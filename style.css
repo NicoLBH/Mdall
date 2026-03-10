@@ -1409,3 +1409,60 @@ body.drilldown-open .drilldown__inner {
   font-size:13px;
 }
 
+/* =========================
+   Project tabs (GitHub-like)
+   ========================= */
+.project-tabs{
+  position:fixed;
+  top:64px; /* juste sous le header */
+  left:0;
+  right:0;
+  height:44px;
+  display:flex;
+  align-items:center;
+  gap:4px;
+  padding:0 16px;
+  background:var(--bg);
+  border-bottom:1px solid var(--border);
+  z-index:9;
+}
+.project-tabs a{
+  display:inline-flex;
+  align-items:center;
+  padding:8px 14px;
+  font-size:14px;
+  font-weight:500;
+  color:var(--muted);
+  text-decoration:none;
+  border:1px solid transparent;
+  border-bottom:none;
+  border-top-left-radius:6px;
+  border-top-right-radius:6px;
+  transition:background .12s ease;
+}
+.project-tabs a:hover{
+  color:var(--text);
+  background:rgba(110,118,129,.08);
+}
+.project-tabs a.active{
+  color:var(--text);
+  background:var(--bg);
+  border:1px solid var(--border);
+  border-bottom:1px solid var(--bg);
+  font-weight:600;
+}
+#app{
+  position:fixed;
+  top:108px; /* header 64 + tabs 44 */
+  left:0;
+  right:0;
+  bottom:0;
+  overflow:auto;
+  padding:16px;
+}
+.project-tabs a::before{
+  content:"●";
+  font-size:8px;
+  margin-right:8px;
+  opacity:.6;
+}
