@@ -6,29 +6,44 @@ import { renderProjectIntervenants } from "./project-intervenants.js";
 import { renderProjectDocuments } from "./project-documents.js";
 
 export function renderProjectLayout(root, projectId, tab) {
-
   root.innerHTML = `
     <div class="project">
-
       <div class="project-tabs">
         ${PROJECT_TABS.map(t => `
-          <a href="#project/${projectId}/${t.id}" 
-             class="${t.id === tab ? "active" : ""}">
-             ${t.label}
+          <a
+            href="#project/${projectId}/${t.id}"
+            class="${t.id === tab ? "active" : ""}"
+          >
+            ${t.label}
           </a>
         `).join("")}
       </div>
 
       <div id="project-content"></div>
-
     </div>
   `;
 
   const content = document.getElementById("project-content");
+  if (!content) return;
 
-  if (tab === "dashboard") renderProjectDashboard(content);
-  if (tab === "identity") renderProjectIdentity(content);
-  if (tab === "situations") renderProjectSituations(content);
-  if (tab === "intervenants") renderProjectIntervenants(content);
-  if (tab === "documents") renderProjectDocuments(content);
+  switch (tab) {
+    case "dashboard":
+      renderProjectDashboard(content);
+      break;
+    case "identity":
+      renderProjectIdentity(content);
+      break;
+    case "situations":
+      renderProjectSituations(content);
+      break;
+    case "intervenants":
+      renderProjectIntervenants(content);
+      break;
+    case "documents":
+      renderProjectDocuments(content);
+      break;
+    default:
+      renderProjectDashboard(content);
+      break;
+  }
 }
