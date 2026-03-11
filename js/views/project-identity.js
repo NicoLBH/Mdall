@@ -42,11 +42,6 @@ root.innerHTML = `
     <option value="PS92">PS92</option>
    </select>
   </div>
-
-  <div class="form-row">
-   <label>PDF étude</label>
-   <input id="pdfFile" type="file" accept="application/pdf">
-  </div>
  </div>
 </div>
 `;
