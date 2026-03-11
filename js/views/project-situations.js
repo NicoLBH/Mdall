@@ -1225,7 +1225,6 @@ export function renderProjectSituations(root) {
   bindFilters();
   bindPagination();
   bindGlobal();
-  bindDetailsEvents();
   bindSidebarToggle();
   bindAssistantLauncher();
 
