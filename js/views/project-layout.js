@@ -1,9 +1,9 @@
 import { PROJECT_TABS } from "../constants.js";
-import { renderProjectDashboard } from "./project-dashboard.js";
-import { renderProjectIdentity } from "./project-identity.js";
+import { renderProjectDocuments } from "./project-documents.js";
 import { renderProjectSituations } from "./project-situations.js";
 import { renderProjectIntervenants } from "./project-intervenants.js";
-import { renderProjectDocuments } from "./project-documents.js";
+import { renderProjectDashboard } from "./project-dashboard.js";
+import { renderProjectIdentity } from "./project-identity.js";
 
 export function renderProjectLayout(root, projectId, tab) {
   root.innerHTML = `
@@ -27,11 +27,8 @@ export function renderProjectLayout(root, projectId, tab) {
   if (!content) return;
 
   switch (tab) {
-    case "dashboard":
-      renderProjectDashboard(content);
-      break;
-    case "identity":
-      renderProjectIdentity(content);
+    case "documents":
+      renderProjectDocuments(content);
       break;
     case "situations":
       renderProjectSituations(content);
@@ -39,8 +36,11 @@ export function renderProjectLayout(root, projectId, tab) {
     case "intervenants":
       renderProjectIntervenants(content);
       break;
-    case "documents":
-      renderProjectDocuments(content);
+    case "dashboard":
+      renderProjectDashboard(content);
+      break;
+    case "identity":
+      renderProjectIdentity(content);
       break;
     default:
       renderProjectDashboard(content);
