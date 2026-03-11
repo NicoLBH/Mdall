@@ -212,6 +212,8 @@ function normalizeFinalResult(final) {
         situation.topic,
         situationId
       ),
+      priority: firstNonEmpty(situation.priority, situation.prio, "P3"),
+      status: firstNonEmpty(situation.status, "open"),
       raw: situation,
       sujets: problemIds.map((problemId) => {
         const problem = problemsById.get(problemId) || {};
@@ -227,6 +229,9 @@ function normalizeFinalResult(final) {
             problem.topic,
             problemId
           ),
+          priority: firstNonEmpty(problem.priority, problem.prio, situation.priority, "P3"),
+          status: firstNonEmpty(problem.status, "open"),
+          agent: firstNonEmpty(problem.agent, problem.owner, "system"),
           raw: problem,
           avis: avisIds.map((avisId) => {
             const avis = avisById.get(avisId) || {};
@@ -242,6 +247,9 @@ function normalizeFinalResult(final) {
                 avisId
               ),
               verdict: firstNonEmpty(avis.verdict, "-"),
+              priority: firstNonEmpty(avis.priority, avis.prio, problem.priority, situation.priority, "P3"),
+              status: firstNonEmpty(avis.status, "open"),
+              agent: firstNonEmpty(avis.agent, problem.agent, "system"),
               raw: avis
             };
           })
@@ -255,6 +263,7 @@ function applyRunResult(final, runId, statusLabel) {
   const nested = normalizeFinalResult(final);
 
   store.situationsView.data = nested;
+  store.situationsView.rawResult = final;
   store.situationsView.page = 1;
   store.situationsView.expandedSituations = new Set();
   store.situationsView.expandedSujets = new Set();
@@ -402,6 +411,7 @@ export async function runAnalysis() {
 
 export function resetAnalysisUi() {
   store.situationsView.data = [];
+  store.situationsView.rawResult = null;
   store.situationsView.expandedSituations = new Set();
   store.situationsView.expandedSujets = new Set();
   store.situationsView.selectedSituationId = null;
