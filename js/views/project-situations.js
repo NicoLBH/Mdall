@@ -1,5 +1,43 @@
 import { store } from "../store.js";
 
+function ensureSituationsLegacyDomStyle() {
+  if (document.getElementById("situations-legacy-dom-style")) return;
+
+  const style = document.createElement("style");
+  style.id = "situations-legacy-dom-style";
+  style.textContent = `
+    #situationsTableHost,
+    #situationsTableHost .issues-table{
+      height:100%;
+      min-height:0;
+    }
+
+    #situationsTableHost .issues-table{
+      display:flex;
+      flex-direction:column;
+      min-height:0;
+    }
+
+    #situationsTableHost .issues-table__head{
+      flex:0 0 auto;
+    }
+
+    #situationsTableHost .issues-table__body{
+      flex:1 1 auto;
+      min-height:0;
+      overflow-y:auto;
+      overflow-x:hidden;
+    }
+
+    #situationsDetailsHost{
+      overflow-y:auto;
+      overflow-x:hidden;
+      min-height:0;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (char) => ({
     "&": "&amp;",
@@ -33,13 +71,6 @@ function normalizeVerdict(verdict) {
   if (v === "DEFAVORABLE") return "KO";
   if (v === "FAVORABLE") return "OK";
   return v;
-}
-
-function verdictTone(verdict) {
-  const v = normalizeVerdict(verdict);
-  if (["KO", "WARNING", "D", "DEFAVORABLE"].includes(v)) return "negative";
-  if (["OK", "S", "FAVORABLE", "F", "HM", "PM", "SO"].includes(v)) return "positive";
-  return "neutral";
 }
 
 function verdictLabel(verdict) {
@@ -427,7 +458,13 @@ function renderTableHtml(filteredSituations) {
   }
 
   if (!filteredSituations.length) {
-    return `<div class="issues-table"><div class="issues-table__body"><div style="padding:24px;color:var(--muted);">Aucun résultat pour les filtres actuels.</div></div></div>`;
+    return `
+      <div class="issues-table">
+        <div class="issues-table__body">
+          <div style="padding:24px;color:var(--muted);">Aucun résultat pour les filtres actuels.</div>
+        </div>
+      </div>
+    `;
   }
 
   const rows = [];
@@ -493,20 +530,119 @@ function getSituationSummary(situation) {
   return firstNonEmpty(raw.summary, raw.message, raw.comment, raw.reasoning, raw.analysis, situation?.title, "Aucune synthèse disponible.");
 }
 
+function renderMetaItem(label, valueHtml) {
+  return `
+    <div class="meta-item">
+      <div class="meta-k">${escapeHtml(label)}</div>
+      <div class="meta-v">${valueHtml}</div>
+    </div>
+  `;
+}
+
+function renderCommentCard(agentName, bodyText, initial = "S") {
+  return `
+    <div class="gh-comment">
+      <div class="gh-avatar" aria-hidden="true">
+        <span class="gh-avatar-initial">${escapeHtml(initial)}</span>
+      </div>
+      <div class="gh-comment-box">
+        <div class="gh-comment-header">
+          <div class="gh-comment-author mono">${escapeHtml(agentName)}</div>
+        </div>
+        <div class="gh-comment-body">${escapeHtml(bodyText).replace(/\n/g, "<br>")}</div>
+      </div>
+    </div>
+  `;
+}
+
+function renderThreadBlock(selection) {
+  const item = selection?.item || {};
+  const actor = escapeHtml(firstNonEmpty(item.agent, "system"));
+  const message =
+    selection?.type === "avis"
+      ? getAvisSummary(item)
+      : selection?.type === "sujet"
+        ? getSujetSummary(item)
+        : getSituationSummary(item);
+
+  return `
+    <div class="gh-timeline-title mono" style="display:none">Discussion</div>
+    <div class="thread gh-thread">
+      <div class="thread-item" data-thread-kind="event" data-thread-idx="0">
+        <div class="thread-badge__subissue"></div>
+        <div class="thread-wrapper">
+          <div class="thread-item__head">
+            <div class="mono">
+              <span>${actor}</span>
+              <span> attached this to </span>
+              <span>${escapeHtml(selection?.type || "item")} n° ${escapeHtml(item.id || "—")}</span>
+            </div>
+          </div>
+          <div class="thread-item__body">${escapeHtml(message)}</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderHumanActionBlock() {
+  return `
+    <div class="human-action">
+      <div class="comment-general-block">
+        <div class="gh-timeline-title mono">Add a comment</div>
+        <div class="comment-box gh-comment-boxwrap">
+          <div class="comment-editor">
+            <textarea class="textarea" placeholder="Réponse humaine (Markdown) — mentionne @rapso pour demander l’avis de l’agent." disabled></textarea>
+          </div>
+        </div>
+        <div class="actions-row actions-row--details" style="margin-top:10px;">
+          <button class="gh-btn gh-btn--help-mode" type="button" disabled>Help</button>
+          <button class="gh-btn gh-btn--comment is-disabled" type="button" disabled>Comment</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderSubIssuesPanel({ title, count, rightMetaHtml, bodyHtml }) {
+  return `
+    <div class="details-subissues">
+      <div class="subissues-head">
+        <div class="subissues-head-left">
+          <span class="chev">▾</span>
+          <span class="subissues-title">${escapeHtml(title)}</span>
+          <span class="subissues-count mono">${escapeHtml(count)}</span>
+        </div>
+        <div class="subissues-head-right">
+          ${rightMetaHtml || ""}
+        </div>
+      </div>
+      <div class="subissues-body">
+        ${bodyHtml || ""}
+      </div>
+    </div>
+  `;
+}
+
 function renderDetailsTitleHtml(selection) {
   if (!selection) {
     return `
       <div class="details-head">
         <div class="details-head-left">
           <div class="details-kicker mono">DÉTAILS</div>
-          <div class="details-title-wrap details-title--expanded">
-            <div class="details-title-row details-title-row--main">
-              <div class="details-title-maincol">
-                <div class="details-title-topline"><span class="details-title-text">Sélectionner un élément</span></div>
+          <div class="gh-panel__title">
+            <div class="details-title-wrap details-title--expanded">
+              <div class="details-title-row details-title-row--main">
+                <div class="details-title-maincol">
+                  <div class="details-title-topline">
+                    <span class="details-title-text">Sélectionner un élément</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         </div>
+
         <div class="details-head-right">
           <div class="details-meta mono" id="detailsMeta">—</div>
           <button id="detailsExpand" class="icon-btn icon-btn--sm" aria-label="Agrandir" title="Agrandir">⤢</button>
@@ -516,7 +652,7 @@ function renderDetailsTitleHtml(selection) {
   }
 
   const item = selection.item;
-  const titleText = escapeHtml(firstNonEmpty(item.title, item.id, "Détail"));
+  const titleTextHtml = escapeHtml(firstNonEmpty(item.title, item.id, "Détail"));
   const idHtml = escapeHtml(item.id || "");
 
   let badgeHtml = "";
@@ -527,51 +663,55 @@ function renderDetailsTitleHtml(selection) {
   if (selection.type === "situation") {
     const stats = situationVerdictStats(item);
     badgeHtml = statePill(item.status);
-    probsHtml = `<span class="subissues-counts subissues-counts--problems"><span>${(item.sujets || []).length} sujets</span></span>`;
+    probsHtml = `<div class="subissues-counts subissues-counts--problems"><span>${(item.sujets || []).length} sujets</span></div>`;
     verdictHtml = verdictBar(stats);
     barOnlyHtml = verdictBar(stats);
   } else if (selection.type === "sujet") {
     const stats = problemVerdictStats(item);
     badgeHtml = statePill(item.status);
-    probsHtml = `<span class="subissues-counts subissues-counts--problems"><span>${(item.avis || []).length} avis</span></span>`;
+    probsHtml = `<div class="subissues-counts subissues-counts--problems"><span>${(item.avis || []).length} avis</span></div>`;
     verdictHtml = verdictBar(stats);
     barOnlyHtml = verdictBar(stats);
   } else {
     badgeHtml = verdictPill(item.verdict);
-    probsHtml = `<span class="subissues-counts subissues-counts--problems"><span>${escapeHtml(firstNonEmpty(item.agent, "system"))}</span></span>`;
+    probsHtml = `<div class="subissues-counts subissues-counts--problems"><span>${escapeHtml(firstNonEmpty(item.agent, "system"))}</span></div>`;
   }
 
   return `
     <div class="details-head">
       <div class="details-head-left">
         <div class="details-kicker mono">DÉTAILS</div>
-        <div class="details-title-wrap details-title--expanded">
-          <div class="details-title-row details-title-row--main">
-            <div class="details-title-maincol">
-              <div class="details-title-topline">
-                <span class="details-title-text">${titleText}</span>
-                <span class="details-title-id mono">${idHtml}</span>
-              </div>
-              <div class="details-title-bottomline">
-                ${badgeHtml}
-                ${probsHtml}
-                ${verdictHtml}
+        <div class="gh-panel__title">
+          <div class="details-title-wrap details-title--expanded">
+            <div class="details-title-row details-title-row--main">
+              <div class="details-title-maincol">
+                <div class="details-title-topline">
+                  <span class="details-title-text">${titleTextHtml}</span>
+                  <span class="details-title-id mono">${idHtml}</span>
+                </div>
+                <div class="details-title-bottomline">
+                  ${badgeHtml}
+                  ${probsHtml}
+                  ${verdictHtml}
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        <div class="details-title-wrap details-title--compact">
-          <div class="details-title-compact">
-            <div class="details-title-compact-col1">${badgeHtml}</div>
-            <div class="details-title-compact-col2">
-              <div class="details-title-compact-top">
-                <span class="details-title-text">${titleText}</span>
-                <span class="details-title-id mono">${idHtml}</span>
+          <div class="details-title-wrap details-title--compact">
+            <div class="details-title-compact">
+              <div class="details-title-compact-col1">
+                ${badgeHtml}
               </div>
-              <div class="details-title-compact-bottom">
-                ${probsHtml}
-                ${barOnlyHtml}
+              <div class="details-title-compact-col2">
+                <div class="details-title-compact-top">
+                  <span class="details-title-text">${titleTextHtml}</span>
+                  <span class="details-title-id mono">${idHtml}</span>
+                </div>
+                <div class="details-title-compact-bottom">
+                  ${probsHtml}
+                  ${barOnlyHtml}
+                </div>
               </div>
             </div>
           </div>
@@ -579,18 +719,9 @@ function renderDetailsTitleHtml(selection) {
       </div>
 
       <div class="details-head-right">
-        <div class="details-meta mono" id="detailsMeta">${escapeHtml(idHtml || "—")}</div>
+        <div class="details-meta mono" id="detailsMeta">${idHtml || "—"}</div>
         <button id="detailsExpand" class="icon-btn icon-btn--sm" aria-label="Agrandir" title="Agrandir">⤢</button>
       </div>
-    </div>
-  `;
-}
-
-function renderMetaItem(label, valueHtml) {
-  return `
-    <div class="meta-item">
-      <span class="meta-k">${escapeHtml(label)}</span>
-      <span class="meta-v">${valueHtml}</span>
     </div>
   `;
 }
@@ -599,41 +730,34 @@ function renderSituationDetails(selection) {
   const situation = selection.item;
   const stats = situationVerdictStats(situation);
   const sujets = situation.sujets || [];
+
+  const subIssuesHtml = renderSubIssuesPanel({
+    title: "Sujets rattachés",
+    count: `${sujets.length}`,
+    rightMetaHtml: verdictBar(stats),
+    bodyHtml: sujets.map((sujet) => `
+      <div class="issue-row issue-row--pb click js-row-sujet" data-sujet-id="${escapeHtml(sujet.id)}">
+        <div class="cell cell-theme cell-theme--full lvl0">
+          <span class="chev chev--spacer"></span>
+          ${issueIcon(sujet.status)}
+          <span class="theme-text theme-text--pb">${escapeHtml(firstNonEmpty(sujet.title, sujet.id, "Non classé"))}</span>
+          <span class="subissues-inline-count mono">${(sujet.avis || []).length} avis</span>
+        </div>
+      </div>
+    `).join("")
+  });
+
   return `
     <div class="details-grid">
       <div class="details-main">
-        <div class="gh-comment">
-          <div class="gh-avatar"><div class="gh-avatar-initial">S</div></div>
-          <div class="gh-comment-box">
-            <div class="gh-comment-header"><span class="gh-comment-author">${escapeHtml(firstNonEmpty(situation.agent, "system"))}</span></div>
-            <div class="gh-comment-body">${escapeHtml(getSituationSummary(situation)).replace(/\n/g, "<br>")}</div>
-          </div>
-        </div>
-
-        <div class="details-subissues">
-          <div class="subissues-head">
-            <div class="subissues-head-left">
-              <strong class="subissues-title">Sujets rattachés</strong>
-              <span class="subissues-inline-count mono">${sujets.length} sujets</span>
-            </div>
-            <div class="subissues-head-right">${verdictBar(stats)}</div>
-          </div>
-          <div class="subissues-body">
-            ${sujets.map((sujet) => `
-              <div class="issue-row issue-row--pb click js-row-sujet" data-sujet-id="${escapeHtml(sujet.id)}">
-                <div class="cell cell-theme cell-theme--full lvl0">
-                  ${issueIcon(sujet.status)}
-                  <span class="theme-text theme-text--pb">${escapeHtml(firstNonEmpty(sujet.title, sujet.id, "Non classé"))}</span>
-                  <span class="subissues-inline-count mono">${(sujet.avis || []).length} avis</span>
-                </div>
-              </div>
-            `).join("")}
-          </div>
-        </div>
+        ${renderCommentCard(firstNonEmpty(situation.agent, "system"), getSituationSummary(situation), "S")}
+        ${subIssuesHtml}
+        ${renderThreadBlock(selection)}
+        ${renderHumanActionBlock()}
       </div>
 
       <aside class="details-meta-col">
-        <div class="meta-title">Meta</div>
+        <div class="meta-title">Metadata</div>
         ${renderMetaItem("ID", `<span class="mono">${escapeHtml(situation.id)}</span>`)}
         ${renderMetaItem("Status", statePill(situation.status))}
         ${renderMetaItem("Priority", priorityBadge(situation.priority))}
@@ -649,41 +773,34 @@ function renderSujetDetails(selection) {
   const stats = problemVerdictStats(sujet);
   const avisList = sujet.avis || [];
   const parentSituation = getSituationBySujetId(sujet.id);
+
+  const subIssuesHtml = renderSubIssuesPanel({
+    title: "Avis rattachés",
+    count: `${avisList.length}`,
+    rightMetaHtml: verdictBar(stats),
+    bodyHtml: avisList.map((avis) => `
+      <div class="issue-row issue-row--avis click js-row-avis" data-avis-id="${escapeHtml(avis.id)}">
+        <div class="cell cell-theme cell-theme--full lvl0">
+          <span class="chev chev--spacer"></span>
+          ${issueIcon(avis.status)}
+          <span class="theme-text theme-text--avis">${escapeHtml(firstNonEmpty(avis.title, avis.id, ""))}</span>
+          <span class="subissues-inline-count mono">${escapeHtml(avis.id)}</span>
+        </div>
+      </div>
+    `).join("")
+  });
+
   return `
     <div class="details-grid">
       <div class="details-main">
-        <div class="gh-comment">
-          <div class="gh-avatar"><div class="gh-avatar-initial">P</div></div>
-          <div class="gh-comment-box">
-            <div class="gh-comment-header"><span class="gh-comment-author">${escapeHtml(firstNonEmpty(sujet.agent, "system"))}</span></div>
-            <div class="gh-comment-body">${escapeHtml(getSujetSummary(sujet)).replace(/\n/g, "<br>")}</div>
-          </div>
-        </div>
-
-        <div class="details-subissues">
-          <div class="subissues-head">
-            <div class="subissues-head-left">
-              <strong class="subissues-title">Avis rattachés</strong>
-              <span class="subissues-inline-count mono">${avisList.length} avis</span>
-            </div>
-            <div class="subissues-head-right">${verdictBar(stats)}</div>
-          </div>
-          <div class="subissues-body">
-            ${avisList.map((avis) => `
-              <div class="issue-row issue-row--avis click js-row-avis" data-avis-id="${escapeHtml(avis.id)}">
-                <div class="cell cell-theme cell-theme--full lvl1">
-                  ${issueIcon(avis.status)}
-                  <span class="theme-text theme-text--avis">${escapeHtml(firstNonEmpty(avis.title, avis.id, ""))}</span>
-                  <span class="subissues-inline-count mono">${escapeHtml(avis.id)}</span>
-                </div>
-              </div>
-            `).join("")}
-          </div>
-        </div>
+        ${renderCommentCard(firstNonEmpty(sujet.agent, "system"), getSujetSummary(sujet), "P")}
+        ${subIssuesHtml}
+        ${renderThreadBlock(selection)}
+        ${renderHumanActionBlock()}
       </div>
 
       <aside class="details-meta-col">
-        <div class="meta-title">Meta</div>
+        <div class="meta-title">Metadata</div>
         ${renderMetaItem("ID", `<span class="mono">${escapeHtml(sujet.id)}</span>`)}
         ${renderMetaItem("Situation parent", `<span class="mono">${escapeHtml(parentSituation?.id || "—")}</span>`)}
         ${renderMetaItem("Status", statePill(sujet.status))}
@@ -698,20 +815,17 @@ function renderAvisDetails(selection) {
   const avis = selection.item;
   const sujet = getSujetByAvisId(avis.id);
   const situation = getSituationByAvisId(avis.id);
+
   return `
     <div class="details-grid">
       <div class="details-main">
-        <div class="gh-comment">
-          <div class="gh-avatar"><div class="gh-avatar-initial">A</div></div>
-          <div class="gh-comment-box">
-            <div class="gh-comment-header"><span class="gh-comment-author">${escapeHtml(firstNonEmpty(avis.agent, "system"))}</span></div>
-            <div class="gh-comment-body">${escapeHtml(getAvisSummary(avis)).replace(/\n/g, "<br>")}</div>
-          </div>
-        </div>
+        ${renderCommentCard(firstNonEmpty(avis.agent, "system"), getAvisSummary(avis), "A")}
+        ${renderThreadBlock(selection)}
+        ${renderHumanActionBlock()}
       </div>
 
       <aside class="details-meta-col">
-        <div class="meta-title">Meta</div>
+        <div class="meta-title">Metadata</div>
         ${renderMetaItem("ID", `<span class="mono">${escapeHtml(avis.id)}</span>`)}
         ${renderMetaItem("Situation parent", `<span class="mono">${escapeHtml(situation?.id || "—")}</span>`)}
         ${renderMetaItem("Sujet parent", `<span class="mono">${escapeHtml(sujet?.id || "—")}</span>`)}
@@ -1002,6 +1116,8 @@ function bindSituationsEvents(root) {
 }
 
 export function renderProjectSituations(root) {
+  ensureSituationsLegacyDomStyle();
+
   const data = store.situationsView.data || [];
   const firstSituationId = data[0]?.id || null;
 
