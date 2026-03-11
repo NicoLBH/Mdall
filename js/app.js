@@ -1,5 +1,5 @@
 import { initRouter } from "./router.js";
-import { getStore } from "./store.js";
+import { store } from "./store.js";
 import { runAnalysis, resetAnalysisUi } from "./services/analysis-runner.js";
 
 function initGlobalNav() {
