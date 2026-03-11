@@ -140,7 +140,22 @@ function priorityBadge(priority = "P3") {
 
 function statePill(status = "open") {
   const isOpen = String(status || "open").toLowerCase() !== "closed";
-  return `<span class="gh-state ${isOpen ? "gh-state--open" : "gh-state--closed"}">${isOpen ? "Open" : "Closed"}</span>`;
+  const icon = isOpen
+    ? `<svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"></path><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Z"></path></svg>`
+    : `<svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M11.28 6.78a.75.75 0 0 0-1.06-1.06L7.25 8.69 5.78 7.22a.75.75 0 0 0-1.06 1.06l2 2a.75.75 0 0 0 1.06 0l3.5-3.5Z"></path><path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0Zm-1.5 0a6.5 6.5 0 1 0-13 0 6.5 6.5 0 0 0 13 0Z"></path></svg>`;
+  return `<span class="gh-state ${isOpen ? "gh-state--open" : "gh-state--closed"}"><span class="gh-state-dot" aria-hidden="true">${icon}</span>${isOpen ? "Open" : "Closed"}</span>`;
+}
+
+function timelineVerdictIcon(verdict) {
+  const raw = normalizeVerdict(verdict);
+  const short = raw === 'WARNING' ? 's' : raw === 'KO' ? 'd' : raw === 'OK' ? 'f' : String(raw || '').toLowerCase();
+  const label = ['F','S','D','HM','PM','SO'].includes(raw) ? raw : (raw === 'WARNING' ? 'S' : raw === 'KO' ? 'D' : raw === 'OK' ? 'F' : '•');
+  const cls = ['f','s','d','hm','pm','so'].includes(short) ? short : 'muted';
+  return `<span class="tl-ico tl-ico--verdict tl-ico--${cls}" aria-hidden="true">${escapeHtml(label)}</span>`;
+}
+
+function humanAvatarSvg() {
+  return `<svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm-5 6.25C3 11.903 5.239 10 8 10s5 1.903 5 4.25a.75.75 0 0 1-1.5 0c0-1.403-1.511-2.75-3.5-2.75s-3.5 1.347-3.5 2.75a.75.75 0 0 1-1.5 0Z"></path></svg>`;
 }
 
 function chevron(isOpen, isVisible = true) {
@@ -287,7 +302,7 @@ function getEffectiveSujetStatus(sujetId) {
   const d = String(decision?.decision || "").toUpperCase();
   if (d === "CLOSED") return "closed";
   if (d === "REOPENED") return "open";
-  return firstNonEmpty(sujet?.status, "open").toLowerCase();
+  return String(sujet?.status || "open").toLowerCase();
 }
 
 function getEffectiveSituationStatus(situationId) {
@@ -296,109 +311,22 @@ function getEffectiveSituationStatus(situationId) {
   const d = String(decision?.decision || "").toUpperCase();
   if (d === "CLOSED") return "closed";
   if (d === "REOPENED") return "open";
-  return firstNonEmpty(situation?.status, "open").toLowerCase();
+  return String(situation?.status || "open").toLowerCase();
 }
 
 /* =========================================================
-   Data access
+   Nested data helpers
 ========================================================= */
 
-function getFilteredSituations() {
-  const verdictFilter = String(store.situationsView.verdictFilter || "ALL").toUpperCase();
-  const query = String(store.situationsView.search || "").trim().toLowerCase();
-  const situations = store.situationsView.data || [];
-  return situations.filter((situation) => situationMatchesFilters(situation, query, verdictFilter));
-}
-
-function avisMatchesFilters(avis, query, verdictFilter) {
-  if (!avis) return false;
-
-  const matchesSearch = matchSearch(
-    [
-      avis.id,
-      avis.title,
-      avis.verdict,
-      avis.priority,
-      avis.status,
-      avis.agent,
-      avis.raw?.message,
-      avis.raw?.summary,
-      avis.raw?.topic,
-      avis.raw?.title,
-      avis.raw?.label
-    ],
-    query
-  );
-
-  if (!matchesSearch) return false;
-  if (verdictFilter === "ALL") return true;
-  return normalizeVerdict(getEffectiveAvisVerdict(avis.id)) === verdictFilter;
-}
-
-function situationMatchesFilters(situation, query, verdictFilter) {
-  const situationTextMatch = matchSearch(
-    [
-      situation.id,
-      situation.title,
-      situation.priority,
-      situation.status,
-      situation.raw?.summary,
-      situation.raw?.topic,
-      situation.raw?.category,
-      situation.raw?.title
-    ],
-    query
-  );
-
-  if (situationTextMatch && verdictFilter === "ALL") return true;
-
-  for (const sujet of situation.sujets || []) {
-    const sujetTextMatch = matchSearch(
-      [
-        sujet.id,
-        sujet.title,
-        sujet.priority,
-        sujet.status,
-        sujet.agent,
-        sujet.raw?.summary,
-        sujet.raw?.topic,
-        sujet.raw?.category,
-        sujet.raw?.title
-      ],
-      query
-    );
-
-    if (sujetTextMatch) {
-      if (verdictFilter === "ALL") return true;
-      if ((sujet.avis || []).some((avis) => normalizeVerdict(getEffectiveAvisVerdict(avis.id)) === verdictFilter)) return true;
-    }
-
-    for (const avis of sujet.avis || []) {
-      if (avisMatchesFilters(avis, query, verdictFilter)) return true;
-    }
-  }
-
-  return situationTextMatch;
-}
-
-function getVisibleCounts(filteredSituations) {
-  let sujets = 0;
-  let avis = 0;
-  for (const situation of filteredSituations) {
-    sujets += (situation.sujets || []).length;
-    for (const sujet of situation.sujets || []) avis += (sujet.avis || []).length;
-  }
-  return { situations: filteredSituations.length, sujets, avis };
-}
-
 function getNestedSituation(situationId) {
-  return (store.situationsView.data || []).find((s) => s.id === situationId) || null;
+  return (store.situationsView.data || []).find((s) => String(s.id) === String(situationId)) || null;
 }
 
-function getNestedSujet(problemId) {
+function getNestedSujet(sujetId) {
   for (const situation of store.situationsView.data || []) {
-    const match = (situation.sujets || []).find((sujet) => sujet.id === problemId);
-    if (match) return match;
+    for (const sujet of situation.sujets || []) {
+      if (String(sujet.id) === String(sujetId)) return sujet;
+    }
   }
   return null;
 }
@@ -406,24 +334,18 @@ function getNestedSujet(problemId) {
 function getNestedAvis(avisId) {
   for (const situation of store.situationsView.data || []) {
     for (const sujet of situation.sujets || []) {
-      const match = (sujet.avis || []).find((avis) => avis.id === avisId);
-      if (match) return match;
+      for (const avis of sujet.avis || []) {
+        if (String(avis.id) === String(avisId)) return avis;
+      }
     }
   }
   return null;
 }
 
-function getSituationBySujetId(problemId) {
-  for (const situation of store.situationsView.data || []) {
-    if ((situation.sujets || []).some((sujet) => sujet.id === problemId)) return situation;
-  }
-  return null;
-}
-
-function getSituationByAvisId(avisId) {
+function getSituationBySujetId(sujetId) {
   for (const situation of store.situationsView.data || []) {
     for (const sujet of situation.sujets || []) {
-      if ((sujet.avis || []).some((avis) => avis.id === avisId)) return situation;
+      if (String(sujet.id) === String(sujetId)) return situation;
     }
   }
   return null;
@@ -432,7 +354,20 @@ function getSituationByAvisId(avisId) {
 function getSujetByAvisId(avisId) {
   for (const situation of store.situationsView.data || []) {
     for (const sujet of situation.sujets || []) {
-      if ((sujet.avis || []).some((avis) => avis.id === avisId)) return sujet;
+      for (const avis of sujet.avis || []) {
+        if (String(avis.id) === String(avisId)) return sujet;
+      }
+    }
+  }
+  return null;
+}
+
+function getSituationByAvisId(avisId) {
+  for (const situation of store.situationsView.data || []) {
+    for (const sujet of situation.sujets || []) {
+      for (const avis of sujet.avis || []) {
+        if (String(avis.id) === String(avisId)) return situation;
+      }
     }
   }
   return null;
@@ -451,66 +386,109 @@ function getActiveSelection() {
     const situation = getNestedSituation(store.situationsView.selectedSituationId);
     if (situation) return { type: "situation", item: situation };
   }
-  const firstSituation = (store.situationsView.data || [])[0] || null;
-  return firstSituation ? { type: "situation", item: firstSituation } : null;
+  return null;
 }
 
-/* =========================================================
-   Effective counts / title helpers
-========================================================= */
-
-function verdictCountsObject() {
-  return { F: 0, S: 0, D: 0, HM: 0, PM: 0, SO: 0 };
+function avisMatchesFilter(avis, verdictFilter) {
+  if (!avis) return false;
+  const v = verdictLabel(getEffectiveAvisVerdict(avis.id));
+  if (!verdictFilter || verdictFilter === "ALL") return true;
+  return v === verdictFilter;
 }
 
-function problemVerdictStats(problem) {
-  const counts = verdictCountsObject();
-  for (const item of problem?.avis || []) {
-    const v = String(getEffectiveAvisVerdict(item.id) || "").toUpperCase();
+function getFilteredSituations() {
+  const query = String(store.situationsView.search || "").trim().toLowerCase();
+  const verdictFilter = String(store.situationsView.verdictFilter || "ALL").toUpperCase();
+
+  return (store.situationsView.data || []).map((situation) => {
+    const sujets = (situation.sujets || []).map((sujet) => {
+      const avis = (sujet.avis || []).filter((avis) => {
+        const searchMatch = matchSearch([
+          situation.id,
+          situation.title,
+          sujet.id,
+          sujet.title,
+          avis.id,
+          avis.title,
+          avis.agent,
+          avis.verdict,
+          avis.raw?.message,
+          avis.raw?.summary
+        ], query);
+        return searchMatch && avisMatchesFilter(avis, verdictFilter);
+      });
+
+      const sujetMatchesSearch = matchSearch([sujet.id, sujet.title], query);
+      const situationMatchesSearch = matchSearch([situation.id, situation.title], query);
+
+      if (avis.length || sujetMatchesSearch || situationMatchesSearch) {
+        return { ...sujet, avis };
+      }
+      return null;
+    }).filter(Boolean);
+
+    const situationMatchesSearch = matchSearch([situation.id, situation.title], query);
+    if (sujets.length || situationMatchesSearch) {
+      return { ...situation, sujets };
+    }
+    return null;
+  }).filter(Boolean);
+}
+
+function getVisibleCounts(filteredSituations) {
+  let sujets = 0;
+  let avis = 0;
+  for (const situation of filteredSituations) {
+    sujets += (situation.sujets || []).length;
+    for (const sujet of situation.sujets || []) {
+      avis += (sujet.avis || []).length;
+    }
+  }
+  return { situations: filteredSituations.length, sujets, avis };
+}
+
+function problemVerdictStats(sujet) {
+  const counts = { F: 0, S: 0, D: 0, HM: 0, PM: 0, SO: 0 };
+  for (const avis of sujet?.avis || []) {
+    const v = verdictLabel(getEffectiveAvisVerdict(avis.id));
     if (counts[v] !== undefined) counts[v] += 1;
   }
-  const total = Object.values(counts).reduce((a, b) => a + b, 0);
-  return { counts, total };
+  return { counts };
 }
 
 function situationVerdictStats(situation) {
-  const counts = verdictCountsObject();
+  const counts = { F: 0, S: 0, D: 0, HM: 0, PM: 0, SO: 0 };
   for (const sujet of situation?.sujets || []) {
-    for (const avis of sujet.avis || []) {
-      const v = String(getEffectiveAvisVerdict(avis.id) || "").toUpperCase();
+    for (const avis of sujet?.avis || []) {
+      const v = verdictLabel(getEffectiveAvisVerdict(avis.id));
       if (counts[v] !== undefined) counts[v] += 1;
     }
   }
-  const total = Object.values(counts).reduce((a, b) => a + b, 0);
-  return { counts, total };
+  return { counts };
 }
 
-function buildVerdictBarHtml(counts, options = {}) {
-  const legend = options.legend !== false;
-  const total = Object.values(counts || {}).reduce((a, b) => a + b, 0) || 1;
-  const order = ["F", "S", "D", "HM", "PM", "SO"];
+function buildVerdictBarHtml(counts, options = { legend: true }) {
+  const order = ["D", "S", "F", "HM", "PM", "SO"];
+  const total = order.reduce((sum, v) => sum + (Number(counts?.[v]) || 0), 0);
+  if (!total) return "";
 
-  const segs = order.map((v) => {
-    const c = Number(counts?.[v] || 0);
-    if (!c) return "";
-    const pct = (c / total) * 100;
+  const items = order
+    .map((v) => ({ v, c: Number(counts?.[v]) || 0 }))
+    .filter((x) => x.c > 0);
+
+  const bar = `<div class="verdict-bar">${items.map(({ v, c }) => {
+    const pct = (c * 100) / total;
     return `<span class="verdict-bar__seg verdict-bar__seg--${v.toLowerCase()}" style="width:${pct.toFixed(2)}%"></span>`;
-  }).join("");
+  }).join("")}</div>`;
 
-  const bar = `<div class="verdict-bar">${segs || `<span class="verdict-bar__seg verdict-bar__seg--empty" style="width:100%"></span>`}</div>`;
+  if (options.legend === false) return bar;
 
-  if (!legend) {
-    return `<div class="subissues-counts subissues-counts--verdicts">${bar}</div>`;
-  }
-
-  const legendHtml = order.map((v) => {
-    const c = Number(counts?.[v] || 0);
-    if (!c) return "";
-    const pct = total ? (c / total) * 100 : 0;
+  const legendHtml = items.map(({ v, c }) => {
+    const pct = (c * 100) / total;
     return `
       <span class="verdict-legend__item">
-        <span class="${verdictDotClass(v)}" aria-hidden="true"></span>
-        <span class="verdict-legend__count">${c} <b>${escapeHtml(v)}</b></span>
+        <span class="v-dot v-dot--${v.toLowerCase()}"></span>
+        <span class="verdict-legend__count">${c} <b>${v}</b></span>
         <span class="verdict-legend__pct">(${pct.toFixed(0)}%)</span>
       </span>
     `;
@@ -667,28 +645,15 @@ function renderTableHtml(filteredSituations) {
   }
 
   const rows = [];
-
-  if (displayDepth === "sujets") {
-    for (const situation of filteredSituations) {
-      for (const sujet of situation.sujets || []) rows.push(renderFlatSujetRow(sujet, situation.id));
-    }
-  } else if (displayDepth === "avis") {
-    for (const situation of filteredSituations) {
-      for (const sujet of situation.sujets || []) {
-        for (const avis of sujet.avis || []) rows.push(renderFlatAvisRow(avis, sujet.id, situation.id));
-      }
-    }
-  } else {
-    for (const situation of filteredSituations) {
-      rows.push(renderSituationRow(situation));
-      if (store.situationsView.expandedSituations.has(situation.id)) {
-        for (const sujet of situation.sujets || []) {
-          rows.push(renderSujetRow(sujet));
-          if (store.situationsView.expandedSujets.has(sujet.id)) {
-            for (const avis of sujet.avis || []) rows.push(renderAvisRow(avis));
-          }
-        }
-      }
+  for (const situation of filteredSituations) {
+    rows.push(renderSituationRow(situation));
+    const showSujets = displayDepth === "sujets" || displayDepth === "avis" || store.situationsView.expandedSituations.has(situation.id);
+    if (!showSujets) continue;
+    for (const sujet of situation.sujets || []) {
+      rows.push(renderSujetRow(sujet));
+      const showAvis = displayDepth === "avis" || store.situationsView.expandedSujets.has(sujet.id);
+      if (!showAvis) continue;
+      for (const avis of sujet.avis || []) rows.push(renderAvisRow(avis));
     }
   }
 
@@ -701,9 +666,7 @@ function renderTableHtml(filteredSituations) {
         <div class="cell cell-agent">Agent</div>
         <div class="cell cell-id">avis_id</div>
       </div>
-      <div class="issues-table__body">
-        ${rows.join("")}
-      </div>
+      <div class="issues-table__body">${rows.join("")}</div>
     </div>
   `;
 }
@@ -883,89 +846,59 @@ function renderThreadBlock() {
       const isHuman = agent === "human";
       const displayName = isHuman ? "Human" : firstNonEmpty(e.actor, e.agent, "Agent");
       const avatarHtml = isHuman
-        ? `<div class="gh-avatar gh-avatar--human" aria-hidden="true"><span class="gh-avatar-initial">H</span></div>`
+        ? `<div class="gh-avatar gh-avatar--human" aria-hidden="true">${humanAvatarSvg()}</div>`
         : `<div class="gh-avatar" aria-hidden="true"><span class="gh-avatar-initial">${escapeHtml(String(displayName).slice(0, 2).toUpperCase())}</span></div>`;
-
       return `
-        <div class="thread-item thread-item--comment thread-item--comment--flush" data-thread-kind="comment" data-thread-idx="${idx}">
-          <div class="thread-wrapper">
-            <div class="gh-comment">
-              ${avatarHtml}
-              <div class="gh-comment-box">
-                <div class="gh-comment-header">
-                  <div class="gh-comment-author mono">${escapeHtml(displayName)}</div>
-                  <div class="mono-small">${escapeHtml(fmtTs(e.ts))}</div>
-                </div>
-                <div class="gh-comment-body">${mdToHtml(e.message || "")}</div>
-              </div>
-            </div>
+        <div class="human-action" data-thread-kind="comment" data-thread-idx="${idx}">
+          ${avatarHtml}
+          <div class="comment-general-block">
+            <div class="gh-timeline-title mono">${escapeHtml(displayName)} · ${escapeHtml(fmtTs(e.ts))}</div>
+            <div class="gh-comment-box"><div class="gh-comment-body">${mdToHtml(e.message || "")}</div></div>
           </div>
         </div>
       `;
     }
 
     if (type === "ACTIVITY") {
-      let verb = "updated";
-      let targetHtml = "";
       const kind = String(e.kind || "").toLowerCase();
-
-      if (kind === "issue_closed") {
-        verb = "closed";
-        targetHtml = e.meta?.problem_id ? `sujet ${escapeHtml(String(e.meta.problem_id))}` : "issue";
+      let ico = `<span class="tl-ico tl-ico--muted" aria-hidden="true">•</span>`;
+      let body = `${escapeHtml(firstNonEmpty(e.actor, "Human"))} a mis à jour l’élément`;
+      if (kind === "avis_verdict_changed") {
+        ico = timelineVerdictIcon(e.meta?.to || "");
+        body = `${escapeHtml(firstNonEmpty(e.actor, "Human"))} changed verdict for avis ${escapeHtml(String(e.meta?.avis_id || ""))} → ${escapeHtml(String(e.meta?.to || ""))}`;
+      } else if (kind === "issue_closed") {
+        ico = `<span class="tl-ico-wrap tl-ico-closed" aria-hidden="true">${issueIcon("closed")}</span>`;
+        body = `${escapeHtml(firstNonEmpty(e.actor, "Human"))} closed ${escapeHtml(String(e.meta?.problem_id || e.entity_id || "issue"))}`;
       } else if (kind === "issue_reopened") {
-        verb = "reopened";
-        targetHtml = e.meta?.problem_id ? `sujet ${escapeHtml(String(e.meta.problem_id))}` : "issue";
-      } else if (kind === "avis_verdict_changed") {
-        verb = "changed verdict";
-        targetHtml = e.meta?.avis_id
-          ? `avis ${escapeHtml(String(e.meta.avis_id))} → ${escapeHtml(String(e.meta?.to || ""))}`
-          : escapeHtml(String(e.meta?.to || ""));
+        ico = `<span class="tl-ico-wrap tl-ico-reopened" aria-hidden="true">${issueIcon("open")}</span>`;
+        body = `${escapeHtml(firstNonEmpty(e.actor, "Human"))} reopened ${escapeHtml(String(e.meta?.problem_id || e.entity_id || "issue"))}`;
       }
-
-      const note = String(e.message || "").trim();
-      const noteHtml = note ? `<div class="tl-note">${mdToHtml(note)}</div>` : "";
-
       return `
-        <div class="thread-item thread-item--activity thread-item--comment--flush" data-thread-kind="activity" data-thread-idx="${idx}">
+        <div class="thread-item thread-item--activity" data-thread-kind="activity" data-thread-idx="${idx}">
+          <div class="thread-badge thread-badge__subissues">${ico}</div>
           <div class="thread-wrapper">
-            <div class="tl-activity">
-              <span class="tl-ico-wrap">${kind === "avis_verdict_changed" ? verdictPill(e.meta?.to || "") : statePill(kind === "issue_closed" ? "closed" : "open")}</span>
-              <div class="tl-activity__text mono">
-                <span class="tl-author-name">${escapeHtml(firstNonEmpty(e.actor, "Human"))}</span>
-                <span class="mono-small"> ${escapeHtml(verb)} ${targetHtml} </span>
-                <span class="mono-small">at ${escapeHtml(fmtTs(e.ts))}</span>
-              </div>
-            </div>
-            ${noteHtml}
+            <div class="gh-timeline-title mono">${body} · ${escapeHtml(fmtTs(e.ts))}</div>
+            ${e.message ? `<div class="thread-item__body">${mdToHtml(e.message)}</div>` : ``}
           </div>
         </div>
       `;
     }
 
+    let badgeHtml = `<span class="thread-badge__subissues" aria-hidden="true"></span>`;
+    const verdictMatch = String(e.message || "").match(/verdict\s*=\s*([A-Za-z]+)/i);
+    if (String(e.entity_type || "") === "avis" && verdictMatch) badgeHtml = timelineVerdictIcon(verdictMatch[1]);
     return `
       <div class="thread-item" data-thread-kind="event" data-thread-idx="${idx}">
-        <div class="thread-badge__subissue"></div>
+        <div class="thread-badge thread-badge__subissues">${badgeHtml}</div>
         <div class="thread-wrapper">
-          <div class="thread-item__head">
-            <div class="mono">
-              <span>${escapeHtml(e.actor || "System")}</span>
-              <span> attached this to </span>
-              <span>${escapeHtml(e.entity_type || "")} n° ${escapeHtml(e.entity_id || "")}</span>
-              <span>·</span>
-              <span> (agent=${escapeHtml(e.agent || "system")})</span>
-              <div class="mono">in ${escapeHtml(fmtTs(e.ts || ""))}</div>
-            </div>
-          </div>
-          <div class="thread-item__body">${escapeHtml(e.message || "")}</div>
+          <div class="gh-timeline-title mono">${escapeHtml(e.actor || "System")} attached this to ${escapeHtml(e.entity_type || "")} #${escapeHtml(e.entity_id || "")} · ${escapeHtml(fmtTs(e.ts || ""))}</div>
+          <div class="thread-item__body">${mdToHtml(e.message || "")}</div>
         </div>
       </div>
     `;
   }).join("");
 
-  return `
-    <div class="gh-timeline-title mono" style="display:none">Discussion</div>
-    <div class="thread gh-thread">${html}</div>
-  `;
+  return `<div class="gh-timeline-title mono">Discussion</div><div class="thread gh-thread">${html}</div>`;
 }
 
 function renderSubIssuesPanel({ title, leftMetaHtml = "", rightMetaHtml = "", bodyHtml = "" }) {
@@ -973,19 +906,15 @@ function renderSubIssuesPanel({ title, leftMetaHtml = "", rightMetaHtml = "", bo
   const isOpen = !!store.situationsView.rightSubissuesOpen;
   return `
     <div class="details-subissues">
-      <div class="subissues-head">
-        <div class="subissues-head-left click" data-action="toggle-subissues">
+      <div class="subissues-head click" data-action="toggle-subissues">
+        <div class="subissues-head-left">
           <span class="chev">${isOpen ? "▾" : "▸"}</span>
           <span class="subissues-title">${escapeHtml(title)}</span>
           ${leftMetaHtml || ""}
         </div>
-        <div class="subissues-head-right">
-          ${rightMetaHtml || ""}
-        </div>
+        <div class="subissues-head-right">${rightMetaHtml || ""}</div>
       </div>
-      <div class="subissues-body ${isOpen ? "" : "hidden"}">
-        ${bodyHtml || ""}
-      </div>
+      <div class="subissues-body ${isOpen ? "" : "hidden"}">${bodyHtml || ""}</div>
     </div>
   `;
 }
@@ -996,63 +925,39 @@ function renderCommentBox(selection) {
   if (!item) return "";
 
   const type = selection.type;
-  const issueStatus =
-    type === "avis"
-      ? "open"
-      : type === "sujet"
-        ? getEffectiveSujetStatus(item.id)
-        : getEffectiveSituationStatus(item.id);
-
+  const issueStatus = type === "avis" ? "open" : type === "sujet" ? getEffectiveSujetStatus(item.id) : getEffectiveSituationStatus(item.id);
   const isIssueOpen = String(issueStatus || "open").toLowerCase() === "open";
   const activeVerdict = String(store.situationsView.tempAvisVerdict || "F").toUpperCase();
   const previewMode = !!store.situationsView.commentPreviewMode;
   const helpMode = !!store.situationsView.helpMode;
-
   const verdicts = ["F", "S", "D", "HM", "PM", "SO"];
-  const verdictSwitch = `
-    <div class="verdict-switch" role="group" aria-label="Verdict">
-      ${verdicts.map((v) => `<button class="verdict-switch__btn ${v === activeVerdict ? "is-active" : ""}" data-action="set-verdict" data-verdict="${v}" type="button">${v}</button>`).join("")}
-    </div>
-  `;
+  const verdictSwitch = `<div class="verdict-switch" role="group" aria-label="Verdict">${verdicts.map((v) => `<button class="verdict-switch__btn ${v === activeVerdict ? "is-active" : ""}" data-action="set-verdict" data-verdict="${v}" type="button">${v}</button>`).join("")}</div>`;
+  const actionsRight = type === "avis"
+    ? `${verdictSwitch}<button class="gh-btn" data-action="avis-validate" type="button">Validate</button><button class="gh-btn gh-btn--comment" data-action="add-comment" type="button">Comment</button>`
+    : `${isIssueOpen ? `<button class="gh-btn gh-btn--issue-action" data-action="issue-close" type="button"><span class="gh-btn__label">Close</span></button>` : `<button class="gh-btn gh-btn--issue-action" data-action="issue-reopen" type="button"><span class="gh-btn__label">Reopen issue</span></button>`}<button class="gh-btn gh-btn--comment" data-action="add-comment" type="button">Comment</button>`;
 
   return `
     <div class="human-action">
+      <div class="gh-avatar gh-avatar--human" aria-hidden="true">${humanAvatarSvg()}</div>
       <div class="comment-general-block">
         <div class="gh-timeline-title mono">Add a comment</div>
         <div class="comment-box gh-comment-boxwrap ${helpMode ? "gh-comment-box--help" : ""}">
           <div class="comment-tabs ${helpMode ? "gh-comment-header--help" : ""}" role="tablist" aria-label="Comment tabs">
-            <button class="comment-tab ${!previewMode ? "is-active" : ""}" data-action="tab-write" type="button">Write</button>
-            <button class="comment-tab ${previewMode ? "is-active" : ""}" data-action="tab-preview" type="button">Preview</button>
+            <button class="comment-tab ${!previewMode ? "is-active" : ""}" role="tab" aria-selected="${!previewMode ? "true" : "false"}" data-action="tab-write" type="button">Write</button>
+            <button class="comment-tab ${previewMode ? "is-active" : ""}" role="tab" aria-selected="${previewMode ? "true" : "false"}" data-action="tab-preview" type="button">Preview</button>
           </div>
-
           <div class="comment-editor ${previewMode ? "hidden" : ""}">
-            <textarea
-              id="humanCommentBox"
-              class="textarea"
-              placeholder="${helpMode ? "Help (éphémère) — décrivez l’écran / l’action souhaitée." : "Réponse humaine (Markdown) — mentionne @rapso pour demander l’avis de l’agent."}"
-            ></textarea>
+            <textarea id="humanCommentBox" class="textarea" placeholder="Réponse humaine (Markdown) — mentionne @rapso pour demander l’avis de l’agent." data-placeholder-default="Réponse humaine (Markdown) — mentionne @rapso pour demander l’avis de l’agent."></textarea>
           </div>
-
           <div class="comment-editor ${previewMode ? "" : "hidden"}">
-            <div class="comment-preview" id="humanCommentPreview"></div>
+            <div id="humanCommentPreview" class="comment-preview"></div>
           </div>
         </div>
-
         <div class="actions-row actions-row--details" style="margin-top:10px;">
-          <div class="rapso-mention-hint">
-            <span>Astuce : mentionne <span class="mono">@rapso</span> dans ton commentaire.</span>
-          </div>
-
+          <div class="rapso-mention-hint"><span>Astuce : mentionne <span class="mono">@rapso</span> dans ton commentaire pour solliciter une réponse de RAPSOBOT.</span></div>
           <div class="actions-row__right" style="display:flex; align-items:center; gap:8px; justify-content:flex-end; flex:0 0 auto;">
             <button class="gh-btn gh-btn--help-mode ${helpMode ? "is-on" : ""}" data-action="toggle-help" type="button">Help</button>
-
-            ${type === "avis"
-              ? `${verdictSwitch}<button class="gh-btn" data-action="avis-validate" type="button">Validate</button>`
-              : (isIssueOpen
-                  ? `<button class="gh-btn gh-btn--issue-action" data-action="issue-close" type="button"><span class="gh-btn__label">Close</span></button>`
-                  : `<button class="gh-btn gh-btn--issue-action" data-action="issue-reopen" type="button"><span class="gh-btn__label">Reopen issue</span></button>`)}
-
-            <button class="gh-btn gh-btn--comment" data-action="add-comment" type="button">Comment</button>
+            ${actionsRight}
           </div>
         </div>
       </div>
@@ -1061,108 +966,78 @@ function renderCommentBox(selection) {
 }
 
 function renderDetailedMetaForSelection(selection) {
-  if (!selection) return "";
-
-  const item = selection.item;
-  const raw = item.raw || {};
-  const decision = getDecision(selection.type, item.id);
+  const item = selection?.item;
+  if (!item) return "";
 
   const common = [
-    renderMetaItem("ID", `<span class="mono">${escapeHtml(item.id)}</span>`),
-    renderMetaItem("Title", escapeHtml(firstNonEmpty(item.title, item.id))),
-    renderMetaItem("Agent", `<span class="mono">${escapeHtml(firstNonEmpty(item.agent, raw.agent, "system"))}</span>`),
-    renderMetaItem("Priority", priorityBadge(firstNonEmpty(item.priority, raw.priority, "P3"))),
-    renderMetaItem("Run", `<span class="mono">${escapeHtml(currentRunKey())}</span>`),
-    renderMetaItem("Historique humain", decision ? `<span class="mono">${escapeHtml(decision.decision)} · ${escapeHtml(fmtTs(decision.ts))}</span>` : "—")
+    renderMetaItem("ID", `<span class="mono">${escapeHtml(item.id || "—")}</span>`),
+    renderMetaItem("Titre", escapeHtml(firstNonEmpty(item.title, "—"))),
+    renderMetaItem("Priorité", priorityBadge(item.priority || "P3")),
+    renderMetaItem("Agent", `<span class="mono">${escapeHtml(firstNonEmpty(item.agent, "system"))}</span>`)
   ];
 
   if (selection.type === "avis") {
-    const sujet = getSujetByAvisId(item.id);
-    const situation = getSituationByAvisId(item.id);
-    const entries = [
-      ...common,
-      renderMetaItem("Situation parent", `<span class="mono">${escapeHtml(situation?.id || "—")}</span>`),
-      renderMetaItem("Sujet parent", `<span class="mono">${escapeHtml(sujet?.id || "—")}</span>`),
-      renderMetaItem("Verdict effectif", verdictPill(getEffectiveAvisVerdict(item.id))),
-      renderMetaItem("Verdict source", verdictPill(firstNonEmpty(raw.verdict, item.verdict, "-"))),
-      renderMetaItem("Severity", `<span class="mono">${escapeHtml(firstNonEmpty(raw.severity, "—"))}</span>`),
-      renderMetaItem("Source", `<span class="mono">${escapeHtml(firstNonEmpty(raw.source, "—"))}</span>`)
-    ];
-    return entries.join("");
+    common.push(renderMetaItem("Verdict", verdictPill(getEffectiveAvisVerdict(item.id))));
+    common.push(renderMetaItem("Sujet", `<span class="mono">${escapeHtml(firstNonEmpty(getSujetByAvisId(item.id)?.id, "—"))}</span>`));
+    common.push(renderMetaItem("Situation", `<span class="mono">${escapeHtml(firstNonEmpty(getSituationByAvisId(item.id)?.id, "—"))}</span>`));
+  } else if (selection.type === "sujet") {
+    common.push(renderMetaItem("Status", statePill(getEffectiveSujetStatus(item.id))));
+    common.push(renderMetaItem("Situation", `<span class="mono">${escapeHtml(firstNonEmpty(getSituationBySujetId(item.id)?.id, "—"))}</span>`));
+    common.push(renderMetaItem("Avis", `<span>${(item.avis || []).length}</span>`));
+  } else {
+    common.push(renderMetaItem("Status", statePill(getEffectiveSituationStatus(item.id))));
+    common.push(renderMetaItem("Sujets", `<span>${(item.sujets || []).length}</span>`));
   }
 
-  if (selection.type === "sujet") {
-    const situation = getSituationBySujetId(item.id);
-    const stats = problemVerdictStats(item);
-    const entries = [
-      ...common,
-      renderMetaItem("Situation parent", `<span class="mono">${escapeHtml(situation?.id || "—")}</span>`),
-      renderMetaItem("Status effectif", statePill(getEffectiveSujetStatus(item.id))),
-      renderMetaItem("Status source", statePill(firstNonEmpty(raw.status, item.status, "open"))),
-      renderMetaItem("Avis", `<span class="mono">${escapeHtml(String((item.avis || []).length))}</span>`),
-      renderMetaItem("Verdicts", buildVerdictBarHtml(stats.counts, { legend: true }))
-    ];
-    return entries.join("");
+  if (item.raw && typeof item.raw === "object") {
+    for (const [key, value] of Object.entries(item.raw)) {
+      if (["summary", "message", "comment", "reasoning", "analysis"].includes(key)) continue;
+      common.push(renderMetaItem(key, `<span class="mono">${escapeHtml(typeof value === "string" ? value : JSON.stringify(value))}</span>`));
+    }
   }
 
-  const stats = situationVerdictStats(item);
-  const entries = [
-    ...common,
-    renderMetaItem("Status effectif", statePill(getEffectiveSituationStatus(item.id))),
-    renderMetaItem("Status source", statePill(firstNonEmpty(raw.status, item.status, "open"))),
-    renderMetaItem("Sujets", `<span class="mono">${escapeHtml(String((item.sujets || []).length))}</span>`),
-    renderMetaItem("Verdicts", buildVerdictBarHtml(stats.counts, { legend: true }))
-  ];
-  return entries.join("");
+  return common.join("");
 }
 
 function renderSubIssuesForSujet(sujet) {
-  ensureViewUiState();
-  const stats = problemVerdictStats(sujet);
-  const rows = (sujet.avis || []).map((avis) => {
-    const effVerdict = getEffectiveAvisVerdict(avis.id);
-    return `
-      <div class="issue-row issue-row--avis click js-row-avis" data-avis-id="${escapeHtml(avis.id)}">
-        <div class="cell cell-theme cell-theme--full lvl0">
-          <span class="chev chev--spacer"></span>
-          <span class="${verdictDotClass(effVerdict)}" aria-hidden="true"></span>
-          <span class="theme-text theme-text--avis">${escapeHtml(firstNonEmpty(avis.title, avis.id, ""))}</span>
-        </div>
-      </div>
-    `;
-  }).join("");
-
-  const body = `
+  const avis = sujet?.avis || [];
+  const bodyHtml = `
     <div class="issues-table subissues-table">
       <div class="issues-table__body">
-        ${rows || `<div class="emptyState">Aucun avis.</div>`}
+        ${avis.map((avis) => `
+          <div class="issue-row issue-row--avis click ${store.situationsView.selectedAvisId === avis.id ? "subissue-row--selected" : ""}" data-avis-id="${escapeHtml(avis.id)}">
+            <div class="cell cell-theme cell-theme--full lvl0">
+              <span class="chev chev--spacer"></span>
+              <span class="v-dot v-dot--${verdictLabel(getEffectiveAvisVerdict(avis.id)).toLowerCase()}"></span>
+              <span class="theme-text theme-text--avis">${escapeHtml(firstNonEmpty(avis.title, avis.id, ""))}</span>
+            </div>
+          </div>
+        `).join("") || `<div class="emptyState">Aucun avis.</div>`}
       </div>
     </div>
   `;
 
   return renderSubIssuesPanel({
     title: "Avis rattachés",
-    leftMetaHtml: `<div class="subissues-counts subissues-counts--total"><span class="mono">${(sujet.avis || []).length}</span></div>`,
-    rightMetaHtml: buildVerdictBarHtml(stats.counts, { legend: true }),
-    bodyHtml: body
+    leftMetaHtml: `<div class="subissues-counts subissues-counts--total"><span class="mono">${avis.length}</span></div>`,
+    rightMetaHtml: buildVerdictBarHtml(problemVerdictStats(sujet).counts),
+    bodyHtml
   });
 }
 
 function renderSubIssuesForSituation(situation) {
-  ensureViewUiState();
-
+  const sujets = situation?.sujets || [];
   const rows = [];
-  for (const sujet of situation.sujets || []) {
+
+  for (const sujet of sujets) {
     const open = store.situationsView.rightExpandedSujets.has(sujet.id);
     const hasAvis = (sujet.avis || []).length > 0;
-    const effStatus = getEffectiveSujetStatus(sujet.id);
-
     rows.push(`
-      <div class="issue-row issue-row--pb click js-sub-right-select-sujet" data-sujet-id="${escapeHtml(sujet.id)}">
+      <div class="issue-row issue-row--pb click ${store.situationsView.selectedSujetId === sujet.id && !store.situationsView.selectedAvisId ? "subissue-row--selected" : ""}">
         <div class="cell cell-theme cell-theme--full lvl0">
           <span class="js-sub-right-toggle-sujet" data-sujet-id="${escapeHtml(sujet.id)}">${chevron(open, hasAvis)}</span>
-          ${issueIcon(effStatus)}
-          <span class="theme-text theme-text--pb">${escapeHtml(firstNonEmpty(sujet.title, sujet.id, "Non classé"))}</span>
+          ${issueIcon(getEffectiveSujetStatus(sujet.id))}
+          <span class="theme-text theme-text--pb js-sub-right-select-sujet" data-sujet-id="${escapeHtml(sujet.id)}">${escapeHtml(firstNonEmpty(sujet.title, sujet.id, "Non classé"))}</span>
           <span class="subissues-inline-count mono">${(sujet.avis || []).length} avis</span>
         </div>
       </div>
@@ -1170,12 +1045,12 @@ function renderSubIssuesForSituation(situation) {
 
     if (open) {
       for (const avis of sujet.avis || []) {
-        const effVerdict = getEffectiveAvisVerdict(avis.id);
+        const v = verdictLabel(getEffectiveAvisVerdict(avis.id)).toLowerCase();
         rows.push(`
-          <div class="issue-row issue-row--avis click js-row-avis" data-avis-id="${escapeHtml(avis.id)}">
+          <div class="issue-row issue-row--avis click js-row-avis ${store.situationsView.selectedAvisId === avis.id ? "subissue-row--selected" : ""}" data-avis-id="${escapeHtml(avis.id)}">
             <div class="cell cell-theme cell-theme--full lvl1">
               <span class="chev chev--spacer"></span>
-              <span class="${verdictDotClass(effVerdict)}" aria-hidden="true"></span>
+              <span class="v-dot v-dot--${v}"></span>
               <span class="theme-text theme-text--avis">${escapeHtml(firstNonEmpty(avis.title, avis.id, ""))}</span>
             </div>
           </div>
@@ -1184,8 +1059,7 @@ function renderSubIssuesForSituation(situation) {
     }
   }
 
-  const stats = situationVerdictStats(situation);
-  const body = `
+  const bodyHtml = `
     <div class="issues-table subissues-table">
       <div class="issues-table__body">
         ${rows.join("") || `<div class="emptyState">Aucun sujet.</div>`}
@@ -1196,8 +1070,8 @@ function renderSubIssuesForSituation(situation) {
   return renderSubIssuesPanel({
     title: "Sujets rattachés",
     leftMetaHtml: problemsCountsHtml(situation),
-    rightMetaHtml: buildVerdictBarHtml(stats.counts, { legend: true }),
-    bodyHtml: body
+    rightMetaHtml: buildVerdictBarHtml(situationVerdictStats(situation).counts),
+    bodyHtml
   });
 }
 
@@ -1207,19 +1081,8 @@ function renderDetailsTitleHtml(selection) {
       <div class="details-head">
         <div class="details-head-left">
           <div class="details-kicker mono">DÉTAILS</div>
-          <div class="gh-panel__title">
-            <div class="details-title-wrap details-title--expanded">
-              <div class="details-title-row details-title-row--main">
-                <div class="details-title-maincol">
-                  <div class="details-title-topline">
-                    <span class="details-title-text">Sélectionner un élément</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+          <div class="gh-panel__title">Sélectionner un élément</div>
         </div>
-
         <div class="details-head-right">
           <div class="details-meta mono" id="detailsMeta">—</div>
           <button id="detailsExpand" class="icon-btn icon-btn--sm" aria-label="Agrandir" title="Agrandir">⤢</button>
@@ -1229,29 +1092,16 @@ function renderDetailsTitleHtml(selection) {
   }
 
   const item = selection.item;
-  let badgeHtml = "";
-  let probsHtml = "";
-  let verdictHtml = "";
-  let barOnlyHtml = "";
-
-  if (selection.type === "avis") {
-    badgeHtml = verdictPill(getEffectiveAvisVerdict(item.id));
-    probsHtml = `<div class="subissues-counts subissues-counts--problems"><span>${escapeHtml(firstNonEmpty(item.agent, "system"))}</span></div>`;
-  } else if (selection.type === "sujet") {
-    const stats = problemVerdictStats(item);
-    badgeHtml = statePill(getEffectiveSujetStatus(item.id));
-    verdictHtml = buildVerdictBarHtml(stats.counts, { legend: true });
-    barOnlyHtml = buildVerdictBarHtml(stats.counts, { legend: false });
-  } else {
-    const stats = situationVerdictStats(item);
-    badgeHtml = statePill(getEffectiveSituationStatus(item.id));
-    probsHtml = problemsCountsHtml(item);
-    verdictHtml = buildVerdictBarHtml(stats.counts, { legend: true });
-    barOnlyHtml = buildVerdictBarHtml(stats.counts, { legend: false });
-  }
-
+  const isAvis = selection.type === "avis";
   const titleTextHtml = escapeHtml(firstNonEmpty(item.title, item.id, "Détail"));
   const idHtml = escapeHtml(item.id || "");
+  const stateHtml = selection.type === "avis" ? statePill("open") : statePill(selection.type === "sujet" ? getEffectiveSujetStatus(item.id) : getEffectiveSituationStatus(item.id));
+  const badgeHtml = isAvis ? verdictPill(getEffectiveAvisVerdict(item.id)) : "";
+  const extraHtml = selection.type === "avis"
+    ? `<span class="mono">${escapeHtml(firstNonEmpty(item.agent, "system"))}</span>`
+    : selection.type === "sujet"
+      ? buildVerdictBarHtml(problemVerdictStats(item).counts, { legend: false })
+      : `${problemsCountsHtml(item)}${buildVerdictBarHtml(situationVerdictStats(item).counts, { legend: false })}`;
 
   return `
     <div class="details-head">
@@ -1262,36 +1112,19 @@ function renderDetailsTitleHtml(selection) {
             <div class="details-title-row details-title-row--main">
               <div class="details-title-maincol">
                 <div class="details-title-topline">
-                  <span class="details-title-text">${titleTextHtml}</span>
-                  <span class="details-title-id mono">${idHtml}</span>
+                  ${stateHtml}
+                  <span class="details-title-text">${isAvis ? `<span class="mono">#${idHtml}</span> ${titleTextHtml}` : titleTextHtml}</span>
                 </div>
                 <div class="details-title-bottomline">
+                  ${!isAvis ? `<span class="details-title-id mono">${idHtml}</span>` : ``}
                   ${badgeHtml}
-                  ${probsHtml}
-                  ${verdictHtml}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="details-title-wrap details-title--compact">
-            <div class="details-title-compact">
-              <div class="details-title-compact-col1">${badgeHtml}</div>
-              <div class="details-title-compact-col2">
-                <div class="details-title-compact-top">
-                  <span class="details-title-text">${titleTextHtml}</span>
-                  <span class="details-title-id mono">${idHtml}</span>
-                </div>
-                <div class="details-title-compact-bottom">
-                  ${probsHtml}
-                  ${barOnlyHtml}
+                  ${extraHtml}
                 </div>
               </div>
             </div>
           </div>
         </div>
       </div>
-
       <div class="details-head-right">
         <div class="details-meta mono" id="detailsMeta">${idHtml || "—"}</div>
         <button id="detailsExpand" class="icon-btn icon-btn--sm" aria-label="Agrandir" title="Agrandir">⤢</button>
@@ -1363,7 +1196,7 @@ function updateDetailsModal() {
   if (!modal || !title || !meta || !body) return;
 
   const details = renderDetailsHtml();
-  title.textContent = details.modalTitle;
+  title.innerHTML = details.titleHtml;
   meta.textContent = details.modalMeta;
   body.innerHTML = details.bodyHtml;
 
@@ -1409,6 +1242,8 @@ function rerenderPanels() {
 
   wireDetailsInteractive(detailsHost);
   updateDetailsModal();
+  updateDrilldownPanel();
+  renderAssistantOverlay();
 }
 
 function selectSituation(situationId) {
@@ -1632,6 +1467,102 @@ function wireDetailsInteractive(root) {
   });
 }
 
+function ensureAssistantOverlayDom() {
+  if (document.getElementById("assist-overlay")) return;
+  const overlay = document.createElement("div");
+  overlay.id = "assist-overlay";
+  overlay.className = "assist-overlay";
+  overlay.innerHTML = `
+    <div class="assist-panel">
+      <div class="assist-panel__head">
+        <div class="assist-head__left">
+          <img class="assist-head__logo" src="logo.png" alt="RAPSOBOT" />
+          <div class="assist-head__title">
+            <div class="assist-head__name">RAPSOBOT</div>
+            <div class="assist-head__sub">Assistant privé projet</div>
+          </div>
+        </div>
+        <button class="assist-close" id="assist-close" type="button" aria-label="Fermer">✕</button>
+      </div>
+      <div class="assist-panel__body">
+        <div class="assist-thread" id="assist-thread"><div class="assist-empty"><div class="assist-empty__title">Aucun échange pour l’instant</div><div class="assist-empty__sub">Assistant privé prêt.</div></div></div>
+        <div class="assist-compose">
+          <textarea id="assist-input" class="assist-input" placeholder="Décris l’action ou la question…"></textarea>
+          <div class="assist-compose__actions">
+            <button id="assist-help-toggle" class="gh-btn gh-btn--help-mode" type="button">Help</button>
+            <button id="assist-send" class="assist-send" type="button">➤</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  overlay.addEventListener("click", (event) => { if (event.target === overlay) closeAssistantOverlay(); });
+  overlay.querySelector("#assist-close")?.addEventListener("click", closeAssistantOverlay);
+}
+
+function openAssistantOverlay() {
+  ensureAssistantOverlayDom();
+  document.getElementById("assist-overlay")?.classList.add("is-open");
+}
+
+function closeAssistantOverlay() {
+  document.getElementById("assist-overlay")?.classList.remove("is-open");
+}
+
+function renderAssistantOverlay() {
+  ensureAssistantOverlayDom();
+}
+
+function ensureDrilldownDom() {
+  if (document.getElementById("drilldownPanel")) return;
+  const panel = document.createElement("div");
+  panel.id = "drilldownPanel";
+  panel.className = "drilldown hidden";
+  panel.innerHTML = `
+    <div class="drilldown__inner gh-panel gh-panel--details">
+      <div class="drilldown__head gh-panel__head gh-panel__head--tight details-head--expanded">
+        <div class="details-head" style="width:100%;">
+          <div class="details-head-left" style="min-width:0;"><div class="gh-panel__title" id="drilldownTitle">—</div></div>
+          <div class="details-head-right"><button class="icon-btn icon-btn--sm" id="drilldownClose" aria-label="Fermer">✕</button></div>
+        </div>
+      </div>
+      <div class="drilldown__body details-body" id="drilldownBody"></div>
+    </div>
+  `;
+  document.body.appendChild(panel);
+  panel.addEventListener("click", (event) => { if (event.target === panel) closeDrilldown(); });
+  panel.querySelector("#drilldownClose")?.addEventListener("click", closeDrilldown);
+}
+
+function openDrilldown() {
+  ensureDrilldownDom();
+  const panel = document.getElementById("drilldownPanel");
+  if (!panel) return;
+  panel.classList.remove("hidden");
+  document.body.classList.add("drilldown-open");
+  updateDrilldownPanel();
+}
+
+function closeDrilldown() {
+  const panel = document.getElementById("drilldownPanel");
+  if (panel) panel.classList.add("hidden");
+  document.body.classList.remove("drilldown-open");
+}
+
+function updateDrilldownPanel() {
+  const panel = document.getElementById("drilldownPanel");
+  if (!panel || panel.classList.contains("hidden")) return;
+  const details = renderDetailsHtml();
+  const title = panel.querySelector("#drilldownTitle");
+  const body = panel.querySelector("#drilldownBody");
+  if (title) title.innerHTML = details.titleHtml;
+  if (body) {
+    body.innerHTML = details.bodyHtml;
+    wireDetailsInteractive(body);
+  }
+}
+
 /* =========================================================
    Panel / modal events
 ========================================================= */
@@ -1647,6 +1578,8 @@ function bindModalEvents() {
   });
   window.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && store.situationsView.detailsModalOpen) closeDetailsModal();
+    if (event.key === "Escape") closeDrilldown();
+    if (event.key === "Escape") closeAssistantOverlay();
   });
 }
 
@@ -1801,6 +1734,16 @@ function bindSituationsEvents(root) {
       selectSituation(String(situationRow.dataset.situationId || ""));
     }
   });
+
+  if (!document.body.dataset.rapsoBrandBound) {
+    document.body.dataset.rapsoBrandBound = "1";
+    document.addEventListener("click", (event) => {
+      const hit = event.target?.closest?.(".gh-brand__logo");
+      if (!hit) return;
+      event.preventDefault();
+      openAssistantOverlay();
+    });
+  }
 }
 
 /* =========================================================
@@ -1810,6 +1753,8 @@ function bindSituationsEvents(root) {
 export function renderProjectSituations(root) {
   ensureSituationsLegacyDomStyle();
   ensureViewUiState();
+  ensureAssistantOverlayDom();
+  ensureDrilldownDom();
 
   const data = store.situationsView.data || [];
   const firstSituationId = data[0]?.id || null;
@@ -1828,53 +1773,31 @@ export function renderProjectSituations(root) {
           <div class="results-bar__left">
             <h2 class="gh-panel__title">Results</h2>
             <div class="gh-filters gh-filters--inline">
-              <label class="gh-filter gh-filter--inline">
-                <span>Verdict</span>
-                <select id="verdictFilter" class="gh-input gh-input--sm">
-                  <option value="ALL">All</option>
-                  <option value="F">F</option>
-                  <option value="D">D</option>
-                  <option value="S">S</option>
-                  <option value="HM">HM</option>
-                  <option value="PM">PM</option>
-                  <option value="SO">SO</option>
-                  <option value="OK">OK</option>
-                  <option value="KO">KO</option>
-                  <option value="WARNING">WARNING</option>
-                </select>
-              </label>
-
-              <label class="gh-filter gh-filter--inline">
-                <span>Search</span>
-                <input id="situationsSearch" class="gh-input gh-input--sm" type="text" placeholder="topic / EC8 / mot-clé…" />
-              </label>
-
-              <label class="gh-filter gh-filter--inline">
-                <span>Affichage</span>
-                <select id="displayDepth" class="gh-input gh-input--sm">
-                  <option value="situations">Situations</option>
-                  <option value="sujets">Sujets</option>
-                  <option value="avis">Avis</option>
-                </select>
-              </label>
+              <label class="gh-filter gh-filter--inline"><span>Verdict</span><select id="verdictFilter" class="gh-input gh-input--sm"><option value="ALL">All</option><option value="F">F</option><option value="D">D</option><option value="S">S</option><option value="HM">HM</option><option value="PM">PM</option><option value="SO">SO</option><option value="OK">OK</option><option value="KO">KO</option><option value="WARNING">WARNING</option></select></label>
+              <label class="gh-filter gh-filter--inline"><span>Search</span><input id="situationsSearch" class="gh-input gh-input--sm" type="text" placeholder="topic / EC8 / mot-clé…" /></label>
+              <label class="gh-filter gh-filter--inline"><span>Affichage</span><select id="displayDepth" class="gh-input gh-input--sm"><option value="situations">Situations</option><option value="sujets">Sujets</option><option value="avis">Avis</option></select></label>
             </div>
           </div>
-
-          <div class="results-bar__right">
-            <div class="issues-totals mono" id="situationsHeaderCounts">—</div>
-          </div>
+          <div class="results-bar__right"><div class="issues-totals mono" id="situationsHeaderCounts">—</div></div>
         </div>
       </div>
-
       <div id="situationsTableHost"></div>
     </section>
 
     <section class="gh-panel gh-panel--details" aria-label="Details">
       <div class="gh-panel__head gh-panel__head--tight" id="situationsDetailsTitle"></div>
-      <div class="details-body" id="situationsDetailsHost">
-        <div class="emptyState">Sélectionne une situation / un sujet / un avis pour afficher les détails.</div>
-      </div>
+      <div class="details-body" id="situationsDetailsHost"><div class="emptyState">Sélectionne une situation / un sujet / un avis pour afficher les détails.</div></div>
     </section>
+
+    <div id="detailsModal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Détails">
+      <div class="modal__inner">
+        <div class="modal__head details-head--expanded">
+          <div class="modal__head-left"><div class="details-kicker mono">DÉTAILS</div><div class="modal__title" id="detailsTitleModal">Sélectionner un élément</div></div>
+          <div class="modal__head-right"><div class="details-meta mono" id="detailsMetaModal">—</div><button id="detailsClose" class="icon-btn icon-btn--sm" aria-label="Fermer" title="Fermer">✕</button></div>
+        </div>
+        <div class="modal__body" id="detailsBodyModal"></div>
+      </div>
+    </div>
   `;
 
   rerenderPanels();
