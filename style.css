@@ -1428,7 +1428,8 @@ body.drilldown-open .drilldown__inner {
   z-index:9;
 }
 .project-tabs a{
-  display:inline-flex;
+  display:inline-block;
+  position:relative;
   align-items:center;
   padding:6px 8px;
   font-size:12px;
@@ -1443,7 +1444,7 @@ body.drilldown-open .drilldown__inner {
   line-height:1.5;
 }
 .project-tabs a::after{
-    bottom: calc(50% - var(--control-xlarge-size, var(--base-size-48, 3rem)) / 2 - 1px);
+    bottom: calc(50% - var(--control-xlarge-size, var(--base-size-48, 3rem)) / 2 + 1px);
     content: "";
     pointer-events: none;
     background-color: #0000;
