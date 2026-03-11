@@ -1442,7 +1442,7 @@ body.drilldown-open .drilldown__inner {
   transition:background .12s ease;
   line-height:1.5;
 }
-.project-tabs a:after{
+.project-tabs a::after{
     bottom: calc(50% - var(--control-xlarge-size, var(--base-size-48, 3rem)) / 2 - 1px);
     content: "";
     pointer-events: none;
@@ -1461,7 +1461,7 @@ body.drilldown-open .drilldown__inner {
 .project-tabs a.active{
   font-weight:600;
 }
-.project-tabs a.active:after{
+.project-tabs a.active::after{
   background-color:rgb(247, 129, 102);
 }
 #app{
@@ -1472,12 +1472,6 @@ body.drilldown-open .drilldown__inner {
   bottom:0;
   overflow:auto;
   padding:16px;
-}
-.project-tabs a::before{
-  content:"●";
-  font-size:8px;
-  margin-right:8px;
-  opacity:.6;
 }
 
 
