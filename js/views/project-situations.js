@@ -1,7 +1,7 @@
 /* RAPSOBOT – project-situations view
    restored DOM contract with legacy CSS
 */
-import { store } from "../store.js";
+import { getStore } from "../store.js";
 
 let selected = null;
 
