@@ -24,17 +24,21 @@ export const store = {
     soilClass: "A",
     liquefaction: "no",
     referential: "EC8",
+    webhookUrl: "",
     pdfFile: null
   },
 
   situationsView: {
     data: [],
     rawResult: null,
+
     expandedSituations: new Set(),
-    expandedSujets: new Set(),
+    expandedProblems: new Set(),
+
     selectedSituationId: null,
-    selectedSujetId: null,
+    selectedProblemId: null,
     selectedAvisId: null,
+
     verdictFilter: "ALL",
     search: "",
     displayDepth: "situations",
