@@ -1,10 +1,10 @@
 /* RAPSOBOT – project-situations view
-   restored DOM contract with legacy CSS
+   Version restaurée compatible avec l'ancien CSS (archive/app.js)
 */
 
 import { store } from "../store.js";
 
-let selected = null;
+let selectedItem = null;
 
 export function renderProjectSituations(root) {
 
@@ -26,6 +26,7 @@ root.innerHTML = `
 <div id="situationsBody" class="issues-table__body"></div>
 
 </div>
+
 </div>
 
 <div class="gh-splitter" id="rightSplitter"></div>
@@ -37,9 +38,11 @@ root.innerHTML = `
 <div class="details-title-row">
 
 <div class="details-title-maincol">
+
 <div class="details-title-topline">
 <span class="details-title-text">Détail</span>
 </div>
+
 </div>
 
 <div class="details-title-actions">
@@ -59,31 +62,28 @@ root.innerHTML = `
 
 initSplitter();
 
-rerender();
+rerenderTable();
+function rerenderTable(){
 
-}
-
-function rerender(){
-
-const store = store();
+const store = getStore();
 const body = document.getElementById("situationsBody");
 
 body.innerHTML = "";
 
-store.situations.forEach(s => {
+store.situations.forEach(situation=>{
 
-body.appendChild(renderSituationRow(s));
+body.appendChild(renderSituationRow(situation));
 
-if(s.open){
+if(situation.open){
 
-s.sujets.forEach(pb=>{
+situation.sujets.forEach(sujet=>{
 
-body.appendChild(renderSujetRow(pb));
+body.appendChild(renderSujetRow(sujet));
 
-if(pb.open){
+if(sujet.open){
 
-pb.avis.forEach(a=>{
-body.appendChild(renderAvisRow(a));
+sujet.avis.forEach(avis=>{
+body.appendChild(renderAvisRow(avis));
 });
 
 }
@@ -99,9 +99,10 @@ body.appendChild(renderAvisRow(a));
 function renderSituationRow(s){
 
 const row = document.createElement("div");
+
 row.className =
 "issue-row issue-row--sit click lvl0" +
-(selected?.id === s.id ? " subissue-row--selected": "");
+(selectedItem?.id === s.id ? " subissue-row--selected":"");
 
 row.innerHTML = `
 <div class="cell cell-theme lvl0">
@@ -112,25 +113,29 @@ row.innerHTML = `
 <div class="cell cell-verdict">${s.verdict||""}</div>
 <div class="cell cell-prio">${s.prio||""}</div>
 <div class="cell cell-agent mono-small">${s.agent||""}</div>
-<div class="cell cell-id mono">${s.id}</div>
+<div class="cell cell-id mono">${s.id||""}</div>
 `;
 
 row.onclick = ()=>{
+
 s.open = !s.open;
+
 selectItem(s);
-rerender();
+
+rerenderTable();
+
 };
 
 return row;
 
 }
-
 function renderSujetRow(pb){
 
 const row = document.createElement("div");
+
 row.className =
 "issue-row issue-row--pb click lvl1" +
-(selected?.id === pb.id ? " subissue-row--selected": "");
+(selectedItem?.id === pb.id ? " subissue-row--selected":"");
 
 row.innerHTML = `
 <div class="cell cell-theme lvl1">
@@ -141,13 +146,17 @@ row.innerHTML = `
 <div class="cell cell-verdict"></div>
 <div class="cell cell-prio">${pb.prio||""}</div>
 <div class="cell cell-agent mono-small">${pb.agent||""}</div>
-<div class="cell cell-id mono">${pb.id}</div>
+<div class="cell cell-id mono">${pb.id||""}</div>
 `;
 
 row.onclick = ()=>{
+
 pb.open = !pb.open;
+
 selectItem(pb);
-rerender();
+
+rerenderTable();
+
 };
 
 return row;
@@ -157,9 +166,10 @@ return row;
 function renderAvisRow(a){
 
 const row = document.createElement("div");
+
 row.className =
 "issue-row issue-row--avis click lvl2" +
-(selected?.id === a.id ? " subissue-row--selected": "");
+(selectedItem?.id === a.id ? " subissue-row--selected":"");
 
 row.innerHTML = `
 <div class="cell cell-theme lvl2">
@@ -170,20 +180,23 @@ row.innerHTML = `
 <div class="cell cell-verdict">${a.verdict||""}</div>
 <div class="cell cell-prio">${a.prio||""}</div>
 <div class="cell cell-agent mono-small">${a.agent||""}</div>
-<div class="cell cell-id mono">${a.id}</div>
+<div class="cell cell-id mono">${a.id||""}</div>
 `;
 
 row.onclick = ()=>{
+
 selectItem(a);
+
 };
 
 return row;
 
 }
 
+}
 function selectItem(item){
 
-selected = item;
+selectedItem = item;
 
 renderDetails(item);
 
@@ -207,11 +220,11 @@ body.innerHTML = `
 <div class="gh-comment-box">
 
 <div class="gh-comment-header">
-<span class="gh-comment-author">${item.agent||"system"}</span>
+<span class="gh-comment-author">${item.agent || "system"}</span>
 </div>
 
 <div class="gh-comment-body">
-${item.description||""}
+${item.description || ""}
 </div>
 
 </div>
@@ -226,17 +239,17 @@ ${item.description||""}
 
 <div class="meta-item">
 <span class="meta-k">ID</span>
-<span class="meta-v mono">${item.id}</span>
+<span class="meta-v mono">${item.id || ""}</span>
 </div>
 
 <div class="meta-item">
 <span class="meta-k">Agent</span>
-<span class="meta-v">${item.agent||""}</span>
+<span class="meta-v">${item.agent || ""}</span>
 </div>
 
 <div class="meta-item">
 <span class="meta-k">Verdict</span>
-<span class="meta-v">${item.verdict||""}</span>
+<span class="meta-v">${item.verdict || ""}</span>
 </div>
 
 </div>
@@ -250,7 +263,8 @@ function initSplitter(){
 
 const splitter = document.getElementById("rightSplitter");
 
-let startX,startWidth;
+let startX;
+let startWidth;
 
 splitter.onmousedown = e=>{
 
