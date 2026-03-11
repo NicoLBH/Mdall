@@ -65,7 +65,7 @@ initSplitter();
 rerenderTable();
 function rerenderTable(){
 
-const store = getStore();
+const store = store();
 const body = document.getElementById("situationsBody");
 
 body.innerHTML = "";
