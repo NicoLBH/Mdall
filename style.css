@@ -1417,7 +1417,7 @@ body.drilldown-open .drilldown__inner {
    ========================= */
 .project-tabs{
   position:fixed;
-  top:var(--header-h);
+  top: calc(var(--header-h) - 10px);
   left:0;
   right:0;
   height:44px;
