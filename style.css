@@ -23,6 +23,8 @@
   --mono:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
 
   --header-h:64px;
+  --control-xlarge-paddingBlock: .875rem;
+  --base-size-48: 3rem;
 }
 
 *{box-sizing:border-box;}
@@ -40,7 +42,6 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);ove
   gap:12px;
   padding:12px 16px;
   background:var(--headbg);
-  border-bottom:1px solid var(--border);
 }
 .gh-header__left{display:flex;align-items:center;gap:12px;min-width:0;justify-self:start;}
 .gh-header__center{justify-self:center;}
@@ -1422,15 +1423,15 @@ body.drilldown-open .drilldown__inner {
   align-items:center;
   gap:4px;
   padding:0 16px;
-  background:var(--bg);
+  background:var(--headbg);
   border-bottom:1px solid var(--border);
   z-index:9;
 }
 .project-tabs a{
   display:inline-flex;
   align-items:center;
-  padding:8px 14px;
-  font-size:14px;
+  padding:6px 8px;
+  font-size:12px;
   font-weight:500;
   color:var(--muted);
   text-decoration:none;
@@ -1439,17 +1440,29 @@ body.drilldown-open .drilldown__inner {
   border-top-left-radius:6px;
   border-top-right-radius:6px;
   transition:background .12s ease;
+  line-height:1.5;
+}
+.project-tabs a:after{
+    bottom: calc(50% - var(--control-xlarge-size, var(--base-size-48, 3rem)) / 2 - 1px);
+    content: "";
+    pointer-events: none;
+    background-color: #0000;
+    border-radius: 0;
+    width: 100%;
+    height: 2px;
+    position: absolute;
+    right: 50%;
+    transform: translate(50%, -50%);
 }
 .project-tabs a:hover{
   color:var(--text);
   background:rgba(110,118,129,.08);
 }
 .project-tabs a.active{
-  color:var(--text);
-  background:var(--bg);
-  border:1px solid var(--border);
-  border-bottom:1px solid var(--bg);
   font-weight:600;
+}
+.project-tabs a.active:after{
+  background-color:rgb(247, 129, 102);
 }
 #app{
   position:fixed;
