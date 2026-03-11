@@ -1468,7 +1468,7 @@ body.drilldown-open .drilldown__inner {
 }
 
 
-/* refacto restore helpers */
+/* refacto restore helpers 
 .gh-input{background:var(--panel);border:1px solid var(--border2);color:var(--fg);border-radius:8px;padding:8px 10px;min-height:36px;}
 .gh-input--sm{min-width:88px;padding:6px 10px;}
 .sidebar-card{padding:16px 0;}
@@ -1501,3 +1501,4 @@ body.drilldown-open .drilldown__inner {
 @media (max-width: 1200px){
   .gh-page[style*="grid-template-columns:minmax(0,1fr) minmax(360px,420px)"]{grid-template-columns:1fr !important;}
 }
+*/
