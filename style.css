@@ -443,6 +443,8 @@ body.banner-visible .gh-page{top:calc(var(--header-h) + 64px);}
   border:1px solid var(--border);
   border-radius:var(--radius);
   overflow:hidden;
+  flex:1 1 auto;
+  margin-top:16px;
 }
 
 .issues-table__head{
