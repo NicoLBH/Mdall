@@ -1,1234 +1,1198 @@
 import { store } from "../store.js";
-import { runAnalysis, resetAnalysisUi } from "../services/analysis-runner.js";
 
-/*  version V1.0.5 */
-(function injectMiddleHoverStyle(){
-  if (document.getElementById("middle-hover-style")) return;
-  const style = document.createElement("style");
-  style.id = "middle-hover-style";
-  style.innerHTML = `
-    .issues-table__body .row:hover,
-    .issues-table__body .issue-row:hover,
-    .issues-table__body .line:hover {
-      background: rgb(21, 27, 35) !important;
-    }
-  `;
-  document.head.appendChild(style);
-})();
-
-
-/* ===== Clickable entity links (IDs) ===== */
-(function injectEntityLinkStyle(){
-  if (document.getElementById("entity-link-style")) return;
-  const style = document.createElement("style");
-  style.id = "entity-link-style";
-  style.innerHTML = `
-    a.entity-link{
-      text-decoration: none;
-      cursor: pointer;
-      color:rgb(145, 152, 161);
-    }
-    a.entity-link:hover{
-      text-decoration: underline;
-    }
-  `;
-  document.head.appendChild(style);
-})();
-
-
-/* ===== @rapso hint + pending animation ===== */
-(function injectRapsoUiStyle(){
-  if (document.getElementById("rapso-ui-style")) return;
-  const style = document.createElement("style");
-  style.id = "rapso-ui-style";
-  style.innerHTML = `
-    .rapso-mention-hint{
-      display:flex;
-      align-items:center;
-      gap:8px;
-      color: var(--muted);
-      font-size: 12px;
-      min-width: 0;
-      flex: 1 1 auto;
-    }
-    .rapso-mention-hint .mono{ color: var(--fg); }
-    .rapso-mention-ico{
-      width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;
-      color: var(--muted);
-      flex: 0 0 auto;
-    }
-    .rapso-wait{
-      display:flex;
-      align-items:center;
-      gap:10px;
-      padding: 10px 12px;
-      border: 1px solid rgba(56,139,253,.35);
-      background: rgba(56,139,253,.08);
-      border-radius: 10px;
-      overflow:hidden;
-    }
-    .rapso-spinner{
-      width:16px;height:16px;
-      border-radius:50%;
-      border:2px solid rgba(139,148,158,.35);
-      border-top-color: rgba(56,139,253,.9);
-      animation: rapso-spin 0.9s linear infinite;
-      flex:0 0 auto;
-    }
-    @keyframes rapso-spin { from { transform: rotate(0deg);} to { transform: rotate(360deg);} }
-    .rapso-shimmer{
-      position:relative;
-      font-weight:600;
-      color: var(--fg);
-      white-space:nowrap;
-    }
-    .rapso-shimmer:after{
-      content:"";
-      position:absolute;
-      top:0;left:-120%;
-      width:120%;
-      height:100%;
-      background: linear-gradient(90deg, rgba(0,0,0,0) 0%, rgba(255,255,255,.18) 50%, rgba(0,0,0,0) 100%);
-      animation: rapso-sweep 1.4s ease-in-out infinite;
-      pointer-events:none;
-    }
-    @keyframes rapso-sweep { from { left:-120%; } to { left:120%; } }
-    .rapso-wait-sub{
-      color: var(--muted);
-      font-size: 12px;
-      margin-top: 6px;
-    }
-  `;
-  document.head.appendChild(style);
-})();
-
-
-// RAPSOBOT PoC UI — lighter middle list + persistent expand + right details with parent context
-// Expected from webhook:
-// { status, run_id, situations[], problems[], avis[] }
-
-const qs = new URLSearchParams(location.search);
-
-const STORAGE_KEY = "rapsobot_ui_human_v2";
-
-const STORAGE_KEY_ASSIST = "rapsobot_ui_assistant_v1";
-
-const state = {
-  data: null,
-
-  // persistent expansions
-  expandedSituations: new Set(), // situation_id
-  expandedProblems: new Set(),   // problem_id
-
-  // selection for right panel
-  selectedSituationId: null,
-  selectedProblemId: null,
-  selectedAvisId: null,
-
-  verdictFilter: "ALL",
-  search: "",
-  displayDepth: "situations", // situations | sujets | avis
-
-  page: 1,
-  pageSize: 80, // paginating avis within a problem if needed
-
-  sidebarCollapsed: false,
-
-  // preserve middle list scroll when re-rendering
-  middleScrollTop: 0,
-  middleScrollLeft: 0,
-
-  // right panel: sub-issues table (below description)
-  rightSubissuesOpen: true,
-  rightExpandedProblems: new Set(),
-
-  // details actions
-  tempAvisVerdict: null,
-  tempAvisVerdictFor: null,
-  // drilldown slide-in panel (independent from main details/modale)
-  drilldown: {
-    isOpen: false,
-    selectedSituationId: null,
-    selectedProblemId: null,
-    selectedAvisId: null,
-    rightSubissuesOpen: true,
-    rightExpandedProblems: new Set(),
-    tempAvisVerdict: null,
-    tempAvisVerdictFor: null,
-  },
-
-
-  // private assistant overlay (non-public chat with Rapso)
-  assistant: {
-    isOpen: false,
-    helpMode: false,
-    // persistent chat stored in localStorage (separate key)
-    draft: "",
-  },
-
-
-};
-
-// DOM helpers
-function el(id){
-  const aliases = {
-    runBtnTop: ["runBtnTop", "runAnalysisBtnTop"],
-    runMetaTop: ["runMetaTop", "runAnalysisMetaTop"],
-  };
-  const ids = aliases[id] || [id];
-  for (const candidate of ids) {
-    const node = document.getElementById(candidate);
-    if (node) return node;
-  }
-  return null;
-}
-function els(sel, root=document){ return Array.from(root.querySelectorAll(sel)); }
-
-function ensureGlobalTopbarAliases() {
-  const runBtn = document.getElementById("runAnalysisBtnTop");
-  if (runBtn && !document.getElementById("runBtnTop")) runBtn.id = "runBtnTop";
-
-  const runMeta = document.getElementById("runAnalysisMetaTop");
-  if (runMeta && !document.getElementById("runMetaTop")) runMeta.id = "runMetaTop";
-}
-
-function clearLocalSituationsState() {
-  state.data = null;
-  state.expandedSituations = new Set();
-  state.expandedProblems = new Set();
-  state.selectedSituationId = null;
-  state.selectedProblemId = null;
-  state.selectedAvisId = null;
-  state.verdictFilter = "ALL";
-  state.search = "";
-  state.page = 1;
-  state._lastRawResult = null;
-}
-
-function syncStateFromStore() {
-  const ui = store.ui || {};
-  const sys = ui.systemStatus || {};
-  setRunMeta(ui.runId || "");
-  setSystemStatus(sys.state || "idle", sys.label || "Idle", sys.meta || "—");
-
-  const view = store.situationsView || {};
-  const raw = view.rawResult || null;
-
-  if (!raw) {
-    clearLocalSituationsState();
-    return;
-  }
-
-  if (state._lastRawResult !== raw) {
-    state.data = raw;
-    state._lastRawResult = raw;
-    state.expandedSituations = new Set(view.expandedSituations || []);
-    state.expandedProblems = new Set(view.expandedSujets || view.expandedProblems || []);
-    state.selectedSituationId = view.selectedSituationId || raw?.situations?.[0]?.situation_id || null;
-    state.selectedProblemId = view.selectedSujetId || view.selectedProblemId || null;
-    state.selectedAvisId = view.selectedAvisId || null;
-    state.verdictFilter = view.verdictFilter || state.verdictFilter || "ALL";
-    state.search = view.search || state.search || "";
-    state.page = view.page || state.page || 1;
-  }
-}
-
-function renderSituationsShell(root) {
-  const projectId = store.currentProjectId || "demo";
-  root.innerHTML = `
-    <div id="topBanner" class="gh-banner gh-banner--info hidden"></div>
-
-    <div class="gh-page gh-page--3col" style="padding-top:0;">
-      <aside id="sidebar" class="gh-sidebar">
-        <div class="gh-sidebar__head">
-          <div class="sidebar-head-left">
-            <button id="sidebarToggle" class="icon-btn icon-btn--sm" type="button" aria-label="Rétracter le menu">☰</button>
-            <strong>Paramètres</strong>
-          </div>
-        </div>
-
-        <div class="gh-sidebar__section">
-          <div class="emptyState" style="padding:0;border:none;background:none;">
-            <p><strong>Référence de vérité</strong></p>
-            <p>Les paramètres projet restent dans l’onglet <a href="#project/${projectId}/identity">Fiche d’identité</a>.</p>
-            <p>Le PDF reste dans l’onglet <a href="#project/${projectId}/documents">Documents</a>.</p>
-          </div>
-        </div>
-      </aside>
-
-      <button id="sidebarToggleFloating" class="sidebar-fab icon-btn" type="button" aria-label="Afficher le menu">☰</button>
-
-      <section class="gh-panel gh-panel--results">
-        <div class="gh-panel__head gh-panel__head--tight">
-          <div class="issues-head">
-            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-              <strong>Résultats</strong>
-
-              <label class="gh-filter" for="verdictFilter">
-                <span>Verdict</span>
-                <select id="verdictFilter" class="gh-input gh-input--sm">
-                  <option value="ALL">ALL</option>
-                  <option value="OK">OK</option>
-                  <option value="D">D</option>
-                  <option value="S">S</option>
-                  <option value="HM">HM</option>
-                  <option value="PM">PM</option>
-                  <option value="SO">SO</option>
-                </select>
-              </label>
-
-              <label class="gh-filter" for="searchBox">
-                <span>Search</span>
-                <input id="searchBox" class="gh-input gh-input--sm" type="text" placeholder="topic / EC8 / mot-clé…">
-              </label>
-            </div>
-
-            <div id="counts" class="issues-totals mono">—</div>
-            <div id="issuesTotals" class="mono" style="display:none">—</div>
-          </div>
-        </div>
-
-        <div id="issuesTable"></div>
-
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:12px 0 0 0;">
-          <div id="pageInfo" class="mono"></div>
-          <div style="display:flex;gap:8px;">
-            <button id="prevPage" class="gh-btn gh-btn--sm" type="button">Précédent</button>
-            <button id="nextPage" class="gh-btn gh-btn--sm" type="button">Suivant</button>
-          </div>
-        </div>
-      </section>
-
-      <aside class="gh-panel gh-panel--details">
-        <div class="gh-panel__head gh-panel__head--tight">
-          <div class="details-head">
-            <div class="details-head-left">
-              <div class="details-kicker mono">DÉTAILS</div>
-              <div class="gh-panel__title" id="detailsTitle"></div>
-            </div>
-            <div class="details-head-right">
-              <div class="details-meta mono" id="detailsMeta">—</div>
-              <button id="detailsExpand" class="icon-btn icon-btn--sm" type="button" aria-label="Ouvrir en plein écran">↗</button>
-            </div>
-          </div>
-        </div>
-
-        <div id="detailsBody" class="details-body"></div>
-      </aside>
-    </div>
-  `;
-}
-
-
-
-function entityLinkHtml(type, id, text, extraAttrs="") {
-  const t = String(text ?? "");
-  const safeText = escapeHtml(t);
-  const safeId = escapeHtml(id);
-  const safeType = escapeHtml(type);
-  return `<a href="#" class="entity-link" data-nav-type="${safeType}" data-nav-id="${safeId}" ${extraAttrs}>${safeText}</a>`;
-}
-
-function openOverlayFor(type, id) {
-  const t = String(type || "").toLowerCase();
-  const x = String(id || "");
-  if (!x) return;
-  if (t === "avis") return openDrilldownFromAvis(x);
-  if (t === "problem" || t === "sujet") return openDrilldownFromProblem(x);
-  if (t === "situation") return drilldownSelectSituation(x);
-}
-
-function refreshAll() {
-  // Keep selections; just re-render everything that can diverge visually.
-  renderMiddle();
-  renderDetails();
-  if (state.drilldown?.isOpen) renderDetails({ target: "drill" });
-}
-
-function escapeHtml(s) {
-  return String(s ?? "").replace(/[&<>"']/g, (c) => ({
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => ({
     "&": "&amp;",
     "<": "&lt;",
     ">": "&gt;",
     '"': "&quot;",
-    "'": "&#39;",
-  }[c]));
+    "'": "&#39;"
+  }[char]));
 }
 
-function badgePriority(p) {
-  const v = String(p || "").toUpperCase();
-  if (v === "P1") return "badge badge--p1";
-  if (v === "P2") return "badge badge--p2";
-  return "badge badge--p3";
-}
-function badgeVerdict(v) {
-  const s = String(v || "").toUpperCase();
-  return `verdict-badge verdict-${s}`;
-}
-
-
-/* ===== Open/Closed status icons (GitHub-like) ===== */
-const SVG_ISSUE_OPEN = `<svg color="var(--fgColor-open)" aria-hidden="true" focusable="false" aria-label="" class="octicon octicon-issue-opened" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align:text-bottom;"><path d="M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"></path><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Z"></path></svg>`;
-const SVG_ISSUE_CLOSED = `<svg color="var(--fgColor-done)" aria-hidden="true" focusable="false" aria-label="" class="octicon octicon-issue-closed" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align:text-bottom"><path d="M11.28 6.78a.75.75 0 0 0-1.06-1.06L7.25 8.69 5.78 7.22a.75.75 0 0 0-1.06 1.06l2 2a.75.75 0 0 0 1.06 0l3.5-3.5Z"></path><path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0Zm-1.5 0a6.5 6.5 0 1 0-13 0 6.5 6.5 0 0 0 13 0Z"></path></svg>`;
-const SVG_ISSUE_REOPENED = `<svg aria-hidden="true" focusable="false" class="octicon octicon-issue-reopened" viewBox="0 0 16 16" width="16" height="16" fill="rgb(63, 185, 80)" display="inline-block" overflow="visible" style="vertical-align: text-bottom;"><path d="M5.029 2.217a6.5 6.5 0 0 1 9.437 5.11.75.75 0 1 0 1.492-.154 8 8 0 0 0-14.315-4.03L.427 1.927A.25.25 0 0 0 0 2.104V5.75A.25.25 0 0 0 .25 6h3.646a.25.25 0 0 0 .177-.427L2.715 4.215a6.491 6.491 0 0 1 2.314-1.998ZM1.262 8.169a.75.75 0 0 0-1.22.658 8.001 8.001 0 0 0 14.315 4.03l1.216 1.216a.25.25 0 0 0 .427-.177V10.25a.25.25 0 0 0-.25-.25h-3.646a.25.25 0 0 0-.177.427l1.358 1.358a6.501 6.501 0 0 1-11.751-3.11.75.75 0 0 0-.272-.506Z"></path><path d="M9.06 9.06a1.5 1.5 0 1 1-2.12-2.12 1.5 1.5 0 0 1 2.12 2.12Z"></path></svg>`;
-const SVG_AVATAR_HUMAN = `<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="22" height="22" fill="currentColor" style="display:block"><path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5Zm0 2c-5.06 0-9 2.39-9 5.25V22h18v-2.75C21 16.39 17.06 14 12 14Z"></path></svg>`;
-
-
-function issueStatusIconHtml(status) {
-  const s = String(status || "closed").toLowerCase();
-  const svg = (s === "open") ? SVG_ISSUE_OPEN : SVG_ISSUE_CLOSED;
-  // Wrapper for spacing/alignment (no extra CSS required)
-  return `<span class="issue-status-icon" style="display:inline-flex; align-items:center; margin-right:8px;">${svg}</span>`;
-}
-
-
-
-/* ===== Sub-issues: Problems (sujets) closed ratio icon ===== */
-function problemsCountsIconHtml(closedCount, totalCount) {
-  const total = Math.max(0, Number(totalCount) || 0);
-  const closed = Math.max(0, Math.min(total, Number(closedCount) || 0));
-
-  if (total > 0 && closed === total) {
-    return `<span class="subissues-problems-icon" aria-label="Tous les sujets sont closed">${SVG_ISSUE_CLOSED}</span>`;
-  }
-
-  // Base circle + pie slice (camembert) showing closed/total
-  const ratio = total ? (closed / total) : 0;
-  const r = 8;
-  const cx = 10, cy = 10;
-  const a = ratio * Math.PI * 2;
-
-  // If ratio is 0, show only the grey circle
-  let wedge = "";
-  if (ratio > 0) {
-    const x = cx + r * Math.sin(a);
-    const y = cy - r * Math.cos(a);
-    const large = a > Math.PI ? 1 : 0;
-    wedge = `<path d="M ${cx} ${cy} L ${cx} ${cy - r} A ${r} ${r} 0 ${large} 1 ${x} ${y} Z" fill="rgba(137,87,229,.55)" opacity="0.75"></path>`;
-  }
-
-  return `
-    <span class="subissues-problems-icon" aria-label="Sujets closed: ${closed}/${total}">
-      <svg viewBox="0 0 20 20" width="16" height="16" style="display:block">
-        <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="rgba(139,148,158,.55)" stroke-width="2"></circle>
-        ${wedge}
-      </svg>
-    </span>
-  `;
-}
-
-function setSystemStatus(kind, label, meta) {
-  el("sysLabel").textContent = label || "";
-  el("sysMeta").textContent = meta || "—";
-  const dot = el("sysDot");
-  const colors = { idle: "var(--muted)", running: "var(--accent)", done: "var(--success)", error: "var(--danger)" };
-  dot.style.background = colors[kind] || colors.idle;
-}
-
-function showBanner(kind, msg) {
-  const box = el("topBanner");
-  if (!box) return;
-  if (!msg) {
-    box.classList.add("hidden");
-    document.body.classList.remove("banner-visible");
-    box.textContent = "";
-    box.classList.remove("gh-banner--error", "gh-banner--info");
-    return;
-  }
-  box.classList.remove("hidden");
-  document.body.classList.add("banner-visible");
-  box.classList.toggle("gh-banner--error", kind === "error");
-  box.classList.toggle("gh-banner--info", kind !== "error");
-  box.textContent = msg;
-}
-
-
-function setRunMeta(run_id) {
-  el("runMetaTop").textContent = run_id ? `run_id=${run_id}` : "";
-}
-function setIssuesTotals(d) {
-  const node = el("issuesTotals");
-  if (!d) return (node.textContent = "—");
-  const s = Array.isArray(d.situations) ? d.situations.length : 0;
-  const p = Array.isArray(d.problems) ? d.problems.length : 0;
-  const a = Array.isArray(d.avis) ? d.avis.length : 0;
-  node.textContent = `${s} situations · ${p} sujets · ${a} avis`;
-}
-
-
-function showError(msg) {
-  showBanner("error", msg || "Erreur inconnue");
-  console.error("[RAPSOBOT] " + (msg || "Erreur inconnue"));
-}
-
-
-function setDetailsMeta(text) {
-  el("detailsMeta").textContent = text || "—";
-  if (el("detailsMetaModal")) el("detailsMetaModal").textContent = text || "—";
-}
-
-function setDetailsTitle(text) {
-  const t = text || "Sélectionner un élément";
-  const m = el("detailsTitle");
-  if (m) m.textContent = t;
-  const mm = el("detailsTitleModal");
-  if (mm) mm.textContent = t;
-}
-
-
-/* ===== Details head: HTML title + GitHub-like badges ===== */
-function setDetailsTitleHtml(html) {
-  const m = el("detailsTitle");
-  if (m) m.innerHTML = html || "";
-  const mm = el("detailsTitleModal");
-  if (mm) mm.innerHTML = html || "";
-}
-
-function statusBadgeHtml(status) {
-  const s = String(status || "OPEN").toUpperCase();
-  const isClosed = (s === "CLOSED" || s === "DONE" || s === "OK");
-  const label = isClosed ? "Closed" : "Open";
-  const cls = isClosed ? "gh-state gh-state--closed" : "gh-state gh-state--open";
-  const svg = isClosed ?  SVG_ISSUE_CLOSED : SVG_ISSUE_OPEN;
-  return `<span class="${cls}">${svg}<span>${label}</span></span>`;
-}
-
-function detailsBadgesHtmlForSelection(obj, kind) {
-  if (!obj) return "";
-  if (kind === "situation") {
-    const st = getEffectiveSituationStatus(obj.situation_id);
-    const pr = obj.priority ? `<span class="badge ${badgePriority(obj.priority)}">${escapeHtml(obj.priority)}</span>` : "";
-    return `${statusBadgeHtml(st)}${pr}`;
-  }
-  if (kind === "problem") {
-    const st = getEffectiveProblemStatus(obj.problem_id);
-    const pr = obj.priority ? `<span class="badge ${badgePriority(obj.priority)}">${escapeHtml(obj.priority)}</span>` : "";
-    return `${statusBadgeHtml(st)}${pr}`;
-  }
-  if (kind === "avis") {
-    const v = getEffectiveAvisVerdict(obj.avis_id) || obj.verdict || "";
-    return v ? `<span class="${badgeVerdict(v)}">${escapeHtml(v)}</span>` : "";
+function firstNonEmpty(...values) {
+  for (const value of values) {
+    if (value !== undefined && value !== null && String(value).trim() !== "") {
+      return String(value);
+    }
   }
   return "";
 }
-/* ===============================
-   DATA HELPERS
-================================ */
 
-function bySituation(id){
-  return state.data?.situations?.find(s => s.situation_id === id) || null;
+function issueIcon(status = "open") {
+  const isOpen = String(status || "open").toLowerCase() !== "closed";
+  return isOpen
+    ? `<svg color="var(--fgColor-open)" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"></path><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Z"></path></svg>`
+    : `<svg color="var(--fgColor-done)" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M11.28 6.78a.75.75 0 0 0-1.06-1.06L7.25 8.69 5.78 7.22a.75.75 0 0 0-1.06 1.06l2 2a.75.75 0 0 0 1.06 0l3.5-3.5Z"></path><path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0Zm-1.5 0a6.5 6.5 0 1 0-13 0 6.5 6.5 0 0 0 13 0Z"></path></svg>`;
 }
 
-function byProblem(id){
-  return state.data?.problems?.find(p => p.problem_id === id) || null;
+function priorityBadge(priority = "P3") {
+  const p = String(priority || "P3").toUpperCase();
+  const cls =
+    p === "P1"
+      ? "badge badge--p1"
+      : p === "P2"
+        ? "badge badge--p2"
+        : "badge badge--p3";
+  return `<span class="${cls}">${escapeHtml(p)}</span>`;
 }
 
-function byAvis(id){
-  return state.data?.avis?.find(a => a.avis_id === id) || null;
+function statePill(status = "open") {
+  const isOpen = String(status || "open").toLowerCase() !== "closed";
+  return `<span class="gh-state ${isOpen ? "gh-state--open" : "gh-state--closed"}">${isOpen ? "Open" : "Closed"}</span>`;
 }
 
-function problemsForSituation(situation_id){
-  return (state.data?.problems || []).filter(p => p.situation_id === situation_id);
+function badgeCounter(current, total) {
+  return `<span class="subissues-counts--problems">${current} sur ${total}</span>`;
 }
 
-function avisForProblem(problem_id){
-  return (state.data?.avis || []).filter(a => a.problem_id === problem_id);
-}
+function buildRawIndex() {
+  const raw = store.situationsView.rawResult || {};
+  const situations = Array.isArray(raw.situations) ? raw.situations : [];
+  const problems = Array.isArray(raw.problems) ? raw.problems : [];
+  const avis = Array.isArray(raw.avis) ? raw.avis : [];
 
-function avisForSituation(situation_id){
-  const probs = problemsForSituation(situation_id).map(p => p.problem_id);
-  return (state.data?.avis || []).filter(a => probs.includes(a.problem_id));
-}
+  const situationById = new Map(situations.map((s) => [String(s.situation_id || s.id), s]));
+  const problemById = new Map(problems.map((p) => [String(p.problem_id || p.id), p]));
+  const avisById = new Map(avis.map((a) => [String(a.avis_id || a.id), a]));
 
+  const problemToSituation = new Map();
+  const avisToProblem = new Map();
+  const avisToSituation = new Map();
 
-/* ===============================
-   EFFECTIVE STATUS / VERDICT
-================================ */
-
-function getEffectiveAvisVerdict(id){
-  const a = byAvis(id);
-  return a?.verdict || null;
-}
-
-function getEffectiveProblemStatus(problem_id){
-  const avis = avisForProblem(problem_id);
-  if (!avis.length) return "open";
-
-  const allClosed = avis.every(a => (a.verdict || "").toUpperCase() === "OK");
-  return allClosed ? "closed" : "open";
-}
-
-function getEffectiveSituationStatus(situation_id){
-  const probs = problemsForSituation(situation_id);
-  if (!probs.length) return "open";
-
-  const allClosed = probs.every(p => getEffectiveProblemStatus(p.problem_id) === "closed");
-  return allClosed ? "closed" : "open";
-}
-
-
-/* ===============================
-   FILTERING
-================================ */
-
-function applyFilters(list){
-  const verdict = state.verdictFilter;
-  const search = state.search.toLowerCase();
-
-  return list.filter(a => {
-    if (verdict !== "ALL") {
-      const v = (a.verdict || "").toUpperCase();
-      if (v !== verdict) return false;
+  for (const situation of situations) {
+    const sid = String(situation.situation_id || situation.id || "");
+    for (const problemId of situation.problem_ids || []) {
+      const pid = String(problemId);
+      problemToSituation.set(pid, sid);
+      const problem = problemById.get(pid);
+      if (!problem) continue;
+      for (const avisId of problem.avis_ids || []) {
+        const aid = String(avisId);
+        avisToProblem.set(aid, pid);
+        avisToSituation.set(aid, sid);
+      }
     }
-
-    if (search) {
-      const txt =
-        (a.topic || "") +
-        " " +
-        (a.description || "") +
-        " " +
-        (a.code || "");
-      if (!txt.toLowerCase().includes(search)) return false;
-    }
-
-    return true;
-  });
-}
-
-
-/* ===============================
-   MIDDLE TABLE RENDER
-================================ */
-
-function renderMiddle(){
-
-  const box = el("issuesTable");
-  if (!box) return;
-
-  if (!state.data){
-    box.innerHTML = `
-      <div class="emptyState">
-        <p>Aucune analyse exécutée.</p>
-      </div>
-    `;
-    return;
   }
 
-  const situations = state.data.situations || [];
-  const problems = state.data.problems || [];
-  const avis = state.data.avis || [];
+  return {
+    raw,
+    situations,
+    problems,
+    avis,
+    situationById,
+    problemById,
+    avisById,
+    problemToSituation,
+    avisToProblem,
+    avisToSituation
+  };
+}
 
-  const rows = [];
+function getNestedSituation(situationId) {
+  return (store.situationsView.data || []).find((s) => s.id === situationId) || null;
+}
 
-  situations.forEach(s => {
+function getNestedSujet(problemId) {
+  for (const situation of store.situationsView.data || []) {
+    const match = (situation.sujets || []).find((sujet) => sujet.id === problemId);
+    if (match) return match;
+  }
+  return null;
+}
 
-    const sOpen = state.expandedSituations.has(s.situation_id);
-    const sStatus = getEffectiveSituationStatus(s.situation_id);
+function getNestedAvis(avisId) {
+  for (const situation of store.situationsView.data || []) {
+    for (const sujet of situation.sujets || []) {
+      const match = (sujet.avis || []).find((avis) => avis.id === avisId);
+      if (match) return match;
+    }
+  }
+  return null;
+}
 
-    rows.push(`
-      <div class="row situation-row" data-id="${s.situation_id}">
-        <div class="col-main">
-          ${issueStatusIconHtml(sStatus)}
-          ${escapeHtml(s.title || "Situation")}
-        </div>
+function getSituationBySujetId(problemId) {
+  for (const situation of store.situationsView.data || []) {
+    if ((situation.sujets || []).some((sujet) => sujet.id === problemId)) {
+      return situation;
+    }
+  }
+  return null;
+}
+
+function getSituationByAvisId(avisId) {
+  for (const situation of store.situationsView.data || []) {
+    for (const sujet of situation.sujets || []) {
+      if ((sujet.avis || []).some((avis) => avis.id === avisId)) {
+        return situation;
+      }
+    }
+  }
+  return null;
+}
+
+function getSujetByAvisId(avisId) {
+  for (const situation of store.situationsView.data || []) {
+    for (const sujet of situation.sujets || []) {
+      if ((sujet.avis || []).some((avis) => avis.id === avisId)) {
+        return sujet;
+      }
+    }
+  }
+  return null;
+}
+
+function getActiveSelection() {
+  if (store.situationsView.selectedAvisId) {
+    const avis = getNestedAvis(store.situationsView.selectedAvisId);
+    if (avis) {
+      return { type: "avis", item: avis };
+    }
+  }
+
+  if (store.situationsView.selectedSujetId) {
+    const sujet = getNestedSujet(store.situationsView.selectedSujetId);
+    if (sujet) {
+      return { type: "sujet", item: sujet };
+    }
+  }
+
+  if (store.situationsView.selectedSituationId) {
+    const situation = getNestedSituation(store.situationsView.selectedSituationId);
+    if (situation) {
+      return { type: "situation", item: situation };
+    }
+  }
+
+  const firstSituation = (store.situationsView.data || [])[0] || null;
+  return firstSituation ? { type: "situation", item: firstSituation } : null;
+}
+
+function normalizeVerdict(verdict) {
+  const v = String(verdict || "").trim().toUpperCase();
+  if (!v) return "";
+  if (v === "WARN") return "WARNING";
+  if (v === "DEFAVORABLE") return "KO";
+  if (v === "FAVORABLE") return "OK";
+  return v;
+}
+
+function verdictTone(verdict) {
+  const v = normalizeVerdict(verdict);
+  if (["KO", "WARNING", "D", "DEFAVORABLE"].includes(v)) return "negative";
+  if (["OK", "S", "FAVORABLE"].includes(v)) return "positive";
+  return "neutral";
+}
+
+function verdictLabel(verdict) {
+  const v = normalizeVerdict(verdict);
+  return v || "—";
+}
+
+function verdictPill(verdict) {
+  const tone = verdictTone(verdict);
+  const cls =
+    tone === "negative"
+      ? "badge badge--danger"
+      : tone === "positive"
+        ? "badge badge--success"
+        : "badge";
+  return `<span class="${cls}">${escapeHtml(verdictLabel(verdict))}</span>`;
+}
+
+function problemVerdictStats(problem) {
+  const avis = problem?.avis || [];
+  let d = 0;
+  let s = 0;
+
+  for (const item of avis) {
+    const verdict = normalizeVerdict(item.verdict);
+    if (["KO", "WARNING", "D", "DEFAVORABLE"].includes(verdict)) d += 1;
+    else s += 1;
+  }
+
+  const total = Math.max(avis.length, 1);
+  const dPct = Math.round((d / total) * 100);
+  const sPct = Math.round((s / total) * 100);
+
+  return { d, s, dPct, sPct, total: avis.length };
+}
+
+function situationVerdictStats(situation) {
+  let d = 0;
+  let s = 0;
+  let total = 0;
+
+  for (const sujet of situation?.sujets || []) {
+    const stats = problemVerdictStats(sujet);
+    d += stats.d;
+    s += stats.s;
+    total += stats.total;
+  }
+
+  const safeTotal = Math.max(total, 1);
+  return {
+    d,
+    s,
+    total,
+    dPct: Math.round((d / safeTotal) * 100),
+    sPct: Math.round((s / safeTotal) * 100)
+  };
+}
+
+function verdictBar(stats) {
+  return `
+    <div class="subissues-counts subissues-counts--verdicts">
+      <div class="verdict-legend">
+        <span><span class="dot dot--red"></span>${stats.d} D (${stats.dPct}%)</span>
+        <span><span class="dot dot--yellow"></span>${stats.s} S (${stats.sPct}%)</span>
       </div>
-    `);
+      <div class="verdict-bar">
+        <span class="verdict-bar__red" style="width:${stats.dPct}%"></span>
+        <span class="verdict-bar__yellow" style="width:${stats.sPct}%"></span>
+      </div>
+    </div>
+  `;
+}
 
-    if (!sOpen) return;
+function matchSearch(parts, query) {
+  if (!query) return true;
+  const haystack = parts
+    .filter((part) => part !== undefined && part !== null)
+    .map((part) => String(part).toLowerCase())
+    .join(" ");
+  return haystack.includes(query);
+}
 
-    const probs = problems.filter(p => p.situation_id === s.situation_id);
+function avisMatchesFilters(avis, query, verdictFilter) {
+  if (!avis) return false;
 
-    probs.forEach(p => {
+  const matchesSearch = matchSearch(
+    [
+      avis.id,
+      avis.title,
+      avis.verdict,
+      avis.priority,
+      avis.status,
+      avis.agent,
+      avis.raw?.message,
+      avis.raw?.summary,
+      avis.raw?.topic,
+      avis.raw?.title,
+      avis.raw?.label
+    ],
+    query
+  );
 
-      const pOpen = state.expandedProblems.has(p.problem_id);
-      const pStatus = getEffectiveProblemStatus(p.problem_id);
+  if (!matchesSearch) return false;
 
-      rows.push(`
-        <div class="row problem-row" data-id="${p.problem_id}">
-          <div class="col-main indent">
-            ${issueStatusIconHtml(pStatus)}
-            ${escapeHtml(p.title || "Sujet")}
+  if (verdictFilter === "ALL") return true;
+  return normalizeVerdict(avis.verdict) === verdictFilter;
+}
+
+function situationMatchesFilters(situation, query, verdictFilter) {
+  const situationTextMatch = matchSearch(
+    [
+      situation.id,
+      situation.title,
+      situation.priority,
+      situation.status,
+      situation.raw?.summary,
+      situation.raw?.topic,
+      situation.raw?.category,
+      situation.raw?.title
+    ],
+    query
+  );
+
+  if (situationTextMatch) return true;
+
+  for (const sujet of situation.sujets || []) {
+    const sujetTextMatch = matchSearch(
+      [
+        sujet.id,
+        sujet.title,
+        sujet.priority,
+        sujet.status,
+        sujet.agent,
+        sujet.raw?.summary,
+        sujet.raw?.topic,
+        sujet.raw?.category,
+        sujet.raw?.title
+      ],
+      query
+    );
+
+    if (sujetTextMatch) {
+      if (verdictFilter === "ALL") return true;
+      if ((sujet.avis || []).some((avis) => normalizeVerdict(avis.verdict) === verdictFilter)) return true;
+    }
+
+    for (const avis of sujet.avis || []) {
+      if (avisMatchesFilters(avis, query, verdictFilter)) return true;
+    }
+  }
+
+  return false;
+}
+
+function getFilteredSituations() {
+  const verdictFilter = String(store.situationsView.verdictFilter || "ALL").toUpperCase();
+  const query = String(store.situationsView.search || "").trim().toLowerCase();
+  const situations = store.situationsView.data || [];
+
+  return situations.filter((situation) => situationMatchesFilters(situation, query, verdictFilter));
+}
+
+function getVisibleCounts(filteredSituations) {
+  let sujets = 0;
+  let avis = 0;
+  for (const situation of filteredSituations) {
+    sujets += (situation.sujets || []).length;
+    for (const sujet of situation.sujets || []) {
+      avis += (sujet.avis || []).length;
+    }
+  }
+  return {
+    situations: filteredSituations.length,
+    sujets,
+    avis
+  };
+}
+
+function chevron(isOpen) {
+  return `<span class="mono" style="display:inline-flex;width:14px;justify-content:center;">${isOpen ? "▾" : "▸"}</span>`;
+}
+
+function rowSelectedClass(kind, id) {
+  if (kind === "situation" && store.situationsView.selectedSituationId === id) return " is-selected";
+  if (kind === "sujet" && store.situationsView.selectedSujetId === id) return " is-selected";
+  if (kind === "avis" && store.situationsView.selectedAvisId === id) return " is-selected";
+  return "";
+}
+
+function renderSituationRow(situation) {
+  const expanded = store.situationsView.expandedSituations.has(situation.id);
+  const stats = situationVerdictStats(situation);
+  const avisCount = (situation.sujets || []).reduce((acc, sujet) => acc + (sujet.avis || []).length, 0);
+
+  return `
+    <tr
+      class="issue-row js-row-situation${rowSelectedClass("situation", situation.id)}"
+      data-situation-id="${escapeHtml(situation.id)}"
+    >
+      <td style="padding-left:12px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <button
+            type="button"
+            class="icon-btn icon-btn--ghost js-toggle-situation"
+            data-situation-id="${escapeHtml(situation.id)}"
+            aria-label="${expanded ? "Réduire" : "Déployer"}"
+          >
+            ${chevron(expanded)}
+          </button>
+          ${issueIcon(situation.status)}
+          <div style="display:flex;flex-direction:column;gap:2px;min-width:0;">
+            <strong style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(situation.title)}</strong>
           </div>
         </div>
-      `);
+      </td>
+      <td>${statePill(situation.status)}</td>
+      <td>${priorityBadge(situation.priority)}</td>
+      <td><span class="mono">${escapeHtml(firstNonEmpty(situation.agent, "system"))}</span></td>
+      <td><span class="mono">${escapeHtml(situation.id)}</span></td>
+    </tr>
+    ${
+      expanded
+        ? `
+      <tr class="subrow">
+        <td colspan="5" style="padding:0;">
+          <div class="subissues-wrap">
+            <div class="subissues-header">
+              <div style="display:flex;align-items:center;gap:10px;">
+                <strong>Sujets rattachés</strong>
+                ${badgeCounter(0, (situation.sujets || []).length)}
+              </div>
+              ${verdictBar(stats)}
+            </div>
+            <table class="issues-table subissues-table">
+              <tbody>
+                ${(situation.sujets || []).map((sujet) => renderSujetRow(sujet, situation.id)).join("")}
+              </tbody>
+            </table>
+          </div>
+        </td>
+      </tr>
+    `
+        : ""
+    }
+    ${
+      !expanded
+        ? `
+      <tr class="issue-row-summary">
+        <td colspan="5" style="padding:0 12px 12px 52px;">
+          <div style="display:flex;align-items:center;gap:16px;justify-content:space-between;flex-wrap:wrap;">
+            <span class="mono">${(situation.sujets || []).length} sujets · ${avisCount} avis</span>
+            ${verdictBar(stats)}
+          </div>
+        </td>
+      </tr>
+    `
+        : ""
+    }
+  `;
+}
 
-      if (!pOpen) return;
+function renderSujetRow(sujet, situationId) {
+  const expanded = store.situationsView.expandedSujets.has(sujet.id);
+  const stats = problemVerdictStats(sujet);
 
-      const aList = avisForProblem(p.problem_id);
-      const filtered = applyFilters(aList);
+  return `
+    <tr
+      class="issue-row js-row-sujet${rowSelectedClass("sujet", sujet.id)}"
+      data-sujet-id="${escapeHtml(sujet.id)}"
+      data-parent-situation-id="${escapeHtml(situationId)}"
+    >
+      <td style="padding-left:18px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <button
+            type="button"
+            class="icon-btn icon-btn--ghost js-toggle-sujet"
+            data-sujet-id="${escapeHtml(sujet.id)}"
+            aria-label="${expanded ? "Réduire" : "Déployer"}"
+          >
+            ${chevron(expanded)}
+          </button>
+          ${issueIcon(sujet.status)}
+          <strong style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(sujet.title)}</strong>
+        </div>
+      </td>
+      <td>${verdictPill((sujet.avis || [])[0]?.verdict || "")}</td>
+      <td>${priorityBadge(sujet.priority)}</td>
+      <td><span class="mono">${escapeHtml(firstNonEmpty(sujet.agent, "system"))}</span></td>
+      <td>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;">
+          <span class="mono">${escapeHtml(sujet.id)}</span>
+          <span class="mono" style="color:var(--muted);">${(sujet.avis || []).length} avis</span>
+        </div>
+      </td>
+    </tr>
+    ${
+      expanded
+        ? `
+      <tr class="subrow">
+        <td colspan="5" style="padding:0;">
+          <div class="subissues-wrap" style="padding-left:36px;">
+            <div class="subissues-header">
+              <div style="display:flex;align-items:center;gap:10px;">
+                <strong>Avis rattachés</strong>
+                ${badgeCounter(0, (sujet.avis || []).length)}
+              </div>
+              ${verdictBar(stats)}
+            </div>
+            <table class="issues-table subissues-table">
+              <tbody>
+                ${(sujet.avis || []).map((avis) => renderAvisRow(avis, sujet.id, situationId)).join("")}
+              </tbody>
+            </table>
+          </div>
+        </td>
+      </tr>
+    `
+        : ""
+    }
+  `;
+}
 
-      filtered.forEach(a => {
+function renderAvisRow(avis, sujetId, situationId) {
+  return `
+    <tr
+      class="issue-row js-row-avis${rowSelectedClass("avis", avis.id)}"
+      data-avis-id="${escapeHtml(avis.id)}"
+      data-parent-sujet-id="${escapeHtml(sujetId)}"
+      data-parent-situation-id="${escapeHtml(situationId)}"
+    >
+      <td style="padding-left:60px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span class="chev--spacer"></span>
+          ${issueIcon(avis.status)}
+          <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(avis.title)}</span>
+        </div>
+      </td>
+      <td>${verdictPill(avis.verdict)}</td>
+      <td>${priorityBadge(avis.priority)}</td>
+      <td><span class="mono">${escapeHtml(firstNonEmpty(avis.agent, "system"))}</span></td>
+      <td><span class="mono">${escapeHtml(avis.id)}</span></td>
+    </tr>
+  `;
+}
 
-        rows.push(`
-          <div class="row avis-row" data-id="${a.avis_id}">
-            <div class="col-main indent2">
-              <span class="${badgeVerdict(a.verdict)}">${escapeHtml(a.verdict || "")}</span>
-              ${escapeHtml(a.topic || "Avis")}
+function renderFlatSujetRow(sujet, situationId) {
+  const stats = problemVerdictStats(sujet);
+  return `
+    <tr
+      class="issue-row js-row-sujet${rowSelectedClass("sujet", sujet.id)}"
+      data-sujet-id="${escapeHtml(sujet.id)}"
+      data-parent-situation-id="${escapeHtml(situationId)}"
+    >
+      <td style="padding-left:12px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          ${issueIcon(sujet.status)}
+          <div style="display:flex;flex-direction:column;gap:2px;min-width:0;">
+            <strong style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(sujet.title)}</strong>
+            <span class="mono" style="color:var(--muted);">${escapeHtml(situationId)}</span>
+          </div>
+        </div>
+      </td>
+      <td>${verdictBar(stats)}</td>
+      <td>${priorityBadge(sujet.priority)}</td>
+      <td><span class="mono">${escapeHtml(firstNonEmpty(sujet.agent, "system"))}</span></td>
+      <td><span class="mono">${escapeHtml(sujet.id)}</span></td>
+    </tr>
+  `;
+}
+
+function renderFlatAvisRow(avis, sujetId, situationId) {
+  return `
+    <tr
+      class="issue-row js-row-avis${rowSelectedClass("avis", avis.id)}"
+      data-avis-id="${escapeHtml(avis.id)}"
+      data-parent-sujet-id="${escapeHtml(sujetId)}"
+      data-parent-situation-id="${escapeHtml(situationId)}"
+    >
+      <td style="padding-left:12px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          ${issueIcon(avis.status)}
+          <div style="display:flex;flex-direction:column;gap:2px;min-width:0;">
+            <strong style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(avis.title)}</strong>
+            <span class="mono" style="color:var(--muted);">${escapeHtml(situationId)} · ${escapeHtml(sujetId)}</span>
+          </div>
+        </div>
+      </td>
+      <td>${verdictPill(avis.verdict)}</td>
+      <td>${priorityBadge(avis.priority)}</td>
+      <td><span class="mono">${escapeHtml(firstNonEmpty(avis.agent, "system"))}</span></td>
+      <td><span class="mono">${escapeHtml(avis.id)}</span></td>
+    </tr>
+  `;
+}
+
+function renderTableHtml(filteredSituations) {
+  const displayDepth = String(store.situationsView.displayDepth || "situations").toLowerCase();
+
+  if (!filteredSituations.length) {
+    return `
+      <div style="padding:24px;color:var(--muted);">
+        Aucun résultat pour les filtres actuels.
+      </div>
+    `;
+  }
+
+  if (displayDepth === "sujets") {
+    const rows = [];
+    for (const situation of filteredSituations) {
+      for (const sujet of situation.sujets || []) {
+        rows.push(renderFlatSujetRow(sujet, situation.id));
+      }
+    }
+
+    return `
+      <table class="issues-table">
+        <thead>
+          <tr>
+            <th>Thème</th>
+            <th>Verdict</th>
+            <th>Prio</th>
+            <th>Agent</th>
+            <th>avis_id</th>
+          </tr>
+        </thead>
+        <tbody class="issues-table__body">${rows.join("")}</tbody>
+      </table>
+    `;
+  }
+
+  if (displayDepth === "avis") {
+    const rows = [];
+    for (const situation of filteredSituations) {
+      for (const sujet of situation.sujets || []) {
+        for (const avis of sujet.avis || []) {
+          rows.push(renderFlatAvisRow(avis, sujet.id, situation.id));
+        }
+      }
+    }
+
+    return `
+      <table class="issues-table">
+        <thead>
+          <tr>
+            <th>Thème</th>
+            <th>Verdict</th>
+            <th>Prio</th>
+            <th>Agent</th>
+            <th>avis_id</th>
+          </tr>
+        </thead>
+        <tbody class="issues-table__body">${rows.join("")}</tbody>
+      </table>
+    `;
+  }
+
+  return `
+    <table class="issues-table">
+      <thead>
+        <tr>
+          <th>Thème</th>
+          <th>Verdict</th>
+          <th>Prio</th>
+          <th>Agent</th>
+          <th>avis_id</th>
+        </tr>
+      </thead>
+      <tbody class="issues-table__body">
+        ${filteredSituations.map((situation) => renderSituationRow(situation)).join("")}
+      </tbody>
+    </table>
+  `;
+}
+
+function getAvisSummary(avis) {
+  const raw = avis?.raw || {};
+  return firstNonEmpty(
+    raw.summary,
+    raw.message,
+    raw.comment,
+    raw.reasoning,
+    raw.analysis,
+    avis?.title,
+    "Aucune synthèse disponible."
+  );
+}
+
+function getSujetSummary(sujet) {
+  const raw = sujet?.raw || {};
+  return firstNonEmpty(
+    raw.summary,
+    raw.message,
+    raw.comment,
+    raw.reasoning,
+    raw.analysis,
+    sujet?.title,
+    "Aucune synthèse disponible."
+  );
+}
+
+function getSituationSummary(situation) {
+  const raw = situation?.raw || {};
+  return firstNonEmpty(
+    raw.summary,
+    raw.message,
+    raw.comment,
+    raw.reasoning,
+    raw.analysis,
+    situation?.title,
+    "Aucune synthèse disponible."
+  );
+}
+
+function renderSituationDetails(selection) {
+  const situation = selection.item;
+  const stats = situationVerdictStats(situation);
+  const agent = firstNonEmpty(situation.agent, "system");
+
+  return `
+    <div class="sidebar-card">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:18px;flex-wrap:wrap;">
+        <div>
+          <h3 style="margin-bottom:8px;">${escapeHtml(situation.title)} <span class="mono" style="color:var(--muted);">#${escapeHtml(situation.id)}</span></h3>
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+            ${statePill(situation.status)}
+            ${badgeCounter(0, (situation.sujets || []).length)}
+            ${verdictBar(stats)}
+          </div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:32px;margin-top:18px;">
+        <div>
+          <div class="timeline-comment">
+            <div class="timeline-avatar">S</div>
+            <div class="timeline-card" style="width:100%;">
+              <div class="timeline-card__head">${escapeHtml(agent)}</div>
+              <div class="timeline-card__body">
+                <div class="mono" style="margin-bottom:10px;color:var(--muted);">Synthèse</div>
+                <div>${escapeHtml(getSituationSummary(situation)).replace(/\n/g, "<br>")}</div>
+                <hr style="margin:18px 0;border:none;border-top:1px solid var(--border2);">
+                <div class="mono" style="color:var(--muted);">Conflits clés</div>
+                <div style="margin-top:8px;" class="mono">
+                  ${(situation.sujets || []).slice(0, 8).map((s) => escapeHtml(s.id)).join(", ") || "—"}
+                </div>
+              </div>
             </div>
           </div>
-        `);
 
-      });
+          <div class="gh-panel" style="margin-top:16px;">
+            <div class="gh-panel__head gh-panel__head--tight" style="display:flex;justify-content:space-between;gap:16px;align-items:center;">
+              <div style="display:flex;align-items:center;gap:10px;">
+                <strong>Sujets rattachés</strong>
+                ${badgeCounter(0, (situation.sujets || []).length)}
+              </div>
+              ${verdictBar(stats)}
+            </div>
+            <table class="issues-table subissues-table">
+              <tbody>
+                ${(situation.sujets || []).map((sujet) => `
+                  <tr class="issue-row js-row-sujet" data-sujet-id="${escapeHtml(sujet.id)}" data-parent-situation-id="${escapeHtml(situation.id)}">
+                    <td style="padding-left:16px;">
+                      <div style="display:flex;align-items:center;gap:10px;">
+                        ${issueIcon(sujet.status)}
+                        <strong>${escapeHtml(sujet.title)}</strong>
+                      </div>
+                    </td>
+                    <td style="text-align:right;color:var(--muted);">${(sujet.avis || []).length} avis</td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+          </div>
 
-    });
+          <div style="display:flex;gap:14px;margin-top:20px;align-items:flex-start;">
+            <div class="timeline-avatar" style="margin-top:2px;">💬</div>
+            <div style="min-width:0;flex:1;">
+              <div class="mono" style="color:var(--muted);margin-bottom:8px;">
+                System attached this to situation n° ${escapeHtml(situation.id)} · (agent=${escapeHtml(agent)})
+              </div>
+              <div style="margin-bottom:14px;">${escapeHtml(situation.title)} priority=${escapeHtml(situation.priority)} sujets=${(situation.sujets || []).length}</div>
+              <h3 style="margin:0 0 12px 0;">Add a comment</h3>
+              <div class="gh-panel">
+                <div class="gh-panel__head gh-panel__head--tight" style="display:flex;gap:18px;">
+                  <strong>Write</strong>
+                  <span style="color:var(--muted);">Preview</span>
+                </div>
+                <div style="padding:16px;">
+                  <textarea class="gh-input" rows="5" style="width:100%;resize:vertical;" placeholder="Réponse humaine (Markdown) — mentionne @rapso pour demander l’avis de l’agent. Ex: « @rapso peux-tu vérifier ce point ? »"></textarea>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
 
-  });
-
-  box.innerHTML = `
-    <div class="issues-table">
-      <div class="issues-table__body">
-        ${rows.join("")}
+        <aside class="meta-list">
+          <div class="meta-row">
+            <div>Priority</div>
+            <div>${priorityBadge(situation.priority)}</div>
+          </div>
+          <div class="meta-row">
+            <div>Title</div>
+            <div>${escapeHtml(situation.title)}</div>
+          </div>
+          <div class="meta-row">
+            <div>Agent</div>
+            <div>${escapeHtml(agent)}</div>
+          </div>
+          <div class="meta-row">
+            <div>situation_id</div>
+            <div class="mono">${escapeHtml(situation.id)}</div>
+          </div>
+          <div class="meta-row">
+            <div>Sujets</div>
+            <div>${(situation.sujets || []).length}</div>
+          </div>
+        </aside>
       </div>
     </div>
   `;
-
-  bindMiddleEvents();
 }
 
+function renderSujetDetails(selection) {
+  const sujet = selection.item;
+  const situation = getSituationBySujetId(sujet.id);
+  const stats = problemVerdictStats(sujet);
 
-/* ===============================
-   MIDDLE EVENTS
-================================ */
-
-function bindMiddleEvents(){
-
-  els(".situation-row").forEach(r => {
-    r.onclick = () => {
-      const id = r.dataset.id;
-
-      if (state.expandedSituations.has(id))
-        state.expandedSituations.delete(id);
-      else
-        state.expandedSituations.add(id);
-
-      state.selectedSituationId = id;
-      renderMiddle();
-      renderDetails();
-    };
-  });
-
-  els(".problem-row").forEach(r => {
-    r.onclick = () => {
-      const id = r.dataset.id;
-
-      if (state.expandedProblems.has(id))
-        state.expandedProblems.delete(id);
-      else
-        state.expandedProblems.add(id);
-
-      state.selectedProblemId = id;
-      renderMiddle();
-      renderDetails();
-    };
-  });
-
-  els(".avis-row").forEach(r => {
-    r.onclick = () => {
-      const id = r.dataset.id;
-      state.selectedAvisId = id;
-      renderDetails();
-    };
-  });
-
-}
-/* ===============================
-   DETAILS PANEL
-================================ */
-
-function renderDetails(opts = {}) {
-
-  const target = opts.target || "main";
-
-  const body = target === "main"
-    ? el("detailsBody")
-    : el("detailsBodyDrill");
-
-  if (!body) return;
-
-  if (!state.selectedSituationId && !state.selectedProblemId && !state.selectedAvisId){
-    body.innerHTML = `
-      <div class="emptyState">
-        <p>Sélectionner un élément dans la liste.</p>
+  return `
+    <div class="sidebar-card">
+      <h3 style="margin-bottom:8px;">${escapeHtml(sujet.title)} <span class="mono" style="color:var(--muted);">#${escapeHtml(sujet.id)}</span></h3>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px;">
+        ${statePill(sujet.status)}
+        ${priorityBadge(sujet.priority)}
+        <span class="mono">${escapeHtml(firstNonEmpty(sujet.agent, "system"))}</span>
+        ${verdictBar(stats)}
       </div>
-    `;
-    return;
-  }
 
-  if (state.selectedAvisId){
-
-    const a = byAvis(state.selectedAvisId);
-    const p = byProblem(a.problem_id);
-    const s = bySituation(p.situation_id);
-
-    setDetailsTitleHtml(`
-      ${escapeHtml(a.topic || "Avis")}
-      ${detailsBadgesHtmlForSelection(a, "avis")}
-    `);
-
-    setDetailsMeta(`Situation ${s.situation_id} · Sujet ${p.problem_id}`);
-
-    body.innerHTML = `
-      <div class="details-block">
-        <div class="details-description">
-          ${escapeHtml(a.description || "—")}
+      <div class="timeline-comment" style="margin-bottom:18px;">
+        <div class="timeline-avatar">S</div>
+        <div class="timeline-card" style="width:100%;">
+          <div class="timeline-card__head">${escapeHtml(firstNonEmpty(sujet.agent, "system"))}</div>
+          <div class="timeline-card__body">
+            <div class="mono" style="margin-bottom:10px;color:var(--muted);">Synthèse</div>
+            <div>${escapeHtml(getSujetSummary(sujet)).replace(/\n/g, "<br>")}</div>
+          </div>
         </div>
       </div>
-    `;
 
-    return;
-  }
+      <div class="gh-panel">
+        <div class="gh-panel__head gh-panel__head--tight" style="display:flex;justify-content:space-between;gap:16px;align-items:center;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <strong>Avis rattachés</strong>
+            ${badgeCounter(0, (sujet.avis || []).length)}
+          </div>
+          ${verdictBar(stats)}
+        </div>
+        <table class="issues-table subissues-table">
+          <tbody>
+            ${(sujet.avis || []).map((avis) => `
+              <tr class="issue-row js-row-avis" data-avis-id="${escapeHtml(avis.id)}" data-parent-sujet-id="${escapeHtml(sujet.id)}" data-parent-situation-id="${escapeHtml(situation?.id || "")}">
+                <td style="padding-left:16px;">
+                  <div style="display:flex;align-items:center;gap:10px;">
+                    ${issueIcon(avis.status)}
+                    <strong>${escapeHtml(avis.title)}</strong>
+                  </div>
+                </td>
+                <td>${verdictPill(avis.verdict)}</td>
+                <td style="text-align:right;" class="mono">${escapeHtml(avis.id)}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </div>
 
-  if (state.selectedProblemId){
-
-    const p = byProblem(state.selectedProblemId);
-    const s = bySituation(p.situation_id);
-
-    setDetailsTitleHtml(`
-      ${escapeHtml(p.title || "Sujet")}
-      ${detailsBadgesHtmlForSelection(p, "problem")}
-    `);
-
-    setDetailsMeta(`Situation ${s.situation_id}`);
-
-    const avis = avisForProblem(p.problem_id);
-
-    const rows = avis.map(a => `
-      <div class="row avis-row" data-id="${a.avis_id}">
-        <div class="col-main">
-          <span class="${badgeVerdict(a.verdict)}">${escapeHtml(a.verdict || "")}</span>
-          ${escapeHtml(a.topic || "")}
+      <div class="meta-list" style="margin-top:18px;">
+        <div class="meta-row">
+          <div>Situation parent</div>
+          <div class="mono">${escapeHtml(situation?.id || "—")}</div>
+        </div>
+        <div class="meta-row">
+          <div>Agent</div>
+          <div>${escapeHtml(firstNonEmpty(sujet.agent, "system"))}</div>
+        </div>
+        <div class="meta-row">
+          <div>Avis</div>
+          <div>${(sujet.avis || []).length}</div>
         </div>
       </div>
-    `).join("");
-
-    body.innerHTML = `
-      <div class="details-block">
-        <div class="details-description">
-          ${escapeHtml(p.description || "—")}
-        </div>
-
-        <div class="subissues">
-          ${rows}
-        </div>
-      </div>
-    `;
-
-    return;
-  }
-
-  if (state.selectedSituationId){
-
-    const s = bySituation(state.selectedSituationId);
-
-    setDetailsTitleHtml(`
-      ${escapeHtml(s.title || "Situation")}
-      ${detailsBadgesHtmlForSelection(s, "situation")}
-    `);
-
-    setDetailsMeta("");
-
-    const probs = problemsForSituation(s.situation_id);
-
-    const rows = probs.map(p => `
-      <div class="row problem-row" data-id="${p.problem_id}">
-        <div class="col-main">
-          ${issueStatusIconHtml(getEffectiveProblemStatus(p.problem_id))}
-          ${escapeHtml(p.title || "")}
-        </div>
-      </div>
-    `).join("");
-
-    body.innerHTML = `
-      <div class="details-block">
-        <div class="details-description">
-          ${escapeHtml(s.description || "—")}
-        </div>
-
-        <div class="subissues">
-          ${rows}
-        </div>
-      </div>
-    `;
-
-  }
-
+    </div>
+  `;
 }
 
+function renderAvisDetails(selection) {
+  const avis = selection.item;
+  const sujet = getSujetByAvisId(avis.id);
+  const situation = getSituationByAvisId(avis.id);
 
-/* ===============================
-   FILTERS
-================================ */
-
-function bindFilters(){
-
-  const f = el("verdictFilter");
-  const s = el("searchBox");
-
-  if (f){
-    f.value = state.verdictFilter;
-    f.onchange = () => {
-      state.verdictFilter = f.value;
-      renderMiddle();
-    };
-  }
-
-  if (s){
-    s.value = state.search;
-    s.oninput = () => {
-      state.search = s.value;
-      renderMiddle();
-    };
-  }
-
-}
-
-
-/* ===============================
-   PAGINATION
-================================ */
-
-function bindPagination(){
-
-  const prev = el("prevPage");
-  const next = el("nextPage");
-
-  if (prev){
-    prev.onclick = () => {
-      state.page = Math.max(1, state.page - 1);
-      renderMiddle();
-    };
-  }
-
-  if (next){
-    next.onclick = () => {
-      state.page += 1;
-      renderMiddle();
-    };
-  }
-
-}
-
-
-/* ===============================
-   ASSISTANT OVERLAY
-================================ */
-
-function toggleAssistant(){
-
-  state.assistant.isOpen = !state.assistant.isOpen;
-
-  const box = el("assistantOverlay");
-  if (!box) return;
-
-  box.classList.toggle("hidden", !state.assistant.isOpen);
-
-}
-
-
-function renderAssistant(){
-
-  const box = el("assistantOverlay");
-  if (!box) return;
-
-  box.innerHTML = `
-    <div class="assistant-window">
-
-      <div class="assistant-head">
-        <strong>Assistant privé</strong>
-        <button id="assistantClose" class="icon-btn">✕</button>
+  return `
+    <div class="sidebar-card">
+      <h3 style="margin-bottom:8px;">${escapeHtml(avis.title)} <span class="mono" style="color:var(--muted);">#${escapeHtml(avis.id)}</span></h3>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px;">
+        ${statePill(avis.status)}
+        ${priorityBadge(avis.priority)}
+        ${verdictPill(avis.verdict)}
+        <span class="mono">${escapeHtml(firstNonEmpty(avis.agent, "system"))}</span>
       </div>
 
-      <div class="assistant-body">
-        <p class="mono">Assistant Rapso privé.</p>
+      <div class="timeline-comment">
+        <div class="timeline-avatar">A</div>
+        <div class="timeline-card" style="width:100%;">
+          <div class="timeline-card__head">${escapeHtml(firstNonEmpty(avis.agent, "system"))}</div>
+          <div class="timeline-card__body">
+            <div class="mono" style="margin-bottom:10px;color:var(--muted);">Avis</div>
+            <div>${escapeHtml(getAvisSummary(avis)).replace(/\n/g, "<br>")}</div>
+          </div>
+        </div>
       </div>
 
-      <div class="assistant-input">
-        <input id="assistantDraft" placeholder="@rapso ..." />
-        <button id="assistantSend">Send</button>
+      <div class="meta-list" style="margin-top:18px;">
+        <div class="meta-row">
+          <div>Situation parent</div>
+          <div class="mono">${escapeHtml(situation?.id || "—")}</div>
+        </div>
+        <div class="meta-row">
+          <div>Sujet parent</div>
+          <div class="mono">${escapeHtml(sujet?.id || "—")}</div>
+        </div>
+        <div class="meta-row">
+          <div>Agent</div>
+          <div>${escapeHtml(firstNonEmpty(avis.agent, "system"))}</div>
+        </div>
+        <div class="meta-row">
+          <div>Verdict</div>
+          <div>${verdictPill(avis.verdict)}</div>
+        </div>
       </div>
+    </div>
+  `;
+}
 
+function renderDetailsHtml() {
+  const selection = getActiveSelection();
+  if (!selection) {
+    return `<div style="padding:20px;color:var(--muted);">Aucun élément sélectionné.</div>`;
+  }
+
+  if (selection.type === "avis") return renderAvisDetails(selection);
+  if (selection.type === "sujet") return renderSujetDetails(selection);
+  return renderSituationDetails(selection);
+}
+
+function ensureDetailsModal() {
+  let modal = document.getElementById("details-modal");
+  if (modal) return modal;
+
+  modal = document.createElement("div");
+  modal.id = "details-modal";
+  modal.className = "details-modal";
+  modal.innerHTML = `
+    <div class="details-modal__backdrop"></div>
+    <div class="details-modal__dialog" role="dialog" aria-modal="true" aria-label="Détail situation">
+      <button type="button" class="details-modal__close" aria-label="Fermer">✕</button>
+      <div class="details-modal__content" id="details-modal-content"></div>
     </div>
   `;
 
-  el("assistantClose").onclick = toggleAssistant;
+  document.body.appendChild(modal);
 
-}
+  modal.querySelector(".details-modal__backdrop")?.addEventListener("click", closeDetailsModal);
+  modal.querySelector(".details-modal__close")?.addEventListener("click", closeDetailsModal);
 
-
-/* ===============================
-   GLOBAL BINDINGS
-================================ */
-
-function bindGlobal(){
-
-  ensureGlobalTopbarAliases();
-
-  const runBtn = el("runBtnTop");
-  const resetBtn = el("resetBtnTop");
-
-  if (runBtn) runBtn.onclick = runAnalysis;
-  if (resetBtn) resetBtn.onclick = resetAnalysisUi;
-
-}
-
-/* ===============================
-   STORE SYNC (UI -> store)
-================================ */
-
-function syncBackToStore() {
-  if (!store.situationsView) return;
-
-  store.situationsView.expandedSituations = new Set(state.expandedSituations);
-  store.situationsView.expandedSujets = new Set(state.expandedProblems);
-  store.situationsView.selectedSituationId = state.selectedSituationId;
-  store.situationsView.selectedSujetId = state.selectedProblemId;
-  store.situationsView.selectedAvisId = state.selectedAvisId;
-  store.situationsView.verdictFilter = state.verdictFilter;
-  store.situationsView.search = state.search;
-  store.situationsView.page = state.page;
-}
-
-
-/* ===============================
-   COUNTS / PAGE INFO
-================================ */
-
-function renderCounts() {
-  const counts = el("counts");
-  const pageInfo = el("pageInfo");
-
-  if (!counts || !pageInfo) return;
-
-  if (!state.data) {
-    counts.textContent = "—";
-    pageInfo.textContent = "";
-    return;
-  }
-
-  const situations = state.data.situations || [];
-  const problems = state.data.problems || [];
-  const avis = state.data.avis || [];
-
-  const filteredAvis = applyFilters(avis);
-
-  counts.textContent = `${situations.length} situations · ${problems.length} sujets · ${filteredAvis.length}/${avis.length} avis`;
-
-  const totalPages = 1;
-  pageInfo.textContent = `Page ${state.page} / ${totalPages}`;
-}
-
-
-/* ===============================
-   DETAILS EVENTS
-================================ */
-
-function bindDetailsEvents() {
-  const body = el("detailsBody");
-  if (!body) return;
-
-  body.querySelectorAll(".problem-row").forEach(r => {
-    r.onclick = () => {
-      const id = r.dataset.id;
-      state.selectedProblemId = id;
-      state.selectedAvisId = null;
-      renderDetails();
-      syncBackToStore();
-    };
-  });
-
-  body.querySelectorAll(".avis-row").forEach(r => {
-    r.onclick = () => {
-      const id = r.dataset.id;
-      state.selectedAvisId = id;
-      renderDetails();
-      syncBackToStore();
-    };
-  });
-}
-
-
-/* ===============================
-   SCROLL MEMORY
-================================ */
-
-function captureMiddleScroll() {
-  const scroller = el("issuesTable");
-  if (!scroller) return;
-  state.middleScrollTop = scroller.scrollTop || 0;
-  state.middleScrollLeft = scroller.scrollLeft || 0;
-}
-
-function restoreMiddleScroll() {
-  const scroller = el("issuesTable");
-  if (!scroller) return;
-  scroller.scrollTop = state.middleScrollTop || 0;
-  scroller.scrollLeft = state.middleScrollLeft || 0;
-}
-
-
-/* ===============================
-   SAFE RENDER CYCLE
-================================ */
-
-function rerenderAll() {
-  captureMiddleScroll();
-  renderMiddle();
-  renderDetails();
-  renderCounts();
-  bindDetailsEvents();
-  restoreMiddleScroll();
-  syncBackToStore();
-}
-
-
-/* ===============================
-   STORE WATCH
-================================ */
-
-let lastObservedRawResult = null;
-let storeWatchStarted = false;
-
-function startStoreWatch() {
-  if (storeWatchStarted) return;
-  storeWatchStarted = true;
-
-  setInterval(() => {
-    const raw = store?.situationsView?.rawResult || null;
-    const runId = store?.ui?.runId || "";
-    const sys = store?.ui?.systemStatus || {};
-
-    setRunMeta(runId);
-    setSystemStatus(sys.state || "idle", sys.label || "Idle", sys.meta || "—");
-
-    if (raw !== lastObservedRawResult) {
-      lastObservedRawResult = raw;
-      syncStateFromStore();
-      rerenderAll();
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && store.situationsView.detailsModalOpen) {
+      closeDetailsModal();
     }
-  }, 400);
+  });
+
+  return modal;
 }
 
+function updateDetailsModal() {
+  const modal = ensureDetailsModal();
+  const content = modal.querySelector("#details-modal-content");
+  if (!content) return;
 
-/* ===============================
-   MODAL / DRILLDOWN PLACEHOLDERS
-   (kept so existing calls do not break)
-================================ */
-
-function openDrilldownFromAvis(id) {
-  state.selectedAvisId = id;
-  const a = byAvis(id);
-  if (a) {
-    state.selectedProblemId = a.problem_id || null;
-    const p = byProblem(a.problem_id);
-    state.selectedSituationId = p?.situation_id || state.selectedSituationId;
-  }
-  rerenderAll();
-}
-
-function openDrilldownFromProblem(id) {
-  state.selectedProblemId = id;
-  state.selectedAvisId = null;
-  const p = byProblem(id);
-  if (p) state.selectedSituationId = p.situation_id || state.selectedSituationId;
-  rerenderAll();
-}
-
-function drilldownSelectSituation(id) {
-  state.selectedSituationId = id;
-  state.selectedProblemId = null;
-  state.selectedAvisId = null;
-  rerenderAll();
-}
-
-
-/* ===============================
-   ASSISTANT OVERLAY MOUNT
-================================ */
-
-function ensureAssistantOverlayMounted() {
-  if (el("assistantOverlay")) return;
-
-  const overlay = document.createElement("div");
-  overlay.id = "assistantOverlay";
-  overlay.className = "hidden";
-  document.body.appendChild(overlay);
-
-  renderAssistant();
-}
-
-
-/* ===============================
-   SIDEBAR TOGGLE
-================================ */
-
-function bindSidebarToggle() {
-  const sidebar = el("sidebar");
-  const btn = el("sidebarToggle");
-  const fab = el("sidebarToggleFloating");
-
-  if (!sidebar) return;
-
-  const apply = () => {
-    sidebar.classList.toggle("collapsed", !!state.sidebarCollapsed);
-    if (fab) fab.classList.toggle("hidden", !state.sidebarCollapsed);
-  };
-
-  if (btn) {
-    btn.onclick = () => {
-      state.sidebarCollapsed = !state.sidebarCollapsed;
-      apply();
-    };
-  }
-
-  if (fab) {
-    fab.onclick = () => {
-      state.sidebarCollapsed = false;
-      apply();
-    };
-  }
-
-  apply();
-}
-
-
-/* ===============================
-   TOPBAR ROBOT / ASSISTANT HOOK
-================================ */
-
-function bindAssistantLauncher() {
-  const robotBtn =
-    document.getElementById("robotHeadBtn") ||
-    document.getElementById("assistantFab") ||
-    document.getElementById("rapsoAssistantBtn");
-
-  if (robotBtn) {
-    robotBtn.onclick = () => {
-      toggleAssistant();
-      renderAssistant();
-    };
+  if (store.situationsView.detailsModalOpen) {
+    content.innerHTML = renderDetailsHtml();
+    modal.classList.add("is-open");
+  } else {
+    modal.classList.remove("is-open");
   }
 }
 
+function openDetailsModal() {
+  store.situationsView.detailsModalOpen = true;
+  updateDetailsModal();
+}
 
-/* ===============================
-   INITIALIZATION
-================================ */
+function closeDetailsModal() {
+  store.situationsView.detailsModalOpen = false;
+  updateDetailsModal();
+}
+
+function rerenderPanels() {
+  const filteredSituations = getFilteredSituations();
+  const counts = getVisibleCounts(filteredSituations);
+
+  const tableHost = document.getElementById("situationsTableHost");
+  const detailsHost = document.getElementById("situationsDetailsHost");
+  const countsHost = document.getElementById("situationsHeaderCounts");
+  const verdictFilter = document.getElementById("verdictFilter");
+  const displayDepth = document.getElementById("displayDepth");
+
+  if (verdictFilter) verdictFilter.value = store.situationsView.verdictFilter || "ALL";
+  if (displayDepth) displayDepth.value = store.situationsView.displayDepth || "situations";
+
+  if (countsHost) {
+    countsHost.textContent = `${counts.situations} situations · ${counts.sujets} sujets · ${counts.avis} avis`;
+  }
+
+  if (tableHost) {
+    tableHost.innerHTML = renderTableHtml(filteredSituations);
+  }
+
+  if (detailsHost) {
+    detailsHost.innerHTML = renderDetailsHtml();
+  }
+
+  updateDetailsModal();
+}
+
+function selectSituation(situationId) {
+  const situation = getNestedSituation(situationId);
+  if (!situation) return;
+
+  store.situationsView.selectedSituationId = situationId;
+  store.situationsView.selectedSujetId = null;
+  store.situationsView.selectedAvisId = null;
+  store.situationsView.expandedSituations.add(situationId);
+  rerenderPanels();
+}
+
+function selectSujet(sujetId) {
+  const sujet = getNestedSujet(sujetId);
+  if (!sujet) return;
+
+  const situation = getSituationBySujetId(sujetId);
+  store.situationsView.selectedSituationId = situation?.id || null;
+  store.situationsView.selectedSujetId = sujetId;
+  store.situationsView.selectedAvisId = null;
+  if (situation?.id) {
+    store.situationsView.expandedSituations.add(situation.id);
+  }
+  store.situationsView.expandedSujets.add(sujetId);
+  rerenderPanels();
+}
+
+function selectAvis(avisId) {
+  const avis = getNestedAvis(avisId);
+  if (!avis) return;
+
+  const sujet = getSujetByAvisId(avisId);
+  const situation = getSituationByAvisId(avisId);
+
+  store.situationsView.selectedSituationId = situation?.id || null;
+  store.situationsView.selectedSujetId = sujet?.id || null;
+  store.situationsView.selectedAvisId = avisId;
+
+  if (situation?.id) store.situationsView.expandedSituations.add(situation.id);
+  if (sujet?.id) store.situationsView.expandedSujets.add(sujet.id);
+
+  rerenderPanels();
+}
+
+function bindSituationsEvents(root) {
+  root.querySelector("#verdictFilter")?.addEventListener("change", (event) => {
+    store.situationsView.verdictFilter = String(event.target.value || "ALL").toUpperCase();
+    rerenderPanels();
+  });
+
+  root.querySelector("#situationsSearch")?.addEventListener("input", (event) => {
+    store.situationsView.search = String(event.target.value || "");
+    rerenderPanels();
+  });
+
+  root.querySelector("#displayDepth")?.addEventListener("change", (event) => {
+    store.situationsView.displayDepth = String(event.target.value || "situations").toLowerCase();
+    rerenderPanels();
+  });
+
+  root.querySelector("#detailsExpandLocal")?.addEventListener("click", () => {
+    openDetailsModal();
+  });
+
+  root.addEventListener("click", (event) => {
+    const toggleSituation = event.target.closest(".js-toggle-situation");
+    if (toggleSituation) {
+      event.preventDefault();
+      event.stopPropagation();
+      const situationId = String(toggleSituation.dataset.situationId || "");
+      if (store.situationsView.expandedSituations.has(situationId)) {
+        store.situationsView.expandedSituations.delete(situationId);
+      } else {
+        store.situationsView.expandedSituations.add(situationId);
+      }
+      rerenderPanels();
+      return;
+    }
+
+    const toggleSujet = event.target.closest(".js-toggle-sujet");
+    if (toggleSujet) {
+      event.preventDefault();
+      event.stopPropagation();
+      const sujetId = String(toggleSujet.dataset.sujetId || "");
+      if (store.situationsView.expandedSujets.has(sujetId)) {
+        store.situationsView.expandedSujets.delete(sujetId);
+      } else {
+        store.situationsView.expandedSujets.add(sujetId);
+      }
+      rerenderPanels();
+      return;
+    }
+
+    const avisRow = event.target.closest(".js-row-avis");
+    if (avisRow) {
+      event.preventDefault();
+      selectAvis(String(avisRow.dataset.avisId || ""));
+      return;
+    }
+
+    const sujetRow = event.target.closest(".js-row-sujet");
+    if (sujetRow) {
+      event.preventDefault();
+      selectSujet(String(sujetRow.dataset.sujetId || ""));
+      return;
+    }
+
+    const situationRow = event.target.closest(".js-row-situation");
+    if (situationRow) {
+      event.preventDefault();
+      selectSituation(String(situationRow.dataset.situationId || ""));
+    }
+  });
+}
 
 export function renderProjectSituations(root) {
-  ensureGlobalTopbarAliases();
-  renderSituationsShell(root);
-  ensureAssistantOverlayMounted();
+  const data = store.situationsView.data || [];
+  const firstSituationId = data[0]?.id || null;
 
-  syncStateFromStore();
-  rerenderAll();
+  if (!store.situationsView.selectedSituationId && firstSituationId) {
+    store.situationsView.selectedSituationId = firstSituationId;
+  }
 
-  bindFilters();
-  bindPagination();
-  bindGlobal();
-  bindSidebarToggle();
-  bindAssistantLauncher();
+  if (!store.situationsView.expandedSituations.size && firstSituationId) {
+    store.situationsView.expandedSituations.add(firstSituationId);
+  }
 
-  restoreMiddleScroll();
-  syncBackToStore();
-  startStoreWatch();
+  root.innerHTML = `
+    <div class="gh-page gh-page--3col" style="padding-top:0;">
+      <section class="gh-panel gh-panel--results" style="grid-column:1 / span 3;">
+        <div class="gh-panel__head">
+          <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;width:100%;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <strong>Results</strong>
+              <label class="mono" for="verdictFilter">Verdict</label>
+              <select id="verdictFilter" class="gh-input gh-input--sm">
+                <option value="ALL">All</option>
+                <option value="OK">OK</option>
+                <option value="KO">KO</option>
+                <option value="WARNING">WARNING</option>
+              </select>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <label class="mono" for="situationsSearch">Search</label>
+              <input id="situationsSearch" class="gh-input" type="text" placeholder="topic / EC8 / mot-clé..." value="${escapeHtml(store.situationsView.search || "")}">
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <label class="mono" for="displayDepth">Affichage</label>
+              <select id="displayDepth" class="gh-input gh-input--sm">
+                <option value="situations">Situations</option>
+                <option value="sujets">Sujets</option>
+                <option value="avis">Avis</option>
+              </select>
+            </div>
+            <div id="situationsHeaderCounts" class="mono" style="margin-left:auto;"></div>
+          </div>
+        </div>
+        <div class="gh-page" style="grid-template-columns:minmax(0,1fr) minmax(360px,420px);gap:16px;padding:0;">
+          <div class="gh-panel" style="overflow:hidden;">
+            <div id="situationsTableHost"></div>
+          </div>
+          <aside class="gh-panel gh-panel--details">
+            <div class="gh-panel__head gh-panel__head--tight">
+              <div class="details-head" style="width:100%;">
+                <div class="details-head-left">
+                  <div class="gh-panel__title">Détail</div>
+                </div>
+                <div class="details-head-right">
+                  <button id="detailsExpandLocal" class="icon-btn icon-btn--sm" aria-label="Ouvrir en plein écran">↗</button>
+                </div>
+              </div>
+            </div>
+            <div id="situationsDetailsHost" class="details-body"></div>
+          </aside>
+        </div>
+      </section>
+    </div>
+  `;
+
+  rerenderPanels();
+  bindSituationsEvents(root);
+  updateDetailsModal();
 }
+
