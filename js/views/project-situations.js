@@ -102,7 +102,7 @@
 
 // RAPSOBOT PoC UI — lighter middle list + persistent expand + right details with parent context
 // Expected from webhook:
-// { status, runAnalysis_id, situations[], problems[], avis[] }
+// { status, run_id, situations[], problems[], avis[] }
 
 const qs = new URLSearchParams(location.search);
 
@@ -115,11 +115,11 @@ const state = {
 
   // persistent expansions
   expandedSituations: new Set(), // situation_id
-  expandedSujets: new Set(),   // problem_id
+  expandedProblems: new Set(),   // problem_id
 
   // selection for right panel
   selectedSituationId: null,
-  selectedSujetId: null,
+  selectedProblemId: null,
   selectedAvisId: null,
 
   verdictFilter: "ALL",
@@ -137,7 +137,7 @@ const state = {
 
   // right panel: sub-issues table (below description)
   rightSubissuesOpen: true,
-  rightexpandedSujets: new Set(),
+  rightExpandedProblems: new Set(),
 
   // details actions
   tempAvisVerdict: null,
@@ -146,10 +146,10 @@ const state = {
   drilldown: {
     isOpen: false,
     selectedSituationId: null,
-    selectedSujetId: null,
+    selectedProblemId: null,
     selectedAvisId: null,
     rightSubissuesOpen: true,
-    rightexpandedSujets: new Set(),
+    rightExpandedProblems: new Set(),
     tempAvisVerdict: null,
     tempAvisVerdictFor: null,
   },
@@ -272,7 +272,7 @@ function setSystemStatus(kind, label, meta) {
   el("sysLabel").textContent = label || "";
   el("sysMeta").textContent = meta || "—";
   const dot = el("sysDot");
-  const colors = { idle: "var(--muted)", runAnalysisning: "var(--accent)", done: "var(--success)", error: "var(--danger)" };
+  const colors = { idle: "var(--muted)", running: "var(--accent)", done: "var(--success)", error: "var(--danger)" };
   dot.style.background = colors[kind] || colors.idle;
 }
 
@@ -294,8 +294,8 @@ function showBanner(kind, msg) {
 }
 
 
-function setrunAnalysisMeta(runAnalysis_id) {
-  el("runAnalysisMetaTop").textContent = runAnalysis_id ? `runAnalysis_id=${runAnalysis_id}` : "";
+function setRunMeta(run_id) {
+  el("runMetaTop").textContent = run_id ? `run_id=${run_id}` : "";
 }
 function setIssuesTotals(d) {
   const node = el("issuesTotals");
@@ -462,11 +462,11 @@ function paginate(list) {
 
 /* ===== Local “discussion” store (human actions) ===== */
 function nowIso() { return new Date().toISOString(); }
-function runAnalysisKey() { return state.data?.runAnalysis_id || "no_runAnalysis"; }
+function runKey() { return state.data?.run_id || "no_run"; }
 
-function runAnalysisIdToIso(runAnalysisId) {
-  const s = String(runAnalysisId || "");
-  // Common patterns: runAnalysis-<epoch_ms> or just <epoch_ms>
+function runIdToIso(runId) {
+  const s = String(runId || "");
+  // Common patterns: RUN-<epoch_ms> or just <epoch_ms>
   const m = s.match(/(\d{12,17})/);
   if (m) {
     const n = Number(m[1]);
@@ -500,14 +500,14 @@ function fmtDateTime(ts) {
 function loadHumanStore() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : { runAnalysiss: {} };
-  } catch { return { runAnalysiss: {} }; }
+    return raw ? JSON.parse(raw) : { runs: {} };
+  } catch { return { runs: {} }; }
 }
 function saveHumanStore(store) { localStorage.setItem(STORAGE_KEY, JSON.stringify(store)); }
-function ensurerunAnalysisBucket(store) {
-  const rk = runAnalysisKey();
-  store.runAnalysiss[rk] ||= { decisions: {}, comments: [] };
-  return store.runAnalysiss[rk];
+function ensureRunBucket(store) {
+  const rk = runKey();
+  store.runs[rk] ||= { decisions: {}, comments: [] };
+  return store.runs[rk];
 }
 function entityKey(type, id) { return `${type}:${id}`; }
 
@@ -543,7 +543,7 @@ function pushActivity(bucket, ev) {
 function logActivityToEntity(entity_type, entity_id, kind, message, meta, opts) {
   if (!entity_type || !entity_id) return;
   const store = loadHumanStore();
-  const bucket = ensurerunAnalysisBucket(store);
+  const bucket = ensureRunBucket(store);
   pushActivity(bucket, {
     ts: (opts && opts.ts) ? String(opts.ts) : nowIso(),
     actor: (opts && opts.actor) ? String(opts.actor) : "RAPSOBOT",
@@ -560,7 +560,7 @@ function logActivityToEntity(entity_type, entity_id, kind, message, meta, opts) 
 
 function setDecision(type, id, decision, note, opts) {
   const store = loadHumanStore();
-  const bucket = ensurerunAnalysisBucket(store);
+  const bucket = ensureRunBucket(store);
 
   const k = entityKey(type, id);
   const prev = bucket.decisions[k] || null;
@@ -631,7 +631,7 @@ function setDecision(type, id, decision, note, opts) {
 
 function addComment(type, id, message) {
   const store = loadHumanStore();
-  const bucket = ensurerunAnalysisBucket(store);
+  const bucket = ensureRunBucket(store);
 
   bucket.comments.push({
     ts: nowIso(),
@@ -650,7 +650,7 @@ function addComment(type, id, message) {
 
 function addAgentComment(type, id, message, agentName = "specialist_ps", meta = {}) {
   const store = loadHumanStore();
-  const bucket = ensurerunAnalysisBucket(store);
+  const bucket = ensureRunBucket(store);
 
   bucket.comments.push({
     ts: nowIso(),
@@ -670,7 +670,7 @@ function addAgentComment(type, id, message, agentName = "specialist_ps", meta = 
 function updateAgentCommentByRequestId(requestId, newMessage, extraMeta = {}) {
   if (!requestId) return false;
   const store = loadHumanStore();
-  const bucket = ensurerunAnalysisBucket(store);
+  const bucket = ensureRunBucket(store);
   const list = bucket.comments || [];
   // Find last matching pending comment
   for (let i = list.length - 1; i >= 0; i--) {
@@ -691,8 +691,8 @@ function updateAgentCommentByRequestId(requestId, newMessage, extraMeta = {}) {
 function loadAssistStore() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_ASSIST);
-    return raw ? JSON.parse(raw) : { runAnalysiss: {} };
-  } catch { return { runAnalysiss: {} }; }
+    return raw ? JSON.parse(raw) : { runs: {} };
+  } catch { return { runs: {} }; }
 }
 function saveAssistStore(store) { localStorage.setItem(STORAGE_KEY_ASSIST, JSON.stringify(store)); }
 
@@ -711,14 +711,14 @@ async function loadAssistantConfig() {
   }
 }
 
-function ensureAssistrunAnalysisBucket(store) {
-  const rk = runAnalysisKey();
-  store.runAnalysiss[rk] ||= { chat: [] };
-  return store.runAnalysiss[rk];
+function ensureAssistRunBucket(store) {
+  const rk = runKey();
+  store.runs[rk] ||= { chat: [] };
+  return store.runs[rk];
 }
 function pushAssistChat(ev) {
   const store = loadAssistStore();
-  const bucket = ensureAssistrunAnalysisBucket(store);
+  const bucket = ensureAssistRunBucket(store);
   bucket.chat.push({
     ts: ev.ts || nowIso(),
     role: ev.role || "user", // user | assistant | system
@@ -731,13 +731,13 @@ function pushAssistChat(ev) {
 }
 function getAssistChat() {
   const store = loadAssistStore();
-  const bucket = store.runAnalysiss?.[runAnalysisKey()];
+  const bucket = store.runs?.[runKey()];
   return bucket?.chat || [];
 }
 
 function getPendingAssistantActions() {
   const store = loadAssistStore();
-  const bucket = ensureAssistrunAnalysisBucket(store);
+  const bucket = ensureAssistRunBucket(store);
   return bucket.pending_actions || null;
 }
 
@@ -748,7 +748,7 @@ function hasPendingAssistantActions() {
 
 function setPendingAssistantActions(pending) {
   const store = loadAssistStore();
-  const bucket = ensureAssistrunAnalysisBucket(store);
+  const bucket = ensureAssistRunBucket(store);
   bucket.pending_actions = pending || null;
   saveAssistStore(store);
 }
@@ -782,7 +782,7 @@ function buildUiSnapshot({ scope = "unknown", type = null, id = null } = {}) {
     },
     selection: {
       situation_id: state.selectedSituationId || null,
-      sujet_id: state.selectedSujetId || null,
+      sujet_id: state.selectedProblemId || null,
       avis_id: state.selectedAvisId || null,
       type: type || null,
       id: id || null,
@@ -898,7 +898,7 @@ function buildRapsoContextBundle(type, id, humanMessage) {
   // ===== Thread local (10 derniers messages max, scope strict) =====
   const thread_recent = (() => {
     const store = loadHumanStore();
-    const bucket = store.runAnalysiss?.[runAnalysisKey()];
+    const bucket = store.runs?.[runKey()];
     const events = (bucket?.comments || [])
       .filter((e) => String(e?.type || "").toUpperCase() === "COMMENT")
       .filter((e) => String(e?.entity_type || "") === String(type) && String(e?.entity_id || "") === String(id))
@@ -1040,7 +1040,7 @@ function buildRapsoContextBundle(type, id, humanMessage) {
   }
 
   return {
-    runAnalysis_id: d.runAnalysis_id || null,
+    run_id: d.run_id || null,
     agent: "specialist_ps",
     scope,
     cadre,
@@ -1320,7 +1320,7 @@ async function askHelpEphemeral({ rootEl, type, id, humanMessage, scope = "detai
 function buildRapsoAssistantContext(userMessage) {
   const d = state.data;
   if (!d) return {
-    runAnalysis_id: null,
+    run_id: null,
     selection: { only_verdicts: ["F","S","D","HM","PM","SO"] },
     project: { situations: [] },
     user_message: String(userMessage || "").trim(),
@@ -1373,7 +1373,7 @@ function buildRapsoAssistantContext(userMessage) {
   });
 
   return {
-    runAnalysis_id: d.runAnalysis_id || null,
+    run_id: d.run_id || null,
     selection: { only_verdicts: ["F","S","D","HM","PM","SO"] },
     project: { situations },
     execution_policy: {
@@ -1621,7 +1621,7 @@ async function askRapsoAssistant({ userMessage, meta = {} }) {
 
     // Update pending message
     const store = loadAssistStore();
-    const bucket = ensureAssistrunAnalysisBucket(store);
+    const bucket = ensureAssistRunBucket(store);
     const list = bucket.chat || [];
     for (let i = list.length - 1; i >= 0; i--) {
       const ev = list[i];
@@ -1658,7 +1658,7 @@ async function askRapsoAssistant({ userMessage, meta = {} }) {
     const errMsg = e?.message || String(e);
     // Update pending to error
     const store = loadAssistStore();
-    const bucket = ensureAssistrunAnalysisBucket(store);
+    const bucket = ensureAssistRunBucket(store);
     const list = bucket.chat || [];
     for (let i = list.length - 1; i >= 0; i--) {
       const ev = list[i];
@@ -1675,7 +1675,7 @@ async function askRapsoAssistant({ userMessage, meta = {} }) {
 }
 function getDecision(type, id) {
   const store = loadHumanStore();
-  const bucket = store.runAnalysiss?.[runAnalysisKey()];
+  const bucket = store.runs?.[runKey()];
   return bucket?.decisions?.[entityKey(type, id)] || null;
 }
 
@@ -1773,7 +1773,7 @@ function findAvis(id) {
 /* ===== Selection behavior (right panel) ===== */
 function selectSituation(sid) {
   state.selectedSituationId = sid || null;
-  state.selectedSujetId = null;
+  state.selectedProblemId = null;
   state.selectedAvisId = null;
   renderMiddle();
 }
@@ -1786,7 +1786,7 @@ function selectProblem(pid) {
   const sid = parents.problemToSituation.get(pid) || null;
 
   state.selectedSituationId = sid;
-  state.selectedSujetId = pid;
+  state.selectedProblemId = pid;
   state.selectedAvisId = null;
   renderMiddle();
 }
@@ -1799,7 +1799,7 @@ function selectAvis(aid) {
   const sid = parents.avisToSituation.get(aid) || null;
 
   state.selectedSituationId = sid;
-  state.selectedSujetId = pid;
+  state.selectedProblemId = pid;
   state.selectedAvisId = aid;
   renderMiddle();
 }
@@ -1810,13 +1810,13 @@ function getThreadForSelection() {
   if (!d) return [];
 
   const store = loadHumanStore();
-  const bucket = store.runAnalysiss?.[runAnalysisKey()];
+  const bucket = store.runs?.[runKey()];
   const humanEvents = bucket?.comments || [];
 
   const events = [];
 
   const s = findSituation(state.selectedSituationId);
-  const p = findProblem(state.selectedSujetId);
+  const p = findProblem(state.selectedProblemId);
   const a = findAvis(state.selectedAvisId);
 
   // keep a per-avis temporary verdict selection for the Validate action
@@ -1834,7 +1834,7 @@ function getThreadForSelection() {
 
   if (s) {
     events.push({
-      ts: runAnalysisIdToIso(d.runAnalysis_id),
+      ts: runIdToIso(d.run_id),
       actor: "System",
       agent: inferAgent(s),
       type: "SITUATION",
@@ -1845,7 +1845,7 @@ function getThreadForSelection() {
   }
   if (p) {
     events.push({
-      ts: runAnalysisIdToIso(d.runAnalysis_id),
+      ts: runIdToIso(d.run_id),
       actor: "System",
       agent: inferAgent(p),
       type: "SUJET",
@@ -1856,7 +1856,7 @@ function getThreadForSelection() {
   }
   if (a) {
     events.push({
-      ts: runAnalysisIdToIso(d.runAnalysis_id),
+      ts: runIdToIso(d.run_id),
       actor: "System",
       agent: inferAgent(a),
       type: "AVIS",
@@ -1949,7 +1949,7 @@ function renderDetails(opts) {
   // selection override (drilldown must not mutate main selection)
   // If no explicit override is provided, use the selection stored in the corresponding UI state.
   const selSid = (opts.selection && ("sid" in opts.selection)) ? opts.selection.sid : uiState.selectedSituationId;
-  const selPid = (opts.selection && ("pid" in opts.selection)) ? opts.selection.pid : uiState.selectedSujetId;
+  const selPid = (opts.selection && ("pid" in opts.selection)) ? opts.selection.pid : uiState.selectedProblemId;
   const selAid = (opts.selection && ("aid" in opts.selection)) ? opts.selection.aid : uiState.selectedAvisId;
 
   const setTitleHtml = (html) => {
@@ -2145,7 +2145,7 @@ function renderDetails(opts) {
       const avisFiltered = applyAvisFilters(avisAll);
 
       const hasAvis = avisFiltered.length > 0;
-      const open = hasAvis && uiState.rightexpandedSujets.has(pbId);
+      const open = hasAvis && uiState.rightExpandedProblems.has(pbId);
       const chev = hasAvis ? (open ? "▾" : "▸") : "";
       const chevHtml = hasAvis
         ? `<span class="chev click" data-action="right-toggle-pb" data-pb="${escapeHtml(pbId)}">${chev}</span>`
@@ -2915,8 +2915,8 @@ wireHost(host);
         ev.stopPropagation();
         const pid = node.getAttribute("data-pb");
         if (!pid) return;
-        if (uiState.rightexpandedSujets.has(pid)) uiState.rightexpandedSujets.delete(pid);
-        else uiState.rightexpandedSujets.add(pid);
+        if (uiState.rightExpandedProblems.has(pid)) uiState.rightExpandedProblems.delete(pid);
+        else uiState.rightExpandedProblems.add(pid);
         renderDetails({ target });
       };
     });
@@ -2987,7 +2987,7 @@ function setDisplayDepth(depth) {
 
   if (state.displayDepth === "situations") {
     state.expandedSituations = new Set();
-    state.expandedSujets = new Set();
+    state.expandedProblems = new Set();
   } else if (state.displayDepth === "sujets") {
     // Expand all situations that have at least one sujet
     const sids = [];
@@ -2997,7 +2997,7 @@ function setDisplayDepth(depth) {
       }
     }
     state.expandedSituations = new Set(sids);
-    state.expandedSujets = new Set(); // keep avis collapsed
+    state.expandedProblems = new Set(); // keep avis collapsed
   } else {
     // avis => expand everything (situations + sujets)
     const sids = [];
@@ -3013,7 +3013,7 @@ function setDisplayDepth(depth) {
       }
     }
     state.expandedSituations = new Set(sids);
-    state.expandedSujets = new Set(pids);
+    state.expandedProblems = new Set(pids);
   }
 
   // Reset paging when changing depth (especially for avis)
@@ -3137,7 +3137,7 @@ function renderMiddle() {
           2. Chargez votre document PDF (notes de calcul)
         </p>
         <p>
-          3. Cliquez sur <b>"runAnalysis analysis"</b>
+          3. Cliquez sur <b>"Run analysis"</b>
         </p>
         <p style="color:var(--muted)">
           ⏳ Les analyses peuvent prendre entre 1 et 3 minutes selon la taille du PDF.
@@ -3159,7 +3159,7 @@ function renderMiddle() {
                    └─ Structuration finale : Situation → Sujet → Avis
         </p>
         <p>
-          Chaque <b>runAnalysis</b> est <b>horodaté</b> et associé à un <b>runAnalysis_id</b> pour faciliter la traçabilité et
+          Chaque <b>run</b> est <b>horodaté</b> et associé à un <b>run_id</b> pour faciliter la traçabilité et
           la relecture.
         </p>
 
@@ -3251,7 +3251,7 @@ const sitPrioHtml = sitHasFilteredAvis
   ? `<span class="${badgePriority(s.priority)}">${escapeHtml(s.priority || "")}</span>`
   : `<span class="${badgePriority(s.priority)}" style="visibility:hidden">${escapeHtml(s.priority || "P3")}</span>`;
 
-const sitSelCls = (state.selectedSituationId === s.situation_id && !state.selectedSujetId && !state.selectedAvisId) ? " subissue-row--selected" : "";
+const sitSelCls = (state.selectedSituationId === s.situation_id && !state.selectedProblemId && !state.selectedAvisId) ? " subissue-row--selected" : "";
 
         rows.push(`
       <div class="issue-row issue-row--sit click${sitSelCls}" data-action="select-sit" data-sit="${escapeHtml(s.situation_id)}">
@@ -3271,7 +3271,7 @@ const sitSelCls = (state.selectedSituationId === s.situation_id && !state.select
 
       for (const pb of problems) {
         const hasAvis = (pb.avis_ids || []).length > 0;
-        const pbOpen = hasAvis && state.expandedSujets.has(pb.problem_id);
+        const pbOpen = hasAvis && state.expandedProblems.has(pb.problem_id);
         const pbChev = hasAvis ? (pbOpen ? "▾" : "▸") : "";
         const pbChevHtml = hasAvis ? `<span class="chev click" data-action="toggle-pb" data-pb="${escapeHtml(pb.problem_id)}">${pbChev}</span>` : `<span class="chev chev--spacer"></span>`;
         
@@ -3280,7 +3280,7 @@ const pbPrioHtml = pbHasFilteredAvis
   ? `<span class="${badgePriority(pb.priority)}">${escapeHtml(pb.priority || "")}</span>`
   : `<span class="${badgePriority(pb.priority)}" style="visibility:hidden">${escapeHtml(pb.priority || "P3")}</span>`;
 
-const pbSelCls = (state.selectedSujetId === pb.problem_id && !state.selectedAvisId) ? " subissue-row--selected" : "";
+const pbSelCls = (state.selectedProblemId === pb.problem_id && !state.selectedAvisId) ? " subissue-row--selected" : "";
 
                 rows.push(`
           <div class="issue-row issue-row--pb click${pbSelCls}" data-action="select-pb" data-pb="${escapeHtml(pb.problem_id)}">
@@ -3371,8 +3371,8 @@ const pbSelCls = (state.selectedSujetId === pb.problem_id && !state.selectedAvis
       const hasAvis = (pObj?.avis_ids || []).length > 0;
 
       if (hasAvis) {
-        if (state.expandedSujets.has(pid)) state.expandedSujets.delete(pid);
-        else state.expandedSujets.add(pid);
+        if (state.expandedProblems.has(pid)) state.expandedProblems.delete(pid);
+        else state.expandedProblems.add(pid);
         renderMiddle();
       }
     };
@@ -3404,7 +3404,7 @@ const pbSelCls = (state.selectedSujetId === pb.problem_id && !state.selectedAvis
 
 /* ===== Network helpers (timeout + delayed status message) ===== */
 const FETCH_TIMEOUT_MS = 180_000;      // 3 minutes
-const SLOW_NOTICE_MS   = 25_000;       // show "still runAnalysisning" message after 25s
+const SLOW_NOTICE_MS   = 25_000;       // show "still running" message after 25s
 
 function isAbortError(e) {
   return e && (e.name === "AbortError" || String(e).includes("AbortError"));
@@ -3443,11 +3443,11 @@ const SUPABASE_URL = "https://smsizuijtrqogupgjnyj.supabase.co";
 // ⚠️ Replace with your *publishable/anon* key (often starts with "sb_publishable_...").
 const SUPABASE_ANON_KEY = "sb_publishable_0JlI9Nc1tyGmjuBZX9Oznw_Zlnfq6gC";
 
-async function fetchrunAnalysisRowFromSupabase(runAnalysisId) {
+async function fetchRunRowFromSupabase(runId) {
   // Build URL via URLSearchParams to avoid encoding / quoting pitfalls.
-  const u = new URL(`${SUPABASE_URL}/rest/v1/rapsobot_runAnalysiss`);
-  u.searchParams.set("select", "runAnalysis_id,status,phase,phase_progress,phase_msg,payload,updated_at");
-  u.searchParams.set("runAnalysis_id", `eq.${runAnalysisId}`);
+  const u = new URL(`${SUPABASE_URL}/rest/v1/rapsobot_runs`);
+  u.searchParams.set("select", "run_id,status,phase,phase_progress,phase_msg,payload,updated_at");
+  u.searchParams.set("run_id", `eq.${runId}`);
   u.searchParams.set("limit", "1");
 
   const res = await fetch(u.toString(), {
@@ -3468,7 +3468,7 @@ async function fetchrunAnalysisRowFromSupabase(runAnalysisId) {
   const rows = await res.json();
 
   // If nothing matches, return UNKNOWN (caller will keep polling).
-  // (This usually means runAnalysis_id mismatch or the row hasn't been inserted yet.)
+  // (This usually means run_id mismatch or the row hasn't been inserted yet.)
   return (rows && rows[0]) ? rows[0] : { status: "UNKNOWN", payload: null };
 }
 
@@ -3528,19 +3528,19 @@ function normalizeStatusResponse(data) {
   return data || {};
 }
 
-async function pollrunAnalysisStatus({ statusUrl, runAnalysisId }) {
+async function pollRunStatus({ statusUrl, runId }) {
   const t0 = Date.now();
   let tries = 0;
 
   while (Date.now() - t0 < POLL_MAX_MS) {
     tries++;
-    setSystemStatus("runAnalysisning", "En cours d’analyse", "IN_PROGRESS");
+    setSystemStatus("running", "En cours d’analyse", "IN_PROGRESS");
     showBanner("info", `Analyse en cours… pol #${tries} · status: IN_PROGRESS`);
 
 
 let data = null;
 try {
-  data = await fetchrunAnalysisRowFromSupabase(runAnalysisId);
+  data = await fetchRunRowFromSupabase(runId);
 } catch (e) {
   // Network/API hiccup during polling → keep waiting
   showBanner("info", `Analyse en cours… pol #${tries} · status: RECOVERING`);
@@ -3553,7 +3553,7 @@ try {
     const status = String(data?.status || "").toUpperCase();
     if (status === "UNKNOWN") {
       // Helpful diagnostics (open DevTools → Console)
-      console.debug("[RAPSOBOT] Supabase returned UNKNOWN for runAnalysisId:", runAnalysisId);
+      console.debug("[RAPSOBOT] Supabase returned UNKNOWN for runId:", runId);
     }
     const payload = data?.payload || null;
 
@@ -3572,7 +3572,7 @@ try {
       : `Analyse en cours… pol #${tries} · ${meta}`;
     
     showBanner("info", bannerMsg);
-    setSystemStatus("runAnalysisning", "En cours d’analyse", meta);
+    setSystemStatus("running", "En cours d’analyse", meta);
 
 
     // READY + payload => render
@@ -3583,24 +3583,24 @@ try {
 
       state.data = final;
       state.expandedSituations = new Set();
-      state.expandedSujets = new Set();
+      state.expandedProblems = new Set();
       state.page = 1;
 
       const firstSit = final.situations?.[0]?.situation_id || null;
       if (firstSit) state.expandedSituations.add(firstSit);
       state.selectedSituationId = firstSit;
-      state.selectedSujetId = null;
+      state.selectedProblemId = null;
       state.selectedAvisId = null;
 
       showBanner("info", "");
-      setrunAnalysisMeta(runAnalysisId);
+      setRunMeta(runId);
       setSystemStatus("done", "Terminé", status);
       setDisplayDepth(state.displayDepth || "situations");
       return true;
     }
 
-    // Still runAnalysisning
-    setrunAnalysisMeta(runAnalysisId);
+    // Still running
+    setRunMeta(runId);
 
 
     await new Promise(r => setTimeout(r, computePollDelayMs(tries, progress)));
@@ -3613,12 +3613,12 @@ try {
 }
 
 
-/* ===== runAnalysis / Reset / Sidebar ===== */
-async function runAnalysis() {
-  // Clear prior UI states, but do NOT fail fast visually: long runAnalysiss are expected.
+/* ===== Run / Reset / Sidebar ===== */
+async function run() {
+  // Clear prior UI states, but do NOT fail fast visually: long runs are expected.
   showBanner("info", "");
-  setrunAnalysisMeta("");
-  setSystemStatus("runAnalysisning", "En cours d’analyse", "POST /webhook");
+  setRunMeta("");
+  setSystemStatus("running", "En cours d’analyse", "POST /webhook");
 
   const inp = readInputs();
   if (!inp.pdfFile) {
@@ -3635,27 +3635,27 @@ async function runAnalysis() {
     referential: inp.referential,
   };
 
-  // Client-side runAnalysis_id so we can poll even if the POST fails.
-  const runAnalysisId = `runAnalysis-${Date.now()}`;
-  setrunAnalysisMeta(runAnalysisId);
+  // Client-side run_id so we can poll even if the POST fails.
+  const runId = `RUN-${Date.now()}`;
+  setRunMeta(runId);
   const statusUrl = STATUS_URL_PROD;
   const startUrl = START_URL_PROD;
-  // Show a gentle notice if the request is still runAnalysisning after a while.
+  // Show a gentle notice if the request is still running after a while.
   let slowTimer = null;
   slowTimer = setTimeout(() => {
     showBanner("info", "Analyse en cours… (cela peut prendre 1–3 minutes selon le PDF).");
-    setSystemStatus("runAnalysisning", "En cours d’analyse", "toujours en cours…");
+    setSystemStatus("running", "En cours d’analyse", "toujours en cours…");
   }, SLOW_NOTICE_MS);
 
   // Start the POST, but do NOT depend on it for rendering (we will poll).
   try {
     const form = new FormData();
-    form.append("runAnalysis_id", runAnalysisId);
+    form.append("run_id", runId);
     form.append("user_reference", JSON.stringify(user_reference));
     form.append("pdf", inp.pdfFile, inp.pdfFile.name);
 
     // If the server returns final_result immediately, we render.
-    // If it returns ACK {runAnalysis_id, status:IN_PROGRESS}, we poll.
+    // If it returns ACK {run_id, status:IN_PROGRESS}, we poll.
     const res = await fetchWithTimeout(startUrl, { method: "POST", body: form }, FETCH_TIMEOUT_MS);
     const text = await res.text();
 
@@ -3670,17 +3670,17 @@ async function runAnalysis() {
         Array.isArray(final.situations) && Array.isArray(final.problems) && Array.isArray(final.avis)) {
       state.data = final;
       state.expandedSituations = new Set();
-      state.expandedSujets = new Set();
+      state.expandedProblems = new Set();
       state.page = 1;
 
       const firstSit = final.situations?.[0]?.situation_id || null;
       if (firstSit) state.expandedSituations.add(firstSit);
       state.selectedSituationId = firstSit;
-      state.selectedSujetId = null;
+      state.selectedProblemId = null;
       state.selectedAvisId = null;
 
       showBanner("info", "");
-      setrunAnalysisMeta(final.runAnalysis_id || runAnalysisId);
+      setRunMeta(final.run_id || runId);
       setSystemStatus("done", "Terminé", final.status || "OK");
       setDisplayDepth(state.displayDepth || "situations");
       return;
@@ -3688,50 +3688,50 @@ async function runAnalysis() {
 
     // Case B: ACK pattern → poll
     showBanner("info", "Analyse en cours… (ack reçu, récupération du résultat)");
-    setSystemStatus("runAnalysisning", "En cours d’analyse", "ACK reçu");
-    await pollrunAnalysisStatus({ statusUrl, runAnalysisId });
+    setSystemStatus("running", "En cours d’analyse", "ACK reçu");
+    await pollRunStatus({ statusUrl, runId });
   } catch (e) {
     // POST failed locally → still try to poll (workflow might have started).
     const msg = e?.message || String(e);
 
     if (isAbortError(e)) {
       showBanner("info", "Analyse en cours… (timeout navigateur). Je tente de récupérer le résultat via le statut…");
-      setSystemStatus("runAnalysisning", "En cours d’analyse", "timeout POST → polling");
+      setSystemStatus("running", "En cours d’analyse", "timeout POST → polling");
     } else if (String(msg).toLowerCase().includes("failed to fetch")) {
       showBanner("info", "Connexion instable : le POST a échoué côté navigateur. Je tente de récupérer le résultat via le statut…");
-      setSystemStatus("runAnalysisning", "En cours d’analyse", "POST KO → polling");
+      setSystemStatus("running", "En cours d’analyse", "POST KO → polling");
     } else {
       showError(`POST webhook en erreur: ${msg}. Je tente quand même la récupération via le statut…`);
-      setSystemStatus("runAnalysisning", "En cours d’analyse", "POST erreur → polling");
+      setSystemStatus("running", "En cours d’analyse", "POST erreur → polling");
     }
 
-    await pollrunAnalysisStatus({ statusUrl, runAnalysisId });
+    await pollRunStatus({ statusUrl, runId });
   } finally {
     if (slowTimer) clearTimeout(slowTimer);
   }
 }
 
-function resetAnalysisUi() {
+function resetUI() {
   showBanner("info", "");
-  setrunAnalysisMeta("");
+  setRunMeta("");
   setSystemStatus("idle", "Idle", "—");
 
   state.data = null;
   state.expandedSituations = new Set();
-  state.expandedSujets = new Set();
+  state.expandedProblems = new Set();
 
   state.selectedSituationId = null;
-  state.selectedSujetId = null;
+  state.selectedProblemId = null;
   state.selectedAvisId = null;
 
 
   // drilldown
   closeDrilldown();
   state.drilldown.selectedSituationId = null;
-  state.drilldown.selectedSujetId = null;
+  state.drilldown.selectedProblemId = null;
   state.drilldown.selectedAvisId = null;
   state.drilldown.rightSubissuesOpen = true;
-  state.drilldown.rightexpandedSujets = new Set();
+  state.drilldown.rightExpandedProblems = new Set();
   state.drilldown.tempAvisVerdict = null;
   state.drilldown.tempAvisVerdictFor = null;
 
@@ -4148,7 +4148,7 @@ function drilldownSelectSituation(sid) {
   const d = state.data;
   if (!d || !sid) return;
   state.drilldown.selectedSituationId = sid;
-  state.drilldown.selectedSujetId = null;
+  state.drilldown.selectedProblemId = null;
   state.drilldown.selectedAvisId = null;
   openDrilldown();
 }
@@ -4160,7 +4160,7 @@ function drilldownSelectProblem(pid) {
   const sid = parents.problemToSituation.get(pid) || null;
 
   state.drilldown.selectedSituationId = sid;
-  state.drilldown.selectedSujetId = pid;
+  state.drilldown.selectedProblemId = pid;
   state.drilldown.selectedAvisId = null;
   openDrilldown();
 }
@@ -4173,7 +4173,7 @@ function drilldownSelectAvis(aid) {
   const sid = parents.avisToSituation.get(aid) || null;
 
   state.drilldown.selectedSituationId = sid;
-  state.drilldown.selectedSujetId = pid;
+  state.drilldown.selectedProblemId = pid;
   state.drilldown.selectedAvisId = aid;
   openDrilldown();
 }
@@ -4268,8 +4268,8 @@ function initRightSplitter() {
 
 
 function wireEvents() {
-  el("runAnalysisBtnTop").onclick = runAnalysis;
-  el("resetBtnTop").onclick = resetAnalysisUi;
+  el("runBtnTop").onclick = run;
+  el("resetBtnTop").onclick = resetUI;
   if (el("sidebarToggle")) el("sidebarToggle").onclick = toggleSidebar;
   if (el("sidebarToggleFloating")) el("sidebarToggleFloating").onclick = toggleSidebar;
 
@@ -4348,4 +4348,4 @@ applyQueryParamsToForm();
 ensureDrilldownDom();
 wireEvents();
 initRightSplitter();
-resetAnalysisUi();
+resetUI();
