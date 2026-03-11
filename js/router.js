@@ -1,7 +1,7 @@
 import { renderGlobalDashboard } from "./views/global-dashboard.js";
 import { renderProjectsList } from "./views/projects-list.js";
 import { renderProjectLayout } from "./views/project-layout.js";
-import { getStore } from "./store.js";
+import { store } from "./store.js";
 
 function parseHash() {
   const hash = location.hash.replace(/^#/, "").trim();
