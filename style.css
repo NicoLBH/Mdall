@@ -643,8 +643,6 @@ body.banner-visible #project-content.gh-page{
 :root{ --panel-head-h:44px; }
 .gh-panel--results .gh-panel__head--tight,
 .gh-panel--details .gh-panel__head{
-  min-height:var(--panel-head-h);
-  /*display:flex;*/
   align-items:center;
 }
 .gh-panel--results .gh-panel__head--tight{padding:none;}
