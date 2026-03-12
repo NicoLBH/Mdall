@@ -19,13 +19,15 @@ function getProjectDisplayName(projectId) {
 
 function getHeaderModel() {
   const parts = parseHash();
+  const inProject = parts[0] === "project" && !!parts[1];
 
-  if (parts[0] === "project" && parts[1]) {
+  if (inProject) {
     return {
       primary: store.user?.name || "user",
       secondary: getProjectDisplayName(parts[1]),
       showSecondary: true,
-      href: `#project/${parts[1]}/dashboard`
+      href: `#project/${parts[1]}/dashboard`,
+      headerClass: "gh-header gh-header--project"
     };
   }
 
@@ -34,7 +36,8 @@ function getHeaderModel() {
       primary: "Projects",
       secondary: "",
       showSecondary: false,
-      href: "#projects"
+      href: "#projects",
+      headerClass: "gh-header gh-header--global"
     };
   }
 
@@ -42,7 +45,8 @@ function getHeaderModel() {
     primary: "Dashboard",
     secondary: "",
     showSecondary: false,
-    href: "#dashboard"
+    href: "#dashboard",
+    headerClass: "gh-header gh-header--global"
   };
 }
 
@@ -53,7 +57,7 @@ export function renderGlobalHeader() {
   const model = getHeaderModel();
 
   host.innerHTML = `
-    <header class="gh-header">
+    <header class="${model.headerClass}">
       <div class="gh-header__left">
         <button id="menuBtn" class="icon-btn" type="button" aria-label="Ouvrir le menu">☰</button>
 
