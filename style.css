@@ -769,7 +769,7 @@ body.is-resizing{
 .gh-comment-body{
   padding:12px;
   white-space:inherit;
-  font-size:14px;
+  font-size:13px;
 }
 
 /* Bullets in first agent comment: uniform 13px (keep .mono as-is) */
