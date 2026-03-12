@@ -37,37 +37,38 @@ export function renderGlobalNav() {
   `;
 }
 
+let globalNavBound = false;
+
 export function bindGlobalNav() {
-  const menuBtn = document.getElementById("menuBtn");
-  const globalNav = document.getElementById("globalNav");
+  if (globalNavBound) return;
+  globalNavBound = true;
 
-  if (!menuBtn || !globalNav) return;
+  document.addEventListener("click", (e) => {
+    const menuBtn = e.target.closest?.("#menuBtn");
+    const globalNav = document.getElementById("globalNav");
 
-  menuBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    globalNav.classList.toggle("hidden");
-  });
+    if (menuBtn) {
+      e.stopPropagation();
+      globalNav?.classList.toggle("hidden");
+      return;
+    }
 
-  globalNav.addEventListener("click", (e) => {
-    const target = e.target;
+    if (!globalNav || globalNav.classList.contains("hidden")) return;
 
-    if (target?.tagName === "A") {
+    const navLink = e.target.closest?.("#globalNav a");
+    if (navLink) {
       globalNav.classList.add("hidden");
       return;
     }
 
-    if (target === globalNav) {
+    const insidePanel = e.target.closest?.(".global-nav__panel");
+    if (!insidePanel) {
       globalNav.classList.add("hidden");
     }
   });
 
-  document.addEventListener("click", (e) => {
-    if (
-      !globalNav.classList.contains("hidden") &&
-      !globalNav.contains(e.target) &&
-      e.target !== menuBtn
-    ) {
-      globalNav.classList.add("hidden");
-    }
+  window.addEventListener("hashchange", () => {
+    const globalNav = document.getElementById("globalNav");
+    globalNav?.classList.add("hidden");
   });
 }
