@@ -366,15 +366,73 @@ function addActivity(entityType, entityId, kind, message = "", meta = {}, option
   });
 }
 
-function setDecision(entityType, entityId, decision, note = "") {
+function _extractValidatedVerdict(decision) {
+  const d = String(decision || "").toUpperCase();
+  const m = d.match(/^VALIDATED_(F|D|S|HM|PM|SO)$/);
+  return m ? m[1] : null;
+}
+
+function _decisionStatus(decision) {
+  const d = String(decision || "").toUpperCase();
+  if (d === "CLOSED") return "closed";
+  if (d === "REOPENED" || d === "OPEN") return "open";
+  return null;
+}
+
+function setDecision(entityType, entityId, decision, note = "", options = {}) {
+  const actor = options.actor || "Human";
+  const agent = options.agent || "human";
+  const ts = options.ts || nowIso();
+  const nextDecision = String(decision || "");
+  const nextNote = String(note || "");
+
   persistRunBucket((bucket) => {
     bucket.decisions[entityType] = bucket.decisions[entityType] || {};
+    const prev = bucket.decisions[entityType][entityId] || null;
     bucket.decisions[entityType][entityId] = {
-      ts: nowIso(),
-      actor: "Human",
-      decision: String(decision || ""),
-      note: String(note || "")
+      ts,
+      actor,
+      decision: nextDecision,
+      note: nextNote
     };
+
+    const prevStatus = _decisionStatus(prev?.decision);
+    const nextStatus = _decisionStatus(nextDecision);
+    if ((entityType === "sujet" || entityType === "situation") && nextStatus && nextStatus !== prevStatus) {
+      const targetType = entityType === "sujet" ? "situation" : "situation";
+      const parentSituation = entityType === "sujet" ? getSituationBySujetId(entityId) : null;
+      const targetId = entityType === "sujet" ? (parentSituation?.id || entityId) : entityId;
+      bucket.activities.push({
+        ts,
+        entity_type: targetType,
+        entity_id: targetId,
+        type: "ACTIVITY",
+        kind: nextStatus === "closed" ? "issue_closed" : "issue_reopened",
+        actor,
+        agent,
+        message: nextNote,
+        meta: entityType === "sujet" ? { problem_id: entityId } : { situation_id: entityId }
+      });
+    }
+
+    if (entityType === "avis") {
+      const fromVerdict = _extractValidatedVerdict(prev?.decision);
+      const toVerdict = _extractValidatedVerdict(nextDecision);
+      if (toVerdict && toVerdict !== fromVerdict) {
+        const parentSujet = getSujetByAvisId(entityId);
+        bucket.activities.push({
+          ts,
+          entity_type: parentSujet?.id ? "sujet" : "avis",
+          entity_id: parentSujet?.id || entityId,
+          type: "ACTIVITY",
+          kind: "avis_verdict_changed",
+          actor,
+          agent,
+          message: nextNote,
+          meta: { avis_id: entityId, from: fromVerdict, to: toVerdict }
+        });
+      }
+    }
   });
 }
 
@@ -405,18 +463,18 @@ function updateCommentByRequestId(requestId, nextMessage, options = {}) {
 }
 
 function stripRapsoTag(text) {
-  return String(text || "").replace(/@rapso/gi, "").replace(/\s{2,}/g, " ").trim();
+  return String(text || "").replace(/@rapso\b/gi, "").replace(/\s{2,}/g, " ").trim();
 }
 
 function isHelpTrigger(text) {
   const t = String(text || "").trim();
-  return /^\/help/i.test(t) || /^@help/i.test(t);
+  return /^\/help\b/i.test(t) || /^@help\b/i.test(t);
 }
 
 function stripHelpTag(text) {
   return String(text || "")
-    .replace(/^\s*\/help\s*/i, "")
-    .replace(/^\s*@help\s*/i, "")
+    .replace(/^\s*\/help\b\s*/i, "")
+    .replace(/^\s*@help\b\s*/i, "")
     .trim();
 }
 
@@ -607,7 +665,7 @@ async function askRapsoAndAppendReply({ type, id, humanMessage }) {
   rerenderPanels();
   const payload = { agent: "specialist_ps", request_id: requestId, context: ctx };
   try {
-    const res = await fetchWithTimeout(ASSIST_LLM_URL_PROD, {
+    const res = await fetchWithTimeout(ASK_LLM_URL_PROD, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
@@ -1942,11 +2000,10 @@ function currentDecisionTarget(root) {
 }
 
 function rerenderScope(root) {
-  if (root?.closest?.("#drilldownPanel")) {
-    updateDrilldownPanel();
-    return;
-  }
   rerenderPanels();
+  if (root?.closest?.("#drilldownPanel") && store.situationsView.drilldown?.isOpen) {
+    updateDrilldownPanel();
+  }
 }
 
 async function applyCommentAction(root) {
@@ -1970,7 +2027,6 @@ async function applyCommentAction(root) {
       humanMessage: message,
       scope: root.closest("#detailsModal") ? "modal" : (root.closest("#drilldownPanel") ? "overlay" : "details")
     });
-    rerenderScope(root);
     return;
   }
 
@@ -1979,7 +2035,7 @@ async function applyCommentAction(root) {
   store.situationsView.commentPreviewMode = false;
   rerenderScope(root);
 
-  if (/@rapso/i.test(message)) {
+  if (/@rapso\b/i.test(message)) {
     await askRapsoAndAppendReply({ type: target.type, id: target.id, humanMessage: message });
   }
 }
@@ -1990,14 +2046,8 @@ function applyValidateAvis(root) {
 
   const avisId = target.id;
   const verdict = String(store.situationsView.tempAvisVerdict || "F").toUpperCase();
-  setDecision("avis", avisId, `VALIDATED_${verdict}`, "");
-
-  const sujet = getSujetByAvisId(avisId);
-  if (sujet) {
-    addActivity("sujet", sujet.id, "avis_verdict_changed", "", { avis_id: avisId, to: verdict }, { actor: "Human", agent: "human" });
-  }
-
-  rerenderPanels();
+  setDecision("avis", avisId, `VALIDATED_${verdict}`, "", { actor: "Human", agent: "human" });
+  rerenderScope(root);
 }
 
 function applyIssueCloseOrReopen(nextStatus, root) {
@@ -2005,28 +2055,9 @@ function applyIssueCloseOrReopen(nextStatus, root) {
   if (!target || target.type === "avis") return;
 
   if (target.type === "sujet") {
-    setDecision("sujet", target.id, nextStatus === "closed" ? "CLOSED" : "REOPENED", "");
-    const situation = getSituationBySujetId(target.id);
-    if (situation) {
-      addActivity(
-        "situation",
-        situation.id,
-        nextStatus === "closed" ? "issue_closed" : "issue_reopened",
-        "",
-        { problem_id: target.id },
-        { actor: "Human", agent: "human" }
-      );
-    }
+    setDecision("sujet", target.id, nextStatus === "closed" ? "CLOSED" : "REOPENED", "", { actor: "Human", agent: "human" });
   } else {
-    setDecision("situation", target.id, nextStatus === "closed" ? "CLOSED" : "REOPENED", "");
-    addActivity(
-      "situation",
-      target.id,
-      nextStatus === "closed" ? "issue_closed" : "issue_reopened",
-      "",
-      {},
-      { actor: "Human", agent: "human" }
-    );
+    setDecision("situation", target.id, nextStatus === "closed" ? "CLOSED" : "REOPENED", "", { actor: "Human", agent: "human" });
   }
 
   rerenderScope(root);
