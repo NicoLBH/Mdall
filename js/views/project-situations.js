@@ -2763,35 +2763,6 @@ function bindDetailsScroll(root) {
 }
 
 function bindSituationsEvents(root) {
-  const verdictBtn = root.querySelector("#verdictHeadBtn");
-  const verdictDropdown = root.querySelector("#verdictHeadDropdown");
-
-  if (verdictBtn && verdictDropdown) {
-    verdictBtn.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-
-      const isOpen = verdictDropdown.classList.contains("gh-menu--open");
-      verdictDropdown.classList.toggle("gh-menu--open", !isOpen);
-      verdictBtn.setAttribute("aria-expanded", String(!isOpen));
-    });
-
-    verdictDropdown.querySelectorAll("[data-verdict]").forEach((item) => {
-      item.addEventListener("click", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-
-        const verdict = String(item.dataset.verdict || "ALL").toUpperCase();
-        store.situationsView.verdictFilter = verdict;
-
-        verdictDropdown.classList.remove("gh-menu--open");
-        verdictBtn.setAttribute("aria-expanded", "false");
-
-        rerenderPanels();
-      });
-    });
-  }
-  
   root.querySelector("#situationsSearch")?.addEventListener("input", (event) => {
     store.situationsView.search = String(event.target.value || "");
     rerenderPanels();
@@ -2803,19 +2774,51 @@ function bindSituationsEvents(root) {
   });
 
   root.addEventListener("click", (event) => {
+    const verdictBtn = event.target.closest("#verdictHeadBtn");
+    if (verdictBtn) {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const currentBtn = root.querySelector("#verdictHeadBtn");
+      const currentDropdown = root.querySelector("#verdictHeadDropdown");
+      if (!currentBtn || !currentDropdown) return;
+
+      const isOpen = currentDropdown.classList.contains("gh-menu--open");
+      currentDropdown.classList.toggle("gh-menu--open", !isOpen);
+      currentBtn.setAttribute("aria-expanded", String(!isOpen));
+      return;
+    }
+
+    const verdictItem = event.target.closest("#verdictHeadDropdown [data-verdict]");
+    if (verdictItem) {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const verdict = String(verdictItem.dataset.verdict || "ALL").toUpperCase();
+      store.situationsView.verdictFilter = verdict;
+
+      const currentBtn = root.querySelector("#verdictHeadBtn");
+      const currentDropdown = root.querySelector("#verdictHeadDropdown");
+      if (currentDropdown) currentDropdown.classList.remove("gh-menu--open");
+      if (currentBtn) currentBtn.setAttribute("aria-expanded", "false");
+
+      rerenderPanels();
+      return;
+    }
+
     const verdictDropdown = root.querySelector("#verdictHeadDropdown");
-    const verdictBtn = root.querySelector("#verdictHeadBtn");
+    const currentBtn = root.querySelector("#verdictHeadBtn");
 
     if (
       verdictDropdown &&
-      verdictBtn &&
+      currentBtn &&
       !event.target.closest("#verdictHeadBtn") &&
       !event.target.closest("#verdictHeadDropdown")
     ) {
       verdictDropdown.classList.remove("gh-menu--open");
-      verdictBtn.setAttribute("aria-expanded", "false");
+      currentBtn.setAttribute("aria-expanded", "false");
     }
-    
+
     const expandBtn = event.target.closest("#detailsExpand");
     if (expandBtn) {
       event.preventDefault();
@@ -2828,8 +2831,11 @@ function bindSituationsEvents(root) {
       event.preventDefault();
       event.stopPropagation();
       const situationId = String(toggleSituation.dataset.situationId || "");
-      if (store.situationsView.expandedSituations.has(situationId)) store.situationsView.expandedSituations.delete(situationId);
-      else store.situationsView.expandedSituations.add(situationId);
+      if (store.situationsView.expandedSituations.has(situationId)) {
+        store.situationsView.expandedSituations.delete(situationId);
+      } else {
+        store.situationsView.expandedSituations.add(situationId);
+      }
       rerenderPanels();
       return;
     }
@@ -2839,8 +2845,11 @@ function bindSituationsEvents(root) {
       event.preventDefault();
       event.stopPropagation();
       const sujetId = String(toggleSujet.dataset.sujetId || "");
-      if (store.situationsView.expandedSujets.has(sujetId)) store.situationsView.expandedSujets.delete(sujetId);
-      else store.situationsView.expandedSujets.add(sujetId);
+      if (store.situationsView.expandedSujets.has(sujetId)) {
+        store.situationsView.expandedSujets.delete(sujetId);
+      } else {
+        store.situationsView.expandedSujets.add(sujetId);
+      }
       rerenderPanels();
       return;
     }
@@ -2863,9 +2872,10 @@ function bindSituationsEvents(root) {
     if (situationRow) {
       event.preventDefault();
       selectSituation(String(situationRow.dataset.situationId || ""));
+      return;
     }
   });
-    
+
   if (!root.__verdictMenuOutsideBound) {
     root.__verdictMenuOutsideBound = true;
 
