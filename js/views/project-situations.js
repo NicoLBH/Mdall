@@ -5,6 +5,7 @@ import {
   bindProjectSituationsRunbar,
   syncProjectSituationsRunbar
 } from "./project-situations-runbar.js";
+import { closeGlobalNav } from "./global-nav.js";
 
 /* =========================================================
    Legacy DOM / archive parity helpers
@@ -2144,6 +2145,7 @@ function updateDetailsModal() {
 }
 
 function openDetailsModal() {
+  closeGlobalNav();
   store.situationsView.detailsModalOpen = true;
   updateDetailsModal();
 }
@@ -2588,6 +2590,7 @@ function updateDrilldownPanel() {
 function openDrilldown() {
   ensureViewUiState();
   ensureDrilldownDom();
+  closeGlobalNav();
   store.situationsView.drilldown.isOpen = true;
   document.getElementById("drilldownPanel")?.classList.remove("hidden");
   document.body.classList.add("drilldown-open");
