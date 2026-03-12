@@ -1490,37 +1490,33 @@ body.drilldown-open .drilldown__inner {
   display: flex;
 }
 
-/* refacto restore helpers 
-.gh-input{background:var(--panel);border:1px solid var(--border2);color:var(--fg);border-radius:8px;padding:8px 10px;min-height:36px;}
-.gh-input--sm{min-width:88px;padding:6px 10px;}
-.sidebar-card{padding:16px 0;}
-.sidebar-card h3{margin:0 0 18px 0;font-size:18px;}
-.meta-list{display:flex;flex-direction:column;gap:18px;}
-.meta-row{padding-bottom:14px;border-bottom:1px solid var(--border2);display:flex;flex-direction:column;gap:8px;color:var(--muted);}
-.meta-row:last-child{border-bottom:none;}
-.meta-row > div:last-child{color:var(--fg);}
-.timeline-comment{display:flex;gap:14px;align-items:flex-start;}
-.timeline-avatar{width:42px;height:42px;border-radius:999px;border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;color:var(--fg);background:#0d1117;flex:0 0 auto;}
-.timeline-card{border:1px solid rgba(56,139,253,.55);border-radius:10px;overflow:hidden;background:rgba(13,17,23,.9);}
-.timeline-card__head{padding:12px 16px;border-bottom:1px solid rgba(56,139,253,.35);font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,Liberation Mono,Courier New,monospace;color:var(--fg);}
-.timeline-card__body{padding:16px;line-height:1.55;}
-.dot{display:inline-block;width:10px;height:10px;border-radius:999px;margin-right:6px;}
-.dot--red{background:#ff6b6b;}
-.dot--yellow{background:#e6d25e;}
-.subissues-counts--verdicts{display:flex;align-items:center;gap:10px;min-width:220px;}
-.verdict-legend{display:flex;align-items:center;gap:14px;color:var(--muted);font-size:12px;}
-.verdict-bar{height:8px;border-radius:999px;overflow:hidden;background:#202938;display:flex;min-width:180px;flex:1;}
-.verdict-bar__red{background:#ff6b6b;display:block;height:100%;}
-.verdict-bar__yellow{background:#e6d25e;display:block;height:100%;}
-.subissues-counts--problems{display:inline-flex;align-items:center;border:1px solid var(--border2);border-radius:999px;padding:4px 10px;color:var(--muted);font-size:12px;}
-.gh-state{display:inline-flex;align-items:center;gap:8px;border-radius:999px;padding:6px 12px;font-weight:600;}
-.gh-state--open{background:rgba(46,160,67,.18);color:#3fb950;}
-.gh-state--closed{background:rgba(218,54,51,.18);color:#ff7b72;}
-#situationsTableHost .issues-table__body{max-height:none;}
-#situationsTableHost .issue-row{cursor:pointer;}
-#situationsTableHost .issue-row:hover,.subissues-table .issue-row:hover{background:rgb(21, 27, 35) !important;}
-.chev--spacer{display:inline-block;width:14px;}
-@media (max-width: 1200px){
-  .gh-page[style*="grid-template-columns:minmax(0,1fr) minmax(360px,420px)"]{grid-template-columns:1fr !important;}
+.project-runbar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:12px;
+  padding:10px 12px;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  background:transparent;
 }
-*/
+
+.project-runbar__left,
+.project-runbar__right{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  min-width:0;
+}
+
+.project-runbar__right{
+  margin-left:auto;
+  flex-wrap:wrap;
+}
+
+.gh-header__center:empty,
+.gh-header__right:empty{
+  display:block;
+  min-height:1px;
+}
