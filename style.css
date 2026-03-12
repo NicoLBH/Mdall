@@ -1195,14 +1195,7 @@ body.drilldown-open .drilldown__inner {
   padding:14px 16px;
 }
 .assist-head__left{ display:flex; align-items:center; gap:12px; min-width:0; }
-.assist-head__logo{
-  width:34px; height:34px;
-  border-radius:8px;
-  background: transparent;
-  filter: drop-shadow(0 0 6px rgba(0,0,0,.6));
-  /* reuse existing brand logo if it's an <img>, otherwise provide a subtle placeholder */
-  border:1px solid rgba(240,246,252,.14);
-}
+.assist-head__logo{ width:34px; height:34px;}
 .assist-head__title{ min-width:0; }
 .assist-head__name{ font-size:16px; font-weight:700; line-height:20px; }
 .assist-head__sub{ font-size:12px; color: var(--muted); line-height:16px; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width: 72vw; }
