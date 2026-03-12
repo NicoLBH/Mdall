@@ -1,5 +1,6 @@
 import { store } from "../store.js";
 import { rerenderRoute } from "../router.js";
+import { syncProjectSituationsRunbar } from "../views/project-situations-runbar.js";
 
 const START_URL_PROD = "https://nicolbh.app.n8n.cloud/webhook/rapsobot-poc";
 const SUPABASE_URL = "https://smsizuijtrqogupgjnyj.supabase.co";
@@ -21,6 +22,10 @@ function setRunMeta(runId) {
   if (node) {
     node.textContent = runId ? `run_id=${runId}` : "";
   }
+  syncProjectSituationsRunbar({
+    run_id: store.ui.runId || "",
+    status: store.ui.systemStatus?.state || "idle"
+  });
 }
 
 function setSystemStatus(state, label, meta = "—") {
@@ -40,6 +45,18 @@ function setSystemStatus(state, label, meta = "—") {
     else if (state === "error") dot.classList.add("is-error");
     else dot.classList.add("is-idle");
   }
+
+  let runbarStatus = "idle";
+  if (state === "running") runbarStatus = "running";
+  else if (state === "done") runbarStatus = "done";
+  else if (state === "error") runbarStatus = "error";
+
+  syncProjectSituationsRunbar({
+    run_id: store.ui.runId || "",
+    status: runbarStatus,
+    label,
+    meta
+  });
 }
 
 function getDomValue(id) {
