@@ -278,6 +278,8 @@ body:not(.sidebar-collapsed) .sidebar-fab{display:none;}
   background:none;
   border:0;
   cursor:pointer;
+  color:#ffff;
+  font-size:13px;
 }
 .issues-head-menu__dropdown .gh-menu__item.is-active{
   font-weight:600;
