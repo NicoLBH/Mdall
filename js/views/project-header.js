@@ -14,8 +14,8 @@ function getProjectDisplayName(projectId) {
 
 export function renderProjectHeader(projectId, activeTab) {
   return `
-    <section class="project-context-header" style="display:none">
-      <div class="project-context-header__top">
+    <section class="project-context-header">
+      <div class="project-context-header__top" style="display:none">
         <div class="project-context-header__left">
           <div class="project-context-header__kicker mono">PROJECT</div>
           <h1 class="project-context-header__title">${getProjectDisplayName(projectId)}</h1>
