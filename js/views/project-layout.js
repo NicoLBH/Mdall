@@ -5,11 +5,26 @@ import { renderProjectIntervenants } from "./project-intervenants.js";
 import { renderProjectDashboard } from "./project-dashboard.js";
 import { renderProjectIdentity } from "./project-identity.js";
 
+function projectTitle(projectId) {
+  return projectId ? `Projet ${projectId}` : "Projet";
+}
+
 export function renderProjectLayout(root, projectId, tab) {
   root.innerHTML = `
-    <div class="project">
+    <div class="project-shell">
+      <section class="project-context-header">
+        <div class="project-context-header__left">
+          <div class="project-context-header__kicker mono">PROJECT</div>
+          <h1 class="project-context-header__title">${projectTitle(projectId)}</h1>
+        </div>
+
+        <div class="project-context-header__right">
+          <div class="project-context-header__meta mono">Contexte projet actif</div>
+        </div>
+      </section>
+
       <div class="project-tabs">
-        ${PROJECT_TABS.map(t => `
+        ${PROJECT_TABS.map((t) => `
           <a
             href="#project/${projectId}/${t.id}"
             class="${t.id === tab ? "active" : ""}"
