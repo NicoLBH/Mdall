@@ -23,6 +23,7 @@
   --mono:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
 
   --header-h:52px;
+  --project-tabs-h:44px;
   --control-xlarge-paddingBlock: .875rem;
   --base-size-48: 3rem;
 }
@@ -530,7 +531,7 @@ body.banner-visible .gh-page{top:calc(var(--header-h) + 64px);}
 /* ===== Top banner (below header) ===== */
 #topBanner.gh-banner{
   position:fixed;
-  top:var(--header-h);
+  top:calc(var(--header-h) + var(--project-tabs-h) - 8px);
   left:0;
   right:0;
   height:44px;
@@ -1410,7 +1411,7 @@ body.drilldown-open .drilldown__inner {
   top: var(--header-h);
   left:0;
   right:0;
-  height:44px;
+  height:var(--project-tabs-h);
   display:flex;
   align-items:center;
   gap:4px;
