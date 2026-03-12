@@ -2774,8 +2774,8 @@ function bindSituationsEvents(root) {
       event.preventDefault();
       event.stopPropagation();
 
-      const isOpen = verdictDropdown.classList.contains("is-open");
-      verdictDropdown.classList.toggle("is-open", !isOpen);
+      const isOpen = verdictDropdown.classList.contains("gh-menu--open");
+      verdictDropdown.classList.toggle("gh-menu--open", !isOpen);
       verdictBtn.setAttribute("aria-expanded", String(!isOpen));
     });
 
@@ -2787,7 +2787,7 @@ function bindSituationsEvents(root) {
         const verdict = String(item.dataset.verdict || "ALL").toUpperCase();
         store.situationsView.verdictFilter = verdict;
 
-        verdictDropdown.classList.remove("is-open");
+        verdictDropdown.classList.remove("gh-menu--open");
         verdictBtn.setAttribute("aria-expanded", "false");
 
         rerenderPanels();
@@ -2815,7 +2815,7 @@ function bindSituationsEvents(root) {
       !event.target.closest("#verdictHeadBtn") &&
       !event.target.closest("#verdictHeadDropdown")
     ) {
-      verdictDropdown.classList.remove("is-open");
+      verdictDropdown.classList.remove("gh-menu--open");
       verdictBtn.setAttribute("aria-expanded", "false");
     }
     
@@ -2884,7 +2884,7 @@ function bindSituationsEvents(root) {
         return;
       }
 
-      verdictDropdown.classList.remove("is-open");
+      verdictDropdown.classList.remove("gh-menu--open");
       verdictBtn.setAttribute("aria-expanded", "false");
     });
   }
