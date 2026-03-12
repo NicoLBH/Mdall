@@ -13,8 +13,12 @@ export const store = {
     },
     assistant: {
       isOpen: false,
+      isSending: false,
+      mode: "auto",
       messages: [],
-      draft: ""
+      draft: "",
+      lastContext: null,
+      lastError: ""
     }
   },
 
