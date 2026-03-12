@@ -72,3 +72,12 @@ export function bindGlobalNav() {
     globalNav?.classList.add("hidden");
   });
 }
+
+export function closeGlobalNav() {
+  document.getElementById("globalNav")?.classList.add("hidden");
+}
+
+export function isGlobalNavOpen() {
+  const el = document.getElementById("globalNav");
+  return !!el && !el.classList.contains("hidden");
+}
