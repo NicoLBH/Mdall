@@ -1,4 +1,8 @@
 import { store } from "../store.js";
+import {
+  ASK_LLM_URL_PROD,
+  ASSIST_LLM_URL_PROD
+} from "../constants.js";
 
 /* =========================================================
    Legacy DOM / archive parity helpers
@@ -477,9 +481,6 @@ function stripHelpTag(text) {
     .replace(/^\s*@help\b\s*/i, "")
     .trim();
 }
-
-const ASK_LLM_URL_PROD = "https://nicolbh.app.n8n.cloud/webhook/rapsobot-poc-assistant";
-const ASSIST_LLM_URL_PROD = "https://nicolbh.app.n8n.cloud/webhook/rapsobot-poc-ask-llm";
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = 120000) {
   const ctrl = new AbortController();
