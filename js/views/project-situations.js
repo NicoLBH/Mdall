@@ -2832,6 +2832,7 @@ export function renderProjectSituations(root) {
     run_id: store.ui?.runId || "",
     status: store.ui?.systemStatus?.state || "idle",
     label: store.ui?.systemStatus?.label || "",
-    meta: store.ui?.systemStatus?.meta || ""
+    meta: store.ui?.systemStatus?.meta || "",
+    isBusy: store.ui?.systemStatus?.state === "running"
   });
 }
