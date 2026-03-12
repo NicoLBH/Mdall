@@ -1,5 +1,6 @@
 import { store } from "../store.js";
 import { sendAssistMessage } from "../services/assist-service.js";
+import { closeGlobalNav } from "./global-nav.js";
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (char) => ({
@@ -163,6 +164,8 @@ export function openAssistOverlay() {
   const overlay = getOverlay();
   if (!overlay) return;
 
+  closeGlobalNav();
+  
   store.ui.assistant.isOpen = true;
   overlay.classList.add("is-open");
   overlay.setAttribute("aria-hidden", "false");
