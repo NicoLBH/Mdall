@@ -1,6 +1,10 @@
 import { store } from "../store.js";
 import { ASK_LLM_URL_PROD } from "../constants.js";
-import { runAnalysis, resetAnalysisUi } from "../services/analysis-runner.js";
+import {
+  renderProjectSituationsRunbar,
+  bindProjectSituationsRunbar,
+  syncProjectSituationsRunbar
+} from "./project-situations-runbar.js";
 
 /* =========================================================
    Legacy DOM / archive parity helpers
@@ -122,50 +126,6 @@ function fmtTs(ts) {
 
 function nowIso() {
   return new Date().toISOString();
-}
-
-function setProjectRunBarStateFromStore() {
-  const runMeta = document.getElementById("runAnalysisMetaTop");
-  const sysLabel = document.getElementById("sysLabel");
-  const sysMeta = document.getElementById("sysMeta");
-  const sysDot = document.getElementById("sysDot");
-
-  if (runMeta) {
-    runMeta.textContent = store.ui?.runId ? `run_id=${store.ui.runId}` : "";
-  }
-
-  if (sysLabel) {
-    sysLabel.textContent = store.ui?.systemStatus?.label || "Idle";
-  }
-
-  if (sysMeta) {
-    sysMeta.textContent = store.ui?.systemStatus?.meta || "—";
-  }
-
-  if (sysDot) {
-    sysDot.classList.remove("is-idle", "is-running", "is-done", "is-error");
-
-    const state = store.ui?.systemStatus?.state || "idle";
-    if (state === "running") sysDot.classList.add("is-running");
-    else if (state === "done") sysDot.classList.add("is-done");
-    else if (state === "error") sysDot.classList.add("is-error");
-    else sysDot.classList.add("is-idle");
-  }
-}
-
-function bindProjectRunBar(root) {
-  const runBtn = root.querySelector("#runAnalysisBtnTop");
-  const resetBtn = root.querySelector("#resetBtnTop");
-
-  if (runBtn) {
-    runBtn.addEventListener("click", runAnalysis);
-  }
-
-  if (resetBtn) {
-    resetBtn.addEventListener("click", resetAnalysisUi);
-  }
-
-  setProjectRunBarStateFromStore();
 }
 
 const SVG_ISSUE_OPEN = `<svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"></path><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Z"></path></svg>`;
@@ -2840,21 +2800,7 @@ export function renderProjectSituations(root) {
                   <option value="avis">Avis</option>
                 </select>
               </label>
-              <section class="project-runbar">
-               <div class="project-runbar__left">
-                 <button id="runAnalysisBtnTop" class="gh-btn gh-btn--primary">Run analysis</button>
-                 <button id="resetBtnTop" class="gh-btn">Reset</button>
-               </div>
-         
-               <div class="project-runbar__right">
-                 <div id="runAnalysisMetaTop" class="gh-meta mono"></div>
-                 <div class="sys-status">
-                   <span class="sys-status__dot" id="sysDot"></span>
-                   <span class="sys-status__label" id="sysLabel">Idle</span>
-                   <span class="sys-status__meta" id="sysMeta">—</span>
-                 </div>
-               </div>
-             </section>
+              ${renderProjectSituationsRunbar()}
             </div>
           </div>
 
@@ -2877,9 +2823,10 @@ export function renderProjectSituations(root) {
 
   rerenderPanels();
   bindSituationsEvents(root);
-  bindProjectRunBar(root);
+  bindProjectSituationsRunbar(root);
   bindModalEvents();
   bindDetailsScroll(root);
   initRightSplitter(root);
   updateDetailsModal();
+  syncProjectSituationsRunbar();
 }
