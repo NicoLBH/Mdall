@@ -50,6 +50,25 @@ function ensureSituationsLegacyDomStyle() {
     .drilldown.hidden{
       display:none !important;
     }
+
+    .issue-status-icon{
+      width:16px;
+      height:16px;
+      min-width:16px;
+      flex:0 0 16px;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      line-height:0;
+    }
+
+    .issue-status-icon svg{
+      width:16px;
+      height:16px;
+      min-width:16px;
+      flex:0 0 16px;
+      display:block;
+    }
   `;
   document.head.appendChild(style);
 }
@@ -109,9 +128,10 @@ const SVG_COMMENT = `<svg viewBox="0 0 16 16" width="16" height="16" fill="curre
 
 function issueIcon(status = "open") {
   const isOpen = String(status || "open").toLowerCase() !== "closed";
-  return isOpen
+  const svg = isOpen
     ? `<svg color="var(--fgColor-open)" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"></path><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Z"></path></svg>`
     : `<svg color="var(--fgColor-done)" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M11.28 6.78a.75.75 0 0 0-1.06-1.06L7.25 8.69 5.78 7.22a.75.75 0 0 0-1.06 1.06l2 2a.75.75 0 0 0 1.06 0l3.5-3.5Z"></path><path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0Zm-1.5 0a6.5 6.5 0 1 0-13 0 6.5 6.5 0 0 0 13 0Z"></path></svg>`;
+  return `<span class="issue-status-icon" aria-hidden="true">${svg}</span>`;
 }
 
 function normalizeVerdict(verdict) {
@@ -1275,20 +1295,8 @@ function renderSubIssuesForSituation(situation, options = {}) {
   });
 }
 
-function renderDetailsTitleHtml(selection) {
-  const emptyHead = `
-    <div class="details-head">
-      <div class="details-head-left">
-        <div class="details-kicker mono">DÉTAILS</div>
-        <div class="gh-panel__title">Sélectionner un élément</div>
-      </div>
-      <div class="details-head-right">
-        <div class="details-meta mono" id="detailsMeta">—</div>
-        <button id="detailsExpand" class="icon-btn icon-btn--sm" aria-label="Agrandir" title="Agrandir">⤢</button>
-      </div>
-    </div>
-  `;
-  if (!selection) return emptyHead;
+function renderDetailsTitleWrapHtml(selection) {
+  if (!selection) return `<span class="details-title-text">Sélectionner un élément</span>`;
 
   const item = selection.item;
   let badgeHtml = "";
@@ -1299,7 +1307,12 @@ function renderDetailsTitleHtml(selection) {
 
   if (selection.type === "avis") {
     badgeHtml = verdictPill(getEffectiveAvisVerdict(item.id));
-    probsHtml = `<div class="subissues-counts subissues-counts--problems"><span>${escapeHtml(firstNonEmpty(item.agent, "system"))}</span></div>`;
+    const sujet = getSujetByAvisId(item.id);
+    if (sujet) {
+      probsHtml = `<div class="subissues-counts subissues-counts--problems"><span>${escapeHtml(firstNonEmpty(sujet.title, sujet.id, "Non classé"))}</span></div>`;
+    } else {
+      probsHtml = `<div class="subissues-counts subissues-counts--problems"><span>${escapeHtml(firstNonEmpty(item.agent, "system"))}</span></div>`;
+    }
   } else if (selection.type === "sujet") {
     const stats = problemVerdictStats(item);
     badgeHtml = statePill(getEffectiveSujetStatus(item.id));
@@ -1316,44 +1329,66 @@ function renderDetailsTitleHtml(selection) {
   const titleTextHtml = escapeHtml(firstNonEmpty(item.title, item.id, "Détail"));
 
   return `
+    <div class="details-title-wrap details-title--expanded">
+      <div class="details-title-row details-title-row--main">
+        <div class="details-title-maincol">
+          <div class="details-title-topline">
+            <span class="details-title-text">${titleTextHtml}</span>
+            <span class="details-title-id mono">${idHtml}</span>
+          </div>
+          <div class="details-title-bottomline">
+            ${badgeHtml}${probsHtml}${verdictHtml}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="details-title-wrap details-title--compact">
+      <div class="details-title-compact">
+        <div class="details-title-compact-col1">${badgeHtml}</div>
+        <div class="details-title-compact-col2">
+          <div class="details-title-compact-top">
+            <span class="details-title-text">${titleTextHtml}</span>
+            <span class="details-title-id mono">${idHtml}</span>
+          </div>
+          <div class="details-title-compact-bottom">
+            ${probsHtml}${barOnlyHtml}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderDetailsTitleHtml(selection, options = {}) {
+  const showExpand = options.showExpand !== false;
+  if (!selection) {
+    return `
+      <div class="details-head">
+        <div class="details-head-left">
+          <div class="details-kicker mono">DÉTAILS</div>
+          <div class="gh-panel__title">Sélectionner un élément</div>
+        </div>
+        <div class="details-head-right">
+          <div class="details-meta mono" id="detailsMeta">—</div>
+          ${showExpand ? `<button id="detailsExpand" class="icon-btn icon-btn--sm" aria-label="Agrandir" title="Agrandir">⤢</button>` : ``}
+        </div>
+      </div>
+    `;
+  }
+
+  return `
     <div class="details-head details-head--expanded">
       <div class="details-head-left">
         <div class="details-kicker mono">DÉTAILS</div>
         <div class="gh-panel__title">
-          <div class="details-title-wrap details-title--expanded">
-            <div class="details-title-row details-title-row--main">
-              <div class="details-title-maincol">
-                <div class="details-title-topline">
-                  <span class="details-title-text">${titleTextHtml}</span>
-                  <span class="details-title-id mono">${idHtml}</span>
-                </div>
-                <div class="details-title-bottomline">
-                  ${badgeHtml}${probsHtml}${verdictHtml}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="details-title-wrap details-title--compact">
-            <div class="details-title-compact">
-              <div class="details-title-compact-col1">${badgeHtml}</div>
-              <div class="details-title-compact-col2">
-                <div class="details-title-compact-top">
-                  <span class="details-title-text">${titleTextHtml}</span>
-                  <span class="details-title-id mono">${idHtml}</span>
-                </div>
-                <div class="details-title-compact-bottom">
-                  ${probsHtml}${barOnlyHtml}
-                </div>
-              </div>
-            </div>
-          </div>
+          ${renderDetailsTitleWrapHtml(selection)}
         </div>
       </div>
 
       <div class="details-head-right">
-        <div class="details-meta mono" id="detailsMeta">${escapeHtml(item.id || "—")}</div>
-        <button id="detailsExpand" class="icon-btn icon-btn--sm" aria-label="Agrandir" title="Agrandir">⤢</button>
+        <div class="details-meta mono" id="detailsMeta">${escapeHtml(selection.item.id || "—")}</div>
+        ${showExpand ? `<button id="detailsExpand" class="icon-btn icon-btn--sm" aria-label="Agrandir" title="Agrandir">⤢</button>` : ``}
       </div>
     </div>
   `;
@@ -1370,6 +1405,10 @@ function renderDetailsBody(selection, options = {}) {
 
   if (selection.type === "avis") {
     descCard = renderCommentCard(firstNonEmpty(item.agent, "system"), getAvisSummary(item), "A");
+    const sujet = getSujetByAvisId(item.id);
+    if (sujet) {
+      subIssuesHtml = renderSubIssuesForSujet(sujet, options.subissuesOptions || {});
+    }
   } else if (selection.type === "sujet") {
     descCard = renderCommentCard(firstNonEmpty(item.agent, "system"), getSujetSummary(item), "P");
     subIssuesHtml = renderSubIssuesForSujet(item, options.subissuesOptions || {});
@@ -1431,7 +1470,8 @@ function updateDetailsModal() {
     }
   });
   if (head) head.classList.add('details-head--expanded');
-  title.innerHTML = details.titleHtml || details.modalTitle;
+  const selection = getActiveSelection();
+  title.innerHTML = renderDetailsTitleWrapHtml(selection);
   meta.textContent = details.modalMeta;
   body.innerHTML = details.bodyHtml;
 
@@ -1441,6 +1481,7 @@ function updateDetailsModal() {
   else modal.classList.add("hidden");
 
   wireDetailsInteractive(body);
+  bindDetailsScroll(document);
 }
 
 function openDetailsModal() {
@@ -1883,9 +1924,10 @@ function updateDrilldownPanel() {
     }
   });
 
-  title.textContent = selection ? firstNonEmpty(selection.item.title, selection.item.id, "Détail") : "—";
+  title.innerHTML = selection ? renderDetailsTitleWrapHtml(selection) : "—";
   body.innerHTML = details.bodyHtml;
   wireDetailsInteractive(body);
+  bindDetailsScroll(document);
 }
 
 function openDrilldown() {
@@ -1983,18 +2025,45 @@ function bindGlobalBrandOverlay() {
   });
 }
 
-function bindDetailsScroll(root) {
-  const detailsBody = root.querySelector("#situationsDetailsHost");
-  const detailsPanel = root.querySelector(".gh-panel--details");
-  if (!detailsBody || !detailsPanel || detailsBody.dataset.scrollBound === "1") return;
-  detailsBody.dataset.scrollBound = "1";
+function bindCondensedTitleScroll(scrollEl, classHost, key) {
+  if (!scrollEl || !classHost) return;
+  const boundKey = key || "default";
+  const attr = `scrollBound${boundKey.charAt(0).toUpperCase()}${boundKey.slice(1)}`;
+  if (scrollEl.dataset[attr] === "1") return;
+  scrollEl.dataset[attr] = "1";
 
   const syncCompactState = () => {
-    detailsPanel.classList.toggle("details-scrolled", detailsBody.scrollTop > 12);
+    const scrolled = (scrollEl.scrollTop || 0) > 8;
+    classHost.classList.toggle("details-scrolled", scrolled);
+    classHost.querySelectorAll?.(".gh-panel__head--tight, .modal__head, .drilldown__head").forEach((head) => {
+      head.classList.toggle("details-head--compact", scrolled);
+      head.classList.toggle("details-head--expanded", !scrolled);
+    });
   };
 
-  detailsBody.addEventListener("scroll", syncCompactState, { passive: true });
+  scrollEl.addEventListener("scroll", syncCompactState, { passive: true });
   syncCompactState();
+  setTimeout(syncCompactState, 0);
+}
+
+function bindDetailsScroll(root) {
+  bindCondensedTitleScroll(
+    root.querySelector("#situationsDetailsHost"),
+    root.querySelector(".gh-panel--details"),
+    "details"
+  );
+
+  bindCondensedTitleScroll(
+    document.getElementById("detailsBodyModal"),
+    document.getElementById("detailsModal"),
+    "modal"
+  );
+
+  bindCondensedTitleScroll(
+    document.getElementById("drilldownBody"),
+    document.querySelector("#drilldownPanel .drilldown__inner"),
+    "drilldown"
+  );
 }
 
 function bindSituationsEvents(root) {
