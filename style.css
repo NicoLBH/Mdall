@@ -465,7 +465,11 @@ body.banner-visible .gh-page{top:calc(var(--header-h) + 64px);}
   min-height:0;
   overflow:auto;
 }
-
+#situationsTableHost .issues-table{
+  border-bottom: solid 1px var(--border);
+  border-bottom-right-radius: var(--radius);
+  border-bottom-left-radius: var(--radius);
+}
 .issue-row{display:grid;grid-template-columns: var(--issues-cols);gap:0;align-items:center;padding:4px 12px;border-bottom:1px solid rgba(48,54,61,.35);}
 .issue-row:last-child{border-bottom:none;}
 .issue-row:hover{background:transparent;}
@@ -1447,7 +1451,7 @@ body.drilldown-open .drilldown__inner {
   line-height:1.5;
 }
 .project-tabs a::after{
-    bottom: calc(50% - var(--control-xlarge-size, var(--base-size-48, 3rem)) / 2 + 1px);
+    bottom: calc(50% - var(--control-xlarge-size, var(--base-size-48, 3rem)) / 2 + 0px);
     content: "";
     pointer-events: none;
     background-color: #0000;
