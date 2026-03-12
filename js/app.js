@@ -1,6 +1,5 @@
 import { initRouter } from "./router.js";
 import { store } from "./store.js";
-import { runAnalysis, resetAnalysisUi } from "./services/analysis-runner.js";
 import { mountAssistOverlay, bindGlobalAssistLauncher } from "./views/assist-overlay.js";
 
 function initGlobalNav() {
@@ -40,6 +39,58 @@ function initGlobalNav() {
   });
 }
 
+function parseHash() {
+  const hash = String(location.hash || "").replace(/^#/, "").trim();
+  if (!hash) return ["dashboard"];
+  return hash.split("/");
+}
+
+function getProjectDisplayName(projectId) {
+  const explicitName =
+    store.currentProject?.name ||
+    store.currentProject?.title ||
+    "";
+
+  if (explicitName) return explicitName;
+  if (projectId) return `Projet ${projectId}`;
+  return "Projet";
+}
+
+function updateGlobalHeader() {
+  const parts = parseHash();
+
+  const primary = document.getElementById("ghHeaderPrimary");
+  const secondary = document.getElementById("ghHeaderSecondary");
+  const sep = document.getElementById("ghHeaderSep");
+
+  if (!primary || !secondary || !sep) return;
+
+  if (parts[0] === "project" && parts[1]) {
+    const projectId = parts[1];
+    const userName = store.user?.name || "user";
+    const projectName = getProjectDisplayName(projectId);
+
+    primary.textContent = userName;
+    secondary.textContent = projectName;
+    secondary.style.display = "";
+    sep.style.display = "";
+    return;
+  }
+
+  if (parts[0] === "projects") {
+    primary.textContent = "Projects";
+    secondary.textContent = "";
+    secondary.style.display = "none";
+    sep.style.display = "none";
+    return;
+  }
+
+  primary.textContent = "Dashboard";
+  secondary.textContent = "";
+  secondary.style.display = "none";
+  sep.style.display = "none";
+}
+
 function bootstrap() {
   console.log("RAPSOBOT V2 boot");
 
@@ -52,18 +103,13 @@ function bootstrap() {
   bindGlobalAssistLauncher();
   initRouter();
 
-  const runBtn = document.getElementById("runAnalysisBtnTop");
-  if (runBtn) {
-    runBtn.addEventListener("click", runAnalysis);
-  }
-
-  const resetBtn = document.getElementById("resetBtnTop");
-  if (resetBtn) {
-    resetBtn.addEventListener("click", resetAnalysisUi);
-  }
+  updateGlobalHeader();
+  window.addEventListener("hashchange", updateGlobalHeader);
 
   if (!location.hash) {
     location.hash = "#project/demo/situations";
+  } else {
+    updateGlobalHeader();
   }
 }
 
