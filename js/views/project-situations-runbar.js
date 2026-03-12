@@ -11,8 +11,8 @@ export function renderProjectSituationsRunbar() {
     <div class="project-runbar">
       <div class="project-runbar__left">
         <div class="gh-split-btn" id="runSplitBtn">
-          <button class="gh-btn gh-btn--primary" id="runAnalysisBtnTop">Run analysis</button>
-          <button class="gh-btn gh-btn--primary gh-btn--split" id="runMenuBtn" aria-label="Ouvrir le menu d’analyse">▼</button>
+          <span class="gh-btn gh-btn--primary" id="runAnalysisBtnTop">Run analysis</span>
+          <span class="gh-btn gh-btn--primary gh-btn--split" id="runMenuBtn" aria-label="Ouvrir le menu d’analyse">▼</span>
           <div class="gh-menu" id="runMenu">
             <div class="gh-menu__item" data-action="run">Run analysis</div>
             <div class="gh-menu__item" data-action="reset">Reset</div>
