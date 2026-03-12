@@ -2,6 +2,23 @@ import { initRouter } from "./router.js";
 import { store } from "./store.js";
 import { mountAssistOverlay, bindGlobalAssistLauncher } from "./views/assist-overlay.js";
 import { renderGlobalShell } from "./views/global-shell.js";
+import { runAnalysis, resetAnalysisUi } from "./services/analysis-runner.js";
+
+let analysisEventsBound = false;
+
+function bindAnalysisEvents() {
+  if (analysisEventsBound) return;
+
+  document.addEventListener("runAnalysis", () => {
+    runAnalysis();
+  });
+
+  document.addEventListener("resetAnalysisUi", () => {
+    resetAnalysisUi();
+  });
+
+  analysisEventsBound = true;
+}
 
 function bootstrap() {
   console.log("RAPSOBOT V2 boot");
@@ -9,6 +26,8 @@ function bootstrap() {
   store.user = {
     name: "demo"
   };
+
+  bindAnalysisEvents();
 
   renderGlobalShell();
   mountAssistOverlay();
