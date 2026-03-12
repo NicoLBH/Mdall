@@ -651,7 +651,7 @@ body.banner-visible #project-content.gh-page{
 /* Top banner (GitHub-like info bar) */
 .gh-banner{
   position: relative;
-  margin: 16px 16px 0;
+  margin: 16px 0px 0;
   padding: 12px 16px;
   border-radius: 6px;
   border: 1px solid rgba(240,246,252,0.12);
