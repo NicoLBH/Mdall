@@ -1416,7 +1416,7 @@ body.drilldown-open .drilldown__inner {
    ========================= */
 .project-tabs{
   position:fixed;
-  top: calc(var(--header-h) - 14px);
+  top: var(--header-h);
   left:0;
   right:0;
   height:44px;
@@ -1610,8 +1610,7 @@ body.drilldown-open .drilldown__inner {
 }
 
 .gh-header--project{
-  border-bottom:1px solid var(--border);
-  box-shadow: inset 0 -1px 0 rgba(255,255,255,.03);
+  border-bottom:none;
 }
 
 .gh-header--project .gh-brand__name{
