@@ -206,6 +206,41 @@ function entityLinkHtml(type, id, text) {
   const safeText = text || safeId;
   return `<a href="#" class="entity-link" data-nav-type="${safeType}" data-nav-id="${safeId}">${safeText}</a>`;
 }
+function renderVerdictHeadFilter() {
+  const current = String(store.situationsView.verdictFilter || "ALL").toUpperCase();
+
+  const options = [
+    "ALL",
+    "F",
+    "D",
+    "S",
+    "HM",
+    "PM",
+    "SO",
+  ];
+
+  return `
+    <div class="issues-head-menu" id="verdictHeadMenu">
+      <button class="issues-head-menu__btn" id="verdictHeadBtn">
+        <span>Verdict</span>
+        <svg class="gh-chevron" viewBox="0 0 16 16">
+          <path d="M4 6l4 4 4-4"></path>
+        </svg>
+      </button>
+
+      <div class="gh-menu issues-head-menu__dropdown" id="verdictHeadDropdown">
+        ${options
+          .map(
+            (v) => `
+            <div class="gh-menu__item ${v === current ? "is-active" : ""}" data-verdict="${v}">
+              ${v}
+            </div>`
+          )
+          .join("")}
+      </div>
+    </div>
+  `;
+}
 
 function inferAgent(obj) {
   return obj?.produced_by || obj?.agent || obj?.by || obj?.source || "system";
