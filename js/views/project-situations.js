@@ -198,6 +198,18 @@ function ensureViewUiState() {
   if (typeof v.helpMode !== "boolean") v.helpMode = false;
   if (!v.tempAvisVerdict) v.tempAvisVerdict = "F";
   if (!v.tempAvisVerdictFor) v.tempAvisVerdictFor = null;
+  if (!v.drilldown) {
+    v.drilldown = {
+      isOpen: false,
+      selectedSituationId: null,
+      selectedSujetId: null,
+      selectedAvisId: null,
+      expandedSujets: new Set()
+    };
+  }
+  if (!(v.drilldown.expandedSujets instanceof Set)) {
+    v.drilldown.expandedSujets = new Set(Array.isArray(v.drilldown.expandedSujets) ? v.drilldown.expandedSujets : []);
+  }
 }
 
 function currentRunKey() {
@@ -551,11 +563,43 @@ function buildVerdictBarHtml(counts, options = {}) {
   `;
 }
 
+function problemsCountsIconHtml(closedCount, totalCount) {
+  const total = Math.max(0, Number(totalCount) || 0);
+  const closed = Math.max(0, Math.min(total, Number(closedCount) || 0));
+
+  if (total > 0 && closed === total) {
+    return `<span class="subissues-problems-icon" aria-label="Tous les sujets sont closed">${SVG_ISSUE_CLOSED}</span>`;
+  }
+
+  const ratio = total ? (closed / total) : 0;
+  const r = 8;
+  const cx = 10;
+  const cy = 10;
+  const a = ratio * Math.PI * 2;
+
+  let wedge = "";
+  if (ratio > 0) {
+    const x = cx + r * Math.sin(a);
+    const y = cy - r * Math.cos(a);
+    const large = a > Math.PI ? 1 : 0;
+    wedge = `<path d="M ${cx} ${cy} L ${cx} ${cy - r} A ${r} ${r} 0 ${large} 1 ${x} ${y} Z" fill="rgba(137,87,229,.55)" opacity="0.75"></path>`;
+  }
+
+  return `
+    <span class="subissues-problems-icon" aria-label="Sujets closed: ${closed}/${total}">
+      <svg viewBox="0 0 20 20" width="16" height="16" style="display:block">
+        <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="rgba(139,148,158,.55)" stroke-width="2"></circle>
+        ${wedge}
+      </svg>
+    </span>
+  `;
+}
+
 function problemsCountsHtml(situation) {
   const problems = situation?.sujets || [];
   const totalPb = problems.length;
   const closedPb = problems.filter((x) => String(getEffectiveSujetStatus(x.id) || "closed").toLowerCase() !== "open").length;
-  return `<div class="subissues-counts subissues-counts--problems"><span>${closedPb} sur ${totalPb}</span></div>`;
+  return `<div class="subissues-counts subissues-counts--problems">${problemsCountsIconHtml(closedPb, totalPb)}<span>${closedPb} sur ${totalPb}</span></div>`;
 }
 
 /* =========================================================
@@ -1140,13 +1184,14 @@ function renderDetailedMetaForSelection(selection) {
   return entries.join("");
 }
 
-function renderSubIssuesForSujet(sujet) {
+function renderSubIssuesForSujet(sujet, options = {}) {
   ensureViewUiState();
+  const avisRowClass = options.avisRowClass || "js-row-avis";
   const stats = problemVerdictStats(sujet);
   const rows = (sujet.avis || []).map((avis) => {
     const effVerdict = getEffectiveAvisVerdict(avis.id);
     return `
-      <div class="issue-row issue-row--avis click js-row-avis" data-avis-id="${escapeHtml(avis.id)}">
+      <div class="issue-row issue-row--avis click ${avisRowClass}" data-avis-id="${escapeHtml(avis.id)}">
         <div class="cell cell-theme cell-theme--full lvl0">
           <span class="chev chev--spacer"></span>
           <span class="${verdictDotClass(effVerdict)}" aria-hidden="true"></span>
@@ -1172,19 +1217,24 @@ function renderSubIssuesForSujet(sujet) {
   });
 }
 
-function renderSubIssuesForSituation(situation) {
+function renderSubIssuesForSituation(situation, options = {}) {
   ensureViewUiState();
+
+  const expandedSet = options.expandedSujets || store.situationsView.rightExpandedSujets;
+  const sujetRowClass = options.sujetRowClass || "js-sub-right-select-sujet";
+  const sujetToggleClass = options.sujetToggleClass || "js-sub-right-toggle-sujet";
+  const avisRowClass = options.avisRowClass || "js-row-avis";
 
   const rows = [];
   for (const sujet of situation.sujets || []) {
-    const open = store.situationsView.rightExpandedSujets.has(sujet.id);
+    const open = expandedSet.has(sujet.id);
     const hasAvis = (sujet.avis || []).length > 0;
     const effStatus = getEffectiveSujetStatus(sujet.id);
 
     rows.push(`
-      <div class="issue-row issue-row--pb click js-sub-right-select-sujet" data-sujet-id="${escapeHtml(sujet.id)}">
+      <div class="issue-row issue-row--pb click ${sujetRowClass}" data-sujet-id="${escapeHtml(sujet.id)}">
         <div class="cell cell-theme cell-theme--full lvl0">
-          <span class="js-sub-right-toggle-sujet" data-sujet-id="${escapeHtml(sujet.id)}">${chevron(open, hasAvis)}</span>
+          <span class="${sujetToggleClass}" data-sujet-id="${escapeHtml(sujet.id)}">${chevron(open, hasAvis)}</span>
           ${issueIcon(effStatus)}
           <span class="theme-text theme-text--pb">${escapeHtml(firstNonEmpty(sujet.title, sujet.id, "Non classé"))}</span>
           <span class="subissues-inline-count mono">${(sujet.avis || []).length} avis</span>
@@ -1196,7 +1246,7 @@ function renderSubIssuesForSituation(situation) {
       for (const avis of sujet.avis || []) {
         const effVerdict = getEffectiveAvisVerdict(avis.id);
         rows.push(`
-          <div class="issue-row issue-row--avis click js-row-avis" data-avis-id="${escapeHtml(avis.id)}">
+          <div class="issue-row issue-row--avis click ${avisRowClass}" data-avis-id="${escapeHtml(avis.id)}">
             <div class="cell cell-theme cell-theme--full lvl1">
               <span class="chev chev--spacer"></span>
               <span class="${verdictDotClass(effVerdict)}" aria-hidden="true"></span>
@@ -1309,7 +1359,7 @@ function renderDetailsTitleHtml(selection) {
   `;
 }
 
-function renderDetailsBody(selection) {
+function renderDetailsBody(selection, options = {}) {
   if (!selection) {
     return `<div class="emptyState">Sélectionne une situation / un sujet / un avis pour afficher les détails.</div>`;
   }
@@ -1322,10 +1372,10 @@ function renderDetailsBody(selection) {
     descCard = renderCommentCard(firstNonEmpty(item.agent, "system"), getAvisSummary(item), "A");
   } else if (selection.type === "sujet") {
     descCard = renderCommentCard(firstNonEmpty(item.agent, "system"), getSujetSummary(item), "P");
-    subIssuesHtml = renderSubIssuesForSujet(item);
+    subIssuesHtml = renderSubIssuesForSujet(item, options.subissuesOptions || {});
   } else {
     descCard = renderCommentCard(firstNonEmpty(item.agent, "system"), getSituationSummary(item), "S");
-    subIssuesHtml = renderSubIssuesForSituation(item);
+    subIssuesHtml = renderSubIssuesForSituation(item, options.subissuesOptions || {});
   }
 
   const threadHtml = renderThreadBlock();
@@ -1350,11 +1400,11 @@ function renderDetailsBody(selection) {
   `;
 }
 
-function renderDetailsHtml() {
-  const selection = getActiveSelection();
+function renderDetailsHtml(selectionOverride = null, options = {}) {
+  const selection = selectionOverride || getActiveSelection();
   return {
     titleHtml: renderDetailsTitleHtml(selection),
-    bodyHtml: renderDetailsBody(selection),
+    bodyHtml: renderDetailsBody(selection, options),
     modalTitle: selection ? firstNonEmpty(selection.item.title, selection.item.id, "Détail") : "Sélectionner un élément",
     modalMeta: selection ? firstNonEmpty(selection.item.id, "") : "—"
   };
@@ -1372,7 +1422,14 @@ function updateDetailsModal() {
   const body = document.getElementById("detailsBodyModal");
   if (!modal || !title || !meta || !body) return;
 
-  const details = renderDetailsHtml();
+  const details = renderDetailsHtml(null, {
+    subissuesOptions: {
+      sujetRowClass: "js-modal-drilldown-sujet",
+      sujetToggleClass: "js-modal-toggle-sujet",
+      avisRowClass: "js-modal-drilldown-avis",
+      expandedSujets: store.situationsView.rightExpandedSujets
+    }
+  });
   if (head) head.classList.add('details-head--expanded');
   title.innerHTML = details.titleHtml || details.modalTitle;
   meta.textContent = details.modalMeta;
@@ -1416,12 +1473,20 @@ function rerenderPanels() {
   if (countsHost) countsHost.textContent = `${counts.situations} situations · ${counts.sujets} sujets · ${counts.avis} avis`;
   if (tableHost) tableHost.innerHTML = renderTableHtml(filteredSituations);
 
-  const details = renderDetailsHtml();
+  const details = renderDetailsHtml(null, {
+    subissuesOptions: {
+      sujetRowClass: "js-modal-drilldown-sujet",
+      sujetToggleClass: "js-modal-toggle-sujet",
+      avisRowClass: "js-modal-drilldown-avis",
+      expandedSujets: store.situationsView.rightExpandedSujets
+    }
+  });
   if (detailsTitleHost) detailsTitleHost.innerHTML = details.titleHtml;
   if (detailsHost) detailsHost.innerHTML = details.bodyHtml;
 
   wireDetailsInteractive(detailsHost);
   updateDetailsModal();
+  if (store.situationsView.drilldown?.isOpen) updateDrilldownPanel();
 }
 
 function selectSituation(situationId) {
@@ -1559,6 +1624,9 @@ function syncCommentPreview(root) {
 function wireDetailsInteractive(root) {
   if (!root) return;
 
+  const isModalScope = !!root.closest("#detailsModal");
+  const isDrilldownScope = !!root.closest("#drilldownPanel");
+
   const commentTextarea = root.querySelector("#humanCommentBox");
   if (commentTextarea) {
     commentTextarea.addEventListener("input", () => {
@@ -1579,14 +1647,16 @@ function wireDetailsInteractive(root) {
     };
   });
 
-  root.querySelectorAll(".js-sub-right-toggle-sujet").forEach((btn) => {
+  root.querySelectorAll(".js-sub-right-toggle-sujet, .js-modal-toggle-sujet, .js-drilldown-toggle-sujet").forEach((btn) => {
     btn.onclick = (ev) => {
       ev.stopPropagation();
       const sujetId = String(btn.dataset.sujetId || "");
       if (!sujetId) return;
-      if (store.situationsView.rightExpandedSujets.has(sujetId)) store.situationsView.rightExpandedSujets.delete(sujetId);
-      else store.situationsView.rightExpandedSujets.add(sujetId);
-      rerenderPanels();
+      const expandedSet = isDrilldownScope ? store.situationsView.drilldown.expandedSujets : store.situationsView.rightExpandedSujets;
+      if (expandedSet.has(sujetId)) expandedSet.delete(sujetId);
+      else expandedSet.add(sujetId);
+      if (isDrilldownScope) updateDrilldownPanel();
+      else rerenderPanels();
     };
   });
 
@@ -1594,6 +1664,20 @@ function wireDetailsInteractive(root) {
     btn.onclick = () => {
       const sujetId = String(btn.dataset.sujetId || "");
       if (sujetId) selectSujet(sujetId);
+    };
+  });
+
+  root.querySelectorAll(".js-modal-drilldown-sujet, .js-drilldown-select-sujet").forEach((btn) => {
+    btn.onclick = () => {
+      const sujetId = String(btn.dataset.sujetId || "");
+      if (sujetId) openDrilldownFromSujet(sujetId);
+    };
+  });
+
+  root.querySelectorAll(".js-modal-drilldown-avis, .js-drilldown-select-avis").forEach((btn) => {
+    btn.onclick = () => {
+      const avisId = String(btn.dataset.avisId || "");
+      if (avisId) openDrilldownFromAvis(avisId);
     };
   });
 
@@ -1659,7 +1743,9 @@ function bindModalEvents() {
     if (event.target?.id === "detailsModal") closeDetailsModal();
   });
   window.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && store.situationsView.detailsModalOpen) closeDetailsModal();
+    if (event.key !== "Escape") return;
+    if (store.situationsView.detailsModalOpen) closeDetailsModal();
+    if (store.situationsView.drilldown?.isOpen) closeDrilldown();
   });
 }
 
@@ -1756,8 +1842,101 @@ function ensureDrilldownDom() {
     </div>
   `;
   document.body.appendChild(panel);
-  panel.querySelector('#drilldownClose')?.addEventListener('click', () => panel.classList.add('hidden'));
-  panel.addEventListener('click', (ev) => { if (ev.target === panel) panel.classList.add('hidden'); });
+  panel.querySelector('#drilldownClose')?.addEventListener('click', closeDrilldown);
+  panel.addEventListener('click', (ev) => { if (ev.target === panel) closeDrilldown(); });
+}
+
+function getDrilldownSelection() {
+  ensureViewUiState();
+  const dd = store.situationsView.drilldown;
+  if (!dd) return null;
+  if (dd.selectedAvisId) {
+    const avis = getNestedAvis(dd.selectedAvisId);
+    if (avis) return { type: "avis", item: avis };
+  }
+  if (dd.selectedSujetId) {
+    const sujet = getNestedSujet(dd.selectedSujetId);
+    if (sujet) return { type: "sujet", item: sujet };
+  }
+  if (dd.selectedSituationId) {
+    const situation = getNestedSituation(dd.selectedSituationId);
+    if (situation) return { type: "situation", item: situation };
+  }
+  return null;
+}
+
+function updateDrilldownPanel() {
+  ensureViewUiState();
+  ensureDrilldownDom();
+  const panel = document.getElementById("drilldownPanel");
+  const title = document.getElementById("drilldownTitle");
+  const body = document.getElementById("drilldownBody");
+  if (!panel || !title || !body) return;
+
+  const selection = getDrilldownSelection();
+  const details = renderDetailsHtml(selection, {
+    subissuesOptions: {
+      sujetRowClass: "js-drilldown-select-sujet",
+      sujetToggleClass: "js-drilldown-toggle-sujet",
+      avisRowClass: "js-drilldown-select-avis",
+      expandedSujets: store.situationsView.drilldown.expandedSujets
+    }
+  });
+
+  title.textContent = selection ? firstNonEmpty(selection.item.title, selection.item.id, "Détail") : "—";
+  body.innerHTML = details.bodyHtml;
+  wireDetailsInteractive(body);
+}
+
+function openDrilldown() {
+  ensureViewUiState();
+  ensureDrilldownDom();
+  store.situationsView.drilldown.isOpen = true;
+  document.getElementById("drilldownPanel")?.classList.remove("hidden");
+  document.body.classList.add("drilldown-open");
+  updateDrilldownPanel();
+}
+
+function closeDrilldown() {
+  ensureViewUiState();
+  store.situationsView.drilldown.isOpen = false;
+  document.getElementById("drilldownPanel")?.classList.add("hidden");
+  document.body.classList.remove("drilldown-open");
+}
+
+function openDrilldownFromSituation(situationId) {
+  ensureViewUiState();
+  const situation = getNestedSituation(situationId);
+  if (!situation) return;
+  store.situationsView.drilldown.selectedSituationId = situation.id;
+  store.situationsView.drilldown.selectedSujetId = null;
+  store.situationsView.drilldown.selectedAvisId = null;
+  openDrilldown();
+}
+
+function openDrilldownFromSujet(sujetId) {
+  ensureViewUiState();
+  const sujet = getNestedSujet(sujetId);
+  const situation = getSituationBySujetId(sujetId);
+  if (!sujet) return;
+  store.situationsView.drilldown.selectedSituationId = situation?.id || null;
+  store.situationsView.drilldown.selectedSujetId = sujet.id;
+  store.situationsView.drilldown.selectedAvisId = null;
+  store.situationsView.drilldown.expandedSujets.add(sujet.id);
+  openDrilldown();
+}
+
+function openDrilldownFromAvis(avisId) {
+  ensureViewUiState();
+  const avis = getNestedAvis(avisId);
+  const sujet = getSujetByAvisId(avisId);
+  const situation = getSituationByAvisId(avisId);
+  if (!avis) return;
+  store.situationsView.drilldown.selectedSituationId = situation?.id || null;
+  store.situationsView.drilldown.selectedSujetId = sujet?.id || null;
+  store.situationsView.drilldown.selectedAvisId = avis.id;
+  if (sujet?.id) store.situationsView.drilldown.expandedSujets.add(sujet.id);
+  openDrilldown();
 }
 
 function ensureAssistantOverlayDom() {
