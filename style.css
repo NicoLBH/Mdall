@@ -465,7 +465,7 @@ body.banner-visible .gh-page{top:calc(var(--header-h) + 64px);}
   min-height:0;
   overflow:auto;
 }
-#situationsTableHost .issues-table{
+#situationsTableHost{
   border-bottom: solid 1px var(--border);
   border-bottom-right-radius: var(--radius);
   border-bottom-left-radius: var(--radius);
