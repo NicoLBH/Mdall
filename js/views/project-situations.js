@@ -122,7 +122,9 @@ function nowIso() {
 const SVG_ISSUE_OPEN = `<svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"></path><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Z"></path></svg>`;
 const SVG_ISSUE_CLOSED = `<svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M11.28 6.78a.75.75 0 0 0-1.06-1.06L7.25 8.69 5.78 7.22a.75.75 0 0 0-1.06 1.06l2 2a.75.75 0 0 0 1.06 0l3.5-3.5Z"></path><path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0Zm-1.5 0a6.5 6.5 0 1 0-13 0 6.5 6.5 0 0 0 13 0Z"></path></svg>`;
 const SVG_ISSUE_REOPENED = SVG_ISSUE_OPEN;
-const SVG_AVATAR_HUMAN = `<svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M10.561 8.073a6.005 6.005 0 0 1 2.895 2.02.75.75 0 1 1-1.143.971 4.5 4.5 0 0 0-1.794-1.307 3.987 3.987 0 0 1-.758.409.75.75 0 1 1-.512-1.41c.503-.183.95-.496 1.312-.893ZM5.439 8.073c.361.397.809.71 1.312.893a.75.75 0 1 1-.512 1.41 3.987 3.987 0 0 1-.758-.409 4.5 4.5 0 0 0-1.794 1.307.75.75 0 1 1-1.143-.97 6.005 6.005 0 0 1 2.895-2.02ZM8 2.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5Z"></path></svg>`;
+const SVG_AVATAR_HUMAN = `<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="22" height="22" fill="currentColor" style="display:block"><path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5Zm0 2c-5.06 0-9 2.39-9 5.25V22h18v-2.75C21 16.39 17.06 14 12 14Z"></path></svg>`;
+const SVG_TL_CLOSED = `<svg aria-hidden="true" focusable="false" class="octicon octicon-check-circle Octicon__StyledOcticon-sc-jtj3m8-0 cdmDIS TimelineRow-module__Octicon__SMhVa" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align: text-bottom;"><path d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm1.5 0a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Zm10.28-1.72-4.5 4.5a.75.75 0 0 1-1.06 0l-2-2a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018l1.47 1.47 3.97-3.97a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042Z"></path></svg>`;
+const SVG_TL_REOPENED = `<svg aria-hidden="true" focusable="false" class="octicon octicon-issue-reopened Octicon__StyledOcticon-sc-jtj3m8-0 cdmDIS TimelineRow-module__Octicon__SMhVa" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align: text-bottom;"><path d="M5.029 2.217a6.5 6.5 0 0 1 9.437 5.11.75.75 0 1 0 1.492-.154 8 8 0 0 0-14.315-4.03L.427 1.927A.25.25 0 0 0 0 2.104V5.75A.25.25 0 0 0 .25 6h3.646a.25.25 0 0 0 .177-.427L2.715 4.215a6.491 6.491 0 0 1 2.314-1.998ZM1.262 8.169a.75.75 0 0 0-1.22.658 8.001 8.001 0 0 0 14.315 4.03l1.216 1.216a.25.25 0 0 0 .427-.177V10.25a.25.25 0 0 0-.25-.25h-3.646a.25.25 0 0 0-.177.427l1.358 1.358a6.501 6.501 0 0 1-11.751-3.11.75.75 0 0 0-.272-.506Z"></path><path d="M9.06 9.06a1.5 1.5 0 1 1-2.12-2.12 1.5 1.5 0 0 1 2.12 2.12Z"></path></svg>`;
 const SVG_COMMENT = `<svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M1.75 2A1.75 1.75 0 0 0 0 3.75v6.5C0 11.216.784 12 1.75 12H4.5l2.354 2.354a.75.75 0 0 0 1.28-.53V12h6.116A1.75 1.75 0 0 0 16 10.25v-6.5A1.75 1.75 0 0 0 14.25 2H1.75Z"></path></svg>`;
 
 
@@ -193,6 +195,48 @@ function entityLinkHtml(type, id, text) {
   const safeId = escapeHtml(id || "");
   const safeText = text || safeId;
   return `<a href="#" class="entity-link" data-nav-type="${safeType}" data-nav-id="${safeId}">${safeText}</a>`;
+}
+
+function inferAgent(obj) {
+  return obj?.produced_by || obj?.agent || obj?.by || obj?.source || "system";
+}
+
+function normActorName(actor, agent) {
+  const a = String(actor || "").trim();
+  if (a) return a;
+  const g = String(agent || "").trim();
+  if (!g) return "System";
+  return g === "human" ? "Human" : g;
+}
+
+function verdictKey(v) {
+  return String(v || "").toUpperCase();
+}
+
+function verdictToneClass(v) {
+  const s = verdictKey(v);
+  if (s === "D") return "d";
+  if (s === "S") return "s";
+  if (s === "F" || s === "OK") return "f";
+  if (s === "HM") return "hm";
+  if (s === "PM") return "pm";
+  if (s === "SO") return "so";
+  return "muted";
+}
+
+function miniAuthorIconHtml(agent) {
+  const a = String(agent || "").toLowerCase();
+  if (a === "human") {
+    return `<span class="tl-author tl-author--human" aria-hidden="true">${SVG_AVATAR_HUMAN}</span>`;
+  }
+  return `<span class="tl-author tl-author--agent mono" aria-hidden="true">R</span>`;
+}
+
+function verdictIconHtml(v) {
+  const k = verdictKey(v);
+  const cls = `tl-ico tl-ico--verdict tl-ico--${verdictToneClass(k)}`;
+  const txt = escapeHtml(k || "—");
+  return `<span class="${cls}" aria-label="Verdict ${txt}">${txt}</span>`;
 }
 
 function matchSearch(parts, query) {
@@ -840,120 +884,117 @@ function getThreadForSelection() {
   if (!selection) return [];
 
   const { bucket } = getRunBucket();
-  const events = [];
   const comments = Array.isArray(bucket?.comments) ? bucket.comments : [];
   const activities = Array.isArray(bucket?.activities) ? bucket.activities : [];
+  const events = [];
 
-  if (selection.type === "situation") {
-    const s = selection.item;
+  const s = selection.type === "situation" ? selection.item : (selection.type === "sujet" ? getSituationBySujetId(selection.item.id) : getSituationByAvisId(selection.item.id));
+  const p = selection.type === "sujet" ? selection.item : (selection.type === "avis" ? getSujetByAvisId(selection.item.id) : null);
+  const a = selection.type === "avis" ? selection.item : null;
+  const rootTs = firstNonEmpty(store.situationsView?.rawResult?.updated_at, store.situationsView?.rawResult?.created_at, nowIso());
+
+  if (a) {
+    if (store.situationsView.tempAvisVerdictFor !== a.id) {
+      store.situationsView.tempAvisVerdictFor = a.id;
+      store.situationsView.tempAvisVerdict = String(getEffectiveAvisVerdict(a.id) || "F").toUpperCase();
+    }
+  } else {
+    store.situationsView.tempAvisVerdictFor = null;
+    store.situationsView.tempAvisVerdict = store.situationsView.tempAvisVerdict || "F";
+  }
+
+  if (s) {
     events.push({
-      ts: firstNonEmpty(store.situationsView?.rawResult?.updated_at, nowIso()),
-      type: "SYSTEM",
+      ts: rootTs,
+      actor: "System",
+      agent: inferAgent(s),
+      type: "SITUATION",
       entity_type: "situation",
       entity_id: s.id,
-      actor: "System",
-      agent: firstNonEmpty(s.agent, "system"),
-      message: `${firstNonEmpty(s.title, s.id)}\npriority=${firstNonEmpty(s.priority, "P3")}\nsujets=${(s.sujets || []).length}`
+      message: `${firstNonEmpty(s.title, s.id, "(sans titre)")}
+priority=${firstNonEmpty(s.priority, "")}
+sujets=${(s.sujets || []).length}`
     });
-
-    for (const a of activities) {
-      if (a.entity_type === "situation" && a.entity_id === s.id) events.push(a);
-    }
-    for (const c of comments) {
-      if (c.entity_type === "situation" && c.entity_id === s.id) events.push(c);
-    }
   }
-
-  if (selection.type === "sujet") {
-    const p = selection.item;
-    const s = getSituationBySujetId(p.id);
-
-    if (s) {
-      events.push({
-        ts: firstNonEmpty(store.situationsView?.rawResult?.updated_at, nowIso()),
-        type: "SYSTEM",
-        entity_type: "situation",
-        entity_id: s.id,
-        actor: "System",
-        agent: firstNonEmpty(s.agent, "system"),
-        message: `${firstNonEmpty(s.title, s.id)}\npriority=${firstNonEmpty(s.priority, "P3")}\nsujets=${(s.sujets || []).length}`
-      });
-    }
-
+  if (p) {
     events.push({
-      ts: firstNonEmpty(store.situationsView?.rawResult?.updated_at, nowIso()),
-      type: "SYSTEM",
+      ts: rootTs,
+      actor: "System",
+      agent: inferAgent(p),
+      type: "SUJET",
       entity_type: "sujet",
       entity_id: p.id,
-      actor: "System",
-      agent: firstNonEmpty(p.agent, "system"),
-      message: `${firstNonEmpty(p.title, p.id)}\npriority=${firstNonEmpty(p.priority, "P3")}\navis=${(p.avis || []).length}`
+      message: `${firstNonEmpty(p.title, p.id, "Non classé")}
+priority=${firstNonEmpty(p.priority, "")}
+avis=${(p.avis || []).length}`
     });
-
-    for (const a of activities) {
-      if ((a.entity_type === "sujet" && a.entity_id === p.id) || (s && a.entity_type === "situation" && a.entity_id === s.id && String(a.meta?.problem_id || "") === String(p.id))) {
-        events.push(a);
-      }
-    }
-    for (const c of comments) {
-      if (c.entity_type === "sujet" && c.entity_id === p.id) events.push(c);
-    }
   }
-
-  if (selection.type === "avis") {
-    const a = selection.item;
-    const p = getSujetByAvisId(a.id);
-    const s = getSituationByAvisId(a.id);
-
-    if (s) {
-      events.push({
-        ts: firstNonEmpty(store.situationsView?.rawResult?.updated_at, nowIso()),
-        type: "SYSTEM",
-        entity_type: "situation",
-        entity_id: s.id,
-        actor: "System",
-        agent: firstNonEmpty(s.agent, "system"),
-        message: `${firstNonEmpty(s.title, s.id)}`
-      });
-    }
-
-    if (p) {
-      events.push({
-        ts: firstNonEmpty(store.situationsView?.rawResult?.updated_at, nowIso()),
-        type: "SYSTEM",
-        entity_type: "sujet",
-        entity_id: p.id,
-        actor: "System",
-        agent: firstNonEmpty(p.agent, "system"),
-        message: `${firstNonEmpty(p.title, p.id)}`
-      });
-    }
-
+  if (a) {
     events.push({
-      ts: firstNonEmpty(store.situationsView?.rawResult?.updated_at, nowIso()),
-      type: "SYSTEM",
+      ts: rootTs,
+      actor: "System",
+      agent: inferAgent(a),
+      type: "AVIS",
       entity_type: "avis",
       entity_id: a.id,
-      actor: "System",
-      agent: firstNonEmpty(a.agent, "system"),
-      message: `${firstNonEmpty(a.title, a.id)}\nverdict=${firstNonEmpty(a.verdict, "-")}\nagent=${firstNonEmpty(a.agent, "system")}\n\n${firstNonEmpty(a.raw?.message, a.raw?.summary, "")}`
-    });
+      message: `${firstNonEmpty(a.title, a.id)}
+severity=${firstNonEmpty(a.severity, "")}
+verdict=${firstNonEmpty(a.verdict, "")}
+agent=${inferAgent(a)}
 
-    for (const act of activities) {
-      if (p && act.entity_type === "sujet" && act.entity_id === p.id) {
-        if (act.kind === "avis_verdict_changed") {
-          if (String(act.meta?.avis_id || "") === String(a.id)) events.push(act);
-        } else if (act.kind === "issue_closed" || act.kind === "issue_reopened") {
-          if (String(act.meta?.problem_id || "") === String(p.id)) events.push(act);
-        }
-      }
-    }
-    for (const c of comments) {
-      if (c.entity_type === "avis" && c.entity_id === a.id) events.push(c);
-    }
+${firstNonEmpty(a.raw?.message, a.raw?.summary, "")}`
+    });
   }
 
-  return events.sort((x, y) => String(x.ts || "").localeCompare(String(y.ts || "")));
+  const allowedComments = new Set();
+  const allowedActivities = new Set();
+  const entityKey = (type, id) => `${String(type || "").toLowerCase()}:${String(id || "")}`;
+
+  if (a) {
+    allowedComments.add(entityKey("avis", a.id));
+    if (p) allowedActivities.add(entityKey("sujet", p.id));
+  } else if (p) {
+    allowedComments.add(entityKey("sujet", p.id));
+    allowedActivities.add(entityKey("sujet", p.id));
+    if (s) allowedActivities.add(entityKey("situation", s.id));
+  } else if (s) {
+    allowedComments.add(entityKey("situation", s.id));
+    allowedActivities.add(entityKey("situation", s.id));
+  }
+
+  const isViewingAvis = !!a;
+  const isViewingSujet = !!p && !a;
+
+  const humanEvents = [...comments, ...activities].filter((e) => {
+    const k = entityKey(e.entity_type, e.entity_id);
+    const t = String(e?.type || "").toUpperCase();
+
+    if (t === "COMMENT") return allowedComments.has(k);
+    if (t !== "ACTIVITY") return allowedComments.has(k) || allowedActivities.has(k);
+    if (!allowedActivities.has(k)) return false;
+
+    const kind = String(e?.kind || "").toLowerCase();
+    const meta = e?.meta || {};
+
+    if (isViewingAvis) {
+      if (kind === "avis_verdict_changed") return String(meta?.avis_id || "") === String(a.id);
+      if (kind === "issue_closed" || kind === "issue_reopened") {
+        if (meta?.problem_id) return String(meta.problem_id) === String(p?.id || "");
+      }
+      return true;
+    }
+
+    if (isViewingSujet) {
+      if (String(e?.entity_type || "").toLowerCase() === "situation") {
+        if (meta?.problem_id) return String(meta.problem_id) === String(p.id);
+      }
+      return true;
+    }
+
+    return true;
+  });
+
+  return [...events, ...humanEvents].sort((x, y) => String(x.ts || "").localeCompare(String(y.ts || "")));
 }
 
 function renderThreadBlock() {
@@ -961,28 +1002,30 @@ function renderThreadBlock() {
   if (!thread.length) return "";
 
   const html = thread.map((e, idx) => {
-    const type = String(e.type || "").toUpperCase();
+    const type = String(e?.type || "").toUpperCase();
 
     if (type === "COMMENT") {
-      const agent = String(e.agent || "human").toLowerCase();
-      const isHuman = agent === "human";
-      const displayName = isHuman ? "Human" : firstNonEmpty(e.actor, e.agent, "Agent");
-      const avatarHtml = isHuman
+      const agent = String(e?.agent || "").toLowerCase();
+      const isHuman = agent === "human" || !agent;
+      const isRapso = !isHuman && agent === "specialist_ps";
+      const displayName = isRapso ? "Agent specialist_ps" : normActorName(e?.actor, agent);
+      const avatarInitial = isRapso ? "AS" : ((agent[0] || "S").toUpperCase());
+      const ts = e?.ts ? `<div class="mono-small">${escapeHtml(fmtTs(e.ts))}</div>` : "";
+      const avatar = isHuman
         ? `<div class="gh-avatar gh-avatar--human" aria-hidden="true">${SVG_AVATAR_HUMAN}</div>`
-        : `<div class="gh-avatar" aria-hidden="true"><span class="gh-avatar-initial">${escapeHtml(String(displayName).slice(0, 2).toUpperCase())}</span></div>`;
+        : `<div class="gh-avatar" aria-hidden="true"><span class="gh-avatar-initial">${escapeHtml(avatarInitial)}</span></div>`;
 
       return `
         <div class="thread-item thread-item--comment thread-item--comment--flush" data-thread-kind="comment" data-thread-idx="${idx}">
-          <div class="thread-badge__subissues"><span class="tl-ico tl-ico--comment">${SVG_COMMENT}</span></div>
           <div class="thread-wrapper">
             <div class="gh-comment">
-              ${avatarHtml}
+              ${avatar}
               <div class="gh-comment-box">
                 <div class="gh-comment-header">
                   <div class="gh-comment-author mono">${escapeHtml(displayName)}</div>
-                  <div class="mono-small">${escapeHtml(fmtTs(e.ts))}</div>
+                  ${ts}
                 </div>
-                <div class="gh-comment-body">${mdToHtml(e.message || "")}</div>
+                <div class="gh-comment-body">${mdToHtml(e?.message || "")}</div>
               </div>
             </div>
           </div>
@@ -991,37 +1034,53 @@ function renderThreadBlock() {
     }
 
     if (type === "ACTIVITY") {
+      const kind = String(e?.kind || "").toLowerCase();
+      const agent = e?.agent || "system";
+      const displayName = normActorName(e?.actor, agent);
+      const ts = fmtTs(e?.ts || "");
+      let icon = `<span class="tl-ico tl-ico--muted" aria-hidden="true"></span>`;
       let verb = "updated";
-      let targetHtml = "issue";
-      const kind = String(e.kind || "").toLowerCase();
-      let iconHtml = `<span class="tl-ico tl-ico--state">${SVG_ISSUE_OPEN}</span>`;
+      let targetHtml = "";
 
       if (kind === "issue_closed") {
+        icon = `<span class="tl-ico-wrap tl-ico-closed" aria-hidden="true">${SVG_TL_CLOSED}</span>`;
+        const sujetId = e?.meta?.problem_id;
+        const sujet = sujetId ? getNestedSujet(sujetId) : null;
+        const sujetTitle = sujet?.title ? `${escapeHtml(sujet.title)} ` : "";
         verb = "closed";
-        targetHtml = e.meta?.problem_id ? `sujet #${escapeHtml(String(e.meta.problem_id))}` : "issue";
-        iconHtml = `<span class="tl-ico tl-ico--state">${SVG_ISSUE_CLOSED}</span>`;
+        targetHtml = sujetId ? `sujet ${sujetTitle}${entityLinkHtml("sujet", sujetId, "#" + escapeHtml(sujetId))}` : "this";
       } else if (kind === "issue_reopened") {
+        icon = `<span class="tl-ico-wrap tl-ico-reopened" aria-hidden="true">${SVG_TL_REOPENED}</span>`;
+        const sujetId = e?.meta?.problem_id;
+        const sujet = sujetId ? getNestedSujet(sujetId) : null;
+        const sujetTitle = sujet?.title ? `${escapeHtml(sujet.title)} ` : "";
         verb = "reopened";
-        targetHtml = e.meta?.problem_id ? `sujet #${escapeHtml(String(e.meta.problem_id))}` : "issue";
-        iconHtml = `<span class="tl-ico tl-ico--state">${SVG_ISSUE_OPEN}</span>`;
+        targetHtml = sujetId ? `sujet ${sujetTitle}${entityLinkHtml("sujet", sujetId, "#" + escapeHtml(sujetId))}` : "this";
       } else if (kind === "avis_verdict_changed") {
+        const toV = e?.meta?.to || "";
+        const avisId = e?.meta?.avis_id;
+        const avis = avisId ? getNestedAvis(avisId) : null;
+        const avisTitle = avis?.title ? `${escapeHtml(avis.title)} ` : "";
+        icon = verdictIconHtml(toV);
         verb = "changed verdict";
-        targetHtml = e.meta?.avis_id ? `avis #${escapeHtml(String(e.meta.avis_id))} → ${escapeHtml(String(e.meta?.to || ""))}` : escapeHtml(String(e.meta?.to || ""));
-        iconHtml = `<span class="tl-ico tl-ico--verdict tl-ico-${String(e.meta?.to || "").toLowerCase()}"></span>`;
+        targetHtml = avisId
+          ? `avis ${avisTitle}${entityLinkHtml("avis", avisId, "#" + escapeHtml(avisId))} → ${escapeHtml(String(toV || ""))}`
+          : escapeHtml(String(toV || ""));
       }
 
-      const note = String(e.message || "").trim();
+      const note = String(e?.message || "").trim();
       const noteHtml = note ? `<div class="tl-note">${mdToHtml(note)}</div>` : "";
 
       return `
         <div class="thread-item thread-item--activity thread-item--comment--flush" data-thread-kind="activity" data-thread-idx="${idx}">
-          <div class="thread-badge__subissues">${iconHtml}</div>
           <div class="thread-wrapper">
             <div class="tl-activity">
+              ${icon}
+              ${miniAuthorIconHtml(agent)}
               <div class="tl-activity__text mono">
-                <span class="tl-author-name">${escapeHtml(firstNonEmpty(e.actor, "Human"))}</span>
-                <span class="mono-small"> ${escapeHtml(verb)} ${targetHtml} </span>
-                <span class="mono-small">at ${escapeHtml(fmtTs(e.ts))}</span>
+                <span class="tl-author-name">${escapeHtml(displayName)}</span>
+                <span class="mono-small"> ${escapeHtml(verb)} ${targetHtml || ""} </span>
+                <span class="mono-small">at ${escapeHtml(ts)}</span>
               </div>
             </div>
             ${noteHtml}
@@ -1032,25 +1091,28 @@ function renderThreadBlock() {
 
     return `
       <div class="thread-item" data-thread-kind="event" data-thread-idx="${idx}">
-        <div class="thread-badge__subissues"><span class="tl-ico tl-ico--state">${SVG_ISSUE_OPEN}</span></div>
+        <div class="thread-badge__subissue">
+          <svg aria-hidden="true" focusable="false" class="octicon octicon-issue-tracks Octicon__StyledOcticon-sc-jtj3m8-0 TimelineRow-module__Octicon__SMhVa" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align: text-bottom;"><path d="M1.5 8a6.5 6.5 0 0 1 13 0A.75.75 0 0 0 16 8a8 8 0 1 0-8 8 .75.75 0 0 0 0-1.5A6.5 6.5 0 0 1 1.5 8Z"></path><path d="M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm1.5 1.75a.75.75 0 0 1 .75-.75h5a.75.75 0 0 1 0 1.5h-5a.75.75 0 0 1-.75-.75Zm2.75 2.25a.75.75 0 0 0 0 1.5h3a.75.75 0 0 0 0-1.5h-3Z"></path></svg>
+        </div>
         <div class="thread-wrapper">
           <div class="thread-item__head">
             <div class="mono">
               <span>${escapeHtml(e.actor || "System")}</span>
               <span> attached this to </span>
-              <span>${escapeHtml(e.entity_type || "")} #${escapeHtml(e.entity_id || "")}</span>
-              <span> · </span>
-              <span>${escapeHtml(fmtTs(e.ts || ""))}</span>
+              <span>${escapeHtml(e.entity_type || "")} n° ${entityLinkHtml(e.entity_type, e.entity_id, e.entity_id || "")}</span>
+              <span>·</span>
+              <span> (agent=${escapeHtml(e.agent || "system")})</span>
+              <div class="mono">in ${escapeHtml(fmtTs(e.ts || ""))}</div>
             </div>
           </div>
-          <div class="thread-item__body">${mdToHtml(e.message || "")}</div>
+          <div class="thread-item__body">${escapeHtml(e.message || "")}</div>
         </div>
       </div>
     `;
   }).join("");
 
   return `
-    <div class="gh-timeline-title mono">Discussion</div>
+    <div class="gh-timeline-title mono" style="display:none">Discussion</div>
     <div class="thread gh-thread">${html}</div>
   `;
 }
@@ -1981,47 +2043,93 @@ function openDrilldownFromAvis(avisId) {
   openDrilldown();
 }
 
+function renderAssistantOverlayMessages(overlay) {
+  const thread = overlay?.querySelector?.("#assist-thread");
+  if (!thread) return;
+  thread.innerHTML = `
+    <div class="assist-empty">
+      <div class="assist-empty__title">Aucun échange pour l’instant</div>
+      <div class="assist-empty__sub">Vous pouvez piloter le projet et demander des synthèses contextualisées.</div>
+    </div>
+  `;
+}
+
+function openAssistantOverlay() {
+  ensureAssistantOverlayDom();
+  const overlay = document.getElementById("assist-overlay");
+  if (!overlay) return;
+  overlay.classList.add("is-open");
+  overlay.setAttribute("aria-hidden", "false");
+  renderAssistantOverlayMessages(overlay);
+}
+
+function closeAssistantOverlay() {
+  const overlay = document.getElementById("assist-overlay");
+  if (!overlay) return;
+  overlay.classList.remove("is-open");
+  overlay.setAttribute("aria-hidden", "true");
+}
+
 function ensureAssistantOverlayDom() {
   if (document.getElementById("assist-overlay")) return;
   const overlay = document.createElement("div");
   overlay.id = "assist-overlay";
-  overlay.className = "assist-overlay hidden";
+  overlay.className = "assist-overlay";
+  overlay.setAttribute("aria-hidden", "true");
   overlay.innerHTML = `
-    <div class="assist-overlay__panel">
-      <div class="assist-overlay__head gh-panel__head gh-panel__head--tight">
-        <div class="details-head details-head--expanded" style="width:100%;">
-          <div class="details-head-left">
-            <div class="details-kicker mono">ASSISTANT</div>
-            <div class="gh-panel__title">RAPSOBOT private overlay</div>
-          </div>
-          <div class="details-head-right">
-            <button class="icon-btn icon-btn--sm" id="assist-overlay-close" aria-label="Fermer">✕</button>
+    <div class="assist-panel" role="dialog" aria-modal="true" aria-label="Assistant privé Rapso">
+      <div class="assist-panel__head">
+        <div class="assist-head__left">
+          <div class="assist-head__logo" aria-hidden="true"></div>
+          <div class="assist-head__title">
+            <div class="assist-head__name">Assistant privé</div>
+            <div class="assist-head__sub">Échanges non publics avec Rapso • Actions historisées</div>
           </div>
         </div>
+        <button class="assist-close" type="button" aria-label="Fermer">✕</button>
       </div>
-      <div class="assist-overlay__body">
-        <div class="assist-empty">
-          <div class="assist-empty__title">Assistant privé</div>
-          <div class="assist-empty__sub">Overlay restauré selon le DOM de l’archive.</div>
+      <div class="assist-panel__body">
+        <div class="assist-thread" id="assist-thread"></div>
+        <div class="assist-compose">
+          <textarea id="assist-input" class="assist-input" rows="3" placeholder="Ex: Synthétise la situation, ou prépare une validation en masse sur un sujet…"></textarea>
+          <div class="assist-compose__actions">
+            <div class="assist-compose__left">
+              <button id="assist-help-toggle" class="assist-help-toggle" type="button" aria-pressed="false" aria-label="Mode Help">Help</button>
+              <button id="assist-authorize" class="assist-authorize hidden" type="button" aria-label="Autorisation directeur">Autorisation directeur</button>
+            </div>
+            <button id="assist-send" class="assist-send" type="button" aria-label="Envoyer">Envoyer</button>
+          </div>
         </div>
       </div>
     </div>
   `;
   document.body.appendChild(overlay);
-  overlay.querySelector('#assist-overlay-close')?.addEventListener('click', () => overlay.classList.add('hidden'));
-  overlay.addEventListener('click', (ev) => { if (ev.target === overlay) overlay.classList.add('hidden'); });
+
+  try {
+    const src = document.querySelector(".gh-brand__logo");
+    const slot = overlay.querySelector(".assist-head__logo");
+    if (src && slot) {
+      const clone = src.cloneNode(true);
+      clone.classList.remove("gh-brand__logo");
+      slot.appendChild(clone);
+    }
+  } catch {}
+
+  overlay.querySelector(".assist-close")?.addEventListener("click", closeAssistantOverlay);
+  overlay.addEventListener("click", (ev) => {
+    if (ev.target === overlay) closeAssistantOverlay();
+  });
 }
 
 let globalSituationsBrandBound = false;
 function bindGlobalBrandOverlay() {
   if (globalSituationsBrandBound) return;
   globalSituationsBrandBound = true;
-  document.addEventListener('click', (event) => {
-    const brandHit = event.target?.closest?.('.gh-brand__logo');
+  document.addEventListener("click", (event) => {
+    const brandHit = event.target?.closest?.("img.gh-brand__logo, .gh-brand__logo, .gh-brand__name, .gh-brand__sep, .gh-brand__repo");
     if (!brandHit) return;
-    ensureAssistantOverlayDom();
-    document.getElementById('assist-overlay')?.classList.remove('hidden');
     event.preventDefault();
+    openAssistantOverlay();
   });
 }
 
