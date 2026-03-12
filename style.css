@@ -177,7 +177,7 @@ body:not(.sidebar-collapsed) .sidebar-fab{display:none;}
 
 /* Fixed columns + internal scroll areas */
 .gh-panel,
-.gh-sidebar{display:flex;flex-direction:column;min-height:0;height:100%;}
+.gh-sidebar{display:flex;flex-direction:column;min-height:0;height:100%;gap:16px;}
 
 .gh-sidebar{overflow:auto;}
 
@@ -207,7 +207,7 @@ body:not(.sidebar-collapsed) .sidebar-fab{display:none;}
 }
 
 /* Middle only: head without background + bordered */
-.gh-panel--results .gh-panel__head--tight{background:transparent;border:1px solid var(--border);border-bottom:1px solid var(--border);border-radius:var(--radius);}
+.gh-panel--results .gh-panel__head--tight{background:transparent;border:none;padding:0px;}
 .gh-panel--results .gh-panel__head:not(.gh-panel__head--tight){border-bottom:none;}
 .gh-panel__title{margin:0;font-size:14px;font-weight:700;}
 
@@ -499,7 +499,6 @@ body.banner-visible #project-content.gh-page{
   border-radius:var(--radius);
   overflow:hidden;
   flex:1 1 auto;
-  margin-top:16px;
 }
 
 .issues-table__head{
@@ -1682,7 +1681,7 @@ body.drilldown-open .drilldown__inner {
   align-items:center;
   justify-content:space-between;
   gap:10px;
-  padding:0px 12px;
+  padding:0px 0px 0px 12px;
   background:transparent;
 }
 .project-runbar__left,
