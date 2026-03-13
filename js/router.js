@@ -1,6 +1,7 @@
 import { renderGlobalDashboard } from "./views/global-dashboard.js";
 import { renderProjectsList } from "./views/projects-list.js";
 import { renderProjectLayout } from "./views/project-layout.js";
+import { unmountProjectShellChrome } from "./views/project-shell-chrome.js";
 import { store } from "./store.js";
 
 function parseHash() {
@@ -19,12 +20,14 @@ function route() {
 
   if (parts[0] === "dashboard") {
     store.currentProjectId = null;
+    unmountProjectShellChrome();
     renderGlobalDashboard(root);
     return;
   }
 
   if (parts[0] === "projects") {
     store.currentProjectId = null;
+    unmountProjectShellChrome();
     renderProjectsList(root);
     return;
   }
@@ -39,6 +42,7 @@ function route() {
   }
 
   store.currentProjectId = null;
+  unmountProjectShellChrome();
   renderGlobalDashboard(root);
 }
 
