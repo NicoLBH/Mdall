@@ -43,8 +43,8 @@ function getFolderIconSvg() {
 
 function getDocumentIconSvg() {
   return `
-    <svg aria-hidden="true" focusable="false" class="octicon octicon-file color-fg-muted" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align:text-bottom;">
-      <path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V5h-2.75A1.75 1.75 0 0 1 9 3.25V1.5Z"></path>
+    <svg height="32" aria-hidden="true" viewBox="0 0 24 24" version="1.1" width="32" data-view-component="true" class="octicon octicon-file mb-2 color-fg-muted">
+      <path d="M3 3a2 2 0 0 1 2-2h9.982a2 2 0 0 1 1.414.586l4.018 4.018A2 2 0 0 1 21 7.018V21a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Zm2-.5a.5.5 0 0 0-.5.5v18a.5.5 0 0 0 .5.5h14a.5.5 0 0 0 .5-.5V8.5h-4a2 2 0 0 1-2-2v-4Zm10 0v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 0-.146-.336l-4.018-4.018A.5.5 0 0 0 15 2.5Z"></path>
     </svg>
   `;
 }
@@ -221,7 +221,7 @@ function renderUploadView() {
                 <h3>Glissez vos fichiers ici pour les ajouter au projet</h3>
                 <p>
                   Ou
-                  <button type="button" class="documents-dropzone__link" id="documentsChooseBtn" ${isDisabled}>choose your file</button>
+                  <button type="button" class="documents-dropzone__link" id="documentsChooseBtn" ${isDisabled}>choisissez votre fichier</button>
                 </p>
               </div>
             </section>
@@ -241,7 +241,6 @@ function renderUploadView() {
                 <div class="documents-commit-card__title">Déposer le document</div>
 
                 <div class="documents-form-field">
-                  <label for="documentsTitleInput">Titre</label>
                   <input
                     id="documentsTitleInput"
                     type="text"
@@ -252,7 +251,6 @@ function renderUploadView() {
                 </div>
 
                 <div class="documents-form-field">
-                  <label for="documentsDescriptionInput">Informations complémentaires</label>
                   <textarea
                     id="documentsDescriptionInput"
                     class="gh-input gh-textarea"
@@ -265,7 +263,7 @@ function renderUploadView() {
                     <input type="radio" name="documentsDepositMode" value="direct" ${docsViewState.depositMode === "direct" ? "checked" : ""}>
                     <span class="documents-radio-option__icon">${getCommitIconSvg()}</span>
                     <span class="documents-radio-option__text">
-                      <strong>Déposer directement les documents</strong>
+                      Déposer directement les documents
                     </span>
                   </label>
 
@@ -273,7 +271,7 @@ function renderUploadView() {
                     <input type="radio" name="documentsDepositMode" value="proposal" ${docsViewState.depositMode === "proposal" ? "checked" : ""}>
                     <span class="documents-radio-option__icon">${getProposalIconSvg()}</span>
                     <span class="documents-radio-option__text">
-                      <strong>Créer une proposition avec demande de visa</strong>
+                      Créer une proposition avec demande de visa
                     </span>
                   </label>
                 </div>
