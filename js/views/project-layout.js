@@ -11,10 +11,16 @@ export function renderProjectLayout(root, projectId, tab) {
   root.innerHTML = `
     <div class="project-shell" id="projectShell">
       ${renderProjectHeader(projectId, tab)}
-      ${renderProjectSituationsTopBanner()}
-      <div id="project-content" class="gh-page gh-page--2col"></div>
+
+      <div class="project-shell__body">
+        ${renderProjectSituationsTopBanner()}
+        <div id="projectViewHeaderHost" class="project-view-header-host"></div>
+        <div id="project-content" class="project-shell__content"></div>
+      </div>
     </div>
   `;
+
+  mountProjectShellChrome({ projectId, tab });
 
   const content = document.getElementById("project-content");
   if (!content) return;
@@ -39,6 +45,4 @@ export function renderProjectLayout(root, projectId, tab) {
       renderProjectDashboard(content);
       break;
   }
-
-  mountProjectShellChrome({ tab });
 }
