@@ -254,7 +254,7 @@ body:not(.sidebar-collapsed) .sidebar-fab{display:none;}
 
 /* Filters */
 .gh-filters{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
-.gh-filter{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);}
+.gh-filter{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);border:solid 1px var(--border);}
 
 /* Head lines */
 .issues-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;}
