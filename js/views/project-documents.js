@@ -276,11 +276,12 @@ function renderUploadView() {
                   </label>
                 </div>
 
-                <div class="documents-commit-card__actions">
-                  <button type="button" class="gh-btn gh-btn--validate" disabled>Valider</button>
-                  <button type="button" class="gh-btn" id="documentsCancelBtn">Annuler</button>
-                </div>
+                
               </section>
+              <div class="documents-commit-card__actions">
+                <button type="button" class="gh-btn gh-btn--validate" disabled>Valider</button>
+                <button type="button" class="gh-btn" id="documentsCancelBtn">Annuler</button>
+              </div>
             </div>
           </div>
         </div>
