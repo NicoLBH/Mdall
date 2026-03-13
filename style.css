@@ -1784,7 +1784,7 @@ body.route--project.project-shell-compact .project-tabs,
   align-items:flex-end;
   justify-content:space-between;
   gap:16px;
-  min-height:28px;
+  min-height:16px;
   padding:0px 16px 0 16px;
 }
 
@@ -1800,6 +1800,7 @@ body.route--project.project-shell-compact .project-tabs,
   font-size:12px;
   letter-spacing:.04em;
   text-transform:uppercase;
+  color:transparent;
 }
 
 .project-view-header__titles{
