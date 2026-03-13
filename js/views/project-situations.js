@@ -1882,7 +1882,7 @@ function renderCommentBox(selection) {
             <button class="gh-btn gh-btn--help-mode ${helpMode ? "is-on" : ""}" data-action="toggle-help" type="button">Help</button>
 
             ${type === "avis"
-              ? `${verdictSwitch}<button class="gh-btn gh-btn-validate" data-action="avis-validate" type="button">Validate</button>`
+              ? `${verdictSwitch}<button class="gh-btn gh-btn--validate" data-action="avis-validate" type="button">Validate</button>`
               : (isIssueOpen
                   ? `<button class="gh-btn gh-btn--issue-action" data-action="issue-close" type="button">${SVG_ISSUE_CLOSED}<span class="gh-btn__label">Close</span></button>`
                   : `<button class="gh-btn gh-btn--issue-action" data-action="issue-reopen" type="button">${SVG_ISSUE_REOPENED}<span class="gh-btn__label">Reopen issue</span></button>`)}
