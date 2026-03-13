@@ -1,4 +1,5 @@
 import { registerProjectPrimaryScrollSource, setProjectViewHeader } from "./project-shell-chrome.js";
+import { bindGhSplitButtons, initGhSplitButton, renderGhSplitButton } from "./ui/gh-split-button.js";
 
 const DOCUMENT_FOLDERS = [
   { name: "Architecte", note: "Dossier discipline" },
@@ -8,6 +9,8 @@ const DOCUMENT_FOLDERS = [
   { name: "CSPS", note: "Dossier discipline" }
 ];
 
+const PROJECT_PHASES = ["ESQ", "APS", "APD", "PRO", "DCE", "EXE", "DET", "AOR"];
+
 const docsViewState = {
   mode: "list", // "list" | "upload"
   file: null,
@@ -16,7 +19,8 @@ const docsViewState = {
   depositMode: "direct",
   isUploading: false,
   uploadProgress: 0,
-  uploadTimer: null
+  uploadTimer: null,
+  selectedPhase: "APS"
 };
 
 function escapeHtml(value) {
@@ -40,7 +44,7 @@ function getFolderIconSvg() {
 function getDocumentIconSvg() {
   return `
     <svg aria-hidden="true" focusable="false" class="octicon octicon-file color-fg-muted" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align:text-bottom;">
-      <path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V5.0h-2.75A1.75 1.75 0 0 1 9 3.25V1.5Z"></path>
+      <path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V5h-2.75A1.75 1.75 0 0 1 9 3.25V1.5Z"></path>
     </svg>
   `;
 }
@@ -69,11 +73,57 @@ function getRemoveIconSvg() {
   `;
 }
 
+function getDownloadIconSvg() {
+  return `
+    <svg aria-hidden="true" focusable="false" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align:text-bottom;">
+      <path d="M7.25 1a.75.75 0 0 1 1.5 0v7.19l2.22-2.22a.75.75 0 1 1 1.06 1.06l-3.5 3.5a.75.75 0 0 1-1.06 0l-3.5-3.5a.75.75 0 0 1 1.06-1.06l2.22 2.22V1Z"></path>
+      <path d="M2.5 9.75a.75.75 0 0 1 .75.75v1.75c0 .138.112.25.25.25h9a.25.25 0 0 0 .25-.25V10.5a.75.75 0 0 1 1.5 0v1.75A1.75 1.75 0 0 1 12.5 14h-9A1.75 1.75 0 0 1 1.75 12.25V10.5a.75.75 0 0 1 .75-.75Z"></path>
+    </svg>
+  `;
+}
+
 function renderDocumentsToolbar() {
+  const phaseButton = renderGhSplitButton({
+    id: "documentsPhaseSplit",
+    label: `<span class="gh-split__label">${escapeHtml(docsViewState.selectedPhase)}</span>`,
+    items: PROJECT_PHASES.map((phase) => ({
+      label: phase,
+      action: `phase:${phase}`
+    }))
+  });
+
+  const addButton = renderGhSplitButton({
+    id: "documentsAddSplit",
+    label: `<span class="gh-split__label">Ajouter</span>`,
+    items: [
+      { label: "Ajouter des documents", action: "add-documents" },
+      { label: "Ajouter un dossier", action: "add-folder" }
+    ]
+  });
+
+  const documentsButton = renderGhSplitButton({
+    id: "documentsActionsSplit",
+    label: `
+      <span class="gh-split__label gh-split__label--with-icon">
+        <span class="gh-split__icon">${getDocumentIconSvg()}</span>
+        <span>Documents</span>
+      </span>
+    `,
+    variant: "primary",
+    items: [
+      { label: "Télécharger le dossier ZIP", action: "download-zip" }
+    ]
+  });
+
   return `
     <div class="documents-toolbar">
       <div class="documents-toolbar__left">
-        <button type="button" class="gh-btn" id="documentsAddBtn">Ajouter un document</button>
+        ${phaseButton}
+      </div>
+
+      <div class="documents-toolbar__right">
+        ${addButton}
+        ${documentsButton}
       </div>
     </div>
   `;
@@ -82,29 +132,31 @@ function renderDocumentsToolbar() {
 function renderDocumentsListView() {
   return `
     <section class="project-simple-page project-simple-page--documents">
-      <div class="project-simple-scroll" id="projectDocumentsScroll">
-        ${renderDocumentsToolbar()}
+      <div class="project-simple-scroll project-simple-scroll--documents" id="projectDocumentsScroll">
+        <div class="documents-shell">
+          ${renderDocumentsToolbar()}
 
-        <div class="documents-repo">
-          <div class="documents-repo__head">
-            <div class="documents-repo__col documents-repo__col--name">Nom</div>
-            <div class="documents-repo__col documents-repo__col--message">Description</div>
-            <div class="documents-repo__col documents-repo__col--date">Dernière mise à jour</div>
-          </div>
+          <div class="documents-repo">
+            <div class="documents-repo__head">
+              <div class="documents-repo__col documents-repo__col--name">Nom</div>
+              <div class="documents-repo__col documents-repo__col--message">Description</div>
+              <div class="documents-repo__col documents-repo__col--date">Dernière mise à jour</div>
+            </div>
 
-          <div class="documents-repo__body">
-            ${DOCUMENT_FOLDERS.map((folder) => `
-              <div class="documents-repo__row">
-                <div class="documents-repo__cell documents-repo__cell--name">
-                  <span class="documents-repo__icon">${getFolderIconSvg()}</span>
-                  <span class="documents-repo__name">${escapeHtml(folder.name)}</span>
+            <div class="documents-repo__body">
+              ${DOCUMENT_FOLDERS.map((folder) => `
+                <div class="documents-repo__row">
+                  <div class="documents-repo__cell documents-repo__cell--name">
+                    <span class="documents-repo__icon">${getFolderIconSvg()}</span>
+                    <span class="documents-repo__name">${escapeHtml(folder.name)}</span>
+                  </div>
+                  <div class="documents-repo__cell documents-repo__cell--message">
+                    ${escapeHtml(folder.note)}
+                  </div>
+                  <div class="documents-repo__cell documents-repo__cell--date">—</div>
                 </div>
-                <div class="documents-repo__cell documents-repo__cell--message">
-                  ${escapeHtml(folder.note)}
-                </div>
-                <div class="documents-repo__cell documents-repo__cell--date">—</div>
-              </div>
-            `).join("")}
+              `).join("")}
+            </div>
           </div>
         </div>
       </div>
@@ -157,70 +209,82 @@ function renderUploadView() {
 
   return `
     <section class="project-simple-page project-simple-page--documents">
-      <div class="project-simple-scroll" id="projectDocumentsScroll">
-        <div class="documents-upload-layout">
-          <section class="documents-dropzone ${isBusy}" id="documentsDropzone">
-            <input id="documentsFileInput" type="file" hidden accept=".pdf,.doc,.docx,.xls,.xlsx,.dwg,.zip,image/*">
-            <div class="documents-dropzone__inner">
-              <div class="documents-dropzone__icon">
-                ${getDocumentIconSvg()}
+      <div class="project-simple-scroll project-simple-scroll--documents" id="projectDocumentsScroll">
+        <div class="documents-shell documents-shell--upload">
+          <div class="documents-upload-layout">
+            <section class="documents-dropzone ${isBusy}" id="documentsDropzone">
+              <input id="documentsFileInput" type="file" hidden accept=".pdf,.doc,.docx,.xls,.xlsx,.dwg,.zip,image/*">
+              <div class="documents-dropzone__inner">
+                <div class="documents-dropzone__icon">
+                  ${getDocumentIconSvg()}
+                </div>
+                <h3>Glissez vos fichiers ici pour les ajouter au projet</h3>
+                <p>
+                  Ou
+                  <button type="button" class="documents-dropzone__link" id="documentsChooseBtn" ${isDisabled}>choose your file</button>
+                </p>
               </div>
-              <h3>Glissez vos fichiers ici pour les ajouter au projet</h3>
-              <p>
-                Ou
-                <button type="button" class="documents-dropzone__link" id="documentsChooseBtn" ${isDisabled}>choose your file</button>
-              </p>
+            </section>
+
+            ${renderUploadProgress()}
+
+            <div class="documents-commit-shell">
+              <div class="documents-commit-shell__avatar">
+                <img
+                  src="260093543.png"
+                  alt="Avatar"
+                  class="documents-commit-shell__avatar-img"
+                >
+              </div>
+
+              <section class="documents-commit-card">
+                <div class="documents-commit-card__title">Déposer le document</div>
+
+                <div class="documents-form-field">
+                  <label for="documentsTitleInput">Titre</label>
+                  <input
+                    id="documentsTitleInput"
+                    type="text"
+                    class="gh-input"
+                    value="${escapeHtml(docsViewState.title)}"
+                    placeholder="Ex. Note d'hypothèses parasismiques - version 03"
+                  >
+                </div>
+
+                <div class="documents-form-field">
+                  <label for="documentsDescriptionInput">Informations complémentaires</label>
+                  <textarea
+                    id="documentsDescriptionInput"
+                    class="gh-input gh-textarea"
+                    placeholder="Décrivez brièvement le contenu, le contexte ou les points d'attention."
+                  >${escapeHtml(docsViewState.description)}</textarea>
+                </div>
+
+                <div class="documents-radio-group">
+                  <label class="documents-radio-option">
+                    <input type="radio" name="documentsDepositMode" value="direct" ${docsViewState.depositMode === "direct" ? "checked" : ""}>
+                    <span class="documents-radio-option__icon">${getCommitIconSvg()}</span>
+                    <span class="documents-radio-option__text">
+                      <strong>Déposer directement les documents</strong>
+                    </span>
+                  </label>
+
+                  <label class="documents-radio-option">
+                    <input type="radio" name="documentsDepositMode" value="proposal" ${docsViewState.depositMode === "proposal" ? "checked" : ""}>
+                    <span class="documents-radio-option__icon">${getProposalIconSvg()}</span>
+                    <span class="documents-radio-option__text">
+                      <strong>Créer une proposition avec demande de visa</strong>
+                    </span>
+                  </label>
+                </div>
+
+                <div class="documents-commit-card__actions">
+                  <button type="button" class="gh-btn gh-btn--validate" disabled>Valider</button>
+                  <button type="button" class="gh-btn" id="documentsCancelBtn">Annuler</button>
+                </div>
+              </section>
             </div>
-          </section>
-
-          ${renderUploadProgress()}
-
-          <section class="documents-commit-card">
-            <div class="documents-commit-card__title">Déposer le document</div>
-
-            <div class="documents-form-field">
-              <label for="documentsTitleInput">Titre</label>
-              <input
-                id="documentsTitleInput"
-                type="text"
-                class="gh-input"
-                value="${escapeHtml(docsViewState.title)}"
-                placeholder="Ex. Note d'hypothèses parasismiques - version 03"
-              >
-            </div>
-
-            <div class="documents-form-field">
-              <label for="documentsDescriptionInput">Informations complémentaires</label>
-              <textarea
-                id="documentsDescriptionInput"
-                class="gh-input gh-textarea"
-                placeholder="Décrivez brièvement le contenu, le contexte ou les points d'attention."
-              >${escapeHtml(docsViewState.description)}</textarea>
-            </div>
-
-            <div class="documents-radio-group">
-              <label class="documents-radio-option">
-                <input type="radio" name="documentsDepositMode" value="direct" ${docsViewState.depositMode === "direct" ? "checked" : ""}>
-                <span class="documents-radio-option__icon">${getCommitIconSvg()}</span>
-                <span class="documents-radio-option__text">
-                  <strong>Déposer directement les documents</strong>
-                </span>
-              </label>
-
-              <label class="documents-radio-option">
-                <input type="radio" name="documentsDepositMode" value="proposal" ${docsViewState.depositMode === "proposal" ? "checked" : ""}>
-                <span class="documents-radio-option__icon">${getProposalIconSvg()}</span>
-                <span class="documents-radio-option__text">
-                  <strong>Créer une proposition avec demande de visa</strong>
-                </span>
-              </label>
-            </div>
-
-            <div class="documents-commit-card__actions">
-              <button type="button" class="gh-btn gh-btn--validate" disabled>Valider</button>
-              <button type="button" class="gh-btn" id="documentsCancelBtn">Annuler</button>
-            </div>
-          </section>
+          </div>
         </div>
       </div>
     </section>
@@ -273,17 +337,52 @@ function renderFromSelectedFile(root, file) {
   simulateUpload(root, file);
 }
 
+function bindDocumentsSplitActions(root) {
+  bindGhSplitButtons();
+
+  const phaseSplit = document.querySelector('[data-split-id="documentsPhaseSplit"]');
+  if (phaseSplit) {
+    initGhSplitButton(phaseSplit);
+    phaseSplit.addEventListener("ghsplit:action", (event) => {
+      const action = event.detail?.action || "";
+      if (!action.startsWith("phase:")) return;
+      docsViewState.selectedPhase = action.slice("phase:".length) || docsViewState.selectedPhase;
+      renderProjectDocuments(root);
+    });
+  }
+
+  const addSplit = document.querySelector('[data-split-id="documentsAddSplit"]');
+  if (addSplit) {
+    initGhSplitButton(addSplit, { mainAction: "add-documents" });
+    addSplit.addEventListener("ghsplit:action", (event) => {
+      const action = event.detail?.action || "";
+      if (action === "add-documents") {
+        docsViewState.mode = "upload";
+        renderProjectDocuments(root);
+      }
+      if (action === "add-folder") {
+        // UI placeholder volontaire : le comportement métier/back sera branché plus tard.
+      }
+    });
+  }
+
+  const documentsSplit = document.querySelector('[data-split-id="documentsActionsSplit"]');
+  if (documentsSplit) {
+    initGhSplitButton(documentsSplit, { mainAction: "download-zip" });
+    documentsSplit.addEventListener("ghsplit:action", (event) => {
+      const action = event.detail?.action || "";
+      if (action === "download-zip") {
+        // UI placeholder volontaire : le téléchargement réel du ZIP sera branché plus tard.
+      }
+    });
+  }
+}
+
 function bindDocumentsView(root) {
   const scrollEl = document.getElementById("projectDocumentsScroll");
   registerProjectPrimaryScrollSource(scrollEl);
 
-  const addBtn = document.getElementById("documentsAddBtn");
-  if (addBtn) {
-    addBtn.addEventListener("click", () => {
-      docsViewState.mode = "upload";
-      renderProjectDocuments(root);
-    });
-  }
+  bindDocumentsSplitActions(root);
 
   const cancelBtn = document.getElementById("documentsCancelBtn");
   if (cancelBtn) {
