@@ -1,107 +1,184 @@
 import { PROJECT_TABS } from "../constants.js";
 
-let cleanupProjectShellChrome = null;
+const shellState = {
+  projectId: null,
+  tab: null,
+  isCompact: false,
+  globalHeaderEl: null,
+  projectTabsEl: null,
+  viewHeaderHostEl: null,
+  primaryScrollSourceEl: null,
+  cleanupScrollSource: null,
+  cleanupWindow: null
+};
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "\"": "&quot;",
+    "'": "&#39;"
+  }[char]));
+}
 
 function getTabLabel(tab) {
   return PROJECT_TABS.find((item) => item.id === tab)?.label || tab || "";
 }
 
-function setCompactState({ isCompact, tab }) {
-  const body = document.body;
-  const globalHeader = document.querySelector("#globalHeaderHost .gh-header");
-  const projectTabs = document.querySelector(".project-tabs");
-
-  body.classList.add("route--project");
-  body.classList.toggle("project-shell-compact", isCompact);
-
-  globalHeader?.classList.toggle("gh-header--compact", isCompact);
-  projectTabs?.classList.toggle("project-tabs--hidden", isCompact);
-
-  document.querySelectorAll(".js-project-view-head").forEach((node) => {
-    node.classList.toggle("project-view-head--compact-active", isCompact);
-    node.dataset.projectTab = tab || "";
-  });
-
-  const tabLabel = getTabLabel(tab);
-  document.querySelectorAll(".js-project-view-tab-label").forEach((node) => {
-    node.textContent = tabLabel;
-  });
+function getViewHeaderEl() {
+  return shellState.viewHeaderHostEl?.querySelector(".project-view-header") || null;
 }
 
-function getPrimaryScrollSource() {
-  return document.querySelector('[data-project-scroll-source="primary"]');
+function applyCompactState(isCompact) {
+  shellState.isCompact = !!isCompact;
+
+  document.body.classList.add("route--project");
+  document.body.classList.toggle("project-shell-compact", shellState.isCompact);
+
+  shellState.globalHeaderEl?.classList.toggle("gh-header--compact", shellState.isCompact);
+  shellState.projectTabsEl?.classList.toggle("project-tabs--hidden", shellState.isCompact);
+  getViewHeaderEl()?.classList.toggle("project-view-header--compact", shellState.isCompact);
 }
 
-function getCurrentScrollTop() {
-  const primary = getPrimaryScrollSource();
-  if (primary) return primary.scrollTop || 0;
-
-  const app = document.getElementById("app");
-  return app?.scrollTop || 0;
+function syncCompactState() {
+  const scrollTop = shellState.primaryScrollSourceEl?.scrollTop || 0;
+  applyCompactState(scrollTop > 12);
 }
 
-export function refreshProjectShellChrome(tab) {
-  setCompactState({
-    isCompact: getCurrentScrollTop() > 12,
-    tab
-  });
+function cleanupPrimaryScrollSource() {
+  shellState.cleanupScrollSource?.();
+  shellState.cleanupScrollSource = null;
+  shellState.primaryScrollSourceEl = null;
 }
 
-export function mountProjectShellChrome({ tab }) {
-  cleanupProjectShellChrome?.();
-  cleanupProjectShellChrome = null;
+function renderProjectViewHeader({
+  contextLabel,
+  title = "",
+  subtitle = "",
+  metaHtml = "",
+  toolbarHtml = "",
+  variant = "default"
+} = {}) {
+  const safeVariant = String(variant || "default").replace(/[^a-zA-Z0-9_-]/g, "");
+  const safeContextLabel = escapeHtml(contextLabel || getTabLabel(shellState.tab));
+  const safeTitle = escapeHtml(title || "");
+  const safeSubtitle = escapeHtml(subtitle || "");
 
-  const app = document.getElementById("app");
-  const projectContent = document.getElementById("project-content");
-  if (!app) return;
+  const hasTitles = !!(safeTitle || safeSubtitle);
+  const hasToolbar = !!String(toolbarHtml || "").trim();
+  const hasMeta = !!String(metaHtml || "").trim();
 
-  const sync = () => {
-    setCompactState({
-      isCompact: getCurrentScrollTop() > 12,
-      tab
-    });
-  };
+  return `
+    <section class="project-view-header project-view-header--${safeVariant}">
+      <div class="project-view-header__bar">
+        <div class="project-view-header__context">
+          <div class="project-view-header__eyebrow mono">${safeContextLabel}</div>
+          ${hasTitles ? `
+            <div class="project-view-header__titles">
+              ${safeTitle ? `<div class="project-view-header__title">${safeTitle}</div>` : ""}
+              ${safeSubtitle ? `<div class="project-view-header__subtitle">${safeSubtitle}</div>` : ""}
+            </div>
+          ` : ""}
+        </div>
 
-  const onAppScroll = () => {
-    if (!getPrimaryScrollSource()) sync();
-  };
+        ${hasMeta ? `<div class="project-view-header__meta">${metaHtml}</div>` : ""}
+      </div>
 
-  const onCapturedScroll = (event) => {
-    const target = event.target;
-    if (!(target instanceof Element)) return;
+      ${hasToolbar ? `<div class="project-view-header__toolbar">${toolbarHtml}</div>` : ""}
+    </section>
+  `;
+}
 
-    const source = target.closest?.('[data-project-scroll-source="primary"]');
-    if (!source) return;
+export function mountProjectShellChrome({ projectId, tab }) {
+  unmountProjectShellChrome();
 
-    sync();
-  };
+  shellState.projectId = projectId || null;
+  shellState.tab = tab || "dashboard";
+  shellState.globalHeaderEl = document.querySelector("#globalHeaderHost .gh-header");
+  shellState.projectTabsEl = document.querySelector(".project-tabs");
+  shellState.viewHeaderHostEl = document.getElementById("projectViewHeaderHost");
+
+  if (shellState.viewHeaderHostEl) {
+    shellState.viewHeaderHostEl.innerHTML = "";
+  }
 
   const onResize = () => {
-    sync();
+    syncCompactState();
   };
 
-  app.addEventListener("scroll", onAppScroll, { passive: true });
-  projectContent?.addEventListener("scroll", onCapturedScroll, { passive: true, capture: true });
   window.addEventListener("resize", onResize);
-
-  sync();
-
-  cleanupProjectShellChrome = () => {
-    app.removeEventListener("scroll", onAppScroll);
-    projectContent?.removeEventListener("scroll", onCapturedScroll, { capture: true });
+  shellState.cleanupWindow = () => {
     window.removeEventListener("resize", onResize);
   };
+
+  setProjectViewHeader({
+    contextLabel: getTabLabel(shellState.tab),
+    variant: shellState.tab || "default"
+  });
+
+  applyCompactState(false);
+}
+
+export function setProjectViewHeader(config = {}) {
+  if (!shellState.viewHeaderHostEl) return;
+
+  shellState.viewHeaderHostEl.innerHTML = renderProjectViewHeader({
+    contextLabel: config.contextLabel || getTabLabel(shellState.tab),
+    title: config.title || "",
+    subtitle: config.subtitle || "",
+    metaHtml: config.metaHtml || "",
+    toolbarHtml: config.toolbarHtml || "",
+    variant: config.variant || shellState.tab || "default"
+  });
+
+  getViewHeaderEl()?.classList.toggle("project-view-header--compact", shellState.isCompact);
+}
+
+export function registerProjectPrimaryScrollSource(el) {
+  cleanupPrimaryScrollSource();
+
+  if (!el) {
+    applyCompactState(false);
+    return;
+  }
+
+  shellState.primaryScrollSourceEl = el;
+
+  const onScroll = () => {
+    syncCompactState();
+  };
+
+  el.addEventListener("scroll", onScroll, { passive: true });
+
+  shellState.cleanupScrollSource = () => {
+    el.removeEventListener("scroll", onScroll);
+  };
+
+  syncCompactState();
+}
+
+export function refreshProjectShellChrome() {
+  syncCompactState();
 }
 
 export function unmountProjectShellChrome() {
-  cleanupProjectShellChrome?.();
-  cleanupProjectShellChrome = null;
+  cleanupPrimaryScrollSource();
 
-  const body = document.body;
-  const globalHeader = document.querySelector("#globalHeaderHost .gh-header");
-  const projectTabs = document.querySelector(".project-tabs");
+  shellState.cleanupWindow?.();
+  shellState.cleanupWindow = null;
 
-  body.classList.remove("route--project", "project-shell-compact");
-  globalHeader?.classList.remove("gh-header--compact");
-  projectTabs?.classList.remove("project-tabs--hidden");
+  shellState.viewHeaderHostEl?.replaceChildren?.();
+
+  document.body.classList.remove("route--project", "project-shell-compact");
+
+  shellState.globalHeaderEl?.classList.remove("gh-header--compact");
+  shellState.projectTabsEl?.classList.remove("project-tabs--hidden");
+
+  shellState.projectId = null;
+  shellState.tab = null;
+  shellState.isCompact = false;
+  shellState.globalHeaderEl = null;
+  shellState.projectTabsEl = null;
+  shellState.viewHeaderHostEl = null;
 }
