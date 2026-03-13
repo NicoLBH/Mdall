@@ -134,17 +134,17 @@ function getPageHtml(form) {
 
                 <button type="button" class="settings-nav__item" data-settings-target="parametres-localisation">
                   <span class="settings-nav__icon">${renderNavIcon("pin")}</span>
-                  <span>localisation</span>
+                  <span>Localisation</span>
                 </button>
 
                 <button type="button" class="settings-nav__item" data-settings-target="parametres-type-ouvrage">
                   <span class="settings-nav__icon">${renderNavIcon("general")}</span>
-                  <span>type d’ouvrage</span>
+                  <span>Type d’ouvrage</span>
                 </button>
 
                 <button type="button" class="settings-nav__item" data-settings-target="parametres-phase">
                   <span class="settings-nav__icon">${renderNavIcon("checklist")}</span>
-                  <span>phase</span>
+                  <span>Phase</span>
                 </button>
 
                 <button type="button" class="settings-nav__item" data-settings-target="parametres-collaborateurs">
@@ -154,12 +154,12 @@ function getPageHtml(form) {
 
                 <button type="button" class="settings-nav__item" data-settings-target="parametres-lots">
                   <span class="settings-nav__icon">${renderNavIcon("book")}</span>
-                  <span>lots</span>
+                  <span>Lots</span>
                 </button>
 
                 <button type="button" class="settings-nav__item" data-settings-target="parametres-zones-batiments">
                   <span class="settings-nav__icon">${renderNavIcon("book")}</span>
-                  <span>zones / bâtiments / niveaux</span>
+                  <span>Zones / bâtiments / niveaux</span>
                 </button>
 
                 <div class="settings-nav__separator"></div>
@@ -167,47 +167,47 @@ function getPageHtml(form) {
 
                 <button type="button" class="settings-nav__item" data-settings-target="parametres-zones-climatiques">
                   <span class="settings-nav__icon">${renderNavIcon("pin")}</span>
-                  <span>zones climatiques</span>
+                  <span>Zones climatiques</span>
                 </button>
 
                 <button type="button" class="settings-nav__item" data-settings-target="parametres-zones-reglementaires">
                   <span class="settings-nav__icon">${renderNavIcon("shield")}</span>
-                  <span>zones réglementaires</span>
+                  <span>Zones réglementaires</span>
                 </button>
 
                 <button type="button" class="settings-nav__item" data-settings-target="parametres-incendie">
                   <span class="settings-nav__icon">${renderNavIcon("shield")}</span>
-                  <span>règlement incendie applicable</span>
+                  <span>Règlement incendie</span>
                 </button>
 
                 <button type="button" class="settings-nav__item" data-settings-target="parametres-accessibilite">
                   <span class="settings-nav__icon">${renderNavIcon("shield")}</span>
-                  <span>règlement accessibilité</span>
+                  <span>Règlement accessibilité</span>
                 </button>
 
                 <button type="button" class="settings-nav__item" data-settings-target="parametres-parasismiques">
                   <span class="settings-nav__icon">${renderNavIcon("shield")}</span>
-                  <span>règlements parasismiques</span>
+                  <span>Règlements parasismiques</span>
                 </button>
 
                 <button type="button" class="settings-nav__item" data-settings-target="parametres-thermiques">
                   <span class="settings-nav__icon">${renderNavIcon("book")}</span>
-                  <span>référentiels thermiques</span>
+                  <span>Référentiels thermiques</span>
                 </button>
 
                 <button type="button" class="settings-nav__item" data-settings-target="parametres-acoustique">
                   <span class="settings-nav__icon">${renderNavIcon("book")}</span>
-                  <span>référentiels acoustique</span>
+                  <span>Référentiels acoustiques</span>
                 </button>
 
                 <button type="button" class="settings-nav__item" data-settings-target="parametres-normes">
                   <span class="settings-nav__icon">${renderNavIcon("book")}</span>
-                  <span>DTU / Eurocodes / normes projet</span>
+                  <span>DTU / Eurocodes / normes</span>
                 </button>
 
                 <button type="button" class="settings-nav__item" data-settings-target="parametres-doctrines">
                   <span class="settings-nav__icon">${renderNavIcon("book")}</span>
-                  <span>doctrines particulières du maître d’ouvrage</span>
+                  <span>Doctrines particulières MOA</span>
                 </button>
 
                 <div class="settings-nav__separator"></div>
@@ -215,37 +215,37 @@ function getPageHtml(form) {
 
                 <button type="button" class="settings-nav__item" data-settings-target="parametres-droits">
                   <span class="settings-nav__icon">${renderNavIcon("people")}</span>
-                  <span>droits par acteur</span>
+                  <span>Droits par acteur</span>
                 </button>
 
                 <button type="button" class="settings-nav__item" data-settings-target="parametres-circuits">
                   <span class="settings-nav__icon">${renderNavIcon("checklist")}</span>
-                  <span>circuits de validation</span>
+                  <span>Circuits de validation</span>
                 </button>
 
                 <button type="button" class="settings-nav__item" data-settings-target="parametres-taxonomie">
                   <span class="settings-nav__icon">${renderNavIcon("book")}</span>
-                  <span>taxonomie des sujets</span>
+                  <span>Taxonomie des sujets</span>
                 </button>
 
                 <button type="button" class="settings-nav__item" data-settings-target="parametres-criticite">
                   <span class="settings-nav__icon">${renderNavIcon("shield")}</span>
-                  <span>règles de criticité</span>
+                  <span>Règles de criticité</span>
                 </button>
 
                 <button type="button" class="settings-nav__item" data-settings-target="parametres-nomenclature">
                   <span class="settings-nav__icon">${renderNavIcon("book")}</span>
-                  <span>nomenclature documentaire</span>
+                  <span>Nomenclature documentaire</span>
                 </button>
 
                 <button type="button" class="settings-nav__item" data-settings-target="parametres-workflow-pr">
                   <span class="settings-nav__icon">${renderNavIcon("checklist")}</span>
-                  <span>workflow de PR</span>
+                  <span>Workflow de PR</span>
                 </button>
 
                 <button type="button" class="settings-nav__item" data-settings-target="parametres-cloture">
                   <span class="settings-nav__icon">${renderNavIcon("shield")}</span>
-                  <span>politique de clôture des sujets</span>
+                  <span>Politique de clôture des sujets</span>
                 </button>
 
                 <div class="settings-nav__separator"></div>
@@ -253,32 +253,32 @@ function getPageHtml(form) {
 
                 <button type="button" class="settings-nav__item" data-settings-target="parametres-jalons">
                   <span class="settings-nav__icon">${renderNavIcon("checklist")}</span>
-                  <span>jalons</span>
+                  <span>Jalons</span>
                 </button>
 
                 <button type="button" class="settings-nav__item" data-settings-target="parametres-responsabilites">
                   <span class="settings-nav__icon">${renderNavIcon("people")}</span>
-                  <span>responsabilités</span>
+                  <span>Responsabilités</span>
                 </button>
 
                 <button type="button" class="settings-nav__item" data-settings-target="parametres-champs">
                   <span class="settings-nav__icon">${renderNavIcon("checklist")}</span>
-                  <span>champs obligatoires</span>
+                  <span>Champs obligatoires</span>
                 </button>
 
                 <button type="button" class="settings-nav__item" data-settings-target="parametres-modeles">
                   <span class="settings-nav__icon">${renderNavIcon("book")}</span>
-                  <span>modèles de documents</span>
+                  <span>Modèles de documents</span>
                 </button>
 
                 <button type="button" class="settings-nav__item" data-settings-target="parametres-templates">
                   <span class="settings-nav__icon">${renderNavIcon("book")}</span>
-                  <span>templates de remarques</span>
+                  <span>Templates de remarques</span>
                 </button>
 
                 <button type="button" class="settings-nav__item" data-settings-target="parametres-diffusion">
                   <span class="settings-nav__icon">${renderNavIcon("people")}</span>
-                  <span>matrices de diffusion</span>
+                  <span>Matrices de diffusion</span>
                 </button>
               </div>
             </aside>
@@ -287,17 +287,17 @@ function getPageHtml(form) {
               ${renderSettingsBlock({
                 id: "parametres-general",
                 title: "General",
-                lead: "Configuration structurante du projet, sur un gabarit Settings proche de GitHub : navigation latérale, zone centrale resserrée et grandes marges latérales.",
+                lead: "Configuration structurante du projet.",
                 isActive: true,
                 isHero: true,
                 cards: [
                   renderSectionCard({
                     title: "Vue d’ensemble",
-                    description: "Le clic dans la navigation de gauche affiche désormais uniquement le bloc concerné. Le scroll se fait dans la zone centrale, tandis que le menu reste fixé sous le header.",
+                    description: "Description",
                     body: renderPlaceholderList([
-                      "Navigation latérale persistante.",
-                      "Affichage central ciblé par item.",
-                      "Comportement robuste et extensible pour les futurs paramètres."
+                      "Liste item 1.",
+                      "Liste item 2.",
+                      "Liste item 3."
                     ])
                   })
                 ]
