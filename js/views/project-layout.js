@@ -5,10 +5,11 @@ import { renderProjectDashboard } from "./project-dashboard.js";
 import { renderProjectIdentity } from "./project-identity.js";
 import { renderProjectHeader } from "./project-header.js";
 import { renderProjectSituationsTopBanner } from "./project-situations-runbar.js";
+import { mountProjectShellChrome } from "./project-shell-chrome.js";
 
 export function renderProjectLayout(root, projectId, tab) {
   root.innerHTML = `
-    <div class="project-shell">
+    <div class="project-shell" id="projectShell">
       ${renderProjectHeader(projectId, tab)}
       ${renderProjectSituationsTopBanner()}
       <div id="project-content" class="gh-page gh-page--2col"></div>
@@ -38,4 +39,6 @@ export function renderProjectLayout(root, projectId, tab) {
       renderProjectDashboard(content);
       break;
   }
+
+  mountProjectShellChrome({ tab });
 }
