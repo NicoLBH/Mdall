@@ -297,7 +297,6 @@ function getPageHtml(form) {
                     body: `<div class="settings-form-grid settings-form-grid--thirds">
                       ${renderInputField({ id: "projectName", label: "Nom de projet", value: form.projectName || "", placeholder: "Projet demo" })}
                     </div>`
-                    ])
                   })
                 ]
               })}
