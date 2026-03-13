@@ -1911,7 +1911,6 @@ body.route--project:not(.project-shell-compact) [data-chrome-visibility="compact
   min-height:0;
   display:flex;
   flex-direction:column;
-  border:1px solid var(--border);
   border-radius:var(--radius2);
   background:transparent;
 }
@@ -1921,6 +1920,9 @@ body.route--project:not(.project-shell-compact) [data-chrome-visibility="compact
   min-height:0;
   overflow:auto;
   padding:16px;
+  max-width: 1280px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .project-shell{display:flex;flex-direction:column;min-width:0;}
@@ -2591,6 +2593,7 @@ color:#ffff;
   width:16px;
   height:16px;
   display:block;
+  fill:#ffff;
 }
 
 .gh-split .gh-menu{
@@ -2638,6 +2641,7 @@ color:#ffff;
 
 .project-simple-page--documents{
   padding:0;
+  align-items:center;
 }
 
 .documents-toolbar{
@@ -2656,7 +2660,7 @@ color:#ffff;
 
 .documents-repo{
   border:1px solid var(--border);
-  border-radius:12px;
+  border-radius:var(--radius);
   overflow:hidden;
   background:transparent;
 }
@@ -2702,7 +2706,8 @@ color:#ffff;
 }
 
 .documents-repo__name{
-  font-weight:600;
+  font-weight:400;
+  font-size:13px;
   white-space:nowrap;
   overflow:hidden;
   text-overflow:ellipsis;
@@ -2711,7 +2716,7 @@ color:#ffff;
 .documents-repo__cell--message,
 .documents-repo__cell--date{
   color:var(--muted);
-  font-size:14px;
+  font-size:13px;
   white-space:nowrap;
   overflow:hidden;
   text-overflow:ellipsis;
@@ -2759,6 +2764,7 @@ color:#ffff;
   justify-content:center;
   margin-bottom:16px;
   color:var(--muted);
+  fill:rgb(145, 152, 161);
 }
 
 .documents-dropzone__icon svg{
@@ -2795,11 +2801,11 @@ color:#ffff;
   color:var(--muted);
   font-size:13px;
 }
-documents-commit-shell__avatar-img{
-    border-radius: 50%;
-    float: left;
-    height: 48px;
-    width: 48px;
+.documents-commit-shell__avatar-img{
+  border-radius: 50%;
+  float: left;
+  height: 48px;
+  width: 48px;
 }
 .documents-commit-card{
   border:1px solid var(--border);
@@ -2868,7 +2874,7 @@ documents-commit-shell__avatar-img{
   display:inline-flex;
   align-items:center;
   justify-content:center;
-  color:var(--muted);
+  fill:var(--muted);
   flex:0 0 auto;
 }
 
