@@ -2082,7 +2082,6 @@ color:#ffff;
 }
 
 .settings-nav__group{
-  border-right:1px solid var(--border);
   padding-right:14px;
 }
 
@@ -2326,12 +2325,6 @@ color:#ffff;
 .settings-nav--parametres{
   width:296px;
 }
-
-.settings-nav__group--project{
-  border-right:1px solid var(--border);
-  padding-right:16px;
-}
-
 .settings-nav__separator{
   height:1px;
   background:var(--border);
@@ -2473,7 +2466,6 @@ color:#ffff;
 }
 
 .settings-nav__group--project{
-  border-right:1px solid var(--border);
   padding-right:16px;
 }
 
@@ -2504,7 +2496,7 @@ color:#ffff;
 .settings-nav__item.is-active{
   background:rgba(110,118,129,.14);
   font-weight: 500;
-  font-size: 14px;
+  font-size: 13px;
   font-family: var(--font);
   color: #ffff;
 }
@@ -2516,7 +2508,7 @@ color:#ffff;
   left: -8px;
   width: 4px;
   position: absolute;
-  line-height:21px;
+  margin-top: -2px;
 }
 .settings-content--parametres{
   min-width:0;
