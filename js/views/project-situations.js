@@ -6,7 +6,11 @@ import {
   syncProjectSituationsRunbar
 } from "./project-situations-runbar.js";
 import { closeGlobalNav } from "./global-nav.js";
-import { refreshProjectShellChrome } from "./project-shell-chrome.js";
+import {
+  setProjectViewHeader,
+  registerProjectPrimaryScrollSource,
+  refreshProjectShellChrome
+} from "./project-shell-chrome.js";
 
 /* =========================================================
    Legacy DOM / archive parity helpers
@@ -2257,13 +2261,12 @@ function rerenderPanels() {
   if (searchInput) searchInput.value = store.situationsView.search || "";
 
   if (countsHost) countsHost.textContent = `${counts.situations} situations · ${counts.sujets} sujets · ${counts.avis} avis`;
+
   if (tableHost) {
     tableHost.innerHTML = renderTableHtml(filteredSituations);
 
     const mainScrollBody = tableHost.querySelector(".issues-table__body");
-    if (mainScrollBody) {
-      mainScrollBody.setAttribute("data-project-scroll-source", "primary");
-    }
+    registerProjectPrimaryScrollSource(mainScrollBody || null);
   }
 
   const details = renderDetailsHtml(null, {
@@ -2783,13 +2786,13 @@ function bindDetailsScroll(root) {
   );
 }
 
-function bindSituationsEvents(root) {
-  root.querySelector("#situationsSearch")?.addEventListener("input", (event) => {
+function bindSituationsEvents(root, headerRoot) {
+  headerRoot?.querySelector("#situationsSearch")?.addEventListener("input", (event) => {
     store.situationsView.search = String(event.target.value || "");
     rerenderPanels();
   });
 
-  root.querySelector("#displayDepth")?.addEventListener("change", (event) => {
+  headerRoot?.querySelector("#displayDepth")?.addEventListener("change", (event) => {
     store.situationsView.displayDepth = String(event.target.value || "situations").toLowerCase();
     rerenderPanels();
   });
@@ -2875,47 +2878,58 @@ function bindSituationsEvents(root) {
       return;
     }
 
-    const avisRow = event.target.closest(".js-row-avis");
-    if (avisRow) {
-      event.preventDefault();
-      selectAvis(String(avisRow.dataset.avisId || ""));
-      return;
-    }
-
     const sujetRow = event.target.closest(".js-row-sujet");
     if (sujetRow) {
       event.preventDefault();
-      selectSujet(String(sujetRow.dataset.sujetId || ""));
+      const sujetId = String(sujetRow.dataset.sujetId || "");
+      selectSujet(sujetId);
       return;
     }
 
     const situationRow = event.target.closest(".js-row-situation");
     if (situationRow) {
       event.preventDefault();
-      selectSituation(String(situationRow.dataset.situationId || ""));
+      const situationId = String(situationRow.dataset.situationId || "");
+      selectSituation(situationId);
       return;
     }
+
+    const avisRow = event.target.closest(".js-row-avis");
+    if (avisRow) {
+      event.preventDefault();
+      const avisId = String(avisRow.dataset.avisId || "");
+      selectAvis(avisId);
+    }
   });
+}
 
-  if (!root.__verdictMenuOutsideBound) {
-    root.__verdictMenuOutsideBound = true;
+function renderSituationsViewHeaderHtml() {
+  return `
+    <div class="results-bar">
+      <div class="results-bar__left">
+        <label class="gh-filter gh-filter--inline" data-chrome-visibility="always">
+          <select id="displayDepth" class="gh-input gh-input--sm">
+            <option value="situations">Situations</option>
+            <option value="sujets">Sujets</option>
+            <option value="avis">Avis</option>
+          </select>
+        </label>
 
-    document.addEventListener("click", (event) => {
-      const verdictDropdown = root.querySelector("#verdictHeadDropdown");
-      const verdictBtn = root.querySelector("#verdictHeadBtn");
-      if (!verdictDropdown || !verdictBtn) return;
+        <div class="issues-totals mono" id="situationsHeaderCounts" data-chrome-visibility="always">—</div>
+      </div>
 
-      if (
-        event.target.closest("#verdictHeadBtn") ||
-        event.target.closest("#verdictHeadDropdown")
-      ) {
-        return;
-      }
+      <div class="results-bar__right">
+        <label class="gh-filter gh-filter--inline" data-chrome-visibility="always">
+          <input id="situationsSearch" class="gh-input gh-input--sm gh-input--search" type="text" placeholder="topic / EC8 / mot-clé…" />
+          <span class="icon-search">
+            <svg aria-hidden="true" focusable="false" class="octicon octicon-search" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align:text-bottom"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z"></path></svg>
+          </span>
+        </label>
 
-      verdictDropdown.classList.remove("gh-menu--open");
-      verdictBtn.setAttribute("aria-expanded", "false");
-    });
-  }
+        ${renderProjectSituationsRunbar()}
+      </div>
+    </div>
+  `;
 }
 
 /* =========================================================
@@ -2927,6 +2941,15 @@ export function renderProjectSituations(root) {
   ensureViewUiState();
   ensureDrilldownDom();
 
+  root.className = "project-shell__content gh-page gh-page--2col";
+
+  setProjectViewHeader({
+    contextLabel: "Situations",
+    variant: "situations",
+    toolbarHtml: renderSituationsViewHeaderHtml()
+  });
+
+  const headerRoot = document.getElementById("projectViewHeaderHost");
   const data = store.situationsView.data || [];
   const firstSituationId = data[0]?.id || null;
 
@@ -2937,37 +2960,8 @@ export function renderProjectSituations(root) {
     store.situationsView.expandedSituations.add(firstSituationId);
   }
 
-    root.innerHTML = `
-        <section class="gh-panel gh-panel--results" aria-label="Results">
-      <div class="gh-panel__head gh-panel__head--tight project-view-head project-view-head--situations js-project-view-head">
-        <div class="project-view-head__context">
-          <div class="project-view-head__tab mono js-project-view-tab-label">Situations</div>
-        </div>
-
-        <div class="results-bar">
-          <div class="results-bar__left">
-            <label class="gh-filter gh-filter--inline">
-              <select id="displayDepth" class="gh-input gh-input--sm">
-                <option value="situations">Situations</option>
-                <option value="sujets">Sujets</option>
-                <option value="avis">Avis</option>
-              </select>
-            </label>
-            <div class="issues-totals mono" id="situationsHeaderCounts">—</div>
-          </div>
-
-          <div class="results-bar__right">
-            <label class="gh-filter gh-filter--inline">
-              <input id="situationsSearch" class="gh-input gh-input--sm gh-input--search" type="text" placeholder="topic / EC8 / mot-clé…" />
-              <span class="icon-search">
-                <svg aria-hidden="true" focusable="false" class="octicon octicon-search" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align:text-bottom"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z"></path></svg>
-              </span>
-            </label>
-            ${renderProjectSituationsRunbar()}
-          </div>
-        </div>
-      </div>
-
+  root.innerHTML = `
+    <section class="gh-panel gh-panel--results" aria-label="Results">
       <div id="situationsTableHost"></div>
     </section>
 
@@ -2980,12 +2974,13 @@ export function renderProjectSituations(root) {
   `;
 
   rerenderPanels();
-  bindSituationsEvents(root);
-  bindProjectSituationsRunbar(root);
+  bindSituationsEvents(root, headerRoot);
+  bindProjectSituationsRunbar(headerRoot || document);
   bindModalEvents();
   bindDetailsScroll(root);
   initRightSplitter(root);
   updateDetailsModal();
+
   syncProjectSituationsRunbar({
     run_id: store.ui?.runId || "",
     status: store.ui?.systemStatus?.state || "idle",
