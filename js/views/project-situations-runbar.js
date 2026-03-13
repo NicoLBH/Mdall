@@ -96,7 +96,7 @@ export function syncProjectSituationsRunbar(run = {}) {
   if (runBtn) {
     if ("disabled" in runBtn) runBtn.disabled = isBusy;
     runBtn.classList.toggle("is-disabled", isBusy);
-    runBtn.textContent = isBusy ? "Analysis running…" : "Run analysis";
+    runBtn.textContent = isBusy ? "Analyse en cours…" : "Analyser";
   }
 
   if (menuBtn && "disabled" in menuBtn) {
