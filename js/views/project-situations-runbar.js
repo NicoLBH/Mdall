@@ -8,7 +8,7 @@ let runbarState = {
 
 export function renderProjectSituationsRunbar() {
   return `
-    <div class="project-runbar">
+    <div class="project-runbar" data-chrome-visibility="always">
       <div class="project-runbar__left">
         <div class="gh-split-btn" id="runSplitBtn">
           <span data-component="icon" class="gh-btn gh-btn--primary gh-btn-icon">
@@ -109,7 +109,6 @@ export function syncProjectSituationsRunbar(run = {}) {
     topBanner.classList.add("hidden");
     topBanner.innerHTML = "";
     topBanner.classList.remove("gh-banner--error", "gh-banner--info");
-    document.body.classList.remove("banner-visible");
     return;
   }
 
@@ -120,7 +119,6 @@ export function syncProjectSituationsRunbar(run = {}) {
   topBanner.classList.remove("hidden");
   topBanner.classList.toggle("gh-banner--error", isError);
   topBanner.classList.toggle("gh-banner--info", !isError);
-  document.body.classList.add("banner-visible");
 
   topBanner.innerHTML = `
     <button class="gh-alert__close" id="runAlertClose" type="button" aria-label="Fermer">✕</button>
@@ -135,7 +133,6 @@ export function syncProjectSituationsRunbar(run = {}) {
       topBanner.classList.add("hidden");
       topBanner.innerHTML = "";
       topBanner.classList.remove("gh-banner--error", "gh-banner--info");
-      document.body.classList.remove("banner-visible");
     };
   }
 }
