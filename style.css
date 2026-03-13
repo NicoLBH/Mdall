@@ -87,6 +87,25 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);ove
 .gh-brand__sep{color:var(--muted);}
 .gh-brand__repo{color:var(--muted);} 
 .gh-brand__name, .gh-brand__sep, .gh-brand__repo{cursor:pointer;}
+.gh-brand__compact-tab{
+  display:none;
+  align-items:center;
+  gap:10px;
+  min-width:0;
+  color:var(--muted);
+}
+.gh-brand__compact-tab.is-empty{
+  display:none !important;
+}
+.gh-brand__compact-tab-label{
+  color:var(--muted);
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+body.route--project.project-shell-compact .gh-brand__compact-tab{
+  display:inline-flex;
+}
 
 /* system status */
 .sys-status{
@@ -298,12 +317,14 @@ body:not(.sidebar-collapsed) .sidebar-fab{display:none;}
 
 /* Details fullscreen modal */
 .modal{
-  position:fixed;inset:0;
+  position:fixed;
+  inset:0;
   background:rgba(0,0,0,.55);
   z-index:var(--z-modal);
   display:flex;
 }
 .modal.hidden{display:none;}
+
 .modal__inner{
   width:100%;
   margin:0;
@@ -311,24 +332,91 @@ body:not(.sidebar-collapsed) .sidebar-fab{display:none;}
   flex-direction:column;
   background:var(--bg);
 }
+
 .modal__head{
-  display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
-  padding:12px 16px;
+  padding:12px 24px;
   border-bottom:1px solid var(--border);
   background:var(--headbg);
 }
-.modal__head-left{display:flex;flex-direction:column;gap:2px;min-width:0;margin-right: auto;margin-left: auto;padding-right: 24px;padding-left: 24px;width: 100%;max-width: 1280px;}
-.modal__title{font-size:16px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.modal__head-right{display:flex;align-items:center;gap:10px;}
+
 .modal__body{
   padding:0;
   overflow:auto;
-  height:calc(100vh - 52px); /* approx header + topbar */
+  height:calc(100vh - 52px);
   overflow-y:auto;
   overflow-x:hidden;
   width:100%;
   max-width:none;
   margin:0;
+}
+.overlay-chrome{
+  display:flex;
+  flex-direction:column;
+  min-height:0;
+}
+
+.overlay-chrome__head{
+  flex:0 0 auto;
+}
+
+.overlay-chrome__bar{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+  width:100%;
+}
+
+.overlay-chrome__context{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  min-width:0;
+  flex:1 1 auto;
+}
+
+.overlay-chrome__eyebrow{
+  font-size:11px;
+  color:var(--muted);
+  letter-spacing:.08em;
+}
+
+.overlay-chrome__titlewrap{
+  min-width:0;
+}
+
+.overlay-chrome__actions{
+  display:flex;
+  align-items:flex-start;
+  gap:10px;
+  flex:0 0 auto;
+}
+
+.overlay-chrome__body{
+  flex:1 1 auto;
+  min-height:0;
+  overflow:auto;
+}
+
+#detailsModal .overlay-chrome__bar{
+  max-width:1280px;
+  margin:0 auto;
+}
+
+#drilldownPanel .overlay-chrome__bar{
+  max-width:none;
+}
+
+.overlay-chrome--compact .overlay-chrome__eyebrow{
+  display:none;
+}
+
+.overlay-chrome--compact .overlay-chrome__head{
+  background:rgb(13, 17, 23) !important;
+}
+
+.overlay-chrome--compact .overlay-chrome__bar{
+  align-items:center;
 }
 
 /* Keep modal content centered while the scrollbar stays at the window edge */
@@ -474,7 +562,9 @@ body.modal-open {
    JS toggles these classes on .gh-panel__head--tight and .modal__head.
    You can override/extend these rules as needed. */
 .gh-panel__head--tight.details-head--compact,
-.modal__head.details-head--compact{
+.modal__head.details-head--compact,
+.drilldown__head.details-head--compact,
+.overlay-chrome__head.details-head--compact{
   background: rgb(13, 17, 23) !important;
 }
 
@@ -1157,12 +1247,15 @@ body.drilldown-open .drilldown__inner {
   transform: translateX(0);
 }
 
-.drilldown__head {
-  flex: 0 0 auto;
+.drilldown__head{
+  flex:0 0 auto;
+  padding:12px 16px;
+  border-bottom:1px solid var(--border);
+  background:var(--headbg);
 }
-.drilldown__body {
-  flex: 1 1 auto;
-  overflow: auto;
+.drilldown__body{
+  flex:1 1 auto;
+  overflow:auto;
 }
 
 /* subissues-counts--problems icon */
@@ -1637,7 +1730,6 @@ body.route--project.project-shell-compact{
   -webkit-font-smoothing:antialiased;
   isolation:isolate;
 }
-
 .project-shell{
   height:100%;
   min-height:0;
@@ -1646,7 +1738,6 @@ body.route--project.project-shell-compact{
   flex-direction:column;
   background:var(--bg);
 }
-
 .project-context-header{
   flex:0 0 auto;
   display:flex;
@@ -1654,7 +1745,6 @@ body.route--project.project-shell-compact{
   gap:0;
   margin:0;
 }
-
 .project-shell__body{
   flex:1 1 auto;
   min-height:0;
@@ -1662,17 +1752,21 @@ body.route--project.project-shell-compact{
   flex-direction:column;
   overflow:hidden;
 }
-
 .project-view-header-host{
   flex:0 0 auto;
 }
-
 .project-shell__content{
   flex:1 1 auto;
   min-height:0;
   overflow:hidden;
 }
-
+body.route--project.project-shell-compact .project-view-header__bar{
+  display:none;
+}
+body.route--project.project-shell-compact .project-view-header__toolbar{
+  padding-top:10px;
+  padding-bottom:10px;
+}
 body.route--project.project-shell-compact .project-tabs,
 .project-tabs.project-tabs--hidden{
   display:none;
