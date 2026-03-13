@@ -28,33 +28,67 @@ function setCompactState({ isCompact, tab }) {
   });
 }
 
+function getPrimaryScrollSource() {
+  return document.querySelector('[data-project-scroll-source="primary"]');
+}
+
+function getCurrentScrollTop() {
+  const primary = getPrimaryScrollSource();
+  if (primary) return primary.scrollTop || 0;
+
+  const app = document.getElementById("app");
+  return app?.scrollTop || 0;
+}
+
+export function refreshProjectShellChrome(tab) {
+  setCompactState({
+    isCompact: getCurrentScrollTop() > 12,
+    tab
+  });
+}
+
 export function mountProjectShellChrome({ tab }) {
   cleanupProjectShellChrome?.();
   cleanupProjectShellChrome = null;
 
   const app = document.getElementById("app");
+  const projectContent = document.getElementById("project-content");
   if (!app) return;
 
-  const onScroll = () => {
-    const isCompact = app.scrollTop > 12;
-    setCompactState({ isCompact, tab });
+  const sync = () => {
+    setCompactState({
+      isCompact: getCurrentScrollTop() > 12,
+      tab
+    });
+  };
+
+  const onAppScroll = () => {
+    if (!getPrimaryScrollSource()) sync();
+  };
+
+  const onCapturedScroll = (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+
+    const source = target.closest?.('[data-project-scroll-source="primary"]');
+    if (!source) return;
+
+    sync();
   };
 
   const onResize = () => {
-    const isCompact = app.scrollTop > 12;
-    setCompactState({ isCompact, tab });
+    sync();
   };
 
-  app.addEventListener("scroll", onScroll, { passive: true });
+  app.addEventListener("scroll", onAppScroll, { passive: true });
+  projectContent?.addEventListener("scroll", onCapturedScroll, { passive: true, capture: true });
   window.addEventListener("resize", onResize);
 
-  setCompactState({
-    isCompact: app.scrollTop > 12,
-    tab
-  });
+  sync();
 
   cleanupProjectShellChrome = () => {
-    app.removeEventListener("scroll", onScroll);
+    app.removeEventListener("scroll", onAppScroll);
+    projectContent?.removeEventListener("scroll", onCapturedScroll, { capture: true });
     window.removeEventListener("resize", onResize);
   };
 }
