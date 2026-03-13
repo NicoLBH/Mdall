@@ -1547,13 +1547,16 @@ body.drilldown-open .drilldown__inner {
 }
 .global-nav{
   position:absolute;
+  top:0;
+  left:0;
+  bottom:0;
+  width:320px;
   z-index:var(--z-global-nav);
   background-color:var(--headbg);
-  width:320px;
-  height:100%;
   border-top-right-radius:12px;
   border-bottom-right-radius:12px;
   border-right:solid 1px var(--border);
+  pointer-events:auto;
 }
 .global-nav__panel{
   flex-direction: column;
@@ -1666,8 +1669,13 @@ body.drilldown-open .drilldown__inner {
 }
 
 #globalNavHost{
-  position:relative;
+  position:fixed;
+  top:64px;
+  left:0;
+  bottom:0;
+  width:320px;
   z-index:var(--z-global-nav);
+  pointer-events:none;
 }
 
 .global-nav__panel a.is-active{
