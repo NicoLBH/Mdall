@@ -2724,7 +2724,7 @@ color:#ffff;
   display:inline-flex;
   align-items:center;
   justify-content:center;
-  color:rgb(47, 129, 247);
+  color:var(--muted);
 }
 
 .documents-upload-layout{
