@@ -31,6 +31,9 @@
   --control-xlarge-paddingBlock: .875rem;
   --base-size-48: 3rem;
 
+  --btn-h:30px;
+  --btn-bg:rgb(33,40,48);
+
   --z-base: 1;
   --z-header: 100;
   --z-top-banner: 110;
@@ -102,6 +105,7 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);ove
   white-space:nowrap;
   overflow:hidden;
   text-overflow:ellipsis;
+  font-size:13px;
 }
 body.route--project.project-shell-compact .gh-brand__compact-tab{
   display:inline-flex;
@@ -144,16 +148,10 @@ body.route--project.project-shell-compact .gh-brand__compact-tab{
 }
 .icon-btn:hover{border-color:#6e7681;}
 
-.gh-input{
-  width:100%;
-  padding:7px 10px;border-radius:var(--radius);
-  border:1px solid var(--border);
-  background:var(--bg);color:var(--text);
-  outline:none;font-size:13px;
-}
+.gh-input{width:100%;padding:7px 10px;border-radius:var(--radius);border:1px solid var(--border);background:var(--bg);color:var(--text);outline:none;font-size:13px;}
 .gh-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(88,166,255,.15);}
-.gh-input--sm{padding:5px 8px;font-size:12px;border-top-right-radius: 0px;border-bottom-right-radius: 0px;border:none;border-right:solid 1px var(--border);}
-
+.gh-input--sm{padding:5px 8px;font-size:12px;height:100%;background:var(--btn-bg);color:#ffff}
+.gh-input--search{border-top-right-radius: 0px;border-bottom-right-radius: 0px;border:none;border-right:solid 1px var(--border);background:var(--bg);}
 .gh-field{display:flex;flex-direction:column;gap:6px;}
 .gh-field__label{font-size:12px;color:var(--muted);margin-top:8px;}
 .gh-field__help{font-size:11px;color:var(--muted);}
@@ -811,6 +809,7 @@ body.modal-open {
   border: solid 1px var(--border);
   background: var(--headbgtight);
   border-radius: var(--radius);
+  height:var(--btn-h);
 }
 .gh-filter--inline span{margin:0;padding: 2px 6px 2px 2px;}
 
@@ -1945,7 +1944,7 @@ body.route--project.project-shell-compact .project-view-head .results-bar{paddin
 position:relative;
 display:flex;
 align-items: center;
-height: 30px;
+height: var(--btn-h);
 border-radius: var(--radius);
 border: solid 1px rgba(0, 0, 0, .2);
 background: rgb(35, 134, 54);
