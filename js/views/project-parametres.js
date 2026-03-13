@@ -328,8 +328,8 @@ function getPageHtml(form) {
                     description: "Qualification réglementaire et niveau d’importance du projet.",
                     badge: "LIVE",
                     body: `<div class="settings-form-grid settings-form-grid--thirds">
-                      ${renderInputField({ id: "riskCategory", label: "Catégorie de risque", value: form.riskCategory || form.risk || "Normal", options: ["Risque Normal", "Risque Spécial"]  })}
-                      ${renderInputField({ id: "importanceCategory", label: "catégorie d'importance", value: form.importanceCategory || form.importance || "II", options: ["Catégorie d'importance I", "Catégorie d'importance II", "Catégorie d'importance III", "Catégorie d'importance IV"]  })}
+                      ${renderSelectField({ id: "riskCategory", label: "Catégorie de risque", value: form.riskCategory || form.risk || "Normal", options: ["Risque Normal", "Risque Spécial"]  })}
+                      ${renderSelectField({ id: "importanceCategory", label: "catégorie d'importance", value: form.importanceCategory || form.importance || "II", options: ["Catégorie d'importance I", "Catégorie d'importance II", "Catégorie d'importance III", "Catégorie d'importance IV"]  })}
                     </div>`
                   })
                 ]
@@ -425,7 +425,7 @@ function getPageHtml(form) {
                     description: "Paramètres territoriaux imposés par la réglementation applicable.",
                     badge: "LIVE",
                     body: `<div class="settings-form-grid settings-form-grid--thirds">
-                      ${renderSelectField({ id: "zoneSismique", label: "zone sismique", value: form.zoneSismique || "3", options: ["1", "2", "3", "4", "5"]  })}
+                      ${renderSelectField({ id: "zoneSismique", label: "Zone sismique", value: form.zoneSismique || "3", options: ["1", "2", "3", "4", "5"]  })}
                       ${renderSelectField({ id: "liquefactionText", label: "Liquéfaction", value: form.liquefactionText || "Non défini à ce stade", options: ["Sol non liquéfiable", "Sol liquéfiable", "Non défini à ce stade"] })}
                       ${renderSelectField({ id: "soilClass", label: "Classe de sol", value: form.soilClass || "A", options: ["A", "B", "C", "D", "E"] })}
                     </div>`
