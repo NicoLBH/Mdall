@@ -2166,6 +2166,8 @@ color:#ffff;
   margin:0 0 16px;
   max-width:980px;
   line-height:1.6;
+  font-size:13px;
+  color:#ffff;
 }
 
 .settings-callout{
@@ -2191,16 +2193,18 @@ color:#ffff;
 }
 
 .settings-card__head h4{
-  font-size:16px;
+  font-size:13px;
   line-height:1.4;
   font-weight:600;
   margin-bottom:6px;
+  color:#ffff;
 }
 
 .settings-card__head p{
   margin:0;
   line-height:1.5;
   max-width:880px;
+  font-size:13px;
 }
 
 .settings-badge{
@@ -2529,7 +2533,7 @@ color:#ffff;
 
 .settings-block__head h3{
   margin:0 0 8px;
-  font-size:32px;
+  font-size:22px;
   line-height:1.2;
   font-weight:500;
 }
