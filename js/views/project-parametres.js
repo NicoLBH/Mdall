@@ -287,17 +287,16 @@ function getPageHtml(form) {
               ${renderSettingsBlock({
                 id: "parametres-general",
                 title: "General",
-                lead: "Configuration structurante du projet.",
+                lead: "",
                 isActive: true,
-                isHero: true,
+                isHero: false,
                 cards: [
                   renderSectionCard({
-                    title: "Vue d’ensemble",
+                    title: "Nom du projet",
                     description: "Description",
-                    body: renderPlaceholderList([
-                      "Liste item 1.",
-                      "Liste item 2.",
-                      "Liste item 3."
+                    body: `<div class="settings-form-grid settings-form-grid--thirds">
+                      ${renderInputField({ id: "projectName", label: "Nom de projet", value: form.projectName || "", placeholder: "Projet demo" })}
+                    </div>`
                     ])
                   })
                 ]
@@ -306,10 +305,10 @@ function getPageHtml(form) {
               ${renderSettingsBlock({
                 id: "parametres-localisation",
                 title: "Données de base projet",
-                lead: "Localisation administrative et d’usage du projet.",
+                lead: "",
                 cards: [
                   renderSectionCard({
-                    title: "localisation",
+                    title: "Localisation",
                     description: "Localisation administrative et d’usage du projet.",
                     badge: "LIVE",
                     body: `<div class="settings-form-grid settings-form-grid--thirds">
@@ -326,11 +325,12 @@ function getPageHtml(form) {
                 lead: "Qualification réglementaire et niveau d’importance du projet.",
                 cards: [
                   renderSectionCard({
-                    title: "type d’ouvrage",
+                    title: "Type d’ouvrage",
                     description: "Qualification réglementaire et niveau d’importance du projet.",
                     badge: "LIVE",
                     body: `<div class="settings-form-grid settings-form-grid--thirds">
-                      ${renderInputField({ id: "importanceCategory", label: "catégorie d'importance", value: form.importanceCategory || form.importance || "II", placeholder: "Ex. II" })}
+                      ${renderInputField({ id: "riskCategory", label: "Catégorie de risque", value: form.riskCategory || form.risk || "Normal", options: ["Risque Normal", "Risque Spécial"]  })}
+                      ${renderInputField({ id: "importanceCategory", label: "catégorie d'importance", value: form.importanceCategory || form.importance || "II", options: ["Catégorie d'importance I", "Catégorie d'importance II", "Catégorie d'importance III", "Catégorie d'importance IV"]  })}
                     </div>`
                   })
                 ]
@@ -342,8 +342,8 @@ function getPageHtml(form) {
                 lead: "Positionnement du projet dans son cycle de production.",
                 cards: [
                   renderSectionCard({
-                    title: "phase",
-                    description: "Positionnement du projet dans son cycle de production.",
+                    title: "Phase",
+                    description: "",
                     body: `<div class="settings-form-grid settings-form-grid--thirds">
                       ${renderSelectField({ id: "projectPhase", label: "Phase", value: form.phase || "APS", options: ["ESQ", "APS", "APD", "PRO", "DCE", "EXE", "DET", "AOR"] })}
                     </div>`
@@ -354,7 +354,7 @@ function getPageHtml(form) {
               ${renderSettingsBlock({
                 id: "parametres-collaborateurs",
                 title: "Données de base projet",
-                lead: "Acteurs clés, profils et rôles mobilisés sur le projet.",
+                lead: "",
                 cards: [
                   renderSectionCard({
                     title: "Collaborateurs",
@@ -374,7 +374,7 @@ function getPageHtml(form) {
                 lead: "Structuration technique et répartition par macro-lots ou spécialités.",
                 cards: [
                   renderSectionCard({
-                    title: "lots",
+                    title: "Lots",
                     description: "Structuration technique et répartition par macro-lots ou spécialités.",
                     body: renderPlaceholderList([
                       "Structure, façade, CVC, CFO/CFA, sécurité incendie, accessibilité, thermique, acoustique.",
@@ -390,7 +390,7 @@ function getPageHtml(form) {
                 lead: "Découpage spatial servant à l’adressage des documents, sujets et avis.",
                 cards: [
                   renderSectionCard({
-                    title: "zones / bâtiments / niveaux",
+                    title: "Zones / bâtiments / niveaux",
                     description: "Découpage spatial servant à l’adressage des documents, sujets et avis.",
                     body: renderPlaceholderList([
                       "Bâtiments, ailes, blocs, zones fonctionnelles, niveaux et locaux.",
@@ -406,7 +406,7 @@ function getPageHtml(form) {
                 lead: "Références climatiques utilisées par les volets thermique, enveloppe et exploitation.",
                 cards: [
                   renderSectionCard({
-                    title: "zones climatiques",
+                    title: "Zones climatiques",
                     description: "Références climatiques utilisées par les volets thermique, enveloppe et exploitation.",
                     body: renderPlaceholderList([
                       "Zone climatique hiver / été.",
@@ -422,7 +422,7 @@ function getPageHtml(form) {
                 lead: "Paramètres territoriaux imposés par la réglementation applicable.",
                 cards: [
                   renderSectionCard({
-                    title: "zones réglementaires",
+                    title: "Zones réglementaires",
                     description: "Paramètres territoriaux imposés par la réglementation applicable.",
                     badge: "LIVE",
                     body: `<div class="settings-form-grid settings-form-grid--thirds">
@@ -440,7 +440,7 @@ function getPageHtml(form) {
                 lead: "Corpus incendie principal retenu pour le projet.",
                 cards: [
                   renderSectionCard({
-                    title: "règlement incendie applicable",
+                    title: "Règlement incendie applicable",
                     description: "Corpus incendie principal retenu pour le projet.",
                     body: renderPlaceholderList([
                       "ERP / IGH / habitation / bureaux / code du travail / ICPE selon le cas.",
@@ -456,7 +456,7 @@ function getPageHtml(form) {
                 lead: "Base normative accessibilité PMR et dispositions complémentaires retenues.",
                 cards: [
                   renderSectionCard({
-                    title: "règlement accessibilité",
+                    title: "Règlement accessibilité",
                     description: "Base normative accessibilité PMR et dispositions complémentaires retenues.",
                     body: renderPlaceholderList([
                       "Exigences réglementaires, cas particuliers, dérogations et pièces justificatives attendues."
@@ -471,7 +471,7 @@ function getPageHtml(form) {
                 lead: "Cadre réglementaire et hypothèses d’entrée du lot parasismique.",
                 cards: [
                   renderSectionCard({
-                    title: "règlements parasismiques",
+                    title: "Règlements parasismiques",
                     description: "Cadre réglementaire et hypothèses d’entrée du lot parasismique.",
                     badge: "LIVE",
                     body: `<div class="settings-form-grid settings-form-grid--thirds">
@@ -487,7 +487,7 @@ function getPageHtml(form) {
                 lead: "Références thermiques et énergétiques applicables.",
                 cards: [
                   renderSectionCard({
-                    title: "référentiels thermiques",
+                    title: "Référentiels thermiques",
                     description: "Références thermiques et énergétiques applicables.",
                     body: renderPlaceholderList([
                       "RE2020, RT existant, labels et exigences contractuelles complémentaires."
@@ -502,7 +502,7 @@ function getPageHtml(form) {
                 lead: "Normes, objectifs contractuels et seuils d’acceptation acoustiques.",
                 cards: [
                   renderSectionCard({
-                    title: "référentiels acoustique",
+                    title: "Référentiels acoustique",
                     description: "Normes, objectifs contractuels et seuils d’acceptation acoustiques.",
                     body: renderPlaceholderList([
                       "NRA, programmes spécifiques, cahiers des charges de performance et modalités de contrôle."
@@ -532,7 +532,7 @@ function getPageHtml(form) {
                 lead: "Exigences internes et doctrines projet non strictement réglementaires.",
                 cards: [
                   renderSectionCard({
-                    title: "doctrines particulières du maître d’ouvrage",
+                    title: "Doctrines particulières du maître d’ouvrage",
                     description: "Exigences internes et doctrines projet non strictement réglementaires.",
                     body: renderPlaceholderList([
                       "Standards internes, listes rouges, bibliothèques de détails, prescriptions d’exploitation et d’entretien."
@@ -546,7 +546,7 @@ function getPageHtml(form) {
                 title: "Gouvernance",
                 lead: "Garde-fous organisationnels qui encadrent la production, la revue, la qualification et la clôture.",
                 cards: [
-                  renderSectionCard({ title: "droits par acteur", body: renderPlaceholderList(["Droits d’ouverture, commentaire, validation, rejet, diffusion et clôture par rôle."]) })
+                  renderSectionCard({ title: "Droits par acteur", body: renderPlaceholderList(["Droits d’ouverture, commentaire, validation, rejet, diffusion et clôture par rôle."]) })
                 ]
               })}
 
@@ -555,7 +555,7 @@ function getPageHtml(form) {
                 title: "Gouvernance",
                 lead: "Règles d’approbation et d’escalade du projet.",
                 cards: [
-                  renderSectionCard({ title: "circuits de validation", body: renderPlaceholderList(["Règles d’approbation, escalade, quorum et cas bloquants selon la nature du sujet."]) })
+                  renderSectionCard({ title: "Circuits de validation", body: renderPlaceholderList(["Règles d’approbation, escalade, quorum et cas bloquants selon la nature du sujet."]) })
                 ]
               })}
 
@@ -564,7 +564,7 @@ function getPageHtml(form) {
                 title: "Gouvernance",
                 lead: "Structuration de la classification métier.",
                 cards: [
-                  renderSectionCard({ title: "taxonomie des sujets", body: renderPlaceholderList(["Arborescence de thèmes, sous-thèmes, disciplines et codes de classification réutilisés partout."]) })
+                  renderSectionCard({ title: "Taxonomie des sujets", body: renderPlaceholderList(["Arborescence de thèmes, sous-thèmes, disciplines et codes de classification réutilisés partout."]) })
                 ]
               })}
 
@@ -573,7 +573,7 @@ function getPageHtml(form) {
                 title: "Gouvernance",
                 lead: "Critères de sévérité, impact et urgence.",
                 cards: [
-                  renderSectionCard({ title: "règles de criticité", body: renderPlaceholderList(["Critères de sévérité, probabilité, impact, urgence et seuils d’alerte."]) })
+                  renderSectionCard({ title: "Règles de criticité", body: renderPlaceholderList(["Critères de sévérité, probabilité, impact, urgence et seuils d’alerte."]) })
                 ]
               })}
 
@@ -582,7 +582,7 @@ function getPageHtml(form) {
                 title: "Gouvernance",
                 lead: "Convention de nommage et d’identification documentaire.",
                 cards: [
-                  renderSectionCard({ title: "nomenclature documentaire", body: renderPlaceholderList(["Convention de nommage, identifiants, versions, lots, zones et statuts documentaires."]) })
+                  renderSectionCard({ title: "Nomenclature documentaire", body: renderPlaceholderList(["Convention de nommage, identifiants, versions, lots, zones et statuts documentaires."]) })
                 ]
               })}
 
@@ -591,7 +591,7 @@ function getPageHtml(form) {
                 title: "Gouvernance",
                 lead: "Cadre de traitement des propositions.",
                 cards: [
-                  renderSectionCard({ title: "workflow de PR", body: renderPlaceholderList(["Règles d’ouverture, revue, approbation, intégration et traçabilité des propositions."]) })
+                  renderSectionCard({ title: "Workflow de PR", body: renderPlaceholderList(["Règles d’ouverture, revue, approbation, intégration et traçabilité des propositions."]) })
                 ]
               })}
 
@@ -600,7 +600,7 @@ function getPageHtml(form) {
                 title: "Gouvernance",
                 lead: "Règles de fermeture et de réouverture.",
                 cards: [
-                  renderSectionCard({ title: "politique de clôture des sujets", body: renderPlaceholderList(["Preuves minimales, validations attendues et critères de fermeture / réouverture."]) })
+                  renderSectionCard({ title: "Politique de clôture des sujets", body: renderPlaceholderList(["Preuves minimales, validations attendues et critères de fermeture / réouverture."]) })
                 ]
               })}
 
@@ -609,7 +609,7 @@ function getPageHtml(form) {
                 title: "Paramètres opérationnels",
                 lead: "Échéances et points de passage du projet.",
                 cards: [
-                  renderSectionCard({ title: "jalons", body: renderPlaceholderList(["Jalons de revue, échéances, fenêtres de diffusion et points de contrôle."]) })
+                  renderSectionCard({ title: "Jalons", body: renderPlaceholderList(["Jalons de revue, échéances, fenêtres de diffusion et points de contrôle."]) })
                 ]
               })}
 
@@ -618,7 +618,7 @@ function getPageHtml(form) {
                 title: "Paramètres opérationnels",
                 lead: "Répartition des rôles d’exécution.",
                 cards: [
-                  renderSectionCard({ title: "responsabilités", body: renderPlaceholderList(["Répartition RACI ou équivalent par type d’action, lot et phase."]) })
+                  renderSectionCard({ title: "Responsabilités", body: renderPlaceholderList(["Répartition RACI ou équivalent par type d’action, lot et phase."]) })
                 ]
               })}
 
@@ -627,7 +627,7 @@ function getPageHtml(form) {
                 title: "Paramètres opérationnels",
                 lead: "Informations minimales imposées selon les objets créés.",
                 cards: [
-                  renderSectionCard({ title: "champs obligatoires", body: renderPlaceholderList(["Données minimales exigées selon l’objet créé : sujet, avis, document, proposition, diffusion."]) })
+                  renderSectionCard({ title: "Champs obligatoires", body: renderPlaceholderList(["Données minimales exigées selon l’objet créé : sujet, avis, document, proposition, diffusion."]) })
                 ]
               })}
 
@@ -636,7 +636,7 @@ function getPageHtml(form) {
                 title: "Paramètres opérationnels",
                 lead: "Gabarits de livrables et supports projet.",
                 cards: [
-                  renderSectionCard({ title: "modèles de documents", body: renderPlaceholderList(["Gabarits de fiches, bordereaux, rapports, notices et documents de synthèse."]) })
+                  renderSectionCard({ title: "Modèles de documents", body: renderPlaceholderList(["Gabarits de fiches, bordereaux, rapports, notices et documents de synthèse."]) })
                 ]
               })}
 
@@ -645,7 +645,7 @@ function getPageHtml(form) {
                 title: "Paramètres opérationnels",
                 lead: "Bibliothèque de formulations réutilisables.",
                 cards: [
-                  renderSectionCard({ title: "templates de remarques", body: renderPlaceholderList(["Bibliothèque de formulations normalisées par discipline et niveau de criticité."]) })
+                  renderSectionCard({ title: "Templates de remarques", body: renderPlaceholderList(["Bibliothèque de formulations normalisées par discipline et niveau de criticité."]) })
                 ]
               })}
 
@@ -654,7 +654,7 @@ function getPageHtml(form) {
                 title: "Paramètres opérationnels",
                 lead: "Règles de diffusion selon le contexte et les destinataires.",
                 cards: [
-                  renderSectionCard({ title: "matrices de diffusion", body: renderPlaceholderList(["Destinataires, visas, pièces jointes et conditions de diffusion selon le contexte."]) })
+                  renderSectionCard({ title: "Matrices de diffusion", body: renderPlaceholderList(["Destinataires, visas, pièces jointes et conditions de diffusion selon le contexte."]) })
                 ]
               })}
             </div>
