@@ -6,6 +6,7 @@ import {
   syncProjectSituationsRunbar
 } from "./project-situations-runbar.js";
 import { closeGlobalNav } from "./global-nav.js";
+import { refreshProjectShellChrome } from "./project-shell-chrome.js";
 
 /* =========================================================
    Legacy DOM / archive parity helpers
@@ -2224,6 +2225,7 @@ function updateDetailsModal() {
 
   wireDetailsInteractive(body);
   bindDetailsScroll(document);
+  body.__syncCondensedTitle?.();
 }
 
 function openDetailsModal() {
@@ -2255,7 +2257,14 @@ function rerenderPanels() {
   if (searchInput) searchInput.value = store.situationsView.search || "";
 
   if (countsHost) countsHost.textContent = `${counts.situations} situations · ${counts.sujets} sujets · ${counts.avis} avis`;
-  if (tableHost) tableHost.innerHTML = renderTableHtml(filteredSituations);
+  if (tableHost) {
+    tableHost.innerHTML = renderTableHtml(filteredSituations);
+
+    const mainScrollBody = tableHost.querySelector(".issues-table__body");
+    if (mainScrollBody) {
+      mainScrollBody.setAttribute("data-project-scroll-source", "primary");
+    }
+  }
 
   const details = renderDetailsHtml(null, {
     subissuesOptions: {
@@ -2271,6 +2280,7 @@ function rerenderPanels() {
   wireDetailsInteractive(detailsHost);
   updateDetailsModal();
   if (store.situationsView.drilldown?.isOpen) updateDrilldownPanel();
+  refreshProjectShellChrome("situations");
 }
 
 function selectSituation(situationId) {
@@ -2725,21 +2735,30 @@ function openDrilldownFromAvis(avisId) {
 
 function bindCondensedTitleScroll(scrollEl, classHost, key) {
   if (!scrollEl || !classHost) return;
+
   const boundKey = key || "default";
   const attr = `scrollBound${boundKey.charAt(0).toUpperCase()}${boundKey.slice(1)}`;
-  if (scrollEl.dataset[attr] === "1") return;
-  scrollEl.dataset[attr] = "1";
 
   const syncCompactState = () => {
     const scrolled = (scrollEl.scrollTop || 0) > 8;
     classHost.classList.toggle("details-scrolled", scrolled);
+
     classHost.querySelectorAll?.(".gh-panel__head--tight, .modal__head, .drilldown__head").forEach((head) => {
       head.classList.toggle("details-head--compact", scrolled);
       head.classList.toggle("details-head--expanded", !scrolled);
     });
   };
 
+  scrollEl.__syncCondensedTitle = syncCompactState;
+
+  if (scrollEl.dataset[attr] === "1") {
+    syncCompactState();
+    return;
+  }
+
+  scrollEl.dataset[attr] = "1";
   scrollEl.addEventListener("scroll", syncCompactState, { passive: true });
+
   syncCompactState();
   setTimeout(syncCompactState, 0);
 }
@@ -2753,7 +2772,7 @@ function bindDetailsScroll(root) {
 
   bindCondensedTitleScroll(
     document.getElementById("detailsBodyModal"),
-    document.getElementById("detailsModal"),
+    document.querySelector("#detailsModal .modal__inner"),
     "modal"
   );
 
