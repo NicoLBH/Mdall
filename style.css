@@ -2538,6 +2538,102 @@ color:#ffff;
 .settings-block--hero .settings-card{
   margin-top:8px;
 }
+/* ===== Reusable split dropdown ===== */
+
+.gh-split{
+  position:relative;
+  display:inline-flex;
+  align-items:stretch;
+  vertical-align:middle;
+}
+
+.gh-split .gh-btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  height:32px;
+  border:1px solid var(--border);
+  background:var(--btn-bg);
+  color:var(--text);
+}
+
+.gh-split__main{
+  border-top-right-radius:0;
+  border-bottom-right-radius:0;
+  border-right:none;
+  padding:0 12px;
+}
+
+.gh-split__toggle{
+  width:32px;
+  min-width:32px;
+  padding:0;
+  border-top-left-radius:0;
+  border-bottom-left-radius:0;
+}
+
+.gh-split--primary .gh-btn{
+  background:var(--btn-bg-success);
+  color:#fff;
+  border-color:rgba(255,255,255,.12);
+}
+
+.gh-split__label{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  white-space:nowrap;
+}
+
+.gh-split__label--with-icon svg,
+.gh-split__icon svg{
+  width:16px;
+  height:16px;
+  display:block;
+}
+
+.gh-split .gh-menu{
+  position:absolute;
+  top:calc(100% + 4px);
+  right:0;
+  left:auto;
+  min-width:220px;
+  display:none;
+  padding:8px 0;
+  margin:0;
+  background:rgb(1, 4, 9);
+  border:1px solid var(--border);
+  border-radius:12px;
+  box-shadow:rgb(61, 68, 77) 0px 0px 0px 1px, rgba(1, 4, 9, 0.4) 0px 6px 12px -3px, rgba(1, 4, 9, 0.4) 0px 6px 18px 0px;
+  z-index:260;
+}
+
+.gh-split.is-open .gh-menu{
+  display:block;
+}
+
+.gh-menu__item{
+  width:100%;
+  display:flex;
+  align-items:center;
+  text-align:left;
+  border:none;
+  background:transparent;
+  color:var(--text);
+  padding:6px 12px;
+  cursor:pointer;
+  white-space:nowrap;
+  font:inherit;
+}
+
+.gh-menu__item:hover{
+  background:rgba(110,118,129,.12);
+}
+
+.gh-menu__item.is-danger{
+  color:#ff7b72;
+}
 /* ===== Documents ===== */
 
 .project-simple-page--documents{
