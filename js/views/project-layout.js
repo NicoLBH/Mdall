@@ -1,11 +1,16 @@
 import { renderProjectDocuments } from "./project-documents.js";
 import { renderProjectSituations } from "./project-situations.js";
-import { renderProjectIntervenants } from "./project-intervenants.js";
-import { renderProjectDashboard } from "./project-dashboard.js";
-import { renderProjectIdentity } from "./project-identity.js";
 import { renderProjectHeader } from "./project-header.js";
 import { renderProjectSituationsTopBanner } from "./project-situations-runbar.js";
 import { mountProjectShellChrome } from "./project-shell-chrome.js";
+import { renderProjectPropositions } from "./project-propositions.js";
+import { renderProjectCoordination } from "./project-coordination.js";
+import { renderProjectWorkflows } from "./project-workflows.js";
+import { renderProjectJalons } from "./project-jalons.js";
+import { renderProjectReferentiel } from "./project-referentiel.js";
+import { renderProjectRisquesSecurite } from "./project-risques-securite.js";
+import { renderProjectPilotage } from "./project-pilotage.js";
+import { renderProjectParametres } from "./project-parametres.js";
 
 export function renderProjectLayout(root, projectId, tab) {
   root.innerHTML = `
@@ -32,17 +37,32 @@ export function renderProjectLayout(root, projectId, tab) {
     case "situations":
       renderProjectSituations(content);
       break;
-    case "intervenants":
-      renderProjectIntervenants(content);
+    case "propositions":
+      renderProjectPropositions(content);
       break;
-    case "dashboard":
-      renderProjectDashboard(content);
+    case "coordination":
+      renderProjectCoordination(content);
       break;
-    case "identity":
-      renderProjectIdentity(content);
+    case "workflows":
+      renderProjectWorkflows(content);
+      break;
+    case "jalons":
+      renderProjectJalons(content);
+      break;
+    case "referentiel":
+      renderProjectReferentiel(content);
+      break;
+    case "risques-securite":
+      renderProjectRisquesSecurite(content);
+      break;
+    case "pilotage":
+      renderProjectPilotage(content);
+      break;
+    case "parametres":
+      renderProjectParametres(content);
       break;
     default:
-      renderProjectDashboard(content);
+      renderProjectDocuments(content);
       break;
   }
 }
