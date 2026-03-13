@@ -2227,8 +2227,9 @@ color:#ffff;
 }
 
 .settings-list li{
-  margin:0 0 8px;
+  margin:0 0 6px;
   line-height:1.55;
+  font-size:13px;
 }
 
 .settings-actions-row{
@@ -2394,10 +2395,6 @@ color:#ffff;
 .settings-form-grid--thirds{
   grid-template-columns:repeat(2, minmax(0, 320px));
   gap:0 16px;
-}
-
-.settings-list--tight li{
-  margin-bottom:6px;
 }
 
 @media (max-width: 1280px){
