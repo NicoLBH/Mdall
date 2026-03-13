@@ -7,6 +7,8 @@ const shellState = {
   globalHeaderEl: null,
   projectTabsEl: null,
   viewHeaderHostEl: null,
+  compactTabHostEl: null,
+  compactTabLabelEl: null,
   primaryScrollSourceEl: null,
   cleanupScrollSource: null,
   cleanupWindow: null
@@ -30,6 +32,14 @@ function getViewHeaderEl() {
   return shellState.viewHeaderHostEl?.querySelector(".project-view-header") || null;
 }
 
+function syncCompactTabLabel() {
+  const label = getTabLabel(shellState.tab);
+  if (shellState.compactTabLabelEl) {
+    shellState.compactTabLabelEl.textContent = label;
+  }
+  shellState.compactTabHostEl?.classList.toggle("is-empty", !label);
+}
+
 function applyCompactState(isCompact) {
   shellState.isCompact = !!isCompact;
 
@@ -39,6 +49,8 @@ function applyCompactState(isCompact) {
   shellState.globalHeaderEl?.classList.toggle("gh-header--compact", shellState.isCompact);
   shellState.projectTabsEl?.classList.toggle("project-tabs--hidden", shellState.isCompact);
   getViewHeaderEl()?.classList.toggle("project-view-header--compact", shellState.isCompact);
+
+  syncCompactTabLabel();
 }
 
 function syncCompactState() {
@@ -98,6 +110,8 @@ export function mountProjectShellChrome({ projectId, tab }) {
   shellState.globalHeaderEl = document.querySelector("#globalHeaderHost .gh-header");
   shellState.projectTabsEl = document.querySelector(".project-tabs");
   shellState.viewHeaderHostEl = document.getElementById("projectViewHeaderHost");
+  shellState.compactTabHostEl = document.getElementById("projectCompactTab");
+  shellState.compactTabLabelEl = document.getElementById("projectCompactTabLabel");
 
   if (shellState.viewHeaderHostEl) {
     shellState.viewHeaderHostEl.innerHTML = "";
@@ -117,6 +131,7 @@ export function mountProjectShellChrome({ projectId, tab }) {
     variant: shellState.tab || "default"
   });
 
+  syncCompactTabLabel();
   applyCompactState(false);
 }
 
@@ -170,6 +185,11 @@ export function unmountProjectShellChrome() {
 
   shellState.viewHeaderHostEl?.replaceChildren?.();
 
+  if (shellState.compactTabLabelEl) {
+    shellState.compactTabLabelEl.textContent = "";
+  }
+  shellState.compactTabHostEl?.classList.remove("is-empty");
+
   document.body.classList.remove("route--project", "project-shell-compact");
 
   shellState.globalHeaderEl?.classList.remove("gh-header--compact");
@@ -181,4 +201,6 @@ export function unmountProjectShellChrome() {
   shellState.globalHeaderEl = null;
   shellState.projectTabsEl = null;
   shellState.viewHeaderHostEl = null;
+  shellState.compactTabHostEl = null;
+  shellState.compactTabLabelEl = null;
 }
