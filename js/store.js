@@ -41,10 +41,10 @@ export const store = {
     climateBaseTemperatures: "",
     projectTabs: {
       propositions: true,
-      coordination: false,
-      jalons: true,
-      referentiel: true,
-      risquesSecurite: true
+      discussions: false,
+      pilotage: false,
+      referentiel: false,
+      risquesSecurite: false
     },
     webhookUrl: "",
     pdfFile: null
