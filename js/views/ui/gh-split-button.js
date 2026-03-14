@@ -22,6 +22,22 @@ function escapeAttr(value) {
   }[char]));
 }
 
+function normalizeSelectOptions(options = []) {
+  return options.map((option) => {
+    if (option && typeof option === "object") {
+      return {
+        value: String(option.value ?? option.label ?? ""),
+        label: String(option.label ?? option.value ?? "")
+      };
+    }
+
+    return {
+      value: String(option ?? ""),
+      label: String(option ?? "")
+    };
+  });
+}
+
 function renderMenuItems(items = []) {
   return items.map((item) => `
     <button
@@ -115,6 +131,44 @@ export function renderGhActionButton({
   `;
 }
 
+export function renderGhSelectMenu({
+  id,
+  label = "",
+  value = "",
+  options = [],
+  tone = "default",
+  size = "md",
+  icon = "",
+  fieldClassName = "",
+  buttonClassName = ""
+}) {
+  const normalizedOptions = normalizeSelectOptions(options);
+  const activeOption = normalizedOptions.find((option) => option.value === String(value)) || normalizedOptions[0] || { value: "", label: "" };
+
+  return `
+    <div
+      class="gh-select-field ${fieldClassName}"
+      data-select-menu
+      data-select-id="${escapeAttr(id)}"
+      data-select-value="${escapeAttr(activeOption.value)}"
+    >
+      ${label ? `<div class="gh-select-field__label">${escapeAttr(label)}</div>` : ""}
+      ${renderGhActionButton({
+        id: `${id}__action`,
+        label: activeOption.label,
+        icon,
+        tone,
+        size,
+        className: `gh-select-field__action ${buttonClassName}`.trim(),
+        items: normalizedOptions.map((option) => ({
+          label: option.label,
+          action: `select:${encodeURIComponent(option.value)}`
+        }))
+      })}
+    </div>
+  `;
+}
+
 export function bindGhActionButtons() {
   if (actionButtonGlobalBound) return;
   actionButtonGlobalBound = true;
@@ -153,9 +207,14 @@ export function bindGhActionButtons() {
 
     if (menuItem && root) {
       const action = menuItem.dataset.menuAction || "";
+      const label =
+        menuItem.querySelector("span:last-child")?.textContent?.trim() ||
+        menuItem.textContent?.trim() ||
+        "";
+
       root.dispatchEvent(new CustomEvent("ghaction:action", {
         bubbles: true,
-        detail: { action }
+        detail: { action, label }
       }));
       closeAllActionMenus();
       return;
@@ -168,6 +227,32 @@ export function bindGhActionButtons() {
 
   window.addEventListener("blur", () => {
     closeAllActionMenus();
+  });
+}
+
+export function bindGhSelectMenus(root = document, { onChange } = {}) {
+  root.querySelectorAll("[data-select-menu]").forEach((field) => {
+    if (field.dataset.selectBound === "true") return;
+    field.dataset.selectBound = "true";
+
+    const actionRoot = field.querySelector(".gh-action");
+    if (!actionRoot) return;
+
+    actionRoot.addEventListener("ghaction:action", (event) => {
+      const action = String(event.detail?.action || "");
+      if (!action.startsWith("select:")) return;
+
+      const value = decodeURIComponent(action.slice("select:".length));
+      const label = String(event.detail?.label || value || "");
+      const labelNode = actionRoot.querySelector(".gh-action__label");
+
+      field.dataset.selectValue = value;
+      if (labelNode) labelNode.textContent = label;
+
+      if (typeof onChange === "function") {
+        onChange(field.dataset.selectId || "", value, field, label);
+      }
+    });
   });
 }
 
