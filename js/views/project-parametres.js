@@ -11,19 +11,78 @@ function escapeHtml(value) {
   }[char]));
 }
 
+function importanceCodeToLabel(value) {
+  const normalized = String(value || "").trim();
+
+  if (normalized === "I" || normalized === "Catégorie d'importance I") return "Catégorie d'importance I";
+  if (normalized === "II" || normalized === "Catégorie d'importance II") return "Catégorie d'importance II";
+  if (normalized === "III" || normalized === "Catégorie d'importance III") return "Catégorie d'importance III";
+  if (normalized === "IV" || normalized === "Catégorie d'importance IV") return "Catégorie d'importance IV";
+
+  return "Catégorie d'importance II";
+}
+
+function importanceLabelToCode(value) {
+  const normalized = String(value || "").trim();
+
+  if (normalized === "Catégorie d'importance I" || normalized === "I") return "I";
+  if (normalized === "Catégorie d'importance II" || normalized === "II") return "II";
+  if (normalized === "Catégorie d'importance III" || normalized === "III") return "III";
+  if (normalized === "Catégorie d'importance IV" || normalized === "IV") return "IV";
+
+  return "II";
+}
+
+function liquefactionCodeToLabel(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+
+  if (
+    normalized === "yes" ||
+    normalized === "true" ||
+    normalized === "sol liquéfiable" ||
+    normalized === "sol liquefiable"
+  ) {
+    return "Sol liquéfiable";
+  }
+
+  if (
+    normalized === "no" ||
+    normalized === "false" ||
+    normalized === "sol non liquéfiable" ||
+    normalized === "sol non liquefiable" ||
+    normalized === ""
+  ) {
+    return "Sol non liquéfiable";
+  }
+
+  if (normalized === "non défini à ce stade" || normalized === "non defini a ce stade") {
+    return "Non défini à ce stade";
+  }
+
+  return "Sol non liquéfiable";
+}
+
+function liquefactionLabelToCode(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+
+  if (normalized === "sol liquéfiable" || normalized === "sol liquefiable") return "yes";
+  if (normalized === "non défini à ce stade" || normalized === "non defini a ce stade") return "";
+  return "no";
+}
+
 function ensureProjectFormDefaults() {
   const form = store.projectForm;
+
+  if (typeof form.projectName !== "string" || !form.projectName.trim()) {
+    form.projectName = "Projet demo";
+  }
+
   if (typeof form.city !== "string") form.city = "";
   if (typeof form.postalCode !== "string") form.postalCode = "";
   if (typeof form.zoneSismique !== "string") form.zoneSismique = "";
-  if (typeof form.liquefactionText !== "string") {
-    form.liquefactionText = form.liquefaction && form.liquefaction !== "no"
-      ? form.liquefaction
-      : "";
-  }
-  if (typeof form.importanceCategory !== "string") {
-    form.importanceCategory = form.importance || "II";
-  }
+  if (typeof form.phase !== "string" || !form.phase.trim()) form.phase = "APS";
+  if (typeof form.referential !== "string" || !form.referential.trim()) form.referential = "EC8";
+  if (typeof form.soilClass !== "string" || !form.soilClass.trim()) form.soilClass = "A";
 
   if ((!form.city || !form.postalCode) && form.communeCp) {
     const raw = String(form.communeCp).trim();
@@ -35,6 +94,14 @@ function ensureProjectFormDefaults() {
       form.city = form.city || raw;
     }
   }
+
+  form.communeCp = [form.city, form.postalCode].filter(Boolean).join(" ").trim();
+
+  form.importance = importanceLabelToCode(form.importance || form.importanceCategory || "II");
+  form.importanceCategory = importanceCodeToLabel(form.importanceCategory || form.importance || "II");
+
+  form.liquefactionText = liquefactionCodeToLabel(form.liquefactionText || form.liquefaction || "no");
+  form.liquefaction = liquefactionLabelToCode(form.liquefactionText || form.liquefaction || "no");
 }
 
 function renderNavIcon(name) {
@@ -692,6 +759,10 @@ function bindValue(id, handler, eventName = "input") {
 }
 
 function bindParametresEvents() {
+  bindValue("projectName", (value) => {
+    store.projectForm.projectName = value;
+  });
+
   bindValue("projectCity", (value) => {
     store.projectForm.city = value;
     store.projectForm.communeCp = [store.projectForm.city, store.projectForm.postalCode].filter(Boolean).join(" ").trim();
@@ -704,8 +775,8 @@ function bindParametresEvents() {
 
   bindValue("importanceCategory", (value) => {
     store.projectForm.importanceCategory = value;
-    store.projectForm.importance = value;
-  });
+    store.projectForm.importance = importanceLabelToCode(value);
+  }, "change");
 
   bindValue("projectPhase", (value) => {
     store.projectForm.phase = value;
@@ -717,8 +788,8 @@ function bindParametresEvents() {
 
   bindValue("liquefactionText", (value) => {
     store.projectForm.liquefactionText = value;
-    store.projectForm.liquefaction = value;
-  });
+    store.projectForm.liquefaction = liquefactionLabelToCode(value);
+  }, "change");
 
   bindValue("referential", (value) => {
     store.projectForm.referential = value;
