@@ -1,3 +1,7 @@
+import {
+  PROJECT_TAB_IDS,
+  normalizeProjectTabId
+} from "../constants.js";
 import { renderProjectDocuments } from "./project-documents.js";
 import { renderProjectSituations } from "./project-situations.js";
 import { renderProjectHeader } from "./project-header.js";
@@ -13,46 +17,23 @@ import { renderProjectPilotage } from "./project-pilotage.js";
 import { renderProjectParametres } from "./project-parametres.js";
 
 function normalizeProjectTab(tab) {
-  const value = String(tab || "").trim();
+  const normalized = normalizeProjectTabId(tab);
 
-  switch (value) {
-    case "documents":
-      return "documents";
-
-    case "situations":
-      return "situations";
-
-    case "propositions":
-      return "propositions";
-
-    case "discussions":
-    case "coordination":
-      return "discussions";
-
-    case "actions":
-    case "workflows":
-      return "actions";
-
-    case "pilotage":
-      return "pilotage";
-
-    case "referentiel":
-      return "referentiel";
-
-    case "risquesSecurite":
-    case "risques-securite":
-      return "risquesSecurite";
-
-    case "insights":
-    case "indicateurs":
-    case "jalons":
-      return "insights";
-
-    case "parametres":
-      return "parametres";
+  switch (normalized) {
+    case PROJECT_TAB_IDS.DOCUMENTS:
+    case PROJECT_TAB_IDS.SITUATIONS:
+    case PROJECT_TAB_IDS.PROPOSITIONS:
+    case PROJECT_TAB_IDS.DISCUSSIONS:
+    case PROJECT_TAB_IDS.ACTIONS:
+    case PROJECT_TAB_IDS.PILOTAGE:
+    case PROJECT_TAB_IDS.REFERENTIEL:
+    case PROJECT_TAB_IDS.RISQUES_SECURITE:
+    case PROJECT_TAB_IDS.INSIGHTS:
+    case PROJECT_TAB_IDS.PARAMETRES:
+      return normalized;
 
     default:
-      return "documents";
+      return PROJECT_TAB_IDS.DOCUMENTS;
   }
 }
 
@@ -77,43 +58,43 @@ export function renderProjectLayout(root, projectId, tab) {
   if (!content) return;
 
   switch (normalizedTab) {
-    case "documents":
+    case PROJECT_TAB_IDS.DOCUMENTS:
       renderProjectDocuments(content);
       break;
 
-    case "situations":
+    case PROJECT_TAB_IDS.SITUATIONS:
       renderProjectSituations(content);
       break;
 
-    case "propositions":
+    case PROJECT_TAB_IDS.PROPOSITIONS:
       renderProjectPropositions(content);
       break;
 
-    case "discussions":
+    case PROJECT_TAB_IDS.DISCUSSIONS:
       renderProjectCoordination(content);
       break;
 
-    case "actions":
+    case PROJECT_TAB_IDS.ACTIONS:
       renderProjectWorkflows(content);
       break;
 
-    case "pilotage":
+    case PROJECT_TAB_IDS.PILOTAGE:
       renderProjectPilotage(content);
       break;
 
-    case "referentiel":
+    case PROJECT_TAB_IDS.REFERENTIEL:
       renderProjectReferentiel(content);
       break;
 
-    case "risquesSecurite":
+    case PROJECT_TAB_IDS.RISQUES_SECURITE:
       renderProjectRisquesSecurite(content);
       break;
 
-    case "insights":
+    case PROJECT_TAB_IDS.INSIGHTS:
       renderProjectJalons(content);
       break;
 
-    case "parametres":
+    case PROJECT_TAB_IDS.PARAMETRES:
       renderProjectParametres(content);
       break;
 
