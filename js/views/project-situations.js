@@ -12,12 +12,19 @@ import {
   refreshProjectShellChrome
 } from "./project-shell-chrome.js";
 import { svgIcon } from "../ui/icons.js";
-import { renderGhActionButton, renderGhSelectMenu, bindGhSelectMenus } from "./ui/gh-split-button.js";
+import { renderGhActionButton, bindGhSelectMenus } from "./ui/gh-split-button.js";
 import {
   renderDataTableShell,
   renderDataTableHead,
   renderDataTableEmptyState
 } from "./ui/data-table-shell.js";
+import {
+  renderProjectTableToolbar,
+  renderProjectTableToolbarGroup,
+  renderProjectTableToolbarSearch,
+  renderProjectTableToolbarSelect,
+  renderProjectTableToolbarMeta
+} from "./ui/project-table-toolbar.js";
 
 /* =========================================================
    Legacy DOM / archive parity helpers
@@ -3002,39 +3009,45 @@ function bindSituationsEvents(root, headerRoot) {
 }
 
 function renderSituationsViewHeaderHtml() {
-  return `
-    <div class="results-bar">
-      <div class="results-bar__left">
-        <div class="gh-filter gh-filter--inline" data-chrome-visibility="always">
-          ${renderGhSelectMenu({
-            id: "displayDepth",
-            value: String(store.situationsView.displayDepth || "situations").toLowerCase(),
-            options: [
-              { value: "situations", label: "Situations" },
-              { value: "sujets", label: "Sujets" },
-              { value: "avis", label: "Avis" }
-            ],
-            tone: "default",
-            size: "sm",
-            fieldClassName: "gh-select-field--inline"
-          })}
-        </div>
+  const leftHtml = [
+    renderProjectTableToolbarGroup({
+      html: renderProjectTableToolbarSelect({
+        id: "displayDepth",
+        value: String(store.situationsView.displayDepth || "situations").toLowerCase(),
+        options: [
+          { value: "situations", label: "Situations" },
+          { value: "sujets", label: "Sujets" },
+          { value: "avis", label: "Avis" }
+        ]
+      })
+    }),
+    renderProjectTableToolbarGroup({
+      html: renderProjectTableToolbarMeta({
+        id: "situationsHeaderCounts",
+        text: "—",
+        className: "issues-totals mono"
+      })
+    })
+  ].join("");
 
-        <div class="issues-totals mono" id="situationsHeaderCounts" data-chrome-visibility="always">—</div>
-      </div>
+  const rightHtml = [
+    renderProjectTableToolbarGroup({
+      html: renderProjectTableToolbarSearch({
+        id: "situationsSearch",
+        value: String(store.situationsView.search || ""),
+        placeholder: "topic / EC8 / mot-clé…"
+      })
+    }),
+    renderProjectTableToolbarGroup({
+      html: renderProjectSituationsRunbar()
+    })
+  ].join("");
 
-      <div class="results-bar__right">
-        <label class="gh-filter gh-filter--inline" data-chrome-visibility="always">
-          <input id="situationsSearch" class="gh-input gh-input--sm gh-input--search" type="text" placeholder="topic / EC8 / mot-clé…" />
-          <span class="icon-search">
-            ${svgIcon("search", { className: "octicon octicon-search" })}
-          </span>
-        </label>
-
-        ${renderProjectSituationsRunbar()}
-      </div>
-    </div>
-  `;
+  return renderProjectTableToolbar({
+    className: "project-table-toolbar--situations",
+    leftHtml,
+    rightHtml
+  });
 }
 
 /* =========================================================
