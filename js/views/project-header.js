@@ -47,13 +47,9 @@ function renderTabCount(tab, counters) {
 
 function isTabVisible(tabId) {
   const visibility = store.projectForm?.projectTabs || {};
-
-  if (tabId === "propositions") return visibility.propositions !== false;
-  if (tabId === "discussions") return visibility.discussions !== false;
-  if (tabId === "pilotage") return visibility.pilotage !== false;
-  if (tabId === "referentiel") return visibility.referentiel !== false;
-  if (tabId === "risquesSecurite") return visibility.risquesSecurite !== false;
-
+  if (tabId in visibility) {
+    return visibility[tabId] !== false;
+  }
   return true;
 }
 
