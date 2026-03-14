@@ -1,3 +1,4 @@
+import { store } from "../store.js";
 import { registerProjectPrimaryScrollSource, setProjectViewHeader } from "./project-shell-chrome.js";
 import { bindGhSplitButtons, initGhSplitButton, renderGhSplitButton } from "./ui/gh-split-button.js";
 
@@ -17,10 +18,12 @@ const docsViewState = {
   title: "",
   description: "",
   depositMode: "direct",
+  proposalName: "",
   isUploading: false,
   uploadProgress: 0,
   uploadTimer: null,
-  selectedPhase: "APS"
+  selectedPhase: "APS",
+  repoDocuments: []
 };
 
 function escapeHtml(value) {
@@ -42,6 +45,14 @@ function getFolderIconSvg() {
 }
 
 function getDocumentIconSvg() {
+  return `
+    <svg aria-hidden="true" focusable="false" class="octicon octicon-file color-fg-muted" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align:text-bottom">
+      <path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 9 4.25V1.5Zm6.75.062V4.25c0 .138.112.25.25.25h2.688l-.011-.013-2.914-2.914-.013-.011Z"></path>
+    </svg>
+  `;
+}
+
+function getLargeDocumentIconSvg() {
   return `
     <svg height="32" aria-hidden="true" viewBox="0 0 24 24" version="1.1" width="32" data-view-component="true" class="octicon octicon-file mb-2 color-fg-muted">
       <path d="M3 3a2 2 0 0 1 2-2h9.982a2 2 0 0 1 1.414.586l4.018 4.018A2 2 0 0 1 21 7.018V21a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Zm2-.5a.5.5 0 0 0-.5.5v18a.5.5 0 0 0 .5.5h14a.5.5 0 0 0 .5-.5V8.5h-4a2 2 0 0 1-2-2v-4Zm10 0v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 0-.146-.336l-4.018-4.018A.5.5 0 0 0 15 2.5Z"></path>
@@ -73,15 +84,6 @@ function getRemoveIconSvg() {
   `;
 }
 
-function getDownloadIconSvg() {
-  return `
-    <svg aria-hidden="true" focusable="false" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" display="inline-block" overflow="visible" style="vertical-align:text-bottom;">
-      <path d="M7.25 1a.75.75 0 0 1 1.5 0v7.19l2.22-2.22a.75.75 0 1 1 1.06 1.06l-3.5 3.5a.75.75 0 0 1-1.06 0l-3.5-3.5a.75.75 0 0 1 1.06-1.06l2.22 2.22V1Z"></path>
-      <path d="M2.5 9.75a.75.75 0 0 1 .75.75v1.75c0 .138.112.25.25.25h9a.25.25 0 0 0 .25-.25V10.5a.75.75 0 0 1 1.5 0v1.75A1.75 1.75 0 0 1 12.5 14h-9A1.75 1.75 0 0 1 1.75 12.25V10.5a.75.75 0 0 1 .75-.75Z"></path>
-    </svg>
-  `;
-}
-
 function renderDocumentsToolbar() {
   const phaseButton = renderGhSplitButton({
     id: "documentsPhaseSplit",
@@ -105,7 +107,7 @@ function renderDocumentsToolbar() {
     id: "documentsActionsSplit",
     label: `
       <span class="gh-split__label gh-split__label--with-icon">
-        <span class="gh-split__icon">${getDocumentIconSvg()}</span>
+        <span class="gh-split__icon">${getLargeDocumentIconSvg()}</span>
         <span>Documents</span>
       </span>
     `,
@@ -129,11 +131,26 @@ function renderDocumentsToolbar() {
   `;
 }
 
+function renderRepoDocumentRow(doc) {
+  return `
+    <div class="documents-repo__row documents-repo__row--file">
+      <div class="documents-repo__cell documents-repo__cell--name">
+        <span class="documents-repo__icon documents-repo__icon--document">${getDocumentIconSvg()}</span>
+        <span class="documents-repo__name">${escapeHtml(doc.name)}</span>
+      </div>
+      <div class="documents-repo__cell documents-repo__cell--message">
+        ${escapeHtml(doc.note || "Document prêt pour l'analyse")}
+      </div>
+      <div class="documents-repo__cell documents-repo__cell--date">${escapeHtml(doc.updatedAt || "À l'instant")}</div>
+    </div>
+  `;
+}
+
 function renderDocumentsListView() {
   return `
     <section class="project-simple-page project-simple-page--documents">
       <div class="project-simple-scroll project-simple-scroll--documents" id="projectDocumentsScroll">
-        <div class="documents-shell">
+        <div class="documents-shell" id="projectDocumentScroll">
           ${renderDocumentsToolbar()}
 
           <div class="documents-repo">
@@ -156,6 +173,7 @@ function renderDocumentsListView() {
                   <div class="documents-repo__cell documents-repo__cell--date">—</div>
                 </div>
               `).join("")}
+              ${docsViewState.repoDocuments.map(renderRepoDocumentRow).join("")}
             </div>
           </div>
         </div>
@@ -171,7 +189,7 @@ function renderUploadProgress() {
     return `
       <div class="documents-upload-progress">
         <div class="documents-upload-progress__file">
-          <span class="documents-upload-progress__icon">${getDocumentIconSvg()}</span>
+          <span class="documents-upload-progress__icon">${getLargeDocumentIconSvg()}</span>
           <span class="documents-upload-progress__name">${escapeHtml(docsViewState.file.name)}</span>
         </div>
         <div class="documents-upload-progress__meta">
@@ -187,7 +205,7 @@ function renderUploadProgress() {
   return `
     <div class="documents-uploaded-file">
       <div class="documents-uploaded-file__left">
-        <span class="documents-uploaded-file__icon">${getDocumentIconSvg()}</span>
+        <span class="documents-uploaded-file__icon">${getLargeDocumentIconSvg()}</span>
         <span class="documents-uploaded-file__name">${escapeHtml(docsViewState.file.name)}</span>
       </div>
       <button
@@ -203,20 +221,51 @@ function renderUploadProgress() {
   `;
 }
 
+function canSubmitUpload() {
+  if (!docsViewState.file || docsViewState.isUploading) return false;
+  if (docsViewState.depositMode === "proposal") {
+    return docsViewState.proposalName.trim().length > 0;
+  }
+  return true;
+}
+
+function renderProposalField() {
+  if (docsViewState.depositMode !== "proposal") return "";
+
+  return `
+    <div class="documents-form-field documents-form-field--proposal">
+      <label for="documentsProposalNameInput">Nom de la modification</label>
+      <div class="documents-inline-input">
+        <span class="documents-inline-input__icon">${getProposalIconSvg()}</span>
+        <input
+          id="documentsProposalNameInput"
+          type="text"
+          class="gh-input documents-inline-input__control"
+          value="${escapeHtml(docsViewState.proposalName)}"
+          placeholder="Ex. Ajustement du visa sur note parasismique V03"
+        >
+      </div>
+    </div>
+  `;
+}
+
 function renderUploadView() {
   const isBusy = docsViewState.isUploading ? "is-busy" : "";
   const isDisabled = docsViewState.isUploading ? "disabled" : "";
+  const submitLabel = docsViewState.depositMode === "proposal"
+    ? "Proposer la modification"
+    : "Valider";
 
   return `
     <section class="project-simple-page project-simple-page--documents">
       <div class="project-simple-scroll project-simple-scroll--documents" id="projectDocumentsScroll">
-        <div class="documents-shell documents-shell--upload">
+        <div class="documents-shell documents-shell--upload" id="projectDocumentScroll">
           <div class="documents-upload-layout">
             <section class="documents-dropzone ${isBusy}" id="documentsDropzone">
               <input id="documentsFileInput" type="file" hidden accept=".pdf,.doc,.docx,.xls,.xlsx,.dwg,.zip,image/*">
               <div class="documents-dropzone__inner">
                 <div class="documents-dropzone__icon">
-                  ${getDocumentIconSvg()}
+                  ${getLargeDocumentIconSvg()}
                 </div>
                 <h3>Glissez vos fichiers ici pour les ajouter au projet</h3>
                 <p>
@@ -275,11 +324,13 @@ function renderUploadView() {
                     </span>
                   </label>
                 </div>
+
+                ${renderProposalField()}
               </section>
-              
+
               <section class="documents-commit-card documents-commit-card-actions">
                 <div class="documents-commit-card__actions">
-                  <button type="button" class="gh-btn gh-btn--validate" disabled>Valider</button>
+                  <button type="button" class="gh-btn gh-btn--validate" id="documentsSubmitBtn" ${canSubmitUpload() ? "" : "disabled"}>${submitLabel}</button>
                   <button type="button" class="gh-btn" id="documentsCancelBtn">Annuler</button>
                 </div>
               </section>
@@ -303,6 +354,10 @@ function resetUploadState() {
   docsViewState.file = null;
   docsViewState.isUploading = false;
   docsViewState.uploadProgress = 0;
+  docsViewState.title = "";
+  docsViewState.description = "";
+  docsViewState.depositMode = "direct";
+  docsViewState.proposalName = "";
 }
 
 function simulateUpload(root, file) {
@@ -334,7 +389,53 @@ function closeUploadView(root) {
 
 function renderFromSelectedFile(root, file) {
   if (!file) return;
+  if (!docsViewState.title) {
+    docsViewState.title = file.name.replace(/\.[^.]+$/, "");
+  }
   simulateUpload(root, file);
+}
+
+function buildRepoDocumentFromState() {
+  const title = docsViewState.title.trim();
+  const description = docsViewState.description.trim();
+  const baseNote = title || description || "Document prêt pour l'analyse";
+
+  return {
+    id: `doc-${Date.now()}`,
+    name: docsViewState.file?.name || "Document",
+    note: baseNote,
+    updatedAt: "À l'instant"
+  };
+}
+
+function commitDirectDocument(root) {
+  if (!docsViewState.file) return;
+
+  docsViewState.repoDocuments.unshift(buildRepoDocumentFromState());
+  store.projectForm.pdfFile = docsViewState.file;
+  closeUploadView(root);
+}
+
+function commitProposal(root) {
+  if (!docsViewState.file) return;
+
+  docsViewState.repoDocuments.unshift({
+    id: `proposal-${Date.now()}`,
+    name: docsViewState.file.name,
+    note: `Proposition : ${docsViewState.proposalName.trim()}`,
+    updatedAt: "À l'instant"
+  });
+
+  closeUploadView(root);
+}
+
+function handleSubmit(root) {
+  if (!canSubmitUpload()) return;
+  if (docsViewState.depositMode === "proposal") {
+    commitProposal(root);
+    return;
+  }
+  commitDirectDocument(root);
 }
 
 function bindDocumentsSplitActions(root) {
@@ -391,6 +492,13 @@ function bindDocumentsView(root) {
     });
   }
 
+  const submitBtn = document.getElementById("documentsSubmitBtn");
+  if (submitBtn) {
+    submitBtn.addEventListener("click", () => {
+      handleSubmit(root);
+    });
+  }
+
   const chooseBtn = document.getElementById("documentsChooseBtn");
   const fileInput = document.getElementById("documentsFileInput");
   const dropzone = document.getElementById("documentsDropzone");
@@ -435,7 +543,9 @@ function bindDocumentsView(root) {
   const removeFileBtn = document.getElementById("documentsRemoveFileBtn");
   if (removeFileBtn) {
     removeFileBtn.addEventListener("click", () => {
-      resetUploadState();
+      docsViewState.file = null;
+      docsViewState.isUploading = false;
+      docsViewState.uploadProgress = 0;
       renderProjectDocuments(root);
     });
   }
@@ -454,9 +564,19 @@ function bindDocumentsView(root) {
     });
   }
 
+  const proposalNameInput = document.getElementById("documentsProposalNameInput");
+  if (proposalNameInput) {
+    proposalNameInput.addEventListener("input", (event) => {
+      docsViewState.proposalName = event.target.value;
+      const submit = document.getElementById("documentsSubmitBtn");
+      if (submit) submit.disabled = !canSubmitUpload();
+    });
+  }
+
   document.querySelectorAll('input[name="documentsDepositMode"]').forEach((radio) => {
     radio.addEventListener("change", (event) => {
       docsViewState.depositMode = event.target.value;
+      renderProjectDocuments(root);
     });
   });
 }
