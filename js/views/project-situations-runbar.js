@@ -1,4 +1,5 @@
 import { svgIcon } from "../ui/icons.js";
+import { bindGhActionButtons, initGhActionButton, renderGhActionButton } from "./ui/gh-split-button.js";
 
 let runbarState = {
   run_id: null,
@@ -14,22 +15,17 @@ export function renderProjectSituationsRunbar() {
   return `
     <div class="project-runbar" data-chrome-visibility="always">
       <div class="project-runbar__left">
-        <div class="gh-split-btn" id="runSplitBtn">
-          <span data-component="icon" class="gh-btn gh-btn--primary gh-btn-icon">
-            ${PLAY_ICON}
-          </span>
-          <span class="gh-btn gh-btn--primary" id="runAnalysisBtnTop">Analyser</span>
-          <span class="gh-btn gh-btn--primary gh-btn--split" id="runMenuBtn" aria-label="Ouvrir le menu d’analyse">▼</span>
-          <div class="gh-menu" id="runMenu">
-            <div class="gh-menu__item" data-action="run">
-              <span data-component="icon">
-                ${PLAY_ICON}
-              </span>
-              <span>Analyser</span>
-            </div>
-            <div class="gh-menu__item" data-action="reset">Reset</div>
-          </div>
-        </div>
+        ${renderGhActionButton({
+          id: "runAnalysisAction",
+          label: "Analyser",
+          icon: PLAY_ICON,
+          tone: "primary",
+          mainAction: "run",
+          items: [
+            { label: "Analyser", action: "run", icon: PLAY_ICON },
+            { label: "Reset", action: "reset" }
+          ]
+        })}
       </div>
     </div>
   `;
@@ -40,41 +36,22 @@ export function renderProjectSituationsTopBanner() {
 }
 
 export function bindProjectSituationsRunbar(root = document) {
-  const runBtn = root.querySelector("#runAnalysisBtnTop");
-  const menuBtn = root.querySelector("#runMenuBtn");
-  const menu = root.querySelector("#runMenu");
+  bindGhActionButtons();
 
-  if (!runBtn || !menuBtn || !menu) return;
+  const actionRoot = root.querySelector('[data-action-id="runAnalysisAction"]');
+  if (!actionRoot) return;
 
-  runBtn.addEventListener("click", () => {
-    if (runbarState.isBusy) return;
-    document.dispatchEvent(new CustomEvent("runAnalysis"));
-  });
+  initGhActionButton(actionRoot, { mainAction: "run" });
 
-  menuBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    menu.classList.toggle("gh-menu--open");
-  });
-
-  menu.addEventListener("click", (e) => {
-    const item = e.target.closest(".gh-menu__item");
-    if (!item) return;
-
-    const action = item.dataset.action;
-    menu.classList.remove("gh-menu--open");
-
+  actionRoot.addEventListener("ghaction:action", (event) => {
+    const action = event.detail?.action || "";
     if (action === "run") {
       if (runbarState.isBusy) return;
       document.dispatchEvent(new CustomEvent("runAnalysis"));
     }
-
     if (action === "reset") {
       document.dispatchEvent(new CustomEvent("resetAnalysisUi"));
     }
-  });
-
-  document.addEventListener("click", () => {
-    menu.classList.remove("gh-menu--open");
   });
 
   syncProjectSituationsRunbar(runbarState);
@@ -86,8 +63,10 @@ export function syncProjectSituationsRunbar(run = {}) {
     ...run
   };
 
-  const runBtn = document.getElementById("runAnalysisBtnTop");
-  const menuBtn = document.getElementById("runMenuBtn");
+  const actionRoot = document.querySelector('[data-action-id="runAnalysisAction"]');
+  const mainBtn = actionRoot?.querySelector("[data-action-main]");
+  const toggleBtn = actionRoot?.querySelector("[data-action-toggle]");
+  const labelNode = mainBtn?.querySelector(".gh-action__label");
   const topBanner = document.getElementById("topBanner");
 
   const isBusy = !!runbarState.isBusy || runbarState.status === "running";
@@ -97,14 +76,17 @@ export function syncProjectSituationsRunbar(run = {}) {
       ? "error"
       : null;
 
-  if (runBtn) {
-    if ("disabled" in runBtn) runBtn.disabled = isBusy;
-    runBtn.classList.toggle("is-disabled", isBusy);
-    runBtn.textContent = isBusy ? "Analyse en cours…" : "Analyser";
+  if (mainBtn) {
+    mainBtn.disabled = isBusy;
+    mainBtn.classList.toggle("is-disabled", isBusy);
   }
 
-  if (menuBtn && "disabled" in menuBtn) {
-    menuBtn.disabled = false;
+  if (toggleBtn) {
+    toggleBtn.disabled = false;
+  }
+
+  if (labelNode) {
+    labelNode.textContent = isBusy ? "Analyse en cours…" : "Analyser";
   }
 
   if (!topBanner) return;
