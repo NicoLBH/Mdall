@@ -2,6 +2,12 @@ import { store } from "../store.js";
 import { sendAssistMessage } from "../services/assist-service.js";
 import { closeGlobalNav } from "./global-nav.js";
 import { svgIcon } from "../ui/icons.js";
+import {
+  renderOverlayChrome,
+  renderOverlayChromeHead,
+  setOverlayChromeOpenState,
+  bindOverlayChromeDismiss
+} from "./ui/overlay-chrome.js";
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (char) => ({
@@ -168,8 +174,7 @@ export function openAssistOverlay() {
   closeGlobalNav();
   
   store.ui.assistant.isOpen = true;
-  overlay.classList.add("is-open");
-  overlay.setAttribute("aria-hidden", "false");
+  setOverlayChromeOpenState(overlay, true);
 
   syncInputFromStore();
   renderAssistOverlayMessages();
@@ -185,8 +190,7 @@ export function closeAssistOverlay() {
   if (!overlay) return;
 
   store.ui.assistant.isOpen = false;
-  overlay.classList.remove("is-open");
-  overlay.setAttribute("aria-hidden", "true");
+  setOverlayChromeOpenState(overlay, false);
 }
 
 export function mountAssistOverlay() {
@@ -195,12 +199,15 @@ export function mountAssistOverlay() {
 
   const overlay = document.createElement("div");
   overlay.id = "assist-overlay";
-  overlay.className = "assist-overlay";
+  overlay.className = "assist-overlay overlay-host overlay-host--assist hidden";
   overlay.setAttribute("aria-hidden", "true");
 
-  overlay.innerHTML = `
-    <div class="assist-panel" role="dialog" aria-modal="true" aria-label="Assistant privé Rapso">
-      <div class="assist-panel__head">
+  overlay.innerHTML = renderOverlayChrome({
+    shellClassName: "assist-panel",
+    variant: "assist",
+    ariaLabel: "Assistant privé Rapso",
+    headHtml: renderOverlayChromeHead({
+      titleHtml: `
         <div class="assist-head__left">
           <div class="assist-head__logo" aria-hidden="true"></div>
           <div class="assist-head__title">
@@ -208,34 +215,36 @@ export function mountAssistOverlay() {
             <div class="assist-head__sub">Contexte global ou projet courant • actions préparées • aide contextualisée</div>
           </div>
         </div>
-        <button class="assist-close" type="button" aria-label="Fermer">✕</button>
-      </div>
+      `,
+      closeId: "assistClose",
+      closeLabel: "Fermer",
+      headClassName: "assist-panel__head"
+    }),
+    bodyClassName: "assist-panel__body",
+    bodyHtml: `
+      <div class="assist-thread" id="assist-thread"></div>
 
-      <div class="assist-panel__body">
-        <div class="assist-thread" id="assist-thread"></div>
+      <div class="assist-compose">
+        <textarea
+          id="assist-input"
+          class="assist-input"
+          rows="3"
+          placeholder="Ex : résume les notifications importantes, priorise les projets urgents, ou prépare une synthèse du sujet sélectionné…"
+        ></textarea>
 
-        <div class="assist-compose">
-          <textarea
-            id="assist-input"
-            class="assist-input"
-            rows="3"
-            placeholder="Ex : résume les notifications importantes, priorise les projets urgents, ou prépare une synthèse du sujet sélectionné…"
-          ></textarea>
-
-          <div class="assist-compose__actions">
-            <div class="assist-compose__left">
-              <button id="assist-mode-auto" class="assist-help-toggle" type="button" aria-pressed="true">Auto</button>
-              <button id="assist-mode-help" class="assist-help-toggle" type="button" aria-pressed="false">Help</button>
-            </div>
-
-            <button id="assist-send" class="assist-send" type="button" aria-label="Envoyer">
-              ${svgIcon("arrow-up")}
-            </button>
+        <div class="assist-compose__actions">
+          <div class="assist-compose__left">
+            <button id="assist-mode-auto" class="assist-help-toggle" type="button" aria-pressed="true">Auto</button>
+            <button id="assist-mode-help" class="assist-help-toggle" type="button" aria-pressed="false">Help</button>
           </div>
+
+          <button id="assist-send" class="assist-send" type="button" aria-label="Envoyer">
+            ${svgIcon("arrow-up")}
+          </button>
         </div>
       </div>
-    </div>
-  `;
+    `
+  });
 
   document.body.appendChild(overlay);
 
@@ -249,10 +258,11 @@ export function mountAssistOverlay() {
     }
   } catch {}
 
-  overlay.querySelector(".assist-close")?.addEventListener("click", closeAssistOverlay);
-  overlay.addEventListener("click", (event) => {
-    if (event.target === overlay) closeAssistOverlay();
+  bindOverlayChromeDismiss(overlay, {
+    onClose: closeAssistOverlay
   });
+
+  overlay.querySelector("#assistClose")?.addEventListener("click", closeAssistOverlay);
 
   const input = getInput();
   input?.addEventListener("input", (event) => {
