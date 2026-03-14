@@ -3295,3 +3295,32 @@ color:#ffff;
   line-height:1.5;
   color:var(--muted);
 }
+.verdict-switch{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  flex-wrap:wrap;
+  border:none;
+  background:transparent;
+}
+
+.verdict-switch__item{
+  display:inline-flex;
+}
+
+.verdict-switch__item .gh-action__main{
+  min-width:44px;
+  font-weight:700;
+}
+
+.verdict-switch__item.is-active .gh-action__main{
+  box-shadow:0 0 0 1px rgba(255,255,255,.16) inset;
+}
+
+.settings-card--param .gh-editable-field{
+  width:100%;
+}
+
+.settings-card--param .gh-editable-field__input{
+  flex:1 1 auto;
+}
