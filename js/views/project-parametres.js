@@ -125,6 +125,7 @@ function ensureProjectFormDefaults() {
   form.liquefaction = liquefactionLabelToCode(form.liquefactionText || form.liquefaction || "no");
 
   form.projectTabs = {
+    propositions: typeof form.projectTabs?.propositions === "boolean" ? form.projectTabs.propositions : true,
     coordination: typeof form.projectTabs?.coordination === "boolean" ? form.projectTabs.coordination : true,
     workflows: typeof form.projectTabs?.workflows === "boolean" ? form.projectTabs.workflows : false,
     jalons: typeof form.projectTabs?.jalons === "boolean" ? form.projectTabs.jalons : false,
@@ -829,6 +830,7 @@ function refreshProjectTabsVisibility() {
     const tabId = link.getAttribute("data-project-tab-id");
     let isVisible = true;
 
+    if (tabId === "propositions") isVisible = visibility.propositions !== false;
     if (tabId === "coordination") isVisible = visibility.coordination !== false;
     if (tabId === "workflows") isVisible = visibility.workflows !== false;
     if (tabId === "jalons") isVisible = visibility.jalons !== false;
