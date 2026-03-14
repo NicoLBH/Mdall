@@ -2654,7 +2654,11 @@ color:#ffff;
   align-items:center;
   gap:12px;
 }
-
+.documents-shell{
+  width:min(100%, 1280px);
+  max-width:1280px;
+  margin:0 auto;
+}
 .documents-repo{
   border:1px solid var(--border);
   border-radius:var(--radius);
@@ -2726,7 +2730,9 @@ color:#ffff;
   justify-content:center;
   color:var(--muted);
 }
-
+.documents-repo__icon--document{
+  color:var(--fg);
+}
 .documents-upload-layout{
   display:grid;
   grid-template-columns:minmax(0, 1fr);
@@ -2879,7 +2885,38 @@ color:#ffff;
   min-width:0;
   font-size:13px;
 }
+.documents-form-field--proposal{
+  margin-top:16px;
+}
 
+.documents-inline-input{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  border:1px solid var(--border);
+  border-radius:8px;
+  background:var(--panel);
+  padding:0 12px;
+}
+
+.documents-inline-input__icon{
+  flex:0 0 auto;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  color:var(--muted);
+}
+
+.documents-inline-input__control{
+  border:none;
+  background:transparent;
+  box-shadow:none;
+  padding-left:0;
+}
+
+.documents-inline-input__control:focus{
+  box-shadow:none;
+}
 .documents-commit-card__actions{
   display:flex;
   align-items:center;
