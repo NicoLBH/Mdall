@@ -57,26 +57,34 @@ function isTabVisible(tabId) {
   return true;
 }
 
+function getTabHref(projectId, tabId) {
+  return `#project/${projectId}/${tabId}`;
+}
+
 export function renderProjectHeader(projectId, activeTab) {
   const counters = getProjectTabCounters();
-  const visibleTabs = PROJECT_TABS.filter((tab) => isTabVisible(tab.id));
 
   return `
     <section class="project-context-header">
       <nav class="project-tabs" aria-label="Project navigation">
-        ${visibleTabs.map((t) => `
-          <a
-            href="#project/${projectId}/${t.id}"
-            class="${t.id === activeTab ? "active" : ""}"
-            data-project-tab-id="${t.id}"
-          >
-            <span class="project-tabs__item">
-              <span class="project-tabs__icon" aria-hidden="true">${t.icon || ""}</span>
-              <span class="project-tabs__label">${t.label}</span>
-              ${renderTabCount(t, counters)}
-            </span>
-          </a>
-        `).join("")}
+        ${PROJECT_TABS.map((t) => {
+          const visible = isTabVisible(t.id);
+          return `
+            <a
+              href="${getTabHref(projectId, t.id)}"
+              class="${t.id === activeTab ? "active" : ""}"
+              data-project-tab-id="${t.id}"
+              style="${visible ? "" : "display:none;"}"
+              aria-hidden="${visible ? "false" : "true"}"
+            >
+              <span class="project-tabs__item">
+                <span class="project-tabs__icon" aria-hidden="true">${t.icon || ""}</span>
+                <span class="project-tabs__label">${t.label}</span>
+                ${renderTabCount(t, counters)}
+              </span>
+            </a>
+          `;
+        }).join("")}
       </nav>
     </section>
   `;
