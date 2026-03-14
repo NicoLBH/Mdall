@@ -127,7 +127,6 @@ function ensureProjectFormDefaults() {
   form.projectTabs = {
     propositions: typeof form.projectTabs?.propositions === "boolean" ? form.projectTabs.propositions : true,
     coordination: typeof form.projectTabs?.coordination === "boolean" ? form.projectTabs.coordination : true,
-    workflows: typeof form.projectTabs?.workflows === "boolean" ? form.projectTabs.workflows : false,
     jalons: typeof form.projectTabs?.jalons === "boolean" ? form.projectTabs.jalons : false,
     referentiel: typeof form.projectTabs?.referentiel === "boolean" ? form.projectTabs.referentiel : false,
     risquesSecurite: typeof form.projectTabs?.risquesSecurite === "boolean" ? form.projectTabs.risquesSecurite : false
@@ -445,8 +444,8 @@ function getPageHtml(form) {
                     </div>`
                   }),
                   renderSectionCard({
-                    title: "Onglets du projet",
-                    description: "Active ou masque certains onglets optionnels dans l’en-tête projet, à la manière des features GitHub.",
+                    title: "Fonctionnalités du projet",
+                    description: "Active ou masque certaines fonctionnalités optionnelles dans l’en-tête projet.",
                     body: renderProjectTabsFeatureCard(form.projectTabs || {})
                   })
                 ]
@@ -832,7 +831,6 @@ function refreshProjectTabsVisibility() {
 
     if (tabId === "propositions") isVisible = visibility.propositions !== false;
     if (tabId === "coordination") isVisible = visibility.coordination !== false;
-    if (tabId === "workflows") isVisible = visibility.workflows !== false;
     if (tabId === "jalons") isVisible = visibility.jalons !== false;
     if (tabId === "referentiel") isVisible = visibility.referentiel !== false;
     if (tabId === "risquesSecurite") isVisible = visibility.risquesSecurite !== false;
