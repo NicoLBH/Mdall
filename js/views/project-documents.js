@@ -280,7 +280,7 @@ function renderUploadView() {
             <div class="documents-commit-shell">
               <div class="documents-commit-shell__avatar">
                 <img
-                  src="260093543.png"
+                  src="assets/images/260093543.png"
                   alt="Avatar"
                   class="documents-commit-shell__avatar-img"
                 >
