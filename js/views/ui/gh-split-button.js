@@ -1,4 +1,5 @@
 let splitButtonGlobalBound = false;
+import { svgIcon } from "../../ui/icons.js";
 
 function closeAllSplitMenus(exceptId = "") {
   document.querySelectorAll(".gh-split").forEach((root) => {
@@ -42,9 +43,7 @@ export function renderGhSplitButton({
         aria-expanded="false"
         aria-label="Ouvrir le menu"
       >
-        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor">
-          <path d="M12.78 5.97a.75.75 0 0 1 0 1.06L8.53 11.28a.75.75 0 0 1-1.06 0L3.22 7.03a.75.75 0 0 1 1.06-1.06L8 9.69l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path>
-        </svg>
+        ${svgIcon("chevron-down", { className: "gh-chevron" })}
       </button>
 
       <div class="gh-menu" role="menu">
