@@ -126,8 +126,8 @@ function ensureProjectFormDefaults() {
 
   form.projectTabs = {
     propositions: typeof form.projectTabs?.propositions === "boolean" ? form.projectTabs.propositions : true,
-    coordination: typeof form.projectTabs?.coordination === "boolean" ? form.projectTabs.coordination : true,
-    jalons: typeof form.projectTabs?.jalons === "boolean" ? form.projectTabs.jalons : false,
+    discussions: typeof form.projectTabs?.discussions === "boolean" ? form.projectTabs.discussions : true,
+    pilotage: typeof form.projectTabs?.pilotage === "boolean" ? form.projectTabs.pilotage : false,
     referentiel: typeof form.projectTabs?.referentiel === "boolean" ? form.projectTabs.referentiel : false,
     risquesSecurite: typeof form.projectTabs?.risquesSecurite === "boolean" ? form.projectTabs.risquesSecurite : false
   };
@@ -198,13 +198,13 @@ function renderProjectTabsFeatureCard(projectTabs) {
     },
     {
       id: "tabVisibilityCoordination",
-      key: "coordination",
+      key: "discussions",
       label: "Discussions",
       description: "Affiche l’onglet Discussions pour les échanges de coordination."
     },
     {
       id: "tabVisibilityJalons",
-      key: "jalons",
+      key: "pilotage",
       label: "Pilotage",
       description: "Affiche l’onglet Pilotage actuellement branché sur les jalons projet."
     },
@@ -830,8 +830,8 @@ function refreshProjectTabsVisibility() {
     let isVisible = true;
 
     if (tabId === "propositions") isVisible = visibility.propositions !== false;
-    if (tabId === "coordination") isVisible = visibility.coordination !== false;
-    if (tabId === "jalons") isVisible = visibility.jalons !== false;
+    if (tabId === "discussions") isVisible = visibility.discussions !== false;
+    if (tabId === "pilotage") isVisible = visibility.pilotage !== false;
     if (tabId === "referentiel") isVisible = visibility.referentiel !== false;
     if (tabId === "risquesSecurite") isVisible = visibility.risquesSecurite !== false;
 
