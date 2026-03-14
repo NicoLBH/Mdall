@@ -1,6 +1,16 @@
 import { store } from "../store.js";
 import { registerProjectPrimaryScrollSource, setProjectViewHeader } from "./project-shell-chrome.js";
-import { bindGhActionButtons, initGhActionButton, renderGhActionButton } from "./ui/gh-split-button.js";
+import {
+  bindGhActionButtons,
+  bindGhSelectMenus,
+  initGhActionButton,
+  renderGhActionButton
+} from "./ui/gh-split-button.js";
+import {
+  renderProjectTableToolbar,
+  renderProjectTableToolbarGroup,
+  renderProjectTableToolbarSelect
+} from "./ui/project-table-toolbar.js";
 import { renderGhInput } from "./ui/gh-input.js";
 import { svgIcon } from "../ui/icons.js";
 import { renderDataTableShell, renderDataTableHead } from "./ui/data-table-shell.js";
@@ -84,16 +94,6 @@ function renderDocumentsTableHeadHtml() {
 }
 
 function renderDocumentsToolbar() {
-  const phaseButton = renderGhActionButton({
-    id: "documentsPhaseSplit",
-    label: docsViewState.selectedPhase,
-    tone: "default",
-    items: PROJECT_PHASES.map((phase) => ({
-      label: phase,
-      action: `phase:${phase}`
-    }))
-  });
-
   const addButton = renderGhActionButton({
     id: "documentsAddSplit",
     label: "Ajouter",
@@ -116,18 +116,27 @@ function renderDocumentsToolbar() {
     ]
   });
 
-  return `
-    <div class="documents-toolbar">
-      <div class="documents-toolbar__left">
-        ${phaseButton}
-      </div>
+  const leftHtml = renderProjectTableToolbarGroup({
+    html: renderProjectTableToolbarSelect({
+      id: "documentsPhase",
+      value: docsViewState.selectedPhase,
+      options: PROJECT_PHASES.map((phase) => ({
+        value: phase,
+        label: phase
+      }))
+    })
+  });
 
-      <div class="documents-toolbar__right">
-        ${addButton}
-        ${documentsButton}
-      </div>
-    </div>
-  `;
+  const rightHtml = [
+    renderProjectTableToolbarGroup({ html: addButton }),
+    renderProjectTableToolbarGroup({ html: documentsButton })
+  ].join("");
+
+  return renderProjectTableToolbar({
+    className: "project-table-toolbar--documents",
+    leftHtml,
+    rightHtml
+  });
 }
 
 function renderRepoDocumentRow(doc) {
@@ -435,16 +444,13 @@ function handleSubmit(root) {
 function bindDocumentsSplitActions(root) {
   bindGhActionButtons();
 
-  const phaseSplit = document.querySelector('[data-action-id="documentsPhaseSplit"]');
-  if (phaseSplit) {
-    initGhActionButton(phaseSplit);
-    phaseSplit.addEventListener("ghaction:action", (event) => {
-      const action = event.detail?.action || "";
-      if (!action.startsWith("phase:")) return;
-      docsViewState.selectedPhase = action.slice("phase:".length) || docsViewState.selectedPhase;
+  bindGhSelectMenus(document, {
+    onChange: (id, value) => {
+      if (id !== "documentsPhase") return;
+      docsViewState.selectedPhase = String(value || docsViewState.selectedPhase);
       renderProjectDocuments(root);
-    });
-  }
+    }
+  });
 
   const addSplit = document.querySelector('[data-action-id="documentsAddSplit"]');
   if (addSplit) {
