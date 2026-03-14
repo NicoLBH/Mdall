@@ -239,32 +239,32 @@ function getPageHtml(form) {
 
                 <button type="button" class="settings-nav__item" data-settings-target="parametres-zones-reglementaires">
                   <span class="settings-nav__icon">${renderNavIcon("shield")}</span>
-                  <span>Zones réglementaires</span>
+                  <span>Solidité des ouvrages</span>
                 </button>
 
                 <button type="button" class="settings-nav__item" data-settings-target="parametres-incendie">
                   <span class="settings-nav__icon">${renderNavIcon("shield")}</span>
-                  <span>Règlement incendie</span>
+                  <span>Sécurité incendie</span>
                 </button>
 
                 <button type="button" class="settings-nav__item" data-settings-target="parametres-accessibilite">
                   <span class="settings-nav__icon">${renderNavIcon("shield")}</span>
-                  <span>Règlement accessibilité</span>
+                  <span>Accessibilité PMR</span>
                 </button>
 
                 <button type="button" class="settings-nav__item" data-settings-target="parametres-parasismiques">
                   <span class="settings-nav__icon">${renderNavIcon("shield")}</span>
-                  <span>Règlements parasismiques</span>
+                  <span>Protection parasismiques</span>
                 </button>
 
                 <button type="button" class="settings-nav__item" data-settings-target="parametres-thermiques">
                   <span class="settings-nav__icon">${renderNavIcon("book")}</span>
-                  <span>Référentiels thermiques</span>
+                  <span>Performances thermiques</span>
                 </button>
 
                 <button type="button" class="settings-nav__item" data-settings-target="parametres-acoustique">
                   <span class="settings-nav__icon">${renderNavIcon("book")}</span>
-                  <span>Référentiels acoustiques</span>
+                  <span>Performances acoustiques</span>
                 </button>
 
                 <button type="button" class="settings-nav__item" data-settings-target="parametres-normes">
