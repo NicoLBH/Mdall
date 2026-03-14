@@ -40,6 +40,7 @@ export const store = {
     climateZoneSummer: "",
     climateBaseTemperatures: "",
     projectTabs: {
+      propositions: true,
       coordination: true,
       workflows: true,
       jalons: true,
