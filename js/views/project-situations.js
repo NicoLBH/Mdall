@@ -12,7 +12,7 @@ import {
   refreshProjectShellChrome
 } from "./project-shell-chrome.js";
 import { svgIcon } from "../ui/icons.js";
-import { renderGhActionButton } from "./ui/gh-split-button.js";
+import { renderGhActionButton, renderGhSelectMenu, bindGhSelectMenus } from "./ui/gh-split-button.js";
 
 /* =========================================================
    Legacy DOM / archive parity helpers
@@ -2880,9 +2880,12 @@ function bindSituationsEvents(root, headerRoot) {
     rerenderPanels();
   });
 
-  headerRoot?.querySelector("#displayDepth")?.addEventListener("change", (event) => {
-    store.situationsView.displayDepth = String(event.target.value || "situations").toLowerCase();
-    rerenderPanels();
+  bindGhSelectMenus(headerRoot || document, {
+    onChange: (id, value) => {
+      if (id !== "displayDepth") return;
+      store.situationsView.displayDepth = String(value || "situations").toLowerCase();
+      rerenderPanels();
+    }
   });
 
   root.addEventListener("click", (event) => {
@@ -2995,13 +2998,20 @@ function renderSituationsViewHeaderHtml() {
   return `
     <div class="results-bar">
       <div class="results-bar__left">
-        <label class="gh-filter gh-filter--inline" data-chrome-visibility="always">
-          <select id="displayDepth" class="gh-input gh-input--sm">
-            <option value="situations">Situations</option>
-            <option value="sujets">Sujets</option>
-            <option value="avis">Avis</option>
-          </select>
-        </label>
+        <div class="gh-filter gh-filter--inline" data-chrome-visibility="always">
+          ${renderGhSelectMenu({
+            id: "displayDepth",
+            value: String(store.situationsView.displayDepth || "situations").toLowerCase(),
+            options: [
+              { value: "situations", label: "Situations" },
+              { value: "sujets", label: "Sujets" },
+              { value: "avis", label: "Avis" }
+            ],
+            tone: "default",
+            size: "sm",
+            fieldClassName: "gh-select-field--inline"
+          })}
+        </div>
 
         <div class="issues-totals mono" id="situationsHeaderCounts" data-chrome-visibility="always">—</div>
       </div>
