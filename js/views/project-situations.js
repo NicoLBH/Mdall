@@ -32,8 +32,14 @@ import {
   renderMessageThreadActivity,
   renderMessageThreadEvent
 } from "./ui/message-thread.js";
-
 import { renderCommentComposer } from "./ui/comment-composer.js";
+import {
+  renderOverlayChrome,
+  renderOverlayChromeHead,
+  setOverlayChromeOpenState,
+  bindOverlayChromeDismiss,
+  bindOverlayChromeCompact
+} from "./ui/overlay-chrome.js";
 
 /* =========================================================
    Legacy DOM / archive parity helpers
@@ -2232,37 +2238,6 @@ function renderDetailsHtml(selectionOverride = null, options = {}) {
   };
 }
 
-function renderOverlayChromeHeadHtml({
-  eyebrow = "DÉTAILS",
-  titleId,
-  metaId = "",
-  closeId,
-  closeLabel = "Fermer",
-  headClass = ""
-} = {}) {
-  const safeTitleId = escapeHtml(titleId || "");
-  const safeMetaId = escapeHtml(metaId || "");
-  const safeCloseId = escapeHtml(closeId || "");
-  const safeCloseLabel = escapeHtml(closeLabel || "Fermer");
-  const safeHeadClass = escapeHtml(headClass || "");
-
-  return `
-    <div class="${safeHeadClass} overlay-chrome__head gh-panel__head gh-panel__head--tight details-head--expanded">
-      <div class="overlay-chrome__bar">
-        <div class="overlay-chrome__context">
-          <div class="overlay-chrome__eyebrow mono">${escapeHtml(eyebrow)}</div>
-          <div class="overlay-chrome__titlewrap" id="${safeTitleId}">—</div>
-        </div>
-
-        <div class="overlay-chrome__actions">
-          ${safeMetaId ? `<div class="details-meta mono" id="${safeMetaId}"></div>` : ""}
-          <button class="icon-btn icon-btn--sm" id="${safeCloseId}" aria-label="${safeCloseLabel}">✕</button>
-        </div>
-      </div>
-    </div>
-  `;
-}
-
 /* =========================================================
    Modal / rerender / selection
 ========================================================= */
@@ -2293,13 +2268,8 @@ function updateDetailsModal() {
 
   ensureDrilldownDom();
 
-  if (store.situationsView.detailsModalOpen) {
-    modal.classList.remove("hidden");
-    document.body.classList.add("modal-open");
-  } else {
-    modal.classList.add("hidden");
-    document.body.classList.remove("modal-open");
-  }
+  setOverlayChromeOpenState(modal, !!store.situationsView.detailsModalOpen);
+  document.body.classList.toggle("modal-open", !!store.situationsView.detailsModalOpen);
 
   wireDetailsInteractive(body);
   bindDetailsScroll(document);
@@ -2606,14 +2576,20 @@ function wireDetailsInteractive(root) {
 ========================================================= */
 
 let modalEventsBound = false;
+let modalEventsBound = false;
+
 function bindModalEvents() {
   if (modalEventsBound) return;
   modalEventsBound = true;
 
-  document.getElementById("detailsClose")?.addEventListener("click", closeDetailsModal);
-  document.getElementById("detailsModal")?.addEventListener("click", (event) => {
-    if (event.target?.id === "detailsModal") closeDetailsModal();
+  const modal = document.getElementById("detailsModal");
+
+  bindOverlayChromeDismiss(modal, {
+    onClose: closeDetailsModal
   });
+
+  document.getElementById("detailsClose")?.addEventListener("click", closeDetailsModal);
+
   window.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
     if (store.situationsView.detailsModalOpen) closeDetailsModal();
@@ -2697,26 +2673,28 @@ function ensureDrilldownDom() {
 
   const panel = document.createElement("div");
   panel.id = "drilldownPanel";
-  panel.className = "drilldown hidden";
+  panel.className = "drilldown overlay-host overlay-host--side hidden";
+  panel.setAttribute("aria-hidden", "true");
 
-  panel.innerHTML = `
-    <div class="drilldown__inner overlay-chrome overlay-chrome--drilldown gh-panel gh-panel--details">
-      ${renderOverlayChromeHeadHtml({
-        eyebrow: "DÉTAILS",
-        titleId: "drilldownTitle",
-        closeId: "drilldownClose",
-        closeLabel: "Fermer",
-        headClass: "drilldown__head"
-      })}
-      <div class="drilldown__body overlay-chrome__body details-body" id="drilldownBody"></div>
-    </div>
-  `;
+  panel.innerHTML = renderOverlayChrome({
+    shellClassName: "drilldown__inner gh-panel gh-panel--details",
+    variant: "drilldown",
+    ariaLabel: "Détails",
+    headHtml: renderOverlayChromeHead({
+      eyebrow: "DÉTAILS",
+      titleId: "drilldownTitle",
+      closeId: "drilldownClose",
+      closeLabel: "Fermer",
+      headClassName: "drilldown__head"
+    }),
+    bodyId: "drilldownBody",
+    bodyClassName: "drilldown__body details-body"
+  });
 
   document.body.appendChild(panel);
 
-  panel.querySelector("#drilldownClose")?.addEventListener("click", closeDrilldown);
-  panel.addEventListener("click", (ev) => {
-    if (ev.target === panel) closeDrilldown();
+  bindOverlayChromeDismiss(panel, {
+    onClose: closeDrilldown
   });
 }
 
@@ -2771,7 +2749,8 @@ function openDrilldown() {
   ensureDrilldownDom();
   closeGlobalNav();
   store.situationsView.drilldown.isOpen = true;
-  document.getElementById("drilldownPanel")?.classList.remove("hidden");
+  const panel = document.getElementById("drilldownPanel");
+  setOverlayChromeOpenState(panel, true);
   document.body.classList.add("drilldown-open");
   updateDrilldownPanel();
 }
@@ -2779,7 +2758,8 @@ function openDrilldown() {
 function closeDrilldown() {
   ensureViewUiState();
   store.situationsView.drilldown.isOpen = false;
-  document.getElementById("drilldownPanel")?.classList.add("hidden");
+  const panel = document.getElementById("drilldownPanel");
+  setOverlayChromeOpenState(panel, false);
   document.body.classList.remove("drilldown-open");
 }
 
@@ -2819,35 +2799,7 @@ function openDrilldownFromAvis(avisId) {
 }
 
 function bindCondensedTitleScroll(scrollEl, classHost, key) {
-  if (!scrollEl || !classHost) return;
-
-  const boundKey = key || "default";
-  const attr = `scrollBound${boundKey.charAt(0).toUpperCase()}${boundKey.slice(1)}`;
-
-  const syncCompactState = () => {
-    const scrolled = (scrollEl.scrollTop || 0) > 8;
-
-    classHost.classList.toggle("details-scrolled", scrolled);
-    classHost.classList.toggle("overlay-chrome--compact", scrolled);
-
-    classHost.querySelectorAll?.(".gh-panel__head--tight, .overlay-chrome__head").forEach((head) => {
-      head.classList.toggle("details-head--compact", scrolled);
-      head.classList.toggle("details-head--expanded", !scrolled);
-    });
-  };
-
-  scrollEl.__syncCondensedTitle = syncCompactState;
-
-  if (scrollEl.dataset[attr] === "1") {
-    syncCompactState();
-    return;
-  }
-
-  scrollEl.dataset[attr] = "1";
-  scrollEl.addEventListener("scroll", syncCompactState, { passive: true });
-
-  syncCompactState();
-  setTimeout(syncCompactState, 0);
+  bindOverlayChromeCompact(scrollEl, classHost, key);
 }
 
 function bindDetailsScroll(root) {
