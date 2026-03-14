@@ -1,3 +1,5 @@
+import { DEFAULT_PROJECT_TABS_VISIBILITY } from "./constants.js";
+
 export const store = {
   user: null,
   projects: [],
@@ -39,13 +41,7 @@ export const store = {
     climateZoneWinter: "",
     climateZoneSummer: "",
     climateBaseTemperatures: "",
-    projectTabs: {
-      propositions: true,
-      discussions: false,
-      pilotage: false,
-      referentiel: false,
-      risquesSecurite: false
-    },
+    projectTabs: { ...DEFAULT_PROJECT_TABS_VISIBILITY },
     webhookUrl: "",
     pdfFile: null
   },
