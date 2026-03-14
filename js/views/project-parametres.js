@@ -126,10 +126,10 @@ function ensureProjectFormDefaults() {
 
   form.projectTabs = {
     propositions: typeof form.projectTabs?.propositions === "boolean" ? form.projectTabs.propositions : true,
-    discussions: typeof form.projectTabs?.discussions === "boolean" ? form.projectTabs.discussions : true,
-    pilotage: typeof form.projectTabs?.pilotage === "boolean" ? form.projectTabs.pilotage : true,
-    referentiel: typeof form.projectTabs?.referentiel === "boolean" ? form.projectTabs.referentiel : true,
-    risquesSecurite: typeof form.projectTabs?.risquesSecurite === "boolean" ? form.projectTabs.risquesSecurite : true
+    discussions: typeof form.projectTabs?.discussions === "boolean" ? form.projectTabs.discussions : false,
+    pilotage: typeof form.projectTabs?.pilotage === "boolean" ? form.projectTabs.pilotage : false,
+    referentiel: typeof form.projectTabs?.referentiel === "boolean" ? form.projectTabs.referentiel : false,
+    risquesSecurite: typeof form.projectTabs?.risquesSecurite === "boolean" ? form.projectTabs.risquesSecurite : false
   };
 }
 
