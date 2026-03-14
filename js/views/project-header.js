@@ -1,4 +1,4 @@
-import { PROJECT_TABS } from "../constants.js";
+import { PROJECT_TABS, isToggleableProjectTab } from "../constants.js";
 import { store } from "../store.js";
 
 function getEffectiveSujetStatus(sujet) {
@@ -47,9 +47,11 @@ function renderTabCount(tab, counters) {
 
 function isTabVisible(tabId) {
   const visibility = store.projectForm?.projectTabs || {};
-  if (tabId in visibility) {
+
+  if (isToggleableProjectTab(tabId)) {
     return visibility[tabId] !== false;
   }
+
   return true;
 }
 
