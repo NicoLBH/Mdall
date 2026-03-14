@@ -1,6 +1,7 @@
 import { store } from "../store.js";
 import { registerProjectPrimaryScrollSource, setProjectViewHeader } from "./project-shell-chrome.js";
-import { bindGhSplitButtons, initGhSplitButton, renderGhSplitButton } from "./ui/gh-split-button.js";
+import { bindGhActionButtons, initGhActionButton, renderGhActionButton } from "./ui/gh-split-button.js";
+import { renderGhInput } from "./ui/gh-input.js";
 import { svgIcon } from "../ui/icons.js";
 
 const DOCUMENT_FOLDERS = [
@@ -68,33 +69,33 @@ function getRemoveIconSvg() {
 }
 
 function renderDocumentsToolbar() {
-  const phaseButton = renderGhSplitButton({
+  const phaseButton = renderGhActionButton({
     id: "documentsPhaseSplit",
-    label: `<span class="gh-split__label">${escapeHtml(docsViewState.selectedPhase)}</span>`,
+    label: docsViewState.selectedPhase,
+    tone: "default",
     items: PROJECT_PHASES.map((phase) => ({
       label: phase,
       action: `phase:${phase}`
     }))
   });
 
-  const addButton = renderGhSplitButton({
+  const addButton = renderGhActionButton({
     id: "documentsAddSplit",
-    label: `<span class="gh-split__label">Ajouter</span>`,
+    label: "Ajouter",
+    tone: "default",
+    mainAction: "add-documents",
     items: [
       { label: "Ajouter des documents", action: "add-documents" },
       { label: "Ajouter un dossier", action: "add-folder" }
     ]
   });
 
-  const documentsButton = renderGhSplitButton({
+  const documentsButton = renderGhActionButton({
     id: "documentsActionsSplit",
-    label: `
-      <span class="gh-split__label gh-split__label--with-icon">
-        <span class="gh-split__icon">${getLargeDocumentIconSvg()}</span>
-        <span>Documents</span>
-      </span>
-    `,
-    variant: "primary",
+    label: "Documents",
+    icon: getLargeDocumentIconSvg(),
+    tone: "primary",
+    mainAction: "download-zip",
     items: [
       { label: "Télécharger le dossier ZIP", action: "download-zip" }
     ]
@@ -218,16 +219,13 @@ function renderProposalField() {
   return `
     <div class="documents-form-field documents-form-field--proposal">
       <label for="documentsProposalNameInput">Nom de la modification</label>
-      <div class="documents-inline-input">
-        <span class="documents-inline-input__icon">${getProposalIconSvg()}</span>
-        <input
-          id="documentsProposalNameInput"
-          type="text"
-          class="gh-input documents-inline-input__control"
-          value="${escapeHtml(docsViewState.proposalName)}"
-          placeholder="Ex. Ajustement du visa sur note parasismique V03"
-        >
-      </div>
+      ${renderGhInput({
+        id: "documentsProposalNameInput",
+        value: docsViewState.proposalName,
+        placeholder: "Ex. Ajustement du visa sur note parasismique V03",
+        icon: getProposalIconSvg(),
+        className: "documents-gh-input"
+      })}
     </div>
   `;
 }
@@ -273,13 +271,12 @@ function renderUploadView() {
                 <div class="documents-commit-card__title">Déposer le document</div>
 
                 <div class="documents-form-field">
-                  <input
-                    id="documentsTitleInput"
-                    type="text"
-                    class="gh-input"
-                    value="${escapeHtml(docsViewState.title)}"
-                    placeholder="Ex. Note d'hypothèses parasismiques - version 03"
-                  >
+                  ${renderGhInput({
+                    id: "documentsTitleInput",
+                    value: docsViewState.title,
+                    placeholder: "Ex. Note d'hypothèses parasismiques - version 03",
+                    icon: getDocumentIconSvg()
+                  })}
                 </div>
 
                 <div class="documents-form-field">
@@ -422,12 +419,12 @@ function handleSubmit(root) {
 }
 
 function bindDocumentsSplitActions(root) {
-  bindGhSplitButtons();
+  bindGhActionButtons();
 
-  const phaseSplit = document.querySelector('[data-split-id="documentsPhaseSplit"]');
+  const phaseSplit = document.querySelector('[data-action-id="documentsPhaseSplit"]');
   if (phaseSplit) {
-    initGhSplitButton(phaseSplit);
-    phaseSplit.addEventListener("ghsplit:action", (event) => {
+    initGhActionButton(phaseSplit);
+    phaseSplit.addEventListener("ghaction:action", (event) => {
       const action = event.detail?.action || "";
       if (!action.startsWith("phase:")) return;
       docsViewState.selectedPhase = action.slice("phase:".length) || docsViewState.selectedPhase;
@@ -435,28 +432,28 @@ function bindDocumentsSplitActions(root) {
     });
   }
 
-  const addSplit = document.querySelector('[data-split-id="documentsAddSplit"]');
+  const addSplit = document.querySelector('[data-action-id="documentsAddSplit"]');
   if (addSplit) {
-    initGhSplitButton(addSplit, { mainAction: "add-documents" });
-    addSplit.addEventListener("ghsplit:action", (event) => {
+    initGhActionButton(addSplit, { mainAction: "add-documents" });
+    addSplit.addEventListener("ghaction:action", (event) => {
       const action = event.detail?.action || "";
       if (action === "add-documents") {
         docsViewState.mode = "upload";
         renderProjectDocuments(root);
       }
       if (action === "add-folder") {
-        // UI placeholder volontaire : le comportement métier/back sera branché plus tard.
+        // placeholder métier
       }
     });
   }
 
-  const documentsSplit = document.querySelector('[data-split-id="documentsActionsSplit"]');
+  const documentsSplit = document.querySelector('[data-action-id="documentsActionsSplit"]');
   if (documentsSplit) {
-    initGhSplitButton(documentsSplit, { mainAction: "download-zip" });
-    documentsSplit.addEventListener("ghsplit:action", (event) => {
+    initGhActionButton(documentsSplit, { mainAction: "download-zip" });
+    documentsSplit.addEventListener("ghaction:action", (event) => {
       const action = event.detail?.action || "";
       if (action === "download-zip") {
-        // UI placeholder volontaire : le téléchargement réel du ZIP sera branché plus tard.
+        // placeholder métier
       }
     });
   }
