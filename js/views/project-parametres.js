@@ -8,6 +8,13 @@ import {
 import { svgIcon } from "../ui/icons.js";
 import { renderGhEditableField, bindGhEditableFields } from "./ui/gh-input.js";
 import { renderGhSelectMenu, bindGhSelectMenus } from "./ui/gh-split-button.js";
+import {
+  renderSideNavLayout,
+  renderSideNavGroup,
+  renderSideNavItem,
+  renderSideNavSeparator,
+  bindSideNavPanels
+} from "./ui/side-nav-layout.js";
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (char) => ({
@@ -152,6 +159,83 @@ function renderNavIcon(name) {
   return icons[name] || icons.general;
 }
 
+const PARAMETRES_NAV_GROUPS = [
+  {
+    title: "Paramètres",
+    items: [
+      { targetId: "parametres-general", label: "Général", icon: "general", isPrimary: true, isActive: true }
+    ]
+  },
+  {
+    sectionLabel: "Données de base projet",
+    items: [
+      { targetId: "parametres-localisation", label: "Localisation", icon: "pin" },
+      { targetId: "parametres-phase", label: "Phase", icon: "checklist" },
+      { targetId: "parametres-collaborateurs", label: "Collaborateurs", icon: "people" },
+      { targetId: "parametres-lots", label: "Lots", icon: "book" },
+      { targetId: "parametres-zones-batiments", label: "Zones / bâtiments / niveaux", icon: "book" }
+    ]
+  },
+  {
+    sectionLabel: "Référentiels techniques et réglementaires",
+    items: [
+      { targetId: "parametres-zones-reglementaires", label: "Solidité des ouvrages", icon: "shield" },
+      { targetId: "parametres-incendie", label: "Sécurité incendie", icon: "shield" },
+      { targetId: "parametres-accessibilite", label: "Accessibilité PMR", icon: "shield" },
+      { targetId: "parametres-parasismiques", label: "Protection parasismique", icon: "shield" },
+      { targetId: "parametres-thermiques", label: "Performances thermiques", icon: "book" },
+      { targetId: "parametres-acoustique", label: "Performances acoustiques", icon: "book" },
+      { targetId: "parametres-normes", label: "DTU / Eurocodes / normes", icon: "book" },
+      { targetId: "parametres-doctrines", label: "Doctrines particulières MOA", icon: "book" }
+    ]
+  },
+  {
+    sectionLabel: "Gouvernance",
+    items: [
+      { targetId: "parametres-droits", label: "Droits par acteur", icon: "people" },
+      { targetId: "parametres-circuits", label: "Circuits de validation", icon: "checklist" },
+      { targetId: "parametres-taxonomie", label: "Taxonomie des sujets", icon: "book" },
+      { targetId: "parametres-criticite", label: "Règles de criticité", icon: "shield" },
+      { targetId: "parametres-nomenclature", label: "Nomenclature documentaire", icon: "book" },
+      { targetId: "parametres-workflow-pr", label: "Workflow de PR", icon: "checklist" },
+      { targetId: "parametres-cloture", label: "Politique de clôture des sujets", icon: "shield" }
+    ]
+  },
+  {
+    sectionLabel: "Paramètres opérationnels",
+    items: [
+      { targetId: "parametres-jalons", label: "Jalons", icon: "checklist" },
+      { targetId: "parametres-responsabilites", label: "Responsabilités", icon: "people" },
+      { targetId: "parametres-champs", label: "Champs obligatoires", icon: "checklist" },
+      { targetId: "parametres-modeles", label: "Modèles de documents", icon: "book" },
+      { targetId: "parametres-templates", label: "Templates de remarques", icon: "book" },
+      { targetId: "parametres-diffusion", label: "Matrices de diffusion", icon: "people" }
+    ]
+  }
+];
+
+function renderParametresNav() {
+  return PARAMETRES_NAV_GROUPS.map((group, groupIndex) => {
+    const html = renderSideNavGroup({
+      title: group.title || "",
+      sectionLabel: group.sectionLabel || "",
+      className: groupIndex === 0 ? "settings-nav__group settings-nav__group--project" : "settings-nav__group settings-nav__group--project",
+      items: group.items.map((item) =>
+        renderSideNavItem({
+          label: item.label,
+          targetId: item.targetId,
+          iconHtml: renderNavIcon(item.icon),
+          isActive: !!item.isActive,
+          isPrimary: !!item.isPrimary
+        })
+      )
+    });
+
+    if (groupIndex === PARAMETRES_NAV_GROUPS.length - 1) return html;
+    return `${html}${renderSideNavSeparator()}`;
+  }).join("");
+}
+
 function renderSectionCard({ id = "", title, description = "", body = "", badge = "" }) {
   return `
     <div class="settings-card settings-card--param" ${id ? `id="${escapeHtml(id)}"` : ""}>
@@ -263,6 +347,7 @@ function renderSettingsBlock({ id, title, lead = "", cards = [], isActive = fals
     <section
       class="settings-block ${isActive ? "is-active" : ""} ${isHero ? "settings-block--hero" : ""}"
       data-settings-block="${escapeHtml(id)}"
+      data-side-nav-panel="${escapeHtml(id)}"
     >
       ${isHero ? `
         <header class="settings-page-header settings-page-header--parametres">
@@ -285,161 +370,12 @@ function getPageHtml(form) {
     <section class="project-simple-page project-simple-page--settings project-simple-page--parametres">
       <div class="project-simple-scroll project-simple-scroll--parametres" id="projectParametresScroll">
         <div class="settings-shell settings-shell--parametres">
-          <div class="settings-layout settings-layout--parametres">
-            <aside class="settings-nav settings-nav--parametres">
-              <div class="settings-nav__group settings-nav__group--project">
-                <div class="settings-nav__title">Paramètres</div>
-
-                <button type="button" class="settings-nav__item settings-nav__item--main is-active" data-settings-target="parametres-general">
-                  <span class="settings-nav__icon">${renderNavIcon("general")}</span>
-                  <span>Général</span>
-                </button>
-
-                <div class="settings-nav__separator"></div>
-                <div class="settings-nav__section-label">Données de base projet</div>
-
-                <button type="button" class="settings-nav__item" data-settings-target="parametres-localisation">
-                  <span class="settings-nav__icon">${renderNavIcon("pin")}</span>
-                  <span>Localisation</span>
-                </button>
-
-                <button type="button" class="settings-nav__item" data-settings-target="parametres-phase">
-                  <span class="settings-nav__icon">${renderNavIcon("checklist")}</span>
-                  <span>Phase</span>
-                </button>
-
-                <button type="button" class="settings-nav__item" data-settings-target="parametres-collaborateurs">
-                  <span class="settings-nav__icon">${renderNavIcon("people")}</span>
-                  <span>Collaborateurs</span>
-                </button>
-
-                <button type="button" class="settings-nav__item" data-settings-target="parametres-lots">
-                  <span class="settings-nav__icon">${renderNavIcon("book")}</span>
-                  <span>Lots</span>
-                </button>
-
-                <button type="button" class="settings-nav__item" data-settings-target="parametres-zones-batiments">
-                  <span class="settings-nav__icon">${renderNavIcon("book")}</span>
-                  <span>Zones / bâtiments / niveaux</span>
-                </button>
-
-                <div class="settings-nav__separator"></div>
-                <div class="settings-nav__section-label">Référentiels techniques et réglementaires</div>
-
-                <button type="button" class="settings-nav__item" data-settings-target="parametres-zones-reglementaires">
-                  <span class="settings-nav__icon">${renderNavIcon("shield")}</span>
-                  <span>Solidité des ouvrages</span>
-                </button>
-
-                <button type="button" class="settings-nav__item" data-settings-target="parametres-incendie">
-                  <span class="settings-nav__icon">${renderNavIcon("shield")}</span>
-                  <span>Sécurité incendie</span>
-                </button>
-
-                <button type="button" class="settings-nav__item" data-settings-target="parametres-accessibilite">
-                  <span class="settings-nav__icon">${renderNavIcon("shield")}</span>
-                  <span>Accessibilité PMR</span>
-                </button>
-
-                <button type="button" class="settings-nav__item" data-settings-target="parametres-parasismiques">
-                  <span class="settings-nav__icon">${renderNavIcon("shield")}</span>
-                  <span>Protection parasismique</span>
-                </button>
-
-                <button type="button" class="settings-nav__item" data-settings-target="parametres-thermiques">
-                  <span class="settings-nav__icon">${renderNavIcon("book")}</span>
-                  <span>Performances thermiques</span>
-                </button>
-
-                <button type="button" class="settings-nav__item" data-settings-target="parametres-acoustique">
-                  <span class="settings-nav__icon">${renderNavIcon("book")}</span>
-                  <span>Performances acoustiques</span>
-                </button>
-
-                <button type="button" class="settings-nav__item" data-settings-target="parametres-normes">
-                  <span class="settings-nav__icon">${renderNavIcon("book")}</span>
-                  <span>DTU / Eurocodes / normes</span>
-                </button>
-
-                <button type="button" class="settings-nav__item" data-settings-target="parametres-doctrines">
-                  <span class="settings-nav__icon">${renderNavIcon("book")}</span>
-                  <span>Doctrines particulières MOA</span>
-                </button>
-
-                <div class="settings-nav__separator"></div>
-                <div class="settings-nav__section-label">Gouvernance</div>
-
-                <button type="button" class="settings-nav__item" data-settings-target="parametres-droits">
-                  <span class="settings-nav__icon">${renderNavIcon("people")}</span>
-                  <span>Droits par acteur</span>
-                </button>
-
-                <button type="button" class="settings-nav__item" data-settings-target="parametres-circuits">
-                  <span class="settings-nav__icon">${renderNavIcon("checklist")}</span>
-                  <span>Circuits de validation</span>
-                </button>
-
-                <button type="button" class="settings-nav__item" data-settings-target="parametres-taxonomie">
-                  <span class="settings-nav__icon">${renderNavIcon("book")}</span>
-                  <span>Taxonomie des sujets</span>
-                </button>
-
-                <button type="button" class="settings-nav__item" data-settings-target="parametres-criticite">
-                  <span class="settings-nav__icon">${renderNavIcon("shield")}</span>
-                  <span>Règles de criticité</span>
-                </button>
-
-                <button type="button" class="settings-nav__item" data-settings-target="parametres-nomenclature">
-                  <span class="settings-nav__icon">${renderNavIcon("book")}</span>
-                  <span>Nomenclature documentaire</span>
-                </button>
-
-                <button type="button" class="settings-nav__item" data-settings-target="parametres-workflow-pr">
-                  <span class="settings-nav__icon">${renderNavIcon("checklist")}</span>
-                  <span>Workflow de PR</span>
-                </button>
-
-                <button type="button" class="settings-nav__item" data-settings-target="parametres-cloture">
-                  <span class="settings-nav__icon">${renderNavIcon("shield")}</span>
-                  <span>Politique de clôture des sujets</span>
-                </button>
-
-                <div class="settings-nav__separator"></div>
-                <div class="settings-nav__section-label">Paramètres opérationnels</div>
-
-                <button type="button" class="settings-nav__item" data-settings-target="parametres-jalons">
-                  <span class="settings-nav__icon">${renderNavIcon("checklist")}</span>
-                  <span>Jalons</span>
-                </button>
-
-                <button type="button" class="settings-nav__item" data-settings-target="parametres-responsabilites">
-                  <span class="settings-nav__icon">${renderNavIcon("people")}</span>
-                  <span>Responsabilités</span>
-                </button>
-
-                <button type="button" class="settings-nav__item" data-settings-target="parametres-champs">
-                  <span class="settings-nav__icon">${renderNavIcon("checklist")}</span>
-                  <span>Champs obligatoires</span>
-                </button>
-
-                <button type="button" class="settings-nav__item" data-settings-target="parametres-modeles">
-                  <span class="settings-nav__icon">${renderNavIcon("book")}</span>
-                  <span>Modèles de documents</span>
-                </button>
-
-                <button type="button" class="settings-nav__item" data-settings-target="parametres-templates">
-                  <span class="settings-nav__icon">${renderNavIcon("book")}</span>
-                  <span>Templates de remarques</span>
-                </button>
-
-                <button type="button" class="settings-nav__item" data-settings-target="parametres-diffusion">
-                  <span class="settings-nav__icon">${renderNavIcon("people")}</span>
-                  <span>Matrices de diffusion</span>
-                </button>
-              </div>
-            </aside>
-
-            <div class="settings-content settings-content--parametres">
+          ${renderSideNavLayout({
+            className: "settings-layout settings-layout--parametres",
+            navClassName: "settings-nav settings-nav--parametres",
+            contentClassName: "settings-content settings-content--parametres",
+            navHtml: renderParametresNav(),
+            contentHtml: `
               ${renderSettingsBlock({
                 id: "parametres-general",
                 title: "General",
@@ -514,14 +450,14 @@ function getPageHtml(form) {
               ${renderSettingsBlock({
                 id: "parametres-lots",
                 title: "Données de base projet",
-                lead: "Structuration technique et répartition par macro-lots ou spécialités.",
+                lead: "",
                 cards: [
                   renderSectionCard({
                     title: "Lots",
-                    description: "Structuration technique et répartition par macro-lots ou spécialités.",
+                    description: "Organisation des disciplines et périmètres techniques du projet.",
                     body: renderPlaceholderList([
-                      "Structure, façade, CVC, CFO/CFA, sécurité incendie, accessibilité, thermique, acoustique.",
-                      "Affectation des responsables et circuits de revue par lot."
+                      "Gros œuvre, structure, fluides, électricité, SSI, VRD, enveloppe, second œuvre, exploitation.",
+                      "Découpage compatible avec les tableaux Documents, Situations et Propositions."
                     ])
                   })
                 ]
@@ -530,14 +466,13 @@ function getPageHtml(form) {
               ${renderSettingsBlock({
                 id: "parametres-zones-batiments",
                 title: "Données de base projet",
-                lead: "Découpage spatial servant à l’adressage des documents, sujets et avis.",
+                lead: "",
                 cards: [
                   renderSectionCard({
                     title: "Zones / bâtiments / niveaux",
-                    description: "Découpage spatial servant à l’adressage des documents, sujets et avis.",
+                    description: "Découpage spatial utilisé dans les analyses et les livrables.",
                     body: renderPlaceholderList([
-                      "Bâtiments, ailes, blocs, zones fonctionnelles, niveaux et locaux.",
-                      "Règles de nommage réutilisables dans les sujets et propositions."
+                      "Bâtiments, ailes, niveaux, zones techniques, secteurs fonctionnels et zones de diffusion."
                     ])
                   })
                 ]
@@ -546,23 +481,14 @@ function getPageHtml(form) {
               ${renderSettingsBlock({
                 id: "parametres-zones-reglementaires",
                 title: "Référentiels techniques et réglementaires",
-                lead: "Paramètres de solidité, d’exposition et d’environnement utiles au dimensionnement.",
+                lead: "Cadre réglementaire principal lié à la solidité et à la structure.",
                 cards: [
                   renderSectionCard({
                     title: "Solidité des ouvrages",
-                    description: "Réunit les paramètres réglementaires territoriaux et les références climatiques utiles au projet.",
-                    badge: "LIVE",
-                    body: `
-                      <div class="settings-form-grid settings-form-grid--thirds">
-                        ${renderInputField({ id: "climateZoneWinter", label: "Zone climatique hiver", value: form.climateZoneWinter || "", placeholder: "Ex. H1b" })}
-                        ${renderInputField({ id: "climateZoneSummer", label: "Zone climatique été", value: form.climateZoneSummer || "", placeholder: "Ex. Ec" })}
-                        ${renderInputField({ id: "climateBaseTemperatures", label: "Températures de base", value: form.climateBaseTemperatures || "", placeholder: "Ex. -10°C / +32°C" })}
-                      </div>
-                      ${renderPlaceholderList([
-                        "Références climatiques, altitude, exposition, vent dominant et neige utiles au projet.",
-                        "Ces données complètent désormais Solidité des ouvrages et ne figurent plus dans une rubrique séparée."
-                      ])}
-                    `
+                    description: "Références réglementaires, hypothèses générales et domaine d’application.",
+                    body: renderPlaceholderList([
+                      "Code de la construction, Eurocodes, règles professionnelles, cas particuliers et exigences du programme."
+                    ])
                   })
                 ]
               })}
@@ -795,8 +721,8 @@ function getPageHtml(form) {
                   renderSectionCard({ title: "Matrices de diffusion", body: renderPlaceholderList(["Destinataires, visas, pièces jointes et conditions de diffusion selon le contexte."]) })
                 ]
               })}
-            </div>
-          </div>
+            `
+          })}
         </div>
       </div>
     </section>
@@ -933,28 +859,12 @@ function bindParametresEvents() {
 
 function bindParametresNav() {
   const scrollEl = document.getElementById("projectParametresScroll");
-  const links = Array.from(document.querySelectorAll("[data-settings-target]"));
-  const blocks = Array.from(document.querySelectorAll("[data-settings-block]"));
+  if (!scrollEl) return;
 
-  if (!scrollEl || !links.length || !blocks.length) return;
-
-  const showBlock = (targetId) => {
-    links.forEach((link) => {
-      link.classList.toggle("is-active", link.dataset.settingsTarget === targetId);
-    });
-
-    blocks.forEach((block) => {
-      block.classList.toggle("is-active", block.dataset.settingsBlock === targetId);
-    });
-
-    scrollEl.scrollTo({ top: 0, behavior: "auto" });
-  };
-
-  links.forEach((link) => {
-    link.addEventListener("click", () => {
-      showBlock(link.dataset.settingsTarget);
-    });
+  bindSideNavPanels(document, {
+    navSelector: "[data-side-nav-target]",
+    panelSelector: "[data-side-nav-panel]",
+    defaultTarget: "parametres-general",
+    scrollContainer: scrollEl
   });
-
-  showBlock("parametres-general");
 }
