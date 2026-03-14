@@ -2547,7 +2547,6 @@ function wireDetailsInteractive(root) {
 ========================================================= */
 
 let modalEventsBound = false;
-let modalEventsBound = false;
 
 function bindModalEvents() {
   if (modalEventsBound) return;
