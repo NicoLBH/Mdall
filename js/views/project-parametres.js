@@ -129,7 +129,7 @@ function ensureProjectFormDefaults() {
     workflows: typeof form.projectTabs?.workflows === "boolean" ? form.projectTabs.workflows : false,
     jalons: typeof form.projectTabs?.jalons === "boolean" ? form.projectTabs.jalons : false,
     referentiel: typeof form.projectTabs?.referentiel === "boolean" ? form.projectTabs.referentiel : false,
-    risques-securite: typeof form.projectTabs?.risques-securite === "boolean" ? form.projectTabs.risques-securite : false
+    risquesSecurite: typeof form.projectTabs?.risquesSecurite === "boolean" ? form.projectTabs.risquesSecurite : false
   };
 }
 
