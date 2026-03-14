@@ -77,12 +77,29 @@ function ensureProjectFormDefaults() {
     form.projectName = "Projet demo";
   }
 
-  if (typeof form.city !== "string") form.city = "";
-  if (typeof form.postalCode !== "string") form.postalCode = "";
-  if (typeof form.zoneSismique !== "string") form.zoneSismique = "";
-  if (typeof form.phase !== "string" || !form.phase.trim()) form.phase = "APS";
-  if (typeof form.referential !== "string" || !form.referential.trim()) form.referential = "EC8";
-  if (typeof form.soilClass !== "string" || !form.soilClass.trim()) form.soilClass = "A";
+  if (typeof form.city !== "string" || !form.city.trim()) {
+    form.city = "Annecy";
+  }
+
+  if (typeof form.postalCode !== "string" || !form.postalCode.trim()) {
+    form.postalCode = "74000";
+  }
+
+  if (typeof form.zoneSismique !== "string" || !form.zoneSismique.trim()) {
+    form.zoneSismique = "4";
+  }
+
+  if (typeof form.phase !== "string" || !form.phase.trim()) {
+    form.phase = "APS";
+  }
+
+  if (typeof form.referential !== "string" || !form.referential.trim()) {
+    form.referential = "EC8";
+  }
+
+  if (typeof form.soilClass !== "string" || !form.soilClass.trim()) {
+    form.soilClass = "A";
+  }
 
   if ((!form.city || !form.postalCode) && form.communeCp) {
     const raw = String(form.communeCp).trim();
