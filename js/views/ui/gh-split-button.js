@@ -1,118 +1,184 @@
-let splitButtonGlobalBound = false;
 import { svgIcon } from "../../ui/icons.js";
 
-function closeAllSplitMenus(exceptId = "") {
-  document.querySelectorAll(".gh-split").forEach((root) => {
-    if (!exceptId || root.dataset.splitId !== exceptId) {
+let actionButtonGlobalBound = false;
+
+function closeAllActionMenus(exceptId = "") {
+  document.querySelectorAll(".gh-action").forEach((root) => {
+    if (!exceptId || root.dataset.actionId !== exceptId) {
       root.classList.remove("is-open");
+      const toggle = root.querySelector("[data-action-toggle]");
+      if (toggle) toggle.setAttribute("aria-expanded", "false");
     }
   });
 }
 
-export function renderGhSplitButton({
-  id,
-  label = "Action",
-  variant = "",
-  items = []
-}) {
-  const itemHtml = items.map((item) => `
+function escapeAttr(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  }[char]));
+}
+
+function renderMenuItems(items = []) {
+  return items.map((item) => `
     <button
       type="button"
       class="gh-menu__item${item.danger ? " is-danger" : ""}"
-      data-menu-action="${item.action}"
+      data-menu-action="${escapeAttr(item.action || "")}"
     >
-      ${item.label}
+      ${item.icon ? `<span class="gh-menu__item-icon">${item.icon}</span>` : ""}
+      <span>${item.label || ""}</span>
     </button>
   `).join("");
+}
+
+export function renderGhActionButton({
+  id,
+  label = "",
+  icon = "",
+  tone = "default",
+  size = "md",
+  items = [],
+  mainAction = "",
+  withChevron = true,
+  iconOnly = false,
+  disabled = false,
+  className = ""
+}) {
+  const hasMenu = Array.isArray(items) && items.length > 0;
+  const btnToneClass = tone ? `gh-btn--${tone}` : "";
+  const btnSizeClass = size ? `gh-btn--${size}` : "";
+  const rootClasses = [
+    "gh-action",
+    hasMenu ? "gh-action--split" : "gh-action--single",
+    className
+  ].filter(Boolean).join(" ");
+
+  const contentHtml = `
+    ${icon ? `<span class="gh-action__icon">${icon}</span>` : ""}
+    ${!iconOnly ? `<span class="gh-action__label">${label}</span>` : ""}
+  `;
+
+  if (!hasMenu) {
+    return `
+      <div
+        class="${rootClasses}"
+        data-action-id="${escapeAttr(id)}"
+        data-main-action="${escapeAttr(mainAction)}"
+      >
+        <button
+          type="button"
+          class="gh-btn gh-action__main ${btnToneClass} ${btnSizeClass}"
+          data-action-main
+          ${disabled ? "disabled" : ""}
+        >
+          ${contentHtml}
+        </button>
+      </div>
+    `;
+  }
 
   return `
-    <div class="gh-split ${variant ? `gh-split--${variant}` : ""}" data-split-id="${id}">
+    <div
+      class="${rootClasses}"
+      data-action-id="${escapeAttr(id)}"
+      data-main-action="${escapeAttr(mainAction)}"
+    >
       <button
         type="button"
-        class="gh-btn ${variant === "primary" ? "gh-btn--primary" : ""} gh-split__main"
-        data-split-main
+        class="gh-btn gh-action__main ${btnToneClass} ${btnSizeClass}"
+        data-action-main
+        ${disabled ? "disabled" : ""}
       >
-        ${label}
+        ${contentHtml}
       </button>
 
       <button
         type="button"
-        class="gh-btn ${variant === "primary" ? "gh-btn--primary" : ""} gh-split__toggle"
-        data-split-toggle
+        class="gh-btn gh-action__toggle ${btnToneClass} ${btnSizeClass}"
+        data-action-toggle
         aria-haspopup="menu"
         aria-expanded="false"
         aria-label="Ouvrir le menu"
+        ${disabled ? "disabled" : ""}
       >
-        ${svgIcon("chevron-down", { className: "gh-chevron" })}
+        ${withChevron ? svgIcon("chevron-down", { className: "gh-chevron" }) : ""}
       </button>
 
       <div class="gh-menu" role="menu">
-        ${itemHtml}
+        ${renderMenuItems(items)}
       </div>
     </div>
   `;
 }
 
-export function bindGhSplitButtons() {
-  if (splitButtonGlobalBound) return;
-  splitButtonGlobalBound = true;
+export function bindGhActionButtons() {
+  if (actionButtonGlobalBound) return;
+  actionButtonGlobalBound = true;
 
   document.addEventListener("click", (event) => {
-    const toggle = event.target.closest?.("[data-split-toggle]");
-    const main = event.target.closest?.("[data-split-main]");
+    const main = event.target.closest?.("[data-action-main]");
+    const toggle = event.target.closest?.("[data-action-toggle]");
     const menuItem = event.target.closest?.("[data-menu-action]");
-    const splitRoot = event.target.closest?.(".gh-split");
+    const root = event.target.closest?.(".gh-action");
 
-    if (toggle && splitRoot) {
+    if (toggle && root) {
       event.preventDefault();
       event.stopPropagation();
 
-      const id = splitRoot.dataset.splitId || "";
-      const isOpen = splitRoot.classList.contains("is-open");
+      const id = root.dataset.actionId || "";
+      const isOpen = root.classList.contains("is-open");
 
-      closeAllSplitMenus(isOpen ? "" : id);
-      splitRoot.classList.toggle("is-open", !isOpen);
+      closeAllActionMenus(isOpen ? "" : id);
+      root.classList.toggle("is-open", !isOpen);
 
-      const toggleBtn = splitRoot.querySelector("[data-split-toggle]");
-      if (toggleBtn) {
-        toggleBtn.setAttribute("aria-expanded", !isOpen ? "true" : "false");
-      }
+      toggle.setAttribute("aria-expanded", !isOpen ? "true" : "false");
       return;
     }
 
-    if (main && splitRoot) {
-      const action = splitRoot.dataset.mainAction;
+    if (main && root) {
+      const action = root.dataset.mainAction || "";
       if (action) {
-        splitRoot.dispatchEvent(new CustomEvent("ghsplit:action", {
+        root.dispatchEvent(new CustomEvent("ghaction:action", {
           bubbles: true,
           detail: { action }
         }));
       }
-      closeAllSplitMenus();
+      closeAllActionMenus();
       return;
     }
 
-    if (menuItem && splitRoot) {
+    if (menuItem && root) {
       const action = menuItem.dataset.menuAction || "";
-      splitRoot.dispatchEvent(new CustomEvent("ghsplit:action", {
+      root.dispatchEvent(new CustomEvent("ghaction:action", {
         bubbles: true,
         detail: { action }
       }));
-      closeAllSplitMenus();
+      closeAllActionMenus();
       return;
     }
 
-    if (!event.target.closest?.(".gh-split")) {
-      closeAllSplitMenus();
+    if (!event.target.closest?.(".gh-action")) {
+      closeAllActionMenus();
     }
   });
 
   window.addEventListener("blur", () => {
-    closeAllSplitMenus();
+    closeAllActionMenus();
   });
 }
 
-export function initGhSplitButton(root, { mainAction = "" } = {}) {
+/* compat */
+export const renderGhSplitButton = renderGhActionButton;
+export const bindGhSplitButtons = bindGhActionButtons;
+
+export function initGhActionButton(root, { mainAction = "" } = {}) {
   if (!root) return;
   root.dataset.mainAction = mainAction;
 }
+
+/* compat */
+export const initGhSplitButton = initGhActionButton;
