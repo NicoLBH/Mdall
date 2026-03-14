@@ -40,6 +40,11 @@ import {
   bindOverlayChromeDismiss,
   bindOverlayChromeCompact
 } from "./ui/overlay-chrome.js";
+import {
+  renderStatusBadge,
+  renderVerdictPill,
+  renderStateDot
+} from "./ui/status-badges.js";
 
 /* =========================================================
    Legacy DOM / archive parity helpers
@@ -223,48 +228,14 @@ function issueIcon(status = "open") {
   return `<span class="issue-status-icon" aria-hidden="true">${svg}</span>`;
 }
 
-function normalizeVerdict(verdict) {
-  const v = String(verdict || "").trim().toUpperCase();
-  if (!v) return "";
-  if (v === "WARN") return "WARNING";
-  if (v === "DEFAVORABLE") return "KO";
-  if (v === "FAVORABLE") return "OK";
-  return v;
-}
-
-function verdictLabel(verdict) {
-  return normalizeVerdict(verdict) || "—";
-}
-
-function verdictBadgeClass(verdict) {
-  const v = verdictLabel(verdict);
-  const safe = v.replace(/[^A-Z0-9_-]/g, "");
-  if (["F", "D", "S", "HM", "PM", "SO"].includes(safe)) return `verdict-badge verdict-${safe}`;
-  if (safe === "OK") return "verdict-badge verdict-F";
-  if (safe === "KO") return "verdict-badge verdict-D";
-  if (safe === "WARNING") return "verdict-badge verdict-S";
-  return "verdict-badge";
-}
-
-function verdictDotClass(verdict) {
-  const v = normalizeVerdict(verdict);
-  if (v === "F" || v === "OK") return "v-dot v-dot--f";
-  if (v === "S" || v === "WARNING") return "v-dot v-dot--s";
-  if (v === "D" || v === "KO") return "v-dot v-dot--d";
-  if (v === "HM") return "v-dot v-dot--hm";
-  if (v === "PM") return "v-dot v-dot--pm";
-  if (v === "SO") return "v-dot v-dot--so";
-  return "v-dot";
-}
-
-function verdictPill(verdict) {
-  return `<span class="${verdictBadgeClass(verdict)}">${escapeHtml(verdictLabel(verdict))}</span>`;
-}
 
 function priorityBadge(priority = "P3") {
   const p = String(priority || "P3").toUpperCase();
-  const cls = p === "P1" ? "badge badge--p1" : p === "P2" ? "badge badge--p2" : "badge badge--p3";
-  return `<span class="${cls}">${escapeHtml(p)}</span>`;
+  const tone = p === "P1" ? "p1" : p === "P2" ? "p2" : "p3";
+  return renderStatusBadge({
+    label: p,
+    tone
+  });
 }
 
 function statePill(status = "open") {
@@ -1324,7 +1295,7 @@ function buildVerdictBarHtml(counts, options = {}) {
     const pct = total ? (c / total) * 100 : 0;
     return `
       <span class="verdict-legend__item">
-        <span class="${verdictDotClass(v)}" aria-hidden="true"></span>
+        ${renderStateDot(v)}
         <span class="verdict-legend__count">${c} <b>${escapeHtml(v)}</b></span>
         <span class="verdict-legend__pct">(${pct.toFixed(0)}%)</span>
       </span>
@@ -1999,7 +1970,7 @@ function renderSubIssuesForSujet(sujet, options = {}) {
       <div class="issue-row issue-row--avis click ${avisRowClass}" data-avis-id="${escapeHtml(avis.id)}">
         <div class="cell cell-theme cell-theme--full lvl0">
           <span class="chev chev--spacer"></span>
-          <span class="${verdictDotClass(effVerdict)}" aria-hidden="true"></span>
+          ${renderStateDot(effVerdict)}
           <span class="theme-text theme-text--avis">${escapeHtml(firstNonEmpty(avis.title, avis.id, ""))}</span>
         </div>
       </div>
@@ -2056,7 +2027,7 @@ function renderSubIssuesForSituation(situation, options = {}) {
           <div class="issue-row issue-row--avis click ${avisRowClass}" data-avis-id="${escapeHtml(avis.id)}">
             <div class="cell cell-theme cell-theme--full lvl1">
               <span class="chev chev--spacer"></span>
-              <span class="${verdictDotClass(effVerdict)}" aria-hidden="true"></span>
+              ${renderStateDot(effVerdict)}
               <span class="theme-text theme-text--avis">${escapeHtml(firstNonEmpty(avis.title, avis.id, ""))}</span>
             </div>
           </div>
