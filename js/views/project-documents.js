@@ -3,6 +3,7 @@ import { registerProjectPrimaryScrollSource, setProjectViewHeader } from "./proj
 import { bindGhActionButtons, initGhActionButton, renderGhActionButton } from "./ui/gh-split-button.js";
 import { renderGhInput } from "./ui/gh-input.js";
 import { svgIcon } from "../ui/icons.js";
+import { renderDataTableShell, renderDataTableHead } from "./ui/data-table-shell.js";
 
 const DOCUMENT_FOLDERS = [
   { name: "Architecte", note: "Dossier discipline" },
@@ -68,6 +69,20 @@ function getRemoveIconSvg() {
   return svgIcon("x");
 }
 
+function getDocumentsTableGridTemplate() {
+  return "minmax(280px, 1.2fr) minmax(220px, 1fr) 180px";
+}
+
+function renderDocumentsTableHeadHtml() {
+  return renderDataTableHead({
+    columns: [
+      { className: "documents-repo__col documents-repo__col--name", label: "Nom" },
+      { className: "documents-repo__col documents-repo__col--message", label: "Description" },
+      { className: "documents-repo__col documents-repo__col--date", label: "Dernière mise à jour" }
+    ]
+  });
+}
+
 function renderDocumentsToolbar() {
   const phaseButton = renderGhActionButton({
     id: "documentsPhaseSplit",
@@ -131,35 +146,34 @@ function renderRepoDocumentRow(doc) {
 }
 
 function renderDocumentsListView() {
+  const bodyHtml = `
+    ${DOCUMENT_FOLDERS.map((folder) => `
+      <div class="documents-repo__row">
+        <div class="documents-repo__cell documents-repo__cell--name">
+          <span class="documents-repo__icon">${getFolderIconSvg()}</span>
+          <span class="documents-repo__name">${escapeHtml(folder.name)}</span>
+        </div>
+        <div class="documents-repo__cell documents-repo__cell--message">
+          ${escapeHtml(folder.note)}
+        </div>
+        <div class="documents-repo__cell documents-repo__cell--date">—</div>
+      </div>
+    `).join("")}
+    ${docsViewState.repoDocuments.map(renderRepoDocumentRow).join("")}
+  `;
+
   return `
     <section class="project-simple-page project-simple-page--documents">
       <div class="project-simple-scroll project-simple-scroll--documents" id="projectDocumentsScroll">
         <div class="documents-shell" id="projectDocumentScroll">
           ${renderDocumentsToolbar()}
 
-          <div class="documents-repo">
-            <div class="documents-repo__head">
-              <div class="documents-repo__col documents-repo__col--name">Nom</div>
-              <div class="documents-repo__col documents-repo__col--message">Description</div>
-              <div class="documents-repo__col documents-repo__col--date">Dernière mise à jour</div>
-            </div>
-
-            <div class="documents-repo__body">
-              ${DOCUMENT_FOLDERS.map((folder) => `
-                <div class="documents-repo__row">
-                  <div class="documents-repo__cell documents-repo__cell--name">
-                    <span class="documents-repo__icon">${getFolderIconSvg()}</span>
-                    <span class="documents-repo__name">${escapeHtml(folder.name)}</span>
-                  </div>
-                  <div class="documents-repo__cell documents-repo__cell--message">
-                    ${escapeHtml(folder.note)}
-                  </div>
-                  <div class="documents-repo__cell documents-repo__cell--date">—</div>
-                </div>
-              `).join("")}
-              ${docsViewState.repoDocuments.map(renderRepoDocumentRow).join("")}
-            </div>
-          </div>
+          ${renderDataTableShell({
+            className: "documents-repo",
+            gridTemplate: getDocumentsTableGridTemplate(),
+            headHtml: renderDocumentsTableHeadHtml(),
+            bodyHtml
+          })}
         </div>
       </div>
     </section>
