@@ -6,6 +6,7 @@ import {
   isToggleableProjectTab
 } from "../constants.js";
 import { svgIcon } from "../ui/icons.js";
+import { renderGhEditableField, bindGhEditableFields } from "./ui/gh-input.js";
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (char) => ({
@@ -167,9 +168,13 @@ function renderSectionCard({ id = "", title, description = "", body = "", badge 
 
 function renderInputField({ id, label, value = "", placeholder = "", width = "" }) {
   return `
-    <div class="form-row form-row--settings ${width}">
-      <label for="${escapeHtml(id)}">${escapeHtml(label)}</label>
-      <input id="${escapeHtml(id)}" type="text" value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder)}">
+    <div class="${width}">
+      ${renderGhEditableField({
+        id,
+        label,
+        value,
+        placeholder
+      })}
     </div>
   `;
 }
@@ -852,18 +857,33 @@ function bindProjectTabToggles() {
 }
 
 function bindParametresEvents() {
-  bindValue("projectName", (value) => {
-    store.projectForm.projectName = value;
-  });
-
-  bindValue("projectCity", (value) => {
-    store.projectForm.city = value;
-    store.projectForm.communeCp = [store.projectForm.city, store.projectForm.postalCode].filter(Boolean).join(" ").trim();
-  });
-
-  bindValue("projectPostalCode", (value) => {
-    store.projectForm.postalCode = value;
-    store.projectForm.communeCp = [store.projectForm.city, store.projectForm.postalCode].filter(Boolean).join(" ").trim();
+  bindGhEditableFields(document, {
+    onValidate: (id, value) => {
+      switch (id) {
+        case "projectName":
+          store.projectForm.projectName = value;
+          break;
+        case "projectCity":
+          store.projectForm.city = value;
+          store.projectForm.communeCp = [store.projectForm.city, store.projectForm.postalCode].filter(Boolean).join(" ").trim();
+          break;
+        case "projectPostalCode":
+          store.projectForm.postalCode = value;
+          store.projectForm.communeCp = [store.projectForm.city, store.projectForm.postalCode].filter(Boolean).join(" ").trim();
+          break;
+        case "climateZoneWinter":
+          store.projectForm.climateZoneWinter = value;
+          break;
+        case "climateZoneSummer":
+          store.projectForm.climateZoneSummer = value;
+          break;
+        case "climateBaseTemperatures":
+          store.projectForm.climateBaseTemperatures = value;
+          break;
+        default:
+          break;
+      }
+    }
   });
 
   bindValue("riskCategory", (value) => {
@@ -896,18 +916,6 @@ function bindParametresEvents() {
   bindValue("soilClass", (value) => {
     store.projectForm.soilClass = value;
   }, "change");
-
-  bindValue("climateZoneWinter", (value) => {
-    store.projectForm.climateZoneWinter = value;
-  });
-
-  bindValue("climateZoneSummer", (value) => {
-    store.projectForm.climateZoneSummer = value;
-  });
-
-  bindValue("climateBaseTemperatures", (value) => {
-    store.projectForm.climateBaseTemperatures = value;
-  });
 
   bindProjectTabToggles();
   refreshProjectTabsVisibility();
