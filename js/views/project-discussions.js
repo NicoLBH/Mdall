@@ -191,6 +191,34 @@ const state = {
   closeMenuOpen: false
 };
 
+let discussionsCurrentRoot = null;
+let discussionsTabResetBound = false;
+
+function bindDiscussionsTabReset() {
+  if (discussionsTabResetBound) return;
+  discussionsTabResetBound = true;
+
+  document.addEventListener("click", (event) => {
+    const tabLink = event.target.closest?.('.project-tabs a[data-project-tab-id="discussions"]');
+    if (!tabLink) return;
+
+    const href = tabLink.getAttribute("href") || "";
+    if (!href || href !== location.hash) return;
+    if (!state.selectedDiscussionId) return;
+    if (!discussionsCurrentRoot || !discussionsCurrentRoot.isConnected) return;
+
+    event.preventDefault();
+
+    state.selectedDiscussionId = "";
+    state.closeMenuOpen = false;
+    state.composerText = "";
+    state.composerPreview = false;
+    state.helpMode = false;
+
+    renderProjectDiscussions(discussionsCurrentRoot, { preserveSelection: true });
+  });
+}
+
 function mdToHtml(text) {
   const safe = escapeHtml(text || "");
   return safe
@@ -488,6 +516,49 @@ function renderCloseMenu(discussion) {
     ? CLOSE_REASON_META[discussion.closeReason]
     : null;
 
+  const orderedKeys = ["resolved", "outdated", "duplicate"];
+
+  const reopenItemHtml = `
+    <button
+      type="button"
+      class="discussion-close-action__item discussion-close-action__item--reopen"
+      data-discussion-reopen="true"
+    >
+      <span class="discussion-close-action__item-icon discussion-close-action__item-icon--reopen">
+        ${svgIcon("comment-discussion")}
+      </span>
+      <span class="discussion-close-action__item-body">
+        <span class="discussion-close-action__item-title">Rouvrir la discussion</span>
+        <span class="discussion-close-action__item-desc">La discussion repasse à l’état ouvert</span>
+      </span>
+    </button>
+  `;
+
+  const itemsHtml = orderedKeys.map((key) => {
+    const meta = CLOSE_REASON_META[key];
+    if (!meta) return "";
+
+    if (isClosed && discussion.closeReason === key) {
+      return reopenItemHtml;
+    }
+
+    return `
+      <button
+        type="button"
+        class="discussion-close-action__item ${discussion.closeReason === key && isClosed ? "is-selected" : ""}"
+        data-discussion-close="${escapeHtml(key)}"
+      >
+        <span class="discussion-close-action__item-icon">
+          ${svgIcon(meta.icon)}
+        </span>
+        <span class="discussion-close-action__item-body">
+          <span class="discussion-close-action__item-title">${escapeHtml(meta.text)}</span>
+          <span class="discussion-close-action__item-desc">${escapeHtml(meta.description)}</span>
+        </span>
+      </button>
+    `;
+  }).join("");
+
   return `
     <div class="discussion-close-action ${state.closeMenuOpen ? "is-open" : ""}">
       <button
@@ -509,21 +580,7 @@ function renderCloseMenu(discussion) {
       </button>
 
       <div class="discussion-close-action__menu">
-        ${Object.entries(CLOSE_REASON_META).map(([key, meta]) => `
-          <button
-            type="button"
-            class="discussion-close-action__item ${discussion.closeReason === key ? "is-selected" : ""}"
-            data-discussion-close="${escapeHtml(key)}"
-          >
-            <span class="discussion-close-action__item-icon">
-              ${svgIcon(meta.icon)}
-            </span>
-            <span class="discussion-close-action__item-body">
-              <span class="discussion-close-action__item-title">${escapeHtml(meta.text)}</span>
-              <span class="discussion-close-action__item-desc">${escapeHtml(meta.description)}</span>
-            </span>
-          </button>
-        `).join("")}
+        ${itemsHtml}
       </div>
     </div>
   `;
@@ -791,6 +848,21 @@ function bindEvents(root) {
     });
   });
 
+  root.querySelectorAll("[data-discussion-reopen]").forEach((btn) => {
+    btn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const discussion = getSelectedDiscussion();
+      if (!discussion) return;
+
+      discussion.isOpen = true;
+      state.closeMenuOpen = false;
+
+      renderProjectDiscussions(root, { preserveSelection: true });
+    });
+  });
+  
   document.addEventListener("click", handleDocumentClickCloseMenu, { once: true });
 
   root.querySelectorAll("[data-discussion-action='toggle-help']").forEach((btn) => {
@@ -839,6 +911,8 @@ function handleDocumentClickCloseMenu(event) {
 
 export function renderProjectDiscussions(root, { preserveSelection = false } = {}) {
   root.className = "project-shell__content";
+  discussionsCurrentRoot = root;
+  bindDiscussionsTabReset();
 
   if (!preserveSelection) {
     state.selectedDiscussionId = "";
