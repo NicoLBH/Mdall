@@ -15,6 +15,26 @@ const shellState = {
   cleanupWindow: null
 };
 
+function getStickyChromeHostEl() {
+  return document.getElementById("projectStickyChromeHost");
+}
+
+export function setProjectStickyChrome(html = "") {
+  const host = getStickyChromeHostEl();
+  if (!host) return;
+
+  host.innerHTML = html || "";
+  host.classList.toggle("is-visible", !!String(html || "").trim());
+}
+
+export function clearProjectStickyChrome() {
+  const host = getStickyChromeHostEl();
+  if (!host) return;
+
+  host.innerHTML = "";
+  host.classList.remove("is-visible");
+}
+
 function getTabLabel(tab) {
   return PROJECT_TABS.find((item) => item.id === tab)?.label || tab || "";
 }
@@ -170,6 +190,7 @@ export function refreshProjectShellChrome() {
 
 export function unmountProjectShellChrome() {
   cleanupPrimaryScrollSource();
+  clearProjectStickyChrome();
 
   shellState.cleanupWindow?.();
   shellState.cleanupWindow = null;
