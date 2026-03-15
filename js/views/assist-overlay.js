@@ -8,16 +8,7 @@ import {
   setOverlayChromeOpenState,
   bindOverlayChromeDismiss
 } from "./ui/overlay-chrome.js";
-
-function escapeHtml(value) {
-  return String(value ?? "").replace(/[&<>"']/g, (char) => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    "\"": "&quot;",
-    "'": "&#39;"
-  }[char]));
-}
+import { escapeHtml } from "../utils/escape-html.js";
 
 function mdToHtml(text) {
   const safe = escapeHtml(text || "");
