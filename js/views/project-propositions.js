@@ -131,22 +131,7 @@ export function renderProjectPropositions(root) {
     <section class="project-simple-page project-simple-page--settings">
       <div class="project-simple-scroll" id="projectPropositionsScroll">
         <div class="settings-content" style="max-width:1216px;margin:0 auto;padding:24px 32px 40px;">
-          <section class="settings-section">
-            <div class="settings-card">
-              <div class="settings-card__head">
-                <div>
-                  <h4>Tableau des propositions</h4>
-                  <p>
-                    Cette vue regroupe les propositions créées depuis l’onglet Documents lorsqu’un dépôt passe par
-                    “Créer une proposition avec demande de visa”.
-                  </p>
-                </div>
-                <span class="settings-badge mono">PR</span>
-              </div>
-
-              ${renderProposalsTable()}
-            </div>
-          </section>
+          ${renderProposalsTable()}
         </div>
       </div>
     </section>
