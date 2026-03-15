@@ -54,21 +54,23 @@ const DISCUSSIONS = [
     author: "NicoLBH",
     kind: "started",
     isOpen: true,
+    closeReason: "",
     updatedAt: "2026-03-13T15:30:00",
     repliesCount: 0,
-    body: "Je propose d'utiliser cet espace pour les idées produit qui ne relèvent pas encore d'un sujet formel.\n\nPremière piste : relier plus facilement une discussion à un **sujet**, une **situation** ou un **avis**.",
     timeline: [
       {
         type: "comment",
         author: "NicoLBH",
         authorType: "human",
         at: "2026-03-13T15:30:00",
-        body: "Je propose d'utiliser cet espace pour les idées produit qui ne relèvent pas encore d'un sujet formel.\n\nPremière piste : relier plus facilement une discussion à un **sujet**, une **situation** ou un **avis**."
+        body: "Je propose d'utiliser cet espace pour les idées produit qui ne relèvent pas encore d'un sujet formel.\n\nPremière piste : relier plus facilement une discussion à un **sujet**, une **situation** ou un **avis**.",
+        repliesCount: 0,
+        roles: ["Maintainer", "Author"]
       },
       {
         type: "activity",
         text: "a lié cette discussion au sujet **PS-14 / Vérification des joints de fractionnement**",
-        note: "Ce lien est seulement illustratif pour la phase UI.",
+        note: "Ce lien est illustratif pour la phase UI.",
         at: "2026-03-13T16:10:00"
       }
     ]
@@ -80,16 +82,18 @@ const DISCUSSIONS = [
     author: "NicoLBH",
     kind: "announced",
     isOpen: true,
+    closeReason: "",
     updatedAt: "2026-03-13T14:10:00",
     repliesCount: 0,
-    body: "Canal réservé aux informations projet utiles mais non normatives : disponibilité des livrables, changements de planning, rappels de coordination.",
     timeline: [
       {
         type: "comment",
         author: "NicoLBH",
         authorType: "human",
         at: "2026-03-13T14:10:00",
-        body: "Canal réservé aux informations projet utiles mais non normatives : disponibilité des livrables, changements de planning, rappels de coordination."
+        body: "Canal réservé aux informations projet utiles mais non normatives : disponibilité des livrables, changements de planning, rappels de coordination.",
+        repliesCount: 0,
+        roles: ["Maintainer", "Author"]
       }
     ]
   },
@@ -100,16 +104,18 @@ const DISCUSSIONS = [
     author: "NicoLBH",
     kind: "started",
     isOpen: true,
+    closeReason: "",
     updatedAt: "2026-03-13T13:00:00",
     repliesCount: 0,
-    body: "Espace libre pour les échanges transverses. Dès qu'un point devient structurant, on pourra le transformer en sujet.",
     timeline: [
       {
         type: "comment",
         author: "NicoLBH",
         authorType: "human",
         at: "2026-03-13T13:00:00",
-        body: "Espace libre pour les échanges transverses. Dès qu'un point devient structurant, on pourra le transformer en sujet."
+        body: "Espace libre pour les échanges transverses. Dès qu'un point devient structurant, on pourra le transformer en sujet.",
+        repliesCount: 0,
+        roles: ["Maintainer", "Author"]
       },
       {
         type: "event",
@@ -118,8 +124,60 @@ const DISCUSSIONS = [
         body: "Une discussion ne remplace pas un objet métier. L'interface permettra plus tard de convertir un échange en élément pilotable."
       }
     ]
+  },
+  {
+    id: "d4",
+    categoryId: "polls",
+    title: "Choix du prochain lot pilote à industrialiser",
+    author: "NicoLBH",
+    kind: "started",
+    isOpen: true,
+    closeReason: "",
+    updatedAt: "2026-03-15T09:00:00",
+    repliesCount: 0,
+    poll: {
+      question: "Quel lot doit être prioritaire pour la prochaine itération ?",
+      options: [
+        "Structure",
+        "Sécurité incendie",
+        "Accessibilité",
+        "Thermique"
+      ]
+    },
+    timeline: [
+      {
+        type: "comment",
+        author: "NicoLBH",
+        authorType: "human",
+        at: "2026-03-15T09:00:00",
+        body: "Sondage de démonstration pour préparer l'interface des arbitrages collectifs. La logique de vote sera branchée plus tard.",
+        repliesCount: 0,
+        roles: ["Maintainer", "Author"]
+      }
+    ]
   }
 ];
+
+const CLOSE_REASON_META = {
+  resolved: {
+    label: "Resolved",
+    text: "Close as resolved",
+    description: "The discussion has been resolved",
+    icon: "discussion-closed"
+  },
+  outdated: {
+    label: "Outdated",
+    text: "Close as outdated",
+    description: "The discussion is no longer relevant",
+    icon: "discussion-outdated"
+  },
+  duplicate: {
+    label: "Duplicate",
+    text: "Close as duplicate",
+    description: "The discussion is a duplicate of another",
+    icon: "discussion-duplicate"
+  }
+};
 
 const state = {
   selectedCategoryId: "all",
@@ -129,7 +187,8 @@ const state = {
   filter: "open",
   composerText: "",
   composerPreview: false,
-  helpMode: false
+  helpMode: false,
+  closeMenuOpen: false
 };
 
 function mdToHtml(text) {
@@ -168,7 +227,12 @@ function getFilteredDiscussions() {
 
     if (!q) return true;
 
-    return [item.title, item.author, item.body, getCategoryMeta(item.categoryId).label]
+    return [
+      item.title,
+      item.author,
+      getCategoryMeta(item.categoryId).label,
+      item.poll?.question || ""
+    ]
       .join(" ")
       .toLowerCase()
       .includes(q);
@@ -306,6 +370,75 @@ function renderListView() {
   `;
 }
 
+function renderPollModule(discussion) {
+  if (discussion.categoryId !== "polls" || !discussion.poll) return "";
+
+  return `
+    <section class="project-discussions__poll-card">
+      <div class="project-discussions__poll-head">
+        <div class="project-discussions__poll-icon">${escapeHtml(getCategoryMeta("polls").icon)}</div>
+        <div>
+          <div class="project-discussions__poll-title">Poll question</div>
+          <div class="project-discussions__poll-subtitle">Interface UI uniquement pour la phase 1</div>
+        </div>
+      </div>
+
+      <div class="project-discussions__poll-question">
+        ${escapeHtml(discussion.poll.question)}
+      </div>
+
+      <div class="project-discussions__poll-options">
+        ${discussion.poll.options.map((option, idx) => `
+          <label class="project-discussions__poll-option">
+            <input type="radio" name="discussionPollOption" ${idx === 0 ? "checked" : ""} disabled>
+            <span>${escapeHtml(option)}</span>
+          </label>
+        `).join("")}
+      </div>
+
+      <div class="project-discussions__poll-footer mono">
+        Fonctionnalités de vote non développées à ce stade.
+      </div>
+    </section>
+  `;
+}
+
+function renderCommentRoles(roles = []) {
+  if (!Array.isArray(roles) || !roles.length) return "";
+  return roles.map((role) => `
+    <span class="project-discussions__role-pill mono">${escapeHtml(role)}</span>
+  `).join("");
+}
+
+function renderReplyUi(item = {}) {
+  return `
+    <div class="project-discussions__reply-shell">
+      <div class="project-discussions__reply-votes">
+        <button type="button" class="project-discussions__vote-btn" disabled>
+          ${svgIcon("arrow-up")}
+          <span class="mono">1</span>
+        </button>
+      </div>
+
+      <div class="project-discussions__reply-main">
+        <div class="project-discussions__reply-input-wrap">
+          <input
+            class="project-discussions__reply-input"
+            type="text"
+            value=""
+            placeholder="Write a reply"
+            disabled
+          >
+        </div>
+      </div>
+
+      <div class="project-discussions__reply-count mono">
+        ${escapeHtml(item.repliesCount ?? 0)} replies
+      </div>
+    </div>
+  `;
+}
+
 function renderTimelineItem(item, idx) {
   if (item.type === "activity") {
     return renderMessageThreadActivity({
@@ -325,34 +458,95 @@ function renderTimelineItem(item, idx) {
     });
   }
 
+  const rolesHtml = renderCommentRoles(item.roles || []);
+
   return renderMessageThreadComment({
     idx,
     author: item.author || "Utilisateur",
-    tsHtml: `<div class="gh-comment-ts mono">${escapeHtml(fmtTs(item.at))}</div>`,
-    bodyHtml: mdToHtml(item.body || ""),
+    tsHtml: `
+      <div class="project-discussions__comment-meta-row">
+        <span class="gh-comment-ts mono">${escapeHtml(fmtTs(item.at))}</span>
+        ${rolesHtml}
+      </div>
+    `,
+    bodyHtml: `
+      <div class="project-discussions__comment-copy">${mdToHtml(item.body || "")}</div>
+      ${renderReplyUi(item)}
+    `,
     avatarHtml: item.authorType === "human"
       ? svgIcon("avatar-human", { width: 22, height: 22, className: "ui-icon ui-icon--block", style: "display:block" })
       : "",
     avatarType: item.authorType === "human" ? "human" : "agent",
-    avatarInitial: item.authorType === "human" ? "M" : "R"
+    avatarInitial: item.authorType === "human" ? "M" : "R",
+    boxClassName: "project-discussions__comment-box"
   });
 }
 
-function renderComposer() {
-  const actionsHtml = [
-    `<button class="gh-btn gh-btn--help-mode ${state.helpMode ? "is-on" : ""}" data-discussion-action="toggle-help" type="button">Help</button>`,
-    `<button class="gh-btn" data-discussion-action="submit-comment" type="button">Commenter</button>`
-  ].join("");
+function renderCloseMenu(discussion) {
+  const isClosed = !discussion.isOpen;
+  const selectedReason = discussion.closeReason && CLOSE_REASON_META[discussion.closeReason]
+    ? CLOSE_REASON_META[discussion.closeReason]
+    : null;
+
+  return `
+    <div class="discussion-close-action ${state.closeMenuOpen ? "is-open" : ""}">
+      <button
+        type="button"
+        class="gh-btn discussion-close-action__main"
+        data-discussion-action="toggle-close-menu"
+      >
+        ${svgIcon(selectedReason?.icon || "discussion-closed")}
+        <span>${isClosed ? `Closed${selectedReason ? ` · ${selectedReason.label}` : ""}` : "Close discussion"}</span>
+      </button>
+
+      <button
+        type="button"
+        class="gh-btn discussion-close-action__toggle"
+        data-discussion-action="toggle-close-menu"
+        aria-expanded="${state.closeMenuOpen ? "true" : "false"}"
+      >
+        ${svgIcon("chevron-down")}
+      </button>
+
+      <div class="discussion-close-action__menu">
+        ${Object.entries(CLOSE_REASON_META).map(([key, meta]) => `
+          <button
+            type="button"
+            class="discussion-close-action__item ${discussion.closeReason === key ? "is-selected" : ""}"
+            data-discussion-close="${escapeHtml(key)}"
+          >
+            <span class="discussion-close-action__item-icon">
+              ${svgIcon(meta.icon)}
+            </span>
+            <span class="discussion-close-action__item-body">
+              <span class="discussion-close-action__item-title">${escapeHtml(meta.text)}</span>
+              <span class="discussion-close-action__item-desc">${escapeHtml(meta.description)}</span>
+            </span>
+          </button>
+        `).join("")}
+      </div>
+    </div>
+  `;
+}
+
+function renderComposer(discussion) {
+  const actionsHtml = `
+    <div class="project-discussions__composer-actions">
+      ${renderCloseMenu(discussion)}
+      <button class="gh-btn gh-btn--primary project-discussions__comment-submit" data-discussion-action="submit-comment" type="button">
+        Comment
+      </button>
+    </div>
+  `;
 
   const hintHtml = `
     <div class="rapso-mention-hint comment-composer__hint">
-      <span class="mono">Astuces :</span>
-      <span>texte libre, lien vers un sujet, pièce jointe ou commande <code>/help</code>.</span>
+      <span class="mono">Markdown is supported</span>
     </div>
   `;
 
   return renderCommentComposer({
-    title: "Ajouter un commentaire",
+    title: "Add a comment",
     avatarHtml: svgIcon("avatar-human", { width: 22, height: 22, className: "ui-icon ui-icon--block", style: "display:block" }),
     previewMode: state.composerPreview,
     helpMode: state.helpMode,
@@ -361,10 +555,18 @@ function renderComposer() {
     textareaValue: state.composerText,
     placeholder: state.helpMode
       ? "Pose une question d'aide contextuelle sur cette discussion…"
-      : "Ajouter un commentaire, un lien, une image ou une activité…",
+      : "Add your comment here…",
     hintHtml,
     actionsHtml
   });
+}
+
+function renderDiscussionState(discussion) {
+  if (discussion.isOpen) return "Open";
+  if (discussion.closeReason && CLOSE_REASON_META[discussion.closeReason]) {
+    return `Closed · ${CLOSE_REASON_META[discussion.closeReason].label}`;
+  }
+  return "Closed";
 }
 
 function renderDetailView() {
@@ -372,18 +574,14 @@ function renderDetailView() {
   if (!discussion) return renderListView();
 
   const category = getCategoryMeta(discussion.categoryId);
+  const commentCount = discussion.timeline.filter((item) => item.type === "comment").length;
 
   return `
-    <section class="project-discussions__detail">
-      <div class="project-discussions__detail-topbar" data-chrome-visibility="expanded">
-        <button type="button" class="gh-btn" data-discussion-action="back-to-list">← Retour</button>
-        <button type="button" class="gh-btn gh-btn--primary" data-discussion-action="new-discussion">Nouvelle discussion</button>
-      </div>
-
+    <section class="project-discussions__detail project-discussions__detail--standalone">
       <div class="project-discussions__detail-head">
         <div class="project-discussions__detail-title-row">
           <div class="project-discussions__category-pill mono">${escapeHtml(category.icon)} ${escapeHtml(category.label)}</div>
-          <div class="project-discussions__state-pill mono">${discussion.isOpen ? "Open" : "Closed"}</div>
+          <div class="project-discussions__state-pill mono">${escapeHtml(renderDiscussionState(discussion))}</div>
         </div>
 
         <h2 class="project-discussions__detail-title">${escapeHtml(discussion.title)}</h2>
@@ -393,19 +591,33 @@ function renderDetailView() {
         </div>
       </div>
 
+      ${renderPollModule(discussion)}
+
+      <div class="project-discussions__comments-title">${commentCount} comment${commentCount > 1 ? "s" : ""}</div>
+
       ${renderMessageThread({
         className: "project-discussions__thread",
         itemsHtml: discussion.timeline.map((item, idx) => renderTimelineItem(item, idx)).join("")
       })}
 
       <div class="project-discussions__composer-wrap">
-        ${renderComposer()}
+        ${renderComposer(discussion)}
       </div>
     </section>
   `;
 }
 
 function renderPage() {
+  if (state.selectedDiscussionId) {
+    return `
+      <section class="project-discussions project-discussions--detail">
+        <section class="project-discussions__scroll" id="projectDiscussionsScroll">
+          ${renderDetailView()}
+        </section>
+      </section>
+    `;
+  }
+
   return renderSideNavLayout({
     className: "project-discussions side-nav-layout--discussions",
     navClassName: "project-discussions__nav",
@@ -413,30 +625,18 @@ function renderPage() {
     navHtml: renderLeftNav(),
     contentHtml: `
       <section class="project-discussions__scroll" id="projectDiscussionsScroll">
-        ${state.selectedDiscussionId ? renderDetailView() : renderListView()}
+        ${renderListView()}
       </section>
     `
   });
 }
 
 function syncHeader() {
-  const selected = getSelectedDiscussion();
+  const host = document.getElementById("projectViewHeaderHost");
+  if (!host) return;
 
-  if (selected) {
-    const category = getCategoryMeta(selected.categoryId);
-
-    setProjectViewHeader({
-      contextLabel: "Discussions",
-      variant: "discussions",
-      title: selected.title,
-      subtitle: `${category.label} · ${selected.author}`,
-      toolbarHtml: `
-        <div class="project-discussions__header-toolbar">
-          <button type="button" class="gh-btn" data-discussion-action="back-to-list">Retour aux discussions</button>
-          <button type="button" class="gh-btn gh-btn--primary" data-discussion-action="new-discussion">Nouvelle discussion</button>
-        </div>
-      `
-    });
+  if (state.selectedDiscussionId) {
+    host.innerHTML = "";
     return;
   }
 
@@ -458,8 +658,12 @@ function pushFakeHelpReply(text) {
     author: "@rapso",
     authorType: "agent",
     at: new Date().toISOString(),
-    body: `Mode help actif.\n\nQuestion reçue : **${text || "(vide)"}**\n\nDans cette phase, la réponse est simulée mais la zone de saisie, la preview et la timeline sont déjà mutualisées.`
+    body: `Mode help actif.\n\nQuestion reçue : **${text || "(vide)"}**\n\nDans cette phase, la réponse est simulée mais la zone de saisie, la preview et la timeline sont déjà mutualisées.`,
+    repliesCount: 0,
+    roles: ["Assistant"]
   });
+
+  discussion.updatedAt = new Date().toISOString();
 }
 
 function pushFakeComment(text) {
@@ -471,7 +675,9 @@ function pushFakeComment(text) {
     author: "Mano",
     authorType: "human",
     at: new Date().toISOString(),
-    body: text
+    body: text,
+    repliesCount: 0,
+    roles: ["Author"]
   });
 
   discussion.updatedAt = new Date().toISOString();
@@ -485,12 +691,12 @@ function bindEvents(root) {
     onChange(selectId, value) {
       if (selectId === "projectDiscussionsSort") {
         state.sort = value;
-        renderProjectDiscussions(root);
+        renderProjectDiscussions(root, { preserveSelection: true });
       }
 
       if (selectId === "projectDiscussionsFilter") {
         state.filter = value;
-        renderProjectDiscussions(root);
+        renderProjectDiscussions(root, { preserveSelection: true });
       }
     }
   });
@@ -499,21 +705,23 @@ function bindEvents(root) {
     btn.addEventListener("click", () => {
       state.selectedCategoryId = btn.dataset.sideNavTarget || "all";
       state.selectedDiscussionId = "";
-      renderProjectDiscussions(root);
+      renderProjectDiscussions(root, { preserveSelection: true });
     });
   });
 
   root.querySelectorAll("[data-discussion-id]").forEach((row) => {
     row.addEventListener("click", () => {
       state.selectedDiscussionId = row.dataset.discussionId || "";
-      renderProjectDiscussions(root);
+      state.closeMenuOpen = false;
+      renderProjectDiscussions(root, { preserveSelection: true });
     });
 
     row.addEventListener("keydown", (event) => {
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
         state.selectedDiscussionId = row.dataset.discussionId || "";
-        renderProjectDiscussions(root);
+        state.closeMenuOpen = false;
+        renderProjectDiscussions(root, { preserveSelection: true });
       }
     });
   });
@@ -527,13 +735,6 @@ function bindEvents(root) {
     });
   });
 
-  root.querySelectorAll("[data-discussion-action='back-to-list']").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      state.selectedDiscussionId = "";
-      renderProjectDiscussions(root);
-    });
-  });
-
   root.querySelectorAll("[data-discussion-action='new-discussion']").forEach((btn) => {
     btn.addEventListener("click", () => {
       alert("Phase 1 UI : la création réelle sera branchée plus tard.");
@@ -544,28 +745,58 @@ function bindEvents(root) {
   if (searchInput) {
     searchInput.addEventListener("input", (event) => {
       state.search = event.target.value || "";
-      renderProjectDiscussions(root);
+      renderProjectDiscussions(root, { preserveSelection: true });
     });
   }
 
   root.querySelectorAll("[data-action='tab-write']").forEach((btn) => {
     btn.addEventListener("click", () => {
       state.composerPreview = false;
-      renderProjectDiscussions(root);
+      renderProjectDiscussions(root, { preserveSelection: true });
     });
   });
 
   root.querySelectorAll("[data-action='tab-preview']").forEach((btn) => {
     btn.addEventListener("click", () => {
       state.composerPreview = true;
-      renderProjectDiscussions(root);
+      renderProjectDiscussions(root, { preserveSelection: true });
     });
   });
+
+  root.querySelectorAll("[data-discussion-action='toggle-close-menu']").forEach((btn) => {
+    btn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      state.closeMenuOpen = !state.closeMenuOpen;
+      renderProjectDiscussions(root, { preserveSelection: true });
+    });
+  });
+
+  root.querySelectorAll("[data-discussion-close]").forEach((btn) => {
+    btn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const discussion = getSelectedDiscussion();
+      if (!discussion) return;
+
+      const reason = btn.dataset.discussionClose || "";
+      if (!CLOSE_REASON_META[reason]) return;
+
+      discussion.isOpen = false;
+      discussion.closeReason = reason;
+      state.closeMenuOpen = false;
+
+      renderProjectDiscussions(root, { preserveSelection: true });
+    });
+  });
+
+  document.addEventListener("click", handleDocumentClickCloseMenu, { once: true });
 
   root.querySelectorAll("[data-discussion-action='toggle-help']").forEach((btn) => {
     btn.addEventListener("click", () => {
       state.helpMode = !state.helpMode;
-      renderProjectDiscussions(root);
+      renderProjectDiscussions(root, { preserveSelection: true });
     });
   });
 
@@ -594,13 +825,28 @@ function bindEvents(root) {
 
       state.composerText = "";
       state.composerPreview = false;
-      renderProjectDiscussions(root);
+      state.closeMenuOpen = false;
+      renderProjectDiscussions(root, { preserveSelection: true });
     });
   });
 }
 
-export function renderProjectDiscussions(root) {
+function handleDocumentClickCloseMenu(event) {
+  if (!event.target.closest(".discussion-close-action")) {
+    state.closeMenuOpen = false;
+  }
+}
+
+export function renderProjectDiscussions(root, { preserveSelection = false } = {}) {
   root.className = "project-shell__content";
+
+  if (!preserveSelection) {
+    state.selectedDiscussionId = "";
+    state.closeMenuOpen = false;
+    state.composerText = "";
+    state.composerPreview = false;
+    state.helpMode = false;
+  }
 
   syncHeader();
   root.innerHTML = renderPage();
