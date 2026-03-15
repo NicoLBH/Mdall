@@ -3833,7 +3833,8 @@ color:#ffff;
   min-height:0;
   display:flex;
   flex-direction:column;
-  padding:16px 16px 0px 16px;
+  padding:0px;
+  padding-left:var(--discussion-content-inset);
 }
 
 .project-discussions--detail{
@@ -4117,8 +4118,8 @@ color:#ffff;
   min-height:0;
   display:flex;
   flex-direction:column;
-  padding:20px 16px 24px;
-  padding-left:var(--discussion-content-inset)
+  padding:0px;
+  padding-left:var(--discussion-content-inset);
 }
 
 .side-nav-layout--discussions{
