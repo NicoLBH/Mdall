@@ -401,7 +401,7 @@ function renderDiscussionFixedCompactBar(discussion) {
 
   return `
   <div class="project-sticky-chrome project-sticky-chrome--discussion">
-    <div class="project-sticky-chrome__container">
+    <div class="project-sticky-chrome__container project-sticky-chrome__container--discussion">
       <div class="project-sticky-chrome__left">
         <div class="project-sticky-chrome__title-row">
           <span class="project-sticky-chrome__title">${escapeHtml(discussion.title || "Discussion")}</span>
