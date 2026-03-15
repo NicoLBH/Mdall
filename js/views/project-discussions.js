@@ -44,12 +44,12 @@ import {
 
 const CATEGORY_META = [
   { id: "all", label: "Voir toutes les discussions", icon: "💬", description: "Toutes catégories" },
-  { id: "announcements", label: "Annonces", icon: "📣", description: "Informations générales" },
-  { id: "general", label: "Général", icon: "💭", description: "Échanges transverses" },
-  { id: "ideas", label: "Idées", icon: "💡", description: "Améliorations et pistes" },
-  { id: "polls", label: "Sondages", icon: "🗳️", description: "Votes et arbitrages" },
-  { id: "qa", label: "Q&A", icon: "🙏", description: "Questions / réponses" },
-  { id: "show", label: "Show and tell", icon: "🙌", description: "Démonstrations et partages" }
+  { id: "announcements", label: "Annonces", icon: "📣", description: "Mises à jour des mainteneurs" },
+  { id: "general", label: "Général", icon: "💭", description: "Discuter librement de tous les sujets" },
+  { id: "ideas", label: "Idées", icon: "💡", description: "Partager des idées pour de nouvelles fonctionnalités" },
+  { id: "polls", label: "Sondages", icon: "🗳️", description: "Lancer un vote de la communauté" },
+  { id: "qa", label: "Q&A", icon: "🙏", description: "Demander de l'aide à la communauté" },
+  { id: "show", label: "Show and tell", icon: "🙌", description: "Montrer ce que vous avez réalisé" }
 ];
 
 const DISCUSSIONS = [
@@ -194,7 +194,11 @@ const state = {
   composerText: "",
   composerPreview: false,
   helpMode: false,
-  closeMenuOpen: false
+  closeMenuOpen: false,
+  creationStep: "",
+  creationCategoryId: "",
+  creationTitle: "",
+  creationBody: ""
 };
 
 let discussionsCurrentRoot = null;
@@ -210,7 +214,7 @@ function bindDiscussionsTabReset() {
 
     const href = tabLink.getAttribute("href") || "";
     if (!href || href !== location.hash) return;
-    if (!state.selectedDiscussionId) return;
+    if (!state.selectedDiscussionId && !state.creationStep) return;
     if (!discussionsCurrentRoot || !discussionsCurrentRoot.isConnected) return;
 
     event.preventDefault();
@@ -220,6 +224,7 @@ function bindDiscussionsTabReset() {
     state.composerText = "";
     state.composerPreview = false;
     state.helpMode = false;
+    resetCreationFlow();
 
     renderProjectDiscussions(discussionsCurrentRoot, { preserveSelection: true });
   });
@@ -273,7 +278,7 @@ function renderDiscussionStickyTitleBar(discussion) {
         class="project-discussions__sticky-toplink mono"
         data-discussion-action="return-top"
       >
-        Return to top
+        Retour en haut
       </button>
     </div>
   `;
@@ -290,11 +295,11 @@ function renderDiscussionStickyMetaBar(discussion) {
       </span>
       <span class="project-discussions__sticky-author mono">${escapeHtml(discussion.author || "Utilisateur")}</span>
       <span class="project-discussions__sticky-sep">-</span>
-      <span class="project-discussions__sticky-activity mono">Latest activity ${escapeHtml(fmtTs(discussion.updatedAt))}</span>
+      <span class="project-discussions__sticky-activity mono">Dernière activité ${escapeHtml(fmtTs(discussion.updatedAt))}</span>
       <span class="project-discussions__sticky-sep">-</span>
-      <span class="project-discussions__sticky-count mono">${escapeHtml(commentCount)} comments</span>
+      <span class="project-discussions__sticky-count mono">${escapeHtml(commentCount)} commentaires</span>
       <span class="project-discussions__sticky-sep">-</span>
-      <span class="project-discussions__sticky-count mono">${escapeHtml(replyCount)} reply${replyCount > 1 ? "s" : ""}</span>
+      <span class="project-discussions__sticky-count mono">${escapeHtml(replyCount)} réponse${replyCount > 1 ? "s" : ""}</span>
     </div>
   `;
 }
@@ -394,6 +399,79 @@ function getSelectedDiscussion() {
   return DISCUSSIONS.find((item) => item.id === state.selectedDiscussionId) || null;
 }
 
+function resetCreationFlow() {
+  state.creationStep = "";
+  state.creationCategoryId = "";
+  state.creationTitle = "";
+  state.creationBody = "";
+}
+
+function openCreationCategories() {
+  state.selectedDiscussionId = "";
+  state.closeMenuOpen = false;
+  state.creationStep = "categories";
+  state.creationCategoryId = "";
+  state.creationTitle = "";
+  state.creationBody = "";
+  state.composerPreview = false;
+}
+
+function openCreationForm(categoryId) {
+  state.selectedDiscussionId = "";
+  state.closeMenuOpen = false;
+  state.creationStep = "form";
+  state.creationCategoryId = categoryId || "general";
+  state.composerPreview = false;
+}
+
+function createDiscussionFromDraft() {
+  const title = String(state.creationTitle || "").trim();
+  const body = String(state.creationBody || "").trim();
+  const categoryId = state.creationCategoryId || "general";
+
+  if (!title || !body) return null;
+
+  const newId = `d${DISCUSSIONS.length + 1}`;
+  const now = new Date().toISOString();
+
+  const discussion = {
+    id: newId,
+    categoryId,
+    title,
+    author: "Mano",
+    kind: "a démarré",
+    isOpen: true,
+    closeReason: "",
+    updatedAt: now,
+    repliesCount: 0,
+    timeline: [
+      {
+        type: "comment",
+        author: "Mano",
+        authorType: "human",
+        at: now,
+        body,
+        repliesCount: 0,
+        roles: ["Author"]
+      }
+    ]
+  };
+
+  if (categoryId === "polls") {
+    discussion.poll = {
+      question: title,
+      options: ["Option 1", "Option 2", "Option 3"]
+    };
+  }
+
+  DISCUSSIONS.unshift(discussion);
+  state.selectedDiscussionId = newId;
+  resetCreationFlow();
+  state.composerPreview = false;
+
+  return discussion;
+}
+
 function renderDiscussionFixedCompactBar(discussion) {
   const discussionNumber = getDiscussionNumber(discussion);
   const commentCount = getDiscussionCommentCount(discussion);
@@ -411,11 +489,11 @@ function renderDiscussionFixedCompactBar(discussion) {
         <div class="project-sticky-chrome__meta mono">
           <span>${escapeHtml(discussion.author || "Utilisateur")}</span>
           <span>-</span>
-          <span>Latest activity ${escapeHtml(fmtTs(discussion.updatedAt))}</span>
+          <span>Dernière activité ${escapeHtml(fmtTs(discussion.updatedAt))}</span>
           <span>-</span>
-          <span>${escapeHtml(commentCount)} comments</span>
+          <span>${escapeHtml(commentCount)} commentaires</span>
           <span>-</span>
-          <span>${escapeHtml(replyCount)} reply${replyCount > 1 ? "s" : ""}</span>
+          <span>${escapeHtml(replyCount)} réponse${replyCount > 1 ? "s" : ""}</span>
         </div>
       </div>
   
@@ -425,7 +503,7 @@ function renderDiscussionFixedCompactBar(discussion) {
           class="project-sticky-chrome__toplink mono"
           data-discussion-action="return-top"
         >
-          Return to top
+          Retour en haut
         </button>
       </div>
     </div>
@@ -501,6 +579,133 @@ function renderListToolbar() {
   });
 }
 
+function renderCreateCategoryCards() {
+  const items = CATEGORY_META.filter((item) => item.id !== "all");
+
+  return `
+    <section class="project-discussions__panel project-discussions__create-panel">
+      <div class="project-discussions__title-row">
+        <h2 class="project-discussions__title">Choisir une catégorie de discussion</h2>
+      </div>
+
+      <div class="project-discussions__category-list">
+        ${items.map((item) => `
+          <article class="project-discussions__category-card">
+            <div class="project-discussions__category-card-main">
+              <div class="project-discussions__category-card-icon" aria-hidden="true">${escapeHtml(item.icon)}</div>
+              <div class="project-discussions__category-card-body">
+                <div class="project-discussions__category-card-title">${escapeHtml(item.label)}</div>
+                <div class="project-discussions__category-card-desc">${escapeHtml(item.description)}</div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              class="gh-btn gh-btn--primary project-discussions__category-card-btn"
+              data-discussion-category-start="${escapeHtml(item.id)}"
+            >
+              Commencer
+            </button>
+          </article>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function renderCreateFormView() {
+  const category = getCategoryMeta(state.creationCategoryId || "general");
+  const bodyPreview = mdToHtml(state.creationBody || "");
+
+  return `
+    <section class="project-discussions__panel project-discussions__create-panel">
+      <div class="project-discussions__title-row">
+        <h2 class="project-discussions__title">Démarrer une nouvelle discussion</h2>
+      </div>
+
+      <div class="project-discussions__create-category-head">
+        <div class="project-discussions__create-category-icon" aria-hidden="true">${escapeHtml(category.icon)}</div>
+        <div class="project-discussions__create-category-copy">
+          <div class="project-discussions__create-category-title">${escapeHtml(category.label)}</div>
+          <div class="project-discussions__create-category-desc">${escapeHtml(category.description)}</div>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        class="project-discussions__create-switch mono"
+        data-discussion-action="change-category"
+      >
+        Choisir une autre catégorie
+      </button>
+
+      <div class="project-discussions__form-block">
+        <label class="project-discussions__form-label" for="projectDiscussionCreateTitle">Ajouter un titre</label>
+        <input
+          id="projectDiscussionCreateTitle"
+          class="project-discussions__form-input"
+          type="text"
+          value="${escapeHtml(state.creationTitle)}"
+          placeholder="Titre"
+        >
+      </div>
+
+      <div class="project-discussions__form-block">
+        <label class="project-discussions__form-label" for="projectDiscussionCreateBody">Ajouter une description</label>
+
+        <div class="project-discussions__form-editor">
+          <div class="project-discussions__form-editor-tabs">
+            <button
+              type="button"
+              class="project-discussions__form-editor-tab ${state.composerPreview ? "" : "is-active"}"
+              data-discussion-action="create-tab-write"
+            >
+              Écrire
+            </button>
+
+            <button
+              type="button"
+              class="project-discussions__form-editor-tab ${state.composerPreview ? "is-active" : ""}"
+              data-discussion-action="create-tab-preview"
+            >
+              Aperçu
+            </button>
+          </div>
+
+          <div class="project-discussions__form-editor-body">
+            <textarea
+              id="projectDiscussionCreateBody"
+              class="project-discussions__form-textarea"
+              placeholder="Poser une question, lancer une conversation ou rédiger une annonce"
+              ${state.composerPreview ? 'style="display:none"' : ""}
+            >${escapeHtml(state.creationBody)}</textarea>
+
+            <div
+              id="projectDiscussionCreatePreview"
+              class="project-discussions__form-preview"
+              ${state.composerPreview ? "" : 'style="display:none"'}
+            >${bodyPreview || '<span class="project-discussions__form-preview-empty">Aucun contenu à prévisualiser.</span>'}</div>
+          </div>
+
+          <div class="project-discussions__form-editor-footer">
+            <span class="mono">Markdown supporté</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="project-discussions__create-actions">
+        <button
+          type="button"
+          class="gh-btn gh-btn--primary"
+          data-discussion-action="submit-new-discussion"
+        >
+          Créer la discussion
+        </button>
+      </div>
+    </section>
+  `;
+}
+
 function renderListView() {
   const category = getCategoryMeta(state.selectedCategoryId);
   const items = getFilteredDiscussions();
@@ -560,7 +765,7 @@ function renderPollModule(discussion) {
       <div class="project-discussions__poll-head">
         <div class="project-discussions__poll-icon">${escapeHtml(getCategoryMeta("polls").icon)}</div>
         <div>
-          <div class="project-discussions__poll-title">Poll question</div>
+          <div class="project-discussions__poll-title">Question du sondage</div>
           <div class="project-discussions__poll-subtitle">Interface UI uniquement pour la phase 1</div>
         </div>
       </div>
@@ -788,7 +993,7 @@ function renderDetailView() {
   const commentCount = getDiscussionCommentCount(discussion);
   const discussionNumber = getDiscussionNumber(discussion);
 
-   const bodyHtml = `
+  const bodyHtml = `
     <section class="project-discussions__detail">
       <div class="project-discussions__detail-head">
         <div class="project-discussions__detail-title-row">
@@ -808,7 +1013,7 @@ function renderDetailView() {
 
       ${renderPollModule(discussion)}
 
-      <div class="project-discussions__comments-title">${commentCount} comment${commentCount > 1 ? "s" : ""}</div>
+      <div class="project-discussions__comments-title">${commentCount} commentaire${commentCount > 1 ? "s" : ""}</div>
 
       ${renderMessageThread({
         className: "project-discussions__thread",
@@ -841,6 +1046,30 @@ function renderPage() {
     `;
   }
 
+  if (state.creationStep === "categories") {
+    return `
+      <section class="project-discussions project-discussions--create">
+        <section class="project-discussions__scroll" id="projectDiscussionsScroll">
+          <div class="project-discussions__create-shell">
+            ${renderCreateCategoryCards()}
+          </div>
+        </section>
+      </section>
+    `;
+  }
+
+  if (state.creationStep === "form") {
+    return `
+      <section class="project-discussions project-discussions--create">
+        <section class="project-discussions__scroll" id="projectDiscussionsScroll">
+          <div class="project-discussions__create-shell">
+            ${renderCreateFormView()}
+          </div>
+        </section>
+      </section>
+    `;
+  }
+
   return renderSideNavLayout({
     className: "project-discussions side-nav-layout--discussions",
     navClassName: "project-discussions__nav",
@@ -858,7 +1087,7 @@ function syncHeader() {
   const host = document.getElementById("projectViewHeaderHost");
   if (!host) return;
 
-  if (state.selectedDiscussionId) {
+  if (state.selectedDiscussionId || state.creationStep) {
     host.innerHTML = "";
     return;
   }
@@ -929,6 +1158,7 @@ function bindEvents(root) {
       state.selectedCategoryId = btn.dataset.sideNavTarget || "all";
       state.selectedDiscussionId = "";
       state.closeMenuOpen = false;
+      resetCreationFlow();
       renderProjectDiscussions(root, { preserveSelection: true });
     });
   });
@@ -937,6 +1167,7 @@ function bindEvents(root) {
     row.addEventListener("click", () => {
       state.selectedDiscussionId = row.dataset.discussionId || "";
       state.closeMenuOpen = false;
+      resetCreationFlow();
       renderProjectDiscussions(root, { preserveSelection: true });
     });
 
@@ -945,6 +1176,7 @@ function bindEvents(root) {
         event.preventDefault();
         state.selectedDiscussionId = row.dataset.discussionId || "";
         state.closeMenuOpen = false;
+        resetCreationFlow();
         renderProjectDiscussions(root, { preserveSelection: true });
       }
     });
@@ -954,14 +1186,30 @@ function bindEvents(root) {
     el.addEventListener("ghaction:action", (event) => {
       const action = String(event.detail?.action || "");
       if (action === "new-discussion") {
-        alert("Phase 1 UI : la création réelle sera branchée plus tard.");
+        openCreationCategories();
+        renderProjectDiscussions(root, { preserveSelection: true });
       }
     });
   });
 
   root.querySelectorAll("[data-discussion-action='new-discussion']").forEach((btn) => {
     btn.addEventListener("click", () => {
-      alert("Phase 1 UI : la création réelle sera branchée plus tard.");
+      openCreationCategories();
+      renderProjectDiscussions(root, { preserveSelection: true });
+    });
+  });
+
+  root.querySelectorAll("[data-discussion-category-start]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      openCreationForm(btn.dataset.discussionCategoryStart || "general");
+      renderProjectDiscussions(root, { preserveSelection: true });
+    });
+  });
+
+  root.querySelectorAll("[data-discussion-action='change-category']").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      state.creationStep = "categories";
+      renderProjectDiscussions(root, { preserveSelection: true });
     });
   });
 
@@ -989,6 +1237,20 @@ function bindEvents(root) {
   });
 
   root.querySelectorAll("[data-action='tab-preview']").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      state.composerPreview = true;
+      renderProjectDiscussions(root, { preserveSelection: true });
+    });
+  });
+
+  root.querySelectorAll("[data-discussion-action='create-tab-write']").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      state.composerPreview = false;
+      renderProjectDiscussions(root, { preserveSelection: true });
+    });
+  });
+
+  root.querySelectorAll("[data-discussion-action='create-tab-preview']").forEach((btn) => {
     btn.addEventListener("click", () => {
       state.composerPreview = true;
       renderProjectDiscussions(root, { preserveSelection: true });
@@ -1059,6 +1321,34 @@ function bindEvents(root) {
     if (preview) preview.innerHTML = mdToHtml(state.composerText);
   }
 
+  const createTitleInput = root.querySelector("#projectDiscussionCreateTitle");
+  if (createTitleInput) {
+    createTitleInput.addEventListener("input", (event) => {
+      state.creationTitle = event.target.value || "";
+    });
+  }
+
+  const createBodyTextarea = root.querySelector("#projectDiscussionCreateBody");
+  if (createBodyTextarea) {
+    createBodyTextarea.addEventListener("input", (event) => {
+      state.creationBody = event.target.value || "";
+      const preview = root.querySelector("#projectDiscussionCreatePreview");
+      if (preview) {
+        preview.innerHTML = state.creationBody.trim()
+          ? mdToHtml(state.creationBody)
+          : '<span class="project-discussions__form-preview-empty">Aucun contenu à prévisualiser.</span>';
+      }
+    });
+  }
+
+  root.querySelectorAll("[data-discussion-action='submit-new-discussion']").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const created = createDiscussionFromDraft();
+      if (!created) return;
+      renderProjectDiscussions(root, { preserveSelection: true });
+    });
+  });
+
   root.querySelectorAll("[data-discussion-action='submit-comment']").forEach((btn) => {
     btn.addEventListener("click", () => {
       const text = String(state.composerText || "").trim();
@@ -1098,6 +1388,7 @@ export function renderProjectDiscussions(root, { preserveSelection = false } = {
     state.composerText = "";
     state.composerPreview = false;
     state.helpMode = false;
+    resetCreationFlow();
   }
 
   syncHeader();
