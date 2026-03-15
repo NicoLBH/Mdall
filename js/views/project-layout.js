@@ -9,11 +9,11 @@ import { renderProjectSituationsTopBanner } from "./project-situations-runbar.js
 import { mountProjectShellChrome } from "./project-shell-chrome.js";
 import { renderProjectPropositions } from "./project-propositions.js";
 import { renderProjectCoordination } from "./project-coordination.js";
-import { renderProjectWorkflows } from "./project-workflows.js";
-import { renderProjectJalons } from "./project-jalons.js";
+import { renderProjectActions } from "./project-actions.js";
+import { renderProjectInsights } from "./project-insights.js";
 import { renderProjectReferentiel } from "./project-referentiel.js";
 import { renderProjectRisquesSecurite } from "./project-risques-securite.js";
-import { renderProjectPilotage } from "./project-pilotage.js";
+import { renderProjectPilotage } from "./project-oversight.js";
 import { renderProjectParametres } from "./project-parametres.js";
 
 function normalizeProjectTab(tab) {
@@ -75,7 +75,7 @@ export function renderProjectLayout(root, projectId, tab) {
       break;
 
     case PROJECT_TAB_IDS.ACTIONS:
-      renderProjectWorkflows(content);
+      renderProjectActions(content);
       break;
 
     case PROJECT_TAB_IDS.PILOTAGE:
@@ -91,7 +91,7 @@ export function renderProjectLayout(root, projectId, tab) {
       break;
 
     case PROJECT_TAB_IDS.INSIGHTS:
-      renderProjectJalons(content);
+      renderProjectInsights(content);
       break;
 
     case PROJECT_TAB_IDS.PARAMETRES:
