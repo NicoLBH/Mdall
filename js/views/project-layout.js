@@ -8,7 +8,7 @@ import { renderProjectHeader } from "./project-header.js";
 import { renderProjectSituationsTopBanner } from "./project-situations-runbar.js";
 import { mountProjectShellChrome } from "./project-shell-chrome.js";
 import { renderProjectPropositions } from "./project-propositions.js";
-import { renderProjectCoordination } from "./project-coordination.js";
+import { renderProjectDiscussions } from "./project-discussions.js";
 import { renderProjectActions } from "./project-actions.js";
 import { renderProjectInsights } from "./project-insights.js";
 import { renderProjectReferentiel } from "./project-referentiel.js";
@@ -71,7 +71,7 @@ export function renderProjectLayout(root, projectId, tab) {
       break;
 
     case PROJECT_TAB_IDS.DISCUSSIONS:
-      renderProjectCoordination(content);
+      renderProjectDiscussions(content);
       break;
 
     case PROJECT_TAB_IDS.ACTIONS:
