@@ -4680,16 +4680,21 @@ color:#ffff;
 
 .project-sticky-chrome{
   height:var(--header-h-compact);
+  background:var(--headbg);
+  border-bottom:1px solid var(--border);
+}
+.project-sticky-chrome__container{
+  max-width:1280px;
+  margin:0 auto;
+  padding:0 16px;
+
   display:flex;
   align-items:center;
   justify-content:space-between;
   gap:16px;
-  padding:8px 16px 2px 16px;
+  height:100%;
   box-sizing:border-box;
-  background:var(--headbg);
-  border-bottom:1px solid var(--border);
 }
-
 .project-sticky-chrome__left{
   min-width:0;
   display:flex;
