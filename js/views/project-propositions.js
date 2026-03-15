@@ -1,144 +1,156 @@
-import { store } from "../store.js";
-import { renderDoctrinePage } from "./project-doctrine-page.js";
 import { escapeHtml } from "../utils/escape-html.js";
+import { setProjectViewHeader, registerProjectPrimaryScrollSource } from "./project-shell-chrome.js";
+import { svgIcon } from "../ui/icons.js";
+import { getProjectProposals, ensureProjectProposalsState } from "../services/project-proposals.js";
+import {
+  renderDataTableEmptyState,
+  renderDataTableHead,
+  renderDataTableShell
+} from "./ui/data-table-shell.js";
 
-function getTopHtml() {
-  const fileLabel = store.projectForm.pdfFile?.name
-    ? `<div class="settings-upload__meta mono">Fichier sélectionné : ${escapeHtml(store.projectForm.pdfFile.name)}</div>`
-    : `<div class="settings-upload__meta">Aucun fichier sélectionné pour le moment.</div>`;
+function getProposalIconSvg() {
+  return svgIcon("git-pull-request", {
+    className: "octicon octicon-git-pull-request",
+    width: 16,
+    height: 16
+  });
+}
 
-  return `
-    <section class="settings-section settings-section--top settings-section--upload" id="propositions-depot">
-      <h3>Dépôt d'une proposition</h3>
-      <p class="settings-lead">La fonction de téléchargement quitte l'onglet Documents et devient l'entrée naturelle d'une proposition de modification. On ne dépose plus un fichier isolé : on ouvre une demande de changement qui sera instruite avant intégration.</p>
+function formatDateTime(value) {
+  if (!value) return "—";
 
-      <div class="settings-card">
-        <div class="settings-card__head">
-          <div>
-            <h4>Créer une proposition de mise à jour</h4>
-            <p>Ce bloc montre le futur point d'entrée pour déposer un nouveau plan, une notice corrigée, une fiche produit modifiée ou toute pièce candidate à l'intégration.</p>
-          </div>
-          <span class="settings-badge mono">PR</span>
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+
+  return new Intl.DateTimeFormat("fr-FR", {
+    dateStyle: "short",
+    timeStyle: "short"
+  }).format(date);
+}
+
+function getStatusMeta(status) {
+  const normalized = String(status || "").toLowerCase();
+
+  if (normalized === "open") {
+    return {
+      label: "Open",
+      className: "workflow-status-pill workflow-status-pill--success"
+    };
+  }
+
+  if (normalized === "merged") {
+    return {
+      label: "Merged",
+      className: "workflow-status-pill"
+    };
+  }
+
+  if (normalized === "rejected") {
+    return {
+      label: "Rejected",
+      className: "workflow-status-pill workflow-status-pill--error"
+    };
+  }
+
+  return {
+    label: normalized || "—",
+    className: "workflow-status-pill"
+  };
+}
+
+function renderProposalStatus(proposal) {
+  const meta = getStatusMeta(proposal.status);
+  return `<span class="${meta.className}">${escapeHtml(meta.label)}</span>`;
+}
+
+function renderProposalRows(entries) {
+  return entries.map((proposal) => `
+    <div class="workflow-runs__row workflow-runs__row--proposal">
+      <div class="workflow-runs__cell workflow-runs__cell--action">
+        <div class="workflow-runs__title-row">
+          <span class="workflow-runs__state-icon workflow-runs__state-icon--proposal">
+            ${getProposalIconSvg()}
+          </span>
+          <span class="workflow-runs__title workflow-runs__title--strong">
+            ${escapeHtml(proposal.title || "Proposition")}
+          </span>
         </div>
+        <div class="workflow-runs__meta">${escapeHtml(proposal.fileName || "Fichier")}</div>
+      </div>
 
-        <div class="form-row form-row--settings">
-          <label>Document candidat</label>
-          <input id="pdfFile" type="file" accept="application/pdf">
-          ${fileLabel}
-        </div>
+      <div class="workflow-runs__cell">
+        <div class="workflow-runs__text">Demande de visa</div>
+        <div class="workflow-runs__meta">${proposal.needsVisa ? "Visa requis" : "Sans visa"}</div>
+      </div>
 
-        <div class="settings-actions-row">
-          <button class="gh-btn gh-btn--validate" type="button" disabled>Créer la proposition</button>
-          <button class="gh-btn" type="button" disabled>Prévisualiser les impacts</button>
-          <button class="gh-btn" type="button" disabled>Associer à un sujet</button>
+      <div class="workflow-runs__cell workflow-runs__cell--muted">
+        ${escapeHtml(formatDateTime(proposal.createdAt))}
+      </div>
+
+      <div class="workflow-runs__cell workflow-runs__cell--status">
+        ${renderProposalStatus(proposal)}
+      </div>
+    </div>
+  `).join("");
+}
+
+function renderProposalsTable() {
+  const entries = getProjectProposals();
+
+  return renderDataTableShell({
+    className: "workflow-runs-table workflow-runs-table--proposals",
+    gridTemplate: "minmax(340px,1.8fr) 220px 170px 120px",
+    headHtml: renderDataTableHead({
+      columns: [
+        "Proposition",
+        "Type",
+        "Créée le",
+        "Statut"
+      ]
+    }),
+    bodyHtml: renderProposalRows(entries),
+    state: entries.length ? "ready" : "empty",
+    emptyHtml: renderDataTableEmptyState({
+      title: "Aucune proposition enregistrée",
+      description: "Crée une proposition avec demande de visa depuis l’onglet Documents pour alimenter ce tableau."
+    })
+  });
+}
+
+export function renderProjectPropositions(root) {
+  ensureProjectProposalsState();
+
+  root.className = "project-shell__content";
+
+  setProjectViewHeader({
+    contextLabel: "Propositions",
+    variant: "propositions"
+  });
+
+  root.innerHTML = `
+    <section class="project-simple-page project-simple-page--settings">
+      <div class="project-simple-scroll" id="projectPropositionsScroll">
+        <div class="settings-content" style="max-width:1216px;margin:0 auto;padding:24px 32px 40px;">
+          <section class="settings-section">
+            <div class="settings-card">
+              <div class="settings-card__head">
+                <div>
+                  <h4>Tableau des propositions</h4>
+                  <p>
+                    Cette vue regroupe les propositions créées depuis l’onglet Documents lorsqu’un dépôt passe par
+                    “Créer une proposition avec demande de visa”.
+                  </p>
+                </div>
+                <span class="settings-badge mono">PR</span>
+              </div>
+
+              ${renderProposalsTable()}
+            </div>
+          </section>
         </div>
       </div>
     </section>
   `;
-}
 
-export function renderProjectPropositions(root) {
-  renderDoctrinePage(root, {
-    contextLabel: "Propositions",
-    variant: "propositions",
-    scrollId: "projectPropositionsScroll",
-    navTitle: "Propositions",
-    pageTitle: "Propositions",
-    pageIntro: "Cet onglet transpose les pull requests de GitHub au projet de construction. Une proposition regroupe un changement, ses pièces, ses impacts, ses relecteurs, ses décisions et son issue d'intégration ou de rejet.",
-    topHtml: getTopHtml(),
-    navItems: [
-      { id: "propositions-depot", label: "Dépôt" },
-      { id: "propositions-cycle", label: "Cycle de revue" },
-      { id: "propositions-impacts", label: "Impacts" },
-      { id: "propositions-decisions", label: "Décisions" }
-    ],
-    sections: [
-      {
-        id: "propositions-cycle",
-        title: "Cycle de revue",
-        lead: "La proposition sera le lieu où l'on verra si la modification est encore ouverte, en revue, acceptée sous réserve, rejetée ou intégrée dans les documents de référence.",
-        blocks: [
-          {
-            title: "Sous-menus de statut",
-            description: "Ils permettent de comprendre le futur workflow d'instruction.",
-            items: [
-              "Open : proposition déposée mais non encore instruite.",
-              "Under review : analyses techniques, réglementaires, coût et planning en cours.",
-              "Changes requested : compléments ou corrections demandés au déposant.",
-              "Approved : validation acquise, en attente d'intégration et diffusion.",
-              "Merged : proposition intégrée dans Documents.",
-              "Rejected / Superseded : proposition refusée ou remplacée par une autre."
-            ],
-            actions: [
-              { label: "Open" },
-              { label: "Under review" },
-              { label: "Changes requested" },
-              { label: "Approved" },
-              { label: "Merged" }
-            ]
-          }
-        ]
-      },
-      {
-        id: "propositions-impacts",
-        title: "Analyse d'impact",
-        lead: "Ici la doctrine construction diverge de GitHub : un changement n'affecte pas seulement un fichier, il peut affecter plusieurs disciplines, le chantier, le coût, le planning et le respect réglementaire.",
-        blocks: [
-          {
-            title: "Encarts visibles sur chaque proposition",
-            description: "Ces encarts expliqueront ce que la plateforme calculera ou demandera plus tard.",
-            badge: "CHECKS",
-            items: [
-              "Documents impactés par la proposition.",
-              "Sujets qui seraient soldés ou au contraire réouverts si la proposition est approuvée.",
-              "Lots et intervenants à reconsulter.",
-              "Impacts chantier, planning, coût et sécurité à documenter avant décision.",
-              "Références normatives ou missions CT touchées."
-            ],
-            actions: [
-              { label: "Voir les impacts" },
-              { label: "Demander revue" }
-            ]
-          }
-        ]
-      },
-      {
-        id: "propositions-decisions",
-        title: "Décision et intégration",
-        lead: "La fin d'une proposition n'est pas seulement un 'merge'. Il faut aussi diffuser, historiser, lier les preuves et mettre à jour les sujets associés.",
-        blocks: [
-          {
-            title: "Boutons d'action futurs",
-            description: "Ils matérialisent la chaîne de gouvernance attendue.",
-            badge: "ACTIONS",
-            items: [
-              "Approuver sous réserve avec commentaires traçables.",
-              "Rejeter avec justification et pièces de retour.",
-              "Intégrer dans Documents et générer la nouvelle version en vigueur.",
-              "Clore ou réouvrir les sujets liés selon la décision.",
-              "Déclencher la diffusion et les workflows associés."
-            ],
-            actions: [
-              { label: "Approuver" },
-              { label: "Approuver sous réserve" },
-              { label: "Rejeter" },
-              { label: "Intégrer" }
-            ]
-          }
-        ]
-      }
-    ]
-  });
-
-  bindPropositionsEvents();
-}
-
-function bindPropositionsEvents() {
-  const pdfFile = document.getElementById("pdfFile");
-  if (!pdfFile) return;
-
-  pdfFile.addEventListener("change", (e) => {
-    store.projectForm.pdfFile = e.target.files?.[0] || null;
-    renderProjectPropositions(document.getElementById("project-content"));
-  });
+  registerProjectPrimaryScrollSource(document.getElementById("projectPropositionsScroll"));
 }
