@@ -1,89 +1,169 @@
+import { escapeHtml } from "../utils/escape-html.js";
 import { renderDoctrinePage } from "./project-doctrine-page.js";
+import { getRunMetrics } from "../services/project-automation.js";
+
+function formatDuration(value) {
+  const ms = Number(value);
+
+  if (!Number.isFinite(ms)) return "—";
+  if (ms < 1000) return `${ms} ms`;
+
+  const seconds = ms / 1000;
+  if (seconds < 60) {
+    return seconds < 10 ? `${seconds.toFixed(1)} s` : `${Math.round(seconds)} s`;
+  }
+
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = Math.round(seconds % 60);
+
+  if (minutes < 60) {
+    return remainingSeconds > 0
+      ? `${minutes} min ${remainingSeconds}s`
+      : `${minutes} min`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+
+  return remainingMinutes > 0
+    ? `${hours} h ${remainingMinutes} min`
+    : `${hours} h`;
+}
+
+function formatPercent(value) {
+  const num = Number(value);
+  return Number.isFinite(num) ? `${num} %` : "—";
+}
+
+function formatInteger(value) {
+  const num = Number(value);
+  return Number.isFinite(num) ? String(num) : "—";
+}
+
+function renderMetricCard({ label, value, hint = "" }) {
+  return `
+    <article class="pilotage-metric-card">
+      <div class="pilotage-metric-card__label">${escapeHtml(label)}</div>
+      <div class="pilotage-metric-card__value">${escapeHtml(value)}</div>
+      ${hint ? `<div class="pilotage-metric-card__hint">${escapeHtml(hint)}</div>` : ""}
+    </article>
+  `;
+}
+
+function renderActionPerformanceSection() {
+  const metrics = getRunMetrics();
+
+  return `
+    <section class="settings-section" id="pilotage-actions-performance">
+      <h3>Actions - Suivi des performances</h3>
+      <p class="settings-lead">
+        Première vue de pilotage alimentée par le run log partagé. Elle expose les performances d’exécution observées localement dans le PoC.
+      </p>
+
+      <div class="settings-card">
+        <div class="settings-card__head">
+          <div>
+            <h4>Indicateurs d’exécution</h4>
+            <p>
+              Ces indicateurs préfigurent le futur suivi opérationnel des actions Rapsobot : cadence d’usage, succès des traitements et temps d’exécution.
+            </p>
+          </div>
+          <span class="settings-badge mono">LIVE METRICS</span>
+        </div>
+
+        <div class="pilotage-metrics-grid">
+          ${renderMetricCard({
+            label: "Dernier traitement",
+            value: formatDuration(metrics.lastRunDurationMs),
+            hint: "Durée du run le plus récent terminé ou en échec."
+          })}
+
+          ${renderMetricCard({
+            label: "Nombre d’actions exécutées",
+            value: formatInteger(metrics.totalRuns),
+            hint: "Nombre total d’entrées actuellement présentes dans le journal d’exécution."
+          })}
+
+          ${renderMetricCard({
+            label: "Taux de succès",
+            value: formatPercent(metrics.successRate),
+            hint: "Part des actions terminées avec succès parmi les actions journalisées."
+          })}
+
+          ${renderMetricCard({
+            label: "Durée moyenne",
+            value: formatDuration(metrics.averageDurationMs),
+            hint: "Moyenne calculée sur les runs terminés avec succès ou échec."
+          })}
+        </div>
+      </div>
+    </section>
+  `;
+}
 
 export function renderProjectPilotage(root) {
   renderDoctrinePage(root, {
-    contextLabel: "Pilotage",
+    contextLabel: "Indicateurs",
     variant: "pilotage",
     scrollId: "projectPilotageScroll",
-    navTitle: "Pilotage",
-    pageTitle: "Pilotage",
-    pageIntro: "Cet onglet reprend l'esprit Insights de GitHub mais l'oriente métier. Il montrera la santé du projet : volume de sujets, délais de traitement, stabilité documentaire, proximité des jalons et zones de risque.",
+    navTitle: "Indicateurs",
+    pageTitle: "Indicateurs",
+    pageIntro: "Cet onglet structure le pilotage du projet : activité, performance, risques, goulots d’étranglement et charge de traitement. La première implémentation du PoC commence par le suivi des actions exécutées.",
     navItems: [
+      { id: "pilotage-actions-performance", label: "Actions - Suivi des performances" },
       { id: "pilotage-activite", label: "Activité" },
-      { id: "pilotage-backlog", label: "Backlog" },
-      { id: "pilotage-qualite", label: "Qualité du flux" },
-      { id: "pilotage-risques", label: "Tendances de risque" }
+      { id: "pilotage-risques", label: "Risques" },
+      { id: "pilotage-charge", label: "Charge" }
     ],
+    topHtml: renderActionPerformanceSection(),
     sections: [
       {
         id: "pilotage-activite",
-        title: "Activité projet",
-        lead: "La page affichera des graphiques et compteurs expliquant comment le projet évolue dans le temps.",
+        title: "Activité",
+        lead: "L’activité agrègera le volume de sujets, d’avis, de propositions et d’actions, ainsi que leur dynamique dans le temps.",
         blocks: [
           {
-            title: "Indicateurs visibles",
-            description: "Ils aident à voir l'activité sans se limiter à un simple volume de documents déposés.",
+            title: "Indicateurs visés",
+            description: "Cette zone affichera ensuite des tendances et des ventilations par phase, lot, criticité ou intervenant.",
             items: [
-              "Nombre de sujets ouverts, clos et réouverts.",
-              "Nombre de propositions créées, approuvées, rejetées, intégrées.",
-              "Nombre de documents remplacés par phase ou discipline.",
-              "Répartition des échanges de coordination."
-            ]
-          }
-        ]
-      },
-      {
-        id: "pilotage-backlog",
-        title: "Backlog et capacité de traitement",
-        lead: "L'objectif est de rendre visible la pression de traitement sur le projet avant qu'elle ne devienne critique.",
-        blocks: [
-          {
-            title: "Mesures de backlog",
-            description: "Ces métriques seront plus utiles que des indicateurs purement cosmétiques.",
-            badge: "FLOW",
-            items: [
-              "Temps moyen de prise en charge d'un sujet.",
-              "Temps moyen de revue d'une proposition.",
-              "Répartition des sujets par discipline, zone et responsable.",
-              "Nombre de points bloquants restant avant chaque jalon."
-            ],
-            actions: [
-              { label: "Voir backlog critique" },
-              { label: "Voir par responsable" }
-            ]
-          }
-        ]
-      },
-      {
-        id: "pilotage-qualite",
-        title: "Qualité du flux projet",
-        lead: "Le pilotage doit aussi montrer si la mécanique fonctionne bien : sujets bien formulés, décisions stables, documents qui ne churnent pas inutilement.",
-        blocks: [
-          {
-            title: "Indicateurs de qualité",
-            description: "Ils permettront de juger la robustesse du processus, pas seulement sa vitesse.",
-            items: [
-              "Taux de réouverture des sujets.",
-              "Taux de propositions rejetées pour dossier incomplet.",
-              "Fréquence de remplacement documentaire par zone ou discipline.",
-              "Taux de sujets clos avec preuve attachée."
+              "Nombre de sujets ouverts / fermés par période.",
+              "Répartition des avis par statut et par domaine.",
+              "Volume de propositions émises, approuvées, rejetées.",
+              "Évolution des temps de traitement et de relecture."
             ]
           }
         ]
       },
       {
         id: "pilotage-risques",
-        title: "Tendances de risque",
-        lead: "Une vue synthétique montrera où le projet devient instable : surcharges sur une discipline, accumulation de sujets critiques, convergence insuffisante avant jalon.",
+        title: "Risques",
+        lead: "Le pilotage des risques fera ressortir les points sensibles : blocages, écarts critiques, accumulation d’incohérences ou zones du projet insuffisamment couvertes.",
         blocks: [
           {
-            title: "Vue de synthèse",
-            description: "Cette vue sera le pendant construction des insights les plus utiles.",
+            title: "Angles de lecture",
+            description: "Le but n’est pas seulement de compter, mais d’orienter l’attention des acteurs vers les points à arbitrer.",
             items: [
-              "Heatmap par zone, lot ou discipline.",
-              "Courbe d'approche des jalons avec points bloquants restants.",
-              "Liste des validations critiques encore attendues.",
-              "Tendance des alertes sécurité et incidents."
+              "Sujets bloquants non traités avant jalon.",
+              "Accumulation d’avis défavorables ou réservés.",
+              "Lots ou zones du projet insuffisamment documentés.",
+              "Retards de validation sur les actions critiques."
+            ]
+          }
+        ]
+      },
+      {
+        id: "pilotage-charge",
+        title: "Charge",
+        lead: "La charge suivra l’intensité opérationnelle du projet : volume à traiter, files d’attente, pics d’activité et répartition des efforts.",
+        blocks: [
+          {
+            title: "Mesures de charge à terme",
+            description: "Ces indicateurs aideront à piloter l’absorption des flux documentaires et des demandes de validation.",
+            items: [
+              "Nombre d’actions en attente ou en cours.",
+              "Temps moyen de passage entre étapes.",
+              "Répartition des charges par acteur ou discipline.",
+              "Détection des goulots d’étranglement de validation."
             ]
           }
         ]
