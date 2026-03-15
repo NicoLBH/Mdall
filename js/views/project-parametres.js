@@ -25,6 +25,7 @@ import {
   setAutomationEnabled
 } from "../services/project-automation.js";
 import { escapeHtml } from "../utils/escape-html.js";
+import { renderGhSelectMenu, bindGhSelectMenus, bindGhActionButtons } from "./ui/gh-split-button.js";
 
 const DEFAULT_PROJECT_COLLABORATORS = [
   { id: "collab-1", email: "nicolas.lebihan@socotec.com", status: "Actif", role: "Admin" },
@@ -1338,6 +1339,8 @@ function bindProjectPhaseToggles() {
 }
 
 function bindParametresEvents() {
+  bindGhActionButtons();
+  
   bindGhEditableFields(document, {
     onValidate: (id, value) => {
       switch (id) {
