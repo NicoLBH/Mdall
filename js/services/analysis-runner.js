@@ -415,7 +415,7 @@ async function pollRunStatus({ runId, token, runLogId }) {
   return { state: "timeout" };
 }
 
-export async function runAnalysis() {
+export async function runAnalysis(options = {}) {
   if (store.ui.systemStatus?.state === "running" && activeRunPromise) {
     return activeRunPromise;
   }
@@ -428,16 +428,23 @@ export async function runAnalysis() {
     return;
   }
 
-  const primaryAgentKey = getPrimaryAnalysisAgent()?.key || "parasismique";
+  const triggerType = options.triggerType || "manual";
+  const triggerLabel = options.triggerLabel
+    || (triggerType === "document-upload" ? "Dépôt de document" : "Lancement manuel");
+  const primaryAgentKey = options.agentKey || getPrimaryAnalysisAgent()?.key || "parasismique";
+
   const runLogEntry = startRunLogEntry({
-    name: getAnalysisRunName(primaryAgentKey, "manual"),
+    name: getAnalysisRunName(primaryAgentKey, triggerType),
     kind: "analysis",
     agentKey: primaryAgentKey,
-    triggerType: "manual",
-    triggerLabel: "Lancement manuel",
-    documentName: inputs.pdfFile?.name || "",
+    triggerType,
+    triggerLabel,
+    documentName: options.documentName || inputs.pdfFile?.name || "",
     status: "running",
-    summary: "Analyse déclenchée depuis l’onglet Situations."
+    summary: options.summary
+      || (triggerType === "document-upload"
+        ? "Analyse déclenchée automatiquement après dépôt réussi d’un document."
+        : "Analyse déclenchée depuis l’onglet Situations.")
   });
 
   const runId = `RUN-${Date.now()}`;
