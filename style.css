@@ -3668,3 +3668,52 @@ color:#ffff;
     --data-table-cols:minmax(240px,1.4fr) 180px 150px 110px 110px !important;
   }
 }
+
+.pilotage-metrics-grid{
+  display:grid;
+  grid-template-columns:repeat(4, minmax(0, 1fr));
+  gap:16px;
+}
+
+.pilotage-metric-card{
+  min-width:0;
+  padding:16px;
+  border:1px solid var(--border);
+  border-radius:12px;
+  background:var(--panel);
+  box-shadow:var(--shadow-sm, none);
+}
+
+.pilotage-metric-card__label{
+  color:var(--muted);
+  font-size:12px;
+  line-height:1.4;
+  margin-bottom:8px;
+}
+
+.pilotage-metric-card__value{
+  color:var(--text);
+  font-size:28px;
+  line-height:1.15;
+  font-weight:700;
+  letter-spacing:-0.02em;
+}
+
+.pilotage-metric-card__hint{
+  margin-top:8px;
+  color:var(--muted);
+  font-size:12px;
+  line-height:1.45;
+}
+
+@media (max-width: 1100px){
+  .pilotage-metrics-grid{
+    grid-template-columns:repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px){
+  .pilotage-metrics-grid{
+    grid-template-columns:1fr;
+  }
+}
