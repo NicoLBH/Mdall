@@ -914,6 +914,10 @@ function bindProjectTabToggles() {
 }
 
 function bindProjectAutomationToggles() {
+  const emitAutomationChanged = () => {
+    document.dispatchEvent(new CustomEvent("projectAutomationChanged"));
+  };
+
   document.querySelectorAll("[data-project-agent-toggle]").forEach((input) => {
     input.addEventListener("change", (event) => {
       const key = event.target.getAttribute("data-project-agent-toggle");
@@ -922,7 +926,10 @@ function bindProjectAutomationToggles() {
       const ok = setAgentEnabled(key, !!event.target.checked);
       if (!ok) {
         event.target.checked = isAgentEnabled(key);
+        return;
       }
+
+      emitAutomationChanged();
     });
   });
 
@@ -934,7 +941,10 @@ function bindProjectAutomationToggles() {
       const ok = setAutomationEnabled(key, !!event.target.checked);
       if (!ok) {
         event.target.checked = isAutomationEnabled(key);
+        return;
       }
+
+      emitAutomationChanged();
     });
   });
 }
