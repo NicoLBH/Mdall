@@ -3,6 +3,7 @@ import { store } from "./store.js";
 import { mountAssistOverlay, bindGlobalAssistLauncher } from "./views/assist-overlay.js";
 import { renderGlobalShell } from "./views/global-shell.js";
 import { runAnalysis, resetAnalysisUi } from "./services/analysis-runner.js";
+import { ensureProjectAutomationDefaults } from "./services/project-automation.js";
 
 let analysisEventsBound = false;
 
@@ -27,6 +28,7 @@ function bootstrap() {
     name: "demo"
   };
 
+  ensureProjectAutomationDefaults();
   bindAnalysisEvents();
 
   // Très important :
