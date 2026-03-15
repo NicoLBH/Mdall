@@ -15,6 +15,8 @@ import { renderGhInput } from "./ui/gh-input.js";
 import { svgIcon } from "../ui/icons.js";
 import { renderDataTableShell, renderDataTableHead } from "./ui/data-table-shell.js";
 import { escapeHtml } from "../utils/escape-html.js";
+import { shouldAutoRunAnalysisAfterUpload } from "../services/project-automation.js";
+import { runAnalysis } from "../services/analysis-runner.js";
 
 const DOCUMENT_FOLDERS = [
   { name: "Architecte", note: "Dossier discipline" },
@@ -402,12 +404,28 @@ function buildRepoDocumentFromState() {
   };
 }
 
+function triggerAutoAnalysisAfterDirectUpload(documentName = "") {
+  if (!shouldAutoRunAnalysisAfterUpload()) return;
+
+  runAnalysis({
+    triggerType: "document-upload",
+    triggerLabel: "Dépôt de document",
+    documentName,
+    summary: "Analyse déclenchée automatiquement après dépôt réussi d’un document."
+  });
+}
+
 function commitDirectDocument(root) {
   if (!docsViewState.file) return;
 
-  docsViewState.repoDocuments.unshift(buildRepoDocumentFromState());
-  store.projectForm.pdfFile = docsViewState.file;
+  const documentFile = docsViewState.file;
+  const repoDocument = buildRepoDocumentFromState();
+
+  docsViewState.repoDocuments.unshift(repoDocument);
+  store.projectForm.pdfFile = documentFile;
+
   closeUploadView(root);
+  triggerAutoAnalysisAfterDirectUpload(documentFile.name);
 }
 
 function commitProposal(root) {
