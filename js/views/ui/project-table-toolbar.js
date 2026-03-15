@@ -1,16 +1,7 @@
 import { renderGhInput } from "./gh-input.js";
 import { renderGhSelectMenu } from "./gh-split-button.js";
 import { svgIcon } from "../../ui/icons.js";
-
-function escapeHtml(value) {
-  return String(value ?? "").replace(/[&<>"']/g, (char) => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#39;"
-  }[char]));
-}
+import { escapeHtml } from "../../utils/escape-html.js";
 
 export function renderProjectTableToolbar({
   className = "",
