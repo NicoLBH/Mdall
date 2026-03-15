@@ -3418,6 +3418,45 @@ color:#ffff;
   line-height:1.5;
   color:var(--muted);
 }
+.settings-feature-row__top{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
+.settings-feature-row__meta{
+  display:inline-flex;
+  align-items:center;
+  padding:2px 8px;
+  border:1px solid var(--border);
+  border-radius:999px;
+  font-size:11px;
+  line-height:1.4;
+  color:var(--text);
+  background:rgba(110,118,129,.08);
+}
+
+.settings-feature-row__meta--muted{
+  color:var(--muted);
+  background:rgba(110,118,129,.06);
+}
+
+.settings-feature-row--disabled{
+  cursor:default;
+}
+
+.settings-feature-row--disabled:hover{
+  background:transparent;
+}
+
+.settings-feature-row--disabled .settings-feature-row__label{
+  color:var(--muted);
+}
+
+.settings-feature-row--disabled .settings-feature-row__control input{
+  cursor:not-allowed;
+}
 .verdict-switch{
   display:inline-flex;
   align-items:center;
