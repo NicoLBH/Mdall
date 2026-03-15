@@ -7,7 +7,7 @@ import {
 } from "../constants.js";
 import { svgIcon } from "../ui/icons.js";
 import { renderGhEditableField, bindGhEditableFields } from "./ui/gh-input.js";
-import { renderGhSelectMenu, bindGhSelectMenus } from "./ui/gh-split-button.js";
+import { renderGhSelectMenu, bindGhSelectMenus, bindGhActionButtons } from "./ui/gh-split-button.js";
 import {
   renderSideNavLayout,
   renderSideNavGroup,
@@ -25,7 +25,6 @@ import {
   setAutomationEnabled
 } from "../services/project-automation.js";
 import { escapeHtml } from "../utils/escape-html.js";
-import { renderGhSelectMenu, bindGhSelectMenus, bindGhActionButtons } from "./ui/gh-split-button.js";
 
 const DEFAULT_PROJECT_COLLABORATORS = [
   { id: "collab-1", email: "nicolas.lebihan@socotec.com", status: "Actif", role: "Admin" },
