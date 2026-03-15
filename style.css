@@ -2083,10 +2083,9 @@ display:block;
 }
 
 .gh-menu__item{
-padding:6px 8px;
-cursor:pointer;
-white-space:nowrap;
-  margin:0px 8px;
+  padding:6px 8px;
+  cursor:pointer;
+  white-space:nowrap;
 }
 
 .gh-menu__item:hover{
@@ -2869,8 +2868,7 @@ color:#ffff;
   padding:8px 0;
   margin:0;
   background:rgb(1, 4, 9);
-  border:1px solid var(--border);
-  border-radius:12px;
+  border-radius:var(--radius);
   box-shadow:rgb(61, 68, 77) 0px 0px 0px 1px, rgba(1, 4, 9, 0.4) 0px 6px 12px -3px, rgba(1, 4, 9, 0.4) 0px 6px 18px 0px;
   z-index:260;
 }
