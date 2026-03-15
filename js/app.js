@@ -4,6 +4,7 @@ import { mountAssistOverlay, bindGlobalAssistLauncher } from "./views/assist-ove
 import { renderGlobalShell } from "./views/global-shell.js";
 import { runAnalysis, resetAnalysisUi } from "./services/analysis-runner.js";
 import { ensureProjectAutomationDefaults } from "./services/project-automation.js";
+import { bindGhActionButtons } from "./views/ui/gh-split-button.js";
 
 let analysisEventsBound = false;
 
@@ -30,10 +31,8 @@ function bootstrap() {
 
   ensureProjectAutomationDefaults();
   bindAnalysisEvents();
+  bindGhActionButtons();
 
-  // Très important :
-  // le global shell doit être rerendu AVANT le router sur chaque hashchange,
-  // pour que mountProjectShellChrome capture les bons noeuds du header courant.
   renderGlobalShell();
   window.addEventListener("hashchange", renderGlobalShell);
 
