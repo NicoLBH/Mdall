@@ -41,6 +41,7 @@ import {
   bindOverlayChromeCompact
 } from "./ui/overlay-chrome.js";
 import {
+  normalizeVerdict,
   renderStatusBadge,
   renderVerdictPill,
   renderStateDot
