@@ -69,20 +69,16 @@ function renderCurrentProjectPhaseCard() {
     : fallbackPhase;
 
   return `
-    <div class="settings-features-card">
-      <div class="settings-features-card__title">Phase</div>
-      <div class="settings-features-card__desc">Phase en cours du projet</div>
-      <div class="settings-form-grid settings-form-grid--thirds">
-        ${renderSelectField({
-          id: "currentProjectPhase",
-          label: "",
-          value: currentPhase,
-          options: enabledPhases.map((item) => ({
-            value: item.code,
-            label: `${item.code} - ${item.label}`
-          }))
-        })}
-      </div>
+    <div class="settings-form-grid settings-form-grid--thirds">
+      ${renderSelectField({
+        id: "currentProjectPhase",
+        label: "",
+        value: currentPhase,
+        options: enabledPhases.map((item) => ({
+          value: item.code,
+          label: `${item.code} - ${item.label}`
+        }))
+      })}
     </div>
   `;
 }
