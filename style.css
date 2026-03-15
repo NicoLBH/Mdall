@@ -3818,3 +3818,6 @@ color:#ffff;
   font-weight:700;
   color:#fff;
 }
+.workflow-runs__state-icon--pending{
+  color:#fb8c00;
+}
