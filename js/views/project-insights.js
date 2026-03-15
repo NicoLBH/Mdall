@@ -1,79 +1,125 @@
-import { renderDoctrinePage } from "./project-doctrine-page.js";
+import { escapeHtml } from "../utils/escape-html.js";
+import { setProjectViewHeader, registerProjectPrimaryScrollSource } from "./project-shell-chrome.js";
+import { getRunMetrics } from "../services/project-automation.js";
 
-export function renderProjectJalons(root) {
-  renderDoctrinePage(root, {
-    contextLabel: "Jalons",
-    variant: "jalons",
-    scrollId: "projectJalonsScroll",
-    navTitle: "Jalons",
-    pageTitle: "Jalons",
-    pageIntro: "Cet onglet adapte GitHub Projects aux phases du projet de construction. Il servira à piloter ce qui doit être traité avant APS, APD, PRO, DCE, EXE, chantier, réception, levée des réserves et GPA.",
-    navItems: [
-      { id: "jalons-phases", label: "Phases" },
-      { id: "jalons-vues", label: "Vues de pilotage" },
-      { id: "jalons-gates", label: "Points bloquants" }
-    ],
-    sections: [
-      {
-        id: "jalons-phases",
-        title: "Phases et milestones",
-        lead: "Chaque jalon sera un conteneur métier regroupant les sujets, propositions et documents attendus pour franchir une étape du projet.",
-        blocks: [
-          {
-            title: "Liste des jalons à afficher",
-            description: "La page montrera une colonne ou une vue filtre pour chaque étape clé.",
-            items: [
-              "Esquisse / APS / APD / PRO / DCE.",
-              "EXE / VISA / chantier.",
-              "OPR / réception / levée des réserves / GPA.",
-              "Jalons internes spécifiques du maître d'ouvrage ou du contrôleur technique."
-            ],
-            actions: [
-              { label: "Nouveau jalon" },
-              { label: "Associer sujets" }
-            ]
-          }
-        ]
-      },
-      {
-        id: "jalons-vues",
-        title: "Vues de pilotage",
-        lead: "Comme dans un tableau GitHub Projects, l'utilisateur pourra voir les points à traiter par statut, discipline, zone, responsable ou criticité.",
-        blocks: [
-          {
-            title: "Vues prévues",
-            description: "Ces vues permettront de voir concrètement comment le système pilotera la maturité du projet.",
-            badge: "BOARD",
-            items: [
-              "Kanban : à traiter, en cours, en attente, validé, clos.",
-              "Vue par discipline : structure, incendie, accessibilité, acoustique, thermique, etc.",
-              "Vue par responsable : MOE, BET, CT, entreprise, MOA.",
-              "Vue planning : sujets proches de l'échéance du jalon."
-            ]
-          }
-        ]
-      },
-      {
-        id: "jalons-gates",
-        title: "Points bloquants avant franchissement",
-        lead: "La valeur ajoutée n'est pas de lister des tâches, mais d'identifier les sujets qui empêchent réellement de passer une phase dans de bonnes conditions.",
-        blocks: [
-          {
-            title: "Indicateurs de gate",
-            description: "Ils expliciteront la logique 'go / no go' adaptée à la construction.",
-            items: [
-              "Sujets critiques encore ouverts.",
-              "Propositions structurantes non arbitrées.",
-              "Documents requis manquants ou non encore en vigueur.",
-              "Checks réglementaires ou techniques non satisfaits."
-            ],
-            actions: [
-              { label: "Vérifier gate" },
-              { label: "Exporter revue de jalon" }
-            ]
-          }
-        ]
-      }
-    ]
+function formatDuration(value) {
+  const ms = Number(value);
+
+  if (!Number.isFinite(ms)) return "—";
+  if (ms < 1000) return `${ms} ms`;
+
+  const seconds = ms / 1000;
+  if (seconds < 60) {
+    return seconds < 10 ? `${seconds.toFixed(1)} s` : `${Math.round(seconds)} s`;
+  }
+
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = Math.round(seconds % 60);
+
+  if (minutes < 60) {
+    return remainingSeconds > 0
+      ? `${minutes} min ${remainingSeconds}s`
+      : `${minutes} min`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+
+  return remainingMinutes > 0
+    ? `${hours} h ${remainingMinutes} min`
+    : `${hours} h`;
+}
+
+function formatPercent(value) {
+  const num = Number(value);
+  return Number.isFinite(num) ? `${num} %` : "—";
+}
+
+function formatInteger(value) {
+  const num = Number(value);
+  return Number.isFinite(num) ? String(num) : "—";
+}
+
+function renderMetricCard({ label, value, hint = "" }) {
+  return `
+    <article class="pilotage-metric-card">
+      <div class="pilotage-metric-card__label">${escapeHtml(label)}</div>
+      <div class="pilotage-metric-card__value">${escapeHtml(value)}</div>
+      ${hint ? `<div class="pilotage-metric-card__hint">${escapeHtml(hint)}</div>` : ""}
+    </article>
+  `;
+}
+
+export function renderExecutionInsightsCardsSection() {
+  const metrics = getRunMetrics();
+
+  return `
+    <section class="settings-section" id="insights-execution">
+      <div class="settings-card">
+        <div class="settings-card__head">
+          <div>
+            <h4>Indicateurs d’exécution</h4>
+            <p>
+              Indicateurs alimentés par le run log partagé du PoC.
+            </p>
+          </div>
+          <span class="settings-badge mono">LIVE METRICS</span>
+        </div>
+
+        <div class="pilotage-metrics-grid">
+          ${renderMetricCard({
+            label: "Actions exécutées",
+            value: formatInteger(metrics.totalRuns),
+            hint: "Nombre total d’actions journalisées."
+          })}
+
+          ${renderMetricCard({
+            label: "Actions terminées",
+            value: formatInteger(metrics.completedRuns),
+            hint: "Actions ayant produit un verdict d’exécution."
+          })}
+
+          ${renderMetricCard({
+            label: "Taux de succès",
+            value: formatPercent(metrics.successRate),
+            hint: "Part des actions terminées avec succès."
+          })}
+
+          ${renderMetricCard({
+            label: "Durée moyenne",
+            value: formatDuration(metrics.averageDurationMs),
+            hint: "Moyenne calculée sur les runs terminés."
+          })}
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+export function renderProjectInsights(root) {
+  root.className = "project-shell__content";
+
+  setProjectViewHeader({
+    contextLabel: "Indicateurs",
+    variant: "insights"
   });
+
+  root.innerHTML = `
+    <section class="project-simple-page project-simple-page--settings">
+      <div class="project-simple-scroll" id="projectInsightsScroll">
+        <div class="settings-content" style="max-width:1216px;margin:0 auto;padding:24px 32px 40px;">
+          <header class="settings-page-header">
+            <h2>Indicateurs</h2>
+            <p>
+              Cet onglet devient le vrai point d’entrée des indicateurs d’exécution.
+            </p>
+          </header>
+
+          ${renderExecutionInsightsCardsSection()}
+        </div>
+      </div>
+    </section>
+  `;
+
+  registerProjectPrimaryScrollSource(document.getElementById("projectInsightsScroll"));
 }
