@@ -1,15 +1,6 @@
 import { store } from "../store.js";
 import { renderDoctrinePage } from "./project-doctrine-page.js";
-
-function escapeHtml(value) {
-  return String(value ?? "").replace(/[&<>"']/g, (char) => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#39;"
-  }[char]));
-}
+import { escapeHtml } from "../utils/escape-html.js";
 
 function getTopHtml() {
   const fileLabel = store.projectForm.pdfFile?.name
