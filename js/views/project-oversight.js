@@ -4,14 +4,13 @@ import {
   renderSideNavGroup,
   renderSideNavItem
 } from "./ui/side-nav-layout.js";
-import { renderExecutionInsightsCardsSection } from "./project-insights.js";
 
 function renderPilotageNav() {
   return renderSideNavGroup({
     title: "Pilotage",
     items: [
       renderSideNavItem({
-        label: "Indicateurs d'exécution",
+        label: "Vue colonnes",
         isActive: true
       })
     ]
@@ -38,11 +37,9 @@ export function renderProjectPilotage(root) {
             <header class="settings-page-header">
               <h2>Pilotage</h2>
               <p>
-                Cette vue est volontairement réduite : le menu de gauche reste en place comme structure visuelle pour les futures implémentations.
+                Cette vue n'est pas implémentée.
               </p>
             </header>
-
-            ${renderExecutionInsightsCardsSection()}
           `
         })}
       </div>
