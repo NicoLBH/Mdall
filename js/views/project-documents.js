@@ -41,7 +41,7 @@ const docsViewState = {
   isUploading: false,
   uploadProgress: 0,
   uploadTimer: null,
-  selectedPhase: store.projectForm?.phase || "APS",
+  selectedPhase: store.projectForm?.currentPhase || store.projectForm?.phase || "APS",
   repoDocuments: [],
   activity: {
     tone: "info",
@@ -70,6 +70,7 @@ function syncDocumentsSelectedPhase() {
 
   if (!enabledPhases.some((item) => item.code === docsViewState.selectedPhase)) {
     docsViewState.selectedPhase =
+      enabledPhases.find((item) => item.code === store.projectForm?.currentPhase)?.code ||
       enabledPhases.find((item) => item.code === store.projectForm?.phase)?.code ||
       fallbackPhase;
   }
@@ -589,7 +590,6 @@ function bindDocumentsSplitActions(root) {
     onChange: (id, value) => {
       if (id !== "documentsPhase") return;
       docsViewState.selectedPhase = String(value || docsViewState.selectedPhase);
-      store.projectForm.phase = docsViewState.selectedPhase;
       renderProjectDocuments(root);
     }
   });
