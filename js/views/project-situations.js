@@ -42,9 +42,11 @@ import {
 } from "./ui/overlay-chrome.js";
 import {
   normalizeVerdict,
+  normalizeReviewState,
   renderStatusBadge,
   renderVerdictPill,
-  renderStateDot
+  renderStateDot,
+  renderReviewStateIcon
 } from "./ui/status-badges.js";
 import { escapeHtml } from "../utils/escape-html.js";
 
@@ -370,10 +372,12 @@ function ensureViewUiState() {
 
 function currentRunKey() {
   return firstNonEmpty(
+    store.currentProjectId,
+    store.currentProject?.id,
     store.ui?.runId,
     store.situationsView?.rawResult?.run_id,
     store.situationsView?.rawResult?.runId,
-    "default-run"
+    "default-project"
   );
 }
 
@@ -399,6 +403,7 @@ function saveHumanStore(data) {
 function getRunBucket() {
   const all = loadHumanStore();
   const key = currentRunKey();
+
   if (!all.runs[key]) {
     all.runs[key] = {
       comments: [],
@@ -407,11 +412,27 @@ function getRunBucket() {
         avis: {},
         sujet: {},
         situation: {}
+      },
+      review: {
+        avis: {},
+        sujet: {},
+        situation: {}
       }
     };
     saveHumanStore(all);
   }
-  return { all, key, bucket: all.runs[key] };
+
+  const bucket = all.runs[key];
+  if (!bucket.review) {
+    bucket.review = {
+      avis: {},
+      sujet: {},
+      situation: {}
+    };
+    saveHumanStore(all);
+  }
+
+  return { all, key, bucket };
 }
 
 function persistRunBucket(mutator) {
@@ -419,6 +440,168 @@ function persistRunBucket(mutator) {
   mutator(bucket);
   all.runs[key] = bucket;
   saveHumanStore(all);
+}
+
+const DEFAULT_REVIEW_META = Object.freeze({
+  is_seen: false,
+  review_state: "pending",
+  is_published: false,
+  last_published_at: null,
+  has_changes_since_publish: false
+});
+
+function getEntityByType(entityType, entityId) {
+  if (entityType === "avis") return getNestedAvis(entityId);
+  if (entityType === "sujet") return getNestedSujet(entityId);
+  if (entityType === "situation") return getNestedSituation(entityId);
+  return null;
+}
+
+function normalizeReviewMeta(meta = {}) {
+  return {
+    is_seen: !!meta.is_seen,
+    review_state: normalizeReviewState(meta.review_state || "pending"),
+    is_published: !!meta.is_published,
+    last_published_at: meta.last_published_at ? String(meta.last_published_at) : null,
+    has_changes_since_publish: !!meta.has_changes_since_publish
+  };
+}
+
+function getBaseReviewMeta(entity) {
+  if (!entity) return { ...DEFAULT_REVIEW_META };
+
+  return normalizeReviewMeta({
+    is_seen: entity.is_seen,
+    review_state: entity.review_state,
+    is_published: entity.is_published,
+    last_published_at: entity.last_published_at,
+    has_changes_since_publish: entity.has_changes_since_publish
+  });
+}
+
+function getReviewEntry(entityType, entityId) {
+  const { bucket } = getRunBucket();
+  return bucket?.review?.[entityType]?.[entityId] || null;
+}
+
+function getEntityReviewMeta(entityType, entityId) {
+  const entity = getEntityByType(entityType, entityId);
+  const base = getBaseReviewMeta(entity);
+  const stored = getReviewEntry(entityType, entityId);
+
+  if (!stored) return base;
+  return normalizeReviewMeta({ ...base, ...stored });
+}
+
+function syncEntityReviewMeta(entityType, entityId) {
+  const entity = getEntityByType(entityType, entityId);
+  if (!entity) return;
+
+  const meta = getEntityReviewMeta(entityType, entityId);
+  entity.is_seen = meta.is_seen;
+  entity.review_state = meta.review_state;
+  entity.is_published = meta.is_published;
+  entity.last_published_at = meta.last_published_at;
+  entity.has_changes_since_publish = meta.has_changes_since_publish;
+
+  if (entity.raw && typeof entity.raw === "object") {
+    entity.raw.is_seen = meta.is_seen;
+    entity.raw.review_state = meta.review_state;
+    entity.raw.is_published = meta.is_published;
+    entity.raw.last_published_at = meta.last_published_at;
+    entity.raw.has_changes_since_publish = meta.has_changes_since_publish;
+  }
+}
+
+function setEntityReviewMeta(entityType, entityId, patch = {}, options = {}) {
+  const ts = options.ts || nowIso();
+
+  persistRunBucket((bucket) => {
+    bucket.review = bucket.review || { avis: {}, sujet: {}, situation: {} };
+    bucket.review[entityType] = bucket.review[entityType] || {};
+
+    const prev = normalizeReviewMeta({
+      ...getEntityReviewMeta(entityType, entityId),
+      ...(bucket.review[entityType][entityId] || {})
+    });
+
+    bucket.review[entityType][entityId] = {
+      ...prev,
+      ...patch,
+      updated_at: ts
+    };
+  });
+
+  syncEntityReviewMeta(entityType, entityId);
+}
+
+function markEntitySeen(entityType, entityId, options = {}) {
+  if (!entityType || !entityId) return;
+
+  const meta = getEntityReviewMeta(entityType, entityId);
+  if (meta.is_seen) return;
+
+  setEntityReviewMeta(entityType, entityId, {
+    is_seen: true
+  }, options);
+}
+
+function markEntityValidated(entityType, entityId, options = {}) {
+  if (!entityType || !entityId) return;
+
+  const meta = getEntityReviewMeta(entityType, entityId);
+  setEntityReviewMeta(entityType, entityId, {
+    is_seen: true,
+    review_state: "validated",
+    has_changes_since_publish: meta.is_published ? true : meta.has_changes_since_publish
+  }, options);
+}
+
+function canRejectEntity(entityType, entityId) {
+  const meta = getEntityReviewMeta(entityType, entityId);
+  if (meta.is_published && !meta.has_changes_since_publish) {
+    window.alert("Cet élément a déjà été diffusé et ne peut plus être supprimé / rejeté dans son état diffusé.");
+    return false;
+  }
+  return true;
+}
+
+function setEntityReviewState(entityType, entityId, nextState, options = {}) {
+  const reviewState = normalizeReviewState(nextState);
+  if ((reviewState === "rejected" || reviewState === "dismissed") && !canRejectEntity(entityType, entityId)) {
+    return false;
+  }
+
+  const meta = getEntityReviewMeta(entityType, entityId);
+
+  setEntityReviewMeta(entityType, entityId, {
+    is_seen: true,
+    review_state: reviewState,
+    has_changes_since_publish:
+      meta.is_published && reviewState !== "published"
+        ? true
+        : meta.has_changes_since_publish
+  }, options);
+
+  return true;
+}
+
+function getSelectionEntityType(type) {
+  return type === "sujet" ? "sujet" : type;
+}
+
+function getReviewTitleStateClass(entityType, entityId) {
+  const meta = getEntityReviewMeta(entityType, entityId);
+  return meta.is_seen ? "is-seen" : "is-unseen";
+}
+
+function renderEntityReviewLeadIcon(entityType, entityId) {
+  const meta = getEntityReviewMeta(entityType, entityId);
+  return renderReviewStateIcon(meta.review_state, {
+    entityType,
+    isPublished: meta.is_published,
+    hasChangesSincePublish: meta.has_changes_since_publish
+  });
 }
 
 function addComment(entityType, entityId, message, options = {}) {
@@ -1356,13 +1539,16 @@ function renderSituationRow(situation) {
   const expanded = store.situationsView.expandedSituations.has(situation.id);
   const hasSujets = (situation.sujets || []).length > 0;
   const effStatus = getEffectiveSituationStatus(situation.id);
+  const reviewIcon = renderEntityReviewLeadIcon("situation", situation.id);
+  const titleSeenClass = getReviewTitleStateClass("situation", situation.id);
 
   return `
     <div class="issue-row issue-row--sit click js-row-situation${rowSelectedClass("situation", situation.id)}" data-situation-id="${escapeHtml(situation.id)}">
       <div class="cell cell-theme lvl0">
         <span class="js-toggle-situation" data-situation-id="${escapeHtml(situation.id)}">${chevron(expanded, hasSujets)}</span>
         ${issueIcon(effStatus)}
-        <span class="theme-text theme-text--sit">${escapeHtml(firstNonEmpty(situation.title, situation.id, "(sans titre)"))}</span>
+        ${reviewIcon ? `<span class="review-title-chip">${reviewIcon}</span>` : ""}
+        <span class="theme-text theme-text--sit ${titleSeenClass}">${escapeHtml(firstNonEmpty(situation.title, situation.id, "(sans titre)"))}</span>
       </div>
       <div class="cell cell-verdict"></div>
       <div class="cell cell-prio">${priorityBadge(situation.priority)}</div>
@@ -1376,13 +1562,16 @@ function renderSujetRow(sujet) {
   const expanded = store.situationsView.expandedSujets.has(sujet.id);
   const hasAvis = (sujet.avis || []).length > 0;
   const effStatus = getEffectiveSujetStatus(sujet.id);
+  const reviewIcon = renderEntityReviewLeadIcon("sujet", sujet.id);
+  const titleSeenClass = getReviewTitleStateClass("sujet", sujet.id);
 
   return `
     <div class="issue-row issue-row--pb click js-row-sujet${rowSelectedClass("sujet", sujet.id)}" data-sujet-id="${escapeHtml(sujet.id)}">
       <div class="cell cell-theme lvl1">
         <span class="js-toggle-sujet" data-sujet-id="${escapeHtml(sujet.id)}">${chevron(expanded, hasAvis)}</span>
         ${issueIcon(effStatus)}
-        <span class="theme-text theme-text--pb">${escapeHtml(firstNonEmpty(sujet.title, sujet.id, "Non classé"))}</span>
+        ${reviewIcon ? `<span class="review-title-chip">${reviewIcon}</span>` : ""}
+        <span class="theme-text theme-text--pb ${titleSeenClass}">${escapeHtml(firstNonEmpty(sujet.title, sujet.id, "Non classé"))}</span>
       </div>
       <div class="cell cell-verdict"></div>
       <div class="cell cell-prio">${priorityBadge(sujet.priority)}</div>
@@ -1394,11 +1583,15 @@ function renderSujetRow(sujet) {
 
 function renderAvisRow(avis) {
   const effVerdict = getEffectiveAvisVerdict(avis.id);
+  const reviewIcon = renderEntityReviewLeadIcon("avis", avis.id);
+  const titleSeenClass = getReviewTitleStateClass("avis", avis.id);
+
   return `
     <div class="issue-row issue-row--avis click js-row-avis${rowSelectedClass("avis", avis.id)}" data-avis-id="${escapeHtml(avis.id)}">
       <div class="cell cell-theme lvl2">
         <span class="chev chev--spacer"></span>
-        <span class="theme-text theme-text--avis">${escapeHtml(firstNonEmpty(avis.title, avis.id, ""))}</span>
+        ${reviewIcon ? `<span class="review-title-chip">${reviewIcon}</span>` : ""}
+        <span class="theme-text theme-text--avis ${titleSeenClass}">${escapeHtml(firstNonEmpty(avis.title, avis.id, ""))}</span>
       </div>
       <div class="cell cell-verdict">${renderVerdictPill(effVerdict)}</div>
       <div class="cell cell-prio"></div>
@@ -1411,13 +1604,16 @@ function renderAvisRow(avis) {
 function renderFlatSujetRow(sujet, situationId) {
   const effStatus = getEffectiveSujetStatus(sujet.id);
   const parentLabel = situationId ? `<span class="mono subissues-inline-count">${escapeHtml(situationId)}</span>` : "";
+  const reviewIcon = renderEntityReviewLeadIcon("sujet", sujet.id);
+  const titleSeenClass = getReviewTitleStateClass("sujet", sujet.id);
 
   return `
     <div class="issue-row issue-row--pb click js-row-sujet${rowSelectedClass("sujet", sujet.id)}" data-sujet-id="${escapeHtml(sujet.id)}">
       <div class="cell cell-theme lvl0">
         <span class="chev chev--spacer"></span>
         ${issueIcon(effStatus)}
-        <span class="theme-text theme-text--pb">${escapeHtml(firstNonEmpty(sujet.title, sujet.id, "Non classé"))}</span>
+        ${reviewIcon ? `<span class="review-title-chip">${reviewIcon}</span>` : ""}
+        <span class="theme-text theme-text--pb ${titleSeenClass}">${escapeHtml(firstNonEmpty(sujet.title, sujet.id, "Non classé"))}</span>
         ${parentLabel}
       </div>
       <div class="cell cell-verdict"></div>
@@ -1431,13 +1627,16 @@ function renderFlatSujetRow(sujet, situationId) {
 function renderFlatAvisRow(avis, sujetId, situationId) {
   const effVerdict = getEffectiveAvisVerdict(avis.id);
   const lineage = [situationId, sujetId].filter(Boolean).join(" · ");
+  const reviewIcon = renderEntityReviewLeadIcon("avis", avis.id);
+  const titleSeenClass = getReviewTitleStateClass("avis", avis.id);
 
   return `
     <div class="issue-row issue-row--avis click js-row-avis${rowSelectedClass("avis", avis.id)}" data-avis-id="${escapeHtml(avis.id)}">
       <div class="cell cell-theme lvl0">
         <span class="chev chev--spacer"></span>
         ${issueIcon("open")}
-        <span class="theme-text theme-text--avis">${escapeHtml(firstNonEmpty(avis.title, avis.id, ""))}</span>
+        ${reviewIcon ? `<span class="review-title-chip">${reviewIcon}</span>` : ""}
+        <span class="theme-text theme-text--avis ${titleSeenClass}">${escapeHtml(firstNonEmpty(avis.title, avis.id, ""))}</span>
         ${lineage ? `<span class="mono subissues-inline-count">${escapeHtml(lineage)}</span>` : ""}
       </div>
       <div class="cell cell-verdict">${renderVerdictPill(effVerdict)}</div>
@@ -1447,7 +1646,6 @@ function renderFlatAvisRow(avis, sujetId, situationId) {
     </div>
   `;
 }
-
 function getSituationsTableGridTemplate() {
   return "1fr 110px 80px 140px 160px";
 }
@@ -1843,6 +2041,35 @@ function renderSubIssuesPanel({ title, leftMetaHtml = "", rightMetaHtml = "", bo
   `;
 }
 
+function renderRejectReviewAction(selection) {
+  if (!selection?.type || !selection?.item?.id) return "";
+
+  const entityType = getSelectionEntityType(selection.type);
+  const reviewIcon = renderReviewStateIcon("rejected", { entityType });
+  const dismissIcon = renderReviewStateIcon("dismissed", { entityType });
+
+  return renderGhActionButton({
+    id: `review-reject-${entityType}-${selection.item.id}`,
+    label: "Rejeter",
+    icon: reviewIcon,
+    tone: "default",
+    size: "sm",
+    className: "js-review-reject-action",
+    items: [
+      {
+        label: "Rejeté par humain",
+        action: "review:set:rejected",
+        icon: reviewIcon
+      },
+      {
+        label: "Non pertinent",
+        action: "review:set:dismissed",
+        icon: dismissIcon
+      }
+    ]
+  });
+}
+
 function renderCommentBox(selection) {
   ensureViewUiState();
   const item = selection?.item || null;
@@ -1869,6 +2096,8 @@ function renderCommentBox(selection) {
     </div>
   `;
 
+  const rejectActionHtml = renderRejectReviewAction(selection);
+
   const actionsHtml = `
     <button class="gh-btn gh-btn--help-mode ${helpMode ? "is-on" : ""}" data-action="toggle-help" type="button">Help</button>
 
@@ -1877,6 +2106,8 @@ function renderCommentBox(selection) {
       : (isIssueOpen
           ? `<button class="gh-btn gh-btn--issue-action" data-action="issue-close" type="button">${SVG_ISSUE_CLOSED}<span class="gh-btn__label">Close</span></button>`
           : `<button class="gh-btn gh-btn--issue-action" data-action="issue-reopen" type="button">${SVG_ISSUE_REOPENED}<span class="gh-btn__label">Reopen issue</span></button>`)}
+
+    ${rejectActionHtml}
 
     <button class="gh-btn gh-btn--comment" data-action="add-comment" type="button">Comment</button>
   `;
@@ -2051,6 +2282,9 @@ function renderDetailsTitleWrapHtml(selection) {
   if (!selection) return `<span class="details-title-text">Sélectionner un élément</span>`;
 
   const item = selection.item;
+  const entityType = getSelectionEntityType(selection.type);
+  const reviewIcon = renderEntityReviewLeadIcon(entityType, item.id);
+  const titleSeenClass = getReviewTitleStateClass(entityType, item.id);
   let badgeHtml = "";
   let probsHtml = "";
   let verdictHtml = "";
@@ -2078,14 +2312,17 @@ function renderDetailsTitleWrapHtml(selection) {
     barOnlyHtml = buildVerdictBarHtml(stats.counts, { legend: false });
   }
 
-  const titleTextHtml = escapeHtml(firstNonEmpty(item.title, item.id, "Détail"));
+  const titleTextHtml = `
+    ${reviewIcon ? `<span class="details-title-status">${reviewIcon}</span>` : ""}
+    <span class="details-title-text ${titleSeenClass}">${escapeHtml(firstNonEmpty(item.title, item.id, "Détail"))}</span>
+  `;
 
   return `
     <div class="details-title-wrap details-title--expanded">
       <div class="details-title-row details-title-row--main">
         <div class="details-title-maincol">
           <div class="details-title-topline">
-            <span class="details-title-text">${titleTextHtml}</span>
+            ${titleTextHtml}
             <span class="details-title-id mono">${idHtml}</span>
           </div>
           <div class="details-title-bottomline">
@@ -2100,7 +2337,7 @@ function renderDetailsTitleWrapHtml(selection) {
         <div class="details-title-compact-col1">${badgeHtml}</div>
         <div class="details-title-compact-col2">
           <div class="details-title-compact-top">
-            <span class="details-title-text">${titleTextHtml}</span>
+            ${titleTextHtml}
             <span class="details-title-id mono">${idHtml}</span>
           </div>
           <div class="details-title-compact-bottom">
@@ -2241,6 +2478,10 @@ function updateDetailsModal() {
 
 function openDetailsModal() {
   closeGlobalNav();
+  const selection = getActiveSelection();
+  if (selection?.type && selection?.item?.id) {
+    markEntitySeen(getSelectionEntityType(selection.type), selection.item.id, { source: "modal" });
+  }
   store.situationsView.detailsModalOpen = true;
   updateDetailsModal();
 }
@@ -2302,6 +2543,7 @@ function selectSituation(situationId) {
   store.situationsView.selectedSujetId = null;
   store.situationsView.selectedAvisId = null;
 
+  markEntitySeen("situation", situationId, { source: "details" });
   rerenderPanels();
 }
 
@@ -2315,6 +2557,7 @@ function selectSujet(sujetId) {
   store.situationsView.selectedSujetId = sujetId;
   store.situationsView.selectedAvisId = null;
 
+  markEntitySeen("sujet", sujetId, { source: "details" });
   rerenderPanels();
 }
 
@@ -2323,16 +2566,20 @@ function selectAvis(avisId) {
   if (!avis) return;
   const sujet = getSujetByAvisId(avisId);
   const situation = getSituationByAvisId(avisId);
+
   store.situationsView.selectedSituationId = situation?.id || null;
   store.situationsView.selectedSujetId = sujet?.id || null;
   store.situationsView.selectedAvisId = avisId;
+
   if (situation?.id) store.situationsView.expandedSituations.add(situation.id);
   if (sujet?.id) store.situationsView.expandedSujets.add(sujet.id);
+
   store.situationsView.tempAvisVerdictFor = avisId;
   store.situationsView.tempAvisVerdict = getEffectiveAvisVerdict(avisId) || "F";
+
+  markEntitySeen("avis", avisId, { source: "details" });
   rerenderPanels();
 }
-
 /* =========================================================
    Details actions (archive-like)
 ========================================================= */
@@ -2402,6 +2649,86 @@ function applyValidateAvis(root) {
   rerenderScope(root);
 }
 
+function applyReviewStateRecursively(entityType, entityId, nextState) {
+  let applied = 0;
+  let skipped = 0;
+
+  const applyOne = (type, id) => {
+    const ok = setEntityReviewState(type, id, nextState, { actor: "Human", agent: "human" });
+    if (ok) applied += 1;
+    else skipped += 1;
+  };
+
+  if (entityType === "avis") {
+    applyOne("avis", entityId);
+    return { applied, skipped };
+  }
+
+  if (entityType === "sujet") {
+    const sujet = getNestedSujet(entityId);
+    if (!sujet) return { applied, skipped };
+
+    for (const avis of sujet.avis || []) {
+      applyOne("avis", avis.id);
+    }
+    applyOne("sujet", entityId);
+    return { applied, skipped };
+  }
+
+  if (entityType === "situation") {
+    const situation = getNestedSituation(entityId);
+    if (!situation) return { applied, skipped };
+
+    for (const sujet of situation.sujets || []) {
+      for (const avis of sujet.avis || []) {
+        applyOne("avis", avis.id);
+      }
+      applyOne("sujet", sujet.id);
+    }
+
+    applyOne("situation", entityId);
+  }
+
+  return { applied, skipped };
+}
+
+function applyReviewStateChange(root, nextState) {
+  const target = currentDecisionTarget(root);
+  if (!target) return;
+
+  const entityType = getSelectionEntityType(target.type);
+  const entityId = target.id;
+  const normalized = normalizeReviewState(nextState);
+
+  if (entityType === "sujet") {
+    const ok = window.confirm(
+      "Rejeter ce sujet entraînera le rejet automatique de tous ses avis. Voulez-vous continuer ? Vous pouvez aussi modifier la description du sujet si vous voulez conserver les avis."
+    );
+    if (!ok) return;
+  }
+
+  if (entityType === "situation") {
+    const ok = window.confirm(
+      "Rejeter cette situation entraînera le rejet automatique de tous ses sujets et de tous ses avis. Voulez-vous continuer ?"
+    );
+    if (!ok) return;
+  }
+
+  const result = applyReviewStateRecursively(entityType, entityId, normalized);
+
+  addActivity(entityType, entityId, `review_${normalized}`, "", {
+    review_state: normalized,
+    applied: result.applied,
+    skipped: result.skipped
+  }, { actor: "Human", agent: "human" });
+
+  if (result.skipped > 0) {
+    window.alert(`${result.skipped} élément(s) déjà diffusé(s) ont été conservé(s).`);
+  }
+
+  rerenderScope(root);
+}
+
 function applyIssueCloseOrReopen(nextStatus, root) {
   const target = currentDecisionTarget(root);
   if (!target || target.type === "avis") return;
@@ -2438,6 +2765,21 @@ function wireDetailsInteractive(root) {
         ev.preventDefault();
         applyCommentAction(root);
       }
+    });
+
+    root.querySelectorAll(".js-review-reject-action").forEach((actionRoot) => {
+      if (actionRoot.dataset.reviewBound === "true") return;
+      actionRoot.dataset.reviewBound = "true";
+  
+      actionRoot.addEventListener("ghaction:action", (event) => {
+        const action = String(event.detail?.action || "");
+        if (!action.startsWith("review:set:")) return;
+  
+        const nextState = action.slice("review:set:".length);
+        if (!nextState) return;
+  
+        applyReviewStateChange(root, nextState);
+      });
     });
   }
 
@@ -2732,6 +3074,7 @@ function openDrilldownFromSituation(situationId) {
   store.situationsView.drilldown.selectedSituationId = situation.id;
   store.situationsView.drilldown.selectedSujetId = null;
   store.situationsView.drilldown.selectedAvisId = null;
+  markEntitySeen("situation", situation.id, { source: "drilldown" });
   openDrilldown();
 }
 
@@ -2744,6 +3087,7 @@ function openDrilldownFromSujet(sujetId) {
   store.situationsView.drilldown.selectedSujetId = sujet.id;
   store.situationsView.drilldown.selectedAvisId = null;
   store.situationsView.drilldown.expandedSujets.add(sujet.id);
+  markEntitySeen("sujet", sujet.id, { source: "drilldown" });
   openDrilldown();
 }
 
@@ -2757,6 +3101,7 @@ function openDrilldownFromAvis(avisId) {
   store.situationsView.drilldown.selectedSujetId = sujet?.id || null;
   store.situationsView.drilldown.selectedAvisId = avis.id;
   if (sujet?.id) store.situationsView.drilldown.expandedSujets.add(sujet.id);
+  markEntitySeen("avis", avis.id, { source: "drilldown" });
   openDrilldown();
 }
 
