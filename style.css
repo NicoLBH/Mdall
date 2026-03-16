@@ -26,7 +26,7 @@
   --font:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji";
   --mono:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
 
-  --data-table-cols: 1fr;
+  --data-table-cols: 1fr 68px 40px 80px 36px;
   --discussion-avatar-rail:52px;
   --discussion-avatar-size:40px;
   --discussion-avatar-gap:12px;
@@ -662,7 +662,7 @@ body.modal-open {
 
 
 /* ===== Issues table (GitHub-like) ===== */
-:root{ --issues-cols: 1fr 110px 80px 140px 160px; }
+:root{ --issues-cols: 1fr 68px 40px 80px 36px; }
 
 .issues-table{
   height:100%;
@@ -707,7 +707,7 @@ body.modal-open {
 .issue-row:hover{background:transparent;}
 
 .cell{min-width:0;}
-.cell-theme{display:flex;align-items:center;gap:10px;min-width:0;}
+.cell-theme{display:flex;align-items:center;gap:5px;min-width:0;}
 .chev{width:16px;text-align:center;color:var(--muted);user-select:none;}
 .chev--spacer{visibility:hidden;}
 
@@ -748,9 +748,9 @@ body.modal-open {
 .verdict-F{color:#7ee787;border-color:rgba(63,185,80,.28);background:rgba(46,160,67,.15);}
 .verdict-D{color:#ffb1af;border-color:rgba(248,81,73,.32);background:rgba(248,81,73,.16);}
 .verdict-S{color:#e3b341;border-color:rgba(187,128,9,.34);background:rgba(187,128,9,.16);}
-.verdict-HM{color:#a5d6ff;border-color:rgba(56,139,253,.28);background:rgba(56,139,253,.14);}
-.verdict-PM{color:#eac54f;border-color:rgba(187,128,9,.28);background:rgba(187,128,9,.12);}
-.verdict-SO{color:#c9d1d9;border-color:rgba(110,118,129,.34);background:rgba(110,118,129,.16);}
+.verdict-HM{color:#eaf7fd;border-color:rgba(211, 233, 244, .36);background:rgba(211, 233, 244, .16);}
+.verdict-PM{color:#f6ead6;border-color:rgba(211, 189, 146, .34);background:rgba(211,189,146,.18);}
+.verdict-SO{color:#fff;border-color:rgba(107,138,196,.32);background:rgba(20,31,53,.85);}
 
 /* Scrollbars: no white track */
 *{
@@ -852,6 +852,7 @@ body.modal-open {
   justify-content:space-between;
   gap:12px;
   width:100%;
+  margin-bottom: 16px;
 }
 
 .project-table-toolbar__left,
@@ -5308,7 +5309,6 @@ color:#ffff;
   display:inline-flex;
   align-items:center;
   justify-content:center;
-  margin-right:6px;
   vertical-align:middle;
 }
 
