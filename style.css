@@ -1170,6 +1170,7 @@ body.is-resizing{
 }
 .gh-state--open{ color:#fff; background-color: rgb(35, 134, 54);line-height: 21px;text-size-adjust: 100%;font-size: 14px; border-color:rgba(46,160,67,.35); }
 .gh-state--closed{ color:#fff; background-color: rgb(137, 87, 229);line-height: 21px;text-size-adjust: 100%;font-size: 14px; border-color:rgba(163,113,247,.35); }
+.gh-state--rejected{ color:#fff; background-color: rgb(101, 109, 118);line-height: 21px;text-size-adjust: 100%;font-size: 14px; border-color:rgba(110,118,129,.4); }
 
 .details-title-text{ font-weight:700; }
 
