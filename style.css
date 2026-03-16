@@ -26,7 +26,7 @@
   --font:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji";
   --mono:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
 
-  --data-table-cols: 1fr 68px 40px 80px 36px;
+  --data-table-cols: 1fr 68px 40px 80px 40px;
   --discussion-avatar-rail:52px;
   --discussion-avatar-size:40px;
   --discussion-avatar-gap:12px;
@@ -662,7 +662,7 @@ body.modal-open {
 
 
 /* ===== Issues table (GitHub-like) ===== */
-:root{ --issues-cols: 1fr 68px 40px 80px 36px; }
+:root{ --issues-cols: 1fr 68px 40px 80px 40px; }
 
 .issues-table{
   height:100%;
