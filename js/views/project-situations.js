@@ -424,6 +424,13 @@ function ensureViewUiState() {
   if (typeof v.helpMode !== "boolean") v.helpMode = false;
   if (!v.tempAvisVerdict) v.tempAvisVerdict = "F";
   if (!v.tempAvisVerdictFor) v.tempAvisVerdictFor = null;
+  if (!v.descriptionEdit || typeof v.descriptionEdit !== "object") {
+    v.descriptionEdit = {
+      entityType: null,
+      entityId: null,
+      draft: ""
+    };
+  }
   if (!v.drilldown) {
     v.drilldown = {
       isOpen: false,
@@ -476,6 +483,11 @@ function getRunBucket() {
     all.runs[key] = {
       comments: [],
       activities: [],
+      descriptions: {
+        avis: {},
+        sujet: {},
+        situation: {}
+      },
       decisions: {
         avis: {},
         sujet: {},
@@ -491,6 +503,14 @@ function getRunBucket() {
   }
 
   const bucket = all.runs[key];
+  if (!bucket.descriptions) {
+    bucket.descriptions = {
+      avis: {},
+      sujet: {},
+      situation: {}
+    };
+    saveHumanStore(all);
+  }
   if (!bucket.review) {
     bucket.review = {
       avis: {},
@@ -715,6 +735,95 @@ function renderEntityReviewLeadIcon(entityType, entityId) {
     hasChangesSincePublish: meta.has_changes_since_publish,
     isSeen: meta.is_seen
   });
+}
+
+
+function getDescriptionDefaults(selectionOrType, entityId = null) {
+  let selection = null;
+  let entityType = selectionOrType;
+  let id = entityId;
+
+  if (selectionOrType && typeof selectionOrType === "object" && selectionOrType.type) {
+    selection = selectionOrType;
+    entityType = getSelectionEntityType(selection.type);
+    id = selection.item?.id || entityId;
+  }
+
+  const entity = selection?.item || getEntityByType(entityType, id);
+  const body =
+    entityType === "avis"
+      ? getAvisSummary(entity)
+      : entityType === "sujet"
+        ? getSujetSummary(entity)
+        : getSituationSummary(entity);
+
+  return {
+    body: String(body || ""),
+    author: firstNonEmpty(entity?.agent, entity?.raw?.agent, "system"),
+    agent: String(firstNonEmpty(entity?.agent, entity?.raw?.agent, "system")).toLowerCase(),
+    avatar_type: "agent",
+    avatar_initial:
+      entityType === "avis"
+        ? "A"
+        : entityType === "sujet"
+          ? "P"
+          : "S"
+  };
+}
+
+function getEntityDescriptionState(selectionOrType, entityId = null) {
+  const { bucket } = getRunBucket();
+  let selection = null;
+  let entityType = selectionOrType;
+  let id = entityId;
+
+  if (selectionOrType && typeof selectionOrType === "object" && selectionOrType.type) {
+    selection = selectionOrType;
+    entityType = getSelectionEntityType(selection.type);
+    id = selection.item?.id || entityId;
+  }
+
+  const defaults = getDescriptionDefaults(selection || entityType, id);
+  const stored = bucket?.descriptions?.[entityType]?.[id] || {};
+  return {
+    ...defaults,
+    ...stored,
+    body: firstNonEmpty(stored.body, defaults.body, ""),
+    author: firstNonEmpty(stored.author, defaults.author, "system"),
+    agent: String(firstNonEmpty(stored.agent, defaults.agent, "system")).toLowerCase(),
+    avatar_type: firstNonEmpty(stored.avatar_type, defaults.avatar_type, "agent"),
+    avatar_initial: firstNonEmpty(stored.avatar_initial, defaults.avatar_initial, "S")
+  };
+}
+
+function setEntityDescriptionState(entityType, entityId, patch = {}, options = {}) {
+  const ts = options.ts || nowIso();
+  persistRunBucket((bucket) => {
+    bucket.descriptions = bucket.descriptions || { avis: {}, sujet: {}, situation: {} };
+    bucket.descriptions[entityType] = bucket.descriptions[entityType] || {};
+    const prev = getEntityDescriptionState(entityType, entityId);
+    bucket.descriptions[entityType][entityId] = {
+      ...prev,
+      ...(bucket.descriptions[entityType][entityId] || {}),
+      ...patch,
+      updated_at: ts
+    };
+  });
+}
+
+function claimDescriptionAsHuman(entityType, entityId, options = {}) {
+  const current = getEntityDescriptionState(entityType, entityId);
+  if (String(current.agent || "").toLowerCase() === "human" && current.avatar_type === "human") return false;
+
+  setEntityDescriptionState(entityType, entityId, {
+    body: current.body,
+    author: "human",
+    agent: "human",
+    avatar_type: "human",
+    avatar_initial: "H"
+  }, options);
+
+  return true;
 }
 
 function addComment(entityType, entityId, message, options = {}) {
@@ -1890,12 +1999,58 @@ function renderMetaItem(label, valueHtml) {
   `;
 }
 
-function renderCommentCard(agentName, bodyText, initial = "S") {
-  return renderMessageCard({
-    author: agentName,
-    bodyHtml: mdToHtml(bodyText),
-    avatarInitial: initial
-  });
+function isEditingDescription(selection) {
+  ensureViewUiState();
+  if (!selection?.item?.id) return false;
+  const entityType = getSelectionEntityType(selection.type);
+  return store.situationsView.descriptionEdit?.entityType === entityType
+    && store.situationsView.descriptionEdit?.entityId === selection.item.id;
+}
+
+function renderDescriptionCard(selection) {
+  const entityType = getSelectionEntityType(selection.type);
+  const entityId = selection.item.id;
+  const description = getEntityDescriptionState(selection);
+  const editing = isEditingDescription(selection);
+  const author = String(description.author || "system");
+  const isHuman = String(description.agent || "").toLowerCase() === "human" || description.avatar_type === "human";
+  const authorHtml = `<div class="gh-comment-author mono">${escapeHtml(author)}</div>`;
+  const editButtonHtml = `
+    <button class="icon-btn icon-btn--sm gh-comment-edit-btn" data-action="edit-description" type="button" aria-label="Modifier la description" title="Modifier la description">
+      ${svgIcon("pencil")}
+    </button>
+  `;
+
+  const headerHtml = `
+    <div class="gh-comment-header gh-comment-header--editable">
+      <div class="gh-comment-header-main">${authorHtml}</div>
+      <div class="gh-comment-header-actions">${editButtonHtml}</div>
+    </div>
+  `;
+
+  const bodyHtml = editing
+    ? `
+      <div class="gh-comment-body gh-comment-body--editable">
+        <textarea class="comment-editor__textarea description-editor__textarea" data-description-editor rows="7">${escapeHtml(store.situationsView.descriptionEdit?.draft || description.body || "")}</textarea>
+        <div class="description-editor__actions">
+          <button class="gh-btn" data-action="cancel-description-edit" type="button">Annuler</button>
+          <button class="gh-btn gh-btn--comment" data-action="save-description-edit" data-entity-type="${escapeHtml(entityType)}" data-entity-id="${escapeHtml(entityId)}" type="button">Sauvegarder</button>
+        </div>
+      </div>
+    `
+    : `<div class="gh-comment-body">${mdToHtml(description.body || "")}</div>`;
+
+  return `
+    <div class="gh-comment gh-comment--description">
+      ${isHuman
+        ? `<div class="gh-avatar gh-avatar--human" aria-hidden="true">${SVG_AVATAR_HUMAN}</div>`
+        : `<div class="gh-avatar" aria-hidden="true"><span class="gh-avatar-initial">${escapeHtml(description.avatar_initial || "S")}</span></div>`}
+      <div class="gh-comment-box">
+        ${headerHtml}
+        ${bodyHtml}
+      </div>
+    </div>
+  `;
 }
 
 function getThreadForSelection() {
@@ -1971,6 +2126,7 @@ ${firstNonEmpty(a.raw?.message, a.raw?.summary, "")}`
 
   if (a) {
     allowedComments.add(entityKey("avis", a.id));
+    allowedActivities.add(entityKey("avis", a.id));
     if (p) allowedActivities.add(entityKey("sujet", p.id));
   } else if (p) {
     allowedComments.add(entityKey("sujet", p.id));
@@ -2110,6 +2266,14 @@ function renderThreadBlock() {
         targetHtml = avisId
           ? `avis ${avisTitle}${entityDisplayLinkHtml("avis", avisId)} → ${escapeHtml(String(toV || ""))}`
           : escapeHtml(String(toV || ""));
+      } else if (kind === "description_version_initial" || kind === "description_version_saved") {
+        iconHtml = `<span class="tl-ico-wrap tl-ico-reopened" aria-hidden="true">${svgIcon("pencil")}</span>`;
+        verb = kind === "description_version_initial" ? "archived description" : "saved description";
+        const entityType = String(e?.entity_type || "").toLowerCase();
+        const entityId = String(e?.entity_id || "");
+        const entity = getEntityByType(entityType, entityId);
+        const entityTitle = entity?.title ? `${escapeHtml(entity.title)} ` : "";
+        targetHtml = entityId ? `${entityType} ${entityTitle}${entityDisplayLinkHtml(entityType, entityId)}` : "this";
       }
 
       const note = String(e?.message || "").trim();
@@ -2585,16 +2749,16 @@ function renderDetailsBody(selection, options = {}) {
   let subIssuesHtml = "";
 
   if (selection.type === "avis") {
-    descCard = renderCommentCard(firstNonEmpty(item.agent, "system"), getAvisSummary(item), "A");
+    descCard = renderDescriptionCard(selection);
     const sujet = getSujetByAvisId(item.id);
     if (sujet) {
       subIssuesHtml = renderSubIssuesForSujet(sujet, options.subissuesOptions || {});
     }
   } else if (selection.type === "sujet") {
-    descCard = renderCommentCard(firstNonEmpty(item.agent, "system"), getSujetSummary(item), "P");
+    descCard = renderDescriptionCard(selection);
     subIssuesHtml = renderSubIssuesForSujet(item, options.subissuesOptions || {});
   } else {
-    descCard = renderCommentCard(firstNonEmpty(item.agent, "system"), getSituationSummary(item), "S");
+    descCard = renderDescriptionCard(selection);
     subIssuesHtml = renderSubIssuesForSituation(item, options.subissuesOptions || {});
   }
 
@@ -2790,8 +2954,69 @@ function currentDecisionTarget(root) {
   return { type: sel.type, id: sel.item.id, item: sel.item };
 }
 
+function clearDescriptionEditState() {
+  ensureViewUiState();
+  store.situationsView.descriptionEdit = {
+    entityType: null,
+    entityId: null,
+    draft: ""
+  };
+}
+
+function syncDescriptionEditorDraft(root) {
+  const ta = root.querySelector("[data-description-editor]");
+  if (!ta) return;
+  store.situationsView.descriptionEdit.draft = ta.value;
+}
+
+async function applyDescriptionSave(root) {
+  const target = currentDecisionTarget(root);
+  if (!target) return;
+
+  const entityType = getSelectionEntityType(target.type);
+  const entityId = target.id;
+  const ta = root.querySelector("[data-description-editor]");
+  if (!ta) return;
+
+  const nextBody = String(ta.value || "").trim();
+  if (!nextBody) return;
+
+  const current = getEntityDescriptionState(entityType, entityId);
+  const previousBody = String(current.body || "").trim();
+  const initialAuthor = firstNonEmpty(current.author, target.item?.agent, "system");
+  const initialAgent = String(firstNonEmpty(current.agent, target.item?.agent, "system")).toLowerCase();
+
+  if (nextBody === previousBody && initialAgent === "human") {
+    clearDescriptionEditState();
+    rerenderScope(root);
+    return;
+  }
+
+  addActivity(entityType, entityId, "description_version_initial", previousBody, {
+    previous_author: initialAuthor
+  }, { actor: initialAuthor, agent: initialAgent || "system" });
+
+  setEntityDescriptionState(entityType, entityId, {
+    body: nextBody,
+    author: "human",
+    agent: "human",
+    avatar_type: "human",
+    avatar_initial: "H"
+  }, { actor: "Human", agent: "human" });
+
+  addActivity(entityType, entityId, "description_version_saved", nextBody, {
+    previous_author: initialAuthor
+  }, { actor: "Human", agent: "human" });
+
+  clearDescriptionEditState();
+  rerenderScope(root);
+}
+
 function rerenderScope(root) {
   rerenderPanels();
+  if (root?.closest?.("#detailsModal") && store.situationsView.detailsModalOpen) {
+    updateDetailsModal();
+  }
   if (root?.closest?.("#drilldownPanel") && store.situationsView.drilldown?.isOpen) {
     updateDrilldownPanel();
   }
@@ -2878,6 +3103,7 @@ function applyValidationCascade(entityType, entityId, mode = "self") {
 
   for (const target of targets) {
     markEntityValidated(target.type, target.id, { actor: "Human", agent: "human" });
+    claimDescriptionAsHuman(target.type, target.id, { actor: "Human", agent: "human" });
     counts[target.type] += 1;
   }
 
@@ -2911,6 +3137,7 @@ function applyValidateAvis(root) {
   const verdict = String(store.situationsView.tempAvisVerdict || "F").toUpperCase();
   setDecision("avis", avisId, `VALIDATED_${verdict}`, "", { actor: "Human", agent: "human" });
   markEntityValidated("avis", avisId, { actor: "Human", agent: "human" });
+  claimDescriptionAsHuman("avis", avisId, { actor: "Human", agent: "human" });
   addActivity("avis", avisId, "review_validated", "", {
     mode: "self",
     counts: { situation: 0, sujet: 0, avis: 1 }
@@ -3049,6 +3276,41 @@ function wireDetailsInteractive(root) {
 
   const isModalScope = !!root.closest("#detailsModal");
   const isDrilldownScope = !!root.closest("#drilldownPanel");
+
+  const descriptionTextarea = root.querySelector("[data-description-editor]");
+  if (descriptionTextarea) {
+    descriptionTextarea.addEventListener("input", () => {
+      syncDescriptionEditorDraft(root);
+    });
+  }
+
+  root.querySelectorAll("[data-action='edit-description']").forEach((btn) => {
+    btn.onclick = () => {
+      const target = currentDecisionTarget(root);
+      if (!target) return;
+      const entityType = getSelectionEntityType(target.type);
+      const current = getEntityDescriptionState(entityType, target.id);
+      store.situationsView.descriptionEdit = {
+        entityType,
+        entityId: target.id,
+        draft: current.body || ""
+      };
+      rerenderScope(root);
+    };
+  });
+
+  root.querySelectorAll("[data-action='cancel-description-edit']").forEach((btn) => {
+    btn.onclick = () => {
+      clearDescriptionEditState();
+      rerenderScope(root);
+    };
+  });
+
+  root.querySelectorAll("[data-action='save-description-edit']").forEach((btn) => {
+    btn.onclick = async () => {
+      await applyDescriptionSave(root);
+    };
+  });
 
   const commentTextarea = root.querySelector("#humanCommentBox");
   if (commentTextarea) {
