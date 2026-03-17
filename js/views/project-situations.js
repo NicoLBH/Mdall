@@ -3937,7 +3937,7 @@ export function renderProjectSituations(root) {
 
   rerenderPanels();
   bindSituationsEvents(root, headerRoot);
-  bindProjectSituationsRunbar(headerRoot || document);
+  bindProjectSituationsRunbar(toolbarHost || root || document);
   bindModalEvents();
   bindDetailsScroll(root);
   initRightSplitter(root);
