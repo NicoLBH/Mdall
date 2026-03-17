@@ -6,16 +6,17 @@ const GEORISQUES_API_BASE = "https://www.georisques.gouv.fr/api/v1";
 const GEORISQUES_COMMUNE_ENDPOINTS = [
   { key: "risques", label: "Risques", paths: ["risques"] },
   { key: "ppr", label: "PPR", paths: ["ppr"] },
-  { key: "catnat", label: "CATNAT", paths: ["catnat"] },
-  { key: "dicrim", label: "DICRIM", paths: ["dicrim"] },
-  { key: "tim", label: "TIM", paths: ["tim"] },
-  { key: "papi", label: "PAPI", paths: ["papi"] },
-  { key: "azi", label: "AZI", paths: ["azi"] },
-  { key: "tri", label: "TRI", paths: ["tri"] },
+  { key: "catnat", label: "CATNAT", paths: ["catnat"], queryMode: "radiusPoint" },
+  { key: "dicrim", label: "DICRIM", paths: ["dicrim"], queryMode: "radiusPoint" },
+  { key: "tim", label: "TIM", paths: ["tim"], queryMode: "radiusPoint" },
+  { key: "papi", label: "PAPI", paths: ["papi"], queryMode: "radiusPoint" },
+  { key: "azi", label: "AZI", paths: ["azi"], queryMode: "radiusPoint" },
+  { key: "tri", label: "TRI", paths: ["tri"], queryMode: "radiusPoint" },
   {
     key: "tri_zonage_reglementaire",
     label: "TRI - Zonage réglementaire",
-    paths: ["tri_zonage_reglementaire", "tri-zonage-reglementaire"]
+    paths: ["tri_zonage_reglementaire", "tri-zonage-reglementaire"],
+    queryMode: "point"
   },
   { key: "old", label: "OLD", paths: ["old"] },
   { key: "radon", label: "RADON", paths: ["radon"] },
@@ -30,7 +31,8 @@ const GEORISQUES_COMMUNE_ENDPOINTS = [
   {
     key: "retrait_gonflement_argiles",
     label: "Retrait gonflement des argiles",
-    paths: ["retrait_gonflement_argiles", "retrait-gonflement-argiles"]
+    paths: ["retrait_gonflement_argiles", "retrait-gonflement-argiles"],
+    queryMode: "point"
   },
   {
     key: "installations_classees",
@@ -38,6 +40,8 @@ const GEORISQUES_COMMUNE_ENDPOINTS = [
     paths: ["installations_classees", "installations-classees"]
   }
 ];
+
+const GEORISQUES_POINT_RADIUS_METERS = 1000;
 
 function safeString(value = "") {
   return String(value ?? "").trim();
@@ -63,6 +67,17 @@ function toCoordsFromGeometry(geometry) {
   };
 }
 
+function formatGeorisquesPoint(lon, lat) {
+  const safeLon = toNumber(lon);
+  const safeLat = toNumber(lat);
+
+  if (!Number.isFinite(safeLon) || !Number.isFinite(safeLat)) {
+    return "";
+  }
+
+  return `${safeLon},${safeLat}`;
+}
+
 async function fetchJson(url, init = {}) {
   const response = await fetch(url, {
     method: "GET",
@@ -79,16 +94,48 @@ async function fetchJson(url, init = {}) {
   return response.json();
 }
 
-function buildEndpointUrl(path, codeInsee) {
-  return `${GEORISQUES_API_BASE}/${path}?code_insee=${encodeURIComponent(codeInsee)}`;
+function buildEndpointUrl(path, context = {}) {
+  const url = new URL(`${GEORISQUES_API_BASE}/${path}`);
+  const queryMode = safeString(context.queryMode || "codeInsee");
+
+  if (queryMode === "point") {
+    const point = formatGeorisquesPoint(context.lon, context.lat);
+    if (!point) {
+      throw new Error("Coordonnées latitude / longitude indisponibles pour cette requête Géorisques.");
+    }
+    url.searchParams.set("point", point);
+    return url.toString();
+  }
+
+  if (queryMode === "radiusPoint") {
+    const point = formatGeorisquesPoint(context.lon, context.lat);
+    if (!point) {
+      throw new Error("Coordonnées latitude / longitude indisponibles pour cette requête Géorisques.");
+    }
+    url.searchParams.set("rayon", String(context.radius || GEORISQUES_POINT_RADIUS_METERS));
+    url.searchParams.set("point", point);
+    return url.toString();
+  }
+
+  url.searchParams.set("code_insee", String(context.codeInsee || ""));
+  return url.toString();
 }
 
-async function fetchFirstAvailableEndpoint(codeInsee, endpoint) {
+async function fetchFirstAvailableEndpoint(context, endpoint) {
   const attempts = [];
 
   for (const path of endpoint.paths) {
-    const url = buildEndpointUrl(path, codeInsee);
+    let url = "";
+
     try {
+      url = buildEndpointUrl(path, {
+        codeInsee: context?.codeInsee,
+        lat: context?.lat,
+        lon: context?.lon,
+        radius: context?.radius,
+        queryMode: endpoint?.queryMode || "codeInsee"
+      });
+
       const data = await fetchJson(url);
       return {
         key: endpoint.key,
@@ -343,7 +390,7 @@ export async function resolveFrenchPostalCode(postalCode = "") {
   };
 }
 
-export async function fetchGeorisquesForCommune({ city = "", postalCode = "" } = {}) {
+export async function fetchGeorisquesForCommune({ city = "", postalCode = "", latitude = null, longitude = null } = {}) {
   const commune = await resolveCommune(city, postalCode);
 
   if (!commune.codeInsee) {
@@ -351,7 +398,12 @@ export async function fetchGeorisquesForCommune({ city = "", postalCode = "" } =
   }
 
   const datasets = await Promise.all(
-    GEORISQUES_COMMUNE_ENDPOINTS.map((endpoint) => fetchFirstAvailableEndpoint(commune.codeInsee, endpoint))
+    GEORISQUES_COMMUNE_ENDPOINTS.map((endpoint) => fetchFirstAvailableEndpoint({
+      codeInsee: commune.codeInsee,
+      lat: toNumber(latitude) ?? commune.lat,
+      lon: toNumber(longitude) ?? commune.lon,
+      radius: GEORISQUES_POINT_RADIUS_METERS
+    }, endpoint))
   );
 
   return {
