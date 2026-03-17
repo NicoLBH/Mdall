@@ -68,6 +68,8 @@ export function addProjectDocument(documentInput = {}) {
     kind: safeString(documentInput.kind) || "file",
     mimeType: safeString(documentInput.mimeType),
     previewUrl: safeString(documentInput.previewUrl),
+    localPreviewUrl: safeString(documentInput.localPreviewUrl),
+    localFile: documentInput.localFile || null,
     extension: safeString(documentInput.extension)
   };
 
@@ -134,4 +136,27 @@ export function decorateDocumentWithPhase(document = null) {
     phaseCode: phaseCode || matchingPhase?.code || "",
     phaseLabel: safeString(document.phaseLabel) || matchingPhase?.label || ""
   };
+}
+
+
+export function getProjectDocumentPreviewUrl(documentOrId) {
+  const document = typeof documentOrId === "string"
+    ? getProjectDocumentById(documentOrId)
+    : documentOrId;
+
+  if (!document) return "";
+
+  const remoteUrl = safeString(document.previewUrl);
+  if (remoteUrl) return remoteUrl;
+
+  if (safeString(document.localPreviewUrl)) {
+    return document.localPreviewUrl;
+  }
+
+  if (typeof URL !== "undefined" && document.localFile instanceof File) {
+    document.localPreviewUrl = URL.createObjectURL(document.localFile);
+    return document.localPreviewUrl;
+  }
+
+  return "";
 }
