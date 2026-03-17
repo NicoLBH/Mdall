@@ -1,4 +1,4 @@
-import { store, DEFAULT_PROJECT_PHASES } from "../store.js";
+import { store } from "../store.js";
 import { registerProjectPrimaryScrollSource, setProjectViewHeader } from "./project-shell-chrome.js";
 import {
   bindGhActionButtons,
@@ -12,6 +12,7 @@ import {
   renderProjectTableToolbarSelect
 } from "./ui/project-table-toolbar.js";
 import { renderGhInput } from "./ui/gh-input.js";
+import { renderStateDot } from "./ui/status-badges.js";
 import { svgIcon } from "../ui/icons.js";
 import { renderDataTableShell, renderDataTableHead } from "./ui/data-table-shell.js";
 import { escapeHtml } from "../utils/escape-html.js";
@@ -22,6 +23,9 @@ import {
   runAnalysis
 } from "../services/analysis-runner.js";
 import { createProjectProposal } from "../services/project-proposals.js";
+import { addProjectDocument, decorateDocumentWithPhase, getEnabledProjectPhasesCatalog, getProjectDocuments } from "../services/project-documents-store.js";
+import { getDocumentStatsMap } from "../services/project-document-selectors.js";
+import { getEffectiveAvisVerdict, getEffectiveSituationStatus, getEffectiveSujetStatus } from "./project-situations.js";
 
 const DOCUMENT_FOLDERS = [
   { name: "Architecte", note: "Dossier discipline" },
@@ -42,7 +46,6 @@ const docsViewState = {
   uploadProgress: 0,
   uploadTimer: null,
   selectedPhase: store.projectForm?.currentPhase || store.projectForm?.phase || "APS",
-  repoDocuments: [],
   activity: {
     tone: "info",
     title: "",
@@ -50,22 +53,8 @@ const docsViewState = {
   }
 };
 
-function getEnabledProjectPhases() {
-  const rawCatalog = Array.isArray(store.projectForm?.phasesCatalog)
-    ? store.projectForm.phasesCatalog
-    : DEFAULT_PROJECT_PHASES;
-
-  return rawCatalog
-    .map((item) => ({
-      code: String(item?.code || "").trim(),
-      label: String(item?.label || "").trim(),
-      enabled: item?.enabled !== false
-    }))
-    .filter((item) => item.code && item.label && item.enabled);
-}
-
 function syncDocumentsSelectedPhase() {
-  const enabledPhases = getEnabledProjectPhases();
+  const enabledPhases = getEnabledProjectPhasesCatalog();
   const fallbackPhase = enabledPhases[0]?.code || "APS";
 
   if (!enabledPhases.some((item) => item.code === docsViewState.selectedPhase)) {
@@ -107,7 +96,7 @@ function getRemoveIconSvg() {
 }
 
 function getDocumentsTableGridTemplate() {
-  return "minmax(280px, 1.2fr) minmax(220px, 1fr) 180px";
+  return "minmax(280px, 1.2fr) minmax(220px, 1fr) 180px minmax(260px, 1.1fr)";
 }
 
 function setDocumentsActivity({ tone = "info", title = "", message = "" } = {}) {
@@ -166,7 +155,8 @@ function renderDocumentsTableHeadHtml() {
     columns: [
       { className: "documents-repo__col documents-repo__col--name", label: "Nom" },
       { className: "documents-repo__col documents-repo__col--message", label: "Description" },
-      { className: "documents-repo__col documents-repo__col--date", label: "Dernière mise à jour" }
+      { className: "documents-repo__col documents-repo__col--date", label: "Dernière mise à jour" },
+      { className: "documents-repo__col documents-repo__col--stats", label: "Compteurs" }
     ]
   });
 }
@@ -194,7 +184,7 @@ function renderDocumentsToolbar() {
     ]
   });
 
-  const enabledPhases = getEnabledProjectPhases();
+  const enabledPhases = getEnabledProjectPhasesCatalog();
 
   const leftHtml = renderProjectTableToolbarGroup({
     html: renderProjectTableToolbarSelect({
@@ -219,17 +209,56 @@ function renderDocumentsToolbar() {
   });
 }
 
+
+function renderDocumentsCountBadge({ iconHtml = "", label = "", count = 0 } = {}) {
+  return `
+    <span class="documents-count-badge" title="${escapeHtml(`${label} : ${count}`)}">
+      <span class="documents-count-badge__icon" aria-hidden="true">${iconHtml}</span>
+      <span class="documents-count-badge__count">${escapeHtml(String(count))}</span>
+    </span>
+  `;
+}
+
+function renderDocumentStatsCell(doc) {
+  const statsMap = getDocumentStatsMap({
+    getSituationStatus: getEffectiveSituationStatus,
+    getSujetStatus: getEffectiveSujetStatus,
+    getAvisVerdict: getEffectiveAvisVerdict
+  });
+  const stats = statsMap.get(doc.id) || {
+    openSituations: 0,
+    openSujets: 0,
+    avisVerdicts: { F: 0, S: 0, D: 0, HM: 0, PM: 0, SO: 0 }
+  };
+
+  return `
+    <div class="documents-repo__stats" aria-label="Compteurs liés au document">
+      ${renderDocumentsCountBadge({ iconHtml: svgIcon("issue-opened"), label: "Situations ouvertes", count: stats.openSituations })}
+      ${renderDocumentsCountBadge({ iconHtml: svgIcon("issue-opened"), label: "Sujets ouverts", count: stats.openSujets })}
+      ${renderDocumentsCountBadge({ iconHtml: renderStateDot("F"), label: "Avis F", count: stats.avisVerdicts.F })}
+      ${renderDocumentsCountBadge({ iconHtml: renderStateDot("S"), label: "Avis S", count: stats.avisVerdicts.S })}
+      ${renderDocumentsCountBadge({ iconHtml: renderStateDot("D"), label: "Avis D", count: stats.avisVerdicts.D })}
+      ${renderDocumentsCountBadge({ iconHtml: renderStateDot("HM"), label: "Avis HM", count: stats.avisVerdicts.HM })}
+      ${renderDocumentsCountBadge({ iconHtml: renderStateDot("PM"), label: "Avis PM", count: stats.avisVerdicts.PM })}
+      ${renderDocumentsCountBadge({ iconHtml: renderStateDot("SO"), label: "Avis SO", count: stats.avisVerdicts.SO })}
+    </div>
+  `;
+}
+
 function renderRepoDocumentRow(doc) {
+  const decoratedDoc = decorateDocumentWithPhase(doc);
   return `
     <div class="documents-repo__row documents-repo__row--file">
       <div class="documents-repo__cell documents-repo__cell--name">
         <span class="documents-repo__icon documents-repo__icon--document">${getDocumentIconSvg()}</span>
-        <span class="documents-repo__name">${escapeHtml(doc.name)}</span>
+        <span class="documents-repo__name">${escapeHtml(decoratedDoc.name)}</span>
       </div>
       <div class="documents-repo__cell documents-repo__cell--message">
-        ${escapeHtml(doc.note || "Document prêt pour l'analyse")}
+        <div class="documents-repo__message-main">${escapeHtml(decoratedDoc.note || "Document prêt pour l'analyse")}</div>
+        <div class="documents-repo__message-meta">${escapeHtml(`${decoratedDoc.phaseCode}${decoratedDoc.phaseLabel ? ` - ${decoratedDoc.phaseLabel}` : ""}`)}</div>
       </div>
-      <div class="documents-repo__cell documents-repo__cell--date">${escapeHtml(doc.updatedAt || "À l'instant")}</div>
+      <div class="documents-repo__cell documents-repo__cell--date">${escapeHtml(decoratedDoc.updatedAt || "À l'instant")}</div>
+      <div class="documents-repo__cell documents-repo__cell--stats">${renderDocumentStatsCell(decoratedDoc)}</div>
     </div>
   `;
 }
@@ -246,9 +275,10 @@ function renderDocumentsListView() {
           ${escapeHtml(folder.note)}
         </div>
         <div class="documents-repo__cell documents-repo__cell--date">—</div>
+        <div class="documents-repo__cell documents-repo__cell--stats">—</div>
       </div>
     `).join("")}
-    ${docsViewState.repoDocuments.map(renderRepoDocumentRow).join("")}
+    ${getProjectDocuments().map(renderRepoDocumentRow).join("")}
   `;
 
   return `
@@ -489,16 +519,22 @@ function buildRepoDocumentFromState() {
   const title = docsViewState.title.trim();
   const description = docsViewState.description.trim();
   const baseNote = title || description || "Document prêt pour l'analyse";
+  const enabledPhases = getEnabledProjectPhasesCatalog();
+  const currentPhase = enabledPhases.find((item) => item.code === docsViewState.selectedPhase) || null;
 
   return {
-    id: `doc-${Date.now()}`,
     name: docsViewState.file?.name || "Document",
+    title: title || docsViewState.file?.name || "Document",
     note: baseNote,
-    updatedAt: "À l'instant"
+    updatedAt: "À l'instant",
+    phaseCode: currentPhase?.code || docsViewState.selectedPhase || "APS",
+    phaseLabel: currentPhase?.label || "",
+    fileName: docsViewState.file?.name || "Document"
   };
 }
 
-function triggerAutoAnalysisAfterDirectUpload(root, documentName = "") {
+function triggerAutoAnalysisAfterDirectUpload(root, document = null) {
+  const documentName = document?.name || "";
   if (!shouldAutoRunAnalysisAfterUpload()) {
     setDocumentsActivity({
       tone: "info",
@@ -528,6 +564,7 @@ function triggerAutoAnalysisAfterDirectUpload(root, documentName = "") {
     triggerType: "document-upload",
     triggerLabel: "Dépôt de document",
     documentName,
+    documentIds: document?.id ? [document.id] : [],
     summary: "Analyse déclenchée automatiquement après dépôt réussi d’un document."
   });
 
@@ -538,13 +575,12 @@ function commitDirectDocument(root) {
   if (!docsViewState.file) return;
 
   const documentFile = docsViewState.file;
-  const repoDocument = buildRepoDocumentFromState();
+  const repoDocument = addProjectDocument(buildRepoDocumentFromState());
 
-  docsViewState.repoDocuments.unshift(repoDocument);
   store.projectForm.pdfFile = documentFile;
 
   closeUploadView(root);
-  triggerAutoAnalysisAfterDirectUpload(root, documentFile.name);
+  triggerAutoAnalysisAfterDirectUpload(root, repoDocument);
 }
 
 function commitProposal(root) {
