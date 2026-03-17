@@ -49,6 +49,7 @@ import {
   renderReviewStateIcon
 } from "./ui/status-badges.js";
 import { escapeHtml } from "../utils/escape-html.js";
+import { getSelectionDocumentRefs } from "../services/project-document-selectors.js";
 
 /* =========================================================
    Legacy DOM / archive parity helpers
@@ -934,7 +935,7 @@ function getDecision(entityType, entityId) {
   return bucket?.decisions?.[entityType]?.[entityId] || null;
 }
 
-function getEffectiveAvisVerdict(avisId) {
+export function getEffectiveAvisVerdict(avisId) {
   const avis = getNestedAvis(avisId);
   const decision = getDecision("avis", avisId);
   const d = String(decision?.decision || "").toUpperCase();
@@ -1464,7 +1465,7 @@ async function askHelpEphemeral({ rootEl, type, id, humanMessage, scope = "detai
   }
 }
 
-function getEffectiveSujetStatus(sujetId) {
+export function getEffectiveSujetStatus(sujetId) {
   const sujet = getNestedSujet(sujetId);
   const decision = getDecision("sujet", sujetId);
   const d = String(decision?.decision || "").toUpperCase();
@@ -1473,7 +1474,7 @@ function getEffectiveSujetStatus(sujetId) {
   return firstNonEmpty(sujet?.status, "open").toLowerCase();
 }
 
-function getEffectiveSituationStatus(situationId) {
+export function getEffectiveSituationStatus(situationId) {
   const situation = getNestedSituation(situationId);
   const decision = getDecision("situation", situationId);
   const d = String(decision?.decision || "").toUpperCase();
@@ -2007,6 +2008,26 @@ function isEditingDescription(selection) {
     && store.situationsView.descriptionEdit?.entityId === selection.item.id;
 }
 
+
+function renderDocumentRefsCard(selection) {
+  const refs = getSelectionDocumentRefs(selection);
+  if (!refs.length) return "";
+
+  return `
+    <div class="details-document-refs" aria-label="Références documentaires">
+      <div class="details-document-refs__label">Références documentaires</div>
+      <div class="details-document-refs__list">
+        ${refs.map((doc) => `
+          <span class="details-document-ref">
+            <span class="details-document-ref__name">${escapeHtml(doc.name)}</span>
+            <span class="details-document-ref__phase">${escapeHtml(doc.phaseCode)}${doc.phaseLabel ? ` · ${escapeHtml(doc.phaseLabel)}` : ""}</span>
+          </span>
+        `).join("")}
+      </div>
+    </div>
+  `;
+}
+
 function renderDescriptionCard(selection) {
   const entityType = getSelectionEntityType(selection.type);
   const entityId = selection.item.id;
@@ -2373,6 +2394,7 @@ function renderRejectReviewAction(selection) {
     tone: "default",
     size: "sm",
     className: "js-review-reject-action",
+    mainActionMode: "first-item",
     items: [
       {
         label: "Rejeté par humain",
@@ -2771,6 +2793,7 @@ function renderDetailsBody(selection, options = {}) {
       <div class="details-main">
         <div class="gh-timeline">
           ${descCard}
+          ${renderDocumentRefsCard(selection)}
           ${subIssuesHtml}
           ${threadHtml}
           ${commentBoxHtml}
@@ -3884,6 +3907,7 @@ export function renderProjectSituations(root) {
   });
 
   const headerRoot = document.getElementById("projectViewHeaderHost");
+  const toolbarHost = document.getElementById("situationsToolbarHost");
   const data = store.situationsView.data || [];
   const firstSituationId = data[0]?.id || null;
 
@@ -3894,9 +3918,12 @@ export function renderProjectSituations(root) {
     store.situationsView.expandedSituations.add(firstSituationId);
   }
 
+  if (toolbarHost) {
+    toolbarHost.innerHTML = `<div class="project-situations__table-toolbar">${renderSituationsViewHeaderHtml()}</div>`;
+  }
+
   root.innerHTML = `
     <section class="gh-panel gh-panel--results" aria-label="Results">
-      <div class="project-situations__table-toolbar" id="situationsToolbarHost">${renderSituationsViewHeaderHtml()}</div>
       <div id="situationsTableHost"></div>
     </section>
 
