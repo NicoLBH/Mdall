@@ -23,7 +23,7 @@ import {
   runAnalysis
 } from "../services/analysis-runner.js";
 import { createProjectProposal } from "../services/project-proposals.js";
-import { addProjectDocument, decorateDocumentWithPhase, getEnabledProjectPhasesCatalog, getProjectDocumentById, getProjectDocuments, resolveDocumentRefs, setActiveProjectDocument } from "../services/project-documents-store.js";
+import { addProjectDocument, decorateDocumentWithPhase, getEnabledProjectPhasesCatalog, getProjectDocumentById, getProjectDocumentPreviewUrl, getProjectDocuments, resolveDocumentRefs, setActiveProjectDocument } from "../services/project-documents-store.js";
 import { getDocumentStatsMap } from "../services/project-document-selectors.js";
 import { getEffectiveAvisVerdict, getEffectiveSituationStatus, getEffectiveSujetStatus } from "./project-situations.js";
 
@@ -123,7 +123,7 @@ function isPdfDocument(documentItem = null) {
 }
 
 function canPreviewPdf(documentItem = null) {
-  return isPdfDocument(documentItem) && !!String(documentItem.previewUrl || "").trim();
+  return isPdfDocument(documentItem) && !!String(getProjectDocumentPreviewUrl(documentItem) || "").trim();
 }
 
 function getSelectedPdfDocument() {
@@ -501,6 +501,8 @@ function renderPdfPreviewView() {
     documentItem.phaseCode ? `${documentItem.phaseCode}${documentItem.phaseLabel ? ` - ${documentItem.phaseLabel}` : ""}` : "",
     documentItem.updatedAt || ""
   ].filter(Boolean).join(" · ");
+  const previewUrl = getProjectDocumentPreviewUrl(documentItem);
+  const isLocalPreview = !String(documentItem.previewUrl || "").trim() && !!String(previewUrl || "").trim();
 
   return `
     <section class="project-simple-page project-simple-page--documents">
@@ -520,25 +522,35 @@ function renderPdfPreviewView() {
               </header>
 
               <div class="documents-report-table__body documents-report-table__body--pdf">
-                <header class="documents-report__hero documents-report__hero--pdf">
-                  <div class="documents-report__hero-brand">
-                    <div class="documents-report__logo-wrap">${getSocotecLogoSvg()}</div>
-                    <div class="documents-report__hero-copy">
-                      <h1 class="documents-report__title">${escapeHtml(documentItem.name || "Document")}</h1>
-                      <div class="documents-report__meta">${escapeHtml(metaLine || "Document PDF")}</div>
-                      <div class="documents-report__meta">${escapeHtml(documentItem.note || "Prévisualisation du document")}</div>
-                    </div>
+                <div class="documents-pdf-viewer__meta">
+                  <div class="documents-pdf-viewer__title-wrap">
+                    <div class="documents-pdf-viewer__title">${escapeHtml(documentItem.name || "Document")}</div>
+                    <div class="documents-pdf-viewer__subtitle">${escapeHtml(metaLine || "Document PDF")}</div>
                   </div>
-                </header>
-
-                <div class="documents-report__page-break" aria-hidden="true"></div>
+                  ${isLocalPreview
+                    ? `<div class="documents-pdf-viewer__hint">Prévisualisation locale temporaire en mémoire avant branchement Supabase.</div>`
+                    : ""}
+                </div>
 
                 <section class="documents-pdf-viewer">
-                  <iframe
-                    class="documents-pdf-viewer__frame"
-                    title="Prévisualisation PDF - ${escapeHtml(documentItem.name || "Document")}"
-                    src="${escapeHtml(documentItem.previewUrl || "")}"
-                  ></iframe>
+                  ${previewUrl
+                    ? `
+                      <object
+                        class="documents-pdf-viewer__frame"
+                        type="application/pdf"
+                        data="${escapeHtml(previewUrl)}#toolbar=1&navpanes=0"
+                      >
+                        <div class="documents-pdf-viewer__fallback">
+                          <p>La prévisualisation intégrée du PDF n'est pas disponible dans ce navigateur.</p>
+                          <a class="gh-btn gh-btn--primary" href="${escapeHtml(previewUrl)}" target="_blank" rel="noopener noreferrer">Ouvrir le PDF</a>
+                        </div>
+                      </object>
+                    `
+                    : `
+                      <div class="documents-pdf-viewer__fallback documents-pdf-viewer__fallback--empty">
+                        <p>Impossible de générer la prévisualisation locale de ce PDF pour cette session.</p>
+                      </div>
+                    `}
                 </section>
               </div>
             </section>
@@ -833,9 +845,7 @@ function buildRepoDocumentFromState() {
   const fileName = docsViewState.file?.name || "Document";
   const mimeType = String(docsViewState.file?.type || "").trim();
   const extension = getFileExtension(fileName);
-  const previewUrl = mimeType === "application/pdf" && typeof URL !== "undefined" && docsViewState.file
-    ? URL.createObjectURL(docsViewState.file)
-    : "";
+  const previewUrl = "";
 
   return {
     name: fileName,
@@ -847,7 +857,8 @@ function buildRepoDocumentFromState() {
     fileName,
     mimeType,
     extension,
-    previewUrl
+    previewUrl,
+    localFile: mimeType === "application/pdf" ? docsViewState.file : null
   };
 }
 
