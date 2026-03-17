@@ -610,50 +610,79 @@ function findFirstMatchingValueDeep(value, matcher) {
   return undefined;
 }
 
+function extractSeismicZoneNumber(value = "") {
+  const normalized = normalizeFlatValue(value);
+  const match = normalized.match(/(?:^|\b)([1-5])(?:\b|\s*-)/);
+  return match ? match[1] : "";
+}
+
+function normalizeSeismicLabel(value = "") {
+  const normalized = normalizeFlatValue(value);
+  if (!normalized || normalized === "—") return "";
+  return normalized.toUpperCase();
+}
+
+function formatSeismicZoneSummary(zoneValue = "", labelValue = "") {
+  const cleanZone = normalizeFlatValue(zoneValue);
+  const cleanLabel = normalizeSeismicLabel(labelValue);
+  const zoneNumber = extractSeismicZoneNumber(cleanZone || cleanLabel);
+
+  if (cleanZone && /[1-5]\s*-/.test(cleanZone)) {
+    return cleanZone;
+  }
+
+  if (zoneNumber && cleanLabel && !cleanLabel.includes(zoneNumber)) {
+    return `${zoneNumber} - ${cleanLabel}`;
+  }
+
+  if (zoneNumber) return zoneNumber;
+  if (cleanZone && cleanZone !== "—") return cleanZone;
+  if (cleanLabel && cleanLabel !== "—") return cleanLabel;
+  return "";
+}
+
 function getGeorisquesSismiqueSummary() {
   const dataset = getGeorisquesDataset("zonage_sismique");
   if (!dataset || dataset.status !== "success") return "";
 
-  const directValue = findFirstMatchingValueDeep(dataset.data, (candidate, key = "") => {
-    const normalizedKey = String(key || "").toLowerCase();
-    if (!/(zone|sismic|sismique|sismicite|sismicité|libelle|label|intitule)/.test(normalizedKey)) {
-      return false;
-    }
-
-    const normalizedValue = normalizeFlatValue(candidate);
-    return normalizedValue && normalizedValue !== "—";
-  });
-
-  if (directValue !== undefined) {
-    const formatted = normalizeFlatValue(directValue);
-    if (formatted && formatted !== "—") return formatted;
-  }
-
   const rows = getTabularRowsFromGeorisquesData(dataset.data);
-  if (!rows.length) return "";
-
-  const preferredKeys = [
-    "zone_sismicite",
-    "zone_sismique",
-    "zone",
-    "libelle",
-    "label",
-    "intitule"
-  ];
+  const zoneKeyPattern = /(zone(_sismique|_sismicite)?|code_zone|niveau_zone)/i;
+  const labelKeyPattern = /(libelle|label|intitule|niveau|qualification)/i;
 
   for (const row of rows) {
-    for (const key of Object.keys(row)) {
-      const normalizedKey = key.toLowerCase();
-      if (preferredKeys.some((candidate) => normalizedKey.includes(candidate))) {
-        const value = normalizeFlatValue(row[key]);
-        if (value && value !== "—") return value;
+    let zoneValue = "";
+    let labelValue = "";
+
+    for (const [key, rawValue] of Object.entries(row)) {
+      const value = normalizeFlatValue(rawValue);
+      if (!value || value === "—") continue;
+
+      if (!zoneValue && zoneKeyPattern.test(key) && extractSeismicZoneNumber(value)) {
+        zoneValue = value;
+        continue;
+      }
+
+      if (!labelValue && labelKeyPattern.test(key)) {
+        labelValue = value;
       }
     }
+
+    const formatted = formatSeismicZoneSummary(zoneValue, labelValue);
+    if (formatted) return formatted;
   }
 
-  const firstRow = rows[0];
-  const firstKey = Object.keys(firstRow)[0];
-  return firstKey ? normalizeFlatValue(firstRow[firstKey]) : "";
+  const directZone = findFirstMatchingValueDeep(dataset.data, (candidate, key = "") => {
+    if (!zoneKeyPattern.test(String(key || ""))) return false;
+    return Boolean(extractSeismicZoneNumber(candidate));
+  });
+
+  const directLabel = findFirstMatchingValueDeep(dataset.data, (candidate, key = "") => {
+    if (!labelKeyPattern.test(String(key || ""))) return false;
+    const value = normalizeFlatValue(candidate);
+    return Boolean(value && value !== "—");
+  });
+
+  return formatSeismicZoneSummary(directZone, directLabel);
 }
 
 function getWindRegionSummary() {
@@ -699,13 +728,7 @@ function renderGeorisquesDataset(dataset = {}) {
   let body = `<div class="settings-inline-error">${escapeHtml(dataset.error || "Requête indisponible")}</div>`;
 
   if (dataset.status === "success") {
-    if (dataset.key === "radon" || dataset.key === "zonage_sismique") {
-      body = renderGeorisquesTable(getTabularRowsFromGeorisquesData(dataset.data));
-    } else if (dataset.key === "ppr") {
-      body = `<pre class="settings-json-block settings-json-block--scrollable">${escapeHtml(JSON.stringify(dataset.data, null, 2))}</pre>`;
-    } else {
-      body = `<pre class="settings-json-block">${escapeHtml(JSON.stringify(dataset.data, null, 2))}</pre>`;
-    }
+    body = renderGeorisquesTable(getTabularRowsFromGeorisquesData(dataset.data));
   }
 
   return renderSectionCard({
