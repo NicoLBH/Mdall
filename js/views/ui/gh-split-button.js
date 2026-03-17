@@ -39,16 +39,22 @@ function normalizeSelectOptions(options = []) {
 }
 
 function renderMenuItems(items = []) {
-  return items.map((item) => `
-    <button
-      type="button"
-      class="gh-menu__item${item.danger ? " is-danger" : ""}"
-      data-menu-action="${escapeAttr(item.action || "")}"
-    >
-      ${item.icon ? `<span class="gh-menu__item-icon">${item.icon}</span>` : ""}
-      <span>${item.label || ""}</span>
-    </button>
-  `).join("");
+  return items.map((item) => {
+    if (item?.separator) {
+      return `<div class="gh-menu__separator" role="separator"></div>`;
+    }
+
+    return `
+      <button
+        type="button"
+        class="gh-menu__item${item.danger ? " is-danger" : ""}"
+        data-menu-action="${escapeAttr(item.action || "")}"
+      >
+        ${item.icon ? `<span class="gh-menu__item-icon">${item.icon}</span>` : ""}
+        <span>${item.label || ""}</span>
+      </button>
+    `;
+  }).join("");
 }
 
 export function renderGhActionButton({
