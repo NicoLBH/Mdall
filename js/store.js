@@ -40,9 +40,12 @@ export const store = {
 
   projectForm: {
     projectName: "Projet demo",
+    address: "",
     city: "Annecy",
     postalCode: "74000",
     communeCp: "Annecy 74000",
+    latitude: null,
+    longitude: null,
     importance: "II",
     importanceCategory: "Catégorie d'importance II",
     riskCategory: "Risque normal",
