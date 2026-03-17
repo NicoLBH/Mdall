@@ -16,23 +16,21 @@ const GEORISQUES_COMMUNE_ENDPOINTS = [
     key: "tri_zonage_reglementaire",
     label: "TRI - Zonage réglementaire",
     paths: ["tri_zonage"],
-    queryMode: "latlonOrCodeInsee"
+    queryMode: "latlonOnly"
   },
-  { key: "old", label: "OLD", paths: ["old"] },
   { key: "radon", label: "RADON", paths: ["radon"] },
   {
     key: "zonage_sismique",
     label: "Zonage sismique",
     paths: ["zonage_sismique", "zonage-sismique"]
   },
-  { key: "sis", label: "SIS", paths: ["sis"] },
   { key: "cavites", label: "Cavités", paths: ["cavites"] },
   { key: "mvt", label: "Mouvements de terrain", paths: ["mvt"] },
   {
     key: "retrait_gonflement_argiles",
     label: "Retrait gonflement des argiles",
     paths: ["rga"],
-    queryMode: "latlonOrCodeInsee"
+    queryMode: "latlonOnly"
   },
   {
     key: "installations_classees",
@@ -98,6 +96,15 @@ function buildEndpointUrl(path, context = {}) {
   const url = new URL(`${GEORISQUES_API_BASE}/${path}`);
   const queryMode = safeString(context.queryMode || "codeInsee");
   const codeInsee = safeString(context.codeInsee);
+
+  if (queryMode === "latlonOnly") {
+    const latlon = formatGeorisquesPoint(context.lon, context.lat);
+    if (!latlon) {
+      throw new Error("Coordonnées latitude / longitude indisponibles pour cette requête Géorisques.");
+    }
+    url.searchParams.set("latlon", latlon);
+    return url.toString();
+  }
 
   if (queryMode === "latlonOrCodeInsee") {
     if (codeInsee) {
