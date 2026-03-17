@@ -46,6 +46,7 @@ export const store = {
     communeCp: "Annecy 74000",
     latitude: null,
     longitude: null,
+    altitude: null,
     importance: "II",
     importanceCategory: "Catégorie d'importance II",
     riskCategory: "Risque normal",
