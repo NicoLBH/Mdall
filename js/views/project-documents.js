@@ -23,7 +23,7 @@ import {
   runAnalysis
 } from "../services/analysis-runner.js";
 import { createProjectProposal } from "../services/project-proposals.js";
-import { addProjectDocument, decorateDocumentWithPhase, getEnabledProjectPhasesCatalog, getProjectDocuments, resolveDocumentRefs } from "../services/project-documents-store.js";
+import { addProjectDocument, decorateDocumentWithPhase, getEnabledProjectPhasesCatalog, getProjectDocumentById, getProjectDocuments, resolveDocumentRefs, setActiveProjectDocument } from "../services/project-documents-store.js";
 import { getDocumentStatsMap } from "../services/project-document-selectors.js";
 import { getEffectiveAvisVerdict, getEffectiveSituationStatus, getEffectiveSujetStatus } from "./project-situations.js";
 
@@ -36,7 +36,7 @@ const DOCUMENT_FOLDERS = [
 ];
 
 const docsViewState = {
-  mode: "list", // "list" | "upload" | "report-preview"
+  mode: "list", // "list" | "upload" | "report-preview" | "pdf-preview"
   file: null,
   title: "",
   description: "",
@@ -108,6 +108,27 @@ function getRemoveIconSvg() {
 
 function getDocumentsTableGridTemplate() {
   return "minmax(280px, 1.2fr) minmax(220px, 1fr) 180px minmax(260px, 1.1fr)";
+}
+
+function getFileExtension(value = "") {
+  const match = String(value || "").trim().toLowerCase().match(/\.([^.]+)$/);
+  return match ? match[1] : "";
+}
+
+function isPdfDocument(documentItem = null) {
+  if (!documentItem) return false;
+  const mimeType = String(documentItem.mimeType || "").toLowerCase();
+  const extension = String(documentItem.extension || getFileExtension(documentItem.fileName || documentItem.name || "")).toLowerCase();
+  return mimeType === "application/pdf" || extension === "pdf";
+}
+
+function canPreviewPdf(documentItem = null) {
+  return isPdfDocument(documentItem) && !!String(documentItem.previewUrl || "").trim();
+}
+
+function getSelectedPdfDocument() {
+  const activeDocumentId = String(store.projectDocuments?.activeDocumentId || "").trim();
+  return activeDocumentId ? getProjectDocumentById(activeDocumentId) : null;
 }
 
 function setDocumentsActivity({ tone = "info", title = "", message = "" } = {}) {
@@ -261,8 +282,15 @@ function renderDocumentStatsCell(doc) {
 
 function renderRepoDocumentRow(doc) {
   const decoratedDoc = decorateDocumentWithPhase(doc);
+  const isPdf = isPdfDocument(decoratedDoc);
+  const isPreviewablePdf = canPreviewPdf(decoratedDoc);
+
   return `
-    <div class="documents-repo__row documents-repo__row--file">
+    <div
+      class="documents-repo__row documents-repo__row--file${isPdf ? " documents-repo__row--pdf" : ""}${isPreviewablePdf ? " is-clickable" : ""}"
+      data-document-id="${escapeHtml(decoratedDoc.id || "")}"
+      ${isPreviewablePdf ? 'role="button" tabindex="0" aria-label="Ouvrir l’aperçu du PDF"' : ""}
+    >
       <div class="documents-repo__cell documents-repo__cell--name">
         <span class="documents-repo__icon documents-repo__icon--document">${getDocumentIconSvg()}</span>
         <span class="documents-repo__name">${escapeHtml(decoratedDoc.name)}</span>
@@ -331,38 +359,52 @@ function buildReportPreviewItems() {
   const items = [];
 
   for (const situation of situations) {
-    if (shouldIncludeInReport(situation)) {
-      items.push({
-        key: `situation:${situation.id}`,
-        entityType: "situation",
-        entity: situation,
-        number: situation.id,
-        stateLabel: normalizeWorkflowStatus(getEffectiveSituationStatus(situation.id)),
-        title: situation.title || situation.id
-      });
-    }
+    const includedSituation = shouldIncludeInReport(situation);
+    const includedSujets = [];
 
     for (const sujet of situation.sujets || []) {
-      if (shouldIncludeInReport(sujet)) {
+      const includedSujet = shouldIncludeInReport(sujet);
+      const includedAvis = (sujet.avis || []).filter((avis) => shouldIncludeInReport(avis));
+
+      if (includedSujet || includedAvis.length) {
+        includedSujets.push({ sujet, includedSujet, includedAvis });
+      }
+    }
+
+    if (!includedSituation && !includedSujets.length) continue;
+
+    items.push({
+      key: `situation:${situation.id}`,
+      entityType: "situation",
+      entity: situation,
+      number: situation.id,
+      stateLabel: normalizeWorkflowStatus(getEffectiveSituationStatus(situation.id)),
+      title: situation.title || situation.id,
+      depth: 0
+    });
+
+    for (const { sujet, includedSujet, includedAvis } of includedSujets) {
+      if (includedSujet || includedAvis.length) {
         items.push({
           key: `sujet:${sujet.id}`,
           entityType: "sujet",
           entity: sujet,
           number: sujet.id,
           stateLabel: normalizeWorkflowStatus(getEffectiveSujetStatus(sujet.id)),
-          title: sujet.title || sujet.id
+          title: sujet.title || sujet.id,
+          depth: 1
         });
       }
 
-      for (const avis of sujet.avis || []) {
-        if (!shouldIncludeInReport(avis)) continue;
+      for (const avis of includedAvis) {
         items.push({
           key: `avis:${avis.id}`,
           entityType: "avis",
           entity: avis,
           number: avis.id,
           stateLabel: getEffectiveAvisVerdict(avis.id),
-          title: avis.title || avis.id
+          title: avis.title || avis.id,
+          depth: 2
         });
       }
     }
@@ -374,9 +416,10 @@ function buildReportPreviewItems() {
 function renderReportPreviewItem(item) {
   const entity = item.entity || null;
   const invalidClass = isHumanValidated(entity) ? "" : " documents-report-item--needs-review";
+  const depth = Number.isFinite(item.depth) ? Math.max(0, Math.min(2, item.depth)) : 0;
 
   return `
-    <article class="documents-report-item${invalidClass}" data-report-entity-type="${escapeHtml(item.entityType)}">
+    <article class="documents-report-item documents-report-item--depth-${depth}${invalidClass}" data-report-entity-type="${escapeHtml(item.entityType)}">
       <div class="documents-report-item__line documents-report-item__line--title">
         <span class="documents-report-item__number">#${escapeHtml(String(item.number || ""))}</span>
         <span class="documents-report-item__state">${escapeHtml(String(item.stateLabel || ""))}</span>
@@ -403,27 +446,16 @@ function renderReportPreviewView() {
     <section class="project-simple-page project-simple-page--documents">
       <div class="project-simple-scroll project-simple-scroll--documents" id="projectDocumentsScroll">
         <div class="documents-shell documents-shell--report" id="projectDocumentScroll">
-          ${renderDocumentsToolbar()}
           ${renderDocumentsActivityBanner()}
 
           <div class="documents-report">
             <div class="documents-report__path">${escapeHtml(breadcrumb)}</div>
 
-            <header class="documents-report__hero">
-              <div class="documents-report__hero-brand">
-                <div class="documents-report__logo-wrap">${getSocotecLogoSvg()}</div>
-                <div class="documents-report__hero-copy">
-                  <h1 class="documents-report__title">${escapeHtml(reportTitle)}</h1>
-                  <div class="documents-report__meta">Intervenant : ${escapeHtml(authorName)}</div>
-                  <div class="documents-report__meta">Date du rapport : ${escapeHtml(formatReportDate())}</div>
-                </div>
-              </div>
-            </header>
-
             <section class="documents-report-table">
               <header class="documents-report-table__header">
                 <div class="documents-report-table__author">${escapeHtml(authorName)}</div>
                 <div class="documents-report-table__actions">
+                  <button type="button" class="gh-btn" id="documentsReportBackBtn">Annuler</button>
                   <button type="button" class="gh-btn gh-btn--validate" disabled>Valider</button>
                   <button type="button" class="gh-btn" disabled>Modifier</button>
                   <button type="button" class="gh-btn" disabled>Diffuser</button>
@@ -431,9 +463,83 @@ function renderReportPreviewView() {
               </header>
 
               <div class="documents-report-table__body">
+                <header class="documents-report__hero">
+                  <div class="documents-report__hero-brand">
+                    <div class="documents-report__logo-wrap">${getSocotecLogoSvg()}</div>
+                    <div class="documents-report__hero-copy">
+                      <h1 class="documents-report__title">${escapeHtml(reportTitle)}</h1>
+                      <div class="documents-report__meta">Intervenant : ${escapeHtml(authorName)}</div>
+                      <div class="documents-report__meta">Date du rapport : ${escapeHtml(formatReportDate())}</div>
+                    </div>
+                  </div>
+                </header>
+
+                <div class="documents-report__page-break" aria-hidden="true"></div>
+
                 ${previewItems.length
                   ? previewItems.map(renderReportPreviewItem).join("")
                   : `<div class="documents-report__empty">Aucun élément nouveau ou modifié à inclure dans ce rapport.</div>`}
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+function renderPdfPreviewView() {
+  const projectName = String(store.projectForm?.projectName || "Projet");
+  const documentItem = decorateDocumentWithPhase(getSelectedPdfDocument());
+
+  if (!documentItem) {
+    return renderDocumentsListView();
+  }
+
+  const breadcrumb = `${projectName} / Documents / ${documentItem.name}`;
+  const metaLine = [
+    documentItem.phaseCode ? `${documentItem.phaseCode}${documentItem.phaseLabel ? ` - ${documentItem.phaseLabel}` : ""}` : "",
+    documentItem.updatedAt || ""
+  ].filter(Boolean).join(" · ");
+
+  return `
+    <section class="project-simple-page project-simple-page--documents">
+      <div class="project-simple-scroll project-simple-scroll--documents" id="projectDocumentsScroll">
+        <div class="documents-shell documents-shell--report" id="projectDocumentScroll">
+          ${renderDocumentsActivityBanner()}
+
+          <div class="documents-report">
+            <div class="documents-report__path">${escapeHtml(breadcrumb)}</div>
+
+            <section class="documents-report-table documents-report-table--pdf">
+              <header class="documents-report-table__header">
+                <div class="documents-report-table__author">${escapeHtml(documentItem.name || "Document")}</div>
+                <div class="documents-report-table__actions">
+                  <button type="button" class="gh-btn" id="documentsPdfBackBtn">Annuler</button>
+                </div>
+              </header>
+
+              <div class="documents-report-table__body documents-report-table__body--pdf">
+                <header class="documents-report__hero documents-report__hero--pdf">
+                  <div class="documents-report__hero-brand">
+                    <div class="documents-report__logo-wrap">${getSocotecLogoSvg()}</div>
+                    <div class="documents-report__hero-copy">
+                      <h1 class="documents-report__title">${escapeHtml(documentItem.name || "Document")}</h1>
+                      <div class="documents-report__meta">${escapeHtml(metaLine || "Document PDF")}</div>
+                      <div class="documents-report__meta">${escapeHtml(documentItem.note || "Prévisualisation du document")}</div>
+                    </div>
+                  </div>
+                </header>
+
+                <div class="documents-report__page-break" aria-hidden="true"></div>
+
+                <section class="documents-pdf-viewer">
+                  <iframe
+                    class="documents-pdf-viewer__frame"
+                    title="Prévisualisation PDF - ${escapeHtml(documentItem.name || "Document")}"
+                    src="${escapeHtml(documentItem.previewUrl || "")}"
+                  ></iframe>
+                </section>
               </div>
             </section>
           </div>
@@ -697,6 +803,19 @@ function openReportPreview(root) {
   renderProjectDocuments(root);
 }
 
+function openPdfPreview(root, documentId) {
+  const documentItem = getProjectDocumentById(documentId);
+  if (!canPreviewPdf(documentItem)) return;
+  setActiveProjectDocument(documentItem.id);
+  docsViewState.mode = "pdf-preview";
+  renderProjectDocuments(root);
+}
+
+function closePdfPreview(root) {
+  docsViewState.mode = "list";
+  renderProjectDocuments(root);
+}
+
 function renderFromSelectedFile(root, file) {
   if (!file) return;
   if (!docsViewState.title) {
@@ -711,15 +830,24 @@ function buildRepoDocumentFromState() {
   const baseNote = title || description || "Document prêt pour l'analyse";
   const enabledPhases = getEnabledProjectPhasesCatalog();
   const currentPhase = enabledPhases.find((item) => item.code === docsViewState.selectedPhase) || null;
+  const fileName = docsViewState.file?.name || "Document";
+  const mimeType = String(docsViewState.file?.type || "").trim();
+  const extension = getFileExtension(fileName);
+  const previewUrl = mimeType === "application/pdf" && typeof URL !== "undefined" && docsViewState.file
+    ? URL.createObjectURL(docsViewState.file)
+    : "";
 
   return {
-    name: docsViewState.file?.name || "Document",
-    title: title || docsViewState.file?.name || "Document",
+    name: fileName,
+    title: title || fileName || "Document",
     note: baseNote,
     updatedAt: "À l'instant",
     phaseCode: currentPhase?.code || docsViewState.selectedPhase || "APS",
     phaseLabel: currentPhase?.label || "",
-    fileName: docsViewState.file?.name || "Document"
+    fileName,
+    mimeType,
+    extension,
+    previewUrl
   };
 }
 
@@ -894,6 +1022,28 @@ function bindDocumentsView(root) {
     });
   }
 
+  const pdfBackBtn = document.getElementById("documentsPdfBackBtn");
+  if (pdfBackBtn) {
+    pdfBackBtn.addEventListener("click", () => {
+      closePdfPreview(root);
+    });
+  }
+
+  document.querySelectorAll(".documents-repo__row--file[data-document-id]").forEach((row) => {
+    const documentId = row.getAttribute("data-document-id") || "";
+    const documentItem = getProjectDocumentById(documentId);
+    if (!canPreviewPdf(documentItem)) return;
+
+    const openPreview = () => openPdfPreview(root, documentId);
+    row.addEventListener("click", openPreview);
+    row.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        openPreview();
+      }
+    });
+  });
+
   if (submitBtn) {
     submitBtn.addEventListener("click", () => {
       if (!canSubmitUpload()) return;
@@ -1001,7 +1151,9 @@ export function renderProjectDocuments(root) {
     ? renderUploadView()
     : docsViewState.mode === "report-preview"
       ? renderReportPreviewView()
-      : renderDocumentsListView();
+      : docsViewState.mode === "pdf-preview"
+        ? renderPdfPreviewView()
+        : renderDocumentsListView();
 
   bindDocumentsView(root);
 }
