@@ -1,4 +1,6 @@
 const COMMUNES_API_URL = "https://geo.api.gouv.fr/communes";
+const ADDRESS_API_URL = "https://api-adresse.data.gouv.fr/search/";
+const IGN_COMPLETION_API_URL = "https://data.geopf.fr/geocodage/completion/";
 const GEORISQUES_API_BASE = "https://www.georisques.gouv.fr/api/v1";
 
 const GEORISQUES_COMMUNE_ENDPOINTS = [
@@ -46,6 +48,19 @@ function normalizeString(value = "") {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
+}
+
+function toNumber(value) {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+}
+
+function toCoordsFromGeometry(geometry) {
+  const coordinates = Array.isArray(geometry?.coordinates) ? geometry.coordinates : [];
+  return {
+    lon: toNumber(coordinates[0]),
+    lat: toNumber(coordinates[1])
+  };
 }
 
 async function fetchJson(url, init = {}) {
@@ -110,7 +125,7 @@ async function resolveCommune(city, postalCode) {
     throw new Error("Ville et code postal requis.");
   }
 
-  const url = `${COMMUNES_API_URL}?codePostal=${encodeURIComponent(safePostalCode)}&nom=${encodeURIComponent(safeCity)}&fields=nom,code,codesPostaux,codeDepartement,codeRegion,population&boost=population&limit=10`;
+  const url = `${COMMUNES_API_URL}?codePostal=${encodeURIComponent(safePostalCode)}&nom=${encodeURIComponent(safeCity)}&fields=nom,code,codesPostaux,codeDepartement,codeRegion,population,centre&boost=population&limit=10`;
   const results = await fetchJson(url);
   const items = Array.isArray(results) ? results : [];
 
@@ -122,6 +137,7 @@ async function resolveCommune(city, postalCode) {
   const exact = items.find((item) => normalizeString(item?.nom) === normalizedCity) || null;
   const matchingPostalCode = items.find((item) => Array.isArray(item?.codesPostaux) && item.codesPostaux.includes(safePostalCode)) || null;
   const best = exact || matchingPostalCode || items[0];
+  const centreCoords = toCoordsFromGeometry(best?.centre);
 
   return {
     name: safeString(best?.nom),
@@ -130,10 +146,30 @@ async function resolveCommune(city, postalCode) {
     departmentCode: safeString(best?.codeDepartement),
     regionCode: safeString(best?.codeRegion),
     population: best?.population ?? null,
+    lat: centreCoords.lat,
+    lon: centreCoords.lon,
     sourceUrl: url
   };
 }
 
+function mapMunicipalityFeature(feature, sourceUrl = "") {
+  const properties = feature?.properties || {};
+  const coords = toCoordsFromGeometry(feature?.geometry);
+  const city = safeString(properties.city || properties.name || properties.label);
+  const postalCode = safeString(properties.postcode || properties.postcode_local || "");
+
+  return {
+    label: safeString(properties.label || [city, postalCode].filter(Boolean).join(" ")),
+    name: city,
+    postalCode,
+    postalCodes: postalCode ? [postalCode] : [],
+    codeInsee: safeString(properties.citycode || properties.code || ""),
+    departmentCode: safeString(properties.context || "").split(",")[0]?.trim() || "",
+    lat: coords.lat,
+    lon: coords.lon,
+    sourceUrl
+  };
+}
 
 export async function searchFrenchCommunes({ query = "", postalCode = "", limit = 6 } = {}) {
   const safeQuery = safeString(query);
@@ -143,28 +179,168 @@ export async function searchFrenchCommunes({ query = "", postalCode = "", limit 
   if (safeQuery.length < 2) return [];
 
   const searchParams = new URLSearchParams({
-    nom: safeQuery,
-    boost: "population",
-    limit: String(safeLimit),
-    fields: "nom,code,codesPostaux,codeDepartement,departement,population"
+    q: safePostalCode ? `${safeQuery} ${safePostalCode}` : safeQuery,
+    type: "municipality",
+    limit: String(safeLimit)
   });
 
-  if (safePostalCode) {
-    searchParams.set("codePostal", safePostalCode);
-  }
+  const url = `${ADDRESS_API_URL}?${searchParams.toString()}`;
+  const results = await fetchJson(url);
+  const features = Array.isArray(results?.features) ? results.features : [];
 
-  const url = `${COMMUNES_API_URL}?${searchParams.toString()}`;
+  return features
+    .map((feature) => mapMunicipalityFeature(feature, url))
+    .filter((item) => item.name)
+    .sort((a, b) => {
+      const exactA = normalizeString(a.name) === normalizeString(safeQuery) ? 1 : 0;
+      const exactB = normalizeString(b.name) === normalizeString(safeQuery) ? 1 : 0;
+      return exactB - exactA;
+    });
+}
+
+export async function searchFrenchPostalCodes({ query = "", limit = 6 } = {}) {
+  const safeQuery = safeString(query).replace(/\D+/g, "");
+  const safeLimit = Math.max(1, Math.min(Number(limit) || 6, 10));
+
+  if (safeQuery.length < 2) return [];
+
+  const searchParams = new URLSearchParams({
+    q: safeQuery,
+    type: "municipality",
+    limit: String(safeLimit)
+  });
+
+  const url = `${ADDRESS_API_URL}?${searchParams.toString()}`;
+  const results = await fetchJson(url);
+  const features = Array.isArray(results?.features) ? results.features : [];
+
+  return features
+    .map((feature) => mapMunicipalityFeature(feature, url))
+    .filter((item) => item.postalCode && item.postalCode.startsWith(safeQuery));
+}
+
+function getIgnCompletionItems(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.results)) return payload.results;
+  if (Array.isArray(payload?.completions)) return payload.completions;
+  if (Array.isArray(payload?.suggestions)) return payload.suggestions;
+  if (Array.isArray(payload?.items)) return payload.items;
+  return [];
+}
+
+function mapIgnCompletionItem(item, sourceUrl = "") {
+  const properties = item?.properties || {};
+  const label = safeString(
+    item?.fulltext ||
+    item?.label ||
+    item?.text ||
+    properties?.fulltext ||
+    properties?.label ||
+    properties?.name ||
+    item?.name
+  );
+
+  return {
+    label,
+    kind: safeString(item?.type || properties?.type || item?.kind || properties?.kind),
+    sourceUrl,
+    raw: item
+  };
+}
+
+export async function searchIgnAddresses({ query = "", limit = 6 } = {}) {
+  const safeQuery = safeString(query);
+  const safeLimit = Math.max(1, Math.min(Number(limit) || 6, 10));
+
+  if (safeQuery.length < 3) return [];
+
+  const searchParams = new URLSearchParams({
+    text: safeQuery,
+    type: "StreetAddress",
+    maximumResponses: String(safeLimit),
+    terr: "METROPOLE"
+  });
+
+  const url = `${IGN_COMPLETION_API_URL}?${searchParams.toString()}`;
   const results = await fetchJson(url);
 
-  return (Array.isArray(results) ? results : []).map((item) => ({
-    name: safeString(item?.nom),
-    codeInsee: safeString(item?.code),
-    postalCodes: Array.isArray(item?.codesPostaux) ? item.codesPostaux.filter(Boolean).map((value) => safeString(value)) : [],
-    departmentCode: safeString(item?.codeDepartement),
-    departmentName: safeString(item?.departement?.nom),
-    population: item?.population ?? null,
+  return getIgnCompletionItems(results)
+    .map((item) => mapIgnCompletionItem(item, url))
+    .filter((item) => item.label);
+}
+
+export async function resolveFrenchAddress(query = "") {
+  const safeQuery = safeString(query);
+
+  if (!safeQuery) {
+    throw new Error("Adresse requise.");
+  }
+
+  const searchParams = new URLSearchParams({
+    q: safeQuery,
+    limit: "1"
+  });
+
+  const url = `${ADDRESS_API_URL}?${searchParams.toString()}`;
+  const results = await fetchJson(url);
+  const feature = Array.isArray(results?.features) ? results.features[0] : null;
+
+  if (!feature) {
+    throw new Error("Adresse introuvable.");
+  }
+
+  const properties = feature.properties || {};
+  const coords = toCoordsFromGeometry(feature.geometry);
+
+  return {
+    address: safeString(properties.label || safeQuery),
+    city: safeString(properties.city),
+    postalCode: safeString(properties.postcode),
+    codeInsee: safeString(properties.citycode),
+    lat: coords.lat,
+    lon: coords.lon,
     sourceUrl: url
-  })).filter((item) => item.name);
+  };
+}
+
+export async function resolveFrenchCommune({ city = "", postalCode = "" } = {}) {
+  const commune = await resolveCommune(city, postalCode);
+  return {
+    city: commune.name,
+    postalCode: commune.postalCodes?.[0] || safeString(postalCode),
+    codeInsee: commune.codeInsee,
+    lat: commune.lat,
+    lon: commune.lon,
+    sourceUrl: commune.sourceUrl
+  };
+}
+
+export async function resolveFrenchPostalCode(postalCode = "") {
+  const safePostalCode = safeString(postalCode).replace(/\D+/g, "");
+
+  if (safePostalCode.length < 5) {
+    throw new Error("Code postal requis.");
+  }
+
+  const url = `${COMMUNES_API_URL}?codePostal=${encodeURIComponent(safePostalCode)}&fields=nom,code,codesPostaux,codeDepartement,codeRegion,population,centre&boost=population&limit=10`;
+  const results = await fetchJson(url);
+  const items = Array.isArray(results) ? results : [];
+  const best = items[0] || null;
+
+  if (!best) {
+    throw new Error("Aucune commune correspondante trouvée.");
+  }
+
+  const centreCoords = toCoordsFromGeometry(best?.centre);
+
+  return {
+    city: safeString(best?.nom),
+    postalCode: safePostalCode,
+    codeInsee: safeString(best?.code),
+    lat: centreCoords.lat,
+    lon: centreCoords.lon,
+    sourceUrl: url
+  };
 }
 
 export async function fetchGeorisquesForCommune({ city = "", postalCode = "" } = {}) {
