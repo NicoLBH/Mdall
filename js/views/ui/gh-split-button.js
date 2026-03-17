@@ -62,9 +62,13 @@ export function renderGhActionButton({
   withChevron = true,
   iconOnly = false,
   disabled = false,
-  className = ""
+  className = "",
+  mainActionMode = "explicit"
 }) {
   const hasMenu = Array.isArray(items) && items.length > 0;
+  const resolvedMainAction = hasMenu && mainActionMode === "first-item"
+    ? String(items[0]?.action || mainAction || "")
+    : String(mainAction || "");
   const btnToneClass = tone ? `gh-btn--${tone}` : "";
   const btnSizeClass = size ? `gh-btn--${size}` : "";
   const rootClasses = [
@@ -83,7 +87,7 @@ export function renderGhActionButton({
       <div
         class="${rootClasses}"
         data-action-id="${escapeAttr(id)}"
-        data-main-action="${escapeAttr(mainAction)}"
+        data-main-action="${escapeAttr(resolvedMainAction)}"
       >
         <button
           type="button"
@@ -101,7 +105,7 @@ export function renderGhActionButton({
     <div
       class="${rootClasses}"
       data-action-id="${escapeAttr(id)}"
-      data-main-action="${escapeAttr(mainAction)}"
+      data-main-action="${escapeAttr(resolvedMainAction)}"
     >
       <button
         type="button"
