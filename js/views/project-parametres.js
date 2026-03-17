@@ -851,7 +851,11 @@ function renderGeorisquesDataset(dataset = {}) {
   let body = `<div class="settings-inline-error">${escapeHtml(dataset.error || "Requête indisponible")}</div>`;
 
   if (dataset.status === "success") {
-    body = renderGeorisquesTable(getTabularRowsFromGeorisquesData(dataset.data));
+    if (dataset.key === "ppr") {
+      body = `<pre class="settings-json-block settings-json-block--scrollable">${escapeHtml(JSON.stringify(dataset.data, null, 2))}</pre>`;
+    } else {
+      body = renderGeorisquesTable(getTabularRowsFromGeorisquesData(dataset.data));
+    }
   }
 
   return renderSectionCard({
@@ -941,7 +945,12 @@ async function loadGeorisquesForCurrentProject({ force = false } = {}) {
   rerenderProjectParametres();
 
   try {
-    const result = await fetchGeorisquesForCommune({ city, postalCode });
+    const result = await fetchGeorisquesForCommune({
+      city,
+      postalCode,
+      latitude: store.projectForm.latitude,
+      longitude: store.projectForm.longitude
+    });
     store.projectForm.georisques = {
       ...result,
       error: ""
