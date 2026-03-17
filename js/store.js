@@ -78,6 +78,12 @@ export const store = {
 
   projectProposals: [],
 
+  projectDocuments: {
+    items: [],
+    activeDocumentId: null,
+    lastAnalysisDocumentIds: []
+  },
+
   situationsView: {
     data: [],
     rawResult: null,
