@@ -25,7 +25,7 @@ import {
   setAutomationEnabled
 } from "../services/project-automation.js";
 import { escapeHtml } from "../utils/escape-html.js";
-import { fetchGeorisquesForCommune } from "../services/georisques-service.js";
+import { fetchGeorisquesForCommune, searchFrenchCommunes } from "../services/georisques-service.js";
 import { getWindRegion } from "../../assets/wind-regions.js";
 
 const DEFAULT_PROJECT_COLLABORATORS = [
@@ -40,7 +40,12 @@ const parametresUiState = {
   collaboratorDraftEmail: "",
   activeSectionId: "parametres-general",
   georisquesIsLoading: false,
-  georisquesLastRequestKey: ""
+  georisquesLastRequestKey: "",
+  cityAutocompleteItems: [],
+  cityAutocompleteLoading: false,
+  cityAutocompleteOpen: false,
+  cityAutocompleteActiveIndex: -1,
+  cityAutocompleteDocumentBound: false
 };
 
 let currentParametresRoot = null;
@@ -383,6 +388,58 @@ function renderSectionCard({ id = "", title, description = "", body = "", badge 
         ${badge ? `<span class="settings-badge mono">${escapeHtml(badge)}</span>` : ""}
       </div>
       ${body}
+    </div>
+  `;
+}
+
+function renderCityAutocompleteField({ id, label, value = "", placeholder = "", width = "" }) {
+  const pencil = svgIcon("pencil", { className: "octicon" });
+  const check = svgIcon("check", { className: "octicon" });
+
+  return `
+    <div class="${width}">
+      <div class="form-row form-row--settings">
+        ${label ? `<label for="${escapeHtml(id)}">${escapeHtml(label)}</label>` : ""}
+        <div class="gh-editable-field gh-editable-field--autocomplete" data-editable-field>
+          <div class="gh-editable-field__control">
+            <input
+              id="${escapeHtml(id)}"
+              type="text"
+              class="gh-input gh-editable-field__input"
+              value="${escapeHtml(value)}"
+              placeholder="${escapeHtml(placeholder)}"
+              autocomplete="off"
+              readonly
+              data-editable-input
+              data-geo-city-input
+              aria-autocomplete="list"
+              aria-expanded="false"
+              aria-controls="projectCityAutocompleteList"
+            >
+            <div
+              class="gh-autocomplete gh-autocomplete--cities"
+              id="projectCityAutocompleteList"
+              data-geo-city-suggestions
+              role="listbox"
+              hidden
+            ></div>
+          </div>
+          <button
+            type="button"
+            class="gh-btn gh-btn--ghost gh-editable-field__btn"
+            data-editable-toggle
+            aria-label="Modifier"
+            data-edit-label="Modifier"
+            data-validate-label="Valider"
+          >
+            <span class="gh-editable-field__btn-icon" data-editable-icon>${pencil}</span>
+            <span class="gh-editable-field__btn-text" data-editable-text>Modifier</span>
+          </button>
+
+          <template data-icon-edit>${pencil}</template>
+          <template data-icon-validate>${check}</template>
+        </div>
+      </div>
     </div>
   `;
 }
@@ -1271,7 +1328,7 @@ function getPageHtml(form) {
                     description: "Localisation administrative et d’usage du projet.",
                     badge: "LIVE",
                     body: `<div class="settings-form-grid settings-form-grid--thirds">
-                      ${renderInputField({ id: "projectCity", label: "Ville", value: form.city || "", placeholder: "Ex. Annecy" })}
+                      ${renderCityAutocompleteField({ id: "projectCity", label: "Ville", value: form.city || "", placeholder: "Ex. Annecy" })}
                       ${renderInputField({ id: "projectPostalCode", label: "CP", value: form.postalCode || "", placeholder: "Ex. 74000" })}
                     </div>
                     ${ensureGeorisquesState().commune ? `
@@ -1779,6 +1836,199 @@ function bindProjectPhaseToggles() {
   });
 }
 
+function resetCityAutocompleteState() {
+  parametresUiState.cityAutocompleteItems = [];
+  parametresUiState.cityAutocompleteLoading = false;
+  parametresUiState.cityAutocompleteOpen = false;
+  parametresUiState.cityAutocompleteActiveIndex = -1;
+}
+
+function renderCityAutocompleteDropdown(container, input) {
+  if (!container || !input) return;
+
+  const items = Array.isArray(parametresUiState.cityAutocompleteItems)
+    ? parametresUiState.cityAutocompleteItems
+    : [];
+
+  const isOpen = parametresUiState.cityAutocompleteOpen && (parametresUiState.cityAutocompleteLoading || items.length > 0);
+
+  input.setAttribute("aria-expanded", isOpen ? "true" : "false");
+  container.hidden = !isOpen;
+
+  if (!isOpen) {
+    container.innerHTML = "";
+    return;
+  }
+
+  if (parametresUiState.cityAutocompleteLoading) {
+    container.innerHTML = `<div class="gh-autocomplete__status">Recherche…</div>`;
+    return;
+  }
+
+  container.innerHTML = items.map((item, index) => {
+    const primaryPostalCode = item.postalCodes?.[0] || "";
+    const allPostalCodes = item.postalCodes?.join(", ") || primaryPostalCode || "—";
+    const isActive = index === parametresUiState.cityAutocompleteActiveIndex;
+
+    return `
+      <button
+        type="button"
+        class="gh-autocomplete__item ${isActive ? "is-active" : ""}"
+        data-geo-city-option-index="${index}"
+        role="option"
+        aria-selected="${isActive ? "true" : "false"}"
+      >
+        <span class="gh-autocomplete__item-main">${escapeHtml(item.name)}</span>
+        <span class="gh-autocomplete__item-meta">${escapeHtml(allPostalCodes)} · INSEE ${escapeHtml(item.codeInsee || "—")}</span>
+      </button>
+    `;
+  }).join("");
+}
+
+function syncProjectLocationFields({ city = "", postalCode = "" } = {}) {
+  store.projectForm.city = String(city || "").trim();
+  store.projectForm.postalCode = String(postalCode || "").trim();
+  store.projectForm.communeCp = [store.projectForm.city, store.projectForm.postalCode].filter(Boolean).join(" ").trim();
+}
+
+function applyCityAutocompleteSelection(item) {
+  if (!item) return;
+
+  const cityInput = document.getElementById("projectCity");
+  const postalCodeInput = document.getElementById("projectPostalCode");
+  const postalCode = item.postalCodes?.[0] || postalCodeInput?.value || store.projectForm.postalCode || "";
+
+  if (cityInput) cityInput.value = item.name || "";
+  if (postalCodeInput && postalCode) postalCodeInput.value = postalCode;
+
+  syncProjectLocationFields({ city: item.name || "", postalCode });
+  resetCityAutocompleteState();
+
+  const dropdown = document.querySelector("[data-geo-city-suggestions]");
+  if (dropdown && cityInput) {
+    renderCityAutocompleteDropdown(dropdown, cityInput);
+  }
+}
+
+function bindProjectCityAutocomplete() {
+  const cityInput = document.getElementById("projectCity");
+  const postalCodeInput = document.getElementById("projectPostalCode");
+  const dropdown = document.querySelector("[data-geo-city-suggestions]");
+
+  if (!cityInput || !dropdown || cityInput.dataset.autocompleteBound === "true") return;
+  cityInput.dataset.autocompleteBound = "true";
+
+  let requestSequence = 0;
+  let debounceTimer = null;
+
+  const closeDropdown = () => {
+    resetCityAutocompleteState();
+    renderCityAutocompleteDropdown(dropdown, cityInput);
+  };
+
+  const openWithLoading = () => {
+    parametresUiState.cityAutocompleteLoading = true;
+    parametresUiState.cityAutocompleteOpen = true;
+    parametresUiState.cityAutocompleteItems = [];
+    parametresUiState.cityAutocompleteActiveIndex = -1;
+    renderCityAutocompleteDropdown(dropdown, cityInput);
+  };
+
+  cityInput.addEventListener("input", () => {
+    const query = String(cityInput.value || "").trim();
+    const postalCode = String(postalCodeInput?.value || store.projectForm.postalCode || "").trim();
+
+    syncProjectLocationFields({ city: query, postalCode });
+
+    if (debounceTimer) clearTimeout(debounceTimer);
+
+    if (query.length < 2) {
+      closeDropdown();
+      return;
+    }
+
+    openWithLoading();
+    const currentRequestId = ++requestSequence;
+
+    debounceTimer = setTimeout(async () => {
+      try {
+        const items = await searchFrenchCommunes({ query, postalCode, limit: 6 });
+        if (currentRequestId != requestSequence) return;
+
+        parametresUiState.cityAutocompleteItems = items;
+        parametresUiState.cityAutocompleteLoading = false;
+        parametresUiState.cityAutocompleteOpen = items.length > 0;
+        parametresUiState.cityAutocompleteActiveIndex = items.length ? 0 : -1;
+        renderCityAutocompleteDropdown(dropdown, cityInput);
+      } catch (error) {
+        if (currentRequestId != requestSequence) return;
+        closeDropdown();
+      }
+    }, 180);
+  });
+
+  cityInput.addEventListener("keydown", (event) => {
+    if (!parametresUiState.cityAutocompleteOpen || !parametresUiState.cityAutocompleteItems.length) return;
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      parametresUiState.cityAutocompleteActiveIndex = (parametresUiState.cityAutocompleteActiveIndex + 1) % parametresUiState.cityAutocompleteItems.length;
+      renderCityAutocompleteDropdown(dropdown, cityInput);
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      parametresUiState.cityAutocompleteActiveIndex = (parametresUiState.cityAutocompleteActiveIndex - 1 + parametresUiState.cityAutocompleteItems.length) % parametresUiState.cityAutocompleteItems.length;
+      renderCityAutocompleteDropdown(dropdown, cityInput);
+      return;
+    }
+
+    if (event.key === "Enter") {
+      const selected = parametresUiState.cityAutocompleteItems[parametresUiState.cityAutocompleteActiveIndex] || parametresUiState.cityAutocompleteItems[0];
+      if (!selected) return;
+      event.preventDefault();
+      applyCityAutocompleteSelection(selected);
+      return;
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeDropdown();
+    }
+  });
+
+  dropdown.addEventListener("mousedown", (event) => {
+    const option = event.target.closest("[data-geo-city-option-index]");
+    if (!option) return;
+    event.preventDefault();
+    const index = Number(option.getAttribute("data-geo-city-option-index"));
+    applyCityAutocompleteSelection(parametresUiState.cityAutocompleteItems[index]);
+  });
+
+  cityInput.addEventListener("blur", () => {
+    setTimeout(() => {
+      if (!document.activeElement || !dropdown.contains(document.activeElement)) {
+        closeDropdown();
+      }
+    }, 120);
+  });
+
+  if (!parametresUiState.cityAutocompleteDocumentBound) {
+    document.addEventListener("click", (event) => {
+      if (!event.target.closest(".gh-editable-field--autocomplete")) {
+        resetCityAutocompleteState();
+        const activeDropdown = document.querySelector("[data-geo-city-suggestions]");
+        const activeInput = document.getElementById("projectCity");
+        if (activeDropdown && activeInput) {
+          renderCityAutocompleteDropdown(activeDropdown, activeInput);
+        }
+      }
+    });
+    parametresUiState.cityAutocompleteDocumentBound = true;
+  }
+}
+
 function bindParametresEvents() {
   bindGhActionButtons();
   
@@ -1810,6 +2060,8 @@ function bindParametresEvents() {
       }
     }
   });
+
+  bindProjectCityAutocomplete();
 
   bindGhSelectMenus(document, {
     onChange: (id, value) => {
