@@ -25,7 +25,15 @@ import {
   setAutomationEnabled
 } from "../services/project-automation.js";
 import { escapeHtml } from "../utils/escape-html.js";
-import { fetchGeorisquesForCommune, searchFrenchCommunes } from "../services/georisques-service.js";
+import {
+  fetchGeorisquesForCommune,
+  searchFrenchCommunes,
+  searchFrenchPostalCodes,
+  searchIgnAddresses,
+  resolveFrenchAddress,
+  resolveFrenchCommune,
+  resolveFrenchPostalCode
+} from "../services/georisques-service.js";
 import { getWindRegion } from "../../assets/wind-regions.js";
 
 const DEFAULT_PROJECT_COLLABORATORS = [
@@ -41,11 +49,12 @@ const parametresUiState = {
   activeSectionId: "parametres-general",
   georisquesIsLoading: false,
   georisquesLastRequestKey: "",
-  cityAutocompleteItems: [],
-  cityAutocompleteLoading: false,
-  cityAutocompleteOpen: false,
-  cityAutocompleteActiveIndex: -1,
-  cityAutocompleteDocumentBound: false
+  locationAutocomplete: {
+    address: { items: [], loading: false, open: false, activeIndex: -1 },
+    city: { items: [], loading: false, open: false, activeIndex: -1 },
+    postalCode: { items: [], loading: false, open: false, activeIndex: -1 }
+  },
+  locationAutocompleteDocumentBound: false
 };
 
 let currentParametresRoot = null;
@@ -190,12 +199,24 @@ function ensureProjectFormDefaults() {
     form.projectName = "Projet demo";
   }
 
+  if (typeof form.address !== "string") {
+    form.address = "";
+  }
+
   if (typeof form.city !== "string" || !form.city.trim()) {
     form.city = "Annecy";
   }
 
   if (typeof form.postalCode !== "string" || !form.postalCode.trim()) {
     form.postalCode = "74000";
+  }
+
+  if (typeof form.latitude !== "number" || !Number.isFinite(form.latitude)) {
+    form.latitude = null;
+  }
+
+  if (typeof form.longitude !== "number" || !Number.isFinite(form.longitude)) {
+    form.longitude = null;
   }
 
   if (typeof form.zoneSismique !== "string" || !form.zoneSismique.trim()) {
@@ -392,9 +413,10 @@ function renderSectionCard({ id = "", title, description = "", body = "", badge 
   `;
 }
 
-function renderCityAutocompleteField({ id, label, value = "", placeholder = "", width = "" }) {
+function renderLocationAutocompleteField({ id, label, value = "", placeholder = "", width = "", fieldKey = "city", inputMode = "text" }) {
   const pencil = svgIcon("pencil", { className: "octicon" });
   const check = svgIcon("check", { className: "octicon" });
+  const dropdownId = `${id}AutocompleteList`;
 
   return `
     <div class="${width}">
@@ -405,21 +427,22 @@ function renderCityAutocompleteField({ id, label, value = "", placeholder = "", 
             <input
               id="${escapeHtml(id)}"
               type="text"
+              inputmode="${escapeHtml(inputMode)}"
               class="gh-input gh-editable-field__input"
               value="${escapeHtml(value)}"
               placeholder="${escapeHtml(placeholder)}"
               autocomplete="off"
               readonly
               data-editable-input
-              data-geo-city-input
+              data-location-autocomplete-input="${escapeHtml(fieldKey)}"
               aria-autocomplete="list"
               aria-expanded="false"
-              aria-controls="projectCityAutocompleteList"
+              aria-controls="${escapeHtml(dropdownId)}"
             >
             <div
               class="gh-autocomplete gh-autocomplete--cities"
-              id="projectCityAutocompleteList"
-              data-geo-city-suggestions
+              id="${escapeHtml(dropdownId)}"
+              data-location-autocomplete-suggestions="${escapeHtml(fieldKey)}"
               role="listbox"
               hidden
             ></div>
@@ -444,14 +467,15 @@ function renderCityAutocompleteField({ id, label, value = "", placeholder = "", 
   `;
 }
 
-function renderInputField({ id, label, value = "", placeholder = "", width = "" }) {
+function renderInputField({ id, label, value = "", placeholder = "", width = "", inputMode = "text" }) {
   return `
     <div class="${width}">
       ${renderGhEditableField({
         id,
         label,
         value,
-        placeholder
+        placeholder,
+        type: "text"
       })}
     </div>
   `;
@@ -1370,13 +1394,16 @@ function getPageHtml(form) {
                     description: "Localisation administrative et d’usage du projet.",
                     badge: "LIVE",
                     body: `<div class="settings-form-grid settings-form-grid--thirds">
-                      ${renderCityAutocompleteField({ id: "projectCity", label: "Ville", value: form.city || "", placeholder: "Ex. Annecy" })}
-                      ${renderInputField({ id: "projectPostalCode", label: "CP", value: form.postalCode || "", placeholder: "Ex. 74000" })}
+                      ${renderLocationAutocompleteField({ id: "projectAddress", fieldKey: "address", label: "Adresse", value: form.address || "", placeholder: "Ex. 12 avenue de la Gare, Annecy" })}
+                      ${renderLocationAutocompleteField({ id: "projectCity", fieldKey: "city", label: "Ville", value: form.city || "", placeholder: "Ex. Annecy" })}
+                      ${renderLocationAutocompleteField({ id: "projectPostalCode", fieldKey: "postalCode", label: "CP", value: form.postalCode || "", placeholder: "Ex. 74000", inputMode: "numeric" })}
                     </div>
-                    ${ensureGeorisquesState().commune ? `
+                    ${(ensureGeorisquesState().commune || Number.isFinite(form.latitude) || Number.isFinite(form.longitude)) ? `
                       <div class="settings-auto-fields">
-                        ${renderAutoResolvedField("Commune résolue", ensureGeorisquesState().commune?.name || "—", "Données récupérées automatiquement sur Géorisques.", { muted: hasStaleLocationDerivedData() })}
+                        ${renderAutoResolvedField("Commune résolue", ensureGeorisquesState().commune?.name || form.city || "—", "Données de localisation résolues automatiquement.", { muted: hasStaleLocationDerivedData() })}
                         ${renderAutoResolvedField("Code INSEE", ensureGeorisquesState().commune?.codeInsee || "—", "Données récupérées automatiquement sur Géorisques.", { muted: hasStaleLocationDerivedData() })}
+                        ${renderAutoResolvedField("Longitude", Number.isFinite(form.longitude) ? String(form.longitude) : "—", "Coordonnée automatiquement déterminée à partir de l’adresse ou du centre de commune.", { muted: hasStaleLocationDerivedData() })}
+                        ${renderAutoResolvedField("Latitude", Number.isFinite(form.latitude) ? String(form.latitude) : "—", "Coordonnée automatiquement déterminée à partir de l’adresse ou du centre de commune.", { muted: hasStaleLocationDerivedData() })}
                       </div>
                     ` : ""}`
                   })
@@ -1878,21 +1905,37 @@ function bindProjectPhaseToggles() {
   });
 }
 
-function resetCityAutocompleteState() {
-  parametresUiState.cityAutocompleteItems = [];
-  parametresUiState.cityAutocompleteLoading = false;
-  parametresUiState.cityAutocompleteOpen = false;
-  parametresUiState.cityAutocompleteActiveIndex = -1;
+function getLocationAutocompleteState(fieldKey) {
+  if (!parametresUiState.locationAutocomplete || typeof parametresUiState.locationAutocomplete !== "object") {
+    parametresUiState.locationAutocomplete = {};
+  }
+
+  if (!parametresUiState.locationAutocomplete[fieldKey]) {
+    parametresUiState.locationAutocomplete[fieldKey] = {
+      items: [],
+      loading: false,
+      open: false,
+      activeIndex: -1
+    };
+  }
+
+  return parametresUiState.locationAutocomplete[fieldKey];
 }
 
-function renderCityAutocompleteDropdown(container, input) {
+function resetLocationAutocompleteState(fieldKey) {
+  const state = getLocationAutocompleteState(fieldKey);
+  state.items = [];
+  state.loading = false;
+  state.open = false;
+  state.activeIndex = -1;
+}
+
+function renderLocationAutocompleteDropdown(fieldKey, container, input) {
   if (!container || !input) return;
 
-  const items = Array.isArray(parametresUiState.cityAutocompleteItems)
-    ? parametresUiState.cityAutocompleteItems
-    : [];
-
-  const isOpen = parametresUiState.cityAutocompleteOpen && (parametresUiState.cityAutocompleteLoading || items.length > 0);
+  const state = getLocationAutocompleteState(fieldKey);
+  const items = Array.isArray(state.items) ? state.items : [];
+  const isOpen = state.open && (state.loading || items.length > 0);
 
   input.setAttribute("aria-expanded", isOpen ? "true" : "false");
   container.hidden = !isOpen;
@@ -1902,90 +1945,160 @@ function renderCityAutocompleteDropdown(container, input) {
     return;
   }
 
-  if (parametresUiState.cityAutocompleteLoading) {
+  if (state.loading) {
     container.innerHTML = `<div class="gh-autocomplete__status">Recherche…</div>`;
     return;
   }
 
   container.innerHTML = items.map((item, index) => {
-    const primaryPostalCode = item.postalCodes?.[0] || "";
-    const allPostalCodes = item.postalCodes?.join(", ") || primaryPostalCode || "—";
-    const isActive = index === parametresUiState.cityAutocompleteActiveIndex;
+    const primary = fieldKey === "postalCode"
+      ? (item.postalCode || item.label || "")
+      : (item.label || item.name || item.postalCode || "");
+    const meta = fieldKey === "address"
+      ? [item.city, item.postalCode].filter(Boolean).join(" · ")
+      : fieldKey === "postalCode"
+        ? [item.name, item.codeInsee ? `INSEE ${item.codeInsee}` : ""].filter(Boolean).join(" · ")
+        : [item.postalCodes?.join(", ") || item.postalCode || "", item.codeInsee ? `INSEE ${item.codeInsee}` : ""].filter(Boolean).join(" · ");
+    const isActive = index === state.activeIndex;
 
     return `
       <button
         type="button"
         class="gh-autocomplete__item ${isActive ? "is-active" : ""}"
-        data-geo-city-option-index="${index}"
+        data-location-option-field="${escapeHtml(fieldKey)}"
+        data-location-option-index="${index}"
         role="option"
         aria-selected="${isActive ? "true" : "false"}"
       >
-        <span class="gh-autocomplete__item-main">${escapeHtml(item.name)}</span>
-        <span class="gh-autocomplete__item-meta">${escapeHtml(allPostalCodes)} · INSEE ${escapeHtml(item.codeInsee || "—")}</span>
+        <span class="gh-autocomplete__item-main">${escapeHtml(primary || "—")}</span>
+        ${meta ? `<span class="gh-autocomplete__item-meta">${escapeHtml(meta)}</span>` : ""}
       </button>
     `;
   }).join("");
 }
 
-function syncProjectLocationFields({ city = "", postalCode = "" } = {}) {
-  store.projectForm.city = String(city || "").trim();
-  store.projectForm.postalCode = String(postalCode || "").trim();
+function syncProjectLocationFields({ address, city, postalCode, latitude, longitude } = {}) {
+  if (address !== undefined) {
+    store.projectForm.address = String(address || "").trim();
+  }
+
+  if (city !== undefined) {
+    store.projectForm.city = String(city || "").trim();
+  }
+
+  if (postalCode !== undefined) {
+    store.projectForm.postalCode = String(postalCode || "").trim();
+  }
+
+  if (latitude !== undefined) {
+    store.projectForm.latitude = Number.isFinite(latitude) ? latitude : null;
+  }
+
+  if (longitude !== undefined) {
+    store.projectForm.longitude = Number.isFinite(longitude) ? longitude : null;
+  }
+
   store.projectForm.communeCp = [store.projectForm.city, store.projectForm.postalCode].filter(Boolean).join(" ").trim();
   syncLocationDerivedStaleUi();
 }
 
-function applyCityAutocompleteSelection(item) {
+function applyLocationSelection(fieldKey, item) {
   if (!item) return;
 
+  const addressInput = document.getElementById("projectAddress");
   const cityInput = document.getElementById("projectCity");
   const postalCodeInput = document.getElementById("projectPostalCode");
-  const postalCode = item.postalCodes?.[0] || postalCodeInput?.value || store.projectForm.postalCode || "";
 
-  if (cityInput) cityInput.value = item.name || "";
-  if (postalCodeInput && postalCode) postalCodeInput.value = postalCode;
+  if (fieldKey === "address") {
+    resolveFrenchAddress(item.label || item.name || "")
+      .then((resolved) => {
+        if (addressInput) addressInput.value = resolved.address || item.label || "";
+        if (cityInput) cityInput.value = resolved.city || "";
+        if (postalCodeInput) postalCodeInput.value = resolved.postalCode || "";
+        syncProjectLocationFields({
+          address: resolved.address || item.label || "",
+          city: resolved.city,
+          postalCode: resolved.postalCode,
+          latitude: resolved.lat,
+          longitude: resolved.lon
+        });
+        resetLocationAutocompleteState(fieldKey);
+        renderLocationAutocompleteDropdown(fieldKey, document.querySelector('[data-location-autocomplete-suggestions="address"]'), addressInput);
+      })
+      .catch(() => {});
+    return;
+  }
 
-  syncProjectLocationFields({ city: item.name || "", postalCode });
-  resetCityAutocompleteState();
+  if (fieldKey === "city") {
+    if (cityInput) cityInput.value = item.name || item.label || "";
+    if (postalCodeInput) postalCodeInput.value = item.postalCode || item.postalCodes?.[0] || "";
+    syncProjectLocationFields({
+      address: "",
+      city: item.name || item.label || "",
+      postalCode: item.postalCode || item.postalCodes?.[0] || "",
+      latitude: item.lat,
+      longitude: item.lon
+    });
+    resetLocationAutocompleteState(fieldKey);
+    renderLocationAutocompleteDropdown(fieldKey, document.querySelector('[data-location-autocomplete-suggestions="city"]'), cityInput);
+    return;
+  }
 
-  const dropdown = document.querySelector("[data-geo-city-suggestions]");
-  if (dropdown && cityInput) {
-    renderCityAutocompleteDropdown(dropdown, cityInput);
+  if (fieldKey === "postalCode") {
+    if (postalCodeInput) postalCodeInput.value = item.postalCode || item.label || "";
+    if (cityInput) cityInput.value = item.name || item.city || "";
+    syncProjectLocationFields({
+      address: "",
+      city: item.name || item.city || "",
+      postalCode: item.postalCode || item.label || "",
+      latitude: item.lat,
+      longitude: item.lon
+    });
+    resetLocationAutocompleteState(fieldKey);
+    renderLocationAutocompleteDropdown(fieldKey, document.querySelector('[data-location-autocomplete-suggestions="postalCode"]'), postalCodeInput);
   }
 }
 
-function bindProjectCityAutocomplete() {
-  const cityInput = document.getElementById("projectCity");
-  const postalCodeInput = document.getElementById("projectPostalCode");
-  const dropdown = document.querySelector("[data-geo-city-suggestions]");
+function bindLocationAutocompleteField(fieldKey, config = {}) {
+  const input = document.querySelector(`[data-location-autocomplete-input="${fieldKey}"]`);
+  const dropdown = document.querySelector(`[data-location-autocomplete-suggestions="${fieldKey}"]`);
 
-  if (!cityInput || !dropdown || cityInput.dataset.autocompleteBound === "true") return;
-  cityInput.dataset.autocompleteBound = "true";
+  if (!input || !dropdown || input.dataset.autocompleteBound === "true") return;
+  input.dataset.autocompleteBound = "true";
 
   let requestSequence = 0;
   let debounceTimer = null;
 
   const closeDropdown = () => {
-    resetCityAutocompleteState();
-    renderCityAutocompleteDropdown(dropdown, cityInput);
+    resetLocationAutocompleteState(fieldKey);
+    renderLocationAutocompleteDropdown(fieldKey, dropdown, input);
   };
 
   const openWithLoading = () => {
-    parametresUiState.cityAutocompleteLoading = true;
-    parametresUiState.cityAutocompleteOpen = true;
-    parametresUiState.cityAutocompleteItems = [];
-    parametresUiState.cityAutocompleteActiveIndex = -1;
-    renderCityAutocompleteDropdown(dropdown, cityInput);
+    const state = getLocationAutocompleteState(fieldKey);
+    state.loading = true;
+    state.open = true;
+    state.items = [];
+    state.activeIndex = -1;
+    renderLocationAutocompleteDropdown(fieldKey, dropdown, input);
   };
 
-  cityInput.addEventListener("input", () => {
-    const query = String(cityInput.value || "").trim();
-    const postalCode = String(postalCodeInput?.value || store.projectForm.postalCode || "").trim();
+  input.addEventListener("input", () => {
+    const query = String(input.value || "").trim();
 
-    syncProjectLocationFields({ city: query, postalCode });
+    if (fieldKey === "address") {
+      syncProjectLocationFields({ address: query, city: store.projectForm.city, postalCode: store.projectForm.postalCode });
+    } else if (fieldKey === "city") {
+      syncProjectLocationFields({ address: "", city: query, postalCode: store.projectForm.postalCode });
+    } else if (fieldKey === "postalCode") {
+      syncProjectLocationFields({ address: "", city: store.projectForm.city, postalCode: query.replace(/\D+/g, "") });
+      input.value = store.projectForm.postalCode;
+    }
 
     if (debounceTimer) clearTimeout(debounceTimer);
 
-    if (query.length < 2) {
+    const minLength = fieldKey === "postalCode" ? 2 : (fieldKey === "address" ? 3 : 2);
+    if (query.length < minLength) {
       closeDropdown();
       return;
     }
@@ -1995,43 +2108,49 @@ function bindProjectCityAutocomplete() {
 
     debounceTimer = setTimeout(async () => {
       try {
-        const items = await searchFrenchCommunes({ query, postalCode, limit: 6 });
-        if (currentRequestId != requestSequence) return;
+        const items = fieldKey === "address"
+          ? await searchIgnAddresses({ query, limit: 6 })
+          : fieldKey === "postalCode"
+            ? await searchFrenchPostalCodes({ query, limit: 6 })
+            : await searchFrenchCommunes({ query, postalCode: String(store.projectForm.postalCode || "").trim(), limit: 6 });
+        if (currentRequestId !== requestSequence) return;
 
-        parametresUiState.cityAutocompleteItems = items;
-        parametresUiState.cityAutocompleteLoading = false;
-        parametresUiState.cityAutocompleteOpen = items.length > 0;
-        parametresUiState.cityAutocompleteActiveIndex = items.length ? 0 : -1;
-        renderCityAutocompleteDropdown(dropdown, cityInput);
+        const state = getLocationAutocompleteState(fieldKey);
+        state.items = items;
+        state.loading = false;
+        state.open = items.length > 0;
+        state.activeIndex = items.length ? 0 : -1;
+        renderLocationAutocompleteDropdown(fieldKey, dropdown, input);
       } catch (error) {
-        if (currentRequestId != requestSequence) return;
+        if (currentRequestId !== requestSequence) return;
         closeDropdown();
       }
     }, 180);
   });
 
-  cityInput.addEventListener("keydown", (event) => {
-    if (!parametresUiState.cityAutocompleteOpen || !parametresUiState.cityAutocompleteItems.length) return;
+  input.addEventListener("keydown", (event) => {
+    const state = getLocationAutocompleteState(fieldKey);
+    if (!state.open || !state.items.length) return;
 
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      parametresUiState.cityAutocompleteActiveIndex = (parametresUiState.cityAutocompleteActiveIndex + 1) % parametresUiState.cityAutocompleteItems.length;
-      renderCityAutocompleteDropdown(dropdown, cityInput);
+      state.activeIndex = (state.activeIndex + 1) % state.items.length;
+      renderLocationAutocompleteDropdown(fieldKey, dropdown, input);
       return;
     }
 
     if (event.key === "ArrowUp") {
       event.preventDefault();
-      parametresUiState.cityAutocompleteActiveIndex = (parametresUiState.cityAutocompleteActiveIndex - 1 + parametresUiState.cityAutocompleteItems.length) % parametresUiState.cityAutocompleteItems.length;
-      renderCityAutocompleteDropdown(dropdown, cityInput);
+      state.activeIndex = (state.activeIndex - 1 + state.items.length) % state.items.length;
+      renderLocationAutocompleteDropdown(fieldKey, dropdown, input);
       return;
     }
 
     if (event.key === "Enter") {
-      const selected = parametresUiState.cityAutocompleteItems[parametresUiState.cityAutocompleteActiveIndex] || parametresUiState.cityAutocompleteItems[0];
+      const selected = state.items[state.activeIndex] || state.items[0];
       if (!selected) return;
       event.preventDefault();
-      applyCityAutocompleteSelection(selected);
+      applyLocationSelection(fieldKey, selected);
       return;
     }
 
@@ -2042,14 +2161,15 @@ function bindProjectCityAutocomplete() {
   });
 
   dropdown.addEventListener("mousedown", (event) => {
-    const option = event.target.closest("[data-geo-city-option-index]");
-    if (!option) return;
+    const option = event.target.closest('[data-location-option-field]');
+    if (!option || option.getAttribute('data-location-option-field') !== fieldKey) return;
     event.preventDefault();
-    const index = Number(option.getAttribute("data-geo-city-option-index"));
-    applyCityAutocompleteSelection(parametresUiState.cityAutocompleteItems[index]);
+    const index = Number(option.getAttribute("data-location-option-index"));
+    const selected = getLocationAutocompleteState(fieldKey).items[index];
+    applyLocationSelection(fieldKey, selected);
   });
 
-  cityInput.addEventListener("blur", () => {
+  input.addEventListener("blur", () => {
     setTimeout(() => {
       if (!document.activeElement || !dropdown.contains(document.activeElement)) {
         closeDropdown();
@@ -2057,19 +2177,27 @@ function bindProjectCityAutocomplete() {
     }, 120);
   });
 
-  if (!parametresUiState.cityAutocompleteDocumentBound) {
+  if (!parametresUiState.locationAutocompleteDocumentBound) {
     document.addEventListener("click", (event) => {
       if (!event.target.closest(".gh-editable-field--autocomplete")) {
-        resetCityAutocompleteState();
-        const activeDropdown = document.querySelector("[data-geo-city-suggestions]");
-        const activeInput = document.getElementById("projectCity");
-        if (activeDropdown && activeInput) {
-          renderCityAutocompleteDropdown(activeDropdown, activeInput);
-        }
+        ["address", "city", "postalCode"].forEach((key) => {
+          resetLocationAutocompleteState(key);
+          const activeDropdown = document.querySelector(`[data-location-autocomplete-suggestions="${key}"]`);
+          const activeInput = document.querySelector(`[data-location-autocomplete-input="${key}"]`);
+          if (activeDropdown && activeInput) {
+            renderLocationAutocompleteDropdown(key, activeDropdown, activeInput);
+          }
+        });
       }
     });
-    parametresUiState.cityAutocompleteDocumentBound = true;
+    parametresUiState.locationAutocompleteDocumentBound = true;
   }
+}
+
+function bindProjectLocationAutocomplete() {
+  bindLocationAutocompleteField("address");
+  bindLocationAutocompleteField("city");
+  bindLocationAutocompleteField("postalCode");
 }
 
 function bindParametresEvents() {
@@ -2077,41 +2205,92 @@ function bindParametresEvents() {
   
   bindGhEditableFields(document, {
     onEditStart: (id) => {
+      const addressInput = document.getElementById("projectAddress");
       const cityInput = document.getElementById("projectCity");
       const postalCodeInput = document.getElementById("projectPostalCode");
 
+      if (id === "projectAddress") {
+        syncProjectLocationFields({ address: store.projectForm.address, city: "", postalCode: "", latitude: null, longitude: null });
+        if (cityInput) cityInput.value = "";
+        if (postalCodeInput) postalCodeInput.value = "";
+        syncLocationDerivedStaleUi();
+      }
+
       if (id === "projectCity") {
-        store.projectForm.postalCode = "";
-        store.projectForm.communeCp = [store.projectForm.city, store.projectForm.postalCode].filter(Boolean).join(" ").trim();
+        syncProjectLocationFields({ address: "", city: store.projectForm.city, postalCode: "", latitude: null, longitude: null });
+        if (addressInput) addressInput.value = "";
         if (postalCodeInput) postalCodeInput.value = "";
         syncLocationDerivedStaleUi();
       }
 
       if (id === "projectPostalCode") {
-        store.projectForm.city = "";
-        store.projectForm.communeCp = [store.projectForm.city, store.projectForm.postalCode].filter(Boolean).join(" ").trim();
+        syncProjectLocationFields({ address: "", city: "", postalCode: store.projectForm.postalCode, latitude: null, longitude: null });
+        if (addressInput) addressInput.value = "";
         if (cityInput) cityInput.value = "";
-        resetCityAutocompleteState();
-        const dropdown = document.querySelector("[data-geo-city-suggestions]");
-        if (dropdown && cityInput) {
-          renderCityAutocompleteDropdown(dropdown, cityInput);
-        }
         syncLocationDerivedStaleUi();
       }
     },
-    onValidate: (id, value) => {
+    onValidate: async (id, value) => {
       switch (id) {
         case "projectName":
           store.projectForm.projectName = value;
           break;
-        case "projectCity":
-          syncProjectLocationFields({ city: value, postalCode: store.projectForm.postalCode });
-          refreshLocationDerivedData();
+        case "projectAddress": {
+          try {
+            const resolved = await resolveFrenchAddress(value);
+            syncProjectLocationFields({
+              address: resolved.address,
+              city: resolved.city,
+              postalCode: resolved.postalCode,
+              latitude: resolved.lat,
+              longitude: resolved.lon
+            });
+            const cityInput = document.getElementById("projectCity");
+            const postalCodeInput = document.getElementById("projectPostalCode");
+            if (cityInput) cityInput.value = resolved.city || "";
+            if (postalCodeInput) postalCodeInput.value = resolved.postalCode || "";
+          } catch (error) {
+            syncProjectLocationFields({ address: value });
+          }
+          await refreshLocationDerivedData();
           break;
-        case "projectPostalCode":
-          syncProjectLocationFields({ city: store.projectForm.city, postalCode: value });
-          refreshLocationDerivedData();
+        }
+        case "projectCity": {
+          try {
+            const resolved = await resolveFrenchCommune({ city: value, postalCode: store.projectForm.postalCode });
+            syncProjectLocationFields({
+              address: "",
+              city: resolved.city,
+              postalCode: resolved.postalCode,
+              latitude: resolved.lat,
+              longitude: resolved.lon
+            });
+            const postalCodeInput = document.getElementById("projectPostalCode");
+            if (postalCodeInput) postalCodeInput.value = resolved.postalCode || "";
+          } catch (error) {
+            syncProjectLocationFields({ address: "", city: value, postalCode: store.projectForm.postalCode });
+          }
+          await refreshLocationDerivedData();
           break;
+        }
+        case "projectPostalCode": {
+          try {
+            const resolved = await resolveFrenchPostalCode(value);
+            syncProjectLocationFields({
+              address: "",
+              city: resolved.city,
+              postalCode: resolved.postalCode,
+              latitude: resolved.lat,
+              longitude: resolved.lon
+            });
+            const cityInput = document.getElementById("projectCity");
+            if (cityInput) cityInput.value = resolved.city || "";
+          } catch (error) {
+            syncProjectLocationFields({ address: "", city: store.projectForm.city, postalCode: value });
+          }
+          await refreshLocationDerivedData();
+          break;
+        }
         case "climateZoneWinter":
           store.projectForm.climateZoneWinter = value;
           break;
@@ -2127,7 +2306,7 @@ function bindParametresEvents() {
     }
   });
 
-  bindProjectCityAutocomplete();
+  bindProjectLocationAutocomplete();
   syncLocationDerivedStaleUi();
 
   bindGhSelectMenus(document, {
