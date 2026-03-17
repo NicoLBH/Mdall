@@ -2930,10 +2930,7 @@ color:#ffff;
 }
 
 .documents-report__hero{
-  border:1px solid var(--border);
-  border-radius:12px;
-  background:var(--panel);
-  padding:20px;
+  padding:20px 20px 100px 20px;
 }
 
 .documents-report__hero--pdf{
@@ -2949,9 +2946,6 @@ color:#ffff;
 .documents-report__logo-wrap{
   width:72px;
   height:72px;
-  border-radius:12px;
-  background:#0d1117;
-  border:1px solid var(--border);
   display:flex;
   align-items:center;
   justify-content:center;
@@ -3014,7 +3008,7 @@ color:#ffff;
 .documents-report-table__body{
   display:flex;
   flex-direction:column;
-  padding:16px;
+  padding:16px 0px;
   background:var(--bg);
 }
 
@@ -3030,12 +3024,8 @@ color:#ffff;
 
 .documents-report-item{
   padding:16px;
-  border-top:1px solid var(--border);
   border-left:4px solid transparent;
   background:var(--panel);
-  border-radius:12px;
-  margin-top:12px;
-  box-shadow:inset 0 0 0 1px rgba(208,215,222,.06);
 }
 
 .documents-report-item--depth-0{
