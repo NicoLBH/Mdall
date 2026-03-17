@@ -502,6 +502,46 @@ function getGeorisquesRequestKey(city = "", postalCode = "") {
   return `${String(city || "").trim().toLowerCase()}::${String(postalCode || "").trim()}`;
 }
 
+
+function getCurrentProjectLocationRequestKey() {
+  return getGeorisquesRequestKey(store.projectForm.city, store.projectForm.postalCode);
+}
+
+function hasStaleLocationDerivedData() {
+  const georisques = ensureGeorisquesState();
+  const currentKey = getCurrentProjectLocationRequestKey();
+  const resolvedKey = getGeorisquesRequestKey(georisques.query?.city, georisques.query?.postalCode);
+
+  if (!resolvedKey) return false;
+  return currentKey !== resolvedKey;
+}
+
+function getLocationDerivedMutedClass() {
+  return hasStaleLocationDerivedData() ? " is-muted" : "";
+}
+
+function syncLocationDerivedStaleUi() {
+  const isMuted = hasStaleLocationDerivedData();
+
+  document.querySelectorAll("[data-location-derived]").forEach((node) => {
+    node.classList.toggle("is-muted", isMuted);
+  });
+}
+
+async function refreshLocationDerivedData() {
+  syncLocationDerivedStaleUi();
+
+  const city = String(store.projectForm.city || "").trim();
+  const postalCode = String(store.projectForm.postalCode || "").trim();
+
+  if (!city || !postalCode) {
+    rerenderProjectParametres();
+    return;
+  }
+
+  await loadGeorisquesForCurrentProject({ force: true });
+}
+
 function formatGeorisquesDate(value) {
   if (!value) return "";
   const date = new Date(value);
@@ -769,9 +809,11 @@ function getWindRegionSummary() {
   return `Région ${wind.region}`;
 }
 
-function renderAutoResolvedField(label, value, hint = "Données récupérées automatiquement sur Géorisques.") {
+function renderAutoResolvedField(label, value, hint = "Données récupérées automatiquement sur Géorisques.", options = {}) {
+  const mutedClass = options?.muted ? " is-muted" : "";
+
   return `
-    <div class="settings-auto-field">
+    <div class="settings-auto-field${mutedClass}" data-location-derived>
       <div class="settings-auto-field__label"><strong>${escapeHtml(label)} <span class="settings-auto-field__asterisk">*</span></strong></div>
       <div class="settings-auto-field__value">${escapeHtml(value || "—")}</div>
       <div class="settings-auto-field__hint">${escapeHtml(hint)}</div>
@@ -805,7 +847,7 @@ function renderGeorisquesSection() {
   const errorCount = georisques.datasets.filter((item) => item.status !== "success").length;
 
   const summaryHtml = `
-    <div class="settings-georisques-summary">
+    <div class="settings-georisques-summary${getLocationDerivedMutedClass()}" data-location-derived>
       <div class="settings-georisques-summary__row"><strong>Entrée projet :</strong> ${escapeHtml(`${city || "—"} ${postalCode || ""}`.trim() || "—")}</div>
       <div class="settings-georisques-summary__row"><strong>Commune résolue :</strong> ${escapeHtml(georisques.commune?.name || "—")}</div>
       <div class="settings-georisques-summary__row"><strong>Code INSEE :</strong> ${escapeHtml(georisques.commune?.codeInsee || "—")}</div>
@@ -844,12 +886,12 @@ function renderGeorisquesSection() {
         title: "Géorisques",
         description: "Chargement de l’ensemble des réponses disponibles actuellement tentées au niveau commune dans le PoC.",
         badge: "LIVE",
-        body: `${summaryHtml}${actionsHtml}${errorHtml}`
+        body: `<div class="settings-location-derived-block${getLocationDerivedMutedClass()}" data-location-derived>${summaryHtml}</div>${actionsHtml}${errorHtml}`
       }),
       renderSectionCard({
         title: "Résultats bruts",
         description: "Les arbitrages de pertinence viendront ensuite ; ici on expose les réponses récupérées telles quelles.",
-        body: datasetsHtml
+        body: `<div class="settings-location-derived-block${getLocationDerivedMutedClass()}" data-location-derived>${datasetsHtml}</div>`
       })
     ]
   });
@@ -1333,8 +1375,8 @@ function getPageHtml(form) {
                     </div>
                     ${ensureGeorisquesState().commune ? `
                       <div class="settings-auto-fields">
-                        ${renderAutoResolvedField("Commune résolue", ensureGeorisquesState().commune?.name || "—")}
-                        ${renderAutoResolvedField("Code INSEE", ensureGeorisquesState().commune?.codeInsee || "—")}
+                        ${renderAutoResolvedField("Commune résolue", ensureGeorisquesState().commune?.name || "—", "Données récupérées automatiquement sur Géorisques.", { muted: hasStaleLocationDerivedData() })}
+                        ${renderAutoResolvedField("Code INSEE", ensureGeorisquesState().commune?.codeInsee || "—", "Données récupérées automatiquement sur Géorisques.", { muted: hasStaleLocationDerivedData() })}
                       </div>
                     ` : ""}`
                   })
@@ -1429,7 +1471,7 @@ function getPageHtml(form) {
                     description: "Références réglementaires, hypothèses générales et domaine d’application.",
                     body: `${getWindRegionSummary() ? `
                       <div class="settings-auto-fields settings-auto-fields--single">
-                        ${renderAutoResolvedField("Zone de vent calculée", getWindRegionSummary(), "Valeur calculée automatiquement à partir de la localisation projet et des tables vent internes.")}
+                        ${renderAutoResolvedField("Zone de vent calculée", getWindRegionSummary(), "Valeur calculée automatiquement à partir de la localisation projet et des tables vent internes.", { muted: hasStaleLocationDerivedData() })}
                       </div>
                     ` : ""}
                     ${renderPlaceholderList([
@@ -1481,7 +1523,7 @@ function getPageHtml(form) {
                     badge: "LIVE",
                     body: `${getGeorisquesSismiqueSummary() ? `
                       <div class="settings-auto-fields settings-auto-fields--single">
-                        ${renderAutoResolvedField("Zone sismique Géorisques", getGeorisquesSismiqueSummary())}
+                        ${renderAutoResolvedField("Zone sismique Géorisques", getGeorisquesSismiqueSummary(), "Données récupérées automatiquement sur Géorisques.", { muted: hasStaleLocationDerivedData() })}
                       </div>
                     ` : ""}
                     <div class="settings-form-grid settings-form-grid--thirds">
@@ -1889,6 +1931,7 @@ function syncProjectLocationFields({ city = "", postalCode = "" } = {}) {
   store.projectForm.city = String(city || "").trim();
   store.projectForm.postalCode = String(postalCode || "").trim();
   store.projectForm.communeCp = [store.projectForm.city, store.projectForm.postalCode].filter(Boolean).join(" ").trim();
+  syncLocationDerivedStaleUi();
 }
 
 function applyCityAutocompleteSelection(item) {
@@ -2033,18 +2076,41 @@ function bindParametresEvents() {
   bindGhActionButtons();
   
   bindGhEditableFields(document, {
+    onEditStart: (id) => {
+      const cityInput = document.getElementById("projectCity");
+      const postalCodeInput = document.getElementById("projectPostalCode");
+
+      if (id === "projectCity") {
+        store.projectForm.postalCode = "";
+        store.projectForm.communeCp = [store.projectForm.city, store.projectForm.postalCode].filter(Boolean).join(" ").trim();
+        if (postalCodeInput) postalCodeInput.value = "";
+        syncLocationDerivedStaleUi();
+      }
+
+      if (id === "projectPostalCode") {
+        store.projectForm.city = "";
+        store.projectForm.communeCp = [store.projectForm.city, store.projectForm.postalCode].filter(Boolean).join(" ").trim();
+        if (cityInput) cityInput.value = "";
+        resetCityAutocompleteState();
+        const dropdown = document.querySelector("[data-geo-city-suggestions]");
+        if (dropdown && cityInput) {
+          renderCityAutocompleteDropdown(dropdown, cityInput);
+        }
+        syncLocationDerivedStaleUi();
+      }
+    },
     onValidate: (id, value) => {
       switch (id) {
         case "projectName":
           store.projectForm.projectName = value;
           break;
         case "projectCity":
-          store.projectForm.city = value;
-          store.projectForm.communeCp = [store.projectForm.city, store.projectForm.postalCode].filter(Boolean).join(" ").trim();
+          syncProjectLocationFields({ city: value, postalCode: store.projectForm.postalCode });
+          refreshLocationDerivedData();
           break;
         case "projectPostalCode":
-          store.projectForm.postalCode = value;
-          store.projectForm.communeCp = [store.projectForm.city, store.projectForm.postalCode].filter(Boolean).join(" ").trim();
+          syncProjectLocationFields({ city: store.projectForm.city, postalCode: value });
+          refreshLocationDerivedData();
           break;
         case "climateZoneWinter":
           store.projectForm.climateZoneWinter = value;
@@ -2062,6 +2128,7 @@ function bindParametresEvents() {
   });
 
   bindProjectCityAutocomplete();
+  syncLocationDerivedStaleUi();
 
   bindGhSelectMenus(document, {
     onChange: (id, value) => {
