@@ -108,15 +108,14 @@ export const WIND_DEPARTMENT_REGIONS = {
 // ============================
 // TABLEAU 4.4 (à compléter)
 // ============================
+//
+
 
 export const WIND_COMMUNE_REGION_SPLITS = {
-  // Exemple structure :
-  // "25": {
-  //   1: ["Besançon", "Montbéliard"],
-  //   2: ["Pontarlier"]
-  // }
-};
 
+
+
+//
 // ============================
 // NORMALISATION
 // ============================
