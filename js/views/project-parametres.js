@@ -27,6 +27,7 @@ import {
 import { escapeHtml } from "../utils/escape-html.js";
 import {
   fetchGeorisquesForCommune,
+  fetchFrenchAltitude,
   searchFrenchCommunes,
   searchFrenchPostalCodes,
   searchIgnAddresses,
@@ -49,6 +50,7 @@ const parametresUiState = {
   activeSectionId: "parametres-general",
   georisquesIsLoading: false,
   georisquesLastRequestKey: "",
+  altitudeIsLoading: false,
   locationAutocomplete: {
     address: { items: [], loading: false, open: false, activeIndex: -1 },
     city: { items: [], loading: false, open: false, activeIndex: -1 },
@@ -219,6 +221,10 @@ function ensureProjectFormDefaults() {
     form.longitude = null;
   }
 
+  if (typeof form.altitude !== "number" || !Number.isFinite(form.altitude)) {
+    form.altitude = null;
+  }
+  
   if (typeof form.zoneSismique !== "string" || !form.zoneSismique.trim()) {
     form.zoneSismique = "4";
   }
@@ -398,7 +404,7 @@ function renderParametresNav() {
   }).join("");
 }
 
-function renderSectionCard({ id = "", title, description = "", body = "", badge = "" }) {
+function renderSectionCard({ id = "", title, description = "", body = "", badge = "", action = "" }) {
   return `
     <div class="settings-card settings-card--param" ${id ? `id="${escapeHtml(id)}"` : ""}>
       <div class="settings-card__head">
@@ -406,7 +412,7 @@ function renderSectionCard({ id = "", title, description = "", body = "", badge 
           <h4>${escapeHtml(title)}</h4>
           ${description ? `<p>${escapeHtml(description)}</p>` : ""}
         </div>
-        ${badge ? `<span class="settings-badge mono">${escapeHtml(badge)}</span>` : ""}
+        ${action || (badge ? `<span class="settings-badge mono">${escapeHtml(badge)}</span>` : "")}
       </div>
       ${body}
     </div>
@@ -552,6 +558,29 @@ function syncLocationDerivedStaleUi() {
   });
 }
 
+async function refreshAltitudeForCurrentProject() {
+  const latitude = store.projectForm.latitude;
+  const longitude = store.projectForm.longitude;
+
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    store.projectForm.altitude = null;
+    return;
+  }
+
+  parametresUiState.altitudeIsLoading = true;
+  rerenderProjectParametres();
+
+  try {
+    const result = await fetchFrenchAltitude({ latitude, longitude });
+    store.projectForm.altitude = Number.isFinite(result?.altitude) ? result.altitude : null;
+  } catch (error) {
+    store.projectForm.altitude = null;
+  } finally {
+    parametresUiState.altitudeIsLoading = false;
+    rerenderProjectParametres();
+  }
+}
+
 async function refreshLocationDerivedData() {
   syncLocationDerivedStaleUi();
 
@@ -559,10 +588,12 @@ async function refreshLocationDerivedData() {
   const postalCode = String(store.projectForm.postalCode || "").trim();
 
   if (!city || !postalCode) {
+    store.projectForm.altitude = null;
     rerenderProjectParametres();
     return;
   }
 
+  await refreshAltitudeForCurrentProject();
   await loadGeorisquesForCurrentProject({ force: true });
 }
 
@@ -845,6 +876,25 @@ function renderAutoResolvedField(label, value, hint = "Données récupérées au
   `;
 }
 
+function getGeorisquesDatasetDescription(datasetKey = "") {
+  const descriptions = {
+    risques: "Liste des détails des risques",
+    ppr: "Liste des différents documents PPR (Plan de Prévention des Risques)",
+    catnat: "Liste des arrêtés de catastrophe naturelle",
+    dicrim: "Liste des Documents d'Information Communal sur les Risques Majeurs",
+    tim: "Liste des dossiers de Transmission d'Information au Maire",
+    papi: "Liste des Programmes d'Actions de Prévention des Inondations",
+    azi: "Liste des Atlas de Zones Inondables",
+    tri: "Liste des Territoires à Risques importants d'Inondation",
+    tri_zonage_reglementaire: "Liste des Territoires à Risques importants d'Inondation",
+    radon: "Potentiel radon",
+    cavites: "Liste des cavités souterraines",
+    mvt: "Données sur les mouvements de terrain"
+  };
+
+  return descriptions[String(datasetKey || "").trim()] || "";
+}
+
 function renderGeorisquesDataset(dataset = {}) {
   const status = dataset.status === "success" ? "OK" : "Erreur";
 
@@ -860,7 +910,7 @@ function renderGeorisquesDataset(dataset = {}) {
 
   return renderSectionCard({
     title: dataset.label || dataset.key || "Donnée",
-    description: dataset.url || "",
+    description: getGeorisquesDatasetDescription(dataset.key),
     badge: status,
     body
   });
@@ -885,16 +935,14 @@ function renderGeorisquesSection() {
   `;
 
   const actionsHtml = `
-    <div class="settings-georisques-actions">
-      <button
-        type="button"
-        class="gh-btn gh-btn--primary"
-        id="projectGeorisquesFetchBtn"
-        ${parametresUiState.georisquesIsLoading ? "disabled" : ""}
-      >
-        ${parametresUiState.georisquesIsLoading ? "Récupération…" : "Récupérer les données Géorisques"}
-      </button>
-    </div>
+    <button
+      type="button"
+      class="gh-btn gh-btn--primary"
+      id="projectGeorisquesFetchBtn"
+      ${parametresUiState.georisquesIsLoading ? "disabled" : ""}
+    >
+      ${parametresUiState.georisquesIsLoading ? "Récupération…" : "Récupérer les données Géorisques"}
+    </button>
   `;
 
   const errorHtml = georisques.error
@@ -907,19 +955,23 @@ function renderGeorisquesSection() {
 
   return renderSettingsBlock({
     id: "parametres-georisques",
-    title: "Données de base projet",
-    lead: "Récupération brute des réponses API Géorisques à l’échelle de la commune à partir de la ville et du code postal du projet.",
+    title: "Géorisques",
+    lead: "",
+    hideHead: true,
     cards: [
       renderSectionCard({
         title: "Géorisques",
         description: "Chargement de l’ensemble des réponses disponibles actuellement tentées au niveau commune dans le PoC.",
-        badge: "LIVE",
-        body: `<div class="settings-location-derived-block${getLocationDerivedMutedClass()}" data-location-derived>${summaryHtml}</div>${actionsHtml}${errorHtml}`
-      }),
-      renderSectionCard({
-        title: "Résultats bruts",
-        description: "Les arbitrages de pertinence viendront ensuite ; ici on expose les réponses récupérées telles quelles.",
-        body: `<div class="settings-location-derived-block${getLocationDerivedMutedClass()}" data-location-derived>${datasetsHtml}</div>`
+        action: actionsHtml,
+        body: `
+          <div class="settings-location-derived-block${getLocationDerivedMutedClass()}" data-location-derived>
+            ${summaryHtml}
+          </div>
+          ${errorHtml}
+          <div class="settings-location-derived-block${getLocationDerivedMutedClass()}" data-location-derived>
+            ${datasetsHtml}
+          </div>
+        `
       })
     ]
   });
@@ -1122,7 +1174,7 @@ function renderAutomationsFeatureCard() {
   });
 }
 
-function renderSettingsBlock({ id, title, lead = "", cards = [], isActive = false, isHero = false }) {
+function renderSettingsBlock({ id, title, lead = "", cards = [], isActive = false, isHero = false, hideHead = false }) {
   return `
     <section
       class="settings-block ${isActive ? "is-active" : ""} ${isHero ? "settings-block--hero" : ""}"
@@ -1134,12 +1186,12 @@ function renderSettingsBlock({ id, title, lead = "", cards = [], isActive = fals
           <h2>${escapeHtml(title)}</h2>
           ${lead ? `<p>${escapeHtml(lead)}</p>` : ""}
         </header>
-      ` : `
+      ` : (hideHead ? "" : `
         <div class="settings-block__head">
           <h3>${escapeHtml(title)}</h3>
           ${lead ? `<p class="settings-lead">${escapeHtml(lead)}</p>` : ""}
         </div>
-      `}
+      `)}
       ${cards.join("")}
     </section>
   `;
@@ -1413,6 +1465,14 @@ function getPageHtml(form) {
                         ${renderAutoResolvedField("Code INSEE", ensureGeorisquesState().commune?.codeInsee || "—", "Données récupérées automatiquement sur Géorisques.", { muted: hasStaleLocationDerivedData() })}
                         ${renderAutoResolvedField("Longitude", Number.isFinite(form.longitude) ? String(form.longitude) : "—", "Coordonnée automatiquement déterminée à partir de l’adresse ou du centre de commune.", { muted: hasStaleLocationDerivedData() })}
                         ${renderAutoResolvedField("Latitude", Number.isFinite(form.latitude) ? String(form.latitude) : "—", "Coordonnée automatiquement déterminée à partir de l’adresse ou du centre de commune.", { muted: hasStaleLocationDerivedData() })}
+                        ${renderAutoResolvedField(
+                          "Altitude",
+                          parametresUiState.altitudeIsLoading
+                            ? "Chargement…"
+                            : (Number.isFinite(form.altitude) ? `${String(form.altitude)} m` : "—"),
+                          "Altitude automatiquement récupérée via l’API altimétrie IGN / GeoPF.",
+                          { muted: hasStaleLocationDerivedData() }
+                        )}
                       </div>
                     ` : ""}`
                   })
@@ -1986,7 +2046,7 @@ function renderLocationAutocompleteDropdown(fieldKey, container, input) {
   }).join("");
 }
 
-function syncProjectLocationFields({ address, city, postalCode, latitude, longitude } = {}) {
+function syncProjectLocationFields({ address, city, postalCode, latitude, longitude, altitude } = {}) {
   if (address !== undefined) {
     store.projectForm.address = String(address || "").trim();
   }
@@ -2005,6 +2065,10 @@ function syncProjectLocationFields({ address, city, postalCode, latitude, longit
 
   if (longitude !== undefined) {
     store.projectForm.longitude = Number.isFinite(longitude) ? longitude : null;
+  }
+
+  if (altitude !== undefined) {
+    store.projectForm.altitude = Number.isFinite(altitude) ? altitude : null;
   }
 
   store.projectForm.communeCp = [store.projectForm.city, store.projectForm.postalCode].filter(Boolean).join(" ").trim();
@@ -2096,11 +2160,11 @@ function bindLocationAutocompleteField(fieldKey, config = {}) {
     const query = String(input.value || "").trim();
 
     if (fieldKey === "address") {
-      syncProjectLocationFields({ address: query, city: store.projectForm.city, postalCode: store.projectForm.postalCode });
+      syncProjectLocationFields({ address: query, city: store.projectForm.city, postalCode: store.projectForm.postalCode, altitude: null });
     } else if (fieldKey === "city") {
-      syncProjectLocationFields({ address: "", city: query, postalCode: store.projectForm.postalCode });
+      syncProjectLocationFields({ address: "", city: query, postalCode: store.projectForm.postalCode, altitude: null });
     } else if (fieldKey === "postalCode") {
-      syncProjectLocationFields({ address: "", city: store.projectForm.city, postalCode: query.replace(/\D+/g, "") });
+      syncProjectLocationFields({ address: "", city: store.projectForm.city, postalCode: query.replace(/\D+/g, ""), altitude: null });
       input.value = store.projectForm.postalCode;
     }
 
@@ -2219,21 +2283,21 @@ function bindParametresEvents() {
       const postalCodeInput = document.getElementById("projectPostalCode");
 
       if (id === "projectAddress") {
-        syncProjectLocationFields({ address: store.projectForm.address, city: "", postalCode: "", latitude: null, longitude: null });
+        syncProjectLocationFields({ address: store.projectForm.address, city: "", postalCode: "", latitude: null, longitude: null, altitude: null });
         if (cityInput) cityInput.value = "";
         if (postalCodeInput) postalCodeInput.value = "";
         syncLocationDerivedStaleUi();
       }
 
       if (id === "projectCity") {
-        syncProjectLocationFields({ address: "", city: store.projectForm.city, postalCode: "", latitude: null, longitude: null });
+        syncProjectLocationFields({ address: "", city: store.projectForm.city, postalCode: "", latitude: null, longitude: null, altitude: null });
         if (addressInput) addressInput.value = "";
         if (postalCodeInput) postalCodeInput.value = "";
         syncLocationDerivedStaleUi();
       }
 
       if (id === "projectPostalCode") {
-        syncProjectLocationFields({ address: "", city: "", postalCode: store.projectForm.postalCode, latitude: null, longitude: null });
+        syncProjectLocationFields({ address: "", city: "", postalCode: store.projectForm.postalCode, latitude: null, longitude: null, altitude: null });
         if (addressInput) addressInput.value = "";
         if (cityInput) cityInput.value = "";
         syncLocationDerivedStaleUi();
@@ -2259,7 +2323,7 @@ function bindParametresEvents() {
             if (cityInput) cityInput.value = resolved.city || "";
             if (postalCodeInput) postalCodeInput.value = resolved.postalCode || "";
           } catch (error) {
-            syncProjectLocationFields({ address: value });
+            syncProjectLocationFields({ address: value, altitude: null });
           }
           await refreshLocationDerivedData();
           break;
@@ -2277,7 +2341,7 @@ function bindParametresEvents() {
             const postalCodeInput = document.getElementById("projectPostalCode");
             if (postalCodeInput) postalCodeInput.value = resolved.postalCode || "";
           } catch (error) {
-            syncProjectLocationFields({ address: "", city: value, postalCode: store.projectForm.postalCode });
+            syncProjectLocationFields({ address: "", city: value, postalCode: store.projectForm.postalCode, altitude: null });
           }
           await refreshLocationDerivedData();
           break;
@@ -2295,7 +2359,7 @@ function bindParametresEvents() {
             const cityInput = document.getElementById("projectCity");
             if (cityInput) cityInput.value = resolved.city || "";
           } catch (error) {
-            syncProjectLocationFields({ address: "", city: store.projectForm.city, postalCode: value });
+            syncProjectLocationFields({ address: "", city: store.projectForm.city, postalCode: value, altitude: null });
           }
           await refreshLocationDerivedData();
           break;
