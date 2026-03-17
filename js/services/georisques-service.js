@@ -4,19 +4,19 @@ const IGN_COMPLETION_API_URL = "https://data.geopf.fr/geocodage/completion/";
 const GEORISQUES_API_BASE = "https://www.georisques.gouv.fr/api/v1";
 
 const GEORISQUES_COMMUNE_ENDPOINTS = [
-  { key: "risques", label: "Risques", paths: ["risques"] },
+  { key: "risques", label: "Risques", paths: ["gaspar/risques"], queryMode: "radiusLatlonOrCodeInsee" },
   { key: "ppr", label: "PPR", paths: ["ppr"] },
-  { key: "catnat", label: "CATNAT", paths: ["catnat"], queryMode: "radiusPoint" },
-  { key: "dicrim", label: "DICRIM", paths: ["dicrim"], queryMode: "radiusPoint" },
-  { key: "tim", label: "TIM", paths: ["tim"], queryMode: "radiusPoint" },
-  { key: "papi", label: "PAPI", paths: ["papi"], queryMode: "radiusPoint" },
-  { key: "azi", label: "AZI", paths: ["azi"], queryMode: "radiusPoint" },
-  { key: "tri", label: "TRI", paths: ["tri"], queryMode: "radiusPoint" },
+  { key: "catnat", label: "CATNAT", paths: ["gaspar/catnat"], queryMode: "radiusLatlonOrCodeInsee" },
+  { key: "dicrim", label: "DICRIM", paths: ["gaspar/dicrim"], queryMode: "radiusLatlonOrCodeInsee" },
+  { key: "tim", label: "TIM", paths: ["gaspar/tim"], queryMode: "radiusLatlonOrCodeInsee" },
+  { key: "papi", label: "PAPI", paths: ["gaspar/papi"], queryMode: "radiusLatlonOrCodeInsee" },
+  { key: "azi", label: "AZI", paths: ["gaspar/azi"], queryMode: "radiusLatlonOrCodeInsee" },
+  { key: "tri", label: "TRI", paths: ["gaspar/tri"], queryMode: "radiusLatlonOrCodeInsee" },
   {
     key: "tri_zonage_reglementaire",
     label: "TRI - Zonage réglementaire",
-    paths: ["tri_zonage_reglementaire", "tri-zonage-reglementaire"],
-    queryMode: "point"
+    paths: ["tri_zonage"],
+    queryMode: "latlonOrCodeInsee"
   },
   { key: "old", label: "OLD", paths: ["old"] },
   { key: "radon", label: "RADON", paths: ["radon"] },
@@ -31,8 +31,8 @@ const GEORISQUES_COMMUNE_ENDPOINTS = [
   {
     key: "retrait_gonflement_argiles",
     label: "Retrait gonflement des argiles",
-    paths: ["retrait_gonflement_argiles", "retrait-gonflement-argiles"],
-    queryMode: "point"
+    paths: ["rga"],
+    queryMode: "latlonOrCodeInsee"
   },
   {
     key: "installations_classees",
@@ -97,27 +97,41 @@ async function fetchJson(url, init = {}) {
 function buildEndpointUrl(path, context = {}) {
   const url = new URL(`${GEORISQUES_API_BASE}/${path}`);
   const queryMode = safeString(context.queryMode || "codeInsee");
+  const codeInsee = safeString(context.codeInsee);
 
-  if (queryMode === "point") {
-    const point = formatGeorisquesPoint(context.lon, context.lat);
-    if (!point) {
+  if (queryMode === "latlonOrCodeInsee") {
+    if (codeInsee) {
+      url.searchParams.set("code_insee", codeInsee);
+      return url.toString();
+    }
+
+    const latlon = formatGeorisquesPoint(context.lon, context.lat);
+    if (!latlon) {
       throw new Error("Coordonnées latitude / longitude indisponibles pour cette requête Géorisques.");
     }
-    url.searchParams.set("point", point);
+    url.searchParams.set("latlon", latlon);
     return url.toString();
   }
 
-  if (queryMode === "radiusPoint") {
-    const point = formatGeorisquesPoint(context.lon, context.lat);
-    if (!point) {
-      throw new Error("Coordonnées latitude / longitude indisponibles pour cette requête Géorisques.");
-    }
+  if (queryMode === "radiusLatlonOrCodeInsee") {
     url.searchParams.set("rayon", String(context.radius || GEORISQUES_POINT_RADIUS_METERS));
-    url.searchParams.set("point", point);
+
+    if (codeInsee) {
+      url.searchParams.set("code_insee", codeInsee);
+    } else {
+      const latlon = formatGeorisquesPoint(context.lon, context.lat);
+      if (!latlon) {
+        throw new Error("Coordonnées latitude / longitude indisponibles pour cette requête Géorisques.");
+      }
+      url.searchParams.set("latlon", latlon);
+    }
+
+    url.searchParams.set("page", "1");
+    url.searchParams.set("page_size", "10");
     return url.toString();
   }
 
-  url.searchParams.set("code_insee", String(context.codeInsee || ""));
+  url.searchParams.set("code_insee", codeInsee);
   return url.toString();
 }
 
