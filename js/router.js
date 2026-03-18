@@ -3,6 +3,7 @@ import { renderProjectsList } from "./views/projects-list.js";
 import { renderProjectLayout } from "./views/project-layout.js";
 import { unmountProjectShellChrome } from "./views/project-shell-chrome.js";
 import { store } from "./store.js";
+import { syncCurrentProjectFromRoute } from "./demo-context.js";
 
 function parseHash() {
   const hash = location.hash.replace(/^#/, "").trim();
@@ -37,6 +38,7 @@ function route() {
     const tab = parts[2] || "dashboard";
 
     store.currentProjectId = projectId || null;
+    syncCurrentProjectFromRoute(projectId);
     renderProjectLayout(root, projectId, tab);
     return;
   }
