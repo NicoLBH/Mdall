@@ -1,5 +1,6 @@
 import { store } from "../store.js";
 import { svgIcon } from "../ui/icons.js";
+import { DEMO_USERS, setCurrentDemoUser } from "../demo-context.js";
 
 function parseHash() {
   const hash = String(location.hash || "").replace(/^#/, "").trim();
@@ -24,17 +25,17 @@ function getHeaderModel() {
 
   if (inProject) {
     return {
-      primary: store.user?.name || "user",
+      primary: store.user?.name || "Utilisateur",
       secondary: getProjectDisplayName(parts[1]),
       showSecondary: true,
-      href: `#project/${parts[1]}/dashboard`,
+      href: `#project/${parts[1]}/documents`,
       headerClass: "gh-header gh-header--project"
     };
   }
 
   if (parts[0] === "projects") {
     return {
-      primary: "Projects",
+      primary: "Projets",
       secondary: "",
       showSecondary: false,
       href: "#projects",
@@ -43,12 +44,56 @@ function getHeaderModel() {
   }
 
   return {
-    primary: "Dashboard",
+    primary: "Accueil",
     secondary: "",
     showSecondary: false,
     href: "#dashboard",
     headerClass: "gh-header gh-header--global"
   };
+}
+
+function renderUserMenu() {
+  const currentName = store.user?.name || "Utilisateur";
+  const currentRole = store.user?.role || "Rôle";
+  const currentAvatar = store.user?.avatar || "assets/images/260093543.png";
+
+  return `
+    <div class="gh-user-menu" id="ghUserMenu">
+      <button
+        id="ghUserMenuBtn"
+        class="gh-user-menu__trigger"
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded="false"
+        aria-label="Changer de profil"
+      >
+        <img src="${currentAvatar}" alt="Avatar" class="documents-commit-shell__avatar-img gh-user-menu__avatar-img">
+        <span class="gh-user-menu__identity">
+          <span class="gh-user-menu__name">${currentName}</span>
+          <span class="gh-user-menu__role">${currentRole}</span>
+        </span>
+        <span class="gh-user-menu__chevron" aria-hidden="true">▾</span>
+      </button>
+
+      <div class="gh-user-menu__dropdown hidden" id="ghUserMenuDropdown" role="menu">
+        ${DEMO_USERS.map((user) => `
+          <button
+            type="button"
+            class="gh-user-menu__item ${user.id === store.user?.id ? "is-active" : ""}"
+            data-user-switch="${user.id}"
+            role="menuitemradio"
+            aria-checked="${user.id === store.user?.id ? "true" : "false"}"
+          >
+            <img src="${user.avatar}" alt="" class="gh-user-menu__item-avatar">
+            <span class="gh-user-menu__item-meta">
+              <span class="gh-user-menu__item-name">${user.firstName} ${user.lastName}</span>
+              <span class="gh-user-menu__item-role">${user.role}</span>
+            </span>
+          </button>
+        `).join("")}
+      </div>
+    </div>
+  `;
 }
 
 export function renderGlobalHeader() {
@@ -86,8 +131,44 @@ export function renderGlobalHeader() {
       <div class="gh-header__center"></div>
 
       <div class="gh-header__right">
-        <div id="globalHeaderActions" class="gh-header__actions"></div>
+        <div id="globalHeaderActions" class="gh-header__actions">
+          ${renderUserMenu()}
+        </div>
       </div>
     </header>
   `;
+}
+
+let userMenuBound = false;
+
+export function bindGlobalHeader() {
+  if (userMenuBound) return;
+
+  document.addEventListener("click", (event) => {
+    const trigger = event.target.closest?.("#ghUserMenuBtn");
+    const switchBtn = event.target.closest?.("[data-user-switch]");
+    const menu = document.getElementById("ghUserMenu");
+    const dropdown = document.getElementById("ghUserMenuDropdown");
+    const btn = document.getElementById("ghUserMenuBtn");
+
+    if (switchBtn) {
+      setCurrentDemoUser(switchBtn.dataset.userSwitch || "");
+      renderGlobalHeader();
+      return;
+    }
+
+    if (trigger) {
+      const isHidden = dropdown?.classList.contains("hidden");
+      dropdown?.classList.toggle("hidden", !isHidden);
+      btn?.setAttribute("aria-expanded", isHidden ? "true" : "false");
+      return;
+    }
+
+    if (menu && !menu.contains(event.target)) {
+      dropdown?.classList.add("hidden");
+      btn?.setAttribute("aria-expanded", "false");
+    }
+  });
+
+  userMenuBound = true;
 }
