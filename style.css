@@ -6068,6 +6068,51 @@ color:#ffff;
   color:var(--text);
 }
 
+.settings-seismic-summary-subtitle{
+  margin-top:16px;
+  padding-top:16px;
+  border-top:1px solid var(--border);
+  font-size:12px;
+  font-weight:600;
+  color:var(--text);
+}
+
+.settings-seismic-spectrum-table-wrap{
+  margin-top:10px;
+  max-height:280px;
+  overflow:auto;
+  border:1px solid var(--border);
+  border-radius:10px;
+  background:rgba(13,17,23,.25);
+}
+
+.settings-seismic-spectrum-table{
+  width:100%;
+  border-collapse:collapse;
+  min-width:220px;
+}
+
+.settings-seismic-spectrum-table th,
+.settings-seismic-spectrum-table td{
+  padding:8px 10px;
+  font-size:12px;
+  line-height:1.4;
+  text-align:left;
+  border-bottom:1px solid var(--border);
+}
+
+.settings-seismic-spectrum-table thead th{
+  position:sticky;
+  top:0;
+  z-index:1;
+  background:var(--panel);
+  color:var(--text);
+}
+
+.settings-seismic-spectrum-table tbody tr:last-child td{
+  border-bottom:none;
+}
+
 @media (max-width: 980px){
   .settings-seismic-sizing-layout{
     grid-template-columns:1fr;
