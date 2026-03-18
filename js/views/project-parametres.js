@@ -627,29 +627,43 @@ function renderSeismicSpectrumChart(form) {
         yDomain: [0, yTicks[yTicks.length - 1] || 1],
         xTicks,
         yTicks,
-        series: [{ label: "spectre élastique normalisé", points }]
+        xGrid: { skipFirst: true, lineStyle: "dashed" },
+        yGrid: { skipFirst: true, lineStyle: "solid" },
+        series: [{
+          label: "spectre élastique normalisé",
+          points,
+          stroke: true,
+          fill: false,
+          pointsVisible: false
+        }]
       })}
     </div>
   `;
 }
 
-function renderSeismicSizingPanels(form) {
+function renderSeismicAccelerationCard(form) {
   const sizing = getSeismicSizingValues(form);
+  return renderSeismicSummaryCard("Accélérations et coefficients", [
+    { symbol: "agr", label: "Accélération de référence au rocher", value: sizing.agr, unit: "m/s²" },
+    { symbol: "γI", label: "Coefficient d’importance", value: sizing.gl },
+    { symbol: "ag", label: "Accélération horizontale de calcul", value: sizing.ag, unit: "m/s²" },
+    { symbol: "η", label: "Coefficient de correction d’amortissement", value: sizing.eta },
+    { symbol: "S", label: "Paramètre de sol", value: sizing.S }
+  ]);
+}
 
+function renderSeismicPeriodsCard(form) {
+  const sizing = getSeismicSizingValues(form);
+  return renderSeismicSummaryCard("Périodes caractéristiques", [
+    { symbol: "TB", label: "Limite inférieure du palier d’accélération spectrale constante", value: sizing.TB, unit: "s" },
+    { symbol: "TD", label: "Début de la branche à déplacement spectral constant", value: sizing.TD, unit: "s" },
+    { symbol: "TC", label: "Limite supérieure du palier d’accélération spectrale constante", value: sizing.TC, unit: "s" }
+  ]);
+}
+
+function renderSeismicSpectrumValuesCard(form) {
   return `
-    ${renderSeismicSummaryCard("Accélérations et coefficients", [
-      { symbol: "agr", label: "Accélération de référence au rocher", value: sizing.agr, unit: "m/s²" },
-      { symbol: "γI", label: "Coefficient d’importance", value: sizing.gl },
-      { symbol: "ag", label: "Accélération horizontale de calcul", value: sizing.ag, unit: "m/s²" },
-      { symbol: "η", label: "Coefficient de correction d’amortissement", value: sizing.eta },
-      { symbol: "S", label: "Paramètre de sol", value: sizing.S }
-    ])}
-    ${renderSeismicSummaryCard("Périodes caractéristiques", [
-      { symbol: "TB", label: "Limite inférieure du palier d’accélération spectrale constante", value: sizing.TB, unit: "s" },
-      { symbol: "TD", label: "Début de la branche à déplacement spectral constant", value: sizing.TD, unit: "s" },
-      { symbol: "TC", label: "Limite supérieure du palier d’accélération spectrale constante", value: sizing.TC, unit: "s" }
-    ])}
-    <div class="settings-seismic-summary-card">
+    <div class="settings-seismic-summary-card settings-seismic-summary-card--table">
       <div class="settings-seismic-summary-card__title">Valeurs du spectre Se(T)</div>
       ${renderElasticSpectrumTable(form)}
     </div>
@@ -1957,14 +1971,24 @@ function getPageHtml(form) {
                     title: "Données de dimensionnement",
                     description: "Premières données de calcul du spectre de dimensionnement élastique et des accélérations réglementaires du projet.",
                     body: `<div class="settings-seismic-sizing-layout">
-                      <div class="settings-seismic-sizing-main">
-                        <div class="settings-form-grid settings-form-grid--thirds">
-                          ${renderInputField({ id: "dampingRatio", label: "ξ coefficient d'amortissement visqueux, exprimé en pourcentage", value: form.dampingRatio || "5", placeholder: "5" })}
-                        </div>
-                        ${renderSeismicSpectrumChart(form)}
+                      <div class="settings-form-grid settings-form-grid--thirds settings-seismic-sizing-layout__controls">
+                        ${renderInputField({ id: "dampingRatio", label: "ξ coefficient d'amortissement visqueux, exprimé en pourcentage", value: form.dampingRatio || "5", placeholder: "5" })}
                       </div>
-                      <div class="settings-seismic-sizing-side">
-                        ${renderSeismicSizingPanels(form)}
+                      <div class="settings-seismic-sizing-layout__row settings-seismic-sizing-layout__row--top">
+                        <div class="settings-seismic-sizing-main">
+                          ${renderSeismicSpectrumChart(form)}
+                        </div>
+                        <div class="settings-seismic-sizing-side">
+                          ${renderSeismicAccelerationCard(form)}
+                        </div>
+                      </div>
+                      <div class="settings-seismic-sizing-layout__row settings-seismic-sizing-layout__row--bottom">
+                        <div class="settings-seismic-sizing-main">
+                          ${renderSeismicPeriodsCard(form)}
+                        </div>
+                        <div class="settings-seismic-sizing-side">
+                          ${renderSeismicSpectrumValuesCard(form)}
+                        </div>
                       </div>
                     </div>`
                   })
