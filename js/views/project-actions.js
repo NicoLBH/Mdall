@@ -36,7 +36,7 @@ function getRunPendingIconSvg() {
 }
 
 function getRunStateIcon(entry) {
-  const status = String(entry?.status || "").toLowerCase();
+  const status = String(entry?.outcomeStatus || entry?.status || "").toLowerCase();
 
   if (status === "success") {
     return `
@@ -107,24 +107,25 @@ function formatDuration(value) {
     : `${hours} h`;
 }
 
-function getRunStatusMeta(status) {
-  const normalized = String(status || "").toLowerCase();
+function getRunStatusMeta(entry) {
+  const lifecycleStatus = String(entry?.lifecycleStatus || entry?.status || "").toLowerCase();
+  const outcomeStatus = String(entry?.outcomeStatus || "").toLowerCase();
 
-  if (normalized === "running") {
+  if (lifecycleStatus === "running") {
     return {
       label: "En cours",
       className: "workflow-status-pill workflow-status-pill--running"
     };
   }
 
-  if (normalized === "success") {
+  if (outcomeStatus === "success") {
     return {
       label: "Réussi",
       className: "workflow-status-pill workflow-status-pill--success"
     };
   }
 
-  if (normalized === "error") {
+  if (outcomeStatus === "error") {
     return {
       label: "Échec",
       className: "workflow-status-pill workflow-status-pill--error"
@@ -132,7 +133,7 @@ function getRunStatusMeta(status) {
   }
 
   return {
-    label: normalized || "—",
+    label: lifecycleStatus === "completed" ? "Terminé" : (outcomeStatus || lifecycleStatus || "—"),
     className: "workflow-status-pill"
   };
 }
@@ -156,7 +157,7 @@ function getTriggerLabel(entry) {
 }
 
 function renderRunStatus(entry) {
-  const meta = getRunStatusMeta(entry.status);
+  const meta = getRunStatusMeta(entry);
   return `<span class="${meta.className}">${escapeHtml(meta.label)}</span>`;
 }
 
@@ -263,42 +264,26 @@ function renderRunPipelineSteps(entry) {
   `;
 }
 
-function renderMetricCard({ label, value, hint = "" }) {
-  return `
-    <article class="pilotage-metric-card">
-      <div class="pilotage-metric-card__label">${escapeHtml(label)}</div>
-      <div class="pilotage-metric-card__value">${escapeHtml(value)}</div>
-      ${hint ? `<div class="pilotage-metric-card__hint">${escapeHtml(hint)}</div>` : ""}
-    </article>
-  `;
+
+function getRunHistoryIconSvg() {
+  return svgIcon("history", {
+    className: "octicon octicon-history",
+    width: 16,
+    height: 16,
+    style: "vertical-align:text-bottom"
+  });
 }
 
-function renderRunMetrics() {
+function renderRunCountInline() {
   const metrics = getRunMetrics();
+  const totalRuns = Number(metrics.totalRuns || 0);
 
   return `
-    <section class="settings-grid settings-grid--metrics" style="margin:0 0 24px;">
-      ${renderMetricCard({
-        label: "Actions exécutées",
-        value: String(metrics.totalRuns || 0),
-        hint: "Analyses et enrichissements confondus"
-      })}
-      ${renderMetricCard({
-        label: "Enrichissements",
-        value: String(metrics.totalEnrichments || 0),
-        hint: "Journal des données de base projet"
-      })}
-      ${renderMetricCard({
-        label: "Analyses",
-        value: String(metrics.totalAnalyses || 0),
-        hint: "Runs d'analyse documentaires"
-      })}
-      ${renderMetricCard({
-        label: "Taux de réussite",
-        value: metrics.successRate == null ? "—" : `${metrics.successRate} %`,
-        hint: metrics.totalErrors ? `${metrics.totalErrors} échec(s)` : "Aucun échec enregistré"
-      })}
-    </section>
+    <span class="workflow-runs__head-count" title="${escapeHtml(`${totalRuns} run${totalRuns > 1 ? "s" : ""} journalisé${totalRuns > 1 ? "s" : ""}`)}">
+      ${getRunHistoryIconSvg()}
+      <span>${escapeHtml(String(totalRuns))}</span>
+      <span>run${totalRuns > 1 ? "s" : ""}</span>
+    </span>
   `;
 }
 
@@ -354,7 +339,10 @@ function renderRunsTable() {
     gridTemplate: "minmax(280px,1.6fr) 220px 170px 120px 120px",
     headHtml: renderDataTableHead({
       columns: [
-        "Action",
+        {
+          html: `<span class="workflow-runs__head-label">Action</span>${renderRunCountInline()}`,
+          className: "workflow-runs__head-col workflow-runs__head-col--action"
+        },
         "Déclencheur",
         "Date",
         "Durée",
@@ -382,7 +370,6 @@ export function renderProjectActions(root) {
     <section class="project-simple-page project-simple-page--settings">
       <div class="project-simple-scroll" id="projectActionsScroll">
         <div class="settings-content" style="max-width:1216px;margin:0 auto;padding:24px 32px 40px;">
-          ${renderRunMetrics()}
           ${renderRunsTable()}
         </div>
       </div>
