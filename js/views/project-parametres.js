@@ -39,6 +39,7 @@ import {
   resolveFrenchPostalCode
 } from "../services/georisques-service.js";
 import { getWindRegion } from "../../assets/wind-regions.js";
+import { getSeismicSizingValues } from "../services/seismic-spectrum.js";
 
 const DEFAULT_PROJECT_COLLABORATORS = [
   { id: "collab-1", email: "nicolas.lebihan@socotec.com", status: "Actif", role: "Admin" },
@@ -228,6 +229,14 @@ function ensureProjectFormDefaults() {
   if (typeof form.altitude !== "number" || !Number.isFinite(form.altitude)) {
     form.altitude = null;
   }
+
+  if (form.workContext !== "new" && form.workContext !== "existing") {
+    form.workContext = "new";
+  }
+
+  if (typeof form.dampingRatio !== "string" || !form.dampingRatio.trim()) {
+    form.dampingRatio = "5";
+  }
   
   if (typeof form.zoneSismique !== "string" || !form.zoneSismique.trim()) {
     form.zoneSismique = "4";
@@ -348,7 +357,7 @@ const PARAMETRES_NAV_GROUPS = [
   {
     sectionLabel: "Données de base projet",
     items: [
-      { targetId: "parametres-localisation", label: "Localisation", icon: "pin" },
+      { targetId: "parametres-localisation", label: "Localisation & travaux", icon: "pin" },
       { targetId: "parametres-phase", label: "Phase", icon: "checklist" },
       { targetId: "parametres-collaborateurs", label: "Collaborateurs", icon: "people" },
       { targetId: "parametres-agents-actives", label: "Agents activés", icon: "shield" },
@@ -363,7 +372,7 @@ const PARAMETRES_NAV_GROUPS = [
       { targetId: "parametres-zones-reglementaires", label: "Solidité des ouvrages", icon: "shield" },
       { targetId: "parametres-incendie", label: "Sécurité incendie", icon: "shield" },
       { targetId: "parametres-accessibilite", label: "Accessibilité PMR", icon: "shield" },
-      { targetId: "parametres-parasismiques", label: "Protection parasismique", icon: "shield" },
+      { targetId: "parametres-parasismiques", label: "Classement, zonage et sol", icon: "shield" },
       { targetId: "parametres-thermiques", label: "Performances thermiques", icon: "book" },
       { targetId: "parametres-acoustique", label: "Performances acoustiques", icon: "book" },
       { targetId: "parametres-normes", label: "DTU / Eurocodes / normes", icon: "book" },
@@ -510,6 +519,67 @@ function renderSelectField({ id, label, value = "", options = [] }) {
     tone: "default",
     size: "md"
   });
+}
+
+function renderWorkContextField(value = "new") {
+  const currentValue = value === "existing" ? "existing" : "new";
+
+  return `
+    <div class="settings-work-context-field">
+      <div class="settings-work-context-field__label">Construction neuve / Cadre bâti existant</div>
+      <div class="documents-radio-group settings-radio-group">
+        <label class="documents-radio-option">
+          <input type="radio" name="projectWorkContext" value="new" ${currentValue === "new" ? "checked" : ""}>
+          <span class="documents-radio-option__text">Neuf</span>
+        </label>
+        <label class="documents-radio-option">
+          <input type="radio" name="projectWorkContext" value="existing" ${currentValue === "existing" ? "checked" : ""}>
+          <span class="documents-radio-option__text">Existant</span>
+        </label>
+      </div>
+    </div>
+  `;
+}
+
+function formatSizingValue(value, unit = "") {
+  if (!Number.isFinite(value)) return "—";
+  const text = String(value).replace(/\.0+$/, "").replace(".", ",");
+  return unit ? `${text} ${unit}` : text;
+}
+
+function renderSeismicSizingSummaryCard(form) {
+  const sizing = getSeismicSizingValues(form);
+
+  return `
+    <div class="settings-seismic-summary-card">
+      <div class="settings-seismic-summary-card__title">Valeurs calculées</div>
+      <div class="settings-seismic-summary-list">
+        <div class="settings-seismic-summary-item">
+          <div class="settings-seismic-summary-item__head">
+            <strong>agr</strong>
+            <span>Accélération de référence au rocher</span>
+          </div>
+          <div class="settings-seismic-summary-item__value">${escapeHtml(formatSizingValue(sizing.agr, "m/s²"))}</div>
+        </div>
+
+        <div class="settings-seismic-summary-item">
+          <div class="settings-seismic-summary-item__head">
+            <strong>gl</strong>
+            <span>Coefficient d’importance</span>
+          </div>
+          <div class="settings-seismic-summary-item__value">${escapeHtml(formatSizingValue(sizing.gl))}</div>
+        </div>
+
+        <div class="settings-seismic-summary-item">
+          <div class="settings-seismic-summary-item__head">
+            <strong>ag</strong>
+            <span>Accélération horizontale de calcul</span>
+          </div>
+          <div class="settings-seismic-summary-item__value">${escapeHtml(formatSizingValue(sizing.ag, "m/s²"))}</div>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 function renderPlaceholderList(items) {
@@ -1648,6 +1718,11 @@ function getPageHtml(form) {
                         )}
                       </div>
                     ` : ""}`
+                  }),
+                  renderSectionCard({
+                    title: "Nature des travaux",
+                    description: "Définition de la nature des travaux envisagés dans le cadre du projet.",
+                    body: renderWorkContextField(form.workContext || "new")
                   })
                 ]
               })}
@@ -1787,8 +1862,8 @@ function getPageHtml(form) {
                 lead: "Cadre réglementaire et hypothèses d’entrée du lot parasismique.",
                 cards: [
                   renderSectionCard({
-                    title: "Protection parasismique",
-                    description: "Centralise désormais les paramètres auparavant répartis entre type d’ouvrage et solidité des ouvrages.",
+                    title: "Classement, zonage et sol",
+                    description: "Paramètres d’entrée du cadre parasismique à utiliser pour le projet.",
                     badge: "LIVE",
                     body: `${getGeorisquesSismiqueSummary() ? `
                       <div class="settings-auto-fields settings-auto-fields--single">
@@ -1802,6 +1877,24 @@ function getPageHtml(form) {
                       ${renderSelectField({ id: "liquefactionText", label: "Liquéfaction", value: form.liquefactionText || "Sol non liquéfiable", options: ["Sol non liquéfiable", "Sol liquéfiable", "Non défini à ce stade"] })}
                       ${renderSelectField({ id: "soilClass", label: "Classe de sol", value: form.soilClass || "A", options: ["A", "B", "C", "D", "E"] })}
                       ${renderSelectField({ id: "referential", label: "Référentiel parasismique", value: form.referential || "EC8", options: ["EC8", "PS92"] })}
+                    </div>`
+                  }),
+                  renderSectionCard({
+                    title: "Données de dimensionnement",
+                    description: "Premières données de calcul du spectre de dimensionnement élastique et des accélérations réglementaires du projet.",
+                    body: `<div class="settings-seismic-sizing-layout">
+                      <div class="settings-seismic-sizing-main">
+                        <div class="settings-form-grid settings-form-grid--thirds">
+                          ${renderInputField({ id: "dampingRatio", label: "ξ coefficient d'amortissement visqueux, exprimé en pourcentage", value: form.dampingRatio || "5", placeholder: "5" })}
+                        </div>
+                        <div class="settings-seismic-chart-placeholder">
+                          <div class="settings-seismic-chart-placeholder__title">Graphique du spectre de réponse élastique normalisé</div>
+                          <div class="settings-seismic-chart-placeholder__text">Zone de tracé réservée pour la prochaine étape d’implémentation.</div>
+                        </div>
+                      </div>
+                      <div class="settings-seismic-sizing-side">
+                        ${renderSeismicSizingSummaryCard(form)}
+                      </div>
                     </div>`
                   })
                 ]
@@ -2112,6 +2205,16 @@ function bindProjectAutomationToggles() {
       }
 
       emitAutomationChanged();
+      rerenderProjectParametres();
+    });
+  });
+}
+
+function bindProjectWorkContextField() {
+  document.querySelectorAll('input[name="projectWorkContext"]').forEach((input) => {
+    input.addEventListener("change", (event) => {
+      const value = event.target?.value === "existing" ? "existing" : "new";
+      store.projectForm.workContext = value;
       rerenderProjectParametres();
     });
   });
@@ -2570,6 +2673,10 @@ function bindParametresEvents() {
         case "climateBaseTemperatures":
           store.projectForm.climateBaseTemperatures = value;
           break;
+        case "dampingRatio":
+          store.projectForm.dampingRatio = value;
+          rerenderProjectParametres();
+          break;
         default:
           break;
       }
@@ -2589,28 +2696,34 @@ function bindParametresEvents() {
         case "riskCategory":
           store.projectForm.riskCategory = value;
           store.projectForm.risk = value;
+          rerenderProjectParametres();
           break;
 
         case "importanceCategory":
           store.projectForm.importanceCategory = value;
           store.projectForm.importance = importanceLabelToCode(value);
+          rerenderProjectParametres();
           break;
 
         case "zoneSismique":
           store.projectForm.zoneSismique = value;
+          rerenderProjectParametres();
           break;
 
         case "liquefactionText":
           store.projectForm.liquefactionText = value;
           store.projectForm.liquefaction = liquefactionLabelToCode(value);
+          rerenderProjectParametres();
           break;
 
         case "referential":
           store.projectForm.referential = value;
+          rerenderProjectParametres();
           break;
 
         case "soilClass":
           store.projectForm.soilClass = value;
+          rerenderProjectParametres();
           break;
 
         default:
@@ -2622,6 +2735,7 @@ function bindParametresEvents() {
   bindProjectTabToggles();
   bindProjectPhaseToggles();
   bindProjectAutomationToggles();
+  bindProjectWorkContextField();
   refreshProjectTabsVisibility();
 
   document.querySelectorAll("[data-open-collaborator-modal]").forEach((btn) => {
