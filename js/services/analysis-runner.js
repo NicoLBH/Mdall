@@ -334,9 +334,39 @@ function normalizeFinalResult(final, options = {}) {
     }, situation.document_ref_ids || defaultDocumentIds);
   });
 }
+function buildAnalysisInsightDetails(nested = []) {
+  const avis = [];
+
+  for (const situation of nested || []) {
+    for (const sujet of situation?.sujets || []) {
+      for (const item of sujet?.avis || []) {
+        avis.push({
+          id: String(item?.id || ""),
+          verdict: firstNonEmpty(item?.raw?.verdict, item?.verdict, "")
+        });
+      }
+    }
+  }
+
+  const criticalAvis = avis.filter((item) => {
+    const verdict = String(item?.verdict || "").toUpperCase();
+    return verdict === "S" || verdict === "D";
+  }).length;
+
+  const blockingAvis = avis.filter((item) => String(item?.verdict || "").toUpperCase() === "D").length;
+
+  return {
+    totalAvis: avis.length,
+    criticalAvis,
+    blockingAvis,
+    avis
+  };
+}
+
 function applyRunResult(final, runId, statusLabel, runLogId = "", options = {}) {
   const documentIds = getPreferredAnalysisDocumentIds(options.documentIds || []);
   const nested = normalizeFinalResult(final, { documentIds });
+  const insightDetails = buildAnalysisInsightDetails(nested);
   setLastAnalysisDocumentIds(documentIds);
 
   store.situationsView.data = nested;
@@ -357,7 +387,10 @@ function applyRunResult(final, runId, statusLabel, runLogId = "", options = {}) 
   if (runLogId) {
     finishRunLogEntry(runLogId, {
       status: "success",
-      summary: statusLabel || "READY_FOR_REVIEW"
+      summary: statusLabel || "READY_FOR_REVIEW",
+      details: {
+        insights: insightDetails
+      }
     });
   }
 
