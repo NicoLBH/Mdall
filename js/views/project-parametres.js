@@ -22,7 +22,10 @@ import {
   isAgentEnabled,
   isAutomationEnabled,
   setAgentEnabled,
-  setAutomationEnabled
+  setAutomationEnabled,
+  shouldAutoRunProjectBaseDataEnrichment,
+  startRunLogEntry,
+  finishRunLogEntry
 } from "../services/project-automation.js";
 import { escapeHtml } from "../utils/escape-html.js";
 import {
@@ -56,7 +59,8 @@ const parametresUiState = {
     city: { items: [], loading: false, open: false, activeIndex: -1 },
     postalCode: { items: [], loading: false, open: false, activeIndex: -1 }
   },
-  locationAutocompleteDocumentBound: false
+  locationAutocompleteDocumentBound: false,
+  locationEditBaseSignature: ""
 };
 
 let currentParametresRoot = null;
@@ -309,6 +313,16 @@ function ensureProjectFormDefaults() {
     form.collaborators = DEFAULT_PROJECT_COLLABORATORS.map((item) => ({ ...item }));
   }
 
+  if (!form.baseDataEnrichment || typeof form.baseDataEnrichment !== "object") {
+    form.baseDataEnrichment = {
+      lastLocationSignature: ""
+    };
+  }
+
+  if (typeof form.baseDataEnrichment.lastLocationSignature !== "string") {
+    form.baseDataEnrichment.lastLocationSignature = "";
+  }
+
   ensureGeorisquesState();
 }
 
@@ -537,6 +551,24 @@ function getCurrentProjectLocationRequestKey() {
   return getGeorisquesRequestKey(store.projectForm.city, store.projectForm.postalCode);
 }
 
+function getProjectLocationSignature() {
+  const address = String(store.projectForm.address || "").trim().toLowerCase();
+  const city = String(store.projectForm.city || "").trim().toLowerCase();
+  const postalCode = String(store.projectForm.postalCode || "").trim();
+  const latitude = Number.isFinite(store.projectForm.latitude) ? String(store.projectForm.latitude) : "";
+  const longitude = Number.isFinite(store.projectForm.longitude) ? String(store.projectForm.longitude) : "";
+
+  return [address, city, postalCode, latitude, longitude].join("|");
+}
+
+function getLocationEditBaseSignature() {
+  return String(parametresUiState.locationEditBaseSignature || "") || getProjectLocationSignature();
+}
+
+function hasProjectLocationChanged(previousSignature = "") {
+  return String(previousSignature || "") !== getProjectLocationSignature();
+}
+
 function hasStaleLocationDerivedData() {
   const georisques = ensureGeorisquesState();
   const currentKey = getCurrentProjectLocationRequestKey();
@@ -581,7 +613,137 @@ async function refreshAltitudeForCurrentProject() {
   }
 }
 
-async function refreshLocationDerivedData() {
+function getProjectBaseDataEnrichmentButtonLabel() {
+  if (parametresUiState.georisquesIsLoading) {
+    return "Récupération…";
+  }
+
+  return shouldAutoRunProjectBaseDataEnrichment()
+    ? "Enrichissement automatique activé"
+    : "Récupérer les données Géorisques";
+}
+
+function getProjectBaseDataEnrichmentButtonTooltip() {
+  if (!shouldAutoRunProjectBaseDataEnrichment()) return "Relancer manuellement l’enrichissement des données de base projet.";
+
+  return "Un enrichissement est lancé automatiquement après validation d’une modification de la localisation projet. Ce bouton permet aussi un relancement manuel.";
+}
+
+function buildProjectBaseDataEnrichmentDetails({ georisquesStatus = "pending", georisquesError = "" } = {}) {
+  const georisques = ensureGeorisquesState();
+  const windSummary = getWindRegionSummary();
+  const seismicSummary = getGeorisquesSismiqueSummary();
+  const successCount = georisques.datasets.filter((item) => item.status === "success").length;
+  const errorCount = georisques.datasets.filter((item) => item.status !== "success").length;
+
+  return {
+    location: {
+      address: String(store.projectForm.address || "").trim(),
+      city: String(store.projectForm.city || "").trim(),
+      postalCode: String(store.projectForm.postalCode || "").trim(),
+      latitude: Number.isFinite(store.projectForm.latitude) ? store.projectForm.latitude : null,
+      longitude: Number.isFinite(store.projectForm.longitude) ? store.projectForm.longitude : null
+    },
+    steps: {
+      georisques: {
+        status: georisquesStatus,
+        requestKey: getCurrentProjectLocationRequestKey(),
+        communeName: georisques.commune?.name || null,
+        codeInsee: georisques.commune?.codeInsee || null,
+        datasetsCount: georisques.datasets.length,
+        successCount,
+        errorCount,
+        error: georisquesError || georisques.error || ""
+      },
+      windRegion: {
+        status: windSummary ? "success" : "pending",
+        source: "ui",
+        value: windSummary || ""
+      },
+      seismicZone: {
+        status: seismicSummary ? "success" : "pending",
+        source: "ui",
+        value: seismicSummary || ""
+      }
+    }
+  };
+}
+
+function getProjectBaseDataEnrichmentSummary(details = {}) {
+  const georisques = details?.steps?.georisques || {};
+  const windRegion = details?.steps?.windRegion || {};
+  const seismicZone = details?.steps?.seismicZone || {};
+  const parts = [];
+
+  if (georisques.status === "success") {
+    parts.push(`Géorisques : ${georisques.successCount || 0} jeu(x) réussi(s)`);
+    if (georisques.errorCount) {
+      parts.push(`${georisques.errorCount} erreur(s)`);
+    }
+  } else if (georisques.error) {
+    parts.push(`Géorisques : ${georisques.error}`);
+  }
+
+  if (windRegion.value) {
+    parts.push(`Vent : ${windRegion.value}`);
+  }
+
+  if (seismicZone.value) {
+    parts.push(`Sismique : ${seismicZone.value}`);
+  }
+
+  return parts.join(" · ") || "Enrichissement des données de base projet.";
+}
+
+async function runProjectBaseDataEnrichment({ triggerType = "manual", triggerLabel = "Lancement manuel depuis Paramètres", force = true } = {}) {
+  const city = String(store.projectForm.city || "").trim();
+  const postalCode = String(store.projectForm.postalCode || "").trim();
+  const georisques = ensureGeorisquesState();
+
+  if (!city || !postalCode) {
+    georisques.error = "Renseigne d'abord la ville et le code postal dans la section Localisation.";
+    rerenderProjectParametres();
+    return null;
+  }
+
+  if (parametresUiState.georisquesIsLoading) return null;
+
+  const runEntry = startRunLogEntry({
+    name: "Enrichissement des données de base projet",
+    kind: "enrichment",
+    agentKey: "project-base-data",
+    triggerType,
+    triggerLabel,
+    status: "running",
+    summary: triggerType === "automatic"
+      ? "Enrichissement déclenché automatiquement après validation d’une modification de la localisation projet."
+      : "Enrichissement déclenché manuellement depuis Paramètres > Géorisques.",
+    details: buildProjectBaseDataEnrichmentDetails({ georisquesStatus: "running" })
+  });
+
+  try {
+    const result = await loadGeorisquesForCurrentProject({ force });
+    const details = buildProjectBaseDataEnrichmentDetails({ georisquesStatus: "success" });
+    store.projectForm.baseDataEnrichment.lastLocationSignature = getProjectLocationSignature();
+    return finishRunLogEntry(runEntry.id, {
+      status: "success",
+      summary: getProjectBaseDataEnrichmentSummary(details),
+      details
+    });
+  } catch (error) {
+    const details = buildProjectBaseDataEnrichmentDetails({
+      georisquesStatus: "error",
+      georisquesError: error instanceof Error ? error.message : String(error)
+    });
+    return finishRunLogEntry(runEntry.id, {
+      status: "error",
+      summary: getProjectBaseDataEnrichmentSummary(details),
+      details
+    });
+  }
+}
+
+async function refreshLocationDerivedData({ runEnrichment = false, triggerType = "manual", triggerLabel = "" } = {}) {
   syncLocationDerivedStaleUi();
 
   const city = String(store.projectForm.city || "").trim();
@@ -594,7 +756,10 @@ async function refreshLocationDerivedData() {
   }
 
   await refreshAltitudeForCurrentProject();
-  await loadGeorisquesForCurrentProject({ force: true });
+
+  if (runEnrichment) {
+    await runProjectBaseDataEnrichment({ triggerType, triggerLabel, force: true });
+  }
 }
 
 function formatGeorisquesDate(value) {
@@ -939,9 +1104,10 @@ function renderGeorisquesSection() {
       type="button"
       class="gh-btn gh-btn--primary"
       id="projectGeorisquesFetchBtn"
+      title="${escapeHtml(getProjectBaseDataEnrichmentButtonTooltip())}"
       ${parametresUiState.georisquesIsLoading ? "disabled" : ""}
     >
-      ${parametresUiState.georisquesIsLoading ? "Récupération…" : "Récupérer les données Géorisques"}
+      ${escapeHtml(getProjectBaseDataEnrichmentButtonLabel())}
     </button>
   `;
 
@@ -986,11 +1152,13 @@ async function loadGeorisquesForCurrentProject({ force = false } = {}) {
   if (!city || !postalCode) {
     georisques.error = "Renseigne d'abord la ville et le code postal dans la section Localisation.";
     rerenderProjectParametres();
-    return;
+    throw new Error(georisques.error);
   }
 
-  if (parametresUiState.georisquesIsLoading) return;
-  if (!force && georisques.datasets.length && parametresUiState.georisquesLastRequestKey === requestKey) return;
+  if (parametresUiState.georisquesIsLoading) return null;
+  if (!force && georisques.datasets.length && parametresUiState.georisquesLastRequestKey === requestKey) {
+    return georisques;
+  }
 
   parametresUiState.georisquesIsLoading = true;
   georisques.error = "";
@@ -1008,8 +1176,12 @@ async function loadGeorisquesForCurrentProject({ force = false } = {}) {
       error: ""
     };
     parametresUiState.georisquesLastRequestKey = requestKey;
+    store.projectForm.baseDataEnrichment.lastLocationSignature = getProjectLocationSignature();
+    return store.projectForm.georisques;
   } catch (error) {
-    ensureGeorisquesState().error = error instanceof Error ? error.message : String(error);
+    const message = error instanceof Error ? error.message : String(error);
+    ensureGeorisquesState().error = message;
+    throw error instanceof Error ? error : new Error(message);
   } finally {
     parametresUiState.georisquesIsLoading = false;
     rerenderProjectParametres();
@@ -1090,6 +1262,7 @@ function getAgentItemDescription(item) {
 
 function getAutomationItemDescription(item) {
   const descriptions = {
+    autoProjectBaseDataEnrichment: "Lance automatiquement l’enrichissement des données Géorisques après modification de la localisation projet.",
     autoAnalysisAfterUpload: "Lance automatiquement l’analyse spécialisée après dépôt réussi d’un document.",
     autoComparePreviousVersion: "Prévu pour comparer automatiquement une version déposée à la précédente.",
     autoDetectInconsistencies: "Prévu pour signaler automatiquement des incohérences inter-documents ou intra-document.",
@@ -1800,7 +1973,7 @@ function getPageHtml(form) {
                 cards: [
                   renderSectionCard({
                     title: "Automatisations",
-                    description: "Ces réglages préfigurent une future logique de niveau de service. Une seule automatisation est activable dans le PoC actuel.",
+                    description: "Ces réglages préfigurent une future logique de niveau de service. Deux automatisations sont activables dans le PoC actuel.",
                     badge: "PoC",
                     body: renderAutomationsFeatureCard()
                   })
@@ -1923,6 +2096,7 @@ function bindProjectAutomationToggles() {
       }
 
       emitAutomationChanged();
+      rerenderProjectParametres();
     });
   });
 
@@ -1938,6 +2112,7 @@ function bindProjectAutomationToggles() {
       }
 
       emitAutomationChanged();
+      rerenderProjectParametres();
     });
   });
 }
@@ -2282,6 +2457,10 @@ function bindParametresEvents() {
       const cityInput = document.getElementById("projectCity");
       const postalCodeInput = document.getElementById("projectPostalCode");
 
+      if (id === "projectAddress" || id === "projectCity" || id === "projectPostalCode") {
+        parametresUiState.locationEditBaseSignature = getProjectLocationSignature();
+      }
+
       if (id === "projectAddress") {
         syncProjectLocationFields({ address: store.projectForm.address, city: "", postalCode: "", latitude: null, longitude: null, altitude: null });
         if (cityInput) cityInput.value = "";
@@ -2309,6 +2488,7 @@ function bindParametresEvents() {
           store.projectForm.projectName = value;
           break;
         case "projectAddress": {
+          const previousLocationSignature = getLocationEditBaseSignature();
           try {
             const resolved = await resolveFrenchAddress(value);
             syncProjectLocationFields({
@@ -2325,10 +2505,16 @@ function bindParametresEvents() {
           } catch (error) {
             syncProjectLocationFields({ address: value, altitude: null });
           }
-          await refreshLocationDerivedData();
+          await refreshLocationDerivedData({
+            runEnrichment: hasProjectLocationChanged(previousLocationSignature) && shouldAutoRunProjectBaseDataEnrichment(),
+            triggerType: "automatic",
+            triggerLabel: "Validation d’une modification de la localisation projet"
+          });
+          parametresUiState.locationEditBaseSignature = "";
           break;
         }
         case "projectCity": {
+          const previousLocationSignature = getLocationEditBaseSignature();
           try {
             const resolved = await resolveFrenchCommune({ city: value, postalCode: store.projectForm.postalCode });
             syncProjectLocationFields({
@@ -2343,10 +2529,16 @@ function bindParametresEvents() {
           } catch (error) {
             syncProjectLocationFields({ address: "", city: value, postalCode: store.projectForm.postalCode, altitude: null });
           }
-          await refreshLocationDerivedData();
+          await refreshLocationDerivedData({
+            runEnrichment: hasProjectLocationChanged(previousLocationSignature) && shouldAutoRunProjectBaseDataEnrichment(),
+            triggerType: "automatic",
+            triggerLabel: "Validation d’une modification de la localisation projet"
+          });
+          parametresUiState.locationEditBaseSignature = "";
           break;
         }
         case "projectPostalCode": {
+          const previousLocationSignature = getLocationEditBaseSignature();
           try {
             const resolved = await resolveFrenchPostalCode(value);
             syncProjectLocationFields({
@@ -2361,7 +2553,12 @@ function bindParametresEvents() {
           } catch (error) {
             syncProjectLocationFields({ address: "", city: store.projectForm.city, postalCode: value, altitude: null });
           }
-          await refreshLocationDerivedData();
+          await refreshLocationDerivedData({
+            runEnrichment: hasProjectLocationChanged(previousLocationSignature) && shouldAutoRunProjectBaseDataEnrichment(),
+            triggerType: "automatic",
+            triggerLabel: "Validation d’une modification de la localisation projet"
+          });
+          parametresUiState.locationEditBaseSignature = "";
           break;
         }
         case "climateZoneWinter":
@@ -2474,7 +2671,10 @@ function bindParametresEvents() {
   const georisquesFetchBtn = document.getElementById("projectGeorisquesFetchBtn");
   if (georisquesFetchBtn) {
     georisquesFetchBtn.addEventListener("click", () => {
-      loadGeorisquesForCurrentProject({ force: true });
+      runProjectBaseDataEnrichment({
+        triggerType: "manual",
+        triggerLabel: "Lancement manuel depuis Paramètres"
+      });
     });
   }
 }
