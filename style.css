@@ -6104,7 +6104,6 @@ color:#ffff;
 .svg-line-chart__svg{
   display:block;
   width:100%;
-  height:auto;
   color:var(--muted);
 }
 
@@ -6201,7 +6200,7 @@ color:#ffff;
   display:flex;
   flex-wrap:wrap;
   gap:12px 16px;
-  margin-top:2px;
+  margin: 20px 0px 40px 50px;
 }
 
 .svg-line-chart__legend-item{
