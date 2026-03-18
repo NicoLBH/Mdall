@@ -5986,9 +5986,19 @@ color:#ffff;
 }
 
 .settings-seismic-sizing-layout{
+  display:flex;
+  flex-direction:column;
+  gap:16px;
+}
+
+.settings-seismic-sizing-layout__row{
   display:grid;
   grid-template-columns:minmax(0, 1fr) 300px;
   gap:16px;
+  align-items:stretch;
+}
+
+.settings-seismic-sizing-layout__controls{
   align-items:start;
 }
 
@@ -6027,6 +6037,11 @@ color:#ffff;
   max-width:420px;
 }
 
+.settings-seismic-sizing-main,
+.settings-seismic-sizing-side{
+  min-width:0;
+}
+
 .settings-seismic-sizing-side{
   display:flex;
   flex-direction:column;
@@ -6035,6 +6050,7 @@ color:#ffff;
 
 .settings-seismic-summary-card{
   padding:16px;
+  height:100%;
 }
 
 .settings-seismic-summary-list{
@@ -6061,7 +6077,14 @@ color:#ffff;
 .svg-line-chart__grid .svg-line-chart__tick line{
   stroke:rgba(139,148,158,.28);
   stroke-width:1;
+}
+
+.svg-line-chart__grid--dashed .svg-line-chart__tick line{
   stroke-dasharray:4 4;
+}
+
+.svg-line-chart__grid--solid .svg-line-chart__tick line{
+  stroke-dasharray:none;
 }
 
 .svg-line-chart__axis path,
@@ -6102,7 +6125,17 @@ color:#ffff;
   color:#db61a2;
 }
 
-.svg-line-chart__line,
+.svg-line-chart__line{
+  stroke:currentColor;
+  fill:none;
+}
+
+.svg-line-chart__area{
+  fill:currentColor;
+  opacity:.12;
+  stroke:none;
+}
+
 .svg-line-chart__point{
   stroke:currentColor;
   fill:currentColor;
@@ -6147,6 +6180,17 @@ color:#ffff;
   border-radius:999px;
   background:currentColor;
   display:inline-block;
+}
+
+.settings-seismic-summary-card--table{
+  display:flex;
+  flex-direction:column;
+}
+
+.settings-seismic-summary-card--table .settings-seismic-spectrum-table-wrap{
+  flex:1 1 auto;
+  min-height:0;
+  margin-top:12px;
 }
 
 .settings-seismic-summary-item{
@@ -6230,7 +6274,7 @@ color:#ffff;
 }
 
 @media (max-width: 980px){
-  .settings-seismic-sizing-layout{
+  .settings-seismic-sizing-layout__row{
     grid-template-columns:1fr;
   }
 }
