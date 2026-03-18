@@ -2564,6 +2564,10 @@ color:#ffff;
   padding:40px 0 0px;
 }
 
+.settings-block--no-head > .settings-card--param:first-of-type{
+  padding-top:0;
+}
+
 .settings-form-grid--thirds{
   grid-template-columns:repeat(2, minmax(0, 320px));
   gap:0 16px;
@@ -6073,8 +6077,18 @@ color:#ffff;
   cursor:help;
 }
 
+.settings-seismic-periods-mini-table__meta{
+  color:var(--muted);
+  font-weight:400;
+}
+
 .settings-seismic-periods-mini-table td{
   color:var(--muted);
+}
+
+.settings-seismic-periods-mini-table__rowhead{
+  color:var(--text);
+  font-weight:600;
 }
 
 .svg-line-chart__frame{
