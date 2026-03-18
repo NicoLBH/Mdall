@@ -433,10 +433,13 @@ function renderSectionCard({ id = "", title, description = "", body = "", badge 
     <div class="settings-card settings-card--param" ${id ? `id="${escapeHtml(id)}"` : ""}>
       <div class="settings-card__head">
         <div>
-          <h4>${escapeHtml(title)}</h4>
+          <span class="settings-card__head-title">
+            <h4>${escapeHtml(title)}</h4>
+            ${action || (badge ? `<span class="settings-badge mono">${escapeHtml(badge)}</span>` : "")}
+          </span>
           ${description ? `<p>${escapeHtml(description)}</p>` : ""}
         </div>
-        ${action || (badge ? `<span class="settings-badge mono">${escapeHtml(badge)}</span>` : "")}
+        
       </div>
       ${body}
     </div>
