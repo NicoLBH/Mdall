@@ -39,7 +39,11 @@ import {
   resolveFrenchPostalCode
 } from "../services/georisques-service.js";
 import { getWindRegion } from "../../assets/wind-regions.js";
-import { getSeismicSizingValues, buildElasticResponseSpectrumTable } from "../services/seismic-spectrum.js";
+import {
+  getSeismicSizingValues,
+  buildElasticResponseSpectrumTable,
+  computeElasticResponseValue
+} from "../services/seismic-spectrum.js";
 import { renderSvgLineChart, getNiceChartTicks } from "../utils/svg-line-chart.js";
 
 const DEFAULT_PROJECT_COLLABORATORS = [
