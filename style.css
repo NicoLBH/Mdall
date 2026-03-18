@@ -2370,35 +2370,13 @@ color:#ffff;
 }
 
 .settings-callout{margin-bottom:16px;}
-
 .settings-card{}
 .settings-card-less{border:none;}
 .settings-card-less h4{font-size:18px;font-weight:600}
-
-.settings-card__head{
-  /*display:flex;
-  align-items:flex-start;
-  justify-content:space-between;
-  gap:16px;*/
-  margin-bottom:14px;
-}
-.settings-card__head-title{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;}
-.settings-card__head h4{
-  font-size:22px;
-  line-height:1.4;
-  font-weight:600;
-  margin-bottom:16px;
-  padding-bottom:8px;
-  color:#ffff;
-  border-bottom: 1px solid var(--border);
-}
-
-.settings-card__head p{
-  margin:0;
-  line-height:1.5;
-  max-width:880px;
-  font-size:13px;
-}
+.settings-card__head{margin-bottom:14px;}
+.settings-card__head-title{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;border-bottom: 1px solid var(--border);margin-bottom:16px;}
+.settings-card__head h4{font-size:22px;line-height:1.4;font-weight:600;padding-bottom:8px;color:#ffff;}
+.settings-card__head p{margin:0;line-height:1.5;max-width:880px;font-size:13px;}
 
 .settings-badge{
   display:inline-flex;
