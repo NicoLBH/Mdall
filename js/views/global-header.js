@@ -53,36 +53,29 @@ function getHeaderModel() {
 }
 
 function renderUserMenu() {
-  const currentName = store.user?.name || "Utilisateur";
-  const currentRole = store.user?.role || "Rôle";
   const currentAvatar = store.user?.avatar || "assets/images/260093543.png";
+  const otherUsers = DEMO_USERS.filter((user) => user.id !== store.user?.id);
 
   return `
-    <div class="gh-user-menu" id="ghUserMenu">
+    <div class="gh-user-menu gh-action" id="ghUserMenu">
       <button
         id="ghUserMenuBtn"
-        class="gh-user-menu__trigger"
+        class="gh-user-menu__trigger gh-action__button"
         type="button"
         aria-haspopup="menu"
         aria-expanded="false"
-        aria-label="Changer de profil"
+        aria-label="Changer de contributeur"
       >
         <img src="${currentAvatar}" alt="Avatar" class="documents-commit-shell__avatar-img gh-user-menu__avatar-img">
-        <span class="gh-user-menu__identity">
-          <span class="gh-user-menu__name">${currentName}</span>
-          <span class="gh-user-menu__role">${currentRole}</span>
-        </span>
-        <span class="gh-user-menu__chevron" aria-hidden="true">▾</span>
       </button>
 
-      <div class="gh-user-menu__dropdown hidden" id="ghUserMenuDropdown" role="menu">
-        ${DEMO_USERS.map((user) => `
+      <div class="gh-user-menu__dropdown gh-menu" id="ghUserMenuDropdown" role="menu">
+        ${otherUsers.map((user) => `
           <button
             type="button"
-            class="gh-user-menu__item ${user.id === store.user?.id ? "is-active" : ""}"
+            class="gh-user-menu__item"
             data-user-switch="${user.id}"
-            role="menuitemradio"
-            aria-checked="${user.id === store.user?.id ? "true" : "false"}"
+            role="menuitem"
           >
             <img src="${user.avatar}" alt="" class="gh-user-menu__item-avatar">
             <span class="gh-user-menu__item-meta">
@@ -158,16 +151,25 @@ export function bindGlobalHeader() {
     }
 
     if (trigger) {
-      const isHidden = dropdown?.classList.contains("hidden");
-      dropdown?.classList.toggle("hidden", !isHidden);
-      btn?.setAttribute("aria-expanded", isHidden ? "true" : "false");
+      const wrapper = document.getElementById("ghUserMenu");
+      const isOpen = wrapper?.classList.contains("is-open");
+      wrapper?.classList.toggle("is-open", !isOpen);
+      btn?.setAttribute("aria-expanded", isOpen ? "false" : "true");
       return;
     }
 
     if (menu && !menu.contains(event.target)) {
-      dropdown?.classList.add("hidden");
+      menu.classList.remove("is-open");
+      dropdown?.classList.remove("gh-menu--open");
       btn?.setAttribute("aria-expanded", "false");
     }
+  });
+
+  document.addEventListener("click", () => {
+    const wrapper = document.getElementById("ghUserMenu");
+    const dropdown = document.getElementById("ghUserMenuDropdown");
+    if (!wrapper || !dropdown) return;
+    dropdown.classList.toggle("gh-menu--open", wrapper.classList.contains("is-open"));
   });
 
   userMenuBound = true;
