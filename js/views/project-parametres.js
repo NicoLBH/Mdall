@@ -39,7 +39,7 @@ import {
   resolveFrenchPostalCode
 } from "../services/georisques-service.js";
 import { getWindRegion } from "../../assets/wind-regions.js";
-import { getSeismicSizingValues } from "../services/seismic-spectrum.js";
+import { getSeismicSizingValues, buildElasticResponseSpectrumTable } from "../services/seismic-spectrum.js";
 
 const DEFAULT_PROJECT_COLLABORATORS = [
   { id: "collab-1", email: "nicolas.lebihan@socotec.com", status: "Actif", role: "Admin" },
@@ -372,7 +372,7 @@ const PARAMETRES_NAV_GROUPS = [
       { targetId: "parametres-zones-reglementaires", label: "Solidité des ouvrages", icon: "shield" },
       { targetId: "parametres-incendie", label: "Sécurité incendie", icon: "shield" },
       { targetId: "parametres-accessibilite", label: "Accessibilité PMR", icon: "shield" },
-      { targetId: "parametres-parasismiques", label: "Classement, zonage et sol", icon: "shield" },
+      { targetId: "parametres-parasismiques", label: "Protection parasismique", icon: "shield" },
       { targetId: "parametres-thermiques", label: "Performances thermiques", icon: "book" },
       { targetId: "parametres-acoustique", label: "Performances acoustiques", icon: "book" },
       { targetId: "parametres-normes", label: "DTU / Eurocodes / normes", icon: "book" },
@@ -547,6 +547,37 @@ function formatSizingValue(value, unit = "") {
   return unit ? `${text} ${unit}` : text;
 }
 
+function formatSpectrumCell(value, unit = "") {
+  if (!Number.isFinite(value)) return "—";
+  const text = value.toFixed(3).replace(/\.?0+$/, '').replace('.', ',');
+  return unit ? `${text} ${unit}` : text;
+}
+
+function renderElasticSpectrumTable(form) {
+  const rows = buildElasticResponseSpectrumTable(form, { step: 0.1, maxPeriod: 4 });
+
+  return `
+    <div class="settings-seismic-spectrum-table-wrap">
+      <table class="settings-seismic-spectrum-table">
+        <thead>
+          <tr>
+            <th>T (s)</th>
+            <th>Se(T) (m/s²)</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map((row) => `
+            <tr>
+              <td>${escapeHtml(formatSpectrumCell(row.T))}</td>
+              <td>${escapeHtml(formatSpectrumCell(row.Se))}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
 function renderSeismicSizingSummaryCard(form) {
   const sizing = getSeismicSizingValues(form);
 
@@ -556,28 +587,47 @@ function renderSeismicSizingSummaryCard(form) {
       <div class="settings-seismic-summary-list">
         <div class="settings-seismic-summary-item">
           <div class="settings-seismic-summary-item__head">
-            <strong>agr</strong>
-            <span>Accélération de référence au rocher</span>
+            <strong>η</strong>
+            <span>Coefficient de correction d’amortissement</span>
           </div>
-          <div class="settings-seismic-summary-item__value">${escapeHtml(formatSizingValue(sizing.agr, "m/s²"))}</div>
+          <div class="settings-seismic-summary-item__value">${escapeHtml(formatSizingValue(sizing.eta))}</div>
         </div>
 
         <div class="settings-seismic-summary-item">
           <div class="settings-seismic-summary-item__head">
-            <strong>gl</strong>
-            <span>Coefficient d’importance</span>
+            <strong>S</strong>
+            <span>Paramètre de sol</span>
           </div>
-          <div class="settings-seismic-summary-item__value">${escapeHtml(formatSizingValue(sizing.gl))}</div>
+          <div class="settings-seismic-summary-item__value">${escapeHtml(formatSizingValue(sizing.S))}</div>
         </div>
 
         <div class="settings-seismic-summary-item">
           <div class="settings-seismic-summary-item__head">
-            <strong>ag</strong>
-            <span>Accélération horizontale de calcul</span>
+            <strong>TB</strong>
+            <span>Limite inférieure du palier d’accélération spectrale constante</span>
           </div>
-          <div class="settings-seismic-summary-item__value">${escapeHtml(formatSizingValue(sizing.ag, "m/s²"))}</div>
+          <div class="settings-seismic-summary-item__value">${escapeHtml(formatSizingValue(sizing.TB, "s"))}</div>
+        </div>
+
+        <div class="settings-seismic-summary-item">
+          <div class="settings-seismic-summary-item__head">
+            <strong>TC</strong>
+            <span>Limite supérieure du palier d’accélération spectrale constante</span>
+          </div>
+          <div class="settings-seismic-summary-item__value">${escapeHtml(formatSizingValue(sizing.TC, "s"))}</div>
+        </div>
+
+        <div class="settings-seismic-summary-item">
+          <div class="settings-seismic-summary-item__head">
+            <strong>TD</strong>
+            <span>Début de la branche à déplacement spectral constant</span>
+          </div>
+          <div class="settings-seismic-summary-item__value">${escapeHtml(formatSizingValue(sizing.TD, "s"))}</div>
         </div>
       </div>
+
+      <div class="settings-seismic-summary-subtitle">Valeurs du spectre Se(T)</div>
+      ${renderElasticSpectrumTable(form)}
     </div>
   `;
 }
@@ -1862,7 +1912,7 @@ function getPageHtml(form) {
                 lead: "Cadre réglementaire et hypothèses d’entrée du lot parasismique.",
                 cards: [
                   renderSectionCard({
-                    title: "Classement, zonage et sol",
+                    title: "Protection parasismique",
                     description: "Paramètres d’entrée du cadre parasismique à utiliser pour le projet.",
                     badge: "LIVE",
                     body: `${getGeorisquesSismiqueSummary() ? `
@@ -1889,7 +1939,7 @@ function getPageHtml(form) {
                         </div>
                         <div class="settings-seismic-chart-placeholder">
                           <div class="settings-seismic-chart-placeholder__title">Graphique du spectre de réponse élastique normalisé</div>
-                          <div class="settings-seismic-chart-placeholder__text">Zone de tracé réservée pour la prochaine étape d’implémentation.</div>
+                          <div class="settings-seismic-chart-placeholder__text">Zone de tracé réservée pour la prochaine étape d’implémentation. Les valeurs Se(T) sont calculées ci-contre avec un pas de 0,1 s.</div>
                         </div>
                       </div>
                       <div class="settings-seismic-sizing-side">
