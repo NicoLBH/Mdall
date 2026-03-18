@@ -5,6 +5,7 @@ import { renderGlobalShell } from "./views/global-shell.js";
 import { runAnalysis, resetAnalysisUi } from "./services/analysis-runner.js";
 import { ensureProjectAutomationDefaults } from "./services/project-automation.js";
 import { bindGhActionButtons } from "./views/ui/gh-split-button.js";
+import { initializeDemoContext, getPersistedDemoProjectId } from "./demo-context.js";
 
 let analysisEventsBound = false;
 
@@ -25,9 +26,7 @@ function bindAnalysisEvents() {
 function bootstrap() {
   console.log("RAPSOBOT V2 boot");
 
-  store.user = {
-    name: "demo"
-  };
+  initializeDemoContext();
 
   ensureProjectAutomationDefaults();
   bindAnalysisEvents();
@@ -41,7 +40,7 @@ function bootstrap() {
   initRouter();
 
   if (!location.hash) {
-    location.hash = "#project/demo/situations";
+    location.hash = `#project/${getPersistedDemoProjectId()}/situations`;
   }
 }
 
