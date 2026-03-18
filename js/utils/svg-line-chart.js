@@ -30,14 +30,28 @@ function buildNiceTicks(maxValue, tickCount = 4) {
   return ticks;
 }
 
-function buildPath(points, xScale, yScale) {
-  const valid = points.filter((point) => Number.isFinite(point?.x) && Number.isFinite(point?.y));
+function getValidPoints(points = []) {
+  return points.filter((point) => Number.isFinite(point?.x) && Number.isFinite(point?.y));
+}
+
+function buildLinePath(points, xScale, yScale) {
+  const valid = getValidPoints(points);
   if (!valid.length) return "";
   return valid.map((point, index) => {
     const x = xScale(point.x).toFixed(3);
     const y = yScale(point.y).toFixed(3);
     return `${index === 0 ? "M" : "L"}${x},${y}`;
   }).join("");
+}
+
+function buildAreaPath(points, xScale, yScale, baselineValue) {
+  const valid = getValidPoints(points);
+  if (!valid.length) return "";
+  const firstX = xScale(valid[0].x).toFixed(3);
+  const lastX = xScale(valid[valid.length - 1].x).toFixed(3);
+  const baselineY = yScale(baselineValue).toFixed(3);
+  const linePath = buildLinePath(valid, xScale, yScale);
+  return `${linePath}L${lastX},${baselineY}L${firstX},${baselineY}Z`;
 }
 
 export function renderSvgLineChart({
@@ -53,6 +67,8 @@ export function renderSvgLineChart({
   yDomain = [0, 1],
   xTicks = [],
   yTicks = [],
+  xGrid = {},
+  yGrid = {},
   series = []
 } = {}) {
   const safeWidth = Math.max(320, clampNumber(width, 394));
@@ -66,24 +82,38 @@ export function renderSvgLineChart({
   const xScale = (value) => ((value - xMin) / xRange) * innerWidth;
   const yScale = (value) => innerHeight - ((value - yMin) / yRange) * innerHeight;
   const descriptionId = `chart-desc-${Math.random().toString(36).slice(2, 10)}`;
+  const safeXGrid = {
+    show: xGrid.show !== false,
+    skipFirst: xGrid.skipFirst !== false,
+    lineStyle: xGrid.lineStyle === "solid" ? "solid" : "dashed"
+  };
+  const safeYGrid = {
+    show: yGrid.show !== false,
+    skipFirst: yGrid.skipFirst !== false,
+    lineStyle: yGrid.lineStyle === "solid" ? "solid" : "dashed"
+  };
 
   return `
     <div class="svg-line-chart">
       <svg class="svg-line-chart__svg" width="${safeWidth}" height="${safeHeight}" role="img" aria-describedby="${descriptionId}">
         <desc id="${descriptionId}">${escapeHtml(ariaDescription || subtitle || title)}</desc>
         <g transform="translate(${margin.left},${margin.top})">
-          <g class="svg-line-chart__grid svg-line-chart__grid--y">
-            ${yTicks.map((tick) => {
-              const y = yScale(tick);
-              return `<g class="svg-line-chart__tick" transform="translate(0,${y.toFixed(3)})"><line x2="${innerWidth}" y2="0"></line></g>`;
-            }).join("")}
-          </g>
-          <g class="svg-line-chart__grid svg-line-chart__grid--x" transform="translate(0,${innerHeight})">
-            ${xTicks.map((tick) => {
-              const x = xScale(tick);
-              return `<g class="svg-line-chart__tick" transform="translate(${x.toFixed(3)},0)"><line y2="-${innerHeight}"></line></g>`;
-            }).join("")}
-          </g>
+          ${safeYGrid.show ? `
+            <g class="svg-line-chart__grid svg-line-chart__grid--y svg-line-chart__grid--${safeYGrid.lineStyle}">
+              ${yTicks.filter((_, index) => !(safeYGrid.skipFirst && index === 0)).map((tick) => {
+                const y = yScale(tick);
+                return `<g class="svg-line-chart__tick" transform="translate(0,${y.toFixed(3)})"><line x2="${innerWidth}" y2="0"></line></g>`;
+              }).join("")}
+            </g>
+          ` : ""}
+          ${safeXGrid.show ? `
+            <g class="svg-line-chart__grid svg-line-chart__grid--x svg-line-chart__grid--${safeXGrid.lineStyle}" transform="translate(0,${innerHeight})">
+              ${xTicks.filter((_, index) => !(safeXGrid.skipFirst && index === 0)).map((tick) => {
+                const x = xScale(tick);
+                return `<g class="svg-line-chart__tick" transform="translate(${x.toFixed(3)},0)"><line y2="-${innerHeight}"></line></g>`;
+              }).join("")}
+            </g>
+          ` : ""}
           <g class="svg-line-chart__axis svg-line-chart__axis--x" transform="translate(0,${innerHeight})">
             <path d="M0.5,0.5H${(innerWidth + 0.5).toFixed(1)}"></path>
             ${xTicks.map((tick) => {
@@ -100,11 +130,17 @@ export function renderSvgLineChart({
           </g>
           ${series.map((item, index) => {
             const className = `svg-line-chart__series svg-line-chart__series--${index + 1}`;
-            const path = buildPath(item?.points || [], xScale, yScale);
+            const linePath = buildLinePath(item?.points || [], xScale, yScale);
+            const areaPath = buildAreaPath(item?.points || [], xScale, yScale, yMin);
+            const showStroke = item?.stroke !== false;
+            const showFill = item?.fill === true;
+            const showPoints = item?.pointsVisible === true;
+            const validPoints = getValidPoints(item?.points || []);
             return `
               <g class="${className}">
-                <path class="svg-line-chart__line" d="${path}"></path>
-                ${(item?.points || []).filter((point) => Number.isFinite(point?.x) && Number.isFinite(point?.y)).map((point) => `<circle class="svg-line-chart__point" cx="${xScale(point.x).toFixed(3)}" cy="${yScale(point.y).toFixed(3)}" r="3.5"></circle>`).join("")}
+                ${showFill && areaPath ? `<path class="svg-line-chart__area" d="${areaPath}"></path>` : ""}
+                ${showStroke && linePath ? `<path class="svg-line-chart__line" d="${linePath}"></path>` : ""}
+                ${showPoints ? validPoints.map((point) => `<circle class="svg-line-chart__point" cx="${xScale(point.x).toFixed(3)}" cy="${yScale(point.y).toFixed(3)}" r="3.5"></circle>`).join("") : ""}
               </g>
             `;
           }).join("")}
