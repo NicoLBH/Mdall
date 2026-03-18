@@ -1,0 +1,16 @@
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Avatar BET">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#d7f7ff"/>
+      <stop offset="100%" stop-color="#dff5ea"/>
+    </linearGradient>
+  </defs>
+  <circle cx="64" cy="64" r="64" fill="url(#bg)"/>
+  <circle cx="64" cy="50" r="24" fill="#f1c7a5"/>
+  <path d="M39 44c6-18 44-18 50 0-10-7-17-9-25-9s-15 2-25 9Z" fill="#3f3f46"/>
+  <rect x="43" y="46" width="16" height="10" rx="4" fill="none" stroke="#334155" stroke-width="3"/>
+  <rect x="69" y="46" width="16" height="10" rx="4" fill="none" stroke="#334155" stroke-width="3"/>
+  <path d="M59 51h10" stroke="#334155" stroke-width="3" stroke-linecap="round"/>
+  <path d="M32 112c3-22 18-34 32-34s29 12 32 34" fill="#f8fafc"/>
+  <path d="M49 86h30" stroke="#16a34a" stroke-width="6" stroke-linecap="round"/>
+</svg>

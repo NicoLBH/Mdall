@@ -1,0 +1,14 @@
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Avatar Entreprise">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ffe3a8"/>
+      <stop offset="100%" stop-color="#ffd1a6"/>
+    </linearGradient>
+  </defs>
+  <circle cx="64" cy="64" r="64" fill="url(#bg)"/>
+  <circle cx="64" cy="54" r="22" fill="#f1c6a2"/>
+  <path d="M36 43c6-9 18-14 28-14s22 5 28 14v7H36Z" fill="#f59e0b"/>
+  <path d="M43 42a21 12 0 0 1 42 0" fill="#ffd54f"/>
+  <path d="M28 112c2-21 17-34 36-34s34 13 36 34" fill="#fff7ed"/>
+  <path d="M50 86h28" stroke="#92400e" stroke-width="6" stroke-linecap="round"/>
+</svg>
