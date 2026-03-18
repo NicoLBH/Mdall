@@ -6006,7 +6006,7 @@ color:#ffff;
 .settings-seismic-chart-card,
 .settings-seismic-summary-card{
   border:1px solid var(--border);
-  border-radius:12px;
+  border-radius:var(--radius);
   background:rgba(110,118,129,.08);
 }
 
@@ -6014,6 +6014,7 @@ color:#ffff;
 .settings-seismic-chart-card{
   min-height:220px;
   padding:18px;
+  height:100%;
 }
 
 .settings-seismic-chart-placeholder{
@@ -6242,7 +6243,7 @@ color:#ffff;
   max-height:280px;
   overflow:auto;
   border:1px solid var(--border);
-  border-radius:10px;
+  border-radius:var(--radius);
   background:rgba(13,17,23,.25);
 }
 
@@ -6265,7 +6266,7 @@ color:#ffff;
   position:sticky;
   top:0;
   z-index:1;
-  background:var(--panel);
+  background:var(--border);
   color:var(--text);
 }
 
