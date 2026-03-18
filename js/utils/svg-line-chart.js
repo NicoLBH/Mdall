@@ -70,6 +70,8 @@ export function renderSvgLineChart({
   xGrid = {},
   yGrid = {},
   interactive = false,
+  xTickFormatter = null,
+  yTickFormatter = null,
   series = []
 } = {}) {
   const safeWidth = Math.max(320, clampNumber(width, 394));
@@ -133,14 +135,16 @@ export function renderSvgLineChart({
             <path d="M0.5,0.5H${(innerWidth + 0.5).toFixed(1)}"></path>
             ${xTicks.map((tick) => {
               const x = xScale(tick);
-              return `<g class="svg-line-chart__axis-tick" transform="translate(${x.toFixed(3)},0)"><text y="16">${escapeHtml(formatTickLabel(tick, 1))}</text></g>`;
+              const label = typeof xTickFormatter === "function" ? xTickFormatter(tick) : formatTickLabel(tick, 1);
+              return `<g class="svg-line-chart__axis-tick" transform="translate(${x.toFixed(3)},0)"><text y="16">${escapeHtml(label)}</text></g>`;
             }).join("")}
           </g>
           <g class="svg-line-chart__axis svg-line-chart__axis--y">
             <path d="M0.5,${(innerHeight + 0.5).toFixed(1)}V0.5"></path>
             ${yTicks.map((tick) => {
               const y = yScale(tick);
-              return `<g class="svg-line-chart__axis-tick" transform="translate(0,${y.toFixed(3)})"><text x="-8" dy="0.32em">${escapeHtml(formatTickLabel(tick, 2))}</text></g>`;
+              const label = typeof yTickFormatter === "function" ? yTickFormatter(tick) : formatTickLabel(tick, 2);
+              return `<g class="svg-line-chart__axis-tick" transform="translate(0,${y.toFixed(3)})"><text x="-8" dy="0.32em">${escapeHtml(label)}</text></g>`;
             }).join("")}
           </g>
           ${series.map((item, index) => {
