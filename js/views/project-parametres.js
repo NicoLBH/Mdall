@@ -630,12 +630,14 @@ function renderSeismicPeriodsMiniTable(form) {
       <table class="settings-seismic-periods-mini-table">
         <thead>
           <tr>
+            <th><span class="settings-seismic-periods-mini-table__rowhead">T</span></th>
             ${periodItems.map((item) => `<th title="${escapeHtml(item.tooltip)}">${escapeHtml(item.key)} <span class="settings-seismic-periods-mini-table__meta">(${escapeHtml(formatSizingValue(item.value, "s"))})</span></th>`).join("")}
           </tr>
         </thead>
         <tbody>
           <tr>
-            ${spectralValues.map((item, index) => `<td>${index === 0 ? '<span class="settings-seismic-periods-mini-table__rowhead">Se(T)</span> ' : ''}${escapeHtml(formatSizingValue(item.value, "m/s2"))}</td>`).join("")}
+            <th><span class="settings-seismic-periods-mini-table__rowhead">Se(T)</span></th>
+            ${spectralValues.map((item, index) => `<td>${escapeHtml(formatSizingValue(item.value, "m/s2"))}</td>`).join("")}
           </tr>
         </tbody>
       </table>
