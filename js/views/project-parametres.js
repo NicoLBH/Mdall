@@ -350,7 +350,7 @@ function renderNavIcon(name) {
 
 const PARAMETRES_NAV_GROUPS = [
   {
-    title: "Paramètres",
+    title: "",
     items: [
       { targetId: "parametres-general", label: "Général", icon: "general", isPrimary: true, isActive: true }
     ]
@@ -362,18 +362,18 @@ const PARAMETRES_NAV_GROUPS = [
       { targetId: "parametres-phase", label: "Phase", icon: "checklist" },
       { targetId: "parametres-collaborateurs", label: "Collaborateurs", icon: "people" },
       { targetId: "parametres-agents-actives", label: "Agents activés", icon: "shield" },
-      { targetId: "parametres-lots", label: "Lots", icon: "book" },
+      { targetId: "parametres-lots", label: "Lots activés", icon: "book" },
       { targetId: "parametres-zones-batiments", label: "Zones / bâtiments / niveaux", icon: "book" },
       { targetId: "parametres-georisques", label: "Géorisques", icon: "shield" }
     ]
   },
   {
-    sectionLabel: "Référentiels techniques et réglementaires",
+    sectionLabel: "Caractérisations techniques",
     items: [
       { targetId: "parametres-zones-reglementaires", label: "Solidité des ouvrages", icon: "shield" },
       { targetId: "parametres-incendie", label: "Sécurité incendie", icon: "shield" },
-      { targetId: "parametres-accessibilite", label: "Accessibilité PMR", icon: "shield" },
       { targetId: "parametres-parasismiques", label: "Protection parasismique", icon: "shield" },
+      { targetId: "parametres-accessibilite", label: "Accessibilité PMR", icon: "book" },
       { targetId: "parametres-thermiques", label: "Performances thermiques", icon: "book" },
       { targetId: "parametres-acoustique", label: "Performances acoustiques", icon: "book" },
       { targetId: "parametres-normes", label: "DTU / Eurocodes / normes", icon: "book" },
@@ -1788,7 +1788,7 @@ function getPageHtml(form) {
             contentHtml: `
               ${renderSettingsBlock({
                 id: "parametres-general",
-                title: "General",
+                title: "",
                 lead: "",
                 isActive: true,
                 isHero: false,
@@ -1810,7 +1810,7 @@ function getPageHtml(form) {
 
               ${renderSettingsBlock({
                 id: "parametres-localisation",
-                title: "Données de base projet",
+                title: "",
                 lead: "",
                 cards: [
                   renderSectionCard({
@@ -1849,8 +1849,8 @@ function getPageHtml(form) {
 
               ${renderSettingsBlock({
                 id: "parametres-phase",
-                title: "Données de base projet",
-                lead: "La phase en cours structure le projet. La liste des phases activées alimente ensuite le menu déroulant de l’onglet Documents.",
+                title: "",
+                lead: "",
                 cards: [
                   renderSectionCard({
                     title: "Phase",
@@ -1867,7 +1867,7 @@ function getPageHtml(form) {
 
               ${renderSettingsBlock({
                 id: "parametres-collaborateurs",
-                title: "Données de base projet",
+                title: "",
                 lead: "",
                 cards: [
                   renderSectionCard({
@@ -1880,7 +1880,7 @@ function getPageHtml(form) {
 
               ${renderSettingsBlock({
                 id: "parametres-agents-actives",
-                title: "Données de base projet",
+                title: "",
                 lead: "",
                 cards: [
                   renderSectionCard({
@@ -1894,7 +1894,7 @@ function getPageHtml(form) {
 
               ${renderSettingsBlock({
                 id: "parametres-lots",
-                title: "Données de base projet",
+                title: "",
                 lead: "",
                 cards: [
                   renderSectionCard({
@@ -1910,7 +1910,7 @@ function getPageHtml(form) {
 
               ${renderSettingsBlock({
                 id: "parametres-zones-batiments",
-                title: "Données de base projet",
+                title: "",
                 lead: "",
                 cards: [
                   renderSectionCard({
@@ -1962,24 +1962,9 @@ function getPageHtml(form) {
               })}
 
               ${renderSettingsBlock({
-                id: "parametres-accessibilite",
-                title: "Référentiels techniques et réglementaires",
-                lead: "Base normative accessibilité PMR et dispositions complémentaires retenues.",
-                cards: [
-                  renderSectionCard({
-                    title: "Règlement accessibilité",
-                    description: "Base normative accessibilité PMR et dispositions complémentaires retenues.",
-                    body: renderPlaceholderList([
-                      "Exigences réglementaires, cas particuliers, dérogations et pièces justificatives attendues."
-                    ])
-                  })
-                ]
-              })}
-
-              ${renderSettingsBlock({
                 id: "parametres-parasismiques",
-                title: "Référentiels techniques et réglementaires",
-                lead: "Cadre réglementaire et hypothèses d’entrée du lot parasismique.",
+                title: "",
+                lead: "",
                 cards: [
                   renderSectionCard({
                     title: "Protection parasismique",
@@ -2015,6 +2000,21 @@ function getPageHtml(form) {
                         </div>
                       </div>
                     </div>`
+                  })
+                ]
+              })}
+
+              ${renderSettingsBlock({
+                id: "parametres-accessibilite",
+                title: "Référentiels techniques et réglementaires",
+                lead: "Base normative accessibilité PMR et dispositions complémentaires retenues.",
+                cards: [
+                  renderSectionCard({
+                    title: "Règlement accessibilité",
+                    description: "Base normative accessibilité PMR et dispositions complémentaires retenues.",
+                    body: renderPlaceholderList([
+                      "Exigences réglementaires, cas particuliers, dérogations et pièces justificatives attendues."
+                    ])
                   })
                 ]
               })}
@@ -2180,8 +2180,8 @@ function getPageHtml(form) {
 
               ${renderSettingsBlock({
                 id: "parametres-automatisations",
-                title: "Paramètres opérationnels",
-                lead: "Configuration des comportements automatiques principaux de Rapsobot pour ce projet.",
+                title: "",
+                lead: "",
                 cards: [
                   renderSectionCard({
                     title: "Automatisations",
