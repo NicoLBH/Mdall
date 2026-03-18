@@ -2159,16 +2159,17 @@ color:#ffff;
 
 .side-nav-layout__section-label{
   color:var(--muted);
-  font-size:12px;
+  font-size:11px;
   font-weight:600;
   line-height:18px;
-  margin:0 0 8px;
+  margin:0 0 6px;
+  padding-left:12px;
 }
 
 .side-nav-layout__separator{
   height:1px;
   background:var(--border);
-  margin:12px 0;
+  margin:7px -8px 8px;
 }
 
 .side-nav-layout__item{
@@ -2238,6 +2239,7 @@ color:#ffff;
 
 .side-nav-layout__label{
   min-width:0;
+  color:#ffff;
 }
 
 .side-nav-layout__tag{
