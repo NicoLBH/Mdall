@@ -6615,7 +6615,6 @@ color:#ffff;
   position:absolute;
   top:calc(100% + 8px);
   right:50px;
-  left:calc(100% - 50px);
   width:260px;
   padding:8px;
   background:rgb(1, 4, 9);
@@ -6623,7 +6622,6 @@ color:#ffff;
   box-shadow:rgb(61, 68, 77) 0px 0px 0px 1px, rgba(1, 4, 9, 0.4) 0px 6px 12px -3px, rgba(1, 4, 9, 0.4) 0px 6px 18px 0px;
   z-index:260;
   display:none;
-  margin-right:20px;
 }
 
 .gh-user-menu.is-open .gh-user-menu__dropdown,
