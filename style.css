@@ -6614,7 +6614,7 @@ color:#ffff;
 .gh-user-menu__dropdown{
   position:absolute;
   top:calc(100% + 8px);
-  right:-20px;
+  right:0px;
   left:auto;
   min-width:260px;
   padding:8px;
@@ -6623,6 +6623,7 @@ color:#ffff;
   box-shadow:rgb(61, 68, 77) 0px 0px 0px 1px, rgba(1, 4, 9, 0.4) 0px 6px 12px -3px, rgba(1, 4, 9, 0.4) 0px 6px 18px 0px;
   z-index:260;
   display:none;
+  padding-right:30px;
 }
 
 .gh-user-menu.is-open .gh-user-menu__dropdown,
