@@ -6613,7 +6613,7 @@ color:#ffff;
 
 .gh-user-menu__dropdown{
   position:absolute;
-  top:calc(100% + 8px);
+  top:calc(100% + 8px + 60px);
   right:50px;
   width:260px;
   padding:8px;
