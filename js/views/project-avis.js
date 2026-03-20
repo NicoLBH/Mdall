@@ -3973,6 +3973,7 @@ export function renderProjectAvis(root) {
     toolbarHost.innerHTML = `<div class="project-situations__table-toolbar">${renderSituationsViewHeaderHtml()}</div>`;
   }
 
+  
   root.innerHTML = `
     <section class="gh-panel gh-panel--results" aria-label="Results">
       <div id="situationsTableHost"></div>
