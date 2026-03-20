@@ -1911,7 +1911,6 @@ function renderFlatAvisRow(avis, sujetId, situationId) {
     <div class="issue-row issue-row--avis click js-row-avis${rowSelectedClass("avis", avis.id)}" data-avis-id="${escapeHtml(avis.id)}">
       <div class="cell cell-theme lvl0">
         <span class="chev chev--spacer"></span>
-        ${issueIcon("open")}
         ${reviewIcon ? `<span class="review-title-chip">${reviewIcon}</span>` : ""}
         <span class="theme-text theme-text--avis ${titleSeenClass}">${escapeHtml(firstNonEmpty(avis.title, avis.id, ""))}</span>
         ${lineage ? `<span class="mono subissues-inline-count">${escapeHtml(lineage)}</span>` : ""}
@@ -1924,7 +1923,7 @@ function renderFlatAvisRow(avis, sujetId, situationId) {
   `;
 }
 function getSituationsTableGridTemplate() {
-  return "1fr 110px 80px 140px 160px";
+  return "1fr 96px 56px 86px 72px";
 }
 
 function renderSituationsTableHeadHtml() {
