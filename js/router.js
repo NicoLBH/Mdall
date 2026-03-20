@@ -1,6 +1,6 @@
 import { renderGlobalDashboard } from "./views/global-dashboard.js";
 import { renderProjectsList } from "./views/projects-list.js";
-import { renderProjectHeader } from "./views/project-layout.js";
+import { renderProjectLayout } from "./views/project-layout.js";
 import { unmountProjectShellChrome } from "./views/project-shell-chrome.js";
 import { store } from "./store.js";
 import { syncCurrentProjectFromRoute } from "./demo-context.js";
