@@ -1,106 +1,97 @@
-import {
-  PROJECT_TAB_IDS,
-  normalizeProjectTabId
-} from "../constants.js";
-import { renderProjectDocuments } from "./project-documents.js";
-import { renderProjectSituations } from "./project-situations.js";
-import { renderProjectHeader } from "./project-header.js";
-import { renderProjectSituationsTopBanner } from "./project-situations-runbar.js";
-import { mountProjectShellChrome } from "./project-shell-chrome.js";
-import { renderProjectPropositions } from "./project-propositions.js";
-import { renderProjectDiscussions } from "./project-discussions.js";
-import { renderProjectActions } from "./project-actions.js";
-import { renderProjectInsights } from "./project-insights.js";
-import { renderProjectReferentiel } from "./project-referentiel.js";
-import { renderProjectRisquesSecurite } from "./project-risques-securite.js";
-import { renderProjectPilotage } from "./project-oversight.js";
-import { renderProjectParametres } from "./project-parametres.js";
+import { PROJECT_TABS, isToggleableProjectTab } from "../constants.js";
+import { store } from "../store.js";
+import { renderCountBadge } from "./ui/status-badges.js";
 
-function normalizeProjectTab(tab) {
-  const normalized = normalizeProjectTabId(tab);
+function getEffectiveSujetStatus(sujet) {
+  const decisions = Array.isArray(store.situationsView?.rawResult?.decisions)
+    ? store.situationsView.rawResult.decisions
+    : [];
 
-  switch (normalized) {
-    case PROJECT_TAB_IDS.DOCUMENTS:
-    case PROJECT_TAB_IDS.SITUATIONS:
-    case PROJECT_TAB_IDS.PROPOSITIONS:
-    case PROJECT_TAB_IDS.DISCUSSIONS:
-    case PROJECT_TAB_IDS.ACTIONS:
-    case PROJECT_TAB_IDS.PILOTAGE:
-    case PROJECT_TAB_IDS.REFERENTIEL:
-    case PROJECT_TAB_IDS.RISQUES_SECURITE:
-    case PROJECT_TAB_IDS.INSIGHTS:
-    case PROJECT_TAB_IDS.PARAMETRES:
-      return normalized;
+  const sujetId = String(sujet?.id || "");
 
-    default:
-      return PROJECT_TAB_IDS.DOCUMENTS;
-  }
+  const decision = decisions.find((d) => {
+    const entityType = String(d?.entity_type || d?.type || "").toLowerCase();
+    const entityId = String(d?.entity_id || d?.problem_id || d?.id || "");
+    return entityType === "sujet" && entityId === sujetId;
+  });
+
+  const d = String(decision?.decision || "").toUpperCase();
+  if (d === "CLOSED") return "closed";
+  if (d === "REOPENED") return "open";
+
+  return String(sujet?.status || "open").toLowerCase();
 }
 
-export function renderProjectLayout(root, projectId, tab) {
-  const normalizedTab = normalizeProjectTab(tab);
+function getProjectTabCounters() {
+  const situations = Array.isArray(store.situationsView?.data)
+    ? store.situationsView.data
+    : [];
 
-  root.innerHTML = `
-    <div class="project-shell" id="projectShell">
-      ${renderProjectHeader(projectId, normalizedTab)}
+  let openSujets = 0;
 
-      <div class="project-shell__body">
-        ${renderProjectSituationsTopBanner()}
-        <div id="projectViewHeaderHost" class="project-view-header-host"></div>
-        <div id="situationsToolbarHost" class="project-situations-toolbar-host"></div>
-        <div id="project-content" class="project-shell__content"></div>
-      </div>
-    </div>
-  `;
-
-  mountProjectShellChrome({ projectId, tab: normalizedTab });
-
-  const content = document.getElementById("project-content");
-  if (!content) return;
-
-  switch (normalizedTab) {
-    case PROJECT_TAB_IDS.DOCUMENTS:
-      renderProjectDocuments(content);
-      break;
-
-    case PROJECT_TAB_IDS.SITUATIONS:
-      renderProjectSituations(content);
-      break;
-
-    case PROJECT_TAB_IDS.PROPOSITIONS:
-      renderProjectPropositions(content);
-      break;
-
-    case PROJECT_TAB_IDS.DISCUSSIONS:
-      renderProjectDiscussions(content);
-      break;
-
-    case PROJECT_TAB_IDS.ACTIONS:
-      renderProjectActions(content);
-      break;
-
-    case PROJECT_TAB_IDS.PILOTAGE:
-      renderProjectPilotage(content);
-      break;
-
-    case PROJECT_TAB_IDS.REFERENTIEL:
-      renderProjectReferentiel(content);
-      break;
-
-    case PROJECT_TAB_IDS.RISQUES_SECURITE:
-      renderProjectRisquesSecurite(content);
-      break;
-
-    case PROJECT_TAB_IDS.INSIGHTS:
-      renderProjectInsights(content);
-      break;
-
-    case PROJECT_TAB_IDS.PARAMETRES:
-      renderProjectParametres(content);
-      break;
-
-    default:
-      renderProjectDocuments(content);
-      break;
+  for (const situation of situations) {
+    for (const sujet of situation?.sujets || []) {
+      if (getEffectiveSujetStatus(sujet) === "open") {
+        openSujets += 1;
+      }
+    }
   }
+
+  return { openSujets };
+}
+
+function renderTabCount(tab, counters) {
+  if (!tab.countKey) return "";
+  const value = Number(counters?.[tab.countKey] || 0);
+  return renderCountBadge(value, {
+    className: "project-tabs__counter",
+    ariaLabel: `${value} élément(s)`
+  });
+}
+
+function isTabVisible(tabId) {
+  const visibility = store.projectForm?.projectTabs || {};
+
+  if (tabId === "avis") {
+    return String(store.user?.role || "").toUpperCase() === "CT";
+  }
+
+  if (isToggleableProjectTab(tabId)) {
+    return visibility[tabId] !== false;
+  }
+
+  return true;
+}
+
+function getTabHref(projectId, tabId) {
+  return `#project/${projectId}/${tabId}`;
+}
+
+export function renderProjectHeader(projectId, activeTab) {
+  const counters = getProjectTabCounters();
+
+  return `
+    <section class="project-context-header">
+      <nav class="project-tabs" aria-label="Project navigation">
+        ${PROJECT_TABS.map((t) => {
+          const visible = isTabVisible(t.id);
+          return `
+            <a
+              href="${getTabHref(projectId, t.id)}"
+              class="${t.id === activeTab ? "active" : ""}"
+              data-project-tab-id="${t.id}"
+              style="${visible ? "" : "display:none;"}"
+              aria-hidden="${visible ? "false" : "true"}"
+            >
+              <span class="project-tabs__item">
+                <span class="project-tabs__icon" aria-hidden="true">${t.icon || ""}</span>
+                <span class="project-tabs__label">${t.label}</span>
+                ${renderTabCount(t, counters)}
+              </span>
+            </a>
+          `;
+        }).join("")}
+      </nav>
+    </section>
+  `;
 }
