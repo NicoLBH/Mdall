@@ -2961,9 +2961,9 @@ function selectSituation(situationId) {
   store.situationsView.selectedSujetId = null;
   store.situationsView.selectedAvisId = null;
 
-  store.situationsView.showTableOnly = false;
-  markEntitySeen("situation", situationId, { source: "details" });
-  rerenderPanels();
+  store.situationsView.showTableOnly = true;
+  updateDetailsModal();
+  openDetailsModal();
 }
 
 function selectSujet(sujetId) {
@@ -2976,9 +2976,11 @@ function selectSujet(sujetId) {
   store.situationsView.selectedSujetId = sujetId;
   store.situationsView.selectedAvisId = null;
 
-  store.situationsView.showTableOnly = false;
-  markEntitySeen("sujet", sujetId, { source: "details" });
-  rerenderPanels();
+  if (situation?.id) store.situationsView.expandedSituations.add(situation.id);
+
+  store.situationsView.showTableOnly = true;
+  updateDetailsModal();
+  openDetailsModal();
 }
 
 function selectAvis(avisId) {
