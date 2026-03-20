@@ -6613,9 +6613,9 @@ color:#ffff;
 
 .gh-user-menu__dropdown{
   position:relative;
-  top:calc(100% + 8px);
-  right:50px;
-  width:260px;
+  top:calc(100% + 8px) !important;
+  right:20px !important;
+  min-width:256px !important;
   padding:8px;
   background:rgb(1, 4, 9);
   border-radius:var(--radius);
