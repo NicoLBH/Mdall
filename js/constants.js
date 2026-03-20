@@ -48,6 +48,14 @@ export function isToggleableProjectTab(tabId) {
   return PROJECT_TABS_TOGGLEABLE.includes(tabId);
 }
 
+export function isProjectTabAllowedForUser(tabId, user) {
+  if (tabId === PROJECT_TAB_IDS.AVIS) {
+    return String(user?.role || "").toUpperCase() === "CT";
+  }
+
+  return true;
+}
+
 export const PROJECT_TABS = [
   {
     id: PROJECT_TAB_IDS.DOCUMENTS,
