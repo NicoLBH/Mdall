@@ -423,6 +423,7 @@ function ensureViewUiState() {
   if (typeof v.rightSubissuesOpen !== "boolean") v.rightSubissuesOpen = true;
   if (typeof v.commentPreviewMode !== "boolean") v.commentPreviewMode = false;
   if (typeof v.helpMode !== "boolean") v.helpMode = false;
+  if (typeof v.showTableOnly !== "boolean") v.showTableOnly = true;
   if (!v.tempAvisVerdict) v.tempAvisVerdict = "F";
   if (!v.tempAvisVerdictFor) v.tempAvisVerdictFor = null;
   if (!v.descriptionEdit || typeof v.descriptionEdit !== "object") {
@@ -2908,9 +2909,7 @@ function rerenderPanels() {
 
   const filteredSituations = getFilteredSituations();
   const counts = getVisibleCounts(filteredSituations);
-  const tableHost = document.getElementById("situationsTableHost");
-  const detailsHost = document.getElementById("situationsDetailsHost");
-  const detailsTitleHost = document.getElementById("situationsDetailsTitle");
+  const panelHost = document.getElementById("situationsPanelHost");
   const countsHost = document.getElementById("situationsHeaderCounts");
   const verdictFilter = document.getElementById("verdictFilter");
   const displayDepth = document.getElementById("displayDepth");
@@ -2922,25 +2921,34 @@ function rerenderPanels() {
 
   if (countsHost) countsHost.textContent = `${counts.situations} situations · ${counts.sujets} sujets · ${counts.avis} avis`;
 
-  if (tableHost) {
-    tableHost.innerHTML = renderTableHtml(filteredSituations);
-
-    const mainScrollBody = tableHost.querySelector(".issues-table__body");
-    registerProjectPrimaryScrollSource(mainScrollBody || null);
+  if (panelHost) {
+    if (store.situationsView.showTableOnly) {
+      panelHost.innerHTML = `<div id="situationsTableHost">${renderTableHtml(filteredSituations)}</div>`;
+      const mainScrollBody = panelHost.querySelector(".issues-table__body");
+      registerProjectPrimaryScrollSource(mainScrollBody || null);
+    } else {
+      const details = renderDetailsHtml(null, {
+        subissuesOptions: {
+          sujetRowClass: "js-modal-drilldown-sujet",
+          sujetToggleClass: "js-modal-toggle-sujet",
+          avisRowClass: "js-modal-drilldown-avis",
+          expandedSujets: store.situationsView.rightExpandedSujets
+        }
+      });
+      panelHost.innerHTML = `
+        <section class="gh-panel gh-panel--details gh-panel--details-standalone" aria-label="Details">
+          <div class="gh-panel__head gh-panel__head--tight" id="situationsDetailsTitle">${details.titleHtml}</div>
+          <div class="details-body" id="situationsDetailsHost">${details.bodyHtml}</div>
+        </section>
+      `;
+      const detailsHost = document.getElementById("situationsDetailsHost");
+      wireDetailsInteractive(detailsHost);
+      bindDetailsScroll(document);
+      detailsHost?.__syncCondensedTitle?.();
+      registerProjectPrimaryScrollSource(detailsHost || null);
+    }
   }
 
-  const details = renderDetailsHtml(null, {
-    subissuesOptions: {
-      sujetRowClass: "js-modal-drilldown-sujet",
-      sujetToggleClass: "js-modal-toggle-sujet",
-      avisRowClass: "js-modal-drilldown-avis",
-      expandedSujets: store.situationsView.rightExpandedSujets
-    }
-  });
-  if (detailsTitleHost) detailsTitleHost.innerHTML = details.titleHtml;
-  if (detailsHost) detailsHost.innerHTML = details.bodyHtml;
-
-  wireDetailsInteractive(detailsHost);
   updateDetailsModal();
   if (store.situationsView.drilldown?.isOpen) updateDrilldownPanel();
   refreshProjectShellChrome("situations");
@@ -2954,6 +2962,7 @@ function selectSituation(situationId) {
   store.situationsView.selectedSujetId = null;
   store.situationsView.selectedAvisId = null;
 
+  store.situationsView.showTableOnly = false;
   markEntitySeen("situation", situationId, { source: "details" });
   rerenderPanels();
 }
@@ -2968,6 +2977,7 @@ function selectSujet(sujetId) {
   store.situationsView.selectedSujetId = sujetId;
   store.situationsView.selectedAvisId = null;
 
+  store.situationsView.showTableOnly = false;
   markEntitySeen("sujet", sujetId, { source: "details" });
   rerenderPanels();
 }
@@ -2988,6 +2998,7 @@ function selectAvis(avisId) {
   store.situationsView.tempAvisVerdictFor = avisId;
   store.situationsView.tempAvisVerdict = getEffectiveAvisVerdict(avisId) || "F";
 
+  store.situationsView.showTableOnly = false;
   markEntitySeen("avis", avisId, { source: "details" });
   rerenderPanels();
 }
@@ -3929,8 +3940,9 @@ export function renderProjectSituations(root) {
   ensureSituationsLegacyDomStyle();
   ensureViewUiState();
   ensureDrilldownDom();
+  store.situationsView.showTableOnly = true;
 
-  root.className = "project-shell__content gh-page gh-page--2col";
+  root.className = "project-shell__content gh-page";
 
   setProjectViewHeader({
     contextLabel: "Situations",
@@ -3956,14 +3968,7 @@ export function renderProjectSituations(root) {
 
   root.innerHTML = `
     <section class="gh-panel gh-panel--results" aria-label="Results">
-      <div id="situationsTableHost"></div>
-    </section>
-
-    <section class="gh-panel gh-panel--details" aria-label="Details">
-      <div class="gh-panel__head gh-panel__head--tight" id="situationsDetailsTitle"></div>
-      <div class="details-body" id="situationsDetailsHost">
-        <div class="emptyState">Sélectionne une situation / un sujet / un avis pour afficher les détails.</div>
-      </div>
+      <div id="situationsPanelHost"></div>
     </section>
   `;
 
@@ -3971,8 +3976,6 @@ export function renderProjectSituations(root) {
   bindSituationsEvents(root, headerRoot);
   bindProjectSituationsRunbar(toolbarHost || root || document);
   bindModalEvents();
-  bindDetailsScroll(root);
-  initRightSplitter(root);
   updateDetailsModal();
 
   syncProjectSituationsRunbar({
