@@ -3,6 +3,7 @@ import {
   normalizeProjectTabId
 } from "../constants.js";
 import { renderProjectDocuments } from "./project-documents.js";
+import { renderProjectAvis } from "./project-avis.js";
 import { renderProjectSituations } from "./project-situations.js";
 import { renderProjectHeader } from "./project-header.js";
 import { renderProjectSituationsTopBanner } from "./project-situations-runbar.js";
@@ -21,6 +22,7 @@ function normalizeProjectTab(tab) {
 
   switch (normalized) {
     case PROJECT_TAB_IDS.DOCUMENTS:
+    case PROJECT_TAB_IDS.AVIS:
     case PROJECT_TAB_IDS.SITUATIONS:
     case PROJECT_TAB_IDS.PROPOSITIONS:
     case PROJECT_TAB_IDS.DISCUSSIONS:
@@ -63,6 +65,10 @@ export function renderProjectLayout(root, projectId, tab) {
       renderProjectDocuments(content);
       break;
 
+    case PROJECT_TAB_IDS.AVISS:
+      renderProjectAvis(content);
+      break;
+      
     case PROJECT_TAB_IDS.SITUATIONS:
       renderProjectSituations(content);
       break;
