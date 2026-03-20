@@ -1616,15 +1616,15 @@ function situationMatchesFilters(situation, query, verdictFilter) {
   return situationTextMatch;
 }
 
+
 function getVisibleCounts(filteredSituations) {
-  let sujets = 0;
   let avis = 0;
   for (const situation of filteredSituations) {
-    sujets += (situation.sujets || []).length;
     for (const sujet of situation.sujets || []) avis += (sujet.avis || []).length;
   }
-  return { situations: filteredSituations.length, sujets, avis };
+  return { avis };
 }
+
 
 function getNestedSituation(situationId) {
   return (store.situationsView.data || []).find((s) => s.id === situationId) || null;
@@ -1673,22 +1673,23 @@ function getSujetByAvisId(avisId) {
   return null;
 }
 
+
 function getActiveSelection() {
   if (store.situationsView.selectedAvisId) {
     const avis = getNestedAvis(store.situationsView.selectedAvisId);
     if (avis) return { type: "avis", item: avis };
   }
-  if (store.situationsView.selectedSujetId) {
-    const sujet = getNestedSujet(store.situationsView.selectedSujetId);
-    if (sujet) return { type: "sujet", item: sujet };
+
+  for (const situation of store.situationsView.data || []) {
+    for (const sujet of situation.sujets || []) {
+      const firstAvis = (sujet.avis || [])[0];
+      if (firstAvis) return { type: "avis", item: firstAvis };
+    }
   }
-  if (store.situationsView.selectedSituationId) {
-    const situation = getNestedSituation(store.situationsView.selectedSituationId);
-    if (situation) return { type: "situation", item: situation };
-  }
-  const firstSituation = (store.situationsView.data || [])[0] || null;
-  return firstSituation ? { type: "situation", item: firstSituation } : null;
+
+  return null;
 }
+
 
 /* =========================================================
    Effective counts / title helpers
@@ -1901,9 +1902,9 @@ function renderFlatSujetRow(sujet, situationId) {
   `;
 }
 
-function renderFlatAvisRow(avis, sujetId, situationId) {
+
+function renderFlatAvisRow(avis) {
   const effVerdict = getEffectiveAvisVerdict(avis.id);
-  const lineage = [situationId, sujetId].filter(Boolean).join(" · ");
   const reviewIcon = renderEntityReviewLeadIcon("avis", avis.id);
   const titleSeenClass = getReviewTitleStateClass("avis", avis.id);
 
@@ -1913,7 +1914,6 @@ function renderFlatAvisRow(avis, sujetId, situationId) {
         <span class="chev chev--spacer"></span>
         ${reviewIcon ? `<span class="review-title-chip">${reviewIcon}</span>` : ""}
         <span class="theme-text theme-text--avis ${titleSeenClass}">${escapeHtml(firstNonEmpty(avis.title, avis.id, ""))}</span>
-        ${lineage ? `<span class="mono subissues-inline-count">${escapeHtml(lineage)}</span>` : ""}
       </div>
       <div class="cell cell-verdict">${renderVerdictPill(effVerdict)}</div>
       <div class="cell cell-prio"></div>
@@ -1922,6 +1922,7 @@ function renderFlatAvisRow(avis, sujetId, situationId) {
     </div>
   `;
 }
+
 function getSituationsTableGridTemplate() {
   return "1fr 96px 56px 86px 72px";
 }
@@ -1938,6 +1939,7 @@ function renderSituationsTableHeadHtml() {
   });
 }
 
+
 function renderWelcomeHtml() {
   return renderDataTableShell({
     className: "issues-table",
@@ -1945,14 +1947,15 @@ function renderWelcomeHtml() {
     headHtml: renderSituationsTableHeadHtml(),
     state: "empty",
     emptyHtml: renderDataTableEmptyState({
-      title: "Aucune analyse disponible",
-      description: "Lancer une analyse pour générer des avis-sujets-situations."
+      title: "Aucun avis disponible",
+      description: "Lancer une analyse pour générer des avis."
     })
   });
 }
 
+
+
 function renderTableHtml(filteredSituations) {
-  const displayDepth = String(store.situationsView.displayDepth || "situations").toLowerCase();
   const activeVerdictFilter = String(store.situationsView.verdictFilter || "ALL").toUpperCase();
 
   const avisMatchesVerdictFilter = (avis) => {
@@ -1962,75 +1965,27 @@ function renderTableHtml(filteredSituations) {
 
   if (!(store.situationsView.data || []).length) return renderWelcomeHtml();
 
-  if (!filteredSituations.length) {
+  const rows = [];
+  for (const situation of filteredSituations) {
+    for (const sujet of situation.sujets || []) {
+      for (const avis of sujet.avis || []) {
+        if (!avisMatchesVerdictFilter(avis)) continue;
+        rows.push(renderFlatAvisRow(avis));
+      }
+    }
+  }
+
+  if (!rows.length) {
     return renderDataTableShell({
       className: "issues-table",
       gridTemplate: getSituationsTableGridTemplate(),
       headHtml: renderSituationsTableHeadHtml(),
       state: "empty",
       emptyHtml: renderDataTableEmptyState({
-        title: "Aucun résultat",
-        description: "Aucun résultat pour les filtres actuels."
+        title: "Aucun avis",
+        description: "Aucun avis ne correspond aux filtres actuels."
       })
     });
-  }
-
-  const rows = [];
-
-  if (displayDepth === "avis") {
-    for (const situation of filteredSituations) {
-      for (const sujet of situation.sujets || []) {
-        for (const avis of sujet.avis || []) {
-          if (!avisMatchesVerdictFilter(avis)) continue;
-          rows.push(renderFlatAvisRow(avis, sujet.id, situation.id));
-        }
-      }
-    }
-
-    return renderDataTableShell({
-      className: "issues-table",
-      gridTemplate: getSituationsTableGridTemplate(),
-      headHtml: renderSituationsTableHeadHtml(),
-      bodyHtml: rows.join("")
-    });
-  }
-
-  const forceExpandSituations = displayDepth === "sujets" || displayDepth === "avis";
-  const forceExpandSujets = displayDepth === "avis";
-
-  for (const situation of filteredSituations) {
-    const visibleSujets =
-      activeVerdictFilter === "ALL"
-        ? (situation.sujets || [])
-        : (situation.sujets || []).filter((sujet) =>
-            (sujet.avis || []).some((avis) => avisMatchesVerdictFilter(avis))
-          );
-
-    if (activeVerdictFilter !== "ALL" && !visibleSujets.length) continue;
-
-    rows.push(renderSituationRow(situation));
-
-    const showSujets =
-      forceExpandSituations || store.situationsView.expandedSituations.has(situation.id);
-    if (!showSujets) continue;
-
-    for (const sujet of visibleSujets) {
-      const visibleAvis =
-        activeVerdictFilter === "ALL"
-          ? (sujet.avis || [])
-          : (sujet.avis || []).filter((avis) => avisMatchesVerdictFilter(avis));
-
-      if (activeVerdictFilter !== "ALL" && !visibleAvis.length) continue;
-
-      rows.push(renderSujetRow(sujet));
-
-      const showAvis = forceExpandSujets || store.situationsView.expandedSujets.has(sujet.id);
-      if (!showAvis) continue;
-
-      for (const avis of visibleAvis) {
-        rows.push(renderAvisRow(avis));
-      }
-    }
   }
 
   return renderDataTableShell({
@@ -2040,6 +1995,7 @@ function renderTableHtml(filteredSituations) {
     bodyHtml: rows.join("")
   });
 }
+
 
 /* =========================================================
    Details / summary / metadata
@@ -2574,61 +2530,31 @@ function renderCommentBox(selection) {
   });
 }
 
+
 function renderDetailedMetaForSelection(selection) {
-  if (!selection) return "";
+  if (!selection || selection.type !== "avis") return "";
 
   const item = selection.item;
   const raw = item.raw || {};
-  const decision = getDecision(selection.type, item.id);
+  const sujet = getSujetByAvisId(item.id);
+  const situation = getSituationByAvisId(item.id);
+  const decision = getDecision("avis", item.id);
 
-  const common = [
+  return [
     renderMetaItem("ID", `<span class="mono">${escapeHtml(item.id)}</span>`),
-    renderMetaItem("Title", escapeHtml(firstNonEmpty(item.title, item.id))),
+    renderMetaItem("Titre", escapeHtml(firstNonEmpty(item.title, item.id))),
+    renderMetaItem("Verdict effectif", renderVerdictPill(getEffectiveAvisVerdict(item.id))),
+    renderMetaItem("Verdict source", renderVerdictPill(firstNonEmpty(raw.verdict, item.verdict, "-"))),
     renderMetaItem("Agent", `<span class="mono">${escapeHtml(firstNonEmpty(item.agent, raw.agent, "system"))}</span>`),
-    renderMetaItem("Priority", priorityBadge(firstNonEmpty(item.priority, raw.priority, "P3"))),
+    renderMetaItem("Severity", `<span class="mono">${escapeHtml(firstNonEmpty(raw.severity, "—"))}</span>`),
+    renderMetaItem("Source", `<span class="mono">${escapeHtml(firstNonEmpty(raw.source, "—"))}</span>`),
+    renderMetaItem("Sujet parent", `<span class="mono">${escapeHtml(sujet?.id || "—")}</span>`),
+    renderMetaItem("Situation parent", `<span class="mono">${escapeHtml(situation?.id || "—")}</span>`),
     renderMetaItem("Run", `<span class="mono">${escapeHtml(currentRunKey())}</span>`),
     renderMetaItem("Historique humain", decision ? `<span class="mono">${escapeHtml(decision.decision)} · ${escapeHtml(fmtTs(decision.ts))}</span>` : "—")
-  ];
-
-  if (selection.type === "avis") {
-    const sujet = getSujetByAvisId(item.id);
-    const situation = getSituationByAvisId(item.id);
-    const entries = [
-      ...common,
-      renderMetaItem("Situation parent", `<span class="mono">${escapeHtml(situation?.id || "—")}</span>`),
-      renderMetaItem("Sujet parent", `<span class="mono">${escapeHtml(sujet?.id || "—")}</span>`),
-      renderMetaItem("Verdict effectif", renderVerdictPill(getEffectiveAvisVerdict(item.id))),
-      renderMetaItem("Verdict source", renderVerdictPill(firstNonEmpty(raw.verdict, item.verdict, "-"))),
-      renderMetaItem("Severity", `<span class="mono">${escapeHtml(firstNonEmpty(raw.severity, "—"))}</span>`),
-      renderMetaItem("Source", `<span class="mono">${escapeHtml(firstNonEmpty(raw.source, "—"))}</span>`)
-    ];
-    return entries.join("");
-  }
-
-  if (selection.type === "sujet") {
-    const situation = getSituationBySujetId(item.id);
-    const stats = problemVerdictStats(item);
-    const entries = [
-      ...common,
-      renderMetaItem("Situation parent", `<span class="mono">${escapeHtml(situation?.id || "—")}</span>`),
-      renderMetaItem("Status effectif", statePill(getEffectiveSujetStatus(item.id))),
-      renderMetaItem("Status source", statePill(firstNonEmpty(raw.status, item.status, "open"))),
-      renderMetaItem("Avis", `<span class="mono">${escapeHtml(String((item.avis || []).length))}</span>`),
-      renderMetaItem("Verdicts", buildVerdictBarHtml(stats.counts, { legend: true }))
-    ];
-    return entries.join("");
-  }
-
-  const stats = situationVerdictStats(item);
-  const entries = [
-    ...common,
-    renderMetaItem("Status effectif", statePill(getEffectiveSituationStatus(item.id))),
-    renderMetaItem("Status source", statePill(firstNonEmpty(raw.status, item.status, "open"))),
-    renderMetaItem("Sujets", `<span class="mono">${escapeHtml(String((item.sujets || []).length))}</span>`),
-    renderMetaItem("Verdicts", buildVerdictBarHtml(stats.counts, { legend: true }))
-  ];
-  return entries.join("");
+  ].join("");
 }
+
 
 function renderSubIssuesForSujet(sujet, options = {}) {
   ensureViewUiState();
@@ -2725,44 +2651,29 @@ function renderSubIssuesForSituation(situation, options = {}) {
   });
 }
 
+
 function renderDetailsTitleWrapHtml(selection) {
-  if (!selection) return `<span class="details-title-text">Sélectionner un élément</span>`;
+  if (!selection || selection.type !== "avis") {
+    return `<span class="details-title-text">Sélectionner un avis</span>`;
+  }
 
   const item = selection.item;
-  const entityType = getSelectionEntityType(selection.type);
-  const reviewIcon = renderEntityReviewLeadIcon(entityType, item.id);
-  const titleSeenClass = getReviewTitleStateClass(entityType, item.id);
-  let badgeHtml = "";
-  let probsHtml = "";
-  let verdictHtml = "";
-  let barOnlyHtml = "";
-  let idHtml = entityDisplayLinkHtml(selection.type, item.id);
-
-  if (selection.type === "avis") {
-    badgeHtml = renderVerdictPill(getEffectiveAvisVerdict(item.id));
-    const sujet = getSujetByAvisId(item.id);
-    if (sujet) {
-      probsHtml = `<div class="subissues-counts subissues-counts--problems"><span>${escapeHtml(firstNonEmpty(sujet.title, sujet.id, "Non classé"))}</span></div>`;
-    } else {
-      probsHtml = `<div class="subissues-counts subissues-counts--problems"><span>${escapeHtml(firstNonEmpty(item.agent, "system"))}</span></div>`;
-    }
-  } else if (selection.type === "sujet") {
-    const stats = problemVerdictStats(item);
-    badgeHtml = statePill(getEffectiveSujetStatus(item.id), { reviewState: getEntityReviewMeta("sujet", item.id).review_state, entityType: "sujet" });
-    verdictHtml = buildVerdictBarHtml(stats.counts, { legend: true });
-    barOnlyHtml = buildVerdictBarHtml(stats.counts, { legend: false });
-  } else {
-    const stats = situationVerdictStats(item);
-    badgeHtml = statePill(getEffectiveSituationStatus(item.id), { reviewState: getEntityReviewMeta("situation", item.id).review_state, entityType: "situation" });
-    probsHtml = problemsCountsHtml(item);
-    verdictHtml = buildVerdictBarHtml(stats.counts, { legend: true });
-    barOnlyHtml = buildVerdictBarHtml(stats.counts, { legend: false });
-  }
+  const reviewIcon = renderEntityReviewLeadIcon("avis", item.id);
+  const titleSeenClass = getReviewTitleStateClass("avis", item.id);
+  const badgeHtml = renderVerdictPill(getEffectiveAvisVerdict(item.id));
+  const idHtml = entityDisplayLinkHtml("avis", item.id);
+  const sujet = getSujetByAvisId(item.id);
+  const situation = getSituationByAvisId(item.id);
+  const lineageHtml = [situation?.id, sujet?.id].filter(Boolean).join(" · ");
 
   const titleTextHtml = `
     ${reviewIcon ? `<span class="details-title-status">${reviewIcon}</span>` : ""}
-    <span class="details-title-text ${titleSeenClass}">${escapeHtml(firstNonEmpty(item.title, item.id, "Détail"))}</span>
+    <span class="details-title-text ${titleSeenClass}">${escapeHtml(firstNonEmpty(item.title, item.id, "Avis"))}</span>
   `;
+
+  const contextHtml = lineageHtml
+    ? `<div class="subissues-counts subissues-counts--problems"><span>${escapeHtml(lineageHtml)}</span></div>`
+    : "";
 
   return `
     <div class="details-title-wrap details-title--expanded">
@@ -2773,7 +2684,7 @@ function renderDetailsTitleWrapHtml(selection) {
             <span class="details-title-id mono">${idHtml}</span>
           </div>
           <div class="details-title-bottomline">
-            ${badgeHtml}${probsHtml}${verdictHtml}
+            ${badgeHtml}${contextHtml}
           </div>
         </div>
       </div>
@@ -2788,13 +2699,14 @@ function renderDetailsTitleWrapHtml(selection) {
             <span class="details-title-id mono">${idHtml}</span>
           </div>
           <div class="details-title-compact-bottom">
-            ${probsHtml}${barOnlyHtml}
+            ${contextHtml}
           </div>
         </div>
       </div>
     </div>
   `;
 }
+
 
 function renderDetailsTitleHtml(selection, options = {}) {
   const showExpand = options.showExpand !== false;
@@ -2830,29 +2742,13 @@ function renderDetailsTitleHtml(selection, options = {}) {
   `;
 }
 
-function renderDetailsBody(selection, options = {}) {
-  if (!selection) {
-    return `<div class="emptyState">Sélectionne une situation / un sujet / un avis pour afficher les détails.</div>`;
+
+function renderDetailsBody(selection) {
+  if (!selection || selection.type !== "avis") {
+    return `<div class="emptyState">Sélectionne un avis pour afficher les détails.</div>`;
   }
 
-  const item = selection.item;
-  let descCard = "";
-  let subIssuesHtml = "";
-
-  if (selection.type === "avis") {
-    descCard = renderDescriptionCard(selection);
-    const sujet = getSujetByAvisId(item.id);
-    if (sujet) {
-      subIssuesHtml = renderSubIssuesForSujet(sujet, options.subissuesOptions || {});
-    }
-  } else if (selection.type === "sujet") {
-    descCard = renderDescriptionCard(selection);
-    subIssuesHtml = renderSubIssuesForSujet(item, options.subissuesOptions || {});
-  } else {
-    descCard = renderDescriptionCard(selection);
-    subIssuesHtml = renderSubIssuesForSituation(item, options.subissuesOptions || {});
-  }
-
+  const descCard = renderDescriptionCard(selection);
   const threadHtml = renderThreadBlock();
   const commentBoxHtml = renderCommentBox(selection);
   const metaHtml = renderDetailedMetaForSelection(selection);
@@ -2863,7 +2759,6 @@ function renderDetailsBody(selection, options = {}) {
         <div class="gh-timeline">
           ${descCard}
           ${renderDocumentRefsCard(selection)}
-          ${subIssuesHtml}
           ${threadHtml}
           ${commentBoxHtml}
         </div>
@@ -2875,6 +2770,7 @@ function renderDetailsBody(selection, options = {}) {
     </div>
   `;
 }
+
 
 function renderDetailsHtml(selectionOverride = null, options = {}) {
   const selection = selectionOverride || getActiveSelection();
@@ -2940,6 +2836,7 @@ function closeDetailsModal() {
   updateDetailsModal();
 }
 
+
 function rerenderPanels() {
   ensureViewUiState();
 
@@ -2949,31 +2846,18 @@ function rerenderPanels() {
   const detailsHost = document.getElementById("situationsDetailsHost");
   const detailsTitleHost = document.getElementById("situationsDetailsTitle");
   const countsHost = document.getElementById("situationsHeaderCounts");
-  const verdictFilter = document.getElementById("verdictFilter");
-  const displayDepth = document.getElementById("displayDepth");
   const searchInput = document.getElementById("situationsSearch");
 
-  if (verdictFilter) verdictFilter.value = store.situationsView.verdictFilter || "ALL";
-  if (displayDepth) displayDepth.value = store.situationsView.displayDepth || "situations";
   if (searchInput) searchInput.value = store.situationsView.search || "";
-
-  if (countsHost) countsHost.textContent = `${counts.situations} situations · ${counts.sujets} sujets · ${counts.avis} avis`;
+  if (countsHost) countsHost.textContent = `${counts.avis} avis`;
 
   if (tableHost) {
     tableHost.innerHTML = renderTableHtml(filteredSituations);
-
     const mainScrollBody = tableHost.querySelector(".issues-table__body");
     registerProjectPrimaryScrollSource(mainScrollBody || null);
   }
 
-  const details = renderDetailsHtml(null, {
-    subissuesOptions: {
-      sujetRowClass: "js-modal-drilldown-sujet",
-      sujetToggleClass: "js-modal-toggle-sujet",
-      avisRowClass: "js-modal-drilldown-avis",
-      expandedSujets: store.situationsView.rightExpandedSujets
-    }
-  });
+  const details = renderDetailsHtml();
   if (detailsTitleHost) detailsTitleHost.innerHTML = details.titleHtml;
   if (detailsHost) detailsHost.innerHTML = details.bodyHtml;
 
@@ -2983,31 +2867,14 @@ function rerenderPanels() {
   refreshProjectShellChrome("situations");
 }
 
-function selectSituation(situationId) {
-  const situation = getNestedSituation(situationId);
-  if (!situation) return;
 
-  store.situationsView.selectedSituationId = situationId;
-  store.situationsView.selectedSujetId = null;
-  store.situationsView.selectedAvisId = null;
 
-  markEntitySeen("situation", situationId, { source: "details" });
-  rerenderPanels();
-}
+function selectSituation() {}
 
-function selectSujet(sujetId) {
-  const sujet = getNestedSujet(sujetId);
-  if (!sujet) return;
 
-  const situation = getSituationBySujetId(sujetId);
 
-  store.situationsView.selectedSituationId = situation?.id || null;
-  store.situationsView.selectedSujetId = sujetId;
-  store.situationsView.selectedAvisId = null;
+function selectSujet() {}
 
-  markEntitySeen("sujet", sujetId, { source: "details" });
-  rerenderPanels();
-}
 
 function selectAvis(avisId) {
   const avis = getNestedAvis(avisId);
@@ -3796,18 +3663,11 @@ function bindDetailsScroll(root) {
   );
 }
 
+
 function bindSituationsEvents(root, headerRoot) {
   headerRoot?.querySelector("#situationsSearch")?.addEventListener("input", (event) => {
     store.situationsView.search = String(event.target.value || "");
     rerenderPanels();
-  });
-
-  bindGhSelectMenus(headerRoot || document, {
-    onChange: (id, value) => {
-      if (id !== "displayDepth") return;
-      store.situationsView.displayDepth = String(value || "situations").toLowerCase();
-      rerenderPanels();
-    }
   });
 
   root.addEventListener("click", (event) => {
@@ -3863,50 +3723,6 @@ function bindSituationsEvents(root, headerRoot) {
       return;
     }
 
-    const toggleSituation = event.target.closest(".js-toggle-situation");
-    if (toggleSituation) {
-      event.preventDefault();
-      event.stopPropagation();
-      const situationId = String(toggleSituation.dataset.situationId || "");
-      if (store.situationsView.expandedSituations.has(situationId)) {
-        store.situationsView.expandedSituations.delete(situationId);
-      } else {
-        store.situationsView.expandedSituations.add(situationId);
-      }
-      rerenderPanels();
-      return;
-    }
-
-    const toggleSujet = event.target.closest(".js-toggle-sujet");
-    if (toggleSujet) {
-      event.preventDefault();
-      event.stopPropagation();
-      const sujetId = String(toggleSujet.dataset.sujetId || "");
-      if (store.situationsView.expandedSujets.has(sujetId)) {
-        store.situationsView.expandedSujets.delete(sujetId);
-      } else {
-        store.situationsView.expandedSujets.add(sujetId);
-      }
-      rerenderPanels();
-      return;
-    }
-
-    const sujetRow = event.target.closest(".js-row-sujet");
-    if (sujetRow) {
-      event.preventDefault();
-      const sujetId = String(sujetRow.dataset.sujetId || "");
-      selectSujet(sujetId);
-      return;
-    }
-
-    const situationRow = event.target.closest(".js-row-situation");
-    if (situationRow) {
-      event.preventDefault();
-      const situationId = String(situationRow.dataset.situationId || "");
-      selectSituation(situationId);
-      return;
-    }
-
     const avisRow = event.target.closest(".js-row-avis");
     if (avisRow) {
       event.preventDefault();
@@ -3915,6 +3731,8 @@ function bindSituationsEvents(root, headerRoot) {
     }
   });
 }
+
+
 
 function renderSituationsViewHeaderHtml() {
   const leftHtml = [
@@ -3932,7 +3750,7 @@ function renderSituationsViewHeaderHtml() {
       html: renderProjectTableToolbarSearch({
         id: "situationsSearch",
         value: String(store.situationsView.search || ""),
-        placeholder: "topic / EC8 / mot-clé…"
+        placeholder: "thème / agent / mot-clé…"
       })
     }),
     renderProjectTableToolbarGroup({
@@ -3947,9 +3765,11 @@ function renderSituationsViewHeaderHtml() {
   });
 }
 
+
 /* =========================================================
    Public render
 ========================================================= */
+
 
 export function renderProjectAvis(root) {
   ensureSituationsLegacyDomStyle();
@@ -3960,21 +3780,19 @@ export function renderProjectAvis(root) {
   root.className = "project-shell__content gh-page gh-page--2col";
 
   setProjectViewHeader({
-    contextLabel: "Situations",
+    contextLabel: "Avis",
     variant: "situations",
     toolbarHtml: ""
   });
 
   const headerRoot = document.getElementById("projectViewHeaderHost");
   const toolbarHost = document.getElementById("situationsToolbarHost");
-  const data = store.situationsView.data || [];
-  const firstSituationId = data[0]?.id || null;
 
-  if (!store.situationsView.selectedSituationId && firstSituationId) {
-    store.situationsView.selectedSituationId = firstSituationId;
-  }
-  if (!store.situationsView.expandedSituations.size && firstSituationId) {
-    store.situationsView.expandedSituations.add(firstSituationId);
+  if (!store.situationsView.selectedAvisId) {
+    const firstSelection = getActiveSelection();
+    if (firstSelection?.type === "avis") {
+      store.situationsView.selectedAvisId = firstSelection.item.id;
+    }
   }
 
   if (toolbarHost) {
@@ -3989,7 +3807,7 @@ export function renderProjectAvis(root) {
     <section class="gh-panel gh-panel--details" aria-label="Details">
       <div class="gh-panel__head gh-panel__head--tight" id="situationsDetailsTitle"></div>
       <div class="details-body" id="situationsDetailsHost">
-        <div class="emptyState">Sélectionne une situation / un sujet / un avis pour afficher les détails.</div>
+        <div class="emptyState">Sélectionne un avis pour afficher les détails.</div>
       </div>
     </section>
   `;
