@@ -25,6 +25,43 @@ function getHeaderModel() {
   };
 }
 
+function renderUserMenu() {
+  const currentAvatar = store.user?.avatar || "assets/images/260093543.png";
+  const otherUsers = DEMO_USERS.filter((user) => user.id !== store.user?.id);
+
+  return `
+    <div class="gh-user-menu gh-action" id="ghUserMenu">
+      <button
+        id="ghUserMenuBtn"
+        class="gh-user-menu__trigger gh-action__button"
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded="false"
+        aria-label="Changer de contributeur"
+      >
+        <img src="${currentAvatar}" alt="Avatar" class="documents-commit-shell__avatar-img gh-user-menu__avatar-img">
+      </button>
+
+      <div class="gh-user-menu__dropdown gh-menu" id="ghUserMenuDropdown" role="menu">
+        ${otherUsers.map((user) => `
+          <button
+            type="button"
+            class="gh-user-menu__item"
+            data-user-switch="${user.id}"
+            role="menuitem"
+          >
+            <img src="${user.avatar}" alt="" class="gh-user-menu__item-avatar">
+            <span class="gh-user-menu__item-meta">
+              <span class="gh-user-menu__item-name">${user.firstName} ${user.lastName}</span>
+              <span class="gh-user-menu__item-role">${user.role}</span>
+            </span>
+          </button>
+        `).join("")}
+      </div>
+    </div>
+  `;
+}
+
 export function renderGlobalHeader() {
   const host = document.getElementById("globalHeaderHost");
   if (!host) return;
@@ -51,14 +88,54 @@ export function renderGlobalHeader() {
       </div>
 
       <div class="gh-header__center"></div>
-      <div class="gh-header__right"></div>
+      <div class="gh-header__right">
+        <div id="globalHeaderActions" class="gh-header__actions">
+          ${renderUserMenu()}
+        </div>
+      </div>
     </header>
   `;
 }
 
-let globalHeaderBound = false;
+let userMenuBound = false;
 
 export function bindGlobalHeader() {
-  if (globalHeaderBound) return;
-  globalHeaderBound = true;
+  if (userMenuBound) return;
+
+  document.addEventListener("click", (event) => {
+    const trigger = event.target.closest?.("#ghUserMenuBtn");
+    const switchBtn = event.target.closest?.("[data-user-switch]");
+    const menu = document.getElementById("ghUserMenu");
+    const dropdown = document.getElementById("ghUserMenuDropdown");
+    const btn = document.getElementById("ghUserMenuBtn");
+
+    if (switchBtn) {
+      setCurrentDemoUser(switchBtn.dataset.userSwitch || "");
+      renderGlobalHeader();
+      return;
+    }
+
+    if (trigger) {
+      const wrapper = document.getElementById("ghUserMenu");
+      const isOpen = wrapper?.classList.contains("is-open");
+      wrapper?.classList.toggle("is-open", !isOpen);
+      btn?.setAttribute("aria-expanded", isOpen ? "false" : "true");
+      return;
+    }
+
+    if (menu && !menu.contains(event.target)) {
+      menu.classList.remove("is-open");
+      dropdown?.classList.remove("gh-menu--open");
+      btn?.setAttribute("aria-expanded", "false");
+    }
+  });
+
+  document.addEventListener("click", () => {
+    const wrapper = document.getElementById("ghUserMenu");
+    const dropdown = document.getElementById("ghUserMenuDropdown");
+    if (!wrapper || !dropdown) return;
+    dropdown.classList.toggle("gh-menu--open", wrapper.classList.contains("is-open"));
+  });
+
+  userMenuBound = true;
 }
