@@ -1,7 +1,6 @@
 import { store } from "../store.js";
 import { ASK_LLM_URL_PROD } from "../constants.js";
 import {
-  renderProjectSituationsRunbar,
   bindProjectSituationsRunbar,
   syncProjectSituationsRunbar
 } from "./project-situations-runbar.js";
@@ -3784,6 +3783,17 @@ function bindSituationsEvents(root, headerRoot) {
     }
   });
 
+  const addActionRoot = document.querySelector('[data-action-id="situationsAddAction"]');
+  if (addActionRoot && addActionRoot.dataset.bound !== "true") {
+    addActionRoot.dataset.bound = "true";
+    addActionRoot.addEventListener("ghaction:action", (event) => {
+      const action = String(event.detail?.action || "");
+      if (action === "add-situation" || action === "add-sujet") {
+        event.preventDefault();
+      }
+    });
+  }
+
   root.addEventListener("click", (event) => {
     const verdictBtn = event.target.closest("#verdictHeadBtn");
     if (verdictBtn) {
@@ -3890,6 +3900,26 @@ function bindSituationsEvents(root, headerRoot) {
   });
 }
 
+function renderSituationsAddAction() {
+  return renderGhActionButton({
+    id: "situationsAddAction",
+    label: "Ajouter",
+    tone: "primary",
+    size: "md",
+    mainActionMode: "first-item",
+    items: [
+      {
+        label: "Ajouter une situation",
+        action: "add-situation"
+      },
+      {
+        label: "Ajouter un sujet",
+        action: "add-sujet"
+      }
+    ]
+  });
+}
+
 function renderSituationsViewHeaderHtml() {
   const leftHtml = [
     renderProjectTableToolbarGroup({
@@ -3921,7 +3951,7 @@ function renderSituationsViewHeaderHtml() {
       })
     }),
     renderProjectTableToolbarGroup({
-      html: renderProjectSituationsRunbar()
+      html: renderSituationsAddAction()
     })
   ].join("");
 
@@ -3963,7 +3993,11 @@ export function renderProjectSituations(root) {
   }
 
   if (toolbarHost) {
-    toolbarHost.innerHTML = `<div class="project-situations__table-toolbar">${renderSituationsViewHeaderHtml()}</div>`;
+    toolbarHost.innerHTML = `
+      <div class="project-situations__table-toolbar" style="max-width:1216px;margin:0 auto;padding:12px 32px 0;box-sizing:border-box;">
+        ${renderSituationsViewHeaderHtml()}
+      </div>
+    `;
   }
 
   root.innerHTML = `
