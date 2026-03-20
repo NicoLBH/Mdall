@@ -111,11 +111,11 @@ function ensureSituationsLegacyDomStyle() {
       max-height:100%;
     }
 
-    #situationsTableHost .issues-table__head{
+    #situationsTableHost .data-table-shell__head{
       flex:0 0 auto;
     }
 
-    #situationsTableHost .issues-table__body{
+    #situationsTableHost .data-table-shell__body{
       flex:1 1 auto;
       min-height:0;
       overflow-y:auto;
@@ -2848,7 +2848,7 @@ function rerenderPanels() {
 
   if (tableHost) {
     tableHost.innerHTML = renderTableHtml(filteredSituations);
-    const mainScrollBody = tableHost.querySelector(".issues-table__body");
+    const mainScrollBody = tableHost.querySelector(".data-table-shell__body");
     registerProjectPrimaryScrollSource(mainScrollBody || null);
   }
 
