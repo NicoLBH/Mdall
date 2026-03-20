@@ -2832,6 +2832,21 @@ function closeDetailsModal() {
 }
 
 
+function syncAvisPrimaryScrollSource() {
+  const tableHost = document.getElementById("situationsTableHost");
+  const mainScrollBody = tableHost?.querySelector(".data-table-shell__body") || null;
+  registerProjectPrimaryScrollSource(mainScrollBody);
+
+  if (!mainScrollBody) return;
+
+  requestAnimationFrame(() => {
+    const currentTableHost = document.getElementById("situationsTableHost");
+    const currentMainScrollBody = currentTableHost?.querySelector(".data-table-shell__body") || null;
+    if (!currentMainScrollBody || currentMainScrollBody !== mainScrollBody) return;
+    registerProjectPrimaryScrollSource(currentMainScrollBody);
+  });
+}
+
 function rerenderPanels() {
   ensureViewUiState();
 
@@ -2848,8 +2863,7 @@ function rerenderPanels() {
 
   if (tableHost) {
     tableHost.innerHTML = renderTableHtml(filteredSituations);
-    const mainScrollBody = tableHost.querySelector(".data-table-shell__body");
-    registerProjectPrimaryScrollSource(mainScrollBody || null);
+    syncAvisPrimaryScrollSource();
   }
 
   const details = renderDetailsHtml();
@@ -3813,6 +3827,7 @@ export function renderProjectAvis(root) {
   bindModalEvents();
   bindDetailsScroll(root);
   initRightSplitter(root);
+  syncAvisPrimaryScrollSource();
   updateDetailsModal();
 
   syncProjectSituationsRunbar({
