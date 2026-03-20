@@ -1,7 +1,9 @@
 import {
   PROJECT_TAB_IDS,
-  normalizeProjectTabId
+  normalizeProjectTabId,
+  isProjectTabAllowedForUser
 } from "../constants.js";
+import { store } from "../store.js";
 import { renderProjectDocuments } from "./project-documents.js";
 import { renderProjectAvis } from "./project-avis.js";
 import { renderProjectSituations } from "./project-situations.js";
@@ -20,6 +22,7 @@ import { renderProjectParametres } from "./project-parametres.js";
 function normalizeProjectTab(tab) {
   const normalized = normalizeProjectTabId(tab);
 
+  let resolvedTab;
   switch (normalized) {
     case PROJECT_TAB_IDS.DOCUMENTS:
     case PROJECT_TAB_IDS.AVIS:
@@ -32,11 +35,19 @@ function normalizeProjectTab(tab) {
     case PROJECT_TAB_IDS.RISQUES_SECURITE:
     case PROJECT_TAB_IDS.INSIGHTS:
     case PROJECT_TAB_IDS.PARAMETRES:
-      return normalized;
+      resolvedTab = normalized;
+      break;
 
     default:
-      return PROJECT_TAB_IDS.DOCUMENTS;
+      resolvedTab = PROJECT_TAB_IDS.DOCUMENTS;
+      break;
   }
+
+  if (!isProjectTabAllowedForUser(resolvedTab, store.user)) {
+    return PROJECT_TAB_IDS.DOCUMENTS;
+  }
+
+  return resolvedTab;
 }
 
 export function renderProjectLayout(root, projectId, tab) {
