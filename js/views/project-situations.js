@@ -2913,28 +2913,22 @@ function renderSituationKanbanCard(sujet) {
 function renderSituationKanbanBody(situation) {
   const columns = getSituationKanbanColumns(situation);
   return `
-    <div class="details-grid details-grid--kanban">
-      <div class="details-main">
-        <div class="situation-kanban" aria-label="Pilotage des sujets de la situation">
-          ${columns.map((column) => `
-            <section class="situation-kanban__col js-kanban-column" data-kanban-column="${escapeHtml(column.key)}">
-              <div class="situation-kanban__head">
-                <span class="situation-kanban__dot" aria-hidden="true"></span>
-                <span>${escapeHtml(column.label)}</span>
-                <span class="situation-kanban__count">${column.sujets.length}</span>
-              </div>
-              <div class="situation-kanban__hint">${escapeHtml(column.hint)}</div>
-              <div class="situation-kanban__cards">
-                ${column.sujets.length ? column.sujets.map((sujet) => renderSituationKanbanCard(sujet)).join("") : `<div class="situation-kanban__empty">Aucun sujet</div>`}
-              </div>
-            </section>
-          `).join("")}
-        </div>
+    <div class="situation-kanban-modal">
+      <div class="situation-kanban" aria-label="Pilotage des sujets de la situation">
+        ${columns.map((column) => `
+          <section class="situation-kanban__col js-kanban-column" data-kanban-column="${escapeHtml(column.key)}">
+            <div class="situation-kanban__head">
+              <div class="situation-kanban__dot situation-kanban__dot--${escapeHtml(String(column.key || '').replace(/_/g, '-'))}" aria-hidden="true"></div>
+              <span>${escapeHtml(column.label)}</span>
+              <span class="situation-kanban__count">${column.sujets.length}</span>
+            </div>
+            <div class="situation-kanban__hint">${escapeHtml(column.hint)}</div>
+            <div class="situation-kanban__cards">
+              ${column.sujets.length ? column.sujets.map((sujet) => renderSituationKanbanCard(sujet)).join("") : `<div class="situation-kanban__empty">Aucun sujet</div>`}
+            </div>
+          </section>
+        `).join("")}
       </div>
-      <aside class="details-meta-col">
-        <div class="meta-title">Situation</div>
-        ${renderDetailedMetaForSelection({ type: "situation", item: situation })}
-      </aside>
     </div>
   `;
 }
@@ -2974,6 +2968,9 @@ function updateDetailsModal() {
 
 
   if (head) head.classList.add("details-head--expanded");
+
+  const isSituationKanbanModal = selection?.type === "situation";
+  body.classList.toggle("details-body-modal--situation-kanban", isSituationKanbanModal);
 
   title.innerHTML = renderDetailsTitleWrapHtml(selection);
   meta.textContent = details.modalMeta;
