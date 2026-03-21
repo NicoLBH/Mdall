@@ -2886,6 +2886,11 @@ function renderSituationKanbanCard(sujet) {
   const kanbanStatus = getSujetKanbanStatus(sujet.id);
   const avisCount = Array.isArray(sujet?.avis) ? sujet.avis.length : 0;
   const effectiveStatus = String(getEffectiveSujetStatus(sujet.id) || sujet?.status || "open").toLowerCase();
+  const reviewMeta = getEntityReviewMeta("sujet", sujet.id);
+  const statusIconHtml = (reviewMeta.review_state === "rejected" || reviewMeta.review_state === "dismissed")
+    ? renderReviewStateIcon(reviewMeta.review_state, { entityType: "sujet", isSeen: true })
+    : issueIcon(effectiveStatus, { entityType: "sujet", reviewState: reviewMeta.review_state, isSeen: !!reviewMeta.is_seen });
+
   return `
     <button
       type="button"
@@ -2895,7 +2900,10 @@ function renderSituationKanbanCard(sujet) {
       draggable="true"
     >
       <div class="situation-kanban-card__meta">
-        <span class="mono">${escapeHtml(getEntityDisplayRef("sujet", sujet.id))}</span>
+        <span class="situation-kanban-card__meta-lead">
+          ${statusIconHtml}
+          <span class="mono">${escapeHtml(getEntityDisplayRef("sujet", sujet.id))}</span>
+        </span>
         <span>${effectiveStatus === "closed" ? "Fermé" : "Ouvert"}</span>
       </div>
       <div class="situation-kanban-card__title">${escapeHtml(firstNonEmpty(sujet.title, sujet.id, "Non classé"))}</div>
