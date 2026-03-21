@@ -785,8 +785,8 @@ body.modal-open {
 .lvl2{padding-left:44px;}
 
 .theme-text{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.theme-text--sit{font-weight:700;font-size:12px;text-transform:uppercase;}
-.theme-text--pb{font-weight:600;font-size:12px;text-transform:uppercase;}
+.theme-text--sit{font-weight:500;font-size:13px;}
+.theme-text--pb{font-weight:500;font-size:13px;}
 .theme-text--avis{font-size:12px;color:var(--text);font-weight:400;}
 
 .cell-id{
@@ -5880,7 +5880,7 @@ color:#ffff;
 }
 
 .theme-text.is-seen{
-  color:var(--fgColor-muted, #8b949e);
+  /* color:var(--fgColor-muted, #8b949e); */
 }
 
 
@@ -5971,7 +5971,7 @@ color:#ffff;
 }
 
 .project-page-shell--content{
-  padding:24px 32px 40px;
+  /* padding:24px 32px 40px; */
 }
 
 .issue-status-icon__svg--situation.issue-status-icon__svg--open{
