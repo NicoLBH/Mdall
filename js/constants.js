@@ -70,7 +70,8 @@ export const PROJECT_TABS = [
   {
     id: PROJECT_TAB_IDS.SUBJECTS,
     label: "Sujets",
-    icon: svgIcon("issue-opened", { className: "octicon octicon-file" })
+    icon: svgIcon("issue-opened", { className: "octicon octicon-file" }),
+    countKey: "openSujets"
   },
   {
     id: PROJECT_TAB_IDS.PROPOSITIONS,
