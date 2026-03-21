@@ -6936,6 +6936,13 @@ color:#ffff;
       font-size:12px;
     }
 
+    .situation-kanban-card__meta-lead{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      min-width:0;
+    }
+
     .situation-kanban-card__title{
       font-size:13px;
       font-weight:400;
