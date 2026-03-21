@@ -1783,6 +1783,54 @@ function problemsCountsHtml(situation) {
    Table render
 ========================================================= */
 
+
+function formatRelativeTimeLabel(ts, prefix = "updated") {
+  if (!ts) return `${prefix} recently`;
+  const date = new Date(ts);
+  if (Number.isNaN(date.getTime())) return `${prefix} recently`;
+
+  const diffMs = Date.now() - date.getTime();
+  const future = diffMs < 0;
+  const absSeconds = Math.max(1, Math.round(Math.abs(diffMs) / 1000));
+
+  const units = [
+    [31536000, "year"],
+    [2592000, "month"],
+    [86400, "day"],
+    [3600, "hour"],
+    [60, "minute"],
+    [1, "second"]
+  ];
+
+  let value = 1;
+  let unit = "second";
+  for (const [seconds, label] of units) {
+    if (absSeconds >= seconds) {
+      value = Math.floor(absSeconds / seconds);
+      unit = label;
+      break;
+    }
+  }
+
+  const plural = value > 1 ? "s" : "";
+  if (future) return `${prefix} in ${value} ${unit}${plural}`;
+  return `${prefix} ${value} ${unit}${plural} ago`;
+}
+
+function getEntityListTimestamp(entityType, entity) {
+  const description = entity?.id ? getEntityDescriptionState(entityType, entity.id) : null;
+  return firstNonEmpty(
+    description?.updated_at,
+    entity?.updated_at,
+    entity?.created_at,
+    entity?.raw?.updated_at,
+    entity?.raw?.created_at,
+    store.situationsView?.rawResult?.updated_at,
+    store.situationsView?.rawResult?.created_at,
+    nowIso()
+  );
+}
+
 function rowSelectedClass(kind, id) {
   if (kind === "situation" && store.situationsView.selectedSituationId === id && !store.situationsView.selectedSujetId && !store.situationsView.selectedAvisId) return " selected subissue-row--selected";
   if (kind === "sujet" && store.situationsView.selectedSujetId === id && !store.situationsView.selectedAvisId) return " selected subissue-row--selected";
@@ -1858,10 +1906,12 @@ function renderAvisRow(avis) {
 
 function renderFlatSujetRow(sujet, situationId) {
   const effStatus = getEffectiveSujetStatus(sujet.id);
-  const parentLabel = situationId ? `<span class="mono subissues-inline-count">${escapeHtml(situationId)}</span>` : "";
   const meta = getEntityReviewMeta("sujet", sujet.id);
   const reviewIcon = renderEntityReviewLeadIcon("sujet", sujet.id);
   const titleSeenClass = getReviewTitleStateClass("sujet", sujet.id);
+  const displayRef = getEntityDisplayRef("sujet", sujet.id);
+  const author = firstNonEmpty(getEntityDescriptionState("sujet", sujet.id)?.author, sujet?.agent, sujet?.raw?.agent, "system");
+  const openedLabel = formatRelativeTimeLabel(getEntityListTimestamp("sujet", sujet), "opened");
 
   return `
     <div class="issue-row issue-row--pb click js-row-sujet${rowSelectedClass("sujet", sujet.id)}" data-sujet-id="${escapeHtml(sujet.id)}">
@@ -1869,12 +1919,13 @@ function renderFlatSujetRow(sujet, situationId) {
         <span class="chev chev--spacer"></span>
         ${issueIcon(effStatus, { reviewState: meta.review_state, entityType: "sujet", isSeen: meta.is_seen })}
         ${reviewIcon ? `<span class="review-title-chip">${reviewIcon}</span>` : ""}
-        <span class="theme-text theme-text--pb ${titleSeenClass}">${escapeHtml(firstNonEmpty(sujet.title, sujet.id, "Non classé"))}</span>
-        ${parentLabel}
+        <span class="issue-row-title-stack">
+          <span class="theme-text theme-text--pb ${titleSeenClass}">${escapeHtml(firstNonEmpty(sujet.title, sujet.id, "Non classé"))}</span>
+          <span class="issue-row-meta-text mono-small">${escapeHtml(displayRef)} - ${escapeHtml(author)} • ${escapeHtml(openedLabel)}</span>
+        </span>
       </div>
       <div class="cell cell-prio">${priorityBadge(sujet.priority)}</div>
       <div class="cell cell-agent"></div>
-      <div class="cell cell-id mono">${escapeHtml(getEntityDisplayRef("sujet", sujet.id))}</div>
     </div>
   `;
 }
@@ -1902,7 +1953,7 @@ function renderFlatAvisRow(avis, sujetId, situationId) {
   `;
 }
 function getSituationsTableGridTemplate() {
-  return "minmax(0, 1fr) 56px 86px 72px";
+  return "minmax(0, 1fr) 56px 86px";
 }
 
 function renderSituationsTableHeadHtml() {
@@ -1910,8 +1961,7 @@ function renderSituationsTableHeadHtml() {
     columns: [
       { className: "cell cell-theme", html: renderSubjectsStatusHeadHtml() },
       { className: "cell cell-prio", label: "Prio" },
-      { className: "cell cell-agent", label: "Agent" },
-      { className: "cell cell-id", label: "avis_id" }
+      { className: "cell cell-agent", label: "Agent" }
     ]
   });
 }
