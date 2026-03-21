@@ -31,6 +31,7 @@ import {
   renderMessageThreadEvent
 } from "./ui/message-thread.js";
 import { renderCommentComposer } from "./ui/comment-composer.js";
+import { renderTableHeadFilterToggle } from "./ui/table-head-filter-toggle.js";
 import {
   renderOverlayChrome,
   renderOverlayChromeHead,
@@ -1666,22 +1667,18 @@ function renderSituationsStatusHeadHtml() {
   const current = getCurrentSituationsStatusFilter();
   const query = String(store.situationsView.search || "").trim().toLowerCase();
   const counts = getSituationsStatusCounts(query);
-  const item = (label, value, count) => `
-    <button
-      type="button"
-      class="table-head-filter${current === value ? " is-active" : ""}"
-      data-situations-status-filter="${value}"
-      aria-pressed="${current === value ? "true" : "false"}"
-      style="display:inline-flex;align-items:center;gap:6px;padding:0;border:0;background:none;color:inherit;font:inherit;cursor:pointer;">
-      <span>${label}</span>
-      ${renderCountBadge(count, { className: "project-tabs__counter", ariaLabel: `${count} ${label.toLowerCase()}` })}
-    </button>`;
-  return `<div class="table-head-filter-group" style="display:inline-flex;align-items:center;gap:16px;">${item("Actives", "open", counts.open)}${item("Archivées", "closed", counts.closed)}</div>`;
+  return renderTableHeadFilterToggle({
+    activeValue: current,
+    items: [
+      { label: "Actives", value: "open", count: counts.open, dataAttr: "situations-status-filter" },
+      { label: "Archivées", value: "closed", count: counts.closed, dataAttr: "situations-status-filter" }
+    ]
+  });
 }
 
 function renderSituationListIcon(status = "open") {
   const isOpen = String(status || "open").toLowerCase() === "open";
-  return `<span class="issue-status-icon" aria-hidden="true">${svgIcon("table", { style: `color: ${isOpen ? "#ffffff" : "var(--muted)"}` })}</span>`;
+  return `<span class="issue-status-icon" aria-hidden="true">${svgIcon("table", { className: `issue-status-icon__svg issue-status-icon__svg--situation ${isOpen ? "issue-status-icon__svg--open" : "issue-status-icon__svg--closed"}` })}</span>`;
 }
 
 function getVisibleCounts(filteredSituations) {
@@ -1797,10 +1794,10 @@ function buildVerdictBarHtml(counts, options = {}) {
     const c = Number(counts?.[v] || 0);
     if (!c) return "";
     const pct = (c / total) * 100;
-    return `<span class="verdict-bar__seg verdict-bar__seg--${v.toLowerCase()}" style="width:${pct.toFixed(2)}%"></span>`;
+    return `<span class="verdict-bar__seg verdict-bar__seg--${v.toLowerCase()}" style="--verdict-seg-width:${pct.toFixed(2)}%"></span>`;
   }).join("");
 
-  const bar = `<div class="verdict-bar">${segs || `<span class="verdict-bar__seg verdict-bar__seg--empty" style="width:100%"></span>`}</div>`;
+  const bar = `<div class="verdict-bar">${segs || `<span class="verdict-bar__seg verdict-bar__seg--empty" style="--verdict-seg-width:100%"></span>`}</div>`;
 
   if (!legend) {
     return `<div class="subissues-counts subissues-counts--verdicts">${bar}</div>`;
@@ -1851,7 +1848,7 @@ function problemsCountsIconHtml(closedCount, totalCount) {
 
   return `
     <span class="subissues-problems-icon" aria-label="Sujets closed: ${closed}/${total}">
-      <svg viewBox="0 0 20 20" width="16" height="16" style="display:block">
+      <svg viewBox="0 0 20 20" width="16" height="16" class="subissues-problems-icon__svg">
         <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="rgba(139,148,158,.55)" stroke-width="2"></circle>
         ${wedge}
       </svg>
@@ -2412,7 +2409,7 @@ function renderThreadBlock() {
   }).join("");
 
   return `
-    <div class="gh-timeline-title mono" style="display:none">Discussion</div>
+    <div class="gh-timeline-title gh-timeline-title--hidden mono">Discussion</div>
     ${renderMessageThread({ itemsHtml })}
   `;
 }
@@ -3039,7 +3036,7 @@ function rerenderPanels() {
 
   if (panelHost) {
     if (store.situationsView.showTableOnly) {
-      panelHost.innerHTML = `<div id="situationsTableHost">${renderTableHtml(filteredSituations)}</div>`;
+      panelHost.innerHTML = `<div id="situationsTableHost" class="project-table-host">${renderTableHtml(filteredSituations)}</div>`;
       syncSituationsPrimaryScrollSource();
     } else {
       const details = renderDetailsHtml(null, {
@@ -4156,7 +4153,7 @@ export function renderProjectSituations(root) {
 
   if (toolbarHost) {
     toolbarHost.innerHTML = `
-      <div class="project-situations__table-toolbar" style="max-width:1216px;margin:0 auto;padding:12px 32px 0;box-sizing:border-box;">
+      <div class="project-situations__table-toolbar project-page-shell project-page-shell--toolbar">
         ${renderSituationsViewHeaderHtml()}
       </div>
     `;
@@ -4165,7 +4162,7 @@ export function renderProjectSituations(root) {
   root.innerHTML = `
     <section class="project-simple-page project-simple-page--settings">
       <div class="project-simple-scroll" id="projectSituationsScroll">
-        <div class="settings-content" style="max-width:1216px;margin:0 auto;padding:24px 32px 40px;">
+        <div class="settings-content project-page-shell project-page-shell--content">
           <section class="gh-panel gh-panel--results" aria-label="Results">
             <div id="situationsPanelHost"></div>
           </section>
