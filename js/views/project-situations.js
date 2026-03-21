@@ -157,6 +157,131 @@ function ensureSituationsLegacyDomStyle() {
       flex:0 0 16px;
       display:block;
     }
+
+    .situation-kanban{
+      display:grid;
+      grid-template-columns:repeat(5, minmax(220px, 1fr));
+      gap:16px;
+      align-items:start;
+      min-width:max-content;
+      padding-bottom:4px;
+    }
+
+    .situation-kanban__col{
+      min-width:220px;
+      background:var(--bgColor-muted, #161b22);
+      border:1px solid var(--borderColor-default, #30363d);
+      border-radius:12px;
+      padding:12px;
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+      min-height:380px;
+    }
+
+    .situation-kanban__col.is-drop-target{
+      border-color:var(--fgColor-accent, #2f81f7);
+      box-shadow:0 0 0 1px var(--fgColor-accent, #2f81f7) inset;
+    }
+
+    .situation-kanban__head{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      font-weight:600;
+      color:var(--fgColor-default, #e6edf3);
+    }
+
+    .situation-kanban__dot{
+      width:10px;
+      height:10px;
+      border-radius:999px;
+      border:2px solid currentColor;
+      flex:0 0 auto;
+    }
+
+    .situation-kanban__count{
+      color:var(--fgColor-muted, #8b949e);
+      font-size:12px;
+      font-weight:600;
+    }
+
+    .situation-kanban__hint{
+      color:var(--fgColor-muted, #8b949e);
+      font-size:12px;
+      line-height:1.4;
+    }
+
+    .situation-kanban__cards{
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      min-height:220px;
+    }
+
+    .situation-kanban__empty{
+      border:1px dashed var(--borderColor-default, #30363d);
+      border-radius:10px;
+      color:var(--fgColor-muted, #8b949e);
+      padding:14px 12px;
+      font-size:13px;
+      text-align:center;
+      background:rgba(255,255,255,0.02);
+    }
+
+    .situation-kanban-card{
+      width:100%;
+      text-align:left;
+      border:1px solid var(--borderColor-default, #30363d);
+      background:var(--bgColor-default, #0d1117);
+      border-radius:10px;
+      padding:12px;
+      color:inherit;
+      cursor:pointer;
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      box-shadow:0 1px 0 rgba(255,255,255,0.03) inset;
+    }
+
+    .situation-kanban-card:hover,
+    .situation-kanban-card:focus-visible{
+      border-color:var(--fgColor-accent, #2f81f7);
+      outline:none;
+    }
+
+    .situation-kanban-card.is-dragging{
+      opacity:.55;
+    }
+
+    .situation-kanban-card__meta{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      color:var(--fgColor-muted, #8b949e);
+      font-size:12px;
+    }
+
+    .situation-kanban-card__title{
+      font-size:14px;
+      font-weight:600;
+      line-height:1.4;
+      color:var(--fgColor-default, #e6edf3);
+    }
+
+    .situation-kanban-card__footer{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      color:var(--fgColor-muted, #8b949e);
+      font-size:12px;
+    }
+
+    #detailsBodyModal{
+      overflow:auto;
+    }
   `;
   document.head.appendChild(style);
 }
@@ -415,6 +540,14 @@ function matchSearch(parts, query) {
 ========================================================= */
 
 const HUMAN_STORE_KEY = "rapsobot-human-store-v2";
+const SUJET_KANBAN_STATUSES = [
+  { key: "non_active", label: "Non activé", hint: "Sujet détecté mais pas encore engagé." },
+  { key: "to_activate", label: "A activer", hint: "Sujet prêt à être lancé." },
+  { key: "in_progress", label: "En cours", hint: "Sujet actuellement traité." },
+  { key: "in_arbitration", label: "En arbitrage", hint: "Décision ou arbitrage attendu." },
+  { key: "resolved", label: "Résolu", hint: "Sujet traité ou clos." }
+];
+const SUJET_KANBAN_STATUS_KEYS = new Set(SUJET_KANBAN_STATUSES.map((status) => status.key));
 
 function ensureViewUiState() {
   const v = store.situationsView;
@@ -446,6 +579,7 @@ function ensureViewUiState() {
   }
   if (typeof v.subjectsStatusFilter !== "string") v.subjectsStatusFilter = "open";
   if (typeof v.situationsStatusFilter !== "string") v.situationsStatusFilter = "open";
+  if (typeof v.draggedKanbanSujetId !== "string") v.draggedKanbanSujetId = "";
 }
 
 function currentRunKey() {
@@ -500,6 +634,9 @@ function getRunBucket() {
         avis: {},
         sujet: {},
         situation: {}
+      },
+      workflow: {
+        sujet_kanban_status: {}
       }
     };
     saveHumanStore(all);
@@ -520,6 +657,16 @@ function getRunBucket() {
       sujet: {},
       situation: {}
     };
+    saveHumanStore(all);
+  }
+  if (!bucket.workflow) {
+    bucket.workflow = {
+      sujet_kanban_status: {}
+    };
+    saveHumanStore(all);
+  }
+  if (!bucket.workflow.sujet_kanban_status) {
+    bucket.workflow.sujet_kanban_status = {};
     saveHumanStore(all);
   }
 
@@ -1516,6 +1663,68 @@ async function askHelpEphemeral({ rootEl, type, id, humanMessage, scope = "detai
     if (slot) slot.innerHTML = _helpFurtiveCommentHtml({ role: "assistant", bodyMd: `_(error: ${errMsg})_`, pending: false });
     showError(`Help: échec de l'appel LLM (${errMsg})`);
   }
+}
+
+function normalizeSujetKanbanStatus(value) {
+  const key = String(value || "").trim().toLowerCase();
+  return SUJET_KANBAN_STATUS_KEYS.has(key) ? key : null;
+}
+
+function getDefaultSujetKanbanStatus(sujetId) {
+  const effectiveStatus = String(getEffectiveSujetStatus(sujetId) || "open").toLowerCase();
+  return effectiveStatus === "closed" ? "resolved" : "non_active";
+}
+
+function getSujetKanbanStatus(sujetId) {
+  const { bucket } = getRunBucket();
+  const stored = normalizeSujetKanbanStatus(bucket?.workflow?.sujet_kanban_status?.[sujetId]);
+  return stored || getDefaultSujetKanbanStatus(sujetId);
+}
+
+function setSujetKanbanStatus(sujetId, nextStatus, options = {}) {
+  const normalized = normalizeSujetKanbanStatus(nextStatus);
+  if (!sujetId || !normalized) return false;
+
+  const previous = getSujetKanbanStatus(sujetId);
+  if (previous === normalized) return false;
+
+  const ts = options.ts || nowIso();
+  const actor = options.actor || "Human";
+  const agent = options.agent || "human";
+  const situation = getSituationBySujetId(sujetId);
+
+  persistRunBucket((bucket) => {
+    bucket.workflow = bucket.workflow || { sujet_kanban_status: {} };
+    bucket.workflow.sujet_kanban_status = bucket.workflow.sujet_kanban_status || {};
+    bucket.workflow.sujet_kanban_status[sujetId] = normalized;
+    bucket.activities.push({
+      ts,
+      entity_type: "situation",
+      entity_id: situation?.id || sujetId,
+      type: "ACTIVITY",
+      kind: "sujet_kanban_status_changed",
+      actor,
+      agent,
+      message: "",
+      meta: {
+        sujet_id: sujetId,
+        from: previous,
+        to: normalized
+      }
+    });
+  });
+
+  return true;
+}
+
+function getSituationKanbanColumns(situation) {
+  const columns = SUJET_KANBAN_STATUSES.map((status) => ({ ...status, sujets: [] }));
+  const columnMap = new Map(columns.map((column) => [column.key, column]));
+  for (const sujet of situation?.sujets || []) {
+    const key = getSujetKanbanStatus(sujet?.id);
+    (columnMap.get(key) || columns[0]).sujets.push(sujet);
+  }
+  return columns;
 }
 
 export function getEffectiveSujetStatus(sujetId) {
@@ -2844,6 +3053,9 @@ function renderDetailsBody(selection, options = {}) {
     descCard = renderDescriptionCard(selection);
     subIssuesHtml = renderSubIssuesForSujet(item, options.subissuesOptions || {});
   } else {
+    if (options.variant === "situation-kanban-modal") {
+      return renderSituationKanbanBody(item);
+    }
     descCard = renderDescriptionCard(selection);
     subIssuesHtml = renderSubIssuesForSituation(item, options.subissuesOptions || {});
   }
@@ -2871,6 +3083,60 @@ function renderDetailsBody(selection, options = {}) {
   `;
 }
 
+function renderSituationKanbanCard(sujet) {
+  const kanbanStatus = getSujetKanbanStatus(sujet.id);
+  const avisCount = Array.isArray(sujet?.avis) ? sujet.avis.length : 0;
+  const effectiveStatus = String(getEffectiveSujetStatus(sujet.id) || sujet?.status || "open").toLowerCase();
+  return `
+    <button
+      type="button"
+      class="situation-kanban-card js-kanban-card"
+      data-sujet-id="${escapeHtml(sujet.id)}"
+      data-kanban-status="${escapeHtml(kanbanStatus)}"
+      draggable="true"
+    >
+      <div class="situation-kanban-card__meta">
+        <span class="mono">${escapeHtml(getEntityDisplayRef("sujet", sujet.id))}</span>
+        <span>${effectiveStatus === "closed" ? "Fermé" : "Ouvert"}</span>
+      </div>
+      <div class="situation-kanban-card__title">${escapeHtml(firstNonEmpty(sujet.title, sujet.id, "Non classé"))}</div>
+      <div class="situation-kanban-card__footer">
+        <span>${priorityBadge(sujet.priority)}</span>
+        <span>${avisCount} avis</span>
+      </div>
+    </button>
+  `;
+}
+
+function renderSituationKanbanBody(situation) {
+  const columns = getSituationKanbanColumns(situation);
+  return `
+    <div class="details-grid details-grid--kanban">
+      <div class="details-main">
+        <div class="situation-kanban" aria-label="Pilotage des sujets de la situation">
+          ${columns.map((column) => `
+            <section class="situation-kanban__col js-kanban-column" data-kanban-column="${escapeHtml(column.key)}">
+              <div class="situation-kanban__head">
+                <span class="situation-kanban__dot" aria-hidden="true"></span>
+                <span>${escapeHtml(column.label)}</span>
+                <span class="situation-kanban__count">${column.sujets.length}</span>
+              </div>
+              <div class="situation-kanban__hint">${escapeHtml(column.hint)}</div>
+              <div class="situation-kanban__cards">
+                ${column.sujets.length ? column.sujets.map((sujet) => renderSituationKanbanCard(sujet)).join("") : `<div class="situation-kanban__empty">Aucun sujet</div>`}
+              </div>
+            </section>
+          `).join("")}
+        </div>
+      </div>
+      <aside class="details-meta-col">
+        <div class="meta-title">Situation</div>
+        ${renderDetailedMetaForSelection({ type: "situation", item: situation })}
+      </aside>
+    </div>
+  `;
+}
+
 function renderDetailsHtml(selectionOverride = null, options = {}) {
   const selection = selectionOverride || getActiveSelection();
   return {
@@ -2893,7 +3159,9 @@ function updateDetailsModal() {
   const body = document.getElementById("detailsBodyModal");
   if (!modal || !title || !meta || !body) return;
 
+  const selection = getActiveSelection();
   const details = renderDetailsHtml(null, {
+    variant: selection?.type === "situation" ? "situation-kanban-modal" : undefined,
     subissuesOptions: {
       sujetRowClass: "js-modal-drilldown-sujet",
       sujetToggleClass: "js-modal-toggle-sujet",
@@ -2902,9 +3170,9 @@ function updateDetailsModal() {
     }
   });
 
+
   if (head) head.classList.add("details-head--expanded");
 
-  const selection = getActiveSelection();
   title.innerHTML = renderDetailsTitleWrapHtml(selection);
   meta.textContent = details.modalMeta;
   body.innerHTML = details.bodyHtml;
@@ -3513,6 +3781,60 @@ function wireDetailsInteractive(root) {
       const avisId = String(btn.dataset.avisId || "");
       if (avisId) openDrilldownFromAvis(avisId);
     };
+  });
+
+  root.querySelectorAll(".js-kanban-card").forEach((card) => {
+    card.onclick = () => {
+      const sujetId = String(card.dataset.sujetId || "");
+      if (sujetId) openDrilldownFromSujet(sujetId);
+    };
+
+    if (card.dataset.kanbanBound === "true") return;
+    card.dataset.kanbanBound = "true";
+
+    card.addEventListener("dragstart", (event) => {
+      const sujetId = String(card.dataset.sujetId || "");
+      if (!sujetId) return;
+      store.situationsView.draggedKanbanSujetId = sujetId;
+      card.classList.add("is-dragging");
+      event.dataTransfer?.setData("text/plain", sujetId);
+      if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+    });
+
+    card.addEventListener("dragend", () => {
+      card.classList.remove("is-dragging");
+      store.situationsView.draggedKanbanSujetId = "";
+      document.querySelectorAll(".js-kanban-column").forEach((column) => column.classList.remove("is-drop-target"));
+    });
+  });
+
+  root.querySelectorAll(".js-kanban-column").forEach((column) => {
+    if (column.dataset.kanbanColumnBound === "true") return;
+    column.dataset.kanbanColumnBound = "true";
+
+    column.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      column.classList.add("is-drop-target");
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+    });
+
+    column.addEventListener("dragleave", () => {
+      column.classList.remove("is-drop-target");
+    });
+
+    column.addEventListener("drop", (event) => {
+      event.preventDefault();
+      column.classList.remove("is-drop-target");
+      const sujetId = String(event.dataTransfer?.getData("text/plain") || store.situationsView.draggedKanbanSujetId || "");
+      const nextStatus = String(column.dataset.kanbanColumn || "");
+      if (!sujetId || !nextStatus) return;
+      const changed = setSujetKanbanStatus(sujetId, nextStatus, { actor: "Human", agent: "human" });
+      if (!changed) return;
+      rerenderPanels();
+      if (store.situationsView.drilldown?.isOpen && String(store.situationsView.drilldown.selectedSujetId || "") === sujetId) {
+        updateDrilldownPanel();
+      }
+    });
   });
 
   root.querySelectorAll("[data-action='tab-write']").forEach((btn) => {
