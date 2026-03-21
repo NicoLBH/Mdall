@@ -1949,7 +1949,6 @@ function renderWelcomeHtml() {
 }
 
 function renderTableHtml(filteredSituations) {
-  const displayDepth = String(store.situationsView.displayDepth || "situations").toLowerCase();
   const activeVerdictFilter = String(store.situationsView.verdictFilter || "ALL").toUpperCase();
 
   const avisMatchesVerdictFilter = (avis) => {
@@ -1973,7 +1972,6 @@ function renderTableHtml(filteredSituations) {
   }
 
   const rows = [];
-  const forceExpandSituations = displayDepth === "sujets" || displayDepth === "avis";
 
   for (const situation of filteredSituations) {
     const visibleSujets =
@@ -1983,13 +1981,7 @@ function renderTableHtml(filteredSituations) {
             (sujet.avis || []).some((avis) => avisMatchesVerdictFilter(avis))
           );
 
-    if (activeVerdictFilter !== "ALL" && !visibleSujets.length) continue;
-
-    rows.push(renderSituationRow(situation));
-
-    const showSujets =
-      forceExpandSituations || store.situationsView.expandedSituations.has(situation.id);
-    if (!showSujets) continue;
+    if (!visibleSujets.length) continue;
 
     for (const sujet of visibleSujets) {
       rows.push(renderSujetRow(sujet));
@@ -3948,11 +3940,9 @@ function renderSituationsViewHeaderHtml() {
     renderProjectTableToolbarGroup({
       html: renderProjectTableToolbarSelect({
         id: "displayDepth",
-        value: String(store.situationsView.displayDepth || "situations").toLowerCase(),
+        value: "sujets",
         options: [
-          { value: "situations", label: "Situations" },
-          { value: "sujets", label: "Sujets" },
-          { value: "avis", label: "Avis" }
+          { value: "sujets", label: "Sujets" }
         ]
       })
     }),
@@ -3994,11 +3984,12 @@ export function renderProjectSubjects(root) {
   ensureViewUiState();
   ensureDrilldownDom();
   store.situationsView.showTableOnly = true;
+  store.situationsView.displayDepth = "sujets";
 
   root.className = "project-shell__content";
 
   setProjectViewHeader({
-    contextLabel: "Situations",
+    contextLabel: "Sujets",
     variant: "situations",
     toolbarHtml: ""
   });
