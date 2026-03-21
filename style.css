@@ -124,6 +124,8 @@
   letter-spacing:.08em;
 }
 
+.overlay-chrome__eyebrow:empty{display:none;}
+
 .overlay-chrome__titlewrap{
   min-width:0;
 }
@@ -1356,6 +1358,18 @@ body.is-resizing{
 .details-title--compact .details-title-compact-bottom{display:flex;align-items:center;gap:8px;min-width:0;height:16px;}
 .details-title--compact .details-title-compact-bottom .subissues-counts--problems{flex:0 0 auto;margin:0px;border:none;padding:0px 6px 0px 0px;font-weight:400;}
 .details-title--compact .details-title-compact-bottom .verdict-bar{flex:0 1 auto;}
+.details-title--compact.details-title--compact-grid{display:block;}
+.details-title--compact .details-title-compact-col2{display:grid;grid-template-rows:auto auto;gap:6px;min-width:0;}
+.details-title--compact.details-title--compact-grid .details-title-compact-top{align-items:center;gap:8px;flex-wrap:nowrap;}
+.details-title--compact.details-title--compact-grid .details-title-compact-top .details-title-text{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.details-title--compact.details-title--compact-grid .details-title-compact-bottom{height:auto;gap:10px;flex-wrap:nowrap;}
+.details-title--compact.details-title--compact-grid .details-title-compact-bottom .subissues-counts--verdicts{display:flex;align-items:center;}
+.details-title--compact.details-title--compact-grid .details-title-compact-bottom .verdict-legend{display:none !important;}
+.details-title--compact-avis .details-title-compact--avis{display:flex;align-items:center;gap:8px;min-width:0;}
+.details-title--compact-avis .details-title-status,.details-title--compact-avis .review-state-icon{flex:0 0 auto;}
+.details-title--compact-avis .details-title-text{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1 1 auto;}
+.details-title--compact-avis .details-title-id{white-space:nowrap;flex:0 0 auto;}
+.details-title--compact-avis .verdict-badge{flex:0 0 auto;}
 .details-title--compact .gh-state{font-size:14px;line-height:21px;padding:3px 10px;height:32px;}
 .details-title--compact .details-title-row{align-items:flex-start;}
 .details-title--compact .details-title-text{font-size:14px;font-weight:400;line-height:20px;color:#fff;}
