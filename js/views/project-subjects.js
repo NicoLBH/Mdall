@@ -2731,32 +2731,76 @@ function renderDetailsTitleWrapHtml(selection) {
   const entityType = getSelectionEntityType(selection.type);
   const reviewIcon = renderEntityReviewLeadIcon(entityType, item.id);
   const titleSeenClass = getReviewTitleStateClass(entityType, item.id);
-  let badgeHtml = "";
-  let probsHtml = "";
-  let verdictHtml = "";
-  let barOnlyHtml = "";
-  let idHtml = entityDisplayLinkHtml(selection.type, item.id);
-
-  if (selection.type === "avis") {
-    badgeHtml = renderVerboseAvisVerdictPill(getEffectiveAvisVerdict(item.id));
-    const sujet = getSujetByAvisId(item.id);
-  } else if (selection.type === "sujet") {
-    const stats = problemVerdictStats(item);
-    badgeHtml = statePill(getEffectiveSujetStatus(item.id), { reviewState: getEntityReviewMeta("sujet", item.id).review_state, entityType: "sujet" });
-    verdictHtml = buildVerdictBarHtml(stats.counts, { legend: true });
-    barOnlyHtml = buildVerdictBarHtml(stats.counts, { legend: false });
-  } else {
-    const stats = situationVerdictStats(item);
-    badgeHtml = statePill(getEffectiveSituationStatus(item.id), { reviewState: getEntityReviewMeta("situation", item.id).review_state, entityType: "situation" });
-    probsHtml = problemsCountsHtml(item);
-    verdictHtml = buildVerdictBarHtml(stats.counts, { legend: true });
-    barOnlyHtml = buildVerdictBarHtml(stats.counts, { legend: false });
-  }
-
+  const idHtml = entityDisplayLinkHtml(selection.type, item.id);
   const titleTextHtml = `
     ${reviewIcon ? `<span class="details-title-status">${reviewIcon}</span>` : ""}
     <span class="details-title-text ${titleSeenClass}">${escapeHtml(firstNonEmpty(item.title, item.id, "Détail"))}</span>
   `;
+
+  if (selection.type === "avis") {
+    const badgeHtml = renderVerboseAvisVerdictPill(getEffectiveAvisVerdict(item.id));
+    return `
+      <div class="details-title-wrap details-title--expanded">
+        <div class="details-title-row details-title-row--main">
+          <div class="details-title-maincol">
+            <div class="details-title-topline">
+              ${titleTextHtml}
+              <span class="details-title-id mono">${idHtml}</span>
+            </div>
+            <div class="details-title-bottomline">
+              ${badgeHtml}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="details-title-wrap details-title--compact details-title--compact-avis">
+        <div class="details-title-compact details-title-compact--avis">
+          ${badgeHtml}
+          ${titleTextHtml}
+          <span class="details-title-id mono">${idHtml}</span>
+        </div>
+      </div>
+    `;
+  }
+
+  if (selection.type === "sujet") {
+    const stats = problemVerdictStats(item);
+    const badgeHtml = statePill(getEffectiveSujetStatus(item.id), { reviewState: getEntityReviewMeta("sujet", item.id).review_state, entityType: "sujet" });
+    const verdictHtml = buildVerdictBarHtml(stats.counts, { legend: true });
+    const barOnlyHtml = buildVerdictBarHtml(stats.counts, { legend: false });
+    return `
+      <div class="details-title-wrap details-title--expanded">
+        <div class="details-title-row details-title-row--main">
+          <div class="details-title-maincol">
+            <div class="details-title-topline">
+              ${titleTextHtml}
+              <span class="details-title-id mono">${idHtml}</span>
+            </div>
+            <div class="details-title-bottomline">
+              ${badgeHtml}${verdictHtml}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="details-title-wrap details-title--compact details-title--compact-grid">
+        <div class="details-title-compact">
+          <div class="details-title-compact-col1">${badgeHtml}</div>
+          <div class="details-title-compact-col2">
+            <div class="details-title-compact-top">${titleTextHtml}</div>
+            <div class="details-title-compact-bottom">${barOnlyHtml}</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  const stats = situationVerdictStats(item);
+  const badgeHtml = statePill(getEffectiveSituationStatus(item.id), { reviewState: getEntityReviewMeta("situation", item.id).review_state, entityType: "situation" });
+  const probsHtml = problemsCountsHtml(item);
+  const verdictHtml = buildVerdictBarHtml(stats.counts, { legend: true });
+  const barOnlyHtml = buildVerdictBarHtml(stats.counts, { legend: false });
 
   return `
     <div class="details-title-wrap details-title--expanded">
@@ -2773,13 +2817,13 @@ function renderDetailsTitleWrapHtml(selection) {
       </div>
     </div>
 
-    <div class="details-title-wrap details-title--compact ${selection.type === "avis" ? "details-title--compact-avis" : "details-title--compact-grid"}">
-      <div class="details-title-compact ${selection.type === "avis" ? "details-title-compact--avis" : ""}">
-        ${selection.type === "avis" ? `${badgeHtml}${titleTextHtml}<span class="details-title-id mono">${idHtml}</span>` : `<div class="details-title-compact-col1">${badgeHtml}</div>
+    <div class="details-title-wrap details-title--compact details-title--compact-grid">
+      <div class="details-title-compact">
+        <div class="details-title-compact-col1">${badgeHtml}</div>
         <div class="details-title-compact-col2">
           <div class="details-title-compact-top">${titleTextHtml}</div>
-          <div class="details-title-compact-bottom">${selection.type === "situation" ? probsHtml : ""}${barOnlyHtml}</div>
-        </div>`}
+          <div class="details-title-compact-bottom">${probsHtml}${barOnlyHtml}</div>
+        </div>
       </div>
     </div>
   `;
