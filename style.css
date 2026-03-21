@@ -2144,7 +2144,6 @@ body.route--project:not(.project-shell-compact) [data-chrome-visibility="compact
   flex:1 1 auto;
   min-height:0;
   overflow:auto;
-  padding:16px;
 }
 
 .project-shell{display:flex;flex-direction:column;min-width:0;}
