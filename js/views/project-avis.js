@@ -49,6 +49,7 @@ import {
   renderReviewStateIcon
 } from "./ui/status-badges.js";
 import { escapeHtml } from "../utils/escape-html.js";
+import { renderSharedDetailsTitleWrap, renderSharedDetailsTitleHtml } from "./ui/detail-header.js";
 import { getSelectionDocumentRefs } from "../services/project-document-selectors.js";
 
 /* =========================================================
@@ -246,6 +247,28 @@ function priorityBadge(priority = "P3") {
   });
 }
 
+
+function renderVerboseAvisVerdictPill(verdict) {
+  const labels = {
+    F: "Favorable",
+    S: "Suspendu",
+    D: "Défavorable",
+    HM: "Hors Mission",
+    PM: "Pour Mémoire",
+    SO: "Sans Objet"
+  };
+  const normalized = normalizeVerdict(verdict);
+  const classMap = {
+    F: "verdict-F",
+    S: "verdict-S",
+    D: "verdict-D",
+    HM: "verdict-HM",
+    PM: "verdict-PM",
+    SO: "verdict-SO"
+  };
+  const badgeClass = classMap[normalized] ? `verdict-badge ${classMap[normalized]}` : "verdict-badge";
+  return `<span class="${badgeClass}">${escapeHtml(labels[normalized] || String(verdict || "—"))}</span>`;
+}
 function statePill(status = "open", options = {}) {
   const {
     reviewState = "pending",
@@ -315,23 +338,6 @@ function getEntityDisplayRef(type, id) {
 
 function entityDisplayLinkHtml(type, id) {
   return entityLinkHtml(type, id, escapeHtml(getEntityDisplayRef(type, id)));
-}
-
-function getVerboseAvisVerdictLabel(verdict) {
-  const value = String(verdict || "").trim().toUpperCase();
-  if (value === "F") return "Favorable";
-  if (value === "S") return "Suspendu";
-  if (value === "D") return "Défavorable";
-  if (value === "HM") return "Hors Mission";
-  if (value === "PM") return "Pour Mémoire";
-  if (value === "SO") return "Sans Objet";
-  return value || "—";
-}
-
-function renderVerboseAvisVerdictPill(verdict) {
-  const label = getVerboseAvisVerdictLabel(verdict);
-  const normalized = String(verdict || "").trim().toUpperCase() || "—";
-  return `<span class="verdict-badge verdict-${escapeHtml(normalized)}">${escapeHtml(label)}</span>`;
 }
 
 function renderVerdictHeadFilter() {
@@ -2665,82 +2671,49 @@ function renderSubIssuesForSituation(situation, options = {}) {
 
 
 function renderDetailsTitleWrapHtml(selection) {
-  if (!selection || selection.type !== "avis") {
-    return `<span class="details-title-text">Sélectionner un avis</span>`;
-  }
-
-  const item = selection.item;
-  const reviewIcon = renderEntityReviewLeadIcon("avis", item.id);
-  const titleSeenClass = getReviewTitleStateClass("avis", item.id);
-  const badgeHtml = renderVerboseAvisVerdictPill(getEffectiveAvisVerdict(item.id));
-  const idHtml = entityDisplayLinkHtml("avis", item.id);
-  const titleTextHtml = `
-    ${reviewIcon ? `<span class="details-title-status">${reviewIcon}</span>` : ""}
-    <span class="details-title-text ${titleSeenClass}">${escapeHtml(firstNonEmpty(item.title, item.id, "Avis"))}</span>
-  `;
-
-  const expandedHtml = `
-    <div class="details-title-wrap details-title--expanded">
-      <div class="details-title-row details-title-row--main">
-        <div class="details-title-maincol">
-          <div class="details-title-topline">
-            ${titleTextHtml}
-            <span class="details-title-id mono">${idHtml}</span>
-          </div>
-          <div class="details-title-bottomline">
-            ${badgeHtml}
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
-
-  const compactHtml = `
-    <div class="details-title-wrap details-title--compact details-title--compact-avis">
-      <div class="details-title-compact details-title-compact--avis">
-        ${badgeHtml}
-        ${titleTextHtml}
-        <span class="details-title-id mono">${idHtml}</span>
-      </div>
-    </div>
-  `;
-
-  return `${expandedHtml}${compactHtml}`;
+  return renderSharedDetailsTitleWrap(selection, {
+    emptyText: "Sélectionner un avis",
+    buildTitleTextHtml(currentSelection) {
+      const item = currentSelection.item;
+      const reviewIcon = renderEntityReviewLeadIcon("avis", item.id);
+      const titleSeenClass = getReviewTitleStateClass("avis", item.id);
+      return `
+        ${reviewIcon ? `<span class="details-title-status">${reviewIcon}</span>` : ""}
+        <span class="details-title-text ${titleSeenClass}">${escapeHtml(firstNonEmpty(item.title, item.id, "Avis"))}</span>
+      `;
+    },
+    buildIdHtml(currentSelection) {
+      return entityDisplayLinkHtml("avis", currentSelection.item.id);
+    },
+    buildExpandedBottomHtml(currentSelection) {
+      return renderVerboseAvisVerdictPill(getEffectiveAvisVerdict(currentSelection.item.id));
+    },
+    buildCompactConfig(currentSelection, { titleTextHtml, idHtml }) {
+      return {
+        variant: "inline",
+        wrapClass: "details-title--compact-avis",
+        bodyClass: "details-title-compact--avis",
+        leftHtml: renderVerboseAvisVerdictPill(getEffectiveAvisVerdict(currentSelection.item.id)),
+        topHtml: titleTextHtml,
+        idHtml
+      };
+    }
+  });
 }
-
 
 function renderDetailsTitleHtml(selection, options = {}) {
   const showExpand = options.showExpand !== false;
-  if (!selection) {
-    return `
-      <div class="details-head">
-        <div class="details-head-left">
-          <div class="details-kicker mono"></div>
-          <div class="gh-panel__title">Sélectionner un élément</div>
-        </div>
-        <div class="details-head-right">
-          <div class="details-meta mono" id="detailsMeta">—</div>
-          ${showExpand ? `<button id="detailsExpand" class="icon-btn icon-btn--sm" aria-label="Agrandir" title="Agrandir">⤢</button>` : ``}
-        </div>
-      </div>
-    `;
-  }
-
-  return `
-    <div class="details-head details-head--expanded">
-      <div class="details-head-left">
-        <div class="details-kicker mono"></div>
-        <div class="gh-panel__title">
-          ${renderDetailsTitleWrapHtml(selection)}
-        </div>
-      </div>
-
-      <div class="details-head-right">
-        <div class="details-meta mono" id="detailsMeta">${escapeHtml(selection.item.id || "—")}</div>
-        ${showExpand ? `<button id="detailsExpand" class="icon-btn icon-btn--sm" aria-label="Agrandir" title="Agrandir">⤢</button>` : ``}
-      </div>
-    </div>
-  `;
+  return renderSharedDetailsTitleHtml(selection, {
+    showExpand,
+    titleWrapHtml: renderDetailsTitleWrapHtml(selection),
+    emptyPanelTitle: "Sélectionner un élément",
+    buildKickerText() {
+      return "";
+    },
+    buildMetaHtml(currentSelection) {
+      return escapeHtml(currentSelection?.item?.id || "—");
+    }
+  });
 }
 
 
@@ -3534,7 +3507,7 @@ function ensureDrilldownDom() {
     variant: "drilldown",
     ariaLabel: "Détails",
     headHtml: renderOverlayChromeHead({
-      eyebrow: "",
+      eyebrow: "DÉTAILS",
       titleId: "drilldownTitle",
       closeId: "drilldownClose",
       closeLabel: "Fermer",
