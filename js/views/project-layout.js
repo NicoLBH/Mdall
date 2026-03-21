@@ -4,20 +4,23 @@ import {
   isProjectTabAllowedForUser
 } from "../constants.js";
 import { store } from "../store.js";
+
 import { renderProjectDocuments } from "./project-documents.js";
 import { renderProjectAvis } from "./project-avis.js";
-import { renderProjectSituations } from "./project-situations.js";
-import { renderProjectHeader } from "./project-header.js";
-import { renderProjectSituationsTopBanner } from "./project-situations-runbar.js";
-import { mountProjectShellChrome } from "./project-shell-chrome.js";
+import { renderProjectSubjects } from "./project-subjects.js";
 import { renderProjectPropositions } from "./project-propositions.js";
 import { renderProjectDiscussions } from "./project-discussions.js";
 import { renderProjectActions } from "./project-actions.js";
-import { renderProjectInsights } from "./project-insights.js";
+import { renderProjectSituations } from "./project-situations.js";
 import { renderProjectReferentiel } from "./project-referentiel.js";
 import { renderProjectRisquesSecurite } from "./project-risques-securite.js";
-import { renderProjectSubjects } from "./project-subjects.js";
+import { renderProjectInsights } from "./project-insights.js";
 import { renderProjectParametres } from "./project-parametres.js";
+
+import { renderProjectHeader } from "./project-header.js";
+import { renderProjectSituationsTopBanner } from "./project-situations-runbar.js";
+import { mountProjectShellChrome } from "./project-shell-chrome.js";
+
 
 function normalizeProjectTab(tab) {
   const normalized = normalizeProjectTabId(tab);
@@ -27,10 +30,10 @@ function normalizeProjectTab(tab) {
     case PROJECT_TAB_IDS.DOCUMENTS:
     case PROJECT_TAB_IDS.AVIS:
     case PROJECT_TAB_IDS.SUBJECTS:
-    case PROJECT_TAB_IDS.SITUATIONS:
     case PROJECT_TAB_IDS.PROPOSITIONS:
     case PROJECT_TAB_IDS.DISCUSSIONS:
     case PROJECT_TAB_IDS.ACTIONS:
+    case PROJECT_TAB_IDS.SITUATIONS:
     case PROJECT_TAB_IDS.REFERENTIEL:
     case PROJECT_TAB_IDS.RISQUES_SECURITE:
     case PROJECT_TAB_IDS.INSIGHTS:
@@ -83,10 +86,6 @@ export function renderProjectLayout(root, projectId, tab) {
     case PROJECT_TAB_IDS.SUBJECTS:
       renderProjectSubjects(content);
       break;
-    
-    case PROJECT_TAB_IDS.SITUATIONS:
-      renderProjectSituations(content);
-      break;
 
     case PROJECT_TAB_IDS.PROPOSITIONS:
       renderProjectPropositions(content);
@@ -99,7 +98,11 @@ export function renderProjectLayout(root, projectId, tab) {
     case PROJECT_TAB_IDS.ACTIONS:
       renderProjectActions(content);
       break;
-
+    
+    case PROJECT_TAB_IDS.SITUATIONS:
+      renderProjectSituations(content);
+      break;
+    
     case PROJECT_TAB_IDS.REFERENTIEL:
       renderProjectReferentiel(content);
       break;
