@@ -797,6 +797,25 @@ body.modal-open {
 }
 .issue-row--avis .cell-id{color:var(--muted);}
 
+.issue-row-title-stack{
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  align-items:flex-start;
+}
+.issue-row-title-stack .theme-text{
+  width:100%;
+}
+.issue-row-meta-text{
+  width:100%;
+  color:var(--muted);
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+
 /* Verdict badges (F/D/S/HM/PM/SO) */
 .verdict-badge{
   display:inline-flex;
