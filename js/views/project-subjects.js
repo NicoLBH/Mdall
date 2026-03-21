@@ -11,7 +11,7 @@ import {
   refreshProjectShellChrome
 } from "./project-shell-chrome.js";
 import { svgIcon } from "../ui/icons.js";
-import { renderGhActionButton, bindGhSelectMenus } from "./ui/gh-split-button.js";
+import { renderGhActionButton } from "./ui/gh-split-button.js";
 import {
   renderDataTableShell,
   renderDataTableHead,
@@ -21,7 +21,6 @@ import {
   renderProjectTableToolbar,
   renderProjectTableToolbarGroup,
   renderProjectTableToolbarSearch,
-  renderProjectTableToolbarSelect,
   renderProjectTableToolbarMeta
 } from "./ui/project-table-toolbar.js";
 import {
@@ -45,7 +44,8 @@ import {
   renderStatusBadge,
   renderVerdictPill,
   renderStateDot,
-  renderReviewStateIcon
+  renderReviewStateIcon,
+  renderCountBadge
 } from "./ui/status-badges.js";
 import { escapeHtml } from "../utils/escape-html.js";
 import { getSelectionDocumentRefs } from "../services/project-document-selectors.js";
@@ -444,6 +444,8 @@ function ensureViewUiState() {
   if (!(v.drilldown.expandedSujets instanceof Set)) {
     v.drilldown.expandedSujets = new Set(Array.isArray(v.drilldown.expandedSujets) ? v.drilldown.expandedSujets : []);
   }
+  if (typeof v.subjectsStatusFilter !== "string") v.subjectsStatusFilter = "open";
+  if (typeof v.situationsStatusFilter !== "string") v.situationsStatusFilter = "open";
 }
 
 function currentRunKey() {
@@ -1616,6 +1618,61 @@ function situationMatchesFilters(situation, query, verdictFilter) {
   return situationTextMatch;
 }
 
+
+function getCurrentSubjectsStatusFilter() {
+  ensureViewUiState();
+  const value = String(store.situationsView.subjectsStatusFilter || "open").toLowerCase();
+  return value === "closed" ? "closed" : "open";
+}
+
+function sujetMatchesStatusFilter(sujet, statusFilter = getCurrentSubjectsStatusFilter()) {
+  const effectiveStatus = String(getEffectiveSujetStatus(sujet?.id) || sujet?.status || "open").toLowerCase();
+  return statusFilter === "closed" ? effectiveStatus !== "open" : effectiveStatus === "open";
+}
+
+function getSubjectsStatusCounts(query = "") {
+  let open = 0;
+  let closed = 0;
+  for (const situation of store.situationsView.data || []) {
+    for (const sujet of situation.sujets || []) {
+      const matchesSearch = matchSearch([
+        situation?.id,
+        situation?.title,
+        sujet?.id,
+        sujet?.title,
+        sujet?.priority,
+        sujet?.status,
+        sujet?.agent,
+        sujet?.raw?.summary,
+        sujet?.raw?.topic,
+        sujet?.raw?.category,
+        sujet?.raw?.title
+      ], query);
+      if (!matchesSearch) continue;
+      if (sujetMatchesStatusFilter(sujet, "closed")) closed += 1;
+      else open += 1;
+    }
+  }
+  return { open, closed };
+}
+
+function renderSubjectsStatusHeadHtml() {
+  const current = getCurrentSubjectsStatusFilter();
+  const query = String(store.situationsView.search || "").trim().toLowerCase();
+  const counts = getSubjectsStatusCounts(query);
+  const item = (label, value, count) => `
+    <button
+      type="button"
+      class="table-head-filter${current === value ? " is-active" : ""}"
+      data-subjects-status-filter="${value}"
+      aria-pressed="${current === value ? "true" : "false"}"
+      style="display:inline-flex;align-items:center;gap:6px;padding:0;border:0;background:none;color:inherit;font:inherit;cursor:pointer;">
+      <span>${label}</span>
+      ${renderCountBadge(count, { className: "project-tabs__counter", ariaLabel: `${count} ${label.toLowerCase()}` })}
+    </button>`;
+  return `<div class="table-head-filter-group" style="display:inline-flex;align-items:center;gap:16px;">${item("Ouverts", "open", counts.open)}${item("Fermés", "closed", counts.closed)}</div>`;
+}
+
 function getVisibleCounts(filteredSituations) {
   let sujets = 0;
   let avis = 0;
@@ -1927,7 +1984,7 @@ function getSituationsTableGridTemplate() {
 function renderSituationsTableHeadHtml() {
   return renderDataTableHead({
     columns: [
-      { className: "cell cell-theme", label: "Thème" },
+      { className: "cell cell-theme", html: renderSubjectsStatusHeadHtml() },
       { className: "cell cell-prio", label: "Prio" },
       { className: "cell cell-agent", label: "Agent" },
       { className: "cell cell-id", label: "avis_id" }
@@ -1949,12 +2006,7 @@ function renderWelcomeHtml() {
 }
 
 function renderTableHtml(filteredSituations) {
-  const activeVerdictFilter = String(store.situationsView.verdictFilter || "ALL").toUpperCase();
-
-  const avisMatchesVerdictFilter = (avis) => {
-    if (activeVerdictFilter === "ALL") return true;
-    return normalizeVerdict(getEffectiveAvisVerdict(avis.id)) === activeVerdictFilter;
-  };
+  const activeStatusFilter = getCurrentSubjectsStatusFilter();
 
   if (!(store.situationsView.data || []).length) return renderWelcomeHtml();
 
@@ -1974,17 +2026,12 @@ function renderTableHtml(filteredSituations) {
   const rows = [];
 
   for (const situation of filteredSituations) {
-    const visibleSujets =
-      activeVerdictFilter === "ALL"
-        ? (situation.sujets || [])
-        : (situation.sujets || []).filter((sujet) =>
-            (sujet.avis || []).some((avis) => avisMatchesVerdictFilter(avis))
-          );
+    const visibleSujets = (situation.sujets || []).filter((sujet) => sujetMatchesStatusFilter(sujet, activeStatusFilter));
 
     if (!visibleSujets.length) continue;
 
     for (const sujet of visibleSujets) {
-      rows.push(renderSujetRow(sujet));
+      rows.push(renderFlatSujetRow(sujet, situation.id));
     }
   }
 
@@ -2924,12 +2971,8 @@ function rerenderPanels() {
   const counts = getVisibleCounts(filteredSituations);
   const panelHost = document.getElementById("situationsPanelHost");
   const countsHost = document.getElementById("situationsHeaderCounts");
-  const verdictFilter = document.getElementById("verdictFilter");
-  const displayDepth = document.getElementById("displayDepth");
   const searchInput = document.getElementById("situationsSearch");
 
-  if (verdictFilter) verdictFilter.value = store.situationsView.verdictFilter || "ALL";
-  if (displayDepth) displayDepth.value = store.situationsView.displayDepth || "situations";
   if (searchInput) searchInput.value = store.situationsView.search || "";
 
   if (countsHost) countsHost.textContent = `${counts.situations} situations · ${counts.sujets} sujets · ${counts.avis} avis`;
@@ -3790,13 +3833,6 @@ function bindSituationsEvents(root, headerRoot) {
     rerenderPanels();
   });
 
-  bindGhSelectMenus(headerRoot || document, {
-    onChange: (id, value) => {
-      if (id !== "displayDepth") return;
-      store.situationsView.displayDepth = String(value || "situations").toLowerCase();
-      rerenderPanels();
-    }
-  });
 
   const addActionRoot = document.querySelector('[data-action-id="situationsAddAction"]');
   if (addActionRoot && addActionRoot.dataset.bound !== "true") {
@@ -3810,6 +3846,14 @@ function bindSituationsEvents(root, headerRoot) {
   }
 
   root.addEventListener("click", (event) => {
+    const subjectsStatusFilterButton = event.target.closest("[data-subjects-status-filter]");
+    if (subjectsStatusFilterButton) {
+      event.preventDefault();
+      store.situationsView.subjectsStatusFilter = String(subjectsStatusFilterButton.dataset.subjectsStatusFilter || "open").toLowerCase() === "closed" ? "closed" : "open";
+      rerenderPanels();
+      return;
+    }
+
     const verdictBtn = event.target.closest("#verdictHeadBtn");
     if (verdictBtn) {
       event.preventDefault();
@@ -3937,15 +3981,6 @@ function renderSituationsAddAction() {
 
 function renderSituationsViewHeaderHtml() {
   const leftHtml = [
-    renderProjectTableToolbarGroup({
-      html: renderProjectTableToolbarSelect({
-        id: "displayDepth",
-        value: "sujets",
-        options: [
-          { value: "sujets", label: "Sujets" }
-        ]
-      })
-    }),
     renderProjectTableToolbarGroup({
       html: renderProjectTableToolbarMeta({
         id: "situationsHeaderCounts",
