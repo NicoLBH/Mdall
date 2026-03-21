@@ -3041,6 +3041,7 @@ function renderSituationKanbanBody(situation) {
         `).join("")}
       </div>
     </div>
+  `}
   `;
 }
 
