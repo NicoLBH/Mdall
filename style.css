@@ -782,9 +782,9 @@ body.modal-open {
   border-bottom-right-radius: var(--radius);
   border-bottom-left-radius: var(--radius);
 }
-.issue-row{display:grid;grid-template-columns: var(--issues-cols);gap:0;align-items:center;padding:4px 12px;border-bottom:1px solid rgba(48,54,61,.35);}
+.issue-row{display:grid;grid-template-columns: var(--issues-cols);gap:0;align-items:center;padding:8px 12px 10px 0px;border-bottom:1px solid rgba(48,54,61,.35);}
 .issue-row:last-child{border-bottom:none;}
-.issue-row:hover{background:transparent;}
+.issue-row:hover{background: rgba(110, 118, 129, .06);}
 
 .cell{min-width:0;}
 .cell-theme{display:flex;align-items:center;gap:5px;min-width:0;}
@@ -808,7 +808,8 @@ body.modal-open {
   padding:0;
   margin:0;
   color:inherit;
-  font:inherit;
+  font-size:14px;
+  font-weight:600;
   text-align:left;
   display:block;
   width:100%;
@@ -1233,7 +1234,7 @@ body.is-resizing{
 .message-thread{display:block;}
 .message-thread__item{width:100%;}
 .message-thread__comment{padding-left:var(--discussion-content-inset);}
-.comment-composer{display:flex;gap:12px;align-items:flex-start;margin-top:10px;padding-left:var(--discussion-content-inset);}
+.comment-composer{display:flex;gap:12px;align-items:flex-start;margin-top:10px;}
 .comment-composer__main{flex:1 1 auto;min-width:0;}
 .comment-composer__box{width:100%;}
 .comment-composer__actions{padding-bottom:100px;}
@@ -3602,8 +3603,8 @@ color:#ffff;
 }
 
 .documents-repo__name{
-  font-weight:400;
-  font-size:13px;
+  font-weight:600;
+  font-size:14px;
   white-space:nowrap;
   overflow:hidden;
   text-overflow:ellipsis;
@@ -5967,8 +5968,8 @@ color:#ffff;
 }
 
 .theme-text.is-unseen{
-  color:var(--fgColor-default, #e6edf3);
-  font-weight:600;
+  /*color:var(--fgColor-default, #e6edf3);
+  font-weight:600;*/
 }
 
 .theme-text.is-seen{
@@ -6084,10 +6085,10 @@ color:#ffff;
 
 
 .details-document-refs{
-  margin:12px 0 16px;
+  margin:12px 0 16px 50px;
   padding:10px 12px;
   border:1px solid rgba(48,54,61,.45);
-  border-radius:10px;
+  border-radius:var(--radius);
   background:rgba(13,17,23,.35);
 }
 .details-document-refs__label{
