@@ -86,7 +86,6 @@ function renderVerdictActionButtons(activeVerdict) {
         </div>
       `).join("")}
     </div>
-    `}
   `;
 }
 
