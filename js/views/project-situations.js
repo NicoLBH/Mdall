@@ -1932,7 +1932,7 @@ function renderSituationRow(situation) {
   const updatedLabel = formatRelativeTimeLabel(getEntityListTimestamp("situation", situation), "updated");
 
   return `
-    <div class="issue-row issue-row--sit click js-row-situation${rowSelectedClass("situation", situation.id)}" data-situation-id="${escapeHtml(situation.id)}">
+    <div class="issue-row issue-row--sit js-row-situation${rowSelectedClass("situation", situation.id)}" data-situation-id="${escapeHtml(situation.id)}">
       <div class="cell cell-theme lvl0">
         <span class="chev chev--spacer"></span>
         <span class="issue-row-title-grid">
@@ -1943,7 +1943,8 @@ function renderSituationRow(situation) {
             ${reviewIcon ? `<span class="review-title-chip">${reviewIcon}</span>` : `<span class="review-title-chip review-title-chip--placeholder" aria-hidden="true"></span>`}
           </span>
           <span class="issue-row-title-grid__title">
-          <button type="button" class="row-title-trigger js-row-title-trigger theme-text theme-text--sit ${titleSeenClass}" data-row-entity-type="situation" data-row-entity-id="${escapeHtml(situation.id)}">${escapeHtml(firstNonEmpty(situation.title, situation.id, "(sans titre)"))}</button>
+            <button type="button" class="row-title-trigger js-row-title-trigger theme-text theme-text--sit ${titleSeenClass}" data-row-entity-type="situation" data-row-entity-id="${escapeHtml(situation.id)}">${escapeHtml(firstNonEmpty(situation.title, situation.id, "(sans titre)"))}</button>
+          </span>
           <span class="issue-row-title-grid__meta issue-row-meta-text mono-small">${escapeHtml(displayRef)} • ${escapeHtml(updatedLabel)}</span>
         </span>
       </div>
@@ -1962,12 +1963,12 @@ function renderSujetRow(sujet) {
   const titleSeenClass = getReviewTitleStateClass("sujet", sujet.id);
 
   return `
-    <div class="issue-row issue-row--pb click js-row-sujet${rowSelectedClass("sujet", sujet.id)}" data-sujet-id="${escapeHtml(sujet.id)}">
+    <div class="issue-row issue-row--pb js-row-sujet${rowSelectedClass("sujet", sujet.id)}" data-sujet-id="${escapeHtml(sujet.id)}">
       <div class="cell cell-theme lvl1">
         <span class="chev chev--spacer"></span>
         ${issueIcon(effStatus, { reviewState: meta.review_state, entityType: "sujet", isSeen: meta.is_seen })}
         ${reviewIcon ? `<span class="review-title-chip">${reviewIcon}</span>` : ""}
-        <span class="theme-text theme-text--pb ${titleSeenClass}">${escapeHtml(firstNonEmpty(sujet.title, sujet.id, "Non classé"))}</span>
+        <button type="button" class="row-title-trigger js-row-title-trigger theme-text theme-text--pb ${titleSeenClass}" data-row-entity-type="sujet" data-row-entity-id="${escapeHtml(sujet.id)}">${escapeHtml(firstNonEmpty(sujet.title, sujet.id, "Non classé"))}</button>
       </div>
       <div class="cell cell-prio">${priorityBadge(sujet.priority)}</div>
       <div class="cell cell-agent"></div>
@@ -1982,11 +1983,11 @@ function renderAvisRow(avis) {
   const titleSeenClass = getReviewTitleStateClass("avis", avis.id);
 
   return `
-    <div class="issue-row issue-row--avis click js-row-avis${rowSelectedClass("avis", avis.id)}" data-avis-id="${escapeHtml(avis.id)}">
+    <div class="issue-row issue-row--avis js-row-avis${rowSelectedClass("avis", avis.id)}" data-avis-id="${escapeHtml(avis.id)}">
       <div class="cell cell-theme lvl2">
         <span class="chev chev--spacer"></span>
         ${reviewIcon ? `<span class="review-title-chip">${reviewIcon}</span>` : ""}
-        <span class="theme-text theme-text--avis ${titleSeenClass}">${escapeHtml(firstNonEmpty(avis.title, avis.id, ""))}</span>
+        <button type="button" class="row-title-trigger js-row-title-trigger theme-text theme-text--avis ${titleSeenClass}" data-row-entity-type="avis" data-row-entity-id="${escapeHtml(avis.id)}">${escapeHtml(firstNonEmpty(avis.title, avis.id, ""))}</button>
       </div>
       <div class="cell cell-verdict">${renderVerdictPill(effVerdict)}</div>
       <div class="cell cell-prio"></div>
@@ -2004,7 +2005,7 @@ function renderFlatSujetRow(sujet, situationId) {
   const titleSeenClass = getReviewTitleStateClass("sujet", sujet.id);
 
   return `
-    <div class="issue-row issue-row--pb click js-row-sujet${rowSelectedClass("sujet", sujet.id)}" data-sujet-id="${escapeHtml(sujet.id)}">
+    <div class="issue-row issue-row--pb js-row-sujet${rowSelectedClass("sujet", sujet.id)}" data-sujet-id="${escapeHtml(sujet.id)}">
       <div class="cell cell-theme lvl0">
         <span class="chev chev--spacer"></span>
         <span class="issue-row-title-grid">
@@ -2034,12 +2035,12 @@ function renderFlatAvisRow(avis, sujetId, situationId) {
   const titleSeenClass = getReviewTitleStateClass("avis", avis.id);
 
   return `
-    <div class="issue-row issue-row--avis click js-row-avis${rowSelectedClass("avis", avis.id)}" data-avis-id="${escapeHtml(avis.id)}">
+    <div class="issue-row issue-row--avis js-row-avis${rowSelectedClass("avis", avis.id)}" data-avis-id="${escapeHtml(avis.id)}">
       <div class="cell cell-theme lvl0">
         <span class="chev chev--spacer"></span>
         ${issueIcon("open")}
         ${reviewIcon ? `<span class="review-title-chip">${reviewIcon}</span>` : ""}
-        <span class="theme-text theme-text--avis ${titleSeenClass}">${escapeHtml(firstNonEmpty(avis.title, avis.id, ""))}</span>
+        <button type="button" class="row-title-trigger js-row-title-trigger theme-text theme-text--avis ${titleSeenClass}" data-row-entity-type="avis" data-row-entity-id="${escapeHtml(avis.id)}">${escapeHtml(firstNonEmpty(avis.title, avis.id, ""))}</button>
         ${lineage ? `<span class="mono subissues-inline-count">${escapeHtml(lineage)}</span>` : ""}
       </div>
       <div class="cell cell-verdict">${renderVerdictPill(effVerdict)}</div>
