@@ -6830,8 +6830,9 @@ color:#ffff;
       display:flex;
       align-items:center;
       gap:8px;
-      font-weight:600;
+      font-weight:500;
       color:var(--fgColor-default, #e6edf3);
+      font-size:13px;
     }
 
     .situation-kanban__dot{
