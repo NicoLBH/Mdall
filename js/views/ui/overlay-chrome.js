@@ -92,7 +92,9 @@ export function bindOverlayChromeDismiss(hostEl, {
 export function bindOverlayChromeCompact(scrollEl, chromeEl, key = "default") {
   if (!scrollEl || !chromeEl) return;
 
-  const attr = `overlayChromeBound${String(key).replace(/[^a-zA-Z0-9_-]/g, "")}`;
+  const attr = `data-overlay-chrome-bound-${String(key)
+    .replace(/[^a-zA-Z0-9_-]/g, "")
+    .toLowerCase()}`;
   const sync = () => {
     const scrolled = (scrollEl.scrollTop || 0) > 8;
     chromeEl.classList.toggle("overlay-chrome--compact", scrolled);
@@ -105,12 +107,12 @@ export function bindOverlayChromeCompact(scrollEl, chromeEl, key = "default") {
 
   scrollEl.__syncCondensedTitle = sync;
 
-  if (scrollEl.dataset[attr] === "1") {
+  if (scrollEl.getAttribute(attr) === "1") {
     sync();
     return;
   }
 
-  scrollEl.dataset[attr] = "1";
+  scrollEl.setAttribute(attr, "1");
   scrollEl.addEventListener("scroll", sync, { passive: true });
 
   sync();
