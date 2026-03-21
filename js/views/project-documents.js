@@ -293,7 +293,7 @@ function renderRepoDocumentRow(doc) {
     >
       <div class="documents-repo__cell documents-repo__cell--name">
         <span class="documents-repo__icon documents-repo__icon--document">${getDocumentIconSvg()}</span>
-        <span class="documents-repo__name">${escapeHtml(decoratedDoc.name)}</span>
+        <button type="button" class="documents-repo__name documents-repo__name-trigger js-document-title-trigger" data-document-id="${escapeHtml(decoratedDoc.id || "")}">${escapeHtml(decoratedDoc.name)}</button>
       </div>
       <div class="documents-repo__cell documents-repo__cell--message">
         <div class="documents-repo__message-main">${escapeHtml(decoratedDoc.note || "Document prêt pour l'analyse")}</div>
@@ -1040,18 +1040,14 @@ function bindDocumentsView(root) {
     });
   }
 
-  document.querySelectorAll(".documents-repo__row--file[data-document-id]").forEach((row) => {
-    const documentId = row.getAttribute("data-document-id") || "";
+  document.querySelectorAll(".js-document-title-trigger[data-document-id]").forEach((trigger) => {
+    const documentId = trigger.getAttribute("data-document-id") || "";
     const documentItem = getProjectDocumentById(documentId);
     if (!canPreviewPdf(documentItem)) return;
 
-    const openPreview = () => openPdfPreview(root, documentId);
-    row.addEventListener("click", openPreview);
-    row.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        openPreview();
-      }
+    trigger.addEventListener("click", (event) => {
+      event.preventDefault();
+      openPdfPreview(root, documentId);
     });
   });
 
