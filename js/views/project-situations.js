@@ -161,22 +161,25 @@ function ensureSituationsLegacyDomStyle() {
     .situation-kanban{
       display:grid;
       grid-template-columns:repeat(5, minmax(220px, 1fr));
-      gap:16px;
+      gap:8px;
       align-items:start;
       min-width:max-content;
       padding-bottom:4px;
+      height:100%;
     }
 
     .situation-kanban__col{
-      min-width:220px;
-      background:var(--bgColor-muted, #161b22);
+      min-width:350px;
+      width:350px;
+      background:var(--bgAssistPanel);
       border:1px solid var(--borderColor-default, #30363d);
-      border-radius:12px;
-      padding:12px;
+      border-radius:var(--radius);
+      padding:4px 8px;
       display:flex;
       flex-direction:column;
       gap:12px;
       min-height:380px;
+      height:100%;
     }
 
     .situation-kanban__col.is-drop-target{
@@ -264,8 +267,8 @@ function ensureSituationsLegacyDomStyle() {
     }
 
     .situation-kanban-card__title{
-      font-size:14px;
-      font-weight:600;
+      font-size:13px;
+      font-weight:400;
       line-height:1.4;
       color:var(--fgColor-default, #e6edf3);
     }
