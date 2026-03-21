@@ -1,4317 +1,1166 @@
 import { store } from "../store.js";
-import { ASK_LLM_URL_PROD } from "../constants.js";
+import { registerProjectPrimaryScrollSource, setProjectViewHeader } from "./project-shell-chrome.js";
 import {
-  bindProjectSituationsRunbar,
-  syncProjectSituationsRunbar
-} from "./project-situations-runbar.js";
-import { closeGlobalNav } from "./global-nav.js";
-import {
-  setProjectViewHeader,
-  registerProjectPrimaryScrollSource,
-  refreshProjectShellChrome
-} from "./project-shell-chrome.js";
-import { svgIcon } from "../ui/icons.js";
-import { renderGhActionButton } from "./ui/gh-split-button.js";
-import {
-  renderDataTableShell,
-  renderDataTableHead,
-  renderDataTableEmptyState
-} from "./ui/data-table-shell.js";
+  bindGhActionButtons,
+  bindGhSelectMenus,
+  initGhActionButton,
+  renderGhActionButton
+} from "./ui/gh-split-button.js";
 import {
   renderProjectTableToolbar,
   renderProjectTableToolbarGroup,
-  renderProjectTableToolbarSearch,
-  renderProjectTableToolbarMeta
+  renderProjectTableToolbarSelect
 } from "./ui/project-table-toolbar.js";
-import {
-  renderMessageCard,
-  renderMessageThread,
-  renderMessageThreadComment,
-  renderMessageThreadActivity,
-  renderMessageThreadEvent
-} from "./ui/message-thread.js";
-import { renderCommentComposer } from "./ui/comment-composer.js";
-import { renderTableHeadFilterToggle } from "./ui/table-head-filter-toggle.js";
-import {
-  renderOverlayChrome,
-  renderOverlayChromeHead,
-  setOverlayChromeOpenState,
-  bindOverlayChromeDismiss,
-  bindOverlayChromeCompact
-} from "./ui/overlay-chrome.js";
-import {
-  normalizeVerdict,
-  normalizeReviewState,
-  renderStatusBadge,
-  renderVerdictPill,
-  renderStateDot,
-  renderReviewStateIcon,
-  renderCountBadge
-} from "./ui/status-badges.js";
+import { renderGhInput } from "./ui/gh-input.js";
+import { renderStateDot } from "./ui/status-badges.js";
+import { svgIcon } from "../ui/icons.js";
+import { renderDataTableShell, renderDataTableHead } from "./ui/data-table-shell.js";
 import { escapeHtml } from "../utils/escape-html.js";
-import { getSelectionDocumentRefs } from "../services/project-document-selectors.js";
+import { shouldAutoRunAnalysisAfterUpload } from "../services/project-automation.js";
+import {
+  getCurrentAnalysisRunMeta,
+  isAnalysisRunning,
+  runAnalysis
+} from "../services/analysis-runner.js";
+import { createProjectProposal } from "../services/project-proposals.js";
+import { addProjectDocument, decorateDocumentWithPhase, getEnabledProjectPhasesCatalog, getProjectDocumentById, getProjectDocumentPreviewUrl, getProjectDocuments, resolveDocumentRefs, setActiveProjectDocument } from "../services/project-documents-store.js";
+import { getDocumentStatsMap } from "../services/project-document-selectors.js";
+import { getEffectiveAvisVerdict, getEffectiveSituationStatus, getEffectiveSujetStatus } from "./project-situations.js";
 
-/* =========================================================
-   Legacy DOM / archive parity helpers
-========================================================= */
-
-function verdictTone(verdict) {
-  const map = {
-    F: "verdict-f",
-    S: "verdict-s",
-    D: "verdict-d",
-    HM: "verdict-hm",
-    PM: "verdict-pm",
-    SO: "verdict-so"
-  };
-  return map[String(verdict || "").toUpperCase()] || "default";
-}
-
-function renderVerdictActionButtons(activeVerdict) {
-  const verdicts = ["F", "S", "D", "HM", "PM", "SO"];
-
-  return `
-    <div class="verdict-switch" role="group" aria-label="Verdict">
-      ${verdicts.map((v) => `
-        <div class="verdict-switch__item ${v === activeVerdict ? "is-active" : ""}">
-          ${renderGhActionButton({
-            id: `verdict-${v}`,
-            label: v,
-            tone: verdictTone(v),
-            size: "sm",
-            mainAction: `set-verdict:${v}`,
-            withChevron: false,
-            className: "verdict-switch__action"
-          })}
-        </div>
-      `).join("")}
-    </div>
-    `}
-  `;
-}
-
-function mdToHtml(text) {
-  const safe = escapeHtml(text || "");
-  return safe
-    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*(.+?)\*/g, "<em>$1</em>")
-    .replace(/([^]+)/g, "<code>$1</code>")
-    .replace(/\n/g, "<br>");
-}
-
-function firstNonEmpty(...values) {
-  for (const value of values) {
-    if (value !== undefined && value !== null && String(value).trim() !== "") {
-      return String(value);
-    }
-  }
-  return "";
-}
-
-function fmtTs(ts) {
-  if (!ts) return "—";
-  const d = new Date(ts);
-  if (Number.isNaN(d.getTime())) return String(ts);
-  return d.toLocaleString("fr-FR", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit"
-  });
-}
-
-function nowIso() {
-  return new Date().toISOString();
-}
-
-const SVG_ISSUE_OPEN = svgIcon("issue-opened");
-const SVG_ISSUE_CLOSED = svgIcon("check-circle");
-const SVG_ISSUE_REOPENED = SVG_ISSUE_OPEN;
-const SVG_AVATAR_HUMAN = svgIcon("avatar-human", {
-  width: 22,
-  height: 22,
-  className: "ui-icon ui-icon--block",
-  style: "display:block"
-});
-const SVG_TL_CLOSED = svgIcon("check-circle", {
-  className: "octicon octicon-check-circle Octicon__StyledOcticon-sc-jtj3m8-0 cdmDIS TimelineRow-module__Octicon__SMhVa"
-});
-const SVG_TL_REOPENED = svgIcon("issue-reopened", {
-  className: "octicon octicon-issue-reopened Octicon__StyledOcticon-sc-jtj3m8-0 cdmDIS TimelineRow-module__Octicon__SMhVa"
-});
-const SVG_COMMENT = svgIcon("comment");
-
-function issueIcon(status = "open", options = {}) {
-  const {
-    reviewState = "pending",
-    entityType = "",
-    isSeen = false
-  } = options;
-
-  const normalizedReview = normalizeReviewState(reviewState);
-  if (normalizedReview === "rejected" || normalizedReview === "dismissed") {
-    const iconName = String(entityType || "").toLowerCase() === "avis" ? "slash" : "skip";
-    const svg = svgIcon(iconName, { style: "color: rgb(145, 152, 161)" });
-    return `<span class="issue-status-icon" aria-hidden="true">${svg}</span>`;
-  }
-
-  const isOpen = String(status || "open").toLowerCase() !== "closed";
-  const svg = isOpen
-    ? svgIcon("issue-opened", { style: "color: var(--fgColor-open)" })
-    : svgIcon("check-circle", { style: "color: var(--fgColor-done)" });
-
-  return `<span class="issue-status-icon" aria-hidden="true">${svg}</span>`;
-}
-
-
-function priorityBadge(priority = "P3") {
-  const p = String(priority || "P3").toUpperCase();
-  const tone = p === "P1" ? "p1" : p === "P2" ? "p2" : "p3";
-  return renderStatusBadge({
-    label: p,
-    tone
-  });
-}
-
-function statePill(status = "open", options = {}) {
-  const {
-    reviewState = "pending",
-    entityType = ""
-  } = options;
-
-  const normalizedReview = normalizeReviewState(reviewState);
-  if (normalizedReview === "rejected" || normalizedReview === "dismissed") {
-    const iconName = String(entityType || "").toLowerCase() === "avis" ? "slash" : "skip";
-    const rejectedIcon = svgIcon(iconName, { style: "color: #fff" });
-    return `<span class="gh-state gh-state--rejected"><span class="gh-state-dot" aria-hidden="true">${rejectedIcon}</span>Rejected</span>`;
-  }
-
-  const isOpen = String(status || "open").toLowerCase() !== "closed";
-  return `<span class="gh-state ${isOpen ? "gh-state--open" : "gh-state--closed"}"><span class="gh-state-dot" aria-hidden="true">${isOpen ? SVG_ISSUE_OPEN : SVG_ISSUE_CLOSED}</span>${isOpen ? "Open" : "Closed"}</span>`;
-}
-
-function chevron(isOpen, isVisible = true) {
-  if (!isVisible) return `<span class="chev chev--spacer"></span>`;
-  return `<span class="chev">${isOpen ? "▾" : "▸"}</span>`;
-}
-
-function entityLinkHtml(type, id, text) {
-  const safeType = escapeHtml(type || "");
-  const safeId = escapeHtml(id || "");
-  const safeText = text || safeId;
-  return `<a href="#" class="entity-link" data-nav-type="${safeType}" data-nav-id="${safeId}">${safeText}</a>`;
-}
-
-function buildEntityDisplayRefMap() {
-  const data = Array.isArray(store.situationsView?.data) ? store.situationsView.data : [];
-  const map = new Map();
-  let index = 1;
-
-  const register = (type, id) => {
-    const safeType = String(type || "").toLowerCase();
-    const safeId = String(id || "").trim();
-    if (!safeType || !safeId) return;
-    const key = `${safeType}:${safeId}`;
-    if (map.has(key)) return;
-    map.set(key, `#${index}`);
-    index += 1;
-  };
-
-  for (const situation of data) {
-    register("situation", situation?.id);
-    const sujets = Array.isArray(situation?.sujets) ? situation.sujets : [];
-    for (const sujet of sujets) {
-      register("sujet", sujet?.id);
-      const avisList = Array.isArray(sujet?.avis) ? sujet.avis : [];
-      for (const avis of avisList) {
-        register("avis", avis?.id);
-      }
-    }
-  }
-
-  return map;
-}
-
-function getEntityDisplayRef(type, id) {
-  const map = buildEntityDisplayRefMap();
-  const safeType = String(type || "").toLowerCase();
-  const safeId = String(id || "").trim();
-  if (!safeId) return "";
-  return map.get(`${safeType}:${safeId}`) || `#${safeId}`;
-}
-
-function entityDisplayLinkHtml(type, id) {
-  return entityLinkHtml(type, id, escapeHtml(getEntityDisplayRef(type, id)));
-}
-
-function renderVerdictHeadFilter() {
-  const current = String(store.situationsView.verdictFilter || "ALL").toUpperCase();
-
-  const options = [
-    "ALL",
-    "F",
-    "D",
-    "S",
-    "HM",
-    "PM",
-    "SO",
-  ];
-
-  const currentLabel = current === "ALL" ? "Verdict" : current;
-
-  return `
-    <div class="issues-head-menu">
-      <button
-        class="issues-head-menu__btn"
-        id="verdictHeadBtn"
-        type="button"
-        aria-haspopup="true"
-        aria-expanded="false"
-      >
-        <span>${escapeHtml(currentLabel)}</span>
-        ${svgIcon("chevron-down", { className: "gh-chevron" })}
-      </button>
-
-      <div class="gh-menu issues-head-menu__dropdown" id="verdictHeadDropdown">
-        ${options.map((v) => `
-          <button
-            class="gh-menu__item ${v === current ? "is-active" : ""}"
-            type="button"
-            data-verdict="${escapeHtml(v)}"
-          >
-            ${escapeHtml(v)}
-          </button>
-        `).join("")}
-      </div>
-    </div>
-  `;
-}
-
-function inferAgent(obj) {
-  return obj?.produced_by || obj?.agent || obj?.by || obj?.source || "system";
-}
-
-function normActorName(actor, agent) {
-  const a = String(actor || "").trim();
-  if (a) return a;
-  const g = String(agent || "").trim();
-  if (!g) return "System";
-  return g === "human" ? "Human" : g;
-}
-
-function verdictKey(v) {
-  return String(v || "").toUpperCase();
-}
-
-function verdictToneClass(v) {
-  const s = verdictKey(v);
-  if (s === "D") return "d";
-  if (s === "S") return "s";
-  if (s === "F" || s === "OK") return "f";
-  if (s === "HM") return "hm";
-  if (s === "PM") return "pm";
-  if (s === "SO") return "so";
-  return "muted";
-}
-
-function miniAuthorIconHtml(agent) {
-  const a = String(agent || "").toLowerCase();
-  if (a === "human") {
-    return `<span class="tl-author tl-author--human" aria-hidden="true">${SVG_AVATAR_HUMAN}</span>`;
-  }
-  return `<span class="tl-author tl-author--agent mono" aria-hidden="true">R</span>`;
-}
-
-function verdictIconHtml(v) {
-  const k = verdictKey(v);
-  const cls = `tl-ico tl-ico--verdict tl-ico--${verdictToneClass(k)}`;
-  const txt = escapeHtml(k || "—");
-  return `<span class="${cls}" aria-label="Verdict ${txt}">${txt}</span>`;
-}
-
-function matchSearch(parts, query) {
-  if (!query) return true;
-  const haystack = parts
-    .filter((part) => part !== undefined && part !== null)
-    .map((part) => String(part).toLowerCase())
-    .join(" ");
-  return haystack.includes(query);
-}
-
-/* =========================================================
-   Local archive-like human store / overlays
-========================================================= */
-
-const HUMAN_STORE_KEY = "rapsobot-human-store-v2";
-const SUJET_KANBAN_STATUSES = [
-  { key: "non_active", label: "Non activé", hint: "Sujet détecté mais pas encore engagé." },
-  { key: "to_activate", label: "A activer", hint: "Sujet prêt à être lancé." },
-  { key: "in_progress", label: "En cours", hint: "Sujet actuellement traité." },
-  { key: "in_arbitration", label: "En arbitrage", hint: "Décision ou arbitrage attendu." },
-  { key: "resolved", label: "Résolu", hint: "Sujet traité ou clos." }
+const DOCUMENT_FOLDERS = [
+  { name: "Architecte", note: "Dossier discipline" },
+  { name: "Structure", note: "Dossier discipline" },
+  { name: "Fluides", note: "Dossier discipline" },
+  { name: "Contrôle Technique", note: "Dossier discipline" },
+  { name: "CSPS", note: "Dossier discipline" }
 ];
-const SUJET_KANBAN_STATUS_KEYS = new Set(SUJET_KANBAN_STATUSES.map((status) => status.key));
 
-function ensureViewUiState() {
-  const v = store.situationsView;
-  if (!v.rightExpandedSujets) v.rightExpandedSujets = new Set();
-  if (typeof v.rightSubissuesOpen !== "boolean") v.rightSubissuesOpen = true;
-  if (typeof v.commentPreviewMode !== "boolean") v.commentPreviewMode = false;
-  if (typeof v.helpMode !== "boolean") v.helpMode = false;
-  if (typeof v.showTableOnly !== "boolean") v.showTableOnly = true;
-  if (!v.tempAvisVerdict) v.tempAvisVerdict = "F";
-  if (!v.tempAvisVerdictFor) v.tempAvisVerdictFor = null;
-  if (!v.descriptionEdit || typeof v.descriptionEdit !== "object") {
-    v.descriptionEdit = {
-      entityType: null,
-      entityId: null,
-      draft: ""
-    };
+const docsViewState = {
+  mode: "list", // "list" | "upload" | "report-preview" | "pdf-preview"
+  file: null,
+  title: "",
+  description: "",
+  depositMode: "direct",
+  proposalName: "",
+  isUploading: false,
+  uploadProgress: 0,
+  uploadTimer: null,
+  selectedPhase: store.projectForm?.currentPhase || store.projectForm?.phase || "APS",
+  reportNumber: 1,
+  activity: {
+    tone: "info",
+    title: "",
+    message: ""
   }
-  if (!v.drilldown) {
-    v.drilldown = {
-      isOpen: false,
-      selectedSituationId: null,
-      selectedSujetId: null,
-      selectedAvisId: null,
-      expandedSujets: new Set()
-    };
-  }
-  if (!(v.drilldown.expandedSujets instanceof Set)) {
-    v.drilldown.expandedSujets = new Set(Array.isArray(v.drilldown.expandedSujets) ? v.drilldown.expandedSujets : []);
-  }
-  if (typeof v.subjectsStatusFilter !== "string") v.subjectsStatusFilter = "open";
-  if (typeof v.situationsStatusFilter !== "string") v.situationsStatusFilter = "open";
-  if (typeof v.draggedKanbanSujetId !== "string") v.draggedKanbanSujetId = "";
-  if (typeof v.situationModalView !== "string") v.situationModalView = "kanban";
-}
+};
 
-function currentRunKey() {
-  return firstNonEmpty(
-    store.currentProjectId,
-    store.currentProject?.id,
-    store.ui?.runId,
-    store.situationsView?.rawResult?.run_id,
-    store.situationsView?.rawResult?.runId,
-    "default-project"
-  );
-}
+function syncDocumentsSelectedPhase() {
+  const enabledPhases = getEnabledProjectPhasesCatalog();
+  const fallbackPhase = enabledPhases[0]?.code || "APS";
 
-function loadHumanStore() {
-  try {
-    const raw = localStorage.getItem(HUMAN_STORE_KEY);
-    if (!raw) return { runs: {} };
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" ? parsed : { runs: {} };
-  } catch {
-    return { runs: {} };
+  if (!enabledPhases.some((item) => item.code === docsViewState.selectedPhase)) {
+    docsViewState.selectedPhase =
+      enabledPhases.find((item) => item.code === store.projectForm?.currentPhase)?.code ||
+      enabledPhases.find((item) => item.code === store.projectForm?.phase)?.code ||
+      fallbackPhase;
   }
 }
 
-function saveHumanStore(data) {
-  try {
-    localStorage.setItem(HUMAN_STORE_KEY, JSON.stringify(data));
-  } catch {
-    // no-op
-  }
+function getFolderIconSvg() {
+  return svgIcon("file-directory", { className: "icon-directory" });
 }
 
-function getRunBucket() {
-  const all = loadHumanStore();
-  const key = currentRunKey();
-
-  if (!all.runs[key]) {
-    all.runs[key] = {
-      comments: [],
-      activities: [],
-      descriptions: {
-        avis: {},
-        sujet: {},
-        situation: {}
-      },
-      decisions: {
-        avis: {},
-        sujet: {},
-        situation: {}
-      },
-      review: {
-        avis: {},
-        sujet: {},
-        situation: {}
-      },
-      workflow: {
-        sujet_kanban_status: {}
-      }
-    };
-    saveHumanStore(all);
-  }
-
-  const bucket = all.runs[key];
-  if (!bucket.descriptions) {
-    bucket.descriptions = {
-      avis: {},
-      sujet: {},
-      situation: {}
-    };
-    saveHumanStore(all);
-  }
-  if (!bucket.review) {
-    bucket.review = {
-      avis: {},
-      sujet: {},
-      situation: {}
-    };
-    saveHumanStore(all);
-  }
-  if (!bucket.workflow) {
-    bucket.workflow = {
-      sujet_kanban_status: {}
-    };
-    saveHumanStore(all);
-  }
-  if (!bucket.workflow.sujet_kanban_status) {
-    bucket.workflow.sujet_kanban_status = {};
-    saveHumanStore(all);
-  }
-
-  return { all, key, bucket };
+function getDocumentIconSvg() {
+  return svgIcon("file", { className: "octicon octicon-file color-fg-muted" });
 }
 
-function persistRunBucket(mutator) {
-  const { all, key, bucket } = getRunBucket();
-  mutator(bucket);
-  all.runs[key] = bucket;
-  saveHumanStore(all);
-}
-
-const DEFAULT_REVIEW_META = Object.freeze({
-  is_seen: false,
-  review_state: "pending",
-  is_published: false,
-  last_published_at: null,
-  has_changes_since_publish: false
-});
-
-function getEntityByType(entityType, entityId) {
-  if (entityType === "avis") return getNestedAvis(entityId);
-  if (entityType === "sujet") return getNestedSujet(entityId);
-  if (entityType === "situation") return getNestedSituation(entityId);
-  return null;
-}
-
-function normalizeReviewMeta(meta = {}) {
-  return {
-    is_seen: !!meta.is_seen,
-    review_state: normalizeReviewState(meta.review_state || "pending"),
-    is_published: !!meta.is_published,
-    last_published_at: meta.last_published_at ? String(meta.last_published_at) : null,
-    has_changes_since_publish: !!meta.has_changes_since_publish,
-    first_seen_at: meta.first_seen_at ? String(meta.first_seen_at) : null,
-    validated_at: meta.validated_at ? String(meta.validated_at) : null,
-    rejected_at: meta.rejected_at ? String(meta.rejected_at) : null,
-    dismissed_at: meta.dismissed_at ? String(meta.dismissed_at) : null,
-    source_verdict: meta.source_verdict ? String(meta.source_verdict) : null,
-    effective_verdict: meta.effective_verdict ? String(meta.effective_verdict) : null,
-    has_human_edit: !!meta.has_human_edit
-  };
-}
-
-function getBaseReviewMeta(entity) {
-  if (!entity) return { ...DEFAULT_REVIEW_META };
-
-  return normalizeReviewMeta({
-    is_seen: entity.is_seen,
-    review_state: entity.review_state,
-    is_published: entity.is_published,
-    last_published_at: entity.last_published_at,
-    has_changes_since_publish: entity.has_changes_since_publish
+function getLargeDocumentIconSvg() {
+  return svgIcon("file", {
+    className: "octicon octicon-file mb-2 color-fg-muted",
+    width: 32,
+    height: 32
   });
 }
 
-function getReviewEntry(entityType, entityId) {
-  const { bucket } = getRunBucket();
-  return bucket?.review?.[entityType]?.[entityId] || null;
+function getCommitIconSvg() {
+  return svgIcon("git-commit", { className: "octicon octicon-git-commit" });
 }
 
-function getEntityReviewMeta(entityType, entityId) {
-  const entity = getEntityByType(entityType, entityId);
-  const base = getBaseReviewMeta(entity);
-  const stored = getReviewEntry(entityType, entityId);
-
-  if (!stored) return base;
-  return normalizeReviewMeta({ ...base, ...stored });
-}
-
-function syncEntityReviewMeta(entityType, entityId) {
-  const entity = getEntityByType(entityType, entityId);
-  if (!entity) return;
-
-  const meta = getEntityReviewMeta(entityType, entityId);
-  entity.is_seen = meta.is_seen;
-  entity.review_state = meta.review_state;
-  entity.is_published = meta.is_published;
-  entity.last_published_at = meta.last_published_at;
-  entity.has_changes_since_publish = meta.has_changes_since_publish;
-
-  if (entity.raw && typeof entity.raw === "object") {
-    entity.raw.is_seen = meta.is_seen;
-    entity.raw.review_state = meta.review_state;
-    entity.raw.is_published = meta.is_published;
-    entity.raw.last_published_at = meta.last_published_at;
-    entity.raw.has_changes_since_publish = meta.has_changes_since_publish;
-  }
-}
-
-function setEntityReviewMeta(entityType, entityId, patch = {}, options = {}) {
-  const ts = options.ts || nowIso();
-
-  persistRunBucket((bucket) => {
-    bucket.review = bucket.review || { avis: {}, sujet: {}, situation: {} };
-    bucket.review[entityType] = bucket.review[entityType] || {};
-
-    const prev = normalizeReviewMeta({
-      ...getEntityReviewMeta(entityType, entityId),
-      ...(bucket.review[entityType][entityId] || {})
-    });
-
-    bucket.review[entityType][entityId] = {
-      ...prev,
-      ...(bucket.review[entityType][entityId] || {}),
-      ...patch,
-      updated_at: ts
-    };
-  });
-
-  syncEntityReviewMeta(entityType, entityId);
-}
-
-function getReviewRestoreSnapshot(entityType, entityId) {
-  const entry = getReviewEntry(entityType, entityId);
-  if (!entry?.restore_snapshot) return null;
-  return normalizeReviewMeta(entry.restore_snapshot);
-}
-
-function stashReviewRestoreSnapshot(entityType, entityId, options = {}) {
-  if (getReviewRestoreSnapshot(entityType, entityId)) return;
-  const snapshot = getEntityReviewMeta(entityType, entityId);
-  setEntityReviewMeta(entityType, entityId, {
-    restore_snapshot: { ...snapshot }
-  }, options);
-}
-
-function restoreEntityReviewMeta(entityType, entityId, options = {}) {
-  const snapshot = getReviewRestoreSnapshot(entityType, entityId);
-  if (!snapshot) return false;
-
-  const ts = options.ts || nowIso();
-  persistRunBucket((bucket) => {
-    bucket.review = bucket.review || { avis: {}, sujet: {}, situation: {} };
-    bucket.review[entityType] = bucket.review[entityType] || {};
-    const prev = bucket.review[entityType][entityId] || {};
-    bucket.review[entityType][entityId] = {
-      ...prev,
-      ...snapshot,
-      updated_at: ts
-    };
-    delete bucket.review[entityType][entityId].restore_snapshot;
-  });
-
-  syncEntityReviewMeta(entityType, entityId);
-  return true;
-}
-
-function markEntitySeen(entityType, entityId, options = {}) {
-  if (!entityType || !entityId) return;
-
-  const meta = getEntityReviewMeta(entityType, entityId);
-  if (meta.is_seen && meta.first_seen_at) return;
-
-  const entity = getEntityByType(entityType, entityId);
-  const sourceVerdict = entityType === "avis"
-    ? firstNonEmpty(entity?.raw?.verdict, entity?.verdict, meta.source_verdict, null)
-    : null;
-
-  setEntityReviewMeta(entityType, entityId, {
-    is_seen: true,
-    first_seen_at: meta.first_seen_at || nowIso(),
-    source_verdict: sourceVerdict
-  }, options);
-}
-
-function markEntityValidated(entityType, entityId, options = {}) {
-  if (!entityType || !entityId) return;
-
-  const meta = getEntityReviewMeta(entityType, entityId);
-  const entity = getEntityByType(entityType, entityId);
-  const sourceVerdict = entityType === "avis"
-    ? firstNonEmpty(entity?.raw?.verdict, entity?.verdict, meta.source_verdict, null)
-    : null;
-  const effectiveVerdict = entityType === "avis"
-    ? firstNonEmpty(store.situationsView.tempAvisVerdict, entity?.verdict, meta.effective_verdict, sourceVerdict, null)
-    : null;
-
-  setEntityReviewMeta(entityType, entityId, {
-    is_seen: true,
-    review_state: "validated",
-    first_seen_at: meta.first_seen_at || nowIso(),
-    validated_at: nowIso(),
-    source_verdict: sourceVerdict,
-    effective_verdict: effectiveVerdict,
-    has_changes_since_publish: meta.is_published ? true : meta.has_changes_since_publish
-  }, options);
-}
-
-function canRejectEntity(entityType, entityId) {
-  const meta = getEntityReviewMeta(entityType, entityId);
-  if (meta.is_published && !meta.has_changes_since_publish) {
-    window.alert("Cet élément a déjà été diffusé et ne peut plus être supprimé / rejeté dans son état diffusé.");
-    return false;
-  }
-  return true;
-}
-
-function setEntityReviewState(entityType, entityId, nextState, options = {}) {
-  const reviewState = normalizeReviewState(nextState);
-  if ((reviewState === "rejected" || reviewState === "dismissed") && !canRejectEntity(entityType, entityId)) {
-    return false;
-  }
-
-  const meta = getEntityReviewMeta(entityType, entityId);
-
-  const entity = getEntityByType(entityType, entityId);
-  const sourceVerdict = entityType === "avis"
-    ? firstNonEmpty(entity?.raw?.verdict, entity?.verdict, meta.source_verdict, null)
-    : null;
-
-  setEntityReviewMeta(entityType, entityId, {
-    is_seen: true,
-    review_state: reviewState,
-    first_seen_at: meta.first_seen_at || nowIso(),
-    rejected_at: reviewState === "rejected" ? nowIso() : meta.rejected_at,
-    dismissed_at: reviewState === "dismissed" ? nowIso() : meta.dismissed_at,
-    source_verdict: sourceVerdict,
-    has_changes_since_publish:
-      meta.is_published && reviewState !== "published"
-        ? true
-        : meta.has_changes_since_publish
-  }, options);
-
-  return true;
-}
-
-function getSelectionEntityType(type) {
-  return type === "sujet" ? "sujet" : type;
-}
-
-function getReviewTitleStateClass(entityType, entityId) {
-  const meta = getEntityReviewMeta(entityType, entityId);
-  return meta.is_seen ? "is-seen" : "is-unseen";
-}
-
-function renderEntityReviewLeadIcon(entityType, entityId) {
-  const meta = getEntityReviewMeta(entityType, entityId);
-  const normalizedType = String(entityType || "").toLowerCase();
-  const normalizedState = normalizeReviewState(meta.review_state);
-
-  if ((normalizedType === "sujet" || normalizedType === "situation")
-    && (normalizedState === "rejected" || normalizedState === "dismissed")) {
-    return "";
-  }
-
-  return renderReviewStateIcon(meta.review_state, {
-    entityType,
-    isPublished: meta.is_published,
-    hasChangesSincePublish: meta.has_changes_since_publish,
-    isSeen: meta.is_seen
+function getProposalIconSvg() {
+  return svgIcon("git-pull-request", {
+    className: "octicon octicon-git-pull-request"
   });
 }
 
-
-function getDescriptionDefaults(selectionOrType, entityId = null) {
-  let selection = null;
-  let entityType = selectionOrType;
-  let id = entityId;
-
-  if (selectionOrType && typeof selectionOrType === "object" && selectionOrType.type) {
-    selection = selectionOrType;
-    entityType = getSelectionEntityType(selection.type);
-    id = selection.item?.id || entityId;
-  }
-
-  const entity = selection?.item || getEntityByType(entityType, id);
-  const body =
-    entityType === "avis"
-      ? getAvisSummary(entity)
-      : entityType === "sujet"
-        ? getSujetSummary(entity)
-        : getSituationSummary(entity);
-
-  return {
-    body: String(body || ""),
-    author: firstNonEmpty(entity?.agent, entity?.raw?.agent, "system"),
-    agent: String(firstNonEmpty(entity?.agent, entity?.raw?.agent, "system")).toLowerCase(),
-    avatar_type: "agent",
-    avatar_initial:
-      entityType === "avis"
-        ? "A"
-        : entityType === "sujet"
-          ? "P"
-          : "S"
-  };
+function getBranchIconSvg() {
+  return svgIcon("git-branch", { className: "octicon octicon-git-branch" });
 }
 
-function getEntityDescriptionState(selectionOrType, entityId = null) {
-  const { bucket } = getRunBucket();
-  let selection = null;
-  let entityType = selectionOrType;
-  let id = entityId;
-
-  if (selectionOrType && typeof selectionOrType === "object" && selectionOrType.type) {
-    selection = selectionOrType;
-    entityType = getSelectionEntityType(selection.type);
-    id = selection.item?.id || entityId;
-  }
-
-  const defaults = getDescriptionDefaults(selection || entityType, id);
-  const stored = bucket?.descriptions?.[entityType]?.[id] || {};
-  return {
-    ...defaults,
-    ...stored,
-    body: firstNonEmpty(stored.body, defaults.body, ""),
-    author: firstNonEmpty(stored.author, defaults.author, "system"),
-    agent: String(firstNonEmpty(stored.agent, defaults.agent, "system")).toLowerCase(),
-    avatar_type: firstNonEmpty(stored.avatar_type, defaults.avatar_type, "agent"),
-    avatar_initial: firstNonEmpty(stored.avatar_initial, defaults.avatar_initial, "S")
-  };
-}
-
-function setEntityDescriptionState(entityType, entityId, patch = {}, options = {}) {
-  const ts = options.ts || nowIso();
-  persistRunBucket((bucket) => {
-    bucket.descriptions = bucket.descriptions || { avis: {}, sujet: {}, situation: {} };
-    bucket.descriptions[entityType] = bucket.descriptions[entityType] || {};
-    const prev = getEntityDescriptionState(entityType, entityId);
-    const nextBody = firstNonEmpty(patch.body, prev.body, "");
-    const nextAgent = String(firstNonEmpty(patch.agent, prev.agent, "system")).toLowerCase();
-    const isHumanEdited = Boolean(
-      bucket.descriptions[entityType][entityId]?.is_human_edited
-      || (nextAgent === "human" && String(nextBody || "").trim() !== String(prev.body || "").trim())
-    );
-    bucket.descriptions[entityType][entityId] = {
-      ...prev,
-      ...(bucket.descriptions[entityType][entityId] || {}),
-      ...patch,
-      is_human_edited: isHumanEdited,
-      updated_at: ts
-    };
-  });
-
-  if (entityType === "avis") {
-    const entity = getEntityByType(entityType, entityId);
-    const meta = getEntityReviewMeta(entityType, entityId);
-    setEntityReviewMeta(entityType, entityId, {
-      has_human_edit: Boolean(getRunBucket().bucket?.descriptions?.[entityType]?.[entityId]?.is_human_edited),
-      source_verdict: firstNonEmpty(entity?.raw?.verdict, entity?.verdict, meta.source_verdict, null)
-    }, options);
-  }
-}
-
-function claimDescriptionAsHuman(entityType, entityId, options = {}) {
-  const current = getEntityDescriptionState(entityType, entityId);
-  if (String(current.agent || "").toLowerCase() === "human" && current.avatar_type === "human") return false;
-
-  setEntityDescriptionState(entityType, entityId, {
-    body: current.body,
-    author: "human",
-    agent: "human",
-    avatar_type: "human",
-    avatar_initial: "H"
-  }, options);
-
-  return true;
-}
-
-function addComment(entityType, entityId, message, options = {}) {
-  persistRunBucket((bucket) => {
-    bucket.comments.push({
-      ts: nowIso(),
-      entity_type: entityType,
-      entity_id: entityId,
-      type: "COMMENT",
-      actor: options.actor || "Human",
-      agent: options.agent || "human",
-      message: String(message || ""),
-      pending: !!options.pending,
-      request_id: options.request_id || null,
-      meta: options.meta || {}
-    });
-  });
-}
-
-function addActivity(entityType, entityId, kind, message = "", meta = {}, options = {}) {
-  persistRunBucket((bucket) => {
-    bucket.activities.push({
-      ts: nowIso(),
-      entity_type: entityType,
-      entity_id: entityId,
-      type: "ACTIVITY",
-      kind,
-      actor: options.actor || "Human",
-      agent: options.agent || "human",
-      message: String(message || ""),
-      meta: meta || {}
-    });
-  });
-}
-
-function _extractValidatedVerdict(decision) {
-  const d = String(decision || "").toUpperCase();
-  const m = d.match(/^VALIDATED_(F|D|S|HM|PM|SO)$/);
-  return m ? m[1] : null;
-}
-
-function _decisionStatus(decision) {
-  const d = String(decision || "").toUpperCase();
-  if (d === "CLOSED") return "closed";
-  if (d === "REOPENED" || d === "OPEN") return "open";
-  return null;
-}
-
-function setDecision(entityType, entityId, decision, note = "", options = {}) {
-  const actor = options.actor || "Human";
-  const agent = options.agent || "human";
-  const ts = options.ts || nowIso();
-  const nextDecision = String(decision || "");
-  const nextNote = String(note || "");
-
-  persistRunBucket((bucket) => {
-    bucket.decisions[entityType] = bucket.decisions[entityType] || {};
-    const prev = bucket.decisions[entityType][entityId] || null;
-    bucket.decisions[entityType][entityId] = {
-      ts,
-      actor,
-      decision: nextDecision,
-      note: nextNote
-    };
-
-    const prevStatus = _decisionStatus(prev?.decision);
-    const nextStatus = _decisionStatus(nextDecision);
-    if ((entityType === "sujet" || entityType === "situation") && nextStatus && nextStatus !== prevStatus) {
-      const targetType = entityType === "sujet" ? "situation" : "situation";
-      const parentSituation = entityType === "sujet" ? getSituationBySujetId(entityId) : null;
-      const targetId = entityType === "sujet" ? (parentSituation?.id || entityId) : entityId;
-      bucket.activities.push({
-        ts,
-        entity_type: targetType,
-        entity_id: targetId,
-        type: "ACTIVITY",
-        kind: nextStatus === "closed" ? "issue_closed" : "issue_reopened",
-        actor,
-        agent,
-        message: nextNote,
-        meta: entityType === "sujet" ? { problem_id: entityId } : { situation_id: entityId }
-      });
-    }
-
-    if (entityType === "avis") {
-      const fromVerdict = _extractValidatedVerdict(prev?.decision);
-      const toVerdict = _extractValidatedVerdict(nextDecision);
-      if (toVerdict && toVerdict !== fromVerdict) {
-        const parentSujet = getSujetByAvisId(entityId);
-        bucket.activities.push({
-          ts,
-          entity_type: parentSujet?.id ? "sujet" : "avis",
-          entity_id: parentSujet?.id || entityId,
-          type: "ACTIVITY",
-          kind: "avis_verdict_changed",
-          actor,
-          agent,
-          message: nextNote,
-          meta: { avis_id: entityId, from: fromVerdict, to: toVerdict }
-        });
-      }
-    }
-  });
-}
-
-function getDecision(entityType, entityId) {
-  const { bucket } = getRunBucket();
-  return bucket?.decisions?.[entityType]?.[entityId] || null;
-}
-
-export function getEffectiveAvisVerdict(avisId) {
-  const avis = getNestedAvis(avisId);
-  const decision = getDecision("avis", avisId);
-  const d = String(decision?.decision || "").toUpperCase();
-  if (d.startsWith("VALIDATED_")) return d.replace("VALIDATED_", "");
-  return normalizeVerdict(avis?.verdict) || "-";
-}
-
-function updateCommentByRequestId(requestId, nextMessage, options = {}) {
-  if (!requestId) return;
-  persistRunBucket((bucket) => {
-    const comments = Array.isArray(bucket.comments) ? bucket.comments : [];
-    const target = [...comments].reverse().find((entry) => String(entry?.request_id || "") === String(requestId));
-    if (!target) return;
-    target.message = String(nextMessage || "");
-    target.pending = !!options.pending;
-    if (options.agent) target.agent = options.agent;
-    if (options.actor) target.actor = options.actor;
-  });
-}
-
-function stripRapsoTag(text) {
-  return String(text || "").replace(/@rapso\b/gi, "").replace(/\s{2,}/g, " ").trim();
-}
-
-function isHelpTrigger(text) {
-  const t = String(text || "").trim();
-  return /^\/help\b/i.test(t) || /^@help\b/i.test(t);
-}
-
-function stripHelpTag(text) {
-  return String(text || "")
-    .replace(/^\s*\/help\b\s*/i, "")
-    .replace(/^\s*@help\b\s*/i, "")
-    .trim();
-}
-
-async function fetchWithTimeout(url, options = {}, timeoutMs = 120000) {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(new Error("timeout")), timeoutMs);
-  try {
-    return await fetch(url, { ...options, signal: ctrl.signal });
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-function showError(message) {
-  console.error(message);
-}
-
-function buildUiSnapshot({ scope = "unknown", type = null, id = null } = {}) {
-  return {
-    scope,
-    now: nowIso(),
-    display_depth: store.situationsView.displayDepth || "situations",
-    filters: {
-      verdict: store.situationsView.verdictFilter || "ALL",
-      search: store.situationsView.search || ""
-    },
-    selection: {
-      situation_id: store.situationsView.selectedSituationId || null,
-      sujet_id: store.situationsView.selectedSujetId || null,
-      avis_id: store.situationsView.selectedAvisId || null,
-      type: type || null,
-      id: id || null
-    }
-  };
-}
-
-function buildRapsoContextBundle(type, id, humanMessage) {
-  const rawResult = store.situationsView?.rawResult || null;
-  const nestedData = Array.isArray(store.situationsView?.data) ? store.situationsView.data : null;
-  if (!rawResult && !nestedData) return null;
-
-  const localType = String(type || "");
-  const rapsoType = localType === "sujet" ? "problem" : localType;
-  const scope = { type: rapsoType, id };
-
-  const situationsRaw = Array.isArray(rawResult?.situations) ? rawResult.situations : [];
-  const problemsRaw = Array.isArray(rawResult?.problems) ? rawResult.problems : [];
-  const avisRaw = Array.isArray(rawResult?.avis) ? rawResult.avis : [];
-
-  const summarizeOneLine = (value, maxLen = 220) => {
-    const t = String(value || "").replace(/\s+/g, " ").trim();
-    if (!t) return "";
-    return t.length > maxLen ? `${t.slice(0, Math.max(0, maxLen - 1)).trim()}…` : t;
-  };
-
-  const idFromAny = (value) => {
-    if (value == null) return "";
-    if (typeof value === "string" || typeof value === "number") return String(value);
-    if (typeof value === "object") {
-      return firstNonEmpty(
-        value.avis_id,
-        value.problem_id,
-        value.situation_id,
-        value.id,
-        value.uid,
-        value.pk,
-        ""
-      );
-    }
-    return "";
-  };
-
-  const situationById = new Map();
-  for (const situation of situationsRaw) {
-    const situationId = firstNonEmpty(situation?.situation_id, situation?.id);
-    if (situationId) situationById.set(String(situationId), situation);
-  }
-
-  const problemById = new Map();
-  for (const problem of problemsRaw) {
-    const problemId = firstNonEmpty(problem?.problem_id, problem?.id);
-    if (problemId) problemById.set(String(problemId), problem);
-  }
-
-  const avisById = new Map();
-  for (const avisEntry of avisRaw) {
-    const avisId = firstNonEmpty(avisEntry?.avis_id, avisEntry?.id);
-    if (avisId) avisById.set(String(avisId), avisEntry);
-  }
-
-  const situationNested = localType === "situation"
-    ? getNestedSituation(id)
-    : (localType === "sujet" ? getSituationBySujetId(id) : getSituationByAvisId(id));
-  const problemNested = localType === "sujet"
-    ? getNestedSujet(id)
-    : (localType === "avis" ? getSujetByAvisId(id) : null);
-  const avisNested = localType === "avis" ? getNestedAvis(id) : null;
-
-  const rawSituationId = firstNonEmpty(
-    situationNested?.raw?.situation_id,
-    situationNested?.raw?.id,
-    situationNested?.id,
-    ""
-  );
-  const rawProblemId = firstNonEmpty(
-    problemNested?.raw?.problem_id,
-    problemNested?.raw?.id,
-    problemNested?.id,
-    ""
-  );
-  const rawAvisId = firstNonEmpty(
-    avisNested?.raw?.avis_id,
-    avisNested?.raw?.id,
-    avisNested?.id,
-    ""
-  );
-
-  const currentSituation = rawSituationId
-    ? (situationById.get(String(rawSituationId)) || situationNested?.raw || null)
-    : (situationNested?.raw || null);
-  const currentProblem = rawProblemId
-    ? (problemById.get(String(rawProblemId)) || problemNested?.raw || null)
-    : (problemNested?.raw || null);
-  const currentAvis = rawAvisId
-    ? (avisById.get(String(rawAvisId)) || avisNested?.raw || null)
-    : (avisNested?.raw || null);
-
-  const situationLite = (s) => s ? ({
-    situation_id: firstNonEmpty(s.situation_id, s.id, rawSituationId, ""),
-    status: String(
-      getEffectiveSituationStatus(firstNonEmpty(s.situation_id, s.id, rawSituationId, "")) || firstNonEmpty(s.status, "open")
-    ).toLowerCase(),
-    title: firstNonEmpty(s.title, s.label, s.name, s.situation, s.topic, rawSituationId, "(sans titre)"),
-    summary: summarizeOneLine(firstNonEmpty(s.summary, s.description, s.message, ""), 220),
-    priority: firstNonEmpty(s.priority, s.prio, "")
-  }) : null;
-
-  const problemLite = (p) => p ? ({
-    sujet_id: firstNonEmpty(p.problem_id, p.id, rawProblemId, ""),
-    status: String(
-      getEffectiveSujetStatus(firstNonEmpty(p.problem_id, p.id, rawProblemId, "")) || firstNonEmpty(p.status, "open")
-    ).toLowerCase(),
-    topic: firstNonEmpty(p.topic, p.title, p.label, p.name, p.problem, "Non classé"),
-    summary: summarizeOneLine(firstNonEmpty(p.summary, p.why_grouped, p.description, ""), 220),
-    priority: firstNonEmpty(p.priority, p.prio, "")
-  }) : null;
-
-  const avisFull = (a, fallbackId = "") => a ? ({
-    avis_id: firstNonEmpty(a.avis_id, a.id, fallbackId, ""),
-    topic: firstNonEmpty(a.topic, a.title, a.label, a.name, ""),
-    verdict: getEffectiveAvisVerdict(firstNonEmpty(a.avis_id, a.id, fallbackId, "")),
-    severity: firstNonEmpty(a.severity, ""),
-    confidence: a.confidence ?? null,
-    source: firstNonEmpty(a.source, ""),
-    agent: firstNonEmpty(a.agent, currentProblem?.agent, problemNested?.agent, "system"),
-    message: firstNonEmpty(a.message, a.summary, ""),
-    evidence: a.evidence ?? null
-  }) : null;
-
-  const avisLite = (a, fallbackId = "") => a ? ({
-    avis_id: firstNonEmpty(a.avis_id, a.id, fallbackId, ""),
-    verdict: getEffectiveAvisVerdict(firstNonEmpty(a.avis_id, a.id, fallbackId, "")),
-    severity: firstNonEmpty(a.severity, ""),
-    summary: summarizeOneLine(firstNonEmpty(a.topic, a.title, a.message, a.summary, ""), 140)
-  }) : null;
-
-  const thread_recent = (() => {
-    const { bucket } = getRunBucket();
-    const comments = Array.isArray(bucket?.comments) ? bucket.comments : [];
-    return comments
-      .filter((entry) => String(entry?.type || "").toUpperCase() === "COMMENT")
-      .filter((entry) => String(entry?.entity_type || "") === String(localType) && String(entry?.entity_id || "") === String(id))
-      .slice(-10)
-      .map((entry) => ({
-        ts: entry.ts,
-        actor: entry.actor,
-        agent: entry.agent,
-        message: entry.message
-      }));
-  })();
-
-  const cadre = {
-    description: [
-      "RAPSOBOT est un PoC qui structure une analyse CT en hiérarchie Situation → Sujet → Avis, à partir d'une note de calcul PS.",
-      "specialist_ps agit comme conseiller technique en mission PS (Eurocode 8 + NA FR + Arrêté 22/10/2010), en appui à la décision.",
-      "Les verdicts D/S/OK qualifient le niveau de conformité / risque (D = non-conformité ou risque majeur ; S = point bloquant/incomplet à clarifier ; OK = conforme).",
-      "Ne pas 'modifier' les avis : proposer des corrections, préciser hypothèses, et recommander les actions/compléments à produire."
-    ].join("\n"),
-    response_format: {
-      required_sections: [
-        "1. Analyse technique",
-        "2. Risque identifié",
-        "3. Impact projet",
-        "4. Recommandations (actions + références EC8 si pertinent)"
-      ],
-      style: "Précis, factuel, orienté décision. Citer EC8/NA si utile. Pas de blabla."
-    }
-  };
-
-  let context_structured = null;
-
-  if (localType === "avis") {
-    const parentSituation = situationLite(currentSituation);
-    const parentProblem = problemLite(currentProblem);
-    const curAvis = avisFull(currentAvis, rawAvisId);
-
-    const siblingIds = Array.isArray(currentProblem?.avis_ids) ? currentProblem.avis_ids : [];
-    const avis_freres = siblingIds
-      .map((avisId) => {
-        const cleanId = idFromAny(avisId);
-        return { cleanId, raw: avisById.get(String(cleanId)) || null };
-      })
-      .filter((entry) => entry.raw)
-      .filter((entry) => String(entry.cleanId) !== String(rawAvisId))
-      .map((entry) => avisLite(entry.raw, entry.cleanId))
-      .slice(0, 50);
-
-    const hierarchy_text = [
-      "PROJET",
-      parentSituation ? `  Situation ${parentSituation.situation_id} (${parentSituation.status})` : "  Situation —",
-      parentProblem ? `    Sujet ${parentProblem.sujet_id} (${parentProblem.status})` : "    Sujet —",
-      curAvis ? `      Avis ${curAvis.avis_id} (${curAvis.verdict || "—"})` : "      Avis —"
-    ].join("\n");
-
-    context_structured = {
-      hierarchy_text,
-      situation: parentSituation,
-      sujet: parentProblem,
-      avis: curAvis,
-      avis_freres
-    };
-  } else if (localType === "sujet") {
-    const parentSituation = situationLite(currentSituation);
-    const curProblem = currentProblem ? ({
-      ...problemLite(currentProblem),
-      stakes: Array.isArray(currentProblem.stakes) ? currentProblem.stakes.slice(0, 10) : [],
-      recommendations: Array.isArray(currentProblem.recommendations) ? currentProblem.recommendations.slice(0, 10) : [],
-      why_grouped: firstNonEmpty(currentProblem.why_grouped, "")
-    }) : null;
-
-    const childIds = Array.isArray(currentProblem?.avis_ids) ? currentProblem.avis_ids : [];
-    const avisChildrenAll = childIds
-      .map((avisId) => {
-        const cleanId = idFromAny(avisId);
-        return { cleanId, raw: avisById.get(String(cleanId)) || null };
-      })
-      .filter((entry) => entry.raw);
-
-    const avis_fils = avisChildrenAll.length <= 5
-      ? avisChildrenAll.map((entry) => avisFull(entry.raw, entry.cleanId))
-      : avisChildrenAll.map((entry) => avisLite(entry.raw, entry.cleanId));
-
-    const hierarchy_text = [
-      "PROJET",
-      parentSituation ? `  Situation ${parentSituation.situation_id} (${parentSituation.status})` : "  Situation —",
-      curProblem ? `    Sujet ${curProblem.sujet_id} (${curProblem.status})` : "    Sujet —"
-    ].join("\n");
-
-    context_structured = {
-      hierarchy_text,
-      situation: parentSituation,
-      sujet: curProblem,
-      avis_fils
-    };
-  } else if (localType === "situation") {
-    const curSituation = currentSituation ? ({
-      ...situationLite(currentSituation),
-      key_conflict_ids: Array.isArray(currentSituation.key_conflict_ids) ? currentSituation.key_conflict_ids.slice(0, 25) : []
-    }) : null;
-
-    const problemIds = Array.isArray(currentSituation?.problem_ids) ? currentSituation.problem_ids : [];
-    const sujets_fils = problemIds
-      .map((problemId) => {
-        const cleanId = idFromAny(problemId);
-        const rawProblem = problemById.get(String(cleanId)) || null;
-        if (!rawProblem) return null;
-        const avisIds = Array.isArray(rawProblem.avis_ids) ? rawProblem.avis_ids : [];
-        let dCount = 0;
-        let sCount = 0;
-        let okCount = 0;
-        for (const avisId of avisIds) {
-          const v = String(getEffectiveAvisVerdict(idFromAny(avisId)) || "").toUpperCase();
-          if (v === "D") dCount += 1;
-          else if (v === "S") sCount += 1;
-          else if (v === "OK" || v === "F") okCount += 1;
-        }
-        return {
-          sujet_id: firstNonEmpty(rawProblem.problem_id, rawProblem.id, cleanId, ""),
-          status: String(
-            getEffectiveSujetStatus(firstNonEmpty(rawProblem.problem_id, rawProblem.id, cleanId, "")) || firstNonEmpty(rawProblem.status, "open")
-          ).toLowerCase(),
-          topic: firstNonEmpty(rawProblem.topic, rawProblem.title, rawProblem.label, rawProblem.name, "Non classé"),
-          nb_avis: avisIds.length,
-          ratio_D_S_OK: `${dCount}/${sCount}/${okCount}`,
-          description: summarizeOneLine(firstNonEmpty(rawProblem.summary, rawProblem.why_grouped, rawProblem.description, ""), 180)
-        };
-      })
-      .filter(Boolean)
-      .slice(0, 80);
-
-    const hierarchy_text = [
-      "PROJET",
-      curSituation ? `  Situation ${curSituation.situation_id} (${curSituation.status})` : "  Situation —"
-    ].join("\n");
-
-    context_structured = {
-      hierarchy_text,
-      situation: curSituation,
-      sujets_fils
-    };
-  } else {
-    context_structured = { hierarchy_text: "PROJET" };
-  }
-
-  return {
-    run_id: firstNonEmpty(rawResult?.run_id, rawResult?.runId, store.ui?.runId, null),
-    agent: "specialist_ps",
-    scope,
-    cadre,
-    context_structured,
-    thread_recent,
-    user_message: stripRapsoTag(humanMessage)
-  };
-}
-
-function _extractJsonFromFencedBlock(s) {
-  const t = String(s || "").trim();
-  const m = t.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-  return m ? String(m[1] || "").trim() : null;
-}
-
-function _tryParseJson(s) {
-  const t = String(s || "").trim();
-  if (!t) return null;
-  try { return JSON.parse(t); } catch { return null; }
-}
-
-function _unwrapOpenAIResponsesText(out) {
-  try {
-    if (!out || typeof out !== "object") return null;
-    const arr = Array.isArray(out.output) ? out.output : null;
-    if (!arr?.length) return null;
-    const msg = arr.find((x) => x && x.type === "message") || arr[0];
-    const content = Array.isArray(msg?.content) ? msg.content : null;
-    if (!content?.length) return null;
-    const ot = content.find((c) => c && (c.type === "output_text" || c.type === "text")) || content[0];
-    const t = typeof ot?.text === "string" ? ot.text : null;
-    return t && t.trim() ? t : null;
-  } catch {
-    return null;
-  }
-}
-
-function _normalizeLlmRawToObject(rawText) {
-  const direct = _tryParseJson(rawText);
-  if (direct) return direct;
-  const inner = _extractJsonFromFencedBlock(rawText);
-  if (inner) {
-    const obj = _tryParseJson(inner);
-    if (obj) return obj;
-  }
-  const t = String(rawText || "").trim();
-  const i = t.indexOf("{");
-  const j = t.lastIndexOf("}");
-  if (i >= 0 && j > i) {
-    const obj = _tryParseJson(t.slice(i, j + 1));
-    if (obj) return obj;
-  }
-  return null;
-}
-
-function _pickReplyMarkdown(out, rawText) {
-  if (out && typeof out === "object") {
-    const r = out.reply_markdown ?? out.reply ?? out.message ?? out.content ?? "";
-    if (typeof r === "string" && r.trim()) return r.trim();
-    const wrapped = _unwrapOpenAIResponsesText(out);
-    if (wrapped) {
-      const obj = _normalizeLlmRawToObject(wrapped);
-      if (obj) return _pickReplyMarkdown(obj, null);
-      return wrapped.trim();
-    }
-  }
-  const obj = rawText ? _normalizeLlmRawToObject(rawText) : null;
-  if (obj) return _pickReplyMarkdown(obj, null);
-  return String(rawText || "").trim();
-}
-
-function _helpFurtiveCommentHtml({ role = "assistant", bodyMd = "", pending = false } = {}) {
-  const who = role === "user" ? "Vous (Help)" : "Rapso (Help)";
-  const tsHtml = `<div class="mono-small">${escapeHtml(fmtTs(nowIso()))}</div>`;
-  const cleanMd = String(bodyMd || "").replace(/^_+|_+$/g, "");
-  const bodyHtml = pending
-    ? `<div><div class="rapso-wait"><span class="rapso-spinner" aria-hidden="true"></span><span class="rapso-shimmer">${escapeHtml(cleanMd || "RAPSOBOT réfléchit…")}</span></div></div>`
-    : mdToHtml(cleanMd);
-
-  return renderMessageThreadComment({
-    author: who,
-    tsHtml,
-    bodyHtml,
-    avatarType: role === "user" ? "human" : "agent",
-    avatarHtml: role === "user" ? SVG_AVATAR_HUMAN : "",
-    avatarInitial: role === "user" ? "H" : "R",
-    boxClassName: "gh-comment-box--help",
-    headerClassName: "gh-comment-header--help",
-    bodyClassName: "gh-comment-body--help"
-  });
-}
-
-function showEphemeralHelpThread(rootEl, { userMd, assistantPendingMd = "RAPSOBOT réfléchit…", ttlMs = 60000 } = {}) {
-  if (!rootEl) return null;
-  const anchor = rootEl.querySelector(".gh-thread") || rootEl;
-  const wrap = document.createElement("div");
-  wrap.className = "help-ephemeral";
-  wrap.innerHTML = `${_helpFurtiveCommentHtml({ role: "user", bodyMd: userMd || "" })}<div class="help-ephemeral__reply">${_helpFurtiveCommentHtml({ role: "assistant", bodyMd: assistantPendingMd || "", pending: true })}</div>`;
-  try {
-    if (anchor && anchor.parentElement) anchor.parentElement.insertBefore(wrap, anchor.nextSibling);
-    else rootEl.appendChild(wrap);
-  } catch {
-    try { rootEl.appendChild(wrap); } catch {}
-  }
-  const timer = setTimeout(() => { try { wrap.remove(); } catch {} }, ttlMs);
-  return { wrap, timer };
-}
-
-async function askRapsoAndAppendReply({ type, id, humanMessage }) {
-  const ctx = buildRapsoContextBundle(type, id, humanMessage);
-  if (!ctx) return;
-  const requestId = `rapso_${Date.now()}_${type}_${id}`;
-  addComment(type, id, "RAPSOBOT est en train de réfléchir…", {
-    actor: "RAPSOBOT",
-    agent: "specialist_ps",
-    pending: true,
-    request_id: requestId,
-    meta: { from_webhook: true }
-  });
-  rerenderPanels();
-  const payload = { agent: "specialist_ps", request_id: requestId, context: ctx };
-  try {
-    const res = await fetchWithTimeout(ASK_LLM_URL_PROD, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    }, 120000);
-    const txt = await res.text();
-    let out = null;
-    try { out = JSON.parse(txt); } catch { out = null; }
-    const reply = _pickReplyMarkdown(out, txt) || "_(no reply)_";
-    updateCommentByRequestId(requestId, reply, { pending: false, actor: "RAPSOBOT", agent: "specialist_ps" });
-    rerenderPanels();
-  } catch (e) {
-    const errMsg = e?.message || String(e);
-    updateCommentByRequestId(requestId, `_(error: ${errMsg})_`, { pending: false, actor: "RAPSOBOT", agent: "specialist_ps" });
-    rerenderPanels();
-    showError(`@rapso: échec de l'appel LLM (${errMsg})`);
-  }
-}
-
-async function askHelpEphemeral({ rootEl, type, id, humanMessage, scope = "details" } = {}) {
-  const raw = String(humanMessage || "").trim();
-  const q = stripHelpTag(raw) || "Explique-moi ce que je peux faire ici.";
-  const ctx = buildRapsoContextBundle(type, id, q);
-  if (!ctx) return;
-  ctx.help_mode = true;
-  ctx.ui_snapshot = buildUiSnapshot({ scope, type, id });
-  ctx.user_message = [
-    "MODE_HELP: explique au format:",
-    "1) Où suis-je (type + id + statut/verdict si dispo)",
-    "2) Actions possibles ici",
-    "3) Exemples de commandes courtes",
-    "",
-    q
-  ].join("");
-  const ui = showEphemeralHelpThread(rootEl, { userMd: q });
-  if (!ui) return;
-  const requestId = `help_${Date.now()}_${type}_${id}`;
-  const payload = { agent: "specialist_ps", request_id: requestId, context: ctx };
-  try {
-    const res = await fetchWithTimeout(ASK_LLM_URL_PROD, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    }, 120000);
-    const txt = await res.text();
-    let out = null;
-    try { out = JSON.parse(txt); } catch { out = null; }
-    const reply = _pickReplyMarkdown(out, txt) || "_(no reply)_";
-    const slot = ui.wrap.querySelector(".help-ephemeral__reply");
-    if (slot) slot.innerHTML = _helpFurtiveCommentHtml({ role: "assistant", bodyMd: reply, pending: false });
-  } catch (e) {
-    const errMsg = e?.message || String(e);
-    const slot = ui.wrap.querySelector(".help-ephemeral__reply");
-    if (slot) slot.innerHTML = _helpFurtiveCommentHtml({ role: "assistant", bodyMd: `_(error: ${errMsg})_`, pending: false });
-    showError(`Help: échec de l'appel LLM (${errMsg})`);
-  }
-}
-
-function normalizeSujetKanbanStatus(value) {
-  const key = String(value || "").trim().toLowerCase();
-  return SUJET_KANBAN_STATUS_KEYS.has(key) ? key : null;
-}
-
-function getDefaultSujetKanbanStatus(sujetId) {
-  const effectiveStatus = String(getEffectiveSujetStatus(sujetId) || "open").toLowerCase();
-  return effectiveStatus === "closed" ? "resolved" : "non_active";
-}
-
-function getSujetKanbanStatus(sujetId) {
-  const { bucket } = getRunBucket();
-  const stored = normalizeSujetKanbanStatus(bucket?.workflow?.sujet_kanban_status?.[sujetId]);
-  return stored || getDefaultSujetKanbanStatus(sujetId);
-}
-
-function setSujetKanbanStatus(sujetId, nextStatus, options = {}) {
-  const normalized = normalizeSujetKanbanStatus(nextStatus);
-  if (!sujetId || !normalized) return false;
-
-  const previous = getSujetKanbanStatus(sujetId);
-  if (previous === normalized) return false;
-
-  const ts = options.ts || nowIso();
-  const actor = options.actor || "Human";
-  const agent = options.agent || "human";
-  const situation = getSituationBySujetId(sujetId);
-
-  persistRunBucket((bucket) => {
-    bucket.workflow = bucket.workflow || { sujet_kanban_status: {} };
-    bucket.workflow.sujet_kanban_status = bucket.workflow.sujet_kanban_status || {};
-    bucket.workflow.sujet_kanban_status[sujetId] = normalized;
-    bucket.activities.push({
-      ts,
-      entity_type: "situation",
-      entity_id: situation?.id || sujetId,
-      type: "ACTIVITY",
-      kind: "sujet_kanban_status_changed",
-      actor,
-      agent,
-      message: "",
-      meta: {
-        sujet_id: sujetId,
-        from: previous,
-        to: normalized
-      }
-    });
-  });
-
-  return true;
-}
-
-function getSituationKanbanColumns(situation) {
-  const columns = SUJET_KANBAN_STATUSES.map((status) => ({ ...status, sujets: [] }));
-  const columnMap = new Map(columns.map((column) => [column.key, column]));
-  for (const sujet of situation?.sujets || []) {
-    const key = getSujetKanbanStatus(sujet?.id);
-    (columnMap.get(key) || columns[0]).sujets.push(sujet);
-  }
-  return columns;
-}
-
-export function getEffectiveSujetStatus(sujetId) {
-  const sujet = getNestedSujet(sujetId);
-  const decision = getDecision("sujet", sujetId);
-  const d = String(decision?.decision || "").toUpperCase();
-  if (d === "CLOSED") return "closed";
-  if (d === "REOPENED") return "open";
-  return firstNonEmpty(sujet?.status, "open").toLowerCase();
-}
-
-export function getEffectiveSituationStatus(situationId) {
-  const situation = getNestedSituation(situationId);
-  const decision = getDecision("situation", situationId);
-  const d = String(decision?.decision || "").toUpperCase();
-  if (d === "CLOSED") return "closed";
-  if (d === "REOPENED") return "open";
-  return firstNonEmpty(situation?.status, "open").toLowerCase();
-}
-
-/* =========================================================
-   Data access
-========================================================= */
-
-function getFilteredSituations() {
-  const verdictFilter = String(store.situationsView.verdictFilter || "ALL").toUpperCase();
-  const query = String(store.situationsView.search || "").trim().toLowerCase();
-  const situations = store.situationsView.data || [];
-  return situations.filter((situation) => situationMatchesFilters(situation, query, verdictFilter));
-}
-
-function avisMatchesFilters(avis, query, verdictFilter) {
-  if (!avis) return false;
-
-  const matchesSearch = matchSearch(
-    [
-      avis.id,
-      avis.title,
-      avis.verdict,
-      avis.priority,
-      avis.status,
-      avis.agent,
-      avis.raw?.message,
-      avis.raw?.summary,
-      avis.raw?.topic,
-      avis.raw?.title,
-      avis.raw?.label
-    ],
-    query
-  );
-
-  if (!matchesSearch) return false;
-  if (verdictFilter === "ALL") return true;
-  return normalizeVerdict(getEffectiveAvisVerdict(avis.id)) === verdictFilter;
-}
-
-function situationMatchesFilters(situation, query, verdictFilter) {
-  const situationTextMatch = matchSearch(
-    [
-      situation.id,
-      situation.title,
-      situation.priority,
-      situation.status,
-      situation.raw?.summary,
-      situation.raw?.topic,
-      situation.raw?.category,
-      situation.raw?.title
-    ],
-    query
-  );
-
-  if (situationTextMatch && verdictFilter === "ALL") return true;
-
-  for (const sujet of situation.sujets || []) {
-    const sujetTextMatch = matchSearch(
-      [
-        sujet.id,
-        sujet.title,
-        sujet.priority,
-        sujet.status,
-        sujet.agent,
-        sujet.raw?.summary,
-        sujet.raw?.topic,
-        sujet.raw?.category,
-        sujet.raw?.title
-      ],
-      query
-    );
-
-    if (sujetTextMatch) {
-      if (verdictFilter === "ALL") return true;
-      if ((sujet.avis || []).some((avis) => normalizeVerdict(getEffectiveAvisVerdict(avis.id)) === verdictFilter)) return true;
-    }
-
-    for (const avis of sujet.avis || []) {
-      if (avisMatchesFilters(avis, query, verdictFilter)) return true;
-    }
-  }
-
-  return situationTextMatch;
-}
-
-
-function getCurrentSituationsStatusFilter() {
-  ensureViewUiState();
-  const value = String(store.situationsView.situationsStatusFilter || "open").toLowerCase();
-  return value === "closed" ? "closed" : "open";
-}
-
-function situationMatchesStatusFilter(situation, statusFilter = getCurrentSituationsStatusFilter()) {
-  const effectiveStatus = String(getEffectiveSituationStatus(situation?.id) || situation?.status || "open").toLowerCase();
-  return statusFilter === "closed" ? effectiveStatus !== "open" : effectiveStatus === "open";
-}
-
-function getSituationsStatusCounts(query = "") {
-  let open = 0;
-  let closed = 0;
-  for (const situation of store.situationsView.data || []) {
-    const matchesSearch = matchSearch([
-      situation?.id,
-      situation?.title,
-      situation?.priority,
-      situation?.status,
-      situation?.raw?.summary,
-      situation?.raw?.topic,
-      situation?.raw?.category,
-      situation?.raw?.title
-    ], query);
-    if (!matchesSearch) continue;
-    if (situationMatchesStatusFilter(situation, "closed")) closed += 1;
-    else open += 1;
-  }
-  return { open, closed };
-}
-
-function renderSituationsStatusHeadHtml() {
-  const current = getCurrentSituationsStatusFilter();
-  const query = String(store.situationsView.search || "").trim().toLowerCase();
-  const counts = getSituationsStatusCounts(query);
-  return renderTableHeadFilterToggle({
-    activeValue: current,
-    items: [
-      { label: "Actives", value: "open", count: counts.open, dataAttr: "situations-status-filter" },
-      { label: "Archivées", value: "closed", count: counts.closed, dataAttr: "situations-status-filter" }
-    ]
-  });
-}
-
-function renderSituationListIcon(status = "open") {
-  const isOpen = String(status || "open").toLowerCase() === "open";
-  return `<span class="issue-status-icon" aria-hidden="true">${svgIcon("table", { className: `issue-status-icon__svg issue-status-icon__svg--situation ${isOpen ? "issue-status-icon__svg--open" : "issue-status-icon__svg--closed"}` })}</span>`;
-}
-
-function getVisibleCounts(filteredSituations) {
-  let sujets = 0;
-  let avis = 0;
-  for (const situation of filteredSituations) {
-    sujets += (situation.sujets || []).length;
-    for (const sujet of situation.sujets || []) avis += (sujet.avis || []).length;
-  }
-  return { situations: filteredSituations.length, sujets, avis };
-}
-
-function getNestedSituation(situationId) {
-  return (store.situationsView.data || []).find((s) => s.id === situationId) || null;
-}
-
-function getNestedSujet(problemId) {
-  for (const situation of store.situationsView.data || []) {
-    const match = (situation.sujets || []).find((sujet) => sujet.id === problemId);
-    if (match) return match;
-  }
-  return null;
-}
-
-function getNestedAvis(avisId) {
-  for (const situation of store.situationsView.data || []) {
-    for (const sujet of situation.sujets || []) {
-      const match = (sujet.avis || []).find((avis) => avis.id === avisId);
-      if (match) return match;
-    }
-  }
-  return null;
-}
-
-function getSituationBySujetId(problemId) {
-  for (const situation of store.situationsView.data || []) {
-    if ((situation.sujets || []).some((sujet) => sujet.id === problemId)) return situation;
-  }
-  return null;
-}
-
-function getSituationByAvisId(avisId) {
-  for (const situation of store.situationsView.data || []) {
-    for (const sujet of situation.sujets || []) {
-      if ((sujet.avis || []).some((avis) => avis.id === avisId)) return situation;
-    }
-  }
-  return null;
-}
-
-function getSujetByAvisId(avisId) {
-  for (const situation of store.situationsView.data || []) {
-    for (const sujet of situation.sujets || []) {
-      if ((sujet.avis || []).some((avis) => avis.id === avisId)) return sujet;
-    }
-  }
-  return null;
-}
-
-function getActiveSelection() {
-  if (store.situationsView.selectedAvisId) {
-    const avis = getNestedAvis(store.situationsView.selectedAvisId);
-    if (avis) return { type: "avis", item: avis };
-  }
-  if (store.situationsView.selectedSujetId) {
-    const sujet = getNestedSujet(store.situationsView.selectedSujetId);
-    if (sujet) return { type: "sujet", item: sujet };
-  }
-  if (store.situationsView.selectedSituationId) {
-    const situation = getNestedSituation(store.situationsView.selectedSituationId);
-    if (situation) return { type: "situation", item: situation };
-  }
-  const firstSituation = (store.situationsView.data || [])[0] || null;
-  return firstSituation ? { type: "situation", item: firstSituation } : null;
-}
-
-/* =========================================================
-   Effective counts / title helpers
-========================================================= */
-
-function verdictCountsObject() {
-  return { F: 0, S: 0, D: 0, HM: 0, PM: 0, SO: 0 };
-}
-
-function problemVerdictStats(problem) {
-  const counts = verdictCountsObject();
-  for (const item of problem?.avis || []) {
-    const v = String(getEffectiveAvisVerdict(item.id) || "").toUpperCase();
-    if (counts[v] !== undefined) counts[v] += 1;
-  }
-  const total = Object.values(counts).reduce((a, b) => a + b, 0);
-  return { counts, total };
-}
-
-function situationVerdictStats(situation) {
-  const counts = verdictCountsObject();
-  for (const sujet of situation?.sujets || []) {
-    for (const avis of sujet.avis || []) {
-      const v = String(getEffectiveAvisVerdict(avis.id) || "").toUpperCase();
-      if (counts[v] !== undefined) counts[v] += 1;
-    }
-  }
-  const total = Object.values(counts).reduce((a, b) => a + b, 0);
-  return { counts, total };
-}
-
-function buildVerdictBarHtml(counts, options = {}) {
-  const legend = options.legend !== false;
-  const total = Object.values(counts || {}).reduce((a, b) => a + b, 0) || 1;
-  const order = ["F", "S", "D", "HM", "PM", "SO"];
-
-  const segs = order.map((v) => {
-    const c = Number(counts?.[v] || 0);
-    if (!c) return "";
-    const pct = (c / total) * 100;
-    return `<span class="verdict-bar__seg verdict-bar__seg--${v.toLowerCase()}" style="--verdict-seg-width:${pct.toFixed(2)}%"></span>`;
-  }).join("");
-
-  const bar = `<div class="verdict-bar">${segs || `<span class="verdict-bar__seg verdict-bar__seg--empty" style="--verdict-seg-width:100%"></span>`}</div>`;
-
-  if (!legend) {
-    return `<div class="subissues-counts subissues-counts--verdicts">${bar}</div>`;
-  }
-
-  const legendHtml = order.map((v) => {
-    const c = Number(counts?.[v] || 0);
-    if (!c) return "";
-    const pct = total ? (c / total) * 100 : 0;
-    return `
-      <span class="verdict-legend__item">
-        ${renderStateDot(v)}
-        <span class="verdict-legend__count">${c} <b>${escapeHtml(v)}</b></span>
-        <span class="verdict-legend__pct">(${pct.toFixed(0)}%)</span>
-      </span>
-    `;
-  }).join("");
-
+function getSocotecLogoSvg() {
   return `
-    <div class="subissues-counts subissues-counts--verdicts">
-      ${bar}
-      <div class="verdict-legend">${legendHtml}</div>
-    </div>
+    <svg xmlns="http://www.w3.org/2000/svg" width="50" height="52" fill="none"><path d="M21.09 27.614c-3.879 0-7.03-3.17-7.03-7.07 0-3.902 3.151-7.072 7.03-7.072a7.005 7.005 0 0 1 5.46 2.62c1.623-1.324 3.5-2.845 5.46-4.45-2.577-3.198-6.51-5.24-10.92-5.24-7.771 0-14.057 6.338-14.057 14.141 0 7.818 6.3 14.142 14.056 14.142 4.41 0 8.344-2.042 10.92-5.24l-5.46-4.45a7.005 7.005 0 0 1-5.46 2.62Z" fill="#0082DE"/><path d="M26.55 24.98a7.052 7.052 0 0 0 1.567-4.451c0-1.69-.588-3.24-1.568-4.451-3.22 2.62-5.46 4.451-5.46 4.451l5.46 4.451ZM42.173 20.543c0-5.057-1.764-9.705-4.704-13.353-1.806 1.479-3.668 3-5.46 4.451a14.134 14.134 0 0 1 3.136 8.902c0 3.367-1.176 6.465-3.136 8.902l5.46 4.451c2.954-3.648 4.704-8.296 4.704-13.353Z" fill="#00ACE8"/><path d="M32.023 11.641c-1.96 1.606-3.836 3.127-5.46 4.451a7.052 7.052 0 0 1 1.568 4.451c0 1.69-.588 3.24-1.568 4.451l5.46 4.451a14.134 14.134 0 0 0 3.136-8.902c-.014-3.38-1.176-6.48-3.136-8.902Z" fill="#005499"/><path d="M21.108 43.853c-.311.275-.699.405-1.14.42-.448-.015-.85-.16-1.162-.443-.319-.298-.478-.68-.47-1.145 0-.458.167-.847.478-1.153.304-.297.691-.45 1.147-.465.433 0 .806.137 1.132.374l.988-1.008a2.942 2.942 0 0 0-1.337-.633 3.31 3.31 0 0 0-.623-.07h-.16c-.038 0-.076 0-.114.009h-.015a3.319 3.319 0 0 0-.623.084 3.036 3.036 0 0 0-1.444.755c-.584.557-.888 1.26-.896 2.122-.008.863.289 1.558.874 2.1.197.183.41.328.646.45.455.229.964.343 1.534.336h.046a3.297 3.297 0 0 0 1.512-.397 2.72 2.72 0 0 0 .577-.405l-.95-.931Zm22.876 0c-.312.275-.7.405-1.14.42-.448-.015-.85-.16-1.162-.443-.32-.298-.479-.68-.471-1.145 0-.458.167-.847.478-1.153.304-.297.692-.45 1.148-.465.433 0 .805.137 1.131.374l.988-1.008a2.942 2.942 0 0 0-1.337-.633 3.312 3.312 0 0 0-.623-.07h-.16c-.037 0-.075 0-.113.009h-.016a3.319 3.319 0 0 0-.623.084 3.036 3.036 0 0 0-1.443.755c-.585.557-.889 1.26-.896 2.122-.008.863.288 1.558.873 2.1.198.183.41.328.646.45.456.229.965.343 1.535.336h.045a3.297 3.297 0 0 0 1.512-.397 2.72 2.72 0 0 0 .577-.405l-.95-.931Zm-18.636 1.756c-.859 0-1.573-.283-2.143-.863-.57-.58-.85-1.275-.85-2.1 0-.824.28-1.518.85-2.098.57-.58 1.284-.863 2.143-.863.858 0 1.572.282 2.142.863.57.58.851 1.274.851 2.099 0 .824-.281 1.519-.85 2.1-.57.58-1.285.862-2.143.862Zm0-1.351c.433 0 .775-.153 1.063-.458.281-.298.433-.695.433-1.153 0-.466-.144-.855-.433-1.153a1.402 1.402 0 0 0-1.063-.458c-.433 0-.783.153-1.072.458-.28.298-.417.695-.417 1.153 0 .466.136.855.417 1.153.282.305.639.458 1.072.458Zm-12.346 1.35c-.858 0-1.573-.282-2.142-.862-.57-.58-.851-1.275-.851-2.1 0-.824.28-1.518.85-2.098.57-.58 1.285-.863 2.143-.863.859 0 1.573.282 2.143.863.57.58.85 1.274.85 2.099 0 .824-.28 1.519-.85 2.1-.57.58-1.284.862-2.143.862Zm0-1.35c.433 0 .775-.153 1.064-.458.28-.298.433-.695.433-1.153 0-.466-.145-.855-.433-1.153a1.402 1.402 0 0 0-1.064-.458c-.433 0-.783.153-1.071.458-.281.298-.418.695-.418 1.153 0 .466.137.855.418 1.153.289.305.646.458 1.071.458Zm20.581-4.45h-4.87v1.29h1.406c.167 0 .296.137.296.297v4.114h1.459v-4.114c0-.168.136-.298.296-.298h1.413v-1.29Zm5.356 4.42h-2.545a.297.297 0 0 1-.296-.299v-.687h2.173v-1.198h-2.173v-.634c0-.168.136-.297.296-.297h2.477V39.83h-4.24v5.702h4.3v-1.305h.008ZM7.372 42.09c-1.132-.214-1.26-.435-1.245-.672.022-.26.334-.39.767-.405a3.092 3.092 0 0 1 1.58.374l.904-.984c-.699-.45-1.595-.687-2.507-.657-1.36.046-2.241.802-2.203 1.832v.015c.03.978.813 1.42 2.09 1.665 1.116.213 1.253.404 1.26.603v.015c.008.26-.44.435-.942.45-.63.023-1.36-.137-1.937-.572H5.13l-.881.977.076.053c.767.558 1.747.84 2.773.81 1.489-.054 2.408-.87 2.37-1.886v-.015c-.038-.962-.835-1.36-2.097-1.603Z" fill="#000"/></svg>
   `;
 }
 
-function problemsCountsIconHtml(closedCount, totalCount) {
-  const total = Math.max(0, Number(totalCount) || 0);
-  const closed = Math.max(0, Math.min(total, Number(closedCount) || 0));
+function getRemoveIconSvg() {
+  return svgIcon("x");
+}
 
-  if (total > 0 && closed === total) {
-    return `<span class="subissues-problems-icon" aria-label="Tous les sujets sont closed">${SVG_ISSUE_CLOSED}</span>`;
-  }
+function getDocumentsTableGridTemplate() {
+  return "minmax(280px, 1.2fr) minmax(220px, 1fr) 180px minmax(260px, 1.1fr)";
+}
 
-  const ratio = total ? (closed / total) : 0;
-  const r = 8;
-  const cx = 10;
-  const cy = 10;
-  const a = ratio * Math.PI * 2;
+function getFileExtension(value = "") {
+  const match = String(value || "").trim().toLowerCase().match(/\.([^.]+)$/);
+  return match ? match[1] : "";
+}
 
-  let wedge = "";
-  if (ratio > 0) {
-    const x = cx + r * Math.sin(a);
-    const y = cy - r * Math.cos(a);
-    const large = a > Math.PI ? 1 : 0;
-    wedge = `<path d="M ${cx} ${cy} L ${cx} ${cy - r} A ${r} ${r} 0 ${large} 1 ${x} ${y} Z" fill="rgba(137,87,229,.55)" opacity="0.75"></path>`;
-  }
+function isPdfDocument(documentItem = null) {
+  if (!documentItem) return false;
+  const mimeType = String(documentItem.mimeType || "").toLowerCase();
+  const extension = String(documentItem.extension || getFileExtension(documentItem.fileName || documentItem.name || "")).toLowerCase();
+  return mimeType === "application/pdf" || extension === "pdf";
+}
+
+function canPreviewPdf(documentItem = null) {
+  return isPdfDocument(documentItem) && !!String(getProjectDocumentPreviewUrl(documentItem) || "").trim();
+}
+
+function getSelectedPdfDocument() {
+  const activeDocumentId = String(store.projectDocuments?.activeDocumentId || "").trim();
+  return activeDocumentId ? getProjectDocumentById(activeDocumentId) : null;
+}
+
+function setDocumentsActivity({ tone = "info", title = "", message = "" } = {}) {
+  docsViewState.activity = {
+    tone,
+    title,
+    message
+  };
+}
+
+function clearDocumentsActivity() {
+  docsViewState.activity = {
+    tone: "info",
+    title: "",
+    message: ""
+  };
+}
+
+function renderDocumentsActivityBanner() {
+  const title = String(docsViewState.activity?.title || "").trim();
+  const message = String(docsViewState.activity?.message || "").trim();
+
+  if (!title && !message) return "";
+
+  const tone = String(docsViewState.activity?.tone || "info").toLowerCase();
+  const className =
+    tone === "success"
+      ? "documents-activity-banner documents-activity-banner--success"
+      : tone === "warning"
+        ? "documents-activity-banner documents-activity-banner--warning"
+        : tone === "error"
+          ? "documents-activity-banner documents-activity-banner--error"
+          : "documents-activity-banner documents-activity-banner--info";
 
   return `
-    <span class="subissues-problems-icon" aria-label="Sujets closed: ${closed}/${total}">
-      <svg viewBox="0 0 20 20" width="16" height="16" class="subissues-problems-icon__svg">
-        <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="rgba(139,148,158,.55)" stroke-width="2"></circle>
-        ${wedge}
-      </svg>
-    </span>
-  `;
-}
-
-function problemsCountsHtml(situation) {
-  const problems = situation?.sujets || [];
-  const totalPb = problems.length;
-  const closedPb = problems.filter((x) => String(getEffectiveSujetStatus(x.id) || "closed").toLowerCase() !== "open").length;
-  return `<div class="subissues-counts subissues-counts--problems">${problemsCountsIconHtml(closedPb, totalPb)}<span>${closedPb} sur ${totalPb}</span></div>`;
-}
-
-/* =========================================================
-   Table render
-========================================================= */
-
-
-function formatRelativeTimeLabel(ts, prefix = "updated") {
-  if (!ts) return `${prefix} recently`;
-  const date = new Date(ts);
-  if (Number.isNaN(date.getTime())) return `${prefix} recently`;
-
-  const diffMs = Date.now() - date.getTime();
-  const future = diffMs < 0;
-  const absSeconds = Math.max(1, Math.round(Math.abs(diffMs) / 1000));
-
-  const units = [
-    [31536000, "year"],
-    [2592000, "month"],
-    [86400, "day"],
-    [3600, "hour"],
-    [60, "minute"],
-    [1, "second"]
-  ];
-
-  let value = 1;
-  let unit = "second";
-  for (const [seconds, label] of units) {
-    if (absSeconds >= seconds) {
-      value = Math.floor(absSeconds / seconds);
-      unit = label;
-      break;
-    }
-  }
-
-  const plural = value > 1 ? "s" : "";
-  if (future) return `${prefix} in ${value} ${unit}${plural}`;
-  return `${prefix} ${value} ${unit}${plural} ago`;
-}
-
-function getEntityListTimestamp(entityType, entity) {
-  const description = entity?.id ? getEntityDescriptionState(entityType, entity.id) : null;
-  return firstNonEmpty(
-    description?.updated_at,
-    entity?.updated_at,
-    entity?.created_at,
-    entity?.raw?.updated_at,
-    entity?.raw?.created_at,
-    store.situationsView?.rawResult?.updated_at,
-    store.situationsView?.rawResult?.created_at,
-    nowIso()
-  );
-}
-
-function rowSelectedClass(kind, id) {
-  if (kind === "situation" && store.situationsView.selectedSituationId === id && !store.situationsView.selectedSujetId && !store.situationsView.selectedAvisId) return " selected subissue-row--selected";
-  if (kind === "sujet" && store.situationsView.selectedSujetId === id && !store.situationsView.selectedAvisId) return " selected subissue-row--selected";
-  if (kind === "avis" && store.situationsView.selectedAvisId === id) return " selected subissue-row--selected";
-  return "";
-}
-
-function renderSituationRow(situation) {
-  const effStatus = getEffectiveSituationStatus(situation.id);
-  const meta = getEntityReviewMeta("situation", situation.id);
-  const reviewIcon = renderEntityReviewLeadIcon("situation", situation.id);
-  const titleSeenClass = getReviewTitleStateClass("situation", situation.id);
-  const displayRef = getEntityDisplayRef("situation", situation.id);
-  const updatedLabel = formatRelativeTimeLabel(getEntityListTimestamp("situation", situation), "updated");
-
-  return `
-    <div class="issue-row issue-row--sit click js-row-situation${rowSelectedClass("situation", situation.id)}" data-situation-id="${escapeHtml(situation.id)}">
-      <div class="cell cell-theme lvl0">
-        <span class="chev chev--spacer"></span>
-        <span class="issue-row-title-grid">
-          <span class="issue-row-title-grid__status">
-            ${renderSituationListIcon(effStatus)}
-          </span>
-          <span class="issue-row-title-grid__review">
-            ${reviewIcon ? `<span class="review-title-chip">${reviewIcon}</span>` : `<span class="review-title-chip review-title-chip--placeholder" aria-hidden="true"></span>`}
-          </span>
-          <span class="issue-row-title-grid__title">
-          <button type="button" class="row-title-trigger js-row-title-trigger theme-text theme-text--sit ${titleSeenClass}" data-row-entity-type="situation" data-row-entity-id="${escapeHtml(situation.id)}">${escapeHtml(firstNonEmpty(situation.title, situation.id, "(sans titre)"))}</button>
-          <span class="issue-row-title-grid__meta issue-row-meta-text mono-small">${escapeHtml(displayRef)} • ${escapeHtml(updatedLabel)}</span>
-        </span>
+    <div class="${className}" role="status" aria-live="polite">
+      <div class="documents-activity-banner__body">
+        ${title ? `<div class="documents-activity-banner__title">${escapeHtml(title)}</div>` : ""}
+        ${message ? `<div class="documents-activity-banner__message">${escapeHtml(message)}</div>` : ""}
       </div>
-      <div class="cell cell-prio">${priorityBadge(situation.priority)}</div>
-      <div class="cell cell-agent"></div>
+      <button
+        type="button"
+        class="documents-activity-banner__close"
+        id="documentsActivityCloseBtn"
+        aria-label="Fermer"
+        title="Fermer"
+      >
+        ${getRemoveIconSvg()}
+      </button>
     </div>
   `;
 }
 
-function renderSujetRow(sujet) {
-  const expanded = store.situationsView.expandedSujets.has(sujet.id);
-  const hasAvis = (sujet.avis || []).length > 0;
-  const effStatus = getEffectiveSujetStatus(sujet.id);
-  const meta = getEntityReviewMeta("sujet", sujet.id);
-  const reviewIcon = renderEntityReviewLeadIcon("sujet", sujet.id);
-  const titleSeenClass = getReviewTitleStateClass("sujet", sujet.id);
-
-  return `
-    <div class="issue-row issue-row--pb click js-row-sujet${rowSelectedClass("sujet", sujet.id)}" data-sujet-id="${escapeHtml(sujet.id)}">
-      <div class="cell cell-theme lvl1">
-        <span class="chev chev--spacer"></span>
-        ${issueIcon(effStatus, { reviewState: meta.review_state, entityType: "sujet", isSeen: meta.is_seen })}
-        ${reviewIcon ? `<span class="review-title-chip">${reviewIcon}</span>` : ""}
-        <span class="theme-text theme-text--pb ${titleSeenClass}">${escapeHtml(firstNonEmpty(sujet.title, sujet.id, "Non classé"))}</span>
-      </div>
-      <div class="cell cell-prio">${priorityBadge(sujet.priority)}</div>
-      <div class="cell cell-agent"></div>
-      <div class="cell cell-id mono">${escapeHtml(getEntityDisplayRef("sujet", sujet.id))}</div>
-    </div>
-  `;
-}
-
-function renderAvisRow(avis) {
-  const effVerdict = getEffectiveAvisVerdict(avis.id);
-  const reviewIcon = renderEntityReviewLeadIcon("avis", avis.id);
-  const titleSeenClass = getReviewTitleStateClass("avis", avis.id);
-
-  return `
-    <div class="issue-row issue-row--avis click js-row-avis${rowSelectedClass("avis", avis.id)}" data-avis-id="${escapeHtml(avis.id)}">
-      <div class="cell cell-theme lvl2">
-        <span class="chev chev--spacer"></span>
-        ${reviewIcon ? `<span class="review-title-chip">${reviewIcon}</span>` : ""}
-        <span class="theme-text theme-text--avis ${titleSeenClass}">${escapeHtml(firstNonEmpty(avis.title, avis.id, ""))}</span>
-      </div>
-      <div class="cell cell-verdict">${renderVerdictPill(effVerdict)}</div>
-      <div class="cell cell-prio"></div>
-      <div class="cell cell-agent mono-small">${escapeHtml(firstNonEmpty(avis.agent, "system"))}</div>
-      <div class="cell cell-id mono">${escapeHtml(getEntityDisplayRef("avis", avis.id))}</div>
-    </div>
-  `;
-}
-
-function renderFlatSujetRow(sujet, situationId) {
-  const effStatus = getEffectiveSujetStatus(sujet.id);
-  const parentLabel = situationId ? `<span class="mono subissues-inline-count">${escapeHtml(situationId)}</span>` : "";
-  const meta = getEntityReviewMeta("sujet", sujet.id);
-  const reviewIcon = renderEntityReviewLeadIcon("sujet", sujet.id);
-  const titleSeenClass = getReviewTitleStateClass("sujet", sujet.id);
-
-  return `
-    <div class="issue-row issue-row--pb click js-row-sujet${rowSelectedClass("sujet", sujet.id)}" data-sujet-id="${escapeHtml(sujet.id)}">
-      <div class="cell cell-theme lvl0">
-        <span class="chev chev--spacer"></span>
-        <span class="issue-row-title-grid">
-          <span class="issue-row-title-grid__status">
-            ${issueIcon(effStatus, { reviewState: meta.review_state, entityType: "sujet", isSeen: meta.is_seen })}
-          </span>
-          <span class="issue-row-title-grid__review">
-            ${reviewIcon ? `<span class="review-title-chip">${reviewIcon}</span>` : `<span class="review-title-chip review-title-chip--placeholder" aria-hidden="true"></span>`}
-          </span>
-          <span class="issue-row-title-grid__title">
-            <button type="button" class="row-title-trigger js-row-title-trigger theme-text theme-text--pb ${titleSeenClass}" data-row-entity-type="sujet" data-row-entity-id="${escapeHtml(sujet.id)}">${escapeHtml(firstNonEmpty(sujet.title, sujet.id, "Non classé"))}</button>
-          </span>
-          <span class="issue-row-title-grid__meta issue-row-meta-text mono-small">${escapeHtml(getEntityDisplayRef("sujet", sujet.id))}${parentLabel ? ` • ` : ""}${parentLabel}</span>
-        </span>
-      </div>
-      <div class="cell cell-prio">${priorityBadge(sujet.priority)}</div>
-      <div class="cell cell-agent"></div>
-      <div class="cell cell-id mono">${escapeHtml(getEntityDisplayRef("sujet", sujet.id))}</div>
-    </div>
-  `;
-}
-
-function renderFlatAvisRow(avis, sujetId, situationId) {
-  const effVerdict = getEffectiveAvisVerdict(avis.id);
-  const lineage = [situationId, sujetId].filter(Boolean).join(" · ");
-  const reviewIcon = renderEntityReviewLeadIcon("avis", avis.id);
-  const titleSeenClass = getReviewTitleStateClass("avis", avis.id);
-
-  return `
-    <div class="issue-row issue-row--avis click js-row-avis${rowSelectedClass("avis", avis.id)}" data-avis-id="${escapeHtml(avis.id)}">
-      <div class="cell cell-theme lvl0">
-        <span class="chev chev--spacer"></span>
-        ${issueIcon("open")}
-        ${reviewIcon ? `<span class="review-title-chip">${reviewIcon}</span>` : ""}
-        <span class="theme-text theme-text--avis ${titleSeenClass}">${escapeHtml(firstNonEmpty(avis.title, avis.id, ""))}</span>
-        ${lineage ? `<span class="mono subissues-inline-count">${escapeHtml(lineage)}</span>` : ""}
-      </div>
-      <div class="cell cell-verdict">${renderVerdictPill(effVerdict)}</div>
-      <div class="cell cell-prio"></div>
-      <div class="cell cell-agent mono-small">${escapeHtml(firstNonEmpty(avis.agent, "system"))}</div>
-      <div class="cell cell-id mono">${escapeHtml(getEntityDisplayRef("avis", avis.id))}</div>
-    </div>
-  `;
-}
-function getSituationsTableGridTemplate() {
-  return "minmax(0, 1fr) 56px 86px";
-}
-
-function renderSituationsTableHeadHtml() {
+function renderDocumentsTableHeadHtml() {
   return renderDataTableHead({
     columns: [
-      { className: "cell cell-theme", html: renderSituationsStatusHeadHtml() },
-      { className: "cell cell-prio", label: "Prio" },
-      { className: "cell cell-agent", label: "Agent" }
+      { className: "documents-repo__col documents-repo__col--name", label: "Nom" },
+      { className: "documents-repo__col documents-repo__col--message", label: "Description" },
+      { className: "documents-repo__col documents-repo__col--date", label: "Dernière mise à jour" },
+      { className: "documents-repo__col documents-repo__col--stats", label: "Compteurs" }
     ]
   });
 }
 
-function renderWelcomeHtml() {
-  return renderDataTableShell({
-    className: "issues-table",
-    gridTemplate: getSituationsTableGridTemplate(),
-    headHtml: renderSituationsTableHeadHtml(),
-    state: "empty",
-    emptyHtml: renderDataTableEmptyState({
-      title: "Aucune analyse disponible",
-      description: "Lancer une analyse pour générer des avis-sujets-situations."
-    })
-  });
-}
-
-function renderTableHtml(filteredSituations) {
-  const activeStatusFilter = getCurrentSituationsStatusFilter();
-
-  if (!(store.situationsView.data || []).length) return renderWelcomeHtml();
-
-  if (!filteredSituations.length) {
-    return renderDataTableShell({
-      className: "issues-table",
-      gridTemplate: getSituationsTableGridTemplate(),
-      headHtml: renderSituationsTableHeadHtml(),
-      state: "empty",
-      emptyHtml: renderDataTableEmptyState({
-        title: "Aucun résultat",
-        description: "Aucun résultat pour les filtres actuels."
-      })
-    });
-  }
-
-  const rows = [];
-
-  for (const situation of filteredSituations) {
-    if (!situationMatchesStatusFilter(situation, activeStatusFilter)) continue;
-    rows.push(renderSituationRow(situation));
-  }
-
-  return renderDataTableShell({
-    className: "issues-table",
-    gridTemplate: getSituationsTableGridTemplate(),
-    headHtml: renderSituationsTableHeadHtml(),
-    bodyHtml: rows.join("")
-  });
-}
-
-/* =========================================================
-   Details / summary / metadata
-========================================================= */
-
-function getAvisSummary(avis) {
-  const raw = avis?.raw || {};
-  return firstNonEmpty(raw.summary, raw.message, raw.comment, raw.reasoning, raw.analysis, avis?.title, "Aucune synthèse disponible.");
-}
-
-function getSujetSummary(sujet) {
-  const raw = sujet?.raw || {};
-  return firstNonEmpty(raw.summary, raw.message, raw.comment, raw.reasoning, raw.analysis, sujet?.title, "Aucune synthèse disponible.");
-}
-
-function getSituationSummary(situation) {
-  const raw = situation?.raw || {};
-  return firstNonEmpty(raw.summary, raw.message, raw.comment, raw.reasoning, raw.analysis, situation?.title, "Aucune synthèse disponible.");
-}
-
-function renderMetaItem(label, valueHtml) {
-  return `
-    <div class="meta-item">
-      <div class="meta-k">${escapeHtml(label)}</div>
-      <div class="meta-v">${valueHtml}</div>
-    </div>
-  `;
-}
-
-function isEditingDescription(selection) {
-  ensureViewUiState();
-  if (!selection?.item?.id) return false;
-  const entityType = getSelectionEntityType(selection.type);
-  return store.situationsView.descriptionEdit?.entityType === entityType
-    && store.situationsView.descriptionEdit?.entityId === selection.item.id;
-}
-
-
-function renderDocumentRefsCard(selection) {
-  const refs = getSelectionDocumentRefs(selection);
-  if (!refs.length) return "";
-
-  return `
-    <div class="details-document-refs" aria-label="Références documentaires">
-      <div class="details-document-refs__label">Références documentaires</div>
-      <div class="details-document-refs__list">
-        ${refs.map((doc) => `
-          <span class="details-document-ref">
-            <span class="details-document-ref__name">${escapeHtml(doc.name)}</span>
-            <span class="details-document-ref__phase">${escapeHtml(doc.phaseCode)}${doc.phaseLabel ? ` · ${escapeHtml(doc.phaseLabel)}` : ""}</span>
-          </span>
-        `).join("")}
-      </div>
-    </div>
-  `;
-}
-
-function renderDescriptionCard(selection) {
-  const entityType = getSelectionEntityType(selection.type);
-  const entityId = selection.item.id;
-  const description = getEntityDescriptionState(selection);
-  const editing = isEditingDescription(selection);
-  const author = String(description.author || "system");
-  const isHuman = String(description.agent || "").toLowerCase() === "human" || description.avatar_type === "human";
-  const authorHtml = `<div class="gh-comment-author mono">${escapeHtml(author)}</div>`;
-  const editButtonHtml = `
-    <button class="icon-btn icon-btn--sm gh-comment-edit-btn" data-action="edit-description" type="button" aria-label="Modifier la description" title="Modifier la description">
-      ${svgIcon("pencil")}
-    </button>
-  `;
-
-  const headerHtml = `
-    <div class="gh-comment-header gh-comment-header--editable">
-      <div class="gh-comment-header-main">${authorHtml}</div>
-      <div class="gh-comment-header-actions">${editButtonHtml}</div>
-    </div>
-  `;
-
-  const bodyHtml = editing
-    ? `
-      <div class="gh-comment-body gh-comment-body--editable">
-        <textarea class="comment-editor__textarea description-editor__textarea" data-description-editor rows="7">${escapeHtml(store.situationsView.descriptionEdit?.draft || description.body || "")}</textarea>
-        <div class="description-editor__actions">
-          <button class="gh-btn" data-action="cancel-description-edit" type="button">Annuler</button>
-          <button class="gh-btn gh-btn--comment" data-action="save-description-edit" data-entity-type="${escapeHtml(entityType)}" data-entity-id="${escapeHtml(entityId)}" type="button">Sauvegarder</button>
-        </div>
-      </div>
-    `
-    : `<div class="gh-comment-body">${mdToHtml(description.body || "")}</div>`;
-
-  return `
-    <div class="gh-comment gh-comment--description">
-      ${isHuman
-        ? `<div class="gh-avatar gh-avatar--human" aria-hidden="true">${SVG_AVATAR_HUMAN}</div>`
-        : `<div class="gh-avatar" aria-hidden="true"><span class="gh-avatar-initial">${escapeHtml(description.avatar_initial || "S")}</span></div>`}
-      <div class="gh-comment-box">
-        ${headerHtml}
-        ${bodyHtml}
-      </div>
-    </div>
-  `;
-}
-
-function getThreadForSelection() {
-  const selection = getActiveSelection();
-  if (!selection) return [];
-
-  const { bucket } = getRunBucket();
-  const comments = Array.isArray(bucket?.comments) ? bucket.comments : [];
-  const activities = Array.isArray(bucket?.activities) ? bucket.activities : [];
-  const events = [];
-
-  const s = selection.type === "situation" ? selection.item : (selection.type === "sujet" ? getSituationBySujetId(selection.item.id) : getSituationByAvisId(selection.item.id));
-  const p = selection.type === "sujet" ? selection.item : (selection.type === "avis" ? getSujetByAvisId(selection.item.id) : null);
-  const a = selection.type === "avis" ? selection.item : null;
-  const rootTs = firstNonEmpty(store.situationsView?.rawResult?.updated_at, store.situationsView?.rawResult?.created_at, nowIso());
-
-  if (a) {
-    if (store.situationsView.tempAvisVerdictFor !== a.id) {
-      store.situationsView.tempAvisVerdictFor = a.id;
-      store.situationsView.tempAvisVerdict = String(getEffectiveAvisVerdict(a.id) || "F").toUpperCase();
-    }
-  } else {
-    store.situationsView.tempAvisVerdictFor = null;
-    store.situationsView.tempAvisVerdict = store.situationsView.tempAvisVerdict || "F";
-  }
-
-  if (s) {
-    events.push({
-      ts: rootTs,
-      actor: "System",
-      agent: inferAgent(s),
-      type: "SITUATION",
-      entity_type: "situation",
-      entity_id: s.id,
-      message: `${firstNonEmpty(s.title, s.id, "(sans titre)")}
-priority=${firstNonEmpty(s.priority, "")}
-sujets=${(s.sujets || []).length}`
-    });
-  }
-  if (p) {
-    events.push({
-      ts: rootTs,
-      actor: "System",
-      agent: inferAgent(p),
-      type: "SUJET",
-      entity_type: "sujet",
-      entity_id: p.id,
-      message: `${firstNonEmpty(p.title, p.id, "Non classé")}
-priority=${firstNonEmpty(p.priority, "")}
-avis=${(p.avis || []).length}`
-    });
-  }
-  if (a) {
-    events.push({
-      ts: rootTs,
-      actor: "System",
-      agent: inferAgent(a),
-      type: "AVIS",
-      entity_type: "avis",
-      entity_id: a.id,
-      message: `${firstNonEmpty(a.title, a.id)}
-severity=${firstNonEmpty(a.severity, "")}
-verdict=${firstNonEmpty(a.verdict, "")}
-agent=${inferAgent(a)}
-
-${firstNonEmpty(a.raw?.message, a.raw?.summary, "")}`
-    });
-  }
-
-  const allowedComments = new Set();
-  const allowedActivities = new Set();
-  const entityKey = (type, id) => `${String(type || "").toLowerCase()}:${String(id || "")}`;
-
-  if (a) {
-    allowedComments.add(entityKey("avis", a.id));
-    allowedActivities.add(entityKey("avis", a.id));
-    if (p) allowedActivities.add(entityKey("sujet", p.id));
-  } else if (p) {
-    allowedComments.add(entityKey("sujet", p.id));
-    allowedActivities.add(entityKey("sujet", p.id));
-    if (s) allowedActivities.add(entityKey("situation", s.id));
-  } else if (s) {
-    allowedComments.add(entityKey("situation", s.id));
-    allowedActivities.add(entityKey("situation", s.id));
-  }
-
-  const isViewingAvis = !!a;
-  const isViewingSujet = !!p && !a;
-
-  const humanEvents = [...comments, ...activities].filter((e) => {
-    const k = entityKey(e.entity_type, e.entity_id);
-    const t = String(e?.type || "").toUpperCase();
-
-    if (t === "COMMENT") return allowedComments.has(k);
-    if (t !== "ACTIVITY") return allowedComments.has(k) || allowedActivities.has(k);
-    if (!allowedActivities.has(k)) return false;
-
-    const kind = String(e?.kind || "").toLowerCase();
-    const meta = e?.meta || {};
-
-    if (isViewingAvis) {
-      if (kind === "avis_verdict_changed") return String(meta?.avis_id || "") === String(a.id);
-      if (kind === "issue_closed" || kind === "issue_reopened") {
-        if (meta?.problem_id) return String(meta.problem_id) === String(p?.id || "");
-      }
-      return true;
-    }
-
-    if (isViewingSujet) {
-      if (String(e?.entity_type || "").toLowerCase() === "situation") {
-        if (meta?.problem_id) return String(meta.problem_id) === String(p.id);
-      }
-      return true;
-    }
-
-    return true;
-  });
-
-  const orderRank = (e) => {
-    const t = String(e?.type || "").toUpperCase();
-    if (t === "SITUATION") return 0;
-    if (t === "SUJET") return 1;
-    if (t === "AVIS") return 2;
-    return 3;
-  };
-
-  return [...events, ...humanEvents].sort((x, y) => {
-    const xr = orderRank(x);
-    const yr = orderRank(y);
-    if (xr !== yr) return xr - yr;
-    return String(x.ts || "").localeCompare(String(y.ts || ""));
-  });
-}
-
-function renderThreadBlock() {
-  const thread = getThreadForSelection();
-  if (!thread.length) return "";
-
-  const itemsHtml = thread.map((e, idx) => {
-    const type = String(e?.type || "").toUpperCase();
-
-    if (type === "COMMENT") {
-      const agent = String(e?.agent || "").toLowerCase();
-      const isHuman = agent === "human" || !agent;
-      const isRapso = !isHuman && agent === "specialist_ps";
-      const displayName = isRapso ? "Agent specialist_ps" : normActorName(e?.actor, agent);
-      const avatarInitial = isRapso ? "AS" : ((agent[0] || "S").toUpperCase());
-      const tsHtml = e?.ts ? `<div class="mono-small">${escapeHtml(fmtTs(e.ts))}</div>` : "";
-
-      return renderMessageThreadComment({
-        idx,
-        author: displayName,
-        tsHtml,
-        bodyHtml: mdToHtml(e?.message || ""),
-        avatarType: isHuman ? "human" : "agent",
-        avatarHtml: isHuman ? SVG_AVATAR_HUMAN : "",
-        avatarInitial
-      });
-    }
-
-    if (type === "ACTIVITY") {
-      const kind = String(e?.kind || "").toLowerCase();
-      const agent = e?.agent || "system";
-      const displayName = normActorName(e?.actor, agent);
-      const ts = fmtTs(e?.ts || "");
-      let iconHtml = `<span class="tl-ico tl-ico--muted" aria-hidden="true"></span>`;
-      let verb = "updated";
-      let targetHtml = "";
-
-      if (kind === "issue_closed") {
-        iconHtml = `<span class="tl-ico-wrap tl-ico-closed" aria-hidden="true">${SVG_TL_CLOSED}</span>`;
-        const sujetId = e?.meta?.problem_id;
-        const sujet = sujetId ? getNestedSujet(sujetId) : null;
-        const sujetTitle = sujet?.title ? `${escapeHtml(sujet.title)} ` : "";
-        verb = "closed";
-        targetHtml = sujetId ? `sujet ${sujetTitle}${entityDisplayLinkHtml("sujet", sujetId)}` : "this";
-      } else if (kind === "issue_reopened") {
-        iconHtml = `<span class="tl-ico-wrap tl-ico-reopened" aria-hidden="true">${SVG_TL_REOPENED}</span>`;
-        const sujetId = e?.meta?.problem_id;
-        const sujet = sujetId ? getNestedSujet(sujetId) : null;
-        const sujetTitle = sujet?.title ? `${escapeHtml(sujet.title)} ` : "";
-        verb = "reopened";
-        targetHtml = sujetId ? `sujet ${sujetTitle}${entityDisplayLinkHtml("sujet", sujetId)}` : "this";
-      } else if (kind === "review_validated" || kind === "review_rejected" || kind === "review_dismissed" || kind === "review_restored") {
-        const entityType = String(e?.entity_type || "").toLowerCase();
-        const entityId = String(e?.entity_id || "");
-        const entity = getEntityByType(entityType, entityId);
-        const entityTitle = entity?.title ? `${escapeHtml(entity.title)} ` : "";
-        const counts = e?.meta?.counts || {};
-        const descendants = Math.max(0, Number(counts?.sujet || 0) + Number(counts?.avis || 0) + Number(counts?.situation || 0) - 1);
-
-        if (kind === "review_validated") {
-          iconHtml = renderReviewStateIcon("validated", { entityType });
-          verb = "validated";
-        } else if (kind === "review_restored") {
-          iconHtml = `<span class="tl-ico-wrap tl-ico-reopened" aria-hidden="true">${SVG_TL_REOPENED}</span>`;
-          verb = "restored";
-        } else {
-          iconHtml = renderReviewStateIcon(kind === "review_dismissed" ? "dismissed" : "rejected", { entityType, isSeen: true });
-          verb = kind === "review_dismissed" ? "dismissed" : "rejected";
-        }
-
-        targetHtml = entityId
-          ? `${entityType} ${entityTitle}${entityDisplayLinkHtml(entityType, entityId)}${descendants > 0 ? ` · ${descendants} descendant(s)` : ""}`
-          : "this";
-      } else if (kind === "avis_verdict_changed") {
-        const toV = e?.meta?.to || "";
-        const avisId = e?.meta?.avis_id;
-        const avis = avisId ? getNestedAvis(avisId) : null;
-        const avisTitle = avis?.title ? `${escapeHtml(avis.title)} ` : "";
-        iconHtml = verdictIconHtml(toV);
-        verb = "changed verdict";
-        targetHtml = avisId
-          ? `avis ${avisTitle}${entityDisplayLinkHtml("avis", avisId)} → ${escapeHtml(String(toV || ""))}`
-          : escapeHtml(String(toV || ""));
-      } else if (kind === "description_version_initial" || kind === "description_version_saved") {
-        iconHtml = `<span class="tl-ico-wrap tl-ico-reopened" aria-hidden="true">${svgIcon("pencil")}</span>`;
-        verb = kind === "description_version_initial" ? "archived description" : "saved description";
-        const entityType = String(e?.entity_type || "").toLowerCase();
-        const entityId = String(e?.entity_id || "");
-        const entity = getEntityByType(entityType, entityId);
-        const entityTitle = entity?.title ? `${escapeHtml(entity.title)} ` : "";
-        targetHtml = entityId ? `${entityType} ${entityTitle}${entityDisplayLinkHtml(entityType, entityId)}` : "this";
-      }
-
-      const note = String(e?.message || "").trim();
-      const noteHtml = note ? `<div class="tl-note">${mdToHtml(note)}</div>` : "";
-
-      return renderMessageThreadActivity({
-        idx,
-        iconHtml,
-        authorIconHtml: miniAuthorIconHtml(agent),
-        textHtml: `
-          <span class="tl-author-name">${escapeHtml(displayName)}</span>
-          <span class="mono-small"> ${escapeHtml(verb)} ${targetHtml || ""} </span>
-          <span class="mono-small">at ${escapeHtml(ts)}</span>
-        `,
-        noteHtml
-      });
-    }
-
-    return renderMessageThreadEvent({
-      idx,
-      badgeHtml: `
-        <div class="thread-badge__subissue">
-          ${svgIcon("issue-tracks", {
-            className: "octicon octicon-issue-tracks Octicon__StyledOcticon-sc-jtj3m8-0 TimelineRow-module__Octicon__SMhVa"
-          })}
-        </div>
-      `,
-      headHtml: `
-        <div class="mono">
-          <span>${escapeHtml(e.actor || "System")}</span>
-          <span> attached this to </span>
-          <span>${escapeHtml(e.entity_type || "")} n° ${entityDisplayLinkHtml(e.entity_type, e.entity_id)}</span>
-          <span>·</span>
-          <span> (agent=${escapeHtml(e.agent || "system")})</span>
-          <div class="mono">in ${escapeHtml(fmtTs(e.ts || ""))}</div>
-        </div>
-      `,
-      bodyHtml: escapeHtml(e.message || "")
-    });
-  }).join("");
-
-  return `
-    <div class="gh-timeline-title gh-timeline-title--hidden mono">Discussion</div>
-    ${renderMessageThread({ itemsHtml })}
-  `;
-}
-
-function renderSubIssuesPanel({ title, leftMetaHtml = "", rightMetaHtml = "", bodyHtml = "" }) {
-  ensureViewUiState();
-  const isOpen = !!store.situationsView.rightSubissuesOpen;
-  return `
-    <div class="details-subissues">
-      <div class="subissues-head click" data-action="toggle-subissues">
-        <div class="subissues-head-left">
-          <span class="chev">${isOpen ? "▾" : "▸"}</span>
-          <span class="subissues-title">${escapeHtml(title)}</span>
-          ${leftMetaHtml || ""}
-        </div>
-        <div class="subissues-head-right">
-          ${rightMetaHtml || ""}
-        </div>
-      </div>
-      <div class="subissues-body ${isOpen ? "" : "hidden"}">
-        ${bodyHtml || ""}
-      </div>
-    </div>
-  `;
-}
-
-function renderRejectReviewAction(selection) {
-  if (!selection?.type || !selection?.item?.id) return "";
-
-  const entityType = getSelectionEntityType(selection.type);
-  const entityId = selection.item.id;
-  const meta = getEntityReviewMeta(entityType, entityId);
-  const reviewIcon = renderReviewStateIcon("rejected", { entityType });
-  const dismissIcon = renderReviewStateIcon("dismissed", { entityType });
-  const canRestore = !!getReviewRestoreSnapshot(entityType, entityId)
-    && (meta.review_state === "rejected" || meta.review_state === "dismissed");
-
-  if (canRestore) {
-    return renderGhActionButton({
-      id: `review-restore-${entityType}-${entityId}`,
-      label: "Récupérer",
-      icon: svgIcon("issue-reopened"),
-      tone: "default",
-      size: "sm",
-      className: "js-review-reject-action",
-      mainAction: "review:restore"
-    });
-  }
-
-  return renderGhActionButton({
-    id: `review-reject-${entityType}-${entityId}`,
-    label: "Rejeter",
-    icon: reviewIcon,
-    tone: "default",
-    size: "sm",
-    className: "js-review-reject-action",
-    mainActionMode: "first-item",
-    items: [
-      {
-        label: "Rejeté par humain",
-        action: "review:set:rejected",
-        icon: reviewIcon
-      },
-      {
-        label: "Non pertinent",
-        action: "review:set:dismissed",
-        icon: dismissIcon
-      }
-    ]
-  });
-}
-
-function renderValidateReviewAction(selection) {
-  if (!selection?.type || !selection?.item?.id) return "";
-
-  const entityType = getSelectionEntityType(selection.type);
-  const entityId = selection.item.id;
-  const meta = getEntityReviewMeta(entityType, entityId);
-  const normalizedState = normalizeReviewState(meta.review_state);
-  if (normalizedState === "rejected" || normalizedState === "dismissed") return "";
-
-  const validateIcon = renderReviewStateIcon("validated", { entityType });
-
-  if (selection.type === "avis") {
-    return `<button class="gh-btn gh-btn--validate" data-action="avis-validate" type="button">Validate</button>`;
-  }
-
-  return renderGhActionButton({
-    id: `review-validate-${entityType}-${selection.item.id}`,
-    label: "Valider",
-    icon: validateIcon,
-    tone: "default",
-    size: "sm",
-    className: "js-review-validate-action",
-    mainAction: "review:validate:self",
-    items: [
-      {
-        label: "Valider seul",
-        action: "review:validate:self",
-        icon: validateIcon
-      },
-      {
-        label: "Valider avec tous les descendants",
-        action: "review:validate:descendants",
-        icon: validateIcon
-      }
-    ]
-  });
-}
-
-function renderCommentBox(selection) {
-  ensureViewUiState();
-  const item = selection?.item || null;
-  if (!item) return "";
-
-  const type = selection.type;
-  const issueStatus =
-    type === "avis"
-      ? "open"
-      : type === "sujet"
-        ? getEffectiveSujetStatus(item.id)
-        : getEffectiveSituationStatus(item.id);
-
-  const isIssueOpen = String(issueStatus || "open").toLowerCase() === "open";
-  const activeVerdict = String(store.situationsView.tempAvisVerdict || "F").toUpperCase();
-  const previewMode = !!store.situationsView.commentPreviewMode;
-  const helpMode = !!store.situationsView.helpMode;
-
-  const verdictSwitch = renderVerdictActionButtons(activeVerdict);
-
-  const hintHtml = `
-    <div class="rapso-mention-hint comment-composer__hint">
-      <span>Astuce : mentionne <span class="mono">@rapso</span> dans ton commentaire.</span>
-    </div>
-  `;
-
-  const rejectActionHtml = renderRejectReviewAction(selection);
-
-  const actionsHtml = `
-    <button class="gh-btn gh-btn--help-mode ${helpMode ? "is-on" : ""}" data-action="toggle-help" type="button">Help</button>
-
-    ${type === "avis"
-      ? `${verdictSwitch}${renderValidateReviewAction(selection)}`
-      : `${renderValidateReviewAction(selection)}${isIssueOpen
-          ? `<button class="gh-btn gh-btn--issue-action" data-action="issue-close" type="button">${SVG_ISSUE_CLOSED}<span class="gh-btn__label">Close</span></button>`
-          : `<button class="gh-btn gh-btn--issue-action" data-action="issue-reopen" type="button">${SVG_ISSUE_REOPENED}<span class="gh-btn__label">Reopen issue</span></button>`}`}
-
-    ${rejectActionHtml}
-
-    <button class="gh-btn gh-btn--comment" data-action="add-comment" type="button">Comment</button>
-  `;
-
-  return renderCommentComposer({
-    title: "Add a comment",
-    avatarHtml: SVG_AVATAR_HUMAN,
-    previewMode,
-    helpMode,
-    textareaId: "humanCommentBox",
-    previewId: "humanCommentPreview",
-    placeholder: helpMode
-      ? "Help (éphémère) — décrivez l’écran / l’action souhaitée."
-      : "Réponse humaine (Markdown) — mentionne @rapso pour demander l’avis de l’agent. Ex: « @rapso peux-tu vérifier ce point ? »",
-    hintHtml,
-    actionsHtml
-  });
-}
-
-function renderDetailedMetaForSelection(selection) {
-  if (!selection) return "";
-
-  const item = selection.item;
-  const raw = item.raw || {};
-  const decision = getDecision(selection.type, item.id);
-
-  const common = [
-    renderMetaItem("ID", `<span class="mono">${escapeHtml(item.id)}</span>`),
-    renderMetaItem("Title", escapeHtml(firstNonEmpty(item.title, item.id))),
-    renderMetaItem("Agent", `<span class="mono">${escapeHtml(firstNonEmpty(item.agent, raw.agent, "system"))}</span>`),
-    renderMetaItem("Priority", priorityBadge(firstNonEmpty(item.priority, raw.priority, "P3"))),
-    renderMetaItem("Run", `<span class="mono">${escapeHtml(currentRunKey())}</span>`),
-    renderMetaItem("Historique humain", decision ? `<span class="mono">${escapeHtml(decision.decision)} · ${escapeHtml(fmtTs(decision.ts))}</span>` : "—")
-  ];
-
-  if (selection.type === "avis") {
-    const sujet = getSujetByAvisId(item.id);
-    const situation = getSituationByAvisId(item.id);
-    const entries = [
-      ...common,
-      renderMetaItem("Situation parent", `<span class="mono">${escapeHtml(situation?.id || "—")}</span>`),
-      renderMetaItem("Sujet parent", `<span class="mono">${escapeHtml(sujet?.id || "—")}</span>`),
-      renderMetaItem("Verdict effectif", renderVerdictPill(getEffectiveAvisVerdict(item.id))),
-      renderMetaItem("Verdict source", renderVerdictPill(firstNonEmpty(raw.verdict, item.verdict, "-"))),
-      renderMetaItem("Severity", `<span class="mono">${escapeHtml(firstNonEmpty(raw.severity, "—"))}</span>`),
-      renderMetaItem("Source", `<span class="mono">${escapeHtml(firstNonEmpty(raw.source, "—"))}</span>`)
-    ];
-    return entries.join("");
-  }
-
-  if (selection.type === "sujet") {
-    const situation = getSituationBySujetId(item.id);
-    const stats = problemVerdictStats(item);
-    const entries = [
-      ...common,
-      renderMetaItem("Situation parent", `<span class="mono">${escapeHtml(situation?.id || "—")}</span>`),
-      renderMetaItem("Status effectif", statePill(getEffectiveSujetStatus(item.id))),
-      renderMetaItem("Status source", statePill(firstNonEmpty(raw.status, item.status, "open"))),
-      renderMetaItem("Avis", `<span class="mono">${escapeHtml(String((item.avis || []).length))}</span>`),
-      renderMetaItem("Verdicts", buildVerdictBarHtml(stats.counts, { legend: true }))
-    ];
-    return entries.join("");
-  }
-
-  const stats = situationVerdictStats(item);
-  const entries = [
-    ...common,
-    renderMetaItem("Status effectif", statePill(getEffectiveSituationStatus(item.id))),
-    renderMetaItem("Status source", statePill(firstNonEmpty(raw.status, item.status, "open"))),
-    renderMetaItem("Sujets", `<span class="mono">${escapeHtml(String((item.sujets || []).length))}</span>`),
-    renderMetaItem("Verdicts", buildVerdictBarHtml(stats.counts, { legend: true }))
-  ];
-  return entries.join("");
-}
-
-function renderSubIssuesForSujet(sujet, options = {}) {
-  ensureViewUiState();
-  const avisRowClass = options.avisRowClass || "js-row-avis";
-  const stats = problemVerdictStats(sujet);
-  const rows = (sujet.avis || []).map((avis) => {
-    const effVerdict = getEffectiveAvisVerdict(avis.id);
-    return `
-      <div class="issue-row issue-row--avis click ${avisRowClass}" data-avis-id="${escapeHtml(avis.id)}">
-        <div class="cell cell-theme cell-theme--full lvl0">
-          <span class="chev chev--spacer"></span>
-          ${renderStateDot(effVerdict)}
-          <span class="theme-text theme-text--avis">${escapeHtml(firstNonEmpty(avis.title, avis.id, ""))}</span>
-        </div>
-      </div>
-    `;
-  }).join("");
-
-  const body = renderDataTableShell({
-    className: "issues-table subissues-table",
-    state: rows ? "ready" : "empty",
-    bodyHtml: rows,
-    emptyHtml: renderDataTableEmptyState({
-      title: "Aucun avis",
-      description: ""
-    })
-  });
-
-  return renderSubIssuesPanel({
-    title: "Avis rattachés",
-    leftMetaHtml: `<div class="subissues-counts subissues-counts--total"><span class="mono">${(sujet.avis || []).length}</span></div>`,
-    rightMetaHtml: buildVerdictBarHtml(stats.counts, { legend: true }),
-    bodyHtml: body
-  });
-}
-
-function renderSubIssuesForSituation(situation, options = {}) {
-  ensureViewUiState();
-
-  const expandedSet = options.expandedSujets || store.situationsView.rightExpandedSujets;
-  const sujetRowClass = options.sujetRowClass || "js-sub-right-select-sujet";
-  const sujetToggleClass = options.sujetToggleClass || "js-sub-right-toggle-sujet";
-  const avisRowClass = options.avisRowClass || "js-row-avis";
-
-  const rows = [];
-  for (const sujet of situation.sujets || []) {
-    const open = expandedSet.has(sujet.id);
-    const hasAvis = (sujet.avis || []).length > 0;
-    const effStatus = getEffectiveSujetStatus(sujet.id);
-
-    rows.push(`
-      <div class="issue-row issue-row--pb click ${sujetRowClass}" data-sujet-id="${escapeHtml(sujet.id)}">
-        <div class="cell cell-theme cell-theme--full lvl0">
-          <span class="${sujetToggleClass}" data-sujet-id="${escapeHtml(sujet.id)}">${chevron(open, hasAvis)}</span>
-          ${issueIcon(effStatus)}
-          <span class="theme-text theme-text--pb">${escapeHtml(firstNonEmpty(sujet.title, sujet.id, "Non classé"))}</span>
-          <span class="subissues-inline-count mono">${(sujet.avis || []).length} avis</span>
-        </div>
-      </div>
-    `);
-
-    if (open) {
-      for (const avis of sujet.avis || []) {
-        const effVerdict = getEffectiveAvisVerdict(avis.id);
-        rows.push(`
-          <div class="issue-row issue-row--avis click ${avisRowClass}" data-avis-id="${escapeHtml(avis.id)}">
-            <div class="cell cell-theme cell-theme--full lvl1">
-              <span class="chev chev--spacer"></span>
-              ${renderStateDot(effVerdict)}
-              <span class="theme-text theme-text--avis">${escapeHtml(firstNonEmpty(avis.title, avis.id, ""))}</span>
-            </div>
-          </div>
-        `);
-      }
-    }
-  }
-
-  const stats = situationVerdictStats(situation);
-  const body = renderDataTableShell({
-    className: "issues-table subissues-table",
-    state: rows.length ? "ready" : "empty",
-    bodyHtml: rows.join(""),
-    emptyHtml: renderDataTableEmptyState({
-      title: "Aucun sujet",
-      description: ""
-    })
-  });
-
-  return renderSubIssuesPanel({
-    title: "Sujets rattachés",
-    leftMetaHtml: problemsCountsHtml(situation),
-    rightMetaHtml: buildVerdictBarHtml(stats.counts, { legend: true }),
-    bodyHtml: body
-  });
-}
-
-function renderDetailsTitleWrapHtml(selection) {
-  if (!selection) return `<span class="details-title-text">Sélectionner un élément</span>`;
-
-  const item = selection.item;
-  const entityType = getSelectionEntityType(selection.type);
-  const reviewIcon = renderEntityReviewLeadIcon(entityType, item.id);
-  const titleSeenClass = getReviewTitleStateClass(entityType, item.id);
-  let badgeHtml = "";
-  let probsHtml = "";
-  let verdictHtml = "";
-  let barOnlyHtml = "";
-  let idHtml = entityDisplayLinkHtml(selection.type, item.id);
-
-  if (selection.type === "avis") {
-    badgeHtml = renderVerdictPill(getEffectiveAvisVerdict(item.id));
-    const sujet = getSujetByAvisId(item.id);
-    if (sujet) {
-      probsHtml = `<div class="subissues-counts subissues-counts--problems"><span>${escapeHtml(firstNonEmpty(sujet.title, sujet.id, "Non classé"))}</span></div>`;
-    } else {
-      probsHtml = `<div class="subissues-counts subissues-counts--problems"><span>${escapeHtml(firstNonEmpty(item.agent, "system"))}</span></div>`;
-    }
-  } else if (selection.type === "sujet") {
-    const stats = problemVerdictStats(item);
-    badgeHtml = statePill(getEffectiveSujetStatus(item.id), { reviewState: getEntityReviewMeta("sujet", item.id).review_state, entityType: "sujet" });
-    verdictHtml = buildVerdictBarHtml(stats.counts, { legend: true });
-    barOnlyHtml = buildVerdictBarHtml(stats.counts, { legend: false });
-  } else {
-    const stats = situationVerdictStats(item);
-    badgeHtml = statePill(getEffectiveSituationStatus(item.id), { reviewState: getEntityReviewMeta("situation", item.id).review_state, entityType: "situation" });
-    probsHtml = problemsCountsHtml(item);
-    verdictHtml = buildVerdictBarHtml(stats.counts, { legend: true });
-    barOnlyHtml = buildVerdictBarHtml(stats.counts, { legend: false });
-  }
-
-  const titleTextHtml = `
-    ${reviewIcon ? `<span class="details-title-status">${reviewIcon}</span>` : ""}
-    <span class="details-title-text ${titleSeenClass}">${escapeHtml(firstNonEmpty(item.title, item.id, "Détail"))}</span>
-  `;
-
-  return `
-    <div class="details-title-wrap details-title--expanded">
-      <div class="details-title-row details-title-row--main">
-        <div class="details-title-maincol">
-          <div class="details-title-topline">
-            ${titleTextHtml}
-            <span class="details-title-id mono">${idHtml}</span>
-          </div>
-          <div class="details-title-bottomline">
-            ${badgeHtml}${probsHtml}${verdictHtml}
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="details-title-wrap details-title--compact">
-      <div class="details-title-compact">
-        <div class="details-title-compact-col1">${badgeHtml}</div>
-        <div class="details-title-compact-col2">
-          <div class="details-title-compact-top">
-            ${titleTextHtml}
-            <span class="details-title-id mono">${idHtml}</span>
-          </div>
-          <div class="details-title-compact-bottom">
-            ${probsHtml}${barOnlyHtml}
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-function renderDetailsTitleHtml(selection, options = {}) {
-  const showExpand = options.showExpand !== false;
-  if (!selection) {
-    return `
-      <div class="details-head">
-        <div class="details-head-left">
-          <div class="details-kicker mono">DÉTAILS</div>
-          <div class="gh-panel__title">Sélectionner un élément</div>
-        </div>
-        <div class="details-head-right">
-          <div class="details-meta mono" id="detailsMeta">—</div>
-          ${showExpand ? `<button id="detailsExpand" class="icon-btn icon-btn--sm" aria-label="Agrandir" title="Agrandir">⤢</button>` : ``}
-        </div>
-      </div>
-    `;
-  }
-
-  return `
-    <div class="details-head details-head--expanded">
-      <div class="details-head-left">
-        <div class="details-kicker mono">DÉTAILS</div>
-        <div class="gh-panel__title">
-          ${renderDetailsTitleWrapHtml(selection)}
-        </div>
-      </div>
-
-      <div class="details-head-right">
-        <div class="details-meta mono" id="detailsMeta">${escapeHtml(selection.item.id || "—")}</div>
-        ${showExpand ? `<button id="detailsExpand" class="icon-btn icon-btn--sm" aria-label="Agrandir" title="Agrandir">⤢</button>` : ``}
-      </div>
-    </div>
-  `;
-}
-
-function renderDetailsBody(selection, options = {}) {
-  if (!selection) {
-    return `<div class="emptyState">Sélectionne une situation / un sujet / un avis pour afficher les détails.</div>`;
-  }
-
-  const item = selection.item;
-  let descCard = "";
-  let subIssuesHtml = "";
-
-  if (selection.type === "avis") {
-    descCard = renderDescriptionCard(selection);
-    const sujet = getSujetByAvisId(item.id);
-    if (sujet) {
-      subIssuesHtml = renderSubIssuesForSujet(sujet, options.subissuesOptions || {});
-    }
-  } else if (selection.type === "sujet") {
-    descCard = renderDescriptionCard(selection);
-    subIssuesHtml = renderSubIssuesForSujet(item, options.subissuesOptions || {});
-  } else {
-    if (options.variant === "situation-kanban-modal") {
-      return renderSituationKanbanBody(item);
-    }
-    descCard = renderDescriptionCard(selection);
-    subIssuesHtml = renderSubIssuesForSituation(item, options.subissuesOptions || {});
-  }
-
-  const threadHtml = renderThreadBlock();
-  const commentBoxHtml = renderCommentBox(selection);
-  const metaHtml = renderDetailedMetaForSelection(selection);
-
-  return `
-    <div class="details-grid">
-      <div class="details-main">
-        <div class="gh-timeline">
-          ${descCard}
-          ${renderDocumentRefsCard(selection)}
-          ${subIssuesHtml}
-          ${threadHtml}
-          ${commentBoxHtml}
-        </div>
-      </div>
-      <aside class="details-meta-col">
-        <div class="meta-title">Metadata</div>
-        ${metaHtml}
-      </aside>
-    </div>
-  `;
-}
-
-function renderSituationKanbanCard(sujet) {
-  const kanbanStatus = getSujetKanbanStatus(sujet.id);
-  const avisCount = Array.isArray(sujet?.avis) ? sujet.avis.length : 0;
-  const effectiveStatus = String(getEffectiveSujetStatus(sujet.id) || sujet?.status || "open").toLowerCase();
-  const reviewMeta = getEntityReviewMeta("sujet", sujet.id);
-  const statusIconHtml = (reviewMeta.review_state === "rejected" || reviewMeta.review_state === "dismissed")
-    ? renderReviewStateIcon(reviewMeta.review_state, { entityType: "sujet", isSeen: true })
-    : issueIcon(effectiveStatus, { entityType: "sujet", reviewState: reviewMeta.review_state, isSeen: !!reviewMeta.is_seen });
-
-  return `
-    <button
-      type="button"
-      class="situation-kanban-card js-kanban-card"
-      data-sujet-id="${escapeHtml(sujet.id)}"
-      data-kanban-status="${escapeHtml(kanbanStatus)}"
-      draggable="true"
-    >
-      <div class="situation-kanban-card__meta">
-        <span class="situation-kanban-card__meta-lead">
-          ${statusIconHtml}
-          <span class="mono">${escapeHtml(getEntityDisplayRef("sujet", sujet.id))}</span>
-        </span>
-        <span>${effectiveStatus === "closed" ? "Fermé" : "Ouvert"}</span>
-      </div>
-      <div class="situation-kanban-card__title">${escapeHtml(firstNonEmpty(sujet.title, sujet.id, "Non classé"))}</div>
-      <div class="situation-kanban-card__footer">
-        <span>${priorityBadge(sujet.priority)}</span>
-        <span>${avisCount} avis</span>
-      </div>
-    </button>
-  `;
-}
-
-function renderSituationModalDetailBody(situation) {
-  const selection = { type: "situation", item: situation };
-  return `
-    <div class="situation-kanban-modal-detail">
-      <div class="details-grid details-grid--situation-modal-detail">
-        <div class="details-main">
-          <div class="gh-timeline">
-            ${renderDescriptionCard(selection)}
-            ${renderDocumentRefsCard(selection)}
-            ${renderSubIssuesForSituation(situation, {
-              sujetRowClass: "js-modal-drilldown-sujet",
-              sujetToggleClass: "js-modal-toggle-sujet",
-              avisRowClass: "js-modal-drilldown-avis",
-              expandedSujets: store.situationsView.rightExpandedSujets
-            })}
-            ${renderThreadBlock()}
-            ${renderCommentBox(selection)}
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-function renderSituationKanbanBody(situation) {
-  const columns = getSituationKanbanColumns(situation);
-  const isDetailMode = String(store.situationsView.situationModalView || "kanban") === "detail";
-  return `
-    <div class="situation-modal-commandbar">
-      ${isDetailMode ? `
-        <button type="button" class="situation-modal-commandbar__back js-situation-modal-back" aria-label="Revenir au kanban" title="Revenir au kanban">
-          ${svgIcon("arrow-left")}
-        </button>
-      ` : ""}
-      <div class="situation-modal-commandbar__title-wrap">
-        <div class="situation-modal-commandbar__title">${escapeHtml(firstNonEmpty(situation.title, situation.id, "(sans titre)"))}</div>
-      </div>
-      ${!isDetailMode ? `
-        <button type="button" class="situation-modal-commandbar__edit js-situation-modal-edit" aria-label="Modifier la situation" title="Modifier la situation">
-          ${svgIcon("pencil")}
-        </button>
-      ` : ""}
-    </div>
-    ${isDetailMode ? renderSituationModalDetailBody(situation) : `
-    <div class="situation-kanban-modal">
-      <div class="situation-kanban" aria-label="Pilotage des sujets de la situation">
-        ${columns.map((column) => `
-          <section class="situation-kanban__col js-kanban-column" data-kanban-column="${escapeHtml(column.key)}">
-            <div class="situation-kanban__head">
-              <div class="situation-kanban__dot situation-kanban__dot--${escapeHtml(String(column.key || '').replace(/_/g, '-'))}" aria-hidden="true"></div>
-              <span>${escapeHtml(column.label)}</span>
-              <span class="situation-kanban__count">${column.sujets.length}</span>
-            </div>
-            <div class="situation-kanban__hint">${escapeHtml(column.hint)}</div>
-            <div class="situation-kanban__cards">
-              ${column.sujets.length ? column.sujets.map((sujet) => renderSituationKanbanCard(sujet)).join("") : `<div class="situation-kanban__empty">Aucun sujet</div>`}
-            </div>
-          </section>
-        `).join("")}
-      </div>
-    </div>
-  `;
-}
-
-function renderDetailsHtml(selectionOverride = null, options = {}) {
-  const selection = selectionOverride || getActiveSelection();
-  return {
-    titleHtml: renderDetailsTitleHtml(selection),
-    bodyHtml: renderDetailsBody(selection, options),
-    modalTitle: selection ? firstNonEmpty(selection.item.title, selection.item.id, "Détail") : "Sélectionner un élément",
-    modalMeta: selection ? firstNonEmpty(selection.item.id, "") : "—"
-  };
-}
-
-/* =========================================================
-   Modal / rerender / selection
-========================================================= */
-
-function updateDetailsModal() {
-  const modal = document.getElementById("detailsModal");
-  const head = modal?.querySelector?.(".modal__head");
-  const title = document.getElementById("detailsTitleModal");
-  const meta = document.getElementById("detailsMetaModal");
-  const body = document.getElementById("detailsBodyModal");
-  if (!modal || !title || !meta || !body) return;
-
-  const selection = getActiveSelection();
-  const details = renderDetailsHtml(null, {
-    variant: selection?.type === "situation" ? "situation-kanban-modal" : undefined,
-    subissuesOptions: {
-      sujetRowClass: "js-modal-drilldown-sujet",
-      sujetToggleClass: "js-modal-toggle-sujet",
-      avisRowClass: "js-modal-drilldown-avis",
-      expandedSujets: store.situationsView.rightExpandedSujets
-    }
-  });
-
-
-  if (head) head.classList.add("details-head--expanded");
-
-  const isSituationKanbanModal = selection?.type === "situation";
-  body.classList.toggle("details-body-modal--situation-kanban", isSituationKanbanModal);
-
-  title.innerHTML = renderDetailsTitleWrapHtml(selection);
-  meta.textContent = details.modalMeta;
-  body.innerHTML = details.bodyHtml;
-
-  ensureDrilldownDom();
-
-  setOverlayChromeOpenState(modal, !!store.situationsView.detailsModalOpen);
-  document.body.classList.toggle("modal-open", !!store.situationsView.detailsModalOpen);
-
-  wireDetailsInteractive(body);
-  bindDetailsScroll(document);
-  body.__syncCondensedTitle?.();
-}
-
-function openDetailsModal() {
-  closeGlobalNav();
-  const selection = getActiveSelection();
-  if (selection?.type && selection?.item?.id) {
-    markEntitySeen(getSelectionEntityType(selection.type), selection.item.id, { source: "modal" });
-  }
-  if (selection?.type === "situation") {
-    store.situationsView.situationModalView = "kanban";
-  }
-  store.situationsView.detailsModalOpen = true;
-  updateDetailsModal();
-}
-
-function closeDetailsModal() {
-  store.situationsView.detailsModalOpen = false;
-  document.body.classList.remove("modal-open");
-  updateDetailsModal();
-}
-
-function syncSituationsPrimaryScrollSource() {
-  const panelHost = document.getElementById("situationsPanelHost");
-
-  if (store.situationsView.showTableOnly) {
-    const mainScrollBody = panelHost?.querySelector(".data-table-shell__body") || null;
-    registerProjectPrimaryScrollSource(mainScrollBody);
-
-    if (!mainScrollBody) return;
-
-    requestAnimationFrame(() => {
-      const currentPanelHost = document.getElementById("situationsPanelHost");
-      const currentMainScrollBody = currentPanelHost?.querySelector(".data-table-shell__body") || null;
-      if (!currentMainScrollBody || currentMainScrollBody !== mainScrollBody) return;
-      registerProjectPrimaryScrollSource(currentMainScrollBody);
-    });
-    return;
-  }
-
-  const detailsHost = document.getElementById("situationsDetailsHost");
-  registerProjectPrimaryScrollSource(detailsHost || null);
-}
-
-function rerenderPanels() {
-  ensureViewUiState();
-
-  const filteredSituations = getFilteredSituations();
-  const counts = getVisibleCounts(filteredSituations);
-  const panelHost = document.getElementById("situationsPanelHost");
-  const countsHost = document.getElementById("situationsHeaderCounts");
-  const searchInput = document.getElementById("situationsSearch");
-
-  if (searchInput) searchInput.value = store.situationsView.search || "";
-
-  if (countsHost) countsHost.textContent = `${counts.situations} situations · ${counts.sujets} sujets · ${counts.avis} avis`;
-
-  if (panelHost) {
-    if (store.situationsView.showTableOnly) {
-      panelHost.innerHTML = `<div id="situationsTableHost" class="project-table-host">${renderTableHtml(filteredSituations)}</div>`;
-      syncSituationsPrimaryScrollSource();
-    } else {
-      const details = renderDetailsHtml(null, {
-        subissuesOptions: {
-          sujetRowClass: "js-modal-drilldown-sujet",
-          sujetToggleClass: "js-modal-toggle-sujet",
-          avisRowClass: "js-modal-drilldown-avis",
-          expandedSujets: store.situationsView.rightExpandedSujets
-        }
-      });
-      panelHost.innerHTML = `
-        <section class="gh-panel gh-panel--details gh-panel--details-standalone" aria-label="Details">
-          <div class="gh-panel__head gh-panel__head--tight" id="situationsDetailsTitle">${details.titleHtml}</div>
-          <div class="details-body" id="situationsDetailsHost">${details.bodyHtml}</div>
-        </section>
-      `;
-      const detailsHost = document.getElementById("situationsDetailsHost");
-      wireDetailsInteractive(detailsHost);
-      bindDetailsScroll(document);
-      detailsHost?.__syncCondensedTitle?.();
-      syncSituationsPrimaryScrollSource();
-    }
-  }
-
-  updateDetailsModal();
-  if (store.situationsView.drilldown?.isOpen) updateDrilldownPanel();
-  refreshProjectShellChrome("situations");
-}
-
-function selectSituation(situationId) {
-  const situation = getNestedSituation(situationId);
-  if (!situation) return;
-
-  store.situationsView.selectedSituationId = situationId;
-  store.situationsView.selectedSujetId = null;
-  store.situationsView.selectedAvisId = null;
-
-  store.situationsView.showTableOnly = true;
-  updateDetailsModal();
-  openDetailsModal();
-}
-
-function selectSujet(sujetId) {
-  const sujet = getNestedSujet(sujetId);
-  if (!sujet) return;
-
-  const situation = getSituationBySujetId(sujetId);
-
-  store.situationsView.selectedSituationId = situation?.id || null;
-  store.situationsView.selectedSujetId = sujetId;
-  store.situationsView.selectedAvisId = null;
-
-  if (situation?.id) store.situationsView.expandedSituations.add(situation.id);
-
-  store.situationsView.showTableOnly = true;
-  updateDetailsModal();
-  openDetailsModal();
-}
-
-function selectAvis(avisId) {
-  const avis = getNestedAvis(avisId);
-  if (!avis) return;
-  const sujet = getSujetByAvisId(avisId);
-  const situation = getSituationByAvisId(avisId);
-
-  store.situationsView.selectedSituationId = situation?.id || null;
-  store.situationsView.selectedSujetId = sujet?.id || null;
-  store.situationsView.selectedAvisId = avisId;
-
-  if (situation?.id) store.situationsView.expandedSituations.add(situation.id);
-  if (sujet?.id) store.situationsView.expandedSujets.add(sujet.id);
-
-  store.situationsView.tempAvisVerdictFor = avisId;
-  store.situationsView.tempAvisVerdict = getEffectiveAvisVerdict(avisId) || "F";
-
-  store.situationsView.showTableOnly = false;
-  markEntitySeen("avis", avisId, { source: "details" });
-  rerenderPanels();
-}
-/* =========================================================
-   Details actions (archive-like)
-========================================================= */
-
-function getScopedSelection(root) {
-  if (root?.closest?.("#drilldownPanel")) {
-    const sel = getDrilldownSelection();
-    if (sel) return sel;
-  }
-  return getActiveSelection();
-}
-
-function currentDecisionTarget(root) {
-  const sel = getScopedSelection(root);
-  if (!sel) return null;
-  return { type: sel.type, id: sel.item.id, item: sel.item };
-}
-
-function clearDescriptionEditState() {
-  ensureViewUiState();
-  store.situationsView.descriptionEdit = {
-    entityType: null,
-    entityId: null,
-    draft: ""
-  };
-}
-
-function syncDescriptionEditorDraft(root) {
-  const ta = root.querySelector("[data-description-editor]");
-  if (!ta) return;
-  store.situationsView.descriptionEdit.draft = ta.value;
-}
-
-async function applyDescriptionSave(root) {
-  const target = currentDecisionTarget(root);
-  if (!target) return;
-
-  const entityType = getSelectionEntityType(target.type);
-  const entityId = target.id;
-  const ta = root.querySelector("[data-description-editor]");
-  if (!ta) return;
-
-  const nextBody = String(ta.value || "").trim();
-  if (!nextBody) return;
-
-  const current = getEntityDescriptionState(entityType, entityId);
-  const previousBody = String(current.body || "").trim();
-  const initialAuthor = firstNonEmpty(current.author, target.item?.agent, "system");
-  const initialAgent = String(firstNonEmpty(current.agent, target.item?.agent, "system")).toLowerCase();
-
-  if (nextBody === previousBody && initialAgent === "human") {
-    clearDescriptionEditState();
-    rerenderScope(root);
-    return;
-  }
-
-  addActivity(entityType, entityId, "description_version_initial", previousBody, {
-    previous_author: initialAuthor
-  }, { actor: initialAuthor, agent: initialAgent || "system" });
-
-  setEntityDescriptionState(entityType, entityId, {
-    body: nextBody,
-    author: "human",
-    agent: "human",
-    avatar_type: "human",
-    avatar_initial: "H"
-  }, { actor: "Human", agent: "human" });
-
-  markEntityValidated(entityType, entityId, { actor: "Human", agent: "human" });
-
-  addActivity(entityType, entityId, "description_version_saved", nextBody, {
-    previous_author: initialAuthor
-  }, { actor: "Human", agent: "human" });
-
-  clearDescriptionEditState();
-  rerenderScope(root);
-}
-
-function rerenderScope(root) {
-  rerenderPanels();
-  if (root?.closest?.("#detailsModal") && store.situationsView.detailsModalOpen) {
-    updateDetailsModal();
-  }
-  if (root?.closest?.("#drilldownPanel") && store.situationsView.drilldown?.isOpen) {
-    updateDrilldownPanel();
-  }
-}
-
-async function applyCommentAction(root) {
-  const target = currentDecisionTarget(root);
-  if (!target) return;
-
-  const ta = root.querySelector("#humanCommentBox");
-  if (!ta) return;
-
-  const message = String(ta.value || "").trim();
-  if (!message) return;
-
-  const helpActive = !!store.situationsView.helpMode || isHelpTrigger(message);
-  if (helpActive) {
-    ta.value = "";
-    store.situationsView.commentPreviewMode = false;
-    await askHelpEphemeral({
-      rootEl: root,
-      type: target.type,
-      id: target.id,
-      humanMessage: message,
-      scope: root.closest("#detailsModal") ? "modal" : (root.closest("#drilldownPanel") ? "overlay" : "details")
-    });
-    return;
-  }
-
-  addComment(target.type, target.id, message, { actor: "Human", agent: "human" });
-  ta.value = "";
-  store.situationsView.commentPreviewMode = false;
-  rerenderScope(root);
-
-  if (/@rapso\b/i.test(message)) {
-    await askRapsoAndAppendReply({ type: target.type, id: target.id, humanMessage: message });
-  }
-}
-
-function buildCascadeCounts() {
-  return { situation: 0, sujet: 0, avis: 0 };
-}
-
-function getCascadeTargets(entityType, entityId, mode = "self") {
-  const targets = [];
-  const pushTarget = (type, id) => {
-    if (!type || !id) return;
-    targets.push({ type, id });
-  };
-
-  if (entityType === "avis") {
-    pushTarget("avis", entityId);
-    return targets;
-  }
-
-  if (entityType === "sujet") {
-    const sujet = getNestedSujet(entityId);
-    if (!sujet) return targets;
-    if (mode === "descendants") {
-      for (const avis of sujet.avis || []) pushTarget("avis", avis.id);
-    }
-    pushTarget("sujet", entityId);
-    return targets;
-  }
-
-  if (entityType === "situation") {
-    const situation = getNestedSituation(entityId);
-    if (!situation) return targets;
-    if (mode === "descendants") {
-      for (const sujet of situation.sujets || []) {
-        for (const avis of sujet.avis || []) pushTarget("avis", avis.id);
-        pushTarget("sujet", sujet.id);
-      }
-    }
-    pushTarget("situation", entityId);
-  }
-
-  return targets;
-}
-
-function applyValidationCascade(entityType, entityId, mode = "self") {
-  const targets = getCascadeTargets(entityType, entityId, mode);
-  const counts = buildCascadeCounts();
-
-  for (const target of targets) {
-    markEntityValidated(target.type, target.id, { actor: "Human", agent: "human" });
-    claimDescriptionAsHuman(target.type, target.id, { actor: "Human", agent: "human" });
-    counts[target.type] += 1;
-  }
-
-  return { applied: targets.length, skipped: 0, counts };
-}
-
-function applyRestoreCascade(entityType, entityId, mode = "self") {
-  const targets = getCascadeTargets(entityType, entityId, mode);
-  const counts = buildCascadeCounts();
-  let applied = 0;
-  let skipped = 0;
-
-  for (const target of targets) {
-    const ok = restoreEntityReviewMeta(target.type, target.id, { actor: "Human", agent: "human" });
-    if (ok) {
-      applied += 1;
-      counts[target.type] += 1;
-    } else {
-      skipped += 1;
-    }
-  }
-
-  return { applied, skipped, counts };
-}
-
-function applyValidateAvis(root) {
-  const target = currentDecisionTarget(root);
-  if (!target || target.type !== "avis") return;
-
-  const avisId = target.id;
-  const verdict = String(store.situationsView.tempAvisVerdict || "F").toUpperCase();
-  setDecision("avis", avisId, `VALIDATED_${verdict}`, "", { actor: "Human", agent: "human" });
-  markEntityValidated("avis", avisId, { actor: "Human", agent: "human" });
-  claimDescriptionAsHuman("avis", avisId, { actor: "Human", agent: "human" });
-  addActivity("avis", avisId, "review_validated", "", {
-    mode: "self",
-    counts: { situation: 0, sujet: 0, avis: 1 }
-  }, { actor: "Human", agent: "human" });
-  rerenderScope(root);
-}
-
-function applyReviewStateRecursively(entityType, entityId, nextState, mode = "descendants") {
-  const targets = getCascadeTargets(entityType, entityId, mode);
-  const normalized = normalizeReviewState(nextState);
-  const counts = buildCascadeCounts();
-  let applied = 0;
-  let skipped = 0;
-
-  for (const target of targets) {
-    if (normalized === "rejected" || normalized === "dismissed") {
-      stashReviewRestoreSnapshot(target.type, target.id, { actor: "Human", agent: "human" });
-    }
-
-    const ok = setEntityReviewState(target.type, target.id, normalized, { actor: "Human", agent: "human" });
-    if (ok) {
-      applied += 1;
-      counts[target.type] += 1;
-    } else {
-      skipped += 1;
-    }
-  }
-
-  return { applied, skipped, counts };
-}
-
-function applyReviewStateChange(root, nextState) {
-  const target = currentDecisionTarget(root);
-  if (!target) return;
-
-  const entityType = getSelectionEntityType(target.type);
-  const entityId = target.id;
-  const normalized = normalizeReviewState(nextState);
-  const mode = entityType === "avis" ? "self" : "descendants";
-
-  if ((normalized === "rejected" || normalized === "dismissed") && entityType === "sujet") {
-    const ok = window.confirm(
-      "Rejeter ce sujet entraînera le rejet automatique de tous ses avis. Voulez-vous continuer ? Vous pourrez récupérer ensuite l'état précédent."
-    );
-    if (!ok) return;
-  }
-
-  if ((normalized === "rejected" || normalized === "dismissed") && entityType === "situation") {
-    const ok = window.confirm(
-      "Rejeter cette situation entraînera le rejet automatique de tous ses sujets et de tous ses avis. Voulez-vous continuer ? Vous pourrez récupérer ensuite l'état précédent."
-    );
-    if (!ok) return;
-  }
-
-  const result = applyReviewStateRecursively(entityType, entityId, normalized, mode);
-
-  addActivity(entityType, entityId, `review_${normalized}`, "", {
-    review_state: normalized,
-    applied: result.applied,
-    skipped: result.skipped,
-    mode,
-    counts: result.counts
-  }, { actor: "Human", agent: "human" });
-
-  if (result.skipped > 0) {
-    window.alert(`${result.skipped} élément(s) déjà diffusé(s) ont été conservé(s).`);
-  }
-
-  rerenderScope(root);
-}
-
-function applyRestoreReviewState(root) {
-  const target = currentDecisionTarget(root);
-  if (!target) return;
-
-  const entityType = getSelectionEntityType(target.type);
-  const entityId = target.id;
-  const mode = entityType === "avis" ? "self" : "descendants";
-  const result = applyRestoreCascade(entityType, entityId, mode);
-
-  addActivity(entityType, entityId, "review_restored", "", {
-    applied: result.applied,
-    skipped: result.skipped,
-    mode,
-    counts: result.counts
-  }, { actor: "Human", agent: "human" });
-
-  rerenderScope(root);
-}
-
-function applyValidateEntity(root, mode = "self") {
-  const target = currentDecisionTarget(root);
-  if (!target) return;
-
-  if (target.type === "avis") {
-    applyValidateAvis(root);
-    return;
-  }
-
-  const entityType = getSelectionEntityType(target.type);
-  const entityId = target.id;
-  const result = applyValidationCascade(entityType, entityId, mode);
-
-  addActivity(entityType, entityId, "review_validated", "", {
-    applied: result.applied,
-    skipped: result.skipped,
-    mode,
-    counts: result.counts
-  }, { actor: "Human", agent: "human" });
-
-  rerenderScope(root);
-}
-
-function applyIssueCloseOrReopen(nextStatus, root) {
-  const target = currentDecisionTarget(root);
-  if (!target || target.type === "avis") return;
-
-  if (target.type === "sujet") {
-    setDecision("sujet", target.id, nextStatus === "closed" ? "CLOSED" : "REOPENED", "", { actor: "Human", agent: "human" });
-  } else {
-    setDecision("situation", target.id, nextStatus === "closed" ? "CLOSED" : "REOPENED", "", { actor: "Human", agent: "human" });
-  }
-
-  rerenderScope(root);
-}
-
-function syncCommentPreview(root) {
-  const ta = root.querySelector("#humanCommentBox");
-  const preview = root.querySelector("#humanCommentPreview");
-  if (!preview) return;
-  preview.innerHTML = mdToHtml(ta?.value || "");
-}
-
-function wireDetailsInteractive(root) {
-  if (!root) return;
-
-  const isModalScope = !!root.closest("#detailsModal");
-  const isDrilldownScope = !!root.closest("#drilldownPanel");
-
-  const descriptionTextarea = root.querySelector("[data-description-editor]");
-  if (descriptionTextarea) {
-    descriptionTextarea.addEventListener("input", () => {
-      syncDescriptionEditorDraft(root);
-    });
-  }
-
-  root.querySelectorAll("[data-action='edit-description']").forEach((btn) => {
-    btn.onclick = () => {
-      const target = currentDecisionTarget(root);
-      if (!target) return;
-      const entityType = getSelectionEntityType(target.type);
-      const current = getEntityDescriptionState(entityType, target.id);
-      store.situationsView.descriptionEdit = {
-        entityType,
-        entityId: target.id,
-        draft: current.body || ""
-      };
-      rerenderScope(root);
-    };
-  });
-
-  root.querySelectorAll("[data-action='cancel-description-edit']").forEach((btn) => {
-    btn.onclick = () => {
-      clearDescriptionEditState();
-      rerenderScope(root);
-    };
-  });
-
-  root.querySelectorAll("[data-action='save-description-edit']").forEach((btn) => {
-    btn.onclick = async () => {
-      await applyDescriptionSave(root);
-    };
-  });
-
-  const commentTextarea = root.querySelector("#humanCommentBox");
-  if (commentTextarea) {
-    commentTextarea.addEventListener("input", () => {
-      if (store.situationsView.commentPreviewMode) syncCommentPreview(root);
-    });
-    commentTextarea.addEventListener("keydown", (ev) => {
-      if (ev.key === "Enter" && (ev.ctrlKey || ev.metaKey)) {
-        ev.preventDefault();
-        applyCommentAction(root);
-      }
-    });
-
-    root.querySelectorAll(".js-review-reject-action").forEach((actionRoot) => {
-      if (actionRoot.dataset.reviewBound === "true") return;
-      actionRoot.dataset.reviewBound = "true";
-  
-      actionRoot.addEventListener("ghaction:action", (event) => {
-        const action = String(event.detail?.action || "");
-        if (action === "review:restore") {
-          applyRestoreReviewState(root);
-          return;
-        }
-        if (!action.startsWith("review:set:")) return;
-  
-        const nextState = action.slice("review:set:".length);
-        if (!nextState) return;
-  
-        applyReviewStateChange(root, nextState);
-      });
-    });
-
-    root.querySelectorAll(".js-review-validate-action").forEach((actionRoot) => {
-      if (actionRoot.dataset.reviewValidateBound === "true") return;
-      actionRoot.dataset.reviewValidateBound = "true";
-
-      actionRoot.addEventListener("ghaction:action", (event) => {
-        const action = String(event.detail?.action || "");
-        if (!action.startsWith("review:validate:")) return;
-        const mode = action.endsWith(":descendants") ? "descendants" : "self";
-        applyValidateEntity(root, mode);
-      });
-    });
-  }
-
-  root.querySelectorAll("[data-action='toggle-subissues']").forEach((btn) => {
-    btn.onclick = () => {
-      store.situationsView.rightSubissuesOpen = !store.situationsView.rightSubissuesOpen;
-      rerenderPanels();
-    };
-  });
-
-  root.querySelectorAll(".js-sub-right-toggle-sujet, .js-modal-toggle-sujet, .js-drilldown-toggle-sujet").forEach((btn) => {
-    btn.onclick = (ev) => {
-      ev.stopPropagation();
-      const sujetId = String(btn.dataset.sujetId || "");
-      if (!sujetId) return;
-      const expandedSet = isDrilldownScope ? store.situationsView.drilldown.expandedSujets : store.situationsView.rightExpandedSujets;
-      if (expandedSet.has(sujetId)) expandedSet.delete(sujetId);
-      else expandedSet.add(sujetId);
-      if (isDrilldownScope) updateDrilldownPanel();
-      else rerenderPanels();
-    };
-  });
-
-  root.querySelectorAll(".js-sub-right-select-sujet").forEach((btn) => {
-    btn.onclick = () => {
-      const sujetId = String(btn.dataset.sujetId || "");
-      if (sujetId) selectSujet(sujetId);
-    };
-  });
-
-  root.querySelectorAll(".js-modal-drilldown-sujet, .js-drilldown-select-sujet").forEach((btn) => {
-    btn.onclick = () => {
-      const sujetId = String(btn.dataset.sujetId || "");
-      if (sujetId) openDrilldownFromSujet(sujetId);
-    };
-  });
-
-  root.querySelectorAll(".js-modal-drilldown-avis, .js-drilldown-select-avis").forEach((btn) => {
-    btn.onclick = () => {
-      const avisId = String(btn.dataset.avisId || "");
-      if (avisId) openDrilldownFromAvis(avisId);
-    };
-  });
-
-  root.querySelectorAll(".js-situation-modal-edit").forEach((btn) => {
-    btn.addEventListener("click", (event) => {
-      event.preventDefault();
-      store.situationsView.situationModalView = "detail";
-      updateDetailsModal();
-    });
-  });
-
-  root.querySelectorAll(".js-situation-modal-back").forEach((btn) => {
-    btn.addEventListener("click", (event) => {
-      event.preventDefault();
-      store.situationsView.situationModalView = "kanban";
-      updateDetailsModal();
-    });
-  });
-
-  root.querySelectorAll(".js-kanban-card").forEach((card) => {
-    card.onclick = () => {
-      const sujetId = String(card.dataset.sujetId || "");
-      if (sujetId) openDrilldownFromSujet(sujetId);
-    };
-
-    if (card.dataset.kanbanBound === "true") return;
-    card.dataset.kanbanBound = "true";
-
-    card.addEventListener("dragstart", (event) => {
-      const sujetId = String(card.dataset.sujetId || "");
-      if (!sujetId) return;
-      store.situationsView.draggedKanbanSujetId = sujetId;
-      card.classList.add("is-dragging");
-      event.dataTransfer?.setData("text/plain", sujetId);
-      if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
-    });
-
-    card.addEventListener("dragend", () => {
-      card.classList.remove("is-dragging");
-      store.situationsView.draggedKanbanSujetId = "";
-      document.querySelectorAll(".js-kanban-column").forEach((column) => column.classList.remove("is-drop-target"));
-    });
-  });
-
-  root.querySelectorAll(".js-kanban-column").forEach((column) => {
-    if (column.dataset.kanbanColumnBound === "true") return;
-    column.dataset.kanbanColumnBound = "true";
-
-    column.addEventListener("dragover", (event) => {
-      event.preventDefault();
-      column.classList.add("is-drop-target");
-      if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
-    });
-
-    column.addEventListener("dragleave", () => {
-      column.classList.remove("is-drop-target");
-    });
-
-    column.addEventListener("drop", (event) => {
-      event.preventDefault();
-      column.classList.remove("is-drop-target");
-      const sujetId = String(event.dataTransfer?.getData("text/plain") || store.situationsView.draggedKanbanSujetId || "");
-      const nextStatus = String(column.dataset.kanbanColumn || "");
-      if (!sujetId || !nextStatus) return;
-      const changed = setSujetKanbanStatus(sujetId, nextStatus, { actor: "Human", agent: "human" });
-      if (!changed) return;
-      rerenderPanels();
-      if (store.situationsView.drilldown?.isOpen && String(store.situationsView.drilldown.selectedSujetId || "") === sujetId) {
-        updateDrilldownPanel();
-      }
-    });
-  });
-
-  root.querySelectorAll("[data-action='tab-write']").forEach((btn) => {
-    btn.onclick = () => {
-      store.situationsView.commentPreviewMode = false;
-      rerenderPanels();
-    };
-  });
-
-  root.querySelectorAll("[data-action='tab-preview']").forEach((btn) => {
-    btn.onclick = () => {
-      store.situationsView.commentPreviewMode = true;
-      rerenderPanels();
-    };
-  });
-
-  root.querySelectorAll("[data-action='toggle-help']").forEach((btn) => {
-    btn.onclick = () => {
-      store.situationsView.helpMode = !store.situationsView.helpMode;
-      rerenderPanels();
-    };
-  });
-
-  root.querySelectorAll("[data-action='add-comment']").forEach((btn) => {
-    btn.onclick = async () => {
-      await applyCommentAction(root);
-    };
-  });
-
-  root.querySelectorAll(".verdict-switch [data-main-action]").forEach((btn) => {
-    btn.onclick = (ev) => {
-      ev.preventDefault();
-      const action = String(btn.dataset.mainAction || "");
-      if (!action.startsWith("set-verdict:")) return;
-      const v = action.slice("set-verdict:".length).toUpperCase();
-      if (!v) return;
-      store.situationsView.tempAvisVerdict = v;
-      rerenderPanels();
-    };
-  });
-
-  root.querySelectorAll("[data-action='avis-validate']").forEach((btn) => {
-    btn.onclick = () => applyValidateAvis(root);
-  });
-
-  root.querySelectorAll("[data-action='issue-close']").forEach((btn) => {
-    btn.onclick = () => applyIssueCloseOrReopen("closed", root);
-  });
-
-  root.querySelectorAll("[data-action='issue-reopen']").forEach((btn) => {
-    btn.onclick = () => applyIssueCloseOrReopen("open", root);
-  });
-}
-
-/* =========================================================
-   Panel / modal events
-========================================================= */
-
-let modalEventsBound = false;
-
-function bindModalEvents() {
-  if (modalEventsBound) return;
-  modalEventsBound = true;
-
-  const modal = document.getElementById("detailsModal");
-
-  bindOverlayChromeDismiss(modal, {
-    onClose: closeDetailsModal
-  });
-
-  document.getElementById("detailsClose")?.addEventListener("click", closeDetailsModal);
-
-  window.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape") return;
-    if (store.situationsView.detailsModalOpen) closeDetailsModal();
-    if (store.situationsView.drilldown?.isOpen) closeDrilldown();
-  });
-}
-
-function initRightSplitter(root) {
-  const page = root.classList.contains("gh-page--2col") ? root : root.querySelector(".gh-page--2col");
-  const details = root.querySelector(".gh-panel--details");
-  if (!page || !details) return;
-
-  const existingSplitter = page.querySelector(":scope > .gh-splitter");
-  if (existingSplitter) existingSplitter.remove();
-
-  const splitter = document.createElement("div");
-  splitter.className = "gh-splitter";
-  splitter.setAttribute("role", "separator");
-  splitter.setAttribute("aria-orientation", "vertical");
-  splitter.setAttribute("aria-label", "Redimensionner la section Détails");
-  page.insertBefore(splitter, details);
-
-  const MIN_W = 320;
-  const MAX_W = 820;
-
-  function currentRightWidth() {
-    const rectW = Math.round(details.getBoundingClientRect().width || 0);
-    const cssVar = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--rightW"), 10);
-    if (rectW >= 120) return rectW;
-    if (Number.isFinite(cssVar) && cssVar > 0) return cssVar;
-    return 420;
-  }
-
-  function setRightWidth(px) {
-    const clamped = Math.max(MIN_W, Math.min(MAX_W, Math.round(px)));
-    document.documentElement.style.setProperty("--rightW", `${clamped}px`);
-  }
-
-  let startX = 0;
-  let startW = 0;
-  let dragging = false;
-
-  function onMove(event) {
-    if (!dragging) return;
-    const x = (event.touches && event.touches[0]) ? event.touches[0].clientX : event.clientX;
-    const dx = x - startX;
-    setRightWidth(startW - dx);
-    if (event.cancelable) event.preventDefault();
-  }
-
-  function onUp() {
-    if (!dragging) return;
-    dragging = false;
-    document.body.classList.remove("is-resizing");
-    window.removeEventListener("mousemove", onMove);
-    window.removeEventListener("mouseup", onUp);
-    window.removeEventListener("touchmove", onMove);
-    window.removeEventListener("touchend", onUp);
-  }
-
-  function onDown(event) {
-    if (window.getComputedStyle(splitter).display === "none") return;
-    dragging = true;
-    document.body.classList.add("is-resizing");
-    startX = (event.touches && event.touches[0]) ? event.touches[0].clientX : event.clientX;
-    startW = currentRightWidth();
-    if (event.cancelable) event.preventDefault();
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    window.addEventListener("touchmove", onMove, { passive: false });
-    window.addEventListener("touchend", onUp);
-  }
-
-  splitter.addEventListener("mousedown", onDown);
-  splitter.addEventListener("touchstart", onDown, { passive: false });
-  setRightWidth(currentRightWidth());
-}
-
-function ensureDrilldownDom() {
-  if (document.getElementById("drilldownPanel")) return;
-
-  const panel = document.createElement("div");
-  panel.id = "drilldownPanel";
-  panel.className = "drilldown overlay-host overlay-host--side hidden";
-  panel.setAttribute("aria-hidden", "true");
-
-  panel.innerHTML = renderOverlayChrome({
-    shellClassName: "drilldown__inner gh-panel gh-panel--details",
-    variant: "drilldown",
-    ariaLabel: "Détails",
-    headHtml: renderOverlayChromeHead({
-      eyebrow: "DÉTAILS",
-      titleId: "drilldownTitle",
-      closeId: "drilldownClose",
-      closeLabel: "Fermer",
-      headClassName: "drilldown__head"
-    }),
-    bodyId: "drilldownBody",
-    bodyClassName: "drilldown__body details-body"
-  });
-
-  document.body.appendChild(panel);
-
-  bindOverlayChromeDismiss(panel, {
-    onClose: closeDrilldown
-  });
-}
-
-function getDrilldownSelection() {
-  ensureViewUiState();
-  const dd = store.situationsView.drilldown;
-  if (!dd) return null;
-  if (dd.selectedAvisId) {
-    const avis = getNestedAvis(dd.selectedAvisId);
-    if (avis) return { type: "avis", item: avis };
-  }
-  if (dd.selectedSujetId) {
-    const sujet = getNestedSujet(dd.selectedSujetId);
-    if (sujet) return { type: "sujet", item: sujet };
-  }
-  if (dd.selectedSituationId) {
-    const situation = getNestedSituation(dd.selectedSituationId);
-    if (situation) return { type: "situation", item: situation };
-  }
-  return null;
-}
-
-function updateDrilldownPanel() {
-  ensureViewUiState();
-  ensureDrilldownDom();
-
-  const panel = document.getElementById("drilldownPanel");
-  const title = document.getElementById("drilldownTitle");
-  const body = document.getElementById("drilldownBody");
-  if (!panel || !title || !body) return;
-
-  const selection = getDrilldownSelection();
-  const details = renderDetailsHtml(selection, {
-    subissuesOptions: {
-      sujetRowClass: "js-drilldown-select-sujet",
-      sujetToggleClass: "js-drilldown-toggle-sujet",
-      avisRowClass: "js-drilldown-select-avis",
-      expandedSujets: store.situationsView.drilldown.expandedSujets
-    }
-  });
-
-  title.innerHTML = selection ? renderDetailsTitleWrapHtml(selection) : "—";
-  body.innerHTML = details.bodyHtml;
-
-  wireDetailsInteractive(body);
-  bindDetailsScroll(document);
-  body.__syncCondensedTitle?.();
-}
-
-function openDrilldown() {
-  ensureViewUiState();
-  ensureDrilldownDom();
-  closeGlobalNav();
-  store.situationsView.drilldown.isOpen = true;
-  const panel = document.getElementById("drilldownPanel");
-  setOverlayChromeOpenState(panel, true);
-  document.body.classList.add("drilldown-open");
-  updateDrilldownPanel();
-}
-
-function closeDrilldown() {
-  ensureViewUiState();
-  store.situationsView.drilldown.isOpen = false;
-  const panel = document.getElementById("drilldownPanel");
-  setOverlayChromeOpenState(panel, false);
-  document.body.classList.remove("drilldown-open");
-}
-
-function openDrilldownFromSituation(situationId) {
-  ensureViewUiState();
-  const situation = getNestedSituation(situationId);
-  if (!situation) return;
-  store.situationsView.drilldown.selectedSituationId = situation.id;
-  store.situationsView.drilldown.selectedSujetId = null;
-  store.situationsView.drilldown.selectedAvisId = null;
-  markEntitySeen("situation", situation.id, { source: "drilldown" });
-  openDrilldown();
-}
-
-function openDrilldownFromSujet(sujetId) {
-  ensureViewUiState();
-  const sujet = getNestedSujet(sujetId);
-  const situation = getSituationBySujetId(sujetId);
-  if (!sujet) return;
-  store.situationsView.drilldown.selectedSituationId = situation?.id || null;
-  store.situationsView.drilldown.selectedSujetId = sujet.id;
-  store.situationsView.drilldown.selectedAvisId = null;
-  store.situationsView.drilldown.expandedSujets.add(sujet.id);
-  markEntitySeen("sujet", sujet.id, { source: "drilldown" });
-  openDrilldown();
-}
-
-function openDrilldownFromAvis(avisId) {
-  ensureViewUiState();
-  const avis = getNestedAvis(avisId);
-  const sujet = getSujetByAvisId(avisId);
-  const situation = getSituationByAvisId(avisId);
-  if (!avis) return;
-  store.situationsView.drilldown.selectedSituationId = situation?.id || null;
-  store.situationsView.drilldown.selectedSujetId = sujet?.id || null;
-  store.situationsView.drilldown.selectedAvisId = avis.id;
-  if (sujet?.id) store.situationsView.drilldown.expandedSujets.add(sujet.id);
-  markEntitySeen("avis", avis.id, { source: "drilldown" });
-  openDrilldown();
-}
-
-function bindCondensedTitleScroll(scrollEl, classHost, key) {
-  bindOverlayChromeCompact(scrollEl, classHost, key);
-}
-
-function bindDetailsScroll(root) {
-  bindCondensedTitleScroll(
-    root.querySelector("#situationsDetailsHost"),
-    root.querySelector(".gh-panel--details"),
-    "details"
-  );
-
-  bindCondensedTitleScroll(
-    document.getElementById("detailsBodyModal"),
-    document.querySelector("#detailsModal .modal__inner"),
-    "modal"
-  );
-
-  bindCondensedTitleScroll(
-    document.getElementById("drilldownBody"),
-    document.querySelector("#drilldownPanel .drilldown__inner"),
-    "drilldown"
-  );
-}
-
-function bindSituationsEvents(root, headerRoot) {
-  headerRoot?.querySelector("#situationsSearch")?.addEventListener("input", (event) => {
-    store.situationsView.search = String(event.target.value || "");
-    rerenderPanels();
-  });
-
-
-  const addActionRoot = document.querySelector('[data-action-id="situationsAddAction"]');
-  if (addActionRoot && addActionRoot.dataset.bound !== "true") {
-    addActionRoot.dataset.bound = "true";
-    addActionRoot.addEventListener("ghaction:action", (event) => {
-      const action = String(event.detail?.action || "");
-      if (action === "add-situation" || action === "add-sujet") {
-        event.preventDefault();
-      }
-    });
-  }
-
-  root.addEventListener("click", (event) => {
-    const situationsStatusFilterButton = event.target.closest("[data-situations-status-filter]");
-    if (situationsStatusFilterButton) {
-      event.preventDefault();
-      store.situationsView.situationsStatusFilter = String(situationsStatusFilterButton.dataset.situationsStatusFilter || "open").toLowerCase() === "closed" ? "closed" : "open";
-      rerenderPanels();
-      return;
-    }
-
-    const verdictBtn = event.target.closest("#verdictHeadBtn");
-    if (verdictBtn) {
-      event.preventDefault();
-      event.stopPropagation();
-
-      const currentBtn = root.querySelector("#verdictHeadBtn");
-      const currentDropdown = root.querySelector("#verdictHeadDropdown");
-      if (!currentBtn || !currentDropdown) return;
-
-      const isOpen = currentDropdown.classList.contains("gh-menu--open");
-      currentDropdown.classList.toggle("gh-menu--open", !isOpen);
-      currentBtn.setAttribute("aria-expanded", String(!isOpen));
-      return;
-    }
-
-    const verdictItem = event.target.closest("#verdictHeadDropdown [data-verdict]");
-    if (verdictItem) {
-      event.preventDefault();
-      event.stopPropagation();
-
-      const verdict = String(verdictItem.dataset.verdict || "ALL").toUpperCase();
-      store.situationsView.verdictFilter = verdict;
-
-      const currentBtn = root.querySelector("#verdictHeadBtn");
-      const currentDropdown = root.querySelector("#verdictHeadDropdown");
-      if (currentDropdown) currentDropdown.classList.remove("gh-menu--open");
-      if (currentBtn) currentBtn.setAttribute("aria-expanded", "false");
-
-      rerenderPanels();
-      return;
-    }
-
-    const verdictDropdown = root.querySelector("#verdictHeadDropdown");
-    const currentBtn = root.querySelector("#verdictHeadBtn");
-
-    if (
-      verdictDropdown &&
-      currentBtn &&
-      !event.target.closest("#verdictHeadBtn") &&
-      !event.target.closest("#verdictHeadDropdown")
-    ) {
-      verdictDropdown.classList.remove("gh-menu--open");
-      currentBtn.setAttribute("aria-expanded", "false");
-    }
-
-    const expandBtn = event.target.closest("#detailsExpand");
-    if (expandBtn) {
-      event.preventDefault();
-      openDetailsModal();
-      return;
-    }
-
-    const toggleSituation = event.target.closest(".js-toggle-situation");
-    if (toggleSituation) {
-      event.preventDefault();
-      event.stopPropagation();
-      const situationId = String(toggleSituation.dataset.situationId || "");
-      if (store.situationsView.expandedSituations.has(situationId)) {
-        store.situationsView.expandedSituations.delete(situationId);
-      } else {
-        store.situationsView.expandedSituations.add(situationId);
-      }
-      rerenderPanels();
-      return;
-    }
-
-    const toggleSujet = event.target.closest(".js-toggle-sujet");
-    if (toggleSujet) {
-      event.preventDefault();
-      event.stopPropagation();
-      const sujetId = String(toggleSujet.dataset.sujetId || "");
-      if (store.situationsView.expandedSujets.has(sujetId)) {
-        store.situationsView.expandedSujets.delete(sujetId);
-      } else {
-        store.situationsView.expandedSujets.add(sujetId);
-      }
-      rerenderPanels();
-      return;
-    }
-
-    const titleTrigger = event.target.closest(".js-row-title-trigger");
-    if (titleTrigger) {
-      event.preventDefault();
-      const entityType = String(titleTrigger.dataset.rowEntityType || "");
-      const entityId = String(titleTrigger.dataset.rowEntityId || "");
-      if (entityType === "sujet") {
-        selectSujet(entityId);
-        return;
-      }
-      if (entityType === "situation") {
-        selectSituation(entityId);
-        return;
-      }
-      if (entityType === "avis") {
-        selectAvis(entityId);
-      }
-    }
-  });
-}
-
-function renderSituationsAddAction() {
-  return renderGhActionButton({
-    id: "situationsAddAction",
+function renderDocumentsToolbar() {
+  const addButton = renderGhActionButton({
+    id: "documentsAddSplit",
     label: "Ajouter",
-    tone: "primary",
-    size: "md",
-    mainActionMode: "first-item",
+    tone: "default",
+    mainAction: "add-documents",
     items: [
-      {
-        label: "Ajouter une situation",
-        action: "add-situation"
-      },
-      {
-        label: "Ajouter un sujet",
-        action: "add-sujet"
-      }
+      { label: "Ajouter des documents", action: "add-documents" },
+      { label: "Ajouter un dossier", action: "add-folder" },
+      { separator: true },
+      { label: "Créer un rapport", action: "create-report" }
     ]
   });
-}
 
-function renderSituationsViewHeaderHtml() {
-  const leftHtml = [
-    renderProjectTableToolbarGroup({
-      html: renderProjectTableToolbarMeta({
-        id: "situationsHeaderCounts",
-        text: "—",
-        className: "issues-totals mono"
-      })
+  const documentsButton = renderGhActionButton({
+    id: "documentsActionsSplit",
+    label: "Documents",
+    icon: getLargeDocumentIconSvg(),
+    tone: "primary",
+    mainAction: "download-zip",
+    items: [
+      { label: "Télécharger le dossier ZIP", action: "download-zip" }
+    ]
+  });
+
+  const enabledPhases = getEnabledProjectPhasesCatalog();
+
+  const leftHtml = renderProjectTableToolbarGroup({
+    html: renderProjectTableToolbarSelect({
+      id: "documentsPhase",
+      value: docsViewState.selectedPhase,
+      icon: getBranchIconSvg(),
+      options: enabledPhases.map((phase) => ({
+        value: phase.code,
+        label: `${phase.code} - ${phase.label}`
+      }))
     })
-  ].join("");
+  });
 
   const rightHtml = [
-    renderProjectTableToolbarGroup({
-      html: renderProjectTableToolbarSearch({
-        id: "situationsSearch",
-        value: String(store.situationsView.search || ""),
-        placeholder: "topic / EC8 / mot-clé…"
-      })
-    }),
-    renderProjectTableToolbarGroup({
-      html: renderSituationsAddAction()
-    })
+    renderProjectTableToolbarGroup({ html: addButton }),
+    renderProjectTableToolbarGroup({ html: documentsButton })
   ].join("");
 
   return renderProjectTableToolbar({
-    className: "project-table-toolbar--situations",
+    className: "project-table-toolbar--documents",
     leftHtml,
     rightHtml
   });
 }
 
-/* =========================================================
-   Public render
-========================================================= */
 
-export function renderProjectSituations(root) {
-  ensureViewUiState();
-  ensureDrilldownDom();
-  store.situationsView.showTableOnly = true;
-  store.situationsView.displayDepth = "situations";
+function renderDocumentsCountBadge({ iconHtml = "", label = "", count = 0 } = {}) {
+  return `
+    <span class="documents-count-badge" title="${escapeHtml(`${label} : ${count}`)}">
+      <span class="documents-count-badge__icon" aria-hidden="true">${iconHtml}</span>
+      <span class="documents-count-badge__count">${escapeHtml(String(count))}</span>
+    </span>
+  `;
+}
 
-  root.className = "project-shell__content";
-
-  setProjectViewHeader({
-    contextLabel: "Situations",
-    variant: "situations",
-    toolbarHtml: ""
+function renderDocumentStatsCell(doc) {
+  const statsMap = getDocumentStatsMap({
+    getSituationStatus: getEffectiveSituationStatus,
+    getSujetStatus: getEffectiveSujetStatus,
+    getAvisVerdict: getEffectiveAvisVerdict
   });
+  const stats = statsMap.get(doc.id) || {
+    openSituations: 0,
+    openSujets: 0,
+    avisVerdicts: { F: 0, S: 0, D: 0, HM: 0, PM: 0, SO: 0 }
+  };
 
-  const headerRoot = document.getElementById("projectViewHeaderHost");
-  const toolbarHost = document.getElementById("situationsToolbarHost");
-  const data = store.situationsView.data || [];
-  const firstSituationId = data[0]?.id || null;
+  return `
+    <div class="documents-repo__stats" aria-label="Compteurs liés au document">
+      ${renderDocumentsCountBadge({ iconHtml: svgIcon("issue-opened"), label: "Situations ouvertes", count: stats.openSituations })}
+      ${renderDocumentsCountBadge({ iconHtml: svgIcon("issue-opened"), label: "Sujets ouverts", count: stats.openSujets })}
+      ${renderDocumentsCountBadge({ iconHtml: renderStateDot("F"), label: "Avis F", count: stats.avisVerdicts.F })}
+      ${renderDocumentsCountBadge({ iconHtml: renderStateDot("S"), label: "Avis S", count: stats.avisVerdicts.S })}
+      ${renderDocumentsCountBadge({ iconHtml: renderStateDot("D"), label: "Avis D", count: stats.avisVerdicts.D })}
+      ${renderDocumentsCountBadge({ iconHtml: renderStateDot("HM"), label: "Avis HM", count: stats.avisVerdicts.HM })}
+      ${renderDocumentsCountBadge({ iconHtml: renderStateDot("PM"), label: "Avis PM", count: stats.avisVerdicts.PM })}
+      ${renderDocumentsCountBadge({ iconHtml: renderStateDot("SO"), label: "Avis SO", count: stats.avisVerdicts.SO })}
+    </div>
+  `;
+}
 
-  if (!store.situationsView.selectedSituationId && firstSituationId) {
-    store.situationsView.selectedSituationId = firstSituationId;
-  }
-  if (!store.situationsView.expandedSituations.size && firstSituationId) {
-    store.situationsView.expandedSituations.add(firstSituationId);
-  }
+function renderRepoDocumentRow(doc) {
+  const decoratedDoc = decorateDocumentWithPhase(doc);
+  const isPdf = isPdfDocument(decoratedDoc);
+  const isPreviewablePdf = canPreviewPdf(decoratedDoc);
 
-  if (toolbarHost) {
-    toolbarHost.innerHTML = `
-      <div class="project-situations__table-toolbar project-page-shell project-page-shell--toolbar">
-        ${renderSituationsViewHeaderHtml()}
+  return `
+    <div
+      class="documents-repo__row documents-repo__row--file${isPdf ? " documents-repo__row--pdf" : ""}${isPreviewablePdf ? " is-clickable" : ""}"
+      data-document-id="${escapeHtml(decoratedDoc.id || "")}"
+      ${isPreviewablePdf ? 'role="button" tabindex="0" aria-label="Ouvrir l’aperçu du PDF"' : ""}
+    >
+      <div class="documents-repo__cell documents-repo__cell--name">
+        <span class="documents-repo__icon documents-repo__icon--document">${getDocumentIconSvg()}</span>
+        <button type="button" class="documents-repo__name documents-repo__name-trigger js-document-title-trigger" data-document-id="${escapeHtml(decoratedDoc.id || "")}">${escapeHtml(decoratedDoc.name)}</button>
       </div>
-    `;
+      <div class="documents-repo__cell documents-repo__cell--message">
+        <div class="documents-repo__message-main">${escapeHtml(decoratedDoc.note || "Document prêt pour l'analyse")}</div>
+        <div class="documents-repo__message-meta">${escapeHtml(`${decoratedDoc.phaseCode}${decoratedDoc.phaseLabel ? ` - ${decoratedDoc.phaseLabel}` : ""}`)}</div>
+      </div>
+      <div class="documents-repo__cell documents-repo__cell--date">${escapeHtml(decoratedDoc.updatedAt || "À l'instant")}</div>
+      <div class="documents-repo__cell documents-repo__cell--stats">${renderDocumentStatsCell(decoratedDoc)}</div>
+    </div>
+  `;
+}
+
+function getReportTitle() {
+  return `Rapport chrono n° ${docsViewState.reportNumber}`;
+}
+
+function formatReportDate(value = new Date()) {
+  return new Intl.DateTimeFormat("fr-FR", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric"
+  }).format(value);
+}
+
+function getReportAuthorName() {
+  return String(store.user?.name || "demo");
+}
+
+function getEntitySummary(entity = null) {
+  const raw = entity?.raw || {};
+  return String(raw.summary || raw.message || raw.comment || raw.reasoning || raw.analysis || entity?.title || "Aucune synthèse disponible.");
+}
+
+function getEntityReferenceLine(entity = null) {
+  const refs = resolveDocumentRefs(Array.isArray(entity?.document_ref_ids) ? entity.document_ref_ids : [])
+    .map((doc) => decorateDocumentWithPhase(doc))
+    .filter(Boolean);
+
+  if (!refs.length) {
+    return "Références documentaires : —";
   }
 
-  root.innerHTML = `
-    <section class="project-simple-page project-simple-page--settings">
-      <div class="project-simple-scroll" id="projectSituationsScroll">
-        <div class="settings-content project-page-shell project-page-shell--content">
-          <section class="gh-panel gh-panel--results" aria-label="Results">
-            <div id="situationsPanelHost"></div>
-          </section>
+  return `Références documentaires : ${refs.map((doc) => `${doc.name}${doc.phaseCode ? ` (${doc.phaseCode})` : ""}`).join(" · ")}`;
+}
+
+function normalizeWorkflowStatus(status = "open") {
+  const value = String(status || "open").trim().toLowerCase();
+  if (["closed", "close", "ferme", "fermé"].includes(value)) return "fermé";
+  if (["reopened", "reopen", "réouvert", "reopenend"].includes(value)) return "réouvert";
+  return "ouvert";
+}
+
+function isHumanValidated(entity = null) {
+  return String(entity?.review_state || "pending").toLowerCase() === "validated";
+}
+
+function shouldIncludeInReport(entity = null) {
+  if (!entity) return false;
+  return !entity.is_published || !!entity.has_changes_since_publish;
+}
+
+function buildReportPreviewItems() {
+  const situations = Array.isArray(store.situationsView?.data) ? store.situationsView.data : [];
+  const items = [];
+
+  for (const situation of situations) {
+    const includedSituation = shouldIncludeInReport(situation);
+    const includedSujets = [];
+
+    for (const sujet of situation.sujets || []) {
+      const includedSujet = shouldIncludeInReport(sujet);
+      const includedAvis = (sujet.avis || []).filter((avis) => shouldIncludeInReport(avis));
+
+      if (includedSujet || includedAvis.length) {
+        includedSujets.push({ sujet, includedSujet, includedAvis });
+      }
+    }
+
+    if (!includedSituation && !includedSujets.length) continue;
+
+    items.push({
+      key: `situation:${situation.id}`,
+      entityType: "situation",
+      entity: situation,
+      number: situation.id,
+      stateLabel: normalizeWorkflowStatus(getEffectiveSituationStatus(situation.id)),
+      title: situation.title || situation.id,
+      depth: 0
+    });
+
+    for (const { sujet, includedSujet, includedAvis } of includedSujets) {
+      if (includedSujet || includedAvis.length) {
+        items.push({
+          key: `sujet:${sujet.id}`,
+          entityType: "sujet",
+          entity: sujet,
+          number: sujet.id,
+          stateLabel: normalizeWorkflowStatus(getEffectiveSujetStatus(sujet.id)),
+          title: sujet.title || sujet.id,
+          depth: 1
+        });
+      }
+
+      for (const avis of includedAvis) {
+        items.push({
+          key: `avis:${avis.id}`,
+          entityType: "avis",
+          entity: avis,
+          number: avis.id,
+          stateLabel: getEffectiveAvisVerdict(avis.id),
+          title: avis.title || avis.id,
+          depth: 2
+        });
+      }
+    }
+  }
+
+  return items;
+}
+
+function renderReportPreviewItem(item) {
+  const entity = item.entity || null;
+  const invalidClass = isHumanValidated(entity) ? "" : " documents-report-item--needs-review";
+  const depth = Number.isFinite(item.depth) ? Math.max(0, Math.min(2, item.depth)) : 0;
+
+  return `
+    <article class="documents-report-item documents-report-item--depth-${depth}${invalidClass}" data-report-entity-type="${escapeHtml(item.entityType)}">
+      <div class="documents-report-item__line documents-report-item__line--title">
+        <span class="documents-report-item__number">#${escapeHtml(String(item.number || ""))}</span>
+        <span class="documents-report-item__state">${escapeHtml(String(item.stateLabel || ""))}</span>
+        <span class="documents-report-item__title">${escapeHtml(String(item.title || "Sans titre"))}</span>
+      </div>
+      <div class="documents-report-item__line documents-report-item__line--description">
+        ${escapeHtml(getEntitySummary(entity))}
+      </div>
+      <div class="documents-report-item__line documents-report-item__line--references">
+        ${escapeHtml(getEntityReferenceLine(entity))}
+      </div>
+    </article>
+  `;
+}
+
+function renderReportPreviewView() {
+  const previewItems = buildReportPreviewItems();
+  const reportTitle = getReportTitle();
+  const projectName = String(store.projectForm?.projectName || "Projet");
+  const breadcrumb = `${projectName} / Documents / ${reportTitle}`;
+  const authorName = getReportAuthorName();
+
+  return `
+    <section class="project-simple-page project-simple-page--documents">
+      <div class="project-simple-scroll project-simple-scroll--documents" id="projectDocumentsScroll">
+        <div class="documents-shell documents-shell--report" id="projectDocumentScroll">
+          ${renderDocumentsActivityBanner()}
+
+          <div class="documents-report">
+            <div class="documents-report__path">${escapeHtml(breadcrumb)}</div>
+
+            <section class="documents-report-table">
+              <header class="documents-report-table__header">
+                <div class="documents-report-table__author">${escapeHtml(authorName)}</div>
+                <div class="documents-report-table__actions">
+                  <button type="button" class="gh-btn" id="documentsReportBackBtn">Annuler</button>
+                  <button type="button" class="gh-btn gh-btn--validate" disabled>Valider</button>
+                  <button type="button" class="gh-btn" disabled>Modifier</button>
+                  <button type="button" class="gh-btn" disabled>Diffuser</button>
+                </div>
+              </header>
+
+              <div class="documents-report-table__body">
+                <header class="documents-report__hero">
+                  <div class="documents-report__hero-brand">
+                    <div class="documents-report__logo-wrap">${getSocotecLogoSvg()}</div>
+                    <div class="documents-report__hero-copy">
+                      <h1 class="documents-report__title">${escapeHtml(reportTitle)}</h1>
+                      <div class="documents-report__meta">Intervenant : ${escapeHtml(authorName)}</div>
+                      <div class="documents-report__meta">Date du rapport : ${escapeHtml(formatReportDate())}</div>
+                    </div>
+                  </div>
+                </header>
+
+                <div class="documents-report__page-break" aria-hidden="true"></div>
+
+                ${previewItems.length
+                  ? previewItems.map(renderReportPreviewItem).join("")
+                  : `<div class="documents-report__empty">Aucun élément nouveau ou modifié à inclure dans ce rapport.</div>`}
+              </div>
+            </section>
+          </div>
         </div>
       </div>
     </section>
   `;
+}
 
-  rerenderPanels();
-  syncSituationsPrimaryScrollSource();
-  bindSituationsEvents(root, headerRoot);
-  bindProjectSituationsRunbar(toolbarHost || root || document);
-  bindModalEvents();
-  updateDetailsModal();
+function renderPdfPreviewView() {
+  const projectName = String(store.projectForm?.projectName || "Projet");
+  const documentItem = decorateDocumentWithPhase(getSelectedPdfDocument());
 
-  syncProjectSituationsRunbar({
-    run_id: store.ui?.runId || "",
-    status: store.ui?.systemStatus?.state || "idle",
-    label: store.ui?.systemStatus?.label || "",
-    meta: store.ui?.systemStatus?.meta || "",
-    isBusy: store.ui?.systemStatus?.state === "running"
+  if (!documentItem) {
+    return renderDocumentsListView();
+  }
+
+  const breadcrumb = `${projectName} / Documents / ${documentItem.name}`;
+  const metaLine = [
+    documentItem.phaseCode ? `${documentItem.phaseCode}${documentItem.phaseLabel ? ` - ${documentItem.phaseLabel}` : ""}` : "",
+    documentItem.updatedAt || ""
+  ].filter(Boolean).join(" · ");
+  const previewUrl = getProjectDocumentPreviewUrl(documentItem);
+  const isLocalPreview = !String(documentItem.previewUrl || "").trim() && !!String(previewUrl || "").trim();
+
+  return `
+    <section class="project-simple-page project-simple-page--documents">
+      <div class="project-simple-scroll project-simple-scroll--documents" id="projectDocumentsScroll">
+        <div class="documents-shell documents-shell--report" id="projectDocumentScroll">
+          ${renderDocumentsActivityBanner()}
+
+          <div class="documents-report">
+            <div class="documents-report__path">${escapeHtml(breadcrumb)}</div>
+
+            <section class="documents-report-table documents-report-table--pdf">
+              <header class="documents-report-table__header">
+                <div class="documents-report-table__author">${escapeHtml(documentItem.name || "Document")}</div>
+                <div class="documents-report-table__actions">
+                  <button type="button" class="gh-btn" id="documentsPdfBackBtn">Annuler</button>
+                </div>
+              </header>
+
+              <div class="documents-report-table__body documents-report-table__body--pdf">
+                <div class="documents-pdf-viewer__meta">
+                  <div class="documents-pdf-viewer__title-wrap">
+                    <div class="documents-pdf-viewer__title">${escapeHtml(documentItem.name || "Document")}</div>
+                    <div class="documents-pdf-viewer__subtitle">${escapeHtml(metaLine || "Document PDF")}</div>
+                  </div>
+                  ${isLocalPreview
+                    ? `<div class="documents-pdf-viewer__hint">Prévisualisation locale temporaire en mémoire avant branchement Supabase.</div>`
+                    : ""}
+                </div>
+
+                <section class="documents-pdf-viewer">
+                  ${previewUrl
+                    ? `
+                      <object
+                        class="documents-pdf-viewer__frame"
+                        type="application/pdf"
+                        data="${escapeHtml(previewUrl)}#toolbar=1&navpanes=0"
+                      >
+                        <div class="documents-pdf-viewer__fallback">
+                          <p>La prévisualisation intégrée du PDF n'est pas disponible dans ce navigateur.</p>
+                          <a class="gh-btn gh-btn--primary" href="${escapeHtml(previewUrl)}" target="_blank" rel="noopener noreferrer">Ouvrir le PDF</a>
+                        </div>
+                      </object>
+                    `
+                    : `
+                      <div class="documents-pdf-viewer__fallback documents-pdf-viewer__fallback--empty">
+                        <p>Impossible de générer la prévisualisation locale de ce PDF pour cette session.</p>
+                      </div>
+                    `}
+                </section>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+function renderDocumentsListView() {
+  const bodyHtml = `
+    ${DOCUMENT_FOLDERS.map((folder) => `
+      <div class="documents-repo__row">
+        <div class="documents-repo__cell documents-repo__cell--name">
+          <span class="documents-repo__icon">${getFolderIconSvg()}</span>
+          <span class="documents-repo__name">${escapeHtml(folder.name)}</span>
+        </div>
+        <div class="documents-repo__cell documents-repo__cell--message">
+          ${escapeHtml(folder.note)}
+        </div>
+        <div class="documents-repo__cell documents-repo__cell--date">—</div>
+        <div class="documents-repo__cell documents-repo__cell--stats">—</div>
+      </div>
+    `).join("")}
+    ${getProjectDocuments().map(renderRepoDocumentRow).join("")}
+  `;
+
+  return `
+    <section class="project-simple-page project-simple-page--documents">
+      <div class="project-simple-scroll project-simple-scroll--documents" id="projectDocumentsScroll">
+        <div class="documents-shell" id="projectDocumentScroll">
+          ${renderDocumentsToolbar()}
+          ${renderDocumentsActivityBanner()}
+
+          ${renderDataTableShell({
+            className: "documents-repo",
+            gridTemplate: getDocumentsTableGridTemplate(),
+            headHtml: renderDocumentsTableHeadHtml(),
+            bodyHtml
+          })}
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+function renderUploadProgress() {
+  if (!docsViewState.file) return "";
+
+  if (docsViewState.isUploading) {
+    return `
+      <div class="documents-upload-progress">
+        <div class="documents-upload-progress__file">
+          <span class="documents-upload-progress__icon">${getLargeDocumentIconSvg()}</span>
+          <span class="documents-upload-progress__name">${escapeHtml(docsViewState.file.name)}</span>
+        </div>
+        <div class="documents-upload-progress__meta">
+          Chargement du fichier... ${docsViewState.uploadProgress}%
+        </div>
+        <div class="documents-upload-progress__bar">
+          <div class="documents-upload-progress__bar-fill" style="width:${docsViewState.uploadProgress}%"></div>
+        </div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="documents-uploaded-file">
+      <div class="documents-uploaded-file__left">
+        <span class="documents-uploaded-file__icon">${getLargeDocumentIconSvg()}</span>
+        <span class="documents-uploaded-file__name">${escapeHtml(docsViewState.file.name)}</span>
+      </div>
+      <button
+        type="button"
+        class="documents-uploaded-file__remove"
+        id="documentsRemoveFileBtn"
+        aria-label="Retirer le fichier"
+        title="Retirer le fichier"
+      >
+        ${getRemoveIconSvg()}
+      </button>
+    </div>
+  `;
+}
+
+function canSubmitUpload() {
+  if (!docsViewState.file || docsViewState.isUploading) return false;
+  if (docsViewState.depositMode === "proposal") {
+    return docsViewState.proposalName.trim().length > 0;
+  }
+  return true;
+}
+
+function renderProposalField() {
+  if (docsViewState.depositMode !== "proposal") return "";
+
+  return `
+    <div class="documents-form-field documents-form-field--proposal">
+      <label for="documentsProposalNameInput">Nom de la modification</label>
+      ${renderGhInput({
+        id: "documentsProposalNameInput",
+        value: docsViewState.proposalName,
+        placeholder: "Ex. Ajustement du visa sur note parasismique V03",
+        icon: getProposalIconSvg(),
+        className: "documents-gh-input"
+      })}
+    </div>
+  `;
+}
+
+function renderUploadView() {
+  const isBusy = docsViewState.isUploading ? "is-busy" : "";
+  const isDisabled = docsViewState.isUploading ? "disabled" : "";
+  const submitLabel = docsViewState.depositMode === "proposal"
+    ? "Proposer la modification"
+    : "Valider";
+
+  return `
+    <section class="project-simple-page project-simple-page--documents">
+      <div class="project-simple-scroll project-simple-scroll--documents" id="projectDocumentsScroll">
+        ${renderDocumentsActivityBanner()}
+        <div class="documents-shell documents-shell--upload" id="projectDocumentScroll">
+          <div class="documents-upload-layout">
+            <section class="documents-dropzone ${isBusy}" id="documentsDropzone">
+              <input id="documentsFileInput" type="file" hidden accept=".pdf,.doc,.docx,.xls,.xlsx,.dwg,.zip,image/*">
+              <div class="documents-dropzone__inner">
+                <div class="documents-dropzone__icon">
+                  ${getLargeDocumentIconSvg()}
+                </div>
+                <h3>Glissez vos fichiers ici pour les ajouter au projet</h3>
+                <p>
+                  Ou
+                  <button type="button" class="documents-dropzone__link" id="documentsChooseBtn" ${isDisabled}>choisissez votre fichier</button>
+                </p>
+              </div>
+            </section>
+
+            ${renderUploadProgress()}
+
+            <div class="documents-commit-shell">
+              <div class="documents-commit-shell__avatar">
+                <img
+                  src="assets/images/260093543.png"
+                  alt="Avatar"
+                  class="documents-commit-shell__avatar-img"
+                >
+              </div>
+
+              <section class="documents-commit-card">
+                <div class="documents-commit-card__title">Déposer le document</div>
+
+                <div class="documents-form-field">
+                  ${renderGhInput({
+                    id: "documentsTitleInput",
+                    value: docsViewState.title,
+                    placeholder: "Ex. Note d'hypothèses parasismiques - version 03",
+                    icon: getDocumentIconSvg()
+                  })}
+                </div>
+
+                <div class="documents-form-field">
+                  <textarea
+                    id="documentsDescriptionInput"
+                    class="gh-input gh-textarea"
+                    placeholder="Décrivez brièvement le contenu, le contexte ou les points d'attention."
+                  >${escapeHtml(docsViewState.description)}</textarea>
+                </div>
+
+                <div class="documents-radio-group">
+                  <label class="documents-radio-option">
+                    <input type="radio" name="documentsDepositMode" value="direct" ${docsViewState.depositMode === "direct" ? "checked" : ""}>
+                    <span class="documents-radio-option__icon">${getCommitIconSvg()}</span>
+                    <span class="documents-radio-option__text">
+                      Déposer directement les documents
+                    </span>
+                  </label>
+
+                  <label class="documents-radio-option">
+                    <input type="radio" name="documentsDepositMode" value="proposal" ${docsViewState.depositMode === "proposal" ? "checked" : ""}>
+                    <span class="documents-radio-option__icon">${getProposalIconSvg()}</span>
+                    <span class="documents-radio-option__text">
+                      Créer une proposition avec demande de visa
+                    </span>
+                  </label>
+                </div>
+
+                ${renderProposalField()}
+              </section>
+
+              <section class="documents-commit-card documents-commit-card-actions">
+                <div class="documents-commit-card__actions">
+                  <button type="button" class="gh-btn gh-btn--validate" id="documentsSubmitBtn" ${canSubmitUpload() ? "" : "disabled"}>${submitLabel}</button>
+                  <button type="button" class="gh-btn" id="documentsCancelBtn">Annuler</button>
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+function stopUploadSimulation() {
+  if (docsViewState.uploadTimer) {
+    clearInterval(docsViewState.uploadTimer);
+    docsViewState.uploadTimer = null;
+  }
+}
+
+function resetUploadState() {
+  stopUploadSimulation();
+  docsViewState.file = null;
+  docsViewState.isUploading = false;
+  docsViewState.uploadProgress = 0;
+  docsViewState.title = "";
+  docsViewState.description = "";
+  docsViewState.depositMode = "direct";
+  docsViewState.proposalName = "";
+
+  const fileInput = document.getElementById("documentsFileInput");
+  if (fileInput) {
+    fileInput.value = "";
+  }
+}
+
+function simulateUpload(root, file) {
+  stopUploadSimulation();
+  docsViewState.file = file;
+  docsViewState.isUploading = true;
+  docsViewState.uploadProgress = 0;
+  renderProjectDocuments(root);
+
+  docsViewState.uploadTimer = setInterval(() => {
+    const increment = docsViewState.uploadProgress < 70 ? 9 : 4;
+    docsViewState.uploadProgress = Math.min(100, docsViewState.uploadProgress + increment);
+
+    if (docsViewState.uploadProgress >= 100) {
+      stopUploadSimulation();
+      docsViewState.isUploading = false;
+      docsViewState.uploadProgress = 100;
+    }
+
+    renderProjectDocuments(root);
+  }, 120);
+}
+
+function closeUploadView(root) {
+  resetUploadState();
+  docsViewState.mode = "list";
+  renderProjectDocuments(root);
+}
+
+function closeReportPreview(root) {
+  docsViewState.mode = "list";
+  renderProjectDocuments(root);
+}
+
+function openReportPreview(root) {
+  docsViewState.mode = "report-preview";
+  renderProjectDocuments(root);
+}
+
+function openPdfPreview(root, documentId) {
+  const documentItem = getProjectDocumentById(documentId);
+  if (!canPreviewPdf(documentItem)) return;
+  setActiveProjectDocument(documentItem.id);
+  docsViewState.mode = "pdf-preview";
+  renderProjectDocuments(root);
+}
+
+function closePdfPreview(root) {
+  docsViewState.mode = "list";
+  renderProjectDocuments(root);
+}
+
+function renderFromSelectedFile(root, file) {
+  if (!file) return;
+  if (!docsViewState.title) {
+    docsViewState.title = file.name.replace(/\.[^.]+$/, "");
+  }
+  simulateUpload(root, file);
+}
+
+function buildRepoDocumentFromState() {
+  const title = docsViewState.title.trim();
+  const description = docsViewState.description.trim();
+  const baseNote = title || description || "Document prêt pour l'analyse";
+  const enabledPhases = getEnabledProjectPhasesCatalog();
+  const currentPhase = enabledPhases.find((item) => item.code === docsViewState.selectedPhase) || null;
+  const fileName = docsViewState.file?.name || "Document";
+  const mimeType = String(docsViewState.file?.type || "").trim();
+  const extension = getFileExtension(fileName);
+  const previewUrl = "";
+
+  return {
+    name: fileName,
+    title: title || fileName || "Document",
+    note: baseNote,
+    updatedAt: "À l'instant",
+    phaseCode: currentPhase?.code || docsViewState.selectedPhase || "APS",
+    phaseLabel: currentPhase?.label || "",
+    fileName,
+    mimeType,
+    extension,
+    previewUrl,
+    localFile: mimeType === "application/pdf" ? docsViewState.file : null
+  };
+}
+
+function triggerAutoAnalysisAfterDirectUpload(root, document = null) {
+  const documentName = document?.name || "";
+  if (!shouldAutoRunAnalysisAfterUpload()) {
+    setDocumentsActivity({
+      tone: "info",
+      title: "Document déposé",
+      message: "Le dépôt a été enregistré. L’analyse automatique n’est pas activée pour ce projet."
+    });
+    return;
+  }
+
+  if (isAnalysisRunning()) {
+    const currentRun = getCurrentAnalysisRunMeta();
+    setDocumentsActivity({
+      tone: "warning",
+      title: "Document déposé",
+      message: `Le dépôt a été enregistré, mais l’analyse automatique n’a pas été relancée car un traitement est déjà en cours${currentRun.runId ? ` (${currentRun.runId})` : ""}.`
+    });
+    return;
+  }
+
+  setDocumentsActivity({
+    tone: "success",
+    title: "Document déposé",
+    message: "Le dépôt a été enregistré et l’analyse parasismique automatique a été lancée."
   });
+
+  runAnalysis({
+    triggerType: "document-upload",
+    triggerLabel: "Dépôt de document",
+    documentName,
+    documentIds: document?.id ? [document.id] : [],
+    summary: "Analyse déclenchée automatiquement après dépôt réussi d’un document."
+  });
+
+  renderProjectDocuments(root);
+}
+
+function commitDirectDocument(root) {
+  if (!docsViewState.file) return;
+
+  const documentFile = docsViewState.file;
+  const repoDocument = addProjectDocument(buildRepoDocumentFromState());
+
+  store.projectForm.pdfFile = documentFile;
+
+  closeUploadView(root);
+  triggerAutoAnalysisAfterDirectUpload(root, repoDocument);
+}
+
+function commitProposal(root) {
+  if (!docsViewState.file) return;
+
+  const fileName = docsViewState.file.name;
+  const proposalTitle = docsViewState.proposalName.trim();
+  const description = docsViewState.description.trim();
+
+  createProjectProposal({
+    title: proposalTitle,
+    fileName,
+    description,
+    status: "open",
+    needsVisa: true,
+    updatedAt: "À l'instant"
+  });
+
+  closeUploadView(root);
+
+  setDocumentsActivity({
+    tone: "success",
+    title: "Proposition enregistrée",
+    message: `La proposition "${proposalTitle}" a été créée avec demande de visa. Elle est désormais visible dans l’onglet Propositions.`
+  });
+
+  renderProjectDocuments(root);
+}
+
+function handleSubmit(root) {
+  if (!canSubmitUpload()) return;
+  if (docsViewState.depositMode === "proposal") {
+    commitProposal(root);
+    return;
+  }
+  commitDirectDocument(root);
+}
+
+function bindDocumentsSplitActions(root) {
+  bindGhActionButtons();
+
+  bindGhSelectMenus(document, {
+    onChange: (id, value) => {
+      if (id !== "documentsPhase") return;
+      docsViewState.selectedPhase = String(value || docsViewState.selectedPhase);
+      renderProjectDocuments(root);
+    }
+  });
+
+  const addSplit = document.querySelector('[data-action-id="documentsAddSplit"]');
+  if (addSplit) {
+    initGhActionButton(addSplit, { mainAction: "add-documents" });
+    addSplit.addEventListener("ghaction:action", (event) => {
+      const action = event.detail?.action || "";
+      if (action === "add-documents") {
+        docsViewState.mode = "upload";
+        renderProjectDocuments(root);
+      }
+      if (action === "add-folder") {
+        // placeholder métier
+      }
+      if (action === "create-report") {
+        openReportPreview(root);
+      }
+    });
+  }
+
+  const documentsSplit = document.querySelector('[data-action-id="documentsActionsSplit"]');
+  if (documentsSplit) {
+    initGhActionButton(documentsSplit, { mainAction: "download-zip" });
+    documentsSplit.addEventListener("ghaction:action", (event) => {
+      const action = event.detail?.action || "";
+      if (action === "download-zip") {
+        // placeholder métier
+      }
+    });
+  }
+}
+
+function bindDocumentsView(root) {
+  const scrollEl = document.getElementById("projectDocumentsScroll");
+  registerProjectPrimaryScrollSource(scrollEl);
+
+  bindDocumentsSplitActions(root);
+
+    const activityCloseBtn = document.getElementById("documentsActivityCloseBtn");
+  if (activityCloseBtn) {
+    activityCloseBtn.addEventListener("click", () => {
+      clearDocumentsActivity();
+      renderProjectDocuments(root);
+    });
+  }
+
+  const submitBtn = document.getElementById("documentsSubmitBtn");
+  const syncSubmitState = () => {
+    if (!submitBtn) return;
+    submitBtn.disabled = !canSubmitUpload();
+  };
+
+  syncSubmitState();
+
+  const handleAnalysisStateChanged = () => {
+    if (docsViewState.mode !== "list") return;
+    renderProjectDocuments(root);
+  };
+
+  document.removeEventListener("analysisStateChanged", handleAnalysisStateChanged);
+  document.addEventListener("analysisStateChanged", handleAnalysisStateChanged, { once: true });
+
+  const cancelBtn = document.getElementById("documentsCancelBtn");
+  if (cancelBtn) {
+    cancelBtn.addEventListener("click", () => {
+      closeUploadView(root);
+    });
+  }
+
+  const reportBackBtn = document.getElementById("documentsReportBackBtn");
+  if (reportBackBtn) {
+    reportBackBtn.addEventListener("click", () => {
+      closeReportPreview(root);
+    });
+  }
+
+  const pdfBackBtn = document.getElementById("documentsPdfBackBtn");
+  if (pdfBackBtn) {
+    pdfBackBtn.addEventListener("click", () => {
+      closePdfPreview(root);
+    });
+  }
+
+  document.querySelectorAll(".js-document-title-trigger[data-document-id]").forEach((trigger) => {
+    const documentId = trigger.getAttribute("data-document-id") || "";
+    const documentItem = getProjectDocumentById(documentId);
+    if (!canPreviewPdf(documentItem)) return;
+
+    trigger.addEventListener("click", (event) => {
+      event.preventDefault();
+      openPdfPreview(root, documentId);
+    });
+  });
+
+  if (submitBtn) {
+    submitBtn.addEventListener("click", () => {
+      if (!canSubmitUpload()) return;
+      submitBtn.disabled = true;
+      handleSubmit(root);
+    });
+  }
+
+  const chooseBtn = document.getElementById("documentsChooseBtn");
+  const fileInput = document.getElementById("documentsFileInput");
+  const dropzone = document.getElementById("documentsDropzone");
+
+  if (chooseBtn && fileInput) {
+    chooseBtn.addEventListener("click", () => {
+      if (docsViewState.isUploading) return;
+      fileInput.value = "";
+      fileInput.click();
+    });
+  }
+
+  if (fileInput) {
+    fileInput.addEventListener("change", (event) => {
+      const file = event.target.files?.[0] || null;
+      renderFromSelectedFile(root, file);
+    });
+  }
+
+  if (dropzone && fileInput) {
+    ["dragenter", "dragover"].forEach((eventName) => {
+      dropzone.addEventListener(eventName, (event) => {
+        event.preventDefault();
+        if (!docsViewState.isUploading) {
+          dropzone.classList.add("is-dragover");
+        }
+      });
+    });
+
+    ["dragleave", "drop"].forEach((eventName) => {
+      dropzone.addEventListener(eventName, (event) => {
+        event.preventDefault();
+        dropzone.classList.remove("is-dragover");
+      });
+    });
+
+    dropzone.addEventListener("drop", (event) => {
+      if (docsViewState.isUploading) return;
+      const file = event.dataTransfer?.files?.[0] || null;
+      renderFromSelectedFile(root, file);
+    });
+  }
+
+  const removeFileBtn = document.getElementById("documentsRemoveFileBtn");
+  if (removeFileBtn) {
+    removeFileBtn.addEventListener("click", () => {
+      stopUploadSimulation();
+      docsViewState.file = null;
+      docsViewState.isUploading = false;
+      docsViewState.uploadProgress = 0;
+      renderProjectDocuments(root);
+    });
+  }
+
+  const titleInput = document.getElementById("documentsTitleInput");
+  if (titleInput) {
+    titleInput.addEventListener("input", (event) => {
+      docsViewState.title = event.target.value;
+    });
+  }
+
+  const descriptionInput = document.getElementById("documentsDescriptionInput");
+  if (descriptionInput) {
+    descriptionInput.addEventListener("input", (event) => {
+      docsViewState.description = event.target.value;
+    });
+  }
+
+  const proposalNameInput = document.getElementById("documentsProposalNameInput");
+  if (proposalNameInput) {
+    proposalNameInput.addEventListener("input", (event) => {
+      docsViewState.proposalName = event.target.value;
+      const submit = document.getElementById("documentsSubmitBtn");
+      if (submit) submit.disabled = !canSubmitUpload();
+    });
+  }
+
+  document.querySelectorAll('input[name="documentsDepositMode"]').forEach((radio) => {
+    radio.addEventListener("change", (event) => {
+      docsViewState.depositMode = event.target.value;
+      renderProjectDocuments(root);
+    });
+  });
+}
+
+export function renderProjectDocuments(root) {
+  syncDocumentsSelectedPhase();
+  
+  root.className = "project-shell__content";
+
+  setProjectViewHeader({
+    contextLabel: "Documents",
+    variant: "documents"
+  });
+
+  root.innerHTML = docsViewState.mode === "upload"
+    ? renderUploadView()
+    : docsViewState.mode === "report-preview"
+      ? renderReportPreviewView()
+      : docsViewState.mode === "pdf-preview"
+        ? renderPdfPreviewView()
+        : renderDocumentsListView();
+
+  bindDocumentsView(root);
 }
