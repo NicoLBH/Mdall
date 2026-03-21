@@ -244,6 +244,23 @@ function entityDisplayLinkHtml(type, id) {
   return entityLinkHtml(type, id, escapeHtml(getEntityDisplayRef(type, id)));
 }
 
+function getVerboseAvisVerdictLabel(verdict) {
+  const value = String(verdict || "").trim().toUpperCase();
+  if (value === "F") return "Favorable";
+  if (value === "S") return "Suspendu";
+  if (value === "D") return "Défavorable";
+  if (value === "HM") return "Hors Mission";
+  if (value === "PM") return "Pour Mémoire";
+  if (value === "SO") return "Sans Objet";
+  return value || "—";
+}
+
+function renderVerboseAvisVerdictPill(verdict) {
+  const label = getVerboseAvisVerdictLabel(verdict);
+  const normalized = String(verdict || "").trim().toUpperCase() || "—";
+  return `<span class="verdict-badge verdict-${escapeHtml(normalized)}">${escapeHtml(label)}</span>`;
+}
+
 function renderVerdictHeadFilter() {
   const current = String(store.situationsView.verdictFilter || "ALL").toUpperCase();
 
@@ -2721,13 +2738,8 @@ function renderDetailsTitleWrapHtml(selection) {
   let idHtml = entityDisplayLinkHtml(selection.type, item.id);
 
   if (selection.type === "avis") {
-    badgeHtml = renderVerdictPill(getEffectiveAvisVerdict(item.id));
+    badgeHtml = renderVerboseAvisVerdictPill(getEffectiveAvisVerdict(item.id));
     const sujet = getSujetByAvisId(item.id);
-    if (sujet) {
-      probsHtml = `<div class="subissues-counts subissues-counts--problems"><span>${escapeHtml(firstNonEmpty(sujet.title, sujet.id, "Non classé"))}</span></div>`;
-    } else {
-      probsHtml = `<div class="subissues-counts subissues-counts--problems"><span>${escapeHtml(firstNonEmpty(item.agent, "system"))}</span></div>`;
-    }
   } else if (selection.type === "sujet") {
     const stats = problemVerdictStats(item);
     badgeHtml = statePill(getEffectiveSujetStatus(item.id), { reviewState: getEntityReviewMeta("sujet", item.id).review_state, entityType: "sujet" });
@@ -2761,18 +2773,13 @@ function renderDetailsTitleWrapHtml(selection) {
       </div>
     </div>
 
-    <div class="details-title-wrap details-title--compact">
-      <div class="details-title-compact">
-        <div class="details-title-compact-col1">${badgeHtml}</div>
+    <div class="details-title-wrap details-title--compact ${selection.type === "avis" ? "details-title--compact-avis" : "details-title--compact-grid"}">
+      <div class="details-title-compact ${selection.type === "avis" ? "details-title-compact--avis" : ""}">
+        ${selection.type === "avis" ? `${badgeHtml}${titleTextHtml}<span class="details-title-id mono">${idHtml}</span>` : `<div class="details-title-compact-col1">${badgeHtml}</div>
         <div class="details-title-compact-col2">
-          <div class="details-title-compact-top">
-            ${titleTextHtml}
-            <span class="details-title-id mono">${idHtml}</span>
-          </div>
-          <div class="details-title-compact-bottom">
-            ${probsHtml}${barOnlyHtml}
-          </div>
-        </div>
+          <div class="details-title-compact-top">${titleTextHtml}</div>
+          <div class="details-title-compact-bottom">${selection.type === "situation" ? probsHtml : ""}${barOnlyHtml}</div>
+        </div>`}
       </div>
     </div>
   `;
@@ -2784,7 +2791,7 @@ function renderDetailsTitleHtml(selection, options = {}) {
     return `
       <div class="details-head">
         <div class="details-head-left">
-          <div class="details-kicker mono">DÉTAILS</div>
+          <div class="details-kicker mono"></div>
           <div class="gh-panel__title">Sélectionner un élément</div>
         </div>
         <div class="details-head-right">
@@ -2798,7 +2805,7 @@ function renderDetailsTitleHtml(selection, options = {}) {
   return `
     <div class="details-head details-head--expanded">
       <div class="details-head-left">
-        <div class="details-kicker mono">DÉTAILS</div>
+        <div class="details-kicker mono"></div>
         <div class="gh-panel__title">
           ${renderDetailsTitleWrapHtml(selection)}
         </div>
@@ -3663,7 +3670,7 @@ function ensureDrilldownDom() {
     variant: "drilldown",
     ariaLabel: "Détails",
     headHtml: renderOverlayChromeHead({
-      eyebrow: "DÉTAILS",
+      eyebrow: "",
       titleId: "drilldownTitle",
       closeId: "drilldownClose",
       closeLabel: "Fermer",
