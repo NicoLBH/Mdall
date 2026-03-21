@@ -1411,10 +1411,10 @@ function renderProjectTabsFeatureCard(projectTabs) {
       description: "Affiche l’onglet Discussions pour les échanges de coordination."
     },
     {
-      id: "tabVisibilityPilotage",
-      key: PROJECT_TAB_IDS.PILOTAGE,
-      label: "Pilotage",
-      description: "Affiche l’onglet Pilotage actuellement branché sur les jalons projet."
+      id: "tabVisibilitySituations",
+      key: PROJECT_TAB_IDS.SITUATIONS,
+      label: "Situations",
+      description: "Affiche l’onglet Situations actuellement branché sur les jalons projet."
     },
     {
       id: "tabVisibilityReferentiel",
