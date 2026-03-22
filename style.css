@@ -12,6 +12,7 @@
   --accent:#58a6ff;
   --danger:#f85149;
   --success:#3fb950;
+  --blueLink:rgb(68, 147, 248);
   --fgColor-open:rgb(63, 185, 80);
   --fgColor-closed:rgb(171, 125, 248);
   --fgColor-done:rgb(171, 125, 248);
@@ -821,7 +822,7 @@ body.modal-open {
 .row-title-trigger:focus-visible,
 .documents-repo__name-trigger:hover,
 .documents-repo__name-trigger:focus-visible{
-  color:rgb(68, 147, 248);
+  color:var(--blueLink);
   text-decoration:underline;
   outline:none;
 }
@@ -6066,6 +6067,7 @@ color:#ffff;
   max-width:1216px;
   margin:0 auto;
   box-sizing:border-box;
+  width:100%
 }
 
 .project-page-shell--toolbar{
