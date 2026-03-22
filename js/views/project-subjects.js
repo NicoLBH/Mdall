@@ -55,6 +55,7 @@ import {
 } from "./ui/status-badges.js";
 import { escapeHtml } from "../utils/escape-html.js";
 import { renderSharedDetailsTitleWrap, renderSharedDetailsTitleHtml } from "./ui/detail-header.js";
+import { renderSelectMenuSection } from "./ui/select-menu.js";
 import { getSelectionDocumentRefs } from "../services/project-document-selectors.js";
 
 /* =========================================================
@@ -419,6 +420,13 @@ function ensureViewUiState() {
   if (typeof v.subjectsSubview !== "string") v.subjectsSubview = "subjects";
   if (typeof v.objectivesStatusFilter !== "string") v.objectivesStatusFilter = "open";
   if (typeof v.selectedObjectiveId !== "string") v.selectedObjectiveId = "";
+  if (!v.subjectMetaDropdown || typeof v.subjectMetaDropdown !== "object") {
+    v.subjectMetaDropdown = {
+      field: null,
+      query: "",
+      activeKey: ""
+    };
+  }
 }
 
 function currentRunKey() {
@@ -474,7 +482,10 @@ function getRunBucket() {
         sujet: {},
         situation: {}
       },
-      objectives: []
+      objectives: [],
+      subjectMeta: {
+        sujet: {}
+      }
     };
     saveHumanStore(all);
   }
@@ -498,6 +509,14 @@ function getRunBucket() {
   }
   if (!Array.isArray(bucket.objectives)) {
     bucket.objectives = [];
+    saveHumanStore(all);
+  }
+  if (!bucket.subjectMeta || typeof bucket.subjectMeta !== "object") {
+    bucket.subjectMeta = { sujet: {} };
+    saveHumanStore(all);
+  }
+  if (!bucket.subjectMeta.sujet || typeof bucket.subjectMeta.sujet !== "object") {
+    bucket.subjectMeta.sujet = {};
     saveHumanStore(all);
   }
 
@@ -540,6 +559,59 @@ function persistRunBucket(mutator) {
   mutator(bucket);
   all.runs[key] = bucket;
   saveHumanStore(all);
+}
+
+function getSubjectSidebarMeta(subjectId) {
+  const { bucket } = getRunBucket();
+  const subjectMeta = bucket?.subjectMeta?.sujet?.[subjectId] || {};
+  const objectiveIds = Array.isArray(subjectMeta.objectiveIds)
+    ? subjectMeta.objectiveIds.map((value) => String(value || "")).filter(Boolean)
+    : getObjectives()
+        .filter((objective) => Array.isArray(objective.subjectIds) && objective.subjectIds.includes(String(subjectId || "")))
+        .map((objective) => String(objective.id || ""))
+        .filter(Boolean);
+  return {
+    assignees: Array.isArray(subjectMeta.assignees) ? subjectMeta.assignees.map((value) => String(value || "")).filter(Boolean) : [],
+    labels: Array.isArray(subjectMeta.labels) ? subjectMeta.labels.map((value) => String(value || "")).filter(Boolean) : [],
+    objectiveIds,
+    relations: Array.isArray(subjectMeta.relations) ? subjectMeta.relations.map((value) => String(value || "")).filter(Boolean) : []
+  };
+}
+
+function getSubjectObjectives(subjectId) {
+  const meta = getSubjectSidebarMeta(subjectId);
+  return meta.objectiveIds.map((objectiveId) => getObjectiveById(objectiveId)).filter(Boolean);
+}
+
+function setSubjectObjectiveIds(subjectId, objectiveIds) {
+  const subjectKey = String(subjectId || "");
+  const nextIds = [...new Set((Array.isArray(objectiveIds) ? objectiveIds : []).map((value) => String(value || "")).filter(Boolean))];
+  persistRunBucket((bucket) => {
+    bucket.subjectMeta = bucket.subjectMeta && typeof bucket.subjectMeta === "object" ? bucket.subjectMeta : {};
+    bucket.subjectMeta.sujet = bucket.subjectMeta.sujet && typeof bucket.subjectMeta.sujet === "object" ? bucket.subjectMeta.sujet : {};
+    const current = bucket.subjectMeta.sujet[subjectKey] && typeof bucket.subjectMeta.sujet[subjectKey] === "object" ? bucket.subjectMeta.sujet[subjectKey] : {};
+    bucket.subjectMeta.sujet[subjectKey] = {
+      ...current,
+      objectiveIds: nextIds
+    };
+
+    const objectives = Array.isArray(bucket.objectives) ? bucket.objectives : [];
+    objectives.forEach((objective) => {
+      const existingIds = Array.isArray(objective?.subjectIds) ? objective.subjectIds.map((value) => String(value || "")).filter(Boolean) : [];
+      const filteredIds = existingIds.filter((value) => value !== subjectKey);
+      if (nextIds.includes(String(objective?.id || ""))) filteredIds.push(subjectKey);
+      objective.subjectIds = [...new Set(filteredIds)];
+    });
+  });
+}
+
+function toggleSubjectObjective(subjectId, objectiveId) {
+  const currentIds = getSubjectSidebarMeta(subjectId).objectiveIds;
+  const normalizedObjectiveId = String(objectiveId || "");
+  const nextIds = currentIds.includes(normalizedObjectiveId)
+    ? currentIds.filter((value) => value !== normalizedObjectiveId)
+    : [...currentIds, normalizedObjectiveId];
+  setSubjectObjectiveIds(subjectId, nextIds);
 }
 
 const DEFAULT_REVIEW_META = Object.freeze({
@@ -2667,6 +2739,200 @@ function renderDetailedMetaForSelection(selection) {
   return entries.join("");
 }
 
+
+function getSubjectSituations(subjectId) {
+  const normalizedId = String(subjectId || "");
+  return (store.situationsView.data || []).filter((situation) => (situation.sujets || []).some((sujet) => String(sujet?.id || "") === normalizedId));
+}
+
+function summarizeSubjectMetaValue(items, emptyLabel = "Aucun") {
+  if (!Array.isArray(items) || !items.length) return emptyLabel;
+  if (items.length === 1) return items[0];
+  return `${items[0]} +${items.length - 1}`;
+}
+
+function renderSubjectMetaField({ field, label, valueHtml, menuHtml }) {
+  const dropdown = store.situationsView.subjectMetaDropdown || {};
+  const isOpen = dropdown.field === field;
+  return `
+    <section class="subject-meta-field ${isOpen ? "is-open" : ""}">
+      <button
+        type="button"
+        class="subject-meta-field__trigger"
+        data-subject-meta-trigger="${escapeHtml(field)}"
+        aria-expanded="${isOpen ? "true" : "false"}"
+      >
+        <span class="subject-meta-field__main">
+          <span class="subject-meta-field__label-row">
+            <span class="subject-meta-field__label">${escapeHtml(label)}</span>
+            <span class="subject-meta-field__gear" aria-hidden="true">${svgIcon("gear", { className: "octicon octicon-gear" })}</span>
+          </span>
+          <span class="subject-meta-field__value">${valueHtml}</span>
+        </span>
+      </button>
+      ${isOpen ? menuHtml : ""}
+    </section>
+  `;
+}
+
+function renderSubjectMetaButtonValue(text) {
+  return `<span class="subject-meta-field__value-text">${escapeHtml(text)}</span>`;
+}
+
+function renderSubjectSituationsValue(subjectId) {
+  const situations = getSubjectSituations(subjectId);
+  if (!situations.length) return renderSubjectMetaButtonValue("Aucune situation");
+  return `
+    <span class="subject-meta-field__chips">
+      ${situations.map((situation) => `
+        <span class="subject-meta-field__chip">
+          <span class="subject-meta-field__chip-text">${escapeHtml(firstNonEmpty(situation.title, situation.id, "Situation"))}</span>
+          ${statePill(getEffectiveSituationStatus(situation.id))}
+        </span>
+      `).join("")}
+    </span>
+  `;
+}
+
+function buildSubjectMetaMenuItems(subject, field) {
+  const dropdownState = store.situationsView.subjectMetaDropdown || {};
+  const query = String(dropdownState.query || "").trim().toLowerCase();
+
+  if (field === "objectives") {
+    const selectedIds = new Set(getSubjectSidebarMeta(subject.id).objectiveIds);
+    const objectives = getObjectives();
+    const matches = (objective) => matchSearch([objective.title, formatObjectiveDueDateLabel(objective), objective.id], query);
+    const toItem = (objective) => ({
+      key: String(objective.id || ""),
+      isActive: String(dropdownState.activeKey || "") === String(objective.id || ""),
+      isSelected: selectedIds.has(String(objective.id || "")),
+      iconHtml: svgIcon("milestone", { className: "octicon octicon-milestone" }),
+      title: objective.title,
+      metaHtml: escapeHtml(formatObjectiveDueDateLabel(objective)),
+      rightHtml: selectedIds.has(String(objective.id || "")) ? '<span class="select-menu__check">✓</span>' : "",
+      dataAttrs: { objectiveToggle: String(objective.id || "") }
+    });
+    return {
+      openItems: objectives.filter((objective) => !objective.closed && matches(objective)).map(toItem),
+      closedItems: objectives.filter((objective) => objective.closed && matches(objective)).map(toItem)
+    };
+  }
+
+  if (field === "situations") {
+    const situations = getSubjectSituations(subject.id).filter((situation) => matchSearch([situation.title, situation.id], query));
+    return {
+      items: situations.map((situation) => ({
+        key: String(situation.id || ""),
+        isActive: String(dropdownState.activeKey || "") === String(situation.id || ""),
+        iconHtml: svgIcon("issue-opened", { className: "octicon octicon-issue-opened" }),
+        title: firstNonEmpty(situation.title, situation.id, "Situation"),
+        metaHtml: escapeHtml(situation.id),
+        rightHtml: statePill(getEffectiveSituationStatus(situation.id)),
+        dataAttrs: { situationNav: String(situation.id || "") }
+      }))
+    };
+  }
+
+  const emptyHintMap = {
+    assignees: "Aucun assigné pour le moment.",
+    labels: "Aucun label pour le moment.",
+    relations: "Aucune relation pour le moment."
+  };
+  return { items: [], emptyHint: emptyHintMap[field] || "Aucune donnée." };
+}
+
+function renderSubjectMetaDropdown(subject, field) {
+  const dropdownState = store.situationsView.subjectMetaDropdown || {};
+  const query = String(dropdownState.query || "");
+
+  if (field === "objectives") {
+    const { openItems, closedItems } = buildSubjectMetaMenuItems(subject, field);
+    return `
+      <div class="subject-meta-dropdown gh-menu gh-menu--open" role="dialog">
+        <div class="subject-meta-dropdown__title">Sélectionner des objectifs</div>
+        <div class="subject-meta-dropdown__search">
+          <span class="subject-meta-dropdown__search-icon" aria-hidden="true">${svgIcon("search", { className: "octicon octicon-search" })}</span>
+          <input type="search" class="subject-meta-dropdown__search-input" data-subject-meta-search="${escapeHtml(field)}" value="${escapeHtml(query)}" placeholder="Filtrer les objectifs" autocomplete="off">
+        </div>
+        <div class="subject-meta-dropdown__body">
+          ${renderSelectMenuSection({ title: "Ouverts", items: openItems, emptyTitle: "Aucun objectif ouvert", emptyHint: query ? "Aucun résultat pour cette recherche." : "Aucun objectif ouvert disponible." })}
+          ${renderSelectMenuSection({ title: "Fermés", items: closedItems, emptyTitle: "Aucun objectif fermé", emptyHint: query ? "Aucun résultat pour cette recherche." : "Aucun objectif fermé disponible." })}
+        </div>
+      </div>
+    `;
+  }
+
+  if (field === "situations") {
+    const { items } = buildSubjectMetaMenuItems(subject, field);
+    return `
+      <div class="subject-meta-dropdown gh-menu gh-menu--open" role="dialog">
+        <div class="subject-meta-dropdown__title">Situations liées</div>
+        <div class="subject-meta-dropdown__search">
+          <span class="subject-meta-dropdown__search-icon" aria-hidden="true">${svgIcon("search", { className: "octicon octicon-search" })}</span>
+          <input type="search" class="subject-meta-dropdown__search-input" data-subject-meta-search="${escapeHtml(field)}" value="${escapeHtml(query)}" placeholder="Filtrer les situations" autocomplete="off">
+        </div>
+        <div class="subject-meta-dropdown__body">
+          ${renderSelectMenuSection({ title: "Présent dans", items, emptyTitle: "Aucune situation", emptyHint: query ? "Aucun résultat pour cette recherche." : "Ce sujet n'est rattaché à aucune situation." })}
+        </div>
+      </div>
+    `;
+  }
+
+  const { items, emptyHint } = buildSubjectMetaMenuItems(subject, field);
+  const titles = {
+    assignees: "Assigner ce sujet",
+    labels: "Gérer les labels",
+    relations: "Gérer les relations"
+  };
+  return `
+    <div class="subject-meta-dropdown gh-menu gh-menu--open" role="dialog">
+      <div class="subject-meta-dropdown__title">${escapeHtml(titles[field] || "Paramètres")}</div>
+      <div class="subject-meta-dropdown__body">
+        ${renderSelectMenuSection({ items, emptyTitle: "Aucune donnée", emptyHint: emptyHint || "Cette liste sera branchée plus tard." })}
+      </div>
+    </div>
+  `;
+}
+
+function renderSubjectMetaControls(subject) {
+  const meta = getSubjectSidebarMeta(subject.id);
+  const selectedObjectives = meta.objectiveIds.map((objectiveId) => getObjectiveById(objectiveId)).filter(Boolean);
+  return `
+    <div class="subject-meta-controls">
+      ${renderSubjectMetaField({
+        field: "assignees",
+        label: "Assigné à",
+        valueHtml: renderSubjectMetaButtonValue(summarizeSubjectMetaValue(meta.assignees, "Personne")),
+        menuHtml: renderSubjectMetaDropdown(subject, "assignees")
+      })}
+      ${renderSubjectMetaField({
+        field: "labels",
+        label: "Labels",
+        valueHtml: renderSubjectMetaButtonValue(summarizeSubjectMetaValue(meta.labels, "Aucun label")),
+        menuHtml: renderSubjectMetaDropdown(subject, "labels")
+      })}
+      ${renderSubjectMetaField({
+        field: "situations",
+        label: "Situations",
+        valueHtml: renderSubjectSituationsValue(subject.id),
+        menuHtml: renderSubjectMetaDropdown(subject, "situations")
+      })}
+      ${renderSubjectMetaField({
+        field: "objectives",
+        label: "Objectifs",
+        valueHtml: renderSubjectMetaButtonValue(selectedObjectives.length ? summarizeSubjectMetaValue(selectedObjectives.map((objective) => objective.title), "Aucun objectif") : "Aucun objectif"),
+        menuHtml: renderSubjectMetaDropdown(subject, "objectives")
+      })}
+      ${renderSubjectMetaField({
+        field: "relations",
+        label: "Relations",
+        valueHtml: renderSubjectMetaButtonValue(summarizeSubjectMetaValue(meta.relations, "Aucune relation")),
+        menuHtml: renderSubjectMetaDropdown(subject, "relations")
+      })}
+    </div>
+  `;
+}
+
 function renderSubIssuesForSujet(sujet, options = {}) {
   ensureViewUiState();
   const avisRowClass = options.avisRowClass || "js-row-avis";
@@ -2860,6 +3126,7 @@ function renderDetailsBody(selection, options = {}) {
   const threadHtml = renderThreadBlock();
   const commentBoxHtml = renderCommentBox(selection);
   const metaHtml = renderDetailedMetaForSelection(selection);
+  const subjectMetaControlsHtml = selection.type === "sujet" ? renderSubjectMetaControls(item) : "";
 
   return `
     <div class="details-grid">
@@ -2873,6 +3140,7 @@ function renderDetailsBody(selection, options = {}) {
         </div>
       </div>
       <aside class="details-meta-col">
+        ${subjectMetaControlsHtml}
         <div class="meta-title">Metadata</div>
         ${metaHtml}
       </aside>
@@ -3400,11 +3668,144 @@ function syncCommentPreview(root) {
   preview.innerHTML = mdToHtml(ta?.value || "");
 }
 
+
+function closeSubjectMetaDropdown() {
+  if (store.situationsView.subjectMetaDropdown) {
+    store.situationsView.subjectMetaDropdown.field = null;
+    store.situationsView.subjectMetaDropdown.query = "";
+    store.situationsView.subjectMetaDropdown.activeKey = "";
+  }
+}
+
+function getSubjectMetaMenuEntries(subject, field) {
+  const config = buildSubjectMetaMenuItems(subject, field);
+  if (field === "objectives") return [...(config.openItems || []), ...(config.closedItems || [])];
+  return config.items || [];
+}
+
+function setSubjectMetaActiveEntry(subject, field, direction = 1) {
+  const entries = getSubjectMetaMenuEntries(subject, field);
+  if (!entries.length) {
+    store.situationsView.subjectMetaDropdown.activeKey = "";
+    return;
+  }
+  const currentKey = String(store.situationsView.subjectMetaDropdown.activeKey || "");
+  const currentIndex = entries.findIndex((entry) => String(entry?.key || "") === currentKey);
+  const nextIndex = currentIndex >= 0
+    ? (currentIndex + direction + entries.length) % entries.length
+    : 0;
+  store.situationsView.subjectMetaDropdown.activeKey = String(entries[nextIndex]?.key || "");
+}
+
+function focusSubjectMetaSearch(root, field) {
+  requestAnimationFrame(() => {
+    const input = root?.querySelector?.(`[data-subject-meta-search="${field}"]`);
+    input?.focus();
+    input?.select?.();
+  });
+}
+
 function wireDetailsInteractive(root) {
   if (!root) return;
 
   const isModalScope = !!root.closest("#detailsModal");
   const isDrilldownScope = !!root.closest("#drilldownPanel");
+  const scopedSelection = getScopedSelection(root);
+
+  root.querySelectorAll("[data-subject-meta-trigger]").forEach((btn) => {
+    btn.onclick = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const field = String(btn.dataset.subjectMetaTrigger || "");
+      const dropdown = store.situationsView.subjectMetaDropdown || {};
+      const isAlreadyOpen = dropdown.field === field;
+      if (isAlreadyOpen) {
+        closeSubjectMetaDropdown();
+      } else {
+        dropdown.field = field;
+        dropdown.query = "";
+        const entries = scopedSelection?.type === "sujet" ? getSubjectMetaMenuEntries(scopedSelection.item, field) : [];
+        dropdown.activeKey = String(entries[0]?.key || "");
+      }
+      rerenderScope(root);
+      if (!isAlreadyOpen) focusSubjectMetaSearch(root, field);
+    };
+  });
+
+  root.querySelectorAll("[data-subject-meta-search]").forEach((input) => {
+    input.addEventListener("input", () => {
+      const field = String(input.dataset.subjectMetaSearch || "");
+      store.situationsView.subjectMetaDropdown.query = String(input.value || "");
+      const subject = getScopedSelection(root)?.type === "sujet" ? getScopedSelection(root).item : null;
+      const entries = subject ? getSubjectMetaMenuEntries(subject, field) : [];
+      store.situationsView.subjectMetaDropdown.activeKey = String(entries[0]?.key || "");
+      rerenderScope(root);
+      focusSubjectMetaSearch(root, field);
+    });
+
+    input.addEventListener("keydown", (event) => {
+      const field = String(input.dataset.subjectMetaSearch || "");
+      const subjectSelection = getScopedSelection(root);
+      if (subjectSelection?.type !== "sujet") return;
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        setSubjectMetaActiveEntry(subjectSelection.item, field, event.key === "ArrowDown" ? 1 : -1);
+        rerenderScope(root);
+        focusSubjectMetaSearch(root, field);
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeSubjectMetaDropdown();
+        rerenderScope(root);
+        return;
+      }
+      if (event.key === "Enter") {
+        const activeKey = String(store.situationsView.subjectMetaDropdown.activeKey || "");
+        if (!activeKey) return;
+        if (field === "objectives") {
+          event.preventDefault();
+          toggleSubjectObjective(subjectSelection.item.id, activeKey);
+          rerenderScope(root);
+          focusSubjectMetaSearch(root, field);
+          return;
+        }
+        if (field === "situations") {
+          event.preventDefault();
+          selectSituation(activeKey);
+        }
+      }
+    });
+  });
+
+  root.querySelectorAll("[data-objective-toggle]").forEach((btn) => {
+    btn.onclick = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const subjectSelection = getScopedSelection(root);
+      if (subjectSelection?.type !== "sujet") return;
+      toggleSubjectObjective(subjectSelection.item.id, String(btn.dataset.objectiveToggle || ""));
+      store.situationsView.subjectMetaDropdown.activeKey = String(btn.dataset.objectiveToggle || "");
+      rerenderScope(root);
+      focusSubjectMetaSearch(root, "objectives");
+    };
+  });
+
+  root.querySelectorAll("[data-situation-nav]").forEach((btn) => {
+    btn.onclick = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      selectSituation(String(btn.dataset.situationNav || ""));
+    };
+  });
+
+  root.addEventListener("click", (event) => {
+    if (event.target.closest(".subject-meta-field")) return;
+    if (store.situationsView.subjectMetaDropdown?.field) {
+      closeSubjectMetaDropdown();
+      rerenderScope(root);
+    }
+  });
 
   const descriptionTextarea = root.querySelector("[data-description-editor]");
   if (descriptionTextarea) {
@@ -4108,9 +4509,8 @@ function formatObjectiveMeta(objective) {
   const dueDate = objective?.dueDate
     ? new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium" }).format(new Date(objective.dueDate))
     : "Pas de date définie";
-  const closedSubjectsCount = Number.isFinite(objective?.closedSubjectsCount) ? objective.closedSubjectsCount : 0;
-  const subjectsCount = Number.isFinite(objective?.subjectsCount) ? objective.subjectsCount : 0;
-  return `${dueDate} - ${closedSubjectsCount}/${subjectsCount} sujets fermés`;
+  const counts = getObjectiveSubjectCounts(objective);
+  return `${dueDate} - ${counts.closed}/${counts.total} sujets fermés`;
 }
 
 
