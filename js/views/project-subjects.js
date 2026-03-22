@@ -366,6 +366,20 @@ function matchSearch(parts, query) {
 ========================================================= */
 
 const HUMAN_STORE_KEY = "rapsobot-human-store-v2";
+const DEFAULT_OBJECTIVE_TITLES = [
+  "Programme validé",
+  "Esquisse retenue",
+  "Estimation projet validée",
+  "Permis déposé",
+  "Permis obtenu",
+  "Permis purgé",
+  "Marchés de travaux signés",
+  "Travaux démarrés",
+  "Gros oeuvre terminé",
+  "Bâtiment clos couvert",
+  "Travaux terminés",
+  "Réception prononcée"
+];
 
 function ensureViewUiState() {
   const v = store.situationsView;
@@ -397,6 +411,8 @@ function ensureViewUiState() {
   }
   if (typeof v.subjectsStatusFilter !== "string") v.subjectsStatusFilter = "open";
   if (typeof v.situationsStatusFilter !== "string") v.situationsStatusFilter = "open";
+  if (typeof v.subjectsSubview !== "string") v.subjectsSubview = "subjects";
+  if (typeof v.objectivesStatusFilter !== "string") v.objectivesStatusFilter = "open";
 }
 
 function currentRunKey() {
@@ -451,7 +467,8 @@ function getRunBucket() {
         avis: {},
         sujet: {},
         situation: {}
-      }
+      },
+      objectives: []
     };
     saveHumanStore(all);
   }
@@ -473,8 +490,42 @@ function getRunBucket() {
     };
     saveHumanStore(all);
   }
+  if (!Array.isArray(bucket.objectives)) {
+    bucket.objectives = [];
+    saveHumanStore(all);
+  }
 
   return { all, key, bucket };
+}
+
+function createDefaultObjectives() {
+  return DEFAULT_OBJECTIVE_TITLES.map((title, index) => ({
+    id: `objective-${index + 1}`,
+    title,
+    dueDate: null,
+    closed: false,
+    closedSubjectsCount: 0,
+    subjectsCount: 2
+  }));
+}
+
+function getObjectives() {
+  const { bucket } = getRunBucket();
+  if (!Array.isArray(bucket.objectives) || !bucket.objectives.length) {
+    const defaults = createDefaultObjectives();
+    persistRunBucket((draft) => {
+      draft.objectives = defaults;
+    });
+    return defaults;
+  }
+  return bucket.objectives.map((objective, index) => ({
+    id: String(objective?.id || `objective-${index + 1}`),
+    title: String(objective?.title || `Objectif ${index + 1}`),
+    dueDate: objective?.dueDate || null,
+    closed: !!objective?.closed,
+    closedSubjectsCount: Number.isFinite(Number(objective?.closedSubjectsCount)) ? Number(objective.closedSubjectsCount) : 0,
+    subjectsCount: Number.isFinite(Number(objective?.subjectsCount)) ? Number(objective.subjectsCount) : 2
+  }));
 }
 
 function persistRunBucket(mutator) {
@@ -2948,15 +2999,17 @@ function rerenderPanels() {
   const filteredSituations = getFilteredSituations();
   const counts = getVisibleCounts(filteredSituations);
   const panelHost = document.getElementById("situationsPanelHost");
-  const countsHost = document.getElementById("situationsHeaderCounts");
   const searchInput = document.getElementById("situationsSearch");
 
   if (searchInput) searchInput.value = store.situationsView.search || "";
 
-  if (countsHost) countsHost.textContent = `${counts.situations} situations · ${counts.sujets} sujets · ${counts.avis} avis`;
+  rerenderSubjectsToolbar();
 
   if (panelHost) {
-    if (store.situationsView.showTableOnly) {
+    if (String(store.situationsView.subjectsSubview || "subjects") === "objectives") {
+      panelHost.innerHTML = `<div id="objectivesTableHost" class="project-table-host">${renderObjectivesTableHtml()}</div>`;
+      syncSituationsPrimaryScrollSource();
+    } else if (store.situationsView.showTableOnly) {
       panelHost.innerHTML = `<div id="situationsTableHost" class="project-table-host">${renderTableHtml(filteredSituations)}</div>`;
       syncSituationsPrimaryScrollSource();
     } else {
@@ -3806,24 +3859,38 @@ function bindDetailsScroll(root) {
 }
 
 function bindSituationsEvents(root, headerRoot) {
-  headerRoot?.querySelector("#situationsSearch")?.addEventListener("input", (event) => {
-    store.situationsView.search = String(event.target.value || "");
+  const toolbarRoot = document.getElementById("situationsToolbarHost");
+
+  toolbarRoot?.addEventListener("input", (event) => {
+    const searchInput = event.target.closest?.("#situationsSearch");
+    if (!searchInput) return;
+    store.situationsView.search = String(searchInput.value || "");
     rerenderPanels();
   });
 
-
-  const addActionRoot = document.querySelector('[data-action-id="situationsAddAction"]');
-  if (addActionRoot && addActionRoot.dataset.bound !== "true") {
-    addActionRoot.dataset.bound = "true";
-    addActionRoot.addEventListener("ghaction:action", (event) => {
-      const action = String(event.detail?.action || "");
-      if (action === "add-situation" || action === "add-sujet") {
-        event.preventDefault();
-      }
-    });
-  }
+  toolbarRoot?.addEventListener("ghaction:action", (event) => {
+    const action = String(event.detail?.action || "");
+    if (!action) return;
+    if (action === "add-sujet" || action === "add-objective" || action === "open-labels") {
+      event.preventDefault();
+      return;
+    }
+    if (action === "open-objectives") {
+      event.preventDefault();
+      store.situationsView.subjectsSubview = "objectives";
+      store.situationsView.showTableOnly = true;
+      rerenderPanels();
+    }
+  });
 
   root.addEventListener("click", (event) => {
+    const objectivesFilterButton = event.target.closest("[data-objectives-filter]");
+    if (objectivesFilterButton) {
+      event.preventDefault();
+      store.situationsView.objectivesStatusFilter = String(objectivesFilterButton.dataset.objectivesFilter || "open").toLowerCase() === "closed" ? "closed" : "open";
+      rerenderPanels();
+      return;
+    }
     const subjectsStatusFilterButton = event.target.closest("[data-subjects-status-filter]");
     if (subjectsStatusFilterButton) {
       event.preventDefault();
@@ -3932,36 +3999,66 @@ function bindSituationsEvents(root, headerRoot) {
   });
 }
 
-function renderSituationsAddAction() {
+function renderSubjectsToolbarButton({ id, label, icon, action, tone = "default" }) {
   return renderGhActionButton({
-    id: "situationsAddAction",
-    label: "Ajouter",
-    tone: "primary",
+    id,
+    label,
+    icon,
+    tone,
     size: "md",
-    mainActionMode: "first-item",
-    items: [
-      {
-        label: "Ajouter une situation",
-        action: "add-situation"
-      },
-      {
-        label: "Ajouter un sujet",
-        action: "add-sujet"
-      }
-    ]
+    mainAction: action,
+    withChevron: false
+  });
+}
+
+function renderSituationsAddAction() {
+  return renderSubjectsToolbarButton({
+    id: "situationsAddAction",
+    label: "Nouveau sujet",
+    tone: "primary",
+    action: "add-sujet"
+  });
+}
+
+function renderObjectivesCreateAction() {
+  return renderSubjectsToolbarButton({
+    id: "objectivesCreateAction",
+    label: "Nouvel objectif",
+    tone: "primary",
+    action: "add-objective"
+  });
+}
+
+function renderSubjectsLabelsAction() {
+  return renderSubjectsToolbarButton({
+    id: "subjectsLabelsAction",
+    label: "Labels",
+    icon: svgIcon("tag", { className: "octicon octicon-tag" }),
+    action: "open-labels"
+  });
+}
+
+function renderSubjectsObjectivesAction() {
+  return renderSubjectsToolbarButton({
+    id: "subjectsObjectivesAction",
+    label: "Objectifs",
+    icon: svgIcon("milestone", { className: "octicon octicon-milestone" }),
+    action: "open-objectives"
   });
 }
 
 function renderSituationsViewHeaderHtml() {
-  const leftHtml = [
-    renderProjectTableToolbarGroup({
-      html: renderProjectTableToolbarMeta({
-        id: "situationsHeaderCounts",
-        text: "—",
-        className: "issues-totals mono"
+  if (String(store.situationsView.subjectsSubview || "subjects") === "objectives") {
+    return renderProjectTableToolbar({
+      className: "project-table-toolbar--situations project-table-toolbar--objectives",
+      leftHtml: renderProjectTableToolbarGroup({
+        html: '<div class="project-table-toolbar__title">Objectifs</div>'
+      }),
+      rightHtml: renderProjectTableToolbarGroup({
+        html: renderObjectivesCreateAction()
       })
-    })
-  ].join("");
+    });
+  }
 
   const rightHtml = [
     renderProjectTableToolbarGroup({
@@ -3972,14 +4069,81 @@ function renderSituationsViewHeaderHtml() {
       })
     }),
     renderProjectTableToolbarGroup({
+      html: renderSubjectsLabelsAction()
+    }),
+    renderProjectTableToolbarGroup({
+      html: renderSubjectsObjectivesAction()
+    }),
+    renderProjectTableToolbarGroup({
       html: renderSituationsAddAction()
     })
   ].join("");
 
   return renderProjectTableToolbar({
     className: "project-table-toolbar--situations",
-    leftHtml,
+    leftHtml: "",
     rightHtml
+  });
+}
+
+function rerenderSubjectsToolbar() {
+  const toolbarHost = document.getElementById("situationsToolbarHost");
+  if (!toolbarHost) return;
+  toolbarHost.innerHTML = `
+    <div class="project-situations__table-toolbar project-page-shell project-page-shell--toolbar">
+      ${renderSituationsViewHeaderHtml()}
+    </div>
+  `;
+}
+
+function formatObjectiveMeta(objective) {
+  const dueDate = objective?.dueDate
+    ? new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium" }).format(new Date(objective.dueDate))
+    : "Pas de date définie";
+  const closedSubjectsCount = Number.isFinite(objective?.closedSubjectsCount) ? objective.closedSubjectsCount : 0;
+  const subjectsCount = Number.isFinite(objective?.subjectsCount) ? objective.subjectsCount : 0;
+  return `${dueDate} - ${closedSubjectsCount}/${subjectsCount} sujets fermés`;
+}
+
+function renderObjectivesTableHtml() {
+  const objectives = getObjectives();
+  const openObjectives = objectives.filter((objective) => !objective.closed);
+  const closedObjectives = objectives.filter((objective) => objective.closed);
+  const activeFilter = String(store.situationsView.objectivesStatusFilter || "open").toLowerCase() === "closed" ? "closed" : "open";
+  const visibleObjectives = activeFilter === "closed" ? closedObjectives : openObjectives;
+
+  const headHtml = `
+    <button type="button" class="objectives-table__filter${activeFilter === "open" ? " is-active" : ""}" data-objectives-filter="open">
+      <span>Ouverts</span>
+      ${renderCountBadge(openObjectives.length, "neutral")}
+    </button>
+    <button type="button" class="objectives-table__filter${activeFilter === "closed" ? " is-active" : ""}" data-objectives-filter="closed">
+      <span>Fermés</span>
+      ${renderCountBadge(closedObjectives.length, "neutral")}
+    </button>
+  `;
+
+  const bodyHtml = visibleObjectives.length
+    ? visibleObjectives.map((objective) => `
+        <button type="button" class="objectives-row" data-objective-id="${escapeHtml(objective.id)}">
+          <span class="objectives-row__title">${escapeHtml(objective.title)}</span>
+          <span class="objectives-row__meta">${escapeHtml(formatObjectiveMeta(objective))}</span>
+        </button>
+      `).join("")
+    : renderDataTableEmptyState({
+        title: activeFilter === "closed" ? "Aucun objectif fermé" : "Aucun objectif ouvert",
+        description: activeFilter === "closed" ? "Les objectifs fermés apparaîtront ici." : "Les objectifs ouverts apparaîtront ici."
+      });
+
+  return renderDataTableShell({
+    className: "objectives-table",
+    headHtml,
+    bodyHtml,
+    headClassName: "objectives-table__head",
+    bodyClassName: "objectives-table__body",
+    gridTemplate: "minmax(0, 1fr) minmax(0, 1fr)",
+    state: visibleObjectives.length ? "ready" : "empty",
+    emptyHtml: bodyHtml
   });
 }
 
@@ -4003,6 +4167,7 @@ export function renderProjectSubjects(root) {
 
   const headerRoot = document.getElementById("projectViewHeaderHost");
   const toolbarHost = document.getElementById("situationsToolbarHost");
+  store.situationsView.subjectsSubview = "subjects";
   const data = store.situationsView.data || [];
   const firstSituationId = data[0]?.id || null;
 
@@ -4014,11 +4179,7 @@ export function renderProjectSubjects(root) {
   }
 
   if (toolbarHost) {
-    toolbarHost.innerHTML = `
-      <div class="project-situations__table-toolbar project-page-shell project-page-shell--toolbar">
-        ${renderSituationsViewHeaderHtml()}
-      </div>
-    `;
+    rerenderSubjectsToolbar();
   }
 
   root.innerHTML = `
