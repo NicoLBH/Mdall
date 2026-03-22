@@ -2040,7 +2040,7 @@ function renderFlatAvisRow(avis, sujetId, situationId) {
   `;
 }
 function getSituationsTableGridTemplate() {
-  return "minmax(340px, 1.8fr) 220px 170px 120px";
+  return "minmax(0, 1fr) 56px 86px";
 }
 
 function renderSituationsTableHeadHtml(options = {}) {
