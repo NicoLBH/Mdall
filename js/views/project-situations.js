@@ -1749,7 +1749,7 @@ function renderSituationsStatusHeadHtml() {
 
 function renderSituationListIcon(status = "open") {
   const isOpen = String(status || "open").toLowerCase() === "open";
-  return `<span class="issue-status-icon" aria-hidden="true">${svgIcon("table", { className: `issue-status-icon__svg issue-status-icon__svg--situation ${isOpen ? "issue-status-icon__svg--open" : "issue-status-icon__svg--closed"}` })}</span>`;
+  return `<span class="issue-status-icon" aria-hidden="true">${svgIcon(isOpen ? "table" : "table-check", { className: `issue-status-icon__svg issue-status-icon__svg--situation ${isOpen ? "issue-status-icon__svg--open" : "issue-status-icon__svg--closed"}` })}</span>`;
 }
 
 function getVisibleCounts(filteredSituations) {
