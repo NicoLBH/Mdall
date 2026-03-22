@@ -2828,7 +2828,7 @@ function buildSubjectMetaMenuItems(subject, field) {
         `,
         title: objective.title,
         metaHtml: escapeHtml(formatObjectiveDueDateLabel(objective)),
-        dataAttrs: { objectiveSelect: String(objective.id || "") }
+        dataAttrs: { "objective-select": String(objective.id || "") }
       };
     };
     return {
@@ -2847,7 +2847,7 @@ function buildSubjectMetaMenuItems(subject, field) {
         title: firstNonEmpty(situation.title, situation.id, "Situation"),
         metaHtml: escapeHtml(situation.id),
         rightHtml: statePill(getEffectiveSituationStatus(situation.id)),
-        dataAttrs: { situationNav: String(situation.id || "") }
+        dataAttrs: { "situation-nav": String(situation.id || "") }
       }))
     };
   }
