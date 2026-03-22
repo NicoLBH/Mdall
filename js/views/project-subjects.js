@@ -2754,7 +2754,7 @@ function summarizeSubjectMetaValue(items, emptyLabel = "Aucun") {
   return `${items[0]} +${items.length - 1}`;
 }
 
-function renderSubjectMetaField({ field, label, valueHtml, menuHtml }) {
+function renderSubjectMetaField({ field, label, valueHtml }) {
   const dropdown = store.situationsView.subjectMetaDropdown || {};
   const isOpen = dropdown.field === field;
   return `
@@ -2772,7 +2772,6 @@ function renderSubjectMetaField({ field, label, valueHtml, menuHtml }) {
         </span>
       </button>
       <div class="subject-meta-field__value">${valueHtml}</div>
-      ${isOpen ? menuHtml : ""}
     </section>
   `;
 }
@@ -2921,32 +2920,27 @@ function renderSubjectMetaControls(subject) {
       ${renderSubjectMetaField({
         field: "assignees",
         label: "Assigné à",
-        valueHtml: renderSubjectMetaButtonValue(summarizeSubjectMetaValue(meta.assignees, "Personne")),
-        menuHtml: renderSubjectMetaDropdown(subject, "assignees")
+        valueHtml: renderSubjectMetaButtonValue(summarizeSubjectMetaValue(meta.assignees, "Personne"))
       })}
       ${renderSubjectMetaField({
         field: "labels",
         label: "Labels",
-        valueHtml: renderSubjectMetaButtonValue(summarizeSubjectMetaValue(meta.labels, "Aucun label")),
-        menuHtml: renderSubjectMetaDropdown(subject, "labels")
+        valueHtml: renderSubjectMetaButtonValue(summarizeSubjectMetaValue(meta.labels, "Aucun label"))
       })}
       ${renderSubjectMetaField({
         field: "situations",
         label: "Situations",
-        valueHtml: renderSubjectSituationsValue(subject.id),
-        menuHtml: renderSubjectMetaDropdown(subject, "situations")
+        valueHtml: renderSubjectSituationsValue(subject.id)
       })}
       ${renderSubjectMetaField({
         field: "objectives",
         label: "Objectifs",
-        valueHtml: renderSubjectObjectivesValue(subject.id),
-        menuHtml: renderSubjectMetaDropdown(subject, "objectives")
+        valueHtml: renderSubjectObjectivesValue(subject.id)
       })}
       ${renderSubjectMetaField({
         field: "relations",
         label: "Relations",
-        valueHtml: renderSubjectMetaButtonValue(summarizeSubjectMetaValue(meta.relations, "Aucune relation")),
-        menuHtml: renderSubjectMetaDropdown(subject, "relations")
+        valueHtml: renderSubjectMetaButtonValue(summarizeSubjectMetaValue(meta.relations, "Aucune relation"))
       })}
     </div>
   `;
@@ -3716,9 +3710,45 @@ function setSubjectMetaActiveEntry(subject, field, direction = 1) {
   store.situationsView.subjectMetaDropdown.activeKey = String(entries[nextIndex]?.key || "");
 }
 
+function ensureSubjectMetaDropdownHost() {
+  let host = document.getElementById("subjectMetaDropdownHost");
+  if (host) return host;
+  host = document.createElement("div");
+  host.id = "subjectMetaDropdownHost";
+  host.className = "subject-meta-dropdown-host";
+  document.body.appendChild(host);
+  return host;
+}
+
+function getSubjectMetaScopeRoot() {
+  if (store.situationsView.drilldown?.isOpen) return document.getElementById("drilldownBody");
+  if (store.situationsView.detailsModalOpen) return document.getElementById("detailsBodyModal");
+  return document.getElementById("situationsDetailsHost");
+}
+
+function renderSubjectMetaDropdownHost(root) {
+  const host = ensureSubjectMetaDropdownHost();
+  const field = String(store.situationsView.subjectMetaDropdown?.field || "");
+  const selection = getScopedSelection(root);
+  if (!field || selection?.type !== "sujet") {
+    host.innerHTML = "";
+    host.setAttribute("aria-hidden", "true");
+    return host;
+  }
+  host.innerHTML = renderSubjectMetaDropdown(selection.item, field);
+  host.setAttribute("aria-hidden", "false");
+  return host;
+}
+
+function rerenderSubjectMetaScopes() {
+  rerenderPanels();
+  if (store.situationsView.detailsModalOpen) updateDetailsModal();
+  if (store.situationsView.drilldown?.isOpen) updateDrilldownPanel();
+}
+
 function focusSubjectMetaSearch(root, field) {
   requestAnimationFrame(() => {
-    const input = root?.querySelector?.(`[data-subject-meta-search="${field}"]`);
+    const input = ensureSubjectMetaDropdownHost().querySelector(`[data-subject-meta-search="${field}"]`);
     input?.focus();
     input?.select?.();
   });
@@ -3727,27 +3757,66 @@ function focusSubjectMetaSearch(root, field) {
 
 function syncSubjectMetaDropdownPosition(root) {
   const field = String(store.situationsView.subjectMetaDropdown?.field || "");
-  if (!field) return;
+  const host = ensureSubjectMetaDropdownHost();
+  if (!field) {
+    host.innerHTML = "";
+    host.setAttribute("aria-hidden", "true");
+    return;
+  }
   requestAnimationFrame(() => {
-    const anchor = root?.querySelector?.(`[data-subject-meta-anchor="${field}"]`);
-    const dropdown = root?.querySelector?.(".subject-meta-dropdown");
-    if (!anchor || !dropdown) return;
+    const scopeRoot = root || getSubjectMetaScopeRoot();
+    const anchor = scopeRoot?.querySelector?.(`[data-subject-meta-anchor="${field}"]`);
+    const dropdown = host.querySelector(".subject-meta-dropdown");
+    if (!anchor || !dropdown) {
+      host.innerHTML = "";
+      host.setAttribute("aria-hidden", "true");
+      return;
+    }
     const rect = anchor.getBoundingClientRect();
     const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
     const dropdownWidth = 320;
     const gutter = 12;
     const left = Math.max(gutter, Math.min(rect.right - dropdownWidth, viewportWidth - dropdownWidth - gutter));
+    const maxHeight = Math.max(240, Math.min(420, viewportHeight - rect.bottom - gutter - 8));
     dropdown.style.left = `${left}px`;
     dropdown.style.top = `${Math.max(gutter, rect.bottom - 4)}px`;
     dropdown.style.width = `${dropdownWidth}px`;
+    dropdown.style.maxHeight = `${maxHeight}px`;
+    host.setAttribute("aria-hidden", "false");
   });
+}
+
+let subjectMetaDropdownDocumentBound = false;
+
+function bindSubjectMetaDropdownDocumentEvents() {
+  if (subjectMetaDropdownDocumentBound) return;
+  subjectMetaDropdownDocumentBound = true;
+
+  document.addEventListener("click", (event) => {
+    if (!store.situationsView.subjectMetaDropdown?.field) return;
+    if (event.target.closest("#subjectMetaDropdownHost .subject-meta-dropdown")) return;
+    if (event.target.closest("[data-subject-meta-trigger]")) return;
+    closeSubjectMetaDropdown();
+    rerenderSubjectMetaScopes();
+  });
+
+  window.addEventListener("resize", () => {
+    if (!store.situationsView.subjectMetaDropdown?.field) return;
+    syncSubjectMetaDropdownPosition(getSubjectMetaScopeRoot());
+  });
+
+  document.addEventListener("scroll", () => {
+    if (!store.situationsView.subjectMetaDropdown?.field) return;
+    syncSubjectMetaDropdownPosition(getSubjectMetaScopeRoot());
+  }, true);
 }
 
 function wireDetailsInteractive(root) {
   if (!root) return;
 
-  const isModalScope = !!root.closest("#detailsModal");
-  const isDrilldownScope = !!root.closest("#drilldownPanel");
+  bindSubjectMetaDropdownDocumentEvents();
+  const dropdownHost = renderSubjectMetaDropdownHost(root);
   const scopedSelection = getScopedSelection(root);
 
   root.querySelectorAll("[data-subject-meta-trigger]").forEach((btn) => {
@@ -3773,12 +3842,12 @@ function wireDetailsInteractive(root) {
       rerenderScope(root);
       if (!isAlreadyOpen) {
         focusSubjectMetaSearch(root, field);
-        syncSubjectMetaDropdownPosition(root);
+        syncSubjectMetaDropdownPosition(getSubjectMetaScopeRoot());
       }
     };
   });
 
-  root.querySelectorAll("[data-subject-meta-search]").forEach((input) => {
+  dropdownHost.querySelectorAll("[data-subject-meta-search]").forEach((input) => {
     input.addEventListener("input", () => {
       const field = String(input.dataset.subjectMetaSearch || "");
       store.situationsView.subjectMetaDropdown.query = String(input.value || "");
@@ -3787,7 +3856,7 @@ function wireDetailsInteractive(root) {
       store.situationsView.subjectMetaDropdown.activeKey = String(entries[0]?.key || "");
       rerenderScope(root);
       focusSubjectMetaSearch(root, field);
-      syncSubjectMetaDropdownPosition(root);
+      syncSubjectMetaDropdownPosition(getSubjectMetaScopeRoot());
     });
 
     input.addEventListener("keydown", (event) => {
@@ -3799,7 +3868,7 @@ function wireDetailsInteractive(root) {
         setSubjectMetaActiveEntry(subjectSelection.item, field, event.key === "ArrowDown" ? 1 : -1);
         rerenderScope(root);
         focusSubjectMetaSearch(root, field);
-        syncSubjectMetaDropdownPosition(root);
+        syncSubjectMetaDropdownPosition(getSubjectMetaScopeRoot());
         return;
       }
       if (event.key === "Escape") {
@@ -3826,7 +3895,7 @@ function wireDetailsInteractive(root) {
     });
   });
 
-  root.querySelectorAll("[data-objective-select]").forEach((btn) => {
+  dropdownHost.querySelectorAll("[data-objective-select]").forEach((btn) => {
     btn.onclick = (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -3839,7 +3908,7 @@ function wireDetailsInteractive(root) {
     };
   });
 
-  root.querySelectorAll("[data-situation-nav]").forEach((btn) => {
+  dropdownHost.querySelectorAll("[data-situation-nav]").forEach((btn) => {
     btn.onclick = (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -3847,15 +3916,8 @@ function wireDetailsInteractive(root) {
     };
   });
 
-  syncSubjectMetaDropdownPosition(root);
+  syncSubjectMetaDropdownPosition(getSubjectMetaScopeRoot());
 
-  root.addEventListener("click", (event) => {
-    if (event.target.closest(".subject-meta-field")) return;
-    if (store.situationsView.subjectMetaDropdown?.field) {
-      closeSubjectMetaDropdown();
-      rerenderScope(root);
-    }
-  });
 
   const descriptionTextarea = root.querySelector("[data-description-editor]");
   if (descriptionTextarea) {
@@ -4308,7 +4370,7 @@ function bindSituationsEvents(root, headerRoot) {
     }
   });
 
-  syncSubjectMetaDropdownPosition(root);
+  syncSubjectMetaDropdownPosition(getSubjectMetaScopeRoot());
 
   root.addEventListener("click", (event) => {
     const objectivesFilterButton = event.target.closest("[data-objectives-filter]");
