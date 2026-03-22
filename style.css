@@ -644,6 +644,7 @@ body.sidebar-collapsed #sidebar{overflow:hidden;width:0;min-width:0;padding:0;ma
 }
 
 .subject-meta-situation-card__title{font-size:11px;font-weight:600;color:#ffff;min-width:0;}
+.subject-meta-situation-card__state{margin-left:auto;font-size:11px;color:var(--muted);}
 
 .subject-meta-situation-card__meta{
   display:flex;
