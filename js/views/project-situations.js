@@ -4064,8 +4064,8 @@ function bindDetailsScroll(root) {
     "modal"
   );
 
-  document.querySelectorAll("#detailsModal .situation-kanban__col.js-kanban-column").forEach((column, index) => {
-    bindCondensedTitleScroll(column, modalInner, `modalKanban${index}`);
+  document.querySelectorAll("#detailsModal .situation-kanban__cards").forEach((cards, index) => {
+    bindCondensedTitleScroll(cards, modalInner, `modalKanbanCards${index}`);
   });
 
   bindCondensedTitleScroll(
