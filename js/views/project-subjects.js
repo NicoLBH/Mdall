@@ -58,6 +58,9 @@ import { renderSharedDetailsTitleWrap, renderSharedDetailsTitleHtml } from "./ui
 import { renderSelectMenuSection } from "./ui/select-menu.js";
 import { getSelectionDocumentRefs } from "../services/project-document-selectors.js";
 
+let subjectsCurrentRoot = null;
+let subjectsTabResetBound = false;
+
 /* =========================================================
    Legacy DOM / archive parity helpers
 ========================================================= */
@@ -2783,17 +2786,35 @@ function renderSubjectMetaButtonValue(text, metaText = "") {
   `;
 }
 
+function renderObjectiveCounterIcon(objective) {
+  const counts = getObjectiveSubjectCounts(objective);
+  return problemsCountsIconHtml(counts.closed, counts.total);
+}
+
+function getSubjectSituationStatusLabel(situation, subjectId) {
+  const linkedSubject = (situation?.sujets || []).find((item) => String(item?.id || "") === String(subjectId || ""));
+  const status = getEffectiveSujetStatus(linkedSubject?.id || subjectId) || linkedSubject?.status || "open";
+  return String(status || "open").toLowerCase() === "closed" ? "Closed" : "Open";
+}
+
+function renderSubjectSituationCard(situation, subjectId) {
+  return `
+    <span class="subject-meta-situation-card">
+      <span class="subject-meta-situation-card__head">
+        <span class="subject-meta-situation-card__icon">${issueIcon(getEffectiveSituationStatus(situation.id), { entityType: "situation" })}</span>
+        <span class="subject-meta-situation-card__title">${escapeHtml(firstNonEmpty(situation.title, situation.id, "Situation"))}</span>
+      </span>
+      <span class="subject-meta-situation-card__meta">Status · ${escapeHtml(getSubjectSituationStatusLabel(situation, subjectId))}</span>
+    </span>
+  `;
+}
+
 function renderSubjectSituationsValue(subjectId) {
   const situations = getSubjectSituations(subjectId);
   if (!situations.length) return renderSubjectMetaButtonValue("Aucune situation");
   return `
     <span class="subject-meta-field__chips">
-      ${situations.map((situation) => `
-        <span class="subject-meta-field__chip">
-          <span class="subject-meta-field__chip-text">${escapeHtml(firstNonEmpty(situation.title, situation.id, "Situation"))}</span>
-          ${statePill(getEffectiveSituationStatus(situation.id))}
-        </span>
-      `).join("")}
+      ${situations.map((situation) => renderSubjectSituationCard(situation, subjectId)).join("")}
     </span>
   `;
 }
@@ -2802,7 +2823,13 @@ function renderSubjectSituationsValue(subjectId) {
 function renderSubjectObjectivesValue(subjectId) {
   const objective = getSubjectObjectives(subjectId)[0] || null;
   if (!objective) return renderSubjectMetaButtonValue("Aucun objectif");
-  return renderSubjectMetaButtonValue(objective.title, formatObjectiveDueDateLabel(objective));
+  return `
+    <span class="subject-meta-objective-card">
+      <span class="subject-meta-objective-card__count">${renderObjectiveCounterIcon(objective)}</span>
+      <span class="subject-meta-objective-card__title">${escapeHtml(objective.title)}</span>
+      <span class="subject-meta-objective-card__date">${escapeHtml(formatObjectiveDueDateLabel(objective))}</span>
+    </span>
+  `;
 }
 
 function buildSubjectMetaMenuItems(subject, field) {
@@ -3812,6 +3839,36 @@ function bindSubjectMetaDropdownDocumentEvents() {
   }, true);
 }
 
+function resetSubjectsTabView() {
+  closeSubjectMetaDropdown();
+  store.situationsView.subjectsSubview = "subjects";
+  store.situationsView.selectedObjectiveId = "";
+  if (store.situationsView.detailsModalOpen) closeDetailsModal();
+  if (store.situationsView.drilldown?.isOpen) closeDrilldown();
+  if (subjectsCurrentRoot && subjectsCurrentRoot.isConnected) {
+    rerenderPanels();
+    syncSituationsPrimaryScrollSource();
+  }
+}
+
+function bindSubjectsTabReset() {
+  if (subjectsTabResetBound) return;
+  subjectsTabResetBound = true;
+
+  document.addEventListener("click", (event) => {
+    const tabLink = event.target.closest?.('.project-tabs a[data-project-tab-id="subjects"]');
+    if (!tabLink) return;
+    const href = tabLink.getAttribute("href") || "";
+    if (!href || href !== location.hash) return;
+    const hasOverlayState = !!store.situationsView.detailsModalOpen || !!store.situationsView.drilldown?.isOpen || !!store.situationsView.subjectMetaDropdown?.field;
+    const hasSubviewState = String(store.situationsView.subjectsSubview || "subjects") !== "subjects" || !!store.situationsView.selectedObjectiveId;
+    if (!hasOverlayState && !hasSubviewState) return;
+    if (!subjectsCurrentRoot || !subjectsCurrentRoot.isConnected) return;
+    event.preventDefault();
+    resetSubjectsTabView();
+  });
+}
+
 function wireDetailsInteractive(root) {
   if (!root) return;
 
@@ -4798,6 +4855,8 @@ function renderObjectivesTableHtml() {
 export function renderProjectSubjects(root) {
   ensureViewUiState();
   ensureDrilldownDom();
+  subjectsCurrentRoot = root;
+  bindSubjectsTabReset();
   store.situationsView.showTableOnly = true;
   store.situationsView.displayDepth = "sujets";
 
