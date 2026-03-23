@@ -32,12 +32,8 @@ export function bindProjectHeaderNavigation() {
 
     if (!el) return;
 
-    console.info("[project-header] click captured", { rawTarget });
-
     const tabLink = el.closest('.project-tabs a[data-project-tab-id]');
     if (!tabLink) return;
-
-    console.info("[project-header] tab link found", { tabLink });
 
     const tabId = String(tabLink.dataset.projectTabId || "");
     if (!tabId) return;
@@ -47,13 +43,9 @@ export function bindProjectHeaderNavigation() {
 
     if (!isActiveTab) return;
 
-    console.info("[project-header] active tab reselected", { tabId });
-
     event.preventDefault();
 
     const projectId = store.currentProjectId || null;
-
-    console.info("[project-header] dispatching reselect", { projectId, tabId });
 
     dispatchProjectTabReselected({ projectId, tabId });
   }, true);
