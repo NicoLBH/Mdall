@@ -1296,6 +1296,13 @@ body.modal-open {
   text-overflow:ellipsis;
 }
 
+.issue-row-subject-title-line{display:flex;align-items:center;gap:6px;min-width:0;flex-wrap:wrap;}
+.issue-row-subject-title-line .row-title-trigger{min-width:0;max-width:100%;}
+.issue-row-subject-labels{display:inline-flex;align-items:center;gap:6px;min-width:0;flex-wrap:wrap;}
+.issue-row-subject-objective{display:inline-flex;align-items:center;gap:4px;min-width:0;vertical-align:middle;}
+.issue-row-subject-objective__icon{display:inline-flex;align-items:center;color:var(--muted);}
+.issue-row-subject-objective__text{min-width:0;overflow:hidden;text-overflow:ellipsis;vertical-align:middle;}
+
 
 /* Verdict badges (F/D/S/HM/PM/SO) */
 .verdict-badge{
