@@ -2,6 +2,45 @@ import { PROJECT_TABS, isToggleableProjectTab, isProjectTabAllowedForUser } from
 import { store } from "../store.js";
 import { renderCountBadge } from "./ui/status-badges.js";
 
+
+const PROJECT_TAB_RESELECTED_EVENT = "project:tab-reselected";
+let projectHeaderNavigationBound = false;
+
+function dispatchProjectTabReselected({ projectId, tabId }) {
+  window.dispatchEvent(new CustomEvent(PROJECT_TAB_RESELECTED_EVENT, {
+    detail: {
+      projectId: projectId || null,
+      tabId: String(tabId || "")
+    }
+  }));
+}
+
+export function bindProjectHeaderNavigation() {
+  if (projectHeaderNavigationBound) return;
+  projectHeaderNavigationBound = true;
+
+  document.addEventListener("click", (event) => {
+    const tabLink = event.target.closest?.('.project-tabs a[data-project-tab-id]');
+    if (!tabLink) return;
+
+    const tabId = String(tabLink.dataset.projectTabId || "");
+    if (!tabId) return;
+
+    const isActiveTab = tabLink.classList.contains("active")
+      || tabLink.getAttribute("aria-current") === "page";
+    if (!isActiveTab) return;
+
+    event.preventDefault();
+
+    const projectShell = tabLink.closest(".project-shell");
+    const projectId = String(projectShell?.dataset.projectId || store.currentProjectId || "");
+
+    dispatchProjectTabReselected({ projectId, tabId });
+  }, true);
+}
+
+export { PROJECT_TAB_RESELECTED_EVENT };
+
 function getEffectiveSujetStatus(sujet) {
   const decisions = Array.isArray(store.situationsView?.rawResult?.decisions)
     ? store.situationsView.rawResult.decisions
@@ -71,7 +110,7 @@ export function renderProjectHeader(projectId, activeTab) {
   const counters = getProjectTabCounters();
 
   return `
-    <section class="project-context-header">
+    <section class="project-context-header" data-project-id="${projectId}">
       <nav class="project-tabs" aria-label="Project navigation">
         ${PROJECT_TABS.map((t) => {
           const visible = isTabVisible(t.id);
