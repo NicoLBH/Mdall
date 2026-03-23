@@ -1,5 +1,6 @@
 import { store } from "../store.js";
 import { ASK_LLM_URL_PROD } from "../constants.js";
+import { PROJECT_TAB_RESELECTED_EVENT } from "./project-header.js";
 import {
   bindProjectSituationsRunbar,
   syncProjectSituationsRunbar
@@ -4206,33 +4207,21 @@ function bindSubjectsTabReset() {
   subjectsTabResetBound = true;
   console.info("[project-subjects] bindSubjectsTabReset:bound");
 
-  document.addEventListener("click", (event) => {
-    const tabLink = event.target.closest?.('.project-tabs a[data-project-tab-id="subjects"]');
-    if (!tabLink) return;
+  window.addEventListener(PROJECT_TAB_RESELECTED_EVENT, (event) => {
+    const detail = event?.detail || {};
+    const tabId = String(detail.tabId || "");
+    if (tabId !== "subjects") return;
 
-    const href = String(tabLink.getAttribute("href") || "").trim();
-    const normalizedCurrentHash = String(location.hash || "").trim();
-    const resolvesToCurrentHash = (() => {
-      if (!href) return false;
-      if (href === normalizedCurrentHash) return true;
-      try {
-        const url = new URL(href, window.location.href);
-        return `${url.hash || ""}` === normalizedCurrentHash;
-      } catch {
-        return false;
-      }
-    })();
-    const isActiveSubjectsTab = tabLink.classList.contains("active") || tabLink.getAttribute("aria-current") === "page";
     const state = getSubjectsTabResetState();
-    console.info("[project-subjects] subjects-tab:click", {
-      href,
-      currentHash: normalizedCurrentHash,
-      resolvesToCurrentHash,
-      isActiveSubjectsTab,
+    console.info("[project-subjects] subjects-tab:reselected", {
+      detail,
       state
     });
-    if (!resolvesToCurrentHash && !isActiveSubjectsTab) {
-      console.info("[project-subjects] subjects-tab:skip-navigation-continues");
+
+    const activeProjectId = String(store.currentProjectId || "");
+    const eventProjectId = String(detail.projectId || "");
+    if (eventProjectId && activeProjectId && eventProjectId !== activeProjectId) {
+      console.info("[project-subjects] subjects-tab:skip-project-mismatch", { eventProjectId, activeProjectId });
       return;
     }
 
@@ -4253,10 +4242,8 @@ function bindSubjectsTabReset() {
       return;
     }
 
-    console.info("[project-subjects] subjects-tab:prevent-default-and-reset");
-    event.preventDefault();
-    event.stopPropagation();
-    resetSubjectsTabView("subjects-tab-click");
+    console.info("[project-subjects] subjects-tab:reset-on-reselect");
+    resetSubjectsTabView("subjects-tab-reselected");
   });
 }
 
