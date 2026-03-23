@@ -2306,6 +2306,16 @@ function renderFlatSujetRow(sujet, situationId) {
   const displayRef = getEntityDisplayRef("sujet", sujet.id);
   const author = firstNonEmpty(getEntityDescriptionState("sujet", sujet.id)?.author, sujet?.agent, sujet?.raw?.agent, "system");
   const openedLabel = formatRelativeTimeLabel(getEntityListTimestamp("sujet", sujet), "opened");
+  const subjectMeta = getSubjectSidebarMeta(sujet.id);
+  const subjectLabelsHtml = subjectMeta.labels
+    .map((label) => getSubjectLabelDefinition(label))
+    .filter(Boolean)
+    .map((labelDef) => renderSubjectLabelBadge(labelDef))
+    .join("");
+  const objective = getObjectiveById(subjectMeta.objectiveIds[0] || "");
+  const objectiveLabel = objective
+    ? ` - <span class="issue-row-subject-objective"><span class="issue-row-subject-objective__icon" aria-hidden="true">${svgIcon("milestone", { className: "octicon octicon-milestone" })}</span><span class="issue-row-subject-objective__text">${escapeHtml(firstNonEmpty(objective.title, objective.id, "Objectif"))}</span></span>`
+    : "";
 
   return `
     <div class="issue-row issue-row--pb click js-row-sujet${rowSelectedClass("sujet", sujet.id)}" data-sujet-id="${escapeHtml(sujet.id)}">
@@ -2318,10 +2328,11 @@ function renderFlatSujetRow(sujet, situationId) {
           <span class="issue-row-title-grid__review">
             ${reviewIcon ? `<span class="review-title-chip">${reviewIcon}</span>` : `<span class="review-title-chip review-title-chip--placeholder" aria-hidden="true"></span>`}
           </span>
-          <span class="issue-row-title-grid__title">
+          <span class="issue-row-title-grid__title issue-row-subject-title-line">
             <button type="button" class="row-title-trigger js-row-title-trigger theme-text theme-text--pb ${titleSeenClass}" data-row-entity-type="sujet" data-row-entity-id="${escapeHtml(sujet.id)}">${escapeHtml(firstNonEmpty(sujet.title, sujet.id, "Non classé"))}</button>
+            ${subjectLabelsHtml ? `<span class="issue-row-subject-labels">${subjectLabelsHtml}</span>` : ""}
           </span>
-          <span class="issue-row-title-grid__meta issue-row-meta-text mono-small">${escapeHtml(displayRef)} - ${escapeHtml(author)} • ${escapeHtml(openedLabel)}</span>
+          <span class="issue-row-title-grid__meta issue-row-meta-text mono-small">${escapeHtml(displayRef)} - ${escapeHtml(author)} • ${escapeHtml(openedLabel)}${objectiveLabel}</span>
         </span>
       </div>
       <div class="cell cell-prio">${priorityBadge(sujet.priority)}</div>
