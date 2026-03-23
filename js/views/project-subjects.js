@@ -4152,17 +4152,38 @@ function bindSubjectMetaDropdownDocumentEvents() {
 }
 
 function resetSubjectsTabView() {
+  console.info("[project-subjects] resetSubjectsTabView:start", {
+    subjectsSubview: String(store.situationsView.subjectsSubview || "subjects"),
+    showTableOnly: !!store.situationsView.showTableOnly,
+    detailsModalOpen: !!store.situationsView.detailsModalOpen,
+    drilldownOpen: !!store.situationsView.drilldown?.isOpen,
+    subjectMetaField: String(store.situationsView.subjectMetaDropdown?.field || ""),
+    subjectKanbanSubjectId: String(store.situationsView.subjectKanbanDropdown?.subjectId || ""),
+    selectedObjectiveId: String(store.situationsView.selectedObjectiveId || "")
+  });
+
   closeSubjectMetaDropdown();
   closeSubjectKanbanDropdown();
   resetObjectiveEditState();
   store.situationsView.subjectsSubview = "subjects";
   store.situationsView.selectedObjectiveId = "";
   store.situationsView.showTableOnly = true;
-  if (store.situationsView.detailsModalOpen) closeDetailsModal();
-  if (store.situationsView.drilldown?.isOpen) closeDrilldown();
+
+  if (store.situationsView.detailsModalOpen) {
+    console.info("[project-subjects] resetSubjectsTabView:closeDetailsModal");
+    closeDetailsModal();
+  }
+  if (store.situationsView.drilldown?.isOpen) {
+    console.info("[project-subjects] resetSubjectsTabView:closeDrilldown");
+    closeDrilldown();
+  }
+
   if (subjectsCurrentRoot && subjectsCurrentRoot.isConnected) {
+    console.info("[project-subjects] resetSubjectsTabView:rerenderPanels");
     rerenderPanels();
     syncSituationsPrimaryScrollSource();
+  } else {
+    console.info("[project-subjects] resetSubjectsTabView:skip-rerender-no-connected-root");
   }
 }
 
@@ -4196,10 +4217,29 @@ function bindSubjectsTabReset() {
     const hasSubviewState = String(store.situationsView.subjectsSubview || "subjects") !== "subjects"
       || !!store.situationsView.selectedObjectiveId
       || !!store.situationsView.objectiveEdit?.isOpen;
-    const hasMainViewResetState = store.situationsView.showTableOnly === false;
-    if (!hasOverlayState && !hasSubviewState && !hasMainViewResetState) return;
-    if (!subjectsCurrentRoot || !subjectsCurrentRoot.isConnected) return;
+    const hasMainViewState = !store.situationsView.showTableOnly;
 
+    console.info("[project-subjects] subjects-tab:click", {
+      href,
+      currentHash: normalizedCurrentHash,
+      resolvesToCurrentHash,
+      isActiveSubjectsTab,
+      hasOverlayState,
+      hasSubviewState,
+      hasMainViewState,
+      hasConnectedRoot: !!(subjectsCurrentRoot && subjectsCurrentRoot.isConnected)
+    });
+
+    if (!hasOverlayState && !hasSubviewState && !hasMainViewState) {
+      console.info("[project-subjects] subjects-tab:skip-reset-already-main-view");
+      return;
+    }
+    if (!subjectsCurrentRoot || !subjectsCurrentRoot.isConnected) {
+      console.info("[project-subjects] subjects-tab:skip-reset-no-connected-root");
+      return;
+    }
+
+    console.info("[project-subjects] subjects-tab:prevent-default-and-reset");
     event.preventDefault();
     event.stopPropagation();
     resetSubjectsTabView();
