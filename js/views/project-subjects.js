@@ -3564,10 +3564,7 @@ function rerenderPanels() {
   rerenderSubjectsToolbar();
 
   if (panelHost) {
-    if (String(store.situationsView.subjectsSubview || "subjects") === "labels") {
-      panelHost.innerHTML = `<div id="labelsTableHost" class="project-table-host">${renderLabelsTableHtml()}</div>`;
-      syncSituationsPrimaryScrollSource();
-    } else if (String(store.situationsView.subjectsSubview || "subjects") === "objectives") {
+    if (String(store.situationsView.subjectsSubview || "subjects") === "objectives") {
       panelHost.innerHTML = `<div id="objectivesTableHost" class="project-table-host">${renderObjectivesTableHtml()}</div>`;
       syncSituationsPrimaryScrollSource();
     } else if (store.situationsView.showTableOnly) {
@@ -4160,6 +4157,7 @@ function resetSubjectsTabView() {
   resetObjectiveEditState();
   store.situationsView.subjectsSubview = "subjects";
   store.situationsView.selectedObjectiveId = "";
+  store.situationsView.showTableOnly = true;
   if (store.situationsView.detailsModalOpen) closeDetailsModal();
   if (store.situationsView.drilldown?.isOpen) closeDrilldown();
   if (subjectsCurrentRoot && subjectsCurrentRoot.isConnected) {
@@ -4198,7 +4196,8 @@ function bindSubjectsTabReset() {
     const hasSubviewState = String(store.situationsView.subjectsSubview || "subjects") !== "subjects"
       || !!store.situationsView.selectedObjectiveId
       || !!store.situationsView.objectiveEdit?.isOpen;
-    if (!hasOverlayState && !hasSubviewState) return;
+    const hasMainViewResetState = store.situationsView.showTableOnly === false;
+    if (!hasOverlayState && !hasSubviewState && !hasMainViewResetState) return;
     if (!subjectsCurrentRoot || !subjectsCurrentRoot.isConnected) return;
 
     event.preventDefault();
@@ -4846,17 +4845,8 @@ function bindSituationsEvents(root, headerRoot) {
   toolbarRoot?.addEventListener("ghaction:action", (event) => {
     const action = String(event.detail?.action || "");
     if (!action) return;
-    if (action === "add-sujet" || action === "add-objective" || action === "add-label") {
+    if (action === "add-sujet" || action === "add-objective" || action === "open-labels") {
       event.preventDefault();
-      return;
-    }
-    if (action === "open-labels") {
-      event.preventDefault();
-      resetObjectiveEditState();
-      store.situationsView.subjectsSubview = "labels";
-      store.situationsView.selectedObjectiveId = "";
-      store.situationsView.showTableOnly = true;
-      rerenderPanels();
       return;
     }
     if (action === "open-objectives") {
@@ -5186,18 +5176,6 @@ function renderSubjectsObjectivesAction() {
 }
 
 function renderSituationsViewHeaderHtml() {
-  if (String(store.situationsView.subjectsSubview || "subjects") === "labels") {
-    return renderProjectTableToolbar({
-      className: "project-table-toolbar--situations project-table-toolbar--labels",
-      leftHtml: renderProjectTableToolbarGroup({
-        html: '<div class="project-table-toolbar__title">Labels</div>'
-      }),
-      rightHtml: renderProjectTableToolbarGroup({
-        html: renderSubjectsToolbarButton({ id: "labelsCreateAction", label: "Nouveau label", action: "add-label", tone: "primary" })
-      })
-    });
-  }
-
   if (String(store.situationsView.subjectsSubview || "subjects") === "objectives") {
     const selectedObjective = getObjectiveById(store.situationsView.selectedObjectiveId || "");
     const isEditingObjective = !!store.situationsView.objectiveEdit?.isOpen
@@ -5271,87 +5249,6 @@ function formatObjectiveMeta(objective) {
   return `${dueDate} - ${counts.closed}/${counts.total} sujets fermés`;
 }
 
-
-const SUBJECT_DEFAULT_LABEL_DEFINITIONS = [
-  { key: "bloquant", label: "bloquant", description: "Empêche l'avancement ou la décision.", color: "#f85149", textColor: "#ffffff", borderColor: "rgba(248,81,73,.45)" },
-  { key: "critique", label: "critique", description: "Point majeur à traiter en priorité.", color: "#db6d28", textColor: "#ffffff", borderColor: "rgba(219,109,40,.45)" },
-  { key: "sensible", label: "sensible", description: "Sujet délicat nécessitant de la vigilance.", color: "#8957e5", textColor: "#ffffff", borderColor: "rgba(137,87,229,.45)" },
-  { key: "non conforme", label: "non conforme", description: "Écart constaté par rapport aux exigences.", color: "#cf222e", textColor: "#ffffff", borderColor: "rgba(207,34,46,.45)" },
-  { key: "incident", label: "incident", description: "Événement ou anomalie signalé(e).", color: "#bc4c00", textColor: "#ffffff", borderColor: "rgba(188,76,0,.45)" },
-  { key: "réserve", label: "réserve", description: "Point à lever ou à suivre avant clôture.", color: "#9a6700", textColor: "#ffffff", borderColor: "rgba(154,103,0,.45)" },
-  { key: "question", label: "question", description: "Clarification attendue sur ce point.", color: "#a371f7", textColor: "#ffffff", borderColor: "rgba(163,113,247,.45)" },
-  { key: "à arbitrer", label: "à arbitrer", description: "Décision de pilotage ou d'arbitrage requise.", color: "#8b5cf6", textColor: "#ffffff", borderColor: "rgba(139,92,246,.45)" },
-  { key: "validation requise", label: "validation requise", description: "Validation formelle attendue.", color: "#1f6feb", textColor: "#ffffff", borderColor: "rgba(31,111,235,.45)" },
-  { key: "à préciser", label: "à préciser", description: "Informations complémentaires nécessaires.", color: "#316dca", textColor: "#ffffff", borderColor: "rgba(49,109,202,.45)" },
-  { key: "information", label: "information", description: "Point purement informatif.", color: "#0969da", textColor: "#ffffff", borderColor: "rgba(9,105,218,.45)" },
-  { key: "refusé", label: "refusé", description: "Demande ou proposition rejetée.", color: "#d1242f", textColor: "#ffffff", borderColor: "rgba(209,36,47,.45)" },
-  { key: "variante", label: "variante", description: "Solution alternative proposée.", color: "#1b7f83", textColor: "#ffffff", borderColor: "rgba(27,127,131,.45)" },
-  { key: "modification", label: "modification", description: "Évolution demandée sur l'existant.", color: "#0a7ea4", textColor: "#ffffff", borderColor: "rgba(10,126,164,.45)" },
-  { key: "optimisation", label: "optimisation", description: "Amélioration possible identifiée.", color: "#2da44e", textColor: "#ffffff", borderColor: "rgba(45,164,78,.45)" },
-  { key: "correction", label: "correction", description: "Action corrective à mettre en œuvre.", color: "#3fb950", textColor: "#ffffff", borderColor: "rgba(63,185,80,.45)" },
-  { key: "action moa", label: "action MOA", description: "Action attendue de la maîtrise d'ouvrage.", color: "#0ea5e9", textColor: "#ffffff", borderColor: "rgba(14,165,233,.45)" },
-  { key: "action moe", label: "action MOE", description: "Action attendue de la maîtrise d'œuvre.", color: "#2563eb", textColor: "#ffffff", borderColor: "rgba(37,99,235,.45)" },
-  { key: "action entreprise", label: "action Entreprise", description: "Action attendue de l'entreprise travaux.", color: "#14b8a6", textColor: "#ffffff", borderColor: "rgba(20,184,166,.45)" },
-  { key: "action bet", label: "action BET", description: "Action attendue du bureau d'études.", color: "#0891b2", textColor: "#ffffff", borderColor: "rgba(8,145,178,.45)" },
-  { key: "coordination", label: "coordination", description: "Coordination nécessaire entre acteurs.", color: "#7c3aed", textColor: "#ffffff", borderColor: "rgba(124,58,237,.45)" },
-  { key: "doublon", label: "doublon", description: "Sujet déjà couvert ailleurs.", color: "#6e7681", textColor: "#ffffff", borderColor: "rgba(110,118,129,.45)" },
-  { key: "hors périmètre", label: "hors périmètre", description: "En dehors du périmètre de traitement.", color: "#57606a", textColor: "#ffffff", borderColor: "rgba(87,96,106,.45)" },
-  { key: "sans suite", label: "sans suite", description: "Point clos sans action complémentaire.", color: "#6b7280", textColor: "#ffffff", borderColor: "rgba(107,114,128,.45)" }
-];
-
-function normalizeSubjectLabelKey(value) {
-  return String(value || "").trim().toLowerCase();
-}
-
-function getSubjectLabelDefinitions() {
-  return SUBJECT_DEFAULT_LABEL_DEFINITIONS;
-}
-
-function getSubjectsLabelUsageCounts() {
-  const counts = new Map();
-  const sujets = (store.situationsView.data || []).flatMap((situation) => Array.isArray(situation?.sujets) ? situation.sujets : []);
-  sujets.forEach((sujet) => {
-    const seen = new Set();
-    getSubjectSidebarMeta(sujet?.id).labels.forEach((label) => {
-      const key = normalizeSubjectLabelKey(label);
-      if (!key || seen.has(key)) return;
-      seen.add(key);
-      counts.set(key, Number(counts.get(key) || 0) + 1);
-    });
-  });
-  return counts;
-}
-
-function renderSubjectLabelBadge(labelDef) {
-  return `<span class="subject-label-badge" style="--subject-label-bg:${escapeHtml(labelDef.color)};--subject-label-fg:${escapeHtml(labelDef.textColor || '#ffffff')};--subject-label-border:${escapeHtml(labelDef.borderColor || labelDef.color)};">${escapeHtml(labelDef.label)}</span>`;
-}
-
-function renderLabelsTableHtml() {
-  const labels = getSubjectLabelDefinitions();
-  const counts = getSubjectsLabelUsageCounts();
-  const headHtml = `<div class="labels-table__head-count">${labels.length} labels</div>`;
-  const rowsHtml = labels.map((labelDef) => {
-    const usageCount = Number(counts.get(normalizeSubjectLabelKey(labelDef.key)) || 0);
-    return `
-      <div class="labels-row">
-        <div class="labels-row__name">${renderSubjectLabelBadge(labelDef)}</div>
-        <div class="labels-row__description">${escapeHtml(labelDef.description)}</div>
-        <div class="labels-row__count">${usageCount > 0 ? `<span class="labels-row__count-value">${usageCount}</span>` : ""}</div>
-      </div>
-    `;
-  }).join("");
-
-  return renderIssuesTable({
-    className: "labels-table",
-    headHtml,
-    rowsHtml,
-    headClassName: "labels-table__head",
-    bodyClassName: "labels-table__body",
-    gridTemplate: "minmax(180px, 320px) minmax(0, 1fr) 80px",
-    emptyTitle: "Aucun label",
-    emptyDescription: "Les labels apparaîtront ici."
-  });
-}
 
 function getObjectiveById(objectiveId) {
   return getObjectives().find((objective) => String(objective?.id || "") === String(objectiveId || "")) || null;
@@ -5712,10 +5609,8 @@ export function renderProjectSubjects(root) {
 
   const headerRoot = document.getElementById("projectViewHeaderHost");
   const toolbarHost = document.getElementById("situationsToolbarHost");
-  store.situationsView.subjectsSubview = String(store.situationsView.subjectsSubview || "subjects");
-  if (store.situationsView.subjectsSubview !== "objectives") {
-    store.situationsView.selectedObjectiveId = "";
-  }
+  store.situationsView.subjectsSubview = "subjects";
+  store.situationsView.selectedObjectiveId = "";
   const data = store.situationsView.data || [];
   const firstSituationId = data[0]?.id || null;
 
