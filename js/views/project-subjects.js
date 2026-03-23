@@ -443,6 +443,7 @@ function ensureViewUiState() {
     v.drilldown.expandedSujets = new Set(Array.isArray(v.drilldown.expandedSujets) ? v.drilldown.expandedSujets : []);
   }
   if (typeof v.subjectsStatusFilter !== "string") v.subjectsStatusFilter = "open";
+  if (typeof v.subjectsPriorityFilter !== "string") v.subjectsPriorityFilter = "";
   if (typeof v.situationsStatusFilter !== "string") v.situationsStatusFilter = "open";
   if (typeof v.subjectsSubview !== "string") v.subjectsSubview = "subjects";
   if (typeof v.objectivesStatusFilter !== "string") v.objectivesStatusFilter = "open";
@@ -1864,6 +1865,7 @@ function avisMatchesFilters(avis, query, verdictFilter) {
 }
 
 function situationMatchesFilters(situation, query, verdictFilter) {
+  const priorityFilter = getCurrentSubjectsPriorityFilter();
   const situationTextMatch = matchSearch(
     [
       situation.id,
@@ -1896,7 +1898,7 @@ function situationMatchesFilters(situation, query, verdictFilter) {
       query
     );
 
-    if (sujetTextMatch) {
+    if (sujetTextMatch && sujetMatchesPriorityFilter(sujet, priorityFilter)) {
       if (verdictFilter === "ALL") return true;
       if ((sujet.avis || []).some((avis) => normalizeVerdict(getEffectiveAvisVerdict(avis.id)) === verdictFilter)) return true;
     }
@@ -1914,6 +1916,71 @@ function getCurrentSubjectsStatusFilter() {
   ensureViewUiState();
   const value = String(store.situationsView.subjectsStatusFilter || "open").toLowerCase();
   return value === "closed" ? "closed" : "open";
+}
+
+function getCurrentSubjectsPriorityFilter() {
+  ensureViewUiState();
+  const value = String(store.situationsView.subjectsPriorityFilter || "").trim().toUpperCase();
+  return value;
+}
+
+function sujetMatchesPriorityFilter(sujet, priorityFilter = "") {
+  const activePriority = String(priorityFilter || "").trim().toUpperCase();
+  if (!activePriority) return true;
+  return String(firstNonEmpty(sujet?.priority, sujet?.prio, "P3")).trim().toUpperCase() === activePriority;
+}
+
+function getAvailableSubjectPriorities() {
+  const priorities = new Set();
+  for (const situation of store.situationsView.data || []) {
+    for (const sujet of getSituationSubjects(situation)) {
+      const priority = String(firstNonEmpty(sujet?.priority, sujet?.prio, "P3")).trim().toUpperCase();
+      if (priority) priorities.add(priority);
+    }
+  }
+  return Array.from(priorities).sort((a, b) => {
+    const na = Number.parseInt(String(a).replace(/[^0-9]/g, ""), 10);
+    const nb = Number.parseInt(String(b).replace(/[^0-9]/g, ""), 10);
+    if (Number.isFinite(na) && Number.isFinite(nb) && na !== nb) return na - nb;
+    return a.localeCompare(b, "fr", { numeric: true, sensitivity: "base" });
+  });
+}
+
+function renderSubjectsPriorityHeadHtml() {
+  const activePriority = getCurrentSubjectsPriorityFilter();
+  const priorities = getAvailableSubjectPriorities();
+  const items = [
+    {
+      key: 'all',
+      title: 'Toutes',
+      isSelected: !activePriority,
+      iconHtml: `<span class="select-menu__objective-iconset" aria-hidden="true"><span class="select-menu__objective-check ${!activePriority ? "is-visible" : ""}">${svgIcon("check", { className: "octicon octicon-check" })}</span></span>`,
+      dataAttrs: { 'subjects-priority-filter': '' }
+    },
+    ...priorities.map((priority) => ({
+      key: priority.toLowerCase(),
+      title: priority,
+      isSelected: activePriority === priority,
+      iconHtml: `<span class="select-menu__objective-iconset" aria-hidden="true"><span class="select-menu__objective-check ${activePriority === priority ? "is-visible" : ""}">${svgIcon("check", { className: "octicon octicon-check" })}</span></span>`,
+      dataAttrs: { 'subjects-priority-filter': priority }
+    }))
+  ];
+
+  return `
+    <div class="subjects-priority-head">
+      <button type="button" class="subjects-priority-head__trigger" id="subjectsPriorityHeadBtn" aria-haspopup="true" aria-expanded="false">
+        <span class="subjects-priority-head__label">Priorité</span>
+        <span class="subjects-priority-head__chevron" aria-hidden="true">${svgIcon("chevron-down", { className: "octicon octicon-chevron-down" })}</span>
+      </button>
+      <div class="subject-meta-dropdown subjects-priority-head__dropdown gh-menu" id="subjectsPriorityHeadDropdown" role="menu" aria-label="Filtrer par priorité">
+        <div class="subject-meta-dropdown__title">Filtrer par priorité</div>
+        <div class="subject-kanban-dropdown__separator" aria-hidden="true"></div>
+        <div class="subject-meta-dropdown__body">
+          ${renderSelectMenuSection({ items, emptyTitle: 'Aucune priorité', emptyHint: '' })}
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 function sujetMatchesStatusFilter(sujet, statusFilter = getCurrentSubjectsStatusFilter()) {
@@ -2298,7 +2365,7 @@ function renderAvisRow(avis) {
   `;
 }
 
-function renderFlatSujetRow(sujet, situationId) {
+function renderFlatSujetRow(sujet, situationId, options = {}) {
   const effStatus = getEffectiveSujetStatus(sujet.id);
   const meta = getEntityReviewMeta("sujet", sujet.id);
   const reviewIcon = renderEntityReviewLeadIcon("sujet", sujet.id);
@@ -2318,7 +2385,7 @@ function renderFlatSujetRow(sujet, situationId) {
     : "";
 
   return `
-    <div class="issue-row issue-row--pb click js-row-sujet${rowSelectedClass("sujet", sujet.id)}" data-sujet-id="${escapeHtml(sujet.id)}">
+    <div class="issue-row issue-row--pb click js-row-sujet${options.isSelectable === false ? "" : rowSelectedClass("sujet", sujet.id)}" data-sujet-id="${escapeHtml(sujet.id)}">
       <div class="cell cell-theme lvl0">
         <span class="chev chev--spacer"></span>
         <span class="issue-row-title-grid">
@@ -2335,8 +2402,7 @@ function renderFlatSujetRow(sujet, situationId) {
           <span class="issue-row-title-grid__meta issue-row-meta-text mono-small">${escapeHtml(displayRef)} - ${escapeHtml(author)} • ${escapeHtml(openedLabel)}${objectiveLabel}</span>
         </span>
       </div>
-      <div class="cell cell-prio">${priorityBadge(sujet.priority)}</div>
-      <div class="cell cell-agent"></div>
+      <div class="cell cell-filter-spacer"></div>
     </div>
   `;
 }
@@ -2364,7 +2430,7 @@ function renderFlatAvisRow(avis, sujetId, situationId) {
   `;
 }
 function getSituationsTableGridTemplate() {
-  return "minmax(0, 1fr) 56px 86px";
+  return "minmax(0, 1fr) max-content";
 }
 
 function renderSituationsTableHeadHtml(options = {}) {
@@ -2372,8 +2438,7 @@ function renderSituationsTableHeadHtml(options = {}) {
     ? options.columns
     : [
         { className: "cell cell-theme", html: renderSubjectsStatusHeadHtml() },
-        { className: "cell cell-prio", label: "Prio" },
-        { className: "cell cell-agent", label: "Agent" }
+        { className: "cell cell-priority-filter", html: renderSubjectsPriorityHeadHtml() }
       ];
 
   return renderDataTableHead({ columns });
@@ -2410,7 +2475,8 @@ function renderTableHtml(filteredSituations) {
     if (!visibleSujets.length) continue;
 
     for (const sujet of visibleSujets) {
-      rows.push(renderFlatSujetRow(sujet, situation.id));
+      if (!sujetMatchesPriorityFilter(sujet, getCurrentSubjectsPriorityFilter())) continue;
+      rows.push(renderFlatSujetRow(sujet, situation.id, { isSelectable: false }));
     }
   }
 
@@ -5165,6 +5231,37 @@ function bindSituationsEvents(root, headerRoot) {
       return;
     }
 
+    const subjectsPriorityBtn = event.target.closest("#subjectsPriorityHeadBtn");
+    if (subjectsPriorityBtn) {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const currentBtn = root.querySelector("#subjectsPriorityHeadBtn");
+      const currentDropdown = root.querySelector("#subjectsPriorityHeadDropdown");
+      if (!currentBtn || !currentDropdown) return;
+
+      const isOpen = currentDropdown.classList.contains("gh-menu--open");
+      currentDropdown.classList.toggle("gh-menu--open", !isOpen);
+      currentBtn.setAttribute("aria-expanded", String(!isOpen));
+      return;
+    }
+
+    const subjectsPriorityItem = event.target.closest("#subjectsPriorityHeadDropdown [data-subjects-priority-filter]");
+    if (subjectsPriorityItem) {
+      event.preventDefault();
+      event.stopPropagation();
+
+      store.situationsView.subjectsPriorityFilter = String(subjectsPriorityItem.dataset.subjectsPriorityFilter || "").trim().toUpperCase();
+
+      const currentBtn = root.querySelector("#subjectsPriorityHeadBtn");
+      const currentDropdown = root.querySelector("#subjectsPriorityHeadDropdown");
+      if (currentDropdown) currentDropdown.classList.remove("gh-menu--open");
+      if (currentBtn) currentBtn.setAttribute("aria-expanded", "false");
+
+      rerenderPanels();
+      return;
+    }
+
     const verdictBtn = event.target.closest("#verdictHeadBtn");
     if (verdictBtn) {
       event.preventDefault();
@@ -5195,6 +5292,19 @@ function bindSituationsEvents(root, headerRoot) {
 
       rerenderPanels();
       return;
+    }
+
+    const subjectsPriorityDropdown = root.querySelector("#subjectsPriorityHeadDropdown");
+    const subjectsPriorityCurrentBtn = root.querySelector("#subjectsPriorityHeadBtn");
+
+    if (
+      subjectsPriorityDropdown &&
+      subjectsPriorityCurrentBtn &&
+      !event.target.closest("#subjectsPriorityHeadBtn") &&
+      !event.target.closest("#subjectsPriorityHeadDropdown")
+    ) {
+      subjectsPriorityDropdown.classList.remove("gh-menu--open");
+      subjectsPriorityCurrentBtn.setAttribute("aria-expanded", "false");
     }
 
     const verdictDropdown = root.querySelector("#verdictHeadDropdown");
@@ -5650,12 +5760,12 @@ function renderObjectiveProgressBar(objective, options = {}) {
 function renderObjectiveSubjectsTableHtml(objective) {
   const counts = getObjectiveSubjectCounts(objective);
   const activeStatusFilter = getCurrentSubjectsStatusFilter();
-  const visibleSubjects = counts.linkedSubjects.filter((sujet) => sujetMatchesStatusFilter(sujet, activeStatusFilter));
+  const visibleSubjects = counts.linkedSubjects.filter((sujet) => sujetMatchesStatusFilter(sujet, activeStatusFilter) && sujetMatchesPriorityFilter(sujet, getCurrentSubjectsPriorityFilter()));
 
   const bodyHtml = visibleSubjects.length
     ? visibleSubjects.map((sujet) => {
         const parentSituation = getSituationBySujetId(sujet.id);
-        return renderFlatSujetRow(sujet, parentSituation?.id || "");
+        return renderFlatSujetRow(sujet, parentSituation?.id || "", { isSelectable: false });
       }).join("")
     : renderDataTableEmptyState({
         title: activeStatusFilter === "closed" ? "Aucun sujet fermé" : "Aucun sujet ouvert",
@@ -5674,9 +5784,7 @@ function renderObjectiveSubjectsTableHtml(objective) {
             { label: "Fermés", value: "closed", count: counts.closed, dataAttr: "subjects-status-filter" }
           ]
         }) },
-        { className: "cell cell-prio", label: "Prio" },
-        { className: "cell cell-agent", label: "Agent" },
-        { className: "cell cell-id mono", label: "#" }
+        { className: "cell cell-priority-filter", html: renderSubjectsPriorityHeadHtml() }
       ]
     }),
     rowsHtml: visibleSubjects.length ? bodyHtml : "",
