@@ -56,10 +56,18 @@ import {
 import { escapeHtml } from "../utils/escape-html.js";
 import { renderSharedDetailsTitleWrap, renderSharedDetailsTitleHtml } from "./ui/detail-header.js";
 import { renderSelectMenuSection } from "./ui/select-menu.js";
+import {
+  formatSharedDateInputValue,
+  parseSharedDateInputValue,
+  renderSharedDatePicker,
+  shiftSharedCalendarMonth,
+  toSharedDateInputValue
+} from "./ui/shared-date-picker.js";
 import { getSelectionDocumentRefs } from "../services/project-document-selectors.js";
 
 let subjectsCurrentRoot = null;
 let subjectsTabResetBound = false;
+let objectiveEditCalendarDismissBound = false;
 
 /* =========================================================
    Legacy DOM / archive parity helpers
@@ -438,6 +446,18 @@ function ensureViewUiState() {
   if (typeof v.subjectsSubview !== "string") v.subjectsSubview = "subjects";
   if (typeof v.objectivesStatusFilter !== "string") v.objectivesStatusFilter = "open";
   if (typeof v.selectedObjectiveId !== "string") v.selectedObjectiveId = "";
+  if (!v.objectiveEdit || typeof v.objectiveEdit !== "object") {
+    v.objectiveEdit = {
+      isOpen: false,
+      objectiveId: "",
+      title: "",
+      dueDate: "",
+      description: "",
+      calendarOpen: false,
+      viewYear: 0,
+      viewMonth: 0
+    };
+  }
   if (!v.subjectMetaDropdown || typeof v.subjectMetaDropdown !== "object") {
     v.subjectMetaDropdown = {
       field: null,
@@ -565,6 +585,7 @@ function createDefaultObjectives() {
     id: `objective-${index + 1}`,
     title,
     dueDate: null,
+    description: "",
     closed: false,
     closedSubjectsCount: 0,
     subjectsCount: 2
@@ -584,6 +605,7 @@ function getObjectives() {
     id: String(objective?.id || `objective-${index + 1}`),
     title: String(objective?.title || `Objectif ${index + 1}`),
     dueDate: objective?.dueDate || null,
+    description: String(objective?.description || ""),
     closed: !!objective?.closed,
     closedSubjectsCount: Number.isFinite(Number(objective?.closedSubjectsCount)) ? Number(objective.closedSubjectsCount) : 0,
     subjectsCount: Number.isFinite(Number(objective?.subjectsCount)) ? Number(objective.subjectsCount) : 2,
@@ -3585,7 +3607,6 @@ function selectSituation(situationId) {
   store.situationsView.selectedAvisId = null;
 
   store.situationsView.showTableOnly = true;
-  updateDetailsModal();
   openDetailsModal();
 }
 
@@ -3602,7 +3623,6 @@ function selectSujet(sujetId) {
   if (situation?.id) store.situationsView.expandedSituations.add(situation.id);
 
   store.situationsView.showTableOnly = true;
-  updateDetailsModal();
   openDetailsModal();
 }
 
@@ -4134,6 +4154,7 @@ function bindSubjectMetaDropdownDocumentEvents() {
 function resetSubjectsTabView() {
   closeSubjectMetaDropdown();
   closeSubjectKanbanDropdown();
+  resetObjectiveEditState();
   store.situationsView.subjectsSubview = "subjects";
   store.situationsView.selectedObjectiveId = "";
   if (store.situationsView.detailsModalOpen) closeDetailsModal();
@@ -4151,12 +4172,15 @@ function bindSubjectsTabReset() {
   document.addEventListener("click", (event) => {
     const tabLink = event.target.closest?.('.project-tabs a[data-project-tab-id="subjects"]');
     if (!tabLink) return;
-    if (!tabLink.classList.contains("active")) return;
+    const href = tabLink.getAttribute("href") || "";
+    if (!href || href !== location.hash) return;
     const hasOverlayState = !!store.situationsView.detailsModalOpen
       || !!store.situationsView.drilldown?.isOpen
       || !!store.situationsView.subjectMetaDropdown?.field
       || !!store.situationsView.subjectKanbanDropdown?.subjectId;
-    const hasSubviewState = String(store.situationsView.subjectsSubview || "subjects") !== "subjects" || !!store.situationsView.selectedObjectiveId;
+    const hasSubviewState = String(store.situationsView.subjectsSubview || "subjects") !== "subjects"
+      || !!store.situationsView.selectedObjectiveId
+      || !!store.situationsView.objectiveEdit?.isOpen;
     if (!hasOverlayState && !hasSubviewState) return;
     if (!subjectsCurrentRoot || !subjectsCurrentRoot.isConnected) return;
     event.preventDefault();
@@ -4790,6 +4814,8 @@ function bindDetailsScroll(root) {
 }
 
 function bindSituationsEvents(root, headerRoot) {
+  if (root?.dataset?.subjectsEventsBound === "1") return;
+  if (root?.dataset) root.dataset.subjectsEventsBound = "1";
   const toolbarRoot = document.getElementById("situationsToolbarHost");
 
   toolbarRoot?.addEventListener("input", (event) => {
@@ -4808,9 +4834,23 @@ function bindSituationsEvents(root, headerRoot) {
     }
     if (action === "open-objectives") {
       event.preventDefault();
+      resetObjectiveEditState();
       store.situationsView.subjectsSubview = "objectives";
       store.situationsView.selectedObjectiveId = "";
       store.situationsView.showTableOnly = true;
+      rerenderPanels();
+      return;
+    }
+    if (action === "edit-objective") {
+      event.preventDefault();
+      if (!store.situationsView.selectedObjectiveId) return;
+      openObjectiveEdit(store.situationsView.selectedObjectiveId);
+      rerenderPanels();
+      return;
+    }
+    if (action === "close-objective") {
+      event.preventDefault();
+      closeObjective(store.situationsView.selectedObjectiveId);
       rerenderPanels();
     }
   });
@@ -4819,6 +4859,7 @@ function bindSituationsEvents(root, headerRoot) {
     const objectiveBackButton = event.target.closest("[data-objectives-back]");
     if (!objectiveBackButton) return;
     event.preventDefault();
+    resetObjectiveEditState();
     store.situationsView.subjectsSubview = "objectives";
     store.situationsView.selectedObjectiveId = "";
     store.situationsView.showTableOnly = true;
@@ -4831,6 +4872,7 @@ function bindSituationsEvents(root, headerRoot) {
     const objectivesFilterButton = event.target.closest("[data-objectives-filter]");
     if (objectivesFilterButton) {
       event.preventDefault();
+      resetObjectiveEditState();
       store.situationsView.objectivesStatusFilter = String(objectivesFilterButton.dataset.objectivesFilter || "open").toLowerCase() === "closed" ? "closed" : "open";
       store.situationsView.selectedObjectiveId = "";
       rerenderPanels();
@@ -4840,7 +4882,90 @@ function bindSituationsEvents(root, headerRoot) {
     const objectiveBackButton = event.target.closest("[data-objectives-back]");
     if (objectiveBackButton) {
       event.preventDefault();
+      resetObjectiveEditState();
       store.situationsView.selectedObjectiveId = "";
+      rerenderPanels();
+      return;
+    }
+
+    const objectiveDateToggle = event.target.closest("[data-shared-date-input-trigger='objectiveEditDueDate']");
+    if (objectiveDateToggle) {
+      event.preventDefault();
+      ensureViewUiState();
+      store.situationsView.objectiveEdit.calendarOpen = !store.situationsView.objectiveEdit.calendarOpen;
+      rerenderPanels();
+      return;
+    }
+
+    const objectiveDatePrev = event.target.closest("[data-shared-date-nav='objectiveEditDueDate-prev']");
+    if (objectiveDatePrev) {
+      event.preventDefault();
+      const edit = store.situationsView.objectiveEdit;
+      const shifted = shiftSharedCalendarMonth(edit.viewYear, edit.viewMonth, -1);
+      edit.viewYear = shifted.year;
+      edit.viewMonth = shifted.month;
+      rerenderPanels();
+      return;
+    }
+
+    const objectiveDateNext = event.target.closest("[data-shared-date-nav='objectiveEditDueDate-next']");
+    if (objectiveDateNext) {
+      event.preventDefault();
+      const edit = store.situationsView.objectiveEdit;
+      const shifted = shiftSharedCalendarMonth(edit.viewYear, edit.viewMonth, 1);
+      edit.viewYear = shifted.year;
+      edit.viewMonth = shifted.month;
+      rerenderPanels();
+      return;
+    }
+
+    const objectiveDateDay = event.target.closest("[data-shared-date-day][data-shared-date-owner='objectiveEditDueDate']");
+    if (objectiveDateDay) {
+      event.preventDefault();
+      const nextValue = String(objectiveDateDay.dataset.sharedDateDay || "");
+      store.situationsView.objectiveEdit.dueDate = nextValue;
+      store.situationsView.objectiveEdit.calendarOpen = false;
+      const selectedDate = parseSharedDateInputValue(nextValue);
+      if (selectedDate) {
+        store.situationsView.objectiveEdit.viewYear = selectedDate.getFullYear();
+        store.situationsView.objectiveEdit.viewMonth = selectedDate.getMonth();
+      }
+      rerenderPanels();
+      return;
+    }
+
+    const objectiveDateClear = event.target.closest("[data-shared-date-clear='objectiveEditDueDate']");
+    if (objectiveDateClear) {
+      event.preventDefault();
+      store.situationsView.objectiveEdit.dueDate = "";
+      store.situationsView.objectiveEdit.calendarOpen = false;
+      rerenderPanels();
+      return;
+    }
+
+    const objectiveDateToday = event.target.closest("[data-shared-date-today='objectiveEditDueDate']");
+    if (objectiveDateToday) {
+      event.preventDefault();
+      const today = new Date();
+      store.situationsView.objectiveEdit.dueDate = toSharedDateInputValue(today);
+      store.situationsView.objectiveEdit.viewYear = today.getFullYear();
+      store.situationsView.objectiveEdit.viewMonth = today.getMonth();
+      store.situationsView.objectiveEdit.calendarOpen = false;
+      rerenderPanels();
+      return;
+    }
+
+    const objectiveEditAction = event.target.closest("[data-objective-edit-action]");
+    if (objectiveEditAction) {
+      event.preventDefault();
+      const action = String(objectiveEditAction.dataset.objectiveEditAction || "");
+      if (action === "cancel") {
+        resetObjectiveEditState();
+      } else if (action === "save") {
+        saveObjectiveEdit();
+      } else if (action === "close") {
+        closeObjective(store.situationsView.selectedObjectiveId);
+      }
       rerenderPanels();
       return;
     }
@@ -4850,6 +4975,7 @@ function bindSituationsEvents(root, headerRoot) {
       event.preventDefault();
       const objectiveId = String(objectiveTitleTrigger.dataset.objectiveId || objectiveTitleTrigger.closest("[data-objective-id]")?.dataset.objectiveId || "");
       if (objectiveId) {
+        resetObjectiveEditState();
         store.situationsView.selectedObjectiveId = objectiveId;
         store.situationsView.showTableOnly = true;
         rerenderPanels();
@@ -4962,6 +5088,24 @@ function bindSituationsEvents(root, headerRoot) {
       }
     }
   });
+
+  root.addEventListener("input", (event) => {
+    const field = event.target.closest?.("[data-objective-edit-field]");
+    if (!field) return;
+    const key = String(field.dataset.objectiveEditField || "");
+    if (!key) return;
+    store.situationsView.objectiveEdit[key] = String(field.value || "");
+  });
+
+  if (!objectiveEditCalendarDismissBound) {
+    objectiveEditCalendarDismissBound = true;
+    document.addEventListener("click", (event) => {
+      if (!store.situationsView.objectiveEdit?.isOpen || !store.situationsView.objectiveEdit?.calendarOpen) return;
+      if (event.target.closest(".shared-date-picker")) return;
+      store.situationsView.objectiveEdit.calendarOpen = false;
+      rerenderPanels();
+    });
+  }
 }
 
 function renderSubjectsToolbarButton({ id, label, icon, action, tone = "default" }) {
@@ -5015,6 +5159,8 @@ function renderSubjectsObjectivesAction() {
 function renderSituationsViewHeaderHtml() {
   if (String(store.situationsView.subjectsSubview || "subjects") === "objectives") {
     const selectedObjective = getObjectiveById(store.situationsView.selectedObjectiveId || "");
+    const isEditingObjective = !!store.situationsView.objectiveEdit?.isOpen
+      && String(store.situationsView.objectiveEdit?.objectiveId || "") === String(selectedObjective?.id || "");
     const leftHtml = selectedObjective
       ? renderProjectTableToolbarGroup({
           html: `<div class="objective-breadcrumb"><button type="button" class="objective-breadcrumb__link" data-objectives-back="list">Objectifs</button><span class="objective-breadcrumb__sep">/</span><span class="objective-breadcrumb__current">${escapeHtml(selectedObjective.title)}</span></div>`
@@ -5023,11 +5169,13 @@ function renderSituationsViewHeaderHtml() {
           html: '<div class="project-table-toolbar__title">Objectifs</div>'
         });
     const rightHtml = selectedObjective
-      ? [
-          renderProjectTableToolbarGroup({ html: renderSubjectsToolbarButton({ id: "objectiveEditAction", label: "Modifier", action: "edit-objective" }) }),
-          renderProjectTableToolbarGroup({ html: renderSubjectsToolbarButton({ id: "objectiveCloseAction", label: "Fermer l'Objectif", action: "close-objective" }) }),
-          renderProjectTableToolbarGroup({ html: renderSituationsAddAction() })
-        ].join("")
+      ? (isEditingObjective
+          ? ""
+          : [
+              renderProjectTableToolbarGroup({ html: renderSubjectsToolbarButton({ id: "objectiveEditAction", label: "Modifier", action: "edit-objective" }) }),
+              renderProjectTableToolbarGroup({ html: renderSubjectsToolbarButton({ id: "objectiveCloseAction", label: "Fermer l'Objectif", action: "close-objective" }) }),
+              renderProjectTableToolbarGroup({ html: renderSituationsAddAction() })
+            ].join(""))
       : renderProjectTableToolbarGroup({
           html: renderObjectivesCreateAction()
         });
@@ -5085,6 +5233,78 @@ function formatObjectiveMeta(objective) {
 
 function getObjectiveById(objectiveId) {
   return getObjectives().find((objective) => String(objective?.id || "") === String(objectiveId || "")) || null;
+}
+
+function resetObjectiveEditState() {
+  ensureViewUiState();
+  store.situationsView.objectiveEdit = {
+    isOpen: false,
+    objectiveId: "",
+    title: "",
+    dueDate: "",
+    description: "",
+    calendarOpen: false,
+    viewYear: 0,
+    viewMonth: 0
+  };
+}
+
+function openObjectiveEdit(objectiveId) {
+  ensureViewUiState();
+  const objective = getObjectiveById(objectiveId);
+  if (!objective) return;
+  const selectedDate = parseSharedDateInputValue(objective.dueDate);
+  const fallback = new Date();
+  store.situationsView.objectiveEdit = {
+    isOpen: true,
+    objectiveId: objective.id,
+    title: String(objective.title || ""),
+    dueDate: toSharedDateInputValue(selectedDate),
+    description: String(objective.description || ""),
+    calendarOpen: false,
+    viewYear: selectedDate?.getFullYear?.() || fallback.getFullYear(),
+    viewMonth: selectedDate?.getMonth?.() ?? fallback.getMonth()
+  };
+}
+
+function getEditingObjective() {
+  ensureViewUiState();
+  const edit = store.situationsView.objectiveEdit;
+  if (!edit?.isOpen || !edit.objectiveId) return null;
+  return getObjectiveById(edit.objectiveId);
+}
+
+function saveObjectiveEdit() {
+  ensureViewUiState();
+  const edit = store.situationsView.objectiveEdit;
+  if (!edit?.isOpen || !edit.objectiveId) return;
+  const nextTitle = String(edit.title || "").trim();
+  if (!nextTitle) return;
+  const nextDueDate = String(edit.dueDate || "").trim() || null;
+  const nextDescription = String(edit.description || "").trim();
+  persistRunBucket((draft) => {
+    const objectives = Array.isArray(draft.objectives) ? draft.objectives : [];
+    const target = objectives.find((objective) => String(objective?.id || "") === String(edit.objectiveId || ""));
+    if (!target) return;
+    target.title = nextTitle;
+    target.dueDate = nextDueDate;
+    target.description = nextDescription;
+  });
+  resetObjectiveEditState();
+}
+
+function closeObjective(objectiveId) {
+  const targetId = String(objectiveId || store.situationsView.selectedObjectiveId || "");
+  if (!targetId) return;
+  persistRunBucket((draft) => {
+    const objectives = Array.isArray(draft.objectives) ? draft.objectives : [];
+    const target = objectives.find((objective) => String(objective?.id || "") === targetId);
+    if (!target) return;
+    target.closed = true;
+  });
+  resetObjectiveEditState();
+  store.situationsView.selectedObjectiveId = "";
+  store.situationsView.objectivesStatusFilter = "open";
 }
 
 function getObjectiveSubjects(objective) {
@@ -5173,6 +5393,71 @@ function renderObjectiveSubjectsTableHtml(objective) {
   });
 }
 
+function renderObjectiveEditFormHtml(objective) {
+  const edit = store.situationsView.objectiveEdit;
+  const selectedDate = parseSharedDateInputValue(edit?.dueDate || objective?.dueDate || "");
+  const fallback = new Date();
+  const viewYear = Number.isFinite(Number(edit?.viewYear)) ? Number(edit.viewYear) : (selectedDate?.getFullYear?.() || fallback.getFullYear());
+  const viewMonth = Number.isFinite(Number(edit?.viewMonth)) ? Number(edit.viewMonth) : (selectedDate?.getMonth?.() ?? fallback.getMonth());
+
+  return `
+    <section class="objective-edit-form">
+      <header class="objective-edit-form__header">
+        <h2 class="objective-edit-form__title">Modifier l'objectif</h2>
+      </header>
+      <div class="objective-edit-form__separator" aria-hidden="true"></div>
+
+      <div class="objective-edit-form__field">
+        <label class="objective-edit-form__label" for="objectiveEditTitle">Titre <span aria-hidden="true">*</span></label>
+        <input
+          id="objectiveEditTitle"
+          class="objective-edit-form__input"
+          type="text"
+          value="${escapeHtml(edit?.title || objective?.title || "")}"
+          placeholder="${escapeHtml(objective?.title || "")}" 
+          data-objective-edit-field="title"
+        >
+      </div>
+
+      <div class="objective-edit-form__field objective-edit-form__field--date">
+        <label class="objective-edit-form__label" for="objectiveEditDueDate">Date d'échéance (optionnel)</label>
+        ${renderSharedDatePicker({
+          idBase: "objectiveEditDueDate",
+          value: edit?.dueDate || "",
+          selectedDate,
+          viewYear,
+          viewMonth,
+          isOpen: !!edit?.calendarOpen,
+          placeholder: "Sélectionner une date",
+          inputLabel: formatSharedDateInputValue(selectedDate),
+          calendarLabel: "Sélectionner une date d'échéance"
+        })}
+      </div>
+
+      <div class="objective-edit-form__field">
+        <label class="objective-edit-form__label" for="objectiveEditDescription">Description (optionnel)</label>
+        <textarea
+          id="objectiveEditDescription"
+          class="objective-edit-form__textarea"
+          rows="5"
+          placeholder="Décrire l'objectif"
+          data-objective-edit-field="description"
+        >${escapeHtml(edit?.description || objective?.description || "")}</textarea>
+      </div>
+
+      <div class="objective-edit-form__separator" aria-hidden="true"></div>
+
+      <footer class="objective-edit-form__actions">
+        <button type="button" class="gh-btn" data-objective-edit-action="close">Fermer l'objectif</button>
+        <div class="objective-edit-form__actions-right">
+          <button type="button" class="gh-btn" data-objective-edit-action="cancel">Annuler</button>
+          <button type="button" class="gh-btn gh-btn--comment" data-objective-edit-action="save">Enregistrer</button>
+        </div>
+      </footer>
+    </section>
+  `;
+}
+
 function renderObjectiveDetailHtml(objective) {
   if (!objective) {
     return renderDataTableEmptyState({
@@ -5205,6 +5490,9 @@ function renderObjectiveDetailHtml(objective) {
 function renderObjectivesTableHtml() {
   const selectedObjective = getObjectiveById(store.situationsView.selectedObjectiveId || "");
   if (selectedObjective) {
+    if (store.situationsView.objectiveEdit?.isOpen && String(store.situationsView.objectiveEdit?.objectiveId || "") === String(selectedObjective.id || "")) {
+      return renderObjectiveEditFormHtml(selectedObjective);
+    }
     return renderObjectiveDetailHtml(selectedObjective);
   }
 
