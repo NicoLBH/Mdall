@@ -4154,23 +4154,57 @@ function bindSubjectMetaDropdownDocumentEvents() {
   }, true);
 }
 
-function resetSubjectsTabView() {
+function getSubjectsTabResetState() {
+  return {
+    subjectsSubview: String(store.situationsView.subjectsSubview || "subjects"),
+    selectedObjectiveId: String(store.situationsView.selectedObjectiveId || ""),
+    showTableOnly: !!store.situationsView.showTableOnly,
+    detailsModalOpen: !!store.situationsView.detailsModalOpen,
+    drilldownOpen: !!store.situationsView.drilldown?.isOpen,
+    subjectMetaDropdownOpen: !!store.situationsView.subjectMetaDropdown?.field,
+    subjectKanbanDropdownOpen: !!store.situationsView.subjectKanbanDropdown?.subjectId,
+    objectiveEditOpen: !!store.situationsView.objectiveEdit?.isOpen,
+    hasConnectedRoot: !!(subjectsCurrentRoot && subjectsCurrentRoot.isConnected)
+  };
+}
+
+function resetSubjectsTabView(reason = "manual") {
+  const before = getSubjectsTabResetState();
+  console.info("[project-subjects] resetSubjectsTabView:start", { reason, before });
+
   closeSubjectMetaDropdown();
   closeSubjectKanbanDropdown();
   resetObjectiveEditState();
   store.situationsView.subjectsSubview = "subjects";
   store.situationsView.selectedObjectiveId = "";
-  if (store.situationsView.detailsModalOpen) closeDetailsModal();
-  if (store.situationsView.drilldown?.isOpen) closeDrilldown();
+  store.situationsView.showTableOnly = true;
+
+  if (store.situationsView.detailsModalOpen) {
+    console.info("[project-subjects] resetSubjectsTabView:closeDetailsModal");
+    closeDetailsModal();
+  }
+  if (store.situationsView.drilldown?.isOpen) {
+    console.info("[project-subjects] resetSubjectsTabView:closeDrilldown");
+    closeDrilldown();
+  }
   if (subjectsCurrentRoot && subjectsCurrentRoot.isConnected) {
+    console.info("[project-subjects] resetSubjectsTabView:rerenderPanels");
     rerenderPanels();
     syncSituationsPrimaryScrollSource();
+  } else {
+    console.info("[project-subjects] resetSubjectsTabView:skip-rerender-no-connected-root");
   }
+
+  console.info("[project-subjects] resetSubjectsTabView:done", {
+    reason,
+    after: getSubjectsTabResetState()
+  });
 }
 
 function bindSubjectsTabReset() {
   if (subjectsTabResetBound) return;
   subjectsTabResetBound = true;
+  console.info("[project-subjects] bindSubjectsTabReset:bound");
 
   document.addEventListener("click", (event) => {
     const tabLink = event.target.closest?.('.project-tabs a[data-project-tab-id="subjects"]');
@@ -4189,21 +4223,40 @@ function bindSubjectsTabReset() {
       }
     })();
     const isActiveSubjectsTab = tabLink.classList.contains("active") || tabLink.getAttribute("aria-current") === "page";
-    if (!resolvesToCurrentHash && !isActiveSubjectsTab) return;
+    const state = getSubjectsTabResetState();
+    console.info("[project-subjects] subjects-tab:click", {
+      href,
+      currentHash: normalizedCurrentHash,
+      resolvesToCurrentHash,
+      isActiveSubjectsTab,
+      state
+    });
+    if (!resolvesToCurrentHash && !isActiveSubjectsTab) {
+      console.info("[project-subjects] subjects-tab:skip-navigation-continues");
+      return;
+    }
 
-    const hasOverlayState = !!store.situationsView.detailsModalOpen
-      || !!store.situationsView.drilldown?.isOpen
-      || !!store.situationsView.subjectMetaDropdown?.field
-      || !!store.situationsView.subjectKanbanDropdown?.subjectId;
-    const hasSubviewState = String(store.situationsView.subjectsSubview || "subjects") !== "subjects"
-      || !!store.situationsView.selectedObjectiveId
-      || !!store.situationsView.objectiveEdit?.isOpen;
-    if (!hasOverlayState && !hasSubviewState) return;
-    if (!subjectsCurrentRoot || !subjectsCurrentRoot.isConnected) return;
+    const hasOverlayState = state.detailsModalOpen
+      || state.drilldownOpen
+      || state.subjectMetaDropdownOpen
+      || state.subjectKanbanDropdownOpen;
+    const hasSubviewState = state.subjectsSubview !== "subjects"
+      || !!state.selectedObjectiveId
+      || state.objectiveEditOpen;
+    const hasMainViewState = !state.showTableOnly;
+    if (!hasOverlayState && !hasSubviewState && !hasMainViewState) {
+      console.info("[project-subjects] subjects-tab:skip-already-main-view");
+      return;
+    }
+    if (!state.hasConnectedRoot) {
+      console.info("[project-subjects] subjects-tab:skip-no-connected-root");
+      return;
+    }
 
+    console.info("[project-subjects] subjects-tab:prevent-default-and-reset");
     event.preventDefault();
     event.stopPropagation();
-    resetSubjectsTabView();
+    resetSubjectsTabView("subjects-tab-click");
   });
 }
 
