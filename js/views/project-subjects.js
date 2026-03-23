@@ -4158,10 +4158,8 @@ function resetSubjectsTabView() {
   closeSubjectMetaDropdown();
   closeSubjectKanbanDropdown();
   resetObjectiveEditState();
-  store.situationsView.subjectsSubview = String(store.situationsView.subjectsSubview || "subjects");
-  if (store.situationsView.subjectsSubview !== "objectives") {
-    store.situationsView.selectedObjectiveId = "";
-  }
+  store.situationsView.subjectsSubview = "subjects";
+  store.situationsView.selectedObjectiveId = "";
   if (store.situationsView.detailsModalOpen) closeDetailsModal();
   if (store.situationsView.drilldown?.isOpen) closeDrilldown();
   if (subjectsCurrentRoot && subjectsCurrentRoot.isConnected) {
