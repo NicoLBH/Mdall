@@ -2055,6 +2055,58 @@ function getFilteredSituations() {
   return situations.filter((situation) => situationMatchesFilters(situation, query, verdictFilter));
 }
 
+function getStandaloneCustomSubjects() {
+  const situationIds = new Set((store.situationsView.data || []).map((situation) => String(situation?.id || "")).filter(Boolean));
+  const { bucket } = getRunBucket();
+  const metaMap = bucket?.subjectMeta?.sujet && typeof bucket.subjectMeta.sujet === "object"
+    ? bucket.subjectMeta.sujet
+    : {};
+
+  return getCustomSubjects().filter((subject) => {
+    const meta = metaMap[String(subject?.id || "")];
+    const linkedIds = normalizeSubjectSituationIds(meta?.situationIds);
+    if (!linkedIds.length) return true;
+    return !linkedIds.some((situationId) => situationIds.has(String(situationId || "")));
+  });
+}
+
+function subjectMatchesFilters(sujet, query, verdictFilter) {
+  if (!sujet) return false;
+
+  const priorityFilter = getCurrentSubjectsPriorityFilter();
+  const sujetTextMatch = matchSearch(
+    [
+      sujet.id,
+      sujet.title,
+      sujet.priority,
+      sujet.status,
+      sujet.agent,
+      sujet.raw?.summary,
+      sujet.raw?.topic,
+      sujet.raw?.category,
+      sujet.raw?.title
+    ],
+    query
+  );
+
+  if (sujetTextMatch && sujetMatchesPriorityFilter(sujet, priorityFilter)) {
+    if (verdictFilter === "ALL") return true;
+    if ((sujet.avis || []).some((avis) => normalizeVerdict(getEffectiveAvisVerdict(avis.id)) === verdictFilter)) return true;
+  }
+
+  for (const avis of sujet.avis || []) {
+    if (avisMatchesFilters(avis, query, verdictFilter)) return true;
+  }
+
+  return false;
+}
+
+function getFilteredStandaloneSubjects() {
+  const verdictFilter = String(store.situationsView.verdictFilter || "ALL").toUpperCase();
+  const query = String(store.situationsView.search || "").trim().toLowerCase();
+  return getStandaloneCustomSubjects().filter((sujet) => subjectMatchesFilters(sujet, query, verdictFilter));
+}
+
 function avisMatchesFilters(avis, query, verdictFilter) {
   if (!avis) return false;
 
@@ -2154,6 +2206,10 @@ function getAvailableSubjectPriorities() {
       if (priority) priorities.add(priority);
     }
   }
+  for (const sujet of getStandaloneCustomSubjects()) {
+    const priority = String(firstNonEmpty(sujet?.priority, sujet?.prio, "P3")).trim().toUpperCase();
+    if (priority) priorities.add(priority);
+  }
   return Array.from(priorities).sort((a, b) => {
     const na = Number.parseInt(String(a).replace(/[^0-9]/g, ""), 10);
     const nb = Number.parseInt(String(b).replace(/[^0-9]/g, ""), 10);
@@ -2207,25 +2263,31 @@ function sujetMatchesStatusFilter(sujet, statusFilter = getCurrentSubjectsStatus
 function getSubjectsStatusCounts(query = "") {
   let open = 0;
   let closed = 0;
+  const registerSubject = (sujet, extra = []) => {
+    const matchesSearch = matchSearch([
+      ...extra,
+      sujet?.id,
+      sujet?.title,
+      sujet?.priority,
+      sujet?.status,
+      sujet?.agent,
+      sujet?.raw?.summary,
+      sujet?.raw?.topic,
+      sujet?.raw?.category,
+      sujet?.raw?.title
+    ], query);
+    if (!matchesSearch) return;
+    if (sujetMatchesStatusFilter(sujet, "closed")) closed += 1;
+    else open += 1;
+  };
+
   for (const situation of store.situationsView.data || []) {
     for (const sujet of getSituationSubjects(situation)) {
-      const matchesSearch = matchSearch([
-        situation?.id,
-        situation?.title,
-        sujet?.id,
-        sujet?.title,
-        sujet?.priority,
-        sujet?.status,
-        sujet?.agent,
-        sujet?.raw?.summary,
-        sujet?.raw?.topic,
-        sujet?.raw?.category,
-        sujet?.raw?.title
-      ], query);
-      if (!matchesSearch) continue;
-      if (sujetMatchesStatusFilter(sujet, "closed")) closed += 1;
-      else open += 1;
+      registerSubject(sujet, [situation?.id, situation?.title]);
     }
+  }
+  for (const sujet of getStandaloneCustomSubjects()) {
+    registerSubject(sujet);
   }
   return { open, closed };
 }
@@ -2249,6 +2311,10 @@ function getVisibleCounts(filteredSituations) {
   for (const situation of filteredSituations) {
     sujets += getSituationSubjects(situation).length;
     for (const sujet of getSituationSubjects(situation)) avis += (sujet.avis || []).length;
+  }
+  for (const sujet of getFilteredStandaloneSubjects()) {
+    sujets += 1;
+    avis += (sujet.avis || []).length;
   }
   return { situations: filteredSituations.length, sujets, avis };
 }
@@ -2683,17 +2749,9 @@ function renderWelcomeHtml() {
 
 function renderTableHtml(filteredSituations) {
   const activeStatusFilter = getCurrentSubjectsStatusFilter();
+  const standaloneSubjects = getFilteredStandaloneSubjects().filter((sujet) => sujetMatchesStatusFilter(sujet, activeStatusFilter));
 
-  if (!(store.situationsView.data || []).length) return renderWelcomeHtml();
-
-  if (!filteredSituations.length) {
-    return renderIssuesTable({
-      gridTemplate: getSituationsTableGridTemplate(),
-      headHtml: renderSituationsTableHeadHtml(),
-      emptyTitle: "Aucun résultat",
-      emptyDescription: "Aucun résultat pour les filtres actuels."
-    });
-  }
+  if (!(store.situationsView.data || []).length && !standaloneSubjects.length) return renderWelcomeHtml();
 
   const rows = [];
 
@@ -2706,6 +2764,20 @@ function renderTableHtml(filteredSituations) {
       if (!sujetMatchesPriorityFilter(sujet, getCurrentSubjectsPriorityFilter())) continue;
       rows.push(renderFlatSujetRow(sujet, situation.id, { isSelectable: false }));
     }
+  }
+
+  for (const sujet of standaloneSubjects) {
+    if (!sujetMatchesPriorityFilter(sujet, getCurrentSubjectsPriorityFilter())) continue;
+    rows.push(renderFlatSujetRow(sujet, "", { isSelectable: false }));
+  }
+
+  if (!rows.length) {
+    return renderIssuesTable({
+      gridTemplate: getSituationsTableGridTemplate(),
+      headHtml: renderSituationsTableHeadHtml(),
+      emptyTitle: "Aucun résultat",
+      emptyDescription: "Aucun résultat pour les filtres actuels."
+    });
   }
 
   return renderIssuesTable({
