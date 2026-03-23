@@ -1169,13 +1169,14 @@ body.modal-open {
   min-height:0;
   border:1px solid var(--border);
   border-radius:var(--radius);
-  overflow:hidden;
+  overflow:visible;
   flex:1 1 auto;
 }
 
 .issues-table__head{
   position:relative;
-  z-index:5;
+  z-index:20;
+  overflow:visible;
   display:grid;
   grid-template-columns: var(--issues-cols);
   gap:0;
