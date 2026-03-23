@@ -19,24 +19,45 @@ export function bindProjectHeaderNavigation() {
   if (projectHeaderNavigationBound) return;
   projectHeaderNavigationBound = true;
 
+  
   document.addEventListener("click", (event) => {
-    const tabLink = event.target.closest?.('.project-tabs a[data-project-tab-id]');
+    const rawTarget = event.target;
+    let el = null;
+
+    if (rawTarget && rawTarget.nodeType === 1) {
+      el = rawTarget;
+    } else if (rawTarget && rawTarget.parentElement) {
+      el = rawTarget.parentElement;
+    }
+
+    if (!el) return;
+
+    console.info("[project-header] click captured", { rawTarget });
+
+    const tabLink = el.closest('.project-tabs a[data-project-tab-id]');
     if (!tabLink) return;
+
+    console.info("[project-header] tab link found", { tabLink });
 
     const tabId = String(tabLink.dataset.projectTabId || "");
     if (!tabId) return;
 
     const isActiveTab = tabLink.classList.contains("active")
       || tabLink.getAttribute("aria-current") === "page";
+
     if (!isActiveTab) return;
+
+    console.info("[project-header] active tab reselected", { tabId });
 
     event.preventDefault();
 
-    const projectShell = tabLink.closest(".project-shell");
-    const projectId = String(projectShell?.dataset.projectId || store.currentProjectId || "");
+    const projectId = store.currentProjectId || null;
+
+    console.info("[project-header] dispatching reselect", { projectId, tabId });
 
     dispatchProjectTabReselected({ projectId, tabId });
   }, true);
+
 }
 
 export { PROJECT_TAB_RESELECTED_EVENT };
