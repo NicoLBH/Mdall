@@ -104,7 +104,7 @@ export function renderGlobalHeader() {
         </button>
 
         <a class="gh-brand" href="${model.href}">
-          <img class="gh-brand__logo" src="assets/images/logo.png" />
+          ${svgIcon("heimdall", { className: "gh-brand__logo", title: "Heimdall" })}
           <span class="gh-brand__name">${model.primary}</span>
           ${
             model.showSecondary
