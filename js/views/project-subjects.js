@@ -233,7 +233,7 @@ function statePill(status = "open", options = {}) {
 }
 
 function chevron(isOpen, isVisible = true) {
-  if (!isVisible) return `<span class="chev chev--spacer"></span>`;
+  if (!isVisible) return "";
   return `<span class="chev">${isOpen ? "▾" : "▸"}</span>`;
 }
 
@@ -2627,7 +2627,6 @@ function renderSujetRow(sujet) {
   return `
     <div class="issue-row issue-row--pb click js-row-sujet${rowSelectedClass("sujet", sujet.id)}" data-sujet-id="${escapeHtml(sujet.id)}">
       <div class="cell cell-theme lvl1">
-        <span class="chev chev--spacer"></span>
         ${issueIcon(effStatus, { reviewState: meta.review_state, entityType: "sujet", isSeen: meta.is_seen })}
         ${reviewIcon ? `<span class="review-title-chip">${reviewIcon}</span>` : ""}
         <span class="theme-text theme-text--pb ${titleSeenClass}">${escapeHtml(firstNonEmpty(sujet.title, sujet.id, "Non classé"))}</span>
@@ -2647,7 +2646,6 @@ function renderAvisRow(avis) {
   return `
     <div class="issue-row issue-row--avis click js-row-avis${rowSelectedClass("avis", avis.id)}" data-avis-id="${escapeHtml(avis.id)}">
       <div class="cell cell-theme lvl2">
-        <span class="chev chev--spacer"></span>
         ${reviewIcon ? `<span class="review-title-chip">${reviewIcon}</span>` : ""}
         <span class="theme-text theme-text--avis ${titleSeenClass}">${escapeHtml(firstNonEmpty(avis.title, avis.id, ""))}</span>
       </div>
@@ -2681,7 +2679,6 @@ function renderFlatSujetRow(sujet, situationId, options = {}) {
   return `
     <div class="issue-row issue-row--pb click js-row-sujet${options.isSelectable === false ? "" : rowSelectedClass("sujet", sujet.id)}" data-sujet-id="${escapeHtml(sujet.id)}">
       <div class="cell cell-theme lvl0">
-        <span class="chev chev--spacer"></span>
         <span class="issue-row-title-grid">
           <span class="issue-row-title-grid__status">
             ${issueIcon(effStatus, { reviewState: meta.review_state, entityType: "sujet", isSeen: meta.is_seen })}
@@ -2710,7 +2707,6 @@ function renderFlatAvisRow(avis, sujetId, situationId) {
   return `
     <div class="issue-row issue-row--avis click js-row-avis${rowSelectedClass("avis", avis.id)}" data-avis-id="${escapeHtml(avis.id)}">
       <div class="cell cell-theme lvl0">
-        <span class="chev chev--spacer"></span>
         ${issueIcon("open")}
         ${reviewIcon ? `<span class="review-title-chip">${reviewIcon}</span>` : ""}
         <span class="theme-text theme-text--avis ${titleSeenClass}">${escapeHtml(firstNonEmpty(avis.title, avis.id, ""))}</span>
@@ -3716,7 +3712,6 @@ function renderSubIssuesForSujet(sujet, options = {}) {
     return `
       <div class="issue-row issue-row--avis click ${avisRowClass}" data-avis-id="${escapeHtml(avis.id)}">
         <div class="cell cell-theme cell-theme--full lvl0">
-          <span class="chev chev--spacer"></span>
           ${renderStateDot(effVerdict)}
           <span class="theme-text theme-text--avis">${escapeHtml(firstNonEmpty(avis.title, avis.id, ""))}</span>
         </div>
@@ -3769,7 +3764,6 @@ function renderSubIssuesForSituation(situation, options = {}) {
         rows.push(`
           <div class="issue-row issue-row--avis click ${avisRowClass}" data-avis-id="${escapeHtml(avis.id)}">
             <div class="cell cell-theme cell-theme--full lvl1">
-              <span class="chev chev--spacer"></span>
               ${renderStateDot(effVerdict)}
               <span class="theme-text theme-text--avis">${escapeHtml(firstNonEmpty(avis.title, avis.id, ""))}</span>
             </div>
