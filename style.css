@@ -210,7 +210,7 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);ove
 .gh-brand__name{font-weight:700;}
 .gh-brand__sep{color:var(--muted);}
 .gh-brand__repo{color:var(--muted);} 
-.gh-brand__name,  .gh-brand__sep,  .gh-brand__repo{cursor:pointer;}
+.gh-brand__name,  .gh-brand__sep,  .gh-brand__repo{cursor:pointer;font-size:13px;}
 .gh-brand__compact-tab{
   display:none;
   align-items:center;
@@ -2673,7 +2673,7 @@ body.route--project:not(.project-shell-compact) [data-chrome-visibility="compact
 
 .gh-header--global{border-bottom:1px solid var(--border);}
 .gh-header--project{border-bottom:none;}
-.gh-header--project .gh-brand__name{font-weight:700;}
+.gh-header--project .gh-brand__name{font-weight:400;font-size:13px;}
 .gh-header--project .gh-brand__repo{opacity:.92;}
 
 .project-tabs{transition:opacity .12s ease, visibility .12s ease;}
@@ -7202,6 +7202,7 @@ color:var(--text);
   width:32px;
   height:32px;
   float:none;
+  box-shadow: rgba(255, 255, 255, 0.15) 0px 0px 0px 1px;
 }
 
 .gh-user-menu__dropdown{
