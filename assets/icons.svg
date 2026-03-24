@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg">
-  <symbol id="heimdall" width="32" height="32" viewBox="0 0 24 24">
+  <symbol id="heimdall" viewBox="0 0 24 24">
     <circle cx="12" cy="12" r="11" fill="white"/>
     <g fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
       <path d="M5.5 15 L8.5 6 L12 10 L15.5 6 L18.5 15"/>
