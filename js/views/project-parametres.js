@@ -1416,18 +1416,6 @@ function renderProjectTabsFeatureCard(projectTabs) {
       label: "Situations",
       description: "Affiche l’onglet Situations actuellement branché sur les jalons projet."
     },
-    {
-      id: "tabVisibilityReferentiel",
-      key: PROJECT_TAB_IDS.REFERENTIEL,
-      label: "Référentiel",
-      description: "Affiche l’onglet Référentiel dans la navigation projet."
-    },
-    {
-      id: "tabVisibilityRisquesSecurite",
-      key: PROJECT_TAB_IDS.RISQUES_SECURITE,
-      label: "Risques & sécurité",
-      description: "Affiche l’onglet Risques & sécurité dans la navigation projet."
-    }
   ];
 
   return `
