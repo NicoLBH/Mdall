@@ -1,3 +1,5 @@
+import { svgIcon } from "../ui/icons.js";
+
 function parseHash() {
   const hash = String(location.hash || "").replace(/^#/, "").trim();
   if (!hash) return ["dashboard"];
@@ -45,7 +47,7 @@ export function renderGlobalNav() {
     <div id="globalNav" class="global-nav hidden" aria-hidden="true">
       <div class="global-nav__panel settings-nav settings-nav--parametres">
         <div class="global-nav__topbar">
-          <img class="global-nav__brand-logo" src="assets/images/logo.png" alt="Rapsobot">
+          ${svgIcon("heimdall", { className: "global-nav__brand-logo", width: 32, height: 32, title: "Heimdall" })}
           <button id="globalNavCloseBtn" class="global-nav__close" type="button" aria-label="Fermer le menu">
             ${closeIcon()}
           </button>
