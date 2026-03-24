@@ -2,7 +2,6 @@ import { svgIcon } from "./ui/icons.js";
 
 export const PROJECT_TAB_IDS = {
   DOCUMENTS: "documents",
-  AVIS: "avis",
   SUBJECTS: "sujets",
   PROPOSITIONS: "propositions",
   DISCUSSIONS: "discussions",
@@ -41,11 +40,7 @@ export function isToggleableProjectTab(tabId) {
   return PROJECT_TABS_TOGGLEABLE.includes(tabId);
 }
 
-export function isProjectTabAllowedForUser(tabId, user) {
-  if (tabId === PROJECT_TAB_IDS.AVIS) {
-    return String(user?.role || "").toUpperCase() === "CT";
-  }
-
+export function isProjectTabAllowedForUser() {
   return true;
 }
 
@@ -54,11 +49,6 @@ export const PROJECT_TABS = [
     id: PROJECT_TAB_IDS.DOCUMENTS,
     label: "Documents",
     icon: svgIcon("file", { className: "octicon octicon-file" })
-  },
-  {
-    id: PROJECT_TAB_IDS.AVIS,
-    label: "Avis",
-    icon: svgIcon("avis", { className: "octicon octicon-file" })
   },
   {
     id: PROJECT_TAB_IDS.SUBJECTS,
