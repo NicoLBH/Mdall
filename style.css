@@ -202,10 +202,8 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);ove
 .gh-brand__logo{
   width:30px;
   height:30px;
-  border-radius:8px;
-  background:transparent;
-  padding:0;
-  object-fit:contain;
+  flex:0 0 30px;
+  display:block;
   margin-top:-4px;
   filter: drop-shadow(0 0 6px rgba(0,0,0,.6));
 }
