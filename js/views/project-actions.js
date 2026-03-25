@@ -166,7 +166,6 @@ function renderRunStatus(entry) {
 function getStepLabel(stepKey) {
   const labels = {
     georisques: "Géorisques",
-    windRegion: "Zone de vent",
     seismicZone: "Zone sismique",
     snowRegion: "Zone de neige",
     frostZone: "Zone de gel",
@@ -199,7 +198,6 @@ function getStepStatusMeta(status) {
 function getOrderedStepEntries(steps) {
   const preferredOrder = [
     "georisques",
-    "windRegion",
     "snowRegion",
     "frostZone",
     "climaticZone",
