@@ -1399,12 +1399,6 @@ async function loadGeorisquesForCurrentProject({ force = false } = {}) {
 function renderProjectTabsFeatureCard(projectTabs) {
   const items = [
     {
-      id: "tabVisibilityPropositions",
-      key: PROJECT_TAB_IDS.PROPOSITIONS,
-      label: "Propositions",
-      description: "Affiche l’onglet Propositions dans la barre d’onglets du projet."
-    },
-    {
       id: "tabVisibilityDiscussions",
       key: PROJECT_TAB_IDS.DISCUSSIONS,
       label: "Discussions",
@@ -1910,7 +1904,7 @@ function getPageHtml(form) {
                     description: "Organisation des disciplines et périmètres techniques du projet.",
                     body: renderPlaceholderList([
                       "Gros œuvre, structure, fluides, électricité, SSI, VRD, enveloppe, second œuvre, exploitation.",
-                      "Découpage compatible avec les tableaux Documents, Situations et Propositions."
+                      "Découpage compatible avec les tableaux Documents, Situations et Sujets."
                     ])
                   })
                 ]
@@ -2129,15 +2123,6 @@ function getPageHtml(form) {
                 lead: "Convention de nommage et d’identification documentaire.",
                 cards: [
                   renderSectionCard({ title: "Nomenclature documentaire", body: renderPlaceholderList(["Convention de nommage, identifiants, versions, lots, zones et statuts documentaires."]) })
-                ]
-              })}
-
-              ${renderSettingsBlock({
-                id: "parametres-workflow-pr",
-                title: "Gouvernance",
-                lead: "Cadre de traitement des propositions.",
-                cards: [
-                  renderSectionCard({ title: "Workflow de PR", body: renderPlaceholderList(["Règles d’ouverture, revue, approbation, intégration et traçabilité des propositions."]) })
                 ]
               })}
 
