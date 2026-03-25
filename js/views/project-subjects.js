@@ -5877,7 +5877,7 @@ function renderCreateSubjectFormHtml() {
               </div>
               <div class="subject-create-editor__body ${form.previewMode ? "is-preview" : ""}">
                 <textarea class="textarea comment-composer__textarea subject-create-textarea ${form.previewMode ? "hidden" : ""}" data-create-subject-description placeholder="Type your description here...">${escapeHtml(String(form.description || ""))}</textarea>
-                <div class="comment-preview comment-composer__preview subject-create-preview ${form.previewMode ? "" : "hidden"}" data-create-subject-preview>${previewHtml || '<span class="project-discussions__form-preview-empty">Aucun contenu à prévisualiser.</span>'}</div>
+                <div class="comment-preview comment-composer__preview subject-create-preview ${form.previewMode ? "" : "hidden"}" data-create-subject-preview>${previewHtml || '<span class="subject-create-preview-empty">Aucun contenu à prévisualiser.</span>'}</div>
               </div>
             </div>
             ${form.validationError ? `<div class="subject-create-form__error">${escapeHtml(form.validationError)}</div>` : ""}
