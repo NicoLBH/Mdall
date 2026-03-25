@@ -20,7 +20,6 @@ import {
   isAnalysisRunning,
   runAnalysis
 } from "../services/analysis-runner.js";
-import { createProjectProposal } from "../services/project-proposals.js";
 import { addProjectDocument, decorateDocumentWithPhase, getEnabledProjectPhasesCatalog, getProjectDocumentById, getProjectDocumentPreviewUrl, getProjectDocuments, resolveDocumentRefs, setActiveProjectDocument } from "../services/project-documents-store.js";
 import { getDocumentStatsMap } from "../services/project-document-selectors.js";
 import { getEffectiveAvisVerdict, getEffectiveSituationStatus, getEffectiveSujetStatus } from "./project-situations.js";
@@ -30,8 +29,6 @@ const docsViewState = {
   file: null,
   title: "",
   description: "",
-  depositMode: "direct",
-  proposalName: "",
   isUploading: false,
   uploadProgress: 0,
   uploadTimer: null,
@@ -78,12 +75,6 @@ function getLargeDocumentIconSvg() {
 
 function getCommitIconSvg() {
   return svgIcon("git-commit", { className: "octicon octicon-git-commit" });
-}
-
-function getProposalIconSvg() {
-  return svgIcon("git-pull-request", {
-    className: "octicon octicon-git-pull-request"
-  });
 }
 
 function getSocotecLogoSvg() {
@@ -600,23 +591,6 @@ function canSubmitUpload() {
   return !!docsViewState.file && !docsViewState.isUploading;
 }
 
-function renderProposalField() {
-  if (docsViewState.depositMode !== "proposal") return "";
-
-  return `
-    <div class="documents-form-field documents-form-field--proposal">
-      <label for="documentsProposalNameInput">Nom de la modification</label>
-      ${renderGhInput({
-        id: "documentsProposalNameInput",
-        value: docsViewState.proposalName,
-        placeholder: "Ex. Ajustement du visa sur note parasismique V03",
-        icon: getProposalIconSvg(),
-        className: "documents-gh-input"
-      })}
-    </div>
-  `;
-}
-
 function renderUploadView() {
   const isBusy = docsViewState.isUploading ? "is-busy" : "";
   const isDisabled = docsViewState.isUploading ? "disabled" : "";
@@ -702,8 +676,6 @@ function resetUploadState() {
   docsViewState.uploadProgress = 0;
   docsViewState.title = "";
   docsViewState.description = "";
-  docsViewState.depositMode = "direct";
-  docsViewState.proposalName = "";
 
   const fileInput = document.getElementById("documentsFileInput");
   if (fileInput) {
@@ -843,33 +815,6 @@ function commitDirectDocument(root) {
 
   closeUploadView(root);
   triggerAutoAnalysisAfterDirectUpload(root, repoDocument);
-}
-
-function commitProposal(root) {
-  if (!docsViewState.file) return;
-
-  const fileName = docsViewState.file.name;
-  const proposalTitle = docsViewState.proposalName.trim();
-  const description = docsViewState.description.trim();
-
-  createProjectProposal({
-    title: proposalTitle,
-    fileName,
-    description,
-    status: "open",
-    needsVisa: true,
-    updatedAt: "À l'instant"
-  });
-
-  closeUploadView(root);
-
-  setDocumentsActivity({
-    tone: "success",
-    title: "Proposition enregistrée",
-    message: `La proposition "${proposalTitle}" a été créée avec demande de visa. Elle est désormais visible dans l’onglet Propositions.`
-  });
-
-  renderProjectDocuments(root);
 }
 
 function handleSubmit(root) {
