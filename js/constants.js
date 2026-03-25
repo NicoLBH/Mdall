@@ -3,7 +3,6 @@ import { svgIcon } from "./ui/icons.js";
 export const PROJECT_TAB_IDS = {
   DOCUMENTS: "documents",
   SUBJECTS: "sujets",
-  DISCUSSIONS: "discussions",
   ACTIONS: "actions",
   SITUATIONS: "situations",
   INSIGHTS: "insights",
@@ -11,19 +10,16 @@ export const PROJECT_TAB_IDS = {
 };
 
 export const PROJECT_TAB_ROUTE_ALIASES = {
-  coordination: PROJECT_TAB_IDS.DISCUSSIONS,
   workflows: PROJECT_TAB_IDS.ACTIONS,
   indicateurs: PROJECT_TAB_IDS.INSIGHTS,
   jalons: PROJECT_TAB_IDS.INSIGHTS,
 };
 
 export const PROJECT_TABS_TOGGLEABLE = [
-  PROJECT_TAB_IDS.DISCUSSIONS,
   PROJECT_TAB_IDS.SITUATIONS,
 ];
 
 export const DEFAULT_PROJECT_TABS_VISIBILITY = {
-  [PROJECT_TAB_IDS.DISCUSSIONS]: false,
   [PROJECT_TAB_IDS.SITUATIONS]: true,
 };
 
@@ -52,11 +48,6 @@ export const PROJECT_TABS = [
     label: "Sujets",
     icon: svgIcon("issue-opened", { className: "octicon octicon-file" }),
     countKey: "openSujets"
-  },
-  {
-    id: PROJECT_TAB_IDS.DISCUSSIONS,
-    label: "Discussions",
-    icon: svgIcon("comment-discussion", { className: "octicon octicon-comment-discussion" })
   },
   {
     id: PROJECT_TAB_IDS.ACTIONS,
