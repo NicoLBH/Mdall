@@ -1399,12 +1399,6 @@ async function loadGeorisquesForCurrentProject({ force = false } = {}) {
 function renderProjectTabsFeatureCard(projectTabs) {
   const items = [
     {
-      id: "tabVisibilityDiscussions",
-      key: PROJECT_TAB_IDS.DISCUSSIONS,
-      label: "Discussions",
-      description: "Affiche l’onglet Discussions pour les échanges de coordination."
-    },
-    {
       id: "tabVisibilitySituations",
       key: PROJECT_TAB_IDS.SITUATIONS,
       label: "Situations",
