@@ -11,7 +11,7 @@ import {
   refreshProjectShellChrome
 } from "./project-shell-chrome.js";
 import { svgIcon } from "../ui/icons.js";
-import { renderGhActionButton } from "./ui/gh-split-button.js";
+import { bindGhActionButtons, initGhActionButton, renderGhActionButton } from "./ui/gh-split-button.js";
 import {
   renderDataTableShell,
   renderDataTableHead,
@@ -54,6 +54,7 @@ import {
   renderCountBadge
 } from "./ui/status-badges.js";
 import { escapeHtml } from "../utils/escape-html.js";
+import { setProjectDocumentsViewMode } from "./project-documents.js";
 import { renderSharedDetailsTitleWrap, renderSharedDetailsTitleHtml } from "./ui/detail-header.js";
 import { getSelectionDocumentRefs } from "../services/project-document-selectors.js";
 
@@ -3017,6 +3018,14 @@ function renderSituationModalDetailBody(situation) {
 function renderSituationKanbanBody(situation) {
   const columns = getSituationKanbanColumns(situation);
   const isDetailMode = String(store.situationsView.situationModalView || "kanban") === "detail";
+  const exportButton = !isDetailMode
+    ? renderGhActionButton({
+        id: "situationKanbanExportAction",
+        label: "Exporter",
+        tone: "default",
+        mainAction: "open-documents-export"
+      })
+    : "";
   return `
     <div class="situation-modal-commandbar">
       ${isDetailMode ? `
@@ -3028,9 +3037,12 @@ function renderSituationKanbanBody(situation) {
         <div class="situation-modal-commandbar__title">${escapeHtml(firstNonEmpty(situation.title, situation.id, "(sans titre)"))}</div>
       </div>
       ${!isDetailMode ? `
-        <button type="button" class="situation-modal-commandbar__edit js-situation-modal-edit" aria-label="Modifier la situation" title="Modifier la situation">
-          ${svgIcon("pencil")}
-        </button>
+        <div class="situation-modal-commandbar__actions">
+          ${exportButton}
+          <button type="button" class="situation-modal-commandbar__edit js-situation-modal-edit" aria-label="Modifier la situation" title="Modifier la situation">
+            ${svgIcon("pencil")}
+          </button>
+        </div>
       ` : ""}
     </div>
     ${isDetailMode ? renderSituationModalDetailBody(situation) : `
@@ -3723,6 +3735,20 @@ function wireDetailsInteractive(root) {
       store.situationsView.situationModalView = "kanban";
       updateDetailsModal();
     });
+  });
+
+  bindGhActionButtons();
+  root.querySelectorAll('[data-action-id="situationKanbanExportAction"]').forEach((actionRoot) => {
+    initGhActionButton(actionRoot, { mainAction: "open-documents-export" });
+    actionRoot.addEventListener("ghaction:action", (event) => {
+      const action = String(event.detail?.action || "");
+      if (action !== "open-documents-export") return;
+      event.preventDefault();
+      setProjectDocumentsViewMode("report-preview");
+      const projectId = String(store.currentProjectId || store.currentProject?.id || "").trim();
+      if (!projectId) return;
+      location.hash = `#/project/${encodeURIComponent(projectId)}/documents`;
+    }, { once: true });
   });
 
   root.querySelectorAll(".js-kanban-card").forEach((card) => {
