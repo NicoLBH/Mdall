@@ -175,13 +175,6 @@ function renderDocumentsTableHeadHtml() {
 }
 
 function renderDocumentsToolbar() {
-  const exportButton = renderGhActionButton({
-    id: "documentsExportAction",
-    label: "Exporter",
-    tone: "default",
-    mainAction: "create-report"
-  });
-
   const documentsButton = renderGhActionButton({
     id: "documentsAddAction",
     label: "Documents",
@@ -191,7 +184,6 @@ function renderDocumentsToolbar() {
   });
 
   const rightHtml = [
-    renderProjectTableToolbarGroup({ html: exportButton }),
     renderProjectTableToolbarGroup({ html: documentsButton })
   ].join("");
 
@@ -715,8 +707,12 @@ function closeReportPreview(root) {
   renderProjectDocuments(root);
 }
 
+export function setProjectDocumentsViewMode(mode = "list") {
+  docsViewState.mode = String(mode || "list");
+}
+
 function openReportPreview(root) {
-  docsViewState.mode = "report-preview";
+  setProjectDocumentsViewMode("report-preview");
   renderProjectDocuments(root);
 }
 
@@ -825,16 +821,6 @@ function handleSubmit(root) {
 function bindDocumentsSplitActions(root) {
   bindGhActionButtons();
 
-  const exportAction = document.querySelector('[data-action-id="documentsExportAction"]');
-  if (exportAction) {
-    initGhActionButton(exportAction, { mainAction: "create-report" });
-    exportAction.addEventListener("ghaction:action", (event) => {
-      const action = event.detail?.action || "";
-      if (action === "create-report") {
-        openReportPreview(root);
-      }
-    });
-  }
 
   const addAction = document.querySelector('[data-action-id="documentsAddAction"]');
   if (addAction) {
