@@ -2,19 +2,17 @@ import { store } from "../store.js";
 import { registerProjectPrimaryScrollSource, setProjectViewHeader } from "./project-shell-chrome.js";
 import {
   bindGhActionButtons,
-  bindGhSelectMenus,
   initGhActionButton,
   renderGhActionButton
 } from "./ui/gh-split-button.js";
 import {
   renderProjectTableToolbar,
-  renderProjectTableToolbarGroup,
-  renderProjectTableToolbarSelect
+  renderProjectTableToolbarGroup
 } from "./ui/project-table-toolbar.js";
 import { renderGhInput } from "./ui/gh-input.js";
 import { renderStateDot } from "./ui/status-badges.js";
 import { svgIcon } from "../ui/icons.js";
-import { renderDataTableShell, renderDataTableHead } from "./ui/data-table-shell.js";
+import { renderDataTableShell, renderDataTableHead, renderDataTableEmptyState } from "./ui/data-table-shell.js";
 import { escapeHtml } from "../utils/escape-html.js";
 import { shouldAutoRunAnalysisAfterUpload } from "../services/project-automation.js";
 import {
@@ -26,14 +24,6 @@ import { createProjectProposal } from "../services/project-proposals.js";
 import { addProjectDocument, decorateDocumentWithPhase, getEnabledProjectPhasesCatalog, getProjectDocumentById, getProjectDocumentPreviewUrl, getProjectDocuments, resolveDocumentRefs, setActiveProjectDocument } from "../services/project-documents-store.js";
 import { getDocumentStatsMap } from "../services/project-document-selectors.js";
 import { getEffectiveAvisVerdict, getEffectiveSituationStatus, getEffectiveSujetStatus } from "./project-situations.js";
-
-const DOCUMENT_FOLDERS = [
-  { name: "Architecte", note: "Dossier discipline" },
-  { name: "Structure", note: "Dossier discipline" },
-  { name: "Fluides", note: "Dossier discipline" },
-  { name: "Contrôle Technique", note: "Dossier discipline" },
-  { name: "CSPS", note: "Dossier discipline" }
-];
 
 const docsViewState = {
   mode: "list", // "list" | "upload" | "report-preview" | "pdf-preview"
@@ -66,12 +56,16 @@ function syncDocumentsSelectedPhase() {
   }
 }
 
-function getFolderIconSvg() {
-  return svgIcon("file-directory", { className: "icon-directory" });
-}
-
 function getDocumentIconSvg() {
   return svgIcon("file", { className: "octicon octicon-file color-fg-muted" });
+}
+
+function getPlusIconSvg() {
+  return `
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false">
+      <path d="M8 3.25v9.5M3.25 8h9.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+  `;
 }
 
 function getLargeDocumentIconSvg() {
@@ -90,10 +84,6 @@ function getProposalIconSvg() {
   return svgIcon("git-pull-request", {
     className: "octicon octicon-git-pull-request"
   });
-}
-
-function getBranchIconSvg() {
-  return svgIcon("git-branch", { className: "octicon octicon-git-branch" });
 }
 
 function getSocotecLogoSvg() {
@@ -194,52 +184,29 @@ function renderDocumentsTableHeadHtml() {
 }
 
 function renderDocumentsToolbar() {
-  const addButton = renderGhActionButton({
-    id: "documentsAddSplit",
-    label: "Ajouter",
+  const exportButton = renderGhActionButton({
+    id: "documentsExportAction",
+    label: "Exporter",
     tone: "default",
-    mainAction: "add-documents",
-    items: [
-      { label: "Ajouter des documents", action: "add-documents" },
-      { label: "Ajouter un dossier", action: "add-folder" },
-      { separator: true },
-      { label: "Créer un rapport", action: "create-report" }
-    ]
+    mainAction: "create-report"
   });
 
   const documentsButton = renderGhActionButton({
-    id: "documentsActionsSplit",
+    id: "documentsAddAction",
     label: "Documents",
-    icon: getLargeDocumentIconSvg(),
+    icon: getPlusIconSvg(),
     tone: "primary",
-    mainAction: "download-zip",
-    items: [
-      { label: "Télécharger le dossier ZIP", action: "download-zip" }
-    ]
-  });
-
-  const enabledPhases = getEnabledProjectPhasesCatalog();
-
-  const leftHtml = renderProjectTableToolbarGroup({
-    html: renderProjectTableToolbarSelect({
-      id: "documentsPhase",
-      value: docsViewState.selectedPhase,
-      icon: getBranchIconSvg(),
-      options: enabledPhases.map((phase) => ({
-        value: phase.code,
-        label: `${phase.code} - ${phase.label}`
-      }))
-    })
+    mainAction: "add-documents"
   });
 
   const rightHtml = [
-    renderProjectTableToolbarGroup({ html: addButton }),
+    renderProjectTableToolbarGroup({ html: exportButton }),
     renderProjectTableToolbarGroup({ html: documentsButton })
   ].join("");
 
   return renderProjectTableToolbar({
     className: "project-table-toolbar--documents",
-    leftHtml,
+    leftHtml: "",
     rightHtml
   });
 }
@@ -562,22 +529,9 @@ function renderPdfPreviewView() {
 }
 
 function renderDocumentsListView() {
-  const bodyHtml = `
-    ${DOCUMENT_FOLDERS.map((folder) => `
-      <div class="documents-repo__row">
-        <div class="documents-repo__cell documents-repo__cell--name">
-          <span class="documents-repo__icon">${getFolderIconSvg()}</span>
-          <span class="documents-repo__name">${escapeHtml(folder.name)}</span>
-        </div>
-        <div class="documents-repo__cell documents-repo__cell--message">
-          ${escapeHtml(folder.note)}
-        </div>
-        <div class="documents-repo__cell documents-repo__cell--date">—</div>
-        <div class="documents-repo__cell documents-repo__cell--stats">—</div>
-      </div>
-    `).join("")}
-    ${getProjectDocuments().map(renderRepoDocumentRow).join("")}
-  `;
+  const documents = getProjectDocuments();
+  const hasDocuments = documents.length > 0;
+  const bodyHtml = documents.map(renderRepoDocumentRow).join("");
 
   return `
     <section class="project-simple-page project-simple-page--documents">
@@ -590,7 +544,12 @@ function renderDocumentsListView() {
             className: "documents-repo",
             gridTemplate: getDocumentsTableGridTemplate(),
             headHtml: renderDocumentsTableHeadHtml(),
-            bodyHtml
+            bodyHtml,
+            state: hasDocuments ? "ready" : "empty",
+            emptyHtml: renderDataTableEmptyState({
+              title: "Aucun document n’a encore été déposé.",
+              description: "Ajoutez des documents pour commencer à constituer le dossier du projet."
+            })
           })}
         </div>
       </div>
@@ -951,39 +910,25 @@ function handleSubmit(root) {
 function bindDocumentsSplitActions(root) {
   bindGhActionButtons();
 
-  bindGhSelectMenus(document, {
-    onChange: (id, value) => {
-      if (id !== "documentsPhase") return;
-      docsViewState.selectedPhase = String(value || docsViewState.selectedPhase);
-      renderProjectDocuments(root);
-    }
-  });
-
-  const addSplit = document.querySelector('[data-action-id="documentsAddSplit"]');
-  if (addSplit) {
-    initGhActionButton(addSplit, { mainAction: "add-documents" });
-    addSplit.addEventListener("ghaction:action", (event) => {
+  const exportAction = document.querySelector('[data-action-id="documentsExportAction"]');
+  if (exportAction) {
+    initGhActionButton(exportAction, { mainAction: "create-report" });
+    exportAction.addEventListener("ghaction:action", (event) => {
       const action = event.detail?.action || "";
-      if (action === "add-documents") {
-        docsViewState.mode = "upload";
-        renderProjectDocuments(root);
-      }
-      if (action === "add-folder") {
-        // placeholder métier
-      }
       if (action === "create-report") {
         openReportPreview(root);
       }
     });
   }
 
-  const documentsSplit = document.querySelector('[data-action-id="documentsActionsSplit"]');
-  if (documentsSplit) {
-    initGhActionButton(documentsSplit, { mainAction: "download-zip" });
-    documentsSplit.addEventListener("ghaction:action", (event) => {
+  const addAction = document.querySelector('[data-action-id="documentsAddAction"]');
+  if (addAction) {
+    initGhActionButton(addAction, { mainAction: "add-documents" });
+    addAction.addEventListener("ghaction:action", (event) => {
       const action = event.detail?.action || "";
-      if (action === "download-zip") {
-        // placeholder métier
+      if (action === "add-documents") {
+        docsViewState.mode = "upload";
+        renderProjectDocuments(root);
       }
     });
   }
