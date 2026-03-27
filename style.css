@@ -7937,3 +7937,13 @@ color:var(--text);
   color:var(--fg-muted);
   font-style:italic;
 }
+
+
+
+.project-studio-router__panel{
+  display:none;
+}
+
+.project-studio-router__panel.is-active{
+  display:block;
+}
