@@ -4558,6 +4558,7 @@ color:var(--text);
 
 .settings-card--param .gh-editable-field{
   width:100%;
+  padding-bottom:16px;
 }
 
 .settings-card--param .gh-editable-field__input{
