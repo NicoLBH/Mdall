@@ -8626,54 +8626,26 @@ color:var(--text);
 }
 
 
-.arkolia-frost-table-card{
-  padding:14px;
-  border:1px solid var(--border);
-  border-radius:12px;
-  background:var(--panel);
+
+.arkolia-assise-card{
+  margin-top:16px;
 }
 
-.arkolia-frost-table-card__head{
+.arkolia-identity-preview__title-wrap{
   display:flex;
-  justify-content:space-between;
-  align-items:flex-start;
-  gap:12px;
-  margin-bottom:12px;
+  align-items:center;
+  gap:8px;
+  min-width:0;
 }
 
-.arkolia-frost-table-card__meta{
-  margin-top:4px;
-  font-size:12px;
-  color:var(--fg-muted);
+.arkolia-identity-preview__alert{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  color:var(--attention-fg, #d29922);
+  flex:0 0 auto;
 }
 
-.arkolia-frost-table-card__count{
-  font-size:12px;
-  color:var(--fg-muted);
-  white-space:nowrap;
-}
-
-.arkolia-frost-table-card__empty{
-  padding:12px 0 4px;
-  color:var(--fg-muted);
-  font-size:13px;
-}
-
-.arkolia-frost-table-wrap{
-  max-height:480px;
-}
-
-.arkolia-frost-table td:last-child,
-.arkolia-frost-table th:last-child{
-  white-space:nowrap;
-}
-
-@media (max-width: 720px){
-  .arkolia-frost-table-card__head{
-    flex-direction:column;
-  }
-
-  .arkolia-frost-table-card__count{
-    white-space:normal;
-  }
+.arkolia-assise-card__textarea{
+  min-height:210px;
 }
