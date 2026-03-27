@@ -8338,7 +8338,6 @@ color:var(--text);
   line-height:1.4;
   font-weight:600;
   color:var(--muted);
-  text-transform:uppercase;
   letter-spacing:.02em;
 }
 
@@ -8504,7 +8503,7 @@ color:var(--text);
 }
 
 .arkolia-identity-sidecard__label{
-  font-size:12px;
+  font-size:13px;
   color:var(--muted);
   font-weight:600;
 }
