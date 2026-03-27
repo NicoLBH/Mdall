@@ -4,7 +4,6 @@ import { getWindRegionsByDepartmentCode } from "../../services/zoning/wind-regio
 import { getSnowRegionsByDepartmentCode } from "../../services/zoning/snow-regions-service.js";
 import { getWindZoneByDepartmentAndCanton } from "../../services/zoning/wind-canton-regions-service.js";
 import { getSnowZoneByDepartmentAndCanton } from "../../services/zoning/snow-canton-regions-service.js";
-import { getAllFrostDepthDepartments } from "../../services/zoning/frost-depth-service.js";
 import { escapeHtml } from "../../utils/escape-html.js";
 import { buildGoogleMapsPlaceEmbedUrl, hasGoogleMapsEmbedApiKey } from "../../services/google-maps-embed-service.js";
 import { registerProjectPrimaryScrollSource } from "../project-shell-chrome.js";
@@ -37,9 +36,7 @@ const arkoliaUiState = {
   debounceTimer: null,
   detailsExpanded: false,
   identity: { ...DEFAULT_IDENTITY },
-  relation: { ...DEFAULT_RELATION },
-  frostDepthDepartments: [],
-  frostDepthDepartmentsStatus: "idle"
+  relation: { ...DEFAULT_RELATION }
 };
 
 let currentRoot = null;
@@ -130,79 +127,6 @@ function getClimateText() {
   const altitude = Number.isFinite(selected.altitude) ? String(selected.altitude) : '—';
   return `Vent : région ${windRegion}, rugosité IIIa
 Neige : région ${snowRegion}, altitude ${altitude} mètres.`;
-}
-
-
-function formatFrostDepthValues(values = []) {
-  const items = Array.isArray(values)
-    ? values.map((value) => String(value || '').trim()).filter(Boolean)
-    : [];
-  return items.length ? items.join(" / ") : "—";
-}
-
-function renderFrostDepthTableSection() {
-  const status = arkoliaUiState.frostDepthDepartmentsStatus;
-  const rows = Array.isArray(arkoliaUiState.frostDepthDepartments) ? arkoliaUiState.frostDepthDepartments : [];
-
-  if (status === "loading") {
-    return `
-      <div class="arkolia-frost-table-section">
-        <div class="arkolia-identity-section__title">Zonage gel H0</div>
-        <div class="settings-table-wrap">
-          <table class="settings-table">
-            <tbody>
-              <tr>
-                <td>Chargement du tableau…</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    `;
-  }
-
-  if (status === "error") {
-    return `
-      <div class="arkolia-frost-table-section">
-        <div class="arkolia-identity-section__title">Zonage gel H0</div>
-        <div class="settings-table-wrap">
-          <table class="settings-table">
-            <tbody>
-              <tr>
-                <td>Le tableau du zonage gel n’a pas pu être chargé.</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    `;
-  }
-
-  return `
-    <div class="arkolia-frost-table-section">
-      <div class="arkolia-identity-section__title">Zonage gel H0</div>
-      <div class="settings-table-wrap">
-        <table class="settings-table">
-          <thead>
-            <tr>
-              <th>Département</th>
-              <th>Nom</th>
-              <th>H0 (m)</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${rows.map((row) => `
-              <tr>
-                <td>${escapeHtml(row.departmentCode || '—')}</td>
-                <td>${escapeHtml(row.departmentName || '—')}</td>
-                <td>${escapeHtml(formatFrostDepthValues(row.h0Values))}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  `;
 }
 
 function renderIdentityRadioGroup(name, options, selectedValue, config = {}) {
@@ -410,8 +334,6 @@ function renderIdentitySection() {
             <textarea class="gh-textarea arkolia-identity-preview__textarea" readonly data-arkolia-climate-output>${escapeHtml(climateText)}</textarea>
           </div>
         </div>
-
-        ${renderFrostDepthTableSection()}
       </div>
     </div>
   `;
@@ -1130,8 +1052,6 @@ export async function renderSolidityArkolia(root) {
   arkoliaUiState.detailsExpanded = false;
   arkoliaUiState.identity = { ...DEFAULT_IDENTITY };
   arkoliaUiState.relation = { ...DEFAULT_RELATION };
-  arkoliaUiState.frostDepthDepartments = [];
-  arkoliaUiState.frostDepthDepartmentsStatus = "loading";
 
   root.innerHTML = `
     <section class="settings-section is-active">
@@ -1180,16 +1100,6 @@ export async function renderSolidityArkolia(root) {
 
   bindCityAutocomplete();
   renderAutocompleteDropdown();
-  renderResultCard();
-
-  try {
-    arkoliaUiState.frostDepthDepartments = await getAllFrostDepthDepartments();
-    arkoliaUiState.frostDepthDepartmentsStatus = "ready";
-  } catch (_error) {
-    arkoliaUiState.frostDepthDepartments = [];
-    arkoliaUiState.frostDepthDepartmentsStatus = "error";
-  }
-
   renderResultCard();
   registerProjectPrimaryScrollSource(root.closest("#projectSolidityRouterScroll") || document.getElementById("projectSolidityRouterScroll"));
 }
