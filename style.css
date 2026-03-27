@@ -8185,7 +8185,7 @@ color:var(--text);
   font-size:13px;
   line-height:1.4;
   font-weight:600;
-  color:var(--text);
+  color:var(--muted);
 }
 
 .arkolia-identity-dimensions{
@@ -8205,7 +8205,7 @@ color:var(--text);
   display:inline-flex;
   align-items:center;
   justify-content:center;
-  min-height:32px;
+  min-height:26px;
   padding:0 12px;
   border:1px solid var(--border);
   border-radius:999px;
@@ -8223,7 +8223,7 @@ color:var(--text);
 }
 
 .arkolia-identity-chip span{
-  font-size:13px;
+  font-size:11px;
   line-height:1.3;
   font-weight:500;
   white-space:nowrap;
@@ -8397,6 +8397,8 @@ color:var(--text);
   }
 }
 
+.gh-editable-fieled__label{font-size:13px;color:var(--muted);}
+
 .arkolia-result-layout{
   display:grid;
   grid-template-columns:minmax(0,1fr) 320px;
@@ -8459,7 +8461,7 @@ color:var(--text);
 .arkolia-relation-card__title{
   font-size:14px;
   font-weight:600;
-  color:var(--text);
+  color:var(--muted);
 }
 
 .arkolia-identity-preview__copy{
