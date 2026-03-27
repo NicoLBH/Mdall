@@ -7947,3 +7947,37 @@ color:var(--text);
 .project-studio-router__panel.is-active{
   display:block;
 }
+
+
+.settings-seismic-chart-card .arkolia-map,
+.settings-seismic-chart-card .arkolia-map iframe{
+  width:100%;
+}
+
+.settings-seismic-chart-card .arkolia-map{
+  min-height:360px;
+  height:100%;
+  margin-top:12px;
+}
+
+.settings-seismic-chart-card .arkolia-map iframe{
+  min-height:360px;
+  height:100%;
+  border:0;
+  border-radius:8px;
+  display:block;
+}
+
+.settings-seismic-summary-item__value.is-muted{
+  color:var(--muted);
+}
+
+.arkolia-map__notice{
+  margin-top:12px;
+  padding:12px;
+  border:1px dashed var(--border);
+  border-radius:8px;
+  color:var(--muted);
+  font-size:13px;
+  line-height:1.5;
+}
