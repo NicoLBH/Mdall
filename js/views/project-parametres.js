@@ -44,6 +44,7 @@ import {
   computeElasticResponseValue
 } from "../services/seismic-spectrum.js";
 import { renderSvgLineChart, getNiceChartTicks } from "../utils/svg-line-chart.js";
+import { persistCurrentProjectState } from "../services/project-state-storage.js";
 
 const DEFAULT_PROJECT_COLLABORATORS = [
   { id: "collab-1", email: "nicolas.lebihan@socotec.com", status: "Actif", role: "Admin" },
@@ -872,6 +873,7 @@ async function refreshLocationDerivedData({ runEnrichment = false, triggerType =
 
   if (!city || !postalCode) {
     store.projectForm.altitude = null;
+    persistCurrentProjectState();
     rerenderProjectParametres();
     return;
   }
@@ -881,6 +883,8 @@ async function refreshLocationDerivedData({ runEnrichment = false, triggerType =
   if (runEnrichment) {
     await runProjectBaseDataEnrichment({ triggerType, triggerLabel, force: true });
   }
+
+  persistCurrentProjectState();
 }
 
 function formatGeorisquesDate(value) {
@@ -1272,10 +1276,12 @@ async function loadGeorisquesForCurrentProject({ force = false } = {}) {
     };
     parametresUiState.georisquesLastRequestKey = requestKey;
     store.projectForm.baseDataEnrichment.lastLocationSignature = getProjectLocationSignature();
+    persistCurrentProjectState();
     return store.projectForm.georisques;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     ensureGeorisquesState().error = message;
+    persistCurrentProjectState();
     throw error instanceof Error ? error : new Error(message);
   } finally {
     parametresUiState.georisquesIsLoading = false;
