@@ -14,7 +14,7 @@ export function hasGoogleMapsEmbedApiKey() {
   return Boolean(getGoogleMapsEmbedApiKey());
 }
 
-export function buildGoogleMapsPlaceEmbedUrl({ latitude = null, longitude = null, zoom = 14 } = {}) {
+export function buildGoogleMapsPlaceEmbedUrl({ latitude = null, longitude = null, zoom = 14, mapType = "roadmap" } = {}) {
   const key = getGoogleMapsEmbedApiKey();
   const lat = Number(latitude);
   const lon = Number(longitude);
@@ -28,6 +28,6 @@ export function buildGoogleMapsPlaceEmbedUrl({ latitude = null, longitude = null
   url.searchParams.set("key", key);
   url.searchParams.set("q", `${lat},${lon}`);
   url.searchParams.set("zoom", String(safeZoom));
-  url.searchParams.set("maptype", "roadmap");
+  url.searchParams.set("maptype", String(mapType || "roadmap"));
   return url.toString();
 }
