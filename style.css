@@ -8173,14 +8173,6 @@ color:var(--text);
 }
 
 
-.arkolia-identity-card{
-  margin-top:16px;
-}
-
-.arkolia-identity-card__head{
-  margin-bottom:0;
-}
-
 .arkolia-identity-section{
   display:flex;
   flex-direction:column;
@@ -8568,6 +8560,15 @@ color:var(--text);
   width:100%;
 }
 
+.arkolia-layout-heading{
+  margin-top:8px;
+  margin-bottom:0;
+}
+
+.arkolia-layout-heading:first-child{
+  margin-top:0;
+}
+
 .arkolia-identity-row > *{
   min-width:0;
 }
@@ -8577,6 +8578,10 @@ color:var(--text);
   border:1px solid var(--border);
   border-radius:12px;
   background:var(--panel);
+}
+
+.arkolia-identity-row{
+  align-items:start;
 }
 
 .arkolia-relation-generalities--inline{
