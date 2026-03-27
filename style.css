@@ -8618,13 +8618,3 @@ color:var(--text);
     align-items:flex-start;
   }
 }
-
-
-.arkolia-frost-table-section{
-  display:grid;
-  gap:10px;
-}
-
-.arkolia-frost-table-section .settings-table-wrap{
-  max-height:480px;
-}
