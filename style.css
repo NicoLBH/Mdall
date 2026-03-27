@@ -8397,7 +8397,7 @@ color:var(--text);
   }
 }
 
-.gh-editable-fieled__label{font-size:13px;color:var(--muted);}
+.gh-editable-field__label{font-size:13px;color:var(--muted);}
 
 .arkolia-result-layout{
   display:grid;
