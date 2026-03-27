@@ -4,6 +4,7 @@ import { getWindRegionsByDepartmentCode } from "../../services/zoning/wind-regio
 import { getSnowRegionsByDepartmentCode } from "../../services/zoning/snow-regions-service.js";
 import { getWindZoneByDepartmentAndCanton } from "../../services/zoning/wind-canton-regions-service.js";
 import { getSnowZoneByDepartmentAndCanton } from "../../services/zoning/snow-canton-regions-service.js";
+import { getAllFrostDepthDepartments } from "../../services/zoning/frost-depth-service.js";
 import { escapeHtml } from "../../utils/escape-html.js";
 import { buildGoogleMapsPlaceEmbedUrl, hasGoogleMapsEmbedApiKey } from "../../services/google-maps-embed-service.js";
 import { registerProjectPrimaryScrollSource } from "../project-shell-chrome.js";
@@ -36,7 +37,9 @@ const arkoliaUiState = {
   debounceTimer: null,
   detailsExpanded: false,
   identity: { ...DEFAULT_IDENTITY },
-  relation: { ...DEFAULT_RELATION }
+  relation: { ...DEFAULT_RELATION },
+  frostDepthDepartments: [],
+  frostDepthDepartmentsError: false
 };
 
 let currentRoot = null;
@@ -171,6 +174,74 @@ function renderCopyButton({ action, title, ariaLabel, value = '' }) {
     <button type="button" class="arkolia-identity-preview__copy" ${action}${valueAttr} title="${escapeAttribute(title)}" aria-label="${escapeAttribute(ariaLabel || title)}">
       ${svgIcon('copy', { className: 'octicon octicon-copy' })}
     </button>
+  `;
+}
+
+function formatFrostDepthValues(values = []) {
+  const rows = Array.isArray(values) ? values : [];
+  return rows.filter(Boolean).join(' / ') || '—';
+}
+
+function renderFrostDepthTable() {
+  const rows = Array.isArray(arkoliaUiState.frostDepthDepartments) ? arkoliaUiState.frostDepthDepartments : [];
+
+  if (arkoliaUiState.frostDepthDepartmentsError) {
+    return `
+      <div class="arkolia-frost-table-card">
+        <div class="arkolia-frost-table-card__head">
+          <div class="arkolia-identity-preview__title">Profondeur hors-gel H0 par département</div>
+        </div>
+        <div class="arkolia-frost-table-card__empty">Impossible de charger le tableau H0 des départements.</div>
+      </div>
+    `;
+  }
+
+  if (!rows.length) {
+    return `
+      <div class="arkolia-frost-table-card">
+        <div class="arkolia-frost-table-card__head">
+          <div class="arkolia-identity-preview__title">Profondeur hors-gel H0 par département</div>
+        </div>
+        <div class="arkolia-frost-table-card__empty">Chargement du tableau H0 des départements…</div>
+      </div>
+    `;
+  }
+
+  const body = rows
+    .slice()
+    .sort((a, b) => String(a.departmentCode || '').localeCompare(String(b.departmentCode || ''), 'fr'))
+    .map((row) => `
+      <tr>
+        <td>${escapeHtml(row.departmentCode || '—')}</td>
+        <td>${escapeHtml(row.departmentName || '—')}</td>
+        <td>${escapeHtml(formatFrostDepthValues(row.h0Values))}</td>
+      </tr>
+    `)
+    .join('');
+
+  return `
+    <div class="arkolia-frost-table-card">
+      <div class="arkolia-frost-table-card__head">
+        <div>
+          <div class="arkolia-identity-preview__title">Profondeur hors-gel H0 par département</div>
+          <div class="arkolia-frost-table-card__meta">Contrôle visuel global basé sur frost-depth-service et frost-depth-departments.json.</div>
+        </div>
+        <div class="arkolia-frost-table-card__count">${rows.length} départements</div>
+      </div>
+
+      <div class="settings-table-wrap arkolia-frost-table-wrap">
+        <table class="settings-table arkolia-frost-table">
+          <thead>
+            <tr>
+              <th>Code</th>
+              <th>Département</th>
+              <th>H0 (m)</th>
+            </tr>
+          </thead>
+          <tbody>${body}</tbody>
+        </table>
+      </div>
+    </div>
   `;
 }
 
@@ -332,6 +403,8 @@ function renderIdentitySection() {
         <textarea class="gh-textarea arkolia-identity-preview__textarea" readonly data-arkolia-climate-output>${escapeHtml(climateText)}</textarea>
       </div>
     </div>
+
+    ${renderFrostDepthTable()}
   `;
 }
 
@@ -1046,6 +1119,8 @@ export async function renderSolidityArkolia(root) {
   arkoliaUiState.detailsExpanded = false;
   arkoliaUiState.identity = { ...DEFAULT_IDENTITY };
   arkoliaUiState.relation = { ...DEFAULT_RELATION };
+  arkoliaUiState.frostDepthDepartments = [];
+  arkoliaUiState.frostDepthDepartmentsError = false;
 
   root.innerHTML = `
     <section class="settings-section is-active">
@@ -1094,6 +1169,14 @@ export async function renderSolidityArkolia(root) {
 
   bindCityAutocomplete();
   renderAutocompleteDropdown();
+
+  try {
+    arkoliaUiState.frostDepthDepartments = await getAllFrostDepthDepartments();
+  } catch (_error) {
+    arkoliaUiState.frostDepthDepartments = [];
+    arkoliaUiState.frostDepthDepartmentsError = true;
+  }
+
   renderResultCard();
   registerProjectPrimaryScrollSource(root.closest("#projectSolidityRouterScroll") || document.getElementById("projectSolidityRouterScroll"));
 }
