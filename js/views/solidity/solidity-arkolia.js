@@ -4,7 +4,7 @@ import { getWindRegionsByDepartmentCode } from "../../services/zoning/wind-regio
 import { getSnowRegionsByDepartmentCode } from "../../services/zoning/snow-regions-service.js";
 import { getWindZoneByDepartmentAndCanton } from "../../services/zoning/wind-canton-regions-service.js";
 import { getSnowZoneByDepartmentAndCanton } from "../../services/zoning/snow-canton-regions-service.js";
-import { getAllFrostDepthDepartments } from "../../services/zoning/frost-depth-service.js";
+import { getFrostDepthByDepartmentCode } from "../../services/zoning/frost-depth-service.js";
 import { escapeHtml } from "../../utils/escape-html.js";
 import { buildGoogleMapsPlaceEmbedUrl, hasGoogleMapsEmbedApiKey } from "../../services/google-maps-embed-service.js";
 import { registerProjectPrimaryScrollSource } from "../project-shell-chrome.js";
@@ -37,9 +37,7 @@ const arkoliaUiState = {
   debounceTimer: null,
   detailsExpanded: false,
   identity: { ...DEFAULT_IDENTITY },
-  relation: { ...DEFAULT_RELATION },
-  frostDepthDepartments: [],
-  frostDepthDepartmentsError: false
+  relation: { ...DEFAULT_RELATION }
 };
 
 let currentRoot = null;
@@ -177,70 +175,62 @@ function renderCopyButton({ action, title, ariaLabel, value = '' }) {
   `;
 }
 
-function formatFrostDepthValues(values = []) {
-  const rows = Array.isArray(values) ? values : [];
-  return rows.filter(Boolean).join(' / ') || '—';
+
+function parseFrenchDecimalToNumber(value) {
+  const normalized = String(value ?? '').trim().replace(/,/g, '.');
+  const number = Number(normalized);
+  return Number.isFinite(number) ? number : null;
 }
 
-function renderFrostDepthTable() {
-  const rows = Array.isArray(arkoliaUiState.frostDepthDepartments) ? arkoliaUiState.frostDepthDepartments : [];
+function formatMeters(value, digits = 2) {
+  return Number.isFinite(value) ? value.toFixed(digits) : '—';
+}
 
-  if (arkoliaUiState.frostDepthDepartmentsError) {
-    return `
-      <div class="arkolia-frost-table-card">
-        <div class="arkolia-frost-table-card__head">
-          <div class="arkolia-identity-preview__title">Profondeur hors-gel H0 par département</div>
-        </div>
-        <div class="arkolia-frost-table-card__empty">Impossible de charger le tableau H0 des départements.</div>
-      </div>
-    `;
-  }
+function getFrostDepthCalculation() {
+  const selected = arkoliaUiState.selected || {};
+  const rawValues = Array.isArray(selected.frostDepthH0Values) ? selected.frostDepthH0Values : [];
+  const h0Numbers = rawValues.map(parseFrenchDecimalToNumber).filter((value) => Number.isFinite(value));
+  const h0 = h0Numbers.length ? Math.max(...h0Numbers) : null;
+  const altitude = Number(selected.altitude);
+  const h = Number.isFinite(h0) && Number.isFinite(altitude)
+    ? h0 + ((altitude - 150) / 4000)
+    : null;
 
-  if (!rows.length) {
-    return `
-      <div class="arkolia-frost-table-card">
-        <div class="arkolia-frost-table-card__head">
-          <div class="arkolia-identity-preview__title">Profondeur hors-gel H0 par département</div>
-        </div>
-        <div class="arkolia-frost-table-card__empty">Chargement du tableau H0 des départements…</div>
-      </div>
-    `;
-  }
+  return {
+    h0,
+    h,
+    altitude: Number.isFinite(altitude) ? altitude : null,
+    hasMultipleH0Values: h0Numbers.length > 1
+  };
+}
 
-  const body = rows
-    .slice()
-    .sort((a, b) => String(a.departmentCode || '').localeCompare(String(b.departmentCode || ''), 'fr'))
-    .map((row) => `
-      <tr>
-        <td>${escapeHtml(row.departmentCode || '—')}</td>
-        <td>${escapeHtml(row.departmentName || '—')}</td>
-        <td>${escapeHtml(formatFrostDepthValues(row.h0Values))}</td>
-      </tr>
-    `)
-    .join('');
+function getAssiseText() {
+  const { h } = getFrostDepthCalculation();
+  const hValue = Number.isFinite(h) ? formatMeters(h, 2) : '…';
+  return `Pour mémoire, la profondeur de fondation est soumise à 3 conditions de stabilité, la stabilité mécanique (portance et tassement), la stabilité hydrique (retrait / gonflement) et stabilité au gel. La plus défavorable étant à respecter impérativement.
+
+Nota: En application du NF DTU 13.1, les fondations devront respecter la cote hors gel mini par rapport au niveau extérieur fini H (en mètres) tel que:
+H > ${hValue} m
+
+Nota: Profondeur hors gel et atteinte du bon sol à vérifier à l'ouverture des fouilles.`;
+}
+
+function renderAssiseCard() {
+  const { hasMultipleH0Values } = getFrostDepthCalculation();
+  const alertIcon = hasMultipleH0Values
+    ? `<span class="arkolia-identity-preview__alert" title="Attention : deux valeurs de H0 existent pour ce département, la plus élevée a été retenue">${svgIcon('alert', { className: 'octicon octicon-alert' })}</span>`
+    : '';
 
   return `
-    <div class="arkolia-frost-table-card">
-      <div class="arkolia-frost-table-card__head">
-        <div>
-          <div class="arkolia-identity-preview__title">Profondeur hors-gel H0 par département</div>
-          <div class="arkolia-frost-table-card__meta">Contrôle visuel global basé sur frost-depth-service et frost-depth-departments.json.</div>
+    <div class="arkolia-identity-preview arkolia-assise-card">
+      <div class="arkolia-identity-preview__head">
+        <div class="arkolia-identity-preview__title-wrap">
+          <div class="arkolia-identity-preview__title">Niveau d'assise</div>
+          ${alertIcon}
         </div>
-        <div class="arkolia-frost-table-card__count">${rows.length} départements</div>
+        ${renderCopyButton({ action: '', value: 'assise', title: "Copier le texte du niveau d'assise" })}
       </div>
-
-      <div class="settings-table-wrap arkolia-frost-table-wrap">
-        <table class="settings-table arkolia-frost-table">
-          <thead>
-            <tr>
-              <th>Code</th>
-              <th>Département</th>
-              <th>H0 (m)</th>
-            </tr>
-          </thead>
-          <tbody>${body}</tbody>
-        </table>
-      </div>
+      <textarea class="gh-textarea arkolia-identity-preview__textarea arkolia-assise-card__textarea" readonly data-arkolia-assise-output>${escapeHtml(getAssiseText())}</textarea>
     </div>
   `;
 }
@@ -404,7 +394,7 @@ function renderIdentitySection() {
       </div>
     </div>
 
-    ${renderFrostDepthTable()}
+    ${renderAssiseCard()}
   `;
 }
 
@@ -564,6 +554,11 @@ function bindIdentityActions() {
         text: getClimateText(),
         copiedTitle: 'Paramètres climatiques copiés',
         defaultTitle: 'Copier les paramètres climatiques'
+      },
+      assise: {
+        text: getAssiseText(),
+        copiedTitle: "Texte du niveau d'assise copié",
+        defaultTitle: "Copier le texte du niveau d'assise"
       }
     };
     const config = valueMap[kind];
@@ -572,7 +567,9 @@ function bindIdentityActions() {
       ? currentRoot.querySelector('[data-arkolia-relation-summary-output]')
       : kind === 'climate'
         ? currentRoot.querySelector('[data-arkolia-climate-output]')
-        : null;
+        : kind === 'assise'
+          ? currentRoot.querySelector('[data-arkolia-assise-output]')
+          : null;
     await copyIdentityText({
       button: copyValueButton,
       text: config.text,
@@ -668,6 +665,11 @@ function updateIdentityDescriptionOutput() {
   const climateOutput = currentRoot.querySelector('[data-arkolia-climate-output]');
   if (climateOutput) {
     climateOutput.value = getClimateText();
+  }
+
+  const assiseOutput = currentRoot.querySelector('[data-arkolia-assise-output]');
+  if (assiseOutput) {
+    assiseOutput.value = getAssiseText();
   }
 }
 
@@ -783,6 +785,8 @@ function renderSummaryCard(selected) {
     renderKeyValue('Code INSEE', selected.codeInsee || '—', { compact: true }),
     renderKeyValue('Coordonnées', `${normalizeCoordinate(selected.lat)} / ${normalizeCoordinate(selected.lon)}`, { compact: true }),
     renderKeyValue('Altitude', normalizeAltitude(selected.altitude), { compact: true }),
+    renderKeyValue('H0 retenu', selected.frostDepthH0Label || '—', { compact: true, muted: selected.hasMultipleFrostDepthH0Values }),
+    renderKeyValue('H calculé', selected.frostDepthHLabel || '—', { compact: true }),
     renderKeyValue('Canton actuel', selected.currentCantonName || '—', { compact: true }),
     renderKeyValue('Canton 2014', selected.cantonName2014 || selected.cantonName || '—', { compact: true, muted: selected.hasCantonMismatch }),
     renderKeyValue('Zone de vent', selected.windZone || '—', { compact: true }),
@@ -884,12 +888,14 @@ async function applySelection(item) {
   let windZone = "";
   let snowRegions = [];
   let snowZone = "";
+  let frostDepthResult = null;
 
-  const [altitudeResult, cantonResult, windRegionsResult, snowRegionsResult] = await Promise.allSettled([
+  const [altitudeResult, cantonResult, windRegionsResult, snowRegionsResult, frostDepthLookupResult] = await Promise.allSettled([
     fetchFrenchAltitude({ longitude: item.lon, latitude: item.lat }),
     getCantonByCommuneCode(item.codeInsee),
     getWindRegionsByDepartmentCode(item.departmentCode),
-    getSnowRegionsByDepartmentCode(item.departmentCode)
+    getSnowRegionsByDepartmentCode(item.departmentCode),
+    getFrostDepthByDepartmentCode(item.departmentCode)
   ]);
 
   if (altitudeResult.status === 'fulfilled') {
@@ -912,6 +918,10 @@ async function applySelection(item) {
       departmentName = snowRegionsResult.value?.departmentName || "";
     }
     snowRegions = Array.isArray(snowRegionsResult.value?.snowRegions) ? snowRegionsResult.value.snowRegions : [];
+  }
+
+  if (frostDepthLookupResult.status === 'fulfilled') {
+    frostDepthResult = frostDepthLookupResult.value || null;
   }
 
   if (cantonName) {
@@ -940,6 +950,16 @@ async function applySelection(item) {
   const normalizedCurrentCantonName = String(currentCantonName || "").trim().normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
   const normalizedCantonName2014 = String(cantonName2014 || cantonName || "").trim().normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
+  const frostDepthH0Values = Array.isArray(frostDepthResult?.h0Values)
+    ? frostDepthResult.h0Values.map((value) => String(value ?? '').trim()).filter(Boolean)
+    : [];
+  const frostDepthH0Numbers = frostDepthH0Values.map(parseFrenchDecimalToNumber).filter((value) => Number.isFinite(value));
+  const retainedH0 = frostDepthH0Numbers.length ? Math.max(...frostDepthH0Numbers) : null;
+  const hasMultipleFrostDepthH0Values = frostDepthH0Numbers.length > 1;
+  const calculatedH = Number.isFinite(retainedH0) && Number.isFinite(altitude)
+    ? retainedH0 + ((altitude - 150) / 4000)
+    : null;
+
   arkoliaUiState.selected = {
     ...item,
     altitude,
@@ -951,7 +971,14 @@ async function applySelection(item) {
     windRegions,
     windZone,
     snowRegions,
-    snowZone
+    snowZone,
+    frostDepthDepartmentName: frostDepthResult?.departmentName || departmentName || '',
+    frostDepthH0Values,
+    frostDepthH0: retainedH0,
+    frostDepthH0Label: Number.isFinite(retainedH0) ? `${formatMeters(retainedH0, 1)} m` : '—',
+    hasMultipleFrostDepthH0Values,
+    frostDepthH: calculatedH,
+    frostDepthHLabel: Number.isFinite(calculatedH) ? `${formatMeters(calculatedH, 2)} m` : '—'
   };
   resetSuggestions();
   renderAutocompleteDropdown();
@@ -1119,8 +1146,6 @@ export async function renderSolidityArkolia(root) {
   arkoliaUiState.detailsExpanded = false;
   arkoliaUiState.identity = { ...DEFAULT_IDENTITY };
   arkoliaUiState.relation = { ...DEFAULT_RELATION };
-  arkoliaUiState.frostDepthDepartments = [];
-  arkoliaUiState.frostDepthDepartmentsError = false;
 
   root.innerHTML = `
     <section class="settings-section is-active">
@@ -1169,13 +1194,6 @@ export async function renderSolidityArkolia(root) {
 
   bindCityAutocomplete();
   renderAutocompleteDropdown();
-
-  try {
-    arkoliaUiState.frostDepthDepartments = await getAllFrostDepthDepartments();
-  } catch (_error) {
-    arkoliaUiState.frostDepthDepartments = [];
-    arkoliaUiState.frostDepthDepartmentsError = true;
-  }
 
   renderResultCard();
   registerProjectPrimaryScrollSource(root.closest("#projectSolidityRouterScroll") || document.getElementById("projectSolidityRouterScroll"));
