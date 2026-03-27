@@ -22,11 +22,11 @@ const arkoliaUiState = {
   identity: {
     length: "",
     width: "",
-    spanPreset: "",
+    spanPreset: "6",
     spanOther: "",
-    intermediatePosts: "",
-    windBeams: "",
-    longitudinalBracing: []
+    intermediatePosts: "0",
+    windBeams: "1",
+    longitudinalBracing: ['croix de Saint-André']
   }
 };
 
@@ -86,6 +86,16 @@ function getIdentityDescription() {
   const bracingText = formatLongitudinalBracing(identity.longitudinalBracing);
 
   return `Construction d'un hangar agricole neuf de ${length} m x ${width} m en charpente métallique, travée ${spanValue} m avec ${beamText} au vent ; stabilité transversale par portiques ${postsText} et contreventement longitudinal par ${bracingText}, pannes Z, couverture en bac acier et panneaux photovoltaïques.`;
+}
+
+function getSelectedPostalCode() {
+  const selected = arkoliaUiState.selected;
+  return ((selected?.postalCodes && selected.postalCodes[0]) || selected?.postalCode || '—');
+}
+
+function getSelectedCityName() {
+  const selected = arkoliaUiState.selected;
+  return selected?.name || selected?.label || '—';
 }
 
 function renderIdentityRadioGroup(name, options, selectedValue) {
@@ -182,7 +192,7 @@ function renderIdentitySection() {
           <label class="gh-editable-field arkolia-identity-other-field">
             <span class="gh-editable-field__label">Autre (m)</span>
             <span class="gh-editable-field__control">
-              <input type="text" class="gh-input" data-arkolia-identity-input="spanOther" value="${escapeAttribute(identity.spanOther || '')}" ${identity.spanPreset === 'other' ? '' : 'disabled'}>
+              <input type="text" class="gh-input" data-arkolia-identity-input="spanOther" value="${escapeAttribute(identity.spanOther || '')}">
             </span>
           </label>
         </div>
@@ -216,14 +226,38 @@ function renderIdentitySection() {
           ], identity.longitudinalBracing)}
         </div>
 
-        <div class="arkolia-identity-preview">
-          <div class="arkolia-identity-preview__head">
-            <div class="arkolia-identity-preview__title">Texte généré automatiquement</div>
-            <button type="button" class="arkolia-identity-preview__copy" data-arkolia-copy-description title="Copier dans le presse-papier" aria-label="Copier dans le presse-papier">
-              ${svgIcon('copy', { className: 'octicon octicon-copy' })}
-            </button>
+        <div class="arkolia-identity-preview-grid">
+          <div class="arkolia-identity-preview">
+            <div class="arkolia-identity-preview__head">
+              <div class="arkolia-identity-preview__title">Description de l'ouvrage</div>
+              <button type="button" class="arkolia-identity-preview__copy" data-arkolia-copy-description title="Copier dans le presse-papier" aria-label="Copier dans le presse-papier">
+                ${svgIcon('copy', { className: 'octicon octicon-copy' })}
+              </button>
+            </div>
+            <textarea class="gh-textarea arkolia-identity-preview__textarea" readonly data-arkolia-description-output>${escapeHtml(description)}</textarea>
           </div>
-          <textarea class="gh-input gh-textarea arkolia-identity-preview__textarea" readonly data-arkolia-description-output>${escapeHtml(description)}</textarea>
+
+          <div class="arkolia-identity-sidecard">
+            <div class="arkolia-identity-sidecard__item">
+              <div class="arkolia-identity-sidecard__head">
+                <div class="arkolia-identity-sidecard__label">Code postal</div>
+                <button type="button" class="arkolia-identity-preview__copy" data-arkolia-copy-value="postalCode" title="Copier le code postal" aria-label="Copier le code postal">
+                  ${svgIcon('copy', { className: 'octicon octicon-copy' })}
+                </button>
+              </div>
+              <div class="arkolia-identity-sidecard__value" data-arkolia-postal-output>${escapeHtml(getSelectedPostalCode())}</div>
+            </div>
+
+            <div class="arkolia-identity-sidecard__item">
+              <div class="arkolia-identity-sidecard__head">
+                <div class="arkolia-identity-sidecard__label">Ville</div>
+                <button type="button" class="arkolia-identity-preview__copy" data-arkolia-copy-value="city" title="Copier le nom de la ville" aria-label="Copier le nom de la ville">
+                  ${svgIcon('copy', { className: 'octicon octicon-copy' })}
+                </button>
+              </div>
+              <div class="arkolia-identity-sidecard__value" data-arkolia-city-output>${escapeHtml(getSelectedCityName())}</div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -240,6 +274,18 @@ function bindIdentityActions() {
     const input = event.target.closest('[data-arkolia-identity-input]');
     if (!input) return;
     const key = input.getAttribute('data-arkolia-identity-input');
+
+    if (key === 'spanOther') {
+      arkoliaUiState.identity = {
+        ...arkoliaUiState.identity,
+        spanPreset: 'other',
+        spanOther: input.value
+      };
+      syncIdentityControls();
+      updateIdentityDescriptionOutput();
+      return;
+    }
+
     arkoliaUiState.identity = {
       ...arkoliaUiState.identity,
       [key]: input.value
@@ -248,15 +294,33 @@ function bindIdentityActions() {
     updateIdentityDescriptionOutput();
   });
 
+  scope.addEventListener('focusin', (event) => {
+    const input = event.target.closest('[data-arkolia-identity-input="spanOther"]');
+    if (!input) return;
+    arkoliaUiState.identity = {
+      ...arkoliaUiState.identity,
+      spanPreset: 'other'
+    };
+    syncIdentityControls();
+    updateIdentityDescriptionOutput();
+  });
+
   scope.addEventListener('change', (event) => {
     const radio = event.target.closest('[data-arkolia-identity-radio]');
     if (radio) {
       const key = radio.getAttribute('data-arkolia-identity-radio');
-      arkoliaUiState.identity = {
+      const nextIdentity = {
         ...arkoliaUiState.identity,
         [key]: radio.value
       };
-      renderResultCard();
+
+      if (key === 'spanPreset' && radio.value !== 'other') {
+        nextIdentity.spanOther = '';
+      }
+
+      arkoliaUiState.identity = nextIdentity;
+      syncIdentityControls();
+      updateIdentityDescriptionOutput();
       return;
     }
 
@@ -277,39 +341,91 @@ function bindIdentityActions() {
   });
 
   scope.addEventListener('click', async (event) => {
-    const copyButton = event.target.closest('[data-arkolia-copy-description]');
-    if (!copyButton) return;
-    const description = getIdentityDescription();
-    const textarea = currentRoot.querySelector('[data-arkolia-description-output]');
-    try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(description);
-      } else if (textarea) {
-        textarea.removeAttribute('readonly');
-        textarea.select();
-        document.execCommand('copy');
-        textarea.setAttribute('readonly', 'readonly');
-      }
-      copyButton.classList.add('is-copied');
-      copyButton.setAttribute('title', 'Texte copié');
-      window.setTimeout(() => {
-        copyButton.classList.remove('is-copied');
-        copyButton.setAttribute('title', 'Copier dans le presse-papier');
-      }, 1200);
-    } catch (_error) {
-      if (textarea) {
-        textarea.focus();
-        textarea.select();
-      }
+    const copyDescriptionButton = event.target.closest('[data-arkolia-copy-description]');
+    if (copyDescriptionButton) {
+      const textarea = currentRoot.querySelector('[data-arkolia-description-output]');
+      await copyIdentityText({
+        button: copyDescriptionButton,
+        text: getIdentityDescription(),
+        textarea,
+        copiedTitle: 'Texte copié',
+        defaultTitle: 'Copier dans le presse-papier'
+      });
+      return;
     }
+
+    const copyValueButton = event.target.closest('[data-arkolia-copy-value]');
+    if (!copyValueButton) return;
+
+    const kind = copyValueButton.getAttribute('data-arkolia-copy-value');
+    const text = kind === 'postalCode' ? getSelectedPostalCode() : getSelectedCityName();
+    await copyIdentityText({
+      button: copyValueButton,
+      text,
+      copiedTitle: kind === 'postalCode' ? 'Code postal copié' : 'Ville copiée',
+      defaultTitle: kind === 'postalCode' ? 'Copier le code postal' : 'Copier le nom de la ville'
+    });
+  });
+}
+
+async function copyIdentityText({ button, text, textarea = null, copiedTitle, defaultTitle }) {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else if (textarea) {
+      textarea.removeAttribute('readonly');
+      textarea.focus();
+      textarea.select();
+      document.execCommand('copy');
+      textarea.setAttribute('readonly', 'readonly');
+    }
+    button.classList.add('is-copied');
+    button.setAttribute('title', copiedTitle);
+    window.setTimeout(() => {
+      button.classList.remove('is-copied');
+      button.setAttribute('title', defaultTitle);
+    }, 1200);
+  } catch (_error) {
+    if (textarea) {
+      textarea.focus();
+      textarea.select();
+    }
+  }
+}
+
+function syncIdentityControls() {
+  if (!currentRoot) return;
+  const spanOtherInput = currentRoot.querySelector('[data-arkolia-identity-input="spanOther"]');
+  if (spanOtherInput) {
+    const isOtherSelected = arkoliaUiState.identity.spanPreset === 'other';
+    spanOtherInput.disabled = false;
+    if (!isOtherSelected && spanOtherInput.value) {
+      spanOtherInput.value = '';
+    }
+  }
+
+  const radioInputs = currentRoot.querySelectorAll('[data-arkolia-identity-radio="spanPreset"]');
+  radioInputs.forEach((radio) => {
+    radio.checked = radio.value === String(arkoliaUiState.identity.spanPreset || '');
   });
 }
 
 function updateIdentityDescriptionOutput() {
   if (!currentRoot) return;
   const output = currentRoot.querySelector('[data-arkolia-description-output]');
-  if (!output) return;
-  output.value = getIdentityDescription();
+  if (output) {
+    output.value = getIdentityDescription();
+  }
+
+  const postalOutput = currentRoot.querySelector('[data-arkolia-postal-output]');
+  if (postalOutput) {
+    postalOutput.textContent = getSelectedPostalCode();
+  }
+
+  const cityOutput = currentRoot.querySelector('[data-arkolia-city-output]');
+  if (cityOutput) {
+    cityOutput.textContent = getSelectedCityName();
+  }
 }
 
 function resetSuggestions() {
@@ -513,6 +629,7 @@ function renderResultCard() {
 
   bindSummaryCardActions();
   bindIdentityActions();
+  syncIdentityControls();
   updateIdentityDescriptionOutput();
 }
 async function applySelection(item) {
@@ -768,11 +885,11 @@ export async function renderSolidityArkolia(root) {
   arkoliaUiState.identity = {
     length: "",
     width: "",
-    spanPreset: "",
+    spanPreset: "6",
     spanOther: "",
-    intermediatePosts: "",
-    windBeams: "",
-    longitudinalBracing: []
+    intermediatePosts: "0",
+    windBeams: "1",
+    longitudinalBracing: ['croix de Saint-André']
   };
 
   root.innerHTML = `
