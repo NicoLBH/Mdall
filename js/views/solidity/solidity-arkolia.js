@@ -4,7 +4,6 @@ import { getWindRegionsByDepartmentCode } from "../../services/zoning/wind-regio
 import { getSnowRegionsByDepartmentCode } from "../../services/zoning/snow-regions-service.js";
 import { getWindZoneByDepartmentAndCanton } from "../../services/zoning/wind-canton-regions-service.js";
 import { getSnowZoneByDepartmentAndCanton } from "../../services/zoning/snow-canton-regions-service.js";
-import { getAllFrostDepthDepartments } from "../../services/zoning/frost-depth-service.js";
 import { escapeHtml } from "../../utils/escape-html.js";
 import { buildGoogleMapsPlaceEmbedUrl, hasGoogleMapsEmbedApiKey } from "../../services/google-maps-embed-service.js";
 import { registerProjectPrimaryScrollSource } from "../project-shell-chrome.js";
@@ -183,158 +182,154 @@ function renderIdentitySection() {
   const climateText = getClimateText();
 
   return `
-    <div class="settings-card settings-card--param arkolia-identity-card">
+    <div class="settings-card__head arkolia-section-heading arkolia-layout-heading">
+      <span class="settings-card__head-title"><h4>Fiche d'identité</h4></span>
+    </div>
+
+    <div class="settings-seismic-sizing-layout__row settings-seismic-sizing-layout__row--top arkolia-result-layout arkolia-identity-row">
       <div class="settings-stack settings-stack--lg">
-        <div class="settings-card__head arkolia-identity-card__head arkolia-section-heading">
-          <span class="settings-card__head-title"><h4>Fiche d'identité</h4></span>
-        </div>
-
-        <div class="settings-seismic-sizing-layout__row arkolia-identity-row">
-          <div class="settings-stack settings-stack--lg">
-            <div class="arkolia-identity-section">
-              <div class="arkolia-identity-section__title">Dimensions du bâtiment</div>
-              <div class="arkolia-identity-dimensions">
-                <label class="gh-editable-field">
-                  <span class="gh-editable-field__label">Longueur (m)</span>
-                  <span class="gh-editable-field__control">
-                    <input type="text" class="gh-input" data-arkolia-identity-input="length" value="${escapeAttribute(identity.length || '')}">
-                  </span>
-                </label>
-                <label class="gh-editable-field">
-                  <span class="gh-editable-field__label">Largeur (m)</span>
-                  <span class="gh-editable-field__control">
-                    <input type="text" class="gh-input" data-arkolia-identity-input="width" value="${escapeAttribute(identity.width || '')}">
-                  </span>
-                </label>
-              </div>
-            </div>
-
-            <div class="arkolia-identity-section">
-              <div class="arkolia-identity-section__title">Travée</div>
-              ${renderIdentityRadioGroup('spanPreset', [
-                { value: '6', label: '6 m' },
-                { value: '7', label: '7 m' },
-                { value: '8', label: '8 m' },
-                { value: '9', label: '9 m' },
-                { value: '10', label: '10 m' },
-                { value: '10.5', label: '10,5 m' },
-                { value: '11', label: '11 m' },
-                { value: 'other', label: 'Autre' }
-              ], identity.spanPreset)}
-              <label class="gh-editable-field arkolia-identity-other-field">
-                <span class="gh-editable-field__label">Autre (m)</span>
-                <span class="gh-editable-field__control">
-                  <input type="text" class="gh-input" data-arkolia-identity-input="spanOther" value="${escapeAttribute(identity.spanOther || '')}">
-                </span>
-              </label>
-            </div>
-
-            <div class="arkolia-identity-section">
-              <div class="arkolia-identity-section__title">Nombre de poteau(x) en travée</div>
-              ${renderIdentityRadioGroup('intermediatePosts', [
-                { value: '0', label: 'Aucun' },
-                { value: '1', label: 'Un' },
-                { value: '2', label: 'Deux' },
-                { value: '3', label: 'Trois' },
-                { value: '4', label: 'Quatre' }
-              ], identity.intermediatePosts)}
-            </div>
-
-            <div class="arkolia-identity-section">
-              <div class="arkolia-identity-section__title">Nombre de poutre au vent</div>
-              ${renderIdentityRadioGroup('windBeams', [
-                { value: '1', label: 'Une' },
-                { value: '2', label: 'Deux' },
-                { value: '3', label: 'Trois' }
-              ], identity.windBeams)}
-            </div>
-
-            <div class="arkolia-identity-section">
-              <div class="arkolia-identity-section__title">Contreventement longitudinal</div>
-              ${renderIdentityCheckboxGroup('longitudinalBracing', [
-                { value: 'croix de Saint-André', label: 'Croix de St-André' },
-                { value: 'portique', label: 'Portique' },
-                { value: 'murs', label: 'Murs' }
-              ], identity.longitudinalBracing)}
-            </div>
-          </div>
-
-          <div class="settings-stack settings-stack--lg">
-            <div class="arkolia-identity-preview">
-              <div class="arkolia-identity-preview__head">
-                <div class="arkolia-identity-preview__title">Description de l'ouvrage</div>
-                ${renderCopyButton({ action: 'data-arkolia-copy-description', title: 'Copier dans le presse-papier' })}
-              </div>
-              <textarea class="gh-textarea arkolia-identity-preview__textarea" readonly data-arkolia-description-output>${escapeHtml(description)}</textarea>
-            </div>
-
-            <div class="arkolia-identity-sidecard">
-              <div class="arkolia-identity-sidecard__item">
-                <div class="arkolia-identity-sidecard__head">
-                  <div class="arkolia-identity-sidecard__label">Code postal</div>
-                  ${renderCopyButton({ action: '', value: 'postalCode', title: 'Copier le code postal' })}
-                </div>
-                <div class="arkolia-identity-sidecard__value" data-arkolia-postal-output>${escapeHtml(getSelectedPostalCode())}</div>
-              </div>
-
-              <div class="arkolia-identity-sidecard__item">
-                <div class="arkolia-identity-sidecard__head">
-                  <div class="arkolia-identity-sidecard__label">Ville</div>
-                  ${renderCopyButton({ action: '', value: 'city', title: 'Copier le nom de la ville' })}
-                </div>
-                <div class="arkolia-identity-sidecard__value" data-arkolia-city-output>${escapeHtml(getSelectedCityName())}</div>
-              </div>
-            </div>
+        <div class="arkolia-identity-section">
+          <div class="arkolia-identity-section__title">Dimensions du bâtiment</div>
+          <div class="arkolia-identity-dimensions">
+            <label class="gh-editable-field">
+              <span class="gh-editable-field__label">Longueur (m)</span>
+              <span class="gh-editable-field__control">
+                <input type="text" class="gh-input" data-arkolia-identity-input="length" value="${escapeAttribute(identity.length || '')}">
+              </span>
+            </label>
+            <label class="gh-editable-field">
+              <span class="gh-editable-field__label">Largeur (m)</span>
+              <span class="gh-editable-field__control">
+                <input type="text" class="gh-input" data-arkolia-identity-input="width" value="${escapeAttribute(identity.width || '')}">
+              </span>
+            </label>
           </div>
         </div>
 
-        <div class="settings-card__head arkolia-section-heading">
-          <span class="settings-card__head-title"><h4>Relation et avis</h4></span>
+        <div class="arkolia-identity-section">
+          <div class="arkolia-identity-section__title">Travée</div>
+          ${renderIdentityRadioGroup('spanPreset', [
+            { value: '6', label: '6 m' },
+            { value: '7', label: '7 m' },
+            { value: '8', label: '8 m' },
+            { value: '9', label: '9 m' },
+            { value: '10', label: '10 m' },
+            { value: '10.5', label: '10,5 m' },
+            { value: '11', label: '11 m' },
+            { value: 'other', label: 'Autre' }
+          ], identity.spanPreset)}
+          <label class="gh-editable-field arkolia-identity-other-field">
+            <span class="gh-editable-field__label">Autre (m)</span>
+            <span class="gh-editable-field__control">
+              <input type="text" class="gh-input" data-arkolia-identity-input="spanOther" value="${escapeAttribute(identity.spanOther || '')}">
+            </span>
+          </label>
         </div>
 
-        <div class="arkolia-identity-section arkolia-relation-generalities-card">
-          <div class="arkolia-identity-section__title">Généralités</div>
-          <div class="arkolia-relation-generalities arkolia-relation-generalities--inline">
-            ${renderIdentityRadioGroup('buildingOpen', [
-              { value: 'open', label: 'Bâtiment ouvert' }
-            ], relation.buildingOpen ? 'open' : '', { dataAttribute: 'data-arkolia-relation-radio' })}
-            <div class="arkolia-relation-generalities__line arkolia-relation-generalities__line--inline">
-              <div class="arkolia-relation-generalities__label">Bâtiment fermé :</div>
-              ${renderIdentityRadioGroup('closedFacades', [
-                { value: 'Nord', label: 'Nord' },
-                { value: 'Sud', label: 'Sud' },
-                { value: 'Est', label: 'Est' },
-                { value: 'Ouest', label: 'Ouest' }
-              ], relation.closedFacades, { type: 'checkbox', dataAttribute: 'data-arkolia-relation-checkbox' })}
-            </div>
-          </div>
+        <div class="arkolia-identity-section">
+          <div class="arkolia-identity-section__title">Nombre de poteau(x) en travée</div>
+          ${renderIdentityRadioGroup('intermediatePosts', [
+            { value: '0', label: 'Aucun' },
+            { value: '1', label: 'Un' },
+            { value: '2', label: 'Deux' },
+            { value: '3', label: 'Trois' },
+            { value: '4', label: 'Quatre' }
+          ], identity.intermediatePosts)}
         </div>
 
-        <div class="arkolia-relation-cards-grid">
-          <div class="arkolia-identity-preview arkolia-identity-preview--compact">
-            <div class="arkolia-identity-preview__head">
-              <div class="arkolia-identity-preview__title">Relation</div>
-              ${renderCopyButton({ action: '', value: 'relationName', title: 'Copier la relation' })}
+        <div class="arkolia-identity-section">
+          <div class="arkolia-identity-section__title">Nombre de poutre au vent</div>
+          ${renderIdentityRadioGroup('windBeams', [
+            { value: '1', label: 'Une' },
+            { value: '2', label: 'Deux' },
+            { value: '3', label: 'Trois' }
+          ], identity.windBeams)}
+        </div>
+
+        <div class="arkolia-identity-section">
+          <div class="arkolia-identity-section__title">Contreventement longitudinal</div>
+          ${renderIdentityCheckboxGroup('longitudinalBracing', [
+            { value: 'croix de Saint-André', label: 'Croix de St-André' },
+            { value: 'portique', label: 'Portique' },
+            { value: 'murs', label: 'Murs' }
+          ], identity.longitudinalBracing)}
+        </div>
+      </div>
+
+      <div class="settings-stack settings-stack--lg">
+        <div class="arkolia-identity-preview">
+          <div class="arkolia-identity-preview__head">
+            <div class="arkolia-identity-preview__title">Description de l'ouvrage</div>
+            ${renderCopyButton({ action: 'data-arkolia-copy-description', title: 'Copier dans le presse-papier' })}
+          </div>
+          <textarea class="gh-textarea arkolia-identity-preview__textarea" readonly data-arkolia-description-output>${escapeHtml(description)}</textarea>
+        </div>
+
+        <div class="arkolia-identity-sidecard">
+          <div class="arkolia-identity-sidecard__item">
+            <div class="arkolia-identity-sidecard__head">
+              <div class="arkolia-identity-sidecard__label">Code postal</div>
+              ${renderCopyButton({ action: '', value: 'postalCode', title: 'Copier le code postal' })}
             </div>
-            <div class="arkolia-identity-sidecard__value" data-arkolia-relation-name-output>${escapeHtml(relation.builderName || 'ARKOLIA')}</div>
+            <div class="arkolia-identity-sidecard__value" data-arkolia-postal-output>${escapeHtml(getSelectedPostalCode())}</div>
           </div>
 
-          <div class="arkolia-identity-preview arkolia-identity-preview--compact">
-            <div class="arkolia-identity-preview__head">
-              <div class="arkolia-identity-preview__title">Avis</div>
-              ${renderCopyButton({ action: '', value: 'relationSummary', title: 'Copier le texte' })}
+          <div class="arkolia-identity-sidecard__item">
+            <div class="arkolia-identity-sidecard__head">
+              <div class="arkolia-identity-sidecard__label">Ville</div>
+              ${renderCopyButton({ action: '', value: 'city', title: 'Copier le nom de la ville' })}
             </div>
-            <textarea class="gh-textarea arkolia-identity-preview__textarea" readonly data-arkolia-relation-summary-output>${escapeHtml(relationSummary)}</textarea>
-          </div>
-
-          <div class="arkolia-identity-preview arkolia-identity-preview--compact">
-            <div class="arkolia-identity-preview__head">
-              <div class="arkolia-identity-preview__title">Paramètres climatiques</div>
-              ${renderCopyButton({ action: '', value: 'climate', title: 'Copier les paramètres climatiques' })}
-            </div>
-            <textarea class="gh-textarea arkolia-identity-preview__textarea" readonly data-arkolia-climate-output>${escapeHtml(climateText)}</textarea>
+            <div class="arkolia-identity-sidecard__value" data-arkolia-city-output>${escapeHtml(getSelectedCityName())}</div>
           </div>
         </div>
+      </div>
+    </div>
+
+    <div class="settings-card__head arkolia-section-heading arkolia-layout-heading">
+      <span class="settings-card__head-title"><h4>Relation et avis</h4></span>
+    </div>
+
+    <div class="arkolia-relation-generalities-card">
+      <div class="arkolia-identity-section__title">Généralités</div>
+      <div class="arkolia-relation-generalities arkolia-relation-generalities--inline">
+        ${renderIdentityRadioGroup('buildingOpen', [
+          { value: 'open', label: 'Bâtiment ouvert' }
+        ], relation.buildingOpen ? 'open' : '', { dataAttribute: 'data-arkolia-relation-radio' })}
+        <div class="arkolia-relation-generalities__line arkolia-relation-generalities__line--inline">
+          <div class="arkolia-relation-generalities__label">Bâtiment fermé :</div>
+          ${renderIdentityRadioGroup('closedFacades', [
+            { value: 'Nord', label: 'Nord' },
+            { value: 'Sud', label: 'Sud' },
+            { value: 'Est', label: 'Est' },
+            { value: 'Ouest', label: 'Ouest' }
+          ], relation.closedFacades, { type: 'checkbox', dataAttribute: 'data-arkolia-relation-checkbox' })}
+        </div>
+      </div>
+    </div>
+
+    <div class="arkolia-relation-cards-grid">
+      <div class="arkolia-identity-preview arkolia-identity-preview--compact">
+        <div class="arkolia-identity-preview__head">
+          <div class="arkolia-identity-preview__title">Relation</div>
+          ${renderCopyButton({ action: '', value: 'relationName', title: 'Copier la relation' })}
+        </div>
+        <div class="arkolia-identity-sidecard__value" data-arkolia-relation-name-output>${escapeHtml(relation.builderName || 'ARKOLIA')}</div>
+      </div>
+
+      <div class="arkolia-identity-preview arkolia-identity-preview--compact">
+        <div class="arkolia-identity-preview__head">
+          <div class="arkolia-identity-preview__title">Avis</div>
+          ${renderCopyButton({ action: '', value: 'relationSummary', title: 'Copier le texte' })}
+        </div>
+        <textarea class="gh-textarea arkolia-identity-preview__textarea" readonly data-arkolia-relation-summary-output>${escapeHtml(relationSummary)}</textarea>
+      </div>
+
+      <div class="arkolia-identity-preview arkolia-identity-preview--compact">
+        <div class="arkolia-identity-preview__head">
+          <div class="arkolia-identity-preview__title">Paramètres climatiques</div>
+          ${renderCopyButton({ action: '', value: 'climate', title: 'Copier les paramètres climatiques' })}
+        </div>
+        <textarea class="gh-textarea arkolia-identity-preview__textarea" readonly data-arkolia-climate-output>${escapeHtml(climateText)}</textarea>
       </div>
     </div>
   `;
@@ -788,9 +783,7 @@ function renderResultCard() {
         </div>
       </div>
 
-      <div class="settings-seismic-sizing-layout__row">
-        ${renderIdentitySection()}
-      </div>
+      ${renderIdentitySection()}
     </div>
   `;
 
