@@ -2,7 +2,7 @@ import { store } from "../../store.js";
 import { fetchGeorisquesForCommune } from "../../services/georisques-service.js";
 import { escapeHtml } from "../../utils/escape-html.js";
 import { registerProjectPrimaryScrollSource } from "../project-shell-chrome.js";
-import { persistCurrentProjectState } from "../../services/project-state-storage.js";
+import { persistCurrentProjectState, readPersistedCurrentProjectState } from "../../services/project-state-storage.js";
 import { shouldAutoRunProjectBaseDataEnrichment } from "../../services/project-automation.js";
 
 const georisksUiState = {
@@ -30,6 +30,26 @@ function ensureGeorisquesState() {
     form.georisques.query = { city: "", postalCode: "" };
   }
   return form.georisques;
+}
+
+
+function syncProjectLocationFromPersistedState() {
+  const persisted = readPersistedCurrentProjectState();
+  const persistedForm = persisted?.projectForm;
+  if (!persistedForm || typeof persistedForm !== "object") return null;
+
+  const location = {
+    address: typeof persistedForm.address === "string" ? persistedForm.address : store.projectForm.address,
+    city: typeof persistedForm.city === "string" ? persistedForm.city : store.projectForm.city,
+    postalCode: typeof persistedForm.postalCode === "string" ? persistedForm.postalCode : store.projectForm.postalCode,
+    latitude: Number.isFinite(persistedForm.latitude) ? persistedForm.latitude : store.projectForm.latitude,
+    longitude: Number.isFinite(persistedForm.longitude) ? persistedForm.longitude : store.projectForm.longitude,
+    altitude: Number.isFinite(persistedForm.altitude) ? persistedForm.altitude : store.projectForm.altitude,
+    communeCp: typeof persistedForm.communeCp === "string" ? persistedForm.communeCp : store.projectForm.communeCp
+  };
+
+  Object.assign(store.projectForm, location);
+  return location;
 }
 
 function getRequestKey(city = "", postalCode = "") {
@@ -303,6 +323,8 @@ function rerender() {
 }
 
 async function loadGeorisques({ force = false } = {}) {
+  syncProjectLocationFromPersistedState();
+
   const city = String(store.projectForm.city || "").trim();
   const postalCode = String(store.projectForm.postalCode || "").trim();
   const requestKey = getRequestKey(city, postalCode);
@@ -361,6 +383,7 @@ function bindEvents(root) {
 export function renderSolidityGeorisks(root) {
   if (!root) return;
   currentRoot = root;
+  syncProjectLocationFromPersistedState();
   ensureGeorisquesState();
   root.innerHTML = getViewHtml();
   bindEvents(root);
