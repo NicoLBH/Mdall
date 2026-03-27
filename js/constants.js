@@ -4,6 +4,7 @@ export const PROJECT_TAB_IDS = {
   DOCUMENTS: "documents",
   SUBJECTS: "sujets",
   ACTIONS: "actions",
+  STUDIO: "atelier",
   SITUATIONS: "situations",
   INSIGHTS: "insights",
   PARAMETRES: "parametres",
@@ -48,6 +49,11 @@ export const PROJECT_TABS = [
     label: "Sujets",
     icon: svgIcon("issue-opened", { className: "octicon octicon-file" }),
     countKey: "openSujets"
+  },
+  {
+    id: PROJECT_TAB_IDS.STUDIO,
+    label: "Atelier",
+    icon: svgIcon("cpu", { className: "octicon octicon-cpu" })
   },
   {
     id: PROJECT_TAB_IDS.ACTIONS,
