@@ -349,10 +349,10 @@ function getPortanceText() {
     const singleWindBeamNote = shouldShowSingleWindBeamNote
       ? `
 
-La descente de charges des croix de stabilité verticales doit être ajoutée aux massifs courants pour le dimensionnement des massifs des stabilités (présence d'une seule poutre au vent en charpente métallique).${exampleText}`
+La descente de charges des croix de stabilité verticales doit être ajoutée aux massifs courants pour le dimensionnement des massifs des stabilités (présence d'une seule poutre au vent en charpente métallique) ${exampleText}`
       : '';
 
-    return `Dimensions minimales des massifs courants à respecter (travée ${spanLabel} m): ${massifText} ht ou équivalent.${singleWindBeamNote}${intermediatePostsText}
+    return `Dimensions minimales des massifs courants à respecter (travée ${spanLabel} m) : ${massifText} ht ou équivalent.${singleWindBeamNote}${intermediatePostsText}
 
 Nota: Le dimensionnement et la vérification des contraintes appliquées au sol restent de la responsabilité de l'entreprise.`;
   }
