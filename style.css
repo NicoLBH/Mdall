@@ -7959,6 +7959,7 @@ color:var(--text);
 .arkolia-head-main{
   min-width:0;
   flex:1 1 auto;
+  padding-bottom: 8px;
 }
 
 .arkolia-head-main__top{
@@ -7993,6 +7994,7 @@ color:var(--text);
   display:flex;
   flex-direction:column;
   gap:6px;
+  color: var(--muted);
 }
 
 .arkolia-head-reference__label{
