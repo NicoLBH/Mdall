@@ -48,6 +48,39 @@ const arkoliaUiState = {
 
 let currentRoot = null;
 
+const COPY_ICON_HTML = svgIcon('copy', { className: 'octicon octicon-copy' });
+const COPY_SUCCESS_ICON_HTML = svgIcon('check', {
+  className: 'octicon octicon-check',
+  style: 'color: var(--success);'
+});
+
+function resetCopyButtonState(button, defaultTitle) {
+  if (!button) return;
+  const resetTimerId = Number(button.dataset.arkoliaCopyResetTimer || 0);
+  if (resetTimerId) {
+    window.clearTimeout(resetTimerId);
+  }
+  button.classList.remove('is-copied');
+  button.innerHTML = COPY_ICON_HTML;
+  button.removeAttribute('data-arkolia-copy-reset-timer');
+  if (defaultTitle) {
+    button.setAttribute('title', defaultTitle);
+    button.setAttribute('aria-label', defaultTitle);
+  }
+}
+
+function showCopyButtonSuccess(button, copiedTitle, defaultTitle) {
+  if (!button) return;
+  resetCopyButtonState(button, defaultTitle);
+  button.classList.add('is-copied');
+  button.innerHTML = COPY_SUCCESS_ICON_HTML;
+  button.setAttribute('title', copiedTitle);
+  button.setAttribute('aria-label', copiedTitle);
+  const timerId = window.setTimeout(() => {
+    resetCopyButtonState(button, defaultTitle);
+  }, 2000);
+  button.dataset.arkoliaCopyResetTimer = String(timerId);
+}
 
 function getArkoliaReferenceStorageKey() {
   const projectId = String(store.currentProjectId || "default").trim() || "default";
@@ -205,7 +238,7 @@ function renderCopyButton({ action, title, ariaLabel, value = '' }) {
   const valueAttr = value ? ` data-arkolia-copy-value="${escapeAttribute(value)}"` : '';
   return `
     <button type="button" class="arkolia-identity-preview__copy" ${action}${valueAttr} title="${escapeAttribute(title)}" aria-label="${escapeAttribute(ariaLabel || title)}">
-      ${svgIcon('copy', { className: 'octicon octicon-copy' })}
+      ${COPY_ICON_HTML}
     </button>
   `;
 }
@@ -802,14 +835,7 @@ async function copyIdentityText({ button, text, textarea = null, copiedTitle, de
       referenceInput.select();
       document.execCommand('copy');
     }
-    button.classList.add('is-copied');
-    button.setAttribute('title', copiedTitle);
-    button.setAttribute('aria-label', copiedTitle);
-    window.setTimeout(() => {
-      button.classList.remove('is-copied');
-      button.setAttribute('title', defaultTitle);
-      button.setAttribute('aria-label', defaultTitle);
-    }, 1200);
+    showCopyButtonSuccess(button, copiedTitle, defaultTitle);
   } catch (_error) {
     if (textarea) {
       textarea.focus();
