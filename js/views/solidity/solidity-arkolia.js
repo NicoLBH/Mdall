@@ -210,6 +210,16 @@ function renderCopyButton({ action, title, ariaLabel, value = '' }) {
   `;
 }
 
+function getReferenceInputValue() {
+  const input = currentRoot?.querySelector('[data-arkolia-reference-input]');
+  const domValue = String(input?.value ?? '').trim();
+  if (domValue) return domValue;
+
+  const stateValue = String(arkoliaUiState.referenceName ?? '').trim();
+  if (stateValue) return stateValue;
+
+  return DEFAULT_ARKOLIA_REFERENCE;
+}
 
 function renderNewSubjectButton() {
   return renderGhActionButton({
@@ -263,9 +273,19 @@ Nota: Profondeur hors gel et atteinte du bon sol à vérifier à l'ouverture des
 
 function getSelectedSpanForPortance() {
   const identity = arkoliaUiState.identity || {};
-  const rawSpan = identity.spanPreset === 'other'
-    ? normalizeDimension(identity.spanOther)
-    : normalizeDimension(identity.spanPreset);
+
+  const selectedRadio = currentRoot?.querySelector('[data-arkolia-identity-radio="spanPreset"]:checked');
+  const domSpanPreset = String(selectedRadio?.value || '').trim();
+  const spanPreset = domSpanPreset || String(identity.spanPreset || '').trim();
+
+  let rawSpan = '';
+  if (spanPreset === 'other') {
+    const spanOtherInput = currentRoot?.querySelector('[data-arkolia-identity-input="spanOther"]');
+    rawSpan = normalizeDimension(spanOtherInput?.value || identity.spanOther);
+  } else {
+    rawSpan = normalizeDimension(spanPreset);
+  }
+
   const spanNumber = Number(String(rawSpan || '').replace(',', '.'));
   return Number.isFinite(spanNumber) ? spanNumber : null;
 }
@@ -293,14 +313,22 @@ function getPortanceText() {
     }
   };
 
-  const normalizedSpan = span === 6 || span === 7 ? span : null;
-  const resultCode = normalizedSpan && portanceMatrix[normalizedSpan]?.[windRegion]?.[terrainRoughness];
+  const normalizedSpan = Number.isFinite(span) ? Number(span) : null;
+  const hasSupportedSpan = normalizedSpan === 6 || normalizedSpan === 7;
+  const normalizedWindRegion = String(windRegion || '').trim();
+  const normalizedTerrainRoughness = String(terrainRoughness || '').trim();
+
+  const resultCode = hasSupportedSpan
+    ? portanceMatrix[normalizedSpan]?.[normalizedWindRegion]?.[normalizedTerrainRoughness] ?? null
+    : null;
+
   const massifText = resultCode === 'large'
     ? '2 m x 1 m x 1 m'
     : resultCode === 'small'
       ? '1 m x 1 m x 1 m'
       : null;
-  const spanLabel = normalizeDimension(span);
+
+  const spanLabel = normalizeDimension(normalizedSpan);
 
   const postsLabelMap = {
     '1': '1',
@@ -313,7 +341,7 @@ function getPortanceText() {
     ? `\n\nNota: La présence de ${postsCount} ${Number(postsCount) > 1 ? 'poteaux intermédiaires de portique peut' : 'poteau intermédiaire de portique peut'} permettre l'optimisation des massifs forfaitaires de stabilité.`
     : '';
 
-  if (normalizedSpan && massifText) {
+  if (hasSupportedSpan && massifText) {
     const exampleText = normalizedSpan === 6
       ? ' : par exemple 2 m x 1 m x 1 m ht ou équivalent.'
       : '.';
@@ -333,6 +361,12 @@ Nota: Le dimensionnement et la vérification des contraintes appliquées au sol 
     return `Travée supérieure à 7 m (prévu ${spanLabel} m), hors cadre d'application du guide Socotec - une étude spécifique est à prévoir.${intermediatePostsText}\n\nNota: Le dimensionnement et la vérification des contraintes appliquées au sol restent de la responsabilité de l'entreprise.`;
   }
 
+  if (hasSupportedSpan && !massifText) {
+    return `Travée ${spanLabel} m reconnue, mais aucun massif forfaitaire n'a pu être déterminé avec les paramètres suivants : zone de vent ${normalizedWindRegion || 'non renseignée'}, rugosité ${normalizedTerrainRoughness || 'non renseignée'}.${intermediatePostsText}
+
+Nota: Le dimensionnement et la vérification des contraintes appliquées au sol restent de la responsabilité de l'entreprise.`;
+  }
+  
   return `Travée non renseignée ou hors matrice de calcul.${intermediatePostsText}\n\nNota: Le dimensionnement et la vérification des contraintes appliquées au sol restent de la responsabilité de l'entreprise.`;
 }
 
@@ -544,8 +578,8 @@ function renderIdentitySection() {
 
 function bindIdentityActions() {
   if (!currentRoot) return;
-  const scope = currentRoot.querySelector('[data-arkolia-result]');
-  if (!scope || scope.dataset.identityBound === 'true') return;
+  const scope = currentRoot;
+  if (scope.dataset.identityBound === 'true') return;
   scope.dataset.identityBound = 'true';
 
   scope.addEventListener('input', (event) => {
@@ -703,7 +737,7 @@ function bindIdentityActions() {
         defaultTitle: 'Copier la relation'
       },
       referenceName: {
-        text: currentRoot?.querySelector('#solidityArkoliaReference')?.value || arkoliaUiState.referenceName || DEFAULT_ARKOLIA_REFERENCE,
+        text: getReferenceInputValue(),
         copiedTitle: 'Référence copiée',
         defaultTitle: 'Copier la référence de projet'
       },
@@ -750,7 +784,9 @@ function bindIdentityActions() {
 }
 
 async function copyIdentityText({ button, text, textarea = null, copiedTitle, defaultTitle }) {
-  const referenceInput = !textarea && button?.closest('.arkolia-head-reference__control')?.querySelector('input');
+  const referenceInput = !textarea
+    ? currentRoot?.querySelector('[data-arkolia-reference-input]')
+    : null;
 
   try {
     if (navigator.clipboard?.writeText) {
