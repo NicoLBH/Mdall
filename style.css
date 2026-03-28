@@ -7950,6 +7950,68 @@ color:var(--text);
 }
 
 
+
+.settings-card__head--arkolia{
+  align-items:flex-start;
+  gap:16px;
+}
+
+.arkolia-head-reference{
+  margin-left:auto;
+  min-width:min(100%, 520px);
+}
+
+.arkolia-head-reference__field{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+
+.arkolia-head-reference__label{
+  font-size:12px;
+  font-weight:600;
+  color:var(--fg-muted);
+}
+
+.arkolia-head-reference__control{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+
+.arkolia-head-reference__control .gh-input{
+  min-width:0;
+}
+
+.settings-location-map-card{
+  margin-top:16px;
+  height:clamp(280px, 34vw, 360px);
+  border:1px solid var(--border-default);
+  border-radius:12px;
+  overflow:hidden;
+  background:#0d1117;
+}
+
+.settings-location-map-card .arkolia-map,
+.settings-location-map-card .arkolia-map iframe{
+  width:100%;
+  height:100%;
+}
+
+.settings-location-map-card .arkolia-map{
+  min-height:100%;
+}
+
+.settings-location-map-card .arkolia-map iframe{
+  border:0;
+  display:block;
+}
+
+.settings-location-map-card.is-blurred .arkolia-map__placeholder-blur{
+  backdrop-filter:blur(5px) saturate(.8);
+  background:linear-gradient(180deg, rgba(13,17,23,.18), rgba(13,17,23,.34));
+}
+
 .settings-seismic-chart-card.arkolia-map-card,
 .settings-seismic-summary-card.arkolia-summary-card{
   height:490px;
@@ -8379,6 +8441,16 @@ color:var(--text);
   .settings-layout--parametres.project-studio-router{
     grid-template-columns:minmax(0,1fr);
     gap:20px;
+  }
+
+  .arkolia-head-reference{
+    margin-left:0;
+    min-width:0;
+    width:100%;
+  }
+
+  .settings-location-map-card{
+    height:320px;
   }
 
   .project-studio-router .settings-nav--parametres,
