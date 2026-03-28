@@ -924,6 +924,7 @@ async function refreshLocationDerivedData({ runEnrichment = false, triggerType =
   if (!city || !postalCode) {
     store.projectForm.altitude = null;
     persistCurrentProjectState();
+    dispatchProjectLocationChanged();
     rerenderProjectParametres();
     return;
   }
@@ -935,6 +936,7 @@ async function refreshLocationDerivedData({ runEnrichment = false, triggerType =
   }
 
   persistCurrentProjectState();
+  dispatchProjectLocationChanged();
 }
 
 function formatGeorisquesDate(value) {
@@ -1341,6 +1343,12 @@ async function loadGeorisquesForCurrentProject({ force = false } = {}) {
 
 function renderProjectTabsFeatureCard(projectTabs) {
   const items = [
+    {
+      id: "tabVisibilityAtelier",
+      key: PROJECT_TAB_IDS.STUDIO,
+      label: "Atelier",
+      description: "Affiche l’onglet Atelier et ses vues métier de travail projet."
+    },
     {
       id: "tabVisibilitySituations",
       key: PROJECT_TAB_IDS.SITUATIONS,
@@ -1904,6 +1912,15 @@ function bindValue(id, handler, eventName = "input") {
   el.addEventListener(eventName, (e) => handler(e.target.value));
 }
 
+function dispatchProjectLocationChanged() {
+  document.dispatchEvent(new CustomEvent("projectLocationChanged", {
+    detail: {
+      projectId: String(store.currentProjectId || "").trim(),
+      locationSignature: getProjectLocationSignature()
+    }
+  }));
+}
+
 function refreshProjectTabsVisibility() {
   const tabsRoot = document.querySelector(".project-tabs");
   if (!tabsRoot) return;
@@ -1926,6 +1943,7 @@ function bindProjectTabToggles() {
       const key = event.target.getAttribute("data-project-tab-toggle");
       if (!key) return;
       store.projectForm.projectTabs[key] = !!event.target.checked;
+      persistCurrentProjectState();
       refreshProjectTabsVisibility();
     });
   });
