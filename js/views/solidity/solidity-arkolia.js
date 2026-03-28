@@ -306,7 +306,7 @@ function getPortanceText() {
       ? ' : par exemple 2 m x 1 m x 1 m ht ou équivalent.'
       : '.';
 
-    return `Dimensions minimales des massifs courants à respecter (travée ${spanLabel} m): ${massifText} ht ou équivalent.\nLa descente de charges des croix de stabilité verticales doit être ajoutée aux massifs courants pour le dimensionnement des massifs des stabilités (présence d'une seule poutre au vent en charpente métallique)${exampleText}\n${intermediatePostsText}\n\nNota: Le dimensionnement et la vérification des contraintes appliquées au sol restent de la responsabilité de l'entreprise.`;
+    return `Dimensions minimales des massifs courants à respecter (travée ${spanLabel} m): ${massifText} ht ou équivalent.\n\nLa descente de charges des croix de stabilité verticales doit être ajoutée aux massifs courants pour le dimensionnement des massifs des stabilités (présence d'une seule poutre au vent en charpente métallique)${exampleText}\n${intermediatePostsText}\nNota: Le dimensionnement et la vérification des contraintes appliquées au sol restent de la responsabilité de l'entreprise.`;
   }
 
   if (Number.isFinite(span) && span > 7) {
