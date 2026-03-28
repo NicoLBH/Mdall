@@ -3224,7 +3224,7 @@ color:var(--text);
 }
 
 .settings-card--param{
-  padding:0px 0 0px;
+  padding:40px 0 0px;
 }
 
 .settings-block--no-head > .settings-card--param:first-of-type{
@@ -7956,6 +7956,30 @@ color:var(--text);
   gap:16px;
 }
 
+.arkolia-head-main{
+  min-width:0;
+  flex:1 1 auto;
+}
+
+.arkolia-head-main__top{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  justify-content:space-between;
+}
+
+.arkolia-head-main__actions{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
+.arkolia-head-main__actions .gh-action,
+.arkolia-head-main__actions .gh-btn{
+  flex:0 0 auto;
+}
+
 .arkolia-head-reference{
   margin-left:auto;
   min-width:min(100%, 520px);
@@ -8441,6 +8465,15 @@ color:var(--text);
   .settings-layout--parametres.project-studio-router{
     grid-template-columns:minmax(0,1fr);
     gap:20px;
+  }
+
+  .arkolia-head-main__top{
+    align-items:flex-start;
+    flex-direction:column;
+  }
+
+  .arkolia-head-main__actions{
+    width:100%;
   }
 
   .arkolia-head-reference{
