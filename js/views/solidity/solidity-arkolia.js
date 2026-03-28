@@ -10,6 +10,7 @@ import { buildGoogleMapsPlaceEmbedUrl, hasGoogleMapsEmbedApiKey } from "../../se
 import { registerProjectPrimaryScrollSource } from "../project-shell-chrome.js";
 import { svgIcon } from "../../ui/icons.js";
 import { store } from "../../store.js";
+import { renderGhActionButton } from "../ui/gh-split-button.js";
 
 const DEFAULT_IDENTITY = {
   length: "",
@@ -210,6 +211,16 @@ function renderCopyButton({ action, title, ariaLabel, value = '' }) {
 }
 
 
+function renderNewSubjectButton() {
+  return renderGhActionButton({
+    id: 'arkoliaNewSubjectAction',
+    label: 'Nouveau sujet',
+    tone: 'primary',
+    size: 'md',
+    mainAction: ''
+  });
+}
+
 function parseFrenchDecimalToNumber(value) {
   const normalized = String(value ?? '').trim().replace(/,/g, '.');
   const number = Number(normalized);
@@ -267,6 +278,7 @@ function getPortanceText() {
   const terrainRoughness = String(relation.terrainRoughness || 'IIIa').trim();
   const span = getSelectedSpanForPortance();
   const intermediatePosts = String(identity.intermediatePosts || '0').trim();
+  const windBeamsCount = Number(String(identity.windBeams || '1').trim());
 
   const portanceMatrix = {
     6: {
@@ -730,6 +742,8 @@ function bindIdentityActions() {
 }
 
 async function copyIdentityText({ button, text, textarea = null, copiedTitle, defaultTitle }) {
+  const referenceInput = !textarea && button?.closest('.arkolia-head-reference__control')?.querySelector('input');
+
   try {
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(text);
@@ -739,17 +753,26 @@ async function copyIdentityText({ button, text, textarea = null, copiedTitle, de
       textarea.select();
       document.execCommand('copy');
       textarea.setAttribute('readonly', 'readonly');
+    } else if (referenceInput) {
+      referenceInput.focus();
+      referenceInput.select();
+      document.execCommand('copy');
     }
     button.classList.add('is-copied');
     button.setAttribute('title', copiedTitle);
+    button.setAttribute('aria-label', copiedTitle);
     window.setTimeout(() => {
       button.classList.remove('is-copied');
       button.setAttribute('title', defaultTitle);
+      button.setAttribute('aria-label', defaultTitle);
     }, 1200);
   } catch (_error) {
     if (textarea) {
       textarea.focus();
       textarea.select();
+    } else if (referenceInput) {
+      referenceInput.focus();
+      referenceInput.select();
     }
   }
 }
@@ -1316,10 +1339,15 @@ export async function renderSolidityArkolia(root) {
     <section class="settings-section is-active">
       <div class="settings-card settings-card--param">
         <div class="settings-card__head settings-card__head--arkolia">
-          <div>
-            <span class="settings-card__head-title">
-              <h4>PV hangar agricole</h4>
-            </span>
+          <div class="arkolia-head-main">
+            <div class="arkolia-head-main__top">
+              <span class="settings-card__head-title">
+                <h4>PV hangar agricole</h4>
+              </span>
+              <div class="arkolia-head-main__actions">
+                ${renderNewSubjectButton()}
+              </div>
+            </div>
             <p>Analyse autonome des fondations pour les hangars agricoles neufs avec panneaux photovoltaïques sur couverture bac acier. Recherche par ville avec auto-complétion, récupération du canton 2014 par code INSEE, affichage des coordonnées, détermination automatique des zones de vent et de neige. Définition automatique des dimensions minimales des fondations et profondeur hors gel à respecter.</p>
           </div>
           <div class="arkolia-head-reference">
