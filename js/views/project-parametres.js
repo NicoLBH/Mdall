@@ -1778,6 +1778,7 @@ function getPageHtml(form) {
                       </div>
                     ` : ""}
                     ${renderProjectLocationMapBlock()}
+                  `
                   })
                 ]
               })}
