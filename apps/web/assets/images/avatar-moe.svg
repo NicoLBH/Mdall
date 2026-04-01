@@ -1,0 +1,14 @@
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Avatar MOE">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ffd6e7"/>
+      <stop offset="100%" stop-color="#ffeec5"/>
+    </linearGradient>
+  </defs>
+  <circle cx="64" cy="64" r="64" fill="url(#bg)"/>
+  <path d="M28 50c4-24 20-34 36-34s32 10 36 34c-8-10-18-17-36-17S36 40 28 50Z" fill="#7c3f58"/>
+  <circle cx="64" cy="52" r="23" fill="#f4c7a1"/>
+  <path d="M30 112c3-21 18-34 34-34s31 13 34 34" fill="#fff7fb"/>
+  <path d="M46 47c7 10 29 10 36 0" fill="none" stroke="#7c3f58" stroke-width="6" stroke-linecap="round"/>
+  <path d="M46 90c9 6 27 6 36 0" fill="#c08497"/>
+</svg>

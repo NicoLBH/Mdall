@@ -1,0 +1,14 @@
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Avatar MOA">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#9ec5ff"/>
+      <stop offset="100%" stop-color="#d8e6ff"/>
+    </linearGradient>
+  </defs>
+  <circle cx="64" cy="64" r="64" fill="url(#bg)"/>
+  <circle cx="64" cy="48" r="24" fill="#f4c7a1"/>
+  <path d="M40 44c3-16 45-18 48 0-7-5-14-7-24-7s-17 2-24 7Z" fill="#4b5563"/>
+  <path d="M32 112c2-21 16-34 32-34s30 13 32 34" fill="#ffffff" opacity=".95"/>
+  <path d="M54 78h20l-3 17-7 9-7-9Z" fill="#334155"/>
+  <path d="M58 78h12l-6 6Z" fill="#c1121f"/>
+</svg>
