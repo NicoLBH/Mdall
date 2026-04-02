@@ -310,6 +310,15 @@ Contraintes :
 `;
 }
 
+function getObservationCurrentTitle(obs: any): string {
+  return String(obs?.title ?? "").trim();
+}
+
+function getObservationCurrentDescription(obs: any): string | null {
+  const value = String(obs?.description ?? "").trim();
+  return value.length > 0 ? value : null;
+}
+
 async function applyDecision(supabase: any, obs: any, decision: any) {
   console.log("Applying decision", {
     observation_id: obs.id,
@@ -406,6 +415,9 @@ async function applyDecision(supabase: any, obs: any, decision: any) {
         throw new Error(`Observation ${obs.id} has no analysis_run_id`);
       }
 
+      const subjectCurrentTitle = getObservationCurrentTitle(obs);
+      const subjectCurrentDescription = getObservationCurrentDescription(obs);
+
       const { data: newSubject, error } = await supabase
         .from("subjects")
         .insert({
@@ -413,10 +425,15 @@ async function applyDecision(supabase: any, obs: any, decision: any) {
           document_id: obs.document_id,
           analysis_run_id: obs.analysis_run_id,
           subject_type: defaultSubjectType,
-          title: obs.title,
-          description: obs.description ?? null,
-          current_title: obs.title,
-          current_description: obs.description,
+      
+          // Compatibilité temporaire uniquement
+          title: subjectCurrentTitle,
+          description: subjectCurrentDescription,
+      
+          // Champs métier officiels
+          current_title: subjectCurrentTitle,
+          current_description: subjectCurrentDescription,
+      
           status: "open",
           priority: obs.priority ?? "medium",
           situation_id: decision.situation_id ?? null
@@ -472,6 +489,9 @@ async function applyDecision(supabase: any, obs: any, decision: any) {
         throw new Error(`Observation ${obs.id} has no analysis_run_id`);
       }
 
+      const childCurrentTitle = getObservationCurrentTitle(obs);
+      const childCurrentDescription = getObservationCurrentDescription(obs);
+      
       const { data: childSubject, error } = await supabase
         .from("subjects")
         .insert({
@@ -479,10 +499,15 @@ async function applyDecision(supabase: any, obs: any, decision: any) {
           document_id: obs.document_id,
           analysis_run_id: obs.analysis_run_id,
           subject_type: defaultSubjectType,
-          title: obs.title,
-          description: obs.description ?? null,
-          current_title: obs.title,
-          current_description: obs.description,
+      
+          // Compatibilité temporaire uniquement
+          title: childCurrentTitle,
+          description: childCurrentDescription,
+      
+          // Champs métier officiels
+          current_title: childCurrentTitle,
+          current_description: childCurrentDescription,
+      
           parent_subject_id: decision.parent_subject_id,
           situation_id: decision.situation_id ?? null,
           status: "open",
