@@ -112,7 +112,11 @@ serve(async (req) => {
         .from("analysis_runs")
         .update({
           llm_output_raw: openAiJson,
-          structured_output_json: { raw_text_output: llmText, parsing_error: String(e) },
+          structured_output_json: {
+            stage: "generate_observations",
+            observations: [],
+            next_step: "resolve_observations"
+          },
           updated_at: new Date().toISOString()
         })
         .eq("id", analysisRunId);
@@ -173,7 +177,11 @@ serve(async (req) => {
       .from("analysis_runs")
       .update({
         llm_output_raw: openAiJson,
-        structured_output_json: { observations },
+        structured_output_json: {
+          stage: "generate_observations",
+          observations,
+          next_step: "resolve_observations"
+        },
         updated_at: new Date().toISOString()
       })
       .eq("id", analysisRunId);
