@@ -138,6 +138,15 @@ serve(async (req) => {
         updated_at: new Date().toISOString()
       })
       .eq("id", analysisRunId);
+    
+    return json({
+      success: true,
+      analysis_run_id: analysisRunId,
+      resolved: resolvedCount,
+      total: observations.length,
+      errors
+    });
+    
   } catch (e) {
     console.error("resolve-observations fatal error", serializeError(e));
     return json({ error: serializeError(e) }, 500);
