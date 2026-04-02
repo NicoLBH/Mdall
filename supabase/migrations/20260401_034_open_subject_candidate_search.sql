@@ -24,6 +24,7 @@ as $$
   from public.subjects s
   where s.project_id = p_project_id
     and s.status = 'open'
+    and s.current_title is not null
     and p_query_title is not null
     and length(trim(p_query_title)) > 0
   order by similarity(s.current_title, p_query_title) desc,
