@@ -23,6 +23,14 @@ const POLL_FAST_TRIES = 5;
 let activeRunPromise = null;
 let activePollToken = 0;
 
+function generateAnalysisRunId() {
+  if (globalThis.crypto?.randomUUID) {
+    return globalThis.crypto.randomUUID();
+  }
+
+  return `run-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
 function el(id) {
   return document.getElementById(id);
 }
@@ -170,31 +178,7 @@ function normalizeStatusResponse(data) {
   return value || {};
 }
 
-function assertSupabaseFrontConfig() {
-  const missing = [];
-
-  if (!SUPABASE_URL || SUPABASE_URL.includes("__NEW_SUPABASE_URL__")) {
-    missing.push("SUPABASE_URL");
-  }
-
-  if (
-    !SUPABASE_ANON_KEY ||
-    SUPABASE_ANON_KEY.includes("__NEW_SUPABASE_PUBLISHABLE_KEY__")
-  ) {
-    missing.push("SUPABASE_ANON_KEY");
-  }
-
-  if (!missing.length) return;
-
-  throw new Error(
-    `Configuration front Supabase incomplète: ${missing.join(", ")}. ` +
-      "Mets à jour apps/web/js/services/analysis-runner.js avec les valeurs du nouveau projet Supabase."
-  );
-}
-
 async function fetchRunRowFromSupabase(runId) {
-  assertSupabaseFrontConfig();
-
   const url = new URL(`${SUPABASE_URL}/rest/v1/analysis_runs`);
   url.searchParams.set(
     "select",
@@ -508,7 +492,7 @@ async function pollRunStatus({ runId, token, runLogId, documentIds = [] }) {
     setSystemStatus("running", "En cours d’analyse", uiMeta || `poll #${tries}`);
     setRunMeta(runId);
 
-    if ((status === "READY_FOR_REVIEW" || status === "DONE" || status === "READY") && payload) {
+    if ((status === "READY_FOR_REVIEW" || status === "DONE" || status === "READY" || status === "SUCCEEDED") && payload) {
       const final = extractFinalPayload(payload);
       applyRunResult(final, runId, status, runLogId, { documentIds });
       return { state: "success" };
@@ -570,7 +554,7 @@ export async function runAnalysis(options = {}) {
         : "Analyse déclenchée depuis l’onglet Situations.")
   });
 
-  const runId = `RUN-${Date.now()}`;
+  const runId = generateAnalysisRunId();
   const pollToken = ++activePollToken;
 
   setRunMeta(runId);
