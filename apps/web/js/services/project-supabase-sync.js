@@ -6,6 +6,7 @@ const SUPABASE_URL = "https://olgxhfgdzyghlzxmremz.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_08nUL61_ATl-6KpD8dOYPw_RM5lMtEz";
 const FRONT_PROJECT_MAP_STORAGE_KEY = "mdall.supabaseProjectMap.v1";
 const PROJECT_SUPABASE_SYNC_EVENT = "project:supabase-sync";
+const PROJECT_IDENTITY_UPDATED_EVENT = "project:identity-updated";
 
 function safeString(value = "") {
   return String(value ?? "").trim();
