@@ -343,7 +343,7 @@ async function fetchSituationsByIds(ids = []) {
   if (!safeIds.length) return [];
 
   const url = new URL(`${SUPABASE_URL}/rest/v1/situations`);
-  url.searchParams.set("select", "id,title,description,status");
+  url.searchParams.set("select", "id,title,description,status,priority");
   url.searchParams.set("id", `in.(${safeIds.join(",")})`);
 
   const res = await fetch(url.toString(), {
@@ -366,34 +366,40 @@ async function buildFinalResultFromDatabase(runId) {
     fetchObservationsForRun(runId)
   ]);
 
-  const situationIds = Array.from(new Set((subjects || []).map((item) => item?.situation_id).filter(Boolean)));
+  const safeSubjects = Array.isArray(subjects) ? subjects : [];
+  const safeObservations = Array.isArray(observations) ? observations : [];
+  const situationIds = Array.from(new Set(safeSubjects.map((item) => item?.situation_id).filter(Boolean)));
   const situationsRows = await fetchSituationsByIds(situationIds);
   const situationsById = new Map((situationsRows || []).map((row) => [row.id, row]));
 
   const problems = [];
   const avis = [];
   const situationMap = new Map();
-  const defaultSituationId = "analysis-results";
 
-  function ensureSituation(situationId, fallbackTitle = "Résultats d'analyse") {
-    const key = situationId || defaultSituationId;
-    if (!situationMap.has(key)) {
-      const source = situationId ? situationsById.get(situationId) : null;
-      situationMap.set(key, {
-        situation_id: key,
-        title: source?.title || fallbackTitle,
+  function ensureSituation(situationId) {
+    if (!situationId) return null;
+    const source = situationsById.get(situationId);
+    if (!source) return null;
+
+    if (!situationMap.has(situationId)) {
+      situationMap.set(situationId, {
+        situation_id: situationId,
+        title: source?.title || situationId,
+        description: source?.description || "",
         status: source?.status || "open",
-        priority: "medium",
+        priority: source?.priority || "medium",
         problem_ids: []
       });
     }
-    return situationMap.get(key);
+    return situationMap.get(situationId);
   }
 
-  for (const subject of subjects || []) {
-    const situation = ensureSituation(subject?.situation_id);
+  for (const subject of safeSubjects) {
     const problemId = String(subject?.id || "");
     if (!problemId) continue;
+
+    const situation = ensureSituation(subject?.situation_id);
+    if (!situation) continue;
 
     situation.problem_ids.push(problemId);
 
@@ -401,16 +407,17 @@ async function buildFinalResultFromDatabase(runId) {
       problem_id: problemId,
       title: subject?.title || "Sujet sans titre",
       description: subject?.description || "",
-      priority: subject?.priority || "medium",
+      priority: subject?.priority || situation.priority || "medium",
       status: subject?.status || "open",
       agent: subject?.subject_type || "system",
+      situation_id: subject?.situation_id || null,
       avis_ids: []
     });
   }
 
   const problemById = new Map(problems.map((item) => [item.problem_id, item]));
 
-  for (const obs of observations || []) {
+  for (const obs of safeObservations) {
     const targetId = obs?.resolved_subject_id || null;
     if (!targetId || !problemById.has(targetId)) continue;
 
@@ -613,7 +620,7 @@ function normalizeFinalResult(final, options = {}) {
         situation.topic,
         situationId
       ),
-      priority: firstNonEmpty(situation.priority, situation.prio, "P3"),
+      priority: firstNonEmpty(situation.priority, situation.prio, "medium"),
       status: firstNonEmpty(situation.status, "open"),
       ...situationReview,
       raw: situation,
@@ -632,7 +639,7 @@ function normalizeFinalResult(final, options = {}) {
             problem.topic,
             problemId
           ),
-          priority: firstNonEmpty(problem.priority, problem.prio, situation.priority, "P3"),
+          priority: firstNonEmpty(problem.priority, problem.prio, situation.priority, "medium"),
           status: firstNonEmpty(problem.status, "open"),
           agent: firstNonEmpty(problem.agent, problem.owner, "system"),
           ...sujetReview,
@@ -652,7 +659,7 @@ function normalizeFinalResult(final, options = {}) {
                 avisId
               ),
               verdict: firstNonEmpty(avis.verdict, "-"),
-              priority: firstNonEmpty(avis.priority, avis.prio, problem.priority, situation.priority, "P3"),
+              priority: firstNonEmpty(avis.priority, avis.prio, problem.priority, situation.priority, "medium"),
               status: firstNonEmpty(avis.status, "open"),
               agent: firstNonEmpty(avis.agent, problem.agent, "system"),
               ...avisReview,
