@@ -505,7 +505,10 @@ function buildLegacySubjectResult(subjectRows = [], options = {}) {
 }
 
 async function buildFinalResultFromDatabase(runId) {
-  const subjects = await fetchSubjectsForRun(runId);
+  const projectId = await fetchAnalysisRunProjectId(runId).catch(() => null);
+  const subjects = projectId
+    ? await fetchSubjectsByProject(projectId)
+    : await fetchSubjectsForRun(runId);
   return buildLegacySubjectResult(subjects, { runId });
 }
 
