@@ -178,7 +178,7 @@ function issueIcon(status = "open", options = {}) {
     return `<span class="issue-status-icon" aria-hidden="true">${svg}</span>`;
   }
 
-  const isOpen = String(status || "open").toLowerCase() !== "closed";
+  const isOpen = normalizeIssueLifecycleStatus(status) !== "closed";
   const svg = isOpen
     ? svgIcon("issue-opened", { style: "color: var(--fgColor-open)" })
     : svgIcon("check-circle", { style: "color: var(--fgColor-done)" });
@@ -229,6 +229,11 @@ function renderVerboseAvisVerdictPill(verdict) {
   const badgeClass = classMap[normalized] ? `verdict-badge ${classMap[normalized]}` : "verdict-badge";
   return `<span class="${badgeClass}">${escapeHtml(labels[normalized] || String(verdict || "—"))}</span>`;
 }
+function normalizeIssueLifecycleStatus(status = "open") {
+  const normalized = String(status || "open").toLowerCase();
+  return normalized.startsWith("closed") ? "closed" : "open";
+}
+
 function statePill(status = "open", options = {}) {
   const {
     reviewState = "pending",
@@ -242,7 +247,7 @@ function statePill(status = "open", options = {}) {
     return `<span class="gh-state gh-state--rejected"><span class="gh-state-dot" aria-hidden="true">${rejectedIcon}</span>Rejected</span>`;
   }
 
-  const isOpen = String(status || "open").toLowerCase() !== "closed";
+  const isOpen = normalizeIssueLifecycleStatus(status) !== "closed";
   return `<span class="gh-state ${isOpen ? "gh-state--open" : "gh-state--closed"}"><span class="gh-state-dot" aria-hidden="true">${isOpen ? SVG_ISSUE_OPEN : SVG_ISSUE_CLOSED}</span>${isOpen ? "Open" : "Closed"}</span>`;
 }
 
@@ -2046,7 +2051,7 @@ export function getEffectiveSujetStatus(sujetId) {
   const d = String(decision?.decision || "").toUpperCase();
   if (d === "CLOSED") return "closed";
   if (d === "REOPENED") return "open";
-  return firstNonEmpty(sujet?.status, "open").toLowerCase();
+  return normalizeIssueLifecycleStatus(firstNonEmpty(sujet?.status, "open"));
 }
 
 export function getEffectiveSituationStatus(situationId) {
@@ -2055,7 +2060,7 @@ export function getEffectiveSituationStatus(situationId) {
   const d = String(decision?.decision || "").toUpperCase();
   if (d === "CLOSED") return "closed";
   if (d === "REOPENED") return "open";
-  return firstNonEmpty(situation?.status, "open").toLowerCase();
+  return normalizeIssueLifecycleStatus(firstNonEmpty(situation?.status, "open"));
 }
 
 /* =========================================================
@@ -3361,7 +3366,7 @@ function renderObjectiveCounterIcon(objective) {
 function getSubjectSituationStatusLabel(situation, subjectId) {
   const linkedSubject = getSituationSubjects(situation).find((item) => String(item?.id || "") === String(subjectId || ""));
   const status = getEffectiveSujetStatus(linkedSubject?.id || subjectId) || linkedSubject?.status || "open";
-  return String(status || "open").toLowerCase() === "closed" ? "Closed" : "Open";
+  return normalizeIssueLifecycleStatus(status) === "closed" ? "Closed" : "Open";
 }
 
 function renderSubjectSituationKanbanButton(situation, subjectId) {
@@ -4401,20 +4406,122 @@ function applyIssueCloseOrReopen(nextStatus, root) {
   rerenderScope(root);
 }
 
+function applyOptimisticSubjectIssueAction(subjectId, action) {
+  const subject = getNestedSujet(subjectId);
+  if (!subject) return null;
+
+  const normalized = String(action || "");
+  const previous = {
+    status: subject.status,
+    closure_reason: subject.closure_reason,
+    closed_at: subject.closed_at,
+    review_state: subject.review_state,
+    raw: subject.raw && typeof subject.raw === "object"
+      ? {
+          status: subject.raw.status,
+          closure_reason: subject.raw.closure_reason,
+          closed_at: subject.raw.closed_at,
+          review_state: subject.raw.review_state
+        }
+      : null
+  };
+
+  if (normalized === "issue:reopen") {
+    subject.status = "open";
+    subject.closure_reason = null;
+    subject.closed_at = null;
+    setDecision("sujet", subjectId, "REOPENED", "", { actor: "Human", agent: "human" });
+    if (subject.raw && typeof subject.raw === "object") {
+      subject.raw.status = "open";
+      subject.raw.closure_reason = null;
+      subject.raw.closed_at = null;
+    }
+    return previous;
+  }
+
+  if (normalized === "issue:close:realized") {
+    subject.status = "closed";
+    subject.closure_reason = "realized";
+    subject.closed_at = nowIso();
+    setDecision("sujet", subjectId, "CLOSED", "", { actor: "Human", agent: "human" });
+    if (subject.raw && typeof subject.raw === "object") {
+      subject.raw.status = "closed";
+      subject.raw.closure_reason = "realized";
+      subject.raw.closed_at = subject.closed_at;
+    }
+    return previous;
+  }
+
+  if (normalized === "issue:close:dismissed") {
+    subject.status = "closed_invalid";
+    subject.closure_reason = "non_pertinent";
+    subject.closed_at = nowIso();
+    setDecision("sujet", subjectId, "CLOSED", "", { actor: "Human", agent: "human" });
+    setEntityReviewState("sujet", subjectId, "dismissed");
+    if (subject.raw && typeof subject.raw === "object") {
+      subject.raw.status = "closed_invalid";
+      subject.raw.closure_reason = "non_pertinent";
+      subject.raw.closed_at = subject.closed_at;
+      subject.raw.review_state = "dismissed";
+    }
+    return previous;
+  }
+
+  if (normalized === "issue:close:duplicate") {
+    subject.status = "closed_duplicate";
+    subject.closure_reason = "duplicate";
+    subject.closed_at = nowIso();
+    setDecision("sujet", subjectId, "CLOSED", "", { actor: "Human", agent: "human" });
+    setEntityReviewState("sujet", subjectId, "rejected");
+    if (subject.raw && typeof subject.raw === "object") {
+      subject.raw.status = "closed_duplicate";
+      subject.raw.closure_reason = "duplicate";
+      subject.raw.closed_at = subject.closed_at;
+      subject.raw.review_state = "rejected";
+    }
+    return previous;
+  }
+
+  return previous;
+}
+
+function revertOptimisticSubjectIssueAction(subjectId, previous = null) {
+  const subject = getNestedSujet(subjectId);
+  if (!subject || !previous) return;
+
+  subject.status = previous.status;
+  subject.closure_reason = previous.closure_reason;
+  subject.closed_at = previous.closed_at;
+  if (subject.raw && typeof subject.raw === "object") {
+    subject.raw.status = previous.raw?.status;
+    subject.raw.closure_reason = previous.raw?.closure_reason;
+    subject.raw.closed_at = previous.raw?.closed_at;
+    subject.raw.review_state = previous.raw?.review_state;
+  }
+}
+
 async function applyIssueStatusAction(root, action) {
   const normalized = String(action || "");
   if (!normalized) return;
 
   const target = currentDecisionTarget(root);
   const isSubjectTarget = target?.type === "sujet";
+  let optimisticPrevious = null;
 
   if (isSubjectTarget) {
     const subject = getNestedSujet(target.id);
     if (!subject) return;
 
+    optimisticPrevious = applyOptimisticSubjectIssueAction(target.id, normalized);
+    rerenderScope(root);
+
     try {
       await persistSubjectIssueActionToSupabase(subject, normalized);
     } catch (error) {
+      revertOptimisticSubjectIssueAction(target.id, optimisticPrevious);
+      await reloadSubjectsFromSupabase(root, { rerender: true, updateModal: true }).catch(() => {
+        rerenderScope(root);
+      });
       console.warn("persistSubjectIssueActionToSupabase failed", error);
       showError(`Mise à jour Supabase impossible : ${String(error?.message || error || "Erreur inconnue")}`);
       return;
@@ -4440,22 +4547,22 @@ async function applyIssueStatusAction(root, action) {
   }
 
   if (normalized === "issue:close:dismissed") {
-    applyReviewStateChange(root, "dismissed");
-    if (isSubjectTarget) {
-      await reloadSubjectsFromSupabase(root, { rerender: true, updateModal: true });
+    if (!isSubjectTarget) {
+      applyReviewStateChange(root, "dismissed");
+      applyIssueCloseOrReopen("closed", root);
       return;
     }
-    applyIssueCloseOrReopen("closed", root);
+    await reloadSubjectsFromSupabase(root, { rerender: true, updateModal: true });
     return;
   }
 
   if (normalized === "issue:close:duplicate") {
-    applyReviewStateChange(root, "rejected");
-    if (isSubjectTarget) {
-      await reloadSubjectsFromSupabase(root, { rerender: true, updateModal: true });
+    if (!isSubjectTarget) {
+      applyReviewStateChange(root, "rejected");
+      applyIssueCloseOrReopen("closed", root);
       return;
     }
-    applyIssueCloseOrReopen("closed", root);
+    await reloadSubjectsFromSupabase(root, { rerender: true, updateModal: true });
   }
 }
 
