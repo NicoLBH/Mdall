@@ -90,6 +90,7 @@ export const store = {
   situationsView: {
     data: [],
     rawResult: null,
+    projectScopeId: null,
 
     expandedSituations: new Set(),
     expandedSujets: new Set(),
