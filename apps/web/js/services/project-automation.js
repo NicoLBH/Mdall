@@ -6,7 +6,7 @@ const DEFAULT_AGENT_CATALOG = {
     label: "Agent spécialisé solidité",
     implemented: false,
     available: true,
-    defaultEnabled: false,
+    defaultEnabled: true,
     order: 10
   },
   incendie: {
@@ -65,7 +65,7 @@ const DEFAULT_AUTOMATION_CATALOG = {
     label: "Déclencher une analyse automatique après le dépôt d'un document",
     implemented: true,
     available: true,
-    defaultEnabled: false,
+    defaultEnabled: true,
     order: 10
   },
   autoComparePreviousVersion: {
