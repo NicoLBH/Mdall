@@ -49,7 +49,7 @@ function syncRunbar(extra = {}) {
 
 function getAnalysisRunName(agentKey = "parasismique", triggerType = "manual") {
   const agentLabels = {
-    parasismique: "Analyse parasismique",
+    parasismique: "Analyse de document",
     solidite: "Analyse solidité",
     incendie: "Analyse sécurité incendie",
     pmr: "Analyse accessibilité PMR",
