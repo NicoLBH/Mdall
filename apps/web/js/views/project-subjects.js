@@ -70,6 +70,7 @@ import { getSelectionDocumentRefs } from "../services/project-document-selectors
 let subjectsCurrentRoot = null;
 let subjectsTabResetBound = false;
 let objectiveEditCalendarDismissBound = false;
+let subjectsSupabaseReloadToken = 0;
 const DRAFT_SUBJECT_ID = "__draft_subject__";
 
 /* =========================================================
@@ -4672,6 +4673,36 @@ function resetSubjectsTabView(reason = "manual") {
   }
 }
 
+function reloadSubjectsFromSupabase(root, options = {}) {
+  const targetRoot = root || subjectsCurrentRoot;
+  if (!targetRoot) return Promise.resolve([]);
+
+  const reloadToken = ++subjectsSupabaseReloadToken;
+  const shouldRerender = options.rerender !== false;
+  const shouldUpdateModal = options.updateModal !== false;
+
+  return loadExistingSubjectsForCurrentProject({ force: true })
+    .then((data) => {
+      const isLatestReload = reloadToken === subjectsSupabaseReloadToken;
+      const isSameRoot = !root || subjectsCurrentRoot === targetRoot;
+      if (!isLatestReload || !isSameRoot || !targetRoot?.isConnected) {
+        return data;
+      }
+
+      if (shouldRerender) {
+        rerenderPanels();
+      }
+      if (shouldUpdateModal) {
+        updateDetailsModal();
+      }
+      return data;
+    })
+    .catch((error) => {
+      console.warn("loadExistingSubjectsForCurrentProject failed", error);
+      throw error;
+    });
+}
+
 function bindSubjectsTabReset() {
   if (subjectsTabResetBound) return;
   subjectsTabResetBound = true;
@@ -4698,10 +4729,16 @@ function bindSubjectsTabReset() {
       || state.objectiveEditOpen
       || state.createSubjectFormOpen;
     const hasMainViewState = !state.showTableOnly;
-    if (!hasOverlayState && !hasSubviewState && !hasMainViewState) {
+    if (!state.hasConnectedRoot) {
       return;
     }
-    if (!state.hasConnectedRoot) {
+
+    reloadSubjectsFromSupabase(subjectsCurrentRoot, {
+      rerender: true,
+      updateModal: true
+    }).catch(() => undefined);
+
+    if (!hasOverlayState && !hasSubviewState && !hasMainViewState) {
       return;
     }
 
@@ -6435,21 +6472,10 @@ export function renderProjectSubjects(root) {
   store.situationsView.showTableOnly = true;
   store.situationsView.displayDepth = "sujets";
 
-  const currentProjectScopeId = String(store.currentProjectId || "").trim() || null;
-  const shouldLoadExistingSubjects =
-    !(Array.isArray(store.situationsView?.data) && store.situationsView.data.length)
-    || store.situationsView?.projectScopeId !== currentProjectScopeId;
-  if (shouldLoadExistingSubjects) {
-    loadExistingSubjectsForCurrentProject()
-      .then(() => {
-        if (!subjectsCurrentRoot || subjectsCurrentRoot !== root || !root?.isConnected) return;
-        rerenderPanels();
-        updateDetailsModal();
-      })
-      .catch((error) => {
-        console.warn("loadExistingSubjectsForCurrentProject failed", error);
-      });
-  }
+  reloadSubjectsFromSupabase(root, {
+    rerender: true,
+    updateModal: true
+  }).catch(() => undefined);
 
   root.className = "project-shell__content";
 
