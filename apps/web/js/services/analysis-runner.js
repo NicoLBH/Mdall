@@ -8,9 +8,10 @@ import {
   startRunLogEntry
 } from "./project-automation.js";
 
-const START_URL_PROD = "https://nicolbh.app.n8n.cloud/webhook/rapsobot-poc";
 const SUPABASE_URL = "https://olgxhfgdzyghlzxmremz.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_08nUL61_ATl-6KpD8dOYPw_RM5lMtEz";
+const STORAGE_BUCKET = "documents";
+const FRONT_PROJECT_MAP_STORAGE_KEY = "mdall.supabaseProjectMap.v1";
 
 const FETCH_TIMEOUT_MS = 60_000;
 
@@ -152,6 +153,305 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = FETCH_TIMEOUT_MS)
   } finally {
     clearTimeout(timerId);
   }
+}
+
+
+function getSupabaseAuthHeaders(extra = {}) {
+  return {
+    apikey: SUPABASE_ANON_KEY,
+    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+    ...extra
+  };
+}
+
+function sanitizeFileName(fileName = "document.pdf") {
+  const safe = String(fileName || "document.pdf")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+
+  return safe || "document.pdf";
+}
+
+function getFrontendProjectKey() {
+  return String(store.currentProjectId || store.currentProject?.id || "default").trim() || "default";
+}
+
+function readFrontendProjectMap() {
+  try {
+    const raw = localStorage.getItem(FRONT_PROJECT_MAP_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeFrontendProjectMap(map) {
+  try {
+    localStorage.setItem(FRONT_PROJECT_MAP_STORAGE_KEY, JSON.stringify(map || {}));
+  } catch {
+    // no-op
+  }
+}
+
+async function restInsert(table, payload, select = "*") {
+  const url = new URL(`${SUPABASE_URL}/rest/v1/${table}`);
+  if (select) url.searchParams.set("select", select);
+
+  const res = await fetch(url.toString(), {
+    method: "POST",
+    headers: getSupabaseAuthHeaders({
+      "Content-Type": "application/json",
+      Prefer: "return=representation"
+    }),
+    body: JSON.stringify(payload)
+  });
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`${table} insert failed (${res.status}): ${txt}`);
+  }
+
+  const rows = await res.json();
+  return Array.isArray(rows) ? (rows[0] || null) : rows;
+}
+
+async function ensureBackendProject() {
+  const frontendProjectKey = getFrontendProjectKey();
+  const map = readFrontendProjectMap();
+  if (map[frontendProjectKey]) {
+    return map[frontendProjectKey];
+  }
+
+  const projectName = String(
+    store.currentProject?.name || store.projectForm?.projectName || frontendProjectKey
+  ).trim() || frontendProjectKey;
+
+  const description = [
+    `Front project key: ${frontendProjectKey}`,
+    store.projectForm?.city ? `Ville: ${store.projectForm.city}` : "",
+    store.projectForm?.currentPhase ? `Phase: ${store.projectForm.currentPhase}` : ""
+  ].filter(Boolean).join(" · ");
+
+  const row = await restInsert("projects", {
+    name: projectName,
+    description
+  }, "id,name");
+
+  if (!row?.id) {
+    throw new Error("projects insert succeeded without id");
+  }
+
+  map[frontendProjectKey] = row.id;
+  writeFrontendProjectMap(map);
+  return row.id;
+}
+
+async function uploadFileToStorage(file, projectId, runId) {
+  const safeFileName = sanitizeFileName(file?.name || "document.pdf");
+  const path = `${projectId}/${runId}/${safeFileName}`;
+  const url = `${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${path}`;
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: getSupabaseAuthHeaders({
+      "x-upsert": "false",
+      "Content-Type": file?.type || "application/pdf"
+    }),
+    body: file
+  });
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`storage upload failed (${res.status}): ${txt}`);
+  }
+
+  return {
+    storage_bucket: STORAGE_BUCKET,
+    storage_path: path
+  };
+}
+
+async function invokeRunAnalysis(runId) {
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/run-analysis`, {
+    method: "POST",
+    headers: getSupabaseAuthHeaders({
+      "Content-Type": "application/json"
+    }),
+    body: JSON.stringify({ run_id: runId })
+  });
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`run-analysis invoke failed (${res.status}): ${txt}`);
+  }
+
+  return res.json().catch(() => null);
+}
+
+async function fetchSubjectsForRun(runId) {
+  const url = new URL(`${SUPABASE_URL}/rest/v1/subjects`);
+  url.searchParams.set(
+    "select",
+    "id,title,description,priority,status,situation_id,parent_subject_id,subject_type,analysis_run_id"
+  );
+  url.searchParams.set("analysis_run_id", `eq.${runId}`);
+  url.searchParams.set("order", "created_at.asc");
+
+  const res = await fetch(url.toString(), {
+    method: "GET",
+    headers: getSupabaseAuthHeaders({ Accept: "application/json" }),
+    cache: "no-store"
+  });
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`subjects fetch failed (${res.status}): ${txt}`);
+  }
+
+  return res.json();
+}
+
+async function fetchObservationsForRun(runId) {
+  const url = new URL(`${SUPABASE_URL}/rest/v1/subject_observations`);
+  url.searchParams.set(
+    "select",
+    "id,title,description,priority,resolution_status,resolved_subject_id,observation_type"
+  );
+  url.searchParams.set("analysis_run_id", `eq.${runId}`);
+  url.searchParams.set("order", "created_at.asc");
+
+  const res = await fetch(url.toString(), {
+    method: "GET",
+    headers: getSupabaseAuthHeaders({ Accept: "application/json" }),
+    cache: "no-store"
+  });
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`subject_observations fetch failed (${res.status}): ${txt}`);
+  }
+
+  return res.json();
+}
+
+async function fetchSituationsByIds(ids = []) {
+  const safeIds = Array.from(new Set((Array.isArray(ids) ? ids : []).filter(Boolean)));
+  if (!safeIds.length) return [];
+
+  const url = new URL(`${SUPABASE_URL}/rest/v1/situations`);
+  url.searchParams.set("select", "id,title,description,status");
+  url.searchParams.set("id", `in.(${safeIds.join(",")})`);
+
+  const res = await fetch(url.toString(), {
+    method: "GET",
+    headers: getSupabaseAuthHeaders({ Accept: "application/json" }),
+    cache: "no-store"
+  });
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`situations fetch failed (${res.status}): ${txt}`);
+  }
+
+  return res.json();
+}
+
+async function buildFinalResultFromDatabase(runId) {
+  const [subjects, observations] = await Promise.all([
+    fetchSubjectsForRun(runId),
+    fetchObservationsForRun(runId)
+  ]);
+
+  const situationIds = Array.from(new Set((subjects || []).map((item) => item?.situation_id).filter(Boolean)));
+  const situationsRows = await fetchSituationsByIds(situationIds);
+  const situationsById = new Map((situationsRows || []).map((row) => [row.id, row]));
+
+  const problems = [];
+  const avis = [];
+  const situationMap = new Map();
+  const defaultSituationId = "analysis-results";
+
+  function ensureSituation(situationId, fallbackTitle = "Résultats d'analyse") {
+    const key = situationId || defaultSituationId;
+    if (!situationMap.has(key)) {
+      const source = situationId ? situationsById.get(situationId) : null;
+      situationMap.set(key, {
+        situation_id: key,
+        title: source?.title || fallbackTitle,
+        status: source?.status || "open",
+        priority: "medium",
+        problem_ids: []
+      });
+    }
+    return situationMap.get(key);
+  }
+
+  for (const subject of subjects || []) {
+    const situation = ensureSituation(subject?.situation_id);
+    const problemId = String(subject?.id || "");
+    if (!problemId) continue;
+
+    situation.problem_ids.push(problemId);
+
+    problems.push({
+      problem_id: problemId,
+      title: subject?.title || "Sujet sans titre",
+      description: subject?.description || "",
+      priority: subject?.priority || "medium",
+      status: subject?.status || "open",
+      agent: subject?.subject_type || "system",
+      avis_ids: []
+    });
+  }
+
+  const problemById = new Map(problems.map((item) => [item.problem_id, item]));
+
+  for (const obs of observations || []) {
+    const targetId = obs?.resolved_subject_id || null;
+    if (!targetId || !problemById.has(targetId)) continue;
+
+    const avisId = String(obs?.id || "");
+    if (!avisId) continue;
+
+    avis.push({
+      avis_id: avisId,
+      title: obs?.title || "Observation",
+      message: obs?.description || "",
+      verdict: String(obs?.resolution_status || "").toUpperCase() === "RESOLVED" ? "S" : "-",
+      priority: obs?.priority || problemById.get(targetId)?.priority || "medium",
+      status: "open",
+      agent: obs?.observation_type || "system"
+    });
+
+    problemById.get(targetId).avis_ids.push(avisId);
+  }
+
+  for (const problem of problems) {
+    if (problem.avis_ids.length) continue;
+    const syntheticAvisId = `${problem.problem_id}::summary`;
+    avis.push({
+      avis_id: syntheticAvisId,
+      title: problem.title,
+      message: problem.description || "Sujet créé sans observation détaillée restituable côté front.",
+      verdict: "-",
+      priority: problem.priority || "medium",
+      status: problem.status || "open",
+      agent: problem.agent || "system"
+    });
+    problem.avis_ids.push(syntheticAvisId);
+  }
+
+  return {
+    run_id: runId,
+    status: "SUCCEEDED",
+    situations: Array.from(situationMap.values()),
+    problems,
+    avis
+  };
 }
 
 function normalizeStatusResponse(data) {
@@ -492,8 +792,18 @@ async function pollRunStatus({ runId, token, runLogId, documentIds = [] }) {
     setSystemStatus("running", "En cours d’analyse", uiMeta || `poll #${tries}`);
     setRunMeta(runId);
 
-    if ((status === "READY_FOR_REVIEW" || status === "DONE" || status === "READY" || status === "SUCCEEDED") && payload) {
-      const final = extractFinalPayload(payload);
+    if (status === "READY_FOR_REVIEW" || status === "DONE" || status === "READY" || status === "SUCCEEDED") {
+      let final = payload ? extractFinalPayload(payload) : null;
+      const hasLegacyShape = final
+        && typeof final === "object"
+        && Array.isArray(final.situations)
+        && Array.isArray(final.problems)
+        && Array.isArray(final.avis);
+
+      if (!hasLegacyShape) {
+        final = await buildFinalResultFromDatabase(runId);
+      }
+
       applyRunResult(final, runId, status, runLogId, { documentIds });
       return { state: "success" };
     }
@@ -560,60 +870,48 @@ export async function runAnalysis(options = {}) {
   setRunMeta(runId);
   setSystemStatus("running", "En cours d’analyse", "POST /webhook");
 
-  const user_reference = {
-    commune_cp: inputs.communeCp,
-    importance: inputs.importance,
-    soilClass: inputs.soilClass,
-    liquefaction: inputs.liquefaction,
-    referential: inputs.referential
-  };
-
   const promise = (async () => {
     try {
-      const form = new FormData();
-      form.append("run_id", runId);
-      form.append("user_reference", JSON.stringify(user_reference));
-      form.append("pdf", inputs.pdfFile, inputs.pdfFile.name);
+      setSystemStatus("running", "En cours d’analyse", "Préparation du projet");
+      const backendProjectId = await ensureBackendProject();
 
-      const res = await fetchWithTimeout(
-        START_URL_PROD,
-        { method: "POST", body: form },
-        FETCH_TIMEOUT_MS
-      );
+      setSystemStatus("running", "En cours d’analyse", "Upload du document");
+      const storageInfo = await uploadFileToStorage(inputs.pdfFile, backendProjectId, runId);
 
-      const text = await res.text();
-      let data = null;
+      setSystemStatus("running", "En cours d’analyse", "Création du document");
+      const documentRow = await restInsert("documents", {
+        project_id: backendProjectId,
+        filename: inputs.pdfFile.name,
+        original_filename: inputs.pdfFile.name,
+        mime_type: inputs.pdfFile.type || "application/pdf",
+        storage_bucket: storageInfo.storage_bucket,
+        storage_path: storageInfo.storage_path,
+        file_size_bytes: inputs.pdfFile.size || null,
+        upload_status: "uploaded",
+        document_kind: "source_pdf"
+      }, "id,project_id,storage_bucket,storage_path");
 
-      try {
-        data = JSON.parse(text);
-      } catch {
-        data = null;
-      }
-
-      data = normalizeStatusResponse(data);
-
-      const final = data?.final_result || data;
-
-      if (
-        final &&
-        typeof final === "object" &&
-        Array.isArray(final.situations) &&
-        Array.isArray(final.problems) &&
-        Array.isArray(final.avis)
-      ) {
-        if (pollToken !== activePollToken) return;
-        applyRunResult(final, final.run_id || runId, final.status || "OK", runLogEntry.id, { documentIds: analysisDocumentIds });
-        return;
-      }
+      setSystemStatus("running", "En cours d’analyse", "Création du run");
+      await restInsert("analysis_runs", {
+        id: runId,
+        project_id: backendProjectId,
+        document_id: documentRow.id,
+        status: "queued",
+        trigger_source: triggerType
+      }, "id,status");
 
       if (pollToken !== activePollToken) return;
 
-      setSystemStatus("running", "En cours d’analyse", "ACK reçu");
+      setSystemStatus("running", "En cours d’analyse", "Lancement de la pipeline Supabase");
+      await invokeRunAnalysis(runId);
+
+      if (pollToken !== activePollToken) return;
+
       const pollResult = await pollRunStatus({
         runId,
         token: pollToken,
         runLogId: runLogEntry.id,
-        documentIds: analysisDocumentIds
+        documentIds: [documentRow.id]
       });
 
       if (pollResult?.state === "timeout") {
@@ -625,25 +923,18 @@ export async function runAnalysis(options = {}) {
     } catch (error) {
       if (pollToken !== activePollToken) return;
 
-      if (isAbortError(error)) {
-        setSystemStatus("running", "En cours d’analyse", "timeout POST → polling");
-      } else {
-        setSystemStatus("running", "En cours d’analyse", "POST erreur → polling");
-      }
+      const errorMessage = String(error?.message || error || "Erreur inconnue");
+      const looksLikeBucketError = /bucket|storage|not found/i.test(errorMessage);
+      setSystemStatus(
+        "error",
+        "Erreur",
+        looksLikeBucketError ? "Bucket documents manquant ou inaccessible" : errorMessage
+      );
 
-      const pollResult = await pollRunStatus({
-        runId,
-        token: pollToken,
-        runLogId: runLogEntry.id,
-        documentIds: analysisDocumentIds
+      finishRunLogEntry(runLogEntry.id, {
+        status: "error",
+        summary: errorMessage
       });
-
-      if (pollResult?.state === "timeout") {
-        finishRunLogEntry(runLogEntry.id, {
-          status: "error",
-          summary: "Timeout du polling après échec ou délai du POST."
-        });
-      }
     } finally {
       if (activeRunPromise === promise) {
         activeRunPromise = null;
