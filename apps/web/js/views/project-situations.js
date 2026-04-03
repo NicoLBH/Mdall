@@ -171,12 +171,23 @@ function issueIcon(status = "open", options = {}) {
 }
 
 
-function priorityBadge(priority = "P3") {
-  const p = String(priority || "P3").toUpperCase();
-  const tone = p === "P1" ? "p1" : p === "P2" ? "p2" : "p3";
+function normalizeBackendPriority(priority = "") {
+  const raw = String(priority ?? "").trim();
+  if (!raw) return "";
+  const value = raw.toLowerCase();
+  if (value === "hight") return "high";
+  if (["low", "medium", "high", "critical"].includes(value)) return value;
+  if (value === "p1") return "critical";
+  if (value === "p2") return "high";
+  if (value === "p3") return "medium";
+  return value;
+}
+
+function priorityBadge(priority = "medium") {
+  const normalized = normalizeBackendPriority(priority) || "medium";
   return renderStatusBadge({
-    label: p,
-    tone
+    label: normalized,
+    tone: normalized
   });
 }
 
