@@ -296,7 +296,7 @@ async function fetchSubjectsForRun(runId) {
   const url = new URL(`${SUPABASE_URL}/rest/v1/subjects`);
   url.searchParams.set(
     "select",
-    "id,project_id,analysis_run_id,parent_subject_id,title,description,priority,status,subject_type,created_at,updated_at"
+    "id,title,description,priority,status,situation_id,parent_subject_id,subject_type,analysis_run_id"
   );
   url.searchParams.set("analysis_run_id", `eq.${runId}`);
   url.searchParams.set("order", "created_at.asc");
@@ -310,6 +310,51 @@ async function fetchSubjectsForRun(runId) {
   if (!res.ok) {
     const txt = await res.text().catch(() => "");
     throw new Error(`subjects fetch failed (${res.status}): ${txt}`);
+  }
+
+  return res.json();
+}
+
+async function fetchObservationsForRun(runId) {
+  const url = new URL(`${SUPABASE_URL}/rest/v1/subject_observations`);
+  url.searchParams.set(
+    "select",
+    "id,title,description,priority,resolution_status,resolved_subject_id,observation_type"
+  );
+  url.searchParams.set("analysis_run_id", `eq.${runId}`);
+  url.searchParams.set("order", "created_at.asc");
+
+  const res = await fetch(url.toString(), {
+    method: "GET",
+    headers: getSupabaseAuthHeaders({ Accept: "application/json" }),
+    cache: "no-store"
+  });
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`subject_observations fetch failed (${res.status}): ${txt}`);
+  }
+
+  return res.json();
+}
+
+async function fetchSituationsByProject(projectId) {
+  if (!projectId) return [];
+
+  const url = new URL(`${SUPABASE_URL}/rest/v1/situations`);
+  url.searchParams.set("select", "id,title,description,status,created_at,updated_at");
+  url.searchParams.set("project_id", `eq.${projectId}`);
+  url.searchParams.set("order", "created_at.asc");
+
+  const res = await fetch(url.toString(), {
+    method: "GET",
+    headers: getSupabaseAuthHeaders({ Accept: "application/json" }),
+    cache: "no-store"
+  });
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`situations fetch failed (${res.status}): ${txt}`);
   }
 
   return res.json();
@@ -336,170 +381,106 @@ async function fetchAnalysisRunProjectId(runId) {
   return rows?.[0]?.project_id || null;
 }
 
-async function fetchSubjectsByProject(projectId) {
-  if (!projectId) return [];
+async function buildFinalResultFromDatabase(runId) {
+  const [subjects, observations, projectId] = await Promise.all([
+    fetchSubjectsForRun(runId),
+    fetchObservationsForRun(runId),
+    fetchAnalysisRunProjectId(runId)
+  ]);
 
-  const url = new URL(`${SUPABASE_URL}/rest/v1/subjects`);
-  url.searchParams.set(
-    "select",
-    "id,project_id,analysis_run_id,parent_subject_id,title,description,priority,status,subject_type,created_at,updated_at"
-  );
-  url.searchParams.set("project_id", `eq.${projectId}`);
-  url.searchParams.set("order", "created_at.asc");
+  const situationsRows = await fetchSituationsByProject(projectId);
+  const situationsById = new Map((situationsRows || []).map((row) => [row.id, row]));
 
-  const res = await fetch(url.toString(), {
-    method: "GET",
-    headers: getSupabaseAuthHeaders({ Accept: "application/json" }),
-    cache: "no-store"
-  });
-
-  if (!res.ok) {
-    const txt = await res.text().catch(() => "");
-    throw new Error(`subjects fetch failed (${res.status}): ${txt}`);
-  }
-
-  return res.json();
-}
-
-function createSubjectViewNode(subject, documentIds = []) {
-  return withDocumentRefs({
-    id: String(subject?.id || ""),
-    title: firstNonEmpty(subject?.title, subject?.id, "Sujet sans titre"),
-    description: firstNonEmpty(subject?.description, ""),
-    priority: firstNonEmpty(subject?.priority, "medium"),
-    status: firstNonEmpty(subject?.status, "open"),
-    agent: firstNonEmpty(subject?.subject_type, "system"),
-    parentSubjectId: firstNonEmpty(subject?.parent_subject_id, ""),
-    avis: [],
-    raw: subject,
-    ...defaultReviewMeta(subject)
-  }, documentIds);
-}
-
-function sortSubjectNodes(nodes = []) {
-  nodes.sort((left, right) => {
-    const leftTs = Date.parse(left?.raw?.created_at || "") || 0;
-    const rightTs = Date.parse(right?.raw?.created_at || "") || 0;
-    if (leftTs !== rightTs) return leftTs - rightTs;
-    return String(left?.title || left?.id || "").localeCompare(String(right?.title || right?.id || ""), "fr");
-  });
-
-  for (const node of nodes) {
-    if (Array.isArray(node?.avis) && node.avis.length) {
-      sortSubjectNodes(node.avis);
-    }
-  }
-
-  return nodes;
-}
-
-function buildSubjectTree(subjectRows = [], options = {}) {
-  const documentIds = getPreferredAnalysisDocumentIds(options.documentIds || []);
-  const nodeById = new Map();
-  const topLevelNodes = [];
-
-  for (const subject of subjectRows || []) {
-    const node = createSubjectViewNode(subject, documentIds);
-    if (!node.id) continue;
-    nodeById.set(node.id, node);
-  }
-
-  for (const node of nodeById.values()) {
-    const parentId = String(node?.parentSubjectId || "");
-    if (parentId && nodeById.has(parentId) && parentId !== node.id) {
-      nodeById.get(parentId).avis.push(node);
-      continue;
-    }
-    topLevelNodes.push(node);
-  }
-
-  sortSubjectNodes(topLevelNodes);
-
-  return [withDocumentRefs({
-    id: "__subjects_root__",
-    title: "Sujets",
-    description: "Vue synthétique des sujets du projet.",
-    priority: "medium",
-    status: "open",
-    sujets: topLevelNodes,
-    raw: {
-      situation_id: "__subjects_root__",
-      title: "Sujets"
-    },
-    ...defaultReviewMeta({})
-  }, documentIds)];
-}
-
-function buildLegacySubjectResult(subjectRows = [], options = {}) {
-  const documentIds = getPreferredAnalysisDocumentIds(options.documentIds || []);
-  const topLevelProblemIds = [];
   const problems = [];
   const avis = [];
+  const situationMap = new Map();
 
-  for (const subject of subjectRows || []) {
+  for (const row of situationsRows || []) {
+    if (!row?.id) continue;
+    situationMap.set(row.id, {
+      situation_id: row.id,
+      title: row.title || row.id,
+      description: row.description || "",
+      status: row.status || "open",
+      problem_ids: []
+    });
+  }
+
+  for (const subject of subjects || []) {
     const problemId = String(subject?.id || "");
     if (!problemId) continue;
 
-    const parentId = String(subject?.parent_subject_id || "");
-    const childIds = (subjectRows || [])
-      .filter((row) => String(row?.parent_subject_id || "") === problemId)
-      .map((row) => String(row?.id || ""))
-      .filter(Boolean);
-
-    if (!parentId) {
-      topLevelProblemIds.push(problemId);
+    const situationId = subject?.situation_id || null;
+    if (situationId && !situationMap.has(situationId)) {
+      const sourceSituation = situationsById.get(situationId);
+      situationMap.set(situationId, {
+        situation_id: situationId,
+        title: sourceSituation?.title || situationId,
+        description: sourceSituation?.description || "",
+        status: sourceSituation?.status || "open",
+        problem_ids: []
+      });
+    }
+    const situation = situationId ? situationMap.get(situationId) : null;
+    if (situation) {
+      situation.problem_ids.push(problemId);
     }
 
-    problems.push(withDocumentRefs({
+    problems.push({
       problem_id: problemId,
-      id: problemId,
       title: subject?.title || "Sujet sans titre",
       description: subject?.description || "",
       priority: subject?.priority || "medium",
       status: subject?.status || "open",
       agent: subject?.subject_type || "system",
-      parent_subject_id: parentId || null,
-      avis_ids: childIds,
-      raw: subject,
-      ...defaultReviewMeta(subject)
-    }, documentIds));
+      avis_ids: []
+    });
+  }
 
-    if (parentId) {
-      avis.push(withDocumentRefs({
-        avis_id: problemId,
-        id: problemId,
-        title: subject?.title || "Sous-sujet",
-        message: subject?.description || "",
-        verdict: "-",
-        priority: subject?.priority || "medium",
-        status: subject?.status || "open",
-        agent: subject?.subject_type || "system",
-        raw: subject,
-        ...defaultReviewMeta(subject)
-      }, documentIds));
-    }
+  const problemById = new Map(problems.map((item) => [item.problem_id, item]));
+
+  for (const obs of observations || []) {
+    const targetId = obs?.resolved_subject_id || null;
+    if (!targetId || !problemById.has(targetId)) continue;
+
+    const avisId = String(obs?.id || "");
+    if (!avisId) continue;
+
+    avis.push({
+      avis_id: avisId,
+      title: obs?.title || "Observation",
+      message: obs?.description || "",
+      verdict: String(obs?.resolution_status || "").toUpperCase() === "RESOLVED" ? "S" : "-",
+      priority: obs?.priority || problemById.get(targetId)?.priority || "medium",
+      status: "open",
+      agent: obs?.observation_type || "system"
+    });
+
+    problemById.get(targetId).avis_ids.push(avisId);
+  }
+
+  for (const problem of problems) {
+    if (problem.avis_ids.length) continue;
+    const syntheticAvisId = `${problem.problem_id}::summary`;
+    avis.push({
+      avis_id: syntheticAvisId,
+      title: problem.title,
+      message: problem.description || "Sujet créé sans observation détaillée restituable côté front.",
+      verdict: "-",
+      priority: problem.priority || "medium",
+      status: problem.status || "open",
+      agent: problem.agent || "system"
+    });
+    problem.avis_ids.push(syntheticAvisId);
   }
 
   return {
-    run_id: options.runId || "",
+    run_id: runId,
     status: "SUCCEEDED",
-    subjects: subjectRows,
-    situations: [{
-      situation_id: "__subjects_root__",
-      title: "Sujets",
-      description: "Vue synthétique des sujets du projet.",
-      status: "open",
-      problem_ids: topLevelProblemIds,
-      document_ref_ids: documentIds
-    }],
+    situations: Array.from(situationMap.values()),
     problems,
     avis
   };
-}
-
-async function buildFinalResultFromDatabase(runId) {
-  const subjects = await fetchSubjectsForRun(runId);
-  return buildLegacySubjectResult(subjects, { runId });
 }
 
 function normalizeStatusResponse(data) {
@@ -628,10 +609,6 @@ function withDocumentRefs(entity = {}, documentIds = []) {
 }
 
 function normalizeFinalResult(final, options = {}) {
-  if (Array.isArray(final?.subjects)) {
-    return buildSubjectTree(final.subjects, options);
-  }
-
   const situations = Array.isArray(final?.situations) ? final.situations : [];
   const problems = Array.isArray(final?.problems) ? final.problems : [];
   const avisList = Array.isArray(final?.avis) ? final.avis : [];
@@ -684,7 +661,6 @@ function normalizeFinalResult(final, options = {}) {
             problem.topic,
             problemId
           ),
-          description: firstNonEmpty(problem.description, problem.message, ""),
           priority: firstNonEmpty(problem.priority, problem.prio, situation.priority, "medium"),
           status: firstNonEmpty(problem.status, "open"),
           agent: firstNonEmpty(problem.agent, problem.owner, "system"),
@@ -704,7 +680,6 @@ function normalizeFinalResult(final, options = {}) {
                 avis.message,
                 avisId
               ),
-              description: firstNonEmpty(avis.message, avis.description, ""),
               verdict: firstNonEmpty(avis.verdict, "-"),
               priority: firstNonEmpty(avis.priority, avis.prio, problem.priority, situation.priority, "medium"),
               status: firstNonEmpty(avis.status, "open"),
@@ -718,29 +693,32 @@ function normalizeFinalResult(final, options = {}) {
     }, situation.document_ref_ids || defaultDocumentIds);
   });
 }
-
 function buildAnalysisInsightDetails(nested = []) {
-  let topLevelSubjects = 0;
-  let nestedSubjects = 0;
-
-  const visit = (subject) => {
-    for (const child of subject?.avis || []) {
-      nestedSubjects += 1;
-      visit(child);
-    }
-  };
+  const avis = [];
 
   for (const situation of nested || []) {
     for (const sujet of situation?.sujets || []) {
-      topLevelSubjects += 1;
-      visit(sujet);
+      for (const item of sujet?.avis || []) {
+        avis.push({
+          id: String(item?.id || ""),
+          verdict: firstNonEmpty(item?.raw?.verdict, item?.verdict, "")
+        });
+      }
     }
   }
 
+  const criticalAvis = avis.filter((item) => {
+    const verdict = String(item?.verdict || "").toUpperCase();
+    return verdict === "S" || verdict === "D";
+  }).length;
+
+  const blockingAvis = avis.filter((item) => String(item?.verdict || "").toUpperCase() === "D").length;
+
   return {
-    totalSubjects: topLevelSubjects,
-    totalNestedSubjects: nestedSubjects,
-    totalVisibleSubjects: topLevelSubjects + nestedSubjects
+    totalAvis: avis.length,
+    criticalAvis,
+    blockingAvis,
+    avis
   };
 }
 
@@ -757,11 +735,9 @@ function applyRunResult(final, runId, statusLabel, runLogId = "", options = {}) 
   store.situationsView.expandedSujets = new Set();
 
   const firstSituationId = nested?.[0]?.id || null;
-  const firstSubjectId = nested?.[0]?.sujets?.[0]?.id || null;
   store.situationsView.selectedSituationId = firstSituationId;
-  store.situationsView.selectedSujetId = firstSubjectId;
+  store.situationsView.selectedSujetId = null;
   store.situationsView.selectedAvisId = null;
-  store.situationsView.subjectsSelectedNodeId = firstSubjectId || "";
 
   if (firstSituationId) {
     store.situationsView.expandedSituations.add(firstSituationId);
@@ -1001,47 +977,6 @@ export async function runAnalysis(options = {}) {
   return promise;
 }
 
-function getMappedBackendProjectId() {
-  const frontendProjectKey = getFrontendProjectKey();
-  const map = readFrontendProjectMap();
-  return map[frontendProjectKey] || "";
-}
-
-export async function loadExistingSubjectsForCurrentProject(options = {}) {
-  const force = !!options.force;
-  const existing = Array.isArray(store.situationsView?.data) ? store.situationsView.data : [];
-  if (!force && existing.length) {
-    return existing;
-  }
-
-  const backendProjectId = getMappedBackendProjectId();
-  if (!backendProjectId) {
-    store.situationsView.data = [];
-    store.situationsView.rawResult = {
-      run_id: store.ui.runId || "",
-      status: "IDLE",
-      subjects: []
-    };
-    return [];
-  }
-
-  const subjects = await fetchSubjectsByProject(backendProjectId);
-  const final = buildLegacySubjectResult(subjects, { runId: store.ui.runId || "" });
-  const nested = normalizeFinalResult(final, { documentIds: getPreferredAnalysisDocumentIds([]) });
-
-  store.situationsView.data = nested;
-  store.situationsView.rawResult = final;
-  store.situationsView.page = 1;
-  store.situationsView.expandedSituations = new Set(nested[0]?.id ? [nested[0].id] : []);
-  store.situationsView.expandedSujets = new Set();
-  store.situationsView.selectedSituationId = nested[0]?.id || null;
-  store.situationsView.selectedSujetId = nested[0]?.sujets?.[0]?.id || null;
-  store.situationsView.selectedAvisId = null;
-  store.situationsView.subjectsSelectedNodeId = nested[0]?.sujets?.[0]?.id || "";
-
-  return nested;
-}
-
 export function resetAnalysisUi() {
   activePollToken += 1;
   activeRunPromise = null;
@@ -1053,7 +988,6 @@ export function resetAnalysisUi() {
   store.situationsView.selectedSituationId = null;
   store.situationsView.selectedSujetId = null;
   store.situationsView.selectedAvisId = null;
-  store.situationsView.subjectsSelectedNodeId = "";
   store.situationsView.verdictFilter = "ALL";
   store.situationsView.search = "";
   store.situationsView.page = 1;
