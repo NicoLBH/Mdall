@@ -194,7 +194,7 @@ function dispatchProjectSupabaseSync(detail = {}) {
   }));
 }
 
-export { PROJECT_SUPABASE_SYNC_EVENT };
+export { PROJECT_SUPABASE_SYNC_EVENT, PROJECT_IDENTITY_UPDATED_EVENT };
 
 export async function resolveCurrentBackendProjectId(options = {}) {
   const force = Boolean(options.force);
@@ -237,6 +237,178 @@ export async function resolveCurrentBackendProjectId(options = {}) {
   }
 
   return backendProjectId;
+}
+
+function applyProjectIdentityLocally({ frontendProjectId = getFrontendProjectKey(), backendProjectId = "", name = "" } = {}) {
+  const nextName = safeString(name);
+  const frontendKey = safeString(frontendProjectId);
+
+  let changed = false;
+
+  if (nextName && frontendKey) {
+    const currentList = Array.isArray(store.projects) ? store.projects : [];
+    const nextProjects = currentList.map((project) => {
+      if (safeString(project?.id) !== frontendKey) return project;
+      if (safeString(project?.name) === nextName) return project;
+      changed = true;
+      return { ...project, name: nextName };
+    });
+    store.projects = nextProjects;
+  }
+
+  if (frontendKey && safeString(store.currentProjectId || "") === frontendKey) {
+    const currentProject = store.currentProject && typeof store.currentProject === "object"
+      ? store.currentProject
+      : { id: frontendKey };
+
+    if (nextName && safeString(currentProject.name) !== nextName) {
+      store.currentProject = { ...currentProject, name: nextName };
+      changed = true;
+    } else if (!store.currentProject) {
+      store.currentProject = currentProject;
+    }
+
+    if (nextName && safeString(store.projectForm?.projectName) !== nextName) {
+      store.projectForm.projectName = nextName;
+      changed = true;
+    }
+  }
+
+  if (backendProjectId && frontendKey) {
+    const bucket = getProjectSyncBucket(frontendKey);
+    if (safeString(bucket.backendProjectId) !== safeString(backendProjectId)) {
+      bucket.backendProjectId = safeString(backendProjectId);
+      changed = true;
+    }
+
+    const frontendMap = readFrontendProjectMap();
+    if (safeString(frontendMap[frontendKey]) !== safeString(backendProjectId)) {
+      frontendMap[frontendKey] = safeString(backendProjectId);
+      writeFrontendProjectMap(frontendMap);
+      changed = true;
+    }
+  }
+
+  return changed;
+}
+
+function dispatchProjectIdentityUpdated(detail = {}) {
+  window.dispatchEvent(new CustomEvent(PROJECT_IDENTITY_UPDATED_EVENT, {
+    detail: {
+      frontendProjectId: getFrontendProjectKey(),
+      ...detail
+    }
+  }));
+}
+
+export async function syncKnownProjectNamesFromSupabase() {
+  const frontendMap = readFrontendProjectMap();
+  const entries = Object.entries(frontendMap).filter(([frontendProjectId, backendProjectId]) => (
+    safeString(frontendProjectId) && looksLikeUuid(backendProjectId)
+  ));
+
+  if (!entries.length) return Array.isArray(store.projects) ? store.projects : [];
+
+  const backendIds = [...new Set(entries.map(([, backendProjectId]) => safeString(backendProjectId)).filter(Boolean))];
+  if (!backendIds.length) return Array.isArray(store.projects) ? store.projects : [];
+
+  const params = new URLSearchParams();
+  params.set("select", "id,name");
+  params.set("id", `in.(${backendIds.join(",")})`);
+
+  const rows = await restFetch("projects", params);
+  const rowsById = new Map((Array.isArray(rows) ? rows : []).map((row) => [safeString(row?.id), row]));
+
+  let changed = false;
+  entries.forEach(([frontendProjectId, backendProjectId]) => {
+    const row = rowsById.get(safeString(backendProjectId));
+    if (!row) return;
+    changed = applyProjectIdentityLocally({
+      frontendProjectId,
+      backendProjectId,
+      name: row.name
+    }) || changed;
+  });
+
+  if (changed) {
+    dispatchProjectIdentityUpdated({
+      section: "projects",
+      projectsCount: Array.isArray(store.projects) ? store.projects.length : 0
+    });
+  }
+
+  return store.projects;
+}
+
+export async function syncCurrentProjectIdentityFromSupabase(options = {}) {
+  const backendProjectId = await resolveCurrentBackendProjectId(options);
+  if (!backendProjectId) return null;
+
+  const params = new URLSearchParams();
+  params.set("select", "id,name");
+  params.set("id", `eq.${backendProjectId}`);
+  params.set("limit", "1");
+
+  const rows = await restFetch("projects", params);
+  const row = Array.isArray(rows) ? (rows[0] || null) : null;
+  if (!row) return null;
+
+  const changed = applyProjectIdentityLocally({
+    frontendProjectId: getFrontendProjectKey(),
+    backendProjectId,
+    name: row.name
+  });
+
+  if (changed) {
+    dispatchProjectIdentityUpdated({
+      section: "project",
+      backendProjectId,
+      projectName: safeString(row.name)
+    });
+  }
+
+  return row;
+}
+
+export async function persistCurrentProjectNameToSupabase(nextProjectName) {
+  const trimmedName = safeString(nextProjectName).trim();
+  const fallbackName = trimmedName || "Projet demo";
+  const frontendProjectId = getFrontendProjectKey();
+
+  applyProjectIdentityLocally({
+    frontendProjectId,
+    name: fallbackName
+  });
+  dispatchProjectIdentityUpdated({
+    section: "project",
+    projectName: fallbackName,
+    optimistic: true
+  });
+
+  const backendProjectId = await resolveCurrentBackendProjectId();
+  if (!backendProjectId) {
+    throw new Error("Unable to resolve backend project id before updating project name.");
+  }
+
+  const updatedProject = await restUpdate(
+    "projects",
+    { id: backendProjectId },
+    { name: fallbackName },
+    { select: "id,name,updated_at" }
+  );
+
+  applyProjectIdentityLocally({
+    frontendProjectId,
+    backendProjectId,
+    name: updatedProject?.name || fallbackName
+  });
+  dispatchProjectIdentityUpdated({
+    section: "project",
+    backendProjectId,
+    projectName: safeString(updatedProject?.name || fallbackName)
+  });
+
+  return updatedProject;
 }
 
 function formatDocumentUpdatedAt(value) {
