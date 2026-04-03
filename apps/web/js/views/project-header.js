@@ -1,10 +1,12 @@
 import { PROJECT_TABS, isToggleableProjectTab, isProjectTabAllowedForUser } from "../constants.js";
 import { store } from "../store.js";
 import { renderCountBadge } from "./ui/status-badges.js";
+import { PROJECT_SUPABASE_SYNC_EVENT, getCurrentProjectSubjectCounters, syncProjectSubjectCountersFromSupabase } from "../services/project-supabase-sync.js";
 
 
 const PROJECT_TAB_RESELECTED_EVENT = "project:tab-reselected";
 let projectHeaderNavigationBound = false;
+let projectHeaderCountersBound = false;
 
 function dispatchProjectTabReselected({ projectId, tabId }) {
   window.dispatchEvent(new CustomEvent(PROJECT_TAB_RESELECTED_EVENT, {
@@ -15,12 +17,27 @@ function dispatchProjectTabReselected({ projectId, tabId }) {
   }));
 }
 
-export function bindProjectHeaderNavigation() {
-  if (projectHeaderNavigationBound) return;
-  projectHeaderNavigationBound = true;
+function updateSubjectsTabCounterDom() {
+  const header = document.querySelector(".project-context-header");
+  if (!header) return;
 
-  
-  document.addEventListener("click", (event) => {
+  const projectId = String(header.dataset.projectId || "");
+  if (projectId && projectId !== String(store.currentProjectId || "")) return;
+
+  const subjectsTab = header.querySelector('.project-tabs a[data-project-tab-id="sujets"] .project-tabs__counter');
+  if (!subjectsTab) return;
+
+  const counters = getProjectTabCounters();
+  const value = Number(counters?.openSujets || 0);
+  subjectsTab.textContent = String(value);
+  subjectsTab.setAttribute("aria-label", `${value} élément(s)`);
+}
+
+export function bindProjectHeaderNavigation() {
+  if (!projectHeaderNavigationBound) {
+    projectHeaderNavigationBound = true;
+
+    document.addEventListener("click", (event) => {
     const rawTarget = event.target;
     let el = null;
 
@@ -48,8 +65,23 @@ export function bindProjectHeaderNavigation() {
     const projectId = store.currentProjectId || null;
 
     dispatchProjectTabReselected({ projectId, tabId });
-  }, true);
+    }, true);
+  }
 
+  if (!projectHeaderCountersBound) {
+    projectHeaderCountersBound = true;
+
+    window.addEventListener(PROJECT_SUPABASE_SYNC_EVENT, (event) => {
+      const frontendProjectId = String(event?.detail?.frontendProjectId || "");
+      if (frontendProjectId && frontendProjectId !== String(store.currentProjectId || "")) return;
+      updateSubjectsTabCounterDom();
+    });
+
+    document.addEventListener("analysisStateChanged", () => {
+      syncProjectSubjectCountersFromSupabase({ force: true }).catch(() => undefined);
+      updateSubjectsTabCounterDom();
+    });
+  }
 }
 
 export { PROJECT_TAB_RESELECTED_EVENT };
@@ -79,17 +111,21 @@ function getProjectTabCounters() {
     ? store.situationsView.data
     : [];
 
-  let openSujets = 0;
+  if (situations.length && store.situationsView?.projectScopeId === String(store.currentProjectId || "")) {
+    let openSujets = 0;
 
-  for (const situation of situations) {
-    for (const sujet of situation?.sujets || []) {
-      if (getEffectiveSujetStatus(sujet) === "open") {
-        openSujets += 1;
+    for (const situation of situations) {
+      for (const sujet of situation?.sujets || []) {
+        if (getEffectiveSujetStatus(sujet) === "open") {
+          openSujets += 1;
+        }
       }
     }
+
+    return { openSujets };
   }
 
-  return { openSujets };
+  return getCurrentProjectSubjectCounters();
 }
 
 function renderTabCount(tab, counters) {
@@ -120,6 +156,7 @@ function getTabHref(projectId, tabId) {
 }
 
 export function renderProjectHeader(projectId, activeTab) {
+  syncProjectSubjectCountersFromSupabase().catch(() => undefined);
   const counters = getProjectTabCounters();
 
   return `
