@@ -338,13 +338,13 @@ async function fetchObservationsForRun(runId) {
   return res.json();
 }
 
-async function fetchSituationsByIds(ids = []) {
-  const safeIds = Array.from(new Set((Array.isArray(ids) ? ids : []).filter(Boolean)));
-  if (!safeIds.length) return [];
+async function fetchSituationsByProject(projectId) {
+  if (!projectId) return [];
 
   const url = new URL(`${SUPABASE_URL}/rest/v1/situations`);
-  url.searchParams.set("select", "id,title,description,status,priority");
-  url.searchParams.set("id", `in.(${safeIds.join(",")})`);
+  url.searchParams.set("select", "id,title,description,status,created_at,updated_at");
+  url.searchParams.set("project_id", `eq.${projectId}`);
+  url.searchParams.set("order", "created_at.asc");
 
   const res = await fetch(url.toString(), {
     method: "GET",
@@ -360,64 +360,86 @@ async function fetchSituationsByIds(ids = []) {
   return res.json();
 }
 
+async function fetchAnalysisRunProjectId(runId) {
+  const url = new URL(`${SUPABASE_URL}/rest/v1/analysis_runs`);
+  url.searchParams.set("select", "project_id");
+  url.searchParams.set("id", `eq.${runId}`);
+  url.searchParams.set("limit", "1");
+
+  const res = await fetch(url.toString(), {
+    method: "GET",
+    headers: getSupabaseAuthHeaders({ Accept: "application/json" }),
+    cache: "no-store"
+  });
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`analysis_runs fetch failed (${res.status}): ${txt}`);
+  }
+
+  const rows = await res.json();
+  return rows?.[0]?.project_id || null;
+}
+
 async function buildFinalResultFromDatabase(runId) {
-  const [subjects, observations] = await Promise.all([
+  const [subjects, observations, projectId] = await Promise.all([
     fetchSubjectsForRun(runId),
-    fetchObservationsForRun(runId)
+    fetchObservationsForRun(runId),
+    fetchAnalysisRunProjectId(runId)
   ]);
 
-  const safeSubjects = Array.isArray(subjects) ? subjects : [];
-  const safeObservations = Array.isArray(observations) ? observations : [];
-  const situationIds = Array.from(new Set(safeSubjects.map((item) => item?.situation_id).filter(Boolean)));
-  const situationsRows = await fetchSituationsByIds(situationIds);
+  const situationsRows = await fetchSituationsByProject(projectId);
   const situationsById = new Map((situationsRows || []).map((row) => [row.id, row]));
 
   const problems = [];
   const avis = [];
   const situationMap = new Map();
 
-  function ensureSituation(situationId) {
-    if (!situationId) return null;
-    const source = situationsById.get(situationId);
-    if (!source) return null;
-
-    if (!situationMap.has(situationId)) {
-      situationMap.set(situationId, {
-        situation_id: situationId,
-        title: source?.title || situationId,
-        description: source?.description || "",
-        status: source?.status || "open",
-        priority: source?.priority || "medium",
-        problem_ids: []
-      });
-    }
-    return situationMap.get(situationId);
+  for (const row of situationsRows || []) {
+    if (!row?.id) continue;
+    situationMap.set(row.id, {
+      situation_id: row.id,
+      title: row.title || row.id,
+      description: row.description || "",
+      status: row.status || "open",
+      problem_ids: []
+    });
   }
 
-  for (const subject of safeSubjects) {
+  for (const subject of subjects || []) {
     const problemId = String(subject?.id || "");
     if (!problemId) continue;
 
-    const situation = ensureSituation(subject?.situation_id);
-    if (!situation) continue;
-
-    situation.problem_ids.push(problemId);
+    const situationId = subject?.situation_id || null;
+    if (situationId && !situationMap.has(situationId)) {
+      const sourceSituation = situationsById.get(situationId);
+      situationMap.set(situationId, {
+        situation_id: situationId,
+        title: sourceSituation?.title || situationId,
+        description: sourceSituation?.description || "",
+        status: sourceSituation?.status || "open",
+        problem_ids: []
+      });
+    }
+    const situation = situationId ? situationMap.get(situationId) : null;
+    if (situation) {
+      situation.problem_ids.push(problemId);
+    }
 
     problems.push({
       problem_id: problemId,
       title: subject?.title || "Sujet sans titre",
       description: subject?.description || "",
-      priority: subject?.priority || situation.priority || "medium",
+      priority: subject?.priority || "medium",
       status: subject?.status || "open",
       agent: subject?.subject_type || "system",
-      situation_id: subject?.situation_id || null,
       avis_ids: []
     });
   }
 
   const problemById = new Map(problems.map((item) => [item.problem_id, item]));
 
-  for (const obs of safeObservations) {
+  for (const obs of observations || []) {
     const targetId = obs?.resolved_subject_id || null;
     if (!targetId || !problemById.has(targetId)) continue;
 
