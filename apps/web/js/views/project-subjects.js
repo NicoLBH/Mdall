@@ -3152,87 +3152,59 @@ function renderThreadBlock() {
 }
 
 
-function renderRejectReviewAction(selection) {
+function renderIssueStatusAction(selection) {
   if (!selection?.type || !selection?.item?.id) return "";
+  if (selection.type === "avis") return "";
 
-  const entityType = getSelectionEntityType(selection.type);
-  const entityId = selection.item.id;
-  const meta = getEntityReviewMeta(entityType, entityId);
-  const reviewIcon = renderReviewStateIcon("rejected", { entityType });
-  const dismissIcon = renderReviewStateIcon("dismissed", { entityType });
-  const canRestore = !!getReviewRestoreSnapshot(entityType, entityId)
-    && (meta.review_state === "rejected" || meta.review_state === "dismissed");
-
-  if (canRestore) {
-    return renderGhActionButton({
-      id: `review-restore-${entityType}-${entityId}`,
-      label: "Récupérer",
-      icon: svgIcon("issue-reopened"),
-      tone: "default",
-      size: "sm",
-      className: "js-review-reject-action",
-      mainAction: "review:restore"
-    });
-  }
+  const item = selection.item;
+  const issueStatus = selection.type === "sujet"
+    ? getEffectiveSujetStatus(item.id)
+    : getEffectiveSituationStatus(item.id);
+  const isOpen = String(issueStatus || "open").toLowerCase() === "open";
 
   return renderGhActionButton({
-    id: `review-reject-${entityType}-${entityId}`,
-    label: "Rejeter",
-    icon: reviewIcon,
+    id: `issue-status-${selection.type}-${item.id}`,
+    label: isOpen ? "Close" : "Reopen",
+    icon: isOpen ? SVG_ISSUE_CLOSED : SVG_ISSUE_REOPENED,
     tone: "default",
     size: "sm",
-    className: "js-review-reject-action",
-    mainActionMode: "first-item",
-    items: [
-      {
-        label: "Rejeté par humain",
-        action: "review:set:rejected",
-        icon: reviewIcon
-      },
-      {
-        label: "Non pertinent",
-        action: "review:set:dismissed",
-        icon: dismissIcon
-      }
-    ]
-  });
-}
-
-function renderValidateReviewAction(selection) {
-  if (!selection?.type || !selection?.item?.id) return "";
-
-  const entityType = getSelectionEntityType(selection.type);
-  const entityId = selection.item.id;
-  const meta = getEntityReviewMeta(entityType, entityId);
-  const normalizedState = normalizeReviewState(meta.review_state);
-  if (normalizedState === "rejected" || normalizedState === "dismissed") return "";
-
-  const validateIcon = renderReviewStateIcon("validated", { entityType });
-
-  if (selection.type === "avis") {
-    return `<button class="gh-btn gh-btn--validate" data-action="avis-validate" type="button">Validate</button>`;
-  }
-
-  return renderGhActionButton({
-    id: `review-validate-${entityType}-${selection.item.id}`,
-    label: "Valider",
-    icon: validateIcon,
-    tone: "default",
-    size: "sm",
-    className: "js-review-validate-action",
-    mainAction: "review:validate:self",
-    items: [
-      {
-        label: "Valider seul",
-        action: "review:validate:self",
-        icon: validateIcon
-      },
-      {
-        label: "Valider avec tous les descendants",
-        action: "review:validate:descendants",
-        icon: validateIcon
-      }
-    ]
+    className: "js-issue-status-action",
+    mainAction: isOpen ? "issue:close:realized" : "issue:reopen",
+    items: isOpen
+      ? [
+          {
+            label: "Fermé comme réalisé",
+            action: "issue:close:realized",
+            icon: SVG_ISSUE_CLOSED
+          },
+          {
+            label: "Fermé comme non pertinent",
+            action: "issue:close:dismissed",
+            icon: renderReviewStateIcon("dismissed", { entityType: getSelectionEntityType(selection.type) })
+          },
+          {
+            label: "Fermé comme dupliqué",
+            action: "issue:close:duplicate",
+            icon: renderReviewStateIcon("rejected", { entityType: getSelectionEntityType(selection.type) })
+          }
+        ]
+      : [
+          {
+            label: "Ré-ouvrir",
+            action: "issue:reopen",
+            icon: SVG_ISSUE_REOPENED
+          },
+          {
+            label: "Fermé comme non pertinent",
+            action: "issue:close:dismissed",
+            icon: renderReviewStateIcon("dismissed", { entityType: getSelectionEntityType(selection.type) })
+          },
+          {
+            label: "Fermé comme dupliqué",
+            action: "issue:close:duplicate",
+            icon: renderReviewStateIcon("rejected", { entityType: getSelectionEntityType(selection.type) })
+          }
+        ]
   });
 }
 
@@ -3249,12 +3221,8 @@ function renderCommentBox(selection) {
         ? getEffectiveSujetStatus(item.id)
         : getEffectiveSituationStatus(item.id);
 
-  const isIssueOpen = String(issueStatus || "open").toLowerCase() === "open";
-  const activeVerdict = String(store.situationsView.tempAvisVerdict || "F").toUpperCase();
   const previewMode = !!store.situationsView.commentPreviewMode;
   const helpMode = !!store.situationsView.helpMode;
-
-  const verdictSwitch = renderVerdictActionButtons(activeVerdict);
 
   const hintHtml = `
     <div class="rapso-mention-hint comment-composer__hint">
@@ -3262,18 +3230,12 @@ function renderCommentBox(selection) {
     </div>
   `;
 
-  const rejectActionHtml = renderRejectReviewAction(selection);
+  const issueStatusActionHtml = renderIssueStatusAction(selection);
 
   const actionsHtml = `
     <button class="gh-btn gh-btn--help-mode ${helpMode ? "is-on" : ""}" data-action="toggle-help" type="button">Help</button>
 
-    ${type === "avis"
-      ? `${verdictSwitch}${renderValidateReviewAction(selection)}`
-      : `${renderValidateReviewAction(selection)}${isIssueOpen
-          ? `<button class="gh-btn gh-btn--issue-action" data-action="issue-close" type="button">${SVG_ISSUE_CLOSED}<span class="gh-btn__label">Close</span></button>`
-          : `<button class="gh-btn gh-btn--issue-action" data-action="issue-reopen" type="button">${SVG_ISSUE_REOPENED}<span class="gh-btn__label">Reopen issue</span></button>`}`}
-
-    ${rejectActionHtml}
+    ${type === "avis" ? "" : issueStatusActionHtml}
 
     <button class="gh-btn gh-btn--comment" data-action="add-comment" type="button">Comment</button>
   `;
@@ -3707,7 +3669,6 @@ function renderSubIssuesForSujet(sujet, options = {}) {
     return `
       <div class="issue-row issue-row--avis click ${avisRowClass}" data-avis-id="${escapeHtml(avis.id)}">
         <div class="cell cell-theme cell-theme--full lvl0">
-          ${renderStateDot(effVerdict)}
           <span class="theme-text theme-text--avis">${escapeHtml(firstNonEmpty(avis.title, avis.id, ""))}</span>
         </div>
       </div>
@@ -3759,7 +3720,6 @@ function renderSubIssuesForSituation(situation, options = {}) {
         rows.push(`
           <div class="issue-row issue-row--avis click ${avisRowClass}" data-avis-id="${escapeHtml(avis.id)}">
             <div class="cell cell-theme cell-theme--full lvl1">
-              ${renderStateDot(effVerdict)}
               <span class="theme-text theme-text--avis">${escapeHtml(firstNonEmpty(avis.title, avis.id, ""))}</span>
             </div>
           </div>
@@ -4440,6 +4400,32 @@ function applyIssueCloseOrReopen(nextStatus, root) {
   rerenderScope(root);
 }
 
+function applyIssueStatusAction(root, action) {
+  const normalized = String(action || "");
+  if (!normalized) return;
+
+  if (normalized === "issue:reopen") {
+    applyIssueCloseOrReopen("open", root);
+    return;
+  }
+
+  if (normalized === "issue:close:realized") {
+    applyIssueCloseOrReopen("closed", root);
+    return;
+  }
+
+  if (normalized === "issue:close:dismissed") {
+    applyIssueCloseOrReopen("closed", root);
+    applyReviewStateChange(root, "dismissed");
+    return;
+  }
+
+  if (normalized === "issue:close:duplicate") {
+    applyIssueCloseOrReopen("closed", root);
+    applyReviewStateChange(root, "rejected");
+  }
+}
+
 function syncCommentPreview(root) {
   const ta = root.querySelector("#humanCommentBox");
   const preview = root.querySelector("#humanCommentPreview");
@@ -5001,34 +4987,13 @@ function wireDetailsInteractive(root) {
       }
     });
 
-    root.querySelectorAll(".js-review-reject-action").forEach((actionRoot) => {
-      if (actionRoot.dataset.reviewBound === "true") return;
-      actionRoot.dataset.reviewBound = "true";
-  
-      actionRoot.addEventListener("ghaction:action", (event) => {
-        const action = String(event.detail?.action || "");
-        if (action === "review:restore") {
-          applyRestoreReviewState(root);
-          return;
-        }
-        if (!action.startsWith("review:set:")) return;
-  
-        const nextState = action.slice("review:set:".length);
-        if (!nextState) return;
-  
-        applyReviewStateChange(root, nextState);
-      });
-    });
-
-    root.querySelectorAll(".js-review-validate-action").forEach((actionRoot) => {
-      if (actionRoot.dataset.reviewValidateBound === "true") return;
-      actionRoot.dataset.reviewValidateBound = "true";
+    root.querySelectorAll(".js-issue-status-action").forEach((actionRoot) => {
+      if (actionRoot.dataset.issueStatusBound === "true") return;
+      actionRoot.dataset.issueStatusBound = "true";
 
       actionRoot.addEventListener("ghaction:action", (event) => {
         const action = String(event.detail?.action || "");
-        if (!action.startsWith("review:validate:")) return;
-        const mode = action.endsWith(":descendants") ? "descendants" : "self";
-        applyValidateEntity(root, mode);
+        applyIssueStatusAction(root, action);
       });
     });
   }
@@ -5113,17 +5078,6 @@ function wireDetailsInteractive(root) {
     };
   });
 
-  root.querySelectorAll("[data-action='avis-validate']").forEach((btn) => {
-    btn.onclick = () => applyValidateAvis(root);
-  });
-
-  root.querySelectorAll("[data-action='issue-close']").forEach((btn) => {
-    btn.onclick = () => applyIssueCloseOrReopen("closed", root);
-  });
-
-  root.querySelectorAll("[data-action='issue-reopen']").forEach((btn) => {
-    btn.onclick = () => applyIssueCloseOrReopen("open", root);
-  });
 }
 
 /* =========================================================
@@ -5235,7 +5189,6 @@ function ensureDrilldownDom() {
     variant: "drilldown",
     ariaLabel: "Détails",
     headHtml: renderOverlayChromeHead({
-      eyebrow: "DÉTAILS",
       titleId: "drilldownTitle",
       closeId: "drilldownClose",
       closeLabel: "Fermer",
