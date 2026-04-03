@@ -43,6 +43,6 @@ jobs:
       - name: Deploy Edge Functions
         run: |
           supabase functions deploy run-analysis --no-verify-jwt --debug
-          supabase functions deploy extract-pdf-text --debug
-          supabase functions deploy generate-observations --debug
-          supabase functions deploy resolve-observations --debug
+          supabase functions deploy extract-pdf-text --no-verify-jwt --debug
+          supabase functions deploy generate-observations --no-verify-jwt --debug
+          supabase functions deploy resolve-observations --no-verify-jwt --debug
