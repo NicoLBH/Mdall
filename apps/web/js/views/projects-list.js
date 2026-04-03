@@ -1,4 +1,6 @@
-import { DEMO_PROJECTS, setCurrentDemoProject } from "../demo-context.js";
+import { setCurrentDemoProject } from "../demo-context.js";
+import { store } from "../store.js";
+import { syncKnownProjectNamesFromSupabase } from "../services/project-supabase-sync.js";
 import {
   renderDataTableShell,
   renderDataTableHead,
@@ -19,7 +21,9 @@ function renderProjectRow(project) {
 }
 
 export function renderProjectsList(root) {
-  const rows = DEMO_PROJECTS.map(renderProjectRow).join("");
+  syncKnownProjectNamesFromSupabase().catch(() => undefined);
+  const projects = Array.isArray(store.projects) ? store.projects : [];
+  const rows = projects.map(renderProjectRow).join("");
 
   root.innerHTML = `
     <section class="page projects-page">
@@ -40,7 +44,7 @@ export function renderProjectsList(root) {
           ]
         }),
         bodyHtml: rows,
-        state: DEMO_PROJECTS.length ? "ready" : "empty",
+        state: projects.length ? "ready" : "empty",
         emptyHtml: renderDataTableEmptyState({
           title: "Aucun projet",
           description: "Ajoutez un projet pour démarrer."
