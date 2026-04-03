@@ -2606,7 +2606,6 @@ function renderSituationRow(situation) {
   const hasSujets = getSituationSubjects(situation).length > 0;
   const effStatus = getEffectiveSituationStatus(situation.id);
   const meta = getEntityReviewMeta("situation", situation.id);
-  const reviewIcon = renderEntityReviewLeadIcon("situation", situation.id);
   const titleSeenClass = getReviewTitleStateClass("situation", situation.id);
 
   return `
@@ -2614,7 +2613,6 @@ function renderSituationRow(situation) {
       <div class="cell cell-theme lvl0">
         <span class="js-toggle-situation" data-situation-id="${escapeHtml(situation.id)}">${chevron(expanded, hasSujets)}</span>
         ${issueIcon(effStatus, { reviewState: meta.review_state, entityType: "situation", isSeen: meta.is_seen })}
-        ${reviewIcon ? `<span class="review-title-chip">${reviewIcon}</span>` : ""}
         <span class="theme-text theme-text--sit ${titleSeenClass}">${escapeHtml(firstNonEmpty(situation.title, situation.id, "(sans titre)"))}</span>
       </div>
       <div class="cell cell-prio">${priorityBadge(situation.priority)}</div>
@@ -2629,14 +2627,12 @@ function renderSujetRow(sujet) {
   const hasAvis = (sujet.avis || []).length > 0;
   const effStatus = getEffectiveSujetStatus(sujet.id);
   const meta = getEntityReviewMeta("sujet", sujet.id);
-  const reviewIcon = renderEntityReviewLeadIcon("sujet", sujet.id);
   const titleSeenClass = getReviewTitleStateClass("sujet", sujet.id);
 
   return `
     <div class="issue-row issue-row--pb click js-row-sujet${rowSelectedClass("sujet", sujet.id)}" data-sujet-id="${escapeHtml(sujet.id)}">
       <div class="cell cell-theme lvl1">
         ${issueIcon(effStatus, { reviewState: meta.review_state, entityType: "sujet", isSeen: meta.is_seen })}
-        ${reviewIcon ? `<span class="review-title-chip">${reviewIcon}</span>` : ""}
         <span class="theme-text theme-text--pb ${titleSeenClass}">${escapeHtml(firstNonEmpty(sujet.title, sujet.id, "Non classé"))}</span>
       </div>
       <div class="cell cell-prio">${priorityBadge(sujet.priority)}</div>
@@ -2648,13 +2644,11 @@ function renderSujetRow(sujet) {
 
 function renderAvisRow(avis) {
   const effVerdict = getEffectiveAvisVerdict(avis.id);
-  const reviewIcon = renderEntityReviewLeadIcon("avis", avis.id);
   const titleSeenClass = getReviewTitleStateClass("avis", avis.id);
 
   return `
     <div class="issue-row issue-row--avis click js-row-avis${rowSelectedClass("avis", avis.id)}" data-avis-id="${escapeHtml(avis.id)}">
       <div class="cell cell-theme lvl2">
-        ${reviewIcon ? `<span class="review-title-chip">${reviewIcon}</span>` : ""}
         <span class="theme-text theme-text--avis ${titleSeenClass}">${escapeHtml(firstNonEmpty(avis.title, avis.id, ""))}</span>
       </div>
       <div class="cell cell-verdict">${renderVerdictPill(effVerdict)}</div>
@@ -2668,7 +2662,6 @@ function renderAvisRow(avis) {
 function renderFlatSujetRow(sujet, situationId, options = {}) {
   const effStatus = getEffectiveSujetStatus(sujet.id);
   const meta = getEntityReviewMeta("sujet", sujet.id);
-  const reviewIcon = renderEntityReviewLeadIcon("sujet", sujet.id);
   const titleSeenClass = getReviewTitleStateClass("sujet", sujet.id);
   const displayRef = getEntityDisplayRef("sujet", sujet.id);
   const author = firstNonEmpty(getEntityDescriptionState("sujet", sujet.id)?.author, sujet?.agent, sujet?.raw?.agent, "system");
@@ -2691,10 +2684,7 @@ function renderFlatSujetRow(sujet, situationId, options = {}) {
           <span class="issue-row-title-grid__status">
             ${issueIcon(effStatus, { reviewState: meta.review_state, entityType: "sujet", isSeen: meta.is_seen })}
           </span>
-          <span class="issue-row-title-grid__review">
-            ${reviewIcon ? `<span class="review-title-chip">${reviewIcon}</span>` : `<span class="review-title-chip review-title-chip--placeholder" aria-hidden="true"></span>`}
-          </span>
-          <span class="issue-row-title-grid__title issue-row-subject-title-line">
+            <span class="issue-row-title-grid__title issue-row-subject-title-line">
             <button type="button" class="row-title-trigger js-row-title-trigger theme-text theme-text--pb ${titleSeenClass}" data-row-entity-type="sujet" data-row-entity-id="${escapeHtml(sujet.id)}">${escapeHtml(firstNonEmpty(sujet.title, sujet.id, "Non classé"))}</button>
             ${subjectLabelsHtml ? `<span class="issue-row-subject-labels">${subjectLabelsHtml}</span>` : ""}
           </span>
@@ -2709,14 +2699,12 @@ function renderFlatSujetRow(sujet, situationId, options = {}) {
 function renderFlatAvisRow(avis, sujetId, situationId) {
   const effVerdict = getEffectiveAvisVerdict(avis.id);
   const lineage = [situationId, sujetId].filter(Boolean).join(" · ");
-  const reviewIcon = renderEntityReviewLeadIcon("avis", avis.id);
   const titleSeenClass = getReviewTitleStateClass("avis", avis.id);
 
   return `
     <div class="issue-row issue-row--avis click js-row-avis${rowSelectedClass("avis", avis.id)}" data-avis-id="${escapeHtml(avis.id)}">
       <div class="cell cell-theme lvl0">
         ${issueIcon("open")}
-        ${reviewIcon ? `<span class="review-title-chip">${reviewIcon}</span>` : ""}
         <span class="theme-text theme-text--avis ${titleSeenClass}">${escapeHtml(firstNonEmpty(avis.title, avis.id, ""))}</span>
         ${lineage ? `<span class="mono subissues-inline-count">${escapeHtml(lineage)}</span>` : ""}
       </div>
@@ -3714,7 +3702,6 @@ function renderSubjectMetaControls(subject) {
 function renderSubIssuesForSujet(sujet, options = {}) {
   ensureViewUiState();
   const avisRowClass = options.avisRowClass || "js-row-avis";
-  const stats = problemVerdictStats(sujet);
   const rows = (sujet.avis || []).map((avis) => {
     const effVerdict = getEffectiveAvisVerdict(avis.id);
     return `
@@ -3735,7 +3722,7 @@ function renderSubIssuesForSujet(sujet, options = {}) {
   return renderSubIssuesPanel({
     title: "Sous-sujets",
     leftMetaHtml: `<div class="subissues-counts subissues-counts--total"><span class="mono">${(sujet.avis || []).length}</span></div>`,
-    rightMetaHtml: buildVerdictBarHtml(stats.counts, { legend: true }),
+    rightMetaHtml: "",
     bodyHtml: body,
     isOpen: !!store.situationsView.rightSubissuesOpen
   });
@@ -3790,7 +3777,7 @@ function renderSubIssuesForSituation(situation, options = {}) {
   return renderSubIssuesPanel({
     title: "Sujets rattachés",
     leftMetaHtml: problemsCountsHtml(situation),
-    rightMetaHtml: buildVerdictBarHtml(stats.counts, { legend: true }),
+    rightMetaHtml: "",
     bodyHtml: body,
     isOpen: !!store.situationsView.rightSubissuesOpen
   });
@@ -3802,10 +3789,8 @@ function renderDetailsTitleWrapHtml(selection) {
     buildTitleTextHtml(currentSelection) {
       const item = currentSelection.item;
       const entityType = getSelectionEntityType(currentSelection.type);
-      const reviewIcon = renderEntityReviewLeadIcon(entityType, item.id);
       const titleSeenClass = getReviewTitleStateClass(entityType, item.id);
       return `
-        ${reviewIcon ? `<span class="details-title-status">${reviewIcon}</span>` : ""}
         <span class="details-title-text ${titleSeenClass}">${escapeHtml(firstNonEmpty(item.title, item.id, "Détail"))}</span>
       `;
     },
@@ -3818,13 +3803,11 @@ function renderDetailsTitleWrapHtml(selection) {
         return renderVerboseAvisVerdictPill(getEffectiveAvisVerdict(item.id));
       }
       if (currentSelection.type === "sujet") {
-        const stats = problemVerdictStats(item);
         const badgeHtml = statePill(getEffectiveSujetStatus(item.id), { reviewState: getEntityReviewMeta("sujet", item.id).review_state, entityType: "sujet" });
-        return `${badgeHtml}${buildVerdictBarHtml(stats.counts, { legend: true })}`;
+        return `${badgeHtml}`;
       }
-      const stats = situationVerdictStats(item);
       const badgeHtml = statePill(getEffectiveSituationStatus(item.id), { reviewState: getEntityReviewMeta("situation", item.id).review_state, entityType: "situation" });
-      return `${badgeHtml}${problemsCountsHtml(item)}${buildVerdictBarHtml(stats.counts, { legend: true })}`;
+      return `${badgeHtml}${problemsCountsHtml(item)}`;
     },
     buildCompactConfig(currentSelection, { titleTextHtml, idHtml }) {
       const item = currentSelection.item;
@@ -3839,22 +3822,20 @@ function renderDetailsTitleWrapHtml(selection) {
         };
       }
       if (currentSelection.type === "sujet") {
-        const stats = problemVerdictStats(item);
         return {
           variant: "grid",
           wrapClass: "details-title--compact-grid",
           leftHtml: statePill(getEffectiveSujetStatus(item.id), { reviewState: getEntityReviewMeta("sujet", item.id).review_state, entityType: "sujet" }),
           topHtml: titleTextHtml,
-          bottomHtml: buildVerdictBarHtml(stats.counts, { legend: false })
+          bottomHtml: ""
         };
       }
-      const stats = situationVerdictStats(item);
       return {
         variant: "grid",
         wrapClass: "details-title--compact-grid",
         leftHtml: statePill(getEffectiveSituationStatus(item.id), { reviewState: getEntityReviewMeta("situation", item.id).review_state, entityType: "situation" }),
         topHtml: titleTextHtml,
-        bottomHtml: `${problemsCountsHtml(item)}${buildVerdictBarHtml(stats.counts, { legend: false })}`
+        bottomHtml: `${problemsCountsHtml(item)}`
       };
     }
   });
@@ -3867,7 +3848,7 @@ function renderDetailsTitleHtml(selection, options = {}) {
     titleWrapHtml: renderDetailsTitleWrapHtml(selection),
     emptyPanelTitle: "Sélectionner un élément",
     buildKickerText(currentSelection) {
-      return currentSelection && currentSelection.type === "situation" ? "DÉTAILS" : "";
+      return "";
     },
     buildMetaHtml(currentSelection) {
       return escapeHtml(currentSelection?.item?.id || "—");
