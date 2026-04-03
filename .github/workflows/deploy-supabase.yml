@@ -41,4 +41,8 @@ jobs:
             OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
 
       - name: Deploy Edge Functions
-        run: supabase functions deploy --debug
+        run: |
+          supabase functions deploy run-analysis --no-verify-jwt --debug
+          supabase functions deploy extract-pdf-text --debug
+          supabase functions deploy generate-observations --debug
+          supabase functions deploy resolve-observations --debug
