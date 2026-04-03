@@ -1,4 +1,5 @@
 import { store } from "./store.js";
+import { syncCurrentProjectIdentityFromSupabase, syncKnownProjectNamesFromSupabase } from "./services/project-supabase-sync.js";
 
 const STORAGE_KEYS = {
   userId: "rapsobot.demoUserId",
@@ -86,7 +87,11 @@ export function getDemoUserById(userId) {
 }
 
 export function getDemoProjectById(projectId) {
-  return DEMO_PROJECTS.find((project) => project.id === projectId) || DEMO_PROJECTS[0];
+  const sourceProjects = Array.isArray(store.projects) && store.projects.length
+    ? store.projects
+    : DEMO_PROJECTS;
+
+  return sourceProjects.find((project) => project.id === projectId) || sourceProjects[0] || DEMO_PROJECTS[0];
 }
 
 export function persistDemoUserId(userId) {
@@ -124,7 +129,9 @@ export function setCurrentDemoUser(userId) {
 export function setCurrentDemoProject(projectId) {
   const project = getDemoProjectById(projectId);
 
-  store.projects = DEMO_PROJECTS.map((item) => ({ ...item }));
+  if (!Array.isArray(store.projects) || !store.projects.length) {
+    store.projects = DEMO_PROJECTS.map((item) => ({ ...item }));
+  }
   store.currentProjectId = project.id;
   store.currentProject = { ...project };
   store.projectForm.projectName = project.name;
@@ -140,9 +147,13 @@ export function initializeDemoContext() {
   store.projects = DEMO_PROJECTS.map((item) => ({ ...item }));
   setCurrentDemoUser(getPersistedDemoUserId());
   setCurrentDemoProject(getPersistedDemoProjectId());
+  syncKnownProjectNamesFromSupabase().catch(() => undefined);
+  syncCurrentProjectIdentityFromSupabase().catch(() => undefined);
 }
 
 export function syncCurrentProjectFromRoute(projectId) {
   if (!projectId) return null;
-  return setCurrentDemoProject(projectId);
+  const project = setCurrentDemoProject(projectId);
+  syncCurrentProjectIdentityFromSupabase().catch(() => undefined);
+  return project;
 }
