@@ -41,19 +41,12 @@ const pdfPreviewController = {
   pdfDocument: null,
   documentCacheKey: "",
   rawBytes: null,
-  sourceDocumentId: ""
+  sourceDocumentId: "",
+  searchResults: [],
+  activeSearchIndex: -1
 };
 
-const PDF_PREVIEW_DEBUG = true;
-
-function logPdfPreviewDebug(message, payload = undefined) {
-  if (!PDF_PREVIEW_DEBUG || typeof console === "undefined") return;
-  if (typeof payload === "undefined") {
-    console.log(`[pdf-preview] ${message}`);
-    return;
-  }
-  console.log(`[pdf-preview] ${message}`, payload);
-}
+function logPdfPreviewDebug() {}
 
 const docsViewState = {
   mode: "list", // "list" | "upload" | "report-preview" | "pdf-preview"
@@ -79,7 +72,9 @@ const docsViewState = {
     bytes: null,
     pageCount: 0,
     zoomLevel: 1,
-    rotation: 0
+    rotation: 0,
+    searchQuery: "",
+    darkMode: false
   }
 };
 
@@ -262,6 +257,182 @@ function getPdfPreviewBytesSnapshot() {
 
   return null;
 }
+function formatPdfPreviewZoomPercent(zoomLevel = 1) {
+  const safeZoomLevel = Number.isFinite(Number(zoomLevel)) ? Number(zoomLevel) : 1;
+  return `${Math.round(safeZoomLevel * 100)}%`;
+}
+
+function updatePdfPreviewToolbarState(root = null) {
+  const activeRoot = getPdfPreviewRenderRoot(root);
+  if (!activeRoot) return;
+
+  const zoomNode = activeRoot.querySelector("#documentsPdfZoomValue");
+  if (zoomNode) {
+    zoomNode.textContent = formatPdfPreviewZoomPercent(docsViewState.pdfPreview?.zoomLevel || 1);
+  }
+
+  const darkModeButton = activeRoot.querySelector('[data-pdf-preview-action="toggle-dark-mode"]');
+  if (darkModeButton) {
+    const isDarkMode = Boolean(docsViewState.pdfPreview?.darkMode);
+    darkModeButton.textContent = isDarkMode ? "Mode clair" : "Mode sombre";
+    darkModeButton.setAttribute("aria-pressed", isDarkMode ? "true" : "false");
+  }
+
+  const searchInput = activeRoot.querySelector("#documentsPdfSearchInput");
+  if (searchInput && searchInput.value !== String(docsViewState.pdfPreview?.searchQuery || "")) {
+    searchInput.value = String(docsViewState.pdfPreview?.searchQuery || "");
+  }
+
+  const resultsNode = activeRoot.querySelector("#documentsPdfSearchResults");
+  if (resultsNode) {
+    if (!String(docsViewState.pdfPreview?.searchQuery || "").trim()) {
+      resultsNode.textContent = "";
+    } else if (!pdfPreviewController.searchResults.length) {
+      resultsNode.textContent = "0 résultat";
+    } else {
+      const activeIndex = Math.max(0, pdfPreviewController.activeSearchIndex);
+      resultsNode.textContent = `${activeIndex + 1}/${pdfPreviewController.searchResults.length}`;
+    }
+  }
+}
+
+function escapeHtmlAttribute(value = "") {
+  return escapeHtml(String(value || "")).replace(/"/g, "&quot;");
+}
+
+function applyPdfPreviewDarkModeToCanvas(canvas) {
+  if (!(canvas instanceof HTMLCanvasElement)) return;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context) return;
+
+  const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imageData.data;
+  const background = { r: 13, g: 17, b: 23 };
+  const foreground = { r: 230, g: 237, b: 243 };
+
+  for (let index = 0; index < data.length; index += 4) {
+    const alpha = data[index + 3];
+    if (alpha === 0) continue;
+
+    const red = data[index];
+    const green = data[index + 1];
+    const blue = data[index + 2];
+    const luminance = (0.2126 * red + 0.7152 * green + 0.0722 * blue) / 255;
+    const mapped = 1 - luminance;
+
+    data[index] = Math.round(background.r + (foreground.r - background.r) * mapped);
+    data[index + 1] = Math.round(background.g + (foreground.g - background.g) * mapped);
+    data[index + 2] = Math.round(background.b + (foreground.b - background.b) * mapped);
+  }
+
+  context.putImageData(imageData, 0, 0);
+}
+
+function clearPdfPreviewSearchHighlights(root = null) {
+  const activeRoot = getPdfPreviewRenderRoot(root);
+  if (!activeRoot) return;
+
+  activeRoot.querySelectorAll(".documents-pdf-viewer__text-item").forEach((node) => {
+    const originalText = node.getAttribute("data-original-text") || node.textContent || "";
+    node.textContent = originalText;
+  });
+
+  activeRoot.querySelectorAll(".documents-pdf-viewer__text-item.is-search-active").forEach((node) => {
+    node.classList.remove("is-search-active");
+  });
+
+  pdfPreviewController.searchResults = [];
+  pdfPreviewController.activeSearchIndex = -1;
+  updatePdfPreviewToolbarState(activeRoot);
+}
+
+function applyPdfPreviewSearch(root = null) {
+  const activeRoot = getPdfPreviewRenderRoot(root);
+  if (!activeRoot) return;
+
+  clearPdfPreviewSearchHighlights(activeRoot);
+  const query = String(docsViewState.pdfPreview?.searchQuery || "").trim();
+  if (!query) return;
+
+  const queryLower = query.toLocaleLowerCase();
+  const textItems = Array.from(activeRoot.querySelectorAll(".documents-pdf-viewer__text-item"));
+  const matches = [];
+
+  textItems.forEach((node) => {
+    const originalText = node.getAttribute("data-original-text") || node.textContent || "";
+    const haystack = originalText.toLocaleLowerCase();
+    if (!haystack.includes(queryLower)) return;
+
+    const fragment = document.createDocumentFragment();
+    let cursor = 0;
+    let hitCount = 0;
+    while (cursor < originalText.length) {
+      const nextIndex = haystack.indexOf(queryLower, cursor);
+      if (nextIndex < 0) {
+        fragment.append(document.createTextNode(originalText.slice(cursor)));
+        break;
+      }
+      if (nextIndex > cursor) {
+        fragment.append(document.createTextNode(originalText.slice(cursor, nextIndex)));
+      }
+      const mark = document.createElement("mark");
+      mark.className = "documents-pdf-viewer__search-hit";
+      mark.textContent = originalText.slice(nextIndex, nextIndex + query.length);
+      mark.setAttribute("data-search-hit-index", String(matches.length + hitCount));
+      fragment.append(mark);
+      hitCount += 1;
+      cursor = nextIndex + query.length;
+    }
+
+    node.replaceChildren(fragment);
+    node.querySelectorAll("mark.documents-pdf-viewer__search-hit").forEach((mark) => {
+      matches.push(mark);
+    });
+  });
+
+  pdfPreviewController.searchResults = matches;
+  pdfPreviewController.activeSearchIndex = matches.length ? 0 : -1;
+  focusPdfPreviewSearchResult(activeRoot, 0);
+  updatePdfPreviewToolbarState(activeRoot);
+}
+
+function focusPdfPreviewSearchResult(root = null, requestedIndex = 0) {
+  const activeRoot = getPdfPreviewRenderRoot(root);
+  if (!activeRoot) return;
+
+  const results = pdfPreviewController.searchResults || [];
+  if (!results.length) {
+    pdfPreviewController.activeSearchIndex = -1;
+    updatePdfPreviewToolbarState(activeRoot);
+    return;
+  }
+
+  const nextIndex = ((requestedIndex % results.length) + results.length) % results.length;
+  pdfPreviewController.activeSearchIndex = nextIndex;
+
+  activeRoot.querySelectorAll(".documents-pdf-viewer__text-item.is-search-active").forEach((node) => {
+    node.classList.remove("is-search-active");
+  });
+
+  results.forEach((node, index) => {
+    node.classList.toggle("is-active", index == nextIndex);
+  });
+
+  const activeResult = results[nextIndex];
+  activeResult?.closest?.(".documents-pdf-viewer__text-item")?.classList?.add("is-search-active");
+  activeResult?.scrollIntoView?.({ block: "center", inline: "nearest", behavior: "smooth" });
+  updatePdfPreviewToolbarState(activeRoot);
+}
+
+function movePdfPreviewSearchSelection(root = null, step = 1) {
+  const activeRoot = getPdfPreviewRenderRoot(root);
+  if (!activeRoot || !pdfPreviewController.searchResults.length) {
+    updatePdfPreviewToolbarState(activeRoot);
+    return;
+  }
+  const currentIndex = pdfPreviewController.activeSearchIndex >= 0 ? pdfPreviewController.activeSearchIndex : 0;
+  focusPdfPreviewSearchResult(activeRoot, currentIndex + step);
+}
 
 function schedulePdfPreviewRender(root = null) {
   const renderRoot = getPdfPreviewRenderRoot(root);
@@ -340,6 +511,45 @@ function bindPdfPreviewControls(root) {
     }
     if (action === "zoom-in") {
       updatePdfPreviewZoom(root, 0.25);
+      return;
+    }
+    if (action === "toggle-dark-mode") {
+      docsViewState.pdfPreview.darkMode = !Boolean(docsViewState.pdfPreview?.darkMode);
+      updatePdfPreviewToolbarState(root);
+      schedulePdfPreviewRender(root);
+      return;
+    }
+    if (action === "copy-selection") {
+      const selectedText = String(window.getSelection?.()?.toString?.() || "").trim();
+      if (selectedText && navigator?.clipboard?.writeText) {
+        navigator.clipboard.writeText(selectedText).catch(() => {});
+      }
+      return;
+    }
+    if (action === "search-prev") {
+      movePdfPreviewSearchSelection(root, -1);
+      return;
+    }
+    if (action === "search-next") {
+      movePdfPreviewSearchSelection(root, 1);
+    }
+  });
+
+  root.addEventListener("input", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement)) return;
+    if (target.id !== "documentsPdfSearchInput") return;
+    docsViewState.pdfPreview.searchQuery = target.value || "";
+    applyPdfPreviewSearch(root);
+  });
+
+  root.addEventListener("keydown", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement)) return;
+    if (target.id !== "documentsPdfSearchInput") return;
+    if (event.key === "Enter") {
+      event.preventDefault();
+      movePdfPreviewSearchSelection(root, event.shiftKey ? -1 : 1);
     }
   });
 
@@ -358,8 +568,12 @@ function resetPdfPreviewState() {
     bytes: null,
     pageCount: 0,
     zoomLevel: 1,
-    rotation: 0
+    rotation: 0,
+    searchQuery: "",
+    darkMode: false
   };
+  pdfPreviewController.searchResults = [];
+  pdfPreviewController.activeSearchIndex = -1;
 }
 
 async function createSupabaseSignedStorageUrl(documentItem = null, expiresInSeconds = 3600) {
@@ -616,13 +830,48 @@ async function renderPdfPreviewPages(root) {
         transform
       }).promise;
 
+      if (docsViewState.pdfPreview?.darkMode) {
+        applyPdfPreviewDarkModeToCanvas(canvas);
+      }
+
+      const textLayer = document.createElement("div");
+      textLayer.className = "documents-pdf-viewer__text-layer";
+      textLayer.style.width = `${Math.floor(viewport.width)}px`;
+      textLayer.style.height = `${Math.floor(viewport.height)}px`;
+
+      const textContent = await page.getTextContent();
+      const textItems = Array.isArray(textContent?.items) ? textContent.items : [];
+      textItems.forEach((item) => {
+        if (!item?.str) return;
+        const textNode = document.createElement("span");
+        textNode.className = "documents-pdf-viewer__text-item";
+        textNode.setAttribute("data-original-text", item.str);
+        textNode.textContent = item.str;
+        const tx = pdfjsLib.Util.transform(viewport.transform, item.transform);
+        const angle = Math.atan2(tx[1], tx[0]);
+        const fontHeight = Math.hypot(tx[2], tx[3]);
+        const fontWidth = Math.hypot(tx[0], tx[1]);
+        const left = tx[4];
+        const top = tx[5] - fontHeight;
+        const scaleX = item.width > 0 ? Math.max((fontWidth * item.width) / Math.max(textNode.textContent.length, 1), 1) : fontWidth;
+        textNode.style.left = `${left}px`;
+        textNode.style.top = `${top}px`;
+        textNode.style.fontSize = `${fontHeight}px`;
+        textNode.style.transform = `rotate(${angle}rad) scaleX(1)`;
+        textNode.style.transformOrigin = "0% 0%";
+        textLayer.appendChild(textNode);
+      });
+
       pageNode.appendChild(canvas);
+      pageNode.appendChild(textLayer);
       container.appendChild(pageNode);
     }
 
     if (renderToken !== pdfPreviewRenderToken || docsViewState.mode !== "pdf-preview") return;
     if (loadingNode) loadingNode.hidden = true;
     container.setAttribute("aria-busy", "false");
+    applyPdfPreviewSearch(activeRoot);
+    updatePdfPreviewToolbarState(activeRoot);
     logPdfPreviewDebug("render completed", {
       renderToken,
       pageCount: docsViewState.pdfPreview.pageCount,
@@ -678,7 +927,9 @@ async function ensurePdfPreviewObjectUrl(documentItem = null) {
       bytes: null,
       pageCount: 0,
       zoomLevel: 1,
-      rotation: 0
+      rotation: 0,
+    searchQuery: docsViewState.pdfPreview?.searchQuery || "",
+    darkMode: docsViewState.pdfPreview?.darkMode || false
     };
     return localPreviewUrl;
   }
@@ -693,7 +944,9 @@ async function ensurePdfPreviewObjectUrl(documentItem = null) {
     bytes: null,
     pageCount: 0,
     zoomLevel: 1,
-    rotation: 0
+    rotation: 0,
+    searchQuery: docsViewState.pdfPreview?.searchQuery || "",
+    darkMode: docsViewState.pdfPreview?.darkMode || false
   };
 
   const signedUrl = await createSupabaseSignedStorageUrl(documentItem);
@@ -713,7 +966,9 @@ async function ensurePdfPreviewObjectUrl(documentItem = null) {
     bytes: previewBytes instanceof Uint8Array ? previewBytes.slice() : null,
     pageCount: 0,
     zoomLevel: 1,
-    rotation: 0
+    rotation: 0,
+    searchQuery: docsViewState.pdfPreview?.searchQuery || "",
+    darkMode: docsViewState.pdfPreview?.darkMode || false
   };
 
   return objectUrl || signedUrl;
@@ -1133,6 +1388,7 @@ function renderPdfPreviewView() {
                     >
                       ${getPdfZoomOutIconSvg()}
                     </button>
+                    <span class="documents-pdf-viewer__zoom-value" id="documentsPdfZoomValue">${formatPdfPreviewZoomPercent(docsViewState.pdfPreview?.zoomLevel || 1)}</span>
                     <button
                       type="button"
                       class="gh-btn documents-report-table__icon-btn"
@@ -1143,6 +1399,47 @@ function renderPdfPreviewView() {
                     >
                       ${getPdfZoomInIconSvg()}
                     </button>
+                    <button
+                      type="button"
+                      class="gh-btn documents-report-table__text-btn"
+                      data-pdf-preview-action="copy-selection"
+                    >
+                      Copier la sélection
+                    </button>
+                    <button
+                      type="button"
+                      class="gh-btn documents-report-table__text-btn"
+                      data-pdf-preview-action="toggle-dark-mode"
+                      aria-pressed="${docsViewState.pdfPreview?.darkMode ? "true" : "false"}"
+                    >
+                      ${docsViewState.pdfPreview?.darkMode ? "Mode clair" : "Mode sombre"}
+                    </button>
+                    <div class="documents-pdf-viewer__search-toolbar">
+                      <input
+                        type="search"
+                        class="gh-input documents-pdf-viewer__search-input"
+                        id="documentsPdfSearchInput"
+                        value="${escapeHtmlAttribute(docsViewState.pdfPreview?.searchQuery || "")}"
+                        placeholder="Rechercher dans le PDF"
+                        autocomplete="off"
+                        spellcheck="false"
+                      />
+                      <span class="documents-pdf-viewer__search-results" id="documentsPdfSearchResults"></span>
+                      <button
+                        type="button"
+                        class="gh-btn documents-report-table__text-btn"
+                        data-pdf-preview-action="search-prev"
+                      >
+                        Préc.
+                      </button>
+                      <button
+                        type="button"
+                        class="gh-btn documents-report-table__text-btn"
+                        data-pdf-preview-action="search-next"
+                      >
+                        Suiv.
+                      </button>
+                    </div>
                   </div>
                   <div class="documents-report-table__actions-group documents-report-table__actions-group--end">
                     ${openInBrowserUrl
@@ -1182,7 +1479,7 @@ function renderPdfPreviewView() {
                     `
                     : previewUrl && hasPdfBytes
                       ? `
-                        <div class="documents-pdf-viewer__canvas-shell">
+                        <div class="documents-pdf-viewer__canvas-shell${docsViewState.pdfPreview?.darkMode ? " is-dark-mode" : ""}">
                           <div class="documents-pdf-viewer__fallback documents-pdf-viewer__fallback--empty" id="documentsPdfCanvasLoading">
                             <p>Préparation de la prévisualisation du PDF…</p>
                           </div>
@@ -1429,7 +1726,9 @@ async function openPdfPreview(root, documentId) {
     bytes: null,
     pageCount: 0,
     zoomLevel: 1,
-    rotation: 0
+    rotation: 0,
+    searchQuery: docsViewState.pdfPreview?.searchQuery || "",
+    darkMode: docsViewState.pdfPreview?.darkMode || false
   };
   renderProjectDocumentsContent(root);
 
@@ -1446,7 +1745,9 @@ async function openPdfPreview(root, documentId) {
       bytes: null,
       pageCount: 0,
       zoomLevel: 1,
-      rotation: 0
+      rotation: 0,
+    searchQuery: docsViewState.pdfPreview?.searchQuery || "",
+    darkMode: docsViewState.pdfPreview?.darkMode || false
     };
   }
 
@@ -1619,6 +1920,7 @@ function bindDocumentsView(root) {
 
   if (docsViewState.mode === "pdf-preview") {
     bindPdfPreviewControls(root);
+    updatePdfPreviewToolbarState(root);
   }
 
   if (docsViewState.mode === "pdf-preview" && docsViewState.pdfPreview?.bytes instanceof Uint8Array) {
