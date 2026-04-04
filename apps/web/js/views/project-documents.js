@@ -106,6 +106,10 @@ function getRemoveIconSvg() {
   return svgIcon("x");
 }
 
+function getDownloadIconSvg() {
+  return svgIcon("download");
+}
+
 function getDocumentsTableGridTemplate() {
   return "minmax(280px, 1.2fr) minmax(220px, 1fr) 180px minmax(260px, 1.1fr)";
 }
@@ -324,7 +328,7 @@ async function renderPdfPreviewPages(root) {
     }
 
     docsViewState.pdfPreview.pageCount = Number(pdfDocument.numPages || 0);
-    const availableWidth = Math.max(320, Math.min(container.clientWidth || 960, 1100) - 32);
+    const availableWidth = Math.max(320, (container.clientWidth || 960) - 24);
 
     for (let pageNumber = 1; pageNumber <= pdfDocument.numPages; pageNumber += 1) {
       if (renderToken !== pdfPreviewRenderToken || docsViewState.mode !== "pdf-preview") break;
@@ -761,15 +765,10 @@ function renderPdfPreviewView() {
   }
 
   const breadcrumb = `${projectName} / Documents / ${documentItem.name}`;
-  const metaLine = [
-    documentItem.phaseCode ? `${documentItem.phaseCode}${documentItem.phaseLabel ? ` - ${documentItem.phaseLabel}` : ""}` : "",
-    documentItem.updatedAt || ""
-  ].filter(Boolean).join(" · ");
   const previewUrl = String(docsViewState.pdfPreview?.objectUrl || "").trim()
     || String(docsViewState.pdfPreview?.signedUrl || "").trim()
     || getProjectDocumentPreviewUrl(documentItem);
   const openInBrowserUrl = String(docsViewState.pdfPreview?.signedUrl || "").trim() || previewUrl;
-  const isLocalPreview = !String(documentItem.storageBucket || "").trim() && !!String(previewUrl || "").trim();
   const isLoadingPreview = Boolean(docsViewState.pdfPreview?.isLoading);
   const previewErrorMessage = String(docsViewState.pdfPreview?.errorMessage || "").trim();
   const hasPdfBytes = docsViewState.pdfPreview?.bytes instanceof Uint8Array && docsViewState.pdfPreview.bytes.byteLength > 0;
@@ -777,34 +776,42 @@ function renderPdfPreviewView() {
   return `
     <section class="project-simple-page project-simple-page--documents">
       <div class="project-simple-scroll project-simple-scroll--documents" id="projectDocumentsScroll">
-        <div class="documents-shell documents-shell--report" id="projectDocumentScroll">
+        <div class="documents-shell documents-shell--report documents-shell--pdf-preview" id="projectDocumentScroll">
           ${renderDocumentsActivityBanner()}
 
           <div class="documents-report">
             <div class="documents-report__path">${escapeHtml(breadcrumb)}</div>
 
             <section class="documents-report-table documents-report-table--pdf">
-              <header class="documents-report-table__header">
-                <div class="documents-report-table__author">${escapeHtml(documentItem.name || "Document")}</div>
-                <div class="documents-report-table__actions">
+              <header class="documents-report-table__header documents-report-table__header--pdf-preview">
+                <div class="documents-report-table__actions documents-report-table__actions--pdf-preview">
                   ${openInBrowserUrl
-                    ? `<a class="gh-btn" href="${escapeHtml(openInBrowserUrl)}" target="_blank" rel="noopener noreferrer">Ouvrir dans un onglet</a>`
+                    ? `
+                      <a
+                        class="gh-btn documents-report-table__icon-btn"
+                        href="${escapeHtml(openInBrowserUrl)}"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label="Télécharger le PDF"
+                        title="Télécharger le PDF"
+                      >
+                        ${getDownloadIconSvg()}
+                      </a>
+                    `
                     : ""}
-                  <button type="button" class="gh-btn" id="documentsPdfBackBtn">Annuler</button>
+                  <button
+                    type="button"
+                    class="gh-btn documents-report-table__icon-btn"
+                    id="documentsPdfBackBtn"
+                    aria-label="Fermer la prévisualisation"
+                    title="Fermer la prévisualisation"
+                  >
+                    ${getRemoveIconSvg()}
+                  </button>
                 </div>
               </header>
 
               <div class="documents-report-table__body documents-report-table__body--pdf">
-                <div class="documents-pdf-viewer__meta">
-                  <div class="documents-pdf-viewer__title-wrap">
-                    <div class="documents-pdf-viewer__title">${escapeHtml(documentItem.name || "Document")}</div>
-                    <div class="documents-pdf-viewer__subtitle">${escapeHtml(metaLine || "Document PDF")}</div>
-                  </div>
-                  ${isLocalPreview
-                    ? `<div class="documents-pdf-viewer__hint">Prévisualisation locale temporaire en mémoire avant branchement Supabase.</div>`
-                    : ""}
-                </div>
-
                 <section class="documents-pdf-viewer">
                   ${isLoadingPreview
                     ? `
