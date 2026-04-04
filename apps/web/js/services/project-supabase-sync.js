@@ -517,9 +517,7 @@ function mapDocumentRowToViewModel(row = {}) {
     fileName: displayName,
     kind: "file",
     mimeType,
-    previewUrl: mimeType === "application/pdf"
-      ? buildStoragePublicUrl(row.storage_bucket, row.storage_path)
-      : "",
+    previewUrl: "",
     localPreviewUrl: "",
     localFile: null,
     extension: displayName.includes(".") ? displayName.split(".").pop().toLowerCase() : "",
