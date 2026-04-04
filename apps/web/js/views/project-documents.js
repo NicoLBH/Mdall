@@ -194,6 +194,64 @@ async function createSupabaseSignedStorageUrl(documentItem = null, expiresInSeco
   return `${SUPABASE_URL}/storage/v1/${signedPath.replace(/^\/+/, '')}`;
 }
 
+function buildSupabaseStorageObjectUrl(documentItem = null) {
+  const storageBucket = String(documentItem?.storageBucket || "").trim();
+  const storagePath = String(documentItem?.storagePath || "").trim();
+  if (!storageBucket || !storagePath) return "";
+
+  const encodedBucket = encodeURIComponent(storageBucket);
+  const encodedPath = storagePath.split("/").map(encodeURIComponent).join("/");
+  return `${SUPABASE_URL}/storage/v1/object/authenticated/${encodedBucket}/${encodedPath}`;
+}
+
+async function fetchPdfBlobUrl(documentItem = null, signedUrl = "") {
+  const objectUrl = buildSupabaseStorageObjectUrl(documentItem);
+  const fetchTargets = [
+    objectUrl
+      ? {
+          url: objectUrl,
+          headers: {
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+          }
+        }
+      : null,
+    signedUrl
+      ? {
+          url: signedUrl,
+          headers: {}
+        }
+      : null
+  ].filter(Boolean);
+
+  let lastError = null;
+
+  for (const target of fetchTargets) {
+    try {
+      const response = await fetch(target.url, {
+        method: "GET",
+        headers: target.headers,
+        cache: "no-store"
+      });
+      if (!response.ok) {
+        throw new Error(`pdf fetch failed (${response.status})`);
+      }
+
+      const pdfBlob = await response.blob();
+      if (!(pdfBlob instanceof Blob) || pdfBlob.size <= 0) {
+        throw new Error("PDF vide ou illisible.");
+      }
+
+      revokePdfPreviewObjectUrl();
+      return URL.createObjectURL(pdfBlob);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error("Impossible de charger le PDF pour la prévisualisation.");
+}
+
 async function ensurePdfPreviewObjectUrl(documentItem = null) {
   if (!documentItem || !isPdfDocument(documentItem)) {
     resetPdfPreviewState();
@@ -228,16 +286,17 @@ async function ensurePdfPreviewObjectUrl(documentItem = null) {
   };
 
   const signedUrl = await createSupabaseSignedStorageUrl(documentItem);
+  const objectUrl = await fetchPdfBlobUrl(documentItem, signedUrl);
 
   docsViewState.pdfPreview = {
-    objectUrl: "",
+    objectUrl,
     signedUrl,
     sourceDocumentId: String(documentItem.id || "").trim(),
     isLoading: false,
-    errorMessage: signedUrl ? "" : "Impossible de générer une URL signée pour ce PDF."
+    errorMessage: objectUrl ? "" : "Impossible de charger ce PDF pour cette session."
   };
 
-  return signedUrl;
+  return objectUrl || signedUrl;
 }
 
 function setDocumentsActivity({ tone = "info", title = "", message = "" } = {}) {
