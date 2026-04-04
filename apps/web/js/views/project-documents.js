@@ -34,6 +34,14 @@ const PDFJS_WORKER_MODULE_URL = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS
 let pdfJsLibPromise = null;
 let pdfPreviewRenderToken = 0;
 
+const pdfPreviewController = {
+  root: null,
+  isBound: false,
+  renderPromise: Promise.resolve(),
+  pdfDocument: null,
+  documentCacheKey: ""
+};
+
 const docsViewState = {
   mode: "list", // "list" | "upload" | "report-preview" | "pdf-preview"
   file: null,
@@ -183,7 +191,73 @@ function revokePdfPreviewObjectUrl() {
   docsViewState.pdfPreview.objectUrl = "";
 }
 
+function cleanupPdfPreviewController() {
+  pdfPreviewController.root = null;
+  pdfPreviewController.isBound = false;
+  pdfPreviewController.documentCacheKey = "";
+  if (pdfPreviewController.pdfDocument) {
+    pdfPreviewController.pdfDocument.destroy().catch(() => {});
+    pdfPreviewController.pdfDocument = null;
+  }
+}
+
+function getPdfPreviewRenderRoot(root = null) {
+  if (root?.isConnected) {
+    pdfPreviewController.root = root;
+    return root;
+  }
+  return pdfPreviewController.root?.isConnected ? pdfPreviewController.root : null;
+}
+
+function schedulePdfPreviewRender(root = null) {
+  const renderRoot = getPdfPreviewRenderRoot(root);
+  if (!renderRoot || docsViewState.mode !== "pdf-preview") return;
+
+  pdfPreviewController.renderPromise = pdfPreviewController.renderPromise
+    .catch(() => {})
+    .then(async () => {
+      const activeRoot = getPdfPreviewRenderRoot(renderRoot);
+      if (!activeRoot || docsViewState.mode !== "pdf-preview") return;
+      await renderPdfPreviewPages(activeRoot);
+    });
+}
+
+function bindPdfPreviewControls(root) {
+  if (!root || pdfPreviewController.root === root && pdfPreviewController.isBound) return;
+
+  pdfPreviewController.root = root;
+  if (pdfPreviewController.isBound) return;
+
+  root.addEventListener("click", (event) => {
+    const actionButton = event.target?.closest?.("[data-pdf-preview-action]");
+    if (!actionButton || !root.contains(actionButton)) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const action = String(actionButton.getAttribute("data-pdf-preview-action") || "").trim();
+    if (action === "rotate-ccw") {
+      updatePdfPreviewRotation(root, -90);
+      return;
+    }
+    if (action === "rotate-cw") {
+      updatePdfPreviewRotation(root, 90);
+      return;
+    }
+    if (action === "zoom-out") {
+      updatePdfPreviewZoom(root, -0.25);
+      return;
+    }
+    if (action === "zoom-in") {
+      updatePdfPreviewZoom(root, 0.25);
+    }
+  });
+
+  pdfPreviewController.isBound = true;
+}
+
 function resetPdfPreviewState() {
+  cleanupPdfPreviewController();
   revokePdfPreviewObjectUrl();
   docsViewState.pdfPreview = {
     objectUrl: "",
@@ -333,15 +407,16 @@ async function loadPdfJsLib() {
 }
 
 async function renderPdfPreviewPages(root) {
-  const container = root?.querySelector?.("#documentsPdfCanvasHost");
-  const loadingNode = root?.querySelector?.("#documentsPdfCanvasLoading");
+  const activeRoot = getPdfPreviewRenderRoot(root);
+  const container = activeRoot?.querySelector?.("#documentsPdfCanvasHost");
+  const loadingNode = activeRoot?.querySelector?.("#documentsPdfCanvasLoading");
   if (!container) return;
 
   const bytes = docsViewState.pdfPreview?.bytes;
   if (!(bytes instanceof Uint8Array) || bytes.byteLength <= 0) return;
 
   const renderToken = ++pdfPreviewRenderToken;
-  container.innerHTML = "";
+  container.replaceChildren();
   container.setAttribute("aria-busy", "true");
   if (loadingNode) loadingNode.hidden = false;
 
@@ -349,35 +424,43 @@ async function renderPdfPreviewPages(root) {
     const pdfjsLib = await loadPdfJsLib();
     if (renderToken !== pdfPreviewRenderToken || docsViewState.mode !== "pdf-preview") return;
 
-    const loadingTask = pdfjsLib.getDocument({
-      data: bytes,
-      disableWorker: true,
-      useSystemFonts: true
-    });
-    const pdfDocument = await loadingTask.promise;
+    const cacheKey = `${docsViewState.pdfPreview?.sourceDocumentId || ""}:${bytes.byteLength}`;
+    let pdfDocument = pdfPreviewController.pdfDocument;
 
-    if (renderToken !== pdfPreviewRenderToken || docsViewState.mode !== "pdf-preview") {
-      await pdfDocument.destroy().catch(() => {});
-      return;
+    if (!pdfDocument || pdfPreviewController.documentCacheKey !== cacheKey) {
+      if (pdfDocument) {
+        await pdfDocument.destroy().catch(() => {});
+      }
+      const loadingTask = pdfjsLib.getDocument({
+        data: bytes,
+        disableWorker: true,
+        useSystemFonts: true
+      });
+      pdfDocument = await loadingTask.promise;
+      pdfPreviewController.pdfDocument = pdfDocument;
+      pdfPreviewController.documentCacheKey = cacheKey;
     }
 
+    if (renderToken !== pdfPreviewRenderToken || docsViewState.mode !== "pdf-preview") return;
+
     docsViewState.pdfPreview.pageCount = Number(pdfDocument.numPages || 0);
-    const availableWidth = Math.max(320, (container.clientWidth || 960) - 24);
+    const zoomLevel = Math.min(3, Math.max(0.5, Number(docsViewState.pdfPreview?.zoomLevel || 1)));
+    const rotation = Number(docsViewState.pdfPreview?.rotation || 0);
+    const outputScale = window.devicePixelRatio && window.devicePixelRatio > 1 ? window.devicePixelRatio : 1;
 
     for (let pageNumber = 1; pageNumber <= pdfDocument.numPages; pageNumber += 1) {
       if (renderToken !== pdfPreviewRenderToken || docsViewState.mode !== "pdf-preview") break;
 
       const page = await pdfDocument.getPage(pageNumber);
-      const baseViewport = page.getViewport({ scale: 1 });
-      const fitScale = availableWidth / Math.max(baseViewport.width, 1);
-      const zoomLevel = Number(docsViewState.pdfPreview?.zoomLevel || 1);
-      const rotation = Number(docsViewState.pdfPreview?.rotation || 0);
-      const scale = fitScale * Math.min(3, Math.max(0.5, zoomLevel));
-      const viewport = page.getViewport({ scale, rotation });
+      const fitViewport = page.getViewport({ scale: 1, rotation });
+      const availableWidth = Math.max(320, (container.clientWidth || container.parentElement?.clientWidth || 960) - 24);
+      const fitScale = availableWidth / Math.max(fitViewport.width, 1);
+      const viewport = page.getViewport({ scale: fitScale * zoomLevel, rotation });
 
       const pageNode = document.createElement("div");
       pageNode.className = "documents-pdf-viewer__page";
       pageNode.style.width = `${Math.ceil(viewport.width)}px`;
+      pageNode.setAttribute("data-page-number", String(pageNumber));
 
       const canvas = document.createElement("canvas");
       canvas.className = "documents-pdf-viewer__canvas";
@@ -386,9 +469,8 @@ async function renderPdfPreviewPages(root) {
         throw new Error("Impossible d'initialiser le rendu PDF dans ce navigateur.");
       }
 
-      const outputScale = window.devicePixelRatio && window.devicePixelRatio > 1 ? window.devicePixelRatio : 1;
-      canvas.width = Math.floor(viewport.width * outputScale);
-      canvas.height = Math.floor(viewport.height * outputScale);
+      canvas.width = Math.max(1, Math.floor(viewport.width * outputScale));
+      canvas.height = Math.max(1, Math.floor(viewport.height * outputScale));
       canvas.style.width = `${Math.floor(viewport.width)}px`;
       canvas.style.height = `${Math.floor(viewport.height)}px`;
 
@@ -403,7 +485,6 @@ async function renderPdfPreviewPages(root) {
       container.appendChild(pageNode);
     }
 
-    await pdfDocument.destroy().catch(() => {});
     if (renderToken !== pdfPreviewRenderToken || docsViewState.mode !== "pdf-preview") return;
     if (loadingNode) loadingNode.hidden = true;
     container.setAttribute("aria-busy", "false");
@@ -414,9 +495,10 @@ async function renderPdfPreviewPages(root) {
       ? error.message
       : "Impossible de générer la prévisualisation PDF dans le navigateur.";
     docsViewState.pdfPreview.bytes = null;
+    cleanupPdfPreviewController();
     if (loadingNode) loadingNode.hidden = true;
     container.setAttribute("aria-busy", "false");
-    renderProjectDocumentsContent(root);
+    renderProjectDocumentsContent(activeRoot || root);
   }
 }
 
@@ -487,13 +569,7 @@ function updatePdfPreviewZoom(root, direction = 0) {
   const nextZoom = Math.min(3, Math.max(0.5, Number((currentZoom + direction).toFixed(2))));
   if (Math.abs(nextZoom - currentZoom) < 0.001) return;
   docsViewState.pdfPreview.zoomLevel = nextZoom;
-  if (root?.isConnected) {
-    queueMicrotask(() => {
-      if (root?.isConnected && docsViewState.mode === "pdf-preview") {
-        renderPdfPreviewPages(root);
-      }
-    });
-  }
+  schedulePdfPreviewRender(root);
 }
 
 function updatePdfPreviewRotation(root, direction = 0) {
@@ -503,13 +579,7 @@ function updatePdfPreviewRotation(root, direction = 0) {
   const nextRotation = (((currentRotation + normalizedStep) % 360) + 360) % 360;
   if (nextRotation === currentRotation) return;
   docsViewState.pdfPreview.rotation = nextRotation;
-  if (root?.isConnected) {
-    queueMicrotask(() => {
-      if (root?.isConnected && docsViewState.mode === "pdf-preview") {
-        renderPdfPreviewPages(root);
-      }
-    });
-  }
+  schedulePdfPreviewRender(root);
 }
 
 function setDocumentsActivity({ tone = "info", title = "", message = "" } = {}) {
@@ -1375,36 +1445,12 @@ function bindDocumentsView(root) {
     });
   }
 
-  const pdfPreviewActionButtons = root?.querySelectorAll?.("[data-pdf-preview-action]") || [];
-  pdfPreviewActionButtons.forEach((button) => {
-    button.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      const action = String(button.getAttribute("data-pdf-preview-action") || "").trim();
-      if (action === "rotate-ccw") {
-        updatePdfPreviewRotation(root, -90);
-        return;
-      }
-      if (action === "rotate-cw") {
-        updatePdfPreviewRotation(root, 90);
-        return;
-      }
-      if (action === "zoom-out") {
-        updatePdfPreviewZoom(root, -0.25);
-        return;
-      }
-      if (action === "zoom-in") {
-        updatePdfPreviewZoom(root, 0.25);
-      }
-    });
-  });
+  if (docsViewState.mode === "pdf-preview") {
+    bindPdfPreviewControls(root);
+  }
 
   if (docsViewState.mode === "pdf-preview" && docsViewState.pdfPreview?.bytes instanceof Uint8Array) {
-    queueMicrotask(() => {
-      if (root?.isConnected && docsViewState.mode === "pdf-preview") {
-        renderPdfPreviewPages(root);
-      }
-    });
+    schedulePdfPreviewRender(root);
   }
 
   document.querySelectorAll(".js-document-title-trigger[data-document-id]").forEach((trigger) => {
