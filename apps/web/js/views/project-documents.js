@@ -39,7 +39,9 @@ const pdfPreviewController = {
   isBound: false,
   renderPromise: Promise.resolve(),
   pdfDocument: null,
-  documentCacheKey: ""
+  documentCacheKey: "",
+  rawBytes: null,
+  sourceDocumentId: ""
 };
 
 const PDF_PREVIEW_DEBUG = true;
@@ -206,6 +208,8 @@ function cleanupPdfPreviewController() {
   pdfPreviewController.root = null;
   pdfPreviewController.isBound = false;
   pdfPreviewController.documentCacheKey = "";
+  pdfPreviewController.rawBytes = null;
+  pdfPreviewController.sourceDocumentId = "";
   if (pdfPreviewController.pdfDocument) {
     pdfPreviewController.pdfDocument.destroy().catch(() => {});
     pdfPreviewController.pdfDocument = null;
@@ -218,6 +222,45 @@ function getPdfPreviewRenderRoot(root = null) {
     return root;
   }
   return pdfPreviewController.root?.isConnected ? pdfPreviewController.root : null;
+}
+
+function setPdfPreviewRawBytes(sourceDocumentId = "", bytes = null) {
+  const normalizedSourceDocumentId = String(sourceDocumentId || "").trim();
+  if (bytes instanceof Uint8Array && bytes.byteLength > 0) {
+    pdfPreviewController.rawBytes = bytes.slice();
+    pdfPreviewController.sourceDocumentId = normalizedSourceDocumentId;
+    return pdfPreviewController.rawBytes;
+  }
+  pdfPreviewController.rawBytes = null;
+  pdfPreviewController.sourceDocumentId = normalizedSourceDocumentId;
+  return null;
+}
+
+function getPdfPreviewBytesSnapshot() {
+  const sourceDocumentId = String(docsViewState.pdfPreview?.sourceDocumentId || "").trim();
+  const stateBytes = docsViewState.pdfPreview?.bytes;
+  if (stateBytes instanceof Uint8Array && stateBytes.byteLength > 0) {
+    if (pdfPreviewController.sourceDocumentId !== sourceDocumentId || !(pdfPreviewController.rawBytes instanceof Uint8Array) || pdfPreviewController.rawBytes.byteLength !== stateBytes.byteLength) {
+      setPdfPreviewRawBytes(sourceDocumentId, stateBytes);
+    }
+    return stateBytes;
+  }
+
+  if (
+    pdfPreviewController.sourceDocumentId === sourceDocumentId &&
+    pdfPreviewController.rawBytes instanceof Uint8Array &&
+    pdfPreviewController.rawBytes.byteLength > 0
+  ) {
+    const restoredBytes = pdfPreviewController.rawBytes.slice();
+    docsViewState.pdfPreview.bytes = restoredBytes;
+    logPdfPreviewDebug("pdf bytes restored from controller cache", {
+      sourceDocumentId,
+      byteLength: restoredBytes.byteLength
+    });
+    return restoredBytes;
+  }
+
+  return null;
 }
 
 function schedulePdfPreviewRender(root = null) {
@@ -470,13 +513,25 @@ async function renderPdfPreviewPages(root) {
     return;
   }
 
-  const bytes = docsViewState.pdfPreview?.bytes;
+  const bytes = getPdfPreviewBytesSnapshot();
+  const cachedPdfDocument = pdfPreviewController.pdfDocument;
+  const cachedSourceDocumentId = String(pdfPreviewController.sourceDocumentId || "").trim();
+  const activeSourceDocumentId = String(docsViewState.pdfPreview?.sourceDocumentId || "").trim();
   if (!(bytes instanceof Uint8Array) || bytes.byteLength <= 0) {
-    logPdfPreviewDebug("render aborted: missing PDF bytes", {
-      hasBytes: bytes instanceof Uint8Array,
-      byteLength: bytes?.byteLength || 0
+    if (!cachedPdfDocument || cachedSourceDocumentId !== activeSourceDocumentId) {
+      logPdfPreviewDebug("render aborted: missing PDF bytes", {
+        hasBytes: bytes instanceof Uint8Array,
+        byteLength: bytes?.byteLength || 0,
+        hasCachedPdfDocument: !!cachedPdfDocument,
+        cachedSourceDocumentId,
+        activeSourceDocumentId
+      });
+      return;
+    }
+    logPdfPreviewDebug("render continues with cached pdf document despite detached bytes", {
+      sourceDocumentId: activeSourceDocumentId,
+      cachedSourceDocumentId
     });
-    return;
   }
 
   const renderToken = ++pdfPreviewRenderToken;
@@ -494,21 +549,25 @@ async function renderPdfPreviewPages(root) {
     const pdfjsLib = await loadPdfJsLib();
     if (renderToken !== pdfPreviewRenderToken || docsViewState.mode !== "pdf-preview") return;
 
-    const cacheKey = `${docsViewState.pdfPreview?.sourceDocumentId || ""}:${bytes.byteLength}`;
+    const cacheKey = `${docsViewState.pdfPreview?.sourceDocumentId || ""}:${bytes?.byteLength || pdfPreviewController.rawBytes?.byteLength || 0}`;
     let pdfDocument = pdfPreviewController.pdfDocument;
 
     if (!pdfDocument || pdfPreviewController.documentCacheKey !== cacheKey) {
+      if (!(bytes instanceof Uint8Array) || bytes.byteLength <= 0) {
+        throw new Error("Impossible de recharger le PDF : les octets de la session ont été perdus.");
+      }
       if (pdfDocument) {
         await pdfDocument.destroy().catch(() => {});
       }
       const loadingTask = pdfjsLib.getDocument({
-        data: bytes,
+        data: bytes.slice(),
         disableWorker: true,
         useSystemFonts: true
       });
       pdfDocument = await loadingTask.promise;
       pdfPreviewController.pdfDocument = pdfDocument;
       pdfPreviewController.documentCacheKey = cacheKey;
+      pdfPreviewController.sourceDocumentId = String(docsViewState.pdfPreview?.sourceDocumentId || "").trim();
     }
 
     if (renderToken !== pdfPreviewRenderToken || docsViewState.mode !== "pdf-preview") return;
@@ -598,11 +657,18 @@ async function ensurePdfPreviewObjectUrl(documentItem = null) {
     (docsViewState.pdfPreview.objectUrl || docsViewState.pdfPreview.signedUrl) &&
     docsViewState.pdfPreview.sourceDocumentId === String(documentItem.id || "").trim()
   ) {
+    const cachedBytes = getPdfPreviewBytesSnapshot();
+    logPdfPreviewDebug("reusing existing pdf preview session", {
+      sourceDocumentId: docsViewState.pdfPreview.sourceDocumentId,
+      hasCachedBytes: cachedBytes instanceof Uint8Array,
+      cachedByteLength: cachedBytes?.byteLength || 0
+    });
     return docsViewState.pdfPreview.objectUrl || docsViewState.pdfPreview.signedUrl;
   }
 
   const localPreviewUrl = getProjectDocumentPreviewUrl(documentItem);
   if (!String(documentItem.storageBucket || "").trim() || !String(documentItem.storagePath || "").trim()) {
+    setPdfPreviewRawBytes(String(documentItem.id || "").trim(), null);
     docsViewState.pdfPreview = {
       objectUrl: localPreviewUrl,
       signedUrl: "",
@@ -617,6 +683,7 @@ async function ensurePdfPreviewObjectUrl(documentItem = null) {
     return localPreviewUrl;
   }
 
+  setPdfPreviewRawBytes(String(documentItem.id || "").trim(), null);
   docsViewState.pdfPreview = {
     objectUrl: "",
     signedUrl: "",
@@ -633,13 +700,17 @@ async function ensurePdfPreviewObjectUrl(documentItem = null) {
   const previewPayload = await fetchPdfPreviewPayload(documentItem, signedUrl);
   const objectUrl = String(previewPayload?.objectUrl || "").trim();
 
+  const normalizedSourceDocumentId = String(documentItem.id || "").trim();
+  const previewBytes = previewPayload?.bytes instanceof Uint8Array ? previewPayload.bytes.slice() : null;
+  setPdfPreviewRawBytes(normalizedSourceDocumentId, previewBytes);
+
   docsViewState.pdfPreview = {
     objectUrl,
     signedUrl,
-    sourceDocumentId: String(documentItem.id || "").trim(),
+    sourceDocumentId: normalizedSourceDocumentId,
     isLoading: false,
     errorMessage: objectUrl ? "" : "Impossible de charger ce PDF pour cette session.",
-    bytes: previewPayload?.bytes instanceof Uint8Array ? previewPayload.bytes : null,
+    bytes: previewBytes instanceof Uint8Array ? previewBytes.slice() : null,
     pageCount: 0,
     zoomLevel: 1,
     rotation: 0
@@ -1365,6 +1436,7 @@ async function openPdfPreview(root, documentId) {
   try {
     await ensurePdfPreviewObjectUrl(documentItem);
   } catch (error) {
+    setPdfPreviewRawBytes(String(documentItem.id || "").trim(), null);
     docsViewState.pdfPreview = {
       objectUrl: "",
       signedUrl: "",
