@@ -29,6 +29,7 @@ const SUPABASE_URL = "https://olgxhfgdzyghlzxmremz.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_08nUL61_ATl-6KpD8dOYPw_RM5lMtEz";
 const PDFJS_CDN_VERSION = "4.4.168";
 const PDFJS_MODULE_URL = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_CDN_VERSION}/build/pdf.min.mjs`;
+const PDFJS_WORKER_MODULE_URL = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_CDN_VERSION}/build/pdf.worker.min.mjs`;
 
 let pdfJsLibPromise = null;
 let pdfPreviewRenderToken = 0;
@@ -277,7 +278,13 @@ async function fetchPdfPreviewPayload(documentItem = null, signedUrl = "") {
 async function loadPdfJsLib() {
   if (!pdfJsLibPromise) {
     pdfJsLibPromise = import(PDFJS_MODULE_URL)
-      .then((module) => module?.default || module)
+      .then((module) => {
+        const pdfjsLib = module?.default || module;
+        if (pdfjsLib?.GlobalWorkerOptions && !pdfjsLib.GlobalWorkerOptions.workerSrc) {
+          pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_MODULE_URL;
+        }
+        return pdfjsLib;
+      })
       .catch((error) => {
         pdfJsLibPromise = null;
         throw error;
