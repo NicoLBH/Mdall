@@ -42,6 +42,17 @@ const pdfPreviewController = {
   documentCacheKey: ""
 };
 
+const PDF_PREVIEW_DEBUG = true;
+
+function logPdfPreviewDebug(message, payload = undefined) {
+  if (!PDF_PREVIEW_DEBUG || typeof console === "undefined") return;
+  if (typeof payload === "undefined") {
+    console.log(`[pdf-preview] ${message}`);
+    return;
+  }
+  console.log(`[pdf-preview] ${message}`, payload);
+}
+
 const docsViewState = {
   mode: "list", // "list" | "upload" | "report-preview" | "pdf-preview"
   file: null,
@@ -211,7 +222,19 @@ function getPdfPreviewRenderRoot(root = null) {
 
 function schedulePdfPreviewRender(root = null) {
   const renderRoot = getPdfPreviewRenderRoot(root);
-  if (!renderRoot || docsViewState.mode !== "pdf-preview") return;
+  if (!renderRoot || docsViewState.mode !== "pdf-preview") {
+    logPdfPreviewDebug("render skipped", {
+      hasRenderRoot: !!renderRoot,
+      mode: docsViewState.mode
+    });
+    return;
+  }
+
+  logPdfPreviewDebug("render scheduled", {
+    zoomLevel: docsViewState.pdfPreview?.zoomLevel,
+    rotation: docsViewState.pdfPreview?.rotation,
+    sourceDocumentId: docsViewState.pdfPreview?.sourceDocumentId
+  });
 
   pdfPreviewController.renderPromise = pdfPreviewController.renderPromise
     .catch(() => {})
@@ -223,10 +246,27 @@ function schedulePdfPreviewRender(root = null) {
 }
 
 function bindPdfPreviewControls(root) {
-  if (!root || pdfPreviewController.root === root && pdfPreviewController.isBound) return;
+  if (!root) {
+    logPdfPreviewDebug("bind skipped: missing root");
+    return;
+  }
+  if (pdfPreviewController.root === root && pdfPreviewController.isBound) {
+    logPdfPreviewDebug("bind skipped: already bound on current root");
+    return;
+  }
 
   pdfPreviewController.root = root;
-  if (pdfPreviewController.isBound) return;
+  if (pdfPreviewController.isBound) {
+    logPdfPreviewDebug("bind skipped: controller already bound on previous root", {
+      sameRoot: pdfPreviewController.root === root
+    });
+    return;
+  }
+
+  logPdfPreviewDebug("binding pdf preview controls", {
+    hasRoot: !!root,
+    mode: docsViewState.mode
+  });
 
   root.addEventListener("click", (event) => {
     const actionButton = event.target?.closest?.("[data-pdf-preview-action]");
@@ -236,6 +276,13 @@ function bindPdfPreviewControls(root) {
     event.stopPropagation();
 
     const action = String(actionButton.getAttribute("data-pdf-preview-action") || "").trim();
+    logPdfPreviewDebug("control click captured", {
+      action,
+      buttonId: actionButton.id || null,
+      className: actionButton.className || "",
+      zoomLevelBefore: docsViewState.pdfPreview?.zoomLevel,
+      rotationBefore: docsViewState.pdfPreview?.rotation
+    });
     if (action === "rotate-ccw") {
       updatePdfPreviewRotation(root, -90);
       return;
@@ -389,12 +436,20 @@ async function fetchPdfPreviewPayload(documentItem = null, signedUrl = "") {
 
 async function loadPdfJsLib() {
   if (!pdfJsLibPromise) {
+    logPdfPreviewDebug("loading pdf.js module", {
+      moduleUrl: PDFJS_MODULE_URL,
+      workerUrl: PDFJS_WORKER_MODULE_URL
+    });
     pdfJsLibPromise = import(PDFJS_MODULE_URL)
       .then((module) => {
         const pdfjsLib = module?.default || module;
         if (pdfjsLib?.GlobalWorkerOptions && !pdfjsLib.GlobalWorkerOptions.workerSrc) {
           pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_MODULE_URL;
         }
+        logPdfPreviewDebug("pdf.js module loaded", {
+          version: pdfjsLib?.version || null,
+          workerSrc: pdfjsLib?.GlobalWorkerOptions?.workerSrc || null
+        });
         return pdfjsLib;
       })
       .catch((error) => {
@@ -410,12 +465,27 @@ async function renderPdfPreviewPages(root) {
   const activeRoot = getPdfPreviewRenderRoot(root);
   const container = activeRoot?.querySelector?.("#documentsPdfCanvasHost");
   const loadingNode = activeRoot?.querySelector?.("#documentsPdfCanvasLoading");
-  if (!container) return;
+  if (!container) {
+    logPdfPreviewDebug("render aborted: missing canvas host");
+    return;
+  }
 
   const bytes = docsViewState.pdfPreview?.bytes;
-  if (!(bytes instanceof Uint8Array) || bytes.byteLength <= 0) return;
+  if (!(bytes instanceof Uint8Array) || bytes.byteLength <= 0) {
+    logPdfPreviewDebug("render aborted: missing PDF bytes", {
+      hasBytes: bytes instanceof Uint8Array,
+      byteLength: bytes?.byteLength || 0
+    });
+    return;
+  }
 
   const renderToken = ++pdfPreviewRenderToken;
+  logPdfPreviewDebug("render started", {
+    renderToken,
+    zoomLevel: docsViewState.pdfPreview?.zoomLevel,
+    rotation: docsViewState.pdfPreview?.rotation,
+    sourceDocumentId: docsViewState.pdfPreview?.sourceDocumentId
+  });
   container.replaceChildren();
   container.setAttribute("aria-busy", "true");
   if (loadingNode) loadingNode.hidden = false;
@@ -444,6 +514,12 @@ async function renderPdfPreviewPages(root) {
     if (renderToken !== pdfPreviewRenderToken || docsViewState.mode !== "pdf-preview") return;
 
     docsViewState.pdfPreview.pageCount = Number(pdfDocument.numPages || 0);
+    logPdfPreviewDebug("pdf document ready", {
+      renderToken,
+      pageCount: docsViewState.pdfPreview.pageCount,
+      cacheKey,
+      reusedCachedDocument: pdfPreviewController.documentCacheKey === cacheKey
+    });
     const zoomLevel = Math.min(3, Math.max(0.5, Number(docsViewState.pdfPreview?.zoomLevel || 1)));
     const rotation = Number(docsViewState.pdfPreview?.rotation || 0);
     const outputScale = window.devicePixelRatio && window.devicePixelRatio > 1 ? window.devicePixelRatio : 1;
@@ -488,8 +564,18 @@ async function renderPdfPreviewPages(root) {
     if (renderToken !== pdfPreviewRenderToken || docsViewState.mode !== "pdf-preview") return;
     if (loadingNode) loadingNode.hidden = true;
     container.setAttribute("aria-busy", "false");
+    logPdfPreviewDebug("render completed", {
+      renderToken,
+      pageCount: docsViewState.pdfPreview.pageCount,
+      zoomLevel: docsViewState.pdfPreview?.zoomLevel,
+      rotation: docsViewState.pdfPreview?.rotation
+    });
   } catch (error) {
     console.warn("PDF preview render failed", error);
+    logPdfPreviewDebug("render failed", {
+      renderToken,
+      message: error instanceof Error ? error.message : String(error)
+    });
     if (renderToken !== pdfPreviewRenderToken || docsViewState.mode !== "pdf-preview") return;
     docsViewState.pdfPreview.errorMessage = error instanceof Error
       ? error.message
@@ -564,21 +650,35 @@ async function ensurePdfPreviewObjectUrl(documentItem = null) {
 
 
 function updatePdfPreviewZoom(root, direction = 0) {
-  if (docsViewState.mode !== "pdf-preview") return;
+  if (docsViewState.mode !== "pdf-preview") {
+    logPdfPreviewDebug("zoom ignored: not in pdf-preview mode", { mode: docsViewState.mode, direction });
+    return;
+  }
   const currentZoom = Number(docsViewState.pdfPreview?.zoomLevel || 1);
   const nextZoom = Math.min(3, Math.max(0.5, Number((currentZoom + direction).toFixed(2))));
-  if (Math.abs(nextZoom - currentZoom) < 0.001) return;
+  if (Math.abs(nextZoom - currentZoom) < 0.001) {
+    logPdfPreviewDebug("zoom ignored: unchanged after clamp", { currentZoom, nextZoom, direction });
+    return;
+  }
   docsViewState.pdfPreview.zoomLevel = nextZoom;
+  logPdfPreviewDebug("zoom updated", { currentZoom, nextZoom, direction });
   schedulePdfPreviewRender(root);
 }
 
 function updatePdfPreviewRotation(root, direction = 0) {
-  if (docsViewState.mode !== "pdf-preview") return;
+  if (docsViewState.mode !== "pdf-preview") {
+    logPdfPreviewDebug("rotation ignored: not in pdf-preview mode", { mode: docsViewState.mode, direction });
+    return;
+  }
   const currentRotation = Number(docsViewState.pdfPreview?.rotation || 0);
   const normalizedStep = direction >= 0 ? 90 : -90;
   const nextRotation = (((currentRotation + normalizedStep) % 360) + 360) % 360;
-  if (nextRotation === currentRotation) return;
+  if (nextRotation === currentRotation) {
+    logPdfPreviewDebug("rotation ignored: unchanged", { currentRotation, nextRotation, direction });
+    return;
+  }
   docsViewState.pdfPreview.rotation = nextRotation;
+  logPdfPreviewDebug("rotation updated", { currentRotation, nextRotation, direction });
   schedulePdfPreviewRender(root);
 }
 
