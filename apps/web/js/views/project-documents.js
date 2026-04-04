@@ -57,7 +57,8 @@ const docsViewState = {
     errorMessage: "",
     bytes: null,
     pageCount: 0,
-    zoomLevel: 1
+    zoomLevel: 1,
+    rotation: 0
   }
 };
 
@@ -119,9 +120,25 @@ function getPdfZoomOutIconSvg() {
   return svgIcon("minus");
 }
 
+function getPdfRotateCounterClockwiseIconSvg() {
+  return `
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" focusable="false">
+      <path d="M5.029 2.217a6.5 6.5 0 0 1 9.437 5.11.75.75 0 1 0 1.492-.154 8 8 0 0 0-14.315-4.03L.427 1.927A.25.25 0 0 0 0 2.104V5.75A.25.25 0 0 0 .25 6h3.646a.25.25 0 0 0 .177-.427L2.715 4.215a6.491 6.491 0 0 1 2.314-1.998ZM1.262 8.169a.75.75 0 0 0-1.22.658 8.001 8.001 0 0 0 14.315 4.03l1.216 1.216a.25.25 0 0 0 .427-.177V10.25a.25.25 0 0 0-.25-.25h-3.646a.25.25 0 0 0-.177.427l1.358 1.358a6.501 6.501 0 0 1-11.751-3.11.75.75 0 0 0-.272-.506Z"></path>
+    </svg>
+  `;
+}
+
+function getPdfRotateClockwiseIconSvg() {
+  return `
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" focusable="false">
+      <path d="M10.971 2.217a6.5 6.5 0 0 0-9.437 5.11.75.75 0 1 1-1.492-.154 8 8 0 0 1 14.315-4.03l1.216-1.216A.25.25 0 0 1 16 2.104V5.75a.25.25 0 0 1-.25.25h-3.646a.25.25 0 0 1-.177-.427l1.358-1.358a6.491 6.491 0 0 0-2.314-1.998ZM14.738 8.169a.75.75 0 0 1 1.22.658 8.001 8.001 0 0 1-14.315 4.03L.427 14.073A.25.25 0 0 1 0 13.896V10.25A.25.25 0 0 1 .25 10h3.646a.25.25 0 0 1 .177.427l-1.358 1.358a6.501 6.501 0 0 0 11.751-3.11.75.75 0 0 1 .272-.506Z"></path>
+    </svg>
+  `;
+}
+
 function getProjectViewCompactLabel() {
   const documentItem = docsViewState.mode === "pdf-preview" ? decorateDocumentWithPhase(getSelectedPdfDocument()) : null;
-  const documentName = String(documentItem?.name || "").trim();
+  const documentName = String(documentItem?.name || documentItem?.fileName || documentItem?.title || "").trim();
   return documentName ? `Documents / ${documentName}` : "Documents";
 }
 
@@ -176,7 +193,8 @@ function resetPdfPreviewState() {
     errorMessage: "",
     bytes: null,
     pageCount: 0,
-    zoomLevel: 1
+    zoomLevel: 1,
+    rotation: 0
   };
 }
 
@@ -353,11 +371,13 @@ async function renderPdfPreviewPages(root) {
       const baseViewport = page.getViewport({ scale: 1 });
       const fitScale = availableWidth / Math.max(baseViewport.width, 1);
       const zoomLevel = Number(docsViewState.pdfPreview?.zoomLevel || 1);
+      const rotation = Number(docsViewState.pdfPreview?.rotation || 0);
       const scale = fitScale * Math.min(3, Math.max(0.5, zoomLevel));
-      const viewport = page.getViewport({ scale });
+      const viewport = page.getViewport({ scale, rotation });
 
       const pageNode = document.createElement("div");
       pageNode.className = "documents-pdf-viewer__page";
+      pageNode.style.width = `${Math.ceil(viewport.width)}px`;
 
       const canvas = document.createElement("canvas");
       canvas.className = "documents-pdf-viewer__canvas";
@@ -423,7 +443,8 @@ async function ensurePdfPreviewObjectUrl(documentItem = null) {
       errorMessage: "",
       bytes: null,
       pageCount: 0,
-      zoomLevel: 1
+      zoomLevel: 1,
+      rotation: 0
     };
     return localPreviewUrl;
   }
@@ -436,7 +457,8 @@ async function ensurePdfPreviewObjectUrl(documentItem = null) {
     errorMessage: "",
     bytes: null,
     pageCount: 0,
-    zoomLevel: 1
+    zoomLevel: 1,
+    rotation: 0
   };
 
   const signedUrl = await createSupabaseSignedStorageUrl(documentItem);
@@ -451,7 +473,8 @@ async function ensurePdfPreviewObjectUrl(documentItem = null) {
     errorMessage: objectUrl ? "" : "Impossible de charger ce PDF pour cette session.",
     bytes: previewPayload?.bytes instanceof Uint8Array ? previewPayload.bytes : null,
     pageCount: 0,
-    zoomLevel: 1
+    zoomLevel: 1,
+    rotation: 0
   };
 
   return objectUrl || signedUrl;
@@ -461,9 +484,21 @@ async function ensurePdfPreviewObjectUrl(documentItem = null) {
 function updatePdfPreviewZoom(root, direction = 0) {
   if (docsViewState.mode !== "pdf-preview") return;
   const currentZoom = Number(docsViewState.pdfPreview?.zoomLevel || 1);
-  const nextZoom = Math.min(3, Math.max(0.5, currentZoom + direction));
+  const nextZoom = Math.min(3, Math.max(0.5, Number((currentZoom + direction).toFixed(2))));
   if (Math.abs(nextZoom - currentZoom) < 0.001) return;
   docsViewState.pdfPreview.zoomLevel = nextZoom;
+  if (root?.isConnected) {
+    renderPdfPreviewPages(root);
+  }
+}
+
+function updatePdfPreviewRotation(root, direction = 0) {
+  if (docsViewState.mode !== "pdf-preview") return;
+  const currentRotation = Number(docsViewState.pdfPreview?.rotation || 0);
+  const normalizedStep = direction >= 0 ? 90 : -90;
+  const nextRotation = (((currentRotation + normalizedStep) % 360) + 360) % 360;
+  if (nextRotation === currentRotation) return;
+  docsViewState.pdfPreview.rotation = nextRotation;
   if (root?.isConnected) {
     renderPdfPreviewPages(root);
   }
@@ -822,6 +857,24 @@ function renderPdfPreviewView() {
                     <button
                       type="button"
                       class="gh-btn documents-report-table__icon-btn"
+                      id="documentsPdfRotateCounterClockwiseBtn"
+                      aria-label="Rotation -90°"
+                      title="Rotation -90°"
+                    >
+                      ${getPdfRotateCounterClockwiseIconSvg()}
+                    </button>
+                    <button
+                      type="button"
+                      class="gh-btn documents-report-table__icon-btn"
+                      id="documentsPdfRotateClockwiseBtn"
+                      aria-label="Rotation +90°"
+                      title="Rotation +90°"
+                    >
+                      ${getPdfRotateClockwiseIconSvg()}
+                    </button>
+                    <button
+                      type="button"
+                      class="gh-btn documents-report-table__icon-btn"
                       id="documentsPdfZoomOutBtn"
                       aria-label="Zoom arrière"
                       title="Zoom arrière"
@@ -1122,7 +1175,8 @@ async function openPdfPreview(root, documentId) {
     errorMessage: "",
     bytes: null,
     pageCount: 0,
-    zoomLevel: 1
+    zoomLevel: 1,
+    rotation: 0
   };
   renderProjectDocumentsContent(root);
 
@@ -1137,7 +1191,8 @@ async function openPdfPreview(root, documentId) {
       errorMessage: error instanceof Error ? error.message : "Impossible de charger ce PDF depuis Supabase.",
       bytes: null,
       pageCount: 0,
-      zoomLevel: 1
+      zoomLevel: 1,
+      rotation: 0
     };
   }
 
@@ -1305,6 +1360,20 @@ function bindDocumentsView(root) {
   if (pdfBackBtn) {
     pdfBackBtn.addEventListener("click", () => {
       closePdfPreview(root);
+    });
+  }
+
+  const pdfRotateCounterClockwiseBtn = document.getElementById("documentsPdfRotateCounterClockwiseBtn");
+  if (pdfRotateCounterClockwiseBtn) {
+    pdfRotateCounterClockwiseBtn.addEventListener("click", () => {
+      updatePdfPreviewRotation(root, -90);
+    });
+  }
+
+  const pdfRotateClockwiseBtn = document.getElementById("documentsPdfRotateClockwiseBtn");
+  if (pdfRotateClockwiseBtn) {
+    pdfRotateClockwiseBtn.addEventListener("click", () => {
+      updatePdfPreviewRotation(root, 90);
     });
   }
 
