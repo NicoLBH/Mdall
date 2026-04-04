@@ -152,10 +152,23 @@ function getPdfRotateClockwiseIconSvg() {
   `;
 }
 
-function getProjectViewCompactLabel() {
+function getProjectViewCompactHeaderState() {
   const documentItem = docsViewState.mode === "pdf-preview" ? decorateDocumentWithPhase(getSelectedPdfDocument()) : null;
   const documentName = String(documentItem?.name || documentItem?.fileName || documentItem?.title || "").trim();
-  return documentName ? `Documents / ${documentName}` : "Documents";
+  return {
+    compactLabel: "Documents",
+    compactLabelSuffix: documentName
+  };
+}
+
+function syncDocumentsProjectViewHeader() {
+  const compactHeaderState = getProjectViewCompactHeaderState();
+  setProjectViewHeader({
+    contextLabel: "Documents",
+    compactLabel: compactHeaderState.compactLabel,
+    compactLabelSuffix: compactHeaderState.compactLabelSuffix,
+    variant: "documents"
+  });
 }
 
 function getDocumentsTableGridTemplate() {
@@ -2016,6 +2029,8 @@ function bindDocumentsView(root) {
 }
 
 function renderProjectDocumentsContent(root) {
+  syncDocumentsProjectViewHeader();
+
   root.innerHTML = docsViewState.mode === "upload"
     ? renderUploadView()
     : docsViewState.mode === "report-preview"
@@ -2031,12 +2046,6 @@ export function renderProjectDocuments(root) {
   syncDocumentsSelectedPhase();
 
   root.className = "project-shell__content";
-
-  setProjectViewHeader({
-    contextLabel: "Documents",
-    compactLabel: getProjectViewCompactLabel(),
-    variant: "documents"
-  });
 
   renderProjectDocumentsContent(root);
 
