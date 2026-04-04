@@ -302,6 +302,76 @@ function dispatchProjectIdentityUpdated(detail = {}) {
   }));
 }
 
+
+function mapProjectRowToCatalogItem(row = {}) {
+  return {
+    id: safeString(row.id),
+    name: safeString(row.name) || "Projet sans nom",
+    clientName: "—",
+    city: "—",
+    currentPhase: "—",
+    description: safeString(row.description || ""),
+    createdAt: row.created_at || null,
+    updatedAt: row.updated_at || null
+  };
+}
+
+function haveSameProjectCatalog(a = [], b = []) {
+  if (a.length !== b.length) return false;
+  for (let index = 0; index < a.length; index += 1) {
+    const left = a[index] || {};
+    const right = b[index] || {};
+    if (
+      safeString(left.id) !== safeString(right.id)
+      || safeString(left.name) !== safeString(right.name)
+      || safeString(left.description) !== safeString(right.description)
+      || safeString(left.updatedAt) !== safeString(right.updatedAt)
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+export async function syncProjectsCatalogFromSupabase() {
+  const params = new URLSearchParams();
+  params.set("select", "id,name,description,created_at,updated_at");
+  params.set("archived_at", "is.null");
+  params.set("order", "updated_at.desc.nullslast,created_at.desc");
+
+  const rows = await restFetch("projects", params);
+  const nextProjects = (Array.isArray(rows) ? rows : [])
+    .map(mapProjectRowToCatalogItem)
+    .filter((project) => safeString(project.id));
+
+  const currentProjects = Array.isArray(store.projects) ? store.projects : [];
+  const changed = !haveSameProjectCatalog(currentProjects, nextProjects);
+
+  if (changed) {
+    store.projects = nextProjects;
+
+    const activeProjectId = safeString(store.currentProjectId || store.currentProject?.id || "");
+    const activeProject = nextProjects.find((project) => safeString(project.id) === activeProjectId) || null;
+
+    if (activeProject) {
+      store.currentProject = { ...activeProject };
+      store.projectForm.projectName = activeProject.name;
+    } else if (!nextProjects.length) {
+      store.currentProject = null;
+      if (!activeProjectId) {
+        store.currentProjectId = null;
+      }
+    }
+
+    dispatchProjectIdentityUpdated({
+      section: "projects",
+      projectsCount: nextProjects.length
+    });
+  }
+
+  return Array.isArray(store.projects) ? store.projects : [];
+}
+
 export async function syncKnownProjectNamesFromSupabase() {
   const frontendMap = readFrontendProjectMap();
   const entries = Object.entries(frontendMap).filter(([frontendProjectId, backendProjectId]) => (
