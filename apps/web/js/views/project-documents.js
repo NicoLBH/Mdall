@@ -237,13 +237,23 @@ async function fetchPdfBlobUrl(documentItem = null, signedUrl = "") {
         throw new Error(`pdf fetch failed (${response.status})`);
       }
 
-      const pdfBlob = await response.blob();
-      if (!(pdfBlob instanceof Blob) || pdfBlob.size <= 0) {
+      const pdfBuffer = await response.arrayBuffer();
+      if (!(pdfBuffer instanceof ArrayBuffer) || pdfBuffer.byteLength <= 0) {
         throw new Error("PDF vide ou illisible.");
       }
 
+      const pdfSignature = new TextDecoder("ascii").decode(pdfBuffer.slice(0, 5));
+      if (pdfSignature !== "%PDF-") {
+        throw new Error("Le fichier récupéré n'est pas un PDF valide.");
+      }
+
+      const safeFileName = String(documentItem?.fileName || documentItem?.name || "document.pdf").trim() || "document.pdf";
+      const normalizedPdfBlob = typeof File === "function"
+        ? new File([pdfBuffer], safeFileName, { type: "application/pdf" })
+        : new Blob([pdfBuffer], { type: "application/pdf" });
+
       revokePdfPreviewObjectUrl();
-      return URL.createObjectURL(pdfBlob);
+      return URL.createObjectURL(normalizedPdfBlob);
     } catch (error) {
       lastError = error;
     }
@@ -680,16 +690,11 @@ function renderPdfPreviewView() {
                     `
                     : previewUrl
                       ? `
-                        <object
+                        <iframe
                           class="documents-pdf-viewer__frame"
-                          type="application/pdf"
-                          data="${escapeHtml(previewUrl)}#toolbar=1&navpanes=0"
-                        >
-                          <div class="documents-pdf-viewer__fallback">
-                            <p>La prévisualisation intégrée du PDF n'est pas disponible dans ce navigateur.</p>
-                            <a class="gh-btn gh-btn--primary" href="${escapeHtml(previewUrl)}" target="_blank" rel="noopener noreferrer">Ouvrir le PDF</a>
-                          </div>
-                        </object>
+                          src="${escapeHtml(previewUrl)}#toolbar=1&navpanes=0"
+                          title="Prévisualisation PDF ${escapeHtml(documentItem.name || "Document")}" 
+                        ></iframe>
                       `
                       : `
                         <div class="documents-pdf-viewer__fallback documents-pdf-viewer__fallback--empty">
