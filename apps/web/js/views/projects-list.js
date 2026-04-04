@@ -1,6 +1,6 @@
 import { setCurrentDemoProject } from "../demo-context.js";
 import { store } from "../store.js";
-import { syncKnownProjectNamesFromSupabase } from "../services/project-supabase-sync.js";
+import { syncProjectsCatalogFromSupabase } from "../services/project-supabase-sync.js";
 import {
   renderDataTableShell,
   renderDataTableHead,
@@ -21,7 +21,7 @@ function renderProjectRow(project) {
 }
 
 export function renderProjectsList(root) {
-  syncKnownProjectNamesFromSupabase().catch(() => undefined);
+  syncProjectsCatalogFromSupabase().catch(() => undefined);
   const projects = Array.isArray(store.projects) ? store.projects : [];
   const rows = projects.map(renderProjectRow).join("");
 
