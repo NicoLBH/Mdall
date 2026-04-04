@@ -3721,8 +3721,9 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
 }
 
 .documents-pdf-viewer__search-input{
-  min-width:220px;
   height:32px;
+  max-width: 160px;
+  min-width: 160px;
 }
 
 .documents-pdf-viewer__search-results{
