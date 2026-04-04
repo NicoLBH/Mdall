@@ -45,6 +45,7 @@ const docsViewState = {
   },
   pdfPreview: {
     objectUrl: "",
+    signedUrl: "",
     sourceDocumentId: "",
     isLoading: false,
     errorMessage: ""
@@ -142,20 +143,43 @@ function resetPdfPreviewState() {
   revokePdfPreviewObjectUrl();
   docsViewState.pdfPreview = {
     objectUrl: "",
+    signedUrl: "",
     sourceDocumentId: "",
     isLoading: false,
     errorMessage: ""
   };
 }
 
-function getSupabaseStorageObjectUrl(documentItem = null) {
+async function createSupabaseSignedStorageUrl(documentItem = null, expiresInSeconds = 3600) {
   const storageBucket = String(documentItem?.storageBucket || "").trim();
   const storagePath = String(documentItem?.storagePath || "").trim();
   if (!storageBucket || !storagePath) return "";
 
   const encodedBucket = encodeURIComponent(storageBucket);
   const encodedPath = storagePath.split("/").map(encodeURIComponent).join("/");
-  return `${SUPABASE_URL}/storage/v1/object/authenticated/${encodedBucket}/${encodedPath}`;
+  const response = await fetch(`${SUPABASE_URL}/storage/v1/object/sign/${encodedBucket}/${encodedPath}`, {
+    method: "POST",
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ expiresIn: expiresInSeconds }),
+    cache: "no-store"
+  });
+
+  if (!response.ok) {
+    const responseText = await response.text().catch(() => "");
+    throw new Error(responseText || `storage signed url failed (${response.status})`);
+  }
+
+  const payload = await response.json().catch(() => ({}));
+  const signedPath = String(payload?.signedURL || payload?.signedUrl || payload?.path || "").trim();
+  if (!signedPath) {
+    throw new Error("Supabase n'a pas retourné d'URL signée pour ce document.");
+  }
+
+  return /^https?:\/\//i.test(signedPath) ? signedPath : `${SUPABASE_URL}${signedPath}`;
 }
 
 async function ensurePdfPreviewObjectUrl(documentItem = null) {
@@ -165,16 +189,17 @@ async function ensurePdfPreviewObjectUrl(documentItem = null) {
   }
 
   if (
-    docsViewState.pdfPreview.objectUrl &&
+    (docsViewState.pdfPreview.objectUrl || docsViewState.pdfPreview.signedUrl) &&
     docsViewState.pdfPreview.sourceDocumentId === String(documentItem.id || "").trim()
   ) {
-    return docsViewState.pdfPreview.objectUrl;
+    return docsViewState.pdfPreview.objectUrl || docsViewState.pdfPreview.signedUrl;
   }
 
   const localPreviewUrl = getProjectDocumentPreviewUrl(documentItem);
   if (!String(documentItem.storageBucket || "").trim() || !String(documentItem.storagePath || "").trim()) {
     docsViewState.pdfPreview = {
       objectUrl: localPreviewUrl,
+      signedUrl: "",
       sourceDocumentId: String(documentItem.id || "").trim(),
       isLoading: false,
       errorMessage: ""
@@ -182,53 +207,53 @@ async function ensurePdfPreviewObjectUrl(documentItem = null) {
     return localPreviewUrl;
   }
 
-  const storageObjectUrl = getSupabaseStorageObjectUrl(documentItem);
-  if (!storageObjectUrl) {
-    docsViewState.pdfPreview = {
-      objectUrl: "",
-      sourceDocumentId: String(documentItem.id || "").trim(),
-      isLoading: false,
-      errorMessage: "Aucun chemin de stockage Supabase n'est disponible pour ce document."
-    };
-    return "";
-  }
-
   docsViewState.pdfPreview = {
     objectUrl: "",
+    signedUrl: "",
     sourceDocumentId: String(documentItem.id || "").trim(),
     isLoading: true,
     errorMessage: ""
   };
 
-  const response = await fetch(storageObjectUrl, {
-    method: "GET",
-    headers: {
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`
-    },
-    cache: "no-store"
-  });
+  const signedUrl = await createSupabaseSignedStorageUrl(documentItem);
 
-  if (!response.ok) {
-    const responseText = await response.text().catch(() => "");
-    throw new Error(responseText || `storage fetch failed (${response.status})`);
+  let objectUrl = "";
+  let errorMessage = "";
+
+  try {
+    const response = await fetch(signedUrl, {
+      method: "GET",
+      cache: "no-store"
+    });
+
+    if (!response.ok) {
+      const responseText = await response.text().catch(() => "");
+      throw new Error(responseText || `storage fetch failed (${response.status})`);
+    }
+
+    const pdfBlob = await response.blob();
+    revokePdfPreviewObjectUrl();
+
+    objectUrl = typeof URL !== "undefined" && typeof URL.createObjectURL === "function"
+      ? URL.createObjectURL(pdfBlob)
+      : "";
+
+    if (!objectUrl) {
+      errorMessage = "Le navigateur n'a pas permis de créer une URL locale pour ce PDF.";
+    }
+  } catch (error) {
+    errorMessage = error instanceof Error ? error.message : "Impossible de télécharger le PDF depuis Supabase.";
   }
-
-  const pdfBlob = await response.blob();
-  revokePdfPreviewObjectUrl();
-
-  const objectUrl = typeof URL !== "undefined" && typeof URL.createObjectURL === "function"
-    ? URL.createObjectURL(pdfBlob)
-    : "";
 
   docsViewState.pdfPreview = {
     objectUrl,
+    signedUrl,
     sourceDocumentId: String(documentItem.id || "").trim(),
     isLoading: false,
-    errorMessage: objectUrl ? "" : "Le navigateur n'a pas permis de créer une URL locale pour ce PDF."
+    errorMessage
   };
 
-  return objectUrl;
+  return objectUrl || signedUrl;
 }
 
 function setDocumentsActivity({ tone = "info", title = "", message = "" } = {}) {
@@ -564,7 +589,10 @@ function renderPdfPreviewView() {
     documentItem.phaseCode ? `${documentItem.phaseCode}${documentItem.phaseLabel ? ` - ${documentItem.phaseLabel}` : ""}` : "",
     documentItem.updatedAt || ""
   ].filter(Boolean).join(" · ");
-  const previewUrl = String(docsViewState.pdfPreview?.objectUrl || "").trim() || getProjectDocumentPreviewUrl(documentItem);
+  const previewUrl = String(docsViewState.pdfPreview?.objectUrl || "").trim()
+    || String(docsViewState.pdfPreview?.signedUrl || "").trim()
+    || getProjectDocumentPreviewUrl(documentItem);
+  const openInBrowserUrl = String(docsViewState.pdfPreview?.signedUrl || "").trim() || previewUrl;
   const isLocalPreview = !String(documentItem.storageBucket || "").trim() && !!String(previewUrl || "").trim();
   const isLoadingPreview = Boolean(docsViewState.pdfPreview?.isLoading);
   const previewErrorMessage = String(docsViewState.pdfPreview?.errorMessage || "").trim();
@@ -582,6 +610,9 @@ function renderPdfPreviewView() {
               <header class="documents-report-table__header">
                 <div class="documents-report-table__author">${escapeHtml(documentItem.name || "Document")}</div>
                 <div class="documents-report-table__actions">
+                  ${openInBrowserUrl
+                    ? `<a class="gh-btn" href="${escapeHtml(openInBrowserUrl)}" target="_blank" rel="noopener noreferrer">Ouvrir dans un onglet</a>`
+                    : ""}
                   <button type="button" class="gh-btn" id="documentsPdfBackBtn">Annuler</button>
                 </div>
               </header>
@@ -845,6 +876,7 @@ async function openPdfPreview(root, documentId) {
   docsViewState.mode = "pdf-preview";
   docsViewState.pdfPreview = {
     objectUrl: "",
+    signedUrl: "",
     sourceDocumentId: String(documentItem.id || "").trim(),
     isLoading: true,
     errorMessage: ""
@@ -856,6 +888,7 @@ async function openPdfPreview(root, documentId) {
   } catch (error) {
     docsViewState.pdfPreview = {
       objectUrl: "",
+      signedUrl: "",
       sourceDocumentId: String(documentItem.id || "").trim(),
       isLoading: false,
       errorMessage: error instanceof Error ? error.message : "Impossible de charger ce PDF depuis Supabase."
