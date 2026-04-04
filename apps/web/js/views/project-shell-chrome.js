@@ -10,7 +10,10 @@ const shellState = {
   viewHeaderHostEl: null,
   compactTabHostEl: null,
   compactTabLabelEl: null,
+  compactTabLabelPrimaryEl: null,
+  compactTabLabelSuffixEl: null,
   compactTabCustomLabel: "",
+  compactTabCustomSuffix: "",
   primaryScrollSourceEl: null,
   cleanupScrollSource: null,
   cleanupWindow: null
@@ -45,11 +48,26 @@ function getViewHeaderEl() {
 }
 
 function syncCompactTabLabel() {
-  const label = String(shellState.compactTabCustomLabel || getTabLabel(shellState.tab) || "").trim();
-  if (shellState.compactTabLabelEl) {
-    shellState.compactTabLabelEl.textContent = label;
+  const primaryLabel = String(shellState.compactTabCustomLabel || getTabLabel(shellState.tab) || "").trim();
+  const suffixLabel = String(shellState.compactTabCustomSuffix || "").trim();
+  const hasStructuredLabel = !!(shellState.compactTabLabelPrimaryEl || shellState.compactTabLabelSuffixEl);
+
+  if (hasStructuredLabel) {
+    if (shellState.compactTabLabelPrimaryEl) {
+      shellState.compactTabLabelPrimaryEl.textContent = primaryLabel;
+    }
+    if (shellState.compactTabLabelSuffixEl) {
+      shellState.compactTabLabelSuffixEl.textContent = suffixLabel ? ` / ${suffixLabel}` : "";
+      shellState.compactTabLabelSuffixEl.classList.toggle("is-empty", !suffixLabel);
+    }
+    if (shellState.compactTabLabelEl && !shellState.compactTabLabelEl.hasAttribute("data-compact-label-structured")) {
+      shellState.compactTabLabelEl.setAttribute("data-compact-label-structured", "true");
+    }
+  } else if (shellState.compactTabLabelEl) {
+    shellState.compactTabLabelEl.textContent = suffixLabel ? `${primaryLabel} / ${suffixLabel}` : primaryLabel;
   }
-  shellState.compactTabHostEl?.classList.toggle("is-empty", !label);
+
+  shellState.compactTabHostEl?.classList.toggle("is-empty", !(primaryLabel || suffixLabel));
 }
 
 function applyCompactState(isCompact) {
@@ -124,6 +142,8 @@ export function mountProjectShellChrome({ projectId, tab }) {
   shellState.viewHeaderHostEl = document.getElementById("projectViewHeaderHost");
   shellState.compactTabHostEl = document.getElementById("projectCompactTab");
   shellState.compactTabLabelEl = document.getElementById("projectCompactTabLabel");
+  shellState.compactTabLabelPrimaryEl = document.getElementById("projectCompactTabLabelPrimary");
+  shellState.compactTabLabelSuffixEl = document.getElementById("projectCompactTabLabelSuffix");
 
   if (shellState.viewHeaderHostEl) {
     shellState.viewHeaderHostEl.innerHTML = "";
@@ -151,6 +171,7 @@ export function setProjectViewHeader(config = {}) {
   if (!shellState.viewHeaderHostEl) return;
 
   shellState.compactTabCustomLabel = String(config.compactLabel || config.contextLabel || "").trim();
+  shellState.compactTabCustomSuffix = String(config.compactLabelSuffix || "").trim();
 
   shellState.viewHeaderHostEl.innerHTML = renderProjectViewHeader({
     contextLabel: config.contextLabel || getTabLabel(shellState.tab),
@@ -162,6 +183,7 @@ export function setProjectViewHeader(config = {}) {
   });
 
   getViewHeaderEl()?.classList.toggle("project-view-header--compact", shellState.isCompact);
+  syncCompactTabLabel();
 }
 
 export function registerProjectPrimaryScrollSource(el) {
@@ -202,6 +224,14 @@ export function unmountProjectShellChrome() {
 
   if (shellState.compactTabLabelEl) {
     shellState.compactTabLabelEl.textContent = "";
+    shellState.compactTabLabelEl.removeAttribute("data-compact-label-structured");
+  }
+  if (shellState.compactTabLabelPrimaryEl) {
+    shellState.compactTabLabelPrimaryEl.textContent = "";
+  }
+  if (shellState.compactTabLabelSuffixEl) {
+    shellState.compactTabLabelSuffixEl.textContent = "";
+    shellState.compactTabLabelSuffixEl.classList.add("is-empty");
   }
   shellState.compactTabHostEl?.classList.remove("is-empty");
 
@@ -218,5 +248,8 @@ export function unmountProjectShellChrome() {
   shellState.viewHeaderHostEl = null;
   shellState.compactTabHostEl = null;
   shellState.compactTabLabelEl = null;
+  shellState.compactTabLabelPrimaryEl = null;
+  shellState.compactTabLabelSuffixEl = null;
   shellState.compactTabCustomLabel = "";
+  shellState.compactTabCustomSuffix = "";
 }
