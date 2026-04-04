@@ -218,7 +218,10 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);ove
   color:var(--muted);
 }
 .gh-brand__compact-tab.is-empty{display:none !important;}
-.gh-brand__compact-tab-label{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px;}
+.gh-brand__compact-tab-label{display:inline-flex;align-items:center;min-width:0;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px;}
+.gh-brand__compact-tab-label-primary{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.gh-brand__compact-tab-label-suffix{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:0 1 auto;}
+.gh-brand__compact-tab-label-suffix.is-empty{display:none;}
 body.route--project.project-shell-compact .gh-brand__compact-tab{
   display:inline-flex;
 }
