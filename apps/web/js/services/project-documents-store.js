@@ -1,8 +1,27 @@
 import { store, DEFAULT_PROJECT_PHASES } from "../store.js";
 
+const SUPABASE_URL = "https://olgxhfgdzyghlzxmremz.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_08nUL61_ATl-6KpD8dOYPw_RM5lMtEz";
+
 function safeString(value = "") {
   return String(value ?? "").trim();
 }
+
+function getSupabaseAuthHeaders(extra = {}) {
+  return {
+    apikey: SUPABASE_ANON_KEY,
+    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+    ...extra
+  };
+}
+
+function buildStorageAuthenticatedUrl(bucket = "", path = "") {
+  const safeBucket = safeString(bucket);
+  const safePath = safeString(path);
+  if (!safeBucket || !safePath) return "";
+  return `${SUPABASE_URL}/storage/v1/object/authenticated/${encodeURIComponent(safeBucket)}/${safePath.split("/").map(encodeURIComponent).join("/")}`;
+}
+
 
 export function ensureProjectDocumentsState() {
   if (!store.projectDocuments || typeof store.projectDocuments !== "object") {
@@ -159,4 +178,62 @@ export function getProjectDocumentPreviewUrl(documentOrId) {
   }
 
   return "";
+}
+
+export async function ensureProjectDocumentPreviewUrl(documentOrId) {
+  const document = typeof documentOrId === "string"
+    ? getProjectDocumentById(documentOrId)
+    : documentOrId;
+
+  if (!document) return "";
+
+  const existingUrl = getProjectDocumentPreviewUrl(document);
+  if (existingUrl) return existingUrl;
+
+  const storageBucket = safeString(document.storageBucket || document.storage_bucket);
+  const storagePath = safeString(document.storagePath || document.storage_path);
+  if (!storageBucket || !storagePath) return "";
+
+  if (document.previewFetchPromise) {
+    return document.previewFetchPromise;
+  }
+
+  const requestUrl = buildStorageAuthenticatedUrl(storageBucket, storagePath);
+  document.previewFetchPromise = fetch(requestUrl, {
+    method: "GET",
+    headers: getSupabaseAuthHeaders(),
+    cache: "no-store"
+  })
+    .then(async (response) => {
+      if (!response.ok) {
+        const text = await response.text().catch(() => "");
+        throw new Error(`storage preview fetch failed (${response.status}): ${text}`);
+      }
+
+      const blob = await response.blob();
+      if (typeof URL === "undefined") {
+        throw new Error("URL API unavailable for PDF preview.");
+      }
+
+      if (safeString(document.localPreviewUrl).startsWith("blob:")) {
+        try {
+          URL.revokeObjectURL(document.localPreviewUrl);
+        } catch {
+          // ignore
+        }
+      }
+
+      const blobUrl = URL.createObjectURL(blob);
+      document.localPreviewUrl = blobUrl;
+      return blobUrl;
+    })
+    .catch((error) => {
+      document.previewError = error instanceof Error ? error.message : String(error || "Erreur de prévisualisation PDF");
+      throw error;
+    })
+    .finally(() => {
+      document.previewFetchPromise = null;
+    });
+
+  return document.previewFetchPromise;
 }
