@@ -24,9 +24,10 @@ import { addProjectDocument, decorateDocumentWithPhase, getEnabledProjectPhasesC
 import { getDocumentStatsMap } from "../services/project-document-selectors.js";
 import { syncProjectDocumentsFromSupabase } from "../services/project-supabase-sync.js";
 import { getEffectiveAvisVerdict, getEffectiveSituationStatus, getEffectiveSujetStatus } from "./project-situations.js";
+import { buildSupabaseAuthHeaders, getSupabaseAnonKey, getSupabaseUrl } from "../../assets/js/auth.js";
 
-const SUPABASE_URL = "https://olgxhfgdzyghlzxmremz.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_08nUL61_ATl-6KpD8dOYPw_RM5lMtEz";
+const SUPABASE_URL = getSupabaseUrl();
+const SUPABASE_ANON_KEY = getSupabaseAnonKey();
 const PDFJS_CDN_VERSION = "4.4.168";
 const PDFJS_MODULE_URL = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_CDN_VERSION}/build/pdf.min.mjs`;
 const PDFJS_WORKER_MODULE_URL = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_CDN_VERSION}/build/pdf.worker.min.mjs`;
@@ -598,11 +599,9 @@ async function createSupabaseSignedStorageUrl(documentItem = null, expiresInSeco
   const encodedPath = storagePath.split("/").map(encodeURIComponent).join("/");
   const response = await fetch(`${SUPABASE_URL}/storage/v1/object/sign/${encodedBucket}/${encodedPath}`, {
     method: "POST",
-    headers: {
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+    headers: await buildSupabaseAuthHeaders({
       "Content-Type": "application/json"
-    },
+    }),
     body: JSON.stringify({ expiresIn: expiresInSeconds }),
     cache: "no-store"
   });
@@ -649,10 +648,7 @@ async function fetchPdfPreviewPayload(documentItem = null, signedUrl = "") {
     objectUrl
       ? {
           url: objectUrl,
-          headers: {
-            apikey: SUPABASE_ANON_KEY,
-            Authorization: `Bearer ${SUPABASE_ANON_KEY}`
-          }
+          headers: await buildSupabaseAuthHeaders()
         }
       : null,
     signedUrl
