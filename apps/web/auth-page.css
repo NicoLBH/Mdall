@@ -457,7 +457,7 @@ body.auth-page{
 }
 
 .auth-form--forgot .auth-input{
-  margin-bottom:0;
+  margin-bottom:16px;
 }
 
 .auth-form--forgot .auth-message{
