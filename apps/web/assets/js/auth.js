@@ -135,3 +135,18 @@ export async function requireAuth() {
 export function redirectToAppHome() {
   window.location.replace(resolveAppUrl('./'))
 }
+
+
+export function isPasswordRecoveryLink(url = window.location.href) {
+  const text = String(url || '')
+  return /type=recovery/.test(text)
+}
+
+export async function requestPasswordReset(email, options = {}) {
+  const redirectTo = String(options.emailRedirectTo || getEmailRedirectUrl()).trim()
+  return await supabase.auth.resetPasswordForEmail(email, { redirectTo })
+}
+
+export async function updatePassword(password) {
+  return await supabase.auth.updateUser({ password })
+}
