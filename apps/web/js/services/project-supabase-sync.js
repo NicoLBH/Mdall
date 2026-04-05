@@ -1,9 +1,10 @@
 import { store } from "../store.js";
 import { ensureProjectDocumentsState } from "./project-documents-store.js";
 import { ensureProjectAutomationDefaults } from "./project-automation.js";
+import { buildSupabaseAuthHeaders, getCurrentUser, getSupabaseUrl, getSupabaseAnonKey } from "../../assets/js/auth.js";
 
-const SUPABASE_URL = "https://olgxhfgdzyghlzxmremz.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_08nUL61_ATl-6KpD8dOYPw_RM5lMtEz";
+const SUPABASE_URL = getSupabaseUrl();
+const SUPABASE_ANON_KEY = getSupabaseAnonKey();
 const FRONT_PROJECT_MAP_STORAGE_KEY = "mdall.supabaseProjectMap.v1";
 const PROJECT_SUPABASE_SYNC_EVENT = "project:supabase-sync";
 const PROJECT_IDENTITY_UPDATED_EVENT = "project:identity-updated";
@@ -42,12 +43,8 @@ function writeFrontendProjectMap(map) {
   }
 }
 
-function getSupabaseAuthHeaders(extra = {}) {
-  return {
-    apikey: SUPABASE_ANON_KEY,
-    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-    ...extra
-  };
+async function getSupabaseAuthHeaders(extra = {}) {
+  return buildSupabaseAuthHeaders(extra);
 }
 
 async function restFetch(table, params = new URLSearchParams()) {
@@ -58,7 +55,7 @@ async function restFetch(table, params = new URLSearchParams()) {
 
   const res = await fetch(url.toString(), {
     method: "GET",
-    headers: getSupabaseAuthHeaders({ Accept: "application/json" }),
+    headers: await getSupabaseAuthHeaders({ Accept: "application/json" }),
     cache: "no-store"
   });
 
@@ -85,7 +82,7 @@ async function restUpdate(table, match = {}, payload = {}, options = {}) {
 
   const res = await fetch(url.toString(), {
     method: "PATCH",
-    headers: getSupabaseAuthHeaders({
+    headers: await getSupabaseAuthHeaders({
       "Content-Type": "application/json",
       Prefer: select ? "return=representation" : "return=minimal"
     }),
@@ -112,7 +109,7 @@ async function restInsert(table, payload, options = {}) {
 
   const res = await fetch(url.toString(), {
     method: "POST",
-    headers: getSupabaseAuthHeaders({
+    headers: await getSupabaseAuthHeaders({
       "Content-Type": "application/json",
       Prefer: select ? "return=representation" : "return=minimal"
     }),
@@ -134,7 +131,7 @@ async function rpcCall(functionName, payload = {}) {
   const url = `${SUPABASE_URL}/rest/v1/rpc/${functionName}`;
   const res = await fetch(url, {
     method: "POST",
-    headers: getSupabaseAuthHeaders({
+    headers: await getSupabaseAuthHeaders({
       "Content-Type": "application/json",
       Accept: "application/json"
     }),
@@ -777,7 +774,8 @@ export async function persistSubjectIssueActionToSupabase(subject = {}, action =
       document_id: documentId || null,
       event_type: actionConfig.history.event_type,
       actor_type: "user",
-      actor_label: "Mdall",
+      actor_label: String((await getCurrentUser())?.email || "Mdall"),
+      actor_user_id: (await getCurrentUser())?.id || null,
       title: actionConfig.history.title,
       description: actionConfig.history.description,
       event_payload: {
