@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Login</title>
+</head>
+<body>
+  <h2>Login / Signup</h2>
+  <input id="email" placeholder="email"><br>
+  <input id="password" type="password" placeholder="password"><br>
+  <button onclick="login()">Login</button>
+  <button onclick="signup()">Signup</button>
+
+  <script type="module">
+    import { signIn, signUp } from './assets/js/auth.js'
+
+    window.login = async () => {
+      const email = document.getElementById('email').value
+      const password = document.getElementById('password').value
+      await signIn(email, password)
+      window.location.href = '/'
+    }
+
+    window.signup = async () => {
+      const email = document.getElementById('email').value
+      const password = document.getElementById('password').value
+      await signUp(email, password)
+      window.location.href = '/'
+    }
+  </script>
+</body>
+</html>
