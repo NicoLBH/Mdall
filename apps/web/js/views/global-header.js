@@ -1,6 +1,7 @@
 import { store } from "../store.js";
 import { svgIcon } from "../ui/icons.js";
 import { DEMO_USERS, setCurrentDemoUser } from "../demo-context.js";
+import { signOut } from "../../assets/js/auth.js";
 import { rerenderRoute } from "../router.js";
 
 function parseHash() {
@@ -55,6 +56,7 @@ function getHeaderModel() {
 
 function renderUserMenu() {
   const currentAvatar = store.user?.avatar || "assets/images/260093543.png";
+  const isAuthenticatedUser = Boolean(store.user?.email && store.user?.id);
   const otherUsers = DEMO_USERS.filter((user) => user.id !== store.user?.id);
 
   return `
@@ -65,13 +67,26 @@ function renderUserMenu() {
         type="button"
         aria-haspopup="menu"
         aria-expanded="false"
-        aria-label="Changer de contributeur"
+        aria-label="Compte utilisateur"
       >
         <img src="${currentAvatar}" alt="Avatar" class="documents-commit-shell__avatar-img gh-user-menu__avatar-img">
       </button>
 
       <div class="gh-user-menu__dropdown gh-menu" id="ghUserMenuDropdown" role="menu">
-        ${otherUsers.map((user) => `
+        ${isAuthenticatedUser ? `
+          <div class="gh-user-menu__item" role="presentation">
+            <span class="gh-user-menu__item-meta">
+              <span class="gh-user-menu__item-name">${store.user?.name || "Utilisateur"}</span>
+              <span class="gh-user-menu__item-role">${store.user?.email || ""}</span>
+            </span>
+          </div>
+          <button type="button" class="gh-user-menu__item" id="ghUserMenuLogout" role="menuitem">
+            <span class="gh-user-menu__item-meta">
+              <span class="gh-user-menu__item-name">Se déconnecter</span>
+              <span class="gh-user-menu__item-role">Fermer la session Supabase</span>
+            </span>
+          </button>
+        ` : otherUsers.map((user) => `
           <button
             type="button"
             class="gh-user-menu__item"
@@ -144,9 +159,19 @@ export function bindGlobalHeader() {
   document.addEventListener("click", (event) => {
     const trigger = event.target.closest?.("#ghUserMenuBtn");
     const switchBtn = event.target.closest?.("[data-user-switch]");
+    const logoutBtn = event.target.closest?.("#ghUserMenuLogout");
     const menu = document.getElementById("ghUserMenu");
     const dropdown = document.getElementById("ghUserMenuDropdown");
     const btn = document.getElementById("ghUserMenuBtn");
+
+    if (logoutBtn) {
+      signOut()
+        .catch((error) => console.error("signOut failed", error))
+        .finally(() => {
+          window.location.replace(new URL("login.html", window.location.href).toString());
+        });
+      return;
+    }
 
     if (switchBtn) {
       setCurrentDemoUser(switchBtn.dataset.userSwitch || "");
