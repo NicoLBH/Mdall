@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Authentification · Mdall</title>
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
+  <link rel="stylesheet" href="./style.css" />
+  <link rel="stylesheet" href="./auth-page.css" />
+</head>
+<body class="auth-page auth-page--signup">
+  <script>
+    window.MDALL_CONFIG = window.MDALL_CONFIG || {};
+    window.MDALL_CONFIG.supabaseUrl = window.MDALL_CONFIG.supabaseUrl || "https://olgxhfgdzyghlzxmremz.supabase.co";
+    window.MDALL_CONFIG.supabaseAnonKey = window.MDALL_CONFIG.supabaseAnonKey || "sb_publishable_08nUL61_ATl-6KpD8dOYPw_RM5lMtEz";
+    window.SUPABASE_URL = window.MDALL_CONFIG.supabaseUrl;
+    window.SUPABASE_ANON_KEY = window.MDALL_CONFIG.supabaseAnonKey;
+  </script>
+
+  <main class="auth-layout">
+    <aside class="auth-hero" aria-hidden="true">
+      <div class="auth-hero__content">
+        <h1 class="auth-hero__title">Créez votre compte gratuitement</h1>
+        <p class="auth-hero__copy">Explorez les fonctionnalités clés de Mdall pour transformer vos documents en sujets actionnables.</p>
+      </div>
+      <div class="auth-hero__art">
+        <img class="auth-hero__mascot" src="assets/images/dos-amigos@2x.webp" alt="" />
+      </div>
+    </aside>
+
+    <section class="auth-panel-wrap">
+      <div class="auth-panel auth-panel--signup">
+        <div class="auth-topbar auth-topbar--signup">
+          <span>Vous avez déjà un compte ?</span>
+          <a class="auth-topbar__link" href="login.html?mode=signin">Connectez-vous →</a>
+        </div>
+
+        <div class="auth-card auth-card--wide">
+          <div class="auth-card__header auth-card__header--signup">
+            <img class="auth-mark auth-mark--brand" src="assets/images/mdall_logo_80.png" alt="Mdall" />
+            <h1 class="auth-title">Créer un compte Mdall</h1>
+          </div>
+
+          <form id="signupForm" class="auth-form" novalidate>
+            <label class="auth-label" for="signupEmail">Email</label>
+            <input id="signupEmail" class="auth-input" type="email" placeholder="nom@exemple.com" autocomplete="email" />
+
+            <label class="auth-label" for="signupPassword">Mot de passe</label>
+            <input id="signupPassword" class="auth-input" type="password" placeholder="Mot de passe" autocomplete="new-password" />
+            <p class="auth-helper">Le mot de passe doit contenir au moins 15 caractères, ou au moins 8 caractères avec un chiffre et une lettre minuscule.</p>
+
+            <p id="signupMessage" class="auth-message" aria-live="polite"></p>
+            <p id="signupHint" class="auth-hint" aria-live="polite"></p>
+
+            <button id="signupBtn" class="auth-submit auth-submit--dark" type="submit">Créer un compte</button>
+          </form>
+        </div>
+      </div>
+
+      <div class="auth-panel auth-panel--signin" hidden>
+        <div class="auth-card auth-card--compact auth-card--signin">
+          <div class="auth-card__header auth-card__header--signin">
+            <img class="auth-mark" src="assets/images/mdall_logo_80.png" alt="Mdall" />
+            <h1 class="auth-title auth-title--signin">Se connecter à Mdall</h1>
+          </div>
+
+          <form id="signinForm" class="auth-form" novalidate>
+            <label class="auth-label auth-label--strong" for="signinEmail">Email ou identifiant</label>
+            <input id="signinEmail" class="auth-input auth-input--dark" type="email" placeholder="nom@exemple.com" autocomplete="email username" />
+
+            <div class="auth-label-row">
+              <label class="auth-label auth-label--strong" for="signinPassword">Mot de passe</label>
+              <a id="forgotPasswordLink" class="auth-inline-link" href="#">Mot de passe oublié ?</a>
+            </div>
+            <input id="signinPassword" class="auth-input auth-input--dark" type="password" placeholder="Mot de passe" autocomplete="current-password" />
+
+            <p id="signinMessage" class="auth-message auth-message--signin" aria-live="polite"></p>
+            <p id="signinHint" class="auth-hint auth-hint--signin" aria-live="polite"></p>
+
+            <button id="loginBtn" class="auth-submit auth-submit--green" type="submit">Se connecter</button>
+          </form>
+
+          <p class="auth-switch-copy">Nouveau sur Mdall ? <a class="auth-inline-link" href="login.html?mode=signup">Créer un compte</a></p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script type="module">
+    import {
+      getCurrentUser,
+      getEmailRedirectUrl,
+      isRateLimitError,
+      redirectToAppHome,
+      signIn,
+      signUp,
+      waitForSession
+    } from './assets/js/auth.js'
+
+    const AUTH_RETRY_LOCK_KEY = 'mdall.auth.retry.lock.until'
+    const VALID_MODES = new Set(['signup', 'signin'])
+
+    const body = document.body
+    const signupPanel = document.querySelector('.auth-panel--signup')
+    const signinPanel = document.querySelector('.auth-panel--signin')
+
+    const signupForm = document.getElementById('signupForm')
+    const signupEmail = document.getElementById('signupEmail')
+    const signupPassword = document.getElementById('signupPassword')
+    const signupBtn = document.getElementById('signupBtn')
+    const signupMessage = document.getElementById('signupMessage')
+    const signupHint = document.getElementById('signupHint')
+
+    const signinForm = document.getElementById('signinForm')
+    const signinEmail = document.getElementById('signinEmail')
+    const signinPassword = document.getElementById('signinPassword')
+    const loginBtn = document.getElementById('loginBtn')
+    const signinMessage = document.getElementById('signinMessage')
+    const signinHint = document.getElementById('signinHint')
+    const forgotPasswordLink = document.getElementById('forgotPasswordLink')
+
+    let isSubmitting = false
+
+    function getMode() {
+      const params = new URLSearchParams(window.location.search)
+      const mode = String(params.get('mode') || 'signup').trim().toLowerCase()
+      return VALID_MODES.has(mode) ? mode : 'signup'
+    }
+
+    function applyMode(mode) {
+      const isSignin = mode === 'signin'
+      body.classList.toggle('auth-page--signin', isSignin)
+      body.classList.toggle('auth-page--signup', !isSignin)
+      signupPanel.hidden = isSignin
+      signinPanel.hidden = !isSignin
+      document.title = isSignin ? 'Connexion · Mdall' : 'Créer un compte · Mdall'
+      window.requestAnimationFrame(() => {
+        if (isSignin) {
+          signinEmail?.focus()
+        } else {
+          signupEmail?.focus()
+        }
+      })
+    }
+
+    function getRetryLockUntil() {
+      const raw = window.localStorage.getItem(AUTH_RETRY_LOCK_KEY)
+      const value = Number(raw || 0)
+      return Number.isFinite(value) ? value : 0
+    }
+
+    function setRetryLock(seconds) {
+      const until = Date.now() + (Math.max(1, Number(seconds) || 1) * 1000)
+      window.localStorage.setItem(AUTH_RETRY_LOCK_KEY, String(until))
+      return until
+    }
+
+    function clearRetryLock() {
+      window.localStorage.removeItem(AUTH_RETRY_LOCK_KEY)
+    }
+
+    function formatRemainingSeconds(until) {
+      return Math.max(0, Math.ceil((until - Date.now()) / 1000))
+    }
+
+    function updateRetryHint() {
+      const until = getRetryLockUntil()
+      const remaining = formatRemainingSeconds(until)
+      const text = remaining > 0
+        ? `Trop de tentatives récentes. Attendez environ ${remaining}s avant de réessayer.`
+        : ''
+      signupHint.textContent = text
+      signinHint.textContent = text
+    }
+
+    function setBusy(isBusy) {
+      const locked = formatRemainingSeconds(getRetryLockUntil()) > 0
+      const disabled = isBusy || locked
+      signupBtn.disabled = disabled
+      loginBtn.disabled = disabled
+      signupEmail.disabled = isBusy
+      signupPassword.disabled = isBusy
+      signinEmail.disabled = isBusy
+      signinPassword.disabled = isBusy
+    }
+
+    function clearMessages() {
+      signupMessage.textContent = ''
+      signinMessage.textContent = ''
+      signupMessage.dataset.tone = 'error'
+      signinMessage.dataset.tone = 'error'
+    }
+
+    function setMessage(target, message, tone = 'error') {
+      if (!target) return
+      target.textContent = message || ''
+      target.dataset.tone = tone
+    }
+
+    async function redirectIfAlreadyAuthenticated() {
+      const currentUser = await getCurrentUser()
+      if (currentUser) {
+        redirectToAppHome()
+      }
+    }
+
+    function explainRateLimit(mode) {
+      const actionLabel = mode === 'signup' ? 'création de compte' : 'connexion'
+      return `Supabase bloque temporairement la ${actionLabel} car trop de tentatives ont été envoyées en peu de temps (erreur 429). Attendez 60 secondes puis réessayez une seule fois. Si vous avez déjà créé le compte, utilisez l'écran de connexion.`
+    }
+
+    async function handleAuth(mode) {
+      updateRetryHint()
+      if (isSubmitting) {
+        return
+      }
+
+      const lockUntil = getRetryLockUntil()
+      if (formatRemainingSeconds(lockUntil) > 0) {
+        setBusy(false)
+        setMessage(mode === 'signup' ? signupMessage : signinMessage, 'Réessayez après le délai indiqué ci-dessous.')
+        updateRetryHint()
+        return
+      }
+
+      clearMessages()
+      const email = String(mode === 'signup' ? signupEmail.value : signinEmail.value || '').trim()
+      const password = String(mode === 'signup' ? signupPassword.value : signinPassword.value || '')
+
+      if (!email || !password) {
+        setMessage(mode === 'signup' ? signupMessage : signinMessage, 'Saisissez un email et un mot de passe.')
+        return
+      }
+
+      isSubmitting = true
+      setBusy(true)
+      try {
+        const result = mode === 'signup'
+          ? await signUp(email, password, { emailRedirectTo: getEmailRedirectUrl() })
+          : await signIn(email, password)
+
+        if (result.error) {
+          throw result.error
+        }
+
+        clearRetryLock()
+        updateRetryHint()
+
+        const session = result.data?.session || await waitForSession({ timeoutMs: 3000, intervalMs: 100 })
+
+        if (session?.user) {
+          redirectToAppHome()
+          return
+        }
+
+        if (mode === 'signup' && result.data?.user) {
+          setMessage(
+            signupMessage,
+            `Compte créé. Ouvrez le mail de confirmation puis cliquez sur le lien le plus récent. La redirection doit revenir vers cette page : ${getEmailRedirectUrl()}`,
+            'success'
+          )
+          return
+        }
+
+        throw new Error("Aucune session n'a été créée. Vérifiez la configuration Supabase Auth (provider Email activé, confirmation email en dev).")
+      } catch (error) {
+        if (isRateLimitError(error)) {
+          setRetryLock(60)
+          updateRetryHint()
+          setMessage(mode === 'signup' ? signupMessage : signinMessage, explainRateLimit(mode))
+          return
+        }
+        setMessage(mode === 'signup' ? signupMessage : signinMessage, error?.message || 'Connexion impossible.')
+      } finally {
+        isSubmitting = false
+        setBusy(false)
+        updateRetryHint()
+      }
+    }
+
+    signupForm.addEventListener('submit', (event) => {
+      event.preventDefault()
+      handleAuth('signup')
+    })
+
+    signinForm.addEventListener('submit', (event) => {
+      event.preventDefault()
+      handleAuth('signin')
+    })
+
+    forgotPasswordLink.addEventListener('click', (event) => {
+      event.preventDefault()
+      setMessage(signinMessage, 'Le lien “Mot de passe oublié ?” est affiché, mais la fonction sera branchée plus tard.')
+    })
+
+    window.setInterval(updateRetryHint, 1000)
+    updateRetryHint()
+    setBusy(false)
+    applyMode(getMode())
+
+    redirectIfAlreadyAuthenticated().catch((error) => {
+      console.error('login bootstrap failed', error)
+    })
+  </script>
+</body>
+</html>
