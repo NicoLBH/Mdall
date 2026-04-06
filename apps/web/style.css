@@ -9214,3 +9214,20 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
 .arkolia-assise-card__textarea{
   min-height:160px;
 }
+
+.project-create-shell__footer-main {
+  display: grid;
+  gap: 8px;
+}
+
+.project-create-shell__error {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--fgColor-danger, #cf222e);
+}
+
+.project-create-shell__submit[disabled] {
+  opacity: .7;
+  cursor: wait;
+}
