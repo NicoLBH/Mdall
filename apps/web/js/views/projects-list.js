@@ -22,7 +22,8 @@ const projectCreateUiState = {
     city: "",
     postalCode: "",
     communeCp: "",
-    clientName: ""
+    clientName: "",
+    departmentCode: ""
   },
   isSubmitting: false,
   submitError: ""
@@ -251,6 +252,7 @@ function renderCitySuggestionsPanel() {
       if (!item) return;
       projectCreateUiState.draft.city = item.name || "";
       projectCreateUiState.draft.postalCode = item.postalCode || "";
+      projectCreateUiState.draft.departmentCode = item.departmentCode || "";
       projectCreateUiState.draft.communeCp = [item.name, item.postalCode].filter(Boolean).join(" ").trim();
       const cityInput = document.getElementById("projectCreateCityInput");
       if (cityInput) cityInput.value = projectCreateUiState.draft.communeCp;
@@ -349,6 +351,7 @@ function bindProjectCreatePage(root) {
     const city = String(projectCreateUiState.draft.city || "").trim();
     const postalCode = String(projectCreateUiState.draft.postalCode || "").trim();
     const clientName = String(projectCreateUiState.draft.clientName || "").trim();
+    const departmentCode = String(projectCreateUiState.draft.departmentCode || "").trim();
 
     if (!projectName) {
       projectCreateUiState.submitError = "Le nom du projet est obligatoire.";
@@ -377,6 +380,7 @@ function bindProjectCreatePage(root) {
         description: projectCreateUiState.draft.description,
         city,
         postalCode,
+        departmentCode,
         clientName,
         currentPhaseCode: "PC"
       });
