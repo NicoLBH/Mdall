@@ -443,7 +443,7 @@ export async function syncCurrentProjectIdentityFromSupabase(options = {}) {
 }
 
 export async function createProjectWithDefaultPhases(payload = {}) {
-  const row = await rpcCall("create_project_with_default_phases", {
+  const rpcPayload = {
     p_project_name: safeString(payload.projectName),
     p_description: safeString(payload.description) || null,
     p_city: safeString(payload.city),
@@ -451,7 +451,24 @@ export async function createProjectWithDefaultPhases(payload = {}) {
     p_department_code: safeString(payload.departmentCode),
     p_project_owner_name: safeString(payload.clientName),
     p_current_phase_code: safeString(payload.currentPhaseCode || "PC") || "PC"
-  });
+  };
+
+  let row;
+  try {
+    row = await rpcCall("create_project_with_default_phases", rpcPayload);
+  } catch (error) {
+    const message = safeString(error?.message || "");
+    const missingDepartmentSignature = message.includes("create_project_with_default_phases")
+      && message.includes("p_department_code")
+      && (message.includes("PGRST202") || message.includes("Could not find the function"));
+
+    if (!missingDepartmentSignature) {
+      throw error;
+    }
+
+    const { p_department_code, ...legacyRpcPayload } = rpcPayload;
+    row = await rpcCall("create_project_with_default_phases", legacyRpcPayload);
+  }
 
   const project = mapProjectRowToCatalogItem(row || {});
   if (!safeString(project.id)) {
