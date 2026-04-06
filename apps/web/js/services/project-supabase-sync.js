@@ -448,6 +448,7 @@ export async function createProjectWithDefaultPhases(payload = {}) {
     p_description: safeString(payload.description) || null,
     p_city: safeString(payload.city),
     p_postal_code: safeString(payload.postalCode),
+    p_department_code: safeString(payload.departmentCode),
     p_project_owner_name: safeString(payload.clientName),
     p_current_phase_code: safeString(payload.currentPhaseCode || "PC") || "PC"
   });
