@@ -1865,7 +1865,7 @@ function captureActiveParametresSection() {
   }
 }
 
-function rerenderProjectParametres() {
+export function rerenderProjectParametres() {
   if (!currentParametresRoot || typeof projectParametresRerender !== "function") return;
   captureActiveParametresSection();
   projectParametresRerender(currentParametresRoot);
@@ -2611,254 +2611,6 @@ function bindProjectLocationAutocomplete() {
   bindLocationAutocompleteField("postalCode");
 }
 
-function bindParametresEvents() {
-  bindGhActionButtons();
-  bindInteractiveSvgLineCharts();
-  bindProjectLotToggles();
-  
-  bindGhEditableFields(document, {
-    onEditStart: (id) => {
-      const addressInput = document.getElementById("projectAddress");
-      const cityInput = document.getElementById("projectCity");
-      const postalCodeInput = document.getElementById("projectPostalCode");
-
-      if (id === "projectAddress" || id === "projectCity" || id === "projectPostalCode") {
-        parametresUiState.locationEditBaseSignature = getProjectLocationSignature();
-      }
-
-      if (id === "projectAddress") {
-        syncProjectLocationFields({ address: store.projectForm.address, city: "", postalCode: "", latitude: null, longitude: null, altitude: null });
-        if (cityInput) cityInput.value = "";
-        if (postalCodeInput) postalCodeInput.value = "";
-        syncLocationDerivedStaleUi();
-      }
-
-      if (id === "projectCity") {
-        syncProjectLocationFields({ address: "", city: store.projectForm.city, postalCode: "", latitude: null, longitude: null, altitude: null });
-        if (addressInput) addressInput.value = "";
-        if (postalCodeInput) postalCodeInput.value = "";
-        syncLocationDerivedStaleUi();
-      }
-
-      if (id === "projectPostalCode") {
-        syncProjectLocationFields({ address: "", city: "", postalCode: store.projectForm.postalCode, latitude: null, longitude: null, altitude: null });
-        if (addressInput) addressInput.value = "";
-        if (cityInput) cityInput.value = "";
-        syncLocationDerivedStaleUi();
-      }
-    },
-    onValidate: async (id, value) => {
-      switch (id) {
-        case "projectName": {
-          const previousProjectName = String(store.projectForm.projectName || store.currentProject?.name || "Projet demo");
-          persistCurrentProjectNameToSupabase(value).catch((error) => {
-            console.warn("persistCurrentProjectNameToSupabase failed", error);
-            persistCurrentProjectNameToSupabase(previousProjectName).catch(() => undefined);
-          });
-          break;
-        }
-        case "projectAddress": {
-          const previousLocationSignature = getLocationEditBaseSignature();
-          try {
-            const resolved = await resolveFrenchAddress(value);
-            syncProjectLocationFields({
-              address: resolved.address,
-              city: resolved.city,
-              postalCode: resolved.postalCode,
-              latitude: resolved.lat,
-              longitude: resolved.lon
-            });
-            const cityInput = document.getElementById("projectCity");
-            const postalCodeInput = document.getElementById("projectPostalCode");
-            if (cityInput) cityInput.value = resolved.city || "";
-            if (postalCodeInput) postalCodeInput.value = resolved.postalCode || "";
-          } catch (error) {
-            syncProjectLocationFields({ address: value, altitude: null });
-          }
-          await refreshLocationDerivedData({
-            runEnrichment: hasProjectLocationChanged(previousLocationSignature) && shouldAutoRunProjectBaseDataEnrichment(),
-            triggerType: "automatic",
-            triggerLabel: "Validation d’une modification de la localisation projet"
-          });
-          parametresUiState.locationEditBaseSignature = "";
-          break;
-        }
-        case "projectCity": {
-          const previousLocationSignature = getLocationEditBaseSignature();
-          try {
-            const resolved = await resolveFrenchCommune({ city: value, postalCode: store.projectForm.postalCode });
-            syncProjectLocationFields({
-              address: "",
-              city: resolved.city,
-              postalCode: resolved.postalCode,
-              latitude: resolved.lat,
-              longitude: resolved.lon
-            });
-            const postalCodeInput = document.getElementById("projectPostalCode");
-            if (postalCodeInput) postalCodeInput.value = resolved.postalCode || "";
-          } catch (error) {
-            syncProjectLocationFields({ address: "", city: value, postalCode: store.projectForm.postalCode, altitude: null });
-          }
-          await refreshLocationDerivedData({
-            runEnrichment: hasProjectLocationChanged(previousLocationSignature) && shouldAutoRunProjectBaseDataEnrichment(),
-            triggerType: "automatic",
-            triggerLabel: "Validation d’une modification de la localisation projet"
-          });
-          parametresUiState.locationEditBaseSignature = "";
-          break;
-        }
-        case "projectPostalCode": {
-          const previousLocationSignature = getLocationEditBaseSignature();
-          try {
-            const resolved = await resolveFrenchPostalCode(value);
-            syncProjectLocationFields({
-              address: "",
-              city: resolved.city,
-              postalCode: resolved.postalCode,
-              latitude: resolved.lat,
-              longitude: resolved.lon
-            });
-            const cityInput = document.getElementById("projectCity");
-            if (cityInput) cityInput.value = resolved.city || "";
-          } catch (error) {
-            syncProjectLocationFields({ address: "", city: store.projectForm.city, postalCode: value, altitude: null });
-          }
-          await refreshLocationDerivedData({
-            runEnrichment: hasProjectLocationChanged(previousLocationSignature) && shouldAutoRunProjectBaseDataEnrichment(),
-            triggerType: "automatic",
-            triggerLabel: "Validation d’une modification de la localisation projet"
-          });
-          parametresUiState.locationEditBaseSignature = "";
-          break;
-        }
-        case "climateZoneWinter":
-          store.projectForm.climateZoneWinter = value;
-          break;
-        case "climateZoneSummer":
-          store.projectForm.climateZoneSummer = value;
-          break;
-        case "climateBaseTemperatures":
-          store.projectForm.climateBaseTemperatures = value;
-          break;
-        case "dampingRatio":
-          store.projectForm.dampingRatio = value;
-          rerenderProjectParametres();
-          break;
-        default:
-          break;
-      }
-    }
-  });
-
-  bindProjectLocationAutocomplete();
-  syncLocationDerivedStaleUi();
-
-  bindGhSelectMenus(document, {
-    onChange: (id, value) => {
-      switch (id) {
-        case "currentProjectPhase":
-          store.projectForm.currentPhase = value;
-          break;
-          
-        case "riskCategory":
-          store.projectForm.riskCategory = value;
-          store.projectForm.risk = value;
-          rerenderProjectParametres();
-          break;
-
-        case "importanceCategory":
-          store.projectForm.importanceCategory = value;
-          store.projectForm.importance = importanceLabelToCode(value);
-          rerenderProjectParametres();
-          break;
-
-        case "zoneSismique":
-          store.projectForm.zoneSismique = value;
-          rerenderProjectParametres();
-          break;
-
-        case "liquefactionText":
-          store.projectForm.liquefactionText = value;
-          store.projectForm.liquefaction = liquefactionLabelToCode(value);
-          rerenderProjectParametres();
-          break;
-
-        case "referential":
-          store.projectForm.referential = value;
-          rerenderProjectParametres();
-          break;
-
-        case "soilClass":
-          store.projectForm.soilClass = value;
-          rerenderProjectParametres();
-          break;
-
-        default:
-          break;
-      }
-    }
-  });
-
-  bindProjectTabToggles();
-  bindProjectPhaseToggles();
-  bindProjectAutomationToggles();
-  refreshProjectTabsVisibility();
-
-  document.querySelectorAll("[data-open-collaborator-modal]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      openCollaboratorModal();
-    });
-  });
-
-  document.querySelectorAll("[data-close-collaborator-modal]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      closeCollaboratorModal();
-    });
-  });
-
-  document.querySelectorAll("[data-submit-collaborator]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      submitCollaboratorDraft();
-    });
-  });
-
-  const collaboratorEmailInput = document.getElementById("projectCollaboratorEmail");
-  if (collaboratorEmailInput) {
-    collaboratorEmailInput.addEventListener("input", (event) => {
-      parametresUiState.collaboratorDraftEmail = event.target.value || "";
-    });
-
-    collaboratorEmailInput.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") {
-        event.preventDefault();
-        submitCollaboratorDraft();
-      }
-    });
-
-    setTimeout(() => collaboratorEmailInput.focus(), 0);
-  }
-
-  document.querySelectorAll("[data-remove-collaborator-id]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const id = btn.getAttribute("data-remove-collaborator-id");
-      if (!id || !Array.isArray(store.projectForm.collaborators)) return;
-
-      store.projectForm.collaborators = store.projectForm.collaborators.filter((item) => item.id !== id);
-      rerenderProjectParametres();
-    });
-  });
-
-  const georisquesFetchBtn = document.getElementById("projectGeorisquesFetchBtn");
-  if (georisquesFetchBtn) {
-    georisquesFetchBtn.addEventListener("click", () => {
-      runProjectBaseDataEnrichment({
-        triggerType: "manual",
-        triggerLabel: "Lancement manuel depuis Paramètres"
-      });
-    });
-  }
-}
-
 function bindInteractiveSvgLineCharts() {
   document.querySelectorAll('.svg-line-chart[data-chart-model]').forEach((chartNode) => {
     if (chartNode.dataset.bound === '1') return;
@@ -2992,151 +2744,311 @@ export function setActiveParametresSectionId(sectionId = "") {
   parametresUiState.activeSectionId = String(sectionId || "").trim() || "parametres-general";
 }
 
-export function renderParametresSectionContent(sectionId) {
+export function renderGeneralParametresContent() {
   const form = store.projectForm;
+  return `${renderSettingsBlock({
+    id: "parametres-general",
+    title: "",
+    lead: "",
+    isActive: true,
+    isHero: false,
+    cards: [
+      renderSectionCard({
+        title: "Nom du projet",
+        description: "Description",
+        body: `<div class="settings-form-grid settings-form-grid--thirds">
+          ${renderInputField({ id: "projectName", label: "Nom de projet", value: form.projectName || "", placeholder: "Projet demo" })}
+        </div>`
+      }),
+      renderSectionCard({
+        title: "Fonctionnalités du projet",
+        description: "Active ou masque certaines fonctionnalités optionnelles dans l’en-tête projet.",
+        body: renderProjectTabsFeatureCard(form.projectTabs || {})
+      })
+    ]
+  })}`;
+}
 
-  switch (sectionId) {
-    case "parametres-localisation":
-      return `${renderSettingsBlock({
-        id: "parametres-localisation",
-        title: "",
-        lead: "",
-        cards: [
-          renderSectionCard({
-            title: "Localisation",
-            description: "Localisation administrative et d’usage du projet.",
-            badge: "LIVE",
-            body: `<div class="settings-form-grid settings-form-grid--thirds">
-              ${renderLocationAutocompleteField({ id: "projectAddress", fieldKey: "address", label: "Adresse", value: form.address || "", placeholder: "Ex. 12 avenue de la Gare, Annecy" })}
-              ${renderLocationAutocompleteField({ id: "projectCity", fieldKey: "city", label: "Ville", value: form.city || "", placeholder: "Ex. Annecy" })}
-              ${renderLocationAutocompleteField({ id: "projectPostalCode", fieldKey: "postalCode", label: "CP", value: form.postalCode || "", placeholder: "Ex. 74000", inputMode: "numeric" })}
-            </div>
-            ${(ensureGeorisquesState().commune || Number.isFinite(form.latitude) || Number.isFinite(form.longitude)) ? `
-              <div class="settings-auto-fields">
-                ${renderAutoResolvedField("Commune résolue", ensureGeorisquesState().commune?.name || form.city || "—", "Données de localisation résolues automatiquement.", { muted: hasStaleLocationDerivedData() })}
-                ${renderAutoResolvedField("Code INSEE", ensureGeorisquesState().commune?.codeInsee || "—", "Données récupérées automatiquement sur Géorisques.", { muted: hasStaleLocationDerivedData() })}
-                ${renderAutoResolvedField("Longitude", Number.isFinite(form.longitude) ? String(form.longitude) : "—", "Coordonnée automatiquement déterminée à partir de l’adresse ou du centre de commune.", { muted: hasStaleLocationDerivedData() })}
-                ${renderAutoResolvedField("Latitude", Number.isFinite(form.latitude) ? String(form.latitude) : "—", "Coordonnée automatiquement déterminée à partir de l’adresse ou du centre de commune.", { muted: hasStaleLocationDerivedData() })}
-                ${renderAutoResolvedField(
-                  "Altitude",
-                  parametresUiState.altitudeIsLoading
-                    ? "Chargement…"
-                    : (Number.isFinite(form.altitude) ? `${String(form.altitude)} m` : "—"),
-                  "Altitude automatiquement récupérée via l’API altimétrie IGN / GeoPF.",
-                  { muted: hasStaleLocationDerivedData() }
-                )}
-              </div>
-            ` : ""}
-            ${renderProjectLocationMapBlock()}
-          `
-          })
-        ]
-      })}`;
+export function renderLocalisationParametresContent() {
+  const form = store.projectForm;
+  return `${renderSettingsBlock({
+    id: "parametres-localisation",
+    title: "",
+    lead: "",
+    cards: [
+      renderSectionCard({
+        title: "Localisation",
+        description: "Localisation administrative et d’usage du projet.",
+        badge: "LIVE",
+        body: `<div class="settings-form-grid settings-form-grid--thirds">
+          ${renderLocationAutocompleteField({ id: "projectAddress", fieldKey: "address", label: "Adresse", value: form.address || "", placeholder: "Ex. 12 avenue de la Gare, Annecy" })}
+          ${renderLocationAutocompleteField({ id: "projectCity", fieldKey: "city", label: "Ville", value: form.city || "", placeholder: "Ex. Annecy" })}
+          ${renderLocationAutocompleteField({ id: "projectPostalCode", fieldKey: "postalCode", label: "CP", value: form.postalCode || "", placeholder: "Ex. 74000", inputMode: "numeric" })}
+        </div>
+        ${(ensureGeorisquesState().commune || Number.isFinite(form.latitude) || Number.isFinite(form.longitude)) ? `
+          <div class="settings-auto-fields">
+            ${renderAutoResolvedField("Commune résolue", ensureGeorisquesState().commune?.name || form.city || "—", "Données de localisation résolues automatiquement.", { muted: hasStaleLocationDerivedData() })}
+            ${renderAutoResolvedField("Code INSEE", ensureGeorisquesState().commune?.codeInsee || "—", "Données récupérées automatiquement sur Géorisques.", { muted: hasStaleLocationDerivedData() })}
+            ${renderAutoResolvedField("Longitude", Number.isFinite(form.longitude) ? String(form.longitude) : "—", "Coordonnée automatiquement déterminée à partir de l’adresse ou du centre de commune.", { muted: hasStaleLocationDerivedData() })}
+            ${renderAutoResolvedField("Latitude", Number.isFinite(form.latitude) ? String(form.latitude) : "—", "Coordonnée automatiquement déterminée à partir de l’adresse ou du centre de commune.", { muted: hasStaleLocationDerivedData() })}
+            ${renderAutoResolvedField(
+              "Altitude",
+              parametresUiState.altitudeIsLoading
+                ? "Chargement…"
+                : (Number.isFinite(form.altitude) ? `${String(form.altitude)} m` : "—"),
+              "Altitude automatiquement récupérée via l’API altimétrie IGN / GeoPF.",
+              { muted: hasStaleLocationDerivedData() }
+            )}
+          </div>
+        ` : ""}
+        ${renderProjectLocationMapBlock()}
+      `
+      })
+    ]
+  })}`;
+}
 
-    case "parametres-phase":
-      return `${renderSettingsBlock({
-        id: "parametres-phase",
-        title: "",
-        lead: "",
-        cards: [
-          renderSectionCard({
-            title: "Phases",
-            description: "Les cases sont toutes cochées par défaut. Cette structure est stockée dans le store pour préparer le branchement backend.",
-            body: renderProjectPhasesCard()
-          })
-        ]
-      })}`;
+export function renderPhasesParametresContent() {
+  return `${renderSettingsBlock({
+    id: "parametres-phase",
+    title: "",
+    lead: "",
+    cards: [
+      renderSectionCard({
+        title: "Phases",
+        description: "Les cases sont toutes cochées par défaut. Cette structure est stockée dans le store pour préparer le branchement backend.",
+        body: renderProjectPhasesCard()
+      })
+    ]
+  })}`;
+}
 
-    case "parametres-lots":
-      return `${renderSettingsBlock({
-        id: "parametres-lots",
-        title: "",
-        lead: "",
-        cards: [
-          renderSectionCard({
-            title: "Lots",
-            description: "Activez les lots présents sur le projet pour organiser les Documents et les Collaborateurs. Les lots personnalisés peuvent être ajoutés puis supprimés.",
-            body: renderProjectLotsCard()
-          })
-        ]
-      })}
+export function renderLotsParametresContent() {
+  return `${renderSettingsBlock({
+    id: "parametres-lots",
+    title: "",
+    lead: "",
+    cards: [
+      renderSectionCard({
+        title: "Lots",
+        description: "Activez les lots présents sur le projet pour organiser les Documents et les Collaborateurs. Les lots personnalisés peuvent être ajoutés puis supprimés.",
+        body: renderProjectLotsCard()
+      })
+    ]
+  })}
       ${renderAddProjectLotModal()}`;
+}
 
-    case "parametres-collaborateurs":
-      return `${renderSettingsBlock({
-        id: "parametres-collaborateurs",
-        title: "",
-        lead: "",
-        cards: [
-          renderSectionCard({
-            title: "Collaborateurs",
-            description: "Gestion des accès projet et suivi des invitations.",
-            body: renderCollaboratorsCard()
-          })
-        ]
-      })}
+export function renderCollaborateursParametresContent() {
+  return `${renderSettingsBlock({
+    id: "parametres-collaborateurs",
+    title: "",
+    lead: "",
+    cards: [
+      renderSectionCard({
+        title: "Collaborateurs",
+        description: "Gestion des accès projet et suivi des invitations.",
+        body: renderCollaboratorsCard()
+      })
+    ]
+  })}
       ${renderCollaboratorModal()}`;
+}
 
-    case "parametres-agents-actives":
-      return `${renderSettingsBlock({
-        id: "parametres-agents-actives",
-        title: "",
-        lead: "",
-        cards: [
-          renderSectionCard({
-            title: "Agents activés",
-            description: "Active les agents spécialisés disponibles pour ce projet. Le PoC expose déjà la structure cible, avec un seul agent actuellement implémenté.",
-            badge: "PoC",
-            body: renderAgentsFeatureCard()
-          })
-        ]
-      })}`;
+export function renderAgentsParametresContent() {
+  return `${renderSettingsBlock({
+    id: "parametres-agents-actives",
+    title: "",
+    lead: "",
+    cards: [
+      renderSectionCard({
+        title: "Agents activés",
+        description: "Active les agents spécialisés disponibles pour ce projet. Le PoC expose déjà la structure cible, avec un seul agent actuellement implémenté.",
+        badge: "PoC",
+        body: renderAgentsFeatureCard()
+      })
+    ]
+  })}`;
+}
 
-    case "parametres-automatisations":
-      return `${renderSettingsBlock({
-        id: "parametres-automatisations",
-        title: "",
-        lead: "",
-        cards: [
-          renderSectionCard({
-            title: "Automatisations",
-            description: "Ces réglages préfigurent une future logique de niveau de service. Deux automatisations sont activables dans le PoC actuel.",
-            badge: "PoC",
-            body: renderAutomationsFeatureCard()
-          })
-        ]
-      })}`;
+export function renderAutomatisationsParametresContent() {
+  return `${renderSettingsBlock({
+    id: "parametres-automatisations",
+    title: "",
+    lead: "",
+    cards: [
+      renderSectionCard({
+        title: "Automatisations",
+        description: "Ces réglages préfigurent une future logique de niveau de service. Deux automatisations sont activables dans le PoC actuel.",
+        badge: "PoC",
+        body: renderAutomationsFeatureCard()
+      })
+    ]
+  })}`;
+}
 
-    case "parametres-general":
-    default:
-      return `${renderSettingsBlock({
-        id: "parametres-general",
-        title: "",
-        lead: "",
-        isActive: true,
-        isHero: false,
-        cards: [
-          renderSectionCard({
-            title: "Nom du projet",
-            description: "Description",
-            body: `<div class="settings-form-grid settings-form-grid--thirds">
-              ${renderInputField({ id: "projectName", label: "Nom de projet", value: form.projectName || "", placeholder: "Projet demo" })}
-            </div>`
-          }),
-          renderSectionCard({
-            title: "Fonctionnalités du projet",
-            description: "Active ou masque certaines fonctionnalités optionnelles dans l’en-tête projet.",
-            body: renderProjectTabsFeatureCard(form.projectTabs || {})
-          })
-        ]
-      })}`;
+function bindBaseParametresUi() {
+  bindGhActionButtons();
+  bindInteractiveSvgLineCharts();
+}
+
+export function bindGeneralParametresSection(root) {
+  currentParametresRoot = root || currentParametresRoot;
+  bindBaseParametresUi();
+  bindGhEditableFields(document, {
+    onValidate: async (id, value) => {
+      if (id !== "projectName") return;
+      const previousProjectName = String(store.projectForm.projectName || store.currentProject?.name || "Projet demo");
+      persistCurrentProjectNameToSupabase(value).catch((error) => {
+        console.warn("persistCurrentProjectNameToSupabase failed", error);
+        persistCurrentProjectNameToSupabase(previousProjectName).catch(() => undefined);
+      });
+    }
+  });
+  bindProjectTabToggles();
+  refreshProjectTabsVisibility();
+}
+
+export function bindLocalisationParametresSection(root) {
+  currentParametresRoot = root || currentParametresRoot;
+  bindBaseParametresUi();
+  bindGhEditableFields(document, {
+    onEditStart: (id) => {
+      const addressInput = document.getElementById("projectAddress");
+      const cityInput = document.getElementById("projectCity");
+      const postalCodeInput = document.getElementById("projectPostalCode");
+      if (id === "projectAddress" || id === "projectCity" || id === "projectPostalCode") {
+        parametresUiState.locationEditBaseSignature = getProjectLocationSignature();
+      }
+      if (id === "projectAddress") {
+        syncProjectLocationFields({ address: store.projectForm.address, city: "", postalCode: "", latitude: null, longitude: null, altitude: null });
+        if (cityInput) cityInput.value = "";
+        if (postalCodeInput) postalCodeInput.value = "";
+        syncLocationDerivedStaleUi();
+      }
+      if (id === "projectCity") {
+        syncProjectLocationFields({ address: "", city: store.projectForm.city, postalCode: "", latitude: null, longitude: null, altitude: null });
+        if (addressInput) addressInput.value = "";
+        if (postalCodeInput) postalCodeInput.value = "";
+        syncLocationDerivedStaleUi();
+      }
+      if (id === "projectPostalCode") {
+        syncProjectLocationFields({ address: "", city: "", postalCode: store.projectForm.postalCode, latitude: null, longitude: null, altitude: null });
+        if (addressInput) addressInput.value = "";
+        if (cityInput) cityInput.value = "";
+        syncLocationDerivedStaleUi();
+      }
+    },
+    onValidate: async (id, value) => {
+      switch (id) {
+        case "projectAddress": {
+          const previousLocationSignature = getLocationEditBaseSignature();
+          try {
+            const resolved = await resolveFrenchAddress(value);
+            syncProjectLocationFields({ address: resolved.address, city: resolved.city, postalCode: resolved.postalCode, latitude: resolved.lat, longitude: resolved.lon });
+            const cityInput = document.getElementById("projectCity");
+            const postalCodeInput = document.getElementById("projectPostalCode");
+            if (cityInput) cityInput.value = resolved.city || "";
+            if (postalCodeInput) postalCodeInput.value = resolved.postalCode || "";
+          } catch {
+            syncProjectLocationFields({ address: value, altitude: null });
+          }
+          await refreshLocationDerivedData({ runEnrichment: hasProjectLocationChanged(previousLocationSignature) && shouldAutoRunProjectBaseDataEnrichment(), triggerType: "automatic", triggerLabel: "Validation d’une modification de la localisation projet" });
+          parametresUiState.locationEditBaseSignature = "";
+          break;
+        }
+        case "projectCity": {
+          const previousLocationSignature = getLocationEditBaseSignature();
+          try {
+            const resolved = await resolveFrenchCommune({ city: value, postalCode: store.projectForm.postalCode });
+            syncProjectLocationFields({ address: "", city: resolved.city, postalCode: resolved.postalCode, latitude: resolved.lat, longitude: resolved.lon });
+            const postalCodeInput = document.getElementById("projectPostalCode");
+            if (postalCodeInput) postalCodeInput.value = resolved.postalCode || "";
+          } catch {
+            syncProjectLocationFields({ address: "", city: value, postalCode: store.projectForm.postalCode, altitude: null });
+          }
+          await refreshLocationDerivedData({ runEnrichment: hasProjectLocationChanged(previousLocationSignature) && shouldAutoRunProjectBaseDataEnrichment(), triggerType: "automatic", triggerLabel: "Validation d’une modification de la localisation projet" });
+          parametresUiState.locationEditBaseSignature = "";
+          break;
+        }
+        case "projectPostalCode": {
+          const previousLocationSignature = getLocationEditBaseSignature();
+          try {
+            const resolved = await resolveFrenchPostalCode(value);
+            syncProjectLocationFields({ address: "", city: resolved.city, postalCode: resolved.postalCode, latitude: resolved.lat, longitude: resolved.lon });
+            const cityInput = document.getElementById("projectCity");
+            if (cityInput) cityInput.value = resolved.city || "";
+          } catch {
+            syncProjectLocationFields({ address: "", city: store.projectForm.city, postalCode: value, altitude: null });
+          }
+          await refreshLocationDerivedData({ runEnrichment: hasProjectLocationChanged(previousLocationSignature) && shouldAutoRunProjectBaseDataEnrichment(), triggerType: "automatic", triggerLabel: "Validation d’une modification de la localisation projet" });
+          parametresUiState.locationEditBaseSignature = "";
+          break;
+        }
+      }
+    }
+  });
+  bindProjectLocationAutocomplete();
+  syncLocationDerivedStaleUi();
+  const georisquesFetchBtn = document.getElementById("projectGeorisquesFetchBtn");
+  if (georisquesFetchBtn) {
+    georisquesFetchBtn.addEventListener("click", () => {
+      runProjectBaseDataEnrichment({ triggerType: "manual", triggerLabel: "Lancement manuel depuis Paramètres" });
+    });
   }
 }
 
-export function bindParametresSection(root, sectionId) {
+export function bindPhasesParametresSection(root) {
   currentParametresRoot = root || currentParametresRoot;
-  bindParametresEvents();
-  if (sectionId === "parametres-lots") {
-    ensureProjectLotsLoaded(currentParametresRoot);
+  bindBaseParametresUi();
+  bindProjectPhaseToggles();
+}
+
+export function bindLotsParametresSection(root) {
+  currentParametresRoot = root || currentParametresRoot;
+  bindBaseParametresUi();
+  bindProjectLotToggles();
+  ensureProjectLotsLoaded(currentParametresRoot);
+}
+
+export function bindCollaborateursParametresSection(root) {
+  currentParametresRoot = root || currentParametresRoot;
+  bindBaseParametresUi();
+  document.querySelectorAll("[data-open-collaborator-modal]").forEach((btn) => btn.addEventListener("click", () => openCollaboratorModal()));
+  document.querySelectorAll("[data-close-collaborator-modal]").forEach((btn) => btn.addEventListener("click", () => closeCollaboratorModal()));
+  document.querySelectorAll("[data-submit-collaborator]").forEach((btn) => btn.addEventListener("click", () => submitCollaboratorDraft()));
+  const collaboratorEmailInput = document.getElementById("projectCollaboratorEmail");
+  if (collaboratorEmailInput) {
+    collaboratorEmailInput.addEventListener("input", (event) => {
+      parametresUiState.collaboratorDraftEmail = event.target.value || "";
+    });
+    collaboratorEmailInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        submitCollaboratorDraft();
+      }
+    });
+    setTimeout(() => collaboratorEmailInput.focus(), 0);
   }
+  document.querySelectorAll("[data-remove-collaborator-id]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = btn.getAttribute("data-remove-collaborator-id");
+      if (!id || !Array.isArray(store.projectForm.collaborators)) return;
+      store.projectForm.collaborators = store.projectForm.collaborators.filter((item) => item.id !== id);
+      rerenderProjectParametres();
+    });
+  });
+}
+
+export function bindAgentsParametresSection(root) {
+  currentParametresRoot = root || currentParametresRoot;
+  bindBaseParametresUi();
+  bindProjectAutomationToggles();
+}
+
+export function bindAutomatisationsParametresSection(root) {
+  currentParametresRoot = root || currentParametresRoot;
+  bindBaseParametresUi();
+  bindProjectAutomationToggles();
+}
 }
