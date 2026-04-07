@@ -1,21 +1,23 @@
 import {
+  bindSideNavPanels,
   renderSideNavLayout,
   renderSideNavGroup,
   renderSideNavItem,
   renderSideNavSeparator
 } from "./ui/side-nav-layout.js";
 import { getPublicProfilePersonalSettingsTab } from "./personal-settings/public-profile.js";
+import { getAccountPersonalSettingsTab } from "./personal-settings/account.js";
 import { store } from "../store.js";
 import { svgIcon } from "../ui/icons.js";
 import { escapeHtml } from "../utils/escape-html.js";
 import { DEFAULT_PUBLIC_AVATAR } from "../services/profile-supabase-sync.js";
 
 const activePersonalSettingsTabs = [
-  getPublicProfilePersonalSettingsTab()
+  getPublicProfilePersonalSettingsTab(),
+  getAccountPersonalSettingsTab()
 ];
 
 const upcomingPersonalSettingsItems = [
-  { label: "Compte", icon: "gear" },
   { label: "Apparence", icon: "paintbrush" },
   { label: "Accessibilité", icon: "accessibility" },
   { label: "Notifications", icon: "bell" }
@@ -74,7 +76,7 @@ function renderPersonalSettingsNav(activeTabId) {
       items: activePersonalSettingsTabs.map((tab) => renderSideNavItem({
         label: tab.label,
         targetId: tab.id,
-        iconHtml: tab.iconHtml,
+        iconHtml: tab.iconHtml || svgIcon(tab.iconName),
         isActive: tab.id === activeTabId,
         isPrimary: Boolean(tab.isPrimary)
       }))
@@ -103,7 +105,7 @@ function renderPersonalSettingsNav(activeTabId) {
 export function renderPersonalSettings(root) {
   if (!root) return;
 
-  const activeTab = activePersonalSettingsTabs[0];
+  const defaultTab = activePersonalSettingsTabs[0];
 
   root.innerHTML = `
     <section class="page personal-settings-page">
@@ -111,12 +113,21 @@ export function renderPersonalSettings(root) {
         className: "settings-layout settings-layout--parametres personal-settings-layout",
         navClassName: "settings-nav settings-nav--parametres personal-settings-layout__nav",
         contentClassName: "settings-content settings-content--parametres personal-settings-layout__content",
-        navHtml: renderPersonalSettingsNav(activeTab.id),
-        contentHtml: activeTab.renderContent()
+        navHtml: renderPersonalSettingsNav(defaultTab.id),
+        contentHtml: activePersonalSettingsTabs.map((tab) => tab.renderContent()).join("")
       })}
     </section>
   `;
 
-  const activePanelRoot = root.querySelector(`[data-side-nav-panel="${activeTab.id}"]`);
-  activeTab.bind?.(activePanelRoot);
+  activePersonalSettingsTabs.forEach((tab) => {
+    const panelRoot = root.querySelector(`[data-side-nav-panel="${tab.id}"]`);
+    tab.bind?.(panelRoot);
+  });
+
+  const scrollContainer = root.querySelector(".side-nav-layout__content") || null;
+
+  bindSideNavPanels(root, {
+    defaultTarget: defaultTab.id,
+    scrollContainer
+  });
 }
