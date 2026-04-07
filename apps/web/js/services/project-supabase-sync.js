@@ -757,6 +757,8 @@ function mapProjectLotRowToViewModel(row = {}) {
     groupCode: safeString(row.lot_catalog?.group_code || ""),
     groupLabel: safeString(row.lot_catalog?.group_label || ""),
     defaultActivated: row.lot_catalog?.default_activated === true,
+    isCustom: row.lot_catalog?.is_custom === true,
+    createdByProjectId: safeString(row.lot_catalog?.created_by_project_id || ""),
     sortOrder: Number(row.lot_catalog?.sort_order || 0),
     createdAt: row.created_at || null,
     updatedAt: row.updated_at || null,
@@ -857,7 +859,7 @@ export async function syncProjectLotsFromSupabase(options = {}) {
   store.projectLots.error = "";
 
   const params = new URLSearchParams();
-  params.set("select", "id,project_id,lot_catalog_id,activated,created_at,updated_at,lot_catalog:lot_catalog_id(id,group_code,group_label,code,label,default_activated,sort_order)");
+  params.set("select", "id,project_id,lot_catalog_id,activated,created_at,updated_at,lot_catalog:lot_catalog_id(id,group_code,group_label,code,label,default_activated,sort_order,is_custom,created_by_project_id)");
   params.set("project_id", `eq.${backendProjectId}`);
   params.set("order", "created_at.asc");
 
@@ -903,7 +905,7 @@ export async function persistProjectLotActivationToSupabase(projectLotId = "", a
     "project_lots",
     { id: lotId },
     { activated: activated === true },
-    { select: "id,project_id,lot_catalog_id,activated,created_at,updated_at,lot_catalog:lot_catalog_id(id,group_code,group_label,code,label,default_activated,sort_order)" }
+    { select: "id,project_id,lot_catalog_id,activated,created_at,updated_at,lot_catalog:lot_catalog_id(id,group_code,group_label,code,label,default_activated,sort_order,is_custom,created_by_project_id)" }
   );
 
   const nextLot = mapProjectLotRowToViewModel(updatedLot || {});
@@ -917,6 +919,68 @@ export async function persistProjectLotActivationToSupabase(projectLotId = "", a
   });
 
   return nextLot;
+}
+
+
+export async function addCustomProjectLotToSupabase({ groupCode = "", label = "" } = {}) {
+  const backendProjectId = await resolveCurrentBackendProjectId();
+  if (!backendProjectId) {
+    throw new Error("Projet Supabase introuvable pour l'ajout du lot.");
+  }
+
+  const row = await rpcCall("add_custom_project_lot", {
+    p_project_id: backendProjectId,
+    p_group_code: safeString(groupCode),
+    p_label: safeString(label)
+  });
+
+  const nextLot = mapProjectLotRowToViewModel(Array.isArray(row) ? (row[0] || {}) : (row || {}));
+  const currentItems = Array.isArray(store.projectLots?.items) ? [...store.projectLots.items] : [];
+  currentItems.push(nextLot);
+  store.projectLots.items = currentItems.sort((a, b) => {
+    const groupCompare = String(a.groupLabel || "").localeCompare(String(b.groupLabel || ""), "fr");
+    if (groupCompare !== 0) return groupCompare;
+    const sortCompare = Number(a.sortOrder || 0) - Number(b.sortOrder || 0);
+    if (sortCompare !== 0) return sortCompare;
+    return String(a.label || "").localeCompare(String(b.label || ""), "fr");
+  });
+
+  dispatchProjectSupabaseSync({
+    section: "lots",
+    lotId: nextLot.id,
+    added: true
+  });
+
+  return nextLot;
+}
+
+export async function deleteCustomProjectLotFromSupabase(projectLotId = "") {
+  const backendProjectId = await resolveCurrentBackendProjectId();
+  const lotId = safeString(projectLotId);
+
+  if (!backendProjectId || !lotId) {
+    throw new Error("Lot projet introuvable pour la suppression.");
+  }
+
+  const deleted = await rpcCall("delete_custom_project_lot", {
+    p_project_lot_id: lotId,
+    p_project_id: backendProjectId
+  });
+
+  if (deleted !== true) {
+    throw new Error("Suppression du lot impossible.");
+  }
+
+  const currentItems = Array.isArray(store.projectLots?.items) ? store.projectLots.items : [];
+  store.projectLots.items = currentItems.filter((item) => item.id !== lotId);
+
+  dispatchProjectSupabaseSync({
+    section: "lots",
+    lotId,
+    deleted: true
+  });
+
+  return true;
 }
 
 export async function persistSubjectIssueActionToSupabase(subject = {}, action = "") {
