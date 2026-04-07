@@ -477,11 +477,27 @@ function bindAvatarCropper(root) {
     }
 
     if (personalSettingsUiState.pointerMode === "resize") {
-      const vectorX = clientX - personalSettingsUiState.selectionCenterX;
-      const vectorY = clientY - personalSettingsUiState.selectionCenterY;
-      const distance = Math.hypot(vectorX, vectorY);
-      const newDiameter = clamp(distance * 2, MIN_SELECTION_DIAMETER, getMaxDiameterForCenter(personalSettingsUiState.selectionCenterX, personalSettingsUiState.selectionCenterY));
-      setSelectionGeometry(personalSettingsUiState.selectionCenterX, personalSettingsUiState.selectionCenterY, newDiameter);
+      const moveDeltaX = clientX - personalSettingsUiState.dragStartX;
+      const moveDeltaY = clientY - personalSettingsUiState.dragStartY;
+      const originDistance = Math.max(1, personalSettingsUiState.dragOriginDistance);
+      const unitX = personalSettingsUiState.dragOriginVectorX / originDistance;
+      const unitY = personalSettingsUiState.dragOriginVectorY / originDistance;
+      const projectedDelta = (moveDeltaX * unitX) + (moveDeltaY * unitY);
+      const originRadius = personalSettingsUiState.dragOriginDiameter / 2;
+      const nextRadius = originRadius + projectedDelta;
+      const newDiameter = clamp(
+        nextRadius * 2,
+        MIN_SELECTION_DIAMETER,
+        getMaxDiameterForCenter(
+          personalSettingsUiState.dragOriginCenterX,
+          personalSettingsUiState.dragOriginCenterY
+        )
+      );
+      setSelectionGeometry(
+        personalSettingsUiState.dragOriginCenterX,
+        personalSettingsUiState.dragOriginCenterY,
+        newDiameter
+      );
     }
   };
 
