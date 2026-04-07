@@ -12,10 +12,7 @@ function renderAccountPanel() {
   return `
     <section class="personal-settings-panel" data-side-nav-panel="personal-settings-account">
       <div class="settings-block__head personal-settings-page__header">
-        <div class="settings-card__head-title settings-card__head-title--danger personal-settings-page__title">
-          <h4>Supprimer votre compte
-          </h4>
-        </div>
+        <div class="settings-card__head-title settings-card__head-title--danger personal-settings-page__title">Supprimer votre compte</div>
       </div>
 
       <div class="personal-settings-panel__content personal-settings-panel__content--stacked">
