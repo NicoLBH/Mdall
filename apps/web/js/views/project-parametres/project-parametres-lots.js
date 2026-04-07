@@ -90,6 +90,7 @@ function renderAddProjectLotModal() {
     modalId: "projectAddLotModal",
     title: "Ajouter un lot",
     closeDataAttribute: "data-close-project-lot-modal",
+    variant: "default",
     bodyHtml: `
       <div class="project-lot-modal__groups" role="radiogroup" aria-label="Groupe du lot">
         ${radioOptions.map((option) => `
@@ -105,11 +106,11 @@ function renderAddProjectLotModal() {
         `).join("")}
       </div>
 
-      <label class="personal-settings-delete-modal__field">
-        <span class="personal-settings-delete-modal__label">Saisssisez le titre du lot à ajouter :</span>
+      <label class="settings-modal__field">
+        <span class="settings-modal__label">Saisssisez le titre du lot à ajouter :</span>
         <input
           type="text"
-          class="gh-input personal-settings-delete-modal__input"
+          class="gh-input settings-modal__input"
           id="projectAddLotTitle"
           value="${escapeHtml(parametresUiState.addLotTitle)}"
           autocomplete="off"
@@ -117,11 +118,11 @@ function renderAddProjectLotModal() {
         >
       </label>
 
-      ${parametresUiState.addLotErrorMessage ? `<div class="gh-alert gh-alert--error personal-settings-delete-modal__feedback">${escapeHtml(parametresUiState.addLotErrorMessage)}</div>` : ""}
+      ${parametresUiState.addLotErrorMessage ? `<div class="gh-alert gh-alert--error settings-modal__feedback">${escapeHtml(parametresUiState.addLotErrorMessage)}</div>` : ""}
 
       <button
         type="button"
-        class="gh-btn gh-btn--primary personal-settings-delete-modal__submit"
+        class="gh-btn gh-btn--primary settings-modal__submit"
         id="projectAddLotSubmit"
         ${submitDisabled ? "disabled" : ""}
       >
