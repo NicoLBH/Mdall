@@ -121,7 +121,7 @@ function renderAddProjectLotModal() {
 
       <button
         type="button"
-        class="gh-btn gh-btn--success personal-settings-delete-modal__submit"
+        class="gh-btn gh-btn--primary personal-settings-delete-modal__submit"
         id="projectAddLotSubmit"
         ${submitDisabled ? "disabled" : ""}
       >
