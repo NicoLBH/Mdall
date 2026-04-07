@@ -87,6 +87,14 @@ export const store = {
     lastAnalysisDocumentIds: []
   },
 
+  projectLots: {
+    items: [],
+    loading: false,
+    loaded: false,
+    error: "",
+    projectKey: ""
+  },
+
   situationsView: {
     data: [],
     rawResult: null,
