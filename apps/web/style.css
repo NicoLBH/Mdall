@@ -9901,24 +9901,93 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   margin-bottom:16px;
 }
 
-.settings-features-card--lots{
-  padding:0;
+.settings-features-toolbar--lots{
+  margin-bottom:20px;
 }
 
-.settings-features-list--lots{
-  border-top:1px solid var(--border);
-}
-
-.settings-lots-group + .settings-lots-group{
-  border-top:1px solid var(--border);
-}
-
-.settings-lots-group__title{
-  padding:16px 20px 12px;
-  font-size:12px;
-  line-height:1.4;
+.settings-lots-add-button{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
   font-weight:600;
-  letter-spacing:.04em;
-  text-transform:uppercase;
+}
+
+.settings-lots-add-button .ui-icon{
+  width:16px;
+  height:16px;
+}
+
+.settings-lots-grid{
+  display:grid;
+  grid-template-columns:repeat(2, minmax(0, 1fr));
+  gap:16px;
+}
+
+.settings-lots-card{
+  min-width:0;
+}
+
+.settings-lots-card .settings-features-list{
+  min-height:100%;
+}
+
+.settings-feature-row--lot{
+  align-items:center;
+}
+
+.settings-feature-row__body--lot{
+  min-width:0;
+}
+
+.settings-feature-row__top--lot{
+  justify-content:space-between;
+  gap:12px;
+}
+
+.settings-lot-delete-button{
+  flex:0 0 auto;
+  border:1px solid transparent;
+  border-radius:6px;
+  background:transparent;
   color:var(--muted);
+  font-size:11px;
+  font-weight:500;
+  line-height:1;
+  padding:4px 8px;
+  cursor:pointer;
+}
+
+.settings-lot-delete-button:hover{
+  background-color:rgb(38, 44, 54);
+  color:rgb(250, 94, 85);
+  border:solid 1px rgb(61, 68, 77);
+}
+
+.settings-empty-note--card{
+  padding:16px 20px;
+}
+
+.project-lot-modal__groups{
+  display:grid;
+  gap:10px;
+  margin-bottom:8px;
+}
+
+.project-lot-modal__radio{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  color:rgb(240, 246, 252);
+  font-size:14px;
+  line-height:20px;
+}
+
+.project-lot-modal__radio input{
+  margin:0;
+}
+
+@media (max-width: 960px){
+  .settings-lots-grid{
+    grid-template-columns:minmax(0, 1fr);
+  }
 }
