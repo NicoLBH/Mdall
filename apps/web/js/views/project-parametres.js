@@ -46,7 +46,11 @@ import {
 import { renderSvgLineChart, getNiceChartTicks } from "../utils/svg-line-chart.js";
 import { persistCurrentProjectState } from "../services/project-state-storage.js";
 import { buildGoogleMapsPlaceEmbedUrl, hasGoogleMapsEmbedApiKey } from "../services/google-maps-embed-service.js";
-import { persistCurrentProjectNameToSupabase } from "../services/project-supabase-sync.js";
+import {
+  persistCurrentProjectNameToSupabase,
+  syncProjectLotsFromSupabase,
+  persistProjectLotActivationToSupabase
+} from "../services/project-supabase-sync.js";
 
 const DEFAULT_PROJECT_COLLABORATORS = [
   { id: "collab-1", email: "nicolas.lebihan@socotec.com", status: "Actif", role: "Admin" },
@@ -391,6 +395,115 @@ function renderSectionCard({ id = "", title, description = "", body = "", badge 
         
       </div>
       ${body}
+    </div>
+  `;
+}
+
+function getProjectLotsViewState() {
+  const state = store.projectLots && typeof store.projectLots === "object"
+    ? store.projectLots
+    : { items: [], loading: false, loaded: false, error: "", projectKey: "" };
+
+  if (store.projectLots !== state) {
+    store.projectLots = state;
+  }
+
+  if (!Array.isArray(state.items)) {
+    state.items = [];
+  }
+
+  if (typeof state.loading !== "boolean") {
+    state.loading = false;
+  }
+
+  if (typeof state.loaded !== "boolean") {
+    state.loaded = false;
+  }
+
+  if (typeof state.error !== "string") {
+    state.error = "";
+  }
+
+  if (typeof state.projectKey !== "string") {
+    state.projectKey = "";
+  }
+
+  return state;
+}
+
+function renderProjectLotsCard() {
+  const lotsState = getProjectLotsViewState();
+  const lots = Array.isArray(lotsState.items) ? [...lotsState.items] : [];
+  const sortedLots = lots.sort((a, b) => {
+    const groupCompare = String(a.groupLabel || "").localeCompare(String(b.groupLabel || ""), "fr");
+    if (groupCompare !== 0) return groupCompare;
+    const sortCompare = Number(a.sortOrder || 0) - Number(b.sortOrder || 0);
+    if (sortCompare !== 0) return sortCompare;
+    return String(a.label || "").localeCompare(String(b.label || ""), "fr");
+  });
+
+  const groups = [];
+  const groupsMap = new Map();
+  sortedLots.forEach((item) => {
+    const key = String(item.groupCode || item.groupLabel || "divers");
+    if (!groupsMap.has(key)) {
+      const bucket = {
+        key,
+        label: String(item.groupLabel || "Lots"),
+        items: []
+      };
+      groupsMap.set(key, bucket);
+      groups.push(bucket);
+    }
+    groupsMap.get(key).items.push(item);
+  });
+
+  let content = "";
+
+  if (lotsState.loading && !sortedLots.length) {
+    content = '<div class="settings-empty-note">Chargement des lots…</div>';
+  } else if (lotsState.error) {
+    content = `<div class="settings-inline-error">${escapeHtml(lotsState.error)}</div>`;
+  } else if (!sortedLots.length) {
+    content = '<div class="settings-empty-note">Aucun lot disponible pour ce projet.</div>';
+  } else {
+    content = groups.map((group) => `
+      <section class="settings-lots-group">
+        <div class="settings-lots-group__title">${escapeHtml(group.label)}</div>
+        <div class="settings-features-list settings-features-list--lots">
+          ${group.items.map((item) => {
+            const inputId = `projectLotToggle_${item.id}`;
+            return `
+              <label class="settings-feature-row" for="${escapeHtml(inputId)}">
+                <div class="settings-feature-row__control">
+                  <input
+                    id="${escapeHtml(inputId)}"
+                    type="checkbox"
+                    data-project-lot-toggle="${escapeHtml(item.id)}"
+                    ${item.activated ? "checked" : ""}
+                  >
+                </div>
+                <div class="settings-feature-row__body">
+                  <div class="settings-feature-row__top">
+                    <div class="settings-feature-row__label">${escapeHtml(item.label)}</div>
+                    ${item.activated ? '<span class="settings-feature-row__meta">Activé</span>' : ''}
+                    ${item.defaultActivated ? '<span class="settings-feature-row__meta settings-feature-row__meta--muted">Par défaut</span>' : ''}
+                  </div>
+                </div>
+              </label>
+            `;
+          }).join("")}
+        </div>
+      </section>
+    `).join("");
+  }
+
+  return `
+    <div class="settings-features-toolbar">
+      <button type="button" class="gh-btn" data-project-lot-add disabled>Ajouter un lot</button>
+    </div>
+    <div class="settings-features-card settings-features-card--lots">
+      ${content}
     </div>
   `;
 }
@@ -1839,11 +1952,8 @@ function getPageHtml(form) {
                 cards: [
                   renderSectionCard({
                     title: "Lots",
-                    description: "Organisation des disciplines et périmètres techniques du projet.",
-                    body: renderPlaceholderList([
-                      "Gros œuvre, structure, fluides, électricité, SSI, VRD, enveloppe, second œuvre, exploitation.",
-                      "Découpage compatible avec les tableaux Documents, Situations et Sujets."
-                    ])
+                    description: "Chaque projet est associé à une liste de lots provenant de Supabase. Le bouton d'ajout est présent dans l'UI, son comportement sera branché ensuite.",
+                    body: renderProjectLotsCard()
                   })
                 ]
               })}
@@ -1905,6 +2015,28 @@ export function renderProjectParametres(root) {
   bindParametresEvents();
   bindParametresNav();
 
+  const lotsState = getProjectLotsViewState();
+  const currentLotsProjectKey = String(store.currentProjectId || store.currentProject?.id || "default");
+  if (lotsState.projectKey !== currentLotsProjectKey) {
+    lotsState.projectKey = currentLotsProjectKey;
+    lotsState.items = [];
+    lotsState.loaded = false;
+    lotsState.error = "";
+  }
+
+  if (!lotsState.loading && !lotsState.loaded) {
+    lotsState.loading = true;
+    syncProjectLotsFromSupabase({ force: true })
+      .then(() => {
+        if (!root?.isConnected) return;
+        rerenderProjectParametres();
+      })
+      .catch((error) => {
+        console.warn("syncProjectLotsFromSupabase failed", error);
+        if (!root?.isConnected) return;
+        rerenderProjectParametres();
+      });
+  }
 }
 
 function bindValue(id, handler, eventName = "input") {
@@ -2017,6 +2149,30 @@ function bindProjectPhaseToggles() {
       }
 
       rerenderProjectParametres();
+    });
+  });
+}
+
+async function handleProjectLotToggle(input, activated) {
+  const previousChecked = input.checked;
+  input.disabled = true;
+
+  try {
+    await persistProjectLotActivationToSupabase(input.getAttribute("data-project-lot-toggle"), activated);
+    rerenderProjectParametres();
+  } catch (error) {
+    console.warn("persistProjectLotActivationToSupabase failed", error);
+    input.checked = !activated;
+  } finally {
+    input.disabled = false;
+  }
+}
+
+function bindProjectLotToggles() {
+  document.querySelectorAll("[data-project-lot-toggle]").forEach((input) => {
+    input.addEventListener("change", (event) => {
+      const target = event.target;
+      handleProjectLotToggle(target, !!target.checked);
     });
   });
 }
@@ -2323,6 +2479,7 @@ function bindProjectLocationAutocomplete() {
 function bindParametresEvents() {
   bindGhActionButtons();
   bindInteractiveSvgLineCharts();
+  bindProjectLotToggles();
   
   bindGhEditableFields(document, {
     onEditStart: (id) => {
