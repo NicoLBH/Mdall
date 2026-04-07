@@ -1,6 +1,7 @@
 import { renderGlobalDashboard } from "./views/global-dashboard.js";
 import { renderProjectsList } from "./views/projects-list.js";
 import { renderProjectLayout } from "./views/project-layout.js";
+import { renderPersonalSettings } from "./views/personal-settings.js";
 import { unmountProjectShellChrome } from "./views/project-shell-chrome.js";
 import { store } from "./store.js";
 import { syncCurrentProjectFromRoute } from "./demo-context.js";
@@ -30,6 +31,13 @@ function route() {
     store.currentProjectId = null;
     unmountProjectShellChrome();
     renderProjectsList(root);
+    return;
+  }
+
+  if (parts[0] === "settings" || parts[0] === "profile") {
+    store.currentProjectId = null;
+    unmountProjectShellChrome();
+    renderPersonalSettings(root);
     return;
   }
 
