@@ -9894,3 +9894,31 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
     margin:56px auto 16px;
   }
 }
+
+.settings-features-toolbar{
+  display:flex;
+  justify-content:flex-end;
+  margin-bottom:16px;
+}
+
+.settings-features-card--lots{
+  padding:0;
+}
+
+.settings-features-list--lots{
+  border-top:1px solid var(--border);
+}
+
+.settings-lots-group + .settings-lots-group{
+  border-top:1px solid var(--border);
+}
+
+.settings-lots-group__title{
+  padding:16px 20px 12px;
+  font-size:12px;
+  line-height:1.4;
+  font-weight:600;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+  color:var(--muted);
+}
