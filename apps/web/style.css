@@ -3777,8 +3777,9 @@ color:var(--text);
 }
 
 .gh-btn--danger-alt:hover{
-  border-color: var(--button-danger-borderColor-rest);
-  filter: brightness(1.05);
+  background-color: rgb(182, 35, 36);
+  color:rgb(255, 255, 255);
+  border: solid 1px rgba(255, 255, 255, 0.15);
 }
 
 .gh-btn--danger-alt .ui-icon{
@@ -9417,9 +9418,14 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
 }
 
 .personal-settings-panel__content{
-
+  display:grid;
+  grid-template-columns:minmax(0, 1fr) 240px;
+  gap:32px;
+  align-items:start;
 }
-
+personal-settings-panel__content--stacked{
+  display:block;
+}
 .personal-settings-form-grid{
   display:grid;
   grid-template-columns:repeat(2, minmax(0, 1fr));
