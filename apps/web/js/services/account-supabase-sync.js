@@ -1,4 +1,4 @@
-import { buildSupabaseAuthHeaders, getCurrentUser, getSupabaseUrl, signOut } from "../../assets/js/auth.js";
+import { buildSupabaseAuthHeaders, getCurrentUser, getSupabaseUrl, refreshUserSession, signOut } from "../../assets/js/auth.js";
 import { store } from "../store.js";
 
 const DELETE_ACCOUNT_FUNCTION_NAME = "delete-account";
@@ -52,16 +52,32 @@ export async function deleteCurrentUserAccount({ identityInput = "", confirmatio
     throw new Error("L'identifiant de confirmation ne correspond pas à votre compte.");
   }
 
-  const response = await fetch(`${getSupabaseUrl()}/functions/v1/${DELETE_ACCOUNT_FUNCTION_NAME}`, {
+  const payload = {
+    identityInput: safeString(identityInput),
+    confirmationText: safeString(confirmationText)
+  };
+
+  let response = await fetch(`${getSupabaseUrl()}/functions/v1/${DELETE_ACCOUNT_FUNCTION_NAME}`, {
     method: "POST",
     headers: await buildSupabaseAuthHeaders({
       "Content-Type": "application/json"
     }),
-    body: JSON.stringify({
-      identityInput: safeString(identityInput),
-      confirmationText: safeString(confirmationText)
-    })
+    body: JSON.stringify(payload)
   });
+
+  if (response.status === 401) {
+    await refreshUserSession();
+
+    response = await fetch(`${getSupabaseUrl()}/functions/v1/${DELETE_ACCOUNT_FUNCTION_NAME}`, {
+      method: "POST",
+      headers: await buildSupabaseAuthHeaders({
+        "Content-Type": "application/json"
+      }, {
+        forceRefresh: true
+      }),
+      body: JSON.stringify(payload)
+    });
+  }
 
   let data = null;
   try {
