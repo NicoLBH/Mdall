@@ -9533,18 +9533,21 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
 }
 
 
+.settings-modal,
 .personal-settings-delete-modal{
   position:fixed;
   inset:0;
   z-index:var(--z-modal);
 }
 
+.settings-modal__backdrop,
 .personal-settings-delete-modal__backdrop{
   position:absolute;
   inset:0;
   background:rgba(1,4,9,.78);
 }
 
+.settings-modal__dialog,
 .personal-settings-delete-modal__dialog{
   position:relative;
   width:min(96vw, 484px);
@@ -9556,6 +9559,7 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   overflow:hidden;
 }
 
+.settings-modal__head,
 .personal-settings-delete-modal__head{
   display:flex;
   align-items:center;
@@ -9564,6 +9568,7 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   padding:16px 16px 12px;
 }
 
+.settings-modal__title,
 .personal-settings-delete-modal__title{
   margin:0;
   font-size:22px;
@@ -9572,6 +9577,7 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   color:var(--fgColor-default, #f0f6fc);
 }
 
+.settings-modal__close,
 .personal-settings-delete-modal__close{
   flex:0 0 auto;
   width:32px;
@@ -9586,54 +9592,67 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   cursor:pointer;
 }
 
+.settings-modal__close:hover,
 .personal-settings-delete-modal__close:hover{
   background:rgb(48, 54, 61);
   color:rgb(240, 246, 252);
 }
 
+.settings-modal__body,
 .personal-settings-delete-modal__body{
   padding:0 16px 16px;
 }
 
+.settings-modal__alert,
 .personal-settings-delete-modal__alert{
   margin:0 0 18px;
   min-height:62px;
   padding:0 16px;
-  border:1px solid rgba(248,81,73,.65);
   border-radius:0;
-  background:rgba(248,81,73,.14);
   color:rgb(240, 246, 252);
   font-size:14px;
   line-height:20px;
 }
 
+.settings-modal__alert--danger,
+.personal-settings-delete-modal__alert{
+  border:1px solid rgba(248,81,73,.65);
+  background:rgba(248,81,73,.14);
+}
+
+.settings-modal__alert-icon,
 .personal-settings-delete-modal__alert-icon{
   display:inline-flex;
   align-items:center;
   color:rgb(248, 81, 73);
 }
 
+.settings-modal__alert-icon .ui-icon,
 .personal-settings-delete-modal__alert-icon .ui-icon{
   width:16px;
   height:16px;
   fill:currentColor;
 }
 
+.settings-modal__copy,
 .personal-settings-delete-modal__copy{
   color:rgb(240, 246, 252);
   font-size:14px;
   line-height:1.5;
 }
 
+.settings-modal__copy p,
 .personal-settings-delete-modal__copy p{
   margin:0 0 10px;
 }
 
+.settings-modal__field,
 .personal-settings-delete-modal__field{
   display:block;
   margin-top:14px;
 }
 
+.settings-modal__label,
 .personal-settings-delete-modal__label{
   display:block;
   margin-bottom:8px;
@@ -9643,15 +9662,18 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   font-weight:600;
 }
 
+.settings-modal__label em,
 .personal-settings-delete-modal__label em{
   font-style:italic;
 }
 
+.settings-modal__input,
 .personal-settings-delete-modal__input{
   width:100%;
   min-height:32px;
 }
 
+.settings-modal__note,
 .personal-settings-delete-modal__note{
   margin-top:12px;
   color:rgb(139, 148, 158);
@@ -9659,6 +9681,16 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   line-height:18px;
 }
 
+.settings-modal__note--success{
+  color:rgb(63, 185, 80);
+}
+
+.settings-modal__feedback,
+.personal-settings-delete-modal__feedback{
+  margin-top:14px;
+}
+
+.settings-modal__submit,
 .personal-settings-delete-modal__submit{
   width:100%;
   margin-top:8px;
@@ -9680,11 +9712,13 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
 }
 
 @media (max-width: 640px){
+  .settings-modal__dialog,
   .personal-settings-delete-modal__dialog{
     width:min(calc(100vw - 24px), 484px);
     margin:96px auto 24px;
   }
 
+  .settings-modal__title,
   .personal-settings-delete-modal__title{
     font-size:18px;
   }
