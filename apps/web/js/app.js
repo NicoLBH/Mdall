@@ -7,7 +7,8 @@ import { ensureProjectAutomationDefaults } from "./services/project-automation.j
 import { bindGhActionButtons } from "./views/ui/gh-split-button.js";
 import { initializeDemoContext } from "./demo-context.js";
 import { PROJECT_IDENTITY_UPDATED_EVENT } from "./services/project-supabase-sync.js";
-import { getCurrentUser, requireAuth } from "../assets/js/auth.js";
+import { requireAuth } from "../assets/js/auth.js";
+import { hydrateStoreUserPublicProfile } from "./services/profile-supabase-sync.js";
 
 let analysisEventsBound = false;
 let projectIdentityEventsBound = false;
@@ -56,6 +57,10 @@ async function bootstrap() {
     role: authenticatedUser.user_metadata?.role || "Utilisateur",
     avatar: "assets/images/260093543.png"
   };
+
+  await hydrateStoreUserPublicProfile().catch((error) => {
+    console.warn("hydrateStoreUserPublicProfile failed", error);
+  });
 
   initializeDemoContext();
 
