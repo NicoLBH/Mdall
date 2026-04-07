@@ -9927,6 +9927,13 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   min-width:0;
 }
 
+.settings-lots-card .settings-features-card__title{
+  background-color: var(--bg-input);
+  border-top-right-radius: var(--radius);
+  border-top-left-radius: var(--radius);
+  border-bottom: solid 1px var(--border);
+}
+
 .settings-lots-card .settings-features-list{
   min-height:100%;
 }
