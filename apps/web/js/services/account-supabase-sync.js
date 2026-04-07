@@ -12,6 +12,13 @@ function normalizeIdentity(value) {
   return safeString(value).toLowerCase();
 }
 
+function maskToken(token) {
+  const value = safeString(token);
+  if (!value) return "";
+  if (value.length <= 12) return `${value.slice(0, 4)}…${value.slice(-2)}`;
+  return `${value.slice(0, 8)}…${value.slice(-6)}`;
+}
+
 function buildUserIdentityCandidates(user) {
   const firstName = safeString(store.user?.publicProfile?.firstName || store.user?.firstName || user?.user_metadata?.first_name || "");
   const lastName = safeString(store.user?.publicProfile?.lastName || store.user?.lastName || user?.user_metadata?.last_name || "");
@@ -57,25 +64,56 @@ export async function deleteCurrentUserAccount({ identityInput = "", confirmatio
     confirmationText: safeString(confirmationText)
   };
 
-  let response = await fetch(`${getSupabaseUrl()}/functions/v1/${DELETE_ACCOUNT_FUNCTION_NAME}`, {
+  const endpoint = `${getSupabaseUrl()}/functions/v1/${DELETE_ACCOUNT_FUNCTION_NAME}`;
+  let requestHeaders = await buildSupabaseAuthHeaders({
+    "Content-Type": "application/json"
+  });
+
+  console.log("[delete-account] preparing request", {
+    endpoint,
+    userId: user.id,
+    identityCandidates,
+    authorizationPreview: maskToken(String(requestHeaders.Authorization || "").replace(/^Bearer\s+/i, "")),
+    hasApiKey: Boolean(requestHeaders.apikey)
+  });
+
+  let response = await fetch(endpoint, {
     method: "POST",
-    headers: await buildSupabaseAuthHeaders({
-      "Content-Type": "application/json"
-    }),
+    headers: requestHeaders,
     body: JSON.stringify(payload)
   });
 
+  console.log("[delete-account] first response", {
+    status: response.status,
+    ok: response.ok
+  });
+
   if (response.status === 401) {
+    console.warn("[delete-account] received 401, forcing session refresh and retrying");
     await refreshUserSession();
 
-    response = await fetch(`${getSupabaseUrl()}/functions/v1/${DELETE_ACCOUNT_FUNCTION_NAME}`, {
+    requestHeaders = await buildSupabaseAuthHeaders({
+      "Content-Type": "application/json"
+    }, {
+      forceRefresh: true
+    });
+
+    console.log("[delete-account] retry request", {
+      endpoint,
+      userId: user.id,
+      authorizationPreview: maskToken(String(requestHeaders.Authorization || "").replace(/^Bearer\s+/i, "")),
+      hasApiKey: Boolean(requestHeaders.apikey)
+    });
+
+    response = await fetch(endpoint, {
       method: "POST",
-      headers: await buildSupabaseAuthHeaders({
-        "Content-Type": "application/json"
-      }, {
-        forceRefresh: true
-      }),
+      headers: requestHeaders,
       body: JSON.stringify(payload)
+    });
+
+    console.log("[delete-account] retry response", {
+      status: response.status,
+      ok: response.ok
     });
   }
 
