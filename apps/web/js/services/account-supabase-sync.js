@@ -1,4 +1,4 @@
-import { supabase, getCurrentUser, signOut } from "../../assets/js/auth.js";
+import { buildSupabaseAuthHeaders, getCurrentUser, getSupabaseUrl, signOut } from "../../assets/js/auth.js";
 import { store } from "../store.js";
 
 const DELETE_ACCOUNT_FUNCTION_NAME = "delete-account";
@@ -52,15 +52,26 @@ export async function deleteCurrentUserAccount({ identityInput = "", confirmatio
     throw new Error("L'identifiant de confirmation ne correspond pas à votre compte.");
   }
 
-  const { data, error } = await supabase.functions.invoke(DELETE_ACCOUNT_FUNCTION_NAME, {
-    body: {
+  const response = await fetch(`${getSupabaseUrl()}/functions/v1/${DELETE_ACCOUNT_FUNCTION_NAME}`, {
+    method: "POST",
+    headers: await buildSupabaseAuthHeaders({
+      "Content-Type": "application/json"
+    }),
+    body: JSON.stringify({
       identityInput: safeString(identityInput),
       confirmationText: safeString(confirmationText)
-    }
+    })
   });
 
-  if (error) {
-    throw new Error(await resolveFunctionsInvokeError(error));
+  let data = null;
+  try {
+    data = await response.json();
+  } catch {
+    data = null;
+  }
+
+  if (!response.ok) {
+    throw new Error(data?.error || `La suppression du compte a échoué (${response.status}).`);
   }
 
   if (!data?.ok) {
@@ -74,24 +85,4 @@ export async function deleteCurrentUserAccount({ identityInput = "", confirmatio
   }
 
   return data;
-}
-
-
-async function resolveFunctionsInvokeError(error) {
-  const fallbackMessage = error?.message || "La suppression du compte a échoué.";
-  const context = error?.context;
-
-  if (!context) return fallbackMessage;
-
-  try {
-    const payload = await context.json();
-    return payload?.error || fallbackMessage;
-  } catch {
-    try {
-      const text = await context.text();
-      return text || fallbackMessage;
-    } catch {
-      return fallbackMessage;
-    }
-  }
 }
