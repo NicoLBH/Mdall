@@ -2,6 +2,7 @@ import { store } from "../../store.js";
 import { svgIcon } from "../../ui/icons.js";
 import { escapeHtml } from "../../utils/escape-html.js";
 import { deleteCurrentUserAccount, DELETE_ACCOUNT_CONFIRMATION_TEXT } from "../../services/account-supabase-sync.js";
+import { renderSettingsModal } from "../ui/settings-modal.js";
 
 const deleteAccountUiState = {
   modalOpen: false,
@@ -36,76 +37,66 @@ function renderDeleteAccountModal() {
     deleteAccountUiState.identityValue.trim().length > 0 &&
     deleteAccountUiState.confirmValue.trim().toLowerCase() === DELETE_ACCOUNT_CONFIRMATION_TEXT;
 
-  return `
-    <div class="personal-settings-delete-modal" id="personalSettingsDeleteModal">
-      <div class="personal-settings-delete-modal__backdrop" data-close-delete-modal="true"></div>
-
-      <div class="personal-settings-delete-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="personalSettingsDeleteModalTitle">
-        <div class="personal-settings-delete-modal__head">
-          <div id="personalSettingsDeleteModalTitle" class="personal-settings-delete-modal__title">Êtes-vous sûr de vouloir faire cela&nbsp;?</div>
-          <button type="button" class="personal-settings-delete-modal__close" data-close-delete-modal="true" aria-label="Fermer">
-            ${svgIcon("x")}
-          </button>
-        </div>
-
-        <div class="personal-settings-delete-modal__body">
-          <div class="gh-alert gh-alert--error personal-settings-delete-modal__alert">
-            <span class="personal-settings-delete-modal__alert-icon">${svgIcon("alert")}</span>
-            <span>Ceci est extrêmement important.</span>
-          </div>
-
-          <div class="personal-settings-delete-modal__copy">
-            <p>
-              Nous supprimerons immédiatement votre compte Mdall, ainsi que tous vos projets, documents, sujets, automatisations et paramètres associés.
-            </p>
-            <p>
-              Vous ne pourrez plus accéder à Mdall avec ce compte.
-            </p>
-          </div>
-
-          <label class="personal-settings-delete-modal__field">
-            <span class="personal-settings-delete-modal__label">Votre nom d'utilisateur ou email&nbsp;:</span>
-            <input
-              type="text"
-              class="gh-input personal-settings-delete-modal__input"
-              id="personalSettingsDeleteIdentity"
-              value="${escapeHtml(deleteAccountUiState.identityValue)}"
-              autocomplete="off"
-              spellcheck="false"
-            >
-          </label>
-
-          <label class="personal-settings-delete-modal__field">
-            <span class="personal-settings-delete-modal__label">Pour vérifier, tapez <em>${escapeHtml(DELETE_ACCOUNT_CONFIRMATION_TEXT)}</em> exactement comme affiché&nbsp;:</span>
-            <input
-              type="text"
-              class="gh-input personal-settings-delete-modal__input"
-              id="personalSettingsDeleteConfirmation"
-              value="${escapeHtml(deleteAccountUiState.confirmValue)}"
-              autocomplete="off"
-              spellcheck="false"
-            >
-          </label>
-
-          <div class="personal-settings-delete-modal__note">
-            Vous devrez confirmer votre identité avant la suppression du compte.
-          </div>
-
-          ${deleteAccountUiState.errorMessage ? `<div class="gh-alert gh-alert--error personal-settings-delete-modal__feedback">${escapeHtml(deleteAccountUiState.errorMessage)}</div>` : ""}
-          ${deleteAccountUiState.successMessage ? `<div class="personal-settings-delete-modal__note personal-settings-delete-modal__note--success">${escapeHtml(deleteAccountUiState.successMessage)}</div>` : ""}
-
-          <button
-            type="button"
-            class="gh-btn gh-btn--danger-alt personal-settings-delete-modal__submit"
-            id="personalSettingsDeleteSubmit"
-            ${isSubmitEnabled && !deleteAccountUiState.submitting ? "" : "disabled"}
-          >
-            ${deleteAccountUiState.submitting ? "Suppression en cours…" : "Annuler le forfait et supprimer ce compte"}
-          </button>
-        </div>
+  return renderSettingsModal({
+    modalId: "personalSettingsDeleteModal",
+    title: "Êtes-vous sûr de vouloir faire cela ?",
+    closeDataAttribute: "data-close-delete-modal",
+    bodyHtml: `
+      <div class="gh-alert gh-alert--error personal-settings-delete-modal__alert">
+        <span class="personal-settings-delete-modal__alert-icon">${svgIcon("alert")}</span>
+        <span>Ceci est extrêmement important.</span>
       </div>
-    </div>
-  `;
+
+      <div class="personal-settings-delete-modal__copy">
+        <p>
+          Nous supprimerons immédiatement votre compte Mdall, ainsi que tous vos projets, documents, sujets, automatisations et paramètres associés.
+        </p>
+        <p>
+          Vous ne pourrez plus accéder à Mdall avec ce compte.
+        </p>
+      </div>
+
+      <label class="personal-settings-delete-modal__field">
+        <span class="personal-settings-delete-modal__label">Votre nom d'utilisateur ou email&nbsp;:</span>
+        <input
+          type="text"
+          class="gh-input personal-settings-delete-modal__input"
+          id="personalSettingsDeleteIdentity"
+          value="${escapeHtml(deleteAccountUiState.identityValue)}"
+          autocomplete="off"
+          spellcheck="false"
+        >
+      </label>
+
+      <label class="personal-settings-delete-modal__field">
+        <span class="personal-settings-delete-modal__label">Pour vérifier, tapez <em>${escapeHtml(DELETE_ACCOUNT_CONFIRMATION_TEXT)}</em> exactement comme affiché&nbsp;:</span>
+        <input
+          type="text"
+          class="gh-input personal-settings-delete-modal__input"
+          id="personalSettingsDeleteConfirmation"
+          value="${escapeHtml(deleteAccountUiState.confirmValue)}"
+          autocomplete="off"
+          spellcheck="false"
+        >
+      </label>
+
+      <div class="personal-settings-delete-modal__note">
+        Vous devrez confirmer votre identité avant la suppression du compte.
+      </div>
+
+      ${deleteAccountUiState.errorMessage ? `<div class="gh-alert gh-alert--error personal-settings-delete-modal__feedback">${escapeHtml(deleteAccountUiState.errorMessage)}</div>` : ""}
+      ${deleteAccountUiState.successMessage ? `<div class="personal-settings-delete-modal__note personal-settings-delete-modal__note--success">${escapeHtml(deleteAccountUiState.successMessage)}</div>` : ""}
+
+      <button
+        type="button"
+        class="gh-btn gh-btn--danger-alt personal-settings-delete-modal__submit"
+        id="personalSettingsDeleteSubmit"
+        ${isSubmitEnabled && !deleteAccountUiState.submitting ? "" : "disabled"}
+      >
+        ${deleteAccountUiState.submitting ? "Suppression en cours…" : "Annuler le forfait et supprimer ce compte"}
+      </button>
+    `
+  });
 }
 
 function renderAccountPanel() {
