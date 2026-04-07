@@ -1,4 +1,7 @@
-import { renderParametresSectionContent } from "./project-parametres-core.js";
+import {
+  renderGeneralParametresContent,
+  bindGeneralParametresSection
+} from "./project-parametres-core.js";
 
 export function getGeneralProjectParametresTab() {
   return {
@@ -6,6 +9,7 @@ export function getGeneralProjectParametresTab() {
     label: "Général",
     iconName: "general",
     isPrimary: true,
-    renderContent: () => renderParametresSectionContent("parametres-general")
+    renderContent: () => renderGeneralParametresContent(),
+    bind: (root) => bindGeneralParametresSection(root)
   };
 }
