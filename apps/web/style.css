@@ -9376,7 +9376,7 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   border-bottom:1px solid var(--border);
 }
 
-.personal-settings-page__header h3{
+.personal-settings-page__title{
   margin:0;
   font-size:40px;
   line-height:1.2;
@@ -9680,7 +9680,7 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
     grid-column:auto;
   }
 
-  .personal-settings-page__header h3{
+  .personal-settings-page__title{
     font-size:30px;
   }
 
