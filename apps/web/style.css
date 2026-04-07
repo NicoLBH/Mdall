@@ -3193,12 +3193,16 @@ color:var(--text);
   color:var(--muted);
 }
 
-.side-nav-layout__item.is-active{
+.side-nav-layout__item.is-active,
+.side-nav-layout__item[data-side-nav-active="true"],
+.side-nav-layout__item[aria-current="page"]{
   background:rgba(110,118,129,.14);
   font-weight:500;
 }
 
-.side-nav-layout__item.is-active::before{
+.side-nav-layout__item.is-active::before,
+.side-nav-layout__item[data-side-nav-active="true"]::before,
+.side-nav-layout__item[aria-current="page"]::before{
   background:var(--borderColor-accent-emphasis);
   border-radius:var(--radius);
   content:"";
@@ -3229,6 +3233,8 @@ color:var(--text);
 }
 
 .side-nav-layout__item.is-active .side-nav-layout__icon,
+.side-nav-layout__item[data-side-nav-active="true"] .side-nav-layout__icon,
+.side-nav-layout__item[aria-current="page"] .side-nav-layout__icon,
 .side-nav-layout__item:hover .side-nav-layout__icon{
   color:var(--text);
 }
@@ -9952,14 +9958,74 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   height:16px;
 }
 
-.settings-lots-grid{
-  display:grid;
-  grid-template-columns:repeat(2, minmax(0, 1fr));
-  gap:16px;
+
+.light-tabs{
+  display:flex;
+  align-items:flex-end;
+  gap:0;
+  border-bottom:1px solid var(--border);
+  margin:0 0 16px;
+  overflow-x:auto;
+  scrollbar-width:none;
+}
+
+.light-tabs::-webkit-scrollbar{
+  display:none;
+}
+
+.light-tabs__item{
+  position:relative;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  margin:0 0 -1px;
+  padding:10px 16px;
+  border:0;
+  border-bottom:1px solid transparent;
+  border-radius:8px 8px 0 0;
+  background:transparent;
+  color:var(--muted);
+  font:inherit;
+  font-size:14px;
+  font-weight:500;
+  white-space:nowrap;
+  cursor:pointer;
+}
+
+.light-tabs__item:hover{
+  color:var(--text);
+}
+
+.light-tabs__item.is-active{
+  border:1px solid var(--border);
+  border-bottom-color:var(--bg-canvas);
+  background:var(--bg-canvas);
+  color:var(--text);
+}
+
+.light-tabs__label{
+  position:relative;
+  z-index:1;
+}
+
+.light-tabs--accent .light-tabs__item{
+  color:var(--borderColor-accent-emphasis);
+}
+
+.light-tabs--accent .light-tabs__item.is-active{
+  color:var(--text);
+}
+
+.settings-lots-tabs{
+  margin-bottom:16px;
 }
 
 .settings-lots-card{
   min-width:0;
+}
+
+.settings-lots-card--active-group{
+  width:100%;
 }
 
 .settings-lots-card .settings-features-card__title{
