@@ -571,7 +571,7 @@ function renderProjectLotsCard() {
 
   return `
     <div class="settings-features-toolbar settings-features-toolbar--lots">
-      <button type="button" class="gh-btn gh-btn--success settings-lots-add-button" data-project-lot-add>
+      <button type="button" class="gh-btn settings-lots-add-button" data-project-lot-add>
         ${svgIcon("book")}
         <span>Ajouter un lot</span>
       </button>
