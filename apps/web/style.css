@@ -9531,6 +9531,164 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   font-size: 13px;
 }
 
+
+.personal-settings-delete-modal{
+  position:fixed;
+  inset:0;
+  z-index:var(--z-modal);
+}
+
+.personal-settings-delete-modal__backdrop{
+  position:absolute;
+  inset:0;
+  background:rgba(1,4,9,.78);
+}
+
+.personal-settings-delete-modal__dialog{
+  position:relative;
+  width:min(96vw, 484px);
+  margin:214px auto 24px;
+  border:1px solid rgb(48, 54, 61);
+  border-radius:16px;
+  background:rgb(1, 4, 9);
+  box-shadow:rgb(61, 68, 77) 0px 0px 0px 1px, rgba(1, 4, 9, 0.4) 0px 8px 24px;
+  overflow:hidden;
+}
+
+.personal-settings-delete-modal__head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  padding:16px 16px 12px;
+}
+
+.personal-settings-delete-modal__title{
+  margin:0;
+  font-size:22px;
+  line-height:1.25;
+  font-weight:600;
+  color:var(--fgColor-default, #f0f6fc);
+}
+
+.personal-settings-delete-modal__close{
+  flex:0 0 auto;
+  width:32px;
+  height:32px;
+  border:0;
+  border-radius:8px;
+  background:rgb(33, 38, 45);
+  color:rgb(139, 148, 158);
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+}
+
+.personal-settings-delete-modal__close:hover{
+  background:rgb(48, 54, 61);
+  color:rgb(240, 246, 252);
+}
+
+.personal-settings-delete-modal__body{
+  padding:0 16px 16px;
+}
+
+.personal-settings-delete-modal__alert{
+  margin:0 0 18px;
+  min-height:62px;
+  padding:0 16px;
+  border:1px solid rgba(248,81,73,.65);
+  border-radius:0;
+  background:rgba(248,81,73,.14);
+  color:rgb(240, 246, 252);
+  font-size:14px;
+  line-height:20px;
+}
+
+.personal-settings-delete-modal__alert-icon{
+  display:inline-flex;
+  align-items:center;
+  color:rgb(248, 81, 73);
+}
+
+.personal-settings-delete-modal__alert-icon .ui-icon{
+  width:16px;
+  height:16px;
+  fill:currentColor;
+}
+
+.personal-settings-delete-modal__copy{
+  color:rgb(240, 246, 252);
+  font-size:14px;
+  line-height:1.5;
+}
+
+.personal-settings-delete-modal__copy p{
+  margin:0 0 10px;
+}
+
+.personal-settings-delete-modal__field{
+  display:block;
+  margin-top:14px;
+}
+
+.personal-settings-delete-modal__label{
+  display:block;
+  margin-bottom:8px;
+  color:rgb(240, 246, 252);
+  font-size:14px;
+  line-height:20px;
+  font-weight:600;
+}
+
+.personal-settings-delete-modal__label em{
+  font-style:italic;
+}
+
+.personal-settings-delete-modal__input{
+  width:100%;
+  min-height:32px;
+}
+
+.personal-settings-delete-modal__note{
+  margin-top:12px;
+  color:rgb(139, 148, 158);
+  font-size:12px;
+  line-height:18px;
+}
+
+.personal-settings-delete-modal__submit{
+  width:100%;
+  margin-top:8px;
+  justify-content:center;
+}
+
+.gh-btn--danger-alt:disabled{
+  opacity:1;
+  cursor:not-allowed;
+  background:rgb(33, 38, 45);
+  border-color:rgb(48, 54, 61);
+  color:rgba(250, 94, 85, .75);
+}
+
+.gh-btn--danger-alt:disabled:hover{
+  background:rgb(33, 38, 45);
+  border-color:rgb(48, 54, 61);
+  color:rgba(250, 94, 85, .75);
+}
+
+@media (max-width: 640px){
+  .personal-settings-delete-modal__dialog{
+    width:min(calc(100vw - 24px), 484px);
+    margin:96px auto 24px;
+  }
+
+  .personal-settings-delete-modal__title{
+    font-size:18px;
+  }
+}
+
 .personal-settings-page__footer{
   display:flex;
   align-items:center;
