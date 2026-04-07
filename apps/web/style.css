@@ -9301,7 +9301,7 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
 }
 
 .personal-settings-layout{
-  max-width:1400px;
+  max-width:1280px;
   margin:0 auto;
 }
 
@@ -9511,17 +9511,23 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
 
 .personal-settings-cropper{
   position:relative;
-  width:100%;
-  aspect-ratio:1 / 1;
+  width:412px;
+  height:412px;
+  max-width:100%;
+  max-height:min(70vh, 412px);
+  margin:0 auto;
   overflow:hidden;
   background:#5d5d5d;
-  cursor:grab;
   user-select:none;
   touch-action:none;
 }
 
-.personal-settings-cropper.is-dragging{
-  cursor:grabbing;
+.personal-settings-cropper.is-moving-selection{
+  cursor:move;
+}
+
+.personal-settings-cropper.is-resizing-selection{
+  cursor:default;
 }
 
 .personal-settings-cropper__image{
@@ -9529,6 +9535,7 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   max-width:none;
   user-select:none;
   -webkit-user-drag:none;
+  pointer-events:none;
 }
 
 .personal-settings-cropper__mask{
@@ -9538,6 +9545,13 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   pointer-events:none;
 }
 
+.personal-settings-cropper__selection{
+  position:absolute;
+  z-index:2;
+  border-radius:50%;
+  cursor:move;
+}
+
 .personal-settings-cropper__circle{
   position:absolute;
   inset:0;
@@ -9545,6 +9559,42 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   box-shadow:0 0 0 9999px rgba(1,4,9,.18);
   border:1px dashed rgba(255,255,255,.9);
   pointer-events:none;
+}
+
+.personal-settings-cropper__handle{
+  position:absolute;
+  width:10px;
+  height:10px;
+  border:0;
+  border-radius:50%;
+  background:#fff;
+  box-shadow:0 0 0 1px rgba(0,0,0,.18);
+  padding:0;
+  transform:translate(-50%, -50%);
+}
+
+.personal-settings-cropper__handle--nw{
+  top:0;
+  left:0;
+  cursor:nwse-resize;
+}
+
+.personal-settings-cropper__handle--ne{
+  top:0;
+  left:100%;
+  cursor:nesw-resize;
+}
+
+.personal-settings-cropper__handle--sw{
+  top:100%;
+  left:0;
+  cursor:nesw-resize;
+}
+
+.personal-settings-cropper__handle--se{
+  top:100%;
+  left:100%;
+  cursor:nwse-resize;
 }
 
 @media (max-width: 980px){
