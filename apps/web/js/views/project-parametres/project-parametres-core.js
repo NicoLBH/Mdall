@@ -749,7 +749,40 @@ export function setActiveParametresSectionId(sectionId = "") {
   parametresUiState.activeSectionId = String(sectionId || "").trim() || "parametres-general";
 }
 
+function bindValue(id, handler, eventName = "input") {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener(eventName, (e) => handler(e.target.value));
+}
 
+
+export function refreshProjectTabsVisibility() {
+  const tabsRoot = document.querySelector(".project-tabs");
+  if (!tabsRoot) return;
+
+  const visibility = store.projectForm.projectTabs || {};
+
+  tabsRoot.querySelectorAll("[data-project-tab-id]").forEach((link) => {
+    const tabId = link.getAttribute("data-project-tab-id");
+    if (!isToggleableProjectTab(tabId)) return;
+
+    const isVisible = visibility[tabId] !== false;
+    link.style.display = isVisible ? "" : "none";
+    link.setAttribute("aria-hidden", isVisible ? "false" : "true");
+  });
+}
+
+export function bindProjectTabToggles() {
+  document.querySelectorAll("[data-project-tab-toggle]").forEach((input) => {
+    input.addEventListener("change", (event) => {
+      const key = event.target.getAttribute("data-project-tab-toggle");
+      if (!key) return;
+      store.projectForm.projectTabs[key] = !!event.target.checked;
+      persistCurrentProjectState();
+      refreshProjectTabsVisibility();
+    });
+  });
+}
 
 
 
