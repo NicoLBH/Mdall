@@ -131,10 +131,17 @@ function renderAccountPanel() {
 }
 
 function rerenderAccountPanel(panelRoot) {
-  if (!panelRoot) return;
-  panelRoot.outerHTML = renderAccountPanel();
+  const livePanelRoot =
+    panelRoot && panelRoot.isConnected
+      ? panelRoot
+      : document.querySelector('[data-side-nav-panel="personal-settings-account"]');
+
+  if (!livePanelRoot) return null;
+
+  livePanelRoot.outerHTML = renderAccountPanel();
   const nextPanelRoot = document.querySelector('[data-side-nav-panel="personal-settings-account"]');
   if (nextPanelRoot) bindAccountPanel(nextPanelRoot);
+  return nextPanelRoot;
 }
 
 function closeDeleteModal(panelRoot) {
