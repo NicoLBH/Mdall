@@ -3691,7 +3691,7 @@ color:var(--text);
 }
 
 .settings-block{
-  display:none;
+  /*display:none;*/
 }
 
 .settings-block.is-active{
