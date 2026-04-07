@@ -174,9 +174,11 @@ function getProjectSyncBucket(frontendProjectId = getFrontendProjectKey()) {
       documentsLoaded: false,
       actionsLoaded: false,
       subjectsCountLoaded: false,
+      lotsLoaded: false,
       lastDocumentsAt: 0,
       lastActionsAt: 0,
-      lastSubjectsCountAt: 0
+      lastSubjectsCountAt: 0,
+      lastLotsAt: 0
     };
   }
 
@@ -743,6 +745,25 @@ export async function syncProjectSubjectCountersFromSupabase(options = {}) {
 }
 
 
+
+function mapProjectLotRowToViewModel(row = {}) {
+  return {
+    id: safeString(row.id),
+    projectId: safeString(row.project_id),
+    activated: row.activated === true,
+    lotCatalogId: safeString(row.lot_catalog_id || row.lot_catalog?.id || ""),
+    code: safeString(row.lot_catalog?.code || ""),
+    label: safeString(row.lot_catalog?.label || ""),
+    groupCode: safeString(row.lot_catalog?.group_code || ""),
+    groupLabel: safeString(row.lot_catalog?.group_label || ""),
+    defaultActivated: row.lot_catalog?.default_activated === true,
+    sortOrder: Number(row.lot_catalog?.sort_order || 0),
+    createdAt: row.created_at || null,
+    updatedAt: row.updated_at || null,
+    raw: row
+  };
+}
+
 function mapIssueActionToSubjectUpdate(action) {
   const normalizedAction = safeString(action);
 
@@ -794,6 +815,108 @@ function mapIssueActionToSubjectUpdate(action) {
     default:
       return null;
   }
+}
+
+
+export async function syncProjectLotsFromSupabase(options = {}) {
+  const force = Boolean(options.force);
+  const frontendProjectId = getFrontendProjectKey();
+  const projectBucket = getProjectSyncBucket(frontendProjectId);
+  const backendProjectId = await resolveCurrentBackendProjectId();
+
+  store.projectLots = store.projectLots && typeof store.projectLots === "object"
+    ? store.projectLots
+    : { items: [], loading: false, loaded: false, error: "", projectKey: "" };
+
+  const currentProjectKey = frontendProjectId;
+  const hasProjectMismatch = safeString(store.projectLots.projectKey) !== currentProjectKey;
+
+  if (hasProjectMismatch) {
+    store.projectLots.items = [];
+    store.projectLots.loaded = false;
+    store.projectLots.error = "";
+    store.projectLots.projectKey = currentProjectKey;
+  }
+
+  if (!backendProjectId) {
+    store.projectLots.items = [];
+    store.projectLots.loading = false;
+    store.projectLots.loaded = true;
+    store.projectLots.error = "";
+    projectBucket.lotsLoaded = true;
+    projectBucket.lastLotsAt = Date.now();
+    dispatchProjectSupabaseSync({ section: "lots", lotsCount: 0 });
+    return [];
+  }
+
+  if (!force && projectBucket.lotsLoaded && store.projectLots.loaded) {
+    return Array.isArray(store.projectLots.items) ? store.projectLots.items : [];
+  }
+
+  store.projectLots.loading = true;
+  store.projectLots.error = "";
+
+  const params = new URLSearchParams();
+  params.set("select", "id,project_id,lot_catalog_id,activated,created_at,updated_at,lot_catalog:lot_catalog_id(id,group_code,group_label,code,label,default_activated,sort_order)");
+  params.set("project_id", `eq.${backendProjectId}`);
+  params.set("order", "created_at.asc");
+
+  try {
+    const rows = await restFetch("project_lots", params);
+    const nextItems = (Array.isArray(rows) ? rows : [])
+      .map(mapProjectLotRowToViewModel)
+      .sort((a, b) => {
+        const groupCompare = String(a.groupLabel || "").localeCompare(String(b.groupLabel || ""), "fr");
+        if (groupCompare !== 0) return groupCompare;
+        const sortCompare = Number(a.sortOrder || 0) - Number(b.sortOrder || 0);
+        if (sortCompare !== 0) return sortCompare;
+        return String(a.label || "").localeCompare(String(b.label || ""), "fr");
+      });
+
+    store.projectLots.items = nextItems;
+    store.projectLots.loading = false;
+    store.projectLots.loaded = true;
+    store.projectLots.error = "";
+    store.projectLots.projectKey = currentProjectKey;
+
+    projectBucket.backendProjectId = backendProjectId;
+    projectBucket.lotsLoaded = true;
+    projectBucket.lastLotsAt = Date.now();
+
+    dispatchProjectSupabaseSync({ section: "lots", lotsCount: nextItems.length });
+    return nextItems;
+  } catch (error) {
+    store.projectLots.loading = false;
+    store.projectLots.loaded = false;
+    store.projectLots.error = error instanceof Error ? error.message : String(error || "Erreur de chargement des lots");
+    throw error;
+  }
+}
+
+export async function persistProjectLotActivationToSupabase(projectLotId = "", activated = false) {
+  const lotId = safeString(projectLotId);
+  if (!lotId) {
+    throw new Error("Project lot id missing for Supabase update.");
+  }
+
+  const updatedLot = await restUpdate(
+    "project_lots",
+    { id: lotId },
+    { activated: activated === true },
+    { select: "id,project_id,lot_catalog_id,activated,created_at,updated_at,lot_catalog:lot_catalog_id(id,group_code,group_label,code,label,default_activated,sort_order)" }
+  );
+
+  const nextLot = mapProjectLotRowToViewModel(updatedLot || {});
+  const currentItems = Array.isArray(store.projectLots?.items) ? store.projectLots.items : [];
+  store.projectLots.items = currentItems.map((item) => item.id === nextLot.id ? nextLot : item);
+
+  dispatchProjectSupabaseSync({
+    section: "lots",
+    lotId: nextLot.id,
+    activated: nextLot.activated
+  });
+
+  return nextLot;
 }
 
 export async function persistSubjectIssueActionToSupabase(subject = {}, action = "") {
