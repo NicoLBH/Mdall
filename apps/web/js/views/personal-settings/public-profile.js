@@ -183,9 +183,7 @@ function renderPublicProfilePanel() {
   return `
     <section class="personal-settings-panel" data-side-nav-panel="personal-settings-public-profile">
       <div class="settings-block__head personal-settings-page__header">
-        <div class="settings-card__head-title">
-          <h3>Profil public</h3>
-        </div>
+        <div class="settings-card__head-title personal-settings-page__title">Profil public</div>
       </div>
 
       <div class="personal-settings-panel__content">
