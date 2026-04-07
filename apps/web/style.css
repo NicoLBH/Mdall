@@ -9423,7 +9423,7 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   gap:32px;
   align-items:start;
 }
-personal-settings-panel__content--stacked{
+.personal-settings-panel__content--stacked{
   display:block;
 }
 .personal-settings-form-grid{
