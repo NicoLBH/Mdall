@@ -10040,7 +10040,6 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   display:inline-flex;
   align-items:center;
   justify-content:center;
-  margin:0 0 -1px;
   padding:10px 16px;
   border:0;
   border-bottom:1px solid transparent;
@@ -10061,7 +10060,7 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
 .light-tabs__item.is-active{
   z-index:2;
   border:1px solid var(--border);
-  border-bottom-color:var(--bg-canvas);
+  border-bottom-color:var(--bg);
   background:var(--bg-canvas);
   color:var(--text);
 }
@@ -10388,6 +10387,7 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   min-height:0;
   overflow:hidden;
   flex-direction:column;
+  margin-bottom:10px;
 }
 
 .project-collaborator-create__body > .project-collaborators-modal__section:first-of-type{
