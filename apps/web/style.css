@@ -1256,6 +1256,8 @@ body.modal-open {
 
 .projects-layout__content{
   min-width:0;
+  width:100%;
+  max-width:none;
 }
 
 .projects-layout__content-inner{
@@ -2749,6 +2751,10 @@ body.drilldown-open .drilldown__inner,
 
 body.route--project #app{
   overflow:hidden;
+  padding:0;
+}
+
+body.route--projects-list #app{
   padding:0;
 }
 
