@@ -6663,7 +6663,7 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
 .project-collaborators__head,
 .project-collaborators__row{
   display:grid;
-  grid-template-columns: 40px minmax(420px, 1.8fr) minmax(200px, 1.8fr) minmax(98px, .8fr) minmax(160px, .9fr) 110px;
+  grid-template-columns: 40px minmax(420px, 1.8fr) minmax(190px, 1.8fr) minmax(98px, .8fr) minmax(80px, .9fr) 90px;
   align-items:center;
   gap:0;
 }
