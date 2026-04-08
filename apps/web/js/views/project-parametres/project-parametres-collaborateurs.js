@@ -7,6 +7,7 @@ import {
   searchProjectCollaboratorCandidates,
   addProjectCollaboratorToSupabase,
   deleteProjectCollaboratorFromSupabase,
+  updateProjectCollaboratorRoleInSupabase,
   syncProjectLotsFromSupabase
 } from "../../services/project-supabase-sync.js";
 import { renderLightTabs, bindLightTabs } from "../ui/light-tabs.js";
@@ -42,6 +43,7 @@ function ensureCollaborateursUiState() {
   if (typeof uiState.collaboratorCreateCompany !== "string") uiState.collaboratorCreateCompany = "";
   if (typeof uiState.collaboratorStatusFilter !== "string" || !uiState.collaboratorStatusFilter.trim()) uiState.collaboratorStatusFilter = "Actif";
   if (typeof uiState.collaboratorStatusFilterOpen !== "boolean") uiState.collaboratorStatusFilterOpen = false;
+  if (typeof uiState.editingCollaboratorId !== "string") uiState.editingCollaboratorId = "";
 
   return uiState;
 }
@@ -115,6 +117,16 @@ function getFilteredCollaborators(uiState = ensureCollaborateursUiState()) {
   return collaborators.filter((item) => String(item?.status || "Actif").trim() === filter);
 }
 
+
+
+function getCollaboratorById(collaboratorId = "") {
+  const collaborators = Array.isArray(store.projectForm.collaborators) ? store.projectForm.collaborators : [];
+  return collaborators.find((item) => String(item?.id || "") === String(collaboratorId || "")) || null;
+}
+
+function isEditingCollaborator(uiState = ensureCollaborateursUiState()) {
+  return !!String(uiState?.editingCollaboratorId || "").trim();
+}
 
 function createInlineDirectoryCandidate(uiState = ensureCollaborateursUiState()) {
   const email = String(uiState.collaboratorSearchTerm || "").trim();
@@ -221,7 +233,11 @@ function renderCollaboratorsRows(collaborators = []) {
         </div>
 
         <div class="project-collaborators__cell project-collaborators__cell--email">
-          <div class="project-collaborators__email">${escapeHtml(displayName)}</div>
+          <button
+            type="button"
+            class="row-title-trigger project-collaborators__name-trigger"
+            data-edit-collaborator-id="${escapeHtml(item.id)}"
+          >${escapeHtml(displayName)}</button>
           <div class="project-collaborators__sub mono">${escapeHtml(subtitleParts.join(" · ") || "—")}</div>
         </div>
 
@@ -246,7 +262,15 @@ function renderCollaboratorsRows(collaborators = []) {
             >
               Retirer
             </button>
-          ` : ""}
+          ` : `
+            <button
+              type="button"
+              class="settings-lot-delete-button"
+              data-restore-collaborator-id="${escapeHtml(item.id)}"
+            >
+              Rétablir
+            </button>
+          `}
         </div>
       </div>
     `;
@@ -400,11 +424,13 @@ function renderCollaboratorCreatePage() {
 
   const fieldIds = getCollaboratorModalFieldIds(uiState);
   const selectedCandidate = uiState.selectedCollaboratorCandidate;
+  const editingMode = isEditingCollaborator(uiState);
+  const editingCollaborator = editingMode ? getCollaboratorById(uiState.editingCollaboratorId) : null;
   const canCreateDirectoryPerson = shouldShowInlineDirectoryCreate(uiState)
     && String(uiState.collaboratorCreateLastName || "").trim()
     && String(uiState.collaboratorCreateFirstName || "").trim();
   const submitDisabled = uiState.collaboratorModalSubmitting
-    || (!selectedCandidate?.candidateKey && !canCreateDirectoryPerson)
+    || (!editingMode && !selectedCandidate?.candidateKey && !canCreateDirectoryPerson)
     || !String(uiState.selectedCollaboratorProjectLotId || "").trim();
 
   const currentUserAvatar = String(store.user?.avatar || "assets/images/260093543.png").trim() || "assets/images/260093543.png";
@@ -416,30 +442,32 @@ function renderCollaboratorCreatePage() {
         <div class="project-collaborator-create__header">
           <img src="${escapeHtml(currentUserAvatar)}" alt="Photo de profil" class="project-collaborator-create__avatar">
           <div class="project-collaborator-create__title-wrap">
-            <div class="project-collaborator-create__title">Ajouter un collaborateur au projet</div>
+            <div class="project-collaborator-create__title">${editingMode ? "Modifier le rôle d'un collaborateur du projet" : "Ajouter un collaborateur au projet"}</div>
           </div>
         </div>
 
         <div class="project-collaborator-create__body">
           <div class="project-collaborators-modal__section">
-            <label class="settings-modal__label" for="${escapeHtml(fieldIds.searchInputId)}">Recherchez un collaborateur par son adresse mail ou son nom</label>
+            <label class="settings-modal__label" for="${escapeHtml(fieldIds.searchInputId)}">${editingMode ? "Vous pouvez modifier le rôle d'un collaborateur du projet" : "Recherchez un collaborateur par son adresse mail ou son nom"}</label>
             <div class="project-collaborators-modal__search-wrap">
               <span class="project-collaborators-modal__search-icon">${svgIcon("search", { width: 18, height: 18 })}</span>
               <div class="project-collaborators-modal__search-field">
                 <input
                   id="${escapeHtml(fieldIds.searchInputId)}"
-                  class="subject-create-input project-collaborators-modal__search-input"
+                  class="subject-create-input project-collaborators-modal__search-input ${editingMode ? 'is-readonly' : ''}"
                   type="text"
                   autocomplete="off"
                   spellcheck="false"
                   value="${escapeHtml(uiState.collaboratorSearchTerm)}"
                   placeholder="nom@entreprise.com ou Nom Prénom"
                   aria-autocomplete="list"
-                  aria-expanded="${shouldShowCollaboratorSuggestionsDropdown(uiState) ? "true" : "false"}"
+                  aria-expanded="${!editingMode && shouldShowCollaboratorSuggestionsDropdown(uiState) ? "true" : "false"}"
+                  ${editingMode ? 'readonly tabindex="-1" aria-readonly="true"' : ''}
                 >
+                ${editingMode ? '' : `
                 <div class="project-collaborators-modal__suggestions ${shouldShowCollaboratorSuggestionsDropdown(uiState) ? 'is-open' : ''}">
                   ${renderCollaboratorSuggestionList(uiState)}
-                </div>
+                </div>`}
               </div>
             </div>
           </div>
@@ -552,6 +580,8 @@ function openCollaboratorModal() {
   uiState.collaboratorCreateLastName = "";
   uiState.collaboratorCreateCompany = "";
   uiState.collaboratorStatusFilterOpen = false;
+  uiState.editingCollaboratorId = "";
+  uiState.editingCollaboratorId = "";
   rerenderProjectParametres();
 }
 
@@ -569,6 +599,32 @@ function closeCollaboratorModal() {
   uiState.collaboratorCreateFirstName = "";
   uiState.collaboratorCreateLastName = "";
   uiState.collaboratorCreateCompany = "";
+  uiState.collaboratorStatusFilterOpen = false;
+  rerenderProjectParametres();
+}
+
+function openEditCollaboratorModal(collaboratorId = "") {
+  const collaborator = getCollaboratorById(collaboratorId);
+  if (!collaborator) return;
+  const uiState = ensureCollaborateursUiState();
+  const groups = getActiveProjectLotsByGroup().filter((group) => group.items.length);
+  const selectedGroupCode = String(collaborator.roleGroupCode || "");
+
+  uiState.collaboratorsModalOpen = true;
+  uiState.editingCollaboratorId = String(collaborator.id || "");
+  uiState.collaboratorSearchTerm = formatCollaboratorCandidateInputValue(collaborator);
+  uiState.collaboratorSuggestions = [];
+  uiState.selectedCollaboratorCandidate = collaborator;
+  uiState.collaboratorSearchLoading = false;
+  uiState.collaboratorModalSubmitting = false;
+  uiState.collaboratorModalError = "";
+  uiState.collaboratorActiveGroupCode = groups.some((group) => group.code === selectedGroupCode) ? selectedGroupCode : (groups[0]?.code || DEFAULT_GROUP_CODE);
+  uiState.selectedCollaboratorProjectLotId = String(collaborator.projectLotId || "");
+  uiState.collaboratorModalFieldIds = createCollaboratorModalFieldIds();
+  uiState.collaboratorCreateMore = false;
+  uiState.collaboratorCreateFirstName = String(collaborator.firstName || "");
+  uiState.collaboratorCreateLastName = String(collaborator.lastName || "");
+  uiState.collaboratorCreateCompany = String(collaborator.company || "");
   uiState.collaboratorStatusFilterOpen = false;
   rerenderProjectParametres();
 }
@@ -641,6 +697,22 @@ async function submitCollaboratorDraft() {
   const uiState = ensureCollaborateursUiState();
   if (!uiState.selectedCollaboratorProjectLotId) return;
 
+  if (isEditingCollaborator(uiState)) {
+    uiState.collaboratorModalSubmitting = true;
+    uiState.collaboratorModalError = "";
+    rerenderCollaboratorCreatePageInPlace();
+
+    try {
+      await updateProjectCollaboratorRoleInSupabase(uiState.editingCollaboratorId, uiState.selectedCollaboratorProjectLotId);
+      closeCollaboratorModal();
+    } catch (error) {
+      uiState.collaboratorModalSubmitting = false;
+      uiState.collaboratorModalError = error instanceof Error ? error.message : String(error || "Erreur de mise à jour du collaborateur");
+      rerenderCollaboratorCreatePageInPlace();
+    }
+    return;
+  }
+
   const shouldCreateInline = shouldShowInlineDirectoryCreate(uiState) && !uiState.selectedCollaboratorCandidate?.candidateKey;
   if (shouldCreateInline && (!String(uiState.collaboratorCreateLastName || "").trim() || !String(uiState.collaboratorCreateFirstName || "").trim())) {
     uiState.collaboratorModalError = "Renseignez au minimum le nom et le prénom pour ajouter cette personne à l'annuaire.";
@@ -697,6 +769,26 @@ async function removeCollaborator(id) {
     rerenderProjectParametres();
   } catch (error) {
     console.warn("deleteProjectCollaboratorFromSupabase failed", error);
+  }
+}
+
+async function restoreCollaborator(id) {
+  const collaborator = getCollaboratorById(id);
+  if (!collaborator) return;
+  try {
+    await addProjectCollaboratorToSupabase({
+      personId: collaborator.personId,
+      userId: collaborator.linkedUserId || collaborator.userId,
+      email: collaborator.email,
+      firstName: collaborator.firstName,
+      lastName: collaborator.lastName,
+      company: collaborator.company,
+      projectLotId: collaborator.projectLotId,
+      status: "Actif"
+    });
+    rerenderProjectParametres();
+  } catch (error) {
+    console.warn("restore collaborator failed", error);
   }
 }
 
@@ -757,6 +849,16 @@ export function bindCollaborateursParametresSection(root) {
   root.querySelectorAll("[data-remove-collaborator-id]").forEach((btn) => {
     btn.addEventListener("click", () => {
       removeCollaborator(btn.getAttribute("data-remove-collaborator-id"));
+    });
+  });
+  root.querySelectorAll("[data-restore-collaborator-id]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      restoreCollaborator(btn.getAttribute("data-restore-collaborator-id"));
+    });
+  });
+  root.querySelectorAll("[data-edit-collaborator-id]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      openEditCollaboratorModal(btn.getAttribute("data-edit-collaborator-id"));
     });
   });
   root.querySelectorAll("[data-collaborator-status-filter-trigger]").forEach((btn) => {
@@ -832,9 +934,11 @@ function bindCollaboratorCreatePage(page) {
 
   registerProjectPrimaryScrollSource(document.getElementById("projectParametresScroll"));
 
+  const uiState = ensureCollaborateursUiState();
+  const editingMode = isEditingCollaborator(uiState);
   const fieldIds = getCollaboratorModalFieldIds();
   const searchInput = page.querySelector(`#${CSS.escape(fieldIds.searchInputId)}`);
-  searchInput?.addEventListener("input", (event) => {
+  if (!editingMode) searchInput?.addEventListener("input", (event) => {
     const uiState = ensureCollaborateursUiState();
     uiState.collaboratorSearchTerm = event.target.value || "";
     uiState.collaboratorModalError = "";
@@ -847,7 +951,9 @@ function bindCollaboratorCreatePage(page) {
     scheduleCollaboratorSearch(uiState.collaboratorSearchTerm);
   });
 
-  searchInput?.addEventListener("keydown", (event) => {
+  });
+
+  if (!editingMode) searchInput?.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
       event.preventDefault();
       const firstCandidate = ensureCollaborateursUiState().collaboratorSuggestions?.[0];
@@ -897,7 +1003,7 @@ function bindCollaboratorCreatePage(page) {
 
   window.requestAnimationFrame(() => {
     const input = document.getElementById(fieldIds.searchInputId);
-    if (input && document.activeElement !== input && !ensureCollaborateursUiState().collaboratorSearchTerm) {
+    if (!editingMode && input && document.activeElement !== input && !ensureCollaborateursUiState().collaboratorSearchTerm) {
       input.focus();
     }
   });
