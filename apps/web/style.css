@@ -1218,12 +1218,17 @@ body.modal-open {
 }
 .projects-page--listing .settings-layout--parametres {
   height:100%;
-  grid-template-columns: 296px auto;
+  grid-template-columns: 296px calc(100% - 360px);;
   justify-content: left;
 }
 .projects-page--listing .settings-layout--parametres .settings-nav--parametres{
   height: 100%;
   border-right: solid 1px var(--border);
+  padding-top:20px;
+  margin-left:20px;
+}
+.projects-page--listing .settings-layout--parametres .settings-content--parametres {
+  padding:20px 60px;
 }
 
 .projects-layout{
