@@ -8,7 +8,6 @@ import {
   deleteProjectCollaboratorFromSupabase,
   syncProjectLotsFromSupabase
 } from "../../services/project-supabase-sync.js";
-import { renderSettingsModal } from "../ui/settings-modal.js";
 import { renderLightTabs, bindLightTabs } from "../ui/light-tabs.js";
 import {
   bindBaseParametresUi,
@@ -36,6 +35,7 @@ function ensureCollaborateursUiState() {
   if (typeof uiState.selectedCollaboratorProjectLotId !== "string") uiState.selectedCollaboratorProjectLotId = "";
   if (typeof uiState.collaboratorsLoadedProjectKey !== "string") uiState.collaboratorsLoadedProjectKey = "";
   if (!uiState.collaboratorModalFieldIds || typeof uiState.collaboratorModalFieldIds !== "object") uiState.collaboratorModalFieldIds = null;
+  if (typeof uiState.collaboratorCreateMore !== "boolean") uiState.collaboratorCreateMore = false;
 
   return uiState;
 }
@@ -147,22 +147,7 @@ function renderCollaboratorsCard() {
 
   return `
     <div class="project-collaborators">
-      <div class="project-collaborators__toolbar">
-        <div class="project-collaborators__toolbar-left">
-          <div class="project-collaborators__toolbar-title">Liste des collaborateurs</div>
-          <div class="project-collaborators__toolbar-sub">Recherchez des utilisateurs existants puis affectez-les à un lot activé du projet.</div>
-        </div>
-
-        <div class="project-collaborators__toolbar-right">
-          <button
-            type="button"
-            class="gh-btn"
-            data-open-collaborator-modal="true"
-          >
-            Ajouter une personne
-          </button>
-        </div>
-      </div>
+      <div class="project-collaborators__intro">Recherchez des utilisateurs existants puis affectez-les à un lot activé du projet.</div>
 
       <div class="project-collaborators__table">
         <div class="project-collaborators__head">
@@ -257,7 +242,7 @@ function renderCollaboratorLotsPicker(uiState) {
   `;
 }
 
-function renderCollaboratorModal() {
+function renderCollaboratorCreatePage() {
   const uiState = ensureCollaborateursUiState();
   if (!uiState.collaboratorsModalOpen) return "";
 
@@ -267,56 +252,73 @@ function renderCollaboratorModal() {
     || !selectedCandidate?.userId
     || !String(uiState.selectedCollaboratorProjectLotId || "").trim();
 
-  return renderSettingsModal({
-    modalId: "projectCollaboratorsModal",
-    title: "Ajouter un collaborateur au projet",
-    subtitle: "Rechercher un collaborateur par son adresse mail ou son nom et affectez lui un rôle",
-    closeDataAttribute: "data-close-collaborator-modal",
-    dialogClassName: "project-collaborators-modal__dialog",
-    bodyClassName: "project-collaborators-modal__body",
-    bodyHtml: `
-      <div class="project-collaborators-modal__section">
-        <label class="settings-modal__label" for="${escapeHtml(fieldIds.searchInputId)}">Rechercher un collaborateur</label>
-        <div class="project-collaborators-modal__search-wrap">
-          <span class="project-collaborators-modal__search-icon">${svgIcon("search", { width: 18, height: 18 })}</span>
-          <input
-            id="${escapeHtml(fieldIds.searchInputId)}"
-            class="gh-input project-collaborators-modal__search-input"
-            type="text"
-            autocomplete="off"
-            spellcheck="false"
-            value="${escapeHtml(uiState.collaboratorSearchTerm)}"
-            placeholder="nom@entreprise.com ou Nom Prénom"
-          >
+  return `
+    <section class="project-collaborator-create-shell" id="projectCollaboratorsCreatePage" data-collaborator-create-page>
+      <div class="project-collaborator-create">
+        <div class="project-collaborator-create__header">
+          <span class="project-collaborator-create__avatar" aria-hidden="true">${svgIcon("people", { width: 18, height: 18 })}</span>
+          <div class="project-collaborator-create__title-wrap">
+            <div class="project-collaborator-create__title">Ajouter un collaborateur au projet</div>
+            <div class="project-collaborator-create__subtitle">Recherchez un collaborateur par son adresse mail ou son nom et affectez-lui un rôle.</div>
+          </div>
         </div>
-        <div class="project-collaborators-modal__suggestions">
-          ${renderCollaboratorSuggestionList(uiState)}
+
+        <div class="project-collaborator-create__body">
+          <div class="project-collaborators-modal__section">
+            <label class="settings-modal__label" for="${escapeHtml(fieldIds.searchInputId)}">Rechercher un collaborateur</label>
+            <div class="project-collaborators-modal__search-wrap">
+              <span class="project-collaborators-modal__search-icon">${svgIcon("search", { width: 18, height: 18 })}</span>
+              <input
+                id="${escapeHtml(fieldIds.searchInputId)}"
+                class="gh-input project-collaborators-modal__search-input"
+                type="text"
+                autocomplete="off"
+                spellcheck="false"
+                value="${escapeHtml(uiState.collaboratorSearchTerm)}"
+                placeholder="nom@entreprise.com ou Nom Prénom"
+              >
+            </div>
+            <div class="project-collaborators-modal__suggestions">
+              ${renderCollaboratorSuggestionList(uiState)}
+            </div>
+          </div>
+
+          <div class="project-collaborators-modal__section">
+            <div class="settings-modal__label">Rôle</div>
+            ${renderCollaboratorLotsPicker(uiState)}
+          </div>
+
+          ${selectedCandidate?.userId ? `
+            <div class="project-collaborators-modal__selection">
+              Collaborateur sélectionné : <strong>${escapeHtml(selectedCandidate.name || selectedCandidate.email || "Utilisateur")}</strong>
+            </div>
+          ` : ""}
+
+          ${uiState.collaboratorModalError ? `<div class="gh-alert gh-alert--error settings-modal__feedback">${escapeHtml(uiState.collaboratorModalError)}</div>` : ""}
+        </div>
+
+        <div class="project-collaborator-create__footer">
+          <div class="project-collaborator-create__footer-left">
+            <label class="subject-create-checkbox">
+              <input type="checkbox" data-collaborator-create-more ${uiState.collaboratorCreateMore ? "checked" : ""}>
+              <span>Créer un autre</span>
+            </label>
+          </div>
+          <div class="project-collaborator-create__footer-right">
+            <button type="button" class="gh-btn" data-close-collaborator-modal="true">Annuler</button>
+            <button
+              type="button"
+              class="gh-btn gh-btn--primary"
+              id="${escapeHtml(fieldIds.submitButtonId)}"
+              ${submitDisabled ? "disabled" : ""}
+            >
+              ${uiState.collaboratorModalSubmitting ? "Ajout en cours…" : "Ajouter"}
+            </button>
+          </div>
         </div>
       </div>
-
-      <div class="project-collaborators-modal__section">
-        <div class="settings-modal__label">Rôle</div>
-        ${renderCollaboratorLotsPicker(uiState)}
-      </div>
-
-      ${selectedCandidate?.userId ? `
-        <div class="project-collaborators-modal__selection">
-          Collaborateur sélectionné : <strong>${escapeHtml(selectedCandidate.name || selectedCandidate.email || "Utilisateur")}</strong>
-        </div>
-      ` : ""}
-
-      ${uiState.collaboratorModalError ? `<div class="gh-alert gh-alert--error settings-modal__feedback">${escapeHtml(uiState.collaboratorModalError)}</div>` : ""}
-
-      <button
-        type="button"
-        class="gh-btn gh-btn--primary settings-modal__submit"
-        id="${escapeHtml(fieldIds.submitButtonId)}"
-        ${submitDisabled ? "disabled" : ""}
-      >
-        ${uiState.collaboratorModalSubmitting ? "Enregistrement…" : "Valider"}
-      </button>
-    `
-  });
+    </section>
+  `;
 }
 
 
@@ -336,10 +338,10 @@ function restoreCollaboratorSearchFocus(fieldIds, cursorPosition = null) {
   });
 }
 
-function rerenderCollaboratorModalInPlace({ preserveSearchFocus = false } = {}) {
+function rerenderCollaboratorCreatePageInPlace({ preserveSearchFocus = false } = {}) {
   const uiState = ensureCollaborateursUiState();
-  const existingModal = document.getElementById("projectCollaboratorsModal");
-  const nextModalHtml = renderCollaboratorModal();
+  const existingPage = document.getElementById("projectCollaboratorsCreatePage");
+  const nextPageHtml = renderCollaboratorCreatePage();
   const fieldIds = getCollaboratorModalFieldIds(uiState);
   const activeElement = document.activeElement;
   const shouldRestoreFocus = preserveSearchFocus && activeElement?.id === fieldIds.searchInputId;
@@ -347,13 +349,13 @@ function rerenderCollaboratorModalInPlace({ preserveSearchFocus = false } = {}) 
     ? activeElement.selectionStart
     : null;
 
-  if (!existingModal) {
+  if (!existingPage) {
     rerenderProjectParametres();
     return;
   }
 
-  existingModal.outerHTML = nextModalHtml;
-  bindCollaboratorModal(document.getElementById("projectCollaboratorsModal"));
+  existingPage.outerHTML = nextPageHtml;
+  bindCollaboratorCreatePage(document.getElementById("projectCollaboratorsCreatePage"));
 
   if (shouldRestoreFocus) {
     restoreCollaboratorSearchFocus(fieldIds, cursorPosition);
@@ -374,6 +376,7 @@ function openCollaboratorModal() {
   uiState.collaboratorActiveGroupCode = groups[0]?.code || DEFAULT_GROUP_CODE;
   uiState.selectedCollaboratorProjectLotId = groups[0]?.items?.[0]?.id || "";
   uiState.collaboratorModalFieldIds = createCollaboratorModalFieldIds();
+  uiState.collaboratorCreateMore = false;
   rerenderProjectParametres();
 }
 
@@ -387,6 +390,7 @@ function closeCollaboratorModal() {
   uiState.collaboratorModalSubmitting = false;
   uiState.collaboratorModalError = "";
   uiState.collaboratorModalFieldIds = null;
+  uiState.collaboratorCreateMore = false;
   rerenderProjectParametres();
 }
 
@@ -400,7 +404,7 @@ async function runCollaboratorSearch(query) {
     uiState.collaboratorSuggestions = [];
     uiState.selectedCollaboratorCandidate = null;
     uiState.collaboratorSearchLoading = false;
-    rerenderCollaboratorModalInPlace({ preserveSearchFocus: true });
+    rerenderCollaboratorCreatePageInPlace({ preserveSearchFocus: true });
     return;
   }
 
@@ -417,14 +421,14 @@ async function runCollaboratorSearch(query) {
     }
     uiState.collaboratorSearchLoading = false;
     uiState.collaboratorModalError = "";
-    rerenderCollaboratorModalInPlace({ preserveSearchFocus: true });
+    rerenderCollaboratorCreatePageInPlace({ preserveSearchFocus: true });
   } catch (error) {
     if (ensureCollaborateursUiState().collaboratorSearchRequestId !== requestId) return;
     uiState.collaboratorSuggestions = [];
     uiState.selectedCollaboratorCandidate = null;
     uiState.collaboratorSearchLoading = false;
     uiState.collaboratorModalError = error instanceof Error ? error.message : String(error || "Erreur de recherche");
-    rerenderCollaboratorModalInPlace({ preserveSearchFocus: true });
+    rerenderCollaboratorCreatePageInPlace({ preserveSearchFocus: true });
   }
 }
 
@@ -445,7 +449,7 @@ function selectCollaboratorCandidate(candidateId) {
   if (!nextCandidate) return;
   uiState.selectedCollaboratorCandidate = nextCandidate;
   uiState.collaboratorModalError = "";
-  rerenderCollaboratorModalInPlace();
+  rerenderCollaboratorCreatePageInPlace();
 }
 
 async function submitCollaboratorDraft() {
@@ -454,7 +458,7 @@ async function submitCollaboratorDraft() {
 
   uiState.collaboratorModalSubmitting = true;
   uiState.collaboratorModalError = "";
-  rerenderCollaboratorModalInPlace();
+  rerenderCollaboratorCreatePageInPlace();
 
   try {
     await addProjectCollaboratorToSupabase({
@@ -462,11 +466,27 @@ async function submitCollaboratorDraft() {
       projectLotId: uiState.selectedCollaboratorProjectLotId,
       status: "Actif"
     });
+
+    if (uiState.collaboratorCreateMore) {
+      const groups = getActiveProjectLotsByGroup().filter((group) => group.items.length);
+      uiState.collaboratorSearchTerm = "";
+      uiState.collaboratorSuggestions = [];
+      uiState.selectedCollaboratorCandidate = null;
+      uiState.collaboratorSearchLoading = false;
+      uiState.collaboratorModalSubmitting = false;
+      uiState.collaboratorModalError = "";
+      uiState.collaboratorActiveGroupCode = groups[0]?.code || uiState.collaboratorActiveGroupCode || DEFAULT_GROUP_CODE;
+      uiState.selectedCollaboratorProjectLotId = groups[0]?.items?.[0]?.id || "";
+      uiState.collaboratorModalFieldIds = createCollaboratorModalFieldIds();
+      rerenderProjectParametres();
+      return;
+    }
+
     closeCollaboratorModal();
   } catch (error) {
     uiState.collaboratorModalSubmitting = false;
     uiState.collaboratorModalError = error instanceof Error ? error.message : String(error || "Erreur d'ajout du collaborateur");
-    rerenderCollaboratorModalInPlace();
+    rerenderCollaboratorCreatePageInPlace();
   }
 }
 
@@ -502,19 +522,31 @@ function ensureCollaboratorsLoaded(root) {
 }
 
 export function renderCollaborateursParametresContent() {
-  return `${renderSettingsBlock({
+  const uiState = ensureCollaborateursUiState();
+  if (uiState.collaboratorsModalOpen) {
+    return renderCollaboratorCreatePage();
+  }
+
+  return renderSettingsBlock({
     id: "parametres-collaborateurs",
     title: "",
     lead: "",
     cards: [
       renderSectionCard({
         title: "Collaborateurs",
-        description: "Gestion des accès projet et affectation d'un rôle par lot activé.",
+        action: `
+          <button
+            type="button"
+            class="gh-btn"
+            data-open-collaborator-modal="true"
+          >
+            Ajouter une personne
+          </button>
+        `,
         body: renderCollaboratorsCard()
       })
     ]
-  })}
-      ${renderCollaboratorModal()}`;
+  });
 }
 
 export function bindCollaborateursParametresSection(root) {
@@ -528,14 +560,14 @@ export function bindCollaborateursParametresSection(root) {
     });
   });
 
-  bindCollaboratorModal(document.getElementById("projectCollaboratorsModal"));
+  bindCollaboratorCreatePage(document.getElementById("projectCollaboratorsCreatePage"));
 }
 
-function bindCollaboratorModal(modal) {
-  if (!modal || modal.dataset.bound === "1") return;
-  modal.dataset.bound = "1";
+function bindCollaboratorCreatePage(page) {
+  if (!page || page.dataset.bound === "1") return;
+  page.dataset.bound = "1";
 
-  modal.addEventListener("click", (event) => {
+  page.addEventListener("click", (event) => {
     const closeTarget = event.target.closest?.("[data-close-collaborator-modal]");
     if (closeTarget) {
       closeCollaboratorModal();
@@ -548,7 +580,7 @@ function bindCollaboratorModal(modal) {
     }
   });
 
-  bindLightTabs(modal, {
+  bindLightTabs(page, {
     selector: ".project-collaborators-modal__tabs [data-light-tab-target]",
     onChange: (nextTabId) => {
       const uiState = ensureCollaborateursUiState();
@@ -559,12 +591,12 @@ function bindCollaboratorModal(modal) {
       if (!hasSelectedLotInGroup) {
         uiState.selectedCollaboratorProjectLotId = activeGroup?.items?.[0]?.id || "";
       }
-      rerenderCollaboratorModalInPlace();
+      rerenderCollaboratorCreatePageInPlace();
     }
   });
 
   const fieldIds = getCollaboratorModalFieldIds();
-  const searchInput = modal.querySelector(`#${CSS.escape(fieldIds.searchInputId)}`);
+  const searchInput = page.querySelector(`#${CSS.escape(fieldIds.searchInputId)}`);
   searchInput?.addEventListener("input", (event) => {
     const uiState = ensureCollaborateursUiState();
     uiState.collaboratorSearchTerm = event.target.value || "";
@@ -583,20 +615,25 @@ function bindCollaboratorModal(modal) {
     }
   });
 
-  modal.querySelectorAll('input[name="projectCollaboratorLot"]').forEach((input) => {
+  page.querySelectorAll('input[name="projectCollaboratorLot"]').forEach((input) => {
     input.addEventListener("change", (event) => {
       const uiState = ensureCollaborateursUiState();
       uiState.selectedCollaboratorProjectLotId = event.target.value || "";
       uiState.collaboratorModalError = "";
-      rerenderCollaboratorModalInPlace();
+      rerenderCollaboratorCreatePageInPlace();
     });
   });
 
-  modal.querySelector(`#${CSS.escape(fieldIds.submitButtonId)}`)?.addEventListener("click", () => {
+  page.querySelector('[data-collaborator-create-more]')?.addEventListener("change", (event) => {
+    const uiState = ensureCollaborateursUiState();
+    uiState.collaboratorCreateMore = !!event.target.checked;
+  });
+
+  page.querySelector(`#${CSS.escape(fieldIds.submitButtonId)}`)?.addEventListener("click", () => {
     void submitCollaboratorDraft();
   });
 
-  modal.addEventListener("keydown", (event) => {
+  page.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
       event.preventDefault();
       closeCollaboratorModal();
@@ -611,12 +648,17 @@ function bindCollaboratorModal(modal) {
   });
 }
 
+export function isCollaborateursParametresStandalone() {
+  return !!ensureCollaborateursUiState().collaboratorsModalOpen;
+}
+
 export function getCollaborateursProjectParametresTab() {
   return {
     id: "parametres-collaborateurs",
     label: "Collaborateurs",
     iconName: "people",
     isPrimary: false,
+    isStandalone: () => isCollaborateursParametresStandalone(),
     renderContent: () => renderCollaborateursParametresContent(),
     bind: (root) => bindCollaborateursParametresSection(root)
   };
