@@ -10020,7 +10020,7 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   scrollbar-width:none;
 }
 
-.light-tabs::after{
+.light-tabs::before{
   content:"";
   position:absolute;
   left:0;
@@ -10284,6 +10284,7 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   overflow:auto;
   padding-right:4px;
   overscroll-behavior:contain;
+  padding-bottom:20px;
 }
 
 .project-collaborators-modal__lot{
@@ -10333,7 +10334,7 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   min-height:0;
   height:100%;
   flex-direction:column;
-  gap:20px;
+  gap:0px;
   overflow:hidden;
 }
 
@@ -10378,7 +10379,7 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   min-height:0;
   overflow:hidden;
   flex-direction:column;
-  gap:18px;
+  gap:38px;
 }
 
 .project-collaborator-create__body .project-collaborators-modal__section:last-of-type{
@@ -10420,7 +10421,7 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
 }
 
 .project-simple-page--parametres-standalone .project-collaborator-create__body{
-  padding-bottom:8px;
+  padding-top:20px;
 }
 
 .project-simple-page--parametres-standalone .project-collaborator-create__footer{
