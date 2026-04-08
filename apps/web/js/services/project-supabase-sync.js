@@ -344,6 +344,7 @@ function mapProjectRowToCatalogItem(row = {}) {
     postalCode: safeString(row.postal_code) || "",
     currentPhase: safeString(row.current_phase_code) || "—",
     description: safeString(row.description || ""),
+    ownerId: safeString(row.owner_id || ""),
     createdAt: row.created_at || null,
     updatedAt: row.updated_at || null
   };
@@ -358,6 +359,7 @@ function haveSameProjectCatalog(a = [], b = []) {
       safeString(left.id) !== safeString(right.id)
       || safeString(left.name) !== safeString(right.name)
       || safeString(left.description) !== safeString(right.description)
+      || safeString(left.ownerId) !== safeString(right.ownerId)
       || safeString(left.clientName) !== safeString(right.clientName)
       || safeString(left.city) !== safeString(right.city)
       || safeString(left.currentPhase) !== safeString(right.currentPhase)
@@ -371,7 +373,7 @@ function haveSameProjectCatalog(a = [], b = []) {
 
 export async function syncProjectsCatalogFromSupabase() {
   const params = new URLSearchParams();
-  params.set("select", "id,name,description,postal_code,city,project_owner_name,current_phase_code,created_at,updated_at");
+  params.set("select", "id,name,description,postal_code,city,project_owner_name,current_phase_code,owner_id,created_at,updated_at");
   params.set("archived_at", "is.null");
   params.set("order", "updated_at.desc.nullslast,created_at.desc");
 
