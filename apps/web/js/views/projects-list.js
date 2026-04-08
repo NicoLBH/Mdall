@@ -584,9 +584,13 @@ export function renderProjectsList(root) {
     .catch(() => undefined);
 
   if (isProjectsCreateRoute()) {
+    document.body.classList.remove("route--projects-list");
     renderProjectCreatePage(root);
     return;
   }
+
+  document.body.classList.add("route--projects-list");
+  root.style.padding = "0";
 
   const activeFilterId = getActiveProjectsFilterId();
   ensureProjectAccessLoaded(root);
