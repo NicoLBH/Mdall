@@ -37,6 +37,9 @@ function ensureCollaborateursUiState() {
   if (typeof uiState.collaboratorsLoadedProjectKey !== "string") uiState.collaboratorsLoadedProjectKey = "";
   if (!uiState.collaboratorModalFieldIds || typeof uiState.collaboratorModalFieldIds !== "object") uiState.collaboratorModalFieldIds = null;
   if (typeof uiState.collaboratorCreateMore !== "boolean") uiState.collaboratorCreateMore = false;
+  if (typeof uiState.collaboratorCreateFirstName !== "string") uiState.collaboratorCreateFirstName = "";
+  if (typeof uiState.collaboratorCreateLastName !== "string") uiState.collaboratorCreateLastName = "";
+  if (typeof uiState.collaboratorCreateCompany !== "string") uiState.collaboratorCreateCompany = "";
 
   return uiState;
 }
@@ -65,6 +68,27 @@ function formatCollaboratorCandidateInputValue(candidate) {
   const email = String(candidate.email || "").trim();
   const company = String(candidate.company || "").trim();
   return [name, email, company].filter(Boolean).join(" · ");
+}
+
+function isValidEmailAddress(value = "") {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim().toLowerCase());
+}
+
+function shouldShowInlineDirectoryCreate(uiState) {
+  const query = String(uiState?.collaboratorSearchTerm || "").trim();
+  const suggestions = Array.isArray(uiState?.collaboratorSuggestions) ? uiState.collaboratorSuggestions : [];
+  return !uiState?.collaboratorSearchLoading && !suggestions.length && isValidEmailAddress(query);
+}
+
+function getCollaboratorSearchExactMatch(uiState) {
+  const query = String(uiState?.collaboratorSearchTerm || "").trim().toLowerCase();
+  const suggestions = Array.isArray(uiState?.collaboratorSuggestions) ? uiState.collaboratorSuggestions : [];
+  return suggestions.find((candidate) => String(candidate.email || "").trim().toLowerCase() === query) || null;
+}
+
+function getCollaboratorSourceLabel(candidate) {
+  if (!candidate) return "Annuaire";
+  return candidate.hasMdallAccount ? "Compte Mdall" : "Annuaire";
 }
 
 function getProjectLotGroupDefinitions() {
@@ -110,7 +134,7 @@ function renderCollaboratorsRows(collaborators = []) {
 
   return collaborators.map((item) => {
     const displayName = String(item.name || "").trim() || String(item.email || "").trim() || "Utilisateur";
-    const subtitleParts = [String(item.email || "").trim(), String(item.company || "").trim()].filter(Boolean);
+    const subtitleParts = [String(item.email || "").trim(), String(item.company || "").trim(), item.hasMdallAccount ? "Compte Mdall" : "Annuaire"].filter(Boolean);
     return `
       <div class="project-collaborators__row">
         <div class="project-collaborators__cell project-collaborators__cell--checkbox">
@@ -157,7 +181,7 @@ function renderCollaboratorsCard() {
 
   return `
     <div class="project-collaborators">
-      <div class="project-collaborators__intro">Recherchez des utilisateurs existants puis affectez-les à un lot activé du projet.</div>
+      <div class="project-collaborators__intro">Recherchez une personne existante ou ajoutez-la à l'annuaire, puis affectez-la à un lot activé du projet.</div>
 
       <div class="project-collaborators__table">
         <div class="project-collaborators__head">
@@ -180,8 +204,9 @@ function renderCollaboratorsCard() {
 }
 
 function shouldShowCollaboratorSuggestionsDropdown(uiState) {
-  const suggestions = Array.isArray(uiState?.collaboratorSuggestions) ? uiState.collaboratorSuggestions : [];
-  return !!(uiState?.collaboratorSearchLoading || suggestions.length);
+  return !!(uiState?.collaboratorSearchLoading
+    || (Array.isArray(uiState?.collaboratorSuggestions) && uiState.collaboratorSuggestions.length)
+    || shouldShowInlineDirectoryCreate(uiState));
 }
 
 function renderCollaboratorSuggestionList(uiState) {
@@ -191,24 +216,44 @@ function renderCollaboratorSuggestionList(uiState) {
     return '<div class="project-collaborators-modal__suggestions-empty">Recherche en cours…</div>';
   }
 
-  if (!suggestions.length) {
-    return '';
+  const blocks = [];
+
+  if (suggestions.length) {
+    blocks.push(suggestions.map((candidate) => {
+      const isSelected = String(uiState.selectedCollaboratorCandidate?.candidateKey || "") === String(candidate.candidateKey || "");
+      const company = String(candidate.company || "").trim();
+      return `
+        <button
+          type="button"
+          class="project-collaborators-modal__suggestion ${isSelected ? 'is-selected' : ''}"
+          data-collaborator-candidate-key="${escapeHtml(candidate.candidateKey || candidate.email || "")}" 
+        >
+          <span class="project-collaborators-modal__suggestion-name-wrap">
+            <span class="project-collaborators-modal__suggestion-name">${escapeHtml(candidate.name || candidate.email || "Utilisateur")}</span>
+            <span class="project-collaborators-modal__suggestion-badge">${escapeHtml(getCollaboratorSourceLabel(candidate))}</span>
+          </span>
+          <span class="project-collaborators-modal__suggestion-meta">${escapeHtml([candidate.email, company].filter(Boolean).join(" · ") || "—")}</span>
+        </button>
+      `;
+    }).join(""));
   }
 
-  return suggestions.map((candidate) => {
-    const isSelected = String(uiState.selectedCollaboratorCandidate?.userId || "") === String(candidate.userId || "");
-    const company = String(candidate.company || "").trim();
-    return `
-      <button
-        type="button"
-        class="project-collaborators-modal__suggestion ${isSelected ? 'is-selected' : ''}"
-        data-collaborator-candidate-id="${escapeHtml(candidate.userId)}"
-      >
-        <span class="project-collaborators-modal__suggestion-name">${escapeHtml(candidate.name || candidate.email || "Utilisateur")}</span>
-        <span class="project-collaborators-modal__suggestion-meta">${escapeHtml([candidate.email, company].filter(Boolean).join(" · ") || "—")}</span>
-      </button>
-    `;
-  }).join("");
+  if (shouldShowInlineDirectoryCreate(uiState)) {
+    const email = String(uiState.collaboratorSearchTerm || "").trim();
+    blocks.push(`
+      <div class="project-collaborators-modal__create-card">
+        <div class="project-collaborators-modal__create-title">Personne absente de l'annuaire, ajoutez-la :</div>
+        <div class="project-collaborators-modal__create-email mono">${escapeHtml(email)}</div>
+        <div class="project-collaborators-modal__create-grid">
+          <input type="text" class="subject-create-input project-collaborators-modal__create-input" data-collaborator-create-field="lastName" value="${escapeHtml(uiState.collaboratorCreateLastName)}" placeholder="Nom">
+          <input type="text" class="subject-create-input project-collaborators-modal__create-input" data-collaborator-create-field="firstName" value="${escapeHtml(uiState.collaboratorCreateFirstName)}" placeholder="Prénom">
+          <input type="text" class="subject-create-input project-collaborators-modal__create-input project-collaborators-modal__create-input--full" data-collaborator-create-field="company" value="${escapeHtml(uiState.collaboratorCreateCompany)}" placeholder="Entreprise">
+        </div>
+      </div>
+    `);
+  }
+
+  return blocks.join("");
 }
 
 function renderCollaboratorLotsPicker(uiState) {
@@ -258,8 +303,11 @@ function renderCollaboratorCreatePage() {
 
   const fieldIds = getCollaboratorModalFieldIds(uiState);
   const selectedCandidate = uiState.selectedCollaboratorCandidate;
+  const canCreateDirectoryPerson = shouldShowInlineDirectoryCreate(uiState)
+    && String(uiState.collaboratorCreateLastName || "").trim()
+    && String(uiState.collaboratorCreateFirstName || "").trim();
   const submitDisabled = uiState.collaboratorModalSubmitting
-    || !selectedCandidate?.userId
+    || (!selectedCandidate?.candidateKey && !canCreateDirectoryPerson)
     || !String(uiState.selectedCollaboratorProjectLotId || "").trim();
 
   const currentUserAvatar = String(store.user?.avatar || "assets/images/260093543.png").trim() || "assets/images/260093543.png";
@@ -373,6 +421,21 @@ function rerenderCollaboratorCreatePageInPlace({ preserveSearchFocus = false } =
   }
 }
 
+function syncCollaboratorSubmitButtonState(page, fieldIds = getCollaboratorModalFieldIds()) {
+  if (!page) return;
+  const uiState = ensureCollaborateursUiState();
+  const canCreateDirectoryPerson = shouldShowInlineDirectoryCreate(uiState)
+    && String(uiState.collaboratorCreateLastName || "").trim()
+    && String(uiState.collaboratorCreateFirstName || "").trim();
+  const submitDisabled = uiState.collaboratorModalSubmitting
+    || (!uiState.selectedCollaboratorCandidate?.candidateKey && !canCreateDirectoryPerson)
+    || !String(uiState.selectedCollaboratorProjectLotId || "").trim();
+  const submitButton = page.querySelector(`#${CSS.escape(fieldIds.submitButtonId)}`);
+  if (submitButton) {
+    submitButton.disabled = submitDisabled;
+  }
+}
+
 function openCollaboratorModal() {
   const uiState = ensureCollaborateursUiState();
   const groups = getActiveProjectLotsByGroup().filter((group) => group.items.length);
@@ -388,6 +451,9 @@ function openCollaboratorModal() {
   uiState.selectedCollaboratorProjectLotId = groups[0]?.items?.[0]?.id || "";
   uiState.collaboratorModalFieldIds = createCollaboratorModalFieldIds();
   uiState.collaboratorCreateMore = false;
+  uiState.collaboratorCreateFirstName = "";
+  uiState.collaboratorCreateLastName = "";
+  uiState.collaboratorCreateCompany = "";
   rerenderProjectParametres();
 }
 
@@ -402,6 +468,9 @@ function closeCollaboratorModal() {
   uiState.collaboratorModalError = "";
   uiState.collaboratorModalFieldIds = null;
   uiState.collaboratorCreateMore = false;
+  uiState.collaboratorCreateFirstName = "";
+  uiState.collaboratorCreateLastName = "";
+  uiState.collaboratorCreateCompany = "";
   rerenderProjectParametres();
 }
 
@@ -426,9 +495,9 @@ async function runCollaboratorSearch(query) {
     if (ensureCollaborateursUiState().collaboratorSearchRequestId !== requestId) return;
 
     uiState.collaboratorSuggestions = suggestions;
-    if (uiState.selectedCollaboratorCandidate?.userId) {
-      const selectedStillPresent = suggestions.find((item) => item.userId === uiState.selectedCollaboratorCandidate.userId);
-      uiState.selectedCollaboratorCandidate = selectedStillPresent || null;
+    if (uiState.selectedCollaboratorCandidate?.candidateKey) {
+      const selectedStillPresent = suggestions.find((item) => item.candidateKey === uiState.selectedCollaboratorCandidate.candidateKey);
+      uiState.selectedCollaboratorCandidate = selectedStillPresent || getCollaboratorSearchExactMatch(uiState) || null;
     }
     uiState.collaboratorSearchLoading = false;
     uiState.collaboratorModalError = "";
@@ -454,21 +523,31 @@ function scheduleCollaboratorSearch(query) {
   }, 220);
 }
 
-function selectCollaboratorCandidate(candidateId) {
+function selectCollaboratorCandidate(candidateKey) {
   const uiState = ensureCollaborateursUiState();
-  const nextCandidate = (uiState.collaboratorSuggestions || []).find((item) => String(item.userId) === String(candidateId));
+  const nextCandidate = (uiState.collaboratorSuggestions || []).find((item) => String(item.candidateKey) === String(candidateKey));
   if (!nextCandidate) return;
   uiState.selectedCollaboratorCandidate = nextCandidate;
   uiState.collaboratorSearchTerm = formatCollaboratorCandidateInputValue(nextCandidate);
   uiState.collaboratorSuggestions = [];
   uiState.collaboratorSearchLoading = false;
   uiState.collaboratorModalError = "";
+  uiState.collaboratorCreateFirstName = String(nextCandidate.firstName || "");
+  uiState.collaboratorCreateLastName = String(nextCandidate.lastName || "");
+  uiState.collaboratorCreateCompany = String(nextCandidate.company || "");
   rerenderCollaboratorCreatePageInPlace();
 }
 
 async function submitCollaboratorDraft() {
   const uiState = ensureCollaborateursUiState();
-  if (!uiState.selectedCollaboratorCandidate?.userId || !uiState.selectedCollaboratorProjectLotId) return;
+  if (!uiState.selectedCollaboratorProjectLotId) return;
+
+  const shouldCreateInline = shouldShowInlineDirectoryCreate(uiState) && !uiState.selectedCollaboratorCandidate?.candidateKey;
+  if (shouldCreateInline && (!String(uiState.collaboratorCreateLastName || "").trim() || !String(uiState.collaboratorCreateFirstName || "").trim())) {
+    uiState.collaboratorModalError = "Renseignez au minimum le nom et le prénom pour ajouter cette personne à l'annuaire.";
+    rerenderCollaboratorCreatePageInPlace({ preserveSearchFocus: true });
+    return;
+  }
 
   uiState.collaboratorModalSubmitting = true;
   uiState.collaboratorModalError = "";
@@ -476,7 +555,12 @@ async function submitCollaboratorDraft() {
 
   try {
     await addProjectCollaboratorToSupabase({
-      userId: uiState.selectedCollaboratorCandidate.userId,
+      personId: uiState.selectedCollaboratorCandidate?.personId || "",
+      userId: uiState.selectedCollaboratorCandidate?.linkedUserId || uiState.selectedCollaboratorCandidate?.userId || "",
+      email: String(uiState.selectedCollaboratorCandidate?.email || uiState.collaboratorSearchTerm || "").trim(),
+      firstName: String(uiState.selectedCollaboratorCandidate?.firstName || uiState.collaboratorCreateFirstName || "").trim(),
+      lastName: String(uiState.selectedCollaboratorCandidate?.lastName || uiState.collaboratorCreateLastName || "").trim(),
+      company: String(uiState.selectedCollaboratorCandidate?.company || uiState.collaboratorCreateCompany || "").trim(),
       projectLotId: uiState.selectedCollaboratorProjectLotId,
       status: "Actif"
     });
@@ -492,6 +576,9 @@ async function submitCollaboratorDraft() {
       uiState.collaboratorActiveGroupCode = groups[0]?.code || uiState.collaboratorActiveGroupCode || DEFAULT_GROUP_CODE;
       uiState.selectedCollaboratorProjectLotId = groups[0]?.items?.[0]?.id || "";
       uiState.collaboratorModalFieldIds = createCollaboratorModalFieldIds();
+      uiState.collaboratorCreateFirstName = "";
+      uiState.collaboratorCreateLastName = "";
+      uiState.collaboratorCreateCompany = "";
       rerenderProjectParametres();
       return;
     }
@@ -588,9 +675,9 @@ function bindCollaboratorCreatePage(page) {
       return;
     }
 
-    const candidateButton = event.target.closest?.("[data-collaborator-candidate-id]");
+    const candidateButton = event.target.closest?.("[data-collaborator-candidate-key]");
     if (candidateButton) {
-      selectCollaboratorCandidate(candidateButton.getAttribute("data-collaborator-candidate-id"));
+      selectCollaboratorCandidate(candidateButton.getAttribute("data-collaborator-candidate-key"));
     }
   });
 
@@ -618,6 +705,11 @@ function bindCollaboratorCreatePage(page) {
     uiState.collaboratorSearchTerm = event.target.value || "";
     uiState.collaboratorModalError = "";
     uiState.selectedCollaboratorCandidate = null;
+    if (!String(uiState.collaboratorSearchTerm || "").trim()) {
+      uiState.collaboratorCreateFirstName = "";
+      uiState.collaboratorCreateLastName = "";
+      uiState.collaboratorCreateCompany = "";
+    }
     scheduleCollaboratorSearch(uiState.collaboratorSearchTerm);
   });
 
@@ -625,8 +717,8 @@ function bindCollaboratorCreatePage(page) {
     if (event.key === "Enter") {
       event.preventDefault();
       const firstCandidate = ensureCollaborateursUiState().collaboratorSuggestions?.[0];
-      if (firstCandidate?.userId) {
-        selectCollaboratorCandidate(firstCandidate.userId);
+      if (firstCandidate?.candidateKey) {
+        selectCollaboratorCandidate(firstCandidate.candidateKey);
       }
     }
   });
@@ -637,6 +729,19 @@ function bindCollaboratorCreatePage(page) {
       uiState.selectedCollaboratorProjectLotId = event.target.value || "";
       uiState.collaboratorModalError = "";
       rerenderCollaboratorCreatePageInPlace();
+    });
+  });
+
+  page.querySelectorAll('[data-collaborator-create-field]').forEach((input) => {
+    input.addEventListener("input", (event) => {
+      const uiState = ensureCollaborateursUiState();
+      const field = event.target.getAttribute("data-collaborator-create-field");
+      const value = event.target.value || "";
+      if (field === "firstName") uiState.collaboratorCreateFirstName = value;
+      if (field === "lastName") uiState.collaboratorCreateLastName = value;
+      if (field === "company") uiState.collaboratorCreateCompany = value;
+      uiState.collaboratorModalError = "";
+      syncCollaboratorSubmitButtonState(page, fieldIds);
     });
   });
 
