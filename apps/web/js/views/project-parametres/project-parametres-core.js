@@ -19,12 +19,6 @@ import {
 import { renderSvgLineChart, getNiceChartTicks } from "../../utils/svg-line-chart.js";
 import { persistCurrentProjectState } from "../../services/project-state-storage.js";
 
-const DEFAULT_PROJECT_COLLABORATORS = [
-  { id: "collab-1", email: "nicolas.lebihan@socotec.com", status: "Actif", role: "Admin" },
-  { id: "collab-2", email: "nicolas.lebihan@yahoo.fr", status: "Invitation en attente", role: "Lecteur" },
-  { id: "collab-3", email: "marie.durand@socotec.com", status: "Actif", role: "Éditeur" },
-  { id: "collab-4", email: "paul.martin@bet-structure.fr", status: "Actif", role: "Contributeur" }
-];
 
 const parametresUiState = {
   activeSectionId: "parametres-general"
@@ -211,8 +205,8 @@ function ensureProjectFormDefaults() {
     })
   );
 
-  if (!Array.isArray(form.collaborators) || !form.collaborators.length) {
-    form.collaborators = DEFAULT_PROJECT_COLLABORATORS.map((item) => ({ ...item }));
+  if (!Array.isArray(form.collaborators)) {
+    form.collaborators = [];
   }
 
   if (!form.baseDataEnrichment || typeof form.baseDataEnrichment !== "object") {
