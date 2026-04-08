@@ -64,7 +64,10 @@ function getCollaboratorModalFieldIds(uiState = ensureCollaborateursUiState()) {
 
 function formatCollaboratorCandidateInputValue(candidate) {
   if (!candidate || typeof candidate !== "object") return "";
-  const name = String(candidate.name || "").trim();
+  const firstName = String(candidate.firstName || "").trim();
+  const lastName = String(candidate.lastName || "").trim();
+  const computedName = [firstName, lastName].filter(Boolean).join(" ");
+  const name = String(candidate.name || computedName).trim();
   const email = String(candidate.email || "").trim();
   const company = String(candidate.company || "").trim();
   return [name, email, company].filter(Boolean).join(" · ");
@@ -89,6 +92,54 @@ function getCollaboratorSearchExactMatch(uiState) {
 function getCollaboratorSourceLabel(candidate) {
   if (!candidate) return "Annuaire";
   return candidate.hasMdallAccount ? "Compte Mdall" : "Annuaire";
+}
+
+function createInlineDirectoryCandidate(uiState = ensureCollaborateursUiState()) {
+  const email = String(uiState.collaboratorSearchTerm || "").trim();
+  const firstName = String(uiState.collaboratorCreateFirstName || "").trim();
+  const lastName = String(uiState.collaboratorCreateLastName || "").trim();
+  const company = String(uiState.collaboratorCreateCompany || "").trim();
+  const name = [firstName, lastName].filter(Boolean).join(" ");
+  return {
+    candidateKey: `inline-create:${email.toLowerCase()}`,
+    email,
+    firstName,
+    lastName,
+    name,
+    company,
+    hasMdallAccount: false,
+    source: "directory_inline"
+  };
+}
+
+function resetCollaboratorInlineCreation(uiState = ensureCollaborateursUiState(), { clearSearchTerm = false } = {}) {
+  if (clearSearchTerm) uiState.collaboratorSearchTerm = "";
+  uiState.collaboratorSuggestions = [];
+  uiState.selectedCollaboratorCandidate = null;
+  uiState.collaboratorSearchLoading = false;
+  uiState.collaboratorModalError = "";
+  uiState.collaboratorCreateFirstName = "";
+  uiState.collaboratorCreateLastName = "";
+  uiState.collaboratorCreateCompany = "";
+}
+
+function cancelInlineDirectoryCreation() {
+  const uiState = ensureCollaborateursUiState();
+  resetCollaboratorInlineCreation(uiState, { clearSearchTerm: true });
+  rerenderCollaboratorCreatePageInPlace({ preserveSearchFocus: true });
+}
+
+function confirmInlineDirectoryCreation() {
+  const uiState = ensureCollaborateursUiState();
+  if (!shouldShowInlineDirectoryCreate(uiState)) return;
+
+  const inlineCandidate = createInlineDirectoryCandidate(uiState);
+  uiState.selectedCollaboratorCandidate = inlineCandidate;
+  uiState.collaboratorSearchTerm = formatCollaboratorCandidateInputValue(inlineCandidate);
+  uiState.collaboratorSuggestions = [];
+  uiState.collaboratorSearchLoading = false;
+  uiState.collaboratorModalError = "";
+  rerenderCollaboratorCreatePageInPlace();
 }
 
 function getProjectLotGroupDefinitions() {
@@ -248,6 +299,10 @@ function renderCollaboratorSuggestionList(uiState) {
           <input type="text" class="subject-create-input project-collaborators-modal__create-input" data-collaborator-create-field="lastName" value="${escapeHtml(uiState.collaboratorCreateLastName)}" placeholder="Nom">
           <input type="text" class="subject-create-input project-collaborators-modal__create-input" data-collaborator-create-field="firstName" value="${escapeHtml(uiState.collaboratorCreateFirstName)}" placeholder="Prénom">
           <input type="text" class="subject-create-input project-collaborators-modal__create-input project-collaborators-modal__create-input--full" data-collaborator-create-field="company" value="${escapeHtml(uiState.collaboratorCreateCompany)}" placeholder="Entreprise">
+        </div>
+        <div class="project-collaborators-modal__create-actions">
+          <button type="button" class="gh-btn" data-collaborator-inline-cancel="true">Annuler</button>
+          <button type="button" class="gh-btn gh-btn--primary" data-collaborator-inline-confirm="true">Valider</button>
         </div>
       </div>
     `);
@@ -448,7 +503,7 @@ function openCollaboratorModal() {
   uiState.collaboratorModalSubmitting = false;
   uiState.collaboratorModalError = "";
   uiState.collaboratorActiveGroupCode = groups[0]?.code || DEFAULT_GROUP_CODE;
-  uiState.selectedCollaboratorProjectLotId = groups[0]?.items?.[0]?.id || "";
+  uiState.selectedCollaboratorProjectLotId = "";
   uiState.collaboratorModalFieldIds = createCollaboratorModalFieldIds();
   uiState.collaboratorCreateMore = false;
   uiState.collaboratorCreateFirstName = "";
@@ -574,7 +629,7 @@ async function submitCollaboratorDraft() {
       uiState.collaboratorModalSubmitting = false;
       uiState.collaboratorModalError = "";
       uiState.collaboratorActiveGroupCode = groups[0]?.code || uiState.collaboratorActiveGroupCode || DEFAULT_GROUP_CODE;
-      uiState.selectedCollaboratorProjectLotId = groups[0]?.items?.[0]?.id || "";
+      uiState.selectedCollaboratorProjectLotId = "";
       uiState.collaboratorModalFieldIds = createCollaboratorModalFieldIds();
       uiState.collaboratorCreateFirstName = "";
       uiState.collaboratorCreateLastName = "";
@@ -678,6 +733,18 @@ function bindCollaboratorCreatePage(page) {
     const candidateButton = event.target.closest?.("[data-collaborator-candidate-key]");
     if (candidateButton) {
       selectCollaboratorCandidate(candidateButton.getAttribute("data-collaborator-candidate-key"));
+      return;
+    }
+
+    const inlineCancelButton = event.target.closest?.("[data-collaborator-inline-cancel]");
+    if (inlineCancelButton) {
+      cancelInlineDirectoryCreation();
+      return;
+    }
+
+    const inlineConfirmButton = event.target.closest?.("[data-collaborator-inline-confirm]");
+    if (inlineConfirmButton) {
+      confirmInlineDirectoryCreation();
     }
   });
 
@@ -687,11 +754,6 @@ function bindCollaboratorCreatePage(page) {
       const uiState = ensureCollaborateursUiState();
       if (uiState.collaboratorActiveGroupCode === nextTabId) return;
       uiState.collaboratorActiveGroupCode = nextTabId;
-      const activeGroup = getActiveProjectLotsByGroup().find((group) => group.code === nextTabId);
-      const hasSelectedLotInGroup = (activeGroup?.items || []).some((item) => item.id === uiState.selectedCollaboratorProjectLotId);
-      if (!hasSelectedLotInGroup) {
-        uiState.selectedCollaboratorProjectLotId = activeGroup?.items?.[0]?.id || "";
-      }
       rerenderCollaboratorCreatePageInPlace();
     }
   });
