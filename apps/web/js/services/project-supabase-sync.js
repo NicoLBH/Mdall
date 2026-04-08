@@ -1024,10 +1024,14 @@ function mapProjectCollaboratorRow(row = {}) {
   const email = safeString(profile.public_email || row.collaborator_email || row.email || "");
   const lot = row.project_lot || {};
   const lotCatalog = lot.lot_catalog || {};
+  const linkedUserId = safeString(row.linked_user_id || row.collaborator_user_id || row.user_id || "");
 
   return {
     id: safeString(row.id || ""),
-    userId: safeString(row.collaborator_user_id || row.user_id || ""),
+    personId: safeString(row.person_id || ""),
+    userId: linkedUserId,
+    linkedUserId,
+    hasMdallAccount: Boolean(linkedUserId),
     email,
     firstName,
     lastName,
@@ -1038,7 +1042,8 @@ function mapProjectCollaboratorRow(row = {}) {
     roleGroupCode: safeString(lotCatalog.group_code || row.role_group_code || ""),
     roleGroupLabel: safeString(lotCatalog.group_label || row.role_group_label || ""),
     status: safeString(row.status || "Actif") || "Actif",
-    company: safeString(profile.company || row.company || "")
+    company: safeString(profile.company || row.company || ""),
+    sourceType: safeString(row.source_type || (linkedUserId ? "mdall_user" : "directory_person")) || "directory_person"
   };
 }
 
@@ -1080,13 +1085,20 @@ export async function searchProjectCollaboratorCandidates(searchTerm = "", optio
   if (!query) return [];
 
   const limit = Number.isFinite(options.limit) ? Number(options.limit) : 8;
+  const projectId = await resolveCurrentBackendProjectId();
   const rows = await rpcCall("search_project_collaborator_candidates", {
     p_query: query,
+    p_project_id: projectId || null,
     p_limit: Math.max(1, Math.min(20, limit))
   });
 
   return Array.isArray(rows) ? rows.map((row) => ({
-    userId: safeString(row.user_id || ""),
+    candidateKey: safeString(row.candidate_key || row.person_id || row.user_id || row.email || ""),
+    sourceType: safeString(row.source_type || "directory_person") || "directory_person",
+    personId: safeString(row.person_id || ""),
+    userId: safeString(row.user_id || row.linked_user_id || ""),
+    linkedUserId: safeString(row.linked_user_id || row.user_id || ""),
+    hasMdallAccount: Boolean(safeString(row.user_id || row.linked_user_id || "")),
     email: safeString(row.email || ""),
     firstName: safeString(row.first_name || ""),
     lastName: safeString(row.last_name || ""),
@@ -1095,40 +1107,93 @@ export async function searchProjectCollaboratorCandidates(searchTerm = "", optio
   })) : [];
 }
 
-export async function addProjectCollaboratorToSupabase({ userId = "", projectLotId = "", status = "Actif" } = {}) {
+function isValidEmailAddress(value = "") {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(safeString(value).toLowerCase());
+}
+
+async function ensureDirectoryPerson({ personId = "", email = "", firstName = "", lastName = "", company = "", userId = "" } = {}) {
+  const explicitPersonId = safeString(personId);
+  if (explicitPersonId) {
+    return {
+      id: explicitPersonId,
+      linkedUserId: safeString(userId)
+    };
+  }
+
+  const normalizedEmail = safeString(email).toLowerCase();
+  if (!normalizedEmail || !isValidEmailAddress(normalizedEmail)) {
+    throw new Error("Adresse mail invalide.");
+  }
+
+  const existingRows = await restFetch("directory_people", new URLSearchParams([
+    ["select", "id,email,linked_user_id"],
+    ["email_normalized", `eq.${normalizedEmail}`],
+    ["limit", "1"]
+  ]));
+  const existingPerson = Array.isArray(existingRows) ? (existingRows[0] || null) : null;
+  if (existingPerson?.id) {
+    return {
+      id: safeString(existingPerson.id),
+      linkedUserId: safeString(existingPerson.linked_user_id || userId)
+    };
+  }
+
+  const currentUser = await getCurrentUser().catch(() => null);
+  const insertedPerson = await restInsert("directory_people", {
+    email: normalizedEmail,
+    first_name: safeString(firstName) || null,
+    last_name: safeString(lastName) || null,
+    company: safeString(company) || null,
+    linked_user_id: safeString(userId) || null,
+    created_by_user_id: safeString(currentUser?.id || "") || null
+  }, {
+    select: "id,email,linked_user_id"
+  });
+
+  return {
+    id: safeString(insertedPerson?.id || ""),
+    linkedUserId: safeString(insertedPerson?.linked_user_id || userId)
+  };
+}
+
+export async function addProjectCollaboratorToSupabase({ personId = "", userId = "", email = "", firstName = "", lastName = "", company = "", projectLotId = "", status = "Actif" } = {}) {
   const backendProjectId = await resolveCurrentBackendProjectId();
-  const collaboratorUserId = safeString(userId);
   const lotId = safeString(projectLotId);
 
   if (!backendProjectId) {
     throw new Error("Projet Supabase introuvable pour l'ajout du collaborateur.");
   }
-  if (!collaboratorUserId) {
-    throw new Error("Aucun collaborateur sélectionné.");
-  }
   if (!lotId) {
     throw new Error("Aucun rôle sélectionné.");
   }
 
+  const collaboratorPerson = await ensureDirectoryPerson({ personId, email, firstName, lastName, company, userId });
+  const resolvedPersonId = safeString(collaboratorPerson.id);
+  if (!resolvedPersonId) {
+    throw new Error("Aucune personne sélectionnée.");
+  }
+
   const currentUser = await getCurrentUser().catch(() => null);
   const existing = Array.isArray(store.projectForm.collaborators) ? store.projectForm.collaborators : [];
-  if (existing.some((item) => safeString(item.userId) === collaboratorUserId && safeString(item.projectLotId) === lotId)) {
-    throw new Error("Ce collaborateur est déjà affecté à ce rôle sur le projet.");
+  if (existing.some((item) => safeString(item.personId) === resolvedPersonId && safeString(item.projectLotId) === lotId)) {
+    throw new Error("Cette personne est déjà affectée à ce rôle sur le projet.");
   }
 
   const inserted = await restInsert("project_collaborators", {
     project_id: backendProjectId,
-    collaborator_user_id: collaboratorUserId,
+    person_id: resolvedPersonId,
+    collaborator_user_id: safeString(collaboratorPerson.linkedUserId || userId) || null,
+    collaborator_email: safeString(email) || null,
     project_lot_id: lotId,
     status: safeString(status) || "Actif",
     invited_by_user_id: safeString(currentUser?.id || "") || null
   }, {
-    select: "id,project_id,collaborator_user_id,project_lot_id,status,created_at,collaborator_email"
+    select: "id,project_id,person_id,collaborator_user_id,project_lot_id,status,created_at,collaborator_email"
   });
 
   const items = await syncProjectCollaboratorsFromSupabase({ force: true });
   const nextItem = items.find((item) => safeString(item.id) === safeString(inserted?.id || ""))
-    || items.find((item) => safeString(item.userId) === collaboratorUserId && safeString(item.projectLotId) === lotId)
+    || items.find((item) => safeString(item.personId) === resolvedPersonId && safeString(item.projectLotId) === lotId)
     || null;
 
   dispatchProjectSupabaseSync({ section: "collaborators", collaboratorId: safeString(nextItem?.id || inserted?.id || ""), collaboratorsCount: items.length });
