@@ -1,4 +1,5 @@
 import { store } from "../../store.js";
+import { registerProjectPrimaryScrollSource } from "../project-shell-chrome.js";
 import { svgIcon } from "../../ui/icons.js";
 import { escapeHtml } from "../../utils/escape-html.js";
 import {
@@ -252,11 +253,14 @@ function renderCollaboratorCreatePage() {
     || !selectedCandidate?.userId
     || !String(uiState.selectedCollaboratorProjectLotId || "").trim();
 
+  const currentUserAvatar = String(store.user?.avatar || "assets/images/260093543.png").trim() || "assets/images/260093543.png";
+
   return `
     <section class="project-collaborator-create-shell" id="projectCollaboratorsCreatePage" data-collaborator-create-page>
+      <div class="project-collaborator-create-shell__inner">
       <div class="project-collaborator-create">
         <div class="project-collaborator-create__header">
-          <span class="project-collaborator-create__avatar" aria-hidden="true">${svgIcon("people", { width: 18, height: 18 })}</span>
+          <img src="${escapeHtml(currentUserAvatar)}" alt="Photo de profil" class="project-collaborator-create__avatar">
           <div class="project-collaborator-create__title-wrap">
             <div class="project-collaborator-create__title">Ajouter un collaborateur au projet</div>
             <div class="project-collaborator-create__subtitle">Recherchez un collaborateur par son adresse mail ou son nom et affectez-lui un rôle.</div>
@@ -270,7 +274,7 @@ function renderCollaboratorCreatePage() {
               <span class="project-collaborators-modal__search-icon">${svgIcon("search", { width: 18, height: 18 })}</span>
               <input
                 id="${escapeHtml(fieldIds.searchInputId)}"
-                class="gh-input project-collaborators-modal__search-input"
+                class="subject-create-input project-collaborators-modal__search-input"
                 type="text"
                 autocomplete="off"
                 spellcheck="false"
@@ -316,6 +320,7 @@ function renderCollaboratorCreatePage() {
             </button>
           </div>
         </div>
+      </div>
       </div>
     </section>
   `;
@@ -594,6 +599,8 @@ function bindCollaboratorCreatePage(page) {
       rerenderCollaboratorCreatePageInPlace();
     }
   });
+
+  registerProjectPrimaryScrollSource(page.querySelector(".project-collaborators-modal__lots") || document.getElementById("projectParametresScroll"));
 
   const fieldIds = getCollaboratorModalFieldIds();
   const searchInput = page.querySelector(`#${CSS.escape(fieldIds.searchInputId)}`);
