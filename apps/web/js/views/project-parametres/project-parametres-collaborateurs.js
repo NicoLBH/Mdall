@@ -185,6 +185,68 @@ function getProjectLotGroupDefinitions() {
   ];
 }
 
+function getCollaboratorDisplayGroupDefinitions() {
+  return [
+    { code: "groupe-maitrise-ouvrage", title: "Maîtrise d'ouvrage" },
+    { code: "groupe-maitrise-oeuvre", title: "Maîtrise d'oeuvre" },
+    { code: "groupe-divers", title: "Divers" },
+    { code: "groupe-entreprise", title: "Entreprises" }
+  ];
+}
+
+function getProjectLotSortMetaMap() {
+  const items = Array.isArray(store.projectLots?.items) ? store.projectLots.items : [];
+  return new Map(items.map((item) => [String(item.id || ""), {
+    id: String(item.id || ""),
+    groupCode: String(item.groupCode || ""),
+    groupLabel: String(item.groupLabel || ""),
+    sortOrder: Number(item.sortOrder || 0),
+    label: String(item.label || "")
+  }]));
+}
+
+function getSortedCollaboratorGroups(collaborators = []) {
+  const definitions = getCollaboratorDisplayGroupDefinitions();
+  const buckets = definitions.map((group) => ({ ...group, items: [] }));
+  const bucketMap = new Map(buckets.map((group) => [group.code, group]));
+  const projectLotSortMetaMap = getProjectLotSortMetaMap();
+
+  collaborators
+    .map((item, index) => {
+      const lotMeta = projectLotSortMetaMap.get(String(item?.projectLotId || "")) || null;
+      const groupCode = String(lotMeta?.groupCode || item?.roleGroupCode || "").trim();
+      return {
+        item,
+        index,
+        groupCode,
+        sortOrder: Number(lotMeta?.sortOrder || 0),
+        roleLabel: String(lotMeta?.label || item?.role || "").trim()
+      };
+    })
+    .sort((a, b) => {
+      const groupIndexA = definitions.findIndex((group) => group.code === a.groupCode);
+      const groupIndexB = definitions.findIndex((group) => group.code === b.groupCode);
+      const normalizedGroupIndexA = groupIndexA >= 0 ? groupIndexA : Number.MAX_SAFE_INTEGER;
+      const normalizedGroupIndexB = groupIndexB >= 0 ? groupIndexB : Number.MAX_SAFE_INTEGER;
+      if (normalizedGroupIndexA !== normalizedGroupIndexB) return normalizedGroupIndexA - normalizedGroupIndexB;
+      const sortCompare = a.sortOrder - b.sortOrder;
+      if (sortCompare !== 0) return sortCompare;
+      const roleCompare = a.roleLabel.localeCompare(b.roleLabel, "fr");
+      if (roleCompare !== 0) return roleCompare;
+      const nameCompare = String(a.item?.name || a.item?.email || "").localeCompare(String(b.item?.name || b.item?.email || ""), "fr");
+      if (nameCompare !== 0) return nameCompare;
+      return a.index - b.index;
+    })
+    .forEach((entry) => {
+      const bucket = bucketMap.get(entry.groupCode);
+      if (bucket) {
+        bucket.items.push(entry.item);
+      }
+    });
+
+  return buckets.filter((group) => group.items.length);
+}
+
 function getActiveProjectLotsByGroup() {
   const groups = getProjectLotGroupDefinitions().map((group) => ({ ...group, items: [] }));
   const map = new Map(groups.map((group) => [group.code, group]));
@@ -208,6 +270,65 @@ function getActiveProjectLotsByGroup() {
   return groups;
 }
 
+function renderCollaboratorRow(item) {
+  const displayName = String(item.name || "").trim() || String(item.email || "").trim() || "Utilisateur";
+  const subtitleParts = [String(item.email || "").trim(), String(item.company || "").trim(), item.hasMdallAccount ? "Compte Mdall" : "Annuaire"].filter(Boolean);
+  const status = String(item.status || "Actif").trim() || "Actif";
+  const displayDate = status === "Retiré"
+    ? formatCollaboratorDisplayDate(item.removedAt || item.updatedAt)
+    : formatCollaboratorDisplayDate(item.addedAt || item.createdAt);
+  return `
+    <div class="project-collaborators__row">
+      <div class="project-collaborators__cell project-collaborators__cell--mail-icon">
+        <span class="project-collaborators__mail-icon">
+          ${svgIcon("mail", { width: 20, height: 20 })}
+        </span>
+      </div>
+
+      <div class="project-collaborators__cell project-collaborators__cell--email">
+        <button
+          type="button"
+          class="row-title-trigger project-collaborators__name-trigger"
+          data-edit-collaborator-id="${escapeHtml(item.id)}"
+        >${escapeHtml(displayName)}</button>
+        <div class="project-collaborators__sub mono">${escapeHtml(subtitleParts.join(" · ") || "—")}</div>
+      </div>
+
+      <div class="project-collaborators__cell project-collaborators__cell--role mono">
+        ${escapeHtml(item.role || "—")}
+      </div>
+
+      <div class="project-collaborators__cell project-collaborators__cell--date mono">
+        ${escapeHtml(displayDate)}
+      </div>
+
+      <div class="project-collaborators__cell project-collaborators__cell--status mono">
+        ${escapeHtml(status)}
+      </div>
+
+      <div class="project-collaborators__cell project-collaborators__cell--action">
+        ${status === "Actif" ? `
+          <button
+            type="button"
+            class="settings-lot-delete-button"
+            data-remove-collaborator-id="${escapeHtml(item.id)}"
+          >
+            Retirer
+          </button>
+        ` : `
+          <button
+            type="button"
+            class="settings-lot-delete-button"
+            data-restore-collaborator-id="${escapeHtml(item.id)}"
+          >
+            Rétablir
+          </button>
+        `}
+      </div>
+    </div>
+  `;
+}
+
 function renderCollaboratorsRows(collaborators = []) {
   if (!collaborators.length) {
     return `
@@ -217,64 +338,12 @@ function renderCollaboratorsRows(collaborators = []) {
     `;
   }
 
-  return collaborators.map((item) => {
-    const displayName = String(item.name || "").trim() || String(item.email || "").trim() || "Utilisateur";
-    const subtitleParts = [String(item.email || "").trim(), String(item.company || "").trim(), item.hasMdallAccount ? "Compte Mdall" : "Annuaire"].filter(Boolean);
-    const status = String(item.status || "Actif").trim() || "Actif";
-    const displayDate = status === "Retiré"
-      ? formatCollaboratorDisplayDate(item.removedAt || item.updatedAt)
-      : formatCollaboratorDisplayDate(item.addedAt || item.createdAt);
-    return `
-      <div class="project-collaborators__row">
-        <div class="project-collaborators__cell project-collaborators__cell--mail-icon">
-          <span class="project-collaborators__mail-icon">
-            ${svgIcon("mail", { width: 20, height: 20 })}
-          </span>
-        </div>
-
-        <div class="project-collaborators__cell project-collaborators__cell--email">
-          <button
-            type="button"
-            class="row-title-trigger project-collaborators__name-trigger"
-            data-edit-collaborator-id="${escapeHtml(item.id)}"
-          >${escapeHtml(displayName)}</button>
-          <div class="project-collaborators__sub mono">${escapeHtml(subtitleParts.join(" · ") || "—")}</div>
-        </div>
-
-        <div class="project-collaborators__cell project-collaborators__cell--role mono">
-          ${escapeHtml(item.role || "—")}
-        </div>
-
-        <div class="project-collaborators__cell project-collaborators__cell--date mono">
-          ${escapeHtml(displayDate)}
-        </div>
-
-        <div class="project-collaborators__cell project-collaborators__cell--status mono">
-          ${escapeHtml(status)}
-        </div>
-
-        <div class="project-collaborators__cell project-collaborators__cell--action">
-          ${status === "Actif" ? `
-            <button
-              type="button"
-              class="settings-lot-delete-button"
-              data-remove-collaborator-id="${escapeHtml(item.id)}"
-            >
-              Retirer
-            </button>
-          ` : `
-            <button
-              type="button"
-              class="settings-lot-delete-button"
-              data-restore-collaborator-id="${escapeHtml(item.id)}"
-            >
-              Rétablir
-            </button>
-          `}
-        </div>
-      </div>
-    `;
-  }).join("");
+  return getSortedCollaboratorGroups(collaborators).map((group) => `
+    <div class="project-collaborators__group-divider" role="presentation">
+      <span class="project-collaborators__group-divider-label">${escapeHtml(group.title)}</span>
+    </div>
+    ${group.items.map((item) => renderCollaboratorRow(item)).join("")}
+  `).join("");
 }
 
 function renderCollaboratorsCard() {
@@ -482,10 +551,11 @@ function renderCollaboratorCreatePage() {
 
         <div class="project-collaborator-create__footer">
           <div class="project-collaborator-create__footer-left">
+            ${editingMode ? "" : `
             <label class="subject-create-checkbox">
               <input type="checkbox" data-collaborator-create-more ${uiState.collaboratorCreateMore ? "checked" : ""}>
               <span>Créer un autre</span>
-            </label>
+            </label>`}
           </div>
           <div class="project-collaborator-create__footer-right">
             <button type="button" class="gh-btn" data-close-collaborator-modal="true">Annuler</button>
@@ -495,7 +565,7 @@ function renderCollaboratorCreatePage() {
               id="${escapeHtml(fieldIds.submitButtonId)}"
               ${submitDisabled ? "disabled" : ""}
             >
-              ${uiState.collaboratorModalSubmitting ? "Ajout en cours…" : "Ajouter"}
+              ${uiState.collaboratorModalSubmitting ? (editingMode ? "Mise à jour…" : "Ajout en cours…") : (editingMode ? "Mettre à jour" : "Ajouter")}
             </button>
           </div>
         </div>
