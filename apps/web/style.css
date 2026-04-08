@@ -3588,7 +3588,7 @@ color:var(--text);
 .project-simple-page--parametres-standalone .project-collaborator-create-shell,
 .project-simple-page--parametres-standalone .project-collaborator-create-shell__inner,
 .project-simple-page--parametres-standalone .project-collaborator-create{
-  min-height:calc(100dvh - var(--header-h) - var(--project-tabs-h));
+  /*min-height:calc(100dvh - var(--header-h) - var(--project-tabs-h));*/
   max-height:calc(100dvh - var(--header-h) - var(--project-tabs-h));
 }
 
