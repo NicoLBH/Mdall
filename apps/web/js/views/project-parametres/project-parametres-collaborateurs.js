@@ -36,8 +36,26 @@ function ensureCollaborateursUiState() {
   if (typeof uiState.collaboratorActiveGroupCode !== "string" || !uiState.collaboratorActiveGroupCode.trim()) uiState.collaboratorActiveGroupCode = DEFAULT_GROUP_CODE;
   if (typeof uiState.selectedCollaboratorProjectLotId !== "string") uiState.selectedCollaboratorProjectLotId = "";
   if (typeof uiState.collaboratorsLoadedProjectKey !== "string") uiState.collaboratorsLoadedProjectKey = "";
+  if (!uiState.collaboratorModalFieldIds || typeof uiState.collaboratorModalFieldIds !== "object") uiState.collaboratorModalFieldIds = null;
 
   return uiState;
+}
+
+
+function createCollaboratorModalFieldIds() {
+  const uniqueSuffix = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  return {
+    searchInputId: `projectCollaboratorSearch_${uniqueSuffix}`,
+    submitButtonId: `projectCollaboratorSubmit_${uniqueSuffix}`,
+    lotInputPrefix: `projectCollaboratorLot_${uniqueSuffix}`
+  };
+}
+
+function getCollaboratorModalFieldIds(uiState = ensureCollaborateursUiState()) {
+  if (!uiState.collaboratorModalFieldIds) {
+    uiState.collaboratorModalFieldIds = createCollaboratorModalFieldIds();
+  }
+  return uiState.collaboratorModalFieldIds;
 }
 
 function getProjectLotGroupDefinitions() {
@@ -201,6 +219,7 @@ function renderCollaboratorSuggestionList(uiState) {
 
 function renderCollaboratorLotsPicker(uiState) {
   const groups = getActiveProjectLotsByGroup().filter((group) => group.items.length);
+  const fieldIds = getCollaboratorModalFieldIds(uiState);
 
   if (!groups.length) {
     return '<div class="settings-empty-note">Aucun lot actif n est disponible. Activez d abord des lots dans Paramètres → Lots.</div>';
@@ -221,7 +240,7 @@ function renderCollaboratorLotsPicker(uiState) {
 
     <div class="project-collaborators-modal__lots" role="radiogroup" aria-label="Lots activés du projet">
       ${activeGroup.items.map((lot) => {
-        const inputId = `projectCollaboratorLot_${lot.id}`;
+        const inputId = `${fieldIds.lotInputPrefix}_${lot.id}`;
         return `
           <label class="project-collaborators-modal__lot" for="${escapeHtml(inputId)}">
             <input
@@ -243,6 +262,7 @@ function renderCollaboratorModal() {
   const uiState = ensureCollaborateursUiState();
   if (!uiState.collaboratorsModalOpen) return "";
 
+  const fieldIds = getCollaboratorModalFieldIds(uiState);
   const selectedCandidate = uiState.selectedCollaboratorCandidate;
   const submitDisabled = uiState.collaboratorModalSubmitting
     || !selectedCandidate?.userId
@@ -257,11 +277,11 @@ function renderCollaboratorModal() {
     bodyClassName: "project-collaborators-modal__body",
     bodyHtml: `
       <div class="project-collaborators-modal__section">
-        <label class="settings-modal__label" for="projectCollaboratorSearch">Rechercher un collaborateur</label>
+        <label class="settings-modal__label" for="${escapeHtml(fieldIds.searchInputId)}">Rechercher un collaborateur</label>
         <div class="project-collaborators-modal__search-wrap">
           <span class="project-collaborators-modal__search-icon">${svgIcon("search", { width: 18, height: 18 })}</span>
           <input
-            id="projectCollaboratorSearch"
+            id="${escapeHtml(fieldIds.searchInputId)}"
             class="gh-input project-collaborators-modal__search-input"
             type="text"
             autocomplete="off"
@@ -291,13 +311,54 @@ function renderCollaboratorModal() {
       <button
         type="button"
         class="gh-btn gh-btn--primary settings-modal__submit"
-        id="projectCollaboratorSubmit"
+        id="${escapeHtml(fieldIds.submitButtonId)}"
         ${submitDisabled ? "disabled" : ""}
       >
         ${uiState.collaboratorModalSubmitting ? "Enregistrement…" : "Valider"}
       </button>
     `
   });
+}
+
+
+function restoreCollaboratorSearchFocus(fieldIds, cursorPosition = null) {
+  if (!fieldIds?.searchInputId) return;
+  window.requestAnimationFrame(() => {
+    const input = document.getElementById(fieldIds.searchInputId);
+    if (!input) return;
+    input.focus();
+    if (typeof cursorPosition === "number") {
+      try {
+        input.setSelectionRange(cursorPosition, cursorPosition);
+      } catch (error) {
+        // no-op
+      }
+    }
+  });
+}
+
+function rerenderCollaboratorModalInPlace({ preserveSearchFocus = false } = {}) {
+  const uiState = ensureCollaborateursUiState();
+  const existingModal = document.getElementById("projectCollaboratorsModal");
+  const nextModalHtml = renderCollaboratorModal();
+  const fieldIds = getCollaboratorModalFieldIds(uiState);
+  const activeElement = document.activeElement;
+  const shouldRestoreFocus = preserveSearchFocus && activeElement?.id === fieldIds.searchInputId;
+  const cursorPosition = shouldRestoreFocus && typeof activeElement.selectionStart === "number"
+    ? activeElement.selectionStart
+    : null;
+
+  if (!existingModal) {
+    rerenderProjectParametres();
+    return;
+  }
+
+  existingModal.outerHTML = nextModalHtml;
+  bindCollaboratorModal(document.getElementById("projectCollaboratorsModal"));
+
+  if (shouldRestoreFocus) {
+    restoreCollaboratorSearchFocus(fieldIds, cursorPosition);
+  }
 }
 
 function openCollaboratorModal() {
@@ -313,6 +374,7 @@ function openCollaboratorModal() {
   uiState.collaboratorModalError = "";
   uiState.collaboratorActiveGroupCode = groups[0]?.code || DEFAULT_GROUP_CODE;
   uiState.selectedCollaboratorProjectLotId = groups[0]?.items?.[0]?.id || "";
+  uiState.collaboratorModalFieldIds = createCollaboratorModalFieldIds();
   rerenderProjectParametres();
 }
 
@@ -325,6 +387,7 @@ function closeCollaboratorModal() {
   uiState.collaboratorSearchLoading = false;
   uiState.collaboratorModalSubmitting = false;
   uiState.collaboratorModalError = "";
+  uiState.collaboratorModalFieldIds = null;
   rerenderProjectParametres();
 }
 
@@ -338,7 +401,7 @@ async function runCollaboratorSearch(query) {
     uiState.collaboratorSuggestions = [];
     uiState.selectedCollaboratorCandidate = null;
     uiState.collaboratorSearchLoading = false;
-    rerenderProjectParametres();
+    rerenderCollaboratorModalInPlace({ preserveSearchFocus: true });
     return;
   }
 
@@ -355,14 +418,14 @@ async function runCollaboratorSearch(query) {
     }
     uiState.collaboratorSearchLoading = false;
     uiState.collaboratorModalError = "";
-    rerenderProjectParametres();
+    rerenderCollaboratorModalInPlace({ preserveSearchFocus: true });
   } catch (error) {
     if (ensureCollaborateursUiState().collaboratorSearchRequestId !== requestId) return;
     uiState.collaboratorSuggestions = [];
     uiState.selectedCollaboratorCandidate = null;
     uiState.collaboratorSearchLoading = false;
     uiState.collaboratorModalError = error instanceof Error ? error.message : String(error || "Erreur de recherche");
-    rerenderProjectParametres();
+    rerenderCollaboratorModalInPlace({ preserveSearchFocus: true });
   }
 }
 
@@ -383,7 +446,7 @@ function selectCollaboratorCandidate(candidateId) {
   if (!nextCandidate) return;
   uiState.selectedCollaboratorCandidate = nextCandidate;
   uiState.collaboratorModalError = "";
-  rerenderProjectParametres();
+  rerenderCollaboratorModalInPlace();
 }
 
 async function submitCollaboratorDraft() {
@@ -392,7 +455,7 @@ async function submitCollaboratorDraft() {
 
   uiState.collaboratorModalSubmitting = true;
   uiState.collaboratorModalError = "";
-  rerenderProjectParametres();
+  rerenderCollaboratorModalInPlace();
 
   try {
     await addProjectCollaboratorToSupabase({
@@ -404,7 +467,7 @@ async function submitCollaboratorDraft() {
   } catch (error) {
     uiState.collaboratorModalSubmitting = false;
     uiState.collaboratorModalError = error instanceof Error ? error.message : String(error || "Erreur d'ajout du collaborateur");
-    rerenderProjectParametres();
+    rerenderCollaboratorModalInPlace();
   }
 }
 
@@ -467,12 +530,19 @@ export function bindCollaborateursParametresSection(root) {
     });
   });
 
-  const modal = document.getElementById("projectCollaboratorsModal");
-  if (!modal) return;
+  bindCollaboratorModal(document.getElementById("projectCollaboratorsModal"));
+}
+
+function bindCollaboratorModal(modal) {
+  if (!modal || modal.dataset.bound === "1") return;
+  modal.dataset.bound = "1";
 
   modal.addEventListener("click", (event) => {
     const closeTarget = event.target.closest?.("[data-close-collaborator-modal]");
-    if (closeTarget) closeCollaboratorModal();
+    if (closeTarget) {
+      closeCollaboratorModal();
+      return;
+    }
 
     const candidateButton = event.target.closest?.("[data-collaborator-candidate-id]");
     if (candidateButton) {
@@ -491,11 +561,12 @@ export function bindCollaborateursParametresSection(root) {
       if (!hasSelectedLotInGroup) {
         uiState.selectedCollaboratorProjectLotId = activeGroup?.items?.[0]?.id || "";
       }
-      rerenderProjectParametres();
+      rerenderCollaboratorModalInPlace();
     }
   });
 
-  const searchInput = modal.querySelector("#projectCollaboratorSearch");
+  const fieldIds = getCollaboratorModalFieldIds();
+  const searchInput = modal.querySelector(`#${CSS.escape(fieldIds.searchInputId)}`);
   searchInput?.addEventListener("input", (event) => {
     const uiState = ensureCollaborateursUiState();
     uiState.collaboratorSearchTerm = event.target.value || "";
@@ -519,10 +590,11 @@ export function bindCollaborateursParametresSection(root) {
       const uiState = ensureCollaborateursUiState();
       uiState.selectedCollaboratorProjectLotId = event.target.value || "";
       uiState.collaboratorModalError = "";
+      rerenderCollaboratorModalInPlace();
     });
   });
 
-  modal.querySelector("#projectCollaboratorSubmit")?.addEventListener("click", () => {
+  modal.querySelector(`#${CSS.escape(fieldIds.submitButtonId)}`)?.addEventListener("click", () => {
     void submitCollaboratorDraft();
   });
 
@@ -533,7 +605,12 @@ export function bindCollaborateursParametresSection(root) {
     }
   });
 
-  setTimeout(() => searchInput?.focus(), 0);
+  window.requestAnimationFrame(() => {
+    const input = document.getElementById(fieldIds.searchInputId);
+    if (input && document.activeElement !== input && !ensureCollaborateursUiState().collaboratorSearchTerm) {
+      input.focus();
+    }
+  });
 }
 
 export function getCollaborateursProjectParametresTab() {
