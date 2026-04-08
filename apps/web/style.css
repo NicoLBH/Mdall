@@ -32,7 +32,7 @@
   --discussion-avatar-gap:12px;
   --discussion-content-inset:calc(var(--discussion-avatar-size) + var(--discussion-avatar-gap));
   
-  --header-h:64px;
+  --header-h:52px;
   --header-h-compact:64px;
   --header-h-sticky-chrome:60px;
   --app-top:var(--header-h);
