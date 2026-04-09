@@ -10684,6 +10684,7 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   grid-template-columns:20px minmax(0,1fr) auto;
   align-items:center;
   cursor:default;
+  padding: 6px 20px;
 }
 
 .settings-feature-row__body--phase{
