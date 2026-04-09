@@ -1,7 +1,7 @@
 import { store } from "../store.js";
 import { ensureProjectDocumentsState } from "./project-documents-store.js";
 import { ensureProjectAutomationDefaults } from "./project-automation.js";
-import { buildSupabaseAuthHeaders, getCurrentUser, getSupabaseUrl, getSupabaseAnonKey } from "../../assets/js/auth.js";
+import { supabase, buildSupabaseAuthHeaders, getCurrentUser, getSupabaseUrl, getSupabaseAnonKey } from "../../assets/js/auth.js";
 
 const SUPABASE_URL = getSupabaseUrl();
 const SUPABASE_ANON_KEY = getSupabaseAnonKey();
@@ -845,14 +845,26 @@ function getProjectPhaseFallbackDefinition(code = "") {
   };
 }
 
-async function fetchProjectPhasesRowsByCode(backendProjectId) {
-  const params = new URLSearchParams();
-  params.set("select", "id,project_id,phase_code,phase_label,phase_order,phase_date,created_at,updated_at");
-  params.set("project_id", `eq.${backendProjectId}`);
-  params.set("order", "phase_order.asc,created_at.asc");
+const PROJECT_PHASES_SELECT = "id,project_id,phase_code,phase_label,phase_order,phase_date,created_at,updated_at";
 
-  const rows = await restFetch("project_phases", params);
-  return new Map((Array.isArray(rows) ? rows : []).map((row) => {
+async function fetchProjectPhasesRows(backendProjectId) {
+  const { data, error } = await supabase
+    .from("project_phases")
+    .select(PROJECT_PHASES_SELECT)
+    .eq("project_id", backendProjectId)
+    .order("phase_order", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    throw new Error(`project_phases fetch failed: ${error.message || error.code || "unknown error"}`);
+  }
+
+  return Array.isArray(data) ? data : [];
+}
+
+async function fetchProjectPhasesRowsByCode(backendProjectId) {
+  const rows = await fetchProjectPhasesRows(backendProjectId);
+  return new Map(rows.map((row) => {
     const item = mapProjectPhaseRowToViewModel(row || {});
     return [normalizeProjectPhaseCode(item.code), item];
   }));
@@ -864,13 +876,8 @@ export async function syncProjectPhasesFromSupabase(options = {}) {
     return Array.isArray(store.projectForm?.phasesCatalog) ? store.projectForm.phasesCatalog : [];
   }
 
-  const params = new URLSearchParams();
-  params.set("select", "id,project_id,phase_code,phase_label,phase_order,phase_date,created_at,updated_at");
-  params.set("project_id", `eq.${backendProjectId}`);
-  params.set("order", "phase_order.asc,created_at.asc");
-
-  const rows = await restFetch("project_phases", params);
-  const phaseRows = (Array.isArray(rows) ? rows : []).map(mapProjectPhaseRowToViewModel);
+  const rows = await fetchProjectPhasesRows(backendProjectId);
+  const phaseRows = rows.map(mapProjectPhaseRowToViewModel);
   if (!Array.isArray(store.projectForm?.phasesCatalog)) {
     store.projectForm.phasesCatalog = [];
   }
@@ -889,7 +896,36 @@ export async function syncProjectPhasesFromSupabase(options = {}) {
     });
   }
 
-  return Array.isArray(store.projectForm.phasesCatalog) ? store.projectForm.phasesCatalog : [];
+  return Array.isArray(store.projectForm?.phasesCatalog) ? store.projectForm.phasesCatalog : [];
+}
+
+async function updateProjectPhaseDateById(phaseId, phaseDate) {
+  const { data, error } = await supabase
+    .from("project_phases")
+    .update({ phase_date: phaseDate })
+    .eq("id", phaseId)
+    .select(PROJECT_PHASES_SELECT)
+    .single();
+
+  if (error) {
+    throw new Error(`project_phases update failed: ${error.message || error.code || "unknown error"}`);
+  }
+
+  return data || null;
+}
+
+async function insertProjectPhaseRow(payload) {
+  const { data, error } = await supabase
+    .from("project_phases")
+    .insert(payload)
+    .select(PROJECT_PHASES_SELECT)
+    .single();
+
+  if (error) {
+    throw new Error(`project_phases insert failed: ${error.message || error.code || "unknown error"}`);
+  }
+
+  return data || null;
 }
 
 export async function persistProjectPhaseDatesToSupabase(phaseDatesByCode = {}) {
@@ -912,12 +948,7 @@ export async function persistProjectPhaseDatesToSupabase(phaseDatesByCode = {}) 
     const existingRow = existingRowsByCode.get(code);
 
     if (existingRow?.id) {
-      const updatedRow = await restUpdate(
-        "project_phases",
-        { id: existingRow.id },
-        { phase_date: phaseDate },
-        { select: "id,project_id,phase_code,phase_label,phase_order,phase_date,created_at,updated_at" }
-      );
+      const updatedRow = await updateProjectPhaseDateById(existingRow.id, phaseDate);
 
       if (!updatedRow) {
         throw new Error(`Aucune ligne project_phases mise à jour pour la phase ${code}.`);
@@ -927,17 +958,13 @@ export async function persistProjectPhaseDatesToSupabase(phaseDatesByCode = {}) 
     }
 
     const fallback = getProjectPhaseFallbackDefinition(code);
-    return restInsert(
-      "project_phases",
-      {
-        project_id: backendProjectId,
-        phase_code: fallback.code,
-        phase_label: fallback.label,
-        phase_order: fallback.order,
-        phase_date: phaseDate
-      },
-      { select: "id,project_id,phase_code,phase_label,phase_order,phase_date,created_at,updated_at" }
-    );
+    return insertProjectPhaseRow({
+      project_id: backendProjectId,
+      phase_code: fallback.code,
+      phase_label: fallback.label,
+      phase_order: fallback.order,
+      phase_date: phaseDate
+    });
   }));
 
   const rowsByCode = new Map(updatedRows.map((row) => {
