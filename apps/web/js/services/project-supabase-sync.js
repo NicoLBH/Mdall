@@ -993,35 +993,43 @@ export async function syncProjectPhasesFromSupabase(options = {}) {
   const phaseRows = rows
     .map(mapProjectPhaseRowToViewModel)
     .filter((row) => safeString(row.code));
-  const currentCatalog = Array.isArray(store.projectForm?.phasesCatalog) ? store.projectForm.phasesCatalog : [];
-  const currentEnabledByCode = new Map(
-    currentCatalog.map((item) => [normalizeProjectPhaseCode(item?.code), item?.enabled !== false])
+  const phaseRowsByCode = new Map(
+    phaseRows.map((row) => [normalizeProjectPhaseCode(row.code), row])
   );
-
-  if (phaseRows.length) {
-    store.projectForm.phasesCatalog = phaseRows.map((row) => ({
-      code: row.code,
-      label: row.label || row.code,
-      enabled: currentEnabledByCode.get(normalizeProjectPhaseCode(row.code)) !== false,
-      phaseDate: safeString(row.phaseDate)
-    }));
-    return store.projectForm.phasesCatalog;
-  }
-
+  const currentCatalog = Array.isArray(store.projectForm?.phasesCatalog) ? store.projectForm.phasesCatalog : [];
   const fallbackCatalog = currentCatalog.length
     ? currentCatalog
     : [];
 
-  store.projectForm.phasesCatalog = fallbackCatalog.map((item) => {
+  if (!fallbackCatalog.length && !phaseRows.length) {
+    store.projectForm.phasesCatalog = [];
+    return store.projectForm.phasesCatalog;
+  }
+
+  const mergedCatalogSource = fallbackCatalog.length
+    ? fallbackCatalog
+    : phaseRows.map((row) => ({
+      code: row.code,
+      label: row.label || row.code,
+      enabled: true,
+      phaseDate: safeString(row.phaseDate),
+      order: row.order
+    }));
+
+  store.projectForm.phasesCatalog = mergedCatalogSource.map((item, index) => {
     const fallback = getProjectPhaseFallbackDefinition(item?.code || "") || {};
     const code = normalizeProjectPhaseCode(item?.code || fallback.code || "");
+    const row = phaseRowsByCode.get(code);
+    const itemOrder = Number(item?.order || item?.phaseOrder || fallback.order || index + 1) || index + 1;
+
     return {
       code,
-      label: safeString(item?.label) || safeString(fallback.label) || code,
-      enabled: item?.enabled !== false,
-      phaseDate: safeString(item?.phaseDate || item?.phase_date)
+      label: safeString(row?.label) || safeString(item?.label) || safeString(fallback.label) || code,
+      enabled: phaseRows.length ? phaseRowsByCode.has(code) : item?.enabled !== false,
+      phaseDate: row ? safeString(row.phaseDate) : safeString(item?.phaseDate || item?.phase_date),
+      order: row?.order || itemOrder
     };
-  });
+  }).sort((a, b) => Number(a?.order || 0) - Number(b?.order || 0));
 
   return Array.isArray(store.projectForm?.phasesCatalog) ? store.projectForm.phasesCatalog : [];
 }
@@ -1037,6 +1045,43 @@ async function updateProjectPhaseDateById(phaseId, phaseDate) {
 
 async function insertProjectPhaseRow(payload) {
   return restInsert("project_phases", payload, { select: PROJECT_PHASES_SELECT });
+}
+
+export async function persistProjectPhaseEnabledToSupabase(phaseCode, isEnabled) {
+  const backendProjectId = await resolveCurrentBackendProjectId();
+  if (!backendProjectId) {
+    throw new Error("Projet Supabase introuvable pour la mise à jour des phases.");
+  }
+
+  const normalizedCode = normalizeProjectPhaseCode(phaseCode);
+  if (!normalizedCode) {
+    throw new Error("Code de phase introuvable pour la mise à jour.");
+  }
+
+  const existingRowsByCode = await fetchProjectPhasesRowsByCode(backendProjectId);
+  const existingRow = existingRowsByCode.get(normalizedCode);
+
+  if (isEnabled) {
+    if (existingRow?.id) {
+      return existingRow;
+    }
+
+    const fallback = getProjectPhaseFallbackDefinition(normalizedCode);
+    return insertProjectPhaseRow({
+      project_id: backendProjectId,
+      phase_code: fallback.code,
+      phase_label: fallback.label,
+      phase_order: fallback.order,
+      phase_date: null
+    });
+  }
+
+  if (!existingRow?.id) {
+    return null;
+  }
+
+  await restDelete("project_phases", { id: existingRow.id });
+  return null;
 }
 
 export async function persistProjectPhaseDatesToSupabase(phaseDatesByCode = {}) {
