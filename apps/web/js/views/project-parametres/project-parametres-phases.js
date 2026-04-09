@@ -245,7 +245,7 @@ function renderProjectPhasesCard() {
           const inputId = `projectPhaseToggle_${item.code}`;
           const isInlineEditing = ensurePhasesUiState().projectPhaseEditingCode === item.code;
           return `
-            <div class="settings-feature-row settings-feature-row--phase${isInlineEditing ? " is-inline-editing" : ""}" data-project-phase-row="${escapeHtml(item.code)}">
+            <div class="settings-feature-row settings-feature-row--phase${canEditPhases ? "" : " settings-feature-row--phase-no-toggle"}${isInlineEditing ? " is-inline-editing" : ""}" data-project-phase-row="${escapeHtml(item.code)}">
               ${canEditPhases ? `
                 <div class="settings-feature-row__control">
                   <input
