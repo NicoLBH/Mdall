@@ -231,17 +231,19 @@ function renderProjectPhaseDateControl(item) {
 
 function renderProjectPhasesCard() {
   const canEditPhases = canCurrentUserEditProjectPhaseDates();
+  const parametresUiState = ensurePhasesUiState();
+  const shouldHideContributorFallback = !canEditPhases
+    && (!parametresUiState.projectPhasesLoaded || Boolean(parametresUiState.projectPhasesError));
   const items = canEditPhases
     ? getProjectPhasesCatalog()
-    : getEnabledProjectPhases();
-  const parametresUiState = ensurePhasesUiState();
+    : (shouldHideContributorFallback ? [] : getEnabledProjectPhases());
 
-  if (parametresUiState.projectPhasesLoading && !items.length) {
+  if ((!canEditPhases && !parametresUiState.projectPhasesLoaded) || (parametresUiState.projectPhasesLoading && !items.length)) {
     return '<div class="settings-empty-note settings-empty-note--card">Chargement des phases…</div>';
   }
 
   if (!items.length) {
-    return '<div class="settings-empty-note settings-empty-note--card">Aucune phase disponible pour ce projet.</div>';
+    return `<div class="settings-empty-note settings-empty-note--card">${canEditPhases ? 'Aucune phase disponible pour ce projet.' : 'Aucune phase active visible pour ce projet.'}</div>`;
   }
 
   return `
