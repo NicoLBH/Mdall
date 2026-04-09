@@ -10687,6 +10687,11 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   padding: 6px 20px;
 }
 
+.settings-feature-row--phase.is-inline-editing{
+  position:relative;
+  z-index:2;
+}
+
 .settings-feature-row__body--phase{
   min-width:0;
   cursor:pointer;
@@ -10695,6 +10700,14 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
 .settings-feature-row__aside--phase{
   justify-self:end;
   min-width:180px;
+}
+
+.settings-phase-date-display{
+  display:inline-flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:8px;
+  min-height:32px;
 }
 
 .settings-phase-date-text{
@@ -10707,19 +10720,43 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   white-space:nowrap;
 }
 
+.settings-phase-edit-btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:28px;
+  height:28px;
+  border:0;
+  border-radius:6px;
+  background:transparent;
+  color:var(--muted);
+  opacity:0;
+  pointer-events:none;
+  transition:opacity .15s ease, background-color .15s ease, color .15s ease;
+}
+
+.settings-feature-row--phase:hover .settings-phase-edit-btn,
+.settings-feature-row--phase.is-inline-editing .settings-phase-edit-btn{
+  opacity:1;
+  pointer-events:auto;
+}
+
+.settings-phase-edit-btn:hover,
+.settings-phase-edit-btn:focus-visible{
+  background:var(--bg-subtle);
+  color:var(--fg-default);
+}
+
+.settings-phase-date-picker{
+  position:relative;
+}
+
 .settings-phase-date-picker .shared-date-picker{
   min-width:180px;
 }
 
 .settings-phase-date-picker .shared-date-picker__trigger{
   justify-content:flex-start;
-}
-
-.settings-phases-card__actions{
-  display:inline-flex;
-  align-items:center;
-  gap:8px;
-  margin-left:auto;
 }
 
 @media (max-width: 860px){
