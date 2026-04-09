@@ -238,17 +238,45 @@ export async function resolveCurrentBackendProjectId(options = {}) {
     return projectBucket.backendProjectId;
   }
 
-  const explicitCurrentId = safeString(store.currentProjectId || store.currentProject?.id || "");
-  if (looksLikeUuid(explicitCurrentId)) {
-    projectBucket.backendProjectId = explicitCurrentId;
-    return explicitCurrentId;
-  }
-
   const frontendMap = readFrontendProjectMap();
   const mappedId = safeString(frontendMap[frontendProjectId] || "");
-  if (mappedId) {
+  if (looksLikeUuid(mappedId)) {
     projectBucket.backendProjectId = mappedId;
     return mappedId;
+  }
+
+  const explicitBackendId = [
+    store.currentProject?.backendProjectId,
+    store.currentProject?.backend_project_id,
+    store.currentProject?.supabaseProjectId,
+    store.currentProject?.supabase_project_id,
+    store.projectForm?.backendProjectId,
+    store.projectForm?.backend_project_id
+  ].map((value) => safeString(value)).find((value) => looksLikeUuid(value));
+
+  if (explicitBackendId) {
+    frontendMap[frontendProjectId] = explicitBackendId;
+    writeFrontendProjectMap(frontendMap);
+    projectBucket.backendProjectId = explicitBackendId;
+    return explicitBackendId;
+  }
+
+  const explicitCurrentId = safeString(store.currentProjectId || store.currentProject?.id || "");
+  if (looksLikeUuid(explicitCurrentId)) {
+    const idParams = new URLSearchParams();
+    idParams.set("select", "id");
+    idParams.set("id", `eq.${explicitCurrentId}`);
+    idParams.set("limit", "1");
+
+    const idRows = await restFetch("projects", idParams).catch(() => []);
+    const verifiedBackendId = safeString(idRows?.[0]?.id || "");
+
+    if (looksLikeUuid(verifiedBackendId)) {
+      frontendMap[frontendProjectId] = verifiedBackendId;
+      writeFrontendProjectMap(frontendMap);
+      projectBucket.backendProjectId = verifiedBackendId;
+      return verifiedBackendId;
+    }
   }
 
   const projectName = getCurrentProjectName();
@@ -873,23 +901,26 @@ export async function syncProjectPhasesFromSupabase(options = {}) {
 
   const rows = await fetchProjectPhasesRows(backendProjectId);
   const phaseRows = rows.map(mapProjectPhaseRowToViewModel);
-  if (!Array.isArray(store.projectForm?.phasesCatalog)) {
-    store.projectForm.phasesCatalog = [];
-  }
+  const phaseRowsByCode = new Map(phaseRows.map((row) => [normalizeProjectPhaseCode(row.code), row]));
+  const currentCatalog = Array.isArray(store.projectForm?.phasesCatalog) ? store.projectForm.phasesCatalog : [];
+  const fallbackCatalog = currentCatalog.length
+    ? currentCatalog
+    : Array.isArray(store.projectForm?.phasesCatalog)
+      ? store.projectForm.phasesCatalog
+      : [];
 
-  if (phaseRows.length) {
-    const currentCatalog = Array.isArray(store.projectForm.phasesCatalog) ? store.projectForm.phasesCatalog : [];
-    const currentByCode = new Map(currentCatalog.map((item) => [safeString(item?.code), item]));
-    store.projectForm.phasesCatalog = phaseRows.map((row) => {
-      const current = currentByCode.get(row.code) || {};
-      return {
-        code: row.code,
-        label: row.label || safeString(current?.label),
-        enabled: current?.enabled !== false,
-        phaseDate: row.phaseDate
-      };
-    });
-  }
+  store.projectForm.phasesCatalog = (currentCatalog.length ? currentCatalog : fallbackCatalog).map((item, index) => {
+    const fallback = getProjectPhaseFallbackDefinition(item?.code || "") || {};
+    const code = normalizeProjectPhaseCode(item?.code || fallback.code || "");
+    const synced = phaseRowsByCode.get(code);
+
+    return {
+      code: synced?.code || code,
+      label: synced?.label || safeString(item?.label) || safeString(fallback.label) || code,
+      enabled: item?.enabled !== false,
+      phaseDate: safeString(synced?.phaseDate)
+    };
+  });
 
   return Array.isArray(store.projectForm?.phasesCatalog) ? store.projectForm.phasesCatalog : [];
 }
