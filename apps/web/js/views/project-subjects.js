@@ -261,6 +261,10 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+function showError(message) {
+  console.error(message);
+}
+
 const SVG_ISSUE_OPEN = svgIcon("issue-opened");
 const SVG_ISSUE_CLOSED = svgIcon("check-circle");
 const SVG_ISSUE_REOPENED = SVG_ISSUE_OPEN;
