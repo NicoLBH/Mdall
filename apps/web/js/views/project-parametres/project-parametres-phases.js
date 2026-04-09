@@ -2,7 +2,8 @@ import { store } from "../../store.js";
 import { escapeHtml } from "../../utils/escape-html.js";
 import {
   syncProjectPhasesFromSupabase,
-  persistProjectPhaseDatesToSupabase
+  persistProjectPhaseDatesToSupabase,
+  persistProjectPhaseEnabledToSupabase
 } from "../../services/project-supabase-sync.js";
 import {
   formatSharedDateInputValue,
@@ -34,6 +35,9 @@ function ensurePhasesUiState() {
   }
   if (typeof parametresUiState.projectPhasesSubmitting !== "boolean") {
     parametresUiState.projectPhasesSubmitting = false;
+  }
+  if (typeof parametresUiState.projectPhaseToggleSubmittingCode !== "string") {
+    parametresUiState.projectPhaseToggleSubmittingCode = "";
   }
   if (typeof parametresUiState.projectPhasesError !== "string") {
     parametresUiState.projectPhasesError = "";
@@ -245,7 +249,9 @@ function renderProjectPhasesCard() {
       <div class="settings-features-list">
         ${items.map((item) => {
           const inputId = `projectPhaseToggle_${item.code}`;
-          const isInlineEditing = ensurePhasesUiState().projectPhaseEditingCode === item.code;
+          const uiState = ensurePhasesUiState();
+          const isInlineEditing = uiState.projectPhaseEditingCode === item.code;
+          const isToggleSubmitting = uiState.projectPhaseToggleSubmittingCode === item.code;
           return `
             <div class="settings-feature-row settings-feature-row--phase${canEditPhases ? "" : " settings-feature-row--phase-no-toggle"}${isInlineEditing ? " is-inline-editing" : ""}" data-project-phase-row="${escapeHtml(item.code)}">
               ${canEditPhases ? `
@@ -253,8 +259,10 @@ function renderProjectPhasesCard() {
                   <input
                     id="${escapeHtml(inputId)}"
                     type="checkbox"
+                    class="settings-toggle"
                     data-project-phase-toggle="${escapeHtml(item.code)}"
                     ${item.enabled ? "checked" : ""}
+                    ${isToggleSubmitting ? "disabled" : ""}
                   >
                 </div>
                 <label class="settings-feature-row__body settings-feature-row__body--phase" for="${escapeHtml(inputId)}">
@@ -282,18 +290,32 @@ function renderProjectPhasesCard() {
 
 function bindProjectPhaseToggles() {
   document.querySelectorAll("[data-project-phase-toggle]").forEach((input) => {
-    input.addEventListener("change", (event) => {
-      const code = event.target.getAttribute("data-project-phase-toggle");
+    input.addEventListener("change", async (event) => {
+      const code = String(event.target.getAttribute("data-project-phase-toggle") || "").trim();
       if (!code || !Array.isArray(store.projectForm.phasesCatalog)) return;
 
       const item = store.projectForm.phasesCatalog.find((phase) => phase.code === code);
       if (!item) return;
 
-      item.enabled = !!event.target.checked;
+      const parametresUiState = ensurePhasesUiState();
+      const previousEnabled = item.enabled !== false;
+      const nextEnabled = !!event.target.checked;
+
+      console.log("[project-phases] toggle requested", {
+        code,
+        previousEnabled,
+        nextEnabled,
+        currentProjectId: String(store.currentProjectId || store.currentProject?.id || ""),
+        currentUserId: String(store.user?.id || ""),
+        currentProjectOwnerId: getCurrentProjectOwnerId()
+      });
+
+      item.enabled = nextEnabled;
 
       const enabledPhases = getEnabledProjectPhases();
 
       if (!enabledPhases.length) {
+        console.log("[project-phases] preventing disable of last active phase", { code });
         item.enabled = true;
         event.target.checked = true;
         return;
@@ -307,7 +329,33 @@ function bindProjectPhaseToggles() {
         store.projectForm.phase = enabledPhases[0].code;
       }
 
+      parametresUiState.projectPhasesError = "";
+      parametresUiState.projectPhasesSubmitting = true;
+      parametresUiState.projectPhaseToggleSubmittingCode = code;
       rerenderProjectParametres();
+
+      try {
+        const result = await persistProjectPhaseEnabledToSupabase(code, nextEnabled);
+        console.log("[project-phases] toggle persisted", {
+          code,
+          nextEnabled,
+          result
+        });
+        await syncProjectPhasesFromSupabase({ force: true });
+      } catch (error) {
+        console.error("[project-phases] toggle persist failed", {
+          code,
+          nextEnabled,
+          error
+        });
+        item.enabled = previousEnabled;
+        event.target.checked = previousEnabled;
+        parametresUiState.projectPhasesError = error instanceof Error ? error.message : String(error || "Erreur de mise à jour des phases");
+      } finally {
+        parametresUiState.projectPhasesSubmitting = false;
+        parametresUiState.projectPhaseToggleSubmittingCode = "";
+        rerenderProjectParametres();
+      }
     });
   });
 }
