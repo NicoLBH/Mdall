@@ -228,6 +228,7 @@ function renderProjectPhaseDateControl(item) {
 function renderProjectPhasesCard() {
   const items = getProjectPhasesCatalog();
   const parametresUiState = ensurePhasesUiState();
+  const canEditPhases = canCurrentUserEditProjectPhaseDates();
 
   if (parametresUiState.projectPhasesLoading && !items.length) {
     return '<div class="settings-empty-note settings-empty-note--card">Chargement des phases…</div>';
@@ -245,19 +246,27 @@ function renderProjectPhasesCard() {
           const isInlineEditing = ensurePhasesUiState().projectPhaseEditingCode === item.code;
           return `
             <div class="settings-feature-row settings-feature-row--phase${isInlineEditing ? " is-inline-editing" : ""}" data-project-phase-row="${escapeHtml(item.code)}">
-              <div class="settings-feature-row__control">
-                <input
-                  id="${escapeHtml(inputId)}"
-                  type="checkbox"
-                  data-project-phase-toggle="${escapeHtml(item.code)}"
-                  ${item.enabled ? "checked" : ""}
-                >
-              </div>
-              <label class="settings-feature-row__body settings-feature-row__body--phase" for="${escapeHtml(inputId)}">
-                <div class="settings-feature-row__label">
-                  ${escapeHtml(item.code)} - ${escapeHtml(item.label)}
+              ${canEditPhases ? `
+                <div class="settings-feature-row__control">
+                  <input
+                    id="${escapeHtml(inputId)}"
+                    type="checkbox"
+                    data-project-phase-toggle="${escapeHtml(item.code)}"
+                    ${item.enabled ? "checked" : ""}
+                  >
                 </div>
-              </label>
+                <label class="settings-feature-row__body settings-feature-row__body--phase" for="${escapeHtml(inputId)}">
+                  <div class="settings-feature-row__label">
+                    ${escapeHtml(item.code)} - ${escapeHtml(item.label)}
+                  </div>
+                </label>
+              ` : `
+                <div class="settings-feature-row__body settings-feature-row__body--phase settings-feature-row__body--phase-readonly">
+                  <div class="settings-feature-row__label">
+                    ${escapeHtml(item.code)} - ${escapeHtml(item.label)}
+                  </div>
+                </div>
+              `}
               <div class="settings-feature-row__aside settings-feature-row__aside--phase">
                 ${renderProjectPhaseDateControl(item)}
               </div>
@@ -444,6 +453,7 @@ function ensureProjectPhasesLoaded(root) {
 
 export function renderPhasesParametresContent() {
   const parametresUiState = ensurePhasesUiState();
+  const canEditPhases = canCurrentUserEditProjectPhaseDates();
   return `${renderSettingsBlock({
     id: "parametres-phase",
     title: "",
@@ -451,7 +461,9 @@ export function renderPhasesParametresContent() {
     cards: [
       renderSectionCard({
         title: "Phases",
-        description: "Vous pouvez choisir les phases que vous voulez activer sur votre projet et définir leurs échéances.",
+        description: canEditPhases
+          ? "Vous pouvez choisir les phases que vous voulez activer sur votre projet et définir leurs échéances."
+          : "Les phases actives et leurs échéances sont définies par l'administrateur du projet.",
         body: `
           ${renderProjectPhasesCard()}
           ${parametresUiState.projectPhasesError ? `<div class="settings-inline-error">${escapeHtml(parametresUiState.projectPhasesError)}</div>` : ""}
