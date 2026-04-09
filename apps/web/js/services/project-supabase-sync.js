@@ -43,8 +43,66 @@ function writeFrontendProjectMap(map) {
   }
 }
 
+function buildHeadersWithGuaranteedApiKey(baseHeaders = {}, extra = {}) {
+  const headers = new Headers();
+
+  const applyEntries = (source = {}) => {
+    if (!source) return;
+    if (source instanceof Headers) {
+      source.forEach((value, key) => {
+        if (value === undefined || value === null || value === "") return;
+        headers.set(key, value);
+      });
+      return;
+    }
+
+    Object.entries(source).forEach(([key, value]) => {
+      if (!key || value === undefined || value === null || value === "") return;
+      headers.set(key, value);
+    });
+  };
+
+  applyEntries(baseHeaders);
+  applyEntries(extra);
+
+  if (!headers.get("apikey") && SUPABASE_ANON_KEY) {
+    headers.set("apikey", SUPABASE_ANON_KEY);
+  }
+
+  return headers;
+}
+
 async function getSupabaseAuthHeaders(extra = {}) {
-  return buildSupabaseAuthHeaders(extra);
+  let baseHeaders = null;
+
+  try {
+    baseHeaders = await buildSupabaseAuthHeaders(extra);
+  } catch {
+    baseHeaders = null;
+  }
+
+  const headers = buildHeadersWithGuaranteedApiKey(baseHeaders, extra);
+  const hasAuthorization = Boolean(headers.get("authorization") || headers.get("Authorization"));
+
+  if (!hasAuthorization) {
+    let session = null;
+    const sessionResult = await supabase.auth.getSession().catch(() => null);
+    session = sessionResult?.data?.session || null;
+
+    if (!session?.access_token && session?.refresh_token) {
+      const refreshResult = await supabase.auth.refreshSession().catch(() => null);
+      session = refreshResult?.data?.session || session;
+    }
+
+    const accessToken = String(session?.access_token || "").trim();
+    if (!accessToken) {
+      throw new Error("Session utilisateur introuvable. Reconnectez-vous puis réessayez.");
+    }
+
+    headers.set("Authorization", `Bearer ${accessToken}`);
+  }
+
+  return headers;
 }
 
 async function restFetch(table, params = new URLSearchParams()) {
@@ -53,18 +111,44 @@ async function restFetch(table, params = new URLSearchParams()) {
     url.searchParams.set(key, value);
   }
 
-  const res = await fetch(url.toString(), {
+  const result = await fetchSupabaseRest(url.toString(), {
     method: "GET",
     headers: await getSupabaseAuthHeaders({ Accept: "application/json" }),
     cache: "no-store"
   });
 
+  const res = result?.response || result;
+  const txt = result?.responseText;
+
   if (!res.ok) {
-    const txt = await res.text().catch(() => "");
-    throw new Error(`${table} fetch failed (${res.status}): ${txt}`);
+    throw new Error(`${table} fetch failed (${res.status}): ${txt ?? ""}`);
   }
 
   return res.json();
+}
+
+function shouldRetryMissingApiKeyResponse(status, responseText = "") {
+  return Number(status) === 403 && /No API key found in request/i.test(String(responseText || ""));
+}
+
+async function fetchSupabaseRest(url, init = {}) {
+  const response = await fetch(url, init);
+  if (response.ok) return response;
+
+  const responseText = await response.text().catch(() => "");
+  if (!shouldRetryMissingApiKeyResponse(response.status, responseText)) {
+    return { response, responseText };
+  }
+
+  const retryHeaders = await getSupabaseAuthHeaders(init?.headers || {});
+  const retriedResponse = await fetch(url, {
+    ...init,
+    headers: retryHeaders
+  });
+
+  if (retriedResponse.ok) return retriedResponse;
+  const retriedText = await retriedResponse.text().catch(() => "");
+  return { response: retriedResponse, responseText: retriedText };
 }
 
 
@@ -80,7 +164,7 @@ async function restUpdate(table, match = {}, payload = {}, options = {}) {
     url.searchParams.set(key, `eq.${value}`);
   });
 
-  const res = await fetch(url.toString(), {
+  const result = await fetchSupabaseRest(url.toString(), {
     method: "PATCH",
     headers: await getSupabaseAuthHeaders({
       "Content-Type": "application/json",
@@ -89,9 +173,11 @@ async function restUpdate(table, match = {}, payload = {}, options = {}) {
     body: JSON.stringify(payload || {})
   });
 
+  const res = result?.response || result;
+  const txt = result?.responseText;
+
   if (!res.ok) {
-    const txt = await res.text().catch(() => "");
-    throw new Error(`${table} update failed (${res.status}): ${txt}`);
+    throw new Error(`${table} update failed (${res.status}): ${txt ?? ""}`);
   }
 
   if (!select) return null;
@@ -107,7 +193,7 @@ async function restInsert(table, payload, options = {}) {
     url.searchParams.set("select", select);
   }
 
-  const res = await fetch(url.toString(), {
+  const result = await fetchSupabaseRest(url.toString(), {
     method: "POST",
     headers: await getSupabaseAuthHeaders({
       "Content-Type": "application/json",
@@ -116,9 +202,11 @@ async function restInsert(table, payload, options = {}) {
     body: JSON.stringify(payload)
   });
 
+  const res = result?.response || result;
+  const txt = result?.responseText;
+
   if (!res.ok) {
-    const txt = await res.text().catch(() => "");
-    throw new Error(`${table} insert failed (${res.status}): ${txt}`);
+    throw new Error(`${table} insert failed (${res.status}): ${txt ?? ""}`);
   }
 
   if (!select) return null;
@@ -140,16 +228,18 @@ async function restDelete(table, match = {}, options = {}) {
     url.searchParams.set(key, `eq.${value}`);
   });
 
-  const res = await fetch(url.toString(), {
+  const result = await fetchSupabaseRest(url.toString(), {
     method: "DELETE",
     headers: await getSupabaseAuthHeaders({
       Prefer: select ? "return=representation" : "return=minimal"
     })
   });
 
+  const res = result?.response || result;
+  const txt = result?.responseText;
+
   if (!res.ok) {
-    const txt = await res.text().catch(() => "");
-    throw new Error(`${table} delete failed (${res.status}): ${txt}`);
+    throw new Error(`${table} delete failed (${res.status}): ${txt ?? ""}`);
   }
 
   if (!select) return null;
@@ -160,7 +250,7 @@ async function restDelete(table, match = {}, options = {}) {
 
 async function rpcCall(functionName, payload = {}) {
   const url = `${SUPABASE_URL}/rest/v1/rpc/${functionName}`;
-  const res = await fetch(url, {
+  const result = await fetchSupabaseRest(url, {
     method: "POST",
     headers: await getSupabaseAuthHeaders({
       "Content-Type": "application/json",
@@ -169,9 +259,11 @@ async function rpcCall(functionName, payload = {}) {
     body: JSON.stringify(payload || {})
   });
 
+  const res = result?.response || result;
+  const txt = result?.responseText;
+
   if (!res.ok) {
-    const txt = await res.text().catch(() => "");
-    throw new Error(`rpc ${functionName} failed (${res.status}): ${txt}`);
+    throw new Error(`rpc ${functionName} failed (${res.status}): ${txt ?? ""}`);
   }
 
   return res.json().catch(() => null);
