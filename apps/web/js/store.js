@@ -4,14 +4,14 @@ export const DEFAULT_PROJECT_PHASES = [
   { code: "PC", label: "Permis de Construire", enabled: true, phaseDate: "" },
   { code: "AT", label: "Autorisation de Travaux", enabled: true, phaseDate: "" },
   { code: "APS", label: "Avant Projet Sommaire", enabled: true, phaseDate: "" },
-  { code: "APD", label: "Avant Projet Définitif", enabled: true, phaseDate: "" },
+  { code: "APD", label: "Avant Projet Détaillé", enabled: true, phaseDate: "" },
   { code: "PRO", label: "Projet", enabled: true, phaseDate: "" },
   { code: "DCE", label: "Dossier de Consultation des Entreprises", enabled: true, phaseDate: "" },
   { code: "MARCHE", label: "Marchés", enabled: true, phaseDate: "" },
   { code: "EXE", label: "Exécution", enabled: true, phaseDate: "" },
   { code: "DOE", label: "Dossier des Ouvrages Exécutés", enabled: true, phaseDate: "" },
-  { code: "RECEPTION", label: "Réception", enabled: true, phaseDate: "" },
-  { code: "GPA", label: "Garantie de Parfait Achèvement", enabled: true, phaseDate: "" }
+  { code: "GPA", label: "Année de Garantie de Parfait Achèvement", enabled: true, phaseDate: "" },
+  { code: "EXPLOIT", label: "Exploitation", enabled: true, phaseDate: "" }
 ];
 
 export const store = {
