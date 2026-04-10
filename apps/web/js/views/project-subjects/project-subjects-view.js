@@ -189,10 +189,6 @@ function buildEntityDisplayRefMap() {
     const sujets = Array.isArray(situation?.sujets) ? situation.sujets : [];
     for (const sujet of sujets) {
       register("sujet", sujet?.id);
-      const avisList = Array.isArray(sujet?.avis) ? sujet.avis : [];
-      for (const avis of avisList) {
-        register("avis", avis?.id);
-      }
     }
   }
 
@@ -566,7 +562,6 @@ function createSubjectFromDraft() {
 
   setSubjectObjectiveIds(subjectId, nextMeta.objectiveIds);
   store.situationsView.selectedSujetId = subjectId;
-  store.situationsView.selectedAvisId = null;
   store.situationsView.selectedSituationId = nextMeta.situationIds[0] || store.situationsView.selectedSituationId || null;
   store.situationsView.createSubjectForm.validationError = "";
   return { ok: true, subjectId };
@@ -863,9 +858,8 @@ function getEntityListTimestamp(entityType, entity) {
 }
 
 function rowSelectedClass(kind, id) {
-  if (kind === "situation" && store.situationsView.selectedSituationId === id && !store.situationsView.selectedSujetId && !store.situationsView.selectedAvisId) return " selected subissue-row--selected";
-  if (kind === "sujet" && store.situationsView.selectedSujetId === id && !store.situationsView.selectedAvisId) return " selected subissue-row--selected";
-  if (kind === "avis" && store.situationsView.selectedAvisId === id) return " selected subissue-row--selected";
+  if (kind === "situation" && store.situationsView.selectedSituationId === id && !store.situationsView.selectedSujetId) return " selected subissue-row--selected";
+  if (kind === "sujet" && store.situationsView.selectedSujetId === id) return " selected subissue-row--selected";
   return "";
 }
 
@@ -1007,21 +1001,6 @@ function renderDetailedMetaForSelection(selection) {
     renderMetaItem("Historique humain", decision ? `<span class="mono">${escapeHtml(decision.decision)} · ${escapeHtml(fmtTs(decision.ts))}</span>` : "—")
   ];
 
-  if (selection.type === "avis") {
-    const sujet = getSujetByAvisId(item.id);
-    const situation = getSituationByAvisId(item.id);
-    const entries = [
-      ...common,
-      renderMetaItem("Situation parent", `<span class="mono">${escapeHtml(situation?.id || "—")}</span>`),
-      renderMetaItem("Sujet parent", `<span class="mono">${escapeHtml(sujet?.id || "—")}</span>`),
-      renderMetaItem("Verdict effectif", renderVerdictPill(getEffectiveAvisVerdict(item.id))),
-      renderMetaItem("Verdict source", renderVerdictPill(firstNonEmpty(raw.verdict, item.verdict, "-"))),
-      renderMetaItem("Severity", `<span class="mono">${escapeHtml(firstNonEmpty(raw.severity, "—"))}</span>`),
-      renderMetaItem("Source", `<span class="mono">${escapeHtml(firstNonEmpty(raw.source, "—"))}</span>`)
-    ];
-    return entries.join("");
-  }
-
   if (selection.type === "sujet") {
     const situations = getSubjectSituations(item.id);
     const situationLabel = situations.length
@@ -1035,13 +1014,11 @@ function renderDetailedMetaForSelection(selection) {
     return entries.join("");
   }
 
-  const stats = situationVerdictStats(item);
   const entries = [
     ...common,
     renderMetaItem("Status effectif", statePill(getEffectiveSituationStatus(item.id))),
     renderMetaItem("Status source", statePill(firstNonEmpty(raw.status, item.status, "open"))),
-    renderMetaItem("Sujets", `<span class="mono">${escapeHtml(String(getSituationSubjects(item).length))}</span>`),
-    renderMetaItem("Verdicts", buildVerdictBarHtml(stats.counts, { legend: true }))
+    renderMetaItem("Sujets", `<span class="mono">${escapeHtml(String(getSituationSubjects(item).length))}</span>`)
   ];
   return entries.join("");
 }
@@ -1399,17 +1376,14 @@ function renderSubjectMetaControls(subject) {
 
 function renderSubIssuesForSujet(sujet, options = {}) {
   ensureViewUiState();
-  const avisRowClass = options.avisRowClass || "js-row-avis";
-  const rows = (sujet.avis || []).map((avis) => {
-    const effVerdict = getEffectiveAvisVerdict(avis.id);
-    return `
-      <div class="issue-row issue-row--avis click ${avisRowClass}" data-avis-id="${escapeHtml(avis.id)}">
+  const sujetRowClass = options.sujetRowClass || "js-row-sujet";
+  const rows = (sujet.avis || []).map((childSujet) => `
+      <div class="issue-row issue-row--pb click ${sujetRowClass}" data-sujet-id="${escapeHtml(childSujet.id)}">
         <div class="cell cell-theme cell-theme--full lvl0">
-          <span class="theme-text theme-text--avis">${escapeHtml(firstNonEmpty(avis.title, avis.id, ""))}</span>
+          <span class="theme-text theme-text--pb">${escapeHtml(firstNonEmpty(childSujet.title, childSujet.id, ""))}</span>
         </div>
       </div>
-    `;
-  }).join("");
+    `).join("");
 
   const body = renderSubIssuesTable({
     rowsHtml: rows,
@@ -1431,32 +1405,29 @@ function renderSubIssuesForSituation(situation, options = {}) {
   const expandedSet = options.expandedSujets || store.situationsView.rightExpandedSujets;
   const sujetRowClass = options.sujetRowClass || "js-sub-right-select-sujet";
   const sujetToggleClass = options.sujetToggleClass || "js-sub-right-toggle-sujet";
-  const avisRowClass = options.avisRowClass || "js-row-avis";
-
   const rows = [];
   for (const sujet of getSituationSubjects(situation)) {
     const open = expandedSet.has(sujet.id);
-    const hasAvis = (sujet.avis || []).length > 0;
+    const hasChildSubjects = (sujet.avis || []).length > 0;
     const effStatus = getEffectiveSujetStatus(sujet.id);
 
     rows.push(`
       <div class="issue-row issue-row--pb click ${sujetRowClass}" data-sujet-id="${escapeHtml(sujet.id)}">
         <div class="cell cell-theme cell-theme--full lvl0">
-          <span class="${sujetToggleClass}" data-sujet-id="${escapeHtml(sujet.id)}">${chevron(open, hasAvis)}</span>
+          <span class="${sujetToggleClass}" data-sujet-id="${escapeHtml(sujet.id)}">${chevron(open, hasChildSubjects)}</span>
           ${issueIcon(effStatus)}
           <span class="theme-text theme-text--pb">${escapeHtml(firstNonEmpty(sujet.title, sujet.id, "Non classé"))}</span>
-          <span class="subissues-inline-count mono">${(sujet.avis || []).length} avis</span>
+          <span class="subissues-inline-count mono">${(sujet.avis || []).length} sous-sujets</span>
         </div>
       </div>
     `);
 
     if (open) {
-      for (const avis of sujet.avis || []) {
-        const effVerdict = getEffectiveAvisVerdict(avis.id);
+      for (const childSujet of sujet.avis || []) {
         rows.push(`
-          <div class="issue-row issue-row--avis click ${avisRowClass}" data-avis-id="${escapeHtml(avis.id)}">
+          <div class="issue-row issue-row--pb click ${sujetRowClass}" data-sujet-id="${escapeHtml(childSujet.id)}">
             <div class="cell cell-theme cell-theme--full lvl1">
-              <span class="theme-text theme-text--avis">${escapeHtml(firstNonEmpty(avis.title, avis.id, ""))}</span>
+              <span class="theme-text theme-text--pb">${escapeHtml(firstNonEmpty(childSujet.title, childSujet.id, ""))}</span>
             </div>
           </div>
         `);
