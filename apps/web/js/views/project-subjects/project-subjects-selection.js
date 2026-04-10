@@ -3,28 +3,22 @@ export function createProjectSubjectsSelection({
   ensureViewUiState,
   getNestedSituation,
   getNestedSujet,
-  getNestedAvis,
   getSituationBySujetId,
-  getSituationByAvisId,
-  getSujetByAvisId,
   getDraftSubjectSelection,
-  getEffectiveAvisVerdict,
   openDetailsModal,
   rerenderPanels,
   markEntitySeen
 }) {
-  function getSelectionFromIds(selectionState, options = {}) {
-    const {
-      includeFallback = false,
-      fallbackSource = store.situationsView.data || []
-    } = options;
+  function getViewState() {
+    ensureViewUiState();
+    return store.projectSubjectsView || store.situationsView || {};
+  }
 
-    if (selectionState?.selectedAvisId) {
-      const avis = getNestedAvis(selectionState.selectedAvisId);
-      if (avis) return { type: "avis", item: avis };
-    }
-    if (selectionState?.selectedSujetId) {
-      const sujet = getNestedSujet(selectionState.selectedSujetId);
+  function getSelectionFromIds(selectionState, options = {}) {
+    const { includeFallback = false, fallbackSource = getViewState().data || [] } = options;
+
+    if (selectionState?.selectedSujetId || selectionState?.selectedSubjectId) {
+      const sujet = getNestedSujet(selectionState.selectedSubjectId || selectionState.selectedSujetId);
       if (sujet) return { type: "sujet", item: sujet };
     }
     if (selectionState?.selectedSituationId) {
@@ -38,31 +32,26 @@ export function createProjectSubjectsSelection({
   }
 
   function getActiveSelection() {
-    ensureViewUiState();
-    return getSelectionFromIds(store.situationsView, {
-      includeFallback: true,
-      fallbackSource: store.situationsView.data || []
-    });
+    return getSelectionFromIds(getViewState(), { includeFallback: true, fallbackSource: getViewState().data || [] });
   }
 
   function getDrilldownSelection() {
-    ensureViewUiState();
-    return getSelectionFromIds(store.situationsView.drilldown);
+    return getSelectionFromIds(getViewState().drilldown);
   }
 
   function setActiveSelection(selection) {
-    ensureViewUiState();
-    store.situationsView.selectedSituationId = selection?.selectedSituationId || null;
-    store.situationsView.selectedSujetId = selection?.selectedSujetId || null;
-    store.situationsView.selectedAvisId = selection?.selectedAvisId || null;
+    const v = getViewState();
+    v.selectedSituationId = selection?.selectedSituationId || null;
+    v.selectedSujetId = selection?.selectedSubjectId || selection?.selectedSujetId || null;
+    v.selectedSubjectId = v.selectedSujetId;
     return getActiveSelection();
   }
 
   function setDrilldownSelection(selection) {
-    ensureViewUiState();
-    store.situationsView.drilldown.selectedSituationId = selection?.selectedSituationId || null;
-    store.situationsView.drilldown.selectedSujetId = selection?.selectedSujetId || null;
-    store.situationsView.drilldown.selectedAvisId = selection?.selectedAvisId || null;
+    const v = getViewState();
+    v.drilldown.selectedSituationId = selection?.selectedSituationId || null;
+    v.drilldown.selectedSujetId = selection?.selectedSubjectId || selection?.selectedSujetId || null;
+    v.drilldown.selectedSubjectId = v.drilldown.selectedSujetId;
     return getDrilldownSelection();
   }
 
@@ -74,59 +63,25 @@ export function createProjectSubjectsSelection({
   function selectSituation(situationId) {
     const situation = getNestedSituation(situationId);
     if (!situation) return null;
-
-    setActiveSelection({
-      selectedSituationId: situation.id,
-      selectedSujetId: null,
-      selectedAvisId: null
-    });
-
-    store.situationsView.showTableOnly = true;
+    setActiveSelection({ selectedSituationId: situation.id, selectedSubjectId: null });
+    getViewState().showTableOnly = true;
     openDetailsModal();
     return { type: "situation", item: situation };
   }
 
-  function selectSujet(sujetId) {
-    const sujet = getNestedSujet(sujetId);
+  function selectSubject(subjectId) {
+    const sujet = getNestedSujet(subjectId);
     if (!sujet) return null;
-
-    const situation = getSituationBySujetId(sujetId);
-    setActiveSelection({
-      selectedSituationId: situation?.id || null,
-      selectedSujetId: sujet.id,
-      selectedAvisId: null
-    });
-
-    if (situation?.id) store.situationsView.expandedSituations.add(situation.id);
-
-    store.situationsView.showTableOnly = true;
+    const situation = getSituationBySujetId(subjectId);
+    setActiveSelection({ selectedSituationId: situation?.id || null, selectedSubjectId: sujet.id });
+    if (situation?.id) getViewState().expandedSituations.add(situation.id);
+    getViewState().showTableOnly = true;
     openDetailsModal();
     return { type: "sujet", item: sujet };
   }
 
-  function selectAvis(avisId) {
-    const avis = getNestedAvis(avisId);
-    if (!avis) return null;
-
-    const sujet = getSujetByAvisId(avisId);
-    const situation = getSituationByAvisId(avisId);
-
-    setActiveSelection({
-      selectedSituationId: situation?.id || null,
-      selectedSujetId: sujet?.id || null,
-      selectedAvisId: avis.id
-    });
-
-    if (situation?.id) store.situationsView.expandedSituations.add(situation.id);
-    if (sujet?.id) store.situationsView.expandedSujets.add(sujet.id);
-
-    store.situationsView.tempAvisVerdictFor = avis.id;
-    store.situationsView.tempAvisVerdict = getEffectiveAvisVerdict(avis.id) || "F";
-
-    store.situationsView.showTableOnly = false;
-    markEntitySeen("avis", avis.id, { source: "details" });
-    rerenderPanels();
-    return { type: "avis", item: avis };
+  function selectSujet(sujetId) {
+    return selectSubject(sujetId);
   }
 
   function getSelectionEntityType(type) {
@@ -134,9 +89,7 @@ export function createProjectSubjectsSelection({
   }
 
   function getScopedSelection(root) {
-    if (root?.closest?.("[data-create-subject-form]")) {
-      return getDraftSubjectSelection();
-    }
+    if (root?.closest?.("[data-create-subject-form]")) return getDraftSubjectSelection();
     if (root?.closest?.("#drilldownPanel")) {
       const selection = getDrilldownSelection();
       if (selection) return selection;
@@ -147,57 +100,37 @@ export function createProjectSubjectsSelection({
   function currentDecisionTarget(root) {
     const selection = getScopedSelection(root);
     if (!selection?.item?.id) return null;
-    return {
-      type: selection.type,
-      id: selection.item.id,
-      item: selection.item
-    };
+    return { type: selection.type, id: selection.item.id, item: selection.item };
   }
 
   function openDrilldownFromSituation(situationId) {
     const situation = getNestedSituation(situationId);
     if (!situation) return null;
-
-    setDrilldownSelection({
-      selectedSituationId: situation.id,
-      selectedSujetId: null,
-      selectedAvisId: null
-    });
+    setDrilldownSelection({ selectedSituationId: situation.id, selectedSubjectId: null });
     markEntitySeen("situation", situation.id, { source: "drilldown" });
     return { type: "situation", item: situation };
   }
 
-  function openDrilldownFromSujet(sujetId) {
-    const sujet = getNestedSujet(sujetId);
+  function openDrilldownFromSubject(subjectId) {
+    const sujet = getNestedSujet(subjectId);
     if (!sujet) return null;
-
-    const situation = getSituationBySujetId(sujetId);
-    setDrilldownSelection({
-      selectedSituationId: situation?.id || null,
-      selectedSujetId: sujet.id,
-      selectedAvisId: null
-    });
-
-    store.situationsView.drilldown.expandedSujets.add(sujet.id);
+    const situation = getSituationBySujetId(subjectId);
+    setDrilldownSelection({ selectedSituationId: situation?.id || null, selectedSubjectId: sujet.id });
+    getViewState().drilldown.expandedSubjectIds.add(sujet.id);
     markEntitySeen("sujet", sujet.id, { source: "drilldown" });
     return { type: "sujet", item: sujet };
   }
 
-  function openDrilldownFromAvis(avisId) {
-    const avis = getNestedAvis(avisId);
-    if (!avis) return null;
+  function openDrilldownFromSujet(sujetId) {
+    return openDrilldownFromSubject(sujetId);
+  }
 
-    const sujet = getSujetByAvisId(avisId);
-    const situation = getSituationByAvisId(avisId);
-    setDrilldownSelection({
-      selectedSituationId: situation?.id || null,
-      selectedSujetId: sujet?.id || null,
-      selectedAvisId: avis.id
-    });
+  function selectAvis() {
+    return null;
+  }
 
-    if (sujet?.id) store.situationsView.drilldown.expandedSujets.add(sujet.id);
-    markEntitySeen("avis", avis.id, { source: "drilldown" });
-    return { type: "avis", item: avis };
+  function openDrilldownFromAvis() {
+    return null;
   }
 
   return {
@@ -211,9 +144,11 @@ export function createProjectSubjectsSelection({
     setDrilldownSelection,
     clearSelection,
     selectSituation,
+    selectSubject,
     selectSujet,
     selectAvis,
     openDrilldownFromSituation,
+    openDrilldownFromSubject,
     openDrilldownFromSujet,
     openDrilldownFromAvis
   };
