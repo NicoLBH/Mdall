@@ -14,6 +14,35 @@ export const DEFAULT_PROJECT_PHASES = [
   { code: "EXPLOIT", label: "Exploitation", enabled: true, phaseDate: "" }
 ];
 
+const projectSubjectsView = {
+  data: [],
+  rawResult: null,
+  projectScopeId: null,
+
+  expandedSituations: new Set(),
+  expandedSujets: new Set(),
+  expandedSubjectIds: new Set(),
+
+  selectedSituationId: null,
+  selectedSujetId: null,
+  selectedSubjectId: null,
+  selectedRelationContext: null,
+
+  filters: {
+    status: "open",
+    priority: "",
+    labelIds: [],
+    milestoneIds: [],
+    blockingState: ""
+  },
+
+  search: "",
+  displayDepth: "situations",
+  page: 1,
+  pageSize: 80,
+  detailsModalOpen: false
+};
+
 export const store = {
   user: null,
   projects: [],
@@ -95,23 +124,6 @@ export const store = {
     projectKey: ""
   },
 
-  situationsView: {
-    data: [],
-    rawResult: null,
-    projectScopeId: null,
-
-    expandedSituations: new Set(),
-    expandedSujets: new Set(),
-
-    selectedSituationId: null,
-    selectedSujetId: null,
-    selectedAvisId: null,
-
-    verdictFilter: "ALL",
-    search: "",
-    displayDepth: "situations",
-    page: 1,
-    pageSize: 80,
-    detailsModalOpen: false
-  }
+  projectSubjectsView,
+  situationsView: projectSubjectsView
 };
