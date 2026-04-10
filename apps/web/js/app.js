@@ -39,7 +39,6 @@ function bindProjectIdentityEvents() {
 }
 
 async function bootstrap() {
-  console.log("RAPSOBOT V2 boot");
 
   const authenticatedUser = await requireAuth();
   if (!authenticatedUser) return;
