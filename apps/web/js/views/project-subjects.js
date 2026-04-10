@@ -2064,6 +2064,10 @@ function updateDetailsModal() {
   projectSubjectDetail.updateDetailsModal();
 }
 
+function ensureDrilldownDom() {
+  projectSubjectDrilldown.ensureDrilldownDom();
+}
+
 function updateDrilldownPanel() {
   projectSubjectDrilldown.updateDrilldownPanel();
 }
