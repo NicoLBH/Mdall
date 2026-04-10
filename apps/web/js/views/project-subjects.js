@@ -685,59 +685,60 @@ const projectSubjectsView = createProjectSubjectsView({
 });
 
 const {
-  normalizeBackendPriority: (...args) => projectSubjectsView.normalizeBackendPriority(...args),
   priorityBadge,
-  renderVerboseAvisVerdictPill: (...args) => projectSubjectsView.renderVerboseAvisVerdictPill(...args),
-  statePill: (...args) => projectSubjectsView.statePill(...args),
-  entityDisplayLinkHtml: (...args) => projectSubjectsView.entityDisplayLinkHtml(...args),
-  renderDocumentRefsCard: (...args) => projectSubjectsView.renderDocumentRefsCard(...args),
-  inferAgent: (...args) => projectSubjectsView.inferAgent(...args),
-  normActorName: (...args) => projectSubjectsView.normActorName(...args),
-  miniAuthorIconHtml: (...args) => projectSubjectsView.miniAuthorIconHtml(...args),
-  verdictIconHtml: (...args) => projectSubjectsView.verdictIconHtml(...args),
-  getDraftSubjectSelection: (...args) => projectSubjectsView.getDraftSubjectSelection(...args),
-  buildDefaultDraftSubjectMeta: (...args) => projectSubjectsView.buildDefaultDraftSubjectMeta(...args),
-  resetCreateSubjectForm: (...args) => projectSubjectsView.resetCreateSubjectForm(...args),
-  openCreateSubjectForm: (...args) => projectSubjectsView.openCreateSubjectForm(...args),
-  getCustomSubjects: (...args) => projectSubjectsView.getCustomSubjects(...args),
-  createSubjectFromDraft: (...args) => projectSubjectsView.createSubjectFromDraft(...args),
-  normalizeSujetKanbanStatus: (...args) => projectSubjectsView.normalizeSujetKanbanStatus(...args),
-  getSujetKanbanStatus: (...args) => projectSubjectsView.getSujetKanbanStatus(...args),
   normalizeSubjectObjectiveIds,
   normalizeSubjectSituationIds,
-  normalizeSubjectLabelKey: (...args) => projectSubjectsView.normalizeSubjectLabelKey(...args),
   normalizeSubjectLabels,
-  getSubjectSidebarMeta: (...args) => projectSubjectsView.getSubjectSidebarMeta(...args),
-  getObjectives: (...args) => projectSubjectsView.getObjectives(...args),
-  getObjectiveById: (...args) => projectSubjectsView.getObjectiveById(...args),
-  problemsCountsHtml: (...args) => projectSubjectsView.problemsCountsHtml(...args),
-  problemsCountsIconHtml: (...args) => projectSubjectsView.problemsCountsIconHtml(...args),
-  renderDetailedMetaForSelection: (...args) => projectSubjectsView.renderDetailedMetaForSelection(...args),
-  renderSubjectMetaControls: (...args) => projectSubjectsView.renderSubjectMetaControls(...args),
-  renderSubIssuesForSujet: (...args) => projectSubjectsView.renderSubIssuesForSujet(...args),
-  renderSubIssuesForSituation: (...args) => projectSubjectsView.renderSubIssuesForSituation(...args),
-  closeSubjectMetaDropdown: (...args) => projectSubjectsView.closeSubjectMetaDropdown(...args),
-  closeSubjectKanbanDropdown: (...args) => projectSubjectsView.closeSubjectKanbanDropdown(...args),
-  getSubjectMetaMenuEntries: (...args) => projectSubjectsView.getSubjectMetaMenuEntries(...args),
-  setSubjectMetaActiveEntry: (...args) => projectSubjectsView.setSubjectMetaActiveEntry(...args),
-  getSubjectKanbanMenuEntries: (...args) => projectSubjectsView.getSubjectKanbanMenuEntries(...args),
-  renderSubjectMetaDropdownHost: (...args) => projectSubjectsView.renderSubjectMetaDropdownHost(...args),
-  focusSubjectMetaSearch: (...args) => projectSubjectsView.focusSubjectMetaSearch(...args),
-  focusSubjectKanbanSearch: (...args) => projectSubjectsView.focusSubjectKanbanSearch(...args),
-  syncSubjectMetaDropdownPosition: (...args) => projectSubjectsView.syncSubjectMetaDropdownPosition(...args),
-  getSubjectMetaScopeRoot: (...args) => projectSubjectsView.getSubjectMetaScopeRoot(...args),
-  renderSubjectsToolbarButton: (...args) => projectSubjectsView.renderSubjectsToolbarButton(...args),
-  renderSituationsAddAction: (...args) => projectSubjectsView.renderSituationsAddAction(...args),
-  renderSubjectsPriorityHeadHtml: (...args) => projectSubjectsView.renderSubjectsPriorityHeadHtml(...args),
-  getSubjectsTableDeps: (...args) => projectSubjectsView.getSubjectsTableDeps(...args),
   renderCreateSubjectFormHtml,
   rerenderSubjectsToolbar,
   syncSituationsPrimaryScrollSource,
   rerenderPanels,
   rerenderScope,
-  syncCommentPreview: (...args) => projectSubjectsView.syncCommentPreview(...args),
   applyCommentAction
 } = projectSubjectsView;
+
+const normalizeBackendPriority = (...args) => projectSubjectsView.normalizeBackendPriority(...args);
+const renderVerboseAvisVerdictPill = (...args) => projectSubjectsView.renderVerboseAvisVerdictPill(...args);
+const statePill = (...args) => projectSubjectsView.statePill(...args);
+const entityDisplayLinkHtml = (...args) => projectSubjectsView.entityDisplayLinkHtml(...args);
+const renderDocumentRefsCard = (...args) => projectSubjectsView.renderDocumentRefsCard(...args);
+const inferAgent = (...args) => projectSubjectsView.inferAgent(...args);
+const normActorName = (...args) => projectSubjectsView.normActorName(...args);
+const miniAuthorIconHtml = (...args) => projectSubjectsView.miniAuthorIconHtml(...args);
+const verdictIconHtml = (...args) => projectSubjectsView.verdictIconHtml(...args);
+const getDraftSubjectSelection = (...args) => projectSubjectsView.getDraftSubjectSelection(...args);
+const buildDefaultDraftSubjectMeta = (...args) => projectSubjectsView.buildDefaultDraftSubjectMeta(...args);
+const resetCreateSubjectForm = (...args) => projectSubjectsView.resetCreateSubjectForm(...args);
+const openCreateSubjectForm = (...args) => projectSubjectsView.openCreateSubjectForm(...args);
+const getCustomSubjects = (...args) => projectSubjectsView.getCustomSubjects(...args);
+const createSubjectFromDraft = (...args) => projectSubjectsView.createSubjectFromDraft(...args);
+const normalizeSujetKanbanStatus = (...args) => projectSubjectsView.normalizeSujetKanbanStatus(...args);
+const getSujetKanbanStatus = (...args) => projectSubjectsView.getSujetKanbanStatus(...args);
+const normalizeSubjectLabelKey = (...args) => projectSubjectsView.normalizeSubjectLabelKey(...args);
+const getSubjectSidebarMeta = (...args) => projectSubjectsView.getSubjectSidebarMeta(...args);
+const getObjectives = (...args) => projectSubjectsView.getObjectives(...args);
+const getObjectiveById = (...args) => projectSubjectsView.getObjectiveById(...args);
+const problemsCountsHtml = (...args) => projectSubjectsView.problemsCountsHtml(...args);
+const problemsCountsIconHtml = (...args) => projectSubjectsView.problemsCountsIconHtml(...args);
+const renderDetailedMetaForSelection = (...args) => projectSubjectsView.renderDetailedMetaForSelection(...args);
+const renderSubjectMetaControls = (...args) => projectSubjectsView.renderSubjectMetaControls(...args);
+const renderSubIssuesForSujet = (...args) => projectSubjectsView.renderSubIssuesForSujet(...args);
+const renderSubIssuesForSituation = (...args) => projectSubjectsView.renderSubIssuesForSituation(...args);
+const closeSubjectMetaDropdown = (...args) => projectSubjectsView.closeSubjectMetaDropdown(...args);
+const closeSubjectKanbanDropdown = (...args) => projectSubjectsView.closeSubjectKanbanDropdown(...args);
+const getSubjectMetaMenuEntries = (...args) => projectSubjectsView.getSubjectMetaMenuEntries(...args);
+const setSubjectMetaActiveEntry = (...args) => projectSubjectsView.setSubjectMetaActiveEntry(...args);
+const getSubjectKanbanMenuEntries = (...args) => projectSubjectsView.getSubjectKanbanMenuEntries(...args);
+const renderSubjectMetaDropdownHost = (...args) => projectSubjectsView.renderSubjectMetaDropdownHost(...args);
+const focusSubjectMetaSearch = (...args) => projectSubjectsView.focusSubjectMetaSearch(...args);
+const focusSubjectKanbanSearch = (...args) => projectSubjectsView.focusSubjectKanbanSearch(...args);
+const syncSubjectMetaDropdownPosition = (...args) => projectSubjectsView.syncSubjectMetaDropdownPosition(...args);
+const getSubjectMetaScopeRoot = (...args) => projectSubjectsView.getSubjectMetaScopeRoot(...args);
+const renderSubjectsToolbarButton = (...args) => projectSubjectsView.renderSubjectsToolbarButton(...args);
+const renderSituationsAddAction = (...args) => projectSubjectsView.renderSituationsAddAction(...args);
+const renderSubjectsPriorityHeadHtml = (...args) => projectSubjectsView.renderSubjectsPriorityHeadHtml(...args);
+const getSubjectsTableDeps = (...args) => projectSubjectsView.getSubjectsTableDeps(...args);
+const syncCommentPreview = (...args) => projectSubjectsView.syncCommentPreview(...args);
 
 export function getEffectiveSujetStatus(...args) {
   return projectSubjectsView.getEffectiveSujetStatus(...args);
