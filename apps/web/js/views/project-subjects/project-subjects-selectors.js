@@ -11,14 +11,46 @@ export function createProjectSubjectsSelectors({
 }) {
   function getViewState() {
     ensureViewUiState();
-    return store.projectSubjectsView && typeof store.projectSubjectsView === "object"
+
+    const projectView = store.projectSubjectsView && typeof store.projectSubjectsView === "object"
       ? store.projectSubjectsView
-      : {};
+      : null;
+    const situationsView = store.situationsView && typeof store.situationsView === "object"
+      ? store.situationsView
+      : null;
+
+    const projectHasSubjects = !!(projectView?.rawResult && typeof projectView.rawResult === "object" && Object.keys(projectView.rawResult.subjectsById || {}).length);
+    const situationsHasSubjects = !!(situationsView?.rawResult && typeof situationsView.rawResult === "object" && Object.keys(situationsView.rawResult.subjectsById || {}).length);
+
+    if (situationsHasSubjects && (!projectView || !projectHasSubjects)) {
+      if (store.projectSubjectsView !== situationsView) {
+        store.projectSubjectsView = situationsView;
+      }
+      return situationsView;
+    }
+
+    if (projectView) {
+      if (store.situationsView !== projectView) {
+        store.situationsView = projectView;
+      }
+      return projectView;
+    }
+
+    return situationsView || {};
   }
 
   function getRawResult() {
-    const rawResult = getViewState()?.rawSubjectsResult;
-    return rawResult && typeof rawResult === "object" ? rawResult : {};
+    const viewState = getViewState();
+    const rawResult = viewState?.rawResult;
+    if (rawResult && typeof rawResult === "object") return rawResult;
+
+    const situationsRawResult = store.situationsView?.rawResult;
+    if (situationsRawResult && typeof situationsRawResult === "object") return situationsRawResult;
+
+    const projectRawResult = store.projectSubjectsView?.rawResult;
+    if (projectRawResult && typeof projectRawResult === "object") return projectRawResult;
+
+    return {};
   }
 
   function getSubjectsByIdMap() {
@@ -45,24 +77,16 @@ export function createProjectSubjectsSelectors({
       : {};
   }
 
-  function getRelationOptionsByIdMap() {
-    return getRawResult().relationOptionsById && typeof getRawResult().relationOptionsById === "object"
-      ? getRawResult().relationOptionsById
+  function getSituationsByIdMap() {
+    return getRawResult().situationsById && typeof getRawResult().situationsById === "object"
+      ? getRawResult().situationsById
       : {};
   }
 
   function getSubjectIdsBySituationIdMap() {
-    const relationIdsBySubjectId = getRawResult().relationIdsBySubjectId && typeof getRawResult().relationIdsBySubjectId === "object"
-      ? getRawResult().relationIdsBySubjectId
+    return getRawResult().subjectIdsBySituationId && typeof getRawResult().subjectIdsBySituationId === "object"
+      ? getRawResult().subjectIdsBySituationId
       : {};
-    const map = {};
-    for (const [subjectId, relationIds] of Object.entries(relationIdsBySubjectId)) {
-      for (const relationId of Array.isArray(relationIds) ? relationIds : []) {
-        if (!map[relationId]) map[relationId] = [];
-        map[relationId].push(subjectId);
-      }
-    }
-    return map;
   }
 
   function sortSubjects(subjects = []) {
@@ -148,7 +172,7 @@ export function createProjectSubjectsSelectors({
   }
 
   function getNestedSituation(situationId) {
-    return getRelationOptionsByIdMap()[String(situationId || "")] || null;
+    return getSituationsByIdMap()[String(situationId || "")] || (getViewState().data || []).find((s) => s.id === situationId) || null;
   }
 
   function collectSituationTreeSubjects(nodes = [], bucket = []) {
@@ -222,7 +246,14 @@ export function createProjectSubjectsSelectors({
       .map(([situationId]) => getNestedSituation(situationId))
       .filter(Boolean);
 
-        const { bucket } = getRunBucket();
+    for (const situation of Array.isArray(getViewState().data) ? getViewState().data : []) {
+      const hasSubjectInTree = getSituationTreeSubjects(situation).some((node) => String(node?.id || "") === normalizedId);
+      if (hasSubjectInTree && !entries.some((item) => String(item?.id || "") === String(situation?.id || ""))) {
+        entries.push(situation);
+      }
+    }
+
+    const { bucket } = getRunBucket();
     const metaMap = bucket?.subjectMeta?.sujet && typeof bucket.subjectMeta.sujet === "object" ? bucket.subjectMeta.sujet : {};
     const meta = metaMap[normalizedId];
     for (const situationId of normalizeSubjectSituationIds(meta?.situationIds)) {
