@@ -333,8 +333,8 @@ const projectSubjectsDetailsRenderer = createProjectSubjectsDetailsRenderer({
 });
 
 const {
-  renderDetailsTitleWrapHtml,
-  renderDetailsHtml
+  renderDetailsTitleWrapHtml: renderSharedDetailsTitleWrapHtml,
+  renderDetailsHtml: renderSharedDetailsHtml
 } = projectSubjectsDetailsRenderer;
 
 const projectSubjectDetail = createProjectSubjectDetailController({
@@ -342,8 +342,8 @@ const projectSubjectDetail = createProjectSubjectDetailController({
   setOverlayChromeOpenState,
   getActiveSelection,
   getSelectionEntityType,
-  renderDetailsHtml,
-  renderDetailsTitleWrapHtml,
+  renderDetailsHtml: renderSharedDetailsHtml,
+  renderDetailsTitleWrapHtml: renderSharedDetailsTitleWrapHtml,
   wireDetailsInteractive,
   bindDetailsScroll,
   ensureDrilldownDom: () => projectSubjectDrilldown.ensureDrilldownDom(),
@@ -362,8 +362,8 @@ const projectSubjectDrilldown = createProjectSubjectDrilldownController({
   openDrilldownFromSituationSelection: openDrilldownFromSituation,
   openDrilldownFromSujetSelection: openDrilldownFromSujet,
   openDrilldownFromAvisSelection: openDrilldownFromAvis,
-  renderDetailsHtml,
-  renderDetailsTitleWrapHtml,
+  renderDetailsHtml: renderSharedDetailsHtml,
+  renderDetailsTitleWrapHtml: renderSharedDetailsTitleWrapHtml,
   wireDetailsInteractive,
   bindDetailsScroll,
   ensureViewUiState
