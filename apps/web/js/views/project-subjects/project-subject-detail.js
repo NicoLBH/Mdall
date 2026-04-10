@@ -21,7 +21,7 @@ export function createProjectSubjectDetailController(config) {
     const body = document.getElementById("detailsBodyModal");
     if (!modal || !title || !meta || !body) return;
 
-    const isOpen = !!store.situationsView.detailsModalOpen;
+    const isOpen = !!(store.projectSubjectsView?.detailsModalOpen || store.situationsView?.detailsModalOpen);
     setOverlayChromeOpenState(modal, isOpen);
     document.body.classList.toggle("modal-open", isOpen);
 
@@ -66,12 +66,24 @@ export function createProjectSubjectDetailController(config) {
     if (selection?.type && selection?.item?.id) {
       markEntitySeen(getSelectionEntityType(selection.type), selection.item.id, { source: "modal" });
     }
-    store.situationsView.detailsModalOpen = true;
+    if (!store.projectSubjectsView || typeof store.projectSubjectsView !== "object") {
+      store.projectSubjectsView = {};
+    }
+    store.projectSubjectsView.detailsModalOpen = true;
+    if (store.situationsView && typeof store.situationsView === "object") {
+      store.situationsView.detailsModalOpen = true;
+    }
     updateDetailsModal();
   }
 
   function closeDetailsModal() {
-    store.situationsView.detailsModalOpen = false;
+    if (!store.projectSubjectsView || typeof store.projectSubjectsView !== "object") {
+      store.projectSubjectsView = {};
+    }
+    store.projectSubjectsView.detailsModalOpen = false;
+    if (store.situationsView && typeof store.situationsView === "object") {
+      store.situationsView.detailsModalOpen = false;
+    }
     document.body.classList.remove("modal-open");
     updateDetailsModal();
   }
