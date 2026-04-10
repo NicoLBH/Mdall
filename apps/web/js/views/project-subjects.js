@@ -77,6 +77,7 @@ import { createProjectSubjectDrilldownController } from "./project-subjects/proj
 import { createProjectSubjectMilestonesController } from "./project-subjects/project-subject-milestones.js";
 import { createProjectSubjectLabelsController } from "./project-subjects/project-subject-labels.js";
 import { createProjectSubjectsSelectors } from "./project-subjects/project-subjects-selectors.js";
+import { createProjectSubjectsState } from "./project-subjects/project-subjects-state.js";
 import {
   HUMAN_STORE_KEY,
   createProjectSubjectsLegacyRapso
@@ -86,6 +87,14 @@ let subjectsCurrentRoot = null;
 let subjectsTabResetBound = false;
 let subjectsSupabaseReloadToken = 0;
 const DRAFT_SUBJECT_ID = "__draft_subject__";
+
+const projectSubjectsState = createProjectSubjectsState({ store });
+const {
+  ensureViewUiState,
+  getSubjectsViewState,
+  resetSubjectsViewTransientState,
+  getSubjectsTabResetState: getSubjectsTabResetStateBase
+} = projectSubjectsState;
 
 const subjectsSelectors = createProjectSubjectsSelectors({
   store,
@@ -222,6 +231,13 @@ const projectSubjectLabels = createProjectSubjectLabelsController({
 
 function resetObjectiveEditState() {
   projectSubjectMilestones.resetObjectiveEditState();
+}
+
+function getSubjectsTabResetState() {
+  return {
+    ...getSubjectsTabResetStateBase(),
+    hasConnectedRoot: !!(subjectsCurrentRoot && subjectsCurrentRoot.isConnected)
+  };
 }
 
 /* =========================================================
@@ -671,86 +687,6 @@ const DEFAULT_OBJECTIVE_TITLES = [
   "Réception prononcée"
 ];
 
-function ensureViewUiState() {
-  const v = store.situationsView;
-  if (!v.rightExpandedSujets) v.rightExpandedSujets = new Set();
-  if (typeof v.rightSubissuesOpen !== "boolean") v.rightSubissuesOpen = true;
-  if (typeof v.commentPreviewMode !== "boolean") v.commentPreviewMode = false;
-  if (typeof v.helpMode !== "boolean") v.helpMode = false;
-  if (typeof v.showTableOnly !== "boolean") v.showTableOnly = true;
-  if (!v.tempAvisVerdict) v.tempAvisVerdict = "F";
-  if (!v.tempAvisVerdictFor) v.tempAvisVerdictFor = null;
-  if (!v.descriptionEdit || typeof v.descriptionEdit !== "object") {
-    v.descriptionEdit = {
-      entityType: null,
-      entityId: null,
-      draft: ""
-    };
-  }
-  if (!v.drilldown) {
-    v.drilldown = {
-      isOpen: false,
-      selectedSituationId: null,
-      selectedSujetId: null,
-      selectedAvisId: null,
-      expandedSujets: new Set()
-    };
-  }
-  if (!(v.drilldown.expandedSujets instanceof Set)) {
-    v.drilldown.expandedSujets = new Set(Array.isArray(v.drilldown.expandedSujets) ? v.drilldown.expandedSujets : []);
-  }
-  if (typeof v.subjectsStatusFilter !== "string") v.subjectsStatusFilter = "open";
-  if (typeof v.subjectsPriorityFilter !== "string") v.subjectsPriorityFilter = "";
-  if (typeof v.situationsStatusFilter !== "string") v.situationsStatusFilter = "open";
-  if (typeof v.subjectsSubview !== "string") v.subjectsSubview = "subjects";
-  if (typeof v.objectivesStatusFilter !== "string") v.objectivesStatusFilter = "open";
-  if (typeof v.selectedObjectiveId !== "string") v.selectedObjectiveId = "";
-  if (!v.objectiveEdit || typeof v.objectiveEdit !== "object") {
-    v.objectiveEdit = {
-      isOpen: false,
-      objectiveId: "",
-      title: "",
-      dueDate: "",
-      description: "",
-      calendarOpen: false,
-      viewYear: 0,
-      viewMonth: 0
-    };
-  }
-  if (!v.subjectMetaDropdown || typeof v.subjectMetaDropdown !== "object") {
-    v.subjectMetaDropdown = {
-      field: null,
-      query: "",
-      activeKey: ""
-    };
-  }
-  if (!v.subjectKanbanDropdown || typeof v.subjectKanbanDropdown !== "object") {
-    v.subjectKanbanDropdown = {
-      subjectId: "",
-      situationId: "",
-      query: "",
-      activeKey: ""
-    };
-  }
-  if (!v.createSubjectForm || typeof v.createSubjectForm !== "object") {
-    v.createSubjectForm = {
-      isOpen: false,
-      title: "",
-      description: "",
-      previewMode: false,
-      createMore: false,
-      meta: {
-        assignees: [],
-        labels: [],
-        objectiveIds: [],
-        situationIds: [],
-        relations: []
-      },
-      validationError: ""
-    };
-  }
-}
-
 function currentRunKey() {
   return firstNonEmpty(
     store.currentProjectId,
@@ -998,7 +934,7 @@ function createCustomSubjectId() {
 
 function createSubjectFromDraft() {
   ensureViewUiState();
-  const draft = store.situationsView.createSubjectForm || {};
+  const draft = getSubjectsViewState().createSubjectForm || {};
   const title = String(draft.title || "").trim();
   if (!title) {
     store.situationsView.createSubjectForm.validationError = "Le titre du sujet est obligatoire.";
@@ -2601,7 +2537,7 @@ function summarizeSubjectMetaValue(items, emptyLabel = "Aucun") {
 }
 
 function renderSubjectMetaField({ field, label, valueHtml }) {
-  const dropdown = store.situationsView.subjectMetaDropdown || {};
+  const dropdown = getSubjectsViewState().subjectMetaDropdown || {};
   const isOpen = dropdown.field === field;
   return `
     <section class="subject-meta-field ${isOpen ? "is-open" : ""}">
@@ -2641,7 +2577,7 @@ function getSubjectSituationStatusLabel(situation, subjectId) {
 }
 
 function renderSubjectSituationKanbanButton(situation, subjectId) {
-  const dropdown = store.situationsView.subjectKanbanDropdown || {};
+  const dropdown = getSubjectsViewState().subjectKanbanDropdown || {};
   const situationId = String(situation?.id || "");
   const isOpen = String(dropdown.subjectId || "") === String(subjectId || "") && String(dropdown.situationId || "") === situationId;
   return `
@@ -2713,7 +2649,7 @@ function renderSubjectObjectivesValue(subjectId) {
 }
 
 function buildSubjectMetaMenuItems(subject, field) {
-  const dropdownState = store.situationsView.subjectMetaDropdown || {};
+  const dropdownState = getSubjectsViewState().subjectMetaDropdown || {};
   const query = String(dropdownState.query || "").trim().toLowerCase();
 
   if (field === "objectives") {
@@ -2802,7 +2738,7 @@ function buildSubjectMetaMenuItems(subject, field) {
 }
 
 function renderSubjectMetaDropdown(subject, field) {
-  const dropdownState = store.situationsView.subjectMetaDropdown || {};
+  const dropdownState = getSubjectsViewState().subjectMetaDropdown || {};
   const query = String(dropdownState.query || "");
 
   if (field === "objectives") {
@@ -2887,7 +2823,7 @@ function getSubjectKanbanMenuEntries(subjectId, situationId, query = "") {
 }
 
 function renderSubjectKanbanDropdown(subjectId, situationId) {
-  const dropdownState = store.situationsView.subjectKanbanDropdown || {};
+  const dropdownState = getSubjectsViewState().subjectKanbanDropdown || {};
   const query = String(dropdownState.query || "");
   const items = getSubjectKanbanMenuEntries(subjectId, situationId, query);
   return `
@@ -3821,8 +3757,9 @@ function bindSubjectMetaDropdownDocumentEvents() {
   subjectMetaDropdownDocumentBound = true;
 
   document.addEventListener("click", (event) => {
-    const hasMetaOpen = !!store.situationsView.subjectMetaDropdown?.field;
-    const hasKanbanOpen = !!store.situationsView.subjectKanbanDropdown?.subjectId && !!store.situationsView.subjectKanbanDropdown?.situationId;
+    const state = getSubjectsViewState();
+    const hasMetaOpen = !!state.subjectMetaDropdown?.field;
+      const hasKanbanOpen = !!state.subjectKanbanDropdown?.subjectId && !!state.subjectKanbanDropdown?.situationId;
     if (!hasMetaOpen && !hasKanbanOpen) return;
     if (event.target.closest("#subjectMetaDropdownHost .subject-meta-dropdown")) return;
     if (event.target.closest("[data-subject-meta-trigger]")) return;
@@ -3833,33 +3770,20 @@ function bindSubjectMetaDropdownDocumentEvents() {
   });
 
   window.addEventListener("resize", () => {
-    if (!store.situationsView.subjectMetaDropdown?.field && !(store.situationsView.subjectKanbanDropdown?.subjectId && store.situationsView.subjectKanbanDropdown?.situationId)) return;
+    const state = getSubjectsViewState();
+    if (!state.subjectMetaDropdown?.field && !(state.subjectKanbanDropdown?.subjectId && state.subjectKanbanDropdown?.situationId)) return;
     syncSubjectMetaDropdownPosition(getSubjectMetaScopeRoot());
   });
 
   document.addEventListener("scroll", () => {
-    if (!store.situationsView.subjectMetaDropdown?.field && !(store.situationsView.subjectKanbanDropdown?.subjectId && store.situationsView.subjectKanbanDropdown?.situationId)) return;
+    const state = getSubjectsViewState();
+    if (!state.subjectMetaDropdown?.field && !(state.subjectKanbanDropdown?.subjectId && state.subjectKanbanDropdown?.situationId)) return;
     syncSubjectMetaDropdownPosition(getSubjectMetaScopeRoot());
   }, true);
 }
 
-function getSubjectsTabResetState() {
-  return {
-    subjectsSubview: String(store.situationsView.subjectsSubview || "subjects"),
-    selectedObjectiveId: String(store.situationsView.selectedObjectiveId || ""),
-    showTableOnly: !!store.situationsView.showTableOnly,
-    detailsModalOpen: !!store.situationsView.detailsModalOpen,
-    drilldownOpen: !!store.situationsView.drilldown?.isOpen,
-    subjectMetaDropdownOpen: !!store.situationsView.subjectMetaDropdown?.field,
-    subjectKanbanDropdownOpen: !!store.situationsView.subjectKanbanDropdown?.subjectId,
-    objectiveEditOpen: !!store.situationsView.objectiveEdit?.isOpen,
-    createSubjectFormOpen: !!store.situationsView.createSubjectForm?.isOpen,
-    hasConnectedRoot: !!(subjectsCurrentRoot && subjectsCurrentRoot.isConnected)
-  };
-}
-
 function resetSubjectsTabView(reason = "manual") {
-  const before = getSubjectsTabResetState();
+  resetSubjectsViewTransientState();
 
   closeSubjectMetaDropdown();
   closeSubjectKanbanDropdown();
@@ -3966,7 +3890,7 @@ function wireDetailsInteractive(root) {
       event.preventDefault();
       event.stopPropagation();
       const field = String(btn.dataset.subjectMetaTrigger || "");
-      const dropdown = store.situationsView.subjectMetaDropdown || {};
+      const dropdown = getSubjectsViewState().subjectMetaDropdown || {};
       const isAlreadyOpen = dropdown.field === field;
       if (isAlreadyOpen) {
         closeSubjectMetaDropdown();
@@ -3999,7 +3923,7 @@ function wireDetailsInteractive(root) {
       event.stopPropagation();
       const subjectId = String(btn.dataset.subjectKanbanTrigger || "");
       const situationId = String(btn.dataset.subjectKanbanSituationId || "");
-      const dropdown = store.situationsView.subjectKanbanDropdown || {};
+      const dropdown = getSubjectsViewState().subjectKanbanDropdown || {};
       const isAlreadyOpen = String(dropdown.subjectId || "") === subjectId && String(dropdown.situationId || "") === situationId;
       if (isAlreadyOpen) {
         closeSubjectKanbanDropdown();
