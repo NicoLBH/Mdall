@@ -204,9 +204,13 @@ const {
   getScopedSelection,
   currentDecisionTarget,
   selectSituation,
+  selectSubject,
   selectSujet,
+  openSubjectDetails,
   openDrilldownFromSituation,
-  openDrilldownFromSujet
+  openDrilldownFromSubject,
+  openDrilldownFromSujet,
+  openSubjectDrilldown
 } = projectSubjectsSelection;
 
 const projectSubjectsThread = createProjectSubjectsThread({
@@ -319,7 +323,9 @@ const projectSubjectsEvents = createProjectSubjectsEvents({
   getApplyIssueStatusAction: () => applyIssueStatusAction,
   showError,
   updateDrilldownPanel: () => projectSubjectDrilldown.updateDrilldownPanel(),
+  openDrilldownFromSubjectPanel: (subjectId) => projectSubjectDrilldown.openDrilldownFromSubject(subjectId),
   openDrilldownFromSujetPanel: (sujetId) => projectSubjectDrilldown.openDrilldownFromSujet(sujetId),
+  selectSubject,
   selectSujet,
   rerenderPanels: (...args) => projectSubjectsView.rerenderPanels(...args),
   resetSubjectsViewTransientState,
@@ -337,7 +343,8 @@ const projectSubjectsEvents = createProjectSubjectsEvents({
   bindOverlayChromeCompact,
   getProjectSubjectMilestones: () => projectSubjectMilestones,
   getSubjectsCurrentRoot: () => subjectsCurrentRoot,
-  openDetailsModal: () => projectSubjectDetail.openDetailsModal()
+  openDetailsModal: () => projectSubjectDetail.openDetailsModal(),
+  openSubjectDetails: () => projectSubjectDetail.openSubjectDetails()
 });
 
 const {
@@ -399,6 +406,7 @@ const projectSubjectDrilldown = createProjectSubjectDrilldownController({
   bindOverlayChromeDismiss,
   getDrilldownSelection,
   openDrilldownFromSituationSelection: openDrilldownFromSituation,
+  openDrilldownFromSubjectSelection: openDrilldownFromSubject,
   openDrilldownFromSujetSelection: openDrilldownFromSujet,
   renderDetailsHtml: renderSharedDetailsHtml,
   renderDetailsTitleWrapHtml: renderSharedDetailsTitleWrapHtml,
