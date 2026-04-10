@@ -2064,6 +2064,22 @@ function updateDetailsModal() {
   projectSubjectDetail.updateDetailsModal();
 }
 
+function updateDrilldownPanel() {
+  projectSubjectDrilldown.updateDrilldownPanel();
+}
+
+function openDrilldownFromSujetPanel(sujetId) {
+  projectSubjectDrilldown.openDrilldownFromSujet(sujetId);
+}
+
+function openDrilldownFromAvisPanel(avisId) {
+  projectSubjectDrilldown.openDrilldownFromAvis(avisId);
+}
+
+function closeDrilldown() {
+  projectSubjectDrilldown.closeDrilldown();
+}
+
 function openDetailsModal() {
   projectSubjectDetail.openDetailsModal();
 }
