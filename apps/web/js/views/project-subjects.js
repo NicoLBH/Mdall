@@ -525,39 +525,6 @@ function getSubjectsTabResetState() {
    Legacy DOM / archive parity helpers
 ========================================================= */
 
-function verdictTone(verdict) {
-  const map = {
-    F: "verdict-f",
-    S: "verdict-s",
-    D: "verdict-d",
-    HM: "verdict-hm",
-    PM: "verdict-pm",
-    SO: "verdict-so"
-  };
-  return map[String(verdict || "").toUpperCase()] || "default";
-}
-
-function renderVerdictActionButtons(activeVerdict) {
-  const verdicts = ["F", "S", "D", "HM", "PM", "SO"];
-
-  return `
-    <div class="verdict-switch" role="group" aria-label="Verdict">
-      ${verdicts.map((v) => `
-        <div class="verdict-switch__item ${v === activeVerdict ? "is-active" : ""}">
-          ${renderGhActionButton({
-            id: `verdict-${v}`,
-            label: v,
-            tone: verdictTone(v),
-            size: "sm",
-            mainAction: `set-verdict:${v}`,
-            withChevron: false,
-            className: "verdict-switch__action"
-          })}
-        </div>
-      `).join("")}
-    </div>
-  `;
-}
 
 function mdToHtml(text) {
   const safe = escapeHtml(text || "");
@@ -731,9 +698,6 @@ export function getEffectiveSujetStatus(...args) {
   return projectSubjectsView.getEffectiveSujetStatus(...args);
 }
 
-export function getEffectiveAvisVerdict() {
-  return null;
-}
 
 export function getEffectiveSituationStatus(...args) {
   return projectSubjectsView.getEffectiveSituationStatus(...args);
