@@ -1,6 +1,6 @@
 import { store, DEFAULT_PROJECT_PHASES } from "../store.js";
 import { PROJECT_TAB_RESELECTED_EVENT } from "./project-header.js";
-import { loadExistingSubjectsForCurrentProject } from "../services/analysis-runner.js";
+import { loadFlatSubjectsForCurrentProject } from "../services/project-subjects-supabase.js";
 import {
   bindProjectSituationsRunbar,
   syncProjectSituationsRunbar
@@ -664,7 +664,7 @@ const projectSubjectsView = createProjectSubjectsView({
     askHelpEphemeral: async () => undefined,
     askRapsoAndAppendReply: async () => undefined
   }),
-  loadExistingSubjectsForCurrentProject,
+  loadExistingSubjectsForCurrentProject: loadFlatSubjectsForCurrentProject,
   getSubjectsCurrentRoot: () => subjectsCurrentRoot,
   registerProjectPrimaryScrollSource,
   getFilteredSituations: (...args) => getFilteredSituations(...args),
@@ -778,20 +778,14 @@ export function renderProjectSubjects(root) {
 
   const headerRoot = document.getElementById("projectViewHeaderHost");
   const toolbarHost = document.getElementById("situationsToolbarHost");
-  store.situationsView.subjectsSubview = String(store.situationsView.subjectsSubview || "subjects");
-  if (store.situationsView.subjectsSubview !== "objectives") {
-    store.situationsView.selectedObjectiveId = "";
+  store.projectSubjectsView.subjectsSubview = String(store.projectSubjectsView.subjectsSubview || "subjects");
+  if (store.projectSubjectsView.subjectsSubview !== "objectives") {
+    store.projectSubjectsView.selectedObjectiveId = "";
   }
-  const data = store.situationsView.data || [];
+  const data = store.projectSubjectsView.subjectsData || [];
   const firstSituationId = data[0]?.id || null;
 
-  if (!store.situationsView.selectedSituationId && firstSituationId) {
-    store.situationsView.selectedSituationId = firstSituationId;
-  }
-  if (!store.situationsView.expandedSituations.size && firstSituationId) {
-    store.situationsView.expandedSituations.add(firstSituationId);
-  }
-
+  
   if (toolbarHost) {
     rerenderSubjectsToolbar();
   }
