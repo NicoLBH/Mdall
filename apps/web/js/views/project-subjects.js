@@ -4744,6 +4744,11 @@ function formatObjectiveMeta(objective) {
 
 
 
+function getObjectives() {
+  const { bucket } = getRunBucket();
+  return Array.isArray(bucket?.objectives) ? bucket.objectives : [];
+}
+
 function getObjectiveById(objectiveId) {
   return getObjectives().find((objective) => String(objective?.id || "") === String(objectiveId || "")) || null;
 }
