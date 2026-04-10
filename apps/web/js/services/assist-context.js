@@ -18,60 +18,154 @@ function safeArray(value) {
   return Array.isArray(value) ? value : [];
 }
 
-function findSituationById(id) {
-  return safeArray(store.situationsView?.data).find((item) => String(item?.id || "") === String(id || "")) || null;
+function getRawSubjectsResult() {
+  const projectRaw = store.projectSubjectsView?.rawSubjectsResult || store.projectSubjectsView?.rawResult;
+  if (projectRaw && typeof projectRaw === "object") return projectRaw;
+  const legacyRaw = store.situationsView?.rawResult;
+  if (legacyRaw && typeof legacyRaw === "object") return legacyRaw;
+  return {};
 }
 
-function findSubjectInTree(subjectId, subjects = [], situation = null) {
+function flattenSubjects(subjects = [], acc = []) {
   for (const subject of safeArray(subjects)) {
-    if (String(subject?.id || "") === String(subjectId || "")) {
-      return { subject, situation };
-    }
-    const nested = findSubjectInTree(subjectId, subject?.children, situation);
-    if (nested) return nested;
+    acc.push(subject);
+    flattenSubjects(subject?.children, acc);
   }
-  return null;
+  return acc;
+}
+
+function getSubjectsByIdMap() {
+  const raw = getRawSubjectsResult();
+  if (raw.subjectsById && typeof raw.subjectsById === "object") return raw.subjectsById;
+
+  const fromProjectView = safeArray(store.projectSubjectsView?.subjectsData);
+  if (fromProjectView.length) {
+    return Object.fromEntries(fromProjectView
+      .map((subject) => [String(subject?.id || ""), subject])
+      .filter(([id]) => !!id));
+  }
+
+  const fallback = {};
+  for (const situation of safeArray(store.situationsView?.data)) {
+    for (const subject of flattenSubjects(situation?.sujets)) {
+      const id = String(subject?.id || "");
+      if (!id) continue;
+      fallback[id] = subject;
+    }
+  }
+  return fallback;
+}
+
+function getLinksBySubjectIdMap() {
+  const raw = getRawSubjectsResult();
+  if (raw.linksBySubjectId && typeof raw.linksBySubjectId === "object") return raw.linksBySubjectId;
+  return {};
+}
+
+function getSituationsByIdMap() {
+  const raw = getRawSubjectsResult();
+  if (raw.situationsById && typeof raw.situationsById === "object") return raw.situationsById;
+  if (raw.relationOptionsById && typeof raw.relationOptionsById === "object") return raw.relationOptionsById;
+
+  const fallback = {};
+  for (const situation of safeArray(store.situationsView?.data)) {
+    const id = String(situation?.id || "");
+    if (!id) continue;
+    fallback[id] = situation;
+  }
+  return fallback;
+}
+
+function getRelationIdsBySubjectIdMap() {
+  const raw = getRawSubjectsResult();
+  if (raw.relationIdsBySubjectId && typeof raw.relationIdsBySubjectId === "object") return raw.relationIdsBySubjectId;
+
+  const fallback = {};
+  for (const situation of safeArray(store.situationsView?.data)) {
+    const situationId = String(situation?.id || "");
+    for (const subject of flattenSubjects(situation?.sujets)) {
+      const subjectId = String(subject?.id || "");
+      if (!subjectId) continue;
+      if (!Array.isArray(fallback[subjectId])) fallback[subjectId] = [];
+      if (situationId) fallback[subjectId].push(situationId);
+    }
+  }
+  return fallback;
+}
+
+function findSituationById(id) {
+  return getSituationsByIdMap()[String(id || "")] || null;
 }
 
 function findSubjectById(id) {
-  for (const situation of safeArray(store.situationsView?.data)) {
-    const hit = findSubjectInTree(id, situation?.sujets, situation);
-    if (hit) return hit;
-  }
-  return null;
+  const subject = getSubjectsByIdMap()[String(id || "")] || null;
+  if (!subject) return null;
+
+  const relationIds = safeArray(getRelationIdsBySubjectIdMap()[String(id || "")]);
+  const situation = relationIds.length ? findSituationById(relationIds[0]) : null;
+
+  return { subject, situation };
+}
+
+function isClosedStatus(status) {
+  return String(status || "open").toLowerCase() === "closed";
+}
+
+function isBlockedSubject(subjectId) {
+  return (getLinksBySubjectIdMap()[String(subjectId || "")] || []).some((link) => {
+    return String(link?.source_subject_id || "") === String(subjectId || "")
+      && String(link?.link_type || "").toLowerCase() === "blocked_by";
+  });
+}
+
+function isBlockingSubject(subjectId) {
+  return (getLinksBySubjectIdMap()[String(subjectId || "")] || []).some((link) => {
+    return String(link?.target_subject_id || "") === String(subjectId || "")
+      && String(link?.link_type || "").toLowerCase() === "blocked_by";
+  });
 }
 
 function summarizeSituations() {
-  const data = safeArray(store.situationsView?.data);
+  const situationsById = getSituationsByIdMap();
+  const subjectsById = getSubjectsByIdMap();
+  const subjects = Object.values(subjectsById);
 
-  let subjectCount = 0;
   let openSubjects = 0;
   let closedSubjects = 0;
+  let blockedSubjects = 0;
+  let blockingSubjects = 0;
+  let rootSubjects = 0;
 
-  const visit = (subjects = []) => {
-    for (const subject of safeArray(subjects)) {
-      subjectCount += 1;
-      if (String(subject?.status || "open").toLowerCase() === "closed") closedSubjects += 1;
-      else openSubjects += 1;
-      visit(subject?.children);
-    }
-  };
+  const childIds = new Set();
+  for (const subject of subjects) {
+    const parentId = String(subject?.parent_subject_id || subject?.parentSubjectId || "");
+    if (parentId) childIds.add(String(subject?.id || ""));
+  }
 
-  for (const situation of data) {
-    visit(situation?.sujets);
+  for (const subject of subjects) {
+    if (isClosedStatus(subject?.status)) closedSubjects += 1;
+    else openSubjects += 1;
+    if (isBlockedSubject(subject?.id)) blockedSubjects += 1;
+    if (isBlockingSubject(subject?.id)) blockingSubjects += 1;
+    if (!childIds.has(String(subject?.id || ""))) rootSubjects += 1;
   }
 
   return {
-    situations_count: data.length,
-    subjects_count: subjectCount,
+    situations_count: Object.keys(situationsById).length,
+    subjects_count: subjects.length,
+    root_subjects_count: rootSubjects,
+    child_subjects_count: Math.max(0, subjects.length - rootSubjects),
     open_subjects_count: openSubjects,
-    closed_subjects_count: closedSubjects
+    closed_subjects_count: closedSubjects,
+    blocked_subjects_count: blockedSubjects,
+    blocking_subjects_count: blockingSubjects
   };
 }
 
 function buildSelectionContext() {
-  const selectedSituationId = store.situationsView?.selectedSituationId || null;
-  const selectedSubjectId = store.situationsView?.selectedSubjectId || store.situationsView?.selectedSujetId || null;
+  const selectionSource = store.projectSubjectsView || store.situationsView || {};
+  const selectedSituationId = selectionSource?.selectedSituationId || null;
+  const selectedSubjectId = selectionSource?.selectedSubjectId || selectionSource?.selectedSujetId || null;
 
   if (selectedSubjectId) {
     const hit = findSubjectById(selectedSubjectId);
@@ -87,7 +181,9 @@ function buildSelectionContext() {
           subject: hit.subject?.title || hit.subject?.label || ""
         },
         status: hit.subject?.status || "open",
-        priority: hit.subject?.priority || "medium"
+        priority: hit.subject?.priority || "medium",
+        blocked: isBlockedSubject(hit.subject?.id),
+        blocking: isBlockingSubject(hit.subject?.id)
       };
     }
   }
@@ -106,7 +202,9 @@ function buildSelectionContext() {
           subject: ""
         },
         status: situation?.status || "open",
-        priority: situation?.priority || "medium"
+        priority: situation?.priority || "medium",
+        blocked: false,
+        blocking: false
       };
     }
   }
@@ -122,7 +220,9 @@ function buildSelectionContext() {
       subject: ""
     },
     status: "",
-    priority: ""
+    priority: "",
+    blocked: false,
+    blocking: false
   };
 }
 
@@ -154,6 +254,8 @@ export function buildAssistContext() {
   const parts = parseHash();
   const scope = inferScope(parts);
   const tab = inferTab(parts);
+  const selection = buildSelectionContext();
+  const summary = summarizeSituations();
 
   return {
     app: {
@@ -170,15 +272,28 @@ export function buildAssistContext() {
     },
     system: buildSystemContext(),
     project_form: buildProjectFormContext(),
+    subjects: {
+      filters: {
+        search: store.projectSubjectsView?.search || store.situationsView?.search || "",
+        display_depth: store.projectSubjectsView?.displayDepth || store.situationsView?.displayDepth || "situations",
+        page: store.projectSubjectsView?.page || store.situationsView?.page || 1,
+        page_size: store.projectSubjectsView?.pageSize || store.situationsView?.pageSize || 80,
+        status: store.projectSubjectsView?.filters?.status || store.situationsView?.filters?.status || "open",
+        priority: store.projectSubjectsView?.filters?.priority || store.situationsView?.filters?.priority || "",
+        blocking_state: store.projectSubjectsView?.filters?.blockingState || store.situationsView?.filters?.blockingState || ""
+      },
+      summary,
+      selection
+    },
     situations: {
       filters: {
-        search: store.situationsView?.search || "",
-        display_depth: store.situationsView?.displayDepth || "situations",
-        page: store.situationsView?.page || 1,
-        page_size: store.situationsView?.pageSize || 80
+        search: store.projectSubjectsView?.search || store.situationsView?.search || "",
+        display_depth: store.projectSubjectsView?.displayDepth || store.situationsView?.displayDepth || "situations",
+        page: store.projectSubjectsView?.page || store.situationsView?.page || 1,
+        page_size: store.projectSubjectsView?.pageSize || store.situationsView?.pageSize || 80
       },
-      summary: summarizeSituations(),
-      selection: buildSelectionContext()
+      summary,
+      selection
     },
     assistant: {
       mode: store.ui?.assistant?.mode || "auto",
