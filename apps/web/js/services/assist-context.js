@@ -7,13 +7,11 @@ function parseHash() {
 }
 
 function inferScope(parts) {
-  if (parts[0] === "project" && parts[1]) return "project";
-  return "global";
+  return parts[0] === "project" && parts[1] ? "project" : "global";
 }
 
 function inferTab(parts) {
-  if (parts[0] === "project") return parts[2] || "dashboard";
-  return parts[0] || "dashboard";
+  return parts[0] === "project" ? parts[2] || "dashboard" : parts[0] || "dashboard";
 }
 
 function safeArray(value) {
@@ -21,115 +19,75 @@ function safeArray(value) {
 }
 
 function findSituationById(id) {
-  return safeArray(store.situationsView?.data).find((s) => String(s?.id) === String(id));
+  return safeArray(store.situationsView?.data).find((item) => String(item?.id || "") === String(id || "")) || null;
 }
 
-function findSujetById(id) {
-  for (const situation of safeArray(store.situationsView?.data)) {
-    for (const sujet of safeArray(situation?.sujets)) {
-      if (String(sujet?.id) === String(id)) return { sujet, situation };
+function findSubjectInTree(subjectId, subjects = [], situation = null) {
+  for (const subject of safeArray(subjects)) {
+    if (String(subject?.id || "") === String(subjectId || "")) {
+      return { subject, situation };
     }
+    const nested = findSubjectInTree(subjectId, subject?.children, situation);
+    if (nested) return nested;
   }
   return null;
 }
 
-function findAvisById(id) {
+function findSubjectById(id) {
   for (const situation of safeArray(store.situationsView?.data)) {
-    for (const sujet of safeArray(situation?.sujets)) {
-      for (const avis of safeArray(sujet?.avis)) {
-        if (String(avis?.id) === String(id)) return { avis, sujet, situation };
-      }
-    }
+    const hit = findSubjectInTree(id, situation?.sujets, situation);
+    if (hit) return hit;
   }
   return null;
 }
 
-function buildSituationsSummary() {
+function summarizeSituations() {
   const data = safeArray(store.situationsView?.data);
 
-  let sujetsCount = 0;
-  let avisCount = 0;
-  const verdicts = {};
-  const statuses = { open: 0, closed: 0 };
+  let subjectCount = 0;
+  let openSubjects = 0;
+  let closedSubjects = 0;
+
+  const visit = (subjects = []) => {
+    for (const subject of safeArray(subjects)) {
+      subjectCount += 1;
+      if (String(subject?.status || "open").toLowerCase() === "closed") closedSubjects += 1;
+      else openSubjects += 1;
+      visit(subject?.children);
+    }
+  };
 
   for (const situation of data) {
-    const sStatus = String(situation?.status || "open").toLowerCase();
-    if (sStatus === "closed") statuses.closed += 1;
-    else statuses.open += 1;
-
-    for (const sujet of safeArray(situation?.sujets)) {
-      sujetsCount += 1;
-
-      const subjStatus = String(sujet?.status || "open").toLowerCase();
-      if (subjStatus === "closed") statuses.closed += 1;
-      else statuses.open += 1;
-
-      for (const avis of safeArray(sujet?.avis)) {
-        avisCount += 1;
-        const avisStatus = String(avis?.status || "open").toLowerCase();
-        if (avisStatus === "closed") statuses.closed += 1;
-        else statuses.open += 1;
-
-        const verdict = String(avis?.verdict || "").toUpperCase();
-        if (verdict) {
-          verdicts[verdict] = (verdicts[verdict] || 0) + 1;
-        }
-      }
-    }
+    visit(situation?.sujets);
   }
 
   return {
     situations_count: data.length,
-    sujets_count: sujetsCount,
-    avis_count: avisCount,
-    statuses,
-    verdicts
+    subjects_count: subjectCount,
+    open_subjects_count: openSubjects,
+    closed_subjects_count: closedSubjects
   };
 }
 
 function buildSelectionContext() {
   const selectedSituationId = store.situationsView?.selectedSituationId || null;
-  const selectedSujetId = store.situationsView?.selectedSujetId || null;
-  const selectedAvisId = store.situationsView?.selectedAvisId || null;
+  const selectedSubjectId = store.situationsView?.selectedSubjectId || store.situationsView?.selectedSujetId || null;
 
-  if (selectedAvisId) {
-    const hit = findAvisById(selectedAvisId);
+  if (selectedSubjectId) {
+    const hit = findSubjectById(selectedSubjectId);
     if (hit) {
       return {
-        level: "avis",
+        level: "subject",
         ids: {
           situation_id: hit.situation?.id || null,
-          sujet_id: hit.sujet?.id || null,
-          avis_id: hit.avis?.id || null
+          subject_id: hit.subject?.id || null
         },
         labels: {
           situation: hit.situation?.title || hit.situation?.label || "",
-          sujet: hit.sujet?.title || hit.sujet?.label || "",
-          avis: hit.avis?.title || hit.avis?.label || ""
+          subject: hit.subject?.title || hit.subject?.label || ""
         },
-        status: hit.avis?.status || "open",
-        verdict: hit.avis?.verdict || ""
-      };
-    }
-  }
-
-  if (selectedSujetId) {
-    const hit = findSujetById(selectedSujetId);
-    if (hit) {
-      return {
-        level: "sujet",
-        ids: {
-          situation_id: hit.situation?.id || null,
-          sujet_id: hit.sujet?.id || null,
-          avis_id: null
-        },
-        labels: {
-          situation: hit.situation?.title || hit.situation?.label || "",
-          sujet: hit.sujet?.title || hit.sujet?.label || "",
-          avis: ""
-        },
-        status: hit.sujet?.status || "open",
-        verdict: ""
+        status: hit.subject?.status || "open",
+        priority: hit.subject?.priority || "medium"
       };
     }
   }
@@ -141,16 +99,14 @@ function buildSelectionContext() {
         level: "situation",
         ids: {
           situation_id: situation?.id || null,
-          sujet_id: null,
-          avis_id: null
+          subject_id: null
         },
         labels: {
           situation: situation?.title || situation?.label || "",
-          sujet: "",
-          avis: ""
+          subject: ""
         },
         status: situation?.status || "open",
-        verdict: ""
+        priority: situation?.priority || "medium"
       };
     }
   }
@@ -159,16 +115,14 @@ function buildSelectionContext() {
     level: "none",
     ids: {
       situation_id: null,
-      sujet_id: null,
-      avis_id: null
+      subject_id: null
     },
     labels: {
       situation: "",
-      sujet: "",
-      avis: ""
+      subject: ""
     },
     status: "",
-    verdict: ""
+    priority: ""
   };
 }
 
@@ -201,7 +155,7 @@ export function buildAssistContext() {
   const scope = inferScope(parts);
   const tab = inferTab(parts);
 
-  const context = {
+  return {
     app: {
       scope,
       route_parts: parts,
@@ -218,13 +172,12 @@ export function buildAssistContext() {
     project_form: buildProjectFormContext(),
     situations: {
       filters: {
-        verdict_filter: store.situationsView?.verdictFilter || "ALL",
         search: store.situationsView?.search || "",
         display_depth: store.situationsView?.displayDepth || "situations",
         page: store.situationsView?.page || 1,
         page_size: store.situationsView?.pageSize || 80
       },
-      summary: buildSituationsSummary(),
+      summary: summarizeSituations(),
       selection: buildSelectionContext()
     },
     assistant: {
@@ -232,25 +185,11 @@ export function buildAssistContext() {
       conversation_length: safeArray(store.ui?.assistant?.messages).length
     },
     global_navigation: {
-      available_sections: ["dashboard", "projects", "project/documents", "project/situations", "project/intervenants", "project/dashboard", "project/identity"]
+      available_sections: ["dashboard", "projects", "project/documents", "project/situations", "project/sujets", "project/insights", "project/parametres"]
     },
     capabilities: {
-      global: [
-        "resume_notifications",
-        "prioritize_projects",
-        "summarize_portfolio",
-        "highlight_urgent_items"
-      ],
-      project: [
-        "draft_comments",
-        "prepare_bulk_verdicts",
-        "summarize_situation",
-        "summarize_sujet",
-        "help_on_selected_item"
-      ]
+      global: ["resume_notifications", "prioritize_projects"],
+      project: ["summarize_subjects", "group_by_situations", "highlight_blockers"]
     }
   };
-
-  store.ui.assistant.lastContext = context;
-  return context;
 }
