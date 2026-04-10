@@ -54,11 +54,44 @@ export function createProjectSubjectsSelectors({
       : {};
   }
 
+  function sortSubjects(subjects = []) {
+    return [...subjects].sort((left, right) => {
+      const leftTs = Date.parse(left?.created_at || left?.raw?.created_at || "") || 0;
+      const rightTs = Date.parse(right?.created_at || right?.raw?.created_at || "") || 0;
+      if (leftTs !== rightTs) return leftTs - rightTs;
+      return String(firstNonEmpty(left?.title, left?.id, "")).localeCompare(String(firstNonEmpty(right?.title, right?.id, "")), "fr");
+    });
+  }
+
+  function getAllNormalizedSubjects() {
+    const map = getSubjectsByIdMap();
+    const seen = new Set();
+    const subjects = [];
+
+    for (const subject of Object.values(map)) {
+      const subjectId = String(subject?.id || "");
+      if (!subjectId || seen.has(subjectId)) continue;
+      seen.add(subjectId);
+      subjects.push(subject);
+    }
+
+    for (const subject of getCustomSubjects()) {
+      const subjectId = String(subject?.id || "");
+      if (!subjectId || seen.has(subjectId)) continue;
+      seen.add(subjectId);
+      subjects.push(subject);
+    }
+
+    return sortSubjects(subjects);
+  }
+
   function getRootSubjects() {
     const raw = getRawResult();
     const subjectsById = getSubjectsByIdMap();
     const ids = Array.isArray(raw.rootSubjectIds) ? raw.rootSubjectIds : [];
-    return ids.map((id) => subjectsById[String(id || "")]).filter(Boolean);
+    const linked = ids.map((id) => subjectsById[String(id || "")]).filter(Boolean);
+    if (linked.length) return sortSubjects(linked);
+    return sortSubjects(getAllNormalizedSubjects().filter((subject) => isRootSubject(subject?.id)));
   }
 
   function getSubjectById(subjectId) {
@@ -162,7 +195,13 @@ export function createProjectSubjectsSelectors({
   }
 
   function getSituationSubjects(situation) {
-    return getSubjectsForSituation(situation);
+    const linked = getSubjectsForSituation(situation);
+    if (linked.length) return sortSubjects(linked);
+    return [];
+  }
+
+  function getFlatSubjects() {
+    return getAllNormalizedSubjects();
   }
 
   function getSituationsForSubject(subjectId) {
@@ -278,15 +317,21 @@ export function createProjectSubjectsSelectors({
     return getStandaloneCustomSubjects().filter((sujet) => subjectMatchesFilters(sujet, query));
   }
 
+  function getFilteredFlatSubjects() {
+    const query = String(getViewState().search || "").trim().toLowerCase();
+    const activeStatusFilter = getCurrentSubjectsStatusFilter();
+    const activePriorityFilter = getCurrentSubjectsPriorityFilter();
+    return getFlatSubjects().filter((subject) => {
+      if (!subjectMatchesFilters(subject, query)) return false;
+      if (!sujetMatchesStatusFilter(subject, activeStatusFilter)) return false;
+      if (!sujetMatchesPriorityFilter(subject, activePriorityFilter)) return false;
+      return true;
+    });
+  }
+
   function getAvailableSubjectPriorities() {
     const priorities = new Set();
-    for (const situation of Array.isArray(getViewState().data) ? getViewState().data : []) {
-      for (const sujet of getSituationSubjects(situation)) {
-        const priority = normalizeBackendPriority(firstNonEmpty(sujet?.priority, sujet?.prio, "medium"));
-        if (priority) priorities.add(priority);
-      }
-    }
-    for (const sujet of getStandaloneCustomSubjects()) {
+    for (const sujet of getFlatSubjects()) {
       const priority = normalizeBackendPriority(firstNonEmpty(sujet?.priority, sujet?.prio, "medium"));
       if (priority) priorities.add(priority);
     }
@@ -297,40 +342,28 @@ export function createProjectSubjectsSelectors({
   function getSubjectsStatusCounts(query = "") {
     let open = 0;
     let closed = 0;
-    const register = (subject, extra = []) => {
+    for (const subject of getFlatSubjects()) {
       const matches = matchSearch([
-        ...extra, subject?.id, subject?.title, subject?.priority, subject?.status, subject?.agent, subject?.raw?.summary, subject?.raw?.topic, subject?.raw?.category, subject?.raw?.title
+        subject?.id, subject?.title, subject?.priority, subject?.status, subject?.agent, subject?.raw?.summary, subject?.raw?.topic, subject?.raw?.category, subject?.raw?.title
       ], query);
-      if (!matches) return;
+      if (!matches) continue;
       if (sujetMatchesStatusFilter(subject, "closed")) closed += 1;
       else open += 1;
-    };
-    for (const situation of Array.isArray(getViewState().data) ? getViewState().data : []) {
-      for (const sujet of getSituationSubjects(situation)) register(sujet, [situation?.id, situation?.title]);
     }
-    for (const sujet of getStandaloneCustomSubjects()) register(sujet);
     return { open, closed };
   }
 
   function getVisibleCounts(filteredSituations) {
+    const visibleSubjects = getFilteredFlatSubjects();
     let sujets = 0;
     let sousSujets = 0;
-    const visit = (subject) => {
-      const children = getChildSubjects(subject?.id);
-      sousSujets += children.length;
-      children.forEach(visit);
-    };
-    for (const situation of filteredSituations) {
-      const subjects = getSituationSubjects(situation).filter((subject) => isRootSubject(subject?.id));
-      sujets += subjects.length;
-      subjects.forEach(visit);
+
+    for (const subject of visibleSubjects) {
+      if (isRootSubject(subject?.id)) sujets += 1;
+      else sousSujets += 1;
     }
-    for (const sujet of getFilteredStandaloneSubjects()) {
-      if (!isRootSubject(sujet?.id)) continue;
-      sujets += 1;
-      visit(sujet);
-    }
-    return { situations: filteredSituations.length, sujets, sousSujets, totalSubjects: sujets + sousSujets };
+
+    return { situations: filteredSituations.length, sujets, sousSujets, totalSubjects: visibleSubjects.length };
   }
 
   function getNestedAvis() {
@@ -349,6 +382,8 @@ export function createProjectSubjectsSelectors({
     getFilteredSituations,
     getStandaloneCustomSubjects,
     getFilteredStandaloneSubjects,
+    getFlatSubjects,
+    getFilteredFlatSubjects,
     getCurrentSubjectsStatusFilter,
     getCurrentSubjectsPriorityFilter,
     sujetMatchesPriorityFilter,
@@ -359,6 +394,8 @@ export function createProjectSubjectsSelectors({
     getNestedSituation,
     getCanonicalSujetById,
     getSituationSubjects,
+    getFlatSubjects,
+    getFilteredFlatSubjects,
     getNestedSujet,
     getSubjectById,
     getParentSubject,
