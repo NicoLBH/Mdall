@@ -205,7 +205,7 @@ const projectSubjectsSelection = createProjectSubjectsSelection({
   getSujetByAvisId,
   getDraftSubjectSelection,
   getEffectiveAvisVerdict,
-  openDetailsModal,
+  openDetailsModal: () => projectSubjectDetail.openDetailsModal(),
   rerenderPanels,
   markEntitySeen
 });
