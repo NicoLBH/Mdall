@@ -93,8 +93,8 @@ export function renderProjectSubjectsTable({ filteredSituations, deps }) {
   } = deps;
 
   const selectorFlatSubjects = Array.isArray(getFilteredFlatSubjects?.()) ? getFilteredFlatSubjects() : [];
-  const rawSubjectsById = store.projectSubjectsView?.rawSubjectsResult?.subjectsById && typeof store.projectSubjectsView.rawSubjectsResult.subjectsById === "object"
-    ? store.projectSubjectsView.rawSubjectsResult.subjectsById
+  const rawSubjectsById = store.situationsView?.rawResult?.subjectsById && typeof store.situationsView.rawResult.subjectsById === "object"
+    ? store.situationsView.rawResult.subjectsById
     : {};
   const rawFlatSubjects = Object.values(rawSubjectsById);
   const activeStatusFilter = typeof getCurrentSubjectsStatusFilter === "function" ? getCurrentSubjectsStatusFilter() : "open";
