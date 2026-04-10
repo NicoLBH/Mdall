@@ -45,7 +45,7 @@ export function createProjectSubjectLabelsController(config) {
 
   function getSubjectsLabelUsageCounts() {
     const counts = new Map();
-    const sujets = (store.situationsView.data || []).flatMap((situation) => Array.isArray(situation?.sujets) ? situation.sujets : []);
+    const sujets = Array.isArray(store.projectSubjectsView?.subjectsData) ? store.projectSubjectsView.subjectsData : [];
     sujets.forEach((sujet) => {
       const seen = new Set();
       getSubjectSidebarMeta(sujet?.id).labels.forEach((label) => {
