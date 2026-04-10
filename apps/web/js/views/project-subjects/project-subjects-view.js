@@ -171,7 +171,7 @@ function entityLinkHtml(type, id, text) {
 }
 
 function buildEntityDisplayRefMap() {
-  const data = Array.isArray(store.situationsView?.data) ? store.situationsView.data : [];
+  const data = Array.isArray(store.projectSubjectsView?.subjectsData) ? store.projectSubjectsView.subjectsData : [];
   const map = new Map();
   let index = 1;
 
@@ -432,10 +432,7 @@ function getDraftSubjectSelection() {
 
 function buildDefaultDraftSubjectMeta() {
   const selectedSituationId = String(
-    store.situationsView.selectedSituationId
-    || (store.situationsView.data || []).find((situation) => String(getEffectiveSituationStatus(situation?.id) || situation?.status || "open").toLowerCase() === "open")?.id
-    || (store.situationsView.data || [])[0]?.id
-    || ""
+    ""
   );
   return {
     assignees: [],
@@ -647,10 +644,7 @@ function getSubjectSidebarMeta(subjectId) {
           .map((objective) => String(objective.id || ""))
           .filter(Boolean)
       );
-  const derivedSituationIds = (store.situationsView.data || [])
-    .filter((situation) => (situation.sujets || []).some((sujet) => String(sujet?.id || "") === String(subjectId || "")))
-    .map((situation) => String(situation.id || ""))
-    .filter(Boolean);
+  const derivedSituationIds = [String(subject?.raw?.situation_id || subject?.situation_id || "")].filter(Boolean);
   const situationIds = Array.isArray(subjectMeta.situationIds)
     ? normalizeSubjectSituationIds(subjectMeta.situationIds)
     : normalizeSubjectSituationIds(derivedSituationIds);
@@ -1183,7 +1177,7 @@ function buildSubjectMetaMenuItems(subject, field) {
 
   if (field === "situations") {
     const selectedSituationIds = new Set(getSubjectSidebarMeta(subject.id).situationIds);
-    const situations = (store.situationsView.data || []).filter((situation) => matchSearch([situation.title, situation.id], query));
+    const situations = Object.values(store.projectSubjectsView?.rawSubjectsResult?.relationOptionsById || {}).filter((situation) => matchSearch([situation.title, situation.id], query));
     const toItem = (situation) => {
       const isSelected = selectedSituationIds.has(String(situation.id || ""));
       return {
