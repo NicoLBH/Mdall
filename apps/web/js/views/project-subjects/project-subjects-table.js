@@ -85,12 +85,27 @@ export function renderProjectSubjectsTable({ filteredSituations, deps }) {
   const {
     store,
     renderIssuesTable,
-    getFilteredFlatSubjects
+    getFilteredFlatSubjects,
+    getCurrentSubjectsStatusFilter,
+    getCurrentSubjectsPriorityFilter,
+    sujetMatchesStatusFilter,
+    sujetMatchesPriorityFilter
   } = deps;
 
-  const flatSubjects = getFilteredFlatSubjects();
-  const hasAnySubjects = !!(store.situationsView.rawResult?.subjectsById && Object.keys(store.situationsView.rawResult.subjectsById).length)
-    || !!flatSubjects.length;
+  const selectorFlatSubjects = Array.isArray(getFilteredFlatSubjects?.()) ? getFilteredFlatSubjects() : [];
+  const rawSubjectsById = store.situationsView?.rawResult?.subjectsById && typeof store.situationsView.rawResult.subjectsById === "object"
+    ? store.situationsView.rawResult.subjectsById
+    : {};
+  const rawFlatSubjects = Object.values(rawSubjectsById);
+  const activeStatusFilter = typeof getCurrentSubjectsStatusFilter === "function" ? getCurrentSubjectsStatusFilter() : "open";
+  const activePriorityFilter = typeof getCurrentSubjectsPriorityFilter === "function" ? getCurrentSubjectsPriorityFilter() : "";
+  const fallbackFlatSubjects = rawFlatSubjects.filter((subject) => {
+    if (typeof sujetMatchesStatusFilter === "function" && !sujetMatchesStatusFilter(subject, activeStatusFilter)) return false;
+    if (typeof sujetMatchesPriorityFilter === "function" && !sujetMatchesPriorityFilter(subject, activePriorityFilter)) return false;
+    return true;
+  });
+  const flatSubjects = selectorFlatSubjects.length ? selectorFlatSubjects : fallbackFlatSubjects;
+  const hasAnySubjects = !!Object.keys(rawSubjectsById).length || !!flatSubjects.length;
 
   if (!hasAnySubjects) return renderWelcomeHtml(deps);
 
