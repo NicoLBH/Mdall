@@ -85,36 +85,16 @@ export function renderProjectSubjectsTable({ filteredSituations, deps }) {
   const {
     store,
     renderIssuesTable,
-    getCurrentSubjectsStatusFilter,
-    getCurrentSubjectsPriorityFilter,
-    getFilteredStandaloneSubjects,
-    getSituationSubjects,
-    sujetMatchesStatusFilter,
-    sujetMatchesPriorityFilter
+    getFilteredFlatSubjects
   } = deps;
 
-  const activeStatusFilter = getCurrentSubjectsStatusFilter();
-  const standaloneSubjects = getFilteredStandaloneSubjects().filter((sujet) => sujetMatchesStatusFilter(sujet, activeStatusFilter));
+  const flatSubjects = getFilteredFlatSubjects();
+  const hasAnySubjects = !!(store.situationsView.rawResult?.subjectsById && Object.keys(store.situationsView.rawResult.subjectsById).length)
+    || !!flatSubjects.length;
 
-  if (!(store.situationsView.data || []).length && !standaloneSubjects.length) return renderWelcomeHtml(deps);
+  if (!hasAnySubjects) return renderWelcomeHtml(deps);
 
-  const rows = [];
-
-  for (const situation of filteredSituations) {
-    const visibleSujets = getSituationSubjects(situation).filter((sujet) => sujetMatchesStatusFilter(sujet, activeStatusFilter));
-
-    if (!visibleSujets.length) continue;
-
-    for (const sujet of visibleSujets) {
-      if (!sujetMatchesPriorityFilter(sujet, getCurrentSubjectsPriorityFilter())) continue;
-      rows.push(renderFlatSujetRow(sujet, situation.id, { isSelectable: false, deps }));
-    }
-  }
-
-  for (const sujet of standaloneSubjects) {
-    if (!sujetMatchesPriorityFilter(sujet, getCurrentSubjectsPriorityFilter())) continue;
-    rows.push(renderFlatSujetRow(sujet, "", { isSelectable: false, deps }));
-  }
+  const rows = flatSubjects.map((sujet) => renderFlatSujetRow(sujet, "", { isSelectable: false, deps }));
 
   if (!rows.length) {
     return renderIssuesTable({
