@@ -190,6 +190,7 @@ const projectSubjectsSelection = createProjectSubjectsSelection({
 const {
   getActiveSelection,
   getDrilldownSelection,
+  getSelectionEntityType,
   getScopedSelection,
   currentDecisionTarget,
   selectSituation,
