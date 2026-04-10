@@ -315,23 +315,6 @@ export function createProjectSubjectsSelectors({
     return null;
   }
 
-  function getActiveSelection() {
-    if (store.situationsView.selectedAvisId) {
-      const avis = getNestedAvis(store.situationsView.selectedAvisId);
-      if (avis) return { type: "avis", item: avis };
-    }
-    if (store.situationsView.selectedSujetId) {
-      const sujet = getNestedSujet(store.situationsView.selectedSujetId);
-      if (sujet) return { type: "sujet", item: sujet };
-    }
-    if (store.situationsView.selectedSituationId) {
-      const situation = getNestedSituation(store.situationsView.selectedSituationId);
-      if (situation) return { type: "situation", item: situation };
-    }
-    const firstSituation = (store.situationsView.data || [])[0] || null;
-    return firstSituation ? { type: "situation", item: firstSituation } : null;
-  }
-
   return {
     getFilteredSituations,
     getStandaloneCustomSubjects,
@@ -350,8 +333,7 @@ export function createProjectSubjectsSelectors({
     getNestedAvis,
     getSituationBySujetId,
     getSituationByAvisId,
-    getSujetByAvisId,
-    getActiveSelection
+    getSujetByAvisId
   };
 }
 

@@ -7,12 +7,10 @@ export function createProjectSubjectDrilldownController(config) {
     renderOverlayChrome,
     renderOverlayChromeHead,
     bindOverlayChromeDismiss,
-    getNestedAvis,
-    getNestedSujet,
-    getNestedSituation,
-    getSituationBySujetId,
-    getSujetByAvisId,
-    getSituationByAvisId,
+    getDrilldownSelection,
+    openDrilldownFromSituationSelection,
+    openDrilldownFromSujetSelection,
+    openDrilldownFromAvisSelection,
     renderDetailsHtml,
     renderDetailsTitleWrapHtml,
     wireDetailsInteractive,
@@ -48,25 +46,6 @@ export function createProjectSubjectDrilldownController(config) {
     bindOverlayChromeDismiss(panel, {
       onClose: closeDrilldown
     });
-  }
-
-  function getDrilldownSelection() {
-    ensureViewUiState();
-    const dd = store.situationsView.drilldown;
-    if (!dd) return null;
-    if (dd.selectedAvisId) {
-      const avis = getNestedAvis(dd.selectedAvisId);
-      if (avis) return { type: "avis", item: avis };
-    }
-    if (dd.selectedSujetId) {
-      const sujet = getNestedSujet(dd.selectedSujetId);
-      if (sujet) return { type: "sujet", item: sujet };
-    }
-    if (dd.selectedSituationId) {
-      const situation = getNestedSituation(dd.selectedSituationId);
-      if (situation) return { type: "situation", item: situation };
-    }
-    return null;
   }
 
   function updateDrilldownPanel() {
@@ -117,39 +96,22 @@ export function createProjectSubjectDrilldownController(config) {
 
   function openDrilldownFromSituation(situationId) {
     ensureViewUiState();
-    const situation = getNestedSituation(situationId);
-    if (!situation) return;
-    store.situationsView.drilldown.selectedSituationId = situation.id;
-    store.situationsView.drilldown.selectedSujetId = null;
-    store.situationsView.drilldown.selectedAvisId = null;
-    markEntitySeen("situation", situation.id, { source: "drilldown" });
+    const selection = openDrilldownFromSituationSelection(situationId);
+    if (!selection) return;
     openDrilldown();
   }
 
   function openDrilldownFromSujet(sujetId) {
     ensureViewUiState();
-    const sujet = getNestedSujet(sujetId);
-    const situation = getSituationBySujetId(sujetId);
-    if (!sujet) return;
-    store.situationsView.drilldown.selectedSituationId = situation?.id || null;
-    store.situationsView.drilldown.selectedSujetId = sujet.id;
-    store.situationsView.drilldown.selectedAvisId = null;
-    store.situationsView.drilldown.expandedSujets.add(sujet.id);
-    markEntitySeen("sujet", sujet.id, { source: "drilldown" });
+    const selection = openDrilldownFromSujetSelection(sujetId);
+    if (!selection) return;
     openDrilldown();
   }
 
   function openDrilldownFromAvis(avisId) {
     ensureViewUiState();
-    const avis = getNestedAvis(avisId);
-    const sujet = getSujetByAvisId(avisId);
-    const situation = getSituationByAvisId(avisId);
-    if (!avis) return;
-    store.situationsView.drilldown.selectedSituationId = situation?.id || null;
-    store.situationsView.drilldown.selectedSujetId = sujet?.id || null;
-    store.situationsView.drilldown.selectedAvisId = avis.id;
-    if (sujet?.id) store.situationsView.drilldown.expandedSujets.add(sujet.id);
-    markEntitySeen("avis", avis.id, { source: "drilldown" });
+    const selection = openDrilldownFromAvisSelection(avisId);
+    if (!selection) return;
     openDrilldown();
   }
 
