@@ -92,6 +92,24 @@ let subjectsTabResetBound = false;
 let subjectsSupabaseReloadToken = 0;
 const DRAFT_SUBJECT_ID = "__draft_subject__";
 
+const SVG_ISSUE_OPEN = svgIcon("issue-opened");
+const SVG_ISSUE_CLOSED = svgIcon("check-circle");
+const SVG_ISSUE_REOPENED = SVG_ISSUE_OPEN;
+const SVG_AVATAR_HUMAN = svgIcon("avatar-human", {
+  width: 22,
+  height: 22,
+  className: "ui-icon ui-icon--block",
+  style: "display:block"
+});
+const SVG_TL_CLOSED = svgIcon("check-circle", {
+  className: "octicon octicon-check-circle Octicon__StyledOcticon-sc-jtj3m8-0 cdmDIS TimelineRow-module__Octicon__SMhVa"
+});
+const SVG_TL_REOPENED = svgIcon("issue-reopened", {
+  className: "octicon octicon-issue-reopened Octicon__StyledOcticon-sc-jtj3m8-0 cdmDIS TimelineRow-module__Octicon__SMhVa"
+});
+const SVG_COMMENT = svgIcon("comment");
+
+
 const projectSubjectsState = createProjectSubjectsState({ store });
 const {
   ensureViewUiState,
@@ -418,22 +436,6 @@ function showError(message) {
   console.error(message);
 }
 
-const SVG_ISSUE_OPEN = svgIcon("issue-opened");
-const SVG_ISSUE_CLOSED = svgIcon("check-circle");
-const SVG_ISSUE_REOPENED = SVG_ISSUE_OPEN;
-const SVG_AVATAR_HUMAN = svgIcon("avatar-human", {
-  width: 22,
-  height: 22,
-  className: "ui-icon ui-icon--block",
-  style: "display:block"
-});
-const SVG_TL_CLOSED = svgIcon("check-circle", {
-  className: "octicon octicon-check-circle Octicon__StyledOcticon-sc-jtj3m8-0 cdmDIS TimelineRow-module__Octicon__SMhVa"
-});
-const SVG_TL_REOPENED = svgIcon("issue-reopened", {
-  className: "octicon octicon-issue-reopened Octicon__StyledOcticon-sc-jtj3m8-0 cdmDIS TimelineRow-module__Octicon__SMhVa"
-});
-const SVG_COMMENT = svgIcon("comment");
 
 const projectSubjectsLegacyRapso = createProjectSubjectsLegacyRapso({
   store,
