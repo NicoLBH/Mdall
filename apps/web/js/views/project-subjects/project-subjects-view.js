@@ -46,6 +46,7 @@ export function createProjectSubjectsView(deps) {
     getSujetByAvisId,
     getSituationSubjects,
     getFilteredStandaloneSubjects,
+    getFilteredFlatSubjects,
     getCurrentSubjectsStatusFilter,
     getCurrentSubjectsPriorityFilter,
     sujetMatchesStatusFilter,
