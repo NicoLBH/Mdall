@@ -26,18 +26,13 @@ export function createProjectSubjectsThread(config = {}) {
     getActiveSelection,
     getSelectionEntityType,
     getSituationBySujetId,
-    getSituationByAvisId,
-    getSujetByAvisId,
     getNestedSujet,
-    getNestedAvis,
-    getEffectiveAvisVerdict,
     getEffectiveSujetStatus,
     getEffectiveSituationStatus,
     entityDisplayLinkHtml,
     inferAgent,
     normActorName,
-    miniAuthorIconHtml,
-    verdictIconHtml
+    miniAuthorIconHtml
   } = config;
 
   function addComment(entityType, entityId, message, options = {}) {
@@ -73,12 +68,6 @@ export function createProjectSubjectsThread(config = {}) {
     });
   }
 
-  function extractValidatedVerdict(decision) {
-    const d = String(decision || "").toUpperCase();
-    const m = d.match(/^VALIDATED_(F|D|S|HM|PM|SO)$/);
-    return m ? m[1] : null;
-  }
-
   function decisionStatus(decision) {
     const d = String(decision || "").toUpperCase();
     if (d === "CLOSED") return "closed";
@@ -106,12 +95,11 @@ export function createProjectSubjectsThread(config = {}) {
       const prevStatus = decisionStatus(prev?.decision);
       const nextStatus = decisionStatus(nextDecision);
       if ((entityType === "sujet" || entityType === "situation") && nextStatus && nextStatus !== prevStatus) {
-        const targetType = entityType === "sujet" ? "situation" : "situation";
         const parentSituation = entityType === "sujet" ? getSituationBySujetId(entityId) : null;
         const targetId = entityType === "sujet" ? (parentSituation?.id || entityId) : entityId;
         bucket.activities.push({
           ts,
-          entity_type: targetType,
+          entity_type: "situation",
           entity_id: targetId,
           type: "ACTIVITY",
           kind: nextStatus === "closed" ? "issue_closed" : "issue_reopened",
@@ -120,25 +108,6 @@ export function createProjectSubjectsThread(config = {}) {
           message: nextNote,
           meta: entityType === "sujet" ? { problem_id: entityId } : { situation_id: entityId }
         });
-      }
-
-      if (entityType === "avis") {
-        const fromVerdict = extractValidatedVerdict(prev?.decision);
-        const toVerdict = extractValidatedVerdict(nextDecision);
-        if (toVerdict && toVerdict !== fromVerdict) {
-          const parentSujet = getSujetByAvisId(entityId);
-          bucket.activities.push({
-            ts,
-            entity_type: parentSujet?.id ? "sujet" : "avis",
-            entity_id: parentSujet?.id || entityId,
-            type: "ACTIVITY",
-            kind: "avis_verdict_changed",
-            actor,
-            agent,
-            message: nextNote,
-            meta: { avis_id: entityId, from: fromVerdict, to: toVerdict }
-          });
-        }
       }
     });
   }
@@ -158,61 +127,37 @@ export function createProjectSubjectsThread(config = {}) {
     const activities = Array.isArray(bucket?.activities) ? bucket.activities : [];
     const events = [];
 
-    const s = selection.type === "situation" ? selection.item : (selection.type === "sujet" ? getSituationBySujetId(selection.item.id) : getSituationByAvisId(selection.item.id));
-    const p = selection.type === "sujet" ? selection.item : (selection.type === "avis" ? getSujetByAvisId(selection.item.id) : null);
-    const a = selection.type === "avis" ? selection.item : null;
+    const situation = selection.type === "situation"
+      ? selection.item
+      : selection.type === "sujet"
+        ? getSituationBySujetId(selection.item.id)
+        : null;
+    const subject = selection.type === "sujet" ? selection.item : null;
     const rootTs = firstNonEmpty(store.situationsView?.rawResult?.updated_at, store.situationsView?.rawResult?.created_at, nowIso());
 
-    if (a) {
-      if (store.situationsView.tempAvisVerdictFor !== a.id) {
-        store.situationsView.tempAvisVerdictFor = a.id;
-        store.situationsView.tempAvisVerdict = String(getEffectiveAvisVerdict(a.id) || "F").toUpperCase();
-      }
-    } else {
-      store.situationsView.tempAvisVerdictFor = null;
-      store.situationsView.tempAvisVerdict = store.situationsView.tempAvisVerdict || "F";
-    }
-
-    if (s) {
+    if (situation) {
       events.push({
         ts: rootTs,
         actor: "System",
-        agent: inferAgent(s),
+        agent: inferAgent(situation),
         type: "SITUATION",
         entity_type: "situation",
-        entity_id: s.id,
-        message: `${firstNonEmpty(s.title, s.id, "(sans titre)")}
-priority=${firstNonEmpty(s.priority, "")}
-sujets=${(s.sujets || []).length}`
+        entity_id: situation.id,
+        message: `${firstNonEmpty(situation.title, situation.id, "(sans titre)")}
+priority=${firstNonEmpty(situation.priority, "")}
+sujets=${(situation.sujets || []).length}`
       });
     }
-    if (p) {
+    if (subject) {
       events.push({
         ts: rootTs,
         actor: "System",
-        agent: inferAgent(p),
+        agent: inferAgent(subject),
         type: "SUJET",
         entity_type: "sujet",
-        entity_id: p.id,
-        message: `${firstNonEmpty(p.title, p.id, "Non classé")}
-priority=${firstNonEmpty(p.priority, "")}
-avis=${(p.avis || []).length}`
-      });
-    }
-    if (a) {
-      events.push({
-        ts: rootTs,
-        actor: "System",
-        agent: inferAgent(a),
-        type: "AVIS",
-        entity_type: "avis",
-        entity_id: a.id,
-        message: `${firstNonEmpty(a.title, a.id)}
-severity=${firstNonEmpty(a.severity, "")}
-verdict=${firstNonEmpty(a.verdict, "")}
-agent=${inferAgent(a)}
-
-${firstNonEmpty(a.raw?.message, a.raw?.summary, "")}`
+        entity_id: subject.id,
+        message: `${firstNonEmpty(subject.title, subject.id, "Non classé")}
+priority=${firstNonEmpty(subject.priority, "")}`
       });
     }
 
@@ -220,21 +165,16 @@ ${firstNonEmpty(a.raw?.message, a.raw?.summary, "")}`
     const allowedActivities = new Set();
     const entityKey = (type, id) => `${String(type || "").toLowerCase()}:${String(id || "")}`;
 
-    if (a) {
-      allowedComments.add(entityKey("avis", a.id));
-      allowedActivities.add(entityKey("avis", a.id));
-      if (p) allowedActivities.add(entityKey("sujet", p.id));
-    } else if (p) {
-      allowedComments.add(entityKey("sujet", p.id));
-      allowedActivities.add(entityKey("sujet", p.id));
-      if (s) allowedActivities.add(entityKey("situation", s.id));
-    } else if (s) {
-      allowedComments.add(entityKey("situation", s.id));
-      allowedActivities.add(entityKey("situation", s.id));
+    if (subject) {
+      allowedComments.add(entityKey("sujet", subject.id));
+      allowedActivities.add(entityKey("sujet", subject.id));
+      if (situation) allowedActivities.add(entityKey("situation", situation.id));
+    } else if (situation) {
+      allowedComments.add(entityKey("situation", situation.id));
+      allowedActivities.add(entityKey("situation", situation.id));
     }
 
-    const isViewingAvis = !!a;
-    const isViewingSujet = !!p && !a;
+    const isViewingSubject = !!subject;
 
     const humanEvents = [...comments, ...activities].filter((e) => {
       const k = entityKey(e.entity_type, e.entity_id);
@@ -244,22 +184,9 @@ ${firstNonEmpty(a.raw?.message, a.raw?.summary, "")}`
       if (t !== "ACTIVITY") return allowedComments.has(k) || allowedActivities.has(k);
       if (!allowedActivities.has(k)) return false;
 
-      const kind = String(e?.kind || "").toLowerCase();
-      const meta = e?.meta || {};
-
-      if (isViewingAvis) {
-        if (kind === "avis_verdict_changed") return String(meta?.avis_id || "") === String(a.id);
-        if (kind === "issue_closed" || kind === "issue_reopened") {
-          if (meta?.problem_id) return String(meta.problem_id) === String(p?.id || "");
-        }
-        return true;
-      }
-
-      if (isViewingSujet) {
-        if (String(e?.entity_type || "").toLowerCase() === "situation") {
-          if (meta?.problem_id) return String(meta.problem_id) === String(p.id);
-        }
-        return true;
+      if (isViewingSubject && String(e?.entity_type || "").toLowerCase() === "situation") {
+        const meta = e?.meta || {};
+        if (meta?.problem_id) return String(meta.problem_id) === String(subject.id);
       }
 
       return true;
@@ -269,8 +196,7 @@ ${firstNonEmpty(a.raw?.message, a.raw?.summary, "")}`
       const t = String(e?.type || "").toUpperCase();
       if (t === "SITUATION") return 0;
       if (t === "SUJET") return 1;
-      if (t === "AVIS") return 2;
-      return 3;
+      return 2;
     };
 
     return [...events, ...humanEvents].sort((x, y) => {
@@ -336,7 +262,7 @@ ${firstNonEmpty(a.raw?.message, a.raw?.summary, "")}`
           const entity = getEntityByType(entityType, entityId);
           const entityTitle = entity?.title ? `${escapeHtml(entity.title)} ` : "";
           const counts = e?.meta?.counts || {};
-          const descendants = Math.max(0, Number(counts?.sujet || 0) + Number(counts?.avis || 0) + Number(counts?.situation || 0) - 1);
+          const descendants = Math.max(0, Number(counts?.sujet || 0) + Number(counts?.situation || 0) - 1);
 
           if (kind === "review_validated") {
             iconHtml = renderReviewStateIcon("validated", { entityType });
@@ -352,16 +278,6 @@ ${firstNonEmpty(a.raw?.message, a.raw?.summary, "")}`
           targetHtml = entityId
             ? `${entityType} ${entityTitle}${entityDisplayLinkHtml(entityType, entityId)}${descendants > 0 ? ` · ${descendants} descendant(s)` : ""}`
             : "this";
-        } else if (kind === "avis_verdict_changed") {
-          const toV = e?.meta?.to || "";
-          const avisId = e?.meta?.avis_id;
-          const avis = avisId ? getNestedAvis(avisId) : null;
-          const avisTitle = avis?.title ? `${escapeHtml(avis.title)} ` : "";
-          iconHtml = verdictIconHtml(toV);
-          verb = "changed verdict";
-          targetHtml = avisId
-            ? `avis ${avisTitle}${entityDisplayLinkHtml("avis", avisId)} → ${escapeHtml(String(toV || ""))}`
-            : escapeHtml(String(toV || ""));
         } else if (kind === "description_version_initial" || kind === "description_version_saved") {
           iconHtml = `<span class="tl-ico-wrap tl-ico-reopened" aria-hidden="true">${svgIcon("pencil")}</span>`;
           verb = kind === "description_version_initial" ? "archived description" : "saved description";
@@ -419,7 +335,6 @@ ${firstNonEmpty(a.raw?.message, a.raw?.summary, "")}`
 
   function renderIssueStatusAction(selection) {
     if (!selection?.type || !selection?.item?.id) return "";
-    if (selection.type === "avis") return "";
 
     const item = selection.item;
     const issueStatus = selection.type === "sujet"
@@ -479,12 +394,9 @@ ${firstNonEmpty(a.raw?.message, a.raw?.summary, "")}`
     if (!item) return "";
 
     const type = selection.type;
-    const issueStatus =
-      type === "avis"
-        ? "open"
-        : type === "sujet"
-          ? getEffectiveSujetStatus(item.id)
-          : getEffectiveSituationStatus(item.id);
+    const issueStatus = type === "sujet"
+      ? getEffectiveSujetStatus(item.id)
+      : getEffectiveSituationStatus(item.id);
 
     const previewMode = !!store.situationsView.commentPreviewMode;
     const helpMode = !!store.situationsView.helpMode;
@@ -500,7 +412,7 @@ ${firstNonEmpty(a.raw?.message, a.raw?.summary, "")}`
     const actionsHtml = `
       <button class="gh-btn gh-btn--help-mode ${helpMode ? "is-on" : ""}" data-action="toggle-help" type="button">Help</button>
 
-      ${type === "avis" ? "" : issueStatusActionHtml}
+      ${issueStatusActionHtml}
 
       <button class="gh-btn gh-btn--comment" data-action="add-comment" type="button">Comment</button>
     `;
@@ -514,7 +426,7 @@ ${firstNonEmpty(a.raw?.message, a.raw?.summary, "")}`
       previewId: "humanCommentPreview",
       placeholder: helpMode
         ? "Help (éphémère) — décrivez l’écran / l’action souhaitée."
-        : "Réponse humaine (Markdown) — mentionne @rapso pour demander l’avis de l’agent. Ex: « @rapso peux-tu vérifier ce point ? »",
+        : `Réponse humaine (Markdown) sur ce ${type === "sujet" ? "sujet" : "regroupement"} — mentionne @rapso pour solliciter l’agent.`,
       hintHtml,
       actionsHtml
     });
