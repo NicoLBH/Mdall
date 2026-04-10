@@ -76,11 +76,16 @@ export function createProjectSubjectDetailController(config) {
     updateDetailsModal();
   }
 
+  function openSubjectDetails() {
+    return openDetailsModal();
+  }
+
   return {
     renderDetailsTitleWrapHtml,
     renderDetailsHtml,
     updateDetailsModal,
     openDetailsModal,
+    openSubjectDetails,
     closeDetailsModal
   };
 }
