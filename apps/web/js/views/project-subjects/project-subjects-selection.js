@@ -129,6 +129,10 @@ export function createProjectSubjectsSelection({
     return { type: "avis", item: avis };
   }
 
+  function getSelectionEntityType(type) {
+    return type === "sujet" ? "sujet" : type;
+  }
+
   function getScopedSelection(root) {
     if (root?.closest?.("[data-create-subject-form]")) {
       return getDraftSubjectSelection();
@@ -199,6 +203,7 @@ export function createProjectSubjectsSelection({
   return {
     getActiveSelection,
     getDrilldownSelection,
+    getSelectionEntityType,
     getScopedSelection,
     currentDecisionTarget,
     getSelectionFromIds,
