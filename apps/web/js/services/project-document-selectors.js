@@ -1,8 +1,6 @@
 import { resolveDocumentRefs, decorateDocumentWithPhase } from "./project-documents-store.js";
 import { store } from "../store.js";
-import { normalizeReviewState, normalizeVerdict } from "../views/ui/status-badges.js";
-
-const AVIS_VERDICTS = ["F", "S", "D", "HM", "PM", "SO"];
+import { normalizeReviewState } from "../views/ui/status-badges.js";
 
 function normalizeEntityDocumentRefs(entity = {}) {
   return Array.isArray(entity?.document_ref_ids) ? entity.document_ref_ids : [];
@@ -17,6 +15,14 @@ function isOpenStatus(status = "open") {
   return String(status || "open").toLowerCase() !== "closed";
 }
 
+function flattenSubjects(subjects = [], acc = []) {
+  for (const subject of Array.isArray(subjects) ? subjects : []) {
+    acc.push(subject);
+    flattenSubjects(subject?.children, acc);
+  }
+  return acc;
+}
+
 export function getSelectionDocumentRefs(selection) {
   const item = selection?.item || null;
   if (!item) return [];
@@ -25,8 +31,7 @@ export function getSelectionDocumentRefs(selection) {
 
 export function getDocumentStatsMap({
   getSituationStatus,
-  getSujetStatus,
-  getAvisVerdict
+  getSujetStatus
 } = {}) {
   const statsMap = new Map();
   const situations = Array.isArray(store.situationsView?.data) ? store.situationsView.data : [];
@@ -35,15 +40,7 @@ export function getDocumentStatsMap({
     if (!statsMap.has(documentId)) {
       statsMap.set(documentId, {
         openSituations: 0,
-        openSujets: 0,
-        avisVerdicts: {
-          F: 0,
-          S: 0,
-          D: 0,
-          HM: 0,
-          PM: 0,
-          SO: 0
-        }
+        openSujets: 0
       });
     }
 
@@ -69,32 +66,16 @@ export function getDocumentStatsMap({
       }
     }
 
-    for (const sujet of situation.sujets || []) {
-      if (isEntityCounted(sujet)) {
-        const effectiveSujetStatus = typeof getSujetStatus === "function"
-          ? getSujetStatus(sujet.id)
-          : sujet.status;
+    for (const sujet of flattenSubjects(situation?.sujets)) {
+      if (!isEntityCounted(sujet)) continue;
 
-        if (isOpenStatus(effectiveSujetStatus)) {
-          bump(normalizeEntityDocumentRefs(sujet), (stats) => {
-            stats.openSujets += 1;
-          });
-        }
-      }
+      const effectiveSujetStatus = typeof getSujetStatus === "function"
+        ? getSujetStatus(sujet.id)
+        : sujet.status;
 
-      for (const avis of sujet.avis || []) {
-        if (!isEntityCounted(avis)) continue;
-
-        const effectiveVerdict = normalizeVerdict(
-          typeof getAvisVerdict === "function"
-            ? getAvisVerdict(avis.id)
-            : avis.verdict
-        );
-
-        if (!AVIS_VERDICTS.includes(effectiveVerdict)) continue;
-
-        bump(normalizeEntityDocumentRefs(avis), (stats) => {
-          stats.avisVerdicts[effectiveVerdict] += 1;
+      if (isOpenStatus(effectiveSujetStatus)) {
+        bump(normalizeEntityDocumentRefs(sujet), (stats) => {
+          stats.openSujets += 1;
         });
       }
     }
