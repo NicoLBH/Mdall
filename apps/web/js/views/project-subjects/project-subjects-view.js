@@ -936,6 +936,14 @@ function renderFlatAvisRow(avis, sujetId, situationId) {
     </div>
   `;
 }
+function logProjectSubjectsViewDebug(step, payload) {
+  try {
+    console.log(`[subjects:view] ${step}`, payload);
+  } catch {
+    // noop
+  }
+}
+
 function getSubjectsTableDeps() {
   return {
     store,
@@ -1453,7 +1461,21 @@ async function reloadSubjectsFromSupabase(root = getSubjectsCurrentRoot(), optio
   const shouldRerender = options?.rerender !== false;
   const shouldUpdateModal = !!options?.updateModal;
 
+  logProjectSubjectsViewDebug("reloadSubjectsFromSupabase:start", {
+    shouldRerender,
+    shouldUpdateModal,
+    hasTargetRoot: !!targetRoot,
+    currentProjectId: store.currentProjectId || null
+  });
+
   const data = await loadExistingSubjectsForCurrentProject({ force: true });
+
+  logProjectSubjectsViewDebug("reloadSubjectsFromSupabase:loaded", {
+    loadedCount: Array.isArray(data) ? data.length : null,
+    subjectsDataCount: Array.isArray(store.projectSubjectsView?.subjectsData) ? store.projectSubjectsView.subjectsData.length : null,
+    rawSubjectsResultKeys: Object.keys(store.projectSubjectsView?.rawSubjectsResult || {}),
+    sampleSubject: Array.isArray(data) && data.length ? data[0] : null
+  });
 
   if (shouldRerender && targetRoot?.isConnected) {
     rerenderPanels();
@@ -1499,6 +1521,12 @@ function syncSituationsPrimaryScrollSource() {
 }
 
 function rerenderPanels() {
+  logProjectSubjectsViewDebug("rerenderPanels:start", {
+    showTableOnly: !!store.situationsView.showTableOnly,
+    subjectsSubview: String(store.situationsView.subjectsSubview || "subjects"),
+    subjectsDataCount: Array.isArray(store.projectSubjectsView?.subjectsData) ? store.projectSubjectsView.subjectsData.length : 0,
+    rawSubjectsCount: Object.keys(store.projectSubjectsView?.rawSubjectsResult?.subjectsById || {}).length
+  });
   ensureViewUiState();
 
   const filteredSituations = getFilteredSituations();
