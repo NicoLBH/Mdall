@@ -1,4 +1,4 @@
-import { store } from "../store.js";
+import { store, DEFAULT_PROJECT_PHASES } from "../store.js";
 import { ASK_LLM_URL_PROD } from "../constants.js";
 import { PROJECT_TAB_RESELECTED_EVENT } from "./project-header.js";
 import { loadExistingSubjectsForCurrentProject } from "../services/analysis-runner.js";
@@ -4491,9 +4491,46 @@ function formatObjectiveMeta(objective) {
 
 
 
+function buildDefaultObjectives() {
+  const phasesCatalog = Array.isArray(store.projectForm?.phasesCatalog) && store.projectForm.phasesCatalog.length
+    ? store.projectForm.phasesCatalog
+    : DEFAULT_PROJECT_PHASES;
+
+  return phasesCatalog
+    .filter((phase) => phase?.enabled !== false)
+    .sort((left, right) => {
+      const leftOrder = Number(left?.order || left?.phaseOrder || 0) || 0;
+      const rightOrder = Number(right?.order || right?.phaseOrder || 0) || 0;
+      return leftOrder - rightOrder;
+    })
+    .map((phase, index) => ({
+      id: `phase-${String(phase?.code || index + 1).trim().toLowerCase()}`,
+      title: String(phase?.label || phase?.code || `Objectif ${index + 1}`),
+      dueDate: String(phase?.phaseDate || ""),
+      description: "",
+      closed: false,
+      subjectIds: [],
+      subjectsCount: 0,
+      closedSubjectsCount: 0,
+      phaseCode: String(phase?.code || "")
+    }));
+}
+
 function getObjectives() {
   const { bucket } = getRunBucket();
-  return Array.isArray(bucket?.objectives) ? bucket.objectives : [];
+  if (Array.isArray(bucket?.objectives) && bucket.objectives.length) return bucket.objectives;
+
+  const defaultObjectives = buildDefaultObjectives();
+  if (!defaultObjectives.length) return [];
+
+  persistRunBucket((draft) => {
+    if (!Array.isArray(draft.objectives) || !draft.objectives.length) {
+      draft.objectives = defaultObjectives.map((objective) => ({ ...objective }));
+    }
+  });
+
+  const refreshedBucket = getRunBucket().bucket;
+  return Array.isArray(refreshedBucket?.objectives) ? refreshedBucket.objectives : [];
 }
 
 function getObjectiveById(objectiveId) {
