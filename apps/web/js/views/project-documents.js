@@ -23,7 +23,7 @@ import {
 import { addProjectDocument, decorateDocumentWithPhase, getEnabledProjectPhasesCatalog, getProjectDocumentById, getProjectDocumentPreviewUrl, getProjectDocuments, resolveDocumentRefs, setActiveProjectDocument } from "../services/project-documents-store.js";
 import { getDocumentStatsMap } from "../services/project-document-selectors.js";
 import { syncProjectDocumentsFromSupabase } from "../services/project-supabase-sync.js";
-import { getEffectiveAvisVerdict, getEffectiveSituationStatus, getEffectiveSujetStatus } from "./project-situations.js";
+import { getEffectiveSituationStatus, getEffectiveSujetStatus } from "./project-situations.js";
 import { buildSupabaseAuthHeaders, getSupabaseAnonKey, getSupabaseUrl } from "../../assets/js/auth.js";
 
 const SUPABASE_URL = getSupabaseUrl();
@@ -1112,13 +1112,11 @@ function renderDocumentsCountBadge({ iconHtml = "", label = "", count = 0 } = {}
 function renderDocumentStatsCell(doc) {
   const statsMap = getDocumentStatsMap({
     getSituationStatus: getEffectiveSituationStatus,
-    getSujetStatus: getEffectiveSujetStatus,
-    getAvisVerdict: getEffectiveAvisVerdict
+    getSujetStatus: getEffectiveSujetStatus
   });
   const stats = statsMap.get(doc.id) || {
     openSituations: 0,
-    openSujets: 0,
-    avisVerdicts: { F: 0, S: 0, D: 0, HM: 0, PM: 0, SO: 0 }
+    openSujets: 0
   };
 
   return `
@@ -1207,20 +1205,39 @@ function buildReportPreviewItems() {
   const situations = Array.isArray(store.situationsView?.data) ? store.situationsView.data : [];
   const items = [];
 
-  for (const situation of situations) {
-    const includedSituation = shouldIncludeInReport(situation);
-    const includedSujets = [];
+  const hasIncludedDescendant = (subject) => {
+    const children = Array.isArray(subject?.children) ? subject.children : [];
+    return children.some((child) => shouldIncludeInReport(child) || hasIncludedDescendant(child));
+  };
 
-    for (const sujet of situation.sujets || []) {
-      const includedSujet = shouldIncludeInReport(sujet);
-      const includedAvis = (sujet.avis || []).filter((avis) => shouldIncludeInReport(avis));
+  const pushSubjectItems = (subject, depth = 1) => {
+    const includedSubject = shouldIncludeInReport(subject);
+    const childSubjects = Array.isArray(subject?.children) ? subject.children : [];
+    const visibleChildren = childSubjects.filter((child) => shouldIncludeInReport(child) || hasIncludedDescendant(child));
 
-      if (includedSujet || includedAvis.length) {
-        includedSujets.push({ sujet, includedSujet, includedAvis });
-      }
+    if (includedSubject || visibleChildren.length) {
+      items.push({
+        key: `sujet:${subject.id}`,
+        entityType: "sujet",
+        entity: subject,
+        number: subject.id,
+        stateLabel: normalizeWorkflowStatus(getEffectiveSujetStatus(subject.id)),
+        title: subject.title || subject.id,
+        depth
+      });
     }
 
-    if (!includedSituation && !includedSujets.length) continue;
+    for (const child of visibleChildren) {
+      pushSubjectItems(child, Math.min(depth + 1, 2));
+    }
+  };
+
+  for (const situation of situations) {
+    const includedSituation = shouldIncludeInReport(situation);
+    const rootSubjects = Array.isArray(situation?.sujets) ? situation.sujets : [];
+    const visibleRoots = rootSubjects.filter((subject) => shouldIncludeInReport(subject) || hasIncludedDescendant(subject));
+
+    if (!includedSituation && !visibleRoots.length) continue;
 
     items.push({
       key: `situation:${situation.id}`,
@@ -1232,30 +1249,8 @@ function buildReportPreviewItems() {
       depth: 0
     });
 
-    for (const { sujet, includedSujet, includedAvis } of includedSujets) {
-      if (includedSujet || includedAvis.length) {
-        items.push({
-          key: `sujet:${sujet.id}`,
-          entityType: "sujet",
-          entity: sujet,
-          number: sujet.id,
-          stateLabel: normalizeWorkflowStatus(getEffectiveSujetStatus(sujet.id)),
-          title: sujet.title || sujet.id,
-          depth: 1
-        });
-      }
-
-      for (const avis of includedAvis) {
-        items.push({
-          key: `avis:${avis.id}`,
-          entityType: "avis",
-          entity: avis,
-          number: avis.id,
-          stateLabel: getEffectiveAvisVerdict(avis.id),
-          title: avis.title || avis.id,
-          depth: 2
-        });
-      }
+    for (const subject of visibleRoots) {
+      pushSubjectItems(subject, 1);
     }
   }
 
