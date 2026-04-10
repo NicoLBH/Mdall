@@ -78,6 +78,7 @@ import { createProjectSubjectMilestonesController } from "./project-subjects/pro
 import { createProjectSubjectLabelsController } from "./project-subjects/project-subject-labels.js";
 import { createProjectSubjectsSelectors } from "./project-subjects/project-subjects-selectors.js";
 import { createProjectSubjectsState } from "./project-subjects/project-subjects-state.js";
+import { createProjectSubjectsPersistence } from "./project-subjects/project-subjects-persistence.js";
 import {
   HUMAN_STORE_KEY,
   createProjectSubjectsLegacyRapso
@@ -95,6 +96,18 @@ const {
   resetSubjectsViewTransientState,
   getSubjectsTabResetState: getSubjectsTabResetStateBase
 } = projectSubjectsState;
+
+const projectSubjectsPersistence = createProjectSubjectsPersistence({
+  store,
+  firstNonEmpty,
+  humanStoreKey: HUMAN_STORE_KEY
+});
+
+const {
+  currentRunKey,
+  getRunBucket,
+  persistRunBucket
+} = projectSubjectsPersistence;
 
 const subjectsSelectors = createProjectSubjectsSelectors({
   store,
@@ -686,156 +699,6 @@ const DEFAULT_OBJECTIVE_TITLES = [
   "Travaux terminés",
   "Réception prononcée"
 ];
-
-function currentRunKey() {
-  return firstNonEmpty(
-    store.currentProjectId,
-    store.currentProject?.id,
-    store.ui?.runId,
-    store.situationsView?.rawResult?.run_id,
-    store.situationsView?.rawResult?.runId,
-    "default-project"
-  );
-}
-
-function loadHumanStore() {
-  try {
-    const raw = localStorage.getItem(HUMAN_STORE_KEY);
-    if (!raw) return { runs: {} };
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" ? parsed : { runs: {} };
-  } catch {
-    return { runs: {} };
-  }
-}
-
-function saveHumanStore(data) {
-  try {
-    localStorage.setItem(HUMAN_STORE_KEY, JSON.stringify(data));
-  } catch {
-    // no-op
-  }
-}
-
-function getRunBucket() {
-  const all = loadHumanStore();
-  const key = currentRunKey();
-
-  if (!all.runs[key]) {
-    all.runs[key] = {
-      comments: [],
-      activities: [],
-      descriptions: {
-        avis: {},
-        sujet: {},
-        situation: {}
-      },
-      decisions: {
-        avis: {},
-        sujet: {},
-        situation: {}
-      },
-      review: {
-        avis: {},
-        sujet: {},
-        situation: {}
-      },
-      objectives: [],
-      workflow: {
-        sujet_kanban_status: {}
-      },
-      subjectMeta: {
-        sujet: {}
-      },
-      customSubjects: []
-    };
-    saveHumanStore(all);
-  }
-
-  const bucket = all.runs[key];
-  if (!bucket.descriptions) {
-    bucket.descriptions = {
-      avis: {},
-      sujet: {},
-      situation: {}
-    };
-    saveHumanStore(all);
-  }
-  if (!bucket.review) {
-    bucket.review = {
-      avis: {},
-      sujet: {},
-      situation: {}
-    };
-    saveHumanStore(all);
-  }
-  if (!Array.isArray(bucket.objectives)) {
-    bucket.objectives = [];
-    saveHumanStore(all);
-  }
-  if (!bucket.workflow || typeof bucket.workflow !== "object") {
-    bucket.workflow = { sujet_kanban_status: {} };
-    saveHumanStore(all);
-  }
-  if (!bucket.workflow.sujet_kanban_status) {
-    bucket.workflow.sujet_kanban_status = {};
-    saveHumanStore(all);
-  }
-  if (!bucket.subjectMeta || typeof bucket.subjectMeta !== "object") {
-    bucket.subjectMeta = { sujet: {} };
-    saveHumanStore(all);
-  }
-  if (!bucket.subjectMeta.sujet || typeof bucket.subjectMeta.sujet !== "object") {
-    bucket.subjectMeta.sujet = {};
-    saveHumanStore(all);
-  }
-  if (!Array.isArray(bucket.customSubjects)) {
-    bucket.customSubjects = [];
-    saveHumanStore(all);
-  }
-
-  return { all, key, bucket };
-}
-
-function createDefaultObjectives() {
-  return DEFAULT_OBJECTIVE_TITLES.map((title, index) => ({
-    id: `objective-${index + 1}`,
-    title,
-    dueDate: null,
-    description: "",
-    closed: false,
-    closedSubjectsCount: 0,
-    subjectsCount: 2
-  }));
-}
-
-function getObjectives() {
-  const { bucket } = getRunBucket();
-  if (!Array.isArray(bucket.objectives) || !bucket.objectives.length) {
-    const defaults = createDefaultObjectives();
-    persistRunBucket((draft) => {
-      draft.objectives = defaults;
-    });
-    return defaults;
-  }
-  return bucket.objectives.map((objective, index) => ({
-    id: String(objective?.id || `objective-${index + 1}`),
-    title: String(objective?.title || `Objectif ${index + 1}`),
-    dueDate: objective?.dueDate || null,
-    description: String(objective?.description || ""),
-    closed: !!objective?.closed,
-    closedSubjectsCount: Number.isFinite(Number(objective?.closedSubjectsCount)) ? Number(objective.closedSubjectsCount) : 0,
-    subjectsCount: Number.isFinite(Number(objective?.subjectsCount)) ? Number(objective.subjectsCount) : 2,
-    subjectIds: Array.isArray(objective?.subjectIds) ? objective.subjectIds.map((value) => String(value || "")).filter(Boolean) : []
-  }));
-}
-
-function persistRunBucket(mutator) {
-  const { all, key, bucket } = getRunBucket();
-  mutator(bucket);
-  all.runs[key] = bucket;
-  saveHumanStore(all);
-}
 
 function getDraftSubjectSelection() {
   ensureViewUiState();
