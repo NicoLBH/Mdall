@@ -622,6 +622,7 @@ const projectSubjectsView = createProjectSubjectsView({
   DEFAULT_PROJECT_PHASES,
   SVG_ISSUE_OPEN,
   SVG_ISSUE_CLOSED,
+  SVG_AVATAR_HUMAN,
   ensureViewUiState,
   getSubjectsViewState,
   currentRunKey,
