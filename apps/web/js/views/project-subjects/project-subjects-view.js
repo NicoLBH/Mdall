@@ -2069,6 +2069,8 @@ function getObjectiveById(objectiveId) {
     getSubjectSidebarMeta,
     getObjectives,
     getObjectiveById,
+    matchSearch,
+    reloadSubjectsFromSupabase,
     getEffectiveSujetStatus,
     getEffectiveAvisVerdict,
     getEffectiveSituationStatus,
