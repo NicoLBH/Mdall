@@ -79,10 +79,13 @@ export function createProjectSubjectDrilldownController(config) {
   }
 
   function openDrilldown() {
-    ensureViewUiState();
+    const viewState = ensureViewUiState();
     ensureDrilldownDom();
     closeGlobalNav();
-    store.situationsView.drilldown.isOpen = true;
+    viewState.drilldown.isOpen = true;
+    if (store.situationsView?.drilldown && typeof store.situationsView.drilldown === "object") {
+      store.situationsView.drilldown.isOpen = true;
+    }
     const panel = document.getElementById("drilldownPanel");
     setOverlayChromeOpenState(panel, true);
     document.body.classList.add("drilldown-open");
@@ -90,8 +93,11 @@ export function createProjectSubjectDrilldownController(config) {
   }
 
   function closeDrilldown() {
-    ensureViewUiState();
-    store.situationsView.drilldown.isOpen = false;
+    const viewState = ensureViewUiState();
+    viewState.drilldown.isOpen = false;
+    if (store.situationsView?.drilldown && typeof store.situationsView.drilldown === "object") {
+      store.situationsView.drilldown.isOpen = false;
+    }
     const panel = document.getElementById("drilldownPanel");
     setOverlayChromeOpenState(panel, false);
     document.body.classList.remove("drilldown-open");
