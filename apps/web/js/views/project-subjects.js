@@ -75,6 +75,7 @@ import {
 import { createProjectSubjectDetailController } from "./project-subjects/project-subject-detail.js";
 import { createProjectSubjectDrilldownController } from "./project-subjects/project-subject-drilldown.js";
 import { createProjectSubjectMilestonesController } from "./project-subjects/project-subject-milestones.js";
+import { createProjectSubjectsDetailsRenderer } from "./project-subjects/project-subjects-details-renderer.js";
 import { createProjectSubjectLabelsController } from "./project-subjects/project-subject-labels.js";
 import { createProjectSubjectsSelectors } from "./project-subjects/project-subjects-selectors.js";
 import { createProjectSubjectsState } from "./project-subjects/project-subjects-state.js";
@@ -306,9 +307,7 @@ const {
   renderDescriptionCard
 } = projectSubjectsDescription;
 
-const projectSubjectDetail = createProjectSubjectDetailController({
-  store,
-  setOverlayChromeOpenState,
+const projectSubjectsDetailsRenderer = createProjectSubjectsDetailsRenderer({
   getActiveSelection,
   getSelectionEntityType,
   getEffectiveAvisVerdict,
@@ -330,7 +329,21 @@ const projectSubjectDetail = createProjectSubjectDetailController({
   renderCommentBox,
   renderDetailedMetaForSelection,
   renderSubjectMetaControls,
-  renderDocumentRefsCard,
+  renderDocumentRefsCard
+});
+
+const {
+  renderDetailsTitleWrapHtml,
+  renderDetailsHtml
+} = projectSubjectsDetailsRenderer;
+
+const projectSubjectDetail = createProjectSubjectDetailController({
+  store,
+  setOverlayChromeOpenState,
+  getActiveSelection,
+  getSelectionEntityType,
+  renderDetailsHtml,
+  renderDetailsTitleWrapHtml,
   wireDetailsInteractive,
   bindDetailsScroll,
   ensureDrilldownDom: () => projectSubjectDrilldown.ensureDrilldownDom(),
