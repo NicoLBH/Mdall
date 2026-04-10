@@ -756,10 +756,18 @@ export function getEffectiveSituationStatus(...args) {
 ========================================================= */
 
 export function renderProjectSubjects(root) {
-  ensureViewUiState();
+  const subjectsViewState = ensureViewUiState();
   projectSubjectDrilldown.ensureDrilldownDom();
   subjectsCurrentRoot = root;
   bindSubjectsTabReset();
+  subjectsViewState.subjectsSubview = "subjects";
+  subjectsViewState.selectedObjectiveId = "";
+  subjectsViewState.showTableOnly = true;
+  if (!store.situationsView || typeof store.situationsView !== "object") {
+    store.situationsView = {};
+  }
+  store.situationsView.subjectsSubview = "subjects";
+  store.situationsView.selectedObjectiveId = "";
   store.situationsView.showTableOnly = true;
   store.situationsView.displayDepth = "sujets";
 
