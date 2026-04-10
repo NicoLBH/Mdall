@@ -4,7 +4,6 @@ export function createProjectSubjectsDetailsRenderer(config) {
   const {
     getActiveSelection,
     getSelectionEntityType,
-    getEffectiveAvisVerdict,
     getEffectiveSujetStatus,
     getEffectiveSituationStatus,
     getEntityReviewMeta,
@@ -13,10 +12,8 @@ export function createProjectSubjectsDetailsRenderer(config) {
     problemsCountsHtml,
     firstNonEmpty,
     escapeHtml,
-    renderVerboseAvisVerdictPill,
     statePill,
     renderDescriptionCard,
-    getSujetByAvisId,
     renderSubIssuesForSujet,
     renderSubIssuesForSituation,
     renderThreadBlock,
@@ -33,43 +30,26 @@ export function createProjectSubjectsDetailsRenderer(config) {
         const item = currentSelection.item;
         const entityType = getSelectionEntityType(currentSelection.type);
         const titleSeenClass = getReviewTitleStateClass(entityType, item.id);
-        return `
-          <span class="details-title-text ${titleSeenClass}">${escapeHtml(firstNonEmpty(item.title, item.id, "Détail"))}</span>
-        `;
+        return `<span class="details-title-text ${titleSeenClass}">${escapeHtml(firstNonEmpty(item.title, item.id, "Détail"))}</span>`;
       },
       buildIdHtml(currentSelection) {
         return entityDisplayLinkHtml(currentSelection.type, currentSelection.item.id);
       },
       buildExpandedBottomHtml(currentSelection) {
         const item = currentSelection.item;
-        if (currentSelection.type === "avis") {
-          return renderVerboseAvisVerdictPill(getEffectiveAvisVerdict(item.id));
-        }
         if (currentSelection.type === "sujet") {
-          const badgeHtml = statePill(getEffectiveSujetStatus(item.id), {
+          return statePill(getEffectiveSujetStatus(item.id), {
             reviewState: getEntityReviewMeta("sujet", item.id).review_state,
             entityType: "sujet"
           });
-          return `${badgeHtml}`;
         }
-        const badgeHtml = statePill(getEffectiveSituationStatus(item.id), {
+        return `${statePill(getEffectiveSituationStatus(item.id), {
           reviewState: getEntityReviewMeta("situation", item.id).review_state,
           entityType: "situation"
-        });
-        return `${badgeHtml}${problemsCountsHtml(item)}`;
+        })}${problemsCountsHtml(item)}`;
       },
-      buildCompactConfig(currentSelection, { titleTextHtml, idHtml }) {
+      buildCompactConfig(currentSelection, { titleTextHtml }) {
         const item = currentSelection.item;
-        if (currentSelection.type === "avis") {
-          return {
-            variant: "inline",
-            wrapClass: "details-title--compact-avis",
-            bodyClass: "details-title-compact--avis",
-            leftHtml: renderVerboseAvisVerdictPill(getEffectiveAvisVerdict(item.id)),
-            topHtml: titleTextHtml,
-            idHtml
-          };
-        }
         if (currentSelection.type === "sujet") {
           return {
             variant: "grid",
@@ -113,27 +93,14 @@ export function createProjectSubjectsDetailsRenderer(config) {
 
   function renderDetailsBody(selection, options = {}) {
     if (!selection) {
-      return `<div class="emptyState">Sélectionne une situation / un sujet / un avis pour afficher les détails.</div>`;
+      return `<div class="emptyState">Sélectionne une situation ou un sujet pour afficher les détails.</div>`;
     }
 
     const item = selection.item;
-    let descCard = "";
-    let subIssuesHtml = "";
-
-    if (selection.type === "avis") {
-      descCard = renderDescriptionCard(selection);
-      const sujet = getSujetByAvisId(item.id);
-      if (sujet) {
-        subIssuesHtml = renderSubIssuesForSujet(sujet, options.subissuesOptions || {});
-      }
-    } else if (selection.type === "sujet") {
-      descCard = renderDescriptionCard(selection);
-      subIssuesHtml = renderSubIssuesForSujet(item, options.subissuesOptions || {});
-    } else {
-      descCard = renderDescriptionCard(selection);
-      subIssuesHtml = renderSubIssuesForSituation(item, options.subissuesOptions || {});
-    }
-
+    const descCard = renderDescriptionCard(selection);
+    const subIssuesHtml = selection.type === "sujet"
+      ? renderSubIssuesForSujet(item, options.subissuesOptions || {})
+      : renderSubIssuesForSituation(item, options.subissuesOptions || {});
     const threadHtml = renderThreadBlock();
     const commentBoxHtml = renderCommentBox(selection);
     const metaHtml = renderDetailedMetaForSelection(selection);
