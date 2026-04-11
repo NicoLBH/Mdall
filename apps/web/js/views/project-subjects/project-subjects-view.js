@@ -1150,7 +1150,7 @@ function getSubjectKanbanMenuEntries(subjectId, situationId, query = "") {
     .filter((status) => matchSearch([status.label, status.hint, status.key], normalizedQuery))
     .map((status) => ({
       key: status.key,
-      isActive: String(store.situationsView.subjectKanbanDropdown?.activeKey || "") === status.key,
+      isActive: String(getSubjectsViewState().subjectKanbanDropdown?.activeKey || "") === status.key,
       isSelected: getSujetKanbanStatus(subjectId, situationId) === status.key,
       iconHtml: `
         <span class="subject-kanban-menu__iconset" aria-hidden="true">
@@ -1458,19 +1458,21 @@ function syncCommentPreview(root) {
 
 
 function closeSubjectMetaDropdown() {
-  if (store.situationsView.subjectMetaDropdown) {
-    store.situationsView.subjectMetaDropdown.field = null;
-    store.situationsView.subjectMetaDropdown.query = "";
-    store.situationsView.subjectMetaDropdown.activeKey = "";
+  const dropdown = getSubjectsViewState().subjectMetaDropdown;
+  if (dropdown) {
+    dropdown.field = null;
+    dropdown.query = "";
+    dropdown.activeKey = "";
   }
 }
 
 function closeSubjectKanbanDropdown() {
-  if (store.situationsView.subjectKanbanDropdown) {
-    store.situationsView.subjectKanbanDropdown.subjectId = "";
-    store.situationsView.subjectKanbanDropdown.situationId = "";
-    store.situationsView.subjectKanbanDropdown.query = "";
-    store.situationsView.subjectKanbanDropdown.activeKey = "";
+  const dropdown = getSubjectsViewState().subjectKanbanDropdown;
+  if (dropdown) {
+    dropdown.subjectId = "";
+    dropdown.situationId = "";
+    dropdown.query = "";
+    dropdown.activeKey = "";
   }
 }
 
@@ -1483,15 +1485,15 @@ function getSubjectMetaMenuEntries(subject, field) {
 function setSubjectMetaActiveEntry(subject, field, direction = 1) {
   const entries = getSubjectMetaMenuEntries(subject, field);
   if (!entries.length) {
-    store.situationsView.subjectMetaDropdown.activeKey = "";
+    getSubjectsViewState().subjectMetaDropdown.activeKey = "";
     return;
   }
-  const currentKey = String(store.situationsView.subjectMetaDropdown.activeKey || "");
+  const currentKey = String(getSubjectsViewState().subjectMetaDropdown.activeKey || "");
   const currentIndex = entries.findIndex((entry) => String(entry?.key || "") === currentKey);
   const nextIndex = currentIndex >= 0
     ? (currentIndex + direction + entries.length) % entries.length
     : 0;
-  store.situationsView.subjectMetaDropdown.activeKey = String(entries[nextIndex]?.key || "");
+  getSubjectsViewState().subjectMetaDropdown.activeKey = String(entries[nextIndex]?.key || "");
 }
 
 function ensureSubjectMetaDropdownHost() {
@@ -1513,8 +1515,8 @@ function getSubjectMetaScopeRoot() {
 
 function renderSubjectMetaDropdownHost(root) {
   const host = ensureSubjectMetaDropdownHost();
-  const field = String(store.situationsView.subjectMetaDropdown?.field || "");
-  const kanbanDropdown = store.situationsView.subjectKanbanDropdown || {};
+  const field = String(getSubjectsViewState().subjectMetaDropdown?.field || "");
+  const kanbanDropdown = getSubjectsViewState().subjectKanbanDropdown || {};
   const selection = getScopedSelection(root);
   if (selection?.type !== "sujet") {
     host.innerHTML = "";
@@ -1559,8 +1561,8 @@ function focusSubjectKanbanSearch(subjectId, situationId) {
 }
 
 function syncSubjectMetaDropdownPosition(root) {
-  const field = String(store.situationsView.subjectMetaDropdown?.field || "");
-  const kanbanDropdown = store.situationsView.subjectKanbanDropdown || {};
+  const field = String(getSubjectsViewState().subjectMetaDropdown?.field || "");
+  const kanbanDropdown = getSubjectsViewState().subjectKanbanDropdown || {};
   const host = ensureSubjectMetaDropdownHost();
   let anchorSelector = "";
   if (field) {
