@@ -1417,10 +1417,12 @@ function rerenderPanels() {
 
 function rerenderScope(root) {
   rerenderPanels();
-  if (root?.closest?.("#detailsModal") && store.situationsView.detailsModalOpen) {
+  const detailsBody = document.getElementById("detailsBodyModal");
+  const drilldownBody = document.getElementById("drilldownBody");
+  if (root?.closest?.("#detailsModal") && detailsBody) {
     getProjectSubjectDetail().updateDetailsModal();
   }
-  if (root?.closest?.("#drilldownPanel") && store.situationsView.drilldown?.isOpen) {
+  if (root?.closest?.("#drilldownPanel") && drilldownBody) {
     getProjectSubjectDrilldown().updateDrilldownPanel();
   }
 }
@@ -1507,10 +1509,17 @@ function ensureSubjectMetaDropdownHost() {
 }
 
 function getSubjectMetaScopeRoot() {
-  if (store.situationsView.createSubjectForm?.isOpen) return document.querySelector("[data-create-subject-form]");
-  if (store.situationsView.drilldown?.isOpen) return document.getElementById("drilldownBody");
-  if (store.situationsView.detailsModalOpen) return document.getElementById("detailsBodyModal");
-  return document.getElementById("situationsDetailsHost");
+  const viewState = getSubjectsViewState();
+  const createSubjectFormRoot = document.querySelector("[data-create-subject-form]");
+  if (viewState.createSubjectForm?.isOpen && createSubjectFormRoot) return createSubjectFormRoot;
+
+  const drilldownBody = document.getElementById("drilldownBody");
+  if (viewState.drilldown?.isOpen && drilldownBody) return drilldownBody;
+
+  const detailsBody = document.getElementById("detailsBodyModal");
+  if (viewState.detailsModalOpen && detailsBody) return detailsBody;
+
+  return document.getElementById("situationsDetailsHost") || detailsBody || drilldownBody || createSubjectFormRoot || document;
 }
 
 function renderSubjectMetaDropdownHost(root) {
@@ -1540,8 +1549,8 @@ function renderSubjectMetaDropdownHost(root) {
 
 function rerenderSubjectMetaScopes() {
   rerenderPanels();
-  if (store.situationsView.detailsModalOpen) getProjectSubjectDetail().updateDetailsModal();
-  if (store.situationsView.drilldown?.isOpen) getProjectSubjectDrilldown().updateDrilldownPanel();
+  if (document.getElementById("detailsBodyModal")) getProjectSubjectDetail().updateDetailsModal();
+  if (document.getElementById("drilldownBody")) getProjectSubjectDrilldown().updateDrilldownPanel();
 }
 
 function focusSubjectMetaSearch(root, field) {
@@ -1576,8 +1585,18 @@ function syncSubjectMetaDropdownPosition(root) {
   }
   requestAnimationFrame(() => {
     const scopeRoot = root || getSubjectMetaScopeRoot();
-    const anchor = scopeRoot?.querySelector?.(anchorSelector);
     const dropdown = host.querySelector(".subject-meta-dropdown");
+    const candidateRoots = [
+      scopeRoot,
+      root,
+      document.getElementById("detailsBodyModal"),
+      document.getElementById("drilldownBody"),
+      document.querySelector("[data-create-subject-form]"),
+      document.getElementById("situationsDetailsHost")
+    ].filter(Boolean);
+    const anchor = candidateRoots
+      .map((candidateRoot) => candidateRoot?.querySelector?.(anchorSelector))
+      .find(Boolean);
     if (!anchor || !dropdown) {
       host.innerHTML = "";
       host.setAttribute("aria-hidden", "true");
