@@ -6,7 +6,8 @@ export function createProjectSituationsEvents({
   rerender,
   refreshSituationsData,
   createSituationRecord,
-  setSelectedSituationId
+  setSelectedSituationId,
+  loadSituationSelection
 }) {
   function openCreateModal(root) {
     uiState.createModalOpen = true;
@@ -57,10 +58,13 @@ export function createProjectSituationsEvents({
     }
 
     root.querySelectorAll("button[data-open-situation]").forEach((node) => {
-      node.addEventListener("click", () => {
+      node.addEventListener("click", async () => {
         const situationId = String(node.getAttribute("data-open-situation") || "").trim();
         if (!situationId) return;
         setSelectedSituationId(situationId);
+        const loadingPromise = loadSituationSelection(situationId);
+        rerender(root);
+        await loadingPromise;
         rerender(root);
       });
     });
