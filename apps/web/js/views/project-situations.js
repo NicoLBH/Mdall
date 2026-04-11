@@ -17,6 +17,7 @@ import { createProjectSituationsEvents } from "./project-situations/project-situ
 import { createProjectSituationsReviewState } from "./project-situations/project-situations-review-state.js";
 import { createProjectSituationsThread } from "./project-situations/project-situations-thread.js";
 import { createProjectSituationsKanbanView } from "./project-situations/project-situations-view-kanban.js";
+import { renderGlobalHeader } from "./global-header.js";
 
 export { getEffectiveSujetStatus, getEffectiveSituationStatus } from "./project-subjects.js";
 import {
@@ -96,11 +97,10 @@ const kanbanView = createProjectSituationsKanbanView({
   }
 });
 
-function syncSituationsToolbar(root = document) {
+function syncSituationsToolbar() {
   const toolbarHost = document.getElementById("situationsToolbarHost");
   if (!toolbarHost) return;
-  toolbarHost.innerHTML = renderProjectSituationsRunbar();
-  bindProjectSituationsRunbar(root || toolbarHost);
+  toolbarHost.innerHTML = "";
 }
 
 function parseCsvList(value) {
@@ -142,11 +142,31 @@ function buildCreateSituationPayload() {
   };
 }
 
+function syncProjectHeader(root) {
+  const selectedSituationId = String(store.situationsView?.selectedSituationId || "").trim();
+  const selectedSituation = getSituationById(selectedSituationId);
+
+  setProjectViewHeader({
+    contextLabel: "Situations",
+    variant: "situations",
+    compactLabel: "Situations",
+    compactLabelSuffix: selectedSituation ? String(selectedSituation.title || "Situation") : "",
+    onCompactLabelClick: selectedSituation
+      ? () => {
+          setSelectedSituationId(null);
+          rerender(root);
+        }
+      : null
+  });
+}
+
 function rerender(root) {
   if (!root || !document.body.contains(root)) return;
   root.className = "project-shell__content";
+  syncProjectHeader(root);
+  renderGlobalHeader();
   root.innerHTML = renderPage();
-  syncSituationsToolbar(root);
+  syncSituationsToolbar();
   registerProjectPrimaryScrollSource(document.getElementById("projectSituationsScroll"));
   bindEvents(root);
   bindViewEvents(root);
@@ -182,11 +202,6 @@ const { bindEvents } = createProjectSituationsEvents({
 });
 
 export function renderProjectSituations(root) {
-  setProjectViewHeader({
-    contextLabel: "Situations",
-    variant: "situations"
-  });
-
   rerender(root);
   refreshSituationsData(root, { forceSubjects: false }).catch(() => undefined);
 }
