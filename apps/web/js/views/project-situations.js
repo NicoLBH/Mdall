@@ -202,6 +202,12 @@ const { bindEvents } = createProjectSituationsEvents({
 });
 
 export function renderProjectSituations(root) {
+  if (store.situationsView && typeof store.situationsView === "object") {
+    store.situationsView.selectedSituationId = null;
+  }
+  uiState.selectedSituationLoading = false;
+  uiState.selectedSituationError = "";
+  uiState.selectedSituationSubjects = [];
   rerender(root);
   refreshSituationsData(root, { forceSubjects: false }).catch(() => undefined);
 }
