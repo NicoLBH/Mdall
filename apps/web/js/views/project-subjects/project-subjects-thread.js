@@ -1,3 +1,4 @@
+import { getAuthorIdentity } from "../ui/author-identity.js";
 export function createProjectSubjectsThread(config = {}) {
   const {
     store,
@@ -216,27 +217,40 @@ priority=${firstNonEmpty(subject.priority, "")}`
 
       if (type === "COMMENT") {
         const agent = String(e?.agent || "").toLowerCase();
-        const isHuman = agent === "human" || !agent;
-        const isRapso = !isHuman && agent === "specialist_ps";
-        const displayName = isRapso ? "Agent specialist_ps" : normActorName(e?.actor, agent);
-        const avatarInitial = isRapso ? "AS" : ((agent[0] || "S").toUpperCase());
+        const isRapso = agent === "specialist_ps";
+        const identity = isRapso
+          ? { displayName: "Agent specialist_ps", avatarType: "agent", avatarHtml: "", avatarInitial: "AS" }
+          : getAuthorIdentity({
+              author: e?.actor,
+              agent,
+              currentUserAvatar: store?.user?.avatar,
+              humanAvatarHtml: SVG_AVATAR_HUMAN,
+              fallbackName: "System"
+            });
         const tsHtml = e?.ts ? `<div class="mono-small">${escapeHtml(fmtTs(e.ts))}</div>` : "";
 
         return renderMessageThreadComment({
           idx,
-          author: displayName,
+          author: identity.displayName,
           tsHtml,
           bodyHtml: mdToHtml(e?.message || ""),
-          avatarType: isHuman ? "human" : "agent",
-          avatarHtml: isHuman ? SVG_AVATAR_HUMAN : "",
-          avatarInitial
+          avatarType: identity.avatarType,
+          avatarHtml: identity.avatarHtml,
+          avatarInitial: identity.avatarInitial
         });
       }
 
       if (type === "ACTIVITY") {
         const kind = String(e?.kind || "").toLowerCase();
         const agent = e?.agent || "system";
-        const displayName = normActorName(e?.actor, agent);
+        const activityIdentity = getAuthorIdentity({
+          author: e?.actor,
+          agent,
+          currentUserAvatar: store?.user?.avatar,
+          humanAvatarHtml: SVG_AVATAR_HUMAN,
+          fallbackName: "System"
+        });
+        const displayName = activityIdentity.displayName;
         const ts = fmtTs(e?.ts || "");
         let iconHtml = `<span class="tl-ico tl-ico--muted" aria-hidden="true"></span>`;
         let verb = "updated";
@@ -294,7 +308,9 @@ priority=${firstNonEmpty(subject.priority, "")}`
         return renderMessageThreadActivity({
           idx,
           iconHtml,
-          authorIconHtml: miniAuthorIconHtml(agent),
+          authorIconHtml: activityIdentity.avatarHtml
+            ? `<span class="tl-author tl-author--custom" aria-hidden="true">${activityIdentity.avatarHtml}</span>`
+            : miniAuthorIconHtml(agent),
           textHtml: `
             <span class="tl-author-name">${escapeHtml(displayName)}</span>
             <span class="mono-small"> ${escapeHtml(verb)} ${targetHtml || ""} </span>
@@ -315,7 +331,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
         `,
         headHtml: `
           <div class="mono">
-            <span>${escapeHtml(e.actor || "System")}</span>
+            <span>${escapeHtml(getAuthorIdentity({ author: e.actor, agent: e.agent, fallbackName: "System" }).displayName)}</span>
             <span> attached this to </span>
             <span>${escapeHtml(e.entity_type || "")} n° ${entityDisplayLinkHtml(e.entity_type, e.entity_id)}</span>
             <span>·</span>
@@ -419,7 +435,13 @@ priority=${firstNonEmpty(subject.priority, "")}`
 
     return renderCommentComposer({
       title: "Add a comment",
-      avatarHtml: SVG_AVATAR_HUMAN,
+      avatarHtml: getAuthorIdentity({
+        author: store?.user?.name,
+        agent: "human",
+        currentUserAvatar: store?.user?.avatar,
+        humanAvatarHtml: SVG_AVATAR_HUMAN,
+        fallbackName: "Human"
+      }).avatarHtml,
       previewMode,
       helpMode,
       textareaId: "humanCommentBox",
