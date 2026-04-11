@@ -14,6 +14,7 @@ const shellState = {
   compactTabLabelSuffixEl: null,
   compactTabCustomLabel: "",
   compactTabCustomSuffix: "",
+  compactTabPrimaryAction: null,
   primaryScrollSourceEl: null,
   cleanupScrollSource: null,
   cleanupWindow: null
@@ -47,6 +48,32 @@ function getViewHeaderEl() {
   return shellState.viewHeaderHostEl?.querySelector(".project-view-header") || null;
 }
 
+function syncCompactPrimaryAction() {
+  const primaryEl = shellState.compactTabLabelPrimaryEl;
+  if (!primaryEl) return;
+
+  primaryEl.onclick = null;
+  primaryEl.onkeydown = null;
+  primaryEl.classList.remove("is-clickable");
+  primaryEl.removeAttribute("role");
+  primaryEl.removeAttribute("tabindex");
+
+  if (typeof shellState.compactTabPrimaryAction !== "function") return;
+
+  primaryEl.classList.add("is-clickable");
+  primaryEl.setAttribute("role", "button");
+  primaryEl.setAttribute("tabindex", "0");
+  primaryEl.onclick = (event) => {
+    event.preventDefault();
+    shellState.compactTabPrimaryAction?.();
+  };
+  primaryEl.onkeydown = (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    shellState.compactTabPrimaryAction?.();
+  };
+}
+
 function syncCompactTabLabel() {
   const primaryLabel = String(shellState.compactTabCustomLabel || getTabLabel(shellState.tab) || "").trim();
   const suffixLabel = String(shellState.compactTabCustomSuffix || "").trim();
@@ -68,6 +95,7 @@ function syncCompactTabLabel() {
   }
 
   shellState.compactTabHostEl?.classList.toggle("is-empty", !(primaryLabel || suffixLabel));
+  syncCompactPrimaryAction();
 }
 
 function applyCompactState(isCompact) {
@@ -172,6 +200,7 @@ export function setProjectViewHeader(config = {}) {
 
   shellState.compactTabCustomLabel = String(config.compactLabel || config.contextLabel || "").trim();
   shellState.compactTabCustomSuffix = String(config.compactLabelSuffix || "").trim();
+  shellState.compactTabPrimaryAction = typeof config.onCompactLabelClick === "function" ? config.onCompactLabelClick : null;
 
   shellState.viewHeaderHostEl.innerHTML = renderProjectViewHeader({
     contextLabel: config.contextLabel || getTabLabel(shellState.tab),
@@ -252,4 +281,5 @@ export function unmountProjectShellChrome() {
   shellState.compactTabLabelSuffixEl = null;
   shellState.compactTabCustomLabel = "";
   shellState.compactTabCustomSuffix = "";
+  shellState.compactTabPrimaryAction = null;
 }
