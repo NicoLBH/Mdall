@@ -2374,6 +2374,10 @@ body.drilldown-open .drilldown__inner,
   overflow:auto;
 }
 
+.drilldown--situation-kanban .drilldown__inner{
+  width:min(66.6667vw, 1440px);
+}
+
 /* subissues-counts--problems icon */
 .subissues-counts--problems .subissues-problems-icon {
   display: inline-flex;
@@ -8046,12 +8050,17 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   width:100%;
   max-width:none;
   padding-inline:0;
+  display:flex;
+  flex-direction:column;
 }
 
 .gh-panel--details-situation-kanban{
   border:none;
   background:transparent;
   box-shadow:none;
+  display:flex;
+  flex-direction:column;
+  min-height:calc(100vh - 180px);
 }
 
 .gh-panel--details-situation-kanban > .gh-panel__head{
@@ -8060,14 +8069,17 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
 
 .gh-panel--details-situation-kanban > .details-body{
   padding-inline:0;
+  flex:1 1 auto;
+  display:flex;
 }
 
 .situation-kanban{
   display:flex;
-  flex:auto;
+  align-items:stretch;
+  flex:1 1 auto;
   width:max-content;
   min-width:100%;
-  min-height:0;
+  min-height:100%;
   gap:12px;
   padding:8px 16px 16px;
 }
@@ -8076,19 +8088,19 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   min-width:320px;
   width:320px;
   background:var(--bgAssistPanel);
-  border:1px solid var(--borderColor-default, #30363d);
+  border:none;
   border-radius:12px;
   padding:8px;
   display:flex;
   flex-direction:column;
   gap:12px;
-  min-height:380px;
-  height:100%;
+  min-height:100%;
+  height:auto;
+  align-self:stretch;
   overflow:hidden;
 }
 
 .situation-kanban__col.is-drop-target{
-  border-color:var(--fgColor-accent, #2f81f7);
   box-shadow:0 0 0 1px var(--fgColor-accent, #2f81f7) inset;
 }
 
@@ -8158,6 +8170,7 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   gap:8px;
   min-height:220px;
   height:100%;
+  flex:1 1 auto;
   overflow-y:auto;
   overflow-x:hidden;
   padding-bottom:8px;
@@ -8246,21 +8259,9 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
 }
 
 .situation-kanban-card__title{
-  appearance:none;
-  border:none;
-  background:transparent;
-  padding:0;
-  margin:0;
-  text-align:left;
   font-size:13px;
   font-weight:500;
   line-height:1.45;
-  color:var(--fgColor-default, #e6edf3);
-  cursor:pointer;
-}
-
-.situation-kanban-card__title:hover{
-  color:var(--fgColor-accent, #2f81f7);
 }
 
 .situation-kanban-card__progress{
@@ -8293,7 +8294,6 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   border-radius:inherit;
   background:rgb(137, 87, 229);
 }
-
 
 .project-table-toolbar__title{
   font-size:20px;
