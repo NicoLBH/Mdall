@@ -153,9 +153,6 @@ function syncSituationsStore(projectId, situations) {
   };
   store.situationsView.projectScopeId = normalizedProjectScopeId;
   store.situationsView.page = 1;
-  if (!store.situationsView.selectedSituationId && normalizedSituations[0]?.id) {
-    store.situationsView.selectedSituationId = normalizedSituations[0].id;
-  }
   return normalizedSituations;
 }
 
