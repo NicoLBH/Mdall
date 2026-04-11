@@ -150,7 +150,9 @@ export function createProjectSituationsKanbanView({
 
   function bindKanbanEvents(root) {
     root.querySelectorAll("[data-open-situation-subject]").forEach((node) => {
-      node.addEventListener("click", () => {
+      node.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
         const subjectId = String(node.getAttribute("data-open-situation-subject") || "").trim();
         if (!subjectId) return;
         openSubjectDrilldown(subjectId, { variant: "situation-kanban" });
