@@ -6,9 +6,10 @@ import { loadFlatSubjectsForCurrentProject } from "../services/project-subjects-
 import {
   loadSituationsForCurrentProject,
   createSituation,
+  updateSituation,
   loadSubjectsForSituation
 } from "../services/project-situations-supabase.js";
-import { createProjectSituationsState, getDefaultCreateForm } from "./project-situations/project-situations-state.js";
+import { createProjectSituationsState, getDefaultCreateForm, getSituationEditForm } from "./project-situations/project-situations-state.js";
 import { createProjectSituationsSelectors } from "./project-situations/project-situations-selectors.js";
 import { createProjectSituationsSelection } from "./project-situations/project-situations-selection.js";
 import { createProjectSituationsPersistence } from "./project-situations/project-situations-persistence.js";
@@ -47,7 +48,8 @@ const {
   getSituationById,
   loadSituationSelection,
   refreshSituationsData: refreshSituationsDataInternal,
-  createSituationRecord
+  createSituationRecord,
+  updateSituationRecord
 } = createProjectSituationsPersistence({
   store,
   uiState,
@@ -55,7 +57,8 @@ const {
   loadFlatSubjectsForCurrentProject,
   loadSituationsForCurrentProject,
   loadSubjectsForSituation,
-  createSituation
+  createSituation,
+  updateSituation
 });
 
 const {
@@ -77,6 +80,7 @@ const {
   store,
   uiState,
   getDefaultCreateForm,
+  getSituationEditForm,
   normalizeSituationMode,
   renderSituationsTable,
   getSituationById,
@@ -187,6 +191,9 @@ function bindSituationsTabReset() {
     uiState.createModalOpen = false;
     uiState.createSubmitting = false;
     uiState.createError = "";
+    uiState.editPanelOpen = false;
+    uiState.editSubmitting = false;
+    uiState.editError = "";
     rerender(currentSituationsRoot);
   });
 }
@@ -224,14 +231,19 @@ async function refreshSituationsData(root, { forceSubjects = false } = {}) {
 }
 
 const { bindEvents } = createProjectSituationsEvents({
+  store,
   uiState,
   getDefaultCreateForm,
+  getSituationEditForm,
   normalizeSituationMode,
   buildCreateSituationPayload,
   rerender,
   refreshSituationsData,
   createSituationRecord,
+  updateSituationRecord,
   setSelectedSituationId,
+  getSituationById,
+  getSituationEditForm,
   loadSituationSelection
 });
 
