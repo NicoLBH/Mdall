@@ -1,3 +1,4 @@
+import { getAuthorIdentity } from "../ui/author-identity.js";
 export function createProjectSubjectsDescription(config = {}) {
   const {
     store,
@@ -135,9 +136,15 @@ export function createProjectSubjectsDescription(config = {}) {
     const entityId = selection.item.id;
     const description = getEntityDescriptionState(selection);
     const editing = isEditingDescription(selection);
-    const author = String(description.author || "system");
-    const isHuman = String(description.agent || "").toLowerCase() === "human" || description.avatar_type === "human";
-    const authorHtml = `<div class="gh-comment-author mono">${escapeHtml(author)}</div>`;
+    const identity = getAuthorIdentity({
+      author: description.author || "system",
+      agent: description.agent || description.avatar_type || "system",
+      currentUserAvatar: store?.user?.avatar,
+      humanAvatarHtml: SVG_AVATAR_HUMAN,
+      fallbackName: "System"
+    });
+    const isHuman = identity.isHuman;
+    const authorHtml = `<div class="gh-comment-author mono">${escapeHtml(identity.displayName)}</div>`;
     const editButtonHtml = `
       <button class="icon-btn icon-btn--sm gh-comment-edit-btn" data-action="edit-description" type="button" aria-label="Modifier la description" title="Modifier la description">
         ${svgIcon("pencil")}
@@ -165,9 +172,9 @@ export function createProjectSubjectsDescription(config = {}) {
 
     return `
       <div class="gh-comment gh-comment--description">
-        ${isHuman
-          ? `<div class="gh-avatar gh-avatar--human" aria-hidden="true">${SVG_AVATAR_HUMAN}</div>`
-          : `<div class="gh-avatar" aria-hidden="true"><span class="gh-avatar-initial">${escapeHtml(description.avatar_initial || "S")}</span></div>`}
+        ${identity.avatarHtml
+          ? `<div class="gh-avatar ${identity.avatarType === "human" ? "gh-avatar--human" : ""}" aria-hidden="true">${identity.avatarHtml}</div>`
+          : `<div class="gh-avatar" aria-hidden="true"><span class="gh-avatar-initial">${escapeHtml(identity.avatarInitial || description.avatar_initial || "S")}</span></div>`}
         <div class="gh-comment-box">
           ${headerHtml}
           ${bodyHtml}
