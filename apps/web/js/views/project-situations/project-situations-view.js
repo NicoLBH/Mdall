@@ -44,7 +44,7 @@ export function createProjectSituationsView({
 
     if (!selectedSituation) {
       return `
-        <section class="gh-panel gh-panel--details" aria-label="Situation sélectionnée">
+        <section class="gh-panel gh-panel--details gh-panel--details-situation-kanban" aria-label="Situation sélectionnée">
           <div class="gh-panel__head gh-panel__head--tight">Aucune situation sélectionnée</div>
           <div class="details-body situation-kanban-modal-detail">Sélectionne une situation dans le tableau pour ouvrir son détail.</div>
         </section>
@@ -61,7 +61,7 @@ export function createProjectSituationsView({
     });
 
     return `
-      <section class="gh-panel gh-panel--details" aria-label="Détail de situation">
+      <section class="gh-panel gh-panel--details gh-panel--details-situation-kanban" aria-label="Détail de situation">
         <div class="gh-panel__head gh-panel__head--tight">
           <div class="project-situation-detail-head">
             <div class="project-situation-detail-head__main">
@@ -162,7 +162,7 @@ export function createProjectSituationsView({
     return `
       <section class="project-simple-page project-simple-page--settings">
         <div class="project-simple-scroll" id="projectSituationsScroll">
-          <div class="settings-content project-page-shell project-page-shell--content">
+          <div class="settings-content project-page-shell project-page-shell--content${hasSelectedSituation ? " project-page-shell--situation-kanban" : ""}">
             ${hasSelectedSituation
               ? `${uiState.editPanelOpen ? renderEditSituationPanel() : renderSelectedSituationDetails()}`
               : `
