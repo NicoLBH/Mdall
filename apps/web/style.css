@@ -10799,3 +10799,123 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
     flex-wrap:wrap;
   }
 }
+
+.project-situation-detail-head{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  width:100%;
+}
+
+.project-situation-title-row{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:12px;
+  flex-wrap:wrap;
+}
+
+.project-situation-title-row__group{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  max-width:100%;
+}
+
+.project-situation-title-row__title{
+  margin:0;
+  font-size:32px;
+  line-height:1.2;
+  font-weight:600;
+}
+
+.project-situation-title-row__edit{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:32px;
+  height:32px;
+  border:0;
+  border-radius:8px;
+  background:transparent;
+  color:var(--muted);
+  opacity:0;
+  pointer-events:none;
+  transition:background-color .16s ease, color .16s ease, opacity .16s ease;
+}
+
+.project-situation-title-row__group:hover .project-situation-title-row__edit,
+.project-situation-title-row__edit:focus-visible{
+  opacity:1;
+  pointer-events:auto;
+}
+
+.project-situation-title-row__edit:hover,
+.project-situation-title-row__edit:focus-visible{
+  background:rgba(110,118,129,.18);
+  color:var(--text);
+}
+
+.project-situation-detail-head__meta{
+  display:flex;
+  gap:8px;
+  align-items:center;
+  flex-wrap:wrap;
+}
+
+.project-situation-detail-head__description{
+  max-width:860px;
+}
+
+.settings-shell--situation-edit{
+  padding-top:4px;
+}
+
+.project-situation-edit{
+  display:flex;
+  flex-direction:column;
+  gap:16px;
+}
+
+.project-situation-edit__header{
+  display:flex;
+  align-items:center;
+}
+
+.project-situation-edit__back{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  border:0;
+  background:transparent;
+  color:var(--text);
+  font-size:20px;
+  font-weight:600;
+  padding:0;
+}
+
+.project-situation-edit__back-icon{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:28px;
+  height:28px;
+  border-radius:8px;
+}
+
+.project-situation-edit__back:hover .project-situation-edit__back-icon,
+.project-situation-edit__back:focus-visible .project-situation-edit__back-icon{
+  background:rgba(110,118,129,.18);
+}
+
+.project-situation-edit__panel .details-body{
+  padding:16px;
+}
+
+.project-situation-edit__body{
+  max-width:720px;
+}
+
+.project-lot-modal__radio--readonly{
+  opacity:.78;
+}
