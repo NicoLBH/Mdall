@@ -11,6 +11,8 @@ import {
   loadSubjectsForSituation
 } from "../services/project-situations-supabase.js";
 
+export { getEffectiveSujetStatus, getEffectiveSituationStatus } from "./project-subjects.js";
+
 const situationsUiState = {
   loading: false,
   error: "",
