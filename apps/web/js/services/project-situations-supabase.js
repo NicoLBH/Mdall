@@ -5,6 +5,14 @@ import { resolveCurrentBackendProjectId } from "./project-supabase-sync.js";
 const SUPABASE_URL = getSupabaseUrl();
 const FRONT_PROJECT_MAP_STORAGE_KEY = "mdall.supabaseProjectMap.v1";
 
+function logSituationCreate(step, payload = undefined) {
+  if (payload === undefined) {
+    console.log(`[situations:create] ${step}`);
+    return;
+  }
+  console.log(`[situations:create] ${step}`, payload);
+}
+
 function safeArray(value) {
   return Array.isArray(value) ? value : [];
 }
@@ -93,12 +101,28 @@ async function getSupabaseAuthHeaders(extra = {}) {
 
 async function getResolvedProjectId(projectId) {
   const explicitProjectId = normalizeUuid(projectId);
-  if (explicitProjectId) return explicitProjectId;
+  if (explicitProjectId) {
+    logSituationCreate("resolved project id from explicit input", { projectId: explicitProjectId });
+    return explicitProjectId;
+  }
 
   const mappedProjectId = getMappedBackendProjectId();
-  if (mappedProjectId) return mappedProjectId;
+  if (mappedProjectId) {
+    logSituationCreate("resolved project id from frontend map", {
+      frontendProjectKey: getFrontendProjectKey(),
+      projectId: mappedProjectId
+    });
+    return mappedProjectId;
+  }
 
-  return normalizeUuid(await resolveCurrentBackendProjectId().catch(() => ""));
+  const resolvedProjectId = normalizeUuid(await resolveCurrentBackendProjectId().catch((error) => {
+    logSituationCreate("resolveCurrentBackendProjectId failed", {
+      message: error instanceof Error ? error.message : String(error || "")
+    });
+    return "";
+  }));
+  logSituationCreate("resolved project id from backend resolver", { projectId: resolvedProjectId || null });
+  return resolvedProjectId;
 }
 
 function getSituationsSelectClause() {
@@ -268,8 +292,19 @@ export async function loadSituationsForCurrentProject(projectId) {
 }
 
 export async function createSituation(projectId, payload = {}) {
+  logSituationCreate("createSituation called", {
+    projectIdInput: normalizeUuid(projectId) || String(projectId || "") || null,
+    payload
+  });
+
   const resolvedProjectId = await getResolvedProjectId(projectId);
-  if (!resolvedProjectId) throw new Error("projectId is required");
+  if (!resolvedProjectId) {
+    logSituationCreate("createSituation aborted: missing project id", {
+      currentProjectId: String(store.currentProjectId || "") || null,
+      currentProject: store.currentProject || null
+    });
+    throw new Error("projectId is required");
+  }
 
   const body = {
     project_id: resolvedProjectId,
@@ -285,23 +320,55 @@ export async function createSituation(projectId, payload = {}) {
     closed_at: normalizeSituationStatus(payload.status) === "closed" ? new Date().toISOString() : null
   };
 
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/situations`, {
+  const requestUrl = `${SUPABASE_URL}/rest/v1/situations`;
+  const headers = await getSupabaseAuthHeaders({
+    Accept: "application/json",
+    "Content-Type": "application/json",
+    Prefer: "return=representation"
+  });
+
+  logSituationCreate("sending POST /situations", {
+    url: requestUrl,
+    body,
+    hasAuthorization: Boolean(headers?.Authorization || headers?.authorization),
+    hasApiKey: Boolean(headers?.apikey || headers?.Apikey)
+  });
+
+  const res = await fetch(requestUrl, {
     method: "POST",
-    headers: await getSupabaseAuthHeaders({
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      Prefer: "return=representation"
-    }),
+    headers,
     body: JSON.stringify(body)
   });
 
+  const responseText = await res.text().catch(() => "");
+  logSituationCreate("received POST /situations response", {
+    ok: res.ok,
+    status: res.status,
+    statusText: res.statusText,
+    body: responseText
+  });
+
   if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`situation create failed (${res.status}): ${text}`);
+    throw new Error(`situation create failed (${res.status}): ${responseText}`);
   }
 
-  const created = normalizeSituationRow((safeArray(await res.json())[0]) || {});
+  let parsed = [];
+  try {
+    parsed = responseText ? JSON.parse(responseText) : [];
+  } catch (error) {
+    logSituationCreate("failed to parse create response as JSON", {
+      message: error instanceof Error ? error.message : String(error || ""),
+      responseText
+    });
+  }
+
+  const created = normalizeSituationRow((safeArray(parsed)[0]) || {});
+  logSituationCreate("normalized created situation", created);
   await loadSituationsForCurrentProject(resolvedProjectId);
+  logSituationCreate("reloaded situations after create", {
+    projectId: resolvedProjectId,
+    situationsCount: safeArray(store.situationsView?.data).length
+  });
   return created;
 }
 
