@@ -11,6 +11,7 @@ export const PROJECT_TAB_IDS = {
 };
 
 export const PROJECT_TAB_ROUTE_ALIASES = {
+  avis: PROJECT_TAB_IDS.SUBJECTS,
   workflows: PROJECT_TAB_IDS.ACTIONS,
   indicateurs: PROJECT_TAB_IDS.INSIGHTS,
   jalons: PROJECT_TAB_IDS.INSIGHTS,
