@@ -227,9 +227,9 @@ export function createProjectSubjectsEvents(config) {
       input.addEventListener("input", () => {
         const subjectId = String(input.dataset.subjectKanbanSearch || "");
         const situationId = String(input.dataset.subjectKanbanSearchSituationId || "");
-        store.situationsView.subjectKanbanDropdown.query = String(input.value || "");
+        getSubjectsViewState().subjectKanbanDropdown.query = String(input.value || "");
         const entries = getSubjectKanbanMenuEntries(subjectId, situationId, input.value || "");
-        store.situationsView.subjectKanbanDropdown.activeKey = String((entries.find((entry) => entry.isSelected) || entries[0] || {}).key || "");
+        getSubjectsViewState().subjectKanbanDropdown.activeKey = String((entries.find((entry) => entry.isSelected) || entries[0] || {}).key || "");
         rerenderScope(root);
         focusSubjectKanbanSearch(subjectId, situationId);
         syncSubjectMetaDropdownPosition(getSubjectMetaScopeRoot());
@@ -238,14 +238,14 @@ export function createProjectSubjectsEvents(config) {
       input.addEventListener("keydown", (event) => {
         const subjectId = String(input.dataset.subjectKanbanSearch || "");
         const situationId = String(input.dataset.subjectKanbanSearchSituationId || "");
-        const entries = getSubjectKanbanMenuEntries(subjectId, situationId, store.situationsView.subjectKanbanDropdown.query || "");
+        const entries = getSubjectKanbanMenuEntries(subjectId, situationId, getSubjectsViewState().subjectKanbanDropdown.query || "");
         if (event.key === "ArrowDown" || event.key === "ArrowUp") {
           event.preventDefault();
           if (!entries.length) return;
-          const currentKey = String(store.situationsView.subjectKanbanDropdown.activeKey || "");
+          const currentKey = String(getSubjectsViewState().subjectKanbanDropdown.activeKey || "");
           const currentIndex = entries.findIndex((entry) => String(entry?.key || "") === currentKey);
           const nextIndex = currentIndex >= 0 ? (currentIndex + (event.key === "ArrowDown" ? 1 : -1) + entries.length) % entries.length : 0;
-          store.situationsView.subjectKanbanDropdown.activeKey = String(entries[nextIndex]?.key || "");
+          getSubjectsViewState().subjectKanbanDropdown.activeKey = String(entries[nextIndex]?.key || "");
           rerenderScope(root);
           focusSubjectKanbanSearch(subjectId, situationId);
           syncSubjectMetaDropdownPosition(getSubjectMetaScopeRoot());
@@ -258,7 +258,7 @@ export function createProjectSubjectsEvents(config) {
           return;
         }
         if (event.key === "Enter") {
-          const activeKey = String(store.situationsView.subjectKanbanDropdown.activeKey || "");
+          const activeKey = String(getSubjectsViewState().subjectKanbanDropdown.activeKey || "");
           if (!activeKey) return;
           event.preventDefault();
           setSujetKanbanStatus(subjectId, activeKey, { situationId });
@@ -271,12 +271,12 @@ export function createProjectSubjectsEvents(config) {
     dropdownHost.querySelectorAll("[data-subject-meta-search]").forEach((input) => {
       input.addEventListener("input", () => {
         const field = String(input.dataset.subjectMetaSearch || "");
-        store.situationsView.subjectMetaDropdown.query = String(input.value || "");
+        getSubjectsViewState().subjectMetaDropdown.query = String(input.value || "");
         const selection = getScopedSelection(root);
         const subject = selection?.type === "sujet" ? selection.item : null;
         const entries = subject ? getSubjectMetaMenuEntries(subject, field) : [];
-        const currentKey = String(store.situationsView.subjectMetaDropdown.activeKey || "");
-        store.situationsView.subjectMetaDropdown.activeKey = entries.some((entry) => String(entry?.key || "") === currentKey)
+        const currentKey = String(getSubjectsViewState().subjectMetaDropdown.activeKey || "");
+        getSubjectsViewState().subjectMetaDropdown.activeKey = entries.some((entry) => String(entry?.key || "") === currentKey)
           ? currentKey
           : String(entries[0]?.key || "");
         rerenderScope(root);
@@ -303,7 +303,7 @@ export function createProjectSubjectsEvents(config) {
           return;
         }
         if (event.key === "Enter") {
-          const activeKey = String(store.situationsView.subjectMetaDropdown.activeKey || "");
+          const activeKey = String(getSubjectsViewState().subjectMetaDropdown.activeKey || "");
           if (!activeKey) return;
           if (field === "objectives") {
             event.preventDefault();
