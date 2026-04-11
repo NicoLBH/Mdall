@@ -1,5 +1,6 @@
 import { store } from "../store.js";
 import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
+import { loadSituationsForCurrentProject, loadSituationSubjectIdsMap } from "./project-situations-supabase.js";
 
 const SUPABASE_URL = getSupabaseUrl();
 const FRONT_PROJECT_MAP_STORAGE_KEY = "mdall.supabaseProjectMap.v1";
@@ -194,7 +195,9 @@ export async function loadFlatSubjectsForCurrentProject(options = {}) {
       parentBySubjectId: {},
       linksBySubjectId: {},
       relationIdsBySubjectId: {},
-      relationOptionsById: {}
+      relationOptionsById: {},
+      situationsById: {},
+      subjectIdsBySituationId: {}
     };
     store.projectSubjectsView.rawResult = store.projectSubjectsView.rawSubjectsResult;
     return [];
@@ -202,7 +205,19 @@ export async function loadFlatSubjectsForCurrentProject(options = {}) {
 
   const subjects = await fetchProjectFlatSubjects(backendProjectId);
   const subjectLinks = await fetchProjectSubjectLinks(backendProjectId).catch(() => []);
+  const situations = await loadSituationsForCurrentProject(backendProjectId).catch(() => []);
+  const manualSituationIds = situations
+    .filter((situation) => String(situation?.mode || "manual").trim().toLowerCase() === "manual")
+    .map((situation) => String(situation?.id || "").trim())
+    .filter(Boolean);
+  const subjectIdsBySituationId = await loadSituationSubjectIdsMap(manualSituationIds).catch(() => ({}));
   const result = buildProjectFlatSubjectsResult(subjects, subjectLinks, { runId: store.ui.runId || "" });
+  result.situationsById = Object.fromEntries(situations.map((situation) => [String(situation?.id || ""), situation]).filter(([id]) => !!id));
+  result.subjectIdsBySituationId = subjectIdsBySituationId;
+  result.relationOptionsById = {
+    ...(result.relationOptionsById && typeof result.relationOptionsById === "object" ? result.relationOptionsById : {}),
+    ...result.situationsById
+  };
 
   store.projectSubjectsView.subjectsData = result.subjects;
   store.projectSubjectsView.rawSubjectsResult = result;
