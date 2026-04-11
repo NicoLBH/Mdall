@@ -24,6 +24,9 @@ export function createProjectSubjectsActions(config) {
     setEntityReviewState,
     rerenderScope,
     reloadSubjectsFromSupabase,
+    loadSituationsForCurrentProject,
+    addSubjectToSituation,
+    removeSubjectFromSituation,
     persistSubjectIssueActionToSupabase,
     showError,
     getSubjectSidebarMeta,
@@ -123,15 +126,62 @@ export function createProjectSubjectsActions(config) {
     });
   }
 
-  function toggleSubjectSituation(subjectId, situationId) {
+  function syncSubjectSituationMaps(subjectId, situationId, shouldLink) {
+    const raw = store.projectSubjectsView?.rawSubjectsResult;
+    if (!raw || typeof raw !== "object") return;
+
+    raw.subjectIdsBySituationId = raw.subjectIdsBySituationId && typeof raw.subjectIdsBySituationId === "object"
+      ? raw.subjectIdsBySituationId
+      : {};
+
     const subjectKey = String(subjectId || "");
     const situationKey = String(situationId || "");
-    if (!subjectKey || !situationKey) return;
+    const currentIds = Array.isArray(raw.subjectIdsBySituationId[situationKey])
+      ? raw.subjectIdsBySituationId[situationKey].map((value) => String(value || "")).filter(Boolean)
+      : [];
+
+    raw.subjectIdsBySituationId[situationKey] = shouldLink
+      ? [...new Set([...currentIds, subjectKey])]
+      : currentIds.filter((value) => value !== subjectKey);
+
+    const situation = (Array.isArray(store.situationsView?.data) ? store.situationsView.data : []).find((item) => String(item?.id || "") === situationKey);
+    if (situation) {
+      raw.situationsById = raw.situationsById && typeof raw.situationsById === "object" ? raw.situationsById : {};
+      raw.relationOptionsById = raw.relationOptionsById && typeof raw.relationOptionsById === "object" ? raw.relationOptionsById : {};
+      raw.situationsById[situationKey] = situation;
+      raw.relationOptionsById[situationKey] = situation;
+    }
+  }
+
+  async function toggleSubjectSituation(subjectId, situationId, options = {}) {
+    const subjectKey = String(subjectId || "");
+    const situationKey = String(situationId || "");
+    if (!subjectKey || !situationKey) return false;
+
     const meta = getSubjectSidebarMeta(subjectKey);
-    const nextIds = meta.situationIds.includes(situationKey)
+    const wasLinked = meta.situationIds.includes(situationKey);
+    const nextIds = wasLinked
       ? meta.situationIds.filter((id) => id !== situationKey)
       : [...meta.situationIds, situationKey];
+
     setSubjectSituationIds(subjectKey, nextIds);
+    syncSubjectSituationMaps(subjectKey, situationKey, !wasLinked);
+
+    if (options.root) rerenderScope(options.root);
+
+    try {
+      if (wasLinked) await removeSubjectFromSituation(situationKey, subjectKey);
+      else await addSubjectToSituation(situationKey, subjectKey);
+      await loadSituationsForCurrentProject().catch(() => []);
+      return true;
+    } catch (error) {
+      setSubjectSituationIds(subjectKey, meta.situationIds);
+      syncSubjectSituationMaps(subjectKey, situationKey, wasLinked);
+      if (options.root) rerenderScope(options.root);
+      console.warn("toggleSubjectSituation failed", error);
+      showError(`Mise à jour Supabase impossible : ${String(error?.message || error || "Erreur inconnue")}`);
+      return false;
+    }
   }
 
   function setSubjectLabels(subjectId, labels) {
