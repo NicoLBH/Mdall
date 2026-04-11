@@ -105,7 +105,7 @@ export function renderReviewStateIcon(
     iconName = "check";
     toneClass = "review-state-icon--validated";
   } else if (normalized === "rejected" || normalized === "dismissed") {
-    iconName = String(entityType || "").toLowerCase() === "avis" ? "avis-rejected" : "skip";
+    iconName = "skip";
     toneClass = "review-state-icon--rejected";
   }
 
