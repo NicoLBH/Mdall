@@ -1,5 +1,6 @@
 import { escapeHtml } from "../../utils/escape-html.js";
 import { svgIcon } from "../../ui/icons.js";
+import { getAuthorIdentity } from "../ui/author-identity.js";
 
 const KANBAN_STATUSES = [
   { key: "non_active", label: "Non activé", hint: "Sujet détecté mais pas encore engagé." },
@@ -34,16 +35,17 @@ function getSubjectProgress(subject, subjectsById = {}, childrenBySubjectId = {}
 }
 
 function renderAuthorAvatar(subject, currentUserAvatar) {
-  const avatar = String(
-    subject?.author_avatar_url ||
-    subject?.avatar ||
-    subject?.owner_avatar ||
-    currentUserAvatar ||
-    ""
-  ).trim();
-  if (avatar) {
-    return `<img src="${escapeHtml(avatar)}" alt="" class="situation-kanban-card__avatar" loading="lazy">`;
-  }
+  const identity = getAuthorIdentity({
+    author: subject?.author || subject?.owner || subject?.produced_by || subject?.agent || subject?.raw?.author || subject?.raw?.agent || "system",
+    agent: subject?.agent || subject?.produced_by || subject?.raw?.agent || "system",
+    avatarUrl: subject?.author_avatar_url || subject?.avatar || subject?.owner_avatar || "",
+    currentUserAvatar,
+    fallbackName: "System",
+    avatarImageOptions: { className: "situation-kanban-card__avatar", alt: "", loading: true },
+    humanAvatarImageOptions: { className: "situation-kanban-card__avatar", alt: "", loading: true },
+    systemAvatarOptions: { className: "situation-kanban-card__avatar-fallback situation-kanban-card__avatar-fallback--system" }
+  });
+  if (identity.avatarHtml) return identity.avatarHtml;
   return `<span class="situation-kanban-card__avatar-fallback" aria-hidden="true">${svgIcon("avatar-human", { className: "octicon octicon-person" })}</span>`;
 }
 
