@@ -1,5 +1,6 @@
 import { store } from "../store.js";
-import { registerProjectPrimaryScrollSource, setProjectViewHeader } from "./project-shell-chrome.js";
+import { PROJECT_TAB_RESELECTED_EVENT } from "./project-header.js";
+import { registerProjectScrollSources, setProjectViewHeader } from "./project-shell-chrome.js";
 import { renderProjectSituationsRunbar, bindProjectSituationsRunbar } from "./project-situations-runbar.js";
 import { loadFlatSubjectsForCurrentProject } from "../services/project-subjects-supabase.js";
 import {
@@ -160,6 +161,36 @@ function syncProjectHeader(root) {
   });
 }
 
+let situationsTabResetBound = false;
+let currentSituationsRoot = null;
+
+function bindSituationsTabReset() {
+  if (situationsTabResetBound) return;
+  situationsTabResetBound = true;
+
+  window.addEventListener(PROJECT_TAB_RESELECTED_EVENT, (event) => {
+    const detail = event?.detail || {};
+    const tabId = String(detail.tabId || "").trim().toLowerCase();
+    if (tabId !== "situations") return;
+
+    const activeProjectId = String(store.currentProjectId || "").trim();
+    const eventProjectId = String(detail.projectId || "").trim();
+    if (eventProjectId && activeProjectId && eventProjectId !== activeProjectId) return;
+    if (!currentSituationsRoot || !currentSituationsRoot.isConnected) return;
+
+    if (store.situationsView && typeof store.situationsView === "object") {
+      store.situationsView.selectedSituationId = null;
+    }
+    uiState.selectedSituationLoading = false;
+    uiState.selectedSituationError = "";
+    uiState.selectedSituationSubjects = [];
+    uiState.createModalOpen = false;
+    uiState.createSubmitting = false;
+    uiState.createError = "";
+    rerender(currentSituationsRoot);
+  });
+}
+
 function rerender(root) {
   if (!root || !document.body.contains(root)) return;
   root.className = "project-shell__content";
@@ -167,7 +198,10 @@ function rerender(root) {
   renderGlobalHeader();
   root.innerHTML = renderPage();
   syncSituationsToolbar();
-  registerProjectPrimaryScrollSource(document.getElementById("projectSituationsScroll"));
+  const primaryScrollRoot = document.getElementById("projectSituationsScroll");
+  const tableScrollBody = root.querySelector(".issues-table .data-table-shell__body");
+  const kanbanColumnBodies = [...root.querySelectorAll(".situation-kanban__cards")];
+  registerProjectScrollSources(primaryScrollRoot, tableScrollBody, kanbanColumnBodies);
   bindEvents(root);
   bindViewEvents(root);
   kanbanView.bindKanbanEvents(root);
@@ -202,6 +236,8 @@ const { bindEvents } = createProjectSituationsEvents({
 });
 
 export function renderProjectSituations(root) {
+  bindSituationsTabReset();
+  currentSituationsRoot = root;
   if (store.situationsView && typeof store.situationsView === "object") {
     store.situationsView.selectedSituationId = null;
   }
