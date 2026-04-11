@@ -202,10 +202,15 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);ove
 
 /* header right replaced below */
 
+.gh-brand-wrap{display:inline-flex;align-items:center;gap:10px;min-width:0;}
 .gh-brand{
   display:inline-flex;align-items:center;gap:10px;
   color:var(--text);text-decoration:none;min-width:0;
 }
+.gh-brand__trail{display:inline-flex;align-items:center;gap:10px;min-width:0;color:var(--muted);font-size:13px;}
+.gh-brand__trail-btn{appearance:none;border:0;background:none;padding:0;color:var(--muted);font:inherit;cursor:pointer;}
+.gh-brand__trail-btn:hover,.gh-brand__trail-btn:focus-visible{text-decoration:underline;outline:none;}
+.gh-brand__trail-current{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);}
 .gh-brand__logo{
   width:32px;
   height:32px;
@@ -229,6 +234,9 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);ove
 .gh-brand__compact-tab-label-primary{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .gh-brand__compact-tab-label-suffix{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:0 1 auto;}
 .gh-brand__compact-tab-label-suffix.is-empty{display:none;}
+.gh-brand__compact-tab-label-primary.is-clickable{cursor:pointer;text-decoration:none;}
+.gh-brand__compact-tab-label-primary.is-clickable:hover,
+.gh-brand__compact-tab-label-primary.is-clickable:focus-visible{text-decoration:underline;outline:none;}
 body.route--project.project-shell-compact .gh-brand__compact-tab{
   display:inline-flex;
 }
