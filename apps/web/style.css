@@ -2043,7 +2043,8 @@ body.is-resizing{
   display:flex;
   align-items:center;
   justify-content:center;
-  flex:0 0 auto;
+  flex:0 0 40px;
+  overflow:hidden;
 }
 .gh-avatar-initial{
   font-family:var(--mono);
@@ -11045,11 +11046,33 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   justify-content:center;
 }
 
+.gh-avatar__system-icon{
+  width:100%;
+  height:100%;
+}
+
 .gh-avatar__system-icon svg,
 .tl-author--system svg,
 .situation-kanban-card__avatar-fallback--system svg{
   width:16px;
   height:16px;
+}
+
+.gh-avatar .gh-avatar__system-icon svg{
+  width:40px;
+  height:40px;
+}
+
+.comment-composer__avatar{
+  width:40px;
+  height:40px;
+  flex:0 0 40px;
+  overflow:hidden;
+}
+
+.situation-kanban-card__avatar-fallback--system svg{
+  width:20px;
+  height:20px;
 }
 
 .tl-author--custom .gh-avatar__img,
