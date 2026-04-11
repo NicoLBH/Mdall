@@ -1,6 +1,7 @@
 import { store, DEFAULT_PROJECT_PHASES } from "../store.js";
 import { PROJECT_TAB_RESELECTED_EVENT } from "./project-header.js";
 import { loadFlatSubjectsForCurrentProject } from "../services/project-subjects-supabase.js";
+import { loadSituationsForCurrentProject, addSubjectToSituation, removeSubjectFromSituation } from "../services/project-situations-supabase.js";
 import {
   bindProjectSituationsRunbar,
   syncProjectSituationsRunbar
@@ -485,6 +486,9 @@ const projectSubjectsActions = createProjectSubjectsActions({
   setEntityReviewState,
   rerenderScope: (root) => rerenderScope(root),
   reloadSubjectsFromSupabase: (root, options) => reloadSubjectsFromSupabase(root, options),
+  loadSituationsForCurrentProject: (...args) => loadSituationsForCurrentProject(...args),
+  addSubjectToSituation: (...args) => addSubjectToSituation(...args),
+  removeSubjectFromSituation: (...args) => removeSubjectFromSituation(...args),
   persistSubjectIssueActionToSupabase,
   showError,
   getSubjectSidebarMeta: (...args) => projectSubjectsView.getSubjectSidebarMeta(...args),
