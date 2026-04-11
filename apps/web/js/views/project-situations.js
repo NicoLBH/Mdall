@@ -7,7 +7,9 @@ import {
   loadSituationsForCurrentProject,
   createSituation,
   updateSituation,
-  loadSubjectsForSituation
+  loadSubjectsForSituation,
+  setSituationSubjectKanbanStatus,
+  loadSituationKanbanStatusMap
 } from "../services/project-situations-supabase.js";
 import { createProjectSituationsState, getDefaultCreateForm, getSituationEditForm } from "./project-situations/project-situations-state.js";
 import { createProjectSituationsSelectors } from "./project-situations/project-situations-selectors.js";
@@ -57,6 +59,7 @@ const {
   loadFlatSubjectsForCurrentProject,
   loadSituationsForCurrentProject,
   loadSubjectsForSituation,
+  loadSituationKanbanStatusMap,
   createSituation,
   updateSituation
 });
@@ -90,8 +93,36 @@ const {
 createProjectSituationsReviewState({ store, uiState });
 createProjectSituationsThread({ store, uiState });
 const kanbanView = createProjectSituationsKanbanView({
+  store,
   getSujetKanbanStatus: (...args) => getSujetKanbanStatusForSituation(...args),
-  setSujetKanbanStatus: (...args) => setSujetKanbanStatusForSituation(...args),
+  setSujetKanbanStatus: async (subjectId, nextStatus, options = {}) => {
+    const updated = setSujetKanbanStatusForSituation(subjectId, nextStatus, options);
+    if (!updated) return false;
+    const situationId = String(options?.situationId || "").trim();
+    if (!situationId) return false;
+    try {
+      await setSituationSubjectKanbanStatus(situationId, subjectId, nextStatus);
+      if (!store.situationsView || typeof store.situationsView !== "object") store.situationsView = {};
+      store.situationsView.kanbanStatusBySituationId = {
+        ...(store.situationsView.kanbanStatusBySituationId || {}),
+        [situationId]: {
+          ...((store.situationsView.kanbanStatusBySituationId || {})[situationId] || {}),
+          [subjectId]: String(nextStatus || "").trim()
+        }
+      };
+      return true;
+    } catch (error) {
+      console.error("setSituationSubjectKanbanStatus failed", error);
+      await loadSituationKanbanStatusMap([situationId]).then((map) => {
+        if (!store.situationsView || typeof store.situationsView !== "object") store.situationsView = {};
+        store.situationsView.kanbanStatusBySituationId = {
+          ...(store.situationsView.kanbanStatusBySituationId || {}),
+          ...(map || {})
+        };
+      }).catch(() => undefined);
+      throw error;
+    }
+  },
   openSubjectDrilldown: (...args) => openSubjectDrilldownFromSituation(...args),
   refreshAfterKanbanChange: async () => {
     const selectedId = String(store.situationsView?.selectedSituationId || "").trim();
@@ -200,7 +231,8 @@ function bindSituationsTabReset() {
 
 function rerender(root) {
   if (!root || !document.body.contains(root)) return;
-  root.className = "project-shell__content";
+  const hasSelectedSituation = !!String(store.situationsView?.selectedSituationId || "").trim();
+  root.className = `project-shell__content${hasSelectedSituation ? " project-shell__content--situation-kanban" : ""}`;
   syncProjectHeader(root);
   renderGlobalHeader();
   root.innerHTML = renderPage();
