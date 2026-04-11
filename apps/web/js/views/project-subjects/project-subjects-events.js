@@ -175,6 +175,7 @@ export function createProjectSubjectsEvents(config) {
         if (isAlreadyOpen) {
           closeSubjectMetaDropdown();
         } else {
+          closeSubjectKanbanDropdown();
           dropdown.field = field;
           dropdown.query = "";
           const entries = scopedSelection?.type === "sujet" ? getSubjectMetaMenuEntries(scopedSelection.item, field) : [];
