@@ -54,12 +54,24 @@ function getHeaderModel() {
   const inProject = parts[0] === "project" && !!parts[1];
 
   if (inProject) {
+    const currentTab = String(parts[2] || "").trim();
+    const selectedSituationId = String(store.situationsView?.selectedSituationId || "").trim();
+    const selectedSituation = currentTab === "situations" && selectedSituationId
+      ? (Array.isArray(store.situationsView?.data)
+          ? store.situationsView.data.find((situation) => String(situation?.id || "") === selectedSituationId)
+          : null)
+      : null;
+
     return {
       primary: store.user?.name || "Utilisateur",
       secondary: getProjectDisplayName(parts[1]),
       showSecondary: true,
       href: `#project/${parts[1]}/documents`,
-      headerClass: "gh-header gh-header--project"
+      headerClass: "gh-header gh-header--project",
+      breadcrumbTabLabel: selectedSituation ? "Situations" : "",
+      breadcrumbCurrentLabel: selectedSituation ? String(selectedSituation.title || "Situation") : "",
+      showSituationBreadcrumb: !!selectedSituation,
+      projectId: parts[1]
     };
   }
 
@@ -172,26 +184,37 @@ export function renderGlobalHeader() {
           ${svgIcon("three-bars", { className: "octicon octicon-three-bars" })}
         </button>
 
-        <a class="gh-brand" href="${model.href}">
-          ${svgIcon("heimdall", { className: "gh-brand__logo", title: "Heimdall" })}
-          <span class="gh-brand__name">${model.primary}</span>
-          ${
-            model.showSecondary
-              ? `
-                <span class="gh-brand__sep">/</span>
-                <span class="gh-brand__repo">${model.secondary}</span>
-
-                <span id="projectCompactTab" class="gh-brand__compact-tab" aria-hidden="true">
+        <div class="gh-brand-wrap">
+          <a class="gh-brand" href="${model.href}">
+            ${svgIcon("heimdall", { className: "gh-brand__logo", title: "Heimdall" })}
+            <span class="gh-brand__name">${model.primary}</span>
+            ${
+              model.showSecondary
+                ? `
                   <span class="gh-brand__sep">/</span>
-                  <span id="projectCompactTabLabel" class="gh-brand__compact-tab-label">
-                    <span id="projectCompactTabLabelPrimary" class="gh-brand__compact-tab-label-primary"></span>
-                    <span id="projectCompactTabLabelSuffix" class="gh-brand__compact-tab-label-suffix"></span>
+                  <span class="gh-brand__repo">${model.secondary}</span>
+
+                  <span id="projectCompactTab" class="gh-brand__compact-tab" aria-hidden="true">
+                    <span class="gh-brand__sep">/</span>
+                    <span id="projectCompactTabLabel" class="gh-brand__compact-tab-label">
+                      <span id="projectCompactTabLabelPrimary" class="gh-brand__compact-tab-label-primary"></span>
+                      <span id="projectCompactTabLabelSuffix" class="gh-brand__compact-tab-label-suffix"></span>
+                    </span>
                   </span>
-                </span>
-              `
-              : ``
-          }
-        </a>
+                `
+                : ``
+            }
+          </a>
+
+          ${model.showSituationBreadcrumb ? `
+            <span class="gh-brand__trail">
+              <span class="gh-brand__sep">/</span>
+              <button type="button" class="gh-brand__trail-btn" id="globalHeaderSituationsBack">${model.breadcrumbTabLabel}</button>
+              <span class="gh-brand__sep">/</span>
+              <span class="gh-brand__trail-current">${model.breadcrumbCurrentLabel}</span>
+            </span>
+          ` : ""}
+        </div>
       </div>
 
       <div class="gh-header__center"></div>
@@ -213,9 +236,18 @@ export function bindGlobalHeader() {
   document.addEventListener("click", (event) => {
     const trigger = event.target.closest?.("#ghUserMenuBtn");
     const logoutBtn = event.target.closest?.("#ghUserMenuLogout");
+    const situationsBackBtn = event.target.closest?.("#globalHeaderSituationsBack");
     const menu = document.getElementById("ghUserMenu");
     const dropdown = document.getElementById("ghUserMenuDropdown");
     const btn = document.getElementById("ghUserMenuBtn");
+
+    if (situationsBackBtn) {
+      if (store.situationsView && typeof store.situationsView === "object") {
+        store.situationsView.selectedSituationId = null;
+      }
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+      return;
+    }
 
     if (logoutBtn) {
       signOut()
