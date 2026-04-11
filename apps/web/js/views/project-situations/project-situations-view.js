@@ -1,11 +1,15 @@
 import { escapeHtml } from "../../utils/escape-html.js";
 import { renderSettingsModal } from "../ui/settings-modal.js";
+import { renderStatusBadge } from "../ui/status-badges.js";
 
 export function createProjectSituationsView({
+  store,
   uiState,
   getDefaultCreateForm,
   normalizeSituationMode,
-  renderSituationsTable
+  renderSituationsTable,
+  getSituationById,
+  renderSituationKanban
 }) {
   function renderCreateSituationModal() {
     if (!uiState.createModalOpen) return "";
@@ -94,6 +98,51 @@ export function createProjectSituationsView({
     });
   }
 
+  function renderSelectedSituationDetails() {
+    const selectedSituationId = String(store.situationsView?.selectedSituationId || "").trim();
+    const selectedSituation = getSituationById(selectedSituationId);
+
+    if (!selectedSituation) {
+      return `
+        <section class="gh-panel gh-panel--details" aria-label="Situation sélectionnée">
+          <div class="gh-panel__head gh-panel__head--tight">Aucune situation sélectionnée</div>
+          <div class="details-body situation-kanban-modal-detail">Sélectionne une situation dans le tableau pour ouvrir son détail.</div>
+        </section>
+      `;
+    }
+
+    const modeBadge = renderStatusBadge({
+      label: normalizeSituationMode(selectedSituation.mode) === "automatic" ? "Automatique" : "Manuelle",
+      tone: normalizeSituationMode(selectedSituation.mode) === "automatic" ? "accent" : "default"
+    });
+    const statusBadge = renderStatusBadge({
+      label: String(selectedSituation.status || "open") === "closed" ? "Fermée" : "Ouverte",
+      tone: String(selectedSituation.status || "open") === "closed" ? "muted" : "success"
+    });
+
+    return `
+      <section class="gh-panel gh-panel--details" aria-label="Détail de situation">
+        <div class="gh-panel__head gh-panel__head--tight">
+          <div style="display:flex;flex-direction:column;gap:10px;width:100%;">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+              <div>
+                <div class="details-title">${escapeHtml(selectedSituation.title || "Situation")}</div>
+                ${selectedSituation.description ? `<div class="issue-row-meta-text" style="margin-top:6px;max-width:860px;">${escapeHtml(selectedSituation.description)}</div>` : ""}
+              </div>
+              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">${statusBadge}${modeBadge}<span class="mono-small">${uiState.selectedSituationSubjects.length} sujet(s)</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="details-body situation-kanban-modal-detail">
+          ${uiState.selectedSituationError ? `<div class="settings-inline-error">${escapeHtml(uiState.selectedSituationError)}</div>` : ""}
+          ${uiState.selectedSituationLoading
+            ? `<div class="settings-empty-state">Chargement des sujets de la situation…</div>`
+            : renderSituationKanban(selectedSituation, uiState.selectedSituationSubjects, { loading: uiState.selectedSituationLoading })}
+        </div>
+      </section>
+    `;
+  }
+
   function renderPage() {
     return `
       <section class="project-simple-page project-simple-page--settings">
@@ -105,6 +154,8 @@ export function createProjectSituationsView({
             <section class="gh-panel gh-panel--results" aria-label="Results">
               ${renderSituationsTable()}
             </section>
+            <div style="height:16px;"></div>
+            ${renderSelectedSituationDetails()}
           </div>
         </div>
         ${renderCreateSituationModal()}
@@ -112,8 +163,12 @@ export function createProjectSituationsView({
     `;
   }
 
+  function bindViewEvents() {}
+
   return {
     renderCreateSituationModal,
-    renderPage
+    renderSelectedSituationDetails,
+    renderPage,
+    bindViewEvents
   };
 }
