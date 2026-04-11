@@ -16,6 +16,7 @@ const shellState = {
   compactTabCustomSuffix: "",
   compactTabPrimaryAction: null,
   primaryScrollSourceEl: null,
+  scrollSourceEls: [],
   cleanupScrollSource: null,
   cleanupWindow: null
 };
@@ -112,7 +113,13 @@ function applyCompactState(isCompact) {
 }
 
 function syncCompactState() {
-  const scrollTop = shellState.primaryScrollSourceEl?.scrollTop || 0;
+  const sources = shellState.scrollSourceEls?.length
+    ? shellState.scrollSourceEls
+    : (shellState.primaryScrollSourceEl ? [shellState.primaryScrollSourceEl] : []);
+  const scrollTop = sources.reduce((maxScrollTop, source) => {
+    const nextScrollTop = Number(source?.scrollTop || 0);
+    return nextScrollTop > maxScrollTop ? nextScrollTop : maxScrollTop;
+  }, 0);
   applyCompactState(scrollTop > 12);
 }
 
@@ -120,6 +127,7 @@ function cleanupPrimaryScrollSource() {
   shellState.cleanupScrollSource?.();
   shellState.cleanupScrollSource = null;
   shellState.primaryScrollSourceEl = null;
+  shellState.scrollSourceEls = [];
 }
 
 function renderProjectViewHeader({
@@ -215,27 +223,46 @@ export function setProjectViewHeader(config = {}) {
   syncCompactTabLabel();
 }
 
-export function registerProjectPrimaryScrollSource(el) {
+export function registerProjectScrollSources(...elements) {
   cleanupPrimaryScrollSource();
 
-  if (!el) {
+  const resolvedElements = elements
+    .flat()
+    .filter((element, index, array) => element && array.indexOf(element) === index);
+
+  if (!resolvedElements.length) {
     applyCompactState(false);
     return;
   }
 
-  shellState.primaryScrollSourceEl = el;
+  shellState.primaryScrollSourceEl = resolvedElements[0] || null;
+  shellState.scrollSourceEls = resolvedElements;
 
-  const onScroll = () => {
-    syncCompactState();
-  };
-
-  el.addEventListener("scroll", onScroll, { passive: true });
+  const listeners = resolvedElements.map((element) => {
+    const onScroll = () => {
+      syncCompactState();
+    };
+    element.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      element.removeEventListener("scroll", onScroll);
+    };
+  });
 
   shellState.cleanupScrollSource = () => {
-    el.removeEventListener("scroll", onScroll);
+    listeners.forEach((cleanup) => {
+      try {
+        cleanup();
+      } catch {
+        // ignore cleanup failures
+      }
+    });
   };
 
   syncCompactState();
+}
+
+export function registerProjectPrimaryScrollSource(el) {
+  registerProjectScrollSources(el);
 }
 
 export function refreshProjectShellChrome() {
