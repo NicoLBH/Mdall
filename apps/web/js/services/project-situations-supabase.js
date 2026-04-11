@@ -442,6 +442,38 @@ export async function loadManualSituationSubjectIds(situationId) {
   return normalizeArrayOfStrings(safeArray(await res.json()).map((row) => row?.subject_id));
 }
 
+export async function loadSituationSubjectIdsMap(situationIds = []) {
+  const normalizedIds = normalizeArrayOfStrings(situationIds).map(normalizeUuid).filter(Boolean);
+  if (!normalizedIds.length) return {};
+
+  const url = new URL(`${SUPABASE_URL}/rest/v1/situation_subjects`);
+  url.searchParams.set("select", "situation_id,subject_id,created_at");
+  url.searchParams.set("situation_id", `in.(${normalizedIds.join(",")})`);
+  url.searchParams.set("order", "created_at.asc");
+
+  const res = await fetch(url.toString(), {
+    method: "GET",
+    headers: await getSupabaseAuthHeaders({ Accept: "application/json" }),
+    cache: "no-store"
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`situation_subjects fetch failed (${res.status}): ${text}`);
+  }
+
+  const rows = safeArray(await res.json());
+  const map = Object.fromEntries(normalizedIds.map((id) => [id, []]));
+  rows.forEach((row) => {
+    const situationId = normalizeUuid(row?.situation_id);
+    const subjectId = normalizeUuid(row?.subject_id);
+    if (!situationId || !subjectId) return;
+    if (!Array.isArray(map[situationId])) map[situationId] = [];
+    if (!map[situationId].includes(subjectId)) map[situationId].push(subjectId);
+  });
+  return map;
+}
+
 export async function addSubjectToSituation(situationId, subjectId) {
   const normalizedSituationId = normalizeUuid(situationId);
   const normalizedSubjectId = normalizeUuid(subjectId);
