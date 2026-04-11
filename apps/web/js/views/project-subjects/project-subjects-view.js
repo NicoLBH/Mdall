@@ -1,3 +1,4 @@
+import { getDisplayAuthorName, getAuthorIdentity } from "../ui/author-identity.js";
 export function createProjectSubjectsView(deps) {
   const {
     store,
@@ -266,10 +267,8 @@ function inferAgent(obj) {
 
 function normActorName(actor, agent) {
   const a = String(actor || "").trim();
-  if (a) return a;
   const g = String(agent || "").trim();
-  if (!g) return "System";
-  return g === "human" ? "Human" : g;
+  return getDisplayAuthorName(a, { agent: g, fallback: g === "human" ? "Human" : "System" });
 }
 
 function verdictKey(v) {
@@ -291,6 +290,9 @@ function miniAuthorIconHtml(agent) {
   const a = String(agent || "").toLowerCase();
   if (a === "human") {
     return `<span class="tl-author tl-author--human" aria-hidden="true">${SVG_AVATAR_HUMAN}</span>`;
+  }
+  if (a === "system") {
+    return `<span class="tl-author tl-author--agent tl-author--system" aria-hidden="true">${getAuthorIdentity({ author: "system", agent: "system" }).avatarHtml}</span>`;
   }
   return `<span class="tl-author tl-author--agent mono" aria-hidden="true">R</span>`;
 }
@@ -857,7 +859,7 @@ function renderDetailedMetaForSelection(selection) {
   const common = [
     renderMetaItem("ID", `<span class="mono">${escapeHtml(item.id)}</span>`),
     renderMetaItem("Title", escapeHtml(firstNonEmpty(item.title, item.id))),
-    renderMetaItem("Agent", `<span class="mono">${escapeHtml(firstNonEmpty(item.agent, raw.agent, "system"))}</span>`),
+    renderMetaItem("Agent", `<span class="mono">${escapeHtml(getDisplayAuthorName(firstNonEmpty(item.agent, raw.agent, "system"), { agent: firstNonEmpty(item.agent, raw.agent, "system"), fallback: "System" }))}</span>`),
     renderMetaItem("Priority", priorityBadge(firstNonEmpty(item.priority, raw.priority, "medium"))),
     renderMetaItem("Run", `<span class="mono">${escapeHtml(currentRunKey())}</span>`),
     renderMetaItem("Historique humain", decision ? `<span class="mono">${escapeHtml(decision.decision)} · ${escapeHtml(fmtTs(decision.ts))}</span>` : "—")
