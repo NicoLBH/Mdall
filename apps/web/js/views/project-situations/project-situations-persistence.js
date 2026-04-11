@@ -49,12 +49,16 @@ export function createProjectSituationsPersistence({
     }));
     uiState.countsBySituationId = Object.fromEntries(countsEntries);
 
-    const selectedSituationId = String(store.situationsView?.selectedSituationId || "").trim() || String(situations[0]?.id || "").trim();
-    if (selectedSituationId && selectedSituationId !== store.situationsView?.selectedSituationId) {
-      store.situationsView.selectedSituationId = selectedSituationId;
+    const selectedSituationId = String(store.situationsView?.selectedSituationId || "").trim();
+    const selectedSituationExists = selectedSituationId
+      ? situations.some((situation) => String(situation?.id || "") === selectedSituationId)
+      : false;
+
+    if (selectedSituationId && !selectedSituationExists) {
+      store.situationsView.selectedSituationId = null;
     }
 
-    if (selectedSituationId) {
+    if (selectedSituationExists) {
       await loadSituationSelection(selectedSituationId);
     } else {
       uiState.selectedSituationSubjects = [];
