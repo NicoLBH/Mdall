@@ -78,7 +78,13 @@ export function createProjectSubjectDrilldownController(config) {
     body.__syncCondensedTitle?.();
   }
 
-  function openDrilldown() {
+  function applyDrilldownVariant(variant = "") {
+    const panel = document.getElementById("drilldownPanel");
+    if (!panel) return;
+    panel.classList.toggle("drilldown--situation-kanban", String(variant || "").trim() === "situation-kanban");
+  }
+
+  function openDrilldown(options = {}) {
     const viewState = ensureViewUiState();
     ensureDrilldownDom();
     closeGlobalNav();
@@ -87,6 +93,7 @@ export function createProjectSubjectDrilldownController(config) {
       store.situationsView.drilldown.isOpen = true;
     }
     const panel = document.getElementById("drilldownPanel");
+    applyDrilldownVariant(options?.variant);
     setOverlayChromeOpenState(panel, true);
     document.body.classList.add("drilldown-open");
     updateDrilldownPanel();
@@ -99,27 +106,28 @@ export function createProjectSubjectDrilldownController(config) {
       store.situationsView.drilldown.isOpen = false;
     }
     const panel = document.getElementById("drilldownPanel");
+    panel?.classList.remove("drilldown--situation-kanban");
     setOverlayChromeOpenState(panel, false);
     document.body.classList.remove("drilldown-open");
   }
 
-  function openDrilldownFromSituation(situationId) {
+  function openDrilldownFromSituation(situationId, options = {}) {
     ensureViewUiState();
     const selection = openDrilldownFromSituationSelection(situationId);
     if (!selection) return;
-    openDrilldown();
+    openDrilldown(options);
   }
 
-  function openDrilldownFromSubject(subjectId) {
+  function openDrilldownFromSubject(subjectId, options = {}) {
     ensureViewUiState();
     const openSelection = openDrilldownFromSubjectSelection || openDrilldownFromSujetSelection;
     const selection = openSelection?.(subjectId);
     if (!selection) return;
-    openDrilldown();
+    openDrilldown(options);
   }
 
-  function openDrilldownFromSujet(sujetId) {
-    return openDrilldownFromSubject(sujetId);
+  function openDrilldownFromSujet(sujetId, options = {}) {
+    return openDrilldownFromSubject(sujetId, options);
   }
 
   return {
