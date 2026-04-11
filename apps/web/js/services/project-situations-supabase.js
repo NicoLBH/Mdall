@@ -126,7 +126,7 @@ async function getResolvedProjectId(projectId) {
 }
 
 function getSituationsSelectClause() {
-  return "id,project_id,title,description,objective_text,progress_percent,status,mode,filter_definition,created_at,updated_at,closed_at";
+  return "id,project_id,title,description,status,mode,filter_definition,created_at,updated_at,closed_at";
 }
 
 async function fetchSituationsByProject(projectId) {
@@ -178,10 +178,6 @@ function syncSituationsStore(projectId, situations) {
   const normalizedProjectScopeId = String(store.currentProjectId || "").trim() || null;
   const normalizedSituations = safeArray(situations).map(normalizeSituationRow);
   store.situationsView.data = normalizedSituations;
-  store.situationsView.rawResult = {
-    situations: normalizedSituations,
-    situationsById: Object.fromEntries(normalizedSituations.map((situation) => [situation.id, situation]))
-  };
   store.situationsView.projectScopeId = normalizedProjectScopeId;
   store.situationsView.page = 1;
   return normalizedSituations;
@@ -281,7 +277,6 @@ export async function loadSituationsForCurrentProject(projectId) {
   const resolvedProjectId = await getResolvedProjectId(projectId);
   if (!resolvedProjectId) {
     store.situationsView.data = [];
-    store.situationsView.rawResult = { situations: [], situationsById: {} };
     store.situationsView.projectScopeId = String(store.currentProjectId || "").trim() || null;
     store.situationsView.selectedSituationId = null;
     return [];
@@ -310,8 +305,6 @@ export async function createSituation(projectId, payload = {}) {
     project_id: resolvedProjectId,
     title: firstNonEmpty(payload.title, "Nouvelle situation"),
     description: firstNonEmpty(payload.description, "") || null,
-    objective_text: payload.objective_text ?? (firstNonEmpty(payload.description, "") || null),
-    progress_percent: Number.isFinite(payload.progress_percent) ? payload.progress_percent : 0,
     status: normalizeSituationStatus(payload.status),
     mode: normalizeSituationMode(payload.mode),
     filter_definition: normalizeSituationMode(payload.mode) === "automatic"
@@ -389,12 +382,6 @@ export async function updateSituation(situationId, patch = {}) {
   }
   if (Object.prototype.hasOwnProperty.call(patch, "description")) {
     body.description = firstNonEmpty(patch.description, "") || null;
-  }
-  if (Object.prototype.hasOwnProperty.call(patch, "objective_text")) {
-    body.objective_text = firstNonEmpty(patch.objective_text, "") || null;
-  }
-  if (Object.prototype.hasOwnProperty.call(patch, "progress_percent")) {
-    body.progress_percent = Number.isFinite(patch.progress_percent) ? patch.progress_percent : current.progress_percent;
   }
   if (Object.prototype.hasOwnProperty.call(patch, "status")) {
     body.status = nextStatus;
@@ -522,7 +509,6 @@ export async function loadSubjectsForSituation(situation, projectSubjectsState =
 
 export function resetSituationsForCurrentProject() {
   store.situationsView.data = [];
-  store.situationsView.rawResult = null;
   store.situationsView.projectScopeId = String(store.currentProjectId || "").trim() || null;
   store.situationsView.expandedSituations = new Set();
   store.situationsView.expandedSujets = new Set();
