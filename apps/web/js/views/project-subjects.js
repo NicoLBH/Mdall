@@ -698,6 +698,18 @@ export function getEffectiveSituationStatus(...args) {
   return projectSubjectsView.getEffectiveSituationStatus(...args);
 }
 
+export function getSujetKanbanStatusForSituation(...args) {
+  return getSujetKanbanStatus(...args);
+}
+
+export function setSujetKanbanStatusForSituation(...args) {
+  return setSujetKanbanStatus(...args);
+}
+
+export function openSubjectDrilldownFromSituation(...args) {
+  return openSubjectDrilldown(...args);
+}
+
 
 
 
