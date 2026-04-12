@@ -147,7 +147,7 @@ export function createProjectSubjectLabelsController(config) {
           <div class="gh-menu__title">Ordre</div>
           <button type="button" class="gh-menu__item ${direction === "asc" ? "is-active" : ""}" data-labels-sort-direction="asc">
             <span class="labels-sort-menu__check">${direction === "asc" ? svgIcon("check") : ""}</span>
-            <span>${svgIcon("arrow-up", { className: "octicon octicon-arrow-up" })}</span>
+            <span>${svgIcon("sort-asc", { className: "octicon octicon-sort-asc" })}</span>
             <span>Ascendant</span>
           </button>
           <button type="button" class="gh-menu__item ${direction === "desc" ? "is-active" : ""}" data-labels-sort-direction="desc">
@@ -205,21 +205,17 @@ export function createProjectSubjectLabelsController(config) {
               <span class="labels-modal__label">Nom</span>
               <input type="text" class="labels-modal__input" data-label-modal-input="name" value="${escapeHtml(modal.name || "")}" autocomplete="off">
             </label>
-            ${isCreate ? "" : `
-              <label class="labels-modal__field">
-                <span class="labels-modal__label">Description</span>
-                <textarea class="labels-modal__textarea" data-label-modal-input="description" rows="4">${escapeHtml(modal.description || "")}</textarea>
-              </label>
-            `}
+            <label class="labels-modal__field">
+              <span class="labels-modal__label">Description</span>
+              <textarea class="labels-modal__textarea" data-label-modal-input="description" rows="4">${escapeHtml(modal.description || "")}</textarea>
+            </label>
             <div class="labels-modal__field">
               <span class="labels-modal__label">Couleur</span>
               <div class="labels-modal__color-row">
                 <button type="button" class="labels-modal__color-reset" aria-label="Réinitialiser la couleur">${svgIcon("sync", { className: "octicon octicon-sync" })}</button>
                 <div class="labels-modal__color-input-wrap ${modal.colorPickerOpen ? "is-open" : ""}">
                   <div class="labels-modal__color-trigger">
-                    <button type="button" class="labels-modal__color-swatch-button" data-label-color-toggle="true" aria-expanded="${modal.colorPickerOpen ? "true" : "false"}">
-                      <span class="labels-modal__color-swatch" style="--label-color:${escapeHtml(color)};"></span>
-                    </button>
+                    <span class="labels-modal__color-swatch" style="--label-color:${escapeHtml(color)};" aria-hidden="true"></span>
                     <input type="text" class="labels-modal__color-input" data-label-modal-input="color" value="${escapeHtml(color)}" autocomplete="off">
                   </div>
                   <div class="labels-modal__color-popover ${modal.colorPickerOpen ? "is-open" : ""}">
