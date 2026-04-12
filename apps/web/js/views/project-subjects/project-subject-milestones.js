@@ -1,3 +1,4 @@
+import { renderProblemsCountsIconHtml } from "../ui/subissues-counts.js";
 export function formatObjectiveDueDateLabel(objective) {
   if (!objective?.dueDate) return "Pas de date définie";
   const parsed = new Date(objective.dueDate);
@@ -641,7 +642,7 @@ export function createProjectSubjectMilestonesController(config) {
           <div class="objectives-row" data-objective-id="${escapeHtml(objective.id)}" tabindex="0" role="button">
             <span class="objectives-row__icon" aria-hidden="true">${svgIcon("milestone", { className: "octicon octicon-milestone" })}</span>
             <button type="button" class="objectives-row__title" data-objective-id="${escapeHtml(objective.id)}">${escapeHtml(objective.title)}</button>
-            <span class="objectives-row__meta">${overdue ? `<span class="objectives-row__overdue"><span class="objectives-row__overdue-icon" aria-hidden="true">${svgIcon("alert-fill", { className: "octicon octicon-alert-fill" })}</span><span>${escapeHtml(overdue.label)}</span></span><span aria-hidden="true">•</span>` : ""}Échéance au ${escapeHtml(dueDateLabel)} <span aria-hidden="true">-</span> ${problemsCountsIconHtml(counts.closed, counts.total)}</span>
+            <span class="objectives-row__meta">${overdue ? `<span class="objectives-row__overdue"><span class="objectives-row__overdue-icon" aria-hidden="true">${svgIcon("alert-fill", { className: "octicon octicon-alert-fill" })}</span><span>${escapeHtml(overdue.label)}</span></span><span aria-hidden="true">•</span>` : ""}Échéance au ${escapeHtml(dueDateLabel)} <span aria-hidden="true">-</span> ${renderProblemsCountsIconHtml(counts.closed, counts.total, { svgIssueClosed: svgIcon("check-circle") })}</span>
             <div class="objectives-row__progress">${renderObjectiveProgressBar(objective, { compact: true })}</div>
           </div>
         `;
