@@ -19,6 +19,8 @@ function createProjectSubjectsViewState() {
     subjectsData: [],
     rawSubjectsResult: null,
     projectScopeId: null,
+    loading: false,
+    loaded: false,
 
   expandedSituations: new Set(),
   expandedSujets: new Set(),
