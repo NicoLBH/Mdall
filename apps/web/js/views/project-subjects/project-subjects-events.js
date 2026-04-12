@@ -576,7 +576,7 @@ export function createProjectSubjectsEvents(config) {
       rerenderPanels();
     });
 
-    toolbarRoot?.addEventListener("ghaction:action", (event) => {
+    const handleSubjectsGhAction = (event) => {
       const action = String(event.detail?.action || "");
       if (!action) return;
       if (action === "add-sujet") {
@@ -601,7 +601,10 @@ export function createProjectSubjectsEvents(config) {
         store.situationsView.showTableOnly = true;
         rerenderPanels();
       }
-    });
+    };
+
+    toolbarRoot?.addEventListener("ghaction:action", handleSubjectsGhAction);
+    root.addEventListener("ghaction:action", handleSubjectsGhAction);
 
     toolbarRoot?.addEventListener("click", (event) => {
       if (projectSubjectMilestones?.handleToolbarClick(event)) {
