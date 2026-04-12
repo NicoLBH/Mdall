@@ -1010,9 +1010,34 @@ function renderSubjectSituationCard(situation, subjectId) {
 function renderSubjectSituationsValue(subjectId) {
   const situations = getSubjectSituations(subjectId);
   if (!situations.length) return renderSubjectMetaButtonValue("Aucune situation");
+
+  const openSituations = situations.filter((situation) => String(getEffectiveSituationStatus(situation?.id) || situation?.status || "open").toLowerCase() === "open");
+  const closedSituations = situations.filter((situation) => String(getEffectiveSituationStatus(situation?.id) || situation?.status || "open").toLowerCase() !== "open");
+  const showClosedSituations = !!getSubjectsViewState().subjectMetaDropdown?.showClosedSituations;
+  const closedCount = closedSituations.length;
+  const closedLabel = closedCount > 1
+    ? `Afficher ${closedCount} situations fermées`
+    : `Afficher ${closedCount} situation fermée`;
+
   return `
     <span class="subject-meta-field__chips">
-      ${situations.map((situation) => renderSubjectSituationCard(situation, subjectId)).join("")}
+      ${openSituations.map((situation) => renderSubjectSituationCard(situation, subjectId)).join("")}
+      ${closedCount ? `
+        <button
+          type="button"
+          class="subject-meta-collapsible-toggle"
+          data-subject-situations-closed-toggle="true"
+          aria-expanded="${showClosedSituations ? "true" : "false"}"
+        >
+          <span class="subject-meta-collapsible-toggle__label">${escapeHtml(showClosedSituations ? "Montrer moins" : closedLabel)}</span>
+          <span class="subject-meta-collapsible-toggle__chevron" aria-hidden="true">${svgIcon(showClosedSituations ? "chevron-up" : "chevron-down", { className: "octicon octicon-chevron-down" })}</span>
+        </button>
+      ` : ""}
+      ${showClosedSituations ? `
+        <span class="subject-meta-field__chips subject-meta-field__chips--closed">
+          ${closedSituations.map((situation) => renderSubjectSituationCard(situation, subjectId)).join("")}
+        </span>
+      ` : ""}
     </span>
   `;
 }
