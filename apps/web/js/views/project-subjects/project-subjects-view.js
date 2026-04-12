@@ -567,6 +567,7 @@ function getSubjectSidebarMeta(subjectId) {
     return {
       assignees: Array.isArray(meta.assignees) ? meta.assignees.map((value) => String(value || "")).filter(Boolean) : [],
       labels: normalizeSubjectLabels(meta.labels),
+      labelIds: [],
       objectiveIds: normalizeSubjectObjectiveIds(meta.objectiveIds),
       situationIds: normalizeSubjectSituationIds(meta.situationIds),
       relations: Array.isArray(meta.relations) ? meta.relations.map((value) => String(value || "")).filter(Boolean) : []
@@ -619,18 +620,20 @@ function getSubjectSidebarMeta(subjectId) {
   const labelsById = rawResult?.labelsById && typeof rawResult.labelsById === "object"
     ? rawResult.labelsById
     : {};
-  const derivedLabels = Array.isArray(subjectMeta.labels) && subjectMeta.labels.length
-    ? normalizeSubjectLabels(subjectMeta.labels)
-    : normalizeSubjectLabels(
-        (Array.isArray(labelIdsBySubjectId[normalizedSubjectId]) ? labelIdsBySubjectId[normalizedSubjectId] : [])
+  const derivedLabelIds = normalizeSubjectSituationIds(labelIdsBySubjectId[normalizedSubjectId]);
+  const derivedLabels = derivedLabelIds.length
+    ? normalizeSubjectLabels(
+        derivedLabelIds
           .map((labelId) => labelsById[String(labelId || "")])
           .filter(Boolean)
           .map((labelDef) => String(labelDef?.name || labelDef?.label || labelDef?.label_key || labelDef?.key || "").trim())
-      );
+      )
+    : normalizeSubjectLabels(subjectMeta.labels);
 
   return {
     assignees: Array.isArray(subjectMeta.assignees) ? subjectMeta.assignees.map((value) => String(value || "")).filter(Boolean) : [],
     labels: derivedLabels,
+    labelIds: derivedLabelIds,
     objectiveIds,
     situationIds: derivedSituationIds,
     relations: Array.isArray(subjectMeta.relations) ? subjectMeta.relations.map((value) => String(value || "")).filter(Boolean) : []
@@ -1149,23 +1152,27 @@ function buildSubjectMetaMenuItems(subject, field) {
   }
 
   if (field === "labels") {
-    const selectedLabelKeys = new Set(getSubjectSidebarMeta(subject.id).labels.map((label) => normalizeSubjectLabelKey(label)));
+    const selectedLabelIds = new Set(getSubjectSidebarMeta(subject.id).labelIds.map((labelId) => String(labelId || "")));
     const items = getProjectSubjectLabels().getSubjectLabelDefinitions()
       .filter((labelDef) => matchSearch([labelDef.label, labelDef.description, labelDef.key], query))
-      .map((labelDef) => ({
-        key: String(labelDef.key || ""),
-        isActive: String(dropdownState.activeKey || "") === String(labelDef.key || ""),
-        isSelected: selectedLabelKeys.has(normalizeSubjectLabelKey(labelDef.key)),
-        iconHtml: `
-          <span class="select-menu__label-iconset" aria-hidden="true">
-            <span class="select-menu__checkbox ${selectedLabelKeys.has(normalizeSubjectLabelKey(labelDef.key)) ? "is-checked" : ""}">${svgIcon("check", { className: "octicon octicon-check" })}</span>
-            <span class="select-menu__label-dot" style="--select-menu-label-dot:${escapeHtml(labelDef.textColor || labelDef.borderColor || labelDef.color || '#8b949e')};"></span>
-          </span>
-        `,
-        title: labelDef.label,
-        metaHtml: escapeHtml(labelDef.description),
-        dataAttrs: { "subject-label-toggle": String(labelDef.key || "") }
-      }));
+      .map((labelDef) => {
+        const labelId = String(labelDef.id || labelDef.key || "");
+        const isSelected = selectedLabelIds.has(labelId);
+        return {
+          key: labelId,
+          isActive: String(dropdownState.activeKey || "") === labelId,
+          isSelected,
+          iconHtml: `
+            <span class="select-menu__label-iconset" aria-hidden="true">
+              <span class="select-menu__checkbox ${isSelected ? "is-checked" : ""}">${svgIcon("check", { className: "octicon octicon-check" })}</span>
+              <span class="select-menu__label-dot" style="--select-menu-label-dot:${escapeHtml(labelDef.textColor || labelDef.borderColor || labelDef.color || '#8b949e')};"></span>
+            </span>
+          `,
+          title: labelDef.label,
+          metaHtml: escapeHtml(labelDef.description),
+          dataAttrs: { "subject-label-toggle": labelId }
+        };
+      });
     return {
       items,
       emptyHint: query ? "Aucun résultat pour cette recherche." : "Aucun label disponible."
