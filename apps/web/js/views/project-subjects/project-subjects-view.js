@@ -1,4 +1,5 @@
 import { getDisplayAuthorName, getAuthorIdentity } from "../ui/author-identity.js";
+import { formatObjectiveDueDateLabel } from "./project-subject-milestones.js";
 export function createProjectSubjectsView(deps) {
   const {
     store,
