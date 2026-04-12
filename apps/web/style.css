@@ -11077,6 +11077,19 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   max-width:860px;
 }
 
+.project-situations-table__title-inline{
+  min-width:0;
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
+.project-situations-table__title-inline .status-badge{
+  flex:0 0 auto;
+}
+
+
 .settings-shell--situation-edit{
   padding-top:4px;
 }
