@@ -1,6 +1,12 @@
 import { store, DEFAULT_PROJECT_PHASES } from "../store.js";
 import { PROJECT_TAB_RESELECTED_EVENT } from "./project-header.js";
-import { loadFlatSubjectsForCurrentProject } from "../services/project-subjects-supabase.js";
+import {
+  loadFlatSubjectsForCurrentProject,
+  createObjective as createObjectiveInSupabase,
+  updateObjective as updateObjectiveInSupabase,
+  closeObjective as closeObjectiveInSupabase,
+  reopenObjective as reopenObjectiveInSupabase
+} from "../services/project-subjects-supabase.js";
 import { loadSituationsForCurrentProject, addSubjectToSituation, removeSubjectFromSituation } from "../services/project-situations-supabase.js";
 import {
   bindProjectSituationsRunbar,
@@ -436,6 +442,12 @@ const projectSubjectMilestones = createProjectSubjectMilestonesController({
   renderSituationsAddAction: (...args) => projectSubjectsView.renderSituationsAddAction(...args),
   getObjectiveById: (...args) => projectSubjectsView.getObjectiveById(...args),
   getObjectives: (...args) => projectSubjectsView.getObjectives(...args),
+  createObjectiveInSupabase,
+  updateObjectiveInSupabase,
+  closeObjectiveInSupabase,
+  reopenObjectiveInSupabase,
+  reloadSubjectsFromSupabase: (root, options) => reloadSubjectsFromSupabase(root, options),
+  getSubjectsCurrentRoot: () => subjectsCurrentRoot,
   persistRunBucket,
   statePill: (...args) => projectSubjectsView.statePill(...args),
   getCurrentSubjectsStatusFilter,
