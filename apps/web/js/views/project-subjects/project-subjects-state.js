@@ -72,6 +72,22 @@ export function createProjectSubjectsState({ store }) {
     if (typeof v.objectivesStatusFilter !== "string") v.objectivesStatusFilter = "open";
     if (typeof v.objectivesSort !== "string") v.objectivesSort = "recently_updated";
     if (typeof v.objectivesSortMenuOpen !== "boolean") v.objectivesSortMenuOpen = false;
+    if (typeof v.labelsSearch !== "string") v.labelsSearch = "";
+    if (typeof v.labelsSortBy !== "string") v.labelsSortBy = "name";
+    if (typeof v.labelsSortDirection !== "string") v.labelsSortDirection = "asc";
+    if (typeof v.labelsSortMenuOpen !== "boolean") v.labelsSortMenuOpen = false;
+    if (typeof v.labelsRowMenuOpen !== "string") v.labelsRowMenuOpen = "";
+    if (!v.labelEditModal || typeof v.labelEditModal !== "object") {
+      v.labelEditModal = {
+        isOpen: false,
+        mode: "edit",
+        targetKey: "",
+        name: "",
+        description: "",
+        color: "#8b949e",
+        colorPickerOpen: false
+      };
+    }
     if (typeof v.selectedObjectiveId !== "string") v.selectedObjectiveId = "";
     if (!v.objectiveEdit || typeof v.objectiveEdit !== "object") {
       v.objectiveEdit = {
@@ -139,6 +155,12 @@ export function createProjectSubjectsState({ store }) {
       activeKey: "",
       showClosedSituations: false
     };
+    v.labelsSortMenuOpen = false;
+    v.labelsRowMenuOpen = "";
+    if (v.labelEditModal && typeof v.labelEditModal === "object") {
+      v.labelEditModal.isOpen = false;
+      v.labelEditModal.colorPickerOpen = false;
+    }
     v.subjectKanbanDropdown = {
       subjectId: "",
       situationId: "",
