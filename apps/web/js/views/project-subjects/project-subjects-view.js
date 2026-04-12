@@ -533,7 +533,8 @@ function renderSujetKanbanStatusBadge(sujetId, situationId = "") {
 }
 
 function normalizeSubjectObjectiveIds(objectiveIds) {
-  return [...new Set((Array.isArray(objectiveIds) ? objectiveIds : []).map((value) => String(value || "").trim()).filter(Boolean))];
+  const normalized = [...new Set((Array.isArray(objectiveIds) ? objectiveIds : []).map((value) => String(value || "").trim()).filter(Boolean))];
+  return normalized.length ? [normalized[0]] : [];
 }
 
 function normalizeSubjectSituationIds(situationIds) {
