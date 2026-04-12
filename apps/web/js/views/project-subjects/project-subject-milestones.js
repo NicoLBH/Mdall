@@ -232,6 +232,168 @@ export function createProjectSubjectMilestonesController(config) {
     return statePill(objective?.closed ? "closed" : "open");
   }
 
+  function normalizeObjectiveSortKey(value) {
+    const allowed = new Set([
+      "recently_updated",
+      "furthest_due_date",
+      "closest_due_date",
+      "least_complete",
+      "most_complete",
+      "alphabetical",
+      "reverse_alphabetical",
+      "most_issues",
+      "fewest_issues"
+    ]);
+    const normalized = String(value || "").trim().toLowerCase();
+    return allowed.has(normalized) ? normalized : "recently_updated";
+  }
+
+  function getObjectiveSortOptions() {
+    return [
+      { value: "recently_updated", label: "Récemment mis à jour" },
+      { value: "furthest_due_date", label: "Date d'échéance la plus lointaine" },
+      { value: "closest_due_date", label: "Date d'échéance la plus proche" },
+      { value: "least_complete", label: "Moins avancés" },
+      { value: "most_complete", label: "Plus avancés" },
+      { value: "alphabetical", label: "Alphabétique" },
+      { value: "reverse_alphabetical", label: "Alphabétique inversé" },
+      { value: "most_issues", label: "Plus de sujets" },
+      { value: "fewest_issues", label: "Moins de sujets" }
+    ];
+  }
+
+  function getObjectiveDueDateValue(objective) {
+    if (!objective?.dueDate) return Number.NaN;
+    const parsed = new Date(`${String(objective.dueDate).slice(0, 10)}T00:00:00`);
+    return Number.isNaN(parsed.getTime()) ? Number.NaN : parsed.getTime();
+  }
+
+  function getObjectiveUpdatedAtValue(objective) {
+    const parsed = new Date(objective?.updated_at || objective?.created_at || 0);
+    return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime();
+  }
+
+  function getObjectiveCompletionPercent(objective) {
+    const counts = getObjectiveSubjectCounts(objective);
+    if (!counts.total) return 0;
+    return Math.round((counts.closed / counts.total) * 100);
+  }
+
+  function getObjectiveOverdueMeta(objective) {
+    if (!objective?.dueDate || objective?.closed) return null;
+    const dueValue = getObjectiveDueDateValue(objective);
+    if (!Number.isFinite(dueValue)) return null;
+    const today = new Date();
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+    const diffDays = Math.floor((todayStart - dueValue) / 86400000);
+    if (diffDays <= 0) return null;
+    return {
+      days: diffDays,
+      label: `Dépassé depuis ${diffDays} ${diffDays > 1 ? "jours" : "jour"}`
+    };
+  }
+
+  function compareObjectiveStrings(left, right) {
+    return String(left || "").localeCompare(String(right || ""), "fr", { sensitivity: "base", numeric: true });
+  }
+
+  function compareOptionalNumbers(left, right, direction = "asc") {
+    const leftValid = Number.isFinite(left);
+    const rightValid = Number.isFinite(right);
+    if (!leftValid && !rightValid) return 0;
+    if (!leftValid) return 1;
+    if (!rightValid) return -1;
+    return direction === "desc" ? right - left : left - right;
+  }
+
+  function sortObjectives(objectives = []) {
+    const sortKey = normalizeObjectiveSortKey(store.situationsView.objectivesSort || "recently_updated");
+    return [...objectives].sort((left, right) => {
+      const leftCounts = getObjectiveSubjectCounts(left);
+      const rightCounts = getObjectiveSubjectCounts(right);
+      const leftCompletion = getObjectiveCompletionPercent(left);
+      const rightCompletion = getObjectiveCompletionPercent(right);
+      const leftDue = getObjectiveDueDateValue(left);
+      const rightDue = getObjectiveDueDateValue(right);
+      const leftUpdated = getObjectiveUpdatedAtValue(left);
+      const rightUpdated = getObjectiveUpdatedAtValue(right);
+
+      let result = 0;
+      switch (sortKey) {
+        case "furthest_due_date":
+          result = compareOptionalNumbers(leftDue, rightDue, "desc");
+          break;
+        case "closest_due_date":
+          result = compareOptionalNumbers(leftDue, rightDue, "asc");
+          break;
+        case "least_complete":
+          result = leftCompletion - rightCompletion;
+          if (result === 0) result = leftCounts.total - rightCounts.total;
+          break;
+        case "most_complete":
+          result = rightCompletion - leftCompletion;
+          if (result === 0) result = rightCounts.total - leftCounts.total;
+          break;
+        case "alphabetical":
+          result = compareObjectiveStrings(left?.title, right?.title);
+          break;
+        case "reverse_alphabetical":
+          result = compareObjectiveStrings(right?.title, left?.title);
+          break;
+        case "most_issues":
+          result = rightCounts.total - leftCounts.total;
+          break;
+        case "fewest_issues":
+          result = leftCounts.total - rightCounts.total;
+          break;
+        case "recently_updated":
+        default:
+          result = rightUpdated - leftUpdated;
+          break;
+      }
+      if (result !== 0) return result;
+      result = compareObjectiveStrings(left?.title, right?.title);
+      if (result !== 0) return result;
+      return compareObjectiveStrings(left?.id, right?.id);
+    });
+  }
+
+  function renderObjectivesSortControlHtml() {
+    const activeSort = normalizeObjectiveSortKey(store.situationsView.objectivesSort || "recently_updated");
+    const isOpen = !!store.situationsView.objectivesSortMenuOpen;
+    return `
+      <div class="issues-head-menu objectives-sort-menu ${isOpen ? "is-open" : ""}">
+        <button
+          type="button"
+          class="gh-btn objectives-sort-menu__trigger"
+          data-objectives-sort-toggle="true"
+          aria-haspopup="true"
+          aria-expanded="${isOpen ? "true" : "false"}"
+        >
+          <span class="objectives-sort-menu__trigger-icon" aria-hidden="true">${svgIcon("sort-desc", { className: "octicon octicon-sort-desc" })}</span>
+          <span>Trier</span>
+          ${svgIcon("chevron-down", { className: "gh-chevron" })}
+        </button>
+        <div class="gh-menu issues-head-menu__dropdown objectives-sort-menu__dropdown ${isOpen ? "gh-menu--open" : ""}" role="menu">
+          <div class="gh-menu__title">Trier par</div>
+          ${getObjectiveSortOptions().map((option) => {
+            const isActive = option.value === activeSort;
+            return `
+              <button
+                type="button"
+                class="gh-menu__item objectives-sort-menu__item ${isActive ? "is-active" : ""}"
+                data-objectives-sort="${escapeHtml(option.value)}"
+              >
+                <span class="objectives-sort-menu__check" aria-hidden="true">${isActive ? svgIcon("check", { className: "octicon octicon-check" }) : ""}</span>
+                <span>${escapeHtml(option.label)}</span>
+              </button>
+            `;
+          }).join("")}
+        </div>
+      </div>
+    `;
+  }
+
   function renderObjectiveProgressBar(objective, options = {}) {
     const counts = getObjectiveSubjectCounts(objective);
     const percent = counts.total > 0 ? Math.round((counts.closed / counts.total) * 100) : 0;
@@ -417,27 +579,38 @@ export function createProjectSubjectMilestonesController(config) {
     const openObjectives = objectives.filter((objective) => !objective.closed);
     const closedObjectives = objectives.filter((objective) => objective.closed);
     const activeFilter = String(store.situationsView.objectivesStatusFilter || "open").toLowerCase() === "closed" ? "closed" : "open";
-    const visibleObjectives = activeFilter === "closed" ? closedObjectives : openObjectives;
+    const visibleObjectives = sortObjectives(activeFilter === "closed" ? closedObjectives : openObjectives);
 
-    const headHtml = renderTableHeadFilterToggle({
-      activeValue: activeFilter,
-      items: [
-        { label: "Ouverts", value: "open", count: openObjectives.length, dataAttr: "objectives-filter" },
-        { label: "Fermés", value: "closed", count: closedObjectives.length, dataAttr: "objectives-filter" }
-      ]
-    });
+    const headHtml = `
+      <div class="objectives-table__head-inner">
+        <div class="objectives-table__head-left">
+          ${renderTableHeadFilterToggle({
+            activeValue: activeFilter,
+            items: [
+              { label: "Ouverts", value: "open", count: openObjectives.length, dataAttr: "objectives-filter" },
+              { label: "Fermés", value: "closed", count: closedObjectives.length, dataAttr: "objectives-filter" }
+            ]
+          })}
+        </div>
+        <div class="objectives-table__head-right">
+          ${renderObjectivesSortControlHtml()}
+        </div>
+      </div>
+    `;
 
     const bodyHtml = visibleObjectives.length
       ? visibleObjectives.map((objective) => {
           const counts = getObjectiveSubjectCounts(objective);
-          const dueDateLabel = objective?.dueDate
-            ? new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium" }).format(new Date(objective.dueDate))
+          const dueDateValue = getObjectiveDueDateValue(objective);
+          const dueDateLabel = Number.isFinite(dueDateValue)
+            ? new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium" }).format(new Date(dueDateValue))
             : "Pas de date définie";
+          const overdue = getObjectiveOverdueMeta(objective);
           return `
           <div class="objectives-row" data-objective-id="${escapeHtml(objective.id)}" tabindex="0" role="button">
             <span class="objectives-row__icon" aria-hidden="true">${svgIcon("milestone", { className: "octicon octicon-milestone" })}</span>
             <button type="button" class="objectives-row__title" data-objective-id="${escapeHtml(objective.id)}">${escapeHtml(objective.title)}</button>
-            <span class="objectives-row__meta">Échéance au ${escapeHtml(dueDateLabel)} <span aria-hidden="true">-</span> ${problemsCountsIconHtml(counts.closed, counts.total)}</span>
+            <span class="objectives-row__meta">${overdue ? `<span class="objectives-row__overdue"><span class="objectives-row__overdue-icon" aria-hidden="true">${svgIcon("alert-fill", { className: "octicon octicon-alert-fill" })}</span><span>${escapeHtml(overdue.label)}</span></span><span aria-hidden="true">•</span>` : ""}Échéance au ${escapeHtml(dueDateLabel)} <span aria-hidden="true">-</span> ${problemsCountsIconHtml(counts.closed, counts.total)}</span>
             <div class="objectives-row__progress">${renderObjectiveProgressBar(objective, { compact: true })}</div>
           </div>
         `;
@@ -484,7 +657,7 @@ export function createProjectSubjectMilestonesController(config) {
           ? ""
           : [
               renderProjectTableToolbarGroup({ html: renderSubjectsToolbarButton({ id: "objectiveEditAction", label: "Modifier", action: "edit-objective" }) }),
-              renderProjectTableToolbarGroup({ html: renderSubjectsToolbarButton({ id: "objectiveCloseAction", label: "Fermer l\'Objectif", action: "close-objective" }) }),
+              renderProjectTableToolbarGroup({ html: renderSubjectsToolbarButton({ id: "objectiveCloseAction", label: selectedObjective?.closed ? "Rouvrir l'objectif" : "Fermer l'objectif", action: "close-objective" }) }),
               renderProjectTableToolbarGroup({ html: renderSituationsAddAction() })
             ].join(""))
       : renderProjectTableToolbarGroup({
@@ -503,6 +676,7 @@ export function createProjectSubjectMilestonesController(config) {
       openObjectiveCreate();
       store.situationsView.subjectsSubview = "objectives";
       store.situationsView.showTableOnly = true;
+      store.situationsView.objectivesSortMenuOpen = false;
       rerenderPanels();
       return true;
     }
@@ -512,6 +686,7 @@ export function createProjectSubjectMilestonesController(config) {
       store.situationsView.subjectsSubview = "objectives";
       store.situationsView.selectedObjectiveId = "";
       store.situationsView.showTableOnly = true;
+      store.situationsView.objectivesSortMenuOpen = false;
       rerenderPanels();
       return true;
     }
@@ -524,13 +699,32 @@ export function createProjectSubjectMilestonesController(config) {
     }
     if (action === "close-objective") {
       event?.preventDefault?.();
-      void closeObjective(store.situationsView.selectedObjectiveId);
+      const selectedObjective = getObjectiveById(store.situationsView.selectedObjectiveId || "");
+      if (selectedObjective?.closed) void reopenObjective(store.situationsView.selectedObjectiveId);
+      else void closeObjective(store.situationsView.selectedObjectiveId);
       return true;
     }
     return false;
   }
 
   function handleToolbarClick(event) {
+    const objectiveSortToggle = event.target.closest("[data-objectives-sort-toggle]");
+    if (objectiveSortToggle) {
+      event.preventDefault();
+      store.situationsView.objectivesSortMenuOpen = !store.situationsView.objectivesSortMenuOpen;
+      rerenderPanels();
+      return true;
+    }
+
+    const objectiveSortButton = event.target.closest("[data-objectives-sort]");
+    if (objectiveSortButton) {
+      event.preventDefault();
+      store.situationsView.objectivesSort = normalizeObjectiveSortKey(objectiveSortButton.dataset.objectivesSort || "recently_updated");
+      store.situationsView.objectivesSortMenuOpen = false;
+      rerenderPanels();
+      return true;
+    }
+
     const objectiveBackButton = event.target.closest("[data-objectives-back]");
     if (!objectiveBackButton) return false;
     event.preventDefault();
@@ -538,17 +732,36 @@ export function createProjectSubjectMilestonesController(config) {
     store.situationsView.subjectsSubview = "objectives";
     store.situationsView.selectedObjectiveId = "";
     store.situationsView.showTableOnly = true;
+    store.situationsView.objectivesSortMenuOpen = false;
     rerenderPanels();
     return true;
   }
 
   function handleRootClick(event) {
+    const objectiveSortToggle = event.target.closest("[data-objectives-sort-toggle]");
+    if (objectiveSortToggle) {
+      event.preventDefault();
+      store.situationsView.objectivesSortMenuOpen = !store.situationsView.objectivesSortMenuOpen;
+      rerenderPanels();
+      return true;
+    }
+
+    const objectiveSortButton = event.target.closest("[data-objectives-sort]");
+    if (objectiveSortButton) {
+      event.preventDefault();
+      store.situationsView.objectivesSort = normalizeObjectiveSortKey(objectiveSortButton.dataset.objectivesSort || "recently_updated");
+      store.situationsView.objectivesSortMenuOpen = false;
+      rerenderPanels();
+      return true;
+    }
+
     const objectivesFilterButton = event.target.closest("[data-objectives-filter]");
     if (objectivesFilterButton) {
       event.preventDefault();
       resetObjectiveEditState();
       store.situationsView.objectivesStatusFilter = String(objectivesFilterButton.dataset.objectivesFilter || "open").toLowerCase() === "closed" ? "closed" : "open";
       store.situationsView.selectedObjectiveId = "";
+      store.situationsView.objectivesSortMenuOpen = false;
       rerenderPanels();
       return true;
     }
@@ -558,6 +771,7 @@ export function createProjectSubjectMilestonesController(config) {
       event.preventDefault();
       resetObjectiveEditState();
       store.situationsView.selectedObjectiveId = "";
+      store.situationsView.objectivesSortMenuOpen = false;
       rerenderPanels();
       return true;
     }
@@ -654,6 +868,7 @@ export function createProjectSubjectMilestonesController(config) {
         resetObjectiveEditState();
         store.situationsView.selectedObjectiveId = objectiveId;
         store.situationsView.showTableOnly = true;
+        store.situationsView.objectivesSortMenuOpen = false;
         rerenderPanels();
         return true;
       }
@@ -675,10 +890,16 @@ export function createProjectSubjectMilestonesController(config) {
     if (objectiveEditCalendarDismissBound) return;
     objectiveEditCalendarDismissBound = true;
     document.addEventListener("click", (event) => {
-      if (!store.situationsView.objectiveEdit?.isOpen || !store.situationsView.objectiveEdit?.calendarOpen) return;
-      if (event.target.closest(".shared-date-picker")) return;
-      store.situationsView.objectiveEdit.calendarOpen = false;
-      rerenderPanels();
+      let shouldRerender = false;
+      if (store.situationsView.objectiveEdit?.isOpen && store.situationsView.objectiveEdit?.calendarOpen && !event.target.closest(".shared-date-picker")) {
+        store.situationsView.objectiveEdit.calendarOpen = false;
+        shouldRerender = true;
+      }
+      if (store.situationsView.objectivesSortMenuOpen && !event.target.closest(".objectives-sort-menu")) {
+        store.situationsView.objectivesSortMenuOpen = false;
+        shouldRerender = true;
+      }
+      if (shouldRerender) rerenderPanels();
     });
   }
 
