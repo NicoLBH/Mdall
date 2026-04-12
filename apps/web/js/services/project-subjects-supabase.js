@@ -359,23 +359,30 @@ async function loadObjectivesForProject(projectId) {
 }
 
 function buildObjectivesResult(milestoneRows = [], milestoneSubjectRows = []) {
-  const subjectIdsByMilestoneId = {};
+  const orderedMilestoneIds = (milestoneRows || []).map((row) => normalizeUuid(row?.id)).filter(Boolean);
+  const orderedMilestoneIdSet = new Set(orderedMilestoneIds);
+  const primaryMilestoneIdBySubjectId = {};
+
   for (const link of milestoneSubjectRows || []) {
     const milestoneId = normalizeUuid(link?.milestone_id);
     const subjectId = normalizeUuid(link?.subject_id);
-    if (!milestoneId || !subjectId) continue;
+    if (!milestoneId || !subjectId || !orderedMilestoneIdSet.has(milestoneId)) continue;
+    if (!primaryMilestoneIdBySubjectId[subjectId]) {
+      primaryMilestoneIdBySubjectId[subjectId] = milestoneId;
+    }
+  }
+
+  const subjectIdsByMilestoneId = {};
+  for (const [subjectId, milestoneId] of Object.entries(primaryMilestoneIdBySubjectId)) {
     if (!Array.isArray(subjectIdsByMilestoneId[milestoneId])) subjectIdsByMilestoneId[milestoneId] = [];
-    if (!subjectIdsByMilestoneId[milestoneId].includes(subjectId)) subjectIdsByMilestoneId[milestoneId].push(subjectId);
+    subjectIdsByMilestoneId[milestoneId].push(subjectId);
   }
 
   const objectives = (milestoneRows || []).map((row) => normalizeObjectiveRow(row, subjectIdsByMilestoneId[normalizeUuid(row?.id)] || []));
   const objectivesById = Object.fromEntries(objectives.map((objective) => [String(objective.id || ""), objective]).filter(([id]) => !!id));
   const objectiveIdsBySubjectId = {};
-  for (const objective of objectives) {
-    for (const subjectId of Array.isArray(objective.subjectIds) ? objective.subjectIds : []) {
-      if (!Array.isArray(objectiveIdsBySubjectId[subjectId])) objectiveIdsBySubjectId[subjectId] = [];
-      objectiveIdsBySubjectId[subjectId].push(String(objective.id || ""));
-    }
+  for (const [subjectId, milestoneId] of Object.entries(primaryMilestoneIdBySubjectId)) {
+    objectiveIdsBySubjectId[subjectId] = [milestoneId];
   }
 
   return {
