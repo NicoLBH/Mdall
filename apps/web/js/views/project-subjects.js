@@ -764,6 +764,7 @@ export function renderProjectSubjects(root) {
 
   
   if (toolbarHost) {
+    toolbarHost.dataset.toolbarOwner = "subjects";
     rerenderSubjectsToolbar();
   }
 
