@@ -888,7 +888,7 @@ body.sidebar-collapsed #sidebar{overflow:hidden;width:0;min-width:0;padding:0;ma
 
 .select-menu__objective-check.is-visible{
   opacity:1;
-  color:var(--muted);
+  color:currentColor;
 }
 
 .select-menu__objective-milestone,
