@@ -34,7 +34,10 @@ export function createProjectSubjectsActions(config) {
     normalizeSubjectSituationIds,
     normalizeSubjectLabels,
     normalizeSubjectLabelKey,
-    getObjectives
+    getObjectives,
+    addSubjectToObjectiveInSupabase,
+    removeSubjectFromObjectiveInSupabase,
+    rerenderPanels
   } = config;
 
   function setSujetKanbanStatus(sujetId, nextStatus, options = {}) {
@@ -218,6 +221,73 @@ export function createProjectSubjectsActions(config) {
       ? meta.labels.filter((value) => normalizeSubjectLabelKey(value) !== labelKey)
       : [...meta.labels, labelValue];
     setSubjectLabels(subjectKey, nextLabels);
+  }
+
+  function syncSubjectObjectiveMaps(subjectId, objectiveId, shouldLink) {
+    const raw = store.projectSubjectsView?.rawSubjectsResult;
+    if (!raw || typeof raw !== "object") return;
+
+    raw.objectiveIdsBySubjectId = raw.objectiveIdsBySubjectId && typeof raw.objectiveIdsBySubjectId === "object"
+      ? raw.objectiveIdsBySubjectId
+      : {};
+    raw.objectivesById = raw.objectivesById && typeof raw.objectivesById === "object"
+      ? raw.objectivesById
+      : {};
+    raw.objectives = Array.isArray(raw.objectives) ? raw.objectives : [];
+
+    const subjectKey = String(subjectId || "");
+    const objectiveKey = String(objectiveId || "");
+    if (!subjectKey || !objectiveKey) return;
+
+    const currentObjectiveIds = Array.isArray(raw.objectiveIdsBySubjectId[subjectKey])
+      ? raw.objectiveIdsBySubjectId[subjectKey].map((value) => String(value || "")).filter(Boolean)
+      : [];
+    raw.objectiveIdsBySubjectId[subjectKey] = shouldLink
+      ? [...new Set([...currentObjectiveIds, objectiveKey])]
+      : currentObjectiveIds.filter((value) => value !== objectiveKey);
+
+    const objective = raw.objectives.find((item) => String(item?.id || "") === objectiveKey) || raw.objectivesById[objectiveKey] || null;
+    if (!objective) return;
+
+    const currentSubjectIds = Array.isArray(objective.subjectIds)
+      ? objective.subjectIds.map((value) => String(value || "")).filter(Boolean)
+      : [];
+    objective.subjectIds = shouldLink
+      ? [...new Set([...currentSubjectIds, subjectKey])]
+      : currentSubjectIds.filter((value) => value !== subjectKey);
+    raw.objectivesById[objectiveKey] = objective;
+  }
+
+  async function toggleSubjectObjective(subjectId, objectiveId, options = {}) {
+    const subjectKey = String(subjectId || "");
+    const objectiveKey = String(objectiveId || "");
+    if (!subjectKey || !objectiveKey) return false;
+
+    const meta = getSubjectSidebarMeta(subjectKey);
+    const wasLinked = meta.objectiveIds.includes(objectiveKey);
+    const nextIds = wasLinked
+      ? meta.objectiveIds.filter((id) => id !== objectiveKey)
+      : [...meta.objectiveIds, objectiveKey];
+
+    setSubjectObjectiveIds(subjectKey, nextIds);
+    syncSubjectObjectiveMaps(subjectKey, objectiveKey, !wasLinked);
+
+    if (options.root) rerenderScope(options.root);
+    else rerenderPanels();
+
+    try {
+      if (wasLinked) await removeSubjectFromObjectiveInSupabase(objectiveKey, subjectKey);
+      else await addSubjectToObjectiveInSupabase(objectiveKey, subjectKey);
+      return true;
+    } catch (error) {
+      setSubjectObjectiveIds(subjectKey, meta.objectiveIds);
+      syncSubjectObjectiveMaps(subjectKey, objectiveKey, wasLinked);
+      if (options.root) rerenderScope(options.root);
+      else rerenderPanels();
+      console.warn("toggleSubjectObjective failed", error);
+      showError(`Mise à jour Supabase impossible : ${String(error?.message || error || "Erreur inconnue")}`);
+      return false;
+    }
   }
 
   function setSubjectObjective(subjectId, objectiveId) {
