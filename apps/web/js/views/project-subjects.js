@@ -10,9 +10,7 @@ import {
   removeSubjectFromObjective as removeSubjectFromObjectiveInSupabase,
   createLabel as createLabelInSupabase,
   updateLabel as updateLabelInSupabase,
-  deleteLabel as deleteLabelInSupabase,
-  addLabelToSubject as addLabelToSubjectInSupabase,
-  removeLabelFromSubject as removeLabelFromSubjectInSupabase
+  deleteLabel as deleteLabelInSupabase
 } from "../services/project-subjects-supabase.js";
 import { loadSituationsForCurrentProject, addSubjectToSituation, removeSubjectFromSituation } from "../services/project-situations-supabase.js";
 import {
@@ -525,8 +523,6 @@ const projectSubjectsActions = createProjectSubjectsActions({
   getObjectives: (...args) => projectSubjectsView.getObjectives(...args),
   addSubjectToObjectiveInSupabase: (...args) => addSubjectToObjectiveInSupabase(...args),
   removeSubjectFromObjectiveInSupabase: (...args) => removeSubjectFromObjectiveInSupabase(...args),
-  addLabelToSubjectInSupabase: (...args) => addLabelToSubjectInSupabase(...args),
-  removeLabelFromSubjectInSupabase: (...args) => removeLabelFromSubjectInSupabase(...args),
   rerenderPanels: (...args) => projectSubjectsView.rerenderPanels(...args)
 });
 
