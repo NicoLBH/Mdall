@@ -1027,18 +1027,18 @@ function buildSubjectMetaMenuItems(subject, field) {
   const query = String(dropdownState.query || "").trim().toLowerCase();
 
   if (field === "objectives") {
-    const selectedObjectiveId = String(getSubjectSidebarMeta(subject.id).objectiveIds[0] || "");
+    const selectedObjectiveIds = new Set(getSubjectSidebarMeta(subject.id).objectiveIds);
     const objectives = getObjectives();
     const matches = (objective) => matchSearch([objective.title, formatObjectiveDueDateLabel(objective), objective.id], query);
     const toItem = (objective) => {
-      const isSelected = selectedObjectiveId === String(objective.id || "");
+      const isSelected = selectedObjectiveIds.has(String(objective.id || ""));
       return {
         key: String(objective.id || ""),
         isActive: String(dropdownState.activeKey || "") === String(objective.id || ""),
         isSelected,
         iconHtml: `
           <span class="select-menu__objective-iconset" aria-hidden="true">
-            <span class="select-menu__objective-check ${isSelected ? "is-visible" : ""}">${svgIcon("check", { className: "octicon octicon-check" })}</span>
+            <span class="select-menu__checkbox ${isSelected ? "is-checked" : ""}">${svgIcon("check", { className: "octicon octicon-check" })}</span>
             <span class="select-menu__objective-milestone">${svgIcon("milestone", { className: "octicon octicon-milestone" })}</span>
           </span>
         `,
