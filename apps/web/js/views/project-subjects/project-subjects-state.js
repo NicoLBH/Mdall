@@ -11,6 +11,12 @@ export function createProjectSubjectsState({ store }) {
     if (typeof view.projectScopeId !== "string" && view.projectScopeId !== null) {
       view.projectScopeId = null;
     }
+    if (typeof view.loading !== "boolean") {
+      view.loading = false;
+    }
+    if (typeof view.loaded !== "boolean") {
+      view.loaded = false;
+    }
     return view;
   }
 
