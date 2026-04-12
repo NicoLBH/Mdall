@@ -70,6 +70,22 @@ export function createProjectSubjectsPersistence(deps = {}) {
       }
     });
 
+    if (!bucket.subjectMeta || typeof bucket.subjectMeta !== "object") {
+      bucket.subjectMeta = { sujet: {} };
+      mutated = true;
+    }
+    if (!bucket.subjectMeta.sujet || typeof bucket.subjectMeta.sujet !== "object") {
+      bucket.subjectMeta.sujet = {};
+      mutated = true;
+    }
+    Object.values(bucket.subjectMeta.sujet).forEach((meta) => {
+      if (!meta || typeof meta !== "object" || Array.isArray(meta)) return;
+      if (Object.prototype.hasOwnProperty.call(meta, "labels")) {
+        delete meta.labels;
+        mutated = true;
+      }
+    });
+
     ["selectedAvisId", "tempAvisVerdict", "tempAvisVerdictFor", "objectives"].forEach((key) => {
       if (Object.prototype.hasOwnProperty.call(bucket, key)) {
         delete bucket[key];
