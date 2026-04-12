@@ -1374,6 +1374,25 @@ function renderSubIssuesForSituation(situation, options = {}) {
 }
 
 
+function scheduleSubjectsPanelsRerender(callback, options = {}) {
+  const maxAttempts = Number.isFinite(Number(options?.maxAttempts)) ? Math.max(1, Number(options.maxAttempts)) : 12;
+  let attempt = 0;
+
+  const tryRerender = () => {
+    const connectedRoot = getSubjectsCurrentRoot();
+    const connectedPanelHost = document.getElementById("situationsPanelHost");
+    if (connectedRoot?.isConnected || connectedPanelHost?.isConnected) {
+      callback();
+      return;
+    }
+    attempt += 1;
+    if (attempt >= maxAttempts) return;
+    requestAnimationFrame(tryRerender);
+  };
+
+  tryRerender();
+}
+
 async function reloadSubjectsFromSupabase(root = getSubjectsCurrentRoot(), options = {}) {
   const targetRoot = root || getSubjectsCurrentRoot();
   const shouldRerender = options?.rerender !== false;
@@ -1383,10 +1402,20 @@ async function reloadSubjectsFromSupabase(root = getSubjectsCurrentRoot(), optio
 
   const data = await loadExistingSubjectsForCurrentProject({ force: true });
 
-  if (shouldRerender && targetRoot?.isConnected) {
+  const rerenderLoadedPanels = () => {
     rerenderPanels();
     const nextPrimaryScrollHost = document.querySelector("#situationsPanelHost .data-table-shell__body") || document.getElementById("situationsDetailsHost");
     restoreScrollableElementScrollState(nextPrimaryScrollHost, primaryScrollState);
+  };
+
+  if (shouldRerender) {
+    const currentRoot = targetRoot?.isConnected ? targetRoot : getSubjectsCurrentRoot();
+    const panelHost = document.getElementById("situationsPanelHost");
+    if (currentRoot?.isConnected || panelHost?.isConnected) {
+      rerenderLoadedPanels();
+    } else {
+      scheduleSubjectsPanelsRerender(rerenderLoadedPanels);
+    }
   }
 
   if (shouldUpdateModal) {
