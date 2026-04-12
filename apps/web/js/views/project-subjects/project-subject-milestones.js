@@ -18,6 +18,12 @@ export function createProjectSubjectMilestonesController(config) {
     renderSituationsAddAction,
     getObjectiveById,
     getObjectives,
+    createObjectiveInSupabase,
+    updateObjectiveInSupabase,
+    closeObjectiveInSupabase,
+    reopenObjectiveInSupabase,
+    reloadSubjectsFromSupabase,
+    getSubjectsCurrentRoot,
     persistRunBucket,
     statePill,
     getCurrentSubjectsStatusFilter,
@@ -47,7 +53,10 @@ export function createProjectSubjectMilestonesController(config) {
       description: "",
       calendarOpen: false,
       viewYear: 0,
-      viewMonth: 0
+      viewMonth: 0,
+      mode: "edit",
+      isSaving: false,
+      errorMessage: ""
     };
   }
 
@@ -65,8 +74,48 @@ export function createProjectSubjectMilestonesController(config) {
       description: String(objective.description || ""),
       calendarOpen: false,
       viewYear: selectedDate?.getFullYear?.() || fallback.getFullYear(),
-      viewMonth: selectedDate?.getMonth?.() ?? fallback.getMonth()
+      viewMonth: selectedDate?.getMonth?.() ?? fallback.getMonth(),
+      mode: "edit",
+      isSaving: false,
+      errorMessage: ""
     };
+  }
+
+
+  function openObjectiveCreate() {
+    ensureViewUiState();
+    const fallback = new Date();
+    store.situationsView.objectiveEdit = {
+      isOpen: true,
+      objectiveId: "",
+      title: "",
+      dueDate: "",
+      description: "",
+      calendarOpen: false,
+      viewYear: fallback.getFullYear(),
+      viewMonth: fallback.getMonth(),
+      mode: "create",
+      isSaving: false,
+      errorMessage: ""
+    };
+    store.situationsView.selectedObjectiveId = "";
+  }
+
+  function setObjectiveEditError(message = "") {
+    ensureViewUiState();
+    if (!store.situationsView.objectiveEdit || typeof store.situationsView.objectiveEdit !== "object") return;
+    store.situationsView.objectiveEdit.errorMessage = String(message || "").trim();
+  }
+
+  function setObjectiveEditSaving(isSaving) {
+    ensureViewUiState();
+    if (!store.situationsView.objectiveEdit || typeof store.situationsView.objectiveEdit !== "object") return;
+    store.situationsView.objectiveEdit.isSaving = !!isSaving;
+  }
+
+  async function refreshObjectivesUi(options = {}) {
+    await reloadSubjectsFromSupabase(getSubjectsCurrentRoot(), { rerender: false, updateModal: true, ...options });
+    rerenderPanels();
   }
 
   function getEditingObjective() {
@@ -76,45 +125,76 @@ export function createProjectSubjectMilestonesController(config) {
     return getObjectiveById(edit.objectiveId);
   }
 
-  function saveObjectiveEdit() {
+  async function saveObjectiveEdit() {
     ensureViewUiState();
     const edit = store.situationsView.objectiveEdit;
-    if (!edit?.isOpen || !edit.objectiveId) return;
+    if (!edit?.isOpen) return;
     const nextTitle = String(edit.title || "").trim();
-    if (!nextTitle) return;
-    const nextDueDate = String(edit.dueDate || "").trim() || null;
-    const nextDescription = String(edit.description || "").trim();
-    persistRunBucket((draft) => {
-      const objectives = Array.isArray(draft.objectives) ? draft.objectives : [];
-      const target = objectives.find((objective) => String(objective?.id || "") === String(edit.objectiveId || ""));
-      if (!target) return;
-      target.title = nextTitle;
-      target.dueDate = nextDueDate;
-      target.description = nextDescription;
-    });
-    resetObjectiveEditState();
+    if (!nextTitle) {
+      setObjectiveEditError("Le titre de l'objectif est obligatoire.");
+      rerenderPanels();
+      return;
+    }
+
+    setObjectiveEditSaving(true);
+    setObjectiveEditError("");
+    rerenderPanels();
+
+    try {
+      if (String(edit.mode || "edit") === "create") {
+        const created = await createObjectiveInSupabase("", {
+          title: nextTitle,
+          dueDate: String(edit.dueDate || "").trim() || null,
+          description: String(edit.description || "").trim(),
+          status: "open"
+        });
+        resetObjectiveEditState();
+        store.situationsView.selectedObjectiveId = String(created?.id || "");
+      } else if (edit.objectiveId) {
+        await updateObjectiveInSupabase(edit.objectiveId, {
+          title: nextTitle,
+          dueDate: String(edit.dueDate || "").trim() || null,
+          description: String(edit.description || "").trim()
+        });
+        resetObjectiveEditState();
+        store.situationsView.selectedObjectiveId = String(edit.objectiveId || "");
+      }
+      await refreshObjectivesUi();
+    } catch (error) {
+      setObjectiveEditSaving(false);
+      setObjectiveEditError(error instanceof Error ? error.message : "Impossible d'enregistrer l'objectif.");
+      rerenderPanels();
+    }
   }
 
-  function setObjectiveClosedState(objectiveId, closed) {
+  async function setObjectiveClosedState(objectiveId, closed) {
     const targetId = String(objectiveId || store.situationsView.selectedObjectiveId || "");
     if (!targetId) return;
-    persistRunBucket((draft) => {
-      const objectives = Array.isArray(draft.objectives) ? draft.objectives : [];
-      const target = objectives.find((objective) => String(objective?.id || "") === targetId);
-      if (!target) return;
-      target.closed = !!closed;
-    });
-    resetObjectiveEditState();
-    store.situationsView.selectedObjectiveId = "";
-    store.situationsView.objectivesStatusFilter = closed ? "open" : "closed";
+
+    setObjectiveEditSaving(true);
+    setObjectiveEditError("");
+    rerenderPanels();
+
+    try {
+      if (closed) await closeObjectiveInSupabase(targetId);
+      else await reopenObjectiveInSupabase(targetId);
+      resetObjectiveEditState();
+      store.situationsView.selectedObjectiveId = targetId;
+      store.situationsView.objectivesStatusFilter = closed ? "closed" : "open";
+      await refreshObjectivesUi();
+    } catch (error) {
+      setObjectiveEditSaving(false);
+      setObjectiveEditError(error instanceof Error ? error.message : "Impossible de mettre à jour le statut de l'objectif.");
+      rerenderPanels();
+    }
   }
 
-  function closeObjective(objectiveId) {
-    setObjectiveClosedState(objectiveId, true);
+  async function closeObjective(objectiveId) {
+    await setObjectiveClosedState(objectiveId, true);
   }
 
-  function reopenObjective(objectiveId) {
-    setObjectiveClosedState(objectiveId, false);
+  async function reopenObjective(objectiveId) {
+    await setObjectiveClosedState(objectiveId, false);
   }
 
   function getObjectiveSubjects(objective) {
@@ -224,13 +304,16 @@ export function createProjectSubjectMilestonesController(config) {
     const viewYear = Number.isFinite(Number(edit?.viewYear)) ? Number(edit.viewYear) : (selectedDate?.getFullYear?.() || fallback.getFullYear());
     const viewMonth = Number.isFinite(Number(edit?.viewMonth)) ? Number(edit.viewMonth) : (selectedDate?.getMonth?.() ?? fallback.getMonth());
     const isClosed = !!objective?.closed;
+    const isCreateMode = String(edit?.mode || "edit") === "create";
+    const isSaving = !!edit?.isSaving;
+    const errorMessage = String(edit?.errorMessage || "");
     const closeActionLabel = isClosed ? "Rouvrir l'objectif" : "Fermer l'objectif";
     const saveButtonClassName = isClosed ? "gh-btn gh-btn--comment" : "gh-btn gh-btn--primary gh-btn--comment";
 
     return `
       <section class="objective-edit-form">
         <header class="objective-edit-form__header">
-          <h2 class="objective-edit-form__title">Modifier l'objectif</h2>
+          <h2 class="objective-edit-form__title">${isCreateMode ? "Nouvel objectif" : "Modifier l'objectif"}</h2>
         </header>
         <div class="objective-edit-form__separator" aria-hidden="true"></div>
 
@@ -243,6 +326,7 @@ export function createProjectSubjectMilestonesController(config) {
             value="${escapeHtml(edit?.title || objective?.title || "")}"
             placeholder="${escapeHtml(objective?.title || "")}" 
             data-objective-edit-field="title"
+            ${isSaving ? "disabled" : ""}
           >
         </div>
 
@@ -269,16 +353,19 @@ export function createProjectSubjectMilestonesController(config) {
             rows="5"
             placeholder="Décrire l'objectif"
             data-objective-edit-field="description"
+            ${isSaving ? "disabled" : ""}
           >${escapeHtml(edit?.description || objective?.description || "")}</textarea>
         </div>
 
         <div class="objective-edit-form__separator" aria-hidden="true"></div>
 
+        ${errorMessage ? `<div class="form-error-banner">${escapeHtml(errorMessage)}</div>` : ""}
+
         <footer class="objective-edit-form__actions">
-          <button type="button" class="gh-btn" data-objective-edit-action="close">${closeActionLabel}</button>
+          ${isCreateMode ? "" : `<button type="button" class="gh-btn" data-objective-edit-action="close" ${isSaving ? "disabled" : ""}>${closeActionLabel}</button>`}
           <div class="objective-edit-form__actions-right">
-            <button type="button" class="gh-btn" data-objective-edit-action="cancel">Annuler</button>
-            <button type="button" class="${saveButtonClassName}" data-objective-edit-action="save">Enregistrer</button>
+            <button type="button" class="gh-btn" data-objective-edit-action="cancel" ${isSaving ? "disabled" : ""}>Annuler</button>
+            <button type="button" class="${saveButtonClassName}" data-objective-edit-action="save" ${isSaving ? "disabled" : ""}>${isSaving ? "Enregistrement..." : "Enregistrer"}</button>
           </div>
         </footer>
       </section>
@@ -316,6 +403,9 @@ export function createProjectSubjectMilestonesController(config) {
 
   function renderObjectivesTableHtml() {
     const selectedObjective = getObjectiveById(store.situationsView.selectedObjectiveId || "");
+    if (!selectedObjective && store.situationsView.objectiveEdit?.isOpen && String(store.situationsView.objectiveEdit?.mode || "") === "create") {
+      return renderObjectiveEditFormHtml(null);
+    }
     if (selectedObjective) {
       if (store.situationsView.objectiveEdit?.isOpen && String(store.situationsView.objectiveEdit?.objectiveId || "") === String(selectedObjective.id || "")) {
         return renderObjectiveEditFormHtml(selectedObjective);
@@ -410,6 +500,10 @@ export function createProjectSubjectMilestonesController(config) {
   function handleToolbarAction(action, event) {
     if (action === "add-objective") {
       event?.preventDefault?.();
+      openObjectiveCreate();
+      store.situationsView.subjectsSubview = "objectives";
+      store.situationsView.showTableOnly = true;
+      rerenderPanels();
       return true;
     }
     if (action === "open-objectives") {
@@ -430,8 +524,7 @@ export function createProjectSubjectMilestonesController(config) {
     }
     if (action === "close-objective") {
       event?.preventDefault?.();
-      closeObjective(store.situationsView.selectedObjectiveId);
-      rerenderPanels();
+      void closeObjective(store.situationsView.selectedObjectiveId);
       return true;
     }
     return false;
@@ -542,14 +635,14 @@ export function createProjectSubjectMilestonesController(config) {
       const action = String(objectiveEditAction.dataset.objectiveEditAction || "");
       if (action === "cancel") {
         resetObjectiveEditState();
+        rerenderPanels();
       } else if (action === "save") {
-        saveObjectiveEdit();
+        void saveObjectiveEdit();
       } else if (action === "close") {
         const editingObjective = getEditingObjective();
-        if (editingObjective?.closed) reopenObjective(store.situationsView.selectedObjectiveId);
-        else closeObjective(store.situationsView.selectedObjectiveId);
+        if (editingObjective?.closed) void reopenObjective(store.situationsView.selectedObjectiveId);
+        else void closeObjective(store.situationsView.selectedObjectiveId);
       }
-      rerenderPanels();
       return true;
     }
 
