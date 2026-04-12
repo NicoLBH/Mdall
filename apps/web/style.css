@@ -574,6 +574,45 @@ body.sidebar-collapsed #sidebar{overflow:hidden;width:0;min-width:0;padding:0;ma
   gap:8px;
 }
 
+.subject-meta-field__chips--closed{
+  margin-top:0;
+}
+
+.subject-meta-collapsible-toggle{
+  width:100%;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  padding:8px 10px;
+  border:0;
+  border-radius:8px;
+  background:rgba(110,118,129,.14);
+  color:var(--text);
+  font:inherit;
+  font-size:13px;
+  font-weight:600;
+  text-align:left;
+  cursor:pointer;
+}
+
+.subject-meta-collapsible-toggle:hover,
+.subject-meta-collapsible-toggle:focus-visible{
+  background:rgba(110,118,129,.24);
+  outline:none;
+}
+
+.subject-meta-collapsible-toggle__label{
+  min-width:0;
+}
+
+.subject-meta-collapsible-toggle__chevron{
+  display:inline-flex;
+  align-items:center;
+  flex:0 0 auto;
+  color:var(--muted);
+}
+
 .subject-meta-field__chip{
   display:flex;
   align-items:center;
@@ -11082,10 +11121,20 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   display:inline-flex;
   align-items:center;
   gap:8px;
-  flex-wrap:wrap;
+  flex-wrap:nowrap;
+  max-width:100%;
+}
+
+.project-situations-table__title-trigger{
+  display:inline-block;
+  width:auto;
+  flex:0 1 auto;
+  min-width:0;
+  max-width:100%;
 }
 
 .project-situations-table__title-inline .status-badge{
+  display:inline-flex;
   flex:0 0 auto;
 }
 
