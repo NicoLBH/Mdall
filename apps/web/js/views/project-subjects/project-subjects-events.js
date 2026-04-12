@@ -333,8 +333,7 @@ export function createProjectSubjectsEvents(config) {
           }
           if (field === "labels") {
             event.preventDefault();
-            toggleSubjectLabel(subjectSelection.item.id, activeKey);
-            rerenderScope(root);
+            await toggleSubjectLabel(subjectSelection.item.id, activeKey, { root });
             focusSubjectMetaSearch(root, field);
             syncSubjectMetaDropdownPosition(getSubjectMetaScopeRoot());
           }
@@ -368,13 +367,12 @@ export function createProjectSubjectsEvents(config) {
     });
 
     dropdownHost.querySelectorAll("[data-subject-label-toggle]").forEach((btn) => {
-      btn.onclick = (event) => {
+      btn.onclick = async (event) => {
         event.preventDefault();
         event.stopPropagation();
         const subjectSelection = getScopedSelection(root);
         if (subjectSelection?.type !== "sujet") return;
-        toggleSubjectLabel(subjectSelection.item.id, String(btn.dataset.subjectLabelToggle || ""));
-        rerenderScope(root);
+        await toggleSubjectLabel(subjectSelection.item.id, String(btn.dataset.subjectLabelToggle || ""), { root });
         focusSubjectMetaSearch(root, "labels");
         syncSubjectMetaDropdownPosition(getSubjectMetaScopeRoot());
       };

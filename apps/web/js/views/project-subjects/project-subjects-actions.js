@@ -34,7 +34,10 @@ export function createProjectSubjectsActions(config) {
     normalizeSubjectSituationIds,
     normalizeSubjectLabels,
     normalizeSubjectLabelKey,
+    getSubjectLabelDefinition,
     getObjectives,
+    addLabelToSubjectInSupabase,
+    removeLabelFromSubjectInSupabase,
     addSubjectToObjectiveInSupabase,
     removeSubjectFromObjectiveInSupabase,
     rerenderPanels
@@ -203,17 +206,90 @@ export function createProjectSubjectsActions(config) {
     });
   }
 
-  function toggleSubjectLabel(subjectId, label) {
+  function syncSubjectLabelMaps(subjectId, labelId, shouldLink) {
+    const raw = store.projectSubjectsView?.rawSubjectsResult;
+    if (!raw || typeof raw !== "object") return;
+
+    raw.labelIdsBySubjectId = raw.labelIdsBySubjectId && typeof raw.labelIdsBySubjectId === "object"
+      ? raw.labelIdsBySubjectId
+      : {};
+    raw.subjectIdsByLabelId = raw.subjectIdsByLabelId && typeof raw.subjectIdsByLabelId === "object"
+      ? raw.subjectIdsByLabelId
+      : {};
+
+    const subjectKey = String(subjectId || "");
+    const labelKey = String(labelId || "");
+    if (!subjectKey || !labelKey) return;
+
+    const currentLabelIds = Array.isArray(raw.labelIdsBySubjectId[subjectKey])
+      ? raw.labelIdsBySubjectId[subjectKey].map((value) => String(value || "")).filter(Boolean)
+      : [];
+    raw.labelIdsBySubjectId[subjectKey] = shouldLink
+      ? [...new Set([...currentLabelIds, labelKey])]
+      : currentLabelIds.filter((value) => value !== labelKey);
+
+    const currentSubjectIds = Array.isArray(raw.subjectIdsByLabelId[labelKey])
+      ? raw.subjectIdsByLabelId[labelKey].map((value) => String(value || "")).filter(Boolean)
+      : [];
+    raw.subjectIdsByLabelId[labelKey] = shouldLink
+      ? [...new Set([...currentSubjectIds, subjectKey])]
+      : currentSubjectIds.filter((value) => value !== subjectKey);
+  }
+
+  async function toggleSubjectLabel(subjectId, label, options = {}) {
     const subjectKey = String(subjectId || "");
     const labelValue = String(label || "").trim();
     const labelKey = normalizeSubjectLabelKey(labelValue);
-    if (!subjectKey || !labelKey) return;
+    if (!subjectKey || !labelKey) return false;
+
+    const labelDefinition = getSubjectLabelDefinition(labelValue);
+    const labelId = String(labelDefinition?.id || "").trim();
+    const displayLabel = String(
+      labelDefinition?.label
+      || labelDefinition?.name
+      || labelDefinition?.label_key
+      || labelDefinition?.key
+      || labelValue
+    ).trim();
+
+    if (!labelId) {
+      showError("Impossible de retrouver ce label dans les données chargées.");
+      return false;
+    }
+
     const meta = getSubjectSidebarMeta(subjectKey);
-    const hasLabel = meta.labels.some((value) => normalizeSubjectLabelKey(value) === labelKey);
+    const previousLabels = Array.isArray(meta.labels) ? [...meta.labels] : [];
+    const hasLabel = previousLabels.some((value) => normalizeSubjectLabelKey(value) === labelKey);
     const nextLabels = hasLabel
-      ? meta.labels.filter((value) => normalizeSubjectLabelKey(value) !== labelKey)
-      : [...meta.labels, labelValue];
+      ? previousLabels.filter((value) => normalizeSubjectLabelKey(value) !== labelKey)
+      : [...previousLabels, displayLabel];
+
     setSubjectLabels(subjectKey, nextLabels);
+    syncSubjectLabelMaps(subjectKey, labelId, !hasLabel);
+
+    if (options.root) rerenderScope(options.root);
+    else rerenderPanels();
+
+    try {
+      if (hasLabel) await removeLabelFromSubjectInSupabase(subjectKey, labelId);
+      else await addLabelToSubjectInSupabase(subjectKey, labelId);
+
+      await reloadSubjectsFromSupabase(options.root, {
+        rerender: true,
+        updateModal: true
+      });
+      return true;
+    } catch (error) {
+      setSubjectLabels(subjectKey, previousLabels);
+      syncSubjectLabelMaps(subjectKey, labelId, hasLabel);
+
+      if (options.root) rerenderScope(options.root);
+      else rerenderPanels();
+
+      console.warn("toggleSubjectLabel failed", error);
+      showError(`Mise à jour Supabase impossible : ${String(error?.message || error || "Erreur inconnue")}`);
+      return false;
+    }
   }
 
   function syncSubjectObjectiveMaps(subjectId, objectiveId, shouldLink) {
