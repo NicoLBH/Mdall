@@ -485,6 +485,35 @@ async function fetchProjectSubjectLabels(projectId) {
   return Array.isArray(rows) ? rows : [];
 }
 
+
+
+function normalizeLabelHexColor(value) {
+  const raw = String(value || "").trim();
+  const match = raw.match(/^#([0-9a-fA-F]{6})$/);
+  return match ? `#${match.group(1).lower()}` : "#8b949e";
+}
+
+function buildProjectLabelWritePayload(projectId, payload = {}, current = null) {
+  const name = firstNonEmpty(payload.name, current?.name, "").trim();
+  if (!name) throw new Error("Le nom du label est requis.");
+
+  const hexColor = normalizeLabelHexColor(firstNonEmpty(payload.hexColor, payload.color, current?.hex_color, current?.hexColor, "#8b949e"));
+  const description = Object.prototype.hasOwnProperty.call(payload, "description")
+    ? firstNonEmpty(payload.description, "")
+    : firstNonEmpty(current?.description, "");
+
+  return {
+    project_id: normalizeUuid(firstNonEmpty(projectId, current?.project_id, current?.projectId, "")),
+    label_key: normalizeSubjectLabelKey(firstNonEmpty(payload.labelKey, payload.label_key, current?.label_key, current?.labelKey, name)),
+    name,
+    description: description || null,
+    text_color: hexColor,
+    background_color: `${hexColor}22`,
+    border_color: `${hexColor}66`,
+    hex_color: hexColor
+  };
+}
+
 function buildLabelsResult(labelRows = [], subjectLabelRows = []) {
   const labels = (Array.isArray(labelRows) ? labelRows : []).map((row) => normalizeProjectLabelRow(row));
   const labelsById = {};
@@ -522,6 +551,101 @@ function buildLabelsResult(labelRows = [], subjectLabelRows = []) {
     labelIdsBySubjectId,
     subjectIdsByLabelId
   };
+}
+
+
+
+export async function createLabel(projectId, payload = {}) {
+  const resolvedProjectId = await getResolvedProjectId(projectId);
+  if (!resolvedProjectId) throw new Error("projectId is required");
+
+  const body = buildProjectLabelWritePayload(resolvedProjectId, payload);
+
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/project_labels`, {
+    method: "POST",
+    headers: await getSupabaseAuthHeaders({
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      Prefer: "return=representation"
+    }),
+    body: JSON.stringify(body)
+  });
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`project_label create failed (${res.status}): ${txt}`);
+  }
+
+  const rows = await res.json().catch(() => []);
+  return normalizeProjectLabelRow((Array.isArray(rows) ? rows[0] : rows) || {});
+}
+
+export async function updateLabel(labelId, patch = {}) {
+  const normalizedLabelId = normalizeUuid(labelId);
+  if (!normalizedLabelId) throw new Error("labelId is required");
+
+  const url = new URL(`${SUPABASE_URL}/rest/v1/project_labels`);
+  url.searchParams.set(
+    "select",
+    "id,project_id,label_key,name,description,text_color,background_color,border_color,hex_color,sort_order,created_at,updated_at"
+  );
+  url.searchParams.set("id", `eq.${normalizedLabelId}`);
+  url.searchParams.set("limit", "1");
+
+  const currentRes = await fetch(url.toString(), {
+    method: "GET",
+    headers: await getSupabaseAuthHeaders({ Accept: "application/json" }),
+    cache: "no-store"
+  });
+
+  if (!currentRes.ok) {
+    const txt = await currentRes.text().catch(() => "");
+    throw new Error(`project_label fetch failed (${currentRes.status}): ${txt}`);
+  }
+
+  const currentRows = await currentRes.json().catch(() => []);
+  const current = normalizeProjectLabelRow((Array.isArray(currentRows) ? currentRows[0] : currentRows) || {});
+  if (!current?.id) throw new Error("label not found");
+
+  const body = buildProjectLabelWritePayload(current.project_id, patch, current);
+
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/project_labels?id=eq.${normalizedLabelId}`, {
+    method: "PATCH",
+    headers: await getSupabaseAuthHeaders({
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      Prefer: "return=representation"
+    }),
+    body: JSON.stringify(body)
+  });
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`project_label update failed (${res.status}): ${txt}`);
+  }
+
+  const rows = await res.json().catch(() => []);
+  return normalizeProjectLabelRow((Array.isArray(rows) ? rows[0] : rows) || {});
+}
+
+export async function deleteLabel(labelId) {
+  const normalizedLabelId = normalizeUuid(labelId);
+  if (!normalizedLabelId) throw new Error("labelId is required");
+
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/project_labels?id=eq.${normalizedLabelId}`, {
+    method: "DELETE",
+    headers: await getSupabaseAuthHeaders({
+      Accept: "application/json",
+      Prefer: "return=minimal"
+    })
+  });
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`project_label delete failed (${res.status}): ${txt}`);
+  }
+
+  return true;
 }
 
 export async function loadLabelsForProject(projectId) {
