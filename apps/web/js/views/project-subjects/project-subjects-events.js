@@ -579,12 +579,56 @@ export function createProjectSubjectsEvents(config) {
     if (root?.dataset) root.dataset.subjectsEventsBound = "1";
     const toolbarRoot = document.getElementById("situationsToolbarHost");
     const projectSubjectMilestones = getProjectSubjectMilestones?.();
+    const projectSubjectLabels = config.getProjectSubjectLabels?.();
+
+    const getLabelsUiState = () => projectSubjectLabels?.getLabelsUiState?.() || {};
+    const closeLabelsMenus = () => {
+      const labelsState = getLabelsUiState();
+      labelsState.labelsSortMenuOpen = false;
+      labelsState.labelsRowMenuOpen = "";
+      if (labelsState.labelEditModal && typeof labelsState.labelEditModal === "object") {
+        labelsState.labelEditModal.colorPickerOpen = false;
+      }
+    };
+    const openLabelModal = (mode = "edit", labelKey = "") => {
+      const labelsState = getLabelsUiState();
+      const labelDef = labelKey ? projectSubjectLabels?.getSubjectLabelDefinition?.(labelKey) : null;
+      labelsState.labelEditModal = {
+        isOpen: true,
+        mode,
+        targetKey: labelDef?.key || "",
+        name: String(labelDef?.label || ""),
+        description: String(labelDef?.description || ""),
+        color: String(labelDef?.hexColor || "#8b949e"),
+        colorPickerOpen: false
+      };
+      labelsState.labelsSortMenuOpen = false;
+      labelsState.labelsRowMenuOpen = "";
+    };
 
     toolbarRoot?.addEventListener("input", (event) => {
       const searchInput = event.target.closest?.("#situationsSearch");
       if (!searchInput) return;
       store.situationsView.search = String(searchInput.value || "");
       rerenderPanels();
+    });
+
+    root.addEventListener("input", (event) => {
+      const labelsSearchInput = event.target.closest?.("#labelsSearchInput");
+      if (labelsSearchInput) {
+        const labelsState = getLabelsUiState();
+        labelsState.labelsSearch = String(labelsSearchInput.value || "");
+        rerenderPanels();
+        return;
+      }
+      const labelModalInput = event.target.closest?.("[data-label-modal-input]");
+      if (labelModalInput) {
+        const labelsState = getLabelsUiState();
+        const modal = labelsState.labelEditModal || {};
+        const field = String(labelModalInput.dataset.labelModalInput || "");
+        modal[field] = String(labelModalInput.value || "");
+        labelsState.labelEditModal = modal;
+      }
     });
 
     const handleSubjectsGhAction = (event) => {
@@ -602,6 +646,8 @@ export function createProjectSubjectsEvents(config) {
 
       if (action === "add-label") {
         event.preventDefault();
+        openLabelModal("create");
+        rerenderPanels();
         return;
       }
       if (action === "open-labels") {
@@ -623,9 +669,104 @@ export function createProjectSubjectsEvents(config) {
       }
     });
 
+    document.addEventListener("click", (event) => {
+      if (String(store.situationsView.subjectsSubview || "subjects") !== "labels") return;
+      if (event.target.closest(".labels-sort-menu") || event.target.closest(".labels-row-menu") || event.target.closest(".labels-modal__color-input-wrap") || event.target.closest("#labelsEditModal")) {
+        return;
+      }
+      const labelsState = getLabelsUiState();
+      if (!labelsState.labelsSortMenuOpen && !labelsState.labelsRowMenuOpen && !(labelsState.labelEditModal && labelsState.labelEditModal.colorPickerOpen)) return;
+      closeLabelsMenus();
+      rerenderPanels();
+    });
+
     syncSubjectMetaDropdownPosition(getSubjectMetaScopeRoot());
 
     root.addEventListener("click", (event) => {
+      const closeLabelModalButton = event.target.closest("[data-close-label-modal]");
+      if (closeLabelModalButton) {
+        event.preventDefault();
+        const labelsState = getLabelsUiState();
+        if (labelsState.labelEditModal && typeof labelsState.labelEditModal === "object") {
+          labelsState.labelEditModal.isOpen = false;
+          labelsState.labelEditModal.colorPickerOpen = false;
+        }
+        rerenderPanels();
+        return;
+      }
+
+      const labelsSortToggle = event.target.closest("[data-labels-sort-toggle]");
+      if (labelsSortToggle) {
+        event.preventDefault();
+        const labelsState = getLabelsUiState();
+        labelsState.labelsSortMenuOpen = !labelsState.labelsSortMenuOpen;
+        labelsState.labelsRowMenuOpen = "";
+        rerenderPanels();
+        return;
+      }
+
+      const labelsSortByButton = event.target.closest("[data-labels-sort-by]");
+      if (labelsSortByButton) {
+        event.preventDefault();
+        const labelsState = getLabelsUiState();
+        labelsState.labelsSortBy = String(labelsSortByButton.dataset.labelsSortBy || "name");
+        labelsState.labelsSortMenuOpen = false;
+        rerenderPanels();
+        return;
+      }
+
+      const labelsSortDirectionButton = event.target.closest("[data-labels-sort-direction]");
+      if (labelsSortDirectionButton) {
+        event.preventDefault();
+        const labelsState = getLabelsUiState();
+        labelsState.labelsSortDirection = String(labelsSortDirectionButton.dataset.labelsSortDirection || "asc");
+        labelsState.labelsSortMenuOpen = false;
+        rerenderPanels();
+        return;
+      }
+
+      const labelRowMenuToggle = event.target.closest("[data-label-row-menu-toggle]");
+      if (labelRowMenuToggle) {
+        event.preventDefault();
+        const labelsState = getLabelsUiState();
+        const key = String(labelRowMenuToggle.dataset.labelRowMenuToggle || "");
+        labelsState.labelsRowMenuOpen = String(labelsState.labelsRowMenuOpen || "") === key ? "" : key;
+        labelsState.labelsSortMenuOpen = false;
+        rerenderPanels();
+        return;
+      }
+
+      const labelEditButton = event.target.closest("[data-label-edit]");
+      if (labelEditButton) {
+        event.preventDefault();
+        openLabelModal("edit", String(labelEditButton.dataset.labelEdit || ""));
+        rerenderPanels();
+        return;
+      }
+
+      const labelColorToggle = event.target.closest("[data-label-color-toggle]");
+      if (labelColorToggle) {
+        event.preventDefault();
+        const labelsState = getLabelsUiState();
+        if (labelsState.labelEditModal && typeof labelsState.labelEditModal === "object") {
+          labelsState.labelEditModal.colorPickerOpen = !labelsState.labelEditModal.colorPickerOpen;
+        }
+        rerenderPanels();
+        return;
+      }
+
+      const labelColorValueButton = event.target.closest("[data-label-color-value]");
+      if (labelColorValueButton) {
+        event.preventDefault();
+        const labelsState = getLabelsUiState();
+        if (labelsState.labelEditModal && typeof labelsState.labelEditModal === "object") {
+          labelsState.labelEditModal.color = String(labelColorValueButton.dataset.labelColorValue || "#8b949e");
+          labelsState.labelEditModal.colorPickerOpen = false;
+        }
+        rerenderPanels();
+        return;
+      }
+
       const createSubjectTabButton = event.target.closest("[data-create-subject-tab]");
       if (createSubjectTabButton && store.situationsView.createSubjectForm?.isOpen) {
         event.preventDefault();
