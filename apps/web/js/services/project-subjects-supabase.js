@@ -918,6 +918,13 @@ export async function loadFlatSubjectsForCurrentProject(options = {}) {
   }
 
   const backendProjectId = getMappedBackendProjectId();
+  const previousSelectedSubjectId = normalizeUuid(
+    store.projectSubjectsView?.selectedSubjectId
+    || store.projectSubjectsView?.selectedSujetId
+  );
+  const previousSelectedSituationId = normalizeUuid(
+    store.projectSubjectsView?.selectedSituationId
+  );
 
   if (!backendProjectId) {
     store.projectSubjectsView.subjectsData = [];
@@ -1006,9 +1013,17 @@ export async function loadFlatSubjectsForCurrentProject(options = {}) {
   store.projectSubjectsView.page = 1;
   store.projectSubjectsView.expandedSubjectIds = new Set();
   store.projectSubjectsView.expandedSujets = store.projectSubjectsView.expandedSubjectIds;
-  store.projectSubjectsView.selectedSubjectId = result.subjects[0]?.id || null;
-  store.projectSubjectsView.selectedSujetId = result.subjects[0]?.id || null;
-  store.projectSubjectsView.subjectsSelectedNodeId = result.subjects[0]?.id || "";
+  const nextSelectedSubjectId = previousSelectedSubjectId && result.subjectsById?.[previousSelectedSubjectId]
+    ? previousSelectedSubjectId
+    : (result.subjects[0]?.id || null);
+  const nextSelectedSituationId = previousSelectedSituationId && result.situationsById?.[previousSelectedSituationId]
+    ? previousSelectedSituationId
+    : (store.projectSubjectsView.selectedSituationId || null);
+
+  store.projectSubjectsView.selectedSubjectId = nextSelectedSubjectId;
+  store.projectSubjectsView.selectedSujetId = nextSelectedSubjectId;
+  store.projectSubjectsView.selectedSituationId = nextSelectedSituationId;
+  store.projectSubjectsView.subjectsSelectedNodeId = nextSelectedSubjectId || "";
 
   return result.subjects;
 }
