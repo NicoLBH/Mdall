@@ -630,6 +630,15 @@ export function createProjectSubjectsEvents(config) {
         labelsState.labelEditModal = modal;
       }
     });
+    root.addEventListener("focusin", (event) => {
+      const colorInput = event.target.closest?.(".labels-modal__color-input");
+      if (!colorInput) return;
+      const labelsState = getLabelsUiState();
+      if (labelsState.labelEditModal && typeof labelsState.labelEditModal === "object" && !labelsState.labelEditModal.colorPickerOpen) {
+        labelsState.labelEditModal.colorPickerOpen = true;
+        rerenderPanels();
+      }
+    });
 
     const handleSubjectsGhAction = (event) => {
       const action = String(event.detail?.action || "");
@@ -744,16 +753,6 @@ export function createProjectSubjectsEvents(config) {
         return;
       }
 
-      const labelColorToggle = event.target.closest("[data-label-color-toggle]");
-      if (labelColorToggle) {
-        event.preventDefault();
-        const labelsState = getLabelsUiState();
-        if (labelsState.labelEditModal && typeof labelsState.labelEditModal === "object") {
-          labelsState.labelEditModal.colorPickerOpen = !labelsState.labelEditModal.colorPickerOpen;
-        }
-        rerenderPanels();
-        return;
-      }
 
       const labelColorValueButton = event.target.closest("[data-label-color-value]");
       if (labelColorValueButton) {
