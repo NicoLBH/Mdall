@@ -20,7 +20,7 @@ export function createProjectSituationsSelectors({ store, uiState }) {
     return String(value || "open").trim().toLowerCase() === "closed" ? "closed" : "open";
   }
 
-  function getSituations() {
+  function getAllSituations() {
     return safeArray(store.situationsView?.data)
       .map((situation) => ({
         ...situation,
@@ -39,10 +39,26 @@ export function createProjectSituationsSelectors({ store, uiState }) {
       });
   }
 
+  function getCurrentSituationsStatusFilter() {
+    return String(store.situationsView?.situationsStatusFilter || store.situationsView?.filters?.status || "open").toLowerCase() === "closed" ? "closed" : "open";
+  }
+
+  function getSituationsStatusCounts() {
+    return getAllSituations().reduce((acc, situation) => {
+      if (situation.status === "closed") acc.closed += 1;
+      else acc.open += 1;
+      return acc;
+    }, { open: 0, closed: 0 });
+  }
+
+  function getSituations() {
+    const current = getCurrentSituationsStatusFilter();
+    return getAllSituations().filter((situation) => situation.status === current);
+  }
 
   function getSelectedSituation() {
     const selectedId = String(store.situationsView?.selectedSituationId || "").trim();
-    return getSituations().find((situation) => situation.id === selectedId) || null;
+    return getAllSituations().find((situation) => situation.id === selectedId) || null;
   }
 
   function renderSituationCount(situationId) {
@@ -84,6 +100,9 @@ export function createProjectSituationsSelectors({ store, uiState }) {
     firstNonEmpty,
     normalizeSituationMode,
     normalizeSituationStatus,
+    getAllSituations,
+    getCurrentSituationsStatusFilter,
+    getSituationsStatusCounts,
     getSituations,
     getSelectedSituation,
     renderSituationCount,
