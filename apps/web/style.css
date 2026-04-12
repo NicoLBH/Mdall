@@ -1797,8 +1797,10 @@ body.modal-open {
 .issue-row-subject-title-line{display:flex;align-items:center;gap:6px;min-width:0;flex-wrap:nowrap;}
 .issue-row-subject-title-line .row-title-trigger{display:inline;flex:0 1 auto;width:auto;min-width:0;max-width:none;}
 .issue-row-subject-labels{display:inline-flex;flex:0 0 auto;align-items:center;gap:6px;min-width:0;flex-wrap:nowrap;}
-.issue-row-subject-objective{display:inline-flex;align-items:center;gap:4px;min-width:0;vertical-align:middle;}
-.issue-row-subject-objective__icon{display:inline-flex;align-items:center;color:var(--muted);}
+.issue-row-subject-objective{display:inline-flex;align-items:center;gap:4px;min-width:0;vertical-align:middle;padding:0;border:0;background:none;color:var(--muted);cursor:pointer;font:inherit;}
+.issue-row-subject-objective:hover,
+.issue-row-subject-objective:focus-visible{color:var(--fgColor-accent, #4493f8);outline:none;}
+.issue-row-subject-objective__icon{display:inline-flex;align-items:center;color:currentColor;}
 .issue-row-subject-objective__text{min-width:0;overflow:hidden;text-overflow:ellipsis;vertical-align:middle;}
 
 
