@@ -96,13 +96,6 @@ export function createProjectSubjectsActions(config) {
         objectiveIds: nextIds
       };
 
-      const objectives = Array.isArray(bucket.objectives) ? bucket.objectives : [];
-      objectives.forEach((objective) => {
-        const existingIds = Array.isArray(objective?.subjectIds) ? objective.subjectIds.map((value) => String(value || "")).filter(Boolean) : [];
-        const filteredIds = existingIds.filter((value) => value !== subjectKey);
-        if (nextIds.includes(String(objective?.id || ""))) filteredIds.push(subjectKey);
-        objective.subjectIds = [...new Set(filteredIds)];
-      });
     });
   }
 
@@ -267,33 +260,24 @@ export function createProjectSubjectsActions(config) {
     const previousIds = Array.isArray(meta.objectiveIds)
       ? meta.objectiveIds.map((id) => String(id || "")).filter(Boolean)
       : [];
-    const previousPrimaryId = String(previousIds[0] || "");
-    const wasLinked = previousPrimaryId === objectiveKey;
-    const nextIds = wasLinked ? [] : [objectiveKey];
+    const wasLinked = previousIds.includes(objectiveKey);
+    const nextIds = wasLinked
+      ? previousIds.filter((id) => id !== objectiveKey)
+      : [...previousIds, objectiveKey];
 
     setSubjectObjectiveIds(subjectKey, nextIds);
-    previousIds.forEach((previousId) => {
-      syncSubjectObjectiveMaps(subjectKey, previousId, false);
-    });
-    if (!wasLinked) syncSubjectObjectiveMaps(subjectKey, objectiveKey, true);
+    syncSubjectObjectiveMaps(subjectKey, objectiveKey, !wasLinked);
 
     if (options.root) rerenderScope(options.root);
     else rerenderPanels();
 
     try {
-      for (const previousId of previousIds) {
-        await removeSubjectFromObjectiveInSupabase(previousId, subjectKey);
-      }
-      if (!wasLinked) await addSubjectToObjectiveInSupabase(objectiveKey, subjectKey);
+      if (wasLinked) await removeSubjectFromObjectiveInSupabase(objectiveKey, subjectKey);
+      else await addSubjectToObjectiveInSupabase(objectiveKey, subjectKey);
       return true;
     } catch (error) {
       setSubjectObjectiveIds(subjectKey, previousIds);
-      previousIds.forEach((previousId) => {
-        syncSubjectObjectiveMaps(subjectKey, previousId, true);
-      });
-      if (!previousIds.includes(objectiveKey)) {
-        syncSubjectObjectiveMaps(subjectKey, objectiveKey, false);
-      }
+      syncSubjectObjectiveMaps(subjectKey, objectiveKey, wasLinked);
       if (options.root) rerenderScope(options.root);
       else rerenderPanels();
       console.warn("toggleSubjectObjective failed", error);
