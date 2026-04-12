@@ -1,7 +1,8 @@
 import { escapeHtml } from "../../utils/escape-html.js";
 import {
   renderDataTableShell,
-  renderDataTableEmptyState
+  renderDataTableEmptyState,
+  renderDataTableLoadingState
 } from "./data-table-shell.js";
 
 export function renderIssuesTable({
@@ -12,11 +13,18 @@ export function renderIssuesTable({
   headClassName = "",
   bodyClassName = "",
   emptyTitle = "Aucun résultat",
-  emptyDescription = ""
+  emptyDescription = "",
+  state = "auto",
+  loadingTitle = "Chargement…",
+  loadingDescription = ""
 } = {}) {
   const hasRows = typeof rowsHtml === "string"
     ? rowsHtml.trim().length > 0
     : !!rowsHtml;
+
+  const resolvedState = state === "auto"
+    ? (hasRows ? "ready" : "empty")
+    : state;
 
   return renderDataTableShell({
     className,
@@ -25,10 +33,14 @@ export function renderIssuesTable({
     headClassName,
     bodyClassName,
     gridTemplate,
-    state: hasRows ? "ready" : "empty",
+    state: resolvedState,
     emptyHtml: renderDataTableEmptyState({
       title: emptyTitle,
       description: emptyDescription
+    }),
+    loadingHtml: renderDataTableLoadingState({
+      title: loadingTitle,
+      description: loadingDescription
     })
   });
 }
