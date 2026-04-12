@@ -1378,11 +1378,15 @@ async function reloadSubjectsFromSupabase(root = getSubjectsCurrentRoot(), optio
   const targetRoot = root || getSubjectsCurrentRoot();
   const shouldRerender = options?.rerender !== false;
   const shouldUpdateModal = !!options?.updateModal;
+  const primaryScrollHost = document.querySelector("#situationsPanelHost .data-table-shell__body") || document.getElementById("situationsDetailsHost");
+  const primaryScrollState = getScrollableElementScrollState(primaryScrollHost);
 
   const data = await loadExistingSubjectsForCurrentProject({ force: true });
 
   if (shouldRerender && targetRoot?.isConnected) {
     rerenderPanels();
+    const nextPrimaryScrollHost = document.querySelector("#situationsPanelHost .data-table-shell__body") || document.getElementById("situationsDetailsHost");
+    restoreScrollableElementScrollState(nextPrimaryScrollHost, primaryScrollState);
   }
 
   if (shouldUpdateModal) {
