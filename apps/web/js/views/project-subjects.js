@@ -352,6 +352,7 @@ const projectSubjectsEvents = createProjectSubjectsEvents({
   bindOverlayChromeDismiss,
   bindOverlayChromeCompact,
   getProjectSubjectMilestones: () => projectSubjectMilestones,
+  getProjectSubjectLabels: () => projectSubjectLabels,
   getSubjectsCurrentRoot: () => subjectsCurrentRoot,
   openDetailsModal: () => projectSubjectDetail.openDetailsModal(),
   openSubjectDetails: () => projectSubjectDetail.openSubjectDetails()
@@ -470,6 +471,7 @@ const projectSubjectMilestones = createProjectSubjectMilestonesController({
 const projectSubjectLabels = createProjectSubjectLabelsController({
   store,
   escapeHtml,
+  svgIcon,
   renderIssuesTable,
   normalizeSubjectLabelKey: (...args) => projectSubjectsView.normalizeSubjectLabelKey(...args),
   getSubjectSidebarMeta: (...args) => projectSubjectsView.getSubjectSidebarMeta(...args)
