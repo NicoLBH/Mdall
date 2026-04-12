@@ -7,7 +7,10 @@ import {
   closeObjective as closeObjectiveInSupabase,
   reopenObjective as reopenObjectiveInSupabase,
   addSubjectToObjective as addSubjectToObjectiveInSupabase,
-  removeSubjectFromObjective as removeSubjectFromObjectiveInSupabase
+  removeSubjectFromObjective as removeSubjectFromObjectiveInSupabase,
+  createLabel as createLabelInSupabase,
+  updateLabel as updateLabelInSupabase,
+  deleteLabel as deleteLabelInSupabase
 } from "../services/project-subjects-supabase.js";
 import { loadSituationsForCurrentProject, addSubjectToSituation, removeSubjectFromSituation } from "../services/project-situations-supabase.js";
 import {
@@ -474,7 +477,12 @@ const projectSubjectLabels = createProjectSubjectLabelsController({
   svgIcon,
   renderIssuesTable,
   normalizeSubjectLabelKey: (...args) => projectSubjectsView.normalizeSubjectLabelKey(...args),
-  getSubjectSidebarMeta: (...args) => projectSubjectsView.getSubjectSidebarMeta(...args)
+  getSubjectSidebarMeta: (...args) => projectSubjectsView.getSubjectSidebarMeta(...args),
+  createLabel: (...args) => createLabelInSupabase(...args),
+  updateLabel: (...args) => updateLabelInSupabase(...args),
+  deleteLabel: (...args) => deleteLabelInSupabase(...args),
+  reloadSubjectsFromSupabase: (...args) => reloadSubjectsFromSupabase(...args),
+  getSubjectsCurrentRoot: () => subjectsCurrentRoot
 });
 
 const projectSubjectsActions = createProjectSubjectsActions({
