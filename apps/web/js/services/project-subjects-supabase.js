@@ -100,6 +100,119 @@ async function fetchProjectSubjectLinks(projectId) {
   return json;
 }
 
+function normalizeUuid(value) {
+  const normalized = String(value || "").trim();
+  return normalized || "";
+}
+
+function normalizeObjectiveStatus(value) {
+  return String(value || "open").trim().toLowerCase() === "closed" ? "closed" : "open";
+}
+
+function normalizeObjectiveRow(row = {}, subjectIds = []) {
+  const normalizedSubjectIds = [...new Set((Array.isArray(subjectIds) ? subjectIds : []).map((value) => String(value || "").trim()).filter(Boolean))];
+  const status = normalizeObjectiveStatus(row.status);
+  return {
+    ...row,
+    id: normalizeUuid(row.id),
+    project_id: normalizeUuid(row.project_id),
+    title: firstNonEmpty(row.title, "Objectif"),
+    description: firstNonEmpty(row.description, ""),
+    dueDate: row.due_date || "",
+    status,
+    closed: status === "closed",
+    created_at: row.created_at || "",
+    updated_at: row.updated_at || "",
+    closed_at: row.closed_at || null,
+    subjectIds: normalizedSubjectIds
+  };
+}
+
+async function fetchProjectMilestones(projectId) {
+  if (!projectId) return [];
+
+  const url = new URL(`${SUPABASE_URL}/rest/v1/milestones`);
+  url.searchParams.set(
+    "select",
+    "id,project_id,title,description,due_date,status,created_at,updated_at,closed_at"
+  );
+  url.searchParams.set("project_id", `eq.${projectId}`);
+  url.searchParams.set("order", "created_at.asc");
+
+  const res = await fetch(url.toString(), {
+    method: "GET",
+    headers: await getSupabaseAuthHeaders({ Accept: "application/json" }),
+    cache: "no-store"
+  });
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`milestones fetch failed (${res.status}): ${txt}`);
+  }
+
+  const json = await res.json().catch(() => []);
+  return Array.isArray(json) ? json : [];
+}
+
+async function fetchProjectMilestoneSubjects(projectId, milestoneIds = []) {
+  const normalizedMilestoneIds = [...new Set((Array.isArray(milestoneIds) ? milestoneIds : []).map((value) => normalizeUuid(value)).filter(Boolean))];
+  if (!normalizedMilestoneIds.length) return [];
+
+  const url = new URL(`${SUPABASE_URL}/rest/v1/milestone_subjects`);
+  url.searchParams.set("select", "id,milestone_id,subject_id,created_at");
+  url.searchParams.set("milestone_id", `in.(${normalizedMilestoneIds.join(',')})`);
+  url.searchParams.set("order", "created_at.asc");
+
+  const res = await fetch(url.toString(), {
+    method: "GET",
+    headers: await getSupabaseAuthHeaders({ Accept: "application/json" }),
+    cache: "no-store"
+  });
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`milestone_subjects fetch failed (${res.status}): ${txt}`);
+  }
+
+  const json = await res.json().catch(() => []);
+  return Array.isArray(json) ? json : [];
+}
+
+async function loadObjectivesForProject(projectId) {
+  const milestoneRows = await fetchProjectMilestones(projectId);
+  const milestoneIds = milestoneRows.map((row) => normalizeUuid(row?.id)).filter(Boolean);
+  const milestoneSubjectRows = await fetchProjectMilestoneSubjects(projectId, milestoneIds);
+  return buildObjectivesResult(milestoneRows, milestoneSubjectRows);
+}
+
+function buildObjectivesResult(milestoneRows = [], milestoneSubjectRows = []) {
+  const subjectIdsByMilestoneId = {};
+  for (const link of milestoneSubjectRows || []) {
+    const milestoneId = normalizeUuid(link?.milestone_id);
+    const subjectId = normalizeUuid(link?.subject_id);
+    if (!milestoneId || !subjectId) continue;
+    if (!Array.isArray(subjectIdsByMilestoneId[milestoneId])) subjectIdsByMilestoneId[milestoneId] = [];
+    if (!subjectIdsByMilestoneId[milestoneId].includes(subjectId)) subjectIdsByMilestoneId[milestoneId].push(subjectId);
+  }
+
+  const objectives = (milestoneRows || []).map((row) => normalizeObjectiveRow(row, subjectIdsByMilestoneId[normalizeUuid(row?.id)] || []));
+  const objectivesById = Object.fromEntries(objectives.map((objective) => [String(objective.id || ""), objective]).filter(([id]) => !!id));
+  const objectiveIdsBySubjectId = {};
+  for (const objective of objectives) {
+    for (const subjectId of Array.isArray(objective.subjectIds) ? objective.subjectIds : []) {
+      if (!Array.isArray(objectiveIdsBySubjectId[subjectId])) objectiveIdsBySubjectId[subjectId] = [];
+      objectiveIdsBySubjectId[subjectId].push(String(objective.id || ""));
+    }
+  }
+
+  return {
+    objectives,
+    objectivesById,
+    objectiveIdsBySubjectId
+  };
+}
+
+
 function buildProjectFlatSubjectsResult(subjectRows = [], subjectLinks = [], options = {}) {
   const subjectsById = {};
   const parentBySubjectId = {};
@@ -197,7 +310,11 @@ export async function loadFlatSubjectsForCurrentProject(options = {}) {
       relationIdsBySubjectId: {},
       relationOptionsById: {},
       situationsById: {},
-      subjectIdsBySituationId: {}
+      subjectIdsBySituationId: {},
+      objectives: [],
+      objectivesById: {},
+      objectiveIdsBySubjectId: {},
+      objectivesHydrated: false
     };
     store.projectSubjectsView.rawResult = store.projectSubjectsView.rawSubjectsResult;
     return [];
@@ -214,6 +331,21 @@ export async function loadFlatSubjectsForCurrentProject(options = {}) {
   const result = buildProjectFlatSubjectsResult(subjects, subjectLinks, { runId: store.ui.runId || "" });
   result.situationsById = Object.fromEntries(situations.map((situation) => [String(situation?.id || ""), situation]).filter(([id]) => !!id));
   result.subjectIdsBySituationId = subjectIdsBySituationId;
+
+  try {
+    const objectivesResult = await loadObjectivesForProject(backendProjectId);
+    result.objectives = Array.isArray(objectivesResult?.objectives) ? objectivesResult.objectives : [];
+    result.objectivesById = objectivesResult?.objectivesById && typeof objectivesResult.objectivesById === "object" ? objectivesResult.objectivesById : {};
+    result.objectiveIdsBySubjectId = objectivesResult?.objectiveIdsBySubjectId && typeof objectivesResult.objectiveIdsBySubjectId === "object" ? objectivesResult.objectiveIdsBySubjectId : {};
+    result.objectivesHydrated = true;
+  } catch (error) {
+    console.warn("[project-subjects] objectives load failed", error);
+    result.objectives = [];
+    result.objectivesById = {};
+    result.objectiveIdsBySubjectId = {};
+    result.objectivesHydrated = false;
+  }
+
   result.relationOptionsById = {
     ...(result.relationOptionsById && typeof result.relationOptionsById === "object" ? result.relationOptionsById : {}),
     ...result.situationsById
