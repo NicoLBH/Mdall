@@ -613,9 +613,24 @@ function getSubjectSidebarMeta(subjectId) {
     String(subject?.raw?.situation_id || subject?.situation_id || "")
   ]);
 
+  const labelIdsBySubjectId = rawResult?.labelIdsBySubjectId && typeof rawResult.labelIdsBySubjectId === "object"
+    ? rawResult.labelIdsBySubjectId
+    : {};
+  const labelsById = rawResult?.labelsById && typeof rawResult.labelsById === "object"
+    ? rawResult.labelsById
+    : {};
+  const derivedLabels = Array.isArray(subjectMeta.labels) && subjectMeta.labels.length
+    ? normalizeSubjectLabels(subjectMeta.labels)
+    : normalizeSubjectLabels(
+        (Array.isArray(labelIdsBySubjectId[normalizedSubjectId]) ? labelIdsBySubjectId[normalizedSubjectId] : [])
+          .map((labelId) => labelsById[String(labelId || "")])
+          .filter(Boolean)
+          .map((labelDef) => String(labelDef?.name || labelDef?.label || labelDef?.label_key || labelDef?.key || "").trim())
+      );
+
   return {
     assignees: Array.isArray(subjectMeta.assignees) ? subjectMeta.assignees.map((value) => String(value || "")).filter(Boolean) : [],
-    labels: normalizeSubjectLabels(subjectMeta.labels),
+    labels: derivedLabels,
     objectiveIds,
     situationIds: derivedSituationIds,
     relations: Array.isArray(subjectMeta.relations) ? subjectMeta.relations.map((value) => String(value || "")).filter(Boolean) : []
