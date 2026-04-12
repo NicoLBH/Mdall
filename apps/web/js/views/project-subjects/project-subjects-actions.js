@@ -37,8 +37,6 @@ export function createProjectSubjectsActions(config) {
     getObjectives,
     addSubjectToObjectiveInSupabase,
     removeSubjectFromObjectiveInSupabase,
-    addLabelToSubjectInSupabase,
-    removeLabelFromSubjectInSupabase,
     rerenderPanels
   } = config;
 
@@ -205,94 +203,17 @@ export function createProjectSubjectsActions(config) {
     });
   }
 
-  function resolveSubjectLabelDefinition(value) {
-    const raw = store.projectSubjectsView?.rawSubjectsResult;
-    const rawValue = String(value || "").trim();
-    const normalizedValue = normalizeSubjectLabelKey(rawValue);
-    if (!raw || typeof raw !== "object") return null;
-
-    const labelsById = raw.labelsById && typeof raw.labelsById === "object" ? raw.labelsById : {};
-    const labelsByKey = raw.labelsByKey && typeof raw.labelsByKey === "object" ? raw.labelsByKey : {};
-    const labels = Array.isArray(raw.labels) ? raw.labels : [];
-
-    return labelsById[rawValue]
-      || labelsById[normalizedValue]
-      || labelsByKey[normalizedValue]
-      || labels.find((labelDef) => {
-        return normalizedValue === normalizeSubjectLabelKey(labelDef?.id)
-          || normalizedValue === normalizeSubjectLabelKey(labelDef?.label_key || labelDef?.labelKey || labelDef?.key)
-          || normalizedValue === normalizeSubjectLabelKey(labelDef?.name || labelDef?.label);
-      })
-      || null;
-  }
-
-  function syncSubjectLabelMaps(subjectId, labelId, shouldLink) {
-    const raw = store.projectSubjectsView?.rawSubjectsResult;
-    if (!raw || typeof raw !== "object") return;
-
-    raw.labelIdsBySubjectId = raw.labelIdsBySubjectId && typeof raw.labelIdsBySubjectId === "object"
-      ? raw.labelIdsBySubjectId
-      : {};
-    raw.subjectIdsByLabelId = raw.subjectIdsByLabelId && typeof raw.subjectIdsByLabelId === "object"
-      ? raw.subjectIdsByLabelId
-      : {};
-
+  function toggleSubjectLabel(subjectId, label) {
     const subjectKey = String(subjectId || "");
-    const labelKey = String(labelId || "");
+    const labelValue = String(label || "").trim();
+    const labelKey = normalizeSubjectLabelKey(labelValue);
     if (!subjectKey || !labelKey) return;
-
-    const currentLabelIds = Array.isArray(raw.labelIdsBySubjectId[subjectKey])
-      ? raw.labelIdsBySubjectId[subjectKey].map((value) => String(value || "")).filter(Boolean)
-      : [];
-    raw.labelIdsBySubjectId[subjectKey] = shouldLink
-      ? [...new Set([...currentLabelIds, labelKey])]
-      : currentLabelIds.filter((value) => value !== labelKey);
-
-    const currentSubjectIds = Array.isArray(raw.subjectIdsByLabelId[labelKey])
-      ? raw.subjectIdsByLabelId[labelKey].map((value) => String(value || "")).filter(Boolean)
-      : [];
-    raw.subjectIdsByLabelId[labelKey] = shouldLink
-      ? [...new Set([...currentSubjectIds, subjectKey])]
-      : currentSubjectIds.filter((value) => value !== subjectKey);
-  }
-
-  async function toggleSubjectLabel(subjectId, label, options = {}) {
-    const subjectKey = String(subjectId || "");
-    const labelDef = resolveSubjectLabelDefinition(label);
-    const labelId = String(labelDef?.id || label || "").trim();
-    const labelName = String(labelDef?.name || labelDef?.label || label || "").trim();
-    const labelKey = normalizeSubjectLabelKey(labelId || labelName);
-    if (!subjectKey || !labelKey) return false;
-
-    if (subjectKey === DRAFT_SUBJECT_ID) {
-      const meta = getSubjectSidebarMeta(subjectKey);
-      const hasLabel = meta.labels.some((value) => normalizeSubjectLabelKey(value) === normalizeSubjectLabelKey(labelName));
-      const nextLabels = hasLabel
-        ? meta.labels.filter((value) => normalizeSubjectLabelKey(value) !== normalizeSubjectLabelKey(labelName))
-        : [...meta.labels, labelName];
-      setSubjectLabels(subjectKey, nextLabels);
-      if (options.root) rerenderScope(options.root);
-      return true;
-    }
-
-    if (!labelDef?.id) return false;
-
     const meta = getSubjectSidebarMeta(subjectKey);
-    const wasLinked = Array.isArray(meta.labelIds) && meta.labelIds.includes(String(labelDef.id));
-    syncSubjectLabelMaps(subjectKey, labelDef.id, !wasLinked);
-    if (options.root) rerenderScope(options.root);
-
-    try {
-      if (wasLinked) await removeLabelFromSubjectInSupabase(subjectKey, labelDef.id);
-      else await addLabelToSubjectInSupabase(subjectKey, labelDef.id);
-      return true;
-    } catch (error) {
-      syncSubjectLabelMaps(subjectKey, labelDef.id, wasLinked);
-      if (options.root) rerenderScope(options.root);
-      console.warn("toggleSubjectLabel failed", error);
-      showError(`Mise à jour Supabase impossible : ${String(error?.message || error || "Erreur inconnue")}`);
-      return false;
-    }
+    const hasLabel = meta.labels.some((value) => normalizeSubjectLabelKey(value) === labelKey);
+    const nextLabels = hasLabel
+      ? meta.labels.filter((value) => normalizeSubjectLabelKey(value) !== labelKey)
+      : [...meta.labels, labelValue];
+    setSubjectLabels(subjectKey, nextLabels);
   }
 
   function syncSubjectObjectiveMaps(subjectId, objectiveId, shouldLink) {
