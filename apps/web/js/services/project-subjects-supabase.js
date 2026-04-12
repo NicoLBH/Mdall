@@ -361,29 +361,27 @@ async function loadObjectivesForProject(projectId) {
 function buildObjectivesResult(milestoneRows = [], milestoneSubjectRows = []) {
   const orderedMilestoneIds = (milestoneRows || []).map((row) => normalizeUuid(row?.id)).filter(Boolean);
   const orderedMilestoneIdSet = new Set(orderedMilestoneIds);
-  const primaryMilestoneIdBySubjectId = {};
+  const subjectIdsByMilestoneId = {};
+  const objectiveIdsBySubjectId = {};
 
   for (const link of milestoneSubjectRows || []) {
     const milestoneId = normalizeUuid(link?.milestone_id);
     const subjectId = normalizeUuid(link?.subject_id);
     if (!milestoneId || !subjectId || !orderedMilestoneIdSet.has(milestoneId)) continue;
-    if (!primaryMilestoneIdBySubjectId[subjectId]) {
-      primaryMilestoneIdBySubjectId[subjectId] = milestoneId;
-    }
-  }
 
-  const subjectIdsByMilestoneId = {};
-  for (const [subjectId, milestoneId] of Object.entries(primaryMilestoneIdBySubjectId)) {
     if (!Array.isArray(subjectIdsByMilestoneId[milestoneId])) subjectIdsByMilestoneId[milestoneId] = [];
-    subjectIdsByMilestoneId[milestoneId].push(subjectId);
+    if (!subjectIdsByMilestoneId[milestoneId].includes(subjectId)) {
+      subjectIdsByMilestoneId[milestoneId].push(subjectId);
+    }
+
+    if (!Array.isArray(objectiveIdsBySubjectId[subjectId])) objectiveIdsBySubjectId[subjectId] = [];
+    if (!objectiveIdsBySubjectId[subjectId].includes(milestoneId)) {
+      objectiveIdsBySubjectId[subjectId].push(milestoneId);
+    }
   }
 
   const objectives = (milestoneRows || []).map((row) => normalizeObjectiveRow(row, subjectIdsByMilestoneId[normalizeUuid(row?.id)] || []));
   const objectivesById = Object.fromEntries(objectives.map((objective) => [String(objective.id || ""), objective]).filter(([id]) => !!id));
-  const objectiveIdsBySubjectId = {};
-  for (const [subjectId, milestoneId] of Object.entries(primaryMilestoneIdBySubjectId)) {
-    objectiveIdsBySubjectId[subjectId] = [milestoneId];
-  }
 
   return {
     objectives,
