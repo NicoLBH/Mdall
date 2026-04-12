@@ -1,3 +1,10 @@
+export function formatObjectiveDueDateLabel(objective) {
+  if (!objective?.dueDate) return "Pas de date définie";
+  const parsed = new Date(objective.dueDate);
+  if (Number.isNaN(parsed.getTime())) return String(objective.dueDate);
+  return new Intl.DateTimeFormat("fr-FR", { dateStyle: "long" }).format(parsed);
+}
+
 export function createProjectSubjectMilestonesController(config) {
   const {
     store,
@@ -219,13 +226,6 @@ export function createProjectSubjectMilestonesController(config) {
     const closed = Math.max(0, Math.min(total, Number.isFinite(Number(objective?.closedSubjectsCount)) ? Number(objective.closedSubjectsCount) : 0));
     const open = Math.max(0, total - closed);
     return { open, closed, total, linkedSubjects: [] };
-  }
-
-export function formatObjectiveDueDateLabel(objective) {
-    if (!objective?.dueDate) return "Pas de date définie";
-    const parsed = new Date(objective.dueDate);
-    if (Number.isNaN(parsed.getTime())) return String(objective.dueDate);
-    return new Intl.DateTimeFormat("fr-FR", { dateStyle: "long" }).format(parsed);
   }
 
   function renderObjectiveStatusBadge(objective) {
