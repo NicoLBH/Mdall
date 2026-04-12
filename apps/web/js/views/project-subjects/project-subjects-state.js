@@ -70,6 +70,8 @@ export function createProjectSubjectsState({ store }) {
     if (typeof v.situationsStatusFilter !== "string") v.situationsStatusFilter = "open";
     if (typeof v.subjectsSubview !== "string") v.subjectsSubview = "subjects";
     if (typeof v.objectivesStatusFilter !== "string") v.objectivesStatusFilter = "open";
+    if (typeof v.objectivesSort !== "string") v.objectivesSort = "recently_updated";
+    if (typeof v.objectivesSortMenuOpen !== "boolean") v.objectivesSortMenuOpen = false;
     if (typeof v.selectedObjectiveId !== "string") v.selectedObjectiveId = "";
     if (!v.objectiveEdit || typeof v.objectiveEdit !== "object") {
       v.objectiveEdit = {
