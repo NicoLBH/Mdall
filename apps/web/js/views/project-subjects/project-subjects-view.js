@@ -1374,6 +1374,14 @@ function renderSubIssuesForSituation(situation, options = {}) {
 }
 
 
+function traceSubjectsViewLifecycle(step, payload = {}) {
+  try {
+    console.info(`[project-subjects-view] ${step}`, payload);
+  } catch {
+    // no-op
+  }
+}
+
 function scheduleSubjectsPanelsRerender(callback, options = {}) {
   const maxAttempts = Number.isFinite(Number(options?.maxAttempts)) ? Math.max(1, Number(options.maxAttempts)) : 12;
   let attempt = 0;
@@ -1400,6 +1408,14 @@ async function reloadSubjectsFromSupabase(root = getSubjectsCurrentRoot(), optio
   const primaryScrollHost = document.querySelector("#situationsPanelHost .data-table-shell__body") || document.getElementById("situationsDetailsHost");
   const primaryScrollState = getScrollableElementScrollState(primaryScrollHost);
 
+  traceSubjectsViewLifecycle("reload.start", {
+    currentProjectId: String(store.currentProjectId || ""),
+    targetRootConnected: !!targetRoot?.isConnected,
+    panelHostConnected: !!document.getElementById("situationsPanelHost")?.isConnected,
+    rerender: shouldRerender,
+    updateModal: shouldUpdateModal
+  });
+
   const data = await loadExistingSubjectsForCurrentProject({ force: true });
 
   const rerenderLoadedPanels = () => {
@@ -1411,14 +1427,29 @@ async function reloadSubjectsFromSupabase(root = getSubjectsCurrentRoot(), optio
   if (shouldRerender) {
     const currentRoot = targetRoot?.isConnected ? targetRoot : getSubjectsCurrentRoot();
     const panelHost = document.getElementById("situationsPanelHost");
+    traceSubjectsViewLifecycle("reload.after-load", {
+      loadedCount: Array.isArray(data) ? data.length : 0,
+      currentRootConnected: !!currentRoot?.isConnected,
+      panelHostConnected: !!panelHost?.isConnected
+    });
     if (currentRoot?.isConnected || panelHost?.isConnected) {
       rerenderLoadedPanels();
+      traceSubjectsViewLifecycle("reload.rerender-immediate", {
+        renderedRowCount: document.querySelectorAll("#situationsPanelHost .issue-row[data-sujet-id]").length
+      });
     } else {
       requestAnimationFrame(() => {
         const nextRoot = getSubjectsCurrentRoot();
         const nextPanelHost = document.getElementById("situationsPanelHost");
+        traceSubjectsViewLifecycle("reload.rerender-next-frame", {
+          nextRootConnected: !!nextRoot?.isConnected,
+          nextPanelHostConnected: !!nextPanelHost?.isConnected
+        });
         if (!nextRoot?.isConnected && !nextPanelHost?.isConnected) return;
         rerenderLoadedPanels();
+        traceSubjectsViewLifecycle("reload.rerender-next-frame-done", {
+          renderedRowCount: document.querySelectorAll("#situationsPanelHost .issue-row[data-sujet-id]").length
+        });
       });
     }
   }
