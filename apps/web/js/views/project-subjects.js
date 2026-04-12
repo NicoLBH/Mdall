@@ -558,13 +558,6 @@ function getSubjectsTabResetState() {
   };
 }
 
-function traceSubjectsRender(step, payload = {}) {
-  try {
-    console.info(`[project-subjects-ui] ${step}`, payload);
-  } catch {
-    // no-op
-  }
-}
 
 function rerenderSubjectsPanelsWhenConnected(root, remainingAttempts = 12) {
   if (!root) return;
@@ -779,14 +772,6 @@ export function openSubjectDrilldownFromSituation(...args) {
 ========================================================= */
 
 export function renderProjectSubjects(root) {
-  traceSubjectsRender('render.start', {
-    currentProjectId: String(store.currentProjectId || ''),
-    rootConnected: !!root?.isConnected,
-    cachedSubjectCount: Array.isArray(store.projectSubjectsView?.subjectsData) ? store.projectSubjectsView.subjectsData.length : 0,
-    loading: !!store.projectSubjectsView?.loading,
-    loaded: !!store.projectSubjectsView?.loaded
-  });
-
   const subjectsViewState = ensureViewUiState();
   projectSubjectDrilldown.ensureDrilldownDom();
   subjectsCurrentRoot = root;
@@ -841,10 +826,6 @@ export function renderProjectSubjects(root) {
   `;
 
   rerenderPanels();
-  traceSubjectsRender('render.after-initial-rerender', {
-    panelHostConnected: !!document.getElementById('situationsPanelHost')?.isConnected,
-    renderedRowCount: document.querySelectorAll('#situationsPanelHost .issue-row[data-sujet-id]').length
-  });
   syncSituationsPrimaryScrollSource();
   rerenderSubjectsPanelsWhenConnected(root);
   bindSituationsEvents(root, headerRoot);
