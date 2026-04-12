@@ -71,6 +71,11 @@ export function createProjectSubjectsView(deps) {
     getScopedSelection
   } = deps;
 
+  const {
+    getSubjectLabelDefinition,
+    renderSubjectLabelBadge
+  } = getProjectSubjectLabels();
+
 function issueIcon(status = "open", options = {}) {
   const {
     reviewState = "pending",
@@ -477,7 +482,6 @@ function createSubjectFromDraft() {
     bucket.subjectMeta.sujet[subjectId] = {
       ...(bucket.subjectMeta.sujet[subjectId] || {}),
       assignees: nextMeta.assignees,
-      labels: nextMeta.labels,
       objectiveIds: nextMeta.objectiveIds,
       situationIds: nextMeta.situationIds,
       relations: nextMeta.relations
@@ -619,14 +623,12 @@ function getSubjectSidebarMeta(subjectId) {
   const labelsById = rawResult?.labelsById && typeof rawResult.labelsById === "object"
     ? rawResult.labelsById
     : {};
-  const derivedLabels = Array.isArray(subjectMeta.labels) && subjectMeta.labels.length
-    ? normalizeSubjectLabels(subjectMeta.labels)
-    : normalizeSubjectLabels(
-        (Array.isArray(labelIdsBySubjectId[normalizedSubjectId]) ? labelIdsBySubjectId[normalizedSubjectId] : [])
-          .map((labelId) => labelsById[String(labelId || "")])
-          .filter(Boolean)
-          .map((labelDef) => String(labelDef?.name || labelDef?.label || labelDef?.label_key || labelDef?.key || "").trim())
-      );
+  const derivedLabels = normalizeSubjectLabels(
+    (Array.isArray(labelIdsBySubjectId[normalizedSubjectId]) ? labelIdsBySubjectId[normalizedSubjectId] : [])
+      .map((labelId) => labelsById[String(labelId || "")])
+      .filter(Boolean)
+      .map((labelDef) => String(labelDef?.name || labelDef?.label || labelDef?.label_key || labelDef?.key || "").trim())
+  );
 
   return {
     assignees: Array.isArray(subjectMeta.assignees) ? subjectMeta.assignees.map((value) => String(value || "")).filter(Boolean) : [],
