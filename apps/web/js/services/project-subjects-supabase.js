@@ -918,8 +918,6 @@ export async function loadFlatSubjectsForCurrentProject(options = {}) {
   }
 
   const backendProjectId = getMappedBackendProjectId();
-  const previousProjectScopeId = String(store.projectSubjectsView?.projectScopeId || "").trim() || null;
-  const preserveViewState = previousProjectScopeId === currentProjectScopeId;
   const previousSelectedSubjectId = normalizeUuid(
     store.projectSubjectsView?.selectedSubjectId
     || store.projectSubjectsView?.selectedSujetId
@@ -927,16 +925,6 @@ export async function loadFlatSubjectsForCurrentProject(options = {}) {
   const previousSelectedSituationId = normalizeUuid(
     store.projectSubjectsView?.selectedSituationId
   );
-  const previousExpandedSubjectIds = preserveViewState
-    ? [...new Set(
-        Array.from(store.projectSubjectsView?.expandedSubjectIds instanceof Set ? store.projectSubjectsView.expandedSubjectIds : [])
-          .map((value) => normalizeUuid(value))
-          .filter(Boolean)
-      )]
-    : [];
-  const previousPage = preserveViewState && Number.isFinite(Number(store.projectSubjectsView?.page))
-    ? Math.max(1, Number(store.projectSubjectsView.page))
-    : 1;
 
   if (!backendProjectId) {
     store.projectSubjectsView.subjectsData = [];

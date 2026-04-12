@@ -75,7 +75,13 @@ export function createProjectSubjectsEvents(config) {
     window.addEventListener("resize", () => {
       const state = getSubjectsViewState();
       if (!state.subjectMetaDropdown?.field && !(state.subjectKanbanDropdown?.subjectId && state.subjectKanbanDropdown?.situationId)) return;
-      syncSubjectMetaDropdownPosition(getSubjectMetaScopeRoot());
+      dropdownHost.querySelectorAll(".select-menu__item").forEach((btn) => {
+      btn.addEventListener("mousedown", (event) => {
+        event.preventDefault();
+      });
+    });
+
+    syncSubjectMetaDropdownPosition(getSubjectMetaScopeRoot());
     });
 
     document.addEventListener("scroll", () => {
@@ -149,6 +155,75 @@ export function createProjectSubjectsEvents(config) {
       }
 
       resetSubjectsTabView("subjects-tab-reselected");
+    });
+  }
+
+
+  function getScrollableElementScrollState(element) {
+    if (!element) return null;
+    return {
+      scrollTop: Number(element.scrollTop || 0)
+    };
+  }
+
+  function restoreScrollableElementScrollState(element, state) {
+    if (!element || !state) return;
+    const maxScrollTop = Math.max(0, Number(element.scrollHeight || 0) - Number(element.clientHeight || 0));
+    element.scrollTop = Math.max(0, Math.min(Number(state.scrollTop || 0), maxScrollTop));
+  }
+
+  function captureSubjectMetaDropdownScrollState() {
+    const host = document.getElementById("subjectMetaDropdownHost");
+    if (!host) return null;
+    const body = host.querySelector(".subject-meta-dropdown__body");
+    const sectionBodies = [...host.querySelectorAll(".select-menu__section-body")].map((element) => getScrollableElementScrollState(element));
+    return {
+      bodyState: getScrollableElementScrollState(body),
+      sectionBodies
+    };
+  }
+
+  function restoreSubjectMetaDropdownScrollState(state) {
+    if (!state) return;
+    const apply = () => {
+      const host = document.getElementById("subjectMetaDropdownHost");
+      if (!host) return;
+      restoreScrollableElementScrollState(host.querySelector(".subject-meta-dropdown__body"), state.bodyState);
+      host.querySelectorAll(".select-menu__section-body").forEach((element, index) => {
+        restoreScrollableElementScrollState(element, state.sectionBodies?.[index] || null);
+      });
+    };
+    apply();
+    requestAnimationFrame(() => {
+      apply();
+      requestAnimationFrame(apply);
+    });
+  }
+
+  function captureSubjectMetaScrollState(root) {
+    return {
+      root,
+      rootState: getScrollableElementScrollState(root),
+      detailsBodyState: getScrollableElementScrollState(document.getElementById("detailsBodyModal")),
+      drilldownBodyState: getScrollableElementScrollState(document.getElementById("drilldownBody")),
+      situationsDetailsState: getScrollableElementScrollState(document.getElementById("situationsDetailsHost")),
+      dropdownState: captureSubjectMetaDropdownScrollState()
+    };
+  }
+
+  function restoreSubjectMetaScrollState(state) {
+    if (!state) return;
+    const apply = () => {
+      restoreScrollableElementScrollState(state.root, state.rootState);
+      restoreScrollableElementScrollState(document.getElementById("detailsBodyModal"), state.detailsBodyState);
+      restoreScrollableElementScrollState(document.getElementById("drilldownBody"), state.drilldownBodyState);
+      restoreScrollableElementScrollState(document.getElementById("situationsDetailsHost"), state.situationsDetailsState);
+      restoreSubjectMetaDropdownScrollState(state.dropdownState);
+    };
+    apply();
+    requestAnimationFrame(() => {
+      apply();
+      requestAnimationFrame(apply);
     });
   }
 
@@ -319,21 +394,27 @@ export function createProjectSubjectsEvents(config) {
           if (!activeKey) return;
           if (field === "objectives") {
             event.preventDefault();
+            const scrollState = captureSubjectMetaScrollState(root);
             await toggleSubjectObjective(subjectSelection.item.id, activeKey, { root });
+            restoreSubjectMetaScrollState(scrollState);
             focusSubjectMetaSearch(root, field);
             syncSubjectMetaDropdownPosition(getSubjectMetaScopeRoot());
             return;
           }
           if (field === "situations") {
             event.preventDefault();
+            const scrollState = captureSubjectMetaScrollState(root);
             await toggleSubjectSituation(subjectSelection.item.id, activeKey, { root });
+            restoreSubjectMetaScrollState(scrollState);
             focusSubjectMetaSearch(root, field);
             syncSubjectMetaDropdownPosition(getSubjectMetaScopeRoot());
             return;
           }
           if (field === "labels") {
             event.preventDefault();
+            const scrollState = captureSubjectMetaScrollState(root);
             await toggleSubjectLabel(subjectSelection.item.id, activeKey, { root });
+            restoreSubjectMetaScrollState(scrollState);
             focusSubjectMetaSearch(root, field);
             syncSubjectMetaDropdownPosition(getSubjectMetaScopeRoot());
           }
@@ -348,7 +429,9 @@ export function createProjectSubjectsEvents(config) {
         const subjectSelection = getScopedSelection(root);
         if (subjectSelection?.type !== "sujet") return;
         const objectiveId = String(btn.dataset.objectiveSelect || "");
+        const scrollState = captureSubjectMetaScrollState(root);
         await toggleSubjectObjective(subjectSelection.item.id, objectiveId, { root });
+        restoreSubjectMetaScrollState(scrollState);
         focusSubjectMetaSearch(root, "objectives");
         syncSubjectMetaDropdownPosition(getSubjectMetaScopeRoot());
       };
@@ -360,7 +443,9 @@ export function createProjectSubjectsEvents(config) {
         event.stopPropagation();
         const subjectSelection = getScopedSelection(root);
         if (subjectSelection?.type !== "sujet") return;
+        const scrollState = captureSubjectMetaScrollState(root);
         await toggleSubjectSituation(subjectSelection.item.id, String(btn.dataset.situationToggle || ""), { root });
+        restoreSubjectMetaScrollState(scrollState);
         focusSubjectMetaSearch(root, "situations");
         syncSubjectMetaDropdownPosition(getSubjectMetaScopeRoot());
       };
@@ -372,7 +457,9 @@ export function createProjectSubjectsEvents(config) {
         event.stopPropagation();
         const subjectSelection = getScopedSelection(root);
         if (subjectSelection?.type !== "sujet") return;
+        const scrollState = captureSubjectMetaScrollState(root);
         await toggleSubjectLabel(subjectSelection.item.id, String(btn.dataset.subjectLabelToggle || ""), { root });
+        restoreSubjectMetaScrollState(scrollState);
         focusSubjectMetaSearch(root, "labels");
         syncSubjectMetaDropdownPosition(getSubjectMetaScopeRoot());
       };
