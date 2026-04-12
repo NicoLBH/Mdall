@@ -110,6 +110,51 @@ function normalizeObjectiveStatus(value) {
   return String(value || "open").trim().toLowerCase() === "closed" ? "closed" : "open";
 }
 
+function normalizeSubjectLabelKey(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
+function normalizeProjectLabelRow(row = {}) {
+  const id = normalizeUuid(row.id);
+  const projectId = normalizeUuid(row.project_id);
+  const labelKey = firstNonEmpty(row.label_key, row.name, id);
+  const name = firstNonEmpty(row.name, row.label_key, "Label");
+  const description = firstNonEmpty(row.description, "");
+  const textColor = firstNonEmpty(row.text_color, "rgb(208, 215, 222)");
+  const backgroundColor = firstNonEmpty(row.background_color, "rgba(110, 118, 129, 0.18)");
+  const borderColor = firstNonEmpty(row.border_color, textColor);
+  const hexColor = firstNonEmpty(row.hex_color, "");
+  const sortOrder = Number.isFinite(Number(row.sort_order)) ? Number(row.sort_order) : 0;
+  return {
+    ...row,
+    id,
+    project_id: projectId,
+    label_key: labelKey,
+    labelKey,
+    key: labelKey,
+    name,
+    label: name,
+    description,
+    text_color: textColor,
+    textColor,
+    background_color: backgroundColor,
+    backgroundColor,
+    color: backgroundColor,
+    border_color: borderColor,
+    borderColor,
+    hex_color: hexColor,
+    hexColor,
+    sort_order: sortOrder,
+    sortOrder,
+    created_at: row.created_at || "",
+    updated_at: row.updated_at || ""
+  };
+}
+
 
 async function getResolvedProjectId(projectId) {
   const explicitProjectId = normalizeUuid(projectId);
@@ -391,6 +436,118 @@ function buildObjectivesResult(milestoneRows = [], milestoneSubjectRows = []) {
 }
 
 
+async function fetchProjectLabels(projectId) {
+  if (!projectId) return [];
+
+  const url = new URL(`${SUPABASE_URL}/rest/v1/project_labels`);
+  url.searchParams.set(
+    "select",
+    "id,project_id,label_key,name,description,text_color,background_color,border_color,hex_color,sort_order,created_at,updated_at"
+  );
+  url.searchParams.set("project_id", `eq.${projectId}`);
+  url.searchParams.set("order", "sort_order.asc,name.asc,created_at.asc");
+
+  const res = await fetch(url.toString(), {
+    method: "GET",
+    headers: await getSupabaseAuthHeaders({ Accept: "application/json" }),
+    cache: "no-store"
+  });
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`project_labels fetch failed (${res.status}): ${txt}`);
+  }
+
+  const rows = await res.json().catch(() => []);
+  return Array.isArray(rows) ? rows.map((row) => normalizeProjectLabelRow(row)) : [];
+}
+
+async function fetchProjectSubjectLabels(projectId) {
+  if (!projectId) return [];
+
+  const url = new URL(`${SUPABASE_URL}/rest/v1/subject_labels`);
+  url.searchParams.set("select", "id,project_id,subject_id,label_id,created_at");
+  url.searchParams.set("project_id", `eq.${projectId}`);
+  url.searchParams.set("order", "created_at.asc");
+
+  const res = await fetch(url.toString(), {
+    method: "GET",
+    headers: await getSupabaseAuthHeaders({ Accept: "application/json" }),
+    cache: "no-store"
+  });
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`subject_labels fetch failed (${res.status}): ${txt}`);
+  }
+
+  const rows = await res.json().catch(() => []);
+  return Array.isArray(rows) ? rows : [];
+}
+
+function buildLabelsResult(labelRows = [], subjectLabelRows = []) {
+  const labels = (Array.isArray(labelRows) ? labelRows : []).map((row) => normalizeProjectLabelRow(row));
+  const labelsById = {};
+  const labelsByKey = {};
+  const labelIdsBySubjectId = {};
+  const subjectIdsByLabelId = {};
+
+  for (const label of labels) {
+    const labelId = normalizeUuid(label?.id);
+    if (!labelId) continue;
+    labelsById[labelId] = label;
+    const normalizedKey = normalizeSubjectLabelKey(label?.label_key || label?.labelKey || label?.key || label?.name || labelId);
+    if (normalizedKey && !labelsByKey[normalizedKey]) {
+      labelsByKey[normalizedKey] = label;
+    }
+    subjectIdsByLabelId[labelId] = [];
+  }
+
+  for (const row of Array.isArray(subjectLabelRows) ? subjectLabelRows : []) {
+    const subjectId = normalizeUuid(row?.subject_id);
+    const labelId = normalizeUuid(row?.label_id);
+    if (!subjectId || !labelId || !labelsById[labelId]) continue;
+
+    if (!Array.isArray(labelIdsBySubjectId[subjectId])) labelIdsBySubjectId[subjectId] = [];
+    if (!labelIdsBySubjectId[subjectId].includes(labelId)) labelIdsBySubjectId[subjectId].push(labelId);
+
+    if (!Array.isArray(subjectIdsByLabelId[labelId])) subjectIdsByLabelId[labelId] = [];
+    if (!subjectIdsByLabelId[labelId].includes(subjectId)) subjectIdsByLabelId[labelId].push(subjectId);
+  }
+
+  return {
+    labels,
+    labelsById,
+    labelsByKey,
+    labelIdsBySubjectId,
+    subjectIdsByLabelId
+  };
+}
+
+export async function loadLabelsForProject(projectId) {
+  const resolvedProjectId = await getResolvedProjectId(projectId);
+  if (!resolvedProjectId) {
+    return {
+      labels: [],
+      labelsById: {},
+      labelsByKey: {},
+      labelIdsBySubjectId: {},
+      subjectIdsByLabelId: {},
+      labelsHydrated: false
+    };
+  }
+
+  const [labelRows, subjectLabelRows] = await Promise.all([
+    fetchProjectLabels(resolvedProjectId),
+    fetchProjectSubjectLabels(resolvedProjectId)
+  ]);
+
+  return {
+    ...buildLabelsResult(labelRows, subjectLabelRows),
+    labelsHydrated: true
+  };
+}
+
 function buildProjectFlatSubjectsResult(subjectRows = [], subjectLinks = [], options = {}) {
   const subjectsById = {};
   const parentBySubjectId = {};
@@ -487,6 +644,12 @@ export async function loadFlatSubjectsForCurrentProject(options = {}) {
       linksBySubjectId: {},
       relationIdsBySubjectId: {},
       relationOptionsById: {},
+      labels: [],
+      labelsById: {},
+      labelsByKey: {},
+      labelIdsBySubjectId: {},
+      subjectIdsByLabelId: {},
+      labelsHydrated: false,
       situationsById: {},
       subjectIdsBySituationId: {},
       objectives: [],
@@ -509,6 +672,24 @@ export async function loadFlatSubjectsForCurrentProject(options = {}) {
   const result = buildProjectFlatSubjectsResult(subjects, subjectLinks, { runId: store.ui.runId || "" });
   result.situationsById = Object.fromEntries(situations.map((situation) => [String(situation?.id || ""), situation]).filter(([id]) => !!id));
   result.subjectIdsBySituationId = subjectIdsBySituationId;
+
+  try {
+    const labelsResult = await loadLabelsForProject(backendProjectId);
+    result.labels = Array.isArray(labelsResult?.labels) ? labelsResult.labels : [];
+    result.labelsById = labelsResult?.labelsById && typeof labelsResult.labelsById === "object" ? labelsResult.labelsById : {};
+    result.labelsByKey = labelsResult?.labelsByKey && typeof labelsResult.labelsByKey === "object" ? labelsResult.labelsByKey : {};
+    result.labelIdsBySubjectId = labelsResult?.labelIdsBySubjectId && typeof labelsResult.labelIdsBySubjectId === "object" ? labelsResult.labelIdsBySubjectId : {};
+    result.subjectIdsByLabelId = labelsResult?.subjectIdsByLabelId && typeof labelsResult.subjectIdsByLabelId === "object" ? labelsResult.subjectIdsByLabelId : {};
+    result.labelsHydrated = true;
+  } catch (error) {
+    console.warn("[project-subjects] labels load failed", error);
+    result.labels = [];
+    result.labelsById = {};
+    result.labelsByKey = {};
+    result.labelIdsBySubjectId = {};
+    result.subjectIdsByLabelId = {};
+    result.labelsHydrated = false;
+  }
 
   try {
     const objectivesResult = await loadObjectivesForProject(backendProjectId);
