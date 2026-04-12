@@ -10,7 +10,9 @@ import {
   removeSubjectFromObjective as removeSubjectFromObjectiveInSupabase,
   createLabel as createLabelInSupabase,
   updateLabel as updateLabelInSupabase,
-  deleteLabel as deleteLabelInSupabase
+  deleteLabel as deleteLabelInSupabase,
+  addLabelToSubject as addLabelToSubjectInSupabase,
+  removeLabelFromSubject as removeLabelFromSubjectInSupabase
 } from "../services/project-subjects-supabase.js";
 import { loadSituationsForCurrentProject, addSubjectToSituation, removeSubjectFromSituation } from "../services/project-situations-supabase.js";
 import {
@@ -520,7 +522,10 @@ const projectSubjectsActions = createProjectSubjectsActions({
   normalizeSubjectSituationIds: (...args) => projectSubjectsView.normalizeSubjectSituationIds(...args),
   normalizeSubjectLabels: (...args) => projectSubjectsView.normalizeSubjectLabels(...args),
   normalizeSubjectLabelKey: (...args) => projectSubjectsView.normalizeSubjectLabelKey(...args),
+  getSubjectLabelDefinition: (...args) => projectSubjectLabels.getSubjectLabelDefinition(...args),
   getObjectives: (...args) => projectSubjectsView.getObjectives(...args),
+  addLabelToSubjectInSupabase: (...args) => addLabelToSubjectInSupabase(...args),
+  removeLabelFromSubjectInSupabase: (...args) => removeLabelFromSubjectInSupabase(...args),
   addSubjectToObjectiveInSupabase: (...args) => addSubjectToObjectiveInSupabase(...args),
   removeSubjectFromObjectiveInSupabase: (...args) => removeSubjectFromObjectiveInSupabase(...args),
   rerenderPanels: (...args) => projectSubjectsView.rerenderPanels(...args)
