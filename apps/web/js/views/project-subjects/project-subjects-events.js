@@ -184,7 +184,7 @@ export function createProjectSubjectsEvents(config) {
             ? String(getSubjectSidebarMeta(scopedSelection.item.id).objectiveIds[0] || "")
             : "";
           const selectedLabelKey = field === "labels" && scopedSelection?.type === "sujet"
-            ? String((getSubjectSidebarMeta(scopedSelection.item.id).labelIds[0] || "")).trim()
+            ? String((getSubjectSidebarMeta(scopedSelection.item.id).labels[0] || "")).trim().toLowerCase()
             : "";
           const preferredKey = selectedObjectiveKey || selectedLabelKey;
           dropdown.activeKey = preferredKey && entries.some((entry) => String(entry?.key || "") === preferredKey)
@@ -333,7 +333,8 @@ export function createProjectSubjectsEvents(config) {
           }
           if (field === "labels") {
             event.preventDefault();
-            await toggleSubjectLabel(subjectSelection.item.id, activeKey, { root });
+            toggleSubjectLabel(subjectSelection.item.id, activeKey);
+            rerenderScope(root);
             focusSubjectMetaSearch(root, field);
             syncSubjectMetaDropdownPosition(getSubjectMetaScopeRoot());
           }
@@ -367,12 +368,13 @@ export function createProjectSubjectsEvents(config) {
     });
 
     dropdownHost.querySelectorAll("[data-subject-label-toggle]").forEach((btn) => {
-      btn.onclick = async (event) => {
+      btn.onclick = (event) => {
         event.preventDefault();
         event.stopPropagation();
         const subjectSelection = getScopedSelection(root);
         if (subjectSelection?.type !== "sujet") return;
-        await toggleSubjectLabel(subjectSelection.item.id, String(btn.dataset.subjectLabelToggle || ""), { root });
+        toggleSubjectLabel(subjectSelection.item.id, String(btn.dataset.subjectLabelToggle || ""));
+        rerenderScope(root);
         focusSubjectMetaSearch(root, "labels");
         syncSubjectMetaDropdownPosition(getSubjectMetaScopeRoot());
       };
