@@ -1,7 +1,6 @@
 import { store } from "../store.js";
 import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
 import { loadSituationsForCurrentProject, loadSituationSubjectIdsMap } from "./project-situations-supabase.js";
-import { resolveCurrentBackendProjectId } from "./project-supabase-sync.js";
 
 const SUPABASE_URL = getSupabaseUrl();
 const FRONT_PROJECT_MAP_STORAGE_KEY = "mdall.supabaseProjectMap.v1";
@@ -35,6 +34,21 @@ function getMappedBackendProjectId() {
   const frontendProjectKey = getFrontendProjectKey();
   const map = readFrontendProjectMap();
   return map[frontendProjectKey] || "";
+}
+
+export async function resolveCurrentBackendProjectId() {
+  const mappedProjectId = normalizeUuid(getMappedBackendProjectId());
+  if (mappedProjectId) return mappedProjectId;
+
+  const currentProjectBackendId = normalizeUuid(
+    store.currentProject?.backendProjectId
+    || store.currentProject?.project_id
+    || store.currentProject?.supabaseProjectId
+    || store.currentProject?.supabase_project_id
+  );
+  if (currentProjectBackendId) return currentProjectBackendId;
+
+  return "";
 }
 
 async function getSupabaseAuthHeaders(extra = {}) {
