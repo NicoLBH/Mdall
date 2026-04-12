@@ -264,24 +264,36 @@ export function createProjectSubjectsActions(config) {
     if (!subjectKey || !objectiveKey) return false;
 
     const meta = getSubjectSidebarMeta(subjectKey);
-    const wasLinked = meta.objectiveIds.includes(objectiveKey);
-    const nextIds = wasLinked
-      ? meta.objectiveIds.filter((id) => id !== objectiveKey)
-      : [...meta.objectiveIds, objectiveKey];
+    const previousIds = Array.isArray(meta.objectiveIds)
+      ? meta.objectiveIds.map((id) => String(id || "")).filter(Boolean)
+      : [];
+    const previousPrimaryId = String(previousIds[0] || "");
+    const wasLinked = previousPrimaryId === objectiveKey;
+    const nextIds = wasLinked ? [] : [objectiveKey];
 
     setSubjectObjectiveIds(subjectKey, nextIds);
-    syncSubjectObjectiveMaps(subjectKey, objectiveKey, !wasLinked);
+    previousIds.forEach((previousId) => {
+      syncSubjectObjectiveMaps(subjectKey, previousId, false);
+    });
+    if (!wasLinked) syncSubjectObjectiveMaps(subjectKey, objectiveKey, true);
 
     if (options.root) rerenderScope(options.root);
     else rerenderPanels();
 
     try {
-      if (wasLinked) await removeSubjectFromObjectiveInSupabase(objectiveKey, subjectKey);
-      else await addSubjectToObjectiveInSupabase(objectiveKey, subjectKey);
+      for (const previousId of previousIds) {
+        await removeSubjectFromObjectiveInSupabase(previousId, subjectKey);
+      }
+      if (!wasLinked) await addSubjectToObjectiveInSupabase(objectiveKey, subjectKey);
       return true;
     } catch (error) {
-      setSubjectObjectiveIds(subjectKey, meta.objectiveIds);
-      syncSubjectObjectiveMaps(subjectKey, objectiveKey, wasLinked);
+      setSubjectObjectiveIds(subjectKey, previousIds);
+      previousIds.forEach((previousId) => {
+        syncSubjectObjectiveMaps(subjectKey, previousId, true);
+      });
+      if (!previousIds.includes(objectiveKey)) {
+        syncSubjectObjectiveMaps(subjectKey, objectiveKey, false);
+      }
       if (options.root) rerenderScope(options.root);
       else rerenderPanels();
       console.warn("toggleSubjectObjective failed", error);
@@ -641,6 +653,7 @@ export function createProjectSubjectsActions(config) {
     toggleSubjectSituation,
     setSubjectLabels,
     toggleSubjectLabel,
+    toggleSubjectObjective,
     setSubjectObjective,
     applyReviewStateChange,
     applyRestoreReviewState,
