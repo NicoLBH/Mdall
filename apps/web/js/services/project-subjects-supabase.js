@@ -1,6 +1,7 @@
 import { store } from "../store.js";
 import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
 import { loadSituationsForCurrentProject, loadSituationSubjectIdsMap } from "./project-situations-supabase.js";
+import { resolveCurrentBackendProjectId } from "./project-supabase-sync.js";
 
 const SUPABASE_URL = getSupabaseUrl();
 const FRONT_PROJECT_MAP_STORAGE_KEY = "mdall.supabaseProjectMap.v1";
@@ -107,6 +108,128 @@ function normalizeUuid(value) {
 
 function normalizeObjectiveStatus(value) {
   return String(value || "open").trim().toLowerCase() === "closed" ? "closed" : "open";
+}
+
+
+async function getResolvedProjectId(projectId) {
+  const explicitProjectId = normalizeUuid(projectId);
+  if (explicitProjectId) return explicitProjectId;
+
+  const mappedProjectId = getMappedBackendProjectId();
+  if (mappedProjectId) return mappedProjectId;
+
+  return normalizeUuid(await resolveCurrentBackendProjectId().catch(() => ""));
+}
+
+function getMilestonesSelectClause() {
+  return "id,project_id,title,description,due_date,status,created_at,updated_at,closed_at";
+}
+
+async function fetchProjectMilestoneById(objectiveId) {
+  const normalizedObjectiveId = normalizeUuid(objectiveId);
+  if (!normalizedObjectiveId) throw new Error("objectiveId is required");
+
+  const url = new URL(`${SUPABASE_URL}/rest/v1/milestones`);
+  url.searchParams.set("select", getMilestonesSelectClause());
+  url.searchParams.set("id", `eq.${normalizedObjectiveId}`);
+  url.searchParams.set("limit", "1");
+
+  const res = await fetch(url.toString(), {
+    method: "GET",
+    headers: await getSupabaseAuthHeaders({ Accept: "application/json" }),
+    cache: "no-store"
+  });
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`milestone fetch failed (${res.status}): ${txt}`);
+  }
+
+  const rows = await res.json().catch(() => []);
+  return (Array.isArray(rows) ? rows[0] : rows) || null;
+}
+
+export async function createObjective(projectId, payload = {}) {
+  const resolvedProjectId = await getResolvedProjectId(projectId);
+  if (!resolvedProjectId) throw new Error("projectId is required");
+
+  const body = {
+    project_id: resolvedProjectId,
+    title: firstNonEmpty(payload.title, "Nouvel objectif"),
+    description: firstNonEmpty(payload.description, "") || null,
+    due_date: firstNonEmpty(payload.dueDate, "") || null,
+    status: normalizeObjectiveStatus(payload.status),
+    closed_at: normalizeObjectiveStatus(payload.status) === "closed" ? new Date().toISOString() : null
+  };
+
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/milestones`, {
+    method: "POST",
+    headers: await getSupabaseAuthHeaders({
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      Prefer: "return=representation"
+    }),
+    body: JSON.stringify(body)
+  });
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`milestone create failed (${res.status}): ${txt}`);
+  }
+
+  const rows = await res.json().catch(() => []);
+  const created = normalizeObjectiveRow((Array.isArray(rows) ? rows[0] : rows) || {});
+  await loadObjectivesForProject(resolvedProjectId);
+  return created;
+}
+
+export async function updateObjective(objectiveId, patch = {}) {
+  const normalizedObjectiveId = normalizeUuid(objectiveId);
+  if (!normalizedObjectiveId) throw new Error("objectiveId is required");
+
+  const current = await fetchProjectMilestoneById(normalizedObjectiveId);
+  if (!current?.id) throw new Error("objective not found");
+
+  const nextStatus = Object.prototype.hasOwnProperty.call(patch, "status")
+    ? normalizeObjectiveStatus(patch.status)
+    : normalizeObjectiveStatus(current.status);
+
+  const body = {};
+  if (Object.prototype.hasOwnProperty.call(patch, "title")) body.title = firstNonEmpty(patch.title, current.title, "Objectif");
+  if (Object.prototype.hasOwnProperty.call(patch, "description")) body.description = firstNonEmpty(patch.description, "") || null;
+  if (Object.prototype.hasOwnProperty.call(patch, "dueDate")) body.due_date = firstNonEmpty(patch.dueDate, "") || null;
+  if (Object.prototype.hasOwnProperty.call(patch, "status")) {
+    body.status = nextStatus;
+    body.closed_at = nextStatus === "closed" ? new Date().toISOString() : null;
+  }
+
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/milestones?id=eq.${normalizedObjectiveId}`, {
+    method: "PATCH",
+    headers: await getSupabaseAuthHeaders({
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      Prefer: "return=representation"
+    }),
+    body: JSON.stringify(body)
+  });
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`milestone update failed (${res.status}): ${txt}`);
+  }
+
+  const rows = await res.json().catch(() => []);
+  const updated = normalizeObjectiveRow((Array.isArray(rows) ? rows[0] : rows) || {});
+  await loadObjectivesForProject(updated.project_id || normalizeUuid(current.project_id));
+  return updated;
+}
+
+export async function closeObjective(objectiveId) {
+  return updateObjective(objectiveId, { status: "closed" });
+}
+
+export async function reopenObjective(objectiveId) {
+  return updateObjective(objectiveId, { status: "open" });
 }
 
 function normalizeObjectiveRow(row = {}, subjectIds = []) {
