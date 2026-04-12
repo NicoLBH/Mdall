@@ -8563,15 +8563,16 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   gap:6px;
   width:max-content;
   color:rgb(145, 152, 161);
-  font-size:12px;
+  font-size:13px;
   font-weight:400;
   cursor:pointer;
   height: 18px;
+  padding-bottom:4px;
 }
 
 .objective-detail__back-link:hover,
 .objective-detail__back-link:focus-visible{
-  color:rgb(201, 209, 217);
+  text-decoration:underline;
   outline:none;
 }
 
