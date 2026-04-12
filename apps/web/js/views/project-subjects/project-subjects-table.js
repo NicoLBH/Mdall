@@ -63,7 +63,7 @@ export function renderFlatSujetRow(sujet, situationId, options = {}) {
     .join("");
   const objective = getObjectiveById(subjectMeta.objectiveIds[0] || "");
   const objectiveLabel = objective
-    ? ` - <span class="issue-row-subject-objective"><span class="issue-row-subject-objective__icon" aria-hidden="true">${svgIcon("milestone", { className: "octicon octicon-milestone" })}</span><span class="issue-row-subject-objective__text">${escapeHtml(firstNonEmpty(objective.title, objective.id, "Objectif"))}</span></span>`
+    ? ` - <button type="button" class="issue-row-subject-objective" data-row-objective-id="${escapeHtml(objective.id)}"><span class="issue-row-subject-objective__icon" aria-hidden="true">${svgIcon("milestone", { className: "octicon octicon-milestone" })}</span><span class="issue-row-subject-objective__text">${escapeHtml(firstNonEmpty(objective.title, objective.id, "Objectif"))}</span></button>`
     : "";
 
   return `
