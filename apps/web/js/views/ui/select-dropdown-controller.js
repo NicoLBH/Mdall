@@ -1,5 +1,31 @@
+const selectDropdownLifecycleRegistry = new Map();
+let selectDropdownFocusFrame = 0;
+let selectDropdownPositionFrame = 0;
+
 function getViewStateFromGetter(getViewState) {
   return typeof getViewState === "function" ? getViewState() : getViewState;
+}
+
+function isSelectDropdownOpenFromState(state) {
+  return !!state?.subjectMetaDropdown?.field
+    || (!!state?.subjectKanbanDropdown?.subjectId && !!state?.subjectKanbanDropdown?.situationId);
+}
+
+function hideSelectDropdownHost(host) {
+  if (!host) return;
+  host.innerHTML = "";
+  host.setAttribute("aria-hidden", "true");
+}
+
+function bindSelectDropdownHostInteractions(host) {
+  if (!host || host.dataset.selectDropdownHostBound === "true") return host;
+  host.dataset.selectDropdownHostBound = "true";
+  host.setAttribute("aria-hidden", "true");
+  host.addEventListener("mousedown", (event) => {
+    if (!event.target.closest(".select-menu__item")) return;
+    event.preventDefault();
+  });
+  return host;
 }
 
 export function ensureSelectDropdownHost({
@@ -7,12 +33,13 @@ export function ensureSelectDropdownHost({
   hostClassName = "subject-meta-dropdown-host"
 } = {}) {
   let host = document.getElementById(hostId);
-  if (host) return host;
-  host = document.createElement("div");
-  host.id = hostId;
-  host.className = hostClassName;
-  document.body.appendChild(host);
-  return host;
+  if (!host) {
+    host = document.createElement("div");
+    host.id = hostId;
+    host.className = hostClassName;
+    document.body.appendChild(host);
+  }
+  return bindSelectDropdownHostInteractions(host);
 }
 
 export function closeMetaSelectDropdown(getViewState) {
@@ -94,8 +121,7 @@ export function renderSelectDropdownHost({
   const kanbanDropdown = viewState.subjectKanbanDropdown || {};
   const selection = getScopedSelection?.(root);
   if (selection?.type !== "sujet") {
-    host.innerHTML = "";
-    host.setAttribute("aria-hidden", "true");
+    hideSelectDropdownHost(host);
     return host;
   }
   if (field) {
@@ -108,8 +134,7 @@ export function renderSelectDropdownHost({
     host.setAttribute("aria-hidden", "false");
     return host;
   }
-  host.innerHTML = "";
-  host.setAttribute("aria-hidden", "true");
+  hideSelectDropdownHost(host);
   return host;
 }
 
@@ -126,8 +151,11 @@ function focusInputWithoutScrolling(input) {
 }
 
 export function focusSelectDropdownSearch({ field = "", subjectId = "", situationId = "", ensureHost = ensureSelectDropdownHost } = {}) {
-  requestAnimationFrame(() => {
+  if (selectDropdownFocusFrame) cancelAnimationFrame(selectDropdownFocusFrame);
+  selectDropdownFocusFrame = requestAnimationFrame(() => {
+    selectDropdownFocusFrame = 0;
     const host = ensureHost();
+    if (host.getAttribute("aria-hidden") === "true") return;
     let input = null;
     if (field) {
       input = host.querySelector(`[data-subject-meta-search="${field}"]`);
@@ -157,12 +185,12 @@ export function syncSelectDropdownPosition({
   } else if (String(kanbanDropdown.subjectId || "") && String(kanbanDropdown.situationId || "")) {
     anchorSelector = `[data-subject-kanban-anchor="${CSS.escape(String(kanbanDropdown.subjectId || ""))}::${CSS.escape(String(kanbanDropdown.situationId || ""))}"]`;
   } else {
-    host.innerHTML = "";
-    host.setAttribute("aria-hidden", "true");
+    hideSelectDropdownHost(host);
     return;
   }
 
-  requestAnimationFrame(() => {
+  if (selectDropdownPositionFrame) cancelAnimationFrame(selectDropdownPositionFrame);
+  selectDropdownPositionFrame = requestAnimationFrame(() => {
     const scopeRoot = root || getScopeRoot();
     const dropdown = host.querySelector(".subject-meta-dropdown");
     const roots = [
@@ -178,8 +206,8 @@ export function syncSelectDropdownPosition({
       .map((candidateRoot) => candidateRoot?.querySelector?.(anchorSelector))
       .find(Boolean);
     if (!anchor || !dropdown) {
-      host.innerHTML = "";
-      host.setAttribute("aria-hidden", "true");
+      selectDropdownPositionFrame = 0;
+      hideSelectDropdownHost(host);
       return;
     }
     const rect = anchor.getBoundingClientRect();
@@ -206,6 +234,7 @@ export function syncSelectDropdownPosition({
     dropdown.style.left = `${left}px`;
     dropdown.style.top = `${top}px`;
     host.setAttribute("aria-hidden", "false");
+    selectDropdownPositionFrame = 0;
   });
 }
 
@@ -275,8 +304,7 @@ export function restoreSelectDropdownContextScrollState(state, { host = ensureSe
 }
 
 export function bindSelectDropdownDocumentEvents({
-  isAlreadyBound,
-  markBound,
+  bindingKey = "subject-meta-dropdown",
   getViewState,
   onRequestClose,
   onRerender,
@@ -284,38 +312,50 @@ export function bindSelectDropdownDocumentEvents({
   getScopeRoot,
   ensureHost = ensureSelectDropdownHost
 }) {
-  if (isAlreadyBound()) return;
-  markBound();
+  const existingBinding = selectDropdownLifecycleRegistry.get(bindingKey);
+  if (existingBinding) return existingBinding.detach;
 
-  document.addEventListener("click", (event) => {
-    const state = getViewStateFromGetter(getViewState) || {};
-    const hasMetaOpen = !!state.subjectMetaDropdown?.field;
-    const hasKanbanOpen = !!state.subjectKanbanDropdown?.subjectId && !!state.subjectKanbanDropdown?.situationId;
-    if (!hasMetaOpen && !hasKanbanOpen) return;
+  const isOpen = () => isSelectDropdownOpenFromState(getViewStateFromGetter(getViewState) || {});
+  const syncPosition = () => {
+    if (!isOpen()) return;
+    onSyncPosition?.(getScopeRoot?.());
+  };
+
+  const handleDocumentClick = (event) => {
+    if (!isOpen()) return;
     if (event.target.closest("#subjectMetaDropdownHost .subject-meta-dropdown")) return;
     if (event.target.closest("[data-subject-meta-trigger]")) return;
     if (event.target.closest("[data-subject-kanban-trigger]")) return;
     onRequestClose?.();
     onRerender?.();
+  };
+
+  const handleWindowResize = () => {
+    if (!isOpen()) return;
+    ensureHost();
+    syncPosition();
+  };
+
+  const handleDocumentScroll = () => {
+    if (!isOpen()) return;
+    syncPosition();
+  };
+
+  document.addEventListener("click", handleDocumentClick);
+  window.addEventListener("resize", handleWindowResize);
+  document.addEventListener("scroll", handleDocumentScroll, true);
+
+  const detach = () => {
+    document.removeEventListener("click", handleDocumentClick);
+    window.removeEventListener("resize", handleWindowResize);
+    document.removeEventListener("scroll", handleDocumentScroll, true);
+    selectDropdownLifecycleRegistry.delete(bindingKey);
+  };
+
+  selectDropdownLifecycleRegistry.set(bindingKey, {
+    detach,
+    syncPosition
   });
 
-  window.addEventListener("resize", () => {
-    const state = getViewStateFromGetter(getViewState) || {};
-    if (!state.subjectMetaDropdown?.field && !(state.subjectKanbanDropdown?.subjectId && state.subjectKanbanDropdown?.situationId)) return;
-    const host = ensureHost();
-    host.querySelectorAll(".select-menu__item").forEach((btn) => {
-      if (btn.dataset.selectDropdownMouseDownBound === "true") return;
-      btn.dataset.selectDropdownMouseDownBound = "true";
-      btn.addEventListener("mousedown", (event) => {
-        event.preventDefault();
-      });
-    });
-    onSyncPosition?.(getScopeRoot?.());
-  });
-
-  document.addEventListener("scroll", () => {
-    const state = getViewStateFromGetter(getViewState) || {};
-    if (!state.subjectMetaDropdown?.field && !(state.subjectKanbanDropdown?.subjectId && state.subjectKanbanDropdown?.situationId)) return;
-    onSyncPosition?.(getScopeRoot?.());
-  }, true);
+  return detach;
 }

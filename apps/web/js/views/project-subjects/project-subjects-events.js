@@ -60,16 +60,14 @@ export function createProjectSubjectsEvents(config) {
     getProjectSubjectMilestones
   } = config;
 
-  let subjectMetaDropdownDocumentBound = false;
+  let detachDropdownDocumentEvents = null;
   let modalEventsBound = false;
   let subjectsTabResetBound = false;
 
   function bindSubjectMetaDropdownDocumentEvents() {
-    bindSelectDropdownDocumentEvents({
-      isAlreadyBound: () => subjectMetaDropdownDocumentBound,
-      markBound: () => {
-        subjectMetaDropdownDocumentBound = true;
-      },
+    if (typeof detachDropdownDocumentEvents === "function") return detachDropdownDocumentEvents;
+    detachDropdownDocumentEvents = bindSelectDropdownDocumentEvents({
+      bindingKey: "project-subjects-dropdown",
       getViewState: getSubjectsViewState,
       onRequestClose: () => {
         closeMetaSelectDropdown(getSubjectsViewState);
@@ -79,6 +77,13 @@ export function createProjectSubjectsEvents(config) {
       onSyncPosition: (scopeRoot) => syncSubjectMetaDropdownPosition(scopeRoot),
       getScopeRoot: getSubjectMetaScopeRoot
     });
+    return detachDropdownDocumentEvents;
+  }
+
+  function detachSubjectMetaDropdownDocumentEvents() {
+    if (typeof detachDropdownDocumentEvents !== "function") return;
+    detachDropdownDocumentEvents();
+    detachDropdownDocumentEvents = null;
   }
 
   function resetSubjectsTabView(reason = "manual") {
@@ -1013,6 +1018,7 @@ export function createProjectSubjectsEvents(config) {
 
   return {
     bindSubjectMetaDropdownDocumentEvents,
+    detachSubjectMetaDropdownDocumentEvents,
     resetSubjectsTabView,
     bindSubjectsTabReset,
     wireDetailsInteractive,
