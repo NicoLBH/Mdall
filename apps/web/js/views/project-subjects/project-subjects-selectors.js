@@ -69,38 +69,7 @@ export function createProjectSubjectsSelectors({
   }
 
   function getChildrenBySubjectIdMap() {
-    const rawResult = getRawResult();
-    const rawChildrenMap = rawResult.childrenBySubjectId && typeof rawResult.childrenBySubjectId === "object"
-      ? rawResult.childrenBySubjectId
-      : null;
-
-    const hasDeclaredChildren = rawChildrenMap && Object.values(rawChildrenMap).some((value) => Array.isArray(value) && value.length > 0);
-    if (hasDeclaredChildren) return rawChildrenMap;
-
-    const fallback = {};
-    const subjectsById = getSubjectsByIdMap();
-    const parentBySubjectId = getParentBySubjectIdMap();
-
-    for (const subjectId of Object.keys(subjectsById)) {
-      fallback[subjectId] = [];
-    }
-
-    for (const [subjectId, parentIdValue] of Object.entries(parentBySubjectId)) {
-      const parentId = String(parentIdValue || "");
-      if (!parentId || parentId === subjectId) continue;
-      if (!fallback[parentId]) fallback[parentId] = [];
-      fallback[parentId].push(subjectId);
-    }
-
-    for (const subject of Object.values(subjectsById)) {
-      const subjectId = String(subject?.id || "");
-      const parentId = String(subject?.parent_subject_id || "");
-      if (!subjectId || !parentId || parentId === subjectId) continue;
-      if (!fallback[parentId]) fallback[parentId] = [];
-      if (!fallback[parentId].includes(subjectId)) fallback[parentId].push(subjectId);
-    }
-
-    return fallback;
+    return getChildrenBySubjectIdMapFromRawResult(getRawResult());
   }
 
   function getParentBySubjectIdMap() {
