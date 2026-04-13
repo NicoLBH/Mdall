@@ -312,7 +312,7 @@ const projectSubjectsEvents = createProjectSubjectsEvents({
   PROJECT_TAB_RESELECTED_EVENT,
   getSubjectsViewState,
   getSubjectsTabResetState,
-  dropdownController: projectSubjectsView.dropdownController,
+  getDropdownController: () => projectSubjectsView.dropdownController,
   renderSubjectMetaDropdownHost: (...args) => projectSubjectsView.renderSubjectMetaDropdownHost(...args),
   getScopedSelection,
   getSubjectMetaMenuEntries: (...args) => projectSubjectsView.getSubjectMetaMenuEntries(...args),
