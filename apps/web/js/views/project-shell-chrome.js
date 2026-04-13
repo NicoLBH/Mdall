@@ -15,9 +15,6 @@ const shellState = {
   compactTabCustomLabel: "",
   compactTabCustomSuffix: "",
   compactTabPrimaryAction: null,
-  primaryScrollSourceEl: null,
-  scrollSourceEls: [],
-  cleanupScrollSource: null,
   cleanupWindow: null
 };
 
@@ -125,12 +122,6 @@ function syncCompactState() {
   applyCompactState(getDocumentScrollTop() > 12);
 }
 
-function cleanupPrimaryScrollSource() {
-  shellState.cleanupScrollSource?.();
-  shellState.cleanupScrollSource = null;
-  shellState.primaryScrollSourceEl = null;
-  shellState.scrollSourceEls = [];
-}
 
 function renderProjectViewHeader({
   contextLabel,
@@ -227,17 +218,7 @@ export function setProjectViewHeader(config = {}) {
   syncCompactTabLabel();
 }
 
-export function registerProjectScrollSources(...elements) {
-  cleanupPrimaryScrollSource();
-
-  const resolvedElements = elements
-    .flat()
-    .filter((element, index, array) => element && array.indexOf(element) === index);
-
-  shellState.primaryScrollSourceEl = resolvedElements[0] || null;
-  shellState.scrollSourceEls = resolvedElements;
-  shellState.cleanupScrollSource = null;
-
+export function registerProjectScrollSources(..._elements) {
   syncCompactState();
 }
 
@@ -250,7 +231,6 @@ export function refreshProjectShellChrome() {
 }
 
 export function unmountProjectShellChrome() {
-  cleanupPrimaryScrollSource();
   clearProjectStickyChrome();
 
   shellState.cleanupWindow?.();

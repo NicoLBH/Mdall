@@ -545,25 +545,6 @@ export function createProjectSubjectsEvents(config) {
 
   }
 
-  function bindModalEvents() {
-    if (modalEventsBound) return;
-    modalEventsBound = true;
-
-    const modal = document.getElementById("detailsModal");
-
-    bindOverlayChromeDismiss(modal, {
-      onClose: closeDetailsModal
-    });
-
-    document.getElementById("detailsClose")?.addEventListener("click", closeDetailsModal);
-
-    window.addEventListener("keydown", (event) => {
-      if (event.key !== "Escape") return;
-      if (store.situationsView.detailsModalOpen) closeDetailsModal();
-      if (store.situationsView.drilldown?.isOpen) closeDrilldown();
-    });
-  }
-
   function bindCondensedTitleScroll(scrollEl, classHost, key) {
     bindOverlayChromeCompact(scrollEl, classHost, key);
   }
@@ -1033,7 +1014,6 @@ export function createProjectSubjectsEvents(config) {
     resetSubjectsTabView,
     bindSubjectsTabReset,
     wireDetailsInteractive,
-    bindModalEvents,
     bindCondensedTitleScroll,
     bindDetailsScroll,
     bindSituationsEvents

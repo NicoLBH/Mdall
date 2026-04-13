@@ -22,7 +22,6 @@ import {
 import { closeGlobalNav } from "./global-nav.js";
 import {
   setProjectViewHeader,
-  registerProjectPrimaryScrollSource,
   refreshProjectShellChrome
 } from "./project-shell-chrome.js";
 import { svgIcon } from "../ui/icons.js";
@@ -365,7 +364,6 @@ const {
   resetSubjectsTabView,
   bindSubjectsTabReset,
   wireDetailsInteractive,
-  bindModalEvents,
   bindDetailsScroll,
   bindSituationsEvents
 } = projectSubjectsEvents;
@@ -674,7 +672,6 @@ const projectSubjectsView = createProjectSubjectsView({
   getProjectSubjectDrilldown: () => projectSubjectDrilldown,
   loadExistingSubjectsForCurrentProject: loadFlatSubjectsForCurrentProject,
   getSubjectsCurrentRoot: () => subjectsCurrentRoot,
-  registerProjectPrimaryScrollSource,
   getFilteredSituations: (...args) => getFilteredSituations(...args),
   getVisibleCounts: (...args) => getVisibleCounts(...args),
   renderProjectSubjectsTable,
@@ -836,8 +833,6 @@ export function renderProjectSubjects(root) {
     updateModal: true
   }).catch(() => undefined);
   bindProjectSituationsRunbar(toolbarHost || root || document);
-  bindModalEvents();
-  projectSubjectDetail.syncDetailsModalIfOpen();
 
   syncProjectSituationsRunbar({
     run_id: store.ui?.runId || "",
