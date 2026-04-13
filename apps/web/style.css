@@ -2489,6 +2489,14 @@ body.is-resizing{
   overflow-x:hidden;
 }
 
+.drilldown__inner > .overlay-chrome__body,
+.drilldown__inner > .drilldown__body,
+#drilldownBody{
+  flex:0 0 auto;
+  min-height:auto;
+  overflow:visible;
+}
+
 body.drilldown-open .drilldown__inner,
 .drilldown.is-open .drilldown__inner{
   transform:translateX(0);
