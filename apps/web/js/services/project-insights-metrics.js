@@ -1,4 +1,5 @@
 import { store } from "../store.js";
+import { getChildrenBySubjectIdMapFromRawResult, getRootSubjectIdsFromRawResult } from "./subject-hierarchy.js";
 
 function safeArray(value) {
   return Array.isArray(value) ? value : [];
@@ -53,7 +54,11 @@ function getSubjectsByIdMap() {
 
 function getChildrenBySubjectIdMap() {
   const raw = getRawSubjectsResult();
-  if (raw.childrenBySubjectId && typeof raw.childrenBySubjectId === "object") return raw.childrenBySubjectId;
+  const hierarchyChildren = getChildrenBySubjectIdMapFromRawResult({
+    ...raw,
+    subjectsById: getSubjectsByIdMap()
+  });
+  if (Object.keys(hierarchyChildren).length) return hierarchyChildren;
 
   const fallback = {};
   for (const subject of Object.values(getSubjectsByIdMap())) {
@@ -62,6 +67,19 @@ function getChildrenBySubjectIdMap() {
     fallback[subjectId] = safeArray(subject?.children).map((child) => String(child?.id || "")).filter(Boolean);
   }
   return fallback;
+}
+
+function getRootSubjectIds() {
+  const raw = getRawSubjectsResult();
+  const rootIds = getRootSubjectIdsFromRawResult({
+    ...raw,
+    subjectsById: getSubjectsByIdMap()
+  });
+  if (Array.isArray(rootIds) && rootIds.length) return rootIds;
+
+  const childrenBySubjectId = getChildrenBySubjectIdMap();
+  const childIds = new Set(Object.values(childrenBySubjectId).flat().map((subjectId) => String(subjectId || "")).filter(Boolean));
+  return Object.keys(getSubjectsByIdMap()).filter((subjectId) => !childIds.has(subjectId));
 }
 
 function getLinksBySubjectIdMap() {
@@ -163,10 +181,7 @@ export function getProjectInsightsMetrics() {
   const criticalSubjects = subjects.filter((subject) => String(subject?.priority || "").toLowerCase() === "critical").length;
   const blockedSubjects = subjects.filter((subject) => isBlockedSubject(subject?.id)).length;
   const blockingSubjects = subjects.filter((subject) => isBlockingSubject(subject?.id)).length;
-  const rootSubjects = subjects.filter((subject) => {
-    const subjectId = String(subject?.id || "");
-    return !Object.values(childrenBySubjectId).flat().includes(subjectId);
-  }).length;
+  const rootSubjects = getRootSubjectIds().length;
   const childSubjects = Math.max(0, totalSubjects - rootSubjects);
   const activeSituations = Object.keys(situationsById).filter((situationId) => {
     const situation = situationsById[situationId] || null;
