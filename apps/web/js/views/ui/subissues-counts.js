@@ -15,7 +15,40 @@ function resolveProblemsCountsOptions(options = {}) {
   return { size, className, ariaLabel };
 }
 
+function renderCompletedProblemsRingSvg(size) {
+  return `
+    <svg
+      viewBox="0 0 16 16"
+      width="${size}"
+      height="${size}"
+      class="subissues-problems-icon__svg subissues-problems-icon__svg--complete"
+      aria-hidden="true"
+      focusable="false"
+      role="presentation"
+    >
+      <path
+        class="subissues-problems-icon__completed-check"
+        fill-rule="evenodd"
+        clip-rule="evenodd"
+        d="M10.0206 11.1074C9.68518 11.3949 9.18014 11.3561 8.8926 11.0206L5.8926 7.52061C5.62055 7.20322 5.63873 6.72989 5.93432 6.4343L7.43432 4.9343C7.74674 4.62188 8.25327 4.62188 8.56569 4.9343C8.87811 5.24672 8.87811 5.75325 8.56569 6.06567L7.58953 7.04182L10.1074 9.97935C10.3949 10.3148 10.3561 10.8198 10.0206 11.1074Z"
+      ></path>
+      <circle
+        class="subissues-problems-icon__completed-ring"
+        cx="8"
+        cy="8"
+        r="6"
+        fill="transparent"
+        stroke-width="2"
+      ></circle>
+    </svg>
+  `;
+}
+
 function renderProblemsProgressRingSvg(ratio, size) {
+  if (ratio >= 1) {
+    return renderCompletedProblemsRingSvg(size);
+  }
+
   const progress = Math.max(0, Math.min(100, Number.isFinite(ratio) ? ratio * 100 : 0));
   const dasharray = `${progress} 100`;
 
