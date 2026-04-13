@@ -1,3 +1,9 @@
+import {
+  getChildrenBySubjectIdMapFromRawResult,
+  getParentBySubjectIdMapFromRawResult,
+  getRootSubjectIdsFromRawResult
+} from "../../services/subject-hierarchy.js";
+
 export function createProjectSubjectsSelectors({
   store,
   ensureViewUiState,
@@ -63,15 +69,11 @@ export function createProjectSubjectsSelectors({
   }
 
   function getChildrenBySubjectIdMap() {
-    return getRawResult().childrenBySubjectId && typeof getRawResult().childrenBySubjectId === "object"
-      ? getRawResult().childrenBySubjectId
-      : {};
+    return getChildrenBySubjectIdMapFromRawResult(getRawResult());
   }
 
   function getParentBySubjectIdMap() {
-    return getRawResult().parentBySubjectId && typeof getRawResult().parentBySubjectId === "object"
-      ? getRawResult().parentBySubjectId
-      : {};
+    return getParentBySubjectIdMapFromRawResult(getRawResult());
   }
 
   function getLinksBySubjectIdMap() {
@@ -124,9 +126,8 @@ export function createProjectSubjectsSelectors({
   }
 
   function getRootSubjects() {
-    const raw = getRawResult();
     const subjectsById = getSubjectsByIdMap();
-    const ids = Array.isArray(raw.rootSubjectIds) ? raw.rootSubjectIds : [];
+    const ids = getRootSubjectIdsFromRawResult(getRawResult());
     const linked = ids.map((id) => subjectsById[String(id || "")]).filter(Boolean);
     if (linked.length) return sortSubjects(linked);
     return sortSubjects(getAllNormalizedSubjects().filter((subject) => isRootSubject(subject?.id)));
