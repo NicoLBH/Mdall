@@ -1,5 +1,5 @@
 import { escapeHtml } from "../utils/escape-html.js";
-import { setProjectViewHeader, registerProjectPrimaryScrollSource } from "./project-shell-chrome.js";
+import { setProjectViewHeader } from "./project-shell-chrome.js";
 import { getRunMetrics } from "../services/project-automation.js";
 import { getProjectInsightsMetrics } from "../services/project-insights-metrics.js";
 import { renderSvgLineChart, getNiceChartTicks } from "../utils/svg-line-chart.js";
@@ -240,15 +240,11 @@ export function renderProjectInsights(root) {
 
   root.innerHTML = `
     <section class="project-simple-page project-simple-page--settings">
-      <div class="project-simple-scroll" id="projectInsightsScroll">
-        <div class="settings-content" style="max-width:1216px;margin:0 auto;padding:24px 32px 40px;">
-          ${renderExecutionInsightsCardsSection()}
-          ${renderPilotageMetricStrip(insights.summary)}
-          ${renderChartsSection(insights)}
-        </div>
+      <div class="settings-content settings-content--project-page" style="max-width:1216px;margin:0 auto;padding:24px 32px 40px;">
+        ${renderExecutionInsightsCardsSection()}
+        ${renderPilotageMetricStrip(insights.summary)}
+        ${renderChartsSection(insights)}
       </div>
     </section>
   `;
-
-  registerProjectPrimaryScrollSource(document.getElementById("projectInsightsScroll"));
 }
