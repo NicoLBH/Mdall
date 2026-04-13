@@ -2,12 +2,10 @@ import { getDisplayAuthorName, getAuthorIdentity } from "../ui/author-identity.j
 import { renderProblemsCountsIconHtml } from "../ui/subissues-counts.js";
 import { formatObjectiveDueDateLabel } from "./project-subject-milestones.js";
 import {
-  closeMetaSelectDropdown,
-  closeKanbanSelectDropdown,
+  createSelectDropdownController,
   ensureSelectDropdownHost,
   getSubjectSelectDropdownScopeRoot,
   renderSelectDropdownHost,
-  focusSelectDropdownSearch,
   syncSelectDropdownPosition
 } from "../ui/select-dropdown-controller.js";
 export function createProjectSubjectsView(deps) {
@@ -1071,17 +1069,6 @@ function renderSubjectObjectivesValue(subjectId) {
   `;
 }
 
-
-function renderFlatSubjectRowById(subjectId, options = {}) {
-  const subject = getNestedSujet(String(subjectId || ""));
-  if (!subject) return "";
-  return deps.renderFlatSujetRow(subject, "", {
-    isSelectable: false,
-    deps: getSubjectsTableDeps(),
-    ...options
-  });
-}
-
 function renderSubjectMetaFieldValue(subject, field) {
   if (!subject || String(subject.type || "") === "") return "";
   if (field === "labels") return renderSubjectLabelsValue(subject.id);
@@ -1620,12 +1607,33 @@ function syncCommentPreview(root) {
 }
 
 
+const subjectSelectDropdown = createSelectDropdownController({
+  getViewState: getSubjectsViewState,
+  bindingKey: "project-subjects-dropdown",
+  getScopeRoot: () => getSubjectSelectDropdownScopeRoot(getSubjectsViewState),
+  ensureHost: ensureSelectDropdownHost,
+  renderHost: (root) => renderSelectDropdownHost({
+    getViewState: getSubjectsViewState,
+    root,
+    getScopedSelection,
+    renderMetaDropdown: renderSubjectMetaDropdown,
+    renderKanbanDropdown: renderSubjectKanbanDropdown,
+    ensureHost: ensureSelectDropdownHost
+  }),
+  onSyncPosition: (scopeRoot) => syncSelectDropdownPosition({
+    getViewState: getSubjectsViewState,
+    root: scopeRoot,
+    getScopeRoot: () => getSubjectSelectDropdownScopeRoot(getSubjectsViewState),
+    ensureHost: ensureSelectDropdownHost
+  })
+});
+
 function closeSubjectMetaDropdown() {
-  closeMetaSelectDropdown(getSubjectsViewState);
+  subjectSelectDropdown.closeMeta();
 }
 
 function closeSubjectKanbanDropdown() {
-  closeKanbanSelectDropdown(getSubjectsViewState);
+  subjectSelectDropdown.closeKanban();
 }
 
 function getSubjectMetaMenuEntries(subject, field) {
@@ -1657,14 +1665,7 @@ function getSubjectMetaScopeRoot() {
 }
 
 function renderSubjectMetaDropdownHost(root) {
-  return renderSelectDropdownHost({
-    getViewState: getSubjectsViewState,
-    root,
-    getScopedSelection,
-    renderMetaDropdown: renderSubjectMetaDropdown,
-    renderKanbanDropdown: renderSubjectKanbanDropdown,
-    ensureHost: ensureSubjectMetaDropdownHost
-  });
+  return subjectSelectDropdown.renderHost(root);
 }
 
 function rerenderSubjectMetaScopes() {
@@ -1674,20 +1675,15 @@ function rerenderSubjectMetaScopes() {
 }
 
 function focusSubjectMetaSearch(root, field) {
-  focusSelectDropdownSearch({ field, ensureHost: ensureSubjectMetaDropdownHost });
+  subjectSelectDropdown.focusSearch({ field });
 }
 
 function focusSubjectKanbanSearch(subjectId, situationId) {
-  focusSelectDropdownSearch({ subjectId, situationId, ensureHost: ensureSubjectMetaDropdownHost });
+  subjectSelectDropdown.focusSearch({ subjectId, situationId });
 }
 
 function syncSubjectMetaDropdownPosition(root) {
-  syncSelectDropdownPosition({
-    getViewState: getSubjectsViewState,
-    root,
-    getScopeRoot: getSubjectMetaScopeRoot,
-    ensureHost: ensureSubjectMetaDropdownHost
-  });
+  subjectSelectDropdown.syncPosition(root);
 }
 
 function renderSubjectsToolbarButton({ id, label, icon, action, tone = "default" }) {
@@ -1934,6 +1930,7 @@ function getObjectiveById(objectiveId) {
 
 
   return {
+    dropdownController: subjectSelectDropdown,
     normalizeBackendPriority,
     priorityBadge,
     statePill,
@@ -1968,7 +1965,6 @@ function getObjectiveById(objectiveId) {
     renderDetailedMetaForSelection,
     renderSubjectMetaControls,
     renderSubjectMetaFieldValue,
-    renderFlatSubjectRowById,
     renderSubIssuesForSujet,
     renderSubIssuesForSituation,
     closeSubjectMetaDropdown,
