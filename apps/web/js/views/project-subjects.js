@@ -359,6 +359,7 @@ const projectSubjectsEvents = createProjectSubjectsEvents({
   getProjectSubjectMilestones: () => projectSubjectMilestones,
   getProjectSubjectLabels: () => projectSubjectLabels,
   renderSubjectMetaFieldValue: (...args) => projectSubjectsView.renderSubjectMetaFieldValue(...args),
+  renderFlatSubjectRowById: (...args) => projectSubjectsView.renderFlatSubjectRowById(...args),
   getSubjectsCurrentRoot: () => subjectsCurrentRoot,
   openDetailsModal: () => projectSubjectDetail.openDetailsModal(),
   openSubjectDetails: () => projectSubjectDetail.openSubjectDetails()
