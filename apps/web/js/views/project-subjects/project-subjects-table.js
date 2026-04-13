@@ -18,18 +18,36 @@ export function renderSituationsTableHeadHtml(options = {}) {
 
 
 function getSubjectChildrenCounts(sujet, getChildSubjects, getEffectiveSujetStatus) {
-  const childSubjects = typeof getChildSubjects === "function"
-    ? getChildSubjects(String(sujet?.id || ""))
-    : [];
-  let closed = 0;
-  for (const childSubject of childSubjects) {
-    const childStatus = String(getEffectiveSujetStatus(childSubject?.id) || childSubject?.status || "open").toLowerCase();
-    if (childStatus !== "open") closed += 1;
+  const rootSubjectId = String(sujet?.id || "");
+  if (!rootSubjectId || typeof getChildSubjects !== "function") {
+    return { total: 0, closed: 0, open: 0 };
   }
+
+  const visited = new Set([rootSubjectId]);
+  const stack = [...getChildSubjects(rootSubjectId)];
+  let total = 0;
+  let closed = 0;
+
+  while (stack.length) {
+    const childSubject = stack.shift();
+    const childSubjectId = String(childSubject?.id || "");
+    if (!childSubjectId || visited.has(childSubjectId)) continue;
+    visited.add(childSubjectId);
+    total += 1;
+
+    const childStatus = String(getEffectiveSujetStatus(childSubjectId) || childSubject?.status || "open").toLowerCase();
+    if (childStatus !== "open") closed += 1;
+
+    const nestedChildren = getChildSubjects(childSubjectId);
+    if (Array.isArray(nestedChildren) && nestedChildren.length) {
+      stack.push(...nestedChildren);
+    }
+  }
+
   return {
-    total: childSubjects.length,
+    total,
     closed,
-    open: Math.max(0, childSubjects.length - closed)
+    open: Math.max(0, total - closed)
   };
 }
 
