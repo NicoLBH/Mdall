@@ -961,7 +961,16 @@ export async function loadFlatSubjectsForCurrentProject(options = {}) {
         objectives: [],
         objectivesById: {},
         objectiveIdsBySubjectId: {},
-        objectivesHydrated: false
+        objectivesHydrated: false,
+        pagination: {
+          entity: "subjects",
+          mode: "full",
+          sourceComplete: true,
+          loadedItems: 0,
+          totalItems: 0,
+          hasNextPage: false,
+          nextCursor: null
+        }
       };
       store.projectSubjectsView.rawResult = store.projectSubjectsView.rawSubjectsResult;
       store.projectSubjectsView.loading = false;
@@ -980,6 +989,15 @@ export async function loadFlatSubjectsForCurrentProject(options = {}) {
     const result = buildProjectFlatSubjectsResult(subjects, subjectLinks, { runId: store.ui.runId || "" });
     result.situationsById = Object.fromEntries(situations.map((situation) => [String(situation?.id || ""), situation]).filter(([id]) => !!id));
     result.subjectIdsBySituationId = subjectIdsBySituationId;
+    result.pagination = {
+      entity: "subjects",
+      mode: "full",
+      sourceComplete: true,
+      loadedItems: Array.isArray(result.subjects) ? result.subjects.length : 0,
+      totalItems: Array.isArray(result.subjects) ? result.subjects.length : 0,
+      hasNextPage: false,
+      nextCursor: null
+    };
 
     try {
       const labelsResult = await loadLabelsForProject(backendProjectId);
@@ -1023,6 +1041,16 @@ export async function loadFlatSubjectsForCurrentProject(options = {}) {
     store.projectSubjectsView.rawResult = result;
     store.projectSubjectsView.projectScopeId = currentProjectScopeId;
     store.projectSubjectsView.page = previousPage;
+    store.projectSubjectsView.pagination = {
+      mode: "full",
+      pageSize: null,
+      currentPage: 1,
+      totalItems: result.pagination?.totalItems || (Array.isArray(result.subjects) ? result.subjects.length : 0),
+      loadedItems: result.pagination?.loadedItems || (Array.isArray(result.subjects) ? result.subjects.length : 0),
+      hasNextPage: false,
+      nextCursor: null,
+      sourceComplete: true
+    };
     store.projectSubjectsView.expandedSubjectIds = new Set(
       previousExpandedSubjectIds.filter((subjectId) => !!result.subjectsById?.[subjectId])
     );
