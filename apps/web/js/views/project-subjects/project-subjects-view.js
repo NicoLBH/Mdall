@@ -1524,6 +1524,7 @@ function rerenderPanels() {
       syncSituationsPrimaryScrollSource();
     } else {
       const details = getProjectSubjectDetail().renderDetailsHtml(null, {
+        showExpand: false,
         subissuesOptions: {
           sujetRowClass: "js-modal-drilldown-sujet",
           sujetToggleClass: "js-modal-toggle-sujet",
@@ -1533,6 +1534,10 @@ function rerenderPanels() {
       });
       panelHost.innerHTML = `
         <section class="gh-panel gh-panel--details gh-panel--details-standalone" aria-label="Details">
+          <button type="button" class="objective-detail__back-link" data-subjects-back="table">
+            <span class="objective-detail__back-icon" aria-hidden="true">${svgIcon("arrow-left", { className: "octicon octicon-arrow-left" })}</span>
+            <span>Retour aux Sujets</span>
+          </button>
           <div class="gh-panel__head gh-panel__head--tight" id="situationsDetailsTitle">${details.titleHtml}</div>
           <div class="details-body" id="situationsDetailsHost">${details.bodyHtml}</div>
         </section>
