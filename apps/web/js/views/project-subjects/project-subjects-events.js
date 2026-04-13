@@ -58,7 +58,8 @@ export function createProjectSubjectsEvents(config) {
     bindOverlayChromeDismiss,
     bindOverlayChromeCompact,
     getProjectSubjectMilestones,
-    renderSubjectMetaFieldValue
+    renderSubjectMetaFieldValue,
+    renderFlatSubjectRowById
   } = config;
 
   let detachDropdownDocumentEvents = null;
@@ -311,6 +312,30 @@ export function createProjectSubjectsEvents(config) {
     });
   }
 
+  function refreshVisibleSubjectRows(subjectId) {
+    const subjectKey = String(subjectId || "");
+    if (!subjectKey || typeof renderFlatSubjectRowById !== "function") return;
+    const selector = `.issue-row[data-sujet-id="${CSS.escape(subjectKey)}"]`;
+    document.querySelectorAll(selector).forEach((row) => {
+      if (!row.closest("#situationsTableHost")) return;
+      const nextHtml = renderFlatSubjectRowById(subjectKey);
+      if (!nextHtml) return;
+      row.outerHTML = nextHtml;
+    });
+  }
+
+  function refreshSubjectUiAroundDropdown(root, { field = "", subjectId = "", preserveScroll = false, preserveFocus = false, focusArgs = null } = {}) {
+    const targetRoot = root || getSubjectMetaScopeRoot();
+    const scrollState = preserveScroll ? captureSelectDropdownContextScrollState(targetRoot) : null;
+    refreshSubjectMetaDropdownUi(targetRoot, { field, preserveScroll: false, preserveFocus: false, focusArgs: null });
+    if (subjectId && (field === "labels" || field === "objectives")) {
+      refreshVisibleSubjectRows(subjectId);
+    }
+    if (scrollState) restoreSelectDropdownContextScrollState(scrollState);
+    if (preserveFocus && focusArgs) focusSelectDropdownSearch(focusArgs);
+    syncSubjectMetaDropdownPosition(getSubjectMetaScopeRoot());
+  }
+
   function refreshSubjectMetaDropdownUi(root, { field = "", preserveScroll = false, preserveFocus = false, focusArgs = null } = {}) {
     if (!root) return null;
     const selection = getScopedSelection(root);
@@ -333,12 +358,28 @@ export function createProjectSubjectsEvents(config) {
   }
 
   async function applyNonDestructiveMetaToggle(root, field, toggleCallback) {
-    const scrollState = captureSelectDropdownContextScrollState(root);
-    await toggleCallback();
-    refreshSubjectMetaDropdownUi(root, { field, preserveScroll: false, preserveFocus: true, focusArgs: { field } });
-    restoreSelectDropdownContextScrollState(scrollState);
-    focusSelectDropdownSearch({ field });
-    syncSubjectMetaDropdownPosition(getSubjectMetaScopeRoot());
+    const subjectSelection = getScopedSelection(root);
+    const subjectId = subjectSelection?.type === "sujet" ? String(subjectSelection.item.id || "") : "";
+
+    refreshSubjectUiAroundDropdown(root, {
+      field,
+      subjectId,
+      preserveScroll: true,
+      preserveFocus: true,
+      focusArgs: { field }
+    });
+
+    const success = await toggleCallback();
+
+    refreshSubjectUiAroundDropdown(root, {
+      field,
+      subjectId,
+      preserveScroll: true,
+      preserveFocus: true,
+      focusArgs: { field }
+    });
+
+    return success;
   }
 
   function bindSubjectsTabReset() {
