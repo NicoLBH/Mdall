@@ -450,7 +450,7 @@ function createSubjectViewNode(subject, documentIds = [], childNodes = []) {
     priority: firstNonEmpty(subject?.priority, "medium"),
     status: firstNonEmpty(subject?.status, "open"),
     agent: firstNonEmpty(subject?.subject_type, "system"),
-    parentSubjectId: firstNonEmpty(subject?.parent_subject_id, ""),
+    parent_subject_id: firstNonEmpty(subject?.parent_subject_id, ""),
     children,
     avis: children,
     raw: {
