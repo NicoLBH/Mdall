@@ -699,7 +699,7 @@ function getChildSubjectList(subject) {
 }
 
 function problemsCountsIconHtml(closedCount, totalCount) {
-  return renderProblemsCountsIconHtml(closedCount, totalCount, { completeIcon: SVG_ISSUE_CLOSED });
+  return renderProblemsCountsIconHtml(closedCount, totalCount);
 }
 
 function problemsCountsHtml(situation) {
