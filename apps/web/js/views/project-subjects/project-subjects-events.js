@@ -57,7 +57,8 @@ export function createProjectSubjectsEvents(config) {
     selectSituation,
     bindOverlayChromeDismiss,
     bindOverlayChromeCompact,
-    getProjectSubjectMilestones
+    getProjectSubjectMilestones,
+    renderSubjectMetaFieldValue
   } = config;
 
   let detachDropdownDocumentEvents = null;
@@ -108,6 +109,236 @@ export function createProjectSubjectsEvents(config) {
       rerenderPanels();
       syncSituationsPrimaryScrollSource();
     }
+  }
+
+  function bindSubjectSituationFieldInteractions(root, fieldRoot) {
+    if (!root || !fieldRoot) return;
+
+    fieldRoot.querySelectorAll("[data-subject-situations-closed-toggle]").forEach((btn) => {
+      btn.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const dropdownState = getSubjectsViewState().subjectMetaDropdown || {};
+        dropdownState.showClosedSituations = !dropdownState.showClosedSituations;
+        refreshSubjectMetaDropdownUi(root, { field: "situations", preserveScroll: true, preserveFocus: true });
+      };
+    });
+
+    fieldRoot.querySelectorAll("[data-subject-kanban-trigger]").forEach((btn) => {
+      btn.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const subjectId = String(btn.dataset.subjectKanbanTrigger || "");
+        const situationId = String(btn.dataset.subjectKanbanSituationId || "");
+        const dropdown = getSubjectsViewState().subjectKanbanDropdown || {};
+        const isAlreadyOpen = String(dropdown.subjectId || "") === subjectId && String(dropdown.situationId || "") === situationId;
+        if (isAlreadyOpen) {
+          closeKanbanSelectDropdown(getSubjectsViewState);
+        } else {
+          closeMetaSelectDropdown(getSubjectsViewState);
+          openKanbanSelectDropdown(getSubjectsViewState, { subjectId, situationId });
+          const entries = getSubjectKanbanMenuEntries(subjectId, situationId, "");
+          dropdown.activeKey = String((entries.find((entry) => entry.isSelected) || entries[0] || {}).key || "");
+        }
+        refreshSubjectMetaDropdownUi(root, {
+          preserveScroll: true,
+          preserveFocus: !isAlreadyOpen,
+          focusArgs: !isAlreadyOpen ? { subjectId, situationId } : null
+        });
+      };
+    });
+  }
+
+  function bindDropdownHostInteractiveElements(root, dropdownHost) {
+    if (!root || !dropdownHost) return;
+    const setSujetKanbanStatus = getSetSujetKanbanStatus?.();
+    const toggleSubjectObjective = getToggleSubjectObjective?.();
+    const toggleSubjectSituation = getToggleSubjectSituation?.();
+    const toggleSubjectLabel = getToggleSubjectLabel?.();
+
+    dropdownHost.querySelectorAll("[data-subject-kanban-search]").forEach((input) => {
+      input.addEventListener("input", () => {
+        const subjectId = String(input.dataset.subjectKanbanSearch || "");
+        const situationId = String(input.dataset.subjectKanbanSearchSituationId || "");
+        setKanbanSelectDropdownQuery(getSubjectsViewState, input.value || "");
+        const entries = getSubjectKanbanMenuEntries(subjectId, situationId, input.value || "");
+        getSubjectsViewState().subjectKanbanDropdown.activeKey = String((entries.find((entry) => entry.isSelected) || entries[0] || {}).key || "");
+        refreshSubjectMetaDropdownUi(root, { preserveScroll: true, preserveFocus: true, focusArgs: { subjectId, situationId } });
+      });
+
+      input.addEventListener("keydown", (event) => {
+        const subjectId = String(input.dataset.subjectKanbanSearch || "");
+        const situationId = String(input.dataset.subjectKanbanSearchSituationId || "");
+        const entries = getSubjectKanbanMenuEntries(subjectId, situationId, getSubjectsViewState().subjectKanbanDropdown.query || "");
+        if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+          event.preventDefault();
+          if (!entries.length) return;
+          const currentKey = String(getSubjectsViewState().subjectKanbanDropdown.activeKey || "");
+          const currentIndex = entries.findIndex((entry) => String(entry?.key || "") === currentKey);
+          const nextIndex = currentIndex >= 0 ? (currentIndex + (event.key === "ArrowDown" ? 1 : -1) + entries.length) % entries.length : 0;
+          getSubjectsViewState().subjectKanbanDropdown.activeKey = String(entries[nextIndex]?.key || "");
+          refreshSubjectMetaDropdownUi(root, { preserveScroll: true, preserveFocus: true, focusArgs: { subjectId, situationId } });
+          return;
+        }
+        if (event.key === "Escape") {
+          event.preventDefault();
+          closeKanbanSelectDropdown(getSubjectsViewState);
+          rerenderScope(root);
+          return;
+        }
+        if (event.key === "Enter") {
+          const activeKey = String(getSubjectsViewState().subjectKanbanDropdown.activeKey || "");
+          if (!activeKey) return;
+          event.preventDefault();
+          setSujetKanbanStatus(subjectId, activeKey, { situationId });
+          closeKanbanSelectDropdown(getSubjectsViewState);
+          rerenderScope(root);
+        }
+      });
+    });
+
+    dropdownHost.querySelectorAll("[data-subject-meta-search]").forEach((input) => {
+      input.addEventListener("input", () => {
+        const field = String(input.dataset.subjectMetaSearch || "");
+        setMetaSelectDropdownQuery(getSubjectsViewState, input.value || "");
+        const selection = getScopedSelection(root);
+        const subject = selection?.type === "sujet" ? selection.item : null;
+        const entries = subject ? getSubjectMetaMenuEntries(subject, field) : [];
+        const currentKey = String(getSubjectsViewState().subjectMetaDropdown.activeKey || "");
+        getSubjectsViewState().subjectMetaDropdown.activeKey = entries.some((entry) => String(entry?.key || "") === currentKey)
+          ? currentKey
+          : String(entries[0]?.key || "");
+        refreshSubjectMetaDropdownUi(root, { preserveScroll: true, preserveFocus: true, focusArgs: { field } });
+      });
+
+      input.addEventListener("keydown", async (event) => {
+        const field = String(input.dataset.subjectMetaSearch || "");
+        const subjectSelection = getScopedSelection(root);
+        if (subjectSelection?.type !== "sujet") return;
+        if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+          event.preventDefault();
+          setSubjectMetaActiveEntry(subjectSelection.item, field, event.key === "ArrowDown" ? 1 : -1);
+          refreshSubjectMetaDropdownUi(root, { preserveScroll: true, preserveFocus: true, focusArgs: { field } });
+          return;
+        }
+        if (event.key === "Escape") {
+          event.preventDefault();
+          closeMetaSelectDropdown(getSubjectsViewState);
+          rerenderScope(root);
+          return;
+        }
+        if (event.key === "Enter") {
+          const activeKey = String(getSubjectsViewState().subjectMetaDropdown.activeKey || "");
+          if (!activeKey) return;
+          event.preventDefault();
+          if (field === "objectives") {
+            await applyNonDestructiveMetaToggle(root, field, () => toggleSubjectObjective(subjectSelection.item.id, activeKey, { root, skipRerender: true }));
+            return;
+          }
+          if (field === "situations") {
+            await applyNonDestructiveMetaToggle(root, field, () => toggleSubjectSituation(subjectSelection.item.id, activeKey, { root, skipRerender: true }));
+            return;
+          }
+          if (field === "labels") {
+            await applyNonDestructiveMetaToggle(root, field, () => toggleSubjectLabel(subjectSelection.item.id, activeKey, { root, skipRerender: true }));
+          }
+        }
+      });
+    });
+
+    dropdownHost.querySelectorAll("[data-objective-select]").forEach((btn) => {
+      btn.onclick = async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const subjectSelection = getScopedSelection(root);
+        if (subjectSelection?.type !== "sujet") return;
+        const objectiveId = String(btn.dataset.objectiveSelect || "");
+        await applyNonDestructiveMetaToggle(root, "objectives", () => toggleSubjectObjective(subjectSelection.item.id, objectiveId, { root, skipRerender: true }));
+      };
+    });
+
+    dropdownHost.querySelectorAll("[data-situation-toggle]").forEach((btn) => {
+      btn.onclick = async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const subjectSelection = getScopedSelection(root);
+        if (subjectSelection?.type !== "sujet") return;
+        const situationId = String(btn.dataset.situationToggle || "");
+        await applyNonDestructiveMetaToggle(root, "situations", () => toggleSubjectSituation(subjectSelection.item.id, situationId, { root, skipRerender: true }));
+      };
+    });
+
+    dropdownHost.querySelectorAll("[data-subject-label-toggle]").forEach((btn) => {
+      btn.onclick = async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const subjectSelection = getScopedSelection(root);
+        if (subjectSelection?.type !== "sujet") return;
+        const labelKey = String(btn.dataset.subjectLabelToggle || "");
+        await applyNonDestructiveMetaToggle(root, "labels", () => toggleSubjectLabel(subjectSelection.item.id, labelKey, { root, skipRerender: true }));
+      };
+    });
+
+    dropdownHost.querySelectorAll("[data-subject-kanban-select]").forEach((btn) => {
+      btn.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const subjectId = String(btn.dataset.subjectKanbanSubjectId || "");
+        const situationId = String(btn.dataset.subjectKanbanSituationId || "");
+        const nextStatus = String(btn.dataset.subjectKanbanSelect || "");
+        setSujetKanbanStatus(subjectId, nextStatus, { situationId });
+        closeKanbanSelectDropdown(getSubjectsViewState);
+        rerenderScope(root);
+      };
+    });
+
+    dropdownHost.querySelectorAll("[data-subject-meta-close]").forEach((btn) => {
+      btn.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        closeMetaSelectDropdown(getSubjectsViewState);
+        rerenderScope(root);
+      };
+    });
+
+    dropdownHost.querySelectorAll("[data-subject-kanban-close]").forEach((btn) => {
+      btn.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        closeKanbanSelectDropdown(getSubjectsViewState);
+        rerenderScope(root);
+      };
+    });
+  }
+
+  function refreshSubjectMetaDropdownUi(root, { field = "", preserveScroll = false, preserveFocus = false, focusArgs = null } = {}) {
+    if (!root) return null;
+    const selection = getScopedSelection(root);
+    if (selection?.type === "sujet" && field && typeof renderSubjectMetaFieldValue === "function") {
+      const fieldSection = root.querySelector(`[data-subject-meta-trigger="${field}"]`)?.closest?.(".subject-meta-field") || null;
+      const fieldValue = fieldSection?.querySelector?.(".subject-meta-field__value") || null;
+      if (fieldValue) {
+        fieldValue.innerHTML = renderSubjectMetaFieldValue(selection.item, field);
+        if (field === "situations") bindSubjectSituationFieldInteractions(root, fieldSection);
+      }
+    }
+
+    const scrollState = preserveScroll ? captureSelectDropdownContextScrollState(root) : null;
+    const nextDropdownHost = renderSubjectMetaDropdownHost(root);
+    bindDropdownHostInteractiveElements(root, nextDropdownHost);
+    if (scrollState) restoreSelectDropdownContextScrollState(scrollState);
+    if (preserveFocus && focusArgs) focusSelectDropdownSearch(focusArgs);
+    syncSubjectMetaDropdownPosition(getSubjectMetaScopeRoot());
+    return nextDropdownHost;
+  }
+
+  async function applyNonDestructiveMetaToggle(root, field, toggleCallback) {
+    const scrollState = captureSelectDropdownContextScrollState(root);
+    await toggleCallback();
+    refreshSubjectMetaDropdownUi(root, { field, preserveScroll: false, preserveFocus: true, focusArgs: { field } });
+    restoreSelectDropdownContextScrollState(scrollState);
+    focusSelectDropdownSearch({ field });
+    syncSubjectMetaDropdownPosition(getSubjectMetaScopeRoot());
   }
 
   function bindSubjectsTabReset() {
@@ -199,225 +430,11 @@ export function createProjectSubjectsEvents(config) {
       };
     });
 
-    root.querySelectorAll("[data-subject-situations-closed-toggle]").forEach((btn) => {
-      btn.onclick = (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        const dropdownState = getSubjectsViewState().subjectMetaDropdown || {};
-        dropdownState.showClosedSituations = !dropdownState.showClosedSituations;
-        rerenderScope(root);
-      };
+    root.querySelectorAll(".subject-meta-field").forEach((fieldRoot) => {
+      bindSubjectSituationFieldInteractions(root, fieldRoot);
     });
 
-    root.querySelectorAll("[data-subject-kanban-trigger]").forEach((btn) => {
-      btn.onclick = (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        const subjectId = String(btn.dataset.subjectKanbanTrigger || "");
-        const situationId = String(btn.dataset.subjectKanbanSituationId || "");
-        const dropdown = getSubjectsViewState().subjectKanbanDropdown || {};
-        const isAlreadyOpen = String(dropdown.subjectId || "") === subjectId && String(dropdown.situationId || "") === situationId;
-        if (isAlreadyOpen) {
-          closeKanbanSelectDropdown(getSubjectsViewState);
-        } else {
-          closeMetaSelectDropdown(getSubjectsViewState);
-          openKanbanSelectDropdown(getSubjectsViewState, { subjectId, situationId });
-          const entries = getSubjectKanbanMenuEntries(subjectId, situationId, "");
-          dropdown.activeKey = String((entries.find((entry) => entry.isSelected) || entries[0] || {}).key || "");
-        }
-        rerenderScope(root);
-        if (!isAlreadyOpen) {
-          focusSelectDropdownSearch({ subjectId, situationId });
-          syncSubjectMetaDropdownPosition(getSubjectMetaScopeRoot());
-        }
-      };
-    });
-
-    dropdownHost.querySelectorAll("[data-subject-kanban-search]").forEach((input) => {
-      input.addEventListener("input", () => {
-        const subjectId = String(input.dataset.subjectKanbanSearch || "");
-        const situationId = String(input.dataset.subjectKanbanSearchSituationId || "");
-        setKanbanSelectDropdownQuery(getSubjectsViewState, input.value || "");
-        const entries = getSubjectKanbanMenuEntries(subjectId, situationId, input.value || "");
-        getSubjectsViewState().subjectKanbanDropdown.activeKey = String((entries.find((entry) => entry.isSelected) || entries[0] || {}).key || "");
-        rerenderScope(root);
-        focusSelectDropdownSearch({ subjectId, situationId });
-        syncSubjectMetaDropdownPosition(getSubjectMetaScopeRoot());
-      });
-
-      input.addEventListener("keydown", (event) => {
-        const subjectId = String(input.dataset.subjectKanbanSearch || "");
-        const situationId = String(input.dataset.subjectKanbanSearchSituationId || "");
-        const entries = getSubjectKanbanMenuEntries(subjectId, situationId, getSubjectsViewState().subjectKanbanDropdown.query || "");
-        if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-          event.preventDefault();
-          if (!entries.length) return;
-          const currentKey = String(getSubjectsViewState().subjectKanbanDropdown.activeKey || "");
-          const currentIndex = entries.findIndex((entry) => String(entry?.key || "") === currentKey);
-          const nextIndex = currentIndex >= 0 ? (currentIndex + (event.key === "ArrowDown" ? 1 : -1) + entries.length) % entries.length : 0;
-          getSubjectsViewState().subjectKanbanDropdown.activeKey = String(entries[nextIndex]?.key || "");
-          rerenderScope(root);
-          focusSelectDropdownSearch({ subjectId, situationId });
-          syncSubjectMetaDropdownPosition(getSubjectMetaScopeRoot());
-          return;
-        }
-        if (event.key === "Escape") {
-          event.preventDefault();
-          closeKanbanSelectDropdown(getSubjectsViewState);
-          rerenderScope(root);
-          return;
-        }
-        if (event.key === "Enter") {
-          const activeKey = String(getSubjectsViewState().subjectKanbanDropdown.activeKey || "");
-          if (!activeKey) return;
-          event.preventDefault();
-          setSujetKanbanStatus(subjectId, activeKey, { situationId });
-          closeKanbanSelectDropdown(getSubjectsViewState);
-          rerenderScope(root);
-        }
-      });
-    });
-
-    dropdownHost.querySelectorAll("[data-subject-meta-search]").forEach((input) => {
-      input.addEventListener("input", () => {
-        const field = String(input.dataset.subjectMetaSearch || "");
-        setMetaSelectDropdownQuery(getSubjectsViewState, input.value || "");
-        const selection = getScopedSelection(root);
-        const subject = selection?.type === "sujet" ? selection.item : null;
-        const entries = subject ? getSubjectMetaMenuEntries(subject, field) : [];
-        const currentKey = String(getSubjectsViewState().subjectMetaDropdown.activeKey || "");
-        getSubjectsViewState().subjectMetaDropdown.activeKey = entries.some((entry) => String(entry?.key || "") === currentKey)
-          ? currentKey
-          : String(entries[0]?.key || "");
-        rerenderScope(root);
-        focusSelectDropdownSearch({ field });
-        syncSubjectMetaDropdownPosition(getSubjectMetaScopeRoot());
-      });
-
-      input.addEventListener("keydown", async (event) => {
-        const field = String(input.dataset.subjectMetaSearch || "");
-        const subjectSelection = getScopedSelection(root);
-        if (subjectSelection?.type !== "sujet") return;
-        if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-          event.preventDefault();
-          setSubjectMetaActiveEntry(subjectSelection.item, field, event.key === "ArrowDown" ? 1 : -1);
-          rerenderScope(root);
-          focusSelectDropdownSearch({ field });
-          syncSubjectMetaDropdownPosition(getSubjectMetaScopeRoot());
-          return;
-        }
-        if (event.key === "Escape") {
-          event.preventDefault();
-          closeMetaSelectDropdown(getSubjectsViewState);
-          rerenderScope(root);
-          return;
-        }
-        if (event.key === "Enter") {
-          const activeKey = String(getSubjectsViewState().subjectMetaDropdown.activeKey || "");
-          if (!activeKey) return;
-          if (field === "objectives") {
-            event.preventDefault();
-            const scrollState = captureSelectDropdownContextScrollState(root);
-            await toggleSubjectObjective(subjectSelection.item.id, activeKey, { root });
-            restoreSelectDropdownContextScrollState(scrollState);
-            focusSelectDropdownSearch({ field });
-            syncSubjectMetaDropdownPosition(getSubjectMetaScopeRoot());
-            return;
-          }
-          if (field === "situations") {
-            event.preventDefault();
-            const scrollState = captureSelectDropdownContextScrollState(root);
-            await toggleSubjectSituation(subjectSelection.item.id, activeKey, { root });
-            restoreSelectDropdownContextScrollState(scrollState);
-            focusSelectDropdownSearch({ field });
-            syncSubjectMetaDropdownPosition(getSubjectMetaScopeRoot());
-            return;
-          }
-          if (field === "labels") {
-            event.preventDefault();
-            const scrollState = captureSelectDropdownContextScrollState(root);
-            await toggleSubjectLabel(subjectSelection.item.id, activeKey, { root });
-            restoreSelectDropdownContextScrollState(scrollState);
-            focusSelectDropdownSearch({ field });
-            syncSubjectMetaDropdownPosition(getSubjectMetaScopeRoot());
-          }
-        }
-      });
-    });
-
-    dropdownHost.querySelectorAll("[data-objective-select]").forEach((btn) => {
-      btn.onclick = async (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        const subjectSelection = getScopedSelection(root);
-        if (subjectSelection?.type !== "sujet") return;
-        const objectiveId = String(btn.dataset.objectiveSelect || "");
-        const scrollState = captureSelectDropdownContextScrollState(root);
-        await toggleSubjectObjective(subjectSelection.item.id, objectiveId, { root });
-        restoreSelectDropdownContextScrollState(scrollState);
-        focusSelectDropdownSearch({ field: "objectives" });
-        syncSubjectMetaDropdownPosition(getSubjectMetaScopeRoot());
-      };
-    });
-
-    dropdownHost.querySelectorAll("[data-situation-toggle]").forEach((btn) => {
-      btn.onclick = async (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        const subjectSelection = getScopedSelection(root);
-        if (subjectSelection?.type !== "sujet") return;
-        const scrollState = captureSelectDropdownContextScrollState(root);
-        await toggleSubjectSituation(subjectSelection.item.id, String(btn.dataset.situationToggle || ""), { root });
-        restoreSelectDropdownContextScrollState(scrollState);
-        focusSelectDropdownSearch({ field: "situations" });
-        syncSubjectMetaDropdownPosition(getSubjectMetaScopeRoot());
-      };
-    });
-
-    dropdownHost.querySelectorAll("[data-subject-label-toggle]").forEach((btn) => {
-      btn.onclick = async (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        const subjectSelection = getScopedSelection(root);
-        if (subjectSelection?.type !== "sujet") return;
-        const scrollState = captureSelectDropdownContextScrollState(root);
-        await toggleSubjectLabel(subjectSelection.item.id, String(btn.dataset.subjectLabelToggle || ""), { root });
-        restoreSelectDropdownContextScrollState(scrollState);
-        focusSelectDropdownSearch({ field: "labels" });
-        syncSubjectMetaDropdownPosition(getSubjectMetaScopeRoot());
-      };
-    });
-
-    dropdownHost.querySelectorAll("[data-subject-kanban-select]").forEach((btn) => {
-      btn.onclick = (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        const subjectId = String(btn.dataset.subjectKanbanSubjectId || "");
-        const situationId = String(btn.dataset.subjectKanbanSituationId || "");
-        const nextStatus = String(btn.dataset.subjectKanbanSelect || "");
-        setSujetKanbanStatus(subjectId, nextStatus, { situationId });
-        closeKanbanSelectDropdown(getSubjectsViewState);
-        rerenderScope(root);
-      };
-    });
-
-    dropdownHost.querySelectorAll("[data-subject-meta-close]").forEach((btn) => {
-      btn.onclick = (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        closeMetaSelectDropdown(getSubjectsViewState);
-        rerenderScope(root);
-      };
-    });
-
-    dropdownHost.querySelectorAll("[data-subject-kanban-close]").forEach((btn) => {
-      btn.onclick = (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        closeKanbanSelectDropdown(getSubjectsViewState);
-        rerenderScope(root);
-      };
-    });
+    bindDropdownHostInteractiveElements(root, dropdownHost);
 
     syncSubjectMetaDropdownPosition(getSubjectMetaScopeRoot());
 
