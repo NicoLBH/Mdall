@@ -3841,12 +3841,12 @@ color:var(--text);
 .project-simple-page--parametres-standalone .project-collaborator-create-shell,
 .project-simple-page--parametres-standalone .project-collaborator-create-shell__inner,
 .project-simple-page--parametres-standalone .project-collaborator-create{
-  /*min-height:calc(100dvh - var(--header-h) - var(--project-tabs-h));*/
-  max-height:calc(100dvh - var(--header-h) - var(--project-tabs-h));
+  min-height:0;
+  max-height:none;
 }
 
 .project-simple-page--parametres-standalone .project-simple-scroll--parametres{
-  overflow:hidden;
+  overflow:visible;
 }
 
 .settings-page-header--parametres h2{
@@ -11058,10 +11058,15 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   gap:10px;
 }
 
+body.route--project .project-collaborator-create__body,
+body.route--project .project-collaborator-create__body .project-collaborators-modal__section:last-of-type{
+  overflow:visible;
+}
+
 .project-simple-page--parametres-standalone .project-collaborator-create-shell,
 .project-simple-page--parametres-standalone .project-collaborator-create-shell__inner,
 .project-simple-page--parametres-standalone .project-collaborator-create{
-  overflow:hidden;
+  overflow:visible;
 }
 
 .project-simple-page--parametres-standalone .project-collaborator-create__body{

@@ -1,5 +1,5 @@
 import { store } from "../store.js";
-import { registerProjectPrimaryScrollSource, setProjectViewHeader } from "./project-shell-chrome.js";
+import { setProjectViewHeader } from "./project-shell-chrome.js";
 import {
   bindGhActionButtons,
   initGhActionButton,
@@ -1290,8 +1290,7 @@ function renderReportPreviewView() {
 
   return `
     <section class="project-simple-page project-simple-page--documents">
-      <div class="project-simple-scroll project-simple-scroll--documents" id="projectDocumentsScroll">
-        <div class="documents-shell documents-shell--report" id="projectDocumentScroll">
+      <div class="documents-shell documents-shell--report documents-shell--project-page" id="projectDocumentScroll">
           ${renderDocumentsActivityBanner()}
 
           <div class="documents-report">
@@ -1329,7 +1328,6 @@ function renderReportPreviewView() {
             </section>
           </div>
         </div>
-      </div>
     </section>
   `;
 }
@@ -1353,8 +1351,7 @@ function renderPdfPreviewView() {
 
   return `
     <section class="project-simple-page project-simple-page--documents">
-      <div class="project-simple-scroll project-simple-scroll--documents" id="projectDocumentsScroll">
-        <div class="documents-shell documents-shell--report documents-shell--pdf-preview" id="projectDocumentScroll">
+      <div class="documents-shell documents-shell--report documents-shell--pdf-preview documents-shell--project-page" id="projectDocumentScroll">
           ${renderDocumentsActivityBanner()}
 
           <div class="documents-report">
@@ -1507,7 +1504,6 @@ function renderPdfPreviewView() {
             </section>
           </div>
         </div>
-      </div>
     </section>
   `;
 }
@@ -1519,13 +1515,12 @@ function renderDocumentsListView() {
 
   return `
     <section class="project-simple-page project-simple-page--documents">
-      <div class="project-simple-scroll project-simple-scroll--documents" id="projectDocumentsScroll">
-        <div class="documents-shell" id="projectDocumentScroll">
+      <div class="documents-shell documents-shell--project-page" id="projectDocumentScroll">
           ${renderDocumentsToolbar()}
           ${renderDocumentsActivityBanner()}
 
           ${renderDataTableShell({
-            className: "documents-repo",
+            className: "documents-repo data-table-shell--document-scroll",
             gridTemplate: getDocumentsTableGridTemplate(),
             headHtml: renderDocumentsTableHeadHtml(),
             bodyHtml,
@@ -1536,7 +1531,6 @@ function renderDocumentsListView() {
             })
           })}
         </div>
-      </div>
     </section>
   `;
 }
@@ -1591,9 +1585,8 @@ function renderUploadView() {
 
   return `
     <section class="project-simple-page project-simple-page--documents">
-      <div class="project-simple-scroll project-simple-scroll--documents" id="projectDocumentsScroll">
+      <div class="documents-shell documents-shell--upload documents-shell--project-page" id="projectDocumentScroll">
         ${renderDocumentsActivityBanner()}
-        <div class="documents-shell documents-shell--upload" id="projectDocumentScroll">
           <div class="documents-upload-layout">
             <section class="documents-dropzone ${isBusy}" id="documentsDropzone">
               <input id="documentsFileInput" type="file" hidden accept=".pdf,.doc,.docx,.xls,.xlsx,.dwg,.zip,image/*">
@@ -1650,7 +1643,6 @@ function renderUploadView() {
             </div>
           </div>
         </div>
-      </div>
     </section>
   `;
 }
@@ -1874,9 +1866,6 @@ function bindDocumentsSplitActions(root) {
 }
 
 function bindDocumentsView(root) {
-  const scrollEl = document.getElementById("projectDocumentsScroll");
-  registerProjectPrimaryScrollSource(scrollEl);
-
   bindDocumentsSplitActions(root);
 
     const activityCloseBtn = document.getElementById("documentsActivityCloseBtn");

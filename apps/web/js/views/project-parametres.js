@@ -1,4 +1,4 @@
-import { setProjectViewHeader, registerProjectPrimaryScrollSource } from "./project-shell-chrome.js";
+import { setProjectViewHeader } from "./project-shell-chrome.js";
 import {
   renderSideNavLayout,
   renderSideNavGroup,
@@ -90,10 +90,7 @@ function mountProjectParametresTab(root, tabId) {
   contentRoot.innerHTML = activeTab.renderContent();
   activeTab.bind?.(contentRoot.querySelector("[data-side-nav-panel]") || contentRoot);
 
-  const scrollContainer = root.querySelector("#projectParametresScroll");
-  if (scrollContainer?.scrollTo) {
-    scrollContainer.scrollTo({ top: 0, behavior: "auto" });
-  }
+  window.scrollTo({ top: 0, behavior: "auto" });
 }
 
 export function renderProjectParametres(root) {
@@ -116,16 +113,14 @@ export function renderProjectParametres(root) {
 
   root.innerHTML = `
     <section class="project-simple-page project-simple-page--settings project-simple-page--parametres ${isStandalone ? "project-simple-page--parametres-standalone" : ""}">
-      <div class="project-simple-scroll project-simple-scroll--parametres" id="projectParametresScroll">
-        <div class="settings-shell settings-shell--parametres ${isStandalone ? "settings-shell--parametres-standalone" : ""}">
-          ${renderSideNavLayout({
-            className: `settings-layout settings-layout--parametres ${isStandalone ? "settings-layout--parametres-standalone" : ""}`,
-            navClassName: "settings-nav settings-nav--parametres",
-            contentClassName: `settings-content settings-content--parametres ${isStandalone ? "settings-content--parametres-standalone" : ""}`,
-            navHtml: renderParametresNav(defaultTab.id),
-            contentHtml: '<div id="projectParametresContent"></div>'
-          })}
-        </div>
+      <div class="settings-shell settings-shell--parametres settings-shell--project-page ${isStandalone ? "settings-shell--parametres-standalone" : ""}">
+        ${renderSideNavLayout({
+          className: `settings-layout settings-layout--parametres ${isStandalone ? "settings-layout--parametres-standalone" : ""}`,
+          navClassName: "settings-nav settings-nav--parametres",
+          contentClassName: `settings-content settings-content--parametres ${isStandalone ? "settings-content--parametres-standalone" : ""}`,
+          navHtml: renderParametresNav(defaultTab.id),
+          contentHtml: '<div id="projectParametresContent"></div>'
+        })}
       </div>
     </section>
   `;
@@ -141,7 +136,5 @@ export function renderProjectParametres(root) {
   };
 
   root.addEventListener("click", root.__projectParametresNavHandler);
-
-  registerProjectPrimaryScrollSource(root.querySelector("#projectParametresScroll"));
   mountProjectParametresTab(root, defaultTab.id);
 }

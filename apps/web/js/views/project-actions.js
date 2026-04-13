@@ -1,5 +1,5 @@
 import { escapeHtml } from "../utils/escape-html.js";
-import { setProjectViewHeader, registerProjectPrimaryScrollSource } from "./project-shell-chrome.js";
+import { setProjectViewHeader } from "./project-shell-chrome.js";
 import { getRunLogEntries, getRunMetrics } from "../services/project-automation.js";
 import { syncProjectActionsFromSupabase } from "../services/project-supabase-sync.js";
 import { svgIcon } from "../ui/icons.js";
@@ -334,7 +334,7 @@ function renderRunsTable() {
   const entries = getRunLogEntries();
 
   return renderDataTableShell({
-    className: "workflow-runs-table",
+    className: "workflow-runs-table data-table-shell--document-scroll",
     gridTemplate: "minmax(280px,1.6fr) 220px 170px 120px 120px",
     headHtml: renderDataTableHead({
       columns: [
@@ -360,15 +360,11 @@ function renderRunsTable() {
 function renderProjectActionsContent(root) {
   root.innerHTML = `
     <section class="project-simple-page project-simple-page--settings">
-      <div class="project-simple-scroll" id="projectActionsScroll">
-        <div class="settings-content" style="max-width:1216px;margin:0 auto;padding:24px 32px 40px;">
-          ${renderRunsTable()}
-        </div>
+      <div class="settings-content settings-content--project-page" style="max-width:1216px;margin:0 auto;padding:24px 32px 40px;">
+        ${renderRunsTable()}
       </div>
     </section>
   `;
-
-  registerProjectPrimaryScrollSource(document.getElementById("projectActionsScroll"));
 }
 
 export function renderProjectActions(root) {
