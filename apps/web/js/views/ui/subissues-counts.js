@@ -14,6 +14,56 @@ function resolveProblemsCountsOptions(options = {}) {
   return { size, className, completeIcon, ariaLabel };
 }
 
+function renderProblemsProgressRingSvg(ratio, size) {
+  const progress = Math.max(0, Math.min(100, Number.isFinite(ratio) ? ratio * 100 : 0));
+  const progressOffset = 100 - progress;
+  const shadeOffset = 100 - (progress / 2);
+
+  return `
+    <svg
+      viewBox="0 0 100 100"
+      width="${size}"
+      height="${size}"
+      class="subissues-problems-icon__svg"
+      aria-hidden="true"
+      focusable="false"
+      role="presentation"
+    >
+      <circle
+        class="subissues-problems-icon__shade"
+        cx="50"
+        cy="50"
+        r="20"
+        fill="none"
+        pathLength="100"
+        stroke-dasharray="100"
+        stroke-dashoffset="${shadeOffset}"
+        stroke-width="40"
+      ></circle>
+      <circle
+        class="subissues-problems-icon__track"
+        cx="50"
+        cy="50"
+        r="42.5"
+        fill="none"
+        stroke-width="15"
+      ></circle>
+      <circle
+        class="subissues-problems-icon__progress"
+        cx="50"
+        cy="50"
+        r="42.5"
+        fill="none"
+        pathLength="100"
+        stroke-dasharray="100"
+        stroke-dashoffset="${progressOffset}"
+        stroke-width="15"
+        stroke-linecap="round"
+      ></circle>
+    </svg>
+  `;
+}
+
 /**
  * Renders the shared subissues progress icon.
  *
@@ -26,34 +76,20 @@ function resolveProblemsCountsOptions(options = {}) {
 export function renderProblemsCountsIconHtml(closedCount, totalCount, options = {}) {
   const { closed, total, ratio } = normalizeProblemsCounts(closedCount, totalCount);
   const { size, className, completeIcon, ariaLabel } = resolveProblemsCountsOptions(options);
-  const wrapperClassName = ["subissues-problems-icon", className].filter(Boolean).join(" ");
+  const wrapperClassName = [
+    "subissues-problems-icon",
+    total <= 0 ? "subissues-problems-icon--empty" : "",
+    ratio >= 1 ? "subissues-problems-icon--complete" : "",
+    completeIcon ? "subissues-problems-icon--has-complete-icon" : "",
+    className,
+  ].filter(Boolean).join(" ");
   const computedAriaLabel = ariaLabel || (total > 0
     ? `Sujets fermés : ${closed}/${total}`
     : "Aucun sous-sujet");
 
-  if (total > 0 && closed === total && completeIcon) {
-    return `<span class="${wrapperClassName}" aria-label="${computedAriaLabel}">${completeIcon}</span>`;
-  }
-
-  const r = 8;
-  const cx = 10;
-  const cy = 10;
-  const a = ratio * Math.PI * 2;
-
-  let wedge = "";
-  if (ratio > 0) {
-    const x = cx + r * Math.sin(a);
-    const y = cy - r * Math.cos(a);
-    const large = a > Math.PI ? 1 : 0;
-    wedge = `<path d="M ${cx} ${cy} L ${cx} ${cy - r} A ${r} ${r} 0 ${large} 1 ${x} ${y} Z" fill="rgba(137,87,229,.55)" opacity="0.75"></path>`;
-  }
-
   return `
     <span class="${wrapperClassName}" aria-label="${computedAriaLabel}">
-      <svg viewBox="0 0 20 20" width="${size}" height="${size}" class="subissues-problems-icon__svg">
-        <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="rgba(139,148,158,.55)" stroke-width="2"></circle>
-        ${wedge}
-      </svg>
+      ${renderProblemsProgressRingSvg(ratio, size)}
     </span>
   `;
 }
