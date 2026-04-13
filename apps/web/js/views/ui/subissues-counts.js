@@ -1,7 +1,9 @@
 function normalizeProblemsCounts(closedCount, totalCount) {
-  const total = Math.max(0, Number(totalCount) || 0);
-  const closed = Math.max(0, Math.min(total, Number(closedCount) || 0));
-  return { closed, total, ratio: total ? (closed / total) : 0 };
+  const rawTotal = Number(totalCount);
+  const rawClosed = Number(closedCount);
+  const total = Number.isFinite(rawTotal) ? Math.max(0, rawTotal) : 0;
+  const closed = Number.isFinite(rawClosed) ? Math.max(0, Math.min(total, rawClosed)) : 0;
+  return { closed, total, ratio: total > 0 ? (closed / total) : 0 };
 }
 
 function resolveProblemsCountsOptions(options = {}) {
@@ -15,8 +17,7 @@ function resolveProblemsCountsOptions(options = {}) {
 
 function renderProblemsProgressRingSvg(ratio, size) {
   const progress = Math.max(0, Math.min(100, Number.isFinite(ratio) ? ratio * 100 : 0));
-  const progressOffset = 100 - progress;
-  const shadeOffset = 100 - (progress / 2);
+  const dasharray = `${progress} 100`;
 
   return `
     <svg
@@ -35,8 +36,8 @@ function renderProblemsProgressRingSvg(ratio, size) {
         r="20"
         fill="none"
         pathLength="100"
-        stroke-dasharray="100"
-        stroke-dashoffset="${shadeOffset}"
+        stroke-dasharray="${dasharray}"
+        stroke-dashoffset="0"
         stroke-width="40"
       ></circle>
       <circle
@@ -45,6 +46,9 @@ function renderProblemsProgressRingSvg(ratio, size) {
         cy="50"
         r="42.5"
         fill="none"
+        pathLength="100"
+        stroke-dasharray="100 100"
+        stroke-dashoffset="0"
         stroke-width="15"
       ></circle>
       <circle
@@ -54,8 +58,8 @@ function renderProblemsProgressRingSvg(ratio, size) {
         r="42.5"
         fill="none"
         pathLength="100"
-        stroke-dasharray="100"
-        stroke-dashoffset="${progressOffset}"
+        stroke-dasharray="${dasharray}"
+        stroke-dashoffset="0"
         stroke-width="15"
         stroke-linecap="round"
       ></circle>
