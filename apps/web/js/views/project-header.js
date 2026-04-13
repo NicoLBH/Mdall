@@ -107,22 +107,27 @@ function getEffectiveSujetStatus(sujet) {
 }
 
 function getProjectTabCounters() {
-  const situations = Array.isArray(store.situationsView?.data)
-    ? store.situationsView.data
-    : [];
+  const rawSubjectsResult = store.projectSubjectsView?.rawSubjectsResult && typeof store.projectSubjectsView.rawSubjectsResult === "object"
+    ? store.projectSubjectsView.rawSubjectsResult
+    : (store.projectSubjectsView?.rawResult && typeof store.projectSubjectsView.rawResult === "object"
+      ? store.projectSubjectsView.rawResult
+      : null);
+  const rawSubjectsById = rawSubjectsResult?.subjectsById && typeof rawSubjectsResult.subjectsById === "object"
+    ? rawSubjectsResult.subjectsById
+    : null;
 
-  if (situations.length && store.situationsView?.projectScopeId === String(store.currentProjectId || "")) {
+  if (rawSubjectsById && Object.keys(rawSubjectsById).length && store.projectSubjectsView?.projectScopeId === String(store.currentProjectId || "")) {
     let openSujets = 0;
+    let totalSujets = 0;
 
-    for (const situation of situations) {
-      for (const sujet of situation?.sujets || []) {
-        if (getEffectiveSujetStatus(sujet) === "open") {
-          openSujets += 1;
-        }
+    for (const sujet of Object.values(rawSubjectsById)) {
+      totalSujets += 1;
+      if (getEffectiveSujetStatus(sujet) === "open") {
+        openSujets += 1;
       }
     }
 
-    return { openSujets };
+    return { openSujets, totalSujets };
   }
 
   return getCurrentProjectSubjectCounters();
