@@ -2381,7 +2381,25 @@ body.is-resizing{
 }
 
 .gh-timeline-title--hidden{display:none;}
-.subissues-problems-icon__svg{display:block;}
+.subissues-problems-icon__svg{display:block;overflow:visible;}
+.subissues-problems-icon__shade{
+  stroke:var(--bgColor-done-emphasis, var(--color-done-emphasis, #8957e5));
+  opacity:.38;
+  transform:rotate(-90deg);
+  transform-origin:50px 50px;
+}
+.subissues-problems-icon__track{
+  stroke:var(--borderColor-default, var(--color-border-default, #30363d));
+}
+.subissues-problems-icon__progress{
+  stroke:var(--bgColor-done-emphasis, var(--color-done-emphasis, #8957e5));
+  transform:rotate(-75deg);
+  transform-origin:50px 50px;
+}
+.subissues-problems-icon--empty .subissues-problems-icon__shade,
+.subissues-problems-icon--empty .subissues-problems-icon__progress{
+  opacity:0;
+}
 .verdict-bar__seg{width:var(--verdict-seg-width, 100%);}
 
 .gh-thread{
