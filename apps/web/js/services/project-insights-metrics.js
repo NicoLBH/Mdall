@@ -1,5 +1,5 @@
 import { store } from "../store.js";
-import { getChildrenBySubjectIdMapFromRawResult, getRootSubjectIdsFromRawResult } from "./subject-hierarchy.js";
+import { buildSubjectHierarchyIndexes, getChildrenBySubjectIdMapFromRawResult, getRootSubjectIdsFromRawResult } from "./subject-hierarchy.js";
 
 function safeArray(value) {
   return Array.isArray(value) ? value : [];
@@ -12,14 +12,6 @@ function firstNonEmpty(...values) {
     if (normalized) return normalized;
   }
   return "";
-}
-
-function flattenSubjects(subjects = [], acc = []) {
-  for (const subject of safeArray(subjects)) {
-    acc.push(subject);
-    flattenSubjects(subject?.children, acc);
-  }
-  return acc;
 }
 
 function getRawSubjectsResult() {
@@ -41,45 +33,47 @@ function getSubjectsByIdMap() {
       .filter(([id]) => !!id));
   }
 
-  const fallback = {};
-  for (const situation of safeArray(store.situationsView?.data)) {
-    for (const subject of flattenSubjects(situation?.sujets)) {
-      const id = String(subject?.id || "");
-      if (!id) continue;
-      fallback[id] = subject;
-    }
+  return {};
+}
+
+function getHierarchyFromIndexedSources() {
+  const raw = getRawSubjectsResult();
+
+  const rawChildrenBySubjectId = raw.childrenBySubjectId && typeof raw.childrenBySubjectId === "object"
+    ? getChildrenBySubjectIdMapFromRawResult(raw)
+    : {};
+  const rawRootSubjectIds = Array.isArray(raw.rootSubjectIds)
+    ? getRootSubjectIdsFromRawResult(raw)
+    : [];
+
+  if (Object.keys(rawChildrenBySubjectId).length || rawRootSubjectIds.length) {
+    return {
+      childrenBySubjectId: rawChildrenBySubjectId,
+      rootSubjectIds: rawRootSubjectIds
+    };
   }
-  return fallback;
+
+  const subjectsById = getSubjectsByIdMap();
+  if (!Object.keys(subjectsById).length) {
+    return {
+      childrenBySubjectId: {},
+      rootSubjectIds: []
+    };
+  }
+
+  const { childrenBySubjectId, rootSubjectIds } = buildSubjectHierarchyIndexes(Object.values(subjectsById), subjectsById);
+  return {
+    childrenBySubjectId,
+    rootSubjectIds
+  };
 }
 
 function getChildrenBySubjectIdMap() {
-  const raw = getRawSubjectsResult();
-  const hierarchyChildren = getChildrenBySubjectIdMapFromRawResult({
-    ...raw,
-    subjectsById: getSubjectsByIdMap()
-  });
-  if (Object.keys(hierarchyChildren).length) return hierarchyChildren;
-
-  const fallback = {};
-  for (const subject of Object.values(getSubjectsByIdMap())) {
-    const subjectId = String(subject?.id || "");
-    if (!subjectId) continue;
-    fallback[subjectId] = safeArray(subject?.children).map((child) => String(child?.id || "")).filter(Boolean);
-  }
-  return fallback;
+  return getHierarchyFromIndexedSources().childrenBySubjectId;
 }
 
 function getRootSubjectIds() {
-  const raw = getRawSubjectsResult();
-  const rootIds = getRootSubjectIdsFromRawResult({
-    ...raw,
-    subjectsById: getSubjectsByIdMap()
-  });
-  if (Array.isArray(rootIds) && rootIds.length) return rootIds;
-
-  const childrenBySubjectId = getChildrenBySubjectIdMap();
-  const childIds = new Set(Object.values(childrenBySubjectId).flat().map((subjectId) => String(subjectId || "")).filter(Boolean));
-  return Object.keys(getSubjectsByIdMap()).filter((subjectId) => !childIds.has(subjectId));
+  return getHierarchyFromIndexedSources().rootSubjectIds;
 }
 
 function getLinksBySubjectIdMap() {

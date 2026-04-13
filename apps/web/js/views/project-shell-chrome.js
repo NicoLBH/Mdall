@@ -49,6 +49,15 @@ function getViewHeaderEl() {
   return shellState.viewHeaderHostEl?.querySelector(".project-view-header") || null;
 }
 
+function getDocumentScrollTop() {
+  return Number(
+    window.scrollY
+    || document.documentElement?.scrollTop
+    || document.body?.scrollTop
+    || 0
+  );
+}
+
 function syncCompactPrimaryAction() {
   const primaryEl = shellState.compactTabLabelPrimaryEl;
   if (!primaryEl) return;
@@ -113,14 +122,7 @@ function applyCompactState(isCompact) {
 }
 
 function syncCompactState() {
-  const sources = shellState.scrollSourceEls?.length
-    ? shellState.scrollSourceEls
-    : (shellState.primaryScrollSourceEl ? [shellState.primaryScrollSourceEl] : []);
-  const scrollTop = sources.reduce((maxScrollTop, source) => {
-    const nextScrollTop = Number(source?.scrollTop || 0);
-    return nextScrollTop > maxScrollTop ? nextScrollTop : maxScrollTop;
-  }, 0);
-  applyCompactState(scrollTop > 12);
+  applyCompactState(getDocumentScrollTop() > 12);
 }
 
 function cleanupPrimaryScrollSource() {
@@ -185,13 +187,15 @@ export function mountProjectShellChrome({ projectId, tab }) {
     shellState.viewHeaderHostEl.innerHTML = "";
   }
 
-  const onResize = () => {
+  const onWindowChange = () => {
     syncCompactState();
   };
 
-  window.addEventListener("resize", onResize);
+  window.addEventListener("resize", onWindowChange);
+  window.addEventListener("scroll", onWindowChange, { passive: true });
   shellState.cleanupWindow = () => {
-    window.removeEventListener("resize", onResize);
+    window.removeEventListener("resize", onWindowChange);
+    window.removeEventListener("scroll", onWindowChange);
   };
 
   setProjectViewHeader({
@@ -200,7 +204,7 @@ export function mountProjectShellChrome({ projectId, tab }) {
   });
 
   syncCompactTabLabel();
-  applyCompactState(false);
+  syncCompactState();
 }
 
 export function setProjectViewHeader(config = {}) {
@@ -230,33 +234,9 @@ export function registerProjectScrollSources(...elements) {
     .flat()
     .filter((element, index, array) => element && array.indexOf(element) === index);
 
-  if (!resolvedElements.length) {
-    applyCompactState(false);
-    return;
-  }
-
   shellState.primaryScrollSourceEl = resolvedElements[0] || null;
   shellState.scrollSourceEls = resolvedElements;
-
-  const listeners = resolvedElements.map((element) => {
-    const onScroll = () => {
-      syncCompactState();
-    };
-    element.addEventListener("scroll", onScroll, { passive: true });
-    return () => {
-      element.removeEventListener("scroll", onScroll);
-    };
-  });
-
-  shellState.cleanupScrollSource = () => {
-    listeners.forEach((cleanup) => {
-      try {
-        cleanup();
-      } catch {
-        // ignore cleanup failures
-      }
-    });
-  };
+  shellState.cleanupScrollSource = null;
 
   syncCompactState();
 }

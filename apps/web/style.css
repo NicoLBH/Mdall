@@ -2935,48 +2935,6 @@ body.route--project .project-simple-scroll{
   min-height:0;
 }
 
-body.route--project .settings-content--project-page,
-body.route--project .settings-shell--project-page,
-body.route--project .documents-shell--project-page{
-  padding:24px 32px 40px;
-}
-
-body.route--project .settings-shell--project-page{
-  max-width:1400px;
-  margin:0 auto;
-}
-
-body.route--project .documents-shell--project-page{
-  width:min(100%, 1280px);
-  margin:0 auto;
-}
-
-body.route--project .documents-shell--project-page.documents-shell--pdf-preview{
-  width:100%;
-  max-width:none;
-}
-
-body.route--project .data-table-shell--document-scroll{
-  height:auto;
-  min-height:0;
-  flex:0 0 auto;
-  overflow:visible;
-}
-
-body.route--project .data-table-shell--document-scroll > .data-table-shell__head{
-  top:var(--app-top);
-}
-
-body.route--project .data-table-shell--document-scroll > .data-table-shell__body{
-  overflow:visible;
-}
-
-body.route--project .settings-nav,
-body.route--project .settings-nav--parametres{
-  top:calc(var(--app-top) + 12px);
-}
-
-
 .global-nav{
   position:absolute;
   top:0;

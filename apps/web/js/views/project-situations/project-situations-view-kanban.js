@@ -1,6 +1,7 @@
 import { escapeHtml } from "../../utils/escape-html.js";
 import { svgIcon } from "../../ui/icons.js";
 import { getAuthorIdentity } from "../ui/author-identity.js";
+import { getChildrenBySubjectIdMapFromRawResult } from "../../services/subject-hierarchy.js";
 
 const KANBAN_STATUSES = [
   { key: "non_active", label: "Non activé", hint: "Sujet détecté mais pas encore engagé." },
