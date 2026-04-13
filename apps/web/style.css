@@ -5796,6 +5796,10 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   display:block;
 }
 
+body.route--project #situationsDetailsHost .detail-chrome__sticky{
+  top:var(--app-top);
+}
+
 .detail-chrome__body{
   flex:1 1 auto;
   min-height:0;
@@ -8145,10 +8149,10 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
 }
 #situationsTableHost,
     #situationsTableHost .issues-table{
-      height:100%;
+      height:auto;
       min-height:0;
-      max-height:100%;
-      overflow:hidden;
+      max-height:none;
+      overflow:visible;
       box-sizing:border-box;
     }
 
@@ -8156,21 +8160,25 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
       display:flex;
       flex-direction:column;
       min-height:0;
-      max-height:100%;
+      max-height:none;
     }
 
     #situationsTableHost .data-table-shell__head{
       flex:0 0 auto;
+      top:var(--app-top);
     }
 
     #situationsTableHost .data-table-shell__body{
-      flex:1 1 auto;
+      flex:0 0 auto;
       min-height:0;
-      overflow-y:auto;
-      overflow-x:hidden;
+      overflow:visible;
     }
 
-    #situationsDetailsHost,
+    #situationsDetailsHost{
+      overflow:visible;
+      min-height:0;
+    }
+
     #detailsBodyModal{
       overflow-y:auto;
       overflow-x:hidden;
