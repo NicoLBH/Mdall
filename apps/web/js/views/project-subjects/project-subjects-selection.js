@@ -9,6 +9,24 @@ export function createProjectSubjectsSelection({
   rerenderPanels,
   markEntitySeen
 }) {
+  function syncLegacySituationsView(selection = {}) {
+    if (!(store.situationsView && typeof store.situationsView === "object")) return;
+    if (Object.prototype.hasOwnProperty.call(selection, "selectedSituationId")) {
+      store.situationsView.selectedSituationId = selection.selectedSituationId || null;
+    }
+    if (Object.prototype.hasOwnProperty.call(selection, "selectedSubjectId") || Object.prototype.hasOwnProperty.call(selection, "selectedSujetId")) {
+      const selectedSubjectId = selection.selectedSubjectId || selection.selectedSujetId || null;
+      store.situationsView.selectedSujetId = selectedSubjectId;
+      store.situationsView.selectedSubjectId = selectedSubjectId;
+    }
+    if (Object.prototype.hasOwnProperty.call(selection, "showTableOnly")) {
+      store.situationsView.showTableOnly = !!selection.showTableOnly;
+    }
+    if (Object.prototype.hasOwnProperty.call(selection, "detailsModalOpen")) {
+      store.situationsView.detailsModalOpen = !!selection.detailsModalOpen;
+    }
+  }
+
   function getViewState() {
     ensureViewUiState();
     return store.projectSubjectsView || store.situationsView || {};
@@ -65,6 +83,11 @@ export function createProjectSubjectsSelection({
     if (!situation) return null;
     setActiveSelection({ selectedSituationId: situation.id, selectedSubjectId: null });
     getViewState().showTableOnly = true;
+    syncLegacySituationsView({
+      selectedSituationId: situation.id,
+      selectedSubjectId: null,
+      showTableOnly: true
+    });
     openDetailsModal();
     return { type: "situation", item: situation };
   }
@@ -78,9 +101,12 @@ export function createProjectSubjectsSelection({
     if (situation?.id) viewState.expandedSituations.add(situation.id);
     viewState.showTableOnly = false;
     viewState.detailsModalOpen = false;
-    if (store.situationsView && typeof store.situationsView === "object") {
-      store.situationsView.detailsModalOpen = false;
-    }
+    syncLegacySituationsView({
+      selectedSituationId: situation?.id || null,
+      selectedSubjectId: sujet.id,
+      showTableOnly: false,
+      detailsModalOpen: false
+    });
     document.body.classList.remove("modal-open");
     window.scrollTo({ top: 0, behavior: "auto" });
     rerenderPanels();
