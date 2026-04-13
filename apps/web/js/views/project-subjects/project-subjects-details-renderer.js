@@ -129,7 +129,7 @@ export function createProjectSubjectsDetailsRenderer(config) {
   function renderDetailsHtml(selectionOverride = null, options = {}) {
     const selection = selectionOverride || getActiveSelection();
     return {
-      titleHtml: renderDetailsTitleHtml(selection),
+      titleHtml: renderDetailsTitleHtml(selection, { showExpand: options.showExpand !== false }),
       bodyHtml: renderDetailsBody(selection, options),
       modalTitle: selection ? firstNonEmpty(selection.item.title, selection.item.id, "Détail") : "Sélectionner un élément",
       modalMeta: selection ? firstNonEmpty(selection.item.id, "") : "—"
