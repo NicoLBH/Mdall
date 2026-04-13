@@ -166,7 +166,9 @@ export function createProjectSubjectsActions(config) {
     setSubjectSituationIds(subjectKey, nextIds);
     syncSubjectSituationMaps(subjectKey, situationKey, !wasLinked);
 
-    if (options.root) rerenderScope(options.root);
+    if (!options.skipRerender) {
+      if (options.root) rerenderScope(options.root);
+    }
 
     try {
       if (wasLinked) await removeSubjectFromSituation(situationKey, subjectKey);
@@ -176,7 +178,9 @@ export function createProjectSubjectsActions(config) {
     } catch (error) {
       setSubjectSituationIds(subjectKey, meta.situationIds);
       syncSubjectSituationMaps(subjectKey, situationKey, wasLinked);
-      if (options.root) rerenderScope(options.root);
+      if (!options.skipRerender) {
+        if (options.root) rerenderScope(options.root);
+      }
       console.warn("toggleSubjectSituation failed", error);
       showError(`Mise à jour Supabase impossible : ${String(error?.message || error || "Erreur inconnue")}`);
       return false;
@@ -257,24 +261,28 @@ export function createProjectSubjectsActions(config) {
     setSubjectLabels(subjectKey, nextLabels);
     syncSubjectLabelMaps(subjectKey, labelId, !hasLabel);
 
-    if (options.root) rerenderScope(options.root);
-    else rerenderPanels();
+    if (!options.skipRerender) {
+      if (options.root) rerenderScope(options.root);
+      else rerenderPanels();
+    }
 
     try {
       if (hasLabel) await removeLabelFromSubjectInSupabase(subjectKey, labelId);
       else await addLabelToSubjectInSupabase(subjectKey, labelId);
 
       await reloadSubjectsFromSupabase(options.root, {
-        rerender: true,
-        updateModal: true
+        rerender: options.skipRerender ? false : true,
+        updateModal: options.skipRerender ? false : true
       });
       return true;
     } catch (error) {
       setSubjectLabels(subjectKey, previousLabels);
       syncSubjectLabelMaps(subjectKey, labelId, hasLabel);
 
-      if (options.root) rerenderScope(options.root);
-      else rerenderPanels();
+      if (!options.skipRerender) {
+        if (options.root) rerenderScope(options.root);
+        else rerenderPanels();
+      }
 
       console.warn("toggleSubjectLabel failed", error);
       showError(`Mise à jour Supabase impossible : ${String(error?.message || error || "Erreur inconnue")}`);
@@ -334,8 +342,10 @@ export function createProjectSubjectsActions(config) {
     setSubjectObjectiveIds(subjectKey, nextIds);
     syncSubjectObjectiveMaps(subjectKey, objectiveKey, !wasLinked);
 
-    if (options.root) rerenderScope(options.root);
-    else rerenderPanels();
+    if (!options.skipRerender) {
+      if (options.root) rerenderScope(options.root);
+      else rerenderPanels();
+    }
 
     try {
       if (wasLinked) await removeSubjectFromObjectiveInSupabase(objectiveKey, subjectKey);
@@ -344,8 +354,10 @@ export function createProjectSubjectsActions(config) {
     } catch (error) {
       setSubjectObjectiveIds(subjectKey, previousIds);
       syncSubjectObjectiveMaps(subjectKey, objectiveKey, wasLinked);
-      if (options.root) rerenderScope(options.root);
-      else rerenderPanels();
+      if (!options.skipRerender) {
+        if (options.root) rerenderScope(options.root);
+        else rerenderPanels();
+      }
       console.warn("toggleSubjectObjective failed", error);
       showError(`Mise à jour Supabase impossible : ${String(error?.message || error || "Erreur inconnue")}`);
       return false;
