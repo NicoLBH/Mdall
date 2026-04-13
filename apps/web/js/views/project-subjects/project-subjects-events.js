@@ -930,13 +930,6 @@ export function createProjectSubjectsEvents(config) {
       }
 
 
-      const expandBtn = event.target.closest("#detailsExpand");
-      if (expandBtn) {
-        event.preventDefault();
-        config.openDetailsModal?.();
-        return;
-      }
-
       const toggleSituation = event.target.closest(".js-toggle-situation");
       if (toggleSituation) {
         event.preventDefault();

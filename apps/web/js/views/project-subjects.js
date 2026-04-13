@@ -207,7 +207,6 @@ const projectSubjectsSelection = createProjectSubjectsSelection({
   getNestedSujet,
   getSituationBySujetId,
   getDraftSubjectSelection: (...args) => projectSubjectsView.getDraftSubjectSelection(...args),
-  openDetailsModal: () => projectSubjectDetail.openDetailsModal(),
   rerenderPanels: (...args) => projectSubjectsView.rerenderPanels(...args),
   markEntitySeen
 });
@@ -356,9 +355,7 @@ const projectSubjectsEvents = createProjectSubjectsEvents({
   getProjectSubjectMilestones: () => projectSubjectMilestones,
   getProjectSubjectLabels: () => projectSubjectLabels,
   renderSubjectMetaFieldValue: (...args) => projectSubjectsView.renderSubjectMetaFieldValue(...args),
-  getSubjectsCurrentRoot: () => subjectsCurrentRoot,
-  openDetailsModal: () => projectSubjectDetail.openDetailsModal(),
-  openSubjectDetails: () => projectSubjectDetail.openSubjectDetails()
+  getSubjectsCurrentRoot: () => subjectsCurrentRoot
 });
 
 const {
@@ -834,7 +831,7 @@ export function renderProjectSubjects(root) {
   }).catch(() => undefined);
   bindProjectSituationsRunbar(toolbarHost || root || document);
   bindModalEvents();
-  projectSubjectDetail.updateDetailsModal();
+  projectSubjectDetail.syncDetailsModalIfOpen();
 
   syncProjectSituationsRunbar({
     run_id: store.ui?.runId || "",

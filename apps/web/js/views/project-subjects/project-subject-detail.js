@@ -26,6 +26,10 @@ export function createProjectSubjectDetailController(config) {
     markEntitySeen
   } = config;
 
+  function isDetailsModalOpen() {
+    return !!(store.projectSubjectsView?.detailsModalOpen || store.situationsView?.detailsModalOpen);
+  }
+
   function updateDetailsModal() {
     const modal = document.getElementById("detailsModal");
     const head = modal?.querySelector?.(".modal__head");
@@ -34,7 +38,7 @@ export function createProjectSubjectDetailController(config) {
     const body = document.getElementById("detailsBodyModal");
     if (!modal || !title || !meta || !body) return;
 
-    const isOpen = !!(store.projectSubjectsView?.detailsModalOpen || store.situationsView?.detailsModalOpen);
+    const isOpen = isDetailsModalOpen();
     setOverlayChromeOpenState(modal, isOpen);
     document.body.classList.toggle("modal-open", isOpen);
 
@@ -105,13 +109,20 @@ export function createProjectSubjectDetailController(config) {
   }
 
   function openSubjectDetails() {
-    return openDetailsModal();
+    return getActiveSelection();
+  }
+
+  function syncDetailsModalIfOpen() {
+    if (!isDetailsModalOpen()) return;
+    updateDetailsModal();
   }
 
   return {
     renderDetailsTitleWrapHtml,
     renderDetailsHtml,
+    isDetailsModalOpen,
     updateDetailsModal,
+    syncDetailsModalIfOpen,
     openDetailsModal,
     openSubjectDetails,
     closeDetailsModal

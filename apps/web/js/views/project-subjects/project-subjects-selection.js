@@ -5,7 +5,6 @@ export function createProjectSubjectsSelection({
   getNestedSujet,
   getSituationBySujetId,
   getDraftSubjectSelection,
-  openDetailsModal,
   rerenderPanels,
   markEntitySeen
 }) {
@@ -119,7 +118,6 @@ export function createProjectSubjectsSelection({
 
   function openSubjectDetails(subjectId) {
     if (subjectId) return selectSubject(subjectId);
-    openDetailsModal();
     return getActiveSelection();
   }
 

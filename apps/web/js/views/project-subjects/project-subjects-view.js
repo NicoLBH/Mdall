@@ -1440,7 +1440,7 @@ async function reloadSubjectsFromSupabase(root = getSubjectsCurrentRoot(), optio
   }
 
   if (shouldUpdateModal) {
-    getProjectSubjectDetail().updateDetailsModal();
+    getProjectSubjectDetail().syncDetailsModalIfOpen();
   }
 
   if (store.situationsView.drilldown?.isOpen) {
@@ -1551,7 +1551,7 @@ function rerenderPanels() {
     }
   }
 
-  getProjectSubjectDetail().updateDetailsModal();
+  getProjectSubjectDetail().syncDetailsModalIfOpen();
   if (store.situationsView.drilldown?.isOpen) getProjectSubjectDrilldown().updateDrilldownPanel();
   refreshProjectShellChrome("situations");
 }
@@ -1569,7 +1569,7 @@ function rerenderScope(root) {
   const detailsBody = document.getElementById("detailsBodyModal");
   const drilldownBody = document.getElementById("drilldownBody");
   if (root?.closest?.("#detailsModal") && detailsBody) {
-    getProjectSubjectDetail().updateDetailsModal();
+    getProjectSubjectDetail().syncDetailsModalIfOpen();
   }
   if (root?.closest?.("#drilldownPanel") && drilldownBody) {
     getProjectSubjectDrilldown().updateDrilldownPanel();
@@ -1671,7 +1671,7 @@ function renderSubjectMetaDropdownHost(root) {
 
 function rerenderSubjectMetaScopes() {
   rerenderPanels();
-  if (document.getElementById("detailsBodyModal")) getProjectSubjectDetail().updateDetailsModal();
+  if (document.getElementById("detailsBodyModal")) getProjectSubjectDetail().syncDetailsModalIfOpen();
   if (document.getElementById("drilldownBody")) getProjectSubjectDrilldown().updateDrilldownPanel();
 }
 
