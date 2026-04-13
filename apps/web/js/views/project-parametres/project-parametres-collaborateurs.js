@@ -1,5 +1,4 @@
 import { store } from "../../store.js";
-import { registerProjectPrimaryScrollSource } from "../project-shell-chrome.js";
 import { svgIcon } from "../../ui/icons.js";
 import { escapeHtml } from "../../utils/escape-html.js";
 import {
@@ -1001,8 +1000,6 @@ function bindCollaboratorCreatePage(page) {
       rerenderCollaboratorCreatePageInPlace();
     }
   });
-
-  registerProjectPrimaryScrollSource(document.getElementById("projectParametresScroll"));
 
   const uiState = ensureCollaborateursUiState();
   const editingMode = isEditingCollaborator(uiState);
