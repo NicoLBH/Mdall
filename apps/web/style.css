@@ -2399,16 +2399,12 @@ body.is-resizing{
 .subissues-problems-icon__shade{
   stroke:var(--bgColor-done-emphasis, var(--color-done-emphasis, #8957e5));
   opacity:.38;
-  transform:rotate(-90deg);
-  transform-origin:50px 50px;
 }
 .subissues-problems-icon__track{
   stroke:var(--borderColor-default, var(--color-border-default, #30363d));
 }
 .subissues-problems-icon__progress{
   stroke:var(--bgColor-done-emphasis, var(--color-done-emphasis, #8957e5));
-  transform:rotate(-90deg);
-  transform-origin:50px 50px;
 }
 .subissues-problems-icon__completed-ring,
 .subissues-problems-icon__completed-check{

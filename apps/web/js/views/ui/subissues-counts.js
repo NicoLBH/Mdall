@@ -72,6 +72,7 @@ function renderProblemsProgressRingSvg(ratio, size) {
         stroke-dasharray="${dasharray}"
         stroke-dashoffset="0"
         stroke-width="40"
+        transform="rotate(-90 50 50)"
       ></circle>
       <circle
         class="subissues-problems-icon__track"
@@ -95,6 +96,7 @@ function renderProblemsProgressRingSvg(ratio, size) {
         stroke-dashoffset="0"
         stroke-width="15"
         stroke-linecap="round"
+        transform="rotate(-90 50 50)"
       ></circle>
     </svg>
   `;
