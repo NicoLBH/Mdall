@@ -67,7 +67,6 @@ export function createProjectSubjectsView(deps) {
     resetObjectiveEditState,
     loadExistingSubjectsForCurrentProject,
     getSubjectsCurrentRoot,
-    registerProjectPrimaryScrollSource,
     getFilteredSituations,
     getVisibleCounts,
     renderProjectSubjectsTable,
@@ -1437,10 +1436,6 @@ async function reloadSubjectsFromSupabase(root = getSubjectsCurrentRoot(), optio
     }
   }
 
-  if (shouldUpdateModal) {
-    getProjectSubjectDetail().syncDetailsModalIfOpen();
-  }
-
   if (store.situationsView.drilldown?.isOpen) {
     getProjectSubjectDrilldown().updateDrilldownPanel();
   }
@@ -1474,30 +1469,7 @@ function restoreDocumentScrollState(state) {
 }
 
 function syncSituationsPrimaryScrollSource() {
-  const panelHost = document.getElementById("situationsPanelHost");
-
-  if (store.situationsView.createSubjectForm?.isOpen) {
-    registerProjectPrimaryScrollSource(document.getElementById("projectSituationsScroll") || panelHost || null);
-    return;
-  }
-
-  if (store.situationsView.showTableOnly) {
-    const mainScrollBody = panelHost?.querySelector(".data-table-shell__body") || null;
-    registerProjectPrimaryScrollSource(mainScrollBody);
-
-    if (!mainScrollBody) return;
-
-    requestAnimationFrame(() => {
-      const currentPanelHost = document.getElementById("situationsPanelHost");
-      const currentMainScrollBody = currentPanelHost?.querySelector(".data-table-shell__body") || null;
-      if (!currentMainScrollBody || currentMainScrollBody !== mainScrollBody) return;
-      registerProjectPrimaryScrollSource(currentMainScrollBody);
-    });
-    return;
-  }
-
-  const detailsHost = document.getElementById("situationsDetailsHost");
-  registerProjectPrimaryScrollSource(detailsHost || null);
+  refreshProjectShellChrome("situations");
 }
 
 function rerenderPanels() {
@@ -1560,7 +1532,6 @@ function rerenderPanels() {
     }
   }
 
-  getProjectSubjectDetail().syncDetailsModalIfOpen();
   if (store.situationsView.drilldown?.isOpen) getProjectSubjectDrilldown().updateDrilldownPanel();
   refreshProjectShellChrome("situations");
 }
@@ -1575,11 +1546,7 @@ function rerenderPanels() {
 
 function rerenderScope(root) {
   rerenderPanels();
-  const detailsBody = document.getElementById("detailsBodyModal");
   const drilldownBody = document.getElementById("drilldownBody");
-  if (root?.closest?.("#detailsModal") && detailsBody) {
-    getProjectSubjectDetail().syncDetailsModalIfOpen();
-  }
   if (root?.closest?.("#drilldownPanel") && drilldownBody) {
     getProjectSubjectDrilldown().updateDrilldownPanel();
   }
@@ -1680,7 +1647,6 @@ function renderSubjectMetaDropdownHost(root) {
 
 function rerenderSubjectMetaScopes() {
   rerenderPanels();
-  if (document.getElementById("detailsBodyModal")) getProjectSubjectDetail().syncDetailsModalIfOpen();
   if (document.getElementById("drilldownBody")) getProjectSubjectDrilldown().updateDrilldownPanel();
 }
 
