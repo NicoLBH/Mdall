@@ -26,18 +26,7 @@ export function createProjectSubjectLabelsController(config) {
     if (typeof view.labelsSortMenuOpen !== "boolean") view.labelsSortMenuOpen = false;
     if (typeof view.labelsRowMenuOpen !== "string") view.labelsRowMenuOpen = "";
     if (!view.labelEditModal || typeof view.labelEditModal !== "object") {
-      view.labelEditModal = {
-        isOpen: false,
-        mode: "edit",
-        targetId: "",
-        targetKey: "",
-        name: "",
-        description: "",
-        color: "#8b949e",
-        colorPickerOpen: false,
-        isSaving: false,
-        isDeleting: false
-      };
+      view.labelEditModal = createClosedLabelEditModal();
     }
     return view;
   }
@@ -214,6 +203,26 @@ export function createProjectSubjectLabelsController(config) {
     `;
   }
 
+  function createClosedLabelEditModal() {
+    return {
+      isOpen: false,
+      mode: "edit",
+      targetId: "",
+      targetKey: "",
+      name: "",
+      description: "",
+      color: "#8b949e",
+      colorPickerOpen: false,
+      isSaving: false,
+      isDeleting: false
+    };
+  }
+
+  function resetLabelEditModal() {
+    const state = getLabelsUiState();
+    state.labelEditModal = createClosedLabelEditModal();
+  }
+
   function renderLabelsModalHtml() {
     const state = getLabelsUiState();
     const modal = state.labelEditModal || {};
@@ -246,7 +255,6 @@ export function createProjectSubjectLabelsController(config) {
                 <button type="button" class="labels-modal__color-reset" data-label-color-reset="true" aria-label="Réinitialiser la couleur">${svgIcon("sync", { className: "octicon octicon-sync" })}</button>
                 <div class="labels-modal__color-input-wrap ${modal.colorPickerOpen ? "is-open" : ""}">
                   <div class="labels-modal__color-trigger">
-                    <span class="labels-modal__color-swatch" style="--label-color:${escapeHtml(color)};" aria-hidden="true"></span>
                     <input type="text" class="labels-modal__color-input" data-label-modal-input="color" value="${escapeHtml(color)}" autocomplete="off">
                   </div>
                   <div class="labels-modal__color-popover ${modal.colorPickerOpen ? "is-open" : ""}">
@@ -334,11 +342,9 @@ export function createProjectSubjectLabelsController(config) {
     try {
       if (String(modal.mode || "edit") === "create") await createLabel?.(store.currentProjectId, payload);
       else await updateLabel?.(modal.targetId, payload);
-      modal.isOpen = false;
-      modal.isSaving = false;
-      modal.isDeleting = false;
+      resetLabelEditModal();
       state.labelsRowMenuOpen = "";
-      await reloadSubjectsFromSupabase?.(getSubjectsCurrentRoot?.(), { rerender: false, updateModal: true });
+      await reloadSubjectsFromSupabase?.(getSubjectsCurrentRoot?.(), { rerender: true, updateModal: true });
       return true;
     } catch (error) {
       modal.isSaving = false;
@@ -357,11 +363,9 @@ export function createProjectSubjectLabelsController(config) {
 
     try {
       await deleteLabel?.(resolvedId);
-      modal.isOpen = false;
-      modal.isSaving = false;
-      modal.isDeleting = false;
+      resetLabelEditModal();
       state.labelsRowMenuOpen = "";
-      await reloadSubjectsFromSupabase?.(getSubjectsCurrentRoot?.(), { rerender: false, updateModal: true });
+      await reloadSubjectsFromSupabase?.(getSubjectsCurrentRoot?.(), { rerender: true, updateModal: true });
       return true;
     } catch (error) {
       modal.isDeleting = false;
