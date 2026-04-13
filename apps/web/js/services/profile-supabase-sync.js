@@ -8,6 +8,7 @@ const SUPABASE_ANON_KEY = getSupabaseAnonKey();
 const FRONT_PROJECT_MAP_STORAGE_KEY = "mdall.supabaseProjectMap.v1";
 const PROJECT_SUPABASE_SYNC_EVENT = "project:supabase-sync";
 const PROJECT_IDENTITY_UPDATED_EVENT = "project:identity-updated";
+export const DEFAULT_PUBLIC_AVATAR = "assets/images/260093543.png";
 
 function safeString(value = "") {
   return String(value ?? "").trim();
