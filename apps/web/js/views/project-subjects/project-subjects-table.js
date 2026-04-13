@@ -138,13 +138,17 @@ export function renderProjectSubjectsTable({ filteredSituations, deps }) {
     store,
     renderIssuesTable,
     getFilteredFlatSubjects,
+    getPaginatedFilteredFlatSubjects,
+    getSubjectsPaginationState,
     getCurrentSubjectsStatusFilter,
     getCurrentSubjectsPriorityFilter,
     sujetMatchesStatusFilter,
     sujetMatchesPriorityFilter
   } = deps;
 
-  const selectorFlatSubjects = Array.isArray(getFilteredFlatSubjects?.()) ? getFilteredFlatSubjects() : [];
+  const allFilteredFlatSubjects = Array.isArray(getFilteredFlatSubjects?.()) ? getFilteredFlatSubjects() : [];
+  const pagination = typeof getSubjectsPaginationState === "function" ? getSubjectsPaginationState(allFilteredFlatSubjects.length) : null;
+  const selectorFlatSubjects = Array.isArray(getPaginatedFilteredFlatSubjects?.()) ? getPaginatedFilteredFlatSubjects() : allFilteredFlatSubjects;
   const rawPayload = store.projectSubjectsView?.rawSubjectsResult && typeof store.projectSubjectsView.rawSubjectsResult === "object"
     ? store.projectSubjectsView.rawSubjectsResult
     : (store.projectSubjectsView?.rawResult && typeof store.projectSubjectsView.rawResult === "object"
@@ -192,7 +196,9 @@ export function renderProjectSubjectsTable({ filteredSituations, deps }) {
       gridTemplate: getSituationsTableGridTemplate(),
       headHtml: renderSituationsTableHeadHtml({ deps }),
       emptyTitle: "Aucun résultat",
-      emptyDescription: "Aucun résultat pour les filtres actuels."
+      emptyDescription: pagination?.enabled
+        ? "Aucun résultat pour cette page avec les filtres actuels."
+        : "Aucun résultat pour les filtres actuels."
     });
   }
 
@@ -201,6 +207,8 @@ export function renderProjectSubjectsTable({ filteredSituations, deps }) {
     headHtml: renderSituationsTableHeadHtml({ deps }),
     rowsHtml: rows.join(""),
     emptyTitle: "Aucun résultat",
-    emptyDescription: "Aucun résultat pour les filtres actuels."
+    emptyDescription: pagination?.enabled
+      ? "Aucun résultat pour cette page avec les filtres actuels."
+      : "Aucun résultat pour les filtres actuels."
   });
 }
