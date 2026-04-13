@@ -10,6 +10,221 @@ const PROJECT_SUPABASE_SYNC_EVENT = "project:supabase-sync";
 const PROJECT_IDENTITY_UPDATED_EVENT = "project:identity-updated";
 export const DEFAULT_PUBLIC_AVATAR = "assets/images/260093543.png";
 
+
+
+const USER_PUBLIC_PROFILES_TABLE = "user_public_profiles";
+const AVATARS_BUCKET = "avatars";
+const AVATAR_SIGNED_URL_TTL_SECONDS = 60 * 60 * 24 * 30;
+
+function normalizeNullableText(value = "") {
+  const normalized = safeString(value);
+  return normalized || null;
+}
+
+function buildDisplayName(firstName = "", lastName = "", fallback = "") {
+  const fullName = [safeString(firstName), safeString(lastName)].filter(Boolean).join(" ").trim();
+  return fullName || safeString(fallback) || "Utilisateur";
+}
+
+function buildDefaultPublicProfile(user = null) {
+  return {
+    firstName: safeString(store.user?.firstName || user?.user_metadata?.first_name || ""),
+    lastName: safeString(store.user?.lastName || user?.user_metadata?.last_name || ""),
+    publicEmail: safeString(store.user?.publicProfile?.publicEmail || ""),
+    bio: safeString(store.user?.publicProfile?.bio || ""),
+    company: safeString(store.user?.publicProfile?.company || ""),
+    avatarStoragePath: ""
+  };
+}
+
+async function readCurrentUserPublicProfileRow(userId = "") {
+  if (!looksLikeUuid(userId)) return null;
+
+  const params = new URLSearchParams();
+  params.set("select", "user_id,first_name,last_name,public_email,bio,company,avatar_storage_path");
+  params.set("user_id", `eq.${userId}`);
+  params.set("limit", "1");
+
+  const rows = await restFetch(USER_PUBLIC_PROFILES_TABLE, params);
+  return Array.isArray(rows) ? (rows[0] || null) : null;
+}
+
+async function createAvatarSignedUrl(storagePath = "") {
+  const normalizedPath = safeString(storagePath);
+  if (!normalizedPath) return DEFAULT_PUBLIC_AVATAR;
+
+  const { data, error } = await supabase.storage
+    .from(AVATARS_BUCKET)
+    .createSignedUrl(normalizedPath, AVATAR_SIGNED_URL_TTL_SECONDS);
+
+  if (error) {
+    throw error;
+  }
+
+  return safeString(data?.signedUrl) || DEFAULT_PUBLIC_AVATAR;
+}
+
+async function buildAvatarUrlFromProfileRow(profileRow = null) {
+  const storagePath = safeString(profileRow?.avatar_storage_path || "");
+  if (!storagePath) return DEFAULT_PUBLIC_AVATAR;
+
+  try {
+    return await createAvatarSignedUrl(storagePath);
+  } catch {
+    return DEFAULT_PUBLIC_AVATAR;
+  }
+}
+
+function applyUserPublicProfileToStore(user = null, profileRow = null, avatarUrl = DEFAULT_PUBLIC_AVATAR) {
+  const fallbackProfile = buildDefaultPublicProfile(user);
+  const nextPublicProfile = {
+    firstName: safeString(profileRow?.first_name || fallbackProfile.firstName),
+    lastName: safeString(profileRow?.last_name || fallbackProfile.lastName),
+    publicEmail: safeString(profileRow?.public_email || fallbackProfile.publicEmail),
+    bio: safeString(profileRow?.bio || fallbackProfile.bio),
+    company: safeString(profileRow?.company || fallbackProfile.company),
+    avatarStoragePath: safeString(profileRow?.avatar_storage_path || "")
+  };
+
+  const baseUser = store.user || {};
+  const nextAvatar = safeString(avatarUrl || DEFAULT_PUBLIC_AVATAR) || DEFAULT_PUBLIC_AVATAR;
+  const fallbackName = safeString(baseUser.name || user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email || "Utilisateur");
+
+  store.user = {
+    ...baseUser,
+    id: safeString(baseUser.id || user?.id || ""),
+    email: safeString(baseUser.email || user?.email || ""),
+    firstName: nextPublicProfile.firstName || safeString(baseUser.firstName || ""),
+    lastName: nextPublicProfile.lastName || safeString(baseUser.lastName || ""),
+    name: buildDisplayName(nextPublicProfile.firstName || baseUser.firstName, nextPublicProfile.lastName || baseUser.lastName, fallbackName),
+    avatar: nextAvatar,
+    publicProfile: nextPublicProfile
+  };
+
+  return store.user;
+}
+
+export async function hydrateStoreUserPublicProfile() {
+  const user = await getCurrentUser().catch(() => null);
+  if (!user?.id) {
+    return store.user;
+  }
+
+  const profileRow = await readCurrentUserPublicProfileRow(user.id).catch(() => null);
+  const avatarUrl = await buildAvatarUrlFromProfileRow(profileRow);
+  return applyUserPublicProfileToStore(user, profileRow, avatarUrl);
+}
+
+export async function saveCurrentUserPublicProfile({ firstName = "", lastName = "", publicEmail = "", bio = "", company = "" } = {}) {
+  const user = await getCurrentUser();
+  if (!user?.id) {
+    throw new Error("Utilisateur non authentifié.");
+  }
+
+  const existingProfile = await readCurrentUserPublicProfileRow(user.id);
+  const payload = {
+    first_name: normalizeNullableText(firstName),
+    last_name: normalizeNullableText(lastName),
+    public_email: normalizeNullableText(publicEmail),
+    bio: normalizeNullableText(bio),
+    company: normalizeNullableText(company)
+  };
+
+  const profileRow = existingProfile
+    ? await restUpdate(USER_PUBLIC_PROFILES_TABLE, { user_id: user.id }, payload, {
+        select: "user_id,first_name,last_name,public_email,bio,company,avatar_storage_path"
+      })
+    : await restInsert(USER_PUBLIC_PROFILES_TABLE, {
+        user_id: user.id,
+        ...payload,
+        avatar_storage_path: null
+      }, {
+        select: "user_id,first_name,last_name,public_email,bio,company,avatar_storage_path"
+      });
+
+  const avatarUrl = await buildAvatarUrlFromProfileRow(profileRow || existingProfile);
+  return applyUserPublicProfileToStore(user, profileRow || existingProfile, avatarUrl);
+}
+
+export async function uploadCurrentUserAvatar(fileOrBlob) {
+  const user = await getCurrentUser();
+  if (!user?.id) {
+    throw new Error("Utilisateur non authentifié.");
+  }
+  if (!(fileOrBlob instanceof Blob)) {
+    throw new Error("Fichier avatar invalide.");
+  }
+
+  const existingProfile = await readCurrentUserPublicProfileRow(user.id);
+  const previousPath = safeString(existingProfile?.avatar_storage_path || "");
+  const extension = safeString(fileOrBlob.type || "").toLowerCase().includes("jpeg") ? "jpg" : "png";
+  const storagePath = `${user.id}/public-avatar.${extension}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from(AVATARS_BUCKET)
+    .upload(storagePath, fileOrBlob, {
+      upsert: true,
+      cacheControl: "3600",
+      contentType: fileOrBlob.type || (extension === "jpg" ? "image/jpeg" : "image/png")
+    });
+
+  if (uploadError) {
+    throw uploadError;
+  }
+
+  const payload = {
+    first_name: normalizeNullableText(existingProfile?.first_name || store.user?.publicProfile?.firstName || store.user?.firstName || ""),
+    last_name: normalizeNullableText(existingProfile?.last_name || store.user?.publicProfile?.lastName || store.user?.lastName || ""),
+    public_email: normalizeNullableText(existingProfile?.public_email || store.user?.publicProfile?.publicEmail || ""),
+    bio: normalizeNullableText(existingProfile?.bio || store.user?.publicProfile?.bio || ""),
+    company: normalizeNullableText(existingProfile?.company || store.user?.publicProfile?.company || ""),
+    avatar_storage_path: storagePath
+  };
+
+  const profileRow = existingProfile
+    ? await restUpdate(USER_PUBLIC_PROFILES_TABLE, { user_id: user.id }, payload, {
+        select: "user_id,first_name,last_name,public_email,bio,company,avatar_storage_path"
+      })
+    : await restInsert(USER_PUBLIC_PROFILES_TABLE, {
+        user_id: user.id,
+        ...payload
+      }, {
+        select: "user_id,first_name,last_name,public_email,bio,company,avatar_storage_path"
+      });
+
+  if (previousPath && previousPath !== storagePath) {
+    await supabase.storage.from(AVATARS_BUCKET).remove([previousPath]).catch(() => null);
+  }
+
+  const avatarUrl = await buildAvatarUrlFromProfileRow(profileRow);
+  return applyUserPublicProfileToStore(user, profileRow, avatarUrl);
+}
+
+export async function removeCurrentUserAvatar() {
+  const user = await getCurrentUser();
+  if (!user?.id) {
+    throw new Error("Utilisateur non authentifié.");
+  }
+
+  const existingProfile = await readCurrentUserPublicProfileRow(user.id);
+  if (!existingProfile) {
+    return applyUserPublicProfileToStore(user, null, DEFAULT_PUBLIC_AVATAR);
+  }
+
+  const previousPath = safeString(existingProfile.avatar_storage_path || "");
+  const profileRow = await restUpdate(USER_PUBLIC_PROFILES_TABLE, { user_id: user.id }, {
+    avatar_storage_path: null
+  }, {
+    select: "user_id,first_name,last_name,public_email,bio,company,avatar_storage_path"
+  });
+
+  if (previousPath) {
+    await supabase.storage.from(AVATARS_BUCKET).remove([previousPath]).catch(() => null);
+  }
+
+  return applyUserPublicProfileToStore(user, profileRow, DEFAULT_PUBLIC_AVATAR);
+}
+
 function safeString(value = "") {
   return String(value ?? "").trim();
 }
