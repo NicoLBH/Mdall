@@ -2404,6 +2404,18 @@ body.is-resizing{
   transform:rotate(-90deg);
   transform-origin:50px 50px;
 }
+.subissues-problems-icon__completed-ring,
+.subissues-problems-icon__completed-check{
+  color:var(--bgColor-done-emphasis, var(--color-done-emphasis, #8957e5));
+  stroke:var(--bgColor-done-emphasis, var(--color-done-emphasis, #8957e5));
+}
+.subissues-problems-icon__completed-ring{
+  fill:transparent;
+}
+.subissues-problems-icon__completed-check{
+  fill:currentColor;
+  stroke:none;
+}
 .subissues-problems-icon--empty .subissues-problems-icon__shade,
 .subissues-problems-icon--empty .subissues-problems-icon__progress,
 .subissues-problems-icon--zero .subissues-problems-icon__shade,
