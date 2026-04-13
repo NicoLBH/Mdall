@@ -980,6 +980,15 @@ export function createProjectSubjectsEvents(config) {
         }
       }
 
+      const backToSubjectsTable = event.target.closest("[data-subjects-back='table']");
+      if (backToSubjectsTable) {
+        event.preventDefault();
+        store.situationsView.showTableOnly = true;
+        window.scrollTo({ top: 0, behavior: "auto" });
+        rerenderPanels();
+        return;
+      }
+
       const titleTrigger = event.target.closest(".js-row-title-trigger");
       if (titleTrigger) {
         event.preventDefault();
