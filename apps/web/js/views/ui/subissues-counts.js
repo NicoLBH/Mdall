@@ -1,13 +1,40 @@
-export function renderProblemsCountsIconHtml(closedCount, totalCount, options = {}) {
+function normalizeProblemsCounts(closedCount, totalCount) {
   const total = Math.max(0, Number(totalCount) || 0);
   const closed = Math.max(0, Math.min(total, Number(closedCount) || 0));
-  const svgIssueClosed = String(options.svgIssueClosed || "");
+  return { closed, total, ratio: total ? (closed / total) : 0 };
+}
 
-  if (total > 0 && closed === total && svgIssueClosed) {
-    return `<span class="subissues-problems-icon" aria-label="Tous les sujets sont fermés">${svgIssueClosed}</span>`;
+function resolveProblemsCountsOptions(options = {}) {
+  const size = Math.max(0, Number(options.size) || 16);
+  const className = String(options.className || "").trim();
+  const completeIcon = String(options.completeIcon || options.svgIssueClosed || "");
+  const ariaLabel = typeof options.ariaLabel === "string" && options.ariaLabel.trim()
+    ? options.ariaLabel.trim()
+    : "";
+  return { size, className, completeIcon, ariaLabel };
+}
+
+/**
+ * Renders the shared subissues progress icon.
+ *
+ * API invariants for phase 2:
+ * - closedCount and totalCount are already computed by the caller.
+ * - this component only normalizes, clamps and renders.
+ * - completeIcon is optional and only affects the fully-complete state.
+ * - svgIssueClosed is preserved as a compatibility alias until call sites are fully harmonized.
+ */
+export function renderProblemsCountsIconHtml(closedCount, totalCount, options = {}) {
+  const { closed, total, ratio } = normalizeProblemsCounts(closedCount, totalCount);
+  const { size, className, completeIcon, ariaLabel } = resolveProblemsCountsOptions(options);
+  const wrapperClassName = ["subissues-problems-icon", className].filter(Boolean).join(" ");
+  const computedAriaLabel = ariaLabel || (total > 0
+    ? `Sujets fermés : ${closed}/${total}`
+    : "Aucun sous-sujet");
+
+  if (total > 0 && closed === total && completeIcon) {
+    return `<span class="${wrapperClassName}" aria-label="${computedAriaLabel}">${completeIcon}</span>`;
   }
 
-  const ratio = total ? (closed / total) : 0;
   const r = 8;
   const cx = 10;
   const cy = 10;
@@ -22,8 +49,8 @@ export function renderProblemsCountsIconHtml(closedCount, totalCount, options = 
   }
 
   return `
-    <span class="subissues-problems-icon" aria-label="Sujets fermés : ${closed}/${total}">
-      <svg viewBox="0 0 20 20" width="16" height="16" class="subissues-problems-icon__svg">
+    <span class="${wrapperClassName}" aria-label="${computedAriaLabel}">
+      <svg viewBox="0 0 20 20" width="${size}" height="${size}" class="subissues-problems-icon__svg">
         <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="rgba(139,148,158,.55)" stroke-width="2"></circle>
         ${wedge}
       </svg>
