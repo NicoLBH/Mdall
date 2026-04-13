@@ -358,6 +358,7 @@ const projectSubjectsEvents = createProjectSubjectsEvents({
   bindOverlayChromeCompact,
   getProjectSubjectMilestones: () => projectSubjectMilestones,
   getProjectSubjectLabels: () => projectSubjectLabels,
+  renderSubjectMetaFieldValue: (...args) => projectSubjectsView.renderSubjectMetaFieldValue(...args),
   getSubjectsCurrentRoot: () => subjectsCurrentRoot,
   openDetailsModal: () => projectSubjectDetail.openDetailsModal(),
   openSubjectDetails: () => projectSubjectDetail.openSubjectDetails()
