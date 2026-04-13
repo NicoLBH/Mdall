@@ -105,8 +105,11 @@ export function createProjectSubjectsEvents(config) {
         event.preventDefault();
         event.stopPropagation();
         const dropdownState = getSubjectsViewState().subjectMetaDropdown || {};
+        const scrollState = dropdownController().captureContextScrollState(root);
         dropdownState.showClosedSituations = !dropdownState.showClosedSituations;
-        refreshSubjectMetaDropdownUi(root, { field: "situations", preserveScroll: true, preserveFocus: true });
+        rerenderScope(root);
+        dropdownController().restoreContextScrollState(scrollState);
+        syncSubjectMetaDropdownPosition(getSubjectMetaScopeRoot());
       };
     });
 
