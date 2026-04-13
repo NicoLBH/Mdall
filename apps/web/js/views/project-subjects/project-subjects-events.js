@@ -582,7 +582,7 @@ export function createProjectSubjectsEvents(config) {
     );
 
     bindCondensedTitleScroll(
-      document.getElementById("drilldownBody"),
+      document.querySelector("#drilldownPanel .drilldown__inner"),
       document.querySelector("#drilldownPanel .drilldown__inner"),
       "drilldown"
     );

@@ -56,7 +56,7 @@ export function createProjectSubjectDrilldownController(config) {
 
     document.body.appendChild(panel);
 
-    bindDrilldownScrollProxy(panel, document.getElementById("drilldownBody"));
+    bindDrilldownScrollProxy(panel, panel.querySelector(".drilldown__inner"));
     bindOverlayChromeDismiss(panel, {
       onClose: closeDrilldown
     });
@@ -69,9 +69,10 @@ export function createProjectSubjectDrilldownController(config) {
     const panel = document.getElementById("drilldownPanel");
     const title = document.getElementById("drilldownTitle");
     const body = document.getElementById("drilldownBody");
-    if (!panel || !title || !body) return;
+    const shell = panel.querySelector(".drilldown__inner");
+    if (!panel || !title || !body || !shell) return;
 
-    const bodyScrollState = getScrollableElementScrollState(body);
+    const shellScrollState = getScrollableElementScrollState(shell);
     const expandedSubjectIds = store.projectSubjectsView?.drilldown?.expandedSubjectIds
       || store.situationsView?.drilldown?.expandedSubjectIds
       || store.situationsView?.drilldown?.expandedSujets
@@ -92,12 +93,12 @@ export function createProjectSubjectDrilldownController(config) {
 
     wireDetailsInteractive(body);
     bindDetailsScroll(document);
-    restoreScrollableElementScrollState(body, bodyScrollState);
-    body.__syncCondensedTitle?.();
+    restoreScrollableElementScrollState(shell, shellScrollState);
+    shell.__syncCondensedTitle?.();
     requestAnimationFrame(() => {
-      const currentBody = document.getElementById("drilldownBody");
-      restoreScrollableElementScrollState(currentBody, bodyScrollState);
-      currentBody?.__syncCondensedTitle?.();
+      const currentShell = document.querySelector("#drilldownPanel .drilldown__inner");
+      restoreScrollableElementScrollState(currentShell, shellScrollState);
+      currentShell?.__syncCondensedTitle?.();
     });
   }
 
@@ -119,21 +120,21 @@ export function createProjectSubjectDrilldownController(config) {
     window.scrollTo({ top: lockedWindowScrollY, behavior: "auto" });
   }
 
-  function bindDrilldownScrollProxy(panel, body) {
-    if (!panel || !body || panel.dataset.drilldownScrollProxyBound === "1") return;
+  function bindDrilldownScrollProxy(panel, shell) {
+    if (!panel || !shell || panel.dataset.drilldownScrollProxyBound === "1") return;
 
-    const forwardWheelToBody = (event) => {
+    const forwardWheelToShell = (event) => {
       if (!store.situationsView?.drilldown?.isOpen) return;
-      if (!body) return;
+      if (!shell) return;
       const deltaY = Number(event.deltaY || 0);
       const deltaX = Number(event.deltaX || 0);
       if (!deltaY && !deltaX) return;
-      body.scrollTop += deltaY;
-      body.scrollLeft += deltaX;
+      shell.scrollTop += deltaY;
+      shell.scrollLeft += deltaX;
       event.preventDefault();
     };
 
-    panel.addEventListener("wheel", forwardWheelToBody, { passive: false });
+    panel.addEventListener("wheel", forwardWheelToShell, { passive: false });
     panel.dataset.drilldownScrollProxyBound = "1";
   }
 
