@@ -8,6 +8,7 @@ import {
   startRunLogEntry
 } from "./project-automation.js";
 import { buildSupabaseAuthHeaders, getCurrentUser, getSupabaseAnonKey, getSupabaseUrl } from "../../assets/js/auth.js";
+import { buildSubjectHierarchyIndexes } from "./subject-hierarchy.js";
 
 const SUPABASE_URL = getSupabaseUrl();
 const SUPABASE_ANON_KEY = getSupabaseAnonKey();
@@ -485,29 +486,22 @@ function sortSubjectNodes(nodes = []) {
 function buildNormalizedSubjectsResult(subjectRows = [], subjectLinks = [], situations = [], options = {}) {
   const documentIds = getPreferredAnalysisDocumentIds(options.documentIds || []);
   const subjectsById = {};
-  const parentBySubjectId = {};
-  const childrenBySubjectId = {};
   const linksBySubjectId = {};
   const situationsById = {};
   const subjectIdsBySituationId = {};
-  const rootSubjectIds = [];
 
   for (const subject of subjectRows || []) {
     const subjectId = String(subject?.id || "");
     if (!subjectId) continue;
     subjectsById[subjectId] = withDocumentRefs({ ...subject, id: subjectId }, documentIds);
-    childrenBySubjectId[subjectId] = [];
     linksBySubjectId[subjectId] = [];
   }
 
-  for (const subject of subjectRows || []) {
-    const subjectId = String(subject?.id || "");
-    if (!subjectId) continue;
-    const parentId = String(subject?.parent_subject_id || "");
-    parentBySubjectId[subjectId] = parentId || null;
-    if (parentId && subjectsById[parentId] && parentId !== subjectId) childrenBySubjectId[parentId].push(subjectId);
-    else rootSubjectIds.push(subjectId);
-  }
+  const {
+    parentBySubjectId,
+    childrenBySubjectId,
+    rootSubjectIds
+  } = buildSubjectHierarchyIndexes(subjectRows, subjectsById);
 
   for (const link of subjectLinks || []) {
     const sourceId = String(link?.source_subject_id || "");
