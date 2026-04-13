@@ -2397,8 +2397,13 @@ body.is-resizing{
   transform-origin:50px 50px;
 }
 .subissues-problems-icon--empty .subissues-problems-icon__shade,
-.subissues-problems-icon--empty .subissues-problems-icon__progress{
+.subissues-problems-icon--empty .subissues-problems-icon__progress,
+.subissues-problems-icon--zero .subissues-problems-icon__shade,
+.subissues-problems-icon--zero .subissues-problems-icon__progress{
   opacity:0;
+}
+.subissues-problems-icon--complete .subissues-problems-icon__progress{
+  stroke-linecap:butt;
 }
 .verdict-bar__seg{width:var(--verdict-seg-width, 100%);}
 
