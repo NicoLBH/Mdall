@@ -37,6 +37,26 @@ export function createProjectSubjectsState({ store }) {
     if (typeof v.helpMode !== "boolean") v.helpMode = false;
     if (typeof v.showTableOnly !== "boolean") v.showTableOnly = true;
     if (!Number.isFinite(Number(v.tableScrollRestoreY))) v.tableScrollRestoreY = 0;
+    if (!v.pagination || typeof v.pagination !== "object") {
+      v.pagination = {
+        mode: "full",
+        pageSize: null,
+        currentPage: 1,
+        totalItems: 0,
+        loadedItems: 0,
+        hasNextPage: false,
+        nextCursor: null,
+        sourceComplete: true
+      };
+    }
+    if (typeof v.pagination.mode !== "string") v.pagination.mode = "full";
+    if (!Number.isFinite(Number(v.pagination.currentPage)) || Number(v.pagination.currentPage) < 1) v.pagination.currentPage = 1;
+    if (!Number.isFinite(Number(v.pagination.totalItems)) || Number(v.pagination.totalItems) < 0) v.pagination.totalItems = 0;
+    if (!Number.isFinite(Number(v.pagination.loadedItems)) || Number(v.pagination.loadedItems) < 0) v.pagination.loadedItems = 0;
+    if (!Number.isFinite(Number(v.pagination.pageSize)) || Number(v.pagination.pageSize) <= 0) v.pagination.pageSize = null;
+    if (typeof v.pagination.hasNextPage !== "boolean") v.pagination.hasNextPage = false;
+    if (typeof v.pagination.sourceComplete !== "boolean") v.pagination.sourceComplete = true;
+    if (typeof v.pagination.nextCursor !== "string" && v.pagination.nextCursor !== null) v.pagination.nextCursor = null;
     if (!v.descriptionEdit || typeof v.descriptionEdit !== "object") {
       v.descriptionEdit = {
         entityType: null,

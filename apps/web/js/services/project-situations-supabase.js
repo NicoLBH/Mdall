@@ -168,6 +168,16 @@ function syncSituationsStore(projectId, situations) {
   const normalizedProjectScopeId = String(store.currentProjectId || "").trim() || null;
   const normalizedSituations = safeArray(situations).map(normalizeSituationRow);
   store.situationsView.data = normalizedSituations;
+  store.situationsView.pagination = {
+    mode: "full",
+    pageSize: null,
+    currentPage: 1,
+    totalItems: normalizedSituations.length,
+    loadedItems: normalizedSituations.length,
+    hasNextPage: false,
+    nextCursor: null,
+    sourceComplete: true
+  };
   store.situationsView.projectScopeId = normalizedProjectScopeId;
   store.situationsView.page = 1;
   return normalizedSituations;

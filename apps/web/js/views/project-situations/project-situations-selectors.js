@@ -51,9 +51,66 @@ export function createProjectSituationsSelectors({ store, uiState }) {
     }, { open: 0, closed: 0 });
   }
 
+  function getSituationsPaginationState(totalItems = 0) {
+    const pagination = store.situationsView?.pagination && typeof store.situationsView.pagination === "object"
+      ? store.situationsView.pagination
+      : {};
+    const pageSize = Number.isFinite(Number(pagination.pageSize)) && Number(pagination.pageSize) > 0
+      ? Math.max(1, Number(pagination.pageSize))
+      : null;
+    const currentPage = Number.isFinite(Number(pagination.currentPage)) && Number(pagination.currentPage) > 0
+      ? Math.max(1, Number(pagination.currentPage))
+      : 1;
+    const normalizedTotal = Math.max(0, Number(totalItems) || 0);
+    const totalPages = pageSize ? Math.max(1, Math.ceil(normalizedTotal / pageSize)) : 1;
+    const safeCurrentPage = Math.min(currentPage, totalPages);
+    const startIndex = pageSize ? (safeCurrentPage - 1) * pageSize : 0;
+    const endIndex = pageSize ? Math.min(normalizedTotal, startIndex + pageSize) : normalizedTotal;
+
+    return {
+      mode: String(pagination.mode || "full"),
+      enabled: Boolean(pageSize),
+      pageSize,
+      currentPage: safeCurrentPage,
+      totalItems: normalizedTotal,
+      totalPages,
+      startIndex,
+      endIndex,
+      loadedItems: Number.isFinite(Number(pagination.loadedItems)) ? Math.max(0, Number(pagination.loadedItems)) : normalizedTotal,
+      hasNextPage: Boolean(pagination.hasNextPage),
+      nextCursor: typeof pagination.nextCursor === "string" ? pagination.nextCursor : null,
+      sourceComplete: typeof pagination.sourceComplete === "boolean" ? pagination.sourceComplete : true
+    };
+  }
+
+  function paginateCollection(items = [], paginationState = getSituationsPaginationState(Array.isArray(items) ? items.length : 0)) {
+    if (!Array.isArray(items) || !items.length) return [];
+    if (!paginationState?.enabled) return items;
+    return items.slice(paginationState.startIndex, paginationState.endIndex);
+  }
+
+  function getSituationsDataSourceInfo() {
+    const all = getAllSituations();
+    const pagination = getSituationsPaginationState(all.length);
+    return {
+      entity: "situations",
+      supportsPagination: true,
+      sourceComplete: pagination.sourceComplete,
+      loadedItems: pagination.loadedItems || all.length,
+      totalItems: pagination.totalItems || all.length,
+      nextCursor: pagination.nextCursor,
+      hasNextPage: pagination.hasNextPage
+    };
+  }
+
   function getSituations() {
     const current = getCurrentSituationsStatusFilter();
     return getAllSituations().filter((situation) => situation.status === current);
+  }
+
+  function getPaginatedSituations() {
+    const situations = getSituations();
+    return paginateCollection(situations, getSituationsPaginationState(situations.length));
   }
 
   function getSelectedSituation() {
@@ -104,6 +161,9 @@ export function createProjectSituationsSelectors({ store, uiState }) {
     getCurrentSituationsStatusFilter,
     getSituationsStatusCounts,
     getSituations,
+    getPaginatedSituations,
+    getSituationsPaginationState,
+    getSituationsDataSourceInfo,
     getSelectedSituation,
     renderSituationCount,
     formatSituationUpdatedLabel

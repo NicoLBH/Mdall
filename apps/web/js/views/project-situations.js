@@ -40,6 +40,9 @@ const {
   getSituations,
   getCurrentSituationsStatusFilter,
   getSituationsStatusCounts,
+  getPaginatedSituations,
+  getSituationsPaginationState,
+  getSituationsDataSourceInfo,
   renderSituationCount,
   formatSituationUpdatedLabel
 } = createProjectSituationsSelectors({ store, uiState });
@@ -72,6 +75,9 @@ const {
   store,
   uiState,
   getSituations,
+  getPaginatedSituations,
+  getSituationsPaginationState,
+  getSituationsDataSourceInfo,
   normalizeSituationMode,
   normalizeSituationStatus,
   renderSituationCount,

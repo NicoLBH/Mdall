@@ -87,6 +87,26 @@ export function createProjectSituationsState({ store }) {
     if (!view.kanbanStatusBySituationId || typeof view.kanbanStatusBySituationId !== "object" || Array.isArray(view.kanbanStatusBySituationId)) {
       view.kanbanStatusBySituationId = {};
     }
+    if (!view.pagination || typeof view.pagination !== "object") {
+      view.pagination = {
+        mode: "full",
+        pageSize: null,
+        currentPage: 1,
+        totalItems: 0,
+        loadedItems: 0,
+        hasNextPage: false,
+        nextCursor: null,
+        sourceComplete: true
+      };
+    }
+    if (typeof view.pagination.mode !== "string") view.pagination.mode = "full";
+    if (!Number.isFinite(Number(view.pagination.currentPage)) || Number(view.pagination.currentPage) < 1) view.pagination.currentPage = 1;
+    if (!Number.isFinite(Number(view.pagination.totalItems)) || Number(view.pagination.totalItems) < 0) view.pagination.totalItems = 0;
+    if (!Number.isFinite(Number(view.pagination.loadedItems)) || Number(view.pagination.loadedItems) < 0) view.pagination.loadedItems = 0;
+    if (!Number.isFinite(Number(view.pagination.pageSize)) || Number(view.pagination.pageSize) <= 0) view.pagination.pageSize = null;
+    if (typeof view.pagination.hasNextPage !== "boolean") view.pagination.hasNextPage = false;
+    if (typeof view.pagination.sourceComplete !== "boolean") view.pagination.sourceComplete = true;
+    if (typeof view.pagination.nextCursor !== "string" && view.pagination.nextCursor !== null) view.pagination.nextCursor = null;
     return view;
   }
 

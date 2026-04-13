@@ -9,6 +9,8 @@ export function createProjectSituationsTable({
   store,
   uiState,
   getSituations,
+  getPaginatedSituations,
+  getSituationsPaginationState,
   normalizeSituationMode,
   normalizeSituationStatus,
   renderSituationCount,
@@ -68,7 +70,9 @@ export function createProjectSituationsTable({
   }
 
   function renderSituationsTable() {
-    const situations = getSituations();
+    const allSituations = getSituations();
+    const pagination = typeof getSituationsPaginationState === "function" ? getSituationsPaginationState(allSituations.length) : null;
+    const situations = typeof getPaginatedSituations === "function" ? getPaginatedSituations() : allSituations;
 
     if (uiState.error) {
       return `<div class="settings-inline-error">${escapeHtml(uiState.error)}</div>`;
