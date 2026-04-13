@@ -2485,6 +2485,7 @@ body.is-resizing{
   background:var(--bg);
   display:flex;
   flex-direction:column;
+  overflow:auto;
 }
 
 body.drilldown-open .drilldown__inner,
@@ -2501,7 +2502,7 @@ body.drilldown-open .drilldown__inner,
 
 .drilldown__body{
   flex:1 1 auto;
-  overflow:auto;
+  overflow:visible;
 }
 
 .drilldown--situation-kanban .drilldown__inner{
