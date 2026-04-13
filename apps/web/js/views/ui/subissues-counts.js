@@ -81,6 +81,7 @@ export function renderProblemsCountsIconHtml(closedCount, totalCount, options = 
   const wrapperClassName = [
     "subissues-problems-icon",
     total <= 0 ? "subissues-problems-icon--empty" : "",
+    ratio <= 0 ? "subissues-problems-icon--zero" : "",
     ratio >= 1 ? "subissues-problems-icon--complete" : "",
     className,
   ].filter(Boolean).join(" ");
