@@ -977,8 +977,11 @@ export function createProjectSubjectsEvents(config) {
       if (backToSubjectsTable) {
         event.preventDefault();
         store.situationsView.showTableOnly = true;
-        window.scrollTo({ top: 0, behavior: "auto" });
         rerenderPanels();
+        const restoreY = Number(store.projectSubjectsView?.tableScrollRestoreY || store.situationsView?.tableScrollRestoreY || 0);
+        requestAnimationFrame(() => {
+          window.scrollTo({ top: Math.max(0, restoreY), behavior: "auto" });
+        });
         return;
       }
 
