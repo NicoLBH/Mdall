@@ -1474,6 +1474,7 @@ function syncSituationsPrimaryScrollSource() {
 
 function rerenderPanels() {
   ensureViewUiState();
+  document.body.classList.remove("project-subject-details-top-compact");
 
   const detailsScrollState = getDocumentScrollState();
   const filteredSituations = getFilteredSituations();
