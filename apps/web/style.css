@@ -458,15 +458,9 @@ body.sidebar-collapsed #sidebar{overflow:hidden;width:0;min-width:0;padding:0;ma
 .subject-details-shell{
   --subject-details-inline-pad:12px;
   --subject-details-content-max:1280px;
-<<<<<<< 4x9dhd-codex/fix-drilldown-head-width-and-centering
-  --subject-drilldown-max:1265px;
-  --subject-drilldown-min:770px;
-  --subject-drilldown-fluid-offset:161px;
-=======
   --subject-drilldown-responsive-breakpoint:767px;
   --subject-drilldown-responsive-width:66.6667vw;
   --subject-drilldown-responsive-min:640px;
->>>>>>> main
 }
 
 .subject-details-shell > .overlay-chrome__head{
@@ -488,7 +482,7 @@ body.sidebar-collapsed #sidebar{overflow:hidden;width:0;min-width:0;padding:0;ma
 }
 
 #drilldownPanel .subject-details-shell{
-  --subject-details-inline-pad:24px;
+  --subject-details-inline-pad:16px;
 }
 
 /* Keep modal content centered while the scrollbar stays at the window edge */
@@ -554,7 +548,7 @@ body.sidebar-collapsed #sidebar{overflow:hidden;width:0;min-width:0;padding:0;ma
 .mono-small{font-family:var(--mono);font-size:12px;color:var(--muted);}
 
 /* Right panel body: responsive 2-col grid (main + metadata) */
-.details-grid{display:grid;grid-template-columns:minmax(0, 1fr) 296px;gap:24px;align-items:stretch;margin-top:10px;min-height:100%;}
+.details-grid{display:grid;grid-template-columns:minmax(0, 1fr) minmax(256px, 296px);gap:24px;align-items:stretch;margin-top:10px;min-height:100%;}
 .details-main{min-width:0;}
 .details-meta-col{padding:0 0 16px 0;height:100%;overflow:auto;}
 .meta-title{
@@ -1054,12 +1048,8 @@ body.sidebar-collapsed #sidebar{overflow:hidden;width:0;min-width:0;padding:0;ma
   color:var(--muted);
 }
 
-@container (max-width: 1012px){
-  .details-grid{grid-template-columns:minmax(0, 1fr) 256px;}
-}
-
 /* When the right panel is narrow, stack metadata under main */
-@container (max-width: 769px){
+@container (max-width: 750px){
   .details-grid{grid-template-columns:1fr;}
 }
 
@@ -2541,14 +2531,7 @@ body.is-resizing{
 
 /* ===== Drilldown slide-in panel ===== */
 .drilldown__inner {
-<<<<<<< 4x9dhd-codex/fix-drilldown-head-width-and-centering
-  width:min(
-    var(--subject-drilldown-max),
-    max(var(--subject-drilldown-min), calc(100vw - var(--subject-drilldown-fluid-offset)))
-  );
-=======
   width:min(720px, 92vw);
->>>>>>> main
   height:100%;
   border-left:1px solid var(--border);
   border-top-left-radius: 12px;
@@ -2563,11 +2546,7 @@ body.is-resizing{
   overflow-x:hidden;
 }
 
-<<<<<<< 4x9dhd-codex/fix-drilldown-head-width-and-centering
-@media (max-width: 770px){
-=======
 @media (max-width: 767px){
->>>>>>> main
   .drilldown__inner{
     width:100vw;
     max-width:100vw;
