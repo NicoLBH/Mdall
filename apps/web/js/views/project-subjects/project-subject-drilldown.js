@@ -32,6 +32,29 @@ export function createProjectSubjectDrilldownController(config) {
 
   let lockedWindowScrollY = 0;
 
+  function getNormalDetailsCompactSnapshot() {
+    const normalDetailsChrome = document.getElementById("situationsDetailsChrome");
+    const normalDetailsHead = document.getElementById("situationsDetailsTitle");
+    if (!normalDetailsChrome || !normalDetailsHead) return null;
+    return {
+      compact: normalDetailsChrome.classList.contains("overlay-chrome--compact")
+        || normalDetailsHead.classList.contains("details-head--compact")
+        || document.body.classList.contains("project-subject-details-top-compact")
+    };
+  }
+
+  function applyNormalDetailsCompactSnapshot(snapshot) {
+    if (!snapshot) return;
+    const normalDetailsChrome = document.getElementById("situationsDetailsChrome");
+    const normalDetailsHead = document.getElementById("situationsDetailsTitle");
+    if (!normalDetailsChrome || !normalDetailsHead) return;
+    const compact = !!snapshot.compact;
+    normalDetailsChrome.classList.toggle("overlay-chrome--compact", compact);
+    normalDetailsHead.classList.toggle("details-head--compact", compact);
+    normalDetailsHead.classList.toggle("details-head--expanded", !compact);
+    document.body.classList.toggle("project-subject-details-top-compact", compact);
+  }
+
   function ensureDrilldownDom() {
     if (document.getElementById("drilldownPanel")) return;
 
@@ -63,7 +86,7 @@ export function createProjectSubjectDrilldownController(config) {
   }
 
   function updateDrilldownPanel() {
-    ensureViewUiState();
+    const viewState = ensureViewUiState();
     ensureDrilldownDom();
 
     const panel = document.getElementById("drilldownPanel");
@@ -93,11 +116,13 @@ export function createProjectSubjectDrilldownController(config) {
 
     wireDetailsInteractive(body);
     bindDetailsScroll(document);
+    applyNormalDetailsCompactSnapshot(viewState.drilldown?.normalDetailsCompactSnapshot);
     restoreScrollableElementScrollState(shell, shellScrollState);
     shell.__syncCondensedTitle?.();
     requestAnimationFrame(() => {
       const currentShell = document.querySelector("#drilldownPanel .drilldown__inner");
       restoreScrollableElementScrollState(currentShell, shellScrollState);
+      applyNormalDetailsCompactSnapshot(viewState.drilldown?.normalDetailsCompactSnapshot);
       currentShell?.__syncCondensedTitle?.();
     });
   }
@@ -143,6 +168,7 @@ export function createProjectSubjectDrilldownController(config) {
     const viewState = ensureViewUiState();
     ensureDrilldownDom();
     closeGlobalNav();
+    viewState.drilldown.normalDetailsCompactSnapshot = getNormalDetailsCompactSnapshot();
     viewState.drilldown.isOpen = true;
     if (store.situationsView?.drilldown && typeof store.situationsView.drilldown === "object") {
       store.situationsView.drilldown.isOpen = true;
@@ -164,6 +190,8 @@ export function createProjectSubjectDrilldownController(config) {
     panel?.classList.remove("drilldown--situation-kanban");
     setOverlayChromeOpenState(panel, false);
     syncWindowScrollLock(false);
+    document.__syncCondensedTitle?.();
+    viewState.drilldown.normalDetailsCompactSnapshot = null;
   }
 
   function openDrilldownFromSituation(situationId, options = {}) {
