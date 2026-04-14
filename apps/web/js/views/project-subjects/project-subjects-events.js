@@ -550,9 +550,11 @@ export function createProjectSubjectsEvents(config) {
   }
 
   function bindDetailsScroll(root) {
+    const normalDetailsHead = root.querySelector("#situationsDetailsTitle");
+    const normalDetailsChrome = root.querySelector("#situationsDetailsChrome");
     bindCondensedTitleScroll(
-      root.querySelector("#situationsDetailsHost"),
-      root.querySelector("#situationsDetailsTitle"),
+      normalDetailsHead ? document : root.querySelector("#situationsDetailsHost"),
+      normalDetailsChrome || normalDetailsHead,
       "details",
       {
         onCompactChange(scrolled) {
