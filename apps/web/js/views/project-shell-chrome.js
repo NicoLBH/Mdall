@@ -15,7 +15,10 @@ const shellState = {
   compactTabCustomLabel: "",
   compactTabCustomSuffix: "",
   compactTabPrimaryAction: null,
-  cleanupWindow: null
+  cleanupWindow: null,
+  cleanupActiveScrollSource: null,
+  activeScrollSourceEl: null,
+  activeScrollSourceResolver: null
 };
 
 function getStickyChromeHostEl() {
@@ -53,6 +56,20 @@ function getDocumentScrollTop() {
     || document.body?.scrollTop
     || 0
   );
+}
+
+function getActiveScrollSourceEl() {
+  if (typeof shellState.activeScrollSourceResolver === "function") {
+    const resolvedEl = shellState.activeScrollSourceResolver();
+    if (resolvedEl) return resolvedEl;
+  }
+
+  return shellState.activeScrollSourceEl || null;
+}
+
+function getScrollTopFromElement(el) {
+  if (!el) return 0;
+  return Number(el.scrollTop || 0);
 }
 
 function syncCompactPrimaryAction() {
@@ -119,7 +136,12 @@ function applyCompactState(isCompact) {
 }
 
 function syncCompactState() {
-  applyCompactState(getDocumentScrollTop() > 12);
+  const activeScrollSourceEl = getActiveScrollSourceEl();
+  const scrollTop = activeScrollSourceEl
+    ? getScrollTopFromElement(activeScrollSourceEl)
+    : getDocumentScrollTop();
+
+  applyCompactState(scrollTop > 12);
 }
 
 
@@ -226,6 +248,40 @@ export function registerProjectPrimaryScrollSource(el) {
   registerProjectScrollSources(el);
 }
 
+export function setProjectActiveScrollSource(el, { resolve = null } = {}) {
+  shellState.cleanupActiveScrollSource?.();
+  shellState.cleanupActiveScrollSource = null;
+  shellState.activeScrollSourceEl = el || null;
+  shellState.activeScrollSourceResolver = typeof resolve === "function" ? resolve : null;
+
+  const bindTarget = shellState.activeScrollSourceEl;
+  if (bindTarget?.addEventListener) {
+    const onScroll = () => {
+      syncCompactState();
+    };
+
+    bindTarget.addEventListener("scroll", onScroll, { passive: true });
+    shellState.cleanupActiveScrollSource = () => {
+      bindTarget.removeEventListener("scroll", onScroll);
+    };
+  }
+
+  syncCompactState();
+}
+
+export function clearProjectActiveScrollSource(el = null) {
+  const activeEl = getActiveScrollSourceEl();
+  if (el && activeEl && el !== activeEl) {
+    return;
+  }
+
+  shellState.cleanupActiveScrollSource?.();
+  shellState.cleanupActiveScrollSource = null;
+  shellState.activeScrollSourceEl = null;
+  shellState.activeScrollSourceResolver = null;
+  syncCompactState();
+}
+
 export function refreshProjectShellChrome() {
   syncCompactState();
 }
@@ -235,6 +291,8 @@ export function unmountProjectShellChrome() {
 
   shellState.cleanupWindow?.();
   shellState.cleanupWindow = null;
+  shellState.cleanupActiveScrollSource?.();
+  shellState.cleanupActiveScrollSource = null;
 
   shellState.viewHeaderHostEl?.replaceChildren?.();
 
@@ -269,4 +327,6 @@ export function unmountProjectShellChrome() {
   shellState.compactTabCustomLabel = "";
   shellState.compactTabCustomSuffix = "";
   shellState.compactTabPrimaryAction = null;
+  shellState.activeScrollSourceEl = null;
+  shellState.activeScrollSourceResolver = null;
 }
