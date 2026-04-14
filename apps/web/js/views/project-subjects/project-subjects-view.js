@@ -1515,9 +1515,9 @@ function rerenderPanels() {
         }
       });
       panelHost.innerHTML = `
-        <section aria-label="Details">
-          ${getProjectSubjectDetail().renderNormalDetailsChromeHeadHtml(null, { headId: "situationsDetailsTitle", headClassName: "details-head" })}
-          <div class="details-body" id="situationsDetailsHost">${details.bodyHtml}</div>
+        <section id="situationsDetailsChrome" class="overlay-chrome gh-panel gh-panel--details" aria-label="Details">
+          ${getProjectSubjectDetail().renderNormalDetailsChromeHeadHtml(null, { headId: "situationsDetailsTitle", headClassName: "drilldown__head" })}
+          <div class="overlay-chrome__body details-body" id="situationsDetailsHost">${details.bodyHtml}</div>
         </section>
       `;
       const detailsHost = document.getElementById("situationsDetailsHost");
