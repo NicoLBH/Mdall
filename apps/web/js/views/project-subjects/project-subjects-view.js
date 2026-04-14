@@ -73,6 +73,7 @@ export function createProjectSubjectsView(deps) {
     wireDetailsInteractive,
     bindDetailsScroll,
     refreshProjectShellChrome,
+    setProjectCompactEnabled,
     currentDecisionTarget,
     addComment,
     getScopedSelection
@@ -1485,6 +1486,12 @@ function rerenderPanels() {
   if (searchInput) searchInput.value = store.situationsView.search || "";
 
   rerenderSubjectsToolbar();
+
+  const shouldDisableProjectCompact = !!panelHost
+    && !store.situationsView.createSubjectForm?.isOpen
+    && String(store.situationsView.subjectsSubview || "subjects") === "subjects"
+    && !store.situationsView.showTableOnly;
+  setProjectCompactEnabled(!shouldDisableProjectCompact);
 
   if (panelHost) {
     if (store.situationsView.createSubjectForm?.isOpen) {

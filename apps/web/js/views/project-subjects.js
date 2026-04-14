@@ -22,7 +22,8 @@ import {
 import { closeGlobalNav } from "./global-nav.js";
 import {
   setProjectViewHeader,
-  refreshProjectShellChrome
+  refreshProjectShellChrome,
+  setProjectCompactEnabled
 } from "./project-shell-chrome.js";
 import { svgIcon } from "../ui/icons.js";
 import { renderGhActionButton } from "./ui/gh-split-button.js";
@@ -681,6 +682,7 @@ const projectSubjectsView = createProjectSubjectsView({
   wireDetailsInteractive: (...args) => projectSubjectsEvents.wireDetailsInteractive(...args),
   bindDetailsScroll: (...args) => projectSubjectsEvents.bindDetailsScroll(...args),
   refreshProjectShellChrome,
+  setProjectCompactEnabled,
   currentDecisionTarget: (...args) => currentDecisionTarget(...args),
   addComment: (...args) => addComment(...args),
   getScopedSelection: (...args) => getScopedSelection(...args)
