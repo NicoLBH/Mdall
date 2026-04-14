@@ -458,6 +458,9 @@ body.sidebar-collapsed #sidebar{overflow:hidden;width:0;min-width:0;padding:0;ma
 .subject-details-shell{
   --subject-details-inline-pad:12px;
   --subject-details-content-max:1280px;
+  --subject-drilldown-responsive-breakpoint:767px;
+  --subject-drilldown-responsive-width:66.6667vw;
+  --subject-drilldown-responsive-min:640px;
 }
 
 .subject-details-shell > .overlay-chrome__head{
@@ -2541,6 +2544,14 @@ body.is-resizing{
   position:relative;
   overflow-y:auto;
   overflow-x:hidden;
+}
+
+@media (max-width: 767px){
+  .drilldown__inner{
+    width:100vw;
+    max-width:100vw;
+    border-left:none;
+  }
 }
 
 .drilldown__inner > .overlay-chrome__body,
