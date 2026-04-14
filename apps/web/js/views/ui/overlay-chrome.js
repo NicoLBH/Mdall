@@ -89,9 +89,22 @@ export function bindOverlayChromeDismiss(hostEl, {
   });
 }
 
-export function bindOverlayChromeCompact(scrollEl, chromeEl, key = "default") {
+function getOverlayCompactHeads(chromeEl) {
+  if (!chromeEl) return [];
+
+  const heads = [];
+  if (chromeEl.matches?.(".gh-panel__head--tight, .overlay-chrome__head, .modal__head, .drilldown__head")) {
+    heads.push(chromeEl);
+  }
+
+  heads.push(...chromeEl.querySelectorAll(".gh-panel__head--tight, .overlay-chrome__head, .modal__head, .drilldown__head"));
+  return heads;
+}
+
+export function bindOverlayChromeCompact(scrollEl, chromeEl, key = "default", options = {}) {
   if (!scrollEl || !chromeEl) return;
 
+  const { onCompactChange = null } = options || {};
   const attr = `data-overlay-chrome-bound-${String(key)
     .replace(/[^a-zA-Z0-9_-]/g, "")
     .toLowerCase()}`;
@@ -99,10 +112,12 @@ export function bindOverlayChromeCompact(scrollEl, chromeEl, key = "default") {
     const scrolled = (scrollEl.scrollTop || 0) > 8;
     chromeEl.classList.toggle("overlay-chrome--compact", scrolled);
 
-    chromeEl.querySelectorAll(".gh-panel__head--tight, .overlay-chrome__head").forEach((head) => {
+    getOverlayCompactHeads(chromeEl).forEach((head) => {
       head.classList.toggle("details-head--compact", scrolled);
       head.classList.toggle("details-head--expanded", !scrolled);
     });
+
+    onCompactChange?.(scrolled);
   };
 
   scrollEl.__syncCondensedTitle = sync;
