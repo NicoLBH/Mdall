@@ -1476,6 +1476,7 @@ function syncSituationsPrimaryScrollSource() {
 function rerenderPanels() {
   ensureViewUiState();
   document.body.classList.remove("project-subject-details-top-compact");
+  document.body.classList.remove("project-subject-normal-detail-flow");
 
   const detailsScrollState = getDocumentScrollState();
   const filteredSituations = getFilteredSituations();
@@ -1491,6 +1492,7 @@ function rerenderPanels() {
     && !store.situationsView.createSubjectForm?.isOpen
     && String(store.situationsView.subjectsSubview || "subjects") === "subjects"
     && !store.situationsView.showTableOnly;
+  document.body.classList.toggle("project-subject-normal-detail-flow", shouldDisableProjectCompact);
   setProjectCompactEnabled(!shouldDisableProjectCompact);
 
   if (panelHost) {

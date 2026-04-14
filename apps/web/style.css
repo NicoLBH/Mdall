@@ -2953,6 +2953,17 @@ body.route--project.project-shell-compact{
   --app-top:var(--header-h-compact);
 }
 
+body.route--project.project-subject-normal-detail-flow{
+  --app-top:0px;
+}
+
+body.route--project.project-subject-normal-detail-flow .gh-header{
+  position:relative;
+  top:auto;
+  left:auto;
+  right:auto;
+}
+
 body.route--project .project-shell{
   min-height:calc(100dvh - var(--app-top));
 }
