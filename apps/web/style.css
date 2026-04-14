@@ -455,6 +455,33 @@ body.sidebar-collapsed #sidebar{overflow:hidden;width:0;min-width:0;padding:0;ma
   max-width:none;
 }
 
+.subject-details-shell{
+  --subject-details-inline-pad:12px;
+  --subject-details-content-max:1280px;
+}
+
+.subject-details-shell > .overlay-chrome__head{
+  width:100%;
+}
+
+.subject-details-shell > .overlay-chrome__head .overlay-chrome__bar{
+  width:100%;
+  max-width:min(var(--subject-details-content-max), calc(100% - (var(--subject-details-inline-pad) * 2)));
+  margin-left:auto;
+  margin-right:auto;
+}
+
+.subject-details-shell > .subject-details-body > :is(.details-grid, .emptyState){
+  width:100%;
+  max-width:min(var(--subject-details-content-max), calc(100% - (var(--subject-details-inline-pad) * 2)));
+  margin-left:auto;
+  margin-right:auto;
+}
+
+#drilldownPanel .subject-details-shell{
+  --subject-details-inline-pad:16px;
+}
+
 /* Keep modal content centered while the scrollbar stays at the window edge */
 #detailsBodyModal{width:100%;padding:16px 24px 50px 24px;margin:0px;}
 #detailsBodyModal .details-grid{max-width:1280px;margin: 0 auto;}

@@ -41,7 +41,7 @@ export function createProjectSubjectDrilldownController(config) {
     panel.setAttribute("aria-hidden", "true");
 
     panel.innerHTML = renderOverlayChrome({
-      shellClassName: "drilldown__inner gh-panel gh-panel--details",
+      shellClassName: "drilldown__inner gh-panel gh-panel--details subject-details-shell",
       variant: "drilldown",
       ariaLabel: "Détails",
       headHtml: renderOverlayChromeHead({
@@ -51,7 +51,7 @@ export function createProjectSubjectDrilldownController(config) {
         headClassName: "drilldown__head"
       }),
       bodyId: "drilldownBody",
-      bodyClassName: "drilldown__body details-body"
+      bodyClassName: "drilldown__body details-body subject-details-body"
     });
 
     document.body.appendChild(panel);
