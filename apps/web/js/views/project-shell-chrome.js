@@ -5,6 +5,7 @@ const shellState = {
   projectId: null,
   tab: null,
   isCompact: false,
+  compactEnabled: true,
   globalHeaderEl: null,
   projectTabsEl: null,
   viewHeaderHostEl: null,
@@ -123,7 +124,7 @@ function syncCompactTabLabel() {
 }
 
 function applyCompactState(isCompact) {
-  shellState.isCompact = !!isCompact;
+  shellState.isCompact = !!(shellState.compactEnabled && isCompact);
 
   document.body.classList.add("route--project");
   document.body.classList.toggle("project-shell-compact", shellState.isCompact);
@@ -282,6 +283,15 @@ export function clearProjectActiveScrollSource(el = null) {
   syncCompactState();
 }
 
+export function setProjectCompactEnabled(enabled = true) {
+  shellState.compactEnabled = enabled !== false;
+  if (!shellState.compactEnabled) {
+    applyCompactState(false);
+    return;
+  }
+  syncCompactState();
+}
+
 export function refreshProjectShellChrome() {
   syncCompactState();
 }
@@ -317,6 +327,7 @@ export function unmountProjectShellChrome() {
   shellState.projectId = null;
   shellState.tab = null;
   shellState.isCompact = false;
+  shellState.compactEnabled = true;
   shellState.globalHeaderEl = null;
   shellState.projectTabsEl = null;
   shellState.viewHeaderHostEl = null;
