@@ -458,6 +458,9 @@ body.sidebar-collapsed #sidebar{overflow:hidden;width:0;min-width:0;padding:0;ma
 .subject-details-shell{
   --subject-details-inline-pad:12px;
   --subject-details-content-max:1280px;
+  --subject-drilldown-responsive-breakpoint:767px;
+  --subject-drilldown-responsive-width:66.6667vw;
+  --subject-drilldown-responsive-min:640px;
 }
 
 .subject-details-shell > .overlay-chrome__head{
@@ -1099,12 +1102,9 @@ body.modal-open {
 /* ===== Details head state classes (for clean CSS cascade) =====
    JS toggles these classes on .gh-panel__head--tight and .modal__head.
    You can override/extend these rules as needed. */
-.gh-panel__head--tight.details-head--compact, 
-.modal__head.details-head--compact, 
-.drilldown__head.details-head--compact, 
-.overlay-chrome__head
-/* FIX: full-width compact subject header */
-.details-head--compact {
+.gh-panel__head--tight.details-head--compact,
+.modal__head.details-head--compact,
+.overlay-chrome__head .details-head--compact {
   width: 100vw;
   margin-left: calc(50% - 50vw);
   margin-right: calc(50% - 50vw);
@@ -2524,8 +2524,11 @@ body.is-resizing{
 
 /* ===== Drilldown slide-in panel ===== */
 .drilldown__inner {
-  width:min(720px, 92vw);
-  height:100vh;
+  width:min(
+    var(--subject-details-content-max),
+    max(var(--subject-drilldown-responsive-min), var(--subject-drilldown-responsive-width))
+  );
+  height:100%;
   border-left:1px solid var(--border);
   transform:translateX(100%);
   transition:transform 180ms ease;
@@ -2535,6 +2538,14 @@ body.is-resizing{
   position:relative;
   overflow-y:auto;
   overflow-x:hidden;
+}
+
+@media (max-width: 767px){
+  .drilldown__inner{
+    width:100vw;
+    max-width:100vw;
+    border-left:none;
+  }
 }
 
 .drilldown__inner > .overlay-chrome__body,
@@ -3333,6 +3344,9 @@ body.route--project #situationsDetailsTitle.details-head--compact{
   position:sticky;
   top:var(--app-top);
   z-index:calc(var(--z-header) - 1);
+  width:100vw;
+  margin-left:calc(50% - 50vw);
+  margin-right:calc(50% - 50vw);
   background: var(--bg) !important;
   border-bottom:1px solid var(--border);
   backdrop-filter:blur(8px);
@@ -3347,6 +3361,10 @@ body.route--project.project-shell-compact.project-subject-details-top-compact #g
 body.route--project.project-shell-compact.project-subject-details-top-compact #situationsDetailsTitle.details-head--compact{
   top:0;
   z-index:calc(var(--z-header) + 1);
+}
+
+#drilldownPanel{
+  top:var(--subject-drilldown-top-offset, 0px);
 }
 
 .project-tabs{transition:opacity .12s ease, visibility .12s ease;}
