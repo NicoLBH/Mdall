@@ -303,7 +303,7 @@ body.sidebar-collapsed #sidebar{overflow:hidden;width:0;min-width:0;padding:0;ma
 /* Panels */
 .gh-panel{background:transparent;border:1px solid var(--border);border-radius:var(--radius2);}
 .gh-panel--results{border:none;border-radius:var(--radius);}
-.gh-panel--details{min-width:320px;border-radius:var(--radius);container-type:inline-size;}
+.gh-panel--details{min-width:320px;border-radius:var(--radius);container-type:inline-size;border:none;}
 
 /* Fixed columns + internal scroll areas */
 .gh-panel{display:flex;flex-direction:column;min-height:0;height:100%;gap:16px;}
@@ -2953,6 +2953,17 @@ body.route--project.project-shell-compact{
   --app-top:var(--header-h-compact);
 }
 
+body.route--project.project-subject-normal-detail-flow{
+  --app-top:0px;
+}
+
+body.route--project.project-subject-normal-detail-flow .gh-header{
+  position:relative;
+  top:auto;
+  left:auto;
+  right:auto;
+}
+
 body.route--project .project-shell{
   min-height:calc(100dvh - var(--app-top));
 }
@@ -3289,7 +3300,7 @@ body.route--project #situationsDetailsTitle.details-head--compact{
   position:sticky;
   top:var(--app-top);
   z-index:calc(var(--z-header) - 1);
-  background:var(--headbg) !important;
+  background: var(--bg) !important;
   border-bottom:1px solid var(--border);
   backdrop-filter:blur(8px);
 }
