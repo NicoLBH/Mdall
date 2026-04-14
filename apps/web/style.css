@@ -332,7 +332,7 @@ body.sidebar-collapsed #sidebar{overflow:hidden;width:0;min-width:0;padding:0;ma
 .gh-panel--details .gh-panel__head--tight, 
 .modal__head, 
 .drilldown__head{
-  background:transparent !important;
+  /*background:transparent !important;*/
 }
 
 /* Middle only: head without background + bordered */
