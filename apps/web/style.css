@@ -2015,9 +2015,10 @@ body.modal-open {
 
 /* Results head layout */
 .gh-panel--results .gh-panel__head--tight{
-  background: transparent !important;
+  background-color: var(--bg) !important;
+  border-bottom: solid 1px var(--border);
 }
-.details-head--expanded {background-color:var(--bg) !important;border-bottom: solid 1px var(--border);}
+
 /* ===== Project table toolbar ===== */
 .project-table-toolbar{
   display:flex;
@@ -2339,7 +2340,7 @@ body.is-resizing{
 .details-title-id a{color:var(--muted);text-decoration:none;}
 .details-title-id a:hover{color:var(--accent);text-decoration:underline;}
 
-.details-title--expanded .details-title-text{font-size:28px;font-weight:400;line-height:43px;color:#fff;}
+.details-title--expanded .details-title-text{font-size:32px;font-weight:400;line-height:43px;color:#fff;}
 .details-title--expanded .gh-state{font-size:14px;line-height:21px;padding:3px 10px;}
 .details-title--expanded .subissues-counts--problems{line-height:21px;padding:0px 12px;margin:0px;height:29px;min-width:auto;}
 .details-title--expanded .subissues-counts--verdicts{margin-left:8px;}
