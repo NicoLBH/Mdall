@@ -2233,6 +2233,7 @@ body.is-resizing{
 .subissues-table .issues-table__head{border-bottom:1px solid var(--border2);}
 .subissues-table .issues-table__body{max-height:360px;overflow:auto;}
 .subissue-row--selected{outline:1px solid rgba(88,166,255,.45);background:rgba(56,139,253,.08);}
+.subissues-table .data-table-shell__body{padding-left:40px;}
 
 /* Main table row selection (same visual language as sub-issues selection) */
 .issue-row.selected{
@@ -2390,6 +2391,11 @@ body.is-resizing{
 
 .gh-timeline-title--hidden{display:none;}
 .subissues-problems-icon__svg{display:block;overflow:visible;}
+.subissues-problems-icon__svg--complete,
+.subissues-problems-icon__svg--complete *{
+  transform:rotate(135deg);;
+  transform-origin:center center;
+}
 .subissues-problems-icon__shade{
   stroke:var(--bgColor-done-emphasis, var(--color-done-emphasis, #8957e5));
   opacity:.38;
@@ -2493,6 +2499,7 @@ body.is-resizing{
   background:var(--bg);
   display:flex;
   flex-direction:column;
+  position:relative;
   overflow-y:auto;
   overflow-x:hidden;
 }
@@ -2511,6 +2518,9 @@ body.drilldown-open .drilldown__inner,
 }
 
 .drilldown__head{
+  position:sticky;
+  top:0;
+  z-index:2;
   flex:0 0 auto;
   padding:12px 16px;
   border-bottom:1px solid var(--border);
@@ -3272,6 +3282,28 @@ body.route--project:not(.project-shell-compact) [data-chrome-visibility="compact
 .gh-header--project{border-bottom:none;}
 .gh-header--project .gh-brand__name{font-weight:400;font-size:13px;}
 .gh-header--project .gh-brand__repo{opacity:.92;}
+
+
+
+body.route--project #situationsDetailsTitle.details-head--compact{
+  position:sticky;
+  top:var(--app-top);
+  z-index:calc(var(--z-header) - 1);
+  background:var(--headbg) !important;
+  border-bottom:1px solid var(--border);
+  backdrop-filter:blur(8px);
+}
+
+body.route--project.project-shell-compact.project-subject-details-top-compact #globalHeaderHost{
+  opacity:0;
+  visibility:hidden;
+  pointer-events:none;
+}
+
+body.route--project.project-shell-compact.project-subject-details-top-compact #situationsDetailsTitle.details-head--compact{
+  top:0;
+  z-index:calc(var(--z-header) + 1);
+}
 
 .project-tabs{transition:opacity .12s ease, visibility .12s ease;}
 body.route--project.project-shell-compact .project-tabs, 
