@@ -1516,7 +1516,7 @@ function rerenderPanels() {
       });
       panelHost.innerHTML = `
         <section aria-label="Details">
-          ${getProjectSubjectDetail().renderNormalDetailsChromeHeadHtml(null, { headId: "situationsDetailsTitle", headClassName: "details-head" })}
+          ${getProjectSubjectDetail().renderNormalDetailsChromeHeadHtml(null, { headId: "situationsDetailsTitle", headClassName: "drilldown__head details-head--normal" })}
           <div class="details-body" id="situationsDetailsHost">${details.bodyHtml}</div>
         </section>
       `;
