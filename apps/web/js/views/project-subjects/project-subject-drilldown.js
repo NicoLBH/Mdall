@@ -1,3 +1,12 @@
+export function normalizeNormalDetailsCompactSnapshot(snapshot) {
+  const compact = !!snapshot?.compact;
+  const hasExpanded = typeof snapshot?.expanded === "boolean";
+  return {
+    compact,
+    expanded: hasExpanded ? snapshot.expanded : !compact
+  };
+}
+
 function getScrollableElementScrollState(element) {
   if (!element) return null;
   return {
@@ -39,7 +48,8 @@ export function createProjectSubjectDrilldownController(config) {
     return {
       compact: normalDetailsChrome.classList.contains("overlay-chrome--compact")
         || normalDetailsHead.classList.contains("details-head--compact")
-        || document.body.classList.contains("project-subject-details-top-compact")
+        || document.body.classList.contains("project-subject-details-top-compact"),
+      expanded: normalDetailsHead.classList.contains("details-head--expanded")
     };
   }
 
@@ -48,11 +58,11 @@ export function createProjectSubjectDrilldownController(config) {
     const normalDetailsChrome = document.getElementById("situationsDetailsChrome");
     const normalDetailsHead = document.getElementById("situationsDetailsTitle");
     if (!normalDetailsChrome || !normalDetailsHead) return;
-    const compact = !!snapshot.compact;
-    normalDetailsChrome.classList.toggle("overlay-chrome--compact", compact);
-    normalDetailsHead.classList.toggle("details-head--compact", compact);
-    normalDetailsHead.classList.toggle("details-head--expanded", !compact);
-    document.body.classList.toggle("project-subject-details-top-compact", compact);
+    const normalizedSnapshot = normalizeNormalDetailsCompactSnapshot(snapshot);
+    normalDetailsChrome.classList.toggle("overlay-chrome--compact", normalizedSnapshot.compact);
+    normalDetailsHead.classList.toggle("details-head--compact", normalizedSnapshot.compact);
+    normalDetailsHead.classList.toggle("details-head--expanded", normalizedSnapshot.expanded);
+    document.body.classList.toggle("project-subject-details-top-compact", normalizedSnapshot.compact);
   }
 
   function ensureDrilldownDom() {
