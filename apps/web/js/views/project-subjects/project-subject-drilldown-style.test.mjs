@@ -9,6 +9,7 @@ const __dirname = path.dirname(__filename);
 const stylePath = path.resolve(__dirname, "../../../style.css");
 const styleCss = fs.readFileSync(stylePath, "utf8");
 
+<<<<<<< 4x9dhd-codex/fix-drilldown-head-width-and-centering
 test("le head compact normal du sujet reste en full-bleed viewport", () => {
   assert.match(
     styleCss,
@@ -50,5 +51,11 @@ test("le détail sujet garde aside 296 puis 256 avant empilement sous 770", () =
   assert.match(
     styleCss,
     /@container\s*\(max-width:\s*769px\)\s*\{\s*\.details-grid\{grid-template-columns:1fr;\}\s*\}/m
+=======
+test("drilldown compact header keeps container width", () => {
+  assert.match(
+    styleCss,
+    /\.drilldown__head\.details-head--compact\s*\{\s*width:\s*100%;\s*margin-left:\s*0;\s*margin-right:\s*0;\s*\}/m
+>>>>>>> main
   );
 });
