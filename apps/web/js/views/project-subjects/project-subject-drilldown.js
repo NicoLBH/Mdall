@@ -154,7 +154,7 @@ export function createProjectSubjectDrilldownController(config) {
     body.innerHTML = details.bodyHtml;
 
     wireDetailsInteractive(body);
-    bindDetailsScroll(document);
+    bindDetailsScroll(panel);
     applyNormalDetailsCompactSnapshot(viewState.drilldown?.normalDetailsCompactSnapshot);
     applyDrilldownViewportOffset(viewState.drilldown?.normalDetailsCompactSnapshot);
     restoreScrollableElementScrollState(shell, shellScrollState);
