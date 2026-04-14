@@ -7,6 +7,14 @@ export function normalizeNormalDetailsCompactSnapshot(snapshot) {
   };
 }
 
+export function computeDrilldownTopOffset(snapshot, normalDetailsHeadBottom = 0) {
+  const normalizedSnapshot = normalizeNormalDetailsCompactSnapshot(snapshot);
+  if (!normalizedSnapshot.compact) return 0;
+  const safeHeadBottom = Number(normalDetailsHeadBottom || 0);
+  if (!Number.isFinite(safeHeadBottom)) return 0;
+  return Math.max(0, Math.round(safeHeadBottom));
+}
+
 function getScrollableElementScrollState(element) {
   if (!element) return null;
   return {
@@ -40,6 +48,21 @@ export function createProjectSubjectDrilldownController(config) {
   } = config;
 
   let lockedWindowScrollY = 0;
+
+  function readNormalDetailsHeadBottom() {
+    const normalDetailsHead = document.getElementById("situationsDetailsTitle");
+    if (!normalDetailsHead) return 0;
+    const rect = normalDetailsHead.getBoundingClientRect?.();
+    return Number(rect?.bottom || 0);
+  }
+
+  function applyDrilldownViewportOffset(snapshot) {
+    const panel = document.getElementById("drilldownPanel");
+    if (!panel) return;
+    const topOffset = computeDrilldownTopOffset(snapshot, readNormalDetailsHeadBottom());
+    panel.style.setProperty("--subject-drilldown-top-offset", `${topOffset}px`);
+    panel.classList.toggle("drilldown--offset-from-normal-compact", topOffset > 0);
+  }
 
   function getNormalDetailsCompactSnapshot() {
     const normalDetailsChrome = document.getElementById("situationsDetailsChrome");
@@ -93,6 +116,12 @@ export function createProjectSubjectDrilldownController(config) {
     bindOverlayChromeDismiss(panel, {
       onClose: closeDrilldown
     });
+
+    window.addEventListener("resize", () => {
+      if (!store.situationsView?.drilldown?.isOpen) return;
+      const viewState = ensureViewUiState();
+      applyDrilldownViewportOffset(viewState.drilldown?.normalDetailsCompactSnapshot);
+    });
   }
 
   function updateDrilldownPanel() {
@@ -125,14 +154,16 @@ export function createProjectSubjectDrilldownController(config) {
     body.innerHTML = details.bodyHtml;
 
     wireDetailsInteractive(body);
-    bindDetailsScroll(document);
+    bindDetailsScroll(panel);
     applyNormalDetailsCompactSnapshot(viewState.drilldown?.normalDetailsCompactSnapshot);
+    applyDrilldownViewportOffset(viewState.drilldown?.normalDetailsCompactSnapshot);
     restoreScrollableElementScrollState(shell, shellScrollState);
     shell.__syncCondensedTitle?.();
     requestAnimationFrame(() => {
       const currentShell = document.querySelector("#drilldownPanel .drilldown__inner");
       restoreScrollableElementScrollState(currentShell, shellScrollState);
       applyNormalDetailsCompactSnapshot(viewState.drilldown?.normalDetailsCompactSnapshot);
+      applyDrilldownViewportOffset(viewState.drilldown?.normalDetailsCompactSnapshot);
       currentShell?.__syncCondensedTitle?.();
     });
   }
@@ -179,6 +210,7 @@ export function createProjectSubjectDrilldownController(config) {
     ensureDrilldownDom();
     closeGlobalNav();
     viewState.drilldown.normalDetailsCompactSnapshot = getNormalDetailsCompactSnapshot();
+    applyDrilldownViewportOffset(viewState.drilldown.normalDetailsCompactSnapshot);
     viewState.drilldown.isOpen = true;
     if (store.situationsView?.drilldown && typeof store.situationsView.drilldown === "object") {
       store.situationsView.drilldown.isOpen = true;
@@ -198,6 +230,10 @@ export function createProjectSubjectDrilldownController(config) {
     }
     const panel = document.getElementById("drilldownPanel");
     panel?.classList.remove("drilldown--situation-kanban");
+    if (panel) {
+      panel.style.setProperty("--subject-drilldown-top-offset", "0px");
+      panel.classList.remove("drilldown--offset-from-normal-compact");
+    }
     setOverlayChromeOpenState(panel, false);
     syncWindowScrollLock(false);
     document.__syncCondensedTitle?.();
