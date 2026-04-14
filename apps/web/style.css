@@ -3289,6 +3289,7 @@ body.route--project #situationsDetailsTitle.details-head--compact{
   position:sticky;
   top:var(--app-top);
   z-index:calc(var(--z-header) - 1);
+  background: var(--bg) !important;
   border-bottom:1px solid var(--border);
   backdrop-filter:blur(8px);
 }
