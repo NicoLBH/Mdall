@@ -2017,7 +2017,7 @@ body.modal-open {
 .gh-panel--results .gh-panel__head--tight{
   background: transparent !important;
 }
-
+.details-head--expanded {background-color:var(--bg) !important;border-bottom: solid 1px var(--border);}
 /* ===== Project table toolbar ===== */
 .project-table-toolbar{
   display:flex;
