@@ -309,7 +309,7 @@ export function unmountProjectShellChrome() {
   }
   shellState.compactTabHostEl?.classList.remove("is-empty");
 
-  document.body.classList.remove("route--project", "project-shell-compact");
+  document.body.classList.remove("route--project", "project-shell-compact", "project-subject-details-top-compact");
 
   shellState.globalHeaderEl?.classList.remove("gh-header--compact");
   shellState.projectTabsEl?.classList.remove("project-tabs--hidden");
