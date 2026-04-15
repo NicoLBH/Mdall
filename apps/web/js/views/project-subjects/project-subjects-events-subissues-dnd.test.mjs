@@ -37,6 +37,9 @@ test("le dragstart est armé par pointerdown sur le handle et utilise un drag pr
   assert.match(eventsSource, /const issuesCols = String\(rowStyles\.getPropertyValue\("--issues-cols"\) \|\| ""\)\.trim\(\);/);
   assert.match(eventsSource, /if \(issuesCols\) dragPreviewNode\.style\.setProperty\("--issues-cols", issuesCols\);/);
   assert.match(eventsSource, /dragPreviewNode\.style\.gridTemplateColumns = rowStyles\.gridTemplateColumns;/);
+  assert.match(eventsSource, /dragPreviewNode\.style\.backgroundColor = "var\(--bbg, var\(--bg\)\)";/);
+  assert.match(eventsSource, /dragPreviewNode\.style\.border = "solid 1px var\(--border\)";/);
+  assert.match(eventsSource, /dragPreviewNode\.style\.borderRadius = "var\(--radius\)";/);
   assert.match(eventsSource, /event\.dataTransfer\.setDragImage\(dragPreviewNode, offsetX, offsetY\);/);
   assert.match(eventsSource, /row\.classList\.add\("is-subissue-dragging", "is-subissue-drag-gap"\);/);
 });
@@ -48,7 +51,7 @@ test("le handle n'est visible qu'au survol/focus et le gap de drag affiche les t
   assert.match(styleSource, /\.subissues-sortable-row\.is-subissue-drag-gap::before,[\s\S]*\.subissues-sortable-row\.is-subissue-drag-gap::after/);
   assert.match(styleSource, /\.subissues-sortable-row\.is-subissue-drag-gap::before\{top:0;\}/);
   assert.match(styleSource, /\.subissues-sortable-row\.is-subissue-drag-gap::after\{bottom:0;\}/);
-  assert.match(styleSource, /\.subissue-drag-preview\{[\s\S]*background:var\(--bg\);[\s\S]*border-radius:var\(--radius\);[\s\S]*opacity:1;/);
+  assert.match(styleSource, /\.subissue-drag-preview\{[\s\S]*background-color:var\(--bbg, var\(--bg\)\);[\s\S]*border:solid 1px var\(--border\);[\s\S]*border-radius:var\(--radius\);[\s\S]*opacity:1 !important;/);
   assert.match(styleSource, /\.subissue-drag-preview > \*\{[\s\S]*visibility:visible !important;/);
 });
 
