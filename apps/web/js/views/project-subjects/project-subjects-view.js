@@ -702,11 +702,16 @@ function problemsCountsIconHtml(closedCount, totalCount) {
   return renderProblemsCountsIconHtml(closedCount, totalCount);
 }
 
-function problemsCountsHtml(situation) {
-  const linkedSubjects = getSituationSubjects(situation);
+function problemsCountsHtml(item, options = {}) {
+  const entityType = String(options.entityType || "situation").toLowerCase();
+  const linkedSubjects = entityType === "sujet"
+    ? getChildSubjectList(item)
+    : getSituationSubjects(item);
   const totalSubjects = linkedSubjects.length;
-  const closedSubjects = linkedSubjects.filter((subject) => String(getEffectiveSujetStatus(subject?.id) || "open").toLowerCase() !== "open").length;
-  return `<div class="subissues-counts subissues-counts--problems">${problemsCountsIconHtml(closedSubjects, totalSubjects)}<span>${closedSubjects} sur ${totalSubjects}</span></div>`;
+  const openSubjects = linkedSubjects.filter((subject) => String(getEffectiveSujetStatus(subject?.id) || "open").toLowerCase() === "open").length;
+  const closedSubjects = Math.max(0, totalSubjects - openSubjects);
+  const ariaLabel = `${openSubjects} sous-sujets ouverts, ${closedSubjects} fermés, ${totalSubjects} au total`;
+  return `<div class="subissues-counts subissues-counts--problems" aria-label="${escapeHtml(ariaLabel)}">${problemsCountsIconHtml(closedSubjects, totalSubjects)}<span>${openSubjects} / ${totalSubjects}</span></div>`;
 }
 
 /* =========================================================
