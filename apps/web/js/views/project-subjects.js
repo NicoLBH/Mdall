@@ -16,11 +16,6 @@ import {
   replaceSubjectAssignees as replaceSubjectAssigneesInSupabase
 } from "../services/project-subjects-supabase.js";
 import { loadSituationsForCurrentProject, addSubjectToSituation, removeSubjectFromSituation } from "../services/project-situations-supabase.js";
-import { setSubjectParentRelationInSupabase } from "../services/subject-parent-relation-service.js";
-import {
-  setSubjectParentRelationInSupabase,
-  reorderSubjectChildrenInSupabase as reorderSubjectChildrenInSupabaseService
-} from "../services/subject-parent-relation-service.js";
 import {
   setSubjectParentRelationInSupabase as setSubjectParentRelationInSupabaseService,
   reorderSubjectChildrenInSupabase as reorderSubjectChildrenInSupabaseService
