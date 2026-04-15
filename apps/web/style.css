@@ -710,6 +710,30 @@ body.sidebar-collapsed #sidebar{overflow:hidden;width:0;min-width:0;padding:0;ma
   width:100%;
 }
 
+.subject-meta-relations-back{
+  width:100%;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:12px 16px 10px;
+  border:0;
+  border-bottom:1px solid var(--border);
+  background:transparent;
+  color:var(--text);
+  text-align:left;
+  cursor:pointer;
+}
+
+.subject-meta-relations-back__icon{
+  display:inline-flex;
+  color:var(--muted);
+}
+
+.subject-meta-relations-back__label{
+  font-size:14px;
+  font-weight:600;
+}
+
 .subject-meta-field__chip{
   display:flex;
   align-items:center;

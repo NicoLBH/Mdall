@@ -114,6 +114,7 @@ export function closeMetaSelectDropdown(getViewState) {
   dropdown.field = null;
   dropdown.query = "";
   dropdown.activeKey = "";
+  dropdown.relationsView = "menu";
 }
 
 export function closeKanbanSelectDropdown(getViewState) {
@@ -134,6 +135,7 @@ export function openMetaSelectDropdown(getViewState, { field = "", activeKey = "
   dropdown.query = String(query || "");
   dropdown.activeKey = String(activeKey || "");
   dropdown.showClosedSituations = !!showClosedSituations;
+  dropdown.relationsView = field === "relations" ? "menu" : "";
 }
 
 export function openKanbanSelectDropdown(getViewState, { subjectId = "", situationId = "", activeKey = "", query = "" } = {}) {

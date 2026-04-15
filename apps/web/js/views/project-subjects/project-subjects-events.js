@@ -19,6 +19,7 @@ export function createProjectSubjectsEvents(config) {
     getToggleSubjectSituation,
     getToggleSubjectLabel,
     getToggleSubjectAssignee,
+    getSetSubjectParent,
     syncDescriptionEditorDraft,
     startDescriptionEdit,
     clearDescriptionEditState,
@@ -177,6 +178,7 @@ export function createProjectSubjectsEvents(config) {
     const toggleSubjectSituation = getToggleSubjectSituation?.();
     const toggleSubjectLabel = getToggleSubjectLabel?.();
     const toggleSubjectAssignee = getToggleSubjectAssignee?.();
+    const setSubjectParent = getSetSubjectParent?.();
 
     dropdownHost.querySelectorAll("[data-subject-kanban-search]").forEach((input) => {
       input.addEventListener("input", () => {
@@ -253,6 +255,11 @@ export function createProjectSubjectsEvents(config) {
           const activeKey = String(getSubjectsViewState().subjectMetaDropdown.activeKey || "");
           if (!activeKey) return;
           event.preventDefault();
+          if (field === "relations" && String(getSubjectsViewState().subjectMetaDropdown?.relationsView || "") === "parent") {
+            if (typeof setSubjectParent !== "function") return;
+            await applyNonDestructiveMetaToggle(root, field, () => setSubjectParent(subjectSelection.item.id, activeKey, { root, skipRerender: true }));
+            return;
+          }
           if (field === "objectives") {
             await applyNonDestructiveMetaToggle(root, field, () => toggleSubjectObjective(subjectSelection.item.id, activeKey, { root, skipRerender: true }));
             return;
@@ -313,6 +320,58 @@ export function createProjectSubjectsEvents(config) {
         if (subjectSelection?.type !== "sujet") return;
         const assigneeId = String(btn.dataset.subjectAssigneeToggle || "");
         await applyNonDestructiveMetaToggle(root, "assignees", () => toggleSubjectAssignee(subjectSelection.item.id, assigneeId, { root, skipRerender: true }));
+      };
+    });
+
+    dropdownHost.querySelectorAll("[data-subject-relations-parent-entry]").forEach((btn) => {
+      btn.onclick = async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const subjectSelection = getScopedSelection(root);
+        if (subjectSelection?.type !== "sujet") return;
+        if (typeof setSubjectParent !== "function") return;
+        const parentSubjectId = String(btn.dataset.subjectRelationsParentEntry || "");
+        await applyNonDestructiveMetaToggle(root, "relations", () => setSubjectParent(subjectSelection.item.id, parentSubjectId, { root, skipRerender: true }));
+      };
+    });
+
+    dropdownHost.querySelectorAll("[data-subject-relations-remove-parent]").forEach((btn) => {
+      btn.onclick = async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const subjectSelection = getScopedSelection(root);
+        if (subjectSelection?.type !== "sujet") return;
+        if (typeof setSubjectParent !== "function") return;
+        await applyNonDestructiveMetaToggle(root, "relations", () => setSubjectParent(subjectSelection.item.id, "", { root, skipRerender: true }));
+      };
+    });
+
+    dropdownHost.querySelectorAll("[data-subject-relations-open-parent]").forEach((btn) => {
+      btn.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const dropdown = getSubjectsViewState().subjectMetaDropdown || {};
+        dropdown.relationsView = "parent";
+        dropdown.query = "";
+        dropdown.activeKey = "";
+        const subjectSelection = getScopedSelection(root);
+        if (subjectSelection?.type === "sujet") {
+          const entries = getSubjectMetaMenuEntries(subjectSelection.item, "relations");
+          dropdown.activeKey = String((entries.find((entry) => entry.isSelected) || entries[0] || {}).key || "");
+        }
+        refreshSubjectMetaDropdownUi(root, { preserveScroll: true, preserveFocus: true, focusArgs: { field: "relations" } });
+      };
+    });
+
+    dropdownHost.querySelectorAll("[data-subject-relations-back]").forEach((btn) => {
+      btn.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const dropdown = getSubjectsViewState().subjectMetaDropdown || {};
+        dropdown.relationsView = "menu";
+        dropdown.query = "";
+        dropdown.activeKey = "";
+        refreshSubjectMetaDropdownUi(root, { preserveScroll: true, preserveFocus: false });
       };
     });
 
@@ -448,6 +507,7 @@ export function createProjectSubjectsEvents(config) {
         } else {
           dropdownController().closeKanban();
           dropdownController().openMeta({ field, showClosedSituations: false });
+          dropdown.relationsView = field === "relations" ? "menu" : "";
           const entries = scopedSelection?.type === "sujet" ? getSubjectMetaMenuEntries(scopedSelection.item, field) : [];
           const selectedObjectiveKey = field === "objectives" && scopedSelection?.type === "sujet"
             ? String(getSubjectSidebarMeta(scopedSelection.item.id).objectiveIds[0] || "")

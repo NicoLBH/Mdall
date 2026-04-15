@@ -43,6 +43,7 @@ export function createProjectSubjectsActions(config) {
     replaceSubjectAssigneesInSupabase,
     addSubjectToObjectiveInSupabase,
     removeSubjectFromObjectiveInSupabase,
+    setSubjectParentInSupabase,
     rerenderPanels
   } = config;
 
@@ -227,6 +228,51 @@ export function createProjectSubjectsActions(config) {
       raw.relationOptionsById = raw.relationOptionsById && typeof raw.relationOptionsById === "object" ? raw.relationOptionsById : {};
       raw.situationsById[situationKey] = situation;
       raw.relationOptionsById[situationKey] = situation;
+    }
+  }
+
+  function syncSubjectParentMap(subjectId, parentSubjectId) {
+    const raw = store.projectSubjectsView?.rawSubjectsResult;
+    if (!raw || typeof raw !== "object") return;
+    const subjectKey = String(subjectId || "");
+    if (!subjectKey) return;
+    const parentKey = String(parentSubjectId || "").trim();
+    raw.subjectsById = raw.subjectsById && typeof raw.subjectsById === "object" ? raw.subjectsById : {};
+    if (!raw.subjectsById[subjectKey]) return;
+    raw.subjectsById[subjectKey].parent_subject_id = parentKey || null;
+    if (raw.subjectsById[subjectKey].raw && typeof raw.subjectsById[subjectKey].raw === "object") {
+      raw.subjectsById[subjectKey].raw.parent_subject_id = parentKey || null;
+    }
+  }
+
+  async function setSubjectParent(subjectId, parentSubjectId, options = {}) {
+    const subjectKey = String(subjectId || "").trim();
+    if (!subjectKey) return false;
+    const nextParentKey = String(parentSubjectId || "").trim();
+    const subject = getNestedSujet(subjectKey);
+    if (!subject) return false;
+    const previousParent = String(subject.parent_subject_id || subject.parentSubjectId || subject.raw?.parent_subject_id || "").trim();
+    if (previousParent === nextParentKey) return true;
+
+    syncSubjectParentMap(subjectKey, nextParentKey);
+
+    if (!options.skipRerender) {
+      if (options.root) rerenderScope(options.root);
+      else rerenderPanels();
+    }
+
+    try {
+      await setSubjectParentInSupabase(subjectKey, nextParentKey || null);
+      return true;
+    } catch (error) {
+      syncSubjectParentMap(subjectKey, previousParent || null);
+      if (!options.skipRerender) {
+        if (options.root) rerenderScope(options.root);
+        else rerenderPanels();
+      }
+      console.warn("setSubjectParent failed", error);
+      showError(`Mise à jour du sujet parent impossible : ${String(error?.message || error || "Erreur inconnue")}`);
+      return false;
     }
   }
 
@@ -799,6 +845,7 @@ export function createProjectSubjectsActions(config) {
     setSubjectAssigneeIds,
     toggleSubjectAssignee,
     toggleSubjectSituation,
+    setSubjectParent,
     setSubjectLabels,
     toggleSubjectLabel,
     toggleSubjectObjective,

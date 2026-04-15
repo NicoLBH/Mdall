@@ -16,6 +16,7 @@ import {
   replaceSubjectAssignees as replaceSubjectAssigneesInSupabase
 } from "../services/project-subjects-supabase.js";
 import { loadSituationsForCurrentProject, addSubjectToSituation, removeSubjectFromSituation } from "../services/project-situations-supabase.js";
+import { setSubjectParentRelationInSupabase } from "../services/subject-parent-relation-service.js";
 import {
   bindProjectSituationsRunbar,
   syncProjectSituationsRunbar
@@ -334,6 +335,7 @@ const projectSubjectsEvents = createProjectSubjectsEvents({
   getToggleSubjectSituation: () => toggleSubjectSituation,
   getToggleSubjectLabel: () => toggleSubjectLabel,
   getToggleSubjectAssignee: () => toggleSubjectAssignee,
+  getSetSubjectParent: () => setSubjectParent,
   syncDescriptionEditorDraft,
   startDescriptionEdit,
   clearDescriptionEditState,
@@ -542,6 +544,11 @@ const projectSubjectsActions = createProjectSubjectsActions({
   replaceSubjectAssigneesInSupabase: (...args) => replaceSubjectAssigneesInSupabase(...args),
   addSubjectToObjectiveInSupabase: (...args) => addSubjectToObjectiveInSupabase(...args),
   removeSubjectFromObjectiveInSupabase: (...args) => removeSubjectFromObjectiveInSupabase(...args),
+  setSubjectParentInSupabase: (subjectId, parentSubjectId) => setSubjectParentRelationInSupabase({
+    subjectId,
+    parentSubjectId,
+    rawSubjectsResult: store.projectSubjectsView?.rawSubjectsResult || null
+  }),
   rerenderPanels: (...args) => projectSubjectsView.rerenderPanels(...args)
 });
 
@@ -551,6 +558,7 @@ const {
   setSubjectSituationIds,
   toggleSubjectAssignee,
   toggleSubjectSituation,
+  setSubjectParent,
   setSubjectLabels,
   toggleSubjectLabel,
   toggleSubjectObjective,
