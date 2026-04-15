@@ -125,6 +125,47 @@ export function createProjectSubjectsActions(config) {
     });
   }
 
+  function normalizeSubjectAssigneeIds(assigneeIds) {
+    return [...new Set((Array.isArray(assigneeIds) ? assigneeIds : []).map((value) => String(value || "").trim()).filter(Boolean))];
+  }
+
+  function setSubjectAssigneeIds(subjectId, assigneeIds) {
+    const subjectKey = String(subjectId || "");
+    const nextIds = normalizeSubjectAssigneeIds(assigneeIds);
+    if (subjectKey === DRAFT_SUBJECT_ID) {
+      ensureViewUiState();
+      store.situationsView.createSubjectForm.meta = {
+        ...buildDefaultDraftSubjectMeta(),
+        ...(store.situationsView.createSubjectForm.meta || {}),
+        assignees: nextIds
+      };
+      return;
+    }
+    persistRunBucket((bucket) => {
+      bucket.subjectMeta = bucket.subjectMeta && typeof bucket.subjectMeta === "object" ? bucket.subjectMeta : {};
+      bucket.subjectMeta.sujet = bucket.subjectMeta.sujet && typeof bucket.subjectMeta.sujet === "object" ? bucket.subjectMeta.sujet : {};
+      const current = bucket.subjectMeta.sujet[subjectKey] && typeof bucket.subjectMeta.sujet[subjectKey] === "object" ? bucket.subjectMeta.sujet[subjectKey] : {};
+      bucket.subjectMeta.sujet[subjectKey] = {
+        ...current,
+        assignees: nextIds
+      };
+    });
+  }
+
+  function toggleSubjectAssignee(subjectId, assigneeId) {
+    const subjectKey = String(subjectId || "");
+    const assigneeKey = String(assigneeId || "").trim();
+    if (!subjectKey || !assigneeKey) return false;
+    const meta = getSubjectSidebarMeta(subjectKey);
+    const currentIds = normalizeSubjectAssigneeIds(meta.assignees);
+    const hasAssignee = currentIds.includes(assigneeKey);
+    const nextIds = hasAssignee
+      ? currentIds.filter((id) => id !== assigneeKey)
+      : [...currentIds, assigneeKey];
+    setSubjectAssigneeIds(subjectKey, nextIds);
+    return true;
+  }
+
   function syncSubjectSituationMaps(subjectId, situationId, shouldLink) {
     const raw = store.projectSubjectsView?.rawSubjectsResult;
     if (!raw || typeof raw !== "object") return;
@@ -718,6 +759,8 @@ export function createProjectSubjectsActions(config) {
     setSujetKanbanStatus,
     setSubjectObjectiveIds,
     setSubjectSituationIds,
+    setSubjectAssigneeIds,
+    toggleSubjectAssignee,
     toggleSubjectSituation,
     setSubjectLabels,
     toggleSubjectLabel,

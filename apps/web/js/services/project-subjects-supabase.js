@@ -51,7 +51,7 @@ async function fetchProjectFlatSubjects(projectId) {
   const url = new URL(`${SUPABASE_URL}/rest/v1/subjects`);
   url.searchParams.set(
     "select",
-    "id,project_id,document_id,analysis_run_id,situation_id,parent_subject_id,title,description,priority,status,closure_reason,subject_type,created_at,updated_at,closed_at"
+    "id,subject_number,project_id,document_id,analysis_run_id,situation_id,parent_subject_id,title,description,priority,status,closure_reason,subject_type,created_at,updated_at,closed_at"
   );
   url.searchParams.set("project_id", `eq.${projectId}`);
   url.searchParams.set("order", "created_at.asc");

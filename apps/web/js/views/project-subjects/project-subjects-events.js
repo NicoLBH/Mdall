@@ -18,6 +18,7 @@ export function createProjectSubjectsEvents(config) {
     getToggleSubjectObjective,
     getToggleSubjectSituation,
     getToggleSubjectLabel,
+    getToggleSubjectAssignee,
     syncDescriptionEditorDraft,
     startDescriptionEdit,
     clearDescriptionEditState,
@@ -144,6 +145,7 @@ export function createProjectSubjectsEvents(config) {
     const toggleSubjectObjective = getToggleSubjectObjective?.();
     const toggleSubjectSituation = getToggleSubjectSituation?.();
     const toggleSubjectLabel = getToggleSubjectLabel?.();
+    const toggleSubjectAssignee = getToggleSubjectAssignee?.();
 
     dropdownHost.querySelectorAll("[data-subject-kanban-search]").forEach((input) => {
       input.addEventListener("input", () => {
@@ -230,6 +232,10 @@ export function createProjectSubjectsEvents(config) {
           }
           if (field === "labels") {
             await applyNonDestructiveMetaToggle(root, field, () => toggleSubjectLabel(subjectSelection.item.id, activeKey, { root, skipRerender: true }));
+            return;
+          }
+          if (field === "assignees") {
+            await applyNonDestructiveMetaToggle(root, field, () => toggleSubjectAssignee(subjectSelection.item.id, activeKey));
           }
         }
       });
@@ -265,6 +271,17 @@ export function createProjectSubjectsEvents(config) {
         if (subjectSelection?.type !== "sujet") return;
         const labelKey = String(btn.dataset.subjectLabelToggle || "");
         await applyNonDestructiveMetaToggle(root, "labels", () => toggleSubjectLabel(subjectSelection.item.id, labelKey, { root, skipRerender: true }));
+      };
+    });
+
+    dropdownHost.querySelectorAll("[data-subject-assignee-toggle]").forEach((btn) => {
+      btn.onclick = async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const subjectSelection = getScopedSelection(root);
+        if (subjectSelection?.type !== "sujet") return;
+        const assigneeId = String(btn.dataset.subjectAssigneeToggle || "");
+        await applyNonDestructiveMetaToggle(root, "assignees", () => toggleSubjectAssignee(subjectSelection.item.id, assigneeId));
       };
     });
 
@@ -516,6 +533,15 @@ export function createProjectSubjectsEvents(config) {
       };
     });
 
+    root.querySelectorAll("[data-parent-subject-id]").forEach((card) => {
+      card.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const parentSubjectId = String(card.dataset.parentSubjectId || "");
+        if (parentSubjectId) (openDrilldownFromSubjectPanel || openDrilldownFromSujetPanel)(parentSubjectId);
+      };
+    });
+
     root.querySelectorAll("[data-action='tab-write']").forEach((btn) => {
       btn.onclick = () => {
         store.situationsView.commentPreviewMode = false;
@@ -540,6 +566,29 @@ export function createProjectSubjectsEvents(config) {
     root.querySelectorAll("[data-action='add-comment']").forEach((btn) => {
       btn.onclick = async () => {
         await applyCommentAction(root);
+      };
+    });
+
+    root.querySelectorAll("[data-subject-assign-self]").forEach((btn) => {
+      btn.onclick = async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const selection = getScopedSelection(root);
+        if (selection?.type !== "sujet") return;
+        const currentUserId = String(store.user?.id || "");
+        const collaborators = Array.isArray(store.projectForm?.collaborators) ? store.projectForm.collaborators : [];
+        const selfCollaborator = collaborators.find((collaborator) => String(collaborator?.userId || collaborator?.linkedUserId || "") === currentUserId);
+        const selfAssigneeId = String(selfCollaborator?.id || "");
+        if (!selfAssigneeId) {
+          showError("Votre profil n'est pas présent dans la liste des collaborateurs du projet.");
+          return;
+        }
+        const meta = getSubjectSidebarMeta(selection.item.id);
+        const alreadyAssigned = Array.isArray(meta.assignees) && meta.assignees.some((id) => String(id || "") === selfAssigneeId);
+        if (alreadyAssigned) return;
+        if (typeof toggleSubjectAssignee !== "function") return;
+        toggleSubjectAssignee(selection.item.id, selfAssigneeId);
+        rerenderScope(root);
       };
     });
 
@@ -970,6 +1019,17 @@ export function createProjectSubjectsEvents(config) {
         requestAnimationFrame(() => {
           window.scrollTo({ top: Math.max(0, restoreY), behavior: "auto" });
         });
+        return;
+      }
+
+      const parentSubjectCard = event.target.closest("[data-parent-subject-id]");
+      if (parentSubjectCard) {
+        event.preventDefault();
+        event.stopPropagation();
+        const parentSubjectId = String(parentSubjectCard.dataset.parentSubjectId || "");
+        if (parentSubjectId) {
+          (openDrilldownFromSubjectPanel || openDrilldownFromSujetPanel)(parentSubjectId);
+        }
         return;
       }
 

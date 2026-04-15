@@ -66,11 +66,18 @@ export function renderSubIssuesPanel({
   bodyHtml = "",
   isOpen = false
 } = {}) {
+  const chevronIcon = `
+    <span class="subject-meta-collapsible-toggle__chevron" aria-hidden="true">
+      <svg class="${isOpen ? "octicon octicon-chevron-up" : "octicon octicon-chevron-down"}" viewBox="0 0 16 16" width="16" height="16" role="img">
+        <use href="assets/icons.svg#${isOpen ? "chevron-up" : "chevron-down"}" xlink:href="assets/icons.svg#${isOpen ? "chevron-up" : "chevron-down"}"></use>
+      </svg>
+    </span>
+  `;
   return `
     <div class="details-subissues">
       <div class="subissues-head click" data-action="toggle-subissues">
         <div class="subissues-head-left">
-          <span class="chev">${isOpen ? "▾" : "▸"}</span>
+          ${chevronIcon}
           <span class="subissues-title">${escapeHtml(title || "")}</span>
           ${leftMetaHtml || ""}
         </div>
