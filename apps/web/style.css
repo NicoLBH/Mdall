@@ -2732,12 +2732,16 @@ body.is-resizing{
 }
 
 .subissue-drag-preview{
+  background-color:var(--bbg, var(--bg));
+  border:solid 1px var(--border);
+  border-radius:var(--radius);
   box-shadow:0 10px 30px rgba(0,0,0,.34), 0 1px 0 rgba(255,255,255,.06) inset;
   opacity:1 !important;
 }
 .subissue-drag-preview > *{
   visibility:visible !important;
 }
+
 
 .gh-timeline{
   position:relative;

@@ -61,3 +61,11 @@ test("le dragover réordonne en direct avec animation FLIP pour faire la place d
   assert.match(eventsSource, /container\.insertBefore\(draggingRow, row\);/);
   assert.match(eventsSource, /item\.style\.transform = `translateY\(\$\{delta\}px\)`;/);
 });
+
+test("l'instrumentation DnD est activable via query/localStorage", () => {
+  assert.match(eventsSource, /function isSubissuesDndDebugEnabled\(\)/);
+  assert.match(eventsSource, /debugSubissuesDnd=1/);
+  assert.match(eventsSource, /mdall:debug-subissues-dnd/);
+  assert.match(eventsSource, /console\.debug\("\[subissues-dnd\]"/);
+  assert.match(eventsSource, /debugSubissuesDnd\("dragstart-preview"/);
+});

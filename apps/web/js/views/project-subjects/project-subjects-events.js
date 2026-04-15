@@ -61,16 +61,16 @@ export function createProjectSubjectsEvents(config) {
     try {
       const search = String(window?.location?.search || "");
       if (search.includes("debugSubissuesDnd=1")) return true;
-      const storageValue = String(window?.localStorage?.getItem?.("mdall:debug-subissues-dnd") || "").trim();
-      return storageValue === "1" || storageValue.toLowerCase() === "true";
+      const storageValue = String(window?.localStorage?.getItem?.("mdall:debug-subissues-dnd") || "").trim().toLowerCase();
+      return storageValue === "1" || storageValue === "true";
     } catch {
       return false;
     }
   }
 
-  function debugSubissuesDnd(...args) {
+  function debugSubissuesDnd(eventName, payload = {}) {
     if (!isSubissuesDndDebugEnabled()) return;
-    console.debug("[subissues-dnd]", ...args);
+    console.debug("[subissues-dnd]", eventName, payload);
   }
 
   function dropdownController() {
@@ -702,10 +702,28 @@ export function createProjectSubjectsEvents(config) {
           dragPreviewNode.style.pointerEvents = "none";
           dragPreviewNode.setAttribute("aria-hidden", "true");
           document.body.appendChild(dragPreviewNode);
+          debugSubissuesDnd("dragstart-preview", {
+            rowRect: {
+              width: rowRect.width,
+              height: rowRect.height
+            },
+            issuesCols,
+            rowGridTemplateColumns: rowStyles.gridTemplateColumns,
+            previewInline: {
+              width: dragPreviewNode.style.width,
+              display: dragPreviewNode.style.display,
+              gridTemplateColumns: dragPreviewNode.style.gridTemplateColumns,
+              backgroundColor: dragPreviewNode.style.backgroundColor,
+              border: dragPreviewNode.style.border,
+              borderRadius: dragPreviewNode.style.borderRadius,
+              opacity: dragPreviewNode.style.opacity
+            }
+          });
           if (event.dataTransfer) {
             const offsetX = Math.max(0, Math.round(event.clientX - rowRect.left));
             const offsetY = Math.max(0, Math.round(event.clientY - rowRect.top));
             event.dataTransfer.setDragImage(dragPreviewNode, offsetX, offsetY);
+            debugSubissuesDnd("dragstart-setDragImage", { offsetX, offsetY });
           }
         });
 
@@ -723,11 +741,19 @@ export function createProjectSubjectsEvents(config) {
             animateSubissueRowReflow(container, () => {
               container.insertBefore(draggingRow, row.nextElementSibling);
             });
+            debugSubissuesDnd("dragover-move-gap", {
+              childSubjectId: String(row.dataset.childSubjectId || ""),
+              insertAfter: true
+            });
             return;
           }
           if (row.previousElementSibling === draggingRow) return;
           animateSubissueRowReflow(container, () => {
             container.insertBefore(draggingRow, row);
+          });
+          debugSubissuesDnd("dragover-move-gap", {
+            childSubjectId: String(row.dataset.childSubjectId || ""),
+            insertAfter: false
           });
         });
 
@@ -764,12 +790,7 @@ export function createProjectSubjectsEvents(config) {
           const orderedChildIds = Array.from(container.querySelectorAll("[data-subissue-sortable-row='true']"))
             .map((item) => String(item.dataset.childSubjectId || ""))
             .filter(Boolean);
-          debugSubissuesDnd("drop reorder", {
-            parentSubjectId,
-            sourceId,
-            targetId,
-            orderedChildIds
-          });
+          debugSubissuesDnd("drop-reorder", { parentSubjectId, sourceId, targetId, orderedChildIds });
           await reorderSubjectChildren(parentSubjectId, orderedChildIds, { root, skipRerender: false });
           clearDragClasses();
           clearDragPreview();
