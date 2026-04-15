@@ -149,7 +149,11 @@ function statePill(status = "open", options = {}) {
 
 function chevron(isOpen, isVisible = true) {
   if (!isVisible) return "";
-  return `<span class="chev">${isOpen ? "▾" : "▸"}</span>`;
+  return `
+    <span class="subject-meta-collapsible-toggle__chevron" aria-hidden="true">
+      ${svgIcon(isOpen ? "chevron-up" : "chevron-down", { className: isOpen ? "octicon octicon-chevron-up" : "octicon octicon-chevron-down" })}
+    </span>
+  `;
 }
 
 function entityLinkHtml(type, id, text) {
@@ -164,12 +168,16 @@ function buildEntityDisplayRefMap() {
   const map = new Map();
   let index = 1;
 
-  const register = (type, id) => {
+  const register = (type, id, refOverride = "") => {
     const safeType = String(type || "").toLowerCase();
     const safeId = String(id || "").trim();
     if (!safeType || !safeId) return;
     const key = `${safeType}:${safeId}`;
     if (map.has(key)) return;
+    if (refOverride) {
+      map.set(key, refOverride);
+      return;
+    }
     map.set(key, `#${index}`);
     index += 1;
   };
@@ -178,7 +186,9 @@ function buildEntityDisplayRefMap() {
     register("situation", situation?.id);
     const sujets = Array.isArray(situation?.sujets) ? situation.sujets : [];
     for (const sujet of sujets) {
-      register("sujet", sujet?.id);
+      const orderNumber = Number(sujet?.subject_number ?? sujet?.subjectNumber);
+      const subjectRef = Number.isFinite(orderNumber) && orderNumber > 0 ? `#${Math.floor(orderNumber)}` : "";
+      register("sujet", sujet?.id, subjectRef);
     }
   }
 
@@ -186,10 +196,20 @@ function buildEntityDisplayRefMap() {
 }
 
 function getEntityDisplayRef(type, id) {
-  const map = buildEntityDisplayRefMap();
   const safeType = String(type || "").toLowerCase();
   const safeId = String(id || "").trim();
   if (!safeId) return "";
+  if (safeType === "sujet") {
+    const subject = getNestedSujet(safeId);
+    const orderNumber = Number(subject?.subject_number ?? subject?.subjectNumber);
+    if (Number.isFinite(orderNumber) && orderNumber > 0) {
+      return `#${Math.floor(orderNumber)}`;
+    }
+  }
+  const map = buildEntityDisplayRefMap();
+  if (safeType === "sujet") {
+    return map.get(`${safeType}:${safeId}`) || "#?";
+  }
   return map.get(`${safeType}:${safeId}`) || `#${safeId}`;
 }
 
@@ -702,11 +722,27 @@ function problemsCountsIconHtml(closedCount, totalCount) {
   return renderProblemsCountsIconHtml(closedCount, totalCount);
 }
 
-function problemsCountsHtml(situation) {
-  const linkedSubjects = getSituationSubjects(situation);
+function problemsCountsHtml(item, options = {}) {
+  const entityType = String(options.entityType || "situation").toLowerCase();
+  const hideIfEmpty = options.hideIfEmpty === true;
+  const linkedSubjects = entityType === "sujet"
+    ? getChildSubjectList(item)
+    : getSituationSubjects(item);
   const totalSubjects = linkedSubjects.length;
-  const closedSubjects = linkedSubjects.filter((subject) => String(getEffectiveSujetStatus(subject?.id) || "open").toLowerCase() !== "open").length;
-  return `<div class="subissues-counts subissues-counts--problems">${problemsCountsIconHtml(closedSubjects, totalSubjects)}<span>${closedSubjects} sur ${totalSubjects}</span></div>`;
+  if (hideIfEmpty && totalSubjects <= 0) return "";
+  const openSubjects = linkedSubjects.filter((subject) => String(getEffectiveSujetStatus(subject?.id) || "open").toLowerCase() === "open").length;
+  const closedSubjects = Math.max(0, totalSubjects - openSubjects);
+  const ariaLabel = `${openSubjects} sous-sujets ouverts, ${closedSubjects} fermés, ${totalSubjects} au total`;
+  return `<div class="subissues-counts subissues-counts--problems" aria-label="${escapeHtml(ariaLabel)}">${problemsCountsIconHtml(closedSubjects, totalSubjects)}<span>${openSubjects} / ${totalSubjects}</span></div>`;
+}
+
+function subissuesHeadCountsHtml(subjects = []) {
+  const linkedSubjects = Array.isArray(subjects) ? subjects : [];
+  const totalSubjects = linkedSubjects.length;
+  const openSubjects = linkedSubjects.filter((subject) => String(getEffectiveSujetStatus(subject?.id) || "open").toLowerCase() === "open").length;
+  const closedSubjects = Math.max(0, totalSubjects - openSubjects);
+  const ariaLabel = `${openSubjects} sous-sujets ouverts, ${closedSubjects} fermés, ${totalSubjects} au total`;
+  return `<div class="subissues-counts subissues-counts--problems subissues-counts--head" aria-label="${escapeHtml(ariaLabel)}">${problemsCountsIconHtml(closedSubjects, totalSubjects)}<span>${openSubjects} sur ${totalSubjects}</span></div>`;
 }
 
 /* =========================================================
@@ -1069,11 +1105,73 @@ function renderSubjectObjectivesValue(subjectId) {
   `;
 }
 
+function getSubjectParentSubject(subjectId) {
+  const subject = getNestedSujet(subjectId);
+  if (!subject) return null;
+  const parentSubjectId = firstNonEmpty(
+    subject.parent_subject_id,
+    subject.parentSubjectId,
+    subject.raw?.parent_subject_id
+  );
+  if (!parentSubjectId) return null;
+  return getNestedSujet(parentSubjectId);
+}
+
+function renderSubjectParentCard(subjectId) {
+  const parentSubject = getSubjectParentSubject(subjectId);
+  if (!parentSubject) return renderSubjectMetaButtonValue("Aucun sujet parent");
+
+  const parentStatus = getEffectiveSujetStatus(parentSubject.id);
+  const parentChildren = getChildSubjectList(parentSubject);
+  const displayRef = getEntityDisplayRef("sujet", parentSubject.id);
+  const author = getDisplayAuthorName(firstNonEmpty(
+    getEntityDescriptionState("sujet", parentSubject.id)?.author,
+    parentSubject?.agent,
+    parentSubject?.raw?.agent,
+    "system"
+  ), {
+    agent: firstNonEmpty(
+      getEntityDescriptionState("sujet", parentSubject.id)?.agent,
+      parentSubject?.agent,
+      parentSubject?.raw?.agent,
+      "system"
+    ),
+    fallback: "System"
+  });
+
+  return `
+    <button type="button" class="subject-meta-parent-card" data-parent-subject-id="${escapeHtml(parentSubject.id)}">
+      <span class="subject-meta-parent-card__label">Sujet parent</span>
+      <span class="subject-meta-parent-card__head">
+        <span class="subject-meta-parent-card__icon">${issueIcon(parentStatus)}</span>
+        <span class="subject-meta-parent-card__title">${escapeHtml(firstNonEmpty(parentSubject.title, parentSubject.id, "Sujet parent"))}</span>
+        <span class="subject-meta-parent-card__count">${subissuesHeadCountsHtml(parentChildren)}</span>
+      </span>
+      <span class="subject-meta-parent-card__meta">${escapeHtml(author)} ${escapeHtml(displayRef)}</span>
+    </button>
+  `;
+}
+
+function renderSubjectParentHeadHtml(subject, options = {}) {
+  const compact = options.compact === true;
+  const parentSubject = getSubjectParentSubject(subject?.id || subject);
+  if (!parentSubject) return "";
+  const title = escapeHtml(firstNonEmpty(parentSubject.title, parentSubject.id, "Sujet parent"));
+  const wrapperClass = compact ? "details-parent-badge details-parent-badge--compact" : "details-parent-badge";
+  return `
+    <span class="${wrapperClass}" title="Sujet parent : ${title}">
+      <span class="details-parent-badge__icon">${issueIcon(getEffectiveSujetStatus(parentSubject.id))}</span>
+      <span class="details-parent-badge__text">Parent: ${title}</span>
+    </span>
+  `;
+}
+
 function renderSubjectMetaFieldValue(subject, field) {
   if (!subject || String(subject.type || "") === "") return "";
   if (field === "labels") return renderSubjectLabelsValue(subject.id);
   if (field === "situations") return renderSubjectSituationsValue(subject.id);
   if (field === "objectives") return renderSubjectObjectivesValue(subject.id);
+  if (field === "relations") return renderSubjectParentCard(subject.id);
   return renderSubjectMetaButtonValue("Aucune donnée");
 }
 
@@ -1174,6 +1272,32 @@ function buildSubjectMetaMenuItems(subject, field) {
 function renderSubjectMetaDropdown(subject, field) {
   const dropdownState = getSubjectsViewState().subjectMetaDropdown || {};
   const query = String(dropdownState.query || "");
+
+  if (field === "relations") {
+    const relationItems = [
+      "Modifier ou supprimer le sujet parent",
+      "Ajouter ou modifier « Bloqué par »",
+      "Ajouter ou modifier « Bloquant »"
+    ];
+    return `
+      <div class="subject-meta-dropdown gh-menu gh-menu--open" role="dialog">
+        <div class="subject-meta-dropdown__title">Gérer les relations</div>
+        <div class="subject-meta-dropdown__body">
+          <div class="select-menu__section">
+            ${relationItems.map((title) => `
+              <button type="button" class="select-menu__item subject-meta-relations-menu__item" role="menuitem">
+                <span class="select-menu__item-mainrow">
+                  <span class="select-menu__item-content">
+                    <span class="select-menu__item-title">${escapeHtml(title)}</span>
+                  </span>
+                </span>
+              </button>
+            `).join("")}
+          </div>
+        </div>
+      </div>
+    `;
+  }
 
   if (field === "objectives") {
     const { openItems, closedItems } = buildSubjectMetaMenuItems(subject, field);
@@ -1304,7 +1428,7 @@ function renderSubjectMetaControls(subject) {
       ${renderSubjectMetaField({
         field: "relations",
         label: "Relations",
-        valueHtml: renderSubjectMetaButtonValue(summarizeSubjectMetaValue(meta.relations, "Aucune relation"))
+        valueHtml: renderSubjectParentCard(subject.id)
       })}
     </div>
   `;
@@ -1314,9 +1438,11 @@ function renderSubIssuesForSujet(sujet, options = {}) {
   ensureViewUiState();
   const sujetRowClass = options.sujetRowClass || "js-row-sujet";
   const childSubjects = getChildSubjectList(sujet);
+  if (!childSubjects.length) return "";
   const rows = childSubjects.map((childSujet) => `
       <div class="issue-row issue-row--pb click ${sujetRowClass}" data-sujet-id="${escapeHtml(childSujet.id)}">
         <div class="cell cell-theme cell-theme--full lvl0">
+          ${issueIcon(getEffectiveSujetStatus(childSujet.id))}
           <span class="theme-text theme-text--pb">${escapeHtml(firstNonEmpty(childSujet.title, childSujet.id, ""))}</span>
         </div>
       </div>
@@ -1329,10 +1455,10 @@ function renderSubIssuesForSujet(sujet, options = {}) {
 
   return renderSubIssuesPanel({
     title: "Sous-sujets",
-    leftMetaHtml: `<div class="subissues-counts subissues-counts--total"><span class="mono">${childSubjects.length}</span></div>`,
+    leftMetaHtml: subissuesHeadCountsHtml(childSubjects),
     rightMetaHtml: "",
     bodyHtml: body,
-    isOpen: !!store.situationsView.rightSubissuesOpen
+    isOpen: store.situationsView.rightSubissuesOpen !== false
   });
 }
 
@@ -1365,6 +1491,7 @@ function renderSubIssuesForSituation(situation, options = {}) {
         rows.push(`
           <div class="issue-row issue-row--pb click ${sujetRowClass}" data-sujet-id="${escapeHtml(childSujet.id)}">
             <div class="cell cell-theme cell-theme--full lvl1">
+              ${issueIcon(getEffectiveSujetStatus(childSujet.id))}
               <span class="theme-text theme-text--pb">${escapeHtml(firstNonEmpty(childSujet.title, childSujet.id, ""))}</span>
             </div>
           </div>
@@ -1373,7 +1500,6 @@ function renderSubIssuesForSituation(situation, options = {}) {
     }
   }
 
-  const stats = situationVerdictStats(situation);
   const body = renderSubIssuesTable({
     rowsHtml: rows.join(""),
     emptyTitle: "Aucun sujet"
@@ -1952,6 +2078,7 @@ function getObjectiveById(objectiveId) {
     getEffectiveSituationStatus,
     problemsCountsHtml,
     problemsCountsIconHtml,
+    renderSubjectParentHeadHtml,
     renderDetailedMetaForSelection,
     renderSubjectMetaControls,
     renderSubjectMetaFieldValue,

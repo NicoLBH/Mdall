@@ -516,6 +516,15 @@ export function createProjectSubjectsEvents(config) {
       };
     });
 
+    root.querySelectorAll("[data-parent-subject-id]").forEach((card) => {
+      card.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const parentSubjectId = String(card.dataset.parentSubjectId || "");
+        if (parentSubjectId) (openDrilldownFromSubjectPanel || openDrilldownFromSujetPanel)(parentSubjectId);
+      };
+    });
+
     root.querySelectorAll("[data-action='tab-write']").forEach((btn) => {
       btn.onclick = () => {
         store.situationsView.commentPreviewMode = false;
@@ -970,6 +979,17 @@ export function createProjectSubjectsEvents(config) {
         requestAnimationFrame(() => {
           window.scrollTo({ top: Math.max(0, restoreY), behavior: "auto" });
         });
+        return;
+      }
+
+      const parentSubjectCard = event.target.closest("[data-parent-subject-id]");
+      if (parentSubjectCard) {
+        event.preventDefault();
+        event.stopPropagation();
+        const parentSubjectId = String(parentSubjectCard.dataset.parentSubjectId || "");
+        if (parentSubjectId) {
+          (openDrilldownFromSubjectPanel || openDrilldownFromSujetPanel)(parentSubjectId);
+        }
         return;
       }
 

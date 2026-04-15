@@ -378,6 +378,7 @@ const projectSubjectsDetailsRenderer = createProjectSubjectsDetailsRenderer({
   getReviewTitleStateClass,
   entityDisplayLinkHtml: (...args) => projectSubjectsView.entityDisplayLinkHtml(...args),
   problemsCountsHtml: (...args) => projectSubjectsView.problemsCountsHtml(...args),
+  renderSubjectParentHeadHtml: (...args) => projectSubjectsView.renderSubjectParentHeadHtml(...args),
   firstNonEmpty,
   escapeHtml,
   statePill: (...args) => projectSubjectsView.statePill(...args),
