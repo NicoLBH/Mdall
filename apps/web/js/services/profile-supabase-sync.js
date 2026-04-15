@@ -2,19 +2,18 @@ import { store } from "../store.js";
 import { ensureProjectDocumentsState } from "./project-documents-store.js";
 import { ensureProjectAutomationDefaults } from "./project-automation.js";
 import { supabase, buildSupabaseAuthHeaders, getCurrentUser, getSupabaseUrl, getSupabaseAnonKey } from "../../assets/js/auth.js";
+import { DEFAULT_AVATAR_URL, resolveAvatarUrl } from "./avatar-url.js";
 
 const SUPABASE_URL = getSupabaseUrl();
 const SUPABASE_ANON_KEY = getSupabaseAnonKey();
 const FRONT_PROJECT_MAP_STORAGE_KEY = "mdall.supabaseProjectMap.v1";
 const PROJECT_SUPABASE_SYNC_EVENT = "project:supabase-sync";
 const PROJECT_IDENTITY_UPDATED_EVENT = "project:identity-updated";
-export const DEFAULT_PUBLIC_AVATAR = "assets/images/260093543.png";
+export const DEFAULT_PUBLIC_AVATAR = DEFAULT_AVATAR_URL;
 
 
 
 const USER_PUBLIC_PROFILES_TABLE = "user_public_profiles";
-const AVATARS_BUCKET = "avatars";
-const AVATAR_SIGNED_URL_TTL_SECONDS = 60 * 60 * 24 * 30;
 
 function normalizeNullableText(value = "") {
   const normalized = safeString(value);
@@ -49,30 +48,11 @@ async function readCurrentUserPublicProfileRow(userId = "") {
   return Array.isArray(rows) ? (rows[0] || null) : null;
 }
 
-async function createAvatarSignedUrl(storagePath = "") {
-  const normalizedPath = safeString(storagePath);
-  if (!normalizedPath) return DEFAULT_PUBLIC_AVATAR;
-
-  const { data, error } = await supabase.storage
-    .from(AVATARS_BUCKET)
-    .createSignedUrl(normalizedPath, AVATAR_SIGNED_URL_TTL_SECONDS);
-
-  if (error) {
-    throw error;
-  }
-
-  return safeString(data?.signedUrl) || DEFAULT_PUBLIC_AVATAR;
-}
-
 async function buildAvatarUrlFromProfileRow(profileRow = null) {
-  const storagePath = safeString(profileRow?.avatar_storage_path || "");
-  if (!storagePath) return DEFAULT_PUBLIC_AVATAR;
-
-  try {
-    return await createAvatarSignedUrl(storagePath);
-  } catch {
-    return DEFAULT_PUBLIC_AVATAR;
-  }
+  return resolveAvatarUrl({
+    avatarStoragePath: safeString(profileRow?.avatar_storage_path || ""),
+    fallback: DEFAULT_PUBLIC_AVATAR
+  });
 }
 
 function applyUserPublicProfileToStore(user = null, profileRow = null, avatarUrl = DEFAULT_PUBLIC_AVATAR) {
@@ -1577,7 +1557,7 @@ export async function deleteCustomProjectLotFromSupabase(projectLotId = "") {
   return true;
 }
 
-function mapProjectCollaboratorRow(row = {}) {
+async function mapProjectCollaboratorRow(row = {}) {
   const profile = row.user_public_profiles || row.profile || {};
   const firstName = safeString(profile.first_name || row.first_name || "");
   const lastName = safeString(profile.last_name || row.last_name || "");
@@ -1586,6 +1566,12 @@ function mapProjectCollaboratorRow(row = {}) {
   const lot = row.project_lot || {};
   const lotCatalog = lot.lot_catalog || {};
   const linkedUserId = safeString(row.linked_user_id || row.collaborator_user_id || row.user_id || "");
+  const avatarUrl = await resolveAvatarUrl({
+    avatarUrl: safeString(profile.avatar_url || row.avatar_url || ""),
+    avatar: safeString(profile.avatar || ""),
+    avatarStoragePath: safeString(profile.avatar_storage_path || row.avatar_storage_path || ""),
+    fallback: ""
+  });
 
   return {
     id: safeString(row.id || ""),
@@ -1606,6 +1592,7 @@ function mapProjectCollaboratorRow(row = {}) {
     addedAt: row.created_at || null,
     removedAt: row.removed_at || null,
     company: safeString(profile.company || row.company || ""),
+    avatarUrl,
     sourceType: safeString(row.source_type || (linkedUserId ? "mdall_user" : "directory_person")) || "directory_person"
   };
 }
@@ -1634,7 +1621,7 @@ export async function syncProjectCollaboratorsFromSupabase(options = {}) {
   params.set("order", "created_at.asc");
 
   const rows = await restFetch("project_collaborators_view", params);
-  const items = Array.isArray(rows) ? rows.map(mapProjectCollaboratorRow) : [];
+  const items = Array.isArray(rows) ? await Promise.all(rows.map((row) => mapProjectCollaboratorRow(row))) : [];
 
   store.projectForm.collaborators = items;
   projectBucket.collaboratorsLoaded = true;

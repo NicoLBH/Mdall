@@ -38,6 +38,7 @@ export function createProjectSubjectsActions(config) {
     getObjectives,
     addLabelToSubjectInSupabase,
     removeLabelFromSubjectInSupabase,
+    replaceSubjectAssigneesInSupabase,
     addSubjectToObjectiveInSupabase,
     removeSubjectFromObjectiveInSupabase,
     rerenderPanels
@@ -123,6 +124,81 @@ export function createProjectSubjectsActions(config) {
         situationIds: nextIds
       };
     });
+  }
+
+  function normalizeSubjectAssigneeIds(assigneeIds) {
+    return [...new Set((Array.isArray(assigneeIds) ? assigneeIds : []).map((value) => String(value || "").trim()).filter(Boolean))];
+  }
+
+  function setSubjectAssigneeIds(subjectId, assigneeIds) {
+    const subjectKey = String(subjectId || "");
+    const nextIds = normalizeSubjectAssigneeIds(assigneeIds);
+    if (subjectKey === DRAFT_SUBJECT_ID) {
+      ensureViewUiState();
+      store.situationsView.createSubjectForm.meta = {
+        ...buildDefaultDraftSubjectMeta(),
+        ...(store.situationsView.createSubjectForm.meta || {}),
+        assignees: nextIds
+      };
+      return;
+    }
+    persistRunBucket((bucket) => {
+      bucket.subjectMeta = bucket.subjectMeta && typeof bucket.subjectMeta === "object" ? bucket.subjectMeta : {};
+      bucket.subjectMeta.sujet = bucket.subjectMeta.sujet && typeof bucket.subjectMeta.sujet === "object" ? bucket.subjectMeta.sujet : {};
+      const current = bucket.subjectMeta.sujet[subjectKey] && typeof bucket.subjectMeta.sujet[subjectKey] === "object" ? bucket.subjectMeta.sujet[subjectKey] : {};
+      bucket.subjectMeta.sujet[subjectKey] = {
+        ...current,
+        assignees: nextIds
+      };
+    });
+  }
+
+  function syncSubjectAssigneeMap(subjectId, assigneeIds = []) {
+    const raw = store.projectSubjectsView?.rawSubjectsResult;
+    if (!raw || typeof raw !== "object") return;
+    const subjectKey = String(subjectId || "");
+    if (!subjectKey) return;
+    raw.assigneePersonIdsBySubjectId = raw.assigneePersonIdsBySubjectId && typeof raw.assigneePersonIdsBySubjectId === "object"
+      ? raw.assigneePersonIdsBySubjectId
+      : {};
+    raw.assigneePersonIdsBySubjectId[subjectKey] = normalizeSubjectAssigneeIds(assigneeIds);
+    if (raw.subjectsById && typeof raw.subjectsById === "object" && raw.subjectsById[subjectKey]) {
+      raw.subjectsById[subjectKey].assignee_person_id = raw.assigneePersonIdsBySubjectId[subjectKey][0] || null;
+    }
+  }
+
+  async function toggleSubjectAssignee(subjectId, assigneeId, options = {}) {
+    const subjectKey = String(subjectId || "");
+    const assigneeKey = String(assigneeId || "").trim();
+    if (!subjectKey || !assigneeKey) return false;
+    const meta = getSubjectSidebarMeta(subjectKey);
+    const currentIds = normalizeSubjectAssigneeIds(meta.assignees);
+    const hasAssignee = currentIds.includes(assigneeKey);
+    const nextIds = hasAssignee
+      ? currentIds.filter((id) => id !== assigneeKey)
+      : [...currentIds, assigneeKey];
+    setSubjectAssigneeIds(subjectKey, nextIds);
+    syncSubjectAssigneeMap(subjectKey, nextIds);
+
+    if (!options.skipRerender) {
+      if (options.root) rerenderScope(options.root);
+      else rerenderPanels();
+    }
+
+    try {
+      await replaceSubjectAssigneesInSupabase(subjectKey, nextIds);
+      return true;
+    } catch (error) {
+      setSubjectAssigneeIds(subjectKey, currentIds);
+      syncSubjectAssigneeMap(subjectKey, currentIds);
+      if (!options.skipRerender) {
+        if (options.root) rerenderScope(options.root);
+        else rerenderPanels();
+      }
+      console.warn("toggleSubjectAssignee failed", error);
+      showError(`Mise à jour des assignés impossible : ${String(error?.message || error || "Erreur inconnue")}`);
+      return false;
+    }
   }
 
   function syncSubjectSituationMaps(subjectId, situationId, shouldLink) {
@@ -718,6 +794,8 @@ export function createProjectSubjectsActions(config) {
     setSujetKanbanStatus,
     setSubjectObjectiveIds,
     setSubjectSituationIds,
+    setSubjectAssigneeIds,
+    toggleSubjectAssignee,
     toggleSubjectSituation,
     setSubjectLabels,
     toggleSubjectLabel,

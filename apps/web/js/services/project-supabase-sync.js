@@ -2,6 +2,7 @@ import { store } from "../store.js";
 import { ensureProjectDocumentsState } from "./project-documents-store.js";
 import { ensureProjectAutomationDefaults } from "./project-automation.js";
 import { supabase, buildSupabaseAuthHeaders, getCurrentUser, getSupabaseUrl, getSupabaseAnonKey } from "../../assets/js/auth.js";
+import { resolveAvatarUrl } from "./avatar-url.js";
 
 const SUPABASE_URL = getSupabaseUrl();
 const SUPABASE_ANON_KEY = getSupabaseAnonKey();
@@ -1361,7 +1362,7 @@ export async function deleteCustomProjectLotFromSupabase(projectLotId = "") {
   return true;
 }
 
-function mapProjectCollaboratorRow(row = {}) {
+async function mapProjectCollaboratorRow(row = {}) {
   const profile = row.user_public_profiles || row.profile || {};
   const firstName = safeString(profile.first_name || row.first_name || "");
   const lastName = safeString(profile.last_name || row.last_name || "");
@@ -1370,6 +1371,12 @@ function mapProjectCollaboratorRow(row = {}) {
   const lot = row.project_lot || {};
   const lotCatalog = lot.lot_catalog || {};
   const linkedUserId = safeString(row.linked_user_id || row.collaborator_user_id || row.user_id || "");
+  const avatarUrl = await resolveAvatarUrl({
+    avatarUrl: safeString(profile.avatar_url || row.avatar_url || ""),
+    avatar: safeString(profile.avatar || ""),
+    avatarStoragePath: safeString(profile.avatar_storage_path || row.avatar_storage_path || ""),
+    fallback: ""
+  });
 
   return {
     id: safeString(row.id || ""),
@@ -1390,6 +1397,7 @@ function mapProjectCollaboratorRow(row = {}) {
     addedAt: row.created_at || null,
     removedAt: row.removed_at || null,
     company: safeString(profile.company || row.company || ""),
+    avatarUrl,
     sourceType: safeString(row.source_type || (linkedUserId ? "mdall_user" : "directory_person")) || "directory_person"
   };
 }
@@ -1418,7 +1426,7 @@ export async function syncProjectCollaboratorsFromSupabase(options = {}) {
   params.set("order", "created_at.asc");
 
   const rows = await restFetch("project_collaborators_view", params);
-  const items = Array.isArray(rows) ? rows.map(mapProjectCollaboratorRow) : [];
+  const items = Array.isArray(rows) ? await Promise.all(rows.map((row) => mapProjectCollaboratorRow(row))) : [];
 
   store.projectForm.collaborators = items;
   projectBucket.collaboratorsLoaded = true;
