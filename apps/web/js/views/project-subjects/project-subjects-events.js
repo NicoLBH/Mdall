@@ -57,6 +57,22 @@ export function createProjectSubjectsEvents(config) {
   let modalEventsBound = false;
   let subjectsTabResetBound = false;
 
+  function isSubissuesDndDebugEnabled() {
+    try {
+      const search = String(window?.location?.search || "");
+      if (search.includes("debugSubissuesDnd=1")) return true;
+      const storageValue = String(window?.localStorage?.getItem?.("mdall:debug-subissues-dnd") || "").trim();
+      return storageValue === "1" || storageValue.toLowerCase() === "true";
+    } catch {
+      return false;
+    }
+  }
+
+  function debugSubissuesDnd(...args) {
+    if (!isSubissuesDndDebugEnabled()) return;
+    console.debug("[subissues-dnd]", ...args);
+  }
+
   function dropdownController() {
     return getDropdownController();
   }
@@ -610,15 +626,19 @@ export function createProjectSubjectsEvents(config) {
 
       sortableRows.forEach((row) => {
         row.addEventListener("dragstart", (event) => {
-          if (!event.target?.closest?.("[data-subissue-drag-handle]")) {
+          const childSubjectId = String(row.dataset.childSubjectId || "");
+          if (!childSubjectId) {
+            debugSubissuesDnd("dragstart ignored: missing childSubjectId", { row });
             event.preventDefault();
             return;
           }
-          const childSubjectId = String(row.dataset.childSubjectId || "");
-          if (!childSubjectId) return;
           row.classList.add("is-subissue-dragging");
           event.dataTransfer?.setData("text/plain", childSubjectId);
           if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+          debugSubissuesDnd("dragstart", {
+            childSubjectId,
+            parentSubjectId: String(row.dataset.parentSubjectId || "")
+          });
         });
 
         row.addEventListener("dragover", (event) => {
@@ -629,6 +649,10 @@ export function createProjectSubjectsEvents(config) {
           const rect = row.getBoundingClientRect();
           const insertAfter = event.clientY >= (rect.top + rect.height / 2);
           row.classList.add(insertAfter ? "is-subissue-drop-after" : "is-subissue-drop-before");
+          debugSubissuesDnd("dragover", {
+            overChildSubjectId: String(row.dataset.childSubjectId || ""),
+            insertAfter
+          });
         });
 
         row.addEventListener("drop", async (event) => {
@@ -638,6 +662,10 @@ export function createProjectSubjectsEvents(config) {
 
           const parentSubjectId = String(row.dataset.parentSubjectId || "");
           if (!parentSubjectId || typeof reorderSubjectChildren !== "function") {
+            debugSubissuesDnd("drop aborted: reorder unavailable", {
+              parentSubjectId,
+              hasReorderHandler: typeof reorderSubjectChildren === "function"
+            });
             clearDragClasses();
             return;
           }
@@ -650,6 +678,7 @@ export function createProjectSubjectsEvents(config) {
           const sourceId = String(draggingRow.dataset.childSubjectId || "");
           const targetId = String(row.dataset.childSubjectId || "");
           if (!sourceId || !targetId || sourceId === targetId) {
+            debugSubissuesDnd("drop aborted: invalid source/target ids", { sourceId, targetId });
             clearDragClasses();
             return;
           }
@@ -662,6 +691,12 @@ export function createProjectSubjectsEvents(config) {
           const orderedChildIds = Array.from(container.querySelectorAll("[data-subissue-sortable-row='true']"))
             .map((item) => String(item.dataset.childSubjectId || ""))
             .filter(Boolean);
+          debugSubissuesDnd("drop reorder", {
+            parentSubjectId,
+            sourceId,
+            targetId,
+            orderedChildIds
+          });
           await reorderSubjectChildren(parentSubjectId, orderedChildIds, { root, skipRerender: false });
           clearDragClasses();
         });

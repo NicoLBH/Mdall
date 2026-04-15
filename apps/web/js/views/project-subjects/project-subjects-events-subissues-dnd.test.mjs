@@ -20,3 +20,14 @@ test("le handler drop protège l'appel reorderSubjectChildren", () => {
   assert.match(eventsSource, /typeof reorderSubjectChildren !== "function"/);
   assert.match(eventsSource, /await reorderSubjectChildren\(parentSubjectId, orderedChildIds, \{ root, skipRerender: false \}\);/);
 });
+
+test("le dragstart de sous-sujet n'est plus bloqué par un contrôle de handle sur event.target", () => {
+  assert.doesNotMatch(eventsSource, /event\.target\?\.closest\?\.\("\[data-subissue-drag-handle\]"\)/);
+});
+
+test("l'instrumentation DnD des sous-sujets peut être activée via query/localStorage", () => {
+  assert.match(eventsSource, /function isSubissuesDndDebugEnabled\(\)/);
+  assert.match(eventsSource, /debugSubissuesDnd=1/);
+  assert.match(eventsSource, /mdall:debug-subissues-dnd/);
+  assert.match(eventsSource, /console\.debug\("\[subissues-dnd\]"/);
+});
