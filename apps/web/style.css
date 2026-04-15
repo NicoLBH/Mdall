@@ -642,6 +642,71 @@ body.sidebar-collapsed #sidebar{overflow:hidden;width:0;min-width:0;padding:0;ma
   flex:0 0 auto;
   color:var(--muted);
 }
+.subject-meta-collapsible-toggle__chevron .octicon-chevron-up,
+.subject-meta-collapsible-toggle__chevron .octicon-chevron-down{
+  color:var(--muted);
+}
+
+.subject-meta-parent-card{
+  width:100%;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  border:1px solid var(--border);
+  border-radius:8px;
+  background:rgba(13,17,23,.32);
+  color:var(--text);
+  text-align:left;
+  padding:10px;
+  cursor:pointer;
+}
+.subject-meta-parent-card:hover,
+.subject-meta-parent-card:focus-visible{
+  background:rgba(56,139,253,.08);
+  border-color:rgba(88,166,255,.45);
+  outline:none;
+}
+.subject-meta-parent-card__label{
+  font-size:11px;
+  font-weight:600;
+  color:var(--muted);
+}
+.subject-meta-parent-card__head{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  min-width:0;
+}
+.subject-meta-parent-card__icon{
+  display:inline-flex;
+  align-items:center;
+  flex:0 0 auto;
+}
+.subject-meta-parent-card__title{
+  min-width:0;
+  font-size:13px;
+  line-height:18px;
+  font-weight:600;
+  color:var(--text);
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.subject-meta-parent-card__count{
+  margin-left:auto;
+  flex:0 0 auto;
+}
+.subject-meta-parent-card__count .subissues-counts{
+  margin-left:0;
+}
+.subject-meta-parent-card__meta{
+  font-size:12px;
+  color:var(--muted);
+}
+
+.subject-meta-relations-menu__item{
+  width:100%;
+}
 
 .subject-meta-field__chip{
   display:flex;
@@ -2267,11 +2332,27 @@ body.is-resizing{
 
 /* ===== Right panel: Sub-issues table (below description) ===== */
 .details-subissues{margin-left:52px;width:calc(100% - 52px);margin-bottom:8px;margin-top:12px;border:1px solid var(--border);border-radius:6px;overflow:hidden;container-type:inline-size;}
-.subissues-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;background: var(--headbgtight);border-bottom: solid 1px var(--border2);}
+.subissues-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;background: transparent;border-bottom: solid 1px var(--border2);}
 .subissues-head-left{display:flex;align-items:center;gap:10px;min-width:0;}
 .subissues-head-right{display:flex;align-items:center;gap:8px;flex:0 0 auto;min-width:0;}
 .subissues-title{font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .subissues-counts{display:inline-flex;align-items:center;gap:2px;margin-left:6px;padding:2px 6px;border:1px solid var(--border2);border-radius:999px;background:rgba(22,27,34,.35);color:var(--muted);font-size:12px;line-height:1;}
+.subissues-counts--head{
+  gap:4px;
+  margin-left:0;
+  min-height:20px;
+  height:20px;
+  padding:0 8px;
+  line-height:20px;
+  border-radius:999px;
+}
+.subissues-counts--head > span:last-child{
+  line-height:20px;
+}
+.subissues-counts--head .subissues-problems-icon{
+  width:16px;
+  height:16px;
+}
 .subissues-body{padding:0;}
 .subissues-table{border:none;border-radius:0;}
 .subissues-table .issues-table__head{border-bottom:1px solid var(--border2);}
@@ -2337,7 +2418,7 @@ body.is-resizing{
 .details-title--compact .details-title-compact--inline .details-title-text{min-width:0;}
 .details-title--compact .details-title-compact-top{display:flex;align-items:baseline;gap:0px 4px;min-width:0;flex-wrap:wrap;}
 .details-title--compact .details-title-compact-bottom{display:flex;align-items:center;gap:8px;min-width:0;height:16px;}
-.details-title--compact .details-title-compact-bottom .subissues-counts--problems{flex:0 0 auto;margin:0px;border:none;padding:0px 6px 0px 0px;font-weight:400;}
+.details-title--compact .details-title-compact-bottom .subissues-counts--problems{flex:0 0 auto;margin:0px;border:none;padding:0px 6px 0px 0px;font-weight:400;font-size:12px;line-height:16px;gap:4px;background:transparent;}
 .details-title--compact .details-title-compact-bottom .verdict-bar{flex:0 1 auto;}
 .details-title--compact .gh-state{font-size:14px;line-height:21px;padding:3px 10px;height:32px;}
 .details-title--compact .details-title-row{align-items:flex-start;}
@@ -2353,7 +2434,21 @@ body.is-resizing{
 
 .details-title--expanded .details-title-text{font-size:32px;font-weight:400;line-height:43px;color:#fff;}
 .details-title--expanded .gh-state{font-size:14px;line-height:21px;padding:3px 10px;}
-.details-title--expanded .subissues-counts--problems{line-height:21px;padding:0px 12px;margin:0px;height:29px;min-width:auto;}
+.details-title--expanded .subissues-counts--problems{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  margin:0px;
+  min-width:auto;
+  height:32px;
+  padding:3px 10px;
+  border-radius:999px;
+  border:1px solid var(--border2);
+  background:rgba(22,27,34,.35);
+  font-size:14px;
+  line-height:21px;
+  font-weight:400;
+}
 .details-title--expanded .subissues-counts--verdicts{margin-left:8px;}
 
 /* Expanded title layout: 2 lines */
