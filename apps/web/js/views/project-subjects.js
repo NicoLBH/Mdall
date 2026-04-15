@@ -12,7 +12,8 @@ import {
   updateLabel as updateLabelInSupabase,
   deleteLabel as deleteLabelInSupabase,
   addLabelToSubject as addLabelToSubjectInSupabase,
-  removeLabelFromSubject as removeLabelFromSubjectInSupabase
+  removeLabelFromSubject as removeLabelFromSubjectInSupabase,
+  replaceSubjectAssignees as replaceSubjectAssigneesInSupabase
 } from "../services/project-subjects-supabase.js";
 import { loadSituationsForCurrentProject, addSubjectToSituation, removeSubjectFromSituation } from "../services/project-situations-supabase.js";
 import {
@@ -77,7 +78,7 @@ import {
   toSharedDateInputValue
 } from "./ui/shared-date-picker.js";
 import { getSelectionDocumentRefs } from "../services/project-document-selectors.js";
-import { persistSubjectIssueActionToSupabase } from "../services/project-supabase-sync.js";
+import { persistSubjectIssueActionToSupabase, syncProjectCollaboratorsFromSupabase } from "../services/project-supabase-sync.js";
 import {
   getSituationsTableGridTemplate,
   renderFlatSujetRow,
@@ -328,6 +329,7 @@ const projectSubjectsEvents = createProjectSubjectsEvents({
   getToggleSubjectObjective: () => toggleSubjectObjective,
   getToggleSubjectSituation: () => toggleSubjectSituation,
   getToggleSubjectLabel: () => toggleSubjectLabel,
+  getToggleSubjectAssignee: () => toggleSubjectAssignee,
   syncDescriptionEditorDraft,
   startDescriptionEdit,
   clearDescriptionEditState,
@@ -378,6 +380,7 @@ const projectSubjectsDetailsRenderer = createProjectSubjectsDetailsRenderer({
   getReviewTitleStateClass,
   entityDisplayLinkHtml: (...args) => projectSubjectsView.entityDisplayLinkHtml(...args),
   problemsCountsHtml: (...args) => projectSubjectsView.problemsCountsHtml(...args),
+  renderSubjectParentHeadHtml: (...args) => projectSubjectsView.renderSubjectParentHeadHtml(...args),
   firstNonEmpty,
   escapeHtml,
   statePill: (...args) => projectSubjectsView.statePill(...args),
@@ -526,6 +529,7 @@ const projectSubjectsActions = createProjectSubjectsActions({
   getObjectives: (...args) => projectSubjectsView.getObjectives(...args),
   addLabelToSubjectInSupabase: (...args) => addLabelToSubjectInSupabase(...args),
   removeLabelFromSubjectInSupabase: (...args) => removeLabelFromSubjectInSupabase(...args),
+  replaceSubjectAssigneesInSupabase: (...args) => replaceSubjectAssigneesInSupabase(...args),
   addSubjectToObjectiveInSupabase: (...args) => addSubjectToObjectiveInSupabase(...args),
   removeSubjectFromObjectiveInSupabase: (...args) => removeSubjectFromObjectiveInSupabase(...args),
   rerenderPanels: (...args) => projectSubjectsView.rerenderPanels(...args)
@@ -535,6 +539,7 @@ const {
   setSujetKanbanStatus,
   setSubjectObjectiveIds,
   setSubjectSituationIds,
+  toggleSubjectAssignee,
   toggleSubjectSituation,
   setSubjectLabels,
   toggleSubjectLabel,
@@ -764,6 +769,23 @@ export function openSubjectDrilldownFromSituation(...args) {
   return projectSubjectDrilldown.openDrilldownFromSubject(...args);
 }
 
+let collaboratorsHydrationInFlight = null;
+
+function ensureSubjectsCollaboratorsLoaded() {
+  const collaborators = Array.isArray(store.projectForm?.collaborators) ? store.projectForm.collaborators : [];
+  if (collaborators.length || collaboratorsHydrationInFlight) return;
+  collaboratorsHydrationInFlight = syncProjectCollaboratorsFromSupabase({ force: false })
+    .then(() => {
+      rerenderPanels();
+    })
+    .catch((error) => {
+      console.warn("[project-subjects] collaborators preload failed", error);
+    })
+    .finally(() => {
+      collaboratorsHydrationInFlight = null;
+    });
+}
+
 
 
 
@@ -775,6 +797,7 @@ export function openSubjectDrilldownFromSituation(...args) {
 ========================================================= */
 
 export function renderProjectSubjects(root) {
+  ensureSubjectsCollaboratorsLoaded();
   const subjectsViewState = ensureViewUiState();
   projectSubjectDrilldown.ensureDrilldownDom();
   subjectsCurrentRoot = root;

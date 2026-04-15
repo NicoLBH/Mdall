@@ -1606,6 +1606,7 @@ function mapProjectCollaboratorRow(row = {}) {
     addedAt: row.created_at || null,
     removedAt: row.removed_at || null,
     company: safeString(profile.company || row.company || ""),
+    avatarUrl: safeString(profile.avatar_url || profile.avatar || row.avatar_url || ""),
     sourceType: safeString(row.source_type || (linkedUserId ? "mdall_user" : "directory_person")) || "directory_person"
   };
 }

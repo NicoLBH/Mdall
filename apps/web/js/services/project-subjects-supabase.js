@@ -51,7 +51,7 @@ async function fetchProjectFlatSubjects(projectId) {
   const url = new URL(`${SUPABASE_URL}/rest/v1/subjects`);
   url.searchParams.set(
     "select",
-    "id,project_id,document_id,analysis_run_id,situation_id,parent_subject_id,title,description,priority,status,closure_reason,subject_type,created_at,updated_at,closed_at"
+    "id,subject_number,project_id,document_id,analysis_run_id,situation_id,parent_subject_id,assignee_person_id,title,description,priority,status,closure_reason,subject_type,created_at,updated_at,closed_at"
   );
   url.searchParams.set("project_id", `eq.${projectId}`);
   url.searchParams.set("order", "created_at.asc");
@@ -487,6 +487,29 @@ async function fetchProjectSubjectLabels(projectId) {
   return Array.isArray(rows) ? rows : [];
 }
 
+async function fetchProjectSubjectAssignees(projectId) {
+  if (!projectId) return [];
+
+  const url = new URL(`${SUPABASE_URL}/rest/v1/subject_assignees`);
+  url.searchParams.set("select", "id,project_id,subject_id,person_id,created_at");
+  url.searchParams.set("project_id", `eq.${projectId}`);
+  url.searchParams.set("order", "created_at.asc");
+
+  const res = await fetch(url.toString(), {
+    method: "GET",
+    headers: await getSupabaseAuthHeaders({ Accept: "application/json" }),
+    cache: "no-store"
+  });
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`subject_assignees fetch failed (${res.status}): ${txt}`);
+  }
+
+  const rows = await res.json().catch(() => []);
+  return Array.isArray(rows) ? rows : [];
+}
+
 
 async function fetchSubjectProjectId(subjectId) {
   const normalizedSubjectId = normalizeUuid(subjectId);
@@ -791,6 +814,72 @@ export async function removeLabelFromSubject(subjectId, labelId) {
   return true;
 }
 
+export async function replaceSubjectAssignees(subjectId, personIds = []) {
+  const normalizedSubjectId = normalizeUuid(subjectId);
+  if (!normalizedSubjectId) throw new Error("subjectId is required");
+  const uniquePersonIds = [...new Set((Array.isArray(personIds) ? personIds : [])
+    .map((value) => normalizeUuid(value))
+    .filter(Boolean))];
+  const projectId = await fetchSubjectProjectId(normalizedSubjectId);
+
+  const deleteUrl = new URL(`${SUPABASE_URL}/rest/v1/subject_assignees`);
+  deleteUrl.searchParams.set("subject_id", `eq.${normalizedSubjectId}`);
+
+  const deleteRes = await fetch(deleteUrl.toString(), {
+    method: "DELETE",
+    headers: await getSupabaseAuthHeaders({
+      Accept: "application/json",
+      Prefer: "return=minimal"
+    })
+  });
+
+  if (!deleteRes.ok) {
+    const txt = await deleteRes.text().catch(() => "");
+    throw new Error(`subject_assignees delete failed (${deleteRes.status}): ${txt}`);
+  }
+
+  if (uniquePersonIds.length) {
+    const insertUrl = new URL(`${SUPABASE_URL}/rest/v1/subject_assignees`);
+    insertUrl.searchParams.set("on_conflict", "subject_id,person_id");
+    const insertRes = await fetch(insertUrl.toString(), {
+      method: "POST",
+      headers: await getSupabaseAuthHeaders({
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        Prefer: "resolution=merge-duplicates,return=representation"
+      }),
+      body: JSON.stringify(uniquePersonIds.map((personId) => ({
+        project_id: projectId,
+        subject_id: normalizedSubjectId,
+        person_id: personId
+      })))
+    });
+
+    if (!insertRes.ok) {
+      const txt = await insertRes.text().catch(() => "");
+      throw new Error(`subject_assignees insert failed (${insertRes.status}): ${txt}`);
+    }
+  }
+
+  const primaryPersonId = uniquePersonIds[0] || null;
+  const patchRes = await fetch(`${SUPABASE_URL}/rest/v1/subjects?id=eq.${normalizedSubjectId}`, {
+    method: "PATCH",
+    headers: await getSupabaseAuthHeaders({
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      Prefer: "return=minimal"
+    }),
+    body: JSON.stringify({ assignee_person_id: primaryPersonId })
+  });
+
+  if (!patchRes.ok) {
+    const txt = await patchRes.text().catch(() => "");
+    throw new Error(`subjects assignee_person_id update failed (${patchRes.status}): ${txt}`);
+  }
+
+  return uniquePersonIds;
+}
+
 export async function replaceSubjectLabels(subjectId, labelIds = []) {
   const normalizedSubjectId = normalizeUuid(subjectId);
   if (!normalizedSubjectId) throw new Error("subjectId is required");
@@ -950,6 +1039,7 @@ export async function loadFlatSubjectsForCurrentProject(options = {}) {
         linksBySubjectId: {},
         relationIdsBySubjectId: {},
         relationOptionsById: {},
+        assigneePersonIdsBySubjectId: {},
         labels: [],
         labelsById: {},
         labelsByKey: {},
@@ -980,6 +1070,7 @@ export async function loadFlatSubjectsForCurrentProject(options = {}) {
 
     const subjects = await fetchProjectFlatSubjects(backendProjectId);
     const subjectLinks = await fetchProjectSubjectLinks(backendProjectId).catch(() => []);
+    const subjectAssignees = await fetchProjectSubjectAssignees(backendProjectId).catch(() => []);
     const situations = await loadSituationsForCurrentProject(backendProjectId).catch(() => []);
     const manualSituationIds = situations
       .filter((situation) => String(situation?.mode || "manual").trim().toLowerCase() === "manual")
@@ -987,6 +1078,16 @@ export async function loadFlatSubjectsForCurrentProject(options = {}) {
       .filter(Boolean);
     const subjectIdsBySituationId = await loadSituationSubjectIdsMap(manualSituationIds).catch(() => ({}));
     const result = buildProjectFlatSubjectsResult(subjects, subjectLinks, { runId: store.ui.runId || "" });
+    result.assigneePersonIdsBySubjectId = {};
+    for (const row of subjectAssignees) {
+      const subjectId = normalizeUuid(row?.subject_id);
+      const personId = normalizeUuid(row?.person_id);
+      if (!subjectId || !personId) continue;
+      if (!Array.isArray(result.assigneePersonIdsBySubjectId[subjectId])) result.assigneePersonIdsBySubjectId[subjectId] = [];
+      if (!result.assigneePersonIdsBySubjectId[subjectId].includes(personId)) {
+        result.assigneePersonIdsBySubjectId[subjectId].push(personId);
+      }
+    }
     result.situationsById = Object.fromEntries(situations.map((situation) => [String(situation?.id || ""), situation]).filter(([id]) => !!id));
     result.subjectIdsBySituationId = subjectIdsBySituationId;
     result.pagination = {
