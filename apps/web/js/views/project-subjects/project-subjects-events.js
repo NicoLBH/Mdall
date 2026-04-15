@@ -439,6 +439,7 @@ export function createProjectSubjectsEvents(config) {
     const toggleSubjectObjective = getToggleSubjectObjective?.();
     const toggleSubjectSituation = getToggleSubjectSituation?.();
     const toggleSubjectLabel = getToggleSubjectLabel?.();
+    const toggleSubjectAssignee = getToggleSubjectAssignee?.();
     const applyIssueStatusAction = getApplyIssueStatusAction?.();
 
     root.querySelectorAll("[data-subject-meta-trigger]").forEach((btn) => {
@@ -652,13 +653,26 @@ export function createProjectSubjectsEvents(config) {
           traceAssignSelf("noop_already_assigned");
           return;
         }
-        if (typeof toggleSubjectAssignee !== "function") return;
-        const toggled = await toggleSubjectAssignee(subjectId, selfAssigneeId, { root, skipRerender: false });
-        traceAssignSelf("toggle_completed", {
-          subjectId,
-          selfAssigneeId,
-          success: toggled === true
-        });
+        if (typeof toggleSubjectAssignee !== "function") {
+          traceAssignSelf("abort_missing_toggle_handler");
+          showError("Action indisponible: gestionnaire d'assignation introuvable.");
+          return;
+        }
+        try {
+          const toggled = await toggleSubjectAssignee(subjectId, selfAssigneeId, { root, skipRerender: false });
+          traceAssignSelf("toggle_completed", {
+            subjectId,
+            selfAssigneeId,
+            success: toggled === true
+          });
+        } catch (error) {
+          traceAssignSelf("toggle_threw", {
+            subjectId,
+            selfAssigneeId,
+            error: String(error?.message || error || "Erreur inconnue")
+          });
+          showError(`Mise à jour des assignés impossible : ${String(error?.message || error || "Erreur inconnue")}`);
+        }
       };
     });
 
