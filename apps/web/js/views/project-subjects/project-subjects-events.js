@@ -19,6 +19,8 @@ export function createProjectSubjectsEvents(config) {
     getToggleSubjectSituation,
     getToggleSubjectLabel,
     getToggleSubjectAssignee,
+    getSetSubjectParent,
+    getReorderSubjectChildren,
     syncDescriptionEditorDraft,
     startDescriptionEdit,
     clearDescriptionEditState,
@@ -177,6 +179,8 @@ export function createProjectSubjectsEvents(config) {
     const toggleSubjectSituation = getToggleSubjectSituation?.();
     const toggleSubjectLabel = getToggleSubjectLabel?.();
     const toggleSubjectAssignee = getToggleSubjectAssignee?.();
+    const setSubjectParent = getSetSubjectParent?.();
+    const reorderSubjectChildren = getReorderSubjectChildren?.();
 
     dropdownHost.querySelectorAll("[data-subject-kanban-search]").forEach((input) => {
       input.addEventListener("input", () => {
@@ -253,6 +257,11 @@ export function createProjectSubjectsEvents(config) {
           const activeKey = String(getSubjectsViewState().subjectMetaDropdown.activeKey || "");
           if (!activeKey) return;
           event.preventDefault();
+          if (field === "relations" && String(getSubjectsViewState().subjectMetaDropdown?.relationsView || "") === "parent") {
+            if (typeof setSubjectParent !== "function") return;
+            await applyNonDestructiveMetaToggle(root, field, () => setSubjectParent(subjectSelection.item.id, activeKey, { root, skipRerender: true }));
+            return;
+          }
           if (field === "objectives") {
             await applyNonDestructiveMetaToggle(root, field, () => toggleSubjectObjective(subjectSelection.item.id, activeKey, { root, skipRerender: true }));
             return;
@@ -313,6 +322,58 @@ export function createProjectSubjectsEvents(config) {
         if (subjectSelection?.type !== "sujet") return;
         const assigneeId = String(btn.dataset.subjectAssigneeToggle || "");
         await applyNonDestructiveMetaToggle(root, "assignees", () => toggleSubjectAssignee(subjectSelection.item.id, assigneeId, { root, skipRerender: true }));
+      };
+    });
+
+    dropdownHost.querySelectorAll("[data-subject-relations-parent-entry]").forEach((btn) => {
+      btn.onclick = async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const subjectSelection = getScopedSelection(root);
+        if (subjectSelection?.type !== "sujet") return;
+        if (typeof setSubjectParent !== "function") return;
+        const parentSubjectId = String(btn.dataset.subjectRelationsParentEntry || "");
+        await applyNonDestructiveMetaToggle(root, "relations", () => setSubjectParent(subjectSelection.item.id, parentSubjectId, { root, skipRerender: true }));
+      };
+    });
+
+    dropdownHost.querySelectorAll("[data-subject-relations-remove-parent]").forEach((btn) => {
+      btn.onclick = async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const subjectSelection = getScopedSelection(root);
+        if (subjectSelection?.type !== "sujet") return;
+        if (typeof setSubjectParent !== "function") return;
+        await applyNonDestructiveMetaToggle(root, "relations", () => setSubjectParent(subjectSelection.item.id, "", { root, skipRerender: true }));
+      };
+    });
+
+    dropdownHost.querySelectorAll("[data-subject-relations-open-parent]").forEach((btn) => {
+      btn.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const dropdown = getSubjectsViewState().subjectMetaDropdown || {};
+        dropdown.relationsView = "parent";
+        dropdown.query = "";
+        dropdown.activeKey = "";
+        const subjectSelection = getScopedSelection(root);
+        if (subjectSelection?.type === "sujet") {
+          const entries = getSubjectMetaMenuEntries(subjectSelection.item, "relations");
+          dropdown.activeKey = String((entries.find((entry) => entry.isSelected) || entries[0] || {}).key || "");
+        }
+        refreshSubjectMetaDropdownUi(root, { preserveScroll: true, preserveFocus: true, focusArgs: { field: "relations" } });
+      };
+    });
+
+    dropdownHost.querySelectorAll("[data-subject-relations-back]").forEach((btn) => {
+      btn.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const dropdown = getSubjectsViewState().subjectMetaDropdown || {};
+        dropdown.relationsView = "menu";
+        dropdown.query = "";
+        dropdown.activeKey = "";
+        refreshSubjectMetaDropdownUi(root, { preserveScroll: true, preserveFocus: false });
       };
     });
 
@@ -448,6 +509,7 @@ export function createProjectSubjectsEvents(config) {
         } else {
           dropdownController().closeKanban();
           dropdownController().openMeta({ field, showClosedSituations: false });
+          dropdown.relationsView = field === "relations" ? "menu" : "";
           const entries = scopedSelection?.type === "sujet" ? getSubjectMetaMenuEntries(scopedSelection.item, field) : [];
           const selectedObjectiveKey = field === "objectives" && scopedSelection?.type === "sujet"
             ? String(getSubjectSidebarMeta(scopedSelection.item.id).objectiveIds[0] || "")
@@ -536,6 +598,78 @@ export function createProjectSubjectsEvents(config) {
         rerenderPanels();
       };
     });
+
+    const sortableRows = Array.from(root.querySelectorAll("[data-subissue-sortable-row='true']"));
+    if (sortableRows.length) {
+      const clearDragClasses = () => {
+        sortableRows.forEach((row) => {
+          row.classList.remove("is-subissue-dragging", "is-subissue-drop-before", "is-subissue-drop-after");
+        });
+      };
+
+      sortableRows.forEach((row) => {
+        row.addEventListener("dragstart", (event) => {
+          if (!event.target?.closest?.("[data-subissue-drag-handle]")) {
+            event.preventDefault();
+            return;
+          }
+          const childSubjectId = String(row.dataset.childSubjectId || "");
+          if (!childSubjectId) return;
+          row.classList.add("is-subissue-dragging");
+          event.dataTransfer?.setData("text/plain", childSubjectId);
+          if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+        });
+
+        row.addEventListener("dragover", (event) => {
+          const draggingRow = root.querySelector(".is-subissue-dragging");
+          if (!draggingRow || draggingRow === row) return;
+          event.preventDefault();
+          row.classList.remove("is-subissue-drop-before", "is-subissue-drop-after");
+          const rect = row.getBoundingClientRect();
+          const insertAfter = event.clientY >= (rect.top + rect.height / 2);
+          row.classList.add(insertAfter ? "is-subissue-drop-after" : "is-subissue-drop-before");
+        });
+
+        row.addEventListener("drop", async (event) => {
+          const draggingRow = root.querySelector(".is-subissue-dragging");
+          if (!draggingRow || draggingRow === row) return;
+          event.preventDefault();
+
+          const parentSubjectId = String(row.dataset.parentSubjectId || "");
+          if (!parentSubjectId || typeof reorderSubjectChildren !== "function") {
+            clearDragClasses();
+            return;
+          }
+
+          const container = row.parentElement;
+          if (!container) {
+            clearDragClasses();
+            return;
+          }
+          const sourceId = String(draggingRow.dataset.childSubjectId || "");
+          const targetId = String(row.dataset.childSubjectId || "");
+          if (!sourceId || !targetId || sourceId === targetId) {
+            clearDragClasses();
+            return;
+          }
+
+          const targetRect = row.getBoundingClientRect();
+          const placeAfter = event.clientY >= (targetRect.top + targetRect.height / 2);
+          const referenceNode = placeAfter ? row.nextElementSibling : row;
+          container.insertBefore(draggingRow, referenceNode);
+
+          const orderedChildIds = Array.from(container.querySelectorAll("[data-subissue-sortable-row='true']"))
+            .map((item) => String(item.dataset.childSubjectId || ""))
+            .filter(Boolean);
+          await reorderSubjectChildren(parentSubjectId, orderedChildIds, { root, skipRerender: false });
+          clearDragClasses();
+        });
+
+        row.addEventListener("dragend", () => {
+          clearDragClasses();
+        });
+      });
+    }
 
     const isDrilldownScope = !!root.closest?.("#drilldownPanel");
     root.querySelectorAll(".js-sub-right-toggle-sujet, .js-modal-toggle-sujet, .js-drilldown-toggle-sujet").forEach((btn) => {

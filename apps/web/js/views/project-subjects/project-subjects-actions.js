@@ -43,6 +43,8 @@ export function createProjectSubjectsActions(config) {
     replaceSubjectAssigneesInSupabase,
     addSubjectToObjectiveInSupabase,
     removeSubjectFromObjectiveInSupabase,
+    setSubjectParentInSupabase,
+    reorderSubjectChildrenInSupabase,
     rerenderPanels
   } = config;
 
@@ -227,6 +229,130 @@ export function createProjectSubjectsActions(config) {
       raw.relationOptionsById = raw.relationOptionsById && typeof raw.relationOptionsById === "object" ? raw.relationOptionsById : {};
       raw.situationsById[situationKey] = situation;
       raw.relationOptionsById[situationKey] = situation;
+    }
+  }
+
+  function syncSubjectParentMap(subjectId, parentSubjectId, options = {}) {
+    const raw = store.projectSubjectsView?.rawSubjectsResult;
+    if (!raw || typeof raw !== "object") return;
+    const subjectKey = String(subjectId || "");
+    if (!subjectKey) return;
+    const parentKey = String(parentSubjectId || "").trim();
+    raw.subjectsById = raw.subjectsById && typeof raw.subjectsById === "object" ? raw.subjectsById : {};
+    if (!raw.subjectsById[subjectKey]) return;
+    raw.subjectsById[subjectKey].parent_subject_id = parentKey || null;
+    raw.subjectsById[subjectKey].parent_linked_at = options.parentLinkedAt || raw.subjectsById[subjectKey].parent_linked_at || null;
+    raw.subjectsById[subjectKey].parent_child_order = Number.isFinite(Number(options.parentChildOrder))
+      ? Number(options.parentChildOrder)
+      : (parentKey ? raw.subjectsById[subjectKey].parent_child_order : null);
+    if (raw.subjectsById[subjectKey].raw && typeof raw.subjectsById[subjectKey].raw === "object") {
+      raw.subjectsById[subjectKey].raw.parent_subject_id = parentKey || null;
+      raw.subjectsById[subjectKey].raw.parent_linked_at = raw.subjectsById[subjectKey].parent_linked_at;
+      raw.subjectsById[subjectKey].raw.parent_child_order = raw.subjectsById[subjectKey].parent_child_order;
+    }
+  }
+
+  async function setSubjectParent(subjectId, parentSubjectId, options = {}) {
+    const subjectKey = String(subjectId || "").trim();
+    if (!subjectKey) return false;
+    const nextParentKey = String(parentSubjectId || "").trim();
+    const subject = getNestedSujet(subjectKey);
+    if (!subject) return false;
+    const previousParent = String(subject.parent_subject_id || subject.parentSubjectId || subject.raw?.parent_subject_id || "").trim();
+    if (previousParent === nextParentKey) return true;
+
+    const nowIsoValue = nowIso();
+    syncSubjectParentMap(subjectKey, nextParentKey, {
+      parentLinkedAt: nextParentKey ? nowIsoValue : null
+    });
+
+    if (!options.skipRerender) {
+      if (options.root) rerenderScope(options.root);
+      else rerenderPanels();
+    }
+
+    try {
+      const result = await setSubjectParentInSupabase(subjectKey, nextParentKey || null);
+      syncSubjectParentMap(subjectKey, nextParentKey, {
+        parentLinkedAt: result?.updatedRow?.parent_linked_at || (nextParentKey ? nowIsoValue : null),
+        parentChildOrder: result?.updatedRow?.parent_child_order
+      });
+      return true;
+    } catch (error) {
+      syncSubjectParentMap(subjectKey, previousParent || null, {
+        parentLinkedAt: subject.parent_linked_at || subject.raw?.parent_linked_at || null,
+        parentChildOrder: subject.parent_child_order ?? subject.raw?.parent_child_order ?? null
+      });
+      if (!options.skipRerender) {
+        if (options.root) rerenderScope(options.root);
+        else rerenderPanels();
+      }
+      console.warn("setSubjectParent failed", error);
+      showError(`Mise à jour du sujet parent impossible : ${String(error?.message || error || "Erreur inconnue")}`);
+      return false;
+    }
+  }
+
+  function applySubjectChildrenOrderLocally(parentSubjectId, orderedChildIds = []) {
+    const raw = store.projectSubjectsView?.rawSubjectsResult;
+    if (!raw || typeof raw !== "object") return;
+    raw.subjectsById = raw.subjectsById && typeof raw.subjectsById === "object" ? raw.subjectsById : {};
+    const parentKey = String(parentSubjectId || "");
+    orderedChildIds.forEach((childId, index) => {
+      const childKey = String(childId || "");
+      const child = raw.subjectsById[childKey];
+      if (!child) return;
+      child.parent_subject_id = parentKey || null;
+      child.parent_child_order = index + 1;
+      child.parent_linked_at = child.parent_linked_at || child.raw?.parent_linked_at || child.updated_at || child.created_at || nowIso();
+      if (child.raw && typeof child.raw === "object") {
+        child.raw.parent_subject_id = child.parent_subject_id;
+        child.raw.parent_child_order = child.parent_child_order;
+        child.raw.parent_linked_at = child.parent_linked_at;
+      }
+    });
+  }
+
+  async function reorderSubjectChildren(parentSubjectId, orderedChildIds = [], options = {}) {
+    const parentKey = String(parentSubjectId || "").trim();
+    const nextOrderedChildIds = [...new Set((Array.isArray(orderedChildIds) ? orderedChildIds : []).map((value) => String(value || "").trim()).filter(Boolean))];
+    if (!parentKey || !nextOrderedChildIds.length) return false;
+
+    const raw = store.projectSubjectsView?.rawSubjectsResult;
+    const previousOrderSnapshot = new Map();
+    for (const childId of nextOrderedChildIds) {
+      const child = raw?.subjectsById?.[childId];
+      previousOrderSnapshot.set(childId, {
+        parent_subject_id: child?.parent_subject_id ?? child?.raw?.parent_subject_id ?? null,
+        parent_child_order: child?.parent_child_order ?? child?.raw?.parent_child_order ?? null,
+        parent_linked_at: child?.parent_linked_at ?? child?.raw?.parent_linked_at ?? null
+      });
+    }
+
+    applySubjectChildrenOrderLocally(parentKey, nextOrderedChildIds);
+    if (!options.skipRerender) {
+      if (options.root) rerenderScope(options.root);
+      else rerenderPanels();
+    }
+
+    try {
+      await reorderSubjectChildrenInSupabase(parentKey, nextOrderedChildIds);
+      return true;
+    } catch (error) {
+      const snapshotEntries = Array.from(previousOrderSnapshot.entries());
+      for (const [childId, snapshot] of snapshotEntries) {
+        syncSubjectParentMap(childId, snapshot.parent_subject_id, {
+          parentChildOrder: snapshot.parent_child_order,
+          parentLinkedAt: snapshot.parent_linked_at
+        });
+      }
+      if (!options.skipRerender) {
+        if (options.root) rerenderScope(options.root);
+        else rerenderPanels();
+      }
+      console.warn("reorderSubjectChildren failed", error);
+      showError(`Réorganisation des sous-sujets impossible : ${String(error?.message || error || "Erreur inconnue")}`);
+      return false;
     }
   }
 
@@ -799,6 +925,8 @@ export function createProjectSubjectsActions(config) {
     setSubjectAssigneeIds,
     toggleSubjectAssignee,
     toggleSubjectSituation,
+    setSubjectParent,
+    reorderSubjectChildren,
     setSubjectLabels,
     toggleSubjectLabel,
     toggleSubjectObjective,

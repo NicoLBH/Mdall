@@ -732,7 +732,21 @@ function getChildSubjectList(subject) {
   const subjectId = String(subject?.id || "");
   if (!subjectId) return [];
   const children = Array.isArray(getChildSubjects(subjectId)) ? getChildSubjects(subjectId) : [];
-  return children.filter(Boolean);
+  return children
+    .filter(Boolean)
+    .sort((left, right) => {
+      const leftOrder = Number(left?.parent_child_order ?? left?.raw?.parent_child_order);
+      const rightOrder = Number(right?.parent_child_order ?? right?.raw?.parent_child_order);
+      const leftHasOrder = Number.isFinite(leftOrder) && leftOrder > 0;
+      const rightHasOrder = Number.isFinite(rightOrder) && rightOrder > 0;
+      if (leftHasOrder && rightHasOrder && leftOrder !== rightOrder) return leftOrder - rightOrder;
+      if (leftHasOrder !== rightHasOrder) return leftHasOrder ? -1 : 1;
+
+      const leftLinkedTs = Date.parse(firstNonEmpty(left?.parent_linked_at, left?.raw?.parent_linked_at, left?.created_at, left?.raw?.created_at) || "") || 0;
+      const rightLinkedTs = Date.parse(firstNonEmpty(right?.parent_linked_at, right?.raw?.parent_linked_at, right?.created_at, right?.raw?.created_at) || "") || 0;
+      if (leftLinkedTs !== rightLinkedTs) return leftLinkedTs - rightLinkedTs;
+      return String(firstNonEmpty(left?.title, left?.id, "")).localeCompare(String(firstNonEmpty(right?.title, right?.id, "")), "fr");
+    });
 }
 
 function problemsCountsIconHtml(closedCount, totalCount) {
@@ -1298,6 +1312,36 @@ function renderSubjectMetaFieldValue(subject, field) {
   return renderSubjectMetaButtonValue("Aucune donnée");
 }
 
+function getSubjectLastActivityTimestamp(subject = {}) {
+  const updatedAt = firstNonEmpty(
+    getEntityDescriptionState("sujet", subject.id)?.updated_at,
+    subject.updated_at,
+    subject.raw?.updated_at,
+    subject.created_at,
+    subject.raw?.created_at
+  );
+  const ts = Date.parse(updatedAt || "");
+  return Number.isFinite(ts) ? ts : 0;
+}
+
+function getRelationParentSuggestions(subject, query = "") {
+  const currentSubjectId = String(subject?.id || "");
+  const normalizedQuery = String(query || "").trim().toLowerCase();
+  const map = store.projectSubjectsView?.rawSubjectsResult?.subjectsById || {};
+  const candidates = Object.values(map)
+    .filter((item) => {
+      const itemId = String(item?.id || "");
+      if (!itemId || itemId === currentSubjectId) return false;
+      return matchSearch([item?.title, item?.id], normalizedQuery);
+    })
+    .sort((left, right) => {
+      const tsDiff = getSubjectLastActivityTimestamp(right) - getSubjectLastActivityTimestamp(left);
+      if (tsDiff !== 0) return tsDiff;
+      return String(firstNonEmpty(left?.title, left?.id, "")).localeCompare(String(firstNonEmpty(right?.title, right?.id, "")), "fr");
+    });
+  return candidates.slice(0, 13);
+}
+
 function buildSubjectMetaMenuItems(subject, field) {
   const dropdownState = getSubjectsViewState().subjectMetaDropdown || {};
   const query = String(dropdownState.query || "").trim().toLowerCase();
@@ -1429,6 +1473,52 @@ function buildSubjectMetaMenuItems(subject, field) {
     };
   }
 
+  if (field === "relations" && String(dropdownState.relationsView || "menu") === "parent") {
+    const selectedParent = getSubjectParentSubject(subject.id);
+    const selectedParentId = String(selectedParent?.id || "");
+    const suggestions = getRelationParentSuggestions(subject, query);
+    const suggestionItems = suggestions
+      .filter((item) => String(item?.id || "") !== selectedParentId)
+      .map((candidate) => ({
+        key: String(candidate.id || ""),
+        isActive: String(dropdownState.activeKey || "") === String(candidate.id || ""),
+        isSelected: false,
+        iconHtml: `
+          <span class="select-menu__situation-iconset" aria-hidden="true">
+            <span class="select-menu__checkbox">${svgIcon("check", { className: "octicon octicon-check" })}</span>
+            <span class="select-menu__situation-icon">${issueIcon(getEffectiveSujetStatus(candidate.id))}</span>
+          </span>
+        `,
+        title: firstNonEmpty(candidate.title, candidate.id, "Sujet"),
+        metaHtml: escapeHtml(getEntityDisplayRef("sujet", candidate.id)),
+        dataAttrs: { "subject-relations-parent-entry": String(candidate.id || "") }
+      }));
+
+    const selectedItem = selectedParent
+      ? {
+        key: selectedParentId,
+        isActive: String(dropdownState.activeKey || "") === selectedParentId,
+        isSelected: true,
+        iconHtml: `
+          <span class="select-menu__situation-iconset" aria-hidden="true">
+            <span class="select-menu__checkbox is-checked">${svgIcon("check", { className: "octicon octicon-check" })}</span>
+            <span class="select-menu__situation-icon">${issueIcon(getEffectiveSujetStatus(selectedParent.id))}</span>
+          </span>
+        `,
+        title: firstNonEmpty(selectedParent.title, selectedParent.id, "Sujet parent"),
+        metaHtml: escapeHtml(getEntityDisplayRef("sujet", selectedParent.id)),
+        dataAttrs: { "subject-relations-parent-entry": selectedParentId }
+      }
+      : null;
+
+    return {
+      selectedItem,
+      suggestionItems,
+      items: [selectedItem, ...suggestionItems].filter(Boolean),
+      emptyHint: query ? "Aucun résultat pour cette recherche." : "Aucun sujet suggéré."
+    };
+  }
+
   const emptyHintMap = {
     assignees: "Aucun assigné pour le moment.",
     labels: "Aucun label pour le moment.",
@@ -1470,25 +1560,68 @@ function renderSubjectMetaDropdown(subject, field) {
   }
 
   if (field === "relations") {
-    const relationItems = [
-      "Modifier ou supprimer le sujet parent",
-      "Ajouter ou modifier « Bloqué par »",
-      "Ajouter ou modifier « Bloquant »"
-    ];
+    const relationsView = String(dropdownState.relationsView || "menu");
+    if (relationsView === "parent") {
+      const { selectedItem, suggestionItems, emptyHint } = buildSubjectMetaMenuItems(subject, field);
+      return `
+        <div class="subject-meta-dropdown gh-menu gh-menu--open" role="dialog">
+          <button type="button" class="subject-meta-relations-back" data-subject-relations-back>
+            <span class="subject-meta-relations-back__icon">${svgIcon("arrow-left", { className: "octicon octicon-arrow-left" })}</span>
+            <span class="subject-meta-relations-back__label">Gérer les relations</span>
+          </button>
+          <div class="subject-meta-dropdown__search">
+            <span class="subject-meta-dropdown__search-icon" aria-hidden="true">${svgIcon("search", { className: "octicon octicon-search" })}</span>
+            <input type="search" class="subject-meta-dropdown__search-input" data-subject-meta-search="${escapeHtml(field)}" value="${escapeHtml(query)}" placeholder="Rechercher un sujet parent" autocomplete="off">
+          </div>
+          <div class="subject-meta-dropdown__body">
+            ${selectedItem ? renderSelectMenuSection({ title: "Sélectionné", items: [selectedItem] }) : `
+              <div class="select-menu__section">
+                <button type="button" class="select-menu__item subject-meta-relations-menu__item" data-subject-relations-remove-parent>
+                  <span class="select-menu__item-mainrow">
+                    <span class="select-menu__item-content">
+                      <span class="select-menu__item-title">Aucun sujet parent</span>
+                      <span class="select-menu__item-meta">Retirer la relation existante</span>
+                    </span>
+                  </span>
+                </button>
+              </div>
+            `}
+            ${renderSelectMenuSection({
+              title: "Suggestions",
+              items: suggestionItems,
+              emptyTitle: "Aucune suggestion",
+              emptyHint
+            })}
+          </div>
+        </div>
+      `;
+    }
+
     return `
       <div class="subject-meta-dropdown gh-menu gh-menu--open" role="dialog">
-        <div class="subject-meta-dropdown__title">Gérer les relations</div>
         <div class="subject-meta-dropdown__body">
           <div class="select-menu__section">
-            ${relationItems.map((title) => `
-              <button type="button" class="select-menu__item subject-meta-relations-menu__item" role="menuitem">
-                <span class="select-menu__item-mainrow">
-                  <span class="select-menu__item-content">
-                    <span class="select-menu__item-title">${escapeHtml(title)}</span>
-                  </span>
+            <button type="button" class="select-menu__item subject-meta-relations-menu__item" role="menuitem" data-subject-relations-open-parent>
+              <span class="select-menu__item-mainrow">
+                <span class="select-menu__item-content">
+                  <span class="select-menu__item-title">Modifier ou supprimer le sujet parent</span>
                 </span>
-              </button>
-            `).join("")}
+              </span>
+            </button>
+            <button type="button" class="select-menu__item subject-meta-relations-menu__item" role="menuitem">
+              <span class="select-menu__item-mainrow">
+                <span class="select-menu__item-content">
+                  <span class="select-menu__item-title">Ajouter ou modifier « Bloqué par »</span>
+                </span>
+              </span>
+            </button>
+            <button type="button" class="select-menu__item subject-meta-relations-menu__item" role="menuitem">
+              <span class="select-menu__item-mainrow">
+                <span class="select-menu__item-content">
+                  <span class="select-menu__item-title">Ajouter ou modifier « Bloquant »</span>
+                </span>
+              </span>
+            </button>
           </div>
         </div>
       </div>
@@ -1636,7 +1769,20 @@ function renderSubIssuesForSujet(sujet, options = {}) {
   const childSubjects = getChildSubjectList(sujet);
   if (!childSubjects.length) return "";
   const rows = childSubjects.map((childSujet) => `
-      <div class="issue-row issue-row--pb click ${sujetRowClass}" data-sujet-id="${escapeHtml(childSujet.id)}">
+      <div
+        class="issue-row issue-row--pb click ${sujetRowClass} subissues-sortable-row"
+        data-sujet-id="${escapeHtml(childSujet.id)}"
+        data-subissue-sortable-row="true"
+        data-parent-subject-id="${escapeHtml(String(sujet?.id || ""))}"
+        data-child-subject-id="${escapeHtml(childSujet.id)}"
+        draggable="true"
+      >
+        <div class="cell cell-subissue-drag-handle">
+          <button type="button" class="subissue-drag-handle" data-subissue-drag-handle aria-label="Réordonner le sous-sujet">
+            ${svgIcon("grabber", { className: "octicon octicon-grabber" })}
+          </button>
+        </div>
+        <div class="cell cell-subissue-drag-spacer" aria-hidden="true"></div>
         <div class="cell cell-theme cell-theme--full lvl0">
           ${issueIcon(getEffectiveSujetStatus(childSujet.id))}
           <span class="theme-text theme-text--pb">${escapeHtml(firstNonEmpty(childSujet.title, childSujet.id, ""))}</span>
@@ -1645,6 +1791,7 @@ function renderSubIssuesForSujet(sujet, options = {}) {
     `).join("");
 
   const body = renderSubIssuesTable({
+    className: "issues-table subissues-table subissues-table--sortable",
     rowsHtml: rows,
     emptyTitle: "Aucun sous-sujet"
   });
