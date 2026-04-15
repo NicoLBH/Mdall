@@ -496,6 +496,7 @@ export function createProjectSubjectsEvents(config) {
     const toggleSubjectLabel = getToggleSubjectLabel?.();
     const toggleSubjectAssignee = getToggleSubjectAssignee?.();
     const applyIssueStatusAction = getApplyIssueStatusAction?.();
+    const reorderSubjectChildren = getReorderSubjectChildren?.();
 
     root.querySelectorAll("[data-subject-meta-trigger]").forEach((btn) => {
       btn.onclick = async (event) => {
