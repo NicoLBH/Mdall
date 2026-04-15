@@ -38,15 +38,15 @@ export function createProjectSubjectsDetailsRenderer(config) {
       buildExpandedBottomHtml(currentSelection) {
         const item = currentSelection.item;
         if (currentSelection.type === "sujet") {
-          return statePill(getEffectiveSujetStatus(item.id), {
+          return `${statePill(getEffectiveSujetStatus(item.id), {
             reviewState: getEntityReviewMeta("sujet", item.id).review_state,
             entityType: "sujet"
-          });
+          })}${problemsCountsHtml(item, { entityType: "sujet" })}`;
         }
         return `${statePill(getEffectiveSituationStatus(item.id), {
           reviewState: getEntityReviewMeta("situation", item.id).review_state,
           entityType: "situation"
-        })}${problemsCountsHtml(item)}`;
+        })}${problemsCountsHtml(item, { entityType: "situation" })}`;
       },
       buildCompactConfig(currentSelection, { titleTextHtml }) {
         const item = currentSelection.item;
@@ -59,7 +59,7 @@ export function createProjectSubjectsDetailsRenderer(config) {
               entityType: "sujet"
             }),
             topHtml: titleTextHtml,
-            bottomHtml: ""
+            bottomHtml: `${problemsCountsHtml(item, { entityType: "sujet" })}`
           };
         }
         return {
@@ -70,7 +70,7 @@ export function createProjectSubjectsDetailsRenderer(config) {
             entityType: "situation"
           }),
           topHtml: titleTextHtml,
-          bottomHtml: `${problemsCountsHtml(item)}`
+          bottomHtml: `${problemsCountsHtml(item, { entityType: "situation" })}`
         };
       }
     });

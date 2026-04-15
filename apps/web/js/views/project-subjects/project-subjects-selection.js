@@ -108,6 +108,7 @@ export function createProjectSubjectsSelection({
     }
     setActiveSelection({ selectedSituationId: situation?.id || null, selectedSubjectId: sujet.id });
     if (situation?.id) viewState.expandedSituations.add(situation.id);
+    viewState.rightSubissuesOpen = true;
     viewState.showTableOnly = false;
     viewState.detailsModalOpen = false;
     syncLegacySituationsView({

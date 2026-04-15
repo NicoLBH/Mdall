@@ -149,7 +149,11 @@ function statePill(status = "open", options = {}) {
 
 function chevron(isOpen, isVisible = true) {
   if (!isVisible) return "";
-  return `<span class="chev">${isOpen ? "▾" : "▸"}</span>`;
+  return `
+    <span class="subject-meta-collapsible-toggle__chevron" aria-hidden="true">
+      ${svgIcon(isOpen ? "chevron-up" : "chevron-down", { className: isOpen ? "octicon octicon-chevron-up" : "octicon octicon-chevron-down" })}
+    </span>
+  `;
 }
 
 function entityLinkHtml(type, id, text) {
@@ -702,11 +706,25 @@ function problemsCountsIconHtml(closedCount, totalCount) {
   return renderProblemsCountsIconHtml(closedCount, totalCount);
 }
 
-function problemsCountsHtml(situation) {
-  const linkedSubjects = getSituationSubjects(situation);
+function problemsCountsHtml(item, options = {}) {
+  const entityType = String(options.entityType || "situation").toLowerCase();
+  const linkedSubjects = entityType === "sujet"
+    ? getChildSubjectList(item)
+    : getSituationSubjects(item);
   const totalSubjects = linkedSubjects.length;
-  const closedSubjects = linkedSubjects.filter((subject) => String(getEffectiveSujetStatus(subject?.id) || "open").toLowerCase() !== "open").length;
-  return `<div class="subissues-counts subissues-counts--problems">${problemsCountsIconHtml(closedSubjects, totalSubjects)}<span>${closedSubjects} sur ${totalSubjects}</span></div>`;
+  const openSubjects = linkedSubjects.filter((subject) => String(getEffectiveSujetStatus(subject?.id) || "open").toLowerCase() === "open").length;
+  const closedSubjects = Math.max(0, totalSubjects - openSubjects);
+  const ariaLabel = `${openSubjects} sous-sujets ouverts, ${closedSubjects} fermés, ${totalSubjects} au total`;
+  return `<div class="subissues-counts subissues-counts--problems" aria-label="${escapeHtml(ariaLabel)}">${problemsCountsIconHtml(closedSubjects, totalSubjects)}<span>${openSubjects} / ${totalSubjects}</span></div>`;
+}
+
+function subissuesHeadCountsHtml(subjects = []) {
+  const linkedSubjects = Array.isArray(subjects) ? subjects : [];
+  const totalSubjects = linkedSubjects.length;
+  const openSubjects = linkedSubjects.filter((subject) => String(getEffectiveSujetStatus(subject?.id) || "open").toLowerCase() === "open").length;
+  const closedSubjects = Math.max(0, totalSubjects - openSubjects);
+  const ariaLabel = `${openSubjects} sous-sujets ouverts, ${closedSubjects} fermés, ${totalSubjects} au total`;
+  return `<div class="subissues-counts subissues-counts--problems subissues-counts--head" aria-label="${escapeHtml(ariaLabel)}">${problemsCountsIconHtml(closedSubjects, totalSubjects)}<span>${openSubjects} sur ${totalSubjects}</span></div>`;
 }
 
 /* =========================================================
@@ -1317,6 +1335,7 @@ function renderSubIssuesForSujet(sujet, options = {}) {
   const rows = childSubjects.map((childSujet) => `
       <div class="issue-row issue-row--pb click ${sujetRowClass}" data-sujet-id="${escapeHtml(childSujet.id)}">
         <div class="cell cell-theme cell-theme--full lvl0">
+          ${issueIcon(getEffectiveSujetStatus(childSujet.id))}
           <span class="theme-text theme-text--pb">${escapeHtml(firstNonEmpty(childSujet.title, childSujet.id, ""))}</span>
         </div>
       </div>
@@ -1329,10 +1348,10 @@ function renderSubIssuesForSujet(sujet, options = {}) {
 
   return renderSubIssuesPanel({
     title: "Sous-sujets",
-    leftMetaHtml: `<div class="subissues-counts subissues-counts--total"><span class="mono">${childSubjects.length}</span></div>`,
+    leftMetaHtml: subissuesHeadCountsHtml(childSubjects),
     rightMetaHtml: "",
     bodyHtml: body,
-    isOpen: !!store.situationsView.rightSubissuesOpen
+    isOpen: store.situationsView.rightSubissuesOpen !== false
   });
 }
 
@@ -1365,6 +1384,7 @@ function renderSubIssuesForSituation(situation, options = {}) {
         rows.push(`
           <div class="issue-row issue-row--pb click ${sujetRowClass}" data-sujet-id="${escapeHtml(childSujet.id)}">
             <div class="cell cell-theme cell-theme--full lvl1">
+              ${issueIcon(getEffectiveSujetStatus(childSujet.id))}
               <span class="theme-text theme-text--pb">${escapeHtml(firstNonEmpty(childSujet.title, childSujet.id, ""))}</span>
             </div>
           </div>
@@ -1373,7 +1393,6 @@ function renderSubIssuesForSituation(situation, options = {}) {
     }
   }
 
-  const stats = situationVerdictStats(situation);
   const body = renderSubIssuesTable({
     rowsHtml: rows.join(""),
     emptyTitle: "Aucun sujet"
