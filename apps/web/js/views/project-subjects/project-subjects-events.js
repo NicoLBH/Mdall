@@ -516,6 +516,15 @@ export function createProjectSubjectsEvents(config) {
       };
     });
 
+    root.querySelectorAll("[data-parent-subject-id]").forEach((card) => {
+      card.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const parentSubjectId = String(card.dataset.parentSubjectId || "");
+        if (parentSubjectId) (openDrilldownFromSubjectPanel || openDrilldownFromSujetPanel)(parentSubjectId);
+      };
+    });
+
     root.querySelectorAll("[data-action='tab-write']").forEach((btn) => {
       btn.onclick = () => {
         store.situationsView.commentPreviewMode = false;

@@ -168,12 +168,16 @@ function buildEntityDisplayRefMap() {
   const map = new Map();
   let index = 1;
 
-  const register = (type, id) => {
+  const register = (type, id, refOverride = "") => {
     const safeType = String(type || "").toLowerCase();
     const safeId = String(id || "").trim();
     if (!safeType || !safeId) return;
     const key = `${safeType}:${safeId}`;
     if (map.has(key)) return;
+    if (refOverride) {
+      map.set(key, refOverride);
+      return;
+    }
     map.set(key, `#${index}`);
     index += 1;
   };
@@ -182,7 +186,9 @@ function buildEntityDisplayRefMap() {
     register("situation", situation?.id);
     const sujets = Array.isArray(situation?.sujets) ? situation.sujets : [];
     for (const sujet of sujets) {
-      register("sujet", sujet?.id);
+      const orderNumber = Number(sujet?.subject_number ?? sujet?.subjectNumber);
+      const subjectRef = Number.isFinite(orderNumber) && orderNumber > 0 ? `#${Math.floor(orderNumber)}` : "";
+      register("sujet", sujet?.id, subjectRef);
     }
   }
 
@@ -190,10 +196,20 @@ function buildEntityDisplayRefMap() {
 }
 
 function getEntityDisplayRef(type, id) {
-  const map = buildEntityDisplayRefMap();
   const safeType = String(type || "").toLowerCase();
   const safeId = String(id || "").trim();
   if (!safeId) return "";
+  if (safeType === "sujet") {
+    const subject = getNestedSujet(safeId);
+    const orderNumber = Number(subject?.subject_number ?? subject?.subjectNumber);
+    if (Number.isFinite(orderNumber) && orderNumber > 0) {
+      return `#${Math.floor(orderNumber)}`;
+    }
+  }
+  const map = buildEntityDisplayRefMap();
+  if (safeType === "sujet") {
+    return map.get(`${safeType}:${safeId}`) || "#?";
+  }
   return map.get(`${safeType}:${safeId}`) || `#${safeId}`;
 }
 
