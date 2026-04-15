@@ -973,6 +973,17 @@ export function createProjectSubjectsEvents(config) {
         return;
       }
 
+      const parentSubjectCard = event.target.closest("[data-parent-subject-id]");
+      if (parentSubjectCard) {
+        event.preventDefault();
+        event.stopPropagation();
+        const parentSubjectId = String(parentSubjectCard.dataset.parentSubjectId || "");
+        if (parentSubjectId) {
+          (openDrilldownFromSubjectPanel || openDrilldownFromSujetPanel)(parentSubjectId);
+        }
+        return;
+      }
+
       const titleTrigger = event.target.closest(".js-row-title-trigger");
       if (titleTrigger) {
         event.preventDefault();
