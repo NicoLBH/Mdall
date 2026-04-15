@@ -496,6 +496,7 @@ export function createProjectSubjectsEvents(config) {
     const toggleSubjectLabel = getToggleSubjectLabel?.();
     const toggleSubjectAssignee = getToggleSubjectAssignee?.();
     const applyIssueStatusAction = getApplyIssueStatusAction?.();
+    const reorderSubjectChildren = getReorderSubjectChildren?.();
 
     root.querySelectorAll("[data-subject-meta-trigger]").forEach((btn) => {
       btn.onclick = async (event) => {
@@ -601,6 +602,15 @@ export function createProjectSubjectsEvents(config) {
 
     const sortableRows = Array.from(root.querySelectorAll("[data-subissue-sortable-row='true']"));
     if (sortableRows.length) {
+      let dragPreviewNode = null;
+
+      const clearDragPreview = () => {
+        if (dragPreviewNode?.parentNode) {
+          dragPreviewNode.parentNode.removeChild(dragPreviewNode);
+        }
+        dragPreviewNode = null;
+      };
+
       const clearDragClasses = () => {
         sortableRows.forEach((row) => {
           row.classList.remove("is-subissue-dragging", "is-subissue-drop-before", "is-subissue-drop-after");
@@ -608,16 +618,42 @@ export function createProjectSubjectsEvents(config) {
       };
 
       sortableRows.forEach((row) => {
+        row.addEventListener("pointerdown", (event) => {
+          row.dataset.subissueDragFromHandle = event.target?.closest?.("[data-subissue-drag-handle]") ? "true" : "false";
+        });
+
         row.addEventListener("dragstart", (event) => {
-          if (!event.target?.closest?.("[data-subissue-drag-handle]")) {
+          const dragFromHandle = row.dataset.subissueDragFromHandle === "true";
+          row.dataset.subissueDragFromHandle = "false";
+          if (!dragFromHandle) {
             event.preventDefault();
             return;
           }
+
           const childSubjectId = String(row.dataset.childSubjectId || "");
-          if (!childSubjectId) return;
+          if (!childSubjectId) {
+            event.preventDefault();
+            return;
+          }
           row.classList.add("is-subissue-dragging");
           event.dataTransfer?.setData("text/plain", childSubjectId);
           if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+
+          const rowRect = row.getBoundingClientRect();
+          dragPreviewNode = row.cloneNode(true);
+          dragPreviewNode.classList.add("subissue-drag-preview");
+          dragPreviewNode.style.width = `${Math.max(1, Math.round(rowRect.width))}px`;
+          dragPreviewNode.style.position = "fixed";
+          dragPreviewNode.style.top = "-9999px";
+          dragPreviewNode.style.left = "-9999px";
+          dragPreviewNode.style.pointerEvents = "none";
+          dragPreviewNode.setAttribute("aria-hidden", "true");
+          document.body.appendChild(dragPreviewNode);
+          if (event.dataTransfer) {
+            const offsetX = Math.max(0, Math.round(event.clientX - rowRect.left));
+            const offsetY = Math.max(0, Math.round(event.clientY - rowRect.top));
+            event.dataTransfer.setDragImage(dragPreviewNode, offsetX, offsetY);
+          }
         });
 
         row.addEventListener("dragover", (event) => {
@@ -638,6 +674,7 @@ export function createProjectSubjectsEvents(config) {
           const parentSubjectId = String(row.dataset.parentSubjectId || "");
           if (!parentSubjectId || typeof reorderSubjectChildren !== "function") {
             clearDragClasses();
+            clearDragPreview();
             return;
           }
 
@@ -650,6 +687,7 @@ export function createProjectSubjectsEvents(config) {
           const targetId = String(row.dataset.childSubjectId || "");
           if (!sourceId || !targetId || sourceId === targetId) {
             clearDragClasses();
+            clearDragPreview();
             return;
           }
 
@@ -663,10 +701,13 @@ export function createProjectSubjectsEvents(config) {
             .filter(Boolean);
           await reorderSubjectChildren(parentSubjectId, orderedChildIds, { root, skipRerender: false });
           clearDragClasses();
+          clearDragPreview();
         });
 
         row.addEventListener("dragend", () => {
           clearDragClasses();
+          clearDragPreview();
+          row.dataset.subissueDragFromHandle = "false";
         });
       });
     }
