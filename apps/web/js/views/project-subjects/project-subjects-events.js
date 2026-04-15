@@ -621,6 +621,7 @@ export function createProjectSubjectsEvents(config) {
         const selfAssigneeId = await resolveSelfCollaboratorAssigneeId();
         if (!selfAssigneeId) {
           showError("Votre profil n'est pas présent dans la liste des collaborateurs du projet.");
+          traceAssignSelf("abort_missing_assignee");
           return;
         }
         const meta = getSubjectSidebarMeta(subjectId);
