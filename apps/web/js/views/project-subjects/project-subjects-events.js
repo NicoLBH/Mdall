@@ -773,6 +773,10 @@ export function createProjectSubjectsEvents(config) {
 
           const parentSubjectId = String(row.dataset.parentSubjectId || "");
           if (!parentSubjectId || typeof reorderSubjectChildren !== "function") {
+            debugSubissuesDnd("drop aborted: reorder unavailable", {
+              parentSubjectId,
+              hasReorderHandler: typeof reorderSubjectChildren === "function"
+            });
             clearDragClasses();
             clearDragPreview();
             return;
@@ -786,6 +790,7 @@ export function createProjectSubjectsEvents(config) {
           const sourceId = String(draggingRow.dataset.childSubjectId || "");
           const targetId = String(row.dataset.childSubjectId || "");
           if (!sourceId || !targetId || sourceId === targetId) {
+            debugSubissuesDnd("drop aborted: invalid source/target ids", { sourceId, targetId });
             clearDragClasses();
             clearDragPreview();
             return;
