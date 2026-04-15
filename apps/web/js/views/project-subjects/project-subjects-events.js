@@ -682,6 +682,7 @@ export function createProjectSubjectsEvents(config) {
 
           const rowRect = row.getBoundingClientRect();
           dragPreviewNode = row.cloneNode(true);
+          dragPreviewNode.classList.remove("is-subissue-dragging", "is-subissue-drag-gap", "is-subissue-drop-before", "is-subissue-drop-after");
           dragPreviewNode.classList.add("subissue-drag-preview");
           dragPreviewNode.style.width = `${Math.max(1, Math.round(rowRect.width))}px`;
           dragPreviewNode.style.position = "fixed";

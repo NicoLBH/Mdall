@@ -2747,6 +2747,17 @@ body.is-resizing{
   opacity:.98;
 }
 
+.subissue-drag-preview{
+  background:var(--bg);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  box-shadow:0 10px 30px rgba(0,0,0,.34), 0 1px 0 rgba(255,255,255,.06) inset;
+  opacity:1;
+}
+.subissue-drag-preview > *{
+  visibility:visible !important;
+}
+
 
 .gh-timeline{
   position:relative;

@@ -32,6 +32,7 @@ test("le dragstart est armé par pointerdown sur le handle et utilise un drag pr
   assert.match(eventsSource, /row\.dataset\.subissueDragFromHandle = event\.target\?\.closest\?\.\("\[data-subissue-drag-handle\]"\) \? "true" : "false";/);
   assert.match(eventsSource, /if \(!dragFromHandle\) \{/);
   assert.match(eventsSource, /dragPreviewNode = row\.cloneNode\(true\);/);
+  assert.match(eventsSource, /dragPreviewNode\.classList\.remove\("is-subissue-dragging", "is-subissue-drag-gap", "is-subissue-drop-before", "is-subissue-drop-after"\);/);
   assert.match(eventsSource, /dragPreviewNode\.classList\.add\("subissue-drag-preview"\);/);
   assert.match(eventsSource, /event\.dataTransfer\.setDragImage\(dragPreviewNode, offsetX, offsetY\);/);
   assert.match(eventsSource, /row\.classList\.add\("is-subissue-dragging", "is-subissue-drag-gap"\);/);
@@ -44,7 +45,8 @@ test("le handle n'est visible qu'au survol/focus et le gap de drag affiche les t
   assert.match(styleSource, /\.subissues-sortable-row\.is-subissue-drag-gap::before,[\s\S]*\.subissues-sortable-row\.is-subissue-drag-gap::after/);
   assert.match(styleSource, /\.subissues-sortable-row\.is-subissue-drag-gap::before\{top:0;\}/);
   assert.match(styleSource, /\.subissues-sortable-row\.is-subissue-drag-gap::after\{bottom:0;\}/);
-  assert.match(styleSource, /\.subissue-drag-preview\{[\s\S]*background:var\(--bg\);[\s\S]*border-radius:var\(--radius\);/);
+  assert.match(styleSource, /\.subissue-drag-preview\{[\s\S]*background:var\(--bg\);[\s\S]*border-radius:var\(--radius\);[\s\S]*opacity:1;/);
+  assert.match(styleSource, /\.subissue-drag-preview > \*\{[\s\S]*visibility:visible !important;/);
 });
 
 test("le dragover réordonne en direct avec animation FLIP pour faire la place d'une ligne", () => {
