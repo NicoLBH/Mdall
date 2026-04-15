@@ -641,10 +641,13 @@ body.sidebar-collapsed #sidebar{overflow:hidden;width:0;min-width:0;padding:0;ma
   align-items:center;
   flex:0 0 auto;
   color:var(--muted);
+  fill:var(--muted);
 }
 .subject-meta-collapsible-toggle__chevron .octicon-chevron-up,
-.subject-meta-collapsible-toggle__chevron .octicon-chevron-down{
+.subject-meta-collapsible-toggle__chevron .octicon-chevron-down,
+.subject-meta-collapsible-toggle__chevron svg{
   color:var(--muted);
+  fill:var(--muted);
 }
 
 .subject-meta-parent-card{
