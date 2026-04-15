@@ -2267,11 +2267,27 @@ body.is-resizing{
 
 /* ===== Right panel: Sub-issues table (below description) ===== */
 .details-subissues{margin-left:52px;width:calc(100% - 52px);margin-bottom:8px;margin-top:12px;border:1px solid var(--border);border-radius:6px;overflow:hidden;container-type:inline-size;}
-.subissues-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;background: var(--headbgtight);border-bottom: solid 1px var(--border2);}
+.subissues-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;background: transparent;border-bottom: solid 1px var(--border2);}
 .subissues-head-left{display:flex;align-items:center;gap:10px;min-width:0;}
 .subissues-head-right{display:flex;align-items:center;gap:8px;flex:0 0 auto;min-width:0;}
 .subissues-title{font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .subissues-counts{display:inline-flex;align-items:center;gap:2px;margin-left:6px;padding:2px 6px;border:1px solid var(--border2);border-radius:999px;background:rgba(22,27,34,.35);color:var(--muted);font-size:12px;line-height:1;}
+.subissues-counts--head{
+  gap:4px;
+  margin-left:0;
+  min-height:20px;
+  height:20px;
+  padding:0 8px;
+  line-height:20px;
+  border-radius:999px;
+}
+.subissues-counts--head > span:last-child{
+  line-height:20px;
+}
+.subissues-counts--head .subissues-problems-icon{
+  width:16px;
+  height:16px;
+}
 .subissues-body{padding:0;}
 .subissues-table{border:none;border-radius:0;}
 .subissues-table .issues-table__head{border-bottom:1px solid var(--border2);}
