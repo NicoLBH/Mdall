@@ -699,10 +699,9 @@ export function createProjectSubjectsEvents(config) {
           dragPreviewNode.style.gridTemplateColumns = rowStyles.gridTemplateColumns;
           dragPreviewNode.style.padding = rowStyles.padding;
           dragPreviewNode.style.opacity = "1";
-          dragPreviewNode.style.backgroundColor = "var(--bbg, var(--bg, #0d1117))";
-          dragPreviewNode.style.border = "solid 1px var(--border, rgba(139,148,158,.35))";
+          dragPreviewNode.style.backgroundColor = "var(--bg)";
+          dragPreviewNode.style.border = "solid 1px var(--border)";
           dragPreviewNode.style.borderRadius = "var(--radius)";
-          dragPreviewNode.style.borderBottom = "none";
           dragPreviewNode.style.position = "fixed";
           dragPreviewNode.style.top = "0";
           dragPreviewNode.style.left = "0";
