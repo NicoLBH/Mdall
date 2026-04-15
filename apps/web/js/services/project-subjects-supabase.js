@@ -3,6 +3,7 @@ import { buildSubjectHierarchyIndexes } from "./subject-hierarchy.js";
 import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
 import { loadSituationsForCurrentProject, loadSituationSubjectIdsMap } from "./project-situations-supabase.js";
 import { resolveCurrentBackendProjectId } from "./project-supabase-sync.js";
+import { normalizeAssigneeIds } from "./subject-assignees-service.js";
 
 const SUPABASE_URL = getSupabaseUrl();
 const FRONT_PROJECT_MAP_STORAGE_KEY = "mdall.supabaseProjectMap.v1";
@@ -817,9 +818,7 @@ export async function removeLabelFromSubject(subjectId, labelId) {
 export async function replaceSubjectAssignees(subjectId, personIds = []) {
   const normalizedSubjectId = normalizeUuid(subjectId);
   if (!normalizedSubjectId) throw new Error("subjectId is required");
-  const uniquePersonIds = [...new Set((Array.isArray(personIds) ? personIds : [])
-    .map((value) => normalizeUuid(value))
-    .filter(Boolean))];
+  const uniquePersonIds = [...new Set(normalizeAssigneeIds(personIds).map((value) => normalizeUuid(value)).filter(Boolean))];
   const projectId = await fetchSubjectProjectId(normalizedSubjectId);
 
   const deleteUrl = new URL(`${SUPABASE_URL}/rest/v1/subject_assignees`);

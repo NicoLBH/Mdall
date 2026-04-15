@@ -1,3 +1,5 @@
+import { normalizeAssigneeIds } from "../../services/subject-assignees-service.js";
+
 export function createProjectSubjectsActions(config) {
   const {
     store,
@@ -127,7 +129,7 @@ export function createProjectSubjectsActions(config) {
   }
 
   function normalizeSubjectAssigneeIds(assigneeIds) {
-    return [...new Set((Array.isArray(assigneeIds) ? assigneeIds : []).map((value) => String(value || "").trim()).filter(Boolean))];
+    return normalizeAssigneeIds(assigneeIds);
   }
 
   function setSubjectAssigneeIds(subjectId, assigneeIds) {

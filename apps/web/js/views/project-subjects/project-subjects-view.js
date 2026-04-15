@@ -2,6 +2,11 @@ import { getDisplayAuthorName, getAuthorIdentity } from "../ui/author-identity.j
 import { renderProblemsCountsIconHtml } from "../ui/subissues-counts.js";
 import { formatObjectiveDueDateLabel } from "./project-subject-milestones.js";
 import {
+  findCollaboratorByAssigneeId,
+  normalizeAssigneeIds,
+  resolveSubjectAssigneeIds
+} from "../../services/subject-assignees-service.js";
+import {
   createSelectDropdownController,
   ensureSelectDropdownHost,
   getSubjectSelectDropdownScopeRoot,
@@ -663,16 +668,15 @@ function getSubjectSidebarMeta(subjectId) {
   const assigneePersonIdsBySubjectId = rawResult?.assigneePersonIdsBySubjectId && typeof rawResult.assigneePersonIdsBySubjectId === "object"
     ? rawResult.assigneePersonIdsBySubjectId
     : {};
-  const derivedAssignees = (Array.isArray(subjectMeta.assignees) && subjectMeta.assignees.length)
-    ? subjectMeta.assignees
-    : (
-      Array.isArray(assigneePersonIdsBySubjectId[normalizedSubjectId]) && assigneePersonIdsBySubjectId[normalizedSubjectId].length
-        ? assigneePersonIdsBySubjectId[normalizedSubjectId]
-        : [String(subject?.assignee_person_id || subject?.raw?.assignee_person_id || "")].filter(Boolean)
-    );
+  const derivedAssignees = resolveSubjectAssigneeIds({
+    subjectMetaAssignees: subjectMeta.assignees,
+    assigneeMap: assigneePersonIdsBySubjectId,
+    subjectId: normalizedSubjectId,
+    subject
+  });
 
   return {
-    assignees: derivedAssignees.map((value) => String(value || "")).filter(Boolean),
+    assignees: normalizeAssigneeIds(derivedAssignees),
     labels: derivedLabels,
     objectiveIds,
     situationIds: derivedSituationIds,
@@ -1184,8 +1188,17 @@ function renderSubjectAssigneesValue(subjectId) {
   const assigneeIds = getSubjectSidebarMeta(subjectId).assignees;
   const collaborators = getActiveProjectCollaborators();
   const collaboratorsById = new Map(collaborators.map((collaborator) => [collaborator.id, collaborator]));
-  const selected = assigneeIds
-    .map((assigneeId) => collaboratorsById.get(String(assigneeId || "")))
+  const selected = normalizeAssigneeIds(assigneeIds)
+    .map((assigneeId) => findCollaboratorByAssigneeId(collaboratorsById, assigneeId) || {
+      id: assigneeId,
+      userId: "",
+      name: `Collaborateur ${assigneeId.slice(0, 8)}`,
+      role: "Collaborateur",
+      roleGroupCode: "",
+      roleGroupLabel: "",
+      email: "",
+      avatarUrl: ""
+    })
     .filter(Boolean);
 
   if (!selected.length) {
