@@ -75,6 +75,12 @@ export function createProjectSubjectsEvents(config) {
     detachDropdownDocumentEvents = null;
   }
 
+  function traceAssignSelf(step, payload = {}) {
+    const debugEnabled = String(window?.localStorage?.getItem?.("mdall.debug.assignSelf") || "") === "1";
+    if (!debugEnabled) return;
+    console.info(`[subject-assign-self] ${step}`, payload);
+  }
+
   async function resolveSelfCollaboratorAssigneeId() {
     const currentUserId = String(store.user?.id || "").trim();
     const currentEmail = String(store.user?.email || "").trim().toLowerCase();
@@ -604,18 +610,55 @@ export function createProjectSubjectsEvents(config) {
       btn.onclick = async (event) => {
         event.preventDefault();
         event.stopPropagation();
+
+        const subjectIdFromButton = String(btn.dataset.subjectAssignSelf || "").trim();
         const selection = getScopedSelection(root);
-        if (selection?.type !== "sujet") return;
-        const selfAssigneeId = await resolveSelfCollaboratorAssigneeId();
-        if (!selfAssigneeId) {
-          showError("Votre profil n'est pas présent dans la liste des collaborateurs du projet.");
+        const subjectIdFromSelection = selection?.type === "sujet"
+          ? String(selection?.item?.id || "").trim()
+          : "";
+        const subjectId = subjectIdFromButton || subjectIdFromSelection;
+
+        traceAssignSelf("click", {
+          scope: root?.id || root?.className || "",
+          subjectIdFromButton,
+          subjectIdFromSelection,
+          resolvedSubjectId: subjectId,
+          selectionType: selection?.type || ""
+        });
+
+        if (!subjectId) {
+          showError("Impossible d'identifier le sujet à assigner.");
+          traceAssignSelf("abort_missing_subject_id");
           return;
         }
-        const meta = getSubjectSidebarMeta(selection.item.id);
+
+        const selfAssigneeId = await resolveSelfCollaboratorAssigneeId();
+        traceAssignSelf("resolved_assignee", {
+          selfAssigneeId,
+          collaboratorsCount: Array.isArray(store.projectForm?.collaborators) ? store.projectForm.collaborators.length : 0
+        });
+        if (!selfAssigneeId) {
+          showError("Votre profil n'est pas présent dans la liste des collaborateurs du projet.");
+          traceAssignSelf("abort_missing_assignee");
+          return;
+        }
+        const meta = getSubjectSidebarMeta(subjectId);
         const alreadyAssigned = Array.isArray(meta.assignees) && meta.assignees.some((id) => String(id || "") === selfAssigneeId);
-        if (alreadyAssigned) return;
+        traceAssignSelf("assignee_state", {
+          assignees: Array.isArray(meta.assignees) ? meta.assignees : [],
+          alreadyAssigned
+        });
+        if (alreadyAssigned) {
+          traceAssignSelf("noop_already_assigned");
+          return;
+        }
         if (typeof toggleSubjectAssignee !== "function") return;
-        await toggleSubjectAssignee(selection.item.id, selfAssigneeId, { root, skipRerender: false });
+        const toggled = await toggleSubjectAssignee(subjectId, selfAssigneeId, { root, skipRerender: false });
+        traceAssignSelf("toggle_completed", {
+          subjectId,
+          selfAssigneeId,
+          success: toggled === true
+        });
       };
     });
 
