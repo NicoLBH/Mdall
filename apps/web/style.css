@@ -1925,6 +1925,7 @@ body.modal-open {
 .issue-row{display:grid;grid-template-columns: var(--issues-cols);gap:0;align-items:center;padding: 12px 16px;border-bottom:1px solid rgba(48,54,61,.35);}
 .issue-row:last-child{border-bottom:none;}
 .issue-row:hover{background: rgba(110, 118, 129, .06);}
+.details-subissues .issue-row{padding:12px 16px 12px 0px;}
 
 .subjects-priority-head{
   position:relative;
@@ -2497,7 +2498,6 @@ body.is-resizing{
 .subissues-table .issues-table__head{border-bottom:1px solid var(--border2);}
 .subissues-table .issues-table__body{max-height:360px;overflow:auto;}
 .subissue-row--selected{outline:1px solid rgba(88,166,255,.45);background:rgba(56,139,253,.08);}
-.subissues-table .data-table-shell__body{padding-left:40px;}
 
 /* Main table row selection (same visual language as sub-issues selection) */
 .issue-row.selected{
@@ -2724,9 +2724,27 @@ body.is-resizing{
 .subissues-sortable-row.is-subissue-drag-gap::after{bottom:0;}
 .subissues-sortable-row.is-subissue-drop-before{
   box-shadow:inset 0 2px 0 0 rgba(56,139,253,.9);
+  transform:translateY(8px);
 }
 .subissues-sortable-row.is-subissue-drop-after{
   box-shadow:inset 0 -2px 0 0 rgba(56,139,253,.9);
+  transform:translateY(-8px);
+}
+
+.subissue-drag-preview{
+  background:var(--bg);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  box-shadow:0 8px 28px rgba(0,0,0,.35);
+  opacity:.98;
+}
+
+.subissue-drag-preview{
+  background:var(--bg);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  box-shadow:0 8px 28px rgba(0,0,0,.35);
+  opacity:.98;
 }
 
 .subissue-drag-preview{
