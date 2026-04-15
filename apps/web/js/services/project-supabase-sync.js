@@ -1371,10 +1371,11 @@ async function mapProjectCollaboratorRow(row = {}) {
   const lot = row.project_lot || {};
   const lotCatalog = lot.lot_catalog || {};
   const linkedUserId = safeString(row.linked_user_id || row.collaborator_user_id || row.user_id || "");
+  const avatarStoragePath = safeString(profile.avatar_storage_path || row.avatar_storage_path || "");
   const avatarUrl = await resolveAvatarUrl({
     avatarUrl: safeString(profile.avatar_url || row.avatar_url || ""),
     avatar: safeString(profile.avatar || ""),
-    avatarStoragePath: safeString(profile.avatar_storage_path || row.avatar_storage_path || ""),
+    avatarStoragePath,
     fallback: ""
   });
 
@@ -1397,6 +1398,7 @@ async function mapProjectCollaboratorRow(row = {}) {
     addedAt: row.created_at || null,
     removedAt: row.removed_at || null,
     company: safeString(profile.company || row.company || ""),
+    avatarStoragePath,
     avatarUrl,
     sourceType: safeString(row.source_type || (linkedUserId ? "mdall_user" : "directory_person")) || "directory_person"
   };

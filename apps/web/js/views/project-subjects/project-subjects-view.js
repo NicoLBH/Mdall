@@ -1153,6 +1153,7 @@ function getActiveProjectCollaborators() {
       roleGroupCode: String(collaborator?.roleGroupCode || "").trim().toLowerCase(),
       roleGroupLabel: firstNonEmpty(collaborator?.roleGroupLabel, ""),
       email: firstNonEmpty(collaborator?.email, ""),
+      avatarStoragePath: firstNonEmpty(collaborator?.avatarStoragePath, ""),
       avatarUrl: firstNonEmpty(collaborator?.avatarUrl, collaborator?.avatar, "")
     }))
     .filter((collaborator) => !!collaborator.id);
