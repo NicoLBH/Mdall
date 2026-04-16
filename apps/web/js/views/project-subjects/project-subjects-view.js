@@ -1778,7 +1778,7 @@ function renderSubissueAssigneesCellHtml(subjectId) {
     .slice(0, 3);
 
   if (!selected.length) {
-    return `<span class="subissues-assignees-placeholder" aria-hidden="true">${svgIcon("circle", { className: "octicon octicon-circle" })}</span>`;
+    return `<span class="subissues-assignees-placeholder" aria-hidden="true">${svgIcon("subissue-assignee-placeholder", { className: "octicon octicon-circle SubIssuesListItem-module__Octicon_1__Xrfw9" })}</span>`;
   }
 
   return `
