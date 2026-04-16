@@ -674,7 +674,6 @@ export function createProjectSubjectsEvents(config) {
           || ""
         ).replace(/\s+/g, " ").trim();
 
-        previewRoot.classList.add("is-active");
         previewCard.setAttribute("data-child-subject-id", childSubjectId);
         previewCard.textContent = previewTitle;
         previewCard.style.width = `${Math.max(1, Math.round(rowRect.width))}px`;
@@ -827,14 +826,19 @@ export function createProjectSubjectsEvents(config) {
           if (event.dataTransfer) {
             const offsetX = Math.max(0, Math.round(event.clientX - rowRect.left));
             const offsetY = Math.max(0, Math.round(event.clientY - rowRect.top));
-            if (dragPreviewNode) dragPreviewNode.getBoundingClientRect();
+            if (!canvasDragPreview && dragPreviewNode) {
+              const previewRoot = document.getElementById("nativeDragPreviewRoot");
+              if (previewRoot) previewRoot.classList.add("is-active");
+              dragPreviewNode.getBoundingClientRect();
+            }
             const dragImageNode = canvasDragPreview || dragPreviewNode || row;
             event.dataTransfer.setDragImage(dragImageNode, offsetX, offsetY);
             debugSubissuesDnd("dragstart-setDragImage", {
               offsetX,
               offsetY,
               hasNativePreview: !!dragPreviewNode,
-              dragImageKind: canvasDragPreview ? "canvas" : (dragPreviewNode ? "dom" : "row")
+              dragImageKind: canvasDragPreview ? "canvas" : (dragPreviewNode ? "dom" : "row"),
+              usesVisibleDomPreviewHost: !canvasDragPreview && !!dragPreviewNode
             });
           }
           row.classList.add("is-subissue-dragging", "is-subissue-drag-gap");
