@@ -2779,10 +2779,11 @@ body.is-resizing{
 .subissues-assignees-placeholder .gh-user-menu__item-icon{
   width: 20px;
   height: 20px;
-  border: solid 1px var(--muted);
+  border: solid 1px rgba(61, 68, 77, 0.7);
   border-radius: 100px;
   padding: 2px;
 }
+.subissues-assignees-placeholder .gh-user-menu__item-icon .octicon-person{fill:rgba(61, 68, 77, 0.7)}
 .cell-subissue-actions{
   position:relative;
   display:flex;
