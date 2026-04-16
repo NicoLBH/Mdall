@@ -2560,7 +2560,7 @@ body.is-resizing{
 .details-title--compact .details-title-compact-bottom .subissues-counts--problems{flex:0 0 auto;margin:0px;border:none;padding:0px 6px 0px 0px;font-weight:400;font-size:12px;line-height:16px;gap:4px;background:transparent;}
 .details-title--compact .details-title-compact-bottom .details-parent-badge{display:inline-flex;align-items:center;gap:4px;font-size:12px;line-height:16px;color:var(--muted);min-width:0;}
 .details-title--compact .details-title-compact-bottom .details-parent-badge__icon{display:inline-flex;align-items:center;flex:0 0 auto;}
-.details-title--compact .details-title-compact-bottom .details-parent-badge__text{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
+.details-title--compact .details-title-compact-bottom .details-parent-badge__link{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
 .details-title--compact .details-title-compact-bottom .verdict-bar{flex:0 1 auto;}
 .details-title--compact .gh-state{font-size:14px;line-height:21px;padding:3px 10px;height:32px;}
 .details-title--compact .details-title-row{align-items:flex-start;}
@@ -2609,7 +2609,24 @@ body.is-resizing{
   min-width:0;
 }
 .details-title--expanded .details-parent-badge__icon{display:inline-flex;align-items:center;flex:0 0 auto;}
-.details-title--expanded .details-parent-badge__text{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
+.details-title--expanded .details-parent-badge__link{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
+.details-parent-badge__link{
+  border:none;
+  background:transparent;
+  color:inherit;
+  font:inherit;
+  line-height:inherit;
+  padding:0;
+  margin:0;
+  cursor:pointer;
+  text-decoration:none;
+}
+.details-parent-badge__link:hover,
+.details-parent-badge__link:focus-visible{
+  color:var(--accent);
+  text-decoration:none;
+  outline:none;
+}
 
 /* Expanded title layout: 2 lines */
 .details-title--expanded .details-title-maincol{display:flex;flex-direction:column;gap:6px;min-width:0;}

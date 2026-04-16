@@ -439,9 +439,22 @@ const projectSubjectDrilldown = createProjectSubjectDrilldownController({
   renderOverlayChromeHead,
   bindOverlayChromeDismiss,
   getDrilldownSelection,
+  promoteActionHtml: `
+    <button
+      class="icon-btn icon-btn--sm js-drilldown-promote-selection"
+      type="button"
+      aria-label="Afficher ce sujet dans le panneau principal"
+      title="Afficher dans le panneau principal"
+    >
+      ${svgIcon("screen-full", { className: "octicon octicon-screen-full" })}
+    </button>
+  `,
   openDrilldownFromSituationSelection: openDrilldownFromSituation,
   openDrilldownFromSubjectSelection: openDrilldownFromSubject,
   openDrilldownFromSujetSelection: openDrilldownFromSujet,
+  selectSituationSelection: selectSituation,
+  selectSubjectSelection: selectSubject,
+  selectSujetSelection: selectSujet,
   renderDetailsHtml: renderSharedDetailsHtml,
   renderDetailsTitleWrapHtml: renderSharedDetailsTitleWrapHtml,
   renderDetailsChromeHeadHtml: renderSharedDetailsChromeHeadHtml,

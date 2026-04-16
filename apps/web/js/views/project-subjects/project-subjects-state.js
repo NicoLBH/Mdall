@@ -74,10 +74,20 @@ export function createProjectSubjectsState({ store }) {
         selectedSituationId: null,
         selectedSujetId: null,
         selectedSubjectId: null,
+        rightSubissuesOpen: true,
+        rightSubissuesExpandedSubjectIds: new Set(),
+        rightSubissueMenuOpenId: "",
         expandedSujets: new Set(),
         expandedSubjectIds: new Set()
       };
     }
+    if (typeof v.drilldown.rightSubissuesOpen !== "boolean") v.drilldown.rightSubissuesOpen = true;
+    if (!(v.drilldown.rightSubissuesExpandedSubjectIds instanceof Set)) {
+      v.drilldown.rightSubissuesExpandedSubjectIds = new Set(
+        Array.isArray(v.drilldown.rightSubissuesExpandedSubjectIds) ? v.drilldown.rightSubissuesExpandedSubjectIds : []
+      );
+    }
+    if (typeof v.drilldown.rightSubissueMenuOpenId !== "string") v.drilldown.rightSubissueMenuOpenId = "";
     if (!(v.drilldown.expandedSubjectIds instanceof Set)) {
       const legacyExpanded = v.drilldown.expandedSujets instanceof Set
         ? Array.from(v.drilldown.expandedSujets)

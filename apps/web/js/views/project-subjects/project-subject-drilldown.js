@@ -37,9 +37,13 @@ export function createProjectSubjectDrilldownController(config) {
     renderOverlayChromeHead,
     bindOverlayChromeDismiss,
     getDrilldownSelection,
+    promoteActionHtml = "",
     openDrilldownFromSituationSelection,
     openDrilldownFromSubjectSelection,
     openDrilldownFromSujetSelection,
+    selectSituationSelection,
+    selectSubjectSelection,
+    selectSujetSelection,
     renderDetailsHtml,
     renderDetailsTitleWrapHtml,
     wireDetailsInteractive,
@@ -104,7 +108,8 @@ export function createProjectSubjectDrilldownController(config) {
         titleId: "drilldownTitle",
         closeId: "drilldownClose",
         closeLabel: "Fermer",
-        headClassName: "drilldown__head"
+        headClassName: "drilldown__head",
+        actionsHtml: promoteActionHtml
       }),
       bodyId: "drilldownBody",
       bodyClassName: "drilldown__body details-body subject-details-body"
@@ -116,6 +121,16 @@ export function createProjectSubjectDrilldownController(config) {
     bindOverlayChromeDismiss(panel, {
       onClose: closeDrilldown
     });
+
+    const promoteButton = panel.querySelector(".js-drilldown-promote-selection");
+    if (promoteButton && panel.dataset.drilldownPromoteBound !== "1") {
+      panel.dataset.drilldownPromoteBound = "1";
+      promoteButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        promoteDrilldownSelectionToPrimary();
+      });
+    }
 
     window.addEventListener("resize", () => {
       if (!store.situationsView?.drilldown?.isOpen) return;
@@ -135,10 +150,15 @@ export function createProjectSubjectDrilldownController(config) {
     if (!panel || !title || !body || !shell) return;
 
     const shellScrollState = getScrollableElementScrollState(shell);
-    const expandedSubjectIds = store.projectSubjectsView?.drilldown?.expandedSubjectIds
-      || store.situationsView?.drilldown?.expandedSubjectIds
+    const drilldownState = store.projectSubjectsView?.drilldown
+      || store.situationsView?.drilldown
+      || {};
+    const expandedSubjectIds = drilldownState.expandedSubjectIds
       || store.situationsView?.drilldown?.expandedSujets
       || new Set();
+    const expandedSubissueSubjectIds = drilldownState.rightSubissuesExpandedSubjectIds || new Set();
+    const subissuesOpen = drilldownState.rightSubissuesOpen !== false;
+    const openSubissueMenuId = String(drilldownState.rightSubissueMenuOpenId || "");
 
     const selection = getDrilldownSelection();
     const details = renderDetailsHtml(selection, {
@@ -146,7 +166,9 @@ export function createProjectSubjectDrilldownController(config) {
         sujetRowClass: "js-drilldown-select-sujet",
         sujetToggleClass: "js-drilldown-toggle-sujet",
         expandedSujets: expandedSubjectIds,
-        expandedSubjectIds
+        expandedSubjectIds: expandedSubissueSubjectIds,
+        openMenuId: openSubissueMenuId,
+        isOpen: subissuesOpen
       }
     });
 
@@ -240,6 +262,18 @@ export function createProjectSubjectDrilldownController(config) {
     viewState.drilldown.normalDetailsCompactSnapshot = null;
   }
 
+  function promoteDrilldownSelectionToPrimary() {
+    const selection = getDrilldownSelection();
+    closeDrilldown();
+    if (!selection?.item?.id) return;
+    if (selection.type === "situation") {
+      selectSituationSelection?.(selection.item.id);
+      return;
+    }
+    const openSelection = selectSubjectSelection || selectSujetSelection;
+    openSelection?.(selection.item.id);
+  }
+
   function openDrilldownFromSituation(situationId, options = {}) {
     ensureViewUiState();
     const selection = openDrilldownFromSituationSelection(situationId);
@@ -265,6 +299,7 @@ export function createProjectSubjectDrilldownController(config) {
     updateDrilldownPanel,
     openDrilldown,
     closeDrilldown,
+    promoteDrilldownSelectionToPrimary,
     openDrilldownFromSituation,
     openDrilldownFromSubject,
     openDrilldownFromSujet

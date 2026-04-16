@@ -47,6 +47,14 @@ export function createProjectSubjectDetailController(config) {
       || store.projectSubjectsView?.expandedSubjectIds
       || store.situationsView?.rightExpandedSujets
       || new Set();
+    const expandedSubissueSubjectIds = store.projectSubjectsView?.rightSubissuesExpandedSubjectIds
+      || store.situationsView?.rightSubissuesExpandedSubjectIds
+      || new Set();
+    const openSubissueMenuId = String(
+      store.projectSubjectsView?.rightSubissueMenuOpenId
+      || store.situationsView?.rightSubissueMenuOpenId
+      || ""
+    );
 
     const bodyScrollState = getScrollableElementScrollState(body);
     const details = renderDetailsHtml(null, {
@@ -54,7 +62,9 @@ export function createProjectSubjectDetailController(config) {
         sujetRowClass: "js-modal-drilldown-sujet",
         sujetToggleClass: "js-modal-toggle-sujet",
         expandedSujets: expandedSubjectIds,
-        expandedSubjectIds
+        expandedSubjectIds: expandedSubissueSubjectIds,
+        openMenuId: openSubissueMenuId,
+        isOpen: (store.projectSubjectsView?.rightSubissuesOpen ?? store.situationsView?.rightSubissuesOpen ?? true) !== false
       }
     });
 

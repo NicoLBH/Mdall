@@ -611,22 +611,43 @@ export function createProjectSubjectsEvents(config) {
       });
     }
 
+    const isDrilldownScope = !!root.closest?.("#drilldownPanel");
+    const scopedUiState = (() => {
+      const uiState = getSubjectsViewState();
+      if (!isDrilldownScope) return uiState;
+      if (!uiState.drilldown || typeof uiState.drilldown !== "object") {
+        uiState.drilldown = {};
+      }
+      return uiState.drilldown;
+    })();
+
+    if (typeof scopedUiState.rightSubissuesOpen !== "boolean") scopedUiState.rightSubissuesOpen = true;
+    if (!(scopedUiState.rightSubissuesExpandedSubjectIds instanceof Set)) {
+      scopedUiState.rightSubissuesExpandedSubjectIds = new Set(
+        Array.isArray(scopedUiState.rightSubissuesExpandedSubjectIds)
+          ? scopedUiState.rightSubissuesExpandedSubjectIds
+          : []
+      );
+    }
+    if (typeof scopedUiState.rightSubissueMenuOpenId !== "string") scopedUiState.rightSubissueMenuOpenId = "";
+
+    const rerenderDetailsScope = () => {
+      if (isDrilldownScope) {
+        updateDrilldownPanel();
+      } else {
+        rerenderPanels();
+      }
+    };
+
     root.querySelectorAll("[data-action='toggle-subissues']").forEach((btn) => {
       btn.onclick = () => {
-        store.situationsView.rightSubissuesOpen = !store.situationsView.rightSubissuesOpen;
-        rerenderPanels();
+        scopedUiState.rightSubissuesOpen = !scopedUiState.rightSubissuesOpen;
+        rerenderDetailsScope();
       };
     });
 
     const setSubjectParent = getSetSubjectParent?.();
-    const subissuesExpandedSet = (() => {
-      const uiState = getSubjectsViewState();
-      if (!(uiState.rightSubissuesExpandedSubjectIds instanceof Set)) {
-        uiState.rightSubissuesExpandedSubjectIds = new Set(Array.isArray(uiState.rightSubissuesExpandedSubjectIds) ? uiState.rightSubissuesExpandedSubjectIds : []);
-      }
-      if (typeof uiState.rightSubissueMenuOpenId !== "string") uiState.rightSubissueMenuOpenId = "";
-      return uiState.rightSubissuesExpandedSubjectIds;
-    })();
+    const subissuesExpandedSet = scopedUiState.rightSubissuesExpandedSubjectIds;
 
     root.querySelectorAll("[data-subissue-tree-toggle]").forEach((btn) => {
       btn.onclick = (event) => {
@@ -636,7 +657,7 @@ export function createProjectSubjectsEvents(config) {
         if (!subjectId) return;
         if (subissuesExpandedSet.has(subjectId)) subissuesExpandedSet.delete(subjectId);
         else subissuesExpandedSet.add(subjectId);
-        rerenderPanels();
+        rerenderDetailsScope();
       };
     });
 
@@ -645,9 +666,8 @@ export function createProjectSubjectsEvents(config) {
         event.preventDefault();
         event.stopPropagation();
         const subjectId = String(btn.dataset.subissueActionsTrigger || "");
-        const uiState = getSubjectsViewState();
-        uiState.rightSubissueMenuOpenId = String(uiState.rightSubissueMenuOpenId || "") === subjectId ? "" : subjectId;
-        rerenderPanels();
+        scopedUiState.rightSubissueMenuOpenId = String(scopedUiState.rightSubissueMenuOpenId || "") === subjectId ? "" : subjectId;
+        rerenderDetailsScope();
       };
     });
 
@@ -658,10 +678,9 @@ export function createProjectSubjectsEvents(config) {
         const subjectId = String(btn.dataset.subissueRemoveParent || "");
         if (!subjectId || typeof setSubjectParent !== "function") return;
         await setSubjectParent(subjectId, "", { root, skipRerender: false });
-        const uiState = getSubjectsViewState();
-        uiState.rightSubissueMenuOpenId = "";
+        scopedUiState.rightSubissueMenuOpenId = "";
         subissuesExpandedSet.delete(subjectId);
-        rerenderPanels();
+        rerenderDetailsScope();
       };
     });
 
@@ -1089,7 +1108,6 @@ export function createProjectSubjectsEvents(config) {
       });
     }
 
-    const isDrilldownScope = !!root.closest?.("#drilldownPanel");
     root.querySelectorAll(".js-sub-right-toggle-sujet, .js-modal-toggle-sujet, .js-drilldown-toggle-sujet").forEach((btn) => {
       btn.onclick = (ev) => {
         ev.stopPropagation();
@@ -1117,7 +1135,16 @@ export function createProjectSubjectsEvents(config) {
       };
     });
 
-    root.querySelectorAll("[data-parent-subject-id]").forEach((card) => {
+    root.querySelectorAll(".js-details-parent-subject-link[data-parent-subject-id]").forEach((btn) => {
+      btn.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const parentSubjectId = String(btn.dataset.parentSubjectId || "");
+        if (parentSubjectId) (openDrilldownFromSubjectPanel || openDrilldownFromSujetPanel)(parentSubjectId);
+      };
+    });
+
+    root.querySelectorAll(".subject-meta-parent-card[data-parent-subject-id]").forEach((card) => {
       card.onclick = (event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -1621,7 +1648,7 @@ export function createProjectSubjectsEvents(config) {
         return;
       }
 
-      const parentSubjectCard = event.target.closest("[data-parent-subject-id]");
+      const parentSubjectCard = event.target.closest(".subject-meta-parent-card[data-parent-subject-id]");
       if (parentSubjectCard) {
         event.preventDefault();
         event.stopPropagation();

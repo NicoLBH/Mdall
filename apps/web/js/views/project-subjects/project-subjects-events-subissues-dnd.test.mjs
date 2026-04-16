@@ -129,6 +129,22 @@ test("le dragend persiste l'ordre même sans drop explicite", () => {
   assert.match(eventsSource, /await reorderSubjectChildren\(parentSubjectId, orderedChildIds, \{ root, skipRerender: false \}\);/);
 });
 
+test("la navigation vers le sujet parent ne capte que la carte parent dédiée", () => {
+  assert.match(eventsSource, /\.subject-meta-parent-card\[data-parent-subject-id\]/);
+  assert.doesNotMatch(eventsSource, /event\.target\.closest\("\[data-parent-subject-id\]"\)/);
+});
+
+test("le badge parent du header ouvre le sujet parent via le drilldown", () => {
+  assert.match(eventsSource, /\.js-details-parent-subject-link\[data-parent-subject-id\]/);
+  assert.match(eventsSource, /if \(parentSubjectId\) \(openDrilldownFromSubjectPanel \|\| openDrilldownFromSujetPanel\)\(parentSubjectId\);/);
+});
+
+test("les toggles de sous-sujets utilisent l'état du scope drilldown quand présent", () => {
+  assert.match(eventsSource, /const isDrilldownScope = !!root\.closest\?\.\("#drilldownPanel"\);/);
+  assert.match(eventsSource, /const scopedUiState = \(\(\) => \{/);
+  assert.match(eventsSource, /if \(isDrilldownScope\) \{\s*updateDrilldownPanel\(\);\s*\}\s*else \{\s*rerenderPanels\(\);\s*\}/);
+});
+
 test("l'instrumentation DnD est activable via query/localStorage", () => {
   assert.match(eventsSource, /function isSubissuesDndDebugEnabled\(\)/);
   assert.match(eventsSource, /debugSubissuesDnd=1/);
