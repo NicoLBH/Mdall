@@ -2662,7 +2662,7 @@ body.is-resizing{
 .v-dot--so{ background:rgb(20, 31, 53); border-color:rgba(20,31,53,.55); }
 
 .details-subissues .subissues-table{ --issues-cols: 1fr; }
-.details-subissues .subissues-table--sortable{ --issues-cols: 24px minmax(0,1fr); }
+.details-subissues .subissues-table--sortable{ --issues-cols: 24px 16px minmax(0,1fr); }
 .details-subissues .issues-table__head{ display:none !important; }
 .details-subissues .cell-theme{ padding-right:0; }
 .details-subissues .issue-row{border-bottom:none;padding:0px;}

@@ -1847,15 +1847,15 @@ function renderSubIssuesForSujet(sujet, options = {}) {
               </button>`
             : ""}
         </div>
+        <div class="cell cell-subissue-drag-spacer">
+          ${hasChildren
+            ? `<button type="button" class="subissue-tree-toggle js-subissue-tree-toggle" data-subissue-tree-toggle="${escapeHtml(subjectId)}" aria-label="${isExpanded ? "Replier" : "Déplier"} le sous-sujet">
+                ${svgIcon(isExpanded ? "chevron-down" : "chevron-right", { className: isExpanded ? "octicon octicon-chevron-down" : "octicon octicon-chevron-right" })}
+              </button>`
+            : ""}
+        </div>
         <div class="subissue-row-main">
           ${nestedSpacerCells}
-          <div class="cell cell-subissue-drag-spacer">
-            ${hasChildren
-              ? `<button type="button" class="subissue-tree-toggle js-subissue-tree-toggle" data-subissue-tree-toggle="${escapeHtml(subjectId)}" aria-label="${isExpanded ? "Replier" : "Déplier"} le sous-sujet">
-                  ${svgIcon(isExpanded ? "chevron-down" : "chevron-right", { className: isExpanded ? "octicon octicon-chevron-down" : "octicon octicon-chevron-right" })}
-                </button>`
-              : ""}
-          </div>
           <div class="cell cell-theme cell-theme--full ${levelClass}">
             ${issueIcon(getEffectiveSujetStatus(subjectId))}
             <span class="theme-text theme-text--pb">${escapeHtml(firstNonEmpty(subjectNode.title, subjectId, ""))}</span>
