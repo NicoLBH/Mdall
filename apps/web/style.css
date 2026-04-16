@@ -2731,26 +2731,24 @@ body.is-resizing{
   transform:translateY(-8px);
 }
 
-.subissue-drag-preview{
-  background-color:var(--bbg, var(--bg));
-  border:solid 1px var(--border);
-  border-radius:var(--radius);
-  box-shadow:0 10px 30px rgba(0,0,0,.34), 0 1px 0 rgba(255,255,255,.06) inset;
-  opacity:1 !important;
+#nativeDragPreviewRoot{
+  position:fixed;
+  top:0;
+  left:0;
+  z-index:-1;
+  display:none;
+  pointer-events:none;
 }
-.subissue-drag-preview > *{
-  visibility:visible !important;
+#nativeDragPreviewRoot.is-active{
+  display:block;
 }
-
-.subissue-drag-preview{
-  background-color:var(--bbg, var(--bg, #0d1117));
-  border:solid 1px var(--border, rgba(139,148,158,.35));
-  border-radius:var(--radius);
-  box-shadow:0 10px 30px rgba(0,0,0,.34), 0 1px 0 rgba(255,255,255,.06) inset;
-  opacity:1 !important;
-}
-.subissue-drag-preview > *{
-  visibility:visible !important;
+#nativeDragPreviewCard{
+  color:var(--text);
+  font:500 13px/1.4 var(--font);
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  opacity:1;
 }
 
 

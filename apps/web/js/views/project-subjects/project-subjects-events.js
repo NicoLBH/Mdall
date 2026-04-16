@@ -628,8 +628,13 @@ export function createProjectSubjectsEvents(config) {
       let dragPreviewNode = null;
 
       const clearDragPreview = () => {
-        if (dragPreviewNode?.parentNode) {
-          dragPreviewNode.parentNode.removeChild(dragPreviewNode);
+        const previewRoot = document.getElementById("nativeDragPreviewRoot");
+        const previewCard = document.getElementById("nativeDragPreviewCard");
+        if (previewRoot) previewRoot.classList.remove("is-active");
+        if (previewCard) {
+          previewCard.textContent = "";
+          previewCard.removeAttribute("data-child-subject-id");
+          previewCard.removeAttribute("style");
         }
         dragPreviewNode = null;
       };
@@ -638,6 +643,75 @@ export function createProjectSubjectsEvents(config) {
         sortableRows.forEach((row) => {
           row.classList.remove("is-subissue-dragging", "is-subissue-drag-gap", "is-subissue-drop-before", "is-subissue-drop-after");
         });
+      };
+
+      const resolveCssCustomProp = (styles, name, fallback = "") => {
+        const rawName = String(name || "").trim();
+        if (!styles || !rawName.startsWith("--")) return String(fallback || "");
+        const resolved = String(styles.getPropertyValue(rawName) || "").trim();
+        if (resolved) return resolved;
+        return String(fallback || "");
+      };
+
+      const getNativeSubissueDragPreviewNodes = () => {
+        const previewRoot = document.getElementById("nativeDragPreviewRoot");
+        const previewCard = document.getElementById("nativeDragPreviewCard");
+        if (!previewRoot || !previewCard) return { previewRoot: null, previewCard: null };
+        return { previewRoot, previewCard };
+      };
+
+      const mountSubissueDragPreview = ({ row, rowRect, rowStyles, issuesCols, childSubjectId }) => {
+        const { previewRoot, previewCard } = getNativeSubissueDragPreviewNodes();
+        if (!previewRoot || !previewCard) return null;
+
+        const previewBackgroundColor = resolveCssCustomProp(rowStyles, "--bbg", resolveCssCustomProp(rowStyles, "--bg", "#0d1117"));
+        const previewBorderColor = resolveCssCustomProp(rowStyles, "--border", "rgba(139,148,158,.35)");
+        const previewBorderRadius = resolveCssCustomProp(rowStyles, "--radius", "6px");
+        const previewTitle = String(
+          row.querySelector(".js-row-title-trigger")?.textContent
+          || row.querySelector("[data-subissue-title]")?.textContent
+          || row.textContent
+          || ""
+        ).replace(/\s+/g, " ").trim();
+
+        previewRoot.classList.add("is-active");
+        previewCard.setAttribute("data-child-subject-id", childSubjectId);
+        previewCard.textContent = previewTitle;
+        previewCard.style.width = `${Math.max(1, Math.round(rowRect.width))}px`;
+        if (issuesCols) previewCard.style.setProperty("--issues-cols", issuesCols);
+        previewCard.style.display = "grid";
+        previewCard.style.gridTemplateColumns = rowStyles.gridTemplateColumns;
+        previewCard.style.padding = rowStyles.padding;
+        previewCard.style.opacity = "1";
+        previewCard.style.backgroundColor = previewBackgroundColor;
+        previewCard.style.borderStyle = "solid";
+        previewCard.style.borderWidth = "1px";
+        previewCard.style.borderColor = previewBorderColor;
+        previewCard.style.borderRadius = previewBorderRadius;
+        previewCard.style.boxShadow = "0 14px 36px rgba(1,4,9,.55), 0 0 0 1px rgba(1,4,9,.35)";
+
+        debugSubissuesDnd("dragstart-preview", {
+          rowRect: {
+            width: rowRect.width,
+            height: rowRect.height
+          },
+          issuesCols,
+          rowGridTemplateColumns: rowStyles.gridTemplateColumns,
+          previewInline: {
+            width: previewCard.style.width,
+            display: previewCard.style.display,
+            gridTemplateColumns: previewCard.style.gridTemplateColumns,
+            backgroundColor: previewCard.style.backgroundColor,
+            borderStyle: previewCard.style.borderStyle,
+            borderWidth: previewCard.style.borderWidth,
+            borderColor: previewCard.style.borderColor,
+            borderRadius: previewCard.style.borderRadius,
+            boxShadow: previewCard.style.boxShadow,
+            opacity: previewCard.style.opacity
+          }
+        });
+
+        return previewCard;
       };
 
       const animateSubissueRowReflow = (container, mutateDom) => {
@@ -683,56 +757,26 @@ export function createProjectSubjectsEvents(config) {
             event.preventDefault();
             return;
           }
-          row.classList.add("is-subissue-dragging", "is-subissue-drag-gap");
           event.dataTransfer?.setData("text/plain", childSubjectId);
           if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
 
           const rowRect = row.getBoundingClientRect();
           const rowStyles = window.getComputedStyle(row);
           const issuesCols = String(rowStyles.getPropertyValue("--issues-cols") || "").trim();
-          dragPreviewNode = row.cloneNode(true);
-          dragPreviewNode.classList.remove("is-subissue-dragging", "is-subissue-drag-gap", "is-subissue-drop-before", "is-subissue-drop-after");
-          dragPreviewNode.classList.add("subissue-drag-preview");
-          dragPreviewNode.style.width = `${Math.max(1, Math.round(rowRect.width))}px`;
-          if (issuesCols) dragPreviewNode.style.setProperty("--issues-cols", issuesCols);
-          dragPreviewNode.style.display = rowStyles.display;
-          dragPreviewNode.style.gridTemplateColumns = rowStyles.gridTemplateColumns;
-          dragPreviewNode.style.padding = rowStyles.padding;
-          dragPreviewNode.style.opacity = "1";
-          dragPreviewNode.style.backgroundColor = "var(--bg)";
-          dragPreviewNode.style.border = "solid 1px var(--border)";
-          dragPreviewNode.style.borderRadius = "var(--radius)";
-          dragPreviewNode.style.position = "fixed";
-          dragPreviewNode.style.top = "0";
-          dragPreviewNode.style.left = "0";
-          dragPreviewNode.style.transform = "translate(-200vw, -200vh)";
-          dragPreviewNode.style.zIndex = "-1";
-          dragPreviewNode.style.pointerEvents = "none";
-          dragPreviewNode.setAttribute("aria-hidden", "true");
-          document.body.appendChild(dragPreviewNode);
-          debugSubissuesDnd("dragstart-preview", {
-            rowRect: {
-              width: rowRect.width,
-              height: rowRect.height
-            },
+          dragPreviewNode = mountSubissueDragPreview({
+            row,
+            rowRect,
+            rowStyles,
             issuesCols,
-            rowGridTemplateColumns: rowStyles.gridTemplateColumns,
-            previewInline: {
-              width: dragPreviewNode.style.width,
-              display: dragPreviewNode.style.display,
-              gridTemplateColumns: dragPreviewNode.style.gridTemplateColumns,
-              backgroundColor: dragPreviewNode.style.backgroundColor,
-              border: dragPreviewNode.style.border,
-              borderRadius: dragPreviewNode.style.borderRadius,
-              opacity: dragPreviewNode.style.opacity
-            }
+            childSubjectId
           });
           if (event.dataTransfer) {
             const offsetX = Math.max(0, Math.round(event.clientX - rowRect.left));
             const offsetY = Math.max(0, Math.round(event.clientY - rowRect.top));
-            event.dataTransfer.setDragImage(dragPreviewNode, offsetX, offsetY);
-            debugSubissuesDnd("dragstart-setDragImage", { offsetX, offsetY });
+            event.dataTransfer.setDragImage(dragPreviewNode || row, offsetX, offsetY);
+            debugSubissuesDnd("dragstart-setDragImage", { offsetX, offsetY, hasNativePreview: !!dragPreviewNode });
           }
+          row.classList.add("is-subissue-dragging", "is-subissue-drag-gap");
         });
 
         row.addEventListener("dragover", (event) => {
