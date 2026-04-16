@@ -2682,11 +2682,11 @@ body.is-resizing{
 .cell-subissue-drag-spacer{
   display:flex;
   align-items:center;
-}
-.cell-subissue-drag-spacer{
   justify-content:center;
-  width:16px;
+  flex:0 0 auto;
 }
+.cell-subissue-drag-handle{width:14px;}
+.cell-subissue-drag-spacer{width:24px;}
 .subissue-tree-toggle{
   width:16px;
   height:16px;
