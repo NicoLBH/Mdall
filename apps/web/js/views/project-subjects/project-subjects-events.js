@@ -751,7 +751,7 @@ export function createProjectSubjectsEvents(config) {
           || row.textContent
           || ""
         ).replace(/\s+/g, " ").trim();
-        const previewIssueIcon = row.querySelector(".issue-status-icon");
+        const previewRowClone = row.cloneNode(true);
 
         previewCard.setAttribute("data-child-subject-id", childSubjectId);
         previewCard.innerHTML = "";
@@ -759,7 +759,12 @@ export function createProjectSubjectsEvents(config) {
         if (issuesCols) previewCard.style.setProperty("--issues-cols", issuesCols);
         previewCard.style.display = "grid";
         previewCard.style.gridTemplateColumns = issuesCols || rowStyles.gridTemplateColumns;
-        previewCard.style.padding = rowStyles.padding;
+        previewCard.style.height = "48px";
+        previewCard.style.minHeight = "48px";
+        previewCard.style.padding = "12px 8px";
+        previewCard.style.alignItems = "center";
+        previewCard.style.boxSizing = "border-box";
+        previewCard.style.overflow = "hidden";
         previewCard.style.opacity = "1";
         previewCard.style.backgroundColor = previewBackgroundColor;
         previewCard.style.borderStyle = "solid";
@@ -767,20 +772,15 @@ export function createProjectSubjectsEvents(config) {
         previewCard.style.borderColor = previewBorderColor;
         previewCard.style.borderRadius = previewBorderRadius;
         previewCard.style.boxShadow = "0 14px 36px rgba(1,4,9,.55), 0 0 0 1px rgba(1,4,9,.35)";
-        const leftSpacer = document.createElement("div");
-        leftSpacer.className = "cell cell-subissue-drag-handle";
-        leftSpacer.setAttribute("aria-hidden", "true");
-        const middleSpacer = document.createElement("div");
-        middleSpacer.className = "cell cell-subissue-drag-spacer";
-        middleSpacer.setAttribute("aria-hidden", "true");
-        const contentCell = document.createElement("div");
-        contentCell.className = "cell cell-theme cell-theme--full lvl0";
-        if (previewIssueIcon) contentCell.appendChild(previewIssueIcon.cloneNode(true));
-        const titleSpan = document.createElement("span");
-        titleSpan.className = "theme-text theme-text--pb";
-        titleSpan.textContent = previewTitle;
-        contentCell.appendChild(titleSpan);
-        previewCard.append(leftSpacer, middleSpacer, contentCell);
+        previewRowClone.classList.remove("is-subissue-dragging", "is-subissue-drag-gap", "is-subissue-drop-before", "is-subissue-drop-after");
+        previewRowClone.removeAttribute("draggable");
+        previewRowClone.querySelectorAll("button").forEach((button) => {
+          button.tabIndex = -1;
+          button.setAttribute("aria-hidden", "true");
+        });
+        Array.from(previewRowClone.children).forEach((child) => {
+          previewCard.appendChild(child.cloneNode(true));
+        });
         const previewPaintRect = previewCard.getBoundingClientRect();
 
         debugSubissuesDnd("dragstart-preview", {
@@ -974,13 +974,13 @@ export function createProjectSubjectsEvents(config) {
               if (previewRoot) previewRoot.classList.add("is-active");
               dragPreviewNode.getBoundingClientRect();
             }
-            const dragImageNode = canvasDragPreview || dragPreviewNode || row;
+            const dragImageNode = dragPreviewNode || canvasDragPreview || row;
             event.dataTransfer.setDragImage(dragImageNode, offsetX, offsetY);
             debugSubissuesDnd("dragstart-setDragImage", {
               offsetX,
               offsetY,
               hasNativePreview: !!dragPreviewNode,
-              dragImageKind: canvasDragPreview ? "canvas" : (dragPreviewNode ? "dom" : "row"),
+              dragImageKind: dragPreviewNode ? "dom" : (canvasDragPreview ? "canvas" : "row"),
               usesVisibleDomPreviewHost: !canvasDragPreview && !!dragPreviewNode
             });
           }
