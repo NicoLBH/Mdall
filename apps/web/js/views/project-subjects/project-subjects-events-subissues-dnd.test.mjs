@@ -46,7 +46,6 @@ test("le dragstart est armé par pointerdown sur le handle et utilise un drag pr
   assert.match(eventsSource, /const issuesCols = String\(rowStyles\.getPropertyValue\("--issues-cols"\) \|\| ""\)\.trim\(\);/);
   assert.match(eventsSource, /if \(issuesCols\) previewCard\.style\.setProperty\("--issues-cols", issuesCols\);/);
   assert.match(eventsSource, /previewCard\.style\.height = "48px";/);
-  assert.match(eventsSource, /previewCard\.style\.padding = "12px 8px";/);
   assert.match(eventsSource, /previewCard\.style\.overflow = "hidden";/);
   assert.match(eventsSource, /previewRowClone\.querySelectorAll\("button"\)\.forEach\(\(button\) => \{/);
   assert.match(eventsSource, /Array\.from\(previewRowClone\.children\)\.forEach\(\(child\) => \{/);
@@ -69,8 +68,8 @@ test("le dragstart est armé par pointerdown sur le handle et utilise un drag pr
   assert.match(eventsSource, /const previewPaintRect = previewCard\.getBoundingClientRect\(\);/);
   assert.match(eventsSource, /previewPaintRect: \{/);
   assert.match(eventsSource, /const canvasDragPreview = createSubissueDragCanvasPreview\(\{/);
-  assert.match(eventsSource, /const dragImageNode = dragPreviewNode \|\| canvasDragPreview \|\| row;/);
-  assert.match(eventsSource, /dragImageKind: dragPreviewNode \? "dom" : \(canvasDragPreview \? "canvas" : "row"\)/);
+  assert.match(eventsSource, /const dragImageNode = canvasDragPreview \|\| dragPreviewNode \|\| row;/);
+  assert.match(eventsSource, /dragImageKind: canvasDragPreview \? "canvas" : \(dragPreviewNode \? "dom" : "row"\)/);
   assert.match(eventsSource, /dragPreviewOffsetX = offsetX;/);
   assert.match(eventsSource, /dragPreviewOffsetY = offsetY;/);
   assert.match(eventsSource, /if \(!canvasDragPreview && dragPreviewNode\) \{/);

@@ -973,13 +973,13 @@ export function createProjectSubjectsEvents(config) {
               if (previewRoot) previewRoot.classList.add("is-active");
               dragPreviewNode.getBoundingClientRect();
             }
-            const dragImageNode = dragPreviewNode || canvasDragPreview || row;
+            const dragImageNode = canvasDragPreview || dragPreviewNode || row;
             event.dataTransfer.setDragImage(dragImageNode, offsetX, offsetY);
             debugSubissuesDnd("dragstart-setDragImage", {
               offsetX,
               offsetY,
               hasNativePreview: !!dragPreviewNode,
-              dragImageKind: dragPreviewNode ? "dom" : (canvasDragPreview ? "canvas" : "row"),
+              dragImageKind: canvasDragPreview ? "canvas" : (dragPreviewNode ? "dom" : "row"),
               usesVisibleDomPreviewHost: !canvasDragPreview && !!dragPreviewNode
             });
           }
