@@ -2662,9 +2662,21 @@ body.is-resizing{
 .v-dot--so{ background:rgb(20, 31, 53); border-color:rgba(20,31,53,.55); }
 
 .details-subissues .subissues-table{ --issues-cols: 1fr; }
-.details-subissues .subissues-table--sortable{ --issues-cols: 24px 16px minmax(0,1fr) 52px 36px; }
+.details-subissues .subissues-table--sortable{ --issues-cols: 24px minmax(0,1fr); }
 .details-subissues .issues-table__head{ display:none !important; }
 .details-subissues .cell-theme{ padding-right:0; }
+.details-subissues .issue-row{border-bottom:none;}
+.subissue-row-main{
+  display:flex;
+  align-items:center;
+  width:100%;
+  border-bottom:1px solid rgba(48,54,61,.35);
+}
+.subissue-row-main .cell-theme{
+  flex:1 1 auto;
+  min-width:0;
+}
+.details-subissues .issue-row:last-child .subissue-row-main{border-bottom:none;}
 .cell-subissue-drag-handle,
 .cell-subissue-drag-spacer{
   display:flex;
@@ -2672,6 +2684,7 @@ body.is-resizing{
 }
 .cell-subissue-drag-spacer{
   justify-content:center;
+  width:16px;
 }
 .subissue-tree-toggle{
   width:16px;
@@ -2753,6 +2766,8 @@ body.is-resizing{
 .cell-subissue-assignees-value{
   display:flex;
   justify-content:flex-end;
+  width:52px;
+  flex:0 0 52px;
 }
 .subissues-assignees-placeholder{
   color:var(--muted);
@@ -2760,25 +2775,12 @@ body.is-resizing{
   align-items:center;
   justify-content:center;
 }
-.subissues-assignees-placeholder__icon-wrap{
-  width:24px;
-  height:24px;
-  border-radius:100px;
-  justify-content:center;
-  align-items:center;
-  margin-right:-2px;
-  display:flex;
-  position:relative;
-  border:solid 1px var(--muted);
-}
-.subissues-assignees-placeholder__icon{
-  width:16px;
-  height:16px;
-}
 .cell-subissue-actions{
   position:relative;
   display:flex;
   justify-content:center;
+  width:36px;
+  flex:0 0 36px;
 }
 .subissue-actions-trigger{
   width:24px;

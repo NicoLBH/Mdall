@@ -1780,8 +1780,10 @@ function renderSubissueAssigneesCellHtml(subjectId) {
   if (!selected.length) {
     return `
       <span class="subissues-assignees-placeholder" aria-hidden="true">
-        <span class="subissues-assignees-placeholder__icon-wrap">
-          ${svgIcon("subissue-assignee-placeholder", { className: "octicon octicon-circle SubIssuesListItem-module__Octicon_1__Xrfw9 subissues-assignees-placeholder__icon" })}
+        <span class="gh-user-menu__item-icon">
+          <svg class="ui-icon octicon octicon-person" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" overflow="visible" aria-hidden="true" focusable="false">
+            <use href="assets/icons.svg#person" xlink:href="assets/icons.svg#person"></use>
+          </svg>
         </span>
       </span>
     `;
@@ -1823,7 +1825,9 @@ function renderSubIssuesForSujet(sujet, options = {}) {
     const canDrag = depth === 0;
     const isRowMenuOpen = openMenuId === subjectId;
     const levelClass = depth <= 2 ? `lvl${depth}` : "lvl2";
-    const extraIndent = depth > 2 ? `style="padding-left:${44 + ((depth - 2) * 22)}px;"` : "";
+    const nestedSpacerCells = depth > 0
+      ? new Array(depth).fill('<div class="cell cell-subissue-drag-spacer" aria-hidden="true"></div>').join("")
+      : "";
 
     rows.push(`
       <div
@@ -1843,33 +1847,36 @@ function renderSubIssuesForSujet(sujet, options = {}) {
               </button>`
             : ""}
         </div>
-        <div class="cell cell-subissue-drag-spacer">
-          ${hasChildren
-            ? `<button type="button" class="subissue-tree-toggle js-subissue-tree-toggle" data-subissue-tree-toggle="${escapeHtml(subjectId)}" aria-label="${isExpanded ? "Replier" : "Déplier"} le sous-sujet">
-                ${svgIcon(isExpanded ? "chevron-down" : "chevron-right", { className: isExpanded ? "octicon octicon-chevron-down" : "octicon octicon-chevron-right" })}
-              </button>`
-            : ""}
-        </div>
-        <div class="cell cell-theme cell-theme--full ${levelClass}" ${extraIndent}>
-          ${issueIcon(getEffectiveSujetStatus(subjectId))}
-          <span class="theme-text theme-text--pb">${escapeHtml(firstNonEmpty(subjectNode.title, subjectId, ""))}</span>
-        </div>
-        <div class="cell cell-subissue-assignees-value">
-          ${renderSubissueAssigneesCellHtml(subjectId)}
-        </div>
-        <div class="cell cell-subissue-actions">
-          <button type="button" class="subissue-actions-trigger" data-subissue-actions-trigger="${escapeHtml(subjectId)}" aria-label="Actions du sous-sujet">
-            ${svgIcon("kebab-horizontal", { className: "octicon octicon-kebab-horizontal" })}
-          </button>
-          ${isRowMenuOpen
-            ? `<div class="subissue-actions-menu gh-menu gh-menu--open" role="menu">
-                <button type="button" class="select-menu__item subissue-actions-menu__item" role="menuitem" data-subissue-remove-parent="${escapeHtml(subjectId)}">
-                  <span class="select-menu__item-text">
-                    <span class="select-menu__item-title">Enlever le sous-sujet</span>
-                  </span>
-                </button>
-              </div>`
-            : ""}
+        <div class="subissue-row-main">
+          ${nestedSpacerCells}
+          <div class="cell cell-subissue-drag-spacer">
+            ${hasChildren
+              ? `<button type="button" class="subissue-tree-toggle js-subissue-tree-toggle" data-subissue-tree-toggle="${escapeHtml(subjectId)}" aria-label="${isExpanded ? "Replier" : "Déplier"} le sous-sujet">
+                  ${svgIcon(isExpanded ? "chevron-down" : "chevron-right", { className: isExpanded ? "octicon octicon-chevron-down" : "octicon octicon-chevron-right" })}
+                </button>`
+              : ""}
+          </div>
+          <div class="cell cell-theme cell-theme--full ${levelClass}">
+            ${issueIcon(getEffectiveSujetStatus(subjectId))}
+            <span class="theme-text theme-text--pb">${escapeHtml(firstNonEmpty(subjectNode.title, subjectId, ""))}</span>
+          </div>
+          <div class="cell cell-subissue-assignees-value">
+            ${renderSubissueAssigneesCellHtml(subjectId)}
+          </div>
+          <div class="cell cell-subissue-actions">
+            <button type="button" class="subissue-actions-trigger" data-subissue-actions-trigger="${escapeHtml(subjectId)}" aria-label="Actions du sous-sujet">
+              ${svgIcon("kebab-horizontal", { className: "octicon octicon-kebab-horizontal" })}
+            </button>
+            ${isRowMenuOpen
+              ? `<div class="subissue-actions-menu gh-menu gh-menu--open" role="menu">
+                  <button type="button" class="select-menu__item subissue-actions-menu__item" role="menuitem" data-subissue-remove-parent="${escapeHtml(subjectId)}">
+                    <span class="select-menu__item-text">
+                      <span class="select-menu__item-title">Enlever le sous-sujet</span>
+                    </span>
+                  </button>
+                </div>`
+              : ""}
+          </div>
         </div>
       </div>
     `);
