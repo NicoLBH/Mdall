@@ -628,6 +628,7 @@ export function createProjectSubjectsEvents(config) {
       let dragPreviewNode = null;
       let dragPreviewOffsetX = 0;
       let dragPreviewOffsetY = 0;
+      let detachGlobalDragTracking = null;
 
       const clearDragPreview = () => {
         const previewRoot = document.getElementById("nativeDragPreviewRoot");
@@ -642,6 +643,10 @@ export function createProjectSubjectsEvents(config) {
         dragPreviewNode = null;
         dragPreviewOffsetX = 0;
         dragPreviewOffsetY = 0;
+        if (typeof detachGlobalDragTracking === "function") {
+          detachGlobalDragTracking();
+          detachGlobalDragTracking = null;
+        }
       };
 
       const clearDragClasses = () => {
@@ -745,6 +750,37 @@ export function createProjectSubjectsEvents(config) {
         const x = Math.round(Number(clientX || 0) - dragPreviewOffsetX);
         const y = Math.round(Number(clientY || 0) - dragPreviewOffsetY);
         previewRoot.style.transform = `translate(${x}px, ${y}px)`;
+      };
+
+      const isInsideSortableSubissuesContainer = (target, container) => {
+        if (!target || !container) return false;
+        return target === container || container.contains(target);
+      };
+
+      const startGlobalSubissueDragTracking = () => {
+        if (typeof detachGlobalDragTracking === "function") return;
+
+        const onDocumentDragOver = (event) => {
+          const draggingRow = root.querySelector(".is-subissue-dragging");
+          if (!draggingRow) return;
+          moveSubissueDragPreview(event.clientX, event.clientY);
+          const container = draggingRow.parentElement;
+          const inContainer = isInsideSortableSubissuesContainer(event.target, container);
+          if (!inContainer) {
+            if (event.dataTransfer) event.dataTransfer.dropEffect = "none";
+            return;
+          }
+          event.preventDefault();
+          if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+        };
+
+        const stop = () => {
+          document.removeEventListener("dragover", onDocumentDragOver, true);
+          detachGlobalDragTracking = null;
+        };
+
+        document.addEventListener("dragover", onDocumentDragOver, true);
+        detachGlobalDragTracking = stop;
       };
 
       const createSubissueDragCanvasPreview = ({ rowRect, rowStyles, title }) => {
@@ -877,6 +913,7 @@ export function createProjectSubjectsEvents(config) {
             previewRoot.classList.add("is-active");
             moveSubissueDragPreview(event.clientX, event.clientY);
           }
+          startGlobalSubissueDragTracking();
           row.classList.add("is-subissue-dragging", "is-subissue-drag-gap");
         });
 
