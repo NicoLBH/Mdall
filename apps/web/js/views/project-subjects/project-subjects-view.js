@@ -776,6 +776,26 @@ function subissuesHeadCountsHtml(subjects = []) {
   return `<div class="subissues-counts subissues-counts--problems subissues-counts--head" aria-label="${escapeHtml(ariaLabel)}">${problemsCountsIconHtml(closedSubjects, totalSubjects)}<span>${openSubjects} sur ${totalSubjects}</span></div>`;
 }
 
+function renderSubissueInlineMetaHtml(subjectNode, childSubjects = []) {
+  const subjectId = String(subjectNode?.id || "");
+  if (!subjectId) return "";
+  const displayRef = getEntityDisplayRef("sujet", subjectId);
+  const hasChildren = Array.isArray(childSubjects) && childSubjects.length > 0;
+  const openChildren = hasChildren
+    ? childSubjects.filter((subject) => String(getEffectiveSujetStatus(subject?.id) || "open").toLowerCase() === "open").length
+    : 0;
+  const closedChildren = hasChildren ? Math.max(0, childSubjects.length - openChildren) : 0;
+  const childrenCounterHtml = hasChildren
+    ? `<span class="subissues-counts subissues-counts--problems subissue-inline-children-counter" aria-label="${escapeHtml(`${openChildren} sous-sujets ouverts, ${closedChildren} fermés, ${childSubjects.length} au total`)}">${problemsCountsIconHtml(closedChildren, childSubjects.length)}<span>${openChildren} / ${childSubjects.length}</span></span>`
+    : "";
+  return `
+    <span class="subissue-inline-meta mono-small">
+      <span class="subissue-inline-ref">${escapeHtml(displayRef)}</span>
+      ${childrenCounterHtml}
+    </span>
+  `;
+}
+
 /* =========================================================
    Table render
 ========================================================= */
@@ -1858,6 +1878,7 @@ function renderSubIssuesForSujet(sujet, options = {}) {
           <div class="cell cell-theme cell-theme--full">
             ${issueIcon(getEffectiveSujetStatus(subjectId))}
             <span class="theme-text theme-text--pb">${escapeHtml(firstNonEmpty(subjectNode.title, subjectId, ""))}</span>
+            ${renderSubissueInlineMetaHtml(subjectNode, nestedChildren)}
           </div>
           <div class="cell cell-subissue-assignees-value">
             ${renderSubissueAssigneesCellHtml(subjectId)}

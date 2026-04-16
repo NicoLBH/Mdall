@@ -2921,6 +2921,22 @@ body.is-resizing{
 
 
 .subissues-inline-count{margin-left:8px;color:var(--muted);font-size:12px;}
+.subissue-inline-meta{
+  margin-left:8px;
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  color:var(--muted);
+}
+.subissue-inline-ref{white-space:nowrap;}
+.subissue-inline-children-counter{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+}
+.subissue-inline-children-counter > span:last-child{
+  white-space:nowrap;
+}
 
 
 /* Sub-issues head: verdict counters (bar + legend) */

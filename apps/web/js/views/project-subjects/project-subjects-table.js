@@ -24,26 +24,15 @@ function getSubjectChildrenCounts(sujet, getChildSubjects, getEffectiveSujetStat
     return { total: 0, closed: 0, open: 0 };
   }
 
-  const visited = new Set([rootSubjectId]);
-  const stack = [...getChildSubjects(rootSubjectId)];
-  let total = 0;
-  let closed = 0;
-
-  while (stack.length) {
-    const childSubject = stack.shift();
-    const childSubjectId = String(childSubject?.id || "");
-    if (!childSubjectId || visited.has(childSubjectId)) continue;
-    visited.add(childSubjectId);
-    total += 1;
-
-    const childStatus = String(getEffectiveSujetStatus(childSubjectId) || childSubject?.status || "open").toLowerCase();
-    if (childStatus !== "open") closed += 1;
-
-    const nestedChildren = getChildSubjects(childSubjectId);
-    if (Array.isArray(nestedChildren) && nestedChildren.length) {
-      stack.push(...nestedChildren);
-    }
-  }
+  const directChildren = Array.isArray(getChildSubjects(rootSubjectId)) ? getChildSubjects(rootSubjectId) : [];
+  const total = directChildren.length;
+  const closed = directChildren
+    .filter((childSubject) => {
+      const childSubjectId = String(childSubject?.id || "");
+      const childStatus = String(getEffectiveSujetStatus(childSubjectId) || childSubject?.status || "open").toLowerCase();
+      return childStatus !== "open";
+    })
+    .length;
 
   return {
     total,
@@ -58,7 +47,7 @@ function renderSubjectChildrenCounterHtml(sujet, deps) {
   return `
     <span class="subissues-counts subissues-counts--problems issue-row-subject-children-counter" aria-label="${counts.open} sous-sujets ouverts, ${counts.closed} fermés, ${counts.total} au total">
       ${renderProblemsCountsIconHtml(counts.closed, counts.total)}
-      <span>${counts.closed} / ${counts.total}</span>
+      <span>${counts.open} / ${counts.total}</span>
     </span>
   `;
 }
