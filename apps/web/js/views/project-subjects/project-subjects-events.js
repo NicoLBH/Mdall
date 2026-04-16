@@ -626,18 +626,153 @@ export function createProjectSubjectsEvents(config) {
       });
 
       let dragPreviewNode = null;
+      let dragPreviewOffsetX = 0;
+      let dragPreviewOffsetY = 0;
 
       const clearDragPreview = () => {
-        if (dragPreviewNode?.parentNode) {
-          dragPreviewNode.parentNode.removeChild(dragPreviewNode);
+        const previewRoot = document.getElementById("nativeDragPreviewRoot");
+        const previewCard = document.getElementById("nativeDragPreviewCard");
+        if (previewRoot) previewRoot.classList.remove("is-active");
+        if (previewRoot) previewRoot.style.transform = "";
+        if (previewCard) {
+          previewCard.textContent = "";
+          previewCard.removeAttribute("data-child-subject-id");
+          previewCard.removeAttribute("style");
         }
         dragPreviewNode = null;
+        dragPreviewOffsetX = 0;
+        dragPreviewOffsetY = 0;
       };
 
       const clearDragClasses = () => {
         sortableRows.forEach((row) => {
           row.classList.remove("is-subissue-dragging", "is-subissue-drag-gap", "is-subissue-drop-before", "is-subissue-drop-after");
         });
+      };
+
+      const resolveCssCustomProp = (styles, name, fallback = "") => {
+        const rawName = String(name || "").trim();
+        if (!styles || !rawName.startsWith("--")) return String(fallback || "");
+        const resolved = String(styles.getPropertyValue(rawName) || "").trim();
+        if (resolved) return resolved;
+        return String(fallback || "");
+      };
+
+      const getNativeSubissueDragPreviewNodes = () => {
+        const previewRoot = document.getElementById("nativeDragPreviewRoot");
+        const previewCard = document.getElementById("nativeDragPreviewCard");
+        if (!previewRoot || !previewCard) return { previewRoot: null, previewCard: null };
+        return { previewRoot, previewCard };
+      };
+
+      const mountSubissueDragPreview = ({ row, rowRect, rowStyles, issuesCols, childSubjectId }) => {
+        const { previewRoot, previewCard } = getNativeSubissueDragPreviewNodes();
+        if (!previewRoot || !previewCard) return null;
+
+        const previewBackgroundColor = resolveCssCustomProp(rowStyles, "--bbg", resolveCssCustomProp(rowStyles, "--bg", "#0d1117"));
+        const previewBorderColor = resolveCssCustomProp(rowStyles, "--border", "rgba(139,148,158,.35)");
+        const previewBorderRadius = resolveCssCustomProp(rowStyles, "--radius", "6px");
+        const previewTitle = String(
+          row.querySelector(".js-row-title-trigger")?.textContent
+          || row.querySelector("[data-subissue-title]")?.textContent
+          || row.textContent
+          || ""
+        ).replace(/\s+/g, " ").trim();
+
+        previewCard.setAttribute("data-child-subject-id", childSubjectId);
+        previewCard.textContent = previewTitle;
+        previewCard.style.width = `${Math.max(1, Math.round(rowRect.width))}px`;
+        if (issuesCols) previewCard.style.setProperty("--issues-cols", issuesCols);
+        previewCard.style.display = "grid";
+        previewCard.style.gridTemplateColumns = rowStyles.gridTemplateColumns;
+        previewCard.style.padding = rowStyles.padding;
+        previewCard.style.opacity = "1";
+        previewCard.style.backgroundColor = previewBackgroundColor;
+        previewCard.style.borderStyle = "solid";
+        previewCard.style.borderWidth = "1px";
+        previewCard.style.borderColor = previewBorderColor;
+        previewCard.style.borderRadius = previewBorderRadius;
+        previewCard.style.boxShadow = "0 14px 36px rgba(1,4,9,.55), 0 0 0 1px rgba(1,4,9,.35)";
+        const previewPaintRect = previewCard.getBoundingClientRect();
+
+        debugSubissuesDnd("dragstart-preview", {
+          rowRect: {
+            width: rowRect.width,
+            height: rowRect.height
+          },
+          previewPaintRect: {
+            width: previewPaintRect.width,
+            height: previewPaintRect.height
+          },
+          issuesCols,
+          rowGridTemplateColumns: rowStyles.gridTemplateColumns,
+          previewInline: {
+            width: previewCard.style.width,
+            display: previewCard.style.display,
+            gridTemplateColumns: previewCard.style.gridTemplateColumns,
+            backgroundColor: previewCard.style.backgroundColor,
+            borderStyle: previewCard.style.borderStyle,
+            borderWidth: previewCard.style.borderWidth,
+            borderColor: previewCard.style.borderColor,
+            borderRadius: previewCard.style.borderRadius,
+            boxShadow: previewCard.style.boxShadow,
+            opacity: previewCard.style.opacity
+          }
+        });
+
+        return previewCard;
+      };
+
+      const moveSubissueDragPreview = (clientX, clientY) => {
+        const { previewRoot } = getNativeSubissueDragPreviewNodes();
+        if (!previewRoot || !previewRoot.classList.contains("is-active")) return;
+        const x = Math.round(Number(clientX || 0) - dragPreviewOffsetX);
+        const y = Math.round(Number(clientY || 0) - dragPreviewOffsetY);
+        previewRoot.style.transform = `translate(${x}px, ${y}px)`;
+      };
+
+      const createSubissueDragCanvasPreview = ({ rowRect, rowStyles, title }) => {
+        const width = Math.max(1, Math.round(rowRect.width));
+        const height = Math.max(36, Math.round(rowRect.height));
+        const dpr = Math.max(1, Number(window.devicePixelRatio || 1));
+        const previewBackgroundColor = resolveCssCustomProp(rowStyles, "--bbg", resolveCssCustomProp(rowStyles, "--bg", "#0d1117"));
+        const previewBorderColor = resolveCssCustomProp(rowStyles, "--border", "rgba(139,148,158,.35)");
+        const previewTextColor = resolveCssCustomProp(rowStyles, "--text", "#e6edf3");
+        const previewRadius = Number.parseFloat(resolveCssCustomProp(rowStyles, "--radius", "6")) || 6;
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(width * dpr));
+        canvas.height = Math.max(1, Math.round(height * dpr));
+        canvas.style.width = `${width}px`;
+        canvas.style.height = `${height}px`;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return null;
+        ctx.scale(dpr, dpr);
+
+        const drawRoundedRectPath = (x, y, w, h, r) => {
+          const radius = Math.max(0, Math.min(r, w / 2, h / 2));
+          ctx.beginPath();
+          ctx.moveTo(x + radius, y);
+          ctx.arcTo(x + w, y, x + w, y + h, radius);
+          ctx.arcTo(x + w, y + h, x, y + h, radius);
+          ctx.arcTo(x, y + h, x, y, radius);
+          ctx.arcTo(x, y, x + w, y, radius);
+          ctx.closePath();
+        };
+
+        drawRoundedRectPath(0.5, 0.5, width - 1, height - 1, previewRadius);
+        ctx.fillStyle = previewBackgroundColor;
+        ctx.fill();
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = previewBorderColor;
+        ctx.stroke();
+        ctx.fillStyle = previewTextColor;
+        ctx.font = `500 13px ${String(rowStyles.fontFamily || "system-ui, sans-serif")}`;
+        ctx.textBaseline = "middle";
+        const safeTitle = String(title || "").trim() || "Sous-sujet";
+        const textX = 12;
+        const textY = Math.round(height / 2);
+        ctx.fillText(safeTitle, textX, textY, Math.max(0, width - textX - 12));
+        return canvas;
       };
 
       const animateSubissueRowReflow = (container, mutateDom) => {
@@ -683,62 +818,57 @@ export function createProjectSubjectsEvents(config) {
             event.preventDefault();
             return;
           }
-          row.classList.add("is-subissue-dragging", "is-subissue-drag-gap");
           event.dataTransfer?.setData("text/plain", childSubjectId);
           if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
 
           const rowRect = row.getBoundingClientRect();
           const rowStyles = window.getComputedStyle(row);
           const issuesCols = String(rowStyles.getPropertyValue("--issues-cols") || "").trim();
-          dragPreviewNode = row.cloneNode(true);
-          dragPreviewNode.classList.remove("is-subissue-dragging", "is-subissue-drag-gap", "is-subissue-drop-before", "is-subissue-drop-after");
-          dragPreviewNode.classList.add("subissue-drag-preview");
-          dragPreviewNode.style.width = `${Math.max(1, Math.round(rowRect.width))}px`;
-          if (issuesCols) dragPreviewNode.style.setProperty("--issues-cols", issuesCols);
-          dragPreviewNode.style.display = rowStyles.display;
-          dragPreviewNode.style.gridTemplateColumns = rowStyles.gridTemplateColumns;
-          dragPreviewNode.style.padding = rowStyles.padding;
-          dragPreviewNode.style.opacity = "1";
-          dragPreviewNode.style.backgroundColor = "var(--bg)";
-          dragPreviewNode.style.border = "solid 1px var(--border)";
-          dragPreviewNode.style.borderRadius = "var(--radius)";
-          dragPreviewNode.style.position = "fixed";
-          dragPreviewNode.style.top = "0";
-          dragPreviewNode.style.left = "0";
-          dragPreviewNode.style.transform = "translate(-200vw, -200vh)";
-          dragPreviewNode.style.zIndex = "-1";
-          dragPreviewNode.style.pointerEvents = "none";
-          dragPreviewNode.setAttribute("aria-hidden", "true");
-          document.body.appendChild(dragPreviewNode);
-          debugSubissuesDnd("dragstart-preview", {
-            rowRect: {
-              width: rowRect.width,
-              height: rowRect.height
-            },
+          dragPreviewNode = mountSubissueDragPreview({
+            row,
+            rowRect,
+            rowStyles,
             issuesCols,
-            rowGridTemplateColumns: rowStyles.gridTemplateColumns,
-            previewInline: {
-              width: dragPreviewNode.style.width,
-              display: dragPreviewNode.style.display,
-              gridTemplateColumns: dragPreviewNode.style.gridTemplateColumns,
-              backgroundColor: dragPreviewNode.style.backgroundColor,
-              border: dragPreviewNode.style.border,
-              borderRadius: dragPreviewNode.style.borderRadius,
-              opacity: dragPreviewNode.style.opacity
-            }
+            childSubjectId
+          });
+          const canvasDragPreview = createSubissueDragCanvasPreview({
+            rowRect,
+            rowStyles,
+            title: dragPreviewNode?.textContent || ""
           });
           if (event.dataTransfer) {
             const offsetX = Math.max(0, Math.round(event.clientX - rowRect.left));
             const offsetY = Math.max(0, Math.round(event.clientY - rowRect.top));
-            event.dataTransfer.setDragImage(dragPreviewNode, offsetX, offsetY);
-            debugSubissuesDnd("dragstart-setDragImage", { offsetX, offsetY });
+            dragPreviewOffsetX = offsetX;
+            dragPreviewOffsetY = offsetY;
+            if (!canvasDragPreview && dragPreviewNode) {
+              const previewRoot = document.getElementById("nativeDragPreviewRoot");
+              if (previewRoot) previewRoot.classList.add("is-active");
+              dragPreviewNode.getBoundingClientRect();
+            }
+            const dragImageNode = canvasDragPreview || dragPreviewNode || row;
+            event.dataTransfer.setDragImage(dragImageNode, offsetX, offsetY);
+            debugSubissuesDnd("dragstart-setDragImage", {
+              offsetX,
+              offsetY,
+              hasNativePreview: !!dragPreviewNode,
+              dragImageKind: canvasDragPreview ? "canvas" : (dragPreviewNode ? "dom" : "row"),
+              usesVisibleDomPreviewHost: !canvasDragPreview && !!dragPreviewNode
+            });
           }
+          const previewRoot = document.getElementById("nativeDragPreviewRoot");
+          if (previewRoot && dragPreviewNode) {
+            previewRoot.classList.add("is-active");
+            moveSubissueDragPreview(event.clientX, event.clientY);
+          }
+          row.classList.add("is-subissue-dragging", "is-subissue-drag-gap");
         });
 
         row.addEventListener("dragover", (event) => {
           const draggingRow = root.querySelector(".is-subissue-dragging");
           if (!draggingRow || draggingRow === row) return;
           event.preventDefault();
+          moveSubissueDragPreview(event.clientX, event.clientY);
 
           const container = row.parentElement;
           if (!container || draggingRow.parentElement !== container) return;
