@@ -33,6 +33,10 @@ export function createProjectSubjectsState({ store }) {
     }
     v.expandedSujets = v.expandedSubjectIds;
     if (typeof v.rightSubissuesOpen !== "boolean") v.rightSubissuesOpen = true;
+    if (!(v.rightSubissuesExpandedSubjectIds instanceof Set)) {
+      v.rightSubissuesExpandedSubjectIds = new Set(Array.isArray(v.rightSubissuesExpandedSubjectIds) ? v.rightSubissuesExpandedSubjectIds : []);
+    }
+    if (typeof v.rightSubissueMenuOpenId !== "string") v.rightSubissueMenuOpenId = "";
     if (typeof v.commentPreviewMode !== "boolean") v.commentPreviewMode = false;
     if (typeof v.helpMode !== "boolean") v.helpMode = false;
     if (typeof v.showTableOnly !== "boolean") v.showTableOnly = true;
@@ -197,6 +201,7 @@ export function createProjectSubjectsState({ store }) {
       query: "",
       activeKey: ""
     };
+    v.rightSubissueMenuOpenId = "";
     return v;
   }
 

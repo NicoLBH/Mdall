@@ -618,6 +618,53 @@ export function createProjectSubjectsEvents(config) {
       };
     });
 
+    const setSubjectParent = getSetSubjectParent?.();
+    const subissuesExpandedSet = (() => {
+      const uiState = getSubjectsViewState();
+      if (!(uiState.rightSubissuesExpandedSubjectIds instanceof Set)) {
+        uiState.rightSubissuesExpandedSubjectIds = new Set(Array.isArray(uiState.rightSubissuesExpandedSubjectIds) ? uiState.rightSubissuesExpandedSubjectIds : []);
+      }
+      if (typeof uiState.rightSubissueMenuOpenId !== "string") uiState.rightSubissueMenuOpenId = "";
+      return uiState.rightSubissuesExpandedSubjectIds;
+    })();
+
+    root.querySelectorAll("[data-subissue-tree-toggle]").forEach((btn) => {
+      btn.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const subjectId = String(btn.dataset.subissueTreeToggle || "");
+        if (!subjectId) return;
+        if (subissuesExpandedSet.has(subjectId)) subissuesExpandedSet.delete(subjectId);
+        else subissuesExpandedSet.add(subjectId);
+        rerenderPanels();
+      };
+    });
+
+    root.querySelectorAll("[data-subissue-actions-trigger]").forEach((btn) => {
+      btn.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const subjectId = String(btn.dataset.subissueActionsTrigger || "");
+        const uiState = getSubjectsViewState();
+        uiState.rightSubissueMenuOpenId = String(uiState.rightSubissueMenuOpenId || "") === subjectId ? "" : subjectId;
+        rerenderPanels();
+      };
+    });
+
+    root.querySelectorAll("[data-subissue-remove-parent]").forEach((btn) => {
+      btn.onclick = async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const subjectId = String(btn.dataset.subissueRemoveParent || "");
+        if (!subjectId || typeof setSubjectParent !== "function") return;
+        await setSubjectParent(subjectId, "", { root, skipRerender: false });
+        const uiState = getSubjectsViewState();
+        uiState.rightSubissueMenuOpenId = "";
+        subissuesExpandedSet.delete(subjectId);
+        rerenderPanels();
+      };
+    });
+
     const sortableRows = Array.from(root.querySelectorAll("[data-subissue-sortable-row='true']"));
     if (sortableRows.length) {
       debugSubissuesDnd("debug-enabled", {
@@ -870,6 +917,11 @@ export function createProjectSubjectsEvents(config) {
             event.preventDefault();
             return;
           }
+          if (subissuesExpandedSet.has(childSubjectId)) {
+            subissuesExpandedSet.delete(childSubjectId);
+          }
+          const uiState = getSubjectsViewState();
+          uiState.rightSubissueMenuOpenId = "";
           event.dataTransfer?.setData("text/plain", childSubjectId);
           if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
 
