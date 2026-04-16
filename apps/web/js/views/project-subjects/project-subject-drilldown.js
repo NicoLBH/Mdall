@@ -175,6 +175,16 @@ export function createProjectSubjectDrilldownController(config) {
     title.innerHTML = selection ? renderDetailsTitleWrapHtml(selection) : "—";
     body.innerHTML = details.bodyHtml;
 
+    title.querySelectorAll(".js-details-parent-subject-link[data-parent-subject-id]").forEach((link) => {
+      link.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const parentSubjectId = String(link.dataset.parentSubjectId || "");
+        if (!parentSubjectId) return;
+        openDrilldownFromSubject(parentSubjectId);
+      };
+    });
+
     wireDetailsInteractive(body);
     bindDetailsScroll(panel);
     applyNormalDetailsCompactSnapshot(viewState.drilldown?.normalDetailsCompactSnapshot);

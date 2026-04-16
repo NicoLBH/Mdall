@@ -1318,13 +1318,14 @@ function renderSubjectParentHeadHtml(subject, options = {}) {
   return `
     <span class="${wrapperClass}" title="Sujet parent : ${title}">
       <span class="details-parent-badge__icon">${issueIcon(getEffectiveSujetStatus(parentSubject.id))}</span>
+      <span class="details-parent-badge__label">Parent :</span>
       <button
         type="button"
         class="details-parent-badge__link js-details-parent-subject-link"
         data-parent-subject-id="${parentSubjectId}"
         aria-label="Ouvrir le sujet parent ${title}"
       >
-        Parent: ${title}
+        <span class="details-parent-badge__title">${title}</span>
       </button>
     </span>
   `;

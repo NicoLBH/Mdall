@@ -1659,6 +1659,17 @@ export function createProjectSubjectsEvents(config) {
         return;
       }
 
+      const parentSubjectLink = event.target.closest(".js-details-parent-subject-link[data-parent-subject-id]");
+      if (parentSubjectLink) {
+        event.preventDefault();
+        event.stopPropagation();
+        const parentSubjectId = String(parentSubjectLink.dataset.parentSubjectId || "");
+        if (parentSubjectId) {
+          (openDrilldownFromSubjectPanel || openDrilldownFromSujetPanel)(parentSubjectId);
+        }
+        return;
+      }
+
       const titleTrigger = event.target.closest(".js-row-title-trigger");
       if (titleTrigger) {
         event.preventDefault();
