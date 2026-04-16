@@ -2797,7 +2797,7 @@ body.is-resizing{
   border:0;
   border-radius:6px;
   background:transparent;
-  color:var(--muted);
+  color:rgba(61, 68, 77, 0.7);
   display:inline-flex;
   align-items:center;
   justify-content:center;
