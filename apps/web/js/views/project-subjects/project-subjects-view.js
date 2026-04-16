@@ -773,7 +773,7 @@ function subissuesHeadCountsHtml(subjects = []) {
   const openSubjects = linkedSubjects.filter((subject) => String(getEffectiveSujetStatus(subject?.id) || "open").toLowerCase() === "open").length;
   const closedSubjects = Math.max(0, totalSubjects - openSubjects);
   const ariaLabel = `${openSubjects} sous-sujets ouverts, ${closedSubjects} fermés, ${totalSubjects} au total`;
-  return `<div class="subissues-counts subissues-counts--problems subissues-counts--head" aria-label="${escapeHtml(ariaLabel)}">${problemsCountsIconHtml(closedSubjects, totalSubjects)}<span>${closedSubjects} sur ${totalSubjects}</span></div>`;
+  return `<div class="subissues-counts subissues-counts--problems subissues-counts--head" aria-label="${escapeHtml(ariaLabel)}">${problemsCountsIconHtml(closedSubjects, totalSubjects)}<span>${closedSubjects} / ${totalSubjects}</span></div>`;
 }
 
 function renderSubissueInlineMetaHtml(subjectNode, childSubjects = []) {
@@ -787,26 +787,6 @@ function renderSubissueInlineMetaHtml(subjectNode, childSubjects = []) {
   const closedChildren = hasChildren ? Math.max(0, childSubjects.length - openChildren) : 0;
   const childrenCounterHtml = hasChildren
     ? `<span class="subissues-counts subissues-counts--problems subissue-inline-children-counter" aria-label="${escapeHtml(`${openChildren} sous-sujets ouverts, ${closedChildren} fermés, ${childSubjects.length} au total`)}">${problemsCountsIconHtml(closedChildren, childSubjects.length)}<span>${closedChildren} / ${childSubjects.length}</span></span>`
-    : "";
-  return `
-    <span class="subissue-inline-meta mono-small">
-      <span class="subissue-inline-ref">${escapeHtml(displayRef)}</span>
-      ${childrenCounterHtml}
-    </span>
-  `;
-}
-
-function renderSubissueInlineMetaHtml(subjectNode, childSubjects = []) {
-  const subjectId = String(subjectNode?.id || "");
-  if (!subjectId) return "";
-  const displayRef = getEntityDisplayRef("sujet", subjectId);
-  const hasChildren = Array.isArray(childSubjects) && childSubjects.length > 0;
-  const openChildren = hasChildren
-    ? childSubjects.filter((subject) => String(getEffectiveSujetStatus(subject?.id) || "open").toLowerCase() === "open").length
-    : 0;
-  const closedChildren = hasChildren ? Math.max(0, childSubjects.length - openChildren) : 0;
-  const childrenCounterHtml = hasChildren
-    ? `<span class="subissues-counts subissues-counts--problems subissue-inline-children-counter" aria-label="${escapeHtml(`${openChildren} sous-sujets ouverts, ${closedChildren} fermés, ${childSubjects.length} au total`)}">${problemsCountsIconHtml(closedChildren, childSubjects.length)}<span>${openChildren} / ${childSubjects.length}</span></span>`
     : "";
   return `
     <span class="subissue-inline-meta mono-small">

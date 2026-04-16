@@ -47,7 +47,7 @@ function renderSubjectChildrenCounterHtml(sujet, deps) {
   return `
     <span class="subissues-counts subissues-counts--problems issue-row-subject-children-counter" aria-label="${counts.open} sous-sujets ouverts, ${counts.closed} fermés, ${counts.total} au total">
       ${renderProblemsCountsIconHtml(counts.closed, counts.total)}
-      <span>${counts.open} / ${counts.total}</span>
+      <span>${counts.closed} / ${counts.total}</span>
     </span>
   `;
 }
