@@ -1763,36 +1763,120 @@ function renderSubjectMetaControls(subject) {
   `;
 }
 
+function renderSubissueAssigneesCellHtml(subjectId) {
+  const collaborators = getActiveProjectCollaborators();
+  const collaboratorsById = new Map(collaborators.map((collaborator) => [collaborator.id, collaborator]));
+  const assigneeIds = normalizeAssigneeIds(getSubjectSidebarMeta(subjectId).assignees);
+  const selected = assigneeIds
+    .map((assigneeId) => findCollaboratorByAssigneeId(collaboratorsById, assigneeId) || {
+      id: assigneeId,
+      userId: "",
+      name: `Collaborateur ${String(assigneeId || "").slice(0, 8)}`,
+      email: "",
+      avatarUrl: ""
+    })
+    .slice(0, 3);
+
+  if (!selected.length) {
+    return `<span class="subissues-assignees-placeholder" aria-hidden="true">${svgIcon("circle", { className: "octicon octicon-circle" })}</span>`;
+  }
+
+  return `
+    <span class="issue-row-assignees" aria-label="${escapeHtml(`${selected.length} assigné(s)`)}}">
+      ${selected.map((collaborator) => renderCollaboratorAvatar({
+        ...collaborator,
+        avatarUrl: firstNonEmpty(
+          collaborator?.avatarUrl,
+          String(collaborator?.userId || "") === String(store?.user?.id || "") ? String(store?.user?.avatar || "") : ""
+        )
+      })).join("")}
+    </span>
+  `;
+}
+
 function renderSubIssuesForSujet(sujet, options = {}) {
   ensureViewUiState();
   const sujetRowClass = options.sujetRowClass || "js-row-sujet";
   const childSubjects = getChildSubjectList(sujet);
   if (!childSubjects.length) return "";
-  const rows = childSubjects.map((childSujet) => `
+  const uiState = getSubjectsViewState();
+  if (!(uiState.rightSubissuesExpandedSubjectIds instanceof Set)) {
+    uiState.rightSubissuesExpandedSubjectIds = new Set(Array.isArray(uiState.rightSubissuesExpandedSubjectIds) ? uiState.rightSubissuesExpandedSubjectIds : []);
+  }
+  if (typeof uiState.rightSubissueMenuOpenId !== "string") uiState.rightSubissueMenuOpenId = "";
+
+  const expandedIds = uiState.rightSubissuesExpandedSubjectIds;
+  const openMenuId = String(uiState.rightSubissueMenuOpenId || "");
+  const rows = [];
+  const walkSubissueTree = (subjectNode, depth = 0, parentId = "") => {
+    const subjectId = String(subjectNode?.id || "");
+    if (!subjectId) return;
+    const nestedChildren = getChildSubjectList(subjectNode);
+    const hasChildren = nestedChildren.length > 0;
+    const isExpanded = hasChildren && expandedIds.has(subjectId);
+    const canDrag = depth === 0;
+    const isRowMenuOpen = openMenuId === subjectId;
+    const levelClass = depth <= 2 ? `lvl${depth}` : "lvl2";
+    const extraIndent = depth > 2 ? `style="padding-left:${44 + ((depth - 2) * 22)}px;"` : "";
+
+    rows.push(`
       <div
-        class="issue-row issue-row--pb click ${sujetRowClass} subissues-sortable-row"
-        data-sujet-id="${escapeHtml(childSujet.id)}"
-        data-subissue-sortable-row="true"
-        data-parent-subject-id="${escapeHtml(String(sujet?.id || ""))}"
-        data-child-subject-id="${escapeHtml(childSujet.id)}"
-        draggable="true"
+        class="issue-row issue-row--pb click ${sujetRowClass}${canDrag ? " subissues-sortable-row" : " subissues-tree-row"}"
+        data-sujet-id="${escapeHtml(subjectId)}"
+        ${canDrag ? `data-subissue-sortable-row="true"` : ""}
+        data-subissue-tree-row="${escapeHtml(subjectId)}"
+        data-subissue-depth="${depth}"
+        data-parent-subject-id="${escapeHtml(String(parentId || sujet?.id || ""))}"
+        data-child-subject-id="${escapeHtml(subjectId)}"
+        draggable="${canDrag ? "true" : "false"}"
       >
         <div class="cell cell-subissue-drag-handle">
-          <button type="button" class="subissue-drag-handle" data-subissue-drag-handle aria-label="Réordonner le sous-sujet">
-            ${svgIcon("grabber", { className: "octicon octicon-grabber" })}
-          </button>
+          ${canDrag
+            ? `<button type="button" class="subissue-drag-handle" data-subissue-drag-handle aria-label="Réordonner le sous-sujet">
+                ${svgIcon("grabber", { className: "octicon octicon-grabber" })}
+              </button>`
+            : ""}
         </div>
-        <div class="cell cell-subissue-drag-spacer" aria-hidden="true"></div>
-        <div class="cell cell-theme cell-theme--full lvl0">
-          ${issueIcon(getEffectiveSujetStatus(childSujet.id))}
-          <span class="theme-text theme-text--pb">${escapeHtml(firstNonEmpty(childSujet.title, childSujet.id, ""))}</span>
+        <div class="cell cell-subissue-drag-spacer">
+          ${hasChildren
+            ? `<button type="button" class="subissue-tree-toggle js-subissue-tree-toggle" data-subissue-tree-toggle="${escapeHtml(subjectId)}" aria-label="${isExpanded ? "Replier" : "Déplier"} le sous-sujet">
+                ${svgIcon(isExpanded ? "chevron-down" : "chevron-right", { className: isExpanded ? "octicon octicon-chevron-down" : "octicon octicon-chevron-right" })}
+              </button>`
+            : ""}
+        </div>
+        <div class="cell cell-theme cell-theme--full ${levelClass}" ${extraIndent}>
+          ${issueIcon(getEffectiveSujetStatus(subjectId))}
+          <span class="theme-text theme-text--pb">${escapeHtml(firstNonEmpty(subjectNode.title, subjectId, ""))}</span>
+        </div>
+        <div class="cell cell-subissue-assignees-value">
+          ${renderSubissueAssigneesCellHtml(subjectId)}
+        </div>
+        <div class="cell cell-subissue-actions">
+          <button type="button" class="subissue-actions-trigger" data-subissue-actions-trigger="${escapeHtml(subjectId)}" aria-label="Actions du sous-sujet">
+            ${svgIcon("kebab-horizontal", { className: "octicon octicon-kebab-horizontal" })}
+          </button>
+          ${isRowMenuOpen
+            ? `<div class="subissue-actions-menu gh-menu gh-menu--open" role="menu">
+                <button type="button" class="select-menu__item subissue-actions-menu__item" role="menuitem" data-subissue-remove-parent="${escapeHtml(subjectId)}">
+                  <span class="select-menu__item-text">
+                    <span class="select-menu__item-title">Enlever le sous-sujet</span>
+                  </span>
+                </button>
+              </div>`
+            : ""}
         </div>
       </div>
-    `).join("");
+    `);
+
+    if (!isExpanded) return;
+    nestedChildren.forEach((nestedChild) => walkSubissueTree(nestedChild, depth + 1, subjectId));
+  };
+
+  childSubjects.forEach((childSujet) => walkSubissueTree(childSujet, 0, String(sujet?.id || "")));
 
   const body = renderSubIssuesTable({
     className: "issues-table subissues-table subissues-table--sortable",
-    rowsHtml: rows,
+    rowsHtml: rows.join(""),
     emptyTitle: "Aucun sous-sujet"
   });
 
