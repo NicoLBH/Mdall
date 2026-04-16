@@ -1117,7 +1117,7 @@ export function createProjectSubjectsEvents(config) {
       };
     });
 
-    root.querySelectorAll("[data-parent-subject-id]").forEach((card) => {
+    root.querySelectorAll(".subject-meta-parent-card[data-parent-subject-id]").forEach((card) => {
       card.onclick = (event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -1621,7 +1621,7 @@ export function createProjectSubjectsEvents(config) {
         return;
       }
 
-      const parentSubjectCard = event.target.closest("[data-parent-subject-id]");
+      const parentSubjectCard = event.target.closest(".subject-meta-parent-card[data-parent-subject-id]");
       if (parentSubjectCard) {
         event.preventDefault();
         event.stopPropagation();

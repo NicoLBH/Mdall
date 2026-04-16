@@ -129,6 +129,11 @@ test("le dragend persiste l'ordre même sans drop explicite", () => {
   assert.match(eventsSource, /await reorderSubjectChildren\(parentSubjectId, orderedChildIds, \{ root, skipRerender: false \}\);/);
 });
 
+test("la navigation vers le sujet parent ne capte que la carte parent dédiée", () => {
+  assert.match(eventsSource, /\.subject-meta-parent-card\[data-parent-subject-id\]/);
+  assert.doesNotMatch(eventsSource, /event\.target\.closest\("\[data-parent-subject-id\]"\)/);
+});
+
 test("l'instrumentation DnD est activable via query/localStorage", () => {
   assert.match(eventsSource, /function isSubissuesDndDebugEnabled\(\)/);
   assert.match(eventsSource, /debugSubissuesDnd=1/);
