@@ -2665,12 +2665,13 @@ body.is-resizing{
 .details-subissues .subissues-table--sortable{ --issues-cols: 24px minmax(0,1fr); }
 .details-subissues .issues-table__head{ display:none !important; }
 .details-subissues .cell-theme{ padding-right:0; }
-.details-subissues .issue-row{border-bottom:none;}
+.details-subissues .issue-row{border-bottom:none;padding:0px;}
 .subissue-row-main{
   display:flex;
   align-items:center;
   width:100%;
   border-bottom:1px solid rgba(48,54,61,.35);
+  padding:8px 0px;
 }
 .subissue-row-main .cell-theme{
   flex:1 1 auto;
