@@ -41,10 +41,16 @@ test("le dragstart est armé par pointerdown sur le handle et utilise un drag pr
   assert.match(eventsSource, /const startGlobalSubissueDragTracking = \(\) => \{/);
   assert.match(eventsSource, /const previewRoot = document\.getElementById\("nativeDragPreviewRoot"\);/);
   assert.match(eventsSource, /const previewCard = document\.getElementById\("nativeDragPreviewCard"\);/);
-  assert.match(eventsSource, /const previewIssueIcon = row\.querySelector\("\.issue-status-icon"\);/);
+  assert.match(eventsSource, /const previewRowClone = row\.cloneNode\(true\);/);
   assert.match(eventsSource, /previewCard\.innerHTML = "";/);
   assert.match(eventsSource, /const issuesCols = String\(rowStyles\.getPropertyValue\("--issues-cols"\) \|\| ""\)\.trim\(\);/);
   assert.match(eventsSource, /if \(issuesCols\) previewCard\.style\.setProperty\("--issues-cols", issuesCols\);/);
+  assert.match(eventsSource, /previewCard\.style\.height = "48px";/);
+  assert.match(eventsSource, /previewCard\.style\.padding = "12px 8px";/);
+  assert.match(eventsSource, /previewCard\.style\.overflow = "hidden";/);
+  assert.match(eventsSource, /previewRowClone\.querySelectorAll\("button"\)\.forEach\(\(button\) => \{/);
+  assert.match(eventsSource, /Array\.from\(previewRowClone\.children\)\.forEach\(\(child\) => \{/);
+  assert.match(eventsSource, /previewCard\.appendChild\(child\.cloneNode\(true\)\);/);
   assert.match(eventsSource, /const resolveCssCustomProp = \(styles, name, fallback = ""\) => \{/);
   assert.match(eventsSource, /const previewBackgroundColor = resolveCssCustomProp\(rowStyles, "--bbg", resolveCssCustomProp\(rowStyles, "--bg", "#0d1117"\)\);/);
   assert.match(eventsSource, /const previewBorderColor = resolveCssCustomProp\(rowStyles, "--border", "rgba\(139,148,158,.35\)"\);/);
@@ -60,17 +66,11 @@ test("le dragstart est armé par pointerdown sur le handle et utilise un drag pr
   assert.match(eventsSource, /borderWidth: previewCard\.style\.borderWidth,/);
   assert.match(eventsSource, /borderColor: previewCard\.style\.borderColor,/);
   assert.match(eventsSource, /boxShadow: previewCard\.style\.boxShadow,/);
-  assert.match(eventsSource, /leftSpacer\.className = "cell cell-subissue-drag-handle";/);
-  assert.match(eventsSource, /middleSpacer\.className = "cell cell-subissue-drag-spacer";/);
-  assert.match(eventsSource, /contentCell\.className = "cell cell-theme cell-theme--full lvl0";/);
-  assert.match(eventsSource, /if \(previewIssueIcon\) contentCell\.appendChild\(previewIssueIcon\.cloneNode\(true\)\);/);
-  assert.match(eventsSource, /titleSpan\.className = "theme-text theme-text--pb";/);
-  assert.match(eventsSource, /previewCard\.append\(leftSpacer, middleSpacer, contentCell\);/);
   assert.match(eventsSource, /const previewPaintRect = previewCard\.getBoundingClientRect\(\);/);
   assert.match(eventsSource, /previewPaintRect: \{/);
   assert.match(eventsSource, /const canvasDragPreview = createSubissueDragCanvasPreview\(\{/);
-  assert.match(eventsSource, /const dragImageNode = canvasDragPreview \|\| dragPreviewNode \|\| row;/);
-  assert.match(eventsSource, /dragImageKind: canvasDragPreview \? "canvas" : \(dragPreviewNode \? "dom" : "row"\)/);
+  assert.match(eventsSource, /const dragImageNode = dragPreviewNode \|\| canvasDragPreview \|\| row;/);
+  assert.match(eventsSource, /dragImageKind: dragPreviewNode \? "dom" : \(canvasDragPreview \? "canvas" : "row"\)/);
   assert.match(eventsSource, /dragPreviewOffsetX = offsetX;/);
   assert.match(eventsSource, /dragPreviewOffsetY = offsetY;/);
   assert.match(eventsSource, /if \(!canvasDragPreview && dragPreviewNode\) \{/);
@@ -113,6 +113,21 @@ test("le dragover réordonne en direct avec animation FLIP pour faire la place d
   assert.match(eventsSource, /container\.insertBefore\(draggingRow, row\.nextElementSibling\);/);
   assert.match(eventsSource, /container\.insertBefore\(draggingRow, row\);/);
   assert.match(eventsSource, /item\.style\.transform = `translateY\(\$\{delta\}px\)`;/);
+});
+
+test("le drag replie toute l'arborescence puis restitue l'état d'ouverture initial", () => {
+  assert.match(eventsSource, /const collapseSubissueTreeForDrag = \(container\) => \{/);
+  assert.match(eventsSource, /const expandedSnapshot = Array\.from\(subissuesExpandedSet\);/);
+  assert.match(eventsSource, /subissuesExpandedSet\.clear\(\);/);
+  assert.match(eventsSource, /\.filter\(\(item\) => item\.dataset\.subissueSortableRow !== "true"\)/);
+  assert.match(eventsSource, /const restoreExpandedSubissueTreeAfterDrag = \(expandedSnapshot = \[\]\) => \{/);
+  assert.match(eventsSource, /restoreExpandedSubissueTreeAfterDrag\(draggedSubissueContext\?\.expandedSnapshot \|\| \[\]\);/);
+  assert.match(eventsSource, /draggedSubissueContext = \{\s*childSubjectId,\s*expandedSnapshot,\s*dropCommitted: false\s*\};/);
+});
+
+test("le dragend persiste l'ordre même sans drop explicite", () => {
+  assert.match(eventsSource, /const shouldCommitOrderOnDragEnd = dndContext && !dndContext\.dropCommitted;/);
+  assert.match(eventsSource, /await reorderSubjectChildren\(parentSubjectId, orderedChildIds, \{ root, skipRerender: false \}\);/);
 });
 
 test("l'instrumentation DnD est activable via query/localStorage", () => {

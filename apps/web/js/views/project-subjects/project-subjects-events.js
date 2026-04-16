@@ -676,6 +676,7 @@ export function createProjectSubjectsEvents(config) {
       let dragPreviewOffsetX = 0;
       let dragPreviewOffsetY = 0;
       let detachGlobalDragTracking = null;
+      let draggedSubissueContext = null;
 
       const clearDragPreview = () => {
         const previewRoot = document.getElementById("nativeDragPreviewRoot");
@@ -699,6 +700,25 @@ export function createProjectSubjectsEvents(config) {
       const clearDragClasses = () => {
         sortableRows.forEach((row) => {
           row.classList.remove("is-subissue-dragging", "is-subissue-drag-gap", "is-subissue-drop-before", "is-subissue-drop-after");
+        });
+      };
+
+      const collapseSubissueTreeForDrag = (container) => {
+        const expandedSnapshot = Array.from(subissuesExpandedSet);
+        subissuesExpandedSet.clear();
+        if (container) {
+          Array.from(container.querySelectorAll("[data-subissue-tree-row]"))
+            .filter((item) => item.dataset.subissueSortableRow !== "true")
+            .forEach((item) => item.remove());
+        }
+        return expandedSnapshot;
+      };
+
+      const restoreExpandedSubissueTreeAfterDrag = (expandedSnapshot = []) => {
+        subissuesExpandedSet.clear();
+        expandedSnapshot.forEach((subjectId) => {
+          const key = String(subjectId || "").trim();
+          if (key) subissuesExpandedSet.add(key);
         });
       };
 
@@ -731,7 +751,7 @@ export function createProjectSubjectsEvents(config) {
           || row.textContent
           || ""
         ).replace(/\s+/g, " ").trim();
-        const previewIssueIcon = row.querySelector(".issue-status-icon");
+        const previewRowClone = row.cloneNode(true);
 
         previewCard.setAttribute("data-child-subject-id", childSubjectId);
         previewCard.innerHTML = "";
@@ -739,7 +759,12 @@ export function createProjectSubjectsEvents(config) {
         if (issuesCols) previewCard.style.setProperty("--issues-cols", issuesCols);
         previewCard.style.display = "grid";
         previewCard.style.gridTemplateColumns = issuesCols || rowStyles.gridTemplateColumns;
-        previewCard.style.padding = rowStyles.padding;
+        previewCard.style.height = "48px";
+        previewCard.style.minHeight = "48px";
+        previewCard.style.padding = "12px 8px";
+        previewCard.style.alignItems = "center";
+        previewCard.style.boxSizing = "border-box";
+        previewCard.style.overflow = "hidden";
         previewCard.style.opacity = "1";
         previewCard.style.backgroundColor = previewBackgroundColor;
         previewCard.style.borderStyle = "solid";
@@ -747,20 +772,15 @@ export function createProjectSubjectsEvents(config) {
         previewCard.style.borderColor = previewBorderColor;
         previewCard.style.borderRadius = previewBorderRadius;
         previewCard.style.boxShadow = "0 14px 36px rgba(1,4,9,.55), 0 0 0 1px rgba(1,4,9,.35)";
-        const leftSpacer = document.createElement("div");
-        leftSpacer.className = "cell cell-subissue-drag-handle";
-        leftSpacer.setAttribute("aria-hidden", "true");
-        const middleSpacer = document.createElement("div");
-        middleSpacer.className = "cell cell-subissue-drag-spacer";
-        middleSpacer.setAttribute("aria-hidden", "true");
-        const contentCell = document.createElement("div");
-        contentCell.className = "cell cell-theme cell-theme--full lvl0";
-        if (previewIssueIcon) contentCell.appendChild(previewIssueIcon.cloneNode(true));
-        const titleSpan = document.createElement("span");
-        titleSpan.className = "theme-text theme-text--pb";
-        titleSpan.textContent = previewTitle;
-        contentCell.appendChild(titleSpan);
-        previewCard.append(leftSpacer, middleSpacer, contentCell);
+        previewRowClone.classList.remove("is-subissue-dragging", "is-subissue-drag-gap", "is-subissue-drop-before", "is-subissue-drop-after");
+        previewRowClone.removeAttribute("draggable");
+        previewRowClone.querySelectorAll("button").forEach((button) => {
+          button.tabIndex = -1;
+          button.setAttribute("aria-hidden", "true");
+        });
+        Array.from(previewRowClone.children).forEach((child) => {
+          previewCard.appendChild(child.cloneNode(true));
+        });
         const previewPaintRect = previewCard.getBoundingClientRect();
 
         debugSubissuesDnd("dragstart-preview", {
@@ -917,9 +937,13 @@ export function createProjectSubjectsEvents(config) {
             event.preventDefault();
             return;
           }
-          if (subissuesExpandedSet.has(childSubjectId)) {
-            subissuesExpandedSet.delete(childSubjectId);
-          }
+          const container = row.parentElement;
+          const expandedSnapshot = collapseSubissueTreeForDrag(container);
+          draggedSubissueContext = {
+            childSubjectId,
+            expandedSnapshot,
+            dropCommitted: false
+          };
           const uiState = getSubjectsViewState();
           uiState.rightSubissueMenuOpenId = "";
           event.dataTransfer?.setData("text/plain", childSubjectId);
@@ -950,13 +974,13 @@ export function createProjectSubjectsEvents(config) {
               if (previewRoot) previewRoot.classList.add("is-active");
               dragPreviewNode.getBoundingClientRect();
             }
-            const dragImageNode = canvasDragPreview || dragPreviewNode || row;
+            const dragImageNode = dragPreviewNode || canvasDragPreview || row;
             event.dataTransfer.setDragImage(dragImageNode, offsetX, offsetY);
             debugSubissuesDnd("dragstart-setDragImage", {
               offsetX,
               offsetY,
               hasNativePreview: !!dragPreviewNode,
-              dragImageKind: canvasDragPreview ? "canvas" : (dragPreviewNode ? "dom" : "row"),
+              dragImageKind: dragPreviewNode ? "dom" : (canvasDragPreview ? "canvas" : "row"),
               usesVisibleDomPreviewHost: !canvasDragPreview && !!dragPreviewNode
             });
           }
@@ -1034,12 +1058,31 @@ export function createProjectSubjectsEvents(config) {
             .map((item) => String(item.dataset.childSubjectId || ""))
             .filter(Boolean);
           debugSubissuesDnd("drop-reorder", { parentSubjectId, sourceId, targetId, orderedChildIds });
+          restoreExpandedSubissueTreeAfterDrag(draggedSubissueContext?.expandedSnapshot || []);
           await reorderSubjectChildren(parentSubjectId, orderedChildIds, { root, skipRerender: false });
+          if (draggedSubissueContext) draggedSubissueContext.dropCommitted = true;
+          draggedSubissueContext = null;
           clearDragClasses();
           clearDragPreview();
         });
 
-        row.addEventListener("dragend", () => {
+        row.addEventListener("dragend", async () => {
+          const dndContext = draggedSubissueContext;
+          const shouldCommitOrderOnDragEnd = dndContext && !dndContext.dropCommitted;
+          restoreExpandedSubissueTreeAfterDrag(dndContext?.expandedSnapshot || []);
+          if (shouldCommitOrderOnDragEnd) {
+            const container = row.parentElement;
+            const parentSubjectId = String(row.dataset.parentSubjectId || "");
+            const orderedChildIds = Array.from(container?.querySelectorAll?.("[data-subissue-sortable-row='true']") || [])
+              .map((item) => String(item.dataset.childSubjectId || ""))
+              .filter(Boolean);
+            if (parentSubjectId && orderedChildIds.length && typeof reorderSubjectChildren === "function") {
+              await reorderSubjectChildren(parentSubjectId, orderedChildIds, { root, skipRerender: false });
+            } else {
+              rerenderPanels();
+            }
+          }
+          draggedSubissueContext = null;
           clearDragClasses();
           clearDragPreview();
           row.dataset.subissueDragFromHandle = "false";
