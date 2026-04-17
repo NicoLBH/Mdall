@@ -336,7 +336,7 @@ export function createSubjectMessagesSupabaseRepository() {
       if (!normalizedProjectId) return [];
 
       const params = new URLSearchParams();
-      params.set("select", "person_id,collaborator_user_id,collaborator_email,collaborator_name,collaborator_first_name,collaborator_last_name,status,role_group_code,role_group_label");
+      params.set("select", "person_id,collaborator_user_id,collaborator_email,first_name,last_name,full_name,email,status,removed_at,role_group_code,role_group_label");
       params.set("project_id", `eq.${normalizedProjectId}`);
       params.set("removed_at", "is.null");
 
@@ -347,10 +347,11 @@ export function createSubjectMessagesSupabaseRepository() {
         .map((row) => ({
           personId: normalizeId(row?.person_id),
           userId: normalizeId(row?.collaborator_user_id),
-          email: String(row?.collaborator_email || "").trim(),
+          email: String(row?.email || row?.collaborator_email || "").trim(),
           label: String(
-            row?.collaborator_name
-              || [row?.collaborator_first_name, row?.collaborator_last_name].filter(Boolean).join(" ")
+            row?.full_name
+              || [row?.first_name, row?.last_name].filter(Boolean).join(" ")
+              || row?.email
               || row?.collaborator_email
               || "Utilisateur"
           ).trim(),
