@@ -13,6 +13,7 @@ import {
   renderSelectDropdownHost,
   syncSelectDropdownPosition
 } from "../ui/select-dropdown-controller.js";
+import { extractStructuredMentions } from "../../utils/subject-mentions.js";
 export function createProjectSubjectsView(deps) {
   const {
     store,
@@ -2333,6 +2334,7 @@ async function applyCommentAction(root) {
 
   const message = String(ta.value || "").trim();
   if (!message) return;
+  const mentions = extractStructuredMentions(message);
 
   const helpActive = !!store.situationsView.helpMode;
   if (helpActive) {
@@ -2351,7 +2353,8 @@ async function applyCommentAction(root) {
   await addComment(target.type, target.id, message, {
     actor: "Human",
     agent: "human",
-    parentMessageId: parentMessageId || undefined
+    parentMessageId: parentMessageId || undefined,
+    mentions
   });
   ta.value = "";
   store.situationsView.commentDraft = "";

@@ -292,6 +292,7 @@ const {
   addActivity,
   setDecision,
   getDecision,
+  getMentionUiState,
   getThreadForSelection,
   getInlineReplyUiState,
   renderThreadBlock,
@@ -388,6 +389,8 @@ const projectSubjectsEvents = createProjectSubjectsEvents({
   addComment: (...args) => addComment(...args),
   editSubjectMessage: (...args) => editSubjectMessage(...args),
   deleteSubjectMessage: (...args) => deleteSubjectMessage(...args),
+  getMentionUiState: (...args) => getMentionUiState(...args),
+  listCollaboratorsForMentions: (...args) => subjectMessagesService.listCollaboratorsForMentions(...args),
   getSubjectsCurrentRoot: () => subjectsCurrentRoot,
   resolveCurrentUserAssigneeId: () => resolveCurrentUserDirectoryPersonId({
     email: store.user?.email || "",

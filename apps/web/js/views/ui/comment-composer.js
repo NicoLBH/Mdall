@@ -11,6 +11,7 @@ export function renderCommentComposer({
   placeholder = "",
   hintHtml = "",
   contextHtml = "",
+  footerHtml = "",
   actionsHtml = "",
   toolbarHtml = "",
   previewEmptyHint = "Use Markdown to format your comment"
@@ -43,6 +44,7 @@ export function renderCommentComposer({
           <div class="comment-editor comment-composer__preview-wrap ${previewMode ? "" : "hidden"}">
             <div class="comment-preview comment-composer__preview" id="${escapeHtml(previewId)}" data-empty-hint="${escapeHtml(previewEmptyHint)}"></div>
           </div>
+          ${footerHtml || ""}
         </div>
 
         <div class="actions-row actions-row--details comment-composer__actions" style="margin-top:10px;">
