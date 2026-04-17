@@ -53,7 +53,8 @@ export function createProjectSubjectsEvents(config) {
     bindOverlayChromeCompact,
     getProjectSubjectMilestones,
     renderSubjectMetaFieldValue,
-    resolveCurrentUserAssigneeId
+    resolveCurrentUserAssigneeId,
+    addComment
   } = config;
 
   let detachDropdownDocumentEvents = null;
