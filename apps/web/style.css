@@ -685,37 +685,53 @@ body.sidebar-collapsed #sidebar{overflow:hidden;width:0;min-width:0;padding:0;ma
   font-weight:600;
   color:var(--muted);
 }
-.subject-meta-parent-card__head{
-  display:flex;
-  align-items:center;
-  gap:8px;
+.subject-meta-parent-card__body{
+  display:grid;
+  grid-template-columns:auto minmax(0, 1fr) auto;
+  grid-template-rows:auto auto;
+  column-gap:8px;
+  row-gap:4px;
+  align-items:start;
   min-width:0;
 }
 .subject-meta-parent-card__icon{
+  grid-column:1;
+  grid-row:1;
   display:inline-flex;
   align-items:center;
   flex:0 0 auto;
+  margin-top:1px;
 }
 .subject-meta-parent-card__title{
+  grid-column:2;
+  grid-row:1;
   min-width:0;
   font-size:13px;
   line-height:18px;
   font-weight:600;
   color:var(--text);
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
+  white-space:normal;
+  overflow:visible;
+  text-overflow:clip;
+  word-break:break-word;
 }
 .subject-meta-parent-card__count{
-  margin-left:auto;
+  grid-column:3;
+  grid-row:1;
+  margin-left:2px;
   flex:0 0 auto;
 }
 .subject-meta-parent-card__count .subissues-counts{
   margin-left:0;
 }
 .subject-meta-parent-card__meta{
+  grid-column:2 / -1;
+  grid-row:2;
   font-size:12px;
   color:var(--muted);
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
 }
 
 .subject-meta-relations-cards{display:flex;flex-direction:column;gap:10px;}
