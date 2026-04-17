@@ -66,22 +66,35 @@ export function createProjectSubjectsThread(config = {}) {
   }
 
   function mapEventRowToThreadActivity(row = {}) {
+    const eventType = String(row.event_type || "");
+    const eventPayload = row.event_payload || {};
     return {
       ts: firstNonEmpty(row.created_at, nowIso()),
       entity_type: "sujet",
       entity_id: normalizeId(row.subject_id),
       type: "ACTIVITY",
-      kind: String(row.event_type || "timeline_event").toLowerCase(),
+      kind: eventType.toLowerCase(),
       actor: row.actor_person_id ? `Person ${normalizeId(row.actor_person_id).slice(0, 8)}` : "System",
       agent: "system",
-      message: String(row.event_payload?.message || ""),
+      message: String(eventPayload.message || ""),
       meta: {
         source: "supabase",
         id: normalizeId(row.id),
-        event_type: String(row.event_type || ""),
-        event_payload: row.event_payload || {}
+        event_type: eventType,
+        event_payload: eventPayload
       }
     };
+  }
+
+  function mapTimelineRowToThreadEntry(row = {}) {
+    const kind = String(row?.kind || "").toLowerCase();
+    if (kind === "message") {
+      return mapMessageRowToThreadComment(row.message || {});
+    }
+    if (kind === "event") {
+      return mapEventRowToThreadActivity(row.event || {});
+    }
+    return null;
   }
 
   function requestScopeRerender() {
@@ -107,7 +120,9 @@ export function createProjectSubjectsThread(config = {}) {
 
         const messages = Array.isArray(timeline?.messages) ? timeline.messages : [];
         const events = Array.isArray(timeline?.events) ? timeline.events : [];
+        const rows = Array.isArray(timeline?.rows) ? timeline.rows : [];
         subjectTimelineCache.set(normalizedSubjectId, {
+          rows: rows.map((row) => mapTimelineRowToThreadEntry(row)).filter(Boolean),
           comments: messages.map((row) => mapMessageRowToThreadComment(row)),
           activities: events.map((row) => mapEventRowToThreadActivity(row)),
           conversation: timeline?.conversation || null
@@ -290,14 +305,11 @@ priority=${firstNonEmpty(subject.priority, "")}`
     const isViewingSubject = !!subject;
 
     const persistedTimeline = subject ? (subjectTimelineCache.get(normalizeId(subject.id)) || null) : null;
-    const comments = subject
-      ? (persistedTimeline?.comments || [])
-      : localComments;
-    const persistedActivities = subject
-      ? (persistedTimeline?.activities || [])
-      : [];
+    const comments = subject ? [] : localComments;
+    const persistedActivities = subject ? [] : [];
+    const persistedRows = subject ? (persistedTimeline?.rows || []) : [];
 
-    const humanEvents = [...comments, ...activities, ...persistedActivities].filter((e) => {
+    const humanEvents = [...comments, ...activities, ...persistedActivities, ...persistedRows].filter((e) => {
       const k = entityKey(e.entity_type, e.entity_id);
       const t = String(e?.type || "").toUpperCase();
 
@@ -312,6 +324,10 @@ priority=${firstNonEmpty(subject.priority, "")}`
 
       return true;
     });
+
+    if (subject) {
+      return humanEvents.sort((x, y) => String(x.ts || "").localeCompare(String(y.ts || "")));
+    }
 
     const orderRank = (e) => {
       const t = String(e?.type || "").toUpperCase();
@@ -420,6 +436,34 @@ priority=${firstNonEmpty(subject.priority, "")}`
           const entity = getEntityByType(entityType, entityId);
           const entityTitle = entity?.title ? `${escapeHtml(entity.title)} ` : "";
           targetHtml = entityId ? `${entityType} ${entityTitle}${entityDisplayLinkHtml(entityType, entityId)}` : "this";
+        } else if (kind === "message_posted") {
+          iconHtml = `<span class="tl-ico-wrap tl-ico-reopened" aria-hidden="true">${svgIcon("comment-discussion")}</span>`;
+          verb = "posted a message on";
+          targetHtml = "this conversation";
+        } else if (kind === "message_edited") {
+          iconHtml = `<span class="tl-ico-wrap tl-ico-reopened" aria-hidden="true">${svgIcon("pencil")}</span>`;
+          verb = "edited a message on";
+          targetHtml = "this conversation";
+        } else if (kind === "message_deleted") {
+          iconHtml = `<span class="tl-ico-wrap tl-ico-closed" aria-hidden="true">${svgIcon("trash")}</span>`;
+          verb = "deleted a message on";
+          targetHtml = "this conversation";
+        } else if (kind === "message_frozen") {
+          iconHtml = `<span class="tl-ico-wrap tl-ico-closed" aria-hidden="true">${svgIcon("lock")}</span>`;
+          verb = "froze a message on";
+          targetHtml = "this conversation";
+        } else if (kind === "conversation_locked") {
+          iconHtml = `<span class="tl-ico-wrap tl-ico-closed" aria-hidden="true">${svgIcon("lock")}</span>`;
+          verb = "locked";
+          targetHtml = "the conversation";
+        } else if (kind === "conversation_unlocked") {
+          iconHtml = `<span class="tl-ico-wrap tl-ico-reopened" aria-hidden="true">${svgIcon("unlock")}</span>`;
+          verb = "unlocked";
+          targetHtml = "the conversation";
+        } else if (kind === "attachments_linked") {
+          iconHtml = `<span class="tl-ico-wrap tl-ico-reopened" aria-hidden="true">${svgIcon("paperclip")}</span>`;
+          verb = "added attachments to";
+          targetHtml = "this conversation";
         }
 
         const note = String(e?.message || "").trim();
