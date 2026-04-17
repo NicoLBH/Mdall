@@ -404,6 +404,7 @@ const projectSubjectsDetailsRenderer = createProjectSubjectsDetailsRenderer({
   getReviewTitleStateClass,
   entityDisplayLinkHtml: (...args) => projectSubjectsView.entityDisplayLinkHtml(...args),
   problemsCountsHtml: (...args) => projectSubjectsView.problemsCountsHtml(...args),
+  renderSubjectBlockedByHeadHtml: (...args) => projectSubjectsView.renderSubjectBlockedByHeadHtml(...args),
   renderSubjectParentHeadHtml: (...args) => projectSubjectsView.renderSubjectParentHeadHtml(...args),
   firstNonEmpty,
   escapeHtml,

@@ -10,6 +10,7 @@ export function createProjectSubjectsDetailsRenderer(config) {
     getReviewTitleStateClass,
     entityDisplayLinkHtml,
     problemsCountsHtml,
+    renderSubjectBlockedByHeadHtml,
     renderSubjectParentHeadHtml,
     firstNonEmpty,
     escapeHtml,
@@ -40,12 +41,14 @@ export function createProjectSubjectsDetailsRenderer(config) {
         const item = currentSelection.item;
         if (currentSelection.type === "sujet") {
           const countsHtml = problemsCountsHtml(item, { entityType: "sujet", hideIfEmpty: true });
+          const blockedByHtml = renderSubjectBlockedByHeadHtml(item, { compact: false });
           const parentHtml = renderSubjectParentHeadHtml(item, { compact: false });
-          const dividerHtml = parentHtml ? `<span class="details-title-divider" aria-hidden="true"></span>` : "";
+          const relationsHtml = `${blockedByHtml}${parentHtml}`;
+          const dividerHtml = relationsHtml ? `<span class="details-title-divider" aria-hidden="true"></span>` : "";
           return `${statePill(getEffectiveSujetStatus(item.id), {
             reviewState: getEntityReviewMeta("sujet", item.id).review_state,
             entityType: "sujet"
-          })}${countsHtml}${dividerHtml}${parentHtml}`;
+          })}${countsHtml}${dividerHtml}${relationsHtml}`;
         }
         return `${statePill(getEffectiveSituationStatus(item.id), {
           reviewState: getEntityReviewMeta("situation", item.id).review_state,
@@ -56,6 +59,7 @@ export function createProjectSubjectsDetailsRenderer(config) {
         const item = currentSelection.item;
         if (currentSelection.type === "sujet") {
           const countsHtml = problemsCountsHtml(item, { entityType: "sujet", hideIfEmpty: true });
+          const blockedByHtml = renderSubjectBlockedByHeadHtml(item, { compact: true });
           const parentHtml = renderSubjectParentHeadHtml(item, { compact: true });
           return {
             variant: "grid",
@@ -65,7 +69,7 @@ export function createProjectSubjectsDetailsRenderer(config) {
               entityType: "sujet"
             }),
             topHtml: titleTextHtml,
-            bottomHtml: `${countsHtml}${parentHtml}`
+            bottomHtml: `${countsHtml}${blockedByHtml}${parentHtml}`
           };
         }
         return {

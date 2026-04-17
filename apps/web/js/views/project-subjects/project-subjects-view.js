@@ -1338,6 +1338,55 @@ function renderSubjectRelationsCards(subjectId) {
   return `<div class="subject-meta-relations-cards">${groups.join('<div class="subject-meta-relations-divider" aria-hidden="true"></div>')}</div>`;
 }
 
+function renderSubjectBlockedByHeadHtml(subject, options = {}) {
+  const compact = options.compact === true;
+  const blockedBySubjects = Array.isArray(getBlockedBySubjects(subject?.id || subject))
+    ? getBlockedBySubjects(subject?.id || subject)
+    : [];
+  if (!blockedBySubjects.length) return "";
+
+  const iconHtml = `<span class="details-blocked-badge__icon">${svgIcon("slash", { className: "octicon octicon-slash" })}</span>`;
+
+  if (blockedBySubjects.length === 1) {
+    const blocker = blockedBySubjects[0] || {};
+    const blockerTitle = escapeHtml(firstNonEmpty(blocker?.title, blocker?.id, "Sujet"));
+    const blockerRef = escapeHtml(getEntityDisplayRef("sujet", blocker?.id));
+    if (compact) {
+      return `
+        <span class="details-blocked-badge details-blocked-badge--compact" title="Bloqué par ${blockerTitle}">
+          ${iconHtml}
+          <span class="details-blocked-badge__title">${blockerRef}</span>
+        </span>
+      `;
+    }
+    return `
+      <span class="details-blocked-badge" title="Bloqué par ${blockerTitle}">
+        ${iconHtml}
+        <span class="details-blocked-badge__label">Bloqué par :</span>
+        <span class="details-blocked-badge__title">${blockerTitle}</span>
+      </span>
+    `;
+  }
+
+  const countLabel = escapeHtml(String(blockedBySubjects.length));
+  if (compact) {
+    return `
+      <span class="details-blocked-badge details-blocked-badge--compact" title="Bloqué par ${countLabel} sujets">
+        ${iconHtml}
+        <span class="details-blocked-badge__title">${countLabel}</span>
+      </span>
+    `;
+  }
+
+  return `
+    <span class="details-blocked-badge" title="Bloqué par ${countLabel} sujets">
+      ${iconHtml}
+      <span class="details-blocked-badge__label">Bloqué par</span>
+      <span class="details-blocked-badge__title">${countLabel}</span>
+    </span>
+  `;
+}
+
 function renderSubjectParentHeadHtml(subject, options = {}) {
   const compact = options.compact === true;
   const parentSubject = getSubjectParentSubject(subject?.id || subject);
@@ -2656,6 +2705,7 @@ function getObjectiveById(objectiveId) {
     getEffectiveSituationStatus,
     problemsCountsHtml,
     problemsCountsIconHtml,
+    renderSubjectBlockedByHeadHtml,
     renderSubjectParentHeadHtml,
     renderDetailedMetaForSelection,
     renderSubjectMetaControls,
