@@ -749,7 +749,10 @@ priority=${firstNonEmpty(subject.priority, "")}`
           `,
           avatarType: identity.avatarType,
           avatarHtml: identity.avatarHtml,
-          avatarInitial: identity.avatarInitial
+          avatarInitial: identity.avatarInitial,
+          className: Number(e?.meta?.depth || 0) > 0
+            ? `message-thread__comment--nested message-thread__comment--depth-${Math.min(MAX_REPLY_VISUAL_DEPTH, Number(e?.meta?.depth || 0))}`
+            : ""
         });
       }
 
@@ -965,6 +968,17 @@ priority=${firstNonEmpty(subject.priority, "")}`
     `;
 
     const issueStatusActionHtml = renderIssueStatusAction(selection);
+    const replyContext = type === "sujet" ? getReplyContextForSubject(item?.id) : null;
+    const contextHtml = replyContext
+      ? `
+        <div class="comment-composer__context">
+          <div class="comment-composer__context-text mono-small">
+            Réponse à un message${replyContext.parentPreview ? ` : “${escapeHtml(replyContext.parentPreview)}”` : ""}
+          </div>
+          <button class="gh-btn gh-btn--sm" type="button" data-action="clear-reply-target">Annuler la réponse</button>
+        </div>
+      `
+      : "";
 
     const actionsHtml = `
       <button class="gh-btn gh-btn--help-mode ${helpMode ? "is-on" : ""}" data-action="toggle-help" type="button">Help</button>
@@ -991,6 +1005,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
         ? "Help (éphémère) — décrivez l’écran / l’action souhaitée."
         : `Réponse humaine (Markdown) sur ce ${type === "sujet" ? "sujet" : "regroupement"} — mentionne @rapso pour solliciter l’agent.`,
       hintHtml,
+      contextHtml,
       actionsHtml
     });
   }
