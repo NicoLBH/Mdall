@@ -134,13 +134,11 @@ export function createProjectSubjectsThread(config = {}) {
     const state = store.situationsView;
     if (!state.inlineReplyUi || typeof state.inlineReplyUi !== "object") {
       state.inlineReplyUi = {
-        menuMessageId: "",
         visibleMessageId: "",
         expandedMessageId: "",
         draftsByMessageId: {}
       };
     }
-    if (typeof state.inlineReplyUi.menuMessageId !== "string") state.inlineReplyUi.menuMessageId = "";
     if (typeof state.inlineReplyUi.visibleMessageId !== "string") state.inlineReplyUi.visibleMessageId = "";
     if (typeof state.inlineReplyUi.expandedMessageId !== "string") state.inlineReplyUi.expandedMessageId = "";
     if (!state.inlineReplyUi.draftsByMessageId || typeof state.inlineReplyUi.draftsByMessageId !== "object") {
@@ -649,7 +647,6 @@ priority=${firstNonEmpty(subject.priority, "")}`
             });
         const tsHtml = e?.ts ? `<div class="mono-small">${escapeHtml(fmtTs(e.ts))}</div>` : "";
         const childReplies = childrenByParentId.get(commentId) || [];
-        const isMenuOpen = replyUi.menuMessageId === commentId;
         const isVisible = replyUi.visibleMessageId === commentId;
         const isExpanded = replyUi.expandedMessageId === commentId;
         const draft = String(replyUi.draftsByMessageId?.[commentId] || "");
@@ -666,7 +663,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
           author: identity.displayName,
           tsHtml,
           headerRightHtml: `
-            <div class="thread-comment-menu ${isMenuOpen ? "is-open" : ""}">
+            <div class="thread-comment-menu">
               <button
                 class="thread-comment-menu__trigger"
                 type="button"
@@ -676,7 +673,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
               >
                 ${svgIcon("kebab-horizontal")}
               </button>
-              <div class="thread-comment-menu__dropdown ${isMenuOpen ? "is-open" : ""}">
+              <div class="thread-comment-menu__dropdown">
                 <button class="gh-menu__item" type="button" data-action="thread-reply-open" data-message-id="${escapeHtml(commentId)}">Répondre au message</button>
               </div>
             </div>

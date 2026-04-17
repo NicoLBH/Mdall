@@ -1257,15 +1257,35 @@ export function createProjectSubjectsEvents(config) {
     });
 
     const selectorValue = (value) => String(value || "").replace(/["\\]/g, "\\$&");
+    const threadReplyDebugEnabled = (() => {
+      try {
+        const search = String(window?.location?.search || "");
+        if (search.includes("debugSubjectReplies=1")) return true;
+        const localValue = String(window?.localStorage?.getItem?.("mdall:debug-subject-replies") || "").trim().toLowerCase();
+        return localValue === "1" || localValue === "true";
+      } catch {
+        return false;
+      }
+    })();
+    const debugThreadReply = (eventName, payload = {}) => {
+      if (!threadReplyDebugEnabled) return;
+      console.log("[subject-thread-reply]", eventName, payload);
+    };
 
     root.querySelectorAll("[data-action='thread-reply-menu-toggle'][data-message-id]").forEach((btn) => {
-      btn.onclick = () => {
-        const messageId = String(btn.dataset.messageId || "").trim();
-        if (!messageId) return;
-        const replyUi = typeof getInlineReplyUiState === "function" ? getInlineReplyUiState() : null;
-        if (!replyUi) return;
-        replyUi.menuMessageId = replyUi.menuMessageId === messageId ? "" : messageId;
-        rerenderScope(root);
+      btn.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const menu = btn.closest(".thread-comment-menu");
+        if (!menu) return;
+        const dropdown = menu.querySelector(".thread-comment-menu__dropdown");
+        if (!dropdown) return;
+        debugThreadReply("menu_toggle", { messageId: btn.dataset.messageId || "", wasOpen: dropdown.classList.contains("is-open") });
+
+        root.querySelectorAll(".thread-comment-menu__dropdown.is-open").forEach((opened) => {
+          if (opened !== dropdown) opened.classList.remove("is-open");
+        });
+        dropdown.classList.toggle("is-open");
       };
     });
 
@@ -1273,9 +1293,10 @@ export function createProjectSubjectsEvents(config) {
       btn.onclick = () => {
         const messageId = String(btn.dataset.messageId || "").trim();
         if (!messageId) return;
+        debugThreadReply("menu_action_reply", { messageId });
+        btn.closest(".thread-comment-menu__dropdown")?.classList.remove("is-open");
         const replyUi = typeof getInlineReplyUiState === "function" ? getInlineReplyUiState() : null;
         if (!replyUi) return;
-        replyUi.menuMessageId = "";
         replyUi.visibleMessageId = messageId;
         replyUi.expandedMessageId = "";
         if (typeof replyUi.draftsByMessageId?.[messageId] !== "string") replyUi.draftsByMessageId[messageId] = "";
@@ -1290,6 +1311,7 @@ export function createProjectSubjectsEvents(config) {
       btn.onclick = () => {
         const messageId = String(btn.dataset.messageId || "").trim();
         if (!messageId) return;
+        debugThreadReply("reply_expand", { messageId });
         const replyUi = typeof getInlineReplyUiState === "function" ? getInlineReplyUiState() : null;
         if (!replyUi) return;
         replyUi.visibleMessageId = messageId;
@@ -1314,12 +1336,12 @@ export function createProjectSubjectsEvents(config) {
     root.querySelectorAll("[data-action='thread-reply-cancel'][data-message-id]").forEach((btn) => {
       btn.onclick = () => {
         const messageId = String(btn.dataset.messageId || "").trim();
+        debugThreadReply("reply_cancel", { messageId });
         const replyUi = typeof getInlineReplyUiState === "function" ? getInlineReplyUiState() : null;
         if (!replyUi) return;
         if (messageId) replyUi.draftsByMessageId[messageId] = "";
         replyUi.visibleMessageId = "";
         replyUi.expandedMessageId = "";
-        replyUi.menuMessageId = "";
         rerenderScope(root);
       };
     });
@@ -1334,6 +1356,7 @@ export function createProjectSubjectsEvents(config) {
         if (!replyUi) return;
         const message = String(replyUi.draftsByMessageId?.[parentMessageId] || "").trim();
         if (!message) return;
+        debugThreadReply("reply_submit", { parentMessageId, messageLength: message.length });
         await addComment("sujet", selection.item.id, message, {
           actor: "Human",
           agent: "human",
@@ -1342,10 +1365,22 @@ export function createProjectSubjectsEvents(config) {
         replyUi.draftsByMessageId[parentMessageId] = "";
         replyUi.visibleMessageId = "";
         replyUi.expandedMessageId = "";
-        replyUi.menuMessageId = "";
         rerenderScope(root);
       };
     });
+
+    root.querySelectorAll(".thread-comment-menu__dropdown").forEach((dropdown) => {
+      dropdown.addEventListener("click", (event) => event.stopPropagation());
+    });
+
+    if (root.dataset.threadReplyDropdownDocumentBound !== "true") {
+      document.addEventListener("click", () => {
+        root.querySelectorAll(".thread-comment-menu__dropdown.is-open").forEach((opened) => {
+          opened.classList.remove("is-open");
+        });
+      });
+      root.dataset.threadReplyDropdownDocumentBound = "true";
+    }
 
     root.querySelectorAll("[data-subject-assign-self]").forEach((btn) => {
       btn.onclick = async (event) => {
