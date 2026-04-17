@@ -706,6 +706,13 @@ body.sidebar-collapsed #sidebar{overflow:hidden;width:0;min-width:0;padding:0;ma
   color:var(--muted);
 }
 
+.subject-meta-relations-cards{display:flex;flex-direction:column;gap:10px;}
+.subject-meta-relations-group{display:flex;flex-direction:column;gap:8px;}
+.subject-meta-relations-group__title{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--muted);}
+.subject-meta-relations-group__counter{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 6px;border-radius:999px;background:rgba(56,139,253,.16);color:var(--text);font-size:11px;line-height:1;}
+.subject-meta-relations-group__list{display:flex;flex-direction:column;gap:8px;}
+.subject-meta-relations-divider{height:1px;background:var(--border);margin:2px 0;}
+
 .subject-meta-relations-menu__item{
   width:100%;
 }
@@ -2110,6 +2117,8 @@ body.modal-open {
 .issue-row-subject-objective:focus-visible{color:var(--fgColor-accent, #4493f8);outline:none;}
 .issue-row-subject-objective__icon{display:inline-flex;align-items:center;color:currentColor;}
 .issue-row-subject-objective__text{min-width:0;overflow:hidden;text-overflow:ellipsis;vertical-align:middle;}
+.issue-row-blocked-pill{display:inline-flex;align-items:center;gap:4px;margin-right:8px;color:var(--muted);}
+.issue-row-blocked-pill .octicon-blocked{color:var(--danger-fg,#f85149);fill:currentColor;}
 .issue-row-subject-children-counter{margin-left:2px;flex:0 0 auto;}
 .issue-row-subject-children-counter span:last-child{white-space:nowrap;}
 
@@ -2562,6 +2571,21 @@ body.is-resizing{
 .details-title--compact .details-title-compact-bottom .details-parent-badge__icon{display:inline-flex;align-items:center;flex:0 0 auto;}
 .details-title--compact .details-title-compact-bottom .details-parent-badge__label{flex:0 0 auto;}
 .details-title--compact .details-title-compact-bottom .details-parent-badge__link{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
+
+
+.details-title--compact .details-title-compact-bottom .details-blocked-badge{display:inline-flex;align-items:center;gap:4px;font-size:12px;line-height:16px;color:var(--muted);min-width:0;}
+.details-title--compact .details-title-compact-bottom .details-blocked-badge__icon{display:inline-flex;align-items:center;flex:0 0 auto;color:var(--danger-fg,#f85149);}
+.details-title--compact .details-title-compact-bottom .details-blocked-badge__label{flex:0 0 auto;}
+.details-title--compact .details-title-compact-bottom .details-blocked-badge__title{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
+
+.details-title--compact .details-title-compact-bottom .subissues-counts--problems + .details-blocked-badge::before,
+.details-title--compact .details-title-compact-bottom .subissues-counts--problems + .details-parent-badge::before,
+.details-title--compact .details-title-compact-bottom .details-blocked-badge + .details-parent-badge::before{
+  content:"·";
+  margin-right:4px;
+  color:var(--muted);
+}
+
 .details-title--compact .details-title-compact-bottom .verdict-bar{flex:0 1 auto;}
 .details-title--compact .gh-state{font-size:14px;line-height:21px;padding:3px 10px;height:32px;}
 .details-title--compact .details-title-row{align-items:flex-start;}
@@ -2612,6 +2636,27 @@ body.is-resizing{
 .details-title--expanded .details-parent-badge__icon{display:inline-flex;align-items:center;flex:0 0 auto;}
 .details-title--expanded .details-parent-badge__label{flex:0 0 auto;}
 .details-title--expanded .details-parent-badge__link{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
+
+
+.details-title--expanded .details-blocked-badge{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  margin:0;
+  height:32px;
+  padding:3px 12px 3px 10px;
+  border-radius:999px;
+  border:1px solid var(--border2);
+  background:rgba(22,27,34,.35);
+  font-size:14px;
+  line-height:21px;
+  color:var(--muted);
+  min-width:0;
+}
+.details-title--expanded .details-blocked-badge__icon{display:inline-flex;align-items:center;flex:0 0 auto;color:var(--danger-fg,#f85149);}
+.details-title--expanded .details-blocked-badge__label{flex:0 0 auto;}
+.details-title--expanded .details-blocked-badge__title{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
+
 .details-parent-badge__link{
   border:none;
   background:transparent;

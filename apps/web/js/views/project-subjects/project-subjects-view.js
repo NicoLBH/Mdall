@@ -57,6 +57,8 @@ export function createProjectSubjectsView(deps) {
     getNestedSujet,
     getSituationSubjects,
     getChildSubjects,
+    getBlockedBySubjects,
+    getBlockingSubjects,
     getFilteredStandaloneSubjects,
     getFilteredFlatSubjects,
     getCurrentSubjectsStatusFilter,
@@ -923,6 +925,7 @@ function getSubjectsTableDeps() {
     renderSubjectLabelBadge: getProjectSubjectLabels().renderSubjectLabelBadge,
     getObjectiveById,
     getChildSubjects,
+    getBlockedBySubjects,
     issueIcon,
     priorityBadge,
     firstNonEmpty
@@ -1273,38 +1276,115 @@ function getSubjectParentSubject(subjectId) {
   return getNestedSujet(parentSubjectId);
 }
 
-function renderSubjectParentCard(subjectId) {
-  const parentSubject = getSubjectParentSubject(subjectId);
-  if (!parentSubject) return renderSubjectMetaButtonValue("Aucun sujet parent");
+function renderSubjectRelationSubjectCard(subject, options = {}) {
+  const relationLabel = firstNonEmpty(options.label, "Relation");
+  const displayRef = getEntityDisplayRef("sujet", subject?.id);
+  const status = getEffectiveSujetStatus(subject?.id);
+  const extraCountHtml = options.countHtml ? `<span class="subject-meta-parent-card__count">${options.countHtml}</span>` : "";
+  return `
+    <button type="button" class="subject-meta-parent-card" data-parent-subject-id="${escapeHtml(subject?.id || "")}">
+      <span class="subject-meta-parent-card__label">${escapeHtml(relationLabel)}</span>
+      <span class="subject-meta-parent-card__head">
+        <span class="subject-meta-parent-card__icon">${issueIcon(status)}</span>
+        <span class="subject-meta-parent-card__title">${escapeHtml(firstNonEmpty(subject?.title, subject?.id, "Sujet"))}</span>
+        ${extraCountHtml}
+      </span>
+      <span class="subject-meta-parent-card__meta">${escapeHtml(displayRef)}</span>
+    </button>
+  `;
+}
 
-  const parentStatus = getEffectiveSujetStatus(parentSubject.id);
-  const parentChildren = getChildSubjectList(parentSubject);
-  const displayRef = getEntityDisplayRef("sujet", parentSubject.id);
-  const author = getDisplayAuthorName(firstNonEmpty(
-    getEntityDescriptionState("sujet", parentSubject.id)?.author,
-    parentSubject?.agent,
-    parentSubject?.raw?.agent,
-    "system"
-  ), {
-    agent: firstNonEmpty(
-      getEntityDescriptionState("sujet", parentSubject.id)?.agent,
-      parentSubject?.agent,
-      parentSubject?.raw?.agent,
-      "system"
-    ),
-    fallback: "System"
-  });
+function renderSubjectRelationsCards(subjectId) {
+  const parentSubject = getSubjectParentSubject(subjectId);
+  const blockedBySubjects = Array.isArray(getBlockedBySubjects(subjectId)) ? getBlockedBySubjects(subjectId) : [];
+  const blockingSubjects = Array.isArray(getBlockingSubjects(subjectId)) ? getBlockingSubjects(subjectId) : [];
+
+  const groups = [];
+  if (parentSubject) {
+    const parentChildren = getChildSubjectList(parentSubject);
+    groups.push(`
+      <div class="subject-meta-relations-group">
+        ${renderSubjectRelationSubjectCard(parentSubject, {
+    label: "Sujet parent",
+    countHtml: subissuesHeadCountsHtml(parentChildren)
+  })}
+      </div>
+    `);
+  }
+
+  if (blockedBySubjects.length) {
+    groups.push(`
+      <div class="subject-meta-relations-group">
+        <div class="subject-meta-relations-group__title">Est bloqué par <span class="subject-meta-relations-group__counter">${blockedBySubjects.length}</span></div>
+        <div class="subject-meta-relations-group__list">
+          ${blockedBySubjects.map((item) => renderSubjectRelationSubjectCard(item, { label: "Sujet" })).join("")}
+        </div>
+      </div>
+    `);
+  }
+
+  if (blockingSubjects.length) {
+    groups.push(`
+      <div class="subject-meta-relations-group">
+        <div class="subject-meta-relations-group__title">Est bloquant pour <span class="subject-meta-relations-group__counter">${blockingSubjects.length}</span></div>
+        <div class="subject-meta-relations-group__list">
+          ${blockingSubjects.map((item) => renderSubjectRelationSubjectCard(item, { label: "Sujet" })).join("")}
+        </div>
+      </div>
+    `);
+  }
+
+  if (!groups.length) return renderSubjectMetaButtonValue("Aucune relation");
+
+  return `<div class="subject-meta-relations-cards">${groups.join('<div class="subject-meta-relations-divider" aria-hidden="true"></div>')}</div>`;
+}
+
+function renderSubjectBlockedByHeadHtml(subject, options = {}) {
+  const compact = options.compact === true;
+  const blockedBySubjects = Array.isArray(getBlockedBySubjects(subject?.id || subject))
+    ? getBlockedBySubjects(subject?.id || subject)
+    : [];
+  if (!blockedBySubjects.length) return "";
+
+  const iconHtml = `<span class="details-blocked-badge__icon">${svgIcon("blocked", { className: "octicon octicon-blocked fgColor-danger" })}</span>`;
+
+  if (blockedBySubjects.length === 1) {
+    const blocker = blockedBySubjects[0] || {};
+    const blockerTitle = escapeHtml(firstNonEmpty(blocker?.title, blocker?.id, "Sujet"));
+    const blockerRef = escapeHtml(getEntityDisplayRef("sujet", blocker?.id));
+    if (compact) {
+      return `
+        <span class="details-blocked-badge details-blocked-badge--compact" title="Bloqué par ${blockerTitle}">
+          ${iconHtml}
+          <span class="details-blocked-badge__title">${blockerRef}</span>
+        </span>
+      `;
+    }
+    return `
+      <span class="details-blocked-badge" title="Bloqué par ${blockerTitle}">
+        ${iconHtml}
+        <span class="details-blocked-badge__label">Bloqué par :</span>
+        <span class="details-blocked-badge__title">${blockerTitle}</span>
+      </span>
+    `;
+  }
+
+  const countLabel = escapeHtml(String(blockedBySubjects.length));
+  if (compact) {
+    return `
+      <span class="details-blocked-badge details-blocked-badge--compact" title="Bloqué par ${countLabel} sujets">
+        ${iconHtml}
+        <span class="details-blocked-badge__title">${countLabel}</span>
+      </span>
+    `;
+  }
 
   return `
-    <button type="button" class="subject-meta-parent-card" data-parent-subject-id="${escapeHtml(parentSubject.id)}">
-      <span class="subject-meta-parent-card__label">Sujet parent</span>
-      <span class="subject-meta-parent-card__head">
-        <span class="subject-meta-parent-card__icon">${issueIcon(parentStatus)}</span>
-        <span class="subject-meta-parent-card__title">${escapeHtml(firstNonEmpty(parentSubject.title, parentSubject.id, "Sujet parent"))}</span>
-        <span class="subject-meta-parent-card__count">${subissuesHeadCountsHtml(parentChildren)}</span>
-      </span>
-      <span class="subject-meta-parent-card__meta">${escapeHtml(author)} ${escapeHtml(displayRef)}</span>
-    </button>
+    <span class="details-blocked-badge" title="Bloqué par ${countLabel} sujets">
+      ${iconHtml}
+      <span class="details-blocked-badge__label">Bloqué par</span>
+      <span class="details-blocked-badge__title">${countLabel}</span>
+    </span>
   `;
 }
 
@@ -1337,7 +1417,7 @@ function renderSubjectMetaFieldValue(subject, field) {
   if (field === "labels") return renderSubjectLabelsValue(subject.id);
   if (field === "situations") return renderSubjectSituationsValue(subject.id);
   if (field === "objectives") return renderSubjectObjectivesValue(subject.id);
-  if (field === "relations") return renderSubjectParentCard(subject.id);
+  if (field === "relations") return renderSubjectRelationsCards(subject.id);
   return renderSubjectMetaButtonValue("Aucune donnée");
 }
 
@@ -1384,6 +1464,43 @@ function getRelationParentSuggestions(subject, query = "") {
       return String(firstNonEmpty(left?.title, left?.id, "")).localeCompare(String(firstNonEmpty(right?.title, right?.id, "")), "fr");
     });
   return candidates.slice(0, 13);
+}
+
+function getRelationSubjectSuggestions(subject, query = "", options = {}) {
+  const currentSubjectId = String(subject?.id || "");
+  const normalizedQuery = String(query || "").trim().toLowerCase();
+  const excludedIds = new Set((Array.isArray(options.excludeSubjectIds) ? options.excludeSubjectIds : []).map((value) => String(value || "")).filter(Boolean));
+  const map = store.projectSubjectsView?.rawSubjectsResult?.subjectsById || {};
+  const candidates = Object.values(map)
+    .filter((item) => {
+      const itemId = String(item?.id || "");
+      if (!itemId || itemId === currentSubjectId || excludedIds.has(itemId)) return false;
+      return matchSearch([item?.title, item?.id], normalizedQuery);
+    })
+    .sort((left, right) => {
+      const tsDiff = getSubjectLastActivityTimestamp(right) - getSubjectLastActivityTimestamp(left);
+      if (tsDiff !== 0) return tsDiff;
+      return String(firstNonEmpty(left?.title, left?.id, "")).localeCompare(String(firstNonEmpty(right?.title, right?.id, "")), "fr");
+    });
+  return candidates.slice(0, 20);
+}
+
+function buildRelationSelectItem(candidate, { dropdownState, isSelected = false, dataAttr }) {
+  const candidateId = String(candidate?.id || "");
+  return {
+    key: candidateId,
+    isActive: String(dropdownState?.activeKey || "") === candidateId,
+    isSelected,
+    iconHtml: `
+      <span class="select-menu__situation-iconset" aria-hidden="true">
+        <span class="select-menu__checkbox ${isSelected ? "is-checked" : ""}">${svgIcon("check", { className: "octicon octicon-check" })}</span>
+        <span class="select-menu__situation-icon">${issueIcon(getEffectiveSujetStatus(candidateId))}</span>
+      </span>
+    `,
+    title: firstNonEmpty(candidate?.title, candidateId, "Sujet"),
+    metaHtml: escapeHtml(getEntityDisplayRef("sujet", candidateId)),
+    dataAttrs: { [dataAttr]: candidateId }
+  };
 }
 
 function buildSubjectMetaMenuItems(subject, field) {
@@ -1517,50 +1634,66 @@ function buildSubjectMetaMenuItems(subject, field) {
     };
   }
 
-  if (field === "relations" && String(dropdownState.relationsView || "menu") === "parent") {
-    const selectedParent = getSubjectParentSubject(subject.id);
-    const selectedParentId = String(selectedParent?.id || "");
-    const suggestions = getRelationParentSuggestions(subject, query);
-    const suggestionItems = suggestions
-      .filter((item) => String(item?.id || "") !== selectedParentId)
-      .map((candidate) => ({
-        key: String(candidate.id || ""),
-        isActive: String(dropdownState.activeKey || "") === String(candidate.id || ""),
+  if (field === "relations") {
+    const relationsView = String(dropdownState.relationsView || "menu");
+    if (relationsView === "parent") {
+      const selectedParent = getSubjectParentSubject(subject.id);
+      const selectedParentId = String(selectedParent?.id || "");
+      const suggestions = getRelationParentSuggestions(subject, query);
+      const suggestionItems = suggestions
+        .filter((item) => String(item?.id || "") !== selectedParentId)
+        .map((candidate) => buildRelationSelectItem(candidate, {
+          dropdownState,
+          dataAttr: "subject-relations-parent-entry"
+        }));
+
+      const selectedItem = selectedParent
+        ? buildRelationSelectItem(selectedParent, {
+          dropdownState,
+          isSelected: true,
+          dataAttr: "subject-relations-parent-entry"
+        })
+        : null;
+
+      return {
+        selectedItem,
+        suggestionItems,
+        items: [selectedItem, ...suggestionItems].filter(Boolean),
+        emptyHint: query ? "Aucun résultat pour cette recherche." : "Aucun sujet suggéré."
+      };
+    }
+
+    if (relationsView === "blocked_by" || relationsView === "blocking_for") {
+      const blockedBySubjects = Array.isArray(getBlockedBySubjects(subject.id)) ? getBlockedBySubjects(subject.id) : [];
+      const blockingSubjects = Array.isArray(getBlockingSubjects(subject.id)) ? getBlockingSubjects(subject.id) : [];
+      const selectedSubjects = relationsView === "blocked_by" ? blockedBySubjects : blockingSubjects;
+      const oppositeSubjects = relationsView === "blocked_by" ? blockingSubjects : blockedBySubjects;
+      const selectedIds = new Set(selectedSubjects.map((item) => String(item?.id || "")).filter(Boolean));
+      const oppositeIds = new Set(oppositeSubjects.map((item) => String(item?.id || "")).filter(Boolean));
+      const dataAttr = relationsView === "blocked_by" ? "subject-relations-blocked-by-entry" : "subject-relations-blocking-for-entry";
+
+      const selectedItems = selectedSubjects
+        .map((candidate) => buildRelationSelectItem(candidate, {
+          dropdownState,
+          isSelected: true,
+          dataAttr
+        }));
+
+      const suggestionItems = getRelationSubjectSuggestions(subject, query, {
+        excludeSubjectIds: [...selectedIds, ...oppositeIds]
+      }).map((candidate) => buildRelationSelectItem(candidate, {
+        dropdownState,
         isSelected: false,
-        iconHtml: `
-          <span class="select-menu__situation-iconset" aria-hidden="true">
-            <span class="select-menu__checkbox">${svgIcon("check", { className: "octicon octicon-check" })}</span>
-            <span class="select-menu__situation-icon">${issueIcon(getEffectiveSujetStatus(candidate.id))}</span>
-          </span>
-        `,
-        title: firstNonEmpty(candidate.title, candidate.id, "Sujet"),
-        metaHtml: escapeHtml(getEntityDisplayRef("sujet", candidate.id)),
-        dataAttrs: { "subject-relations-parent-entry": String(candidate.id || "") }
+        dataAttr
       }));
 
-    const selectedItem = selectedParent
-      ? {
-        key: selectedParentId,
-        isActive: String(dropdownState.activeKey || "") === selectedParentId,
-        isSelected: true,
-        iconHtml: `
-          <span class="select-menu__situation-iconset" aria-hidden="true">
-            <span class="select-menu__checkbox is-checked">${svgIcon("check", { className: "octicon octicon-check" })}</span>
-            <span class="select-menu__situation-icon">${issueIcon(getEffectiveSujetStatus(selectedParent.id))}</span>
-          </span>
-        `,
-        title: firstNonEmpty(selectedParent.title, selectedParent.id, "Sujet parent"),
-        metaHtml: escapeHtml(getEntityDisplayRef("sujet", selectedParent.id)),
-        dataAttrs: { "subject-relations-parent-entry": selectedParentId }
-      }
-      : null;
-
-    return {
-      selectedItem,
-      suggestionItems,
-      items: [selectedItem, ...suggestionItems].filter(Boolean),
-      emptyHint: query ? "Aucun résultat pour cette recherche." : "Aucun sujet suggéré."
-    };
+      return {
+        selectedItems,
+        suggestionItems,
+        items: [...selectedItems, ...suggestionItems],
+        emptyHint: query ? "Aucun résultat pour cette recherche." : "Aucun sujet suggéré."
+      };
+    }
   }
 
   const emptyHintMap = {
@@ -1605,8 +1738,12 @@ function renderSubjectMetaDropdown(subject, field) {
 
   if (field === "relations") {
     const relationsView = String(dropdownState.relationsView || "menu");
-    if (relationsView === "parent") {
-      const { selectedItem, suggestionItems, emptyHint } = buildSubjectMetaMenuItems(subject, field);
+    if (relationsView === "parent" || relationsView === "blocked_by" || relationsView === "blocking_for") {
+      const { selectedItem, selectedItems = [], suggestionItems = [], emptyHint } = buildSubjectMetaMenuItems(subject, field);
+      const selectedSectionItems = selectedItem ? [selectedItem] : selectedItems;
+      const searchPlaceholder = relationsView === "parent"
+        ? "Rechercher un sujet parent"
+        : "Rechercher un sujet";
       return `
         <div class="subject-meta-dropdown gh-menu gh-menu--open" role="dialog">
           <button type="button" class="subject-meta-relations-back" data-subject-relations-back>
@@ -1615,10 +1752,10 @@ function renderSubjectMetaDropdown(subject, field) {
           </button>
           <div class="subject-meta-dropdown__search">
             <span class="subject-meta-dropdown__search-icon" aria-hidden="true">${svgIcon("search", { className: "octicon octicon-search" })}</span>
-            <input type="search" class="subject-meta-dropdown__search-input" data-subject-meta-search="${escapeHtml(field)}" value="${escapeHtml(query)}" placeholder="Rechercher un sujet parent" autocomplete="off">
+            <input type="search" class="subject-meta-dropdown__search-input" data-subject-meta-search="${escapeHtml(field)}" value="${escapeHtml(query)}" placeholder="${escapeHtml(searchPlaceholder)}" autocomplete="off">
           </div>
           <div class="subject-meta-dropdown__body">
-            ${selectedItem ? renderSelectMenuSection({ title: "Sélectionné", items: [selectedItem] }) : `
+            ${relationsView === "parent" && !selectedItem ? `
               <div class="select-menu__section">
                 <button type="button" class="select-menu__item subject-meta-relations-menu__item" data-subject-relations-remove-parent>
                   <span class="select-menu__item-mainrow">
@@ -1629,7 +1766,7 @@ function renderSubjectMetaDropdown(subject, field) {
                   </span>
                 </button>
               </div>
-            `}
+            ` : renderSelectMenuSection({ title: "Sélectionné", items: selectedSectionItems, emptyTitle: "Aucune sélection", emptyHint: "Aucun sujet sélectionné." })}
             ${renderSelectMenuSection({
               title: "Suggestions",
               items: suggestionItems,
@@ -1652,17 +1789,17 @@ function renderSubjectMetaDropdown(subject, field) {
                 </span>
               </span>
             </button>
-            <button type="button" class="select-menu__item subject-meta-relations-menu__item" role="menuitem">
+            <button type="button" class="select-menu__item subject-meta-relations-menu__item" role="menuitem" data-subject-relations-open-blocked-by>
               <span class="select-menu__item-mainrow">
                 <span class="select-menu__item-content">
-                  <span class="select-menu__item-title">Ajouter ou modifier « Bloqué par »</span>
+                  <span class="select-menu__item-title">Ajouter ou modifier « Est bloqué par »</span>
                 </span>
               </span>
             </button>
-            <button type="button" class="select-menu__item subject-meta-relations-menu__item" role="menuitem">
+            <button type="button" class="select-menu__item subject-meta-relations-menu__item" role="menuitem" data-subject-relations-open-blocking-for>
               <span class="select-menu__item-mainrow">
                 <span class="select-menu__item-content">
-                  <span class="select-menu__item-title">Ajouter ou modifier « Bloquant »</span>
+                  <span class="select-menu__item-title">Ajouter ou modifier « Est bloquant pour »</span>
                 </span>
               </span>
             </button>
@@ -1801,7 +1938,7 @@ function renderSubjectMetaControls(subject) {
       ${renderSubjectMetaField({
         field: "relations",
         label: "Relations",
-        valueHtml: renderSubjectParentCard(subject.id)
+        valueHtml: renderSubjectRelationsCards(subject.id)
       })}
     </div>
   `;
@@ -2569,6 +2706,7 @@ function getObjectiveById(objectiveId) {
     getEffectiveSituationStatus,
     problemsCountsHtml,
     problemsCountsIconHtml,
+    renderSubjectBlockedByHeadHtml,
     renderSubjectParentHeadHtml,
     renderDetailedMetaForSelection,
     renderSubjectMetaControls,

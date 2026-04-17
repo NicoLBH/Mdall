@@ -44,6 +44,8 @@ export function createProjectSubjectsActions(config) {
     addSubjectToObjectiveInSupabase,
     removeSubjectFromObjectiveInSupabase,
     setSubjectParentInSupabase,
+    createBlockedByRelationInSupabase,
+    deleteBlockedByRelationInSupabase,
     reorderSubjectChildrenInSupabase,
     rerenderPanels
   } = config;
@@ -291,6 +293,86 @@ export function createProjectSubjectsActions(config) {
       showError(`Mise à jour du sujet parent impossible : ${String(error?.message || error || "Erreur inconnue")}`);
       return false;
     }
+  }
+
+  function syncBlockedByLinkLocally(sourceSubjectId, targetSubjectId, shouldExist) {
+    const raw = store.projectSubjectsView?.rawSubjectsResult;
+    if (!raw || typeof raw !== "object") return;
+    const sourceKey = String(sourceSubjectId || "").trim();
+    const targetKey = String(targetSubjectId || "").trim();
+    if (!sourceKey || !targetKey) return;
+
+    raw.linksBySubjectId = raw.linksBySubjectId && typeof raw.linksBySubjectId === "object"
+      ? raw.linksBySubjectId
+      : {};
+
+    const sourceLinks = Array.isArray(raw.linksBySubjectId[sourceKey]) ? raw.linksBySubjectId[sourceKey] : [];
+    const targetLinks = Array.isArray(raw.linksBySubjectId[targetKey]) ? raw.linksBySubjectId[targetKey] : [];
+
+    const isSameLink = (link) => String(link?.link_type || "") === "blocked_by"
+      && String(link?.source_subject_id || "") === sourceKey
+      && String(link?.target_subject_id || "") === targetKey;
+
+    const existing = sourceLinks.find(isSameLink) || targetLinks.find(isSameLink) || null;
+    if (shouldExist) {
+      const projectId = String(raw?.subjectsById?.[sourceKey]?.project_id || raw?.subjectsById?.[sourceKey]?.raw?.project_id || "").trim() || null;
+      const nextLink = existing || {
+        id: `${sourceKey}:${targetKey}:blocked_by`,
+        project_id: projectId,
+        source_subject_id: sourceKey,
+        target_subject_id: targetKey,
+        link_type: "blocked_by",
+        created_at: nowIso()
+      };
+      if (!sourceLinks.some((link) => isSameLink(link))) sourceLinks.push(nextLink);
+      if (!targetLinks.some((link) => isSameLink(link))) targetLinks.push(nextLink);
+      raw.linksBySubjectId[sourceKey] = sourceLinks;
+      raw.linksBySubjectId[targetKey] = targetLinks;
+      return;
+    }
+
+    raw.linksBySubjectId[sourceKey] = sourceLinks.filter((link) => !isSameLink(link));
+    raw.linksBySubjectId[targetKey] = targetLinks.filter((link) => !isSameLink(link));
+  }
+
+  async function toggleSubjectBlockedByRelation(subjectId, blockedBySubjectId, options = {}) {
+    const sourceKey = String(subjectId || "").trim();
+    const targetKey = String(blockedBySubjectId || "").trim();
+    if (!sourceKey || !targetKey) return false;
+
+    const raw = store.projectSubjectsView?.rawSubjectsResult;
+    const links = Array.isArray(raw?.linksBySubjectId?.[sourceKey]) ? raw.linksBySubjectId[sourceKey] : [];
+    const alreadyLinked = links.some((link) => String(link?.link_type || "") === "blocked_by"
+      && String(link?.source_subject_id || "") === sourceKey
+      && String(link?.target_subject_id || "") === targetKey);
+
+    syncBlockedByLinkLocally(sourceKey, targetKey, !alreadyLinked);
+    if (!options.skipRerender) {
+      if (options.root) rerenderScope(options.root);
+      else rerenderPanels();
+    }
+
+    try {
+      if (alreadyLinked) await deleteBlockedByRelationInSupabase(sourceKey, targetKey);
+      else await createBlockedByRelationInSupabase(sourceKey, targetKey);
+      return true;
+    } catch (error) {
+      syncBlockedByLinkLocally(sourceKey, targetKey, alreadyLinked);
+      if (!options.skipRerender) {
+        if (options.root) rerenderScope(options.root);
+        else rerenderPanels();
+      }
+      console.warn("toggleSubjectBlockedByRelation failed", error);
+      showError(`Mise à jour de la relation « Est bloqué par » impossible : ${String(error?.message || error || "Erreur inconnue")}`);
+      return false;
+    }
+  }
+
+  async function toggleSubjectBlockingForRelation(subjectId, blockedSubjectId, options = {}) {
+    const subjectKey = String(subjectId || "").trim();
+    const blockedKey = String(blockedSubjectId || "").trim();
+    if (!subjectKey || !blockedKey) return false;
+    return toggleSubjectBlockedByRelation(blockedKey, subjectKey, options);
   }
 
   function applySubjectChildrenOrderLocally(parentSubjectId, orderedChildIds = []) {
@@ -926,6 +1008,8 @@ export function createProjectSubjectsActions(config) {
     toggleSubjectAssignee,
     toggleSubjectSituation,
     setSubjectParent,
+    toggleSubjectBlockedByRelation,
+    toggleSubjectBlockingForRelation,
     reorderSubjectChildren,
     setSubjectLabels,
     toggleSubjectLabel,

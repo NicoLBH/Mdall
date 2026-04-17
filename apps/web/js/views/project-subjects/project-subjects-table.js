@@ -144,6 +144,7 @@ export function renderFlatSujetRow(sujet, situationId, options = {}) {
     renderSubjectLabelBadge,
     getObjectiveById,
     getChildSubjects,
+    getBlockedBySubjects,
     firstNonEmpty
   } = deps;
 
@@ -166,6 +167,10 @@ export function renderFlatSujetRow(sujet, situationId, options = {}) {
   const objectiveLabel = objective
     ? ` - <button type="button" class="issue-row-subject-objective" data-row-objective-id="${escapeHtml(objective.id)}"><span class="issue-row-subject-objective__icon" aria-hidden="true">${svgIcon("milestone", { className: "octicon octicon-milestone" })}</span><span class="issue-row-subject-objective__text">${escapeHtml(firstNonEmpty(objective.title, objective.id, "Objectif"))}</span></button>`
     : "";
+  const isBlocked = (Array.isArray(getBlockedBySubjects?.(sujet.id)) ? getBlockedBySubjects(sujet.id) : []).length > 0;
+  const blockedBadge = isBlocked
+    ? `<span class="issue-row-blocked-pill" aria-label="Sujet bloqué">${svgIcon("blocked", { className: "octicon octicon-blocked fgColor-danger" })}<span>Bloqué</span></span>`
+    : "";
 
   return `
     <div class="issue-row issue-row--pb click js-row-sujet${options.isSelectable === false ? "" : (options.rowSelectedClass ? options.rowSelectedClass("sujet", sujet.id) : "")}" data-sujet-id="${escapeHtml(sujet.id)}">
@@ -178,7 +183,7 @@ export function renderFlatSujetRow(sujet, situationId, options = {}) {
             <button type="button" class="row-title-trigger js-row-title-trigger theme-text theme-text--pb ${titleSeenClass}" data-row-entity-type="sujet" data-row-entity-id="${escapeHtml(sujet.id)}">${escapeHtml(firstNonEmpty(sujet.title, sujet.id, "Non classé"))}</button>
             ${renderSubjectChildrenCounterHtml(sujet, deps)}${subjectLabelsHtml ? `<span class="issue-row-subject-labels">${subjectLabelsHtml}</span>` : ""}
           </span>
-          <span class="issue-row-title-grid__meta issue-row-meta-text mono-small">${escapeHtml(displayRef)} - ${escapeHtml(author)} • ${escapeHtml(openedLabel)}${objectiveLabel}</span>
+          <span class="issue-row-title-grid__meta issue-row-meta-text mono-small">${blockedBadge}${escapeHtml(displayRef)} - ${escapeHtml(author)} • ${escapeHtml(openedLabel)}${objectiveLabel}</span>
         </span>
       </div>
       <div class="cell cell-assignees-value">${renderSubjectAssigneesCellHtml(sujet, deps)}</div>
