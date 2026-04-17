@@ -1393,6 +1393,8 @@ function renderSubjectParentHeadHtml(subject, options = {}) {
   const parentSubject = getSubjectParentSubject(subject?.id || subject);
   if (!parentSubject) return "";
   const title = escapeHtml(firstNonEmpty(parentSubject.title, parentSubject.id, "Sujet parent"));
+  const parentRef = escapeHtml(firstNonEmpty(getEntityDisplayRef("sujet", parentSubject.id), `#${parentSubject.id || ""}`));
+  const linkTitle = compact ? parentRef : title;
   const parentSubjectId = escapeHtml(String(parentSubject.id || ""));
   const wrapperClass = compact ? "details-parent-badge details-parent-badge--compact" : "details-parent-badge";
   return `
@@ -1405,7 +1407,7 @@ function renderSubjectParentHeadHtml(subject, options = {}) {
         data-parent-subject-id="${parentSubjectId}"
         aria-label="Ouvrir le sujet parent ${title}"
       >
-        <span class="details-parent-badge__title">${title}</span>
+        <span class="details-parent-badge__title">${linkTitle}</span>
       </button>
     </span>
   `;
