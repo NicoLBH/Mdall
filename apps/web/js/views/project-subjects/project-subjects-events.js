@@ -1321,13 +1321,7 @@ export function createProjectSubjectsEvents(config) {
         debugThreadReply("menu_action_reply", { messageId, parentMessageLength: parentMessageText.length });
         btn.closest(".thread-comment-menu__dropdown")?.classList.remove("is-open");
         const replyUi = resolveInlineReplyUiState();
-        const existingDraft = String(replyUi.draftsByMessageId?.[messageId] || "");
-        if (!existingDraft) {
-          const quoted = parentMessageText
-            ? `> ${parentMessageText.replace(/\n+/g, "\n> ")}\n\n`
-            : "";
-          replyUi.draftsByMessageId[messageId] = quoted;
-        }
+        replyUi.draftsByMessageId[messageId] = "";
         replyUi.expandedMessageId = messageId;
         debugThreadReply("reply_opened", {
           messageId,

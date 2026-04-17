@@ -611,7 +611,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
     return `
       <div class="thread-inline-reply-editor" data-inline-reply-editor="${escapeHtml(commentId)}">
         <div class="thread-inline-reply-editor__content">
-          <div class="thread-inline-reply-editor__tabs" role="tablist" aria-label="Reply tabs">
+          <div class="thread-inline-reply-editor__tabs" role="tablist" aria-label="Onglets de réponse">
             <button class="comment-tab is-active" type="button">Write</button>
             <button class="comment-tab" type="button" disabled>Preview</button>
           </div>
@@ -619,13 +619,13 @@ priority=${firstNonEmpty(subject.priority, "")}`
             <textarea
               class="textarea thread-inline-reply-editor__textarea"
               data-thread-reply-draft="${escapeHtml(commentId)}"
-              placeholder="Write a reply"
+              placeholder="Écrire une réponse"
             >${escapeHtml(draft || "")}</textarea>
           </div>
         </div>
         <div class="thread-inline-reply-editor__actions">
-          <button class="gh-btn" type="button" data-action="thread-reply-cancel" data-message-id="${escapeHtml(commentId)}">Cancel</button>
-          <button class="gh-btn gh-btn--comment" type="button" data-action="thread-reply-submit" data-message-id="${escapeHtml(commentId)}">Répondre</button>
+          <button class="gh-btn" type="button" data-action="thread-reply-cancel" data-message-id="${escapeHtml(commentId)}">Annuler</button>
+          <button class="gh-btn gh-btn--comment gh-btn--primary" type="button" data-action="thread-reply-submit" data-message-id="${escapeHtml(commentId)}">Répondre</button>
         </div>
       </div>
     `;
@@ -737,9 +737,13 @@ priority=${firstNonEmpty(subject.priority, "")}`
               <div class="mono-small color-fg-muted">${escapeHtml(String(e?.stateLabel || "modifiable"))}</div>
               ${mdToHtml(e?.message || "")}
             </div>
-            <div class="thread-comment-footer">
-              <span class="mono-small color-fg-muted">${childReplies.length} repl${childReplies.length > 1 ? "ies" : "y"}</span>
-            </div>
+            ${childReplies.length
+              ? `
+                <div class="thread-comment-footer">
+                  <span class="mono-small color-fg-muted">${childReplies.length} réponse${childReplies.length > 1 ? "s" : ""}</span>
+                </div>
+              `
+              : ""}
             ${repliesHtml}
             <div class="thread-comment-reply-box">
               ${renderInlineReplyComposer({
