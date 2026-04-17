@@ -10,6 +10,7 @@ export function renderCommentComposer({
   textareaValue = "",
   placeholder = "",
   hintHtml = "",
+  contextHtml = "",
   actionsHtml = ""
 } = {}) {
   return `
@@ -20,6 +21,7 @@ export function renderCommentComposer({
         <div class="gh-timeline-title mono comment-composer__title">${escapeHtml(title)}</div>
 
         <div class="comment-box gh-comment-boxwrap comment-composer__box ${helpMode ? "gh-comment-box--help" : ""}">
+          ${contextHtml || ""}
           <div class="comment-tabs comment-composer__tabs ${helpMode ? "gh-comment-header--help" : ""}" role="tablist" aria-label="Comment tabs">
             <button class="comment-tab ${!previewMode ? "is-active" : ""}" data-action="tab-write" type="button">Write</button>
             <button class="comment-tab ${previewMode ? "is-active" : ""}" data-action="tab-preview" type="button">Preview</button>

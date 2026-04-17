@@ -290,6 +290,7 @@ const {
   setDecision,
   getDecision,
   getThreadForSelection,
+  getInlineReplyUiState,
   renderThreadBlock,
   renderIssueStatusAction,
   renderCommentBox
@@ -756,7 +757,8 @@ const projectSubjectsView = createProjectSubjectsView({
   setProjectCompactEnabled,
   currentDecisionTarget: (...args) => currentDecisionTarget(...args),
   addComment: (...args) => addComment(...args),
-  getScopedSelection: (...args) => getScopedSelection(...args)
+  getScopedSelection: (...args) => getScopedSelection(...args),
+  getInlineReplyUiState: (...args) => getInlineReplyUiState(...args)
 });
 
 const {
