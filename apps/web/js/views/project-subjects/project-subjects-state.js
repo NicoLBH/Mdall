@@ -38,6 +38,7 @@ export function createProjectSubjectsState({ store }) {
     }
     if (typeof v.rightSubissueMenuOpenId !== "string") v.rightSubissueMenuOpenId = "";
     if (typeof v.commentPreviewMode !== "boolean") v.commentPreviewMode = false;
+    if (typeof v.commentDraft !== "string") v.commentDraft = "";
     if (typeof v.helpMode !== "boolean") v.helpMode = false;
     if (!v.replyContext || typeof v.replyContext !== "object") {
       v.replyContext = {

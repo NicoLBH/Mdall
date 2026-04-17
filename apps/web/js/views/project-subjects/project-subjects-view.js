@@ -2337,6 +2337,7 @@ async function applyCommentAction(root) {
   const helpActive = !!store.situationsView.helpMode;
   if (helpActive) {
     ta.value = "";
+    store.situationsView.commentDraft = "";
     store.situationsView.commentPreviewMode = false;
     return;
   }
@@ -2353,6 +2354,7 @@ async function applyCommentAction(root) {
     parentMessageId: parentMessageId || undefined
   });
   ta.value = "";
+  store.situationsView.commentDraft = "";
   store.situationsView.commentPreviewMode = false;
   if (store.situationsView?.replyContext) {
     store.situationsView.replyContext.subjectId = "";
@@ -2367,7 +2369,16 @@ function syncCommentPreview(root) {
   const ta = root.querySelector("#humanCommentBox");
   const preview = root.querySelector("#humanCommentPreview");
   if (!preview) return;
-  preview.innerHTML = mdToHtml(ta?.value || "");
+
+  const markdown = String(ta?.value || store.situationsView.commentDraft || "");
+  const rendered = mdToHtml(markdown);
+  if (!rendered) {
+    const emptyHint = String(preview.dataset.emptyHint || "Use Markdown to format your comment");
+    preview.innerHTML = `<div class="comment-composer__preview-empty">${escapeHtml(emptyHint)}</div>`;
+    return;
+  }
+
+  preview.innerHTML = rendered;
 }
 
 

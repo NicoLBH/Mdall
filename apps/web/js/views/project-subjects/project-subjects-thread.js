@@ -986,6 +986,31 @@ priority=${firstNonEmpty(subject.priority, "")}`
       `
       : "";
 
+    const toolbarButtons = [
+      { action: "bold", icon: "markdown-bold", label: "Gras" },
+      { action: "italic", icon: "markdown-italic", label: "Italique" },
+      { action: "underline", icon: "markdown-underline", label: "Souligné" },
+      { action: "bullet-list", icon: "markdown-list-unordered", label: "Liste à puces" },
+      { action: "ordered-list", icon: "markdown-list-ordered", label: "Liste numérotée" },
+      { action: "checklist", icon: "markdown-tasklist", label: "Checklist" },
+      { action: "quote", icon: "markdown-quote", label: "Citation" },
+      { action: "link", icon: "markdown-link", label: "Lien" },
+      { action: "mention", icon: "markdown-mention", label: "Mention" }
+    ];
+
+    const toolbarHtml = toolbarButtons.map((button) => `
+      <button
+        class="comment-toolbar-btn"
+        type="button"
+        data-action="composer-format"
+        data-format="${escapeHtml(button.action)}"
+        title="${escapeHtml(button.label)}"
+        aria-label="${escapeHtml(button.label)}"
+      >
+        ${svgIcon(button.icon)}
+      </button>
+    `).join("");
+
     const actionsHtml = `
       <button class="gh-btn gh-btn--help-mode ${helpMode ? "is-on" : ""}" data-action="toggle-help" type="button">Help</button>
 
@@ -1007,12 +1032,14 @@ priority=${firstNonEmpty(subject.priority, "")}`
       helpMode,
       textareaId: "humanCommentBox",
       previewId: "humanCommentPreview",
+      textareaValue: String(store.situationsView.commentDraft || ""),
       placeholder: helpMode
         ? "Help (éphémère) — décrivez l’écran / l’action souhaitée."
         : `Réponse humaine (Markdown) sur ce ${type === "sujet" ? "sujet" : "regroupement"} — mentionne @rapso pour solliciter l’agent.`,
       hintHtml,
       contextHtml,
-      actionsHtml
+      actionsHtml,
+      toolbarHtml
     });
   }
 
