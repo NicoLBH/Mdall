@@ -382,6 +382,7 @@ const projectSubjectsEvents = createProjectSubjectsEvents({
   getProjectSubjectMilestones: () => projectSubjectMilestones,
   getProjectSubjectLabels: () => projectSubjectLabels,
   renderSubjectMetaFieldValue: (...args) => projectSubjectsView.renderSubjectMetaFieldValue(...args),
+  addComment: (...args) => addComment(...args),
   getSubjectsCurrentRoot: () => subjectsCurrentRoot,
   resolveCurrentUserAssigneeId: () => resolveCurrentUserDirectoryPersonId({
     email: store.user?.email || "",
