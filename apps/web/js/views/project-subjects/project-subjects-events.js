@@ -10,6 +10,7 @@ export function createProjectSubjectsEvents(config) {
     getSubjectMetaMenuEntries,
     getSubjectSidebarMeta,
     rerenderScope,
+    getInlineReplyUiState,
     syncSubjectMetaDropdownPosition,
     getSubjectMetaScopeRoot,
     getSubjectKanbanMenuEntries,
@@ -1252,6 +1253,93 @@ export function createProjectSubjectsEvents(config) {
     root.querySelectorAll("[data-action='add-comment']").forEach((btn) => {
       btn.onclick = async () => {
         await applyCommentAction(root);
+      };
+    });
+
+    const selectorValue = (value) => String(value || "").replace(/["\\]/g, "\\$&");
+
+    root.querySelectorAll("[data-action='thread-reply-menu-toggle'][data-message-id]").forEach((btn) => {
+      btn.onclick = () => {
+        const messageId = String(btn.dataset.messageId || "").trim();
+        if (!messageId) return;
+        const replyUi = typeof getInlineReplyUiState === "function" ? getInlineReplyUiState() : null;
+        if (!replyUi) return;
+        replyUi.menuMessageId = replyUi.menuMessageId === messageId ? "" : messageId;
+        rerenderScope(root);
+      };
+    });
+
+    root.querySelectorAll("[data-action='thread-reply-open'][data-message-id]").forEach((btn) => {
+      btn.onclick = () => {
+        const messageId = String(btn.dataset.messageId || "").trim();
+        if (!messageId) return;
+        const replyUi = typeof getInlineReplyUiState === "function" ? getInlineReplyUiState() : null;
+        if (!replyUi) return;
+        replyUi.menuMessageId = "";
+        replyUi.expandedMessageId = messageId;
+        if (typeof replyUi.draftsByMessageId?.[messageId] !== "string") replyUi.draftsByMessageId[messageId] = "";
+        rerenderScope(root);
+        requestAnimationFrame(() => {
+          root.querySelector(`[data-thread-reply-draft="${selectorValue(messageId)}"]`)?.focus();
+        });
+      };
+    });
+
+    root.querySelectorAll("[data-action='thread-reply-expand'][data-message-id]").forEach((btn) => {
+      btn.onclick = () => {
+        const messageId = String(btn.dataset.messageId || "").trim();
+        if (!messageId) return;
+        const replyUi = typeof getInlineReplyUiState === "function" ? getInlineReplyUiState() : null;
+        if (!replyUi) return;
+        replyUi.expandedMessageId = messageId;
+        rerenderScope(root);
+        requestAnimationFrame(() => {
+          root.querySelector(`[data-thread-reply-draft="${selectorValue(messageId)}"]`)?.focus();
+        });
+      };
+    });
+
+    root.querySelectorAll("[data-thread-reply-draft]").forEach((textarea) => {
+      textarea.addEventListener("input", () => {
+        const messageId = String(textarea.dataset.threadReplyDraft || "").trim();
+        if (!messageId) return;
+        const replyUi = typeof getInlineReplyUiState === "function" ? getInlineReplyUiState() : null;
+        if (!replyUi) return;
+        replyUi.draftsByMessageId[messageId] = String(textarea.value || "");
+      });
+    });
+
+    root.querySelectorAll("[data-action='thread-reply-cancel'][data-message-id]").forEach((btn) => {
+      btn.onclick = () => {
+        const messageId = String(btn.dataset.messageId || "").trim();
+        const replyUi = typeof getInlineReplyUiState === "function" ? getInlineReplyUiState() : null;
+        if (!replyUi) return;
+        if (messageId) replyUi.draftsByMessageId[messageId] = "";
+        replyUi.expandedMessageId = "";
+        replyUi.menuMessageId = "";
+        rerenderScope(root);
+      };
+    });
+
+    root.querySelectorAll("[data-action='thread-reply-submit'][data-message-id]").forEach((btn) => {
+      btn.onclick = async () => {
+        const selection = getScopedSelection(root);
+        if (selection?.type !== "sujet") return;
+        const parentMessageId = String(btn.dataset.messageId || "").trim();
+        if (!parentMessageId) return;
+        const replyUi = typeof getInlineReplyUiState === "function" ? getInlineReplyUiState() : null;
+        if (!replyUi) return;
+        const message = String(replyUi.draftsByMessageId?.[parentMessageId] || "").trim();
+        if (!message) return;
+        await addComment("sujet", selection.item.id, message, {
+          actor: "Human",
+          agent: "human",
+          parentMessageId
+        });
+        replyUi.draftsByMessageId[parentMessageId] = "";
+        replyUi.expandedMessageId = "";
+        replyUi.menuMessageId = "";
+        rerenderScope(root);
       };
     });
 
