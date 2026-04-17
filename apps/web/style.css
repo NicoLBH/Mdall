@@ -2499,7 +2499,7 @@ body.is-resizing{
 }
 /* ===== Message thread + comment composer ===== */
 .message-thread{display:block;}
-.message-thread__item{width:100%;}
+.message-thread__item{width:calc(100% + 52px);}
 .message-thread__comment{padding-left:var(--discussion-content-inset);}
 .comment-composer{display:flex;gap:12px;align-items:flex-start;margin-top:10px;}
 .comment-composer__main{flex:1 1 auto;min-width:0;}
