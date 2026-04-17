@@ -77,6 +77,7 @@ import {
   renderCountBadge
 } from "./ui/status-badges.js";
 import { escapeHtml } from "../utils/escape-html.js";
+import { renderMarkdownToHtml } from "../utils/markdown-renderer.js";
 import { renderSelectMenuSection } from "./ui/select-menu.js";
 import {
   formatSharedDateInputValue,
@@ -653,12 +654,7 @@ function rerenderSubjectsPanelsWhenConnected(root, remainingAttempts = 12) {
 
 
 function mdToHtml(text) {
-  const safe = escapeHtml(text || "");
-  return safe
-    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*(.+?)\*/g, "<em>$1</em>")
-    .replace(/`([^`]+)`/g, "<code>$1</code>")
-    .replace(/\n/g, "<br>");
+  return renderMarkdownToHtml(text || "");
 }
 
 function firstNonEmpty(...values) {

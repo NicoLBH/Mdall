@@ -11,7 +11,9 @@ export function renderCommentComposer({
   placeholder = "",
   hintHtml = "",
   contextHtml = "",
-  actionsHtml = ""
+  actionsHtml = "",
+  toolbarHtml = "",
+  previewEmptyHint = "Use Markdown to format your comment"
 } = {}) {
   return `
     <div class="human-action comment-composer">
@@ -23,8 +25,11 @@ export function renderCommentComposer({
         <div class="comment-box gh-comment-boxwrap comment-composer__box ${helpMode ? "gh-comment-box--help" : ""}">
           ${contextHtml || ""}
           <div class="comment-tabs comment-composer__tabs ${helpMode ? "gh-comment-header--help" : ""}" role="tablist" aria-label="Comment tabs">
-            <button class="comment-tab ${!previewMode ? "is-active" : ""}" data-action="tab-write" type="button">Write</button>
-            <button class="comment-tab ${previewMode ? "is-active" : ""}" data-action="tab-preview" type="button">Preview</button>
+            <div class="comment-composer__tabs-left">
+              <button class="comment-tab ${!previewMode ? "is-active" : ""}" data-action="tab-write" type="button">Write</button>
+              <button class="comment-tab ${previewMode ? "is-active" : ""}" data-action="tab-preview" type="button">Preview</button>
+            </div>
+            ${toolbarHtml ? `<div class="comment-composer__toolbar" role="toolbar" aria-label="Markdown toolbar">${toolbarHtml}</div>` : ""}
           </div>
 
           <div class="comment-editor comment-composer__editor ${previewMode ? "hidden" : ""}">
@@ -36,7 +41,7 @@ export function renderCommentComposer({
           </div>
 
           <div class="comment-editor comment-composer__preview-wrap ${previewMode ? "" : "hidden"}">
-            <div class="comment-preview comment-composer__preview" id="${escapeHtml(previewId)}"></div>
+            <div class="comment-preview comment-composer__preview" id="${escapeHtml(previewId)}" data-empty-hint="${escapeHtml(previewEmptyHint)}"></div>
           </div>
         </div>
 

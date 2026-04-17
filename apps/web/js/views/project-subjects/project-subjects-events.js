@@ -1,3 +1,5 @@
+import { applyMarkdownComposerAction } from "../../utils/markdown-composer.js";
+
 export function createProjectSubjectsEvents(config) {
   const {
     store,
@@ -665,6 +667,7 @@ export function createProjectSubjectsEvents(config) {
     const commentTextarea = root.querySelector("#humanCommentBox");
     if (commentTextarea) {
       commentTextarea.addEventListener("input", () => {
+        store.situationsView.commentDraft = String(commentTextarea.value || "");
         if (store.situationsView.commentPreviewMode) syncCommentPreview(root);
       });
       commentTextarea.addEventListener("keydown", (ev) => {
@@ -672,6 +675,16 @@ export function createProjectSubjectsEvents(config) {
           ev.preventDefault();
           applyCommentAction(root);
         }
+      });
+
+      root.querySelectorAll("[data-action='composer-format'][data-format]").forEach((btn) => {
+        btn.onclick = () => {
+          const action = String(btn.dataset.format || "").trim();
+          if (!action) return;
+          const didApply = applyMarkdownComposerAction(commentTextarea, action);
+          if (!didApply) return;
+          if (store.situationsView.commentPreviewMode) syncCommentPreview(root);
+        };
       });
 
       root.querySelectorAll(".js-issue-status-action").forEach((actionRoot) => {
