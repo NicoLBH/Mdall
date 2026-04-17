@@ -74,6 +74,39 @@ async function fetchProjectFlatSubjects(projectId) {
   return json;
 }
 
+
+async function fetchProjectSubjectMessageCounts(projectId) {
+  if (!projectId) {
+    return {};
+  }
+
+  const url = new URL(`${SUPABASE_URL}/rest/v1/subject_messages`);
+  url.searchParams.set("select", "subject_id");
+  url.searchParams.set("project_id", `eq.${projectId}`);
+  url.searchParams.set("deleted_at", "is.null");
+
+  const headers = await getSupabaseAuthHeaders({ Accept: "application/json" });
+
+  const res = await fetch(url.toString(), {
+    method: "GET",
+    headers,
+    cache: "no-store"
+  });
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`subject_messages fetch failed (${res.status}): ${txt}`);
+  }
+
+  const rows = await res.json().catch(() => []);
+  const countsBySubjectId = {};
+  for (const row of (Array.isArray(rows) ? rows : [])) {
+    const subjectId = String(row?.subject_id || "").trim();
+    if (!subjectId) continue;
+    countsBySubjectId[subjectId] = Number(countsBySubjectId[subjectId] || 0) + 1;
+  }
+  return countsBySubjectId;
+}
 async function fetchProjectSubjectLinks(projectId) {
   if (!projectId) {
     return [];
@@ -1039,6 +1072,7 @@ export async function loadFlatSubjectsForCurrentProject(options = {}) {
         relationIdsBySubjectId: {},
         relationOptionsById: {},
         assigneePersonIdsBySubjectId: {},
+        subjectMessageCountsBySubjectId: {},
         labels: [],
         labelsById: {},
         labelsByKey: {},
@@ -1070,6 +1104,7 @@ export async function loadFlatSubjectsForCurrentProject(options = {}) {
     const subjects = await fetchProjectFlatSubjects(backendProjectId);
     const subjectLinks = await fetchProjectSubjectLinks(backendProjectId).catch(() => []);
     const subjectAssignees = await fetchProjectSubjectAssignees(backendProjectId).catch(() => []);
+    const subjectMessageCountsBySubjectId = await fetchProjectSubjectMessageCounts(backendProjectId).catch(() => ({}));
     const situations = await loadSituationsForCurrentProject(backendProjectId).catch(() => []);
     const manualSituationIds = situations
       .filter((situation) => String(situation?.mode || "manual").trim().toLowerCase() === "manual")
@@ -1078,6 +1113,9 @@ export async function loadFlatSubjectsForCurrentProject(options = {}) {
     const subjectIdsBySituationId = await loadSituationSubjectIdsMap(manualSituationIds).catch(() => ({}));
     const result = buildProjectFlatSubjectsResult(subjects, subjectLinks, { runId: store.ui.runId || "" });
     result.assigneePersonIdsBySubjectId = {};
+    result.subjectMessageCountsBySubjectId = subjectMessageCountsBySubjectId && typeof subjectMessageCountsBySubjectId === "object"
+      ? subjectMessageCountsBySubjectId
+      : {};
     for (const row of subjectAssignees) {
       const subjectId = normalizeUuid(row?.subject_id);
       const personId = normalizeUuid(row?.person_id);
