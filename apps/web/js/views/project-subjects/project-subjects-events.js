@@ -10,6 +10,9 @@ export function createProjectSubjectsEvents(config) {
     getSubjectMetaMenuEntries,
     getSubjectSidebarMeta,
     rerenderScope,
+    setReplyContext,
+    clearReplyContext,
+    buildReplyPreview,
     syncSubjectMetaDropdownPosition,
     getSubjectMetaScopeRoot,
     getSubjectKanbanMenuEntries,
@@ -1252,6 +1255,40 @@ export function createProjectSubjectsEvents(config) {
     root.querySelectorAll("[data-action='add-comment']").forEach((btn) => {
       btn.onclick = async () => {
         await applyCommentAction(root);
+      };
+    });
+
+    root.querySelectorAll("[data-action='reply-to-message'][data-message-id]").forEach((btn) => {
+      btn.onclick = () => {
+        const selection = getScopedSelection(root);
+        if (selection?.type !== "sujet") return;
+        const messageId = String(btn.dataset.messageId || "").trim();
+        if (!messageId) return;
+        const messageBody = String(
+          btn.closest?.("[data-thread-kind='comment']")
+            ?.querySelector?.(".gh-comment-body")
+            ?.textContent || ""
+        ).trim();
+        if (typeof setReplyContext === "function") {
+          setReplyContext({
+            subjectId: selection.item.id,
+            parentMessageId: messageId,
+            parentPreview: typeof buildReplyPreview === "function"
+              ? buildReplyPreview(messageBody)
+              : messageBody
+          });
+        }
+        rerenderScope(root);
+        requestAnimationFrame(() => {
+          root.querySelector("#humanCommentBox")?.focus();
+        });
+      };
+    });
+
+    root.querySelectorAll("[data-action='clear-reply-target']").forEach((btn) => {
+      btn.onclick = () => {
+        if (typeof clearReplyContext === "function") clearReplyContext();
+        rerenderScope(root);
       };
     });
 

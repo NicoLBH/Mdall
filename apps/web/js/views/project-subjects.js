@@ -290,6 +290,9 @@ const {
   setDecision,
   getDecision,
   getThreadForSelection,
+  setReplyContext,
+  clearReplyContext,
+  buildReplyPreview,
   renderThreadBlock,
   renderIssueStatusAction,
   renderCommentBox
@@ -756,7 +759,10 @@ const projectSubjectsView = createProjectSubjectsView({
   setProjectCompactEnabled,
   currentDecisionTarget: (...args) => currentDecisionTarget(...args),
   addComment: (...args) => addComment(...args),
-  getScopedSelection: (...args) => getScopedSelection(...args)
+  getScopedSelection: (...args) => getScopedSelection(...args),
+  setReplyContext: (...args) => setReplyContext(...args),
+  clearReplyContext: (...args) => clearReplyContext(...args),
+  buildReplyPreview: (...args) => buildReplyPreview(...args)
 });
 
 const {

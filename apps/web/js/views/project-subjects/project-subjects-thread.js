@@ -41,6 +41,7 @@ export function createProjectSubjectsThread(config = {}) {
   const subjectTimelineCache = new Map();
   const subjectTimelineState = new Map();
   const subjectReadMarkState = new Map();
+  const MAX_REPLY_VISUAL_DEPTH = 2;
 
   function normalizeId(value) {
     return String(value || "").trim();
@@ -68,12 +69,115 @@ export function createProjectSubjectsThread(config = {}) {
         source: "supabase",
         id: normalizeId(row.id),
         parent_message_id: normalizeId(row.parent_message_id),
+        depth: 0,
+        reply_preview: "",
         is_frozen: isFrozen,
         is_deleted: isDeleted,
         state_label: stateLabel
       },
       stateLabel
     };
+  }
+
+  function getReplyContextState() {
+    ensureViewUiState();
+    const state = store.situationsView;
+    if (!state.replyContext || typeof state.replyContext !== "object") {
+      state.replyContext = {
+        subjectId: "",
+        parentMessageId: "",
+        parentPreview: ""
+      };
+    }
+    return state.replyContext;
+  }
+
+  function clearReplyContext() {
+    const context = getReplyContextState();
+    context.subjectId = "";
+    context.parentMessageId = "";
+    context.parentPreview = "";
+  }
+
+  function setReplyContext({ subjectId = "", parentMessageId = "", parentPreview = "" } = {}) {
+    const context = getReplyContextState();
+    context.subjectId = normalizeId(subjectId);
+    context.parentMessageId = normalizeId(parentMessageId);
+    context.parentPreview = String(parentPreview || "").trim();
+  }
+
+  function getReplyContextForSubject(subjectId = "") {
+    const context = getReplyContextState();
+    const normalizedSubjectId = normalizeId(subjectId);
+    if (!normalizedSubjectId) return null;
+    if (normalizeId(context.subjectId) !== normalizedSubjectId) return null;
+    const parentMessageId = normalizeId(context.parentMessageId);
+    if (!parentMessageId) return null;
+    return {
+      subjectId: normalizedSubjectId,
+      parentMessageId,
+      parentPreview: String(context.parentPreview || "")
+    };
+  }
+
+  function buildReplyPreview(markdown = "") {
+    const normalized = String(markdown || "")
+      .replace(/\s+/g, " ")
+      .replace(/^#+\s*/g, "")
+      .trim();
+    if (!normalized) return "";
+    return normalized.length > 120 ? `${normalized.slice(0, 117)}…` : normalized;
+  }
+
+  function decorateNestedMessageComments(comments = []) {
+    const list = Array.isArray(comments) ? comments : [];
+    if (!list.length) return [];
+
+    const byId = new Map();
+    list.forEach((comment) => {
+      const commentId = normalizeId(comment?.meta?.id);
+      if (commentId) byId.set(commentId, comment);
+    });
+
+    const depthCache = new Map();
+    const parentChain = (comment) => {
+      const chain = [];
+      let current = comment;
+      const seen = new Set();
+      while (current) {
+        const currentId = normalizeId(current?.meta?.id);
+        if (!currentId || seen.has(currentId)) break;
+        seen.add(currentId);
+        const parentId = normalizeId(current?.meta?.parent_message_id);
+        if (!parentId) break;
+        chain.push(parentId);
+        current = byId.get(parentId) || null;
+      }
+      return chain;
+    };
+
+    list.forEach((comment) => {
+      const commentId = normalizeId(comment?.meta?.id);
+      if (!commentId) return;
+      if (depthCache.has(commentId)) return;
+      const chain = parentChain(comment);
+      depthCache.set(commentId, chain.length);
+    });
+
+    return list.map((comment) => {
+      const commentId = normalizeId(comment?.meta?.id);
+      const parentId = normalizeId(comment?.meta?.parent_message_id);
+      const parentComment = parentId ? byId.get(parentId) : null;
+      const depth = Math.min(MAX_REPLY_VISUAL_DEPTH, Number(depthCache.get(commentId) || 0));
+      return {
+        ...comment,
+        meta: {
+          ...(comment.meta || {}),
+          depth,
+          reply_preview: parentComment ? buildReplyPreview(parentComment.message) : ""
+        }
+      };
+    });
   }
 
   function queueSubjectMessageReadMarking(subjectId, messages = []) {
@@ -172,9 +276,17 @@ export function createProjectSubjectsThread(config = {}) {
         const messages = Array.isArray(timeline?.messages) ? timeline.messages : [];
         const events = Array.isArray(timeline?.events) ? timeline.events : [];
         const rows = Array.isArray(timeline?.rows) ? timeline.rows : [];
+        const mappedRows = rows.map((row) => mapTimelineRowToThreadEntry(row)).filter(Boolean);
+        const mappedComments = mappedRows.filter((entry) => String(entry?.type || "").toUpperCase() === "COMMENT");
+        const nestedComments = decorateNestedMessageComments(mappedComments);
+        const nestedById = new Map(nestedComments.map((comment) => [normalizeId(comment?.meta?.id), comment]));
         subjectTimelineCache.set(normalizedSubjectId, {
-          rows: rows.map((row) => mapTimelineRowToThreadEntry(row)).filter(Boolean),
-          comments: messages.map((row) => mapMessageRowToThreadComment(row)),
+          rows: mappedRows.map((entry) => {
+            if (String(entry?.type || "").toUpperCase() !== "COMMENT") return entry;
+            const nested = nestedById.get(normalizeId(entry?.meta?.id));
+            return nested || entry;
+          }),
+          comments: nestedComments,
           activities: events.map((row) => mapEventRowToThreadActivity(row)),
           conversation: timeline?.conversation || null
         });
@@ -422,12 +534,27 @@ priority=${firstNonEmpty(subject.priority, "")}`
           author: identity.displayName,
           tsHtml,
           bodyHtml: `
+            ${e?.meta?.reply_preview
+              ? `<div class="comment-reply-preview mono-small">↪ ${escapeHtml(String(e.meta.reply_preview || ""))}</div>`
+              : ""}
             <div class="mono-small color-fg-muted">${escapeHtml(String(e?.stateLabel || "modifiable"))}</div>
             ${mdToHtml(e?.message || "")}
+            ${e?.meta?.id
+              ? `
+                <div class="comment-reply-actions">
+                  <button class="gh-btn gh-btn--sm" type="button" data-action="reply-to-message" data-message-id="${escapeHtml(String(e.meta.id || ""))}">
+                    Répondre
+                  </button>
+                </div>
+              `
+              : ""}
           `,
           avatarType: identity.avatarType,
           avatarHtml: identity.avatarHtml,
-          avatarInitial: identity.avatarInitial
+          avatarInitial: identity.avatarInitial,
+          className: Number(e?.meta?.depth || 0) > 0
+            ? `message-thread__comment--nested message-thread__comment--depth-${Math.min(MAX_REPLY_VISUAL_DEPTH, Number(e?.meta?.depth || 0))}`
+            : ""
         });
       }
 
@@ -643,6 +770,17 @@ priority=${firstNonEmpty(subject.priority, "")}`
     `;
 
     const issueStatusActionHtml = renderIssueStatusAction(selection);
+    const replyContext = type === "sujet" ? getReplyContextForSubject(item?.id) : null;
+    const contextHtml = replyContext
+      ? `
+        <div class="comment-composer__context">
+          <div class="comment-composer__context-text mono-small">
+            Réponse à un message${replyContext.parentPreview ? ` : “${escapeHtml(replyContext.parentPreview)}”` : ""}
+          </div>
+          <button class="gh-btn gh-btn--sm" type="button" data-action="clear-reply-target">Annuler la réponse</button>
+        </div>
+      `
+      : "";
 
     const actionsHtml = `
       <button class="gh-btn gh-btn--help-mode ${helpMode ? "is-on" : ""}" data-action="toggle-help" type="button">Help</button>
@@ -669,6 +807,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
         ? "Help (éphémère) — décrivez l’écran / l’action souhaitée."
         : `Réponse humaine (Markdown) sur ce ${type === "sujet" ? "sujet" : "regroupement"} — mentionne @rapso pour solliciter l’agent.`,
       hintHtml,
+      contextHtml,
       actionsHtml
     });
   }
@@ -679,6 +818,10 @@ priority=${firstNonEmpty(subject.priority, "")}`
     setDecision,
     getDecision,
     getThreadForSelection,
+    setReplyContext,
+    clearReplyContext,
+    getReplyContextForSubject,
+    buildReplyPreview,
     renderThreadBlock,
     renderIssueStatusAction,
     renderCommentBox
