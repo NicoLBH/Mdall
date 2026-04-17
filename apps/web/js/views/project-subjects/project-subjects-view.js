@@ -1277,19 +1277,25 @@ function getSubjectParentSubject(subjectId) {
 }
 
 function renderSubjectRelationSubjectCard(subject, options = {}) {
-  const relationLabel = firstNonEmpty(options.label, "Relation");
+  const relationLabel = String(firstNonEmpty(options.label, "")).trim();
   const displayRef = getEntityDisplayRef("sujet", subject?.id);
   const status = getEffectiveSujetStatus(subject?.id);
+  const descriptionState = getEntityDescriptionState("sujet", subject?.id) || {};
+  const author = getDisplayAuthorName(firstNonEmpty(descriptionState.author, subject?.agent, subject?.raw?.agent, "system"), {
+    agent: firstNonEmpty(descriptionState.agent, subject?.agent, subject?.raw?.agent, "system"),
+    fallback: "System"
+  });
+  const authorAndRef = `${author}/${displayRef}`;
   const extraCountHtml = options.countHtml ? `<span class="subject-meta-parent-card__count">${options.countHtml}</span>` : "";
   return `
     <button type="button" class="subject-meta-parent-card" data-parent-subject-id="${escapeHtml(subject?.id || "")}">
-      <span class="subject-meta-parent-card__label">${escapeHtml(relationLabel)}</span>
-      <span class="subject-meta-parent-card__head">
+      ${relationLabel ? `<span class="subject-meta-parent-card__label">${escapeHtml(relationLabel)}</span>` : ""}
+      <span class="subject-meta-parent-card__body">
         <span class="subject-meta-parent-card__icon">${issueIcon(status)}</span>
         <span class="subject-meta-parent-card__title">${escapeHtml(firstNonEmpty(subject?.title, subject?.id, "Sujet"))}</span>
         ${extraCountHtml}
+        <span class="subject-meta-parent-card__meta">${escapeHtml(authorAndRef)}</span>
       </span>
-      <span class="subject-meta-parent-card__meta">${escapeHtml(displayRef)}</span>
     </button>
   `;
 }
@@ -1317,7 +1323,7 @@ function renderSubjectRelationsCards(subjectId) {
       <div class="subject-meta-relations-group">
         <div class="subject-meta-relations-group__title">Est bloqué par <span class="subject-meta-relations-group__counter">${blockedBySubjects.length}</span></div>
         <div class="subject-meta-relations-group__list">
-          ${blockedBySubjects.map((item) => renderSubjectRelationSubjectCard(item, { label: "Sujet" })).join("")}
+          ${blockedBySubjects.map((item) => renderSubjectRelationSubjectCard(item)).join("")}
         </div>
       </div>
     `);
@@ -1328,7 +1334,7 @@ function renderSubjectRelationsCards(subjectId) {
       <div class="subject-meta-relations-group">
         <div class="subject-meta-relations-group__title">Est bloquant pour <span class="subject-meta-relations-group__counter">${blockingSubjects.length}</span></div>
         <div class="subject-meta-relations-group__list">
-          ${blockingSubjects.map((item) => renderSubjectRelationSubjectCard(item, { label: "Sujet" })).join("")}
+          ${blockingSubjects.map((item) => renderSubjectRelationSubjectCard(item)).join("")}
         </div>
       </div>
     `);
@@ -1393,6 +1399,8 @@ function renderSubjectParentHeadHtml(subject, options = {}) {
   const parentSubject = getSubjectParentSubject(subject?.id || subject);
   if (!parentSubject) return "";
   const title = escapeHtml(firstNonEmpty(parentSubject.title, parentSubject.id, "Sujet parent"));
+  const parentRef = escapeHtml(firstNonEmpty(getEntityDisplayRef("sujet", parentSubject.id), `#${parentSubject.id || ""}`));
+  const linkTitle = compact ? parentRef : title;
   const parentSubjectId = escapeHtml(String(parentSubject.id || ""));
   const wrapperClass = compact ? "details-parent-badge details-parent-badge--compact" : "details-parent-badge";
   return `
@@ -1405,7 +1413,7 @@ function renderSubjectParentHeadHtml(subject, options = {}) {
         data-parent-subject-id="${parentSubjectId}"
         aria-label="Ouvrir le sujet parent ${title}"
       >
-        <span class="details-parent-badge__title">${title}</span>
+        <span class="details-parent-badge__title">${linkTitle}</span>
       </button>
     </span>
   `;

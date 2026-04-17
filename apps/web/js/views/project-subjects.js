@@ -416,6 +416,7 @@ const projectSubjectsDetailsRenderer = createProjectSubjectsDetailsRenderer({
   renderCommentBox,
   renderDetailedMetaForSelection: (...args) => projectSubjectsView.renderDetailedMetaForSelection(...args),
   renderSubjectMetaControls: (...args) => projectSubjectsView.renderSubjectMetaControls(...args),
+  priorityBadge: (...args) => projectSubjectsView.priorityBadge(...args),
   renderDocumentRefsCard: (...args) => projectSubjectsView.renderDocumentRefsCard(...args)
 });
 
