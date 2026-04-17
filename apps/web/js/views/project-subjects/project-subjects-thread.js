@@ -41,6 +41,7 @@ export function createProjectSubjectsThread(config = {}) {
   const subjectTimelineCache = new Map();
   const subjectTimelineState = new Map();
   const subjectReadMarkState = new Map();
+  const MAX_REPLY_VISUAL_DEPTH = 2;
 
   function normalizeId(value) {
     return String(value || "").trim();
@@ -68,12 +69,133 @@ export function createProjectSubjectsThread(config = {}) {
         source: "supabase",
         id: normalizeId(row.id),
         parent_message_id: normalizeId(row.parent_message_id),
+        depth: 0,
+        reply_preview: "",
         is_frozen: isFrozen,
         is_deleted: isDeleted,
         state_label: stateLabel
       },
       stateLabel
     };
+  }
+
+  function getReplyContextState() {
+    ensureViewUiState();
+    const state = store.situationsView;
+    if (!state.replyContext || typeof state.replyContext !== "object") {
+      state.replyContext = {
+        subjectId: "",
+        parentMessageId: "",
+        parentPreview: ""
+      };
+    }
+    return state.replyContext;
+  }
+
+  function clearReplyContext() {
+    const context = getReplyContextState();
+    context.subjectId = "";
+    context.parentMessageId = "";
+    context.parentPreview = "";
+  }
+
+  function setReplyContext({ subjectId = "", parentMessageId = "", parentPreview = "" } = {}) {
+    const context = getReplyContextState();
+    context.subjectId = normalizeId(subjectId);
+    context.parentMessageId = normalizeId(parentMessageId);
+    context.parentPreview = String(parentPreview || "").trim();
+  }
+
+  function getReplyContextForSubject(subjectId = "") {
+    const context = getReplyContextState();
+    const normalizedSubjectId = normalizeId(subjectId);
+    if (!normalizedSubjectId) return null;
+    if (normalizeId(context.subjectId) !== normalizedSubjectId) return null;
+    const parentMessageId = normalizeId(context.parentMessageId);
+    if (!parentMessageId) return null;
+    return {
+      subjectId: normalizedSubjectId,
+      parentMessageId,
+      parentPreview: String(context.parentPreview || "")
+    };
+  }
+
+  function buildReplyPreview(markdown = "") {
+    const normalized = String(markdown || "")
+      .replace(/\s+/g, " ")
+      .replace(/^#+\s*/g, "")
+      .trim();
+    if (!normalized) return "";
+    return normalized.length > 120 ? `${normalized.slice(0, 117)}…` : normalized;
+  }
+
+  function getInlineReplyUiState() {
+    ensureViewUiState();
+    const state = store.situationsView;
+    if (!state.inlineReplyUi || typeof state.inlineReplyUi !== "object") {
+      state.inlineReplyUi = {
+        visibleMessageId: "",
+        expandedMessageId: "",
+        draftsByMessageId: {}
+      };
+    }
+    if (typeof state.inlineReplyUi.visibleMessageId !== "string") state.inlineReplyUi.visibleMessageId = "";
+    if (typeof state.inlineReplyUi.expandedMessageId !== "string") state.inlineReplyUi.expandedMessageId = "";
+    if (!state.inlineReplyUi.draftsByMessageId || typeof state.inlineReplyUi.draftsByMessageId !== "object") {
+      state.inlineReplyUi.draftsByMessageId = {};
+    }
+    return state.inlineReplyUi;
+  }
+
+  function decorateNestedMessageComments(comments = []) {
+    const list = Array.isArray(comments) ? comments : [];
+    if (!list.length) return [];
+
+    const byId = new Map();
+    list.forEach((comment) => {
+      const commentId = normalizeId(comment?.meta?.id);
+      if (commentId) byId.set(commentId, comment);
+    });
+
+    const depthCache = new Map();
+    const parentChain = (comment) => {
+      const chain = [];
+      let current = comment;
+      const seen = new Set();
+      while (current) {
+        const currentId = normalizeId(current?.meta?.id);
+        if (!currentId || seen.has(currentId)) break;
+        seen.add(currentId);
+        const parentId = normalizeId(current?.meta?.parent_message_id);
+        if (!parentId) break;
+        chain.push(parentId);
+        current = byId.get(parentId) || null;
+      }
+      return chain;
+    };
+
+    list.forEach((comment) => {
+      const commentId = normalizeId(comment?.meta?.id);
+      if (!commentId) return;
+      if (depthCache.has(commentId)) return;
+      const chain = parentChain(comment);
+      depthCache.set(commentId, chain.length);
+    });
+
+    return list.map((comment) => {
+      const commentId = normalizeId(comment?.meta?.id);
+      const parentId = normalizeId(comment?.meta?.parent_message_id);
+      const parentComment = parentId ? byId.get(parentId) : null;
+      const depth = Math.min(MAX_REPLY_VISUAL_DEPTH, Number(depthCache.get(commentId) || 0));
+      return {
+        ...comment,
+        meta: {
+          ...(comment.meta || {}),
+          depth,
+          reply_preview: parentComment ? buildReplyPreview(parentComment.message) : ""
+        }
+      };
+    });
   }
 
   function queueSubjectMessageReadMarking(subjectId, messages = []) {
@@ -172,9 +294,17 @@ export function createProjectSubjectsThread(config = {}) {
         const messages = Array.isArray(timeline?.messages) ? timeline.messages : [];
         const events = Array.isArray(timeline?.events) ? timeline.events : [];
         const rows = Array.isArray(timeline?.rows) ? timeline.rows : [];
+        const mappedRows = rows.map((row) => mapTimelineRowToThreadEntry(row)).filter(Boolean);
+        const mappedComments = mappedRows.filter((entry) => String(entry?.type || "").toUpperCase() === "COMMENT");
+        const nestedComments = decorateNestedMessageComments(mappedComments);
+        const nestedById = new Map(nestedComments.map((comment) => [normalizeId(comment?.meta?.id), comment]));
         subjectTimelineCache.set(normalizedSubjectId, {
-          rows: rows.map((row) => mapTimelineRowToThreadEntry(row)).filter(Boolean),
-          comments: messages.map((row) => mapMessageRowToThreadComment(row)),
+          rows: mappedRows.map((entry) => {
+            if (String(entry?.type || "").toUpperCase() !== "COMMENT") return entry;
+            const nested = nestedById.get(normalizeId(entry?.meta?.id));
+            return nested || entry;
+          }),
+          comments: nestedComments,
           activities: events.map((row) => mapEventRowToThreadActivity(row)),
           conversation: timeline?.conversation || null
         });
@@ -396,14 +526,114 @@ priority=${firstNonEmpty(subject.priority, "")}`
     });
   }
 
+  function groupThreadReplies(thread = []) {
+    const commentEntries = (Array.isArray(thread) ? thread : [])
+      .filter((entry) => String(entry?.type || "").toUpperCase() === "COMMENT");
+    const commentsById = new Map();
+    const childrenByParentId = new Map();
+
+    commentEntries.forEach((entry) => {
+      const id = normalizeId(entry?.meta?.id);
+      if (!id) return;
+      commentsById.set(id, entry);
+    });
+
+    commentEntries.forEach((entry) => {
+      const id = normalizeId(entry?.meta?.id);
+      const parentId = normalizeId(entry?.meta?.parent_message_id);
+      if (!id || !parentId || !commentsById.has(parentId)) return;
+      const current = childrenByParentId.get(parentId) || [];
+      current.push(entry);
+      childrenByParentId.set(parentId, current);
+    });
+
+    childrenByParentId.forEach((list, parentId) => {
+      childrenByParentId.set(
+        parentId,
+        list.sort((left, right) => String(left?.ts || "").localeCompare(String(right?.ts || "")))
+      );
+    });
+
+    return { commentsById, childrenByParentId };
+  }
+
+  function renderInlineReplyComposer({ commentId, isVisible, isExpanded, draft }) {
+    if (!commentId) return "";
+    if (!isVisible) return "";
+    if (!isExpanded) {
+      return `
+        <button
+          class="thread-inline-reply-collapsed"
+          type="button"
+          data-action="thread-reply-expand"
+          data-message-id="${escapeHtml(commentId)}"
+        >
+          Write a reply
+        </button>
+      `;
+    }
+
+    return `
+      <div class="thread-inline-reply-editor" data-inline-reply-editor="${escapeHtml(commentId)}">
+        <div class="thread-inline-reply-editor__tabs" role="tablist" aria-label="Reply tabs">
+          <button class="comment-tab is-active" type="button">Write</button>
+          <button class="comment-tab" type="button" disabled>Preview</button>
+        </div>
+        <div class="thread-inline-reply-editor__body">
+          <textarea
+            class="textarea thread-inline-reply-editor__textarea"
+            data-thread-reply-draft="${escapeHtml(commentId)}"
+            placeholder="Write a reply"
+          >${escapeHtml(draft || "")}</textarea>
+        </div>
+        <div class="thread-inline-reply-editor__actions">
+          <button class="gh-btn" type="button" data-action="thread-reply-cancel" data-message-id="${escapeHtml(commentId)}">Cancel</button>
+          <button class="gh-btn gh-btn--comment" type="button" data-action="thread-reply-submit" data-message-id="${escapeHtml(commentId)}">Répondre</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderNestedReplyComment(entry, idx) {
+    const agent = String(entry?.agent || "").toLowerCase();
+    const identity = getAuthorIdentity({
+      author: entry?.actor,
+      agent,
+      currentUserAvatar: store?.user?.avatar,
+      humanAvatarHtml: SVG_AVATAR_HUMAN,
+      fallbackName: "System"
+    });
+    const tsHtml = entry?.ts ? `<div class="mono-small">${escapeHtml(fmtTs(entry.ts))}</div>` : "";
+
+    return renderMessageThreadComment({
+      idx,
+      author: identity.displayName,
+      tsHtml,
+      bodyHtml: `
+        <div class="mono-small color-fg-muted">${escapeHtml(String(entry?.stateLabel || "modifiable"))}</div>
+        ${mdToHtml(entry?.message || "")}
+      `,
+      avatarType: identity.avatarType,
+      avatarHtml: identity.avatarHtml,
+      avatarInitial: identity.avatarInitial,
+      className: "message-thread__comment--nested message-thread__comment--reply-item"
+    });
+  }
+
   function renderThreadBlock() {
     const thread = getThreadForSelection();
     if (!thread.length) return "";
+    const replyUi = getInlineReplyUiState();
+    const { childrenByParentId } = groupThreadReplies(thread);
 
     const itemsHtml = thread.map((e, idx) => {
       const type = String(e?.type || "").toUpperCase();
 
       if (type === "COMMENT") {
+        const commentId = normalizeId(e?.meta?.id);
+        const parentId = normalizeId(e?.meta?.parent_message_id);
+        if (parentId) return "";
+
         const agent = String(e?.agent || "").toLowerCase();
         const isRapso = agent === "specialist_ps";
         const identity = isRapso
@@ -416,14 +646,53 @@ priority=${firstNonEmpty(subject.priority, "")}`
               fallbackName: "System"
             });
         const tsHtml = e?.ts ? `<div class="mono-small">${escapeHtml(fmtTs(e.ts))}</div>` : "";
+        const childReplies = childrenByParentId.get(commentId) || [];
+        const isVisible = replyUi.visibleMessageId === commentId;
+        const isExpanded = replyUi.expandedMessageId === commentId;
+        const draft = String(replyUi.draftsByMessageId?.[commentId] || "");
+        const repliesHtml = childReplies.length
+          ? `
+            <div class="thread-comment-replies">
+              ${childReplies.map((reply, replyIdx) => renderNestedReplyComment(reply, idx + replyIdx + 1)).join("")}
+            </div>
+          `
+          : "";
 
         return renderMessageThreadComment({
           idx,
           author: identity.displayName,
           tsHtml,
+          headerRightHtml: `
+            <div class="thread-comment-menu">
+              <button
+                class="thread-comment-menu__trigger"
+                type="button"
+                aria-label="Actions du message"
+                data-action="thread-reply-menu-toggle"
+                data-message-id="${escapeHtml(commentId)}"
+              >
+                ${svgIcon("kebab-horizontal")}
+              </button>
+              <div class="thread-comment-menu__dropdown">
+                <button class="gh-menu__item" type="button" data-action="thread-reply-open" data-message-id="${escapeHtml(commentId)}">Répondre au message</button>
+              </div>
+            </div>
+          `,
           bodyHtml: `
             <div class="mono-small color-fg-muted">${escapeHtml(String(e?.stateLabel || "modifiable"))}</div>
             ${mdToHtml(e?.message || "")}
+            <div class="thread-comment-footer">
+              <span class="mono-small color-fg-muted">${childReplies.length} repl${childReplies.length > 1 ? "ies" : "y"}</span>
+            </div>
+            ${repliesHtml}
+            <div class="thread-comment-reply-box">
+              ${renderInlineReplyComposer({
+                commentId,
+                isVisible,
+                isExpanded,
+                draft
+              })}
+            </div>
           `,
           avatarType: identity.avatarType,
           avatarHtml: identity.avatarHtml,
@@ -679,6 +948,11 @@ priority=${firstNonEmpty(subject.priority, "")}`
     setDecision,
     getDecision,
     getThreadForSelection,
+    setReplyContext,
+    clearReplyContext,
+    getReplyContextForSubject,
+    buildReplyPreview,
+    getInlineReplyUiState,
     renderThreadBlock,
     renderIssueStatusAction,
     renderCommentBox
