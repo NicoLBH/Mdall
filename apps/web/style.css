@@ -2593,6 +2593,90 @@ body.is-resizing{
 .subject-mention-popup__name{font-size:13px;}
 .subject-mention-popup__meta{font-size:12px;color:var(--muted);}
 .subject-mention-popup__empty{padding:10px 12px;font-size:12px;color:var(--muted);}
+.subject-composer-dropzone{
+  margin:0 10px 10px;
+  border:1px dashed var(--border2);
+  border-radius:8px;
+  padding:10px;
+  background:rgba(110,118,129,.06);
+}
+.subject-composer-dropzone.is-dragover{
+  border-color:rgba(56,139,253,.95);
+  background:rgba(56,139,253,.12);
+}
+.subject-composer-dropzone__label{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  color:var(--muted);
+}
+.subject-composer-file-input{display:none;}
+.subject-composer-attachments{
+  margin-top:10px;
+  display:grid;
+  gap:8px;
+}
+.subject-composer-attachment-item{
+  display:flex;
+  align-items:flex-start;
+  gap:8px;
+}
+.subject-composer-attachment-remove{
+  margin-left:auto;
+  border:none;
+  background:transparent;
+  color:var(--muted);
+  cursor:pointer;
+  width:24px;
+  height:24px;
+  border-radius:6px;
+}
+.subject-composer-attachment-remove:hover{background:rgba(110,118,129,.2);color:var(--text);}
+.subject-attachment-grid{
+  display:grid;
+  gap:8px;
+  margin:10px 12px 0;
+}
+.subject-attachment{
+  border:1px solid var(--border2);
+  border-radius:8px;
+  overflow:hidden;
+  background:rgba(13,17,23,.3);
+}
+.subject-attachment--image img{
+  display:block;
+  width:100%;
+  max-height:220px;
+  object-fit:cover;
+}
+.subject-attachment__caption{
+  padding:6px 8px;
+  color:var(--muted);
+}
+.subject-attachment--file{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:8px;
+}
+.subject-attachment__file-icon{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:28px;
+  height:28px;
+  color:var(--muted);
+}
+.subject-attachment__file-body{flex:1 1 auto;min-width:0;}
+.subject-attachment__file-name{
+  color:var(--text);
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.subject-attachment__file-meta{color:var(--muted);}
+.subject-attachment__file-link{font-size:12px;}
+.subject-attachment__state{padding:0 8px 8px;color:var(--muted);}
 .md-render p{margin:0 0 10px;}
 .md-render p:last-child{margin-bottom:0;}
 .md-render ul,.md-render ol{margin:0 0 10px 20px;padding:0;}

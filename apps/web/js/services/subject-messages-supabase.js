@@ -1,5 +1,5 @@
 import { store } from "../store.js";
-import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
+import { buildSupabaseAuthHeaders, getSupabaseUrl, supabase } from "../../assets/js/auth.js";
 import { resolveCurrentBackendProjectId, resolveCurrentUserDirectoryPersonId } from "./project-supabase-sync.js";
 
 const SUPABASE_URL = getSupabaseUrl();
@@ -30,6 +30,31 @@ function safeJsonParse(text) {
   } catch {
     return null;
   }
+}
+
+function normalizeFileName(value) {
+  return String(value || "")
+    .trim()
+    .replace(/[^\w.\- ]+/g, "_")
+    .replace(/\s+/g, "-")
+    .slice(0, 120);
+}
+
+function randomToken() {
+  return Math.random().toString(36).slice(2, 10);
+}
+
+function encodeStoragePath(path = "") {
+  return String(path || "")
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+}
+
+function buildAuthenticatedStorageObjectUrl(bucket = SUBJECT_ATTACHMENTS_BUCKET, storagePath = "") {
+  const normalizedPath = String(storagePath || "").trim();
+  if (!normalizedPath) return "";
+  return `${SUPABASE_URL}/storage/v1/object/authenticated/${encodeURIComponent(String(bucket || SUBJECT_ATTACHMENTS_BUCKET))}/${encodeStoragePath(normalizedPath)}`;
 }
 
 async function getAuthHeaders(extra = {}) {
@@ -79,6 +104,39 @@ async function resolveCurrentPersonId() {
 }
 
 export function createSubjectMessagesSupabaseRepository() {
+  async function listAttachmentsByMessageIds(messageIds = []) {
+    const ids = (Array.isArray(messageIds) ? messageIds : [])
+      .map((value) => normalizeId(value))
+      .filter(Boolean);
+    if (!ids.length) return new Map();
+
+    const params = new URLSearchParams();
+    params.set("select", "id,project_id,subject_id,message_id,storage_bucket,storage_path,file_name,mime_type,size_bytes,width,height,sort_order,created_at,linked_at");
+    params.set("message_id", `in.(${ids.join(",")})`);
+    params.set("deleted_at", "is.null");
+    params.set("order", "sort_order.asc");
+    params.append("order", "created_at.asc");
+    const rows = await restFetch("/rest/v1/subject_message_attachments", params);
+    const grouped = new Map();
+    (Array.isArray(rows) ? rows : []).forEach((row) => {
+      const messageId = normalizeId(row?.message_id);
+      if (!messageId) return;
+      const list = grouped.get(messageId) || [];
+      list.push({
+        ...row,
+        id: normalizeId(row?.id),
+        message_id: messageId,
+        storage_bucket: String(row?.storage_bucket || SUBJECT_ATTACHMENTS_BUCKET),
+        storage_path: String(row?.storage_path || ""),
+        file_name: String(row?.file_name || ""),
+        mime_type: String(row?.mime_type || ""),
+        object_url: buildAuthenticatedStorageObjectUrl(row?.storage_bucket, row?.storage_path)
+      });
+      grouped.set(messageId, list);
+    });
+    return grouped;
+  }
+
   async function listMentionsByMessageIds(messageIds = []) {
     const ids = (Array.isArray(messageIds) ? messageIds : [])
       .map((value) => normalizeId(value))
@@ -149,11 +207,13 @@ export function createSubjectMessagesSupabaseRepository() {
       const rows = await restFetch("/rest/v1/subject_messages", params);
       const messages = Array.isArray(rows) ? rows : [];
       const mentionsByMessageId = await listMentionsByMessageIds(messages.map((message) => message?.id));
+      const attachmentsByMessageId = await listAttachmentsByMessageIds(messages.map((message) => message?.id));
       return messages.map((message) => {
         const messageId = normalizeId(message?.id);
         return {
           ...message,
-          mentions: mentionsByMessageId.get(messageId) || []
+          mentions: mentionsByMessageId.get(messageId) || [],
+          attachments: attachmentsByMessageId.get(messageId) || []
         };
       });
     },
@@ -299,6 +359,56 @@ export function createSubjectMessagesSupabaseRepository() {
       return (Array.isArray(rows) ? rows[0] : rows) || null;
     },
 
+    async uploadAttachmentFile(payload = {}) {
+      const file = payload?.file;
+      if (!(file instanceof File || file instanceof Blob)) {
+        throw new Error("file is required");
+      }
+
+      const subjectId = normalizeId(payload.subjectId);
+      const projectId = await resolveProjectId(payload.projectId);
+      const uploadSessionId = normalizeId(payload.uploadSessionId);
+      if (!subjectId) throw new Error("subjectId is required");
+      if (!projectId) throw new Error("projectId is required");
+      if (!uploadSessionId) throw new Error("uploadSessionId is required");
+
+      const fileName = String(file?.name || payload.fileName || "attachment").trim();
+      const storagePath = String(
+        payload.storagePath
+          || `${projectId}/${subjectId}/temporary/${uploadSessionId}/${Date.now()}-${randomToken()}-${normalizeFileName(fileName) || "attachment"}`
+      ).trim();
+      if (!storagePath) throw new Error("storagePath is required");
+
+      const { error: uploadError } = await supabase
+        .storage
+        .from(SUBJECT_ATTACHMENTS_BUCKET)
+        .upload(storagePath, file, {
+          upsert: false,
+          contentType: String(file?.type || payload.mimeType || "application/octet-stream")
+        });
+      if (uploadError) {
+        throw new Error(`Attachment upload failed: ${String(uploadError?.message || uploadError)}`);
+      }
+
+      const attachment = await this.uploadTemporaryAttachment({
+        subjectId,
+        projectId,
+        uploadSessionId,
+        storagePath,
+        storageBucket: SUBJECT_ATTACHMENTS_BUCKET,
+        fileName,
+        mimeType: String(file?.type || payload.mimeType || ""),
+        sizeBytes: Number(file?.size || payload.sizeBytes || 0),
+        width: payload.width,
+        height: payload.height,
+        sortOrder: payload.sortOrder
+      });
+      return {
+        ...attachment,
+        object_url: buildAuthenticatedStorageObjectUrl(SUBJECT_ATTACHMENTS_BUCKET, storagePath)
+      };
+    },
+
     async linkAttachmentsToMessage({ subjectId, messageId, uploadSessionId }) {
       const normalizedSubjectId = normalizeId(subjectId);
       const normalizedMessageId = normalizeId(messageId);
@@ -314,6 +424,41 @@ export function createSubjectMessagesSupabaseRepository() {
       });
 
       return Array.isArray(rows) ? rows : [];
+    },
+
+    async removeTemporaryAttachment({ attachmentId }) {
+      const normalizedAttachmentId = normalizeId(attachmentId);
+      if (!normalizedAttachmentId) throw new Error("attachmentId is required");
+
+      const readParams = new URLSearchParams();
+      readParams.set("select", "id,storage_bucket,storage_path");
+      readParams.set("id", `eq.${normalizedAttachmentId}`);
+      readParams.set("limit", "1");
+      const currentRows = await restFetch("/rest/v1/subject_message_attachments", readParams);
+      const currentAttachment = (Array.isArray(currentRows) ? currentRows[0] : currentRows) || null;
+
+      const patchParams = new URLSearchParams();
+      patchParams.set("id", `eq.${normalizedAttachmentId}`);
+      await restFetch("/rest/v1/subject_message_attachments", patchParams, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Prefer: "return=minimal"
+        },
+        body: JSON.stringify({ deleted_at: new Date().toISOString() })
+      });
+
+      if (currentAttachment?.storage_path) {
+        await fetch(
+          `${SUPABASE_URL}/storage/v1/object/${encodeURIComponent(String(currentAttachment.storage_bucket || SUBJECT_ATTACHMENTS_BUCKET))}/${encodeStoragePath(currentAttachment.storage_path)}`,
+          {
+            method: "DELETE",
+            headers: await getAuthHeaders()
+          }
+        ).catch(() => {});
+      }
+
+      return true;
     },
 
     async lockConversation({ subjectId, reason = "" }) {

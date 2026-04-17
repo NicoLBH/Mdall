@@ -98,8 +98,16 @@ export function createSubjectMessagesService({ repository } = {}) {
     return provider.uploadTemporaryAttachment(payload);
   }
 
+  async function uploadAttachmentFile(payload = {}) {
+    return provider.uploadAttachmentFile(payload);
+  }
+
   async function linkAttachmentsToMessage(payload = {}) {
     return provider.linkAttachmentsToMessage(payload);
+  }
+
+  async function removeTemporaryAttachment(payload = {}) {
+    return provider.removeTemporaryAttachment(payload);
   }
 
   async function lockConversation(subjectId, options = {}) {
@@ -129,7 +137,9 @@ export function createSubjectMessagesService({ repository } = {}) {
     editMessage,
     deleteMessage,
     uploadTemporaryAttachment,
+    uploadAttachmentFile,
     linkAttachmentsToMessage,
+    removeTemporaryAttachment,
     lockConversation,
     unlockConversation,
     listCollaboratorsForMentions,
