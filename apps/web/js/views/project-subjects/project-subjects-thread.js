@@ -47,7 +47,34 @@ export function createProjectSubjectsThread(config = {}) {
     return String(value || "").trim();
   }
 
+  function getProjectCollaborators() {
+    return Array.isArray(store?.projectForm?.collaborators) ? store.projectForm.collaborators : [];
+  }
+
+  function resolveAuthorProfile(row = {}) {
+    const personId = normalizeId(row?.author_person_id);
+    const collaborator = getProjectCollaborators().find((entry) => {
+      const collaboratorPersonId = normalizeId(entry?.personId || entry?.id);
+      return !!collaboratorPersonId && collaboratorPersonId === personId;
+    }) || null;
+
+    const displayName = firstNonEmpty(
+      collaborator?.displayName,
+      collaborator?.fullName,
+      `${firstNonEmpty(collaborator?.firstName, "")} ${firstNonEmpty(collaborator?.lastName, "")}`.trim(),
+      collaborator?.name,
+      collaborator?.email,
+      personId ? `Person ${personId.slice(0, 8)}` : "Human"
+    );
+
+    return {
+      displayName: String(displayName || "Human"),
+      avatarUrl: String(firstNonEmpty(collaborator?.avatarUrl, collaborator?.avatar, ""))
+    };
+  }
+
   function mapMessageRowToThreadComment(row = {}) {
+    const authorProfile = resolveAuthorProfile(row);
     const isDeleted = !!row.deleted_at;
     const isFrozen = !!row.is_frozen;
     const stateLabel = isDeleted
@@ -60,7 +87,7 @@ export function createProjectSubjectsThread(config = {}) {
       entity_type: "sujet",
       entity_id: normalizeId(row.subject_id),
       type: "COMMENT",
-      actor: row.author_person_id ? `Person ${normalizeId(row.author_person_id).slice(0, 8)}` : "Human",
+      actor: authorProfile.displayName,
       agent: "human",
       message: String(row.deleted_at ? "[message supprimé]" : row.body_markdown || ""),
       pending: false,
@@ -69,6 +96,9 @@ export function createProjectSubjectsThread(config = {}) {
         source: "supabase",
         id: normalizeId(row.id),
         parent_message_id: normalizeId(row.parent_message_id),
+        author_person_id: normalizeId(row.author_person_id),
+        author_user_id: normalizeId(row.author_user_id),
+        author_avatar_url: authorProfile.avatarUrl,
         depth: 0,
         reply_preview: "",
         is_frozen: isFrozen,
@@ -581,11 +611,15 @@ priority=${firstNonEmpty(subject.priority, "")}`
   }
 
   function renderNestedReplyComment(entry, idx) {
-    const agent = String(entry?.agent || "").toLowerCase();
+    const currentUserId = normalizeId(store?.user?.id);
+    const authorUserId = normalizeId(entry?.meta?.author_user_id);
+    const isCurrentUserAuthor = !!authorUserId && !!currentUserId && authorUserId === currentUserId;
+    const agent = isCurrentUserAuthor ? "human" : "member";
     const identity = getAuthorIdentity({
       author: entry?.actor,
       agent,
-      currentUserAvatar: store?.user?.avatar,
+      avatarUrl: entry?.meta?.author_avatar_url || "",
+      currentUserAvatar: isCurrentUserAuthor ? store?.user?.avatar : "",
       humanAvatarHtml: SVG_AVATAR_HUMAN,
       fallbackName: "System"
     });
@@ -620,14 +654,18 @@ priority=${firstNonEmpty(subject.priority, "")}`
         const parentId = normalizeId(e?.meta?.parent_message_id);
         if (parentId) return "";
 
-        const agent = String(e?.agent || "").toLowerCase();
+        const currentUserId = normalizeId(store?.user?.id);
+        const authorUserId = normalizeId(e?.meta?.author_user_id);
+        const isCurrentUserAuthor = !!authorUserId && !!currentUserId && authorUserId === currentUserId;
+        const agent = isCurrentUserAuthor ? "human" : "member";
         const isRapso = agent === "specialist_ps";
         const identity = isRapso
           ? { displayName: "Agent specialist_ps", avatarType: "agent", avatarHtml: "", avatarInitial: "AS" }
           : getAuthorIdentity({
               author: e?.actor,
               agent,
-              currentUserAvatar: store?.user?.avatar,
+              avatarUrl: e?.meta?.author_avatar_url || "",
+              currentUserAvatar: isCurrentUserAuthor ? store?.user?.avatar : "",
               humanAvatarHtml: SVG_AVATAR_HUMAN,
               fallbackName: "System"
             });

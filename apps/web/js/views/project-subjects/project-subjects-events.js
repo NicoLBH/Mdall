@@ -1271,6 +1271,23 @@ export function createProjectSubjectsEvents(config) {
       if (!threadReplyDebugEnabled) return;
       console.log("[subject-thread-reply]", eventName, payload);
     };
+    const resolveInlineReplyUiState = () => {
+      if (typeof getInlineReplyUiState === "function") {
+        const state = getInlineReplyUiState();
+        if (state && typeof state === "object") return state;
+      }
+      if (!store.situationsView || typeof store.situationsView !== "object") {
+        store.situationsView = {};
+      }
+      if (!store.situationsView.inlineReplyUi || typeof store.situationsView.inlineReplyUi !== "object") {
+        store.situationsView.inlineReplyUi = {
+          expandedMessageId: "",
+          draftsByMessageId: {}
+        };
+      }
+      debugThreadReply("reply_state_fallback", { hasAccessor: typeof getInlineReplyUiState === "function" });
+      return store.situationsView.inlineReplyUi;
+    };
 
     root.querySelectorAll("[data-action='thread-reply-menu-toggle'][data-message-id]").forEach((btn) => {
       btn.onclick = (event) => {
@@ -1300,8 +1317,7 @@ export function createProjectSubjectsEvents(config) {
         ).trim();
         debugThreadReply("menu_action_reply", { messageId, parentMessageLength: parentMessageText.length });
         btn.closest(".thread-comment-menu__dropdown")?.classList.remove("is-open");
-        const replyUi = typeof getInlineReplyUiState === "function" ? getInlineReplyUiState() : null;
-        if (!replyUi) return;
+        const replyUi = resolveInlineReplyUiState();
         const existingDraft = String(replyUi.draftsByMessageId?.[messageId] || "");
         if (!existingDraft) {
           const quoted = parentMessageText
@@ -1316,7 +1332,9 @@ export function createProjectSubjectsEvents(config) {
         });
         rerenderScope(root);
         requestAnimationFrame(() => {
-          root.querySelector(`[data-thread-reply-draft="${selectorValue(messageId)}"]`)?.focus();
+          const textarea = root.querySelector(`[data-thread-reply-draft="${selectorValue(messageId)}"]`);
+          debugThreadReply("reply_editor_presence", { messageId, found: !!textarea });
+          textarea?.focus();
         });
       };
     });
@@ -1325,8 +1343,7 @@ export function createProjectSubjectsEvents(config) {
       textarea.addEventListener("input", () => {
         const messageId = String(textarea.dataset.threadReplyDraft || "").trim();
         if (!messageId) return;
-        const replyUi = typeof getInlineReplyUiState === "function" ? getInlineReplyUiState() : null;
-        if (!replyUi) return;
+        const replyUi = resolveInlineReplyUiState();
         replyUi.draftsByMessageId[messageId] = String(textarea.value || "");
       });
     });
@@ -1335,8 +1352,7 @@ export function createProjectSubjectsEvents(config) {
       btn.onclick = () => {
         const messageId = String(btn.dataset.messageId || "").trim();
         debugThreadReply("reply_cancel", { messageId });
-        const replyUi = typeof getInlineReplyUiState === "function" ? getInlineReplyUiState() : null;
-        if (!replyUi) return;
+        const replyUi = resolveInlineReplyUiState();
         if (messageId) replyUi.draftsByMessageId[messageId] = "";
         replyUi.expandedMessageId = "";
         rerenderScope(root);
@@ -1349,8 +1365,7 @@ export function createProjectSubjectsEvents(config) {
         if (selection?.type !== "sujet") return;
         const parentMessageId = String(btn.dataset.messageId || "").trim();
         if (!parentMessageId) return;
-        const replyUi = typeof getInlineReplyUiState === "function" ? getInlineReplyUiState() : null;
-        if (!replyUi) return;
+        const replyUi = resolveInlineReplyUiState();
         const message = String(replyUi.draftsByMessageId?.[parentMessageId] || "").trim();
         if (!message) return;
         debugThreadReply("reply_submit", { parentMessageId, messageLength: message.length });
