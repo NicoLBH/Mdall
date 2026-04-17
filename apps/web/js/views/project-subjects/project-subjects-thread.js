@@ -39,7 +39,7 @@ export function createProjectSubjectsThread(config = {}) {
   } = config;
 
   const subjectTimelineCache = new Map();
-  const subjectTimelinePending = new Set();
+  const subjectTimelineState = new Map();
 
   function normalizeId(value) {
     return String(value || "").trim();
@@ -90,13 +90,21 @@ export function createProjectSubjectsThread(config = {}) {
     }
   }
 
-  function ensureSubjectTimelineLoaded(subjectId) {
+  function ensureSubjectTimelineLoaded(subjectId, options = {}) {
     const normalizedSubjectId = normalizeId(subjectId);
-    if (!normalizedSubjectId || !subjectMessagesService || subjectTimelinePending.has(normalizedSubjectId)) return;
+    if (!normalizedSubjectId || !subjectMessagesService) return;
 
-    subjectTimelinePending.add(normalizedSubjectId);
+    const force = !!options.force;
+    const currentState = subjectTimelineState.get(normalizedSubjectId) || { loading: false, requestId: 0 };
+    if (currentState.loading && !force) return;
+
+    const requestId = Number(currentState.requestId || 0) + 1;
+    subjectTimelineState.set(normalizedSubjectId, { loading: true, requestId });
     subjectMessagesService.listTimeline(normalizedSubjectId)
       .then((timeline) => {
+        const latestState = subjectTimelineState.get(normalizedSubjectId) || {};
+        if (Number(latestState.requestId || 0) !== requestId) return;
+
         const messages = Array.isArray(timeline?.messages) ? timeline.messages : [];
         const events = Array.isArray(timeline?.events) ? timeline.events : [];
         subjectTimelineCache.set(normalizedSubjectId, {
@@ -110,7 +118,9 @@ export function createProjectSubjectsThread(config = {}) {
         console.warn("[subject-messages] timeline load failed", error);
       })
       .finally(() => {
-        subjectTimelinePending.delete(normalizedSubjectId);
+        const latestState = subjectTimelineState.get(normalizedSubjectId) || {};
+        if (Number(latestState.requestId || 0) !== requestId) return;
+        subjectTimelineState.set(normalizedSubjectId, { loading: false, requestId });
       });
   }
 
@@ -132,7 +142,7 @@ export function createProjectSubjectsThread(config = {}) {
             bodyMarkdown: normalizedMessage
           });
 
-      ensureSubjectTimelineLoaded(normalizedEntityId);
+      ensureSubjectTimelineLoaded(normalizedEntityId, { force: true });
       return created;
     }
 
@@ -280,11 +290,11 @@ priority=${firstNonEmpty(subject.priority, "")}`
     const isViewingSubject = !!subject;
 
     const persistedTimeline = subject ? (subjectTimelineCache.get(normalizeId(subject.id)) || null) : null;
-    const comments = subject && persistedTimeline
-      ? persistedTimeline.comments
+    const comments = subject
+      ? (persistedTimeline?.comments || [])
       : localComments;
-    const persistedActivities = subject && persistedTimeline
-      ? persistedTimeline.activities
+    const persistedActivities = subject
+      ? (persistedTimeline?.activities || [])
       : [];
 
     const humanEvents = [...comments, ...activities, ...persistedActivities].filter((e) => {
