@@ -286,6 +286,8 @@ const projectSubjectsThread = createProjectSubjectsThread({
 
 const {
   addComment,
+  editSubjectMessage,
+  deleteSubjectMessage,
   addActivity,
   setDecision,
   getDecision,
@@ -383,6 +385,8 @@ const projectSubjectsEvents = createProjectSubjectsEvents({
   getProjectSubjectLabels: () => projectSubjectLabels,
   renderSubjectMetaFieldValue: (...args) => projectSubjectsView.renderSubjectMetaFieldValue(...args),
   addComment: (...args) => addComment(...args),
+  editSubjectMessage: (...args) => editSubjectMessage(...args),
+  deleteSubjectMessage: (...args) => deleteSubjectMessage(...args),
   getSubjectsCurrentRoot: () => subjectsCurrentRoot,
   resolveCurrentUserAssigneeId: () => resolveCurrentUserDirectoryPersonId({
     email: store.user?.email || "",

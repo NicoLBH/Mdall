@@ -54,7 +54,9 @@ export function createProjectSubjectsEvents(config) {
     getProjectSubjectMilestones,
     renderSubjectMetaFieldValue,
     resolveCurrentUserAssigneeId,
-    addComment
+    addComment,
+    editSubjectMessage,
+    deleteSubjectMessage
   } = config;
 
   let detachDropdownDocumentEvents = null;
@@ -1337,6 +1339,43 @@ export function createProjectSubjectsEvents(config) {
           debugThreadReply("reply_editor_presence", { messageId, found: !!textarea });
           textarea?.focus();
         });
+      };
+    });
+
+    root.querySelectorAll("[data-action='thread-message-edit'][data-message-id]").forEach((btn) => {
+      btn.onclick = async () => {
+        const selection = getScopedSelection(root);
+        if (selection?.type !== "sujet") return;
+        const messageId = String(btn.dataset.messageId || "").trim();
+        if (!messageId) return;
+        const currentBody = String(btn.dataset.messageBody || "").trim();
+        const nextBody = window.prompt("Modifier le message", currentBody);
+        if (nextBody == null) return;
+        const normalized = String(nextBody || "").trim();
+        if (!normalized || normalized === currentBody) return;
+        btn.closest(".thread-comment-menu__dropdown")?.classList.remove("is-open");
+        try {
+          await editSubjectMessage?.(selection.item.id, messageId, normalized);
+        } catch (error) {
+          showError(`Modification impossible : ${String(error?.message || error || "Erreur inconnue")}`);
+        }
+      };
+    });
+
+    root.querySelectorAll("[data-action='thread-message-delete'][data-message-id]").forEach((btn) => {
+      btn.onclick = async () => {
+        const selection = getScopedSelection(root);
+        if (selection?.type !== "sujet") return;
+        const messageId = String(btn.dataset.messageId || "").trim();
+        if (!messageId) return;
+        const confirmed = window.confirm("Supprimer ce message ?");
+        if (!confirmed) return;
+        btn.closest(".thread-comment-menu__dropdown")?.classList.remove("is-open");
+        try {
+          await deleteSubjectMessage?.(selection.item.id, messageId);
+        } catch (error) {
+          showError(`Suppression impossible : ${String(error?.message || error || "Erreur inconnue")}`);
+        }
       };
     });
 

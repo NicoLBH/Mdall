@@ -389,6 +389,25 @@ export function createProjectSubjectsThread(config = {}) {
     return null;
   }
 
+  async function editSubjectMessage(subjectId, messageId, bodyMarkdown) {
+    const normalizedSubjectId = normalizeId(subjectId);
+    const normalizedMessageId = normalizeId(messageId);
+    const nextBody = String(bodyMarkdown || "").trim();
+    if (!normalizedSubjectId || !normalizedMessageId || !nextBody || !subjectMessagesService) return null;
+    const updated = await subjectMessagesService.editMessage(normalizedMessageId, { bodyMarkdown: nextBody });
+    ensureSubjectTimelineLoaded(normalizedSubjectId, { force: true });
+    return updated;
+  }
+
+  async function deleteSubjectMessage(subjectId, messageId) {
+    const normalizedSubjectId = normalizeId(subjectId);
+    const normalizedMessageId = normalizeId(messageId);
+    if (!normalizedSubjectId || !normalizedMessageId || !subjectMessagesService) return null;
+    const deleted = await subjectMessagesService.deleteMessage(normalizedMessageId);
+    ensureSubjectTimelineLoaded(normalizedSubjectId, { force: true });
+    return deleted;
+  }
+
   function addActivity(entityType, entityId, kind, message = "", meta = {}, options = {}) {
     persistRunBucket((bucket) => {
       bucket.activities.push({
@@ -630,8 +649,10 @@ priority=${firstNonEmpty(subject.priority, "")}`
       author: identity.displayName,
       tsHtml,
       bodyHtml: `
-        <div class="mono-small color-fg-muted">${escapeHtml(String(entry?.stateLabel || "modifiable"))}</div>
-        ${mdToHtml(entry?.message || "")}
+        <div class="thread-comment-content-capsule">
+          <div class="mono-small color-fg-muted">${escapeHtml(String(entry?.stateLabel || "modifiable"))}</div>
+          ${mdToHtml(entry?.message || "")}
+        </div>
       `,
       avatarType: identity.avatarType,
       avatarHtml: identity.avatarHtml,
@@ -673,6 +694,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
         const childReplies = childrenByParentId.get(commentId) || [];
         const isExpanded = replyUi.expandedMessageId === commentId;
         const draft = String(replyUi.draftsByMessageId?.[commentId] || "");
+        const isEditable = !e?.meta?.is_frozen && !e?.meta?.is_deleted;
         const repliesHtml = childReplies.length
           ? `
             <div class="thread-comment-replies">
@@ -697,16 +719,22 @@ priority=${firstNonEmpty(subject.priority, "")}`
                 ${svgIcon("kebab-horizontal")}
               </button>
               <div class="thread-comment-menu__dropdown">
+                ${isEditable
+                  ? `
+                    <button class="gh-menu__item" type="button" data-action="thread-message-edit" data-message-id="${escapeHtml(commentId)}" data-message-body="${escapeHtml(String(e?.message || ""))}">Modifier le message</button>
+                    <button class="gh-menu__item" type="button" data-action="thread-message-delete" data-message-id="${escapeHtml(commentId)}">Supprimer le message</button>
+                    <div class="thread-comment-menu__divider" role="separator" aria-hidden="true"></div>
+                  `
+                  : ""}
                 <button class="gh-menu__item" type="button" data-action="thread-reply-open" data-message-id="${escapeHtml(commentId)}">Répondre au message</button>
               </div>
             </div>
           `,
           bodyHtml: `
-            ${e?.meta?.reply_preview
-              ? `<div class="comment-reply-preview mono-small">↪ ${escapeHtml(String(e.meta.reply_preview || ""))}</div>`
-              : ""}
-            <div class="mono-small color-fg-muted">${escapeHtml(String(e?.stateLabel || "modifiable"))}</div>
-            ${mdToHtml(e?.message || "")}
+            <div class="thread-comment-content-capsule">
+              <div class="mono-small color-fg-muted">${escapeHtml(String(e?.stateLabel || "modifiable"))}</div>
+              ${mdToHtml(e?.message || "")}
+            </div>
             <div class="thread-comment-footer">
               <span class="mono-small color-fg-muted">${childReplies.length} repl${childReplies.length > 1 ? "ies" : "y"}</span>
             </div>
@@ -984,6 +1012,8 @@ priority=${firstNonEmpty(subject.priority, "")}`
 
   return {
     addComment,
+    editSubjectMessage,
+    deleteSubjectMessage,
     addActivity,
     setDecision,
     getDecision,
