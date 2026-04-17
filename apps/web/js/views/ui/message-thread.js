@@ -27,7 +27,8 @@ export function renderMessageCard({
   className = "",
   boxClassName = "",
   headerClassName = "",
-  bodyClassName = ""
+  bodyClassName = "",
+  headerRightHtml = ""
 } = {}) {
   return `
     <div class="gh-comment ${className}">
@@ -38,8 +39,11 @@ export function renderMessageCard({
       })}
       <div class="gh-comment-box ${boxClassName}">
         <div class="gh-comment-header ${headerClassName}">
-          <div class="gh-comment-author mono">${escapeHtml(author)}</div>
-          ${tsHtml || ""}
+          <div class="gh-comment-header-main">
+            <div class="gh-comment-author mono">${escapeHtml(author)}</div>
+            ${tsHtml || ""}
+          </div>
+          ${headerRightHtml || ""}
         </div>
         <div class="gh-comment-body ${bodyClassName}">${bodyHtml}</div>
       </div>
@@ -65,7 +69,8 @@ export function renderMessageThreadComment({
   className = "",
   boxClassName = "",
   headerClassName = "",
-  bodyClassName = ""
+  bodyClassName = "",
+  headerRightHtml = ""
 } = {}) {
   return `
     <div class="thread-item thread-item--comment thread-item--comment--flush message-thread__item ${className}" data-thread-kind="comment" data-thread-idx="${idx}">
@@ -79,7 +84,8 @@ export function renderMessageThreadComment({
           avatarInitial,
           boxClassName,
           headerClassName,
-          bodyClassName
+          bodyClassName,
+          headerRightHtml
         })}
       </div>
     </div>
