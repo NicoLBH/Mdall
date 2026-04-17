@@ -2604,7 +2604,7 @@ body.is-resizing{
 .thread-inline-reply-editor__content{
   border:solid 1px var(--border2);
   border-radius:6px;
-  background: var(--bg);
+  background: var(--bgAssistPanel);
 }
 .thread-inline-reply-editor__tabs{
   display:flex;
@@ -2615,7 +2615,7 @@ body.is-resizing{
 }
 .thread-inline-reply-editor__tabs .comment-tab[disabled]{opacity:.6;cursor:not-allowed;}
 .thread-inline-reply-editor__body{padding:10px;}
-.thread-inline-reply-editor__textarea{min-height:110px;}
+.thread-inline-reply-editor__textarea{min-height:110px;background: var(--bgAssistPanel);}
 .thread-inline-reply-editor__actions{
   display:flex;
   justify-content:flex-end;
