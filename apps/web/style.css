@@ -2580,7 +2580,7 @@ body.is-resizing{
   margin:4px 0;
 }
 .thread-comment-content-capsule{
-  padding:12px 12px 0px;
+  padding:12px;
 }
 .thread-comment-footer{
   display:flex;
