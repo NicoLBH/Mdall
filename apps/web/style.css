@@ -2645,6 +2645,8 @@ body.is-resizing{
   text-decoration:underline;
   outline:none;
 }
+.details-title--expanded ..details-title-inline-ref a{font-size:32px;}
+
 .details-title-id a{color:var(--muted);text-decoration:none;}
 .details-title-id a:hover{color:var(--accent);text-decoration:underline;}
 
