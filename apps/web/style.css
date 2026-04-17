@@ -2117,7 +2117,7 @@ body.modal-open {
 .issue-row-subject-objective:focus-visible{color:var(--fgColor-accent, #4493f8);outline:none;}
 .issue-row-subject-objective__icon{display:inline-flex;align-items:center;color:currentColor;}
 .issue-row-subject-objective__text{min-width:0;overflow:hidden;text-overflow:ellipsis;vertical-align:middle;}
-.issue-row-blocked-pill{display:inline-flex;align-items:center;gap:4px;margin-right:8px;color:var(--muted);}
+.issue-row-blocked-pill{display:inline-flex;align-items:center;gap:4px;margin-right:8px;color:var(--muted);border:solid 1px var(--border);border-radius:100px;padding:2px 5px;height:20px;}
 .issue-row-blocked-pill .octicon-blocked{color:var(--danger-fg,#f85149);fill:currentColor;}
 .issue-row-subject-children-counter{margin-left:2px;flex:0 0 auto;}
 .issue-row-subject-children-counter span:last-child{white-space:nowrap;}
@@ -2584,6 +2584,8 @@ body.is-resizing{
   content:"·";
   margin-right:4px;
   color:var(--muted);
+  font-size:12px;
+  font-weight:600;
 }
 
 .details-title--compact .details-title-compact-bottom .verdict-bar{flex:0 1 auto;}
@@ -2634,8 +2636,8 @@ body.is-resizing{
   min-width:0;
 }
 .details-title--expanded .details-parent-badge__icon{display:inline-flex;align-items:center;flex:0 0 auto;}
-.details-title--expanded .details-parent-badge__label{flex:0 0 auto;}
-.details-title--expanded .details-parent-badge__link{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
+.details-title--expanded .details-parent-badge__label{flex:0 0 auto;font-size:12px;}
+.details-title--expanded .details-parent-badge__link{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;font-size:12px;}
 
 
 .details-title--expanded .details-blocked-badge{
@@ -2654,8 +2656,8 @@ body.is-resizing{
   min-width:0;
 }
 .details-title--expanded .details-blocked-badge__icon{display:inline-flex;align-items:center;flex:0 0 auto;color:var(--danger-fg,#f85149);}
-.details-title--expanded .details-blocked-badge__label{flex:0 0 auto;}
-.details-title--expanded .details-blocked-badge__title{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
+.details-title--expanded .details-blocked-badge__label{flex:0 0 auto; font-size:12px;}
+.details-title--expanded .details-blocked-badge__title{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;font-size:12px;}
 
 .details-parent-badge__link{
   border:none;
