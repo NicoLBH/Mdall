@@ -925,6 +925,7 @@ function getSubjectsTableDeps() {
     renderSubjectLabelBadge: getProjectSubjectLabels().renderSubjectLabelBadge,
     getObjectiveById,
     getChildSubjects,
+    getBlockedBySubjects,
     issueIcon,
     priorityBadge,
     firstNonEmpty
@@ -1345,7 +1346,7 @@ function renderSubjectBlockedByHeadHtml(subject, options = {}) {
     : [];
   if (!blockedBySubjects.length) return "";
 
-  const iconHtml = `<span class="details-blocked-badge__icon">${svgIcon("slash", { className: "octicon octicon-slash" })}</span>`;
+  const iconHtml = `<span class="details-blocked-badge__icon">${svgIcon("blocked", { className: "octicon octicon-blocked fgColor-danger" })}</span>`;
 
   if (blockedBySubjects.length === 1) {
     const blocker = blockedBySubjects[0] || {};

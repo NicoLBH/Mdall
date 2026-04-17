@@ -2117,6 +2117,8 @@ body.modal-open {
 .issue-row-subject-objective:focus-visible{color:var(--fgColor-accent, #4493f8);outline:none;}
 .issue-row-subject-objective__icon{display:inline-flex;align-items:center;color:currentColor;}
 .issue-row-subject-objective__text{min-width:0;overflow:hidden;text-overflow:ellipsis;vertical-align:middle;}
+.issue-row-blocked-pill{display:inline-flex;align-items:center;gap:4px;margin-right:8px;color:var(--muted);}
+.issue-row-blocked-pill .octicon-blocked{color:var(--danger-fg,#f85149);fill:currentColor;}
 .issue-row-subject-children-counter{margin-left:2px;flex:0 0 auto;}
 .issue-row-subject-children-counter span:last-child{white-space:nowrap;}
 
