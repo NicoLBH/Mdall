@@ -2598,6 +2598,10 @@ body.is-resizing{
   overflow:hidden;
   background:var(--bg-elev);
 }
+.thread-inline-reply-editor__content{
+  border:solid 1px var(--border2);
+  border-radius:6px;
+}
 .thread-inline-reply-editor__tabs{
   display:flex;
   align-items:center;
@@ -2635,13 +2639,13 @@ body.is-resizing{
   padding:0px;
 }
 .message-thread__comment--reply-item{
-  margin-left:12px;
-  width:calc(100% - 12px);
+  margin-left:0;
+  width:100%;
   box-sizing:border-box;
 }
 .message-thread__comment--reply-item .thread-wrapper{
   border-left:2px solid var(--border2);
-  padding-left:16px;
+  padding-left:0;
   width:100%;
   box-sizing:border-box;
 }
@@ -2651,7 +2655,7 @@ body.is-resizing{
   box-sizing:border-box;
 }
 .thread-comment-replies--github .message-thread__comment--reply-item .gh-avatar{
-  margin-left:-22px;
+  margin-left:-20px;
 }
 
 /* ===== Right panel: Sub-issues table (below description) ===== */
