@@ -2341,9 +2341,24 @@ async function applyCommentAction(root) {
     return;
   }
 
-  await addComment(target.type, target.id, message, { actor: "Human", agent: "human" });
+  const replyContext = store.situationsView?.replyContext || {};
+  const replySubjectId = String(replyContext?.subjectId || "").trim();
+  const parentMessageId = target.type === "sujet" && replySubjectId === String(target.id || "").trim()
+    ? String(replyContext?.parentMessageId || "").trim()
+    : "";
+
+  await addComment(target.type, target.id, message, {
+    actor: "Human",
+    agent: "human",
+    parentMessageId: parentMessageId || undefined
+  });
   ta.value = "";
   store.situationsView.commentPreviewMode = false;
+  if (store.situationsView?.replyContext) {
+    store.situationsView.replyContext.subjectId = "";
+    store.situationsView.replyContext.parentMessageId = "";
+    store.situationsView.replyContext.parentPreview = "";
+  }
   rerenderScope(root);
 
 }

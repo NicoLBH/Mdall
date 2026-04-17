@@ -1276,7 +1276,7 @@ body.sidebar-collapsed #sidebar{overflow:hidden;width:0;min-width:0;padding:0;ma
 .thread-item--comment .thread-badge__subissue{margin-top:4px;}
 
 .thread-badge__subissue{color:rgb(145, 152, 161);background-color:rgb(33, 40, 48);border:solid 2px rgb(13, 17, 23);height:32px;width:32px;align-items:center;border-radius:32px;display:flex;margin-left:-36px;justify-content:center;}
-.thread-wrapper{width:80%;line-height:21px;display:inline-block;vertical-align:top;}
+.thread-wrapper{width:100%;line-height:21px;display:inline-block;vertical-align:top;}
 .thread-item__head{padding:0px 12px;font-size:12px;color:var(--muted);}
 .thread-item__body{padding:0px 12px;font-size:13px;}
 
@@ -2490,9 +2490,10 @@ body.is-resizing{
   line-height: 21px;
   color:var(--text);
   letter-spacing:.02em;
+  padding-right:8px;
 }
 .gh-comment-body{
-  padding:12px;
+  padding:0px;
   white-space:inherit;
   font-size:13px;
 }
@@ -2506,6 +2507,153 @@ body.is-resizing{
 .comment-composer__actions{padding-bottom:100px;}
 .comment-composer__actions-right{width:100%;}
 .comment-composer__hint{margin-right:auto;}
+.comment-composer__context{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  padding:8px 12px;
+  border-bottom:1px solid var(--border2);
+  background:rgba(56,139,253,.08);
+}
+.comment-composer__context-text{
+  color:var(--muted);
+}
+
+.message-thread__comment--nested{position:relative;}
+.message-thread__comment--depth-1{margin-left:24px;}
+.message-thread__comment--depth-2{margin-left:48px;}
+.comment-reply-preview{
+  margin-bottom:8px;
+  padding-left:8px;
+  border-left:2px solid var(--border2);
+  color:var(--muted);
+}
+.comment-reply-actions{
+  margin-top:10px;
+}
+.thread-comment-menu{
+  position:relative;
+  margin-left:auto;
+}
+.thread-comment-menu__trigger{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:24px;
+  height:24px;
+  border:none;
+  border-radius:6px;
+  background:transparent;
+  color:var(--muted);
+  cursor:pointer;
+}
+.thread-comment-menu__trigger:hover{background:rgba(110,118,129,.2);color:var(--text);}
+.thread-comment-menu__trigger .octicon{width:16px;height:16px;}
+.thread-comment-menu__dropdown{
+  position:absolute;
+  top:calc(100% + 6px);
+  right:0;
+  min-width:180px;
+  display:none;
+  z-index:220;
+  background:rgb(1, 4, 9);
+  box-shadow: rgb(61, 68, 77) 0px 0px 0px 1px, rgba(1, 4, 9, 0.4) 0px 6px 12px -3px, rgba(1, 4, 9, 0.4) 0px 6px 18px 0px;
+  border-radius:8px;
+  padding:4px;
+}
+.thread-comment-menu__dropdown.is-open{display:block;}
+.thread-comment-menu__dropdown .gh-menu__item{
+  width:100%;
+  text-align:left;
+  border:none;
+  background:transparent;
+  color:var(--text);
+  border-radius:6px;
+}
+.thread-comment-menu__dropdown .gh-menu__item:hover{
+  background:rgba(56,139,253,.14);
+}
+.thread-comment-menu__divider{
+  height:1px;
+  background:var(--border2);
+  margin:4px 0;
+}
+.thread-comment-content-capsule{
+  padding:12px 12px 0px;
+}
+.thread-comment-footer{
+  display:flex;
+  justify-content:flex-end;
+  margin-top:8px;
+  margin-bottom:8px;
+  padding:0px 12px;
+}
+.thread-comment-reply-box{
+  border-top:none;
+  padding-top:10px;
+}
+.thread-inline-reply-editor{
+  border:1px solid var(--border2);
+  border-radius:6px;
+  overflow:hidden;
+  background:var(--bg-elev);
+}
+.thread-inline-reply-editor__tabs{
+  display:flex;
+  align-items:center;
+  gap:4px;
+  padding:6px 8px 0;
+  border-bottom:1px solid var(--border2);
+}
+.thread-inline-reply-editor__tabs .comment-tab[disabled]{opacity:.6;cursor:not-allowed;}
+.thread-inline-reply-editor__body{padding:10px;}
+.thread-inline-reply-editor__textarea{min-height:110px;}
+.thread-inline-reply-editor__actions{
+  display:flex;
+  justify-content:flex-end;
+  gap:8px;
+  padding:0 10px 10px;
+}
+.thread-comment-replies{
+  margin-top:8px;
+  margin-bottom:8px;
+  border-top:1px solid var(--border2);
+  padding-top:8px;
+  background-color:var(--bgAssistPanel);
+}
+.thread-comment-replies--github .gh-comment-box{
+  border:none;
+  box-shadow:none;
+  background:transparent;
+}
+.thread-comment-replies--github .gh-comment-header{
+  background:transparent;
+  border-bottom:none;
+  padding:0px 12px;
+}
+.thread-comment-replies--github .gh-comment-body{
+  padding:0px;
+}
+.message-thread__comment--reply-item{
+  margin-left:12px;
+  width:calc(100% - 12px);
+  box-sizing:border-box;
+}
+.message-thread__comment--reply-item .thread-wrapper{
+  border-left:2px solid var(--border2);
+  padding-left:16px;
+  width:100%;
+  box-sizing:border-box;
+}
+.message-thread__comment--reply-item .gh-comment{
+  width:100%;
+  max-width:100%;
+  box-sizing:border-box;
+}
+.thread-comment-replies--github .message-thread__comment--reply-item .gh-avatar{
+  margin-left:-22px;
+}
 
 /* ===== Right panel: Sub-issues table (below description) ===== */
 .details-subissues{margin-left:52px;width:calc(100% - 52px);margin-bottom:8px;margin-top:12px;border:1px solid var(--border);border-radius:6px;overflow:hidden;container-type:inline-size;}
