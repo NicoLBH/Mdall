@@ -104,7 +104,8 @@ export function createProjectSubjectsThread(config = {}) {
         is_frozen: isFrozen,
         is_deleted: isDeleted,
         state_label: stateLabel,
-        mentions: Array.isArray(row?.mentions) ? row.mentions : []
+        mentions: Array.isArray(row?.mentions) ? row.mentions : [],
+        attachments: Array.isArray(row?.attachments) ? row.attachments : []
       },
       stateLabel
     };
@@ -137,6 +138,22 @@ export function createProjectSubjectsThread(config = {}) {
       };
     }
     return state.replyContext;
+  }
+
+  function getComposerAttachmentsState() {
+    ensureViewUiState();
+    const state = store.situationsView;
+    if (!state.subjectComposerAttachments || typeof state.subjectComposerAttachments !== "object") {
+      state.subjectComposerAttachments = {
+        subjectId: "",
+        uploadSessionId: "",
+        items: []
+      };
+    }
+    if (!Array.isArray(state.subjectComposerAttachments.items)) {
+      state.subjectComposerAttachments.items = [];
+    }
+    return state.subjectComposerAttachments;
   }
 
   function clearReplyContext() {
@@ -385,6 +402,15 @@ export function createProjectSubjectsThread(config = {}) {
             bodyMarkdown: normalizedMessage,
             mentions: Array.isArray(options.mentions) ? options.mentions : []
           });
+
+      const uploadSessionId = normalizeId(options.uploadSessionId);
+      if (uploadSessionId && created?.id) {
+        await subjectMessagesService.linkAttachmentsToMessage({
+          subjectId: normalizedEntityId,
+          messageId: created.id,
+          uploadSessionId
+        });
+      }
 
       ensureSubjectTimelineLoaded(normalizedEntityId, { force: true });
       return created;
@@ -682,6 +708,47 @@ priority=${firstNonEmpty(subject.priority, "")}`
     });
   }
 
+  function renderAttachmentTile(attachment = {}, options = {}) {
+    const fileName = String(attachment?.file_name || attachment?.fileName || "Pièce jointe");
+    const mimeType = String(attachment?.mime_type || attachment?.mimeType || "").toLowerCase();
+    const objectUrl = String(attachment?.object_url || attachment?.previewUrl || "");
+    const isImage = options.forceImage || mimeType.startsWith("image/");
+    const isPdf = mimeType === "application/pdf";
+    const uploadState = String(options.uploadState || "").trim();
+    const metaLine = [
+      mimeType || "fichier",
+      Number.isFinite(Number(attachment?.size_bytes || attachment?.sizeBytes))
+        ? `${Math.max(1, Math.round(Number(attachment?.size_bytes || attachment?.sizeBytes) / 1024))} KB`
+        : ""
+    ].filter(Boolean).join(" · ");
+
+    if (isImage && objectUrl) {
+      return `
+        <div class="subject-attachment subject-attachment--image">
+          <a href="${escapeHtml(objectUrl)}" target="_blank" rel="noopener noreferrer">
+            <img src="${escapeHtml(objectUrl)}" alt="${escapeHtml(fileName)}" loading="lazy" />
+          </a>
+          <div class="subject-attachment__caption mono-small">${escapeHtml(fileName)}</div>
+          ${uploadState ? `<div class="subject-attachment__state mono-small">${escapeHtml(uploadState)}</div>` : ""}
+        </div>
+      `;
+    }
+
+    return `
+      <div class="subject-attachment subject-attachment--file">
+        <div class="subject-attachment__file-icon" aria-hidden="true">${svgIcon(isPdf ? "file" : "paperclip")}</div>
+        <div class="subject-attachment__file-body">
+          <div class="subject-attachment__file-name mono-small">${escapeHtml(fileName)}</div>
+          <div class="subject-attachment__file-meta mono-small">${escapeHtml(metaLine || "fichier")}</div>
+        </div>
+        ${objectUrl
+          ? `<a class="subject-attachment__file-link" href="${escapeHtml(objectUrl)}" target="_blank" rel="noopener noreferrer">Ouvrir</a>`
+          : ""}
+        ${uploadState ? `<div class="subject-attachment__state mono-small">${escapeHtml(uploadState)}</div>` : ""}
+      </div>
+    `;
+  }
+
   function renderThreadBlock() {
     const thread = getThreadForSelection();
     if (!thread.length) return "";
@@ -756,6 +823,9 @@ priority=${firstNonEmpty(subject.priority, "")}`
               <div class="mono-small color-fg-muted">${escapeHtml(String(e?.stateLabel || "modifiable"))}</div>
               ${mdToHtml(e?.message || "")}
             </div>
+            ${(Array.isArray(e?.meta?.attachments) && e.meta.attachments.length)
+              ? `<div class="subject-attachment-grid">${e.meta.attachments.map((attachment) => renderAttachmentTile(attachment)).join("")}</div>`
+              : ""}
             ${childReplies.length
               ? `
                 <div class="thread-comment-footer">
@@ -1039,6 +1109,11 @@ priority=${firstNonEmpty(subject.priority, "")}`
     `;
 
     const mentionUi = getMentionUiState();
+    const attachmentState = getComposerAttachmentsState();
+    const normalizedSubjectId = type === "sujet" ? normalizeId(item.id) : "";
+    const pendingAttachments = normalizedSubjectId && normalizeId(attachmentState.subjectId) === normalizedSubjectId
+      ? attachmentState.items
+      : [];
     const mentionPopupHtml = mentionUi.open
       ? `
         <div class="subject-mention-popup" role="listbox" aria-label="Suggestions de mention">
@@ -1066,6 +1141,53 @@ priority=${firstNonEmpty(subject.priority, "")}`
       `
       : "";
 
+    const pendingAttachmentsHtml = pendingAttachments.length
+      ? `
+        <div class="subject-composer-attachments">
+          ${pendingAttachments.map((attachment, index) => `
+            <div class="subject-composer-attachment-item">
+              ${renderAttachmentTile(attachment, {
+                forceImage: !!attachment.isImage,
+                uploadState: attachment.error
+                  ? "Erreur d’upload"
+                  : attachment.uploading
+                    ? "Upload en cours…"
+                    : "Prêt"
+              })}
+              <button
+                class="subject-composer-attachment-remove"
+                type="button"
+                data-action="composer-attachment-remove"
+                data-attachment-id="${escapeHtml(normalizeId(attachment.id))}"
+                data-temp-id="${escapeHtml(String(attachment.tempId || index))}"
+                aria-label="Retirer la pièce jointe"
+              >
+                ${svgIcon("x")}
+              </button>
+            </div>
+          `).join("")}
+        </div>
+      `
+      : "";
+
+    const composerAttachmentsHtml = type === "sujet"
+      ? `
+        <div
+          class="subject-composer-dropzone"
+          data-role="subject-composer-dropzone"
+          tabindex="0"
+          aria-label="Déposer des pièces jointes"
+        >
+          <input id="subjectComposerAttachmentInput" type="file" class="subject-composer-file-input" data-role="subject-composer-file-input" multiple />
+          <div class="subject-composer-dropzone__label mono-small">
+            Dépose des images, PDF ou autres fichiers ici — ou
+            <button class="gh-btn gh-btn--sm" type="button" data-action="composer-attachments-pick">ajouter un fichier</button>
+          </div>
+          ${pendingAttachmentsHtml}
+        </div>
+      `
+      : "";
+
     return renderCommentComposer({
       title: "Add a comment",
       avatarHtml: getAuthorIdentity({
@@ -1087,7 +1209,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
       contextHtml,
       actionsHtml,
       toolbarHtml,
-      footerHtml: mentionPopupHtml
+      footerHtml: `${mentionPopupHtml}${composerAttachmentsHtml}`
     });
   }
 
@@ -1104,6 +1226,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
     getReplyContextForSubject,
     buildReplyPreview,
     getMentionUiState,
+    getComposerAttachmentsState,
     getInlineReplyUiState,
     renderThreadBlock,
     renderIssueStatusAction,
