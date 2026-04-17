@@ -134,12 +134,10 @@ export function createProjectSubjectsThread(config = {}) {
     const state = store.situationsView;
     if (!state.inlineReplyUi || typeof state.inlineReplyUi !== "object") {
       state.inlineReplyUi = {
-        visibleMessageId: "",
         expandedMessageId: "",
         draftsByMessageId: {}
       };
     }
-    if (typeof state.inlineReplyUi.visibleMessageId !== "string") state.inlineReplyUi.visibleMessageId = "";
     if (typeof state.inlineReplyUi.expandedMessageId !== "string") state.inlineReplyUi.expandedMessageId = "";
     if (!state.inlineReplyUi.draftsByMessageId || typeof state.inlineReplyUi.draftsByMessageId !== "object") {
       state.inlineReplyUi.draftsByMessageId = {};
@@ -557,21 +555,9 @@ priority=${firstNonEmpty(subject.priority, "")}`
     return { commentsById, childrenByParentId };
   }
 
-  function renderInlineReplyComposer({ commentId, isVisible, isExpanded, draft }) {
+  function renderInlineReplyComposer({ commentId, isExpanded, draft }) {
     if (!commentId) return "";
-    if (!isVisible) return "";
-    if (!isExpanded) {
-      return `
-        <button
-          class="thread-inline-reply-collapsed"
-          type="button"
-          data-action="thread-reply-expand"
-          data-message-id="${escapeHtml(commentId)}"
-        >
-          Write a reply
-        </button>
-      `;
-    }
+    if (!isExpanded) return "";
 
     return `
       <div class="thread-inline-reply-editor" data-inline-reply-editor="${escapeHtml(commentId)}">
@@ -647,7 +633,6 @@ priority=${firstNonEmpty(subject.priority, "")}`
             });
         const tsHtml = e?.ts ? `<div class="mono-small">${escapeHtml(fmtTs(e.ts))}</div>` : "";
         const childReplies = childrenByParentId.get(commentId) || [];
-        const isVisible = replyUi.visibleMessageId === commentId;
         const isExpanded = replyUi.expandedMessageId === commentId;
         const draft = String(replyUi.draftsByMessageId?.[commentId] || "");
         const repliesHtml = childReplies.length
@@ -691,7 +676,6 @@ priority=${firstNonEmpty(subject.priority, "")}`
             <div class="thread-comment-reply-box">
               ${renderInlineReplyComposer({
                 commentId,
-                isVisible,
                 isExpanded,
                 draft
               })}

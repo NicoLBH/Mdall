@@ -48,7 +48,6 @@ export function createProjectSubjectsState({ store }) {
     }
     if (!v.inlineReplyUi || typeof v.inlineReplyUi !== "object") {
       v.inlineReplyUi = {
-        visibleMessageId: "",
         expandedMessageId: "",
         draftsByMessageId: {}
       };
@@ -232,7 +231,6 @@ export function createProjectSubjectsState({ store }) {
       parentPreview: ""
     };
     v.inlineReplyUi = {
-      visibleMessageId: "",
       expandedMessageId: "",
       draftsByMessageId: {}
     };

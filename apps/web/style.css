@@ -2583,16 +2583,6 @@ body.is-resizing{
   border-top:1px solid var(--border2);
   padding-top:10px;
 }
-.thread-inline-reply-collapsed{
-  width:100%;
-  text-align:left;
-  padding:6px 10px;
-  border:1px solid var(--border2);
-  border-radius:6px;
-  background:transparent;
-  color:var(--muted);
-  cursor:text;
-}
 .thread-inline-reply-editor{
   border:1px solid var(--border2);
   border-radius:6px;

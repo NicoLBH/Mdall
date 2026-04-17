@@ -1293,29 +1293,27 @@ export function createProjectSubjectsEvents(config) {
       btn.onclick = () => {
         const messageId = String(btn.dataset.messageId || "").trim();
         if (!messageId) return;
-        debugThreadReply("menu_action_reply", { messageId });
+        const parentMessageText = String(
+          btn.closest(".thread-item--comment")
+            ?.querySelector(".gh-comment-body")
+            ?.textContent || ""
+        ).trim();
+        debugThreadReply("menu_action_reply", { messageId, parentMessageLength: parentMessageText.length });
         btn.closest(".thread-comment-menu__dropdown")?.classList.remove("is-open");
         const replyUi = typeof getInlineReplyUiState === "function" ? getInlineReplyUiState() : null;
         if (!replyUi) return;
-        replyUi.visibleMessageId = messageId;
-        replyUi.expandedMessageId = "";
-        if (typeof replyUi.draftsByMessageId?.[messageId] !== "string") replyUi.draftsByMessageId[messageId] = "";
-        rerenderScope(root);
-        requestAnimationFrame(() => {
-          root.querySelector(`[data-action="thread-reply-expand"][data-message-id="${selectorValue(messageId)}"]`)?.focus();
-        });
-      };
-    });
-
-    root.querySelectorAll("[data-action='thread-reply-expand'][data-message-id]").forEach((btn) => {
-      btn.onclick = () => {
-        const messageId = String(btn.dataset.messageId || "").trim();
-        if (!messageId) return;
-        debugThreadReply("reply_expand", { messageId });
-        const replyUi = typeof getInlineReplyUiState === "function" ? getInlineReplyUiState() : null;
-        if (!replyUi) return;
-        replyUi.visibleMessageId = messageId;
+        const existingDraft = String(replyUi.draftsByMessageId?.[messageId] || "");
+        if (!existingDraft) {
+          const quoted = parentMessageText
+            ? `> ${parentMessageText.replace(/\n+/g, "\n> ")}\n\n`
+            : "";
+          replyUi.draftsByMessageId[messageId] = quoted;
+        }
         replyUi.expandedMessageId = messageId;
+        debugThreadReply("reply_opened", {
+          messageId,
+          hasDraft: !!String(replyUi.draftsByMessageId?.[messageId] || "").trim()
+        });
         rerenderScope(root);
         requestAnimationFrame(() => {
           root.querySelector(`[data-thread-reply-draft="${selectorValue(messageId)}"]`)?.focus();
@@ -1340,7 +1338,6 @@ export function createProjectSubjectsEvents(config) {
         const replyUi = typeof getInlineReplyUiState === "function" ? getInlineReplyUiState() : null;
         if (!replyUi) return;
         if (messageId) replyUi.draftsByMessageId[messageId] = "";
-        replyUi.visibleMessageId = "";
         replyUi.expandedMessageId = "";
         rerenderScope(root);
       };
@@ -1363,7 +1360,6 @@ export function createProjectSubjectsEvents(config) {
           parentMessageId
         });
         replyUi.draftsByMessageId[parentMessageId] = "";
-        replyUi.visibleMessageId = "";
         replyUi.expandedMessageId = "";
         rerenderScope(root);
       };
