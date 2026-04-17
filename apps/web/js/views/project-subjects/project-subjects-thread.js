@@ -610,16 +610,18 @@ priority=${firstNonEmpty(subject.priority, "")}`
 
     return `
       <div class="thread-inline-reply-editor" data-inline-reply-editor="${escapeHtml(commentId)}">
-        <div class="thread-inline-reply-editor__tabs" role="tablist" aria-label="Reply tabs">
-          <button class="comment-tab is-active" type="button">Write</button>
-          <button class="comment-tab" type="button" disabled>Preview</button>
-        </div>
-        <div class="thread-inline-reply-editor__body">
-          <textarea
-            class="textarea thread-inline-reply-editor__textarea"
-            data-thread-reply-draft="${escapeHtml(commentId)}"
-            placeholder="Write a reply"
-          >${escapeHtml(draft || "")}</textarea>
+        <div class="thread-inline-reply-editor__content">
+          <div class="thread-inline-reply-editor__tabs" role="tablist" aria-label="Reply tabs">
+            <button class="comment-tab is-active" type="button">Write</button>
+            <button class="comment-tab" type="button" disabled>Preview</button>
+          </div>
+          <div class="thread-inline-reply-editor__body">
+            <textarea
+              class="textarea thread-inline-reply-editor__textarea"
+              data-thread-reply-draft="${escapeHtml(commentId)}"
+              placeholder="Write a reply"
+            >${escapeHtml(draft || "")}</textarea>
+          </div>
         </div>
         <div class="thread-inline-reply-editor__actions">
           <button class="gh-btn" type="button" data-action="thread-reply-cancel" data-message-id="${escapeHtml(commentId)}">Cancel</button>
