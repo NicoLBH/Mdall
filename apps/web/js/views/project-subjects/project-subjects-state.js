@@ -39,6 +39,19 @@ export function createProjectSubjectsState({ store }) {
     if (typeof v.rightSubissueMenuOpenId !== "string") v.rightSubissueMenuOpenId = "";
     if (typeof v.commentPreviewMode !== "boolean") v.commentPreviewMode = false;
     if (typeof v.helpMode !== "boolean") v.helpMode = false;
+    if (!v.replyContext || typeof v.replyContext !== "object") {
+      v.replyContext = {
+        subjectId: "",
+        parentMessageId: "",
+        parentPreview: ""
+      };
+    }
+    if (!v.inlineReplyUi || typeof v.inlineReplyUi !== "object") {
+      v.inlineReplyUi = {
+        expandedMessageId: "",
+        draftsByMessageId: {}
+      };
+    }
     if (typeof v.showTableOnly !== "boolean") v.showTableOnly = true;
     if (!Number.isFinite(Number(v.tableScrollRestoreY))) v.tableScrollRestoreY = 0;
     if (!v.pagination || typeof v.pagination !== "object") {
@@ -212,6 +225,15 @@ export function createProjectSubjectsState({ store }) {
       activeKey: ""
     };
     v.rightSubissueMenuOpenId = "";
+    v.replyContext = {
+      subjectId: "",
+      parentMessageId: "",
+      parentPreview: ""
+    };
+    v.inlineReplyUi = {
+      expandedMessageId: "",
+      draftsByMessageId: {}
+    };
     return v;
   }
 
