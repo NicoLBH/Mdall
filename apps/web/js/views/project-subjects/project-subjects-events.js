@@ -1,4 +1,9 @@
 import { applyMarkdownComposerAction } from "../../utils/markdown-composer.js";
+import {
+  applyMentionSuggestion,
+  extractStructuredMentions,
+  resolveMentionTriggerContext
+} from "../../utils/subject-mentions.js";
 
 export function createProjectSubjectsEvents(config) {
   const {
@@ -58,7 +63,9 @@ export function createProjectSubjectsEvents(config) {
     resolveCurrentUserAssigneeId,
     addComment,
     editSubjectMessage,
-    deleteSubjectMessage
+    deleteSubjectMessage,
+    getMentionUiState,
+    listCollaboratorsForMentions
   } = config;
 
   let detachDropdownDocumentEvents = null;
@@ -666,11 +673,140 @@ export function createProjectSubjectsEvents(config) {
 
     const commentTextarea = root.querySelector("#humanCommentBox");
     if (commentTextarea) {
+      let mentionCollaborators = [];
+      let mentionCollaboratorsLoaded = false;
+      let mentionLoadPromise = null;
+
+      const getMentionState = () => {
+        if (typeof getMentionUiState === "function") return getMentionUiState();
+        if (!store.situationsView.mentionUi || typeof store.situationsView.mentionUi !== "object") {
+          store.situationsView.mentionUi = {
+            open: false,
+            query: "",
+            activeIndex: 0,
+            triggerStart: -1,
+            triggerEnd: -1,
+            suggestions: []
+          };
+        }
+        return store.situationsView.mentionUi;
+      };
+
+      const closeMentionPopup = ({ rerender = true } = {}) => {
+        const mentionState = getMentionState();
+        mentionState.open = false;
+        mentionState.query = "";
+        mentionState.activeIndex = 0;
+        mentionState.triggerStart = -1;
+        mentionState.triggerEnd = -1;
+        mentionState.suggestions = [];
+        if (rerender) rerenderScope(root);
+      };
+
+      const ensureMentionCollaboratorsLoaded = async () => {
+        if (mentionCollaboratorsLoaded) return mentionCollaborators;
+        if (mentionLoadPromise) return mentionLoadPromise;
+        const selection = getScopedSelection(root);
+        if (!selection?.item?.project_id || typeof listCollaboratorsForMentions !== "function") {
+          mentionCollaborators = [];
+          mentionCollaboratorsLoaded = true;
+          return mentionCollaborators;
+        }
+        mentionLoadPromise = listCollaboratorsForMentions(selection.item.project_id)
+          .then((rows) => {
+            mentionCollaborators = Array.isArray(rows) ? rows : [];
+            mentionCollaboratorsLoaded = true;
+            return mentionCollaborators;
+          })
+          .catch((error) => {
+            console.warn("[subject-mentions] collaborators load failed", error);
+            mentionCollaborators = [];
+            mentionCollaboratorsLoaded = true;
+            return mentionCollaborators;
+          })
+          .finally(() => {
+            mentionLoadPromise = null;
+          });
+        return mentionLoadPromise;
+      };
+
+      const syncMentionPopup = async ({ forceOpen = false } = {}) => {
+        const mentionState = getMentionState();
+        const context = resolveMentionTriggerContext(commentTextarea.value || "", commentTextarea.selectionStart || 0);
+        if (!context && !forceOpen) {
+          if (mentionState.open) closeMentionPopup();
+          return;
+        }
+
+        const collaborators = await ensureMentionCollaboratorsLoaded();
+        const query = String(context?.query || "").trim().toLowerCase();
+        const suggestions = collaborators
+          .filter((entry) => {
+            if (!query) return true;
+            return [
+              String(entry?.label || "").toLowerCase(),
+              String(entry?.email || "").toLowerCase()
+            ].some((field) => field.includes(query));
+          })
+          .slice(0, 8);
+
+        mentionState.triggerStart = Number(context?.triggerStart ?? -1);
+        mentionState.triggerEnd = Number(context?.triggerEnd ?? -1);
+        mentionState.query = query;
+        mentionState.suggestions = suggestions;
+        mentionState.open = !!context || forceOpen;
+        mentionState.activeIndex = Math.max(0, Math.min(Number(mentionState.activeIndex || 0), Math.max(0, suggestions.length - 1)));
+        rerenderScope(root);
+      };
+
+      const pickMentionSuggestion = (suggestion) => {
+        const mentionState = getMentionState();
+        const context = {
+          triggerStart: mentionState.triggerStart,
+          triggerEnd: Number(commentTextarea.selectionStart || mentionState.triggerEnd || 0)
+        };
+        const result = applyMentionSuggestion(commentTextarea.value || "", context, suggestion);
+        commentTextarea.value = result.nextText;
+        store.situationsView.commentDraft = String(result.nextText || "");
+        commentTextarea.focus();
+        commentTextarea.selectionStart = result.nextCursorIndex;
+        commentTextarea.selectionEnd = result.nextCursorIndex;
+        closeMentionPopup({ rerender: false });
+        if (store.situationsView.commentPreviewMode) syncCommentPreview(root);
+        rerenderScope(root);
+      };
+
       commentTextarea.addEventListener("input", () => {
         store.situationsView.commentDraft = String(commentTextarea.value || "");
+        void syncMentionPopup();
         if (store.situationsView.commentPreviewMode) syncCommentPreview(root);
       });
       commentTextarea.addEventListener("keydown", (ev) => {
+        const mentionState = getMentionState();
+        if (mentionState.open && Array.isArray(mentionState.suggestions) && mentionState.suggestions.length) {
+          if (ev.key === "ArrowDown") {
+            ev.preventDefault();
+            mentionState.activeIndex = (Number(mentionState.activeIndex || 0) + 1) % mentionState.suggestions.length;
+            rerenderScope(root);
+            return;
+          }
+          if (ev.key === "ArrowUp") {
+            ev.preventDefault();
+            mentionState.activeIndex = (Number(mentionState.activeIndex || 0) - 1 + mentionState.suggestions.length) % mentionState.suggestions.length;
+            rerenderScope(root);
+            return;
+          }
+          if (ev.key === "Enter") {
+            ev.preventDefault();
+            pickMentionSuggestion(mentionState.suggestions[Number(mentionState.activeIndex || 0)] || mentionState.suggestions[0]);
+            return;
+          }
+          if (ev.key === "Escape") {
+            ev.preventDefault();
+            closeMentionPopup();
+            return;
+          }
+        }
         if (ev.key === "Enter" && (ev.ctrlKey || ev.metaKey)) {
           ev.preventDefault();
           applyCommentAction(root);
@@ -683,9 +819,33 @@ export function createProjectSubjectsEvents(config) {
           if (!action) return;
           const didApply = applyMarkdownComposerAction(commentTextarea, action);
           if (!didApply) return;
+          if (action === "mention") void syncMentionPopup({ forceOpen: true });
+          else closeMentionPopup({ rerender: false });
+          store.situationsView.commentDraft = String(commentTextarea.value || "");
           if (store.situationsView.commentPreviewMode) syncCommentPreview(root);
         };
       });
+
+      root.querySelectorAll("[data-action='mention-pick'][data-person-id]").forEach((btn) => {
+        btn.onclick = () => {
+          pickMentionSuggestion({
+            personId: String(btn.dataset.personId || "").trim(),
+            label: String(btn.dataset.label || "").trim()
+          });
+        };
+      });
+
+      if (root.dataset.subjectMentionDocumentBound !== "true") {
+        document.addEventListener("click", (event) => {
+          const target = event?.target;
+          if (!target || !(target instanceof Element)) return;
+          if (target.closest(".subject-mention-popup") || target.closest("#humanCommentBox")) return;
+          const mentionState = getMentionState();
+          if (!mentionState.open) return;
+          closeMentionPopup();
+        });
+        root.dataset.subjectMentionDocumentBound = "true";
+      }
 
       root.querySelectorAll(".js-issue-status-action").forEach((actionRoot) => {
         if (actionRoot.dataset.issueStatusBound === "true") return;
@@ -1415,11 +1575,13 @@ export function createProjectSubjectsEvents(config) {
         const replyUi = resolveInlineReplyUiState();
         const message = String(replyUi.draftsByMessageId?.[parentMessageId] || "").trim();
         if (!message) return;
+        const mentions = extractStructuredMentions(message);
         debugThreadReply("reply_submit", { parentMessageId, messageLength: message.length });
         await addComment("sujet", selection.item.id, message, {
           actor: "Human",
           agent: "human",
-          parentMessageId
+          parentMessageId,
+          mentions
         });
         replyUi.draftsByMessageId[parentMessageId] = "";
         replyUi.expandedMessageId = "";

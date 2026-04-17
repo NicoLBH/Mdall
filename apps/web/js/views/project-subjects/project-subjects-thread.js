@@ -103,10 +103,27 @@ export function createProjectSubjectsThread(config = {}) {
         reply_preview: "",
         is_frozen: isFrozen,
         is_deleted: isDeleted,
-        state_label: stateLabel
+        state_label: stateLabel,
+        mentions: Array.isArray(row?.mentions) ? row.mentions : []
       },
       stateLabel
     };
+  }
+
+  function getMentionUiState() {
+    ensureViewUiState();
+    const state = store.situationsView;
+    if (!state.mentionUi || typeof state.mentionUi !== "object") {
+      state.mentionUi = {
+        open: false,
+        query: "",
+        activeIndex: 0,
+        triggerStart: -1,
+        triggerEnd: -1,
+        suggestions: []
+      };
+    }
+    return state.mentionUi;
   }
 
   function getReplyContextState() {
@@ -360,11 +377,13 @@ export function createProjectSubjectsThread(config = {}) {
         ? await subjectMessagesService.createReply({
             subjectId: normalizedEntityId,
             parentMessageId: options.parentMessageId,
-            bodyMarkdown: normalizedMessage
+            bodyMarkdown: normalizedMessage,
+            mentions: Array.isArray(options.mentions) ? options.mentions : []
           })
         : await subjectMessagesService.createMessage({
             subjectId: normalizedEntityId,
-            bodyMarkdown: normalizedMessage
+            bodyMarkdown: normalizedMessage,
+            mentions: Array.isArray(options.mentions) ? options.mentions : []
           });
 
       ensureSubjectTimelineLoaded(normalizedEntityId, { force: true });
@@ -1019,6 +1038,34 @@ priority=${firstNonEmpty(subject.priority, "")}`
       <button class="gh-btn gh-btn--comment" data-action="add-comment" type="button">Comment</button>
     `;
 
+    const mentionUi = getMentionUiState();
+    const mentionPopupHtml = mentionUi.open
+      ? `
+        <div class="subject-mention-popup" role="listbox" aria-label="Suggestions de mention">
+          ${(Array.isArray(mentionUi.suggestions) ? mentionUi.suggestions : []).length
+            ? mentionUi.suggestions.map((suggestion, index) => {
+            const personId = normalizeId(suggestion?.personId);
+            const isActive = Number(mentionUi.activeIndex || 0) === index;
+            return `
+              <button
+                class="subject-mention-popup__item ${isActive ? "is-active" : ""}"
+                type="button"
+                role="option"
+                aria-selected="${isActive ? "true" : "false"}"
+                data-action="mention-pick"
+                data-person-id="${escapeHtml(personId)}"
+                data-label="${escapeHtml(String(suggestion?.label || ""))}"
+              >
+                <span class="subject-mention-popup__name">${escapeHtml(String(suggestion?.label || ""))}</span>
+                <span class="subject-mention-popup__meta">${escapeHtml(String(suggestion?.email || ""))}</span>
+              </button>
+            `;
+          }).join("")
+            : `<div class="subject-mention-popup__empty">Aucun collaborateur trouvé</div>`}
+        </div>
+      `
+      : "";
+
     return renderCommentComposer({
       title: "Add a comment",
       avatarHtml: getAuthorIdentity({
@@ -1039,7 +1086,8 @@ priority=${firstNonEmpty(subject.priority, "")}`
       hintHtml,
       contextHtml,
       actionsHtml,
-      toolbarHtml
+      toolbarHtml,
+      footerHtml: mentionPopupHtml
     });
   }
 
@@ -1055,6 +1103,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
     clearReplyContext,
     getReplyContextForSubject,
     buildReplyPreview,
+    getMentionUiState,
     getInlineReplyUiState,
     renderThreadBlock,
     renderIssueStatusAction,

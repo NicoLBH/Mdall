@@ -9,6 +9,21 @@ function normalizeId(value) {
   return String(value || "").trim();
 }
 
+function normalizeMentions(rawMentions = []) {
+  const list = Array.isArray(rawMentions) ? rawMentions : [];
+  const seen = new Set();
+  return list
+    .map((entry) => ({
+      personId: normalizeId(entry?.personId || entry?.mentionedPersonId),
+      label: String(entry?.label || entry?.displayLabel || "").trim()
+    }))
+    .filter((entry) => {
+      if (!entry.personId || seen.has(entry.personId)) return false;
+      seen.add(entry.personId);
+      return true;
+    });
+}
+
 function safeJsonParse(text) {
   try {
     return JSON.parse(text);
@@ -64,6 +79,60 @@ async function resolveCurrentPersonId() {
 }
 
 export function createSubjectMessagesSupabaseRepository() {
+  async function listMentionsByMessageIds(messageIds = []) {
+    const ids = (Array.isArray(messageIds) ? messageIds : [])
+      .map((value) => normalizeId(value))
+      .filter(Boolean);
+    if (!ids.length) return new Map();
+
+    const params = new URLSearchParams();
+    params.set("select", "id,project_id,subject_id,message_id,mentioned_person_id,display_label,created_at");
+    params.set("message_id", `in.(${ids.join(",")})`);
+    params.set("order", "created_at.asc");
+    const rows = await restFetch("/rest/v1/subject_message_mentions", params);
+    const grouped = new Map();
+    (Array.isArray(rows) ? rows : []).forEach((row) => {
+      const messageId = normalizeId(row?.message_id);
+      if (!messageId) return;
+      const mentions = grouped.get(messageId) || [];
+      mentions.push({
+        id: normalizeId(row?.id),
+        message_id: messageId,
+        mentioned_person_id: normalizeId(row?.mentioned_person_id),
+        display_label: String(row?.display_label || "").trim(),
+        created_at: String(row?.created_at || "")
+      });
+      grouped.set(messageId, mentions);
+    });
+    return grouped;
+  }
+
+  async function insertMessageMentions({ message = null, mentions = [] } = {}) {
+    const messageId = normalizeId(message?.id);
+    const projectId = normalizeId(message?.project_id);
+    const subjectId = normalizeId(message?.subject_id);
+    if (!messageId || !projectId || !subjectId) return [];
+
+    const normalizedMentions = normalizeMentions(mentions);
+    if (!normalizedMentions.length) return [];
+
+    const rows = await restFetch("/rest/v1/subject_message_mentions", null, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Prefer: "resolution=merge-duplicates,return=representation"
+      },
+      body: JSON.stringify(normalizedMentions.map((mention) => ({
+        project_id: projectId,
+        subject_id: subjectId,
+        message_id: messageId,
+        mentioned_person_id: mention.personId,
+        display_label: mention.label || null
+      })))
+    });
+    return Array.isArray(rows) ? rows : [];
+  }
+
   return {
     async listMessages({ subjectId }) {
       const normalizedSubjectId = normalizeId(subjectId);
@@ -78,7 +147,15 @@ export function createSubjectMessagesSupabaseRepository() {
       params.set("order", "created_at.asc");
 
       const rows = await restFetch("/rest/v1/subject_messages", params);
-      return Array.isArray(rows) ? rows : [];
+      const messages = Array.isArray(rows) ? rows : [];
+      const mentionsByMessageId = await listMentionsByMessageIds(messages.map((message) => message?.id));
+      return messages.map((message) => {
+        const messageId = normalizeId(message?.id);
+        return {
+          ...message,
+          mentions: mentionsByMessageId.get(messageId) || []
+        };
+      });
     },
 
     async listEvents({ subjectId }) {
@@ -134,7 +211,14 @@ export function createSubjectMessagesSupabaseRepository() {
         })
       });
 
-      return (Array.isArray(rows) ? rows[0] : rows) || null;
+      const createdMessage = (Array.isArray(rows) ? rows[0] : rows) || null;
+      const mentions = normalizeMentions(payload.mentions);
+      if (!createdMessage || !mentions.length) return createdMessage;
+      const insertedMentions = await insertMessageMentions({ message: createdMessage, mentions });
+      return {
+        ...createdMessage,
+        mentions: insertedMentions
+      };
     },
 
     async markMessageRead({ messageId, subjectId = "", projectId = "" } = {}) {

@@ -75,7 +75,7 @@ export function applyMarkdownComposerAction(textarea, action = "") {
       }
       break;
     case "mention":
-      result = applyWrap(value, start, end, "@", "", "collaborateur");
+      result = applyWrap(value, start, end, "@", "", "");
       break;
     default:
       return false;
