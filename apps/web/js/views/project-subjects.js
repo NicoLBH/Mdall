@@ -21,6 +21,10 @@ import {
   reorderSubjectChildrenInSupabase as reorderSubjectChildrenInSupabaseService
 } from "../services/subject-parent-relation-service.js";
 import {
+  createBlockedByRelationInSupabase as createBlockedByRelationInSupabaseService,
+  deleteBlockedByRelationInSupabase as deleteBlockedByRelationInSupabaseService
+} from "../services/subject-blocking-relation-service.js";
+import {
   bindProjectSituationsRunbar,
   syncProjectSituationsRunbar
 } from "./project-situations-runbar.js";
@@ -208,7 +212,9 @@ const {
   getSituationSubjects,
   getNestedSujet,
   getSituationBySujetId,
-  getChildSubjects
+  getChildSubjects,
+  getBlockedBySubjects,
+  getBlockingSubjects
 } = subjectsSelectors;
 
 
@@ -339,6 +345,8 @@ const projectSubjectsEvents = createProjectSubjectsEvents({
   getToggleSubjectLabel: () => toggleSubjectLabel,
   getToggleSubjectAssignee: () => toggleSubjectAssignee,
   getSetSubjectParent: () => setSubjectParent,
+  getToggleSubjectBlockedByRelation: () => toggleSubjectBlockedByRelation,
+  getToggleSubjectBlockingForRelation: () => toggleSubjectBlockingForRelation,
   getReorderSubjectChildren: () => reorderSubjectChildren,
   syncDescriptionEditorDraft,
   startDescriptionEdit,
@@ -566,6 +574,15 @@ const projectSubjectsActions = createProjectSubjectsActions({
     parentSubjectId,
     rawSubjectsResult: store.projectSubjectsView?.rawSubjectsResult || null
   }),
+  createBlockedByRelationInSupabase: (subjectId, blockedBySubjectId) => createBlockedByRelationInSupabaseService({
+    subjectId,
+    blockedBySubjectId,
+    rawSubjectsResult: store.projectSubjectsView?.rawSubjectsResult || null
+  }),
+  deleteBlockedByRelationInSupabase: (subjectId, blockedBySubjectId) => deleteBlockedByRelationInSupabaseService({
+    subjectId,
+    blockedBySubjectId
+  }),
   reorderSubjectChildrenInSupabase: (parentSubjectId, orderedChildIds) => reorderSubjectChildrenInSupabaseService({
     parentSubjectId,
     orderedChildIds
@@ -580,6 +597,8 @@ const {
   toggleSubjectAssignee,
   toggleSubjectSituation,
   setSubjectParent,
+  toggleSubjectBlockedByRelation,
+  toggleSubjectBlockingForRelation,
   reorderSubjectChildren,
   setSubjectLabels,
   toggleSubjectLabel,
@@ -704,6 +723,8 @@ const projectSubjectsView = createProjectSubjectsView({
   getNestedSujet: (...args) => getNestedSujet(...args),
   getSituationSubjects: (...args) => getSituationSubjects(...args),
   getChildSubjects: (...args) => getChildSubjects(...args),
+  getBlockedBySubjects: (...args) => getBlockedBySubjects(...args),
+  getBlockingSubjects: (...args) => getBlockingSubjects(...args),
   getFilteredStandaloneSubjects: (...args) => getFilteredStandaloneSubjects(...args),
   getFilteredFlatSubjects: (...args) => getFilteredFlatSubjects(...args),
   getPaginatedFilteredFlatSubjects: (...args) => getPaginatedFilteredFlatSubjects(...args),

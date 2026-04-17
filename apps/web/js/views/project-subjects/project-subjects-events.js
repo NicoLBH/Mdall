@@ -20,6 +20,8 @@ export function createProjectSubjectsEvents(config) {
     getToggleSubjectLabel,
     getToggleSubjectAssignee,
     getSetSubjectParent,
+    getToggleSubjectBlockedByRelation,
+    getToggleSubjectBlockingForRelation,
     getReorderSubjectChildren,
     syncDescriptionEditorDraft,
     startDescriptionEdit,
@@ -198,6 +200,8 @@ export function createProjectSubjectsEvents(config) {
     const toggleSubjectLabel = getToggleSubjectLabel?.();
     const toggleSubjectAssignee = getToggleSubjectAssignee?.();
     const setSubjectParent = getSetSubjectParent?.();
+    const toggleSubjectBlockedByRelation = getToggleSubjectBlockedByRelation?.();
+    const toggleSubjectBlockingForRelation = getToggleSubjectBlockingForRelation?.();
     const reorderSubjectChildren = getReorderSubjectChildren?.();
 
     dropdownHost.querySelectorAll("[data-subject-kanban-search]").forEach((input) => {
@@ -275,10 +279,23 @@ export function createProjectSubjectsEvents(config) {
           const activeKey = String(getSubjectsViewState().subjectMetaDropdown.activeKey || "");
           if (!activeKey) return;
           event.preventDefault();
-          if (field === "relations" && String(getSubjectsViewState().subjectMetaDropdown?.relationsView || "") === "parent") {
-            if (typeof setSubjectParent !== "function") return;
-            await applyNonDestructiveMetaToggle(root, field, () => setSubjectParent(subjectSelection.item.id, activeKey, { root, skipRerender: true }));
-            return;
+          if (field === "relations") {
+            const relationsView = String(getSubjectsViewState().subjectMetaDropdown?.relationsView || "");
+            if (relationsView === "parent") {
+              if (typeof setSubjectParent !== "function") return;
+              await applyNonDestructiveMetaToggle(root, field, () => setSubjectParent(subjectSelection.item.id, activeKey, { root, skipRerender: true }));
+              return;
+            }
+            if (relationsView === "blocked_by") {
+              if (typeof toggleSubjectBlockedByRelation !== "function") return;
+              await applyNonDestructiveMetaToggle(root, field, () => toggleSubjectBlockedByRelation(subjectSelection.item.id, activeKey, { root, skipRerender: true }));
+              return;
+            }
+            if (relationsView === "blocking_for") {
+              if (typeof toggleSubjectBlockingForRelation !== "function") return;
+              await applyNonDestructiveMetaToggle(root, field, () => toggleSubjectBlockingForRelation(subjectSelection.item.id, activeKey, { root, skipRerender: true }));
+              return;
+            }
           }
           if (field === "objectives") {
             await applyNonDestructiveMetaToggle(root, field, () => toggleSubjectObjective(subjectSelection.item.id, activeKey, { root, skipRerender: true }));
@@ -380,6 +397,64 @@ export function createProjectSubjectsEvents(config) {
           dropdown.activeKey = String((entries.find((entry) => entry.isSelected) || entries[0] || {}).key || "");
         }
         refreshSubjectMetaDropdownUi(root, { preserveScroll: true, preserveFocus: true, focusArgs: { field: "relations" } });
+      };
+    });
+
+    dropdownHost.querySelectorAll("[data-subject-relations-open-blocked-by]").forEach((btn) => {
+      btn.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const dropdown = getSubjectsViewState().subjectMetaDropdown || {};
+        dropdown.relationsView = "blocked_by";
+        dropdown.query = "";
+        dropdown.activeKey = "";
+        const subjectSelection = getScopedSelection(root);
+        if (subjectSelection?.type === "sujet") {
+          const entries = getSubjectMetaMenuEntries(subjectSelection.item, "relations");
+          dropdown.activeKey = String((entries.find((entry) => entry.isSelected) || entries[0] || {}).key || "");
+        }
+        refreshSubjectMetaDropdownUi(root, { preserveScroll: true, preserveFocus: true, focusArgs: { field: "relations" } });
+      };
+    });
+
+    dropdownHost.querySelectorAll("[data-subject-relations-open-blocking-for]").forEach((btn) => {
+      btn.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const dropdown = getSubjectsViewState().subjectMetaDropdown || {};
+        dropdown.relationsView = "blocking_for";
+        dropdown.query = "";
+        dropdown.activeKey = "";
+        const subjectSelection = getScopedSelection(root);
+        if (subjectSelection?.type === "sujet") {
+          const entries = getSubjectMetaMenuEntries(subjectSelection.item, "relations");
+          dropdown.activeKey = String((entries.find((entry) => entry.isSelected) || entries[0] || {}).key || "");
+        }
+        refreshSubjectMetaDropdownUi(root, { preserveScroll: true, preserveFocus: true, focusArgs: { field: "relations" } });
+      };
+    });
+
+    dropdownHost.querySelectorAll("[data-subject-relations-blocked-by-entry]").forEach((btn) => {
+      btn.onclick = async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const subjectSelection = getScopedSelection(root);
+        if (subjectSelection?.type !== "sujet") return;
+        if (typeof toggleSubjectBlockedByRelation !== "function") return;
+        const relationSubjectId = String(btn.dataset.subjectRelationsBlockedByEntry || "");
+        await applyNonDestructiveMetaToggle(root, "relations", () => toggleSubjectBlockedByRelation(subjectSelection.item.id, relationSubjectId, { root, skipRerender: true }));
+      };
+    });
+
+    dropdownHost.querySelectorAll("[data-subject-relations-blocking-for-entry]").forEach((btn) => {
+      btn.onclick = async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const subjectSelection = getScopedSelection(root);
+        if (subjectSelection?.type !== "sujet") return;
+        if (typeof toggleSubjectBlockingForRelation !== "function") return;
+        const relationSubjectId = String(btn.dataset.subjectRelationsBlockingForEntry || "");
+        await applyNonDestructiveMetaToggle(root, "relations", () => toggleSubjectBlockingForRelation(subjectSelection.item.id, relationSubjectId, { root, skipRerender: true }));
       };
     });
 

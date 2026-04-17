@@ -706,6 +706,13 @@ body.sidebar-collapsed #sidebar{overflow:hidden;width:0;min-width:0;padding:0;ma
   color:var(--muted);
 }
 
+.subject-meta-relations-cards{display:flex;flex-direction:column;gap:10px;}
+.subject-meta-relations-group{display:flex;flex-direction:column;gap:8px;}
+.subject-meta-relations-group__title{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--muted);}
+.subject-meta-relations-group__counter{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 6px;border-radius:999px;background:rgba(56,139,253,.16);color:var(--text);font-size:11px;line-height:1;}
+.subject-meta-relations-group__list{display:flex;flex-direction:column;gap:8px;}
+.subject-meta-relations-divider{height:1px;background:var(--border);margin:2px 0;}
+
 .subject-meta-relations-menu__item{
   width:100%;
 }
