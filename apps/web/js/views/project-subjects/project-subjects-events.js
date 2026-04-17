@@ -10,6 +10,7 @@ export function createProjectSubjectsEvents(config) {
     getSubjectMetaMenuEntries,
     getSubjectSidebarMeta,
     rerenderScope,
+    getInlineReplyUiState,
     syncSubjectMetaDropdownPosition,
     getSubjectMetaScopeRoot,
     getSubjectKanbanMenuEntries,
@@ -52,7 +53,8 @@ export function createProjectSubjectsEvents(config) {
     bindOverlayChromeCompact,
     getProjectSubjectMilestones,
     renderSubjectMetaFieldValue,
-    resolveCurrentUserAssigneeId
+    resolveCurrentUserAssigneeId,
+    addComment
   } = config;
 
   let detachDropdownDocumentEvents = null;
@@ -1254,6 +1256,143 @@ export function createProjectSubjectsEvents(config) {
         await applyCommentAction(root);
       };
     });
+
+    const selectorValue = (value) => String(value || "").replace(/["\\]/g, "\\$&");
+    const threadReplyDebugEnabled = (() => {
+      try {
+        const search = String(window?.location?.search || "");
+        if (search.includes("debugSubjectReplies=1")) return true;
+        const localValue = String(window?.localStorage?.getItem?.("mdall:debug-subject-replies") || "").trim().toLowerCase();
+        return localValue === "1" || localValue === "true";
+      } catch {
+        return false;
+      }
+    })();
+    const debugThreadReply = (eventName, payload = {}) => {
+      if (!threadReplyDebugEnabled) return;
+      console.log("[subject-thread-reply]", eventName, payload);
+    };
+    const resolveInlineReplyUiState = () => {
+      if (typeof getInlineReplyUiState === "function") {
+        const state = getInlineReplyUiState();
+        if (state && typeof state === "object") return state;
+      }
+      if (!store.situationsView || typeof store.situationsView !== "object") {
+        store.situationsView = {};
+      }
+      if (!store.situationsView.inlineReplyUi || typeof store.situationsView.inlineReplyUi !== "object") {
+        store.situationsView.inlineReplyUi = {
+          expandedMessageId: "",
+          draftsByMessageId: {}
+        };
+      }
+      debugThreadReply("reply_state_fallback", { hasAccessor: typeof getInlineReplyUiState === "function" });
+      return store.situationsView.inlineReplyUi;
+    };
+
+    root.querySelectorAll("[data-action='thread-reply-menu-toggle'][data-message-id]").forEach((btn) => {
+      btn.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const menu = btn.closest(".thread-comment-menu");
+        if (!menu) return;
+        const dropdown = menu.querySelector(".thread-comment-menu__dropdown");
+        if (!dropdown) return;
+        debugThreadReply("menu_toggle", { messageId: btn.dataset.messageId || "", wasOpen: dropdown.classList.contains("is-open") });
+
+        root.querySelectorAll(".thread-comment-menu__dropdown.is-open").forEach((opened) => {
+          if (opened !== dropdown) opened.classList.remove("is-open");
+        });
+        dropdown.classList.toggle("is-open");
+      };
+    });
+
+    root.querySelectorAll("[data-action='thread-reply-open'][data-message-id]").forEach((btn) => {
+      btn.onclick = () => {
+        const messageId = String(btn.dataset.messageId || "").trim();
+        if (!messageId) return;
+        const parentMessageText = String(
+          btn.closest(".thread-item--comment")
+            ?.querySelector(".gh-comment-body")
+            ?.textContent || ""
+        ).trim();
+        debugThreadReply("menu_action_reply", { messageId, parentMessageLength: parentMessageText.length });
+        btn.closest(".thread-comment-menu__dropdown")?.classList.remove("is-open");
+        const replyUi = resolveInlineReplyUiState();
+        const existingDraft = String(replyUi.draftsByMessageId?.[messageId] || "");
+        if (!existingDraft) {
+          const quoted = parentMessageText
+            ? `> ${parentMessageText.replace(/\n+/g, "\n> ")}\n\n`
+            : "";
+          replyUi.draftsByMessageId[messageId] = quoted;
+        }
+        replyUi.expandedMessageId = messageId;
+        debugThreadReply("reply_opened", {
+          messageId,
+          hasDraft: !!String(replyUi.draftsByMessageId?.[messageId] || "").trim()
+        });
+        rerenderScope(root);
+        requestAnimationFrame(() => {
+          const textarea = root.querySelector(`[data-thread-reply-draft="${selectorValue(messageId)}"]`);
+          debugThreadReply("reply_editor_presence", { messageId, found: !!textarea });
+          textarea?.focus();
+        });
+      };
+    });
+
+    root.querySelectorAll("[data-thread-reply-draft]").forEach((textarea) => {
+      textarea.addEventListener("input", () => {
+        const messageId = String(textarea.dataset.threadReplyDraft || "").trim();
+        if (!messageId) return;
+        const replyUi = resolveInlineReplyUiState();
+        replyUi.draftsByMessageId[messageId] = String(textarea.value || "");
+      });
+    });
+
+    root.querySelectorAll("[data-action='thread-reply-cancel'][data-message-id]").forEach((btn) => {
+      btn.onclick = () => {
+        const messageId = String(btn.dataset.messageId || "").trim();
+        debugThreadReply("reply_cancel", { messageId });
+        const replyUi = resolveInlineReplyUiState();
+        if (messageId) replyUi.draftsByMessageId[messageId] = "";
+        replyUi.expandedMessageId = "";
+        rerenderScope(root);
+      };
+    });
+
+    root.querySelectorAll("[data-action='thread-reply-submit'][data-message-id]").forEach((btn) => {
+      btn.onclick = async () => {
+        const selection = getScopedSelection(root);
+        if (selection?.type !== "sujet") return;
+        const parentMessageId = String(btn.dataset.messageId || "").trim();
+        if (!parentMessageId) return;
+        const replyUi = resolveInlineReplyUiState();
+        const message = String(replyUi.draftsByMessageId?.[parentMessageId] || "").trim();
+        if (!message) return;
+        debugThreadReply("reply_submit", { parentMessageId, messageLength: message.length });
+        await addComment("sujet", selection.item.id, message, {
+          actor: "Human",
+          agent: "human",
+          parentMessageId
+        });
+        replyUi.draftsByMessageId[parentMessageId] = "";
+        replyUi.expandedMessageId = "";
+        rerenderScope(root);
+      };
+    });
+
+    root.querySelectorAll(".thread-comment-menu__dropdown").forEach((dropdown) => {
+      dropdown.addEventListener("click", (event) => event.stopPropagation());
+    });
+
+    if (root.dataset.threadReplyDropdownDocumentBound !== "true") {
+      document.addEventListener("click", () => {
+        root.querySelectorAll(".thread-comment-menu__dropdown.is-open").forEach((opened) => {
+          opened.classList.remove("is-open");
+        });
+      });
+      root.dataset.threadReplyDropdownDocumentBound = "true";
+    }
 
     root.querySelectorAll("[data-subject-assign-self]").forEach((btn) => {
       btn.onclick = async (event) => {

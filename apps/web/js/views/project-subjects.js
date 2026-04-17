@@ -290,6 +290,7 @@ const {
   setDecision,
   getDecision,
   getThreadForSelection,
+  getInlineReplyUiState,
   renderThreadBlock,
   renderIssueStatusAction,
   renderCommentBox
@@ -381,6 +382,7 @@ const projectSubjectsEvents = createProjectSubjectsEvents({
   getProjectSubjectMilestones: () => projectSubjectMilestones,
   getProjectSubjectLabels: () => projectSubjectLabels,
   renderSubjectMetaFieldValue: (...args) => projectSubjectsView.renderSubjectMetaFieldValue(...args),
+  addComment: (...args) => addComment(...args),
   getSubjectsCurrentRoot: () => subjectsCurrentRoot,
   resolveCurrentUserAssigneeId: () => resolveCurrentUserDirectoryPersonId({
     email: store.user?.email || "",
@@ -756,7 +758,8 @@ const projectSubjectsView = createProjectSubjectsView({
   setProjectCompactEnabled,
   currentDecisionTarget: (...args) => currentDecisionTarget(...args),
   addComment: (...args) => addComment(...args),
-  getScopedSelection: (...args) => getScopedSelection(...args)
+  getScopedSelection: (...args) => getScopedSelection(...args),
+  getInlineReplyUiState: (...args) => getInlineReplyUiState(...args)
 });
 
 const {
