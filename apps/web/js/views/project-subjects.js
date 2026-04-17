@@ -91,6 +91,7 @@ import {
   resolveCurrentUserDirectoryPersonId,
   syncProjectCollaboratorsFromSupabase
 } from "../services/project-supabase-sync.js";
+import { subjectMessagesService } from "../services/subject-messages-service.js";
 import {
   getSituationsTableGridTemplate,
   renderFlatSujetRow,
@@ -275,6 +276,8 @@ const projectSubjectsThread = createProjectSubjectsThread({
   getNestedSujet,
   getEffectiveSujetStatus,
   getEffectiveSituationStatus,
+  subjectMessagesService,
+  requestRerender: (...args) => projectSubjectsView.rerenderScope(...args),
   entityDisplayLinkHtml: (...args) => projectSubjectsView.entityDisplayLinkHtml(...args),
   inferAgent: (...args) => projectSubjectsView.inferAgent(...args),
   normActorName: (...args) => projectSubjectsView.normActorName(...args),

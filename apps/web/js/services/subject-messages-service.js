@@ -1,0 +1,140 @@
+import { createSubjectMessagesSupabaseRepository } from "./subject-messages-supabase.js";
+
+function normalizeId(value) {
+  return String(value || "").trim();
+}
+
+function toTimelineRows(messages = [], events = []) {
+  const messageRows = (Array.isArray(messages) ? messages : []).map((message) => ({
+    kind: "message",
+    created_at: message?.created_at || "",
+    message
+  }));
+  const eventRows = (Array.isArray(events) ? events : []).map((event) => ({
+    kind: "event",
+    created_at: event?.created_at || "",
+    event
+  }));
+
+  return [...messageRows, ...eventRows].sort((left, right) => {
+    const lt = String(left?.created_at || "");
+    const rt = String(right?.created_at || "");
+    return lt.localeCompare(rt);
+  });
+}
+
+export function createSubjectMessagesService({ repository } = {}) {
+  const provider = repository || createSubjectMessagesSupabaseRepository();
+
+  async function listMessages(subjectId) {
+    const normalizedSubjectId = normalizeId(subjectId);
+    if (!normalizedSubjectId) return [];
+    return provider.listMessages({ subjectId: normalizedSubjectId });
+  }
+
+  async function listTimeline(subjectId) {
+    const normalizedSubjectId = normalizeId(subjectId);
+    if (!normalizedSubjectId) return { rows: [], messages: [], events: [], conversation: null };
+
+    const [messages, events, conversation] = await Promise.all([
+      provider.listMessages({ subjectId: normalizedSubjectId }),
+      provider.listEvents({ subjectId: normalizedSubjectId }),
+      provider.getConversationSettings({ subjectId: normalizedSubjectId })
+    ]);
+
+    return {
+      rows: toTimelineRows(messages, events),
+      messages,
+      events,
+      conversation
+    };
+  }
+
+  async function createMessage(payload = {}) {
+    return provider.createMessage(payload);
+  }
+
+  async function createReply(payload = {}) {
+    return provider.createMessage({
+      ...payload,
+      parentMessageId: normalizeId(payload.parentMessageId)
+    });
+  }
+
+  async function markMessageRead(messageId, context = {}) {
+    return provider.markMessageRead({ messageId, ...context });
+  }
+
+  async function markTimelineRead(subjectId) {
+    const messages = await listMessages(subjectId);
+    for (const message of messages) {
+      const messageId = normalizeId(message?.id);
+      if (!messageId) continue;
+      await provider.markMessageRead({
+        messageId,
+        subjectId,
+        projectId: message?.project_id
+      });
+    }
+    return true;
+  }
+
+  async function canEditMessage(messageId) {
+    return provider.canEditMessage({ messageId });
+  }
+
+  async function editMessage(messageId, patch = {}) {
+    return provider.editMessage({
+      messageId,
+      bodyMarkdown: patch.bodyMarkdown
+    });
+  }
+
+  async function deleteMessage(messageId) {
+    return provider.deleteMessage({ messageId });
+  }
+
+  async function uploadTemporaryAttachment(payload = {}) {
+    return provider.uploadTemporaryAttachment(payload);
+  }
+
+  async function linkAttachmentsToMessage(payload = {}) {
+    return provider.linkAttachmentsToMessage(payload);
+  }
+
+  async function lockConversation(subjectId, options = {}) {
+    return provider.lockConversation({ subjectId, reason: options.reason });
+  }
+
+  async function unlockConversation(subjectId) {
+    return provider.unlockConversation({ subjectId });
+  }
+
+  async function listCollaboratorsForMentions(projectId) {
+    return provider.listCollaboratorsForMentions({ projectId });
+  }
+
+  async function listUnreadConversationNotifications(context = {}) {
+    return provider.listUnreadConversationNotifications(context);
+  }
+
+  return {
+    listTimeline,
+    listMessages,
+    createMessage,
+    createReply,
+    markMessageRead,
+    markTimelineRead,
+    canEditMessage,
+    editMessage,
+    deleteMessage,
+    uploadTemporaryAttachment,
+    linkAttachmentsToMessage,
+    lockConversation,
+    unlockConversation,
+    listCollaboratorsForMentions,
+    listUnreadConversationNotifications
+  };
+}
+
+export const subjectMessagesService = createSubjectMessagesService();

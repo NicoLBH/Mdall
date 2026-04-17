@@ -2341,7 +2341,7 @@ async function applyCommentAction(root) {
     return;
   }
 
-  addComment(target.type, target.id, message, { actor: "Human", agent: "human" });
+  await addComment(target.type, target.id, message, { actor: "Human", agent: "human" });
   ta.value = "";
   store.situationsView.commentPreviewMode = false;
   rerenderScope(root);

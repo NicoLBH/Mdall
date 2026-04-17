@@ -30,13 +30,112 @@ export function createProjectSubjectsThread(config = {}) {
     getNestedSujet,
     getEffectiveSujetStatus,
     getEffectiveSituationStatus,
+    subjectMessagesService,
+    requestRerender,
     entityDisplayLinkHtml,
     inferAgent,
     normActorName,
     miniAuthorIconHtml
   } = config;
 
-  function addComment(entityType, entityId, message, options = {}) {
+  const subjectTimelineCache = new Map();
+  const subjectTimelinePending = new Set();
+
+  function normalizeId(value) {
+    return String(value || "").trim();
+  }
+
+  function mapMessageRowToThreadComment(row = {}) {
+    return {
+      ts: firstNonEmpty(row.created_at, nowIso()),
+      entity_type: "sujet",
+      entity_id: normalizeId(row.subject_id),
+      type: "COMMENT",
+      actor: row.author_person_id ? `Person ${normalizeId(row.author_person_id).slice(0, 8)}` : "Human",
+      agent: "human",
+      message: String(row.deleted_at ? "[message supprimé]" : row.body_markdown || ""),
+      pending: false,
+      request_id: null,
+      meta: {
+        source: "supabase",
+        id: normalizeId(row.id),
+        parent_message_id: normalizeId(row.parent_message_id),
+        is_frozen: !!row.is_frozen
+      }
+    };
+  }
+
+  function mapEventRowToThreadActivity(row = {}) {
+    return {
+      ts: firstNonEmpty(row.created_at, nowIso()),
+      entity_type: "sujet",
+      entity_id: normalizeId(row.subject_id),
+      type: "ACTIVITY",
+      kind: String(row.event_type || "timeline_event").toLowerCase(),
+      actor: row.actor_person_id ? `Person ${normalizeId(row.actor_person_id).slice(0, 8)}` : "System",
+      agent: "system",
+      message: String(row.event_payload?.message || ""),
+      meta: {
+        source: "supabase",
+        id: normalizeId(row.id),
+        event_type: String(row.event_type || ""),
+        event_payload: row.event_payload || {}
+      }
+    };
+  }
+
+  function requestScopeRerender() {
+    if (typeof requestRerender === "function") {
+      requestRerender(document.getElementById("situationsDetailsHost") || document);
+    }
+  }
+
+  function ensureSubjectTimelineLoaded(subjectId) {
+    const normalizedSubjectId = normalizeId(subjectId);
+    if (!normalizedSubjectId || !subjectMessagesService || subjectTimelinePending.has(normalizedSubjectId)) return;
+
+    subjectTimelinePending.add(normalizedSubjectId);
+    subjectMessagesService.listTimeline(normalizedSubjectId)
+      .then((timeline) => {
+        const messages = Array.isArray(timeline?.messages) ? timeline.messages : [];
+        const events = Array.isArray(timeline?.events) ? timeline.events : [];
+        subjectTimelineCache.set(normalizedSubjectId, {
+          comments: messages.map((row) => mapMessageRowToThreadComment(row)),
+          activities: events.map((row) => mapEventRowToThreadActivity(row)),
+          conversation: timeline?.conversation || null
+        });
+        requestScopeRerender();
+      })
+      .catch((error) => {
+        console.warn("[subject-messages] timeline load failed", error);
+      })
+      .finally(() => {
+        subjectTimelinePending.delete(normalizedSubjectId);
+      });
+  }
+
+  async function addComment(entityType, entityId, message, options = {}) {
+    const normalizedEntityType = String(entityType || "").toLowerCase();
+    const normalizedEntityId = normalizeId(entityId);
+    const normalizedMessage = String(message || "").trim();
+    if (!normalizedMessage) return null;
+
+    if (normalizedEntityType === "sujet" && normalizedEntityId && subjectMessagesService) {
+      const created = options.parentMessageId
+        ? await subjectMessagesService.createReply({
+            subjectId: normalizedEntityId,
+            parentMessageId: options.parentMessageId,
+            bodyMarkdown: normalizedMessage
+          })
+        : await subjectMessagesService.createMessage({
+            subjectId: normalizedEntityId,
+            bodyMarkdown: normalizedMessage
+          });
+
+      ensureSubjectTimelineLoaded(normalizedEntityId);
+      return created;
+    }
+
     persistRunBucket((bucket) => {
       bucket.comments.push({
         ts: nowIso(),
@@ -51,6 +150,8 @@ export function createProjectSubjectsThread(config = {}) {
         meta: options.meta || {}
       });
     });
+
+    return null;
   }
 
   function addActivity(entityType, entityId, kind, message = "", meta = {}, options = {}) {
@@ -124,7 +225,7 @@ export function createProjectSubjectsThread(config = {}) {
     if (!selection) return [];
 
     const { bucket } = getRunBucket();
-    const comments = Array.isArray(bucket?.comments) ? bucket.comments : [];
+    const localComments = Array.isArray(bucket?.comments) ? bucket.comments : [];
     const activities = Array.isArray(bucket?.activities) ? bucket.activities : [];
     const events = [];
 
@@ -167,6 +268,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
     const entityKey = (type, id) => `${String(type || "").toLowerCase()}:${String(id || "")}`;
 
     if (subject) {
+      ensureSubjectTimelineLoaded(subject.id);
       allowedComments.add(entityKey("sujet", subject.id));
       allowedActivities.add(entityKey("sujet", subject.id));
       if (situation) allowedActivities.add(entityKey("situation", situation.id));
@@ -177,7 +279,15 @@ priority=${firstNonEmpty(subject.priority, "")}`
 
     const isViewingSubject = !!subject;
 
-    const humanEvents = [...comments, ...activities].filter((e) => {
+    const persistedTimeline = subject ? (subjectTimelineCache.get(normalizeId(subject.id)) || null) : null;
+    const comments = subject && persistedTimeline
+      ? persistedTimeline.comments
+      : localComments;
+    const persistedActivities = subject && persistedTimeline
+      ? persistedTimeline.activities
+      : [];
+
+    const humanEvents = [...comments, ...activities, ...persistedActivities].filter((e) => {
       const k = entityKey(e.entity_type, e.entity_id);
       const t = String(e?.type || "").toUpperCase();
 
