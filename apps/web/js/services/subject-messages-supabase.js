@@ -1,5 +1,5 @@
 import { store } from "../store.js";
-import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
+import { buildSupabaseAuthHeaders, getSupabaseUrl, supabase } from "../../assets/js/auth.js";
 import { resolveCurrentBackendProjectId, resolveCurrentUserDirectoryPersonId } from "./project-supabase-sync.js";
 
 const SUPABASE_URL = getSupabaseUrl();
@@ -38,6 +38,10 @@ function normalizeFileName(value) {
     .replace(/[^\w.\- ]+/g, "_")
     .replace(/\s+/g, "-")
     .slice(0, 120);
+}
+
+function randomToken() {
+  return Math.random().toString(36).slice(2, 10);
 }
 
 function encodeStoragePath(path = "") {
@@ -371,24 +375,19 @@ export function createSubjectMessagesSupabaseRepository() {
       const fileName = String(file?.name || payload.fileName || "attachment").trim();
       const storagePath = String(
         payload.storagePath
-          || `${projectId}/${subjectId}/temporary/${uploadSessionId}/${Date.now()}-${normalizeFileName(fileName) || "attachment"}`
+          || `${projectId}/${subjectId}/temporary/${uploadSessionId}/${Date.now()}-${randomToken()}-${normalizeFileName(fileName) || "attachment"}`
       ).trim();
       if (!storagePath) throw new Error("storagePath is required");
 
-      const uploadResponse = await fetch(
-        `${SUPABASE_URL}/storage/v1/object/${encodeURIComponent(SUBJECT_ATTACHMENTS_BUCKET)}/${encodeStoragePath(storagePath)}`,
-        {
-          method: "POST",
-          headers: await getAuthHeaders({
-            "Content-Type": String(file?.type || payload.mimeType || "application/octet-stream"),
-            "x-upsert": "false"
-          }),
-          body: file
-        }
-      );
-      if (!uploadResponse.ok) {
-        const text = await uploadResponse.text().catch(() => "");
-        throw new Error(`Attachment upload failed (${uploadResponse.status}): ${text}`);
+      const { error: uploadError } = await supabase
+        .storage
+        .from(SUBJECT_ATTACHMENTS_BUCKET)
+        .upload(storagePath, file, {
+          upsert: false,
+          contentType: String(file?.type || payload.mimeType || "application/octet-stream")
+        });
+      if (uploadError) {
+        throw new Error(`Attachment upload failed: ${String(uploadError?.message || uploadError)}`);
       }
 
       const attachment = await this.uploadTemporaryAttachment({
