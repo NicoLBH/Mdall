@@ -1888,7 +1888,7 @@ function renderSubjectMetaControls(subject) {
       ${renderSubjectMetaField({
         field: "relations",
         label: "Relations",
-        valueHtml: renderSubjectParentCard(subject.id)
+        valueHtml: renderSubjectRelationsCards(subject.id)
       })}
     </div>
   `;
