@@ -2,7 +2,7 @@ import { renderProblemsCountsIconHtml } from "../ui/subissues-counts.js";
 import { getDisplayAuthorName } from "../ui/author-identity.js";
 import { findCollaboratorByAssigneeId, normalizeAssigneeIds } from "../../services/subject-assignees-service.js";
 export function getSituationsTableGridTemplate() {
-  return "minmax(0, 1fr) max-content";
+  return "minmax(0, 1fr) 84px max-content";
 }
 
 export function renderSituationsTableHeadHtml(options = {}) {
@@ -60,6 +60,7 @@ function renderWelcomeHtml(deps) {
       deps,
       columns: [
         { className: "cell cell-theme", html: deps.renderSubjectsStatusHeadHtml() },
+        { className: "cell cell-messages-head", html: "" },
         { className: "cell cell-assignees-head", html: "Assignés" }
       ]
     }),
@@ -96,6 +97,33 @@ function renderAssigneeAvatar(collaborator = {}, escapeHtml, fallbackAvatar = ""
     return `<span class="subject-assignee-avatar"><img src="${escapeHtml(avatarUrl)}" alt="${escapeHtml(displayName)}" class="subject-assignee-avatar__img"></span>`;
   }
   return `<span class="subject-assignee-avatar subject-assignee-avatar--fallback" aria-hidden="true">${escapeHtml(initials)}</span>`;
+}
+
+function getSubjectMessagesCount(sujet, deps) {
+  const rawPayload = deps?.store?.projectSubjectsView?.rawSubjectsResult && typeof deps.store.projectSubjectsView.rawSubjectsResult === "object"
+    ? deps.store.projectSubjectsView.rawSubjectsResult
+    : (deps?.store?.projectSubjectsView?.rawResult && typeof deps.store.projectSubjectsView.rawResult === "object"
+      ? deps.store.projectSubjectsView.rawResult
+      : {});
+  const subjectMessageCountsBySubjectId = rawPayload?.subjectMessageCountsBySubjectId && typeof rawPayload.subjectMessageCountsBySubjectId === "object"
+    ? rawPayload.subjectMessageCountsBySubjectId
+    : {};
+  const count = Number(subjectMessageCountsBySubjectId[String(sujet?.id || "")] || 0);
+  return Number.isFinite(count) && count > 0 ? count : 0;
+}
+
+function renderSubjectMessagesCountCellHtml(sujet, deps) {
+  const { svgIcon, escapeHtml } = deps;
+  const count = getSubjectMessagesCount(sujet, deps);
+  if (!count) {
+    return '<span class="issue-row-messages-empty" aria-hidden="true"></span>';
+  }
+  return `
+    <span class="issue-row-messages-count" aria-label="${escapeHtml(`${count} message(s)`)}">
+      ${svgIcon("message")}
+      <span>${escapeHtml(String(count))}</span>
+    </span>
+  `;
 }
 
 function renderSubjectAssigneesCellHtml(sujet, deps) {
@@ -186,6 +214,7 @@ export function renderFlatSujetRow(sujet, situationId, options = {}) {
           <span class="issue-row-title-grid__meta issue-row-meta-text mono-small">${blockedBadge}${escapeHtml(displayRef)} - ${escapeHtml(author)} • ${escapeHtml(openedLabel)}${objectiveLabel}</span>
         </span>
       </div>
+      <div class="cell cell-messages-value">${renderSubjectMessagesCountCellHtml(sujet, deps)}</div>
       <div class="cell cell-assignees-value">${renderSubjectAssigneesCellHtml(sujet, deps)}</div>
     </div>
   `;
@@ -234,6 +263,7 @@ export function renderProjectSubjectsTable({ filteredSituations, deps }) {
         deps,
         columns: [
           { className: "cell cell-theme", html: deps.renderSubjectsStatusHeadHtml() },
+          { className: "cell cell-messages-head", html: "" },
           { className: "cell cell-assignees-head", html: "Assignés" }
         ]
       }),
@@ -262,6 +292,7 @@ export function renderProjectSubjectsTable({ filteredSituations, deps }) {
         deps,
         columns: [
           { className: "cell cell-theme", html: deps.renderSubjectsStatusHeadHtml() },
+          { className: "cell cell-messages-head", html: "" },
           { className: "cell cell-assignees-head", html: "Assignés" }
         ]
       }),
@@ -278,6 +309,7 @@ export function renderProjectSubjectsTable({ filteredSituations, deps }) {
       deps,
       columns: [
         { className: "cell cell-theme", html: deps.renderSubjectsStatusHeadHtml() },
+        { className: "cell cell-messages-head", html: "" },
         { className: "cell cell-assignees-head", html: "Assignés" }
       ]
     }),

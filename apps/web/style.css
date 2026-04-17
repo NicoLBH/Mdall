@@ -2015,9 +2015,19 @@ body.modal-open {
   justify-content:flex-end;
 }
 
+.cell-messages-head,
+.cell-messages-value,
 .cell-assignees-head,
 .cell-assignees-value{
   justify-self:end;
+}
+
+.cell-messages-head,
+.cell-messages-value{
+  width:84px;
+  display:flex;
+  justify-content:flex-end;
+  align-items:center;
 }
 
 .cell-assignees-value{
@@ -2025,6 +2035,21 @@ body.modal-open {
   display:flex;
   justify-content:flex-end;
   align-items:center;
+}
+
+.issue-row-messages-empty{
+  display:inline-block;
+  width:100%;
+  min-height:16px;
+}
+
+.issue-row-messages-count{
+  display:inline-flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:6px;
+  color:var(--muted);
+  font-size:12px;
 }
 
 .issue-row-assignees{
