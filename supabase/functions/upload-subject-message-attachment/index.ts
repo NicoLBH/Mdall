@@ -89,6 +89,14 @@ Deno.serve(async (req) => {
       storagePath,
       storagePathRaw: rawStoragePath
     };
+    if (rawStoragePath !== storagePath) {
+      console.info("[upload-subject-message-attachment] storage path normalized", {
+        userId: user.id,
+        bucket,
+        storagePathRaw: rawStoragePath,
+        storagePathCanonical: storagePath
+      });
+    }
 
     const { data: canAccess, error: accessError } = await userClient.rpc("can_access_project_subject_conversation", {
       p_project_id: projectId
