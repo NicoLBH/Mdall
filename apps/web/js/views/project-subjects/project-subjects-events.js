@@ -1623,6 +1623,16 @@ export function createProjectSubjectsEvents(config) {
 
     root.querySelectorAll("[data-action='add-comment']").forEach((btn) => {
       btn.onclick = async () => {
+        const draftMessage = String(store?.situationsView?.commentDraft || "").trim();
+        const attachmentState = typeof getComposerAttachmentsState === "function"
+          ? getComposerAttachmentsState()
+          : null;
+        const hasReadyAttachment = Array.isArray(attachmentState?.items)
+          && attachmentState.items.some((attachment) => {
+            const status = String(attachment?.uploadStatus || "").trim();
+            return status === "ready" && !attachment?.error;
+          });
+        if (!draftMessage && !hasReadyAttachment) return;
         await applyCommentAction(root);
       };
     });

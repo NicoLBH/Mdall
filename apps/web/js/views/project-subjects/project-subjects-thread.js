@@ -660,18 +660,17 @@ priority=${firstNonEmpty(subject.priority, "")}`
       { action: "bold", icon: "markdown-bold", label: "Gras" },
       { action: "italic", icon: "markdown-italic", label: "Italique" },
       { action: "underline", icon: "markdown-underline", label: "Souligné" },
-      { action: "bullet-list", icon: "markdown-list-unordered", label: "Liste à puces" },
-      { action: "ordered-list", icon: "markdown-list-ordered", label: "Liste numérotée" },
-      { action: "checklist", icon: "markdown-tasklist", label: "Checklist" },
       { action: "quote", icon: "markdown-quote", label: "Citation" },
       { action: "link", icon: "markdown-link", label: "Lien" },
+      { action: "ordered-list", icon: "markdown-list-ordered", label: "Liste numérotée" },
+      { action: "bullet-list", icon: "markdown-list-unordered", label: "Liste à puces" },
+      { action: "checklist", icon: "markdown-tasklist", label: "Checklist" },
       { action: "mention", icon: "markdown-mention", label: "Mention" }
     ];
     const extraAttributes = Object.entries(extraData)
       .map(([key, value]) => `data-${escapeHtml(key)}="${escapeHtml(String(value || ""))}"`)
       .join(" ");
-
-    return toolbarButtons.map((button) => `
+    const renderToolbarButton = (button = {}) => `
       <button
         class="comment-toolbar-btn"
         type="button"
@@ -683,7 +682,40 @@ priority=${firstNonEmpty(subject.priority, "")}`
       >
         ${svgIcon(button.icon)}
       </button>
-    `).join("");
+    `;
+
+    if (buttonAction !== "composer-format") {
+      return toolbarButtons.map((button) => renderToolbarButton(button)).join("");
+    }
+
+    const attachmentButton = `
+      <button
+        class="comment-toolbar-btn"
+        type="button"
+        data-action="composer-attachments-pick"
+        title="Pièce jointe"
+        aria-label="Pièce jointe"
+      >
+        ${svgIcon("paperclip")}
+      </button>
+    `;
+
+    const groupOne = ["bold", "italic", "underline", "quote", "link"];
+    const groupTwo = ["ordered-list", "bullet-list", "checklist"];
+    const mentionButton = toolbarButtons.find((button) => button.action === "mention");
+    const renderGroup = (actions = []) => actions
+      .map((action) => toolbarButtons.find((button) => button.action === action))
+      .filter(Boolean)
+      .map((button) => renderToolbarButton(button))
+      .join("");
+
+    return `
+      <div class="comment-toolbar-layout">
+        <div class="comment-toolbar-layout__group">${renderGroup(groupOne)}</div>
+        <div class="comment-toolbar-layout__group">${renderGroup(groupTwo)}</div>
+        <div class="comment-toolbar-layout__group">${attachmentButton}${mentionButton ? renderToolbarButton(mentionButton) : ""}</div>
+      </div>
+    `;
   }
 
   function renderInlineReplyComposer({ commentId, isExpanded, draft, previewMode }) {
@@ -1144,18 +1176,12 @@ priority=${firstNonEmpty(subject.priority, "")}`
     const pendingAttachments = normalizedSubjectId && normalizeId(attachmentState.subjectId) === normalizedSubjectId
       ? attachmentState.items
       : [];
-    const hasReadyAttachment = pendingAttachments.some((attachment) => String(attachment?.uploadStatus || "").trim() === "ready" && !attachment?.error);
-    const normalizedDraftMessage = String(store?.situationsView?.commentDraft || "").trim();
-    const canSubmitComment = !!normalizedDraftMessage || hasReadyAttachment;
-    const commentButtonClassName = canSubmitComment
-      ? "gh-btn gh-btn--comment gh-btn--primary"
-      : "gh-btn gh-btn--comment";
     const actionsHtml = `
       <button class="gh-btn gh-btn--help-mode ${helpMode ? "is-on" : ""}" data-action="toggle-help" type="button">Help</button>
 
       ${issueStatusActionHtml}
 
-      <button class="${commentButtonClassName}" data-action="add-comment" type="button" ${canSubmitComment ? "" : "disabled"}>Comment</button>
+      <button class="gh-btn gh-action__main gh-btn--primary gh-btn--md" data-action="add-comment" type="button">Commenter</button>
     `;
     const mentionPopupHtml = mentionUi.open
       ? `
@@ -1223,11 +1249,14 @@ priority=${firstNonEmpty(subject.priority, "")}`
         >
           <input id="subjectComposerAttachmentInput" type="file" class="subject-composer-file-input" data-role="subject-composer-file-input" multiple />
           <div class="subject-composer-dropzone__label mono-small">
-            Dépose des images, PDF ou autres fichiers ici — ou
-            <button class="gh-btn gh-btn--sm" type="button" data-action="composer-attachments-pick">ajouter un fichier</button>
+            Dépose des images, PDF ou autres fichiers ici
           </div>
           ${pendingAttachmentsHtml}
         </div>
+        <button class="subject-composer-attachments-pick-btn" type="button" data-action="composer-attachments-pick">
+          <span class="subject-composer-attachments-pick-btn__icon" aria-hidden="true">${svgIcon("image")}</span>
+          <span>Ajouter un fichier</span>
+        </button>
       `
       : "";
 
