@@ -1242,16 +1242,12 @@ priority=${firstNonEmpty(subject.priority, "")}`
 
     const composerAttachmentsHtml = type === "sujet"
       ? `
+        <input id="subjectComposerAttachmentInput" type="file" class="subject-composer-file-input" data-role="subject-composer-file-input" multiple />
         <div
-          class="subject-composer-dropzone"
-          data-role="subject-composer-dropzone"
-          tabindex="0"
-          aria-label="Déposer des pièces jointes"
+          class="subject-composer-attachments-preview ${pendingAttachments.length ? "" : "hidden"}"
+          data-role="subject-composer-attachments-preview"
+          aria-live="polite"
         >
-          <input id="subjectComposerAttachmentInput" type="file" class="subject-composer-file-input" data-role="subject-composer-file-input" multiple />
-          <div class="subject-composer-dropzone__label mono-small">
-            Dépose des images, PDF ou autres fichiers ici
-          </div>
           ${pendingAttachmentsHtml}
         </div>
         <button class="subject-composer-attachments-pick-btn" type="button" data-action="composer-attachments-pick">
