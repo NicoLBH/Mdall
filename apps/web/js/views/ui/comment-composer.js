@@ -16,11 +16,22 @@ export function renderCommentComposer({
   footerHtml = "",
   actionsHtml = "",
   toolbarHtml = "",
+  textareaAttributes = {},
   tabWriteAction = "tab-write",
   tabPreviewAction = "tab-preview",
   previewHtml = "",
   previewEmptyHint = "Use Markdown to format your comment"
 } = {}) {
+  const textareaAttributesHtml = Object.entries(
+    textareaAttributes && typeof textareaAttributes === "object" ? textareaAttributes : {}
+  )
+    .map(([key, value]) => {
+      const attrName = String(key || "").trim();
+      if (!attrName || /[\s"'<>/=]/.test(attrName)) return "";
+      return `${escapeHtml(attrName)}="${escapeHtml(String(value ?? ""))}"`;
+    })
+    .filter(Boolean)
+    .join(" ");
   return `
     <div class="human-action comment-composer">
       ${hideAvatar ? "" : `<div class="gh-avatar gh-avatar--human comment-composer__avatar" aria-hidden="true">${avatarHtml}</div>`}
@@ -43,6 +54,7 @@ export function renderCommentComposer({
               id="${escapeHtml(textareaId)}"
               class="textarea comment-composer__textarea"
               placeholder="${escapeHtml(placeholder)}"
+              ${textareaAttributesHtml}
             >${escapeHtml(textareaValue)}</textarea>
           </div>
 

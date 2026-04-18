@@ -200,7 +200,9 @@ export function createProjectSubjectsThread(config = {}) {
       state.inlineReplyUi = {
         expandedMessageId: "",
         draftsByMessageId: {},
-        previewByMessageId: {}
+        previewByMessageId: {},
+        attachmentsByMessageId: {},
+        uploadSessionByMessageId: {}
       };
     }
     if (typeof state.inlineReplyUi.expandedMessageId !== "string") state.inlineReplyUi.expandedMessageId = "";
@@ -209,6 +211,12 @@ export function createProjectSubjectsThread(config = {}) {
     }
     if (!state.inlineReplyUi.previewByMessageId || typeof state.inlineReplyUi.previewByMessageId !== "object") {
       state.inlineReplyUi.previewByMessageId = {};
+    }
+    if (!state.inlineReplyUi.attachmentsByMessageId || typeof state.inlineReplyUi.attachmentsByMessageId !== "object") {
+      state.inlineReplyUi.attachmentsByMessageId = {};
+    }
+    if (!state.inlineReplyUi.uploadSessionByMessageId || typeof state.inlineReplyUi.uploadSessionByMessageId !== "object") {
+      state.inlineReplyUi.uploadSessionByMessageId = {};
     }
     return state.inlineReplyUi;
   }
@@ -689,11 +697,15 @@ priority=${firstNonEmpty(subject.priority, "")}`
       return toolbarButtons.map((button) => renderToolbarButton(button)).join("");
     }
 
+    const attachmentAction = buttonAction === "thread-reply-format"
+      ? "thread-reply-attachments-pick"
+      : "composer-attachments-pick";
     const attachmentButton = `
       <button
         class="comment-toolbar-btn"
         type="button"
-        data-action="composer-attachments-pick"
+        data-action="${escapeHtml(attachmentAction)}"
+        ${extraAttributes}
         title="Pièce jointe"
         aria-label="Pièce jointe"
       >
@@ -719,11 +731,43 @@ priority=${firstNonEmpty(subject.priority, "")}`
     `;
   }
 
-  function renderInlineReplyComposer({ commentId, isExpanded, draft, previewMode }) {
+  function renderInlineReplyComposer({ commentId, isExpanded, draft, previewMode, attachments = [] }) {
     if (!commentId) return "";
     if (!isExpanded) return "";
+    const pendingAttachments = Array.isArray(attachments) ? attachments : [];
     const normalizedDraft = String(draft || "");
-    const canSubmit = !!normalizedDraft.trim();
+    const hasReadyAttachment = pendingAttachments.some((attachment) => String(attachment?.uploadStatus || "").trim() === "ready" && !attachment?.error);
+    const canSubmit = !!normalizedDraft.trim() || hasReadyAttachment;
+    const pendingAttachmentsHtml = pendingAttachments.length
+      ? `
+        <div class="subject-composer-attachments">
+          ${pendingAttachments.map((attachment, index) => `
+            <div class="subject-composer-attachment-item">
+              ${renderAttachmentTile(attachment, {
+                forceImage: !!attachment.isImage,
+                uploadState: attachment.error
+                  ? "Erreur d’upload"
+                  : String(attachment.uploadStatus || "").trim() === "uploading"
+                    ? "Envoi..."
+                    : "Prêt"
+              })}
+              <button
+                class="subject-composer-attachment-remove"
+                type="button"
+                data-action="thread-reply-attachment-remove"
+                data-message-id="${escapeHtml(commentId)}"
+                data-attachment-id="${escapeHtml(normalizeId(attachment.id))}"
+                data-temp-id="${escapeHtml(String(attachment.tempId || index))}"
+                aria-label="Retirer la pièce jointe"
+              >
+                ${svgIcon("x")}
+              </button>
+            </div>
+          `).join("")}
+        </div>
+      `
+      : "";
+
     return `
       <div class="thread-inline-reply-editor" data-inline-reply-editor="${escapeHtml(commentId)}">
         ${renderCommentComposer({
@@ -733,6 +777,9 @@ priority=${firstNonEmpty(subject.priority, "")}`
           textareaId: `threadReplyBox-${commentId}`,
           previewId: `threadReplyPreview-${commentId}`,
           textareaValue: normalizedDraft,
+          textareaAttributes: {
+            "data-thread-reply-draft": commentId
+          },
           placeholder: "Écrire une réponse",
           tabWriteAction: "thread-reply-tab-write",
           tabPreviewAction: "thread-reply-tab-preview",
@@ -742,7 +789,25 @@ priority=${firstNonEmpty(subject.priority, "")}`
             <button class="gh-btn" type="button" data-action="thread-reply-cancel" data-message-id="${escapeHtml(commentId)}">Annuler</button>
             <button class="gh-btn gh-btn--comment gh-btn--primary" type="button" data-action="thread-reply-submit" data-message-id="${escapeHtml(commentId)}" ${canSubmit ? "" : "disabled"}>Répondre</button>
           `,
-          previewEmptyHint: "Use Markdown to format your reply"
+          previewEmptyHint: "Use Markdown to format your reply",
+          footerHtml: `
+            <input
+              id="threadReplyAttachmentInput-${escapeHtml(commentId)}"
+              type="file"
+              class="subject-composer-file-input"
+              data-role="thread-reply-file-input"
+              data-message-id="${escapeHtml(commentId)}"
+              multiple
+            />
+            <div
+              class="subject-composer-attachments-preview ${pendingAttachments.length ? "" : "hidden"}"
+              data-role="thread-reply-attachments-preview"
+              data-message-id="${escapeHtml(commentId)}"
+              aria-live="polite"
+            >
+              ${pendingAttachmentsHtml}
+            </div>
+          `
         })}
       </div>
     `;
@@ -875,6 +940,9 @@ priority=${firstNonEmpty(subject.priority, "")}`
         const isExpanded = replyUi.expandedMessageId === commentId;
         const draft = String(replyUi.draftsByMessageId?.[commentId] || "");
         const previewMode = !!replyUi.previewByMessageId?.[commentId];
+        const attachments = Array.isArray(replyUi.attachmentsByMessageId?.[commentId])
+          ? replyUi.attachmentsByMessageId[commentId]
+          : [];
         const isEditable = !e?.meta?.is_frozen && !e?.meta?.is_deleted;
         const repliesHtml = childReplies.length
           ? `
@@ -932,7 +1000,8 @@ priority=${firstNonEmpty(subject.priority, "")}`
                 commentId,
                 isExpanded,
                 draft,
-                previewMode
+                previewMode,
+                attachments
               })}
             </div>
           `,
