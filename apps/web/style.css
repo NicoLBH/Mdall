@@ -2619,22 +2619,17 @@ body.is-resizing{
 .subject-mention-popup__name{font-size:13px;}
 .subject-mention-popup__meta{font-size:12px;color:var(--muted);}
 .subject-mention-popup__empty{padding:10px 12px;font-size:12px;color:var(--muted);}
-.subject-composer-dropzone{
-  margin:0 0 10px;
-  border:1px dashed var(--border2);
-  border-radius:8px;
-  padding:10px;
-  background:rgba(110,118,129,.06);
-}
-.subject-composer-dropzone.is-dragover{
+.comment-composer__editor.is-dragover{
+  border-style:dashed;
   border-color:rgba(56,139,253,.95);
   background:rgba(56,139,253,.12);
 }
-.subject-composer-dropzone__label{
-  display:flex;
-  align-items:center;
-  gap:8px;
-  color:var(--muted);
+.comment-composer__editor{
+  border:1px solid transparent;
+  border-radius:8px;
+}
+.subject-composer-attachments-preview{
+  margin:0 0 10px;
 }
 .subject-composer-attachments-pick-btn{
   margin-top:0;
