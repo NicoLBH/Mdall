@@ -2658,6 +2658,7 @@ body.is-resizing{
   align-items:center;
   gap:8px;
   padding:8px;
+  margin-bottom: 8px;
 }
 .subject-attachment__file-icon{
   display:inline-flex;
