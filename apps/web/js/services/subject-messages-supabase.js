@@ -8,6 +8,10 @@ import {
   shouldFallbackToDirectUploadFromEdgeHttpFailure,
   shouldFallbackToDirectUploadFromEdgeNetworkFailure
 } from "./subject-message-attachments-transport.js";
+import {
+  normalizeAttachmentBucket,
+  normalizeSubjectAttachmentStoragePath
+} from "./subject-attachments-storage-path.js";
 
 const SUPABASE_URL = getSupabaseUrl();
 const SUBJECT_ATTACHMENTS_BUCKET = "subject-message-attachments";
@@ -74,8 +78,9 @@ function encodeStoragePath(path = "") {
 }
 
 async function createAttachmentSignedUrl(bucket = SUBJECT_ATTACHMENTS_BUCKET, storagePath = "") {
-  const normalizedBucket = String(bucket || SUBJECT_ATTACHMENTS_BUCKET).trim();
-  const normalizedPath = String(storagePath || "").trim();
+  const normalizedBucket = normalizeAttachmentBucket(bucket, SUBJECT_ATTACHMENTS_BUCKET);
+  const rawPath = String(storagePath ?? "");
+  const normalizedPath = normalizeSubjectAttachmentStoragePath(rawPath, normalizedBucket);
   if (!normalizedBucket || !normalizedPath) return "";
 
   const { data, error } = await supabase.storage
@@ -86,8 +91,9 @@ async function createAttachmentSignedUrl(bucket = SUBJECT_ATTACHMENTS_BUCKET, st
 }
 
 async function resolveAttachmentObjectUrl(bucket = SUBJECT_ATTACHMENTS_BUCKET, storagePath = "") {
-  const normalizedBucket = String(bucket || SUBJECT_ATTACHMENTS_BUCKET).trim();
-  const normalizedPath = String(storagePath || "").trim();
+  const normalizedBucket = normalizeAttachmentBucket(bucket, SUBJECT_ATTACHMENTS_BUCKET);
+  const rawPath = String(storagePath ?? "");
+  const normalizedPath = normalizeSubjectAttachmentStoragePath(rawPath, normalizedBucket);
   if (!normalizedBucket || !normalizedPath) return "";
   try {
     const signedUrl = await createAttachmentSignedUrl(normalizedBucket, normalizedPath);
@@ -378,19 +384,26 @@ export function createSubjectMessagesSupabaseRepository() {
     const grouped = new Map();
     const attachmentRows = Array.isArray(rows) ? rows : [];
     const resolvedObjectUrls = await Promise.all(
-      attachmentRows.map((row) => resolveAttachmentObjectUrl(row?.storage_bucket, row?.storage_path))
+      attachmentRows.map((row) => {
+        const storageBucket = normalizeAttachmentBucket(row?.storage_bucket, SUBJECT_ATTACHMENTS_BUCKET);
+        const storagePath = normalizeSubjectAttachmentStoragePath(row?.storage_path, storageBucket);
+        return resolveAttachmentObjectUrl(storageBucket, storagePath);
+      })
     );
 
     attachmentRows.forEach((row, index) => {
       const messageId = normalizeId(row?.message_id);
       if (!messageId) return;
+      const storageBucket = normalizeAttachmentBucket(row?.storage_bucket, SUBJECT_ATTACHMENTS_BUCKET);
+      const rawStoragePath = String(row?.storage_path ?? "");
+      const canonicalStoragePath = normalizeSubjectAttachmentStoragePath(rawStoragePath, storageBucket);
       const list = grouped.get(messageId) || [];
       list.push({
         ...row,
         id: normalizeId(row?.id),
         message_id: messageId,
-        storage_bucket: String(row?.storage_bucket || SUBJECT_ATTACHMENTS_BUCKET),
-        storage_path: String(row?.storage_path || ""),
+        storage_bucket: storageBucket,
+        storage_path: canonicalStoragePath,
         file_name: String(row?.file_name || ""),
         mime_type: String(row?.mime_type || ""),
         object_url: String(resolvedObjectUrls[index] || "")
@@ -609,7 +622,8 @@ export function createSubjectMessagesSupabaseRepository() {
       const subjectId = normalizeId(payload.subjectId);
       const projectId = await resolveProjectId(payload.projectId);
       const personId = await resolveCurrentPersonId();
-      const storagePath = String(payload.storagePath || "").trim();
+      const storageBucket = normalizeAttachmentBucket(payload.storageBucket, SUBJECT_ATTACHMENTS_BUCKET);
+      const storagePath = normalizeSubjectAttachmentStoragePath(payload.storagePath, storageBucket);
       const fileName = String(payload.fileName || "").trim();
 
       if (!subjectId) throw new Error("subjectId is required");
@@ -628,7 +642,7 @@ export function createSubjectMessagesSupabaseRepository() {
           project_id: projectId,
           subject_id: subjectId,
           upload_session_id: normalizeId(payload.uploadSessionId) || null,
-          storage_bucket: String(payload.storageBucket || SUBJECT_ATTACHMENTS_BUCKET),
+          storage_bucket: storageBucket,
           storage_path: storagePath,
           file_name: fileName,
           mime_type: String(payload.mimeType || "") || null,
@@ -667,10 +681,11 @@ export function createSubjectMessagesSupabaseRepository() {
       }
 
       const fileName = String(file?.name || payload.fileName || "attachment").trim();
-      const storagePath = String(
+      const rawStoragePath = String(
         payload.storagePath
           || `${projectId}/${subjectId}/temporary/${uploadSessionId}/${Date.now()}-${randomToken()}-${normalizeFileName(fileName) || "attachment"}`
-      ).trim();
+      );
+      const storagePath = normalizeSubjectAttachmentStoragePath(rawStoragePath, SUBJECT_ATTACHMENTS_BUCKET);
       if (!storagePath) throw new Error("storagePath is required");
       const resolvedMimeType = String(file?.type || payload.mimeType || inferMimeTypeFromFileName(fileName) || "").trim();
       const uploadOptions = {
@@ -678,19 +693,6 @@ export function createSubjectMessagesSupabaseRepository() {
         cacheControl: "3600"
       };
       if (resolvedMimeType) uploadOptions.contentType = resolvedMimeType;
-      console.info("[subject-attachments] upload start", {
-        bucket: SUBJECT_ATTACHMENTS_BUCKET,
-        subjectId,
-        projectId,
-        requestedProjectId,
-        subjectProjectId,
-        uploadSessionId,
-        storagePath,
-        fileName,
-        mimeType: resolvedMimeType,
-        sizeBytes: Number(file?.size || payload.sizeBytes || 0)
-      });
-
       try {
         await uploadStorageObject({
           bucket: SUBJECT_ATTACHMENTS_BUCKET,
@@ -818,8 +820,10 @@ export function createSubjectMessagesSupabaseRepository() {
       });
 
       if (currentAttachment?.storage_path) {
+        const normalizedBucket = normalizeAttachmentBucket(currentAttachment.storage_bucket, SUBJECT_ATTACHMENTS_BUCKET);
+        const normalizedStoragePath = normalizeSubjectAttachmentStoragePath(currentAttachment.storage_path, normalizedBucket);
         await fetch(
-          `${SUPABASE_URL}/storage/v1/object/${encodeURIComponent(String(currentAttachment.storage_bucket || SUBJECT_ATTACHMENTS_BUCKET))}/${encodeStoragePath(currentAttachment.storage_path)}`,
+          `${SUPABASE_URL}/storage/v1/object/${encodeURIComponent(normalizedBucket)}/${encodeStoragePath(normalizedStoragePath)}`,
           {
             method: "DELETE",
             headers: await getAuthHeaders()

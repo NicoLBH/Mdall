@@ -1144,18 +1144,12 @@ priority=${firstNonEmpty(subject.priority, "")}`
     const pendingAttachments = normalizedSubjectId && normalizeId(attachmentState.subjectId) === normalizedSubjectId
       ? attachmentState.items
       : [];
-    const hasReadyAttachment = pendingAttachments.some((attachment) => String(attachment?.uploadStatus || "").trim() === "ready" && !attachment?.error);
-    const normalizedDraftMessage = String(store?.situationsView?.commentDraft || "").trim();
-    const canSubmitComment = !!normalizedDraftMessage || hasReadyAttachment;
-    const commentButtonClassName = canSubmitComment
-      ? "gh-btn gh-btn--comment gh-btn--primary"
-      : "gh-btn gh-btn--comment";
     const actionsHtml = `
       <button class="gh-btn gh-btn--help-mode ${helpMode ? "is-on" : ""}" data-action="toggle-help" type="button">Help</button>
 
       ${issueStatusActionHtml}
 
-      <button class="${commentButtonClassName}" data-action="add-comment" type="button" ${canSubmitComment ? "" : "disabled"}>Comment</button>
+      <button class="gh-btn gh-action__main gh-btn--primary gh-btn--md" data-action="add-comment" type="button">Commenter</button>
     `;
     const mentionPopupHtml = mentionUi.open
       ? `

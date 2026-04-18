@@ -2637,6 +2637,7 @@ body.is-resizing{
   gap:8px;
   margin:10px 12px 0;
 }
+.subject-attachment-grid > :last-child{margin-bottom:5px;}
 .subject-attachment{
   border:1px solid var(--border2);
   border-radius:8px;

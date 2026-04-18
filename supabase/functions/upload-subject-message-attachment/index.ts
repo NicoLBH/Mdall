@@ -14,6 +14,7 @@ const jsonHeaders = {
 };
 
 const BUCKET = "subject-message-attachments";
+const EDGE_TRIM_PATTERN = /^[\s\u200B\u200C\u200D\u2060\uFEFF]+|[\s\u200B\u200C\u200D\u2060\uFEFF]+$/g;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -55,7 +56,8 @@ Deno.serve(async (req) => {
 
     const formData = await req.formData();
     const bucket = String(formData.get("bucket") || BUCKET).trim() || BUCKET;
-    const storagePath = String(formData.get("storagePath") || "").trim();
+    const rawStoragePath = String(formData.get("storagePath") || "");
+    const storagePath = normalizeStoragePath(rawStoragePath, bucket);
     const upsert = String(formData.get("upsert") || "true").trim().toLowerCase() === "true";
     const contentType = String(formData.get("contentType") || "").trim();
     const file = formData.get("file");
@@ -84,7 +86,8 @@ Deno.serve(async (req) => {
       userId: user.id,
       projectId,
       subjectId: subjectId || null,
-      storagePath
+      storagePath,
+      storagePathRaw: rawStoragePath
     };
 
     const { data: canAccess, error: accessError } = await userClient.rpc("can_access_project_subject_conversation", {
@@ -135,4 +138,21 @@ Deno.serve(async (req) => {
 
 function jsonResponse(body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: jsonHeaders });
+}
+
+function normalizeStoragePath(storagePath = "", bucket = "") {
+  const normalizedBucket = String(bucket || "").trim();
+  let normalizedPath = String(storagePath ?? "").replace(EDGE_TRIM_PATTERN, "");
+  normalizedPath = normalizedPath.replace(/\/{2,}/g, "/");
+  normalizedPath = normalizedPath.replace(/^\/+/, "");
+  if (normalizedBucket) {
+    const bucketPrefixPattern = new RegExp(`^${escapeRegExp(normalizedBucket)}\/+`);
+    normalizedPath = normalizedPath.replace(bucketPrefixPattern, "");
+  }
+  normalizedPath = normalizedPath.replace(/\/{2,}/g, "/");
+  return normalizedPath;
+}
+
+function escapeRegExp(value = "") {
+  return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
