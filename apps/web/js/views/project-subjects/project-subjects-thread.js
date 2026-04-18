@@ -1150,11 +1150,14 @@ priority=${firstNonEmpty(subject.priority, "")}`
     const previewMode = !!store.situationsView.commentPreviewMode;
     const helpMode = !!store.situationsView.helpMode;
 
-    const hintHtml = `
-      <div class="rapso-mention-hint comment-composer__hint">
-        <span>Astuce : mentionne <span class="mono">@rapso</span> dans ton commentaire.</span>
-      </div>
-    `;
+    const hintHtml = type === "sujet"
+      ? `
+        <button class="subject-composer-attachments-pick-btn" type="button" data-action="composer-attachments-pick">
+          <span class="subject-composer-attachments-pick-btn__icon" aria-hidden="true">${svgIcon("image")}</span>
+          <span>Ajouter un fichier</span>
+        </button>
+      `
+      : "";
 
     const issueStatusActionHtml = renderIssueStatusAction(selection);
     const replyContext = type === "sujet" ? getReplyContextForSubject(item?.id) : null;
@@ -1250,10 +1253,6 @@ priority=${firstNonEmpty(subject.priority, "")}`
         >
           ${pendingAttachmentsHtml}
         </div>
-        <button class="subject-composer-attachments-pick-btn" type="button" data-action="composer-attachments-pick">
-          <span class="subject-composer-attachments-pick-btn__icon" aria-hidden="true">${svgIcon("image")}</span>
-          <span>Ajouter un fichier</span>
-        </button>
       `
       : "";
 
