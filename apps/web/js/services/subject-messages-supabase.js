@@ -71,6 +71,84 @@ function buildAuthenticatedStorageObjectUrl(bucket = SUBJECT_ATTACHMENTS_BUCKET,
   return `${SUPABASE_URL}/storage/v1/object/authenticated/${encodeURIComponent(String(bucket || SUBJECT_ATTACHMENTS_BUCKET))}/${encodeStoragePath(normalizedPath)}`;
 }
 
+async function uploadStorageObject({
+  bucket = SUBJECT_ATTACHMENTS_BUCKET,
+  storagePath = "",
+  file,
+  mimeType = "",
+  upsert = true
+} = {}) {
+  const normalizedBucket = String(bucket || SUBJECT_ATTACHMENTS_BUCKET).trim();
+  const normalizedPath = String(storagePath || "").trim();
+  if (!normalizedBucket) throw new Error("bucket is required");
+  if (!normalizedPath) throw new Error("storagePath is required");
+  if (!(file instanceof Blob)) throw new Error("file must be a Blob");
+
+  const contentType = String(mimeType || file.type || "application/octet-stream");
+  const functionUrl = `${SUPABASE_URL}/functions/v1/upload-subject-message-attachment`;
+  const formData = new FormData();
+  formData.set("bucket", normalizedBucket);
+  formData.set("storagePath", normalizedPath);
+  formData.set("upsert", upsert ? "true" : "false");
+  formData.set("contentType", contentType);
+  formData.set("file", file, String(file?.name || "attachment.bin"));
+
+  const functionHeaders = await getAuthHeaders();
+  delete functionHeaders["Content-Type"];
+
+  try {
+    const functionResponse = await fetch(functionUrl, {
+      method: "POST",
+      headers: functionHeaders,
+      body: formData
+    });
+    if (functionResponse.ok) return true;
+
+    const functionBody = await functionResponse.text().catch(() => "");
+    const shouldFallbackToStorage =
+      functionResponse.status === 404
+      || functionResponse.status === 405
+      || functionResponse.status >= 500
+      || /cors|preflight|failed to fetch/i.test(functionBody);
+    if (!shouldFallbackToStorage) {
+      const error = new Error(`storage upload failed (${functionResponse.status}): ${functionBody || functionResponse.statusText || "edge function failed"}`);
+      error.status = functionResponse.status;
+      error.statusCode = String(functionResponse.status);
+      error.responseBody = functionBody;
+      throw error;
+    }
+    console.warn("[subject-attachments] edge upload unavailable, fallback to direct storage", {
+      status: functionResponse.status,
+      body: functionBody
+    });
+  } catch (functionError) {
+    const message = String(functionError?.message || functionError || "");
+    const isNetworkFailure = /failed to fetch|networkerror|cors|preflight/i.test(message);
+    if (!isNetworkFailure) throw functionError;
+    console.warn("[subject-attachments] edge upload network failure, fallback to direct storage", { message });
+  }
+
+  const directUrl = `${SUPABASE_URL}/storage/v1/object/${encodeURIComponent(normalizedBucket)}/${encodeStoragePath(normalizedPath)}`;
+  const directResponse = await fetch(directUrl, {
+    method: "POST",
+    headers: await getAuthHeaders({
+      "x-upsert": upsert ? "true" : "false",
+      "Content-Type": contentType
+    }),
+    body: file
+  });
+  if (!directResponse.ok) {
+    const bodyText = await directResponse.text().catch(() => "");
+    const message = bodyText || directResponse.statusText || "storage upload failed";
+    const error = new Error(`storage upload failed (${directResponse.status}): ${message}`);
+    error.status = directResponse.status;
+    error.statusCode = String(directResponse.status);
+    error.responseBody = bodyText;
+    throw error;
+  }
+  return true;
+}
+
 async function getAuthHeaders(extra = {}) {
   return buildSupabaseAuthHeaders(extra);
 }
@@ -113,8 +191,120 @@ async function resolveProjectId(explicitProjectId = "") {
   return normalizeId(await resolveCurrentBackendProjectId().catch(() => ""));
 }
 
+async function resolveProjectIdFromSubject(subjectId = "") {
+  const normalizedSubjectId = normalizeId(subjectId);
+  if (!normalizedSubjectId) return "";
+  const params = new URLSearchParams();
+  params.set("select", "project_id");
+  params.set("id", `eq.${normalizedSubjectId}`);
+  params.set("limit", "1");
+  const rows = await restFetch("/rest/v1/subjects", params).catch(() => null);
+  const row = Array.isArray(rows) ? rows[0] : rows;
+  return normalizeId(row?.project_id);
+}
+
 async function resolveCurrentPersonId() {
   return normalizeId(await resolveCurrentUserDirectoryPersonId().catch(() => ""));
+}
+
+async function gatherAttachmentUploadDiagnostics({
+  projectId = "",
+  subjectId = "",
+  uploadSessionId = "",
+  storagePath = "",
+  fileName = "",
+  mimeType = "",
+  sizeBytes = null
+} = {}) {
+  const normalizedProjectId = normalizeId(projectId);
+  const normalizedSubjectId = normalizeId(subjectId);
+
+  const [sessionResult, personResult, accessResult, subjectResult, projectResult] = await Promise.allSettled([
+    supabase.auth.getSession(),
+    rpcCall("current_person_id", {}),
+    normalizedProjectId
+      ? rpcCall("can_access_project_subject_conversation", { p_project_id: normalizedProjectId })
+      : Promise.resolve(null),
+    normalizedSubjectId
+      ? restFetch("/rest/v1/subjects", (() => {
+          const params = new URLSearchParams();
+          params.set("select", "id,project_id");
+          params.set("id", `eq.${normalizedSubjectId}`);
+          params.set("limit", "1");
+          return params;
+        })())
+      : Promise.resolve(null),
+    normalizedProjectId
+      ? restFetch("/rest/v1/projects", (() => {
+          const params = new URLSearchParams();
+          params.set("select", "id,owner_id");
+          params.set("id", `eq.${normalizedProjectId}`);
+          params.set("limit", "1");
+          return params;
+        })())
+      : Promise.resolve(null)
+  ]);
+
+  const session = sessionResult.status === "fulfilled" ? sessionResult.value : null;
+  const personValue = personResult.status === "fulfilled" ? personResult.value : null;
+  const accessValue = accessResult.status === "fulfilled" ? accessResult.value : null;
+  const subjectValue = subjectResult.status === "fulfilled" ? subjectResult.value : null;
+  const projectValue = projectResult.status === "fulfilled" ? projectResult.value : null;
+
+  const normalizedPersonId = (() => {
+    if (Array.isArray(personValue)) return normalizeId(personValue[0] || "");
+    if (personValue && typeof personValue === "object") return normalizeId(personValue.id || personValue.current_person_id || "");
+    return normalizeId(personValue);
+  })();
+
+  const canAccessProject = (() => {
+    if (typeof accessValue === "boolean") return accessValue;
+    if (Array.isArray(accessValue)) return Boolean(accessValue[0]);
+    if (accessValue && typeof accessValue === "object") {
+      if (typeof accessValue.can_access_project_subject_conversation === "boolean") {
+        return accessValue.can_access_project_subject_conversation;
+      }
+      if (typeof accessValue.result === "boolean") return accessValue.result;
+    }
+    return null;
+  })();
+
+  const subjectRow = Array.isArray(subjectValue) ? subjectValue[0] : subjectValue;
+  const projectRow = Array.isArray(projectValue) ? projectValue[0] : projectValue;
+  const sessionUser = session?.data?.session?.user || null;
+
+  return {
+    uploadContext: {
+      projectId: normalizedProjectId,
+      subjectId: normalizedSubjectId,
+      uploadSessionId: normalizeId(uploadSessionId),
+      storagePath: String(storagePath || ""),
+      fileName: String(fileName || ""),
+      mimeType: String(mimeType || ""),
+      sizeBytes: Number.isFinite(Number(sizeBytes)) ? Number(sizeBytes) : null
+    },
+    auth: {
+      userId: normalizeId(sessionUser?.id || ""),
+      email: String(sessionUser?.email || ""),
+      hasSession: Boolean(session?.data?.session)
+    },
+    rpc: {
+      currentPersonId: normalizedPersonId,
+      canAccessProjectSubjectConversation: canAccessProject
+    },
+    visibility: {
+      subjectProjectId: normalizeId(subjectRow?.project_id || ""),
+      projectOwnerId: normalizeId(projectRow?.owner_id || ""),
+      projectVisible: Boolean(projectRow?.id),
+      subjectVisible: Boolean(subjectRow?.id)
+    },
+    transport: {
+      currentPersonIdRpc: personResult.status,
+      canAccessRpc: accessResult.status,
+      subjectRead: subjectResult.status,
+      projectRead: projectResult.status
+    }
+  };
 }
 
 export function createSubjectMessagesSupabaseRepository() {
@@ -380,11 +570,21 @@ export function createSubjectMessagesSupabaseRepository() {
       }
 
       const subjectId = normalizeId(payload.subjectId);
-      const projectId = await resolveProjectId(payload.projectId);
+      const requestedProjectId = await resolveProjectId(payload.projectId);
       const uploadSessionId = normalizeId(payload.uploadSessionId);
       if (!subjectId) throw new Error("subjectId is required");
-      if (!projectId) throw new Error("projectId is required");
       if (!uploadSessionId) throw new Error("uploadSessionId is required");
+
+      const subjectProjectId = await resolveProjectIdFromSubject(subjectId);
+      const projectId = subjectProjectId || requestedProjectId;
+      if (!projectId) throw new Error("projectId is required");
+      if (requestedProjectId && subjectProjectId && requestedProjectId !== subjectProjectId) {
+        console.warn("[subject-attachments] project id mismatch, using subject.project_id", {
+          subjectId,
+          requestedProjectId,
+          subjectProjectId
+        });
+      }
 
       const fileName = String(file?.name || payload.fileName || "attachment").trim();
       const storagePath = String(
@@ -398,14 +598,71 @@ export function createSubjectMessagesSupabaseRepository() {
         cacheControl: "3600"
       };
       if (resolvedMimeType) uploadOptions.contentType = resolvedMimeType;
+      console.info("[subject-attachments] upload start", {
+        bucket: SUBJECT_ATTACHMENTS_BUCKET,
+        subjectId,
+        projectId,
+        requestedProjectId,
+        subjectProjectId,
+        uploadSessionId,
+        storagePath,
+        fileName,
+        mimeType: resolvedMimeType,
+        sizeBytes: Number(file?.size || payload.sizeBytes || 0)
+      });
 
-      const { error: uploadError } = await supabase
-        .storage
-        .from(SUBJECT_ATTACHMENTS_BUCKET)
-        .upload(storagePath, file, uploadOptions);
-      if (uploadError) {
+      try {
+        await uploadStorageObject({
+          bucket: SUBJECT_ATTACHMENTS_BUCKET,
+          storagePath,
+          file,
+          mimeType: uploadOptions.contentType || resolvedMimeType || file?.type || "",
+          upsert: Boolean(uploadOptions.upsert)
+        });
+      } catch (uploadError) {
+        const runtimeDiagnostics = await gatherAttachmentUploadDiagnostics({
+          projectId,
+          subjectId,
+          uploadSessionId,
+          storagePath,
+          fileName,
+          mimeType: resolvedMimeType,
+          sizeBytes: Number(file?.size || payload.sizeBytes || 0)
+        }).catch((error) => ({
+          diagnosticCollectionFailed: true,
+          message: String(error?.message || error || "")
+        }));
+        const diagnostic = {
+          bucket: SUBJECT_ATTACHMENTS_BUCKET,
+          subjectId,
+          projectId,
+          requestedProjectId,
+          subjectProjectId,
+          uploadSessionId,
+          storagePath,
+          fileName,
+          mimeType: resolvedMimeType,
+          sizeBytes: Number(file?.size || payload.sizeBytes || 0),
+          statusCode: uploadError?.statusCode || uploadError?.status || "unknown",
+          message: String(uploadError?.message || uploadError || ""),
+          error: uploadError,
+          responseBody: String(uploadError?.responseBody || ""),
+          runtimeDiagnostics
+        };
+        console.error("[subject-attachments] upload failed", diagnostic);
         throw new Error(
           `Attachment upload failed (${String(uploadError?.statusCode || uploadError?.status || "unknown")}): ${String(uploadError?.message || uploadError)}`
+          + ` | context=${JSON.stringify({
+            subjectId,
+            projectId,
+            requestedProjectId,
+            subjectProjectId,
+            uploadSessionId,
+            storagePath,
+            mimeType: resolvedMimeType,
+            sizeBytes: Number(file?.size || payload.sizeBytes || 0),
+            runtimeDiagnostics
+          })}`
         );
       }
 
