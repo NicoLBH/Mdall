@@ -4,6 +4,7 @@ import { resolveCurrentBackendProjectId, resolveCurrentUserDirectoryPersonId } f
 
 const SUPABASE_URL = getSupabaseUrl();
 const SUBJECT_ATTACHMENTS_BUCKET = "subject-message-attachments";
+const ATTACHMENT_SIGNED_URL_TTL_SECONDS = 60 * 60 * 24;
 
 function normalizeId(value) {
   return String(value || "").trim();
@@ -69,6 +70,35 @@ function buildAuthenticatedStorageObjectUrl(bucket = SUBJECT_ATTACHMENTS_BUCKET,
   const normalizedPath = String(storagePath || "").trim();
   if (!normalizedPath) return "";
   return `${SUPABASE_URL}/storage/v1/object/authenticated/${encodeURIComponent(String(bucket || SUBJECT_ATTACHMENTS_BUCKET))}/${encodeStoragePath(normalizedPath)}`;
+}
+
+async function createAttachmentSignedUrl(bucket = SUBJECT_ATTACHMENTS_BUCKET, storagePath = "") {
+  const normalizedBucket = String(bucket || SUBJECT_ATTACHMENTS_BUCKET).trim();
+  const normalizedPath = String(storagePath || "").trim();
+  if (!normalizedBucket || !normalizedPath) return "";
+
+  const { data, error } = await supabase.storage
+    .from(normalizedBucket)
+    .createSignedUrl(normalizedPath, ATTACHMENT_SIGNED_URL_TTL_SECONDS);
+  if (error) throw error;
+  return String(data?.signedUrl || "").trim();
+}
+
+async function resolveAttachmentObjectUrl(bucket = SUBJECT_ATTACHMENTS_BUCKET, storagePath = "") {
+  const normalizedBucket = String(bucket || SUBJECT_ATTACHMENTS_BUCKET).trim();
+  const normalizedPath = String(storagePath || "").trim();
+  if (!normalizedBucket || !normalizedPath) return "";
+  try {
+    const signedUrl = await createAttachmentSignedUrl(normalizedBucket, normalizedPath);
+    if (signedUrl) return signedUrl;
+  } catch (error) {
+    console.warn("[subject-attachments] signed url failed; fallback to authenticated object url", {
+      bucket: normalizedBucket,
+      storagePath: normalizedPath,
+      message: String(error?.message || error || "")
+    });
+  }
+  return buildAuthenticatedStorageObjectUrl(normalizedBucket, normalizedPath);
 }
 
 async function uploadStorageObject({
@@ -341,7 +371,12 @@ export function createSubjectMessagesSupabaseRepository() {
     params.append("order", "created_at.asc");
     const rows = await restFetch("/rest/v1/subject_message_attachments", params);
     const grouped = new Map();
-    (Array.isArray(rows) ? rows : []).forEach((row) => {
+    const attachmentRows = Array.isArray(rows) ? rows : [];
+    const resolvedObjectUrls = await Promise.all(
+      attachmentRows.map((row) => resolveAttachmentObjectUrl(row?.storage_bucket, row?.storage_path))
+    );
+
+    attachmentRows.forEach((row, index) => {
       const messageId = normalizeId(row?.message_id);
       if (!messageId) return;
       const list = grouped.get(messageId) || [];
@@ -353,7 +388,7 @@ export function createSubjectMessagesSupabaseRepository() {
         storage_path: String(row?.storage_path || ""),
         file_name: String(row?.file_name || ""),
         mime_type: String(row?.mime_type || ""),
-        object_url: buildAuthenticatedStorageObjectUrl(row?.storage_bucket, row?.storage_path)
+        object_url: String(resolvedObjectUrls[index] || "")
       });
       grouped.set(messageId, list);
     });
@@ -700,7 +735,7 @@ export function createSubjectMessagesSupabaseRepository() {
       });
       return {
         ...attachment,
-        object_url: buildAuthenticatedStorageObjectUrl(SUBJECT_ATTACHMENTS_BUCKET, storagePath)
+        object_url: await resolveAttachmentObjectUrl(SUBJECT_ATTACHMENTS_BUCKET, storagePath)
       };
     },
 
