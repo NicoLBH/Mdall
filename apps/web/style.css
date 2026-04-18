@@ -2668,9 +2668,14 @@ body.is-resizing{
   display:flex;
   align-items:flex-start;
   gap:8px;
+  border: solid 1px var(--border2);
+  border-radius: var(--radius);
 }
 .subject-composer-attachment-remove{
   margin-left:auto;
+  margin-top: 8px;
+  margin-right: 8px;
+  padding:4px;
   border:none;
   background:transparent;
   color:var(--muted);
@@ -2687,8 +2692,6 @@ body.is-resizing{
 }
 .subject-attachment-grid > :last-child{margin-bottom:8px;}
 .subject-attachment{
-  border:1px solid var(--border2);
-  border-radius:8px;
   overflow:hidden;
   background:rgba(13,17,23,.3);
 }
