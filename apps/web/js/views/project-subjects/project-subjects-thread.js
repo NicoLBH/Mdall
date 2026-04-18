@@ -755,7 +755,15 @@ priority=${firstNonEmpty(subject.priority, "")}`
     const mimeType = String(attachment?.mime_type || attachment?.mimeType || "").toLowerCase();
     const extension = String(fileName.split(".").pop() || "").toLowerCase();
     const previewUrl = String(attachment?.localPreviewUrl || attachment?.previewUrl || attachment?.object_url || "");
-    const objectUrl = String(attachment?.remoteObjectUrl || attachment?.object_url || previewUrl || "");
+    const downloadUrl = String(
+      attachment?.remoteObjectUrl
+      || attachment?.download_url
+      || attachment?.signed_url
+      || attachment?.url
+      || attachment?.object_url
+      || previewUrl
+      || ""
+    );
     const isImage = options.forceImage || mimeType.startsWith("image/");
     const uploadState = String(options.uploadState || "").trim();
     const typeIcon = mimeType === "application/pdf" || extension === "pdf"
@@ -776,7 +784,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
     if (isImage && previewUrl) {
       return `
         <div class="subject-attachment subject-attachment--image">
-          <a href="${escapeHtml(objectUrl || previewUrl)}" target="_blank" rel="noopener noreferrer">
+          <a href="${escapeHtml(downloadUrl || previewUrl)}" target="_blank" rel="noopener noreferrer">
             <img src="${escapeHtml(previewUrl)}" alt="${escapeHtml(fileName)}" loading="lazy" />
           </a>
           <div class="subject-attachment__caption mono-small">${escapeHtml(fileName)}</div>
@@ -789,13 +797,13 @@ priority=${firstNonEmpty(subject.priority, "")}`
       <div class="subject-attachment subject-attachment--file">
         <div class="subject-attachment__file-icon" aria-hidden="true">${svgIcon(typeIcon)}</div>
         <div class="subject-attachment__file-body">
-          ${objectUrl
-            ? `<a class="subject-attachment__file-name mono-small subject-attachment__file-link--name" href="${escapeHtml(objectUrl)}" rel="noopener noreferrer" download="${escapeHtml(fileName)}">${escapeHtml(fileName)}</a>`
+          ${downloadUrl
+            ? `<a class="subject-attachment__file-name mono-small subject-attachment__file-link--name" href="${escapeHtml(downloadUrl)}" rel="noopener noreferrer" download="${escapeHtml(fileName)}">${escapeHtml(fileName)}</a>`
             : `<div class="subject-attachment__file-name mono-small">${escapeHtml(fileName)}</div>`}
           <div class="subject-attachment__file-meta mono-small">${escapeHtml(metaLine || "fichier")}</div>
           ${progressHtml}
         </div>
-        ${objectUrl ? `<a class="subject-attachment__file-link" href="${escapeHtml(objectUrl)}" rel="noopener noreferrer" download="${escapeHtml(fileName)}">Télécharger</a>` : ""}
+        ${downloadUrl ? `<a class="subject-attachment__file-link" href="${escapeHtml(downloadUrl)}" rel="noopener noreferrer" download="${escapeHtml(fileName)}">Télécharger</a>` : ""}
       </div>
     `;
   }
