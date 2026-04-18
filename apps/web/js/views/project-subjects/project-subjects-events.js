@@ -65,7 +65,10 @@ export function createProjectSubjectsEvents(config) {
     editSubjectMessage,
     deleteSubjectMessage,
     getMentionUiState,
-    listCollaboratorsForMentions
+    getComposerAttachmentsState,
+    listCollaboratorsForMentions,
+    uploadAttachmentFile,
+    removeTemporaryAttachment
   } = config;
 
   let detachDropdownDocumentEvents = null;
@@ -673,6 +676,132 @@ export function createProjectSubjectsEvents(config) {
 
     const commentTextarea = root.querySelector("#humanCommentBox");
     if (commentTextarea) {
+      const getComposerAttachments = () => {
+        if (typeof getComposerAttachmentsState === "function") return getComposerAttachmentsState();
+        if (!store.situationsView.subjectComposerAttachments || typeof store.situationsView.subjectComposerAttachments !== "object") {
+          store.situationsView.subjectComposerAttachments = {
+            subjectId: "",
+            uploadSessionId: "",
+            items: []
+          };
+        }
+        if (!Array.isArray(store.situationsView.subjectComposerAttachments.items)) {
+          store.situationsView.subjectComposerAttachments.items = [];
+        }
+        return store.situationsView.subjectComposerAttachments;
+      };
+
+      const createUploadSessionId = () => {
+        try {
+          if (window?.crypto?.randomUUID) return String(window.crypto.randomUUID());
+        } catch {}
+        return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      };
+
+      const ensureComposerAttachmentContext = () => {
+        const selection = getScopedSelection(root);
+        const state = getComposerAttachments();
+        const subjectId = selection?.type === "sujet" ? String(selection?.item?.id || "").trim() : "";
+        if (!subjectId) return { subjectId: "", state };
+        if (String(state.subjectId || "") !== subjectId) {
+          state.subjectId = subjectId;
+          state.uploadSessionId = "";
+          state.items = [];
+        }
+        if (!String(state.uploadSessionId || "")) {
+          state.uploadSessionId = createUploadSessionId();
+        }
+        return { subjectId, state };
+      };
+
+      const isImageFile = (file) => String(file?.type || "").toLowerCase().startsWith("image/");
+      const toObjectUrl = (file) => {
+        try {
+          return isImageFile(file) && window?.URL?.createObjectURL ? window.URL.createObjectURL(file) : "";
+        } catch {
+          return "";
+        }
+      };
+
+      const revokeObjectUrl = (value) => {
+        try {
+          if (value && window?.URL?.revokeObjectURL) window.URL.revokeObjectURL(value);
+        } catch {}
+      };
+
+      const addComposerFiles = async (files = []) => {
+        const list = Array.from(files || []).filter((entry) => !!entry);
+        if (!list.length) return;
+        const selection = getScopedSelection(root);
+        if (selection?.type !== "sujet") return;
+        const projectId = String(selection?.item?.project_id || "").trim();
+        if (!projectId) {
+          showError("Projet introuvable pour l’upload des pièces jointes.");
+          return;
+        }
+        const { subjectId, state } = ensureComposerAttachmentContext();
+        if (!subjectId || typeof uploadAttachmentFile !== "function") return;
+
+        for (const file of list) {
+          const tempId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+          const localPreview = toObjectUrl(file);
+          const pending = {
+            id: "",
+            tempId,
+            file_name: String(file?.name || "fichier"),
+            mime_type: String(file?.type || ""),
+            size_bytes: Number(file?.size || 0),
+            previewUrl: localPreview,
+            isImage: isImageFile(file),
+            uploading: true,
+            error: ""
+          };
+          state.items.push(pending);
+          rerenderScope(root);
+
+          try {
+            const uploaded = await uploadAttachmentFile({
+              subjectId,
+              projectId,
+              uploadSessionId: state.uploadSessionId,
+              file,
+              sortOrder: state.items.length - 1
+            });
+            pending.id = String(uploaded?.id || "");
+            pending.storage_path = String(uploaded?.storage_path || "");
+            pending.object_url = String(uploaded?.object_url || "");
+            pending.uploading = false;
+            pending.error = "";
+            if (pending.isImage && pending.object_url) {
+              revokeObjectUrl(localPreview);
+              pending.previewUrl = pending.object_url;
+            }
+          } catch (error) {
+            pending.uploading = false;
+            pending.error = String(error?.message || error || "Erreur d'upload");
+          }
+          rerenderScope(root);
+        }
+      };
+
+      const removeComposerAttachmentById = async (tempId = "", attachmentId = "") => {
+        const state = getComposerAttachments();
+        const normalizedAttachmentId = String(attachmentId || "").trim();
+        const targetIndex = state.items.findIndex((entry) => String(entry?.tempId || "") === String(tempId || "") || String(entry?.id || "") === normalizedAttachmentId);
+        if (targetIndex < 0) return;
+        const current = state.items[targetIndex];
+        state.items.splice(targetIndex, 1);
+        rerenderScope(root);
+        revokeObjectUrl(String(current?.previewUrl || ""));
+        if (normalizedAttachmentId && typeof removeTemporaryAttachment === "function") {
+          try {
+            await removeTemporaryAttachment({ attachmentId: normalizedAttachmentId });
+          } catch (error) {
+            console.warn("[subject-attachments] remove temporary attachment failed", error);
+          }
+        }
+      };
+
       let mentionCollaborators = [];
       let mentionCollaboratorsLoaded = false;
       let mentionLoadPromise = null;
@@ -832,6 +961,49 @@ export function createProjectSubjectsEvents(config) {
             personId: String(btn.dataset.personId || "").trim(),
             label: String(btn.dataset.label || "").trim()
           });
+        };
+      });
+
+      const attachmentInput = root.querySelector("[data-role='subject-composer-file-input']");
+      const attachmentDropzone = root.querySelector("[data-role='subject-composer-dropzone']");
+      root.querySelectorAll("[data-action='composer-attachments-pick']").forEach((btn) => {
+        btn.onclick = () => attachmentInput?.click();
+      });
+      if (attachmentInput) {
+        attachmentInput.addEventListener("change", async (event) => {
+          const files = Array.from(event?.target?.files || []);
+          if (files.length) await addComposerFiles(files);
+          attachmentInput.value = "";
+        });
+      }
+
+      if (attachmentDropzone) {
+        ["dragenter", "dragover"].forEach((eventName) => {
+          attachmentDropzone.addEventListener(eventName, (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            attachmentDropzone.classList.add("is-dragover");
+          });
+        });
+        ["dragleave", "dragend", "drop"].forEach((eventName) => {
+          attachmentDropzone.addEventListener(eventName, (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            attachmentDropzone.classList.remove("is-dragover");
+          });
+        });
+        attachmentDropzone.addEventListener("drop", async (event) => {
+          const files = Array.from(event?.dataTransfer?.files || []);
+          if (files.length) await addComposerFiles(files);
+        });
+      }
+
+      root.querySelectorAll("[data-action='composer-attachment-remove']").forEach((btn) => {
+        btn.onclick = async () => {
+          await removeComposerAttachmentById(
+            String(btn.dataset.tempId || ""),
+            String(btn.dataset.attachmentId || "")
+          );
         };
       });
 

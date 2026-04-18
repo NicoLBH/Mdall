@@ -293,6 +293,7 @@ const {
   setDecision,
   getDecision,
   getMentionUiState,
+  getComposerAttachmentsState,
   getThreadForSelection,
   getInlineReplyUiState,
   renderThreadBlock,
@@ -390,7 +391,10 @@ const projectSubjectsEvents = createProjectSubjectsEvents({
   editSubjectMessage: (...args) => editSubjectMessage(...args),
   deleteSubjectMessage: (...args) => deleteSubjectMessage(...args),
   getMentionUiState: (...args) => getMentionUiState(...args),
+  getComposerAttachmentsState: (...args) => getComposerAttachmentsState(...args),
   listCollaboratorsForMentions: (...args) => subjectMessagesService.listCollaboratorsForMentions(...args),
+  uploadAttachmentFile: (...args) => subjectMessagesService.uploadAttachmentFile(...args),
+  removeTemporaryAttachment: (...args) => subjectMessagesService.removeTemporaryAttachment(...args),
   getSubjectsCurrentRoot: () => subjectsCurrentRoot,
   resolveCurrentUserAssigneeId: () => resolveCurrentUserDirectoryPersonId({
     email: store.user?.email || "",
