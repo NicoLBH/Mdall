@@ -1719,6 +1719,25 @@ export function createProjectSubjectsEvents(config) {
         uploadSessionId: String(replyUi.uploadSessionByMessageId[normalizedMessageId] || "")
       };
     };
+    const canSubmitInlineReply = (messageId = "") => {
+      const normalizedMessageId = String(messageId || "").trim();
+      if (!normalizedMessageId) return false;
+      const replyUi = resolveInlineReplyUiState();
+      const message = String(replyUi.draftsByMessageId?.[normalizedMessageId] || "").trim();
+      if (message) return true;
+      const inlineAttachmentsState = getInlineReplyAttachmentsState(normalizedMessageId);
+      return Array.isArray(inlineAttachmentsState?.items)
+        && inlineAttachmentsState.items.some((attachment) => String(attachment?.uploadStatus || "").trim() === "ready" && !attachment?.error);
+    };
+    const syncInlineReplySubmitButton = (messageId = "") => {
+      const normalizedMessageId = String(messageId || "").trim();
+      if (!normalizedMessageId) return;
+      const submitButton = root.querySelector(
+        `[data-action='thread-reply-submit'][data-message-id="${selectorValue(normalizedMessageId)}"]`
+      );
+      if (!submitButton) return;
+      submitButton.disabled = !canSubmitInlineReply(normalizedMessageId);
+    };
     const clearInlineReplyAttachmentsState = (messageId = "", { keepUploadSession = false } = {}) => {
       const normalizedMessageId = String(messageId || "").trim();
       if (!normalizedMessageId) return;
@@ -1911,12 +1930,15 @@ export function createProjectSubjectsEvents(config) {
         if (!messageId) return;
         const replyUi = resolveInlineReplyUiState();
         replyUi.draftsByMessageId[messageId] = String(textarea.value || "");
+        syncInlineReplySubmitButton(messageId);
       });
       textarea.addEventListener("keydown", (event) => {
         if (!(event.ctrlKey || event.metaKey) || event.key !== "Enter") return;
         event.preventDefault();
         const submitButton = textarea.closest(".thread-inline-reply-editor")?.querySelector("[data-action='thread-reply-submit'][data-message-id]");
-        submitButton?.click();
+        const messageId = String(textarea.dataset.threadReplyDraft || "").trim();
+        if (messageId) syncInlineReplySubmitButton(messageId);
+        if (submitButton && !submitButton.disabled) submitButton.click();
       });
     });
 
