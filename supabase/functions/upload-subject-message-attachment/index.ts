@@ -31,7 +31,8 @@ Deno.serve(async (req) => {
     const authHeader = req.headers.get("Authorization") ?? req.headers.get("authorization") ?? "";
 
     if (!supabaseUrl || !supabaseAnonKey || !serviceRoleKey) {
-      throw new Error("Missing Supabase environment variables.");
+      console.error("[upload-subject-message-attachment] missing Supabase environment variables");
+      return jsonResponse({ ok: false, error: "Server misconfiguration." }, 500);
     }
     if (!authHeader) {
       return jsonResponse({ ok: false, error: "Missing authorization header." }, 401);
@@ -65,23 +66,40 @@ Deno.serve(async (req) => {
     if (!storagePath) {
       return jsonResponse({ ok: false, error: "storagePath is required." }, 400);
     }
+    if (storagePath.startsWith("/") || storagePath.includes("..")) {
+      return jsonResponse({ ok: false, error: "Invalid storage path." }, 400);
+    }
     if (!(file instanceof File)) {
       return jsonResponse({ ok: false, error: "file is required." }, 400);
     }
+    if (file.size <= 0) {
+      return jsonResponse({ ok: false, error: "file is empty." }, 400);
+    }
 
-    const projectId = storagePath.split("/")[0] || "";
+    const [projectId = "", subjectId = ""] = storagePath.split("/");
     if (!projectId) {
       return jsonResponse({ ok: false, error: "Invalid storage path." }, 400);
     }
+    const logContext = {
+      userId: user.id,
+      projectId,
+      subjectId: subjectId || null,
+      storagePath
+    };
 
     const { data: canAccess, error: accessError } = await userClient.rpc("can_access_project_subject_conversation", {
       p_project_id: projectId
     });
     if (accessError) {
-      console.error("[upload-subject-message-attachment] access rpc failed", accessError);
+      console.error("[upload-subject-message-attachment] access rpc failed", {
+        ...logContext,
+        message: accessError.message,
+        code: accessError.code
+      });
       return jsonResponse({ ok: false, error: "Project access check failed." }, 403);
     }
     if (!canAccess) {
+      console.warn("[upload-subject-message-attachment] access denied", logContext);
       return jsonResponse({ ok: false, error: "Access denied." }, 403);
     }
 
@@ -92,6 +110,7 @@ Deno.serve(async (req) => {
     });
     if (uploadError) {
       console.error("[upload-subject-message-attachment] upload failed", {
+        ...logContext,
         message: uploadError.message,
         statusCode: uploadError.statusCode,
         error: uploadError
