@@ -2353,7 +2353,7 @@ async function applyCommentAction(root) {
   const hasAttachmentsForTarget = target.type === "sujet"
     && String(composerAttachments?.subjectId || "").trim() === String(target.id || "").trim()
     && Array.isArray(composerAttachments?.items)
-    && composerAttachments.items.some((entry) => !entry?.uploading && !entry?.error);
+    && composerAttachments.items.some((entry) => String(entry?.uploadStatus || "").trim() === "ready" && !entry?.error);
   const uploadSessionId = hasAttachmentsForTarget ? String(composerAttachments?.uploadSessionId || "").trim() : "";
 
   await addComment(target.type, target.id, message, {
@@ -2372,6 +2372,17 @@ async function applyCommentAction(root) {
     store.situationsView.replyContext.parentPreview = "";
   }
   if (store.situationsView?.subjectComposerAttachments && target.type === "sujet") {
+    const pendingItems = Array.isArray(store.situationsView.subjectComposerAttachments.items)
+      ? store.situationsView.subjectComposerAttachments.items
+      : [];
+    pendingItems.forEach((entry) => {
+      try {
+        const localPreviewUrl = String(entry?.localPreviewUrl || "").trim();
+        if (localPreviewUrl && window?.URL?.revokeObjectURL) {
+          window.URL.revokeObjectURL(localPreviewUrl);
+        }
+      } catch {}
+    });
     store.situationsView.subjectComposerAttachments.subjectId = String(target.id || "");
     store.situationsView.subjectComposerAttachments.uploadSessionId = "";
     store.situationsView.subjectComposerAttachments.items = [];

@@ -102,6 +102,29 @@ async function resolveAttachmentObjectUrl(bucket = SUBJECT_ATTACHMENTS_BUCKET, s
   return "";
 }
 
+async function resolveAttachmentObjectUrlWithRetry(
+  bucket = SUBJECT_ATTACHMENTS_BUCKET,
+  storagePath = "",
+  retryDelaysMs = []
+) {
+  const delays = Array.isArray(retryDelaysMs) ? retryDelaysMs : [];
+  let lastError = null;
+  for (let attempt = 0; attempt <= delays.length; attempt += 1) {
+    try {
+      const objectUrl = await resolveAttachmentObjectUrl(bucket, storagePath);
+      if (objectUrl) return objectUrl;
+    } catch (error) {
+      lastError = error;
+    }
+    const delayMs = Number(delays[attempt] || 0);
+    if (attempt < delays.length && delayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+  if (lastError) throw lastError;
+  return "";
+}
+
 async function uploadStorageObject({
   bucket = SUBJECT_ATTACHMENTS_BUCKET,
   storagePath = "",
@@ -715,7 +738,11 @@ export function createSubjectMessagesSupabaseRepository() {
         height: payload.height,
         sortOrder: payload.sortOrder
       });
-      const objectUrl = await resolveAttachmentObjectUrl(SUBJECT_ATTACHMENTS_BUCKET, storagePath).catch((error) => {
+      const objectUrl = await resolveAttachmentObjectUrlWithRetry(
+        SUBJECT_ATTACHMENTS_BUCKET,
+        storagePath,
+        [300, 800, 1500]
+      ).catch((error) => {
         console.warn("[subject-attachments] object url resolution failed; preview disabled", {
           bucket: SUBJECT_ATTACHMENTS_BUCKET,
           storagePath,

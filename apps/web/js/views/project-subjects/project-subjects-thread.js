@@ -711,7 +711,8 @@ priority=${firstNonEmpty(subject.priority, "")}`
   function renderAttachmentTile(attachment = {}, options = {}) {
     const fileName = String(attachment?.file_name || attachment?.fileName || "Pièce jointe");
     const mimeType = String(attachment?.mime_type || attachment?.mimeType || "").toLowerCase();
-    const objectUrl = String(attachment?.object_url || attachment?.previewUrl || "");
+    const previewUrl = String(attachment?.localPreviewUrl || attachment?.previewUrl || attachment?.object_url || "");
+    const objectUrl = String(attachment?.remoteObjectUrl || attachment?.object_url || previewUrl || "");
     const isImage = options.forceImage || mimeType.startsWith("image/");
     const isPdf = mimeType === "application/pdf";
     const uploadState = String(options.uploadState || "").trim();
@@ -722,11 +723,11 @@ priority=${firstNonEmpty(subject.priority, "")}`
         : ""
     ].filter(Boolean).join(" · ");
 
-    if (isImage && objectUrl) {
+    if (isImage && previewUrl) {
       return `
         <div class="subject-attachment subject-attachment--image">
-          <a href="${escapeHtml(objectUrl)}" target="_blank" rel="noopener noreferrer">
-            <img src="${escapeHtml(objectUrl)}" alt="${escapeHtml(fileName)}" loading="lazy" />
+          <a href="${escapeHtml(objectUrl || previewUrl)}" target="_blank" rel="noopener noreferrer">
+            <img src="${escapeHtml(previewUrl)}" alt="${escapeHtml(fileName)}" loading="lazy" />
           </a>
           <div class="subject-attachment__caption mono-small">${escapeHtml(fileName)}</div>
           ${uploadState ? `<div class="subject-attachment__state mono-small">${escapeHtml(uploadState)}</div>` : ""}
@@ -1150,8 +1151,8 @@ priority=${firstNonEmpty(subject.priority, "")}`
                 forceImage: !!attachment.isImage,
                 uploadState: attachment.error
                   ? "Erreur d’upload"
-                  : attachment.uploading
-                    ? "Upload en cours…"
+                  : String(attachment.uploadStatus || "").trim() === "uploading"
+                    ? "Envoi..."
                     : "Prêt"
               })}
               <button

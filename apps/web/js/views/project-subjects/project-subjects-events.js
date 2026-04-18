@@ -704,9 +704,9 @@ export function createProjectSubjectsEvents(config) {
         const subjectId = selection?.type === "sujet" ? String(selection?.item?.id || "").trim() : "";
         if (!subjectId) return { subjectId: "", state };
         if (String(state.subjectId || "") !== subjectId) {
+          clearComposerAttachmentItems(state);
           state.subjectId = subjectId;
           state.uploadSessionId = "";
-          state.items = [];
         }
         if (!String(state.uploadSessionId || "")) {
           state.uploadSessionId = createUploadSessionId();
@@ -727,6 +727,16 @@ export function createProjectSubjectsEvents(config) {
         try {
           if (value && window?.URL?.revokeObjectURL) window.URL.revokeObjectURL(value);
         } catch {}
+      };
+
+      const releaseAttachmentPreviewUrls = (attachment = {}) => {
+        revokeObjectUrl(String(attachment?.localPreviewUrl || ""));
+      };
+
+      const clearComposerAttachmentItems = (state) => {
+        const items = Array.isArray(state?.items) ? state.items : [];
+        items.forEach((entry) => releaseAttachmentPreviewUrls(entry));
+        if (state && typeof state === "object") state.items = [];
       };
 
       const addComposerFiles = async (files = []) => {
@@ -751,9 +761,12 @@ export function createProjectSubjectsEvents(config) {
             file_name: String(file?.name || "fichier"),
             mime_type: String(file?.type || ""),
             size_bytes: Number(file?.size || 0),
+            localPreviewUrl: localPreview,
+            remoteObjectUrl: "",
             previewUrl: localPreview,
             isImage: isImageFile(file),
-            uploading: true,
+            uploadStatus: "uploading",
+            previewStatus: localPreview ? "local" : "none",
             error: ""
           };
           state.items.push(pending);
@@ -769,14 +782,25 @@ export function createProjectSubjectsEvents(config) {
             });
             pending.id = String(uploaded?.id || "");
             pending.storage_path = String(uploaded?.storage_path || "");
-            pending.object_url = String(uploaded?.object_url || "");
-            pending.uploading = false;
+            pending.remoteObjectUrl = String(uploaded?.object_url || "");
+            pending.object_url = pending.remoteObjectUrl;
+            pending.uploadStatus = "ready";
             pending.error = "";
-            if (pending.isImage && !pending.previewUrl && pending.object_url) {
-              pending.previewUrl = pending.object_url;
+            if (pending.isImage) {
+              if (pending.remoteObjectUrl) {
+                pending.previewStatus = pending.localPreviewUrl ? "local" : "remote";
+                if (!pending.previewUrl) pending.previewUrl = pending.remoteObjectUrl;
+              } else if (pending.localPreviewUrl) {
+                pending.previewStatus = "local";
+              } else {
+                pending.previewStatus = "none";
+              }
+            } else {
+              pending.previewStatus = "none";
             }
           } catch (error) {
-            pending.uploading = false;
+            pending.uploadStatus = "error";
+            pending.previewStatus = pending.localPreviewUrl ? "local" : "none";
             pending.error = String(error?.message || error || "Erreur d'upload");
           }
           rerenderScope(root);
@@ -791,7 +815,7 @@ export function createProjectSubjectsEvents(config) {
         const current = state.items[targetIndex];
         state.items.splice(targetIndex, 1);
         rerenderScope(root);
-        revokeObjectUrl(String(current?.previewUrl || ""));
+        releaseAttachmentPreviewUrls(current);
         if (normalizedAttachmentId && typeof removeTemporaryAttachment === "function") {
           try {
             await removeTemporaryAttachment({ attachmentId: normalizedAttachmentId });
