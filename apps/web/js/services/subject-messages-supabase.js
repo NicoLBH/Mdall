@@ -84,33 +84,68 @@ async function uploadStorageObject({
   if (!normalizedPath) throw new Error("storagePath is required");
   if (!(file instanceof Blob)) throw new Error("file must be a Blob");
 
-  const url = `${SUPABASE_URL}/functions/v1/upload-subject-message-attachment`;
+  const contentType = String(mimeType || file.type || "application/octet-stream");
+  const functionUrl = `${SUPABASE_URL}/functions/v1/upload-subject-message-attachment`;
   const formData = new FormData();
   formData.set("bucket", normalizedBucket);
   formData.set("storagePath", normalizedPath);
   formData.set("upsert", upsert ? "true" : "false");
-  formData.set("contentType", String(mimeType || file.type || "application/octet-stream"));
+  formData.set("contentType", contentType);
   formData.set("file", file, String(file?.name || "attachment.bin"));
 
-  const headers = await getAuthHeaders();
-  delete headers["Content-Type"];
+  const functionHeaders = await getAuthHeaders();
+  delete functionHeaders["Content-Type"];
 
-  const response = await fetch(url, {
+  try {
+    const functionResponse = await fetch(functionUrl, {
+      method: "POST",
+      headers: functionHeaders,
+      body: formData
+    });
+    if (functionResponse.ok) return true;
+
+    const functionBody = await functionResponse.text().catch(() => "");
+    const shouldFallbackToStorage =
+      functionResponse.status === 404
+      || functionResponse.status === 405
+      || functionResponse.status >= 500
+      || /cors|preflight|failed to fetch/i.test(functionBody);
+    if (!shouldFallbackToStorage) {
+      const error = new Error(`storage upload failed (${functionResponse.status}): ${functionBody || functionResponse.statusText || "edge function failed"}`);
+      error.status = functionResponse.status;
+      error.statusCode = String(functionResponse.status);
+      error.responseBody = functionBody;
+      throw error;
+    }
+    console.warn("[subject-attachments] edge upload unavailable, fallback to direct storage", {
+      status: functionResponse.status,
+      body: functionBody
+    });
+  } catch (functionError) {
+    const message = String(functionError?.message || functionError || "");
+    const isNetworkFailure = /failed to fetch|networkerror|cors|preflight/i.test(message);
+    if (!isNetworkFailure) throw functionError;
+    console.warn("[subject-attachments] edge upload network failure, fallback to direct storage", { message });
+  }
+
+  const directUrl = `${SUPABASE_URL}/storage/v1/object/${encodeURIComponent(normalizedBucket)}/${encodeStoragePath(normalizedPath)}`;
+  const directResponse = await fetch(directUrl, {
     method: "POST",
-    headers,
-    body: formData
+    headers: await getAuthHeaders({
+      "x-upsert": upsert ? "true" : "false",
+      "Content-Type": contentType
+    }),
+    body: file
   });
-
-  if (!response.ok) {
-    const bodyText = await response.text().catch(() => "");
-    const message = bodyText || response.statusText || "storage upload failed";
-    const error = new Error(`storage upload failed (${response.status}): ${message}`);
-    error.status = response.status;
-    error.statusCode = String(response.status);
+  if (!directResponse.ok) {
+    const bodyText = await directResponse.text().catch(() => "");
+    const message = bodyText || directResponse.statusText || "storage upload failed";
+    const error = new Error(`storage upload failed (${directResponse.status}): ${message}`);
+    error.status = directResponse.status;
+    error.statusCode = String(directResponse.status);
     error.responseBody = bodyText;
     throw error;
   }
-
   return true;
 }
 
