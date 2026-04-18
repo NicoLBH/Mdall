@@ -73,12 +73,6 @@ function encodeStoragePath(path = "") {
     .join("/");
 }
 
-function buildAuthenticatedStorageObjectUrl(bucket = SUBJECT_ATTACHMENTS_BUCKET, storagePath = "") {
-  const normalizedPath = String(storagePath || "").trim();
-  if (!normalizedPath) return "";
-  return `${SUPABASE_URL}/storage/v1/object/authenticated/${encodeURIComponent(String(bucket || SUBJECT_ATTACHMENTS_BUCKET))}/${encodeStoragePath(normalizedPath)}`;
-}
-
 async function createAttachmentSignedUrl(bucket = SUBJECT_ATTACHMENTS_BUCKET, storagePath = "") {
   const normalizedBucket = String(bucket || SUBJECT_ATTACHMENTS_BUCKET).trim();
   const normalizedPath = String(storagePath || "").trim();
@@ -99,13 +93,13 @@ async function resolveAttachmentObjectUrl(bucket = SUBJECT_ATTACHMENTS_BUCKET, s
     const signedUrl = await createAttachmentSignedUrl(normalizedBucket, normalizedPath);
     if (signedUrl) return signedUrl;
   } catch (error) {
-    console.warn("[subject-attachments] signed url failed; fallback to authenticated object url", {
+    console.warn("[subject-attachments] signed url failed; preview disabled until next refresh", {
       bucket: normalizedBucket,
       storagePath: normalizedPath,
       message: String(error?.message || error || "")
     });
   }
-  return buildAuthenticatedStorageObjectUrl(normalizedBucket, normalizedPath);
+  return "";
 }
 
 async function uploadStorageObject({
@@ -721,9 +715,18 @@ export function createSubjectMessagesSupabaseRepository() {
         height: payload.height,
         sortOrder: payload.sortOrder
       });
+      const objectUrl = await resolveAttachmentObjectUrl(SUBJECT_ATTACHMENTS_BUCKET, storagePath).catch((error) => {
+        console.warn("[subject-attachments] object url resolution failed; preview disabled", {
+          bucket: SUBJECT_ATTACHMENTS_BUCKET,
+          storagePath,
+          message: String(error?.message || error || "")
+        });
+        return "";
+      });
+
       return {
         ...attachment,
-        object_url: await resolveAttachmentObjectUrl(SUBJECT_ATTACHMENTS_BUCKET, storagePath)
+        object_url: objectUrl
       };
     },
 
