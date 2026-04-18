@@ -1,5 +1,4 @@
 import { getAuthorIdentity } from "../ui/author-identity.js";
-import { renderUploadProgressBar } from "../ui/upload-progress.js";
 export function createProjectSubjectsThread(config = {}) {
   const {
     store,
@@ -200,12 +199,16 @@ export function createProjectSubjectsThread(config = {}) {
     if (!state.inlineReplyUi || typeof state.inlineReplyUi !== "object") {
       state.inlineReplyUi = {
         expandedMessageId: "",
-        draftsByMessageId: {}
+        draftsByMessageId: {},
+        previewByMessageId: {}
       };
     }
     if (typeof state.inlineReplyUi.expandedMessageId !== "string") state.inlineReplyUi.expandedMessageId = "";
     if (!state.inlineReplyUi.draftsByMessageId || typeof state.inlineReplyUi.draftsByMessageId !== "object") {
       state.inlineReplyUi.draftsByMessageId = {};
+    }
+    if (!state.inlineReplyUi.previewByMessageId || typeof state.inlineReplyUi.previewByMessageId !== "object") {
+      state.inlineReplyUi.previewByMessageId = {};
     }
     return state.inlineReplyUi;
   }
@@ -652,29 +655,62 @@ priority=${firstNonEmpty(subject.priority, "")}`
     return { commentsById, childrenByParentId };
   }
 
-  function renderInlineReplyComposer({ commentId, isExpanded, draft }) {
+  function renderMarkdownToolbar(buttonAction, extraData = {}) {
+    const toolbarButtons = [
+      { action: "bold", icon: "markdown-bold", label: "Gras" },
+      { action: "italic", icon: "markdown-italic", label: "Italique" },
+      { action: "underline", icon: "markdown-underline", label: "Souligné" },
+      { action: "bullet-list", icon: "markdown-list-unordered", label: "Liste à puces" },
+      { action: "ordered-list", icon: "markdown-list-ordered", label: "Liste numérotée" },
+      { action: "checklist", icon: "markdown-tasklist", label: "Checklist" },
+      { action: "quote", icon: "markdown-quote", label: "Citation" },
+      { action: "link", icon: "markdown-link", label: "Lien" },
+      { action: "mention", icon: "markdown-mention", label: "Mention" }
+    ];
+    const extraAttributes = Object.entries(extraData)
+      .map(([key, value]) => `data-${escapeHtml(key)}="${escapeHtml(String(value || ""))}"`)
+      .join(" ");
+
+    return toolbarButtons.map((button) => `
+      <button
+        class="comment-toolbar-btn"
+        type="button"
+        data-action="${escapeHtml(buttonAction)}"
+        data-format="${escapeHtml(button.action)}"
+        ${extraAttributes}
+        title="${escapeHtml(button.label)}"
+        aria-label="${escapeHtml(button.label)}"
+      >
+        ${svgIcon(button.icon)}
+      </button>
+    `).join("");
+  }
+
+  function renderInlineReplyComposer({ commentId, isExpanded, draft, previewMode }) {
     if (!commentId) return "";
     if (!isExpanded) return "";
-
+    const normalizedDraft = String(draft || "");
+    const canSubmit = !!normalizedDraft.trim();
     return `
       <div class="thread-inline-reply-editor" data-inline-reply-editor="${escapeHtml(commentId)}">
-        <div class="thread-inline-reply-editor__content">
-          <div class="thread-inline-reply-editor__tabs" role="tablist" aria-label="Onglets de réponse">
-            <button class="comment-tab is-active" type="button">Write</button>
-            <button class="comment-tab" type="button" disabled>Preview</button>
-          </div>
-          <div class="thread-inline-reply-editor__body">
-            <textarea
-              class="textarea thread-inline-reply-editor__textarea"
-              data-thread-reply-draft="${escapeHtml(commentId)}"
-              placeholder="Écrire une réponse"
-            >${escapeHtml(draft || "")}</textarea>
-          </div>
-        </div>
-        <div class="thread-inline-reply-editor__actions">
-          <button class="gh-btn" type="button" data-action="thread-reply-cancel" data-message-id="${escapeHtml(commentId)}">Annuler</button>
-          <button class="gh-btn gh-btn--comment gh-btn--primary" type="button" data-action="thread-reply-submit" data-message-id="${escapeHtml(commentId)}">Répondre</button>
-        </div>
+        ${renderCommentComposer({
+          hideAvatar: true,
+          hideTitle: true,
+          previewMode,
+          textareaId: `threadReplyBox-${commentId}`,
+          previewId: `threadReplyPreview-${commentId}`,
+          textareaValue: normalizedDraft,
+          placeholder: "Écrire une réponse",
+          tabWriteAction: "thread-reply-tab-write",
+          tabPreviewAction: "thread-reply-tab-preview",
+          toolbarHtml: renderMarkdownToolbar("thread-reply-format", { messageId: commentId }),
+          previewHtml: normalizedDraft.trim() ? mdToHtml(normalizedDraft) : "",
+          actionsHtml: `
+            <button class="gh-btn" type="button" data-action="thread-reply-cancel" data-message-id="${escapeHtml(commentId)}">Annuler</button>
+            <button class="gh-btn gh-btn--comment gh-btn--primary" type="button" data-action="thread-reply-submit" data-message-id="${escapeHtml(commentId)}" ${canSubmit ? "" : "disabled"}>Répondre</button>
+          `,
+          previewEmptyHint: "Use Markdown to format your reply"
+        })}
       </div>
     `;
   }
@@ -722,8 +758,6 @@ priority=${firstNonEmpty(subject.priority, "")}`
     const objectUrl = String(attachment?.remoteObjectUrl || attachment?.object_url || previewUrl || "");
     const isImage = options.forceImage || mimeType.startsWith("image/");
     const uploadState = String(options.uploadState || "").trim();
-    const isUploading = String(attachment?.uploadStatus || "").trim() === "uploading";
-    const isReady = String(attachment?.uploadStatus || "").trim() === "ready";
     const typeIcon = mimeType === "application/pdf" || extension === "pdf"
       ? "file-pdf"
       : mimeType.includes("javascript") || extension === "js" || extension === "ts"
@@ -731,17 +765,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
         : extension === "dwg" || mimeType.includes("autocad") || mimeType.includes("dwg")
           ? "file-dwg"
           : "file-generic";
-    const progressHtml = uploadState
-      ? `
-        <div class="subject-attachment__state mono-small">${escapeHtml(uploadState)}</div>
-        ${renderUploadProgressBar({
-          progressPercent: isReady ? 100 : 45,
-          indeterminate: isUploading,
-          className: "subject-attachment__progress",
-          label: `Progression de l’envoi de ${fileName}`
-        })}
-      `
-      : "";
+    const progressHtml = uploadState ? `<div class="subject-attachment__state mono-small">${escapeHtml(uploadState)}</div>` : "";
     const metaLine = [
       mimeType || "fichier",
       Number.isFinite(Number(attachment?.size_bytes || attachment?.sizeBytes))
@@ -766,12 +790,12 @@ priority=${firstNonEmpty(subject.priority, "")}`
         <div class="subject-attachment__file-icon" aria-hidden="true">${svgIcon(typeIcon)}</div>
         <div class="subject-attachment__file-body">
           ${objectUrl
-            ? `<a class="subject-attachment__file-name mono-small subject-attachment__file-link--name" href="${escapeHtml(objectUrl)}" target="_blank" rel="noopener noreferrer" download="${escapeHtml(fileName)}">${escapeHtml(fileName)}</a>`
+            ? `<a class="subject-attachment__file-name mono-small subject-attachment__file-link--name" href="${escapeHtml(objectUrl)}" rel="noopener noreferrer" download="${escapeHtml(fileName)}">${escapeHtml(fileName)}</a>`
             : `<div class="subject-attachment__file-name mono-small">${escapeHtml(fileName)}</div>`}
           <div class="subject-attachment__file-meta mono-small">${escapeHtml(metaLine || "fichier")}</div>
           ${progressHtml}
         </div>
-        ${objectUrl ? `<a class="subject-attachment__file-link" href="${escapeHtml(objectUrl)}" target="_blank" rel="noopener noreferrer" download="${escapeHtml(fileName)}">Télécharger</a>` : ""}
+        ${objectUrl ? `<a class="subject-attachment__file-link" href="${escapeHtml(objectUrl)}" rel="noopener noreferrer" download="${escapeHtml(fileName)}">Télécharger</a>` : ""}
       </div>
     `;
   }
@@ -809,6 +833,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
         const childReplies = childrenByParentId.get(commentId) || [];
         const isExpanded = replyUi.expandedMessageId === commentId;
         const draft = String(replyUi.draftsByMessageId?.[commentId] || "");
+        const previewMode = !!replyUi.previewByMessageId?.[commentId];
         const isEditable = !e?.meta?.is_frozen && !e?.meta?.is_deleted;
         const repliesHtml = childReplies.length
           ? `
@@ -865,7 +890,8 @@ priority=${firstNonEmpty(subject.priority, "")}`
               ${renderInlineReplyComposer({
                 commentId,
                 isExpanded,
-                draft
+                draft,
+                previewMode
               })}
             </div>
           `,
@@ -1102,30 +1128,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
       `
       : "";
 
-    const toolbarButtons = [
-      { action: "bold", icon: "markdown-bold", label: "Gras" },
-      { action: "italic", icon: "markdown-italic", label: "Italique" },
-      { action: "underline", icon: "markdown-underline", label: "Souligné" },
-      { action: "bullet-list", icon: "markdown-list-unordered", label: "Liste à puces" },
-      { action: "ordered-list", icon: "markdown-list-ordered", label: "Liste numérotée" },
-      { action: "checklist", icon: "markdown-tasklist", label: "Checklist" },
-      { action: "quote", icon: "markdown-quote", label: "Citation" },
-      { action: "link", icon: "markdown-link", label: "Lien" },
-      { action: "mention", icon: "markdown-mention", label: "Mention" }
-    ];
-
-    const toolbarHtml = toolbarButtons.map((button) => `
-      <button
-        class="comment-toolbar-btn"
-        type="button"
-        data-action="composer-format"
-        data-format="${escapeHtml(button.action)}"
-        title="${escapeHtml(button.label)}"
-        aria-label="${escapeHtml(button.label)}"
-      >
-        ${svgIcon(button.icon)}
-      </button>
-    `).join("");
+    const toolbarHtml = renderMarkdownToolbar("composer-format");
 
     const mentionUi = getMentionUiState();
     const attachmentState = getComposerAttachmentsState();

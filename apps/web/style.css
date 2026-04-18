@@ -2679,15 +2679,12 @@ body.is-resizing{
   text-decoration:none;
 }
 .subject-attachment__file-link--name:hover{
+  color:var(--accent, #2f81f7);
   text-decoration:underline;
 }
 .subject-attachment__file-meta{color:var(--muted);}
 .subject-attachment__file-link{font-size:12px;}
 .subject-attachment__state{padding:0 8px 8px;color:var(--muted);}
-.subject-attachment__progress{
-  margin:0 8px 8px;
-  height:6px;
-}
 .md-render p{margin:0 0 10px;}
 .md-render p:last-child{margin-bottom:0;}
 .md-render ul,.md-render ol{margin:0 0 10px 20px;padding:0;}
@@ -2771,34 +2768,13 @@ body.is-resizing{
   border-top:none;
 }
 .thread-inline-reply-editor{
-  border-radius:var(--radius);
-  overflow:hidden;
-  padding: 12px;
-  background-color: var(--bg-input);
-  border-top-right-radius: 0px;
-  border-top-left-radius: 0px;
-  border-top: solid 1px var(--border);
+  border-top:1px solid var(--border);
+  padding:12px;
+  background-color:var(--bg-input);
 }
-.thread-inline-reply-editor__content{
-  border:solid 1px var(--border2);
-  border-radius:6px;
-  background: var(--bgAssistPanel);
-}
-.thread-inline-reply-editor__tabs{
-  display:flex;
-  align-items:center;
-  gap:4px;
-  padding:6px 8px 0;
-  border-bottom:1px solid var(--border2);
-}
-.thread-inline-reply-editor__tabs .comment-tab[disabled]{opacity:.6;cursor:not-allowed;}
-.thread-inline-reply-editor__body{padding:10px;}
-.thread-inline-reply-editor__textarea{min-height:110px;background: var(--bgAssistPanel);}
-.thread-inline-reply-editor__actions{
-  display:flex;
-  justify-content:flex-end;
-  gap:8px;
-  padding: 10px 0px 0px;
+.thread-inline-reply-editor .comment-composer__textarea{
+  min-height:110px;
+  background:var(--bgAssistPanel);
 }
 .thread-comment-replies{
   margin-top:8px;

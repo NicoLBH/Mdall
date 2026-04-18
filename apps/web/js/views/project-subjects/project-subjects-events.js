@@ -1653,8 +1653,12 @@ export function createProjectSubjectsEvents(config) {
       if (!store.situationsView.inlineReplyUi || typeof store.situationsView.inlineReplyUi !== "object") {
         store.situationsView.inlineReplyUi = {
           expandedMessageId: "",
-          draftsByMessageId: {}
+          draftsByMessageId: {},
+          previewByMessageId: {}
         };
+      }
+      if (!store.situationsView.inlineReplyUi.previewByMessageId || typeof store.situationsView.inlineReplyUi.previewByMessageId !== "object") {
+        store.situationsView.inlineReplyUi.previewByMessageId = {};
       }
       debugThreadReply("reply_state_fallback", { hasAccessor: typeof getInlineReplyUiState === "function" });
       return store.situationsView.inlineReplyUi;
@@ -1690,6 +1694,7 @@ export function createProjectSubjectsEvents(config) {
         btn.closest(".thread-comment-menu__dropdown")?.classList.remove("is-open");
         const replyUi = resolveInlineReplyUiState();
         replyUi.draftsByMessageId[messageId] = "";
+        replyUi.previewByMessageId[messageId] = false;
         replyUi.expandedMessageId = messageId;
         debugThreadReply("reply_opened", {
           messageId,
@@ -1748,6 +1753,47 @@ export function createProjectSubjectsEvents(config) {
         const replyUi = resolveInlineReplyUiState();
         replyUi.draftsByMessageId[messageId] = String(textarea.value || "");
       });
+      textarea.addEventListener("keydown", (event) => {
+        if (!(event.ctrlKey || event.metaKey) || event.key !== "Enter") return;
+        event.preventDefault();
+        const submitButton = textarea.closest(".thread-inline-reply-editor")?.querySelector("[data-action='thread-reply-submit'][data-message-id]");
+        submitButton?.click();
+      });
+    });
+
+    root.querySelectorAll("[data-action='thread-reply-tab-write']").forEach((btn) => {
+      btn.onclick = () => {
+        const messageId = String(btn.closest("[data-inline-reply-editor]")?.dataset.inlineReplyEditor || "").trim();
+        if (!messageId) return;
+        const replyUi = resolveInlineReplyUiState();
+        replyUi.previewByMessageId[messageId] = false;
+        rerenderScope(root);
+      };
+    });
+
+    root.querySelectorAll("[data-action='thread-reply-tab-preview']").forEach((btn) => {
+      btn.onclick = () => {
+        const messageId = String(btn.closest("[data-inline-reply-editor]")?.dataset.inlineReplyEditor || "").trim();
+        if (!messageId) return;
+        const replyUi = resolveInlineReplyUiState();
+        replyUi.previewByMessageId[messageId] = true;
+        rerenderScope(root);
+      };
+    });
+
+    root.querySelectorAll("[data-action='thread-reply-format'][data-format][data-message-id]").forEach((btn) => {
+      btn.onclick = () => {
+        const action = String(btn.dataset.format || "").trim();
+        const messageId = String(btn.dataset.messageId || "").trim();
+        if (!action || !messageId) return;
+        const textarea = root.querySelector(`[data-thread-reply-draft="${selectorValue(messageId)}"]`);
+        if (!textarea) return;
+        const didApply = applyMarkdownComposerAction(textarea, action);
+        if (!didApply) return;
+        const replyUi = resolveInlineReplyUiState();
+        replyUi.draftsByMessageId[messageId] = String(textarea.value || "");
+        rerenderScope(root);
+      };
     });
 
     root.querySelectorAll("[data-action='thread-reply-cancel'][data-message-id]").forEach((btn) => {
@@ -1756,6 +1802,7 @@ export function createProjectSubjectsEvents(config) {
         debugThreadReply("reply_cancel", { messageId });
         const replyUi = resolveInlineReplyUiState();
         if (messageId) replyUi.draftsByMessageId[messageId] = "";
+        if (messageId) replyUi.previewByMessageId[messageId] = false;
         replyUi.expandedMessageId = "";
         rerenderScope(root);
       };
@@ -1779,6 +1826,7 @@ export function createProjectSubjectsEvents(config) {
           mentions
         });
         replyUi.draftsByMessageId[parentMessageId] = "";
+        replyUi.previewByMessageId[parentMessageId] = false;
         replyUi.expandedMessageId = "";
         rerenderScope(root);
       };
