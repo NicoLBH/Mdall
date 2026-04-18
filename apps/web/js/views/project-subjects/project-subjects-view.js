@@ -2333,7 +2333,12 @@ async function applyCommentAction(root) {
   if (!ta) return;
 
   const message = String(ta.value || "").trim();
-  if (!message) return;
+  const composerAttachments = store.situationsView?.subjectComposerAttachments || {};
+  const hasAttachmentsForTarget = target.type === "sujet"
+    && String(composerAttachments?.subjectId || "").trim() === String(target.id || "").trim()
+    && Array.isArray(composerAttachments?.items)
+    && composerAttachments.items.some((entry) => String(entry?.uploadStatus || "").trim() === "ready" && !entry?.error);
+  if (!message && !hasAttachmentsForTarget) return;
   const mentions = extractStructuredMentions(message);
 
   const helpActive = !!store.situationsView.helpMode;
@@ -2349,11 +2354,6 @@ async function applyCommentAction(root) {
   const parentMessageId = target.type === "sujet" && replySubjectId === String(target.id || "").trim()
     ? String(replyContext?.parentMessageId || "").trim()
     : "";
-  const composerAttachments = store.situationsView?.subjectComposerAttachments || {};
-  const hasAttachmentsForTarget = target.type === "sujet"
-    && String(composerAttachments?.subjectId || "").trim() === String(target.id || "").trim()
-    && Array.isArray(composerAttachments?.items)
-    && composerAttachments.items.some((entry) => String(entry?.uploadStatus || "").trim() === "ready" && !entry?.error);
   const uploadSessionId = hasAttachmentsForTarget ? String(composerAttachments?.uploadSessionId || "").trim() : "";
 
   await addComment(target.type, target.id, message, {

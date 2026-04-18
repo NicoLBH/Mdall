@@ -510,29 +510,50 @@ export function createSubjectMessagesSupabaseRepository() {
     async createMessage(payload = {}) {
       const subjectId = normalizeId(payload.subjectId);
       const bodyMarkdown = String(payload.bodyMarkdown || "").trim();
+      const uploadSessionId = normalizeId(payload.uploadSessionId);
       const projectId = await resolveProjectId(payload.projectId);
       const personId = await resolveCurrentPersonId();
 
       if (!subjectId) throw new Error("subjectId is required");
       if (!projectId) throw new Error("projectId is required");
       if (!personId) throw new Error("current person is required");
-      if (!bodyMarkdown) throw new Error("bodyMarkdown is required");
+      if (!bodyMarkdown && !uploadSessionId) throw new Error("bodyMarkdown or uploadSessionId is required");
 
-      const rows = await restFetch("/rest/v1/subject_messages", null, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Prefer: "return=representation"
-        },
-        body: JSON.stringify({
-          project_id: projectId,
-          subject_id: subjectId,
-          parent_message_id: normalizeId(payload.parentMessageId) || null,
-          author_person_id: personId,
-          author_user_id: normalizeId(store?.user?.id || "") || null,
-          body_markdown: bodyMarkdown
-        })
-      });
+      const baseInsertPayload = {
+        project_id: projectId,
+        subject_id: subjectId,
+        parent_message_id: normalizeId(payload.parentMessageId) || null,
+        author_person_id: personId,
+        author_user_id: normalizeId(store?.user?.id || "") || null
+      };
+
+      let rows = null;
+      try {
+        rows = await restFetch("/rest/v1/subject_messages", null, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Prefer: "return=representation"
+          },
+          body: JSON.stringify({
+            ...baseInsertPayload,
+            body_markdown: bodyMarkdown
+          })
+        });
+      } catch (error) {
+        if (bodyMarkdown || !uploadSessionId) throw error;
+        rows = await restFetch("/rest/v1/subject_messages", null, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Prefer: "return=representation"
+          },
+          body: JSON.stringify({
+            ...baseInsertPayload,
+            body_markdown: "\u200B"
+          })
+        });
+      }
 
       const createdMessage = (Array.isArray(rows) ? rows[0] : rows) || null;
       const mentions = normalizeMentions(payload.mentions);
