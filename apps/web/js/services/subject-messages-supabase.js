@@ -82,6 +82,13 @@ async function createAttachmentSignedUrl(bucket = SUBJECT_ATTACHMENTS_BUCKET, st
   const rawPath = String(storagePath ?? "");
   const normalizedPath = normalizeSubjectAttachmentStoragePath(rawPath, normalizedBucket);
   if (!normalizedBucket || !normalizedPath) return "";
+  if (normalizedPath !== rawPath) {
+    console.info("[subject-attachments] storage path normalized before signed url", {
+      bucket: normalizedBucket,
+      storagePathRaw: rawPath,
+      storagePathCanonical: normalizedPath
+    });
+  }
 
   const { data, error } = await supabase.storage
     .from(normalizedBucket)
