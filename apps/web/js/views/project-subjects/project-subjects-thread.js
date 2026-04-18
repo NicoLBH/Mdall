@@ -387,7 +387,8 @@ export function createProjectSubjectsThread(config = {}) {
     const normalizedEntityType = String(entityType || "").toLowerCase();
     const normalizedEntityId = normalizeId(entityId);
     const normalizedMessage = String(message || "").trim();
-    if (!normalizedMessage) return null;
+    const normalizedUploadSessionId = normalizeId(options.uploadSessionId);
+    if (!normalizedMessage && !normalizedUploadSessionId) return null;
 
     if (normalizedEntityType === "sujet" && normalizedEntityId && subjectMessagesService) {
       const created = options.parentMessageId
@@ -395,20 +396,21 @@ export function createProjectSubjectsThread(config = {}) {
             subjectId: normalizedEntityId,
             parentMessageId: options.parentMessageId,
             bodyMarkdown: normalizedMessage,
+            uploadSessionId: normalizedUploadSessionId || undefined,
             mentions: Array.isArray(options.mentions) ? options.mentions : []
           })
         : await subjectMessagesService.createMessage({
             subjectId: normalizedEntityId,
             bodyMarkdown: normalizedMessage,
+            uploadSessionId: normalizedUploadSessionId || undefined,
             mentions: Array.isArray(options.mentions) ? options.mentions : []
           });
 
-      const uploadSessionId = normalizeId(options.uploadSessionId);
-      if (uploadSessionId && created?.id) {
+      if (normalizedUploadSessionId && created?.id) {
         await subjectMessagesService.linkAttachmentsToMessage({
           subjectId: normalizedEntityId,
           messageId: created.id,
-          uploadSessionId
+          uploadSessionId: normalizedUploadSessionId
         });
       }
 
@@ -1101,20 +1103,25 @@ priority=${firstNonEmpty(subject.priority, "")}`
       </button>
     `).join("");
 
-    const actionsHtml = `
-      <button class="gh-btn gh-btn--help-mode ${helpMode ? "is-on" : ""}" data-action="toggle-help" type="button">Help</button>
-
-      ${issueStatusActionHtml}
-
-      <button class="gh-btn gh-btn--comment" data-action="add-comment" type="button">Comment</button>
-    `;
-
     const mentionUi = getMentionUiState();
     const attachmentState = getComposerAttachmentsState();
     const normalizedSubjectId = type === "sujet" ? normalizeId(item.id) : "";
     const pendingAttachments = normalizedSubjectId && normalizeId(attachmentState.subjectId) === normalizedSubjectId
       ? attachmentState.items
       : [];
+    const hasReadyAttachment = pendingAttachments.some((attachment) => String(attachment?.uploadStatus || "").trim() === "ready" && !attachment?.error);
+    const normalizedDraftMessage = String(store?.situationsView?.commentDraft || "").trim();
+    const canSubmitComment = !!normalizedDraftMessage || hasReadyAttachment;
+    const commentButtonClassName = canSubmitComment
+      ? "gh-btn gh-btn--comment gh-btn--primary"
+      : "gh-btn gh-btn--comment";
+    const actionsHtml = `
+      <button class="gh-btn gh-btn--help-mode ${helpMode ? "is-on" : ""}" data-action="toggle-help" type="button">Help</button>
+
+      ${issueStatusActionHtml}
+
+      <button class="${commentButtonClassName}" data-action="add-comment" type="button" ${canSubmitComment ? "" : "disabled"}>Comment</button>
+    `;
     const mentionPopupHtml = mentionUi.open
       ? `
         <div class="subject-mention-popup" role="listbox" aria-label="Suggestions de mention">
