@@ -675,8 +675,12 @@ priority=${firstNonEmpty(subject.priority, "")}`
       { action: "checklist", icon: "markdown-tasklist", label: "Checklist" },
       { action: "mention", icon: "markdown-mention", label: "Mention" }
     ];
+    const toDataAttributeName = (key) => String(key || "")
+      .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+      .replace(/[\s_]+/g, "-")
+      .toLowerCase();
     const extraAttributes = Object.entries(extraData)
-      .map(([key, value]) => `data-${escapeHtml(key)}="${escapeHtml(String(value || ""))}"`)
+      .map(([key, value]) => `data-${escapeHtml(toDataAttributeName(key))}="${escapeHtml(String(value || ""))}"`)
       .join(" ");
     const renderToolbarButton = (button = {}) => `
       <button
