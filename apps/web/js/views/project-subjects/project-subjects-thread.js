@@ -808,7 +808,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
     if (!emojiUi?.open || String(emojiUi.composerKey || "") !== String(composerKey || "")) return "";
     const suggestions = Array.isArray(emojiUi.suggestions) ? emojiUi.suggestions : [];
     return `
-      <div class="subject-mention-popup subject-emoji-popup" role="listbox" aria-label="Suggestions d’emoji">
+      <div class="subject-mention-popup subject-emoji-popup" data-autocomplete-popup="emoji" data-composer-key="${escapeHtml(String(composerKey || ""))}" role="listbox" aria-label="Suggestions d’emoji">
         ${suggestions.length
     ? `
             <div class="subject-emoji-popup__grid">
@@ -1494,7 +1494,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
     `;
     const mentionPopupHtml = mentionUi.open
       ? `
-        <div class="subject-mention-popup" role="listbox" aria-label="Suggestions de mention">
+        <div class="subject-mention-popup" data-autocomplete-popup="mention" data-composer-key="main" role="listbox" aria-label="Suggestions de mention">
           ${(Array.isArray(mentionUi.suggestions) ? mentionUi.suggestions : []).length
             ? mentionUi.suggestions.map((suggestion, index) => {
             const personId = normalizeId(suggestion?.personId);

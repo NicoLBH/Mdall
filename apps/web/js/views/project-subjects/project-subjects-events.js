@@ -699,7 +699,13 @@ export function createProjectSubjectsEvents(config) {
       return store.situationsView.emojiUi;
     };
 
-    const closeEmojiPopup = ({ rerender = true } = {}) => {
+    const closeEmojiPopup = ({
+      rerender = true,
+      selector = "",
+      shouldFocus = false,
+      caretStart = 0,
+      caretEnd = 0
+    } = {}) => {
       const emojiState = getEmojiState();
       emojiState.open = false;
       emojiState.query = "";
@@ -708,7 +714,112 @@ export function createProjectSubjectsEvents(config) {
       emojiState.triggerEnd = -1;
       emojiState.suggestions = [];
       emojiState.composerKey = "";
-      if (rerender) rerenderScope(root);
+      if (rerender) {
+        if (selector) {
+          rerenderAutocompleteUi({ selector, shouldFocus, caretStart, caretEnd });
+        } else {
+          rerenderScope(root);
+        }
+      }
+    };
+
+    const getTextareaSelector = ({ composerKey = "main", messageId = "" } = {}) => {
+      if (composerKey === "main") return "#humanCommentBox";
+      if (composerKey === "reply" && messageId) return `[data-thread-reply-draft="${selectorValue(messageId)}"]`;
+      if (composerKey === "edit" && messageId) return `[data-thread-edit-draft="${selectorValue(messageId)}"]`;
+      return "";
+    };
+
+    const computeTextareaCaretRect = (textarea, caretIndex = 0) => {
+      if (!textarea || !textarea.isConnected) return null;
+      const computed = window.getComputedStyle(textarea);
+      const mirror = document.createElement("div");
+      const mirrorStyle = mirror.style;
+      mirrorStyle.position = "fixed";
+      mirrorStyle.top = "0";
+      mirrorStyle.left = "-9999px";
+      mirrorStyle.whiteSpace = "pre-wrap";
+      mirrorStyle.wordWrap = "break-word";
+      mirrorStyle.visibility = "hidden";
+      mirrorStyle.overflow = "hidden";
+      [
+        "fontFamily", "fontSize", "fontWeight", "fontStyle", "letterSpacing", "lineHeight",
+        "textTransform", "textIndent", "textDecoration", "paddingTop", "paddingRight",
+        "paddingBottom", "paddingLeft", "borderTopWidth", "borderRightWidth",
+        "borderBottomWidth", "borderLeftWidth", "boxSizing"
+      ].forEach((key) => {
+        mirrorStyle[key] = computed[key];
+      });
+      mirrorStyle.width = `${textarea.clientWidth}px`;
+      mirror.textContent = String(textarea.value || "").slice(0, Math.max(0, Number(caretIndex || 0)));
+      const marker = document.createElement("span");
+      marker.textContent = "\u200b";
+      mirror.appendChild(marker);
+      document.body.appendChild(mirror);
+      const markerRect = marker.getBoundingClientRect();
+      const textareaRect = textarea.getBoundingClientRect();
+      const top = textareaRect.top + (markerRect.top - mirror.getBoundingClientRect().top) - textarea.scrollTop;
+      const left = textareaRect.left + (markerRect.left - mirror.getBoundingClientRect().left) - textarea.scrollLeft;
+      document.body.removeChild(mirror);
+      return {
+        top,
+        left,
+        bottom: top + Math.max(16, parseFloat(computed.lineHeight) || 20)
+      };
+    };
+
+    const positionAutocompletePopup = (textarea, popup) => {
+      if (!textarea || !popup || !popup.isConnected) return;
+      const caretRect = computeTextareaCaretRect(textarea, textarea.selectionStart || 0);
+      if (!caretRect) return;
+      popup.style.position = "fixed";
+      popup.style.margin = "0";
+      popup.style.maxWidth = "min(360px, calc(100vw - 16px))";
+      popup.style.zIndex = "900";
+      const popupRect = popup.getBoundingClientRect();
+      const gap = 8;
+      const viewportH = window.innerHeight || 0;
+      const viewportW = window.innerWidth || 0;
+      const placeBelow = caretRect.bottom + gap + popupRect.height <= viewportH - 8;
+      const top = placeBelow
+        ? caretRect.bottom + gap
+        : Math.max(8, caretRect.top - popupRect.height - gap);
+      const left = Math.min(
+        Math.max(8, caretRect.left),
+        Math.max(8, viewportW - popupRect.width - 8)
+      );
+      popup.style.top = `${Math.round(top)}px`;
+      popup.style.left = `${Math.round(left)}px`;
+    };
+
+    const restoreComposerViewport = ({ selector = "", caretStart = 0, caretEnd = 0, shouldFocus = false } = {}) => {
+      const textarea = selector ? root.querySelector(selector) : null;
+      if (!textarea) return;
+      if (shouldFocus) {
+        textarea.focus({ preventScroll: true });
+        textarea.selectionStart = caretStart;
+        textarea.selectionEnd = caretEnd;
+      }
+      const popups = root.querySelectorAll(`.subject-mention-popup[data-composer-key]`);
+      popups.forEach((popup) => {
+        const popupKey = String(popup.dataset.composerKey || "");
+        if (!popupKey) return;
+        const [mode, messageId = ""] = popupKey.includes(":") ? popupKey.split(":") : [popupKey, ""];
+        const popupSelector = getTextareaSelector({ composerKey: mode, messageId });
+        const popupTextarea = popupSelector ? root.querySelector(popupSelector) : null;
+        if (!popupTextarea) return;
+        positionAutocompletePopup(popupTextarea, popup);
+      });
+    };
+
+    const rerenderAutocompleteUi = ({ selector = "", shouldFocus = false, caretStart = 0, caretEnd = 0 } = {}) => {
+      const scrollX = window.scrollX;
+      const scrollY = window.scrollY;
+      rerenderScope(root);
+      requestAnimationFrame(() => {
+        window.scrollTo(scrollX, scrollY);
+        restoreComposerViewport({ selector, shouldFocus, caretStart, caretEnd });
+      });
     };
 
     const commentTextarea = root.querySelector("#humanCommentBox");
@@ -889,7 +1000,37 @@ export function createProjectSubjectsEvents(config) {
         mentionState.triggerStart = -1;
         mentionState.triggerEnd = -1;
         mentionState.suggestions = [];
-        if (rerender) rerenderScope(root);
+        if (rerender) {
+          rerenderAutocompleteUi({
+            selector: "#humanCommentBox",
+            shouldFocus: document.activeElement === commentTextarea,
+            caretStart: Number(commentTextarea.selectionStart || 0),
+            caretEnd: Number(commentTextarea.selectionEnd || 0)
+          });
+        }
+      };
+      const syncEmojiPopup = ({ composerKey = "main" } = {}) => {
+        const emojiState = getEmojiState();
+        const context = resolveEmojiTriggerContext(commentTextarea.value || "", commentTextarea.selectionStart || 0);
+        if (!context) {
+          if (emojiState.open) closeEmojiPopup();
+          return;
+        }
+        const query = String(context?.query || "").trim().toLowerCase();
+        const suggestions = searchEmojiSuggestions(query, 200);
+        emojiState.triggerStart = Number(context?.triggerStart ?? -1);
+        emojiState.triggerEnd = Number(context?.triggerEnd ?? -1);
+        emojiState.query = query;
+        emojiState.suggestions = suggestions;
+        emojiState.composerKey = composerKey;
+        emojiState.open = true;
+        emojiState.activeIndex = Math.max(0, Math.min(Number(emojiState.activeIndex || 0), Math.max(0, suggestions.length - 1)));
+        rerenderAutocompleteUi({
+          selector: "#humanCommentBox",
+          shouldFocus: true,
+          caretStart: Number(commentTextarea.selectionStart || 0),
+          caretEnd: Number(commentTextarea.selectionEnd || 0)
+        });
       };
       const syncEmojiPopup = ({ composerKey = "main" } = {}) => {
         const emojiState = getEmojiState();
@@ -963,7 +1104,12 @@ export function createProjectSubjectsEvents(config) {
         mentionState.suggestions = suggestions;
         mentionState.open = !!context || forceOpen;
         mentionState.activeIndex = Math.max(0, Math.min(Number(mentionState.activeIndex || 0), Math.max(0, suggestions.length - 1)));
-        rerenderScope(root);
+        rerenderAutocompleteUi({
+          selector: "#humanCommentBox",
+          shouldFocus: true,
+          caretStart: Number(commentTextarea.selectionStart || 0),
+          caretEnd: Number(commentTextarea.selectionEnd || 0)
+        });
       };
 
       const pickMentionSuggestion = (suggestion) => {
@@ -981,7 +1127,44 @@ export function createProjectSubjectsEvents(config) {
         closeMentionPopup({ rerender: false });
         closeEmojiPopup({ rerender: false });
         if (store.situationsView.commentPreviewMode) syncCommentPreview(root);
-        rerenderScope(root);
+        rerenderAutocompleteUi({
+          selector: "#humanCommentBox",
+          shouldFocus: true,
+          caretStart: result.nextCursorIndex,
+          caretEnd: result.nextCursorIndex
+        });
+      };
+      const pickEmojiSuggestion = (suggestion) => {
+        const emojiState = getEmojiState();
+        const context = {
+          triggerStart: emojiState.triggerStart,
+          triggerEnd: Number(commentTextarea.selectionStart || emojiState.triggerEnd || 0)
+        };
+        const result = applyEmojiSuggestion(commentTextarea.value || "", context, suggestion);
+        commentTextarea.value = result.nextText;
+        store.situationsView.commentDraft = String(result.nextText || "");
+        commentTextarea.focus();
+        commentTextarea.selectionStart = result.nextCursorIndex;
+        commentTextarea.selectionEnd = result.nextCursorIndex;
+        closeEmojiPopup({ rerender: false });
+        if (store.situationsView.commentPreviewMode) syncCommentPreview(root);
+        syncMainComposerTextareaHeight();
+        rerenderAutocompleteUi({
+          selector: "#humanCommentBox",
+          shouldFocus: true,
+          caretStart: result.nextCursorIndex,
+          caretEnd: result.nextCursorIndex
+        });
+      };
+      const syncComposerAutocomplete = async () => {
+        const mentionContext = resolveMentionTriggerContext(commentTextarea.value || "", commentTextarea.selectionStart || 0);
+        if (mentionContext) {
+          await syncMentionPopup();
+          closeEmojiPopup({ rerender: false });
+          return;
+        }
+        if (getMentionState().open) closeMentionPopup({ rerender: false });
+        syncEmojiPopup({ composerKey: "main" });
       };
       const pickEmojiSuggestion = (suggestion) => {
         const emojiState = getEmojiState();
@@ -1038,13 +1221,23 @@ export function createProjectSubjectsEvents(config) {
           if (ev.key === "ArrowDown") {
             ev.preventDefault();
             mentionState.activeIndex = (Number(mentionState.activeIndex || 0) + 1) % mentionState.suggestions.length;
-            rerenderScope(root);
+            rerenderAutocompleteUi({
+              selector: "#humanCommentBox",
+              shouldFocus: true,
+              caretStart: Number(commentTextarea.selectionStart || 0),
+              caretEnd: Number(commentTextarea.selectionEnd || 0)
+            });
             return;
           }
           if (ev.key === "ArrowUp") {
             ev.preventDefault();
             mentionState.activeIndex = (Number(mentionState.activeIndex || 0) - 1 + mentionState.suggestions.length) % mentionState.suggestions.length;
-            rerenderScope(root);
+            rerenderAutocompleteUi({
+              selector: "#humanCommentBox",
+              shouldFocus: true,
+              caretStart: Number(commentTextarea.selectionStart || 0),
+              caretEnd: Number(commentTextarea.selectionEnd || 0)
+            });
             return;
           }
           if (ev.key === "Enter") {
@@ -1062,25 +1255,45 @@ export function createProjectSubjectsEvents(config) {
           if (ev.key === "ArrowDown") {
             ev.preventDefault();
             emojiState.activeIndex = (Number(emojiState.activeIndex || 0) + EMOJI_GRID_COLUMNS) % emojiState.suggestions.length;
-            rerenderScope(root);
+            rerenderAutocompleteUi({
+              selector: "#humanCommentBox",
+              shouldFocus: true,
+              caretStart: Number(commentTextarea.selectionStart || 0),
+              caretEnd: Number(commentTextarea.selectionEnd || 0)
+            });
             return;
           }
           if (ev.key === "ArrowUp") {
             ev.preventDefault();
             emojiState.activeIndex = (Number(emojiState.activeIndex || 0) - EMOJI_GRID_COLUMNS + emojiState.suggestions.length) % emojiState.suggestions.length;
-            rerenderScope(root);
+            rerenderAutocompleteUi({
+              selector: "#humanCommentBox",
+              shouldFocus: true,
+              caretStart: Number(commentTextarea.selectionStart || 0),
+              caretEnd: Number(commentTextarea.selectionEnd || 0)
+            });
             return;
           }
           if (ev.key === "ArrowRight") {
             ev.preventDefault();
             emojiState.activeIndex = (Number(emojiState.activeIndex || 0) + 1) % emojiState.suggestions.length;
-            rerenderScope(root);
+            rerenderAutocompleteUi({
+              selector: "#humanCommentBox",
+              shouldFocus: true,
+              caretStart: Number(commentTextarea.selectionStart || 0),
+              caretEnd: Number(commentTextarea.selectionEnd || 0)
+            });
             return;
           }
           if (ev.key === "ArrowLeft") {
             ev.preventDefault();
             emojiState.activeIndex = (Number(emojiState.activeIndex || 0) - 1 + emojiState.suggestions.length) % emojiState.suggestions.length;
-            rerenderScope(root);
+            rerenderAutocompleteUi({
+              selector: "#humanCommentBox",
+              shouldFocus: true,
+              caretStart: Number(commentTextarea.selectionStart || 0),
+              caretEnd: Number(commentTextarea.selectionEnd || 0)
+            });
             return;
           }
           if (ev.key === "Enter") {
@@ -1090,7 +1303,12 @@ export function createProjectSubjectsEvents(config) {
           }
           if (ev.key === "Escape") {
             ev.preventDefault();
-            closeEmojiPopup();
+            closeEmojiPopup({
+              selector: "#humanCommentBox",
+              shouldFocus: true,
+              caretStart: Number(commentTextarea.selectionStart || 0),
+              caretEnd: Number(commentTextarea.selectionEnd || 0)
+            });
             return;
           }
         }
@@ -2172,7 +2390,7 @@ export function createProjectSubjectsEvents(config) {
       };
     });
 
-    const syncInlineEmojiPopup = (textarea, composerKey) => {
+      const syncInlineEmojiPopup = (textarea, composerKey) => {
       const emojiState = getEmojiState();
       const mentionContext = resolveMentionTriggerContext(textarea.value || "", textarea.selectionStart || 0);
       if (mentionContext) {
@@ -2193,7 +2411,14 @@ export function createProjectSubjectsEvents(config) {
       emojiState.triggerEnd = Number(context?.triggerEnd ?? -1);
       emojiState.suggestions = suggestions;
       emojiState.composerKey = composerKey;
-      rerenderScope(root);
+      const [mode, messageId = ""] = String(composerKey || "").split(":");
+      const selector = getTextareaSelector({ composerKey: mode, messageId });
+      rerenderAutocompleteUi({
+        selector,
+        shouldFocus: true,
+        caretStart: Number(textarea.selectionStart || 0),
+        caretEnd: Number(textarea.selectionEnd || 0)
+      });
     };
 
     const applyInlineEmojiSuggestion = (textarea, suggestion = {}) => {
@@ -2230,25 +2455,45 @@ export function createProjectSubjectsEvents(config) {
           if (event.key === "ArrowDown") {
             event.preventDefault();
             emojiState.activeIndex = (Number(emojiState.activeIndex || 0) + EMOJI_GRID_COLUMNS) % emojiState.suggestions.length;
-            rerenderScope(root);
+            rerenderAutocompleteUi({
+              selector: getTextareaSelector({ composerKey: "reply", messageId }),
+              shouldFocus: true,
+              caretStart: Number(textarea.selectionStart || 0),
+              caretEnd: Number(textarea.selectionEnd || 0)
+            });
             return;
           }
           if (event.key === "ArrowUp") {
             event.preventDefault();
             emojiState.activeIndex = (Number(emojiState.activeIndex || 0) - EMOJI_GRID_COLUMNS + emojiState.suggestions.length) % emojiState.suggestions.length;
-            rerenderScope(root);
+            rerenderAutocompleteUi({
+              selector: getTextareaSelector({ composerKey: "reply", messageId }),
+              shouldFocus: true,
+              caretStart: Number(textarea.selectionStart || 0),
+              caretEnd: Number(textarea.selectionEnd || 0)
+            });
             return;
           }
           if (event.key === "ArrowRight") {
             event.preventDefault();
             emojiState.activeIndex = (Number(emojiState.activeIndex || 0) + 1) % emojiState.suggestions.length;
-            rerenderScope(root);
+            rerenderAutocompleteUi({
+              selector: getTextareaSelector({ composerKey: "reply", messageId }),
+              shouldFocus: true,
+              caretStart: Number(textarea.selectionStart || 0),
+              caretEnd: Number(textarea.selectionEnd || 0)
+            });
             return;
           }
           if (event.key === "ArrowLeft") {
             event.preventDefault();
             emojiState.activeIndex = (Number(emojiState.activeIndex || 0) - 1 + emojiState.suggestions.length) % emojiState.suggestions.length;
-            rerenderScope(root);
+            rerenderAutocompleteUi({
+              selector: getTextareaSelector({ composerKey: "reply", messageId }),
+              shouldFocus: true,
+              caretStart: Number(textarea.selectionStart || 0),
+              caretEnd: Number(textarea.selectionEnd || 0)
+            });
             return;
           }
           if (event.key === "Enter") {
@@ -2262,7 +2507,12 @@ export function createProjectSubjectsEvents(config) {
           }
           if (event.key === "Escape") {
             event.preventDefault();
-            closeEmojiPopup();
+            closeEmojiPopup({
+              selector: getTextareaSelector({ composerKey: "reply", messageId }),
+              shouldFocus: true,
+              caretStart: Number(textarea.selectionStart || 0),
+              caretEnd: Number(textarea.selectionEnd || 0)
+            });
             return;
           }
         }
@@ -2293,25 +2543,45 @@ export function createProjectSubjectsEvents(config) {
           if (event.key === "ArrowDown") {
             event.preventDefault();
             emojiState.activeIndex = (Number(emojiState.activeIndex || 0) + EMOJI_GRID_COLUMNS) % emojiState.suggestions.length;
-            rerenderScope(root);
+            rerenderAutocompleteUi({
+              selector: getTextareaSelector({ composerKey: "edit", messageId }),
+              shouldFocus: true,
+              caretStart: Number(textarea.selectionStart || 0),
+              caretEnd: Number(textarea.selectionEnd || 0)
+            });
             return;
           }
           if (event.key === "ArrowUp") {
             event.preventDefault();
             emojiState.activeIndex = (Number(emojiState.activeIndex || 0) - EMOJI_GRID_COLUMNS + emojiState.suggestions.length) % emojiState.suggestions.length;
-            rerenderScope(root);
+            rerenderAutocompleteUi({
+              selector: getTextareaSelector({ composerKey: "edit", messageId }),
+              shouldFocus: true,
+              caretStart: Number(textarea.selectionStart || 0),
+              caretEnd: Number(textarea.selectionEnd || 0)
+            });
             return;
           }
           if (event.key === "ArrowRight") {
             event.preventDefault();
             emojiState.activeIndex = (Number(emojiState.activeIndex || 0) + 1) % emojiState.suggestions.length;
-            rerenderScope(root);
+            rerenderAutocompleteUi({
+              selector: getTextareaSelector({ composerKey: "edit", messageId }),
+              shouldFocus: true,
+              caretStart: Number(textarea.selectionStart || 0),
+              caretEnd: Number(textarea.selectionEnd || 0)
+            });
             return;
           }
           if (event.key === "ArrowLeft") {
             event.preventDefault();
             emojiState.activeIndex = (Number(emojiState.activeIndex || 0) - 1 + emojiState.suggestions.length) % emojiState.suggestions.length;
-            rerenderScope(root);
+            rerenderAutocompleteUi({
+              selector: getTextareaSelector({ composerKey: "edit", messageId }),
+              shouldFocus: true,
+              caretStart: Number(textarea.selectionStart || 0),
+              caretEnd: Number(textarea.selectionEnd || 0)
+            });
             return;
           }
           if (event.key === "Enter") {
@@ -2325,7 +2595,12 @@ export function createProjectSubjectsEvents(config) {
           }
           if (event.key === "Escape") {
             event.preventDefault();
-            closeEmojiPopup();
+            closeEmojiPopup({
+              selector: getTextareaSelector({ composerKey: "edit", messageId }),
+              shouldFocus: true,
+              caretStart: Number(textarea.selectionStart || 0),
+              caretEnd: Number(textarea.selectionEnd || 0)
+            });
             return;
           }
         }
