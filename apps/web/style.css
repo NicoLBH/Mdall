@@ -2873,6 +2873,20 @@ body.is-resizing{
 .thread-comment-content-capsule{
   padding:12px;
 }
+.thread-inline-edit-editor{
+  padding:12px;
+}
+.thread-inline-edit-editor--root{}
+.thread-inline-edit-editor--nested{}
+.thread-inline-edit-editor .comment-composer__actions{
+  margin-bottom:0;
+}
+.comment-composer--thread-edit-root .comment-composer__textarea{
+  background-color:var(--bgAssistPanel);
+}
+.comment-composer--thread-edit-nested .comment-composer__textarea{
+  background-color:var(--bgAssistPanel);
+}
 .thread-comment-footer{
   display:flex;
   justify-content:flex-end;
