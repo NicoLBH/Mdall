@@ -2318,7 +2318,41 @@ function rerenderPanels() {
 
 
 function rerenderScope(root) {
-  rerenderPanels();
+  const detailsHost = document.getElementById("situationsDetailsHost");
+  const shouldRerenderDetailsOnly = !!detailsHost
+    && detailsHost.isConnected
+    && !store.situationsView.createSubjectForm?.isOpen
+    && String(store.situationsView.subjectsSubview || "subjects") === "subjects"
+    && !store.situationsView.showTableOnly
+    && !!root?.closest?.("#situationsDetailsHost");
+
+  if (shouldRerenderDetailsOnly) {
+    const detailsScrollState = getScrollableElementScrollState(detailsHost);
+    const details = getProjectSubjectDetail().renderDetailsHtml(null, {
+      showExpand: false,
+      subissuesOptions: {
+        sujetRowClass: "js-modal-drilldown-sujet",
+        sujetToggleClass: "js-modal-toggle-sujet",
+        avisRowClass: "js-modal-drilldown-avis",
+        expandedSujets: store.situationsView.rightExpandedSujets,
+        expandedSubjectIds: store.situationsView.rightSubissuesExpandedSubjectIds,
+        openMenuId: store.situationsView.rightSubissueMenuOpenId,
+        isOpen: store.situationsView.rightSubissuesOpen
+      }
+    });
+    detailsHost.innerHTML = details.bodyHtml;
+    wireDetailsInteractive(detailsHost);
+    bindDetailsScroll(document);
+    restoreScrollableElementScrollState(detailsHost, detailsScrollState);
+    requestAnimationFrame(() => {
+      restoreScrollableElementScrollState(detailsHost, detailsScrollState);
+      const currentDetailsHost = document.getElementById("situationsDetailsHost");
+      currentDetailsHost?.__syncCondensedTitle?.();
+    });
+  } else {
+    rerenderPanels();
+  }
+
   const drilldownBody = document.getElementById("drilldownBody");
   if (root?.closest?.("#drilldownPanel") && drilldownBody) {
     getProjectSubjectDrilldown().updateDrilldownPanel();
