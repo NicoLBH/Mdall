@@ -928,8 +928,23 @@ export function createProjectSubjectsEvents(config) {
         rerenderScope(root);
       };
 
+      const syncMainComposerTextareaHeight = () => {
+        const computedStyle = window.getComputedStyle(commentTextarea);
+        const lineHeight = Math.max(16, Math.round(parseFloat(computedStyle.lineHeight) || 20));
+        const minHeight = Math.max(170, Math.round(parseFloat(computedStyle.minHeight) || 170));
+        const comfortExtraLines = 3;
+        const extraPadding = lineHeight * comfortExtraLines;
+        commentTextarea.style.overflowY = "hidden";
+        commentTextarea.style.height = "auto";
+        const nextHeight = Math.max(minHeight, commentTextarea.scrollHeight + extraPadding);
+        commentTextarea.style.height = `${nextHeight}px`;
+      };
+
+      syncMainComposerTextareaHeight();
+
       commentTextarea.addEventListener("input", () => {
         store.situationsView.commentDraft = String(commentTextarea.value || "");
+        syncMainComposerTextareaHeight();
         void syncMentionPopup();
         if (store.situationsView.commentPreviewMode) syncCommentPreview(root);
       });
@@ -974,6 +989,7 @@ export function createProjectSubjectsEvents(config) {
           if (action === "mention") void syncMentionPopup({ forceOpen: true });
           else closeMentionPopup({ rerender: false });
           store.situationsView.commentDraft = String(commentTextarea.value || "");
+          syncMainComposerTextareaHeight();
           if (store.situationsView.commentPreviewMode) syncCommentPreview(root);
         };
       });
@@ -1745,7 +1761,7 @@ export function createProjectSubjectsEvents(config) {
       const computedStyle = window.getComputedStyle(textarea);
       const lineHeight = Math.max(16, Math.round(parseFloat(computedStyle.lineHeight) || 20));
       const minHeight = Math.max(110, Math.round(parseFloat(computedStyle.minHeight) || 110));
-      const comfortExtraLines = 6;
+      const comfortExtraLines = 3;
       const extraPadding = lineHeight * comfortExtraLines;
       textarea.style.overflowY = "hidden";
       textarea.style.height = "auto";
