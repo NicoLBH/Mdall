@@ -794,6 +794,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
           tabWriteAction: "thread-reply-tab-write",
           tabPreviewAction: "thread-reply-tab-preview",
           tabsClassName: "comment-composer__tabs--thread-reply",
+          composerClassName: "comment-composer--thread-reply-editor",
           toolbarHtml: renderMarkdownToolbar("thread-reply-format", { messageId: commentId }),
           previewHtml: normalizedDraft.trim() ? mdToHtml(normalizedDraft) : "",
           actionsHtml: `

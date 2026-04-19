@@ -17,6 +17,7 @@ export function renderCommentComposer({
   actionsHtml = "",
   toolbarHtml = "",
   tabsClassName = "",
+  composerClassName = "",
   textareaAttributes = {},
   tabWriteAction = "tab-write",
   tabPreviewAction = "tab-preview",
@@ -34,7 +35,7 @@ export function renderCommentComposer({
     .filter(Boolean)
     .join(" ");
   return `
-    <div class="human-action comment-composer">
+    <div class="human-action comment-composer ${escapeHtml(composerClassName)}">
       ${hideAvatar ? "" : `<div class="gh-avatar gh-avatar--human comment-composer__avatar" aria-hidden="true">${avatarHtml}</div>`}
 
       <div class="comment-general-block comment-composer__main">
@@ -47,7 +48,7 @@ export function renderCommentComposer({
               <button class="comment-tab light-tabs__item ${!previewMode ? "is-active" : ""}" data-action="${escapeHtml(tabWriteAction)}" type="button" role="tab" aria-selected="${!previewMode ? "true" : "false"}"><span class="light-tabs__label">Écrire</span></button>
               <button class="comment-tab light-tabs__item ${previewMode ? "is-active" : ""}" data-action="${escapeHtml(tabPreviewAction)}" type="button" role="tab" aria-selected="${previewMode ? "true" : "false"}"><span class="light-tabs__label">Aperçu</span></button>
             </div>
-            ${toolbarHtml ? `<div class="comment-composer__toolbar" role="toolbar" aria-label="Markdown toolbar">${toolbarHtml}</div>` : ""}
+            ${toolbarHtml && !previewMode ? `<div class="comment-composer__toolbar" role="toolbar" aria-label="Markdown toolbar">${toolbarHtml}</div>` : ""}
           </div>
 
           <div class="comment-editor comment-composer__editor ${previewMode ? "hidden" : ""}">

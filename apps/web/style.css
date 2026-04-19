@@ -2569,11 +2569,20 @@ body.is-resizing{
 }
 .comment-composer__tabs--main{}
 .comment-composer__tabs--thread-reply{}
-.comment-composer__toolbar{display:flex;align-items:center;justify-content:flex-end;}
+
+.comment-composer--thread-reply-editor .comment-editor{
+  background:var(--bgAssistPanel);
+}
+.comment-composer--thread-reply-editor .comment-composer__tabs.light-tabs .light-tabs__item.is-active{
+  background:var(--bgAssistPanel);
+}
+.comment-composer__toolbar{display:flex;align-items:center;justify-content:flex-end;min-height:39px;}
 .comment-toolbar-layout{
   display:grid;
   grid-template-columns:auto auto auto;
   align-items:center;
+  align-content:center;
+  height:100%;
   gap:0;
 }
 .comment-toolbar-layout__group{
