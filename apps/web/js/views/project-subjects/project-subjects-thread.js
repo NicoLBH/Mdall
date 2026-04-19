@@ -735,7 +735,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
     `;
   }
 
-  function renderInlineReplyComposer({ commentId, isExpanded, draft, previewMode, attachments = [] }) {
+  function renderInlineReplyComposer({ commentId, isExpanded, draft, previewMode, attachments = [], depth = 0 }) {
     if (!commentId) return "";
     if (!isExpanded) return "";
     const pendingAttachments = Array.isArray(attachments) ? attachments : [];
@@ -750,10 +750,11 @@ priority=${firstNonEmpty(subject.priority, "")}`
               ${renderAttachmentTile(attachment, {
                 forceImage: !!attachment.isImage,
                 uploadState: attachment.error
-                  ? "Erreur d’upload"
+                  ? "error"
                   : String(attachment.uploadStatus || "").trim() === "uploading"
-                    ? "Envoi..."
-                    : "Prêt"
+                    ? "uploading"
+                    : "ready",
+                uploadStateText: attachment.error ? "Erreur d’upload" : ""
               })}
               <button
                 class="subject-composer-attachment-remove"
@@ -772,8 +773,12 @@ priority=${firstNonEmpty(subject.priority, "")}`
       `
       : "";
 
+    const inlineEditorClass = Number(depth || 0) > 0
+      ? "thread-inline-reply-editor thread-inline-reply-editor--nested"
+      : "thread-inline-reply-editor thread-inline-reply-editor--root";
+
     return `
-      <div class="thread-inline-reply-editor" data-inline-reply-editor="${escapeHtml(commentId)}">
+      <div class="${inlineEditorClass}" data-inline-reply-editor="${escapeHtml(commentId)}">
         ${renderCommentComposer({
           hideAvatar: true,
           hideTitle: true,
@@ -784,14 +789,16 @@ priority=${firstNonEmpty(subject.priority, "")}`
           textareaAttributes: {
             "data-thread-reply-draft": commentId
           },
-          placeholder: "Écrire une réponse",
+          placeholder: "🖼️ Écrire une réponse, glisser-déposer une pièce jointe...",
           tabWriteAction: "thread-reply-tab-write",
           tabPreviewAction: "thread-reply-tab-preview",
           toolbarHtml: renderMarkdownToolbar("thread-reply-format", { messageId: commentId }),
           previewHtml: normalizedDraft.trim() ? mdToHtml(normalizedDraft) : "",
           actionsHtml: `
-            <button class="gh-btn" type="button" data-action="thread-reply-cancel" data-message-id="${escapeHtml(commentId)}">Annuler</button>
-            <button class="gh-btn gh-btn--comment gh-btn--primary" type="button" data-action="thread-reply-submit" data-message-id="${escapeHtml(commentId)}" ${canSubmit ? "" : "disabled"}>Répondre</button>
+            <div class="thread-inline-reply-editor__actions">
+              <button class="gh-btn" type="button" data-action="thread-reply-cancel" data-message-id="${escapeHtml(commentId)}">Annuler</button>
+              <button class="gh-btn gh-btn--comment gh-btn--primary" type="button" data-action="thread-reply-submit" data-message-id="${escapeHtml(commentId)}" ${canSubmit ? "" : "disabled"}>Répondre</button>
+            </div>
           `,
           previewEmptyHint: "Use Markdown to format your reply",
           footerHtml: `
@@ -817,12 +824,16 @@ priority=${firstNonEmpty(subject.priority, "")}`
     `;
   }
 
-  function renderNestedReplyComment(entry, idx) {
+  function resolveThreadCommentIdentity(entry) {
     const currentUserId = normalizeId(store?.user?.id);
     const authorUserId = normalizeId(entry?.meta?.author_user_id);
     const isCurrentUserAuthor = !!authorUserId && !!currentUserId && authorUserId === currentUserId;
     const agent = isCurrentUserAuthor ? "human" : "member";
-    const identity = getAuthorIdentity({
+    const isRapso = agent === "specialist_ps";
+    if (isRapso) {
+      return { displayName: "Agent specialist_ps", avatarType: "agent", avatarHtml: "", avatarInitial: "AS" };
+    }
+    return getAuthorIdentity({
       author: entry?.actor,
       agent,
       avatarUrl: entry?.meta?.author_avatar_url || "",
@@ -830,25 +841,101 @@ priority=${firstNonEmpty(subject.priority, "")}`
       humanAvatarHtml: SVG_AVATAR_HUMAN,
       fallbackName: "System"
     });
+  }
+
+  function renderThreadCommentActions(entry) {
+    const commentId = normalizeId(entry?.meta?.id);
+    if (!commentId) return "";
+    const isEditable = !entry?.meta?.is_frozen && !entry?.meta?.is_deleted;
+    return `
+      <div class="thread-comment-menu">
+        <button
+          class="thread-comment-menu__trigger"
+          type="button"
+          aria-label="Actions du message"
+          data-action="thread-reply-menu-toggle"
+          data-message-id="${escapeHtml(commentId)}"
+        >
+          ${svgIcon("kebab-horizontal")}
+        </button>
+        <div class="thread-comment-menu__dropdown">
+          ${isEditable
+            ? `
+              <button class="gh-menu__item" type="button" data-action="thread-message-edit" data-message-id="${escapeHtml(commentId)}" data-message-body="${escapeHtml(String(entry?.message || ""))}">Modifier le message</button>
+              <button class="gh-menu__item" type="button" data-action="thread-message-delete" data-message-id="${escapeHtml(commentId)}">Supprimer le message</button>
+              <div class="thread-comment-menu__divider" role="separator" aria-hidden="true"></div>
+            `
+            : ""}
+          <button class="gh-menu__item" type="button" data-action="thread-reply-open" data-message-id="${escapeHtml(commentId)}">Répondre au message</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderThreadCommentNode(entry, { idx = 0, depth = 0, childrenByParentId = new Map(), replyUi = {} } = {}) {
+    const commentId = normalizeId(entry?.meta?.id);
+    if (!commentId) return "";
+    const identity = resolveThreadCommentIdentity(entry);
     const tsHtml = entry?.ts ? `<div class="mono-small">${escapeHtml(fmtTs(entry.ts))}</div>` : "";
+    const childReplies = childrenByParentId.get(commentId) || [];
+    const nestedDepth = Math.min(MAX_REPLY_VISUAL_DEPTH, Math.max(1, Number(depth || 0)));
+    const classes = depth > 0
+      ? `message-thread__comment--nested message-thread__comment--reply-item message-thread__comment--depth-${nestedDepth}`
+      : "";
+    const isExpanded = replyUi.expandedMessageId === commentId;
+    const draft = String(replyUi.draftsByMessageId?.[commentId] || "");
+    const previewMode = !!replyUi.previewByMessageId?.[commentId];
+    const attachments = Array.isArray(replyUi.attachmentsByMessageId?.[commentId])
+      ? replyUi.attachmentsByMessageId[commentId]
+      : [];
+    const repliesHtml = childReplies.length
+      ? `
+        <div class="thread-comment-replies thread-comment-replies--github">
+          ${childReplies.map((reply, replyIdx) => renderThreadCommentNode(reply, {
+            idx: idx + replyIdx + 1,
+            depth: depth + 1,
+            childrenByParentId,
+            replyUi
+          })).join("")}
+        </div>
+      `
+      : "";
 
     return renderMessageThreadComment({
       idx,
       author: identity.displayName,
       tsHtml,
+      headerRightHtml: renderThreadCommentActions(entry),
       bodyHtml: `
         <div class="thread-comment-content-capsule">
-          <div class="mono-small color-fg-muted">${escapeHtml(String(entry?.stateLabel || "modifiable"))}</div>
           ${mdToHtml(entry?.message || "")}
         </div>
         ${(Array.isArray(entry?.meta?.attachments) && entry.meta.attachments.length)
           ? `<div class="subject-attachment-grid">${entry.meta.attachments.map((attachment) => renderAttachmentTile(attachment)).join("")}</div>`
           : ""}
+        ${childReplies.length
+          ? `
+            <div class="thread-comment-footer">
+              <span class="mono-small color-fg-muted">${childReplies.length} réponse${childReplies.length > 1 ? "s" : ""}</span>
+            </div>
+          `
+          : ""}
+        ${repliesHtml}
+        <div class="thread-comment-reply-box">
+          ${renderInlineReplyComposer({
+            commentId,
+            isExpanded,
+            draft,
+            previewMode,
+            attachments,
+            depth
+          })}
+        </div>
       `,
       avatarType: identity.avatarType,
       avatarHtml: identity.avatarHtml,
       avatarInitial: identity.avatarInitial,
-      className: "message-thread__comment--nested message-thread__comment--reply-item"
+      className: classes
     });
   }
 
@@ -867,7 +954,8 @@ priority=${firstNonEmpty(subject.priority, "")}`
       || ""
     );
     const isImage = options.forceImage || mimeType.startsWith("image/");
-    const uploadState = String(options.uploadState || "").trim();
+    const uploadState = String(options.uploadState || "").trim().toLowerCase();
+    const uploadStateText = String(options.uploadStateText || "").trim();
     const typeIcon = mimeType === "application/pdf" || extension === "pdf"
       ? "file-pdf"
       : mimeType.includes("javascript") || extension === "js" || extension === "ts"
@@ -875,7 +963,25 @@ priority=${firstNonEmpty(subject.priority, "")}`
         : extension === "dwg" || mimeType.includes("autocad") || mimeType.includes("dwg")
           ? "file-dwg"
           : "file-generic";
-    const progressHtml = uploadState ? `<div class="subject-attachment__state mono-small">${escapeHtml(uploadState)}</div>` : "";
+    let progressHtml = "";
+    let uploadIndicatorHtml = "";
+    if (uploadState === "uploading") {
+      uploadIndicatorHtml = `
+        <span class="subject-attachment__upload-indicator is-spinning" aria-label="Envoi en cours">
+          ${svgIcon("attachment-upload-spinner", { className: "subject-attachment__spinner anim-rotate" })}
+        </span>
+      `;
+    } else if (uploadState === "ready") {
+      uploadIndicatorHtml = `
+        <span class="subject-attachment__upload-indicator" aria-label="Pièce jointe prête">
+          ${svgIcon("attachment-upload-dot", { className: "subject-attachment__spinner" })}
+        </span>
+      `;
+    } else if (uploadState === "error") {
+      progressHtml = `<div class="subject-attachment__state mono-small">${escapeHtml(uploadStateText || "Erreur d’upload")}</div>`;
+    } else if (uploadState) {
+      progressHtml = `<div class="subject-attachment__state mono-small">${escapeHtml(uploadState)}</div>`;
+    }
     const metaLine = [
       mimeType || "fichier",
       Number.isFinite(Number(attachment?.size_bytes || attachment?.sizeBytes))
@@ -889,7 +995,10 @@ priority=${firstNonEmpty(subject.priority, "")}`
           <a href="${escapeHtml(downloadUrl || previewUrl)}" target="_blank" rel="noopener noreferrer">
             <img src="${escapeHtml(previewUrl)}" alt="${escapeHtml(fileName)}" loading="lazy" />
           </a>
-          <div class="subject-attachment__caption mono-small">${escapeHtml(fileName)}</div>
+          <div class="subject-attachment__caption mono-small">
+            <span class="subject-attachment__caption-name">${escapeHtml(fileName)}</span>
+            ${uploadIndicatorHtml}
+          </div>
           ${progressHtml}
         </div>
       `;
@@ -899,9 +1008,12 @@ priority=${firstNonEmpty(subject.priority, "")}`
       <div class="subject-attachment subject-attachment--file">
         <div class="subject-attachment__file-icon" aria-hidden="true">${svgIcon(typeIcon)}</div>
         <div class="subject-attachment__file-body">
-          ${downloadUrl
-            ? `<a class="subject-attachment__file-name mono-small subject-attachment__file-link--name" href="${escapeHtml(downloadUrl)}" rel="noopener noreferrer" download="${escapeHtml(fileName)}">${escapeHtml(fileName)}</a>`
-            : `<div class="subject-attachment__file-name mono-small">${escapeHtml(fileName)}</div>`}
+          <div class="subject-attachment__file-head">
+            ${downloadUrl
+              ? `<a class="subject-attachment__file-name mono-small subject-attachment__file-link--name" href="${escapeHtml(downloadUrl)}" rel="noopener noreferrer" download="${escapeHtml(fileName)}">${escapeHtml(fileName)}</a>`
+              : `<div class="subject-attachment__file-name mono-small">${escapeHtml(fileName)}</div>`}
+            ${uploadIndicatorHtml}
+          </div>
           <div class="subject-attachment__file-meta mono-small">${escapeHtml(metaLine || "fichier")}</div>
           ${progressHtml}
         </div>
@@ -915,107 +1027,22 @@ priority=${firstNonEmpty(subject.priority, "")}`
     if (!thread.length) return "";
     const replyUi = getInlineReplyUiState();
     const { childrenByParentId } = groupThreadReplies(thread);
+    let commentRenderIdx = 0;
 
     const itemsHtml = thread.map((e, idx) => {
       const type = String(e?.type || "").toUpperCase();
 
       if (type === "COMMENT") {
-        const commentId = normalizeId(e?.meta?.id);
         const parentId = normalizeId(e?.meta?.parent_message_id);
         if (parentId) return "";
-
-        const currentUserId = normalizeId(store?.user?.id);
-        const authorUserId = normalizeId(e?.meta?.author_user_id);
-        const isCurrentUserAuthor = !!authorUserId && !!currentUserId && authorUserId === currentUserId;
-        const agent = isCurrentUserAuthor ? "human" : "member";
-        const isRapso = agent === "specialist_ps";
-        const identity = isRapso
-          ? { displayName: "Agent specialist_ps", avatarType: "agent", avatarHtml: "", avatarInitial: "AS" }
-          : getAuthorIdentity({
-              author: e?.actor,
-              agent,
-              avatarUrl: e?.meta?.author_avatar_url || "",
-              currentUserAvatar: isCurrentUserAuthor ? store?.user?.avatar : "",
-              humanAvatarHtml: SVG_AVATAR_HUMAN,
-              fallbackName: "System"
-            });
-        const tsHtml = e?.ts ? `<div class="mono-small">${escapeHtml(fmtTs(e.ts))}</div>` : "";
-        const childReplies = childrenByParentId.get(commentId) || [];
-        const isExpanded = replyUi.expandedMessageId === commentId;
-        const draft = String(replyUi.draftsByMessageId?.[commentId] || "");
-        const previewMode = !!replyUi.previewByMessageId?.[commentId];
-        const attachments = Array.isArray(replyUi.attachmentsByMessageId?.[commentId])
-          ? replyUi.attachmentsByMessageId[commentId]
-          : [];
-        const isEditable = !e?.meta?.is_frozen && !e?.meta?.is_deleted;
-        const repliesHtml = childReplies.length
-          ? `
-            <div class="thread-comment-replies thread-comment-replies--github">
-              ${childReplies.map((reply, replyIdx) => renderNestedReplyComment(reply, idx + replyIdx + 1)).join("")}
-            </div>
-          `
-          : "";
-
-        return renderMessageThreadComment({
-          idx,
-          author: identity.displayName,
-          tsHtml,
-          headerRightHtml: `
-            <div class="thread-comment-menu">
-              <button
-                class="thread-comment-menu__trigger"
-                type="button"
-                aria-label="Actions du message"
-                data-action="thread-reply-menu-toggle"
-                data-message-id="${escapeHtml(commentId)}"
-              >
-                ${svgIcon("kebab-horizontal")}
-              </button>
-              <div class="thread-comment-menu__dropdown">
-                ${isEditable
-                  ? `
-                    <button class="gh-menu__item" type="button" data-action="thread-message-edit" data-message-id="${escapeHtml(commentId)}" data-message-body="${escapeHtml(String(e?.message || ""))}">Modifier le message</button>
-                    <button class="gh-menu__item" type="button" data-action="thread-message-delete" data-message-id="${escapeHtml(commentId)}">Supprimer le message</button>
-                    <div class="thread-comment-menu__divider" role="separator" aria-hidden="true"></div>
-                  `
-                  : ""}
-                <button class="gh-menu__item" type="button" data-action="thread-reply-open" data-message-id="${escapeHtml(commentId)}">Répondre au message</button>
-              </div>
-            </div>
-          `,
-          bodyHtml: `
-            <div class="thread-comment-content-capsule">
-              <div class="mono-small color-fg-muted">${escapeHtml(String(e?.stateLabel || "modifiable"))}</div>
-              ${mdToHtml(e?.message || "")}
-            </div>
-            ${(Array.isArray(e?.meta?.attachments) && e.meta.attachments.length)
-              ? `<div class="subject-attachment-grid">${e.meta.attachments.map((attachment) => renderAttachmentTile(attachment)).join("")}</div>`
-              : ""}
-            ${childReplies.length
-              ? `
-                <div class="thread-comment-footer">
-                  <span class="mono-small color-fg-muted">${childReplies.length} réponse${childReplies.length > 1 ? "s" : ""}</span>
-                </div>
-              `
-              : ""}
-            ${repliesHtml}
-            <div class="thread-comment-reply-box">
-              ${renderInlineReplyComposer({
-                commentId,
-                isExpanded,
-                draft,
-                previewMode,
-                attachments
-              })}
-            </div>
-          `,
-          avatarType: identity.avatarType,
-          avatarHtml: identity.avatarHtml,
-          avatarInitial: identity.avatarInitial,
-          className: Number(e?.meta?.depth || 0) > 0
-            ? `message-thread__comment--nested message-thread__comment--depth-${Math.min(MAX_REPLY_VISUAL_DEPTH, Number(e?.meta?.depth || 0))}`
-            : ""
+        const rendered = renderThreadCommentNode(e, {
+          idx: commentRenderIdx,
+          depth: 0,
+          childrenByParentId,
+          replyUi
         });
+        commentRenderIdx += 1;
+        return rendered;
       }
 
       if (type === "ACTIVITY") {
@@ -1223,14 +1250,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
     const previewMode = !!store.situationsView.commentPreviewMode;
     const helpMode = !!store.situationsView.helpMode;
 
-    const hintHtml = type === "sujet"
-      ? `
-        <button class="subject-composer-attachments-pick-btn" type="button" data-action="composer-attachments-pick">
-          <span class="subject-composer-attachments-pick-btn__icon" aria-hidden="true">${svgIcon("image")}</span>
-          <span>Ajouter un fichier</span>
-        </button>
-      `
-      : "";
+    const hintHtml = "";
 
     const issueStatusActionHtml = renderIssueStatusAction(selection);
     const replyContext = type === "sujet" ? getReplyContextForSubject(item?.id) : null;
@@ -1295,10 +1315,11 @@ priority=${firstNonEmpty(subject.priority, "")}`
               ${renderAttachmentTile(attachment, {
                 forceImage: !!attachment.isImage,
                 uploadState: attachment.error
-                  ? "Erreur d’upload"
+                  ? "error"
                   : String(attachment.uploadStatus || "").trim() === "uploading"
-                    ? "Envoi..."
-                    : "Prêt"
+                    ? "uploading"
+                    : "ready",
+                uploadStateText: attachment.error ? "Erreur d’upload" : ""
               })}
               <button
                 class="subject-composer-attachment-remove"
@@ -1345,7 +1366,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
       textareaValue: String(store.situationsView.commentDraft || ""),
       placeholder: helpMode
         ? "Help (éphémère) — décrivez l’écran / l’action souhaitée."
-        : `Réponse humaine (Markdown) sur ce ${type === "sujet" ? "sujet" : "regroupement"} — mentionne @rapso pour solliciter l’agent.`,
+        : "📎 Ecrire une réponse, glisser-déposer une pièce jointe...",
       hintHtml,
       contextHtml,
       actionsHtml,
