@@ -16,6 +16,7 @@ export function renderCommentComposer({
   footerHtml = "",
   actionsHtml = "",
   toolbarHtml = "",
+  tabsClassName = "",
   textareaAttributes = {},
   tabWriteAction = "tab-write",
   tabPreviewAction = "tab-preview",
@@ -41,10 +42,10 @@ export function renderCommentComposer({
 
         <div class="comment-box gh-comment-boxwrap comment-composer__box ${helpMode ? "gh-comment-box--help" : ""}">
           ${contextHtml || ""}
-          <div class="comment-tabs comment-composer__tabs ${helpMode ? "gh-comment-header--help" : ""}" role="tablist" aria-label="Comment tabs">
+          <div class="comment-composer__tabs light-tabs ${escapeHtml(tabsClassName)} ${helpMode ? "gh-comment-header--help" : ""}" role="tablist" aria-label="Onglets du commentaire">
             <div class="comment-composer__tabs-left">
-              <button class="comment-tab ${!previewMode ? "is-active" : ""}" data-action="${escapeHtml(tabWriteAction)}" type="button">Write</button>
-              <button class="comment-tab ${previewMode ? "is-active" : ""}" data-action="${escapeHtml(tabPreviewAction)}" type="button">Preview</button>
+              <button class="comment-tab light-tabs__item ${!previewMode ? "is-active" : ""}" data-action="${escapeHtml(tabWriteAction)}" type="button" role="tab" aria-selected="${!previewMode ? "true" : "false"}"><span class="light-tabs__label">Écrire</span></button>
+              <button class="comment-tab light-tabs__item ${previewMode ? "is-active" : ""}" data-action="${escapeHtml(tabPreviewAction)}" type="button" role="tab" aria-selected="${previewMode ? "true" : "false"}"><span class="light-tabs__label">Aperçu</span></button>
             </div>
             ${toolbarHtml ? `<div class="comment-composer__toolbar" role="toolbar" aria-label="Markdown toolbar">${toolbarHtml}</div>` : ""}
           </div>
