@@ -1809,10 +1809,13 @@ export function createProjectSubjectsEvents(config) {
       const normalizedMessageId = String(messageId || "").trim();
       if (!normalizedMessageId) return;
       const editor = root.querySelector(`[data-inline-edit-editor="${selectorValue(normalizedMessageId)}"]`);
-      if (!editor) return;
-      editor.classList.toggle("hidden", !visible);
-      if (visible) editor.removeAttribute("aria-hidden");
-      else editor.setAttribute("aria-hidden", "true");
+      const content = root.querySelector(`[data-thread-comment-content="${selectorValue(normalizedMessageId)}"]`);
+      if (editor) {
+        editor.classList.toggle("hidden", !visible);
+        if (visible) editor.removeAttribute("aria-hidden");
+        else editor.setAttribute("aria-hidden", "true");
+      }
+      if (content) content.classList.toggle("hidden", !!visible);
     };
     const clearInlineReplyAttachmentsState = (messageId = "", { keepUploadSession = false } = {}) => {
       const normalizedMessageId = String(messageId || "").trim();

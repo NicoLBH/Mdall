@@ -958,20 +958,17 @@ priority=${firstNonEmpty(subject.priority, "")}`
       tsHtml,
       headerRightHtml: renderThreadCommentActions(entry),
       bodyHtml: `
-        ${isEditing
-          ? renderInlineEditComposer({
-            commentId,
-            depth,
-            isEditing,
-            draft: editDraft || String(entry?.message || ""),
-            previewMode: editPreviewMode,
-            originalMessage: String(entry?.message || "")
-          })
-          : `
-            <div class="thread-comment-content-capsule">
-              ${mdToHtml(entry?.message || "")}
-            </div>
-          `}
+        <div class="thread-comment-content-capsule ${isEditing ? "hidden" : ""}" data-thread-comment-content="${escapeHtml(commentId)}">
+          ${mdToHtml(entry?.message || "")}
+        </div>
+        ${renderInlineEditComposer({
+          commentId,
+          depth,
+          isEditing,
+          draft: editDraft || String(entry?.message || ""),
+          previewMode: editPreviewMode,
+          originalMessage: String(entry?.message || "")
+        })}
         ${(Array.isArray(entry?.meta?.attachments) && entry.meta.attachments.length)
           ? `<div class="subject-attachment-grid">${entry.meta.attachments.map((attachment) => renderAttachmentTile(attachment)).join("")}</div>`
           : ""}
