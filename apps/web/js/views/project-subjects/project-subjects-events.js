@@ -987,8 +987,10 @@ export function createProjectSubjectsEvents(config) {
         };
       });
 
-      const attachmentInput = root.querySelector("[data-role='subject-composer-file-input']");
-      const attachmentDropzone = root.querySelector(".comment-composer__editor");
+      const mainComposerRoot = commentTextarea.closest(".comment-composer");
+      const attachmentInput = mainComposerRoot?.querySelector("[data-role='subject-composer-file-input']")
+        || root.querySelector("[data-role='subject-composer-file-input']");
+      const attachmentDropzone = mainComposerRoot?.querySelector(".comment-composer__editor");
       root.querySelectorAll("[data-action='composer-attachments-pick']").forEach((btn) => {
         btn.onclick = () => attachmentInput?.click();
       });
