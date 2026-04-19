@@ -2826,6 +2826,19 @@ body.is-resizing{
   padding:12px;
   background-color:var(--bg-input);
 }
+.thread-inline-reply-editor--root{
+  border-bottom-left-radius:var(--radius);
+  border-bottom-right-radius:var(--radius);
+}
+.thread-inline-reply-editor--nested{
+  border:1px solid var(--border2);
+  border-bottom-left-radius:var(--radius);
+}
+.thread-inline-reply-editor__actions{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+}
 .thread-inline-reply-editor .comment-composer__textarea{
   min-height:110px;
   background:var(--bgAssistPanel);
@@ -2836,6 +2849,8 @@ body.is-resizing{
   border-top:1px solid var(--border2);
   padding-top:8px;
   background-color:var(--bgAssistPanel);
+  border-bottom-left-radius:var(--radius);
+  border-bottom-right-radius:var(--radius);
 }
 .thread-comment-replies--github .gh-comment-box{
   border:none;

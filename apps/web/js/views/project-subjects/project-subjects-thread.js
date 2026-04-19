@@ -735,7 +735,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
     `;
   }
 
-  function renderInlineReplyComposer({ commentId, isExpanded, draft, previewMode, attachments = [] }) {
+  function renderInlineReplyComposer({ commentId, isExpanded, draft, previewMode, attachments = [], depth = 0 }) {
     if (!commentId) return "";
     if (!isExpanded) return "";
     const pendingAttachments = Array.isArray(attachments) ? attachments : [];
@@ -772,8 +772,12 @@ priority=${firstNonEmpty(subject.priority, "")}`
       `
       : "";
 
+    const inlineEditorClass = Number(depth || 0) > 0
+      ? "thread-inline-reply-editor thread-inline-reply-editor--nested"
+      : "thread-inline-reply-editor thread-inline-reply-editor--root";
+
     return `
-      <div class="thread-inline-reply-editor" data-inline-reply-editor="${escapeHtml(commentId)}">
+      <div class="${inlineEditorClass}" data-inline-reply-editor="${escapeHtml(commentId)}">
         ${renderCommentComposer({
           hideAvatar: true,
           hideTitle: true,
@@ -784,14 +788,16 @@ priority=${firstNonEmpty(subject.priority, "")}`
           textareaAttributes: {
             "data-thread-reply-draft": commentId
           },
-          placeholder: "Écrire une réponse",
+          placeholder: "écrire une réponse, glisser-déposer une pièce jointe...",
           tabWriteAction: "thread-reply-tab-write",
           tabPreviewAction: "thread-reply-tab-preview",
           toolbarHtml: renderMarkdownToolbar("thread-reply-format", { messageId: commentId }),
           previewHtml: normalizedDraft.trim() ? mdToHtml(normalizedDraft) : "",
           actionsHtml: `
-            <button class="gh-btn" type="button" data-action="thread-reply-cancel" data-message-id="${escapeHtml(commentId)}">Annuler</button>
-            <button class="gh-btn gh-btn--comment gh-btn--primary" type="button" data-action="thread-reply-submit" data-message-id="${escapeHtml(commentId)}" ${canSubmit ? "" : "disabled"}>Répondre</button>
+            <div class="thread-inline-reply-editor__actions">
+              <button class="gh-btn" type="button" data-action="thread-reply-cancel" data-message-id="${escapeHtml(commentId)}">Annuler</button>
+              <button class="gh-btn gh-btn--comment gh-btn--primary" type="button" data-action="thread-reply-submit" data-message-id="${escapeHtml(commentId)}" ${canSubmit ? "" : "disabled"}>Répondre</button>
+            </div>
           `,
           previewEmptyHint: "Use Markdown to format your reply",
           footerHtml: `
@@ -920,7 +926,8 @@ priority=${firstNonEmpty(subject.priority, "")}`
             isExpanded,
             draft,
             previewMode,
-            attachments
+            attachments,
+            depth
           })}
         </div>
       `,
