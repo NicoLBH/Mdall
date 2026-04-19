@@ -2630,6 +2630,22 @@ body.is-resizing{
 .comment-toolbar-btn .ui-icon{width:16px;height:16px;}
 .comment-composer__preview{min-height:170px;padding:12px;background:var(--bg);}
 .comment-composer__preview-empty{color:var(--muted);font-size:14px;}
+#subject-autocomplete-layer{
+  position:fixed;
+  inset:0;
+  z-index:900;
+  pointer-events:none;
+}
+.subject-autocomplete-popup-root{
+  position:fixed;
+  top:0;
+  left:0;
+  pointer-events:none;
+}
+.subject-autocomplete-popup-root .subject-mention-popup{
+  margin:0;
+  pointer-events:auto;
+}
 .subject-mention-popup{
   margin:0 10px 10px;
   border:1px solid var(--border2);
