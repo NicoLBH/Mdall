@@ -1032,6 +1032,24 @@ export function createProjectSubjectsEvents(config) {
           caretEnd: Number(commentTextarea.selectionEnd || 0)
         });
       };
+      const syncEmojiPopup = ({ composerKey = "main" } = {}) => {
+        const emojiState = getEmojiState();
+        const context = resolveEmojiTriggerContext(commentTextarea.value || "", commentTextarea.selectionStart || 0);
+        if (!context) {
+          if (emojiState.open) closeEmojiPopup();
+          return;
+        }
+        const query = String(context?.query || "").trim().toLowerCase();
+        const suggestions = searchEmojiSuggestions(query, 200);
+        emojiState.triggerStart = Number(context?.triggerStart ?? -1);
+        emojiState.triggerEnd = Number(context?.triggerEnd ?? -1);
+        emojiState.query = query;
+        emojiState.suggestions = suggestions;
+        emojiState.composerKey = composerKey;
+        emojiState.open = true;
+        emojiState.activeIndex = Math.max(0, Math.min(Number(emojiState.activeIndex || 0), Math.max(0, suggestions.length - 1)));
+        rerenderScope(root);
+      };
 
       const ensureMentionCollaboratorsLoaded = async () => {
         if (mentionCollaboratorsLoaded) return mentionCollaborators;
@@ -1137,6 +1155,33 @@ export function createProjectSubjectsEvents(config) {
           caretStart: result.nextCursorIndex,
           caretEnd: result.nextCursorIndex
         });
+      };
+      const syncComposerAutocomplete = async () => {
+        const mentionContext = resolveMentionTriggerContext(commentTextarea.value || "", commentTextarea.selectionStart || 0);
+        if (mentionContext) {
+          await syncMentionPopup();
+          closeEmojiPopup({ rerender: false });
+          return;
+        }
+        if (getMentionState().open) closeMentionPopup({ rerender: false });
+        syncEmojiPopup({ composerKey: "main" });
+      };
+      const pickEmojiSuggestion = (suggestion) => {
+        const emojiState = getEmojiState();
+        const context = {
+          triggerStart: emojiState.triggerStart,
+          triggerEnd: Number(commentTextarea.selectionStart || emojiState.triggerEnd || 0)
+        };
+        const result = applyEmojiSuggestion(commentTextarea.value || "", context, suggestion);
+        commentTextarea.value = result.nextText;
+        store.situationsView.commentDraft = String(result.nextText || "");
+        commentTextarea.focus();
+        commentTextarea.selectionStart = result.nextCursorIndex;
+        commentTextarea.selectionEnd = result.nextCursorIndex;
+        closeEmojiPopup({ rerender: false });
+        if (store.situationsView.commentPreviewMode) syncCommentPreview(root);
+        syncMainComposerTextareaHeight();
+        rerenderScope(root);
       };
       const syncComposerAutocomplete = async () => {
         const mentionContext = resolveMentionTriggerContext(commentTextarea.value || "", commentTextarea.selectionStart || 0);
