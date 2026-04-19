@@ -11,6 +11,7 @@ import {
 } from "../../utils/emoji-autocomplete.js";
 
 export function createProjectSubjectsEvents(config) {
+  const EMOJI_GRID_COLUMNS = 6;
   const {
     store,
     PROJECT_TAB_RESELECTED_EVENT,
@@ -898,7 +899,7 @@ export function createProjectSubjectsEvents(config) {
           return;
         }
         const query = String(context?.query || "").trim().toLowerCase();
-        const suggestions = searchEmojiSuggestions(query, 8);
+        const suggestions = searchEmojiSuggestions(query, 200);
         emojiState.triggerStart = Number(context?.triggerStart ?? -1);
         emojiState.triggerEnd = Number(context?.triggerEnd ?? -1);
         emojiState.query = query;
@@ -1060,11 +1061,23 @@ export function createProjectSubjectsEvents(config) {
         if (emojiState.open && Array.isArray(emojiState.suggestions) && emojiState.suggestions.length && String(emojiState.composerKey || "") === "main") {
           if (ev.key === "ArrowDown") {
             ev.preventDefault();
-            emojiState.activeIndex = (Number(emojiState.activeIndex || 0) + 1) % emojiState.suggestions.length;
+            emojiState.activeIndex = (Number(emojiState.activeIndex || 0) + EMOJI_GRID_COLUMNS) % emojiState.suggestions.length;
             rerenderScope(root);
             return;
           }
           if (ev.key === "ArrowUp") {
+            ev.preventDefault();
+            emojiState.activeIndex = (Number(emojiState.activeIndex || 0) - EMOJI_GRID_COLUMNS + emojiState.suggestions.length) % emojiState.suggestions.length;
+            rerenderScope(root);
+            return;
+          }
+          if (ev.key === "ArrowRight") {
+            ev.preventDefault();
+            emojiState.activeIndex = (Number(emojiState.activeIndex || 0) + 1) % emojiState.suggestions.length;
+            rerenderScope(root);
+            return;
+          }
+          if (ev.key === "ArrowLeft") {
             ev.preventDefault();
             emojiState.activeIndex = (Number(emojiState.activeIndex || 0) - 1 + emojiState.suggestions.length) % emojiState.suggestions.length;
             rerenderScope(root);
@@ -2172,7 +2185,7 @@ export function createProjectSubjectsEvents(config) {
         return;
       }
       const query = String(context?.query || "").trim().toLowerCase();
-      const suggestions = searchEmojiSuggestions(query, 8);
+      const suggestions = searchEmojiSuggestions(query, 200);
       emojiState.open = true;
       emojiState.query = query;
       emojiState.activeIndex = Math.max(0, Math.min(Number(emojiState.activeIndex || 0), Math.max(0, suggestions.length - 1)));
@@ -2216,11 +2229,23 @@ export function createProjectSubjectsEvents(config) {
         if (emojiState.open && String(emojiState.composerKey || "") === composerKey && Array.isArray(emojiState.suggestions) && emojiState.suggestions.length) {
           if (event.key === "ArrowDown") {
             event.preventDefault();
-            emojiState.activeIndex = (Number(emojiState.activeIndex || 0) + 1) % emojiState.suggestions.length;
+            emojiState.activeIndex = (Number(emojiState.activeIndex || 0) + EMOJI_GRID_COLUMNS) % emojiState.suggestions.length;
             rerenderScope(root);
             return;
           }
           if (event.key === "ArrowUp") {
+            event.preventDefault();
+            emojiState.activeIndex = (Number(emojiState.activeIndex || 0) - EMOJI_GRID_COLUMNS + emojiState.suggestions.length) % emojiState.suggestions.length;
+            rerenderScope(root);
+            return;
+          }
+          if (event.key === "ArrowRight") {
+            event.preventDefault();
+            emojiState.activeIndex = (Number(emojiState.activeIndex || 0) + 1) % emojiState.suggestions.length;
+            rerenderScope(root);
+            return;
+          }
+          if (event.key === "ArrowLeft") {
             event.preventDefault();
             emojiState.activeIndex = (Number(emojiState.activeIndex || 0) - 1 + emojiState.suggestions.length) % emojiState.suggestions.length;
             rerenderScope(root);
@@ -2267,11 +2292,23 @@ export function createProjectSubjectsEvents(config) {
         if (emojiState.open && String(emojiState.composerKey || "") === composerKey && Array.isArray(emojiState.suggestions) && emojiState.suggestions.length) {
           if (event.key === "ArrowDown") {
             event.preventDefault();
-            emojiState.activeIndex = (Number(emojiState.activeIndex || 0) + 1) % emojiState.suggestions.length;
+            emojiState.activeIndex = (Number(emojiState.activeIndex || 0) + EMOJI_GRID_COLUMNS) % emojiState.suggestions.length;
             rerenderScope(root);
             return;
           }
           if (event.key === "ArrowUp") {
+            event.preventDefault();
+            emojiState.activeIndex = (Number(emojiState.activeIndex || 0) - EMOJI_GRID_COLUMNS + emojiState.suggestions.length) % emojiState.suggestions.length;
+            rerenderScope(root);
+            return;
+          }
+          if (event.key === "ArrowRight") {
+            event.preventDefault();
+            emojiState.activeIndex = (Number(emojiState.activeIndex || 0) + 1) % emojiState.suggestions.length;
+            rerenderScope(root);
+            return;
+          }
+          if (event.key === "ArrowLeft") {
             event.preventDefault();
             emojiState.activeIndex = (Number(emojiState.activeIndex || 0) - 1 + emojiState.suggestions.length) % emojiState.suggestions.length;
             rerenderScope(root);

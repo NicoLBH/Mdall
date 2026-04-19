@@ -804,6 +804,41 @@ priority=${firstNonEmpty(subject.priority, "")}`
     `;
   }
 
+  function renderEmojiPopup(emojiUi, composerKey) {
+    if (!emojiUi?.open || String(emojiUi.composerKey || "") !== String(composerKey || "")) return "";
+    const suggestions = Array.isArray(emojiUi.suggestions) ? emojiUi.suggestions : [];
+    return `
+      <div class="subject-mention-popup subject-emoji-popup" role="listbox" aria-label="Suggestions d’emoji">
+        ${suggestions.length
+    ? `
+            <div class="subject-emoji-popup__grid">
+              ${suggestions.map((suggestion, index) => {
+      const isActive = Number(emojiUi.activeIndex || 0) === index;
+      const shortcode = String(suggestion?.shortcode || "").trim();
+      return `
+                  <button
+                    class="subject-emoji-popup__cell ${isActive ? "is-active" : ""}"
+                    type="button"
+                    role="option"
+                    aria-selected="${isActive ? "true" : "false"}"
+                    aria-label="${escapeHtml(shortcode ? `:${shortcode}:` : "emoji")}"
+                    title="${escapeHtml(shortcode ? `:${shortcode}:` : "emoji")}"
+                    data-action="emoji-pick"
+                    data-composer-key="${escapeHtml(String(composerKey || ""))}"
+                    data-emoji="${escapeHtml(String(suggestion?.emoji || ""))}"
+                    data-shortcode="${escapeHtml(shortcode)}"
+                  >
+                    ${escapeHtml(String(suggestion?.emoji || ""))}
+                  </button>
+                `;
+    }).join("")}
+            </div>
+          `
+    : `<div class="subject-mention-popup__empty">Aucun emoji trouvé</div>`}
+      </div>
+    `;
+  }
+
   function renderInlineReplyComposer({ commentId, isExpanded, draft, previewMode, attachments = [], depth = 0 }) {
     if (!commentId) return "";
     const pendingAttachments = Array.isArray(attachments) ? attachments : [];
@@ -846,36 +881,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
       : "thread-inline-reply-editor thread-inline-reply-editor--root";
     const emojiUi = getEmojiUiState();
     const replyComposerKey = `reply:${commentId}`;
-    const inlineReplyEmojiPopupHtml = emojiUi.open && String(emojiUi.composerKey || "") === replyComposerKey
-      ? `
-        <div class="subject-mention-popup subject-emoji-popup" role="listbox" aria-label="Suggestions d’emoji">
-          ${(Array.isArray(emojiUi.suggestions) ? emojiUi.suggestions : []).length
-            ? emojiUi.suggestions.map((suggestion, index) => {
-            const isActive = Number(emojiUi.activeIndex || 0) === index;
-            const aliases = Array.isArray(suggestion?.aliases) ? suggestion.aliases.slice(0, 2).join(", ") : "";
-            return `
-              <button
-                class="subject-mention-popup__item subject-emoji-popup__item ${isActive ? "is-active" : ""}"
-                type="button"
-                role="option"
-                aria-selected="${isActive ? "true" : "false"}"
-                data-action="emoji-pick"
-                data-composer-key="${escapeHtml(replyComposerKey)}"
-                data-emoji="${escapeHtml(String(suggestion?.emoji || ""))}"
-                data-shortcode="${escapeHtml(String(suggestion?.shortcode || ""))}"
-              >
-                <span class="subject-emoji-popup__glyph">${escapeHtml(String(suggestion?.emoji || ""))}</span>
-                <span class="subject-emoji-popup__content">
-                  <span class="subject-emoji-popup__code">:${escapeHtml(String(suggestion?.shortcode || ""))}:</span>
-                  <span class="subject-emoji-popup__meta">${escapeHtml(aliases)}</span>
-                </span>
-              </button>
-            `;
-          }).join("")
-            : `<div class="subject-mention-popup__empty">Aucun emoji trouvé</div>`}
-        </div>
-      `
-      : "";
+    const inlineReplyEmojiPopupHtml = renderEmojiPopup(emojiUi, replyComposerKey);
 
     return `
       <div class="${inlineEditorClass} ${isExpanded ? "" : "hidden"}" data-inline-reply-editor="${escapeHtml(commentId)}" ${isExpanded ? "" : "aria-hidden=\"true\""}>
@@ -941,36 +947,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
     const canSubmit = !!normalizedDraft.trim();
     const emojiUi = getEmojiUiState();
     const editComposerKey = `edit:${commentId}`;
-    const inlineEditEmojiPopupHtml = emojiUi.open && String(emojiUi.composerKey || "") === editComposerKey
-      ? `
-        <div class="subject-mention-popup subject-emoji-popup" role="listbox" aria-label="Suggestions d’emoji">
-          ${(Array.isArray(emojiUi.suggestions) ? emojiUi.suggestions : []).length
-            ? emojiUi.suggestions.map((suggestion, index) => {
-            const isActive = Number(emojiUi.activeIndex || 0) === index;
-            const aliases = Array.isArray(suggestion?.aliases) ? suggestion.aliases.slice(0, 2).join(", ") : "";
-            return `
-              <button
-                class="subject-mention-popup__item subject-emoji-popup__item ${isActive ? "is-active" : ""}"
-                type="button"
-                role="option"
-                aria-selected="${isActive ? "true" : "false"}"
-                data-action="emoji-pick"
-                data-composer-key="${escapeHtml(editComposerKey)}"
-                data-emoji="${escapeHtml(String(suggestion?.emoji || ""))}"
-                data-shortcode="${escapeHtml(String(suggestion?.shortcode || ""))}"
-              >
-                <span class="subject-emoji-popup__glyph">${escapeHtml(String(suggestion?.emoji || ""))}</span>
-                <span class="subject-emoji-popup__content">
-                  <span class="subject-emoji-popup__code">:${escapeHtml(String(suggestion?.shortcode || ""))}:</span>
-                  <span class="subject-emoji-popup__meta">${escapeHtml(aliases)}</span>
-                </span>
-              </button>
-            `;
-          }).join("")
-            : `<div class="subject-mention-popup__empty">Aucun emoji trouvé</div>`}
-        </div>
-      `
-      : "";
+    const inlineEditEmojiPopupHtml = renderEmojiPopup(emojiUi, editComposerKey);
     return `
       <div class="thread-inline-edit-editor ${editModeClass} ${isEditing ? "" : "hidden"}" data-inline-edit-editor="${escapeHtml(commentId)}" ${isEditing ? "" : "aria-hidden=\"true\""}>
         ${renderCommentComposer({
@@ -1541,36 +1518,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
         </div>
       `
       : "";
-    const mainEmojiPopupHtml = emojiUi.open && String(emojiUi.composerKey || "") === "main"
-      ? `
-        <div class="subject-mention-popup subject-emoji-popup" role="listbox" aria-label="Suggestions d’emoji">
-          ${(Array.isArray(emojiUi.suggestions) ? emojiUi.suggestions : []).length
-            ? emojiUi.suggestions.map((suggestion, index) => {
-            const isActive = Number(emojiUi.activeIndex || 0) === index;
-            const aliases = Array.isArray(suggestion?.aliases) ? suggestion.aliases.slice(0, 2).join(", ") : "";
-            return `
-              <button
-                class="subject-mention-popup__item subject-emoji-popup__item ${isActive ? "is-active" : ""}"
-                type="button"
-                role="option"
-                aria-selected="${isActive ? "true" : "false"}"
-                data-action="emoji-pick"
-                data-composer-key="main"
-                data-emoji="${escapeHtml(String(suggestion?.emoji || ""))}"
-                data-shortcode="${escapeHtml(String(suggestion?.shortcode || ""))}"
-              >
-                <span class="subject-emoji-popup__glyph">${escapeHtml(String(suggestion?.emoji || ""))}</span>
-                <span class="subject-emoji-popup__content">
-                  <span class="subject-emoji-popup__code">:${escapeHtml(String(suggestion?.shortcode || ""))}:</span>
-                  <span class="subject-emoji-popup__meta">${escapeHtml(aliases)}</span>
-                </span>
-              </button>
-            `;
-          }).join("")
-            : `<div class="subject-mention-popup__empty">Aucun emoji trouvé</div>`}
-        </div>
-      `
-      : "";
+    const mainEmojiPopupHtml = renderEmojiPopup(emojiUi, "main");
 
     const pendingAttachmentsHtml = pendingAttachments.length
       ? `
