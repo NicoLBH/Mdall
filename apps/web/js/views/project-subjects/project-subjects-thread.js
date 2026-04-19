@@ -161,6 +161,23 @@ export function createProjectSubjectsThread(config = {}) {
     return state.mentionUi;
   }
 
+  function getEmojiUiState() {
+    ensureViewUiState();
+    const state = store.situationsView;
+    if (!state.emojiUi || typeof state.emojiUi !== "object") {
+      state.emojiUi = {
+        open: false,
+        query: "",
+        activeIndex: 0,
+        triggerStart: -1,
+        triggerEnd: -1,
+        suggestions: [],
+        composerKey: ""
+      };
+    }
+    return state.emojiUi;
+  }
+
   function getReplyContextState() {
     ensureViewUiState();
     const state = store.situationsView;
@@ -787,6 +804,41 @@ priority=${firstNonEmpty(subject.priority, "")}`
     `;
   }
 
+  function renderEmojiPopup(emojiUi, composerKey) {
+    if (!emojiUi?.open || String(emojiUi.composerKey || "") !== String(composerKey || "")) return "";
+    const suggestions = Array.isArray(emojiUi.suggestions) ? emojiUi.suggestions : [];
+    return `
+      <div class="subject-mention-popup subject-emoji-popup" data-autocomplete-popup="emoji" data-composer-key="${escapeHtml(String(composerKey || ""))}" role="listbox" aria-label="Suggestions d’emoji">
+        ${suggestions.length
+    ? `
+            <div class="subject-emoji-popup__grid">
+              ${suggestions.map((suggestion, index) => {
+      const isActive = Number(emojiUi.activeIndex || 0) === index;
+      const shortcode = String(suggestion?.shortcode || "").trim();
+      return `
+                  <button
+                    class="subject-emoji-popup__cell ${isActive ? "is-active" : ""}"
+                    type="button"
+                    role="option"
+                    aria-selected="${isActive ? "true" : "false"}"
+                    aria-label="${escapeHtml(shortcode ? `:${shortcode}:` : "emoji")}"
+                    title="${escapeHtml(shortcode ? `:${shortcode}:` : "emoji")}"
+                    data-action="emoji-pick"
+                    data-composer-key="${escapeHtml(String(composerKey || ""))}"
+                    data-emoji="${escapeHtml(String(suggestion?.emoji || ""))}"
+                    data-shortcode="${escapeHtml(shortcode)}"
+                  >
+                    ${escapeHtml(String(suggestion?.emoji || ""))}
+                  </button>
+                `;
+    }).join("")}
+            </div>
+          `
+    : `<div class="subject-mention-popup__empty">Aucun emoji trouvé</div>`}
+      </div>
+    `;
+  }
+
   function renderInlineReplyComposer({ commentId, isExpanded, draft, previewMode, attachments = [], depth = 0 }) {
     if (!commentId) return "";
     const pendingAttachments = Array.isArray(attachments) ? attachments : [];
@@ -827,6 +879,9 @@ priority=${firstNonEmpty(subject.priority, "")}`
     const inlineEditorClass = Number(depth || 0) > 0
       ? "thread-inline-reply-editor thread-inline-reply-editor--nested"
       : "thread-inline-reply-editor thread-inline-reply-editor--root";
+    const emojiUi = getEmojiUiState();
+    const replyComposerKey = `reply:${commentId}`;
+    const inlineReplyEmojiPopupHtml = renderEmojiPopup(emojiUi, replyComposerKey);
 
     return `
       <div class="${inlineEditorClass} ${isExpanded ? "" : "hidden"}" data-inline-reply-editor="${escapeHtml(commentId)}" ${isExpanded ? "" : "aria-hidden=\"true\""}>
@@ -855,6 +910,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
           `,
           previewEmptyHint: "Use Markdown to format your reply",
           footerHtml: `
+            ${inlineReplyEmojiPopupHtml}
             <input
               id="threadReplyAttachmentInput-${escapeHtml(commentId)}"
               type="file"
@@ -889,6 +945,9 @@ priority=${firstNonEmpty(subject.priority, "")}`
       : "comment-composer--thread-edit-root";
     const submitLabel = Number(depth || 0) > 0 ? "Mettre à jour la réponse" : "Mettre à jour le commentaire";
     const canSubmit = !!normalizedDraft.trim();
+    const emojiUi = getEmojiUiState();
+    const editComposerKey = `edit:${commentId}`;
+    const inlineEditEmojiPopupHtml = renderEmojiPopup(emojiUi, editComposerKey);
     return `
       <div class="thread-inline-edit-editor ${editModeClass} ${isEditing ? "" : "hidden"}" data-inline-edit-editor="${escapeHtml(commentId)}" ${isEditing ? "" : "aria-hidden=\"true\""}>
         ${renderCommentComposer({
@@ -914,7 +973,8 @@ priority=${firstNonEmpty(subject.priority, "")}`
               <button class="gh-btn gh-btn--comment gh-btn--primary" type="button" data-action="thread-edit-submit" data-message-id="${escapeHtml(commentId)}" data-original-body="${escapeHtml(String(originalMessage || ""))}" ${canSubmit ? "" : "disabled"}>${submitLabel}</button>
             </div>
           `,
-          previewEmptyHint: "Use Markdown to format your comment"
+          previewEmptyHint: "Use Markdown to format your comment",
+          footerHtml: inlineEditEmojiPopupHtml
         })}
       </div>
     `;
@@ -1419,6 +1479,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
     const toolbarHtml = renderMarkdownToolbar("composer-format");
 
     const mentionUi = getMentionUiState();
+    const emojiUi = getEmojiUiState();
     const attachmentState = getComposerAttachmentsState();
     const normalizedSubjectId = type === "sujet" ? normalizeId(item.id) : "";
     const pendingAttachments = normalizedSubjectId && normalizeId(attachmentState.subjectId) === normalizedSubjectId
@@ -1433,7 +1494,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
     `;
     const mentionPopupHtml = mentionUi.open
       ? `
-        <div class="subject-mention-popup" role="listbox" aria-label="Suggestions de mention">
+        <div class="subject-mention-popup" data-autocomplete-popup="mention" data-composer-key="main" role="listbox" aria-label="Suggestions de mention">
           ${(Array.isArray(mentionUi.suggestions) ? mentionUi.suggestions : []).length
             ? mentionUi.suggestions.map((suggestion, index) => {
             const personId = normalizeId(suggestion?.personId);
@@ -1457,6 +1518,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
         </div>
       `
       : "";
+    const mainEmojiPopupHtml = renderEmojiPopup(emojiUi, "main");
 
     const pendingAttachmentsHtml = pendingAttachments.length
       ? `
@@ -1527,7 +1589,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
         ? mdToHtml(String(store.situationsView.commentDraft || ""))
         : "",
       previewEmptyHint: "Utilisez le Markdown pour formater votre commentaire",
-      footerHtml: `${mentionPopupHtml}${composerAttachmentsHtml}`
+      footerHtml: `${mentionPopupHtml}${mainEmojiPopupHtml}${composerAttachmentsHtml}`
     });
   }
 
@@ -1545,6 +1607,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
     getReplyContextForSubject,
     buildReplyPreview,
     getMentionUiState,
+    getEmojiUiState,
     getComposerAttachmentsState,
     getInlineReplyUiState,
     renderThreadBlock,

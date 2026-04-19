@@ -2658,6 +2658,33 @@ body.is-resizing{
 .subject-mention-popup__name{font-size:13px;}
 .subject-mention-popup__meta{font-size:12px;color:var(--muted);}
 .subject-mention-popup__empty{padding:10px 12px;font-size:12px;color:var(--muted);}
+.subject-emoji-popup{
+  max-height:220px;
+  overflow:hidden;
+}
+.subject-emoji-popup__grid{
+  max-height:220px;
+  overflow:auto;
+  padding:10px;
+  display:grid;
+  grid-template-columns:repeat(6, minmax(0, 1fr));
+  gap:8px;
+}
+.subject-emoji-popup__cell{
+  border:1px solid transparent;
+  border-radius:8px;
+  background:transparent;
+  color:var(--text);
+  font-size:22px;
+  line-height:1;
+  min-height:36px;
+  cursor:pointer;
+}
+.subject-emoji-popup__cell:hover,
+.subject-emoji-popup__cell.is-active{
+  border-color:rgba(56,139,253,.45);
+  background:rgba(56,139,253,.18);
+}
 .comment-composer__editor.is-dragover{
   border-color:rgba(56,139,253,.95);
 }
