@@ -1871,6 +1871,10 @@ export function createProjectSubjectsEvents(config) {
         debugThreadReply("menu_action_reply", { messageId, parentMessageLength: parentMessageText.length });
         btn.closest(".thread-comment-menu__dropdown")?.classList.remove("is-open");
         const replyUi = resolveInlineReplyUiState();
+        const previouslyExpandedMessageId = String(replyUi.expandedMessageId || "").trim();
+        if (previouslyExpandedMessageId && previouslyExpandedMessageId !== messageId) {
+          clearInlineReplyAttachmentsState(previouslyExpandedMessageId);
+        }
         if (!String(replyUi.draftsByMessageId?.[messageId] || "").trim()) replyUi.draftsByMessageId[messageId] = "";
         replyUi.previewByMessageId[messageId] = false;
         replyUi.expandedMessageId = messageId;
