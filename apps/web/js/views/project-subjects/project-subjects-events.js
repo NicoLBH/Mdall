@@ -13,6 +13,7 @@ import { computeTextareaCaretRect } from "../../utils/textarea-caret-position.js
 
 export function createProjectSubjectsEvents(config) {
   const EMOJI_GRID_COLUMNS = 6;
+  const CARET_NAVIGATION_KEYS = new Set(["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"]);
   const {
     store,
     PROJECT_TAB_RESELECTED_EVENT,
@@ -700,12 +701,15 @@ export function createProjectSubjectsEvents(config) {
       return store.situationsView.emojiUi;
     };
 
+    const escapeHtml = (value) => String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+
     const closeEmojiPopup = ({
-      rerender = true,
-      selector = "",
-      shouldFocus = false,
-      caretStart = 0,
-      caretEnd = 0
+      rerender = true
     } = {}) => {
       const emojiState = getEmojiState();
       emojiState.open = false;
@@ -715,13 +719,7 @@ export function createProjectSubjectsEvents(config) {
       emojiState.triggerEnd = -1;
       emojiState.suggestions = [];
       emojiState.composerKey = "";
-      if (rerender) {
-        if (selector) {
-          rerenderAutocompleteUi({ selector, shouldFocus, caretStart, caretEnd });
-        } else {
-          rerenderScope(root);
-        }
-      }
+      if (rerender) rerenderAutocompleteUi();
     };
 
     const getTextareaSelector = ({ composerKey = "main", messageId = "" } = {}) => {
@@ -744,12 +742,93 @@ export function createProjectSubjectsEvents(config) {
       return selector ? root.querySelector(selector) : null;
     };
 
-    const positionAutocompletePopup = (textarea, popup) => {
+    const focusComposerTextarea = (composerKey = "") => {
+      const textarea = getTextareaForComposerKey(composerKey);
+      if (!textarea) return null;
+      textarea.focus({ preventScroll: true });
+      return textarea;
+    };
+
+    const getAutocompleteLayer = () => {
+      const layer = document.querySelector("#subject-autocomplete-layer");
+      if (!layer) return null;
+      const mentionRoot = layer.querySelector("#subject-mention-popup-root");
+      const emojiRoot = layer.querySelector("#subject-emoji-popup-root");
+      if (!mentionRoot || !emojiRoot) return null;
+      return { layer, mentionRoot, emojiRoot };
+    };
+
+    const renderMentionPopupHtml = () => {
+      const mentionState = getMentionState();
+      if (!mentionState?.open) return "";
+      const suggestions = Array.isArray(mentionState.suggestions) ? mentionState.suggestions : [];
+      return `
+        <div class="subject-mention-popup" data-autocomplete-popup="mention" data-composer-key="${escapeHtml(String(mentionState.composerKey || ""))}" role="listbox" aria-label="Suggestions de mention">
+          ${suggestions.length
+    ? suggestions.map((suggestion, index) => {
+      const personId = String(suggestion?.personId || "").trim();
+      const isActive = Number(mentionState.activeIndex || 0) === index;
+      return `
+              <button
+                class="subject-mention-popup__item ${isActive ? "is-active" : ""}"
+                type="button"
+                role="option"
+                aria-selected="${isActive ? "true" : "false"}"
+                data-action="mention-pick"
+                data-composer-key="${escapeHtml(String(mentionState.composerKey || ""))}"
+                data-person-id="${escapeHtml(personId)}"
+                data-label="${escapeHtml(String(suggestion?.label || ""))}"
+              >
+                <span class="subject-mention-popup__name">${escapeHtml(String(suggestion?.label || ""))}</span>
+                <span class="subject-mention-popup__meta">${escapeHtml(String(suggestion?.email || ""))}</span>
+              </button>
+            `;
+    }).join("")
+    : `<div class="subject-mention-popup__empty">Aucun collaborateur trouvé</div>`}
+        </div>
+      `;
+    };
+
+    const renderEmojiPopupHtml = () => {
+      const emojiState = getEmojiState();
+      if (!emojiState?.open) return "";
+      const suggestions = Array.isArray(emojiState.suggestions) ? emojiState.suggestions : [];
+      return `
+        <div class="subject-mention-popup subject-emoji-popup" data-autocomplete-popup="emoji" data-composer-key="${escapeHtml(String(emojiState.composerKey || ""))}" role="listbox" aria-label="Suggestions d’emoji">
+          ${suggestions.length
+    ? `
+              <div class="subject-emoji-popup__grid">
+                ${suggestions.map((suggestion, index) => {
+      const isActive = Number(emojiState.activeIndex || 0) === index;
+      const shortcode = String(suggestion?.shortcode || "").trim();
+      return `
+                    <button
+                      class="subject-emoji-popup__cell ${isActive ? "is-active" : ""}"
+                      type="button"
+                      role="option"
+                      aria-selected="${isActive ? "true" : "false"}"
+                      aria-label="${escapeHtml(shortcode ? `:${shortcode}:` : "emoji")}"
+                      title="${escapeHtml(shortcode ? `:${shortcode}:` : "emoji")}"
+                      data-action="emoji-pick"
+                      data-composer-key="${escapeHtml(String(emojiState.composerKey || ""))}"
+                      data-emoji="${escapeHtml(String(suggestion?.emoji || ""))}"
+                      data-shortcode="${escapeHtml(shortcode)}"
+                    >
+                      ${escapeHtml(String(suggestion?.emoji || ""))}
+                    </button>
+                  `;
+    }).join("")}
+              </div>
+            `
+    : `<div class="subject-mention-popup__empty">Aucun emoji trouvé</div>`}
+        </div>
+      `;
+    };
+
+    const positionAutocompletePopup = (textarea, popup, popupRoot) => {
       if (!textarea || !popup || !popup.isConnected) return;
       const caretRect = computeTextareaCaretRect(textarea, textarea.selectionStart || 0);
       if (!caretRect) return;
-      popup.style.position = "fixed";
-      popup.style.margin = "0";
       popup.style.maxWidth = "min(360px, calc(100vw - 16px))";
       if (String(popup.dataset.autocompletePopup || "") === "mention") {
         popup.style.width = "min(340px, calc(100vw - 16px))";
@@ -769,41 +848,57 @@ export function createProjectSubjectsEvents(config) {
         Math.max(8, caretRect.left),
         Math.max(8, viewportW - popupRect.width - 8)
       );
-      popup.style.top = `${Math.round(top)}px`;
-      popup.style.left = `${Math.round(left)}px`;
+      if (popupRoot) {
+        popupRoot.style.top = `${Math.round(top)}px`;
+        popupRoot.style.left = `${Math.round(left)}px`;
+      }
     };
 
     const positionAllAutocompletePopups = () => {
-      const popups = root.querySelectorAll(".subject-mention-popup[data-composer-key]");
-      popups.forEach((popup) => {
-        const popupKey = String(popup.dataset.composerKey || "");
-        if (!popupKey) return;
-        const [mode, messageId = ""] = popupKey.includes(":") ? popupKey.split(":") : [popupKey, ""];
-        const popupSelector = getTextareaSelector({ composerKey: mode, messageId });
-        const popupTextarea = popupSelector ? root.querySelector(popupSelector) : null;
-        if (!popupTextarea) return;
-        positionAutocompletePopup(popupTextarea, popup);
-      });
+      const autocompleteLayer = getAutocompleteLayer();
+      if (!autocompleteLayer) return;
+      const mentionState = getMentionState();
+      const emojiState = getEmojiState();
+      const mentionPopup = autocompleteLayer.mentionRoot.querySelector(".subject-mention-popup");
+      const emojiPopup = autocompleteLayer.emojiRoot.querySelector(".subject-mention-popup");
+      if (mentionState.open && mentionPopup) {
+        const mentionTextarea = getTextareaForComposerKey(String(mentionState.composerKey || ""));
+        if (mentionTextarea) positionAutocompletePopup(mentionTextarea, mentionPopup, autocompleteLayer.mentionRoot);
+        else autocompleteLayer.mentionRoot.classList.add("hidden");
+      }
+      if (emojiState.open && emojiPopup) {
+        const emojiTextarea = getTextareaForComposerKey(String(emojiState.composerKey || ""));
+        if (emojiTextarea) positionAutocompletePopup(emojiTextarea, emojiPopup, autocompleteLayer.emojiRoot);
+        else autocompleteLayer.emojiRoot.classList.add("hidden");
+      }
     };
 
-    const restoreComposerViewport = ({ selector = "", caretStart = 0, caretEnd = 0, shouldFocus = false } = {}) => {
-      const textarea = selector ? root.querySelector(selector) : null;
-      if (textarea && shouldFocus) {
-        textarea.focus({ preventScroll: true });
-        textarea.selectionStart = caretStart;
-        textarea.selectionEnd = caretEnd;
+    const syncAutocompletePopups = () => {
+      const autocompleteLayer = getAutocompleteLayer();
+      if (!autocompleteLayer) return;
+      const mentionState = getMentionState();
+      const emojiState = getEmojiState();
+
+      if (mentionState.open) {
+        autocompleteLayer.mentionRoot.innerHTML = renderMentionPopupHtml();
+        autocompleteLayer.mentionRoot.classList.remove("hidden");
+      } else {
+        autocompleteLayer.mentionRoot.innerHTML = "";
+        autocompleteLayer.mentionRoot.classList.add("hidden");
       }
+      if (emojiState.open) {
+        autocompleteLayer.emojiRoot.innerHTML = renderEmojiPopupHtml();
+        autocompleteLayer.emojiRoot.classList.remove("hidden");
+      } else {
+        autocompleteLayer.emojiRoot.innerHTML = "";
+        autocompleteLayer.emojiRoot.classList.add("hidden");
+      }
+
       positionAllAutocompletePopups();
     };
 
-    const rerenderAutocompleteUi = ({ selector = "", shouldFocus = false, caretStart = 0, caretEnd = 0 } = {}) => {
-      const scrollX = window.scrollX;
-      const scrollY = window.scrollY;
-      rerenderScope(root);
-      requestAnimationFrame(() => {
-        window.scrollTo(scrollX, scrollY);
-        restoreComposerViewport({ selector, shouldFocus, caretStart, caretEnd });
-      });
+    const rerenderAutocompleteUi = () => {
+      syncAutocompletePopups();
     };
 
     let mentionCollaborators = [];
@@ -829,7 +924,7 @@ export function createProjectSubjectsEvents(config) {
       return store.situationsView.mentionUi;
     };
 
-    const closeMentionPopup = ({ rerender = true, selector = "#humanCommentBox", shouldFocus = false, caretStart = 0, caretEnd = 0 } = {}) => {
+    const closeMentionPopup = ({ rerender = true } = {}) => {
       const mentionState = getMentionState();
       mentionState.open = false;
       mentionState.query = "";
@@ -838,7 +933,7 @@ export function createProjectSubjectsEvents(config) {
       mentionState.triggerEnd = -1;
       mentionState.suggestions = [];
       mentionState.composerKey = "";
-      if (rerender) rerenderAutocompleteUi({ selector, shouldFocus, caretStart, caretEnd });
+      if (rerender) rerenderAutocompleteUi();
     };
 
     const ensureMentionCollaboratorsLoaded = async () => {
@@ -1308,6 +1403,9 @@ export function createProjectSubjectsEvents(config) {
             return;
           }
         }
+        if (CARET_NAVIGATION_KEYS.has(ev.key)) {
+          requestAnimationFrame(() => { void syncMainComposerAutocomplete(); });
+        }
         if (ev.key === "Enter" && (ev.ctrlKey || ev.metaKey)) {
           ev.preventDefault();
           applyCommentAction(root);
@@ -1336,23 +1434,6 @@ export function createProjectSubjectsEvents(config) {
           store.situationsView.commentDraft = String(commentTextarea.value || "");
           syncMainComposerTextareaHeight();
           if (store.situationsView.commentPreviewMode) syncCommentPreview(root);
-        };
-      });
-
-      root.querySelectorAll("[data-action='mention-pick'][data-person-id]").forEach((btn) => {
-        btn.onclick = () => {
-          pickMentionSuggestion({
-            personId: String(btn.dataset.personId || "").trim(),
-            label: String(btn.dataset.label || "").trim()
-          }, String(btn.dataset.composerKey || "main"));
-        };
-      });
-      root.querySelectorAll("[data-action='emoji-pick'][data-composer-key='main']").forEach((btn) => {
-        btn.onclick = () => {
-          pickEmojiSuggestion({
-            emoji: String(btn.dataset.emoji || "").trim(),
-            shortcode: String(btn.dataset.shortcode || "").trim()
-          });
         };
       });
 
@@ -1406,7 +1487,7 @@ export function createProjectSubjectsEvents(config) {
           const target = event?.target;
           if (!target || !(target instanceof Element)) return;
           if (
-            target.closest(".subject-mention-popup")
+            target.closest("#subject-autocomplete-layer")
             || target.closest("#humanCommentBox")
             || target.closest("[data-thread-reply-draft]")
             || target.closest("[data-thread-edit-draft]")
@@ -2469,6 +2550,50 @@ export function createProjectSubjectsEvents(config) {
       return result;
     };
 
+    const applyEmojiSuggestionByComposerKey = (composerKey, suggestion = {}) => {
+      const normalizedKey = String(composerKey || "").trim();
+      if (!normalizedKey) return;
+      const textarea = getTextareaForComposerKey(normalizedKey);
+      if (!textarea) return;
+      const [mode = "main", messageId = ""] = normalizedKey.split(":");
+      if (normalizedKey === "main") {
+        const emojiState = getEmojiState();
+        const context = {
+          triggerStart: emojiState.triggerStart,
+          triggerEnd: Number(textarea.selectionStart || emojiState.triggerEnd || 0)
+        };
+        const result = applyEmojiSuggestion(textarea.value || "", context, suggestion);
+        textarea.value = result.nextText;
+        store.situationsView.commentDraft = String(result.nextText || "");
+        textarea.focus();
+        textarea.selectionStart = result.nextCursorIndex;
+        textarea.selectionEnd = result.nextCursorIndex;
+        closeEmojiPopup({ rerender: false });
+        if (store.situationsView.commentPreviewMode) syncCommentPreview(root);
+        const computedStyle = window.getComputedStyle(textarea);
+        const lineHeight = Math.max(16, Math.round(parseFloat(computedStyle.lineHeight) || 20));
+        const minHeight = Math.max(170, Math.round(parseFloat(computedStyle.minHeight) || 170));
+        const comfortExtraLines = 3;
+        const extraPadding = lineHeight * comfortExtraLines;
+        textarea.style.overflowY = "hidden";
+        textarea.style.height = "auto";
+        textarea.style.height = `${Math.max(minHeight, textarea.scrollHeight + extraPadding)}px`;
+        rerenderAutocompleteUi();
+        return;
+      }
+      const result = applyInlineEmojiSuggestion(textarea, suggestion);
+      const replyUi = resolveInlineReplyUiState();
+      if (mode === "reply") {
+        replyUi.draftsByMessageId[messageId] = String(result.nextText || "");
+        syncInlineReplySubmitButton(messageId);
+      } else {
+        replyUi.editDraftsByMessageId[messageId] = String(result.nextText || "");
+        syncInlineEditSubmitButton(messageId);
+      }
+      syncInlineReplyTextareaHeight(textarea);
+      rerenderAutocompleteUi();
+    };
+
     root.querySelectorAll("[data-thread-reply-draft]").forEach((textarea) => {
       syncInlineReplyTextareaHeight(textarea);
       textarea.addEventListener("input", () => {
@@ -2580,6 +2705,9 @@ export function createProjectSubjectsEvents(config) {
             syncInlineReplySubmitButton(messageId);
             return;
           }
+        }
+        if (CARET_NAVIGATION_KEYS.has(event.key)) {
+          requestAnimationFrame(() => { void syncInlineAutocomplete(textarea, composerKey); });
         }
         if (!(event.ctrlKey || event.metaKey) || event.key !== "Enter") return;
         event.preventDefault();
@@ -2704,6 +2832,9 @@ export function createProjectSubjectsEvents(config) {
             syncInlineEditSubmitButton(messageId);
             return;
           }
+        }
+        if (CARET_NAVIGATION_KEYS.has(event.key)) {
+          requestAnimationFrame(() => { void syncInlineAutocomplete(textarea, composerKey); });
         }
         if (!(event.ctrlKey || event.metaKey) || event.key !== "Enter") return;
         event.preventDefault();
@@ -2846,31 +2977,6 @@ export function createProjectSubjectsEvents(config) {
           closeEmojiPopup({ rerender: false });
         }
         textarea.focus();
-      };
-    });
-    root.querySelectorAll("[data-action='emoji-pick'][data-composer-key]").forEach((btn) => {
-      btn.onclick = () => {
-        const composerKey = String(btn.dataset.composerKey || "").trim();
-        if (!composerKey || composerKey === "main") return;
-        const [mode, messageId] = composerKey.split(":");
-        if (!mode || !messageId) return;
-        const textarea = mode === "reply"
-          ? root.querySelector(`[data-thread-reply-draft="${selectorValue(messageId)}"]`)
-          : root.querySelector(`[data-thread-edit-draft="${selectorValue(messageId)}"]`);
-        if (!textarea) return;
-        const result = applyInlineEmojiSuggestion(textarea, {
-          emoji: String(btn.dataset.emoji || "").trim(),
-          shortcode: String(btn.dataset.shortcode || "").trim()
-        });
-        const replyUi = resolveInlineReplyUiState();
-        if (mode === "reply") {
-          replyUi.draftsByMessageId[messageId] = String(result.nextText || "");
-          syncInlineReplySubmitButton(messageId);
-        } else {
-          replyUi.editDraftsByMessageId[messageId] = String(result.nextText || "");
-          syncInlineEditSubmitButton(messageId);
-        }
-        syncInlineReplyTextareaHeight(textarea);
       };
     });
     root.querySelectorAll("[data-action='thread-reply-attachments-pick'][data-message-id]").forEach((btn) => {
@@ -3017,11 +3123,42 @@ export function createProjectSubjectsEvents(config) {
       });
       root.dataset.threadReplyDropdownDocumentBound = "true";
     }
+    const autocompleteLayer = getAutocompleteLayer();
+    if (autocompleteLayer && autocompleteLayer.layer.dataset.subjectAutocompleteBound !== "true") {
+      autocompleteLayer.layer.addEventListener("mousedown", (event) => {
+        const target = event.target;
+        if (!(target instanceof Element)) return;
+        if (target.closest("[data-action='mention-pick'], [data-action='emoji-pick']")) {
+          event.preventDefault();
+        }
+      });
+      autocompleteLayer.layer.addEventListener("click", (event) => {
+        const target = event.target;
+        if (!(target instanceof Element)) return;
+        const mentionBtn = target.closest("[data-action='mention-pick'][data-person-id]");
+        if (mentionBtn instanceof HTMLElement) {
+          pickMentionSuggestion({
+            personId: String(mentionBtn.dataset.personId || "").trim(),
+            label: String(mentionBtn.dataset.label || "").trim()
+          }, String(mentionBtn.dataset.composerKey || "main"));
+          return;
+        }
+        const emojiBtn = target.closest("[data-action='emoji-pick'][data-composer-key]");
+        if (!(emojiBtn instanceof HTMLElement)) return;
+        const composerKey = String(emojiBtn.dataset.composerKey || "").trim();
+        if (!composerKey) return;
+        applyEmojiSuggestionByComposerKey(composerKey, {
+          emoji: String(emojiBtn.dataset.emoji || "").trim(),
+          shortcode: String(emojiBtn.dataset.shortcode || "").trim()
+        });
+      });
+      autocompleteLayer.layer.dataset.subjectAutocompleteBound = "true";
+    }
     if (root.dataset.subjectEmojiDocumentBound !== "true") {
       document.addEventListener("click", (event) => {
         const target = event?.target;
         if (!target || !(target instanceof Element)) return;
-        if (target.closest(".subject-emoji-popup")) return;
+        if (target.closest("#subject-autocomplete-layer")) return;
         if (
           target.closest("#humanCommentBox")
           || target.closest("[data-thread-reply-draft]")
@@ -3041,6 +3178,7 @@ export function createProjectSubjectsEvents(config) {
       };
       window.addEventListener("resize", syncPopupPositions);
       window.addEventListener("scroll", syncPopupPositions);
+      document.addEventListener("scroll", syncPopupPositions, true);
       document.addEventListener("selectionchange", () => {
         const activeElement = document.activeElement;
         if (!(activeElement instanceof HTMLTextAreaElement)) return;
@@ -3048,6 +3186,23 @@ export function createProjectSubjectsEvents(config) {
         positionAllAutocompletePopups();
       });
       root.dataset.subjectAutocompletePositionBound = "true";
+    }
+    if (root.dataset.subjectAutocompleteEscapeBound !== "true") {
+      document.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape" || event.defaultPrevented) return;
+        const mentionState = getMentionState();
+        const emojiState = getEmojiState();
+        const mentionOpen = !!mentionState.open;
+        const emojiOpen = !!emojiState.open;
+        if (!mentionOpen && !emojiOpen) return;
+        event.preventDefault();
+        const fallbackComposerKey = String(mentionState.composerKey || emojiState.composerKey || "main");
+        closeMentionPopup({ rerender: false });
+        closeEmojiPopup({ rerender: false });
+        rerenderAutocompleteUi();
+        focusComposerTextarea(fallbackComposerKey);
+      });
+      root.dataset.subjectAutocompleteEscapeBound = "true";
     }
     requestAnimationFrame(() => positionAllAutocompletePopups());
 
