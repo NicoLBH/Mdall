@@ -155,9 +155,11 @@ export function createProjectSubjectsThread(config = {}) {
         activeIndex: 0,
         triggerStart: -1,
         triggerEnd: -1,
-        suggestions: []
+        suggestions: [],
+        composerKey: ""
       };
     }
+    if (typeof state.mentionUi.composerKey !== "string") state.mentionUi.composerKey = "";
     return state.mentionUi;
   }
 
@@ -839,6 +841,36 @@ priority=${firstNonEmpty(subject.priority, "")}`
     `;
   }
 
+  function renderMentionPopup(mentionUi, composerKey) {
+    if (!mentionUi?.open || String(mentionUi.composerKey || "") !== String(composerKey || "")) return "";
+    const suggestions = Array.isArray(mentionUi.suggestions) ? mentionUi.suggestions : [];
+    return `
+      <div class="subject-mention-popup" data-autocomplete-popup="mention" data-composer-key="${escapeHtml(String(composerKey || ""))}" role="listbox" aria-label="Suggestions de mention">
+        ${suggestions.length
+    ? suggestions.map((suggestion, index) => {
+      const personId = normalizeId(suggestion?.personId);
+      const isActive = Number(mentionUi.activeIndex || 0) === index;
+      return `
+            <button
+              class="subject-mention-popup__item ${isActive ? "is-active" : ""}"
+              type="button"
+              role="option"
+              aria-selected="${isActive ? "true" : "false"}"
+              data-action="mention-pick"
+              data-composer-key="${escapeHtml(String(composerKey || ""))}"
+              data-person-id="${escapeHtml(personId)}"
+              data-label="${escapeHtml(String(suggestion?.label || ""))}"
+            >
+              <span class="subject-mention-popup__name">${escapeHtml(String(suggestion?.label || ""))}</span>
+              <span class="subject-mention-popup__meta">${escapeHtml(String(suggestion?.email || ""))}</span>
+            </button>
+          `;
+    }).join("")
+    : `<div class="subject-mention-popup__empty">Aucun collaborateur trouvé</div>`}
+      </div>
+    `;
+  }
+
   function renderInlineReplyComposer({ commentId, isExpanded, draft, previewMode, attachments = [], depth = 0 }) {
     if (!commentId) return "";
     const pendingAttachments = Array.isArray(attachments) ? attachments : [];
@@ -880,8 +912,10 @@ priority=${firstNonEmpty(subject.priority, "")}`
       ? "thread-inline-reply-editor thread-inline-reply-editor--nested"
       : "thread-inline-reply-editor thread-inline-reply-editor--root";
     const emojiUi = getEmojiUiState();
+    const mentionUi = getMentionUiState();
     const replyComposerKey = `reply:${commentId}`;
     const inlineReplyEmojiPopupHtml = renderEmojiPopup(emojiUi, replyComposerKey);
+    const inlineReplyMentionPopupHtml = renderMentionPopup(mentionUi, replyComposerKey);
 
     return `
       <div class="${inlineEditorClass} ${isExpanded ? "" : "hidden"}" data-inline-reply-editor="${escapeHtml(commentId)}" ${isExpanded ? "" : "aria-hidden=\"true\""}>
@@ -910,6 +944,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
           `,
           previewEmptyHint: "Use Markdown to format your reply",
           footerHtml: `
+            ${inlineReplyMentionPopupHtml}
             ${inlineReplyEmojiPopupHtml}
             <input
               id="threadReplyAttachmentInput-${escapeHtml(commentId)}"
@@ -946,8 +981,10 @@ priority=${firstNonEmpty(subject.priority, "")}`
     const submitLabel = Number(depth || 0) > 0 ? "Mettre à jour la réponse" : "Mettre à jour le commentaire";
     const canSubmit = !!normalizedDraft.trim();
     const emojiUi = getEmojiUiState();
+    const mentionUi = getMentionUiState();
     const editComposerKey = `edit:${commentId}`;
     const inlineEditEmojiPopupHtml = renderEmojiPopup(emojiUi, editComposerKey);
+    const inlineEditMentionPopupHtml = renderMentionPopup(mentionUi, editComposerKey);
     return `
       <div class="thread-inline-edit-editor ${editModeClass} ${isEditing ? "" : "hidden"}" data-inline-edit-editor="${escapeHtml(commentId)}" ${isEditing ? "" : "aria-hidden=\"true\""}>
         ${renderCommentComposer({
@@ -974,7 +1011,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
             </div>
           `,
           previewEmptyHint: "Use Markdown to format your comment",
-          footerHtml: inlineEditEmojiPopupHtml
+          footerHtml: `${inlineEditMentionPopupHtml}${inlineEditEmojiPopupHtml}`
         })}
       </div>
     `;
@@ -1493,32 +1530,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
 
       <button class="gh-btn gh-action__main gh-btn--primary gh-btn--md" data-action="add-comment" type="button">Commenter</button>
     `;
-    const mentionPopupHtml = mentionUi.open
-      ? `
-        <div class="subject-mention-popup" data-autocomplete-popup="mention" data-composer-key="main" role="listbox" aria-label="Suggestions de mention">
-          ${(Array.isArray(mentionUi.suggestions) ? mentionUi.suggestions : []).length
-            ? mentionUi.suggestions.map((suggestion, index) => {
-            const personId = normalizeId(suggestion?.personId);
-            const isActive = Number(mentionUi.activeIndex || 0) === index;
-            return `
-              <button
-                class="subject-mention-popup__item ${isActive ? "is-active" : ""}"
-                type="button"
-                role="option"
-                aria-selected="${isActive ? "true" : "false"}"
-                data-action="mention-pick"
-                data-person-id="${escapeHtml(personId)}"
-                data-label="${escapeHtml(String(suggestion?.label || ""))}"
-              >
-                <span class="subject-mention-popup__name">${escapeHtml(String(suggestion?.label || ""))}</span>
-                <span class="subject-mention-popup__meta">${escapeHtml(String(suggestion?.email || ""))}</span>
-              </button>
-            `;
-          }).join("")
-            : `<div class="subject-mention-popup__empty">Aucun collaborateur trouvé</div>`}
-        </div>
-      `
-      : "";
+    const mentionPopupHtml = renderMentionPopup(mentionUi, "main");
     const mainEmojiPopupHtml = renderEmojiPopup(emojiUi, "main");
 
     const pendingAttachmentsHtml = pendingAttachments.length
