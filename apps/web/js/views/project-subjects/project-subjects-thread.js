@@ -750,10 +750,11 @@ priority=${firstNonEmpty(subject.priority, "")}`
               ${renderAttachmentTile(attachment, {
                 forceImage: !!attachment.isImage,
                 uploadState: attachment.error
-                  ? "Erreur d’upload"
+                  ? "error"
                   : String(attachment.uploadStatus || "").trim() === "uploading"
-                    ? "Envoi..."
-                    : "Prêt"
+                    ? "uploading"
+                    : "ready",
+                uploadStateText: attachment.error ? "Erreur d’upload" : ""
               })}
               <button
                 class="subject-composer-attachment-remove"
@@ -953,7 +954,8 @@ priority=${firstNonEmpty(subject.priority, "")}`
       || ""
     );
     const isImage = options.forceImage || mimeType.startsWith("image/");
-    const uploadState = String(options.uploadState || "").trim();
+    const uploadState = String(options.uploadState || "").trim().toLowerCase();
+    const uploadStateText = String(options.uploadStateText || "").trim();
     const typeIcon = mimeType === "application/pdf" || extension === "pdf"
       ? "file-pdf"
       : mimeType.includes("javascript") || extension === "js" || extension === "ts"
@@ -961,7 +963,28 @@ priority=${firstNonEmpty(subject.priority, "")}`
         : extension === "dwg" || mimeType.includes("autocad") || mimeType.includes("dwg")
           ? "file-dwg"
           : "file-generic";
-    const progressHtml = uploadState ? `<div class="subject-attachment__state mono-small">${escapeHtml(uploadState)}</div>` : "";
+    let progressHtml = "";
+    if (uploadState === "uploading") {
+      progressHtml = `
+        <div class="subject-attachment__state mono-small subject-attachment__state--icon" aria-live="polite">
+          <span class="subject-attachment__upload-indicator is-spinning" aria-label="Envoi en cours">
+            ${svgIcon("attachment-upload-spinner", { className: "subject-attachment__spinner anim-rotate" })}
+          </span>
+        </div>
+      `;
+    } else if (uploadState === "ready") {
+      progressHtml = `
+        <div class="subject-attachment__state mono-small subject-attachment__state--icon" aria-live="polite">
+          <span class="subject-attachment__upload-indicator" aria-label="Pièce jointe prête">
+            ${svgIcon("attachment-upload-dot", { className: "subject-attachment__spinner" })}
+          </span>
+        </div>
+      `;
+    } else if (uploadState === "error") {
+      progressHtml = `<div class="subject-attachment__state mono-small">${escapeHtml(uploadStateText || "Erreur d’upload")}</div>`;
+    } else if (uploadState) {
+      progressHtml = `<div class="subject-attachment__state mono-small">${escapeHtml(uploadState)}</div>`;
+    }
     const metaLine = [
       mimeType || "fichier",
       Number.isFinite(Number(attachment?.size_bytes || attachment?.sizeBytes))
@@ -1296,10 +1319,11 @@ priority=${firstNonEmpty(subject.priority, "")}`
               ${renderAttachmentTile(attachment, {
                 forceImage: !!attachment.isImage,
                 uploadState: attachment.error
-                  ? "Erreur d’upload"
+                  ? "error"
                   : String(attachment.uploadStatus || "").trim() === "uploading"
-                    ? "Envoi..."
-                    : "Prêt"
+                    ? "uploading"
+                    : "ready",
+                uploadStateText: attachment.error ? "Erreur d’upload" : ""
               })}
               <button
                 class="subject-composer-attachment-remove"

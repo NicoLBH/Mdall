@@ -2739,6 +2739,19 @@ body.is-resizing{
 .subject-attachment__file-meta{color:var(--muted);}
 .subject-attachment__file-link{font-size:12px;}
 .subject-attachment__state{padding:0 8px 8px;color:var(--muted);}
+.subject-attachment__state--icon{display:flex;align-items:center;}
+.subject-attachment__upload-indicator{
+  display:inline-flex;
+  width:16px;
+  height:16px;
+  color:var(--fgColor-attention);
+}
+.subject-attachment__spinner{width:16px;height:16px;}
+.anim-rotate{animation:thread-attachment-spin 1s linear infinite;transform-origin:center;}
+@keyframes thread-attachment-spin{
+  from{transform:rotate(0deg);}
+  to{transform:rotate(360deg);}
+}
 .md-render p{margin:0 0 10px;}
 .md-render p:last-child{margin-bottom:0;}
 .md-render ul,.md-render ol{margin:0 0 10px 20px;padding:0;}
