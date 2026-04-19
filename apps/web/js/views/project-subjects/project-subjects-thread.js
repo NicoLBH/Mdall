@@ -789,7 +789,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
           textareaAttributes: {
             "data-thread-reply-draft": commentId
           },
-          placeholder: "🖼️ Écrire une réponse, glisser-déposer une pièce jointe...",
+          placeholder: "Écrire une réponse, glisser-déposer une pièce jointe...",
           tabWriteAction: "thread-reply-tab-write",
           tabPreviewAction: "thread-reply-tab-preview",
           toolbarHtml: renderMarkdownToolbar("thread-reply-format", { messageId: commentId }),
@@ -1366,7 +1366,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
       textareaValue: String(store.situationsView.commentDraft || ""),
       placeholder: helpMode
         ? "Help (éphémère) — décrivez l’écran / l’action souhaitée."
-        : "📎 Ecrire une réponse, glisser-déposer une pièce jointe...",
+        : "Ecrire une réponse, glisser-déposer une pièce jointe...",
       hintHtml,
       contextHtml,
       actionsHtml,

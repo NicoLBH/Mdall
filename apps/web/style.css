@@ -3493,7 +3493,7 @@ body.is-resizing{
 .actions-row--details{
   gap:10px;
   justify-content:flex-end;
-  padding:0 12px 0 0;
+  padding:0px;
 }
 .actions-row--details .rapso-mention-hint{margin-right:auto;}
 .actions-row--details .actions-row__right{width:100%;}
