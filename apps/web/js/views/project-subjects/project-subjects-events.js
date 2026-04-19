@@ -770,7 +770,6 @@ export function createProjectSubjectsEvents(config) {
 
     const positionAutocompletePopup = (textarea, popup) => {
       if (!textarea || !popup || !popup.isConnected) return;
-      if (document.activeElement !== textarea) return;
       const caretRect = computeTextareaCaretRect(textarea, textarea.selectionStart || 0);
       if (!caretRect) return;
       popup.style.position = "fixed";

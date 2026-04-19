@@ -1024,7 +1024,8 @@ priority=${firstNonEmpty(subject.priority, "")}`
             `
             : ""}
           <button class="gh-menu__item" type="button" data-action="thread-reply-open" data-message-id="${escapeHtml(commentId)}">Répondre au message</button>
-          <div class="thread-comment-menu__reactions-label">Réagir</div>
+          <div class="thread-comment-menu__divider" role="separator" aria-hidden="true"></div>
+          <div class="thread-comment-menu__reactions-label">Réagir au message</div>
           <div class="thread-comment-menu__reactions-grid">
             ${THREAD_REACTION_CHOICES.map((choice) => `
               <button
@@ -1110,9 +1111,6 @@ priority=${firstNonEmpty(subject.priority, "")}`
         ${(childReplies.length || reactionsSummaryList.length)
           ? `
             <div class="thread-comment-footer">
-              ${childReplies.length
-                ? `<span class="mono-small color-fg-muted">${childReplies.length} réponse${childReplies.length > 1 ? "s" : ""}</span>`
-                : ""}
               ${reactionsSummaryList.length
                 ? `
                   <div class="thread-comment-footer__reactions">
@@ -1130,6 +1128,9 @@ priority=${firstNonEmpty(subject.priority, "")}`
                     `).join("")}
                   </div>
                 `
+                : ""}
+              ${childReplies.length
+                ? `<span class="mono-small color-fg-muted thread-comment-footer__replies-count">${childReplies.length} réponse${childReplies.length > 1 ? "s" : ""}</span>`
                 : ""}
             </div>
           `

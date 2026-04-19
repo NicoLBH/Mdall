@@ -2922,7 +2922,7 @@ body.is-resizing{
 }
 .thread-comment-footer{
   display:flex;
-  justify-content:flex-start;
+  justify-content:space-between;
   align-items:center;
   gap:8px;
   margin-top:8px;
@@ -2933,6 +2933,12 @@ body.is-resizing{
   display:flex;
   flex-wrap:wrap;
   gap:6px;
+  min-width:0;
+}
+.thread-comment-footer__replies-count{
+  margin-left:auto;
+  text-align:right;
+  white-space:nowrap;
 }
 .thread-comment-reaction-chip{
   cursor:default;

@@ -30,21 +30,16 @@ export function resolveMentionTriggerContext(text = "", cursorIndex = 0) {
   const source = String(text || "");
   const caret = Math.max(0, Math.min(Number(cursorIndex || 0), source.length));
   const before = source.slice(0, caret);
-
-  let index = before.length - 1;
-  while (index >= 0) {
-    const char = before[index];
-    if (char === "\n" || char === "\r" || char === "\t" || char === " ") break;
-    index -= 1;
-  }
-
-  const tokenStart = index + 1;
-  const token = before.slice(tokenStart);
-  if (!token.startsWith("@")) return null;
+  const triggerStart = before.lastIndexOf("@");
+  if (triggerStart < 0) return null;
+  const previousChar = triggerStart === 0 ? "" : before[triggerStart - 1];
+  if (triggerStart > 0 && /[A-Za-z0-9_]/.test(previousChar)) return null;
+  const token = before.slice(triggerStart);
+  if (/[\s\r\n\t]/.test(token)) return null;
   if (token.length >= 2 && token[1] === "[") return null;
 
   return {
-    triggerStart: tokenStart,
+    triggerStart,
     triggerEnd: caret,
     query: token.slice(1)
   };
