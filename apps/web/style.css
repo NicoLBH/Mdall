@@ -2562,6 +2562,7 @@ body.is-resizing{
   font-size:13px;
   margin-left:-1px;
   margin-top:-1px;
+  height:39px;
 }
 .comment-composer__tabs.light-tabs .light-tabs__item.is-active{
   background: var(--bg);
