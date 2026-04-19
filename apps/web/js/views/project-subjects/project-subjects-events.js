@@ -775,6 +775,11 @@ export function createProjectSubjectsEvents(config) {
       popup.style.position = "fixed";
       popup.style.margin = "0";
       popup.style.maxWidth = "min(360px, calc(100vw - 16px))";
+      if (String(popup.dataset.autocompletePopup || "") === "mention") {
+        popup.style.width = "min(340px, calc(100vw - 16px))";
+      } else {
+        popup.style.width = "";
+      }
       popup.style.zIndex = "900";
       const popupRect = popup.getBoundingClientRect();
       const gap = 8;
@@ -792,15 +797,8 @@ export function createProjectSubjectsEvents(config) {
       popup.style.left = `${Math.round(left)}px`;
     };
 
-    const restoreComposerViewport = ({ selector = "", caretStart = 0, caretEnd = 0, shouldFocus = false } = {}) => {
-      const textarea = selector ? root.querySelector(selector) : null;
-      if (!textarea) return;
-      if (shouldFocus) {
-        textarea.focus({ preventScroll: true });
-        textarea.selectionStart = caretStart;
-        textarea.selectionEnd = caretEnd;
-      }
-      const popups = root.querySelectorAll(`.subject-mention-popup[data-composer-key]`);
+    const positionAllAutocompletePopups = () => {
+      const popups = root.querySelectorAll(".subject-mention-popup[data-composer-key]");
       popups.forEach((popup) => {
         const popupKey = String(popup.dataset.composerKey || "");
         if (!popupKey) return;
@@ -810,6 +808,16 @@ export function createProjectSubjectsEvents(config) {
         if (!popupTextarea) return;
         positionAutocompletePopup(popupTextarea, popup);
       });
+    };
+
+    const restoreComposerViewport = ({ selector = "", caretStart = 0, caretEnd = 0, shouldFocus = false } = {}) => {
+      const textarea = selector ? root.querySelector(selector) : null;
+      if (textarea && shouldFocus) {
+        textarea.focus({ preventScroll: true });
+        textarea.selectionStart = caretStart;
+        textarea.selectionEnd = caretEnd;
+      }
+      positionAllAutocompletePopups();
     };
 
     const rerenderAutocompleteUi = ({ selector = "", shouldFocus = false, caretStart = 0, caretEnd = 0 } = {}) => {
@@ -2104,6 +2112,10 @@ export function createProjectSubjectsEvents(config) {
       if (!normalizedMessageId) return;
       const editor = root.querySelector(`[data-inline-reply-editor="${selectorValue(normalizedMessageId)}"]`);
       if (!editor) return;
+      if (!visible && editor.contains(document.activeElement)) {
+        const activeElement = document.activeElement;
+        if (activeElement && typeof activeElement.blur === "function") activeElement.blur();
+      }
       editor.classList.toggle("hidden", !visible);
       if (visible) editor.removeAttribute("aria-hidden");
       else editor.setAttribute("aria-hidden", "true");
@@ -2114,6 +2126,10 @@ export function createProjectSubjectsEvents(config) {
       const editor = root.querySelector(`[data-inline-edit-editor="${selectorValue(normalizedMessageId)}"]`);
       const content = root.querySelector(`[data-thread-comment-content="${selectorValue(normalizedMessageId)}"]`);
       if (editor) {
+        if (!visible && editor.contains(document.activeElement)) {
+          const activeElement = document.activeElement;
+          if (activeElement && typeof activeElement.blur === "function") activeElement.blur();
+        }
         editor.classList.toggle("hidden", !visible);
         if (visible) editor.removeAttribute("aria-hidden");
         else editor.setAttribute("aria-hidden", "true");
@@ -2875,6 +2891,15 @@ export function createProjectSubjectsEvents(config) {
       });
       root.dataset.subjectEmojiDocumentBound = "true";
     }
+    if (root.dataset.subjectAutocompletePositionBound !== "true") {
+      const syncPopupPositions = () => {
+        requestAnimationFrame(() => positionAllAutocompletePopups());
+      };
+      window.addEventListener("resize", syncPopupPositions);
+      window.addEventListener("scroll", syncPopupPositions, true);
+      root.dataset.subjectAutocompletePositionBound = "true";
+    }
+    requestAnimationFrame(() => positionAllAutocompletePopups());
 
     root.querySelectorAll("[data-subject-assign-self]").forEach((btn) => {
       btn.onclick = async (event) => {
