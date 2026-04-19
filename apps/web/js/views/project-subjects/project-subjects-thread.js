@@ -218,6 +218,13 @@ export function createProjectSubjectsThread(config = {}) {
     if (!state.inlineReplyUi.uploadSessionByMessageId || typeof state.inlineReplyUi.uploadSessionByMessageId !== "object") {
       state.inlineReplyUi.uploadSessionByMessageId = {};
     }
+    if (typeof state.inlineReplyUi.editMessageId !== "string") state.inlineReplyUi.editMessageId = "";
+    if (!state.inlineReplyUi.editDraftsByMessageId || typeof state.inlineReplyUi.editDraftsByMessageId !== "object") {
+      state.inlineReplyUi.editDraftsByMessageId = {};
+    }
+    if (!state.inlineReplyUi.editPreviewByMessageId || typeof state.inlineReplyUi.editPreviewByMessageId !== "object") {
+      state.inlineReplyUi.editPreviewByMessageId = {};
+    }
     return state.inlineReplyUi;
   }
 
@@ -827,6 +834,42 @@ priority=${firstNonEmpty(subject.priority, "")}`
     `;
   }
 
+  function renderInlineEditComposer({ commentId, depth = 0, isEditing = false, draft = "", previewMode = false, originalMessage = "" } = {}) {
+    if (!commentId || !isEditing) return "";
+    const normalizedDraft = String(draft || "");
+    const submitLabel = Number(depth || 0) > 0 ? "Mettre à jour la réponse" : "Mettre à jour le commentaire";
+    const canSubmit = !!normalizedDraft.trim();
+    return `
+      <div class="thread-inline-edit-editor" data-inline-edit-editor="${escapeHtml(commentId)}">
+        ${renderCommentComposer({
+          hideAvatar: true,
+          hideTitle: true,
+          previewMode,
+          textareaId: `threadEditBox-${commentId}`,
+          previewId: `threadEditPreview-${commentId}`,
+          textareaValue: normalizedDraft,
+          textareaAttributes: {
+            "data-thread-edit-draft": commentId
+          },
+          placeholder: "Modifier le message...",
+          tabWriteAction: "thread-edit-tab-write",
+          tabPreviewAction: "thread-edit-tab-preview",
+          tabsClassName: "comment-composer__tabs--thread-reply",
+          composerClassName: "comment-composer--thread-reply-editor",
+          toolbarHtml: renderMarkdownToolbar("thread-edit-format", { messageId: commentId }),
+          previewHtml: normalizedDraft.trim() ? mdToHtml(normalizedDraft) : "",
+          actionsHtml: `
+            <div class="thread-inline-reply-editor__actions">
+              <button class="gh-btn" type="button" data-action="thread-edit-cancel" data-message-id="${escapeHtml(commentId)}">Annuler</button>
+              <button class="gh-btn gh-btn--comment gh-btn--primary" type="button" data-action="thread-edit-submit" data-message-id="${escapeHtml(commentId)}" data-original-body="${escapeHtml(String(originalMessage || ""))}" ${canSubmit ? "" : "disabled"}>${submitLabel}</button>
+            </div>
+          `,
+          previewEmptyHint: "Use Markdown to format your comment"
+        })}
+      </div>
+    `;
+  }
+
   function resolveThreadCommentIdentity(entry) {
     const currentUserId = normalizeId(store?.user?.id);
     const authorUserId = normalizeId(entry?.meta?.author_user_id);
@@ -886,8 +929,11 @@ priority=${firstNonEmpty(subject.priority, "")}`
       ? `message-thread__comment--nested message-thread__comment--reply-item message-thread__comment--depth-${nestedDepth}`
       : "";
     const isExpanded = replyUi.expandedMessageId === commentId;
+    const isEditing = replyUi.editMessageId === commentId;
     const draft = String(replyUi.draftsByMessageId?.[commentId] || "");
     const previewMode = !!replyUi.previewByMessageId?.[commentId];
+    const editDraft = String(replyUi.editDraftsByMessageId?.[commentId] || "");
+    const editPreviewMode = !!replyUi.editPreviewByMessageId?.[commentId];
     const attachments = Array.isArray(replyUi.attachmentsByMessageId?.[commentId])
       ? replyUi.attachmentsByMessageId[commentId]
       : [];
@@ -910,9 +956,20 @@ priority=${firstNonEmpty(subject.priority, "")}`
       tsHtml,
       headerRightHtml: renderThreadCommentActions(entry),
       bodyHtml: `
-        <div class="thread-comment-content-capsule">
-          ${mdToHtml(entry?.message || "")}
-        </div>
+        ${isEditing
+          ? renderInlineEditComposer({
+            commentId,
+            depth,
+            isEditing,
+            draft: editDraft || String(entry?.message || ""),
+            previewMode: editPreviewMode,
+            originalMessage: String(entry?.message || "")
+          })
+          : `
+            <div class="thread-comment-content-capsule">
+              ${mdToHtml(entry?.message || "")}
+            </div>
+          `}
         ${(Array.isArray(entry?.meta?.attachments) && entry.meta.attachments.length)
           ? `<div class="subject-attachment-grid">${entry.meta.attachments.map((attachment) => renderAttachmentTile(attachment)).join("")}</div>`
           : ""}

@@ -1684,7 +1684,10 @@ export function createProjectSubjectsEvents(config) {
           draftsByMessageId: {},
           previewByMessageId: {},
           attachmentsByMessageId: {},
-          uploadSessionByMessageId: {}
+          uploadSessionByMessageId: {},
+          editMessageId: "",
+          editDraftsByMessageId: {},
+          editPreviewByMessageId: {}
         };
       }
       if (!store.situationsView.inlineReplyUi.previewByMessageId || typeof store.situationsView.inlineReplyUi.previewByMessageId !== "object") {
@@ -1695,6 +1698,15 @@ export function createProjectSubjectsEvents(config) {
       }
       if (!store.situationsView.inlineReplyUi.uploadSessionByMessageId || typeof store.situationsView.inlineReplyUi.uploadSessionByMessageId !== "object") {
         store.situationsView.inlineReplyUi.uploadSessionByMessageId = {};
+      }
+      if (typeof store.situationsView.inlineReplyUi.editMessageId !== "string") {
+        store.situationsView.inlineReplyUi.editMessageId = "";
+      }
+      if (!store.situationsView.inlineReplyUi.editDraftsByMessageId || typeof store.situationsView.inlineReplyUi.editDraftsByMessageId !== "object") {
+        store.situationsView.inlineReplyUi.editDraftsByMessageId = {};
+      }
+      if (!store.situationsView.inlineReplyUi.editPreviewByMessageId || typeof store.situationsView.inlineReplyUi.editPreviewByMessageId !== "object") {
+        store.situationsView.inlineReplyUi.editPreviewByMessageId = {};
       }
       debugThreadReply("reply_state_fallback", { hasAccessor: typeof getInlineReplyUiState === "function" });
       return store.situationsView.inlineReplyUi;
@@ -1755,6 +1767,21 @@ export function createProjectSubjectsEvents(config) {
       );
       if (!submitButton) return;
       submitButton.disabled = !canSubmitInlineReply(normalizedMessageId);
+    };
+    const canSubmitInlineEdit = (messageId = "") => {
+      const normalizedMessageId = String(messageId || "").trim();
+      if (!normalizedMessageId) return false;
+      const replyUi = resolveInlineReplyUiState();
+      return !!String(replyUi.editDraftsByMessageId?.[normalizedMessageId] || "").trim();
+    };
+    const syncInlineEditSubmitButton = (messageId = "") => {
+      const normalizedMessageId = String(messageId || "").trim();
+      if (!normalizedMessageId) return;
+      const submitButton = root.querySelector(
+        `[data-action='thread-edit-submit'][data-message-id="${selectorValue(normalizedMessageId)}"]`
+      );
+      if (!submitButton) return;
+      submitButton.disabled = !canSubmitInlineEdit(normalizedMessageId);
     };
     const syncInlineReplyTextareaHeight = (textarea) => {
       if (!textarea) return;
@@ -1922,22 +1949,22 @@ export function createProjectSubjectsEvents(config) {
     });
 
     root.querySelectorAll("[data-action='thread-message-edit'][data-message-id]").forEach((btn) => {
-      btn.onclick = async () => {
-        const selection = getScopedSelection(root);
-        if (selection?.type !== "sujet") return;
+      btn.onclick = () => {
         const messageId = String(btn.dataset.messageId || "").trim();
         if (!messageId) return;
-        const currentBody = String(btn.dataset.messageBody || "").trim();
-        const nextBody = window.prompt("Modifier le message", currentBody);
-        if (nextBody == null) return;
-        const normalized = String(nextBody || "").trim();
-        if (!normalized || normalized === currentBody) return;
         btn.closest(".thread-comment-menu__dropdown")?.classList.remove("is-open");
-        try {
-          await editSubjectMessage?.(selection.item.id, messageId, normalized);
-        } catch (error) {
-          showError(`Modification impossible : ${String(error?.message || error || "Erreur inconnue")}`);
+        const replyUi = resolveInlineReplyUiState();
+        const currentBody = String(btn.dataset.messageBody || "");
+        if (!String(replyUi.editDraftsByMessageId?.[messageId] || "").trim()) {
+          replyUi.editDraftsByMessageId[messageId] = currentBody;
         }
+        replyUi.editPreviewByMessageId[messageId] = false;
+        replyUi.editMessageId = messageId;
+        rerenderScope(root);
+        requestAnimationFrame(() => {
+          const textarea = root.querySelector(`[data-thread-edit-draft="${selectorValue(messageId)}"]`);
+          textarea?.focus();
+        });
       };
     });
 
@@ -1978,6 +2005,26 @@ export function createProjectSubjectsEvents(config) {
       });
     });
 
+    root.querySelectorAll("[data-thread-edit-draft]").forEach((textarea) => {
+      syncInlineReplyTextareaHeight(textarea);
+      textarea.addEventListener("input", () => {
+        const messageId = String(textarea.dataset.threadEditDraft || "").trim();
+        if (!messageId) return;
+        const replyUi = resolveInlineReplyUiState();
+        replyUi.editDraftsByMessageId[messageId] = String(textarea.value || "");
+        syncInlineReplyTextareaHeight(textarea);
+        syncInlineEditSubmitButton(messageId);
+      });
+      textarea.addEventListener("keydown", (event) => {
+        if (!(event.ctrlKey || event.metaKey) || event.key !== "Enter") return;
+        event.preventDefault();
+        const submitButton = textarea.closest(".thread-inline-edit-editor")?.querySelector("[data-action='thread-edit-submit'][data-message-id]");
+        const messageId = String(textarea.dataset.threadEditDraft || "").trim();
+        if (messageId) syncInlineEditSubmitButton(messageId);
+        if (submitButton && !submitButton.disabled) submitButton.click();
+      });
+    });
+
     root.querySelectorAll("[data-action='thread-reply-tab-write']").forEach((btn) => {
       btn.onclick = () => {
         const messageId = String(btn.closest("[data-inline-reply-editor]")?.dataset.inlineReplyEditor || "").trim();
@@ -1998,6 +2045,26 @@ export function createProjectSubjectsEvents(config) {
       };
     });
 
+    root.querySelectorAll("[data-action='thread-edit-tab-write']").forEach((btn) => {
+      btn.onclick = () => {
+        const messageId = String(btn.closest("[data-inline-edit-editor]")?.dataset.inlineEditEditor || "").trim();
+        if (!messageId) return;
+        const replyUi = resolveInlineReplyUiState();
+        replyUi.editPreviewByMessageId[messageId] = false;
+        rerenderScope(root);
+      };
+    });
+
+    root.querySelectorAll("[data-action='thread-edit-tab-preview']").forEach((btn) => {
+      btn.onclick = () => {
+        const messageId = String(btn.closest("[data-inline-edit-editor]")?.dataset.inlineEditEditor || "").trim();
+        if (!messageId) return;
+        const replyUi = resolveInlineReplyUiState();
+        replyUi.editPreviewByMessageId[messageId] = true;
+        rerenderScope(root);
+      };
+    });
+
     root.querySelectorAll("[data-action='thread-reply-format'][data-format][data-message-id]").forEach((btn) => {
       btn.onclick = () => {
         const action = String(btn.dataset.format || "").trim();
@@ -2011,6 +2078,23 @@ export function createProjectSubjectsEvents(config) {
         replyUi.draftsByMessageId[messageId] = String(textarea.value || "");
         syncInlineReplyTextareaHeight(textarea);
         syncInlineReplySubmitButton(messageId);
+        textarea.focus();
+      };
+    });
+
+    root.querySelectorAll("[data-action='thread-edit-format'][data-format][data-message-id]").forEach((btn) => {
+      btn.onclick = () => {
+        const action = String(btn.dataset.format || "").trim();
+        const messageId = String(btn.dataset.messageId || "").trim();
+        if (!action || !messageId) return;
+        const textarea = root.querySelector(`[data-thread-edit-draft="${selectorValue(messageId)}"]`);
+        if (!textarea) return;
+        const didApply = applyMarkdownComposerAction(textarea, action);
+        if (!didApply) return;
+        const replyUi = resolveInlineReplyUiState();
+        replyUi.editDraftsByMessageId[messageId] = String(textarea.value || "");
+        syncInlineReplyTextareaHeight(textarea);
+        syncInlineEditSubmitButton(messageId);
         textarea.focus();
       };
     });
@@ -2104,6 +2188,45 @@ export function createProjectSubjectsEvents(config) {
         clearInlineReplyAttachmentsState(parentMessageId);
         replyUi.expandedMessageId = "";
         rerenderScope(root);
+      };
+    });
+
+    root.querySelectorAll("[data-action='thread-edit-cancel'][data-message-id]").forEach((btn) => {
+      btn.onclick = () => {
+        const messageId = String(btn.dataset.messageId || "").trim();
+        const replyUi = resolveInlineReplyUiState();
+        if (messageId) replyUi.editPreviewByMessageId[messageId] = false;
+        replyUi.editMessageId = "";
+        rerenderScope(root);
+      };
+    });
+
+    root.querySelectorAll("[data-action='thread-edit-submit'][data-message-id]").forEach((btn) => {
+      btn.onclick = async () => {
+        const selection = getScopedSelection(root);
+        if (selection?.type !== "sujet") return;
+        const messageId = String(btn.dataset.messageId || "").trim();
+        if (!messageId) return;
+        const replyUi = resolveInlineReplyUiState();
+        const nextBody = String(replyUi.editDraftsByMessageId?.[messageId] || "");
+        const normalized = nextBody.trim();
+        if (!normalized) return;
+        const currentBody = String(btn.dataset.originalBody || "");
+        if (normalized === currentBody.trim()) {
+          replyUi.editPreviewByMessageId[messageId] = false;
+          replyUi.editMessageId = "";
+          rerenderScope(root);
+          return;
+        }
+        try {
+          await editSubjectMessage?.(selection.item.id, messageId, normalized);
+          replyUi.editPreviewByMessageId[messageId] = false;
+          replyUi.editMessageId = "";
+        } catch (error) {
+          showError(`Modification impossible : ${String(error?.message || error || "Erreur inconnue")}`);
+        } finally {
+          rerenderScope(root);
+        }
       };
     });
 

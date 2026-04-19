@@ -2873,6 +2873,12 @@ body.is-resizing{
 .thread-comment-content-capsule{
   padding:12px;
 }
+.thread-inline-edit-editor{
+  padding:12px;
+}
+.thread-inline-edit-editor .comment-composer__actions{
+  margin-bottom:0;
+}
 .thread-comment-footer{
   display:flex;
   justify-content:flex-end;
