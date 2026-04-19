@@ -392,6 +392,7 @@ const projectSubjectsEvents = createProjectSubjectsEvents({
   deleteSubjectMessage: (...args) => deleteSubjectMessage(...args),
   getMentionUiState: (...args) => getMentionUiState(...args),
   getComposerAttachmentsState: (...args) => getComposerAttachmentsState(...args),
+  mdToHtml,
   listCollaboratorsForMentions: (...args) => subjectMessagesService.listCollaboratorsForMentions(...args),
   uploadAttachmentFile: (...args) => subjectMessagesService.uploadAttachmentFile(...args),
   removeTemporaryAttachment: (...args) => subjectMessagesService.removeTemporaryAttachment(...args),

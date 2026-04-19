@@ -74,14 +74,10 @@ export function createProjectSubjectsThread(config = {}) {
   }
 
   function mapMessageRowToThreadComment(row = {}) {
+    if (row?.deleted_at) return null;
     const authorProfile = resolveAuthorProfile(row);
-    const isDeleted = !!row.deleted_at;
     const isFrozen = !!row.is_frozen;
-    const stateLabel = isDeleted
-      ? "supprimé"
-      : isFrozen
-        ? "figé (vu par un tiers)"
-        : "modifiable";
+    const stateLabel = isFrozen ? "figé (vu par un tiers)" : "modifiable";
     return {
       ts: firstNonEmpty(row.created_at, nowIso()),
       entity_type: "sujet",
@@ -89,7 +85,7 @@ export function createProjectSubjectsThread(config = {}) {
       type: "COMMENT",
       actor: authorProfile.displayName,
       agent: "human",
-      message: String(row.deleted_at ? "[message supprimé]" : row.body_markdown || ""),
+      message: String(row.body_markdown || ""),
       pending: false,
       request_id: null,
       meta: {
@@ -102,7 +98,7 @@ export function createProjectSubjectsThread(config = {}) {
         depth: 0,
         reply_preview: "",
         is_frozen: isFrozen,
-        is_deleted: isDeleted,
+        is_deleted: false,
         state_label: stateLabel,
         mentions: Array.isArray(row?.mentions) ? row.mentions : [],
         attachments: Array.isArray(row?.attachments) ? row.attachments : []
@@ -745,7 +741,6 @@ priority=${firstNonEmpty(subject.priority, "")}`
 
   function renderInlineReplyComposer({ commentId, isExpanded, draft, previewMode, attachments = [], depth = 0 }) {
     if (!commentId) return "";
-    if (!isExpanded) return "";
     const pendingAttachments = Array.isArray(attachments) ? attachments : [];
     const normalizedDraft = String(draft || "");
     const hasReadyAttachment = pendingAttachments.some((attachment) => String(attachment?.uploadStatus || "").trim() === "ready" && !attachment?.error);
@@ -786,7 +781,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
       : "thread-inline-reply-editor thread-inline-reply-editor--root";
 
     return `
-      <div class="${inlineEditorClass}" data-inline-reply-editor="${escapeHtml(commentId)}">
+      <div class="${inlineEditorClass} ${isExpanded ? "" : "hidden"}" data-inline-reply-editor="${escapeHtml(commentId)}" ${isExpanded ? "" : "aria-hidden=\"true\""}>
         ${renderCommentComposer({
           hideAvatar: true,
           hideTitle: true,
@@ -835,7 +830,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
   }
 
   function renderInlineEditComposer({ commentId, depth = 0, isEditing = false, draft = "", previewMode = false, originalMessage = "" } = {}) {
-    if (!commentId || !isEditing) return "";
+    if (!commentId) return "";
     const normalizedDraft = String(draft || "");
     const isNestedReplyEdit = Number(depth || 0) > 0;
     const editModeClass = isNestedReplyEdit
@@ -847,7 +842,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
     const submitLabel = Number(depth || 0) > 0 ? "Mettre à jour la réponse" : "Mettre à jour le commentaire";
     const canSubmit = !!normalizedDraft.trim();
     return `
-      <div class="thread-inline-edit-editor ${editModeClass}" data-inline-edit-editor="${escapeHtml(commentId)}">
+      <div class="thread-inline-edit-editor ${editModeClass} ${isEditing ? "" : "hidden"}" data-inline-edit-editor="${escapeHtml(commentId)}" ${isEditing ? "" : "aria-hidden=\"true\""}>
         ${renderCommentComposer({
           hideAvatar: true,
           hideTitle: true,
@@ -1114,6 +1109,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
 
       if (type === "ACTIVITY") {
         const kind = String(e?.kind || "").toLowerCase();
+        if (kind === "message_deleted") return "";
         const agent = e?.agent || "system";
         const activityIdentity = getAuthorIdentity({
           author: e?.actor,
@@ -1179,10 +1175,6 @@ priority=${firstNonEmpty(subject.priority, "")}`
         } else if (kind === "message_edited") {
           iconHtml = `<span class="tl-ico-wrap tl-ico-reopened" aria-hidden="true">${svgIcon("pencil")}</span>`;
           verb = "edited a message on";
-          targetHtml = "this conversation";
-        } else if (kind === "message_deleted") {
-          iconHtml = `<span class="tl-ico-wrap tl-ico-closed" aria-hidden="true">${svgIcon("trash")}</span>`;
-          verb = "deleted a message on";
           targetHtml = "this conversation";
         } else if (kind === "message_frozen") {
           iconHtml = `<span class="tl-ico-wrap tl-ico-closed" aria-hidden="true">${svgIcon("lock")}</span>`;

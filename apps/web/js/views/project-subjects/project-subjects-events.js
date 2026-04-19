@@ -66,6 +66,7 @@ export function createProjectSubjectsEvents(config) {
     deleteSubjectMessage,
     getMentionUiState,
     getComposerAttachmentsState,
+    mdToHtml,
     listCollaboratorsForMentions,
     uploadAttachmentFile,
     removeTemporaryAttachment
@@ -1795,6 +1796,24 @@ export function createProjectSubjectsEvents(config) {
       const nextHeight = Math.max(minHeight, textarea.scrollHeight + extraPadding);
       textarea.style.height = `${nextHeight}px`;
     };
+    const toggleInlineReplyEditorVisibility = (messageId = "", visible = false) => {
+      const normalizedMessageId = String(messageId || "").trim();
+      if (!normalizedMessageId) return;
+      const editor = root.querySelector(`[data-inline-reply-editor="${selectorValue(normalizedMessageId)}"]`);
+      if (!editor) return;
+      editor.classList.toggle("hidden", !visible);
+      if (visible) editor.removeAttribute("aria-hidden");
+      else editor.setAttribute("aria-hidden", "true");
+    };
+    const toggleInlineEditEditorVisibility = (messageId = "", visible = false) => {
+      const normalizedMessageId = String(messageId || "").trim();
+      if (!normalizedMessageId) return;
+      const editor = root.querySelector(`[data-inline-edit-editor="${selectorValue(normalizedMessageId)}"]`);
+      if (!editor) return;
+      editor.classList.toggle("hidden", !visible);
+      if (visible) editor.removeAttribute("aria-hidden");
+      else editor.setAttribute("aria-hidden", "true");
+    };
     const clearInlineReplyAttachmentsState = (messageId = "", { keepUploadSession = false } = {}) => {
       const normalizedMessageId = String(messageId || "").trim();
       if (!normalizedMessageId) return;
@@ -1939,12 +1958,22 @@ export function createProjectSubjectsEvents(config) {
           messageId,
           hasDraft: !!String(replyUi.draftsByMessageId?.[messageId] || "").trim()
         });
-        rerenderScope(root);
-        requestAnimationFrame(() => {
-          const textarea = root.querySelector(`[data-thread-reply-draft="${selectorValue(messageId)}"]`);
-          debugThreadReply("reply_editor_presence", { messageId, found: !!textarea });
-          textarea?.focus();
-        });
+        if (previouslyExpandedMessageId && previouslyExpandedMessageId !== messageId) {
+          toggleInlineReplyEditorVisibility(previouslyExpandedMessageId, false);
+        }
+        toggleInlineReplyEditorVisibility(messageId, true);
+        const textarea = root.querySelector(`[data-thread-reply-draft="${selectorValue(messageId)}"]`);
+        if (textarea) {
+          textarea.value = String(replyUi.draftsByMessageId?.[messageId] || "");
+          syncInlineReplyTextareaHeight(textarea);
+          syncInlineReplySubmitButton(messageId);
+          requestAnimationFrame(() => {
+            debugThreadReply("reply_editor_presence", { messageId, found: true });
+            textarea.focus();
+          });
+        } else {
+          rerenderScope(root);
+        }
       };
     });
 
@@ -1958,13 +1987,22 @@ export function createProjectSubjectsEvents(config) {
         if (!String(replyUi.editDraftsByMessageId?.[messageId] || "").trim()) {
           replyUi.editDraftsByMessageId[messageId] = currentBody;
         }
+        const previousEditMessageId = String(replyUi.editMessageId || "").trim();
         replyUi.editPreviewByMessageId[messageId] = false;
         replyUi.editMessageId = messageId;
-        rerenderScope(root);
-        requestAnimationFrame(() => {
-          const textarea = root.querySelector(`[data-thread-edit-draft="${selectorValue(messageId)}"]`);
-          textarea?.focus();
-        });
+        if (previousEditMessageId && previousEditMessageId !== messageId) {
+          toggleInlineEditEditorVisibility(previousEditMessageId, false);
+        }
+        toggleInlineEditEditorVisibility(messageId, true);
+        const textarea = root.querySelector(`[data-thread-edit-draft="${selectorValue(messageId)}"]`);
+        if (textarea) {
+          textarea.value = String(replyUi.editDraftsByMessageId?.[messageId] || "");
+          syncInlineReplyTextareaHeight(textarea);
+          syncInlineEditSubmitButton(messageId);
+          requestAnimationFrame(() => textarea.focus());
+        } else {
+          rerenderScope(root);
+        }
       };
     });
 
@@ -2031,7 +2069,17 @@ export function createProjectSubjectsEvents(config) {
         if (!messageId) return;
         const replyUi = resolveInlineReplyUiState();
         replyUi.previewByMessageId[messageId] = false;
-        rerenderScope(root);
+        const writeTab = btn.closest(".comment-composer")?.querySelector("[data-action='thread-reply-tab-write']");
+        const previewTab = btn.closest(".comment-composer")?.querySelector("[data-action='thread-reply-tab-preview']");
+        const composerRoot = btn.closest(".comment-composer");
+        const textareaWrap = composerRoot?.querySelector(".comment-composer__editor");
+        const previewWrap = composerRoot?.querySelector(".comment-composer__preview-wrap");
+        writeTab?.classList.add("is-active");
+        previewTab?.classList.remove("is-active");
+        writeTab?.setAttribute("aria-selected", "true");
+        previewTab?.setAttribute("aria-selected", "false");
+        textareaWrap?.classList.remove("hidden");
+        previewWrap?.classList.add("hidden");
       };
     });
 
@@ -2041,7 +2089,22 @@ export function createProjectSubjectsEvents(config) {
         if (!messageId) return;
         const replyUi = resolveInlineReplyUiState();
         replyUi.previewByMessageId[messageId] = true;
-        rerenderScope(root);
+        const composerRoot = btn.closest(".comment-composer");
+        const textarea = composerRoot?.querySelector(`[data-thread-reply-draft="${selectorValue(messageId)}"]`);
+        const previewWrap = composerRoot?.querySelector(".comment-composer__preview");
+        const previewWrapContainer = composerRoot?.querySelector(".comment-composer__preview-wrap");
+        const writeTab = composerRoot?.querySelector("[data-action='thread-reply-tab-write']");
+        const previewTab = composerRoot?.querySelector("[data-action='thread-reply-tab-preview']");
+        writeTab?.classList.remove("is-active");
+        previewTab?.classList.add("is-active");
+        writeTab?.setAttribute("aria-selected", "false");
+        previewTab?.setAttribute("aria-selected", "true");
+        composerRoot?.querySelector(".comment-composer__editor")?.classList.add("hidden");
+        previewWrapContainer?.classList.remove("hidden");
+        if (previewWrap) {
+          const markdown = String(textarea?.value || replyUi.draftsByMessageId?.[messageId] || "");
+          previewWrap.innerHTML = markdown.trim() ? mdToHtml(markdown) : `<div class="comment-composer__preview-empty">Use Markdown to format your reply</div>`;
+        }
       };
     });
 
@@ -2051,7 +2114,15 @@ export function createProjectSubjectsEvents(config) {
         if (!messageId) return;
         const replyUi = resolveInlineReplyUiState();
         replyUi.editPreviewByMessageId[messageId] = false;
-        rerenderScope(root);
+        const composerRoot = btn.closest(".comment-composer");
+        const writeTab = composerRoot?.querySelector("[data-action='thread-edit-tab-write']");
+        const previewTab = composerRoot?.querySelector("[data-action='thread-edit-tab-preview']");
+        writeTab?.classList.add("is-active");
+        previewTab?.classList.remove("is-active");
+        writeTab?.setAttribute("aria-selected", "true");
+        previewTab?.setAttribute("aria-selected", "false");
+        composerRoot?.querySelector(".comment-composer__editor")?.classList.remove("hidden");
+        composerRoot?.querySelector(".comment-composer__preview-wrap")?.classList.add("hidden");
       };
     });
 
@@ -2061,7 +2132,22 @@ export function createProjectSubjectsEvents(config) {
         if (!messageId) return;
         const replyUi = resolveInlineReplyUiState();
         replyUi.editPreviewByMessageId[messageId] = true;
-        rerenderScope(root);
+        const composerRoot = btn.closest(".comment-composer");
+        const textarea = composerRoot?.querySelector(`[data-thread-edit-draft="${selectorValue(messageId)}"]`);
+        const previewWrap = composerRoot?.querySelector(".comment-composer__preview");
+        const previewWrapContainer = composerRoot?.querySelector(".comment-composer__preview-wrap");
+        const writeTab = composerRoot?.querySelector("[data-action='thread-edit-tab-write']");
+        const previewTab = composerRoot?.querySelector("[data-action='thread-edit-tab-preview']");
+        writeTab?.classList.remove("is-active");
+        previewTab?.classList.add("is-active");
+        writeTab?.setAttribute("aria-selected", "false");
+        previewTab?.setAttribute("aria-selected", "true");
+        composerRoot?.querySelector(".comment-composer__editor")?.classList.add("hidden");
+        previewWrapContainer?.classList.remove("hidden");
+        if (previewWrap) {
+          const markdown = String(textarea?.value || replyUi.editDraftsByMessageId?.[messageId] || "");
+          previewWrap.innerHTML = markdown.trim() ? mdToHtml(markdown) : `<div class="comment-composer__preview-empty">Use Markdown to format your comment</div>`;
+        }
       };
     });
 
@@ -2157,7 +2243,7 @@ export function createProjectSubjectsEvents(config) {
         if (messageId) replyUi.previewByMessageId[messageId] = false;
         if (messageId) clearInlineReplyAttachmentsState(messageId);
         replyUi.expandedMessageId = "";
-        rerenderScope(root);
+        toggleInlineReplyEditorVisibility(messageId, false);
       };
     });
 
@@ -2197,7 +2283,7 @@ export function createProjectSubjectsEvents(config) {
         const replyUi = resolveInlineReplyUiState();
         if (messageId) replyUi.editPreviewByMessageId[messageId] = false;
         replyUi.editMessageId = "";
-        rerenderScope(root);
+        toggleInlineEditEditorVisibility(messageId, false);
       };
     });
 

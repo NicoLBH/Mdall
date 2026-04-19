@@ -25,7 +25,9 @@ function renderInlineMarkdown(source = "") {
     const href = sanitizeLinkHref(hrefRaw);
     if (!href) return `${label} (lien non autorisé)`;
     const external = /^https?:/i.test(href);
-    return `<a href="${escapeHtml(href)}"${external ? ' target="_blank" rel="noopener noreferrer"' : ""}>${label}</a>`;
+    const isMentionLink = /^\/people\//i.test(href);
+    const className = isMentionLink ? ' class="md-mention-link"' : "";
+    return `<a href="${escapeHtml(href)}"${className}${external ? ' target="_blank" rel="noopener noreferrer"' : ""}>${label}</a>`;
   });
 
   return safe;
