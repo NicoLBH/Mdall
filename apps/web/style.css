@@ -2581,6 +2581,8 @@ body.is-resizing{
   border-bottom-color: var(--bgAssistPanel);
   border-top:none;
 }
+.comment-composer--thread-reply-editor .comment-composer__preview-wrap{background:var(--bgAssistPanel);}
+
 .comment-composer__toolbar{display:flex;align-items:center;justify-content:flex-end;min-height:39px;}
 .comment-toolbar-layout{
   display:grid;
