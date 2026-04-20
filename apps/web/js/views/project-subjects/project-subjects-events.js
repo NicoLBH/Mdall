@@ -1162,7 +1162,7 @@ export function createProjectSubjectsEvents(config) {
       if (mode === "main") {
         store.situationsView.commentDraft = String(result.nextText || "");
       } else if (mode === "description") {
-        const descriptionState = getDescriptionEditorState();
+        const descriptionState = resolveDescriptionEditorState();
         descriptionState.draft = String(result.nextText || "");
       } else {
         const replyUi = resolveInlineReplyUiState();
@@ -1264,7 +1264,7 @@ export function createProjectSubjectsEvents(config) {
       if (mode === "main") {
         store.situationsView.commentDraft = String(result.nextText || "");
       } else if (mode === "description") {
-        const descriptionState = getDescriptionEditorState();
+        const descriptionState = resolveDescriptionEditorState();
         descriptionState.draft = String(result.nextText || "");
       } else {
         const replyUi = resolveInlineReplyUiState();
@@ -2650,21 +2650,14 @@ export function createProjectSubjectsEvents(config) {
       debugThreadReply("reply_state_fallback", { hasAccessor: typeof getInlineReplyUiState === "function" });
       return store.situationsView.inlineReplyUi;
     };
-    const createUploadSessionId = () => {
+    const createScopedUploadSessionId = () => {
       try {
         if (window?.crypto?.randomUUID) return String(window.crypto.randomUUID());
       } catch {}
       const chunk = () => Math.floor((1 + Math.random()) * 0x10000).toString(16).slice(1);
       return `${chunk()}${chunk()}-${chunk()}-${chunk()}-${chunk()}-${chunk()}${chunk()}${chunk()}`;
     };
-    const getDescriptionEditorState = () => {
-      if (typeof getDescriptionEditState === "function") {
-        const state = getDescriptionEditState();
-        if (state && typeof state === "object") return state;
-      }
-      return store.situationsView?.descriptionEdit || {};
-    };
-    const getDescriptionEditorState = () => {
+    const resolveDescriptionEditorState = () => {
       if (typeof getDescriptionEditState === "function") {
         const state = getDescriptionEditState();
         if (state && typeof state === "object") return state;
@@ -2688,7 +2681,7 @@ export function createProjectSubjectsEvents(config) {
       revokeObjectUrl(String(attachment?.localPreviewUrl || ""));
     };
     const renderDescriptionAttachmentsPreview = () => {
-      const state = getDescriptionEditorState();
+      const state = resolveDescriptionEditorState();
       const entityId = String(state?.entityId || "").trim();
       if (!entityId) return;
       const container = root.querySelector(
@@ -2707,14 +2700,14 @@ export function createProjectSubjectsEvents(config) {
       if (!list.length) return;
       const selection = getScopedSelection(root);
       if (selection?.type !== "sujet") return;
-      const state = getDescriptionEditorState();
+      const state = resolveDescriptionEditorState();
       const entityId = String(state?.entityId || "").trim();
       if (!entityId) return;
       const projectId = String(selection?.item?.project_id || "").trim();
       if (!projectId || typeof uploadAttachmentFile !== "function") return;
       const uploadSessionId = typeof ensureDescriptionUploadSessionId === "function"
         ? String(ensureDescriptionUploadSessionId() || "").trim()
-        : (String(state.uploadSessionId || "").trim() || createUploadSessionId());
+        : (String(state.uploadSessionId || "").trim() || createScopedUploadSessionId());
       if (!state.uploadSessionId) state.uploadSessionId = uploadSessionId;
 
       const attachments = Array.isArray(state.attachments) ? state.attachments : [];
@@ -2758,7 +2751,7 @@ export function createProjectSubjectsEvents(config) {
       }
     };
     const removeDescriptionAttachment = async ({ attachmentId = "", tempId = "" } = {}) => {
-      const state = getDescriptionEditorState();
+      const state = resolveDescriptionEditorState();
       const attachments = Array.isArray(state.attachments) ? state.attachments : [];
       const normalizedAttachmentId = String(attachmentId || "").trim();
       const targetIndex = attachments.findIndex((entry) => String(entry?.tempId || "") === String(tempId || "") || String(entry?.id || "") === normalizedAttachmentId);
@@ -3384,7 +3377,7 @@ export function createProjectSubjectsEvents(config) {
       }
       const result = applyInlineEmojiSuggestion(textarea, suggestion);
       if (mode === "description") {
-        const descriptionState = getDescriptionEditorState();
+        const descriptionState = resolveDescriptionEditorState();
         descriptionState.draft = String(result.nextText || "");
         rerenderAutocompleteUi();
         return;
@@ -3867,7 +3860,7 @@ export function createProjectSubjectsEvents(config) {
     root.querySelectorAll("[data-action='description-tab-write']").forEach((btn) => {
       btn.onclick = () => {
         const entityId = String(btn.closest(".gh-comment")?.querySelector("[data-description-draft]")?.dataset.descriptionDraft || "").trim();
-        const descriptionState = getDescriptionEditorState();
+        const descriptionState = resolveDescriptionEditorState();
         if (entityId) descriptionState.entityId = entityId;
         descriptionState.previewMode = false;
         const composerRoot = btn.closest(".comment-composer");
@@ -3879,7 +3872,7 @@ export function createProjectSubjectsEvents(config) {
     });
     root.querySelectorAll("[data-action='description-tab-preview']").forEach((btn) => {
       btn.onclick = () => {
-        const descriptionState = getDescriptionEditorState();
+        const descriptionState = resolveDescriptionEditorState();
         descriptionState.previewMode = true;
         const composerRoot = btn.closest(".comment-composer");
         const textarea = composerRoot?.querySelector("[data-description-draft]");
