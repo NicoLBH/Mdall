@@ -131,8 +131,9 @@ export function createProjectSubjectsDetailsRenderer(config) {
     const subIssuesHtml = selection.type === "sujet"
       ? renderSubIssuesForSujet(item, options.subissuesOptions || {})
       : renderSubIssuesForSituation(item, options.subissuesOptions || {});
-    const threadHtml = renderThreadBlock();
-    const commentBoxHtml = renderCommentBox(selection);
+    const shouldRenderDiscussion = options.renderDiscussion !== false;
+    const threadHtml = shouldRenderDiscussion ? renderThreadBlock() : "";
+    const commentBoxHtml = shouldRenderDiscussion ? renderCommentBox(selection) : "";
     const subjectMetaControlsHtml = selection.type === "sujet" ? renderSubjectMetaControls(item) : "";
     const subjectPriorityHtml = selection.type === "sujet"
       ? `
@@ -152,8 +153,12 @@ export function createProjectSubjectsDetailsRenderer(config) {
             ${descCard}
             ${renderDocumentRefsCard(selection)}
             ${subIssuesHtml}
-            ${threadHtml}
-            ${commentBoxHtml}
+            <div class="subject-details-thread-host" data-details-thread-host>
+              ${threadHtml}
+            </div>
+            <div class="subject-details-composer-host" data-details-composer-host>
+              ${commentBoxHtml}
+            </div>
           </div>
         </div>
         <aside class="details-meta-col">
@@ -176,11 +181,26 @@ export function createProjectSubjectsDetailsRenderer(config) {
     };
   }
 
+  function renderDetailsDiscussionHtml(selectionOverride = null) {
+    const selection = selectionOverride || getActiveSelection();
+    if (!selection) {
+      return {
+        threadHtml: "",
+        composerHtml: ""
+      };
+    }
+    return {
+      threadHtml: renderThreadBlock(),
+      composerHtml: renderCommentBox(selection)
+    };
+  }
+
   return {
     renderDetailsTitleWrapHtml,
     renderDetailsTitleHtml,
     renderDetailsChromeHeadHtml,
     renderDetailsBody,
-    renderDetailsHtml
+    renderDetailsHtml,
+    renderDetailsDiscussionHtml
   };
 }

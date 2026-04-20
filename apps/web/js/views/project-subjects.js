@@ -452,7 +452,8 @@ const projectSubjectsDetailsRenderer = createProjectSubjectsDetailsRenderer({
 const {
   renderDetailsTitleWrapHtml: renderSharedDetailsTitleWrapHtml,
   renderDetailsChromeHeadHtml: renderSharedDetailsChromeHeadHtml,
-  renderDetailsHtml: renderSharedDetailsHtml
+  renderDetailsHtml: renderSharedDetailsHtml,
+  renderDetailsDiscussionHtml: renderSharedDetailsDiscussionHtml
 } = projectSubjectsDetailsRenderer;
 
 const projectSubjectDetail = createProjectSubjectDetailController({
@@ -461,6 +462,7 @@ const projectSubjectDetail = createProjectSubjectDetailController({
   getActiveSelection,
   getSelectionEntityType,
   renderDetailsHtml: renderSharedDetailsHtml,
+  renderDetailsDiscussionHtml: renderSharedDetailsDiscussionHtml,
   renderDetailsTitleWrapHtml: renderSharedDetailsTitleWrapHtml,
   renderDetailsChromeHeadHtml: renderSharedDetailsChromeHeadHtml,
   wireDetailsInteractive,

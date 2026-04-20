@@ -2276,6 +2276,7 @@ function rerenderPanels() {
     } else {
       const details = getProjectSubjectDetail().renderDetailsHtml(null, {
         showExpand: false,
+        renderDiscussion: false,
         subissuesOptions: {
           sujetRowClass: "js-modal-drilldown-sujet",
           sujetToggleClass: "js-modal-toggle-sujet",
@@ -2293,6 +2294,7 @@ function rerenderPanels() {
         </section>
       `;
       const detailsHost = document.getElementById("situationsDetailsHost");
+      renderDetailsDiscussionScopes(detailsHost);
       wireDetailsInteractive(detailsHost);
       bindDetailsScroll(document);
       restoreDocumentScrollState(detailsScrollState);
@@ -2325,11 +2327,21 @@ function rerenderScope(root) {
     && String(store.situationsView.subjectsSubview || "subjects") === "subjects"
     && !store.situationsView.showTableOnly
     && !!root?.closest?.("#situationsDetailsHost");
+  const isThreadScopeRoot = !!root?.closest?.("[data-details-thread-host]");
+  const isComposerScopeRoot = !!root?.closest?.("[data-details-composer-host]");
 
   if (shouldRerenderDetailsOnly) {
+    if (isThreadScopeRoot || isComposerScopeRoot) {
+      renderDetailsDiscussionScopes(detailsHost, {
+        renderThread: isThreadScopeRoot,
+        renderComposer: isComposerScopeRoot
+      });
+      return;
+    }
     const detailsScrollState = getScrollableElementScrollState(detailsHost);
     const details = getProjectSubjectDetail().renderDetailsHtml(null, {
       showExpand: false,
+      renderDiscussion: false,
       subissuesOptions: {
         sujetRowClass: "js-modal-drilldown-sujet",
         sujetToggleClass: "js-modal-toggle-sujet",
@@ -2341,6 +2353,7 @@ function rerenderScope(root) {
       }
     });
     detailsHost.innerHTML = details.bodyHtml;
+    renderDetailsDiscussionScopes(detailsHost);
     wireDetailsInteractive(detailsHost);
     bindDetailsScroll(document);
     restoreScrollableElementScrollState(detailsHost, detailsScrollState);
@@ -2356,6 +2369,31 @@ function rerenderScope(root) {
   const drilldownBody = document.getElementById("drilldownBody");
   if (root?.closest?.("#drilldownPanel") && drilldownBody) {
     getProjectSubjectDrilldown().updateDrilldownPanel();
+  }
+}
+
+function renderDetailsDiscussionScopes(detailsHost, options = {}) {
+  if (!detailsHost || !detailsHost.isConnected) return;
+  const {
+    renderThread = true,
+    renderComposer = true
+  } = options;
+  if (!renderThread && !renderComposer) return;
+
+  const discussion = getProjectSubjectDetail().renderDetailsDiscussionHtml();
+  if (renderThread) {
+    const threadHost = detailsHost.querySelector("[data-details-thread-host]");
+    if (threadHost) {
+      threadHost.innerHTML = discussion.threadHtml;
+      wireDetailsInteractive(threadHost);
+    }
+  }
+  if (renderComposer) {
+    const composerHost = detailsHost.querySelector("[data-details-composer-host]");
+    if (composerHost) {
+      composerHost.innerHTML = discussion.composerHtml;
+      wireDetailsInteractive(composerHost);
+    }
   }
 }
 
