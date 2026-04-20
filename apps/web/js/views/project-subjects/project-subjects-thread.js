@@ -762,6 +762,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
       { action: "ordered-list", icon: "markdown-list-ordered", label: "Liste numérotée" },
       { action: "bullet-list", icon: "markdown-list-unordered", label: "Liste à puces" },
       { action: "checklist", icon: "markdown-tasklist", label: "Checklist" },
+      { action: "heading", icon: "markdown-heading", label: "Titre (H3)" },
       { action: "mention", icon: "markdown-mention", label: "Mention" },
       { action: "subject-ref", icon: "cross-reference", label: "Référence sujet" }
     ];
@@ -808,7 +809,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
     `;
 
     const groupOne = ["bold", "italic", "underline", "quote", "code", "link"];
-    const groupTwo = ["ordered-list", "bullet-list", "checklist"];
+    const groupTwo = ["ordered-list", "bullet-list", "checklist", "heading"];
     const mentionButton = toolbarButtons.find((button) => button.action === "mention");
     const subjectRefButton = toolbarButtons.find((button) => button.action === "subject-ref");
     const renderGroup = (actions = []) => actions

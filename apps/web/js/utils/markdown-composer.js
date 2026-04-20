@@ -71,6 +71,9 @@ export function applyMarkdownComposerAction(textarea, action = "") {
     case "checklist":
       result = prefixSelectedLines(value, start, end, "- [ ] ");
       break;
+    case "heading":
+      result = prefixSelectedLines(value, start, end, "### ");
+      break;
     case "link":
       result = applyWrap(value, start, end, "[", "](https://)", "label");
       if (result) {
