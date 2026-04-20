@@ -85,7 +85,8 @@ export function createProjectSubjectsView(deps) {
     setProjectCompactEnabled,
     currentDecisionTarget,
     addComment,
-    getScopedSelection
+    getScopedSelection,
+    ensureTimelineLoadedForSelection
   } = deps;
 
   const {
@@ -2442,6 +2443,7 @@ function renderDetailsDiscussionScopes(detailsHost, options = {}) {
   } = options;
   if (!renderThread && !renderComposer) return;
 
+  ensureTimelineLoadedForSelection();
   const discussion = getProjectSubjectDetail().renderDetailsDiscussionHtml();
   if (renderThread) {
     debugRenderScope("thread", { host: "details-thread-host" });

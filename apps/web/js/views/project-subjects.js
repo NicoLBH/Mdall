@@ -302,6 +302,7 @@ const {
   getComposerAttachmentsState,
   getThreadForSelection,
   getInlineReplyUiState,
+  ensureTimelineLoadedForSelection,
   renderThreadBlock,
   renderIssueStatusAction,
   renderCommentBox
@@ -786,7 +787,8 @@ const projectSubjectsView = createProjectSubjectsView({
   currentDecisionTarget: (...args) => currentDecisionTarget(...args),
   addComment: (...args) => addComment(...args),
   getScopedSelection: (...args) => getScopedSelection(...args),
-  getInlineReplyUiState: (...args) => getInlineReplyUiState(...args)
+  getInlineReplyUiState: (...args) => getInlineReplyUiState(...args),
+  ensureTimelineLoadedForSelection: (...args) => ensureTimelineLoadedForSelection(...args)
 });
 
 const {
