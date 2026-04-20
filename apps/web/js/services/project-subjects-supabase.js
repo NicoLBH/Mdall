@@ -2,12 +2,13 @@ import { store } from "../store.js";
 import { buildSubjectHierarchyIndexes } from "./subject-hierarchy.js";
 import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
 import { loadSituationsForCurrentProject, loadSituationSubjectIdsMap } from "./project-situations-supabase.js";
-import { resolveCurrentBackendProjectId } from "./project-supabase-sync.js";
+import { resolveCurrentBackendProjectId, resolveCurrentUserDirectoryPersonId } from "./project-supabase-sync.js";
 import { invalidateSubjectRefIndex } from "../utils/subject-ref-index.js";
 import { normalizeAssigneeIds } from "./subject-assignees-service.js";
 
 const SUPABASE_URL = getSupabaseUrl();
 const FRONT_PROJECT_MAP_STORAGE_KEY = "mdall.supabaseProjectMap.v1";
+const SUBJECT_DESCRIPTION_DEBUG_FLAG = "__MDALL_DEBUG_SUBJECT_DESCRIPTION__";
 
 
 
@@ -43,6 +44,96 @@ function getMappedBackendProjectId() {
 
 async function getSupabaseAuthHeaders(extra = {}) {
   return buildSupabaseAuthHeaders(extra);
+}
+
+function isSubjectDescriptionDebugEnabled() {
+  return typeof window !== "undefined" && window?.[SUBJECT_DESCRIPTION_DEBUG_FLAG] === true;
+}
+
+function truncateDescriptionPreview(value = "", maxLength = 160) {
+  const raw = String(value || "");
+  if (raw.length <= maxLength) return raw;
+  return `${raw.slice(0, maxLength)}…`;
+}
+
+function safeJsonParse(text = "") {
+  const raw = String(text || "");
+  if (!raw.trim()) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function buildSubjectDescriptionDebugRequestId() {
+  return `subject-description-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+async function rpcCall(functionName, payload = {}) {
+  const rpcUrl = `${SUPABASE_URL}/rest/v1/rpc/${functionName}`;
+  const response = await fetch(rpcUrl, {
+    method: "POST",
+    headers: await getSupabaseAuthHeaders({
+      Accept: "application/json",
+      "Content-Type": "application/json"
+    }),
+    body: JSON.stringify(payload || {})
+  });
+
+  if (!response.ok) {
+    const rawBody = await response.text().catch(() => "");
+    const parsedBody = safeJsonParse(rawBody);
+    const error = new Error(`${functionName} failed (${response.status}): ${rawBody || response.statusText || "Unknown error"}`);
+    error.status = response.status;
+    error.rawBody = rawBody;
+    error.parsedBody = parsedBody;
+    error.rpcUrl = rpcUrl;
+    error.payload = payload;
+    throw error;
+  }
+
+  const payloadText = await response.text().catch(() => "");
+  if (!payloadText) return null;
+  try {
+    return JSON.parse(payloadText);
+  } catch {
+    return null;
+  }
+}
+
+async function gatherSubjectDescriptionFailureDiagnostics({
+  subjectId = "",
+  uploadSessionId = "",
+  actorPersonId = "",
+  description = ""
+} = {}) {
+  const payload = {
+    p_subject_id: normalizeUuid(subjectId) || null,
+    p_upload_session_id: normalizeUuid(uploadSessionId) || null,
+    p_actor_person_id: normalizeUuid(actorPersonId) || null,
+    p_description: String(description || "")
+  };
+
+  try {
+    const response = await rpcCall("debug_update_subject_description_context", payload);
+    return {
+      ok: true,
+      payload,
+      data: Array.isArray(response) ? (response[0] || null) : response
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      payload,
+      error: {
+        message: String(error?.message || error || ""),
+        status: Number(error?.status || 0) || null,
+        rawBody: String(error?.rawBody || ""),
+        parsedBody: error?.parsedBody ?? null
+      }
+    };
+  }
 }
 
 async function fetchProjectFlatSubjects(projectId) {
@@ -938,6 +1029,9 @@ export async function replaceSubjectLabels(subjectId, labelIds = []) {
 }
 
 export async function updateSubjectDescription({ subjectId, description, uploadSessionId = "" } = {}) {
+  const debugEnabled = isSubjectDescriptionDebugEnabled();
+  const debugRequestId = debugEnabled ? buildSubjectDescriptionDebugRequestId() : null;
+  const rpcUrl = `${SUPABASE_URL}/rest/v1/rpc/update_subject_description`;
   const normalizedSubjectId = normalizeUuid(subjectId);
   if (!normalizedSubjectId) throw new Error("subjectId is required");
   const rawDescription = typeof description === "string" ? description : String(description || "");
@@ -948,25 +1042,84 @@ export async function updateSubjectDescription({ subjectId, description, uploadS
     throw new Error("description or uploadSessionId is required");
   }
 
-  const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/update_subject_description`, {
-    method: "POST",
-    headers: await getSupabaseAuthHeaders({
-      Accept: "application/json",
-      "Content-Type": "application/json",
-    }),
-    body: JSON.stringify({
-      p_subject_id: normalizedSubjectId,
-      p_description: nextDescription,
-      p_upload_session_id: normalizedUploadSessionId || null
-    })
-  });
-  if (!response.ok) {
-    const txt = await response.text().catch(() => "");
-    const rawError = txt || response.statusText || "Unknown error";
-    throw new Error(`update_subject_description failed (${response.status}): ${rawError}`);
+  let actorPersonId = "";
+  try {
+    actorPersonId = normalizeUuid(await resolveCurrentUserDirectoryPersonId());
+  } catch (error) {
+    throw new Error(`update_subject_description identity resolution failed: ${String(error?.message || error || "unknown identity resolution error")}`);
+  }
+  if (!actorPersonId) {
+    throw new Error("update_subject_description identity resolution failed: no linked directory person found for current user");
   }
 
-  const payload = await response.json().catch(() => null);
+  const rpcPayload = {
+    p_subject_id: normalizedSubjectId,
+    p_description: nextDescription,
+    p_upload_session_id: normalizedUploadSessionId || null,
+    p_actor_person_id: actorPersonId
+  };
+  if (debugEnabled) rpcPayload.p_debug_request_id = debugRequestId;
+
+  if (debugEnabled) {
+    console.info("[subject-description] rpc request", {
+      timestamp: new Date().toISOString(),
+      subjectId: normalizedSubjectId,
+      uploadSessionId: normalizedUploadSessionId || null,
+      actorPersonId,
+      descriptionLength: rawDescription.length,
+      descriptionPreview: truncateDescriptionPreview(rawDescription),
+      rpcUrl,
+      payload: rpcPayload
+    });
+  }
+
+  let payload = null;
+  try {
+    payload = await rpcCall("update_subject_description", rpcPayload);
+  } catch (error) {
+    const statusCode = Number(error?.status || 0) || null;
+    const rawError = String(error?.rawBody || error?.message || error || "");
+    const parsedBody = error?.parsedBody ?? safeJsonParse(rawError);
+    let preflight = null;
+
+    if (debugEnabled) {
+      preflight = await gatherSubjectDescriptionFailureDiagnostics({
+        subjectId: normalizedSubjectId,
+        uploadSessionId: normalizedUploadSessionId,
+        actorPersonId,
+        description: nextDescription
+      });
+    }
+
+    if (debugEnabled) {
+      console.error("[subject-description] rpc failure", {
+        timestamp: new Date().toISOString(),
+        subjectId: normalizedSubjectId,
+        uploadSessionId: normalizedUploadSessionId || null,
+        actorPersonId,
+        descriptionLength: rawDescription.length,
+        descriptionPreview: truncateDescriptionPreview(rawDescription),
+        rpcUrl: String(error?.rpcUrl || rpcUrl),
+        payload: rpcPayload,
+        statusCode,
+        rawBody: rawError,
+        parsedBody,
+        preflight
+      });
+      if (preflight && !preflight.ok) {
+        console.error("[subject-description] debug preflight failure", {
+          timestamp: new Date().toISOString(),
+          rpc: "debug_update_subject_description_context",
+          payload: preflight.payload,
+          error: preflight.error
+        });
+      }
+    }
+
+    const preflightSummary = debugEnabled && preflight?.ok ? ` | preflight=${JSON.stringify(preflight.data)}` : "";
+    throw new Error(`update_subject_description failed (${statusCode || "unknown"}): ${rawError}${preflightSummary}`);
+  }
+
   const row = Array.isArray(payload) ? payload[0] : payload;
   const descriptionAttachments = Array.isArray(row?.description_attachments) ? row.description_attachments : [];
   return {
