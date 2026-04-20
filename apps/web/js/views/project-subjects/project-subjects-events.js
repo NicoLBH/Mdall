@@ -11,9 +11,9 @@ import {
 } from "../../utils/emoji-autocomplete.js";
 import {
   applySubjectRefSuggestion,
-  resolveSubjectRefTriggerContext,
-  searchSubjectRefSuggestions
+  resolveSubjectRefTriggerContext
 } from "../../utils/subject-links.js";
+import { searchSubjectRefs } from "../../utils/subject-ref-index.js";
 import { computeTextareaCaretRect } from "../../utils/textarea-caret-position.js";
 
 export function createProjectSubjectsEvents(config) {
@@ -1172,41 +1172,20 @@ export function createProjectSubjectsEvents(config) {
     };
 
     const listSubjectRefSuggestions = (query = "") => {
-      const subjectsData = Array.isArray(store.projectSubjectsView?.subjectsData)
-        ? store.projectSubjectsView.subjectsData
-        : [];
-      const seen = new Set();
-      const allSubjects = [];
-      subjectsData.forEach((situation) => {
-        const queue = Array.isArray(situation?.sujets) ? [...situation.sujets] : [];
-        while (queue.length) {
-          const sujet = queue.shift();
-          const subjectId = String(sujet?.id || "").trim();
-          const subjectNumber = Number.parseInt(String(sujet?.subject_number ?? sujet?.subjectNumber ?? ""), 10);
-          if (subjectId && Number.isFinite(subjectNumber) && subjectNumber > 0 && !seen.has(subjectId)) {
-            seen.add(subjectId);
-            const canonicalSujet = typeof getNestedSujet === "function" ? getNestedSujet(subjectId) : sujet;
-            const status = typeof getEffectiveSujetStatus === "function"
-              ? getEffectiveSujetStatus(canonicalSujet || sujet)
-              : String((canonicalSujet || sujet)?.status || "open");
-            allSubjects.push({
-              subjectId,
-              subjectNumber: Math.floor(subjectNumber),
-              title: String((canonicalSujet || sujet)?.title || "").trim() || `Sujet #${subjectNumber}`,
-              status
-            });
+      const projectSubjectsView = store.projectSubjectsView && typeof store.projectSubjectsView === "object"
+        ? store.projectSubjectsView
+        : {};
+      return searchSubjectRefs(projectSubjectsView, query, 8, {
+        statusResolver: (subject) => {
+          const canonicalSujet = typeof getNestedSujet === "function"
+            ? (getNestedSujet(subject?.id) || subject)
+            : subject;
+          if (typeof getEffectiveSujetStatus === "function") {
+            return getEffectiveSujetStatus(canonicalSujet);
           }
-          const children = Array.isArray(sujet?.sujets)
-            ? sujet.sujets
-            : Array.isArray(sujet?.childSujets)
-              ? sujet.childSujets
-              : Array.isArray(sujet?.children)
-                ? sujet.children
-                : [];
-          if (children.length) queue.push(...children);
+          return String(canonicalSujet?.status || subject?.status || "open");
         }
       });
-      return searchSubjectRefSuggestions(allSubjects, query, 8);
     };
 
     const syncSubjectRefPopupForTextarea = (textarea, composerKey) => {

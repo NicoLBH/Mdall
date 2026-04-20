@@ -79,6 +79,7 @@ import {
 import { escapeHtml } from "../utils/escape-html.js";
 import { renderMarkdownToHtml } from "../utils/markdown-renderer.js";
 import { linkifySubjectRefsInHtml } from "../utils/subject-links.js";
+import { getSubjectRefByNumber } from "../utils/subject-ref-index.js";
 import { renderSelectMenuSection } from "./ui/select-menu.js";
 import {
   formatSharedDateInputValue,
@@ -672,37 +673,9 @@ function rerenderSubjectsPanelsWhenConnected(root, remainingAttempts = 12) {
 
 
 function mdToHtml(text) {
-  const subjectRows = Array.isArray(store.projectSubjectsView?.subjectsData)
-    ? store.projectSubjectsView.subjectsData
-    : [];
-  const byNumber = new Map();
-  const registerSubject = (entry) => {
-    const number = Number.parseInt(String(entry?.subject_number ?? entry?.subjectNumber ?? ""), 10);
-    const subjectId = String(entry?.id || "").trim();
-    if (!Number.isFinite(number) || number <= 0 || !subjectId || byNumber.has(number)) return;
-    byNumber.set(number, {
-      id: subjectId,
-      subjectNumber: number
-    });
-  };
-  subjectRows.forEach((situation) => {
-    const queue = Array.isArray(situation?.sujets) ? [...situation.sujets] : [];
-    while (queue.length) {
-      const sujet = queue.shift();
-      registerSubject(sujet);
-      const children = Array.isArray(sujet?.sujets)
-        ? sujet.sujets
-        : Array.isArray(sujet?.childSujets)
-          ? sujet.childSujets
-          : Array.isArray(sujet?.children)
-            ? sujet.children
-            : [];
-      if (children.length) queue.push(...children);
-    }
-  });
   return renderMarkdownToHtml(text || "", {
     postProcessHtml: (html) => linkifySubjectRefsInHtml(html, {
-      resolveSubjectByNumber: (number) => byNumber.get(Number(number)) || null
+      resolveSubjectByNumber: (number) => getSubjectRefByNumber(store.projectSubjectsView, number)
     })
   });
 }

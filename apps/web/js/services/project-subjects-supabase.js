@@ -3,6 +3,7 @@ import { buildSubjectHierarchyIndexes } from "./subject-hierarchy.js";
 import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
 import { loadSituationsForCurrentProject, loadSituationSubjectIdsMap } from "./project-situations-supabase.js";
 import { resolveCurrentBackendProjectId } from "./project-supabase-sync.js";
+import { invalidateSubjectRefIndex } from "../utils/subject-ref-index.js";
 import { normalizeAssigneeIds } from "./subject-assignees-service.js";
 
 const SUPABASE_URL = getSupabaseUrl();
@@ -1096,6 +1097,7 @@ export async function loadFlatSubjectsForCurrentProject(options = {}) {
         }
       };
       store.projectSubjectsView.rawResult = store.projectSubjectsView.rawSubjectsResult;
+      invalidateSubjectRefIndex(store.projectSubjectsView);
       store.projectSubjectsView.loading = false;
       store.projectSubjectsView.loaded = true;
       return [];
@@ -1177,6 +1179,7 @@ export async function loadFlatSubjectsForCurrentProject(options = {}) {
     store.projectSubjectsView.subjectsData = result.subjects;
     store.projectSubjectsView.rawSubjectsResult = result;
     store.projectSubjectsView.rawResult = result;
+    invalidateSubjectRefIndex(store.projectSubjectsView);
     store.projectSubjectsView.projectScopeId = currentProjectScopeId;
     store.projectSubjectsView.page = previousPage;
     store.projectSubjectsView.pagination = {
@@ -1221,6 +1224,7 @@ export function resetFlatSubjectsForCurrentProject() {
   store.projectSubjectsView.subjectsData = [];
   store.projectSubjectsView.rawSubjectsResult = null;
   store.projectSubjectsView.rawResult = null;
+  invalidateSubjectRefIndex(store.projectSubjectsView);
   store.projectSubjectsView.projectScopeId = String(store.currentProjectId || "").trim() || null;
   store.projectSubjectsView.loading = false;
   store.projectSubjectsView.loaded = false;
