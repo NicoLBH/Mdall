@@ -1161,12 +1161,16 @@ export async function loadSubjectDescriptionVersions(subjectId, options = {}) {
     peopleUrl.searchParams.set("select", "id,first_name,last_name,email");
     peopleUrl.searchParams.set("id", `in.(${personIds.join(",")})`);
 
-    const peopleResponse = await fetch(peopleUrl.toString(), {
+    const peopleRequest = fetch(peopleUrl.toString(), {
       method: "GET",
       headers: await getSupabaseAuthHeaders({ Accept: "application/json" }),
       cache: "no-store"
     });
-    if (peopleResponse.ok) {
+    const timeoutRequest = new Promise((resolve) => {
+      setTimeout(() => resolve(null), 1500);
+    });
+    const peopleResponse = await Promise.race([peopleRequest, timeoutRequest]).catch(() => null);
+    if (peopleResponse?.ok) {
       const peopleRows = await peopleResponse.json().catch(() => []);
       (Array.isArray(peopleRows) ? peopleRows : []).forEach((person) => {
         const personId = normalizeUuid(person?.id);

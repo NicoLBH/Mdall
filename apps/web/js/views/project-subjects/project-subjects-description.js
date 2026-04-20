@@ -353,7 +353,7 @@ export function createProjectSubjectsDescription(config = {}) {
       : (!ui.isLoading && !ui.error ? `<div class="description-versions-menu__empty">Aucune version disponible.</div>` : "");
 
     return `
-      <div class="description-versions-menu__dropdown" data-role="description-versions-dropdown" role="menu">
+      <div class="description-versions-menu__dropdown gh-menu gh-menu--open" data-role="description-versions-dropdown" role="menu">
         <div class="description-versions-menu__title">Nombre de versions : ${count}</div>
         ${loadingHtml}
         ${errorHtml}
