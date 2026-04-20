@@ -937,6 +937,46 @@ export async function replaceSubjectLabels(subjectId, labelIds = []) {
   return true;
 }
 
+export async function updateSubjectDescription({ subjectId, description, uploadSessionId = "" } = {}) {
+  const normalizedSubjectId = normalizeUuid(subjectId);
+  if (!normalizedSubjectId) throw new Error("subjectId is required");
+  const nextDescription = String(description || "").trim();
+  const normalizedUploadSessionId = normalizeUuid(uploadSessionId);
+  if (!nextDescription && !normalizedUploadSessionId) {
+    throw new Error("description or uploadSessionId is required");
+  }
+
+  const url = new URL(`${SUPABASE_URL}/rest/v1/rpc/update_subject_description`);
+  const response = await fetch(url.toString(), {
+    method: "POST",
+    headers: await getSupabaseAuthHeaders({
+      Accept: "application/json",
+      "Content-Type": "application/json"
+    }),
+    body: JSON.stringify({
+      p_subject_id: normalizedSubjectId,
+      p_description: nextDescription,
+      p_upload_session_id: normalizedUploadSessionId || null
+    })
+  });
+
+  if (!response.ok) {
+    const txt = await response.text().catch(() => "");
+    throw new Error(`update_subject_description failed (${response.status}): ${txt}`);
+  }
+
+  const payload = await response.json().catch(() => null);
+  const row = Array.isArray(payload) ? payload[0] : payload;
+  const normalizedAttachments = Array.isArray(row?.description_attachments)
+    ? row.description_attachments
+    : [];
+  return {
+    ...(row || {}),
+    description: String(row?.description || nextDescription),
+    description_attachments: normalizedAttachments
+  };
+}
+
 export async function loadLabelsForProject(projectId) {
   const resolvedProjectId = await getResolvedProjectId(projectId);
   if (!resolvedProjectId) {

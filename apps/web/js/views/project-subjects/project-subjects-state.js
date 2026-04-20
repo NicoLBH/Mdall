@@ -87,9 +87,19 @@ export function createProjectSubjectsState({ store }) {
       v.descriptionEdit = {
         entityType: null,
         entityId: null,
-        draft: ""
+        draft: "",
+        previewMode: false,
+        uploadSessionId: "",
+        attachments: [],
+        isSaving: false,
+        error: ""
       };
     }
+    if (typeof v.descriptionEdit.previewMode !== "boolean") v.descriptionEdit.previewMode = false;
+    if (typeof v.descriptionEdit.uploadSessionId !== "string") v.descriptionEdit.uploadSessionId = "";
+    if (!Array.isArray(v.descriptionEdit.attachments)) v.descriptionEdit.attachments = [];
+    if (typeof v.descriptionEdit.isSaving !== "boolean") v.descriptionEdit.isSaving = false;
+    if (typeof v.descriptionEdit.error !== "string") v.descriptionEdit.error = "";
     if (!v.drilldown || typeof v.drilldown !== "object") {
       v.drilldown = {
         isOpen: false,
@@ -212,7 +222,12 @@ export function createProjectSubjectsState({ store }) {
     v.descriptionEdit = {
       entityType: null,
       entityId: null,
-      draft: ""
+      draft: "",
+      previewMode: false,
+      uploadSessionId: "",
+      attachments: [],
+      isSaving: false,
+      error: ""
     };
     v.subjectMetaDropdown = {
       field: null,

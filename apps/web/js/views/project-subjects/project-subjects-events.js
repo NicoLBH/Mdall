@@ -45,6 +45,8 @@ export function createProjectSubjectsEvents(config) {
     getToggleSubjectBlockingForRelation,
     getReorderSubjectChildren,
     syncDescriptionEditorDraft,
+    getDescriptionEditState,
+    ensureDescriptionUploadSessionId,
     startDescriptionEdit,
     clearDescriptionEditState,
     applyDescriptionSave,
@@ -668,7 +670,7 @@ export function createProjectSubjectsEvents(config) {
 
     syncSubjectMetaDropdownPosition(getSubjectMetaScopeRoot());
 
-    const descriptionTextarea = root.querySelector("[data-description-editor]");
+    const descriptionTextarea = root.querySelector("[data-description-draft]");
     if (descriptionTextarea) {
       descriptionTextarea.addEventListener("input", () => {
         syncDescriptionEditorDraft(root);
@@ -768,6 +770,7 @@ export function createProjectSubjectsEvents(config) {
       if (composerKey === "main") return "#humanCommentBox";
       if (composerKey === "reply" && messageId) return `[data-thread-reply-draft="${selectorValue(messageId)}"]`;
       if (composerKey === "edit" && messageId) return `[data-thread-edit-draft="${selectorValue(messageId)}"]`;
+      if (composerKey === "description" && messageId) return `[data-description-draft="${selectorValue(messageId)}"]`;
       return "";
     };
 
@@ -1158,6 +1161,9 @@ export function createProjectSubjectsEvents(config) {
       const { mode, messageId = "" } = splitComposerKey(composerKey);
       if (mode === "main") {
         store.situationsView.commentDraft = String(result.nextText || "");
+      } else if (mode === "description") {
+        const descriptionState = getDescriptionEditorState();
+        descriptionState.draft = String(result.nextText || "");
       } else {
         const replyUi = resolveInlineReplyUiState();
         if (mode === "reply") {
@@ -1257,6 +1263,9 @@ export function createProjectSubjectsEvents(config) {
       const { mode, messageId = "" } = splitComposerKey(composerKey);
       if (mode === "main") {
         store.situationsView.commentDraft = String(result.nextText || "");
+      } else if (mode === "description") {
+        const descriptionState = getDescriptionEditorState();
+        descriptionState.draft = String(result.nextText || "");
       } else {
         const replyUi = resolveInlineReplyUiState();
         if (mode === "reply") {
@@ -2647,6 +2656,13 @@ export function createProjectSubjectsEvents(config) {
       } catch {}
       return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     };
+    const getDescriptionEditorState = () => {
+      if (typeof getDescriptionEditState === "function") {
+        const state = getDescriptionEditState();
+        if (state && typeof state === "object") return state;
+      }
+      return store.situationsView?.descriptionEdit || {};
+    };
     const isImageFile = (file) => String(file?.type || "").toLowerCase().startsWith("image/");
     const toObjectUrl = (file) => {
       try {
@@ -2662,6 +2678,94 @@ export function createProjectSubjectsEvents(config) {
     };
     const releaseAttachmentPreviewUrls = (attachment = {}) => {
       revokeObjectUrl(String(attachment?.localPreviewUrl || ""));
+    };
+    const renderDescriptionAttachmentsPreview = () => {
+      const state = getDescriptionEditorState();
+      const entityId = String(state?.entityId || "").trim();
+      if (!entityId) return;
+      const container = root.querySelector(
+        `[data-role='description-attachments-preview'][data-entity-id="${selectorValue(entityId)}"]`
+      );
+      if (!container) return;
+      const items = Array.isArray(state?.attachments) ? state.attachments : [];
+      container.innerHTML = renderAttachmentPreviewItemsHtml({
+        attachments: items,
+        removeAction: "description-attachment-remove"
+      });
+      container.classList.toggle("hidden", !items.length);
+    };
+    const addDescriptionFiles = async (files = []) => {
+      const list = Array.from(files || []).filter(Boolean);
+      if (!list.length) return;
+      const selection = getScopedSelection(root);
+      if (selection?.type !== "sujet") return;
+      const state = getDescriptionEditorState();
+      const entityId = String(state?.entityId || "").trim();
+      if (!entityId) return;
+      const projectId = String(selection?.item?.project_id || "").trim();
+      if (!projectId || typeof uploadAttachmentFile !== "function") return;
+      const uploadSessionId = typeof ensureDescriptionUploadSessionId === "function"
+        ? String(ensureDescriptionUploadSessionId() || "").trim()
+        : (String(state.uploadSessionId || "").trim() || createUploadSessionId());
+      if (!state.uploadSessionId) state.uploadSessionId = uploadSessionId;
+
+      const attachments = Array.isArray(state.attachments) ? state.attachments : [];
+      state.attachments = attachments;
+      for (const file of list) {
+        const tempId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        const localPreviewUrl = toObjectUrl(file);
+        const pending = {
+          id: "",
+          tempId,
+          file_name: String(file?.name || "fichier"),
+          mime_type: String(file?.type || ""),
+          size_bytes: Number(file?.size || 0),
+          localPreviewUrl,
+          previewUrl: localPreviewUrl,
+          isImage: isImageFile(file),
+          uploadStatus: "uploading",
+          error: ""
+        };
+        attachments.push(pending);
+        renderDescriptionAttachmentsPreview();
+        try {
+          const uploaded = await uploadAttachmentFile({
+            subjectId: entityId,
+            projectId,
+            uploadSessionId,
+            file,
+            sortOrder: attachments.length - 1
+          });
+          pending.id = String(uploaded?.id || "");
+          pending.storage_path = String(uploaded?.storage_path || "");
+          pending.object_url = String(uploaded?.object_url || "");
+          pending.previewUrl = pending.previewUrl || pending.object_url || "";
+          pending.uploadStatus = "ready";
+          pending.error = "";
+        } catch (error) {
+          pending.uploadStatus = "error";
+          pending.error = String(error?.message || error || "Erreur d'upload");
+        }
+        renderDescriptionAttachmentsPreview();
+      }
+    };
+    const removeDescriptionAttachment = async ({ attachmentId = "", tempId = "" } = {}) => {
+      const state = getDescriptionEditorState();
+      const attachments = Array.isArray(state.attachments) ? state.attachments : [];
+      const normalizedAttachmentId = String(attachmentId || "").trim();
+      const targetIndex = attachments.findIndex((entry) => String(entry?.tempId || "") === String(tempId || "") || String(entry?.id || "") === normalizedAttachmentId);
+      if (targetIndex < 0) return;
+      const current = attachments[targetIndex];
+      attachments.splice(targetIndex, 1);
+      renderDescriptionAttachmentsPreview();
+      releaseAttachmentPreviewUrls(current);
+      if (normalizedAttachmentId && typeof removeTemporaryAttachment === "function") {
+        try {
+          await removeTemporaryAttachment({ attachmentId: normalizedAttachmentId });
+        } catch (error) {
+          console.warn("[subject-attachments] remove temporary attachment failed", error);
+        }
+      }
     };
     const getInlineReplyAttachmentsState = (messageId = "", { createIfMissing = false } = {}) => {
       const normalizedMessageId = String(messageId || "").trim();
@@ -3271,6 +3375,12 @@ export function createProjectSubjectsEvents(config) {
         return;
       }
       const result = applyInlineEmojiSuggestion(textarea, suggestion);
+      if (mode === "description") {
+        const descriptionState = getDescriptionEditorState();
+        descriptionState.draft = String(result.nextText || "");
+        rerenderAutocompleteUi();
+        return;
+      }
       const replyUi = resolveInlineReplyUiState();
       if (mode === "reply") {
         replyUi.draftsByMessageId[messageId] = String(result.nextText || "");
@@ -3745,6 +3855,120 @@ export function createProjectSubjectsEvents(config) {
         }
         textarea.focus();
       };
+    });
+    root.querySelectorAll("[data-action='description-tab-write']").forEach((btn) => {
+      btn.onclick = () => {
+        const entityId = String(btn.closest(".gh-comment")?.querySelector("[data-description-draft]")?.dataset.descriptionDraft || "").trim();
+        const descriptionState = getDescriptionEditorState();
+        if (entityId) descriptionState.entityId = entityId;
+        descriptionState.previewMode = false;
+        const composerRoot = btn.closest(".comment-composer");
+        composerRoot?.querySelector("[data-action='description-tab-write']")?.classList.add("is-active");
+        composerRoot?.querySelector("[data-action='description-tab-preview']")?.classList.remove("is-active");
+        composerRoot?.querySelector(".comment-composer__editor")?.classList.remove("hidden");
+        composerRoot?.querySelector(".comment-composer__preview-wrap")?.classList.add("hidden");
+      };
+    });
+    root.querySelectorAll("[data-action='description-tab-preview']").forEach((btn) => {
+      btn.onclick = () => {
+        const descriptionState = getDescriptionEditorState();
+        descriptionState.previewMode = true;
+        const composerRoot = btn.closest(".comment-composer");
+        const textarea = composerRoot?.querySelector("[data-description-draft]");
+        const previewWrap = composerRoot?.querySelector(".comment-composer__preview");
+        composerRoot?.querySelector("[data-action='description-tab-write']")?.classList.remove("is-active");
+        composerRoot?.querySelector("[data-action='description-tab-preview']")?.classList.add("is-active");
+        composerRoot?.querySelector(".comment-composer__editor")?.classList.add("hidden");
+        composerRoot?.querySelector(".comment-composer__preview-wrap")?.classList.remove("hidden");
+        if (previewWrap) {
+          const markdown = String(textarea?.value || descriptionState.draft || "");
+          previewWrap.innerHTML = markdown.trim()
+            ? mdToHtml(markdown, { preserveMessageLineBreaks: true })
+            : `<div class="comment-composer__preview-empty">Use Markdown to format your comment</div>`;
+        }
+      };
+    });
+    root.querySelectorAll("[data-action='description-format'][data-format]").forEach((btn) => {
+      btn.onclick = () => {
+        const action = String(btn.dataset.format || "").trim();
+        const textarea = root.querySelector("[data-description-draft]");
+        if (!action || !textarea) return;
+        if (action === "subject-ref") {
+          ensureSubjectRefTriggerInTextarea(textarea);
+          syncDescriptionEditorDraft(root);
+          closeMentionPopup({ rerender: false });
+          closeEmojiPopup({ rerender: false });
+          void syncSubjectRefPopupForTextarea(textarea, `description:${String(textarea.dataset.descriptionDraft || "")}`);
+          textarea.focus();
+          return;
+        }
+        const didApply = applyMarkdownComposerAction(textarea, action);
+        if (!didApply) return;
+        syncDescriptionEditorDraft(root);
+        if (action === "mention") {
+          void syncMentionPopupForTextarea(textarea, `description:${String(textarea.dataset.descriptionDraft || "")}`, { forceOpen: true });
+        } else {
+          closeMentionPopup({ rerender: false });
+          closeEmojiPopup({ rerender: false });
+        }
+        textarea.focus();
+      };
+    });
+    root.querySelectorAll("[data-action='description-attachments-pick']").forEach((btn) => {
+      btn.onclick = () => {
+        const input = root.querySelector("[data-role='description-file-input']");
+        input?.click();
+      };
+    });
+    root.querySelectorAll("[data-role='description-file-input']").forEach((input) => {
+      input.addEventListener("change", async (event) => {
+        const files = Array.from(event?.target?.files || []);
+        if (files.length) await addDescriptionFiles(files);
+        input.value = "";
+      });
+    });
+    root.querySelectorAll("[data-action='description-attachment-remove']").forEach((btn) => {
+      btn.onclick = async () => {
+        await removeDescriptionAttachment({
+          attachmentId: String(btn.dataset.attachmentId || ""),
+          tempId: String(btn.dataset.tempId || "")
+        });
+      };
+    });
+    root.querySelectorAll("[data-description-draft]").forEach((textarea) => {
+      const composerKey = `description:${String(textarea.dataset.descriptionDraft || "").trim()}`;
+      textarea.addEventListener("input", () => {
+        syncDescriptionEditorDraft(root);
+        void syncInlineAutocomplete(textarea, composerKey);
+      });
+      textarea.addEventListener("keydown", (event) => {
+        if (CARET_NAVIGATION_KEYS.has(event.key)) {
+          requestAnimationFrame(() => { void syncInlineAutocomplete(textarea, composerKey); });
+        }
+      });
+      textarea.addEventListener("click", () => { void syncInlineAutocomplete(textarea, composerKey); });
+      textarea.addEventListener("keyup", () => { void syncInlineAutocomplete(textarea, composerKey); });
+      const editor = textarea.closest(".comment-composer");
+      const dropzone = editor?.querySelector(".comment-composer__editor");
+      if (!dropzone) return;
+      ["dragenter", "dragover"].forEach((eventName) => {
+        dropzone.addEventListener(eventName, (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          dropzone.classList.add("is-dragover");
+        });
+      });
+      ["dragleave", "dragend", "drop"].forEach((eventName) => {
+        dropzone.addEventListener(eventName, (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          dropzone.classList.remove("is-dragover");
+        });
+      });
+      dropzone.addEventListener("drop", async (event) => {
+        const files = Array.from(event?.dataTransfer?.files || []);
+        if (files.length) await addDescriptionFiles(files);
+      });
     });
     root.querySelectorAll("[data-action='thread-reply-attachments-pick'][data-message-id]").forEach((btn) => {
       btn.onclick = () => {

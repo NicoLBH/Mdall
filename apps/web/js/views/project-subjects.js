@@ -13,7 +13,8 @@ import {
   deleteLabel as deleteLabelInSupabase,
   addLabelToSubject as addLabelToSubjectInSupabase,
   removeLabelFromSubject as removeLabelFromSubjectInSupabase,
-  replaceSubjectAssignees as replaceSubjectAssigneesInSupabase
+  replaceSubjectAssignees as replaceSubjectAssigneesInSupabase,
+  updateSubjectDescription as updateSubjectDescriptionInSupabase
 } from "../services/project-subjects-supabase.js";
 import { loadSituationsForCurrentProject, addSubjectToSituation, removeSubjectFromSituation } from "../services/project-situations-supabase.js";
 import {
@@ -317,6 +318,7 @@ const projectSubjectsDescription = createProjectSubjectsDescription({
   mdToHtml,
   nowIso,
   SVG_AVATAR_HUMAN,
+  renderCommentComposer,
   getRunBucket,
   persistRunBucket,
   getSelectionEntityType,
@@ -325,8 +327,8 @@ const projectSubjectsDescription = createProjectSubjectsDescription({
   setEntityReviewMeta,
   currentDecisionTarget,
   rerenderScope: (...args) => projectSubjectsView.rerenderScope(...args),
-  addActivity: (entityType, entityId, kind, message, meta, options) => addActivity(entityType, entityId, kind, message, meta, options),
-  markEntityValidated: (entityType, entityId, options) => markEntityValidated(entityType, entityId, options)
+  markEntityValidated: (entityType, entityId, options) => markEntityValidated(entityType, entityId, options),
+  updateSubjectDescription: (...args) => updateSubjectDescriptionInSupabase(...args)
 });
 
 const {
@@ -335,6 +337,8 @@ const {
   claimDescriptionAsHuman,
   clearDescriptionEditState,
   syncDescriptionEditorDraft,
+  getDescriptionEditState,
+  ensureDescriptionUploadSessionId,
   applyDescriptionSave,
   startDescriptionEdit,
   renderDescriptionCard
@@ -365,6 +369,8 @@ const projectSubjectsEvents = createProjectSubjectsEvents({
   getToggleSubjectBlockingForRelation: () => toggleSubjectBlockingForRelation,
   getReorderSubjectChildren: () => reorderSubjectChildren,
   syncDescriptionEditorDraft,
+  getDescriptionEditState,
+  ensureDescriptionUploadSessionId,
   startDescriptionEdit,
   clearDescriptionEditState,
   applyDescriptionSave,
