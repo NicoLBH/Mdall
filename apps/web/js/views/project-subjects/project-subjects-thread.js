@@ -296,6 +296,12 @@ export function createProjectSubjectsThread(config = {}) {
     if (!state.inlineReplyUi.editPreviewByMessageId || typeof state.inlineReplyUi.editPreviewByMessageId !== "object") {
       state.inlineReplyUi.editPreviewByMessageId = {};
     }
+    if (!state.inlineReplyUi.editAttachmentsByMessageId || typeof state.inlineReplyUi.editAttachmentsByMessageId !== "object") {
+      state.inlineReplyUi.editAttachmentsByMessageId = {};
+    }
+    if (!state.inlineReplyUi.editUploadSessionByMessageId || typeof state.inlineReplyUi.editUploadSessionByMessageId !== "object") {
+      state.inlineReplyUi.editUploadSessionByMessageId = {};
+    }
     return state.inlineReplyUi;
   }
 
@@ -526,12 +532,18 @@ export function createProjectSubjectsThread(config = {}) {
     return null;
   }
 
-  async function editSubjectMessage(subjectId, messageId, bodyMarkdown) {
+  async function editSubjectMessage(subjectId, messageId, { bodyMarkdown = "", uploadSessionId = "" } = {}) {
     const normalizedSubjectId = normalizeId(subjectId);
     const normalizedMessageId = normalizeId(messageId);
-    const nextBody = String(bodyMarkdown || "").trim();
-    if (!normalizedSubjectId || !normalizedMessageId || !nextBody || !subjectMessagesService) return null;
-    const updated = await subjectMessagesService.editMessage(normalizedMessageId, { bodyMarkdown: nextBody });
+    const nextBody = String(bodyMarkdown || "");
+    const normalizedUploadSessionId = normalizeId(uploadSessionId);
+    if (!normalizedSubjectId || !normalizedMessageId || !subjectMessagesService) return null;
+    const updated = await subjectMessagesService.editMessage({
+      messageId: normalizedMessageId,
+      subjectId: normalizedSubjectId,
+      bodyMarkdown: nextBody,
+      uploadSessionId: normalizedUploadSessionId || undefined
+    });
     ensureSubjectTimelineLoaded(normalizedSubjectId, { force: true });
     return updated;
   }
@@ -794,9 +806,11 @@ priority=${firstNonEmpty(subject.priority, "")}`
       return toolbarButtons.map((button) => renderToolbarButton(button)).join("");
     }
 
-    const attachmentAction = buttonAction === "thread-reply-format" || buttonAction === "thread-edit-format"
-      ? "thread-reply-attachments-pick"
-      : "composer-attachments-pick";
+    const attachmentAction = buttonAction === "thread-edit-format"
+      ? "thread-edit-attachments-pick"
+      : buttonAction === "thread-reply-format"
+        ? "thread-reply-attachments-pick"
+        : "composer-attachments-pick";
     const attachmentButton = `
       <button
         class="comment-toolbar-btn"
@@ -920,9 +934,11 @@ priority=${firstNonEmpty(subject.priority, "")}`
     `;
   }
 
-  function renderInlineEditComposer({ commentId, depth = 0, isEditing = false, draft = "", previewMode = false, originalMessage = "" } = {}) {
+  function renderInlineEditComposer({ commentId, depth = 0, isEditing = false, draft = "", previewMode = false, originalMessage = "", attachments = [] } = {}) {
     if (!commentId) return "";
     const normalizedDraft = String(draft || "");
+    const pendingAttachments = Array.isArray(attachments) ? attachments : [];
+    const hasReadyAttachment = pendingAttachments.some((attachment) => String(attachment?.uploadStatus || "").trim() === "ready" && !attachment?.error);
     const isNestedReplyEdit = Number(depth || 0) > 0;
     const editModeClass = isNestedReplyEdit
       ? "thread-inline-edit-editor--nested"
@@ -931,7 +947,37 @@ priority=${firstNonEmpty(subject.priority, "")}`
       ? "comment-composer--thread-edit-nested"
       : "comment-composer--thread-edit-root";
     const submitLabel = Number(depth || 0) > 0 ? "Mettre à jour la réponse" : "Mettre à jour le commentaire";
-    const canSubmit = !!normalizedDraft.trim();
+    const canSubmit = !!normalizedDraft.trim() || hasReadyAttachment;
+    const pendingAttachmentsHtml = pendingAttachments.length
+      ? `
+        <div class="subject-composer-attachments">
+          ${pendingAttachments.map((attachment, index) => `
+            <div class="subject-composer-attachment-item">
+              ${renderAttachmentTile(attachment, {
+                forceImage: !!attachment.isImage,
+                uploadState: attachment.error
+                  ? "error"
+                  : String(attachment.uploadStatus || "").trim() === "uploading"
+                    ? "uploading"
+                    : "ready",
+                uploadStateText: attachment.error ? "Erreur d’upload" : ""
+              })}
+              <button
+                class="subject-composer-attachment-remove"
+                type="button"
+                data-action="thread-edit-attachment-remove"
+                data-message-id="${escapeHtml(commentId)}"
+                data-attachment-id="${escapeHtml(normalizeId(attachment.id))}"
+                data-temp-id="${escapeHtml(String(attachment.tempId || index))}"
+                aria-label="Retirer la pièce jointe"
+              >
+                ${svgIcon("x")}
+              </button>
+            </div>
+          `).join("")}
+        </div>
+      `
+      : "";
     return `
       <div class="thread-inline-edit-editor ${editModeClass} ${isEditing ? "" : "hidden"}" data-inline-edit-editor="${escapeHtml(commentId)}" ${isEditing ? "" : "aria-hidden=\"true\""}>
         ${renderCommentComposer({
@@ -944,7 +990,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
           textareaAttributes: {
             "data-thread-edit-draft": commentId
           },
-          placeholder: "Modifier le message...",
+          placeholder: "Modifier le message, glisser-déposer une pièce jointe...",
           tabWriteAction: "thread-edit-tab-write",
           tabPreviewAction: "thread-edit-tab-preview",
           tabsClassName: "comment-composer__tabs--thread-reply",
@@ -960,7 +1006,24 @@ priority=${firstNonEmpty(subject.priority, "")}`
             </div>
           `,
           previewEmptyHint: "Use Markdown to format your comment",
-          footerHtml: ""
+          footerHtml: `
+            <input
+              id="threadEditAttachmentInput-${escapeHtml(commentId)}"
+              type="file"
+              class="subject-composer-file-input"
+              data-role="thread-edit-file-input"
+              data-message-id="${escapeHtml(commentId)}"
+              multiple
+            />
+            <div
+              class="subject-composer-attachments-preview ${pendingAttachments.length ? "" : "hidden"}"
+              data-role="thread-edit-attachments-preview"
+              data-message-id="${escapeHtml(commentId)}"
+              aria-live="polite"
+            >
+              ${pendingAttachmentsHtml}
+            </div>
+          `
         })}
       </div>
     `;
@@ -1052,10 +1115,17 @@ priority=${firstNonEmpty(subject.priority, "")}`
     const isEditing = replyUi.editMessageId === commentId;
     const draft = String(replyUi.draftsByMessageId?.[commentId] || "");
     const previewMode = !!replyUi.previewByMessageId?.[commentId];
-    const editDraft = String(replyUi.editDraftsByMessageId?.[commentId] || "");
+    const hasExplicitEditDraft = !!replyUi.editDraftsByMessageId
+      && Object.prototype.hasOwnProperty.call(replyUi.editDraftsByMessageId, commentId);
+    const editDraft = hasExplicitEditDraft
+      ? String(replyUi.editDraftsByMessageId?.[commentId] || "")
+      : String(entry?.message || "");
     const editPreviewMode = !!replyUi.editPreviewByMessageId?.[commentId];
     const attachments = Array.isArray(replyUi.attachmentsByMessageId?.[commentId])
       ? replyUi.attachmentsByMessageId[commentId]
+      : [];
+    const editAttachments = Array.isArray(replyUi.editAttachmentsByMessageId?.[commentId])
+      ? replyUi.editAttachmentsByMessageId[commentId]
       : [];
     const messageReactionSummary = buildMessageReactionSummary(entry?.meta?.reactions || []);
     const reactionsSummaryList = THREAD_REACTION_CHOICES
@@ -1087,9 +1157,10 @@ priority=${firstNonEmpty(subject.priority, "")}`
           commentId,
           depth,
           isEditing,
-          draft: editDraft || String(entry?.message || ""),
+          draft: editDraft,
           previewMode: editPreviewMode,
-          originalMessage: String(entry?.message || "")
+          originalMessage: String(entry?.message || ""),
+          attachments: editAttachments
         })}
         ${(Array.isArray(entry?.meta?.attachments) && entry.meta.attachments.length)
           ? `<div class="subject-attachment-grid">${entry.meta.attachments.map((attachment) => renderAttachmentTile(attachment)).join("")}</div>`

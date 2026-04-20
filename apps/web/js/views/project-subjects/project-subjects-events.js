@@ -2399,7 +2399,9 @@ export function createProjectSubjectsEvents(config) {
           uploadSessionByMessageId: {},
           editMessageId: "",
           editDraftsByMessageId: {},
-          editPreviewByMessageId: {}
+          editPreviewByMessageId: {},
+          editAttachmentsByMessageId: {},
+          editUploadSessionByMessageId: {}
         };
       }
       if (!store.situationsView.inlineReplyUi.previewByMessageId || typeof store.situationsView.inlineReplyUi.previewByMessageId !== "object") {
@@ -2419,6 +2421,12 @@ export function createProjectSubjectsEvents(config) {
       }
       if (!store.situationsView.inlineReplyUi.editPreviewByMessageId || typeof store.situationsView.inlineReplyUi.editPreviewByMessageId !== "object") {
         store.situationsView.inlineReplyUi.editPreviewByMessageId = {};
+      }
+      if (!store.situationsView.inlineReplyUi.editAttachmentsByMessageId || typeof store.situationsView.inlineReplyUi.editAttachmentsByMessageId !== "object") {
+        store.situationsView.inlineReplyUi.editAttachmentsByMessageId = {};
+      }
+      if (!store.situationsView.inlineReplyUi.editUploadSessionByMessageId || typeof store.situationsView.inlineReplyUi.editUploadSessionByMessageId !== "object") {
+        store.situationsView.inlineReplyUi.editUploadSessionByMessageId = {};
       }
       debugThreadReply("reply_state_fallback", { hasAccessor: typeof getInlineReplyUiState === "function" });
       return store.situationsView.inlineReplyUi;
@@ -2471,6 +2479,8 @@ export function createProjectSubjectsEvents(config) {
       return Array.isArray(inlineAttachmentsState?.items)
         && inlineAttachmentsState.items.some((attachment) => String(attachment?.uploadStatus || "").trim() === "ready" && !attachment?.error);
     };
+    const hasReadyInlineAttachments = (attachmentsState = null) => Array.isArray(attachmentsState?.items)
+      && attachmentsState.items.some((attachment) => String(attachment?.uploadStatus || "").trim() === "ready" && !attachment?.error);
     const syncInlineReplySubmitButton = (messageId = "") => {
       const normalizedMessageId = String(messageId || "").trim();
       if (!normalizedMessageId) return;
@@ -2484,7 +2494,10 @@ export function createProjectSubjectsEvents(config) {
       const normalizedMessageId = String(messageId || "").trim();
       if (!normalizedMessageId) return false;
       const replyUi = resolveInlineReplyUiState();
-      return !!String(replyUi.editDraftsByMessageId?.[normalizedMessageId] || "").trim();
+      const message = String(replyUi.editDraftsByMessageId?.[normalizedMessageId] || "").trim();
+      if (message) return true;
+      const inlineAttachmentsState = getInlineEditAttachmentsState(normalizedMessageId);
+      return hasReadyInlineAttachments(inlineAttachmentsState);
     };
     const syncInlineEditSubmitButton = (messageId = "") => {
       const normalizedMessageId = String(messageId || "").trim();
@@ -2546,6 +2559,33 @@ export function createProjectSubjectsEvents(config) {
       items.forEach((attachment) => releaseAttachmentPreviewUrls(attachment));
       delete replyUi.attachmentsByMessageId[normalizedMessageId];
       if (!keepUploadSession) delete replyUi.uploadSessionByMessageId[normalizedMessageId];
+    };
+    const getInlineEditAttachmentsState = (messageId = "", { createIfMissing = false } = {}) => {
+      const normalizedMessageId = String(messageId || "").trim();
+      const replyUi = resolveInlineReplyUiState();
+      if (!normalizedMessageId) return { replyUi, items: [], uploadSessionId: "" };
+      if (!Array.isArray(replyUi.editAttachmentsByMessageId[normalizedMessageId])) {
+        if (createIfMissing) replyUi.editAttachmentsByMessageId[normalizedMessageId] = [];
+      }
+      if (createIfMissing && !String(replyUi.editUploadSessionByMessageId[normalizedMessageId] || "")) {
+        replyUi.editUploadSessionByMessageId[normalizedMessageId] = createUploadSessionId();
+      }
+      return {
+        replyUi,
+        items: Array.isArray(replyUi.editAttachmentsByMessageId[normalizedMessageId]) ? replyUi.editAttachmentsByMessageId[normalizedMessageId] : [],
+        uploadSessionId: String(replyUi.editUploadSessionByMessageId[normalizedMessageId] || "")
+      };
+    };
+    const clearInlineEditAttachmentsState = (messageId = "", { keepUploadSession = false } = {}) => {
+      const normalizedMessageId = String(messageId || "").trim();
+      if (!normalizedMessageId) return;
+      const replyUi = resolveInlineReplyUiState();
+      const items = Array.isArray(replyUi.editAttachmentsByMessageId?.[normalizedMessageId])
+        ? replyUi.editAttachmentsByMessageId[normalizedMessageId]
+        : [];
+      items.forEach((attachment) => releaseAttachmentPreviewUrls(attachment));
+      delete replyUi.editAttachmentsByMessageId[normalizedMessageId];
+      if (!keepUploadSession) delete replyUi.editUploadSessionByMessageId[normalizedMessageId];
     };
     const addInlineReplyFiles = async (messageId = "", files = []) => {
       const normalizedMessageId = String(messageId || "").trim();
@@ -2619,6 +2659,78 @@ export function createProjectSubjectsEvents(config) {
         rerenderScope(root);
       }
     };
+    const addInlineEditFiles = async (messageId = "", files = []) => {
+      const normalizedMessageId = String(messageId || "").trim();
+      const list = Array.from(files || []).filter((entry) => !!entry);
+      if (!normalizedMessageId || !list.length) return;
+      const selection = getScopedSelection(root);
+      if (selection?.type !== "sujet") return;
+      const subjectId = String(selection?.item?.id || "").trim();
+      const projectId = String(selection?.item?.project_id || "").trim();
+      if (!subjectId || !projectId || typeof uploadAttachmentFile !== "function") {
+        showError("Projet introuvable pour l’upload des pièces jointes.");
+        return;
+      }
+      const { items, uploadSessionId } = getInlineEditAttachmentsState(normalizedMessageId, { createIfMissing: true });
+      const effectiveSessionId = uploadSessionId || createUploadSessionId();
+      if (!uploadSessionId) {
+        const replyUi = resolveInlineReplyUiState();
+        replyUi.editUploadSessionByMessageId[normalizedMessageId] = effectiveSessionId;
+      }
+      for (const file of list) {
+        const tempId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        const localPreview = toObjectUrl(file);
+        const pending = {
+          id: "",
+          tempId,
+          file_name: String(file?.name || "fichier"),
+          mime_type: String(file?.type || ""),
+          size_bytes: Number(file?.size || 0),
+          localPreviewUrl: localPreview,
+          remoteObjectUrl: "",
+          previewUrl: localPreview,
+          isImage: isImageFile(file),
+          uploadStatus: "uploading",
+          previewStatus: localPreview ? "local" : "none",
+          error: ""
+        };
+        items.push(pending);
+        rerenderScope(root);
+        try {
+          const uploaded = await uploadAttachmentFile({
+            subjectId,
+            projectId,
+            uploadSessionId: effectiveSessionId,
+            file,
+            sortOrder: items.length - 1,
+            parentMessageId: normalizedMessageId
+          });
+          pending.id = String(uploaded?.id || "");
+          pending.storage_path = String(uploaded?.storage_path || "");
+          pending.remoteObjectUrl = String(uploaded?.object_url || "");
+          pending.object_url = pending.remoteObjectUrl;
+          pending.uploadStatus = "ready";
+          pending.error = "";
+          if (pending.isImage) {
+            if (pending.remoteObjectUrl) {
+              pending.previewStatus = pending.localPreviewUrl ? "local" : "remote";
+              if (!pending.previewUrl) pending.previewUrl = pending.remoteObjectUrl;
+            } else if (pending.localPreviewUrl) {
+              pending.previewStatus = "local";
+            } else {
+              pending.previewStatus = "none";
+            }
+          } else {
+            pending.previewStatus = "none";
+          }
+        } catch (error) {
+          pending.uploadStatus = "error";
+          pending.previewStatus = pending.localPreviewUrl ? "local" : "none";
+          pending.error = String(error?.message || error || "Erreur d'upload");
+        }
+        rerenderScope(root);
+      }
+    };
     const removeInlineReplyAttachmentById = async (messageId = "", tempId = "", attachmentId = "") => {
       const normalizedMessageId = String(messageId || "").trim();
       if (!normalizedMessageId) return;
@@ -2631,6 +2743,26 @@ export function createProjectSubjectsEvents(config) {
       rerenderScope(root);
       releaseAttachmentPreviewUrls(current);
       if (!items.length) clearInlineReplyAttachmentsState(normalizedMessageId, { keepUploadSession: true });
+      if (normalizedAttachmentId && typeof removeTemporaryAttachment === "function") {
+        try {
+          await removeTemporaryAttachment({ attachmentId: normalizedAttachmentId });
+        } catch (error) {
+          console.warn("[subject-attachments] remove temporary attachment failed", error);
+        }
+      }
+    };
+    const removeInlineEditAttachmentById = async (messageId = "", tempId = "", attachmentId = "") => {
+      const normalizedMessageId = String(messageId || "").trim();
+      if (!normalizedMessageId) return;
+      const { items } = getInlineEditAttachmentsState(normalizedMessageId);
+      const normalizedAttachmentId = String(attachmentId || "").trim();
+      const targetIndex = items.findIndex((entry) => String(entry?.tempId || "") === String(tempId || "") || String(entry?.id || "") === normalizedAttachmentId);
+      if (targetIndex < 0) return;
+      const current = items[targetIndex];
+      items.splice(targetIndex, 1);
+      rerenderScope(root);
+      releaseAttachmentPreviewUrls(current);
+      if (!items.length) clearInlineEditAttachmentsState(normalizedMessageId, { keepUploadSession: true });
       if (normalizedAttachmentId && typeof removeTemporaryAttachment === "function") {
         try {
           await removeTemporaryAttachment({ attachmentId: normalizedAttachmentId });
@@ -2713,6 +2845,7 @@ export function createProjectSubjectsEvents(config) {
         replyUi.editPreviewByMessageId[messageId] = false;
         replyUi.editMessageId = messageId;
         if (previousEditMessageId && previousEditMessageId !== messageId) {
+          clearInlineEditAttachmentsState(previousEditMessageId);
           toggleInlineEditEditorVisibility(previousEditMessageId, false);
         }
         toggleInlineEditEditorVisibility(messageId, true);
@@ -3351,11 +3484,27 @@ export function createProjectSubjectsEvents(config) {
         input?.click();
       };
     });
+    root.querySelectorAll("[data-action='thread-edit-attachments-pick'][data-message-id]").forEach((btn) => {
+      btn.onclick = () => {
+        const messageId = String(btn.dataset.messageId || "").trim();
+        if (!messageId) return;
+        const input = root.querySelector(`[data-role='thread-edit-file-input'][data-message-id="${selectorValue(messageId)}"]`);
+        input?.click();
+      };
+    });
     root.querySelectorAll("[data-role='thread-reply-file-input'][data-message-id]").forEach((input) => {
       input.addEventListener("change", async (event) => {
         const messageId = String(input.dataset.messageId || "").trim();
         const files = Array.from(event?.target?.files || []);
         if (messageId && files.length) await addInlineReplyFiles(messageId, files);
+        input.value = "";
+      });
+    });
+    root.querySelectorAll("[data-role='thread-edit-file-input'][data-message-id]").forEach((input) => {
+      input.addEventListener("change", async (event) => {
+        const messageId = String(input.dataset.messageId || "").trim();
+        const files = Array.from(event?.target?.files || []);
+        if (messageId && files.length) await addInlineEditFiles(messageId, files);
         input.value = "";
       });
     });
@@ -3383,9 +3532,42 @@ export function createProjectSubjectsEvents(config) {
         if (files.length) await addInlineReplyFiles(messageId, files);
       });
     });
+    root.querySelectorAll("[data-inline-edit-editor]").forEach((editor) => {
+      const messageId = String(editor.dataset.inlineEditEditor || "").trim();
+      if (!messageId) return;
+      const dropzone = editor.querySelector(".comment-composer__editor");
+      if (!dropzone) return;
+      ["dragenter", "dragover"].forEach((eventName) => {
+        dropzone.addEventListener(eventName, (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          dropzone.classList.add("is-dragover");
+        });
+      });
+      ["dragleave", "dragend", "drop"].forEach((eventName) => {
+        dropzone.addEventListener(eventName, (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          dropzone.classList.remove("is-dragover");
+        });
+      });
+      dropzone.addEventListener("drop", async (event) => {
+        const files = Array.from(event?.dataTransfer?.files || []);
+        if (files.length) await addInlineEditFiles(messageId, files);
+      });
+    });
     root.querySelectorAll("[data-action='thread-reply-attachment-remove'][data-message-id]").forEach((btn) => {
       btn.onclick = async () => {
         await removeInlineReplyAttachmentById(
+          String(btn.dataset.messageId || ""),
+          String(btn.dataset.tempId || ""),
+          String(btn.dataset.attachmentId || "")
+        );
+      };
+    });
+    root.querySelectorAll("[data-action='thread-edit-attachment-remove'][data-message-id]").forEach((btn) => {
+      btn.onclick = async () => {
+        await removeInlineEditAttachmentById(
           String(btn.dataset.messageId || ""),
           String(btn.dataset.tempId || ""),
           String(btn.dataset.attachmentId || "")
@@ -3441,6 +3623,7 @@ export function createProjectSubjectsEvents(config) {
         const messageId = String(btn.dataset.messageId || "").trim();
         const replyUi = resolveInlineReplyUiState();
         if (messageId) replyUi.editPreviewByMessageId[messageId] = false;
+        if (messageId) clearInlineEditAttachmentsState(messageId);
         replyUi.editMessageId = "";
         toggleInlineEditEditorVisibility(messageId, false);
       };
@@ -3455,17 +3638,28 @@ export function createProjectSubjectsEvents(config) {
         const replyUi = resolveInlineReplyUiState();
         const nextBody = String(replyUi.editDraftsByMessageId?.[messageId] || "");
         const normalized = nextBody.trim();
-        if (!normalized) return;
+        const inlineAttachmentsState = getInlineEditAttachmentsState(messageId);
+        const hasReadyAttachment = hasReadyInlineAttachments(inlineAttachmentsState);
+        if (!normalized && !hasReadyAttachment) return;
+        const uploadSessionId = hasReadyAttachment
+          ? String(inlineAttachmentsState.uploadSessionId || "").trim()
+          : "";
         const currentBody = String(btn.dataset.originalBody || "");
-        if (normalized === currentBody.trim()) {
+        const hasBodyChanged = normalized !== currentBody.trim();
+        if (!hasBodyChanged && !uploadSessionId) {
           replyUi.editPreviewByMessageId[messageId] = false;
+          clearInlineEditAttachmentsState(messageId);
           replyUi.editMessageId = "";
           rerenderScope(root);
           return;
         }
         try {
-          await editSubjectMessage?.(selection.item.id, messageId, normalized);
+          await editSubjectMessage?.(selection.item.id, messageId, {
+            bodyMarkdown: nextBody,
+            uploadSessionId
+          });
           replyUi.editPreviewByMessageId[messageId] = false;
+          clearInlineEditAttachmentsState(messageId);
           replyUi.editMessageId = "";
         } catch (error) {
           showError(`Modification impossible : ${String(error?.message || error || "Erreur inconnue")}`);

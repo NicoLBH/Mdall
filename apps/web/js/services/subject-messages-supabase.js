@@ -635,25 +635,52 @@ export function createSubjectMessagesSupabaseRepository() {
       return !!result;
     },
 
-    async editMessage({ messageId, bodyMarkdown }) {
+    async editMessage({ messageId, subjectId, bodyMarkdown, uploadSessionId } = {}) {
       const normalizedMessageId = normalizeId(messageId);
-      const nextBody = String(bodyMarkdown || "").trim();
+      const rawBody = String(bodyMarkdown || "");
+      const nextBody = rawBody.trim();
+      const normalizedSubjectId = normalizeId(subjectId);
+      const normalizedUploadSessionId = normalizeId(uploadSessionId);
       if (!normalizedMessageId) throw new Error("messageId is required");
-      if (!nextBody) throw new Error("bodyMarkdown is required");
+      if (!nextBody && !normalizedUploadSessionId) throw new Error("bodyMarkdown or uploadSessionId is required");
 
       const params = new URLSearchParams();
       params.set("id", `eq.${normalizedMessageId}`);
 
-      const rows = await restFetch("/rest/v1/subject_messages", params, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Prefer: "return=representation"
-        },
-        body: JSON.stringify({ body_markdown: nextBody })
-      });
+      let rows = null;
+      try {
+        rows = await restFetch("/rest/v1/subject_messages", params, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Prefer: "return=representation"
+          },
+          body: JSON.stringify({ body_markdown: nextBody })
+        });
+      } catch (error) {
+        if (nextBody || !normalizedUploadSessionId) throw error;
+        rows = await restFetch("/rest/v1/subject_messages", params, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Prefer: "return=representation"
+          },
+          body: JSON.stringify({ body_markdown: "\u200B" })
+        });
+      }
 
-      return (Array.isArray(rows) ? rows[0] : rows) || null;
+      const updatedMessage = (Array.isArray(rows) ? rows[0] : rows) || null;
+      if (normalizedUploadSessionId) {
+        const targetSubjectId = normalizedSubjectId || normalizeId(updatedMessage?.subject_id);
+        if (!targetSubjectId) throw new Error("subjectId is required when uploadSessionId is provided");
+        await this.linkAttachmentsToMessage({
+          subjectId: targetSubjectId,
+          messageId: normalizedMessageId,
+          uploadSessionId: normalizedUploadSessionId
+        });
+      }
+
+      return updatedMessage;
     },
 
     async deleteMessage({ messageId }) {

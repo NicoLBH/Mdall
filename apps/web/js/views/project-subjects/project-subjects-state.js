@@ -50,7 +50,15 @@ export function createProjectSubjectsState({ store }) {
     if (!v.inlineReplyUi || typeof v.inlineReplyUi !== "object") {
       v.inlineReplyUi = {
         expandedMessageId: "",
-        draftsByMessageId: {}
+        draftsByMessageId: {},
+        previewByMessageId: {},
+        attachmentsByMessageId: {},
+        uploadSessionByMessageId: {},
+        editMessageId: "",
+        editDraftsByMessageId: {},
+        editPreviewByMessageId: {},
+        editAttachmentsByMessageId: {},
+        editUploadSessionByMessageId: {}
       };
     }
     if (typeof v.showTableOnly !== "boolean") v.showTableOnly = true;
@@ -233,7 +241,15 @@ export function createProjectSubjectsState({ store }) {
     };
     v.inlineReplyUi = {
       expandedMessageId: "",
-      draftsByMessageId: {}
+      draftsByMessageId: {},
+      previewByMessageId: {},
+      attachmentsByMessageId: {},
+      uploadSessionByMessageId: {},
+      editMessageId: "",
+      editDraftsByMessageId: {},
+      editPreviewByMessageId: {},
+      editAttachmentsByMessageId: {},
+      editUploadSessionByMessageId: {}
     };
     return v;
   }
