@@ -762,7 +762,8 @@ priority=${firstNonEmpty(subject.priority, "")}`
       { action: "ordered-list", icon: "markdown-list-ordered", label: "Liste numérotée" },
       { action: "bullet-list", icon: "markdown-list-unordered", label: "Liste à puces" },
       { action: "checklist", icon: "markdown-tasklist", label: "Checklist" },
-      { action: "mention", icon: "markdown-mention", label: "Mention" }
+      { action: "mention", icon: "markdown-mention", label: "Mention" },
+      { action: "subject-ref", icon: "cross-reference", label: "Référence sujet" }
     ];
     const toDataAttributeName = (key) => String(key || "")
       .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
@@ -809,6 +810,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
     const groupOne = ["bold", "italic", "underline", "quote", "code", "link"];
     const groupTwo = ["ordered-list", "bullet-list", "checklist"];
     const mentionButton = toolbarButtons.find((button) => button.action === "mention");
+    const subjectRefButton = toolbarButtons.find((button) => button.action === "subject-ref");
     const renderGroup = (actions = []) => actions
       .map((action) => toolbarButtons.find((button) => button.action === action))
       .filter(Boolean)
@@ -819,7 +821,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
       <div class="comment-toolbar-layout">
         <div class="comment-toolbar-layout__group">${renderGroup(groupOne)}</div>
         <div class="comment-toolbar-layout__group">${renderGroup(groupTwo)}</div>
-        <div class="comment-toolbar-layout__group">${attachmentButton}${mentionButton ? renderToolbarButton(mentionButton) : ""}</div>
+        <div class="comment-toolbar-layout__group">${attachmentButton}${mentionButton ? renderToolbarButton(mentionButton) : ""}${subjectRefButton ? renderToolbarButton(subjectRefButton) : ""}</div>
       </div>
     `;
   }

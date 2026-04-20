@@ -1229,6 +1229,21 @@ export function createProjectSubjectsEvents(config) {
       });
     };
 
+    const ensureSubjectRefTriggerInTextarea = (textarea) => {
+      if (!textarea) return false;
+      const source = String(textarea.value || "");
+      const cursor = Math.max(0, Math.min(Number(textarea.selectionStart || 0), source.length));
+      if (resolveSubjectRefTriggerContext(source, cursor)) return false;
+      const previousChar = source[cursor - 1] || "";
+      const insertion = /[A-Za-z0-9_]/.test(previousChar) ? " #" : "#";
+      const nextText = `${source.slice(0, cursor)}${insertion}${source.slice(cursor)}`;
+      const nextCursor = cursor + insertion.length;
+      textarea.value = nextText;
+      textarea.selectionStart = nextCursor;
+      textarea.selectionEnd = nextCursor;
+      return true;
+    };
+
     const pickSubjectRefSuggestion = (suggestion = {}, composerKey = "main") => {
       const textarea = getTextareaForComposerKey(composerKey);
       if (!textarea) return;
@@ -1659,6 +1674,17 @@ export function createProjectSubjectsEvents(config) {
         btn.onclick = () => {
           const action = String(btn.dataset.format || "").trim();
           if (!action) return;
+          if (action === "subject-ref") {
+            ensureSubjectRefTriggerInTextarea(commentTextarea);
+            closeMentionPopup({ rerender: false });
+            closeEmojiPopup({ rerender: false });
+            store.situationsView.commentDraft = String(commentTextarea.value || "");
+            syncMainComposerTextareaHeight();
+            if (store.situationsView.commentPreviewMode) syncCommentPreview(root);
+            void syncSubjectRefPopupForTextarea(commentTextarea, "main");
+            commentTextarea.focus();
+            return;
+          }
           const didApply = applyMarkdownComposerAction(commentTextarea, action);
           if (!didApply) return;
           if (action === "mention") void syncMentionPopup({ forceOpen: true });
@@ -3253,6 +3279,18 @@ export function createProjectSubjectsEvents(config) {
         if (!action || !messageId) return;
         const textarea = root.querySelector(`[data-thread-reply-draft="${selectorValue(messageId)}"]`);
         if (!textarea) return;
+        if (action === "subject-ref") {
+          ensureSubjectRefTriggerInTextarea(textarea);
+          const replyUi = resolveInlineReplyUiState();
+          replyUi.draftsByMessageId[messageId] = String(textarea.value || "");
+          syncInlineReplyTextareaHeight(textarea);
+          syncInlineReplySubmitButton(messageId);
+          closeMentionPopup({ rerender: false });
+          closeEmojiPopup({ rerender: false });
+          void syncSubjectRefPopupForTextarea(textarea, `reply:${messageId}`);
+          textarea.focus();
+          return;
+        }
         const didApply = applyMarkdownComposerAction(textarea, action);
         if (!didApply) return;
         const replyUi = resolveInlineReplyUiState();
@@ -3275,6 +3313,18 @@ export function createProjectSubjectsEvents(config) {
         if (!action || !messageId) return;
         const textarea = root.querySelector(`[data-thread-edit-draft="${selectorValue(messageId)}"]`);
         if (!textarea) return;
+        if (action === "subject-ref") {
+          ensureSubjectRefTriggerInTextarea(textarea);
+          const replyUi = resolveInlineReplyUiState();
+          replyUi.editDraftsByMessageId[messageId] = String(textarea.value || "");
+          syncInlineReplyTextareaHeight(textarea);
+          syncInlineEditSubmitButton(messageId);
+          closeMentionPopup({ rerender: false });
+          closeEmojiPopup({ rerender: false });
+          void syncSubjectRefPopupForTextarea(textarea, `edit:${messageId}`);
+          textarea.focus();
+          return;
+        }
         const didApply = applyMarkdownComposerAction(textarea, action);
         if (!didApply) return;
         const replyUi = resolveInlineReplyUiState();
