@@ -49,7 +49,7 @@ function flushList(state, html) {
   state.items = [];
 }
 
-export function renderMarkdownToHtml(markdown = "") {
+export function renderMarkdownToHtml(markdown = "", options = {}) {
   const source = String(markdown || "").replace(/\r\n?/g, "\n");
   if (!source.trim()) return "";
 
@@ -120,5 +120,10 @@ export function renderMarkdownToHtml(markdown = "") {
   flushParagraph(paragraphLines, html);
   flushList(listState, html);
 
-  return `<div class="md-render">${html.join("")}</div>`;
+  const rendered = `<div class="md-render">${html.join("")}</div>`;
+  const postProcessHtml = options && typeof options.postProcessHtml === "function"
+    ? options.postProcessHtml
+    : null;
+  if (!postProcessHtml) return rendered;
+  return String(postProcessHtml(rendered) || rendered);
 }

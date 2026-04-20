@@ -180,6 +180,24 @@ export function createProjectSubjectsThread(config = {}) {
     return state.emojiUi;
   }
 
+  function getSubjectRefUiState() {
+    ensureViewUiState();
+    const state = store.situationsView;
+    if (!state.subjectRefUi || typeof state.subjectRefUi !== "object") {
+      state.subjectRefUi = {
+        open: false,
+        query: "",
+        activeIndex: 0,
+        triggerStart: -1,
+        triggerEnd: -1,
+        suggestions: [],
+        composerKey: ""
+      };
+    }
+    if (typeof state.subjectRefUi.composerKey !== "string") state.subjectRefUi.composerKey = "";
+    return state.subjectRefUi;
+  }
+
   function getReplyContextState() {
     ensureViewUiState();
     const state = store.situationsView;
@@ -1539,6 +1557,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
     buildReplyPreview,
     getMentionUiState,
     getEmojiUiState,
+    getSubjectRefUiState,
     getComposerAttachmentsState,
     getInlineReplyUiState,
     renderThreadBlock,
