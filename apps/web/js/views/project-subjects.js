@@ -78,6 +78,7 @@ import {
 } from "./ui/status-badges.js";
 import { escapeHtml } from "../utils/escape-html.js";
 import { renderMarkdownToHtml } from "../utils/markdown-renderer.js";
+import { linkifySubjectRefsInHtml } from "../utils/subject-links.js";
 import { renderSelectMenuSection } from "./ui/select-menu.js";
 import {
   formatSharedDateInputValue,
@@ -295,6 +296,7 @@ const {
   getDecision,
   getMentionUiState,
   getEmojiUiState,
+  getSubjectRefUiState,
   getComposerAttachmentsState,
   getThreadForSelection,
   getInlineReplyUiState,
@@ -395,11 +397,16 @@ const projectSubjectsEvents = createProjectSubjectsEvents({
   toggleSubjectMessageReaction: (...args) => toggleSubjectMessageReaction(...args),
   getMentionUiState: (...args) => getMentionUiState(...args),
   getEmojiUiState: (...args) => getEmojiUiState(...args),
+  getSubjectRefUiState: (...args) => getSubjectRefUiState(...args),
   getComposerAttachmentsState: (...args) => getComposerAttachmentsState(...args),
   mdToHtml,
   listCollaboratorsForMentions: (...args) => subjectMessagesService.listCollaboratorsForMentions(...args),
   uploadAttachmentFile: (...args) => subjectMessagesService.uploadAttachmentFile(...args),
   removeTemporaryAttachment: (...args) => subjectMessagesService.removeTemporaryAttachment(...args),
+  getNestedSujet: (...args) => getNestedSujet(...args),
+  getEffectiveSujetStatus: (...args) => getEffectiveSujetStatus(...args),
+  getFilteredFlatSubjects: (...args) => getFilteredFlatSubjects(...args),
+  svgIcon,
   getSubjectsCurrentRoot: () => subjectsCurrentRoot,
   resolveCurrentUserAssigneeId: () => resolveCurrentUserDirectoryPersonId({
     email: store.user?.email || "",
@@ -666,7 +673,39 @@ function rerenderSubjectsPanelsWhenConnected(root, remainingAttempts = 12) {
 
 
 function mdToHtml(text) {
-  return renderMarkdownToHtml(text || "");
+  const subjectRows = Array.isArray(store.projectSubjectsView?.subjectsData)
+    ? store.projectSubjectsView.subjectsData
+    : [];
+  const byNumber = new Map();
+  const registerSubject = (entry) => {
+    const number = Number.parseInt(String(entry?.subject_number ?? entry?.subjectNumber ?? ""), 10);
+    const subjectId = String(entry?.id || "").trim();
+    if (!Number.isFinite(number) || number <= 0 || !subjectId || byNumber.has(number)) return;
+    byNumber.set(number, {
+      id: subjectId,
+      subjectNumber: number
+    });
+  };
+  subjectRows.forEach((situation) => {
+    const queue = Array.isArray(situation?.sujets) ? [...situation.sujets] : [];
+    while (queue.length) {
+      const sujet = queue.shift();
+      registerSubject(sujet);
+      const children = Array.isArray(sujet?.sujets)
+        ? sujet.sujets
+        : Array.isArray(sujet?.childSujets)
+          ? sujet.childSujets
+          : Array.isArray(sujet?.children)
+            ? sujet.children
+            : [];
+      if (children.length) queue.push(...children);
+    }
+  });
+  return renderMarkdownToHtml(text || "", {
+    postProcessHtml: (html) => linkifySubjectRefsInHtml(html, {
+      resolveSubjectByNumber: (number) => byNumber.get(Number(number)) || null
+    })
+  });
 }
 
 function firstNonEmpty(...values) {

@@ -9,6 +9,11 @@ import {
   resolveEmojiTriggerContext,
   searchEmojiSuggestions
 } from "../../utils/emoji-autocomplete.js";
+import {
+  applySubjectRefSuggestion,
+  resolveSubjectRefTriggerContext,
+  searchSubjectRefSuggestions
+} from "../../utils/subject-links.js";
 import { computeTextareaCaretRect } from "../../utils/textarea-caret-position.js";
 
 export function createProjectSubjectsEvents(config) {
@@ -75,11 +80,16 @@ export function createProjectSubjectsEvents(config) {
     toggleSubjectMessageReaction,
     getMentionUiState,
     getEmojiUiState,
+    getSubjectRefUiState,
     getComposerAttachmentsState,
     mdToHtml,
     listCollaboratorsForMentions,
     uploadAttachmentFile,
-    removeTemporaryAttachment
+    removeTemporaryAttachment,
+    getNestedSujet,
+    getEffectiveSujetStatus,
+    getFilteredFlatSubjects,
+    svgIcon
   } = config;
 
   let detachDropdownDocumentEvents = null;
@@ -701,6 +711,25 @@ export function createProjectSubjectsEvents(config) {
       return store.situationsView.emojiUi;
     };
 
+    const getSubjectRefState = () => {
+      if (typeof getSubjectRefUiState === "function") return getSubjectRefUiState();
+      if (!store.situationsView.subjectRefUi || typeof store.situationsView.subjectRefUi !== "object") {
+        store.situationsView.subjectRefUi = {
+          open: false,
+          query: "",
+          activeIndex: 0,
+          triggerStart: -1,
+          triggerEnd: -1,
+          suggestions: [],
+          composerKey: ""
+        };
+      }
+      if (typeof store.situationsView.subjectRefUi.composerKey !== "string") {
+        store.situationsView.subjectRefUi.composerKey = "";
+      }
+      return store.situationsView.subjectRefUi;
+    };
+
     const escapeHtml = (value) => String(value || "")
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
@@ -719,6 +748,19 @@ export function createProjectSubjectsEvents(config) {
       emojiState.triggerEnd = -1;
       emojiState.suggestions = [];
       emojiState.composerKey = "";
+      if (rerender) rerenderAutocompleteUi();
+      else syncAutocompletePopups();
+    };
+
+    const closeSubjectRefPopup = ({ rerender = true } = {}) => {
+      const subjectRefState = getSubjectRefState();
+      subjectRefState.open = false;
+      subjectRefState.query = "";
+      subjectRefState.activeIndex = 0;
+      subjectRefState.triggerStart = -1;
+      subjectRefState.triggerEnd = -1;
+      subjectRefState.suggestions = [];
+      subjectRefState.composerKey = "";
       if (rerender) rerenderAutocompleteUi();
       else syncAutocompletePopups();
     };
@@ -755,8 +797,9 @@ export function createProjectSubjectsEvents(config) {
       if (!layer) return null;
       const mentionRoot = layer.querySelector("#subject-mention-popup-root");
       const emojiRoot = layer.querySelector("#subject-emoji-popup-root");
-      if (!mentionRoot || !emojiRoot) return null;
-      return { layer, mentionRoot, emojiRoot };
+      const subjectRefRoot = layer.querySelector("#subject-ref-popup-root");
+      if (!mentionRoot || !emojiRoot || !subjectRefRoot) return null;
+      return { layer, mentionRoot, emojiRoot, subjectRefRoot };
     };
 
     const renderMentionPopupHtml = () => {
@@ -826,12 +869,57 @@ export function createProjectSubjectsEvents(config) {
       `;
     };
 
+    const resolveSubjectStatusIcon = (status = "open") => {
+      const normalized = String(status || "open").trim().toLowerCase();
+      if (normalized === "reopened") return svgIcon("issue-reopened", { className: "octicon octicon-issue-reopened" });
+      if (normalized.startsWith("closed")) return svgIcon("check-circle", { className: "octicon octicon-check-circle" });
+      return svgIcon("issue-opened", { className: "octicon octicon-issue-opened" });
+    };
+
+    const renderSubjectRefPopupHtml = () => {
+      const subjectRefState = getSubjectRefState();
+      if (!subjectRefState?.open) return "";
+      const suggestions = Array.isArray(subjectRefState.suggestions) ? subjectRefState.suggestions : [];
+      return `
+        <div class="subject-mention-popup subject-ref-popup" data-autocomplete-popup="subject-ref" data-composer-key="${escapeHtml(String(subjectRefState.composerKey || ""))}" role="listbox" aria-label="Suggestions de sujet">
+          ${suggestions.length
+    ? suggestions.map((suggestion, index) => {
+      const isActive = Number(subjectRefState.activeIndex || 0) === index;
+      const subjectId = String(suggestion?.subjectId || "").trim();
+      const subjectNumber = Number(suggestion?.subjectNumber || 0);
+      const status = String(suggestion?.status || "open");
+      const iconHtml = resolveSubjectStatusIcon(status);
+      return `
+              <button
+                class="subject-mention-popup__item subject-ref-popup__item ${isActive ? "is-active" : ""}"
+                type="button"
+                role="option"
+                aria-selected="${isActive ? "true" : "false"}"
+                data-action="subject-ref-pick"
+                data-composer-key="${escapeHtml(String(subjectRefState.composerKey || ""))}"
+                data-subject-id="${escapeHtml(subjectId)}"
+                data-subject-number="${escapeHtml(String(subjectNumber || ""))}"
+              >
+                <span class="subject-ref-popup__line">
+                  <span class="subject-ref-popup__status" aria-hidden="true">${iconHtml}</span>
+                  <span class="subject-ref-popup__title">${escapeHtml(String(suggestion?.title || ""))}</span>
+                  <span class="subject-ref-popup__number">#${escapeHtml(String(subjectNumber || ""))}</span>
+                </span>
+              </button>
+            `;
+    }).join("")
+    : `<div class="subject-mention-popup__empty">Aucun sujet trouvé</div>`}
+        </div>
+      `;
+    };
+
     const positionAutocompletePopup = (textarea, popup, popupRoot) => {
       if (!textarea || !popup || !popup.isConnected) return;
       const caretRect = computeTextareaCaretRect(textarea, textarea.selectionStart || 0);
       if (!caretRect) return;
       popup.style.maxWidth = "min(360px, calc(100vw - 16px))";
-      if (String(popup.dataset.autocompletePopup || "") === "mention") {
+      const popupType = String(popup.dataset.autocompletePopup || "");
+      if (popupType === "mention" || popupType === "subject-ref") {
         popup.style.width = "min(340px, calc(100vw - 16px))";
       } else {
         popup.style.width = "";
@@ -860,8 +948,10 @@ export function createProjectSubjectsEvents(config) {
       if (!autocompleteLayer) return;
       const mentionState = getMentionState();
       const emojiState = getEmojiState();
+      const subjectRefState = getSubjectRefState();
       const mentionPopup = autocompleteLayer.mentionRoot.querySelector(".subject-mention-popup");
       const emojiPopup = autocompleteLayer.emojiRoot.querySelector(".subject-mention-popup");
+      const subjectRefPopup = autocompleteLayer.subjectRefRoot.querySelector(".subject-mention-popup");
       if (mentionState.open && mentionPopup) {
         const mentionTextarea = getTextareaForComposerKey(String(mentionState.composerKey || ""));
         if (mentionTextarea) positionAutocompletePopup(mentionTextarea, mentionPopup, autocompleteLayer.mentionRoot);
@@ -872,6 +962,11 @@ export function createProjectSubjectsEvents(config) {
         if (emojiTextarea) positionAutocompletePopup(emojiTextarea, emojiPopup, autocompleteLayer.emojiRoot);
         else autocompleteLayer.emojiRoot.classList.add("hidden");
       }
+      if (subjectRefState.open && subjectRefPopup) {
+        const subjectRefTextarea = getTextareaForComposerKey(String(subjectRefState.composerKey || ""));
+        if (subjectRefTextarea) positionAutocompletePopup(subjectRefTextarea, subjectRefPopup, autocompleteLayer.subjectRefRoot);
+        else autocompleteLayer.subjectRefRoot.classList.add("hidden");
+      }
     };
 
     const syncAutocompletePopups = () => {
@@ -879,6 +974,7 @@ export function createProjectSubjectsEvents(config) {
       if (!autocompleteLayer) return;
       const mentionState = getMentionState();
       const emojiState = getEmojiState();
+      const subjectRefState = getSubjectRefState();
 
       if (mentionState.open) {
         autocompleteLayer.mentionRoot.innerHTML = renderMentionPopupHtml();
@@ -893,6 +989,13 @@ export function createProjectSubjectsEvents(config) {
       } else {
         autocompleteLayer.emojiRoot.innerHTML = "";
         autocompleteLayer.emojiRoot.classList.add("hidden");
+      }
+      if (subjectRefState.open) {
+        autocompleteLayer.subjectRefRoot.innerHTML = renderSubjectRefPopupHtml();
+        autocompleteLayer.subjectRefRoot.classList.remove("hidden");
+      } else {
+        autocompleteLayer.subjectRefRoot.innerHTML = "";
+        autocompleteLayer.subjectRefRoot.classList.add("hidden");
       }
 
       positionAllAutocompletePopups();
@@ -1063,6 +1166,127 @@ export function createProjectSubjectsEvents(config) {
       const selector = getTextareaSelector({ composerKey: mode, messageId });
       rerenderAutocompleteUi({
         selector,
+        shouldFocus: true,
+        caretStart: result.nextCursorIndex,
+        caretEnd: result.nextCursorIndex
+      });
+    };
+
+    const listSubjectRefSuggestions = (query = "") => {
+      const seen = new Set();
+      const allSubjects = [];
+
+      const registerSubject = (rawSubject) => {
+        const subjectId = String(rawSubject?.id || "").trim();
+        if (!subjectId || seen.has(subjectId)) return;
+        const canonicalSujet = typeof getNestedSujet === "function" ? getNestedSujet(subjectId) : rawSubject;
+        const subject = canonicalSujet || rawSubject;
+        const subjectNumber = Number.parseInt(String(subject?.subject_number ?? subject?.subjectNumber ?? ""), 10);
+        if (!Number.isFinite(subjectNumber) || subjectNumber <= 0) return;
+        seen.add(subjectId);
+        const status = typeof getEffectiveSujetStatus === "function"
+          ? getEffectiveSujetStatus(subject)
+          : String(subject?.status || "open");
+        allSubjects.push({
+          subjectId,
+          subjectNumber: Math.floor(subjectNumber),
+          title: String(subject?.title || "").trim() || `Sujet #${subjectNumber}`,
+          status
+        });
+      };
+
+      const flatSubjects = typeof getFilteredFlatSubjects === "function"
+        ? getFilteredFlatSubjects("")
+        : [];
+      if (Array.isArray(flatSubjects)) {
+        flatSubjects.forEach((subject) => registerSubject(subject));
+      }
+
+      if (!allSubjects.length) {
+        const subjectsData = Array.isArray(store.projectSubjectsView?.subjectsData)
+          ? store.projectSubjectsView.subjectsData
+          : [];
+        subjectsData.forEach((situation) => {
+          const queue = Array.isArray(situation?.sujets) ? [...situation.sujets] : [];
+          while (queue.length) {
+            const sujet = queue.shift();
+            registerSubject(sujet);
+            const children = Array.isArray(sujet?.sujets)
+              ? sujet.sujets
+              : Array.isArray(sujet?.childSujets)
+                ? sujet.childSujets
+                : Array.isArray(sujet?.children)
+                  ? sujet.children
+                  : [];
+            if (children.length) queue.push(...children);
+          }
+        });
+      }
+
+      return searchSubjectRefSuggestions(allSubjects, query, 8);
+    };
+
+    const syncSubjectRefPopupForTextarea = (textarea, composerKey) => {
+      if (!textarea) return;
+      const subjectRefState = getSubjectRefState();
+      const context = resolveSubjectRefTriggerContext(textarea.value || "", textarea.selectionStart || 0);
+      if (!context) {
+        if (subjectRefState.open && String(subjectRefState.composerKey || "") === composerKey) {
+          closeSubjectRefPopup({ rerender: false });
+        }
+        return;
+      }
+      const query = String(context?.query || "").trim().toLowerCase();
+      const suggestions = listSubjectRefSuggestions(query);
+      subjectRefState.triggerStart = Number(context?.triggerStart ?? -1);
+      subjectRefState.triggerEnd = Number(context?.triggerEnd ?? -1);
+      subjectRefState.query = query;
+      subjectRefState.suggestions = suggestions;
+      subjectRefState.composerKey = composerKey;
+      subjectRefState.open = true;
+      subjectRefState.activeIndex = Math.max(0, Math.min(Number(subjectRefState.activeIndex || 0), Math.max(0, suggestions.length - 1)));
+      const { mode, messageId = "" } = splitComposerKey(composerKey);
+      rerenderAutocompleteUi({
+        selector: getTextareaSelector({ composerKey: mode, messageId }),
+        shouldFocus: true,
+        caretStart: Number(textarea.selectionStart || 0),
+        caretEnd: Number(textarea.selectionEnd || 0)
+      });
+    };
+
+    const pickSubjectRefSuggestion = (suggestion = {}, composerKey = "main") => {
+      const textarea = getTextareaForComposerKey(composerKey);
+      if (!textarea) return;
+      const subjectRefState = getSubjectRefState();
+      const context = {
+        triggerStart: subjectRefState.triggerStart,
+        triggerEnd: Number(textarea.selectionStart || subjectRefState.triggerEnd || 0)
+      };
+      const result = applySubjectRefSuggestion(textarea.value || "", context, suggestion);
+      textarea.value = String(result.nextText || "");
+      const { mode, messageId = "" } = splitComposerKey(composerKey);
+      if (mode === "main") {
+        store.situationsView.commentDraft = String(result.nextText || "");
+      } else {
+        const replyUi = resolveInlineReplyUiState();
+        if (mode === "reply") {
+          replyUi.draftsByMessageId[messageId] = String(result.nextText || "");
+          syncInlineReplySubmitButton(messageId);
+        } else if (mode === "edit") {
+          replyUi.editDraftsByMessageId[messageId] = String(result.nextText || "");
+          syncInlineEditSubmitButton(messageId);
+        }
+        syncInlineReplyTextareaHeight(textarea);
+      }
+      textarea.focus();
+      textarea.selectionStart = result.nextCursorIndex;
+      textarea.selectionEnd = result.nextCursorIndex;
+      closeSubjectRefPopup({ rerender: false });
+      closeMentionPopup({ rerender: false });
+      closeEmojiPopup({ rerender: false });
+      if (store.situationsView.commentPreviewMode) syncCommentPreview(root);
+      rerenderAutocompleteUi({
+        selector: getTextareaSelector({ composerKey: mode, messageId }),
         shouldFocus: true,
         caretStart: result.nextCursorIndex,
         caretEnd: result.nextCursorIndex
@@ -1273,10 +1497,19 @@ export function createProjectSubjectsEvents(config) {
         const mentionContext = resolveMentionTriggerContext(commentTextarea.value || "", commentTextarea.selectionStart || 0);
         if (mentionContext) {
           await syncMentionPopup();
+          closeSubjectRefPopup({ rerender: false });
+          closeEmojiPopup({ rerender: false });
+          return;
+        }
+        const subjectRefContext = resolveSubjectRefTriggerContext(commentTextarea.value || "", commentTextarea.selectionStart || 0);
+        if (subjectRefContext) {
+          if (getMentionState().open) closeMentionPopup({ rerender: false });
+          syncSubjectRefPopupForTextarea(commentTextarea, "main");
           closeEmojiPopup({ rerender: false });
           return;
         }
         if (getMentionState().open) closeMentionPopup({ rerender: false });
+        if (getSubjectRefState().open) closeSubjectRefPopup({ rerender: false });
         syncMainEmojiPopup({ composerKey: "main" });
       };
 
@@ -1303,6 +1536,7 @@ export function createProjectSubjectsEvents(config) {
       commentTextarea.addEventListener("keydown", (ev) => {
         const mentionState = getMentionState();
         const emojiState = getEmojiState();
+        const subjectRefState = getSubjectRefState();
         if (ev.key === "Escape") {
           if (mentionState.open && String(mentionState.composerKey || "") === "main") {
             ev.preventDefault();
@@ -1322,6 +1556,11 @@ export function createProjectSubjectsEvents(config) {
               caretStart: Number(commentTextarea.selectionStart || 0),
               caretEnd: Number(commentTextarea.selectionEnd || 0)
             });
+            return;
+          }
+          if (subjectRefState.open && String(subjectRefState.composerKey || "") === "main") {
+            ev.preventDefault();
+            closeSubjectRefPopup();
             return;
           }
         }
@@ -1402,6 +1641,25 @@ export function createProjectSubjectsEvents(config) {
           if (ev.key === "Enter") {
             ev.preventDefault();
             pickEmojiSuggestion(emojiState.suggestions[Number(emojiState.activeIndex || 0)] || emojiState.suggestions[0]);
+            return;
+          }
+        }
+        if (subjectRefState.open && String(subjectRefState.composerKey || "") === "main" && Array.isArray(subjectRefState.suggestions) && subjectRefState.suggestions.length) {
+          if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
+            ev.preventDefault();
+            const delta = ev.key === "ArrowDown" ? 1 : -1;
+            subjectRefState.activeIndex = (Number(subjectRefState.activeIndex || 0) + delta + subjectRefState.suggestions.length) % subjectRefState.suggestions.length;
+            rerenderAutocompleteUi({
+              selector: "#humanCommentBox",
+              shouldFocus: true,
+              caretStart: Number(commentTextarea.selectionStart || 0),
+              caretEnd: Number(commentTextarea.selectionEnd || 0)
+            });
+            return;
+          }
+          if (ev.key === "Enter") {
+            ev.preventDefault();
+            pickSubjectRefSuggestion(subjectRefState.suggestions[Number(subjectRefState.activeIndex || 0)] || subjectRefState.suggestions[0], "main");
             return;
           }
         }
@@ -2061,6 +2319,16 @@ export function createProjectSubjectsEvents(config) {
       };
     });
 
+    root.querySelectorAll(".md-subject-link[data-subject-id]").forEach((link) => {
+      link.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const subjectId = String(link.dataset.subjectId || "").trim();
+        if (!subjectId) return;
+        (openDrilldownFromSubjectPanel || openDrilldownFromSujetPanel)(subjectId);
+      });
+    });
+
     root.querySelectorAll("[data-action='tab-write']").forEach((btn) => {
       btn.onclick = () => {
         store.situationsView.commentPreviewMode = false;
@@ -2527,12 +2795,27 @@ export function createProjectSubjectsEvents(config) {
       const mentionContext = resolveMentionTriggerContext(textarea.value || "", textarea.selectionStart || 0);
       if (mentionContext) {
         await syncMentionPopupForTextarea(textarea, composerKey);
+        closeSubjectRefPopup({ rerender: false });
+        closeEmojiPopup({ rerender: false });
+        return;
+      }
+      const subjectRefContext = resolveSubjectRefTriggerContext(textarea.value || "", textarea.selectionStart || 0);
+      if (subjectRefContext) {
+        const mentionState = getMentionState();
+        if (mentionState.open && String(mentionState.composerKey || "") === composerKey) {
+          closeMentionPopup({ rerender: false });
+        }
+        syncSubjectRefPopupForTextarea(textarea, composerKey);
         closeEmojiPopup({ rerender: false });
         return;
       }
       const mentionState = getMentionState();
       if (mentionState.open && String(mentionState.composerKey || "") === composerKey) {
         closeMentionPopup({ rerender: false });
+      }
+      const subjectRefState = getSubjectRefState();
+      if (subjectRefState.open && String(subjectRefState.composerKey || "") === composerKey) {
+        closeSubjectRefPopup({ rerender: false });
       }
       syncInlineEmojiPopup(textarea, composerKey);
     };
@@ -2612,6 +2895,7 @@ export function createProjectSubjectsEvents(config) {
         const composerKey = `reply:${messageId}`;
         const mentionState = getMentionState();
         const emojiState = getEmojiState();
+        const subjectRefState = getSubjectRefState();
         if (event.key === "Escape") {
           if (mentionState.open && String(mentionState.composerKey || "") === composerKey) {
             event.preventDefault();
@@ -2631,6 +2915,11 @@ export function createProjectSubjectsEvents(config) {
               caretStart: Number(textarea.selectionStart || 0),
               caretEnd: Number(textarea.selectionEnd || 0)
             });
+            return;
+          }
+          if (subjectRefState.open && String(subjectRefState.composerKey || "") === composerKey) {
+            event.preventDefault();
+            closeSubjectRefPopup();
             return;
           }
         }
@@ -2708,6 +2997,25 @@ export function createProjectSubjectsEvents(config) {
             return;
           }
         }
+        if (subjectRefState.open && String(subjectRefState.composerKey || "") === composerKey && Array.isArray(subjectRefState.suggestions) && subjectRefState.suggestions.length) {
+          if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+            event.preventDefault();
+            const delta = event.key === "ArrowDown" ? 1 : -1;
+            subjectRefState.activeIndex = (Number(subjectRefState.activeIndex || 0) + delta + subjectRefState.suggestions.length) % subjectRefState.suggestions.length;
+            rerenderAutocompleteUi({
+              selector: getTextareaSelector({ composerKey: "reply", messageId }),
+              shouldFocus: true,
+              caretStart: Number(textarea.selectionStart || 0),
+              caretEnd: Number(textarea.selectionEnd || 0)
+            });
+            return;
+          }
+          if (event.key === "Enter") {
+            event.preventDefault();
+            pickSubjectRefSuggestion(subjectRefState.suggestions[Number(subjectRefState.activeIndex || 0)] || subjectRefState.suggestions[0], composerKey);
+            return;
+          }
+        }
         if (CARET_NAVIGATION_KEYS.has(event.key)) {
           requestAnimationFrame(() => { void syncInlineAutocomplete(textarea, composerKey); });
         }
@@ -2739,6 +3047,7 @@ export function createProjectSubjectsEvents(config) {
         const composerKey = `edit:${messageId}`;
         const mentionState = getMentionState();
         const emojiState = getEmojiState();
+        const subjectRefState = getSubjectRefState();
         if (event.key === "Escape") {
           if (mentionState.open && String(mentionState.composerKey || "") === composerKey) {
             event.preventDefault();
@@ -2758,6 +3067,11 @@ export function createProjectSubjectsEvents(config) {
               caretStart: Number(textarea.selectionStart || 0),
               caretEnd: Number(textarea.selectionEnd || 0)
             });
+            return;
+          }
+          if (subjectRefState.open && String(subjectRefState.composerKey || "") === composerKey) {
+            event.preventDefault();
+            closeSubjectRefPopup();
             return;
           }
         }
@@ -2832,6 +3146,25 @@ export function createProjectSubjectsEvents(config) {
             if (messageId) replyUi.editDraftsByMessageId[messageId] = String(result.nextText || "");
             syncInlineReplyTextareaHeight(textarea);
             syncInlineEditSubmitButton(messageId);
+            return;
+          }
+        }
+        if (subjectRefState.open && String(subjectRefState.composerKey || "") === composerKey && Array.isArray(subjectRefState.suggestions) && subjectRefState.suggestions.length) {
+          if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+            event.preventDefault();
+            const delta = event.key === "ArrowDown" ? 1 : -1;
+            subjectRefState.activeIndex = (Number(subjectRefState.activeIndex || 0) + delta + subjectRefState.suggestions.length) % subjectRefState.suggestions.length;
+            rerenderAutocompleteUi({
+              selector: getTextareaSelector({ composerKey: "edit", messageId }),
+              shouldFocus: true,
+              caretStart: Number(textarea.selectionStart || 0),
+              caretEnd: Number(textarea.selectionEnd || 0)
+            });
+            return;
+          }
+          if (event.key === "Enter") {
+            event.preventDefault();
+            pickSubjectRefSuggestion(subjectRefState.suggestions[Number(subjectRefState.activeIndex || 0)] || subjectRefState.suggestions[0], composerKey);
             return;
           }
         }
@@ -3130,7 +3463,7 @@ export function createProjectSubjectsEvents(config) {
       autocompleteLayer.layer.addEventListener("mousedown", (event) => {
         const target = event.target;
         if (!(target instanceof Element)) return;
-        if (target.closest("[data-action='mention-pick'], [data-action='emoji-pick']")) {
+        if (target.closest("[data-action='mention-pick'], [data-action='emoji-pick'], [data-action='subject-ref-pick']")) {
           event.preventDefault();
         }
       });
@@ -3146,13 +3479,21 @@ export function createProjectSubjectsEvents(config) {
           return;
         }
         const emojiBtn = target.closest("[data-action='emoji-pick'][data-composer-key]");
-        if (!(emojiBtn instanceof HTMLElement)) return;
-        const composerKey = String(emojiBtn.dataset.composerKey || "").trim();
-        if (!composerKey) return;
-        applyEmojiSuggestionByComposerKey(composerKey, {
-          emoji: String(emojiBtn.dataset.emoji || "").trim(),
-          shortcode: String(emojiBtn.dataset.shortcode || "").trim()
-        });
+        if (emojiBtn instanceof HTMLElement) {
+          const composerKey = String(emojiBtn.dataset.composerKey || "").trim();
+          if (!composerKey) return;
+          applyEmojiSuggestionByComposerKey(composerKey, {
+            emoji: String(emojiBtn.dataset.emoji || "").trim(),
+            shortcode: String(emojiBtn.dataset.shortcode || "").trim()
+          });
+          return;
+        }
+        const subjectRefBtn = target.closest("[data-action='subject-ref-pick'][data-subject-id][data-subject-number]");
+        if (!(subjectRefBtn instanceof HTMLElement)) return;
+        pickSubjectRefSuggestion({
+          subjectId: String(subjectRefBtn.dataset.subjectId || "").trim(),
+          subjectNumber: Number(subjectRefBtn.dataset.subjectNumber || 0)
+        }, String(subjectRefBtn.dataset.composerKey || "main"));
       });
       autocompleteLayer.layer.dataset.subjectAutocompleteBound = "true";
     }
@@ -3169,8 +3510,11 @@ export function createProjectSubjectsEvents(config) {
           return;
         }
         const emojiState = getEmojiState();
-        if (!emojiState.open) return;
-        closeEmojiPopup();
+        const subjectRefState = getSubjectRefState();
+        if (!emojiState.open && !subjectRefState.open) return;
+        closeEmojiPopup({ rerender: false });
+        closeSubjectRefPopup({ rerender: false });
+        rerenderAutocompleteUi();
       });
       root.dataset.subjectEmojiDocumentBound = "true";
     }
@@ -3194,13 +3538,16 @@ export function createProjectSubjectsEvents(config) {
         if (event.key !== "Escape" || event.defaultPrevented) return;
         const mentionState = getMentionState();
         const emojiState = getEmojiState();
+        const subjectRefState = getSubjectRefState();
         const mentionOpen = !!mentionState.open;
         const emojiOpen = !!emojiState.open;
-        if (!mentionOpen && !emojiOpen) return;
+        const subjectRefOpen = !!subjectRefState.open;
+        if (!mentionOpen && !emojiOpen && !subjectRefOpen) return;
         event.preventDefault();
-        const fallbackComposerKey = String(mentionState.composerKey || emojiState.composerKey || "main");
+        const fallbackComposerKey = String(mentionState.composerKey || subjectRefState.composerKey || emojiState.composerKey || "main");
         closeMentionPopup({ rerender: false });
         closeEmojiPopup({ rerender: false });
+        closeSubjectRefPopup({ rerender: false });
         rerenderAutocompleteUi();
         focusComposerTextarea(fallbackComposerKey);
       });
