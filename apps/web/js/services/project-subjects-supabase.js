@@ -1150,7 +1150,21 @@ export async function loadSubjectDescriptionVersions(subjectId, options = {}) {
   });
   if (!versionsResponse.ok) {
     const txt = await versionsResponse.text().catch(() => "");
-    throw new Error(`subject_description_versions fetch failed (${versionsResponse.status}): ${txt}`);
+    const parsed = safeJsonParse(txt);
+    const detailMessage = String(
+      parsed?.message
+      || parsed?.error_description
+      || parsed?.error
+      || txt
+      || "Unknown error"
+    ).trim();
+    const error = new Error(
+      `subject_description_versions fetch failed (${versionsResponse.status} ${versionsResponse.statusText || ""}): ${detailMessage}`
+    );
+    error.status = Number(versionsResponse.status || 0);
+    error.details = detailMessage;
+    error.code = String(parsed?.code || "");
+    throw error;
   }
   const versionRows = await versionsResponse.json().catch(() => []);
   const rows = Array.isArray(versionRows) ? versionRows : [];
