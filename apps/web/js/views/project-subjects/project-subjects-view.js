@@ -928,6 +928,7 @@ function getSubjectsTableDeps() {
     getObjectiveById,
     getChildSubjects,
     getBlockedBySubjects,
+    getHeadVisibleBlockedBySubjects,
     issueIcon,
     priorityBadge,
     firstNonEmpty

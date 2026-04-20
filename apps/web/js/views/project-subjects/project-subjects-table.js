@@ -173,6 +173,7 @@ export function renderFlatSujetRow(sujet, situationId, options = {}) {
     getObjectiveById,
     getChildSubjects,
     getBlockedBySubjects,
+    getHeadVisibleBlockedBySubjects,
     firstNonEmpty
   } = deps;
 
@@ -195,7 +196,10 @@ export function renderFlatSujetRow(sujet, situationId, options = {}) {
   const objectiveLabel = objective
     ? ` - <button type="button" class="issue-row-subject-objective" data-row-objective-id="${escapeHtml(objective.id)}"><span class="issue-row-subject-objective__icon" aria-hidden="true">${svgIcon("milestone", { className: "octicon octicon-milestone" })}</span><span class="issue-row-subject-objective__text">${escapeHtml(firstNonEmpty(objective.title, objective.id, "Objectif"))}</span></button>`
     : "";
-  const isBlocked = (Array.isArray(getBlockedBySubjects?.(sujet.id)) ? getBlockedBySubjects(sujet.id) : []).length > 0;
+  const headVisibleBlockedBySubjects = Array.isArray(getHeadVisibleBlockedBySubjects?.(sujet.id))
+    ? getHeadVisibleBlockedBySubjects(sujet.id)
+    : (Array.isArray(getBlockedBySubjects?.(sujet.id)) ? getBlockedBySubjects(sujet.id) : []);
+  const isBlocked = headVisibleBlockedBySubjects.length > 0;
   const blockedBadge = isBlocked
     ? `<span class="issue-row-blocked-pill" aria-label="Sujet bloqué">${svgIcon("blocked", { className: "octicon octicon-blocked fgColor-danger" })}<span>Bloqué</span></span>`
     : "";
