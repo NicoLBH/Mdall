@@ -35,9 +35,11 @@ function renderInlineMarkdown(source = "") {
 
 function flushParagraph(paragraphLines = [], html = []) {
   if (!paragraphLines.length) return;
-  const paragraphText = paragraphLines.join(" ").trim();
-  if (!paragraphText) return;
-  html.push(`<p>${renderInlineMarkdown(paragraphText)}</p>`);
+  const renderedLines = paragraphLines
+    .map((line) => renderInlineMarkdown(String(line || "")))
+    .join("<br>");
+  if (!renderedLines.trim()) return;
+  html.push(`<p>${renderedLines}</p>`);
   paragraphLines.length = 0;
 }
 
