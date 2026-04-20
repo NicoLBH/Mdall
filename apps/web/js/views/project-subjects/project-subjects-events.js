@@ -2654,7 +2654,15 @@ export function createProjectSubjectsEvents(config) {
       try {
         if (window?.crypto?.randomUUID) return String(window.crypto.randomUUID());
       } catch {}
-      return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const chunk = () => Math.floor((1 + Math.random()) * 0x10000).toString(16).slice(1);
+      return `${chunk()}${chunk()}-${chunk()}-${chunk()}-${chunk()}-${chunk()}${chunk()}${chunk()}`;
+    };
+    const getDescriptionEditorState = () => {
+      if (typeof getDescriptionEditState === "function") {
+        const state = getDescriptionEditState();
+        if (state && typeof state === "object") return state;
+      }
+      return store.situationsView?.descriptionEdit || {};
     };
     const getDescriptionEditorState = () => {
       if (typeof getDescriptionEditState === "function") {
