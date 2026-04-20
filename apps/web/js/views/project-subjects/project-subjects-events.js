@@ -51,6 +51,7 @@ export function createProjectSubjectsEvents(config) {
     closeDescriptionVersionsDropdown,
     openDescriptionVersionModal,
     closeDescriptionVersionModal,
+    retryDescriptionVersionsLoad,
     startDescriptionEdit,
     clearDescriptionEditState,
     applyDescriptionSave,
@@ -719,11 +720,32 @@ export function createProjectSubjectsEvents(config) {
       };
     });
 
-    root.querySelectorAll("[data-action='close-description-version-modal']").forEach((btn) => {
+    root.querySelectorAll("[data-action='reload-description-versions']").forEach((btn) => {
       btn.onclick = () => {
-        closeDescriptionVersionModal?.(root);
+        retryDescriptionVersionsLoad?.(root);
       };
     });
+
+    const detailsModal = document.getElementById("detailsModal");
+    if (detailsModal && detailsModal.dataset.descriptionVersionBound !== "true") {
+      detailsModal.addEventListener("click", (event) => {
+        if (detailsModal.dataset.descriptionVersionModalOpen !== "true") return;
+        if (event.target === detailsModal) closeDescriptionVersionModal?.(root);
+      });
+      detailsModal.dataset.descriptionVersionBound = "true";
+    }
+
+    const detailsCloseBtn = document.getElementById("detailsClose");
+    if (detailsCloseBtn) {
+      detailsCloseBtn.onclick = () => {
+        const isDescriptionVersionOpen = detailsModal?.dataset.descriptionVersionModalOpen === "true";
+        if (isDescriptionVersionOpen) {
+          closeDescriptionVersionModal?.(root);
+          return;
+        }
+        closeDetailsModal?.();
+      };
+    }
 
     const getEmojiState = () => {
       if (typeof getEmojiUiState === "function") return getEmojiUiState();
@@ -4168,7 +4190,7 @@ export function createProjectSubjectsEvents(config) {
 
     if (root.dataset.threadReplyDropdownDocumentBound !== "true") {
       document.addEventListener("click", () => {
-        const hadOpenDescriptionVersions = Boolean(root.querySelector("[data-role='description-versions-dropdown']"));
+        const hadOpenDescriptionVersions = Boolean(root.querySelector("[data-role='description-versions-dropdown'].gh-menu--open"));
         root.querySelectorAll(".thread-comment-menu__dropdown.is-open").forEach((opened) => {
           opened.classList.remove("is-open");
         });

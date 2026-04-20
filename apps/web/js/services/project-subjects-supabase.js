@@ -1133,6 +1133,7 @@ export async function updateSubjectDescription({ subjectId, description, uploadS
 }
 
 export async function loadSubjectDescriptionVersions(subjectId, options = {}) {
+  const logPrefix = "[subject-description-versions]";
   const normalizedSubjectId = normalizeUuid(subjectId);
   if (!normalizedSubjectId) throw new Error("subjectId is required");
   const limit = Math.min(100, Math.max(1, Number(options?.limit || 50)));
@@ -1142,19 +1143,76 @@ export async function loadSubjectDescriptionVersions(subjectId, options = {}) {
   versionsUrl.searchParams.set("subject_id", `eq.${normalizedSubjectId}`);
   versionsUrl.searchParams.set("order", "created_at.desc");
   versionsUrl.searchParams.set("limit", String(limit));
+  console.info(`${logPrefix} fetch start`, {
+    timestamp: new Date().toISOString(),
+    subjectId: normalizedSubjectId,
+    limit,
+    url: versionsUrl.toString()
+  });
 
   const versionsResponse = await fetch(versionsUrl.toString(), {
     method: "GET",
     headers: await getSupabaseAuthHeaders({ Accept: "application/json" }),
     cache: "no-store"
   });
+  console.info(`${logPrefix} fetch response`, {
+    timestamp: new Date().toISOString(),
+    subjectId: normalizedSubjectId,
+    status: Number(versionsResponse.status || 0),
+    statusText: String(versionsResponse.statusText || "")
+  });
   if (!versionsResponse.ok) {
     const txt = await versionsResponse.text().catch(() => "");
-    throw new Error(`subject_description_versions fetch failed (${versionsResponse.status}): ${txt}`);
+    const parsed = safeJsonParse(txt);
+    console.error(`${logPrefix} fetch failed`, {
+      timestamp: new Date().toISOString(),
+      subjectId: normalizedSubjectId,
+      status: Number(versionsResponse.status || 0),
+      statusText: String(versionsResponse.statusText || ""),
+      rawBody: txt,
+      parsedBody: parsed
+    });
+    const detailMessage = String(
+      parsed?.message
+      || parsed?.error_description
+      || parsed?.error
+      || txt
+      || "Unknown error"
+    ).trim();
+    const error = new Error(
+      `subject_description_versions fetch failed (${versionsResponse.status} ${versionsResponse.statusText || ""}): ${detailMessage}`
+    );
+    error.status = Number(versionsResponse.status || 0);
+    error.details = detailMessage;
+    error.code = String(parsed?.code || "");
+    throw error;
   }
   const versionRows = await versionsResponse.json().catch(() => []);
   const rows = Array.isArray(versionRows) ? versionRows : [];
+  console.info(`${logPrefix} fetch success`, {
+    timestamp: new Date().toISOString(),
+    subjectId: normalizedSubjectId,
+    rowsCount: rows.length,
+    sample: rows.slice(0, 3).map((row) => ({
+      id: normalizeUuid(row?.id),
+      subject_id: normalizeUuid(row?.subject_id),
+      actor_user_id: normalizeUuid(row?.actor_user_id),
+      actor_person_id: normalizeUuid(row?.actor_person_id),
+      created_at: String(row?.created_at || "")
+    }))
+  });
+  if (!rows.length) {
+    console.warn(`${logPrefix} fetch succeeded but returned no version rows`, {
+      timestamp: new Date().toISOString(),
+      subjectId: normalizedSubjectId
+    });
+  }
   const personIds = [...new Set(rows.map((row) => normalizeUuid(row?.actor_person_id)).filter(Boolean))];
+  console.info(`${logPrefix} directory_people fetch candidates`, {
+    timestamp: new Date().toISOString(),
+    subjectId: normalizedSubjectId,
+    personIds
+  });
   const peopleById = {};
   if (personIds.length) {
     const peopleUrl = new URL(`${SUPABASE_URL}/rest/v1/directory_people`);
@@ -1170,12 +1228,34 @@ export async function loadSubjectDescriptionVersions(subjectId, options = {}) {
       setTimeout(() => resolve(null), 1500);
     });
     const peopleResponse = await Promise.race([peopleRequest, timeoutRequest]).catch(() => null);
+    if (!peopleResponse) {
+      console.warn(`${logPrefix} directory_people fetch timeout or network failure`, {
+        timestamp: new Date().toISOString(),
+        subjectId: normalizedSubjectId,
+        personIds
+      });
+    }
     if (peopleResponse?.ok) {
       const peopleRows = await peopleResponse.json().catch(() => []);
+      console.info(`${logPrefix} directory_people fetch success`, {
+        timestamp: new Date().toISOString(),
+        subjectId: normalizedSubjectId,
+        status: Number(peopleResponse.status || 0),
+        rowsCount: Array.isArray(peopleRows) ? peopleRows.length : 0
+      });
       (Array.isArray(peopleRows) ? peopleRows : []).forEach((person) => {
         const personId = normalizeUuid(person?.id);
         if (!personId) return;
         peopleById[personId] = person;
+      });
+    } else if (peopleResponse) {
+      const peopleRawBody = await peopleResponse.text().catch(() => "");
+      console.warn(`${logPrefix} directory_people fetch failed`, {
+        timestamp: new Date().toISOString(),
+        subjectId: normalizedSubjectId,
+        status: Number(peopleResponse.status || 0),
+        statusText: String(peopleResponse.statusText || ""),
+        rawBody: peopleRawBody
       });
     }
   }
