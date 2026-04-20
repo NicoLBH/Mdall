@@ -763,6 +763,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
       { action: "ordered-list", icon: "markdown-list-ordered", label: "Liste numérotée" },
       { action: "bullet-list", icon: "markdown-list-unordered", label: "Liste à puces" },
       { action: "checklist", icon: "markdown-tasklist", label: "Checklist" },
+      { action: "heading", icon: "markdown-heading", label: "Titre (H3)" },
       { action: "mention", icon: "markdown-mention", label: "Mention" },
       { action: "subject-ref", icon: "cross-reference", label: "Référence sujet" }
     ];
