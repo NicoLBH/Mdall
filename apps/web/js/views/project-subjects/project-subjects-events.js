@@ -4190,7 +4190,7 @@ export function createProjectSubjectsEvents(config) {
 
     if (root.dataset.threadReplyDropdownDocumentBound !== "true") {
       document.addEventListener("click", () => {
-        const hadOpenDescriptionVersions = Boolean(root.querySelector("[data-role='description-versions-dropdown']"));
+        const hadOpenDescriptionVersions = Boolean(root.querySelector("[data-role='description-versions-dropdown'].gh-menu--open"));
         root.querySelectorAll(".thread-comment-menu__dropdown.is-open").forEach((opened) => {
           opened.classList.remove("is-open");
         });

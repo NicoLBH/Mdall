@@ -2,6 +2,7 @@ import { getAuthorIdentity } from "../ui/author-identity.js";
 import { renderSubjectMarkdownToolbar } from "../ui/subject-rich-editor.js";
 
 export function createProjectSubjectsDescription(config = {}) {
+  const VERSIONS_LOG_PREFIX = "[subject-description-versions]";
   const {
     store,
     ensureViewUiState,
@@ -32,6 +33,13 @@ export function createProjectSubjectsDescription(config = {}) {
     const chunk = () => Math.floor((1 + Math.random()) * 0x10000).toString(16).slice(1);
     return `${chunk()}${chunk()}-${chunk()}-${chunk()}-${chunk()}-${chunk()}${chunk()}${chunk()}`;
   };
+
+  function logDescriptionVersions(message, payload = {}) {
+    console.info(`${VERSIONS_LOG_PREFIX} ${message}`, {
+      timestamp: new Date().toISOString(),
+      ...payload
+    });
+  }
 
   function ensureDescriptionEditState() {
     ensureViewUiState();
@@ -258,10 +266,35 @@ export function createProjectSubjectsDescription(config = {}) {
 
   async function ensureDescriptionVersionsLoaded(root, entityType, entityId, options = {}) {
     const ui = ensureDescriptionVersionsUiState();
-    if (ui.isLoading) return;
     const forceReload = !!options.forceReload;
     const sameTarget = ui.entityType === entityType && ui.entityId === entityId;
-    if (!forceReload && sameTarget && !ui.error && Array.isArray(ui.versions) && ui.versions.length) return;
+    const versionsInMemory = Array.isArray(ui.versions) ? ui.versions.length : 0;
+    logDescriptionVersions("ensure start", {
+      entityType,
+      entityId,
+      forceReload,
+      sameTarget,
+      isLoading: !!ui.isLoading,
+      versionsInMemory
+    });
+    if (ui.isLoading) {
+      logDescriptionVersions("ensure early return: already loading", { entityType, entityId });
+      return;
+    }
+    if (!forceReload && sameTarget && !ui.error && Array.isArray(ui.versions) && ui.versions.length) {
+      logDescriptionVersions("ensure early return: cache hit", {
+        entityType,
+        entityId,
+        cachedVersionsCount: ui.versions.length
+      });
+      return;
+    }
+    logDescriptionVersions("ensure branch: loading triggered", {
+      entityType,
+      entityId,
+      forceReload,
+      sameTarget
+    });
     ui.isLoading = true;
     ui.error = "";
     ui.entityType = entityType;
@@ -275,10 +308,43 @@ export function createProjectSubjectsDescription(config = {}) {
       if (!ui.selectedVersionId && ui.versions.length) {
         ui.selectedVersionId = String(ui.versions[0]?.id || "");
       }
+      if (!ui.versions.length) {
+        logDescriptionVersions("ensure loaded with empty result set", {
+          entityType,
+          entityId
+        });
+        const descriptionState = getEntityDescriptionState(entityType, entityId);
+        const hasCurrentDescription = !!String(descriptionState?.body || "").trim();
+        if (hasCurrentDescription) {
+          console.warn(
+            `${VERSIONS_LOG_PREFIX} subject has current description but no historical version rows; check backfill / RPC deployment`,
+            {
+              timestamp: new Date().toISOString(),
+              entityType,
+              entityId
+            }
+          );
+        }
+      }
     } catch (error) {
       ui.error = buildDescriptionVersionsLoadError(error);
+      console.error(`${VERSIONS_LOG_PREFIX} ensure failed`, {
+        timestamp: new Date().toISOString(),
+        entityType,
+        entityId,
+        forceReload,
+        sameTarget,
+        error
+      });
     } finally {
       ui.isLoading = false;
+      logDescriptionVersions("ensure done", {
+        entityType,
+        entityId,
+        versionsCount: Array.isArray(ui.versions) ? ui.versions.length : 0,
+        hasError: !!ui.error,
+        selectedVersionId: String(ui.selectedVersionId || "")
+      });
       rerenderScope(root);
     }
   }
@@ -301,9 +367,18 @@ export function createProjectSubjectsDescription(config = {}) {
     const entityId = target.id;
     const ui = ensureDescriptionVersionsUiState();
     const isSameEntity = ui.entityType === entityType && ui.entityId === entityId;
+    const prevOpen = !!ui.isOpen;
     ui.entityType = entityType;
     ui.entityId = entityId;
     ui.isOpen = !(isSameEntity && ui.isOpen);
+    const willLoad = ui.isOpen && entityType === "sujet";
+    logDescriptionVersions("toggle dropdown", {
+      entityType,
+      entityId,
+      previousIsOpen: prevOpen,
+      nextIsOpen: !!ui.isOpen,
+      triggeredLoad: willLoad
+    });
     if (ui.isOpen && entityType === "sujet") {
       void ensureDescriptionVersionsLoaded(root, entityType, entityId);
     }
