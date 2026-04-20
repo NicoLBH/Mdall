@@ -2372,6 +2372,41 @@ function rerenderScope(root) {
   }
 }
 
+const scheduledScopeRenders = new Map();
+let scheduledScopeRendersFrame = 0;
+
+function scheduleScopedRerender(scopeKey, resolveRoot) {
+  const normalizedScopeKey = String(scopeKey || "").trim();
+  if (!normalizedScopeKey) return;
+  const resolver = typeof resolveRoot === "function" ? resolveRoot : () => resolveRoot;
+  scheduledScopeRenders.set(normalizedScopeKey, resolver);
+  if (scheduledScopeRendersFrame) return;
+  scheduledScopeRendersFrame = requestAnimationFrame(() => {
+    const pendingRenders = Array.from(scheduledScopeRenders.entries());
+    scheduledScopeRenders.clear();
+    scheduledScopeRendersFrame = 0;
+    pendingRenders.forEach(([, currentResolver]) => {
+      const root = currentResolver?.();
+      if (!root) return;
+      rerenderScope(root);
+    });
+  });
+}
+
+function scheduleDetailsThreadRerender() {
+  scheduleScopedRerender("details-thread", () => {
+    const detailsHost = document.getElementById("situationsDetailsHost");
+    return detailsHost?.querySelector?.("[data-details-thread-host]") || detailsHost || document;
+  });
+}
+
+function scheduleDetailsComposerRerender() {
+  scheduleScopedRerender("details-composer", () => {
+    const detailsHost = document.getElementById("situationsDetailsHost");
+    return detailsHost?.querySelector?.("[data-details-composer-host]") || detailsHost || document;
+  });
+}
+
 function renderDetailsDiscussionScopes(detailsHost, options = {}) {
   if (!detailsHost || !detailsHost.isConnected) return;
   const {
@@ -2864,6 +2899,9 @@ function getObjectiveById(objectiveId) {
     syncSituationsPrimaryScrollSource,
     rerenderPanels,
     rerenderScope,
+    scheduleScopedRerender,
+    scheduleDetailsThreadRerender,
+    scheduleDetailsComposerRerender,
     syncCommentPreview,
     applyCommentAction
   };

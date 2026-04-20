@@ -2474,42 +2474,70 @@ export function createProjectSubjectsEvents(config) {
         </div>
       `;
     };
-    const renderMainComposerAttachmentsPreview = (attachments = []) => {
-      const container = root.querySelector("[data-role='subject-composer-attachments-preview']");
-      if (!container) return;
-      container.innerHTML = renderAttachmentPreviewItemsHtml({
-        attachments,
-        removeAction: "composer-attachment-remove"
+    const scheduleScopedDomRender = (scopeKey, callback) => {
+      const normalizedScopeKey = String(scopeKey || "").trim();
+      if (!normalizedScopeKey || typeof callback !== "function") return;
+      if (!root.__subjectScopedDomRenderTasks || typeof root.__subjectScopedDomRenderTasks !== "object") {
+        root.__subjectScopedDomRenderTasks = new Map();
+      }
+      const renderTasks = root.__subjectScopedDomRenderTasks;
+      renderTasks.set(normalizedScopeKey, callback);
+      if (root.__subjectScopedDomRenderFrame) return;
+      root.__subjectScopedDomRenderFrame = requestAnimationFrame(() => {
+        const tasks = Array.from(renderTasks.entries());
+        renderTasks.clear();
+        root.__subjectScopedDomRenderFrame = 0;
+        tasks.forEach(([, task]) => {
+          try {
+            task();
+          } catch (error) {
+            console.warn("[subject-thread] scoped dom render failed", { scopeKey: normalizedScopeKey, error });
+          }
+        });
       });
-      container.classList.toggle("hidden", !Array.isArray(attachments) || !attachments.length);
+    };
+    const renderMainComposerAttachmentsPreview = (attachments = []) => {
+      scheduleScopedDomRender("attachments-main-composer-preview", () => {
+        const container = root.querySelector("[data-role='subject-composer-attachments-preview']");
+        if (!container) return;
+        container.innerHTML = renderAttachmentPreviewItemsHtml({
+          attachments,
+          removeAction: "composer-attachment-remove"
+        });
+        container.classList.toggle("hidden", !Array.isArray(attachments) || !attachments.length);
+      });
     };
     const renderInlineReplyAttachmentsPreview = (messageId = "", attachments = []) => {
       const normalizedMessageId = String(messageId || "").trim();
       if (!normalizedMessageId) return;
-      const container = root.querySelector(
-        `[data-role='thread-reply-attachments-preview'][data-message-id="${selectorValue(normalizedMessageId)}"]`
-      );
-      if (!container) return;
-      container.innerHTML = renderAttachmentPreviewItemsHtml({
-        attachments,
-        removeAction: "thread-reply-attachment-remove",
-        messageId: normalizedMessageId
+      scheduleScopedDomRender(`attachments-inline-reply-preview:${normalizedMessageId}`, () => {
+        const container = root.querySelector(
+          `[data-role='thread-reply-attachments-preview'][data-message-id="${selectorValue(normalizedMessageId)}"]`
+        );
+        if (!container) return;
+        container.innerHTML = renderAttachmentPreviewItemsHtml({
+          attachments,
+          removeAction: "thread-reply-attachment-remove",
+          messageId: normalizedMessageId
+        });
+        container.classList.toggle("hidden", !Array.isArray(attachments) || !attachments.length);
       });
-      container.classList.toggle("hidden", !Array.isArray(attachments) || !attachments.length);
     };
     const renderInlineEditAttachmentsPreview = (messageId = "", attachments = []) => {
       const normalizedMessageId = String(messageId || "").trim();
       if (!normalizedMessageId) return;
-      const container = root.querySelector(
-        `[data-role='thread-edit-attachments-preview'][data-message-id="${selectorValue(normalizedMessageId)}"]`
-      );
-      if (!container) return;
-      container.innerHTML = renderAttachmentPreviewItemsHtml({
-        attachments,
-        removeAction: "thread-edit-attachment-remove",
-        messageId: normalizedMessageId
+      scheduleScopedDomRender(`attachments-inline-edit-preview:${normalizedMessageId}`, () => {
+        const container = root.querySelector(
+          `[data-role='thread-edit-attachments-preview'][data-message-id="${selectorValue(normalizedMessageId)}"]`
+        );
+        if (!container) return;
+        container.innerHTML = renderAttachmentPreviewItemsHtml({
+          attachments,
+          removeAction: "thread-edit-attachment-remove",
+          messageId: normalizedMessageId
+        });
+        container.classList.toggle("hidden", !Array.isArray(attachments) || !attachments.length);
       });
-      container.classList.toggle("hidden", !Array.isArray(attachments) || !attachments.length);
     };
     const threadReplyDebugEnabled = (() => {
       try {
@@ -2666,22 +2694,9 @@ export function createProjectSubjectsEvents(config) {
     const toggleInlineReplyEditorVisibility = (messageId = "", visible = false) => {
       const normalizedMessageId = String(messageId || "").trim();
       if (!normalizedMessageId) return;
-      const editor = root.querySelector(`[data-inline-reply-editor="${selectorValue(normalizedMessageId)}"]`);
-      if (!editor) return;
-      if (!visible && editor.contains(document.activeElement)) {
-        const activeElement = document.activeElement;
-        if (activeElement && typeof activeElement.blur === "function") activeElement.blur();
-      }
-      editor.classList.toggle("hidden", !visible);
-      if (visible) editor.removeAttribute("aria-hidden");
-      else editor.setAttribute("aria-hidden", "true");
-    };
-    const toggleInlineEditEditorVisibility = (messageId = "", visible = false) => {
-      const normalizedMessageId = String(messageId || "").trim();
-      if (!normalizedMessageId) return;
-      const editor = root.querySelector(`[data-inline-edit-editor="${selectorValue(normalizedMessageId)}"]`);
-      const content = root.querySelector(`[data-thread-comment-content="${selectorValue(normalizedMessageId)}"]`);
-      if (editor) {
+      scheduleScopedDomRender(`inline-reply-editor:${normalizedMessageId}`, () => {
+        const editor = root.querySelector(`[data-inline-reply-editor="${selectorValue(normalizedMessageId)}"]`);
+        if (!editor) return;
         if (!visible && editor.contains(document.activeElement)) {
           const activeElement = document.activeElement;
           if (activeElement && typeof activeElement.blur === "function") activeElement.blur();
@@ -2689,8 +2704,25 @@ export function createProjectSubjectsEvents(config) {
         editor.classList.toggle("hidden", !visible);
         if (visible) editor.removeAttribute("aria-hidden");
         else editor.setAttribute("aria-hidden", "true");
-      }
-      if (content) content.classList.toggle("hidden", !!visible);
+      });
+    };
+    const toggleInlineEditEditorVisibility = (messageId = "", visible = false) => {
+      const normalizedMessageId = String(messageId || "").trim();
+      if (!normalizedMessageId) return;
+      scheduleScopedDomRender(`inline-edit-editor:${normalizedMessageId}`, () => {
+        const editor = root.querySelector(`[data-inline-edit-editor="${selectorValue(normalizedMessageId)}"]`);
+        const content = root.querySelector(`[data-thread-comment-content="${selectorValue(normalizedMessageId)}"]`);
+        if (editor) {
+          if (!visible && editor.contains(document.activeElement)) {
+            const activeElement = document.activeElement;
+            if (activeElement && typeof activeElement.blur === "function") activeElement.blur();
+          }
+          editor.classList.toggle("hidden", !visible);
+          if (visible) editor.removeAttribute("aria-hidden");
+          else editor.setAttribute("aria-hidden", "true");
+        }
+        if (content) content.classList.toggle("hidden", !!visible);
+      });
     };
     const closeInlineReplyEditor = (messageId = "") => {
       const normalizedMessageId = String(messageId || "").trim();

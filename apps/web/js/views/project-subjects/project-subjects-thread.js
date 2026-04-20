@@ -32,6 +32,7 @@ export function createProjectSubjectsThread(config = {}) {
     getEffectiveSituationStatus,
     subjectMessagesService,
     requestRerender,
+    scheduleThreadRerender,
     entityDisplayLinkHtml,
     inferAgent,
     normActorName,
@@ -429,6 +430,10 @@ export function createProjectSubjectsThread(config = {}) {
   }
 
   function requestScopeRerender() {
+    if (typeof scheduleThreadRerender === "function") {
+      scheduleThreadRerender();
+      return;
+    }
     if (typeof requestRerender === "function") {
       const detailsHost = document.getElementById("situationsDetailsHost");
       const threadHost = detailsHost?.querySelector?.("[data-details-thread-host]");
