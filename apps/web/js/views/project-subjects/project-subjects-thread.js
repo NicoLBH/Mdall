@@ -886,7 +886,9 @@ priority=${firstNonEmpty(subject.priority, "")}`
           tabsClassName: "comment-composer__tabs--thread-reply",
           composerClassName: "comment-composer--thread-reply-editor",
           toolbarHtml: renderMarkdownToolbar("thread-reply-format", { messageId: commentId }),
-          previewHtml: normalizedDraft.trim() ? mdToHtml(normalizedDraft) : "",
+          previewHtml: normalizedDraft.trim()
+            ? mdToHtml(normalizedDraft, { preserveMessageLineBreaks: true })
+            : "",
           actionsHtml: `
             <div class="thread-inline-reply-editor__actions">
               <button class="gh-btn" type="button" data-action="thread-reply-cancel" data-message-id="${escapeHtml(commentId)}">Annuler</button>
@@ -947,7 +949,9 @@ priority=${firstNonEmpty(subject.priority, "")}`
           tabsClassName: "comment-composer__tabs--thread-reply",
           composerClassName: `comment-composer--thread-reply-editor ${composerEditClass}`,
           toolbarHtml: renderMarkdownToolbar("thread-edit-format", { messageId: commentId }),
-          previewHtml: normalizedDraft.trim() ? mdToHtml(normalizedDraft) : "",
+          previewHtml: normalizedDraft.trim()
+            ? mdToHtml(normalizedDraft, { preserveMessageLineBreaks: true })
+            : "",
           actionsHtml: `
             <div class="thread-inline-reply-editor__actions">
               <button class="gh-btn" type="button" data-action="thread-edit-cancel" data-message-id="${escapeHtml(commentId)}">Annuler</button>
@@ -1076,7 +1080,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
       headerRightHtml: renderThreadCommentActions(entry),
       bodyHtml: `
         <div class="thread-comment-content-capsule ${isEditing ? "hidden" : ""}" data-thread-comment-content="${escapeHtml(commentId)}">
-          ${mdToHtml(entry?.message || "")}
+          ${mdToHtml(entry?.message || "", { preserveMessageLineBreaks: true })}
         </div>
         ${renderInlineEditComposer({
           commentId,
@@ -1539,7 +1543,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
       toolbarHtml,
       tabsClassName: "comment-composer__tabs--main",
       previewHtml: previewMode && String(store.situationsView.commentDraft || "").trim()
-        ? mdToHtml(String(store.situationsView.commentDraft || ""))
+        ? mdToHtml(String(store.situationsView.commentDraft || ""), { preserveMessageLineBreaks: true })
         : "",
       previewEmptyHint: "Utilisez le Markdown pour formater votre commentaire",
       footerHtml: composerAttachmentsHtml
