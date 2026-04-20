@@ -11,9 +11,9 @@ import {
 } from "../../utils/emoji-autocomplete.js";
 import {
   applySubjectRefSuggestion,
-  resolveSubjectRefTriggerContext,
-  searchSubjectRefSuggestions
+  resolveSubjectRefTriggerContext
 } from "../../utils/subject-links.js";
+import { searchSubjectRefs } from "../../utils/subject-ref-index.js";
 import { computeTextareaCaretRect } from "../../utils/textarea-caret-position.js";
 
 export function createProjectSubjectsEvents(config) {
@@ -870,9 +870,22 @@ export function createProjectSubjectsEvents(config) {
 
     const resolveSubjectStatusIcon = (status = "open") => {
       const normalized = String(status || "open").trim().toLowerCase();
-      if (normalized === "reopened") return svgIcon("issue-reopened", { className: "octicon octicon-issue-reopened" });
-      if (normalized.startsWith("closed")) return svgIcon("check-circle", { className: "octicon octicon-check-circle" });
-      return svgIcon("issue-opened", { className: "octicon octicon-issue-opened" });
+      if (normalized === "closed_invalid" || normalized === "closed_duplicate") {
+        return svgIcon("skip", {
+          className: "octicon octicon-skip",
+          style: "color: rgb(145, 152, 161)"
+        });
+      }
+      if (normalized.startsWith("closed")) {
+        return svgIcon("check-circle", {
+          className: "octicon octicon-check-circle",
+          style: "color: var(--fgColor-done)"
+        });
+      }
+      return svgIcon("issue-opened", {
+        className: "octicon octicon-issue-opened",
+        style: "color: var(--fgColor-open)"
+      });
     };
 
     const renderSubjectRefPopupHtml = () => {
@@ -1172,41 +1185,20 @@ export function createProjectSubjectsEvents(config) {
     };
 
     const listSubjectRefSuggestions = (query = "") => {
-      const subjectsData = Array.isArray(store.projectSubjectsView?.subjectsData)
-        ? store.projectSubjectsView.subjectsData
-        : [];
-      const seen = new Set();
-      const allSubjects = [];
-      subjectsData.forEach((situation) => {
-        const queue = Array.isArray(situation?.sujets) ? [...situation.sujets] : [];
-        while (queue.length) {
-          const sujet = queue.shift();
-          const subjectId = String(sujet?.id || "").trim();
-          const subjectNumber = Number.parseInt(String(sujet?.subject_number ?? sujet?.subjectNumber ?? ""), 10);
-          if (subjectId && Number.isFinite(subjectNumber) && subjectNumber > 0 && !seen.has(subjectId)) {
-            seen.add(subjectId);
-            const canonicalSujet = typeof getNestedSujet === "function" ? getNestedSujet(subjectId) : sujet;
-            const status = typeof getEffectiveSujetStatus === "function"
-              ? getEffectiveSujetStatus(canonicalSujet || sujet)
-              : String((canonicalSujet || sujet)?.status || "open");
-            allSubjects.push({
-              subjectId,
-              subjectNumber: Math.floor(subjectNumber),
-              title: String((canonicalSujet || sujet)?.title || "").trim() || `Sujet #${subjectNumber}`,
-              status
-            });
+      const projectSubjectsView = store.projectSubjectsView && typeof store.projectSubjectsView === "object"
+        ? store.projectSubjectsView
+        : {};
+      return searchSubjectRefs(projectSubjectsView, query, 8, {
+        statusResolver: (subject) => {
+          const canonicalSujet = typeof getNestedSujet === "function"
+            ? (getNestedSujet(subject?.id) || subject)
+            : subject;
+          if (typeof getEffectiveSujetStatus === "function") {
+            return getEffectiveSujetStatus(canonicalSujet);
           }
-          const children = Array.isArray(sujet?.sujets)
-            ? sujet.sujets
-            : Array.isArray(sujet?.childSujets)
-              ? sujet.childSujets
-              : Array.isArray(sujet?.children)
-                ? sujet.children
-                : [];
-          if (children.length) queue.push(...children);
+          return String(canonicalSujet?.status || subject?.status || "open");
         }
       });
-      return searchSubjectRefSuggestions(allSubjects, query, 8);
     };
 
     const syncSubjectRefPopupForTextarea = (textarea, composerKey) => {
@@ -1235,6 +1227,21 @@ export function createProjectSubjectsEvents(config) {
         caretStart: Number(textarea.selectionStart || 0),
         caretEnd: Number(textarea.selectionEnd || 0)
       });
+    };
+
+    const ensureSubjectRefTriggerInTextarea = (textarea) => {
+      if (!textarea) return false;
+      const source = String(textarea.value || "");
+      const cursor = Math.max(0, Math.min(Number(textarea.selectionStart || 0), source.length));
+      if (resolveSubjectRefTriggerContext(source, cursor)) return false;
+      const previousChar = source[cursor - 1] || "";
+      const insertion = /[A-Za-z0-9_]/.test(previousChar) ? " #" : "#";
+      const nextText = `${source.slice(0, cursor)}${insertion}${source.slice(cursor)}`;
+      const nextCursor = cursor + insertion.length;
+      textarea.value = nextText;
+      textarea.selectionStart = nextCursor;
+      textarea.selectionEnd = nextCursor;
+      return true;
     };
 
     const pickSubjectRefSuggestion = (suggestion = {}, composerKey = "main") => {
@@ -1667,6 +1674,17 @@ export function createProjectSubjectsEvents(config) {
         btn.onclick = () => {
           const action = String(btn.dataset.format || "").trim();
           if (!action) return;
+          if (action === "subject-ref") {
+            ensureSubjectRefTriggerInTextarea(commentTextarea);
+            closeMentionPopup({ rerender: false });
+            closeEmojiPopup({ rerender: false });
+            store.situationsView.commentDraft = String(commentTextarea.value || "");
+            syncMainComposerTextareaHeight();
+            if (store.situationsView.commentPreviewMode) syncCommentPreview(root);
+            void syncSubjectRefPopupForTextarea(commentTextarea, "main");
+            commentTextarea.focus();
+            return;
+          }
           const didApply = applyMarkdownComposerAction(commentTextarea, action);
           if (!didApply) return;
           if (action === "mention") void syncMentionPopup({ forceOpen: true });
@@ -3261,6 +3279,18 @@ export function createProjectSubjectsEvents(config) {
         if (!action || !messageId) return;
         const textarea = root.querySelector(`[data-thread-reply-draft="${selectorValue(messageId)}"]`);
         if (!textarea) return;
+        if (action === "subject-ref") {
+          ensureSubjectRefTriggerInTextarea(textarea);
+          const replyUi = resolveInlineReplyUiState();
+          replyUi.draftsByMessageId[messageId] = String(textarea.value || "");
+          syncInlineReplyTextareaHeight(textarea);
+          syncInlineReplySubmitButton(messageId);
+          closeMentionPopup({ rerender: false });
+          closeEmojiPopup({ rerender: false });
+          void syncSubjectRefPopupForTextarea(textarea, `reply:${messageId}`);
+          textarea.focus();
+          return;
+        }
         const didApply = applyMarkdownComposerAction(textarea, action);
         if (!didApply) return;
         const replyUi = resolveInlineReplyUiState();
@@ -3283,6 +3313,18 @@ export function createProjectSubjectsEvents(config) {
         if (!action || !messageId) return;
         const textarea = root.querySelector(`[data-thread-edit-draft="${selectorValue(messageId)}"]`);
         if (!textarea) return;
+        if (action === "subject-ref") {
+          ensureSubjectRefTriggerInTextarea(textarea);
+          const replyUi = resolveInlineReplyUiState();
+          replyUi.editDraftsByMessageId[messageId] = String(textarea.value || "");
+          syncInlineReplyTextareaHeight(textarea);
+          syncInlineEditSubmitButton(messageId);
+          closeMentionPopup({ rerender: false });
+          closeEmojiPopup({ rerender: false });
+          void syncSubjectRefPopupForTextarea(textarea, `edit:${messageId}`);
+          textarea.focus();
+          return;
+        }
         const didApply = applyMarkdownComposerAction(textarea, action);
         if (!didApply) return;
         const replyUi = resolveInlineReplyUiState();
