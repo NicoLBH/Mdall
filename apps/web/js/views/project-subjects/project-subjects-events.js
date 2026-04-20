@@ -870,9 +870,22 @@ export function createProjectSubjectsEvents(config) {
 
     const resolveSubjectStatusIcon = (status = "open") => {
       const normalized = String(status || "open").trim().toLowerCase();
-      if (normalized === "reopened") return svgIcon("issue-reopened", { className: "octicon octicon-issue-reopened" });
-      if (normalized.startsWith("closed")) return svgIcon("check-circle", { className: "octicon octicon-check-circle" });
-      return svgIcon("issue-opened", { className: "octicon octicon-issue-opened" });
+      if (normalized === "closed_invalid" || normalized === "closed_duplicate") {
+        return svgIcon("skip", {
+          className: "octicon octicon-skip",
+          style: "color: rgb(145, 152, 161)"
+        });
+      }
+      if (normalized.startsWith("closed")) {
+        return svgIcon("check-circle", {
+          className: "octicon octicon-check-circle",
+          style: "color: var(--fgColor-done)"
+        });
+      }
+      return svgIcon("issue-opened", {
+        className: "octicon octicon-issue-opened",
+        style: "color: var(--fgColor-open)"
+      });
     };
 
     const renderSubjectRefPopupHtml = () => {
