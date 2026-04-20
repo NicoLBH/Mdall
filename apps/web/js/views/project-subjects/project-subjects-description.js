@@ -307,6 +307,49 @@ export function createProjectSubjectsDescription(config = {}) {
     return `Échec du chargement des versions${statusChunk}. ${normalizedDetail}`;
   }
 
+  function resetDescriptionVersionsUiForTargetChange(ui, options = {}) {
+    ui.selectedVersionId = "";
+    ui.versions = [];
+    ui.error = "";
+    if (options.resetLoading !== false) ui.isLoading = false;
+  }
+
+  function syncDescriptionVersionsTarget(root) {
+    const ui = ensureDescriptionVersionsUiState();
+    const target = currentDecisionTarget(root);
+    const nextEntityTypeRaw = target?.type ? getSelectionEntityType(target.type) : "";
+    const nextEntityType = nextEntityTypeRaw === "sujet" ? "sujet" : "";
+    const nextEntityId = nextEntityType ? String(target?.id || "") : "";
+    const previousEntityType = String(ui.entityType || "");
+    const previousEntityId = String(ui.entityId || "");
+    const wasOpen = !!ui.isOpen;
+    const changed = previousEntityType !== nextEntityType || previousEntityId !== nextEntityId;
+
+    if (changed) {
+      resetDescriptionVersionsUiForTargetChange(ui);
+      ui.entityType = nextEntityType;
+      ui.entityId = nextEntityId;
+      logDescriptionVersions("target changed", {
+        previousEntityType,
+        previousEntityId,
+        nextEntityType,
+        nextEntityId,
+        wasOpen
+      });
+    }
+    if (!nextEntityType && ui.isOpen) ui.isOpen = false;
+
+    return {
+      changed,
+      wasOpen,
+      isOpen: !!ui.isOpen,
+      entityType: String(ui.entityType || ""),
+      entityId: String(ui.entityId || ""),
+      previousEntityType,
+      previousEntityId
+    };
+  }
+
   async function ensureDescriptionVersionsLoaded(root, entityType, entityId, options = {}) {
     const ui = ensureDescriptionVersionsUiState();
     const forceReload = !!options.forceReload;
@@ -371,7 +414,15 @@ export function createProjectSubjectsDescription(config = {}) {
         ignoredAsStale: isStaleResponse,
         stateRefId: getStateRefId(currentUi)
       });
-      if (isStaleResponse) return;
+      if (isStaleResponse) {
+        logDescriptionVersions("stale response ignored", {
+          entityType,
+          entityId,
+          loadToken,
+          versionsCount: normalizedVersions.length
+        });
+        return;
+      }
       currentUi.versions = normalizedVersions;
       if (!currentUi.selectedVersionId && currentUi.versions.length) {
         currentUi.selectedVersionId = String(currentUi.versions[0]?.id || "");
@@ -397,7 +448,16 @@ export function createProjectSubjectsDescription(config = {}) {
     } catch (error) {
       const currentUi = ensureDescriptionVersionsUiState();
       const isStaleResponse = Number(currentUi.loadToken || 0) !== loadToken;
-      if (!isStaleResponse) currentUi.error = buildDescriptionVersionsLoadError(error);
+      if (isStaleResponse) {
+        logDescriptionVersions("stale response ignored", {
+          entityType,
+          entityId,
+          loadToken,
+          stage: "catch"
+        });
+      } else {
+        currentUi.error = buildDescriptionVersionsLoadError(error);
+      }
       console.error(`${VERSIONS_LOG_PREFIX} ensure failed`, {
         timestamp: new Date().toISOString(),
         entityType,
@@ -432,32 +492,31 @@ export function createProjectSubjectsDescription(config = {}) {
   }
 
   function retryDescriptionVersionsLoad(root) {
+    syncDescriptionVersionsTarget(root);
     const ui = ensureDescriptionVersionsUiState();
     if (!ui.entityType || !ui.entityId) return;
     void ensureDescriptionVersionsLoaded(root, ui.entityType, ui.entityId, { forceReload: true });
   }
 
   function toggleDescriptionVersionsDropdown(root) {
-    const target = currentDecisionTarget(root);
-    if (!target) return;
-    const entityType = getSelectionEntityType(target.type);
-    const entityId = target.id;
+    const sync = syncDescriptionVersionsTarget(root);
+    if (!sync.entityType || !sync.entityId) return;
+    const entityType = sync.entityType;
+    const entityId = sync.entityId;
     const ui = ensureDescriptionVersionsUiState();
-    const isSameEntity = ui.entityType === entityType && ui.entityId === entityId;
     const prevOpen = !!ui.isOpen;
-    ui.entityType = entityType;
-    ui.entityId = entityId;
-    ui.isOpen = !(isSameEntity && ui.isOpen);
+    ui.isOpen = !ui.isOpen;
     const willLoad = ui.isOpen && entityType === "sujet";
     logDescriptionVersions("toggle dropdown", {
       entityType,
       entityId,
+      targetChanged: sync.changed,
       previousIsOpen: prevOpen,
       nextIsOpen: !!ui.isOpen,
       triggeredLoad: willLoad
     });
     if (ui.isOpen && entityType === "sujet") {
-      void ensureDescriptionVersionsLoaded(root, entityType, entityId);
+      void ensureDescriptionVersionsLoaded(root, entityType, entityId, { forceReload: sync.changed && sync.wasOpen });
     } else {
       hideDescriptionVersionsDropdownHost();
     }
@@ -593,7 +652,8 @@ export function createProjectSubjectsDescription(config = {}) {
     ));
   }
 
-  function renderDescriptionVersionsTrigger(entityType, entityId) {
+  function renderDescriptionVersionsTrigger(root, entityType, entityId) {
+    syncDescriptionVersionsTarget(root);
     const ui = ensureDescriptionVersionsUiState();
     const isTarget = ui.entityType === entityType && ui.entityId === entityId;
     const isOpen = isTarget && ui.isOpen;
@@ -732,30 +792,10 @@ export function createProjectSubjectsDescription(config = {}) {
   }
 
   function renderDescriptionVersionsDropdownHost(root) {
+    const sync = syncDescriptionVersionsTarget(root);
     const ui = ensureDescriptionVersionsUiState();
-    const activeTarget = currentDecisionTarget(root);
-    if (ui.isOpen && activeTarget?.id) {
-      const activeEntityType = getSelectionEntityType(activeTarget.type);
-      const activeEntityId = String(activeTarget.id || "");
-      if (activeEntityType !== "sujet") {
-        ui.isOpen = false;
-        hideDescriptionVersionsDropdownHost();
-      }
-      if (activeEntityType !== ui.entityType || activeEntityId !== String(ui.entityId || "")) {
-        ui.entityType = activeEntityType;
-        ui.entityId = activeEntityId;
-        ui.selectedVersionId = "";
-        ui.versions = [];
-        ui.error = "";
-        logDescriptionVersions("host target switched", {
-          entityType: activeEntityType,
-          entityId: activeEntityId,
-          stateRefId: getStateRefId(ui)
-        });
-        if (activeEntityType === "sujet") {
-          void ensureDescriptionVersionsLoaded(root, activeEntityType, activeEntityId, { forceReload: true });
-        }
-      }
+    if (ui.isOpen && sync.changed && sync.entityType === "sujet" && sync.entityId) {
+      void ensureDescriptionVersionsLoaded(root, sync.entityType, sync.entityId, { forceReload: true });
     }
     const host = ensureDescriptionVersionsDropdownHost();
     const entityType = String(ui.entityType || "");
@@ -766,6 +806,9 @@ export function createProjectSubjectsDescription(config = {}) {
     }
     host.innerHTML = renderDescriptionVersionsDropdownContent(entityType, entityId);
     host.setAttribute("aria-hidden", "false");
+    if (!ui.isLoading && !ui.error && (!Array.isArray(ui.versions) || ui.versions.length === 0) && entityType === "sujet") {
+      void ensureDescriptionVersionsLoaded(root, entityType, entityId);
+    }
     syncDescriptionVersionsDropdownPosition(root);
     return host;
   }
@@ -784,7 +827,7 @@ export function createProjectSubjectsDescription(config = {}) {
       fallbackName: "System"
     });
     const authorHtml = `<div class="gh-comment-author mono">${escapeHtml(identity.displayName)}</div>`;
-    const versionsTriggerHtml = entityType === "sujet" ? renderDescriptionVersionsTrigger(entityType, entityId) : "";
+    const versionsTriggerHtml = entityType === "sujet" ? renderDescriptionVersionsTrigger(null, entityType, entityId) : "";
     const editButtonHtml = `
       <button class="icon-btn icon-btn--sm gh-comment-edit-btn" data-action="edit-description" type="button" aria-label="Modifier la description" title="Modifier la description">
         ${svgIcon("pencil")}

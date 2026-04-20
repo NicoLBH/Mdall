@@ -3,6 +3,42 @@ import assert from "node:assert/strict";
 
 import { createProjectSubjectsDescription } from "./project-subjects-description.js";
 
+function installFakeDom(anchorByKey = {}) {
+  const fakeNodesById = new Map();
+  globalThis.window = { innerWidth: 1200, innerHeight: 900 };
+  globalThis.CSS = { escape: (value) => String(value || "") };
+  globalThis.document = {
+    body: {
+      appendChild: (node) => {
+        if (node?.id) fakeNodesById.set(node.id, node);
+        return node;
+      }
+    },
+    documentElement: { clientWidth: 1200, clientHeight: 900 },
+    createElement: () => ({
+      id: "",
+      className: "",
+      style: {},
+      innerHTML: "",
+      attributes: {},
+      setAttribute(name, value) { this.attributes[name] = value; },
+      getAttribute(name) { return this.attributes[name]; },
+      querySelector: () => null
+    }),
+    getElementById: (id) => fakeNodesById.get(id) || null,
+    querySelector: (selector) => {
+      const match = String(selector || "").match(/data-description-versions-anchor=\"([^\"]+)\"/);
+      return match ? anchorByKey[match[1]] || null : null;
+    }
+  };
+}
+
+function cleanupFakeDom() {
+  delete globalThis.document;
+  delete globalThis.window;
+  delete globalThis.CSS;
+}
+
 test("description versions: un rerender pendant le chargement ne bloque pas isLoading", async () => {
   const fakeNodesById = new Map();
   const fakeAnchor = {
@@ -128,37 +164,11 @@ test("description versions: un rerender pendant le chargement ne bloque pas isLo
 });
 
 test("description versions: en dropdown ouvert, un changement de ticket recharge la bonne cible", async () => {
-  const fakeNodesById = new Map();
   const fakeAnchors = {
     "sujet::subject-1": { getBoundingClientRect: () => ({ top: 100, right: 320, bottom: 140, left: 260, width: 60, height: 40 }) },
     "sujet::subject-2": { getBoundingClientRect: () => ({ top: 120, right: 340, bottom: 160, left: 280, width: 60, height: 40 }) }
   };
-  globalThis.window = { innerWidth: 1200, innerHeight: 900 };
-  globalThis.CSS = { escape: (value) => String(value || "") };
-  globalThis.document = {
-    body: {
-      appendChild: (node) => {
-        if (node?.id) fakeNodesById.set(node.id, node);
-        return node;
-      }
-    },
-    documentElement: { clientWidth: 1200, clientHeight: 900 },
-    createElement: () => ({
-      id: "",
-      className: "",
-      style: {},
-      innerHTML: "",
-      attributes: {},
-      setAttribute(name, value) { this.attributes[name] = value; },
-      getAttribute(name) { return this.attributes[name]; },
-      querySelector: () => null
-    }),
-    getElementById: (id) => fakeNodesById.get(id) || null,
-    querySelector: (selector) => {
-      const match = String(selector || "").match(/data-description-versions-anchor=\"([^\"]+)\"/);
-      return match ? fakeAnchors[match[1]] || null : null;
-    }
-  };
+  installFakeDom(fakeAnchors);
 
   const store = { user: { id: "u1" }, projectForm: { collaborators: [] }, projectSubjectsView: {}, situationsView: {} };
   const runBucketState = { descriptions: { sujet: {}, situation: {} } };
@@ -212,9 +222,122 @@ test("description versions: en dropdown ouvert, un changement de ticket recharge
 
   assert.deepEqual(loads, ["subject-1", "subject-2"]);
   assert.equal(store.projectSubjectsView.descriptionVersionsUi.entityId, "subject-2");
-  assert.match(globalThis.document.getElementById("descriptionVersionsDropdownHost")?.innerHTML || "", /subject-2-markdown|Mdall/);
+  const hostHtml = globalThis.document.getElementById("descriptionVersionsDropdownHost")?.innerHTML || "";
+  assert.match(hostHtml, /subject-2-markdown|Mdall/);
+  assert.doesNotMatch(hostHtml, /subject-1-markdown/);
+  assert.equal(store.projectSubjectsView.descriptionVersionsUi.selectedVersionId, "v-subject-2");
 
-  delete globalThis.document;
-  delete globalThis.window;
-  delete globalThis.CSS;
+  cleanupFakeDom();
+});
+
+test("description versions: dropdown fermé puis changement de sujet charge directement la nouvelle cible à l'ouverture", async () => {
+  const fakeAnchors = {
+    "sujet::subject-a": { getBoundingClientRect: () => ({ top: 100, right: 320, bottom: 140, left: 260, width: 60, height: 40 }) },
+    "sujet::subject-b": { getBoundingClientRect: () => ({ top: 100, right: 340, bottom: 140, left: 280, width: 60, height: 40 }) }
+  };
+  installFakeDom(fakeAnchors);
+
+  const store = { user: { id: "u1" }, projectForm: { collaborators: [] }, projectSubjectsView: {}, situationsView: {} };
+  let selectedSubjectId = "subject-a";
+  const loads = [];
+  const api = createProjectSubjectsDescription({
+    store,
+    ensureViewUiState: () => { store.projectSubjectsView ||= {}; },
+    firstNonEmpty: (...values) => values.find((value) => String(value ?? "").trim()) || "",
+    escapeHtml: (value) => String(value ?? ""),
+    svgIcon: () => "",
+    mdToHtml: (value) => String(value || ""),
+    fmtTs: () => "20/04/2026",
+    nowIso: () => new Date().toISOString(),
+    setOverlayChromeOpenState: () => {},
+    SVG_AVATAR_HUMAN: "",
+    renderCommentComposer: () => "",
+    getRunBucket: () => ({ bucket: { descriptions: { sujet: {}, situation: {} } } }),
+    persistRunBucket: () => {},
+    getSelectionEntityType: (type) => type,
+    getEntityByType: (type, id) => ({ id, title: `${type}-${id}`, raw: { description: "Description" } }),
+    getEntityReviewMeta: () => ({}),
+    setEntityReviewMeta: () => {},
+    currentDecisionTarget: () => ({ type: "sujet", id: selectedSubjectId, item: { id: selectedSubjectId } }),
+    rerenderScope: () => {},
+    markEntityValidated: () => {},
+    updateSubjectDescription: async () => ({}),
+    loadSubjectDescriptionVersions: async (subjectId) => {
+      loads.push(subjectId);
+      return [{ id: `v-${subjectId}`, actor_name: subjectId, description_markdown: subjectId, created_at: new Date().toISOString() }];
+    }
+  });
+
+  api.toggleDescriptionVersionsDropdown({});
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  api.toggleDescriptionVersionsDropdown({});
+
+  selectedSubjectId = "subject-b";
+  api.toggleDescriptionVersionsDropdown({});
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  api.renderDescriptionVersionsDropdownHost({ querySelector: () => fakeAnchors[`sujet::${selectedSubjectId}`] });
+
+  assert.deepEqual(loads, ["subject-a", "subject-b"]);
+  assert.equal(store.projectSubjectsView.descriptionVersionsUi.entityId, "subject-b");
+  assert.match(globalThis.document.getElementById("descriptionVersionsDropdownHost")?.innerHTML || "", /subject-b/);
+  assert.doesNotMatch(globalThis.document.getElementById("descriptionVersionsDropdownHost")?.innerHTML || "", /subject-a/);
+
+  cleanupFakeDom();
+});
+
+test("description versions: une réponse tardive de A est ignorée après passage à B", async () => {
+  const fakeAnchors = {
+    "sujet::A": { getBoundingClientRect: () => ({ top: 100, right: 320, bottom: 140, left: 260, width: 60, height: 40 }) },
+    "sujet::B": { getBoundingClientRect: () => ({ top: 120, right: 340, bottom: 160, left: 280, width: 60, height: 40 }) }
+  };
+  installFakeDom(fakeAnchors);
+
+  const store = { user: { id: "u1" }, projectForm: { collaborators: [] }, projectSubjectsView: {}, situationsView: {} };
+  let selectedSubjectId = "A";
+  const deferred = new Map();
+  const api = createProjectSubjectsDescription({
+    store,
+    ensureViewUiState: () => { store.projectSubjectsView ||= {}; },
+    firstNonEmpty: (...values) => values.find((value) => String(value ?? "").trim()) || "",
+    escapeHtml: (value) => String(value ?? ""),
+    svgIcon: () => "",
+    mdToHtml: (value) => String(value || ""),
+    fmtTs: () => "20/04/2026",
+    nowIso: () => new Date().toISOString(),
+    setOverlayChromeOpenState: () => {},
+    SVG_AVATAR_HUMAN: "",
+    renderCommentComposer: () => "",
+    getRunBucket: () => ({ bucket: { descriptions: { sujet: {}, situation: {} } } }),
+    persistRunBucket: () => {},
+    getSelectionEntityType: (type) => type,
+    getEntityByType: (type, id) => ({ id, title: `${type}-${id}`, raw: { description: "Description" } }),
+    getEntityReviewMeta: () => ({}),
+    setEntityReviewMeta: () => {},
+    currentDecisionTarget: () => ({ type: "sujet", id: selectedSubjectId, item: { id: selectedSubjectId } }),
+    rerenderScope: () => {},
+    markEntityValidated: () => {},
+    updateSubjectDescription: async () => ({}),
+    loadSubjectDescriptionVersions: async (subjectId) => {
+      return await new Promise((resolve) => {
+        deferred.set(subjectId, resolve);
+      });
+    }
+  });
+
+  api.toggleDescriptionVersionsDropdown({});
+  selectedSubjectId = "B";
+  api.renderDescriptionVersionsDropdownHost({ querySelector: () => fakeAnchors["sujet::B"] });
+  deferred.get("B")?.([{ id: "v-B", actor_name: "B", description_markdown: "B", created_at: new Date().toISOString() }]);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  deferred.get("A")?.([{ id: "v-A", actor_name: "A", description_markdown: "A", created_at: new Date().toISOString() }]);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  api.renderDescriptionVersionsDropdownHost({ querySelector: () => fakeAnchors["sujet::B"] });
+
+  const hostHtml = globalThis.document.getElementById("descriptionVersionsDropdownHost")?.innerHTML || "";
+  assert.match(hostHtml, /v-B|>B</);
+  assert.doesNotMatch(hostHtml, /v-A|>A</);
+  assert.equal(store.projectSubjectsView.descriptionVersionsUi.entityId, "B");
+  assert.equal(store.projectSubjectsView.descriptionVersionsUi.selectedVersionId, "v-B");
+
+  cleanupFakeDom();
 });
