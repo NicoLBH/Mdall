@@ -763,7 +763,6 @@ priority=${firstNonEmpty(subject.priority, "")}`
       { action: "ordered-list", icon: "markdown-list-ordered", label: "Liste numérotée" },
       { action: "bullet-list", icon: "markdown-list-unordered", label: "Liste à puces" },
       { action: "checklist", icon: "markdown-tasklist", label: "Checklist" },
-      { action: "heading", icon: "markdown-heading", label: "Titre (H3)" },
       { action: "mention", icon: "markdown-mention", label: "Mention" },
       { action: "subject-ref", icon: "cross-reference", label: "Référence sujet" }
     ];
@@ -788,12 +787,14 @@ priority=${firstNonEmpty(subject.priority, "")}`
       </button>
     `;
 
-    const shouldUseComposerLayout = buttonAction === "composer-format" || buttonAction === "thread-reply-format";
+    const shouldUseComposerLayout = buttonAction === "composer-format"
+      || buttonAction === "thread-reply-format"
+      || buttonAction === "thread-edit-format";
     if (!shouldUseComposerLayout) {
       return toolbarButtons.map((button) => renderToolbarButton(button)).join("");
     }
 
-    const attachmentAction = buttonAction === "thread-reply-format"
+    const attachmentAction = buttonAction === "thread-reply-format" || buttonAction === "thread-edit-format"
       ? "thread-reply-attachments-pick"
       : "composer-attachments-pick";
     const attachmentButton = `
@@ -886,7 +887,9 @@ priority=${firstNonEmpty(subject.priority, "")}`
           tabsClassName: "comment-composer__tabs--thread-reply",
           composerClassName: "comment-composer--thread-reply-editor",
           toolbarHtml: renderMarkdownToolbar("thread-reply-format", { messageId: commentId }),
-          previewHtml: normalizedDraft.trim() ? mdToHtml(normalizedDraft) : "",
+          previewHtml: normalizedDraft.trim()
+            ? mdToHtml(normalizedDraft, { preserveMessageLineBreaks: true })
+            : "",
           actionsHtml: `
             <div class="thread-inline-reply-editor__actions">
               <button class="gh-btn" type="button" data-action="thread-reply-cancel" data-message-id="${escapeHtml(commentId)}">Annuler</button>
@@ -947,7 +950,9 @@ priority=${firstNonEmpty(subject.priority, "")}`
           tabsClassName: "comment-composer__tabs--thread-reply",
           composerClassName: `comment-composer--thread-reply-editor ${composerEditClass}`,
           toolbarHtml: renderMarkdownToolbar("thread-edit-format", { messageId: commentId }),
-          previewHtml: normalizedDraft.trim() ? mdToHtml(normalizedDraft) : "",
+          previewHtml: normalizedDraft.trim()
+            ? mdToHtml(normalizedDraft, { preserveMessageLineBreaks: true })
+            : "",
           actionsHtml: `
             <div class="thread-inline-reply-editor__actions">
               <button class="gh-btn" type="button" data-action="thread-edit-cancel" data-message-id="${escapeHtml(commentId)}">Annuler</button>
@@ -1076,7 +1081,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
       headerRightHtml: renderThreadCommentActions(entry),
       bodyHtml: `
         <div class="thread-comment-content-capsule ${isEditing ? "hidden" : ""}" data-thread-comment-content="${escapeHtml(commentId)}">
-          ${mdToHtml(entry?.message || "")}
+          ${mdToHtml(entry?.message || "", { preserveMessageLineBreaks: true })}
         </div>
         ${renderInlineEditComposer({
           commentId,
@@ -1539,7 +1544,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
       toolbarHtml,
       tabsClassName: "comment-composer__tabs--main",
       previewHtml: previewMode && String(store.situationsView.commentDraft || "").trim()
-        ? mdToHtml(String(store.situationsView.commentDraft || ""))
+        ? mdToHtml(String(store.situationsView.commentDraft || ""), { preserveMessageLineBreaks: true })
         : "",
       previewEmptyHint: "Utilisez le Markdown pour formater votre commentaire",
       footerHtml: composerAttachmentsHtml

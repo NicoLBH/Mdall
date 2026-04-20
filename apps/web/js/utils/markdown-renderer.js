@@ -33,12 +33,13 @@ function renderInlineMarkdown(source = "") {
   return safe;
 }
 
-function flushParagraph(paragraphLines = [], html = []) {
+function flushParagraph(paragraphLines = [], html = [], options = {}) {
   if (!paragraphLines.length) return;
+  const preserveMessageLineBreaks = !!options.preserveMessageLineBreaks;
   const renderedLines = paragraphLines
     .map((line) => renderInlineMarkdown(String(line || "")))
     .join("<br>");
-  if (!renderedLines.trim()) return;
+  if (!preserveMessageLineBreaks && !renderedLines.trim()) return;
   html.push(`<p>${renderedLines}</p>`);
   paragraphLines.length = 0;
 }
@@ -54,6 +55,7 @@ function flushList(state, html) {
 export function renderMarkdownToHtml(markdown = "", options = {}) {
   const source = String(markdown || "").replace(/\r\n?/g, "\n");
   if (!source.trim()) return "";
+  const preserveMessageLineBreaks = !!options.preserveMessageLineBreaks;
 
   const html = [];
   const paragraphLines = [];
@@ -66,7 +68,7 @@ export function renderMarkdownToHtml(markdown = "", options = {}) {
 
     const headingMatch = line.match(HEADING_PATTERN);
     if (headingMatch) {
-      flushParagraph(paragraphLines, html);
+      flushParagraph(paragraphLines, html, { preserveMessageLineBreaks });
       flushList(listState, html);
       const level = Math.min(6, headingMatch[1].length);
       html.push(`<h${level}>${renderInlineMarkdown(headingMatch[2])}</h${level}>`);
@@ -75,7 +77,7 @@ export function renderMarkdownToHtml(markdown = "", options = {}) {
 
     const blockquoteMatch = line.match(BLOCKQUOTE_PATTERN);
     if (blockquoteMatch) {
-      flushParagraph(paragraphLines, html);
+      flushParagraph(paragraphLines, html, { preserveMessageLineBreaks });
       flushList(listState, html);
       html.push(`<blockquote>${renderInlineMarkdown(blockquoteMatch[1])}</blockquote>`);
       return;
@@ -83,7 +85,7 @@ export function renderMarkdownToHtml(markdown = "", options = {}) {
 
     const checklistMatch = line.match(CHECKLIST_PATTERN);
     if (checklistMatch) {
-      flushParagraph(paragraphLines, html);
+      flushParagraph(paragraphLines, html, { preserveMessageLineBreaks });
       if (listState.type && listState.type !== "unordered") flushList(listState, html);
       listState.type = "unordered";
       const checked = String(checklistMatch[1] || "").toLowerCase() === "x";
@@ -93,7 +95,7 @@ export function renderMarkdownToHtml(markdown = "", options = {}) {
 
     const unorderedMatch = line.match(LIST_ITEM_PATTERN);
     if (unorderedMatch) {
-      flushParagraph(paragraphLines, html);
+      flushParagraph(paragraphLines, html, { preserveMessageLineBreaks });
       if (listState.type && listState.type !== "unordered") flushList(listState, html);
       listState.type = "unordered";
       listState.items.push(`<li>${renderInlineMarkdown(unorderedMatch[2])}</li>`);
@@ -102,7 +104,7 @@ export function renderMarkdownToHtml(markdown = "", options = {}) {
 
     const orderedMatch = line.match(ORDERED_LIST_PATTERN);
     if (orderedMatch) {
-      flushParagraph(paragraphLines, html);
+      flushParagraph(paragraphLines, html, { preserveMessageLineBreaks });
       if (listState.type && listState.type !== "ordered") flushList(listState, html);
       listState.type = "ordered";
       listState.items.push(`<li>${renderInlineMarkdown(orderedMatch[1])}</li>`);
@@ -110,7 +112,14 @@ export function renderMarkdownToHtml(markdown = "", options = {}) {
     }
 
     if (!trimmed) {
-      flushParagraph(paragraphLines, html);
+      // Message mode preserves user-entered line breaks in plain text blocks
+      // by keeping empty lines inside the current paragraph instead of forcing
+      // a new paragraph split.
+      if (preserveMessageLineBreaks && !listState.type) {
+        paragraphLines.push("");
+        return;
+      }
+      flushParagraph(paragraphLines, html, { preserveMessageLineBreaks });
       flushList(listState, html);
       return;
     }
@@ -119,7 +128,7 @@ export function renderMarkdownToHtml(markdown = "", options = {}) {
     paragraphLines.push(line);
   });
 
-  flushParagraph(paragraphLines, html);
+  flushParagraph(paragraphLines, html, { preserveMessageLineBreaks });
   flushList(listState, html);
 
   const rendered = `<div class="md-render">${html.join("")}</div>`;

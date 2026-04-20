@@ -672,8 +672,9 @@ function rerenderSubjectsPanelsWhenConnected(root, remainingAttempts = 12) {
 ========================================================= */
 
 
-function mdToHtml(text) {
+function mdToHtml(text, options = {}) {
   return renderMarkdownToHtml(text || "", {
+    preserveMessageLineBreaks: !!options.preserveMessageLineBreaks,
     postProcessHtml: (html) => linkifySubjectRefsInHtml(html, {
       resolveSubjectByNumber: (number) => getSubjectRefByNumber(store.projectSubjectsView, number)
     })

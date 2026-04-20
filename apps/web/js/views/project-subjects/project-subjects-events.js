@@ -3224,7 +3224,9 @@ export function createProjectSubjectsEvents(config) {
         previewWrapContainer?.classList.remove("hidden");
         if (previewWrap) {
           const markdown = String(textarea?.value || replyUi.draftsByMessageId?.[messageId] || "");
-          previewWrap.innerHTML = markdown.trim() ? mdToHtml(markdown) : `<div class="comment-composer__preview-empty">Use Markdown to format your reply</div>`;
+          previewWrap.innerHTML = markdown.trim()
+            ? mdToHtml(markdown, { preserveMessageLineBreaks: true })
+            : `<div class="comment-composer__preview-empty">Use Markdown to format your reply</div>`;
         }
       };
     });
@@ -3267,7 +3269,9 @@ export function createProjectSubjectsEvents(config) {
         previewWrapContainer?.classList.remove("hidden");
         if (previewWrap) {
           const markdown = String(textarea?.value || replyUi.editDraftsByMessageId?.[messageId] || "");
-          previewWrap.innerHTML = markdown.trim() ? mdToHtml(markdown) : `<div class="comment-composer__preview-empty">Use Markdown to format your comment</div>`;
+          previewWrap.innerHTML = markdown.trim()
+            ? mdToHtml(markdown, { preserveMessageLineBreaks: true })
+            : `<div class="comment-composer__preview-empty">Use Markdown to format your comment</div>`;
         }
       };
     });
