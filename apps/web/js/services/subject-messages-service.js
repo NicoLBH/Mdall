@@ -83,10 +83,20 @@ export function createSubjectMessagesService({ repository } = {}) {
     return provider.canEditMessage({ messageId });
   }
 
-  async function editMessage(messageId, patch = {}) {
+  async function editMessage(messageIdOrPayload, patch = {}) {
+    if (messageIdOrPayload && typeof messageIdOrPayload === "object" && !Array.isArray(messageIdOrPayload)) {
+      return provider.editMessage({
+        messageId: messageIdOrPayload.messageId,
+        subjectId: messageIdOrPayload.subjectId,
+        bodyMarkdown: messageIdOrPayload.bodyMarkdown,
+        uploadSessionId: messageIdOrPayload.uploadSessionId
+      });
+    }
     return provider.editMessage({
-      messageId,
-      bodyMarkdown: patch.bodyMarkdown
+      messageId: messageIdOrPayload,
+      bodyMarkdown: patch.bodyMarkdown,
+      subjectId: patch.subjectId,
+      uploadSessionId: patch.uploadSessionId
     });
   }
 
