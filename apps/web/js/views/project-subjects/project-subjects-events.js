@@ -2692,6 +2692,26 @@ export function createProjectSubjectsEvents(config) {
       }
       if (content) content.classList.toggle("hidden", !!visible);
     };
+    const closeInlineReplyEditor = (messageId = "") => {
+      const normalizedMessageId = String(messageId || "").trim();
+      if (!normalizedMessageId) return;
+      const replyUi = resolveInlineReplyUiState();
+      replyUi.previewByMessageId[normalizedMessageId] = false;
+      if (String(replyUi.expandedMessageId || "").trim() === normalizedMessageId) {
+        replyUi.expandedMessageId = "";
+      }
+      toggleInlineReplyEditorVisibility(normalizedMessageId, false);
+    };
+    const closeInlineEditEditor = (messageId = "") => {
+      const normalizedMessageId = String(messageId || "").trim();
+      if (!normalizedMessageId) return;
+      const replyUi = resolveInlineReplyUiState();
+      replyUi.editPreviewByMessageId[normalizedMessageId] = false;
+      if (String(replyUi.editMessageId || "").trim() === normalizedMessageId) {
+        replyUi.editMessageId = "";
+      }
+      toggleInlineEditEditorVisibility(normalizedMessageId, false);
+    };
     const clearInlineReplyAttachmentsState = (messageId = "", { keepUploadSession = false } = {}) => {
       const normalizedMessageId = String(messageId || "").trim();
       if (!normalizedMessageId) return;
@@ -3003,7 +3023,7 @@ export function createProjectSubjectsEvents(config) {
             textarea.focus();
           });
         } else {
-          rerenderScope(root);
+          console.warn("[subject-thread-reply] inline reply textarea missing", { messageId });
         }
       };
     });
@@ -3033,7 +3053,7 @@ export function createProjectSubjectsEvents(config) {
           syncInlineEditSubmitButton(messageId);
           requestAnimationFrame(() => textarea.focus());
         } else {
-          rerenderScope(root);
+          console.warn("[subject-thread-reply] inline edit textarea missing", { messageId });
         }
       };
     });
@@ -3739,10 +3759,8 @@ export function createProjectSubjectsEvents(config) {
         debugThreadReply("reply_cancel", { messageId });
         const replyUi = resolveInlineReplyUiState();
         if (messageId) replyUi.draftsByMessageId[messageId] = "";
-        if (messageId) replyUi.previewByMessageId[messageId] = false;
         if (messageId) clearInlineReplyAttachmentsState(messageId);
-        replyUi.expandedMessageId = "";
-        toggleInlineReplyEditorVisibility(messageId, false);
+        closeInlineReplyEditor(messageId);
       };
     });
 
@@ -3769,21 +3787,16 @@ export function createProjectSubjectsEvents(config) {
           mentions
         });
         replyUi.draftsByMessageId[parentMessageId] = "";
-        replyUi.previewByMessageId[parentMessageId] = false;
         clearInlineReplyAttachmentsState(parentMessageId);
-        replyUi.expandedMessageId = "";
-        rerenderScope(root);
+        closeInlineReplyEditor(parentMessageId);
       };
     });
 
     root.querySelectorAll("[data-action='thread-edit-cancel'][data-message-id]").forEach((btn) => {
       btn.onclick = () => {
         const messageId = String(btn.dataset.messageId || "").trim();
-        const replyUi = resolveInlineReplyUiState();
-        if (messageId) replyUi.editPreviewByMessageId[messageId] = false;
         if (messageId) clearInlineEditAttachmentsState(messageId);
-        replyUi.editMessageId = "";
-        toggleInlineEditEditorVisibility(messageId, false);
+        closeInlineEditEditor(messageId);
       };
     });
 
@@ -3805,10 +3818,8 @@ export function createProjectSubjectsEvents(config) {
         const currentBody = String(btn.dataset.originalBody || "");
         const hasBodyChanged = normalized !== currentBody.trim();
         if (!hasBodyChanged && !uploadSessionId) {
-          replyUi.editPreviewByMessageId[messageId] = false;
           clearInlineEditAttachmentsState(messageId);
-          replyUi.editMessageId = "";
-          rerenderScope(root);
+          closeInlineEditEditor(messageId);
           return;
         }
         try {
@@ -3816,13 +3827,10 @@ export function createProjectSubjectsEvents(config) {
             bodyMarkdown: nextBody,
             uploadSessionId
           });
-          replyUi.editPreviewByMessageId[messageId] = false;
           clearInlineEditAttachmentsState(messageId);
-          replyUi.editMessageId = "";
+          closeInlineEditEditor(messageId);
         } catch (error) {
           showError(`Modification impossible : ${String(error?.message || error || "Erreur inconnue")}`);
-        } finally {
-          rerenderScope(root);
         }
       };
     });
