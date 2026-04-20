@@ -865,6 +865,7 @@ export function createProjectSubjectsActions(config) {
       subject.closure_reason = null;
       subject.closed_at = null;
       setDecision("sujet", subjectId, "REOPENED", "", { actor: "Human", agent: "human" });
+      setEntityReviewState("sujet", subjectId, "pending");
       if (subject.raw && typeof subject.raw === "object") {
         subject.raw.status = "open";
         subject.raw.closure_reason = null;
@@ -878,6 +879,7 @@ export function createProjectSubjectsActions(config) {
       subject.closure_reason = "realized";
       subject.closed_at = nowIso();
       setDecision("sujet", subjectId, "CLOSED", "", { actor: "Human", agent: "human" });
+      setEntityReviewState("sujet", subjectId, "pending");
       if (subject.raw && typeof subject.raw === "object") {
         subject.raw.status = "closed";
         subject.raw.closure_reason = "realized";
@@ -926,6 +928,7 @@ export function createProjectSubjectsActions(config) {
     subject.status = previous.status;
     subject.closure_reason = previous.closure_reason;
     subject.closed_at = previous.closed_at;
+    subject.review_state = previous.review_state;
     if (subject.raw && typeof subject.raw === "object") {
       subject.raw.status = previous.raw?.status;
       subject.raw.closure_reason = previous.raw?.closure_reason;
