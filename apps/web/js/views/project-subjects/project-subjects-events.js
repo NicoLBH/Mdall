@@ -47,6 +47,10 @@ export function createProjectSubjectsEvents(config) {
     syncDescriptionEditorDraft,
     getDescriptionEditState,
     ensureDescriptionUploadSessionId,
+    toggleDescriptionVersionsDropdown,
+    closeDescriptionVersionsDropdown,
+    openDescriptionVersionModal,
+    closeDescriptionVersionModal,
     startDescriptionEdit,
     clearDescriptionEditState,
     applyDescriptionSave,
@@ -693,6 +697,31 @@ export function createProjectSubjectsEvents(config) {
     root.querySelectorAll("[data-action='save-description-edit']").forEach((btn) => {
       btn.onclick = async () => {
         await applyDescriptionSave(root);
+      };
+    });
+
+    root.querySelectorAll("[data-action='toggle-description-versions']").forEach((btn) => {
+      btn.onclick = (event) => {
+        event.stopPropagation();
+        toggleDescriptionVersionsDropdown?.(root);
+      };
+    });
+
+    root.querySelectorAll("[data-role='description-versions-dropdown']").forEach((dropdown) => {
+      dropdown.addEventListener("click", (event) => event.stopPropagation());
+    });
+
+    root.querySelectorAll("[data-action='open-description-version-modal'][data-version-id]").forEach((btn) => {
+      btn.onclick = () => {
+        const versionId = String(btn.dataset.versionId || "").trim();
+        if (!versionId) return;
+        openDescriptionVersionModal?.(root, versionId);
+      };
+    });
+
+    root.querySelectorAll("[data-action='close-description-version-modal']").forEach((btn) => {
+      btn.onclick = () => {
+        closeDescriptionVersionModal?.(root);
       };
     });
 
@@ -4139,9 +4168,12 @@ export function createProjectSubjectsEvents(config) {
 
     if (root.dataset.threadReplyDropdownDocumentBound !== "true") {
       document.addEventListener("click", () => {
+        const hadOpenDescriptionVersions = Boolean(root.querySelector("[data-role='description-versions-dropdown']"));
         root.querySelectorAll(".thread-comment-menu__dropdown.is-open").forEach((opened) => {
           opened.classList.remove("is-open");
         });
+        closeDescriptionVersionsDropdown?.();
+        if (hadOpenDescriptionVersions) rerenderScope(root);
       });
       root.dataset.threadReplyDropdownDocumentBound = "true";
     }

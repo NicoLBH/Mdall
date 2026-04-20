@@ -14,7 +14,8 @@ import {
   addLabelToSubject as addLabelToSubjectInSupabase,
   removeLabelFromSubject as removeLabelFromSubjectInSupabase,
   replaceSubjectAssignees as replaceSubjectAssigneesInSupabase,
-  updateSubjectDescription as updateSubjectDescriptionInSupabase
+  updateSubjectDescription as updateSubjectDescriptionInSupabase,
+  loadSubjectDescriptionVersions as loadSubjectDescriptionVersionsInSupabase
 } from "../services/project-subjects-supabase.js";
 import { loadSituationsForCurrentProject, addSubjectToSituation, removeSubjectFromSituation } from "../services/project-situations-supabase.js";
 import {
@@ -328,7 +329,8 @@ const projectSubjectsDescription = createProjectSubjectsDescription({
   currentDecisionTarget,
   rerenderScope: (...args) => projectSubjectsView.rerenderScope(...args),
   markEntityValidated: (entityType, entityId, options) => markEntityValidated(entityType, entityId, options),
-  updateSubjectDescription: (...args) => updateSubjectDescriptionInSupabase(...args)
+  updateSubjectDescription: (...args) => updateSubjectDescriptionInSupabase(...args),
+  loadSubjectDescriptionVersions: (...args) => loadSubjectDescriptionVersionsInSupabase(...args)
 });
 
 const {
@@ -339,6 +341,10 @@ const {
   syncDescriptionEditorDraft,
   getDescriptionEditState,
   ensureDescriptionUploadSessionId,
+  toggleDescriptionVersionsDropdown,
+  closeDescriptionVersionsDropdown,
+  openDescriptionVersionModal,
+  closeDescriptionVersionModal,
   applyDescriptionSave,
   startDescriptionEdit,
   renderDescriptionCard
@@ -371,6 +377,10 @@ const projectSubjectsEvents = createProjectSubjectsEvents({
   syncDescriptionEditorDraft,
   getDescriptionEditState,
   ensureDescriptionUploadSessionId,
+  toggleDescriptionVersionsDropdown,
+  closeDescriptionVersionsDropdown,
+  openDescriptionVersionModal,
+  closeDescriptionVersionModal,
   startDescriptionEdit,
   clearDescriptionEditState,
   applyDescriptionSave,

@@ -21,7 +21,8 @@ export function createProjectSubjectsDescription(config = {}) {
     currentDecisionTarget,
     rerenderScope,
     markEntityValidated,
-    updateSubjectDescription
+    updateSubjectDescription,
+    loadSubjectDescriptionVersions
   } = config;
 
   const createUploadSessionId = () => {
@@ -44,6 +45,49 @@ export function createProjectSubjectsDescription(config = {}) {
       error: String(state.error || "")
     };
     return store.situationsView.descriptionEdit;
+  }
+
+  function ensureDescriptionVersionsUiState() {
+    ensureViewUiState();
+    const current = store.situationsView.descriptionVersionsUi || {};
+    store.situationsView.descriptionVersionsUi = {
+      entityType: current.entityType || null,
+      entityId: current.entityId || null,
+      isOpen: !!current.isOpen,
+      isLoading: !!current.isLoading,
+      error: String(current.error || ""),
+      versions: Array.isArray(current.versions) ? current.versions : [],
+      selectedVersionId: String(current.selectedVersionId || ""),
+      modalOpen: !!current.modalOpen
+    };
+    return store.situationsView.descriptionVersionsUi;
+  }
+
+  function formatRelativeTimeFromNow(ts = "") {
+    const target = new Date(String(ts || ""));
+    if (Number.isNaN(target.getTime())) return "à l'instant";
+    const deltaMs = Date.now() - target.getTime();
+    const deltaMinutes = Math.round(deltaMs / 60000);
+    if (Math.abs(deltaMinutes) < 1) return "à l'instant";
+    if (Math.abs(deltaMinutes) < 60) return `il y a ${Math.abs(deltaMinutes)} min`;
+    const deltaHours = Math.round(deltaMinutes / 60);
+    if (Math.abs(deltaHours) < 24) return `il y a ${Math.abs(deltaHours)} h`;
+    const deltaDays = Math.round(deltaHours / 24);
+    if (Math.abs(deltaDays) < 30) return `il y a ${Math.abs(deltaDays)} j`;
+    const deltaMonths = Math.round(deltaDays / 30);
+    if (Math.abs(deltaMonths) < 12) return `il y a ${Math.abs(deltaMonths)} mois`;
+    const deltaYears = Math.round(deltaMonths / 12);
+    return `il y a ${Math.abs(deltaYears)} an${Math.abs(deltaYears) > 1 ? "s" : ""}`;
+  }
+
+  function buildVersionInitials(version = {}) {
+    const first = String(version?.actor_first_name || "").trim();
+    const last = String(version?.actor_last_name || "").trim();
+    const email = String(version?.actor_email || "").trim();
+    const fromNames = `${first.charAt(0)}${last.charAt(0)}`.trim();
+    if (fromNames) return fromNames.toUpperCase();
+    if (email) return email.charAt(0).toUpperCase();
+    return "U";
   }
 
   function getSujetSummary(sujet) {
@@ -194,6 +238,172 @@ export function createProjectSubjectsDescription(config = {}) {
     `;
   }
 
+  async function ensureDescriptionVersionsLoaded(root, entityType, entityId) {
+    const ui = ensureDescriptionVersionsUiState();
+    if (ui.isLoading) return;
+    ui.isLoading = true;
+    ui.error = "";
+    ui.entityType = entityType;
+    ui.entityId = entityId;
+    rerenderScope(root);
+    try {
+      const versions = entityType === "sujet" && typeof loadSubjectDescriptionVersions === "function"
+        ? await loadSubjectDescriptionVersions(entityId)
+        : [];
+      ui.versions = Array.isArray(versions) ? versions : [];
+      if (!ui.selectedVersionId && ui.versions.length) {
+        ui.selectedVersionId = String(ui.versions[0]?.id || "");
+      }
+    } catch (error) {
+      ui.error = String(error?.message || error || "Impossible de charger les versions.");
+    } finally {
+      ui.isLoading = false;
+      rerenderScope(root);
+    }
+  }
+
+  function closeDescriptionVersionsDropdown() {
+    const ui = ensureDescriptionVersionsUiState();
+    ui.isOpen = false;
+  }
+
+  function toggleDescriptionVersionsDropdown(root) {
+    const target = currentDecisionTarget(root);
+    if (!target) return;
+    const entityType = getSelectionEntityType(target.type);
+    const entityId = target.id;
+    const ui = ensureDescriptionVersionsUiState();
+    const isSameEntity = ui.entityType === entityType && ui.entityId === entityId;
+    ui.entityType = entityType;
+    ui.entityId = entityId;
+    ui.isOpen = !(isSameEntity && ui.isOpen);
+    if (ui.isOpen && entityType === "sujet") {
+      void ensureDescriptionVersionsLoaded(root, entityType, entityId);
+    }
+    rerenderScope(root);
+  }
+
+  function openDescriptionVersionModal(root, versionId = "") {
+    const ui = ensureDescriptionVersionsUiState();
+    ui.selectedVersionId = String(versionId || "");
+    ui.modalOpen = Boolean(ui.selectedVersionId);
+    ui.isOpen = false;
+    rerenderScope(root);
+  }
+
+  function closeDescriptionVersionModal(root) {
+    const ui = ensureDescriptionVersionsUiState();
+    ui.modalOpen = false;
+    rerenderScope(root);
+  }
+
+  function renderDescriptionVersionsTrigger(entityType, entityId) {
+    const ui = ensureDescriptionVersionsUiState();
+    const isTarget = ui.entityType === entityType && ui.entityId === entityId;
+    const isOpen = isTarget && ui.isOpen;
+    const count = isTarget && Array.isArray(ui.versions) ? ui.versions.length : 0;
+    return `
+      <div class="description-versions-menu">
+        <button
+          class="icon-btn icon-btn--sm description-versions-menu__trigger ${isOpen ? "is-open" : ""}"
+          type="button"
+          data-action="toggle-description-versions"
+          aria-expanded="${isOpen ? "true" : "false"}"
+          aria-haspopup="menu"
+          title="Versions"
+        >
+          <span>Versions${count ? ` (${count})` : ""}</span>
+          <span class="description-versions-menu__caret">${svgIcon("chevron-down")}</span>
+        </button>
+        ${isOpen ? renderDescriptionVersionsDropdown(entityType, entityId) : ""}
+      </div>
+    `;
+  }
+
+  function renderDescriptionVersionsDropdown(entityType, entityId) {
+    const ui = ensureDescriptionVersionsUiState();
+    const isTarget = ui.entityType === entityType && ui.entityId === entityId;
+    const versions = isTarget && Array.isArray(ui.versions) ? ui.versions : [];
+    const count = versions.length;
+    const loadingHtml = ui.isLoading ? `<div class="description-versions-menu__empty">Chargement des versions…</div>` : "";
+    const errorHtml = !ui.isLoading && ui.error ? `<div class="description-versions-menu__empty color-danger">${escapeHtml(ui.error)}</div>` : "";
+    const listHtml = !ui.isLoading && !ui.error && versions.length
+      ? versions.map((version) => {
+          const versionId = String(version?.id || "");
+          const displayName = String(version?.actor_name || "Utilisateur");
+          const relTime = formatRelativeTimeFromNow(version?.created_at);
+          const initials = buildVersionInitials(version);
+          const avatarUrl = String(version?.actor_user_id || "") === String(store?.user?.id || "")
+            ? String(store?.user?.avatar || "")
+            : "";
+          return `
+            <button type="button" class="description-versions-menu__item" data-action="open-description-version-modal" data-version-id="${escapeHtml(versionId)}">
+              <span class="description-versions-menu__avatar">
+                ${avatarUrl
+                  ? `<img src="${escapeHtml(avatarUrl)}" alt="${escapeHtml(displayName)}">`
+                  : `<span class="description-versions-menu__avatar-fallback">${escapeHtml(initials)}</span>`}
+              </span>
+              <span class="description-versions-menu__item-content">
+                <span class="description-versions-menu__item-name">${escapeHtml(displayName)}</span>
+                <span class="description-versions-menu__item-meta">${escapeHtml(relTime)}</span>
+              </span>
+            </button>
+          `;
+        }).join("")
+      : (!ui.isLoading && !ui.error ? `<div class="description-versions-menu__empty">Aucune version disponible.</div>` : "");
+
+    return `
+      <div class="description-versions-menu__dropdown gh-menu gh-menu--open" data-role="description-versions-dropdown" role="menu">
+        <div class="description-versions-menu__title">Nombre de versions : ${count}</div>
+        ${loadingHtml}
+        ${errorHtml}
+        <div class="description-versions-menu__list">${listHtml}</div>
+      </div>
+    `;
+  }
+
+  function renderDescriptionVersionModal(selection) {
+    const entityType = getSelectionEntityType(selection.type);
+    const entityId = selection?.item?.id;
+    const ui = ensureDescriptionVersionsUiState();
+    if (!ui.modalOpen || ui.entityType !== entityType || ui.entityId !== entityId) return "";
+    const versions = Array.isArray(ui.versions) ? ui.versions : [];
+    const version = versions.find((entry) => String(entry?.id || "") === String(ui.selectedVersionId || "")) || null;
+    if (!version) return "";
+    const displayName = String(version?.actor_name || "Utilisateur");
+    const relTime = formatRelativeTimeFromNow(version?.created_at);
+    const bodyMarkdown = String(version?.description_markdown || "");
+    const avatarUrl = String(version?.actor_user_id || "") === String(store?.user?.id || "")
+      ? String(store?.user?.avatar || "")
+      : "";
+    return `
+      <div class="description-version-modal" data-role="description-version-modal">
+        <div class="description-version-modal__backdrop" data-action="close-description-version-modal"></div>
+        <div class="description-version-modal__dialog" role="dialog" aria-modal="true" aria-label="Version de description">
+          <div class="description-version-modal__head">
+            <div class="description-version-modal__title-wrap">
+              <span class="description-version-modal__avatar">
+                ${avatarUrl
+                  ? `<img src="${escapeHtml(avatarUrl)}" alt="${escapeHtml(displayName)}">`
+                  : `<span class="description-version-modal__avatar-fallback">${escapeHtml(buildVersionInitials(version))}</span>`}
+              </span>
+              <div>
+                <div class="description-version-modal__title">${escapeHtml(displayName)}</div>
+                <div class="description-version-modal__subtitle">${escapeHtml(relTime)}</div>
+              </div>
+            </div>
+            <button type="button" class="icon-btn icon-btn--sm" data-action="close-description-version-modal" aria-label="Fermer">
+              ${svgIcon("x")}
+            </button>
+          </div>
+          <div class="description-version-modal__body">
+            ${mdToHtml(bodyMarkdown || "")}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   function renderDescriptionCard(selection) {
     const entityType = getSelectionEntityType(selection.type);
     const entityId = selection.item.id;
@@ -208,6 +418,7 @@ export function createProjectSubjectsDescription(config = {}) {
       fallbackName: "System"
     });
     const authorHtml = `<div class="gh-comment-author mono">${escapeHtml(identity.displayName)}</div>`;
+    const versionsTriggerHtml = entityType === "sujet" ? renderDescriptionVersionsTrigger(entityType, entityId) : "";
     const editButtonHtml = `
       <button class="icon-btn icon-btn--sm gh-comment-edit-btn" data-action="edit-description" type="button" aria-label="Modifier la description" title="Modifier la description">
         ${svgIcon("pencil")}
@@ -216,7 +427,7 @@ export function createProjectSubjectsDescription(config = {}) {
     const headerHtml = `
       <div class="gh-comment-header gh-comment-header--editable">
         <div class="gh-comment-header-main">${authorHtml}</div>
-        <div class="gh-comment-header-actions">${editButtonHtml}</div>
+        <div class="gh-comment-header-actions">${versionsTriggerHtml}${editButtonHtml}</div>
       </div>
     `;
 
@@ -295,6 +506,7 @@ export function createProjectSubjectsDescription(config = {}) {
           ${headerHtml}
           ${bodyHtml}
         </div>
+        ${renderDescriptionVersionModal(selection)}
       </div>
     `;
   }
@@ -425,6 +637,10 @@ export function createProjectSubjectsDescription(config = {}) {
     syncDescriptionEditorDraft,
     getDescriptionEditState,
     ensureDescriptionUploadSessionId,
+    toggleDescriptionVersionsDropdown,
+    closeDescriptionVersionsDropdown,
+    openDescriptionVersionModal,
+    closeDescriptionVersionModal,
     applyDescriptionSave,
     startDescriptionEdit,
     renderDescriptionCard
