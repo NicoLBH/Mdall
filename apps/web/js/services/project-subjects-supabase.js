@@ -1263,6 +1263,8 @@ export async function loadSubjectDescriptionVersions(subjectId, options = {}) {
   return rows.map((row) => {
     const actorPersonId = normalizeUuid(row?.actor_person_id);
     const person = peopleById[actorPersonId] || {};
+    const actorUserId = normalizeUuid(row?.actor_user_id);
+    const isSystemActor = !actorPersonId && !actorUserId;
     const firstName = String(person?.first_name || "").trim();
     const lastName = String(person?.last_name || "").trim();
     const fullName = [firstName, lastName].filter(Boolean).join(" ").trim();
@@ -1270,12 +1272,13 @@ export async function loadSubjectDescriptionVersions(subjectId, options = {}) {
     return {
       id: normalizeUuid(row?.id),
       subject_id: normalizeUuid(row?.subject_id || normalizedSubjectId),
-      actor_user_id: normalizeUuid(row?.actor_user_id),
+      actor_user_id: actorUserId,
       actor_person_id: actorPersonId,
       actor_first_name: firstName,
       actor_last_name: lastName,
-      actor_name: fullName || fallbackName || "Utilisateur",
+      actor_name: fullName || fallbackName || (isSystemActor ? "Mdall" : "Utilisateur"),
       actor_email: fallbackName,
+      actor_is_system: isSystemActor,
       description_markdown: String(row?.description_markdown || ""),
       created_at: String(row?.created_at || "")
     };
