@@ -1347,11 +1347,26 @@ function renderSubjectRelationsCards(subjectId) {
   return `<div class="subject-meta-relations-cards">${groups.join('<div class="subject-meta-relations-divider" aria-hidden="true"></div>')}</div>`;
 }
 
+function getHeadVisibleBlockedBySubjects(subjectId) {
+  const normalizedSubjectId = firstNonEmpty(subjectId?.id, subjectId);
+  if (!normalizedSubjectId) return [];
+
+  const subjectStatus = normalizeIssueLifecycleStatus(getEffectiveSujetStatus(normalizedSubjectId));
+  if (subjectStatus === "closed") return [];
+
+  const blockedBySubjects = Array.isArray(getBlockedBySubjects(normalizedSubjectId))
+    ? getBlockedBySubjects(normalizedSubjectId)
+    : [];
+
+  return blockedBySubjects.filter((blocker) => {
+    const blockerStatus = normalizeIssueLifecycleStatus(getEffectiveSujetStatus(blocker?.id));
+    return blockerStatus === "open";
+  });
+}
+
 function renderSubjectBlockedByHeadHtml(subject, options = {}) {
   const compact = options.compact === true;
-  const blockedBySubjects = Array.isArray(getBlockedBySubjects(subject?.id || subject))
-    ? getBlockedBySubjects(subject?.id || subject)
-    : [];
+  const blockedBySubjects = getHeadVisibleBlockedBySubjects(subject?.id || subject);
   if (!blockedBySubjects.length) return "";
 
   const iconHtml = `<span class="details-blocked-badge__icon">${svgIcon("blocked", { className: "octicon octicon-blocked fgColor-danger" })}</span>`;
@@ -2910,6 +2925,7 @@ function getObjectiveById(objectiveId) {
     matchSearch,
     reloadSubjectsFromSupabase,
     getEffectiveSujetStatus,
+    getHeadVisibleBlockedBySubjects,
     getEffectiveAvisVerdict,
     getEffectiveSituationStatus,
     problemsCountsHtml,
