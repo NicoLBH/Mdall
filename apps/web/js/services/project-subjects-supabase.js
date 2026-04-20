@@ -940,9 +940,11 @@ export async function replaceSubjectLabels(subjectId, labelIds = []) {
 export async function updateSubjectDescription({ subjectId, description, uploadSessionId = "" } = {}) {
   const normalizedSubjectId = normalizeUuid(subjectId);
   if (!normalizedSubjectId) throw new Error("subjectId is required");
-  const nextDescription = String(description || "").trim();
+  const rawDescription = typeof description === "string" ? description : String(description || "");
+  const normalizedDescription = rawDescription.trim();
+  const nextDescription = normalizedDescription ? rawDescription : "";
   const normalizedUploadSessionId = normalizeUuid(uploadSessionId);
-  if (!nextDescription && !normalizedUploadSessionId) {
+  if (!normalizedDescription && !normalizedUploadSessionId) {
     throw new Error("description or uploadSessionId is required");
   }
 
@@ -960,7 +962,8 @@ export async function updateSubjectDescription({ subjectId, description, uploadS
   });
   if (!response.ok) {
     const txt = await response.text().catch(() => "");
-    throw new Error(`update_subject_description failed (${response.status}): ${txt}`);
+    const rawError = txt || response.statusText || "Unknown error";
+    throw new Error(`update_subject_description failed (${response.status}): ${rawError}`);
   }
 
   const payload = await response.json().catch(() => null);
