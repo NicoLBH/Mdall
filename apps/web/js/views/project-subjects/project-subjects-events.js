@@ -2321,24 +2321,33 @@ export function createProjectSubjectsEvents(config) {
       });
     });
 
+    const rerenderDiscussionComposerScope = (triggerElement = null) => {
+      const composerScopeRoot = triggerElement?.closest?.("[data-details-composer-host]");
+      if (composerScopeRoot) {
+        rerenderScope(composerScopeRoot);
+        return;
+      }
+      rerenderScope(triggerElement || root);
+    };
+
     root.querySelectorAll("[data-action='tab-write']").forEach((btn) => {
       btn.onclick = () => {
         store.situationsView.commentPreviewMode = false;
-        rerenderPanels();
+        rerenderDiscussionComposerScope(btn);
       };
     });
 
     root.querySelectorAll("[data-action='tab-preview']").forEach((btn) => {
       btn.onclick = () => {
         store.situationsView.commentPreviewMode = true;
-        rerenderPanels();
+        rerenderDiscussionComposerScope(btn);
       };
     });
 
     root.querySelectorAll("[data-action='toggle-help']").forEach((btn) => {
       btn.onclick = () => {
         store.situationsView.helpMode = !store.situationsView.helpMode;
-        rerenderPanels();
+        rerenderDiscussionComposerScope(btn);
       };
     });
 
