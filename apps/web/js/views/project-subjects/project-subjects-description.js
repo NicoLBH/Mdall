@@ -564,6 +564,9 @@ export function createProjectSubjectsDescription(config = {}) {
   }
 
   function resolveVersionAvatarUrl(version = {}) {
+    if (version?.actor_is_system === true || (!version?.actor_user_id && !version?.actor_person_id)) {
+      return "/assets/images/avatar-entreprise.jfif";
+    }
     const directAvatar = firstNonEmpty(
       version?.actor_avatar_url,
       version?.actor_avatar,
