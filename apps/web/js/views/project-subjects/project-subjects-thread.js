@@ -753,6 +753,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
 
   function renderMarkdownToolbar(buttonAction, extraData = {}) {
     const toolbarButtons = [
+      { action: "heading", icon: "markdown-heading", label: "Titre (H3)" },
       { action: "bold", icon: "markdown-bold", label: "Gras" },
       { action: "italic", icon: "markdown-italic", label: "Italique" },
       { action: "underline", icon: "markdown-underline", label: "Souligné" },
@@ -808,8 +809,8 @@ priority=${firstNonEmpty(subject.priority, "")}`
       </button>
     `;
 
-    const groupOne = ["bold", "italic", "underline", "quote", "code", "link"];
-    const groupTwo = ["ordered-list", "bullet-list", "checklist", "heading"];
+    const groupOne = ["heading", "bold", "italic", "underline", "quote", "code", "link"];
+    const groupTwo = ["ordered-list", "bullet-list", "checklist"];
     const mentionButton = toolbarButtons.find((button) => button.action === "mention");
     const subjectRefButton = toolbarButtons.find((button) => button.action === "subject-ref");
     const renderGroup = (actions = []) => actions
