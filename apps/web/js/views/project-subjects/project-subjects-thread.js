@@ -1,4 +1,5 @@
 import { getAuthorIdentity } from "../ui/author-identity.js";
+import { renderSubjectMarkdownToolbar } from "../ui/subject-rich-editor.js";
 export function createProjectSubjectsThread(config = {}) {
   const {
     store,
@@ -826,86 +827,6 @@ priority=${firstNonEmpty(subject.priority, "")}`
     return { commentsById, childrenByParentId };
   }
 
-  function renderMarkdownToolbar(buttonAction, extraData = {}) {
-    const toolbarButtons = [
-      { action: "heading", icon: "markdown-heading", label: "Titre (H3)" },
-      { action: "bold", icon: "markdown-bold", label: "Gras" },
-      { action: "italic", icon: "markdown-italic", label: "Italique" },
-      { action: "underline", icon: "markdown-underline", label: "Souligné" },
-      { action: "quote", icon: "markdown-quote", label: "Citation" },
-      { action: "code", icon: "markdown-code", label: "Code" },
-      { action: "link", icon: "markdown-link", label: "Lien" },
-      { action: "ordered-list", icon: "markdown-list-ordered", label: "Liste numérotée" },
-      { action: "bullet-list", icon: "markdown-list-unordered", label: "Liste à puces" },
-      { action: "checklist", icon: "markdown-tasklist", label: "Checklist" },
-      { action: "mention", icon: "markdown-mention", label: "Mention" },
-      { action: "subject-ref", icon: "cross-reference", label: "Référence sujet" }
-    ];
-    const toDataAttributeName = (key) => String(key || "")
-      .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
-      .replace(/[\s_]+/g, "-")
-      .toLowerCase();
-    const extraAttributes = Object.entries(extraData)
-      .map(([key, value]) => `data-${escapeHtml(toDataAttributeName(key))}="${escapeHtml(String(value || ""))}"`)
-      .join(" ");
-    const renderToolbarButton = (button = {}) => `
-      <button
-        class="comment-toolbar-btn"
-        type="button"
-        data-action="${escapeHtml(buttonAction)}"
-        data-format="${escapeHtml(button.action)}"
-        ${extraAttributes}
-        title="${escapeHtml(button.label)}"
-        aria-label="${escapeHtml(button.label)}"
-      >
-        ${svgIcon(button.icon)}
-      </button>
-    `;
-
-    const shouldUseComposerLayout = buttonAction === "composer-format"
-      || buttonAction === "thread-reply-format"
-      || buttonAction === "thread-edit-format";
-    if (!shouldUseComposerLayout) {
-      return toolbarButtons.map((button) => renderToolbarButton(button)).join("");
-    }
-
-    const attachmentAction = buttonAction === "thread-edit-format"
-      ? "thread-edit-attachments-pick"
-      : buttonAction === "thread-reply-format"
-        ? "thread-reply-attachments-pick"
-        : "composer-attachments-pick";
-    const attachmentButton = `
-      <button
-        class="comment-toolbar-btn"
-        type="button"
-        data-action="${escapeHtml(attachmentAction)}"
-        ${extraAttributes}
-        title="Pièce jointe"
-        aria-label="Pièce jointe"
-      >
-        ${svgIcon("paperclip")}
-      </button>
-    `;
-
-    const groupOne = ["heading", "bold", "italic", "underline", "quote", "code", "link"];
-    const groupTwo = ["ordered-list", "bullet-list", "checklist"];
-    const mentionButton = toolbarButtons.find((button) => button.action === "mention");
-    const subjectRefButton = toolbarButtons.find((button) => button.action === "subject-ref");
-    const renderGroup = (actions = []) => actions
-      .map((action) => toolbarButtons.find((button) => button.action === action))
-      .filter(Boolean)
-      .map((button) => renderToolbarButton(button))
-      .join("");
-
-    return `
-      <div class="comment-toolbar-layout">
-        <div class="comment-toolbar-layout__group">${renderGroup(groupOne)}</div>
-        <div class="comment-toolbar-layout__group">${renderGroup(groupTwo)}</div>
-        <div class="comment-toolbar-layout__group">${attachmentButton}${mentionButton ? renderToolbarButton(mentionButton) : ""}${subjectRefButton ? renderToolbarButton(subjectRefButton) : ""}</div>
-      </div>
-    `;
-  }
-
   function renderInlineReplyComposer({ commentId, isExpanded, draft, previewMode, attachments = [], depth = 0 }) {
     if (!commentId) return "";
     const pendingAttachments = Array.isArray(attachments) ? attachments : [];
@@ -963,7 +884,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
           tabPreviewAction: "thread-reply-tab-preview",
           tabsClassName: "comment-composer__tabs--thread-reply",
           composerClassName: "comment-composer--thread-reply-editor",
-          toolbarHtml: renderMarkdownToolbar("thread-reply-format", { messageId: commentId }),
+          toolbarHtml: renderSubjectMarkdownToolbar({ buttonAction: "thread-reply-format", svgIcon, extraData: { messageId: commentId } }),
           previewHtml: normalizedDraft.trim()
             ? mdToHtml(normalizedDraft, { preserveMessageLineBreaks: true })
             : "",
@@ -1058,7 +979,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
           tabPreviewAction: "thread-edit-tab-preview",
           tabsClassName: "comment-composer__tabs--thread-reply",
           composerClassName: `comment-composer--thread-reply-editor ${composerEditClass}`,
-          toolbarHtml: renderMarkdownToolbar("thread-edit-format", { messageId: commentId }),
+          toolbarHtml: renderSubjectMarkdownToolbar({ buttonAction: "thread-edit-format", svgIcon, extraData: { messageId: commentId } }),
           previewHtml: normalizedDraft.trim()
             ? mdToHtml(normalizedDraft, { preserveMessageLineBreaks: true })
             : "",
@@ -1435,9 +1356,13 @@ priority=${firstNonEmpty(subject.priority, "")}`
           targetHtml = entityId
             ? `${entityType} ${entityTitle}${entityDisplayLinkHtml(entityType, entityId)}${descendants > 0 ? ` · ${descendants} descendant(s)` : ""}`
             : "this";
-        } else if (kind === "description_version_initial" || kind === "description_version_saved") {
+        } else if (kind === "description_version_initial" || kind === "description_version_saved" || kind === "subject_description_updated") {
           iconHtml = `<span class="tl-ico-wrap tl-ico-reopened" aria-hidden="true">${svgIcon("pencil")}</span>`;
-          verb = kind === "description_version_initial" ? "archived description" : "saved description";
+          verb = kind === "description_version_initial"
+            ? "archived description"
+            : kind === "subject_description_updated"
+              ? "updated description on"
+              : "saved description";
           const entityType = String(e?.entity_type || "").toLowerCase();
           const entityId = String(e?.entity_id || "");
           const entity = getEntityByType(entityType, entityId);
@@ -1602,7 +1527,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
       `
       : "";
 
-    const toolbarHtml = renderMarkdownToolbar("composer-format");
+    const toolbarHtml = renderSubjectMarkdownToolbar({ buttonAction: "composer-format", svgIcon });
 
     const attachmentState = getComposerAttachmentsState();
     const normalizedSubjectId = type === "sujet" ? normalizeId(item.id) : "";
