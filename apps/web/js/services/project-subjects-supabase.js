@@ -1132,6 +1132,72 @@ export async function updateSubjectDescription({ subjectId, description, uploadS
   };
 }
 
+export async function loadSubjectDescriptionVersions(subjectId, options = {}) {
+  const normalizedSubjectId = normalizeUuid(subjectId);
+  if (!normalizedSubjectId) throw new Error("subjectId is required");
+  const limit = Math.min(100, Math.max(1, Number(options?.limit || 50)));
+
+  const versionsUrl = new URL(`${SUPABASE_URL}/rest/v1/subject_description_versions`);
+  versionsUrl.searchParams.set("select", "id,subject_id,actor_user_id,actor_person_id,description_markdown,created_at");
+  versionsUrl.searchParams.set("subject_id", `eq.${normalizedSubjectId}`);
+  versionsUrl.searchParams.set("order", "created_at.desc");
+  versionsUrl.searchParams.set("limit", String(limit));
+
+  const versionsResponse = await fetch(versionsUrl.toString(), {
+    method: "GET",
+    headers: await getSupabaseAuthHeaders({ Accept: "application/json" }),
+    cache: "no-store"
+  });
+  if (!versionsResponse.ok) {
+    const txt = await versionsResponse.text().catch(() => "");
+    throw new Error(`subject_description_versions fetch failed (${versionsResponse.status}): ${txt}`);
+  }
+  const versionRows = await versionsResponse.json().catch(() => []);
+  const rows = Array.isArray(versionRows) ? versionRows : [];
+  const personIds = [...new Set(rows.map((row) => normalizeUuid(row?.actor_person_id)).filter(Boolean))];
+  const peopleById = {};
+  if (personIds.length) {
+    const peopleUrl = new URL(`${SUPABASE_URL}/rest/v1/directory_people`);
+    peopleUrl.searchParams.set("select", "id,first_name,last_name,email");
+    peopleUrl.searchParams.set("id", `in.(${personIds.join(",")})`);
+
+    const peopleResponse = await fetch(peopleUrl.toString(), {
+      method: "GET",
+      headers: await getSupabaseAuthHeaders({ Accept: "application/json" }),
+      cache: "no-store"
+    });
+    if (peopleResponse.ok) {
+      const peopleRows = await peopleResponse.json().catch(() => []);
+      (Array.isArray(peopleRows) ? peopleRows : []).forEach((person) => {
+        const personId = normalizeUuid(person?.id);
+        if (!personId) return;
+        peopleById[personId] = person;
+      });
+    }
+  }
+
+  return rows.map((row) => {
+    const actorPersonId = normalizeUuid(row?.actor_person_id);
+    const person = peopleById[actorPersonId] || {};
+    const firstName = String(person?.first_name || "").trim();
+    const lastName = String(person?.last_name || "").trim();
+    const fullName = [firstName, lastName].filter(Boolean).join(" ").trim();
+    const fallbackName = String(person?.email || "").trim();
+    return {
+      id: normalizeUuid(row?.id),
+      subject_id: normalizeUuid(row?.subject_id || normalizedSubjectId),
+      actor_user_id: normalizeUuid(row?.actor_user_id),
+      actor_person_id: actorPersonId,
+      actor_first_name: firstName,
+      actor_last_name: lastName,
+      actor_name: fullName || fallbackName || "Utilisateur",
+      actor_email: fallbackName,
+      description_markdown: String(row?.description_markdown || ""),
+      created_at: String(row?.created_at || "")
+    };
+  });
+}
+
 export async function loadLabelsForProject(projectId) {
   const resolvedProjectId = await getResolvedProjectId(projectId);
   if (!resolvedProjectId) {
