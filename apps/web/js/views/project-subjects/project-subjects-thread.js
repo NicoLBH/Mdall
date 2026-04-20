@@ -42,6 +42,23 @@ export function createProjectSubjectsThread(config = {}) {
   const subjectTimelineCache = new Map();
   const subjectTimelineState = new Map();
   const subjectReadMarkState = new Map();
+  const renderScopeDebugEnabled = (() => {
+    try {
+      const search = String(window?.location?.search || "");
+      if (search.includes("debugRenderScopes=1")) return true;
+      const localValue = String(window?.localStorage?.getItem?.("mdall:debug-render-scopes") || "").trim().toLowerCase();
+      const sessionValue = String(window?.sessionStorage?.getItem?.("mdall:debug-render-scopes") || "").trim().toLowerCase();
+      const globalValue = String(window?.__MDALL_DEBUG_RENDER_SCOPES__ || "").trim().toLowerCase();
+      return localValue === "1"
+        || localValue === "true"
+        || sessionValue === "1"
+        || sessionValue === "true"
+        || globalValue === "1"
+        || globalValue === "true";
+    } catch {
+      return false;
+    }
+  })();
   const MAX_REPLY_VISUAL_DEPTH = 2;
   const THREAD_REACTION_CHOICES = [
     { code: "thumbs_up", label: "J'aime", emoji: "👍", assetPath: "assets/images/reactions/thumbs-up.png" },
@@ -56,6 +73,11 @@ export function createProjectSubjectsThread(config = {}) {
 
   function normalizeId(value) {
     return String(value || "").trim();
+  }
+
+  function debugRenderScope(scope, payload = {}) {
+    if (!renderScopeDebugEnabled) return;
+    console.log("[subject-render-scope]", String(scope || "unknown"), payload);
   }
 
   function getProjectCollaborators() {
@@ -431,12 +453,14 @@ export function createProjectSubjectsThread(config = {}) {
 
   function requestScopeRerender() {
     if (typeof scheduleThreadRerender === "function") {
+      debugRenderScope("thread", { source: "timeline-refresh", mode: "scheduled" });
       scheduleThreadRerender();
       return;
     }
     if (typeof requestRerender === "function") {
       const detailsHost = document.getElementById("situationsDetailsHost");
       const threadHost = detailsHost?.querySelector?.("[data-details-thread-host]");
+      debugRenderScope("thread", { source: "timeline-refresh", mode: "fallback-request-rerender" });
       requestRerender(threadHost || detailsHost || document);
     }
   }
@@ -472,6 +496,10 @@ export function createProjectSubjectsThread(config = {}) {
           comments: nestedComments,
           activities: events.map((row) => mapEventRowToThreadActivity(row)),
           conversation: timeline?.conversation || null
+        });
+        debugRenderScope("thread-timeline-refresh", {
+          subjectId: normalizedSubjectId,
+          rowsCount: mappedRows.length
         });
         queueSubjectMessageReadMarking(normalizedSubjectId, messages);
         requestScopeRerender();

@@ -2332,12 +2332,14 @@ function rerenderScope(root) {
 
   if (shouldRerenderDetailsOnly) {
     if (isThreadScopeRoot || isComposerScopeRoot) {
+      debugRenderScope(isThreadScopeRoot ? "thread" : "composer", { mode: "scoped-rerender" });
       renderDetailsDiscussionScopes(detailsHost, {
         renderThread: isThreadScopeRoot,
         renderComposer: isComposerScopeRoot
       });
       return;
     }
+    debugRenderScope("details-shell", { mode: "full-details-rerender" });
     const detailsScrollState = getScrollableElementScrollState(detailsHost);
     const details = getProjectSubjectDetail().renderDetailsHtml(null, {
       showExpand: false,
@@ -2375,19 +2377,44 @@ function rerenderScope(root) {
 const scheduledScopeRenders = new Map();
 let scheduledScopeRendersFrame = 0;
 
+function isRenderScopeDebugEnabled() {
+  try {
+    const search = String(window?.location?.search || "");
+    if (search.includes("debugRenderScopes=1")) return true;
+    const localValue = String(window?.localStorage?.getItem?.("mdall:debug-render-scopes") || "").trim().toLowerCase();
+    const sessionValue = String(window?.sessionStorage?.getItem?.("mdall:debug-render-scopes") || "").trim().toLowerCase();
+    const globalValue = String(window?.__MDALL_DEBUG_RENDER_SCOPES__ || "").trim().toLowerCase();
+    return localValue === "1"
+      || localValue === "true"
+      || sessionValue === "1"
+      || sessionValue === "true"
+      || globalValue === "1"
+      || globalValue === "true";
+  } catch {
+    return false;
+  }
+}
+
+function debugRenderScope(scope, payload = {}) {
+  if (!isRenderScopeDebugEnabled()) return;
+  console.log("[subject-render-scope]", String(scope || "unknown"), payload);
+}
+
 function scheduleScopedRerender(scopeKey, resolveRoot) {
   const normalizedScopeKey = String(scopeKey || "").trim();
   if (!normalizedScopeKey) return;
   const resolver = typeof resolveRoot === "function" ? resolveRoot : () => resolveRoot;
   scheduledScopeRenders.set(normalizedScopeKey, resolver);
+  debugRenderScope(`${normalizedScopeKey}:scheduled`);
   if (scheduledScopeRendersFrame) return;
   scheduledScopeRendersFrame = requestAnimationFrame(() => {
     const pendingRenders = Array.from(scheduledScopeRenders.entries());
     scheduledScopeRenders.clear();
     scheduledScopeRendersFrame = 0;
-    pendingRenders.forEach(([, currentResolver]) => {
+    pendingRenders.forEach(([pendingScopeKey, currentResolver]) => {
       const root = currentResolver?.();
       if (!root) return;
+      debugRenderScope(`${pendingScopeKey}:flushed`);
       rerenderScope(root);
     });
   });
@@ -2417,6 +2444,7 @@ function renderDetailsDiscussionScopes(detailsHost, options = {}) {
 
   const discussion = getProjectSubjectDetail().renderDetailsDiscussionHtml();
   if (renderThread) {
+    debugRenderScope("thread", { host: "details-thread-host" });
     const threadHost = detailsHost.querySelector("[data-details-thread-host]");
     if (threadHost) {
       threadHost.innerHTML = discussion.threadHtml;
@@ -2424,6 +2452,7 @@ function renderDetailsDiscussionScopes(detailsHost, options = {}) {
     }
   }
   if (renderComposer) {
+    debugRenderScope("composer", { host: "details-composer-host" });
     const composerHost = detailsHost.querySelector("[data-details-composer-host]");
     if (composerHost) {
       composerHost.innerHTML = discussion.composerHtml;
@@ -2494,7 +2523,14 @@ async function applyCommentAction(root) {
     store.situationsView.subjectComposerAttachments.uploadSessionId = "";
     store.situationsView.subjectComposerAttachments.items = [];
   }
-  rerenderScope(root);
+  const detailsHost = document.getElementById("situationsDetailsHost");
+  const composerHost = root?.closest?.("[data-details-composer-host]")
+    || detailsHost?.querySelector?.("[data-details-composer-host]");
+  if (composerHost) {
+    scheduleDetailsComposerRerender();
+  } else {
+    rerenderScope(root);
+  }
 
 }
 

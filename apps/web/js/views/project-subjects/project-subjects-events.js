@@ -2500,6 +2500,7 @@ export function createProjectSubjectsEvents(config) {
       scheduleScopedDomRender("attachments-main-composer-preview", () => {
         const container = root.querySelector("[data-role='subject-composer-attachments-preview']");
         if (!container) return;
+        debugRenderScope("attachments-main-composer-preview", { count: Array.isArray(attachments) ? attachments.length : 0 });
         container.innerHTML = renderAttachmentPreviewItemsHtml({
           attachments,
           removeAction: "composer-attachment-remove"
@@ -2515,6 +2516,10 @@ export function createProjectSubjectsEvents(config) {
           `[data-role='thread-reply-attachments-preview'][data-message-id="${selectorValue(normalizedMessageId)}"]`
         );
         if (!container) return;
+        debugRenderScope("attachments-inline-reply-preview", {
+          messageId: normalizedMessageId,
+          count: Array.isArray(attachments) ? attachments.length : 0
+        });
         container.innerHTML = renderAttachmentPreviewItemsHtml({
           attachments,
           removeAction: "thread-reply-attachment-remove",
@@ -2531,6 +2536,10 @@ export function createProjectSubjectsEvents(config) {
           `[data-role='thread-edit-attachments-preview'][data-message-id="${selectorValue(normalizedMessageId)}"]`
         );
         if (!container) return;
+        debugRenderScope("attachments-inline-edit-preview", {
+          messageId: normalizedMessageId,
+          count: Array.isArray(attachments) ? attachments.length : 0
+        });
         container.innerHTML = renderAttachmentPreviewItemsHtml({
           attachments,
           removeAction: "thread-edit-attachment-remove",
@@ -2552,6 +2561,27 @@ export function createProjectSubjectsEvents(config) {
     const debugThreadReply = (eventName, payload = {}) => {
       if (!threadReplyDebugEnabled) return;
       console.log("[subject-thread-reply]", eventName, payload);
+    };
+    const renderScopeDebugEnabled = (() => {
+      try {
+        const search = String(window?.location?.search || "");
+        if (search.includes("debugRenderScopes=1")) return true;
+        const localValue = String(window?.localStorage?.getItem?.("mdall:debug-render-scopes") || "").trim().toLowerCase();
+        const sessionValue = String(window?.sessionStorage?.getItem?.("mdall:debug-render-scopes") || "").trim().toLowerCase();
+        const globalValue = String(window?.__MDALL_DEBUG_RENDER_SCOPES__ || "").trim().toLowerCase();
+        return localValue === "1"
+          || localValue === "true"
+          || sessionValue === "1"
+          || sessionValue === "true"
+          || globalValue === "1"
+          || globalValue === "true";
+      } catch {
+        return false;
+      }
+    })();
+    const debugRenderScope = (scope, payload = {}) => {
+      if (!renderScopeDebugEnabled) return;
+      console.log("[subject-render-scope]", String(scope || "unknown"), payload);
     };
     const resolveInlineReplyUiState = () => {
       if (typeof getInlineReplyUiState === "function") {
@@ -2697,6 +2727,7 @@ export function createProjectSubjectsEvents(config) {
       scheduleScopedDomRender(`inline-reply-editor:${normalizedMessageId}`, () => {
         const editor = root.querySelector(`[data-inline-reply-editor="${selectorValue(normalizedMessageId)}"]`);
         if (!editor) return;
+        debugRenderScope("inline-reply-editor", { messageId: normalizedMessageId, visible: !!visible });
         if (!visible && editor.contains(document.activeElement)) {
           const activeElement = document.activeElement;
           if (activeElement && typeof activeElement.blur === "function") activeElement.blur();
@@ -2712,6 +2743,7 @@ export function createProjectSubjectsEvents(config) {
       scheduleScopedDomRender(`inline-edit-editor:${normalizedMessageId}`, () => {
         const editor = root.querySelector(`[data-inline-edit-editor="${selectorValue(normalizedMessageId)}"]`);
         const content = root.querySelector(`[data-thread-comment-content="${selectorValue(normalizedMessageId)}"]`);
+        debugRenderScope("inline-edit-editor", { messageId: normalizedMessageId, visible: !!visible });
         if (editor) {
           if (!visible && editor.contains(document.activeElement)) {
             const activeElement = document.activeElement;
