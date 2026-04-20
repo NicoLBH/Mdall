@@ -2519,7 +2519,7 @@ body.is-resizing{
   padding-right:8px;
 }
 .gh-comment-body{
-  padding:0px;
+  padding:12px;
   white-space:inherit;
   font-size:13px;
 }
@@ -2960,7 +2960,7 @@ body.is-resizing{
   margin:4px 0;
 }
 .thread-comment-content-capsule{
-  padding:12px;
+  /*padding:12px;*/
 }
 .thread-inline-edit-editor{
   padding:12px;
@@ -8613,6 +8613,7 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
   align-items:center;
   gap:4px;
   color:var(--muted);
+  width:100%;
 }
 .description-versions-menu__trigger:hover{
   color:var(--text);
