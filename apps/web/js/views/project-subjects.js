@@ -348,6 +348,8 @@ const {
   openDescriptionVersionModal,
   closeDescriptionVersionModal,
   retryDescriptionVersionsLoad,
+  renderDescriptionVersionsDropdownHost,
+  syncDescriptionVersionsDropdownPosition,
   applyDescriptionSave,
   startDescriptionEdit,
   renderDescriptionCard
@@ -385,6 +387,8 @@ const projectSubjectsEvents = createProjectSubjectsEvents({
   openDescriptionVersionModal,
   closeDescriptionVersionModal,
   retryDescriptionVersionsLoad,
+  renderDescriptionVersionsDropdownHost,
+  syncDescriptionVersionsDropdownPosition,
   startDescriptionEdit,
   clearDescriptionEditState,
   applyDescriptionSave,

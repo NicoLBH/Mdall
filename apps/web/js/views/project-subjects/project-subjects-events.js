@@ -52,6 +52,8 @@ export function createProjectSubjectsEvents(config) {
     openDescriptionVersionModal,
     closeDescriptionVersionModal,
     retryDescriptionVersionsLoad,
+    renderDescriptionVersionsDropdownHost,
+    syncDescriptionVersionsDropdownPosition,
     startDescriptionEdit,
     clearDescriptionEditState,
     applyDescriptionSave,
@@ -101,6 +103,7 @@ export function createProjectSubjectsEvents(config) {
   let detachDropdownDocumentEvents = null;
   let modalEventsBound = false;
   let subjectsTabResetBound = false;
+  let descriptionVersionsPositionBound = false;
 
   function isSubissuesDndDebugEnabled() {
     try {
@@ -708,11 +711,12 @@ export function createProjectSubjectsEvents(config) {
       };
     });
 
-    root.querySelectorAll("[data-role='description-versions-dropdown']").forEach((dropdown) => {
-      dropdown.addEventListener("click", (event) => event.stopPropagation());
-    });
+    const descriptionVersionsHost = renderDescriptionVersionsDropdownHost?.(root) || null;
+    if (descriptionVersionsHost instanceof HTMLElement) {
+      descriptionVersionsHost.onclick = (event) => event.stopPropagation();
+    }
 
-    root.querySelectorAll("[data-action='open-description-version-modal'][data-version-id]").forEach((btn) => {
+    (descriptionVersionsHost || root).querySelectorAll("[data-action='open-description-version-modal'][data-version-id]").forEach((btn) => {
       btn.onclick = () => {
         const versionId = String(btn.dataset.versionId || "").trim();
         if (!versionId) return;
@@ -720,11 +724,13 @@ export function createProjectSubjectsEvents(config) {
       };
     });
 
-    root.querySelectorAll("[data-action='reload-description-versions']").forEach((btn) => {
+    (descriptionVersionsHost || root).querySelectorAll("[data-action='reload-description-versions']").forEach((btn) => {
       btn.onclick = () => {
         retryDescriptionVersionsLoad?.(root);
       };
     });
+
+    syncDescriptionVersionsDropdownPosition?.(root);
 
     const detailsModal = document.getElementById("detailsModal");
     if (detailsModal && detailsModal.dataset.descriptionVersionBound !== "true") {
@@ -4190,7 +4196,7 @@ export function createProjectSubjectsEvents(config) {
 
     if (root.dataset.threadReplyDropdownDocumentBound !== "true") {
       document.addEventListener("click", () => {
-        const hadOpenDescriptionVersions = Boolean(root.querySelector("[data-role='description-versions-dropdown'].gh-menu--open"));
+        const hadOpenDescriptionVersions = Boolean(document.querySelector("#descriptionVersionsDropdownHost [data-role='description-versions-dropdown'].gh-menu--open"));
         root.querySelectorAll(".thread-comment-menu__dropdown.is-open").forEach((opened) => {
           opened.classList.remove("is-open");
         });
@@ -4198,6 +4204,11 @@ export function createProjectSubjectsEvents(config) {
         if (hadOpenDescriptionVersions) rerenderScope(root);
       });
       root.dataset.threadReplyDropdownDocumentBound = "true";
+    }
+    if (!descriptionVersionsPositionBound) {
+      descriptionVersionsPositionBound = true;
+      window.addEventListener("resize", () => syncDescriptionVersionsDropdownPosition?.(getSubjectMetaScopeRoot?.() || document));
+      document.addEventListener("scroll", () => syncDescriptionVersionsDropdownPosition?.(getSubjectMetaScopeRoot?.() || document), true);
     }
     const autocompleteLayer = getAutocompleteLayer();
     if (autocompleteLayer && autocompleteLayer.layer.dataset.subjectAutocompleteBound !== "true") {

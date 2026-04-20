@@ -3,6 +3,9 @@ import { renderSubjectMarkdownToolbar } from "../ui/subject-rich-editor.js";
 
 export function createProjectSubjectsDescription(config = {}) {
   const VERSIONS_LOG_PREFIX = "[subject-description-versions]";
+  const stateRefIds = new WeakMap();
+  let lastLoggedStateRefId = "";
+  let stateRefSeq = 0;
   const {
     store,
     ensureViewUiState,
@@ -41,36 +44,80 @@ export function createProjectSubjectsDescription(config = {}) {
     });
   }
 
-  function ensureDescriptionEditState() {
+  function getSubjectsViewStore() {
     ensureViewUiState();
-    const state = store.situationsView.descriptionEdit || {};
-    store.situationsView.descriptionEdit = {
-      entityType: state.entityType || null,
-      entityId: state.entityId || null,
-      draft: String(state.draft || ""),
-      previewMode: !!state.previewMode,
-      uploadSessionId: String(state.uploadSessionId || ""),
-      attachments: Array.isArray(state.attachments) ? state.attachments : [],
-      isSaving: !!state.isSaving,
-      error: String(state.error || "")
+    if (!store.projectSubjectsView || typeof store.projectSubjectsView !== "object") {
+      store.projectSubjectsView = {};
+    }
+    return store.projectSubjectsView;
+  }
+
+  function getStateRefId(state) {
+    if (!state || typeof state !== "object") return "no-state";
+    if (!stateRefIds.has(state)) {
+      stateRefSeq += 1;
+      stateRefIds.set(state, `description-versions-ui-${stateRefSeq}`);
+    }
+    return stateRefIds.get(state);
+  }
+
+  function isHtmlElement(value) {
+    if (!value || typeof value !== "object") return false;
+    if (typeof HTMLElement !== "undefined" && value instanceof HTMLElement) return true;
+    return typeof value.querySelector === "function" || typeof value.getBoundingClientRect === "function";
+  }
+
+  function ensureDescriptionEditState() {
+    const view = getSubjectsViewStore();
+    view.descriptionEdit ??= {
+      entityType: null,
+      entityId: null,
+      draft: "",
+      previewMode: false,
+      uploadSessionId: "",
+      attachments: [],
+      isSaving: false,
+      error: ""
     };
-    return store.situationsView.descriptionEdit;
+    if (!Array.isArray(view.descriptionEdit.attachments)) view.descriptionEdit.attachments = [];
+    if (typeof view.descriptionEdit.previewMode !== "boolean") view.descriptionEdit.previewMode = false;
+    if (typeof view.descriptionEdit.isSaving !== "boolean") view.descriptionEdit.isSaving = false;
+    if (typeof view.descriptionEdit.error !== "string") view.descriptionEdit.error = "";
+    if (typeof view.descriptionEdit.uploadSessionId !== "string") view.descriptionEdit.uploadSessionId = "";
+    return view.descriptionEdit;
   }
 
   function ensureDescriptionVersionsUiState() {
-    ensureViewUiState();
-    const current = store.situationsView.descriptionVersionsUi || {};
-    store.situationsView.descriptionVersionsUi = {
-      entityType: current.entityType || null,
-      entityId: current.entityId || null,
-      isOpen: !!current.isOpen,
-      isLoading: !!current.isLoading,
-      error: String(current.error || ""),
-      versions: Array.isArray(current.versions) ? current.versions : [],
-      selectedVersionId: String(current.selectedVersionId || ""),
-      modalOpen: !!current.modalOpen
+    const view = getSubjectsViewStore();
+    const existing = view.descriptionVersionsUi;
+    view.descriptionVersionsUi ??= {
+      entityType: null,
+      entityId: null,
+      isOpen: false,
+      isLoading: false,
+      error: "",
+      versions: [],
+      selectedVersionId: "",
+      modalOpen: false,
+      loadToken: 0
     };
-    return store.situationsView.descriptionVersionsUi;
+    if (!Array.isArray(view.descriptionVersionsUi.versions)) view.descriptionVersionsUi.versions = [];
+    if (typeof view.descriptionVersionsUi.error !== "string") view.descriptionVersionsUi.error = "";
+    if (typeof view.descriptionVersionsUi.isOpen !== "boolean") view.descriptionVersionsUi.isOpen = false;
+    if (typeof view.descriptionVersionsUi.isLoading !== "boolean") view.descriptionVersionsUi.isLoading = false;
+    if (typeof view.descriptionVersionsUi.selectedVersionId !== "string") view.descriptionVersionsUi.selectedVersionId = "";
+    if (typeof view.descriptionVersionsUi.modalOpen !== "boolean") view.descriptionVersionsUi.modalOpen = false;
+    if (!Number.isFinite(Number(view.descriptionVersionsUi.loadToken))) view.descriptionVersionsUi.loadToken = 0;
+    const stateRefId = getStateRefId(view.descriptionVersionsUi);
+    if (!existing || lastLoggedStateRefId !== stateRefId) {
+      lastLoggedStateRefId = stateRefId;
+      logDescriptionVersions("state init", {
+        store: "store.projectSubjectsView.descriptionVersionsUi",
+        hasExistingState: !!existing,
+        stateRefId
+      });
+    }
+    return view.descriptionVersionsUi;
   }
 
   function formatRelativeTimeFromNow(ts = "") {
@@ -91,11 +138,7 @@ export function createProjectSubjectsDescription(config = {}) {
   }
 
   function formatVersionTimestamp(ts = "") {
-    const absolute = typeof fmtTs === "function" ? fmtTs(ts) : String(ts || "—");
-    const relative = formatRelativeTimeFromNow(ts);
-    return relative && relative !== "à l'instant"
-      ? `${absolute} (${relative})`
-      : absolute;
+    return typeof fmtTs === "function" ? fmtTs(ts) : String(ts || "—");
   }
 
   function buildVersionInitials(version = {}) {
@@ -269,19 +312,17 @@ export function createProjectSubjectsDescription(config = {}) {
     const forceReload = !!options.forceReload;
     const sameTarget = ui.entityType === entityType && ui.entityId === entityId;
     const versionsInMemory = Array.isArray(ui.versions) ? ui.versions.length : 0;
+    const previousLoading = !!ui.isLoading;
     logDescriptionVersions("ensure start", {
       entityType,
       entityId,
       forceReload,
       sameTarget,
-      isLoading: !!ui.isLoading,
-      versionsInMemory
+      previousIsLoading: previousLoading,
+      versionsInMemory,
+      stateRefId: getStateRefId(ui)
     });
-    if (ui.isLoading) {
-      logDescriptionVersions("ensure early return: already loading", { entityType, entityId });
-      return;
-    }
-    if (!forceReload && sameTarget && !ui.error && Array.isArray(ui.versions) && ui.versions.length) {
+    if (!forceReload && sameTarget && !ui.error && Array.isArray(ui.versions) && ui.versions.length && !previousLoading) {
       logDescriptionVersions("ensure early return: cache hit", {
         entityType,
         entityId,
@@ -289,26 +330,53 @@ export function createProjectSubjectsDescription(config = {}) {
       });
       return;
     }
-    logDescriptionVersions("ensure branch: loading triggered", {
+    const loadToken = Number(ui.loadToken || 0) + 1;
+    ui.loadToken = loadToken;
+    logDescriptionVersions("ensure loading begin", {
       entityType,
       entityId,
-      forceReload,
-      sameTarget
+      loadToken,
+      previousIsLoading: previousLoading,
+      versionsCount: versionsInMemory
     });
     ui.isLoading = true;
     ui.error = "";
     ui.entityType = entityType;
     ui.entityId = entityId;
+    logDescriptionVersions("rerender loading snapshot", {
+      loadToken,
+      snapshot: {
+        entityType: ui.entityType,
+        entityId: ui.entityId,
+        isLoading: ui.isLoading,
+        versionsCount: Array.isArray(ui.versions) ? ui.versions.length : 0,
+        error: ui.error,
+        stateRefId: getStateRefId(ui)
+      }
+    });
     rerenderScope(root);
     try {
       const versions = entityType === "sujet" && typeof loadSubjectDescriptionVersions === "function"
         ? await loadSubjectDescriptionVersions(entityId)
         : [];
-      ui.versions = Array.isArray(versions) ? versions : [];
-      if (!ui.selectedVersionId && ui.versions.length) {
-        ui.selectedVersionId = String(ui.versions[0]?.id || "");
+      const currentUi = ensureDescriptionVersionsUiState();
+      const isStaleResponse = Number(currentUi.loadToken || 0) !== loadToken;
+      const normalizedVersions = Array.isArray(versions) ? versions : [];
+      logDescriptionVersions("fetch resolved", {
+        entityType,
+        entityId,
+        loadToken,
+        rowsCount: normalizedVersions.length,
+        selectedVersionId: String(currentUi.selectedVersionId || ""),
+        ignoredAsStale: isStaleResponse,
+        stateRefId: getStateRefId(currentUi)
+      });
+      if (isStaleResponse) return;
+      currentUi.versions = normalizedVersions;
+      if (!currentUi.selectedVersionId && currentUi.versions.length) {
+        currentUi.selectedVersionId = String(currentUi.versions[0]?.id || "");
       }
-      if (!ui.versions.length) {
+      if (!currentUi.versions.length) {
         logDescriptionVersions("ensure loaded with empty result set", {
           entityType,
           entityId
@@ -327,23 +395,31 @@ export function createProjectSubjectsDescription(config = {}) {
         }
       }
     } catch (error) {
-      ui.error = buildDescriptionVersionsLoadError(error);
+      const currentUi = ensureDescriptionVersionsUiState();
+      const isStaleResponse = Number(currentUi.loadToken || 0) !== loadToken;
+      if (!isStaleResponse) currentUi.error = buildDescriptionVersionsLoadError(error);
       console.error(`${VERSIONS_LOG_PREFIX} ensure failed`, {
         timestamp: new Date().toISOString(),
         entityType,
         entityId,
         forceReload,
         sameTarget,
+        loadToken,
+        ignoredAsStale: isStaleResponse,
         error
       });
     } finally {
-      ui.isLoading = false;
-      logDescriptionVersions("ensure done", {
+      const currentUi = ensureDescriptionVersionsUiState();
+      if (Number(currentUi.loadToken || 0) === loadToken) currentUi.isLoading = false;
+      logDescriptionVersions("finally", {
         entityType,
         entityId,
-        versionsCount: Array.isArray(ui.versions) ? ui.versions.length : 0,
-        hasError: !!ui.error,
-        selectedVersionId: String(ui.selectedVersionId || "")
+        loadToken,
+        isLoadingFinal: !!currentUi.isLoading,
+        versionsCountFinal: Array.isArray(currentUi.versions) ? currentUi.versions.length : 0,
+        hasError: !!currentUi.error,
+        selectedVersionId: String(currentUi.selectedVersionId || ""),
+        stateRefId: getStateRefId(currentUi)
       });
       rerenderScope(root);
     }
@@ -352,6 +428,7 @@ export function createProjectSubjectsDescription(config = {}) {
   function closeDescriptionVersionsDropdown() {
     const ui = ensureDescriptionVersionsUiState();
     ui.isOpen = false;
+    hideDescriptionVersionsDropdownHost();
   }
 
   function retryDescriptionVersionsLoad(root) {
@@ -381,6 +458,8 @@ export function createProjectSubjectsDescription(config = {}) {
     });
     if (ui.isOpen && entityType === "sujet") {
       void ensureDescriptionVersionsLoaded(root, entityType, entityId);
+    } else {
+      hideDescriptionVersionsDropdownHost();
     }
     rerenderScope(root);
   }
@@ -390,9 +469,14 @@ export function createProjectSubjectsDescription(config = {}) {
     ui.selectedVersionId = String(versionId || "");
     ui.modalOpen = false;
     ui.isOpen = false;
+    hideDescriptionVersionsDropdownHost();
     const version = Array.isArray(ui.versions)
       ? ui.versions.find((entry) => String(entry?.id || "") === ui.selectedVersionId)
       : null;
+    logDescriptionVersions("item click", {
+      versionId: ui.selectedVersionId,
+      foundVersion: !!version
+    });
     if (!version) {
       rerenderScope(root);
       return;
@@ -410,7 +494,9 @@ export function createProjectSubjectsDescription(config = {}) {
 
   function closeDescriptionVersionDetailsModalDom() {
     const modal = document.getElementById("detailsModal");
+    const body = document.getElementById("detailsBodyModal");
     if (!modal || modal.dataset.descriptionVersionModalOpen !== "true") return;
+    body?.classList.remove("details-body-modal--description-version");
     if (typeof setOverlayChromeOpenState === "function") {
       setOverlayChromeOpenState(modal, false);
     } else {
@@ -431,14 +517,21 @@ export function createProjectSubjectsDescription(config = {}) {
 
     const displayName = String(version?.actor_name || "Utilisateur");
     const dateLabel = formatVersionTimestamp(version?.created_at);
+    const dateRelativeLabel = formatRelativeTimeFromNow(version?.created_at);
     const initials = buildVersionInitials(version);
-    const avatarUrl = String(version?.actor_user_id || "") === String(store?.user?.id || "")
-      ? String(store?.user?.avatar || "")
-      : "";
+    const avatarUrl = resolveVersionAvatarUrl(version);
     const bodyMarkdown = String(version?.description_markdown || "");
+    const fullDateLabel = `${dateRelativeLabel} · ${dateLabel}`;
+    logDescriptionVersions("modal open", {
+      title: "Version de description",
+      author: displayName,
+      created_at: String(version?.created_at || ""),
+      markdownLength: bodyMarkdown.length
+    });
 
     title.textContent = "Version de description";
-    meta.textContent = dateLabel;
+    meta.textContent = fullDateLabel;
+    body.classList.add("details-body-modal--description-version");
     body.innerHTML = `
       <article class="description-version-details">
         <header class="description-version-details__header">
@@ -449,7 +542,7 @@ export function createProjectSubjectsDescription(config = {}) {
           </span>
           <div class="description-version-details__author">
             <div class="description-version-details__name">${escapeHtml(displayName)}</div>
-            <div class="description-version-details__date">${escapeHtml(dateLabel)}</div>
+            <div class="description-version-details__date" title="${escapeHtml(dateLabel)}">${escapeHtml(dateRelativeLabel)}</div>
           </div>
         </header>
         <div class="description-version-details__body gh-comment-body">
@@ -470,17 +563,46 @@ export function createProjectSubjectsDescription(config = {}) {
     return true;
   }
 
+  function resolveVersionAvatarUrl(version = {}) {
+    const directAvatar = firstNonEmpty(
+      version?.actor_avatar_url,
+      version?.actor_avatar,
+      version?.actor_user_avatar
+    );
+    if (directAvatar) return directAvatar;
+
+    if (String(version?.actor_user_id || "") === String(store?.user?.id || "")) {
+      return String(store?.user?.avatar || "");
+    }
+
+    const collaborators = Array.isArray(store?.projectForm?.collaborators) ? store.projectForm.collaborators : [];
+    const actorUserId = String(version?.actor_user_id || "");
+    const actorPersonId = String(version?.actor_person_id || "");
+    const collaborator = collaborators.find((entry) => {
+      const linkedUserId = String(entry?.userId || entry?.linkedUserId || "");
+      const personId = String(entry?.personId || entry?.id || "");
+      return (actorUserId && linkedUserId === actorUserId) || (actorPersonId && personId === actorPersonId);
+    });
+    return String(firstNonEmpty(
+      collaborator?.avatar,
+      collaborator?.avatarUrl,
+      collaborator?.photo_url
+    ));
+  }
+
   function renderDescriptionVersionsTrigger(entityType, entityId) {
     const ui = ensureDescriptionVersionsUiState();
     const isTarget = ui.entityType === entityType && ui.entityId === entityId;
     const isOpen = isTarget && ui.isOpen;
     const count = isTarget && Array.isArray(ui.versions) ? ui.versions.length : 0;
+    const anchorKey = `${entityType}::${entityId}`;
     return `
       <div class="issues-head-menu description-versions-dropdown ${isOpen ? "is-open" : ""}">
         <button
-          class="gh-btn description-versions-dropdown__trigger"
+          class="issues-head-menu__btn description-versions-dropdown__trigger"
           type="button"
           data-action="toggle-description-versions"
+          data-description-versions-anchor="${escapeHtml(anchorKey)}"
           aria-expanded="${isOpen ? "true" : "false"}"
           aria-haspopup="menu"
           title="Versions"
@@ -488,16 +610,24 @@ export function createProjectSubjectsDescription(config = {}) {
           <span>Versions${count ? ` (${count})` : ""}</span>
           <span class="description-versions-dropdown__caret">${svgIcon("chevron-down")}</span>
         </button>
-        ${renderDescriptionVersionsDropdown(entityType, entityId)}
       </div>
     `;
   }
 
-  function renderDescriptionVersionsDropdown(entityType, entityId) {
+  function renderDescriptionVersionsDropdownContent(entityType, entityId) {
     const ui = ensureDescriptionVersionsUiState();
     const isTarget = ui.entityType === entityType && ui.entityId === entityId;
     const versions = isTarget && Array.isArray(ui.versions) ? ui.versions : [];
     const count = versions.length;
+    logDescriptionVersions("dropdown render", {
+      entityType,
+      entityId,
+      isTarget,
+      isOpen: !!(isTarget && ui.isOpen),
+      isLoading: !!ui.isLoading,
+      versionsLength: count,
+      stateRefId: getStateRefId(ui)
+    });
     const loadingHtml = ui.isLoading ? `<div class="description-versions-dropdown__status">Chargement des versions…</div>` : "";
     const errorHtml = !ui.isLoading && ui.error
       ? `
@@ -511,19 +641,18 @@ export function createProjectSubjectsDescription(config = {}) {
       ? versions.map((version) => {
           const versionId = String(version?.id || "");
           const displayName = String(version?.actor_name || "Utilisateur");
-          const timestampLabel = formatVersionTimestamp(version?.created_at);
+          const timestampLabel = formatRelativeTimeFromNow(version?.created_at);
+          const absoluteTimestampLabel = formatVersionTimestamp(version?.created_at);
           const initials = buildVersionInitials(version);
-          const avatarUrl = String(version?.actor_user_id || "") === String(store?.user?.id || "")
-            ? String(store?.user?.avatar || "")
-            : "";
+          const avatarUrl = resolveVersionAvatarUrl(version);
           return `
-            <button type="button" class="gh-menu__item description-versions-dropdown__item" data-action="open-description-version-modal" data-version-id="${escapeHtml(versionId)}">
+            <button type="button" class="gh-menu__item description-versions-dropdown__item" data-action="open-description-version-modal" data-version-id="${escapeHtml(versionId)}" title="${escapeHtml(absoluteTimestampLabel)}">
               <span class="description-versions-dropdown__avatar">
                 ${avatarUrl
                   ? `<img src="${escapeHtml(avatarUrl)}" alt="${escapeHtml(displayName)}">`
                   : `<span class="description-versions-dropdown__avatar-fallback">${escapeHtml(initials)}</span>`}
               </span>
-              <span class="description-versions-dropdown__item-content">
+              <span class="description-versions-dropdown__item-inline">
                 <span class="description-versions-dropdown__item-name">${escapeHtml(displayName)}</span>
                 <span class="description-versions-dropdown__item-meta">${escapeHtml(timestampLabel)}</span>
               </span>
@@ -534,12 +663,84 @@ export function createProjectSubjectsDescription(config = {}) {
 
     return `
       <div class="gh-menu issues-head-menu__dropdown description-versions-dropdown__menu ${isTarget && ui.isOpen ? "gh-menu--open" : ""}" data-role="description-versions-dropdown" role="menu">
-        <div class="gh-menu__title">Versions (${count})</div>
+        <div class="gh-menu__title description-versions-dropdown__title">versions (${count})</div>
         ${loadingHtml}
         ${errorHtml}
         <div class="description-versions-dropdown__list">${listHtml}</div>
       </div>
     `;
+  }
+
+  function ensureDescriptionVersionsDropdownHost() {
+    let host = document.getElementById("descriptionVersionsDropdownHost");
+    if (!host) {
+      host = document.createElement("div");
+      host.id = "descriptionVersionsDropdownHost";
+      host.className = "description-versions-dropdown-host";
+      host.setAttribute("aria-hidden", "true");
+      document.body.appendChild(host);
+    }
+    return host;
+  }
+
+  function hideDescriptionVersionsDropdownHost() {
+    const host = ensureDescriptionVersionsDropdownHost();
+    host.innerHTML = "";
+    host.setAttribute("aria-hidden", "true");
+  }
+
+  function resolveDescriptionVersionsAnchor(root, entityType, entityId) {
+    const anchorKey = `${entityType}::${entityId}`;
+    const selector = `[data-description-versions-anchor="${CSS.escape(anchorKey)}"]`;
+    const inRoot = root?.querySelector?.(selector);
+    if (isHtmlElement(inRoot)) return inRoot;
+    const fallback = document.querySelector(selector);
+    return isHtmlElement(fallback) ? fallback : null;
+  }
+
+  function syncDescriptionVersionsDropdownPosition(root) {
+    const ui = ensureDescriptionVersionsUiState();
+    const host = ensureDescriptionVersionsDropdownHost();
+    if (host.getAttribute("aria-hidden") === "true") return;
+    const anchor = resolveDescriptionVersionsAnchor(root, ui.entityType, ui.entityId);
+    if (!anchor) {
+      hideDescriptionVersionsDropdownHost();
+      return;
+    }
+    const menu = host.querySelector("[data-role='description-versions-dropdown']");
+    if (!isHtmlElement(menu)) return;
+    const anchorRect = anchor.getBoundingClientRect();
+    const menuRect = menu.getBoundingClientRect();
+    const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+    const margin = 12;
+    let left = anchorRect.right - menuRect.width;
+    let top = anchorRect.bottom + 6;
+    if (left < margin) left = margin;
+    if (left + menuRect.width > viewportWidth - margin) {
+      left = Math.max(margin, viewportWidth - menuRect.width - margin);
+    }
+    if (top + menuRect.height > viewportHeight - margin) {
+      top = Math.max(margin, anchorRect.top - menuRect.height - 6);
+    }
+    host.style.position = "fixed";
+    host.style.left = `${Math.round(left)}px`;
+    host.style.top = `${Math.round(top)}px`;
+  }
+
+  function renderDescriptionVersionsDropdownHost(root) {
+    const ui = ensureDescriptionVersionsUiState();
+    const host = ensureDescriptionVersionsDropdownHost();
+    const entityType = String(ui.entityType || "");
+    const entityId = String(ui.entityId || "");
+    if (!ui.isOpen || !entityType || !entityId) {
+      hideDescriptionVersionsDropdownHost();
+      return host;
+    }
+    host.innerHTML = renderDescriptionVersionsDropdownContent(entityType, entityId);
+    host.setAttribute("aria-hidden", "false");
+    syncDescriptionVersionsDropdownPosition(root);
+    return host;
   }
 
   function renderDescriptionCard(selection) {
@@ -649,8 +850,8 @@ export function createProjectSubjectsDescription(config = {}) {
   }
 
   function clearDescriptionEditState() {
-    ensureViewUiState();
-    store.situationsView.descriptionEdit = {
+    const view = getSubjectsViewStore();
+    view.descriptionEdit = {
       entityType: null,
       entityId: null,
       draft: "",
@@ -749,7 +950,8 @@ export function createProjectSubjectsDescription(config = {}) {
     if (!target) return false;
     const entityType = getSelectionEntityType(target.type);
     const current = getEntityDescriptionState(entityType, target.id);
-    store.situationsView.descriptionEdit = {
+    const view = getSubjectsViewStore();
+    view.descriptionEdit = {
       entityType,
       entityId: target.id,
       draft: current.body || "",
@@ -779,6 +981,8 @@ export function createProjectSubjectsDescription(config = {}) {
     openDescriptionVersionModal,
     closeDescriptionVersionModal,
     retryDescriptionVersionsLoad,
+    renderDescriptionVersionsDropdownHost,
+    syncDescriptionVersionsDropdownPosition,
     applyDescriptionSave,
     startDescriptionEdit,
     renderDescriptionCard
