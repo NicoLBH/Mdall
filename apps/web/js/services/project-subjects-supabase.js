@@ -2,7 +2,7 @@ import { store } from "../store.js";
 import { buildSubjectHierarchyIndexes } from "./subject-hierarchy.js";
 import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
 import { loadSituationsForCurrentProject, loadSituationSubjectIdsMap } from "./project-situations-supabase.js";
-import { resolveCurrentBackendProjectId } from "./project-supabase-sync.js";
+import { resolveCurrentBackendProjectId, resolveCurrentUserDirectoryPersonId } from "./project-supabase-sync.js";
 import { invalidateSubjectRefIndex } from "../utils/subject-ref-index.js";
 import { normalizeAssigneeIds } from "./subject-assignees-service.js";
 
@@ -43,6 +43,33 @@ function getMappedBackendProjectId() {
 
 async function getSupabaseAuthHeaders(extra = {}) {
   return buildSupabaseAuthHeaders(extra);
+}
+
+async function rpcCall(functionName, payload = {}) {
+  const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${functionName}`, {
+    method: "POST",
+    headers: await getSupabaseAuthHeaders({
+      Accept: "application/json",
+      "Content-Type": "application/json"
+    }),
+    body: JSON.stringify(payload || {})
+  });
+
+  if (!response.ok) {
+    const rawBody = await response.text().catch(() => "");
+    const error = new Error(`${functionName} failed (${response.status}): ${rawBody || response.statusText || "Unknown error"}`);
+    error.status = response.status;
+    error.rawBody = rawBody;
+    throw error;
+  }
+
+  const payloadText = await response.text().catch(() => "");
+  if (!payloadText) return null;
+  try {
+    return JSON.parse(payloadText);
+  } catch {
+    return null;
+  }
 }
 
 async function fetchProjectFlatSubjects(projectId) {
@@ -948,25 +975,29 @@ export async function updateSubjectDescription({ subjectId, description, uploadS
     throw new Error("description or uploadSessionId is required");
   }
 
-  const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/update_subject_description`, {
-    method: "POST",
-    headers: await getSupabaseAuthHeaders({
-      Accept: "application/json",
-      "Content-Type": "application/json",
-    }),
-    body: JSON.stringify({
-      p_subject_id: normalizedSubjectId,
-      p_description: nextDescription,
-      p_upload_session_id: normalizedUploadSessionId || null
-    })
-  });
-  if (!response.ok) {
-    const txt = await response.text().catch(() => "");
-    const rawError = txt || response.statusText || "Unknown error";
-    throw new Error(`update_subject_description failed (${response.status}): ${rawError}`);
+  let actorPersonId = "";
+  try {
+    actorPersonId = normalizeUuid(await resolveCurrentUserDirectoryPersonId());
+  } catch (error) {
+    throw new Error(`update_subject_description identity resolution failed: ${String(error?.message || error || "unknown identity resolution error")}`);
+  }
+  if (!actorPersonId) {
+    throw new Error("update_subject_description identity resolution failed: no linked directory person found for current user");
   }
 
-  const payload = await response.json().catch(() => null);
+  let payload = null;
+  try {
+    payload = await rpcCall("update_subject_description", {
+      p_subject_id: normalizedSubjectId,
+      p_description: nextDescription,
+      p_upload_session_id: normalizedUploadSessionId || null,
+      p_actor_person_id: actorPersonId
+    });
+  } catch (error) {
+    const rawError = String(error?.rawBody || error?.message || error || "");
+    throw new Error(`update_subject_description failed: ${rawError}`);
+  }
+
   const row = Array.isArray(payload) ? payload[0] : payload;
   const descriptionAttachments = Array.isArray(row?.description_attachments) ? row.description_attachments : [];
   return {
