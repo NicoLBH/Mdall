@@ -8607,6 +8607,31 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
 }
 .description-versions-dropdown{
   position:relative;
+  z-index:1300;
+}
+.description-versions-dropdown-host{
+  position:fixed;
+  left:0;
+  top:0;
+  z-index:calc(var(--z-assist) + 20);
+  pointer-events:none;
+}
+.description-versions-dropdown-host .description-versions-dropdown__menu{
+  position:static;
+  margin:0;
+  pointer-events:auto;
+}
+.description-versions-dropdown-host{
+  position:fixed;
+  left:0;
+  top:0;
+  z-index:calc(var(--z-assist) + 20);
+  pointer-events:none;
+}
+.description-versions-dropdown-host .description-versions-dropdown__menu{
+  position:static;
+  margin:0;
+  pointer-events:auto;
 }
 .description-versions-dropdown-host{
   position:fixed;
@@ -8646,6 +8671,25 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
   right:0;
   width:320px;
   max-height:340px;
+  z-index:1301;
+}
+.description-versions-dropdown__title{
+  font-size:12px;
+  color:var(--muted);
+  padding:8px 10px;
+  text-transform:none;
+}
+.description-versions-dropdown__title{
+  font-size:12px;
+  color:var(--muted);
+  padding:8px 10px;
+  text-transform:none;
+}
+.description-versions-dropdown__title{
+  font-size:12px;
+  color:var(--muted);
+  padding:8px 10px;
+  text-transform:none;
 }
 .description-versions-dropdown__title{
   font-size:12px;
