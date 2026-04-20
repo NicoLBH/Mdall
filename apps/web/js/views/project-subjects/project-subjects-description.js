@@ -733,6 +733,30 @@ export function createProjectSubjectsDescription(config = {}) {
 
   function renderDescriptionVersionsDropdownHost(root) {
     const ui = ensureDescriptionVersionsUiState();
+    const activeTarget = currentDecisionTarget(root);
+    if (ui.isOpen && activeTarget?.id) {
+      const activeEntityType = getSelectionEntityType(activeTarget.type);
+      const activeEntityId = String(activeTarget.id || "");
+      if (activeEntityType !== "sujet") {
+        ui.isOpen = false;
+        hideDescriptionVersionsDropdownHost();
+      }
+      if (activeEntityType !== ui.entityType || activeEntityId !== String(ui.entityId || "")) {
+        ui.entityType = activeEntityType;
+        ui.entityId = activeEntityId;
+        ui.selectedVersionId = "";
+        ui.versions = [];
+        ui.error = "";
+        logDescriptionVersions("host target switched", {
+          entityType: activeEntityType,
+          entityId: activeEntityId,
+          stateRefId: getStateRefId(ui)
+        });
+        if (activeEntityType === "sujet") {
+          void ensureDescriptionVersionsLoaded(root, activeEntityType, activeEntityId, { forceReload: true });
+        }
+      }
+    }
     const host = ensureDescriptionVersionsDropdownHost();
     const entityType = String(ui.entityType || "");
     const entityId = String(ui.entityId || "");

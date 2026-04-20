@@ -126,3 +126,95 @@ test("description versions: un rerender pendant le chargement ne bloque pas isLo
   delete globalThis.window;
   delete globalThis.CSS;
 });
+
+test("description versions: en dropdown ouvert, un changement de ticket recharge la bonne cible", async () => {
+  const fakeNodesById = new Map();
+  const fakeAnchors = {
+    "sujet::subject-1": { getBoundingClientRect: () => ({ top: 100, right: 320, bottom: 140, left: 260, width: 60, height: 40 }) },
+    "sujet::subject-2": { getBoundingClientRect: () => ({ top: 120, right: 340, bottom: 160, left: 280, width: 60, height: 40 }) }
+  };
+  globalThis.window = { innerWidth: 1200, innerHeight: 900 };
+  globalThis.CSS = { escape: (value) => String(value || "") };
+  globalThis.document = {
+    body: {
+      appendChild: (node) => {
+        if (node?.id) fakeNodesById.set(node.id, node);
+        return node;
+      }
+    },
+    documentElement: { clientWidth: 1200, clientHeight: 900 },
+    createElement: () => ({
+      id: "",
+      className: "",
+      style: {},
+      innerHTML: "",
+      attributes: {},
+      setAttribute(name, value) { this.attributes[name] = value; },
+      getAttribute(name) { return this.attributes[name]; },
+      querySelector: () => null
+    }),
+    getElementById: (id) => fakeNodesById.get(id) || null,
+    querySelector: (selector) => {
+      const match = String(selector || "").match(/data-description-versions-anchor=\"([^\"]+)\"/);
+      return match ? fakeAnchors[match[1]] || null : null;
+    }
+  };
+
+  const store = { user: { id: "u1" }, projectForm: { collaborators: [] }, projectSubjectsView: {}, situationsView: {} };
+  const runBucketState = { descriptions: { sujet: {}, situation: {} } };
+  let selectedSubjectId = "subject-1";
+  const loads = [];
+
+  const api = createProjectSubjectsDescription({
+    store,
+    ensureViewUiState: () => { store.projectSubjectsView ||= {}; },
+    firstNonEmpty: (...values) => values.find((value) => String(value ?? "").trim()) || "",
+    escapeHtml: (value) => String(value ?? ""),
+    svgIcon: () => "",
+    mdToHtml: (value) => String(value || ""),
+    fmtTs: () => "20/04/2026",
+    nowIso: () => new Date().toISOString(),
+    setOverlayChromeOpenState: () => {},
+    SVG_AVATAR_HUMAN: "",
+    renderCommentComposer: () => "",
+    getRunBucket: () => ({ bucket: runBucketState }),
+    persistRunBucket: (updater) => updater(runBucketState),
+    getSelectionEntityType: (type) => type,
+    getEntityByType: (type, id) => ({ id, title: `${type}-${id}`, raw: { description: "Description" } }),
+    getEntityReviewMeta: () => ({}),
+    setEntityReviewMeta: () => {},
+    currentDecisionTarget: () => ({ type: "sujet", id: selectedSubjectId, item: { id: selectedSubjectId } }),
+    rerenderScope: () => {},
+    markEntityValidated: () => {},
+    updateSubjectDescription: async () => ({}),
+    loadSubjectDescriptionVersions: async (subjectId) => {
+      loads.push(subjectId);
+      return [{
+        id: `v-${subjectId}`,
+        actor_user_id: "",
+        actor_person_id: "",
+        actor_name: "Mdall",
+        actor_is_system: true,
+        description_markdown: `${subjectId}-markdown`,
+        created_at: new Date().toISOString()
+      }];
+    }
+  });
+
+  api.toggleDescriptionVersionsDropdown({});
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(loads, ["subject-1"]);
+
+  selectedSubjectId = "subject-2";
+  api.renderDescriptionVersionsDropdownHost({ querySelector: () => fakeAnchors[`sujet::${selectedSubjectId}`] });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  api.renderDescriptionVersionsDropdownHost({ querySelector: () => fakeAnchors[`sujet::${selectedSubjectId}`] });
+
+  assert.deepEqual(loads, ["subject-1", "subject-2"]);
+  assert.equal(store.projectSubjectsView.descriptionVersionsUi.entityId, "subject-2");
+  assert.match(globalThis.document.getElementById("descriptionVersionsDropdownHost")?.innerHTML || "", /subject-2-markdown|Mdall/);
+
+  delete globalThis.document;
+  delete globalThis.window;
+  delete globalThis.CSS;
+});

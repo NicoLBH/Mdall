@@ -6,8 +6,7 @@ with version_rank as (
   select
     v.id,
     v.subject_id,
-    row_number() over (partition by v.subject_id order by v.created_at asc, v.id asc) as rn,
-    count(*) over (partition by v.subject_id) as version_count
+    row_number() over (partition by v.subject_id order by v.created_at asc, v.id asc) as rn
   from public.subject_description_versions v
 ),
 first_subject_history as (
@@ -18,15 +17,6 @@ first_subject_history as (
   from public.subject_history h
   where h.subject_id is not null
   order by h.subject_id, h.created_at asc, h.id asc
-),
-description_updates as (
-  select
-    h.subject_id,
-    count(*) as update_count
-  from public.subject_history h
-  where h.subject_id is not null
-    and h.event_type = 'subject_description_updated'
-  group by h.subject_id
 ),
 actor_person_map as (
   select distinct on (dp.linked_user_id)
@@ -45,11 +35,8 @@ candidates as (
   from version_rank vr
   join public.subject_description_versions v on v.id = vr.id
   left join first_subject_history fs on fs.subject_id = vr.subject_id
-  left join description_updates du on du.subject_id = vr.subject_id
   left join actor_person_map apm on apm.actor_user_id = fs.actor_user_id
   where vr.rn = 1
-    and vr.version_count = 1
-    and coalesce(du.update_count, 0) = 0
 )
 update public.subject_description_versions v
 set
