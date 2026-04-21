@@ -1447,8 +1447,8 @@ priority=${firstNonEmpty(subject.priority, "")}`
           const richNoteHtml = buildBusinessRichNoteHtml(e);
           const titleUpdateInlineHtml = isSubjectTitleUpdated && nextTitle
             ? `${previousTitle
-              ? `<span class="mono-small">"</span><span class="mono-small tl-note-inline-text tl-note-inline-text--strikethrough">${escapeHtml(previousTitle)}</span><span class="mono-small">" en </span>`
-              : ""}<span class="tl-note-inline-text tl-note-inline-text--quote">"</span><span class="tl-note-inline-text">${escapeHtml(nextTitle)}</span><span class="tl-note-inline-text tl-note-inline-text--quote">"</span>`
+              ? `<div class="tl-activity__titleChange"><span class="mono-small">"</span><span class="mono-small tl-note-inline-text tl-note-inline-text--strikethrough">${escapeHtml(previousTitle)}</span><span class="mono-small">" en </span>`
+              : ""}<span class="tl-note-inline-text tl-note-inline-text--quote">"</span><span class="tl-note-inline-text">${escapeHtml(nextTitle)}</span><span class="tl-note-inline-text tl-note-inline-text--quote">"</span></div>`
             : "";
           const inlineDetailHtml = richNoteHtml
             ? richNoteHtml
