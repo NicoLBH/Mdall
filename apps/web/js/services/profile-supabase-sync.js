@@ -1345,49 +1345,13 @@ function mapIssueActionToSubjectUpdate(action) {
 
   switch (normalizedAction) {
     case "issue:reopen":
-      return {
-        status: "open",
-        closure_reason: null,
-        closed_at: null,
-        history: {
-          event_type: "subject_reopened",
-          title: "Sujet rouvert",
-          description: "Le sujet a été rouvert depuis l’interface Mdall."
-        }
-      };
+      return { action: "issue:reopen" };
     case "issue:close:realized":
-      return {
-        status: "closed",
-        closure_reason: "realized",
-        closed_at: new Date().toISOString(),
-        history: {
-          event_type: "subject_closed",
-          title: "Sujet fermé comme réalisé",
-          description: "Le sujet a été marqué comme réalisé depuis l’interface Mdall."
-        }
-      };
+      return { action: "issue:close:realized" };
     case "issue:close:dismissed":
-      return {
-        status: "closed_invalid",
-        closure_reason: "non_pertinent",
-        closed_at: new Date().toISOString(),
-        history: {
-          event_type: "subject_closed",
-          title: "Sujet fermé comme non pertinent",
-          description: "Le sujet a été marqué comme non pertinent depuis l’interface Mdall."
-        }
-      };
+      return { action: "issue:close:dismissed" };
     case "issue:close:duplicate":
-      return {
-        status: "closed_duplicate",
-        closure_reason: "duplicate",
-        closed_at: new Date().toISOString(),
-        history: {
-          event_type: "subject_marked_duplicate",
-          title: "Sujet fermé comme dupliqué",
-          description: "Le sujet a été marqué comme dupliqué depuis l’interface Mdall."
-        }
-      };
+      return { action: "issue:close:duplicate" };
     default:
       return null;
   }
@@ -1818,9 +1782,6 @@ export async function deleteProjectCollaboratorFromSupabase(projectCollaboratorI
 export async function persistSubjectIssueActionToSupabase(subject = {}, action = "") {
   const actionConfig = mapIssueActionToSubjectUpdate(action);
   const subjectId = safeString(subject?.id || subject?.raw?.id || "");
-  const projectId = safeString(subject?.raw?.project_id || subject?.project_id || "");
-  const analysisRunId = safeString(subject?.raw?.analysis_run_id || subject?.analysis_run_id || "");
-  const documentId = safeString(subject?.raw?.document_id || subject?.document_id || "");
   const situationId = safeString(subject?.raw?.situation_id || subject?.situation_id || "");
 
   if (!actionConfig) {
@@ -1831,40 +1792,13 @@ export async function persistSubjectIssueActionToSupabase(subject = {}, action =
     throw new Error("Subject id missing for Supabase status update.");
   }
 
-  const updatedSubject = await restUpdate(
-    "subjects",
-    { id: subjectId },
-    {
-      status: actionConfig.status,
-      closure_reason: actionConfig.closure_reason,
-      closed_at: actionConfig.closed_at
-    },
-    {
-      select: "id,status,closure_reason,closed_at,updated_at"
-    }
-  );
-
-  if (projectId) {
-    await restInsert("subject_history", {
-      project_id: projectId,
-      subject_id: subjectId,
-      analysis_run_id: analysisRunId || null,
-      document_id: documentId || null,
-      event_type: actionConfig.history.event_type,
-      actor_type: "user",
-      actor_label: String((await getCurrentUser())?.email || "Mdall"),
-      actor_user_id: (await getCurrentUser())?.id || null,
-      title: actionConfig.history.title,
-      description: actionConfig.history.description,
-      event_payload: {
-        source: "mdall_frontend",
-        action: safeString(action),
-        previous_status: safeString(subject?.raw?.status || subject?.status || ""),
-        new_status: actionConfig.status,
-        closure_reason: actionConfig.closure_reason
-      }
-    });
-  }
+  const actorPersonId = safeString(await resolveCurrentUserDirectoryPersonId());
+  const payload = await rpcCall("update_subject_issue_status", {
+    p_subject_id: subjectId,
+    p_action: actionConfig.action,
+    p_actor_person_id: actorPersonId || null
+  });
+  const updatedSubject = Array.isArray(payload) ? (payload[0] || {}) : (payload || {});
 
   if (situationId) {
     try {
@@ -1886,7 +1820,7 @@ export async function persistSubjectIssueActionToSupabase(subject = {}, action =
     section: "subjects",
     subjectId,
     action: safeString(action),
-    status: actionConfig.status
+    status: safeString(updatedSubject?.status || "")
   });
 
   return updatedSubject;
