@@ -1270,7 +1270,24 @@ priority=${firstNonEmpty(subject.priority, "")}`
     const title = firstNonEmpty(objective?.title, fallbackLabel, "Objectif");
     return `
       <span class="subject-meta-objective-card subject-meta-objective-card--inline">
+        <span class="subject-meta-objective-card__count" aria-hidden="true">${svgIcon("milestone", { className: "ui-icon octicon octicon-milestone" })}</span>
         <span class="subject-meta-objective-card__title">${escapeHtml(title)}</span>
+      </span>
+    `;
+  }
+
+  function renderSituationInline(situationId = "", fallbackLabel = "") {
+    const raw = getRawSubjectsResult();
+    const situationsById = raw?.situationsById && typeof raw.situationsById === "object" ? raw.situationsById : {};
+    const situationsList = Array.isArray(raw?.situations) ? raw.situations : [];
+    const situation = situationsById[situationId] || situationsList.find((item) => normalizeId(item?.id) === normalizeId(situationId)) || null;
+    const status = String(situation?.status || "open").toLowerCase();
+    const isClosedSituation = status === "closed";
+    const title = firstNonEmpty(situation?.title, fallbackLabel, "Situation");
+    return `
+      <span class="tl-note-inline-link">
+        <span class="subject-meta-situation-card__icon" aria-hidden="true">${svgIcon(isClosedSituation ? "table-check" : "table", { className: "ui-icon octicon octicon-table" })}</span>
+        <span class="tl-note-inline-text">${escapeHtml(title)}</span>
       </span>
     `;
   }
@@ -1354,6 +1371,16 @@ priority=${firstNonEmpty(subject.priority, "")}`
       return `${renderObjectiveInline(objective?.id, objective?.label)}`;
     }
 
+    if (eventType === "subject_situations_changed" && String(payload?.action || "").toLowerCase() === "added" && added.length === 1) {
+      const situation = added[0] || {};
+      return `${renderSituationInline(situation?.id, situation?.label)}`;
+    }
+
+    if (eventType === "subject_situations_changed" && String(payload?.action || "").toLowerCase() === "removed" && removed.length === 1) {
+      const situation = removed[0] || {};
+      return `${renderSituationInline(situation?.id, situation?.label)}`;
+    }
+
     if (eventType === "subject_blocked_by_added" && counterpartId) {
       return renderLinkedSubjectInline(counterpartId, counterpartTitle);
     }
@@ -1414,12 +1441,16 @@ priority=${firstNonEmpty(subject.priority, "")}`
             ? "a retiré un assigné"
             : eventType === "subject_labels_changed" && action === "removed"
               ? "a retiré le label"
-              : eventType === "subject_labels_changed" && action === "added"
+                : eventType === "subject_labels_changed" && action === "added"
                 ? "a ajouté le label"
                 : eventType === "subject_objectives_changed" && action === "removed"
-                  ? "a retiré un objectif"
+                  ? "a retiré l'objectif"
                   : eventType === "subject_objectives_changed" && action === "added"
-                    ? "a ajouté un objectif"
+                    ? "a ajouté l'objectif"
+                  : eventType === "subject_situations_changed" && action === "removed"
+                    ? "a supprimé le sujet de la situation"
+                  : eventType === "subject_situations_changed" && action === "added"
+                    ? "a ajouté le sujet à la situation"
             : (eventType === "subject_parent_added" ? "a ajouté le sujet parent" : appearance.verb);
           const note = buildBusinessActivitySummary({
             payload,
@@ -1432,7 +1463,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
             ? richNoteHtml
             : (note ? `<span class="tl-note-inline-text">${escapeHtml(note)}</span>` : "");
           const shouldRenderInlineBeforeTimestamp = (
-            (eventType === "subject_labels_changed" || eventType === "subject_objectives_changed")
+            (eventType === "subject_labels_changed" || eventType === "subject_objectives_changed" || eventType === "subject_situations_changed")
             && (action === "added" || action === "removed")
           );
           const shouldRenderInlineBelow = (

@@ -34,6 +34,22 @@ export function summarizeCollectionChange(payload = {}, entityLabel = "élément
   return "";
 }
 
+function summarizeSituationChange(payload = {}, firstNonEmpty = defaultFirstNonEmpty) {
+  const added = readDeltaEntries(payload, "added", firstNonEmpty);
+  const removed = readDeltaEntries(payload, "removed", firstNonEmpty);
+  if (added.length === 1 && !removed.length) return `a ajouté le sujet à la situation ${added[0]}`;
+  if (removed.length === 1 && !added.length) return `a supprimé le sujet de la situation ${removed[0]}`;
+  return summarizeCollectionChange(payload, "situation", firstNonEmpty);
+}
+
+function summarizeObjectiveChange(payload = {}, firstNonEmpty = defaultFirstNonEmpty) {
+  const added = readDeltaEntries(payload, "added", firstNonEmpty);
+  const removed = readDeltaEntries(payload, "removed", firstNonEmpty);
+  if (added.length === 1 && !removed.length) return `a ajouté l'objectif ${added[0]}`;
+  if (removed.length === 1 && !added.length) return `a retiré l'objectif ${removed[0]}`;
+  return summarizeCollectionChange(payload, "objectif", firstNonEmpty);
+}
+
 export const BUSINESS_ACTIVITY_CONFIG = {
   subject_title_updated: { icon: "pencil", tone: "business-edit", verb: "a modifié le titre" },
   subject_description_updated: { icon: "note", tone: "business-edit", verb: "a modifié la description" },
@@ -53,13 +69,13 @@ export const BUSINESS_ACTIVITY_CONFIG = {
     icon: "table",
     tone: "business-rel",
     verb: "a mis à jour les situations",
-    summarize: (payload, firstNonEmpty) => summarizeCollectionChange(payload, "situation", firstNonEmpty)
+    summarize: (payload, firstNonEmpty) => summarizeSituationChange(payload, firstNonEmpty)
   },
   subject_objectives_changed: {
     icon: "milestone",
     tone: "business-rel",
     verb: "a mis à jour les objectifs",
-    summarize: (payload, firstNonEmpty) => summarizeCollectionChange(payload, "objectif", firstNonEmpty)
+    summarize: (payload, firstNonEmpty) => summarizeObjectiveChange(payload, firstNonEmpty)
   },
   subject_parent_added: { icon: "issue-tracked-by", tone: "business-rel", verb: "a ajouté un parent" },
   subject_parent_removed: { icon: "arrow-up", tone: "business-rel", verb: "a retiré un parent" },
