@@ -1348,11 +1348,8 @@ priority=${firstNonEmpty(subject.priority, "")}`
 
     if (eventType === "subject_parent_added" && counterpartId) {
       const linkedSubject = entityDisplayLinkHtml("sujet", counterpartId);
-      const status = String(getEffectiveSujetStatus(counterpartId) || getNestedSujet(counterpartId)?.status || "open").toLowerCase();
-      const statusIcon = status.startsWith("closed") ? "check-circle" : "issue-reopened";
       return `
-        <span class="tl-note-inline-link">${svgIcon(statusIcon)}${counterpartTitle ? `${escapeHtml(counterpartTitle)} ` : ""}${linkedSubject}</span>
-        <span class="mono-small">comme parent</span>
+        <span class="tl-note-inline-link">${counterpartTitle ? `${escapeHtml(counterpartTitle)} ` : ""}${linkedSubject}</span>
       `;
     }
 
@@ -1402,7 +1399,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
           const assigneesAction = String(payload?.action || "").toLowerCase();
           const resolvedVerb = eventType === "subject_assignees_changed" && assigneesAction === "removed"
             ? "a retiré un assigné"
-            : (eventType === "subject_parent_added" ? "a ajouté le sujet" : appearance.verb);
+            : (eventType === "subject_parent_added" ? "a ajouté le sujet parent" : appearance.verb);
           const note = buildBusinessActivitySummary({
             payload,
             appearance,
@@ -1413,6 +1410,12 @@ priority=${firstNonEmpty(subject.priority, "")}`
           const inlineDetailHtml = richNoteHtml
             ? richNoteHtml
             : (note ? `<span class="tl-note-inline-text">${escapeHtml(note)}</span>` : "");
+          const parentAddedLineHtml = eventType === "subject_parent_added" && inlineDetailHtml
+            ? `<span class="tl-note-inline tl-note-inline--parent-added">${inlineDetailHtml}</span>`
+            : "";
+          const defaultInlineHtml = eventType === "subject_parent_added"
+            ? ""
+            : (inlineDetailHtml ? `<span class="tl-note-inline">${inlineDetailHtml}</span>` : "");
 
           return renderMessageThreadActivity({
             idx,
@@ -1424,8 +1427,9 @@ priority=${firstNonEmpty(subject.priority, "")}`
             textHtml: `
               <span class="tl-author-name">${escapeHtml(activityIdentity.displayName)}</span>
               <span class="mono-small"> ${escapeHtml(resolvedVerb)} </span>
-              ${inlineDetailHtml ? `<span class="tl-note-inline">${inlineDetailHtml}</span>` : ""}
               <span class="mono-small">· ${escapeHtml(ts)}</span>
+              ${defaultInlineHtml}
+              ${parentAddedLineHtml}
             `,
             noteHtml: ""
           });
