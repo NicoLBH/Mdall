@@ -517,6 +517,26 @@ export function createSubjectMessagesSupabaseRepository() {
       return Array.isArray(rows) ? rows : [];
     },
 
+    async listBusinessEvents({ subjectId, limit = 300 }) {
+      const normalizedSubjectId = normalizeId(subjectId);
+      if (!normalizedSubjectId) return [];
+
+      const rows = await rpcCall("list_subject_business_timeline_events", {
+        p_subject_id: normalizedSubjectId,
+        p_limit: Math.max(1, Number(limit) || 300)
+      });
+      const list = Array.isArray(rows) ? rows : [];
+      return list
+        .map((row) => ({
+          ...row,
+          created_at: String(row?.created_at || ""),
+          event_payload: row?.normalized_payload && typeof row.normalized_payload === "object"
+            ? row.normalized_payload
+            : (row?.event_payload || {})
+        }))
+        .sort((left, right) => String(left?.created_at || "").localeCompare(String(right?.created_at || "")));
+    },
+
     async getConversationSettings({ subjectId }) {
       const normalizedSubjectId = normalizeId(subjectId);
       if (!normalizedSubjectId) return null;

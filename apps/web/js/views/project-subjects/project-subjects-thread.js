@@ -1,6 +1,11 @@
 import { getAuthorIdentity } from "../ui/author-identity.js";
 import { renderSubjectMarkdownToolbar } from "../ui/subject-rich-editor.js";
 import { renderSubjectAttachmentTile } from "./project-subjects-attachments-ui.js";
+import {
+  buildBusinessActivitySummary,
+  getBusinessActivityAppearance,
+  mapBusinessEventRowToThreadActivity as mapBusinessEventRowToThreadActivityShared
+} from "./project-subjects-thread-business-events.js";
 export function createProjectSubjectsThread(config = {}) {
   const {
     store,
@@ -443,6 +448,10 @@ export function createProjectSubjectsThread(config = {}) {
     };
   }
 
+  function mapBusinessEventRowToThreadActivity(row = {}) {
+    return mapBusinessEventRowToThreadActivityShared(row, { firstNonEmpty, nowIso });
+  }
+
   function mapTimelineRowToThreadEntry(row = {}) {
     const kind = String(row?.kind || "").toLowerCase();
     if (kind === "message") {
@@ -450,6 +459,9 @@ export function createProjectSubjectsThread(config = {}) {
     }
     if (kind === "event") {
       return mapEventRowToThreadActivity(row.event || {});
+    }
+    if (kind === "business_event") {
+      return mapBusinessEventRowToThreadActivity(row.event || {});
     }
     return null;
   }
@@ -504,6 +516,7 @@ export function createProjectSubjectsThread(config = {}) {
 
         const messages = Array.isArray(timeline?.messages) ? timeline.messages : [];
         const events = Array.isArray(timeline?.events) ? timeline.events : [];
+        const businessEvents = Array.isArray(timeline?.businessEvents) ? timeline.businessEvents : [];
         const rows = Array.isArray(timeline?.rows) ? timeline.rows : [];
         const mappedRows = rows.map((row) => mapTimelineRowToThreadEntry(row)).filter(Boolean);
         const mappedComments = mappedRows.filter((entry) => String(entry?.type || "").toUpperCase() === "COMMENT");
@@ -517,6 +530,7 @@ export function createProjectSubjectsThread(config = {}) {
           }),
           comments: nestedComments,
           activities: events.map((row) => mapEventRowToThreadActivity(row)),
+          businessActivities: businessEvents.map((row) => mapBusinessEventRowToThreadActivity(row)),
           conversation: timeline?.conversation || null
         });
         debugRenderScope("thread-timeline-refresh", {
@@ -1232,6 +1246,40 @@ priority=${firstNonEmpty(subject.priority, "")}`
       if (type === "ACTIVITY") {
         const kind = String(e?.kind || "").toLowerCase();
         if (kind === "message_deleted") return "";
+        if (String(e?.meta?.source || "") === "subject_history") {
+          const activityIdentity = getAuthorIdentity({
+            author: e?.actor,
+            agent: "human",
+            currentUserAvatar: store?.user?.avatar,
+            humanAvatarHtml: SVG_AVATAR_HUMAN,
+            fallbackName: "Utilisateur"
+          });
+          const appearance = getBusinessActivityAppearance(e?.meta?.event_type || kind);
+          const payload = e?.meta?.event_payload && typeof e.meta.event_payload === "object" ? e.meta.event_payload : {};
+          const ts = fmtTs(e?.ts || "");
+          const note = buildBusinessActivitySummary({
+            payload,
+            appearance,
+            fallbackMessage: e?.message,
+            firstNonEmpty
+          });
+          const noteHtml = note ? `<div class="tl-note">${escapeHtml(note)}</div>` : "";
+
+          return renderMessageThreadActivity({
+            idx,
+            className: `thread-item--business thread-item--${appearance.tone} thread-item--event-${String(e?.meta?.event_type || "").toLowerCase()}`,
+            iconHtml: `<span class="tl-ico tl-ico--business tl-ico--${appearance.tone}" aria-hidden="true">${svgIcon(appearance.icon)}</span>`,
+            authorIconHtml: activityIdentity.avatarHtml
+              ? `<span class="tl-author tl-author--custom" aria-hidden="true">${activityIdentity.avatarHtml}</span>`
+              : miniAuthorIconHtml("human"),
+            textHtml: `
+              <span class="tl-author-name">${escapeHtml(activityIdentity.displayName)}</span>
+              <span class="mono-small"> ${escapeHtml(appearance.verb)} </span>
+              <span class="mono-small">· ${escapeHtml(ts)}</span>
+            `,
+            noteHtml
+          });
+        }
         const agent = e?.agent || "system";
         const activityIdentity = getAuthorIdentity({
           author: e?.actor,

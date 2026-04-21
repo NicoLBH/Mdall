@@ -14,6 +14,9 @@ import {
   addLabelToSubject as addLabelToSubjectInSupabase,
   removeLabelFromSubject as removeLabelFromSubjectInSupabase,
   replaceSubjectAssignees as replaceSubjectAssigneesInSupabase,
+  replaceSubjectLabels as replaceSubjectLabelsInSupabase,
+  replaceSubjectSituations as replaceSubjectSituationsInSupabase,
+  replaceSubjectObjectives as replaceSubjectObjectivesInSupabase,
   updateSubjectDescription as updateSubjectDescriptionInSupabase,
   updateSubjectTitle as updateSubjectTitleInSupabase,
   loadSubjectDescriptionVersions as loadSubjectDescriptionVersionsInSupabase
@@ -654,6 +657,9 @@ const projectSubjectsActions = createProjectSubjectsActions({
   addLabelToSubjectInSupabase: (...args) => addLabelToSubjectInSupabase(...args),
   removeLabelFromSubjectInSupabase: (...args) => removeLabelFromSubjectInSupabase(...args),
   replaceSubjectAssigneesInSupabase: (...args) => replaceSubjectAssigneesInSupabase(...args),
+  replaceSubjectLabelsInSupabase: (...args) => replaceSubjectLabelsInSupabase(...args),
+  replaceSubjectSituationsInSupabase: (...args) => replaceSubjectSituationsInSupabase(...args),
+  replaceSubjectObjectivesInSupabase: (...args) => replaceSubjectObjectivesInSupabase(...args),
   addSubjectToObjectiveInSupabase: (...args) => addSubjectToObjectiveInSupabase(...args),
   removeSubjectFromObjectiveInSupabase: (...args) => removeSubjectFromObjectiveInSupabase(...args),
   setSubjectParentInSupabase: (subjectId, parentSubjectId) => setSubjectParentRelationInSupabaseService({
@@ -668,7 +674,8 @@ const projectSubjectsActions = createProjectSubjectsActions({
   }),
   deleteBlockedByRelationInSupabase: (subjectId, blockedBySubjectId) => deleteBlockedByRelationInSupabaseService({
     subjectId,
-    blockedBySubjectId
+    blockedBySubjectId,
+    rawSubjectsResult: store.projectSubjectsView?.rawSubjectsResult || null
   }),
   reorderSubjectChildrenInSupabase: (parentSubjectId, orderedChildIds) => reorderSubjectChildrenInSupabaseService({
     parentSubjectId,

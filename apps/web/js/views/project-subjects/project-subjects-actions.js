@@ -27,8 +27,6 @@ export function createProjectSubjectsActions(config) {
     rerenderScope,
     reloadSubjectsFromSupabase,
     loadSituationsForCurrentProject,
-    addSubjectToSituation,
-    removeSubjectFromSituation,
     persistSubjectIssueActionToSupabase,
     showError,
     getSubjectSidebarMeta,
@@ -38,11 +36,10 @@ export function createProjectSubjectsActions(config) {
     normalizeSubjectLabelKey,
     getSubjectLabelDefinition,
     getObjectives,
-    addLabelToSubjectInSupabase,
-    removeLabelFromSubjectInSupabase,
+    replaceSubjectLabelsInSupabase,
     replaceSubjectAssigneesInSupabase,
-    addSubjectToObjectiveInSupabase,
-    removeSubjectFromObjectiveInSupabase,
+    replaceSubjectSituationsInSupabase,
+    replaceSubjectObjectivesInSupabase,
     setSubjectParentInSupabase,
     createBlockedByRelationInSupabase,
     deleteBlockedByRelationInSupabase,
@@ -457,8 +454,7 @@ export function createProjectSubjectsActions(config) {
     }
 
     try {
-      if (wasLinked) await removeSubjectFromSituation(situationKey, subjectKey);
-      else await addSubjectToSituation(situationKey, subjectKey);
+      await replaceSubjectSituationsInSupabase(subjectKey, nextIds);
       await loadSituationsForCurrentProject().catch(() => []);
       return true;
     } catch (error) {
@@ -553,8 +549,10 @@ export function createProjectSubjectsActions(config) {
     }
 
     try {
-      if (hasLabel) await removeLabelFromSubjectInSupabase(subjectKey, labelId);
-      else await addLabelToSubjectInSupabase(subjectKey, labelId);
+      const nextLabelIds = Array.isArray(store.projectSubjectsView?.rawSubjectsResult?.labelIdsBySubjectId?.[subjectKey])
+        ? store.projectSubjectsView.rawSubjectsResult.labelIdsBySubjectId[subjectKey].map((value) => String(value || "").trim()).filter(Boolean)
+        : [];
+      await replaceSubjectLabelsInSupabase(subjectKey, nextLabelIds);
 
       await reloadSubjectsFromSupabase(options.root, {
         rerender: options.skipRerender ? false : true,
@@ -635,12 +633,7 @@ export function createProjectSubjectsActions(config) {
     }
 
     try {
-      for (const removedId of removedObjectiveIds) {
-        await removeSubjectFromObjectiveInSupabase(removedId, subjectKey);
-      }
-      for (const addedId of addedObjectiveIds) {
-        await addSubjectToObjectiveInSupabase(addedId, subjectKey);
-      }
+      await replaceSubjectObjectivesInSupabase(subjectKey, nextIds);
       return true;
     } catch (error) {
       setSubjectObjectiveIds(subjectKey, previousIds);
