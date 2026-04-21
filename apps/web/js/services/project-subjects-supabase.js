@@ -1110,62 +1110,16 @@ export async function replaceSubjectAssignees(subjectId, personIds = []) {
   const normalizedSubjectId = normalizeUuid(subjectId);
   if (!normalizedSubjectId) throw new Error("subjectId is required");
   const uniquePersonIds = [...new Set(normalizeAssigneeIds(personIds).map((value) => normalizeUuid(value)).filter(Boolean))];
-  const projectId = await fetchSubjectProjectId(normalizedSubjectId);
+  const actorPersonId = normalizeUuid(await resolveCurrentUserDirectoryPersonId());
+  if (!actorPersonId) {
+    throw new Error("replace_subject_assignees identity resolution failed: no linked directory person found for current user");
+  }
 
-  const deleteUrl = new URL(`${SUPABASE_URL}/rest/v1/subject_assignees`);
-  deleteUrl.searchParams.set("subject_id", `eq.${normalizedSubjectId}`);
-
-  const deleteRes = await fetch(deleteUrl.toString(), {
-    method: "DELETE",
-    headers: await getSupabaseAuthHeaders({
-      Accept: "application/json",
-      Prefer: "return=minimal"
-    })
+  await rpcCall("replace_subject_assignees", {
+    p_subject_id: normalizedSubjectId,
+    p_person_ids: uniquePersonIds,
+    p_actor_person_id: actorPersonId
   });
-
-  if (!deleteRes.ok) {
-    const txt = await deleteRes.text().catch(() => "");
-    throw new Error(`subject_assignees delete failed (${deleteRes.status}): ${txt}`);
-  }
-
-  if (uniquePersonIds.length) {
-    const insertUrl = new URL(`${SUPABASE_URL}/rest/v1/subject_assignees`);
-    insertUrl.searchParams.set("on_conflict", "subject_id,person_id");
-    const insertRes = await fetch(insertUrl.toString(), {
-      method: "POST",
-      headers: await getSupabaseAuthHeaders({
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        Prefer: "resolution=merge-duplicates,return=representation"
-      }),
-      body: JSON.stringify(uniquePersonIds.map((personId) => ({
-        project_id: projectId,
-        subject_id: normalizedSubjectId,
-        person_id: personId
-      })))
-    });
-
-    if (!insertRes.ok) {
-      const txt = await insertRes.text().catch(() => "");
-      throw new Error(`subject_assignees insert failed (${insertRes.status}): ${txt}`);
-    }
-  }
-
-  const primaryPersonId = uniquePersonIds[0] || null;
-  const patchRes = await fetch(`${SUPABASE_URL}/rest/v1/subjects?id=eq.${normalizedSubjectId}`, {
-    method: "PATCH",
-    headers: await getSupabaseAuthHeaders({
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      Prefer: "return=minimal"
-    }),
-    body: JSON.stringify({ assignee_person_id: primaryPersonId })
-  });
-
-  if (!patchRes.ok) {
-    const txt = await patchRes.text().catch(() => "");
-    throw new Error(`subjects assignee_person_id update failed (${patchRes.status}): ${txt}`);
-  }
 
   return uniquePersonIds;
 }
@@ -1173,25 +1127,55 @@ export async function replaceSubjectAssignees(subjectId, personIds = []) {
 export async function replaceSubjectLabels(subjectId, labelIds = []) {
   const normalizedSubjectId = normalizeUuid(subjectId);
   if (!normalizedSubjectId) throw new Error("subjectId is required");
+  const actorPersonId = normalizeUuid(await resolveCurrentUserDirectoryPersonId());
+  if (!actorPersonId) {
+    throw new Error("replace_subject_labels identity resolution failed: no linked directory person found for current user");
+  }
 
   const nextLabelIds = [...new Set((Array.isArray(labelIds) ? labelIds : []).map((value) => normalizeUuid(value)).filter(Boolean))];
-  const currentLabelIds = [
-    ...new Set((store.projectSubjectsView?.rawSubjectsResult?.labelIdsBySubjectId?.[normalizedSubjectId] || []).map((value) => normalizeUuid(value)).filter(Boolean))
-  ];
+  await rpcCall("replace_subject_labels", {
+    p_subject_id: normalizedSubjectId,
+    p_label_ids: nextLabelIds,
+    p_actor_person_id: actorPersonId
+  });
 
-  const currentSet = new Set(currentLabelIds);
-  const nextSet = new Set(nextLabelIds);
-  const labelIdsToRemove = currentLabelIds.filter((labelId) => !nextSet.has(labelId));
-  const labelIdsToAdd = nextLabelIds.filter((labelId) => !currentSet.has(labelId));
+  return nextLabelIds;
+}
 
-  for (const labelId of labelIdsToRemove) {
-    await removeLabelFromSubject(normalizedSubjectId, labelId);
+export async function replaceSubjectSituations(subjectId, situationIds = []) {
+  const normalizedSubjectId = normalizeUuid(subjectId);
+  if (!normalizedSubjectId) throw new Error("subjectId is required");
+  const actorPersonId = normalizeUuid(await resolveCurrentUserDirectoryPersonId());
+  if (!actorPersonId) {
+    throw new Error("replace_subject_situations identity resolution failed: no linked directory person found for current user");
   }
-  for (const labelId of labelIdsToAdd) {
-    await addLabelToSubject(normalizedSubjectId, labelId);
+
+  const nextSituationIds = [...new Set((Array.isArray(situationIds) ? situationIds : []).map((value) => normalizeUuid(value)).filter(Boolean))];
+  await rpcCall("replace_subject_situations", {
+    p_subject_id: normalizedSubjectId,
+    p_situation_ids: nextSituationIds,
+    p_actor_person_id: actorPersonId
+  });
+
+  return nextSituationIds;
+}
+
+export async function replaceSubjectObjectives(subjectId, objectiveIds = []) {
+  const normalizedSubjectId = normalizeUuid(subjectId);
+  if (!normalizedSubjectId) throw new Error("subjectId is required");
+  const actorPersonId = normalizeUuid(await resolveCurrentUserDirectoryPersonId());
+  if (!actorPersonId) {
+    throw new Error("replace_subject_objectives identity resolution failed: no linked directory person found for current user");
   }
 
-  return true;
+  const nextObjectiveIds = [...new Set((Array.isArray(objectiveIds) ? objectiveIds : []).map((value) => normalizeUuid(value)).filter(Boolean))];
+  await rpcCall("replace_subject_objectives", {
+    p_subject_id: normalizedSubjectId,
+    p_objective_ids: nextObjectiveIds,
+    p_actor_person_id: actorPersonId
+  });
+
+  return nextObjectiveIds;
 }
 
 export async function updateSubjectDescription({ subjectId, description, uploadSessionId = "" } = {}) {
