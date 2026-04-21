@@ -830,19 +830,6 @@ export function createProjectSubjectsEvents(config) {
       console.log(`${AUTOCOMPLETE_LOG_PREFIX} ${eventName}`, payload);
     };
 
-    const syncComposerTextareaHeight = (textarea, { minHeightFallback = 110 } = {}) => {
-      if (!textarea) return;
-      const computedStyle = window.getComputedStyle(textarea);
-      const lineHeight = Math.max(16, Math.round(parseFloat(computedStyle.lineHeight) || 20));
-      const minHeight = Math.max(minHeightFallback, Math.round(parseFloat(computedStyle.minHeight) || minHeightFallback));
-      const comfortExtraLines = 3;
-      const extraPadding = lineHeight * comfortExtraLines;
-      textarea.style.overflowY = "hidden";
-      textarea.style.height = "auto";
-      const nextHeight = Math.max(minHeight, textarea.scrollHeight + extraPadding);
-      textarea.style.height = `${nextHeight}px`;
-    };
-
     const getTextareaSelector = ({ composerKey = "main", messageId = "" } = {}) => {
       if (composerKey === "main") return "#humanCommentBox";
       if (composerKey === "reply" && messageId) return `[data-thread-reply-draft="${selectorValue(messageId)}"]`;
@@ -1266,11 +1253,9 @@ export function createProjectSubjectsEvents(config) {
       const { mode, messageId = "" } = splitComposerKey(composerKey);
       if (mode === "main") {
         store.situationsView.commentDraft = String(result.nextText || "");
-        syncComposerTextareaHeight(textarea, { minHeightFallback: 170 });
       } else if (mode === "description") {
         const descriptionState = resolveDescriptionEditorState();
         descriptionState.draft = String(result.nextText || "");
-        syncComposerTextareaHeight(textarea, { minHeightFallback: 170 });
       } else {
         const replyUi = resolveInlineReplyUiState();
         if (mode === "reply") {
@@ -1382,11 +1367,9 @@ export function createProjectSubjectsEvents(config) {
       const { mode, messageId = "" } = splitComposerKey(composerKey);
       if (mode === "main") {
         store.situationsView.commentDraft = String(result.nextText || "");
-        syncComposerTextareaHeight(textarea, { minHeightFallback: 170 });
       } else if (mode === "description") {
         const descriptionState = resolveDescriptionEditorState();
         descriptionState.draft = String(result.nextText || "");
-        syncComposerTextareaHeight(textarea, { minHeightFallback: 170 });
       } else {
         const replyUi = resolveInlineReplyUiState();
         if (mode === "reply") {
@@ -1641,7 +1624,15 @@ export function createProjectSubjectsEvents(config) {
       };
 
       const syncMainComposerTextareaHeight = () => {
-        syncComposerTextareaHeight(commentTextarea, { minHeightFallback: 170 });
+        const computedStyle = window.getComputedStyle(commentTextarea);
+        const lineHeight = Math.max(16, Math.round(parseFloat(computedStyle.lineHeight) || 20));
+        const minHeight = Math.max(170, Math.round(parseFloat(computedStyle.minHeight) || 170));
+        const comfortExtraLines = 3;
+        const extraPadding = lineHeight * comfortExtraLines;
+        commentTextarea.style.overflowY = "hidden";
+        commentTextarea.style.height = "auto";
+        const nextHeight = Math.max(minHeight, commentTextarea.scrollHeight + extraPadding);
+        commentTextarea.style.height = `${nextHeight}px`;
       };
 
       syncMainComposerTextareaHeight();
@@ -2843,7 +2834,16 @@ export function createProjectSubjectsEvents(config) {
       submitButton.disabled = !canSubmitInlineEdit(normalizedMessageId);
     };
     const syncInlineReplyTextareaHeight = (textarea) => {
-      syncComposerTextareaHeight(textarea, { minHeightFallback: 110 });
+      if (!textarea) return;
+      const computedStyle = window.getComputedStyle(textarea);
+      const lineHeight = Math.max(16, Math.round(parseFloat(computedStyle.lineHeight) || 20));
+      const minHeight = Math.max(110, Math.round(parseFloat(computedStyle.minHeight) || 110));
+      const comfortExtraLines = 3;
+      const extraPadding = lineHeight * comfortExtraLines;
+      textarea.style.overflowY = "hidden";
+      textarea.style.height = "auto";
+      const nextHeight = Math.max(minHeight, textarea.scrollHeight + extraPadding);
+      textarea.style.height = `${nextHeight}px`;
     };
     const toggleInlineReplyEditorVisibility = (messageId = "", visible = false) => {
       const normalizedMessageId = String(messageId || "").trim();
@@ -3746,8 +3746,6 @@ export function createProjectSubjectsEvents(config) {
         previewTab?.setAttribute("aria-selected", "false");
         textareaWrap?.classList.remove("hidden");
         previewWrap?.classList.add("hidden");
-        const textarea = composerRoot?.querySelector(`[data-thread-reply-draft="${selectorValue(messageId)}"]`);
-        if (textarea) requestAnimationFrame(() => syncInlineReplyTextareaHeight(textarea));
       };
     });
 
@@ -3793,8 +3791,6 @@ export function createProjectSubjectsEvents(config) {
         previewTab?.setAttribute("aria-selected", "false");
         composerRoot?.querySelector(".comment-composer__editor")?.classList.remove("hidden");
         composerRoot?.querySelector(".comment-composer__preview-wrap")?.classList.add("hidden");
-        const textarea = composerRoot?.querySelector(`[data-thread-edit-draft="${selectorValue(messageId)}"]`);
-        if (textarea) requestAnimationFrame(() => syncInlineReplyTextareaHeight(textarea));
       };
     });
 
@@ -3903,10 +3899,6 @@ export function createProjectSubjectsEvents(config) {
         composerRoot?.querySelector("[data-action='description-tab-preview']")?.classList.remove("is-active");
         composerRoot?.querySelector(".comment-composer__editor")?.classList.remove("hidden");
         composerRoot?.querySelector(".comment-composer__preview-wrap")?.classList.add("hidden");
-        const textarea = composerRoot?.querySelector("[data-description-draft]");
-        if (textarea instanceof HTMLTextAreaElement) {
-          requestAnimationFrame(() => syncComposerTextareaHeight(textarea, { minHeightFallback: 170 }));
-        }
       };
     });
     root.querySelectorAll("[data-action='description-tab-preview']").forEach((btn) => {
@@ -3936,7 +3928,6 @@ export function createProjectSubjectsEvents(config) {
         if (action === "subject-ref") {
           ensureSubjectRefTriggerInTextarea(textarea);
           syncDescriptionEditorDraft(root);
-          syncComposerTextareaHeight(textarea, { minHeightFallback: 170 });
           closeMentionPopup({ rerender: false });
           closeEmojiPopup({ rerender: false });
           void syncSubjectRefPopupForTextarea(textarea, `description:${String(textarea.dataset.descriptionDraft || "")}`);
@@ -3946,7 +3937,6 @@ export function createProjectSubjectsEvents(config) {
         const didApply = applyMarkdownComposerAction(textarea, action);
         if (!didApply) return;
         syncDescriptionEditorDraft(root);
-        syncComposerTextareaHeight(textarea, { minHeightFallback: 170 });
         if (action === "mention") {
           void syncMentionPopupForTextarea(textarea, `description:${String(textarea.dataset.descriptionDraft || "")}`, { forceOpen: true });
         } else {
@@ -3979,10 +3969,8 @@ export function createProjectSubjectsEvents(config) {
     });
     root.querySelectorAll("[data-description-draft]").forEach((textarea) => {
       const composerKey = `description:${String(textarea.dataset.descriptionDraft || "").trim()}`;
-      syncComposerTextareaHeight(textarea, { minHeightFallback: 170 });
       textarea.addEventListener("input", () => {
         syncDescriptionEditorDraft(root);
-        syncComposerTextareaHeight(textarea, { minHeightFallback: 170 });
         void syncInlineAutocomplete(textarea, composerKey);
       });
       textarea.addEventListener("keydown", (event) => {
