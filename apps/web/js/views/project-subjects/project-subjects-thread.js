@@ -1262,9 +1262,9 @@ priority=${firstNonEmpty(subject.priority, "")}`
     const isClosedSituation = status === "closed";
     const title = firstNonEmpty(situation?.title, fallbackLabel, "Situation");
     return `
-      <span class="tl-note-inline-link">
-        <span class="subject-meta-situation-card__icon" aria-hidden="true">${svgIcon(isClosedSituation ? "table-check" : "table", { className: "ui-icon octicon octicon-table" })}</span>
-        <span class="tl-note-inline-text">${escapeHtml(title)}</span>
+      <span class="subject-meta-objective-card subject-meta-objective-card--inline">
+        <span class="subject-meta-objective-card__count" aria-hidden="true">${svgIcon(isClosedSituation ? "table-check" : "table", { className: "ui-icon octicon octicon-table" })}</span>
+        <span class="subject-meta-objective-card__title">${escapeHtml(title)}</span>
       </span>
     `;
   }
@@ -1446,10 +1446,9 @@ priority=${firstNonEmpty(subject.priority, "")}`
           );
           const richNoteHtml = buildBusinessRichNoteHtml(e);
           const titleUpdateInlineHtml = isSubjectTitleUpdated && nextTitle
-            ? `<span class="tl-note-inline-text">"</span>
-                ${previousTitle ? `<span class="tl-note-inline-text tl-note-inline-text--strikethrough">${escapeHtml(previousTitle)}</span>` : ""}
-                ${previousTitle ? `<span class="tl-note-inline-text">" en </span>` : ""}
-                <span class="tl-note-inline-text">"${escapeHtml(nextTitle)}"</span>`
+            ? `${previousTitle
+              ? `<span class="mono-small tl-note-inline-text tl-note-inline-text--strikethrough">${escapeHtml(previousTitle)}</span><span class="tl-note-inline-text"> en </span>`
+              : ""}<span class="tl-note-inline-text">${escapeHtml(nextTitle)}</span>`
             : "";
           const inlineDetailHtml = richNoteHtml
             ? richNoteHtml
