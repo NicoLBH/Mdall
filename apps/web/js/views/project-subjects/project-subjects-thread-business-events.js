@@ -50,13 +50,13 @@ export const BUSINESS_ACTIVITY_CONFIG = {
     summarize: (payload, firstNonEmpty) => summarizeCollectionChange(payload, "label", firstNonEmpty)
   },
   subject_situations_changed: {
-    icon: "project",
+    icon: "table",
     tone: "business-rel",
     verb: "a mis à jour les situations",
     summarize: (payload, firstNonEmpty) => summarizeCollectionChange(payload, "situation", firstNonEmpty)
   },
   subject_objectives_changed: {
-    icon: "goal",
+    icon: "milestone",
     tone: "business-rel",
     verb: "a mis à jour les objectifs",
     summarize: (payload, firstNonEmpty) => summarizeCollectionChange(payload, "objectif", firstNonEmpty)
