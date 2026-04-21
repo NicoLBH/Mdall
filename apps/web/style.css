@@ -2525,6 +2525,9 @@ body.is-resizing{
   letter-spacing:.02em;
   padding-right:8px;
 }
+.gh-comment-author-meta{
+  color:var(--muted);
+}
 .gh-comment-body{
   padding:0px;
   white-space:inherit;

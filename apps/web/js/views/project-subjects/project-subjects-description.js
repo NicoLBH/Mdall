@@ -113,6 +113,34 @@ export function createProjectSubjectsDescription(config = {}) {
     return `il y a ${Math.abs(deltaYears)} an${Math.abs(deltaYears) > 1 ? "s" : ""}`;
   }
 
+  function formatOpenedRelativeTimeFromNow(ts = "") {
+    const target = new Date(String(ts || ""));
+    if (Number.isNaN(target.getTime())) return "ouvert à l'instant";
+    const deltaMs = Date.now() - target.getTime();
+    const future = deltaMs < 0;
+    const absSeconds = Math.max(1, Math.round(Math.abs(deltaMs) / 1000));
+    const units = [
+      [31536000, "an"],
+      [2592000, "mois"],
+      [86400, "jour"],
+      [3600, "heure"],
+      [60, "minute"],
+      [1, "seconde"]
+    ];
+    let value = 1;
+    let unit = "seconde";
+    for (const [seconds, label] of units) {
+      if (absSeconds >= seconds) {
+        value = Math.floor(absSeconds / seconds);
+        unit = label;
+        break;
+      }
+    }
+    const plural = value > 1 && unit !== "mois" ? "s" : "";
+    if (future) return `ouvert dans ${value} ${unit}${plural}`;
+    return `ouvert il y a ${value} ${unit}${plural}`;
+  }
+
   function formatVersionTimestamp(ts = "") {
     return typeof fmtTs === "function" ? fmtTs(ts) : String(ts || "—");
   }
@@ -171,6 +199,19 @@ export function createProjectSubjectsDescription(config = {}) {
       humanAvatarHtml: SVG_AVATAR_HUMAN,
       fallbackName: "Utilisateur"
     });
+  }
+
+  function getVersionDisplayName(version = {}, options = {}) {
+    const preferFirstLast = options.preferFirstLast !== false;
+    if (isSystemDescriptionVersionActor(version)) return "Mdall";
+    const firstName = String(version?.actor_first_name || "").trim();
+    const lastName = String(version?.actor_last_name || "").trim();
+    if (preferFirstLast && (firstName || lastName)) {
+      return `${firstName} ${lastName}`.trim();
+    }
+    const actorName = String(version?.actor_name || "").trim();
+    if (actorName) return actorName;
+    return `${firstName} ${lastName}`.trim() || "Utilisateur";
   }
 
   function buildVersionInitials(version = {}) {
@@ -846,6 +887,21 @@ export function createProjectSubjectsDescription(config = {}) {
       humanAvatarHtml: SVG_AVATAR_HUMAN,
       fallbackName: "System"
     });
+    const versions = isVersionsTarget && Array.isArray(versionsUi.versions) ? versionsUi.versions : [];
+    const latestVersion = versions.length ? versions[0] : null;
+    const firstVersion = versions.length ? versions[versions.length - 1] : null;
+    const firstVersionIdentity = firstVersion
+      ? getVersionAuthorIdentity({
+          ...firstVersion,
+          actor_name: getVersionDisplayName(firstVersion, { preferFirstLast: true })
+        })
+      : null;
+    const firstAuthorDisplayName = firstVersionIdentity?.displayName || identity.displayName;
+    const openedLabel = firstVersion?.created_at ? formatOpenedRelativeTimeFromNow(firstVersion.created_at) : "";
+    const editedByLabel = versions.length > 1 && latestVersion
+      ? ` · modifié par ${getVersionDisplayName(latestVersion, { preferFirstLast: true })}`
+      : "";
+    const authorMetaLabel = `${openedLabel}${editedByLabel}`.trim();
     const authorHtml = waitingForCurrentAuthor
       ? `
         <div class="gh-comment-author">
@@ -853,7 +909,12 @@ export function createProjectSubjectsDescription(config = {}) {
           <span>Chargement auteur…</span>
         </div>
       `
-      : `<div class="gh-comment-author">${escapeHtml(identity.displayName)}</div>`;
+      : `
+        <div class="gh-comment-author">
+          <span>${escapeHtml(firstAuthorDisplayName)}</span>
+          ${authorMetaLabel ? `<span class="gh-comment-author-meta">${escapeHtml(authorMetaLabel)}</span>` : ""}
+        </div>
+      `;
     const versionsTriggerHtml = entityType === "sujet" ? renderDescriptionVersionsTrigger(null, entityType, entityId) : "";
     const editButtonHtml = `
       <button class="icon-btn icon-btn--sm gh-comment-edit-btn" data-action="edit-description" type="button" aria-label="Modifier la description" title="Modifier la description">
@@ -931,11 +992,12 @@ export function createProjectSubjectsDescription(config = {}) {
         </div>
       `;
 
+    const displayIdentity = firstVersionIdentity || identity;
     return `
       <div class="gh-comment gh-comment--description">
-        ${identity.avatarHtml
-          ? `<div class="gh-avatar ${identity.avatarType === "human" ? "gh-avatar--human" : ""}" aria-hidden="true">${identity.avatarHtml}</div>`
-          : `<div class="gh-avatar" aria-hidden="true"><span class="gh-avatar-initial">${escapeHtml(identity.avatarInitial || description.avatar_initial || "S")}</span></div>`}
+        ${displayIdentity.avatarHtml
+          ? `<div class="gh-avatar ${displayIdentity.avatarType === "human" ? "gh-avatar--human" : ""}" aria-hidden="true">${displayIdentity.avatarHtml}</div>`
+          : `<div class="gh-avatar" aria-hidden="true"><span class="gh-avatar-initial">${escapeHtml(displayIdentity.avatarInitial || description.avatar_initial || "S")}</span></div>`}
         <div class="gh-comment-box">
           ${headerHtml}
           ${bodyHtml}
