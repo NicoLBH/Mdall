@@ -32,6 +32,17 @@ export function createProjectSubjectsDetailsRenderer(config) {
     const item = currentSelection.item;
     const entityType = getSelectionEntityType(currentSelection.type);
     const titleSeenClass = getReviewTitleStateClass(entityType, item.id);
+    if (options.compact) {
+      return `
+        <div class="subject-title-display subject-title-display--compact">
+          <div class="subject-title-display__main">
+            <span class="details-title-text ${titleSeenClass}">${escapeHtml(firstNonEmpty(item.title, item.id, "Détail"))}</span>
+            <span class="details-title-inline-ref">${entityDisplayLinkHtml(currentSelection.type, item.id)}</span>
+          </div>
+        </div>
+      `;
+    }
+
     const editState = getSubjectTitleEditState?.() || {};
     const isEditing = isEditingSubjectTitle?.(currentSelection) === true;
     const initialTitleTrimmed = String(editState.initialTitle || item.title || "").trim();
