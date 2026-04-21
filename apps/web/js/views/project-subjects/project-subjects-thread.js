@@ -1327,8 +1327,18 @@ priority=${firstNonEmpty(subject.priority, "")}`
       return `${renderSubjectLabelBadgeInline(label?.id, label?.label)}`;
     }
 
+    if (eventType === "subject_labels_changed" && String(payload?.action || "").toLowerCase() === "removed" && removed.length === 1) {
+      const label = removed[0] || {};
+      return `${renderSubjectLabelBadgeInline(label?.id, label?.label)}`;
+    }
+
     if (eventType === "subject_objectives_changed" && String(payload?.action || "").toLowerCase() === "added" && added.length === 1) {
       const objective = added[0] || {};
+      return `${renderObjectiveInline(objective?.id, objective?.label)}`;
+    }
+
+    if (eventType === "subject_objectives_changed" && String(payload?.action || "").toLowerCase() === "removed" && removed.length === 1) {
+      const objective = removed[0] || {};
       return `${renderObjectiveInline(objective?.id, objective?.label)}`;
     }
 
@@ -1396,9 +1406,17 @@ priority=${firstNonEmpty(subject.priority, "")}`
           const payload = e?.meta?.event_payload && typeof e.meta.event_payload === "object" ? e.meta.event_payload : {};
           const ts = fmtTs(e?.ts || "");
           const eventType = String(e?.meta?.event_type || "").toLowerCase();
-          const assigneesAction = String(payload?.action || "").toLowerCase();
-          const resolvedVerb = eventType === "subject_assignees_changed" && assigneesAction === "removed"
+          const action = String(payload?.action || "").toLowerCase();
+          const resolvedVerb = eventType === "subject_assignees_changed" && action === "removed"
             ? "a retiré un assigné"
+            : eventType === "subject_labels_changed" && action === "removed"
+              ? "a retiré le label"
+              : eventType === "subject_labels_changed" && action === "added"
+                ? "a ajouté le label"
+                : eventType === "subject_objectives_changed" && action === "removed"
+                  ? "a retiré un objectif"
+                  : eventType === "subject_objectives_changed" && action === "added"
+                    ? "a ajouté un objectif"
             : (eventType === "subject_parent_added" ? "a ajouté le sujet parent" : appearance.verb);
           const note = buildBusinessActivitySummary({
             payload,
@@ -1410,12 +1428,18 @@ priority=${firstNonEmpty(subject.priority, "")}`
           const inlineDetailHtml = richNoteHtml
             ? richNoteHtml
             : (note ? `<span class="tl-note-inline-text">${escapeHtml(note)}</span>` : "");
+          const shouldRenderInlineBeforeTimestamp = (
+            (eventType === "subject_labels_changed" || eventType === "subject_objectives_changed")
+            && (action === "added" || action === "removed")
+          );
           const parentAddedLineHtml = eventType === "subject_parent_added" && inlineDetailHtml
             ? `<span class="tl-note-inline tl-note-inline--parent-added">${inlineDetailHtml}</span>`
             : "";
           const defaultInlineHtml = eventType === "subject_parent_added"
             ? ""
             : (inlineDetailHtml ? `<span class="tl-note-inline">${inlineDetailHtml}</span>` : "");
+          const inlineBeforeTimestampHtml = shouldRenderInlineBeforeTimestamp ? defaultInlineHtml : "";
+          const inlineAfterTimestampHtml = shouldRenderInlineBeforeTimestamp ? "" : defaultInlineHtml;
 
           return renderMessageThreadActivity({
             idx,
@@ -1427,8 +1451,9 @@ priority=${firstNonEmpty(subject.priority, "")}`
             textHtml: `
               <span class="tl-author-name">${escapeHtml(activityIdentity.displayName)}</span>
               <span class="mono-small"> ${escapeHtml(resolvedVerb)} </span>
+              ${inlineBeforeTimestampHtml}
               <span class="mono-small">· ${escapeHtml(ts)}</span>
-              ${defaultInlineHtml}
+              ${inlineAfterTimestampHtml}
               ${parentAddedLineHtml}
             `,
             noteHtml: ""

@@ -3937,9 +3937,9 @@ body.drilldown-open .drilldown__inner,
 .tl-note-inline-link{display:inline-flex;align-items:center;gap:4px;}
 .tl-note-inline-text{display:inline;}
 .subject-meta-assignee-row--inline{display:inline-flex;margin-left:8px;vertical-align:middle;}
-.subject-meta-assignee-row--inline .subject-meta-assignee-row__content{display:inline-flex;align-items:baseline;gap:6px;}
+.subject-meta-assignee-row--inline .subject-meta-assignee-row__content{display:flex;flex-direction:column;gap:0;line-height:1.1;}
 .subject-meta-assignee-row--inline .subject-meta-assignee-row__name,
-.subject-meta-assignee-row--inline .subject-meta-assignee-row__role{display:inline;line-height:18px;}
+.subject-meta-assignee-row--inline .subject-meta-assignee-row__role{display:block;line-height:16px;}
 .subject-meta-assignee-avatar-inline{
   width:22px;height:22px;border-radius:999px;overflow:hidden;background:rgba(110,118,129,.16);display:inline-flex;align-items:center;justify-content:center;
 }
