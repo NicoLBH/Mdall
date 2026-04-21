@@ -452,3 +452,69 @@ test("description versions: l'auteur de la carte est réaligné sur la dernière
 
   cleanupFakeDom();
 });
+
+test("description card: précharge les versions et affiche un spinner auteur en attendant", async () => {
+  installFakeDom({
+    "sujet::subject-1": { getBoundingClientRect: () => ({ top: 100, right: 320, bottom: 140, left: 260, width: 60, height: 40 }) }
+  });
+  const runBucketState = { descriptions: { sujet: {}, situation: {} } };
+  let deferredResolve;
+  let loadCalls = 0;
+  const store = { user: { id: "u1" }, projectForm: { collaborators: [] }, projectSubjectsView: {}, situationsView: {} };
+  const api = createProjectSubjectsDescription({
+    store,
+    ensureViewUiState: () => { store.projectSubjectsView ||= {}; },
+    firstNonEmpty: (...values) => values.find((value) => String(value ?? "").trim()) || "",
+    escapeHtml: (value) => String(value ?? ""),
+    svgIcon: (name) => `<svg data-icon="${name}"></svg>`,
+    mdToHtml: (value) => String(value || ""),
+    fmtTs: () => "20/04/2026",
+    nowIso: () => new Date().toISOString(),
+    setOverlayChromeOpenState: () => {},
+    SVG_AVATAR_HUMAN: "",
+    renderCommentComposer: () => "",
+    getRunBucket: () => ({ bucket: runBucketState }),
+    persistRunBucket: (updater) => updater(runBucketState),
+    getSelectionEntityType: (type) => type,
+    getEntityByType: (type, id) => ({ id, title: `${type}-${id}`, raw: { description: "Description" } }),
+    getEntityReviewMeta: () => ({}),
+    setEntityReviewMeta: () => {},
+    currentDecisionTarget: () => ({ type: "sujet", id: "subject-1", item: { id: "subject-1" } }),
+    rerenderScope: () => {},
+    markEntityValidated: () => {},
+    updateSubjectDescription: async () => ({}),
+    loadSubjectDescriptionVersions: async () => {
+      loadCalls += 1;
+      return await new Promise((resolve) => {
+        deferredResolve = resolve;
+      });
+    }
+  });
+
+  const htmlBefore = api.renderDescriptionCard({
+    type: "sujet",
+    item: { id: "subject-1", title: "Sujet", raw: { description: "Description initiale" } }
+  });
+  assert.equal(loadCalls, 1);
+  assert.match(htmlBefore, /Chargement auteur…/);
+  assert.match(htmlBefore, /data-icon="attachment-upload-spinner"/);
+
+  deferredResolve?.([{
+    id: "v-last",
+    actor_name: "Dernier Auteur",
+    actor_user_id: "u9",
+    actor_person_id: "p9",
+    description_markdown: "new",
+    created_at: new Date().toISOString()
+  }]);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  const htmlAfter = api.renderDescriptionCard({
+    type: "sujet",
+    item: { id: "subject-1", title: "Sujet", raw: { description: "Description initiale" } }
+  });
+  assert.match(htmlAfter, /Dernier Auteur/);
+  assert.doesNotMatch(htmlAfter, /Chargement auteur…/);
+
+  cleanupFakeDom();
+});

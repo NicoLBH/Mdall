@@ -884,9 +884,26 @@ export function createProjectSubjectsDescription(config = {}) {
   function renderDescriptionCard(selection) {
     const entityType = getSelectionEntityType(selection.type);
     const entityId = selection.item.id;
+    const versionsUi = ensureDescriptionVersionsUiState();
+    const isSubjectDescription = entityType === "sujet" && !!entityId;
+    const isVersionsTarget = isSubjectDescription && versionsUi.entityType === entityType && versionsUi.entityId === entityId;
+    const hasVersionsLoaded = isVersionsTarget && Array.isArray(versionsUi.versions) && versionsUi.versions.length > 0;
+    if (
+      isSubjectDescription
+      && typeof loadSubjectDescriptionVersions === "function"
+      && !versionsUi.isLoading
+      && !hasVersionsLoaded
+    ) {
+      void ensureDescriptionVersionsLoaded(null, entityType, entityId);
+    }
     const description = getEntityDescriptionState(selection);
     const edit = ensureDescriptionEditState();
     const editing = isEditingDescription(selection);
+    const waitingForCurrentAuthor = isSubjectDescription
+      && versionsUi.entityType === entityType
+      && versionsUi.entityId === entityId
+      && versionsUi.isLoading
+      && (!Array.isArray(versionsUi.versions) || versionsUi.versions.length === 0);
     const identity = getAuthorIdentity({
       author: description.author || "system",
       agent: description.agent || description.avatar_type || "system",
@@ -894,7 +911,14 @@ export function createProjectSubjectsDescription(config = {}) {
       humanAvatarHtml: SVG_AVATAR_HUMAN,
       fallbackName: "System"
     });
-    const authorHtml = `<div class="gh-comment-author mono">${escapeHtml(identity.displayName)}</div>`;
+    const authorHtml = waitingForCurrentAuthor
+      ? `
+        <div class="gh-comment-author mono">
+          <span class="anim-rotate" aria-hidden="true">${svgIcon("attachment-upload-spinner", { className: "subject-attachment__spinner" })}</span>
+          <span>Chargement auteur…</span>
+        </div>
+      `
+      : `<div class="gh-comment-author mono">${escapeHtml(identity.displayName)}</div>`;
     const versionsTriggerHtml = entityType === "sujet" ? renderDescriptionVersionsTrigger(null, entityType, entityId) : "";
     const editButtonHtml = `
       <button class="icon-btn icon-btn--sm gh-comment-edit-btn" data-action="edit-description" type="button" aria-label="Modifier la description" title="Modifier la description">
