@@ -141,29 +141,53 @@ async function fetchProjectFlatSubjects(projectId) {
     return [];
   }
 
-  const url = new URL(`${SUPABASE_URL}/rest/v1/subjects`);
-  url.searchParams.set(
-    "select",
-    "id,subject_number,project_id,document_id,analysis_run_id,situation_id,parent_subject_id,parent_linked_at,parent_child_order,assignee_person_id,title,description,priority,status,closure_reason,subject_type,created_at,updated_at,closed_at"
-  );
-  url.searchParams.set("project_id", `eq.${projectId}`);
-  url.searchParams.set("order", "created_at.asc");
-
+  const selectWithRefs = "id,subject_number,project_id,document_id,document_ref_ids,analysis_run_id,situation_id,parent_subject_id,parent_linked_at,parent_child_order,assignee_person_id,title,description,priority,status,closure_reason,subject_type,created_at,updated_at,closed_at";
+  const selectWithoutRefs = "id,subject_number,project_id,document_id,analysis_run_id,situation_id,parent_subject_id,parent_linked_at,parent_child_order,assignee_person_id,title,description,priority,status,closure_reason,subject_type,created_at,updated_at,closed_at";
   const headers = await getSupabaseAuthHeaders({ Accept: "application/json" });
 
-  const res = await fetch(url.toString(), {
-    method: "GET",
-    headers,
-    cache: "no-store"
-  });
+  const fetchSubjects = async (selectQuery) => {
+    const url = new URL(`${SUPABASE_URL}/rest/v1/subjects`);
+    url.searchParams.set("select", selectQuery);
+    url.searchParams.set("project_id", `eq.${projectId}`);
+    url.searchParams.set("order", "created_at.asc");
+    return fetch(url.toString(), {
+      method: "GET",
+      headers,
+      cache: "no-store"
+    });
+  };
+
+  let res = await fetchSubjects(selectWithRefs);
+  if (!res.ok && Number(res.status || 0) === 400) {
+    const rawBody = await res.text().catch(() => "");
+    const parsedBody = safeJsonParse(rawBody);
+    const details = String(
+      parsedBody?.message
+      || parsedBody?.details
+      || parsedBody?.hint
+      || rawBody
+      || ""
+    ).toLowerCase();
+    const missingDocumentRefsColumn = details.includes("document_ref_ids");
+    if (missingDocumentRefsColumn) {
+      console.warn("[project-subjects] subjects table has no document_ref_ids column; falling back to legacy select", {
+        projectId: String(projectId || ""),
+        status: Number(res.status || 0),
+        details: String(parsedBody?.message || parsedBody?.details || rawBody || "")
+      });
+      res = await fetchSubjects(selectWithoutRefs);
+    } else {
+      throw new Error(`subjects fetch failed (${res.status}): ${rawBody}`);
+    }
+  }
 
   if (!res.ok) {
     const txt = await res.text().catch(() => "");
     throw new Error(`subjects fetch failed (${res.status}): ${txt}`);
   }
 
-  const json = await res.json();
-  return json;
+  const json = await res.json().catch(() => []);
+  return Array.isArray(json) ? json : [];
 }
 
 

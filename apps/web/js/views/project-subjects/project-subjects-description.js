@@ -141,6 +141,79 @@ export function createProjectSubjectsDescription(config = {}) {
     return typeof fmtTs === "function" ? fmtTs(ts) : String(ts || "—");
   }
 
+  function isSystemDescriptionVersionActor(version = {}) {
+    return version?.actor_is_system === true || (!version?.actor_user_id && !version?.actor_person_id);
+  }
+
+  function buildDescriptionIdentityPatchFromVersion(version = {}) {
+    const isSystemActor = isSystemDescriptionVersionActor(version);
+    const displayName = String(version?.actor_name || "").trim();
+    const avatarUrl = resolveVersionAvatarUrl(version);
+    const identity = getAuthorIdentity({
+      author: isSystemActor ? "system" : (displayName || "Utilisateur"),
+      agent: isSystemActor ? "system" : "human",
+      avatarUrl,
+      currentUserAvatar: store?.user?.avatar,
+      humanAvatarHtml: SVG_AVATAR_HUMAN,
+      fallbackName: isSystemActor ? "Mdall" : "Utilisateur"
+    });
+    return {
+      author: identity.displayName,
+      agent: isSystemActor ? "system" : "human",
+      avatar_type: identity.avatarType,
+      avatar_initial: identity.avatarInitial || "S",
+      avatarSource: isSystemActor ? "heimdall" : (avatarUrl ? "avatar-url" : "fallback-initial")
+    };
+  }
+
+  function syncDescriptionCurrentAuthorFromVersions(entityType, entityId, versions = []) {
+    if (entityType !== "sujet" || !entityId || !Array.isArray(versions) || !versions.length) return;
+    const latestVersion = versions[0] || {};
+    const previousState = getEntityDescriptionState(entityType, entityId);
+    const patch = buildDescriptionIdentityPatchFromVersion(latestVersion);
+    console.info("[subject-description-current-author] versions loaded", {
+      subjectId: entityId,
+      versionsCount: versions.length,
+      latestVersionId: String(latestVersion?.id || ""),
+      latestActorName: String(latestVersion?.actor_name || ""),
+      latestActorUserId: String(latestVersion?.actor_user_id || ""),
+      latestActorPersonId: String(latestVersion?.actor_person_id || ""),
+      latestActorIsSystem: isSystemDescriptionVersionActor(latestVersion)
+    });
+    console.info("[subject-description-current-author] display sync", {
+      subjectId: entityId,
+      previousAuthor: String(previousState?.author || ""),
+      nextAuthor: String(patch.author || ""),
+      previousAgent: String(previousState?.agent || ""),
+      nextAgent: String(patch.agent || ""),
+      avatarSource: patch.avatarSource
+    });
+    if (
+      String(previousState?.author || "") === String(patch.author || "")
+      && String(previousState?.agent || "") === String(patch.agent || "")
+      && String(previousState?.avatar_type || "") === String(patch.avatar_type || "")
+      && String(previousState?.avatar_initial || "") === String(patch.avatar_initial || "")
+    ) return;
+    setEntityDescriptionState(entityType, entityId, {
+      author: patch.author,
+      agent: patch.agent,
+      avatar_type: patch.avatar_type,
+      avatar_initial: patch.avatar_initial
+    });
+  }
+
+  function getVersionAuthorIdentity(version = {}) {
+    const patch = buildDescriptionIdentityPatchFromVersion(version);
+    return getAuthorIdentity({
+      author: patch.author,
+      agent: patch.agent,
+      avatarUrl: resolveVersionAvatarUrl(version),
+      currentUserAvatar: store?.user?.avatar,
+      humanAvatarHtml: SVG_AVATAR_HUMAN,
+      fallbackName: "Utilisateur"
+    });
+  }
+
   function buildVersionInitials(version = {}) {
     const first = String(version?.actor_first_name || "").trim();
     const last = String(version?.actor_last_name || "").trim();
@@ -427,6 +500,7 @@ export function createProjectSubjectsDescription(config = {}) {
       if (!currentUi.selectedVersionId && currentUi.versions.length) {
         currentUi.selectedVersionId = String(currentUi.versions[0]?.id || "");
       }
+      syncDescriptionCurrentAuthorFromVersions(entityType, entityId, currentUi.versions);
       if (!currentUi.versions.length) {
         logDescriptionVersions("ensure loaded with empty result set", {
           entityType,
@@ -574,11 +648,11 @@ export function createProjectSubjectsDescription(config = {}) {
     const body = document.getElementById("detailsBodyModal");
     if (!modal || !title || !meta || !body) return false;
 
-    const displayName = String(version?.actor_name || "Utilisateur");
+    const identity = getVersionAuthorIdentity(version);
+    const displayName = String(identity.displayName || "Utilisateur");
     const dateLabel = formatVersionTimestamp(version?.created_at);
     const dateRelativeLabel = formatRelativeTimeFromNow(version?.created_at);
     const initials = buildVersionInitials(version);
-    const avatarUrl = resolveVersionAvatarUrl(version);
     const bodyMarkdown = String(version?.description_markdown || "");
     const fullDateLabel = `${dateRelativeLabel} · ${dateLabel}`;
     logDescriptionVersions("modal open", {
@@ -595,9 +669,7 @@ export function createProjectSubjectsDescription(config = {}) {
       <article class="description-version-details">
         <header class="description-version-details__header">
           <span class="description-version-details__avatar">
-            ${avatarUrl
-              ? `<img src="${escapeHtml(avatarUrl)}" alt="${escapeHtml(displayName)}">`
-              : `<span class="description-version-details__avatar-fallback">${escapeHtml(initials)}</span>`}
+            ${identity.avatarHtml || `<span class="description-version-details__avatar-fallback">${escapeHtml(initials)}</span>`}
           </span>
           <div class="description-version-details__author">
             <div class="description-version-details__name">${escapeHtml(displayName)}</div>
@@ -623,9 +695,7 @@ export function createProjectSubjectsDescription(config = {}) {
   }
 
   function resolveVersionAvatarUrl(version = {}) {
-    if (version?.actor_is_system === true || (!version?.actor_user_id && !version?.actor_person_id)) {
-      return "/assets/images/avatar-entreprise.jfif";
-    }
+    if (isSystemDescriptionVersionActor(version)) return "";
     const directAvatar = firstNonEmpty(
       version?.actor_avatar_url,
       version?.actor_avatar,
@@ -703,17 +773,15 @@ export function createProjectSubjectsDescription(config = {}) {
     const listHtml = !ui.isLoading && !ui.error && versions.length
       ? versions.map((version) => {
           const versionId = String(version?.id || "");
-          const displayName = String(version?.actor_name || "Utilisateur");
+          const identity = getVersionAuthorIdentity(version);
+          const displayName = String(identity.displayName || "Utilisateur");
           const timestampLabel = formatRelativeTimeFromNow(version?.created_at);
           const absoluteTimestampLabel = formatVersionTimestamp(version?.created_at);
           const initials = buildVersionInitials(version);
-          const avatarUrl = resolveVersionAvatarUrl(version);
           return `
             <button type="button" class="gh-menu__item description-versions-dropdown__item" data-action="open-description-version-modal" data-version-id="${escapeHtml(versionId)}" title="${escapeHtml(absoluteTimestampLabel)}">
               <span class="description-versions-dropdown__avatar">
-                ${avatarUrl
-                  ? `<img src="${escapeHtml(avatarUrl)}" alt="${escapeHtml(displayName)}">`
-                  : `<span class="description-versions-dropdown__avatar-fallback">${escapeHtml(initials)}</span>`}
+                ${identity.avatarHtml || `<span class="description-versions-dropdown__avatar-fallback">${escapeHtml(initials)}</span>`}
               </span>
               <span class="description-versions-dropdown__item-inline">
                 <span class="description-versions-dropdown__item-name">${escapeHtml(displayName)}</span>
@@ -973,6 +1041,7 @@ export function createProjectSubjectsDescription(config = {}) {
       }, { actor: "Human", agent: "human" });
       markEntityValidated(entityType, entityId, { actor: "Human", agent: "human" });
       clearDescriptionEditState();
+      void ensureDescriptionVersionsLoaded(root, entityType, entityId, { forceReload: true });
       rerenderScope(root);
       return;
     }

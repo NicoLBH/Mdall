@@ -341,3 +341,114 @@ test("description versions: une réponse tardive de A est ignorée après passag
 
   cleanupFakeDom();
 });
+
+test("description versions: la version système affiche Heimdall sans fallback bitmap", async () => {
+  installFakeDom({
+    "sujet::subject-1": { getBoundingClientRect: () => ({ top: 100, right: 320, bottom: 140, left: 260, width: 60, height: 40 }) }
+  });
+  const store = { user: { id: "u1" }, projectForm: { collaborators: [] }, projectSubjectsView: {}, situationsView: {} };
+  const api = createProjectSubjectsDescription({
+    store,
+    ensureViewUiState: () => { store.projectSubjectsView ||= {}; },
+    firstNonEmpty: (...values) => values.find((value) => String(value ?? "").trim()) || "",
+    escapeHtml: (value) => String(value ?? ""),
+    svgIcon: (name) => `<svg data-icon="${name}"></svg>`,
+    mdToHtml: (value) => String(value || ""),
+    fmtTs: () => "20/04/2026",
+    nowIso: () => new Date().toISOString(),
+    setOverlayChromeOpenState: () => {},
+    SVG_AVATAR_HUMAN: "",
+    renderCommentComposer: () => "",
+    getRunBucket: () => ({ bucket: { descriptions: { sujet: {}, situation: {} } } }),
+    persistRunBucket: () => {},
+    getSelectionEntityType: (type) => type,
+    getEntityByType: (type, id) => ({ id, title: `${type}-${id}`, raw: { description: "Description" } }),
+    getEntityReviewMeta: () => ({}),
+    setEntityReviewMeta: () => {},
+    currentDecisionTarget: () => ({ type: "sujet", id: "subject-1", item: { id: "subject-1" } }),
+    rerenderScope: () => {},
+    markEntityValidated: () => {},
+    updateSubjectDescription: async () => ({}),
+    loadSubjectDescriptionVersions: async () => [{
+      id: "v1",
+      actor_name: "Mdall",
+      actor_is_system: true,
+      actor_user_id: "",
+      actor_person_id: "",
+      description_markdown: "system",
+      created_at: new Date().toISOString()
+    }]
+  });
+
+  api.toggleDescriptionVersionsDropdown({});
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  api.renderDescriptionVersionsDropdownHost({ querySelector: () => ({ getBoundingClientRect: () => ({ top: 100, right: 320, bottom: 140, left: 260, width: 60, height: 40 }) }) });
+  const hostHtml = globalThis.document.getElementById("descriptionVersionsDropdownHost")?.innerHTML || "";
+  assert.match(hostHtml, /icons\.svg#heimdall/);
+  assert.doesNotMatch(hostHtml, /avatar-entreprise\.jfif/);
+
+  cleanupFakeDom();
+});
+
+test("description versions: l'auteur de la carte est réaligné sur la dernière version chargée", async () => {
+  installFakeDom({
+    "sujet::subject-1": { getBoundingClientRect: () => ({ top: 100, right: 320, bottom: 140, left: 260, width: 60, height: 40 }) }
+  });
+  const runBucketState = {
+    descriptions: {
+      sujet: {
+        "subject-1": {
+          body: "Description initiale",
+          author: "Ancien auteur",
+          agent: "human",
+          avatar_type: "human",
+          avatar_initial: "A"
+        }
+      },
+      situation: {}
+    }
+  };
+  const store = { user: { id: "u1" }, projectForm: { collaborators: [] }, projectSubjectsView: {}, situationsView: {} };
+  const api = createProjectSubjectsDescription({
+    store,
+    ensureViewUiState: () => { store.projectSubjectsView ||= {}; },
+    firstNonEmpty: (...values) => values.find((value) => String(value ?? "").trim()) || "",
+    escapeHtml: (value) => String(value ?? ""),
+    svgIcon: (name) => `<svg data-icon="${name}"></svg>`,
+    mdToHtml: (value) => String(value || ""),
+    fmtTs: () => "20/04/2026",
+    nowIso: () => new Date().toISOString(),
+    setOverlayChromeOpenState: () => {},
+    SVG_AVATAR_HUMAN: "",
+    renderCommentComposer: () => "",
+    getRunBucket: () => ({ bucket: runBucketState }),
+    persistRunBucket: (updater) => updater(runBucketState),
+    getSelectionEntityType: (type) => type,
+    getEntityByType: (type, id) => ({ id, title: `${type}-${id}`, raw: { description: "Description" } }),
+    getEntityReviewMeta: () => ({}),
+    setEntityReviewMeta: () => {},
+    currentDecisionTarget: () => ({ type: "sujet", id: "subject-1", item: { id: "subject-1" } }),
+    rerenderScope: () => {},
+    markEntityValidated: () => {},
+    updateSubjectDescription: async () => ({}),
+    loadSubjectDescriptionVersions: async () => [{
+      id: "v-last",
+      actor_name: "Nouveau Auteur",
+      actor_user_id: "u2",
+      actor_person_id: "p2",
+      description_markdown: "new",
+      created_at: new Date().toISOString()
+    }]
+  });
+
+  api.toggleDescriptionVersionsDropdown({});
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const html = api.renderDescriptionCard({
+    type: "sujet",
+    item: { id: "subject-1", title: "Sujet", raw: { description: "Description initiale" } }
+  });
+  assert.match(html, /Nouveau Auteur/);
+  assert.doesNotMatch(html, /Ancien auteur/);
+
+  cleanupFakeDom();
+});
