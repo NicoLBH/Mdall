@@ -30,11 +30,24 @@ export async function resolveSubjectAttachmentObjectUrl(bucket = SUBJECT_ATTACHM
 export async function hydratePersistedSubjectAttachmentsObjectUrls(attachments = []) {
   const list = Array.isArray(attachments) ? attachments : [];
   if (!list.length) return [];
-  const urls = await Promise.all(
-    list.map((attachment) => resolveSubjectAttachmentObjectUrl(attachment?.storage_bucket, attachment?.storage_path))
-  );
+  const hasUsableUrl = (attachment = {}) => String(
+    attachment?.localPreviewUrl
+    || attachment?.previewUrl
+    || attachment?.remoteObjectUrl
+    || attachment?.download_url
+    || attachment?.signed_url
+    || attachment?.url
+    || attachment?.object_url
+    || ""
+  ).trim().length > 0;
+  const urls = await Promise.all(list.map(async (attachment) => {
+    if (hasUsableUrl(attachment)) return "";
+    if (!String(attachment?.storage_path || "").trim()) return "";
+    return resolveSubjectAttachmentObjectUrl(attachment?.storage_bucket, attachment?.storage_path);
+  }));
   return list.map((attachment, index) => ({
     ...attachment,
-    object_url: String(attachment?.object_url || urls[index] || "")
+    object_url: String(attachment?.object_url || urls[index] || ""),
+    previewUrl: String(attachment?.previewUrl || attachment?.object_url || urls[index] || "")
   }));
 }
