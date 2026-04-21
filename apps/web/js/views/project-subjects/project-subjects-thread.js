@@ -1284,11 +1284,29 @@ priority=${firstNonEmpty(subject.priority, "")}`
     const eventType = String(entry?.meta?.event_type || "").toLowerCase();
     const payload = entry?.meta?.event_payload && typeof entry.meta.event_payload === "object" ? entry.meta.event_payload : {};
     const added = Array.isArray(payload?.delta?.added) ? payload.delta.added : [];
+    const removed = Array.isArray(payload?.delta?.removed) ? payload.delta.removed : [];
     const counterpartTitle = firstNonEmpty(payload?.counterpart_subject_title, "");
     const counterpartId = normalizeId(payload?.counterpart_subject_id);
 
     if (eventType === "subject_assignees_changed" && String(payload?.action || "").toLowerCase() === "added" && added.length === 1) {
       const assignee = added[0] || {};
+      const assigneeId = normalizeId(assignee?.id);
+      const collaborator = findCollaboratorByPersonId(assigneeId);
+      const fullName = firstNonEmpty(collaborator?.displayName, collaborator?.name, assignee?.label, "Collaborateur");
+      const role = firstNonEmpty(collaborator?.role, collaborator?.roleGroupLabel, "Collaborateur");
+      return `
+        <span class="subject-meta-assignee-row subject-meta-assignee-row--inline">
+          <span class="subject-meta-assignee-row__avatar subject-meta-assignee-avatar-inline">${renderCollaboratorAvatarInline(collaborator, fullName)}</span>
+          <span class="subject-meta-assignee-row__content">
+            <span class="subject-meta-assignee-row__name">${escapeHtml(fullName)}</span>
+            <span class="subject-meta-assignee-row__role">${escapeHtml(role)}</span>
+          </span>
+        </span>
+      `;
+    }
+
+    if (eventType === "subject_assignees_changed" && String(payload?.action || "").toLowerCase() === "removed" && removed.length === 1) {
+      const assignee = removed[0] || {};
       const assigneeId = normalizeId(assignee?.id);
       const collaborator = findCollaboratorByPersonId(assigneeId);
       const fullName = firstNonEmpty(collaborator?.displayName, collaborator?.name, assignee?.label, "Collaborateur");
@@ -1325,6 +1343,16 @@ priority=${firstNonEmpty(subject.priority, "")}`
       const linkedSubject = entityDisplayLinkHtml("sujet", counterpartId);
       return `
         <span class="tl-note-inline-link">${counterpartTitle ? `${escapeHtml(counterpartTitle)} ` : ""}${linkedSubject}</span>
+      `;
+    }
+
+    if (eventType === "subject_parent_added" && counterpartId) {
+      const linkedSubject = entityDisplayLinkHtml("sujet", counterpartId);
+      const status = String(getEffectiveSujetStatus(counterpartId) || getNestedSujet(counterpartId)?.status || "open").toLowerCase();
+      const statusIcon = status.startsWith("closed") ? "check-circle" : "issue-reopened";
+      return `
+        <span class="tl-note-inline-link">${svgIcon(statusIcon)}${counterpartTitle ? `${escapeHtml(counterpartTitle)} ` : ""}${linkedSubject}</span>
+        <span class="mono-small">comme parent</span>
       `;
     }
 
@@ -1370,6 +1398,11 @@ priority=${firstNonEmpty(subject.priority, "")}`
           const appearance = getBusinessActivityAppearance(e?.meta?.event_type || kind);
           const payload = e?.meta?.event_payload && typeof e.meta.event_payload === "object" ? e.meta.event_payload : {};
           const ts = fmtTs(e?.ts || "");
+          const eventType = String(e?.meta?.event_type || "").toLowerCase();
+          const assigneesAction = String(payload?.action || "").toLowerCase();
+          const resolvedVerb = eventType === "subject_assignees_changed" && assigneesAction === "removed"
+            ? "a retiré un assigné"
+            : (eventType === "subject_parent_added" ? "a ajouté le sujet" : appearance.verb);
           const note = buildBusinessActivitySummary({
             payload,
             appearance,
@@ -1390,7 +1423,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
               : miniAuthorIconHtml("human"),
             textHtml: `
               <span class="tl-author-name">${escapeHtml(activityIdentity.displayName)}</span>
-              <span class="mono-small"> ${escapeHtml(appearance.verb)} </span>
+              <span class="mono-small"> ${escapeHtml(resolvedVerb)} </span>
               ${inlineDetailHtml ? `<span class="tl-note-inline">${inlineDetailHtml}</span>` : ""}
               <span class="mono-small">· ${escapeHtml(ts)}</span>
             `,
