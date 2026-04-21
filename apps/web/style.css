@@ -3918,10 +3918,10 @@ body.drilldown-open .drilldown__inner,
   color:#fff;
 }
 .tl-ico--business-edit{background:rgba(9, 105, 218, .8);}
-.tl-ico--business-people{background:rgba(26, 127, 55, .86);}
-.tl-ico--business-labels{background:rgba(130, 80, 223, .9);}
-.tl-ico--business-rel{background:rgba(140, 75, 31, .9);}
-.tl-ico--business-alert{background:rgba(207, 34, 46, .9);}
+.tl-ico--business-people{background:rgb(33, 40, 48);color:rgb(145, 152, 161);fill:rgb(145, 152, 161)}
+.tl-ico--business-labels{background:rgb(33, 40, 48);color:rgb(145, 152, 161);fill:rgb(145, 152, 161)}
+.tl-ico--business-rel{background:rgb(33, 40, 48);color:rgb(145, 152, 161);fill:rgb(145, 152, 161)}
+.tl-ico--business-alert{background:rgb(33, 40, 48);color:rgb(145, 152, 161);fill:rgb(145, 152, 161)}
 .tl-ico--business-open{background:rgba(31, 136, 61, .9);}
 .tl-ico--business-neutral{background:rgba(110,118,129,.7);}
 .thread-item--event-subject_closed .tl-activity{border:1px solid rgba(207, 34, 46, .3);}
