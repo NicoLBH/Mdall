@@ -3244,9 +3244,15 @@ body.is-resizing{
   font-size:inherit;
   font-weight:400;
 }
+.details-title--expanded .details-title-inline-ref{
+  line-height:43px;
+  font-weight:200;
+}
 .details-title-inline-ref a{
   color:inherit;
   text-decoration:none;
+  line-height:inherit;
+  font-weight:inherit;
 }
 .details-title-inline-ref a:hover,
 .details-title-inline-ref a:focus-visible{
@@ -3351,6 +3357,9 @@ body.is-resizing{
 .details-title--expanded .details-title-bottomline{display:flex;align-items:center;gap:10px;min-width:0;flex-wrap:wrap;}
 .details-title--expanded .details-title-id{font-size:28px;font-weight:100;font-family:inherit;white-space:nowrap;text-overflow:ellipsis;}
 .subject-title-edit{min-width:0;display:flex;flex-direction:column;gap:6px;max-width:100%;}
+.subject-title-display{min-width:0;max-width:100%;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}
+.subject-title-display__main{min-width:0;display:flex;align-items:baseline;gap:4px;flex:1 1 auto;}
+.subject-title-display__actions{flex:0 0 auto;display:flex;align-items:center;justify-content:flex-end;}
 .subject-title-edit__row{display:flex;align-items:center;gap:8px;min-width:0;max-width:100%;}
 .subject-title-edit__input-wrap{min-width:0;flex:1 1 auto;}
 .subject-title-edit__input{

@@ -46,9 +46,15 @@ export function createProjectSubjectsDetailsRenderer(config) {
 
     if (!isEditing) {
       return `
-        <span class="details-title-text ${titleSeenClass}">${escapeHtml(firstNonEmpty(item.title, item.id, "Détail"))}</span>
-        <span class="details-title-inline-ref mono">${entityDisplayLinkHtml(currentSelection.type, item.id)}</span>
-        <button class="gh-btn gh-btn--sm subject-title-edit__action" type="button" data-action="edit-subject-title">Modifier</button>
+        <div class="subject-title-display">
+          <div class="subject-title-display__main">
+            <span class="details-title-text ${titleSeenClass}">${escapeHtml(firstNonEmpty(item.title, item.id, "Détail"))}</span>
+            <span class="details-title-inline-ref">${entityDisplayLinkHtml(currentSelection.type, item.id)}</span>
+          </div>
+          <div class="subject-title-display__actions">
+            <button class="gh-btn gh-btn--sm subject-title-edit__action" type="button" data-action="edit-subject-title">Modifier</button>
+          </div>
+        </div>
       `;
     }
 
@@ -65,7 +71,7 @@ export function createProjectSubjectsDetailsRenderer(config) {
               ${isSaving ? "disabled" : ""}
             />
           </div>
-          <span class="details-title-inline-ref mono">${entityDisplayLinkHtml(currentSelection.type, item.id)}</span>
+          <span class="details-title-inline-ref">${entityDisplayLinkHtml(currentSelection.type, item.id)}</span>
           <div class="subject-title-edit__actions">
             <button class="gh-btn gh-btn--sm subject-title-edit__action" type="button" data-action="cancel-subject-title-edit" ${isSaving ? "disabled" : ""}>Annuler</button>
             <button class="gh-btn gh-btn--primary gh-btn--sm subject-title-edit__action" type="button" data-action="save-subject-title-edit" ${canSave ? "" : "disabled"}>Enregistrer</button>

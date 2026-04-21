@@ -808,9 +808,12 @@ export function createProjectSubjectsEvents(config) {
 
     titleBindingRoots.forEach((scopeRoot) => {
       if (!(scopeRoot instanceof HTMLElement || scopeRoot === document)) return;
+      const titleActionRoot = scopeRoot?.closest?.("#detailsTitleModal")
+        ? (document.getElementById("detailsBodyModal") || root)
+        : scopeRoot;
       scopeRoot.querySelectorAll("[data-action='edit-subject-title']").forEach((btn) => {
         btn.onclick = () => {
-          const didStart = startSubjectTitleEdit?.(root);
+          const didStart = startSubjectTitleEdit?.(titleActionRoot);
           if (!didStart) return;
           requestAnimationFrame(() => {
             const input = getVisibleTitleInput();
@@ -824,7 +827,7 @@ export function createProjectSubjectsEvents(config) {
 
       scopeRoot.querySelectorAll("[data-action='cancel-subject-title-edit']").forEach((btn) => {
         btn.onclick = () => {
-          cancelSubjectTitleEdit?.(root);
+          cancelSubjectTitleEdit?.(titleActionRoot);
         };
       });
 
@@ -832,14 +835,14 @@ export function createProjectSubjectsEvents(config) {
         btn.onclick = async () => {
           const state = getSubjectTitleEditState?.() || {};
           if (state.isSaving) return;
-          await applySubjectTitleSave?.(root);
+          await applySubjectTitleSave?.(titleActionRoot);
         };
       });
 
       scopeRoot.querySelectorAll("[data-subject-title-draft]").forEach((input) => {
         input.oninput = () => {
           syncSubjectTitleDraft?.(scopeRoot);
-          rerenderScope(root);
+          rerenderScope(titleActionRoot);
         };
         input.onkeydown = async (event) => {
           if (event.key !== "Enter") return;
@@ -851,10 +854,10 @@ export function createProjectSubjectsEvents(config) {
           const draftTitle = String(state.draft || "").trim();
           if (state.isSaving) return;
           if (!draftTitle || draftTitle === initialTitle) {
-            cancelSubjectTitleEdit?.(root);
+            cancelSubjectTitleEdit?.(titleActionRoot);
             return;
           }
-          await applySubjectTitleSave?.(root);
+          await applySubjectTitleSave?.(titleActionRoot);
         };
       });
     });
