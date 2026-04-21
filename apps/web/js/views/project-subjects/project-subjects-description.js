@@ -3,6 +3,7 @@ import { renderSubjectMarkdownToolbar } from "../ui/subject-rich-editor.js";
 import { renderSubjectAttachmentTile, renderSubjectAttachmentsPreviewList } from "./project-subjects-attachments-ui.js";
 
 export function createProjectSubjectsDescription(config = {}) {
+  const VERSIONS_LOG_PREFIX = "[subject-description-versions]";
   const {
     store,
     ensureViewUiState,
@@ -373,8 +374,7 @@ export function createProjectSubjectsDescription(config = {}) {
       forceReload,
       sameTarget,
       previousIsLoading: previousLoading,
-      versionsInMemory,
-      stateRefId: getStateRefId(ui)
+      versionsInMemory
     });
     if (!forceReload && sameTarget && !ui.error && Array.isArray(ui.versions) && ui.versions.length && !previousLoading) {
       logDescriptionVersions("ensure early return: cache hit", {
@@ -404,8 +404,7 @@ export function createProjectSubjectsDescription(config = {}) {
         entityId: ui.entityId,
         isLoading: ui.isLoading,
         versionsCount: Array.isArray(ui.versions) ? ui.versions.length : 0,
-        error: ui.error,
-        stateRefId: getStateRefId(ui)
+        error: ui.error
       }
     });
     rerenderScope(root);
@@ -422,8 +421,7 @@ export function createProjectSubjectsDescription(config = {}) {
         loadToken,
         rowsCount: normalizedVersions.length,
         selectedVersionId: String(currentUi.selectedVersionId || ""),
-        ignoredAsStale: isStaleResponse,
-        stateRefId: getStateRefId(currentUi)
+        ignoredAsStale: isStaleResponse
       });
       if (isStaleResponse) {
         logDescriptionVersions("stale response ignored", {
@@ -490,8 +488,7 @@ export function createProjectSubjectsDescription(config = {}) {
         isLoadingFinal: !!currentUi.isLoading,
         versionsCountFinal: Array.isArray(currentUi.versions) ? currentUi.versions.length : 0,
         hasError: !!currentUi.error,
-        selectedVersionId: String(currentUi.selectedVersionId || ""),
-        stateRefId: getStateRefId(currentUi)
+        selectedVersionId: String(currentUi.selectedVersionId || "")
       });
       rerenderScope(root);
     }
@@ -696,8 +693,7 @@ export function createProjectSubjectsDescription(config = {}) {
       isTarget,
       isOpen: !!(isTarget && ui.isOpen),
       isLoading: !!ui.isLoading,
-      versionsLength: count,
-      stateRefId: getStateRefId(ui)
+      versionsLength: count
     });
     const loadingHtml = ui.isLoading ? `<div class="description-versions-dropdown__status">Chargement des versions…</div>` : "";
     const errorHtml = !ui.isLoading && ui.error

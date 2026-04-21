@@ -123,7 +123,6 @@ function getBlockedByCount(subjectId) {
 export function getSelectionDocumentRefs(selection) {
   const item = selection?.item || null;
   if (!item) return [];
-  const subjectId = String(item?.id || item?.subject_id || "");
   const normalizedRefIds = normalizeEntityDocumentRefs(item);
 
   const resolvedDocs = resolveDocumentRefs(normalizedRefIds);
@@ -133,7 +132,6 @@ export function getSelectionDocumentRefs(selection) {
     .filter(Boolean)
     .map(decorateDocumentWithPhase)
     .filter(Boolean);
-  const unresolvedRefIds = normalizedRefIds.filter((documentId) => !resolvedById.has(String(documentId || "")));
   return renderable;
 }
 
