@@ -2530,7 +2530,7 @@ body.is-resizing{
 .message-thread__comment{padding-left:var(--discussion-content-inset);}
 .message-thread .thread-item--comment{overflow:visible;}
 .message-thread .gh-comment-box{overflow:visible;}
-.comment-composer{display:flex;gap:12px;align-items:flex-start;margin-top:10px;}
+.comment-composer{display:flex;gap:12px;align-items:flex-start;margin-top:30px;}
 .comment-composer__main{flex:1 1 auto;min-width:0;}
 .comment-composer__box{width:100%;}
 .comment-composer__actions{padding-bottom:100px;}
