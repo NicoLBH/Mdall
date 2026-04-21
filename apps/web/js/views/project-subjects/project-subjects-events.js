@@ -15,7 +15,7 @@ import {
 } from "../../utils/subject-links.js";
 import { searchSubjectRefs } from "../../utils/subject-ref-index.js";
 import { computeTextareaCaretRect } from "../../utils/textarea-caret-position.js";
-import { autosizeTextarea, bindAutosizeTextarea } from "../../utils/textarea-autosize.js";
+import { autosizeTextarea } from "../../utils/textarea-autosize.js";
 import { renderSubjectAttachmentTile, renderSubjectAttachmentsPreviewList } from "./project-subjects-attachments-ui.js";
 
 export function createProjectSubjectsEvents(config) {
@@ -651,28 +651,56 @@ export function createProjectSubjectsEvents(config) {
         textareaType: type
       });
     };
-    const scheduleAutosize = (textarea, cause = "raf") => {
+    const isAutosizeDebugEnabled = () => typeof window !== "undefined" && window?.__MDALL_DEBUG_TEXTAREA_AUTOSIZE__ === true;
+    const isElementMeasurable = (element) => {
+      if (!element || element.isConnected === false) return false;
+      if (element.closest?.("[hidden], .hidden")) return false;
+      return element.offsetParent !== null || element.getClientRects?.().length > 0;
+    };
+    const scheduleAutosizeAfterRender = (textarea, cause = "after-render", options = {}) => {
       if (!textarea) return;
-      const { type, minHeightFallback } = getTextareaAutosizeMeta(textarea);
-      const binder = bindAutosizeTextarea(textarea, {
-        minHeightFallback,
-        comfortLines: 3,
-        log: true,
-        logPrefix: "[textarea-autosize]",
-        textareaType: type,
-        initialCause: "noop"
-      });
-      binder.resizeNextFrame(cause);
+      const { maxAttempts = 8 } = options || {};
+      let attempts = 0;
+      const schedulePass = () => {
+        if (typeof requestAnimationFrame !== "function") {
+          runAutosize(textarea, cause);
+          return;
+        }
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            attempts += 1;
+            const visible = isElementMeasurable(textarea);
+            if (!visible && attempts < maxAttempts) {
+              if (isAutosizeDebugEnabled()) {
+                console.info("[textarea-autosize]", {
+                  textareaType: getTextareaAutosizeMeta(textarea).type,
+                  cause,
+                  visible,
+                  deferredAfterRender: true,
+                  attempts
+                });
+              }
+              schedulePass();
+              return;
+            }
+            runAutosize(textarea, `${cause}${attempts > 1 ? `:attempt-${attempts}` : ""}`);
+          });
+        });
+      };
+      schedulePass();
+    };
+    const scheduleAutosizeAfterVisibility = (textarea, cause = "after-visibility", options = {}) => {
+      scheduleAutosizeAfterRender(textarea, cause, options);
     };
     const bindComposerAutosizeLifecycle = (textarea) => {
       if (!textarea || textarea.dataset.autosizeBound === "true") return;
       textarea.dataset.autosizeBound = "true";
       runAutosize(textarea, "mount");
-      scheduleAutosize(textarea, "raf-open");
+      scheduleAutosizeAfterVisibility(textarea, "mount-after-visible");
       ["input", "paste", "cut", "drop"].forEach((eventName) => {
         textarea.addEventListener(eventName, () => {
           runAutosize(textarea, eventName);
-          scheduleAutosize(textarea, `raf-${eventName}`);
+          scheduleAutosizeAfterRender(textarea, `after-render-${eventName}`);
         });
       });
     };
@@ -737,7 +765,9 @@ export function createProjectSubjectsEvents(config) {
 
     root.querySelectorAll("[data-action='edit-description']").forEach((btn) => {
       btn.onclick = () => {
-        startDescriptionEdit(root);
+        const didStart = startDescriptionEdit(root);
+        if (!didStart) return;
+        scheduleAutosizeAfterVisibility(root.querySelector("[data-description-draft]"), "description-edit-open");
       };
     });
 
@@ -1315,7 +1345,7 @@ export function createProjectSubjectsEvents(config) {
           replyUi.editDraftsByMessageId[messageId] = String(result.nextText || "");
           syncInlineEditSubmitButton(messageId);
         }
-        syncInlineReplyTextareaHeight(textarea);
+        scheduleAutosizeAfterRender(textarea, "inline-mention");
       }
       textarea.focus();
       textarea.selectionStart = result.nextCursorIndex;
@@ -1430,7 +1460,7 @@ export function createProjectSubjectsEvents(config) {
           replyUi.editDraftsByMessageId[messageId] = String(result.nextText || "");
           syncInlineEditSubmitButton(messageId);
         }
-        syncInlineReplyTextareaHeight(textarea);
+        scheduleAutosizeAfterRender(textarea, "inline-subject-ref");
       }
       textarea.focus();
       textarea.selectionStart = result.nextCursorIndex;
@@ -1646,7 +1676,7 @@ export function createProjectSubjectsEvents(config) {
         commentTextarea.selectionEnd = result.nextCursorIndex;
         closeEmojiPopup({ rerender: false });
         if (store.situationsView.commentPreviewMode) syncCommentPreview(root);
-        syncMainComposerTextareaHeight();
+        syncMainComposerTextareaHeight("emoji", { afterRender: true });
         rerenderAutocompleteUi({
           selector: "#humanCommentBox",
           shouldFocus: true,
@@ -1674,7 +1704,12 @@ export function createProjectSubjectsEvents(config) {
         syncMainEmojiPopup({ composerKey: "main" });
       };
 
-      const syncMainComposerTextareaHeight = (cause = "manual") => runAutosize(commentTextarea, cause);
+      const syncMainComposerTextareaHeight = (cause = "manual", options = {}) => {
+        runAutosize(commentTextarea, cause);
+        if (options?.afterRender === true) {
+          scheduleAutosizeAfterRender(commentTextarea, `main-${cause}`);
+        }
+      };
 
       bindComposerAutosizeLifecycle(commentTextarea);
       syncMainComposerTextareaHeight("mount");
@@ -1841,7 +1876,7 @@ export function createProjectSubjectsEvents(config) {
             closeMentionPopup({ rerender: false });
             closeEmojiPopup({ rerender: false });
             store.situationsView.commentDraft = String(commentTextarea.value || "");
-            syncMainComposerTextareaHeight();
+            syncMainComposerTextareaHeight("subject-ref", { afterRender: true });
             if (store.situationsView.commentPreviewMode) syncCommentPreview(root);
             void syncSubjectRefPopupForTextarea(commentTextarea, "main");
             commentTextarea.focus();
@@ -1855,7 +1890,7 @@ export function createProjectSubjectsEvents(config) {
             closeEmojiPopup({ rerender: false });
           }
           store.situationsView.commentDraft = String(commentTextarea.value || "");
-          syncMainComposerTextareaHeight();
+          syncMainComposerTextareaHeight("toolbar", { afterRender: true });
           if (store.situationsView.commentPreviewMode) syncCommentPreview(root);
         };
       });
@@ -2496,6 +2531,7 @@ export function createProjectSubjectsEvents(config) {
       btn.onclick = () => {
         store.situationsView.commentPreviewMode = false;
         rerenderDiscussionComposerScope(btn);
+        scheduleAutosizeAfterVisibility(root.querySelector("#humanCommentBox"), "main-preview-write");
       };
     });
 
@@ -2875,10 +2911,10 @@ export function createProjectSubjectsEvents(config) {
       if (!submitButton) return;
       submitButton.disabled = !canSubmitInlineEdit(normalizedMessageId);
     };
-    const syncInlineReplyTextareaHeight = (textarea, cause = "manual") => runAutosize(textarea, cause);
-    const toggleInlineReplyEditorVisibility = (messageId = "", visible = false) => {
+    const toggleInlineReplyEditorVisibility = (messageId = "", visible = false, options = {}) => {
       const normalizedMessageId = String(messageId || "").trim();
       if (!normalizedMessageId) return;
+      const onRendered = typeof options?.onRendered === "function" ? options.onRendered : null;
       scheduleScopedDomRender(`inline-reply-editor:${normalizedMessageId}`, () => {
         const editor = root.querySelector(`[data-inline-reply-editor="${selectorValue(normalizedMessageId)}"]`);
         if (!editor) return;
@@ -2890,11 +2926,13 @@ export function createProjectSubjectsEvents(config) {
         editor.classList.toggle("hidden", !visible);
         if (visible) editor.removeAttribute("aria-hidden");
         else editor.setAttribute("aria-hidden", "true");
+        if (onRendered) onRendered(editor);
       });
     };
-    const toggleInlineEditEditorVisibility = (messageId = "", visible = false) => {
+    const toggleInlineEditEditorVisibility = (messageId = "", visible = false, options = {}) => {
       const normalizedMessageId = String(messageId || "").trim();
       if (!normalizedMessageId) return;
+      const onRendered = typeof options?.onRendered === "function" ? options.onRendered : null;
       scheduleScopedDomRender(`inline-edit-editor:${normalizedMessageId}`, () => {
         const editor = root.querySelector(`[data-inline-edit-editor="${selectorValue(normalizedMessageId)}"]`);
         const content = root.querySelector(`[data-thread-comment-content="${selectorValue(normalizedMessageId)}"]`);
@@ -2909,6 +2947,7 @@ export function createProjectSubjectsEvents(config) {
           else editor.setAttribute("aria-hidden", "true");
         }
         if (content) content.classList.toggle("hidden", !!visible);
+        if (onRendered) onRendered(editor);
       });
     };
     const closeInlineReplyEditor = (messageId = "") => {
@@ -3231,19 +3270,23 @@ export function createProjectSubjectsEvents(config) {
         if (previouslyExpandedMessageId && previouslyExpandedMessageId !== messageId) {
           toggleInlineReplyEditorVisibility(previouslyExpandedMessageId, false);
         }
-        toggleInlineReplyEditorVisibility(messageId, true);
-        const textarea = root.querySelector(`[data-thread-reply-draft="${selectorValue(messageId)}"]`);
-        if (textarea) {
-          textarea.value = String(replyUi.draftsByMessageId?.[messageId] || "");
-          syncInlineReplyTextareaHeight(textarea);
-          syncInlineReplySubmitButton(messageId);
-          requestAnimationFrame(() => {
-            debugThreadReply("reply_editor_presence", { messageId, found: true });
-            textarea.focus();
-          });
-        } else {
-          console.warn("[subject-thread-reply] inline reply textarea missing", { messageId });
-        }
+        toggleInlineReplyEditorVisibility(messageId, true, {
+          onRendered: () => {
+            const textarea = root.querySelector(`[data-thread-reply-draft="${selectorValue(messageId)}"]`);
+            if (!textarea) {
+              console.warn("[subject-thread-reply] inline reply textarea missing", { messageId });
+              return;
+            }
+            textarea.value = String(replyUi.draftsByMessageId?.[messageId] || "");
+            scheduleAutosizeAfterVisibility(textarea, "inline-reply-open");
+            syncInlineReplySubmitButton(messageId);
+            scheduleAutosizeAfterVisibility(textarea, "inline-reply-visible-focus");
+            requestAnimationFrame(() => {
+              debugThreadReply("reply_editor_presence", { messageId, found: true });
+              textarea.focus();
+            });
+          }
+        });
       };
     });
 
@@ -3264,16 +3307,19 @@ export function createProjectSubjectsEvents(config) {
           clearInlineEditAttachmentsState(previousEditMessageId);
           toggleInlineEditEditorVisibility(previousEditMessageId, false);
         }
-        toggleInlineEditEditorVisibility(messageId, true);
-        const textarea = root.querySelector(`[data-thread-edit-draft="${selectorValue(messageId)}"]`);
-        if (textarea) {
-          textarea.value = String(replyUi.editDraftsByMessageId?.[messageId] || "");
-          syncInlineReplyTextareaHeight(textarea);
-          syncInlineEditSubmitButton(messageId);
-          requestAnimationFrame(() => textarea.focus());
-        } else {
-          console.warn("[subject-thread-reply] inline edit textarea missing", { messageId });
-        }
+        toggleInlineEditEditorVisibility(messageId, true, {
+          onRendered: () => {
+            const textarea = root.querySelector(`[data-thread-edit-draft="${selectorValue(messageId)}"]`);
+            if (!textarea) {
+              console.warn("[subject-thread-reply] inline edit textarea missing", { messageId });
+              return;
+            }
+            textarea.value = String(replyUi.editDraftsByMessageId?.[messageId] || "");
+            scheduleAutosizeAfterVisibility(textarea, "inline-edit-open");
+            syncInlineEditSubmitButton(messageId);
+            requestAnimationFrame(() => textarea.focus());
+          }
+        });
       };
     });
 
@@ -3446,19 +3492,19 @@ export function createProjectSubjectsEvents(config) {
         replyUi.editDraftsByMessageId[messageId] = String(result.nextText || "");
         syncInlineEditSubmitButton(messageId);
       }
-      syncInlineReplyTextareaHeight(textarea);
+      scheduleAutosizeAfterVisibility(textarea, "inline-reply-bind");
       rerenderAutocompleteUi();
     };
 
     root.querySelectorAll("[data-thread-reply-draft]").forEach((textarea) => {
       bindComposerAutosizeLifecycle(textarea);
-      syncInlineReplyTextareaHeight(textarea);
+      scheduleAutosizeAfterVisibility(textarea, "inline-reply-bind-initial");
       textarea.addEventListener("input", () => {
         const messageId = String(textarea.dataset.threadReplyDraft || "").trim();
         if (!messageId) return;
         const replyUi = resolveInlineReplyUiState();
         replyUi.draftsByMessageId[messageId] = String(textarea.value || "");
-        syncInlineReplyTextareaHeight(textarea);
+        runAutosize(textarea, "inline-reply-input");
         syncInlineReplySubmitButton(messageId);
         void syncInlineAutocomplete(textarea, `reply:${messageId}`);
       });
@@ -3564,7 +3610,7 @@ export function createProjectSubjectsEvents(config) {
             const result = applyInlineEmojiSuggestion(textarea, emojiState.suggestions[Number(emojiState.activeIndex || 0)] || emojiState.suggestions[0]);
             const replyUi = resolveInlineReplyUiState();
             if (messageId) replyUi.draftsByMessageId[messageId] = String(result.nextText || "");
-            syncInlineReplyTextareaHeight(textarea);
+            scheduleAutosizeAfterRender(textarea, "inline-reply-emoji");
             syncInlineReplySubmitButton(messageId);
             return;
           }
@@ -3605,13 +3651,13 @@ export function createProjectSubjectsEvents(config) {
 
     root.querySelectorAll("[data-thread-edit-draft]").forEach((textarea) => {
       bindComposerAutosizeLifecycle(textarea);
-      syncInlineReplyTextareaHeight(textarea);
+      scheduleAutosizeAfterVisibility(textarea, "inline-edit-bind");
       textarea.addEventListener("input", () => {
         const messageId = String(textarea.dataset.threadEditDraft || "").trim();
         if (!messageId) return;
         const replyUi = resolveInlineReplyUiState();
         replyUi.editDraftsByMessageId[messageId] = String(textarea.value || "");
-        syncInlineReplyTextareaHeight(textarea);
+        runAutosize(textarea, "inline-edit-input");
         syncInlineEditSubmitButton(messageId);
         void syncInlineAutocomplete(textarea, `edit:${messageId}`);
       });
@@ -3717,7 +3763,7 @@ export function createProjectSubjectsEvents(config) {
             const result = applyInlineEmojiSuggestion(textarea, emojiState.suggestions[Number(emojiState.activeIndex || 0)] || emojiState.suggestions[0]);
             const replyUi = resolveInlineReplyUiState();
             if (messageId) replyUi.editDraftsByMessageId[messageId] = String(result.nextText || "");
-            syncInlineReplyTextareaHeight(textarea);
+            scheduleAutosizeAfterRender(textarea, "inline-edit-emoji");
             syncInlineEditSubmitButton(messageId);
             return;
           }
@@ -3774,7 +3820,7 @@ export function createProjectSubjectsEvents(config) {
         textareaWrap?.classList.remove("hidden");
         previewWrap?.classList.add("hidden");
         const textarea = composerRoot?.querySelector(`[data-thread-reply-draft="${selectorValue(messageId)}"]`);
-        if (textarea) syncInlineReplyTextareaHeight(textarea);
+        if (textarea) scheduleAutosizeAfterVisibility(textarea, "inline-reply-preview-write");
       };
     });
 
@@ -3821,7 +3867,7 @@ export function createProjectSubjectsEvents(config) {
         composerRoot?.querySelector(".comment-composer__editor")?.classList.remove("hidden");
         composerRoot?.querySelector(".comment-composer__preview-wrap")?.classList.add("hidden");
         const textarea = composerRoot?.querySelector(`[data-thread-edit-draft="${selectorValue(messageId)}"]`);
-        if (textarea) syncInlineReplyTextareaHeight(textarea);
+        if (textarea) scheduleAutosizeAfterVisibility(textarea, "inline-edit-preview-write");
       };
     });
 
@@ -3863,7 +3909,7 @@ export function createProjectSubjectsEvents(config) {
           ensureSubjectRefTriggerInTextarea(textarea);
           const replyUi = resolveInlineReplyUiState();
           replyUi.draftsByMessageId[messageId] = String(textarea.value || "");
-          syncInlineReplyTextareaHeight(textarea);
+          scheduleAutosizeAfterRender(textarea, "inline-reply-toolbar-subject-ref");
           syncInlineReplySubmitButton(messageId);
           closeMentionPopup({ rerender: false });
           closeEmojiPopup({ rerender: false });
@@ -3875,7 +3921,7 @@ export function createProjectSubjectsEvents(config) {
         if (!didApply) return;
         const replyUi = resolveInlineReplyUiState();
         replyUi.draftsByMessageId[messageId] = String(textarea.value || "");
-        syncInlineReplyTextareaHeight(textarea);
+        scheduleAutosizeAfterRender(textarea, "inline-reply-toolbar");
         syncInlineReplySubmitButton(messageId);
         if (action === "mention") void syncMentionPopupForTextarea(textarea, `reply:${messageId}`, { forceOpen: true });
         else {
@@ -3897,7 +3943,7 @@ export function createProjectSubjectsEvents(config) {
           ensureSubjectRefTriggerInTextarea(textarea);
           const replyUi = resolveInlineReplyUiState();
           replyUi.editDraftsByMessageId[messageId] = String(textarea.value || "");
-          syncInlineReplyTextareaHeight(textarea);
+          scheduleAutosizeAfterRender(textarea, "inline-edit-toolbar-subject-ref");
           syncInlineEditSubmitButton(messageId);
           closeMentionPopup({ rerender: false });
           closeEmojiPopup({ rerender: false });
@@ -3909,7 +3955,7 @@ export function createProjectSubjectsEvents(config) {
         if (!didApply) return;
         const replyUi = resolveInlineReplyUiState();
         replyUi.editDraftsByMessageId[messageId] = String(textarea.value || "");
-        syncInlineReplyTextareaHeight(textarea);
+        scheduleAutosizeAfterRender(textarea, "inline-edit-toolbar");
         syncInlineEditSubmitButton(messageId);
         if (action === "mention") void syncMentionPopupForTextarea(textarea, `edit:${messageId}`, { forceOpen: true });
         else {
@@ -3932,8 +3978,7 @@ export function createProjectSubjectsEvents(config) {
         composerRoot?.querySelector(".comment-composer__preview-wrap")?.classList.add("hidden");
         const textarea = composerRoot?.querySelector("[data-description-draft]");
         if (textarea) {
-          runAutosize(textarea, "preview-toggle");
-          scheduleAutosize(textarea, "raf-open");
+          scheduleAutosizeAfterVisibility(textarea, "description-preview-write");
         }
       };
     });
@@ -3965,7 +4010,7 @@ export function createProjectSubjectsEvents(config) {
         if (action === "subject-ref") {
           ensureSubjectRefTriggerInTextarea(textarea);
           syncDescriptionEditorDraft(root);
-          runAutosize(textarea, "subject-ref");
+          scheduleAutosizeAfterRender(textarea, "description-toolbar-subject-ref");
           closeMentionPopup({ rerender: false });
           closeEmojiPopup({ rerender: false });
           void syncSubjectRefPopupForTextarea(textarea, `description:${String(textarea.dataset.descriptionDraft || "")}`);
@@ -3975,7 +4020,7 @@ export function createProjectSubjectsEvents(config) {
         const didApply = applyMarkdownComposerAction(textarea, action);
         if (!didApply) return;
         syncDescriptionEditorDraft(root);
-        runAutosize(textarea, "toolbar");
+        scheduleAutosizeAfterRender(textarea, "description-toolbar");
         if (action === "mention") {
           void syncMentionPopupForTextarea(textarea, `description:${String(textarea.dataset.descriptionDraft || "")}`, { forceOpen: true });
         } else {
@@ -4011,7 +4056,7 @@ export function createProjectSubjectsEvents(config) {
       bindComposerAutosizeLifecycle(textarea);
       textarea.addEventListener("input", () => {
         syncDescriptionEditorDraft(root);
-        runAutosize(textarea, "input");
+        runAutosize(textarea, "description-input");
         void syncInlineAutocomplete(textarea, composerKey);
       });
       textarea.addEventListener("keydown", (event) => {

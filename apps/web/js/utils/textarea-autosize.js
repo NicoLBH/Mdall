@@ -19,6 +19,7 @@ export function autosizeTextarea(textarea, options = {}) {
   const minHeight = Math.max(Number(minHeightFallback || 0), minHeightCss);
   const comfortHeight = lineHeight * Math.max(0, Number(comfortLines || 0));
   const previousHeight = Math.round(parseFloat(String(textarea.style.height || "0")) || textarea.offsetHeight || 0);
+  const isVisible = textarea.offsetParent !== null || textarea.getClientRects?.().length > 0;
 
   if (textarea.isConnected === false) {
     return {
@@ -29,7 +30,8 @@ export function autosizeTextarea(textarea, options = {}) {
       comfortLines: Math.max(0, Number(comfortLines || 0)),
       comfortHeight,
       scrollHeight: 0,
-      skipped: "disconnected"
+      skipped: "disconnected",
+      visible: isVisible
     };
   }
 
@@ -46,7 +48,8 @@ export function autosizeTextarea(textarea, options = {}) {
       comfortLines: Math.max(0, Number(comfortLines || 0)),
       comfortHeight,
       scrollHeight: measuredScrollHeight,
-      skipped: "not-measurable"
+      skipped: "not-measurable",
+      visible: isVisible
     };
   }
   const targetHeight = Math.max(minHeight, Math.round(measuredScrollHeight + comfortHeight));
@@ -62,6 +65,7 @@ export function autosizeTextarea(textarea, options = {}) {
       previousHeight,
       nextHeight: targetHeight,
       scrollHeight: measuredScrollHeight,
+      visible: isVisible,
       lineHeight,
       comfortHeight,
       minHeight,
@@ -76,7 +80,8 @@ export function autosizeTextarea(textarea, options = {}) {
     lineHeight,
     comfortLines: Math.max(0, Number(comfortLines || 0)),
     comfortHeight,
-    scrollHeight: measuredScrollHeight
+    scrollHeight: measuredScrollHeight,
+    visible: isVisible
   };
 }
 

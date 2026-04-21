@@ -14,6 +14,7 @@ import {
 const SUPABASE_URL = getSupabaseUrl();
 const FRONT_PROJECT_MAP_STORAGE_KEY = "mdall.supabaseProjectMap.v1";
 const SUBJECT_DESCRIPTION_DEBUG_FLAG = "__MDALL_DEBUG_SUBJECT_DESCRIPTION__";
+const PROJECT_SUBJECTS_DEBUG_FLAG = "__MDALL_DEBUG_PROJECT_SUBJECTS__";
 
 
 
@@ -53,6 +54,10 @@ async function getSupabaseAuthHeaders(extra = {}) {
 
 function isSubjectDescriptionDebugEnabled() {
   return typeof window !== "undefined" && window?.[SUBJECT_DESCRIPTION_DEBUG_FLAG] === true;
+}
+
+function isProjectSubjectsDebugEnabled() {
+  return typeof window !== "undefined" && window?.[PROJECT_SUBJECTS_DEBUG_FLAG] === true;
 }
 
 function truncateDescriptionPreview(value = "", maxLength = 160) {
@@ -208,7 +213,17 @@ async function fetchProjectFlatSubjects(projectId) {
   }
 
   const json = await res.json().catch(() => []);
-  return Array.isArray(json) ? json : [];
+  const rows = Array.isArray(json) ? json : [];
+  if (isProjectSubjectsDebugEnabled()) {
+    const hasDocumentRefIdsInPayload = rows.some((row) => Object.prototype.hasOwnProperty.call(row || {}, "document_ref_ids"));
+    console.info("[project-subjects] fetch subjects", {
+      projectId: String(projectId || ""),
+      rows: rows.length,
+      missingOptionalColumns: [...missingOptionalColumns],
+      hasDocumentRefIdsInPayload
+    });
+  }
+  return rows;
 }
 
 async function fetchDescriptionAttachmentsBySubjectIds(subjectIds = []) {
@@ -1593,6 +1608,9 @@ export async function loadFlatSubjectsForCurrentProject(options = {}) {
     const descriptionAttachmentsBySubjectId = await fetchDescriptionAttachmentsBySubjectIds(subjectIds).catch(() => new Map());
     const hydratedSubjects = (Array.isArray(subjects) ? subjects : []).map((subject) => {
       const subjectId = normalizeUuid(subject?.id);
+      const documentRefIds = Array.isArray(subject?.document_ref_ids)
+        ? subject.document_ref_ids.map((value) => normalizeUuid(value)).filter(Boolean)
+        : [];
       const descriptionAttachments = Array.isArray(descriptionAttachmentsBySubjectId.get(subjectId))
         ? descriptionAttachmentsBySubjectId.get(subjectId)
         : [];
@@ -1605,9 +1623,17 @@ export async function loadFlatSubjectsForCurrentProject(options = {}) {
       }
       return {
         ...subject,
+        document_ref_ids: documentRefIds,
         description_attachments: descriptionAttachments
       };
     });
+    if (isProjectSubjectsDebugEnabled()) {
+      console.info("[project-subjects] hydrated subjects", {
+        projectId: backendProjectId,
+        count: hydratedSubjects.length,
+        subjectsWithDocumentRefs: hydratedSubjects.filter((subject) => Array.isArray(subject?.document_ref_ids) && subject.document_ref_ids.length > 0).length
+      });
+    }
     const subjectLinks = await fetchProjectSubjectLinks(backendProjectId).catch(() => []);
     const subjectAssignees = await fetchProjectSubjectAssignees(backendProjectId).catch(() => []);
     const subjectMessageCountsBySubjectId = await fetchProjectSubjectMessageCounts(backendProjectId).catch(() => ({}));
