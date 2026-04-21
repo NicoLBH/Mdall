@@ -1,4 +1,5 @@
 import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
+import { resolveCurrentUserDirectoryPersonId } from "./project-supabase-sync.js";
 
 const SUPABASE_URL = getSupabaseUrl();
 
@@ -66,33 +67,23 @@ export async function createBlockedByRelationInSupabase({ subjectId, blockedBySu
     rawSubjectsResult
   });
 
-  const sourceSubject = getSubject(rawSubjectsResult, sourceKey);
-  const projectId = normalizeProjectId(sourceSubject);
-  if (!projectId) {
-    throw new Error("project_id introuvable pour le sujet source.");
+  const actorPersonId = normalizeId(await resolveCurrentUserDirectoryPersonId());
+  if (!actorPersonId) {
+    throw new Error("Impossible de résoudre l'identité utilisateur pour historiser la relation bloquante.");
   }
 
-  const url = new URL(`${SUPABASE_URL}/rest/v1/subject_links`);
-  url.searchParams.set("on_conflict", "project_id,source_subject_id,target_subject_id,link_type");
-
-  const headers = await buildSupabaseAuthHeaders({
-    "Content-Type": "application/json",
-    Accept: "application/json",
-    Prefer: "resolution=merge-duplicates,return=representation"
-  });
-
-  const payload = [{
-    project_id: projectId,
-    source_subject_id: sourceKey,
-    target_subject_id: targetKey,
-    link_type: "blocked_by"
-  }];
-
-  const res = await fetch(url.toString(), {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/set_subject_blocked_by_relation_with_history`, {
     method: "POST",
-    headers,
-    body: JSON.stringify(payload),
-    cache: "no-store"
+    headers: await buildSupabaseAuthHeaders({
+      "Content-Type": "application/json",
+      Accept: "application/json"
+    }),
+    body: JSON.stringify({
+      p_subject_id: sourceKey,
+      p_blocked_by_subject_id: targetKey,
+      p_should_exist: true,
+      p_actor_person_id: actorPersonId
+    })
   });
 
   if (!res.ok) {
@@ -100,29 +91,40 @@ export async function createBlockedByRelationInSupabase({ subjectId, blockedBySu
     throw new Error(`Ajout de la relation bloquante impossible (${res.status}) : ${text}`);
   }
 
-  const rows = await res.json().catch(() => []);
-  return rows[0] || null;
+  return await res.json().catch(() => ({}));
 }
 
-export async function deleteBlockedByRelationInSupabase({ subjectId, blockedBySubjectId } = {}) {
+export async function deleteBlockedByRelationInSupabase({ subjectId, blockedBySubjectId, rawSubjectsResult = null } = {}) {
   const sourceKey = normalizeId(subjectId);
   const targetKey = normalizeId(blockedBySubjectId);
   if (!sourceKey) throw new Error("subjectId est requis.");
   if (!targetKey) throw new Error("blockedBySubjectId est requis.");
 
-  const url = new URL(`${SUPABASE_URL}/rest/v1/subject_links`);
-  url.searchParams.set("source_subject_id", `eq.${sourceKey}`);
-  url.searchParams.set("target_subject_id", `eq.${targetKey}`);
-  url.searchParams.set("link_type", "eq.blocked_by");
+  if (rawSubjectsResult) {
+    assertBlockingRelationAllowed({
+      subjectId: sourceKey,
+      blockedBySubjectId: targetKey,
+      rawSubjectsResult
+    });
+  }
 
-  const headers = await buildSupabaseAuthHeaders({
-    Accept: "application/json"
-  });
+  const actorPersonId = normalizeId(await resolveCurrentUserDirectoryPersonId());
+  if (!actorPersonId) {
+    throw new Error("Impossible de résoudre l'identité utilisateur pour historiser la relation bloquante.");
+  }
 
-  const res = await fetch(url.toString(), {
-    method: "DELETE",
-    headers,
-    cache: "no-store"
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/set_subject_blocked_by_relation_with_history`, {
+    method: "POST",
+    headers: await buildSupabaseAuthHeaders({
+      "Content-Type": "application/json",
+      Accept: "application/json"
+    }),
+    body: JSON.stringify({
+      p_subject_id: sourceKey,
+      p_blocked_by_subject_id: targetKey,
+      p_should_exist: false,
+      p_actor_person_id: actorPersonId
+    })
   });
 
   if (!res.ok) {
@@ -130,5 +132,5 @@ export async function deleteBlockedByRelationInSupabase({ subjectId, blockedBySu
     throw new Error(`Suppression de la relation bloquante impossible (${res.status}) : ${text}`);
   }
 
-  return true;
+  return await res.json().catch(() => ({}));
 }

@@ -4,7 +4,7 @@ function normalizeId(value) {
   return String(value || "").trim();
 }
 
-function toTimelineRows(messages = [], events = []) {
+function toTimelineRows(messages = [], events = [], businessEvents = []) {
   const messageRows = (Array.isArray(messages) ? messages : []).map((message) => ({
     kind: "message",
     created_at: message?.created_at || "",
@@ -15,8 +15,13 @@ function toTimelineRows(messages = [], events = []) {
     created_at: event?.created_at || "",
     event
   }));
+  const businessRows = (Array.isArray(businessEvents) ? businessEvents : []).map((event) => ({
+    kind: "business_event",
+    created_at: event?.created_at || "",
+    event
+  }));
 
-  return [...messageRows, ...eventRows].sort((left, right) => {
+  return [...messageRows, ...eventRows, ...businessRows].sort((left, right) => {
     const lt = String(left?.created_at || "");
     const rt = String(right?.created_at || "");
     return lt.localeCompare(rt);
@@ -34,18 +39,20 @@ export function createSubjectMessagesService({ repository } = {}) {
 
   async function listTimeline(subjectId) {
     const normalizedSubjectId = normalizeId(subjectId);
-    if (!normalizedSubjectId) return { rows: [], messages: [], events: [], conversation: null };
+    if (!normalizedSubjectId) return { rows: [], messages: [], events: [], businessEvents: [], conversation: null };
 
-    const [messages, events, conversation] = await Promise.all([
+    const [messages, events, businessEvents, conversation] = await Promise.all([
       provider.listMessages({ subjectId: normalizedSubjectId }),
       provider.listEvents({ subjectId: normalizedSubjectId }),
+      provider.listBusinessEvents({ subjectId: normalizedSubjectId }),
       provider.getConversationSettings({ subjectId: normalizedSubjectId })
     ]);
 
     return {
-      rows: toTimelineRows(messages, events),
+      rows: toTimelineRows(messages, events, businessEvents),
       messages,
       events,
+      businessEvents,
       conversation
     };
   }
