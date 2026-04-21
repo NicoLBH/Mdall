@@ -1320,23 +1320,11 @@ export async function loadSubjectDescriptionVersions(subjectId, options = {}) {
   versionsUrl.searchParams.set("subject_id", `eq.${normalizedSubjectId}`);
   versionsUrl.searchParams.set("order", "created_at.desc");
   versionsUrl.searchParams.set("limit", String(limit));
-  console.info(`${logPrefix} fetch start`, {
-    timestamp: new Date().toISOString(),
-    subjectId: normalizedSubjectId,
-    limit,
-    url: versionsUrl.toString()
-  });
 
   const versionsResponse = await fetch(versionsUrl.toString(), {
     method: "GET",
     headers: await getSupabaseAuthHeaders({ Accept: "application/json" }),
     cache: "no-store"
-  });
-  console.info(`${logPrefix} fetch response`, {
-    timestamp: new Date().toISOString(),
-    subjectId: normalizedSubjectId,
-    status: Number(versionsResponse.status || 0),
-    statusText: String(versionsResponse.statusText || "")
   });
   if (!versionsResponse.ok) {
     const txt = await versionsResponse.text().catch(() => "");
@@ -1366,18 +1354,6 @@ export async function loadSubjectDescriptionVersions(subjectId, options = {}) {
   }
   const versionRows = await versionsResponse.json().catch(() => []);
   const rows = Array.isArray(versionRows) ? versionRows : [];
-  console.info(`${logPrefix} fetch success`, {
-    timestamp: new Date().toISOString(),
-    subjectId: normalizedSubjectId,
-    rowsCount: rows.length,
-    sample: rows.slice(0, 3).map((row) => ({
-      id: normalizeUuid(row?.id),
-      subject_id: normalizeUuid(row?.subject_id),
-      actor_user_id: normalizeUuid(row?.actor_user_id),
-      actor_person_id: normalizeUuid(row?.actor_person_id),
-      created_at: String(row?.created_at || "")
-    }))
-  });
   if (!rows.length) {
     console.warn(`${logPrefix} fetch succeeded but returned no version rows`, {
       timestamp: new Date().toISOString(),
@@ -1385,11 +1361,6 @@ export async function loadSubjectDescriptionVersions(subjectId, options = {}) {
     });
   }
   const personIds = [...new Set(rows.map((row) => normalizeUuid(row?.actor_person_id)).filter(Boolean))];
-  console.info(`${logPrefix} directory_people fetch candidates`, {
-    timestamp: new Date().toISOString(),
-    subjectId: normalizedSubjectId,
-    personIds
-  });
   const peopleById = {};
   if (personIds.length) {
     const peopleUrl = new URL(`${SUPABASE_URL}/rest/v1/directory_people`);
@@ -1414,12 +1385,6 @@ export async function loadSubjectDescriptionVersions(subjectId, options = {}) {
     }
     if (peopleResponse?.ok) {
       const peopleRows = await peopleResponse.json().catch(() => []);
-      console.info(`${logPrefix} directory_people fetch success`, {
-        timestamp: new Date().toISOString(),
-        subjectId: normalizedSubjectId,
-        status: Number(peopleResponse.status || 0),
-        rowsCount: Array.isArray(peopleRows) ? peopleRows.length : 0
-      });
       (Array.isArray(peopleRows) ? peopleRows : []).forEach((person) => {
         const personId = normalizeUuid(person?.id);
         if (!personId) return;

@@ -123,15 +123,7 @@ function getBlockedByCount(subjectId) {
 export function getSelectionDocumentRefs(selection) {
   const item = selection?.item || null;
   if (!item) return [];
-  const subjectId = String(item?.id || item?.subject_id || "");
   const normalizedRefIds = normalizeEntityDocumentRefs(item);
-  console.info("[subject-document-refs] resolve start", {
-    subjectId,
-    document_id: String(item?.document_id || ""),
-    document_ref_ids: Array.isArray(item?.document_ref_ids) ? item.document_ref_ids : [],
-    raw_document_id: String(item?.raw?.document_id || ""),
-    raw_document_ref_ids: Array.isArray(item?.raw?.document_ref_ids) ? item.raw.document_ref_ids : []
-  });
 
   const resolvedDocs = resolveDocumentRefs(normalizedRefIds);
   const resolvedById = new Map(resolvedDocs.map((doc) => [String(doc?.id || ""), doc]));
@@ -140,14 +132,6 @@ export function getSelectionDocumentRefs(selection) {
     .filter(Boolean)
     .map(decorateDocumentWithPhase)
     .filter(Boolean);
-  const unresolvedRefIds = normalizedRefIds.filter((documentId) => !resolvedById.has(String(documentId || "")));
-  console.info("[subject-document-refs] resolve result", {
-    subjectId,
-    normalizedRefIds,
-    resolvedDocsCount: resolvedDocs.length,
-    unresolvedRefIds,
-    renderableCount: renderable.length
-  });
   return renderable;
 }
 

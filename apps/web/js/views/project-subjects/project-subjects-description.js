@@ -4,9 +4,6 @@ import { renderSubjectAttachmentTile, renderSubjectAttachmentsPreviewList } from
 
 export function createProjectSubjectsDescription(config = {}) {
   const VERSIONS_LOG_PREFIX = "[subject-description-versions]";
-  const stateRefIds = new WeakMap();
-  let lastLoggedStateRefId = "";
-  let stateRefSeq = 0;
   const {
     store,
     ensureViewUiState,
@@ -38,11 +35,8 @@ export function createProjectSubjectsDescription(config = {}) {
     return `${chunk()}${chunk()}-${chunk()}-${chunk()}-${chunk()}-${chunk()}${chunk()}${chunk()}`;
   };
 
-  function logDescriptionVersions(message, payload = {}) {
-    console.info(`${VERSIONS_LOG_PREFIX} ${message}`, {
-      timestamp: new Date().toISOString(),
-      ...payload
-    });
+  function logDescriptionVersions() {
+    // Debug logs intentionally disabled.
   }
 
   function getSubjectsViewStore() {
@@ -51,15 +45,6 @@ export function createProjectSubjectsDescription(config = {}) {
       store.projectSubjectsView = {};
     }
     return store.projectSubjectsView;
-  }
-
-  function getStateRefId(state) {
-    if (!state || typeof state !== "object") return "no-state";
-    if (!stateRefIds.has(state)) {
-      stateRefSeq += 1;
-      stateRefIds.set(state, `description-versions-ui-${stateRefSeq}`);
-    }
-    return stateRefIds.get(state);
   }
 
   function isHtmlElement(value) {
@@ -90,7 +75,6 @@ export function createProjectSubjectsDescription(config = {}) {
 
   function ensureDescriptionVersionsUiState() {
     const view = getSubjectsViewStore();
-    const existing = view.descriptionVersionsUi;
     view.descriptionVersionsUi ??= {
       entityType: null,
       entityId: null,
@@ -109,15 +93,6 @@ export function createProjectSubjectsDescription(config = {}) {
     if (typeof view.descriptionVersionsUi.selectedVersionId !== "string") view.descriptionVersionsUi.selectedVersionId = "";
     if (typeof view.descriptionVersionsUi.modalOpen !== "boolean") view.descriptionVersionsUi.modalOpen = false;
     if (!Number.isFinite(Number(view.descriptionVersionsUi.loadToken))) view.descriptionVersionsUi.loadToken = 0;
-    const stateRefId = getStateRefId(view.descriptionVersionsUi);
-    if (!existing || lastLoggedStateRefId !== stateRefId) {
-      lastLoggedStateRefId = stateRefId;
-      logDescriptionVersions("state init", {
-        store: "store.projectSubjectsView.descriptionVersionsUi",
-        hasExistingState: !!existing,
-        stateRefId
-      });
-    }
     return view.descriptionVersionsUi;
   }
 
@@ -172,23 +147,6 @@ export function createProjectSubjectsDescription(config = {}) {
     const latestVersion = versions[0] || {};
     const previousState = getEntityDescriptionState(entityType, entityId);
     const patch = buildDescriptionIdentityPatchFromVersion(latestVersion);
-    console.info("[subject-description-current-author] versions loaded", {
-      subjectId: entityId,
-      versionsCount: versions.length,
-      latestVersionId: String(latestVersion?.id || ""),
-      latestActorName: String(latestVersion?.actor_name || ""),
-      latestActorUserId: String(latestVersion?.actor_user_id || ""),
-      latestActorPersonId: String(latestVersion?.actor_person_id || ""),
-      latestActorIsSystem: isSystemDescriptionVersionActor(latestVersion)
-    });
-    console.info("[subject-description-current-author] display sync", {
-      subjectId: entityId,
-      previousAuthor: String(previousState?.author || ""),
-      nextAuthor: String(patch.author || ""),
-      previousAgent: String(previousState?.agent || ""),
-      nextAgent: String(patch.agent || ""),
-      avatarSource: patch.avatarSource
-    });
     if (
       String(previousState?.author || "") === String(patch.author || "")
       && String(previousState?.agent || "") === String(patch.agent || "")
@@ -416,8 +374,7 @@ export function createProjectSubjectsDescription(config = {}) {
       forceReload,
       sameTarget,
       previousIsLoading: previousLoading,
-      versionsInMemory,
-      stateRefId: getStateRefId(ui)
+      versionsInMemory
     });
     if (!forceReload && sameTarget && !ui.error && Array.isArray(ui.versions) && ui.versions.length && !previousLoading) {
       logDescriptionVersions("ensure early return: cache hit", {
@@ -447,8 +404,7 @@ export function createProjectSubjectsDescription(config = {}) {
         entityId: ui.entityId,
         isLoading: ui.isLoading,
         versionsCount: Array.isArray(ui.versions) ? ui.versions.length : 0,
-        error: ui.error,
-        stateRefId: getStateRefId(ui)
+        error: ui.error
       }
     });
     rerenderScope(root);
@@ -465,8 +421,7 @@ export function createProjectSubjectsDescription(config = {}) {
         loadToken,
         rowsCount: normalizedVersions.length,
         selectedVersionId: String(currentUi.selectedVersionId || ""),
-        ignoredAsStale: isStaleResponse,
-        stateRefId: getStateRefId(currentUi)
+        ignoredAsStale: isStaleResponse
       });
       if (isStaleResponse) {
         logDescriptionVersions("stale response ignored", {
@@ -533,8 +488,7 @@ export function createProjectSubjectsDescription(config = {}) {
         isLoadingFinal: !!currentUi.isLoading,
         versionsCountFinal: Array.isArray(currentUi.versions) ? currentUi.versions.length : 0,
         hasError: !!currentUi.error,
-        selectedVersionId: String(currentUi.selectedVersionId || ""),
-        stateRefId: getStateRefId(currentUi)
+        selectedVersionId: String(currentUi.selectedVersionId || "")
       });
       rerenderScope(root);
     }
@@ -739,8 +693,7 @@ export function createProjectSubjectsDescription(config = {}) {
       isTarget,
       isOpen: !!(isTarget && ui.isOpen),
       isLoading: !!ui.isLoading,
-      versionsLength: count,
-      stateRefId: getStateRefId(ui)
+      versionsLength: count
     });
     const loadingHtml = ui.isLoading ? `<div class="description-versions-dropdown__status">Chargement des versions…</div>` : "";
     const errorHtml = !ui.isLoading && ui.error
