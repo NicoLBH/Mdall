@@ -1,6 +1,5 @@
 export function autosizeTextarea(textarea, options = {}) {
   if (!textarea || typeof textarea !== "object") return null;
-  if (typeof textarea.isConnected === "boolean" && !textarea.isConnected) return null;
   if (typeof textarea.style !== "object") return null;
 
   const {
@@ -20,12 +19,15 @@ export function autosizeTextarea(textarea, options = {}) {
   const previousHeight = Math.round(parseFloat(String(textarea.style.height || "0")) || textarea.offsetHeight || 0);
 
   textarea.style.overflowY = "hidden";
-  textarea.style.height = "auto";
+  textarea.style.height = "0px";
 
   const targetHeight = Math.max(minHeight, Math.round(Number(textarea.scrollHeight || 0) + comfortHeight));
   textarea.style.height = `${targetHeight}px`;
 
-  if (log) {
+  const shouldLog = !!log
+    && typeof window !== "undefined"
+    && window?.__MDALL_DEBUG_TEXTAREA_AUTOSIZE__ === true;
+  if (shouldLog) {
     console.info(logPrefix, {
       previousHeight,
       nextHeight: targetHeight,

@@ -25,8 +25,8 @@ test("autosizeTextarea calcule la hauteur avec 3 lignes de confort", () => {
   assert.equal(result?.minHeight, 120);
 });
 
-test("autosizeTextarea ignore les textarea détachées", () => {
-  const textarea = { isConnected: false, style: {} };
+test("autosizeTextarea retourne null si textarea invalide (sans style)", () => {
+  const textarea = { isConnected: false };
   const result = autosizeTextarea(textarea);
   assert.equal(result, null);
 });
