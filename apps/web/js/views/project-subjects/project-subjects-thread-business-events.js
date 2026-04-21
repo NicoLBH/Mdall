@@ -40,7 +40,7 @@ export const BUSINESS_ACTIVITY_CONFIG = {
   subject_assignees_changed: {
     icon: "person-add",
     tone: "business-people",
-    verb: "a mis à jour les assignés",
+    verb: "a ajouté un assigné",
     summarize: (payload, firstNonEmpty) => summarizeCollectionChange(payload, "assigné", firstNonEmpty)
   },
   subject_labels_changed: {
@@ -65,9 +65,9 @@ export const BUSINESS_ACTIVITY_CONFIG = {
   subject_parent_removed: { icon: "arrow-up", tone: "business-rel", verb: "a retiré un parent" },
   subject_child_added: { icon: "arrow-down", tone: "business-rel", verb: "a ajouté un sous-sujet" },
   subject_child_removed: { icon: "arrow-down", tone: "business-rel", verb: "a retiré un sous-sujet" },
-  subject_blocked_by_added: { icon: "blocked", tone: "business-alert", verb: "a ajouté un blocage entrant" },
+  subject_blocked_by_added: { icon: "blocked", tone: "business-alert", verb: "a ajouté que le sujet est bloqué par" },
   subject_blocked_by_removed: { icon: "blocked", tone: "business-alert", verb: "a retiré un blocage entrant" },
-  subject_blocking_for_added: { icon: "blocked", tone: "business-alert", verb: "a ajouté un blocage sortant" },
+  subject_blocking_for_added: { icon: "blocked", tone: "business-alert", verb: "a ajouté que le sujet est bloquant pour" },
   subject_blocking_for_removed: { icon: "blocked", tone: "business-alert", verb: "a retiré un blocage sortant" },
   subject_closed: { icon: "check-circle", tone: "business-alert", verb: "a fermé le sujet" },
   subject_reopened: { icon: "issue-reopened", tone: "business-open", verb: "a rouvert le sujet" }

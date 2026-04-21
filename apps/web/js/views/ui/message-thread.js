@@ -106,7 +106,7 @@ export function renderMessageThreadActivity({
         <div class="tl-activity">
           ${iconHtml}
           ${authorIconHtml}
-          <div class="tl-activity__text mono">${textHtml}</div>
+          <div class="tl-activity__text">${textHtml}</div>
         </div>
         ${noteHtml || ""}
       </div>
