@@ -3387,6 +3387,23 @@ body.is-resizing{
 .subject-title-edit__input:disabled{opacity:.65;cursor:not-allowed;}
 .subject-title-edit__actions{display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;}
 .subject-title-edit__action{white-space:nowrap;}
+.subject-title-edit__save-btn{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+}
+.subject-title-edit__shortcut{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:20px;
+  height:20px;
+  border:solid 1px rgba(4, 38, 15, 0.1);
+  border-radius:var(--radius);
+  background-color:rgba(4, 38, 15, 0.2);
+  font-size:12px;
+  line-height:1;
+}
 .subject-title-edit__error{font-size:12px;line-height:1.35;color:var(--danger-fg,#f85149);}
 .details-title--compact .subject-title-edit__input{min-height:28px;font-size:14px;line-height:1.2;}
 .details-title--compact .subject-title-edit__actions .gh-btn{min-height:28px;}

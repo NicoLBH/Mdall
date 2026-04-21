@@ -74,7 +74,10 @@ export function createProjectSubjectsDetailsRenderer(config) {
           </div>
           <div class="subject-title-edit__actions">
             <button class="gh-btn gh-btn--sm subject-title-edit__action" type="button" data-action="cancel-subject-title-edit" ${isSaving ? "disabled" : ""}>Annuler</button>
-            <button class="gh-btn gh-btn--primary gh-btn--sm subject-title-edit__action" type="button" data-action="save-subject-title-edit" ${canSave ? "" : "disabled"}>Enregistrer</button>
+            <button class="gh-btn gh-btn--primary gh-btn--sm subject-title-edit__action subject-title-edit__save-btn" type="button" data-action="save-subject-title-edit" ${canSave ? "" : "disabled"}>
+              <span>Enregistrer</span>
+              <span class="subject-title-edit__shortcut" aria-hidden="true">⏎</span>
+            </button>
           </div>
         </div>
         ${errorHtml}

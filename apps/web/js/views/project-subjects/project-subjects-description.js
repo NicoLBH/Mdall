@@ -663,6 +663,7 @@ export function createProjectSubjectsDescription(config = {}) {
     const isTarget = ui.entityType === entityType && ui.entityId === entityId;
     const isOpen = isTarget && ui.isOpen;
     const count = isTarget && Array.isArray(ui.versions) ? ui.versions.length : 0;
+    const versionsLabel = count > 1 ? "Versions" : "Version";
     const anchorKey = `${entityType}::${entityId}`;
     return `
       <div class="issues-head-menu description-versions-dropdown ${isOpen ? "is-open" : ""}">
@@ -675,7 +676,7 @@ export function createProjectSubjectsDescription(config = {}) {
           aria-haspopup="menu"
           title="Versions"
         >
-          <span>Versions${count ? ` (${count})` : ""}</span>
+          <span>${versionsLabel}</span>
           <span class="description-versions-dropdown__caret">${svgIcon("chevron-down")}</span>
         </button>
       </div>
