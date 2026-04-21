@@ -1,6 +1,11 @@
 import { getAuthorIdentity } from "../ui/author-identity.js";
 import { renderSubjectMarkdownToolbar } from "../ui/subject-rich-editor.js";
 import { renderSubjectAttachmentTile } from "./project-subjects-attachments-ui.js";
+import {
+  buildBusinessActivitySummary,
+  getBusinessActivityAppearance,
+  mapBusinessEventRowToThreadActivity as mapBusinessEventRowToThreadActivityShared
+} from "./project-subjects-thread-business-events.js";
 export function createProjectSubjectsThread(config = {}) {
   const {
     store,
@@ -443,6 +448,10 @@ export function createProjectSubjectsThread(config = {}) {
     };
   }
 
+  function mapBusinessEventRowToThreadActivity(row = {}) {
+    return mapBusinessEventRowToThreadActivityShared(row, { firstNonEmpty, nowIso });
+  }
+
   function mapTimelineRowToThreadEntry(row = {}) {
     const kind = String(row?.kind || "").toLowerCase();
     if (kind === "message") {
@@ -450,6 +459,9 @@ export function createProjectSubjectsThread(config = {}) {
     }
     if (kind === "event") {
       return mapEventRowToThreadActivity(row.event || {});
+    }
+    if (kind === "business_event") {
+      return mapBusinessEventRowToThreadActivity(row.event || {});
     }
     return null;
   }
@@ -504,6 +516,7 @@ export function createProjectSubjectsThread(config = {}) {
 
         const messages = Array.isArray(timeline?.messages) ? timeline.messages : [];
         const events = Array.isArray(timeline?.events) ? timeline.events : [];
+        const businessEvents = Array.isArray(timeline?.businessEvents) ? timeline.businessEvents : [];
         const rows = Array.isArray(timeline?.rows) ? timeline.rows : [];
         const mappedRows = rows.map((row) => mapTimelineRowToThreadEntry(row)).filter(Boolean);
         const mappedComments = mappedRows.filter((entry) => String(entry?.type || "").toUpperCase() === "COMMENT");
@@ -517,6 +530,7 @@ export function createProjectSubjectsThread(config = {}) {
           }),
           comments: nestedComments,
           activities: events.map((row) => mapEventRowToThreadActivity(row)),
+          businessActivities: businessEvents.map((row) => mapBusinessEventRowToThreadActivity(row)),
           conversation: timeline?.conversation || null
         });
         debugRenderScope("thread-timeline-refresh", {
@@ -1204,6 +1218,128 @@ priority=${firstNonEmpty(subject.priority, "")}`
     });
   }
 
+  function getRawSubjectsResult() {
+    return store?.projectSubjectsView?.rawSubjectsResult && typeof store.projectSubjectsView.rawSubjectsResult === "object"
+      ? store.projectSubjectsView.rawSubjectsResult
+      : {};
+  }
+
+  function findCollaboratorByPersonId(personId = "") {
+    const normalizedPersonId = normalizeId(personId);
+    if (!normalizedPersonId) return null;
+    const collaborators = Array.isArray(store?.projectForm?.collaborators) ? store.projectForm.collaborators : [];
+    return collaborators.find((collaborator) => {
+      return normalizeId(collaborator?.personId || collaborator?.id) === normalizedPersonId;
+    }) || null;
+  }
+
+  function renderCollaboratorAvatarInline(collaborator = {}, fallbackLabel = "") {
+    const avatarUrl = firstNonEmpty(collaborator?.avatarUrl, collaborator?.avatar);
+    if (avatarUrl) {
+      return `<img src="${escapeHtml(avatarUrl)}" alt="" class="subject-meta-assignee-avatar-inline__img" loading="lazy" />`;
+    }
+    const initials = String(
+      firstNonEmpty(collaborator?.displayName, collaborator?.name, fallbackLabel, "U")
+    )
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0] || "")
+      .join("")
+      .toUpperCase() || "U";
+    return `<span class="subject-meta-assignee-avatar-inline__fallback">${escapeHtml(initials)}</span>`;
+  }
+
+  function renderSubjectLabelBadgeInline(labelId = "", fallbackLabel = "") {
+    const raw = getRawSubjectsResult();
+    const labels = Array.isArray(raw?.labels) ? raw.labels : [];
+    const normalizedId = normalizeId(labelId);
+    const labelDef = labels.find((item) => normalizeId(item?.id) === normalizedId) || null;
+    const label = firstNonEmpty(labelDef?.name, labelDef?.label, fallbackLabel, "Label");
+    const bg = firstNonEmpty(labelDef?.background_color, labelDef?.backgroundColor, "rgba(110,118,129,.18)");
+    const fg = firstNonEmpty(labelDef?.text_color, labelDef?.textColor, "rgb(201,209,217)");
+    const border = firstNonEmpty(labelDef?.border_color, labelDef?.borderColor, "rgba(110,118,129,.35)");
+    return `<span class="subject-label-badge" style="--subject-label-bg:${escapeHtml(bg)};--subject-label-fg:${escapeHtml(fg)};--subject-label-border:${escapeHtml(border)};">${escapeHtml(label)}</span>`;
+  }
+
+  function renderObjectiveInline(objectiveId = "", fallbackLabel = "") {
+    const raw = getRawSubjectsResult();
+    const objectivesById = raw?.objectivesById && typeof raw.objectivesById === "object" ? raw.objectivesById : {};
+    const objectivesList = Array.isArray(raw?.objectives) ? raw.objectives : [];
+    const objective = objectivesById[objectiveId] || objectivesList.find((item) => normalizeId(item?.id) === normalizeId(objectiveId)) || null;
+    const title = firstNonEmpty(objective?.title, fallbackLabel, "Objectif");
+    const dueDate = firstNonEmpty(objective?.dueDate, objective?.due_date, "");
+    const dueLabel = dueDate ? fmtTs(dueDate) : "Pas de date";
+    const linkedCount = Array.isArray(objective?.subjectIds) ? objective.subjectIds.length : Number(objective?.subjectsCount || 0);
+    return `
+      <span class="subject-meta-objective-card subject-meta-objective-card--inline">
+        <span class="subject-meta-objective-card__count">${escapeHtml(String(linkedCount || 0))}</span>
+        <span class="subject-meta-objective-card__title">${escapeHtml(title)}</span>
+        <span class="subject-meta-objective-card__date">${escapeHtml(dueLabel)}</span>
+      </span>
+    `;
+  }
+
+  function buildBusinessRichNoteHtml(entry = {}) {
+    const eventType = String(entry?.meta?.event_type || "").toLowerCase();
+    const payload = entry?.meta?.event_payload && typeof entry.meta.event_payload === "object" ? entry.meta.event_payload : {};
+    const added = Array.isArray(payload?.delta?.added) ? payload.delta.added : [];
+    const counterpartTitle = firstNonEmpty(payload?.counterpart_subject_title, "");
+    const counterpartId = normalizeId(payload?.counterpart_subject_id);
+
+    if (eventType === "subject_assignees_changed" && String(payload?.action || "").toLowerCase() === "added" && added.length === 1) {
+      const assignee = added[0] || {};
+      const assigneeId = normalizeId(assignee?.id);
+      const collaborator = findCollaboratorByPersonId(assigneeId);
+      const fullName = firstNonEmpty(collaborator?.displayName, collaborator?.name, assignee?.label, "Collaborateur");
+      const role = firstNonEmpty(collaborator?.role, collaborator?.roleGroupLabel, "Collaborateur");
+      return `
+        <span class="tl-note-inline">a ajouté un assigné</span>
+        <span class="subject-meta-assignee-row subject-meta-assignee-row--inline">
+          <span class="subject-meta-assignee-row__avatar subject-meta-assignee-avatar-inline">${renderCollaboratorAvatarInline(collaborator, fullName)}</span>
+          <span class="subject-meta-assignee-row__content">
+            <span class="subject-meta-assignee-row__name">${escapeHtml(fullName)}</span>
+            <span class="subject-meta-assignee-row__role">${escapeHtml(role)}</span>
+          </span>
+        </span>
+      `;
+    }
+
+    if (eventType === "subject_labels_changed" && String(payload?.action || "").toLowerCase() === "added" && added.length === 1) {
+      const label = added[0] || {};
+      return `
+        <span class="tl-note-inline">a ajouté un label</span>
+        ${renderSubjectLabelBadgeInline(label?.id, label?.label)}
+      `;
+    }
+
+    if (eventType === "subject_objectives_changed" && String(payload?.action || "").toLowerCase() === "added" && added.length === 1) {
+      const objective = added[0] || {};
+      return `
+        <span class="tl-note-inline">a ajouté un objectif</span>
+        ${renderObjectiveInline(objective?.id, objective?.label)}
+      `;
+    }
+
+    if (eventType === "subject_blocked_by_added" && counterpartId) {
+      const linkedSubject = entityDisplayLinkHtml("sujet", counterpartId);
+      return `
+        <span class="tl-note-inline">a indiqué que le sujet est bloqué par</span>
+        <span class="tl-note-inline-link">${counterpartTitle ? `${escapeHtml(counterpartTitle)} ` : ""}${linkedSubject}</span>
+      `;
+    }
+
+    if (eventType === "subject_blocking_for_added" && counterpartId) {
+      const linkedSubject = entityDisplayLinkHtml("sujet", counterpartId);
+      return `
+        <span class="tl-note-inline">a indiqué que le sujet est bloquant pour</span>
+        <span class="tl-note-inline-link">${counterpartTitle ? `${escapeHtml(counterpartTitle)} ` : ""}${linkedSubject}</span>
+      `;
+    }
+
+    return "";
+  }
+
   function renderThreadBlock() {
     threadRenderDepth += 1;
     try {
@@ -1232,6 +1368,43 @@ priority=${firstNonEmpty(subject.priority, "")}`
       if (type === "ACTIVITY") {
         const kind = String(e?.kind || "").toLowerCase();
         if (kind === "message_deleted") return "";
+        if (String(e?.meta?.source || "") === "subject_history") {
+          const activityIdentity = getAuthorIdentity({
+            author: e?.actor,
+            agent: "human",
+            currentUserAvatar: store?.user?.avatar,
+            humanAvatarHtml: SVG_AVATAR_HUMAN,
+            fallbackName: "Utilisateur"
+          });
+          const appearance = getBusinessActivityAppearance(e?.meta?.event_type || kind);
+          const payload = e?.meta?.event_payload && typeof e.meta.event_payload === "object" ? e.meta.event_payload : {};
+          const ts = fmtTs(e?.ts || "");
+          const note = buildBusinessActivitySummary({
+            payload,
+            appearance,
+            fallbackMessage: e?.message,
+            firstNonEmpty
+          });
+          const richNoteHtml = buildBusinessRichNoteHtml(e);
+          const noteHtml = richNoteHtml
+            ? `<div class="tl-note">${richNoteHtml}</div>`
+            : (note ? `<div class="tl-note">${escapeHtml(note)}</div>` : "");
+
+          return renderMessageThreadActivity({
+            idx,
+            className: `thread-item--business thread-item--${appearance.tone} thread-item--event-${String(e?.meta?.event_type || "").toLowerCase()}`,
+            iconHtml: `<span class="tl-ico tl-ico--business tl-ico--${appearance.tone}" aria-hidden="true">${svgIcon(appearance.icon)}</span>`,
+            authorIconHtml: activityIdentity.avatarHtml
+              ? `<span class="tl-author tl-author--custom" aria-hidden="true">${activityIdentity.avatarHtml}</span>`
+              : miniAuthorIconHtml("human"),
+            textHtml: `
+              <span class="tl-author-name">${escapeHtml(activityIdentity.displayName)}</span>
+              <span class="mono-small"> ${escapeHtml(appearance.verb)} </span>
+              <span class="mono-small">· ${escapeHtml(ts)}</span>
+            `,
+            noteHtml
+          });
+        }
         const agent = e?.agent || "system";
         const activityIdentity = getAuthorIdentity({
           author: e?.actor,

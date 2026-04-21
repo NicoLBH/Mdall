@@ -1,4 +1,5 @@
 import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
+import { resolveCurrentUserDirectoryPersonId } from "./project-supabase-sync.js";
 
 const SUPABASE_URL = getSupabaseUrl();
 
@@ -48,34 +49,6 @@ function assertSameProject(subject, parentSubject) {
   }
 }
 
-async function fetchNextParentChildOrder(parentSubjectId) {
-  const normalizedParentSubjectId = normalizeId(parentSubjectId);
-  if (!normalizedParentSubjectId) return null;
-
-  const url = new URL(`${SUPABASE_URL}/rest/v1/subjects`);
-  url.searchParams.set("select", "parent_child_order");
-  url.searchParams.set("parent_subject_id", `eq.${normalizedParentSubjectId}`);
-  url.searchParams.set("order", "parent_child_order.desc.nullslast");
-  url.searchParams.set("limit", "1");
-
-  const headers = await buildSupabaseAuthHeaders({ Accept: "application/json" });
-  const res = await fetch(url.toString(), {
-    method: "GET",
-    headers,
-    cache: "no-store"
-  });
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`Impossible de calculer l'ordre des sous-sujets (${res.status}) : ${text}`);
-  }
-
-  const rows = await res.json().catch(() => []);
-  const row = (Array.isArray(rows) ? rows[0] : rows) || null;
-  const lastOrder = Number(row?.parent_child_order);
-  return Number.isFinite(lastOrder) && lastOrder > 0 ? lastOrder + 1 : 1;
-}
-
 export async function setSubjectParentRelationInSupabase({ subjectId, parentSubjectId = null, rawSubjectsResult = null } = {}) {
   const normalizedSubjectId = normalizeId(subjectId);
   const normalizedParentSubjectId = normalizeId(parentSubjectId);
@@ -99,24 +72,21 @@ export async function setSubjectParentRelationInSupabase({ subjectId, parentSubj
     assertSameProject(subject, subjectsById[normalizedParentSubjectId]);
   }
 
-  const headers = await buildSupabaseAuthHeaders({
-    Accept: "application/json",
-    "Content-Type": "application/json",
-    Prefer: "return=representation"
-  });
+  const actorPersonId = normalizeId(await resolveCurrentUserDirectoryPersonId());
+  if (!actorPersonId) {
+    throw new Error("Impossible de résoudre l'identité utilisateur pour historiser la relation parent.");
+  }
 
-  const nowIso = new Date().toISOString();
-  const nextOrder = normalizedParentSubjectId
-    ? await fetchNextParentChildOrder(normalizedParentSubjectId)
-    : null;
-
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/subjects?id=eq.${encodeURIComponent(normalizedSubjectId)}`, {
-    method: "PATCH",
-    headers,
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/set_subject_parent_with_history`, {
+    method: "POST",
+    headers: await buildSupabaseAuthHeaders({
+      Accept: "application/json",
+      "Content-Type": "application/json"
+    }),
     body: JSON.stringify({
-      parent_subject_id: normalizedParentSubjectId || null,
-      parent_linked_at: normalizedParentSubjectId ? nowIso : null,
-      parent_child_order: normalizedParentSubjectId ? nextOrder : null
+      p_subject_id: normalizedSubjectId,
+      p_parent_subject_id: normalizedParentSubjectId || null,
+      p_actor_person_id: actorPersonId
     })
   });
 
@@ -125,11 +95,15 @@ export async function setSubjectParentRelationInSupabase({ subjectId, parentSubj
     throw new Error(`Mise à jour du sujet parent impossible (${res.status}) : ${text}`);
   }
 
-  const rows = await res.json().catch(() => []);
-  const updatedRow = (Array.isArray(rows) ? rows[0] : rows) || null;
+  const rpcPayload = await res.json().catch(() => ({}));
+  const updatedRow = {
+    parent_subject_id: normalizeId(rpcPayload?.next_parent_subject_id) || null,
+    parent_linked_at: rpcPayload?.parent_linked_at || null,
+    parent_child_order: rpcPayload?.parent_child_order ?? null
+  };
   return {
     subjectId: normalizedSubjectId,
-    parentSubjectId: normalizeId(updatedRow?.parent_subject_id),
+    parentSubjectId: normalizeId(updatedRow.parent_subject_id),
     updatedRow
   };
 }
