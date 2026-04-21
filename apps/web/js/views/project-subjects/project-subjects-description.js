@@ -1,5 +1,6 @@
 import { getAuthorIdentity } from "../ui/author-identity.js";
 import { renderSubjectMarkdownToolbar } from "../ui/subject-rich-editor.js";
+import { renderSubjectAttachmentTile, renderSubjectAttachmentsPreviewList } from "./project-subjects-attachments-ui.js";
 
 export function createProjectSubjectsDescription(config = {}) {
   const VERSIONS_LOG_PREFIX = "[subject-description-versions]";
@@ -335,41 +336,21 @@ export function createProjectSubjectsDescription(config = {}) {
     return true;
   }
 
-  function renderDescriptionAttachmentTile(attachment = {}, { removable = false, removeAction = "" } = {}) {
-    const fileName = String(attachment?.file_name || attachment?.fileName || "Pièce jointe");
-    const isImage = String(attachment?.mime_type || attachment?.mimeType || "").startsWith("image/");
-    const previewUrl = String(attachment?.localPreviewUrl || attachment?.previewUrl || attachment?.object_url || "");
-    const attachmentId = String(attachment?.id || "");
-    const tempId = String(attachment?.tempId || "");
-    const status = attachment?.error
-      ? "Erreur d’upload"
-      : String(attachment?.uploadStatus || "").trim() === "uploading"
-        ? "Envoi…"
-        : "";
-    return `
-      <div class="subject-composer-attachment-item">
-        <div class="subject-attachment subject-attachment--compact">
-          ${isImage && previewUrl
-            ? `<img class="subject-attachment__image" src="${escapeHtml(previewUrl)}" alt="${escapeHtml(fileName)}" />`
-            : `<div class="subject-attachment__file-name mono-small">${escapeHtml(fileName)}</div>`}
-          ${status ? `<div class="subject-attachment__state mono-small">${escapeHtml(status)}</div>` : ""}
-        </div>
-        ${removable
-          ? `
-            <button
-              class="subject-composer-attachment-remove"
-              type="button"
-              data-action="${escapeHtml(removeAction)}"
-              data-attachment-id="${escapeHtml(attachmentId)}"
-              data-temp-id="${escapeHtml(tempId)}"
-              aria-label="Retirer la pièce jointe"
-            >
-              ${svgIcon("x")}
-            </button>
-          `
-          : ""}
-      </div>
-    `;
+  function renderDescriptionAttachmentTile(attachment = {}, options = {}) {
+    return renderSubjectAttachmentTile(attachment, {
+      ...options,
+      escapeHtml,
+      svgIcon
+    });
+  }
+
+  function renderDescriptionAttachmentsPreview(attachments = [], { removable = false, removeAction = "" } = {}) {
+    return renderSubjectAttachmentsPreviewList({
+      attachments,
+      removeAction: removable ? removeAction : "",
+      escapeHtml,
+      svgIcon
+    });
   }
 
   function buildDescriptionVersionsLoadError(error) {
@@ -937,9 +918,7 @@ export function createProjectSubjectsDescription(config = {}) {
           const attachments = Array.isArray(edit.attachments) ? edit.attachments : [];
           const hasReadyAttachment = attachments.some((attachment) => String(attachment?.uploadStatus || "").trim() === "ready" && !attachment?.error);
           const canSubmit = !!String(edit.draft || "").trim() || hasReadyAttachment;
-          const attachmentsHtml = attachments.length
-            ? `<div class="subject-composer-attachments">${attachments.map((attachment) => renderDescriptionAttachmentTile(attachment, { removable: true, removeAction: "description-attachment-remove" })).join("")}</div>`
-            : "";
+          const attachmentsHtml = renderDescriptionAttachmentsPreview(attachments, { removable: true, removeAction: "description-attachment-remove" });
           return `
             ${renderCommentComposer({
               hideAvatar: true,
@@ -993,7 +972,7 @@ export function createProjectSubjectsDescription(config = {}) {
         <div class="gh-comment-body">
           ${mdToHtml(description.body || "")}
           ${Array.isArray(description.attachments) && description.attachments.length
-            ? `<div class="subject-composer-attachments" style="margin-top:10px;">${description.attachments.map((attachment) => renderDescriptionAttachmentTile(attachment)).join("")}</div>`
+            ? `<div class="subject-attachment-grid" style="margin-top:10px;">${description.attachments.map((attachment) => renderDescriptionAttachmentTile(attachment)).join("")}</div>`
             : ""}
         </div>
       `;
@@ -1009,6 +988,31 @@ export function createProjectSubjectsDescription(config = {}) {
         </div>
       </div>
     `;
+  }
+
+
+  function reconcilePersistedDescriptionAttachments(persistedAttachments = [], draftAttachments = []) {
+    const draftList = Array.isArray(draftAttachments) ? draftAttachments : [];
+    const persistedList = Array.isArray(persistedAttachments) ? persistedAttachments : [];
+    return persistedList.map((attachment) => {
+      if (String(attachment?.object_url || attachment?.previewUrl || attachment?.localPreviewUrl || "").trim()) return attachment;
+      const storagePath = String(attachment?.storage_path || "").trim();
+      const fileName = String(attachment?.file_name || attachment?.fileName || "").trim();
+      const match = draftList.find((draftAttachment) => {
+        const draftStoragePath = String(draftAttachment?.storage_path || "").trim();
+        const draftFileName = String(draftAttachment?.file_name || draftAttachment?.fileName || "").trim();
+        return (storagePath && draftStoragePath && storagePath === draftStoragePath)
+          || (fileName && draftFileName && fileName === draftFileName);
+      });
+      if (!match) return attachment;
+      const localPreviewUrl = String(match?.localPreviewUrl || match?.previewUrl || "").trim();
+      if (!localPreviewUrl) return attachment;
+      return {
+        ...attachment,
+        localPreviewUrl,
+        previewUrl: String(attachment?.previewUrl || localPreviewUrl)
+      };
+    });
   }
 
   function clearDescriptionEditState() {
@@ -1083,9 +1087,10 @@ export function createProjectSubjectsDescription(config = {}) {
       });
 
       const persistedBody = String(updated?.description ?? nextBody);
-      const persistedAttachments = Array.isArray(updated?.description_attachments)
+      const persistedAttachmentsRaw = Array.isArray(updated?.description_attachments)
         ? updated.description_attachments
         : attachments.filter((attachment) => String(attachment?.uploadStatus || "").trim() === "ready" && !attachment?.error);
+      const persistedAttachments = reconcilePersistedDescriptionAttachments(persistedAttachmentsRaw, attachments);
       setEntityDescriptionState(entityType, entityId, {
         body: persistedBody,
         attachments: persistedAttachments,

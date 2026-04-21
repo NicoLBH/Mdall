@@ -12,10 +12,10 @@ import {
   normalizeAttachmentBucket,
   normalizeSubjectAttachmentStoragePath
 } from "./subject-attachments-storage-path.js";
+import { resolveSubjectAttachmentObjectUrl as resolveSubjectAttachmentObjectUrlShared } from "./subject-attachments-object-url.js";
 
 const SUPABASE_URL = getSupabaseUrl();
 const SUBJECT_ATTACHMENTS_BUCKET = "subject-message-attachments";
-const ATTACHMENT_SIGNED_URL_TTL_SECONDS = 60 * 60 * 24;
 
 function normalizeId(value) {
   return String(value || "").trim();
@@ -81,42 +81,8 @@ function encodeStoragePath(path = "") {
     .join("/");
 }
 
-async function createAttachmentSignedUrl(bucket = SUBJECT_ATTACHMENTS_BUCKET, storagePath = "") {
-  const normalizedBucket = normalizeAttachmentBucket(bucket, SUBJECT_ATTACHMENTS_BUCKET);
-  const rawPath = String(storagePath ?? "");
-  const normalizedPath = normalizeSubjectAttachmentStoragePath(rawPath, normalizedBucket);
-  if (!normalizedBucket || !normalizedPath) return "";
-  if (normalizedPath !== rawPath) {
-    console.info("[subject-attachments] storage path normalized before signed url", {
-      bucket: normalizedBucket,
-      storagePathRaw: rawPath,
-      storagePathCanonical: normalizedPath
-    });
-  }
-
-  const { data, error } = await supabase.storage
-    .from(normalizedBucket)
-    .createSignedUrl(normalizedPath, ATTACHMENT_SIGNED_URL_TTL_SECONDS);
-  if (error) throw error;
-  return String(data?.signedUrl || "").trim();
-}
-
 async function resolveAttachmentObjectUrl(bucket = SUBJECT_ATTACHMENTS_BUCKET, storagePath = "") {
-  const normalizedBucket = normalizeAttachmentBucket(bucket, SUBJECT_ATTACHMENTS_BUCKET);
-  const rawPath = String(storagePath ?? "");
-  const normalizedPath = normalizeSubjectAttachmentStoragePath(rawPath, normalizedBucket);
-  if (!normalizedBucket || !normalizedPath) return "";
-  try {
-    const signedUrl = await createAttachmentSignedUrl(normalizedBucket, normalizedPath);
-    if (signedUrl) return signedUrl;
-  } catch (error) {
-    console.warn("[subject-attachments] signed url failed; preview disabled until next refresh", {
-      bucket: normalizedBucket,
-      storagePath: normalizedPath,
-      message: String(error?.message || error || "")
-    });
-  }
-  return "";
+  return resolveSubjectAttachmentObjectUrlShared(bucket, storagePath);
 }
 
 async function resolveAttachmentObjectUrlWithRetry(

@@ -5,6 +5,7 @@ import { loadSituationsForCurrentProject, loadSituationSubjectIdsMap } from "./p
 import { resolveCurrentBackendProjectId, resolveCurrentUserDirectoryPersonId } from "./project-supabase-sync.js";
 import { invalidateSubjectRefIndex } from "../utils/subject-ref-index.js";
 import { normalizeAssigneeIds } from "./subject-assignees-service.js";
+import { hydratePersistedSubjectAttachmentsObjectUrls } from "./subject-attachments-object-url.js";
 
 const SUPABASE_URL = getSupabaseUrl();
 const FRONT_PROJECT_MAP_STORAGE_KEY = "mdall.supabaseProjectMap.v1";
@@ -1145,7 +1146,7 @@ export async function updateSubjectDescription({ subjectId, description, uploadS
   }
 
   const row = Array.isArray(payload) ? payload[0] : payload;
-  const descriptionAttachments = Array.isArray(row?.description_attachments) ? row.description_attachments : [];
+  const descriptionAttachments = await hydratePersistedSubjectAttachmentsObjectUrls(Array.isArray(row?.description_attachments) ? row.description_attachments : []);
   return {
     ...(row || {}),
     id: String(row?.id || normalizedSubjectId),
