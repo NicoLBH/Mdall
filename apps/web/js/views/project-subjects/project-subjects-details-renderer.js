@@ -8,6 +8,8 @@ export function createProjectSubjectsDetailsRenderer(config) {
     getEffectiveSituationStatus,
     getEntityReviewMeta,
     getReviewTitleStateClass,
+    getSubjectTitleEditState,
+    isEditingSubjectTitle,
     entityDisplayLinkHtml,
     problemsCountsHtml,
     renderSubjectBlockedByHeadHtml,
@@ -26,18 +28,71 @@ export function createProjectSubjectsDetailsRenderer(config) {
     renderDocumentRefsCard
   } = config;
 
+  function renderSubjectTitleContent(currentSelection, options = {}) {
+    const item = currentSelection.item;
+    const entityType = getSelectionEntityType(currentSelection.type);
+    const titleSeenClass = getReviewTitleStateClass(entityType, item.id);
+    const editState = getSubjectTitleEditState?.() || {};
+    const isEditing = isEditingSubjectTitle?.(currentSelection) === true;
+    const initialTitleTrimmed = String(editState.initialTitle || item.title || "").trim();
+    const draftValue = String(editState.draft ?? item.title ?? "");
+    const draftTrimmed = draftValue.trim();
+    const isSaving = isEditing && editState.isSaving === true;
+    const hasDraftChange = draftTrimmed && draftTrimmed !== initialTitleTrimmed;
+    const canSave = isEditing && !isSaving && hasDraftChange;
+    const errorHtml = isEditing && String(editState.error || "").trim()
+      ? `<div class="subject-title-edit__error">${escapeHtml(editState.error)}</div>`
+      : "";
+
+    if (!isEditing) {
+      return `
+        <div class="subject-title-display">
+          <div class="subject-title-display__main">
+            <span class="details-title-text ${titleSeenClass}">${escapeHtml(firstNonEmpty(item.title, item.id, "Détail"))}</span>
+            <span class="details-title-inline-ref">${entityDisplayLinkHtml(currentSelection.type, item.id)}</span>
+          </div>
+          <div class="subject-title-display__spacer" aria-hidden="true"></div>
+          <div class="subject-title-display__actions">
+            <button class="gh-btn gh-btn--sm subject-title-edit__action" type="button" data-action="edit-subject-title">Modifier</button>
+          </div>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="subject-title-edit subject-title-edit--inline ${options.compact ? "subject-title-edit--compact" : ""}">
+        <div class="subject-title-edit__row">
+          <div class="subject-title-edit__input-wrap">
+            <input
+              class="subject-title-edit__input objective-edit-form__input"
+              type="text"
+              value="${escapeHtml(draftValue)}"
+              data-subject-title-draft
+              autocomplete="off"
+              ${isSaving ? "disabled" : ""}
+            />
+          </div>
+          <div class="subject-title-edit__actions">
+            <button class="gh-btn gh-btn--sm subject-title-edit__action" type="button" data-action="cancel-subject-title-edit" ${isSaving ? "disabled" : ""}>Annuler</button>
+            <button class="gh-btn gh-btn--primary gh-btn--sm subject-title-edit__action" type="button" data-action="save-subject-title-edit" ${canSave ? "" : "disabled"}>Enregistrer</button>
+          </div>
+        </div>
+        ${errorHtml}
+      </div>
+    `;
+  }
+
   function renderDetailsTitleWrapHtml(selection) {
     return renderSharedDetailsTitleWrap(selection, {
       emptyText: "Sélectionner un élément",
       buildTitleTextHtml(currentSelection) {
+        if (currentSelection.type === "sujet") {
+          return renderSubjectTitleContent(currentSelection);
+        }
         const item = currentSelection.item;
         const entityType = getSelectionEntityType(currentSelection.type);
         const titleSeenClass = getReviewTitleStateClass(entityType, item.id);
-        const titleHtml = `<span class="details-title-text ${titleSeenClass}">${escapeHtml(firstNonEmpty(item.title, item.id, "Détail"))}</span>`;
-        if (currentSelection.type === "sujet") {
-          return `${titleHtml} <span class="details-title-inline-ref mono">${entityDisplayLinkHtml(currentSelection.type, item.id)}</span>`;
-        }
-        return titleHtml;
+        return `<span class="details-title-text ${titleSeenClass}">${escapeHtml(firstNonEmpty(item.title, item.id, "Détail"))}</span>`;
       },
       buildIdHtml(currentSelection) {
         if (currentSelection.type === "sujet") return "";
@@ -74,7 +129,7 @@ export function createProjectSubjectsDetailsRenderer(config) {
               reviewState: getEntityReviewMeta("sujet", item.id).review_state,
               entityType: "sujet"
             }),
-            topHtml: titleTextHtml,
+            topHtml: renderSubjectTitleContent(currentSelection, { compact: true }),
             bottomHtml: `${countsHtml}${blockedByHtml}${parentHtml}`
           };
         }
