@@ -1,6 +1,11 @@
 import { getAuthorIdentity } from "../ui/author-identity.js";
 import { renderSubjectMarkdownToolbar } from "../ui/subject-rich-editor.js";
 import { renderSubjectAttachmentTile } from "./project-subjects-attachments-ui.js";
+import {
+  buildBusinessActivitySummary,
+  getBusinessActivityAppearance,
+  mapBusinessEventRowToThreadActivity as mapBusinessEventRowToThreadActivityShared
+} from "./project-subjects-thread-business-events.js";
 export function createProjectSubjectsThread(config = {}) {
   const {
     store,
@@ -444,33 +449,7 @@ export function createProjectSubjectsThread(config = {}) {
   }
 
   function mapBusinessEventRowToThreadActivity(row = {}) {
-    const eventType = String(row.event_type || "");
-    const eventPayload = row.event_payload && typeof row.event_payload === "object" ? row.event_payload : {};
-    const resultLabel = firstNonEmpty(
-      eventPayload?.display?.result_label,
-      eventPayload?.result_label,
-      row?.timeline_description,
-      row?.description,
-      row?.timeline_title,
-      row?.title,
-      "a effectué une action métier"
-    );
-    return {
-      ts: firstNonEmpty(row.created_at, nowIso()),
-      entity_type: "sujet",
-      entity_id: normalizeId(row.subject_id),
-      type: "ACTIVITY",
-      kind: String(eventType || "").toLowerCase(),
-      actor: firstNonEmpty(row.actor_label, "Utilisateur"),
-      agent: "human",
-      message: String(resultLabel || ""),
-      meta: {
-        source: "subject_history",
-        id: normalizeId(row.id),
-        event_type: eventType,
-        event_payload: eventPayload
-      }
-    };
+    return mapBusinessEventRowToThreadActivityShared(row, { firstNonEmpty, nowIso });
   }
 
   function mapTimelineRowToThreadEntry(row = {}) {
@@ -1348,15 +1327,13 @@ priority=${firstNonEmpty(subject.priority, "")}`
           });
           const appearance = getBusinessActivityAppearance(e?.meta?.event_type || kind);
           const payload = e?.meta?.event_payload && typeof e.meta.event_payload === "object" ? e.meta.event_payload : {};
-          const summaryFromPayload = firstNonEmpty(
-            payload?.display?.result_label,
-            payload?.result_label
-          );
-          const summaryFromConfig = typeof appearance?.summarize === "function"
-            ? String(appearance.summarize(payload) || "").trim()
-            : "";
           const ts = fmtTs(e?.ts || "");
-          const note = firstNonEmpty(summaryFromPayload, summaryFromConfig, e?.message, "a mis à jour le sujet");
+          const note = buildBusinessActivitySummary({
+            payload,
+            appearance,
+            fallbackMessage: e?.message,
+            firstNonEmpty
+          });
           const noteHtml = note ? `<div class="tl-note">${escapeHtml(note)}</div>` : "";
 
           return renderMessageThreadActivity({
