@@ -38,7 +38,7 @@ export const BUSINESS_ACTIVITY_CONFIG = {
   subject_title_updated: { icon: "pencil", tone: "business-edit", verb: "a modifié le titre" },
   subject_description_updated: { icon: "note", tone: "business-edit", verb: "a modifié la description" },
   subject_assignees_changed: {
-    icon: "person-add",
+    icon: "person",
     tone: "business-people",
     verb: "a ajouté un assigné",
     summarize: (payload, firstNonEmpty) => summarizeCollectionChange(payload, "assigné", firstNonEmpty)
