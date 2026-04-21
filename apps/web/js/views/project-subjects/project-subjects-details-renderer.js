@@ -51,6 +51,7 @@ export function createProjectSubjectsDetailsRenderer(config) {
             <span class="details-title-text ${titleSeenClass}">${escapeHtml(firstNonEmpty(item.title, item.id, "Détail"))}</span>
             <span class="details-title-inline-ref">${entityDisplayLinkHtml(currentSelection.type, item.id)}</span>
           </div>
+          <div class="subject-title-display__spacer" aria-hidden="true"></div>
           <div class="subject-title-display__actions">
             <button class="gh-btn gh-btn--sm subject-title-edit__action" type="button" data-action="edit-subject-title">Modifier</button>
           </div>
