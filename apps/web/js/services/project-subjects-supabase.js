@@ -71,6 +71,21 @@ function buildSubjectDescriptionDebugRequestId() {
   return `subject-description-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function extractMissingColumnFromSupabaseError(rawBody = "") {
+  const parsedBody = safeJsonParse(String(rawBody || ""));
+  const details = String(
+    parsedBody?.message
+    || parsedBody?.details
+    || parsedBody?.hint
+    || rawBody
+    || ""
+  );
+  const match = details.match(/column\s+subjects\.([a-zA-Z0-9_]+)/i)
+    || details.match(/subjects\s+"([a-zA-Z0-9_]+)"/i)
+    || details.match(/\b([a-zA-Z0-9_]+)\b\s+does not exist/i);
+  return String(match?.[1] || "").trim();
+}
+
 async function rpcCall(functionName, payload = {}) {
   const rpcUrl = `${SUPABASE_URL}/rest/v1/rpc/${functionName}`;
   const response = await fetch(rpcUrl, {
@@ -142,13 +157,23 @@ async function fetchProjectFlatSubjects(projectId) {
     return [];
   }
 
-  const selectWithRefs = "id,subject_number,project_id,document_id,document_ref_ids,analysis_run_id,situation_id,parent_subject_id,parent_linked_at,parent_child_order,assignee_person_id,title,description,priority,status,closure_reason,subject_type,created_at,updated_at,closed_at";
-  const selectWithoutRefs = "id,subject_number,project_id,document_id,analysis_run_id,situation_id,parent_subject_id,parent_linked_at,parent_child_order,assignee_person_id,title,description,priority,status,closure_reason,subject_type,created_at,updated_at,closed_at";
+  const optionalColumns = ["document_ref_ids", "description_attachments"];
+  const baseColumns = [
+    "id", "subject_number", "project_id", "document_id", "analysis_run_id", "situation_id",
+    "parent_subject_id", "parent_linked_at", "parent_child_order", "assignee_person_id",
+    "title", "description", "priority", "status", "closure_reason", "subject_type",
+    "created_at", "updated_at", "closed_at"
+  ];
   const headers = await getSupabaseAuthHeaders({ Accept: "application/json" });
+  const missingOptionalColumns = new Set();
 
-  const fetchSubjects = async (selectQuery) => {
+  const fetchSubjects = async () => {
+    const selectColumns = [
+      ...baseColumns,
+      ...optionalColumns.filter((column) => !missingOptionalColumns.has(column))
+    ];
     const url = new URL(`${SUPABASE_URL}/rest/v1/subjects`);
-    url.searchParams.set("select", selectQuery);
+    url.searchParams.set("select", selectColumns.join(","));
     url.searchParams.set("project_id", `eq.${projectId}`);
     url.searchParams.set("order", "created_at.asc");
     return fetch(url.toString(), {
@@ -158,28 +183,19 @@ async function fetchProjectFlatSubjects(projectId) {
     });
   };
 
-  let res = await fetchSubjects(selectWithRefs);
-  if (!res.ok && Number(res.status || 0) === 400) {
+  let res = await fetchSubjects();
+  while (!res.ok && Number(res.status || 0) === 400) {
     const rawBody = await res.text().catch(() => "");
-    const parsedBody = safeJsonParse(rawBody);
-    const details = String(
-      parsedBody?.message
-      || parsedBody?.details
-      || parsedBody?.hint
-      || rawBody
-      || ""
-    ).toLowerCase();
-    const missingDocumentRefsColumn = details.includes("document_ref_ids");
-    if (missingDocumentRefsColumn) {
-      console.warn("[project-subjects] subjects table has no document_ref_ids column; falling back to legacy select", {
-        projectId: String(projectId || ""),
-        status: Number(res.status || 0),
-        details: String(parsedBody?.message || parsedBody?.details || rawBody || "")
-      });
-      res = await fetchSubjects(selectWithoutRefs);
-    } else {
+    const missingColumn = extractMissingColumnFromSupabaseError(rawBody);
+    if (!optionalColumns.includes(missingColumn) || missingOptionalColumns.has(missingColumn)) {
       throw new Error(`subjects fetch failed (${res.status}): ${rawBody}`);
     }
+    missingOptionalColumns.add(missingColumn);
+    console.warn("[project-subjects] subjects table missing optional column; falling back", {
+      projectId: String(projectId || ""),
+      missingColumn
+    });
+    res = await fetchSubjects();
   }
 
   if (!res.ok) {
@@ -190,6 +206,7 @@ async function fetchProjectFlatSubjects(projectId) {
   const json = await res.json().catch(() => []);
   return Array.isArray(json) ? json : [];
 }
+
 
 
 async function fetchProjectSubjectMessageCounts(projectId) {
@@ -1146,7 +1163,13 @@ export async function updateSubjectDescription({ subjectId, description, uploadS
   }
 
   const row = Array.isArray(payload) ? payload[0] : payload;
-  const descriptionAttachments = await hydratePersistedSubjectAttachmentsObjectUrls(Array.isArray(row?.description_attachments) ? row.description_attachments : []);
+  const descriptionAttachmentsRaw = Array.isArray(row?.description_attachments) ? row.description_attachments : [];
+  const descriptionAttachments = await hydratePersistedSubjectAttachmentsObjectUrls(descriptionAttachmentsRaw);
+  console.info("[subject-description-attachments] rpc update hydration", {
+    subjectId: normalizedSubjectId,
+    rawAttachments: descriptionAttachmentsRaw.length,
+    hydratedWithObjectUrl: descriptionAttachments.filter((attachment) => String(attachment?.object_url || attachment?.previewUrl || attachment?.localPreviewUrl || "").trim()).length
+  });
   return {
     ...(row || {}),
     id: String(row?.id || normalizedSubjectId),
@@ -1477,6 +1500,20 @@ export async function loadFlatSubjectsForCurrentProject(options = {}) {
     }
 
     const subjects = await fetchProjectFlatSubjects(backendProjectId);
+    const hydratedSubjects = await Promise.all((Array.isArray(subjects) ? subjects : []).map(async (subject) => {
+      const descriptionAttachments = Array.isArray(subject?.description_attachments) ? subject.description_attachments : [];
+      if (!descriptionAttachments.length) return subject;
+      const hydratedDescriptionAttachments = await hydratePersistedSubjectAttachmentsObjectUrls(descriptionAttachments);
+      console.info("[subject-description-attachments] hydrated subject description attachments", {
+        subjectId: String(subject?.id || ""),
+        attachments: descriptionAttachments.length,
+        hydratedWithObjectUrl: hydratedDescriptionAttachments.filter((attachment) => String(attachment?.object_url || attachment?.previewUrl || attachment?.localPreviewUrl || "").trim()).length
+      });
+      return {
+        ...subject,
+        description_attachments: hydratedDescriptionAttachments
+      };
+    }));
     const subjectLinks = await fetchProjectSubjectLinks(backendProjectId).catch(() => []);
     const subjectAssignees = await fetchProjectSubjectAssignees(backendProjectId).catch(() => []);
     const subjectMessageCountsBySubjectId = await fetchProjectSubjectMessageCounts(backendProjectId).catch(() => ({}));
@@ -1486,7 +1523,7 @@ export async function loadFlatSubjectsForCurrentProject(options = {}) {
       .map((situation) => String(situation?.id || "").trim())
       .filter(Boolean);
     const subjectIdsBySituationId = await loadSituationSubjectIdsMap(manualSituationIds).catch(() => ({}));
-    const result = buildProjectFlatSubjectsResult(subjects, subjectLinks, { runId: store.ui.runId || "" });
+    const result = buildProjectFlatSubjectsResult(hydratedSubjects, subjectLinks, { runId: store.ui.runId || "" });
     result.assigneePersonIdsBySubjectId = {};
     result.subjectMessageCountsBySubjectId = subjectMessageCountsBySubjectId && typeof subjectMessageCountsBySubjectId === "object"
       ? subjectMessageCountsBySubjectId
