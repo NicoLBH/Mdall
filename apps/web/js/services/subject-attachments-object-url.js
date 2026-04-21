@@ -27,9 +27,14 @@ export async function resolveSubjectAttachmentObjectUrl(bucket = SUBJECT_ATTACHM
   }
 }
 
-export async function hydratePersistedSubjectAttachmentsObjectUrls(attachments = []) {
+function isDescriptionAttachmentsDebugEnabled() {
+  return typeof window !== "undefined" && window?.__MDALL_DEBUG_SUBJECT_DESCRIPTION__ === true;
+}
+
+export async function hydratePersistedSubjectAttachmentsObjectUrls(attachments = [], options = {}) {
   const list = Array.isArray(attachments) ? attachments : [];
   if (!list.length) return [];
+  const forceRefreshSignedUrls = options?.forceRefreshSignedUrls === true;
   const hasUsableUrl = (attachment = {}) => String(
     attachment?.localPreviewUrl
     || attachment?.previewUrl
@@ -40,14 +45,26 @@ export async function hydratePersistedSubjectAttachmentsObjectUrls(attachments =
     || attachment?.object_url
     || ""
   ).trim().length > 0;
+  let refreshedUrls = 0;
   const urls = await Promise.all(list.map(async (attachment) => {
-    if (hasUsableUrl(attachment)) return "";
+    if (!forceRefreshSignedUrls && hasUsableUrl(attachment)) return "";
     if (!String(attachment?.storage_path || "").trim()) return "";
+    refreshedUrls += 1;
     return resolveSubjectAttachmentObjectUrl(attachment?.storage_bucket, attachment?.storage_path);
   }));
-  return list.map((attachment, index) => ({
+  const hydrated = list.map((attachment, index) => ({
     ...attachment,
-    object_url: String(attachment?.object_url || urls[index] || ""),
-    previewUrl: String(attachment?.previewUrl || attachment?.object_url || urls[index] || "")
+    object_url: String(forceRefreshSignedUrls ? (urls[index] || "") : (attachment?.object_url || urls[index] || "")),
+    previewUrl: String(forceRefreshSignedUrls
+      ? (urls[index] || "")
+      : (attachment?.previewUrl || attachment?.object_url || urls[index] || ""))
   }));
+  if (isDescriptionAttachmentsDebugEnabled()) {
+    console.info("[subject-description-attachments] object url hydration", {
+      attachments: list.length,
+      forceRefreshSignedUrls,
+      regeneratedUrls: refreshedUrls
+    });
+  }
+  return hydrated;
 }

@@ -15,7 +15,7 @@ import {
 } from "../../utils/subject-links.js";
 import { searchSubjectRefs } from "../../utils/subject-ref-index.js";
 import { computeTextareaCaretRect } from "../../utils/textarea-caret-position.js";
-import { autosizeTextarea } from "../../utils/textarea-autosize.js";
+import { autosizeTextarea, bindAutosizeTextarea } from "../../utils/textarea-autosize.js";
 import { renderSubjectAttachmentTile, renderSubjectAttachmentsPreviewList } from "./project-subjects-attachments-ui.js";
 
 export function createProjectSubjectsEvents(config) {
@@ -626,6 +626,56 @@ export function createProjectSubjectsEvents(config) {
 
   function wireDetailsInteractive(root) {
     if (!root) return;
+    const getTextareaAutosizeMeta = (textarea) => {
+      const type = textarea?.matches?.("#humanCommentBox")
+        ? "main-comment"
+        : textarea?.matches?.("[data-description-draft]")
+          ? "description"
+          : textarea?.matches?.("[data-thread-edit-draft]")
+            ? "inline-edit"
+            : textarea?.matches?.("[data-thread-reply-draft]")
+              ? "inline-reply"
+              : "unknown";
+      const minHeightFallback = type === "main-comment" ? 170 : 110;
+      return { type, minHeightFallback };
+    };
+    const runAutosize = (textarea, cause = "manual") => {
+      if (!textarea) return null;
+      const { type, minHeightFallback } = getTextareaAutosizeMeta(textarea);
+      return autosizeTextarea(textarea, {
+        minHeightFallback,
+        comfortLines: 3,
+        log: true,
+        logPrefix: "[textarea-autosize]",
+        cause,
+        textareaType: type
+      });
+    };
+    const scheduleAutosize = (textarea, cause = "raf") => {
+      if (!textarea) return;
+      const { type, minHeightFallback } = getTextareaAutosizeMeta(textarea);
+      const binder = bindAutosizeTextarea(textarea, {
+        minHeightFallback,
+        comfortLines: 3,
+        log: true,
+        logPrefix: "[textarea-autosize]",
+        textareaType: type,
+        initialCause: "noop"
+      });
+      binder.resizeNextFrame(cause);
+    };
+    const bindComposerAutosizeLifecycle = (textarea) => {
+      if (!textarea || textarea.dataset.autosizeBound === "true") return;
+      textarea.dataset.autosizeBound = "true";
+      runAutosize(textarea, "mount");
+      scheduleAutosize(textarea, "raf-open");
+      ["input", "paste", "cut", "drop"].forEach((eventName) => {
+        textarea.addEventListener(eventName, () => {
+          runAutosize(textarea, eventName);
+          scheduleAutosize(textarea, `raf-${eventName}`);
+        });
+      });
+    };
 
     bindSubjectMetaDropdownDocumentEvents();
     const dropdownHost = renderSubjectMetaDropdownHost(root);
@@ -682,7 +732,7 @@ export function createProjectSubjectsEvents(config) {
 
     const descriptionTextarea = root.querySelector("[data-description-draft]");
     if (descriptionTextarea) {
-      autosizeTextarea(descriptionTextarea, { minHeightFallback: 110, comfortLines: 3, log: true, logPrefix: "[textarea-autosize]" });
+      bindComposerAutosizeLifecycle(descriptionTextarea);
     }
 
     root.querySelectorAll("[data-action='edit-description']").forEach((btn) => {
@@ -1255,7 +1305,7 @@ export function createProjectSubjectsEvents(config) {
       } else if (mode === "description") {
         const descriptionState = resolveDescriptionEditorState();
         descriptionState.draft = String(result.nextText || "");
-        autosizeTextarea(textarea, { minHeightFallback: 110, comfortLines: 3, log: true, logPrefix: "[textarea-autosize]" });
+        runAutosize(textarea, "mention");
       } else {
         const replyUi = resolveInlineReplyUiState();
         if (mode === "reply") {
@@ -1370,7 +1420,7 @@ export function createProjectSubjectsEvents(config) {
       } else if (mode === "description") {
         const descriptionState = resolveDescriptionEditorState();
         descriptionState.draft = String(result.nextText || "");
-        autosizeTextarea(textarea, { minHeightFallback: 110, comfortLines: 3, log: true, logPrefix: "[textarea-autosize]" });
+        runAutosize(textarea, "subject-ref");
       } else {
         const replyUi = resolveInlineReplyUiState();
         if (mode === "reply") {
@@ -1624,18 +1674,14 @@ export function createProjectSubjectsEvents(config) {
         syncMainEmojiPopup({ composerKey: "main" });
       };
 
-      const syncMainComposerTextareaHeight = () => autosizeTextarea(commentTextarea, {
-        minHeightFallback: 170,
-        comfortLines: 3,
-        log: true,
-        logPrefix: "[textarea-autosize]"
-      });
+      const syncMainComposerTextareaHeight = (cause = "manual") => runAutosize(commentTextarea, cause);
 
-      syncMainComposerTextareaHeight();
+      bindComposerAutosizeLifecycle(commentTextarea);
+      syncMainComposerTextareaHeight("mount");
 
       commentTextarea.addEventListener("input", () => {
         store.situationsView.commentDraft = String(commentTextarea.value || "");
-        syncMainComposerTextareaHeight();
+        syncMainComposerTextareaHeight("input");
         void syncMainComposerAutocomplete();
         if (store.situationsView.commentPreviewMode) syncCommentPreview(root);
       });
@@ -2829,12 +2875,7 @@ export function createProjectSubjectsEvents(config) {
       if (!submitButton) return;
       submitButton.disabled = !canSubmitInlineEdit(normalizedMessageId);
     };
-    const syncInlineReplyTextareaHeight = (textarea) => autosizeTextarea(textarea, {
-      minHeightFallback: 110,
-      comfortLines: 3,
-      log: true,
-      logPrefix: "[textarea-autosize]"
-    });
+    const syncInlineReplyTextareaHeight = (textarea, cause = "manual") => runAutosize(textarea, cause);
     const toggleInlineReplyEditorVisibility = (messageId = "", visible = false) => {
       const normalizedMessageId = String(messageId || "").trim();
       if (!normalizedMessageId) return;
@@ -3378,7 +3419,7 @@ export function createProjectSubjectsEvents(config) {
         });
         closeEmojiPopup({ rerender: false });
         if (store.situationsView.commentPreviewMode) syncCommentPreview(root);
-        autosizeTextarea(textarea, { minHeightFallback: 170, comfortLines: 3, log: true, logPrefix: "[textarea-autosize]" });
+        runAutosize(textarea, "emoji");
         rerenderAutocompleteUi();
         return;
       }
@@ -3393,7 +3434,7 @@ export function createProjectSubjectsEvents(config) {
       if (mode === "description") {
         const descriptionState = resolveDescriptionEditorState();
         descriptionState.draft = String(result.nextText || "");
-        autosizeTextarea(textarea, { minHeightFallback: 110, comfortLines: 3, log: true, logPrefix: "[textarea-autosize]" });
+        runAutosize(textarea, "emoji");
         rerenderAutocompleteUi();
         return;
       }
@@ -3410,6 +3451,7 @@ export function createProjectSubjectsEvents(config) {
     };
 
     root.querySelectorAll("[data-thread-reply-draft]").forEach((textarea) => {
+      bindComposerAutosizeLifecycle(textarea);
       syncInlineReplyTextareaHeight(textarea);
       textarea.addEventListener("input", () => {
         const messageId = String(textarea.dataset.threadReplyDraft || "").trim();
@@ -3562,6 +3604,7 @@ export function createProjectSubjectsEvents(config) {
     });
 
     root.querySelectorAll("[data-thread-edit-draft]").forEach((textarea) => {
+      bindComposerAutosizeLifecycle(textarea);
       syncInlineReplyTextareaHeight(textarea);
       textarea.addEventListener("input", () => {
         const messageId = String(textarea.dataset.threadEditDraft || "").trim();
@@ -3888,7 +3931,10 @@ export function createProjectSubjectsEvents(config) {
         composerRoot?.querySelector(".comment-composer__editor")?.classList.remove("hidden");
         composerRoot?.querySelector(".comment-composer__preview-wrap")?.classList.add("hidden");
         const textarea = composerRoot?.querySelector("[data-description-draft]");
-        if (textarea) autosizeTextarea(textarea, { minHeightFallback: 110, comfortLines: 3, log: true, logPrefix: "[textarea-autosize]" });
+        if (textarea) {
+          runAutosize(textarea, "preview-toggle");
+          scheduleAutosize(textarea, "raf-open");
+        }
       };
     });
     root.querySelectorAll("[data-action='description-tab-preview']").forEach((btn) => {
@@ -3919,7 +3965,7 @@ export function createProjectSubjectsEvents(config) {
         if (action === "subject-ref") {
           ensureSubjectRefTriggerInTextarea(textarea);
           syncDescriptionEditorDraft(root);
-          autosizeTextarea(textarea, { minHeightFallback: 110, comfortLines: 3, log: true, logPrefix: "[textarea-autosize]" });
+          runAutosize(textarea, "subject-ref");
           closeMentionPopup({ rerender: false });
           closeEmojiPopup({ rerender: false });
           void syncSubjectRefPopupForTextarea(textarea, `description:${String(textarea.dataset.descriptionDraft || "")}`);
@@ -3929,7 +3975,7 @@ export function createProjectSubjectsEvents(config) {
         const didApply = applyMarkdownComposerAction(textarea, action);
         if (!didApply) return;
         syncDescriptionEditorDraft(root);
-        autosizeTextarea(textarea, { minHeightFallback: 110, comfortLines: 3, log: true, logPrefix: "[textarea-autosize]" });
+        runAutosize(textarea, "toolbar");
         if (action === "mention") {
           void syncMentionPopupForTextarea(textarea, `description:${String(textarea.dataset.descriptionDraft || "")}`, { forceOpen: true });
         } else {
@@ -3962,10 +4008,10 @@ export function createProjectSubjectsEvents(config) {
     });
     root.querySelectorAll("[data-description-draft]").forEach((textarea) => {
       const composerKey = `description:${String(textarea.dataset.descriptionDraft || "").trim()}`;
-      autosizeTextarea(textarea, { minHeightFallback: 110, comfortLines: 3, log: true, logPrefix: "[textarea-autosize]" });
+      bindComposerAutosizeLifecycle(textarea);
       textarea.addEventListener("input", () => {
         syncDescriptionEditorDraft(root);
-        autosizeTextarea(textarea, { minHeightFallback: 110, comfortLines: 3, log: true, logPrefix: "[textarea-autosize]" });
+        runAutosize(textarea, "input");
         void syncInlineAutocomplete(textarea, composerKey);
       });
       textarea.addEventListener("keydown", (event) => {

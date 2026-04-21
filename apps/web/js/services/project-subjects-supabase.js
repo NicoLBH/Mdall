@@ -6,6 +6,10 @@ import { resolveCurrentBackendProjectId, resolveCurrentUserDirectoryPersonId } f
 import { invalidateSubjectRefIndex } from "../utils/subject-ref-index.js";
 import { normalizeAssigneeIds } from "./subject-assignees-service.js";
 import { hydratePersistedSubjectAttachmentsObjectUrls } from "./subject-attachments-object-url.js";
+import {
+  normalizeAttachmentBucket,
+  normalizeSubjectAttachmentStoragePath
+} from "./subject-attachments-storage-path.js";
 
 const SUPABASE_URL = getSupabaseUrl();
 const FRONT_PROJECT_MAP_STORAGE_KEY = "mdall.supabaseProjectMap.v1";
@@ -157,7 +161,7 @@ async function fetchProjectFlatSubjects(projectId) {
     return [];
   }
 
-  const optionalColumns = ["document_ref_ids", "description_attachments"];
+  const optionalColumns = ["document_ref_ids"];
   const baseColumns = [
     "id", "subject_number", "project_id", "document_id", "analysis_run_id", "situation_id",
     "parent_subject_id", "parent_linked_at", "parent_child_order", "assignee_person_id",
@@ -205,6 +209,86 @@ async function fetchProjectFlatSubjects(projectId) {
 
   const json = await res.json().catch(() => []);
   return Array.isArray(json) ? json : [];
+}
+
+async function fetchDescriptionAttachmentsBySubjectIds(subjectIds = []) {
+  const ids = [...new Set((Array.isArray(subjectIds) ? subjectIds : []).map((value) => normalizeUuid(value)).filter(Boolean))];
+  if (!ids.length) return new Map();
+
+  const url = new URL(`${SUPABASE_URL}/rest/v1/subject_message_attachments`);
+  url.searchParams.set("select", "id,project_id,subject_id,message_id,storage_bucket,storage_path,file_name,mime_type,size_bytes,width,height,sort_order,created_at,linked_at");
+  url.searchParams.set("subject_id", `in.(${ids.join(",")})`);
+  url.searchParams.set("message_id", "is.null");
+  url.searchParams.set("deleted_at", "is.null");
+  url.searchParams.set("linked_at", "not.is.null");
+  url.searchParams.set("order", "sort_order.asc");
+  url.searchParams.append("order", "created_at.asc");
+
+  const response = await fetch(url.toString(), {
+    method: "GET",
+    headers: await getSupabaseAuthHeaders({ Accept: "application/json" }),
+    cache: "no-store"
+  });
+  if (!response.ok) {
+    const txt = await response.text().catch(() => "");
+    throw new Error(`subject description attachments fetch failed (${response.status}): ${txt}`);
+  }
+
+  const rows = await response.json().catch(() => []);
+  const grouped = new Map();
+  const attachmentRows = Array.isArray(rows) ? rows : [];
+  const normalizedRows = attachmentRows.map((row) => {
+    const subjectId = normalizeUuid(row?.subject_id);
+    const storageBucket = normalizeAttachmentBucket(row?.storage_bucket, "subject-message-attachments");
+    return {
+      ...row,
+      id: normalizeUuid(row?.id),
+      subject_id: subjectId,
+      storage_bucket: storageBucket,
+      storage_path: normalizeSubjectAttachmentStoragePath(row?.storage_path, storageBucket),
+      file_name: String(row?.file_name || ""),
+      mime_type: String(row?.mime_type || "")
+    };
+  }).filter((row) => !!row.subject_id);
+
+  const hydratedRows = await hydratePersistedSubjectAttachmentsObjectUrls(normalizedRows, {
+    forceRefreshSignedUrls: true
+  });
+
+  hydratedRows.forEach((row) => {
+    const subjectId = normalizeUuid(row?.subject_id);
+    if (!subjectId) return;
+    const list = grouped.get(subjectId) || [];
+    list.push(row);
+    grouped.set(subjectId, list);
+  });
+
+  if (isSubjectDescriptionDebugEnabled()) {
+    let totalAttachments = 0;
+    let regeneratedUrls = 0;
+    let imageCount = 0;
+    let fileCardCount = 0;
+    grouped.forEach((entries, subjectId) => {
+      totalAttachments += entries.length;
+      regeneratedUrls += entries.filter((entry) => String(entry?.object_url || entry?.previewUrl || "").trim()).length;
+      imageCount += entries.filter((entry) => String(entry?.mime_type || "").toLowerCase().startsWith("image/")).length;
+      fileCardCount += entries.filter((entry) => !String(entry?.mime_type || "").toLowerCase().startsWith("image/")).length;
+      console.info("[subject-description-attachments] loaded", {
+        source: "subject_message_attachments",
+        subjectId,
+        attachments: entries.length
+      });
+    });
+    console.info("[subject-description-attachments] hydration summary", {
+      source: "subject_message_attachments",
+      subjects: grouped.size,
+      attachments: totalAttachments,
+      regeneratedUrls,
+      imageTiles: imageCount,
+      fileCards: fileCardCount
+    });
+  }
+  return grouped;
 }
 
 
@@ -1164,12 +1248,17 @@ export async function updateSubjectDescription({ subjectId, description, uploadS
 
   const row = Array.isArray(payload) ? payload[0] : payload;
   const descriptionAttachmentsRaw = Array.isArray(row?.description_attachments) ? row.description_attachments : [];
-  const descriptionAttachments = await hydratePersistedSubjectAttachmentsObjectUrls(descriptionAttachmentsRaw);
-  console.info("[subject-description-attachments] rpc update hydration", {
-    subjectId: normalizedSubjectId,
-    rawAttachments: descriptionAttachmentsRaw.length,
-    hydratedWithObjectUrl: descriptionAttachments.filter((attachment) => String(attachment?.object_url || attachment?.previewUrl || attachment?.localPreviewUrl || "").trim()).length
+  const descriptionAttachments = await hydratePersistedSubjectAttachmentsObjectUrls(descriptionAttachmentsRaw, {
+    forceRefreshSignedUrls: true
   });
+  if (debugEnabled) {
+    console.info("[subject-description-attachments] rpc update hydration", {
+      source: "update_subject_description rpc",
+      subjectId: normalizedSubjectId,
+      rawAttachments: descriptionAttachmentsRaw.length,
+      hydratedWithObjectUrl: descriptionAttachments.filter((attachment) => String(attachment?.object_url || attachment?.previewUrl || "").trim()).length
+    });
+  }
   return {
     ...(row || {}),
     id: String(row?.id || normalizedSubjectId),
@@ -1500,20 +1589,25 @@ export async function loadFlatSubjectsForCurrentProject(options = {}) {
     }
 
     const subjects = await fetchProjectFlatSubjects(backendProjectId);
-    const hydratedSubjects = await Promise.all((Array.isArray(subjects) ? subjects : []).map(async (subject) => {
-      const descriptionAttachments = Array.isArray(subject?.description_attachments) ? subject.description_attachments : [];
-      if (!descriptionAttachments.length) return subject;
-      const hydratedDescriptionAttachments = await hydratePersistedSubjectAttachmentsObjectUrls(descriptionAttachments);
-      console.info("[subject-description-attachments] hydrated subject description attachments", {
-        subjectId: String(subject?.id || ""),
-        attachments: descriptionAttachments.length,
-        hydratedWithObjectUrl: hydratedDescriptionAttachments.filter((attachment) => String(attachment?.object_url || attachment?.previewUrl || attachment?.localPreviewUrl || "").trim()).length
-      });
+    const subjectIds = (Array.isArray(subjects) ? subjects : []).map((subject) => normalizeUuid(subject?.id)).filter(Boolean);
+    const descriptionAttachmentsBySubjectId = await fetchDescriptionAttachmentsBySubjectIds(subjectIds).catch(() => new Map());
+    const hydratedSubjects = (Array.isArray(subjects) ? subjects : []).map((subject) => {
+      const subjectId = normalizeUuid(subject?.id);
+      const descriptionAttachments = Array.isArray(descriptionAttachmentsBySubjectId.get(subjectId))
+        ? descriptionAttachmentsBySubjectId.get(subjectId)
+        : [];
+      if (isSubjectDescriptionDebugEnabled()) {
+        console.info("[subject-description-attachments] merged subject attachments", {
+          source: "subject_message_attachments",
+          subjectId,
+          attachments: descriptionAttachments.length
+        });
+      }
       return {
         ...subject,
-        description_attachments: hydratedDescriptionAttachments
+        description_attachments: descriptionAttachments
       };
-    }));
+    });
     const subjectLinks = await fetchProjectSubjectLinks(backendProjectId).catch(() => []);
     const subjectAssignees = await fetchProjectSubjectAssignees(backendProjectId).catch(() => []);
     const subjectMessageCountsBySubjectId = await fetchProjectSubjectMessageCounts(backendProjectId).catch(() => ({}));

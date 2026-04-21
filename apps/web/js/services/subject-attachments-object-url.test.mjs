@@ -41,6 +41,18 @@ test("hydratePersistedSubjectAttachmentsObjectUrls enrichit les pièces jointes 
     assert.equal(hydrated.length, 1);
     assert.equal(hydrated[0].object_url, "https://signed.example/subject-message-attachments/project-1/subject-1/file.png");
     assert.equal(calls.length, 1);
+
+    calls.length = 0;
+    const forceHydrated = await hydratePersistedSubjectAttachmentsObjectUrls([
+      {
+        id: "a2",
+        storage_bucket: "subject-message-attachments",
+        storage_path: "project-1/subject-1/with-existing-url.pdf",
+        object_url: "https://expired.example/file.pdf"
+      }
+    ], { forceRefreshSignedUrls: true });
+    assert.equal(forceHydrated[0].object_url, "https://signed.example/subject-message-attachments/project-1/subject-1/with-existing-url.pdf");
+    assert.equal(calls.length, 1);
   } finally {
     supabase.storage = originalStorage;
   }
