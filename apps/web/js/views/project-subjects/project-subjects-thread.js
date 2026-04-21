@@ -1447,8 +1447,8 @@ priority=${firstNonEmpty(subject.priority, "")}`
           const richNoteHtml = buildBusinessRichNoteHtml(e);
           const titleUpdateInlineHtml = isSubjectTitleUpdated && nextTitle
             ? `${previousTitle
-              ? `<span class="mono-small tl-note-inline-text tl-note-inline-text--strikethrough">${escapeHtml(previousTitle)}</span><span class="tl-note-inline-text"> en </span>`
-              : ""}<span class="tl-note-inline-text">${escapeHtml(nextTitle)}</span>`
+              ? `<span class="mono-small">"</span><span class="mono-small tl-note-inline-text tl-note-inline-text--strikethrough">${escapeHtml(previousTitle)}</span><span class="mono-small">" en </span>`
+              : ""}<span class="tl-note-inline-text tl-note-inline-text--quote">"</span><span class="tl-note-inline-text">${escapeHtml(nextTitle)}</span><span class="tl-note-inline-text tl-note-inline-text--quote">"</span>`
             : "";
           const inlineDetailHtml = richNoteHtml
             ? richNoteHtml
@@ -1456,7 +1456,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
           const shouldRenderInlineBeforeTimestamp = (
             (eventType === "subject_labels_changed" || eventType === "subject_objectives_changed" || eventType === "subject_situations_changed")
             && (action === "added" || action === "removed")
-          );
+          ) || isSubjectTitleUpdated;
           const shouldRenderInlineBelow = (
             (eventType === "subject_parent_added")
             || (eventType === "subject_assignees_changed" && (action === "added" || action === "removed"))
@@ -1464,9 +1464,12 @@ priority=${firstNonEmpty(subject.priority, "")}`
           const secondLineInlineHtml = shouldRenderInlineBelow && inlineDetailHtml
             ? `<span class="tl-note-inline tl-note-inline--parent-added">${inlineDetailHtml}</span>`
             : "";
+          const inlineClassName = isSubjectTitleUpdated
+            ? "tl-note-inline tl-note-inline--title-updated"
+            : "tl-note-inline";
           const defaultInlineHtml = eventType === "subject_parent_added"
             ? ""
-            : (inlineDetailHtml ? `<span class="tl-note-inline">${inlineDetailHtml}</span>` : "");
+            : (inlineDetailHtml ? `<span class="${inlineClassName}">${inlineDetailHtml}</span>` : "");
           const inlineBeforeTimestampHtml = shouldRenderInlineBeforeTimestamp ? defaultInlineHtml : "";
           const inlineAfterTimestampHtml = shouldRenderInlineBeforeTimestamp || shouldRenderInlineBelow ? "" : defaultInlineHtml;
 
