@@ -15,6 +15,7 @@ import {
   removeLabelFromSubject as removeLabelFromSubjectInSupabase,
   replaceSubjectAssignees as replaceSubjectAssigneesInSupabase,
   updateSubjectDescription as updateSubjectDescriptionInSupabase,
+  updateSubjectTitle as updateSubjectTitleInSupabase,
   loadSubjectDescriptionVersions as loadSubjectDescriptionVersionsInSupabase
 } from "../services/project-subjects-supabase.js";
 import { loadSituationsForCurrentProject, addSubjectToSituation, removeSubjectFromSituation } from "../services/project-situations-supabase.js";
@@ -114,6 +115,7 @@ import { createProjectSubjectsPersistence } from "./project-subjects/project-sub
 import { createProjectSubjectsSelection } from "./project-subjects/project-subjects-selection.js";
 import { createProjectSubjectsReviewState } from "./project-subjects/project-subjects-review-state.js";
 import { createProjectSubjectsDescription } from "./project-subjects/project-subjects-description.js";
+import { createProjectSubjectsTitle } from "./project-subjects/project-subjects-title.js";
 import { createProjectSubjectsThread } from "./project-subjects/project-subjects-thread.js";
 import { createProjectSubjectsActions } from "./project-subjects/project-subjects-actions.js";
 import { createProjectSubjectsEvents } from "./project-subjects/project-subjects-events.js";
@@ -355,6 +357,25 @@ const {
   renderDescriptionCard
 } = projectSubjectsDescription;
 
+const projectSubjectsTitle = createProjectSubjectsTitle({
+  store,
+  ensureViewUiState,
+  currentDecisionTarget,
+  getSelectionEntityType,
+  getEntityByType,
+  rerenderScope: (...args) => projectSubjectsView.rerenderScope(...args),
+  updateSubjectTitle: (...args) => updateSubjectTitleInSupabase(...args)
+});
+
+const {
+  getSubjectTitleEditState,
+  isEditingSubjectTitle,
+  startSubjectTitleEdit,
+  cancelSubjectTitleEdit,
+  syncSubjectTitleDraft,
+  applySubjectTitleSave
+} = projectSubjectsTitle;
+
 const projectSubjectsEvents = createProjectSubjectsEvents({
   store,
   PROJECT_TAB_RESELECTED_EVENT,
@@ -392,6 +413,11 @@ const projectSubjectsEvents = createProjectSubjectsEvents({
   startDescriptionEdit,
   clearDescriptionEditState,
   applyDescriptionSave,
+  getSubjectTitleEditState,
+  startSubjectTitleEdit,
+  cancelSubjectTitleEdit,
+  syncSubjectTitleDraft,
+  applySubjectTitleSave,
   syncCommentPreview: (...args) => projectSubjectsView.syncCommentPreview(...args),
   applyCommentAction: (...args) => projectSubjectsView.applyCommentAction(...args),
   getApplyIssueStatusAction: () => applyIssueStatusAction,
@@ -457,6 +483,8 @@ const projectSubjectsDetailsRenderer = createProjectSubjectsDetailsRenderer({
   getEffectiveSituationStatus,
   getEntityReviewMeta,
   getReviewTitleStateClass,
+  getSubjectTitleEditState,
+  isEditingSubjectTitle,
   entityDisplayLinkHtml: (...args) => projectSubjectsView.entityDisplayLinkHtml(...args),
   problemsCountsHtml: (...args) => projectSubjectsView.problemsCountsHtml(...args),
   renderSubjectBlockedByHeadHtml: (...args) => projectSubjectsView.renderSubjectBlockedByHeadHtml(...args),

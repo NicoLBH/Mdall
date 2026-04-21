@@ -59,6 +59,11 @@ export function createProjectSubjectsEvents(config) {
     startDescriptionEdit,
     clearDescriptionEditState,
     applyDescriptionSave,
+    getSubjectTitleEditState,
+    startSubjectTitleEdit,
+    cancelSubjectTitleEdit,
+    syncSubjectTitleDraft,
+    applySubjectTitleSave,
     syncCommentPreview,
     applyCommentAction,
     getApplyIssueStatusAction,
@@ -782,6 +787,76 @@ export function createProjectSubjectsEvents(config) {
       btn.onclick = async () => {
         await applyDescriptionSave(root);
       };
+    });
+
+    const titleBindingRoots = [root];
+    const detailsHead = document.getElementById("situationsDetailsTitle");
+    const modalTitle = document.getElementById("detailsTitleModal");
+    if (detailsHead && !titleBindingRoots.includes(detailsHead)) titleBindingRoots.push(detailsHead);
+    if (modalTitle && !titleBindingRoots.includes(modalTitle)) titleBindingRoots.push(modalTitle);
+
+    const getVisibleTitleInput = () => {
+      const inputs = titleBindingRoots
+        .flatMap((scopeRoot) => Array.from(scopeRoot?.querySelectorAll?.("[data-subject-title-draft]") || []));
+      return inputs.find((input) => {
+        if (!(input instanceof HTMLElement)) return false;
+        if (input.disabled) return false;
+        const rect = input.getBoundingClientRect?.();
+        return !!(input.offsetParent || (rect && rect.width > 0 && rect.height > 0));
+      }) || inputs[0] || null;
+    };
+
+    titleBindingRoots.forEach((scopeRoot) => {
+      if (!(scopeRoot instanceof HTMLElement || scopeRoot === document)) return;
+      scopeRoot.querySelectorAll("[data-action='edit-subject-title']").forEach((btn) => {
+        btn.onclick = () => {
+          const didStart = startSubjectTitleEdit?.(root);
+          if (!didStart) return;
+          requestAnimationFrame(() => {
+            const input = getVisibleTitleInput();
+            if (!input) return;
+            input.focus();
+            const len = String(input.value || "").length;
+            input.setSelectionRange?.(len, len);
+          });
+        };
+      });
+
+      scopeRoot.querySelectorAll("[data-action='cancel-subject-title-edit']").forEach((btn) => {
+        btn.onclick = () => {
+          cancelSubjectTitleEdit?.(root);
+        };
+      });
+
+      scopeRoot.querySelectorAll("[data-action='save-subject-title-edit']").forEach((btn) => {
+        btn.onclick = async () => {
+          const state = getSubjectTitleEditState?.() || {};
+          if (state.isSaving) return;
+          await applySubjectTitleSave?.(root);
+        };
+      });
+
+      scopeRoot.querySelectorAll("[data-subject-title-draft]").forEach((input) => {
+        input.oninput = () => {
+          syncSubjectTitleDraft?.(scopeRoot);
+          rerenderScope(root);
+        };
+        input.onkeydown = async (event) => {
+          if (event.key !== "Enter") return;
+          event.preventDefault();
+          event.stopPropagation();
+          syncSubjectTitleDraft?.(scopeRoot);
+          const state = getSubjectTitleEditState?.() || {};
+          const initialTitle = String(state.initialTitle || "").trim();
+          const draftTitle = String(state.draft || "").trim();
+          if (state.isSaving) return;
+          if (!draftTitle || draftTitle === initialTitle) {
+            cancelSubjectTitleEdit?.(root);
+            return;
+          }
+          await applySubjectTitleSave?.(root);
+        };
+      });
     });
 
     root.querySelectorAll("[data-action='toggle-description-versions']").forEach((btn) => {

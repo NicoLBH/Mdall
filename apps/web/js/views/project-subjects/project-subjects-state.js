@@ -106,6 +106,18 @@ export function createProjectSubjectsState({ store }) {
     if (!Array.isArray(v.descriptionEdit.attachments)) v.descriptionEdit.attachments = [];
     if (typeof v.descriptionEdit.isSaving !== "boolean") v.descriptionEdit.isSaving = false;
     if (typeof v.descriptionEdit.error !== "string") v.descriptionEdit.error = "";
+    if (!v.subjectTitleEdit || typeof v.subjectTitleEdit !== "object") {
+      v.subjectTitleEdit = {
+        entityType: null,
+        entityId: null,
+        draft: "",
+        initialTitle: "",
+        isSaving: false,
+        error: ""
+      };
+    }
+    if (typeof v.subjectTitleEdit.isSaving !== "boolean") v.subjectTitleEdit.isSaving = false;
+    if (typeof v.subjectTitleEdit.error !== "string") v.subjectTitleEdit.error = "";
     if (!v.drilldown || typeof v.drilldown !== "object") {
       v.drilldown = {
         isOpen: false,
@@ -232,6 +244,14 @@ export function createProjectSubjectsState({ store }) {
       previewMode: false,
       uploadSessionId: "",
       attachments: [],
+      isSaving: false,
+      error: ""
+    };
+    v.subjectTitleEdit = {
+      entityType: null,
+      entityId: null,
+      draft: "",
+      initialTitle: "",
       isSaving: false,
       error: ""
     };

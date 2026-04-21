@@ -1309,6 +1309,46 @@ export async function updateSubjectDescription({ subjectId, description, uploadS
   };
 }
 
+export async function updateSubjectTitle({ subjectId, title } = {}) {
+  const normalizedSubjectId = normalizeUuid(subjectId);
+  if (!normalizedSubjectId) throw new Error("subjectId is required");
+  const nextTitle = String(title || "").trim();
+  if (!nextTitle) throw new Error("Le titre du sujet ne peut pas être vide.");
+
+  let actorPersonId = "";
+  try {
+    actorPersonId = normalizeUuid(await resolveCurrentUserDirectoryPersonId());
+  } catch (error) {
+    throw new Error(`update_subject_title identity resolution failed: ${String(error?.message || error || "unknown identity resolution error")}`);
+  }
+  if (!actorPersonId) {
+    throw new Error("update_subject_title identity resolution failed: no linked directory person found for current user");
+  }
+
+  let payload = null;
+  try {
+    payload = await rpcCall("update_subject_title", {
+      p_subject_id: normalizedSubjectId,
+      p_title: nextTitle,
+      p_actor_person_id: actorPersonId
+    });
+  } catch (error) {
+    const statusCode = Number(error?.status || 0) || null;
+    throw new Error(
+      `Impossible de mettre à jour le titre du sujet (${statusCode || "unknown"}): ${String(error?.message || error || "unknown error")}`
+    );
+  }
+
+  const row = Array.isArray(payload) ? (payload[0] || {}) : (payload || {});
+  return {
+    id: normalizeUuid(row?.id || normalizedSubjectId),
+    project_id: normalizeUuid(row?.project_id),
+    title: String(row?.title || nextTitle),
+    normalized_title: String(row?.normalized_title || ""),
+    updated_at: String(row?.updated_at || "")
+  };
+}
+
 export async function loadSubjectDescriptionVersions(subjectId, options = {}) {
   const logPrefix = "[subject-description-versions]";
   const normalizedSubjectId = normalizeUuid(subjectId);

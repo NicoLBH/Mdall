@@ -3350,6 +3350,26 @@ body.is-resizing{
 .details-title--expanded .details-title-topline{display:flex;align-items:center;gap:4px;min-width:0;}
 .details-title--expanded .details-title-bottomline{display:flex;align-items:center;gap:10px;min-width:0;flex-wrap:wrap;}
 .details-title--expanded .details-title-id{font-size:28px;font-weight:100;font-family:inherit;white-space:nowrap;text-overflow:ellipsis;}
+.subject-title-edit{min-width:0;display:flex;flex-direction:column;gap:6px;max-width:100%;}
+.subject-title-edit__row{display:flex;align-items:center;gap:8px;min-width:0;max-width:100%;}
+.subject-title-edit__input-wrap{min-width:0;flex:1 1 auto;}
+.subject-title-edit__input{
+  width:100%;
+  min-height:34px;
+  border:1px solid var(--border2);
+  border-radius:8px;
+  background:var(--panel);
+  color:var(--text);
+  padding:6px 10px;
+  font:inherit;
+}
+.subject-title-edit__input:disabled{opacity:.65;cursor:not-allowed;}
+.subject-title-edit__actions{display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;}
+.subject-title-edit__action{white-space:nowrap;}
+.subject-title-edit__error{font-size:12px;line-height:1.35;color:var(--danger-fg,#f85149);}
+.details-title--expanded .subject-title-edit__input{font-size:24px;line-height:1.35;}
+.details-title--compact .subject-title-edit__input{min-height:28px;font-size:14px;line-height:1.2;}
+.details-title--compact .subject-title-edit__actions .gh-btn{min-height:28px;}
 
 /* Sub-issues: keep Problems pill readable; at narrow widths stack icon + text and hide verdict legend */
 .subissues-counts--problems{flex:0 0 auto;min-width:auto;}
