@@ -3870,6 +3870,7 @@ body.drilldown-open .drilldown__inner,
 .tl-author--agent{font-size:11px;color:var(--text);line-height:1;}
 
 .tl-activity__text{min-width:0;white-space:normal;overflow:visible;text-overflow:clip;word-break:break-word;}
+.tl-activity__titleChange .tl-note-inline{display:inline-block;}
 .tl-author-name{font-weight:600;color:var(--text);font-size:14px;margin-right:2px;}
 .tl-note{
   margin:0 12px 8px 127px; /* align with .tl-activity__text */
