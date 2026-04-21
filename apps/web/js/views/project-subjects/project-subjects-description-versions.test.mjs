@@ -390,7 +390,7 @@ test("description versions: la version système affiche Heimdall sans fallback b
   cleanupFakeDom();
 });
 
-test("description versions: l'auteur de la carte est réaligné sur la dernière version chargée", async () => {
+test("description versions: la carte affiche l'auteur de la première version et le dernier éditeur", async () => {
   installFakeDom({
     "sujet::subject-1": { getBoundingClientRect: () => ({ top: 100, right: 320, bottom: 140, left: 260, width: 60, height: 40 }) }
   });
@@ -431,14 +431,28 @@ test("description versions: l'auteur de la carte est réaligné sur la dernière
     rerenderScope: () => {},
     markEntityValidated: () => {},
     updateSubjectDescription: async () => ({}),
-    loadSubjectDescriptionVersions: async () => [{
-      id: "v-last",
-      actor_name: "Nouveau Auteur",
-      actor_user_id: "u2",
-      actor_person_id: "p2",
-      description_markdown: "new",
-      created_at: new Date().toISOString()
-    }]
+    loadSubjectDescriptionVersions: async () => [
+      {
+        id: "v-last",
+        actor_name: "Nouveau Auteur",
+        actor_first_name: "Nouveau",
+        actor_last_name: "Auteur",
+        actor_user_id: "u2",
+        actor_person_id: "p2",
+        description_markdown: "new",
+        created_at: new Date().toISOString()
+      },
+      {
+        id: "v-first",
+        actor_name: "Ancien Auteur",
+        actor_first_name: "Ancien",
+        actor_last_name: "Auteur",
+        actor_user_id: "u3",
+        actor_person_id: "p3",
+        description_markdown: "old",
+        created_at: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString()
+      }
+    ]
   });
 
   api.toggleDescriptionVersionsDropdown({});
@@ -447,8 +461,10 @@ test("description versions: l'auteur de la carte est réaligné sur la dernière
     type: "sujet",
     item: { id: "subject-1", title: "Sujet", raw: { description: "Description initiale" } }
   });
-  assert.match(html, /Nouveau Auteur/);
-  assert.doesNotMatch(html, /Ancien auteur/);
+  assert.match(html, /Ancien Auteur/);
+  assert.match(html, /ouvert il y a/);
+  assert.match(html, /modifié par Nouveau Auteur/);
+  assert.doesNotMatch(html, /Ancien auteur<\/div>/);
 
   cleanupFakeDom();
 });
