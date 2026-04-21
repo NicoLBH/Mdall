@@ -1446,9 +1446,11 @@ priority=${firstNonEmpty(subject.priority, "")}`
           );
           const richNoteHtml = buildBusinessRichNoteHtml(e);
           const titleUpdateInlineHtml = isSubjectTitleUpdated && nextTitle
-            ? `${previousTitle
-              ? `<span class="mono-small tl-note-inline-text tl-note-inline-text--strikethrough">${escapeHtml(previousTitle)}</span><span class="tl-note-inline-text"> en </span>`
-              : ""}<span class="tl-note-inline-text">${escapeHtml(nextTitle)}</span>`
+            ? `<div class="tl-note-inline-block tl-note-inline-block--title-update">${
+              previousTitle
+                ? `<span class="tl-note-inline-text tl-note-inline-text--quote">"</span><span class="mono-small tl-note-inline-text tl-note-inline-text--strikethrough">${escapeHtml(previousTitle)}</span><span class="tl-note-inline-text tl-note-inline-text--quote">"</span><span class="tl-note-inline-text"> en </span>`
+                : ""
+            }<span class="tl-note-inline-text tl-note-inline-text--quote">"</span><span class="tl-note-inline-text">${escapeHtml(nextTitle)}</span><span class="tl-note-inline-text tl-note-inline-text--quote">"</span></div>`
             : "";
           const inlineDetailHtml = richNoteHtml
             ? richNoteHtml
@@ -1456,7 +1458,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
           const shouldRenderInlineBeforeTimestamp = (
             (eventType === "subject_labels_changed" || eventType === "subject_objectives_changed" || eventType === "subject_situations_changed")
             && (action === "added" || action === "removed")
-          );
+          ) || isSubjectTitleUpdated;
           const shouldRenderInlineBelow = (
             (eventType === "subject_parent_added")
             || (eventType === "subject_assignees_changed" && (action === "added" || action === "removed"))
