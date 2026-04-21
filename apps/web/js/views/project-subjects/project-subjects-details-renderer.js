@@ -32,6 +32,17 @@ export function createProjectSubjectsDetailsRenderer(config) {
     const item = currentSelection.item;
     const entityType = getSelectionEntityType(currentSelection.type);
     const titleSeenClass = getReviewTitleStateClass(entityType, item.id);
+    if (options.compact) {
+      return `
+        <div class="subject-title-display subject-title-display--compact">
+          <div class="subject-title-display__main">
+            <span class="details-title-text ${titleSeenClass}">${escapeHtml(firstNonEmpty(item.title, item.id, "Détail"))}</span>
+            <span class="details-title-inline-ref">${entityDisplayLinkHtml(currentSelection.type, item.id)}</span>
+          </div>
+        </div>
+      `;
+    }
+
     const editState = getSubjectTitleEditState?.() || {};
     const isEditing = isEditingSubjectTitle?.(currentSelection) === true;
     const initialTitleTrimmed = String(editState.initialTitle || item.title || "").trim();
@@ -74,7 +85,10 @@ export function createProjectSubjectsDetailsRenderer(config) {
           </div>
           <div class="subject-title-edit__actions">
             <button class="gh-btn gh-btn--sm subject-title-edit__action" type="button" data-action="cancel-subject-title-edit" ${isSaving ? "disabled" : ""}>Annuler</button>
-            <button class="gh-btn gh-btn--primary gh-btn--sm subject-title-edit__action" type="button" data-action="save-subject-title-edit" ${canSave ? "" : "disabled"}>Enregistrer</button>
+            <button class="gh-btn gh-btn--primary gh-btn--sm subject-title-edit__action subject-title-edit__save-btn" type="button" data-action="save-subject-title-edit" ${canSave ? "" : "disabled"}>
+              <span>Enregistrer</span>
+              <span class="subject-title-edit__shortcut" aria-hidden="true">⏎</span>
+            </button>
           </div>
         </div>
         ${errorHtml}

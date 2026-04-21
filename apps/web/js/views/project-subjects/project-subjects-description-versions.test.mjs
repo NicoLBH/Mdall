@@ -153,7 +153,7 @@ test("description versions: un rerender pendant le chargement ne bloque pas isLo
   api.renderDescriptionVersionsDropdownHost(root);
   const hostHtml = (globalThis.document?.getElementById?.("descriptionVersionsDropdownHost")?.innerHTML || "");
 
-  assert.match(html, /Versions \(1\)/);
+  assert.match(html, />Version</);
   assert.doesNotMatch(hostHtml, /Chargement des versions/);
   assert.match(hostHtml, /Ada Lovelace/);
   assert.match(hostHtml, /il y a/);

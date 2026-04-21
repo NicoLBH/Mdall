@@ -229,6 +229,20 @@ function entityDisplayLinkHtml(type, id) {
   return entityLinkHtml(type, id, escapeHtml(getEntityDisplayRef(type, id)));
 }
 
+function getDocumentDisplayName(document = {}) {
+  const fileName = String(document?.fileName || "").trim();
+  const title = String(document?.title || "").trim();
+  const name = String(document?.name || "").trim();
+  const id = String(document?.id || "").trim();
+  const extension = String(document?.extension || "").trim().replace(/^\./, "");
+  const baseName = fileName || title || name || id || "Document";
+  if (!baseName) return "Document";
+  if (!extension) return baseName;
+  const lowered = baseName.toLowerCase();
+  const normalizedExtension = extension.toLowerCase();
+  return lowered.endsWith(`.${normalizedExtension}`) ? baseName : `${baseName}.${normalizedExtension}`;
+}
+
 
 function renderDocumentRefsCard(selection) {
   const refs = getSelectionDocumentRefs(selection);
@@ -240,7 +254,7 @@ function renderDocumentRefsCard(selection) {
       <div class="details-document-refs__list">
         ${refs.map((doc) => `
           <span class="details-document-ref">
-            <span class="details-document-ref__name">${escapeHtml(doc.name)}</span>
+            <span class="details-document-ref__name">${escapeHtml(getDocumentDisplayName(doc))}</span>
             <span class="details-document-ref__phase">${escapeHtml(doc.phaseCode)}${doc.phaseLabel ? ` · ${escapeHtml(doc.phaseLabel)}` : ""}</span>
           </span>
         `).join("")}
