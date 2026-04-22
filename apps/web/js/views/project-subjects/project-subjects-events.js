@@ -845,6 +845,14 @@ export function createProjectSubjectsEvents(config) {
     const parentSubjectId = String(formContext.parentSubjectId || "").trim() || null;
     const scopeHost = String(formContext.scopeHost || "").trim().toLowerCase() === "drilldown" ? "drilldown" : "main";
     const setSubjectParent = getSetSubjectParent?.();
+    const descriptionLength = String(formContext.description || "").trim().length;
+    console.debug("[create-subissue-flow] submit", {
+      mode: formMode,
+      subjectId: null,
+      parentSubjectId,
+      descriptionLength,
+      didCallUpdateSubjectDescription: descriptionLength > 0 || (Array.isArray(formContext.attachments) && formContext.attachments.length > 0)
+    });
 
     (async () => {
       const submitPromise = createSubjectFromDraft();
@@ -854,6 +862,13 @@ export function createProjectSubjectsEvents(config) {
         rerenderPanels();
         return;
       }
+      console.debug("[create-subissue-flow] submit result", {
+        mode: formMode,
+        subjectId: String(result.subjectId || ""),
+        parentSubjectId,
+        descriptionLength,
+        didCallUpdateSubjectDescription: descriptionLength > 0 || (Array.isArray(formContext.attachments) && formContext.attachments.length > 0)
+      });
 
       if (formMode === "subissue") {
         if (parentSubjectId && typeof setSubjectParent === "function") {

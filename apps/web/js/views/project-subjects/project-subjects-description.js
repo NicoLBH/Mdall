@@ -84,7 +84,10 @@ export function createProjectSubjectsDescription(config = {}) {
       versions: [],
       selectedVersionId: "",
       modalOpen: false,
-      loadToken: 0
+      loadToken: 0,
+      lastLoadedEntityKey: "",
+      lastLoadReturnedEmpty: false,
+      warnedMissingHistoryByEntity: {}
     };
     if (!Array.isArray(view.descriptionVersionsUi.versions)) view.descriptionVersionsUi.versions = [];
     if (typeof view.descriptionVersionsUi.error !== "string") view.descriptionVersionsUi.error = "";
@@ -93,6 +96,11 @@ export function createProjectSubjectsDescription(config = {}) {
     if (typeof view.descriptionVersionsUi.selectedVersionId !== "string") view.descriptionVersionsUi.selectedVersionId = "";
     if (typeof view.descriptionVersionsUi.modalOpen !== "boolean") view.descriptionVersionsUi.modalOpen = false;
     if (!Number.isFinite(Number(view.descriptionVersionsUi.loadToken))) view.descriptionVersionsUi.loadToken = 0;
+    if (typeof view.descriptionVersionsUi.lastLoadedEntityKey !== "string") view.descriptionVersionsUi.lastLoadedEntityKey = "";
+    if (typeof view.descriptionVersionsUi.lastLoadReturnedEmpty !== "boolean") view.descriptionVersionsUi.lastLoadReturnedEmpty = false;
+    if (!view.descriptionVersionsUi.warnedMissingHistoryByEntity || typeof view.descriptionVersionsUi.warnedMissingHistoryByEntity !== "object") {
+      view.descriptionVersionsUi.warnedMissingHistoryByEntity = {};
+    }
     return view.descriptionVersionsUi;
   }
 
@@ -364,7 +372,21 @@ export function createProjectSubjectsDescription(config = {}) {
     ui.selectedVersionId = "";
     ui.versions = [];
     ui.error = "";
+    ui.lastLoadedEntityKey = "";
+    ui.lastLoadReturnedEmpty = false;
     if (options.resetLoading !== false) ui.isLoading = false;
+  }
+
+  function getPersistedDescriptionInfo(entityType, entityId) {
+    const entity = getEntityByType(entityType, entityId);
+    const raw = entity?.raw && typeof entity.raw === "object" ? entity.raw : {};
+    const persistedBody = firstNonEmpty(raw.description, entity?.description, "");
+    const hasPersistedDescription = !!String(persistedBody || "").trim();
+    const hasDisplayFallbackOnly = !hasPersistedDescription && !!String(entity?.title || "").trim();
+    return {
+      hasPersistedDescription,
+      hasDisplayFallbackOnly
+    };
   }
 
   function syncDescriptionVersionsTarget(root) {
@@ -407,8 +429,31 @@ export function createProjectSubjectsDescription(config = {}) {
     const ui = ensureDescriptionVersionsUiState();
     const forceReload = !!options.forceReload;
     const sameTarget = ui.entityType === entityType && ui.entityId === entityId;
+    const currentEntityKey = `${entityType}::${entityId}`;
     const versionsInMemory = Array.isArray(ui.versions) ? ui.versions.length : 0;
     const previousLoading = !!ui.isLoading;
+    if (!forceReload && previousLoading && sameTarget) {
+      console.debug(`${VERSIONS_LOG_PREFIX} skip fetch`, {
+        entityType,
+        entityId,
+        skipReason: "already-loading",
+        lastLoadToken: Number(ui.loadToken || 0)
+      });
+      return;
+    }
+    if (!forceReload && sameTarget && ui.lastLoadedEntityKey === currentEntityKey && ui.lastLoadReturnedEmpty && !ui.error) {
+      const persistedInfo = getPersistedDescriptionInfo(entityType, entityId);
+      console.debug(`${VERSIONS_LOG_PREFIX} skip fetch`, {
+        entityType,
+        entityId,
+        skipReason: "empty-result-already-acknowledged",
+        hasPersistedDescription: persistedInfo.hasPersistedDescription,
+        hasDisplayFallbackOnly: persistedInfo.hasDisplayFallbackOnly,
+        versionsCount: versionsInMemory,
+        lastLoadToken: Number(ui.loadToken || 0)
+      });
+      return;
+    }
     logDescriptionVersions("ensure start", {
       entityType,
       entityId,
@@ -474,26 +519,39 @@ export function createProjectSubjectsDescription(config = {}) {
         return;
       }
       currentUi.versions = normalizedVersions;
+      currentUi.lastLoadedEntityKey = currentEntityKey;
+      currentUi.lastLoadReturnedEmpty = normalizedVersions.length === 0;
       if (!currentUi.selectedVersionId && currentUi.versions.length) {
         currentUi.selectedVersionId = String(currentUi.versions[0]?.id || "");
       }
       syncDescriptionCurrentAuthorFromVersions(entityType, entityId, currentUi.versions);
       if (!currentUi.versions.length) {
+        const persistedInfo = getPersistedDescriptionInfo(entityType, entityId);
         logDescriptionVersions("ensure loaded with empty result set", {
           entityType,
-          entityId
+          entityId,
+          hasPersistedDescription: persistedInfo.hasPersistedDescription,
+          hasDisplayFallbackOnly: persistedInfo.hasDisplayFallbackOnly,
+          versionsCount: 0,
+          lastLoadToken: loadToken
         });
-        const descriptionState = getEntityDescriptionState(entityType, entityId);
-        const hasCurrentDescription = !!String(descriptionState?.body || "").trim();
-        if (hasCurrentDescription) {
-          console.warn(
-            `${VERSIONS_LOG_PREFIX} subject has current description but no historical version rows; check backfill / RPC deployment`,
-            {
-              timestamp: new Date().toISOString(),
-              entityType,
-              entityId
-            }
-          );
+        if (persistedInfo.hasPersistedDescription) {
+          const warningKey = `${entityType}::${entityId}`;
+          if (!currentUi.warnedMissingHistoryByEntity?.[warningKey]) {
+            currentUi.warnedMissingHistoryByEntity[warningKey] = true;
+            console.warn(
+              `${VERSIONS_LOG_PREFIX} subject has current description but no historical version rows; check backfill / RPC deployment`,
+              {
+                timestamp: new Date().toISOString(),
+                entityType,
+                entityId,
+                hasPersistedDescription: true,
+                hasDisplayFallbackOnly: persistedInfo.hasDisplayFallbackOnly,
+                versionsCount: 0,
+                lastLoadToken: loadToken
+              }
+            );
+          }
         }
       }
     } catch (error) {
@@ -850,7 +908,13 @@ export function createProjectSubjectsDescription(config = {}) {
     }
     host.innerHTML = renderDescriptionVersionsDropdownContent(entityType, entityId);
     host.setAttribute("aria-hidden", "false");
-    if (!ui.isLoading && !ui.error && (!Array.isArray(ui.versions) || ui.versions.length === 0) && entityType === "sujet") {
+    if (
+      !ui.isLoading
+      && !ui.error
+      && (!Array.isArray(ui.versions) || ui.versions.length === 0)
+      && entityType === "sujet"
+      && !(ui.lastLoadedEntityKey === `${entityType}::${entityId}` && ui.lastLoadReturnedEmpty)
+    ) {
       void ensureDescriptionVersionsLoaded(root, entityType, entityId);
     }
     syncDescriptionVersionsDropdownPosition(root);
@@ -869,6 +933,7 @@ export function createProjectSubjectsDescription(config = {}) {
       && typeof loadSubjectDescriptionVersions === "function"
       && !versionsUi.isLoading
       && !hasVersionsLoaded
+      && !(versionsUi.lastLoadedEntityKey === `${entityType}::${entityId}` && versionsUi.lastLoadReturnedEmpty && !versionsUi.error)
     ) {
       void ensureDescriptionVersionsLoaded(null, entityType, entityId);
     }

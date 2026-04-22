@@ -534,3 +534,113 @@ test("description card: précharge les versions et affiche un spinner auteur en 
 
   cleanupFakeDom();
 });
+
+test("description versions: un sujet sans description persistée (titre seul) ne spamme pas warning ni reload vide", async () => {
+  installFakeDom({
+    "sujet::subject-no-description": { getBoundingClientRect: () => ({ top: 100, right: 320, bottom: 140, left: 260, width: 60, height: 40 }) }
+  });
+  const store = { user: { id: "u1" }, projectForm: { collaborators: [] }, projectSubjectsView: {}, situationsView: {} };
+  let loadCalls = 0;
+  const warnCalls = [];
+  const originalWarn = console.warn;
+  console.warn = (...args) => warnCalls.push(args);
+  const api = createProjectSubjectsDescription({
+    store,
+    ensureViewUiState: () => { store.projectSubjectsView ||= {}; },
+    firstNonEmpty: (...values) => values.find((value) => String(value ?? "").trim()) || "",
+    escapeHtml: (value) => String(value ?? ""),
+    svgIcon: () => "",
+    mdToHtml: (value) => String(value || ""),
+    fmtTs: () => "20/04/2026",
+    nowIso: () => new Date().toISOString(),
+    setOverlayChromeOpenState: () => {},
+    SVG_AVATAR_HUMAN: "",
+    renderCommentComposer: () => "",
+    getRunBucket: () => ({ bucket: { descriptions: { sujet: {}, situation: {} } } }),
+    persistRunBucket: () => {},
+    getSelectionEntityType: (type) => type,
+    getEntityByType: () => ({ id: "subject-no-description", title: "Titre sans description", raw: {} }),
+    getEntityReviewMeta: () => ({}),
+    setEntityReviewMeta: () => {},
+    currentDecisionTarget: () => ({ type: "sujet", id: "subject-no-description", item: { id: "subject-no-description" } }),
+    rerenderScope: () => {},
+    markEntityValidated: () => {},
+    updateSubjectDescription: async () => ({}),
+    loadSubjectDescriptionVersions: async () => {
+      loadCalls += 1;
+      return [];
+    }
+  });
+
+  api.renderDescriptionCard({
+    type: "sujet",
+    item: { id: "subject-no-description", title: "Titre sans description", raw: {} }
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  api.renderDescriptionCard({
+    type: "sujet",
+    item: { id: "subject-no-description", title: "Titre sans description", raw: {} }
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(loadCalls, 1);
+  assert.equal(warnCalls.length, 0);
+
+  console.warn = originalWarn;
+  cleanupFakeDom();
+});
+
+test("description versions: description persistée + versions vides log une seule alerte et ne boucle pas", async () => {
+  installFakeDom({
+    "sujet::subject-empty-versions": { getBoundingClientRect: () => ({ top: 100, right: 320, bottom: 140, left: 260, width: 60, height: 40 }) }
+  });
+  const store = { user: { id: "u1" }, projectForm: { collaborators: [] }, projectSubjectsView: {}, situationsView: {} };
+  let loadCalls = 0;
+  const warnCalls = [];
+  const originalWarn = console.warn;
+  console.warn = (...args) => warnCalls.push(args);
+  const api = createProjectSubjectsDescription({
+    store,
+    ensureViewUiState: () => { store.projectSubjectsView ||= {}; },
+    firstNonEmpty: (...values) => values.find((value) => String(value ?? "").trim()) || "",
+    escapeHtml: (value) => String(value ?? ""),
+    svgIcon: () => "",
+    mdToHtml: (value) => String(value || ""),
+    fmtTs: () => "20/04/2026",
+    nowIso: () => new Date().toISOString(),
+    setOverlayChromeOpenState: () => {},
+    SVG_AVATAR_HUMAN: "",
+    renderCommentComposer: () => "",
+    getRunBucket: () => ({ bucket: { descriptions: { sujet: {}, situation: {} } } }),
+    persistRunBucket: () => {},
+    getSelectionEntityType: (type) => type,
+    getEntityByType: () => ({ id: "subject-empty-versions", title: "Sujet", raw: { description: "Description persistée" } }),
+    getEntityReviewMeta: () => ({}),
+    setEntityReviewMeta: () => {},
+    currentDecisionTarget: () => ({ type: "sujet", id: "subject-empty-versions", item: { id: "subject-empty-versions" } }),
+    rerenderScope: () => {},
+    markEntityValidated: () => {},
+    updateSubjectDescription: async () => ({}),
+    loadSubjectDescriptionVersions: async () => {
+      loadCalls += 1;
+      return [];
+    }
+  });
+
+  api.renderDescriptionCard({
+    type: "sujet",
+    item: { id: "subject-empty-versions", title: "Sujet", raw: { description: "Description persistée" } }
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  api.renderDescriptionCard({
+    type: "sujet",
+    item: { id: "subject-empty-versions", title: "Sujet", raw: { description: "Description persistée" } }
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(loadCalls, 1);
+  assert.equal(warnCalls.length, 1);
+
+  console.warn = originalWarn;
+  cleanupFakeDom();
+});

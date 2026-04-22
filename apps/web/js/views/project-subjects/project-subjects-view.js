@@ -620,6 +620,10 @@ async function createSubjectFromDraft() {
 
   const description = String(formState.description || "").trim();
   const draftAttachments = normalizeCreateSubjectDraftAttachments(formState.attachments);
+  const mode = String(formState.mode || "").trim().toLowerCase() === "subissue" ? "subissue" : "standard";
+  const parentSubjectId = mode === "subissue" ? String(formState.parentSubjectId || "").trim() : "";
+  const descriptionLength = description.length;
+  const shouldCallUpdateSubjectDescription = Boolean(description || draftAttachments.length > 0);
 
   store.situationsView.createSubjectForm.validationError = "";
   store.situationsView.createSubjectForm.isSubmitting = true;
@@ -634,6 +638,13 @@ async function createSubjectFromDraft() {
     if (!subjectId) {
       throw new Error("Le backend n'a pas renvoyé d'identifiant de sujet.");
     }
+    console.debug("[create-subissue-flow] createSubjectFromDraft created subject", {
+      mode,
+      subjectId,
+      parentSubjectId: parentSubjectId || null,
+      descriptionLength,
+      didCallUpdateSubjectDescription: false
+    });
 
     if (nextMeta.assignees.length) {
       await replaceSubjectAssigneesInSupabase(subjectId, nextMeta.assignees);
@@ -673,6 +684,13 @@ async function createSubjectFromDraft() {
     }
 
     if (description || uploadSessionId) {
+      console.debug("[create-subissue-flow] createSubjectFromDraft description update", {
+        mode,
+        subjectId,
+        parentSubjectId: parentSubjectId || null,
+        descriptionLength,
+        didCallUpdateSubjectDescription: shouldCallUpdateSubjectDescription
+      });
       await updateSubjectDescriptionInSupabase({
         subjectId,
         description,
