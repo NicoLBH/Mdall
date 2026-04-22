@@ -50,6 +50,7 @@ test("l'événement d'ouverture du menu sous-sujet utilise le dropdown mutualis�
 
 test("l'action Ajouter un sujet existant ouvre une sous-vue latérale sans fermer le dropdown", () => {
   assert.match(eventsSource, /\[data-action='open-link-existing-subissue'\]/);
+  assert.match(eventsSource, /dropdownHost\.querySelectorAll\("\[data-action='open-link-existing-subissue'\]"\)/);
   assert.match(eventsSource, /dropdown\.subissueActionsView = "existing-subissue";/);
   assert.match(eventsSource, /dropdownController\(\)\.focusSearch\(\{ field: "subissue-actions" \}\);/);
   assert.match(eventsSource, /\[data-action='open-link-existing-subissue'\][\s\S]{0,600}refreshSubjectMetaDropdownUi\(root, \{ preserveScroll: true, preserveFocus: false \}\);/);
