@@ -3159,6 +3159,11 @@ body.is-resizing{
 .subissues-table .issues-table__head{border-bottom:1px solid var(--border2);}
 .subissues-table .issues-table__body{max-height:360px;overflow:auto;}
 .subissue-row--selected{outline:1px solid rgba(88,166,255,.45);background:rgba(56,139,253,.08);}
+.subject-add-subissue-action{width:100%;}
+.subject-add-subissue-action--description{margin-top:8px;margin-bottom:0;}
+.subject-add-subissue-action--subissues{margin:0;padding:10px 12px 12px;border-top:1px solid var(--border2);width:100%;}
+.subject-add-subissue-action__trigger{display:inline-flex;align-items:center;gap:8px;}
+.subject-add-subissue-action__chevron{display:inline-flex;align-items:center;color:var(--muted);}
 
 /* Main table row selection (same visual language as sub-issues selection) */
 .issue-row.selected{
@@ -10691,6 +10696,58 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
 
 .subject-create-aside{
   padding-top:36px;
+}
+.subject-create-layout--subissue{
+  grid-template-columns:minmax(0,1fr);
+  gap:0;
+}
+.subject-create-layout--subissue .subject-create-content__avatar{display:none;}
+.subject-create-inline-meta{
+  display:flex;
+  align-items:flex-start;
+}
+.subject-create-layout--subissue .subject-create-footer{
+  align-items:flex-end;
+}
+.subject-create-layout--subissue .subject-meta-controls{
+  margin:0;
+  flex-direction:row;
+  flex-wrap:wrap;
+}
+.subject-create-layout--subissue .subject-meta-controls--create{
+  display:flex;
+  flex-direction:row;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.subject-create-layout--subissue .subject-meta-field{
+  width:auto;
+  margin:0;
+}
+.subject-create-subissue-modal__dialog{
+  width:min(980px, calc(100vw - 48px));
+  position:absolute !important;
+  top:50% !important;
+  left:50% !important;
+  margin:0 !important;
+  transform:translate(-50%, -50%) !important;
+  max-height:calc(100vh - 48px);
+}
+.subject-create-subissue-modal__body{
+  padding:0;
+  overflow:auto;
+}
+.subject-create-subissue-modal__body .subject-create-shell{
+  padding:16px;
+}
+.subject-create-layout--subissue .comment-composer--create-subject{
+  width:min(700px, 100%);
+}
+.subject-create-layout--subissue .comment-composer--create-subject .comment-composer__textarea{
+  width:min(700px, 100%) !important;
+  min-height:326px !important;
+  height:326px !important;
+  max-height:326px !important;
 }
 
 .comment-composer--create-subject{
