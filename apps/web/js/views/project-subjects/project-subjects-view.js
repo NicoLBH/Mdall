@@ -95,7 +95,8 @@ export function createProjectSubjectsView(deps) {
     replaceSubjectLabelsInSupabase,
     replaceSubjectSituationsInSupabase,
     replaceSubjectObjectivesInSupabase,
-    updateSubjectDescriptionInSupabase
+    updateSubjectDescriptionInSupabase,
+    uploadAttachmentFile
   } = deps;
 
   const {
@@ -432,6 +433,42 @@ function getDraftSubjectSelection() {
   };
 }
 
+function createSubjectUploadSessionId() {
+  try {
+    if (window?.crypto?.randomUUID) return String(window.crypto.randomUUID());
+  } catch {}
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function revokeObjectUrl(url = "") {
+  try {
+    if (url && window?.URL?.revokeObjectURL) window.URL.revokeObjectURL(url);
+  } catch {}
+}
+
+function normalizeCreateSubjectDraftAttachments(attachments = []) {
+  return (Array.isArray(attachments) ? attachments : []).map((attachment, index) => ({
+    id: String(attachment?.id || ""),
+    tempId: String(attachment?.tempId || `${Date.now()}-${index}-${Math.random().toString(16).slice(2)}`),
+    file: attachment?.file || null,
+    file_name: String(attachment?.file_name || attachment?.name || attachment?.fileName || "Pièce jointe"),
+    mime_type: String(attachment?.mime_type || attachment?.mimeType || attachment?.file?.type || ""),
+    size_bytes: Number(attachment?.size_bytes || attachment?.sizeBytes || attachment?.file?.size || 0) || 0,
+    isImage: Boolean(attachment?.isImage || String(attachment?.mime_type || attachment?.mimeType || attachment?.file?.type || "").toLowerCase().startsWith("image/")),
+    localPreviewUrl: String(attachment?.localPreviewUrl || ""),
+    remoteObjectUrl: String(attachment?.remoteObjectUrl || attachment?.object_url || ""),
+    previewUrl: String(attachment?.previewUrl || attachment?.localPreviewUrl || attachment?.remoteObjectUrl || attachment?.object_url || ""),
+    uploadStatus: String(attachment?.uploadStatus || "draft"),
+    error: String(attachment?.error || "")
+  }));
+}
+
+function clearCreateSubjectDraftAttachments(attachments = []) {
+  normalizeCreateSubjectDraftAttachments(attachments).forEach((attachment) => {
+    revokeObjectUrl(String(attachment?.localPreviewUrl || ""));
+  });
+}
+
 function buildDefaultDraftSubjectMeta() {
   const selectedSituationId = String(
     ""
@@ -449,6 +486,7 @@ function resetCreateSubjectForm(options = {}) {
   ensureViewUiState();
   const keepCreateMore = !!options.keepCreateMore;
   const previous = store.situationsView.createSubjectForm || {};
+  clearCreateSubjectDraftAttachments(previous.attachments);
   store.situationsView.createSubjectForm = {
     isOpen: false,
     title: "",
@@ -458,7 +496,7 @@ function resetCreateSubjectForm(options = {}) {
     meta: buildDefaultDraftSubjectMeta(),
     validationError: "",
     isSubmitting: false,
-    attachments: [],
+    uploadSessionId: "",
     attachments: []
   };
 }
@@ -479,7 +517,9 @@ function openCreateSubjectForm() {
     createMore: previousCreateMore,
     meta: buildDefaultDraftSubjectMeta(),
     validationError: "",
-    isSubmitting: false
+    isSubmitting: false,
+    uploadSessionId: "",
+    attachments: []
   };
 }
 
@@ -541,6 +581,7 @@ async function createSubjectFromDraft() {
   };
 
   const description = String(formState.description || "").trim();
+  const draftAttachments = normalizeCreateSubjectDraftAttachments(formState.attachments);
 
   store.situationsView.createSubjectForm.validationError = "";
   store.situationsView.createSubjectForm.isSubmitting = true;
@@ -573,10 +614,31 @@ async function createSubjectFromDraft() {
       await replaceSubjectObjectivesInSupabase(subjectId, nextMeta.objectiveIds);
     }
 
-    if (description) {
+    const hasDraftAttachments = draftAttachments.length > 0;
+    let uploadSessionId = String(formState.uploadSessionId || "").trim();
+    if (hasDraftAttachments && !uploadSessionId) {
+      uploadSessionId = createSubjectUploadSessionId();
+      store.situationsView.createSubjectForm.uploadSessionId = uploadSessionId;
+    }
+
+    if (hasDraftAttachments) {
+      for (let index = 0; index < draftAttachments.length; index += 1) {
+        const attachment = draftAttachments[index];
+        if (!(attachment?.file instanceof Blob)) continue;
+        await uploadAttachmentFile({
+          subjectId,
+          uploadSessionId,
+          file: attachment.file,
+          sortOrder: index
+        });
+      }
+    }
+
+    if (description || uploadSessionId) {
       await updateSubjectDescriptionInSupabase({
         subjectId,
-        description
+        description,
+        uploadSessionId
       });
     }
 
@@ -2914,7 +2976,12 @@ function renderCreateSubjectFormHtml() {
               footerHtml: `
                 <input type="file" class="subject-composer-file-input" data-role="create-subject-file-input" multiple />
                 <div class="subject-composer-attachments-preview ${(Array.isArray(form.attachments) && form.attachments.length) ? "" : "hidden"}" data-role="create-subject-attachments-preview" aria-live="polite">
-                  ${Array.isArray(form.attachments) ? form.attachments.map((attachment) => `<div class="subject-attachment-tile"><span class="subject-attachment__name">${escapeHtml(String(attachment?.name || "Pièce jointe"))}</span></div>`).join("") : ""}
+                  ${renderSubjectAttachmentsPreviewList({
+                    attachments: normalizeCreateSubjectDraftAttachments(form.attachments),
+                    removeAction: "create-subject-attachment-remove",
+                    escapeHtml,
+                    svgIcon
+                  })}
                 </div>
               `
             })}

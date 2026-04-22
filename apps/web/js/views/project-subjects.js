@@ -860,7 +860,8 @@ const projectSubjectsView = createProjectSubjectsView({
   replaceSubjectLabelsInSupabase: (...args) => replaceSubjectLabelsInSupabase(...args),
   replaceSubjectSituationsInSupabase: (...args) => replaceSubjectSituationsInSupabase(...args),
   replaceSubjectObjectivesInSupabase: (...args) => replaceSubjectObjectivesInSupabase(...args),
-  updateSubjectDescriptionInSupabase: (...args) => updateSubjectDescriptionInSupabase(...args)
+  updateSubjectDescriptionInSupabase: (...args) => updateSubjectDescriptionInSupabase(...args),
+  uploadAttachmentFile: (...args) => subjectMessagesService.uploadAttachmentFile(...args)
 });
 
 const {
