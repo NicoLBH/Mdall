@@ -2942,9 +2942,6 @@ function renderCreateSubjectFormHtml() {
   const previewHtml = mdToHtml(String(form.description || "").trim());
   return `
     <section class="subject-create-shell" data-create-subject-form>
-      <div class="subject-create-header">
-        <div class="subject-create-header__title">Créer un nouveau sujet</div>
-      </div>
       <div class="subject-create-layout">
         <div class="subject-create-main">
           <div class="subject-create-content">

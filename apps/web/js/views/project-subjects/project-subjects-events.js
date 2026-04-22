@@ -116,6 +116,8 @@ export function createProjectSubjectsEvents(config) {
   function getTextareaAutosizeMeta(textarea) {
     const type = textarea?.matches?.("#humanCommentBox")
       ? "main-comment"
+      : textarea?.matches?.("[data-create-subject-description]")
+        ? "create-subject"
       : textarea?.matches?.("[data-description-draft]")
         ? "description"
         : textarea?.matches?.("[data-thread-edit-draft]")
@@ -123,16 +125,21 @@ export function createProjectSubjectsEvents(config) {
           : textarea?.matches?.("[data-thread-reply-draft]")
             ? "inline-reply"
             : "unknown";
-    const minHeightFallback = type === "main-comment" ? 170 : 110;
-    return { type, minHeightFallback };
+    const minHeightFallback = type === "main-comment"
+      ? 170
+      : type === "create-subject"
+        ? 452
+        : 110;
+    const comfortLines = type === "create-subject" ? 0 : 3;
+    return { type, minHeightFallback, comfortLines };
   }
 
   function runAutosize(textarea, cause = "manual") {
     if (!textarea) return null;
-    const { type, minHeightFallback } = getTextareaAutosizeMeta(textarea);
+    const { type, minHeightFallback, comfortLines } = getTextareaAutosizeMeta(textarea);
     return autosizeTextarea(textarea, {
       minHeightFallback,
-      comfortLines: 3,
+      comfortLines,
       log: true,
       logPrefix: "[textarea-autosize]",
       cause,
