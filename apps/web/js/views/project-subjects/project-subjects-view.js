@@ -87,7 +87,13 @@ export function createProjectSubjectsView(deps) {
     addComment,
     getSelectionForScope,
     getScopedSelection,
-    ensureTimelineLoadedForSelection
+    ensureTimelineLoadedForSelection,
+    createManualSubject,
+    replaceSubjectAssigneesInSupabase,
+    replaceSubjectLabelsInSupabase,
+    replaceSubjectSituationsInSupabase,
+    replaceSubjectObjectivesInSupabase,
+    updateSubjectDescriptionInSupabase
   } = deps;
 
   const {
@@ -448,7 +454,8 @@ function resetCreateSubjectForm(options = {}) {
     previewMode: false,
     createMore: keepCreateMore ? !!previous.createMore : false,
     meta: buildDefaultDraftSubjectMeta(),
-    validationError: ""
+    validationError: "",
+    isSubmitting: false
   };
 }
 
@@ -467,7 +474,8 @@ function openCreateSubjectForm() {
     previewMode: false,
     createMore: previousCreateMore,
     meta: buildDefaultDraftSubjectMeta(),
-    validationError: ""
+    validationError: "",
+    isSubmitting: false
   };
 }
 
@@ -484,82 +492,106 @@ function getCustomSubjects() {
   }));
 }
 
-function createCustomSubjectId() {
-  const stamp = new Date();
-  const compact = [
-    stamp.getFullYear(),
-    String(stamp.getMonth() + 1).padStart(2, "0"),
-    String(stamp.getDate()).padStart(2, "0"),
-    "-",
-    String(stamp.getHours()).padStart(2, "0"),
-    String(stamp.getMinutes()).padStart(2, "0"),
-    String(stamp.getSeconds()).padStart(2, "0"),
-    "-",
-    Math.random().toString(36).slice(2, 6)
-  ].join("");
-  return `sujet-local-${compact}`;
+function resolveDraftLabelIds(labels = []) {
+  return [...new Set((Array.isArray(labels) ? labels : [])
+    .map((value) => String(value || "").trim())
+    .filter(Boolean)
+    .map((value) => String(getSubjectLabelDefinition(value)?.id || "").trim())
+    .filter(Boolean))];
 }
 
-function createSubjectFromDraft() {
+async function createSubjectFromDraft() {
   ensureViewUiState();
-  const draft = getSubjectsViewState().createSubjectForm || {};
-  const title = String(draft.title || "").trim();
+  const formState = getSubjectsViewState().createSubjectForm || {};
+  if (formState.isSubmitting) {
+    return { ok: false, reason: "in-flight" };
+  }
+
+  const title = String(formState.title || "").trim();
   if (!title) {
     store.situationsView.createSubjectForm.validationError = "Le titre du sujet est obligatoire.";
     return { ok: false, reason: "missing-title" };
   }
 
-  const subjectId = createCustomSubjectId();
   const nextMeta = {
-    assignees: Array.isArray(draft.meta?.assignees) ? draft.meta.assignees.map((value) => String(value || "")).filter(Boolean) : [],
-    labels: normalizeSubjectLabels(draft.meta?.labels),
-    objectiveIds: normalizeSubjectObjectiveIds(draft.meta?.objectiveIds),
-    situationIds: normalizeSubjectSituationIds(draft.meta?.situationIds),
-    relations: Array.isArray(draft.meta?.relations) ? draft.meta.relations.map((value) => String(value || "")).filter(Boolean) : []
+    assignees: Array.isArray(formState.meta?.assignees) ? formState.meta.assignees.map((value) => String(value || "").trim()).filter(Boolean) : [],
+    labels: normalizeSubjectLabels(formState.meta?.labels),
+    objectiveIds: normalizeSubjectObjectiveIds(formState.meta?.objectiveIds),
+    situationIds: normalizeSubjectSituationIds(formState.meta?.situationIds),
+    relations: Array.isArray(formState.meta?.relations) ? formState.meta.relations.map((value) => String(value || "").trim()).filter(Boolean) : []
   };
 
-  persistRunBucket((bucket) => {
-    bucket.customSubjects = Array.isArray(bucket.customSubjects) ? bucket.customSubjects : [];
-    bucket.customSubjects.unshift({
-      id: subjectId,
-      title,
-      status: "open",
-      priority: "P3",
-      agent: "human",
-      raw: {
-        created_by: String(store.user?.id || "human"),
-        created_at: nowIso()
-      },
-      avis: []
-    });
-    bucket.subjectMeta = bucket.subjectMeta && typeof bucket.subjectMeta === "object" ? bucket.subjectMeta : {};
-    bucket.subjectMeta.sujet = bucket.subjectMeta.sujet && typeof bucket.subjectMeta.sujet === "object" ? bucket.subjectMeta.sujet : {};
-    bucket.subjectMeta.sujet[subjectId] = {
-      ...(bucket.subjectMeta.sujet[subjectId] || {}),
-      assignees: nextMeta.assignees,
-      objectiveIds: nextMeta.objectiveIds,
-      situationIds: nextMeta.situationIds,
-      relations: nextMeta.relations
-    };
-  });
+  const description = String(formState.description || "").trim();
 
-  setEntityDescriptionState("sujet", subjectId, {
-    body: String(draft.description || "").trim(),
-    author: firstNonEmpty(store.user?.name, store.user?.firstName, "human"),
-    agent: "human",
-    avatar_type: "human",
-    avatar_initial: "H"
-  }, { actor: "Human", agent: "human" });
-
-  setSubjectObjectiveIds(subjectId, nextMeta.objectiveIds);
-  store.situationsView.selectedSujetId = subjectId;
-  store.situationsView.selectedSubjectId = subjectId;
-  store.situationsView.selectedSituationId = nextMeta.situationIds[0] || store.situationsView.selectedSituationId || null;
-  store.projectSubjectsView.selectedSujetId = subjectId;
-  store.projectSubjectsView.selectedSubjectId = subjectId;
-  store.projectSubjectsView.selectedSituationId = nextMeta.situationIds[0] || store.projectSubjectsView.selectedSituationId || null;
   store.situationsView.createSubjectForm.validationError = "";
-  return { ok: true, subjectId };
+  store.situationsView.createSubjectForm.isSubmitting = true;
+
+  try {
+    const createdSubject = await createManualSubject({
+      title,
+      subjectType: "explicit_problem"
+    });
+
+    const subjectId = String(createdSubject?.id || "").trim();
+    if (!subjectId) {
+      throw new Error("Le backend n'a pas renvoyé d'identifiant de sujet.");
+    }
+
+    if (nextMeta.assignees.length) {
+      await replaceSubjectAssigneesInSupabase(subjectId, nextMeta.assignees);
+    }
+
+    const labelIds = resolveDraftLabelIds(nextMeta.labels);
+    if (labelIds.length) {
+      await replaceSubjectLabelsInSupabase(subjectId, labelIds);
+    }
+
+    if (nextMeta.situationIds.length) {
+      await replaceSubjectSituationsInSupabase(subjectId, nextMeta.situationIds);
+    }
+
+    if (nextMeta.objectiveIds.length) {
+      await replaceSubjectObjectivesInSupabase(subjectId, nextMeta.objectiveIds);
+    }
+
+    if (description) {
+      await updateSubjectDescriptionInSupabase({
+        subjectId,
+        description
+      });
+    }
+
+    await reloadSubjectsFromSupabase(getSubjectsCurrentRoot(), {
+      rerender: false,
+      updateModal: false
+    });
+
+    const persistedSubject = getNestedSujet(subjectId);
+    const selectedSituationId = String(
+      persistedSubject?.situation_id
+      || persistedSubject?.situationId
+      || nextMeta.situationIds[0]
+      || store.situationsView.selectedSituationId
+      || ""
+    ).trim() || null;
+
+    store.situationsView.selectedSujetId = subjectId;
+    store.situationsView.selectedSubjectId = subjectId;
+    store.situationsView.selectedSituationId = selectedSituationId;
+    store.projectSubjectsView.selectedSujetId = subjectId;
+    store.projectSubjectsView.selectedSubjectId = subjectId;
+    store.projectSubjectsView.selectedSituationId = selectedSituationId;
+
+    return { ok: true, subjectId };
+  } catch (error) {
+    const message = String(error?.message || error || "Erreur inconnue");
+    store.situationsView.createSubjectForm.validationError = `Création du sujet impossible : ${message}`;
+    return { ok: false, reason: "create-failed", error };
+  } finally {
+    if (store.situationsView?.createSubjectForm && typeof store.situationsView.createSubjectForm === "object") {
+      store.situationsView.createSubjectForm.isSubmitting = false;
+    }
+  }
 }
 
 function normalizeSujetKanbanStatus(value) {
@@ -2854,12 +2886,12 @@ function renderCreateSubjectFormHtml() {
             <div class="subject-create-footer__left">
               <label class="subject-create-checkbox">
                 <input type="checkbox" data-create-subject-create-more ${form.createMore ? "checked" : ""}>
-                <span>Create more</span>
+                <span>En ajouter d'autres</span>
               </label>
             </div>
             <div class="subject-create-footer__right">
-              <button type="button" class="gh-btn" data-create-subject-cancel>Cancel</button>
-              <button type="button" class="gh-btn gh-btn--primary" data-create-subject-submit>Create</button>
+              <button type="button" class="gh-btn" data-create-subject-cancel>Annuler</button>
+              <button type="button" class="gh-btn gh-btn--primary" data-create-subject-submit ${form.isSubmitting ? "disabled" : ""}>${form.isSubmitting ? "Création..." : "Ajouter"}</button>
             </div>
           </div>
         </div>
