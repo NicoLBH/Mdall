@@ -198,11 +198,17 @@ export function createProjectSubjectsState({ store }) {
         query: "",
         activeKey: "",
         showClosedSituations: false,
-        relationsView: "menu"
+        relationsView: "menu",
+        subissueActionSubjectId: "",
+        subissueActionScopeHost: "main",
+        subissueActionIntent: ""
       };
     }
     if (typeof v.subjectMetaDropdown.showClosedSituations !== "boolean") v.subjectMetaDropdown.showClosedSituations = false;
     if (typeof v.subjectMetaDropdown.relationsView !== "string") v.subjectMetaDropdown.relationsView = "menu";
+    if (typeof v.subjectMetaDropdown.subissueActionSubjectId !== "string") v.subjectMetaDropdown.subissueActionSubjectId = "";
+    if (typeof v.subjectMetaDropdown.subissueActionScopeHost !== "string") v.subjectMetaDropdown.subissueActionScopeHost = "main";
+    if (typeof v.subjectMetaDropdown.subissueActionIntent !== "string") v.subjectMetaDropdown.subissueActionIntent = "";
     if (!v.subjectKanbanDropdown || typeof v.subjectKanbanDropdown !== "object") {
       v.subjectKanbanDropdown = {
         subjectId: "",
