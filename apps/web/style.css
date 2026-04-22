@@ -10711,9 +10711,12 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
 }
 .subject-create-layout--subissue .subject-meta-controls{
   margin:0;
+  flex-direction:row;
+  flex-wrap:wrap;
 }
 .subject-create-layout--subissue .subject-meta-controls--create{
   display:flex;
+  flex-direction:row;
   gap:8px;
   flex-wrap:wrap;
 }
@@ -10723,11 +10726,11 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
 }
 .subject-create-subissue-modal__dialog{
   width:min(980px, calc(100vw - 48px));
-  position:absolute;
-  top:50%;
-  left:50%;
-  margin:0;
-  transform:translate(-50%, -50%);
+  position:absolute !important;
+  top:50% !important;
+  left:50% !important;
+  margin:0 !important;
+  transform:translate(-50%, -50%) !important;
   max-height:calc(100vh - 48px);
 }
 .subject-create-subissue-modal__body{
@@ -10741,9 +10744,10 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
   width:min(700px, 100%);
 }
 .subject-create-layout--subissue .comment-composer--create-subject .comment-composer__textarea{
-  width:min(700px, 100%);
-  min-height:326px;
-  height:326px;
+  width:min(700px, 100%) !important;
+  min-height:326px !important;
+  height:326px !important;
+  max-height:326px !important;
 }
 
 .comment-composer--create-subject{

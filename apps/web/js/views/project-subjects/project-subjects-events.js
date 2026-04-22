@@ -112,6 +112,7 @@ export function createProjectSubjectsEvents(config) {
   let modalEventsBound = false;
   let subjectsTabResetBound = false;
   let descriptionVersionsPositionBound = false;
+  let isCreateSubjectSubmitHandling = false;
 
   function getTextareaAutosizeMeta(textarea) {
     const type = textarea?.matches?.("#humanCommentBox")
@@ -137,6 +138,12 @@ export function createProjectSubjectsEvents(config) {
   function runAutosize(textarea, cause = "manual") {
     if (!textarea) return null;
     const { type, minHeightFallback, comfortLines } = getTextareaAutosizeMeta(textarea);
+    const isSubissueCreateTextarea = type === "create-subject"
+      && String(store.situationsView?.createSubjectForm?.mode || "").trim().toLowerCase() === "subissue";
+    if (isSubissueCreateTextarea) {
+      textarea.style.height = "";
+      return null;
+    }
     return autosizeTextarea(textarea, {
       minHeightFallback,
       comfortLines,
@@ -827,7 +834,9 @@ export function createProjectSubjectsEvents(config) {
 
   function handleCreateSubjectSubmit(interactionRoot) {
     if (!store.situationsView.createSubjectForm?.isOpen) return false;
+    if (isCreateSubjectSubmitHandling) return true;
     if (store.situationsView.createSubjectForm?.isSubmitting) return true;
+    isCreateSubjectSubmitHandling = true;
     const formContext = store.situationsView.createSubjectForm || {};
     const formMode = String(formContext.mode || "").trim().toLowerCase() === "subissue" ? "subissue" : "standard";
     const keepCreateMore = !!formContext.createMore;
@@ -880,6 +889,8 @@ export function createProjectSubjectsEvents(config) {
     })().catch((error) => {
       showError(`Création du sujet impossible : ${String(error?.message || error || "Erreur inconnue")}`);
       rerenderPanels();
+    }).finally(() => {
+      isCreateSubjectSubmitHandling = false;
     });
     return true;
   }
