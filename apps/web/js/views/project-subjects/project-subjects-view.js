@@ -16,6 +16,7 @@ import {
 import { extractStructuredMentions } from "../../utils/subject-mentions.js";
 import { renderCommentComposer } from "../ui/comment-composer.js";
 import { renderSubjectMarkdownToolbar } from "../ui/subject-rich-editor.js";
+import { renderSubjectAttachmentsPreviewList } from "./project-subjects-attachments-ui.js";
 export function createProjectSubjectsView(deps) {
   const {
     store,
