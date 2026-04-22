@@ -19,6 +19,7 @@ import {
   replaceSubjectObjectives as replaceSubjectObjectivesInSupabase,
   updateSubjectDescription as updateSubjectDescriptionInSupabase,
   updateSubjectTitle as updateSubjectTitleInSupabase,
+  createManualSubject as createManualSubjectInSupabase,
   loadSubjectDescriptionVersions as loadSubjectDescriptionVersionsInSupabase
 } from "../services/project-subjects-supabase.js";
 import { loadSituationsForCurrentProject, addSubjectToSituation, removeSubjectFromSituation } from "../services/project-situations-supabase.js";
@@ -851,7 +852,13 @@ const projectSubjectsView = createProjectSubjectsView({
   getSelectionForScope: (...args) => getSelectionForScope(...args),
   getScopedSelection: (...args) => getScopedSelection(...args),
   getInlineReplyUiState: (...args) => getInlineReplyUiState(...args),
-  ensureTimelineLoadedForSelection: (...args) => ensureTimelineLoadedForSelection(...args)
+  ensureTimelineLoadedForSelection: (...args) => ensureTimelineLoadedForSelection(...args),
+  createManualSubject: (...args) => createManualSubjectInSupabase(...args),
+  replaceSubjectAssigneesInSupabase: (...args) => replaceSubjectAssigneesInSupabase(...args),
+  replaceSubjectLabelsInSupabase: (...args) => replaceSubjectLabelsInSupabase(...args),
+  replaceSubjectSituationsInSupabase: (...args) => replaceSubjectSituationsInSupabase(...args),
+  replaceSubjectObjectivesInSupabase: (...args) => replaceSubjectObjectivesInSupabase(...args),
+  updateSubjectDescriptionInSupabase: (...args) => updateSubjectDescriptionInSupabase(...args)
 });
 
 const {
