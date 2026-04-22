@@ -1382,6 +1382,7 @@ export async function updateSubjectTitle({ subjectId, title } = {}) {
 
 export async function loadSubjectDescriptionVersions(subjectId, options = {}) {
   const logPrefix = "[subject-description-versions]";
+  const debugEnabled = isSubjectDescriptionDebugEnabled();
   const normalizedSubjectId = normalizeUuid(subjectId);
   if (!normalizedSubjectId) throw new Error("subjectId is required");
   const limit = Math.min(100, Math.max(1, Number(options?.limit || 50)));
@@ -1425,8 +1426,8 @@ export async function loadSubjectDescriptionVersions(subjectId, options = {}) {
   }
   const versionRows = await versionsResponse.json().catch(() => []);
   const rows = Array.isArray(versionRows) ? versionRows : [];
-  if (!rows.length) {
-    console.warn(`${logPrefix} fetch succeeded but returned no version rows`, {
+  if (!rows.length && debugEnabled) {
+    console.debug(`${logPrefix} fetch succeeded but returned no version rows`, {
       timestamp: new Date().toISOString(),
       subjectId: normalizedSubjectId
     });

@@ -98,7 +98,6 @@ export function createProjectSubjectsView(deps) {
     replaceSubjectSituationsInSupabase,
     replaceSubjectObjectivesInSupabase,
     updateSubjectDescriptionInSupabase,
-    loadSubjectDescriptionVersionsInSupabase,
     uploadAttachmentFile
   } = deps;
 
@@ -696,9 +695,6 @@ async function createSubjectFromDraft() {
         description,
         uploadSessionId
       });
-      if (typeof loadSubjectDescriptionVersionsInSupabase === "function") {
-        await loadSubjectDescriptionVersionsInSupabase(subjectId);
-      }
     }
 
     await reloadSubjectsFromSupabase(getSubjectsCurrentRoot(), {

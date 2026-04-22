@@ -853,13 +853,20 @@ export function createProjectSubjectsEvents(config) {
       descriptionLength,
       didCallUpdateSubjectDescription: descriptionLength > 0 || (Array.isArray(formContext.attachments) && formContext.attachments.length > 0)
     });
+    const rerenderSubmitScope = () => {
+      if (interactionRoot && interactionRoot.isConnected) {
+        rerenderScope(interactionRoot);
+        return;
+      }
+      rerenderPanels();
+    };
 
     (async () => {
       const submitPromise = createSubjectFromDraft();
-      rerenderPanels();
+      rerenderSubmitScope();
       const result = await submitPromise;
       if (!result.ok) {
-        rerenderPanels();
+        rerenderSubmitScope();
         return;
       }
       console.debug("[create-subissue-flow] submit result", {
@@ -874,7 +881,7 @@ export function createProjectSubjectsEvents(config) {
         if (parentSubjectId && typeof setSubjectParent === "function") {
           const linked = await setSubjectParent(result.subjectId, parentSubjectId, { root: interactionRoot, skipRerender: true });
           if (!linked) {
-            rerenderPanels();
+            rerenderSubmitScope();
             return;
           }
         }
@@ -914,7 +921,7 @@ export function createProjectSubjectsEvents(config) {
       rerenderPanels();
     })().catch((error) => {
       showError(`Création du sujet impossible : ${String(error?.message || error || "Erreur inconnue")}`);
-      rerenderPanels();
+      rerenderSubmitScope();
     }).finally(() => {
       isCreateSubjectSubmitHandling = false;
     });
