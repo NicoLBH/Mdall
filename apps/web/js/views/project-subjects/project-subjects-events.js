@@ -112,6 +112,33 @@ export function createProjectSubjectsEvents(config) {
   let subjectsTabResetBound = false;
   let descriptionVersionsPositionBound = false;
 
+  function getTextareaAutosizeMeta(textarea) {
+    const type = textarea?.matches?.("#humanCommentBox")
+      ? "main-comment"
+      : textarea?.matches?.("[data-description-draft]")
+        ? "description"
+        : textarea?.matches?.("[data-thread-edit-draft]")
+          ? "inline-edit"
+          : textarea?.matches?.("[data-thread-reply-draft]")
+            ? "inline-reply"
+            : "unknown";
+    const minHeightFallback = type === "main-comment" ? 170 : 110;
+    return { type, minHeightFallback };
+  }
+
+  function runAutosize(textarea, cause = "manual") {
+    if (!textarea) return null;
+    const { type, minHeightFallback } = getTextareaAutosizeMeta(textarea);
+    return autosizeTextarea(textarea, {
+      minHeightFallback,
+      comfortLines: 3,
+      log: true,
+      logPrefix: "[textarea-autosize]",
+      cause,
+      textareaType: type
+    });
+  }
+
   function isSubissuesDndDebugEnabled() {
     try {
       const search = String(window?.location?.search || "");
@@ -631,31 +658,6 @@ export function createProjectSubjectsEvents(config) {
 
   function wireDetailsInteractive(root) {
     if (!root) return;
-    const getTextareaAutosizeMeta = (textarea) => {
-      const type = textarea?.matches?.("#humanCommentBox")
-        ? "main-comment"
-        : textarea?.matches?.("[data-description-draft]")
-          ? "description"
-          : textarea?.matches?.("[data-thread-edit-draft]")
-            ? "inline-edit"
-            : textarea?.matches?.("[data-thread-reply-draft]")
-              ? "inline-reply"
-              : "unknown";
-      const minHeightFallback = type === "main-comment" ? 170 : 110;
-      return { type, minHeightFallback };
-    };
-    const runAutosize = (textarea, cause = "manual") => {
-      if (!textarea) return null;
-      const { type, minHeightFallback } = getTextareaAutosizeMeta(textarea);
-      return autosizeTextarea(textarea, {
-        minHeightFallback,
-        comfortLines: 3,
-        log: true,
-        logPrefix: "[textarea-autosize]",
-        cause,
-        textareaType: type
-      });
-    };
     const isAutosizeDebugEnabled = () => typeof window !== "undefined" && window?.__MDALL_DEBUG_TEXTAREA_AUTOSIZE__ === true;
     const isElementMeasurable = (element) => {
       if (!element || element.isConnected === false) return false;
@@ -5235,7 +5237,9 @@ export function createProjectSubjectsEvents(config) {
       if (createSubjectDescription && store.situationsView.createSubjectForm?.isOpen) {
         store.situationsView.createSubjectForm.description = String(createSubjectDescription.value || "");
         runAutosize(createSubjectDescription, "create-subject-input");
-        void syncInlineAutocomplete(createSubjectDescription, "create-subject");
+        if (typeof syncInlineAutocomplete === "function") {
+          void syncInlineAutocomplete(createSubjectDescription, "create-subject");
+        }
         if (store.situationsView.createSubjectForm.previewMode) rerenderPanels();
         return;
       }
