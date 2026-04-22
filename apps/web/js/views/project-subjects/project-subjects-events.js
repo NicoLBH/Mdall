@@ -5234,6 +5234,8 @@ export function createProjectSubjectsEvents(config) {
       const createSubjectDescription = event.target.closest?.("[data-create-subject-description]");
       if (createSubjectDescription && store.situationsView.createSubjectForm?.isOpen) {
         store.situationsView.createSubjectForm.description = String(createSubjectDescription.value || "");
+        runAutosize(createSubjectDescription, "create-subject-input");
+        void syncInlineAutocomplete(createSubjectDescription, "create-subject");
         if (store.situationsView.createSubjectForm.previewMode) rerenderPanels();
         return;
       }
