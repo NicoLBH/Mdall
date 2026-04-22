@@ -765,6 +765,52 @@ export function createProjectSubjectsEvents(config) {
       };
     });
 
+    root.querySelectorAll("[data-action='open-subissue-action-menu']").forEach((btn) => {
+      btn.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const targetSubjectId = String(btn.dataset.subjectId || scopedSelection?.item?.id || "");
+        if (!targetSubjectId) return;
+        const dropdown = getSubjectsViewState().subjectMetaDropdown || {};
+        const isAlreadyOpen = dropdown.field === "subissue-actions" && String(dropdown.subissueActionSubjectId || "") === targetSubjectId;
+        if (isAlreadyOpen) {
+          dropdownController().closeMeta();
+        } else {
+          dropdownController().closeKanban();
+          dropdownController().openMeta({ field: "subissue-actions" });
+          dropdown.subissueActionSubjectId = targetSubjectId;
+          dropdown.subissueActionScopeHost = isDrilldownScope ? "drilldown" : "main";
+          dropdown.subissueActionIntent = "";
+        }
+        rerenderScope(root);
+        if (!isAlreadyOpen) {
+          syncSubjectMetaDropdownPosition(getSubjectMetaScopeRoot());
+        }
+      };
+    });
+
+    root.querySelectorAll("[data-action='open-create-subissue']").forEach((btn) => {
+      btn.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        dropdownController().closeMeta();
+        const dropdown = getSubjectsViewState().subjectMetaDropdown || {};
+        dropdown.subissueActionIntent = "create";
+        rerenderScope(root);
+      };
+    });
+
+    root.querySelectorAll("[data-action='open-link-existing-subissue']").forEach((btn) => {
+      btn.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        dropdownController().closeMeta();
+        const dropdown = getSubjectsViewState().subjectMetaDropdown || {};
+        dropdown.subissueActionIntent = "link-existing";
+        rerenderScope(root);
+      };
+    });
+
     root.querySelectorAll(".subject-meta-field").forEach((fieldRoot) => {
       bindSubjectSituationFieldInteractions(root, fieldRoot);
     });

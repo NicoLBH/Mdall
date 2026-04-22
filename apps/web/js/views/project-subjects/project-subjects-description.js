@@ -857,7 +857,7 @@ export function createProjectSubjectsDescription(config = {}) {
     return host;
   }
 
-  function renderDescriptionCard(selection) {
+  function renderDescriptionCard(selection, options = {}) {
     const entityType = getSelectionEntityType(selection.type);
     const entityId = selection.item.id;
     const versionsUi = ensureDescriptionVersionsUiState();
@@ -993,6 +993,7 @@ export function createProjectSubjectsDescription(config = {}) {
       `;
 
     const displayIdentity = firstVersionIdentity || identity;
+    const footerActionsHtml = String(options.footerActionsHtml || "").trim();
     return `
       <div class="gh-comment gh-comment--description">
         ${displayIdentity.avatarHtml
@@ -1001,6 +1002,7 @@ export function createProjectSubjectsDescription(config = {}) {
         <div class="gh-comment-box">
           ${headerHtml}
           ${bodyHtml}
+          ${footerActionsHtml}
         </div>
       </div>
     `;

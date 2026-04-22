@@ -1993,6 +1993,31 @@ function renderSubjectMetaDropdown(subject, field) {
     `;
   }
 
+  if (field === "subissue-actions") {
+    return `
+      <div class="subject-meta-dropdown gh-menu gh-menu--open" role="menu">
+        <div class="subject-meta-dropdown__body">
+          <div class="select-menu__section">
+            <button type="button" class="select-menu__item subject-meta-relations-menu__item" role="menuitem" data-action="open-create-subissue">
+              <span class="select-menu__item-mainrow">
+                <span class="select-menu__item-content">
+                  <span class="select-menu__item-title">Créer un sous-sujet</span>
+                </span>
+              </span>
+            </button>
+            <button type="button" class="select-menu__item subject-meta-relations-menu__item" role="menuitem" data-action="open-link-existing-subissue">
+              <span class="select-menu__item-mainrow">
+                <span class="select-menu__item-content">
+                  <span class="select-menu__item-title">Ajouter un sujet existant</span>
+                </span>
+              </span>
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   if (field === "objectives") {
     const { openItems, closedItems } = buildSubjectMetaMenuItems(subject, field);
     return `
@@ -2167,6 +2192,30 @@ function renderSubissueAssigneesCellHtml(subjectId) {
   `;
 }
 
+function renderAddSubissueActionButton(subjectId, options = {}) {
+  const normalizedSubjectId = String(subjectId || "");
+  if (!normalizedSubjectId) return "";
+  const dropdown = getSubjectsViewState().subjectMetaDropdown || {};
+  const isOpen = String(dropdown.field || "") === "subissue-actions"
+    && String(dropdown.subissueActionSubjectId || "") === normalizedSubjectId;
+  const placement = String(options.placement || "").trim().toLowerCase() === "subissues" ? "subissues" : "description";
+  return `
+    <div class="subject-add-subissue-action subject-add-subissue-action--${escapeHtml(placement)}">
+      <button
+        type="button"
+        class="gh-btn gh-btn--md subject-add-subissue-action__trigger ${isOpen ? "is-open" : ""}"
+        data-action="open-subissue-action-menu"
+        data-subject-id="${escapeHtml(normalizedSubjectId)}"
+        data-subject-meta-anchor="subissue-actions"
+        aria-expanded="${isOpen ? "true" : "false"}"
+      >
+        <span>Ajouter sous-sujet</span>
+        <span class="subject-add-subissue-action__chevron" aria-hidden="true">${svgIcon("chevron-down", { className: "octicon octicon-chevron-down" })}</span>
+      </button>
+    </div>
+  `;
+}
+
 function renderSubIssuesForSujet(sujet, options = {}) {
   ensureViewUiState();
   const sujetRowClass = options.sujetRowClass || "js-row-sujet";
@@ -2266,7 +2315,7 @@ function renderSubIssuesForSujet(sujet, options = {}) {
     title: "Sous-sujets",
     leftMetaHtml: subissuesHeadCountsHtml(childSubjects),
     rightMetaHtml: "",
-    bodyHtml: body,
+    bodyHtml: `${body}${renderAddSubissueActionButton(sujet?.id, { placement: "subissues" })}`,
     isOpen: options.isOpen !== false
   });
 }
@@ -3169,6 +3218,8 @@ function getObjectiveById(objectiveId) {
     renderDetailedMetaForSelection,
     renderSubjectMetaControls,
     renderSubjectMetaFieldValue,
+    getChildSubjectList,
+    renderAddSubissueActionButton,
     renderSubIssuesForSujet,
     renderSubIssuesForSituation,
     closeSubjectMetaDropdown,
