@@ -20,8 +20,8 @@ const viewSource = fs.readFileSync(viewPath, "utf8");
 const statePath = path.resolve(__dirname, "./project-subjects-state.js");
 const stateSource = fs.readFileSync(statePath, "utf8");
 
-test("le header normal de détail sujet expose le bouton Nouveau sujet via actionsHtml", () => {
-  assert.match(detailsRendererSource, /data-action="open-create-subject-from-detail"/);
+test("le header normal de détail sujet expose le bouton Nouveau sujet au même niveau que Modifier", () => {
+  assert.match(detailsRendererSource, /<div class="subject-title-display__actions">[\s\S]*data-action="edit-subject-title"[\s\S]*data-action="open-create-subject-from-detail"/);
   assert.match(detailsRendererSource, /class="gh-btn gh-action__main gh-btn--primary gh-btn--md"/);
   assert.match(detailControllerSource, /showCreateFromDetailAction: true/);
 });
