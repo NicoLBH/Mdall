@@ -460,6 +460,7 @@ const projectSubjectsEvents = createProjectSubjectsEvents({
   getComposerAttachmentsState: (...args) => getComposerAttachmentsState(...args),
   mdToHtml,
   listCollaboratorsForMentions: (...args) => subjectMessagesService.listCollaboratorsForMentions(...args),
+  ensureProjectCollaboratorsLoaded: (...args) => ensureSubjectsCollaboratorsLoaded(...args),
   uploadAttachmentFile: (...args) => subjectMessagesService.uploadAttachmentFile(...args),
   removeTemporaryAttachment: (...args) => subjectMessagesService.removeTemporaryAttachment(...args),
   getNestedSujet: (...args) => getNestedSujet(...args),
@@ -944,17 +945,21 @@ let collaboratorsHydrationInFlight = null;
 
 function ensureSubjectsCollaboratorsLoaded() {
   const collaborators = Array.isArray(store.projectForm?.collaborators) ? store.projectForm.collaborators : [];
-  if (collaborators.length || collaboratorsHydrationInFlight) return;
+  if (collaborators.length) return Promise.resolve(collaborators);
+  if (collaboratorsHydrationInFlight) return collaboratorsHydrationInFlight;
   collaboratorsHydrationInFlight = syncProjectCollaboratorsFromSupabase({ force: false })
     .then(() => {
       rerenderPanels();
+      return Array.isArray(store.projectForm?.collaborators) ? store.projectForm.collaborators : [];
     })
     .catch((error) => {
       console.warn("[project-subjects] collaborators preload failed", error);
+      return [];
     })
     .finally(() => {
       collaboratorsHydrationInFlight = null;
     });
+  return collaboratorsHydrationInFlight;
 }
 
 

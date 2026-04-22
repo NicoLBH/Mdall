@@ -100,6 +100,7 @@ export function createProjectSubjectsEvents(config) {
     getComposerAttachmentsState,
     mdToHtml,
     listCollaboratorsForMentions,
+    ensureProjectCollaboratorsLoaded,
     uploadAttachmentFile,
     removeTemporaryAttachment,
     getNestedSujet,
@@ -998,11 +999,7 @@ export function createProjectSubjectsEvents(config) {
       else syncAutocompletePopups();
     };
 
-    const AUTOCOMPLETE_LOG_PREFIX = "[subject-autocomplete]";
-
-    const logAutocompleteEvent = (eventName, payload = {}) => {
-      console.log(`${AUTOCOMPLETE_LOG_PREFIX} ${eventName}`, payload);
-    };
+    const logAutocompleteEvent = () => {};
 
     const getTextareaSelector = ({ composerKey = "main", messageId = "" } = {}) => {
       if (composerKey === "main") return "#humanCommentBox";
@@ -1285,6 +1282,7 @@ export function createProjectSubjectsEvents(config) {
     let mentionCollaborators = [];
     let mentionCollaboratorsLoaded = false;
     let mentionLoadPromise = null;
+    let mentionCacheProjectKey = "";
 
     const getMentionState = () => {
       if (typeof getMentionUiState === "function") return getMentionUiState();
@@ -1318,33 +1316,161 @@ export function createProjectSubjectsEvents(config) {
       else syncAutocompletePopups();
     };
 
-    const ensureMentionCollaboratorsLoaded = async () => {
-      if (mentionCollaboratorsLoaded) return mentionCollaborators;
-      if (mentionLoadPromise) return mentionLoadPromise;
-      const selection = getScopedSelection(root);
-      const projectId = String(
-        selection?.item?.project_id
-        || selection?.item?.projectId
-        || store?.projectForm?.id
+    const isSubjectMentionsDebugEnabled = () => {
+      try {
+        const search = String(window?.location?.search || "");
+        if (search.includes("debugSubjectMentions=1")) return true;
+        const storageValue = String(window?.localStorage?.getItem?.("mdall:debug-subject-mentions") || "").trim().toLowerCase();
+        const sessionStorageValue = String(window?.sessionStorage?.getItem?.("mdall:debug-subject-mentions") || "").trim().toLowerCase();
+        const globalFlag = String(window?.__MDALL_DEBUG_SUBJECT_MENTIONS__ || "").trim().toLowerCase();
+        return storageValue === "1" || storageValue === "true" || sessionStorageValue === "1" || sessionStorageValue === "true" || globalFlag === "1" || globalFlag === "true";
+      } catch {
+        return false;
+      }
+    };
+
+    const debugSubjectMentions = (eventName, payload = {}) => {
+      if (!isSubjectMentionsDebugEnabled()) return;
+      console.debug(`[subject-mentions] ${eventName}`, payload);
+    };
+
+    const resolveMentionProjectKey = () => {
+      const scopedSelection = getScopedSelection(root);
+      const projectKey = String(
+        store?.projectForm?.id
         || store?.projectForm?.projectId
+        || store?.currentProjectId
+        || store?.currentProject?.id
         || store?.project?.id
+        || scopedSelection?.item?.project_id
+        || scopedSelection?.item?.projectId
         || ""
       ).trim();
-      if (!projectId || typeof listCollaboratorsForMentions !== "function") {
+      debugSubjectMentions("resolve source", {
+        projectKey,
+        scopedSelectionType: String(scopedSelection?.type || ""),
+        hasProjectFormCollaborators: Array.isArray(store?.projectForm?.collaborators),
+        projectFormCollaboratorsCount: Array.isArray(store?.projectForm?.collaborators) ? store.projectForm.collaborators.length : 0
+      });
+      return projectKey;
+    };
+
+    const resetMentionCollaboratorsCache = (reason = "manual", projectKey = "") => {
+      mentionCollaborators = [];
+      mentionCollaboratorsLoaded = false;
+      mentionLoadPromise = null;
+      mentionCacheProjectKey = String(projectKey || "").trim();
+      debugSubjectMentions("cache reset", { reason, projectKey: mentionCacheProjectKey });
+    };
+
+    const normalizeMentionCollaborator = (entry = {}) => {
+      const personId = String(entry?.personId || entry?.person_id || entry?.id || "").trim();
+      if (!personId) return null;
+      const userId = String(entry?.userId || entry?.linkedUserId || entry?.collaborator_user_id || "").trim();
+      const email = String(entry?.email || entry?.collaborator_email || "").trim();
+      const label = String(
+        entry?.label
+        || entry?.name
+        || entry?.full_name
+        || [entry?.firstName || entry?.first_name, entry?.lastName || entry?.last_name].filter(Boolean).join(" ")
+        || email
+        || "Utilisateur"
+      ).trim();
+      return {
+        personId,
+        userId,
+        email,
+        label,
+        roleGroupCode: String(entry?.roleGroupCode || entry?.role_group_code || "").trim().toLowerCase(),
+        roleGroupLabel: String(entry?.roleGroupLabel || entry?.role_group_label || "").trim()
+      };
+    };
+
+    const buildMentionSuggestions = (entries = []) => entries
+      .filter((entry) => String(entry?.status || "Actif").trim().toLowerCase() !== "retiré")
+      .map((entry) => normalizeMentionCollaborator(entry))
+      .filter((entry) => !!entry?.personId);
+
+    const syncMentionCollaboratorsFromProjectStore = ({ projectKey = "", composerKey = "" } = {}) => {
+      const storeRows = Array.isArray(store?.projectForm?.collaborators) ? store.projectForm.collaborators : [];
+      if (!storeRows.length) return [];
+      const normalized = buildMentionSuggestions(storeRows);
+      mentionCollaborators = normalized;
+      mentionCollaboratorsLoaded = true;
+      mentionCacheProjectKey = String(projectKey || "").trim();
+      debugSubjectMentions("use store.projectForm.collaborators", {
+        composerKey,
+        projectKey: mentionCacheProjectKey,
+        collaboratorsCount: storeRows.length,
+        suggestionsCount: normalized.length
+      });
+      return normalized;
+    };
+
+    const ensureMentionCollaboratorsLoaded = async ({ composerKey = "" } = {}) => {
+      const projectKey = resolveMentionProjectKey();
+      if (projectKey !== mentionCacheProjectKey) {
+        resetMentionCollaboratorsCache("project-changed", projectKey);
+      }
+      if (mentionCollaboratorsLoaded) return mentionCollaborators;
+      if (mentionLoadPromise) return mentionLoadPromise;
+
+      const cachedFromStore = syncMentionCollaboratorsFromProjectStore({ projectKey, composerKey });
+      if (cachedFromStore.length) return cachedFromStore;
+
+      if (typeof ensureProjectCollaboratorsLoaded === "function") {
+        debugSubjectMentions("fetch collaborators fallback", {
+          composerKey,
+          projectKey,
+          source: "ensureProjectCollaboratorsLoaded"
+        });
+        await Promise.resolve(ensureProjectCollaboratorsLoaded());
+        const hydratedFromStore = syncMentionCollaboratorsFromProjectStore({ projectKey, composerKey });
+        if (hydratedFromStore.length) return hydratedFromStore;
+      }
+
+      if (!projectKey || typeof listCollaboratorsForMentions !== "function") {
+        debugSubjectMentions("fetch collaborators fallback", {
+          composerKey,
+          projectKey,
+          source: "none",
+          reason: "missing-project-or-provider"
+        });
         mentionCollaborators = [];
         mentionCollaboratorsLoaded = true;
+        mentionCacheProjectKey = projectKey;
         return mentionCollaborators;
       }
-      mentionLoadPromise = listCollaboratorsForMentions(projectId)
+      debugSubjectMentions("fetch collaborators fallback", {
+        composerKey,
+        projectKey,
+        source: "listCollaboratorsForMentions"
+      });
+      mentionLoadPromise = listCollaboratorsForMentions(projectKey)
         .then((rows) => {
-          mentionCollaborators = Array.isArray(rows) ? rows : [];
+          mentionCollaborators = buildMentionSuggestions(Array.isArray(rows) ? rows : []);
           mentionCollaboratorsLoaded = true;
+          mentionCacheProjectKey = projectKey;
+          debugSubjectMentions("suggestions computed", {
+            composerKey,
+            projectKey,
+            collaboratorsCount: Array.isArray(rows) ? rows.length : 0,
+            suggestionsCount: mentionCollaborators.length,
+            source: "listCollaboratorsForMentions"
+          });
           return mentionCollaborators;
         })
         .catch((error) => {
           console.warn("[subject-mentions] collaborators load failed", error);
+          debugSubjectMentions("fetch collaborators fallback", {
+            composerKey,
+            projectKey,
+            source: "listCollaboratorsForMentions",
+            error: String(error?.message || error || "")
+          });
           mentionCollaborators = [];
           mentionCollaboratorsLoaded = true;
+          mentionCacheProjectKey = projectKey;
           return mentionCollaborators;
         })
         .finally(() => {
@@ -1386,7 +1512,7 @@ export function createProjectSubjectsEvents(config) {
           caretStart: Number(textarea.selectionStart || 0),
           caretEnd: Number(textarea.selectionEnd || 0)
         });
-        void ensureMentionCollaboratorsLoaded().then(() => {
+        void ensureMentionCollaboratorsLoaded({ composerKey }).then(() => {
           const activeTextarea = getTextareaForComposerKey(composerKey);
           if (activeTextarea) void syncMentionPopupForTextarea(activeTextarea, composerKey, { forceOpen: true });
         });
@@ -1402,6 +1528,13 @@ export function createProjectSubjectsEvents(config) {
           ].some((field) => field.includes(query));
         })
         .slice(0, 8);
+      debugSubjectMentions("suggestions computed", {
+        composerKey,
+        projectKey: mentionCacheProjectKey,
+        query,
+        collaboratorsCount: mentionCollaborators.length,
+        suggestionsCount: suggestions.length
+      });
 
       mentionState.triggerStart = Number(context?.triggerStart ?? -1);
       mentionState.triggerEnd = Number(context?.triggerEnd ?? -1);
