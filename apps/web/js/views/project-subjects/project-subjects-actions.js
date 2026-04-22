@@ -188,6 +188,10 @@ export function createProjectSubjectsActions(config) {
       else rerenderPanels();
     }
 
+    if (subjectKey === DRAFT_SUBJECT_ID) {
+      return true;
+    }
+
     try {
       await replaceSubjectAssigneesInSupabase(subjectKey, nextIds);
       return true;
@@ -453,6 +457,10 @@ export function createProjectSubjectsActions(config) {
       if (options.root) rerenderScope(options.root);
     }
 
+    if (subjectKey === DRAFT_SUBJECT_ID) {
+      return true;
+    }
+
     try {
       await replaceSubjectSituationsInSupabase(subjectKey, nextIds);
       await loadSituationsForCurrentProject().catch(() => []);
@@ -517,6 +525,21 @@ export function createProjectSubjectsActions(config) {
     const labelValue = String(label || "").trim();
     const labelKey = normalizeSubjectLabelKey(labelValue);
     if (!subjectKey || !labelKey) return false;
+
+    if (subjectKey === DRAFT_SUBJECT_ID) {
+      const meta = getSubjectSidebarMeta(subjectKey);
+      const previousLabels = Array.isArray(meta.labels) ? [...meta.labels] : [];
+      const hasLabel = previousLabels.some((value) => normalizeSubjectLabelKey(value) === labelKey);
+      const nextLabels = hasLabel
+        ? previousLabels.filter((value) => normalizeSubjectLabelKey(value) !== labelKey)
+        : [...previousLabels, labelValue];
+      setSubjectLabels(subjectKey, nextLabels);
+      if (!options.skipRerender) {
+        if (options.root) rerenderScope(options.root);
+        else rerenderPanels();
+      }
+      return true;
+    }
 
     const labelDefinition = getSubjectLabelDefinition(labelValue);
     const labelId = String(labelDefinition?.id || "").trim();
@@ -630,6 +653,10 @@ export function createProjectSubjectsActions(config) {
     if (!options.skipRerender) {
       if (options.root) rerenderScope(options.root);
       else rerenderPanels();
+    }
+
+    if (subjectKey === DRAFT_SUBJECT_ID) {
+      return true;
     }
 
     try {

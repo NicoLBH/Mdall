@@ -225,9 +225,13 @@ export function createProjectSubjectsState({ store }) {
           situationIds: [],
           relations: []
         },
-        validationError: ""
+        validationError: "",
+        isSubmitting: false,
+        attachments: []
       };
     }
+    if (typeof v.createSubjectForm.isSubmitting !== "boolean") v.createSubjectForm.isSubmitting = false;
+    if (!Array.isArray(v.createSubjectForm.attachments)) v.createSubjectForm.attachments = [];
     return v;
   }
 

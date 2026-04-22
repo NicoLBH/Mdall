@@ -1178,6 +1178,53 @@ export async function replaceSubjectObjectives(subjectId, objectiveIds = []) {
   return nextObjectiveIds;
 }
 
+
+export async function createManualSubject({ projectId = "", title, subjectType = "explicit_problem" } = {}) {
+  const resolvedProjectId = normalizeUuid(await getResolvedProjectId(projectId));
+  if (!resolvedProjectId) throw new Error("projectId is required");
+
+  const nextTitle = String(title || "").trim();
+  if (!nextTitle) throw new Error("Le titre du sujet est obligatoire.");
+
+  const nextSubjectType = String(subjectType || "explicit_problem").trim() || "explicit_problem";
+
+  let actorPersonId = "";
+  try {
+    actorPersonId = normalizeUuid(await resolveCurrentUserDirectoryPersonId());
+  } catch (error) {
+    throw new Error(`create_manual_subject identity resolution failed: ${String(error?.message || error || "unknown identity resolution error")}`);
+  }
+  if (!actorPersonId) {
+    throw new Error("create_manual_subject identity resolution failed: no linked directory person found for current user");
+  }
+
+  let payload = null;
+  try {
+    payload = await rpcCall("create_manual_subject", {
+      p_project_id: resolvedProjectId,
+      p_title: nextTitle,
+      p_actor_person_id: actorPersonId,
+      p_subject_type: nextSubjectType
+    });
+  } catch (error) {
+    const statusCode = Number(error?.status || 0) || null;
+    const rawError = String(error?.rawBody || error?.message || error || "unknown error");
+    throw new Error(`Impossible de créer le sujet (${statusCode || "unknown"}): ${rawError}`);
+  }
+
+  const row = Array.isArray(payload) ? (payload[0] || {}) : (payload || {});
+  return {
+    id: normalizeUuid(row?.id),
+    project_id: normalizeUuid(row?.project_id || resolvedProjectId),
+    title: String(row?.title || nextTitle),
+    status: String(row?.status || "open"),
+    priority: String(row?.priority || "medium"),
+    created_at: String(row?.created_at || ""),
+    updated_at: String(row?.updated_at || ""),
+    subject_number: Number.isFinite(Number(row?.subject_number)) ? Number(row.subject_number) : null
+  };
+}
+
 export async function updateSubjectDescription({ subjectId, description, uploadSessionId = "" } = {}) {
   const debugEnabled = isSubjectDescriptionDebugEnabled();
   const debugRequestId = debugEnabled ? buildSubjectDescriptionDebugRequestId() : null;

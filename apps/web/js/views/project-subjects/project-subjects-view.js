@@ -14,6 +14,8 @@ import {
   syncSelectDropdownPosition
 } from "../ui/select-dropdown-controller.js";
 import { extractStructuredMentions } from "../../utils/subject-mentions.js";
+import { renderCommentComposer } from "../ui/comment-composer.js";
+import { renderSubjectMarkdownToolbar } from "../ui/subject-rich-editor.js";
 export function createProjectSubjectsView(deps) {
   const {
     store,
@@ -87,7 +89,13 @@ export function createProjectSubjectsView(deps) {
     addComment,
     getSelectionForScope,
     getScopedSelection,
-    ensureTimelineLoadedForSelection
+    ensureTimelineLoadedForSelection,
+    createManualSubject,
+    replaceSubjectAssigneesInSupabase,
+    replaceSubjectLabelsInSupabase,
+    replaceSubjectSituationsInSupabase,
+    replaceSubjectObjectivesInSupabase,
+    updateSubjectDescriptionInSupabase
   } = deps;
 
   const {
@@ -448,7 +456,10 @@ function resetCreateSubjectForm(options = {}) {
     previewMode: false,
     createMore: keepCreateMore ? !!previous.createMore : false,
     meta: buildDefaultDraftSubjectMeta(),
-    validationError: ""
+    validationError: "",
+    isSubmitting: false,
+    attachments: [],
+    attachments: []
   };
 }
 
@@ -467,7 +478,8 @@ function openCreateSubjectForm() {
     previewMode: false,
     createMore: previousCreateMore,
     meta: buildDefaultDraftSubjectMeta(),
-    validationError: ""
+    validationError: "",
+    isSubmitting: false
   };
 }
 
@@ -484,82 +496,133 @@ function getCustomSubjects() {
   }));
 }
 
-function createCustomSubjectId() {
-  const stamp = new Date();
-  const compact = [
-    stamp.getFullYear(),
-    String(stamp.getMonth() + 1).padStart(2, "0"),
-    String(stamp.getDate()).padStart(2, "0"),
-    "-",
-    String(stamp.getHours()).padStart(2, "0"),
-    String(stamp.getMinutes()).padStart(2, "0"),
-    String(stamp.getSeconds()).padStart(2, "0"),
-    "-",
-    Math.random().toString(36).slice(2, 6)
-  ].join("");
-  return `sujet-local-${compact}`;
+function resolveDraftLabelIds(labels = []) {
+  return [...new Set((Array.isArray(labels) ? labels : [])
+    .map((value) => String(value || "").trim())
+    .filter(Boolean)
+    .map((value) => String(getSubjectLabelDefinition(value)?.id || "").trim())
+    .filter(Boolean))];
 }
 
-function createSubjectFromDraft() {
+async function createSubjectFromDraft() {
   ensureViewUiState();
-  const draft = getSubjectsViewState().createSubjectForm || {};
-  const title = String(draft.title || "").trim();
+  const formState = store.situationsView.createSubjectForm || {};
+  if (formState.isSubmitting) {
+    return { ok: false, reason: "in-flight" };
+  }
+
+  const titleInput = document.querySelector("[data-create-subject-title]");
+  const descriptionInput = document.querySelector("[data-create-subject-description]");
+  const liveTitle = String(titleInput?.value || "");
+  const liveDescription = String(descriptionInput?.value || "");
+
+  if (liveTitle && liveTitle !== String(formState.title || "")) {
+    formState.title = liveTitle;
+    store.situationsView.createSubjectForm.title = liveTitle;
+  }
+  if (liveDescription && liveDescription !== String(formState.description || "")) {
+    formState.description = liveDescription;
+    store.situationsView.createSubjectForm.description = liveDescription;
+  }
+
+  const title = String(formState.title || "").trim();
   if (!title) {
     store.situationsView.createSubjectForm.validationError = "Le titre du sujet est obligatoire.";
     return { ok: false, reason: "missing-title" };
   }
 
-  const subjectId = createCustomSubjectId();
+  const draftMeta = getSubjectSidebarMeta(DRAFT_SUBJECT_ID);
   const nextMeta = {
-    assignees: Array.isArray(draft.meta?.assignees) ? draft.meta.assignees.map((value) => String(value || "")).filter(Boolean) : [],
-    labels: normalizeSubjectLabels(draft.meta?.labels),
-    objectiveIds: normalizeSubjectObjectiveIds(draft.meta?.objectiveIds),
-    situationIds: normalizeSubjectSituationIds(draft.meta?.situationIds),
-    relations: Array.isArray(draft.meta?.relations) ? draft.meta.relations.map((value) => String(value || "")).filter(Boolean) : []
+    assignees: Array.isArray(draftMeta?.assignees) ? draftMeta.assignees.map((value) => String(value || "").trim()).filter(Boolean) : [],
+    labels: normalizeSubjectLabels(draftMeta?.labels),
+    objectiveIds: normalizeSubjectObjectiveIds(draftMeta?.objectiveIds),
+    situationIds: normalizeSubjectSituationIds(draftMeta?.situationIds),
+    relations: Array.isArray(draftMeta?.relations) ? draftMeta.relations.map((value) => String(value || "").trim()).filter(Boolean) : []
   };
 
-  persistRunBucket((bucket) => {
-    bucket.customSubjects = Array.isArray(bucket.customSubjects) ? bucket.customSubjects : [];
-    bucket.customSubjects.unshift({
-      id: subjectId,
-      title,
-      status: "open",
-      priority: "P3",
-      agent: "human",
-      raw: {
-        created_by: String(store.user?.id || "human"),
-        created_at: nowIso()
-      },
-      avis: []
-    });
-    bucket.subjectMeta = bucket.subjectMeta && typeof bucket.subjectMeta === "object" ? bucket.subjectMeta : {};
-    bucket.subjectMeta.sujet = bucket.subjectMeta.sujet && typeof bucket.subjectMeta.sujet === "object" ? bucket.subjectMeta.sujet : {};
-    bucket.subjectMeta.sujet[subjectId] = {
-      ...(bucket.subjectMeta.sujet[subjectId] || {}),
-      assignees: nextMeta.assignees,
-      objectiveIds: nextMeta.objectiveIds,
-      situationIds: nextMeta.situationIds,
-      relations: nextMeta.relations
-    };
-  });
+  const description = String(formState.description || "").trim();
 
-  setEntityDescriptionState("sujet", subjectId, {
-    body: String(draft.description || "").trim(),
-    author: firstNonEmpty(store.user?.name, store.user?.firstName, "human"),
-    agent: "human",
-    avatar_type: "human",
-    avatar_initial: "H"
-  }, { actor: "Human", agent: "human" });
-
-  setSubjectObjectiveIds(subjectId, nextMeta.objectiveIds);
-  store.situationsView.selectedSujetId = subjectId;
-  store.situationsView.selectedSubjectId = subjectId;
-  store.situationsView.selectedSituationId = nextMeta.situationIds[0] || store.situationsView.selectedSituationId || null;
-  store.projectSubjectsView.selectedSujetId = subjectId;
-  store.projectSubjectsView.selectedSubjectId = subjectId;
-  store.projectSubjectsView.selectedSituationId = nextMeta.situationIds[0] || store.projectSubjectsView.selectedSituationId || null;
   store.situationsView.createSubjectForm.validationError = "";
-  return { ok: true, subjectId };
+  store.situationsView.createSubjectForm.isSubmitting = true;
+
+  try {
+    const createdSubject = await createManualSubject({
+      title,
+      subjectType: "explicit_problem"
+    });
+
+    const subjectId = String(createdSubject?.id || "").trim();
+    if (!subjectId) {
+      throw new Error("Le backend n'a pas renvoyé d'identifiant de sujet.");
+    }
+
+    if (nextMeta.assignees.length) {
+      await replaceSubjectAssigneesInSupabase(subjectId, nextMeta.assignees);
+    }
+
+    const labelIds = resolveDraftLabelIds(nextMeta.labels);
+    if (labelIds.length) {
+      await replaceSubjectLabelsInSupabase(subjectId, labelIds);
+    }
+
+    if (nextMeta.situationIds.length) {
+      await replaceSubjectSituationsInSupabase(subjectId, nextMeta.situationIds);
+    }
+
+    if (nextMeta.objectiveIds.length) {
+      await replaceSubjectObjectivesInSupabase(subjectId, nextMeta.objectiveIds);
+    }
+
+    if (description) {
+      await updateSubjectDescriptionInSupabase({
+        subjectId,
+        description
+      });
+    }
+
+    await reloadSubjectsFromSupabase(getSubjectsCurrentRoot(), {
+      rerender: false,
+      updateModal: false
+    });
+
+    const persistedSubject = getNestedSujet(subjectId);
+    const selectedSituationId = String(
+      persistedSubject?.situation_id
+      || persistedSubject?.situationId
+      || nextMeta.situationIds[0]
+      || store.situationsView.selectedSituationId
+      || ""
+    ).trim() || null;
+
+    store.situationsView.selectedSujetId = subjectId;
+    store.situationsView.selectedSubjectId = subjectId;
+    store.situationsView.selectedSituationId = selectedSituationId;
+    store.projectSubjectsView.selectedSujetId = subjectId;
+    store.projectSubjectsView.selectedSubjectId = subjectId;
+    store.projectSubjectsView.selectedSituationId = selectedSituationId;
+
+    persistRunBucket((bucket) => {
+      bucket.subjectMeta = bucket.subjectMeta && typeof bucket.subjectMeta === "object" ? bucket.subjectMeta : {};
+      bucket.subjectMeta.sujet = bucket.subjectMeta.sujet && typeof bucket.subjectMeta.sujet === "object" ? bucket.subjectMeta.sujet : {};
+      bucket.subjectMeta.sujet[subjectId] = {
+        ...(bucket.subjectMeta.sujet[subjectId] || {}),
+        assignees: nextMeta.assignees,
+        labels: nextMeta.labels,
+        objectiveIds: nextMeta.objectiveIds,
+        situationIds: nextMeta.situationIds
+      };
+    });
+
+    return { ok: true, subjectId };
+  } catch (error) {
+    const message = String(error?.message || error || "Erreur inconnue");
+    store.situationsView.createSubjectForm.validationError = `Création du sujet impossible : ${message}`;
+    return { ok: false, reason: "create-failed", error };
+  } finally {
+    if (store.situationsView?.createSubjectForm && typeof store.situationsView.createSubjectForm === "object") {
+      store.situationsView.createSubjectForm.isSubmitting = false;
+    }
+  }
 }
 
 function normalizeSujetKanbanStatus(value) {
@@ -682,12 +745,14 @@ function getSubjectSidebarMeta(subjectId) {
   const labelsById = rawResult?.labelsById && typeof rawResult.labelsById === "object"
     ? rawResult.labelsById
     : {};
+  const storedLabels = normalizeSubjectLabels(subjectMeta.labels);
   const derivedLabels = normalizeSubjectLabels(
     (Array.isArray(labelIdsBySubjectId[normalizedSubjectId]) ? labelIdsBySubjectId[normalizedSubjectId] : [])
       .map((labelId) => labelsById[String(labelId || "")])
       .filter(Boolean)
       .map((labelDef) => String(labelDef?.name || labelDef?.label || labelDef?.label_key || labelDef?.key || "").trim())
   );
+  const resolvedLabels = derivedLabels.length ? derivedLabels : storedLabels;
   const assigneePersonIdsBySubjectId = rawResult?.assigneePersonIdsBySubjectId && typeof rawResult.assigneePersonIdsBySubjectId === "object"
     ? rawResult.assigneePersonIdsBySubjectId
     : {};
@@ -700,7 +765,7 @@ function getSubjectSidebarMeta(subjectId) {
 
   return {
     assignees: normalizeAssigneeIds(derivedAssignees),
-    labels: derivedLabels,
+    labels: resolvedLabels,
     objectiveIds,
     situationIds: derivedSituationIds,
     relations: Array.isArray(subjectMeta.relations) ? subjectMeta.relations.map((value) => String(value || "")).filter(Boolean) : []
@@ -2828,25 +2893,31 @@ function renderCreateSubjectFormHtml() {
 
           <div class="subject-create-field subject-create-field--editor">
             <div class="subject-create-field__label">Add a description</div>
-            <div class="comment-box gh-comment-boxwrap subject-create-editor">
-              <div class="comment-tabs comment-composer__tabs" role="tablist" aria-label="Description tabs">
-                <button class="comment-tab ${!form.previewMode ? "is-active" : ""}" data-create-subject-tab="write" type="button">Write</button>
-                <button class="comment-tab ${form.previewMode ? "is-active" : ""}" data-create-subject-tab="preview" type="button">Preview</button>
-                <div class="subject-create-editor__toolbar" aria-hidden="true">
-                  <span class="subject-create-editor__tool">H</span>
-                  <span class="subject-create-editor__tool">B</span>
-                  <span class="subject-create-editor__tool"><em>I</em></span>
-                  <span class="subject-create-editor__tool">•</span>
-                  <span class="subject-create-editor__tool">&lt;/&gt;</span>
-                  <span class="subject-create-editor__tool">🔗</span>
-                  <span class="subject-create-editor__tool">@</span>
+            ${renderCommentComposer({
+              hideAvatar: true,
+              hideTitle: true,
+              previewMode: !!form.previewMode,
+              textareaId: "createSubjectDescriptionBox",
+              previewId: "createSubjectDescriptionPreview",
+              textareaValue: String(form.description || ""),
+              textareaAttributes: {
+                "data-create-subject-description": "true"
+              },
+              placeholder: "Type your description here...",
+              tabWriteAction: "create-subject-tab-write",
+              tabPreviewAction: "create-subject-tab-preview",
+              tabsClassName: "comment-composer__tabs--thread-reply",
+              composerClassName: "comment-composer--thread-reply-editor",
+              toolbarHtml: renderSubjectMarkdownToolbar({ buttonAction: "create-subject-format", svgIcon }),
+              previewHtml: previewHtml || "",
+              previewEmptyHint: "Use Markdown to format your comment",
+              footerHtml: `
+                <input type="file" class="subject-composer-file-input" data-role="create-subject-file-input" multiple />
+                <div class="subject-composer-attachments-preview ${(Array.isArray(form.attachments) && form.attachments.length) ? "" : "hidden"}" data-role="create-subject-attachments-preview" aria-live="polite">
+                  ${Array.isArray(form.attachments) ? form.attachments.map((attachment) => `<div class="subject-attachment-tile"><span class="subject-attachment__name">${escapeHtml(String(attachment?.name || "Pièce jointe"))}</span></div>`).join("") : ""}
                 </div>
-              </div>
-              <div class="subject-create-editor__body ${form.previewMode ? "is-preview" : ""}">
-                <textarea class="textarea comment-composer__textarea subject-create-textarea ${form.previewMode ? "hidden" : ""}" data-create-subject-description placeholder="Type your description here...">${escapeHtml(String(form.description || ""))}</textarea>
-                <div class="comment-preview comment-composer__preview subject-create-preview ${form.previewMode ? "" : "hidden"}" data-create-subject-preview>${previewHtml || '<span class="subject-create-preview-empty">Aucun contenu à prévisualiser.</span>'}</div>
-              </div>
-            </div>
+              `
+            })}
             ${form.validationError ? `<div class="subject-create-form__error">${escapeHtml(form.validationError)}</div>` : ""}
           </div>
 
@@ -2854,12 +2925,12 @@ function renderCreateSubjectFormHtml() {
             <div class="subject-create-footer__left">
               <label class="subject-create-checkbox">
                 <input type="checkbox" data-create-subject-create-more ${form.createMore ? "checked" : ""}>
-                <span>Create more</span>
+                <span>En ajouter d'autres</span>
               </label>
             </div>
             <div class="subject-create-footer__right">
-              <button type="button" class="gh-btn" data-create-subject-cancel>Cancel</button>
-              <button type="button" class="gh-btn gh-btn--primary" data-create-subject-submit>Create</button>
+              <button type="button" class="gh-btn" data-create-subject-cancel>Annuler</button>
+              <button type="button" class="gh-btn gh-btn--primary" data-create-subject-submit ${form.isSubmitting ? "disabled" : ""}>${form.isSubmitting ? "Création..." : "Ajouter"}</button>
             </div>
           </div>
         </div>

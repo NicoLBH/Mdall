@@ -44,7 +44,8 @@ export function renderSubjectMarkdownToolbar({
   const shouldUseComposerLayout = buttonAction === "composer-format"
     || buttonAction === "thread-reply-format"
     || buttonAction === "thread-edit-format"
-    || buttonAction === "description-format";
+    || buttonAction === "description-format"
+    || buttonAction === "create-subject-format";
   if (!shouldUseComposerLayout) {
     return toolbarButtons.map((button) => renderToolbarButton(button)).join("");
   }
@@ -55,6 +56,8 @@ export function renderSubjectMarkdownToolbar({
       ? "thread-reply-attachments-pick"
       : buttonAction === "description-format"
         ? "description-attachments-pick"
+      : buttonAction === "create-subject-format"
+        ? "create-subject-attachments-pick"
         : "composer-attachments-pick";
   const attachmentButton = `
     <button
