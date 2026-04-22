@@ -48,7 +48,8 @@ export function createProjectSubjectDrilldownController(config) {
     renderDetailsTitleWrapHtml,
     wireDetailsInteractive,
     bindDetailsScroll,
-    ensureViewUiState
+    ensureViewUiState,
+    ensureTimelineLoadedForSelection
   } = config;
 
   let lockedWindowScrollY = 0;
@@ -162,6 +163,7 @@ export function createProjectSubjectDrilldownController(config) {
 
     const selection = getDrilldownSelection();
     const details = renderDetailsHtml(selection, {
+      discussionScopeHost: "drilldown",
       subissuesOptions: {
         sujetRowClass: "js-drilldown-select-sujet",
         sujetToggleClass: "js-drilldown-toggle-sujet",
@@ -186,6 +188,7 @@ export function createProjectSubjectDrilldownController(config) {
     });
 
     wireDetailsInteractive(body);
+    ensureTimelineLoadedForSelection?.(selection, { scopeHost: "drilldown" });
     bindDetailsScroll(panel);
     applyNormalDetailsCompactSnapshot(viewState.drilldown?.normalDetailsCompactSnapshot);
     applyDrilldownViewportOffset(viewState.drilldown?.normalDetailsCompactSnapshot);

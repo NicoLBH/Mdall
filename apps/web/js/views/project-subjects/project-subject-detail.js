@@ -59,6 +59,7 @@ export function createProjectSubjectDetailController(config) {
 
     const bodyScrollState = getScrollableElementScrollState(body);
     const details = renderDetailsHtml(null, {
+      discussionScopeHost: "main",
       subissuesOptions: {
         sujetRowClass: "js-modal-drilldown-sujet",
         sujetToggleClass: "js-modal-toggle-sujet",

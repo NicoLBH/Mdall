@@ -281,6 +281,7 @@ const projectSubjectsThread = createProjectSubjectsThread({
   persistRunBucket,
   getEntityByType,
   getActiveSelection,
+  getDrilldownSelection,
   getSelectionEntityType,
   getSituationBySujetId,
   getNestedSujet,
@@ -288,7 +289,7 @@ const projectSubjectsThread = createProjectSubjectsThread({
   getEffectiveSituationStatus,
   subjectMessagesService,
   requestRerender: (...args) => projectSubjectsView.rerenderScope(...args),
-  scheduleThreadRerender: () => projectSubjectsView.scheduleDetailsThreadRerender(),
+  scheduleThreadRerender: (...args) => projectSubjectsView.scheduleDetailsThreadRerender(...args),
   entityDisplayLinkHtml: (...args) => projectSubjectsView.entityDisplayLinkHtml(...args),
   inferAgent: (...args) => projectSubjectsView.inferAgent(...args),
   normActorName: (...args) => projectSubjectsView.normActorName(...args),
@@ -558,7 +559,8 @@ const projectSubjectDrilldown = createProjectSubjectDrilldownController({
   renderDetailsChromeHeadHtml: renderSharedDetailsChromeHeadHtml,
   wireDetailsInteractive,
   bindDetailsScroll,
-  ensureViewUiState
+  ensureViewUiState,
+  ensureTimelineLoadedForSelection: (...args) => ensureTimelineLoadedForSelection(...args)
 });
 
 const projectSubjectMilestones = createProjectSubjectMilestonesController({
