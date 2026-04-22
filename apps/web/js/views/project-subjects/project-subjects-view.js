@@ -2100,7 +2100,7 @@ function renderSubjectMetaControls(subject) {
       })}
       ${renderSubjectMetaField({
         field: "situations",
-        label: "Situations",
+        label: "Situation",
         valueHtml: renderSubjectSituationsValue(subject.id)
       })}
       ${renderSubjectMetaField({
@@ -2923,7 +2923,7 @@ function renderCreateSubjectMetaControls() {
       })}
       ${renderSubjectMetaField({
         field: "situations",
-        label: "Situations",
+        label: "Situation",
         valueHtml: renderSubjectSituationsValue(subject.id)
       })}
       ${renderSubjectMetaField({
@@ -2945,17 +2945,17 @@ function renderCreateSubjectFormHtml() {
       <div class="subject-create-layout">
         <div class="subject-create-main">
           <div class="subject-create-header">
-            <img src="${escapeHtml(avatar)}" alt="Avatar" class="subject-create-header__avatar">
-            <div class="subject-create-header__title">Create new issue</div>
+            <img src="${escapeHtml(avatar)}" alt="Auteur" class="subject-create-header__avatar">
+            <div class="subject-create-header__title">Créer un nouveau sujet</div>
           </div>
 
           <label class="subject-create-field">
-            <span class="subject-create-field__label">Add a title <span class="subject-create-field__required">*</span></span>
-            <input type="text" class="subject-create-input" data-create-subject-title value="${escapeHtml(String(form.title || ""))}" placeholder="Title" autocomplete="off">
+            <span class="subject-create-field__label">Ajouter un titre<span class="subject-create-field__required">*</span></span>
+            <input type="text" class="subject-create-input" data-create-subject-title value="${escapeHtml(String(form.title || ""))}" placeholder="Titre du sujet" autocomplete="off">
           </label>
 
           <div class="subject-create-field subject-create-field--editor">
-            <div class="subject-create-field__label">Add a description</div>
+            <div class="subject-create-field__label">Ajouter une description</div>
             ${renderCommentComposer({
               hideAvatar: true,
               hideTitle: true,
@@ -2966,14 +2966,14 @@ function renderCreateSubjectFormHtml() {
               textareaAttributes: {
                 "data-create-subject-description": "true"
               },
-              placeholder: "Type your description here...",
+              placeholder: "Décrivez le sujet...",
               tabWriteAction: "create-subject-tab-write",
               tabPreviewAction: "create-subject-tab-preview",
               tabsClassName: "comment-composer__tabs--thread-reply",
               composerClassName: "comment-composer--thread-reply-editor",
               toolbarHtml: renderSubjectMarkdownToolbar({ buttonAction: "create-subject-format", svgIcon }),
               previewHtml: previewHtml || "",
-              previewEmptyHint: "Use Markdown to format your comment",
+              previewEmptyHint: "Utilisez Markdown pour formater votre description",
               footerHtml: `
                 <input type="file" class="subject-composer-file-input" data-role="create-subject-file-input" multiple />
                 <div class="subject-composer-attachments-preview ${(Array.isArray(form.attachments) && form.attachments.length) ? "" : "hidden"}" data-role="create-subject-attachments-preview" aria-live="polite">
@@ -2993,7 +2993,7 @@ function renderCreateSubjectFormHtml() {
             <div class="subject-create-footer__left">
               <label class="subject-create-checkbox">
                 <input type="checkbox" data-create-subject-create-more ${form.createMore ? "checked" : ""}>
-                <span>En ajouter d'autres</span>
+                <span>En ajouter d’autres</span>
               </label>
             </div>
             <div class="subject-create-footer__right">

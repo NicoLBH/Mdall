@@ -4998,6 +4998,9 @@ export function createProjectSubjectsEvents(config) {
       if (createSubjectCancelButton && store.situationsView.createSubjectForm?.isOpen) {
         event.preventDefault();
         dropdownController().closeMeta();
+        closeMentionPopup({ rerender: false });
+        closeEmojiPopup({ rerender: false });
+        closeSubjectRefPopup({ rerender: false });
         resetCreateSubjectForm({ keepCreateMore: true });
         rerenderPanels();
         return;
