@@ -1369,7 +1369,6 @@ body.modal-open {
 }
 
 .data-table-shell__head{
-  position:sticky;
   top:0;
   z-index:5;
   display:grid;
@@ -1381,6 +1380,8 @@ body.modal-open {
   color:var(--muted);
   background-color:rgb(21, 27, 35);
   border-bottom:1px solid var(--border2);
+  border-top-right-radius: var(--radius);
+  border-top-left-radius: var(--radius);
   flex:0 0 auto;
 }
 

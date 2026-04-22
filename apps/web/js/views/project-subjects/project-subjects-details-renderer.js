@@ -169,6 +169,21 @@ export function createProjectSubjectsDetailsRenderer(config) {
   }
 
   function renderDetailsChromeHeadHtml(selection, options = {}) {
+    const showCreateFromDetailAction = options.showCreateFromDetailAction === true;
+    const shouldRenderCreateFromDetailAction = showCreateFromDetailAction
+      && selection?.type === "sujet"
+      && (typeof canRenderCreateFromDetailAction === "function"
+        ? canRenderCreateFromDetailAction(selection)
+        : true);
+    const createFromDetailActionHtml = shouldRenderCreateFromDetailAction
+      ? `
+        <button
+          type="button"
+          class="gh-btn gh-action__main gh-btn--primary gh-btn--md"
+          data-action="open-create-subject-from-detail"
+        >Nouveau sujet</button>
+      `
+      : "";
     return renderSharedDetailsChromeHeadHtml(selection, {
       headId: options.headId || "",
       headClassName: options.headClassName || "",
