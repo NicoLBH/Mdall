@@ -1320,12 +1320,20 @@ export function createProjectSubjectsEvents(config) {
       if (mentionCollaboratorsLoaded) return mentionCollaborators;
       if (mentionLoadPromise) return mentionLoadPromise;
       const selection = getScopedSelection(root);
-      if (!selection?.item?.project_id || typeof listCollaboratorsForMentions !== "function") {
+      const projectId = String(
+        selection?.item?.project_id
+        || selection?.item?.projectId
+        || store?.projectForm?.id
+        || store?.projectForm?.projectId
+        || store?.project?.id
+        || ""
+      ).trim();
+      if (!projectId || typeof listCollaboratorsForMentions !== "function") {
         mentionCollaborators = [];
         mentionCollaboratorsLoaded = true;
         return mentionCollaborators;
       }
-      mentionLoadPromise = listCollaboratorsForMentions(selection.item.project_id)
+      mentionLoadPromise = listCollaboratorsForMentions(projectId)
         .then((rows) => {
           mentionCollaborators = Array.isArray(rows) ? rows : [];
           mentionCollaboratorsLoaded = true;
@@ -4998,9 +5006,36 @@ export function createProjectSubjectsEvents(config) {
       if (createSubjectCancelButton && store.situationsView.createSubjectForm?.isOpen) {
         event.preventDefault();
         dropdownController().closeMeta();
-        closeMentionPopup({ rerender: false });
-        closeEmojiPopup({ rerender: false });
-        closeSubjectRefPopup({ rerender: false });
+        const mentionUi = typeof getMentionUiState === "function" ? getMentionUiState() : store?.situationsView?.mentionUi;
+        if (mentionUi && typeof mentionUi === "object") {
+          mentionUi.open = false;
+          mentionUi.query = "";
+          mentionUi.activeIndex = 0;
+          mentionUi.triggerStart = -1;
+          mentionUi.triggerEnd = -1;
+          mentionUi.suggestions = [];
+          mentionUi.composerKey = "";
+        }
+        const emojiUi = typeof getEmojiUiState === "function" ? getEmojiUiState() : store?.situationsView?.emojiUi;
+        if (emojiUi && typeof emojiUi === "object") {
+          emojiUi.open = false;
+          emojiUi.query = "";
+          emojiUi.activeIndex = 0;
+          emojiUi.triggerStart = -1;
+          emojiUi.triggerEnd = -1;
+          emojiUi.suggestions = [];
+          emojiUi.composerKey = "";
+        }
+        const subjectRefUi = typeof getSubjectRefUiState === "function" ? getSubjectRefUiState() : store?.situationsView?.subjectRefUi;
+        if (subjectRefUi && typeof subjectRefUi === "object") {
+          subjectRefUi.open = false;
+          subjectRefUi.query = "";
+          subjectRefUi.activeIndex = 0;
+          subjectRefUi.triggerStart = -1;
+          subjectRefUi.triggerEnd = -1;
+          subjectRefUi.suggestions = [];
+          subjectRefUi.composerKey = "";
+        }
         resetCreateSubjectForm({ keepCreateMore: true });
         rerenderPanels();
         return;
