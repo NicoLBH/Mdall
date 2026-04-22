@@ -41,6 +41,7 @@ test("le dropdown Ajouter sous-sujet expose exactement les deux actions attendue
 
 test("l'événement d'ouverture du menu sous-sujet utilise le dropdown mutualisé", () => {
   assert.match(eventsSource, /\[data-action='open-subissue-action-menu'\]/);
+  assert.match(eventsSource, /debugSubissueFlow\("menu-open", \{/);
   assert.match(eventsSource, /dropdownController\(\)\.openMeta\(\{ field: "subissue-actions" \}\)/);
   assert.match(eventsSource, /dropdownController\(\)\.closeKanban\(\);/);
   assert.match(eventsSource, /dropdown\.subissueActionsView = "menu";/);
@@ -51,6 +52,7 @@ test("l'événement d'ouverture du menu sous-sujet utilise le dropdown mutualis�
 test("l'action Ajouter un sujet existant ouvre une sous-vue latérale sans fermer le dropdown", () => {
   assert.match(eventsSource, /\[data-action='open-link-existing-subissue'\]/);
   assert.match(eventsSource, /dropdownHost\.querySelectorAll\("\[data-action='open-link-existing-subissue'\]"\)/);
+  assert.match(eventsSource, /debugSubissueFlow\("menu-open-existing-view", \{/);
   assert.match(eventsSource, /dropdown\.subissueActionsView = "existing-subissue";/);
   assert.match(eventsSource, /dropdownController\(\)\.focusSearch\(\{ field: "subissue-actions" \}\);/);
   assert.match(eventsSource, /\[data-action='open-link-existing-subissue'\][\s\S]{0,600}refreshSubjectMetaDropdownUi\(root, \{ preserveScroll: true, preserveFocus: false \}\);/);
@@ -59,6 +61,8 @@ test("l'action Ajouter un sujet existant ouvre une sous-vue latérale sans ferme
 test("la sélection d'un sujet existant utilise setSubjectParent puis referme le dropdown", () => {
   assert.match(eventsSource, /\[data-subject-subissue-existing-entry\]/);
   assert.match(eventsSource, /await setSubjectParent\(childSubjectId, parentSubjectId, \{ root, skipRerender: true \}\);/);
+  assert.match(eventsSource, /debugSubissueFlow\("parent-linked", \{/);
+  assert.match(eventsSource, /debugSubissueFlow\("final-selection", \{/);
   assert.match(eventsSource, /dropdownController\(\)\.closeMeta\(\);/);
 });
 
