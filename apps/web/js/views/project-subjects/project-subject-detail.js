@@ -96,7 +96,10 @@ export function createProjectSubjectDetailController(config) {
 
   function renderNormalDetailsChromeHeadHtml(selectionOverride = null, options = {}) {
     const selection = selectionOverride || getActiveSelection();
-    return renderDetailsChromeHeadHtml(selection, options);
+    return renderDetailsChromeHeadHtml(selection, {
+      ...options,
+      showCreateFromDetailAction: true
+    });
   }
 
   function openDetailsModal() {
