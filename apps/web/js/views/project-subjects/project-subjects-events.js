@@ -879,10 +879,21 @@ export function createProjectSubjectsEvents(config) {
           }
         }
         resetCreateSubjectForm({ keepCreateMore: true });
+        const shouldReopenParent = !!parentSubjectId;
+        console.debug("[create-subissue-flow] reopen parent after create", {
+          mode: formMode,
+          subjectId: String(result.subjectId || ""),
+          parentSubjectId,
+          shouldReopenParent
+        });
         if (scopeHost === "drilldown") {
-          (openDrilldownFromSubjectPanel || openDrilldownFromSujetPanel)(result.subjectId);
+          (openDrilldownFromSubjectPanel || openDrilldownFromSujetPanel)(shouldReopenParent ? parentSubjectId : result.subjectId);
         } else {
-          selectSubject(result.subjectId) || selectSujet(result.subjectId);
+          if (shouldReopenParent) {
+            selectSubject(parentSubjectId) || selectSujet(parentSubjectId);
+          } else {
+            selectSubject(result.subjectId) || selectSujet(result.subjectId);
+          }
         }
         rerenderPanels();
         return;
