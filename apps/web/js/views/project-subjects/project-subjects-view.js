@@ -85,7 +85,7 @@ export function createProjectSubjectsView(deps) {
     setProjectCompactEnabled,
     currentDecisionTarget,
     addComment,
-    getScopedSelection,
+    getSelectionForScope,
     ensureTimelineLoadedForSelection
   } = deps;
 
@@ -2312,6 +2312,7 @@ function rerenderPanels() {
       const details = getProjectSubjectDetail().renderDetailsHtml(null, {
         showExpand: false,
         renderDiscussion: false,
+        discussionScopeHost: "main",
         subissuesOptions: {
           sujetRowClass: "js-modal-drilldown-sujet",
           sujetToggleClass: "js-modal-toggle-sujet",
@@ -2369,6 +2370,8 @@ function rerenderScope(root) {
     && !!root?.closest?.("#situationsDetailsHost");
   const isThreadScopeRoot = !!root?.closest?.("[data-details-thread-host]");
   const isComposerScopeRoot = !!root?.closest?.("[data-details-composer-host]");
+  const drilldownBody = document.getElementById("drilldownBody");
+  const isDrilldownScopeRoot = !!root?.closest?.("#drilldownPanel");
 
   if (shouldRerenderDetailsModal) {
     debugRenderScope("details-modal", { mode: "full-modal-rerender" });
@@ -2390,6 +2393,7 @@ function rerenderScope(root) {
     const details = getProjectSubjectDetail().renderDetailsHtml(null, {
       showExpand: false,
       renderDiscussion: false,
+      discussionScopeHost: "main",
       subissuesOptions: {
         sujetRowClass: "js-modal-drilldown-sujet",
         sujetToggleClass: "js-modal-toggle-sujet",
@@ -2411,10 +2415,22 @@ function rerenderScope(root) {
       currentDetailsHost?.__syncCondensedTitle?.();
     });
   } else {
+    if (isDrilldownScopeRoot && drilldownBody && (isThreadScopeRoot || isComposerScopeRoot)) {
+      debugRenderScope(isThreadScopeRoot ? "thread" : "composer", { mode: "scoped-rerender", host: "drilldown" });
+      debugThreadScope("rerender", {
+        host: "drilldown",
+        reason: isThreadScopeRoot ? "thread-scope" : "composer-scope"
+      });
+      renderDetailsDiscussionScopes(drilldownBody, {
+        renderThread: isThreadScopeRoot,
+        renderComposer: isComposerScopeRoot,
+        selectionOverride: getSelectionForScope("drilldown")
+      });
+      return;
+    }
     rerenderPanels();
   }
 
-  const drilldownBody = document.getElementById("drilldownBody");
   if (root?.closest?.("#drilldownPanel") && drilldownBody) {
     getProjectSubjectDrilldown().updateDrilldownPanel();
   }
@@ -2446,6 +2462,11 @@ function debugRenderScope(scope, payload = {}) {
   console.log("[subject-render-scope]", String(scope || "unknown"), payload);
 }
 
+function debugThreadScope(scope, payload = {}) {
+  if (!isRenderScopeDebugEnabled()) return;
+  console.log("[subject-thread-scope]", String(scope || "unknown"), payload);
+}
+
 function scheduleScopedRerender(scopeKey, resolveRoot) {
   const normalizedScopeKey = String(scopeKey || "").trim();
   if (!normalizedScopeKey) return;
@@ -2466,16 +2487,22 @@ function scheduleScopedRerender(scopeKey, resolveRoot) {
   });
 }
 
-function scheduleDetailsThreadRerender() {
-  scheduleScopedRerender("details-thread", () => {
-    const detailsHost = document.getElementById("situationsDetailsHost");
+function scheduleDetailsThreadRerender(options = {}) {
+  const scopeHost = String(options?.scopeHost || "main").trim().toLowerCase() === "drilldown" ? "drilldown" : "main";
+  scheduleScopedRerender(`details-thread:${scopeHost}`, () => {
+    const detailsHost = scopeHost === "drilldown"
+      ? document.getElementById("drilldownBody")
+      : document.getElementById("situationsDetailsHost");
     return detailsHost?.querySelector?.("[data-details-thread-host]") || null;
   });
 }
 
-function scheduleDetailsComposerRerender() {
-  scheduleScopedRerender("details-composer", () => {
-    const detailsHost = document.getElementById("situationsDetailsHost");
+function scheduleDetailsComposerRerender(options = {}) {
+  const scopeHost = String(options?.scopeHost || "main").trim().toLowerCase() === "drilldown" ? "drilldown" : "main";
+  scheduleScopedRerender(`details-composer:${scopeHost}`, () => {
+    const detailsHost = scopeHost === "drilldown"
+      ? document.getElementById("drilldownBody")
+      : document.getElementById("situationsDetailsHost");
     return detailsHost?.querySelector?.("[data-details-composer-host]") || detailsHost || document;
   });
 }
@@ -2484,17 +2511,34 @@ function renderDetailsDiscussionScopes(detailsHost, options = {}) {
   if (!detailsHost || !detailsHost.isConnected) return;
   const {
     renderThread = true,
-    renderComposer = true
+    renderComposer = true,
+    selectionOverride = null
   } = options;
   if (!renderThread && !renderComposer) return;
+  const scopeHost = detailsHost?.closest?.("#drilldownPanel") ? "drilldown" : "main";
+  const scopedSelection = selectionOverride || getSelectionForScope(scopeHost);
 
-  if (renderThread) ensureTimelineLoadedForSelection();
-  const discussion = getProjectSubjectDetail().renderDetailsDiscussionHtml(null, {
+  if (renderThread) {
+    ensureTimelineLoadedForSelection(scopedSelection, { scopeHost });
+    debugRenderScope("thread", { host: scopeHost, reason: "renderDetailsDiscussionScopes:load" });
+    debugThreadScope("load-timeline", {
+      host: scopeHost,
+      subjectId: String(scopedSelection?.item?.id || ""),
+      force: false
+    });
+  }
+  const discussion = getProjectSubjectDetail().renderDetailsDiscussionHtml(scopedSelection, {
     renderThread,
-    renderComposer
+    renderComposer,
+    scopeHost
   });
   if (renderThread) {
-    debugRenderScope("thread", { host: "details-thread-host" });
+    debugRenderScope("thread", { host: scopeHost, target: "details-thread-host" });
+    debugThreadScope("render", {
+      host: scopeHost,
+      subjectId: String(scopedSelection?.item?.id || ""),
+      source: "renderDetailsDiscussionScopes.thread"
+    });
     const threadHost = detailsHost.querySelector("[data-details-thread-host]");
     if (threadHost) {
       threadHost.innerHTML = discussion.threadHtml;
@@ -2502,7 +2546,12 @@ function renderDetailsDiscussionScopes(detailsHost, options = {}) {
     }
   }
   if (renderComposer) {
-    debugRenderScope("composer", { host: "details-composer-host" });
+    debugRenderScope("composer", { host: scopeHost, target: "details-composer-host" });
+    debugThreadScope("render", {
+      host: scopeHost,
+      subjectId: String(scopedSelection?.item?.id || ""),
+      source: "renderDetailsDiscussionScopes.composer"
+    });
     const composerHost = detailsHost.querySelector("[data-details-composer-host]");
     if (composerHost) {
       composerHost.innerHTML = discussion.composerHtml;

@@ -32,6 +32,7 @@ export function createProjectSubjectsThread(config = {}) {
     persistRunBucket,
     getEntityByType,
     getActiveSelection,
+    getDrilldownSelection,
     getSelectionEntityType,
     getSituationBySujetId,
     getNestedSujet,
@@ -86,6 +87,11 @@ export function createProjectSubjectsThread(config = {}) {
   function debugRenderScope(scope, payload = {}) {
     if (!renderScopeDebugEnabled) return;
     console.log("[subject-render-scope]", String(scope || "unknown"), payload);
+  }
+
+  function debugThreadScope(scope, payload = {}) {
+    if (!renderScopeDebugEnabled) return;
+    console.log("[subject-thread-scope]", String(scope || "unknown"), payload);
   }
 
   function getProjectCollaborators() {
@@ -466,17 +472,29 @@ export function createProjectSubjectsThread(config = {}) {
     return null;
   }
 
-  function requestScopeRerender() {
+  function requestScopeRerender(options = {}) {
+    const scopeHost = String(options.scopeHost || "").trim().toLowerCase();
     if (typeof scheduleThreadRerender === "function") {
-      debugRenderScope("thread", { source: "timeline-refresh", mode: "scheduled" });
-      scheduleThreadRerender();
+      debugRenderScope("thread", { source: "timeline-refresh", mode: "scheduled", scopeHost });
+      debugThreadScope("rerender", { host: scopeHost || "main", reason: "timeline-refresh" });
+      scheduleThreadRerender({ scopeHost });
       return;
     }
     if (typeof requestRerender === "function") {
-      const detailsHost = document.getElementById("situationsDetailsHost");
-      const threadHost = detailsHost?.querySelector?.("[data-details-thread-host]");
+      const rootHost = scopeHost === "drilldown"
+        ? document.getElementById("drilldownBody")
+        : document.getElementById("situationsDetailsHost");
+      const threadHost = rootHost?.querySelector?.("[data-details-thread-host]");
       if (!threadHost) return;
-      debugRenderScope("thread", { source: "timeline-refresh", mode: "fallback-request-rerender" });
+      debugRenderScope("thread", {
+        source: "timeline-refresh",
+        mode: "fallback-request-rerender",
+        scopeHost: scopeHost || "main"
+      });
+      debugThreadScope("rerender", {
+        host: scopeHost || "main",
+        reason: "timeline-refresh-fallback"
+      });
       requestRerender(threadHost);
     }
   }
@@ -493,6 +511,7 @@ export function createProjectSubjectsThread(config = {}) {
     }
 
     const force = !!options.force;
+    const scopeHost = String(options.scopeHost || "").trim().toLowerCase() === "drilldown" ? "drilldown" : "main";
     const currentState = subjectTimelineState.get(normalizedSubjectId) || { loading: false, requestId: 0 };
     if (!force && subjectTimelineCache.has(normalizedSubjectId)) {
       debugRenderScope("thread-timeline-fetch", { subjectId: normalizedSubjectId, action: "skip-cache-hit" });
@@ -508,6 +527,11 @@ export function createProjectSubjectsThread(config = {}) {
     debugRenderScope("thread-timeline-fetch", {
       subjectId: normalizedSubjectId,
       action: force ? "start-force" : "start"
+    });
+    debugThreadScope("load-timeline", {
+      host: scopeHost,
+      subjectId: normalizedSubjectId,
+      force
     });
     subjectMessagesService.listTimeline(normalizedSubjectId)
       .then((timeline) => {
@@ -538,7 +562,7 @@ export function createProjectSubjectsThread(config = {}) {
           rowsCount: mappedRows.length
         });
         queueSubjectMessageReadMarking(normalizedSubjectId, messages);
-        requestScopeRerender();
+        requestScopeRerender({ scopeHost });
       })
       .catch((error) => {
         debugRenderScope("thread-timeline-fetch", { subjectId: normalizedSubjectId, action: "error" });
@@ -556,6 +580,11 @@ export function createProjectSubjectsThread(config = {}) {
     if (!currentSelection || String(currentSelection.type || "").toLowerCase() !== "sujet") return;
     const subjectId = normalizeId(currentSelection?.item?.id);
     if (!subjectId) return;
+    debugThreadScope("load-timeline", {
+      host: String(options?.scopeHost || "").trim().toLowerCase() === "drilldown" ? "drilldown" : "main",
+      subjectId,
+      force: !!options?.force
+    });
     ensureSubjectTimelineLoaded(subjectId, options);
   }
 
@@ -689,22 +718,22 @@ export function createProjectSubjectsThread(config = {}) {
     return bucket?.decisions?.[entityType]?.[entityId] || null;
   }
 
-  function getThreadForSelection() {
+  function getThreadForSelection(selection = null) {
     ensureViewUiState();
-    const selection = getActiveSelection();
-    if (!selection) return [];
+    const resolvedSelection = selection || getActiveSelection();
+    if (!resolvedSelection) return [];
 
     const { bucket } = getRunBucket();
     const localComments = Array.isArray(bucket?.comments) ? bucket.comments : [];
     const activities = Array.isArray(bucket?.activities) ? bucket.activities : [];
     const events = [];
 
-    const situation = selection.type === "situation"
-      ? selection.item
-      : selection.type === "sujet"
-        ? getSituationBySujetId(selection.item.id)
+    const situation = resolvedSelection.type === "situation"
+      ? resolvedSelection.item
+      : resolvedSelection.type === "sujet"
+        ? getSituationBySujetId(resolvedSelection.item.id)
         : null;
-    const subject = selection.type === "sujet" ? selection.item : null;
+    const subject = resolvedSelection.type === "sujet" ? resolvedSelection.item : null;
     const rootTs = firstNonEmpty(store.situationsView?.rawResult?.updated_at, store.situationsView?.rawResult?.created_at, nowIso());
 
     if (situation) {
@@ -1373,11 +1402,18 @@ priority=${firstNonEmpty(subject.priority, "")}`
     return "";
   }
 
-  function renderThreadBlock() {
+  function renderThreadBlock(selection = null, options = {}) {
     threadRenderDepth += 1;
     try {
-      const thread = getThreadForSelection();
+      const resolvedSelection = selection || getActiveSelection();
+      const thread = getThreadForSelection(resolvedSelection);
       if (!thread.length) return "";
+      const scopeHost = String(options.scopeHost || "").trim().toLowerCase() === "drilldown" ? "drilldown" : "main";
+      debugThreadScope("render", {
+        host: scopeHost,
+        subjectId: normalizeId(resolvedSelection?.item?.id),
+        source: options.source || "renderThreadBlock"
+      });
       const replyUi = getInlineReplyUiState();
       const { childrenByParentId } = groupThreadReplies(thread);
       let commentRenderIdx = 0;
@@ -1684,12 +1720,19 @@ priority=${firstNonEmpty(subject.priority, "")}`
     });
   }
 
-  function renderCommentBox(selection) {
+  function renderCommentBox(selection = null, options = {}) {
     ensureViewUiState();
-    const item = selection?.item || null;
+    const scopeHost = String(options.scopeHost || "").trim().toLowerCase() === "drilldown" ? "drilldown" : "main";
+    const resolvedSelection = selection || (scopeHost === "drilldown" ? getDrilldownSelection?.() : getActiveSelection());
+    const item = resolvedSelection?.item || null;
     if (!item) return "";
 
-    const type = selection.type;
+    const type = resolvedSelection.type;
+    debugThreadScope("render", {
+      host: scopeHost,
+      subjectId: normalizeId(item?.id),
+      source: options.source || "renderCommentBox"
+    });
     const issueStatus = type === "sujet"
       ? getEffectiveSujetStatus(item.id)
       : getEffectiveSituationStatus(item.id);
@@ -1699,7 +1742,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
 
     const hintHtml = "";
 
-    const issueStatusActionHtml = renderIssueStatusAction(selection);
+    const issueStatusActionHtml = renderIssueStatusAction(resolvedSelection);
     const replyContext = type === "sujet" ? getReplyContextForSubject(item?.id) : null;
     const contextHtml = replyContext
       ? `

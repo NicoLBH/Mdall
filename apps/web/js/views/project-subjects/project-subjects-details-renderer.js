@@ -201,8 +201,13 @@ export function createProjectSubjectsDetailsRenderer(config) {
       ? renderSubIssuesForSujet(item, options.subissuesOptions || {})
       : renderSubIssuesForSituation(item, options.subissuesOptions || {});
     const shouldRenderDiscussion = options.renderDiscussion !== false;
-    const threadHtml = shouldRenderDiscussion ? renderThreadBlock() : "";
-    const commentBoxHtml = shouldRenderDiscussion ? renderCommentBox(selection) : "";
+    const discussionScopeHost = String(options.discussionScopeHost || "").trim().toLowerCase() === "drilldown" ? "drilldown" : "main";
+    const threadHtml = shouldRenderDiscussion
+      ? renderThreadBlock(selection, { scopeHost: discussionScopeHost, source: "renderDetailsBody" })
+      : "";
+    const commentBoxHtml = shouldRenderDiscussion
+      ? renderCommentBox(selection, { scopeHost: discussionScopeHost, source: "renderDetailsBody" })
+      : "";
     const subjectMetaControlsHtml = selection.type === "sujet" ? renderSubjectMetaControls(item) : "";
     const subjectPriorityHtml = selection.type === "sujet"
       ? `
@@ -254,8 +259,10 @@ export function createProjectSubjectsDetailsRenderer(config) {
     const selection = selectionOverride || getActiveSelection();
     const {
       renderThread = true,
-      renderComposer = true
+      renderComposer = true,
+      scopeHost = "main"
     } = options;
+    const normalizedScopeHost = String(scopeHost || "").trim().toLowerCase() === "drilldown" ? "drilldown" : "main";
     if (!selection) {
       return {
         threadHtml: "",
@@ -263,8 +270,12 @@ export function createProjectSubjectsDetailsRenderer(config) {
       };
     }
     return {
-      threadHtml: renderThread ? renderThreadBlock() : "",
-      composerHtml: renderComposer ? renderCommentBox(selection) : ""
+      threadHtml: renderThread
+        ? renderThreadBlock(selection, { scopeHost: normalizedScopeHost, source: "renderDetailsDiscussionHtml" })
+        : "",
+      composerHtml: renderComposer
+        ? renderCommentBox(selection, { scopeHost: normalizedScopeHost, source: "renderDetailsDiscussionHtml" })
+        : ""
     };
   }
 
