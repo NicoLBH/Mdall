@@ -257,6 +257,7 @@ export function createProjectSubjectsDetailsRenderer(config) {
         <div class="details-main">
           <div class="gh-timeline">
             ${descCard}
+            ${descriptionAddSubissueActionHtml}
             ${renderDocumentRefsCard(selection)}
             ${subIssuesHtml}
             <div class="subject-details-thread-host" data-details-thread-host>
