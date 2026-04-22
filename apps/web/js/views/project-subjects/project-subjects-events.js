@@ -920,7 +920,7 @@ export function createProjectSubjectsEvents(config) {
           });
         }
         resetCreateSubjectForm({ keepCreateMore: true });
-        const finalSubjectId = String(result.subjectId || "");
+        const finalSubjectId = String(parentSubjectId || result.subjectId || "");
         if (scopeHost === "drilldown") {
           (openDrilldownFromSubjectPanel || openDrilldownFromSujetPanel)(finalSubjectId);
         } else {
