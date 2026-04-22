@@ -599,6 +599,18 @@ export function createProjectSubjectsEvents(config) {
         dropdownController().closeMeta();
         const dropdown = getSubjectsViewState().subjectMetaDropdown || {};
         dropdown.subissueActionIntent = "create";
+        const parentSubjectId = String(dropdown.subissueActionSubjectId || "");
+        if (parentSubjectId && getNestedSujet(parentSubjectId)) {
+          openCreateSubjectForm({
+            mode: "subissue",
+            parentSubjectId,
+            sourceSubjectId: parentSubjectId,
+            origin: "detail",
+            scopeHost: dropdown.subissueActionScopeHost || (root.closest?.("#drilldownPanel") ? "drilldown" : "main")
+          });
+          rerenderScope(root);
+          return;
+        }
         refreshSubjectMetaDropdownUi(root, { preserveScroll: true, preserveFocus: false });
       };
     });
@@ -5302,10 +5314,22 @@ export function createProjectSubjectsEvents(config) {
         return;
       }
 
+      const closeSubissueCreateModalTrigger = event.target.closest("[data-close-subissue-create-modal]");
+      if (closeSubissueCreateModalTrigger && store.situationsView.createSubjectForm?.isOpen) {
+        event.preventDefault();
+        const formContext = store.situationsView.createSubjectForm || {};
+        const isSubissueMode = String(formContext.mode || "").trim().toLowerCase() === "subissue";
+        if (!isSubissueMode) return;
+        resetCreateSubjectForm({ keepCreateMore: true });
+        rerenderPanels();
+        return;
+      }
+
       const createSubjectCancelButton = event.target.closest("[data-create-subject-cancel]");
       if (createSubjectCancelButton && store.situationsView.createSubjectForm?.isOpen) {
         event.preventDefault();
         const formContext = store.situationsView.createSubjectForm || {};
+        const isSubissueMode = String(formContext.mode || "").trim().toLowerCase() === "subissue";
         const formOrigin = String(formContext.origin || "").trim().toLowerCase() === "detail" ? "detail" : "table";
         const sourceSubjectId = String(formContext.sourceSubjectId || "").trim();
         dropdownController().closeMeta();
@@ -5340,6 +5364,10 @@ export function createProjectSubjectsEvents(config) {
           subjectRefUi.composerKey = "";
         }
         resetCreateSubjectForm({ keepCreateMore: true });
+        if (isSubissueMode) {
+          rerenderPanels();
+          return;
+        }
         if (formOrigin === "detail" && sourceSubjectId && getNestedSujet(sourceSubjectId)) {
           selectSubject(sourceSubjectId) || selectSujet(sourceSubjectId);
           store.situationsView.showTableOnly = false;
@@ -5374,15 +5402,37 @@ export function createProjectSubjectsEvents(config) {
         }
 
         const formContext = store.situationsView.createSubjectForm || {};
+        const formMode = String(formContext.mode || "").trim().toLowerCase() === "subissue" ? "subissue" : "standard";
         const keepCreateMore = !!formContext.createMore;
         const formOrigin = String(formContext.origin || "").trim().toLowerCase() === "detail" ? "detail" : "table";
         const sourceSubjectId = String(formContext.sourceSubjectId || "").trim() || null;
+        const parentSubjectId = String(formContext.parentSubjectId || "").trim() || null;
+        const scopeHost = String(formContext.scopeHost || "").trim().toLowerCase() === "drilldown" ? "drilldown" : "main";
+        const setSubjectParent = getSetSubjectParent?.();
 
         (async () => {
           const submitPromise = createSubjectFromDraft();
           rerenderPanels();
           const result = await submitPromise;
           if (!result.ok) {
+            rerenderPanels();
+            return;
+          }
+
+          if (formMode === "subissue") {
+            if (parentSubjectId && typeof setSubjectParent === "function") {
+              const linked = await setSubjectParent(result.subjectId, parentSubjectId, { root, skipRerender: true });
+              if (!linked) {
+                rerenderPanels();
+                return;
+              }
+            }
+            resetCreateSubjectForm({ keepCreateMore: true });
+            if (scopeHost === "drilldown") {
+              (openDrilldownFromSubjectPanel || openDrilldownFromSujetPanel)(result.subjectId);
+            } else {
+              selectSubject(result.subjectId) || selectSujet(result.subjectId);
+            }
             rerenderPanels();
             return;
           }

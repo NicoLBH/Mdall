@@ -10697,6 +10697,39 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
 .subject-create-aside{
   padding-top:36px;
 }
+.subject-create-layout--subissue{
+  grid-template-columns:minmax(0,1fr);
+  gap:0;
+}
+.subject-create-layout--subissue .subject-create-content__avatar{display:none;}
+.subject-create-inline-meta{
+  display:flex;
+  align-items:flex-start;
+}
+.subject-create-layout--subissue .subject-create-footer{
+  align-items:flex-end;
+}
+.subject-create-layout--subissue .subject-meta-controls{
+  margin:0;
+}
+.subject-create-layout--subissue .subject-meta-controls--create{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.subject-create-layout--subissue .subject-meta-field{
+  width:auto;
+  margin:0;
+}
+.subject-create-subissue-modal__dialog{
+  width:min(980px, calc(100vw - 48px));
+}
+.subject-create-subissue-modal__body{
+  padding:0;
+}
+.subject-create-subissue-modal__body .subject-create-shell{
+  padding:16px;
+}
 
 .comment-composer--create-subject{
   margin-top:0;

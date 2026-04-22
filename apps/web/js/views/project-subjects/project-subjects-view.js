@@ -17,6 +17,7 @@ import { extractStructuredMentions } from "../../utils/subject-mentions.js";
 import { renderCommentComposer } from "../ui/comment-composer.js";
 import { renderSubjectMarkdownToolbar } from "../ui/subject-rich-editor.js";
 import { renderSubjectAttachmentsPreviewList } from "./project-subjects-attachments-ui.js";
+import { renderSettingsModal } from "../ui/settings-modal.js";
 export function createProjectSubjectsView(deps) {
   const {
     store,
@@ -484,6 +485,19 @@ function buildDefaultDraftSubjectMeta() {
   };
 }
 
+function buildSubissueDraftMeta(parentSubjectId = "") {
+  const subjectId = String(parentSubjectId || "").trim();
+  if (!subjectId) return buildDefaultDraftSubjectMeta();
+  const parentMeta = getSubjectSidebarMeta(subjectId);
+  return {
+    assignees: [],
+    labels: [],
+    objectiveIds: normalizeSubjectObjectiveIds(parentMeta?.objectiveIds),
+    situationIds: normalizeSubjectSituationIds(parentMeta?.situationIds),
+    relations: []
+  };
+}
+
 function resetCreateSubjectForm(options = {}) {
   ensureViewUiState();
   const keepCreateMore = !!options.keepCreateMore;
@@ -501,6 +515,9 @@ function resetCreateSubjectForm(options = {}) {
     isSubmitting: false,
     uploadSessionId: "",
     attachments: [],
+    mode: keepContext ? (String(previous.mode || "").trim().toLowerCase() === "subissue" ? "subissue" : "standard") : "standard",
+    parentSubjectId: keepContext ? (String(previous.parentSubjectId || "").trim() || null) : null,
+    scopeHost: keepContext ? (String(previous.scopeHost || "").trim().toLowerCase() === "drilldown" ? "drilldown" : "main") : "main",
     origin: keepContext ? (previous.origin === "detail" ? "detail" : "table") : "table",
     sourceSubjectId: keepContext ? (String(previous.sourceSubjectId || "").trim() || null) : null
   };
@@ -512,24 +529,32 @@ function openCreateSubjectForm(options = {}) {
   closeSubjectKanbanDropdown();
   ensureViewUiState();
   const previousCreateMore = !!store.situationsView.createSubjectForm?.createMore;
+  const mode = String(options.mode || "").trim().toLowerCase() === "subissue" ? "subissue" : "standard";
   const requestedOrigin = String(options.origin || "").trim().toLowerCase();
-  const origin = requestedOrigin === "detail" ? "detail" : "table";
+  const origin = mode === "subissue" ? "detail" : (requestedOrigin === "detail" ? "detail" : "table");
   const sourceSubjectId = origin === "detail"
     ? (String(options.sourceSubjectId || "").trim() || null)
     : null;
+  const parentSubjectId = mode === "subissue"
+    ? (String(options.parentSubjectId || sourceSubjectId || "").trim() || null)
+    : null;
+  const scopeHost = String(options.scopeHost || "").trim().toLowerCase() === "drilldown" ? "drilldown" : "main";
   store.situationsView.subjectsSubview = "subjects";
-  store.situationsView.showTableOnly = true;
+  if (mode !== "subissue") store.situationsView.showTableOnly = true;
   store.situationsView.createSubjectForm = {
     isOpen: true,
     title: "",
     description: "",
     previewMode: false,
-    createMore: previousCreateMore,
-    meta: buildDefaultDraftSubjectMeta(),
+    createMore: mode === "subissue" ? false : previousCreateMore,
+    meta: mode === "subissue" ? buildSubissueDraftMeta(parentSubjectId) : buildDefaultDraftSubjectMeta(),
     validationError: "",
     isSubmitting: false,
     uploadSessionId: "",
     attachments: [],
+    mode,
+    parentSubjectId,
+    scopeHost,
     origin,
     sourceSubjectId
   };
@@ -2522,6 +2547,16 @@ function syncSituationsPrimaryScrollSource() {
   refreshProjectShellChrome("situations");
 }
 
+function ensureCreateSubissueModalHost() {
+  let host = document.getElementById("subjectCreateSubissueModalHost");
+  if (!host) {
+    host = document.createElement("div");
+    host.id = "subjectCreateSubissueModalHost";
+    document.body.appendChild(host);
+  }
+  return host;
+}
+
 function rerenderPanels() {
   ensureViewUiState();
   document.body.classList.remove("project-subject-details-top-compact");
@@ -2536,16 +2571,20 @@ function rerenderPanels() {
   if (searchInput) searchInput.value = store.situationsView.search || "";
 
   rerenderSubjectsToolbar();
+  const createForm = store.situationsView.createSubjectForm || {};
+  const isCreateFormOpen = !!createForm.isOpen;
+  const isSubissueCreateMode = isCreateFormOpen && String(createForm.mode || "").trim().toLowerCase() === "subissue";
+  const isStandardCreateMode = isCreateFormOpen && !isSubissueCreateMode;
 
   const shouldDisableProjectCompact = !!panelHost
-    && !store.situationsView.createSubjectForm?.isOpen
+    && !isCreateFormOpen
     && String(store.situationsView.subjectsSubview || "subjects") === "subjects"
     && !store.situationsView.showTableOnly;
   document.body.classList.toggle("project-subject-normal-detail-flow", shouldDisableProjectCompact);
   setProjectCompactEnabled(!shouldDisableProjectCompact);
 
   if (panelHost) {
-    if (store.situationsView.createSubjectForm?.isOpen) {
+    if (isStandardCreateMode) {
       panelHost.innerHTML = `<div id="subjectCreateFormHost" class="project-table-host">${renderCreateSubjectFormHtml()}</div>`;
       const createFormRoot = panelHost.querySelector("[data-create-subject-form]");
       wireDetailsInteractive(createFormRoot);
@@ -2595,6 +2634,15 @@ function rerenderPanels() {
       });
       syncSituationsPrimaryScrollSource();
     }
+  }
+
+  const subissueCreateModalHost = ensureCreateSubissueModalHost();
+  if (isSubissueCreateMode) {
+    subissueCreateModalHost.innerHTML = renderCreateSubissueModalHtml();
+    const modalCreateFormRoot = subissueCreateModalHost.querySelector("[data-create-subject-form]");
+    wireDetailsInteractive(modalCreateFormRoot);
+  } else {
+    subissueCreateModalHost.innerHTML = "";
   }
 
   if (store.situationsView.drilldown?.isOpen) getProjectSubjectDrilldown().updateDrilldownPanel();
@@ -3063,17 +3111,30 @@ function renderCreateSubjectMetaControls() {
 function renderCreateSubjectFormHtml() {
   ensureViewUiState();
   const form = store.situationsView.createSubjectForm || {};
+  const isSubissueMode = String(form.mode || "").trim().toLowerCase() === "subissue";
   const avatar = String(store.user?.avatar || "assets/images/260093543.png");
   const previewHtml = mdToHtml(String(form.description || "").trim());
+  const subissueHeaderTitle = isSubissueMode ? "Créer un sous-sujet" : "Créer un nouveau sujet";
+  const createMoreLabel = isSubissueMode ? "Créer d'autres sous-sujets" : "En ajouter d’autres";
+  const inlineMetaHtml = isSubissueMode
+    ? `<div class="subject-create-inline-meta">${renderCreateSubjectMetaControls()}</div>`
+    : "";
+  const asideHtml = isSubissueMode
+    ? ""
+    : `
+      <aside class="subject-create-aside details-meta-col">
+        ${renderCreateSubjectMetaControls()}
+      </aside>
+    `;
   return `
     <section class="subject-create-shell" data-create-subject-form>
-      <div class="subject-create-layout">
+      <div class="subject-create-layout ${isSubissueMode ? "subject-create-layout--subissue" : ""}">
         <div class="subject-create-main">
           <div class="subject-create-content">
             <img src="${escapeHtml(avatar)}" alt="Auteur" class="subject-create-content__avatar">
             <div class="subject-create-content__fields">
               <div class="subject-create-header">
-                <div class="subject-create-header__title">Créer un nouveau sujet</div>
+                <div class="subject-create-header__title">${escapeHtml(subissueHeaderTitle)}</div>
               </div>
               <label class="subject-create-field">
                 <span class="subject-create-field__label">Ajouter un titre<span class="subject-create-field__required">*</span></span>
@@ -3118,9 +3179,10 @@ function renderCreateSubjectFormHtml() {
 
               <div class="subject-create-footer">
                 <div class="subject-create-footer__left">
+                  ${inlineMetaHtml}
                   <label class="subject-create-checkbox">
                     <input type="checkbox" data-create-subject-create-more ${form.createMore ? "checked" : ""}>
-                    <span>En ajouter d’autres</span>
+                    <span>${escapeHtml(createMoreLabel)}</span>
                   </label>
                 </div>
                 <div class="subject-create-footer__right">
@@ -3131,12 +3193,22 @@ function renderCreateSubjectFormHtml() {
             </div>
           </div>
         </div>
-        <aside class="subject-create-aside details-meta-col">
-          ${renderCreateSubjectMetaControls()}
-        </aside>
+        ${asideHtml}
       </div>
     </section>
   `;
+}
+
+function renderCreateSubissueModalHtml() {
+  return renderSettingsModal({
+    modalId: "subjectCreateSubissueModal",
+    title: "Create new sub-issue",
+    closeDataAttribute: "data-close-subissue-create-modal",
+    bodyHtml: renderCreateSubjectFormHtml(),
+    variant: "wide",
+    dialogClassName: "subject-create-subissue-modal__dialog",
+    bodyClassName: "subject-create-subissue-modal__body"
+  });
 }
 
 function renderSituationsViewHeaderHtml() {
