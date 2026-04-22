@@ -69,8 +69,8 @@ export function createProjectSubjectsDetailsRenderer(config) {
           </div>
           <div class="subject-title-display__spacer" aria-hidden="true"></div>
           <div class="subject-title-display__actions">
-            <button class="gh-btn gh-btn--sm subject-title-edit__action" type="button" data-action="edit-subject-title">Modifier</button>
-            ${showCreateFromDetailAction ? `<button class="gh-btn gh-action__main gh-btn--primary gh-btn--md" type="button" data-action="open-create-subject-from-detail">Nouveau sujet</button>` : ""}
+            <button class="gh-btn gh-btn--sm subject-title-edit__action subject-title-display__edit-action" type="button" data-action="edit-subject-title">Modifier</button>
+            ${showCreateFromDetailAction ? `<button class="gh-btn gh-action__main gh-btn--primary gh-btn--md subject-title-display__create-from-detail-action" type="button" data-action="open-create-subject-from-detail">Nouveau sujet</button>` : ""}
           </div>
         </div>
       `;

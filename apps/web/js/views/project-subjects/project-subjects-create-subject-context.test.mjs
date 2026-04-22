@@ -19,10 +19,15 @@ const viewPath = path.resolve(__dirname, "./project-subjects-view.js");
 const viewSource = fs.readFileSync(viewPath, "utf8");
 const statePath = path.resolve(__dirname, "./project-subjects-state.js");
 const stateSource = fs.readFileSync(statePath, "utf8");
+const stylePath = path.resolve(__dirname, "../../../style.css");
+const styleSource = fs.readFileSync(stylePath, "utf8");
 
 test("le header normal de détail sujet expose le bouton Nouveau sujet au même niveau que Modifier", () => {
   assert.match(detailsRendererSource, /<div class="subject-title-display__actions">[\s\S]*data-action="edit-subject-title"[\s\S]*data-action="open-create-subject-from-detail"/);
-  assert.match(detailsRendererSource, /class="gh-btn gh-action__main gh-btn--primary gh-btn--md"/);
+  assert.match(detailsRendererSource, /subject-title-display__edit-action/);
+  assert.match(detailsRendererSource, /class="gh-btn gh-action__main gh-btn--primary gh-btn--md subject-title-display__create-from-detail-action"/);
+  assert.match(styleSource, /\.subject-title-display__edit-action\{height:32px;\}/);
+  assert.match(styleSource, /\.subject-title-display__create-from-detail-action\{margin-left:8px;\}/);
   assert.match(detailControllerSource, /showCreateFromDetailAction: true/);
 });
 
