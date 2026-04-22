@@ -198,11 +198,19 @@ export function createProjectSubjectsState({ store }) {
         query: "",
         activeKey: "",
         showClosedSituations: false,
-        relationsView: "menu"
+        relationsView: "menu",
+        subissueActionsView: "menu",
+        subissueActionSubjectId: "",
+        subissueActionScopeHost: "main",
+        subissueActionIntent: ""
       };
     }
     if (typeof v.subjectMetaDropdown.showClosedSituations !== "boolean") v.subjectMetaDropdown.showClosedSituations = false;
     if (typeof v.subjectMetaDropdown.relationsView !== "string") v.subjectMetaDropdown.relationsView = "menu";
+    if (typeof v.subjectMetaDropdown.subissueActionsView !== "string") v.subjectMetaDropdown.subissueActionsView = "menu";
+    if (typeof v.subjectMetaDropdown.subissueActionSubjectId !== "string") v.subjectMetaDropdown.subissueActionSubjectId = "";
+    if (typeof v.subjectMetaDropdown.subissueActionScopeHost !== "string") v.subjectMetaDropdown.subissueActionScopeHost = "main";
+    if (typeof v.subjectMetaDropdown.subissueActionIntent !== "string") v.subjectMetaDropdown.subissueActionIntent = "";
     if (!v.subjectKanbanDropdown || typeof v.subjectKanbanDropdown !== "object") {
       v.subjectKanbanDropdown = {
         subjectId: "",
@@ -229,6 +237,9 @@ export function createProjectSubjectsState({ store }) {
         isSubmitting: false,
         uploadSessionId: "",
         attachments: [],
+        mode: "standard",
+        parentSubjectId: null,
+        scopeHost: "main",
         origin: "table",
         sourceSubjectId: null
       };
@@ -236,6 +247,9 @@ export function createProjectSubjectsState({ store }) {
     if (typeof v.createSubjectForm.isSubmitting !== "boolean") v.createSubjectForm.isSubmitting = false;
     if (typeof v.createSubjectForm.uploadSessionId !== "string") v.createSubjectForm.uploadSessionId = "";
     if (!Array.isArray(v.createSubjectForm.attachments)) v.createSubjectForm.attachments = [];
+    if (String(v.createSubjectForm.mode || "").trim().toLowerCase() !== "subissue") v.createSubjectForm.mode = "standard";
+    v.createSubjectForm.parentSubjectId = String(v.createSubjectForm.parentSubjectId || "").trim() || null;
+    if (String(v.createSubjectForm.scopeHost || "").trim().toLowerCase() !== "drilldown") v.createSubjectForm.scopeHost = "main";
     if (String(v.createSubjectForm.origin || "").trim().toLowerCase() !== "detail") v.createSubjectForm.origin = "table";
     const sourceSubjectId = String(v.createSubjectForm.sourceSubjectId || "").trim();
     v.createSubjectForm.sourceSubjectId = sourceSubjectId || null;
