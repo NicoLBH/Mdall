@@ -596,17 +596,18 @@ export function createProjectSubjectsEvents(config) {
       btn.onclick = (event) => {
         event.preventDefault();
         event.stopPropagation();
-        dropdownController().closeMeta();
         const dropdown = getSubjectsViewState().subjectMetaDropdown || {};
-        dropdown.subissueActionIntent = "create";
         const parentSubjectId = String(dropdown.subissueActionSubjectId || "");
+        const scopeHost = dropdown.subissueActionScopeHost || (root.closest?.("#drilldownPanel") ? "drilldown" : "main");
+        dropdownController().closeMeta();
+        dropdown.subissueActionIntent = "create";
         if (parentSubjectId && getNestedSujet(parentSubjectId)) {
           openCreateSubjectForm({
             mode: "subissue",
             parentSubjectId,
             sourceSubjectId: parentSubjectId,
             origin: "detail",
-            scopeHost: dropdown.subissueActionScopeHost || (root.closest?.("#drilldownPanel") ? "drilldown" : "main")
+            scopeHost: scopeHost
           });
           rerenderScope(root);
           return;
@@ -908,9 +909,22 @@ export function createProjectSubjectsEvents(config) {
       btn.onclick = (event) => {
         event.preventDefault();
         event.stopPropagation();
-        dropdownController().closeMeta();
         const dropdown = getSubjectsViewState().subjectMetaDropdown || {};
+        const parentSubjectId = String(dropdown.subissueActionSubjectId || "");
+        const scopeHost = dropdown.subissueActionScopeHost || (root.closest?.("#drilldownPanel") ? "drilldown" : "main");
+        dropdownController().closeMeta();
         dropdown.subissueActionIntent = "create";
+        if (parentSubjectId && getNestedSujet(parentSubjectId)) {
+          openCreateSubjectForm({
+            mode: "subissue",
+            parentSubjectId,
+            sourceSubjectId: parentSubjectId,
+            origin: "detail",
+            scopeHost: scopeHost
+          });
+          rerenderScope(root);
+          return;
+        }
         refreshSubjectMetaDropdownUi(root, { preserveScroll: true, preserveFocus: false });
         syncSubissueActionTriggerUi();
       };
