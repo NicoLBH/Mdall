@@ -2950,6 +2950,9 @@ function renderCreateSubjectFormHtml() {
           <div class="subject-create-content">
             <img src="${escapeHtml(avatar)}" alt="Auteur" class="subject-create-content__avatar">
             <div class="subject-create-content__fields">
+              <div class="subject-create-header">
+                <div class="subject-create-header__title">Créer un nouveau sujet</div>
+              </div>
               <label class="subject-create-field">
                 <span class="subject-create-field__label">Ajouter un titre<span class="subject-create-field__required">*</span></span>
                 <input type="text" class="subject-create-input" data-create-subject-title value="${escapeHtml(String(form.title || ""))}" placeholder="Titre du sujet" autocomplete="off">
@@ -2990,19 +2993,19 @@ function renderCreateSubjectFormHtml() {
                 })}
                 ${form.validationError ? `<div class="subject-create-form__error">${escapeHtml(form.validationError)}</div>` : ""}
               </div>
-            </div>
-          </div>
 
-          <div class="subject-create-footer">
-            <div class="subject-create-footer__left">
-              <label class="subject-create-checkbox">
-                <input type="checkbox" data-create-subject-create-more ${form.createMore ? "checked" : ""}>
-                <span>En ajouter d’autres</span>
-              </label>
-            </div>
-            <div class="subject-create-footer__right">
-              <button type="button" class="gh-btn" data-create-subject-cancel>Annuler</button>
-              <button type="button" class="gh-btn gh-btn--primary" data-create-subject-submit ${form.isSubmitting ? "disabled" : ""}>${form.isSubmitting ? "Création..." : "Ajouter"}</button>
+              <div class="subject-create-footer">
+                <div class="subject-create-footer__left">
+                  <label class="subject-create-checkbox">
+                    <input type="checkbox" data-create-subject-create-more ${form.createMore ? "checked" : ""}>
+                    <span>En ajouter d’autres</span>
+                  </label>
+                </div>
+                <div class="subject-create-footer__right">
+                  <button type="button" class="gh-btn" data-create-subject-cancel>Annuler</button>
+                  <button type="button" class="gh-btn gh-btn--primary" data-create-subject-submit ${form.isSubmitting ? "disabled" : ""}>${form.isSubmitting ? "Création..." : "Ajouter"}</button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
