@@ -67,6 +67,18 @@ test("Créer un sous-sujet ouvre le create form en mode subissue (modale)", () =
   assert.match(eventsSource, /openCreateSubjectForm\(\{\s*mode: "subissue",[\s\S]*parentSubjectId,[\s\S]*scopeHost:/);
   assert.match(viewSource, /function renderCreateSubissueModalHtml\(\)/);
   assert.match(viewSource, /subjectCreateSubissueModal/);
+  assert.match(viewSource, /title: "Créer un sous-sujet"/);
+  assert.match(viewSource, /\$\{isSubissueMode \? "" : `[\s\S]*subject-create-header__title/);
+  assert.match(viewSource, /function renderCreateSubissueAssigneesValue\(subjectId\)/);
+  assert.match(viewSource, /function renderCreateSubissueLabelsValue\(subjectId\)/);
+  assert.match(viewSource, /function renderCreateSubissueSituationValue\(subjectId\)/);
+  assert.match(viewSource, /function renderCreateSubissueObjectiveValue\(subjectId\)/);
+  assert.match(styleSource, /\.settings-modal__dialog\.subject-create-subissue-modal__dialog\{[\s\S]*width:800px;[\s\S]*height:673px;/);
+  assert.match(styleSource, /\.subject-create-subissue-modal__dialog \.settings-modal__title\{[\s\S]*font-size:14px;/);
+  assert.match(styleSource, /\.subject-create-subissue-modal__dialog \.settings-modal__close\{[\s\S]*background:transparent;/);
+  assert.match(styleSource, /\.settings-modal__head,[\s\S]*border-bottom:solid 1px var\(--border\);/);
+  assert.match(styleSource, /\.subject-create-layout--subissue \.subject-meta-field__trigger\{[\s\S]*border:1px dashed var\(--border2\);/);
+  assert.match(styleSource, /\.subject-create-subissue-inline-label__dot\{/);
   assert.match(stateSource, /mode: "standard"/);
   assert.match(stateSource, /parentSubjectId: null/);
 });

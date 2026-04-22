@@ -172,6 +172,10 @@ export function createProjectSubjectsEvents(config) {
     console.log("[subissues-dnd]", eventName, payload);
   }
 
+  function debugSubissueFlow(eventName, payload = {}) {
+    console.debug("[subissue-flow]", eventName, payload);
+  }
+
   function dropdownController() {
     return getDropdownController();
   }
@@ -609,6 +613,10 @@ export function createProjectSubjectsEvents(config) {
         dropdownController().closeMeta();
         dropdown.subissueActionIntent = "create";
         if (parentSubjectId && getNestedSujet(parentSubjectId)) {
+          debugSubissueFlow("create-modal-open", {
+            parentSubjectId,
+            scopeHost
+          });
           openCreateSubjectForm({
             mode: "subissue",
             parentSubjectId,
@@ -628,6 +636,10 @@ export function createProjectSubjectsEvents(config) {
         event.preventDefault();
         event.stopPropagation();
         const dropdown = getSubjectsViewState().subjectMetaDropdown || {};
+        debugSubissueFlow("menu-open-existing-view", {
+          parentSubjectId: String(dropdown.subissueActionSubjectId || ""),
+          scopeHost: String(dropdown.subissueActionScopeHost || "main")
+        });
         dropdown.subissueActionsView = "existing-subissue";
         dropdown.query = "";
         dropdown.subissueActionIntent = "link-existing";
@@ -660,7 +672,17 @@ export function createProjectSubjectsEvents(config) {
         if (selectedChildParentId === parentSubjectId) return;
         const applied = await setSubjectParent(childSubjectId, parentSubjectId, { root, skipRerender: true });
         if (!applied) return;
+        debugSubissueFlow("parent-linked", {
+          parentSubjectId,
+          childSubjectId,
+          source: "link-existing"
+        });
         dropdownController().closeMeta();
+        debugSubissueFlow("final-selection", {
+          subjectId: parentSubjectId,
+          scopeHost: String(dropdown.subissueActionScopeHost || "main"),
+          source: "link-existing"
+        });
         rerenderScope(root);
       };
     });
@@ -853,6 +875,13 @@ export function createProjectSubjectsEvents(config) {
       descriptionLength,
       didCallUpdateSubjectDescription: descriptionLength > 0 || (Array.isArray(formContext.attachments) && formContext.attachments.length > 0)
     });
+    if (formMode === "subissue") {
+      debugSubissueFlow("create-submit", {
+        parentSubjectId,
+        scopeHost,
+        descriptionLength
+      });
+    }
     const rerenderSubmitScope = () => {
       if (interactionRoot && interactionRoot.isConnected) {
         rerenderScope(interactionRoot);
@@ -884,24 +913,24 @@ export function createProjectSubjectsEvents(config) {
             rerenderSubmitScope();
             return;
           }
+          debugSubissueFlow("parent-linked", {
+            parentSubjectId,
+            childSubjectId: String(result.subjectId || ""),
+            source: "create"
+          });
         }
         resetCreateSubjectForm({ keepCreateMore: true });
-        const shouldReopenParent = !!parentSubjectId;
-        console.debug("[create-subissue-flow] reopen parent after create", {
-          mode: formMode,
-          subjectId: String(result.subjectId || ""),
-          parentSubjectId,
-          shouldReopenParent
-        });
+        const finalSubjectId = String(parentSubjectId || result.subjectId || "");
         if (scopeHost === "drilldown") {
-          (openDrilldownFromSubjectPanel || openDrilldownFromSujetPanel)(shouldReopenParent ? parentSubjectId : result.subjectId);
+          (openDrilldownFromSubjectPanel || openDrilldownFromSujetPanel)(finalSubjectId);
         } else {
-          if (shouldReopenParent) {
-            selectSubject(parentSubjectId) || selectSujet(parentSubjectId);
-          } else {
-            selectSubject(result.subjectId) || selectSujet(result.subjectId);
-          }
+          selectSubject(finalSubjectId) || selectSujet(finalSubjectId);
         }
+        debugSubissueFlow("final-selection", {
+          subjectId: finalSubjectId,
+          scopeHost,
+          source: "create"
+        });
         rerenderPanels();
         return;
       }
@@ -1053,6 +1082,10 @@ export function createProjectSubjectsEvents(config) {
         if (isAlreadyOpen) {
           dropdownController().closeMeta();
         } else {
+          debugSubissueFlow("menu-open", {
+            subjectId: targetSubjectId,
+            scopeHost: isDrilldownScope ? "drilldown" : "main"
+          });
           dropdownController().closeKanban();
           dropdownController().openMeta({ field: "subissue-actions" });
           dropdown.subissueActionsView = "menu";
@@ -1080,6 +1113,10 @@ export function createProjectSubjectsEvents(config) {
         dropdownController().closeMeta();
         dropdown.subissueActionIntent = "create";
         if (parentSubjectId && getNestedSujet(parentSubjectId)) {
+          debugSubissueFlow("create-modal-open", {
+            parentSubjectId,
+            scopeHost
+          });
           openCreateSubjectForm({
             mode: "subissue",
             parentSubjectId,
@@ -1100,6 +1137,10 @@ export function createProjectSubjectsEvents(config) {
         event.preventDefault();
         event.stopPropagation();
         const dropdown = getSubjectsViewState().subjectMetaDropdown || {};
+        debugSubissueFlow("menu-open-existing-view", {
+          parentSubjectId: String(dropdown.subissueActionSubjectId || ""),
+          scopeHost: String(dropdown.subissueActionScopeHost || "main")
+        });
         dropdown.subissueActionsView = "existing-subissue";
         dropdown.query = "";
         dropdown.subissueActionIntent = "link-existing";

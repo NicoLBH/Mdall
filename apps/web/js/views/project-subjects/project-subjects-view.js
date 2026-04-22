@@ -3096,31 +3096,91 @@ function renderSubjectsObjectivesAction() {
   });
 }
 
+function compactLastName(fullName) {
+  const parts = String(fullName || "").trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "Utilisateur";
+  return parts[parts.length - 1];
+}
+
+function renderCreateSubissueAssigneesValue(subjectId) {
+  const assigneeIds = getSubjectSidebarMeta(subjectId).assignees;
+  const collaborators = getActiveProjectCollaborators();
+  const collaboratorsById = new Map(collaborators.map((collaborator) => [collaborator.id, collaborator]));
+  const selected = normalizeAssigneeIds(assigneeIds)
+    .map((assigneeId) => findCollaboratorByAssigneeId(collaboratorsById, assigneeId))
+    .filter(Boolean);
+  if (!selected.length) return "";
+  return `
+    <span class="subject-create-subissue-inline-values">
+      ${selected.map((collaborator) => `
+        <span class="subject-create-subissue-inline-person">
+          ${renderCollaboratorAvatar(collaborator)}
+          <span class="subject-create-subissue-inline-person__name">${escapeHtml(compactLastName(collaborator.name))}</span>
+        </span>
+      `).join("")}
+    </span>
+  `;
+}
+
+function renderCreateSubissueLabelsValue(subjectId) {
+  const labels = getSubjectSidebarMeta(subjectId).labels
+    .map((label) => getSubjectLabelDefinition(label))
+    .filter(Boolean);
+  if (!labels.length) return "";
+  return `
+    <span class="subject-create-subissue-inline-values">
+      ${labels.map((labelDef) => `
+        <span class="subject-create-subissue-inline-label">
+          <span class="subject-create-subissue-inline-label__dot" style="background:${escapeHtml(labelDef.color || "#6e7681")}"></span>
+          <span class="subject-create-subissue-inline-label__name">${escapeHtml(labelDef.name)}</span>
+        </span>
+      `).join("")}
+    </span>
+  `;
+}
+
+function renderCreateSubissueSituationValue(subjectId) {
+  const situations = getSubjectSituations(subjectId);
+  const firstSituation = situations[0] || null;
+  if (!firstSituation) return "";
+  return `<span class="subject-create-subissue-inline-values"><span class="subject-create-subissue-inline-text">${escapeHtml(firstNonEmpty(firstSituation.title, firstSituation.id, "Situation"))}</span></span>`;
+}
+
+function renderCreateSubissueObjectiveValue(subjectId) {
+  const objectives = getSubjectObjectives(subjectId);
+  const objective = objectives[0] || null;
+  if (!objective) return "";
+  return `<span class="subject-create-subissue-inline-values"><span class="subject-create-subissue-inline-text">${escapeHtml(objective.title)}</span></span>`;
+}
+
 function renderCreateSubjectMetaControls() {
   const subject = getDraftSubjectSelection()?.item || { id: DRAFT_SUBJECT_ID };
   const meta = getSubjectSidebarMeta(subject.id);
   const objective = meta.objectiveIds.map((objectiveId) => getObjectiveById(objectiveId)).filter(Boolean)[0] || null;
+  const isSubissueMode = String(store.situationsView.createSubjectForm?.mode || "").trim().toLowerCase() === "subissue";
   return `
     <div class="subject-meta-controls subject-meta-controls--create">
       ${renderSubjectMetaField({
         field: "assignees",
-        label: "Assigné à",
-        valueHtml: renderSubjectAssigneesValue(subject.id)
+        label: "Assignee",
+        valueHtml: isSubissueMode ? renderCreateSubissueAssigneesValue(subject.id) : renderSubjectAssigneesValue(subject.id)
       })}
       ${renderSubjectMetaField({
         field: "labels",
         label: "Labels",
-        valueHtml: renderSubjectLabelsValue(subject.id)
+        valueHtml: isSubissueMode ? renderCreateSubissueLabelsValue(subject.id) : renderSubjectLabelsValue(subject.id)
       })}
       ${renderSubjectMetaField({
         field: "situations",
-        label: "Situation",
-        valueHtml: renderSubjectSituationsValue(subject.id)
+        label: "Project",
+        valueHtml: isSubissueMode ? renderCreateSubissueSituationValue(subject.id) : renderSubjectSituationsValue(subject.id)
       })}
       ${renderSubjectMetaField({
         field: "objectives",
-        label: "Objectifs",
-        valueHtml: objective ? renderSubjectObjectivesValue(subject.id) : renderSubjectMetaButtonValue("Aucun objectif")
+        label: "Milestone",
+        valueHtml: isSubissueMode
+          ? renderCreateSubissueObjectiveValue(subject.id)
+          : (objective ? renderSubjectObjectivesValue(subject.id) : renderSubjectMetaButtonValue("Aucun objectif"))
       })}
     </div>
   `;
@@ -3151,9 +3211,11 @@ function renderCreateSubjectFormHtml() {
           <div class="subject-create-content">
             <img src="${escapeHtml(avatar)}" alt="Auteur" class="subject-create-content__avatar">
             <div class="subject-create-content__fields">
-              <div class="subject-create-header">
-                <div class="subject-create-header__title">${escapeHtml(subissueHeaderTitle)}</div>
-              </div>
+              ${isSubissueMode ? "" : `
+                <div class="subject-create-header">
+                  <div class="subject-create-header__title">${escapeHtml(subissueHeaderTitle)}</div>
+                </div>
+              `}
               <label class="subject-create-field">
                 <span class="subject-create-field__label">Ajouter un titre<span class="subject-create-field__required">*</span></span>
                 <input type="text" class="subject-create-input" data-create-subject-title value="${escapeHtml(String(form.title || ""))}" placeholder="Titre du sujet" autocomplete="off">
@@ -3220,7 +3282,7 @@ function renderCreateSubjectFormHtml() {
 function renderCreateSubissueModalHtml() {
   return renderSettingsModal({
     modalId: "subjectCreateSubissueModal",
-    title: "Create new sub-issue",
+    title: "Créer un sous-sujet",
     closeDataAttribute: "data-close-subissue-create-modal",
     bodyHtml: renderCreateSubjectFormHtml(),
     variant: "wide",
