@@ -1007,6 +1007,7 @@ export function createProjectSubjectsEvents(config) {
       if (composerKey === "reply" && messageId) return `[data-thread-reply-draft="${selectorValue(messageId)}"]`;
       if (composerKey === "edit" && messageId) return `[data-thread-edit-draft="${selectorValue(messageId)}"]`;
       if (composerKey === "description" && messageId) return `[data-description-draft="${selectorValue(messageId)}"]`;
+      if (composerKey === "create-subject") return "[data-create-subject-description]";
       return "";
     };
 
@@ -3895,6 +3896,80 @@ export function createProjectSubjectsEvents(config) {
       textarea.addEventListener("scroll", () => positionAllAutocompletePopups());
     });
 
+    root.querySelectorAll("[data-create-subject-description]").forEach((textarea) => {
+      bindComposerAutosizeLifecycle(textarea);
+      scheduleAutosizeAfterVisibility(textarea, "create-subject-bind");
+      textarea.addEventListener("keydown", (event) => {
+        const composerKey = "create-subject";
+        const mentionState = getMentionState();
+        const emojiState = getEmojiState();
+        const subjectRefState = getSubjectRefState();
+        if (event.key === "Escape") {
+          if (mentionState.open && String(mentionState.composerKey || "") === composerKey) {
+            event.preventDefault();
+            closeMentionPopup({ selector: getTextareaSelector({ composerKey }), shouldFocus: true, caretStart: Number(textarea.selectionStart || 0), caretEnd: Number(textarea.selectionEnd || 0) });
+            return;
+          }
+          if (emojiState.open && String(emojiState.composerKey || "") === composerKey) {
+            event.preventDefault();
+            closeEmojiPopup({ selector: getTextareaSelector({ composerKey }), shouldFocus: true, caretStart: Number(textarea.selectionStart || 0), caretEnd: Number(textarea.selectionEnd || 0) });
+            return;
+          }
+          if (subjectRefState.open && String(subjectRefState.composerKey || "") === composerKey) {
+            event.preventDefault();
+            closeSubjectRefPopup();
+            return;
+          }
+        }
+        if (mentionState.open && String(mentionState.composerKey || "") === composerKey && Array.isArray(mentionState.suggestions) && mentionState.suggestions.length && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
+          event.preventDefault();
+          const delta = event.key === "ArrowDown" ? 1 : -1;
+          mentionState.activeIndex = (Number(mentionState.activeIndex || 0) + delta + mentionState.suggestions.length) % mentionState.suggestions.length;
+          rerenderAutocompleteUi({ selector: getTextareaSelector({ composerKey }), shouldFocus: true, caretStart: Number(textarea.selectionStart || 0), caretEnd: Number(textarea.selectionEnd || 0) });
+          return;
+        }
+        if (mentionState.open && String(mentionState.composerKey || "") === composerKey && Array.isArray(mentionState.suggestions) && mentionState.suggestions.length && event.key === "Enter") {
+          event.preventDefault();
+          pickMentionSuggestion(mentionState.suggestions[Number(mentionState.activeIndex || 0)] || mentionState.suggestions[0], composerKey);
+          return;
+        }
+        if (emojiState.open && String(emojiState.composerKey || "") === composerKey && Array.isArray(emojiState.suggestions) && emojiState.suggestions.length) {
+          if (event.key === "ArrowDown") { event.preventDefault(); emojiState.activeIndex = (Number(emojiState.activeIndex || 0) + EMOJI_GRID_COLUMNS) % emojiState.suggestions.length; }
+          else if (event.key === "ArrowUp") { event.preventDefault(); emojiState.activeIndex = (Number(emojiState.activeIndex || 0) - EMOJI_GRID_COLUMNS + emojiState.suggestions.length) % emojiState.suggestions.length; }
+          else if (event.key === "ArrowRight") { event.preventDefault(); emojiState.activeIndex = (Number(emojiState.activeIndex || 0) + 1) % emojiState.suggestions.length; }
+          else if (event.key === "ArrowLeft") { event.preventDefault(); emojiState.activeIndex = (Number(emojiState.activeIndex || 0) - 1 + emojiState.suggestions.length) % emojiState.suggestions.length; }
+          else if (event.key === "Enter") {
+            event.preventDefault();
+            const result = applyInlineEmojiSuggestion(textarea, emojiState.suggestions[Number(emojiState.activeIndex || 0)] || emojiState.suggestions[0]);
+            store.situationsView.createSubjectForm.description = String(result.nextText || "");
+            scheduleAutosizeAfterRender(textarea, "create-subject-emoji");
+          } else {
+            return;
+          }
+          rerenderAutocompleteUi({ selector: getTextareaSelector({ composerKey }), shouldFocus: true, caretStart: Number(textarea.selectionStart || 0), caretEnd: Number(textarea.selectionEnd || 0) });
+          return;
+        }
+        if (subjectRefState.open && String(subjectRefState.composerKey || "") === composerKey && Array.isArray(subjectRefState.suggestions) && subjectRefState.suggestions.length) {
+          if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+            event.preventDefault();
+            const delta = event.key === "ArrowDown" ? 1 : -1;
+            subjectRefState.activeIndex = (Number(subjectRefState.activeIndex || 0) + delta + subjectRefState.suggestions.length) % subjectRefState.suggestions.length;
+            rerenderAutocompleteUi({ selector: getTextareaSelector({ composerKey }), shouldFocus: true, caretStart: Number(textarea.selectionStart || 0), caretEnd: Number(textarea.selectionEnd || 0) });
+            return;
+          }
+          if (event.key === "Enter") {
+            event.preventDefault();
+            pickSubjectRefSuggestion(subjectRefState.suggestions[Number(subjectRefState.activeIndex || 0)] || subjectRefState.suggestions[0], composerKey);
+            return;
+          }
+        }
+        if (CARET_NAVIGATION_KEYS.has(event.key)) requestAnimationFrame(() => { void syncInlineAutocomplete(textarea, composerKey); });
+      });
+      textarea.addEventListener("click", () => { void syncInlineAutocomplete(textarea, "create-subject"); });
+      textarea.addEventListener("keyup", () => { void syncInlineAutocomplete(textarea, "create-subject"); });
+      textarea.addEventListener("scroll", () => positionAllAutocompletePopups());
+    });
+
     root.querySelectorAll("[data-action='thread-reply-tab-write']").forEach((btn) => {
       btn.onclick = () => {
         const messageId = String(btn.closest("[data-inline-reply-editor]")?.dataset.inlineReplyEditor || "").trim();
@@ -4162,13 +4237,34 @@ export function createProjectSubjectsEvents(config) {
       };
     });
     root.querySelectorAll("[data-role='create-subject-file-input']").forEach((input) => {
+      const toObjectUrl = (file) => {
+        try {
+          return file && window?.URL?.createObjectURL ? String(window.URL.createObjectURL(file)) : "";
+        } catch {
+          return "";
+        }
+      };
       const appendFiles = (files = []) => {
         if (!store.situationsView.createSubjectForm?.isOpen) return;
         const existing = Array.isArray(store.situationsView.createSubjectForm.attachments) ? store.situationsView.createSubjectForm.attachments : [];
-        const next = files.map((file) => ({
-          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          name: String(file?.name || "Pièce jointe")
-        }));
+        const next = files
+          .filter((file) => file instanceof File || file instanceof Blob)
+          .map((file) => {
+            const localPreviewUrl = String(file?.type || "").toLowerCase().startsWith("image/") ? toObjectUrl(file) : "";
+            return {
+              id: "",
+              tempId: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              file,
+              file_name: String(file?.name || "Pièce jointe"),
+              mime_type: String(file?.type || ""),
+              size_bytes: Number(file?.size || 0),
+              isImage: String(file?.type || "").toLowerCase().startsWith("image/"),
+              localPreviewUrl,
+              previewUrl: localPreviewUrl,
+              uploadStatus: "draft",
+              error: ""
+            };
+          });
         store.situationsView.createSubjectForm.attachments = [...existing, ...next];
         rerenderPanels();
       };
@@ -4198,6 +4294,25 @@ export function createProjectSubjectsEvents(config) {
         const files = Array.from(event?.dataTransfer?.files || []);
         if (files.length) appendFiles(files);
       });
+    });
+    root.querySelectorAll("[data-action='create-subject-attachment-remove']").forEach((btn) => {
+      btn.onclick = () => {
+        if (!store.situationsView.createSubjectForm?.isOpen) return;
+        const attachmentId = String(btn.dataset.attachmentId || "").trim();
+        const tempId = String(btn.dataset.tempId || "").trim();
+        const attachments = Array.isArray(store.situationsView.createSubjectForm.attachments)
+          ? store.situationsView.createSubjectForm.attachments
+          : [];
+        const index = attachments.findIndex((entry) => String(entry?.id || "") === attachmentId || String(entry?.tempId || "") === tempId);
+        if (index < 0) return;
+        const [removed] = attachments.splice(index, 1);
+        try {
+          if (removed?.localPreviewUrl && window?.URL?.revokeObjectURL) {
+            window.URL.revokeObjectURL(String(removed.localPreviewUrl));
+          }
+        } catch {}
+        rerenderPanels();
+      };
     });
     root.querySelectorAll("[data-action='description-attachments-pick']").forEach((btn) => {
       btn.onclick = () => {
@@ -5081,6 +5196,8 @@ export function createProjectSubjectsEvents(config) {
       const createSubjectDescription = event.target.closest?.("[data-create-subject-description]");
       if (createSubjectDescription && store.situationsView.createSubjectForm?.isOpen) {
         store.situationsView.createSubjectForm.description = String(createSubjectDescription.value || "");
+        runAutosize(createSubjectDescription, "create-subject-input");
+        void syncInlineAutocomplete(createSubjectDescription, "create-subject");
         if (store.situationsView.createSubjectForm.previewMode) rerenderPanels();
         return;
       }
