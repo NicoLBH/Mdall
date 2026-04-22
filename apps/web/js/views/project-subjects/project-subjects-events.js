@@ -367,6 +367,28 @@ export function createProjectSubjectsEvents(config) {
           const activeKey = String(getSubjectsViewState().subjectMetaDropdown.activeKey || "");
           if (!activeKey) return;
           event.preventDefault();
+          if (field === "subissue-actions") {
+            const dropdown = getSubjectsViewState().subjectMetaDropdown || {};
+            const subissueActionsView = String(dropdown.subissueActionsView || "menu");
+            if (subissueActionsView === "existing-subissue") {
+              if (typeof setSubjectParent !== "function") return;
+              const parentSubjectId = String(dropdown.subissueActionSubjectId || subjectSelection.item.id || "");
+              if (!parentSubjectId || activeKey === parentSubjectId) return;
+              const selectedChild = getNestedSujet(activeKey);
+              const selectedChildParentId = String(
+                selectedChild?.parent_subject_id
+                || selectedChild?.parentSubjectId
+                || selectedChild?.raw?.parent_subject_id
+                || ""
+              ).trim();
+              if (selectedChildParentId === parentSubjectId) return;
+              const applied = await setSubjectParent(activeKey, parentSubjectId, { root, skipRerender: true });
+              if (!applied) return;
+              dropdownController().closeMeta();
+              rerenderScope(root);
+              return;
+            }
+          }
           if (field === "relations") {
             const relationsView = String(getSubjectsViewState().subjectMetaDropdown?.relationsView || "");
             if (relationsView === "parent") {
@@ -555,6 +577,71 @@ export function createProjectSubjectsEvents(config) {
         dropdown.query = "";
         dropdown.activeKey = "";
         refreshSubjectMetaDropdownUi(root, { preserveScroll: true, preserveFocus: false });
+      };
+    });
+
+    dropdownHost.querySelectorAll("[data-action='subissue-actions-back']").forEach((btn) => {
+      btn.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const dropdown = getSubjectsViewState().subjectMetaDropdown || {};
+        dropdown.subissueActionsView = "menu";
+        dropdown.query = "";
+        dropdown.activeKey = "";
+        refreshSubjectMetaDropdownUi(root, { preserveScroll: true, preserveFocus: false });
+      };
+    });
+
+    dropdownHost.querySelectorAll("[data-action='open-create-subissue']").forEach((btn) => {
+      btn.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        dropdownController().closeMeta();
+        const dropdown = getSubjectsViewState().subjectMetaDropdown || {};
+        dropdown.subissueActionIntent = "create";
+        refreshSubjectMetaDropdownUi(root, { preserveScroll: true, preserveFocus: false });
+      };
+    });
+
+    dropdownHost.querySelectorAll("[data-action='open-link-existing-subissue']").forEach((btn) => {
+      btn.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const dropdown = getSubjectsViewState().subjectMetaDropdown || {};
+        dropdown.subissueActionsView = "existing-subissue";
+        dropdown.query = "";
+        dropdown.subissueActionIntent = "link-existing";
+        refreshSubjectMetaDropdownUi(root, { preserveScroll: true, preserveFocus: false });
+        const selection = getScopedSelection(root);
+        const subject = selection?.type === "sujet" ? selection.item : null;
+        const entries = subject ? getSubjectMetaMenuEntries(subject, "subissue-actions") : [];
+        dropdown.activeKey = String(entries[0]?.key || "");
+        dropdownController().focusSearch({ field: "subissue-actions" });
+        syncSubjectMetaDropdownPosition(getSubjectMetaScopeRoot());
+      };
+    });
+
+    dropdownHost.querySelectorAll("[data-subject-subissue-existing-entry]").forEach((btn) => {
+      btn.onclick = async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (typeof setSubjectParent !== "function") return;
+        const dropdown = getSubjectsViewState().subjectMetaDropdown || {};
+        const parentSubjectId = String(dropdown.subissueActionSubjectId || "");
+        const childSubjectId = String(btn.dataset.subjectSubissueExistingEntry || "");
+        if (!parentSubjectId || !childSubjectId || childSubjectId === parentSubjectId) return;
+        const selectedChild = getNestedSujet(childSubjectId);
+        const selectedChildParentId = String(
+          selectedChild?.parent_subject_id
+          || selectedChild?.parentSubjectId
+          || selectedChild?.raw?.parent_subject_id
+          || ""
+        ).trim();
+        if (selectedChildParentId === parentSubjectId) return;
+        const applied = await setSubjectParent(childSubjectId, parentSubjectId, { root, skipRerender: true });
+        if (!applied) return;
+        dropdownController().closeMeta();
+        rerenderScope(root);
       };
     });
 
@@ -762,6 +849,77 @@ export function createProjectSubjectsEvents(config) {
           dropdownController().focusSearch({ field });
           syncSubjectMetaDropdownPosition(getSubjectMetaScopeRoot());
         }
+      };
+    });
+
+    const syncSubissueActionTriggerUi = () => {
+      const dropdown = getSubjectsViewState().subjectMetaDropdown || {};
+      const openedSubjectId = String(dropdown.subissueActionSubjectId || "");
+      const isMenuOpen = String(dropdown.field || "") === "subissue-actions";
+      root.querySelectorAll("[data-action='open-subissue-action-menu'][data-subject-id]").forEach((trigger) => {
+        const subjectId = String(trigger.dataset.subjectId || "");
+        const isOpen = isMenuOpen && subjectId && subjectId === openedSubjectId;
+        trigger.setAttribute("aria-expanded", isOpen ? "true" : "false");
+        trigger.classList.toggle("is-open", isOpen);
+      });
+    };
+
+    root.querySelectorAll("[data-action='open-subissue-action-menu']").forEach((btn) => {
+      btn.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const targetSubjectId = String(btn.dataset.subjectId || scopedSelection?.item?.id || "");
+        if (!targetSubjectId) return;
+        const dropdown = getSubjectsViewState().subjectMetaDropdown || {};
+        const isAlreadyOpen = dropdown.field === "subissue-actions" && String(dropdown.subissueActionSubjectId || "") === targetSubjectId;
+        if (isAlreadyOpen) {
+          dropdownController().closeMeta();
+        } else {
+          dropdownController().closeKanban();
+          dropdownController().openMeta({ field: "subissue-actions" });
+          dropdown.subissueActionsView = "menu";
+          dropdown.query = "";
+          dropdown.activeKey = "";
+          dropdown.subissueActionSubjectId = targetSubjectId;
+          dropdown.subissueActionScopeHost = isDrilldownScope ? "drilldown" : "main";
+          dropdown.subissueActionIntent = "";
+        }
+        refreshSubjectMetaDropdownUi(root, { preserveScroll: true, preserveFocus: false });
+        syncSubissueActionTriggerUi();
+        if (!isAlreadyOpen) {
+          syncSubjectMetaDropdownPosition(getSubjectMetaScopeRoot());
+        }
+      };
+    });
+
+    root.querySelectorAll("[data-action='open-create-subissue']").forEach((btn) => {
+      btn.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        dropdownController().closeMeta();
+        const dropdown = getSubjectsViewState().subjectMetaDropdown || {};
+        dropdown.subissueActionIntent = "create";
+        refreshSubjectMetaDropdownUi(root, { preserveScroll: true, preserveFocus: false });
+        syncSubissueActionTriggerUi();
+      };
+    });
+
+    root.querySelectorAll("[data-action='open-link-existing-subissue']").forEach((btn) => {
+      btn.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const dropdown = getSubjectsViewState().subjectMetaDropdown || {};
+        dropdown.subissueActionsView = "existing-subissue";
+        dropdown.query = "";
+        dropdown.subissueActionIntent = "link-existing";
+        refreshSubjectMetaDropdownUi(root, { preserveScroll: true, preserveFocus: false });
+        const selection = getScopedSelection(root);
+        const subject = selection?.type === "sujet" ? selection.item : null;
+        const entries = subject ? getSubjectMetaMenuEntries(subject, "subissue-actions") : [];
+        dropdown.activeKey = String(entries[0]?.key || "");
+        dropdownController().focusSearch({ field: "subissue-actions" });
+        syncSubjectMetaDropdownPosition(getSubjectMetaScopeRoot());
+        syncSubissueActionTriggerUi();
       };
     });
 

@@ -1669,6 +1669,31 @@ function getRelationSubjectSuggestions(subject, query = "", options = {}) {
   return candidates.slice(0, 20);
 }
 
+function getExistingSubissueSuggestions(subject, query = "") {
+  const currentSubjectId = String(subject?.id || "");
+  if (!currentSubjectId) return [];
+  const normalizedQuery = String(query || "").trim().toLowerCase();
+  const forbiddenIds = collectDescendantSubjectIds(currentSubjectId);
+  const currentProjectId = String(firstNonEmpty(subject?.project_id, subject?.raw?.project_id, "")).trim();
+  const map = store.projectSubjectsView?.rawSubjectsResult?.subjectsById || {};
+  const candidates = Object.values(map)
+    .filter((item) => {
+      const candidateId = String(item?.id || "");
+      if (!candidateId || forbiddenIds.has(candidateId)) return false;
+      const candidateParentId = String(firstNonEmpty(item?.parent_subject_id, item?.parentSubjectId, item?.raw?.parent_subject_id, "")).trim();
+      if (candidateParentId === currentSubjectId) return false;
+      const candidateProjectId = String(firstNonEmpty(item?.project_id, item?.raw?.project_id, "")).trim();
+      if (currentProjectId && candidateProjectId && candidateProjectId !== currentProjectId) return false;
+      return matchSearch([item?.title, item?.id], normalizedQuery);
+    })
+    .sort((left, right) => {
+      const tsDiff = getSubjectLastActivityTimestamp(right) - getSubjectLastActivityTimestamp(left);
+      if (tsDiff !== 0) return tsDiff;
+      return String(firstNonEmpty(left?.title, left?.id, "")).localeCompare(String(firstNonEmpty(right?.title, right?.id, "")), "fr");
+    });
+  return candidates.slice(0, 20);
+}
+
 function buildRelationSelectItem(candidate, { dropdownState, isSelected = false, dataAttr }) {
   const candidateId = String(candidate?.id || "");
   return {
@@ -1880,6 +1905,22 @@ function buildSubjectMetaMenuItems(subject, field) {
     }
   }
 
+  if (field === "subissue-actions") {
+    const subissueActionsView = String(dropdownState.subissueActionsView || "menu");
+    if (subissueActionsView === "existing-subissue") {
+      const items = getExistingSubissueSuggestions(subject, query).map((candidate) => buildRelationSelectItem(candidate, {
+        dropdownState,
+        isSelected: false,
+        dataAttr: "subject-subissue-existing-entry"
+      }));
+      return {
+        items,
+        emptyHint: query ? "Aucun résultat pour cette recherche." : "Aucun sujet disponible."
+      };
+    }
+    return { items: [], emptyHint: "Aucune action." };
+  }
+
   const emptyHintMap = {
     assignees: "Aucun assigné pour le moment.",
     labels: "Aucun label pour le moment.",
@@ -1984,6 +2025,55 @@ function renderSubjectMetaDropdown(subject, field) {
               <span class="select-menu__item-mainrow">
                 <span class="select-menu__item-content">
                   <span class="select-menu__item-title">Ajouter ou modifier « Est bloquant pour »</span>
+                </span>
+              </span>
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  if (field === "subissue-actions") {
+    const subissueActionsView = String(dropdownState.subissueActionsView || "menu");
+    if (subissueActionsView === "existing-subissue") {
+      const { items, emptyHint } = buildSubjectMetaMenuItems(subject, field);
+      return `
+        <div class="subject-meta-dropdown gh-menu gh-menu--open" role="dialog">
+          <button type="button" class="subject-meta-relations-back" data-action="subissue-actions-back">
+            <span class="subject-meta-relations-back__icon">${svgIcon("arrow-left", { className: "octicon octicon-arrow-left" })}</span>
+            <span class="subject-meta-relations-back__label">Ajouter un sujet existant</span>
+          </button>
+          <div class="subject-meta-dropdown__search">
+            <span class="subject-meta-dropdown__search-icon" aria-hidden="true">${svgIcon("search", { className: "octicon octicon-search" })}</span>
+            <input type="search" class="subject-meta-dropdown__search-input" data-subject-meta-search="${escapeHtml(field)}" value="${escapeHtml(query)}" placeholder="Rechercher un sujet" autocomplete="off">
+          </div>
+          <div class="subject-meta-dropdown__body">
+            ${renderSelectMenuSection({
+    items,
+    emptyTitle: "Aucun sujet",
+    emptyHint
+  })}
+          </div>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="subject-meta-dropdown gh-menu gh-menu--open" role="menu">
+        <div class="subject-meta-dropdown__body">
+          <div class="select-menu__section">
+            <button type="button" class="select-menu__item subject-meta-relations-menu__item" role="menuitem" data-action="open-create-subissue">
+              <span class="select-menu__item-mainrow">
+                <span class="select-menu__item-content">
+                  <span class="select-menu__item-title">Créer un sous-sujet</span>
+                </span>
+              </span>
+            </button>
+            <button type="button" class="select-menu__item subject-meta-relations-menu__item" role="menuitem" data-action="open-link-existing-subissue">
+              <span class="select-menu__item-mainrow">
+                <span class="select-menu__item-content">
+                  <span class="select-menu__item-title">Ajouter un sujet existant</span>
                 </span>
               </span>
             </button>
@@ -2167,6 +2257,30 @@ function renderSubissueAssigneesCellHtml(subjectId) {
   `;
 }
 
+function renderAddSubissueActionButton(subjectId, options = {}) {
+  const normalizedSubjectId = String(subjectId || "");
+  if (!normalizedSubjectId) return "";
+  const dropdown = getSubjectsViewState().subjectMetaDropdown || {};
+  const isOpen = String(dropdown.field || "") === "subissue-actions"
+    && String(dropdown.subissueActionSubjectId || "") === normalizedSubjectId;
+  const placement = String(options.placement || "").trim().toLowerCase() === "subissues" ? "subissues" : "description";
+  return `
+    <div class="subject-add-subissue-action subject-add-subissue-action--${escapeHtml(placement)}">
+      <button
+        type="button"
+        class="gh-btn gh-btn--md subject-add-subissue-action__trigger ${isOpen ? "is-open" : ""}"
+        data-action="open-subissue-action-menu"
+        data-subject-id="${escapeHtml(normalizedSubjectId)}"
+        data-subject-meta-anchor="subissue-actions"
+        aria-expanded="${isOpen ? "true" : "false"}"
+      >
+        <span>Ajouter sous-sujet</span>
+        <span class="subject-add-subissue-action__chevron" aria-hidden="true">${svgIcon("chevron-down", { className: "octicon octicon-chevron-down" })}</span>
+      </button>
+    </div>
+  `;
+}
+
 function renderSubIssuesForSujet(sujet, options = {}) {
   ensureViewUiState();
   const sujetRowClass = options.sujetRowClass || "js-row-sujet";
@@ -2266,7 +2380,7 @@ function renderSubIssuesForSujet(sujet, options = {}) {
     title: "Sous-sujets",
     leftMetaHtml: subissuesHeadCountsHtml(childSubjects),
     rightMetaHtml: "",
-    bodyHtml: body,
+    bodyHtml: `${body}${renderAddSubissueActionButton(sujet?.id, { placement: "subissues" })}`,
     isOpen: options.isOpen !== false
   });
 }
@@ -3169,6 +3283,8 @@ function getObjectiveById(objectiveId) {
     renderDetailedMetaForSelection,
     renderSubjectMetaControls,
     renderSubjectMetaFieldValue,
+    getChildSubjectList,
+    renderAddSubissueActionButton,
     renderSubIssuesForSujet,
     renderSubIssuesForSituation,
     closeSubjectMetaDropdown,

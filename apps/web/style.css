@@ -3159,6 +3159,11 @@ body.is-resizing{
 .subissues-table .issues-table__head{border-bottom:1px solid var(--border2);}
 .subissues-table .issues-table__body{max-height:360px;overflow:auto;}
 .subissue-row--selected{outline:1px solid rgba(88,166,255,.45);background:rgba(56,139,253,.08);}
+.subject-add-subissue-action{width:100%;}
+.subject-add-subissue-action--description{margin-top:8px;margin-bottom:0;}
+.subject-add-subissue-action--subissues{margin:0;padding:10px 12px 12px;border-top:1px solid var(--border2);width:100%;}
+.subject-add-subissue-action__trigger{display:inline-flex;align-items:center;gap:8px;}
+.subject-add-subissue-action__chevron{display:inline-flex;align-items:center;color:var(--muted);}
 
 /* Main table row selection (same visual language as sub-issues selection) */
 .issue-row.selected{
