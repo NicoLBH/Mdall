@@ -487,6 +487,7 @@ function buildDefaultDraftSubjectMeta() {
 function resetCreateSubjectForm(options = {}) {
   ensureViewUiState();
   const keepCreateMore = !!options.keepCreateMore;
+  const keepContext = !!options.keepContext;
   const previous = store.situationsView.createSubjectForm || {};
   clearCreateSubjectDraftAttachments(previous.attachments);
   store.situationsView.createSubjectForm = {
@@ -499,16 +500,23 @@ function resetCreateSubjectForm(options = {}) {
     validationError: "",
     isSubmitting: false,
     uploadSessionId: "",
-    attachments: []
+    attachments: [],
+    origin: keepContext ? (previous.origin === "detail" ? "detail" : "table") : "table",
+    sourceSubjectId: keepContext ? (String(previous.sourceSubjectId || "").trim() || null) : null
   };
 }
 
-function openCreateSubjectForm() {
+function openCreateSubjectForm(options = {}) {
   resetObjectiveEditState();
   closeSubjectMetaDropdown();
   closeSubjectKanbanDropdown();
   ensureViewUiState();
   const previousCreateMore = !!store.situationsView.createSubjectForm?.createMore;
+  const requestedOrigin = String(options.origin || "").trim().toLowerCase();
+  const origin = requestedOrigin === "detail" ? "detail" : "table";
+  const sourceSubjectId = origin === "detail"
+    ? (String(options.sourceSubjectId || "").trim() || null)
+    : null;
   store.situationsView.subjectsSubview = "subjects";
   store.situationsView.showTableOnly = true;
   store.situationsView.createSubjectForm = {
@@ -521,7 +529,9 @@ function openCreateSubjectForm() {
     validationError: "",
     isSubmitting: false,
     uploadSessionId: "",
-    attachments: []
+    attachments: [],
+    origin,
+    sourceSubjectId
   };
 }
 

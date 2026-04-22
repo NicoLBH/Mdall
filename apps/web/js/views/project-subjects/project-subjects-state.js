@@ -228,12 +228,17 @@ export function createProjectSubjectsState({ store }) {
         validationError: "",
         isSubmitting: false,
         uploadSessionId: "",
-        attachments: []
+        attachments: [],
+        origin: "table",
+        sourceSubjectId: null
       };
     }
     if (typeof v.createSubjectForm.isSubmitting !== "boolean") v.createSubjectForm.isSubmitting = false;
     if (typeof v.createSubjectForm.uploadSessionId !== "string") v.createSubjectForm.uploadSessionId = "";
     if (!Array.isArray(v.createSubjectForm.attachments)) v.createSubjectForm.attachments = [];
+    if (String(v.createSubjectForm.origin || "").trim().toLowerCase() !== "detail") v.createSubjectForm.origin = "table";
+    const sourceSubjectId = String(v.createSubjectForm.sourceSubjectId || "").trim();
+    v.createSubjectForm.sourceSubjectId = sourceSubjectId || null;
     return v;
   }
 

@@ -507,7 +507,8 @@ const projectSubjectsDetailsRenderer = createProjectSubjectsDetailsRenderer({
   renderDetailedMetaForSelection: (...args) => projectSubjectsView.renderDetailedMetaForSelection(...args),
   renderSubjectMetaControls: (...args) => projectSubjectsView.renderSubjectMetaControls(...args),
   priorityBadge: (...args) => projectSubjectsView.priorityBadge(...args),
-  renderDocumentRefsCard: (...args) => projectSubjectsView.renderDocumentRefsCard(...args)
+  renderDocumentRefsCard: (...args) => projectSubjectsView.renderDocumentRefsCard(...args),
+  canRenderCreateFromDetailAction: () => !store.situationsView?.createSubjectForm?.isOpen
 });
 
 const {

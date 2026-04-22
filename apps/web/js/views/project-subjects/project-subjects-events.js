@@ -4957,7 +4957,7 @@ export function createProjectSubjectsEvents(config) {
       if (!action) return;
       if (action === "add-sujet") {
         event.preventDefault();
-        openCreateSubjectForm();
+        openCreateSubjectForm({ origin: "table", sourceSubjectId: null });
         rerenderPanels();
         return;
       }
@@ -5147,6 +5147,9 @@ export function createProjectSubjectsEvents(config) {
       const createSubjectCancelButton = event.target.closest("[data-create-subject-cancel]");
       if (createSubjectCancelButton && store.situationsView.createSubjectForm?.isOpen) {
         event.preventDefault();
+        const formContext = store.situationsView.createSubjectForm || {};
+        const formOrigin = String(formContext.origin || "").trim().toLowerCase() === "detail" ? "detail" : "table";
+        const sourceSubjectId = String(formContext.sourceSubjectId || "").trim();
         dropdownController().closeMeta();
         const mentionUi = typeof getMentionUiState === "function" ? getMentionUiState() : store?.situationsView?.mentionUi;
         if (mentionUi && typeof mentionUi === "object") {
@@ -5179,6 +5182,28 @@ export function createProjectSubjectsEvents(config) {
           subjectRefUi.composerKey = "";
         }
         resetCreateSubjectForm({ keepCreateMore: true });
+        if (formOrigin === "detail" && sourceSubjectId && getNestedSujet(sourceSubjectId)) {
+          selectSubject(sourceSubjectId) || selectSujet(sourceSubjectId);
+          store.situationsView.showTableOnly = false;
+          store.projectSubjectsView.showTableOnly = false;
+          return;
+        }
+        rerenderPanels();
+        return;
+      }
+
+      const openCreateSubjectFromDetailButton = event.target.closest("[data-action='open-create-subject-from-detail']");
+      if (openCreateSubjectFromDetailButton) {
+        event.preventDefault();
+        const activeSubjectId = String(
+          store.situationsView.selectedSubjectId
+          || store.situationsView.selectedSujetId
+          || store.projectSubjectsView.selectedSubjectId
+          || store.projectSubjectsView.selectedSujetId
+          || ""
+        ).trim();
+        if (!activeSubjectId || !getNestedSujet(activeSubjectId)) return;
+        openCreateSubjectForm({ origin: "detail", sourceSubjectId: activeSubjectId });
         rerenderPanels();
         return;
       }
@@ -5190,7 +5215,10 @@ export function createProjectSubjectsEvents(config) {
           return;
         }
 
-        const keepCreateMore = !!store.situationsView.createSubjectForm?.createMore;
+        const formContext = store.situationsView.createSubjectForm || {};
+        const keepCreateMore = !!formContext.createMore;
+        const formOrigin = String(formContext.origin || "").trim().toLowerCase() === "detail" ? "detail" : "table";
+        const sourceSubjectId = String(formContext.sourceSubjectId || "").trim() || null;
 
         (async () => {
           const submitPromise = createSubjectFromDraft();
@@ -5202,9 +5230,16 @@ export function createProjectSubjectsEvents(config) {
           }
 
           if (keepCreateMore) {
-            openCreateSubjectForm();
+            openCreateSubjectForm({
+              origin: formOrigin,
+              sourceSubjectId
+            });
           } else {
             resetCreateSubjectForm({ keepCreateMore: true });
+            if (formOrigin === "detail") {
+              store.situationsView.showTableOnly = false;
+              store.projectSubjectsView.showTableOnly = false;
+            }
           }
           rerenderPanels();
         })().catch((error) => {
