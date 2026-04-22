@@ -765,6 +765,18 @@ export function createProjectSubjectsEvents(config) {
       };
     });
 
+    const syncSubissueActionTriggerUi = () => {
+      const dropdown = getSubjectsViewState().subjectMetaDropdown || {};
+      const openedSubjectId = String(dropdown.subissueActionSubjectId || "");
+      const isMenuOpen = String(dropdown.field || "") === "subissue-actions";
+      root.querySelectorAll("[data-action='open-subissue-action-menu'][data-subject-id]").forEach((trigger) => {
+        const subjectId = String(trigger.dataset.subjectId || "");
+        const isOpen = isMenuOpen && subjectId && subjectId === openedSubjectId;
+        trigger.setAttribute("aria-expanded", isOpen ? "true" : "false");
+        trigger.classList.toggle("is-open", isOpen);
+      });
+    };
+
     root.querySelectorAll("[data-action='open-subissue-action-menu']").forEach((btn) => {
       btn.onclick = (event) => {
         event.preventDefault();
@@ -782,7 +794,8 @@ export function createProjectSubjectsEvents(config) {
           dropdown.subissueActionScopeHost = isDrilldownScope ? "drilldown" : "main";
           dropdown.subissueActionIntent = "";
         }
-        rerenderScope(root);
+        refreshSubjectMetaDropdownUi(root, { preserveScroll: true, preserveFocus: false });
+        syncSubissueActionTriggerUi();
         if (!isAlreadyOpen) {
           syncSubjectMetaDropdownPosition(getSubjectMetaScopeRoot());
         }
@@ -796,7 +809,8 @@ export function createProjectSubjectsEvents(config) {
         dropdownController().closeMeta();
         const dropdown = getSubjectsViewState().subjectMetaDropdown || {};
         dropdown.subissueActionIntent = "create";
-        rerenderScope(root);
+        refreshSubjectMetaDropdownUi(root, { preserveScroll: true, preserveFocus: false });
+        syncSubissueActionTriggerUi();
       };
     });
 
@@ -807,7 +821,8 @@ export function createProjectSubjectsEvents(config) {
         dropdownController().closeMeta();
         const dropdown = getSubjectsViewState().subjectMetaDropdown || {};
         dropdown.subissueActionIntent = "link-existing";
-        rerenderScope(root);
+        refreshSubjectMetaDropdownUi(root, { preserveScroll: true, preserveFocus: false });
+        syncSubissueActionTriggerUi();
       };
     });
 

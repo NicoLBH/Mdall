@@ -40,6 +40,8 @@ test("l'événement d'ouverture du menu sous-sujet utilise le dropdown mutualis�
   assert.match(eventsSource, /\[data-action='open-subissue-action-menu'\]/);
   assert.match(eventsSource, /dropdownController\(\)\.openMeta\(\{ field: "subissue-actions" \}\)/);
   assert.match(eventsSource, /dropdownController\(\)\.closeKanban\(\);/);
+  assert.match(eventsSource, /const syncSubissueActionTriggerUi = \(\) => \{/);
+  assert.match(eventsSource, /refreshSubjectMetaDropdownUi\(root, \{ preserveScroll: true, preserveFocus: false \}\);/);
 });
 
 test("les data attributes et l'état UI dédié sont présents", () => {
