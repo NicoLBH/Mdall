@@ -37,9 +37,12 @@ test("le drilldown ne rend pas le bouton Nouveau sujet", () => {
 
 test("openCreateSubjectForm accepte un contexte explicite origin\/sourceSubjectId", () => {
   assert.match(viewSource, /function openCreateSubjectForm\(options = \{\}\)/);
-  assert.match(viewSource, /const origin = requestedOrigin === "detail" \? "detail" : "table";/);
+  assert.match(viewSource, /const mode = String\(options\.mode \|\| ""\)\.trim\(\)\.toLowerCase\(\) === "subissue" \? "subissue" : "standard";/);
+  assert.match(viewSource, /const origin = mode === "subissue" \? "detail" : \(requestedOrigin === "detail" \? "detail" : "table"\);/);
   assert.match(viewSource, /sourceSubjectId/);
+  assert.match(viewSource, /parentSubjectId/);
   assert.match(stateSource, /origin: "table"/);
+  assert.match(stateSource, /mode: "standard"/);
   assert.match(stateSource, /sourceSubjectId: null/);
 });
 
@@ -58,4 +61,12 @@ test("Ajouter conserve En ajouter d'autres et distingue le flux detail/table", (
   assert.match(eventsSource, /openCreateSubjectForm\(\{\s*origin: formOrigin,\s*sourceSubjectId\s*\}\);/);
   assert.match(eventsSource, /if \(formOrigin === "detail"\) \{\s*store\.situationsView\.showTableOnly = false;/);
   assert.match(eventsSource, /openCreateSubjectForm\(\{ origin: "table", sourceSubjectId: null \}\);/);
+});
+
+test("Créer un sous-sujet ouvre le create form en mode subissue (modale)", () => {
+  assert.match(eventsSource, /openCreateSubjectForm\(\{\s*mode: "subissue",[\s\S]*parentSubjectId,[\s\S]*scopeHost:/);
+  assert.match(viewSource, /function renderCreateSubissueModalHtml\(\)/);
+  assert.match(viewSource, /subjectCreateSubissueModal/);
+  assert.match(stateSource, /mode: "standard"/);
+  assert.match(stateSource, /parentSubjectId: null/);
 });
