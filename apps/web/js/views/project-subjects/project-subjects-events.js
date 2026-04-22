@@ -999,11 +999,7 @@ export function createProjectSubjectsEvents(config) {
       else syncAutocompletePopups();
     };
 
-    const AUTOCOMPLETE_LOG_PREFIX = "[subject-autocomplete]";
-
-    const logAutocompleteEvent = (eventName, payload = {}) => {
-      console.log(`${AUTOCOMPLETE_LOG_PREFIX} ${eventName}`, payload);
-    };
+    const logAutocompleteEvent = () => {};
 
     const getTextareaSelector = ({ composerKey = "main", messageId = "" } = {}) => {
       if (composerKey === "main") return "#humanCommentBox";
