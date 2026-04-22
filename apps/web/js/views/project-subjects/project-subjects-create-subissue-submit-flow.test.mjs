@@ -24,6 +24,13 @@ test("le flux subissue conserve setSubjectParent avec skipRerender true", () => 
   assert.match(eventsSource, /await setSubjectParent\(result\.subjectId, parentSubjectId, \{ root: interactionRoot, skipRerender: true \}\);/);
 });
 
+test("le flux subissue sélectionne le sujet enfant créé dans le bon scope après succès", () => {
+  assert.match(eventsSource, /const finalSubjectId = String\(result\.subjectId \|\| ""\);/);
+  assert.match(eventsSource, /\(openDrilldownFromSubjectPanel \|\| openDrilldownFromSujetPanel\)\(finalSubjectId\);/);
+  assert.match(eventsSource, /selectSubject\(finalSubjectId\) \|\| selectSujet\(finalSubjectId\);/);
+  assert.match(eventsSource, /debugSubissueFlow\("final-selection", \{/);
+});
+
 test("createSubjectFromDraft ne force plus le chargement des versions de description juste après update", () => {
   assert.match(viewSource, /await updateSubjectDescriptionInSupabase\(\{\s*subjectId,\s*description,\s*uploadSessionId\s*\}\);/);
   assert.doesNotMatch(viewSource, /loadSubjectDescriptionVersionsInSupabase\(subjectId\)/);
