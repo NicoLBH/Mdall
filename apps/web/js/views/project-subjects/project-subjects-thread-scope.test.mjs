@@ -107,6 +107,46 @@ test("renderDetailsDiscussionHtml scope le thread/composer sur la sélection exp
   ]);
 });
 
+test("renderDetailsBody n'utilise pas de variable subissue fantôme et injecte le footer via renderDescriptionCard", () => {
+  const captured = [];
+  const renderer = createProjectSubjectsDetailsRenderer({
+    getActiveSelection: () => ({ type: "sujet", item: { id: "S1", title: "Sujet 1" } }),
+    getSelectionEntityType: () => "sujet",
+    getEffectiveSujetStatus: () => "open",
+    getEffectiveSituationStatus: () => "open",
+    getEntityReviewMeta: () => ({ review_state: "pending" }),
+    getReviewTitleStateClass: () => "",
+    getSubjectTitleEditState: () => ({}),
+    isEditingSubjectTitle: () => false,
+    entityDisplayLinkHtml: () => "",
+    problemsCountsHtml: () => "",
+    renderSubjectBlockedByHeadHtml: () => "",
+    renderSubjectParentHeadHtml: () => "",
+    firstNonEmpty: (...values) => values.find((value) => value !== undefined && value !== null && value !== "") || "",
+    escapeHtml: (value) => String(value || ""),
+    statePill: () => "",
+    renderDescriptionCard: (_selection, options = {}) => {
+      captured.push(String(options.footerActionsHtml || ""));
+      return "<description-card />";
+    },
+    renderSubIssuesForSujet: () => "",
+    renderSubIssuesForSituation: () => "",
+    getChildSubjectList: () => [],
+    renderAddSubissueActionButton: () => "<add-subissue-action />",
+    renderThreadBlock: () => "",
+    renderCommentBox: () => "",
+    renderDetailedMetaForSelection: () => "",
+    renderSubjectMetaControls: () => "",
+    priorityBadge: () => "",
+    renderDocumentRefsCard: () => ""
+  });
+
+  const details = renderer.renderDetailsHtml({ type: "sujet", item: { id: "S1", title: "Sujet 1" } });
+  assert.match(details.bodyHtml, /<description-card \/>/);
+  assert.equal(captured.length, 1);
+  assert.match(captured[0], /<add-subissue-action \/>/);
+});
+
 test("ensureTimelineLoadedForSelection charge le subjectId de la sélection fournie", async () => {
   const loadedSubjectIds = [];
   const rerenderHosts = [];
