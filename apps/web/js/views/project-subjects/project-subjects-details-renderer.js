@@ -25,7 +25,8 @@ export function createProjectSubjectsDetailsRenderer(config) {
     renderDetailedMetaForSelection,
     renderSubjectMetaControls,
     priorityBadge,
-    renderDocumentRefsCard
+    renderDocumentRefsCard,
+    canRenderCreateFromDetailAction
   } = config;
 
   function renderSubjectTitleContent(currentSelection, options = {}) {
@@ -56,6 +57,10 @@ export function createProjectSubjectsDetailsRenderer(config) {
       : "";
 
     if (!isEditing) {
+      const showCreateFromDetailAction = options.showCreateFromDetailAction === true
+        && (typeof canRenderCreateFromDetailAction === "function"
+          ? canRenderCreateFromDetailAction(currentSelection)
+          : true);
       return `
         <div class="subject-title-display">
           <div class="subject-title-display__main">
@@ -64,7 +69,8 @@ export function createProjectSubjectsDetailsRenderer(config) {
           </div>
           <div class="subject-title-display__spacer" aria-hidden="true"></div>
           <div class="subject-title-display__actions">
-            <button class="gh-btn gh-btn--sm subject-title-edit__action" type="button" data-action="edit-subject-title">Modifier</button>
+            <button class="gh-btn gh-btn--sm subject-title-edit__action subject-title-display__edit-action" type="button" data-action="edit-subject-title">Modifier</button>
+            ${showCreateFromDetailAction ? `<button class="gh-btn gh-action__main gh-btn--primary gh-btn--md subject-title-display__create-from-detail-action" type="button" data-action="open-create-subject-from-detail">Nouveau sujet</button>` : ""}
           </div>
         </div>
       `;
@@ -96,12 +102,13 @@ export function createProjectSubjectsDetailsRenderer(config) {
     `;
   }
 
-  function renderDetailsTitleWrapHtml(selection) {
+  function renderDetailsTitleWrapHtml(selection, options = {}) {
+    const showCreateFromDetailAction = options.showCreateFromDetailAction === true;
     return renderSharedDetailsTitleWrap(selection, {
       emptyText: "Sélectionner un élément",
       buildTitleTextHtml(currentSelection) {
         if (currentSelection.type === "sujet") {
-          return renderSubjectTitleContent(currentSelection);
+          return renderSubjectTitleContent(currentSelection, { showCreateFromDetailAction });
         }
         const item = currentSelection.item;
         const entityType = getSelectionEntityType(currentSelection.type);
@@ -167,7 +174,9 @@ export function createProjectSubjectsDetailsRenderer(config) {
       headClassName: options.headClassName || "",
       closeId: options.closeId || "",
       closeLabel: options.closeLabel || "Fermer",
-      titleWrapHtml: renderDetailsTitleWrapHtml(selection),
+      titleWrapHtml: renderDetailsTitleWrapHtml(selection, {
+        showCreateFromDetailAction: options.showCreateFromDetailAction === true
+      }),
       emptyPanelTitle: "Sélectionner un élément",
       buildMetaHtml(currentSelection) {
         return escapeHtml(currentSelection?.item?.id || "—");
