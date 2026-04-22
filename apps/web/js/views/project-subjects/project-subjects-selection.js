@@ -173,17 +173,61 @@ export function createProjectSubjectsSelection({
     return type === "sujet" ? "sujet" : type;
   }
 
-  function getScopedSelection(root) {
-    if (root?.closest?.("[data-create-subject-form]")) return getDraftSubjectSelection();
-    if (root?.closest?.("#drilldownPanel")) {
-      const selection = getDrilldownSelection();
-      if (selection) return selection;
+  function resolveScopeFromRoot(root) {
+    if (root?.closest?.("[data-create-subject-form]")) return "draft";
+    if (root?.closest?.("#drilldownPanel")) return "drilldown";
+    return "active";
+  }
+
+  function debugSelectionScope(payload = {}) {
+    if (!isSelectionDebugEnabled()) return;
+    console.info("[subject-selection-scope] resolve", payload);
+  }
+
+  function getSelectionForScope(scopeName = "active", options = {}) {
+    const normalizedScope = String(scopeName || "active").trim().toLowerCase();
+    const {
+      fallbackToActive = false,
+      debugInputType = "scope",
+      debugInputValue = scopeName
+    } = options;
+    let selection = null;
+    if (normalizedScope === "draft") {
+      selection = getDraftSubjectSelection?.() || null;
+    } else if (normalizedScope === "drilldown") {
+      selection = getDrilldownSelection();
+    } else {
+      selection = getActiveSelection();
     }
-    return getActiveSelection();
+
+    if (!selection && fallbackToActive && normalizedScope !== "active") {
+      selection = getActiveSelection();
+    }
+
+    debugSelectionScope({
+      inputType: debugInputType,
+      inputValue: debugInputValue,
+      resolvedScope: normalizedScope,
+      selectionId: selection?.item?.id || null
+    });
+    return selection || null;
+  }
+
+  function getScopedSelectionFromRoot(root, options = {}) {
+    const resolvedScope = resolveScopeFromRoot(root);
+    return getSelectionForScope(resolvedScope, {
+      fallbackToActive: options.fallbackToActive === true,
+      debugInputType: "root",
+      debugInputValue: resolvedScope
+    });
+  }
+
+  function getScopedSelection(root) {
+    return getScopedSelectionFromRoot(root, { fallbackToActive: true });
   }
 
   function currentDecisionTarget(root) {
-    const selection = getScopedSelection(root);
+    const selection = getScopedSelectionFromRoot(root, { fallbackToActive: true });
     if (!selection?.item?.id) return null;
     return { type: selection.type, id: selection.item.id, item: selection.item };
   }
@@ -217,6 +261,8 @@ export function createProjectSubjectsSelection({
   return {
     getActiveSelection,
     getDrilldownSelection,
+    getSelectionForScope,
+    getScopedSelectionFromRoot,
     getSelectionEntityType,
     getScopedSelection,
     currentDecisionTarget,

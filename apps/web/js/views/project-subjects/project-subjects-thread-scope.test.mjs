@@ -168,5 +168,5 @@ test("rerender scoped drilldown n'écrase pas le host principal (protection câb
 
   assert.match(source, /isDrilldownScopeRoot && drilldownBody && \(isThreadScopeRoot \|\| isComposerScopeRoot\)/);
   assert.match(source, /renderDetailsDiscussionScopes\(drilldownBody, \{/);
-  assert.match(source, /selectionOverride: getScopedSelection\("drilldown"\)/);
+  assert.match(source, /selectionOverride: getSelectionForScope\("drilldown"\)/);
 });

@@ -243,6 +243,7 @@ const projectSubjectsSelection = createProjectSubjectsSelection({
 const {
   getActiveSelection,
   getDrilldownSelection,
+  getSelectionForScope,
   getSelectionEntityType,
   getScopedSelection,
   currentDecisionTarget,
@@ -847,6 +848,7 @@ const projectSubjectsView = createProjectSubjectsView({
   setProjectCompactEnabled,
   currentDecisionTarget: (...args) => currentDecisionTarget(...args),
   addComment: (...args) => addComment(...args),
+  getSelectionForScope: (...args) => getSelectionForScope(...args),
   getScopedSelection: (...args) => getScopedSelection(...args),
   getInlineReplyUiState: (...args) => getInlineReplyUiState(...args),
   ensureTimelineLoadedForSelection: (...args) => ensureTimelineLoadedForSelection(...args)

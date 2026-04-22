@@ -85,7 +85,7 @@ export function createProjectSubjectsView(deps) {
     setProjectCompactEnabled,
     currentDecisionTarget,
     addComment,
-    getScopedSelection,
+    getSelectionForScope,
     ensureTimelineLoadedForSelection
   } = deps;
 
@@ -2424,7 +2424,7 @@ function rerenderScope(root) {
       renderDetailsDiscussionScopes(drilldownBody, {
         renderThread: isThreadScopeRoot,
         renderComposer: isComposerScopeRoot,
-        selectionOverride: getScopedSelection("drilldown")
+        selectionOverride: getSelectionForScope("drilldown")
       });
       return;
     }
@@ -2516,9 +2516,7 @@ function renderDetailsDiscussionScopes(detailsHost, options = {}) {
   } = options;
   if (!renderThread && !renderComposer) return;
   const scopeHost = detailsHost?.closest?.("#drilldownPanel") ? "drilldown" : "main";
-  const scopedSelection = selectionOverride || (scopeHost === "drilldown"
-    ? getScopedSelection("drilldown")
-    : getScopedSelection("active"));
+  const scopedSelection = selectionOverride || getSelectionForScope(scopeHost);
 
   if (renderThread) {
     ensureTimelineLoadedForSelection(scopedSelection, { scopeHost });
