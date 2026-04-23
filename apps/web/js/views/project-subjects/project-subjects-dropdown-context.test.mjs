@@ -16,11 +16,13 @@ test("subjectMetaDropdown stocke un contexte explicite (scope + subjectId)", () 
   assert.match(stateSource, /scope:\s*""/);
   assert.match(stateSource, /scopeHost:\s*"main"/);
   assert.match(stateSource, /subjectId:\s*""/);
+  assert.match(stateSource, /anchorKey:\s*""/);
+  assert.match(stateSource, /instanceKey:\s*""/);
 });
 
 test("les ouvertures de dropdown méta fournissent scope et subjectId explicites", () => {
-  assert.match(eventsSource, /openMeta\(\{\s*field,\s*scope,\s*scopeHost:\s*scope === "drilldown" \? "drilldown" : "main",\s*subjectId:\s*targetSubjectId/s);
-  assert.match(eventsSource, /openMeta\(\{\s*field:\s*"subissue-actions",\s*scope,\s*scopeHost:\s*scope === "drilldown" \? "drilldown" : "main",\s*subjectId:\s*targetSubjectId/s);
+  assert.match(eventsSource, /openMeta\(\{\s*field,\s*scope,\s*scopeHost,\s*subjectId:\s*targetSubjectId,[\s\S]*anchorKey,[\s\S]*instanceKey/s);
+  assert.match(eventsSource, /openMeta\(\{\s*field:\s*"subissue-actions",\s*scope,\s*scopeHost,\s*subjectId:\s*targetSubjectId,[\s\S]*anchorKey,[\s\S]*instanceKey/s);
 });
 
 test("les actions dropdown utilisent le sujet du contexte explicite", () => {
@@ -35,6 +37,8 @@ test("les actions dropdown utilisent le sujet du contexte explicite", () => {
 test("le contrôleur dropdown conserve le subjectId explicite pendant la session", () => {
   assert.match(dropdownControllerSource, /dropdown\.subjectId = String\(subjectId \|\| ""\);/);
   assert.match(dropdownControllerSource, /dropdown\.subjectId = "";/);
+  assert.match(dropdownControllerSource, /dropdown\.anchorKey = String\(anchorKey \|\| ""\)\.trim\(\)/);
+  assert.match(dropdownControllerSource, /dropdown\.anchorKey = "";/);
   assert.match(dropdownControllerSource, /const explicitSubjectId = String\(viewState\.subjectMetaDropdown\?\.subjectId \|\| ""\)\.trim\(\);/);
 });
 

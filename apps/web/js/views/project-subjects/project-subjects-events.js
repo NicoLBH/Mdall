@@ -17,6 +17,7 @@ import { searchSubjectRefs } from "../../utils/subject-ref-index.js";
 import { computeTextareaCaretRect } from "../../utils/textarea-caret-position.js";
 import { autosizeTextarea } from "../../utils/textarea-autosize.js";
 import { renderSubjectAttachmentTile, renderSubjectAttachmentsPreviewList } from "./project-subjects-attachments-ui.js";
+import { isMetaDropdownOpenForAnchor } from "../ui/select-dropdown-controller.js";
 
 export function createProjectSubjectsEvents(config) {
   const EMOJI_GRID_COLUMNS = 6;
@@ -203,6 +204,17 @@ export function createProjectSubjectsEvents(config) {
     if (root?.closest?.("[data-create-subject-form]")) return "draft";
     if (root?.closest?.("#drilldownPanel")) return "drilldown";
     return "main";
+  }
+
+  function isSubissueCreateModalOpen() {
+    const form = getSubjectsViewState()?.createSubjectForm || {};
+    return !!form.isOpen && String(form.mode || "").trim().toLowerCase() === "subissue";
+  }
+
+  function isBlockedBySubissueModal(root, trigger = null) {
+    if (!isSubissueCreateModalOpen()) return false;
+    if (trigger?.closest?.("#subjectCreateSubissueModal")) return false;
+    return !root?.closest?.("#subjectCreateSubissueModal");
   }
 
   function resolveMetaDropdownContext(root, fallbackSelection = null) {
@@ -757,7 +769,11 @@ export function createProjectSubjectsEvents(config) {
     if (!root) return null;
     const subject = getDropdownContextSubject(root, { selection: getScopedSelection(root) });
     if (subject?.id && field && typeof renderSubjectMetaFieldValue === "function") {
-      const fieldSection = root.querySelector(`[data-subject-meta-trigger="${field}"]`)?.closest?.(".subject-meta-field") || null;
+      const anchorKey = String(dropdown.anchorKey || "");
+      const fieldSelector = anchorKey
+        ? `[data-subject-meta-trigger="${field}"][data-subject-meta-anchor="${CSS.escape(anchorKey)}"]`
+        : `[data-subject-meta-trigger="${field}"]`;
+      const fieldSection = root.querySelector(fieldSelector)?.closest?.(".subject-meta-field") || null;
       const fieldValue = fieldSection?.querySelector?.(".subject-meta-field__value") || null;
       if (fieldValue) {
         fieldValue.innerHTML = renderSubjectMetaFieldValue(subject, field);
@@ -1067,24 +1083,40 @@ export function createProjectSubjectsEvents(config) {
       btn.onclick = async (event) => {
         event.preventDefault();
         event.stopPropagation();
+        if (isBlockedBySubissueModal(root, btn)) return;
         const field = String(btn.dataset.subjectMetaTrigger || "");
         const dropdown = getSubjectsViewState().subjectMetaDropdown || {};
-        const isAlreadyOpen = dropdown.field === field;
+        const scope = String(btn.dataset.subjectMetaScope || resolveDropdownScopeFromRoot(root));
+        const scopeHost = String(btn.dataset.subjectMetaScopeHost || (scope === "drilldown" ? "drilldown" : "main"));
+        const currentSelection = getScopedSelection(root);
+        const targetSubjectId = String(
+          btn.dataset.subjectMetaSubjectId
+          || (currentSelection?.type === "sujet" ? currentSelection.item?.id || "" : "")
+        );
+        const anchorKey = String(btn.dataset.subjectMetaAnchor || "");
+        const instanceKey = String(btn.dataset.subjectMetaInstance || "");
+        const isAlreadyOpen = isMetaDropdownOpenForAnchor(dropdown, {
+          field,
+          scope,
+          scopeHost,
+          subjectId: targetSubjectId,
+          anchorKey
+        });
         if (isAlreadyOpen) {
           dropdownController().closeMeta();
         } else {
-          const currentSelection = getScopedSelection(root);
-          const scope = resolveDropdownScopeFromRoot(root);
-          const targetSubjectId = String(currentSelection?.type === "sujet" ? currentSelection.item?.id || "" : "");
           if (!targetSubjectId) return;
           dropdownController().closeKanban();
           dropdownController().openMeta({
             field,
             scope,
-            scopeHost: scope === "drilldown" ? "drilldown" : "main",
+            scopeHost,
             subjectId: targetSubjectId,
             showClosedSituations: false,
-            anchor: btn
+            anchor: btn,
+            anchorKey,
+            instanceKey,
+            openedFrom: "subject-meta-trigger"
           });
           dropdown.relationsView = field === "relations" ? "menu" : "";
           const entries = currentSelection?.type === "sujet" ? getSubjectMetaMenuEntries(currentSelection.item, field) : [];
@@ -1109,11 +1141,18 @@ export function createProjectSubjectsEvents(config) {
 
     const syncSubissueActionTriggerUi = () => {
       const dropdown = getSubjectsViewState().subjectMetaDropdown || {};
-      const openedSubjectId = String(dropdown.subissueActionSubjectId || "");
-      const isMenuOpen = String(dropdown.field || "") === "subissue-actions";
       root.querySelectorAll("[data-action='open-subissue-action-menu'][data-subject-id]").forEach((trigger) => {
-        const subjectId = String(trigger.dataset.subjectId || "");
-        const isOpen = isMenuOpen && subjectId && subjectId === openedSubjectId;
+        const subjectId = String(trigger.dataset.subjectMetaSubjectId || trigger.dataset.subjectId || "");
+        const scope = String(trigger.dataset.subjectMetaScope || resolveDropdownScopeFromRoot(root));
+        const scopeHost = String(trigger.dataset.subjectMetaScopeHost || (scope === "drilldown" ? "drilldown" : "main"));
+        const anchorKey = String(trigger.dataset.subjectMetaAnchor || "");
+        const isOpen = isMetaDropdownOpenForAnchor(dropdown, {
+          field: "subissue-actions",
+          scope,
+          scopeHost,
+          subjectId,
+          anchorKey
+        });
         trigger.setAttribute("aria-expanded", isOpen ? "true" : "false");
         trigger.classList.toggle("is-open", isOpen);
       });
@@ -1123,31 +1162,45 @@ export function createProjectSubjectsEvents(config) {
       btn.onclick = (event) => {
         event.preventDefault();
         event.stopPropagation();
+        if (isBlockedBySubissueModal(root, btn)) return;
         const currentSelection = getScopedSelection(root);
-        const targetSubjectId = String(btn.dataset.subjectId || currentSelection?.item?.id || "");
+        const targetSubjectId = String(btn.dataset.subjectMetaSubjectId || btn.dataset.subjectId || currentSelection?.item?.id || "");
         if (!targetSubjectId) return;
-        const scope = resolveDropdownScopeFromRoot(root);
+        const scope = String(btn.dataset.subjectMetaScope || resolveDropdownScopeFromRoot(root));
+        const scopeHost = String(btn.dataset.subjectMetaScopeHost || (scope === "drilldown" ? "drilldown" : "main"));
+        const anchorKey = String(btn.dataset.subjectMetaAnchor || "");
+        const instanceKey = String(btn.dataset.subjectMetaInstance || "");
         const dropdown = getSubjectsViewState().subjectMetaDropdown || {};
-        const isAlreadyOpen = dropdown.field === "subissue-actions" && String(dropdown.subissueActionSubjectId || "") === targetSubjectId;
+        const isAlreadyOpen = isMetaDropdownOpenForAnchor(dropdown, {
+          field: "subissue-actions",
+          scope,
+          scopeHost,
+          subjectId: targetSubjectId,
+          anchorKey
+        });
         if (isAlreadyOpen) {
           dropdownController().closeMeta();
         } else {
           debugSubissueFlow("menu-open", {
             subjectId: targetSubjectId,
-            scopeHost: isDrilldownScope ? "drilldown" : "main"
+            scopeHost
           });
           dropdownController().closeKanban();
           dropdownController().openMeta({
             field: "subissue-actions",
             scope,
-            scopeHost: scope === "drilldown" ? "drilldown" : "main",
-            subjectId: targetSubjectId
+            scopeHost,
+            subjectId: targetSubjectId,
+            anchor: btn,
+            anchorKey,
+            instanceKey,
+            openedFrom: "subissue-actions-trigger"
           });
           dropdown.subissueActionsView = "menu";
           dropdown.query = "";
           dropdown.activeKey = "";
           dropdown.subissueActionSubjectId = targetSubjectId;
-          dropdown.subissueActionScopeHost = isDrilldownScope ? "drilldown" : "main";
+          dropdown.subissueActionScopeHost = scopeHost;
           dropdown.subissueActionIntent = "";
         }
         refreshSubjectMetaDropdownUi(root, { preserveScroll: true, preserveFocus: false });

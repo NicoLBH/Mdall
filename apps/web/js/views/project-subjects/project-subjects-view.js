@@ -7,9 +7,11 @@ import {
   resolveSubjectAssigneeIds
 } from "../../services/subject-assignees-service.js";
 import {
+  buildSubjectMetaAnchorKey,
   createSelectDropdownController,
   ensureSelectDropdownHost,
   getSubjectSelectDropdownScopeRoot,
+  isMetaDropdownOpenForAnchor,
   renderSelectDropdownHost,
   syncSelectDropdownPosition
 } from "../ui/select-dropdown-controller.js";
@@ -1200,9 +1202,19 @@ function summarizeSubjectMetaValue(items, emptyLabel = "Aucun") {
   return `${items[0]} +${items.length - 1}`;
 }
 
-function renderSubjectMetaField({ field, label, valueHtml, emptyState = null }) {
+function renderSubjectMetaField({
+  field,
+  label,
+  valueHtml,
+  emptyState = null,
+  subjectId = "",
+  scope = "main",
+  scopeHost = "main",
+  instance = "aside"
+}) {
   const dropdown = getSubjectsViewState().subjectMetaDropdown || {};
-  const isOpen = dropdown.field === field;
+  const anchorKey = buildSubjectMetaAnchorKey({ field, subjectId, scope, scopeHost, instance });
+  const isOpen = isMetaDropdownOpenForAnchor(dropdown, { field, subjectId, scope, scopeHost, anchorKey });
   const isEmpty = !!(emptyState && emptyState.isEmpty);
   return `
     <section class="subject-meta-field ${isOpen ? "is-open" : ""}">
@@ -1210,7 +1222,11 @@ function renderSubjectMetaField({ field, label, valueHtml, emptyState = null }) 
         type="button"
         class="subject-meta-field__trigger ${isEmpty ? "subject-meta-field__trigger--empty" : ""}"
         data-subject-meta-trigger="${escapeHtml(field)}"
-        data-subject-meta-anchor="${escapeHtml(field)}"
+        data-subject-meta-anchor="${escapeHtml(anchorKey)}"
+        data-subject-meta-instance="${escapeHtml(instance)}"
+        data-subject-meta-scope="${escapeHtml(scope)}"
+        data-subject-meta-scope-host="${escapeHtml(scopeHost)}"
+        data-subject-meta-subject-id="${escapeHtml(subjectId)}"
         aria-expanded="${isOpen ? "true" : "false"}"
       >
         ${isEmpty ? `
@@ -2240,32 +2256,53 @@ function renderSubjectKanbanDropdown(subjectId, situationId) {
 function renderSubjectMetaControls(subject) {
   const meta = getSubjectSidebarMeta(subject.id);
   const selectedObjectives = meta.objectiveIds.map((objectiveId) => getObjectiveById(objectiveId)).filter(Boolean);
+  const subjectId = String(subject?.id || "");
   return `
     <div class="subject-meta-controls">
       ${renderSubjectMetaField({
         field: "assignees",
         label: "Assigné à",
-        valueHtml: renderSubjectAssigneesValue(subject.id)
+        valueHtml: renderSubjectAssigneesValue(subject.id),
+        subjectId,
+        scope: "main",
+        scopeHost: "main",
+        instance: "detail-aside"
       })}
       ${renderSubjectMetaField({
         field: "labels",
         label: "Labels",
-        valueHtml: renderSubjectLabelsValue(subject.id)
+        valueHtml: renderSubjectLabelsValue(subject.id),
+        subjectId,
+        scope: "main",
+        scopeHost: "main",
+        instance: "detail-aside"
       })}
       ${renderSubjectMetaField({
         field: "situations",
         label: "Situation",
-        valueHtml: renderSubjectSituationsValue(subject.id)
+        valueHtml: renderSubjectSituationsValue(subject.id),
+        subjectId,
+        scope: "main",
+        scopeHost: "main",
+        instance: "detail-aside"
       })}
       ${renderSubjectMetaField({
         field: "objectives",
         label: "Objectifs",
-        valueHtml: renderSubjectObjectivesValue(subject.id)
+        valueHtml: renderSubjectObjectivesValue(subject.id),
+        subjectId,
+        scope: "main",
+        scopeHost: "main",
+        instance: "detail-aside"
       })}
       ${renderSubjectMetaField({
         field: "relations",
         label: "Relations",
-        valueHtml: renderSubjectRelationsCards(subject.id)
+        valueHtml: renderSubjectRelationsCards(subject.id),
+        subjectId,
+        scope: "main",
+        scopeHost: "main",
+        instance: "detail-aside"
       })}
     </div>
   `;
@@ -2314,9 +2351,24 @@ function renderAddSubissueActionButton(subjectId, options = {}) {
   const normalizedSubjectId = String(subjectId || "");
   if (!normalizedSubjectId) return "";
   const dropdown = getSubjectsViewState().subjectMetaDropdown || {};
-  const isOpen = String(dropdown.field || "") === "subissue-actions"
-    && String(dropdown.subissueActionSubjectId || "") === normalizedSubjectId;
+  const scopeHost = String(options.scopeHost || "").trim().toLowerCase() === "drilldown" ? "drilldown" : "main";
+  const scope = String(options.scope || (scopeHost === "drilldown" ? "drilldown" : "main")).trim().toLowerCase() || "main";
   const placement = String(options.placement || "").trim().toLowerCase() === "subissues" ? "subissues" : "description";
+  const instance = placement === "subissues" ? "subissue-actions-subtable" : "subissue-actions-detail";
+  const anchorKey = buildSubjectMetaAnchorKey({
+    field: "subissue-actions",
+    scope,
+    scopeHost,
+    subjectId: normalizedSubjectId,
+    instance
+  });
+  const isOpen = isMetaDropdownOpenForAnchor(dropdown, {
+    field: "subissue-actions",
+    scope,
+    scopeHost,
+    subjectId: normalizedSubjectId,
+    anchorKey
+  });
   return `
     <div class="subject-add-subissue-action subject-add-subissue-action--${escapeHtml(placement)}">
       <button
@@ -2324,7 +2376,11 @@ function renderAddSubissueActionButton(subjectId, options = {}) {
         class="gh-btn gh-btn--md subject-add-subissue-action__trigger ${isOpen ? "is-open" : ""}"
         data-action="open-subissue-action-menu"
         data-subject-id="${escapeHtml(normalizedSubjectId)}"
-        data-subject-meta-anchor="subissue-actions"
+        data-subject-meta-anchor="${escapeHtml(anchorKey)}"
+        data-subject-meta-instance="${escapeHtml(instance)}"
+        data-subject-meta-scope="${escapeHtml(scope)}"
+        data-subject-meta-scope-host="${escapeHtml(scopeHost)}"
+        data-subject-meta-subject-id="${escapeHtml(normalizedSubjectId)}"
         aria-expanded="${isOpen ? "true" : "false"}"
       >
         <span>Ajouter sous-sujet</span>
@@ -3278,6 +3334,10 @@ function renderCreateSubjectMetaControls() {
   const objectivesValueHtml = isSubissueMode
     ? renderCreateSubissueObjectiveValue(subject.id)
     : (objective ? renderSubjectObjectivesValue(subject.id) : renderSubjectMetaButtonValue("Aucun objectif"));
+  const scope = "draft";
+  const scopeHost = "main";
+  const instance = isSubissueMode ? "create-subissue-modal" : "create-subject-standard";
+  const subjectId = String(subject?.id || "");
 
   return `
     <div class="subject-meta-controls subject-meta-controls--create">
@@ -3285,25 +3345,41 @@ function renderCreateSubjectMetaControls() {
         field: "assignees",
         label: "Assignee",
         valueHtml: assigneesValueHtml,
-        emptyState: isSubissueMode ? { isEmpty: !assigneesValueHtml, icon: "people", text: "Assigné à" } : null
+        emptyState: isSubissueMode ? { isEmpty: !assigneesValueHtml, icon: "people", text: "Assigné à" } : null,
+        subjectId,
+        scope,
+        scopeHost,
+        instance
       })}
       ${renderSubjectMetaField({
         field: "labels",
         label: "Labels",
         valueHtml: labelsValueHtml,
-        emptyState: isSubissueMode ? { isEmpty: !labelsValueHtml, icon: "tag", text: "Label" } : null
+        emptyState: isSubissueMode ? { isEmpty: !labelsValueHtml, icon: "tag", text: "Label" } : null,
+        subjectId,
+        scope,
+        scopeHost,
+        instance
       })}
       ${renderSubjectMetaField({
         field: "situations",
         label: "Project",
         valueHtml: situationsValueHtml,
-        emptyState: isSubissueMode ? { isEmpty: !situationsValueHtml, icon: "table", text: "Situation" } : null
+        emptyState: isSubissueMode ? { isEmpty: !situationsValueHtml, icon: "table", text: "Situation" } : null,
+        subjectId,
+        scope,
+        scopeHost,
+        instance
       })}
       ${renderSubjectMetaField({
         field: "objectives",
         label: "Milestone",
         valueHtml: objectivesValueHtml,
-        emptyState: isSubissueMode ? { isEmpty: !objectivesValueHtml, icon: "milestone", text: "Objectif" } : null
+        emptyState: isSubissueMode ? { isEmpty: !objectivesValueHtml, icon: "milestone", text: "Objectif" } : null,
+        subjectId,
+        scope,
+        scopeHost,
+        instance
       })}
     </div>
   `;
