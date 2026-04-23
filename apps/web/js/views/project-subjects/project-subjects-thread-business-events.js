@@ -79,7 +79,7 @@ export const BUSINESS_ACTIVITY_CONFIG = {
   },
   subject_parent_added: { icon: "issue-tracked-by", tone: "business-rel", verb: "a ajouté un parent" },
   subject_parent_removed: { icon: "arrow-up", tone: "business-rel", verb: "a retiré un parent" },
-  subject_child_added: { icon: "arrow-down", tone: "business-rel", verb: "a ajouté un sous-sujet" },
+  subject_child_added: { icon: "issue-tracks", tone: "business-rel", verb: "a ajouté un sous-sujet" },
   subject_child_removed: { icon: "arrow-down", tone: "business-rel", verb: "a retiré un sous-sujet" },
   subject_blocked_by_added: { icon: "blocked", tone: "business-alert", verb: "a ajouté un blocage entrant" },
   subject_blocked_by_removed: { icon: "blocked", tone: "business-alert", verb: "a retiré un blocage entrant" },
