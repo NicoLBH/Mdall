@@ -5,6 +5,8 @@ export function autosizeTextarea(textarea, options = {}) {
   const {
     minHeightFallback = 110,
     comfortLines = 3,
+    lockOverflowY = true,
+    preferMinHeightOnFirstMount = false,
     log = false,
     logPrefix = "[textarea-autosize]",
     cause = "manual",
@@ -18,8 +20,21 @@ export function autosizeTextarea(textarea, options = {}) {
   const minHeightCss = Math.round(parseFloat(computedStyle?.minHeight || "") || 0);
   const minHeight = Math.max(Number(minHeightFallback || 0), minHeightCss);
   const comfortHeight = lineHeight * Math.max(0, Number(comfortLines || 0));
+  const manualFloorStored = Math.max(0, Math.round(parseFloat(String(textarea?.dataset?.manualResizeFloor || "0")) || 0));
+  const previousAutosizeHeight = Math.max(0, Math.round(parseFloat(String(textarea?.dataset?.autosizeLastHeight || "0")) || 0));
   const previousHeight = Math.round(parseFloat(String(textarea.style.height || "0")) || textarea.offsetHeight || 0);
+  const measuredOffsetHeight = Math.max(0, Math.round(Number(textarea.offsetHeight || 0)));
+  const measuredInlineHeight = Math.max(0, Math.round(parseFloat(String(textarea.style.height || "0")) || 0));
+  const measuredCurrentHeight = Math.max(measuredOffsetHeight, measuredInlineHeight);
   const isVisible = textarea.offsetParent !== null || textarea.getClientRects?.().length > 0;
+  const didUserGrowTextarea = measuredCurrentHeight > 0 && previousAutosizeHeight > 0 && measuredCurrentHeight > previousAutosizeHeight + 1;
+  const manualFloor = didUserGrowTextarea
+    ? Math.max(manualFloorStored, measuredCurrentHeight)
+    : manualFloorStored;
+
+  if (manualFloor > 0 && textarea?.dataset) {
+    textarea.dataset.manualResizeFloor = String(manualFloor);
+  }
 
   if (textarea.isConnected === false) {
     return {
@@ -35,7 +50,11 @@ export function autosizeTextarea(textarea, options = {}) {
     };
   }
 
-  textarea.style.overflowY = "hidden";
+  if (lockOverflowY) {
+    textarea.style.overflowY = "hidden";
+  } else if (textarea.style.overflowY === "hidden") {
+    textarea.style.overflowY = "";
+  }
   textarea.style.height = "auto";
 
   const measuredScrollHeight = Math.round(Number(textarea.scrollHeight || 0));
@@ -52,8 +71,19 @@ export function autosizeTextarea(textarea, options = {}) {
       visible: isVisible
     };
   }
-  const targetHeight = Math.max(minHeight, Math.round(measuredScrollHeight + comfortHeight));
+  const baseFloor = Math.max(minHeight, manualFloor);
+  const isFirstMountPass = !!preferMinHeightOnFirstMount
+    && String(cause || "").startsWith("mount")
+    && !previousAutosizeHeight
+    && !manualFloor
+    && !String(textarea?.value || "").trim();
+  const targetHeight = isFirstMountPass
+    ? baseFloor
+    : Math.max(baseFloor, Math.round(measuredScrollHeight + comfortHeight));
   textarea.style.height = `${targetHeight}px`;
+  if (textarea?.dataset) {
+    textarea.dataset.autosizeLastHeight = String(targetHeight);
+  }
 
   const shouldLog = !!log
     && typeof window !== "undefined"
@@ -69,7 +99,8 @@ export function autosizeTextarea(textarea, options = {}) {
       lineHeight,
       comfortHeight,
       minHeight,
-      comfortLines: Math.max(0, Number(comfortLines || 0))
+      comfortLines: Math.max(0, Number(comfortLines || 0)),
+      manualFloor
     });
   }
 
@@ -77,6 +108,7 @@ export function autosizeTextarea(textarea, options = {}) {
     previousHeight,
     nextHeight: targetHeight,
     minHeight,
+    manualFloor,
     lineHeight,
     comfortLines: Math.max(0, Number(comfortLines || 0)),
     comfortHeight,

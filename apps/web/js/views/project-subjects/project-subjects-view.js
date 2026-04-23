@@ -2604,6 +2604,59 @@ function isCreateSubissueModalScopeRoot(root) {
   return root === modalHost || !!root.closest?.("#subjectCreateSubissueModalHost");
 }
 
+let subissueModalScrollLockState = null;
+
+function setSubissueModalScrollLock(isLocked) {
+  const shouldLock = !!isLocked;
+  document.body.classList.toggle("subject-create-subissue-modal-open", shouldLock);
+  document.body.classList.toggle("modal-open", shouldLock);
+
+  if (shouldLock) {
+    if (!subissueModalScrollLockState) {
+      subissueModalScrollLockState = {
+        scrollY: Math.max(0, Math.round(window.scrollY || window.pageYOffset || 0)),
+        bodyStyles: {
+          position: document.body.style.position || "",
+          top: document.body.style.top || "",
+          left: document.body.style.left || "",
+          right: document.body.style.right || "",
+          width: document.body.style.width || "",
+          overflow: document.body.style.overflow || "",
+          overscrollBehavior: document.body.style.overscrollBehavior || ""
+        },
+        htmlStyles: {
+          overflow: document.documentElement.style.overflow || "",
+          overscrollBehavior: document.documentElement.style.overscrollBehavior || ""
+        }
+      };
+    }
+    document.documentElement.style.overflow = "hidden";
+    document.documentElement.style.overscrollBehavior = "none";
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${subissueModalScrollLockState.scrollY}px`;
+    document.body.style.left = "0";
+    document.body.style.right = "0";
+    document.body.style.width = "100%";
+    document.body.style.overflow = "hidden";
+    document.body.style.overscrollBehavior = "none";
+    return;
+  }
+
+  if (!subissueModalScrollLockState) return;
+  const { scrollY = 0, bodyStyles = {}, htmlStyles = {} } = subissueModalScrollLockState;
+  subissueModalScrollLockState = null;
+  document.documentElement.style.overflow = htmlStyles.overflow || "";
+  document.documentElement.style.overscrollBehavior = htmlStyles.overscrollBehavior || "";
+  document.body.style.position = bodyStyles.position || "";
+  document.body.style.top = bodyStyles.top || "";
+  document.body.style.left = bodyStyles.left || "";
+  document.body.style.right = bodyStyles.right || "";
+  document.body.style.width = bodyStyles.width || "";
+  document.body.style.overflow = bodyStyles.overflow || "";
+  document.body.style.overscrollBehavior = bodyStyles.overscrollBehavior || "";
+  window.scrollTo(0, scrollY);
+}
+
 function rerenderCreateSubissueModal() {
   const modalHost = ensureCreateSubissueModalHost();
   if (!isSubissueCreateFormOpen()) {
@@ -2634,7 +2687,7 @@ function rerenderPanels() {
   const isCreateFormOpen = !!createForm.isOpen;
   const isSubissueCreateMode = isCreateFormOpen && String(createForm.mode || "").trim().toLowerCase() === "subissue";
   const isStandardCreateMode = isCreateFormOpen && !isSubissueCreateMode;
-  document.body.classList.toggle("subject-create-subissue-modal-open", isSubissueCreateMode);
+  setSubissueModalScrollLock(isSubissueCreateMode);
 
   const shouldDisableProjectCompact = !!panelHost
     && !isCreateFormOpen
