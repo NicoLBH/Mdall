@@ -1298,6 +1298,16 @@ priority=${firstNonEmpty(subject.priority, "")}`
     `;
   }
 
+  function getSituationKanbanStatusLabel(statusKey = "") {
+    const normalized = String(statusKey || "").trim().toLowerCase();
+    if (normalized === "non_active") return "Non activé";
+    if (normalized === "to_activate") return "À activer";
+    if (normalized === "in_progress") return "En cours";
+    if (normalized === "in_arbitration") return "En arbitrage";
+    if (normalized === "resolved") return "Résolu";
+    return "—";
+  }
+
   function renderLinkedSubjectInline(counterpartId = "", fallbackTitle = "") {
     const subject = counterpartId ? getNestedSujet(counterpartId) : null;
     const status = String(getEffectiveSujetStatus(counterpartId) || subject?.status || "open").toLowerCase();
@@ -1446,7 +1456,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
 
       if (type === "ACTIVITY") {
         const kind = String(e?.kind || "").toLowerCase();
-        if (kind === "message_deleted" || kind === "issue_closed" || kind === "issue_reopened") return "";
+        if (kind === "message_deleted" || kind === "issue_closed" || kind === "issue_reopened" || kind === "message_frozen") return "";
         if (String(e?.meta?.source || "") === "subject_history") {
           const activityIdentity = getAuthorIdentity({
             author: e?.actor,
@@ -1557,6 +1567,27 @@ priority=${firstNonEmpty(subject.priority, "")}`
         });
         const displayName = activityIdentity.displayName;
         const ts = fmtTs(e?.ts || "");
+        if (kind === "sujet_kanban_status_changed") {
+          const fromStatus = getSituationKanbanStatusLabel(e?.meta?.from);
+          const toStatus = getSituationKanbanStatusLabel(e?.meta?.to);
+          const situationId = normalizeId(e?.meta?.situation_id || e?.entity_id);
+          const inlineSituationHtml = renderSituationInline(situationId, "Situation");
+          return renderMessageThreadActivity({
+            idx,
+            className: "thread-item--business thread-item--business-rel thread-item--event-subject-situation-status-changed",
+            iconHtml: `<span class="tl-ico tl-ico--business tl-ico--business-rel" aria-hidden="true">${svgIcon("table")}</span>`,
+            authorIconHtml: activityIdentity.avatarHtml
+              ? `<span class="tl-author tl-author--custom" aria-hidden="true">${activityIdentity.avatarHtml}</span>`
+              : miniAuthorIconHtml("human"),
+            textHtml: `
+              <span class="tl-author-name">${escapeHtml(displayName)}</span>
+              <span class="mono-small"> a modifié de l'état </span>
+              <span class="tl-note-inline"><span class="tl-note-inline-text">${escapeHtml(fromStatus)}</span><span class="mono-small"> à </span><span class="tl-note-inline-text">${escapeHtml(toStatus)}</span><span class="mono-small"> dans la situation </span>${inlineSituationHtml}</span>
+              <span class="mono-small tl-time-inline"><span aria-hidden="true">·</span><span>${escapeHtml(ts)}</span></span>
+            `,
+            noteHtml: ""
+          });
+        }
         let iconHtml = `<span class="tl-ico tl-ico--muted" aria-hidden="true"></span>`;
         let verb = "updated";
         let targetHtml = "";
