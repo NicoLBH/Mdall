@@ -173,8 +173,16 @@ export function setKanbanSelectDropdownQuery(getViewState, query = "") {
 
 export function getSubjectSelectDropdownScopeRoot(getViewState) {
   const viewState = getViewStateFromGetter(getViewState) || {};
-  const createSubjectFormRoot = document.querySelector("[data-create-subject-form]");
-  if (viewState.createSubjectForm?.isOpen && createSubjectFormRoot) return createSubjectFormRoot;
+  if (viewState.createSubjectForm?.isOpen) {
+    const createMode = String(viewState.createSubjectForm?.mode || "").trim().toLowerCase();
+    if (createMode === "subissue") {
+      const subissueModal = document.getElementById("subjectCreateSubissueModal");
+      const modalCreateFormRoot = subissueModal?.querySelector?.("[data-create-subject-form]");
+      if (modalCreateFormRoot) return modalCreateFormRoot;
+    }
+    const createSubjectFormRoots = [...document.querySelectorAll("[data-create-subject-form]")];
+    if (createSubjectFormRoots.length) return createSubjectFormRoots[createSubjectFormRoots.length - 1];
+  }
 
   const drilldownBody = document.getElementById("drilldownBody");
   if (viewState.drilldown?.isOpen && drilldownBody) return drilldownBody;
@@ -278,7 +286,7 @@ export function syncSelectDropdownPosition({
       ...candidateRoots,
       document.getElementById("detailsBodyModal"),
       document.getElementById("drilldownBody"),
-      document.querySelector("[data-create-subject-form]"),
+      ...document.querySelectorAll("[data-create-subject-form]"),
       document.getElementById("situationsDetailsHost")
     ].filter(Boolean);
     const stateAnchor = viewState?.subjectMetaDropdown?.anchorElement;
