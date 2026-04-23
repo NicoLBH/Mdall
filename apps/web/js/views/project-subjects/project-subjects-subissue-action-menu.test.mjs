@@ -42,7 +42,7 @@ test("le dropdown Ajouter sous-sujet expose exactement les deux actions attendue
 test("l'événement d'ouverture du menu sous-sujet utilise le dropdown mutualisé", () => {
   assert.match(eventsSource, /\[data-action='open-subissue-action-menu'\]/);
   assert.match(eventsSource, /debugSubissueFlow\("menu-open", \{/);
-  assert.match(eventsSource, /dropdownController\(\)\.openMeta\(\{ field: "subissue-actions" \}\)/);
+  assert.match(eventsSource, /dropdownController\(\)\.openMeta\(\{\s*field: "subissue-actions",[\s\S]*subjectId: targetSubjectId/);
   assert.match(eventsSource, /dropdownController\(\)\.closeKanban\(\);/);
   assert.match(eventsSource, /dropdown\.subissueActionsView = "menu";/);
   assert.match(eventsSource, /const syncSubissueActionTriggerUi = \(\) => \{/);

@@ -3088,6 +3088,10 @@ const subjectSelectDropdown = createSelectDropdownController({
     getViewState: getSubjectsViewState,
     root,
     getScopedSelection,
+    resolveSubjectById: (subjectId) => {
+      if (String(subjectId || "") === DRAFT_SUBJECT_ID) return getDraftSubjectSelection()?.item || null;
+      return getNestedSujet(subjectId);
+    },
     renderMetaDropdown: renderSubjectMetaDropdown,
     renderKanbanDropdown: renderSubjectKanbanDropdown,
     ensureHost: ensureSelectDropdownHost

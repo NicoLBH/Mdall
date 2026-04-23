@@ -480,7 +480,21 @@ export function createProjectSubjectsActions(config) {
   function setSubjectLabels(subjectId, labels) {
     const subjectKey = String(subjectId || "");
     const nextLabels = normalizeSubjectLabels(labels);
-    if (subjectKey !== DRAFT_SUBJECT_ID) return;
+    if (!subjectKey) return;
+    if (subjectKey !== DRAFT_SUBJECT_ID) {
+      persistRunBucket((bucket) => {
+        bucket.subjectMeta = bucket.subjectMeta && typeof bucket.subjectMeta === "object" ? bucket.subjectMeta : {};
+        bucket.subjectMeta.sujet = bucket.subjectMeta.sujet && typeof bucket.subjectMeta.sujet === "object" ? bucket.subjectMeta.sujet : {};
+        const current = bucket.subjectMeta.sujet[subjectKey] && typeof bucket.subjectMeta.sujet[subjectKey] === "object"
+          ? bucket.subjectMeta.sujet[subjectKey]
+          : {};
+        bucket.subjectMeta.sujet[subjectKey] = {
+          ...current,
+          labels: nextLabels
+        };
+      });
+      return;
+    }
 
     ensureViewUiState();
     store.situationsView.createSubjectForm.meta = {

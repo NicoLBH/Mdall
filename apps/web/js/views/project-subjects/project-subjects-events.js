@@ -199,6 +199,39 @@ export function createProjectSubjectsEvents(config) {
     detachDropdownDocumentEvents = null;
   }
 
+  function resolveDropdownScopeFromRoot(root) {
+    if (root?.closest?.("[data-create-subject-form]")) return "draft";
+    if (root?.closest?.("#drilldownPanel")) return "drilldown";
+    return "main";
+  }
+
+  function resolveMetaDropdownContext(root, fallbackSelection = null) {
+    const dropdown = getSubjectsViewState().subjectMetaDropdown || {};
+    const scope = String(dropdown.scope || "").trim().toLowerCase();
+    const scopeHost = String(dropdown.scopeHost || "").trim().toLowerCase() === "drilldown" ? "drilldown" : "main";
+    const subjectId = String(dropdown.subjectId || "").trim();
+    if (scope && subjectId) {
+      return { scope, scopeHost, subjectId, field: String(dropdown.field || "") };
+    }
+    const selection = fallbackSelection || getScopedSelection(root);
+    const resolvedScope = resolveDropdownScopeFromRoot(root);
+    return {
+      scope: resolvedScope,
+      scopeHost: resolvedScope === "drilldown" ? "drilldown" : "main",
+      subjectId: String(selection?.type === "sujet" ? selection.item?.id || "" : ""),
+      field: String(dropdown.field || "")
+    };
+  }
+
+  function getDropdownContextSubject(root, options = {}) {
+    const context = resolveMetaDropdownContext(root, options.selection || null);
+    const subjectId = String(context.subjectId || "");
+    if (!subjectId) return null;
+    const selection = getScopedSelection(root);
+    if (selection?.type === "sujet" && String(selection.item?.id || "") === subjectId) return selection.item;
+    return getNestedSujet(subjectId) || null;
+  }
+
   async function resolveSelfCollaboratorAssigneeId() {
     const currentUserId = String(store.user?.id || "").trim();
     const currentEmail = String(store.user?.email || "").trim().toLowerCase();
@@ -351,8 +384,7 @@ export function createProjectSubjectsEvents(config) {
       input.oninput = () => {
         const field = String(input.dataset.subjectMetaSearch || "");
         dropdownController().setMetaQuery(input.value || "");
-        const selection = getScopedSelection(root);
-        const subject = selection?.type === "sujet" ? selection.item : null;
+        const subject = getDropdownContextSubject(root);
         const entries = subject ? getSubjectMetaMenuEntries(subject, field) : [];
         const currentKey = String(getSubjectsViewState().subjectMetaDropdown.activeKey || "");
         getSubjectsViewState().subjectMetaDropdown.activeKey = entries.some((entry) => String(entry?.key || "") === currentKey)
@@ -363,11 +395,11 @@ export function createProjectSubjectsEvents(config) {
 
       input.onkeydown = async (event) => {
         const field = String(input.dataset.subjectMetaSearch || "");
-        const subjectSelection = getScopedSelection(root);
-        if (subjectSelection?.type !== "sujet") return;
+        const targetSubject = getDropdownContextSubject(root);
+        if (!targetSubject?.id) return;
         if (event.key === "ArrowDown" || event.key === "ArrowUp") {
           event.preventDefault();
-          setSubjectMetaActiveEntry(subjectSelection.item, field, event.key === "ArrowDown" ? 1 : -1);
+          setSubjectMetaActiveEntry(targetSubject, field, event.key === "ArrowDown" ? 1 : -1);
           refreshSubjectMetaDropdownUi(root, { preserveScroll: true, preserveFocus: true, focusArgs: { field } });
           return;
         }
@@ -386,7 +418,7 @@ export function createProjectSubjectsEvents(config) {
             const subissueActionsView = String(dropdown.subissueActionsView || "menu");
             if (subissueActionsView === "existing-subissue") {
               if (typeof setSubjectParent !== "function") return;
-              const parentSubjectId = String(dropdown.subissueActionSubjectId || subjectSelection.item.id || "");
+              const parentSubjectId = String(dropdown.subissueActionSubjectId || targetSubject.id || "");
               if (!parentSubjectId || activeKey === parentSubjectId) return;
               const selectedChild = getNestedSujet(activeKey);
               const selectedChildParentId = String(
@@ -407,34 +439,34 @@ export function createProjectSubjectsEvents(config) {
             const relationsView = String(getSubjectsViewState().subjectMetaDropdown?.relationsView || "");
             if (relationsView === "parent") {
               if (typeof setSubjectParent !== "function") return;
-              await applyNonDestructiveMetaToggle(root, field, () => setSubjectParent(subjectSelection.item.id, activeKey, { root, skipRerender: true }));
+              await applyNonDestructiveMetaToggle(root, field, () => setSubjectParent(targetSubject.id, activeKey, { root, skipRerender: true }));
               return;
             }
             if (relationsView === "blocked_by") {
               if (typeof toggleSubjectBlockedByRelation !== "function") return;
-              await applyNonDestructiveMetaToggle(root, field, () => toggleSubjectBlockedByRelation(subjectSelection.item.id, activeKey, { root, skipRerender: true }));
+              await applyNonDestructiveMetaToggle(root, field, () => toggleSubjectBlockedByRelation(targetSubject.id, activeKey, { root, skipRerender: true }));
               return;
             }
             if (relationsView === "blocking_for") {
               if (typeof toggleSubjectBlockingForRelation !== "function") return;
-              await applyNonDestructiveMetaToggle(root, field, () => toggleSubjectBlockingForRelation(subjectSelection.item.id, activeKey, { root, skipRerender: true }));
+              await applyNonDestructiveMetaToggle(root, field, () => toggleSubjectBlockingForRelation(targetSubject.id, activeKey, { root, skipRerender: true }));
               return;
             }
           }
           if (field === "objectives") {
-            await applyNonDestructiveMetaToggle(root, field, () => toggleSubjectObjective(subjectSelection.item.id, activeKey, { root, skipRerender: true }));
+            await applyNonDestructiveMetaToggle(root, field, () => toggleSubjectObjective(targetSubject.id, activeKey, { root, skipRerender: true }));
             return;
           }
           if (field === "situations") {
-            await applyNonDestructiveMetaToggle(root, field, () => toggleSubjectSituation(subjectSelection.item.id, activeKey, { root, skipRerender: true }));
+            await applyNonDestructiveMetaToggle(root, field, () => toggleSubjectSituation(targetSubject.id, activeKey, { root, skipRerender: true }));
             return;
           }
           if (field === "labels") {
-            await applyNonDestructiveMetaToggle(root, field, () => toggleSubjectLabel(subjectSelection.item.id, activeKey, { root, skipRerender: true }));
+            await applyNonDestructiveMetaToggle(root, field, () => toggleSubjectLabel(targetSubject.id, activeKey, { root, skipRerender: true }));
             return;
           }
           if (field === "assignees") {
-            await applyNonDestructiveMetaToggle(root, field, () => toggleSubjectAssignee(subjectSelection.item.id, activeKey, { root, skipRerender: true }));
+            await applyNonDestructiveMetaToggle(root, field, () => toggleSubjectAssignee(targetSubject.id, activeKey, { root, skipRerender: true }));
           }
         }
       };
@@ -444,10 +476,10 @@ export function createProjectSubjectsEvents(config) {
       btn.onclick = async (event) => {
         event.preventDefault();
         event.stopPropagation();
-        const subjectSelection = getScopedSelection(root);
-        if (subjectSelection?.type !== "sujet") return;
+        const targetSubject = getDropdownContextSubject(root);
+        if (!targetSubject?.id) return;
         const objectiveId = String(btn.dataset.objectiveSelect || "");
-        await applyNonDestructiveMetaToggle(root, "objectives", () => toggleSubjectObjective(subjectSelection.item.id, objectiveId, { root, skipRerender: true }));
+        await applyNonDestructiveMetaToggle(root, "objectives", () => toggleSubjectObjective(targetSubject.id, objectiveId, { root, skipRerender: true }));
       };
     });
 
@@ -455,10 +487,10 @@ export function createProjectSubjectsEvents(config) {
       btn.onclick = async (event) => {
         event.preventDefault();
         event.stopPropagation();
-        const subjectSelection = getScopedSelection(root);
-        if (subjectSelection?.type !== "sujet") return;
+        const targetSubject = getDropdownContextSubject(root);
+        if (!targetSubject?.id) return;
         const situationId = String(btn.dataset.situationToggle || "");
-        await applyNonDestructiveMetaToggle(root, "situations", () => toggleSubjectSituation(subjectSelection.item.id, situationId, { root, skipRerender: true }));
+        await applyNonDestructiveMetaToggle(root, "situations", () => toggleSubjectSituation(targetSubject.id, situationId, { root, skipRerender: true }));
       };
     });
 
@@ -466,10 +498,10 @@ export function createProjectSubjectsEvents(config) {
       btn.onclick = async (event) => {
         event.preventDefault();
         event.stopPropagation();
-        const subjectSelection = getScopedSelection(root);
-        if (subjectSelection?.type !== "sujet") return;
+        const targetSubject = getDropdownContextSubject(root);
+        if (!targetSubject?.id) return;
         const labelKey = String(btn.dataset.subjectLabelToggle || "");
-        await applyNonDestructiveMetaToggle(root, "labels", () => toggleSubjectLabel(subjectSelection.item.id, labelKey, { root, skipRerender: true }));
+        await applyNonDestructiveMetaToggle(root, "labels", () => toggleSubjectLabel(targetSubject.id, labelKey, { root, skipRerender: true }));
       };
     });
 
@@ -477,10 +509,10 @@ export function createProjectSubjectsEvents(config) {
       btn.onclick = async (event) => {
         event.preventDefault();
         event.stopPropagation();
-        const subjectSelection = getScopedSelection(root);
-        if (subjectSelection?.type !== "sujet") return;
+        const targetSubject = getDropdownContextSubject(root);
+        if (!targetSubject?.id) return;
         const assigneeId = String(btn.dataset.subjectAssigneeToggle || "");
-        await applyNonDestructiveMetaToggle(root, "assignees", () => toggleSubjectAssignee(subjectSelection.item.id, assigneeId, { root, skipRerender: true }));
+        await applyNonDestructiveMetaToggle(root, "assignees", () => toggleSubjectAssignee(targetSubject.id, assigneeId, { root, skipRerender: true }));
       };
     });
 
@@ -488,11 +520,11 @@ export function createProjectSubjectsEvents(config) {
       btn.onclick = async (event) => {
         event.preventDefault();
         event.stopPropagation();
-        const subjectSelection = getScopedSelection(root);
-        if (subjectSelection?.type !== "sujet") return;
+        const targetSubject = getDropdownContextSubject(root);
+        if (!targetSubject?.id) return;
         if (typeof setSubjectParent !== "function") return;
         const parentSubjectId = String(btn.dataset.subjectRelationsParentEntry || "");
-        await applyNonDestructiveMetaToggle(root, "relations", () => setSubjectParent(subjectSelection.item.id, parentSubjectId, { root, skipRerender: true }));
+        await applyNonDestructiveMetaToggle(root, "relations", () => setSubjectParent(targetSubject.id, parentSubjectId, { root, skipRerender: true }));
       };
     });
 
@@ -500,10 +532,10 @@ export function createProjectSubjectsEvents(config) {
       btn.onclick = async (event) => {
         event.preventDefault();
         event.stopPropagation();
-        const subjectSelection = getScopedSelection(root);
-        if (subjectSelection?.type !== "sujet") return;
+        const targetSubject = getDropdownContextSubject(root);
+        if (!targetSubject?.id) return;
         if (typeof setSubjectParent !== "function") return;
-        await applyNonDestructiveMetaToggle(root, "relations", () => setSubjectParent(subjectSelection.item.id, "", { root, skipRerender: true }));
+        await applyNonDestructiveMetaToggle(root, "relations", () => setSubjectParent(targetSubject.id, "", { root, skipRerender: true }));
       };
     });
 
@@ -515,9 +547,9 @@ export function createProjectSubjectsEvents(config) {
         dropdown.relationsView = "parent";
         dropdown.query = "";
         dropdown.activeKey = "";
-        const subjectSelection = getScopedSelection(root);
-        if (subjectSelection?.type === "sujet") {
-          const entries = getSubjectMetaMenuEntries(subjectSelection.item, "relations");
+        const targetSubject = getDropdownContextSubject(root);
+        if (targetSubject?.id) {
+          const entries = getSubjectMetaMenuEntries(targetSubject, "relations");
           dropdown.activeKey = String((entries.find((entry) => entry.isSelected) || entries[0] || {}).key || "");
         }
         refreshSubjectMetaDropdownUi(root, { preserveScroll: true, preserveFocus: true, focusArgs: { field: "relations" } });
@@ -532,9 +564,9 @@ export function createProjectSubjectsEvents(config) {
         dropdown.relationsView = "blocked_by";
         dropdown.query = "";
         dropdown.activeKey = "";
-        const subjectSelection = getScopedSelection(root);
-        if (subjectSelection?.type === "sujet") {
-          const entries = getSubjectMetaMenuEntries(subjectSelection.item, "relations");
+        const targetSubject = getDropdownContextSubject(root);
+        if (targetSubject?.id) {
+          const entries = getSubjectMetaMenuEntries(targetSubject, "relations");
           dropdown.activeKey = String((entries.find((entry) => entry.isSelected) || entries[0] || {}).key || "");
         }
         refreshSubjectMetaDropdownUi(root, { preserveScroll: true, preserveFocus: true, focusArgs: { field: "relations" } });
@@ -549,9 +581,9 @@ export function createProjectSubjectsEvents(config) {
         dropdown.relationsView = "blocking_for";
         dropdown.query = "";
         dropdown.activeKey = "";
-        const subjectSelection = getScopedSelection(root);
-        if (subjectSelection?.type === "sujet") {
-          const entries = getSubjectMetaMenuEntries(subjectSelection.item, "relations");
+        const targetSubject = getDropdownContextSubject(root);
+        if (targetSubject?.id) {
+          const entries = getSubjectMetaMenuEntries(targetSubject, "relations");
           dropdown.activeKey = String((entries.find((entry) => entry.isSelected) || entries[0] || {}).key || "");
         }
         refreshSubjectMetaDropdownUi(root, { preserveScroll: true, preserveFocus: true, focusArgs: { field: "relations" } });
@@ -562,11 +594,11 @@ export function createProjectSubjectsEvents(config) {
       btn.onclick = async (event) => {
         event.preventDefault();
         event.stopPropagation();
-        const subjectSelection = getScopedSelection(root);
-        if (subjectSelection?.type !== "sujet") return;
+        const targetSubject = getDropdownContextSubject(root);
+        if (!targetSubject?.id) return;
         if (typeof toggleSubjectBlockedByRelation !== "function") return;
         const relationSubjectId = String(btn.dataset.subjectRelationsBlockedByEntry || "");
-        await applyNonDestructiveMetaToggle(root, "relations", () => toggleSubjectBlockedByRelation(subjectSelection.item.id, relationSubjectId, { root, skipRerender: true }));
+        await applyNonDestructiveMetaToggle(root, "relations", () => toggleSubjectBlockedByRelation(targetSubject.id, relationSubjectId, { root, skipRerender: true }));
       };
     });
 
@@ -574,11 +606,11 @@ export function createProjectSubjectsEvents(config) {
       btn.onclick = async (event) => {
         event.preventDefault();
         event.stopPropagation();
-        const subjectSelection = getScopedSelection(root);
-        if (subjectSelection?.type !== "sujet") return;
+        const targetSubject = getDropdownContextSubject(root);
+        if (!targetSubject?.id) return;
         if (typeof toggleSubjectBlockingForRelation !== "function") return;
         const relationSubjectId = String(btn.dataset.subjectRelationsBlockingForEntry || "");
-        await applyNonDestructiveMetaToggle(root, "relations", () => toggleSubjectBlockingForRelation(subjectSelection.item.id, relationSubjectId, { root, skipRerender: true }));
+        await applyNonDestructiveMetaToggle(root, "relations", () => toggleSubjectBlockingForRelation(targetSubject.id, relationSubjectId, { root, skipRerender: true }));
       };
     });
 
@@ -647,8 +679,7 @@ export function createProjectSubjectsEvents(config) {
         dropdown.query = "";
         dropdown.subissueActionIntent = "link-existing";
         refreshSubjectMetaDropdownUi(root, { preserveScroll: true, preserveFocus: false });
-        const selection = getScopedSelection(root);
-        const subject = selection?.type === "sujet" ? selection.item : null;
+        const subject = getDropdownContextSubject(root);
         const entries = subject ? getSubjectMetaMenuEntries(subject, "subissue-actions") : [];
         dropdown.activeKey = String(entries[0]?.key || "");
         dropdownController().focusSearch({ field: "subissue-actions" });
@@ -724,12 +755,12 @@ export function createProjectSubjectsEvents(config) {
 
   function refreshSubjectMetaDropdownUi(root, { field = "", preserveScroll = false, preserveFocus = false, focusArgs = null } = {}) {
     if (!root) return null;
-    const selection = getScopedSelection(root);
-    if (selection?.type === "sujet" && field && typeof renderSubjectMetaFieldValue === "function") {
+    const subject = getDropdownContextSubject(root, { selection: getScopedSelection(root) });
+    if (subject?.id && field && typeof renderSubjectMetaFieldValue === "function") {
       const fieldSection = root.querySelector(`[data-subject-meta-trigger="${field}"]`)?.closest?.(".subject-meta-field") || null;
       const fieldValue = fieldSection?.querySelector?.(".subject-meta-field__value") || null;
       if (fieldValue) {
-        fieldValue.innerHTML = renderSubjectMetaFieldValue(selection.item, field);
+        fieldValue.innerHTML = renderSubjectMetaFieldValue(subject, field);
         if (field === "situations") bindSubjectSituationFieldInteractions(root, fieldSection);
       }
     }
@@ -1042,15 +1073,26 @@ export function createProjectSubjectsEvents(config) {
         if (isAlreadyOpen) {
           dropdownController().closeMeta();
         } else {
+          const currentSelection = getScopedSelection(root);
+          const scope = resolveDropdownScopeFromRoot(root);
+          const targetSubjectId = String(currentSelection?.type === "sujet" ? currentSelection.item?.id || "" : "");
+          if (!targetSubjectId) return;
           dropdownController().closeKanban();
-          dropdownController().openMeta({ field, showClosedSituations: false, anchor: btn });
+          dropdownController().openMeta({
+            field,
+            scope,
+            scopeHost: scope === "drilldown" ? "drilldown" : "main",
+            subjectId: targetSubjectId,
+            showClosedSituations: false,
+            anchor: btn
+          });
           dropdown.relationsView = field === "relations" ? "menu" : "";
-          const entries = scopedSelection?.type === "sujet" ? getSubjectMetaMenuEntries(scopedSelection.item, field) : [];
-          const selectedObjectiveKey = field === "objectives" && scopedSelection?.type === "sujet"
-            ? String(getSubjectSidebarMeta(scopedSelection.item.id).objectiveIds[0] || "")
+          const entries = currentSelection?.type === "sujet" ? getSubjectMetaMenuEntries(currentSelection.item, field) : [];
+          const selectedObjectiveKey = field === "objectives" && currentSelection?.type === "sujet"
+            ? String(getSubjectSidebarMeta(currentSelection.item.id).objectiveIds[0] || "")
             : "";
-          const selectedLabelKey = field === "labels" && scopedSelection?.type === "sujet"
-            ? String((getSubjectSidebarMeta(scopedSelection.item.id).labels[0] || "")).trim().toLowerCase()
+          const selectedLabelKey = field === "labels" && currentSelection?.type === "sujet"
+            ? String((getSubjectSidebarMeta(currentSelection.item.id).labels[0] || "")).trim().toLowerCase()
             : "";
           const preferredKey = selectedObjectiveKey || selectedLabelKey;
           dropdown.activeKey = preferredKey && entries.some((entry) => String(entry?.key || "") === preferredKey)
@@ -1081,8 +1123,10 @@ export function createProjectSubjectsEvents(config) {
       btn.onclick = (event) => {
         event.preventDefault();
         event.stopPropagation();
-        const targetSubjectId = String(btn.dataset.subjectId || scopedSelection?.item?.id || "");
+        const currentSelection = getScopedSelection(root);
+        const targetSubjectId = String(btn.dataset.subjectId || currentSelection?.item?.id || "");
         if (!targetSubjectId) return;
+        const scope = resolveDropdownScopeFromRoot(root);
         const dropdown = getSubjectsViewState().subjectMetaDropdown || {};
         const isAlreadyOpen = dropdown.field === "subissue-actions" && String(dropdown.subissueActionSubjectId || "") === targetSubjectId;
         if (isAlreadyOpen) {
@@ -1093,7 +1137,12 @@ export function createProjectSubjectsEvents(config) {
             scopeHost: isDrilldownScope ? "drilldown" : "main"
           });
           dropdownController().closeKanban();
-          dropdownController().openMeta({ field: "subissue-actions" });
+          dropdownController().openMeta({
+            field: "subissue-actions",
+            scope,
+            scopeHost: scope === "drilldown" ? "drilldown" : "main",
+            subjectId: targetSubjectId
+          });
           dropdown.subissueActionsView = "menu";
           dropdown.query = "";
           dropdown.activeKey = "";
@@ -1151,8 +1200,7 @@ export function createProjectSubjectsEvents(config) {
         dropdown.query = "";
         dropdown.subissueActionIntent = "link-existing";
         refreshSubjectMetaDropdownUi(root, { preserveScroll: true, preserveFocus: false });
-        const selection = getScopedSelection(root);
-        const subject = selection?.type === "sujet" ? selection.item : null;
+        const subject = getDropdownContextSubject(root);
         const entries = subject ? getSubjectMetaMenuEntries(subject, "subissue-actions") : [];
         dropdown.activeKey = String(entries[0]?.key || "");
         dropdownController().focusSearch({ field: "subissue-actions" });

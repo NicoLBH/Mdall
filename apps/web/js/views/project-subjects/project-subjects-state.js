@@ -195,6 +195,9 @@ export function createProjectSubjectsState({ store }) {
     if (!v.subjectMetaDropdown || typeof v.subjectMetaDropdown !== "object") {
       v.subjectMetaDropdown = {
         field: null,
+        scope: "",
+        scopeHost: "main",
+        subjectId: "",
         query: "",
         activeKey: "",
         showClosedSituations: false,
@@ -205,6 +208,9 @@ export function createProjectSubjectsState({ store }) {
         subissueActionIntent: ""
       };
     }
+    if (typeof v.subjectMetaDropdown.scope !== "string") v.subjectMetaDropdown.scope = "";
+    if (typeof v.subjectMetaDropdown.scopeHost !== "string") v.subjectMetaDropdown.scopeHost = "main";
+    if (typeof v.subjectMetaDropdown.subjectId !== "string") v.subjectMetaDropdown.subjectId = "";
     if (typeof v.subjectMetaDropdown.showClosedSituations !== "boolean") v.subjectMetaDropdown.showClosedSituations = false;
     if (typeof v.subjectMetaDropdown.relationsView !== "string") v.subjectMetaDropdown.relationsView = "menu";
     if (typeof v.subjectMetaDropdown.subissueActionsView !== "string") v.subjectMetaDropdown.subissueActionsView = "menu";
@@ -282,6 +288,9 @@ export function createProjectSubjectsState({ store }) {
     };
     v.subjectMetaDropdown = {
       field: null,
+      scope: "",
+      scopeHost: "main",
+      subjectId: "",
       query: "",
       activeKey: "",
       showClosedSituations: false,

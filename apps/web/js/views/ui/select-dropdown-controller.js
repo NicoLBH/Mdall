@@ -115,6 +115,9 @@ export function closeMetaSelectDropdown(getViewState) {
   const dropdown = viewState?.subjectMetaDropdown;
   if (!dropdown) return;
   dropdown.field = null;
+  dropdown.scope = "";
+  dropdown.scopeHost = "main";
+  dropdown.subjectId = "";
   dropdown.query = "";
   dropdown.activeKey = "";
   dropdown.relationsView = "menu";
@@ -136,11 +139,26 @@ export function closeKanbanSelectDropdown(getViewState) {
   dropdown.activeKey = "";
 }
 
-export function openMetaSelectDropdown(getViewState, { field = "", activeKey = "", query = "", showClosedSituations = false, anchor = null } = {}) {
+export function openMetaSelectDropdown(
+  getViewState,
+  {
+    field = "",
+    scope = "",
+    scopeHost = "main",
+    subjectId = "",
+    activeKey = "",
+    query = "",
+    showClosedSituations = false,
+    anchor = null
+  } = {}
+) {
   const viewState = getViewStateFromGetter(getViewState);
   const dropdown = viewState?.subjectMetaDropdown;
   if (!dropdown) return;
   dropdown.field = String(field || "") || null;
+  dropdown.scope = String(scope || "");
+  dropdown.scopeHost = String(scopeHost || "").trim().toLowerCase() === "drilldown" ? "drilldown" : "main";
+  dropdown.subjectId = String(subjectId || "");
   dropdown.query = String(query || "");
   dropdown.activeKey = String(activeKey || "");
   dropdown.showClosedSituations = !!showClosedSituations;
@@ -197,6 +215,7 @@ export function renderSelectDropdownHost({
   getViewState,
   root,
   getScopedSelection,
+  resolveSubjectById,
   renderMetaDropdown,
   renderKanbanDropdown,
   ensureHost = ensureSelectDropdownHost
@@ -205,12 +224,18 @@ export function renderSelectDropdownHost({
   const viewState = getViewStateFromGetter(getViewState) || {};
   const field = String(viewState.subjectMetaDropdown?.field || "");
   const kanbanDropdown = viewState.subjectKanbanDropdown || {};
-  const selection = getScopedSelection?.(root);
-  if (selection?.type !== "sujet") {
-    hideSelectDropdownHost(host);
-    return host;
-  }
+  const explicitSubjectId = String(viewState.subjectMetaDropdown?.subjectId || "").trim();
+  const explicitSubject = explicitSubjectId && typeof resolveSubjectById === "function"
+    ? resolveSubjectById(explicitSubjectId)
+    : null;
+  const selection = explicitSubject
+    ? { type: "sujet", item: explicitSubject }
+    : getScopedSelection?.(root);
   if (field) {
+    if (selection?.type !== "sujet") {
+      hideSelectDropdownHost(host);
+      return host;
+    }
     host.innerHTML = renderMetaDropdown(selection.item, field);
     host.setAttribute("aria-hidden", "false");
     return host;
