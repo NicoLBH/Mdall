@@ -124,27 +124,25 @@ export function createProjectSubjectsEvents(config) {
         ? "description"
         : textarea?.matches?.("[data-thread-edit-draft]")
           ? "inline-edit"
-          : textarea?.matches?.("[data-thread-reply-draft]")
+        : textarea?.matches?.("[data-thread-reply-draft]")
             ? "inline-reply"
             : "unknown";
-    const minHeightFallback = type === "main-comment"
+    const isSubissueCreateMode = type === "create-subject"
+      && String(store.situationsView?.createSubjectForm?.mode || "").trim().toLowerCase() === "subissue";
+    const minHeightFallback = isSubissueCreateMode
+      ? 326
+      : type === "main-comment"
       ? 170
       : type === "create-subject"
         ? 452
         : 110;
-    const comfortLines = type === "create-subject" ? 0 : 3;
+    const comfortLines = type === "create-subject" && !isSubissueCreateMode ? 0 : 3;
     return { type, minHeightFallback, comfortLines };
   }
 
   function runAutosize(textarea, cause = "manual") {
     if (!textarea) return null;
     const { type, minHeightFallback, comfortLines } = getTextareaAutosizeMeta(textarea);
-    const isSubissueCreateTextarea = type === "create-subject"
-      && String(store.situationsView?.createSubjectForm?.mode || "").trim().toLowerCase() === "subissue";
-    if (isSubissueCreateTextarea) {
-      textarea.style.height = "";
-      return null;
-    }
     return autosizeTextarea(textarea, {
       minHeightFallback,
       comfortLines,
