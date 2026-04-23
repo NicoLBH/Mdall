@@ -2603,6 +2603,7 @@ function rerenderPanels() {
   const isCreateFormOpen = !!createForm.isOpen;
   const isSubissueCreateMode = isCreateFormOpen && String(createForm.mode || "").trim().toLowerCase() === "subissue";
   const isStandardCreateMode = isCreateFormOpen && !isSubissueCreateMode;
+  document.body.classList.toggle("subject-create-subissue-modal-open", isSubissueCreateMode);
 
   const shouldDisableProjectCompact = !!panelHost
     && !isCreateFormOpen
@@ -3213,10 +3214,6 @@ function renderCreateSubjectFormHtml() {
   const avatar = String(store.user?.avatar || "assets/images/260093543.png");
   const previewHtml = mdToHtml(String(form.description || "").trim());
   const subissueHeaderTitle = isSubissueMode ? "Créer un sous-sujet" : "Créer un nouveau sujet";
-  const createMoreLabel = isSubissueMode ? "Créer d'autres sous-sujets" : "En ajouter d’autres";
-  const inlineMetaHtml = isSubissueMode
-    ? `<div class="subject-create-inline-meta">${renderCreateSubjectMetaControls()}</div>`
-    : "";
   const asideHtml = isSubissueMode
     ? ""
     : `
@@ -3277,19 +3274,8 @@ function renderCreateSubjectFormHtml() {
                 ${form.validationError ? `<div class="subject-create-form__error">${escapeHtml(form.validationError)}</div>` : ""}
               </div>
 
-              <div class="subject-create-footer">
-                <div class="subject-create-footer__left">
-                  ${inlineMetaHtml}
-                  <label class="subject-create-checkbox">
-                    <input type="checkbox" data-create-subject-create-more ${form.createMore ? "checked" : ""}>
-                    <span>${escapeHtml(createMoreLabel)}</span>
-                  </label>
-                </div>
-                <div class="subject-create-footer__right">
-                  <button type="button" class="gh-btn" data-create-subject-cancel>Annuler</button>
-                  <button type="button" class="gh-btn gh-btn--primary" data-create-subject-submit ${form.isSubmitting ? "disabled" : ""}>${form.isSubmitting ? "Création..." : "Ajouter"}</button>
-                </div>
-              </div>
+              ${isSubissueMode ? `<div class="subject-create-inline-meta">${renderCreateSubjectMetaControls()}</div>` : ""}
+              ${isSubissueMode ? "" : renderCreateSubjectFooterHtml({ form, isSubissueMode })}
             </div>
           </div>
         </div>
@@ -3299,15 +3285,36 @@ function renderCreateSubjectFormHtml() {
   `;
 }
 
+function renderCreateSubjectFooterHtml({ form = {}, isSubissueMode = false } = {}) {
+  const createMoreLabel = isSubissueMode ? "Créer d'autres sous-sujets" : "En ajouter d’autres";
+  return `
+    <div class="subject-create-footer">
+      <div class="subject-create-footer__left">
+        <label class="subject-create-checkbox">
+          <input type="checkbox" data-create-subject-create-more ${form.createMore ? "checked" : ""}>
+          <span>${escapeHtml(createMoreLabel)}</span>
+        </label>
+      </div>
+      <div class="subject-create-footer__right">
+        <button type="button" class="gh-btn" data-create-subject-cancel>Annuler</button>
+        <button type="button" class="gh-btn gh-btn--primary" data-create-subject-submit ${form.isSubmitting ? "disabled" : ""}>${form.isSubmitting ? "Création..." : "Ajouter"}</button>
+      </div>
+    </div>
+  `;
+}
+
 function renderCreateSubissueModalHtml() {
+  const form = store.situationsView.createSubjectForm || {};
   return renderSettingsModal({
     modalId: "subjectCreateSubissueModal",
     title: "Créer un sous-sujet",
     closeDataAttribute: "data-close-subissue-create-modal",
     bodyHtml: renderCreateSubjectFormHtml(),
+    footerHtml: renderCreateSubjectFooterHtml({ form, isSubissueMode: true }),
     variant: "wide",
     dialogClassName: "subject-create-subissue-modal__dialog",
-    bodyClassName: "subject-create-subissue-modal__body"
+    bodyClassName: "subject-create-subissue-modal__body",
+    footerClassName: "subject-create-subissue-modal__footer"
   });
 }
 

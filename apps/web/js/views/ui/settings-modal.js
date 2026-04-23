@@ -10,11 +10,13 @@ export function renderSettingsModal({
   title = "",
   subtitle = "",
   bodyHtml = "",
+  footerHtml = "",
   closeDataAttribute = "data-close-settings-modal",
   variant = "default",
   rootClassName = "",
   dialogClassName = "",
-  bodyClassName = ""
+  bodyClassName = "",
+  footerClassName = ""
 } = {}) {
   const safeModalId = escapeHtml(modalId);
   const safeTitleId = escapeHtml(`${modalId}Title`);
@@ -30,6 +32,7 @@ export function renderSettingsModal({
 
   const dialogClasses = ["settings-modal__dialog", normalizeClassName(dialogClassName)].filter(Boolean).join(" ");
   const bodyClasses = ["settings-modal__body", normalizeClassName(bodyClassName)].filter(Boolean).join(" ");
+  const footerClasses = ["settings-modal__footer", normalizeClassName(footerClassName)].filter(Boolean).join(" ");
 
   return `
     <div class="${rootClasses}" id="${safeModalId}">
@@ -49,6 +52,11 @@ export function renderSettingsModal({
         <div class="${bodyClasses}">
           ${bodyHtml}
         </div>
+        ${footerHtml ? `
+          <div class="${footerClasses}">
+            ${footerHtml}
+          </div>
+        ` : ""}
       </div>
     </div>
   `;
