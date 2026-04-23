@@ -10880,7 +10880,7 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
 }
 .subject-create-subissue-modal__dialog .settings-modal__head{
   height:49px;
-  padding:8px;
+  padding:8px 8px 8px 16px;
   box-sizing:border-box;
 }
 .subject-create-subissue-modal__dialog .settings-modal__footer.subject-create-subissue-modal__footer{
@@ -12069,7 +12069,6 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
   position:relative;
   width:min(96vw, 484px);
   margin:214px auto 24px;
-  border:1px solid rgb(48, 54, 61);
   border-radius:16px;
   background:rgb(1, 4, 9);
   box-shadow:rgb(61, 68, 77) 0px 0px 0px 1px, rgba(1, 4, 9, 0.4) 0px 8px 24px;
