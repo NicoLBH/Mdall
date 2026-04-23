@@ -11,6 +11,7 @@ const eventsSource = fs.readFileSync(path.resolve(__dirname, "./project-subjects
 const stateSource = fs.readFileSync(path.resolve(__dirname, "./project-subjects-state.js"), "utf8");
 const dropdownControllerSource = fs.readFileSync(path.resolve(__dirname, "../ui/select-dropdown-controller.js"), "utf8");
 const actionsSource = fs.readFileSync(path.resolve(__dirname, "./project-subjects-actions.js"), "utf8");
+const subjectsIndexSource = fs.readFileSync(path.resolve(__dirname, "../project-subjects.js"), "utf8");
 
 test("subjectMetaDropdown stocke un contexte explicite (scope + subjectId)", () => {
   assert.match(stateSource, /scope:\s*""/);
@@ -46,4 +47,8 @@ test("setSubjectLabels écrit aussi pour un sujet persistant", () => {
   assert.match(actionsSource, /if \(subjectKey !== DRAFT_SUBJECT_ID\) \{/);
   assert.match(actionsSource, /bucket\.subjectMeta\.sujet\[subjectKey\] = \{/);
   assert.match(actionsSource, /labels:\s*nextLabels/);
+});
+
+test("events reçoit DRAFT_SUBJECT_ID pour le contexte create-subject draft", () => {
+  assert.match(subjectsIndexSource, /createProjectSubjectsEvents\(\{\s*DRAFT_SUBJECT_ID,/s);
 });

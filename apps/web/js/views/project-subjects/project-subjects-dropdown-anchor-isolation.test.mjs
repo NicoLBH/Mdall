@@ -43,3 +43,8 @@ test("fermeture dropdown nettoie la session d'ancre", () => {
 test("le refresh de dropdown lit explicitement l'état dropdown courant", () => {
   assert.match(eventsSource, /function refreshSubjectMetaDropdownUi\(root, \{ field = "", preserveScroll = false, preserveFocus = false, focusArgs = null \} = \{\}\) \{\s*if \(!root\) return null;\s*const dropdown = getSubjectsViewState\(\)\.subjectMetaDropdown \|\| \{\};/s);
 });
+
+test("le contexte draft du create modal résout un sujet virtuel pour les toggles", () => {
+  assert.match(eventsSource, /DRAFT_SUBJECT_ID = "__draft_subject__"/);
+  assert.match(eventsSource, /if \(String\(context\.scope \|\| ""\) === "draft" \|\| subjectId === DRAFT_SUBJECT_ID\) \{\s*return \{ id: subjectId, title: "" \};\s*\}/s);
+});

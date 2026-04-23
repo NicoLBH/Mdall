@@ -23,6 +23,7 @@ export function createProjectSubjectsEvents(config) {
   const EMOJI_GRID_COLUMNS = 6;
   const CARET_NAVIGATION_KEYS = new Set(["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"]);
   const {
+    DRAFT_SUBJECT_ID = "__draft_subject__",
     store,
     PROJECT_TAB_RESELECTED_EVENT,
     getSubjectsViewState,
@@ -241,7 +242,12 @@ export function createProjectSubjectsEvents(config) {
     if (!subjectId) return null;
     const selection = getScopedSelection(root);
     if (selection?.type === "sujet" && String(selection.item?.id || "") === subjectId) return selection.item;
-    return getNestedSujet(subjectId) || null;
+    const resolvedSubject = getNestedSujet(subjectId) || null;
+    if (resolvedSubject) return resolvedSubject;
+    if (String(context.scope || "") === "draft" || subjectId === DRAFT_SUBJECT_ID) {
+      return { id: subjectId, title: "" };
+    }
+    return null;
   }
 
   async function resolveSelfCollaboratorAssigneeId() {
