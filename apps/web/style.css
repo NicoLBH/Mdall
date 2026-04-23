@@ -3948,7 +3948,7 @@ body.drilldown-open .drilldown__inner,
 .tl-ico--business-rel{background:rgb(33, 40, 48);color:rgb(145, 152, 161);fill:rgb(145, 152, 161)}
 .tl-ico--business-alert{background:rgb(33, 40, 48);color:rgb(145, 152, 161);fill:rgb(145, 152, 161)}
 .tl-ico--business-closed{background:rgb(137, 87, 229);color:#ffff;}
-.tl-ico--business-open{var(--fgColor-open);}
+.tl-ico--business-open{background:var(--fgColor-open);}
 .tl-ico--business-neutral{background:rgb(33, 40, 48);}
 .thread-item--event-subject_closed .tl-activity{/*border:1px solid rgba(207, 34, 46, .3);*/}
 .thread-item--event-subject_reopened .tl-activity{/*border:1px solid rgba(31, 136, 61, .3);*/}
