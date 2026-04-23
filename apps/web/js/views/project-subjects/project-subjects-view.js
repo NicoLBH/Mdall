@@ -2611,9 +2611,9 @@ function rerenderCreateSubissueModal() {
     return null;
   }
   modalHost.innerHTML = renderCreateSubissueModalHtml();
-  const modalCreateFormRoot = bumpInteractiveEpoch(modalHost.querySelector("[data-create-subject-form]"));
-  wireDetailsInteractive(modalCreateFormRoot);
-  return modalCreateFormRoot;
+  const modalScopeRoot = bumpInteractiveEpoch(modalHost);
+  wireDetailsInteractive(modalScopeRoot);
+  return modalScopeRoot;
 }
 
 function rerenderPanels() {
