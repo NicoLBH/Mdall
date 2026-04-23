@@ -70,6 +70,7 @@ test("Créer un sous-sujet ouvre le create form en mode subissue (modale)", () =
   assert.match(viewSource, /title: "Créer un sous-sujet"/);
   assert.match(viewSource, /footerHtml: renderCreateSubjectFooterHtml\(\{ form, isSubissueMode: true \}\)/);
   assert.match(viewSource, /footerClassName: "subject-create-subissue-modal__footer"/);
+  assert.match(viewSource, /\$\{isSubissueMode \? `<div class="subject-create-inline-meta">\$\{renderCreateSubjectMetaControls\(\)\}<\/div>` : ""\}/);
   assert.match(viewSource, /\$\{isSubissueMode \? "" : renderCreateSubjectFooterHtml\(\{ form, isSubissueMode \}\)\}/);
   assert.match(viewSource, /document\.body\.classList\.toggle\("subject-create-subissue-modal-open", isSubissueCreateMode\);/);
   assert.match(viewSource, /\$\{isSubissueMode \? "" : `[\s\S]*subject-create-header__title/);
@@ -85,7 +86,7 @@ test("Créer un sous-sujet ouvre le create form en mode subissue (modale)", () =
   assert.match(styleSource, /\.subject-create-subissue-modal__dialog \.settings-modal__footer\.subject-create-subissue-modal__footer\{[\s\S]*height:64px;[\s\S]*border-top:solid 1px var\(--border\);/);
   assert.match(styleSource, /body\.subject-create-subissue-modal-open \.details-body,[\s\S]*overflow: hidden !important;/);
   assert.match(styleSource, /\.subject-create-layout--subissue \.comment-composer--create-subject \.comment-composer__textarea\{[\s\S]*width:min\(766px, 100%\) !important;[\s\S]*resize:vertical !important;/);
-  assert.match(styleSource, /\.subject-create-subissue-modal__footer \.subject-meta-field__value\{[\s\S]*display:none;/);
+  assert.match(styleSource, /\.subject-create-layout--subissue \.subject-create-inline-meta\{[\s\S]*margin-top:12px;/);
   assert.match(styleSource, /\.settings-modal__head,[\s\S]*border-bottom:solid 1px var\(--border\);/);
   assert.match(styleSource, /\.subject-create-layout--subissue \.subject-meta-field__trigger\{[\s\S]*border:1px dashed var\(--border2\);/);
   assert.match(styleSource, /\.subject-create-subissue-inline-label__dot\{/);

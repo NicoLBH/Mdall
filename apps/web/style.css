@@ -10895,25 +10895,6 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
   align-items:center;
   overflow:visible;
 }
-.subject-create-subissue-modal__footer .subject-create-footer__left{
-  min-width:0;
-  display:flex;
-  align-items:center;
-  gap:8px;
-}
-.subject-create-subissue-modal__footer .subject-create-inline-meta{
-  min-width:0;
-}
-.subject-create-subissue-modal__footer .subject-meta-controls,
-.subject-create-subissue-modal__footer .subject-meta-controls--create{
-  align-items:center;
-}
-.subject-create-subissue-modal__footer .subject-meta-field__trigger{
-  margin-bottom:0;
-}
-.subject-create-subissue-modal__footer .subject-meta-field__value{
-  display:none;
-}
 .subject-create-subissue-modal__dialog .settings-modal__title{
   font-size:14px;
 }
@@ -10929,6 +10910,9 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
   height:auto !important;
   max-height:none !important;
   resize:vertical !important;
+}
+.subject-create-layout--subissue .subject-create-inline-meta{
+  margin-top:12px;
 }
 
 .comment-composer--create-subject{

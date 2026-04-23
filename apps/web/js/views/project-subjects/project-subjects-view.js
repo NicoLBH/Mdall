@@ -3274,6 +3274,7 @@ function renderCreateSubjectFormHtml() {
                 ${form.validationError ? `<div class="subject-create-form__error">${escapeHtml(form.validationError)}</div>` : ""}
               </div>
 
+              ${isSubissueMode ? `<div class="subject-create-inline-meta">${renderCreateSubjectMetaControls()}</div>` : ""}
               ${isSubissueMode ? "" : renderCreateSubjectFooterHtml({ form, isSubissueMode })}
             </div>
           </div>
@@ -3286,13 +3287,9 @@ function renderCreateSubjectFormHtml() {
 
 function renderCreateSubjectFooterHtml({ form = {}, isSubissueMode = false } = {}) {
   const createMoreLabel = isSubissueMode ? "Créer d'autres sous-sujets" : "En ajouter d’autres";
-  const inlineMetaHtml = isSubissueMode
-    ? `<div class="subject-create-inline-meta">${renderCreateSubjectMetaControls()}</div>`
-    : "";
   return `
     <div class="subject-create-footer">
       <div class="subject-create-footer__left">
-        ${inlineMetaHtml}
         <label class="subject-create-checkbox">
           <input type="checkbox" data-create-subject-create-more ${form.createMore ? "checked" : ""}>
           <span>${escapeHtml(createMoreLabel)}</span>
