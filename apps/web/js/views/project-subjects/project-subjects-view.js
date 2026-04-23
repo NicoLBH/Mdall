@@ -2603,6 +2603,7 @@ function rerenderPanels() {
   const isCreateFormOpen = !!createForm.isOpen;
   const isSubissueCreateMode = isCreateFormOpen && String(createForm.mode || "").trim().toLowerCase() === "subissue";
   const isStandardCreateMode = isCreateFormOpen && !isSubissueCreateMode;
+  document.body.classList.toggle("subject-create-subissue-modal-open", isSubissueCreateMode);
 
   const shouldDisableProjectCompact = !!panelHost
     && !isCreateFormOpen

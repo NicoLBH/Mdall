@@ -1323,6 +1323,12 @@ body.modal-open {
   overflow: hidden;
 }
 
+body.subject-create-subissue-modal-open .details-body,
+body.subject-create-subissue-modal-open .subject-details-body,
+body.subject-create-subissue-modal-open #situationsDetailsHost{
+  overflow: hidden !important;
+}
+
 /* ===== Details head state classes (for clean CSS cascade) =====
    JS toggles these classes on .gh-panel__head--tight and .modal__head.
    You can override/extend these rules as needed. */
@@ -10882,9 +10888,31 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
   padding:16px;
   border-top:solid 1px var(--border);
   box-sizing:border-box;
+  overflow:visible;
 }
 .subject-create-subissue-modal__footer .subject-create-footer{
   margin-top:0;
+  align-items:center;
+  overflow:visible;
+}
+.subject-create-subissue-modal__footer .subject-create-footer__left{
+  min-width:0;
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.subject-create-subissue-modal__footer .subject-create-inline-meta{
+  min-width:0;
+}
+.subject-create-subissue-modal__footer .subject-meta-controls,
+.subject-create-subissue-modal__footer .subject-meta-controls--create{
+  align-items:center;
+}
+.subject-create-subissue-modal__footer .subject-meta-field__trigger{
+  margin-bottom:0;
+}
+.subject-create-subissue-modal__footer .subject-meta-field__value{
+  display:none;
 }
 .subject-create-subissue-modal__dialog .settings-modal__title{
   font-size:14px;
@@ -10893,13 +10921,14 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
   background:transparent;
 }
 .subject-create-layout--subissue .comment-composer--create-subject{
-  width:min(700px, 100%);
+  width:min(766px, 100%);
 }
 .subject-create-layout--subissue .comment-composer--create-subject .comment-composer__textarea{
-  width:min(700px, 100%) !important;
+  width:min(766px, 100%) !important;
   min-height:326px !important;
-  height:326px !important;
-  max-height:326px !important;
+  height:auto !important;
+  max-height:none !important;
+  resize:vertical !important;
 }
 
 .comment-composer--create-subject{
