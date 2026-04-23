@@ -3874,7 +3874,7 @@ body.drilldown-open .drilldown__inner,
 .thread-item--activity::before{display:block;height:auto;}
 .tl-activity{
   display:flex;
-  align-items:center;
+  align-items:flex-start;
   gap:10px;
   padding:4px 12px 8px 57px;
 }
@@ -3891,11 +3891,20 @@ body.drilldown-open .drilldown__inner,
   justify-content:center;
   flex:0 0 auto;
   overflow:hidden;
+  margin-top:7px;
 }
 .tl-author--human svg{width:14px;height:14px;}
 .tl-author--agent{font-size:11px;color:var(--text);line-height:1;}
 
-.tl-activity__text{min-width:0;white-space:normal;overflow:visible;text-overflow:clip;word-break:break-word;}
+.tl-activity__text{
+  min-width:0;
+  white-space:normal;
+  overflow:visible;
+  text-overflow:clip;
+  word-break:break-word;
+  line-height:20px;
+  padding-top:6px;
+}
 .tl-author-name{font-weight:600;color:var(--text);font-size:14px;margin-right:2px;}
 .tl-note{
   margin:0 12px 8px 127px; /* align with .tl-activity__text */
