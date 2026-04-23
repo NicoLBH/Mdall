@@ -174,6 +174,40 @@ test("autosizeTextarea conserve le minHeight sur mount puis mount-after-visible 
   assert.equal(textarea.style.height, "326px");
 });
 
+test("autosizeTextarea conserve le minHeight pendant une passe de bind de montage", () => {
+  global.window = {
+    getComputedStyle() {
+      return { lineHeight: "20px", minHeight: "0px" };
+    }
+  };
+
+  const textarea = {
+    isConnected: true,
+    value: "",
+    style: { height: "", overflowY: "auto" },
+    dataset: {},
+    scrollHeight: 420,
+    offsetHeight: 0,
+    offsetParent: {}
+  };
+
+  autosizeTextarea(textarea, {
+    minHeightFallback: 326,
+    comfortLines: 3,
+    cause: "mount",
+    preferMinHeightOnFirstMount: true
+  });
+  const bindPass = autosizeTextarea(textarea, {
+    minHeightFallback: 326,
+    comfortLines: 3,
+    cause: "create-subject-bind",
+    preferMinHeightOnFirstMount: true
+  });
+
+  assert.equal(bindPass?.nextHeight, 326);
+  assert.equal(textarea.style.height, "326px");
+});
+
 test("autosizeTextarea peut dépasser le minHeight après saisie utilisateur", () => {
   global.window = {
     getComputedStyle() {

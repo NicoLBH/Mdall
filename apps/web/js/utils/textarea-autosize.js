@@ -73,18 +73,26 @@ export function autosizeTextarea(textarea, options = {}) {
   }
   const baseFloor = Math.max(minHeight, manualFloor);
   const causeLabel = String(cause || "");
-  const isMountLikeCause = causeLabel.startsWith("mount");
+  const normalizedCause = causeLabel.toLowerCase();
+  const isLikelyUserInteractionCause = normalizedCause === "manual"
+    || normalizedCause.includes("input")
+    || normalizedCause.includes("paste")
+    || normalizedCause.includes("cut")
+    || normalizedCause.includes("drop")
+    || normalizedCause.includes("emoji")
+    || normalizedCause.includes("mention")
+    || normalizedCause.includes("subject-ref");
   const isEmptyValue = !String(textarea?.value || "").trim();
   const wasUserInteracted = textarea?.dataset?.autosizeUserInteracted === "1";
-  const shouldMarkUserInteracted = !isMountLikeCause || !isEmptyValue || manualFloor > 0;
+  const shouldMarkUserInteracted = isLikelyUserInteractionCause || !isEmptyValue || manualFloor > 0;
   if (textarea?.dataset && shouldMarkUserInteracted) {
     textarea.dataset.autosizeUserInteracted = "1";
   }
   const keepMinHeightDuringMount = !!preferMinHeightOnFirstMount
-    && isMountLikeCause
     && !manualFloor
     && isEmptyValue
-    && !wasUserInteracted;
+    && !wasUserInteracted
+    && !isLikelyUserInteractionCause;
   const targetHeight = keepMinHeightDuringMount
     ? baseFloor
     : Math.max(baseFloor, Math.round(measuredScrollHeight + comfortHeight));
