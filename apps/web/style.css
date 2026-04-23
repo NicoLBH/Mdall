@@ -10916,7 +10916,6 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
 .subject-create-layout--subissue .comment-composer--create-subject .comment-composer__textarea{
   width:min(766px, 100%) !important;
   min-height:326px !important;
-  height:auto !important;
   max-height:none !important;
   resize:vertical !important;
 }

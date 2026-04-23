@@ -5,6 +5,7 @@ export function autosizeTextarea(textarea, options = {}) {
   const {
     minHeightFallback = 110,
     comfortLines = 3,
+    lockOverflowY = true,
     log = false,
     logPrefix = "[textarea-autosize]",
     cause = "manual",
@@ -48,7 +49,11 @@ export function autosizeTextarea(textarea, options = {}) {
     };
   }
 
-  textarea.style.overflowY = "hidden";
+  if (lockOverflowY) {
+    textarea.style.overflowY = "hidden";
+  } else if (textarea.style.overflowY === "hidden") {
+    textarea.style.overflowY = "";
+  }
   textarea.style.height = "auto";
 
   const measuredScrollHeight = Math.round(Number(textarea.scrollHeight || 0));

@@ -92,6 +92,25 @@ test("autosizeTextarea applique le minHeight fallback quand le CSS est trop faib
   assert.equal(textarea.style.height, "326px");
 });
 
+test("autosizeTextarea peut éviter overflow-y:hidden quand lockOverflowY=false", () => {
+  global.window = {
+    getComputedStyle() {
+      return { lineHeight: "20px", minHeight: "110px" };
+    }
+  };
+
+  const textarea = {
+    isConnected: true,
+    style: { height: "120px", overflowY: "hidden" },
+    scrollHeight: 180,
+    offsetHeight: 120,
+    offsetParent: {}
+  };
+
+  autosizeTextarea(textarea, { minHeightFallback: 110, comfortLines: 3, lockOverflowY: false });
+  assert.equal(textarea.style.overflowY, "");
+});
+
 test("autosizeTextarea retourne null si textarea invalide (sans style)", () => {
   const textarea = { isConnected: false };
   const result = autosizeTextarea(textarea);
