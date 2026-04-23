@@ -113,6 +113,7 @@ export function createProjectSubjectsEvents(config) {
   let subjectsTabResetBound = false;
   let descriptionVersionsPositionBound = false;
   let isCreateSubjectSubmitHandling = false;
+  const interactiveBindingEpochByRoot = new WeakMap();
 
   function getTextareaAutosizeMeta(textarea) {
     const type = textarea?.matches?.("#humanCommentBox")
@@ -183,7 +184,7 @@ export function createProjectSubjectsEvents(config) {
   function bindSubjectMetaDropdownDocumentEvents() {
     if (typeof detachDropdownDocumentEvents === "function") return detachDropdownDocumentEvents;
     detachDropdownDocumentEvents = dropdownController().bindDocumentEvents({
-      onRerender: () => rerenderScope(),
+      onRerender: (scopeRoot) => rerenderScope(scopeRoot || getSubjectMetaScopeRoot?.() || document),
       onSyncPosition: (scopeRoot) => syncSubjectMetaDropdownPosition(scopeRoot),
       getScopeRoot: getSubjectMetaScopeRoot
     });
@@ -304,16 +305,16 @@ export function createProjectSubjectsEvents(config) {
     const reorderSubjectChildren = getReorderSubjectChildren?.();
 
     dropdownHost.querySelectorAll("[data-subject-kanban-search]").forEach((input) => {
-      input.addEventListener("input", () => {
+      input.oninput = () => {
         const subjectId = String(input.dataset.subjectKanbanSearch || "");
         const situationId = String(input.dataset.subjectKanbanSearchSituationId || "");
         dropdownController().setKanbanQuery(input.value || "");
         const entries = getSubjectKanbanMenuEntries(subjectId, situationId, input.value || "");
         getSubjectsViewState().subjectKanbanDropdown.activeKey = String((entries.find((entry) => entry.isSelected) || entries[0] || {}).key || "");
         refreshSubjectMetaDropdownUi(root, { preserveScroll: true, preserveFocus: true, focusArgs: { subjectId, situationId } });
-      });
+      };
 
-      input.addEventListener("keydown", (event) => {
+      input.onkeydown = (event) => {
         const subjectId = String(input.dataset.subjectKanbanSearch || "");
         const situationId = String(input.dataset.subjectKanbanSearchSituationId || "");
         const entries = getSubjectKanbanMenuEntries(subjectId, situationId, getSubjectsViewState().subjectKanbanDropdown.query || "");
@@ -341,11 +342,11 @@ export function createProjectSubjectsEvents(config) {
           dropdownController().closeKanban();
           rerenderScope(root);
         }
-      });
+      };
     });
 
     dropdownHost.querySelectorAll("[data-subject-meta-search]").forEach((input) => {
-      input.addEventListener("input", () => {
+      input.oninput = () => {
         const field = String(input.dataset.subjectMetaSearch || "");
         dropdownController().setMetaQuery(input.value || "");
         const selection = getScopedSelection(root);
@@ -356,9 +357,9 @@ export function createProjectSubjectsEvents(config) {
           ? currentKey
           : String(entries[0]?.key || "");
         refreshSubjectMetaDropdownUi(root, { preserveScroll: true, preserveFocus: true, focusArgs: { field } });
-      });
+      };
 
-      input.addEventListener("keydown", async (event) => {
+      input.onkeydown = async (event) => {
         const field = String(input.dataset.subjectMetaSearch || "");
         const subjectSelection = getScopedSelection(root);
         if (subjectSelection?.type !== "sujet") return;
@@ -434,7 +435,7 @@ export function createProjectSubjectsEvents(config) {
             await applyNonDestructiveMetaToggle(root, field, () => toggleSubjectAssignee(subjectSelection.item.id, activeKey, { root, skipRerender: true }));
           }
         }
-      });
+      };
     });
 
     dropdownHost.querySelectorAll("[data-objective-select]").forEach((btn) => {
@@ -960,6 +961,9 @@ export function createProjectSubjectsEvents(config) {
 
   function wireDetailsInteractive(root) {
     if (!root) return;
+    const bindingEpoch = String(root.dataset.detailsInteractiveEpoch || "0");
+    if (interactiveBindingEpochByRoot.get(root) === bindingEpoch) return;
+    interactiveBindingEpochByRoot.set(root, bindingEpoch);
     const isAutosizeDebugEnabled = () => typeof window !== "undefined" && window?.__MDALL_DEBUG_TEXTAREA_AUTOSIZE__ === true;
     const isElementMeasurable = (element) => {
       if (!element || element.isConnected === false) return false;
@@ -1188,7 +1192,7 @@ export function createProjectSubjectsEvents(config) {
         const explicitTab = String(btn.dataset.createSubjectTab || "").trim();
         const isPreview = explicitTab === "preview" || action === "create-subject-tab-preview";
         store.situationsView.createSubjectForm.previewMode = isPreview;
-        rerenderPanels();
+        rerenderScope(root);
       };
     });
     root.querySelectorAll("[data-create-subject-title]").forEach((input) => {
@@ -1201,7 +1205,7 @@ export function createProjectSubjectsEvents(config) {
       textarea.oninput = () => {
         store.situationsView.createSubjectForm.description = String(textarea.value || "");
         runAutosize(textarea, "create-subject-input");
-        if (store.situationsView.createSubjectForm.previewMode) rerenderPanels();
+        if (store.situationsView.createSubjectForm.previewMode) rerenderScope(root);
       };
     });
     root.querySelectorAll("[data-create-subject-create-more]").forEach((checkbox) => {

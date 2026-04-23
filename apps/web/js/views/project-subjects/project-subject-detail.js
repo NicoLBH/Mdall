@@ -11,6 +11,13 @@ function restoreScrollableElementScrollState(element, state) {
   element.scrollTop = Math.max(0, Math.min(Number(state.scrollTop || 0), maxScrollTop));
 }
 
+function bumpInteractiveEpoch(root) {
+  if (!root) return root;
+  const currentEpoch = Number(root.dataset.detailsInteractiveEpoch || 0);
+  root.dataset.detailsInteractiveEpoch = String(currentEpoch + 1);
+  return root;
+}
+
 export function createProjectSubjectDetailController(config) {
   const {
     store,
@@ -79,7 +86,7 @@ export function createProjectSubjectDetailController(config) {
 
     ensureDrilldownDom();
 
-    wireDetailsInteractive(body);
+    wireDetailsInteractive(bumpInteractiveEpoch(body));
     bindDetailsScroll(document);
     restoreScrollableElementScrollState(body, bodyScrollState);
     body.__syncCondensedTitle?.();

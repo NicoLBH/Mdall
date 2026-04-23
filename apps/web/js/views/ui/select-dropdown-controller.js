@@ -411,7 +411,7 @@ export function bindSelectDropdownDocumentEvents({
     if (event.target.closest("[data-subject-meta-trigger]")) return;
     if (event.target.closest("[data-subject-kanban-trigger]")) return;
     onRequestClose?.();
-    onRerender?.();
+    onRerender?.(getScopeRoot?.() || event.target);
   };
 
   const handleWindowResize = () => {

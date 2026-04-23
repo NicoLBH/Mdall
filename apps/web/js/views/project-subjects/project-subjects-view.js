@@ -2585,6 +2585,37 @@ function ensureCreateSubissueModalHost() {
   return host;
 }
 
+function bumpInteractiveEpoch(root) {
+  if (!root) return root;
+  const currentEpoch = Number(root.dataset.detailsInteractiveEpoch || 0);
+  root.dataset.detailsInteractiveEpoch = String(currentEpoch + 1);
+  return root;
+}
+
+function isSubissueCreateFormOpen() {
+  const createForm = store.situationsView.createSubjectForm || {};
+  return !!createForm.isOpen && String(createForm.mode || "").trim().toLowerCase() === "subissue";
+}
+
+function isCreateSubissueModalScopeRoot(root) {
+  if (!root || !isSubissueCreateFormOpen()) return false;
+  const modalHost = document.getElementById("subjectCreateSubissueModalHost");
+  if (!modalHost || !modalHost.isConnected) return false;
+  return root === modalHost || !!root.closest?.("#subjectCreateSubissueModalHost");
+}
+
+function rerenderCreateSubissueModal() {
+  const modalHost = ensureCreateSubissueModalHost();
+  if (!isSubissueCreateFormOpen()) {
+    modalHost.innerHTML = "";
+    return null;
+  }
+  modalHost.innerHTML = renderCreateSubissueModalHtml();
+  const modalScopeRoot = bumpInteractiveEpoch(modalHost);
+  wireDetailsInteractive(modalScopeRoot);
+  return modalScopeRoot;
+}
+
 function rerenderPanels() {
   ensureViewUiState();
   document.body.classList.remove("project-subject-details-top-compact");
@@ -2615,7 +2646,7 @@ function rerenderPanels() {
   if (panelHost) {
     if (isStandardCreateMode) {
       panelHost.innerHTML = `<div id="subjectCreateFormHost" class="project-table-host">${renderCreateSubjectFormHtml()}</div>`;
-      const createFormRoot = panelHost.querySelector("[data-create-subject-form]");
+      const createFormRoot = bumpInteractiveEpoch(panelHost.querySelector("[data-create-subject-form]"));
       wireDetailsInteractive(createFormRoot);
       syncSituationsPrimaryScrollSource();
     } else if (String(store.situationsView.subjectsSubview || "subjects") === "labels") {
@@ -2653,7 +2684,7 @@ function rerenderPanels() {
       `;
       const detailsHost = document.getElementById("situationsDetailsHost");
       renderDetailsDiscussionScopes(detailsHost);
-      wireDetailsInteractive(detailsHost);
+      wireDetailsInteractive(bumpInteractiveEpoch(detailsHost));
       bindDetailsScroll(document);
       restoreDocumentScrollState(detailsScrollState);
       requestAnimationFrame(() => {
@@ -2665,14 +2696,7 @@ function rerenderPanels() {
     }
   }
 
-  const subissueCreateModalHost = ensureCreateSubissueModalHost();
-  if (isSubissueCreateMode) {
-    subissueCreateModalHost.innerHTML = renderCreateSubissueModalHtml();
-    const modalCreateFormRoot = subissueCreateModalHost.querySelector("[data-create-subject-form]");
-    wireDetailsInteractive(modalCreateFormRoot);
-  } else {
-    subissueCreateModalHost.innerHTML = "";
-  }
+  rerenderCreateSubissueModal();
 
   if (store.situationsView.drilldown?.isOpen) getProjectSubjectDrilldown().updateDrilldownPanel();
   refreshProjectShellChrome("situations");
@@ -2703,6 +2727,12 @@ function rerenderScope(root) {
   const isComposerScopeRoot = !!root?.closest?.("[data-details-composer-host]");
   const drilldownBody = document.getElementById("drilldownBody");
   const isDrilldownScopeRoot = !!root?.closest?.("#drilldownPanel");
+
+  if (isCreateSubissueModalScopeRoot(root)) {
+    debugRenderScope("create-subissue-modal", { mode: "modal-only-rerender" });
+    rerenderCreateSubissueModal();
+    return;
+  }
 
   if (shouldRerenderDetailsModal) {
     debugRenderScope("details-modal", { mode: "full-modal-rerender" });
@@ -2737,7 +2767,7 @@ function rerenderScope(root) {
     });
     detailsHost.innerHTML = details.bodyHtml;
     renderDetailsDiscussionScopes(detailsHost);
-    wireDetailsInteractive(detailsHost);
+    wireDetailsInteractive(bumpInteractiveEpoch(detailsHost));
     bindDetailsScroll(document);
     restoreScrollableElementScrollState(detailsHost, detailsScrollState);
     requestAnimationFrame(() => {
@@ -2873,7 +2903,7 @@ function renderDetailsDiscussionScopes(detailsHost, options = {}) {
     const threadHost = detailsHost.querySelector("[data-details-thread-host]");
     if (threadHost) {
       threadHost.innerHTML = discussion.threadHtml;
-      wireDetailsInteractive(threadHost);
+      wireDetailsInteractive(bumpInteractiveEpoch(threadHost));
     }
   }
   if (renderComposer) {
@@ -2886,7 +2916,7 @@ function renderDetailsDiscussionScopes(detailsHost, options = {}) {
     const composerHost = detailsHost.querySelector("[data-details-composer-host]");
     if (composerHost) {
       composerHost.innerHTML = discussion.composerHtml;
-      wireDetailsInteractive(composerHost);
+      wireDetailsInteractive(bumpInteractiveEpoch(composerHost));
     }
   }
 }
