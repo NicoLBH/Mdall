@@ -198,6 +198,9 @@ export function createProjectSubjectsState({ store }) {
         scope: "",
         scopeHost: "main",
         subjectId: "",
+        anchorKey: "",
+        instanceKey: "",
+        openedFrom: "",
         query: "",
         activeKey: "",
         showClosedSituations: false,
@@ -211,6 +214,9 @@ export function createProjectSubjectsState({ store }) {
     if (typeof v.subjectMetaDropdown.scope !== "string") v.subjectMetaDropdown.scope = "";
     if (typeof v.subjectMetaDropdown.scopeHost !== "string") v.subjectMetaDropdown.scopeHost = "main";
     if (typeof v.subjectMetaDropdown.subjectId !== "string") v.subjectMetaDropdown.subjectId = "";
+    if (typeof v.subjectMetaDropdown.anchorKey !== "string") v.subjectMetaDropdown.anchorKey = "";
+    if (typeof v.subjectMetaDropdown.instanceKey !== "string") v.subjectMetaDropdown.instanceKey = "";
+    if (typeof v.subjectMetaDropdown.openedFrom !== "string") v.subjectMetaDropdown.openedFrom = "";
     if (typeof v.subjectMetaDropdown.showClosedSituations !== "boolean") v.subjectMetaDropdown.showClosedSituations = false;
     if (typeof v.subjectMetaDropdown.relationsView !== "string") v.subjectMetaDropdown.relationsView = "menu";
     if (typeof v.subjectMetaDropdown.subissueActionsView !== "string") v.subjectMetaDropdown.subissueActionsView = "menu";
@@ -291,6 +297,9 @@ export function createProjectSubjectsState({ store }) {
       scope: "",
       scopeHost: "main",
       subjectId: "",
+      anchorKey: "",
+      instanceKey: "",
+      openedFrom: "",
       query: "",
       activeKey: "",
       showClosedSituations: false,

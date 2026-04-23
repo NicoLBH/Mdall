@@ -6,6 +6,42 @@ function getViewStateFromGetter(getViewState) {
   return typeof getViewState === "function" ? getViewState() : getViewState;
 }
 
+function normalizeMetaScope(scope = "") {
+  const normalized = String(scope || "").trim().toLowerCase();
+  return normalized || "main";
+}
+
+function normalizeMetaScopeHost(scopeHost = "") {
+  return String(scopeHost || "").trim().toLowerCase() === "drilldown" ? "drilldown" : "main";
+}
+
+export function buildSubjectMetaAnchorKey({
+  field = "",
+  scope = "",
+  scopeHost = "main",
+  subjectId = "",
+  instance = ""
+} = {}) {
+  const normalizedField = String(field || "").trim().toLowerCase();
+  const normalizedScope = normalizeMetaScope(scope);
+  const normalizedScopeHost = normalizeMetaScopeHost(scopeHost);
+  const normalizedSubjectId = String(subjectId || "").trim() || "none";
+  const normalizedInstance = String(instance || "").trim().toLowerCase() || "default";
+  return [normalizedScope, normalizedScopeHost, normalizedSubjectId, normalizedField, normalizedInstance].join(":");
+}
+
+export function isMetaDropdownOpenForAnchor(dropdown = {}, context = {}) {
+  if (!dropdown || !context) return false;
+  const expectedAnchorKey = String(context.anchorKey || "").trim()
+    || buildSubjectMetaAnchorKey(context);
+  if (!expectedAnchorKey) return false;
+  return String(dropdown.field || "") === String(context.field || "")
+    && String(dropdown.scope || "") === String(context.scope || "")
+    && normalizeMetaScopeHost(dropdown.scopeHost || "main") === normalizeMetaScopeHost(context.scopeHost || "main")
+    && String(dropdown.subjectId || "") === String(context.subjectId || "")
+    && String(dropdown.anchorKey || "") === expectedAnchorKey;
+}
+
 function isSelectDropdownOpenFromState(state) {
   return !!state?.subjectMetaDropdown?.field
     || (!!state?.subjectKanbanDropdown?.subjectId && !!state?.subjectKanbanDropdown?.situationId);
@@ -118,6 +154,9 @@ export function closeMetaSelectDropdown(getViewState) {
   dropdown.scope = "";
   dropdown.scopeHost = "main";
   dropdown.subjectId = "";
+  dropdown.anchorKey = "";
+  dropdown.instanceKey = "";
+  dropdown.openedFrom = "";
   dropdown.query = "";
   dropdown.activeKey = "";
   dropdown.relationsView = "menu";
@@ -149,16 +188,23 @@ export function openMetaSelectDropdown(
     activeKey = "",
     query = "",
     showClosedSituations = false,
-    anchor = null
+    anchor = null,
+    anchorKey = "",
+    instanceKey = "",
+    openedFrom = ""
   } = {}
 ) {
   const viewState = getViewStateFromGetter(getViewState);
   const dropdown = viewState?.subjectMetaDropdown;
   if (!dropdown) return;
   dropdown.field = String(field || "") || null;
-  dropdown.scope = String(scope || "");
-  dropdown.scopeHost = String(scopeHost || "").trim().toLowerCase() === "drilldown" ? "drilldown" : "main";
+  dropdown.scope = normalizeMetaScope(scope);
+  dropdown.scopeHost = normalizeMetaScopeHost(scopeHost);
   dropdown.subjectId = String(subjectId || "");
+  dropdown.anchorKey = String(anchorKey || "").trim()
+    || buildSubjectMetaAnchorKey({ field, scope: dropdown.scope, scopeHost: dropdown.scopeHost, subjectId, instance: instanceKey });
+  dropdown.instanceKey = String(instanceKey || "").trim();
+  dropdown.openedFrom = String(openedFrom || "").trim().toLowerCase();
   dropdown.query = String(query || "");
   dropdown.activeKey = String(activeKey || "");
   dropdown.showClosedSituations = !!showClosedSituations;
@@ -293,7 +339,12 @@ export function syncSelectDropdownPosition({
   const host = ensureHost();
   let anchorSelector = "";
   if (field) {
-    anchorSelector = `[data-subject-meta-anchor="${field}"]`;
+    const anchorKey = String(viewState.subjectMetaDropdown?.anchorKey || "").trim();
+    if (!anchorKey) {
+      hideSelectDropdownHost(host);
+      return;
+    }
+    anchorSelector = `[data-subject-meta-anchor="${CSS.escape(anchorKey)}"]`;
   } else if (String(kanbanDropdown.subjectId || "") && String(kanbanDropdown.situationId || "")) {
     anchorSelector = `[data-subject-kanban-anchor="${CSS.escape(String(kanbanDropdown.subjectId || ""))}::${CSS.escape(String(kanbanDropdown.situationId || ""))}"]`;
   } else {
@@ -316,10 +367,12 @@ export function syncSelectDropdownPosition({
     ].filter(Boolean);
     const stateAnchor = viewState?.subjectMetaDropdown?.anchorElement;
     const stateAnchorField = String(viewState?.subjectMetaDropdown?.anchorField || "");
+    const stateAnchorKey = String(viewState?.subjectMetaDropdown?.anchorKey || "");
     const anchorFromState = stateAnchor
       && stateAnchorField === field
       && stateAnchor.isConnected
       && stateAnchor.matches?.(anchorSelector)
+      && String(stateAnchor?.dataset?.subjectMetaAnchor || "") === stateAnchorKey
       ? stateAnchor
       : null;
     const anchor = anchorFromState || roots
@@ -472,7 +525,12 @@ export function bindSelectDropdownDocumentEvents({
   const handleDocumentClick = (event) => {
     if (!isOpen()) return;
     if (event.target.closest("#subjectMetaDropdownHost .subject-meta-dropdown")) return;
-    if (event.target.closest("[data-subject-meta-trigger]")) return;
+    const activeAnchorKey = String(getViewStateFromGetter(getViewState)?.subjectMetaDropdown?.anchorKey || "");
+    const trigger = event.target.closest("[data-subject-meta-trigger]");
+    if (trigger) {
+      const triggerAnchorKey = String(trigger.dataset.subjectMetaAnchor || "");
+      if (activeAnchorKey && triggerAnchorKey === activeAnchorKey) return;
+    }
     if (event.target.closest("[data-subject-kanban-trigger]")) return;
     onRequestClose?.();
     onRerender?.(getScopeRoot?.() || event.target);
