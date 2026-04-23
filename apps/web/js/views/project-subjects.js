@@ -383,6 +383,7 @@ const {
 } = projectSubjectsTitle;
 
 const projectSubjectsEvents = createProjectSubjectsEvents({
+  DRAFT_SUBJECT_ID,
   store,
   PROJECT_TAB_RESELECTED_EVENT,
   getSubjectsViewState,
