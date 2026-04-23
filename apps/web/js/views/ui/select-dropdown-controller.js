@@ -35,6 +35,7 @@ export function createSelectDropdownController(config = {}) {
   const {
     getViewState,
     getScopeRoot,
+    resolvePlacement,
     renderHost,
     ensureHost = ensureSelectDropdownHost,
     bindingKey = "select-dropdown",
@@ -63,7 +64,8 @@ export function createSelectDropdownController(config = {}) {
         getViewState,
         root: root || (typeof getScopeRoot === "function" ? getScopeRoot() : undefined),
         getScopeRoot,
-        ensureHost
+        ensureHost,
+        resolvePlacement
       });
     },
     captureScrollState: () => captureSelectDropdownScrollState({ host: ensureHost() }),
@@ -84,7 +86,8 @@ export function createSelectDropdownController(config = {}) {
           getViewState,
           root: scopeRoot,
           getScopeRoot,
-          ensureHost
+          ensureHost,
+          resolvePlacement
         });
       }),
       getScopeRoot: overrides.getScopeRoot || getScopeRoot,
@@ -244,6 +247,7 @@ export function syncSelectDropdownPosition({
   root,
   getScopeRoot = () => getSubjectSelectDropdownScopeRoot(getViewState),
   ensureHost = ensureSelectDropdownHost,
+  resolvePlacement,
   candidateRoots = []
 }) {
   const viewState = getViewStateFromGetter(getViewState) || {};
@@ -287,7 +291,15 @@ export function syncSelectDropdownPosition({
     const dropdownWidth = 320;
     const gutter = 12;
     const spacing = 8;
-    const left = Math.max(gutter, Math.min(rect.right - dropdownWidth, viewportWidth - dropdownWidth - gutter));
+    const placement = typeof resolvePlacement === "function"
+      ? (resolvePlacement({ anchor, field, viewState, root: scopeRoot }) || {})
+      : {};
+    const horizontalAlign = placement.horizontal === "anchor-start" ? "anchor-start" : "anchor-end";
+    const verticalMode = placement.vertical === "above-preferred" ? "above-preferred" : "auto";
+    const requestedSpacing = Number(placement.spacing);
+    const resolvedSpacing = Number.isFinite(requestedSpacing) ? Math.max(0, requestedSpacing) : spacing;
+    const anchorLeft = horizontalAlign === "anchor-start" ? rect.left : (rect.right - dropdownWidth);
+    const left = Math.max(gutter, Math.min(anchorLeft, viewportWidth - dropdownWidth - gutter));
     const spaceBelow = Math.max(0, viewportHeight - rect.bottom - gutter);
     const spaceAbove = Math.max(0, rect.top - gutter);
     const preferredHeight = Math.min(420, Math.max(240, Math.max(spaceBelow, spaceAbove)));
@@ -297,10 +309,17 @@ export function syncSelectDropdownPosition({
     dropdown.style.maxHeight = `${maxHeight}px`;
 
     const measuredHeight = Math.min(dropdown.offsetHeight || maxHeight, maxHeight);
-    const shouldOpenAbove = spaceBelow < Math.min(240, measuredHeight) && spaceAbove > spaceBelow;
-    const top = shouldOpenAbove
-      ? Math.max(gutter, rect.top - measuredHeight - spacing)
-      : Math.max(gutter, rect.bottom - 4);
+    const minVisibleHeight = Math.min(240, measuredHeight);
+    const shouldOpenAbove = verticalMode === "above-preferred"
+      ? (spaceAbove >= minVisibleHeight || (spaceAbove >= spaceBelow && spaceAbove >= 120))
+      : (spaceBelow < minVisibleHeight && spaceAbove > spaceBelow);
+    const aboveTop = rect.top - measuredHeight - resolvedSpacing;
+    const belowTop = verticalMode === "above-preferred"
+      ? rect.bottom + resolvedSpacing
+      : rect.bottom - 4;
+    const rawTop = shouldOpenAbove ? aboveTop : belowTop;
+    const maxTop = Math.max(gutter, viewportHeight - measuredHeight - gutter);
+    const top = Math.max(gutter, Math.min(rawTop, maxTop));
 
     dropdown.style.left = `${left}px`;
     dropdown.style.top = `${top}px`;

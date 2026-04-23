@@ -3064,10 +3064,25 @@ function syncCommentPreview(root) {
 }
 
 
+function resolveSubjectDropdownPlacement({ anchor, field, viewState }) {
+  const isMetaField = ["assignees", "labels", "objectives", "situations"].includes(String(field || ""));
+  const isSubissueCreateMode = String(viewState?.createSubjectForm?.mode || "").trim().toLowerCase() === "subissue";
+  const isInsideCreateForm = !!anchor?.closest?.("[data-create-subject-form]");
+  if (isMetaField && isSubissueCreateMode && isInsideCreateForm) {
+    return {
+      horizontal: "anchor-start",
+      vertical: "above-preferred",
+      spacing: 8
+    };
+  }
+  return null;
+}
+
 const subjectSelectDropdown = createSelectDropdownController({
   getViewState: getSubjectsViewState,
   bindingKey: "project-subjects-dropdown",
   getScopeRoot: () => getSubjectSelectDropdownScopeRoot(getSubjectsViewState),
+  resolvePlacement: resolveSubjectDropdownPlacement,
   ensureHost: ensureSelectDropdownHost,
   renderHost: (root) => renderSelectDropdownHost({
     getViewState: getSubjectsViewState,
@@ -3081,7 +3096,8 @@ const subjectSelectDropdown = createSelectDropdownController({
     getViewState: getSubjectsViewState,
     root: scopeRoot,
     getScopeRoot: () => getSubjectSelectDropdownScopeRoot(getSubjectsViewState),
-    ensureHost: ensureSelectDropdownHost
+    ensureHost: ensureSelectDropdownHost,
+    resolvePlacement: resolveSubjectDropdownPlacement
   })
 });
 
