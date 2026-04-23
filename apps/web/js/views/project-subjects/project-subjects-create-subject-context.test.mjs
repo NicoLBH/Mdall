@@ -68,6 +68,9 @@ test("Créer un sous-sujet ouvre le create form en mode subissue (modale)", () =
   assert.match(viewSource, /function renderCreateSubissueModalHtml\(\)/);
   assert.match(viewSource, /subjectCreateSubissueModal/);
   assert.match(viewSource, /title: "Créer un sous-sujet"/);
+  assert.match(viewSource, /footerHtml: renderCreateSubjectFooterHtml\(\{ form, isSubissueMode: true \}\)/);
+  assert.match(viewSource, /footerClassName: "subject-create-subissue-modal__footer"/);
+  assert.match(viewSource, /\$\{isSubissueMode \? "" : renderCreateSubjectFooterHtml\(\{ form, isSubissueMode \}\)\}/);
   assert.match(viewSource, /\$\{isSubissueMode \? "" : `[\s\S]*subject-create-header__title/);
   assert.match(viewSource, /function renderCreateSubissueAssigneesValue\(subjectId\)/);
   assert.match(viewSource, /function renderCreateSubissueLabelsValue\(subjectId\)/);
@@ -76,6 +79,9 @@ test("Créer un sous-sujet ouvre le create form en mode subissue (modale)", () =
   assert.match(styleSource, /\.settings-modal__dialog\.subject-create-subissue-modal__dialog\{[\s\S]*width:800px;[\s\S]*height:673px;/);
   assert.match(styleSource, /\.subject-create-subissue-modal__dialog \.settings-modal__title\{[\s\S]*font-size:14px;/);
   assert.match(styleSource, /\.subject-create-subissue-modal__dialog \.settings-modal__close\{[\s\S]*background:transparent;/);
+  assert.match(styleSource, /\.subject-create-subissue-modal__dialog \.settings-modal__head\{[\s\S]*height:49px;[\s\S]*padding:8px;/);
+  assert.match(styleSource, /\.subject-create-subissue-modal__body\{[\s\S]*height:560px;[\s\S]*padding:16px;[\s\S]*overflow-y:auto;/);
+  assert.match(styleSource, /\.subject-create-subissue-modal__dialog \.settings-modal__footer\.subject-create-subissue-modal__footer\{[\s\S]*height:64px;[\s\S]*border-top:solid 1px var\(--border\);/);
   assert.match(styleSource, /\.settings-modal__head,[\s\S]*border-bottom:solid 1px var\(--border\);/);
   assert.match(styleSource, /\.subject-create-layout--subissue \.subject-meta-field__trigger\{[\s\S]*border:1px dashed var\(--border2\);/);
   assert.match(styleSource, /\.subject-create-subissue-inline-label__dot\{/);
