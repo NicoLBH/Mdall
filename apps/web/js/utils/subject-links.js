@@ -141,5 +141,21 @@ export function linkifySubjectRefsInHtml(html = "", { resolveSubjectByNumber } =
     textNode.parentNode?.replaceChild(fragment, textNode);
   });
 
+  const anchoredLinks = template.content.querySelectorAll("a[href]");
+  anchoredLinks.forEach((link) => {
+    if (!(link instanceof HTMLAnchorElement)) return;
+    if (String(link.dataset.subjectId || "").trim()) return;
+    const href = String(link.getAttribute("href") || "").trim();
+    const match = href.match(/^#(\d{1,7})$/);
+    if (!match) return;
+    const number = normalizeNumber(match[1]);
+    const subject = number ? resolveSubjectByNumber(number) : null;
+    if (!subject?.id) return;
+    link.setAttribute("href", "#");
+    link.classList.add("md-subject-link");
+    link.dataset.subjectId = String(subject.id || "");
+    link.dataset.subjectNumber = String(number);
+  });
+
   return template.innerHTML;
 }

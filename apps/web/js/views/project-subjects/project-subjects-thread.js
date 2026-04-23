@@ -1648,7 +1648,29 @@ priority=${firstNonEmpty(subject.priority, "")}`
         }
 
         const note = String(e?.message || "").trim();
+        const hasKnownLegacyKind = [
+          "review_validated",
+          "review_rejected",
+          "review_dismissed",
+          "review_restored",
+          "description_version_initial",
+          "description_version_saved",
+          "subject_description_updated",
+          "message_posted",
+          "message_edited",
+          "message_frozen",
+          "conversation_locked",
+          "conversation_unlocked",
+          "attachments_linked"
+        ].includes(kind);
+        const isLegacyHistoryFallback = !hasKnownLegacyKind;
+        const historySource = firstNonEmpty(e?.meta?.source, e?.kind, "legacy");
+        const resolvedTargetHtml = isLegacyHistoryFallback ? "#history" : (targetHtml || "");
+        const legacyReason = isLegacyHistoryFallback
+          ? `Activité #history générée quand un événement historique n'est pas encore mappé (source: ${historySource}).`
+          : "";
         const noteHtml = note ? `<div class="tl-note">${mdToHtml(note)}</div>` : "";
+        const fallbackNoteHtml = !note && legacyReason ? `<div class="tl-note">${escapeHtml(legacyReason)}</div>` : "";
 
         return renderMessageThreadActivity({
           idx,
@@ -1658,10 +1680,10 @@ priority=${firstNonEmpty(subject.priority, "")}`
             : miniAuthorIconHtml(agent),
           textHtml: `
             <span class="tl-author-name">${escapeHtml(displayName)}</span>
-            <span class="mono-small"> ${escapeHtml(verb)} ${targetHtml || ""} </span>
+            <span class="mono-small"> ${escapeHtml(verb)} ${resolvedTargetHtml} </span>
             <span class="mono-small">at ${escapeHtml(ts)}</span>
           `,
-          noteHtml
+          noteHtml: noteHtml || fallbackNoteHtml
         });
       }
 
