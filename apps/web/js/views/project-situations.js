@@ -221,6 +221,7 @@ let situationsTabResetBound = false;
 let currentSituationsRoot = null;
 let cleanupSituationsListeners = null;
 let cleanupSituationsSyncEvents = null;
+const DEBUG_SITUATION_KANBAN_SCROLL = window.localStorage?.getItem("debug:situation-kanban-scroll") === "1";
 
 function syncSituationsAvailableHeight(root) {
   if (!root || !root.isConnected) return;
@@ -290,6 +291,18 @@ function rerender(root) {
   const gridScrollBody = root.querySelector(".project-situation-alt-view--grid");
   const roadmapScrollBody = root.querySelector(".project-situation-alt-view--roadmap");
   const kanbanColumns = [...root.querySelectorAll(".situation-kanban__col")];
+  if (DEBUG_SITUATION_KANBAN_SCROLL) {
+    console.debug("[situations:kanban-bind]", {
+      columns: kanbanColumns.length,
+      columnsMeta: kanbanColumns.map((col) => ({
+        column: col.dataset.situationKanbanColumn,
+        scrollHeight: col.scrollHeight,
+        clientHeight: col.clientHeight,
+        canScroll: col.scrollHeight > col.clientHeight,
+        overflowY: getComputedStyle(col).overflowY
+      }))
+    });
+  }
   if (kanbanColumns.length) {
     registerProjectScrollSources(kanbanColumns);
   } else {
@@ -305,6 +318,17 @@ function rerender(root) {
     const onColumnScroll = (event) => {
       const columnEl = event?.currentTarget;
       if (!columnEl) return;
+      if (DEBUG_SITUATION_KANBAN_SCROLL) {
+        console.debug("[situations:kanban-column-scroll]", {
+          column: columnEl.dataset.situationKanbanColumn,
+          scrollTop: columnEl.scrollTop,
+          scrollHeight: columnEl.scrollHeight,
+          clientHeight: columnEl.clientHeight,
+          overflowY: getComputedStyle(columnEl).overflowY,
+          shouldCompact: columnEl.scrollTop > 12,
+          isConnected: columnEl.isConnected
+        });
+      }
       syncProjectShellCompactFromScrollSource(columnEl);
       syncSituationsAvailableHeight(root);
     };

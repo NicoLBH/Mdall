@@ -23,6 +23,7 @@ const shellState = {
   activeScrollSourceResolver: null
 };
 export const PROJECT_SHELL_COMPACT_CHANGE_EVENT = "project-shell-compact-change";
+const DEBUG_SITUATION_KANBAN_SCROLL = window.localStorage?.getItem("debug:situation-kanban-scroll") === "1";
 
 function getStickyChromeHostEl() {
   return document.getElementById("projectStickyChromeHost");
@@ -148,6 +149,19 @@ function applyCompactState(isCompact) {
   shellState.globalHeaderEl?.classList.toggle("gh-header--compact", shellState.isCompact);
   shellState.projectTabsEl?.classList.toggle("project-tabs--hidden", shellState.isCompact);
   getViewHeaderEl()?.classList.toggle("project-view-header--compact", shellState.isCompact);
+
+  if (DEBUG_SITUATION_KANBAN_SCROLL) {
+    console.debug("[project-shell:apply-compact-state]", {
+      requested: isCompact,
+      applied: !!(shellState.compactEnabled && isCompact),
+      compactEnabled: shellState.compactEnabled,
+      didChange,
+      bodyHasCompact: document.body.classList.contains("project-shell-compact"),
+      headerClass: shellState.globalHeaderEl?.className,
+      tabsClass: shellState.projectTabsEl?.className,
+      tabsDisplay: shellState.projectTabsEl ? getComputedStyle(shellState.projectTabsEl).display : null
+    });
+  }
 
   syncCompactTabLabel();
   if (didChange) {
@@ -369,6 +383,18 @@ export function syncProjectShellCompactFromScrollSource(el) {
   shellState.activeScrollSourceResolver = null;
 
   const scrollTop = Number(el.scrollTop || 0);
+  if (DEBUG_SITUATION_KANBAN_SCROLL) {
+    console.debug("[project-shell:compact-from-source]", {
+      sourceClass: el.className,
+      sourceDataset: { ...el.dataset },
+      scrollTop: el.scrollTop,
+      shouldCompact: scrollTop > 12,
+      compactEnabled: shellState.compactEnabled,
+      currentIsCompact: shellState.isCompact,
+      globalHeaderFound: !!shellState.globalHeaderEl,
+      projectTabsFound: !!shellState.projectTabsEl
+    });
+  }
   applyCompactState(scrollTop > 12);
 }
 
