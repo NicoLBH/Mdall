@@ -13297,11 +13297,6 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   flex:0 0 auto;
 }
 
-.project-situation-detail-head__description{
-  max-width:860px;
-}
-
-
 .project-situation-drilldown{
   width:580px;
   max-width:100%;
