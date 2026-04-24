@@ -127,7 +127,6 @@ export function createProjectSituationsView({
                   </div>
                 </div>
               </div>
-              ${selectedSituation.description ? `<div class="issue-row-meta-text project-situation-detail-head__description">${escapeHtml(selectedSituation.description)}</div>` : ""}
               ${renderSituationLayoutTabs()}
             </div>
           </div>
