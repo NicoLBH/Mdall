@@ -2416,8 +2416,8 @@ function renderSubIssuesForSujet(sujet, options = {}) {
     const isExpanded = hasChildren && expandedIds.has(subjectId);
     const canDrag = depth === 0;
     const isRowMenuOpen = openMenuId === subjectId;
-    const nestedSpacerCells = depth > 0
-      ? new Array(depth).fill('<div class="cell cell-subissue-drag-spacer" aria-hidden="true"></div>').join("")
+    const nestedSpacerCell = depth > 0
+      ? `<div class="cell cell-subissue-drag-spacer" style="width:${depth * 24}px" aria-hidden="true"></div>`
       : "";
 
     rows.push(`
@@ -2438,7 +2438,7 @@ function renderSubIssuesForSujet(sujet, options = {}) {
               </button>`
             : ""}
         </div>
-        ${nestedSpacerCells}
+        ${nestedSpacerCell}
         <div class="cell cell-subissue-drag-spacer">
           ${hasChildren
             ? `<button type="button" class="subissue-tree-toggle js-subissue-tree-toggle" data-subissue-tree-toggle="${escapeHtml(subjectId)}" aria-label="${isExpanded ? "Replier" : "Déplier"} le sous-sujet">
