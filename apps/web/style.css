@@ -4184,6 +4184,9 @@ body.drilldown-open .drilldown__inner,
 .assist-msg--help.assist-msg--assistant{ border:1px solid rgba(46,160,67,.28); }
 
 .gh-btn--help-mode{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
   height:30px;
   padding:0 10px;
   border-radius:999px;
@@ -4191,6 +4194,7 @@ body.drilldown-open .drilldown__inner,
   background: rgba(46,160,67,.06);
   color: rgba(240,246,252,.92);
 }
+.gh-btn--help-mode .gh-btn__icon{ display:inline-flex; }
 .gh-btn--help-mode:hover{ background: rgba(46,160,67,.10); }
 .gh-btn--help-mode.is-on{
   border-color: rgba(46,160,67,.60);

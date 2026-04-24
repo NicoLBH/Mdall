@@ -1865,7 +1865,10 @@ priority=${firstNonEmpty(subject.priority, "")}`
       ? attachmentState.items
       : [];
     const actionsHtml = `
-      <button class="gh-btn gh-btn--help-mode ${helpMode ? "is-on" : ""}" data-action="toggle-help" type="button">Help</button>
+      <button class="gh-btn gh-btn--help-mode ${helpMode ? "is-on" : ""}" data-action="toggle-help" type="button">
+        <span class="gh-btn__icon" aria-hidden="true">${svgIcon("stopwatch", { className: "octicon octicon-stopwatch" })}</span>
+        <span>Mode éphémère</span>
+      </button>
 
       ${issueStatusActionHtml}
 
