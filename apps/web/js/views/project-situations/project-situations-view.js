@@ -187,6 +187,24 @@ export function createProjectSituationsView({
       yTicks: objectivesData?.yTicks || [0, 1],
       yMax: objectivesData?.yMax || 1
     });
+    let chartShellContent = "";
+    if (uiState.insightsLoading) {
+      chartShellContent = `<div class="settings-empty-state">Chargement des indicateurs…</div>`;
+    } else if (uiState.insightsError) {
+      chartShellContent = `<div class="settings-inline-error">${escapeHtml(uiState.insightsError)}</div>`;
+    } else if (!hasSituationSubjects) {
+      chartShellContent = `<div class="settings-empty-state">Aucun sujet rattaché à cette situation.</div>`;
+    } else if (activeChart === "burnup") {
+      chartShellContent = chartHtml;
+    } else if (activeChart === "labels") {
+      chartShellContent = (labelsData?.labels || []).length
+        ? labelsChartHtml
+        : `<div class="settings-empty-state">Aucun label trouvé pour les sujets de cette situation.</div>`;
+    } else {
+      chartShellContent = (objectivesData?.labels || []).length
+        ? objectivesChartHtml
+        : `<div class="settings-empty-state">Aucun objectif trouvé pour les sujets de cette situation.</div>`;
+    }
 
     return `
       <div class="settings-shell settings-shell--parametres settings-shell--situation-edit settings-shell--situation-insights">
@@ -219,25 +237,7 @@ export function createProjectSituationsView({
                     </div>
                   ` : ""}
                   <div class="project-situation-insights__chart-shell">
-                    ${uiState.insightsLoading
-                      ? `<div class="settings-empty-state">Chargement des indicateurs…</div>`
-                      : (uiState.insightsError
-                        ? `<div class="settings-inline-error">${escapeHtml(uiState.insightsError)}</div>`
-                        : (activeChart === "burnup"
-                          ? (hasSituationSubjects
-                            ? chartHtml
-                            : `<div class="settings-empty-state">Aucun sujet rattaché à cette situation.</div>`)
-                          : (activeChart === "labels"
-                            ? (!hasSituationSubjects
-                              ? `<div class="settings-empty-state">Aucun sujet rattaché à cette situation.</div>`
-                              : ((labelsData?.labels || []).length
-                              ? labelsChartHtml
-                              : `<div class="settings-empty-state">Aucun label trouvé pour les sujets de cette situation.</div>`))
-                            : (!hasSituationSubjects
-                              ? `<div class="settings-empty-state">Aucun sujet rattaché à cette situation.</div>`
-                              : ((objectivesData?.labels || []).length
-                              ? objectivesChartHtml
-                              : `<div class="settings-empty-state">Aucun objectif trouvé pour les sujets de cette situation.</div>`))))}
+                    ${chartShellContent}
                   </div>
                 </div>
               </section>
