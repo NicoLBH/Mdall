@@ -39,7 +39,8 @@ import { closeGlobalNav } from "./global-nav.js";
 import {
   setProjectViewHeader,
   refreshProjectShellChrome,
-  setProjectCompactEnabled
+  setProjectCompactEnabled,
+  clearProjectActiveScrollSource
 } from "./project-shell-chrome.js";
 import { svgIcon } from "../ui/icons.js";
 import { renderGhActionButton } from "./ui/gh-split-button.js";
@@ -855,6 +856,7 @@ const projectSubjectsView = createProjectSubjectsView({
   bindDetailsScroll: (...args) => projectSubjectsEvents.bindDetailsScroll(...args),
   refreshProjectShellChrome,
   setProjectCompactEnabled,
+  clearProjectActiveScrollSource,
   currentDecisionTarget: (...args) => currentDecisionTarget(...args),
   addComment: (...args) => addComment(...args),
   getSelectionForScope: (...args) => getSelectionForScope(...args),
@@ -999,7 +1001,7 @@ export function renderProjectSubjects(root) {
   store.situationsView.showTableOnly = true;
   store.situationsView.displayDepth = "sujets";
 
-  root.className = "project-shell__content";
+  root.className = "project-shell__content project-shell__content--subjects-document-scroll";
 
   setProjectViewHeader({
     contextLabel: "Sujets",
@@ -1027,7 +1029,7 @@ export function renderProjectSubjects(root) {
 
   root.innerHTML = `
     <section class="project-simple-page project-simple-page--settings">
-      <div class="project-simple-scroll" id="projectSituationsScroll">
+      <div class="project-simple-scroll project-simple-scroll--subjects-document">
         <div class="settings-content project-page-shell project-page-shell--content">
           <section class="gh-panel gh-panel--results" aria-label="Results">
             <div id="situationsPanelHost"></div>

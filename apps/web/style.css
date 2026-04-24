@@ -4694,6 +4694,15 @@ body.route--project:not(.project-shell-compact) [data-chrome-visibility="compact
   flex-direction:column;
 }
 
+.project-shell__content--subjects-document-scroll{
+  overflow:visible;
+}
+
+.project-simple-scroll--subjects-document{
+  overflow:visible;
+  height:auto;
+}
+
 .project-shell{display:flex;flex-direction:column;min-width:0;}
 .project-context-header{display:flex;flex-direction:column;gap:12px}
 
