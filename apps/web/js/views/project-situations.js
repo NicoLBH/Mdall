@@ -331,24 +331,6 @@ function rerender(root) {
   const roadmapScrollBody = root.querySelector(".project-situation-alt-view--roadmap");
   const kanbanColumns = [...root.querySelectorAll(".situation-kanban__col")];
   const kanbanCardLists = [...root.querySelectorAll(".situation-kanban__cards")];
-  debugProjectSituationsKanbanScroll("[situations:kanban-bind]", {
-    columns: kanbanColumns.length,
-    cardLists: kanbanCardLists.length,
-    columnsMeta: kanbanColumns.map((col) => ({
-      column: col.dataset.situationKanbanColumn,
-      scrollHeight: col.scrollHeight,
-      clientHeight: col.clientHeight,
-      canScroll: col.scrollHeight > col.clientHeight,
-      overflowY: getComputedStyle(col).overflowY
-    })),
-    cardListsMeta: kanbanCardLists.map((list) => ({
-      column: list.closest(".situation-kanban__col")?.dataset?.situationKanbanColumn || null,
-      scrollHeight: list.scrollHeight,
-      clientHeight: list.clientHeight,
-      canScroll: list.scrollHeight > list.clientHeight,
-      overflowY: getComputedStyle(list).overflowY
-    }))
-  });
   if (kanbanColumns.length) {
     registerProjectScrollSources(kanbanColumns, kanbanCardLists, primaryScrollRoot);
   } else {
@@ -371,17 +353,6 @@ function rerender(root) {
     const onKanbanScroll = (event) => {
       const sourceEl = event?.currentTarget;
       if (!sourceEl) return;
-      debugProjectSituationsKanbanScroll("[situations:kanban-column-scroll]", {
-        sourceClass: sourceEl.className,
-        sourceTag: sourceEl.tagName,
-        column: ownerColumn?.dataset?.situationKanbanColumn || null,
-        scrollTop: sourceEl.scrollTop,
-        scrollHeight: sourceEl.scrollHeight,
-        clientHeight: sourceEl.clientHeight,
-        overflowY: getComputedStyle(sourceEl).overflowY,
-        shouldCompact: sourceEl.scrollTop > 12,
-        isConnected: sourceEl.isConnected
-      });
       syncProjectShellCompactFromScrollSource(sourceEl);
       syncSituationsAvailableHeight(root);
     };

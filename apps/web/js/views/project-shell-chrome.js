@@ -420,16 +420,6 @@ export function syncProjectShellCompactFromScrollSource(el) {
   shellState.activeScrollSourceResolver = null;
 
   const scrollTop = Number(el.scrollTop || 0);
-  debugProjectShellKanbanScroll("[project-shell:compact-from-source]", {
-    sourceClass: el.className,
-    sourceDataset: { ...el.dataset },
-    scrollTop: el.scrollTop,
-    shouldCompact: scrollTop > 12,
-    compactEnabled: shellState.compactEnabled,
-    currentIsCompact: shellState.isCompact,
-    globalHeaderFound: !!shellState.globalHeaderEl,
-    projectTabsFound: !!shellState.projectTabsEl
-  });
   applyCompactState(scrollTop > 12);
 }
 
