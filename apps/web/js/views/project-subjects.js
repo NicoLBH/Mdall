@@ -394,6 +394,7 @@ const projectSubjectsEvents = createProjectSubjectsEvents({
   getSubjectMetaMenuEntries: (...args) => projectSubjectsView.getSubjectMetaMenuEntries(...args),
   getSubjectSidebarMeta: (...args) => projectSubjectsView.getSubjectSidebarMeta(...args),
   rerenderScope: (...args) => projectSubjectsView.rerenderScope(...args),
+  rerenderSubissuesPanelScope: (...args) => projectSubjectsView.rerenderSubissuesPanelScope(...args),
   syncSubjectMetaDropdownPosition: (...args) => projectSubjectsView.syncSubjectMetaDropdownPosition(...args),
   getSubjectMetaScopeRoot: (...args) => projectSubjectsView.getSubjectMetaScopeRoot(...args),
   getSubjectKanbanMenuEntries: (...args) => projectSubjectsView.getSubjectKanbanMenuEntries(...args),

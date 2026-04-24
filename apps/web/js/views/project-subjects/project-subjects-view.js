@@ -2416,8 +2416,8 @@ function renderSubIssuesForSujet(sujet, options = {}) {
     const isExpanded = hasChildren && expandedIds.has(subjectId);
     const canDrag = depth === 0;
     const isRowMenuOpen = openMenuId === subjectId;
-    const nestedSpacerCells = depth > 0
-      ? new Array(depth).fill('<div class="cell cell-subissue-drag-spacer" aria-hidden="true"></div>').join("")
+    const nestedSpacerCell = depth > 0
+      ? `<div class="cell cell-subissue-drag-spacer" style="width:${depth * 24}px" aria-hidden="true"></div>`
       : "";
 
     rows.push(`
@@ -2438,7 +2438,7 @@ function renderSubIssuesForSujet(sujet, options = {}) {
               </button>`
             : ""}
         </div>
-        ${nestedSpacerCells}
+        ${nestedSpacerCell}
         <div class="cell cell-subissue-drag-spacer">
           ${hasChildren
             ? `<button type="button" class="subissue-tree-toggle js-subissue-tree-toggle" data-subissue-tree-toggle="${escapeHtml(subjectId)}" aria-label="${isExpanded ? "Replier" : "Déplier"} le sous-sujet">
@@ -2723,6 +2723,73 @@ function rerenderCreateSubissueModal() {
   const modalScopeRoot = bumpInteractiveEpoch(modalHost);
   wireDetailsInteractive(modalScopeRoot);
   return modalScopeRoot;
+}
+
+function rerenderSubissuesPanelScope(root, options = {}) {
+  if (!root || !root.isConnected) return false;
+  ensureViewUiState();
+  const targetPanel = root.closest?.(".details-subissues");
+  if (!targetPanel) return false;
+
+  const isDrilldownScope = !!targetPanel.closest?.("#drilldownPanel");
+  const isModalScope = !!targetPanel.closest?.("#detailsBodyModal");
+  const uiState = getSubjectsViewState();
+  const scopedUiState = (() => {
+    if (isModalScope) {
+      if (!store.projectSubjectsView || typeof store.projectSubjectsView !== "object") {
+        store.projectSubjectsView = {};
+      }
+      return store.projectSubjectsView;
+    }
+    if (!isDrilldownScope) return uiState;
+    if (!uiState.drilldown || typeof uiState.drilldown !== "object") {
+      uiState.drilldown = {};
+    }
+    return uiState.drilldown;
+  })();
+  const scopeHost = isDrilldownScope ? "drilldown" : "main";
+  const scopedSelection = options.selectionOverride || getSelectionForScope(scopeHost);
+  if (!scopedSelection?.item) return false;
+
+  if (typeof scopedUiState.rightSubissuesOpen !== "boolean") scopedUiState.rightSubissuesOpen = true;
+  if (!(scopedUiState.rightSubissuesExpandedSubjectIds instanceof Set)) {
+    scopedUiState.rightSubissuesExpandedSubjectIds = new Set(
+      Array.isArray(scopedUiState.rightSubissuesExpandedSubjectIds) ? scopedUiState.rightSubissuesExpandedSubjectIds : []
+    );
+  }
+  if (!(scopedUiState.rightExpandedSujets instanceof Set)) {
+    scopedUiState.rightExpandedSujets = new Set(
+      Array.isArray(scopedUiState.rightExpandedSujets) ? scopedUiState.rightExpandedSujets : []
+    );
+  }
+  if (typeof scopedUiState.rightSubissueMenuOpenId !== "string") scopedUiState.rightSubissueMenuOpenId = "";
+
+  const subissuesOptions = {
+    sujetRowClass: "js-modal-drilldown-sujet",
+    sujetToggleClass: "js-modal-toggle-sujet",
+    avisRowClass: "js-modal-drilldown-avis",
+    expandedSujets: scopedUiState.rightExpandedSujets,
+    expandedSubjectIds: scopedUiState.rightSubissuesExpandedSubjectIds,
+    openMenuId: scopedUiState.rightSubissueMenuOpenId,
+    isOpen: scopedUiState.rightSubissuesOpen
+  };
+
+  const nextPanelHtml = scopedSelection.type === "sujet"
+    ? renderSubIssuesForSujet(scopedSelection.item, subissuesOptions)
+    : renderSubIssuesForSituation(scopedSelection.item, subissuesOptions);
+  if (!nextPanelHtml) return false;
+  const template = document.createElement("template");
+  template.innerHTML = String(nextPanelHtml || "").trim();
+  const nextPanel = template.content.firstElementChild;
+  if (!nextPanel) return false;
+
+  targetPanel.replaceWith(nextPanel);
+  wireDetailsInteractive(bumpInteractiveEpoch(nextPanel));
+  debugRenderScope("details-subissues", {
+    mode: "local-subissues-rerender",
+    host: isDrilldownScope ? "drilldown" : "main"
+  });
+  return true;
 }
 
 function rerenderPanels() {
@@ -3662,6 +3729,7 @@ function getObjectiveById(objectiveId) {
     renderCreateSubjectFormHtml,
     rerenderSubjectsToolbar,
     syncSituationsPrimaryScrollSource,
+    rerenderSubissuesPanelScope,
     rerenderPanels,
     rerenderScope,
     scheduleScopedRerender,
