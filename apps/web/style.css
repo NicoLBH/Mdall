@@ -3859,7 +3859,8 @@ body.drilldown-open .drilldown__inner,
 }
 
 .drilldown--situation-kanban .drilldown__inner{
-  width:min(66.6667vw, 1440px);
+  width:580px;
+  max-width:100%;
 }
 
 /* subissues-counts--problems icon */
@@ -13314,7 +13315,7 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 
 .project-situation-drilldown__title{
   margin:0;
-  font-size:24px;
+  font-size:16px;
   line-height:1.25;
   font-weight:600;
 }
@@ -13348,15 +13349,17 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   align-items:center;
   justify-content:space-between;
   gap:8px;
+  width:100%;
 }
 
 .project-situation-drilldown__section-title{
   display:inline-flex;
   align-items:center;
   gap:8px;
-  font-size:24px;
+  font-size:14px;
   line-height:1.2;
   font-weight:600;
+  justify-content:flex-start;
 }
 
 .project-situation-drilldown__section-action{
@@ -13364,12 +13367,20 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   background:transparent;
   color:var(--muted);
   font-weight:500;
+  margin-left:auto;
+  width:28px;
+  height:28px;
+  border-radius:6px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
 }
 
 .project-situation-drilldown__section-action:hover,
 .project-situation-drilldown__section-action:focus-visible{
   color:var(--accent-fg);
-  text-decoration:underline;
+  background:rgba(110,118,129,.12);
+  text-decoration:none;
 }
 
 .project-situation-drilldown__section-content{
