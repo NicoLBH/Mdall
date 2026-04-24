@@ -192,11 +192,15 @@ export function createProjectSituationsView({
 
   function renderPage() {
     const hasSelectedSituation = !!String(store.situationsView?.selectedSituationId || "").trim();
+    const selectedLayout = getSelectedSituationLayout();
+    const layoutClassSuffix = hasSelectedSituation
+      ? (selectedLayout === "tableau" ? "kanban" : selectedLayout)
+      : "";
 
     return `
-      <section class="project-simple-page project-simple-page--settings">
-        <div class="project-simple-scroll${hasSelectedSituation ? " project-simple-scroll--situation-kanban" : ""}" id="projectSituationsScroll">
-          <div class="settings-content project-page-shell project-page-shell--content${hasSelectedSituation ? " project-page-shell--situation-kanban" : ""}">
+      <section class="project-simple-page project-simple-page--settings${hasSelectedSituation ? " project-simple-page--situation-view" : ""}">
+        <div class="project-simple-scroll${hasSelectedSituation ? ` project-simple-scroll--situation-view project-simple-scroll--situation-${layoutClassSuffix}` : ""}" id="projectSituationsScroll">
+          <div class="settings-content project-page-shell project-page-shell--content${hasSelectedSituation ? ` project-page-shell--situation-view project-page-shell--situation-${layoutClassSuffix}` : ""}">
             ${hasSelectedSituation
               ? `${uiState.editPanelOpen ? renderEditSituationPanel() : renderSelectedSituationDetails()}`
               : `
