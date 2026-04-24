@@ -251,22 +251,8 @@ function rerender(root) {
   syncSituationsToolbar();
   const primaryScrollRoot = document.getElementById("projectSituationsScroll");
   const tableScrollBody = root.querySelector(".issues-table .data-table-shell__body");
-  const kanbanColumnBodies = [...root.querySelectorAll(".situation-kanban__cards")];
-  registerProjectScrollSources(primaryScrollRoot, tableScrollBody, kanbanColumnBodies);
-  root.querySelectorAll(".situation-kanban__col").forEach((column) => {
-    column.addEventListener("mouseenter", () => {
-      setProjectActiveScrollSource(column);
-    });
-    column.addEventListener("scroll", () => {
-      setProjectActiveScrollSource(column);
-    }, { passive: true });
-    column.addEventListener("wheel", () => {
-      setProjectActiveScrollSource(column);
-    }, { passive: true });
-    column.addEventListener("touchstart", () => {
-      setProjectActiveScrollSource(column);
-    }, { passive: true });
-  });
+  const kanbanColumns = [...root.querySelectorAll(".situation-kanban__col")];
+  registerProjectScrollSources(primaryScrollRoot, tableScrollBody, kanbanColumns);
   bindEvents(root);
   bindViewEvents(root);
   kanbanView.bindKanbanEvents(root);
