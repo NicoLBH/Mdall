@@ -13241,7 +13241,7 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .project-situation-layout-tabs{
   margin:6px 0 0;
 }
-.project-situation-layout-tabs .light-tabs__item .is-active {background:var(--bg);}
+.project-situation-layout-tabs .light-tabs__item.is-active {background:var(--bg);}
 .project-situations-table__title-inline{
   min-width:0;
   display:inline-flex;
