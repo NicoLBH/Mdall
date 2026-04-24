@@ -169,6 +169,11 @@ export function createProjectSituationsView({
               <span class="project-situation-edit__back-icon">${svgIcon("arrow-left", { className: "octicon octicon-arrow-left route-title-module__Octicon__vxu4r", width: 24, height: 24 })}</span>
             </button>
             <h1 class="project-situation-edit__title">Paramètres</h1>
+            <div class="project-situation-edit__header-actions">
+              <button type="button" class="gh-btn gh-action__main gh-btn--default gh-btn--md">
+                ${svgIcon("graph", { className: "octicon octicon-graph" })}<span>Indicateurs</span>
+              </button>
+            </div>
           </div>
           <div class="project-situation-edit__main">
             <aside class="project-situation-edit__aside settings-nav settings-nav--parametres settings-nav--situation-edit">
@@ -179,7 +184,6 @@ export function createProjectSituationsView({
                 <div class="gh-panel__head gh-panel__head--tight">
                   <div>
                     <div class="details-title">Paramètres de la situation</div>
-                    <div class="issue-row-meta-text" style="margin-top:6px;">Mets à jour les informations de la situation sans changer son mode.</div>
                   </div>
                 </div>
                 <div class="details-body project-situation-edit__body">
