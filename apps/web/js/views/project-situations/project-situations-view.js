@@ -66,20 +66,23 @@ export function createProjectSituationsView({
     });
 
     const activeRange = String(uiState.insightsRange || "2w");
+    const burnupData = uiState.insightsData?.burnup || null;
+    const labels = Array.isArray(burnupData?.labels) ? burnupData.labels : [];
     const chartHtml = renderSvgLineChart({
       width: 964,
       height: 478,
       xLabel: "",
       yLabel: "",
-      xDomain: [0, 13],
-      yDomain: [0, 10],
-      xTicks: [0, 2, 4, 6, 8, 10, 12],
-      yTicks: [0, 2, 4, 6, 8, 10],
-      xTickFormatter: () => "",
-      series: [
-        { label: "Terminés", points: [] },
-        { label: "Ouverts", points: [] }
-      ]
+      xDomain: [0, Math.max(1, labels.length - 1)],
+      yDomain: [0, Math.max(1, Number(burnupData?.yMax) || 1)],
+      xTicks: Array.isArray(burnupData?.xTicks) ? burnupData.xTicks : [0],
+      yTicks: Array.isArray(burnupData?.yTicks) ? burnupData.yTicks : [0, 1],
+      xTickFormatter: (tick) => {
+        const index = Number(tick);
+        const label = labels[index] || "";
+        return label ? label.slice(5) : "";
+      },
+      series: Array.isArray(burnupData?.series) ? burnupData.series : []
     });
 
     return `
@@ -111,7 +114,11 @@ export function createProjectSituationsView({
                     <button type="button" class="project-situation-insights__range ${activeRange === "max" ? "is-active" : ""}" data-situation-insights-range="max">Max</button>
                   </div>
                   <div class="project-situation-insights__chart-shell">
-                    ${chartHtml}
+                    ${uiState.insightsLoading
+                      ? `<div class="settings-empty-state">Chargement des indicateurs…</div>`
+                      : (uiState.insightsError
+                        ? `<div class="settings-inline-error">${escapeHtml(uiState.insightsError)}</div>`
+                        : chartHtml)}
                   </div>
                 </div>
               </section>
