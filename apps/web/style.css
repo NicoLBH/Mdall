@@ -13299,8 +13299,6 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 }
 
 .project-situation-drilldown{
-  width:580px;
-  max-width:100%;
   display:flex;
   flex-direction:column;
   gap:16px;
@@ -13385,6 +13383,7 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 
 .project-situation-drilldown__section-content{
   color:var(--text);
+  font-size:14px;
   line-height:1.5;
 }
 
