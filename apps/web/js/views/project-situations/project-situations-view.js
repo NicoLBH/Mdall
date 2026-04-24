@@ -186,11 +186,31 @@ export function createProjectSituationsView({
       yTicks: labelsData?.yTicks || [0, 1],
       yMax: labelsData?.yMax || 1
     });
-    const objectivesChartHtml = renderSituationInsightsBarChart({
-      labels: objectivesData?.labels || [],
-      values: objectivesData?.values || [],
-      yTicks: objectivesData?.yTicks || [0, 1],
-      yMax: objectivesData?.yMax || 1
+    const objectivesLineChartHtml = renderSvgLineChart({
+      width: 964,
+      height: 478,
+      xLabel: "",
+      yLabel: "",
+      xDomain: [0, Math.max(1, (objectivesData?.labels || []).length - 1)],
+      yDomain: [0, Math.max(1, Number(objectivesData?.yMax) || 1)],
+      xTicks: Array.from({ length: (objectivesData?.labels || []).length }, (_, index) => index),
+      yTicks: Array.isArray(objectivesData?.yTicks) ? objectivesData.yTicks : [0, 1],
+      xTickFormatter: (tick) => {
+        const label = (objectivesData?.labels || [])[Number(tick)] || "";
+        return label.length > 16 ? `${label.slice(0, 15)}…` : label;
+      },
+      series: [{
+        label: "Count of Items",
+        points: (objectivesData?.values || []).map((value, index) => ({ x: index, y: Number(value) || 0 })),
+        fill: true,
+        color: "#0078ff",
+        areaColor: "color(srgb 0 0.101961 0.278431 / 0.5)",
+        areaOpacity: 1,
+        lineWidth: 2,
+        lineDasharray: "none",
+        legendMarker: "circle",
+        curve: "smooth"
+      }]
     });
     let chartShellContent = "";
     if (uiState.insightsLoading) {
@@ -207,7 +227,7 @@ export function createProjectSituationsView({
         : `<div class="settings-empty-state">Aucun label trouvé pour les sujets de cette situation.</div>`;
     } else {
       chartShellContent = (objectivesData?.labels || []).length
-        ? objectivesChartHtml
+        ? objectivesLineChartHtml
         : `<div class="settings-empty-state">Aucun objectif trouvé pour les sujets de cette situation.</div>`;
     }
 
