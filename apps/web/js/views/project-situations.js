@@ -1,6 +1,6 @@
 import { store } from "../store.js";
 import { PROJECT_TAB_RESELECTED_EVENT } from "./project-header.js";
-import { registerProjectScrollSources, setProjectViewHeader } from "./project-shell-chrome.js";
+import { registerProjectScrollSources, setProjectActiveScrollSource, setProjectViewHeader } from "./project-shell-chrome.js";
 import { renderProjectSituationsRunbar, bindProjectSituationsRunbar } from "./project-situations-runbar.js";
 import { loadFlatSubjectsForCurrentProject } from "../services/project-subjects-supabase.js";
 import {
