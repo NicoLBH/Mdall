@@ -54,15 +54,45 @@ export function createProjectSituationsView({
     const selectedSituation = getSituationById(selectedSituationId);
     if (!selectedSituation) return renderSelectedSituationDetails();
 
+    const activeChart = String(uiState.insightsActiveChart || "burnup");
+    const chartLabels = {
+      burnup: "Évolution des sujets",
+      labels: "Répartition par labels",
+      objectives: "Répartition par objectifs"
+    };
+
     const navHtml = renderSideNavGroup({
       className: "settings-nav__group settings-nav__group--project",
-      items: [renderSideNavItem({
-        label: "Graphique burndown",
-        targetId: "situation-insights-panel",
-        iconHtml: svgIcon("situation-insights"),
-        isActive: true,
-        isPrimary: true
-      })]
+      items: [
+        renderSideNavItem({
+          label: "Évolution des sujets",
+          targetId: "situation-insights-panel",
+          iconHtml: svgIcon("situation-insights"),
+          isActive: activeChart === "burnup",
+          isPrimary: true,
+          dataAttributes: {
+            "data-situation-insights-chart": "burnup"
+          }
+        }),
+        renderSideNavItem({
+          label: "Labels",
+          targetId: "situation-insights-panel",
+          iconHtml: svgIcon("graph"),
+          isActive: activeChart === "labels",
+          dataAttributes: {
+            "data-situation-insights-chart": "labels"
+          }
+        }),
+        renderSideNavItem({
+          label: "Objectifs",
+          targetId: "situation-insights-panel",
+          iconHtml: svgIcon("graph"),
+          isActive: activeChart === "objectives",
+          dataAttributes: {
+            "data-situation-insights-chart": "objectives"
+          }
+        })
+      ]
     });
 
     const activeRange = String(uiState.insightsRange || "2w");
@@ -102,23 +132,27 @@ export function createProjectSituationsView({
               <section class="gh-panel gh-panel--details project-situation-edit__panel project-situation-insights__panel">
                 <div class="gh-panel__head gh-panel__head--tight">
                   <div>
-                    <div class="details-title">Burn up</div>
-                    <div class="issue-row-meta-text" style="margin-top:6px;">Visualise l’évolution des sujets ouverts et terminés pour cette situation.</div>
+                    <div class="details-title">${escapeHtml(chartLabels[activeChart] || chartLabels.burnup)}</div>
+                    <div class="issue-row-meta-text" style="margin-top:6px;">Visualise les indicateurs pour cette situation.</div>
                   </div>
                 </div>
                 <div class="details-body project-situation-insights__body">
-                  <div class="project-situation-insights__ranges" role="tablist" aria-label="Plage temporelle des indicateurs">
-                    <button type="button" class="project-situation-insights__range ${activeRange === "2w" ? "is-active" : ""}" data-situation-insights-range="2w">2 semaines</button>
-                    <button type="button" class="project-situation-insights__range ${activeRange === "1m" ? "is-active" : ""}" data-situation-insights-range="1m">1 mois</button>
-                    <button type="button" class="project-situation-insights__range ${activeRange === "3m" ? "is-active" : ""}" data-situation-insights-range="3m">3 mois</button>
-                    <button type="button" class="project-situation-insights__range ${activeRange === "max" ? "is-active" : ""}" data-situation-insights-range="max">Max</button>
-                  </div>
+                  ${activeChart === "burnup" ? `
+                    <div class="project-situation-insights__ranges" role="tablist" aria-label="Plage temporelle des indicateurs">
+                      <button type="button" class="project-situation-insights__range ${activeRange === "2w" ? "is-active" : ""}" data-situation-insights-range="2w">2 semaines</button>
+                      <button type="button" class="project-situation-insights__range ${activeRange === "1m" ? "is-active" : ""}" data-situation-insights-range="1m">1 mois</button>
+                      <button type="button" class="project-situation-insights__range ${activeRange === "3m" ? "is-active" : ""}" data-situation-insights-range="3m">3 mois</button>
+                      <button type="button" class="project-situation-insights__range ${activeRange === "max" ? "is-active" : ""}" data-situation-insights-range="max">Max</button>
+                    </div>
+                  ` : ""}
                   <div class="project-situation-insights__chart-shell">
-                    ${uiState.insightsLoading
-                      ? `<div class="settings-empty-state">Chargement des indicateurs…</div>`
-                      : (uiState.insightsError
-                        ? `<div class="settings-inline-error">${escapeHtml(uiState.insightsError)}</div>`
-                        : chartHtml)}
+                    ${activeChart !== "burnup"
+                      ? `<div class="settings-empty-state">Ce graphique sera alimenté à l’étape suivante.</div>`
+                      : (uiState.insightsLoading
+                        ? `<div class="settings-empty-state">Chargement des indicateurs…</div>`
+                        : (uiState.insightsError
+                          ? `<div class="settings-inline-error">${escapeHtml(uiState.insightsError)}</div>`
+                          : chartHtml))}
                   </div>
                 </div>
               </section>

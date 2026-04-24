@@ -10,7 +10,8 @@ export function renderSideNavItem({
   isDisabled = false,
   tag = "",
   className = "",
-  as = "button"
+  as = "button",
+  dataAttributes = {}
 } = {}) {
   const resolvedTag = as === "a" ? "a" : "button";
   const attrs = [];
@@ -24,6 +25,11 @@ export function renderSideNavItem({
   if (targetId && !isDisabled) {
     attrs.push(`data-side-nav-target="${escapeHtml(targetId)}"`);
   }
+
+  Object.entries(dataAttributes || {}).forEach(([key, value]) => {
+    if (!String(key || "").trim().toLowerCase().startsWith("data-")) return;
+    attrs.push(`${escapeHtml(key)}="${escapeHtml(value)}"`);
+  });
 
   attrs.push(`data-side-nav-active="${isActive ? "true" : "false"}"`);
   attrs.push(`aria-current="${isActive ? "page" : "false"}"`);

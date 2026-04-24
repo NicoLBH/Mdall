@@ -290,10 +290,24 @@ export function createProjectSituationsEvents({
 
     root.querySelectorAll("[data-situation-insights-range]").forEach((node) => {
       node.addEventListener("click", async () => {
+        if (String(uiState.insightsActiveChart || "burnup") !== "burnup") return;
         const nextRange = String(node.getAttribute("data-situation-insights-range") || "").trim().toLowerCase();
         if (!nextRange || uiState.insightsRange === nextRange) return;
         uiState.insightsRange = nextRange;
         await refreshInsightsData(root);
+      });
+    });
+
+    root.querySelectorAll("[data-situation-insights-chart]").forEach((node) => {
+      node.addEventListener("click", async () => {
+        const nextChart = String(node.getAttribute("data-situation-insights-chart") || "").trim().toLowerCase();
+        if (!["burnup", "labels", "objectives"].includes(nextChart)) return;
+        if (uiState.insightsActiveChart === nextChart) return;
+        uiState.insightsActiveChart = nextChart;
+        rerender(root);
+        if (nextChart === "burnup" && !uiState.insightsLoading && !uiState.insightsData?.burnup) {
+          await refreshInsightsData(root);
+        }
       });
     });
 
