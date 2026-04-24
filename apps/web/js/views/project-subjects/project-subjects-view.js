@@ -89,6 +89,7 @@ export function createProjectSubjectsView(deps) {
     bindDetailsScroll,
     refreshProjectShellChrome,
     setProjectCompactEnabled,
+    clearProjectActiveScrollSource,
     currentDecisionTarget,
     addComment,
     getSelectionForScope,
@@ -2628,6 +2629,7 @@ function restoreDocumentScrollState(state) {
 }
 
 function syncSituationsPrimaryScrollSource() {
+  clearProjectActiveScrollSource?.();
   refreshProjectShellChrome("situations");
 }
 
