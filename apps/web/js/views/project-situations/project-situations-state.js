@@ -91,7 +91,10 @@ export function createProjectSituationsState({ store }) {
       view.selectedSituationLayout = "tableau";
     }
     view.selectedSituationLayout = String(view.selectedSituationLayout || "").trim().toLowerCase();
-    if (!["grille", "tableau", "planning"].includes(view.selectedSituationLayout)) {
+    if (view.selectedSituationLayout === "planning") {
+      view.selectedSituationLayout = "roadmap";
+    }
+    if (!["grille", "tableau", "roadmap"].includes(view.selectedSituationLayout)) {
       view.selectedSituationLayout = "tableau";
     }
     if (!view.pagination || typeof view.pagination !== "object") {

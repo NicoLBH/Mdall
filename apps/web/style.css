@@ -9874,8 +9874,7 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
     
 .project-shell__content--situation-kanban{
   padding-inline:0;
-  overflow-x:auto;
-  overflow-y:hidden;
+  overflow:hidden;
 }
 
 .project-page-shell--situation-kanban{
@@ -9884,6 +9883,12 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
   padding-inline:0;
   display:flex;
   flex-direction:column;
+  height:calc(100dvh - 150px);
+  min-height:calc(100dvh - 150px);
+}
+
+body.route--project .project-simple-scroll.project-simple-scroll--situation-kanban{
+  overflow:hidden;
 }
 
 .gh-panel--details-situation-kanban{
@@ -9892,7 +9897,8 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
   box-shadow:none;
   display:flex;
   flex-direction:column;
-  min-height:calc(100vh - 180px);
+  min-height:0;
+  height:100%;
 }
 
 .gh-panel--details-situation-kanban > .gh-panel__head{
@@ -13226,7 +13232,7 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 }
 
 .project-situation-layout-tabs{
-  margin:0 16px 12px;
+  margin:6px 0 0;
 }
 
 .project-situations-table__title-inline{

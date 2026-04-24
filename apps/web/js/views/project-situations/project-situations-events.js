@@ -288,7 +288,8 @@ export function createProjectSituationsEvents({
       onChange: (nextTabId) => {
         if (!store.situationsView || typeof store.situationsView !== "object") store.situationsView = {};
         const normalizedTabId = String(nextTabId || "").trim().toLowerCase();
-        const nextLayout = ["grille", "tableau", "planning"].includes(normalizedTabId) ? normalizedTabId : "tableau";
+        const resolvedTabId = normalizedTabId === "planning" ? "roadmap" : normalizedTabId;
+        const nextLayout = ["grille", "tableau", "roadmap"].includes(resolvedTabId) ? resolvedTabId : "tableau";
         if (store.situationsView.selectedSituationLayout === nextLayout) return;
         store.situationsView.selectedSituationLayout = nextLayout;
         rerender(root);

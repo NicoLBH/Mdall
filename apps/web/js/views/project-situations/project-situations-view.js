@@ -5,6 +5,8 @@ import { renderStatusBadge } from "../ui/status-badges.js";
 import { renderSideNavLayout, renderSideNavGroup, renderSideNavItem } from "../ui/side-nav-layout.js";
 import { renderLightTabs } from "../ui/light-tabs.js";
 import { renderSituationForm } from "./project-situations-form.js";
+import { renderSituationGridView } from "./project-situations-view-grid.js";
+import { renderSituationRoadmapView } from "./project-situations-view-roadmap.js";
 
 export function createProjectSituationsView({
   store,
@@ -18,7 +20,8 @@ export function createProjectSituationsView({
 }) {
   function getSelectedSituationLayout() {
     const layout = String(store.situationsView?.selectedSituationLayout || "").trim().toLowerCase();
-    return ["grille", "tableau", "planning"].includes(layout) ? layout : "tableau";
+    if (layout === "planning") return "roadmap";
+    return ["grille", "tableau", "roadmap"].includes(layout) ? layout : "tableau";
   }
 
   function renderSituationLayoutTabs() {
@@ -26,7 +29,7 @@ export function createProjectSituationsView({
       tabs: [
         { id: "grille", label: "Grille" },
         { id: "tableau", label: "Tableau" },
-        { id: "planning", label: "Planning" }
+        { id: "roadmap", label: "Trajectoire" }
       ],
       activeTabId: getSelectedSituationLayout(),
       ariaLabel: "Modes d'affichage de la situation",
@@ -40,9 +43,9 @@ export function createProjectSituationsView({
       return renderSituationKanban(selectedSituation, uiState.selectedSituationSubjects, { loading: uiState.selectedSituationLoading });
     }
     if (selectedLayout === "grille") {
-      return `<div class="settings-empty-state">Vue grille disponible prochainement.</div>`;
+      return renderSituationGridView(selectedSituation, uiState.selectedSituationSubjects);
     }
-    return `<div class="settings-empty-state">Vue planning disponible prochainement.</div>`;
+    return renderSituationRoadmapView(selectedSituation, uiState.selectedSituationSubjects);
   }
 
   function renderCreateSituationModal() {
@@ -109,6 +112,7 @@ export function createProjectSituationsView({
                 <div class="project-situation-detail-head__meta">${statusBadge}${modeBadge}<span class="mono-small">${uiState.selectedSituationSubjects.length} sujet(s)</span></div>
               </div>
               ${selectedSituation.description ? `<div class="issue-row-meta-text project-situation-detail-head__description">${escapeHtml(selectedSituation.description)}</div>` : ""}
+              ${renderSituationLayoutTabs()}
             </div>
           </div>
         </div>
@@ -116,10 +120,7 @@ export function createProjectSituationsView({
           ${uiState.selectedSituationError ? `<div class="settings-inline-error">${escapeHtml(uiState.selectedSituationError)}</div>` : ""}
           ${uiState.selectedSituationLoading
             ? `<div class="settings-empty-state">Chargement des sujets de la situation…</div>`
-            : `
-              ${renderSituationLayoutTabs()}
-              ${renderSelectedSituationLayoutBody(selectedSituation)}
-            `}
+            : renderSelectedSituationLayoutBody(selectedSituation)}
         </div>
       </section>
     `;
@@ -194,7 +195,7 @@ export function createProjectSituationsView({
 
     return `
       <section class="project-simple-page project-simple-page--settings">
-        <div class="project-simple-scroll" id="projectSituationsScroll">
+        <div class="project-simple-scroll${hasSelectedSituation ? " project-simple-scroll--situation-kanban" : ""}" id="projectSituationsScroll">
           <div class="settings-content project-page-shell project-page-shell--content${hasSelectedSituation ? " project-page-shell--situation-kanban" : ""}">
             ${hasSelectedSituation
               ? `${uiState.editPanelOpen ? renderEditSituationPanel() : renderSelectedSituationDetails()}`
