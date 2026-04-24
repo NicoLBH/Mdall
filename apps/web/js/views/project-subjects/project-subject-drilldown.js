@@ -61,8 +61,18 @@ export function createProjectSubjectDrilldownController(config) {
 
   let lockedWindowScrollY = 0;
 
+  function getNormalDetailsHeadElement() {
+    return document.getElementById("situationsDetailsTitle")
+      || document.getElementById("situationsKanbanDetailsTitle");
+  }
+
+  function getNormalDetailsChromeElement() {
+    return document.getElementById("situationsDetailsChrome")
+      || document.getElementById("situationsKanbanDetailsChrome");
+  }
+
   function readNormalDetailsHeadBottom() {
-    const normalDetailsHead = document.getElementById("situationsDetailsTitle");
+    const normalDetailsHead = getNormalDetailsHeadElement();
     if (!normalDetailsHead) return 0;
     const rect = normalDetailsHead.getBoundingClientRect?.();
     return Number(rect?.bottom || 0);
@@ -77,11 +87,12 @@ export function createProjectSubjectDrilldownController(config) {
   }
 
   function getNormalDetailsCompactSnapshot() {
-    const normalDetailsChrome = document.getElementById("situationsDetailsChrome");
-    const normalDetailsHead = document.getElementById("situationsDetailsTitle");
-    if (!normalDetailsChrome || !normalDetailsHead) return null;
+    const normalDetailsChrome = getNormalDetailsChromeElement();
+    const normalDetailsHead = getNormalDetailsHeadElement();
+    if (!normalDetailsHead) return null;
     return {
-      compact: normalDetailsChrome.classList.contains("overlay-chrome--compact")
+      compact: !!document.body.classList.contains("project-shell-compact")
+        || normalDetailsChrome?.classList?.contains("overlay-chrome--compact")
         || normalDetailsHead.classList.contains("details-head--compact")
         || document.body.classList.contains("project-subject-details-top-compact"),
       expanded: normalDetailsHead.classList.contains("details-head--expanded")
@@ -90,11 +101,11 @@ export function createProjectSubjectDrilldownController(config) {
 
   function applyNormalDetailsCompactSnapshot(snapshot) {
     if (!snapshot) return;
-    const normalDetailsChrome = document.getElementById("situationsDetailsChrome");
-    const normalDetailsHead = document.getElementById("situationsDetailsTitle");
-    if (!normalDetailsChrome || !normalDetailsHead) return;
+    const normalDetailsChrome = getNormalDetailsChromeElement();
+    const normalDetailsHead = getNormalDetailsHeadElement();
+    if (!normalDetailsHead) return;
     const normalizedSnapshot = normalizeNormalDetailsCompactSnapshot(snapshot);
-    normalDetailsChrome.classList.toggle("overlay-chrome--compact", normalizedSnapshot.compact);
+    normalDetailsChrome?.classList?.toggle("overlay-chrome--compact", normalizedSnapshot.compact);
     normalDetailsHead.classList.toggle("details-head--compact", normalizedSnapshot.compact);
     normalDetailsHead.classList.toggle("details-head--expanded", normalizedSnapshot.expanded);
     document.body.classList.toggle("project-subject-details-top-compact", normalizedSnapshot.compact);
@@ -213,7 +224,24 @@ export function createProjectSubjectDrilldownController(config) {
   function applyDrilldownVariant(variant = "") {
     const panel = document.getElementById("drilldownPanel");
     if (!panel) return;
-    panel.classList.toggle("drilldown--situation-kanban", String(variant || "").trim() === "situation-kanban");
+    const isSituationKanban = String(variant || "").trim() === "situation-kanban";
+    panel.classList.toggle("drilldown--situation-kanban", isSituationKanban);
+    if (isSituationKanban) {
+      panel.querySelector(".overlay-chrome__head.drilldown__head")?.remove();
+      return;
+    }
+    if (panel.querySelector("#drilldownTitle")) return;
+    const headMarkup = renderOverlayChromeHead({
+      titleId: "drilldownTitle",
+      closeId: "drilldownClose",
+      closeLabel: "Fermer",
+      headClassName: "drilldown__head",
+      actionsHtml: promoteActionHtml
+    });
+    const body = panel.querySelector("#drilldownBody");
+    if (body) {
+      body.insertAdjacentHTML("beforebegin", headMarkup);
+    }
   }
   function syncWindowScrollLock(open) {
     if (open) {
@@ -261,7 +289,9 @@ export function createProjectSubjectDrilldownController(config) {
     applyDrilldownVariant(options?.variant);
     setOverlayChromeOpenState(panel, true);
     syncWindowScrollLock(true);
-    updateDrilldownPanel();
+    if (String(options?.variant || "").trim() !== "situation-kanban") {
+      updateDrilldownPanel();
+    }
   }
 
   function closeDrilldown() {

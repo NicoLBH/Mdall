@@ -94,8 +94,8 @@ export function createProjectSituationsView({
     });
 
     return `
-      <section class="gh-panel gh-panel--details gh-panel--details-situation-kanban" aria-label="Détail de situation">
-        <div class="gh-panel__head gh-panel__head--tight">
+      <section id="situationsKanbanDetailsChrome" class="gh-panel gh-panel--details gh-panel--details-situation-kanban" aria-label="Détail de situation">
+        <div id="situationsKanbanDetailsTitle" class="gh-panel__head gh-panel__head--tight details-head--expanded">
           <div class="project-situation-detail-head">
             <div class="project-situation-detail-head__main">
               <div class="project-situation-title-row">
