@@ -34,6 +34,7 @@ export function createProjectSubjectsEvents(config) {
     getSubjectMetaMenuEntries,
     getSubjectSidebarMeta,
     rerenderScope,
+    rerenderSubissuesPanelScope,
     getInlineReplyUiState,
     syncSubjectMetaDropdownPosition,
     getSubjectMetaScopeRoot,
@@ -2796,7 +2797,8 @@ export function createProjectSubjectsEvents(config) {
     root.querySelectorAll("[data-action='toggle-subissues']").forEach((btn) => {
       btn.onclick = () => {
         scopedUiState.rightSubissuesOpen = !scopedUiState.rightSubissuesOpen;
-        rerenderDetailsScope();
+        if (typeof rerenderSubissuesPanelScope === "function" && rerenderSubissuesPanelScope(btn)) return;
+        rerenderScope(btn);
       };
     });
 
@@ -2811,7 +2813,8 @@ export function createProjectSubjectsEvents(config) {
         if (!subjectId) return;
         if (subissuesExpandedSet.has(subjectId)) subissuesExpandedSet.delete(subjectId);
         else subissuesExpandedSet.add(subjectId);
-        rerenderDetailsScope();
+        if (typeof rerenderSubissuesPanelScope === "function" && rerenderSubissuesPanelScope(btn)) return;
+        rerenderScope(btn);
       };
     });
 
@@ -2821,7 +2824,8 @@ export function createProjectSubjectsEvents(config) {
         event.stopPropagation();
         const subjectId = String(btn.dataset.subissueActionsTrigger || "");
         scopedUiState.rightSubissueMenuOpenId = String(scopedUiState.rightSubissueMenuOpenId || "") === subjectId ? "" : subjectId;
-        rerenderDetailsScope();
+        if (typeof rerenderSubissuesPanelScope === "function" && rerenderSubissuesPanelScope(btn)) return;
+        rerenderScope(btn);
       };
     });
 
