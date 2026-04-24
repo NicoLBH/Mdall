@@ -213,7 +213,24 @@ export function createProjectSubjectDrilldownController(config) {
   function applyDrilldownVariant(variant = "") {
     const panel = document.getElementById("drilldownPanel");
     if (!panel) return;
-    panel.classList.toggle("drilldown--situation-kanban", String(variant || "").trim() === "situation-kanban");
+    const isSituationKanban = String(variant || "").trim() === "situation-kanban";
+    panel.classList.toggle("drilldown--situation-kanban", isSituationKanban);
+    if (isSituationKanban) {
+      panel.querySelector(".overlay-chrome__head.drilldown__head")?.remove();
+      return;
+    }
+    if (panel.querySelector("#drilldownTitle")) return;
+    const headMarkup = renderOverlayChromeHead({
+      titleId: "drilldownTitle",
+      closeId: "drilldownClose",
+      closeLabel: "Fermer",
+      headClassName: "drilldown__head",
+      actionsHtml: promoteActionHtml
+    });
+    const body = panel.querySelector("#drilldownBody");
+    if (body) {
+      body.insertAdjacentHTML("beforebegin", headMarkup);
+    }
   }
   function syncWindowScrollLock(open) {
     if (open) {
@@ -261,7 +278,9 @@ export function createProjectSubjectDrilldownController(config) {
     applyDrilldownVariant(options?.variant);
     setOverlayChromeOpenState(panel, true);
     syncWindowScrollLock(true);
-    updateDrilldownPanel();
+    if (String(options?.variant || "").trim() !== "situation-kanban") {
+      updateDrilldownPanel();
+    }
   }
 
   function closeDrilldown() {

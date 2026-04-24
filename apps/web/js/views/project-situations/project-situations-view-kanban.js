@@ -156,7 +156,7 @@ export function createProjectSituationsKanbanView({
         event.stopPropagation();
         const subjectId = String(node.getAttribute("data-open-situation-subject") || "").trim();
         if (!subjectId) return;
-        openSubjectDrilldown(subjectId, { variant: "situation-kanban" });
+        openSubjectDrilldown(subjectId);
       });
     });
 
