@@ -9959,7 +9959,7 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   min-height:0;
   height:100%;
   align-self:stretch;
-  overflow-y:auto;
+  overflow-y:hidden;
   overflow-x:hidden;
 }
 
@@ -10041,7 +10041,7 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   min-height:0;
   height:100%;
   flex:1 1 auto;
-  overflow-y:visible;
+  overflow-y:auto;
   overflow-x:hidden;
   padding-bottom:8px;
 }
