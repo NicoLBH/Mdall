@@ -66,7 +66,11 @@ export function createProjectSituationsState({ store }) {
     editError: "",
     editForm: getDefaultSituationForm(),
     insightsPanelOpen: false,
-    insightsRange: "2w"
+    insightsRange: "2w",
+    insightsLoading: false,
+    insightsError: "",
+    insightsActiveChart: "burnup",
+    insightsData: null
   };
 
   function ensureSituationsViewState() {

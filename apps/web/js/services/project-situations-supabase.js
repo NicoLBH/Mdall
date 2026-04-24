@@ -273,6 +273,214 @@ function sortSubjects(subjects = []) {
   });
 }
 
+function getRangeDayCount(range) {
+  if (range === "1m") return 30;
+  if (range === "3m") return 90;
+  return 14;
+}
+
+function toDayStartTimestamp(value) {
+  const timestamp = Date.parse(value || "");
+  if (!Number.isFinite(timestamp)) return NaN;
+  const date = new Date(timestamp);
+  date.setUTCHours(0, 0, 0, 0);
+  return date.getTime();
+}
+
+function buildEvenTicks(maxValue, targetSteps = 5) {
+  const safeMax = Math.max(0, Number(maxValue) || 0);
+  const step = Math.max(1, Math.ceil(safeMax / Math.max(1, targetSteps)));
+  const ticks = [0];
+  for (let value = step; value <= safeMax; value += step) ticks.push(value);
+  if (ticks[ticks.length - 1] !== safeMax) ticks.push(safeMax);
+  return [...new Set(ticks)];
+}
+
+function buildSituationBurnupChartData(subjects = [], range = "2w") {
+  const safeSubjects = safeArray(subjects);
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const todayTs = today.getTime();
+
+  const filteredRange = String(range || "2w").trim().toLowerCase();
+  let startTs = todayTs;
+  if (filteredRange === "max") {
+    const minCreatedTs = safeSubjects
+      .map((subject) => toDayStartTimestamp(subject?.created_at))
+      .filter(Number.isFinite)
+      .sort((a, b) => a - b)[0];
+    startTs = Number.isFinite(minCreatedTs) ? minCreatedTs : todayTs;
+  } else {
+    startTs = todayTs - ((getRangeDayCount(filteredRange) - 1) * 86400000);
+  }
+
+  const dayCount = Math.max(1, Math.floor((todayTs - startTs) / 86400000) + 1);
+  const dayTimestamps = Array.from({ length: dayCount }, (_, index) => startTs + (index * 86400000));
+
+  const openedSeries = [];
+  const closedSeries = [];
+
+  // NOTE: la précision historique dépend des colonnes disponibles (status/created_at/updated_at/closed_at) ;
+  // sans journal d'événements complet, on ne peut pas reconstruire parfaitement les fermetures/réouvertures successives.
+  dayTimestamps.forEach((dayTs, index) => {
+    const dayEndTs = dayTs + 86399999;
+    let openCount = 0;
+    let closedCount = 0;
+
+    safeSubjects.forEach((subject) => {
+      const createdTs = Date.parse(subject?.created_at || "");
+      if (!Number.isFinite(createdTs) || createdTs > dayEndTs) return;
+
+      const closedAtTs = Date.parse(subject?.closed_at || "");
+      const effectiveClosedTs = Number.isFinite(closedAtTs) ? closedAtTs : NaN;
+      const effectiveStatus = String(subject?.status || "open").trim().toLowerCase() === "closed" ? "closed" : "open";
+
+      if (Number.isFinite(effectiveClosedTs) && effectiveClosedTs <= dayEndTs) {
+        closedCount += 1;
+        return;
+      }
+      if (effectiveStatus === "closed" && !Number.isFinite(effectiveClosedTs)) {
+        closedCount += 1;
+        return;
+      }
+      openCount += 1;
+    });
+
+    openedSeries.push({ x: index, y: openCount });
+    closedSeries.push({ x: index, y: closedCount });
+  });
+
+  const yMax = Math.max(
+    1,
+    ...openedSeries.map((point) => point.y),
+    ...closedSeries.map((point) => point.y)
+  );
+
+  const xTicks = (() => {
+    if (dayCount <= 7) return Array.from({ length: dayCount }, (_, index) => index);
+    const step = Math.max(1, Math.floor(dayCount / 6));
+    const ticks = [0];
+    for (let tick = step; tick < dayCount - 1; tick += step) ticks.push(tick);
+    if (ticks[ticks.length - 1] !== dayCount - 1) ticks.push(dayCount - 1);
+    return [...new Set(ticks)];
+  })();
+
+  return {
+    labels: dayTimestamps.map((dayTs) => new Date(dayTs).toISOString().slice(0, 10)),
+    xTicks,
+    yTicks: buildEvenTicks(yMax, 5),
+    yMax,
+    series: [
+      { label: "Fermés", points: closedSeries },
+      { label: "Ouverts", points: openedSeries }
+    ]
+  };
+}
+
+function getRawSubjectsResult(projectSubjectsState = store.projectSubjectsView) {
+  const raw = projectSubjectsState?.rawSubjectsResult;
+  return raw && typeof raw === "object" ? raw : null;
+}
+
+function buildSituationLabelDistribution(subjects = [], projectSubjectsState = store.projectSubjectsView) {
+  const raw = getRawSubjectsResult(projectSubjectsState);
+  const labelsById = raw?.labelsById && typeof raw.labelsById === "object" ? raw.labelsById : {};
+  const labelsByKey = raw?.labelsByKey && typeof raw.labelsByKey === "object" ? raw.labelsByKey : {};
+  const labelIdsBySubjectId = raw?.labelIdsBySubjectId && typeof raw.labelIdsBySubjectId === "object" ? raw.labelIdsBySubjectId : {};
+  const countsByLabel = new Map();
+
+  safeArray(subjects).forEach((subject) => {
+    const subjectId = normalizeUuid(subject?.id);
+    if (!subjectId) return;
+
+    const linkedLabelIds = normalizeArrayOfStrings(labelIdsBySubjectId[subjectId]);
+    if (linkedLabelIds.length) {
+      linkedLabelIds.forEach((labelId) => {
+        const label = labelsById[labelId] || {};
+        const labelName = firstNonEmpty(label?.name, label?.label_key, label?.id, labelId);
+        if (!labelName) return;
+        countsByLabel.set(labelName, (countsByLabel.get(labelName) || 0) + 1);
+      });
+      return;
+    }
+
+    // Fallback: si rawSubjectsResult n'expose pas encore labelIdsBySubjectId, on exploite la méta sujet déjà hydratée.
+    const fallbackLabelKeys = getSubjectLabelKeys(subjectId, projectSubjectsState);
+    fallbackLabelKeys.forEach((labelKey) => {
+      const label = labelsByKey[String(labelKey || "").toLowerCase()] || {};
+      const labelName = firstNonEmpty(label?.name, label?.label_key, label?.id, labelKey);
+      if (!labelName) return;
+      countsByLabel.set(labelName, (countsByLabel.get(labelName) || 0) + 1);
+    });
+  });
+
+  const sorted = [...countsByLabel.entries()]
+    .sort((left, right) => {
+      if (right[1] !== left[1]) return right[1] - left[1];
+      return String(left[0]).localeCompare(String(right[0]), "fr");
+    });
+
+  const labels = sorted.map(([name]) => name);
+  const values = sorted.map(([, count]) => count);
+  const yMax = Math.max(1, ...values, 0);
+
+  return {
+    labels,
+    values,
+    yTicks: buildEvenTicks(yMax, 5),
+    yMax
+  };
+}
+
+function buildSituationObjectiveDistribution(subjects = [], projectSubjectsState = store.projectSubjectsView) {
+  const raw = getRawSubjectsResult(projectSubjectsState);
+  const objectivesById = raw?.objectivesById && typeof raw.objectivesById === "object" ? raw.objectivesById : {};
+  const objectiveIdsBySubjectId = raw?.objectiveIdsBySubjectId && typeof raw.objectiveIdsBySubjectId === "object" ? raw.objectiveIdsBySubjectId : {};
+  const countsByObjective = new Map();
+
+  safeArray(subjects).forEach((subject) => {
+    const subjectId = normalizeUuid(subject?.id);
+    if (!subjectId) return;
+
+    const linkedObjectiveIds = normalizeArrayOfStrings(objectiveIdsBySubjectId[subjectId]);
+    if (linkedObjectiveIds.length) {
+      linkedObjectiveIds.forEach((objectiveId) => {
+        const objective = objectivesById[objectiveId] || {};
+        const objectiveTitle = firstNonEmpty(objective?.title, objective?.name, objective?.id, objectiveId);
+        if (!objectiveTitle) return;
+        countsByObjective.set(objectiveTitle, (countsByObjective.get(objectiveTitle) || 0) + 1);
+      });
+      return;
+    }
+
+    // Fallback: si objectiveIdsBySubjectId n'est pas disponible dans rawSubjectsResult, on lit les objectiveIds de la méta sujet.
+    const fallbackObjectiveIds = getSubjectObjectiveIds(subjectId, projectSubjectsState);
+    fallbackObjectiveIds.forEach((objectiveId) => {
+      const objective = objectivesById[objectiveId] || {};
+      const objectiveTitle = firstNonEmpty(objective?.title, objective?.name, objective?.id, objectiveId);
+      if (!objectiveTitle) return;
+      countsByObjective.set(objectiveTitle, (countsByObjective.get(objectiveTitle) || 0) + 1);
+    });
+  });
+
+  const sorted = [...countsByObjective.entries()]
+    .sort((left, right) => {
+      if (right[1] !== left[1]) return right[1] - left[1];
+      return String(left[0]).localeCompare(String(right[0]), "fr");
+    });
+
+  const labels = sorted.map(([name]) => name);
+  const values = sorted.map(([, count]) => count);
+  const yMax = Math.max(1, ...values, 0);
+
+  return {
+    labels,
+    values,
+    yTicks: buildEvenTicks(yMax, 5),
+    yMax
+  };
+}
+
 export async function loadSituationsForCurrentProject(projectId) {
   const resolvedProjectId = await getResolvedProjectId(projectId);
   if (!resolvedProjectId) throw new Error("projectId is required");
@@ -572,6 +780,19 @@ export async function loadSubjectsForSituation(situation, projectSubjectsState =
 
   const flatSubjects = Object.values(subjectsById);
   return sortSubjects(flatSubjects.filter((subject) => subjectMatchesAutomaticFilter(subject, normalizedSituation.filter_definition, projectSubjectsState)));
+}
+
+export async function loadSituationInsightsData(situation, options = {}) {
+  const range = String(options?.range || "2w").trim().toLowerCase();
+  const normalizedRange = ["2w", "1m", "3m", "max"].includes(range) ? range : "2w";
+  const subjects = await loadSubjectsForSituation(situation, store.projectSubjectsView);
+  const labelDistribution = buildSituationLabelDistribution(subjects, store.projectSubjectsView);
+  const objectiveDistribution = buildSituationObjectiveDistribution(subjects, store.projectSubjectsView);
+  return {
+    burnup: buildSituationBurnupChartData(subjects, normalizedRange),
+    labels: labelDistribution,
+    objectives: objectiveDistribution
+  };
 }
 
 export function resetSituationsForCurrentProject() {
