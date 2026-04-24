@@ -276,8 +276,7 @@ export function registerProjectScrollSources(...elements) {
   const onSourceChange = (event) => {
     const sourceEl = event?.currentTarget;
     if (sourceEl) {
-      shellState.activeScrollSourceEl = sourceEl;
-      shellState.activeScrollSourceResolver = null;
+      useProjectScrollSource(sourceEl);
     }
     syncCompactState();
   };
@@ -320,6 +319,15 @@ export function setProjectActiveScrollSource(el, { resolve = null } = {}) {
   syncCompactState();
 }
 
+export function useProjectScrollSource(el) {
+  if (!el) return;
+  if (shellState.activeScrollSourceEl === el && !shellState.activeScrollSourceResolver) return;
+  shellState.cleanupActiveScrollSource?.();
+  shellState.cleanupActiveScrollSource = null;
+  shellState.activeScrollSourceEl = el;
+  shellState.activeScrollSourceResolver = null;
+}
+
 export function clearProjectActiveScrollSource(el = null) {
   const activeEl = getActiveScrollSourceEl();
   if (el && activeEl && el !== activeEl) {
@@ -349,6 +357,19 @@ export function refreshProjectShellChrome() {
 
 export function refreshProjectShellCompactState() {
   syncCompactState();
+}
+
+export function syncProjectShellCompactFromScrollSource(el) {
+  if (!el) return;
+
+  refreshProjectShellChromeRefs();
+
+  shellState.compactEnabled = true;
+  shellState.activeScrollSourceEl = el;
+  shellState.activeScrollSourceResolver = null;
+
+  const scrollTop = Number(el.scrollTop || 0);
+  applyCompactState(scrollTop > 12);
 }
 
 export function unmountProjectShellChrome() {

@@ -4,7 +4,7 @@ import {
   PROJECT_SHELL_COMPACT_CHANGE_EVENT,
   setProjectCompactEnabled,
   refreshProjectShellChrome,
-  refreshProjectShellCompactState,
+  syncProjectShellCompactFromScrollSource,
   registerProjectScrollSources,
   setProjectActiveScrollSource,
   setProjectViewHeader
@@ -289,7 +289,11 @@ function rerender(root) {
   const gridScrollBody = root.querySelector(".project-situation-alt-view--grid");
   const roadmapScrollBody = root.querySelector(".project-situation-alt-view--roadmap");
   const kanbanColumns = [...root.querySelectorAll(".situation-kanban__col")];
-  registerProjectScrollSources(primaryScrollRoot, tableScrollBody, gridScrollBody, roadmapScrollBody, kanbanColumns);
+  if (kanbanColumns.length) {
+    registerProjectScrollSources(kanbanColumns);
+  } else {
+    registerProjectScrollSources(primaryScrollRoot, tableScrollBody, gridScrollBody, roadmapScrollBody);
+  }
 
   const unbindColumnHandlers = [];
   kanbanColumns.forEach((column) => {
@@ -297,9 +301,10 @@ function rerender(root) {
       setProjectCompactEnabled(true);
       setProjectActiveScrollSource(column);
     };
-    const onColumnScroll = () => {
-      setProjectCompactEnabled(true);
-      refreshProjectShellCompactState();
+    const onColumnScroll = (event) => {
+      const columnEl = event?.currentTarget;
+      if (!columnEl) return;
+      syncProjectShellCompactFromScrollSource(columnEl);
       syncSituationsAvailableHeight(root);
     };
     column.addEventListener("mouseenter", activateColumn);
