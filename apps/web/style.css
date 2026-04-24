@@ -13579,6 +13579,7 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   min-width:0;
   display:flex;
   justify-content:center;
+  margin:0 auto;
   padding:20px 24px;
 }
 
@@ -13609,6 +13610,7 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   }
 
   .project-situation-edit__content{
+    margin:0;
     padding:20px 0;
   }
 }
