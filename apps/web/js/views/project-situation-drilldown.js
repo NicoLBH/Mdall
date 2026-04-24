@@ -38,7 +38,16 @@ export function renderProjectSituationDrilldown(situation, options = {}) {
             </svg>
             ${escapeHtml(shortDescriptionLabel)}
           </span>
-          <button type="button" class="project-situation-drilldown__section-action">${escapeHtml(editActionLabel)}</button>
+          <button
+            type="button"
+            class="project-situation-drilldown__section-action"
+            aria-label="${escapeHtml(editActionLabel)}"
+            title="${escapeHtml(editActionLabel)}"
+          >
+            <svg class="icon" aria-hidden="true" focusable="false">
+              <use href="#pencil"></use>
+            </svg>
+          </button>
         </div>
 
         <div class="project-situation-drilldown__section-content">${escapeHtml(normalizedSituation.description)}</div>
