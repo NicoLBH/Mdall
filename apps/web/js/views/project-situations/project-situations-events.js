@@ -27,8 +27,56 @@ export function createProjectSituationsEvents({
   setSelectedSituationId,
   getSituationById,
   loadSituationSelection,
+  loadSituationInsightsData,
   openSituationDrilldownFromSelection
 }) {
+  function isSituationInsightsDebugEnabled() {
+    try {
+      return window.localStorage?.getItem("debug:situation-insights") === "1";
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function logSituationInsights(message, payload = {}) {
+    if (!isSituationInsightsDebugEnabled()) return;
+    console.info(`[situation-insights] ${message}`, payload);
+  }
+
+  async function refreshInsightsData(root) {
+    const situationId = String(store.situationsView?.selectedSituationId || "").trim();
+    const selectedSituation = getSituationById(situationId);
+    if (!selectedSituation) return;
+
+    uiState.insightsLoading = true;
+    uiState.insightsError = "";
+    rerender(root);
+
+    const startedAt = Date.now();
+    logSituationInsights("load:start", { situationId, range: uiState.insightsRange });
+    try {
+      const insightsData = await loadSituationInsightsData(selectedSituation, { range: uiState.insightsRange });
+      uiState.insightsData = insightsData;
+      uiState.insightsLoading = false;
+      uiState.insightsError = "";
+      logSituationInsights("load:success", {
+        situationId,
+        range: uiState.insightsRange,
+        durationMs: Date.now() - startedAt
+      });
+      rerender(root);
+    } catch (error) {
+      uiState.insightsLoading = false;
+      uiState.insightsError = error instanceof Error ? error.message : "Impossible de charger les indicateurs.";
+      logSituationInsights("load:error", {
+        situationId,
+        range: uiState.insightsRange,
+        durationMs: Date.now() - startedAt,
+        error: uiState.insightsError
+      });
+      rerender(root);
+    }
+  }
   function buildEditSituationPayload() {
     const form = uiState.editForm || getDefaultCreateForm();
     const mode = normalizeSituationMode(form.mode);
@@ -100,7 +148,9 @@ export function createProjectSituationsEvents({
   function openInsightsPanel(root) {
     uiState.insightsPanelOpen = true;
     uiState.editPanelOpen = false;
+    uiState.insightsActiveChart = "burnup";
     rerender(root);
+    refreshInsightsData(root).catch(() => undefined);
   }
 
   function closeInsightsPanel(root) {
@@ -239,11 +289,30 @@ export function createProjectSituationsEvents({
     });
 
     root.querySelectorAll("[data-situation-insights-range]").forEach((node) => {
-      node.addEventListener("click", () => {
+      node.addEventListener("click", async () => {
+        if (String(uiState.insightsActiveChart || "burnup") !== "burnup") return;
         const nextRange = String(node.getAttribute("data-situation-insights-range") || "").trim().toLowerCase();
         if (!nextRange || uiState.insightsRange === nextRange) return;
         uiState.insightsRange = nextRange;
+        await refreshInsightsData(root);
+      });
+    });
+
+    root.querySelectorAll("[data-situation-insights-chart]").forEach((node) => {
+      node.addEventListener("click", async () => {
+        const nextChart = String(node.getAttribute("data-situation-insights-chart") || "").trim().toLowerCase();
+        if (!["burnup", "labels", "objectives"].includes(nextChart)) return;
+        if (uiState.insightsActiveChart === nextChart) return;
+        uiState.insightsActiveChart = nextChart;
         rerender(root);
+        const missingData = (
+          (nextChart === "burnup" && !uiState.insightsData?.burnup)
+          || (nextChart === "labels" && !uiState.insightsData?.labels)
+          || (nextChart === "objectives" && !uiState.insightsData?.objectives)
+        );
+        if (!uiState.insightsLoading && missingData) {
+          await refreshInsightsData(root);
+        }
       });
     });
 
