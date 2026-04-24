@@ -115,8 +115,13 @@ export function createProjectSituationsView({
     const activeChart = String(uiState.insightsActiveChart || "burnup");
     const chartLabels = {
       burnup: "Évolution des sujets",
-      labels: "Répartition par labels",
+      labels: "Répartition par Labels",
       objectives: "Répartition par objectifs"
+    };
+    const chartDescriptions = {
+      burnup: "Ce graphique montre l'évolution des sujets ouverts et fermés sur la période sélectionnée, afin de suivre la dynamique globale de traitement.",
+      labels: "Ce graphique présente la répartition des sujets par Labels pour identifier rapidement les thématiques les plus représentées.",
+      objectives: "Ce graphique présente la répartition des sujets par objectifs pour visualiser les axes projet qui concentrent le plus de sujets."
     };
 
     const navHtml = renderSideNavGroup({
@@ -133,16 +138,16 @@ export function createProjectSituationsView({
           }
         }),
         renderSideNavItem({
-          label: "Labels",
+          label: "Répartition par Labels",
           targetId: "situation-insights-panel",
-          iconHtml: svgIcon("graph"),
+          iconHtml: svgIcon("labels-distribution"),
           isActive: activeChart === "labels",
           dataAttributes: {
             "data-situation-insights-chart": "labels"
           }
         }),
         renderSideNavItem({
-          label: "Objectifs",
+          label: "Répartition par objectifs",
           targetId: "situation-insights-panel",
           iconHtml: svgIcon("graph"),
           isActive: activeChart === "objectives",
@@ -224,10 +229,10 @@ export function createProjectSituationsView({
                 <div class="gh-panel__head gh-panel__head--tight">
                   <div>
                     <div class="details-title">${escapeHtml(chartLabels[activeChart] || chartLabels.burnup)}</div>
-                    <div class="issue-row-meta-text" style="margin-top:6px;">Visualise les indicateurs pour cette situation.</div>
                   </div>
                 </div>
                 <div class="details-body project-situation-insights__body">
+                  <p class="project-situation-insights__description">${escapeHtml(chartDescriptions[activeChart] || chartDescriptions.burnup)}</p>
                   ${activeChart === "burnup" ? `
                     <div class="project-situation-insights__ranges" role="tablist" aria-label="Plage temporelle des indicateurs">
                       <button type="button" class="project-situation-insights__range ${activeRange === "2w" ? "is-active" : ""}" data-situation-insights-range="2w">2 semaines</button>
