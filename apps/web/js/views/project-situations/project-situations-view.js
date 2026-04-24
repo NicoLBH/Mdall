@@ -109,7 +109,17 @@ export function createProjectSituationsView({
                     title="Modifier la situation"
                   >${svgIcon("pencil", { className: "octicon octicon-pencil" })}</button>
                 </div>
-                <div class="project-situation-detail-head__meta">${statusBadge}${modeBadge}<span class="mono-small">${uiState.selectedSituationSubjects.length} sujet(s)</span></div>
+                <div class="project-situation-title-row__right">
+                  <div class="project-situation-detail-head__meta">${statusBadge}${modeBadge}<span class="mono-small">${uiState.selectedSituationSubjects.length} sujet(s)</span></div>
+                  <div class="project-situation-title-row__actions">
+                    <button type="button" class="gh-btn gh-action__main gh-btn--default gh-btn--md">
+                      ${svgIcon("graph", { className: "octicon octicon-graph" })}<span>Indicateurs</span>
+                    </button>
+                    <button type="button" class="gh-btn gh-action__main gh-btn--default gh-btn--md" aria-label="Étendre la barre latérale" title="Étendre la barre latérale">
+                      ${svgIcon("sidebar-expand", { className: "octicon octicon-sidebar-expand" })}
+                    </button>
+                  </div>
+                </div>
               </div>
               ${selectedSituation.description ? `<div class="issue-row-meta-text project-situation-detail-head__description">${escapeHtml(selectedSituation.description)}</div>` : ""}
               ${renderSituationLayoutTabs()}
