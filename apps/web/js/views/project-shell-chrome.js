@@ -23,33 +23,6 @@ const shellState = {
   activeScrollSourceResolver: null
 };
 export const PROJECT_SHELL_COMPACT_CHANGE_EVENT = "project-shell-compact-change";
-const DEBUG_SITUATION_KANBAN_SCROLL = window.localStorage?.getItem("debug:situation-kanban-scroll") === "1";
-
-function isSituationKanbanScrollDebugEnabled() {
-  try {
-    return window.localStorage?.getItem("debug:situation-kanban-scroll") === "1";
-  } catch (_) {
-    return false;
-  }
-}
-
-function debugSituationKanbanScroll(label, payload) {
-  if (!isSituationKanbanScrollDebugEnabled()) return;
-  console.info(label, payload);
-}
-
-function isSituationKanbanScrollDebugEnabled() {
-  try {
-    return window.localStorage?.getItem("debug:situation-kanban-scroll") === "1";
-  } catch (_) {
-    return false;
-  }
-}
-
-function debugSituationKanbanScroll(label, payload) {
-  if (!isSituationKanbanScrollDebugEnabled()) return;
-  console.info(label, payload);
-}
 
 function isProjectShellKanbanScrollDebugEnabled() {
   try {
