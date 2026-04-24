@@ -87,6 +87,16 @@ export function createProjectSituationsState({ store }) {
     if (!view.kanbanStatusBySituationId || typeof view.kanbanStatusBySituationId !== "object" || Array.isArray(view.kanbanStatusBySituationId)) {
       view.kanbanStatusBySituationId = {};
     }
+    if (typeof view.selectedSituationLayout !== "string") {
+      view.selectedSituationLayout = "tableau";
+    }
+    view.selectedSituationLayout = String(view.selectedSituationLayout || "").trim().toLowerCase();
+    if (view.selectedSituationLayout === "planning") {
+      view.selectedSituationLayout = "roadmap";
+    }
+    if (!["grille", "tableau", "roadmap"].includes(view.selectedSituationLayout)) {
+      view.selectedSituationLayout = "tableau";
+    }
     if (!view.pagination || typeof view.pagination !== "object") {
       view.pagination = {
         mode: "full",

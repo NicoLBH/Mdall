@@ -3,7 +3,10 @@ import { svgIcon } from "../../ui/icons.js";
 import { renderSettingsModal } from "../ui/settings-modal.js";
 import { renderStatusBadge } from "../ui/status-badges.js";
 import { renderSideNavLayout, renderSideNavGroup, renderSideNavItem } from "../ui/side-nav-layout.js";
+import { renderLightTabs } from "../ui/light-tabs.js";
 import { renderSituationForm } from "./project-situations-form.js";
+import { renderSituationGridView } from "./project-situations-view-grid.js";
+import { renderSituationRoadmapView } from "./project-situations-view-roadmap.js";
 
 export function createProjectSituationsView({
   store,
@@ -15,6 +18,36 @@ export function createProjectSituationsView({
   getSituationById,
   renderSituationKanban
 }) {
+  function getSelectedSituationLayout() {
+    const layout = String(store.situationsView?.selectedSituationLayout || "").trim().toLowerCase();
+    if (layout === "planning") return "roadmap";
+    return ["grille", "tableau", "roadmap"].includes(layout) ? layout : "tableau";
+  }
+
+  function renderSituationLayoutTabs() {
+    return renderLightTabs({
+      tabs: [
+        { id: "grille", label: "Grille" },
+        { id: "tableau", label: "Tableau" },
+        { id: "roadmap", label: "Trajectoire" }
+      ],
+      activeTabId: getSelectedSituationLayout(),
+      ariaLabel: "Modes d'affichage de la situation",
+      className: "settings-lots-tabs project-situation-layout-tabs"
+    });
+  }
+
+  function renderSelectedSituationLayoutBody(selectedSituation) {
+    const selectedLayout = getSelectedSituationLayout();
+    if (selectedLayout === "tableau") {
+      return renderSituationKanban(selectedSituation, uiState.selectedSituationSubjects, { loading: uiState.selectedSituationLoading });
+    }
+    if (selectedLayout === "grille") {
+      return renderSituationGridView(selectedSituation, uiState.selectedSituationSubjects);
+    }
+    return renderSituationRoadmapView(selectedSituation, uiState.selectedSituationSubjects);
+  }
+
   function renderCreateSituationModal() {
     if (!uiState.createModalOpen) return "";
 
@@ -79,6 +112,7 @@ export function createProjectSituationsView({
                 <div class="project-situation-detail-head__meta">${statusBadge}${modeBadge}<span class="mono-small">${uiState.selectedSituationSubjects.length} sujet(s)</span></div>
               </div>
               ${selectedSituation.description ? `<div class="issue-row-meta-text project-situation-detail-head__description">${escapeHtml(selectedSituation.description)}</div>` : ""}
+              ${renderSituationLayoutTabs()}
             </div>
           </div>
         </div>
@@ -86,7 +120,7 @@ export function createProjectSituationsView({
           ${uiState.selectedSituationError ? `<div class="settings-inline-error">${escapeHtml(uiState.selectedSituationError)}</div>` : ""}
           ${uiState.selectedSituationLoading
             ? `<div class="settings-empty-state">Chargement des sujets de la situation…</div>`
-            : renderSituationKanban(selectedSituation, uiState.selectedSituationSubjects, { loading: uiState.selectedSituationLoading })}
+            : renderSelectedSituationLayoutBody(selectedSituation)}
         </div>
       </section>
     `;
@@ -161,7 +195,7 @@ export function createProjectSituationsView({
 
     return `
       <section class="project-simple-page project-simple-page--settings">
-        <div class="project-simple-scroll" id="projectSituationsScroll">
+        <div class="project-simple-scroll${hasSelectedSituation ? " project-simple-scroll--situation-kanban" : ""}" id="projectSituationsScroll">
           <div class="settings-content project-page-shell project-page-shell--content${hasSelectedSituation ? " project-page-shell--situation-kanban" : ""}">
             ${hasSelectedSituation
               ? `${uiState.editPanelOpen ? renderEditSituationPanel() : renderSelectedSituationDetails()}`

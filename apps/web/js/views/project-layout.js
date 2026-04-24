@@ -47,6 +47,7 @@ function normalizeProjectTab(tab) {
 
 export function renderProjectLayout(root, projectId, tab) {
   const normalizedTab = normalizeProjectTab(tab);
+  const shellBodyClassName = `project-shell__body${normalizedTab === PROJECT_TAB_IDS.SITUATIONS ? " project-shell__body--situations" : ""}`;
 
   bindProjectHeaderNavigation();
 
@@ -54,7 +55,7 @@ export function renderProjectLayout(root, projectId, tab) {
     <div class="project-shell" id="projectShell" data-project-id="${projectId}">
       ${renderProjectHeader(projectId, normalizedTab)}
 
-      <div class="project-shell__body">
+      <div class="${shellBodyClassName}">
         ${renderProjectSituationsTopBanner()}
         <div id="projectViewHeaderHost" class="project-view-header-host"></div>
         <div id="situationsToolbarHost" class="project-situations-toolbar-host"></div>

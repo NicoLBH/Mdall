@@ -18,8 +18,10 @@ const shellState = {
   compactTabPrimaryAction: null,
   cleanupWindow: null,
   cleanupActiveScrollSource: null,
+  cleanupRegisteredScrollSources: null,
   activeScrollSourceEl: null,
-  activeScrollSourceResolver: null
+  activeScrollSourceResolver: null,
+  registeredScrollSources: []
 };
 
 function getStickyChromeHostEl() {
@@ -152,7 +154,8 @@ function renderProjectViewHeader({
   subtitle = "",
   metaHtml = "",
   toolbarHtml = "",
-  variant = "default"
+  variant = "default",
+  hideBar = false
 } = {}) {
   const safeVariant = String(variant || "default").replace(/[^a-zA-Z0-9_-]/g, "");
   const safeContextLabel = escapeHtml(contextLabel || getTabLabel(shellState.tab));
@@ -165,19 +168,21 @@ function renderProjectViewHeader({
 
   return `
     <section class="project-view-header project-view-header--${safeVariant}">
-      <div class="project-view-header__bar">
-        <div class="project-view-header__context">
-          <div class="project-view-header__eyebrow mono">${safeContextLabel}</div>
-          ${hasTitles ? `
-            <div class="project-view-header__titles">
-              ${safeTitle ? `<div class="project-view-header__title">${safeTitle}</div>` : ""}
-              ${safeSubtitle ? `<div class="project-view-header__subtitle">${safeSubtitle}</div>` : ""}
-            </div>
-          ` : ""}
-        </div>
+      ${hideBar ? "" : `
+        <div class="project-view-header__bar">
+          <div class="project-view-header__context">
+            <div class="project-view-header__eyebrow mono">${safeContextLabel}</div>
+            ${hasTitles ? `
+              <div class="project-view-header__titles">
+                ${safeTitle ? `<div class="project-view-header__title">${safeTitle}</div>` : ""}
+                ${safeSubtitle ? `<div class="project-view-header__subtitle">${safeSubtitle}</div>` : ""}
+              </div>
+            ` : ""}
+          </div>
 
-        ${hasMeta ? `<div class="project-view-header__meta">${metaHtml}</div>` : ""}
-      </div>
+          ${hasMeta ? `<div class="project-view-header__meta">${metaHtml}</div>` : ""}
+        </div>
+      `}
 
       ${hasToolbar ? `<div class="project-view-header__toolbar">${toolbarHtml}</div>` : ""}
     </section>
@@ -234,7 +239,8 @@ export function setProjectViewHeader(config = {}) {
     subtitle: config.subtitle || "",
     metaHtml: config.metaHtml || "",
     toolbarHtml: config.toolbarHtml || "",
-    variant: config.variant || shellState.tab || "default"
+    variant: config.variant || shellState.tab || "default",
+    hideBar: config.hideBar === true
   });
 
   getViewHeaderEl()?.classList.toggle("project-view-header--compact", shellState.isCompact);
@@ -242,6 +248,48 @@ export function setProjectViewHeader(config = {}) {
 }
 
 export function registerProjectScrollSources(..._elements) {
+  shellState.cleanupRegisteredScrollSources?.();
+  shellState.cleanupRegisteredScrollSources = null;
+
+  const resolvedElements = _elements
+    .flatMap((entry) => (Array.isArray(entry) ? entry : [entry]))
+    .filter((entry) => entry?.addEventListener);
+
+  const uniqueElements = [...new Set(resolvedElements)];
+  shellState.registeredScrollSources = uniqueElements;
+
+  if (!uniqueElements.length) {
+    syncCompactState();
+    return;
+  }
+
+  const bindings = uniqueElements.map((sourceEl) => {
+    const setAsActiveSource = () => {
+      shellState.activeScrollSourceEl = sourceEl;
+      shellState.activeScrollSourceResolver = null;
+      syncCompactState();
+    };
+    sourceEl.addEventListener("scroll", setAsActiveSource, { passive: true });
+    sourceEl.addEventListener("wheel", setAsActiveSource, { passive: true });
+    sourceEl.addEventListener("touchstart", setAsActiveSource, { passive: true });
+    sourceEl.addEventListener("mouseenter", setAsActiveSource);
+    return { sourceEl, setAsActiveSource };
+  });
+
+  if (!shellState.activeScrollSourceEl || !uniqueElements.includes(shellState.activeScrollSourceEl)) {
+    shellState.activeScrollSourceEl = uniqueElements[0];
+    shellState.activeScrollSourceResolver = null;
+  }
+
+  shellState.cleanupRegisteredScrollSources = () => {
+    bindings.forEach(({ sourceEl, setAsActiveSource }) => {
+      sourceEl.removeEventListener("scroll", setAsActiveSource);
+      sourceEl.removeEventListener("wheel", setAsActiveSource);
+      sourceEl.removeEventListener("touchstart", setAsActiveSource);
+      sourceEl.removeEventListener("mouseenter", setAsActiveSource);
+    });
+  };
+
   syncCompactState();
 }
 
@@ -301,6 +349,8 @@ export function unmountProjectShellChrome() {
 
   shellState.cleanupWindow?.();
   shellState.cleanupWindow = null;
+  shellState.cleanupRegisteredScrollSources?.();
+  shellState.cleanupRegisteredScrollSources = null;
   shellState.cleanupActiveScrollSource?.();
   shellState.cleanupActiveScrollSource = null;
 
@@ -340,4 +390,5 @@ export function unmountProjectShellChrome() {
   shellState.compactTabPrimaryAction = null;
   shellState.activeScrollSourceEl = null;
   shellState.activeScrollSourceResolver = null;
+  shellState.registeredScrollSources = [];
 }

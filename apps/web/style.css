@@ -4563,6 +4563,10 @@ body.route--project .project-simple-scroll{
   overflow:hidden;
   padding:0 12px;
 }
+
+.project-shell__body--situations{
+  padding:0;
+}
 .project-view-header-host{
   flex:0 0 auto;
 }
@@ -9874,8 +9878,14 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
     
 .project-shell__content--situation-kanban{
   padding-inline:0;
-  overflow-x:auto;
-  overflow-y:hidden;
+  overflow:hidden;
+  height:100%;
+  min-height:0;
+}
+
+.project-shell__content--situation-kanban .project-simple-page{
+  height:100%;
+  min-height:0;
 }
 
 .project-page-shell--situation-kanban{
@@ -9884,6 +9894,14 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
   padding-inline:0;
   display:flex;
   flex-direction:column;
+  height:100%;
+  min-height:0;
+}
+
+body.route--project .project-simple-scroll.project-simple-scroll--situation-kanban{
+  overflow:hidden;
+  min-height:0;
+  height:100%;
 }
 
 .gh-panel--details-situation-kanban{
@@ -9892,7 +9910,8 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
   box-shadow:none;
   display:flex;
   flex-direction:column;
-  min-height:calc(100vh - 180px);
+  min-height:0;
+  height:100%;
 }
 
 .gh-panel--details-situation-kanban > .gh-panel__head{
@@ -9925,14 +9944,15 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
   background:var(--bgAssistPanel);
   border:none;
   border-radius:12px;
-  padding:8px;
+  padding:8px 8px 12px;
   display:flex;
   flex-direction:column;
   gap:12px;
   min-height:100%;
-  height:auto;
+  height:100%;
   align-self:stretch;
-  overflow:hidden;
+  overflow-y:auto;
+  overflow-x:hidden;
 }
 
 @media (max-width: 1480px){
@@ -10013,7 +10033,7 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
   min-height:220px;
   height:100%;
   flex:1 1 auto;
-  overflow-y:auto;
+  overflow-y:visible;
   overflow-x:hidden;
   padding-bottom:8px;
 }
@@ -13222,6 +13242,10 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 
 .project-situation-detail-head__description{
   max-width:860px;
+}
+
+.project-situation-layout-tabs{
+  margin:6px 0 0;
 }
 
 .project-situations-table__title-inline{

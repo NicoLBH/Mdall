@@ -1,3 +1,5 @@
+import { bindLightTabs } from "../ui/light-tabs.js";
+
 function syncSubmitButtonState(button, { submitting = false, title = "" } = {}) {
   if (!button) return;
   button.disabled = submitting || !String(title || "").trim();
@@ -279,6 +281,19 @@ export function createProjectSituationsEvents({
         store.situationsView.filters.status = value;
         rerender(root);
       });
+    });
+
+    bindLightTabs(root, {
+      selector: ".project-situation-layout-tabs [data-light-tab-target]",
+      onChange: (nextTabId) => {
+        if (!store.situationsView || typeof store.situationsView !== "object") store.situationsView = {};
+        const normalizedTabId = String(nextTabId || "").trim().toLowerCase();
+        const resolvedTabId = normalizedTabId === "planning" ? "roadmap" : normalizedTabId;
+        const nextLayout = ["grille", "tableau", "roadmap"].includes(resolvedTabId) ? resolvedTabId : "tableau";
+        if (store.situationsView.selectedSituationLayout === nextLayout) return;
+        store.situationsView.selectedSituationLayout = nextLayout;
+        rerender(root);
+      }
     });
 
     bindCreateModalEvents(root);

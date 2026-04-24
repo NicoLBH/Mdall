@@ -196,6 +196,7 @@ function syncProjectHeader(root) {
   setProjectViewHeader({
     contextLabel: "Situations",
     variant: "situations",
+    hideBar: true,
     compactLabel: "Situations",
     compactLabelSuffix: selectedSituation ? String(selectedSituation.title || "Situation") : "",
     onCompactLabelClick: selectedSituation
@@ -250,8 +251,8 @@ function rerender(root) {
   syncSituationsToolbar();
   const primaryScrollRoot = document.getElementById("projectSituationsScroll");
   const tableScrollBody = root.querySelector(".issues-table .data-table-shell__body");
-  const kanbanColumnBodies = [...root.querySelectorAll(".situation-kanban__cards")];
-  registerProjectScrollSources(primaryScrollRoot, tableScrollBody, kanbanColumnBodies);
+  const kanbanColumns = [...root.querySelectorAll(".situation-kanban__col")];
+  registerProjectScrollSources(primaryScrollRoot, tableScrollBody, kanbanColumns);
   bindEvents(root);
   bindViewEvents(root);
   kanbanView.bindKanbanEvents(root);
