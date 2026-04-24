@@ -18,6 +18,7 @@ import {
   createSituation,
   updateSituation,
   loadSubjectsForSituation,
+  loadSituationInsightsData,
   setSituationSubjectKanbanStatus,
   loadSituationKanbanStatusMap
 } from "../services/project-situations-supabase.js";
@@ -428,6 +429,7 @@ const { bindEvents } = createProjectSituationsEvents({
   setSelectedSituationId,
   getSituationById,
   loadSituationSelection,
+  loadSituationInsightsData,
   openSituationDrilldownFromSelection
 });
 
