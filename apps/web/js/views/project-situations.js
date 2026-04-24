@@ -2,6 +2,7 @@ import { store } from "../store.js";
 import { PROJECT_TAB_RESELECTED_EVENT } from "./project-header.js";
 import {
   PROJECT_SHELL_COMPACT_CHANGE_EVENT,
+  setProjectCompactEnabled,
   registerProjectScrollSources,
   setProjectActiveScrollSource,
   setProjectViewHeader
@@ -349,6 +350,8 @@ const { bindEvents } = createProjectSituationsEvents({
 export function renderProjectSituations(root) {
   bindSituationsTabReset();
   currentSituationsRoot = root;
+  // Les vues Situations doivent toujours piloter le compactage via leur source de scroll locale.
+  setProjectCompactEnabled(true);
   if (store.situationsView && typeof store.situationsView === "object") {
     store.situationsView.selectedSituationId = null;
   }
