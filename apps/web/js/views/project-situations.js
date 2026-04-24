@@ -7,6 +7,7 @@ import {
   syncProjectShellCompactFromScrollSource,
   registerProjectScrollSources,
   setProjectActiveScrollSource,
+  useProjectScrollSource,
   setProjectViewHeader
 } from "./project-shell-chrome.js";
 import { renderProjectSituationsRunbar, bindProjectSituationsRunbar } from "./project-situations-runbar.js";
@@ -220,6 +221,46 @@ let situationsTabResetBound = false;
 let currentSituationsRoot = null;
 let cleanupSituationsListeners = null;
 let cleanupSituationsSyncEvents = null;
+const DEBUG_SITUATION_KANBAN_SCROLL = window.localStorage?.getItem("debug:situation-kanban-scroll") === "1";
+
+function isSituationKanbanScrollDebugEnabled() {
+  try {
+    return window.localStorage?.getItem("debug:situation-kanban-scroll") === "1";
+  } catch (_) {
+    return false;
+  }
+}
+
+function debugSituationKanbanScroll(label, payload) {
+  if (!isSituationKanbanScrollDebugEnabled()) return;
+  console.info(label, payload);
+}
+
+function isSituationKanbanScrollDebugEnabled() {
+  try {
+    return window.localStorage?.getItem("debug:situation-kanban-scroll") === "1";
+  } catch (_) {
+    return false;
+  }
+}
+
+function debugSituationKanbanScroll(label, payload) {
+  if (!isSituationKanbanScrollDebugEnabled()) return;
+  console.info(label, payload);
+}
+
+function isProjectSituationsKanbanScrollDebugEnabled() {
+  try {
+    return window.localStorage?.getItem("debug:situation-kanban-scroll") === "1";
+  } catch (_) {
+    return false;
+  }
+}
+
+function debugProjectSituationsKanbanScroll(label, payload) {
+  if (!isProjectSituationsKanbanScrollDebugEnabled()) return;
+  console.info(label, payload);
+}
 
 function syncSituationsAvailableHeight(root) {
   if (!root || !root.isConnected) return;
