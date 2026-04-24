@@ -1,5 +1,5 @@
 import { escapeHtml } from "../utils/escape-html.js";
-import { setProjectViewHeader, clearProjectActiveScrollSource } from "./project-shell-chrome.js";
+import { setProjectViewHeader, clearProjectActiveScrollSource, debugProjectScrollPolicy } from "./project-shell-chrome.js";
 import { getRunLogEntries, getRunMetrics } from "../services/project-automation.js";
 import { syncProjectActionsFromSupabase } from "../services/project-supabase-sync.js";
 import { svgIcon } from "../ui/icons.js";
@@ -377,6 +377,7 @@ export function renderProjectActions(root) {
   });
 
   renderProjectActionsContent(root);
+  debugProjectScrollPolicy("render-project-actions");
 
   syncProjectActionsFromSupabase({ force: true })
     .then(() => {

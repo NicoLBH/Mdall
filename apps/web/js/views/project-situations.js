@@ -8,7 +8,8 @@ import {
   registerProjectScrollSources,
   setProjectActiveScrollSource,
   clearProjectActiveScrollSource,
-  setProjectViewHeader
+  setProjectViewHeader,
+  debugProjectScrollPolicy
 } from "./project-shell-chrome.js";
 import { renderProjectSituationsRunbar, bindProjectSituationsRunbar } from "./project-situations-runbar.js";
 import { loadFlatSubjectsForCurrentProject } from "../services/project-subjects-supabase.js";
@@ -312,6 +313,10 @@ function rerender(root) {
     clearProjectActiveScrollSource();
     registerProjectScrollSources(primaryScrollRoot, tableScrollBody, gridScrollBody, roadmapScrollBody);
   }
+  debugProjectScrollPolicy("render-project-situations", {
+    hasSelectedSituation,
+    hasKanbanColumns: kanbanColumns.length > 0
+  });
 
   const unbindColumnHandlers = [];
   const kanbanScrollElements = kanbanColumns.length

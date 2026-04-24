@@ -37,6 +37,58 @@ function debugProjectShellKanbanScroll(label, payload) {
   console.info(label, payload);
 }
 
+function isProjectScrollPolicyDebugEnabled() {
+  try {
+    return window.localStorage?.getItem("debug:project-scroll-policy") === "1";
+  } catch (_) {
+    return false;
+  }
+}
+
+function readComputedLayout(selector) {
+  const el = document.querySelector(selector);
+  if (!el) {
+    return {
+      selector,
+      found: false
+    };
+  }
+  const style = window.getComputedStyle(el);
+  return {
+    selector,
+    found: true,
+    className: el.className || "",
+    height: style.height,
+    minHeight: style.minHeight,
+    overflow: style.overflow
+  };
+}
+
+export function debugProjectScrollPolicy(label, extra = {}) {
+  if (!isProjectScrollPolicyDebugEnabled()) return;
+
+  const activeScrollSourceEl = getActiveScrollSourceEl();
+  const scrollingElement = document.scrollingElement || document.documentElement || document.body || null;
+  const projectContent = document.getElementById("project-content");
+
+  console.info("[project-scroll-policy]", {
+    label,
+    tab: shellState.tab || null,
+    scrollSource: activeScrollSourceEl ? "local-element" : "document/window",
+    scrollSourceClass: activeScrollSourceEl?.className || null,
+    documentScrollHeight: Number(scrollingElement?.scrollHeight || 0),
+    documentClientHeight: Number(scrollingElement?.clientHeight || 0),
+    windowScrollY: Number(window.scrollY || 0),
+    projectContentClass: projectContent?.className || null,
+    projectShell: readComputedLayout(".project-shell"),
+    projectShellBody: readComputedLayout(".project-shell__body"),
+    projectShellContent: readComputedLayout(".project-shell__content"),
+    projectSimplePage: readComputedLayout(".project-simple-page"),
+    projectSimpleScroll: readComputedLayout(".project-simple-scroll"),
+    ...extra
+  });
+}
+
 function getStickyChromeHostEl() {
   return document.getElementById("projectStickyChromeHost");
 }
@@ -352,6 +404,9 @@ export function setProjectActiveScrollSource(el, { resolve = null, syncImmediate
   if (syncImmediately !== false) {
     syncCompactState();
   }
+  debugProjectScrollPolicy("set-active-scroll-source", {
+    syncImmediately: syncImmediately !== false
+  });
 }
 
 export function useProjectScrollSource(el) {
@@ -361,6 +416,7 @@ export function useProjectScrollSource(el) {
   shellState.cleanupActiveScrollSource = null;
   shellState.activeScrollSourceEl = el;
   shellState.activeScrollSourceResolver = null;
+  debugProjectScrollPolicy("use-scroll-source");
 }
 
 export function clearProjectActiveScrollSource(el = null) {
@@ -374,6 +430,7 @@ export function clearProjectActiveScrollSource(el = null) {
   shellState.activeScrollSourceEl = null;
   shellState.activeScrollSourceResolver = null;
   syncCompactState();
+  debugProjectScrollPolicy("clear-active-scroll-source");
 }
 
 export function setProjectCompactEnabled(enabled = true) {

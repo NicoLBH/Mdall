@@ -40,7 +40,8 @@ import {
   setProjectViewHeader,
   refreshProjectShellChrome,
   setProjectCompactEnabled,
-  clearProjectActiveScrollSource
+  clearProjectActiveScrollSource,
+  debugProjectScrollPolicy
 } from "./project-shell-chrome.js";
 import { svgIcon } from "../ui/icons.js";
 import { renderGhActionButton } from "./ui/gh-split-button.js";
@@ -1058,4 +1059,5 @@ export function renderProjectSubjects(root) {
     meta: store.ui?.systemStatus?.meta || "",
     isBusy: store.ui?.systemStatus?.state === "running"
   });
+  debugProjectScrollPolicy("render-project-subjects");
 }

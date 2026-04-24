@@ -15,7 +15,7 @@ import { renderProjectParametres } from "./project-parametres.js";
 
 import { renderProjectHeader, bindProjectHeaderNavigation } from "./project-header.js";
 import { renderProjectSituationsTopBanner } from "./project-situations-runbar.js";
-import { mountProjectShellChrome } from "./project-shell-chrome.js";
+import { mountProjectShellChrome, debugProjectScrollPolicy } from "./project-shell-chrome.js";
 
 
 function normalizeProjectTab(tab) {
@@ -103,4 +103,8 @@ export function renderProjectLayout(root, projectId, tab) {
       renderProjectDocuments(content);
       break;
   }
+
+  debugProjectScrollPolicy("project-tab-render", {
+    tab: normalizedTab
+  });
 }

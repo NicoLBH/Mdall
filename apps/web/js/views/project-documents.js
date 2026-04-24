@@ -1,5 +1,5 @@
 import { store } from "../store.js";
-import { setProjectViewHeader, clearProjectActiveScrollSource } from "./project-shell-chrome.js";
+import { setProjectViewHeader, clearProjectActiveScrollSource, debugProjectScrollPolicy } from "./project-shell-chrome.js";
 import {
   bindGhActionButtons,
   initGhActionButton,
@@ -2030,6 +2030,7 @@ export function renderProjectDocuments(root) {
   clearProjectActiveScrollSource();
 
   renderProjectDocumentsContent(root);
+  debugProjectScrollPolicy("render-project-documents", { mode: docsViewState.mode });
 
   syncProjectDocumentsFromSupabase({ force: true })
     .then(() => {

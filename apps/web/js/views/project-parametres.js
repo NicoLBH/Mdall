@@ -1,4 +1,4 @@
-import { setProjectViewHeader, clearProjectActiveScrollSource } from "./project-shell-chrome.js";
+import { setProjectViewHeader, clearProjectActiveScrollSource, debugProjectScrollPolicy } from "./project-shell-chrome.js";
 import {
   renderSideNavLayout,
   renderSideNavGroup,
@@ -138,4 +138,7 @@ export function renderProjectParametres(root) {
 
   root.addEventListener("click", root.__projectParametresNavHandler);
   mountProjectParametresTab(root, defaultTab.id);
+  debugProjectScrollPolicy("render-project-parametres", {
+    activeSection: defaultTab.id
+  });
 }

@@ -1,5 +1,5 @@
 import { escapeHtml } from "../utils/escape-html.js";
-import { setProjectViewHeader, clearProjectActiveScrollSource } from "./project-shell-chrome.js";
+import { setProjectViewHeader, clearProjectActiveScrollSource, debugProjectScrollPolicy } from "./project-shell-chrome.js";
 import { getRunMetrics } from "../services/project-automation.js";
 import { getProjectInsightsMetrics } from "../services/project-insights-metrics.js";
 import { renderSvgLineChart, getNiceChartTicks } from "../utils/svg-line-chart.js";
@@ -248,4 +248,5 @@ export function renderProjectInsights(root) {
       </div>
     </section>
   `;
+  debugProjectScrollPolicy("render-project-insights");
 }
