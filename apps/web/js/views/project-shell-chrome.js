@@ -17,10 +17,12 @@ const shellState = {
   compactTabCustomSuffix: "",
   compactTabPrimaryAction: null,
   cleanupWindow: null,
+  cleanupRegisteredScrollSources: null,
   cleanupActiveScrollSource: null,
   activeScrollSourceEl: null,
   activeScrollSourceResolver: null
 };
+export const PROJECT_SHELL_COMPACT_CHANGE_EVENT = "project-shell-compact-change";
 
 function getStickyChromeHostEl() {
   return document.getElementById("projectStickyChromeHost");
@@ -124,7 +126,9 @@ function syncCompactTabLabel() {
 }
 
 function applyCompactState(isCompact) {
-  shellState.isCompact = !!(shellState.compactEnabled && isCompact);
+  const nextCompact = !!(shellState.compactEnabled && isCompact);
+  const didChange = shellState.isCompact !== nextCompact;
+  shellState.isCompact = nextCompact;
 
   document.body.classList.add("route--project");
   document.body.classList.toggle("project-shell-compact", shellState.isCompact);
@@ -134,6 +138,11 @@ function applyCompactState(isCompact) {
   getViewHeaderEl()?.classList.toggle("project-view-header--compact", shellState.isCompact);
 
   syncCompactTabLabel();
+  if (didChange) {
+    window.dispatchEvent(new CustomEvent(PROJECT_SHELL_COMPACT_CHANGE_EVENT, {
+      detail: { isCompact: shellState.isCompact }
+    }));
+  }
 }
 
 function syncCompactState() {
@@ -245,7 +254,44 @@ export function setProjectViewHeader(config = {}) {
   syncCompactTabLabel();
 }
 
-export function registerProjectScrollSources(..._elements) {
+export function registerProjectScrollSources(...elements) {
+  shellState.cleanupRegisteredScrollSources?.();
+  shellState.cleanupRegisteredScrollSources = null;
+
+  const candidates = elements
+    .flat(Infinity)
+    .filter((element) => element?.addEventListener);
+
+  if (!candidates.length) {
+    syncCompactState();
+    return;
+  }
+
+  const onSourceChange = (event) => {
+    const sourceEl = event?.currentTarget;
+    if (sourceEl) {
+      shellState.activeScrollSourceEl = sourceEl;
+      shellState.activeScrollSourceResolver = null;
+    }
+    syncCompactState();
+  };
+
+  candidates.forEach((element) => {
+    element.addEventListener("scroll", onSourceChange, { passive: true });
+    element.addEventListener("wheel", onSourceChange, { passive: true });
+    element.addEventListener("touchstart", onSourceChange, { passive: true });
+    element.addEventListener("mouseenter", onSourceChange);
+  });
+
+  shellState.cleanupRegisteredScrollSources = () => {
+    candidates.forEach((element) => {
+      element.removeEventListener("scroll", onSourceChange);
+      element.removeEventListener("wheel", onSourceChange);
+      element.removeEventListener("touchstart", onSourceChange);
+      element.removeEventListener("mouseenter", onSourceChange);
+    });
+  };
+
   syncCompactState();
 }
 
@@ -305,6 +351,8 @@ export function unmountProjectShellChrome() {
 
   shellState.cleanupWindow?.();
   shellState.cleanupWindow = null;
+  shellState.cleanupRegisteredScrollSources?.();
+  shellState.cleanupRegisteredScrollSources = null;
   shellState.cleanupActiveScrollSource?.();
   shellState.cleanupActiveScrollSource = null;
 
