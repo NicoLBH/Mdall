@@ -13420,7 +13420,6 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .project-situation-edit{
   display:flex;
   flex-direction:column;
-  gap:16px;
 }
 
 .project-situation-edit__header{
@@ -13480,29 +13479,40 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   max-width:720px;
 }
 
-.settings-layout--situation-edit{
-  grid-template-columns:329px minmax(0, 1fr);
-  justify-content:stretch;
-  gap:0;
+.project-situation-edit__main{
+  position:relative;
+  min-height:calc(100dvh - 49px);
+}
+
+.project-situation-edit__aside{
+  position:fixed;
+  left:0;
+  width:329px;
+  height:calc(100dvh - var(--header-h) - var(--project-tabs-h) - 49px);
+  border-right:1px solid var(--border);
+  padding:12px 16px;
+  overflow:auto;
+  background:var(--bg);
 }
 
 .settings-nav--situation-edit{
   width:329px;
 }
 
-.settings-layout--situation-edit .side-nav-layout__nav{
-  padding:0 16px;
-}
-
-.settings-layout--situation-edit .side-nav-layout__content{
+.project-situation-edit__content{
+  margin-left:329px;
   display:flex;
   justify-content:center;
+  padding:20px 24px;
 }
 
 .settings-content--situation-edit{
   width:100%;
   max-width:920px;
-  padding:0 24px;
+}
+
+.project-situation-edit__panel{
+  width:100%;
 }
 
 .project-lot-modal__radio--readonly{
