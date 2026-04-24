@@ -249,6 +249,19 @@ function debugSituationKanbanScroll(label, payload) {
   console.info(label, payload);
 }
 
+function isProjectSituationsKanbanScrollDebugEnabled() {
+  try {
+    return window.localStorage?.getItem("debug:situation-kanban-scroll") === "1";
+  } catch (_) {
+    return false;
+  }
+}
+
+function debugProjectSituationsKanbanScroll(label, payload) {
+  if (!isProjectSituationsKanbanScrollDebugEnabled()) return;
+  console.info(label, payload);
+}
+
 function syncSituationsAvailableHeight(root) {
   if (!root || !root.isConnected) return;
   const shell = root.querySelector(".project-page-shell--situation-view");
@@ -318,7 +331,7 @@ function rerender(root) {
   const roadmapScrollBody = root.querySelector(".project-situation-alt-view--roadmap");
   const kanbanColumns = [...root.querySelectorAll(".situation-kanban__col")];
   const kanbanCardLists = [...root.querySelectorAll(".situation-kanban__cards")];
-  debugSituationKanbanScroll("[situations:kanban-bind]", {
+  debugProjectSituationsKanbanScroll("[situations:kanban-bind]", {
     columns: kanbanColumns.length,
     cardLists: kanbanCardLists.length,
     columnsMeta: kanbanColumns.map((col) => ({
@@ -358,7 +371,7 @@ function rerender(root) {
     const onKanbanScroll = (event) => {
       const sourceEl = event?.currentTarget;
       if (!sourceEl) return;
-      debugSituationKanbanScroll("[situations:kanban-column-scroll]", {
+      debugProjectSituationsKanbanScroll("[situations:kanban-column-scroll]", {
         sourceClass: sourceEl.className,
         sourceTag: sourceEl.tagName,
         column: ownerColumn?.dataset?.situationKanbanColumn || null,

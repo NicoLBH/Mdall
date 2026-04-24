@@ -51,6 +51,19 @@ function debugSituationKanbanScroll(label, payload) {
   console.info(label, payload);
 }
 
+function isProjectShellKanbanScrollDebugEnabled() {
+  try {
+    return window.localStorage?.getItem("debug:situation-kanban-scroll") === "1";
+  } catch (_) {
+    return false;
+  }
+}
+
+function debugProjectShellKanbanScroll(label, payload) {
+  if (!isProjectShellKanbanScrollDebugEnabled()) return;
+  console.info(label, payload);
+}
+
 function getStickyChromeHostEl() {
   return document.getElementById("projectStickyChromeHost");
 }
@@ -176,7 +189,7 @@ function applyCompactState(isCompact) {
   shellState.projectTabsEl?.classList.toggle("project-tabs--hidden", shellState.isCompact);
   getViewHeaderEl()?.classList.toggle("project-view-header--compact", shellState.isCompact);
 
-  debugSituationKanbanScroll("[project-shell:apply-compact-state]", {
+  debugProjectShellKanbanScroll("[project-shell:apply-compact-state]", {
     requested: isCompact,
     applied: !!(shellState.compactEnabled && isCompact),
     compactEnabled: shellState.compactEnabled,
@@ -407,7 +420,7 @@ export function syncProjectShellCompactFromScrollSource(el) {
   shellState.activeScrollSourceResolver = null;
 
   const scrollTop = Number(el.scrollTop || 0);
-  debugSituationKanbanScroll("[project-shell:compact-from-source]", {
+  debugProjectShellKanbanScroll("[project-shell:compact-from-source]", {
     sourceClass: el.className,
     sourceDataset: { ...el.dataset },
     scrollTop: el.scrollTop,
