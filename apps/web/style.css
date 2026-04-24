@@ -13412,38 +13412,57 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 
 
 .settings-shell--situation-edit{
-  padding-top:4px;
+  max-width:none;
+  margin:0;
+  padding-top:0;
 }
 
 .project-situation-edit{
   display:flex;
   flex-direction:column;
-  gap:16px;
 }
 
 .project-situation-edit__header{
   display:flex;
   align-items:center;
+  gap:12px;
+  height:49px;
+  padding:0 12px;
+  border-bottom:1px solid var(--border);
+  background:var(--headbg);
 }
 
 .project-situation-edit__back{
   display:inline-flex;
   align-items:center;
-  gap:8px;
   border:0;
   background:transparent;
-  color:var(--text);
-  font-size:20px;
-  font-weight:600;
   padding:0;
+  color:var(--muted);
+  fill:var(--muted);
+  cursor:pointer;
+}
+
+.project-situation-edit__title{
+  margin:0;
+  font-size:20px;
+  line-height:1.2;
+  font-weight:600;
 }
 
 .project-situation-edit__back-icon{
   display:inline-flex;
   align-items:center;
   justify-content:center;
-  width:28px;
-  height:28px;
+  width:24px;
+  height:24px;
+  color:var(--muted);
+  fill:var(--muted);
+}
+
+.project-situation-edit__back-icon .ui-icon{
+  width:24px;
+  height:24px;
   border-radius:8px;
 }
 
@@ -13458,6 +13477,42 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 
 .project-situation-edit__body{
   max-width:720px;
+}
+
+.project-situation-edit__main{
+  position:relative;
+  min-height:calc(100dvh - 49px);
+}
+
+.project-situation-edit__aside{
+  position:fixed;
+  left:0;
+  width:329px;
+  height:calc(100dvh - var(--header-h) - var(--project-tabs-h) - 49px);
+  border-right:1px solid var(--border);
+  padding:12px 16px;
+  overflow:auto;
+  background:var(--bg);
+}
+
+.settings-nav--situation-edit{
+  width:329px;
+}
+
+.project-situation-edit__content{
+  margin-left:329px;
+  display:flex;
+  justify-content:center;
+  padding:20px 24px;
+}
+
+.settings-content--situation-edit{
+  width:100%;
+  max-width:920px;
+}
+
+.project-situation-edit__panel{
+  width:100%;
 }
 
 .project-lot-modal__radio--readonly{
