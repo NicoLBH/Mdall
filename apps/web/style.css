@@ -9881,17 +9881,29 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
   overflow:hidden;
 }
 
-.project-page-shell--situation-kanban{
+body.route--project .project-simple-page.project-simple-page--situation-view,
+body.route--project .project-simple-scroll.project-simple-scroll--situation-view{
+  overflow:hidden;
+}
+
+.project-page-shell--situation-view{
   width:100%;
   max-width:none;
   padding-inline:0;
   display:flex;
   flex-direction:column;
-  height:calc(100dvh - 150px);
-  min-height:calc(100dvh - 150px);
+  height:var(--project-situations-available-h, auto);
+  min-height:var(--project-situations-available-h, 320px);
+  max-height:var(--project-situations-available-h, none);
 }
 
-body.route--project .project-simple-scroll.project-simple-scroll--situation-kanban{
+.project-page-shell--situation-grid,
+.project-page-shell--situation-roadmap,
+.project-page-shell--situation-kanban{
+  min-height:0;
+}
+
+body.route--project .project-simple-scroll.project-simple-scroll--situation-view{
   overflow:hidden;
 }
 
@@ -9903,6 +9915,7 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-kanb
   flex-direction:column;
   min-height:0;
   height:100%;
+  max-height:100%;
 }
 
 .gh-panel--details-situation-kanban > .gh-panel__head{
@@ -9916,6 +9929,7 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-kanb
   flex:1 1 auto;
   display:flex;
   min-width:0;
+  min-height:0;
   overflow-x:auto;
   overflow-y:hidden;
 }
@@ -9924,9 +9938,10 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-kanb
   display:flex;
   align-items:stretch;
   flex:1 1 auto;
+  height:100%;
   width:max-content;
   min-width:100%;
-  min-height:calc(100vh - 180px);
+  min-height:0;
   gap:12px;
   padding:8px 16px 16px;
 }
@@ -9941,7 +9956,7 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-kanb
   display:flex;
   flex-direction:column;
   gap:12px;
-  min-height:100%;
+  min-height:0;
   height:100%;
   align-self:stretch;
   overflow-y:auto;
@@ -10023,12 +10038,19 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-kanb
   display:flex;
   flex-direction:column;
   gap:8px;
-  min-height:220px;
+  min-height:0;
   height:100%;
   flex:1 1 auto;
   overflow-y:visible;
   overflow-x:hidden;
   padding-bottom:8px;
+}
+
+.project-situation-alt-view{
+  flex:1 1 auto;
+  min-height:0;
+  height:100%;
+  overflow:auto;
 }
 
 .situation-kanban__empty{

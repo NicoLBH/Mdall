@@ -1,6 +1,12 @@
 import { store } from "../store.js";
 import { PROJECT_TAB_RESELECTED_EVENT } from "./project-header.js";
-import { registerProjectScrollSources, setProjectActiveScrollSource, setProjectViewHeader } from "./project-shell-chrome.js";
+import {
+  PROJECT_SHELL_COMPACT_CHANGE_EVENT,
+  setProjectCompactEnabled,
+  registerProjectScrollSources,
+  setProjectActiveScrollSource,
+  setProjectViewHeader
+} from "./project-shell-chrome.js";
 import { renderProjectSituationsRunbar, bindProjectSituationsRunbar } from "./project-situations-runbar.js";
 import { loadFlatSubjectsForCurrentProject } from "../services/project-subjects-supabase.js";
 import {
@@ -210,6 +216,28 @@ function syncProjectHeader(root) {
 
 let situationsTabResetBound = false;
 let currentSituationsRoot = null;
+let cleanupSituationsListeners = null;
+let cleanupSituationsSyncEvents = null;
+
+function syncSituationsAvailableHeight(root) {
+  if (!root || !root.isConnected) return;
+  const shell = root.querySelector(".project-page-shell--situation-view");
+  if (!shell) return;
+  const shellTop = shell.getBoundingClientRect().top;
+  const availableHeight = Math.max(320, Math.round(window.innerHeight - shellTop));
+  root.style.setProperty("--project-situations-available-h", `${availableHeight}px`);
+}
+
+function bindSituationsSyncEvents(root) {
+  cleanupSituationsSyncEvents?.();
+  const syncHeight = () => syncSituationsAvailableHeight(root);
+  window.addEventListener("resize", syncHeight, { passive: true });
+  window.addEventListener(PROJECT_SHELL_COMPACT_CHANGE_EVENT, syncHeight);
+  cleanupSituationsSyncEvents = () => {
+    window.removeEventListener("resize", syncHeight);
+    window.removeEventListener(PROJECT_SHELL_COMPACT_CHANGE_EVENT, syncHeight);
+  };
+}
 
 function bindSituationsTabReset() {
   if (situationsTabResetBound) return;
@@ -243,30 +271,48 @@ function bindSituationsTabReset() {
 
 function rerender(root) {
   if (!root || !document.body.contains(root)) return;
+  cleanupSituationsListeners?.();
+  cleanupSituationsListeners = null;
   const hasSelectedSituation = !!String(store.situationsView?.selectedSituationId || "").trim();
   root.className = `project-shell__content${hasSelectedSituation ? " project-shell__content--situation-kanban" : ""}`;
   syncProjectHeader(root);
   renderGlobalHeader();
   root.innerHTML = renderPage();
+  bindSituationsSyncEvents(root);
+  syncSituationsAvailableHeight(root);
   syncSituationsToolbar();
   const primaryScrollRoot = document.getElementById("projectSituationsScroll");
   const tableScrollBody = root.querySelector(".issues-table .data-table-shell__body");
-  const kanbanColumnBodies = [...root.querySelectorAll(".situation-kanban__cards")];
-  registerProjectScrollSources(primaryScrollRoot, tableScrollBody, kanbanColumnBodies);
-  root.querySelectorAll(".situation-kanban__col").forEach((column) => {
-    column.addEventListener("mouseenter", () => {
+  const gridScrollBody = root.querySelector(".project-situation-alt-view--grid");
+  const roadmapScrollBody = root.querySelector(".project-situation-alt-view--roadmap");
+  const kanbanColumns = [...root.querySelectorAll(".situation-kanban__col")];
+  registerProjectScrollSources(primaryScrollRoot, tableScrollBody, gridScrollBody, roadmapScrollBody, kanbanColumns);
+
+  const unbindColumnHandlers = [];
+  kanbanColumns.forEach((column) => {
+    const activateColumn = () => {
+      setProjectCompactEnabled(true);
       setProjectActiveScrollSource(column);
+    };
+    const onColumnScroll = () => {
+      setProjectCompactEnabled(true);
+      setProjectActiveScrollSource(column);
+      syncSituationsAvailableHeight(root);
+    };
+    column.addEventListener("mouseenter", activateColumn);
+    column.addEventListener("wheel", activateColumn, { passive: true });
+    column.addEventListener("touchstart", activateColumn, { passive: true });
+    column.addEventListener("scroll", onColumnScroll, { passive: true });
+    unbindColumnHandlers.push(() => {
+      column.removeEventListener("mouseenter", activateColumn);
+      column.removeEventListener("wheel", activateColumn);
+      column.removeEventListener("touchstart", activateColumn);
+      column.removeEventListener("scroll", onColumnScroll);
     });
-    column.addEventListener("scroll", () => {
-      setProjectActiveScrollSource(column);
-    }, { passive: true });
-    column.addEventListener("wheel", () => {
-      setProjectActiveScrollSource(column);
-    }, { passive: true });
-    column.addEventListener("touchstart", () => {
-      setProjectActiveScrollSource(column);
-    }, { passive: true });
   });
+  cleanupSituationsListeners = () => {
+    unbindColumnHandlers.forEach((unbind) => unbind());
+  };
   bindEvents(root);
   bindViewEvents(root);
   kanbanView.bindKanbanEvents(root);
@@ -308,12 +354,16 @@ const { bindEvents } = createProjectSituationsEvents({
 export function renderProjectSituations(root) {
   bindSituationsTabReset();
   currentSituationsRoot = root;
+  // Les vues Situations doivent toujours piloter le compactage via leur source de scroll locale.
+  setProjectCompactEnabled(true);
   if (store.situationsView && typeof store.situationsView === "object") {
     store.situationsView.selectedSituationId = null;
   }
   uiState.selectedSituationLoading = false;
   uiState.selectedSituationError = "";
   uiState.selectedSituationSubjects = [];
+  cleanupSituationsSyncEvents?.();
+  cleanupSituationsSyncEvents = null;
   rerender(root);
   refreshSituationsData(root, { forceSubjects: false }).catch(() => undefined);
 }
