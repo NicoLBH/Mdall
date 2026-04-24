@@ -4361,34 +4361,8 @@ body.route--project.project-shell-compact{
   --app-top:var(--header-h-compact);
 }
 
-body.route--project.project-subject-normal-detail-flow{
-  --app-top:0px;
-}
-
-body.route--project.project-subject-normal-detail-flow .gh-header{
-  position:relative;
-  top:auto;
-  left:auto;
-  right:auto;
-}
-
 body.route--project .project-shell{
   min-height:calc(100dvh - var(--app-top));
-}
-
-body.route--project .project-shell__body,
-body.route--project .project-shell__content{
-  overflow:visible;
-}
-
-body.route--project .project-simple-page{
-  height:auto;
-  min-height:0;
-}
-
-body.route--project .project-simple-scroll{
-  overflow:visible;
-  min-height:0;
 }
 
 .global-nav{

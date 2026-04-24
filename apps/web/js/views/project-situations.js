@@ -7,6 +7,7 @@ import {
   syncProjectShellCompactFromScrollSource,
   registerProjectScrollSources,
   setProjectActiveScrollSource,
+  clearProjectActiveScrollSource,
   setProjectViewHeader
 } from "./project-shell-chrome.js";
 import { renderProjectSituationsRunbar, bindProjectSituationsRunbar } from "./project-situations-runbar.js";
@@ -308,6 +309,7 @@ function rerender(root) {
   if (kanbanColumns.length) {
     registerProjectScrollSources(kanbanCardLists);
   } else {
+    clearProjectActiveScrollSource();
     registerProjectScrollSources(primaryScrollRoot, tableScrollBody, gridScrollBody, roadmapScrollBody);
   }
 

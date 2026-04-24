@@ -1,5 +1,5 @@
 import { escapeHtml } from "../utils/escape-html.js";
-import { setProjectViewHeader } from "./project-shell-chrome.js";
+import { setProjectViewHeader, clearProjectActiveScrollSource } from "./project-shell-chrome.js";
 import { getRunMetrics } from "../services/project-automation.js";
 import { getProjectInsightsMetrics } from "../services/project-insights-metrics.js";
 import { renderSvgLineChart, getNiceChartTicks } from "../utils/svg-line-chart.js";
@@ -230,6 +230,7 @@ function renderChartsSection(insights) {
 
 export function renderProjectInsights(root) {
   root.className = "project-shell__content";
+  clearProjectActiveScrollSource();
 
   setProjectViewHeader({
     contextLabel: "Indicateurs",

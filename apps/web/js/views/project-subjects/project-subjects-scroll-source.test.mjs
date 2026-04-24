@@ -22,3 +22,7 @@ test("la vue Sujets garde le compactage projet activé dans rerenderPanels", () 
 test("la page Sujets ne rend plus le conteneur scrollable projectSituationsScroll", () => {
   assert.doesNotMatch(subjectsEntrySource, /id="projectSituationsScroll"/);
 });
+
+test("renderProjectSubjects réinitialise la source active au montage de la page", () => {
+  assert.match(subjectsEntrySource, /export function renderProjectSubjects\(root\)\s*\{[\s\S]*?clearProjectActiveScrollSource\(\);/);
+});

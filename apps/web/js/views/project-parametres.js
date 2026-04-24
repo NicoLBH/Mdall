@@ -1,4 +1,4 @@
-import { setProjectViewHeader } from "./project-shell-chrome.js";
+import { setProjectViewHeader, clearProjectActiveScrollSource } from "./project-shell-chrome.js";
 import {
   renderSideNavLayout,
   renderSideNavGroup,
@@ -96,6 +96,7 @@ function mountProjectParametresTab(root, tabId) {
 export function renderProjectParametres(root) {
   ensureProjectParametresSetup(root);
   setProjectParametresRerender(renderProjectParametres);
+  clearProjectActiveScrollSource();
 
   const uiState = getParametresUiState();
   const defaultTab = getProjectParametresTabById(uiState.activeSectionId || "parametres-general");

@@ -1,5 +1,5 @@
 import { store } from "../store.js";
-import { setProjectViewHeader } from "./project-shell-chrome.js";
+import { setProjectViewHeader, clearProjectActiveScrollSource } from "./project-shell-chrome.js";
 import {
   bindGhActionButtons,
   initGhActionButton,
@@ -2027,6 +2027,7 @@ export function renderProjectDocuments(root) {
   syncDocumentsSelectedPhase();
 
   root.className = "project-shell__content";
+  clearProjectActiveScrollSource();
 
   renderProjectDocumentsContent(root);
 

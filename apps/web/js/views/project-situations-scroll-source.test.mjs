@@ -1,7 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { resolveKanbanScrollableSource } from "./project-situations-scroll-source.js";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const situationsPath = path.resolve(__dirname, "./project-situations.js");
+const situationsSource = fs.readFileSync(situationsPath, "utf8");
 
 function createMockNode({ classes = [], parent = null, cards = null } = {}) {
   const classSet = new Set(classes);
@@ -54,3 +61,10 @@ test("resolveKanbanScrollableSource returns null outside kanban column", () => {
   assert.equal(resolveKanbanScrollableSource(node), null);
 });
 
+test("la vue Situations conserve une source locale pour le Kanban", () => {
+  assert.match(situationsSource, /setProjectActiveScrollSource\(sourceEl,\s*\{\s*syncImmediately\s*\}\);/);
+});
+
+test("la vue Situations réinitialise la source active hors Kanban", () => {
+  assert.match(situationsSource, /if \(kanbanColumns\.length\) \{[\s\S]*?\} else \{[\s\S]*?clearProjectActiveScrollSource\(\);/);
+});

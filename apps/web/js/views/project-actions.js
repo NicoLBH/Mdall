@@ -1,5 +1,5 @@
 import { escapeHtml } from "../utils/escape-html.js";
-import { setProjectViewHeader } from "./project-shell-chrome.js";
+import { setProjectViewHeader, clearProjectActiveScrollSource } from "./project-shell-chrome.js";
 import { getRunLogEntries, getRunMetrics } from "../services/project-automation.js";
 import { syncProjectActionsFromSupabase } from "../services/project-supabase-sync.js";
 import { svgIcon } from "../ui/icons.js";
@@ -369,6 +369,7 @@ function renderProjectActionsContent(root) {
 
 export function renderProjectActions(root) {
   root.className = "project-shell__content";
+  clearProjectActiveScrollSource();
 
   setProjectViewHeader({
     contextLabel: "Actions",

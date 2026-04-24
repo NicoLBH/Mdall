@@ -986,6 +986,7 @@ function ensureSubjectsCollaboratorsLoaded() {
 
 export function renderProjectSubjects(root) {
   ensureSubjectsCollaboratorsLoaded();
+  clearProjectActiveScrollSource();
   const subjectsViewState = ensureViewUiState();
   projectSubjectDrilldown.ensureDrilldownDom();
   subjectsCurrentRoot = root;
