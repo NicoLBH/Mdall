@@ -165,9 +165,9 @@ export function createProjectSituationsView({
       <div class="project-situation-edit" data-side-nav-panel="situation-settings-panel">
         <div class="project-situation-edit__header">
           <button type="button" class="project-situation-edit__back" data-close-situation-edit>
-            <span class="project-situation-edit__back-icon">${svgIcon("chevron-left", { className: "octicon octicon-chevron-left" })}</span>
-            <span>Paramètres</span>
+            <span class="project-situation-edit__back-icon">${svgIcon("arrow-left", { className: "octicon octicon-arrow-left route-title-module__Octicon__vxu4r", width: 24, height: 24 })}</span>
           </button>
+          <h1 class="project-situation-edit__title">Paramètres</h1>
         </div>
         <section class="gh-panel gh-panel--details project-situation-edit__panel">
           <div class="gh-panel__head gh-panel__head--tight">
@@ -195,9 +195,9 @@ export function createProjectSituationsView({
     return `
       <div class="settings-shell settings-shell--parametres settings-shell--situation-edit">
         ${renderSideNavLayout({
-          className: "settings-layout settings-layout--parametres",
-          navClassName: "settings-nav settings-nav--parametres",
-          contentClassName: "settings-content settings-content--parametres",
+          className: "settings-layout settings-layout--parametres settings-layout--situation-edit",
+          navClassName: "settings-nav settings-nav--parametres settings-nav--situation-edit",
+          contentClassName: "settings-content settings-content--parametres settings-content--situation-edit",
           navHtml,
           contentHtml
         })}

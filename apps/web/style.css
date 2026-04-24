@@ -13412,7 +13412,9 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 
 
 .settings-shell--situation-edit{
-  padding-top:4px;
+  max-width:none;
+  margin:0;
+  padding-top:0;
 }
 
 .project-situation-edit{
@@ -13424,26 +13426,44 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .project-situation-edit__header{
   display:flex;
   align-items:center;
+  gap:12px;
+  height:49px;
+  padding:0 12px;
+  border-bottom:1px solid var(--border);
+  background:var(--headbg);
 }
 
 .project-situation-edit__back{
   display:inline-flex;
   align-items:center;
-  gap:8px;
   border:0;
   background:transparent;
-  color:var(--text);
-  font-size:20px;
-  font-weight:600;
   padding:0;
+  color:var(--muted);
+  fill:var(--muted);
+  cursor:pointer;
+}
+
+.project-situation-edit__title{
+  margin:0;
+  font-size:20px;
+  line-height:1.2;
+  font-weight:600;
 }
 
 .project-situation-edit__back-icon{
   display:inline-flex;
   align-items:center;
   justify-content:center;
-  width:28px;
-  height:28px;
+  width:24px;
+  height:24px;
+  color:var(--muted);
+  fill:var(--muted);
+}
+
+.project-situation-edit__back-icon .ui-icon{
+  width:24px;
+  height:24px;
   border-radius:8px;
 }
 
@@ -13458,6 +13478,31 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 
 .project-situation-edit__body{
   max-width:720px;
+}
+
+.settings-layout--situation-edit{
+  grid-template-columns:329px minmax(0, 1fr);
+  justify-content:stretch;
+  gap:0;
+}
+
+.settings-nav--situation-edit{
+  width:329px;
+}
+
+.settings-layout--situation-edit .side-nav-layout__nav{
+  padding:0 16px;
+}
+
+.settings-layout--situation-edit .side-nav-layout__content{
+  display:flex;
+  justify-content:center;
+}
+
+.settings-content--situation-edit{
+  width:100%;
+  max-width:920px;
+  padding:0 24px;
 }
 
 .project-lot-modal__radio--readonly{
