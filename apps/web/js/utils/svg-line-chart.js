@@ -34,9 +34,27 @@ function getValidPoints(points = []) {
   return points.filter((point) => Number.isFinite(point?.x) && Number.isFinite(point?.y));
 }
 
-function buildLinePath(points, xScale, yScale) {
+function buildLinePath(points, xScale, yScale, curve = "linear") {
   const valid = getValidPoints(points);
   if (!valid.length) return "";
+  if (curve === "smooth" && valid.length > 2) {
+    const coords = valid.map((point) => ({
+      x: xScale(point.x),
+      y: yScale(point.y)
+    }));
+    let path = `M${coords[0].x.toFixed(3)},${coords[0].y.toFixed(3)}`;
+    for (let index = 1; index < coords.length - 1; index += 1) {
+      const current = coords[index];
+      const next = coords[index + 1];
+      const midX = ((current.x + next.x) / 2).toFixed(3);
+      const midY = ((current.y + next.y) / 2).toFixed(3);
+      path += `Q${current.x.toFixed(3)},${current.y.toFixed(3)} ${midX},${midY}`;
+    }
+    const penultimate = coords[coords.length - 2];
+    const last = coords[coords.length - 1];
+    path += `Q${penultimate.x.toFixed(3)},${penultimate.y.toFixed(3)} ${last.x.toFixed(3)},${last.y.toFixed(3)}`;
+    return path;
+  }
   return valid.map((point, index) => {
     const x = xScale(point.x).toFixed(3);
     const y = yScale(point.y).toFixed(3);
@@ -44,7 +62,7 @@ function buildLinePath(points, xScale, yScale) {
   }).join("");
 }
 
-function buildAreaPath(points, xScale, yScale, baselineValue) {
+function buildAreaPath(points, xScale, yScale, baselineValue, curve = "linear") {
   const valid = getValidPoints(points);
   if (!valid.length) return "";
   const baselinePoints = Array.isArray(baselineValue)
@@ -52,7 +70,7 @@ function buildAreaPath(points, xScale, yScale, baselineValue) {
     : [];
   if (baselinePoints.length) {
     const baselineByX = new Map(baselinePoints.map((point) => [point.x, point.y]));
-    const linePath = buildLinePath(valid, xScale, yScale);
+    const linePath = buildLinePath(valid, xScale, yScale, curve);
     const baselinePath = [...valid]
       .reverse()
       .map((point, index) => {
@@ -66,7 +84,7 @@ function buildAreaPath(points, xScale, yScale, baselineValue) {
   const firstX = xScale(valid[0].x).toFixed(3);
   const lastX = xScale(valid[valid.length - 1].x).toFixed(3);
   const baselineY = yScale(baselineValue).toFixed(3);
-  const linePath = buildLinePath(valid, xScale, yScale);
+  const linePath = buildLinePath(valid, xScale, yScale, curve);
   return `${linePath}L${lastX},${baselineY}L${firstX},${baselineY}Z`;
 }
 
@@ -165,8 +183,9 @@ export function renderSvgLineChart({
           </g>
           ${series.map((item, index) => {
             const className = `svg-line-chart__series svg-line-chart__series--${index + 1}`;
-            const linePath = buildLinePath(item?.points || [], xScale, yScale);
-            const areaPath = buildAreaPath(item?.points || [], xScale, yScale, item?.areaBaselinePoints || yMin);
+            const curve = item?.curve === "smooth" ? "smooth" : "linear";
+            const linePath = buildLinePath(item?.points || [], xScale, yScale, curve);
+            const areaPath = buildAreaPath(item?.points || [], xScale, yScale, item?.areaBaselinePoints || yMin, curve);
             const showStroke = item?.stroke !== false;
             const showFill = item?.fill === true;
             const showPoints = item?.pointsVisible === true;

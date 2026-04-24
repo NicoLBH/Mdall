@@ -9413,6 +9413,8 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
 .svg-line-chart__line{
   stroke:currentColor;
   fill:none;
+  stroke-linecap:round;
+  stroke-linejoin:round;
 }
 
 .svg-line-chart__area{
