@@ -305,7 +305,12 @@ export function createProjectSituationsEvents({
         if (uiState.insightsActiveChart === nextChart) return;
         uiState.insightsActiveChart = nextChart;
         rerender(root);
-        if (nextChart === "burnup" && !uiState.insightsLoading && !uiState.insightsData?.burnup) {
+        const missingData = (
+          (nextChart === "burnup" && !uiState.insightsData?.burnup)
+          || (nextChart === "labels" && !uiState.insightsData?.labels)
+          || (nextChart === "objectives" && !uiState.insightsData?.objectives)
+        );
+        if (!uiState.insightsLoading && missingData) {
           await refreshInsightsData(root);
         }
       });

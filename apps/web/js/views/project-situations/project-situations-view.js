@@ -19,6 +19,64 @@ export function createProjectSituationsView({
   getSituationById,
   renderSituationKanban
 }) {
+  function renderSituationInsightsBarChart({ labels = [], values = [], yTicks = [0, 1], yMax = 1 } = {}) {
+    const safeLabels = Array.isArray(labels) ? labels : [];
+    const safeValues = Array.isArray(values) ? values : [];
+    const width = 964;
+    const height = 478;
+    const margin = { top: 24, right: 24, bottom: 120, left: 56 };
+    const innerWidth = width - margin.left - margin.right;
+    const innerHeight = height - margin.top - margin.bottom;
+    const barGap = 10;
+    const barCount = Math.max(1, safeLabels.length);
+    const barWidth = Math.max(12, (innerWidth - (barGap * (barCount - 1))) / barCount);
+    const domainMax = Math.max(1, Number(yMax) || 1);
+    const scaleY = (value) => innerHeight - ((Math.max(0, Number(value) || 0) / domainMax) * innerHeight);
+    const truncate = (value, max = 14) => {
+      const raw = String(value || "");
+      return raw.length > max ? `${raw.slice(0, max - 1)}…` : raw;
+    };
+
+    return `
+      <div class="svg-line-chart">
+        <div class="svg-line-chart__frame">
+          <svg class="svg-line-chart__svg" width="${width}" height="${height}" role="img" aria-label="Distribution des sujets">
+            <g transform="translate(${margin.left},${margin.top})">
+              <g class="svg-line-chart__grid svg-line-chart__grid--y svg-line-chart__grid--dashed">
+                ${(Array.isArray(yTicks) ? yTicks : []).filter((_, index) => index !== 0).map((tick) => {
+                  const y = scaleY(tick);
+                  return `<g class="svg-line-chart__tick" transform="translate(0,${y.toFixed(3)})"><line x2="${innerWidth}" y2="0"></line></g>`;
+                }).join("")}
+              </g>
+              <g class="svg-line-chart__axis svg-line-chart__axis--x" transform="translate(0,${innerHeight})">
+                <path d="M0.5,0.5H${(innerWidth + 0.5).toFixed(1)}"></path>
+                ${safeLabels.map((label, index) => {
+                  const x = index * (barWidth + barGap) + (barWidth / 2);
+                  return `<g class="svg-line-chart__axis-tick" transform="translate(${x.toFixed(3)},0)"><text y="16" transform="rotate(35 0 16)" text-anchor="start">${escapeHtml(truncate(label))}</text></g>`;
+                }).join("")}
+              </g>
+              <g class="svg-line-chart__axis svg-line-chart__axis--y">
+                <path d="M0.5,${(innerHeight + 0.5).toFixed(1)}V0.5"></path>
+                ${(Array.isArray(yTicks) ? yTicks : []).map((tick) => {
+                  const y = scaleY(tick);
+                  return `<g class="svg-line-chart__axis-tick" transform="translate(0,${y.toFixed(3)})"><text x="-8" dy="0.32em">${escapeHtml(String(tick))}</text></g>`;
+                }).join("")}
+              </g>
+              <g>
+                ${safeValues.map((value, index) => {
+                  const barHeight = Math.max(0, innerHeight - scaleY(value));
+                  const x = index * (barWidth + barGap);
+                  const y = innerHeight - barHeight;
+                  return `<rect x="${x.toFixed(3)}" y="${y.toFixed(3)}" width="${barWidth.toFixed(3)}" height="${barHeight.toFixed(3)}" rx="4" class="svg-line-chart__area"></rect>`;
+                }).join("")}
+              </g>
+            </g>
+          </svg>
+        </div>
+      </div>
+    `;
+  }
+
   function getSelectedSituationLayout() {
     const layout = String(store.situationsView?.selectedSituationLayout || "").trim().toLowerCase();
     if (layout === "planning") return "roadmap";
@@ -97,6 +155,9 @@ export function createProjectSituationsView({
 
     const activeRange = String(uiState.insightsRange || "2w");
     const burnupData = uiState.insightsData?.burnup || null;
+    const labelsData = uiState.insightsData?.labels || null;
+    const objectivesData = uiState.insightsData?.objectives || null;
+    const hasSituationSubjects = Array.isArray(uiState.selectedSituationSubjects) && uiState.selectedSituationSubjects.length > 0;
     const labels = Array.isArray(burnupData?.labels) ? burnupData.labels : [];
     const chartHtml = renderSvgLineChart({
       width: 964,
@@ -113,6 +174,18 @@ export function createProjectSituationsView({
         return label ? label.slice(5) : "";
       },
       series: Array.isArray(burnupData?.series) ? burnupData.series : []
+    });
+    const labelsChartHtml = renderSituationInsightsBarChart({
+      labels: labelsData?.labels || [],
+      values: labelsData?.values || [],
+      yTicks: labelsData?.yTicks || [0, 1],
+      yMax: labelsData?.yMax || 1
+    });
+    const objectivesChartHtml = renderSituationInsightsBarChart({
+      labels: objectivesData?.labels || [],
+      values: objectivesData?.values || [],
+      yTicks: objectivesData?.yTicks || [0, 1],
+      yMax: objectivesData?.yMax || 1
     });
 
     return `
@@ -146,13 +219,25 @@ export function createProjectSituationsView({
                     </div>
                   ` : ""}
                   <div class="project-situation-insights__chart-shell">
-                    ${activeChart !== "burnup"
-                      ? `<div class="settings-empty-state">Ce graphique sera alimenté à l’étape suivante.</div>`
-                      : (uiState.insightsLoading
-                        ? `<div class="settings-empty-state">Chargement des indicateurs…</div>`
-                        : (uiState.insightsError
-                          ? `<div class="settings-inline-error">${escapeHtml(uiState.insightsError)}</div>`
-                          : chartHtml))}
+                    ${uiState.insightsLoading
+                      ? `<div class="settings-empty-state">Chargement des indicateurs…</div>`
+                      : (uiState.insightsError
+                        ? `<div class="settings-inline-error">${escapeHtml(uiState.insightsError)}</div>`
+                        : (activeChart === "burnup"
+                          ? (hasSituationSubjects
+                            ? chartHtml
+                            : `<div class="settings-empty-state">Aucun sujet rattaché à cette situation.</div>`)
+                          : (activeChart === "labels"
+                            ? (!hasSituationSubjects
+                              ? `<div class="settings-empty-state">Aucun sujet rattaché à cette situation.</div>`
+                              : ((labelsData?.labels || []).length
+                              ? labelsChartHtml
+                              : `<div class="settings-empty-state">Aucun label trouvé pour les sujets de cette situation.</div>`))
+                            : (!hasSituationSubjects
+                              ? `<div class="settings-empty-state">Aucun sujet rattaché à cette situation.</div>`
+                              : ((objectivesData?.labels || []).length
+                              ? objectivesChartHtml
+                              : `<div class="settings-empty-state">Aucun objectif trouvé pour les sujets de cette situation.</div>`))))}
                   </div>
                 </div>
               </section>
