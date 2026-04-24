@@ -27,9 +27,9 @@ export function createProjectSituationsView({
   function renderSituationLayoutTabs() {
     return renderLightTabs({
       tabs: [
-        { id: "grille", label: "Grille" },
-        { id: "tableau", label: "Tableau" },
-        { id: "roadmap", label: "Trajectoire" }
+        { id: "grille", label: "Grille", iconName: "table" },
+        { id: "tableau", label: "Tableau", iconName: "project-view" },
+        { id: "roadmap", label: "Trajectoire", iconName: "project-roadmap" }
       ],
       activeTabId: getSelectedSituationLayout(),
       ariaLabel: "Modes d'affichage de la situation",

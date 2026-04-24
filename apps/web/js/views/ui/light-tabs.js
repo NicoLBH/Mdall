@@ -1,4 +1,5 @@
 import { escapeHtml } from '../../utils/escape-html.js';
+import { svgIcon } from '../../ui/icons.js';
 
 function normalizeTone(value = '') {
   const tone = String(value || '').trim().toLowerCase();
@@ -27,6 +28,7 @@ export function renderLightTabs({
       ${tabs.map((tab) => {
         const tabId = String(tab?.id || '').trim();
         const isActive = tabId === activeTabId;
+        const iconHtml = tab.iconHtml || (tab.iconName ? svgIcon(tab.iconName, { className: `light-tabs__icon ${escapeHtml(tab.iconClassName || 'octicon')}` }) : '');
         return `
           <button
             type="button"
@@ -36,6 +38,7 @@ export function renderLightTabs({
             aria-selected="${isActive ? 'true' : 'false'}"
             tabindex="${isActive ? '0' : '-1'}"
           >
+            ${iconHtml ? `<span class="light-tabs__icon-wrap" aria-hidden="true">${iconHtml}</span>` : ''}
             <span class="light-tabs__label">${escapeHtml(tab.label || '')}</span>
           </button>
         `;
