@@ -7,6 +7,7 @@ import {
   syncProjectShellCompactFromScrollSource,
   registerProjectScrollSources,
   setProjectActiveScrollSource,
+  useProjectScrollSource,
   setProjectViewHeader
 } from "./project-shell-chrome.js";
 import { renderProjectSituationsRunbar, bindProjectSituationsRunbar } from "./project-situations-runbar.js";
