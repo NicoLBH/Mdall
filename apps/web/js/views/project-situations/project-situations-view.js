@@ -24,14 +24,14 @@ export function createProjectSituationsView({
     const safeValues = Array.isArray(values) ? values : [];
     const width = 964;
     const height = 478;
-    const margin = { top: 24, right: 24, bottom: 120, left: 56 };
+    const margin = { top: 24, right: 24, bottom: 78, left: 100 };
     const innerWidth = width - margin.left - margin.right;
     const innerHeight = height - margin.top - margin.bottom;
     const barGap = 10;
     const barCount = Math.max(1, safeLabels.length);
-    const barWidth = Math.max(12, (innerWidth - (barGap * (barCount - 1))) / barCount);
+    const barHeight = Math.max(12, (innerHeight - (barGap * (barCount - 1))) / barCount);
     const domainMax = Math.max(1, Number(yMax) || 1);
-    const scaleY = (value) => innerHeight - ((Math.max(0, Number(value) || 0) / domainMax) * innerHeight);
+    const scaleX = (value) => (Math.max(0, Number(value) || 0) / domainMax) * innerWidth;
     const truncate = (value, max = 14) => {
       const raw = String(value || "");
       return raw.length > max ? `${raw.slice(0, max - 1)}…` : raw;
@@ -42,36 +42,46 @@ export function createProjectSituationsView({
         <div class="svg-line-chart__frame">
           <svg class="svg-line-chart__svg" width="${width}" height="${height}" role="img" aria-label="Distribution des sujets">
             <g transform="translate(${margin.left},${margin.top})">
+              <g class="svg-line-chart__grid svg-line-chart__grid--x svg-line-chart__grid--dashed" transform="translate(0,${innerHeight})">
+                ${(Array.isArray(yTicks) ? yTicks : []).map((tick) => {
+                  const x = scaleX(tick);
+                  return `<g class="svg-line-chart__tick" transform="translate(${x.toFixed(3)},0)"><line y2="-${innerHeight}"></line></g>`;
+                }).join("")}
+              </g>
               <g class="svg-line-chart__grid svg-line-chart__grid--y svg-line-chart__grid--dashed">
-                ${(Array.isArray(yTicks) ? yTicks : []).filter((_, index) => index !== 0).map((tick) => {
-                  const y = scaleY(tick);
+                ${safeLabels.map((_, index) => {
+                  const y = index * (barHeight + barGap) + (barHeight / 2);
                   return `<g class="svg-line-chart__tick" transform="translate(0,${y.toFixed(3)})"><line x2="${innerWidth}" y2="0"></line></g>`;
                 }).join("")}
               </g>
-              <g class="svg-line-chart__axis svg-line-chart__axis--x" transform="translate(0,${innerHeight})">
+              <g class="svg-line-chart__axis svg-line-chart__axis--x" transform="translate(0,${(innerHeight + 0.5).toFixed(3)})">
                 <path d="M0.5,0.5H${(innerWidth + 0.5).toFixed(1)}"></path>
-                ${safeLabels.map((label, index) => {
-                  const x = index * (barWidth + barGap) + (barWidth / 2);
-                  return `<g class="svg-line-chart__axis-tick" transform="translate(${x.toFixed(3)},0)"><text y="16" transform="rotate(35 0 16)" text-anchor="start">${escapeHtml(truncate(label))}</text></g>`;
+                ${(Array.isArray(yTicks) ? yTicks : []).map((tick) => {
+                  const x = scaleX(tick);
+                  return `<g class="svg-line-chart__axis-tick" transform="translate(${x.toFixed(3)},0)"><text y="20">${escapeHtml(String(tick))}</text></g>`;
                 }).join("")}
               </g>
               <g class="svg-line-chart__axis svg-line-chart__axis--y">
                 <path d="M0.5,${(innerHeight + 0.5).toFixed(1)}V0.5"></path>
-                ${(Array.isArray(yTicks) ? yTicks : []).map((tick) => {
-                  const y = scaleY(tick);
-                  return `<g class="svg-line-chart__axis-tick" transform="translate(0,${y.toFixed(3)})"><text x="-8" dy="0.32em">${escapeHtml(String(tick))}</text></g>`;
+                ${safeLabels.map((label, index) => {
+                  const y = index * (barHeight + barGap) + (barHeight / 2);
+                  return `<g class="svg-line-chart__axis-tick" transform="translate(0,${y.toFixed(3)})"><text x="-12" dy="0.32em" text-anchor="end">${escapeHtml(truncate(label, 22))}</text></g>`;
                 }).join("")}
               </g>
               <g>
                 ${safeValues.map((value, index) => {
-                  const barHeight = Math.max(0, innerHeight - scaleY(value));
-                  const x = index * (barWidth + barGap);
-                  const y = innerHeight - barHeight;
-                  return `<rect x="${x.toFixed(3)}" y="${y.toFixed(3)}" width="${barWidth.toFixed(3)}" height="${barHeight.toFixed(3)}" rx="4" class="svg-line-chart__area"></rect>`;
+                  const widthValue = Math.max(0, scaleX(value));
+                  const y = index * (barHeight + barGap);
+                  return `<rect x="0" y="${y.toFixed(3)}" width="${widthValue.toFixed(3)}" height="${barHeight.toFixed(3)}" rx="3" style="fill:color(srgb 0 0.101961 0.278431 / 0.5);stroke:rgb(5, 118, 255);stroke-width:2;opacity:1;"></rect>`;
                 }).join("")}
               </g>
             </g>
           </svg>
+          <div class="svg-line-chart__meta">
+            <div class="svg-line-chart__legend">
+              <div class="svg-line-chart__legend-item"><span class="svg-line-chart__legend-swatch svg-line-chart__legend-swatch--circle" style="color:#0078ff;"></span><span>Count of Items</span></div>
+            </div>
+          </div>
         </div>
       </div>
     `;
@@ -186,11 +196,31 @@ export function createProjectSituationsView({
       yTicks: labelsData?.yTicks || [0, 1],
       yMax: labelsData?.yMax || 1
     });
-    const objectivesChartHtml = renderSituationInsightsBarChart({
-      labels: objectivesData?.labels || [],
-      values: objectivesData?.values || [],
-      yTicks: objectivesData?.yTicks || [0, 1],
-      yMax: objectivesData?.yMax || 1
+    const objectivesLineChartHtml = renderSvgLineChart({
+      width: 964,
+      height: 478,
+      xLabel: "",
+      yLabel: "",
+      xDomain: [0, Math.max(1, (objectivesData?.labels || []).length - 1)],
+      yDomain: [0, Math.max(1, Number(objectivesData?.yMax) || 1)],
+      xTicks: Array.from({ length: (objectivesData?.labels || []).length }, (_, index) => index),
+      yTicks: Array.isArray(objectivesData?.yTicks) ? objectivesData.yTicks : [0, 1],
+      xTickFormatter: (tick) => {
+        const label = (objectivesData?.labels || [])[Number(tick)] || "";
+        return label.length > 16 ? `${label.slice(0, 15)}…` : label;
+      },
+      series: [{
+        label: "Count of Items",
+        points: (objectivesData?.values || []).map((value, index) => ({ x: index, y: Number(value) || 0 })),
+        fill: true,
+        color: "#0078ff",
+        areaColor: "color(srgb 0 0.101961 0.278431 / 0.5)",
+        areaOpacity: 1,
+        lineWidth: 2,
+        lineDasharray: "none",
+        legendMarker: "circle",
+        curve: "smooth"
+      }]
     });
     let chartShellContent = "";
     if (uiState.insightsLoading) {
@@ -207,7 +237,7 @@ export function createProjectSituationsView({
         : `<div class="settings-empty-state">Aucun label trouvé pour les sujets de cette situation.</div>`;
     } else {
       chartShellContent = (objectivesData?.labels || []).length
-        ? objectivesChartHtml
+        ? objectivesLineChartHtml
         : `<div class="settings-empty-state">Aucun objectif trouvé pour les sujets de cette situation.</div>`;
     }
 

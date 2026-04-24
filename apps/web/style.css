@@ -9413,6 +9413,8 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
 .svg-line-chart__line{
   stroke:currentColor;
   fill:none;
+  stroke-linecap:round;
+  stroke-linejoin:round;
 }
 
 .svg-line-chart__area{
@@ -9469,6 +9471,14 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
   border-radius:999px;
   background:currentColor;
   display:inline-block;
+}
+
+.svg-line-chart__legend-swatch--circle{
+  width:12px;
+  height:12px;
+  border-radius:50%;
+  background:transparent;
+  border:1.5px solid currentColor;
 }
 
 .svg-line-chart__hover-point{
@@ -13549,6 +13559,15 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 
 .project-situation-insights__chart-shell .svg-line-chart{
   height:100%;
+}
+
+.project-situation-insights__chart-shell .svg-line-chart__legend{
+  justify-content:flex-end;
+  margin:16px 6px 0 0;
+}
+
+.project-situation-insights__chart-shell .svg-line-chart__legend-item{
+  color:var(--text);
 }
 
 .project-situation-edit__main{

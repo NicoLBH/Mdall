@@ -371,8 +371,29 @@ function buildSituationBurnupChartData(subjects = [], range = "2w") {
     yTicks: buildEvenTicks(yMax, 5),
     yMax,
     series: [
-      { label: "Fermés", points: closedSeries },
-      { label: "Ouverts", points: openedSeries }
+      {
+        label: "Completed",
+        points: closedSeries,
+        fill: true,
+        color: "#8957e5",
+        areaColor: "#271052",
+        areaOpacity: 0.5,
+        lineDasharray: "6 2",
+        lineWidth: 2,
+        legendMarker: "circle"
+      },
+      {
+        label: "Open",
+        points: openedSeries,
+        fill: true,
+        color: "#238636",
+        areaColor: "#04260f",
+        areaOpacity: 0.5,
+        areaBaselinePoints: closedSeries,
+        lineDasharray: "none",
+        lineWidth: 2,
+        legendMarker: "circle"
+      }
     ]
   };
 }
