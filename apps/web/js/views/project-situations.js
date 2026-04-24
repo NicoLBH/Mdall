@@ -4,7 +4,7 @@ import {
   PROJECT_SHELL_COMPACT_CHANGE_EVENT,
   setProjectCompactEnabled,
   refreshProjectShellChrome,
-  refreshProjectShellCompactState,
+  syncProjectShellCompactFromScrollSource,
   registerProjectScrollSources,
   setProjectActiveScrollSource,
   setProjectViewHeader
@@ -221,6 +221,19 @@ let currentSituationsRoot = null;
 let cleanupSituationsListeners = null;
 let cleanupSituationsSyncEvents = null;
 
+function isSituationKanbanScrollDebugEnabled() {
+  try {
+    return window.localStorage?.getItem("debug:situation-kanban-scroll") === "1";
+  } catch (_) {
+    return false;
+  }
+}
+
+function debugSituationKanbanScroll(label, payload) {
+  if (!isSituationKanbanScrollDebugEnabled()) return;
+  console.info(label, payload);
+}
+
 function syncSituationsAvailableHeight(root) {
   if (!root || !root.isConnected) return;
   const shell = root.querySelector(".project-page-shell--situation-view");
@@ -289,28 +302,70 @@ function rerender(root) {
   const gridScrollBody = root.querySelector(".project-situation-alt-view--grid");
   const roadmapScrollBody = root.querySelector(".project-situation-alt-view--roadmap");
   const kanbanColumns = [...root.querySelectorAll(".situation-kanban__col")];
-  registerProjectScrollSources(primaryScrollRoot, tableScrollBody, gridScrollBody, roadmapScrollBody, kanbanColumns);
+  const kanbanCardLists = [...root.querySelectorAll(".situation-kanban__cards")];
+  debugSituationKanbanScroll("[situations:kanban-bind]", {
+    columns: kanbanColumns.length,
+    cardLists: kanbanCardLists.length,
+    columnsMeta: kanbanColumns.map((col) => ({
+      column: col.dataset.situationKanbanColumn,
+      scrollHeight: col.scrollHeight,
+      clientHeight: col.clientHeight,
+      canScroll: col.scrollHeight > col.clientHeight,
+      overflowY: getComputedStyle(col).overflowY
+    })),
+    cardListsMeta: kanbanCardLists.map((list) => ({
+      column: list.closest(".situation-kanban__col")?.dataset?.situationKanbanColumn || null,
+      scrollHeight: list.scrollHeight,
+      clientHeight: list.clientHeight,
+      canScroll: list.scrollHeight > list.clientHeight,
+      overflowY: getComputedStyle(list).overflowY
+    }))
+  });
+  if (kanbanColumns.length) {
+    registerProjectScrollSources(kanbanColumns, kanbanCardLists, primaryScrollRoot);
+  } else {
+    registerProjectScrollSources(primaryScrollRoot, tableScrollBody, gridScrollBody, roadmapScrollBody);
+  }
 
   const unbindColumnHandlers = [];
-  kanbanColumns.forEach((column) => {
+  const kanbanScrollElements = kanbanColumns.length
+    ? [...new Set([...kanbanColumns, ...kanbanCardLists, primaryScrollRoot].filter(Boolean))]
+    : [];
+  kanbanScrollElements.forEach((source) => {
+    const ownerColumn = source.classList.contains("situation-kanban__col")
+      ? source
+      : source.closest(".situation-kanban__col");
     const activateColumn = () => {
+      if (!ownerColumn) return;
       setProjectCompactEnabled(true);
-      setProjectActiveScrollSource(column);
+      setProjectActiveScrollSource(ownerColumn);
     };
-    const onColumnScroll = () => {
-      setProjectCompactEnabled(true);
-      refreshProjectShellCompactState();
+    const onKanbanScroll = (event) => {
+      const sourceEl = event?.currentTarget;
+      if (!sourceEl) return;
+      debugSituationKanbanScroll("[situations:kanban-column-scroll]", {
+        sourceClass: sourceEl.className,
+        sourceTag: sourceEl.tagName,
+        column: ownerColumn?.dataset?.situationKanbanColumn || null,
+        scrollTop: sourceEl.scrollTop,
+        scrollHeight: sourceEl.scrollHeight,
+        clientHeight: sourceEl.clientHeight,
+        overflowY: getComputedStyle(sourceEl).overflowY,
+        shouldCompact: sourceEl.scrollTop > 12,
+        isConnected: sourceEl.isConnected
+      });
+      syncProjectShellCompactFromScrollSource(sourceEl);
       syncSituationsAvailableHeight(root);
     };
-    column.addEventListener("mouseenter", activateColumn);
-    column.addEventListener("wheel", activateColumn, { passive: true });
-    column.addEventListener("touchstart", activateColumn, { passive: true });
-    column.addEventListener("scroll", onColumnScroll, { passive: true });
+    source.addEventListener("mouseenter", activateColumn);
+    source.addEventListener("wheel", activateColumn, { passive: true });
+    source.addEventListener("touchstart", activateColumn, { passive: true });
+    source.addEventListener("scroll", onKanbanScroll, { passive: true });
     unbindColumnHandlers.push(() => {
-      column.removeEventListener("mouseenter", activateColumn);
-      column.removeEventListener("wheel", activateColumn);
-      column.removeEventListener("touchstart", activateColumn);
-      column.removeEventListener("scroll", onColumnScroll);
+      source.removeEventListener("mouseenter", activateColumn);
+      source.removeEventListener("wheel", activateColumn);
+      source.removeEventListener("touchstart", activateColumn);
+      source.removeEventListener("scroll", onKanbanScroll);
     });
   });
   cleanupSituationsListeners = () => {
