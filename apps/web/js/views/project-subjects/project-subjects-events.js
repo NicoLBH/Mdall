@@ -5420,9 +5420,8 @@ export function createProjectSubjectsEvents(config) {
   function bindDetailsScroll(root) {
     const normalDetailsHead = root.querySelector("#situationsDetailsTitle");
     const normalDetailsChrome = root.querySelector("#situationsDetailsChrome");
-    const normalDetailsBody = root.querySelector("#situationsDetailsHost");
     bindCondensedTitleScroll(
-      normalDetailsBody || (normalDetailsHead ? document : null),
+      normalDetailsHead ? document : null,
       normalDetailsChrome || normalDetailsHead,
       "details",
       {

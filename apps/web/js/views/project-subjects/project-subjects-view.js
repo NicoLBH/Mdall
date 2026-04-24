@@ -2797,7 +2797,6 @@ function rerenderSubissuesPanelScope(root, options = {}) {
 function rerenderPanels() {
   ensureViewUiState();
   document.body.classList.remove("project-subject-details-top-compact");
-  document.body.classList.remove("project-subject-normal-detail-flow");
 
   const detailsScrollState = getDocumentScrollState();
   const filteredSituations = getFilteredSituations();
@@ -2814,12 +2813,7 @@ function rerenderPanels() {
   const isStandardCreateMode = isCreateFormOpen && !isSubissueCreateMode;
   setSubissueModalScrollLock(isSubissueCreateMode);
 
-  const shouldDisableProjectCompact = !!panelHost
-    && !isCreateFormOpen
-    && String(store.situationsView.subjectsSubview || "subjects") === "subjects"
-    && !store.situationsView.showTableOnly;
-  document.body.classList.toggle("project-subject-normal-detail-flow", shouldDisableProjectCompact);
-  setProjectCompactEnabled(!shouldDisableProjectCompact);
+  setProjectCompactEnabled(true);
 
   if (panelHost) {
     if (isStandardCreateMode) {
