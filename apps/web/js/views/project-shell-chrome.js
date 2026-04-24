@@ -278,17 +278,11 @@ export function registerProjectScrollSources(...elements) {
 
   candidates.forEach((element) => {
     element.addEventListener("scroll", onSourceChange, { passive: true });
-    element.addEventListener("wheel", onSourceChange, { passive: true });
-    element.addEventListener("touchstart", onSourceChange, { passive: true });
-    element.addEventListener("mouseenter", onSourceChange);
   });
 
   shellState.cleanupRegisteredScrollSources = () => {
     candidates.forEach((element) => {
       element.removeEventListener("scroll", onSourceChange);
-      element.removeEventListener("wheel", onSourceChange);
-      element.removeEventListener("touchstart", onSourceChange);
-      element.removeEventListener("mouseenter", onSourceChange);
     });
   };
 
