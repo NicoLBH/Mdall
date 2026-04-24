@@ -153,6 +153,17 @@ function applyCompactState(isCompact) {
   refreshProjectShellChromeRefs();
   const nextCompact = !!(shellState.compactEnabled && isCompact);
   const didChange = shellState.isCompact !== nextCompact;
+  if (!didChange) {
+    debugProjectShellKanbanScroll("[project-shell:apply-compact-state]", {
+      requested: isCompact,
+      applied: nextCompact,
+      compactEnabled: shellState.compactEnabled,
+      didChange,
+      skipped: true
+    });
+    return;
+  }
+
   shellState.isCompact = nextCompact;
 
   document.body.classList.add("route--project");
@@ -174,11 +185,9 @@ function applyCompactState(isCompact) {
   });
 
   syncCompactTabLabel();
-  if (didChange) {
-    window.dispatchEvent(new CustomEvent(PROJECT_SHELL_COMPACT_CHANGE_EVENT, {
-      detail: { isCompact: shellState.isCompact }
-    }));
-  }
+  window.dispatchEvent(new CustomEvent(PROJECT_SHELL_COMPACT_CHANGE_EVENT, {
+    detail: { isCompact: shellState.isCompact }
+  }));
 }
 
 function syncCompactState() {

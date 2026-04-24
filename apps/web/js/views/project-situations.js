@@ -7,7 +7,6 @@ import {
   syncProjectShellCompactFromScrollSource,
   registerProjectScrollSources,
   setProjectActiveScrollSource,
-  useProjectScrollSource,
   setProjectViewHeader
 } from "./project-shell-chrome.js";
 import { renderProjectSituationsRunbar, bindProjectSituationsRunbar } from "./project-situations-runbar.js";
@@ -30,6 +29,7 @@ import { createProjectSituationsEvents } from "./project-situations/project-situ
 import { createProjectSituationsReviewState } from "./project-situations/project-situations-review-state.js";
 import { createProjectSituationsThread } from "./project-situations/project-situations-thread.js";
 import { createProjectSituationsKanbanView } from "./project-situations/project-situations-view-kanban.js";
+import { resolveKanbanScrollableSource } from "./project-situations-scroll-source.js";
 import { renderGlobalHeader } from "./global-header.js";
 
 export { getEffectiveSujetStatus, getEffectiveSituationStatus } from "./project-subjects.js";
@@ -220,6 +220,19 @@ function syncProjectHeader(root) {
 let situationsTabResetBound = false;
 let currentSituationsRoot = null;
 let cleanupSituationsListeners = null;
+
+function isKanbanScrollDebugEnabled() {
+  try {
+    return window.localStorage?.getItem("debug:situation-kanban-scroll") === "1";
+  } catch (_) {
+    return false;
+  }
+}
+
+function debugKanbanScroll(label, payload) {
+  if (!isKanbanScrollDebugEnabled()) return;
+  console.info(label, payload);
+}
 let cleanupSituationsSyncEvents = null;
 
 function syncSituationsAvailableHeight(root) {
@@ -292,28 +305,56 @@ function rerender(root) {
   const kanbanColumns = [...root.querySelectorAll(".situation-kanban__col")];
   const kanbanCardLists = [...root.querySelectorAll(".situation-kanban__cards")];
   if (kanbanColumns.length) {
-    registerProjectScrollSources(kanbanColumns, kanbanCardLists, primaryScrollRoot);
+    registerProjectScrollSources(kanbanCardLists);
   } else {
     registerProjectScrollSources(primaryScrollRoot, tableScrollBody, gridScrollBody, roadmapScrollBody);
   }
 
   const unbindColumnHandlers = [];
   const kanbanScrollElements = kanbanColumns.length
-    ? [...new Set([...kanbanColumns, ...kanbanCardLists, primaryScrollRoot].filter(Boolean))]
+    ? [...new Set([...kanbanColumns, ...kanbanCardLists].filter(Boolean))]
     : [];
+
+  const resolveAndActivateKanbanScrollableSource = (target, eventType = null) => {
+    const sourceEl = resolveKanbanScrollableSource(target);
+    if (!sourceEl) return;
+
+    setProjectCompactEnabled(true);
+    setProjectActiveScrollSource(sourceEl);
+
+    const scrollTop = Number(sourceEl.scrollTop || 0);
+    const nextCompact = scrollTop > 12;
+    const didChange = document.body.classList.contains("project-shell-compact") !== nextCompact;
+    debugKanbanScroll("[situations:kanban-scroll-source]", {
+      eventType,
+      sourceTag: sourceEl.tagName || null,
+      sourceClass: sourceEl.className || null,
+      scrollTop,
+      nextCompact,
+      didChange
+    });
+  };
+
   kanbanScrollElements.forEach((source) => {
-    const ownerColumn = source.classList.contains("situation-kanban__col")
-      ? source
-      : source.closest(".situation-kanban__col");
-    const activateColumn = () => {
-      if (!ownerColumn) return;
-      setProjectCompactEnabled(true);
-      setProjectActiveScrollSource(ownerColumn);
+    const activateColumn = (event) => {
+      resolveAndActivateKanbanScrollableSource(event?.target || source, event?.type || null);
     };
     const onKanbanScroll = (event) => {
       const sourceEl = event?.currentTarget;
       if (!sourceEl) return;
       syncProjectShellCompactFromScrollSource(sourceEl);
+
+      const scrollTop = Number(sourceEl.scrollTop || 0);
+      const nextCompact = scrollTop > 12;
+      const didChange = document.body.classList.contains("project-shell-compact") !== nextCompact;
+      debugKanbanScroll("[situations:kanban-scroll]", {
+        eventType: event?.type || null,
+        sourceTag: sourceEl.tagName || null,
+        sourceClass: sourceEl.className || null,
+        scrollTop,
+        nextCompact,
+        didChange
+      });
       syncSituationsAvailableHeight(root);
     };
     source.addEventListener("mouseenter", activateColumn);
