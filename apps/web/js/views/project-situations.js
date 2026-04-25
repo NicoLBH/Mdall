@@ -40,7 +40,15 @@ import {
   getSujetKanbanStatusForSituation,
   setSujetKanbanStatusForSituation,
   openSubjectDrilldownFromSituation,
-  openSituationDrilldownFromSelection
+  openSituationDrilldownFromSelection,
+  openSharedSubjectMetaDropdown,
+  openSharedSubjectKanbanDropdown,
+  closeSharedSubjectDropdowns,
+  setSharedSubjectMetaDropdownQuery,
+  setSharedSubjectKanbanDropdownQuery,
+  toggleSubjectAssigneeFromSharedDropdown,
+  toggleSubjectLabelFromSharedDropdown,
+  toggleSubjectObjectiveFromSharedDropdown
 } from "./project-subjects.js";
 
 const { uiState, ensureSituationsViewState } = createProjectSituationsState({ store });
@@ -430,7 +438,42 @@ const { bindEvents } = createProjectSituationsEvents({
   getSituationById,
   loadSituationSelection,
   loadSituationInsightsData,
-  openSituationDrilldownFromSelection
+  openSituationDrilldownFromSelection,
+  openSharedSubjectMetaDropdown: (...args) => openSharedSubjectMetaDropdown(...args),
+  openSharedSubjectKanbanDropdown: (...args) => openSharedSubjectKanbanDropdown(...args),
+  closeSharedSubjectDropdowns: (...args) => closeSharedSubjectDropdowns(...args),
+  setSharedSubjectMetaDropdownQuery: (...args) => setSharedSubjectMetaDropdownQuery(...args),
+  setSharedSubjectKanbanDropdownQuery: (...args) => setSharedSubjectKanbanDropdownQuery(...args),
+  toggleSubjectAssigneeFromSharedDropdown: (...args) => toggleSubjectAssigneeFromSharedDropdown(...args),
+  toggleSubjectLabelFromSharedDropdown: (...args) => toggleSubjectLabelFromSharedDropdown(...args),
+  toggleSubjectObjectiveFromSharedDropdown: (...args) => toggleSubjectObjectiveFromSharedDropdown(...args),
+  setSituationGridKanbanStatus: async (situationId, subjectId, nextStatus) => {
+    const normalizedSituationId = String(situationId || "").trim();
+    const normalizedSubjectId = String(subjectId || "").trim();
+    const normalizedNextStatus = String(nextStatus || "").trim().toLowerCase();
+    if (!normalizedSituationId || !normalizedSubjectId || !normalizedNextStatus) return false;
+    try {
+      await setSituationSubjectKanbanStatus(normalizedSituationId, normalizedSubjectId, normalizedNextStatus);
+      if (!store.situationsView || typeof store.situationsView !== "object") store.situationsView = {};
+      store.situationsView.kanbanStatusBySituationId = {
+        ...(store.situationsView.kanbanStatusBySituationId || {}),
+        [normalizedSituationId]: {
+          ...((store.situationsView.kanbanStatusBySituationId || {})[normalizedSituationId] || {}),
+          [normalizedSubjectId]: normalizedNextStatus
+        }
+      };
+      return true;
+    } catch (error) {
+      await loadSituationKanbanStatusMap([normalizedSituationId]).then((map) => {
+        if (!store.situationsView || typeof store.situationsView !== "object") store.situationsView = {};
+        store.situationsView.kanbanStatusBySituationId = {
+          ...(store.situationsView.kanbanStatusBySituationId || {}),
+          ...(map || {})
+        };
+      }).catch(() => undefined);
+      throw error;
+    }
+  }
 });
 
 export function renderProjectSituations(root) {

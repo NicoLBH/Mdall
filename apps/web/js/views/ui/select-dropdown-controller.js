@@ -274,8 +274,14 @@ export function renderSelectDropdownHost({
   const explicitSubject = explicitSubjectId && typeof resolveSubjectById === "function"
     ? resolveSubjectById(explicitSubjectId)
     : null;
+  const explicitKanbanSubjectId = String(kanbanDropdown.subjectId || "").trim();
+  const explicitKanbanSubject = !explicitSubject && explicitKanbanSubjectId && typeof resolveSubjectById === "function"
+    ? resolveSubjectById(explicitKanbanSubjectId)
+    : null;
   const selection = explicitSubject
     ? { type: "sujet", item: explicitSubject }
+    : explicitKanbanSubject
+      ? { type: "sujet", item: explicitKanbanSubject }
     : getScopedSelection?.(root);
   if (field) {
     if (selection?.type !== "sujet") {
