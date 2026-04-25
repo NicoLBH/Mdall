@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const eventsSource = fs.readFileSync(path.resolve(__dirname, "./project-situations-events.js"), "utf8");
+const styleSource = fs.readFileSync(path.resolve(__dirname, "../../../style.css"), "utf8");
 
 test("la grille situation ouvre un dropdown éditable ancré aux cellules", () => {
   assert.match(eventsSource, /openSituationGridCellDropdown\(root, \{ field, anchor: node, subjectId, situationId \}\)/);
@@ -46,4 +47,38 @@ test("la fermeture extérieure utilise closeSituationGridCellDropdown et closeSh
   assert.match(eventsSource, /outside-pointerdown-close/);
   assert.match(eventsSource, /if \(shouldIgnoreOutsideClose\(eventTarget, state\)\) return;/);
   assert.match(eventsSource, /closeSituationGridCellDropdown\(\);/);
+});
+
+test("la grille situation bind un DnD multi-niveaux avec instrumentation dédiée", () => {
+  assert.match(eventsSource, /function bindSituationGridDnd\(root\)/);
+  assert.match(eventsSource, /data-subissue-sortable-row='true'/);
+  assert.match(eventsSource, /logSituationGridDnd\("dragstart"/);
+  assert.match(eventsSource, /logSituationGridDnd\("dragover"/);
+  assert.match(eventsSource, /logSituationGridDnd\("drop"/);
+  assert.match(eventsSource, /logSituationGridDnd\("persist-success"/);
+  assert.match(eventsSource, /logSituationGridDnd\("persist-error"/);
+  assert.match(eventsSource, /await setSituationGridSubjectParent\?\.\(sourceId, nextParentId \|\| null\);/);
+  assert.match(eventsSource, /await reorderSituationGridSubjectChildren\?\.\(nextParentId, nextTargetSiblings\);/);
+  assert.match(eventsSource, /await reorderSituationGridRootSubjects\?\.\(nextTargetSiblings\);/);
+  assert.match(eventsSource, /bindSituationGridDnd\(root\);/);
+});
+
+test("le patch local de hiérarchie respecte l'ordre déposé sans resort implicite", () => {
+  assert.match(eventsSource, /const normalizedChildIds = \[\.\.\.new Set\(\(Array\.isArray\(childIds\) \? childIds : \[\]\)/);
+  assert.doesNotMatch(eventsSource, /const normalizedChildIds = sortSubjectIdsByOrder\(childIds, raw\.subjectsById\);/);
+});
+
+test("le drop de grille est résolu au niveau du conteneur pour accepter toute la largeur de ligne", () => {
+  assert.match(eventsSource, /const dropContainer = sortableRows\[0\]\?\.parentElement \|\| null;/);
+  assert.match(eventsSource, /dropContainer\.addEventListener\("dragover", \(event\) => \{/);
+  assert.match(eventsSource, /dropContainer\.addEventListener\("drop", async \(event\) => \{/);
+  assert.match(eventsSource, /const resolveDropTargetFromPointer = \(clientY\) => \{/);
+  assert.match(eventsSource, /row\.style\.setProperty\("--situation-grid-drop-indent"/);
+});
+
+test("les indicateurs de drop de la grille situation utilisent une ligne plus épaisse et indentée", () => {
+  assert.match(styleSource, /\.situation-grid \.subissues-sortable-row\.is-subissue-drop-before::before,/);
+  assert.match(styleSource, /left:calc\(16px \+ var\(--situation-grid-drop-indent, 0px\)\);/);
+  assert.match(styleSource, /height:3px;/);
+  assert.match(styleSource, /background:rgb\(31, 111, 235\);/);
 });
