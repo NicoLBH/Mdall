@@ -34,6 +34,24 @@ function normalizeId(value) {
   return String(value || "").trim();
 }
 
+function hasBlockedByRelation(subjectId, store = {}, rawSubjectsResult = {}) {
+  const normalizedSubjectId = normalizeId(subjectId);
+  if (!normalizedSubjectId) return false;
+  const linksBySubjectId = rawSubjectsResult?.linksBySubjectId && typeof rawSubjectsResult.linksBySubjectId === "object"
+    ? rawSubjectsResult.linksBySubjectId
+    : (store?.projectSubjectsView?.linksBySubjectId && typeof store.projectSubjectsView.linksBySubjectId === "object"
+      ? store.projectSubjectsView.linksBySubjectId
+      : {});
+  const scopedLinks = Array.isArray(linksBySubjectId?.[normalizedSubjectId]) ? linksBySubjectId[normalizedSubjectId] : [];
+  const subjectLinks = Array.isArray(store?.projectSubjectsView?.subjectLinks) ? store.projectSubjectsView.subjectLinks : [];
+  return [...scopedLinks, ...subjectLinks].some((link) => {
+    const linkType = String(link?.link_type || "").trim().toLowerCase();
+    if (linkType !== "blocked_by") return false;
+    const sourceId = normalizeId(link?.source_subject_id);
+    return sourceId === normalizedSubjectId;
+  });
+}
+
 export function buildSituationGridColumnWidthsScopeKey(projectId, situationId) {
   const normalizedProjectId = normalizeId(projectId) || "project";
   const normalizedSituationId = normalizeId(situationId) || "situation";
@@ -81,13 +99,15 @@ function firstNonEmpty(...values) {
   return "";
 }
 
-function renderIssueStateIcon(subject) {
+function renderIssueStateIcon(subject, { isBlocked = false } = {}) {
   const isClosed = normalizeIssueLifecycleStatus(subject?.status) === "closed";
   return `<span class="issue-status-icon situation-grid__status-icon" aria-hidden="true">${
     isClosed
       ? svgIcon("check-circle", { style: "color: var(--fgColor-done)" })
       : svgIcon("issue-opened", { style: "color: var(--fgColor-open)" })
-  }</span>`;
+  }${isBlocked
+    ? `<span class="subject-status-blocked-indicator situation-grid__status-blocked-indicator" aria-hidden="true">${svgIcon("blocked", { className: "octicon octicon-blocked", width: 12, height: 12 })}</span>`
+    : ""}</span>`;
 }
 
 function sortSubjectIds(subjectIds = [], subjectsById = {}) {
@@ -554,7 +574,7 @@ export function renderSituationGridView(situation, subjects = [], options = {}) 
     childrenBySubjectId,
     rootSubjectIds,
     expandedSubjectIds,
-    dndMode: "none",
+    dndMode: "all-levels",
     rowClassName: "situation-grid__row project-situation-grid__row",
     escapeHtml,
     context: {
@@ -564,6 +584,7 @@ export function renderSituationGridView(situation, subjects = [], options = {}) 
       const indentWidth = Math.max(0, depth) * 20;
       const identifier = getSubjectDisplayIdentifier(subject);
       const subjectTitle = String(subject?.title || subjectId || "Sujet");
+      const isBlocked = hasBlockedByRelation(subjectId, options?.store || {}, rawSubjectsResult);
       return `
         <div class="situation-grid__cell situation-grid__cell--title project-situation-grid__cell project-situation-grid__cell--title">
           <div class="situation-grid__title-content" style="--situation-grid-indent:${indentWidth}px;">
@@ -580,7 +601,7 @@ export function renderSituationGridView(situation, subjects = [], options = {}) 
                   ${svgIcon(isExpanded ? "chevron-down" : "chevron-right", { className: isExpanded ? "octicon octicon-chevron-down" : "octicon octicon-chevron-right" })}
                 </button>`
               : `<span class="situation-grid__toggle situation-grid__toggle--placeholder" aria-hidden="true"></span>`}
-            ${renderIssueStateIcon(subject)}
+            ${renderIssueStateIcon(subject, { isBlocked })}
             <button type="button" class="situation-grid__subject-title" data-open-situation-subject="${escapeHtml(subjectId)}">${escapeHtml(subjectTitle)}</button>
             <span class="situation-grid__subject-id mono">${escapeHtml(identifier)}</span>
           </div>
