@@ -73,7 +73,9 @@ export function createProjectSituationsEvents({
 
   function isSituationGridDropdownDebugEnabled() {
     try {
-      return window.localStorage?.getItem("debug:situation-grid-dropdown") === "1";
+      const storageValue = String(window.localStorage?.getItem("debug:situation-grid-dropdown") || "").trim().toLowerCase();
+      const sessionValue = String(window.sessionStorage?.getItem("debug:situation-grid-dropdown") || "").trim().toLowerCase();
+      return storageValue === "1" || storageValue === "true" || sessionValue === "1" || sessionValue === "true";
     } catch (_) {
       return false;
     }
@@ -133,6 +135,8 @@ export function createProjectSituationsEvents({
 
   function closeSituationGridCellDropdown() {
     const state = ensureSituationGridCellDropdownState();
+    const host = document.getElementById("subjectMetaDropdownHost");
+    if (host?.dataset) delete host.dataset.situationGridOwned;
     logSituationGridDropdown("close", buildSituationGridDropdownDebugPayload({
       field: state.field,
       subjectId: state.subjectId,
@@ -165,12 +169,14 @@ export function createProjectSituationsEvents({
   function openSituationGridCellDropdown(root, { field = "", anchor = null, subjectId = "", situationId = "" } = {}) {
     if (!anchor) return;
     const state = ensureSituationGridCellDropdownState();
+    const host = document.getElementById("subjectMetaDropdownHost");
     closeSituationGridCellDropdown();
     state.open = true;
     state.field = String(field || "").trim().toLowerCase();
     state.subjectId = String(subjectId || "").trim();
     state.situationId = String(situationId || "").trim();
     state.anchor = anchor;
+    if (host?.dataset) host.dataset.situationGridOwned = "1";
     anchor.setAttribute("aria-expanded", "true");
     logSituationGridDropdown("open", buildSituationGridDropdownDebugPayload({
       field: state.field,
@@ -478,7 +484,7 @@ export function createProjectSituationsEvents({
       return false;
     };
 
-    document.addEventListener("click", async (event) => {
+    const handleGridDropdownItemClickCapture = async (event) => {
       const eventTarget = event.target instanceof Element ? event.target : null;
       if (!eventTarget) return;
       const root = resolveSituationGridDropdownRoot();
@@ -519,6 +525,14 @@ export function createProjectSituationsEvents({
         }
         return;
       }
+    };
+
+    const host = document.getElementById("subjectMetaDropdownHost");
+    host?.addEventListener("click", handleGridDropdownItemClickCapture, { capture: true, signal });
+    document.addEventListener("click", async (event) => {
+      await handleGridDropdownItemClickCapture(event);
+      const eventTarget = event.target instanceof Element ? event.target : null;
+      if (!eventTarget) return;
 
       const state = ensureSituationGridCellDropdownState();
       if (!state.open) return;

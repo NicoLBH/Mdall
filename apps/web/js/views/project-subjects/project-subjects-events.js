@@ -362,7 +362,8 @@ export function createProjectSubjectsEvents(config) {
       const dropdown = getSubjectsViewState()?.subjectMetaDropdown || {};
       const openedFrom = String(dropdown.openedFrom || "").trim().toLowerCase();
       const scope = String(dropdown.scope || "").trim().toLowerCase();
-      return openedFrom === "situation-grid" || scope === "situation-grid";
+      const hostOwned = String(document.getElementById("subjectMetaDropdownHost")?.dataset?.situationGridOwned || "") === "1";
+      return hostOwned && (openedFrom === "situation-grid" || scope === "situation-grid");
     }
 
     function logSituationGridGenericSkip() {
