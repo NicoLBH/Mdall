@@ -59,6 +59,8 @@ test("renderSituationGridView rend la grille et la colonne titre sans balise tab
   assert.match(html, /situation-grid__cell--progress/);
   assert.match(html, /situation-grid__cell--labels/);
   assert.match(html, /situation-grid__cell--objectives/);
+  assert.match(html, /data-subissue-sortable-row="true"/);
+  assert.match(html, /draggable="true"/);
   assert.doesNotMatch(html, /<table|<tr|<td/i);
 });
 
