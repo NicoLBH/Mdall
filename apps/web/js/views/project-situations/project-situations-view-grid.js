@@ -2,6 +2,21 @@ import { escapeHtml } from "../../utils/escape-html.js";
 import { svgIcon } from "../../ui/icons.js";
 import { renderSubjectTreeGrid } from "../shared/subject-tree-grid.js";
 
+const GRID_COLUMN_DEFINITIONS = [
+  { key: "title", label: "Titre", minWidth: 320, className: "title" },
+  { key: "assignees", label: "Assignés", minWidth: 160, className: "assignees" },
+  { key: "kanban", label: "Statut", minWidth: 160, className: "kanban" },
+  { key: "progress", label: "Progression", minWidth: 180, className: "progress" },
+  { key: "labels", label: "Labels", minWidth: 220, className: "labels" },
+  { key: "objectives", label: "Objectifs", minWidth: 220, className: "objectives" },
+  { key: "priority", label: "Priorité", minWidth: 120, className: "priority" },
+  { key: "dates", label: "Créé · MAJ", minWidth: 160, className: "dates" }
+];
+
+export function getSituationGridColumnDefinitions() {
+  return GRID_COLUMN_DEFINITIONS.map((column) => ({ ...column }));
+}
+
 const KANBAN_STATUS_META = {
   non_active: { label: "Non activé", bg: "rgba(46, 160, 67, 0.15)", border: "rgb(35, 134, 54)", text: "rgb(63, 185, 80)" },
   to_activate: { label: "À activer", bg: "rgba(56, 139, 253, 0.1)", border: "rgb(31, 111, 235)", text: "rgb(88, 166, 255)" },
@@ -16,6 +31,45 @@ function normalizeIssueLifecycleStatus(status = "") {
 
 function normalizeId(value) {
   return String(value || "").trim();
+}
+
+export function buildSituationGridColumnWidthsScopeKey(projectId, situationId) {
+  const normalizedProjectId = normalizeId(projectId) || "project";
+  const normalizedSituationId = normalizeId(situationId) || "situation";
+  return `project:${normalizedProjectId}:situation:${normalizedSituationId}`;
+}
+
+export function normalizeSituationGridColumnWidths(rawWidths = {}) {
+  const source = rawWidths && typeof rawWidths === "object" ? rawWidths : {};
+  return GRID_COLUMN_DEFINITIONS.reduce((acc, column) => {
+    const rawValue = Number(source[column.key]);
+    const normalizedValue = Number.isFinite(rawValue)
+      ? Math.max(column.minWidth, Math.round(rawValue))
+      : column.minWidth;
+    acc[column.key] = normalizedValue;
+    return acc;
+  }, {});
+}
+
+export function getSituationGridColumnCssVariables(widths = {}) {
+  return GRID_COLUMN_DEFINITIONS.reduce((acc, column) => {
+    acc[`--situation-grid-col-${column.key}`] = `${Math.max(column.minWidth, Number(widths?.[column.key]) || 0)}px`;
+    return acc;
+  }, {});
+}
+
+function getGridContainerInlineStyle(widths = {}) {
+  const cssVars = getSituationGridColumnCssVariables(widths);
+  return Object.entries(cssVars)
+    .map(([name, value]) => `${name}:${value}`)
+    .join(";");
+}
+
+function getStoredGridColumnWidths(store = {}, scopeKey = "") {
+  if (!scopeKey) return normalizeSituationGridColumnWidths();
+  const widthsByScope = store?.situationsView?.gridColumnWidthsByScope;
+  const scoped = widthsByScope && typeof widthsByScope === "object" ? widthsByScope[scopeKey] : null;
+  return normalizeSituationGridColumnWidths(scoped || {});
 }
 
 function firstNonEmpty(...values) {
@@ -278,14 +332,17 @@ function renderDatesCell(subject = {}) {
 function renderGridHeaderRow() {
   return `
     <header class="project-situation-grid__header situation-grid__header" role="row">
-      <div class="project-situation-grid__head-cell situation-grid__head-cell situation-grid__head-cell--title" role="columnheader">Titre</div>
-      <div class="project-situation-grid__head-cell situation-grid__head-cell--assignees" role="columnheader">Assignés</div>
-      <div class="project-situation-grid__head-cell situation-grid__head-cell--kanban" role="columnheader">Statut</div>
-      <div class="project-situation-grid__head-cell situation-grid__head-cell--progress" role="columnheader">Progression</div>
-      <div class="project-situation-grid__head-cell situation-grid__head-cell--labels" role="columnheader">Labels</div>
-      <div class="project-situation-grid__head-cell situation-grid__head-cell--objectives" role="columnheader">Objectifs</div>
-      <div class="project-situation-grid__head-cell situation-grid__head-cell--priority" role="columnheader">Priorité</div>
-      <div class="project-situation-grid__head-cell situation-grid__head-cell--dates" role="columnheader">Créé · MAJ</div>
+      ${GRID_COLUMN_DEFINITIONS.map((column) => `
+        <div class="project-situation-grid__head-cell situation-grid__head-cell situation-grid__head-cell--${column.className}" role="columnheader" data-situation-grid-column-key="${escapeHtml(column.key)}">
+          <span class="situation-grid__head-cell-label">${escapeHtml(column.label)}</span>
+          <button
+            type="button"
+            class="situation-grid__resize-handle"
+            data-situation-grid-resize-handle="${escapeHtml(column.key)}"
+            aria-label="Redimensionner la colonne ${escapeHtml(column.label)}"
+          ></button>
+        </div>
+      `).join("")}
     </header>
   `;
 }
@@ -293,6 +350,12 @@ function renderGridHeaderRow() {
 export function renderSituationGridView(situation, subjects = [], options = {}) {
   const title = String(situation?.title || "Situation");
   const normalizedSituationId = normalizeId(situation?.id);
+  const normalizedProjectId = normalizeId(
+    options?.projectId
+      || options?.store?.currentProjectId
+      || options?.store?.projectForm?.projectId
+      || options?.store?.projectForm?.id
+  );
   if (!normalizedSituationId) {
     return `
       <section class="project-situation-alt-view project-situation-alt-view--grid" aria-label="Vue grille">
@@ -334,6 +397,9 @@ export function renderSituationGridView(situation, subjects = [], options = {}) 
     rootSubjectIds,
     fallbackExpandedIds: [...selectedSubjectIds]
   });
+  const columnWidthsScopeKey = buildSituationGridColumnWidthsScopeKey(normalizedProjectId, normalizedSituationId);
+  const columnWidths = getStoredGridColumnWidths(options?.store || {}, columnWidthsScopeKey);
+  const gridContainerStyle = getGridContainerInlineStyle(columnWidths);
 
   const rowsHtml = renderSubjectTreeGrid({
     subjectsById,
@@ -386,7 +452,13 @@ export function renderSituationGridView(situation, subjects = [], options = {}) 
 
   return `
     <section class="project-situation-alt-view project-situation-alt-view--grid" aria-label="Vue grille">
-      <section class="project-situation-grid situation-grid" data-situation-grid="${escapeHtml(normalizedSituationId)}">
+      <section
+        class="project-situation-grid situation-grid"
+        data-situation-grid="${escapeHtml(normalizedSituationId)}"
+        data-situation-grid-project-id="${escapeHtml(normalizedProjectId)}"
+        data-situation-grid-scope="${escapeHtml(columnWidthsScopeKey)}"
+        style="${escapeHtml(gridContainerStyle)}"
+      >
         <div class="project-situation-grid__scroll situation-grid__scroll">
           ${renderGridHeaderRow()}
           <div class="project-situation-grid__body situation-grid__body" role="rowgroup">
@@ -402,6 +474,8 @@ export function __situationGridTestUtils() {
   return {
     resolveSituationTreeData,
     getSubjectProgress,
-    getKanbanStatusMeta
+    getKanbanStatusMeta,
+    normalizeSituationGridColumnWidths,
+    buildSituationGridColumnWidthsScopeKey
   };
 }

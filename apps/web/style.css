@@ -10051,7 +10051,15 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
 
 .project-situation-grid,
 .situation-grid{
-  --situation-grid-cols:minmax(320px,2fr) minmax(160px,1fr) minmax(160px,1fr) minmax(180px,1fr) minmax(220px,1.2fr) minmax(220px,1.2fr) minmax(120px,.8fr) minmax(160px,1fr);
+  --situation-grid-col-title:420px;
+  --situation-grid-col-assignees:200px;
+  --situation-grid-col-kanban:180px;
+  --situation-grid-col-progress:220px;
+  --situation-grid-col-labels:240px;
+  --situation-grid-col-objectives:240px;
+  --situation-grid-col-priority:120px;
+  --situation-grid-col-dates:180px;
+  --situation-grid-cols:var(--situation-grid-col-title) var(--situation-grid-col-assignees) var(--situation-grid-col-kanban) var(--situation-grid-col-progress) var(--situation-grid-col-labels) var(--situation-grid-col-objectives) var(--situation-grid-col-priority) var(--situation-grid-col-dates);
   width:100%;
   min-height:0;
   height:100%;
@@ -10079,6 +10087,7 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
 
 .project-situation-grid__head-cell,
 .situation-grid__head-cell{
+  position:relative;
   min-height:32px;
   padding:0 16px;
   display:flex;
@@ -10087,6 +10096,44 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   font-weight:500;
   color:var(--fgColor-muted, #8b949e);
   border-right:1px solid var(--borderColor-default, #30363d);
+}
+
+.situation-grid__head-cell-label{
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+.situation-grid__resize-handle{
+  position:absolute;
+  top:0;
+  right:-5px;
+  width:10px;
+  height:100%;
+  border:none;
+  padding:0;
+  margin:0;
+  background:transparent;
+  cursor:col-resize;
+  z-index:3;
+}
+
+.situation-grid__resize-handle::before{
+  content:"";
+  position:absolute;
+  top:8px;
+  bottom:8px;
+  left:4px;
+  width:1px;
+  background:var(--borderColor-default, #30363d);
+  opacity:.65;
+}
+
+.situation-grid__resize-handle:hover::before,
+.situation-grid__resize-handle:focus-visible::before{
+  background:var(--fgColor-accent, #2f81f7);
+  opacity:1;
 }
 
 .project-situation-grid__body,

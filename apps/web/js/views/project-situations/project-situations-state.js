@@ -94,6 +94,9 @@ export function createProjectSituationsState({ store }) {
     if (!view.kanbanStatusBySituationId || typeof view.kanbanStatusBySituationId !== "object" || Array.isArray(view.kanbanStatusBySituationId)) {
       view.kanbanStatusBySituationId = {};
     }
+    if (!view.gridColumnWidthsByScope || typeof view.gridColumnWidthsByScope !== "object" || Array.isArray(view.gridColumnWidthsByScope)) {
+      view.gridColumnWidthsByScope = {};
+    }
     if (typeof view.selectedSituationLayout !== "string") {
       view.selectedSituationLayout = "tableau";
     }
