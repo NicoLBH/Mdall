@@ -274,15 +274,25 @@ export function renderSelectDropdownHost({
   const explicitSubject = explicitSubjectId && typeof resolveSubjectById === "function"
     ? resolveSubjectById(explicitSubjectId)
     : null;
+  const fallbackExplicitSubject = !explicitSubject && explicitSubjectId
+    ? { id: explicitSubjectId }
+    : null;
   const explicitKanbanSubjectId = String(kanbanDropdown.subjectId || "").trim();
   const explicitKanbanSubject = !explicitSubject && explicitKanbanSubjectId && typeof resolveSubjectById === "function"
     ? resolveSubjectById(explicitKanbanSubjectId)
     : null;
+  const fallbackExplicitKanbanSubject = !explicitKanbanSubject && explicitKanbanSubjectId
+    ? { id: explicitKanbanSubjectId }
+    : null;
   const selection = explicitSubject
     ? { type: "sujet", item: explicitSubject }
+    : fallbackExplicitSubject
+      ? { type: "sujet", item: fallbackExplicitSubject }
     : explicitKanbanSubject
       ? { type: "sujet", item: explicitKanbanSubject }
-    : getScopedSelection?.(root);
+      : fallbackExplicitKanbanSubject
+        ? { type: "sujet", item: fallbackExplicitKanbanSubject }
+      : getScopedSelection?.(root);
   if (field) {
     if (selection?.type !== "sujet") {
       hideSelectDropdownHost(host);
@@ -292,7 +302,7 @@ export function renderSelectDropdownHost({
     host.setAttribute("aria-hidden", "false");
     return host;
   }
-  if (String(kanbanDropdown.subjectId || "") === String(selection.item.id || "") && String(kanbanDropdown.situationId || "")) {
+  if (String(kanbanDropdown.subjectId || "") === String(selection?.item?.id || "") && String(kanbanDropdown.situationId || "")) {
     host.innerHTML = renderKanbanDropdown(selection.item.id, String(kanbanDropdown.situationId || ""));
     host.setAttribute("aria-hidden", "false");
     return host;

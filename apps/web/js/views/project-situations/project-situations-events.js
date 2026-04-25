@@ -147,6 +147,7 @@ export function createProjectSituationsEvents({
       subjectId: state.subjectId,
       situationId: state.situationId
     }));
+    state.anchor?.classList?.remove?.("situation-grid__editable-trigger--active");
     if (state.anchor?.setAttribute) state.anchor.setAttribute("aria-expanded", "false");
     state.open = false;
     state.field = "";
@@ -182,6 +183,7 @@ export function createProjectSituationsEvents({
     state.situationId = String(situationId || "").trim();
     state.anchor = anchor;
     if (host?.dataset) host.dataset.situationGridOwned = "1";
+    anchor.classList?.add?.("situation-grid__editable-trigger--active");
     anchor.setAttribute("aria-expanded", "true");
     logSituationGridDropdown("open", buildSituationGridDropdownDebugPayload({
       field: state.field,
@@ -254,6 +256,16 @@ export function createProjectSituationsEvents({
     return String(actionNode?.getAttribute(attrName) || "").trim();
   }
 
+  function findSituationGridEditAnchor(root, { field = "", subjectId = "", situationId = "" } = {}) {
+    const normalizedField = String(field || "").trim().toLowerCase();
+    const normalizedSubjectId = String(subjectId || "").trim();
+    const normalizedSituationId = String(situationId || "").trim();
+    if (!root || !normalizedField || !normalizedSubjectId) return null;
+    return [...root.querySelectorAll(`[data-situation-grid-edit-cell="${normalizedField}"]`)]
+      .find((node) => String(node.getAttribute("data-situation-grid-subject-id") || "").trim() === normalizedSubjectId
+        && String(node.getAttribute("data-situation-grid-situation-id") || "").trim() === normalizedSituationId) || null;
+  }
+
   async function handleSharedDropdownAction(root, actionNode, event = null) {
     const state = ensureSituationGridCellDropdownState();
     const subjectId = String(state.subjectId || actionNode?.getAttribute("data-subject-id") || "").trim();
@@ -279,7 +291,8 @@ export function createProjectSituationsEvents({
       action = toggleSubjectObjectiveFromSharedDropdown;
     }
     if (!actionType) return false;
-    closeSituationGridCellDropdown();
+    const shouldKeepOpen = actionType === "assignee";
+    if (!shouldKeepOpen) closeSituationGridCellDropdown();
     if (!value) return true;
 
     const payload = {
@@ -326,7 +339,14 @@ export function createProjectSituationsEvents({
       const success = await action?.(subjectId, value, { root, skipRerender: true });
       if (success === true) {
         logSituationGridDropdown("shared-action:success", payload);
+        if (!shouldKeepOpen) {
+          rerender(root);
+          return true;
+        }
         rerender(root);
+        const refreshedRoot = resolveSituationGridDropdownRoot();
+        const anchor = findSituationGridEditAnchor(refreshedRoot, { field, subjectId, situationId });
+        if (anchor) openSituationGridCellDropdown(refreshedRoot, { field, anchor, subjectId, situationId });
         return true;
       }
       logSituationGridDropdown("shared-action:false-result", payload);
