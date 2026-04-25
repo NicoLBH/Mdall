@@ -1,6 +1,7 @@
 import { escapeHtml } from "../../utils/escape-html.js";
 import { svgIcon } from "../../ui/icons.js";
 import { renderSubjectTreeGrid } from "../shared/subject-tree-grid.js";
+import { buildSubjectMetaAnchorKey } from "../ui/select-dropdown-controller.js";
 
 const GRID_COLUMN_DEFINITIONS = [
   { key: "title", label: "Titre", minWidth: 320, className: "title" },
@@ -187,6 +188,16 @@ function getSubjectDisplayIdentifier(subject = {}) {
   return subjectId ? `#${subjectId}` : "";
 }
 
+function getSituationGridMetaAnchorKey(field = "", subjectId = "") {
+  return buildSubjectMetaAnchorKey({
+    field,
+    scope: "situation-grid",
+    scopeHost: "main",
+    subjectId,
+    instance: "situation-grid"
+  });
+}
+
 function getSubjectProgress(subject, subjectsById = {}, childrenBySubjectId = {}) {
   const subjectId = normalizeId(subject?.id);
   const childIds = Array.isArray(childrenBySubjectId?.[subjectId]) ? childrenBySubjectId[subjectId] : [];
@@ -229,6 +240,7 @@ function renderAssigneesCell(subjectId, rawSubjectsResult = {}, store = {}) {
         class="situation-grid__editable-trigger situation-grid__editable-trigger--empty"
         data-situation-grid-edit-cell="assignees"
         data-situation-grid-subject-id="${escapeHtml(subjectId)}"
+        data-subject-meta-anchor="${escapeHtml(getSituationGridMetaAnchorKey("assignees", subjectId))}"
         aria-haspopup="menu"
         aria-expanded="false"
         title="Modifier les assignés"
@@ -249,6 +261,7 @@ function renderAssigneesCell(subjectId, rawSubjectsResult = {}, store = {}) {
       class="situation-grid__editable-trigger"
       data-situation-grid-edit-cell="assignees"
       data-situation-grid-subject-id="${escapeHtml(subjectId)}"
+      data-subject-meta-anchor="${escapeHtml(getSituationGridMetaAnchorKey("assignees", subjectId))}"
       aria-haspopup="menu"
       aria-expanded="false"
       title="Modifier les assignés"
@@ -281,6 +294,7 @@ function renderKanbanCell(subjectId, situationId, store) {
       data-situation-grid-edit-cell="kanban"
       data-situation-grid-subject-id="${escapeHtml(subjectId)}"
       data-situation-grid-situation-id="${escapeHtml(situationId)}"
+      data-subject-kanban-anchor="${escapeHtml(`${subjectId}::${situationId}`)}"
       aria-haspopup="menu"
       aria-expanded="false"
       title="Modifier le statut kanban"
@@ -314,6 +328,7 @@ function renderLabelsCell(subjectId, rawSubjectsResult = {}) {
         class="situation-grid__editable-trigger situation-grid__editable-trigger--empty"
         data-situation-grid-edit-cell="labels"
         data-situation-grid-subject-id="${escapeHtml(subjectId)}"
+        data-subject-meta-anchor="${escapeHtml(getSituationGridMetaAnchorKey("labels", subjectId))}"
         aria-haspopup="menu"
         aria-expanded="false"
         title="Modifier les labels"
@@ -334,6 +349,7 @@ function renderLabelsCell(subjectId, rawSubjectsResult = {}) {
         class="situation-grid__editable-trigger situation-grid__editable-trigger--empty"
         data-situation-grid-edit-cell="labels"
         data-situation-grid-subject-id="${escapeHtml(subjectId)}"
+        data-subject-meta-anchor="${escapeHtml(getSituationGridMetaAnchorKey("labels", subjectId))}"
         aria-haspopup="menu"
         aria-expanded="false"
         title="Modifier les labels"
@@ -352,6 +368,7 @@ function renderLabelsCell(subjectId, rawSubjectsResult = {}) {
       class="situation-grid__editable-trigger"
       data-situation-grid-edit-cell="labels"
       data-situation-grid-subject-id="${escapeHtml(subjectId)}"
+      data-subject-meta-anchor="${escapeHtml(getSituationGridMetaAnchorKey("labels", subjectId))}"
       aria-haspopup="menu"
       aria-expanded="false"
       title="Modifier les labels"
@@ -379,6 +396,7 @@ function renderObjectivesCell(subjectId, rawSubjectsResult = {}) {
         class="situation-grid__editable-trigger situation-grid__editable-trigger--empty"
         data-situation-grid-edit-cell="objectives"
         data-situation-grid-subject-id="${escapeHtml(subjectId)}"
+        data-subject-meta-anchor="${escapeHtml(getSituationGridMetaAnchorKey("objectives", subjectId))}"
         aria-haspopup="menu"
         aria-expanded="false"
         title="Modifier les objectifs"
@@ -399,6 +417,7 @@ function renderObjectivesCell(subjectId, rawSubjectsResult = {}) {
         class="situation-grid__editable-trigger situation-grid__editable-trigger--empty"
         data-situation-grid-edit-cell="objectives"
         data-situation-grid-subject-id="${escapeHtml(subjectId)}"
+        data-subject-meta-anchor="${escapeHtml(getSituationGridMetaAnchorKey("objectives", subjectId))}"
         aria-haspopup="menu"
         aria-expanded="false"
         title="Modifier les objectifs"
@@ -417,6 +436,7 @@ function renderObjectivesCell(subjectId, rawSubjectsResult = {}) {
       class="situation-grid__editable-trigger"
       data-situation-grid-edit-cell="objectives"
       data-situation-grid-subject-id="${escapeHtml(subjectId)}"
+      data-subject-meta-anchor="${escapeHtml(getSituationGridMetaAnchorKey("objectives", subjectId))}"
       aria-haspopup="menu"
       aria-expanded="false"
       title="Modifier les objectifs"
