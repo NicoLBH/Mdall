@@ -554,7 +554,7 @@ export function renderSituationGridView(situation, subjects = [], options = {}) 
     childrenBySubjectId,
     rootSubjectIds,
     expandedSubjectIds,
-    dndMode: "none",
+    dndMode: "all-levels",
     rowClassName: "situation-grid__row project-situation-grid__row",
     escapeHtml,
     context: {

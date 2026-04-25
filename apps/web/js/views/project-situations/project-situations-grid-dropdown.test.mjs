@@ -47,3 +47,16 @@ test("la fermeture extérieure utilise closeSituationGridCellDropdown et closeSh
   assert.match(eventsSource, /if \(shouldIgnoreOutsideClose\(eventTarget, state\)\) return;/);
   assert.match(eventsSource, /closeSituationGridCellDropdown\(\);/);
 });
+
+test("la grille situation bind un DnD multi-niveaux avec instrumentation dédiée", () => {
+  assert.match(eventsSource, /function bindSituationGridDnd\(root\)/);
+  assert.match(eventsSource, /data-subissue-sortable-row='true'/);
+  assert.match(eventsSource, /logSituationGridDnd\("dragstart"/);
+  assert.match(eventsSource, /logSituationGridDnd\("dragover"/);
+  assert.match(eventsSource, /logSituationGridDnd\("drop"/);
+  assert.match(eventsSource, /logSituationGridDnd\("persist-success"/);
+  assert.match(eventsSource, /logSituationGridDnd\("persist-error"/);
+  assert.match(eventsSource, /await setSituationGridSubjectParent\?\.\(sourceId, nextParentId \|\| null\);/);
+  assert.match(eventsSource, /await reorderSituationGridSubjectChildren\?\.\(nextParentId, nextTargetSiblings\);/);
+  assert.match(eventsSource, /bindSituationGridDnd\(root\);/);
+});
