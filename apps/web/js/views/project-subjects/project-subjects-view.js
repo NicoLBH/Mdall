@@ -20,6 +20,7 @@ import { renderCommentComposer } from "../ui/comment-composer.js";
 import { renderSubjectMarkdownToolbar } from "../ui/subject-rich-editor.js";
 import { renderSubjectAttachmentsPreviewList } from "./project-subjects-attachments-ui.js";
 import { renderSettingsModal } from "../ui/settings-modal.js";
+import { renderSubjectTreeGrid } from "../shared/subject-tree-grid.js";
 export function createProjectSubjectsView(deps) {
   const {
     store,
@@ -2408,30 +2409,38 @@ function renderSubIssuesForSujet(sujet, options = {}) {
       return uiState.rightSubissuesExpandedSubjectIds;
     })();
   const openMenuId = String(firstNonEmpty(options.openMenuId, getSubjectsViewState().rightSubissueMenuOpenId, ""));
-  const rows = [];
-  const walkSubissueTree = (subjectNode, depth = 0, parentId = "") => {
-    const subjectId = String(subjectNode?.id || "");
-    if (!subjectId) return;
-    const nestedChildren = getChildSubjectList(subjectNode);
-    const hasChildren = nestedChildren.length > 0;
-    const isExpanded = hasChildren && expandedIds.has(subjectId);
-    const canDrag = depth === 0;
-    const isRowMenuOpen = openMenuId === subjectId;
-    const nestedSpacerCell = depth > 0
-      ? `<div class="cell cell-subissue-drag-spacer" style="width:${depth * 24}px" aria-hidden="true"></div>`
-      : "";
+  const subjectsById = {};
+  const childrenBySubjectId = {};
+  const collectTreeNodes = (nodes = []) => {
+    nodes.forEach((node) => {
+      const nodeId = String(node?.id || "");
+      if (!nodeId || subjectsById[nodeId]) return;
+      subjectsById[nodeId] = node;
+      const nestedChildren = getChildSubjectList(node);
+      childrenBySubjectId[nodeId] = nestedChildren.map((child) => String(child?.id || "")).filter(Boolean);
+      collectTreeNodes(nestedChildren);
+    });
+  };
+  collectTreeNodes(childSubjects);
 
-    rows.push(`
-      <div
-        class="issue-row issue-row--pb click ${sujetRowClass}${canDrag ? " subissues-sortable-row" : " subissues-tree-row"}"
-        data-sujet-id="${escapeHtml(subjectId)}"
-        ${canDrag ? `data-subissue-sortable-row="true"` : ""}
-        data-subissue-tree-row="${escapeHtml(subjectId)}"
-        data-subissue-depth="${depth}"
-        data-parent-subject-id="${escapeHtml(String(parentId || sujet?.id || ""))}"
-        data-child-subject-id="${escapeHtml(subjectId)}"
-        draggable="${canDrag ? "true" : "false"}"
-      >
+  const rows = renderSubjectTreeGrid({
+    subjectsById,
+    childrenBySubjectId,
+    rootSubjectIds: childSubjects.map((childSubject) => String(childSubject?.id || "")).filter(Boolean),
+    expandedSubjectIds: expandedIds,
+    dndMode: "first-level",
+    rowClassName: sujetRowClass,
+    escapeHtml,
+    context: {
+      rootParentId: String(sujet?.id || "")
+    },
+    getSubjectStatus: (subjectId) => getEffectiveSujetStatus(subjectId),
+    renderTitleCell: ({ subject, subjectId, depth, hasChildren, isExpanded, canDrag }) => {
+      const nestedSpacerCell = depth > 0
+        ? `<div class="cell cell-subissue-drag-spacer" style="width:${depth * 24}px" aria-hidden="true"></div>`
+        : "";
+      const nestedChildren = getChildSubjectList(subject);
+      return `
         <div class="cell cell-subissue-drag-handle">
           ${canDrag
             ? `<button type="button" class="subissue-drag-handle" data-subissue-drag-handle aria-label="Réordonner le sous-sujet">
@@ -2450,9 +2459,14 @@ function renderSubIssuesForSujet(sujet, options = {}) {
         <div class="subissue-row-main">
           <div class="cell cell-theme cell-theme--full">
             ${issueIcon(getEffectiveSujetStatus(subjectId))}
-            <span class="theme-text theme-text--pb">${escapeHtml(firstNonEmpty(subjectNode.title, subjectId, ""))}</span>
-            ${renderSubissueInlineMetaHtml(subjectNode, nestedChildren)}
+            <span class="theme-text theme-text--pb">${escapeHtml(firstNonEmpty(subject.title, subjectId, ""))}</span>
+            ${renderSubissueInlineMetaHtml(subject, nestedChildren)}
           </div>
+      `;
+    },
+    renderExtraCells: ({ subjectId }) => {
+      const isRowMenuOpen = openMenuId === subjectId;
+      return `
           <div class="cell cell-subissue-assignees-value">
             ${renderSubissueAssigneesCellHtml(subjectId)}
           </div>
@@ -2471,18 +2485,13 @@ function renderSubIssuesForSujet(sujet, options = {}) {
               : ""}
           </div>
         </div>
-      </div>
-    `);
-
-    if (!isExpanded) return;
-    nestedChildren.forEach((nestedChild) => walkSubissueTree(nestedChild, depth + 1, subjectId));
-  };
-
-  childSubjects.forEach((childSujet) => walkSubissueTree(childSujet, 0, String(sujet?.id || "")));
+      `;
+    }
+  });
 
   const body = renderSubIssuesTable({
     className: "issues-table subissues-table subissues-table--sortable",
-    rowsHtml: rows.join(""),
+    rowsHtml: rows,
     emptyTitle: "Aucun sous-sujet"
   });
 
