@@ -362,6 +362,12 @@ function renderLabelsCell(subjectId, rawSubjectsResult = {}) {
 
   const visible = labels.slice(0, 2);
   const overflow = Math.max(0, labels.length - visible.length);
+  const getLabelBadgeStyle = (label) => {
+    const border = firstNonEmpty(label?.border_color, label?.borderColor, label?.text_color, label?.textColor, label?.hex_color, "#656d76");
+    const background = firstNonEmpty(label?.background_color, label?.backgroundColor, `${border}22`, "#21262d");
+    const text = firstNonEmpty(label?.text_color, label?.textColor, label?.hex_color, "#d0d7de");
+    return `--subject-label-border:${escapeHtml(border)};--subject-label-bg:${escapeHtml(background)};--subject-label-fg:${escapeHtml(text)};`;
+  };
   return `
     <button
       type="button"
@@ -376,7 +382,7 @@ function renderLabelsCell(subjectId, rawSubjectsResult = {}) {
       <span class="situation-grid__labels">
       ${visible.map((label) => {
         const labelName = firstNonEmpty(label?.name, label?.label, label?.key, label?.id, "Label");
-        return `<span class="subject-label-badge">${escapeHtml(labelName)}</span>`;
+        return `<span class="subject-label-badge" style="${getLabelBadgeStyle(label)}">${escapeHtml(labelName)}</span>`;
       }).join("")}
       ${overflow > 0 ? `<span class="situation-grid__pill-overflow mono">+${overflow}</span>` : ""}
       </span>

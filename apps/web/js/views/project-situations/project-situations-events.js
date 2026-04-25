@@ -140,6 +140,9 @@ export function createProjectSituationsEvents({
 
   function closeSituationGridCellDropdown() {
     const state = ensureSituationGridCellDropdownState();
+    const scrollNode = state.anchor?.closest?.(".project-situation-grid__scroll, .situation-grid__scroll") || null;
+    const preservedScrollTop = Number(scrollNode?.scrollTop || 0);
+    const preservedScrollLeft = Number(scrollNode?.scrollLeft || 0);
     const host = document.getElementById("subjectMetaDropdownHost");
     if (host?.dataset) delete host.dataset.situationGridOwned;
     logSituationGridDropdown("close", buildSituationGridDropdownDebugPayload({
@@ -147,7 +150,7 @@ export function createProjectSituationsEvents({
       subjectId: state.subjectId,
       situationId: state.situationId
     }));
-    state.anchor?.classList?.remove?.("situation-grid__editable-trigger--active");
+    state.anchor?.closest?.(".situation-grid__cell")?.classList?.remove?.("situation-grid__cell--active");
     if (state.anchor?.setAttribute) state.anchor.setAttribute("aria-expanded", "false");
     state.open = false;
     state.field = "";
@@ -155,6 +158,10 @@ export function createProjectSituationsEvents({
     state.situationId = "";
     state.anchor = null;
     closeSharedSubjectDropdowns?.();
+    if (scrollNode) {
+      scrollNode.scrollTop = preservedScrollTop;
+      scrollNode.scrollLeft = preservedScrollLeft;
+    }
   }
 
   function setSituationGridDropdownRoot(root) {
@@ -183,7 +190,7 @@ export function createProjectSituationsEvents({
     state.situationId = String(situationId || "").trim();
     state.anchor = anchor;
     if (host?.dataset) host.dataset.situationGridOwned = "1";
-    anchor.classList?.add?.("situation-grid__editable-trigger--active");
+    anchor.closest?.(".situation-grid__cell")?.classList?.add?.("situation-grid__cell--active");
     anchor.setAttribute("aria-expanded", "true");
     logSituationGridDropdown("open", buildSituationGridDropdownDebugPayload({
       field: state.field,
@@ -532,6 +539,10 @@ export function createProjectSituationsEvents({
     setSituationGridDropdownRoot(root);
     root.querySelectorAll("[data-situation-grid-edit-cell]").forEach((node) => {
       node.addEventListener("click", (event) => {
+        const caretNode = event.target instanceof Element
+          ? event.target.closest(".situation-grid__editable-caret")
+          : null;
+        if (!caretNode) return;
         event.preventDefault();
         event.stopPropagation();
         const field = String(node.getAttribute("data-situation-grid-edit-cell") || "").trim().toLowerCase();

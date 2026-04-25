@@ -1789,6 +1789,7 @@ function buildSubjectMetaMenuItems(subject, field) {
     const selectedAssigneeIds = new Set(getSubjectSidebarMeta(subject.id).assignees.map((value) => String(value || "")));
     const collaborators = getActiveProjectCollaborators()
       .filter((collaborator) => matchSearch([collaborator.name, collaborator.role, collaborator.roleGroupLabel, collaborator.email], query));
+    const isLoadingAssignees = collaboratorsHydrationInFlight && collaborators.length === 0;
 
     const items = collaborators.map((collaborator) => ({
       key: collaborator.id,
@@ -1826,7 +1827,8 @@ function buildSubjectMetaMenuItems(subject, field) {
 
     return {
       groupedSections,
-      items
+      items,
+      isLoadingAssignees
     };
   }
 
@@ -2003,7 +2005,7 @@ function renderSubjectMetaDropdown(subject, field) {
   const query = String(dropdownState.query || "");
 
   if (field === "assignees") {
-    const { groupedSections = [] } = buildSubjectMetaMenuItems(subject, field);
+    const { groupedSections = [], isLoadingAssignees = false } = buildSubjectMetaMenuItems(subject, field);
     return `
       <div class="subject-meta-dropdown gh-menu gh-menu--open" role="dialog">
         <div class="subject-meta-dropdown__title">Sélectionner des assignés</div>
@@ -2013,7 +2015,18 @@ function renderSubjectMetaDropdown(subject, field) {
         </div>
         <div class="subject-kanban-dropdown__separator" aria-hidden="true"></div>
         <div class="subject-meta-dropdown__body">
-          ${groupedSections.length
+          ${isLoadingAssignees && !groupedSections.length
+            ? `
+              <section class="select-menu__section">
+                <div class="select-menu__section-body">
+                  <div class="select-menu__empty">
+                    <div class="select-menu__empty-title">Chargement des collaborateurs…</div>
+                    <div class="select-menu__empty-hint"><span class="ui-spinner ui-spinner--sm"><span class="ui-spinner__ring"></span></span></div>
+                  </div>
+                </div>
+              </section>
+            `
+            : groupedSections.length
             ? groupedSections.map((section) => renderSelectMenuSection({
               title: section.title,
               items: section.items,
