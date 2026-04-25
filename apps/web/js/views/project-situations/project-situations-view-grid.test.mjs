@@ -102,6 +102,7 @@ test("renderSituationGridView utilise le statut kanban de la situation et évite
 
   assert.match(html, /En cours/);
   assert.match(html, /data-situation-grid-edit-cell="kanban"/);
+  assert.match(html, /data-situation-grid-edit-cell="assignees"/);
   assert.match(html, /situation-grid__editable-caret/);
   assert.doesNotMatch(html, /undefined/);
 });

@@ -954,6 +954,79 @@ export function openSituationDrilldownFromSelection(...args) {
   return projectSubjectDrilldown.openDrilldownFromSituation(...args);
 }
 
+export function openSharedSubjectMetaDropdown({
+  root = document,
+  field = "",
+  subjectId = "",
+  anchor = null,
+  scope = "main",
+  scopeHost = "main",
+  instanceKey = "external",
+  openedFrom = "external"
+} = {}) {
+  const normalizedField = String(field || "").trim();
+  const normalizedSubjectId = String(subjectId || "").trim();
+  if (!normalizedField || !normalizedSubjectId) return false;
+  projectSubjectsView.dropdownController?.openMeta?.({
+    field: normalizedField,
+    scope,
+    scopeHost,
+    subjectId: normalizedSubjectId,
+    anchor,
+    instanceKey,
+    openedFrom
+  });
+  renderSubjectMetaDropdownHost(root);
+  syncSubjectMetaDropdownPosition(root);
+  return true;
+}
+
+export function openSharedSubjectKanbanDropdown({
+  root = document,
+  subjectId = "",
+  situationId = ""
+} = {}) {
+  const normalizedSubjectId = String(subjectId || "").trim();
+  const normalizedSituationId = String(situationId || "").trim();
+  if (!normalizedSubjectId || !normalizedSituationId) return false;
+  projectSubjectsView.dropdownController?.openKanban?.({
+    subjectId: normalizedSubjectId,
+    situationId: normalizedSituationId
+  });
+  renderSubjectMetaDropdownHost(root);
+  syncSubjectMetaDropdownPosition(root);
+  return true;
+}
+
+export function closeSharedSubjectDropdowns() {
+  closeSubjectMetaDropdown();
+  closeSubjectKanbanDropdown();
+}
+
+export function setSharedSubjectMetaDropdownQuery(query = "", root = document) {
+  projectSubjectsView.dropdownController?.setMetaQuery?.(query);
+  renderSubjectMetaDropdownHost(root);
+  syncSubjectMetaDropdownPosition(root);
+}
+
+export function setSharedSubjectKanbanDropdownQuery(query = "", root = document) {
+  projectSubjectsView.dropdownController?.setKanbanQuery?.(query);
+  renderSubjectMetaDropdownHost(root);
+  syncSubjectMetaDropdownPosition(root);
+}
+
+export function toggleSubjectAssigneeFromSharedDropdown(...args) {
+  return toggleSubjectAssignee(...args);
+}
+
+export function toggleSubjectLabelFromSharedDropdown(...args) {
+  return toggleSubjectLabel(...args);
+}
+
+export function toggleSubjectObjectiveFromSharedDropdown(...args) {
+  return toggleSubjectObjective(...args);
+}
+
 let collaboratorsHydrationInFlight = null;
 
 function ensureSubjectsCollaboratorsLoaded() {

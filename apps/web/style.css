@@ -10234,19 +10234,6 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   flex:0 0 auto;
 }
 
-.situation-grid__dropdown-host{
-  position:fixed;
-  inset:0;
-  pointer-events:none;
-  z-index:180;
-}
-
-.situation-grid__dropdown-panel{
-  position:absolute;
-  pointer-events:auto;
-  width:min(360px, calc(100vw - 16px));
-}
-
 .situation-grid__inline-error{
   margin:8px;
 }

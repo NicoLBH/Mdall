@@ -40,7 +40,15 @@ import {
   getSujetKanbanStatusForSituation,
   setSujetKanbanStatusForSituation,
   openSubjectDrilldownFromSituation,
-  openSituationDrilldownFromSelection
+  openSituationDrilldownFromSelection,
+  openSharedSubjectMetaDropdown,
+  openSharedSubjectKanbanDropdown,
+  closeSharedSubjectDropdowns,
+  setSharedSubjectMetaDropdownQuery,
+  setSharedSubjectKanbanDropdownQuery,
+  toggleSubjectAssigneeFromSharedDropdown,
+  toggleSubjectLabelFromSharedDropdown,
+  toggleSubjectObjectiveFromSharedDropdown
 } from "./project-subjects.js";
 
 const { uiState, ensureSituationsViewState } = createProjectSituationsState({ store });
@@ -431,6 +439,14 @@ const { bindEvents } = createProjectSituationsEvents({
   loadSituationSelection,
   loadSituationInsightsData,
   openSituationDrilldownFromSelection,
+  openSharedSubjectMetaDropdown: (...args) => openSharedSubjectMetaDropdown(...args),
+  openSharedSubjectKanbanDropdown: (...args) => openSharedSubjectKanbanDropdown(...args),
+  closeSharedSubjectDropdowns: (...args) => closeSharedSubjectDropdowns(...args),
+  setSharedSubjectMetaDropdownQuery: (...args) => setSharedSubjectMetaDropdownQuery(...args),
+  setSharedSubjectKanbanDropdownQuery: (...args) => setSharedSubjectKanbanDropdownQuery(...args),
+  toggleSubjectAssigneeFromSharedDropdown: (...args) => toggleSubjectAssigneeFromSharedDropdown(...args),
+  toggleSubjectLabelFromSharedDropdown: (...args) => toggleSubjectLabelFromSharedDropdown(...args),
+  toggleSubjectObjectiveFromSharedDropdown: (...args) => toggleSubjectObjectiveFromSharedDropdown(...args),
   setSituationGridKanbanStatus: async (situationId, subjectId, nextStatus) => {
     const normalizedSituationId = String(situationId || "").trim();
     const normalizedSubjectId = String(subjectId || "").trim();

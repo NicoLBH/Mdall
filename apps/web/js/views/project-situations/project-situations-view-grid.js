@@ -222,14 +222,38 @@ function renderAssigneesCell(subjectId, rawSubjectsResult = {}, store = {}) {
     ? rawSubjectsResult.assigneePersonIdsBySubjectId
     : {};
   const assigneeIds = Array.isArray(assigneeMap?.[subjectId]) ? assigneeMap[subjectId].map((value) => normalizeId(value)).filter(Boolean) : [];
-  if (!assigneeIds.length) return "<span class=\"situation-grid__empty-cell\"></span>";
+  if (!assigneeIds.length) {
+    return `
+      <button
+        type="button"
+        class="situation-grid__editable-trigger situation-grid__editable-trigger--empty"
+        data-situation-grid-edit-cell="assignees"
+        data-situation-grid-subject-id="${escapeHtml(subjectId)}"
+        aria-haspopup="menu"
+        aria-expanded="false"
+        title="Modifier les assignés"
+      >
+        <span class="situation-grid__empty-cell"></span>
+        <span class="situation-grid__editable-caret" aria-hidden="true">${svgIcon("chevron-down", { className: "octicon octicon-chevron-down" })}</span>
+      </button>
+    `;
+  }
 
   const collaboratorsById = new Map(getActiveProjectCollaborators(store).map((item) => [item.id, item]));
   const firstAssignees = assigneeIds.slice(0, 3).map((id) => collaboratorsById.get(id) || { id, name: `Collaborateur ${id.slice(0, 8)}`, avatarUrl: "" });
   const overflowCount = Math.max(0, assigneeIds.length - firstAssignees.length);
 
   return `
-    <span class="situation-grid__assignees" aria-label="${escapeHtml(`${assigneeIds.length} assigné(s)`)}">
+    <button
+      type="button"
+      class="situation-grid__editable-trigger"
+      data-situation-grid-edit-cell="assignees"
+      data-situation-grid-subject-id="${escapeHtml(subjectId)}"
+      aria-haspopup="menu"
+      aria-expanded="false"
+      title="Modifier les assignés"
+    >
+      <span class="situation-grid__assignees" aria-label="${escapeHtml(`${assigneeIds.length} assigné(s)`)}">
       ${firstAssignees.map((assignee) => {
         const initials = String(assignee?.name || "U")
           .split(/\s+/)
@@ -242,7 +266,9 @@ function renderAssigneesCell(subjectId, rawSubjectsResult = {}, store = {}) {
           : `<span class="situation-grid__assignee-avatar situation-grid__assignee-avatar--fallback" aria-hidden="true">${escapeHtml(initials)}</span>`;
       }).join("")}
       ${overflowCount > 0 ? `<span class="situation-grid__assignee-overflow mono">+${overflowCount}</span>` : ""}
-    </span>
+      </span>
+      <span class="situation-grid__editable-caret" aria-hidden="true">${svgIcon("chevron-down", { className: "octicon octicon-chevron-down" })}</span>
+    </button>
   `;
 }
 
