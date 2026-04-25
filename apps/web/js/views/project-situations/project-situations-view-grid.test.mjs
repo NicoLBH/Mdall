@@ -103,3 +103,20 @@ test("renderSituationGridView utilise le statut kanban de la situation et évite
   assert.match(html, /En cours/);
   assert.doesNotMatch(html, /undefined/);
 });
+
+test("normalizeSituationGridColumnWidths respecte les largeurs minimales par colonne", () => {
+  const { normalizeSituationGridColumnWidths } = __situationGridTestUtils();
+  const widths = normalizeSituationGridColumnWidths({
+    title: 120,
+    assignees: 400,
+    kanban: "20",
+    labels: 480
+  });
+
+  assert.equal(widths.title, 320);
+  assert.equal(widths.assignees, 400);
+  assert.equal(widths.kanban, 160);
+  assert.equal(widths.progress, 180);
+  assert.equal(widths.labels, 480);
+  assert.equal(widths.objectives, 220);
+});

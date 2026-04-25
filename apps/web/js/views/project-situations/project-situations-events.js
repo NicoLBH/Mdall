@@ -1,5 +1,11 @@
 import { bindLightTabs } from "../ui/light-tabs.js";
 import { renderProjectSituationDrilldown } from "../project-situation-drilldown.js";
+import {
+  buildSituationGridColumnWidthsScopeKey,
+  getSituationGridColumnCssVariables,
+  getSituationGridColumnDefinitions,
+  normalizeSituationGridColumnWidths
+} from "./project-situations-view-grid.js";
 
 function syncSubmitButtonState(button, { submitting = false, title = "" } = {}) {
   if (!button) return;
@@ -43,6 +49,119 @@ export function createProjectSituationsEvents({
   function logSituationInsights(message, payload = {}) {
     if (!isSituationInsightsDebugEnabled()) return;
     console.info(`[situation-insights] ${message}`, payload);
+  }
+
+  function resolveCurrentProjectId() {
+    return String(
+      store?.currentProjectId
+      || store?.projectForm?.projectId
+      || store?.projectForm?.id
+      || ""
+    ).trim();
+  }
+
+  function getGridColumnStorageKey(scopeKey = "") {
+    return scopeKey ? `mdall:situation-grid:column-widths:${scopeKey}` : "";
+  }
+
+  function readStoredGridColumnWidths(scopeKey = "") {
+    const storageKey = getGridColumnStorageKey(scopeKey);
+    if (!storageKey) return null;
+    try {
+      const raw = window.localStorage?.getItem(storageKey);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" ? parsed : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function persistGridColumnWidths(scopeKey = "", widths = {}) {
+    const storageKey = getGridColumnStorageKey(scopeKey);
+    if (!storageKey) return;
+    try {
+      window.localStorage?.setItem(storageKey, JSON.stringify(widths));
+    } catch (_) {
+      // No-op: localStorage may be blocked in private contexts.
+    }
+  }
+
+  function ensureGridColumnWidthsByScope() {
+    if (!store.situationsView || typeof store.situationsView !== "object") store.situationsView = {};
+    if (!store.situationsView.gridColumnWidthsByScope || typeof store.situationsView.gridColumnWidthsByScope !== "object") {
+      store.situationsView.gridColumnWidthsByScope = {};
+    }
+    return store.situationsView.gridColumnWidthsByScope;
+  }
+
+  function applyGridColumnWidthsToNode(gridNode, widths = {}) {
+    if (!gridNode || !gridNode.style) return;
+    const cssVars = getSituationGridColumnCssVariables(widths);
+    Object.entries(cssVars).forEach(([name, value]) => {
+      gridNode.style.setProperty(name, value);
+    });
+  }
+
+  function hydrateSituationGridColumnWidths(gridNode) {
+    if (!gridNode) return;
+    const situationId = String(gridNode.getAttribute("data-situation-grid") || "").trim();
+    if (!situationId) return;
+    const projectId = String(gridNode.getAttribute("data-situation-grid-project-id") || "").trim() || resolveCurrentProjectId();
+    const scopeKey = String(gridNode.getAttribute("data-situation-grid-scope") || "").trim()
+      || buildSituationGridColumnWidthsScopeKey(projectId, situationId);
+    const byScope = ensureGridColumnWidthsByScope();
+    const fromStore = byScope[scopeKey] && typeof byScope[scopeKey] === "object" ? byScope[scopeKey] : null;
+    const fromStorage = readStoredGridColumnWidths(scopeKey);
+    const normalized = normalizeSituationGridColumnWidths(fromStore || fromStorage || {});
+    byScope[scopeKey] = normalized;
+    applyGridColumnWidthsToNode(gridNode, normalized);
+    if (!gridNode.getAttribute("data-situation-grid-scope")) {
+      gridNode.setAttribute("data-situation-grid-scope", scopeKey);
+    }
+  }
+
+  function bindSituationGridColumnResize(root) {
+    const columnsByKey = new Map(getSituationGridColumnDefinitions().map((column) => [column.key, column]));
+    root.querySelectorAll(".situation-grid[data-situation-grid]").forEach((gridNode) => {
+      hydrateSituationGridColumnWidths(gridNode);
+      gridNode.querySelectorAll("[data-situation-grid-resize-handle]").forEach((handle) => {
+        handle.addEventListener("pointerdown", (event) => {
+          const target = event.currentTarget;
+          const columnKey = String(target?.getAttribute("data-situation-grid-resize-handle") || "").trim();
+          const columnMeta = columnsByKey.get(columnKey);
+          if (!columnMeta) return;
+
+          const scopeKey = String(gridNode.getAttribute("data-situation-grid-scope") || "").trim();
+          const byScope = ensureGridColumnWidthsByScope();
+          const scopedWidths = normalizeSituationGridColumnWidths(byScope[scopeKey] || {});
+          byScope[scopeKey] = scopedWidths;
+          const startX = Number(event.clientX) || 0;
+          const initialWidth = Number(scopedWidths[columnKey]) || columnMeta.minWidth;
+
+          const onPointerMove = (moveEvent) => {
+            const pointerX = Number(moveEvent.clientX) || 0;
+            const nextWidth = Math.max(columnMeta.minWidth, Math.round(initialWidth + (pointerX - startX)));
+            scopedWidths[columnKey] = nextWidth;
+            applyGridColumnWidthsToNode(gridNode, scopedWidths);
+          };
+
+          const onPointerUp = () => {
+            window.removeEventListener("pointermove", onPointerMove);
+            window.removeEventListener("pointerup", onPointerUp);
+            window.removeEventListener("pointercancel", onPointerUp);
+            byScope[scopeKey] = normalizeSituationGridColumnWidths(scopedWidths);
+            persistGridColumnWidths(scopeKey, byScope[scopeKey]);
+          };
+
+          event.preventDefault();
+          event.stopPropagation();
+          window.addEventListener("pointermove", onPointerMove);
+          window.addEventListener("pointerup", onPointerUp);
+          window.addEventListener("pointercancel", onPointerUp);
+        });
+      });
+    });
   }
 
   async function refreshInsightsData(root) {
@@ -471,6 +590,8 @@ export function createProjectSituationsEvents({
         rerender(root);
       });
     });
+
+    bindSituationGridColumnResize(root);
 
     bindCreateModalEvents(root);
     bindEditPanelEvents(root);
