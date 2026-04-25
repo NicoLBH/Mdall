@@ -134,3 +134,34 @@ export async function reorderSubjectChildrenInSupabase({ parentSubjectId, ordere
   const rows = await res.json().catch(() => []);
   return Array.isArray(rows) ? rows : [];
 }
+
+export async function reorderRootSubjectsInSupabase({ orderedRootSubjectIds = [] } = {}) {
+  const normalizedRootIds = [...new Set((Array.isArray(orderedRootSubjectIds) ? orderedRootSubjectIds : []).map(normalizeId).filter(Boolean))];
+  if (!normalizedRootIds.length) throw new Error("orderedRootSubjectIds est requis.");
+
+  const updates = normalizedRootIds.map(async (subjectId, index) =>
+    fetch(`${SUPABASE_URL}/rest/v1/subjects?id=eq.${subjectId}`, {
+      method: "PATCH",
+      headers: await buildSupabaseAuthHeaders({
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        Prefer: "return=minimal"
+      }),
+      body: JSON.stringify({
+        parent_subject_id: null,
+        parent_child_order: index + 1
+      })
+    }).then(async (res) => {
+      if (res.ok) return;
+      const text = await res.text().catch(() => "");
+      throw new Error(`Réordonnancement des sujets racine impossible (${res.status}) : ${text}`);
+    })
+  );
+
+  await Promise.all(updates);
+  return normalizedRootIds.map((subjectId, index) => ({
+    subject_id: subjectId,
+    parent_subject_id: null,
+    parent_child_order: index + 1
+  }));
+}

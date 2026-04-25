@@ -14,6 +14,11 @@ import {
 import { renderProjectSituationsRunbar, bindProjectSituationsRunbar } from "./project-situations-runbar.js";
 import { loadFlatSubjectsForCurrentProject } from "../services/project-subjects-supabase.js";
 import {
+  setSubjectParentRelationInSupabase,
+  reorderSubjectChildrenInSupabase,
+  reorderRootSubjectsInSupabase
+} from "../services/subject-parent-relation-service.js";
+import {
   loadSituationsForCurrentProject,
   createSituation,
   updateSituation,
@@ -473,6 +478,33 @@ const { bindEvents } = createProjectSituationsEvents({
       }).catch(() => undefined);
       throw error;
     }
+  },
+  setSituationGridSubjectParent: async (subjectId, parentSubjectId) => {
+    return setSubjectParentRelationInSupabase({
+      subjectId,
+      parentSubjectId,
+      rawSubjectsResult: store.projectSubjectsView?.rawSubjectsResult || null
+    });
+  },
+  reorderSituationGridSubjectChildren: async (parentSubjectId, orderedChildIds = []) => {
+    const normalizedParentId = String(parentSubjectId || "").trim();
+    const normalizedChildIds = [...new Set((Array.isArray(orderedChildIds) ? orderedChildIds : [])
+      .map((value) => String(value || "").trim())
+      .filter(Boolean))];
+    if (!normalizedParentId || !normalizedChildIds.length) return [];
+    return reorderSubjectChildrenInSupabase({
+      parentSubjectId: normalizedParentId,
+      orderedChildIds: normalizedChildIds
+    });
+  },
+  reorderSituationGridRootSubjects: async (orderedRootSubjectIds = []) => {
+    const normalizedRootIds = [...new Set((Array.isArray(orderedRootSubjectIds) ? orderedRootSubjectIds : [])
+      .map((value) => String(value || "").trim())
+      .filter(Boolean))];
+    if (!normalizedRootIds.length) return [];
+    return reorderRootSubjectsInSupabase({
+      orderedRootSubjectIds: normalizedRootIds
+    });
   }
 });
 

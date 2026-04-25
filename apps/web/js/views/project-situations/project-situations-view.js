@@ -455,8 +455,17 @@ export function createProjectSituationsView({
             ${hasSelectedSituation
               ? `${uiState.insightsPanelOpen ? renderSituationInsightsPanel() : (uiState.editPanelOpen ? renderEditSituationPanel() : renderSelectedSituationDetails())}`
               : `
-                <div style="display:flex;justify-content:flex-end;align-items:center;margin:0 0 16px;">
-                  <button type="button" class="gh-btn gh-btn--primary" id="openCreateSituationButton">Nouvelle situation</button>
+                <div class="project-situations__table-toolbar project-page-shell project-page-shell--toolbar">
+                  <div class="project-table-toolbar project-table-toolbar--situations">
+                    <div class="project-table-toolbar__left"></div>
+                    <div class="project-table-toolbar__right">
+                      <div class="project-table-toolbar__group">
+                        <div class="gh-action gh-action--single">
+                          <button type="button" class="gh-btn gh-action__main gh-btn--primary gh-btn--md" id="openCreateSituationButton">Nouvelle situation</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
                 <section class="gh-panel gh-panel--results" aria-label="Results">
                   ${renderSituationsTable()}

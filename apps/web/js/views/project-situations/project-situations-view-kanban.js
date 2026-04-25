@@ -15,13 +15,37 @@ function normalizeIssueLifecycleStatus(status = "") {
   return String(status || "").trim().toLowerCase() === "closed" ? "closed" : "open";
 }
 
-function renderIssueStateIcon(subject) {
+function normalizeId(value) {
+  return String(value || "").trim();
+}
+
+function hasBlockedByRelation(subjectId, store = {}, rawSubjectsResult = {}) {
+  const normalizedSubjectId = normalizeId(subjectId);
+  if (!normalizedSubjectId) return false;
+  const linksBySubjectId = rawSubjectsResult?.linksBySubjectId && typeof rawSubjectsResult.linksBySubjectId === "object"
+    ? rawSubjectsResult.linksBySubjectId
+    : (store?.projectSubjectsView?.linksBySubjectId && typeof store.projectSubjectsView.linksBySubjectId === "object"
+      ? store.projectSubjectsView.linksBySubjectId
+      : {});
+  const scopedLinks = Array.isArray(linksBySubjectId?.[normalizedSubjectId]) ? linksBySubjectId[normalizedSubjectId] : [];
+  const subjectLinks = Array.isArray(store?.projectSubjectsView?.subjectLinks) ? store.projectSubjectsView.subjectLinks : [];
+  return [...scopedLinks, ...subjectLinks].some((link) => {
+    const linkType = String(link?.link_type || "").trim().toLowerCase();
+    if (linkType !== "blocked_by") return false;
+    const sourceId = normalizeId(link?.source_subject_id);
+    return sourceId === normalizedSubjectId;
+  });
+}
+
+function renderIssueStateIcon(subject, { isBlocked = false } = {}) {
   const isClosed = normalizeIssueLifecycleStatus(subject?.status) === "closed";
   return `<span class="issue-status-icon situation-kanban-card__status-icon" aria-hidden="true">${
     isClosed
       ? svgIcon("check-circle", { style: "color: var(--fgColor-done)" })
       : svgIcon("issue-opened", { style: "color: var(--fgColor-open)" })
-  }</span>`;
+  }${isBlocked
+    ? `<span class="subject-status-blocked-indicator situation-kanban-card__status-blocked-indicator" aria-hidden="true">${svgIcon("blocked", { className: "octicon octicon-blocked", width: 12, height: 12 })}</span>`
+    : ""}</span>`;
 }
 
 function getSubjectProgress(subject, subjectsById = {}, childrenBySubjectId = {}) {
@@ -106,6 +130,7 @@ export function createProjectSituationsKanbanView({
               ${cardsByColumn[column.key].length
                 ? cardsByColumn[column.key].map((subject) => {
                     const progress = getSubjectProgress(subject, subjectsById, childrenBySubjectId);
+                    const isBlocked = hasBlockedByRelation(subject?.id, store, rawSubjectsResult);
                     return `
                       <article
                         class="situation-kanban-card"
@@ -117,7 +142,7 @@ export function createProjectSituationsKanbanView({
                       >
                         <div class="situation-kanban-card__meta">
                           <div class="situation-kanban-card__meta-lead">
-                            ${renderIssueStateIcon(subject)}
+                            ${renderIssueStateIcon(subject, { isBlocked })}
                             <span class="mono-small issue-row-meta-text">Mdall #${escapeHtml(subject.id)}</span>
                           </div>
                           ${renderAuthorAvatar(subject, currentUserAvatar)}
