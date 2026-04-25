@@ -10185,6 +10185,13 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   grid-template-columns:var(--situation-grid-cols);
   min-height:40px;
   padding:0;
+  width:max-content;
+  min-width:100%;
+}
+
+.situation-grid__row:hover .situation-grid__cell,
+.situation-grid__row:focus-within .situation-grid__cell{
+  background:var(--bgColor-muted, rgba(110,118,129,.06));
 }
 
 .situation-grid__cell{

@@ -221,14 +221,25 @@ export function createProjectSituationsEvents({
   }
 
   function getKanbanLabel(status = "") {
-    const map = {
-      non_active: "Non activé",
-      to_activate: "À activer",
-      in_progress: "En cours",
-      in_arbitration: "En arbitrage",
-      resolved: "Résolu"
+    const meta = {
+      non_active: { label: "Non activé", bg: "rgba(46, 160, 67, 0.15)", border: "rgb(35, 134, 54)", text: "rgb(63, 185, 80)" },
+      to_activate: { label: "À activer", bg: "rgba(56, 139, 253, 0.1)", border: "rgb(31, 111, 235)", text: "rgb(88, 166, 255)" },
+      in_progress: { label: "En cours", bg: "rgba(187, 128, 9, 0.15)", border: "rgb(158, 106, 3)", text: "rgb(210, 153, 34)" },
+      in_arbitration: { label: "En arbitrage", bg: "rgba(171, 125, 248, 0.15)", border: "rgb(137, 87, 229)", text: "rgb(188, 140, 255)" },
+      resolved: { label: "Résolu", bg: "rgba(219, 109, 40, 0.1)", border: "rgb(189, 86, 29)", text: "rgb(255, 161, 107)" }
     };
-    return map[String(status || "").trim().toLowerCase()] || map.non_active;
+    return (meta[String(status || "").trim().toLowerCase()] || meta.non_active).label;
+  }
+
+  function getKanbanTone(status = "") {
+    const meta = {
+      non_active: { bg: "rgba(46, 160, 67, 0.15)", border: "rgb(35, 134, 54)", text: "rgb(63, 185, 80)" },
+      to_activate: { bg: "rgba(56, 139, 253, 0.1)", border: "rgb(31, 111, 235)", text: "rgb(88, 166, 255)" },
+      in_progress: { bg: "rgba(187, 128, 9, 0.15)", border: "rgb(158, 106, 3)", text: "rgb(210, 153, 34)" },
+      in_arbitration: { bg: "rgba(171, 125, 248, 0.15)", border: "rgb(137, 87, 229)", text: "rgb(188, 140, 255)" },
+      resolved: { bg: "rgba(219, 109, 40, 0.1)", border: "rgb(189, 86, 29)", text: "rgb(255, 161, 107)" }
+    };
+    return meta[String(status || "").trim().toLowerCase()] || meta.non_active;
   }
 
   function patchSituationGridKanbanCell({ root, subjectId = "", situationId = "" } = {}) {
@@ -241,6 +252,10 @@ export function createProjectSituationsEvents({
     const badge = trigger.querySelector(".subject-kanban-badge");
     if (!badge) return;
     badge.textContent = getKanbanLabel(nextStatus);
+    const tone = getKanbanTone(nextStatus);
+    badge.style.setProperty("--subject-kanban-badge-bg", tone.bg);
+    badge.style.setProperty("--subject-kanban-badge-border", tone.border);
+    badge.style.setProperty("--subject-kanban-badge-text", tone.text);
   }
 
   function showSituationGridInlineError(root, message = "") {
