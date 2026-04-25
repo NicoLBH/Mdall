@@ -71,6 +71,19 @@ export function createProjectSituationsEvents({
     console.info(`[situation-insights] ${message}`, payload);
   }
 
+  function isSituationGridDropdownDebugEnabled() {
+    try {
+      return window.localStorage?.getItem("debug:situation-grid-dropdown") === "1";
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function logSituationGridDropdown(message, payload = {}) {
+    if (!isSituationGridDropdownDebugEnabled()) return;
+    console.info(`[situation-grid-dropdown] ${message}`, payload);
+  }
+
   function resolveCurrentProjectId() {
     return String(
       store?.currentProjectId
@@ -95,6 +108,11 @@ export function createProjectSituationsEvents({
 
   function closeSituationGridCellDropdown() {
     const state = ensureSituationGridCellDropdownState();
+    logSituationGridDropdown("close", {
+      field: state.field,
+      subjectId: state.subjectId,
+      situationId: state.situationId
+    });
     if (state.anchor?.setAttribute) state.anchor.setAttribute("aria-expanded", "false");
     state.open = false;
     state.field = "";
@@ -102,6 +120,21 @@ export function createProjectSituationsEvents({
     state.situationId = "";
     state.anchor = null;
     closeSharedSubjectDropdowns?.();
+  }
+
+  function setSituationGridDropdownRoot(root) {
+    if (uiState && typeof uiState === "object") {
+      uiState.situationGridDropdownRoot = root || null;
+    }
+  }
+
+  function resolveSituationGridDropdownRoot() {
+    if (uiState?.situationGridDropdownRoot?.isConnected) return uiState.situationGridDropdownRoot;
+    const state = ensureSituationGridCellDropdownState();
+    if (state.anchor?.isConnected) {
+      return state.anchor.closest(".project-shell__content") || state.anchor.ownerDocument?.querySelector?.(".project-shell__content") || document;
+    }
+    return document.querySelector(".project-shell__content") || document;
   }
 
   function openSituationGridCellDropdown(root, { field = "", anchor = null, subjectId = "", situationId = "" } = {}) {
@@ -114,6 +147,11 @@ export function createProjectSituationsEvents({
     state.situationId = String(situationId || "").trim();
     state.anchor = anchor;
     anchor.setAttribute("aria-expanded", "true");
+    logSituationGridDropdown("open", {
+      field: state.field,
+      subjectId: state.subjectId,
+      situationId: state.situationId
+    });
     if (state.field === "kanban") {
       const opened = openSharedSubjectKanbanDropdown?.({
         root,
@@ -187,21 +225,27 @@ export function createProjectSituationsEvents({
     if (actionNode.matches("[data-subject-assignee-toggle]")) {
       const assigneeId = normalizeGridDropdownTogglePayload(actionNode, "data-subject-assignee-toggle");
       if (!assigneeId) return true;
-      await toggleSubjectAssigneeFromSharedDropdown?.(subjectId, assigneeId, { rerender: false });
+      logSituationGridDropdown("item-click", { type: "assignee", subjectId, situationId: state.situationId, value: assigneeId });
+      logSituationGridDropdown("supabase:before-mutation", { type: "assignee", subjectId, situationId: state.situationId, value: assigneeId });
+      await toggleSubjectAssigneeFromSharedDropdown?.(subjectId, assigneeId, { root, skipRerender: true });
       rerender(root);
       return true;
     }
     if (actionNode.matches("[data-subject-label-toggle]")) {
       const labelKey = normalizeGridDropdownTogglePayload(actionNode, "data-subject-label-toggle");
       if (!labelKey) return true;
-      await toggleSubjectLabelFromSharedDropdown?.(subjectId, labelKey, { rerender: false });
+      logSituationGridDropdown("item-click", { type: "label", subjectId, situationId: state.situationId, value: labelKey });
+      logSituationGridDropdown("supabase:before-mutation", { type: "label", subjectId, situationId: state.situationId, value: labelKey });
+      await toggleSubjectLabelFromSharedDropdown?.(subjectId, labelKey, { root, skipRerender: true });
       rerender(root);
       return true;
     }
     if (actionNode.matches("[data-objective-select]")) {
       const objectiveId = normalizeGridDropdownTogglePayload(actionNode, "data-objective-select");
       if (!objectiveId) return true;
-      await toggleSubjectObjectiveFromSharedDropdown?.(subjectId, objectiveId, { rerender: false });
+      logSituationGridDropdown("item-click", { type: "objective", subjectId, situationId: state.situationId, value: objectiveId });
+      logSituationGridDropdown("supabase:before-mutation", { type: "objective", subjectId, situationId: state.situationId, value: objectiveId });
+      await toggleSubjectObjectiveFromSharedDropdown?.(subjectId, objectiveId, { root, skipRerender: true });
       rerender(root);
       return true;
     }
@@ -313,6 +357,7 @@ export function createProjectSituationsEvents({
   }
 
   function bindSituationGridEditableCells(root) {
+    setSituationGridDropdownRoot(root);
     root.querySelectorAll("[data-situation-grid-edit-cell]").forEach((node) => {
       node.addEventListener("click", (event) => {
         event.preventDefault();
@@ -339,6 +384,7 @@ export function createProjectSituationsEvents({
       document.addEventListener("click", async (event) => {
         const eventTarget = event.target instanceof Element ? event.target : null;
         if (!eventTarget) return;
+        const root = resolveSituationGridDropdownRoot();
         const actionNode = eventTarget.closest(
           "[data-subject-kanban-select],[data-subject-assignee-toggle],[data-subject-label-toggle],[data-objective-select]"
         );
@@ -346,33 +392,39 @@ export function createProjectSituationsEvents({
           const state = ensureSituationGridCellDropdownState();
           if (!state.open) return;
           if (actionNode.matches("[data-subject-kanban-select]")) {
+            const subjectId = String(state.subjectId || "").trim();
+            const situationId = String(state.situationId || "").trim();
             const nextStatus = String(actionNode.getAttribute("data-subject-kanban-select") || "").trim();
-            const previousStatus = String(store?.situationsView?.kanbanStatusBySituationId?.[state.situationId]?.[state.subjectId] || "non_active").trim().toLowerCase();
-            if (!nextStatus || nextStatus === previousStatus) {
+            const previousStatus = String(store?.situationsView?.kanbanStatusBySituationId?.[situationId]?.[subjectId] || "non_active").trim().toLowerCase();
+            logSituationGridDropdown("item-click", { type: "kanban", subjectId, situationId, value: nextStatus });
+            if (!subjectId || !situationId || !nextStatus || nextStatus === previousStatus) {
               closeSituationGridCellDropdown();
               return;
             }
             if (!store.situationsView || typeof store.situationsView !== "object") store.situationsView = {};
             store.situationsView.kanbanStatusBySituationId = {
               ...(store.situationsView.kanbanStatusBySituationId || {}),
-              [state.situationId]: {
-                ...((store.situationsView.kanbanStatusBySituationId || {})[state.situationId] || {}),
-                [state.subjectId]: nextStatus
+              [situationId]: {
+                ...((store.situationsView.kanbanStatusBySituationId || {})[situationId] || {}),
+                [subjectId]: nextStatus
               }
             };
-            patchSituationGridKanbanCell({ root, subjectId: state.subjectId, situationId: state.situationId });
+            patchSituationGridKanbanCell({ root, subjectId, situationId });
             closeSituationGridCellDropdown();
             try {
-              await setSituationGridKanbanStatus?.(state.situationId, state.subjectId, nextStatus);
+              logSituationGridDropdown("supabase:before-mutation", { type: "kanban", subjectId, situationId, value: nextStatus });
+              await setSituationGridKanbanStatus?.(situationId, subjectId, nextStatus);
+              logSituationGridDropdown("supabase:success", { type: "kanban", subjectId, situationId, value: nextStatus });
             } catch (error) {
               store.situationsView.kanbanStatusBySituationId = {
                 ...(store.situationsView.kanbanStatusBySituationId || {}),
-                [state.situationId]: {
-                  ...((store.situationsView.kanbanStatusBySituationId || {})[state.situationId] || {}),
-                  [state.subjectId]: previousStatus
+                [situationId]: {
+                  ...((store.situationsView.kanbanStatusBySituationId || {})[situationId] || {}),
+                  [subjectId]: previousStatus
                 }
               };
-              patchSituationGridKanbanCell({ root, subjectId: state.subjectId, situationId: state.situationId });
+              patchSituationGridKanbanCell({ root, subjectId, situationId });
+              logSituationGridDropdown("supabase:rollback", { type: "kanban", subjectId, situationId, value: previousStatus });
               console.error("situation grid kanban update failed", error);
               showSituationGridInlineError(root, error instanceof Error ? error.message : "La mise à jour du statut kanban a échoué.");
             }
@@ -381,6 +433,7 @@ export function createProjectSituationsEvents({
 
           try {
             await handleSharedDropdownAction(root, actionNode);
+            logSituationGridDropdown("supabase:success", { type: "shared", subjectId: ensureSituationGridCellDropdownState().subjectId, situationId: ensureSituationGridCellDropdownState().situationId });
           } catch (error) {
             console.error("situation grid shared dropdown action failed", error);
             showSituationGridInlineError(root, error instanceof Error ? error.message : "La mise à jour a échoué.");
@@ -401,6 +454,7 @@ export function createProjectSituationsEvents({
       document.addEventListener("input", (event) => {
         const eventTarget = event.target instanceof Element ? event.target : null;
         if (!eventTarget) return;
+        const root = resolveSituationGridDropdownRoot();
         const metaSearch = eventTarget.closest("[data-subject-meta-search]");
         if (metaSearch && ensureSituationGridCellDropdownState().open) {
           setSharedSubjectMetaDropdownQuery?.(metaSearch.value || "", root);

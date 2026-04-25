@@ -13,19 +13,21 @@ test("la grille situation ouvre un dropdown éditable ancré aux cellules", () =
   assert.match(eventsSource, /openSharedSubjectMetaDropdown\?\.\(/);
   assert.match(eventsSource, /openSharedSubjectKanbanDropdown\?\.\(/);
   assert.match(eventsSource, /const eventTarget = event\.target instanceof Element \? event\.target : null;/);
-  assert.match(eventsSource, /document\.addEventListener\(\"pointerdown\", \(event\) => \{/);
+  assert.match(eventsSource, /document\.addEventListener\("pointerdown", \(event\) => \{/);
   assert.match(eventsSource, /document\.addEventListener\("keydown", \(event\) => \{\s*if \(event\.key !== "Escape"\) return;/s);
 });
 
-test("la mise à jour kanban utilise le service dédié avec rollback local", () => {
-  assert.match(eventsSource, /await setSituationGridKanbanStatus\?\.\(state\.situationId, state\.subjectId, nextStatus\)/);
-  assert.match(eventsSource, /store\.situationsView\.kanbanStatusBySituationId = \{[\s\S]*\[state\.subjectId\]: previousStatus/s);
-  assert.match(eventsSource, /showSituationGridInlineError\(root, error instanceof Error \? error\.message : "La mise à jour du statut kanban a échoué\."\)/);
+test("la mise à jour kanban snapshot les ids avant fermeture et rollback avec ces constantes", () => {
+  assert.match(eventsSource, /const subjectId = String\(state\.subjectId \|\| ""\)\.trim\(\);/);
+  assert.match(eventsSource, /const situationId = String\(state\.situationId \|\| ""\)\.trim\(\);/);
+  assert.match(eventsSource, /closeSituationGridCellDropdown\(\);\s*try \{\s*[\s\S]*await setSituationGridKanbanStatus\?\.\(situationId, subjectId, nextStatus\);/s);
+  assert.match(eventsSource, /\[situationId\]: \{[\s\S]*\[subjectId\]: previousStatus/s);
+  assert.match(eventsSource, /patchSituationGridKanbanCell\(\{ root, subjectId, situationId \}\);/);
 });
 
-test("la grille réutilise les actions dropdown mutualisées pour assignés, labels et objectifs", () => {
-  assert.match(eventsSource, /toggleSubjectAssigneeFromSharedDropdown\?\.\(/);
-  assert.match(eventsSource, /toggleSubjectLabelFromSharedDropdown\?\.\(/);
-  assert.match(eventsSource, /toggleSubjectObjectiveFromSharedDropdown\?\.\(/);
-  assert.match(eventsSource, /data-objective-select/);
+test("les actions assignés labels objectifs utilisent skipRerender true et rerender de la grille", () => {
+  assert.match(eventsSource, /toggleSubjectAssigneeFromSharedDropdown\?\.\(subjectId, assigneeId, \{ root, skipRerender: true \}\);/);
+  assert.match(eventsSource, /toggleSubjectLabelFromSharedDropdown\?\.\(subjectId, labelKey, \{ root, skipRerender: true \}\);/);
+  assert.match(eventsSource, /toggleSubjectObjectiveFromSharedDropdown\?\.\(subjectId, objectiveId, \{ root, skipRerender: true \}\);/);
+  assert.match(eventsSource, /await toggleSubjectObjectiveFromSharedDropdown\?\.\([\s\S]*\);\s*rerender\(root\);/s);
 });
