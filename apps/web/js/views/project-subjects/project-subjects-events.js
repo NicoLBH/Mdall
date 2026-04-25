@@ -358,6 +358,23 @@ export function createProjectSubjectsEvents(config) {
     const toggleSubjectBlockingForRelation = getToggleSubjectBlockingForRelation?.();
     const reorderSubjectChildren = getReorderSubjectChildren?.();
 
+    function isSituationGridOwnedDropdown() {
+      const dropdown = getSubjectsViewState()?.subjectMetaDropdown || {};
+      const openedFrom = String(dropdown.openedFrom || "").trim().toLowerCase();
+      const scope = String(dropdown.scope || "").trim().toLowerCase();
+      const hostOwned = String(document.getElementById("subjectMetaDropdownHost")?.dataset?.situationGridOwned || "") === "1";
+      return hostOwned && (openedFrom === "situation-grid" || scope === "situation-grid");
+    }
+
+    function logSituationGridGenericSkip() {
+      try {
+        if (window.localStorage?.getItem("debug:situation-grid-dropdown") !== "1") return;
+      } catch (_) {
+        return;
+      }
+      console.info("[subject-meta-dropdown] skip generic handler for situation-grid.");
+    }
+
     dropdownHost.querySelectorAll("[data-subject-kanban-search]").forEach((input) => {
       input.oninput = () => {
         const subjectId = String(input.dataset.subjectKanbanSearch || "");
@@ -493,6 +510,10 @@ export function createProjectSubjectsEvents(config) {
 
     dropdownHost.querySelectorAll("[data-objective-select]").forEach((btn) => {
       btn.onclick = async (event) => {
+        if (isSituationGridOwnedDropdown()) {
+          logSituationGridGenericSkip();
+          return;
+        }
         event.preventDefault();
         event.stopPropagation();
         const targetSubject = getDropdownContextSubject(root);
@@ -515,6 +536,10 @@ export function createProjectSubjectsEvents(config) {
 
     dropdownHost.querySelectorAll("[data-subject-label-toggle]").forEach((btn) => {
       btn.onclick = async (event) => {
+        if (isSituationGridOwnedDropdown()) {
+          logSituationGridGenericSkip();
+          return;
+        }
         event.preventDefault();
         event.stopPropagation();
         const targetSubject = getDropdownContextSubject(root);
@@ -526,6 +551,10 @@ export function createProjectSubjectsEvents(config) {
 
     dropdownHost.querySelectorAll("[data-subject-assignee-toggle]").forEach((btn) => {
       btn.onclick = async (event) => {
+        if (isSituationGridOwnedDropdown()) {
+          logSituationGridGenericSkip();
+          return;
+        }
         event.preventDefault();
         event.stopPropagation();
         const targetSubject = getDropdownContextSubject(root);
@@ -742,6 +771,10 @@ export function createProjectSubjectsEvents(config) {
 
     dropdownHost.querySelectorAll("[data-subject-kanban-select]").forEach((btn) => {
       btn.onclick = (event) => {
+        if (isSituationGridOwnedDropdown()) {
+          logSituationGridGenericSkip();
+          return;
+        }
         event.preventDefault();
         event.stopPropagation();
         const subjectId = String(btn.dataset.subjectKanbanSubjectId || "");

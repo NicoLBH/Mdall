@@ -36,16 +36,34 @@ export function createProjectSubjectsActions(config) {
     normalizeSubjectLabelKey,
     getSubjectLabelDefinition,
     getObjectives,
-    replaceSubjectLabelsInSupabase,
-    replaceSubjectAssigneesInSupabase,
+    addLabelToSubjectInSupabase,
+    removeLabelFromSubjectInSupabase,
+    addSubjectAssigneeInSupabase,
+    removeSubjectAssigneeInSupabase,
+    addSubjectToObjectiveInSupabase,
+    removeSubjectFromObjectiveInSupabase,
     replaceSubjectSituationsInSupabase,
-    replaceSubjectObjectivesInSupabase,
     setSubjectParentInSupabase,
     createBlockedByRelationInSupabase,
     deleteBlockedByRelationInSupabase,
     reorderSubjectChildrenInSupabase,
     rerenderPanels
   } = config;
+
+  function isSituationGridDropdownDebugEnabled() {
+    try {
+      const storageValue = String(window.localStorage?.getItem("debug:situation-grid-dropdown") || "").trim().toLowerCase();
+      const sessionValue = String(window.sessionStorage?.getItem("debug:situation-grid-dropdown") || "").trim().toLowerCase();
+      return storageValue === "1" || storageValue === "true" || sessionValue === "1" || sessionValue === "true";
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function logSituationGridSupabaseMutation(payload = {}) {
+    if (!isSituationGridDropdownDebugEnabled()) return;
+    console.info("[situation-grid-dropdown] supabase-mutation", payload);
+  }
 
   function resolveDefaultHumanActorLabel() {
     const user = store?.user && typeof store.user === "object" ? store.user : {};
@@ -212,7 +230,24 @@ export function createProjectSubjectsActions(config) {
     }
 
     try {
-      await replaceSubjectAssigneesInSupabase(subjectKey, nextIds);
+      const action = hasAssignee ? "assignee:remove" : "assignee:add";
+      const method = hasAssignee ? "DELETE" : "POST";
+      const endpoint = "/rest/v1/subject_assignees";
+      const payload = hasAssignee
+        ? { subject_id: `eq.${subjectKey}`, person_id: `eq.${assigneeKey}` }
+        : { subject_id: subjectKey, person_id: assigneeKey };
+      logSituationGridSupabaseMutation({
+        action,
+        field: "assignees",
+        subjectId: subjectKey,
+        situationId: String(options.situationId || ""),
+        value: assigneeKey,
+        method,
+        endpoint,
+        payload
+      });
+      if (hasAssignee) await removeSubjectAssigneeInSupabase(subjectKey, assigneeKey);
+      else await addSubjectAssigneeInSupabase(subjectKey, assigneeKey);
       return true;
     } catch (error) {
       setSubjectAssigneeIds(subjectKey, currentIds);
@@ -607,15 +642,24 @@ export function createProjectSubjectsActions(config) {
     }
 
     try {
-      const nextLabelIds = Array.isArray(store.projectSubjectsView?.rawSubjectsResult?.labelIdsBySubjectId?.[subjectKey])
-        ? store.projectSubjectsView.rawSubjectsResult.labelIdsBySubjectId[subjectKey].map((value) => String(value || "").trim()).filter(Boolean)
-        : [];
-      await replaceSubjectLabelsInSupabase(subjectKey, nextLabelIds);
-
-      await reloadSubjectsFromSupabase(options.root, {
-        rerender: options.skipRerender ? false : true,
-        updateModal: options.skipRerender ? false : true
+      const action = hasLabel ? "label:remove" : "label:add";
+      const method = hasLabel ? "DELETE" : "POST";
+      const endpoint = "/rest/v1/subject_labels";
+      const payload = hasLabel
+        ? { subject_id: `eq.${subjectKey}`, label_id: `eq.${labelId}` }
+        : { subject_id: subjectKey, label_id: labelId };
+      logSituationGridSupabaseMutation({
+        action,
+        field: "labels",
+        subjectId: subjectKey,
+        situationId: String(options.situationId || ""),
+        value: labelId,
+        method,
+        endpoint,
+        payload
       });
+      if (hasLabel) await removeLabelFromSubjectInSupabase(subjectKey, labelId);
+      else await addLabelToSubjectInSupabase(subjectKey, labelId);
       return true;
     } catch (error) {
       setSubjectLabels(subjectKey, previousLabels);
@@ -697,7 +741,23 @@ export function createProjectSubjectsActions(config) {
     }
 
     try {
-      await replaceSubjectObjectivesInSupabase(subjectKey, nextIds);
+      const action = wasLinked ? "objective:remove" : "objective:add";
+      const method = wasLinked ? "DELETE" : "POST";
+      const endpoint = "/rest/v1/milestone_subjects";
+      logSituationGridSupabaseMutation({
+        action,
+        field: "objectives",
+        subjectId: subjectKey,
+        situationId: String(options.situationId || ""),
+        value: objectiveKey,
+        method,
+        endpoint,
+        payload: wasLinked
+          ? { milestone_id: `eq.${objectiveKey}`, subject_id: `eq.${subjectKey}` }
+          : { milestone_id: objectiveKey, subject_id: subjectKey }
+      });
+      if (wasLinked) await removeSubjectFromObjectiveInSupabase(objectiveKey, subjectKey);
+      else await addSubjectToObjectiveInSupabase(objectiveKey, subjectKey);
       return true;
     } catch (error) {
       setSubjectObjectiveIds(subjectKey, previousIds);

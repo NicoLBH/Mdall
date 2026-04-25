@@ -1124,6 +1124,64 @@ export async function replaceSubjectAssignees(subjectId, personIds = []) {
   return uniquePersonIds;
 }
 
+export async function addSubjectAssignee(subjectId, personId) {
+  const normalizedSubjectId = normalizeUuid(subjectId);
+  const normalizedPersonId = normalizeUuid(personId);
+  if (!normalizedSubjectId) throw new Error("subjectId is required");
+  if (!normalizedPersonId) throw new Error("personId is required");
+
+  const projectId = await fetchSubjectProjectId(normalizedSubjectId);
+  const url = new URL(`${SUPABASE_URL}/rest/v1/subject_assignees`);
+  url.searchParams.set("on_conflict", "subject_id,person_id");
+
+  const res = await fetch(url.toString(), {
+    method: "POST",
+    headers: await getSupabaseAuthHeaders({
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      Prefer: "resolution=merge-duplicates,return=representation"
+    }),
+    body: JSON.stringify({
+      project_id: projectId,
+      subject_id: normalizedSubjectId,
+      person_id: normalizedPersonId
+    })
+  });
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`subject_assignee create failed (${res.status}): ${txt}`);
+  }
+
+  return true;
+}
+
+export async function removeSubjectAssignee(subjectId, personId) {
+  const normalizedSubjectId = normalizeUuid(subjectId);
+  const normalizedPersonId = normalizeUuid(personId);
+  if (!normalizedSubjectId) throw new Error("subjectId is required");
+  if (!normalizedPersonId) throw new Error("personId is required");
+
+  const url = new URL(`${SUPABASE_URL}/rest/v1/subject_assignees`);
+  url.searchParams.set("subject_id", `eq.${normalizedSubjectId}`);
+  url.searchParams.set("person_id", `eq.${normalizedPersonId}`);
+
+  const res = await fetch(url.toString(), {
+    method: "DELETE",
+    headers: await getSupabaseAuthHeaders({
+      Accept: "application/json",
+      Prefer: "return=minimal"
+    })
+  });
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`subject_assignee delete failed (${res.status}): ${txt}`);
+  }
+
+  return true;
+}
+
 export async function replaceSubjectLabels(subjectId, labelIds = []) {
   const normalizedSubjectId = normalizeUuid(subjectId);
   if (!normalizedSubjectId) throw new Error("subjectId is required");

@@ -73,7 +73,9 @@ export function createProjectSituationsEvents({
 
   function isSituationGridDropdownDebugEnabled() {
     try {
-      return window.localStorage?.getItem("debug:situation-grid-dropdown") === "1";
+      const storageValue = String(window.localStorage?.getItem("debug:situation-grid-dropdown") || "").trim().toLowerCase();
+      const sessionValue = String(window.sessionStorage?.getItem("debug:situation-grid-dropdown") || "").trim().toLowerCase();
+      return storageValue === "1" || storageValue === "true" || sessionValue === "1" || sessionValue === "true";
     } catch (_) {
       return false;
     }
@@ -82,6 +84,36 @@ export function createProjectSituationsEvents({
   function logSituationGridDropdown(message, payload = {}) {
     if (!isSituationGridDropdownDebugEnabled()) return;
     console.info(`[situation-grid-dropdown] ${message}`, payload);
+  }
+
+  function logSituationGridSupabaseMutation(payload = {}) {
+    if (!isSituationGridDropdownDebugEnabled()) return;
+    console.info("[situation-grid-dropdown] supabase-mutation", payload);
+  }
+
+  function getSharedDropdownDebugMeta() {
+    const dropdown = store?.projectSubjectsView?.subjectMetaDropdown || {};
+    return {
+      openedFrom: String(dropdown?.openedFrom || ""),
+      metaScope: String(dropdown?.scope || "")
+    };
+  }
+
+  function buildSituationGridDropdownDebugPayload({
+    field = "",
+    subjectId = "",
+    situationId = "",
+    value = "",
+    event = null
+  } = {}) {
+    return {
+      field,
+      subjectId,
+      situationId,
+      value,
+      target: event?.target?.outerHTML?.slice?.(0, 200) || "",
+      ...getSharedDropdownDebugMeta()
+    };
   }
 
   function resolveCurrentProjectId() {
@@ -108,11 +140,13 @@ export function createProjectSituationsEvents({
 
   function closeSituationGridCellDropdown() {
     const state = ensureSituationGridCellDropdownState();
-    logSituationGridDropdown("close", {
+    const host = document.getElementById("subjectMetaDropdownHost");
+    if (host?.dataset) delete host.dataset.situationGridOwned;
+    logSituationGridDropdown("close", buildSituationGridDropdownDebugPayload({
       field: state.field,
       subjectId: state.subjectId,
       situationId: state.situationId
-    });
+    }));
     if (state.anchor?.setAttribute) state.anchor.setAttribute("aria-expanded", "false");
     state.open = false;
     state.field = "";
@@ -140,18 +174,20 @@ export function createProjectSituationsEvents({
   function openSituationGridCellDropdown(root, { field = "", anchor = null, subjectId = "", situationId = "" } = {}) {
     if (!anchor) return;
     const state = ensureSituationGridCellDropdownState();
+    const host = document.getElementById("subjectMetaDropdownHost");
     closeSituationGridCellDropdown();
     state.open = true;
     state.field = String(field || "").trim().toLowerCase();
     state.subjectId = String(subjectId || "").trim();
     state.situationId = String(situationId || "").trim();
     state.anchor = anchor;
+    if (host?.dataset) host.dataset.situationGridOwned = "1";
     anchor.setAttribute("aria-expanded", "true");
-    logSituationGridDropdown("open", {
+    logSituationGridDropdown("open", buildSituationGridDropdownDebugPayload({
       field: state.field,
       subjectId: state.subjectId,
       situationId: state.situationId
-    });
+    }));
     if (state.field === "kanban") {
       const opened = openSharedSubjectKanbanDropdown?.({
         root,
@@ -218,7 +254,7 @@ export function createProjectSituationsEvents({
     return String(actionNode?.getAttribute(attrName) || "").trim();
   }
 
-  async function handleSharedDropdownAction(root, actionNode) {
+  async function handleSharedDropdownAction(root, actionNode, event = null) {
     const state = ensureSituationGridCellDropdownState();
     const subjectId = String(state.subjectId || actionNode?.getAttribute("data-subject-id") || "").trim();
     const situationId = String(state.situationId || actionNode?.getAttribute("data-situation-id") || "").trim();
@@ -243,28 +279,62 @@ export function createProjectSituationsEvents({
       action = toggleSubjectObjectiveFromSharedDropdown;
     }
     if (!actionType) return false;
-    logSituationGridDropdown("item-click", { field, type: actionType, subjectId, situationId, value });
     closeSituationGridCellDropdown();
     if (!value) return true;
 
-    logSituationGridDropdown("shared-action:start", { field, type: actionType, subjectId, situationId, value });
+    const payload = {
+      ...buildSituationGridDropdownDebugPayload({ field, subjectId, situationId, value, event }),
+      type: actionType
+    };
+    logSituationGridDropdown("shared-action:start", payload);
+    logSituationGridSupabaseMutation({
+      action: actionType === "assignee"
+        ? "assignee:toggle"
+        : actionType === "label"
+          ? "label:toggle"
+          : "objective:toggle",
+      field,
+      subjectId,
+      situationId,
+      value,
+      method: actionType === "objective"
+        ? "POST|DELETE"
+        : actionType === "assignee"
+          ? "POST|DELETE"
+          : "POST|DELETE",
+      endpoint: actionType === "objective"
+        ? "/rest/v1/milestone_subjects"
+        : actionType === "assignee"
+          ? "/rest/v1/subject_assignees"
+          : "/rest/v1/subject_labels",
+      payload: actionType === "objective"
+        ? {
+            milestone_id: value,
+            subject_id: subjectId
+          }
+        : actionType === "assignee"
+          ? {
+              person_id: value,
+              subject_id: subjectId
+            }
+          : {
+              label_id: value,
+              subject_id: subjectId
+            }
+    });
     try {
       const success = await action?.(subjectId, value, { root, skipRerender: true });
       if (success === true) {
-        logSituationGridDropdown("shared-action:success", { field, type: actionType, subjectId, situationId, value });
+        logSituationGridDropdown("shared-action:success", payload);
         rerender(root);
         return true;
       }
-      logSituationGridDropdown("shared-action:false-result", { field, type: actionType, subjectId, situationId, value });
+      logSituationGridDropdown("shared-action:false-result", payload);
       showSituationGridInlineError(root, "La mise à jour a échoué.");
       return false;
     } catch (error) {
       logSituationGridDropdown("shared-action:error", {
-        field,
-        type: actionType,
-        subjectId,
-        situationId,
-        value,
+        ...payload,
         message: error instanceof Error ? error.message : String(error || "")
       });
       throw error;
@@ -375,6 +445,69 @@ export function createProjectSituationsEvents({
     });
   }
 
+  async function handleSituationGridKanbanAction(root, actionNode, event = null) {
+    const state = ensureSituationGridCellDropdownState();
+    const field = String(state.field || "").trim().toLowerCase();
+    const subjectId = String(state.subjectId || "").trim();
+    const situationId = String(state.situationId || "").trim();
+    const nextStatus = String(actionNode?.getAttribute("data-subject-kanban-select") || "").trim().toLowerCase();
+    const previousStatus = String(store?.situationsView?.kanbanStatusBySituationId?.[situationId]?.[subjectId] || "non_active").trim().toLowerCase();
+    const payload = buildSituationGridDropdownDebugPayload({ field, subjectId, situationId, value: nextStatus, event });
+    if (!subjectId || !situationId || !nextStatus || nextStatus === previousStatus) {
+      closeSituationGridCellDropdown();
+      return;
+    }
+
+    if (!store.situationsView || typeof store.situationsView !== "object") store.situationsView = {};
+    store.situationsView.kanbanStatusBySituationId = {
+      ...(store.situationsView.kanbanStatusBySituationId || {}),
+      [situationId]: {
+        ...((store.situationsView.kanbanStatusBySituationId || {})[situationId] || {}),
+        [subjectId]: nextStatus
+      }
+    };
+    patchSituationGridKanbanCell({ root, subjectId, situationId });
+    closeSituationGridCellDropdown();
+    try {
+      logSituationGridDropdown("kanban-action:start", payload);
+      logSituationGridSupabaseMutation({
+        action: "kanban:update",
+        field: "kanban",
+        subjectId,
+        situationId,
+        value: nextStatus,
+        method: "PATCH",
+        endpoint: "/rest/v1/situation_subjects",
+        payload: {
+          where: {
+            situation_id: `eq.${situationId}`,
+            subject_id: `eq.${subjectId}`
+          },
+          body: {
+            kanban_status: nextStatus
+          }
+        }
+      });
+      await setSituationGridKanbanStatus?.(situationId, subjectId, nextStatus);
+      logSituationGridDropdown("kanban-action:success", payload);
+    } catch (error) {
+      store.situationsView.kanbanStatusBySituationId = {
+        ...(store.situationsView.kanbanStatusBySituationId || {}),
+        [situationId]: {
+          ...((store.situationsView.kanbanStatusBySituationId || {})[situationId] || {}),
+          [subjectId]: previousStatus
+        }
+      };
+      patchSituationGridKanbanCell({ root, subjectId, situationId });
+      logSituationGridDropdown("kanban-action:error", {
+        ...payload,
+        message: error instanceof Error ? error.message : String(error || "")
+      });
+      console.error("situation grid kanban update failed", error);
+      showSituationGridInlineError(root, error instanceof Error ? error.message : "La mise à jour du statut kanban a échoué.");
+    }
+  }
+
   function bindSituationGridEditableCells(root) {
     setSituationGridDropdownRoot(root);
     root.querySelectorAll("[data-situation-grid-edit-cell]").forEach((node) => {
@@ -403,12 +536,13 @@ export function createProjectSituationsEvents({
 
     const shouldIgnoreOutsideClose = (eventTarget, state) => {
       const host = document.getElementById("subjectMetaDropdownHost");
-      if (host?.contains(eventTarget)) return true;
+      const hostDropdown = host?.querySelector?.(".subject-meta-dropdown");
+      if (hostDropdown?.contains(eventTarget)) return true;
       if (state.anchor && (state.anchor === eventTarget || state.anchor.contains(eventTarget))) return true;
       return false;
     };
 
-    document.addEventListener("click", async (event) => {
+    const handleGridDropdownItemClickCapture = async (event) => {
       const eventTarget = event.target instanceof Element ? event.target : null;
       if (!eventTarget) return;
       const root = resolveSituationGridDropdownRoot();
@@ -418,63 +552,57 @@ export function createProjectSituationsEvents({
       if (actionNode) {
         const state = ensureSituationGridCellDropdownState();
         if (!state.open) return;
-        if (actionNode.matches("[data-subject-kanban-select]")) {
+        event.preventDefault();
+        event.stopPropagation();
+        try {
           const field = String(state.field || "").trim().toLowerCase();
           const subjectId = String(state.subjectId || "").trim();
           const situationId = String(state.situationId || "").trim();
-          const nextStatus = String(actionNode.getAttribute("data-subject-kanban-select") || "").trim();
-          const previousStatus = String(store?.situationsView?.kanbanStatusBySituationId?.[situationId]?.[subjectId] || "non_active").trim().toLowerCase();
-          logSituationGridDropdown("item-click", { field, type: "kanban", subjectId, situationId, value: nextStatus });
-          if (!subjectId || !situationId || !nextStatus || nextStatus === previousStatus) {
-            closeSituationGridCellDropdown();
+          const value = String(
+            actionNode.getAttribute("data-subject-kanban-select")
+            || actionNode.getAttribute("data-subject-assignee-toggle")
+            || actionNode.getAttribute("data-subject-label-toggle")
+            || actionNode.getAttribute("data-objective-select")
+            || ""
+          ).trim();
+          logSituationGridDropdown("host-capture:item-click", buildSituationGridDropdownDebugPayload({
+            field,
+            subjectId,
+            situationId,
+            value,
+            event
+          }));
+          if (actionNode.matches("[data-subject-kanban-select]")) {
+            await handleSituationGridKanbanAction(root, actionNode, event);
             return;
           }
-          if (!store.situationsView || typeof store.situationsView !== "object") store.situationsView = {};
-          store.situationsView.kanbanStatusBySituationId = {
-            ...(store.situationsView.kanbanStatusBySituationId || {}),
-            [situationId]: {
-              ...((store.situationsView.kanbanStatusBySituationId || {})[situationId] || {}),
-              [subjectId]: nextStatus
-            }
-          };
-          patchSituationGridKanbanCell({ root, subjectId, situationId });
-          closeSituationGridCellDropdown();
-          try {
-            await setSituationGridKanbanStatus?.(situationId, subjectId, nextStatus);
-          } catch (error) {
-            store.situationsView.kanbanStatusBySituationId = {
-              ...(store.situationsView.kanbanStatusBySituationId || {}),
-              [situationId]: {
-                ...((store.situationsView.kanbanStatusBySituationId || {})[situationId] || {}),
-                [subjectId]: previousStatus
-              }
-            };
-            patchSituationGridKanbanCell({ root, subjectId, situationId });
-            console.error("situation grid kanban update failed", error);
-            showSituationGridInlineError(root, error instanceof Error ? error.message : "La mise à jour du statut kanban a échoué.");
-          }
-          return;
-        }
-
-        try {
-          await handleSharedDropdownAction(root, actionNode);
+          await handleSharedDropdownAction(root, actionNode, event);
         } catch (error) {
           console.error("situation grid shared dropdown action failed", error);
           showSituationGridInlineError(root, error instanceof Error ? error.message : "La mise à jour a échoué.");
         }
         return;
       }
+    };
+
+    const host = document.getElementById("subjectMetaDropdownHost");
+    host?.addEventListener("click", handleGridDropdownItemClickCapture, { capture: true, signal });
+    document.addEventListener("click", async (event) => {
+      await handleGridDropdownItemClickCapture(event);
+      const eventTarget = event.target instanceof Element ? event.target : null;
+      if (!eventTarget) return;
 
       const state = ensureSituationGridCellDropdownState();
       if (!state.open) return;
       if (shouldIgnoreOutsideClose(eventTarget, state)) return;
-      logSituationGridDropdown("outside-click-close", {
+      logSituationGridDropdown("outside-click-close", buildSituationGridDropdownDebugPayload({
         field: state.field,
         subjectId: state.subjectId,
-        situationId: state.situationId
-      });
+        situationId: state.situationId,
+        event
+      }));
       closeSituationGridCellDropdown();
-    }, { signal });
+    }, { capture: true, signal });
 
     document.addEventListener("input", (event) => {
       const eventTarget = event.target instanceof Element ? event.target : null;
@@ -505,11 +633,12 @@ export function createProjectSituationsEvents({
       const state = ensureSituationGridCellDropdownState();
       if (!state.open) return;
       if (shouldIgnoreOutsideClose(eventTarget, state)) return;
-      logSituationGridDropdown("outside-pointerdown-close", {
+      logSituationGridDropdown("outside-pointerdown-close", buildSituationGridDropdownDebugPayload({
         field: state.field,
         subjectId: state.subjectId,
-        situationId: state.situationId
-      });
+        situationId: state.situationId,
+        event
+      }));
       closeSituationGridCellDropdown();
     }, { capture: true, signal });
   }
