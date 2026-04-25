@@ -1,6 +1,7 @@
 import { escapeHtml } from "../../utils/escape-html.js";
 import { svgIcon } from "../../ui/icons.js";
 import { renderSubjectTreeGrid } from "../shared/subject-tree-grid.js";
+import { buildSubjectMetaAnchorKey } from "../ui/select-dropdown-controller.js";
 
 const GRID_COLUMN_DEFINITIONS = [
   { key: "title", label: "Titre", minWidth: 320, className: "title" },
@@ -187,6 +188,16 @@ function getSubjectDisplayIdentifier(subject = {}) {
   return subjectId ? `#${subjectId}` : "";
 }
 
+function getSituationGridMetaAnchorKey(field = "", subjectId = "") {
+  return buildSubjectMetaAnchorKey({
+    field,
+    scope: "situation-grid",
+    scopeHost: "main",
+    subjectId,
+    instance: "situation-grid"
+  });
+}
+
 function getSubjectProgress(subject, subjectsById = {}, childrenBySubjectId = {}) {
   const subjectId = normalizeId(subject?.id);
   const childIds = Array.isArray(childrenBySubjectId?.[subjectId]) ? childrenBySubjectId[subjectId] : [];
@@ -222,14 +233,40 @@ function renderAssigneesCell(subjectId, rawSubjectsResult = {}, store = {}) {
     ? rawSubjectsResult.assigneePersonIdsBySubjectId
     : {};
   const assigneeIds = Array.isArray(assigneeMap?.[subjectId]) ? assigneeMap[subjectId].map((value) => normalizeId(value)).filter(Boolean) : [];
-  if (!assigneeIds.length) return "<span class=\"situation-grid__empty-cell\"></span>";
+  if (!assigneeIds.length) {
+    return `
+      <button
+        type="button"
+        class="situation-grid__editable-trigger situation-grid__editable-trigger--empty"
+        data-situation-grid-edit-cell="assignees"
+        data-situation-grid-subject-id="${escapeHtml(subjectId)}"
+        data-subject-meta-anchor="${escapeHtml(getSituationGridMetaAnchorKey("assignees", subjectId))}"
+        aria-haspopup="menu"
+        aria-expanded="false"
+        title="Modifier les assignés"
+      >
+        <span class="situation-grid__empty-cell"></span>
+        <span class="situation-grid__editable-caret" aria-hidden="true">${svgIcon("chevron-down", { className: "octicon octicon-chevron-down" })}</span>
+      </button>
+    `;
+  }
 
   const collaboratorsById = new Map(getActiveProjectCollaborators(store).map((item) => [item.id, item]));
   const firstAssignees = assigneeIds.slice(0, 3).map((id) => collaboratorsById.get(id) || { id, name: `Collaborateur ${id.slice(0, 8)}`, avatarUrl: "" });
   const overflowCount = Math.max(0, assigneeIds.length - firstAssignees.length);
 
   return `
-    <span class="situation-grid__assignees" aria-label="${escapeHtml(`${assigneeIds.length} assigné(s)`)}">
+    <button
+      type="button"
+      class="situation-grid__editable-trigger"
+      data-situation-grid-edit-cell="assignees"
+      data-situation-grid-subject-id="${escapeHtml(subjectId)}"
+      data-subject-meta-anchor="${escapeHtml(getSituationGridMetaAnchorKey("assignees", subjectId))}"
+      aria-haspopup="menu"
+      aria-expanded="false"
+      title="Modifier les assignés"
+    >
+      <span class="situation-grid__assignees" aria-label="${escapeHtml(`${assigneeIds.length} assigné(s)`)}">
       ${firstAssignees.map((assignee) => {
         const initials = String(assignee?.name || "U")
           .split(/\s+/)
@@ -242,13 +279,30 @@ function renderAssigneesCell(subjectId, rawSubjectsResult = {}, store = {}) {
           : `<span class="situation-grid__assignee-avatar situation-grid__assignee-avatar--fallback" aria-hidden="true">${escapeHtml(initials)}</span>`;
       }).join("")}
       ${overflowCount > 0 ? `<span class="situation-grid__assignee-overflow mono">+${overflowCount}</span>` : ""}
-    </span>
+      </span>
+      <span class="situation-grid__editable-caret" aria-hidden="true">${svgIcon("chevron-down", { className: "octicon octicon-chevron-down" })}</span>
+    </button>
   `;
 }
 
 function renderKanbanCell(subjectId, situationId, store) {
   const meta = getKanbanStatusMeta(subjectId, situationId, store);
-  return `<span class="subject-kanban-badge" style="--subject-kanban-badge-bg:${meta.bg};--subject-kanban-badge-border:${meta.border};--subject-kanban-badge-text:${meta.text};">${escapeHtml(meta.label)}</span>`;
+  return `
+    <button
+      type="button"
+      class="situation-grid__editable-trigger"
+      data-situation-grid-edit-cell="kanban"
+      data-situation-grid-subject-id="${escapeHtml(subjectId)}"
+      data-situation-grid-situation-id="${escapeHtml(situationId)}"
+      data-subject-kanban-anchor="${escapeHtml(`${subjectId}::${situationId}`)}"
+      aria-haspopup="menu"
+      aria-expanded="false"
+      title="Modifier le statut kanban"
+    >
+      <span class="subject-kanban-badge" style="--subject-kanban-badge-bg:${meta.bg};--subject-kanban-badge-border:${meta.border};--subject-kanban-badge-text:${meta.text};">${escapeHtml(meta.label)}</span>
+      <span class="situation-grid__editable-caret" aria-hidden="true">${svgIcon("chevron-down", { className: "octicon octicon-chevron-down" })}</span>
+    </button>
+  `;
 }
 
 function renderProgressCell(subject, subjectsById = {}, childrenBySubjectId = {}) {
@@ -267,23 +321,67 @@ function renderLabelsCell(subjectId, rawSubjectsResult = {}) {
   const labelsById = rawSubjectsResult?.labelsById && typeof rawSubjectsResult.labelsById === "object" ? rawSubjectsResult.labelsById : {};
   const labelIdsBySubjectId = rawSubjectsResult?.labelIdsBySubjectId && typeof rawSubjectsResult.labelIdsBySubjectId === "object" ? rawSubjectsResult.labelIdsBySubjectId : {};
   const labelIds = Array.isArray(labelIdsBySubjectId?.[subjectId]) ? labelIdsBySubjectId[subjectId] : [];
-  if (!labelIds.length) return "<span class=\"situation-grid__empty-cell\"></span>";
+  if (!labelIds.length) {
+    return `
+      <button
+        type="button"
+        class="situation-grid__editable-trigger situation-grid__editable-trigger--empty"
+        data-situation-grid-edit-cell="labels"
+        data-situation-grid-subject-id="${escapeHtml(subjectId)}"
+        data-subject-meta-anchor="${escapeHtml(getSituationGridMetaAnchorKey("labels", subjectId))}"
+        aria-haspopup="menu"
+        aria-expanded="false"
+        title="Modifier les labels"
+      >
+        <span class="situation-grid__empty-cell"></span>
+        <span class="situation-grid__editable-caret" aria-hidden="true">${svgIcon("chevron-down", { className: "octicon octicon-chevron-down" })}</span>
+      </button>
+    `;
+  }
 
   const labels = labelIds
     .map((labelId) => labelsById[normalizeId(labelId)] || null)
     .filter(Boolean);
-  if (!labels.length) return "<span class=\"situation-grid__empty-cell\"></span>";
+  if (!labels.length) {
+    return `
+      <button
+        type="button"
+        class="situation-grid__editable-trigger situation-grid__editable-trigger--empty"
+        data-situation-grid-edit-cell="labels"
+        data-situation-grid-subject-id="${escapeHtml(subjectId)}"
+        data-subject-meta-anchor="${escapeHtml(getSituationGridMetaAnchorKey("labels", subjectId))}"
+        aria-haspopup="menu"
+        aria-expanded="false"
+        title="Modifier les labels"
+      >
+        <span class="situation-grid__empty-cell"></span>
+        <span class="situation-grid__editable-caret" aria-hidden="true">${svgIcon("chevron-down", { className: "octicon octicon-chevron-down" })}</span>
+      </button>
+    `;
+  }
 
   const visible = labels.slice(0, 2);
   const overflow = Math.max(0, labels.length - visible.length);
   return `
-    <span class="situation-grid__labels">
+    <button
+      type="button"
+      class="situation-grid__editable-trigger"
+      data-situation-grid-edit-cell="labels"
+      data-situation-grid-subject-id="${escapeHtml(subjectId)}"
+      data-subject-meta-anchor="${escapeHtml(getSituationGridMetaAnchorKey("labels", subjectId))}"
+      aria-haspopup="menu"
+      aria-expanded="false"
+      title="Modifier les labels"
+    >
+      <span class="situation-grid__labels">
       ${visible.map((label) => {
         const labelName = firstNonEmpty(label?.name, label?.label, label?.key, label?.id, "Label");
         return `<span class="subject-label-badge">${escapeHtml(labelName)}</span>`;
       }).join("")}
       ${overflow > 0 ? `<span class="situation-grid__pill-overflow mono">+${overflow}</span>` : ""}
-    </span>
+      </span>
+      <span class="situation-grid__editable-caret" aria-hidden="true">${svgIcon("chevron-down", { className: "octicon octicon-chevron-down" })}</span>
+    </button>
   `;
 }
 
@@ -291,20 +389,64 @@ function renderObjectivesCell(subjectId, rawSubjectsResult = {}) {
   const objectivesById = rawSubjectsResult?.objectivesById && typeof rawSubjectsResult.objectivesById === "object" ? rawSubjectsResult.objectivesById : {};
   const objectiveIdsBySubjectId = rawSubjectsResult?.objectiveIdsBySubjectId && typeof rawSubjectsResult.objectiveIdsBySubjectId === "object" ? rawSubjectsResult.objectiveIdsBySubjectId : {};
   const objectiveIds = Array.isArray(objectiveIdsBySubjectId?.[subjectId]) ? objectiveIdsBySubjectId[subjectId] : [];
-  if (!objectiveIds.length) return "<span class=\"situation-grid__empty-cell\"></span>";
+  if (!objectiveIds.length) {
+    return `
+      <button
+        type="button"
+        class="situation-grid__editable-trigger situation-grid__editable-trigger--empty"
+        data-situation-grid-edit-cell="objectives"
+        data-situation-grid-subject-id="${escapeHtml(subjectId)}"
+        data-subject-meta-anchor="${escapeHtml(getSituationGridMetaAnchorKey("objectives", subjectId))}"
+        aria-haspopup="menu"
+        aria-expanded="false"
+        title="Modifier les objectifs"
+      >
+        <span class="situation-grid__empty-cell"></span>
+        <span class="situation-grid__editable-caret" aria-hidden="true">${svgIcon("chevron-down", { className: "octicon octicon-chevron-down" })}</span>
+      </button>
+    `;
+  }
 
   const objectives = objectiveIds
     .map((objectiveId) => objectivesById[normalizeId(objectiveId)] || null)
     .filter(Boolean);
-  if (!objectives.length) return "<span class=\"situation-grid__empty-cell\"></span>";
+  if (!objectives.length) {
+    return `
+      <button
+        type="button"
+        class="situation-grid__editable-trigger situation-grid__editable-trigger--empty"
+        data-situation-grid-edit-cell="objectives"
+        data-situation-grid-subject-id="${escapeHtml(subjectId)}"
+        data-subject-meta-anchor="${escapeHtml(getSituationGridMetaAnchorKey("objectives", subjectId))}"
+        aria-haspopup="menu"
+        aria-expanded="false"
+        title="Modifier les objectifs"
+      >
+        <span class="situation-grid__empty-cell"></span>
+        <span class="situation-grid__editable-caret" aria-hidden="true">${svgIcon("chevron-down", { className: "octicon octicon-chevron-down" })}</span>
+      </button>
+    `;
+  }
 
   const visible = objectives.slice(0, 1);
   const overflow = Math.max(0, objectives.length - visible.length);
   return `
-    <span class="situation-grid__objectives">
+    <button
+      type="button"
+      class="situation-grid__editable-trigger"
+      data-situation-grid-edit-cell="objectives"
+      data-situation-grid-subject-id="${escapeHtml(subjectId)}"
+      data-subject-meta-anchor="${escapeHtml(getSituationGridMetaAnchorKey("objectives", subjectId))}"
+      aria-haspopup="menu"
+      aria-expanded="false"
+      title="Modifier les objectifs"
+    >
+      <span class="situation-grid__objectives">
       ${visible.map((objective) => `<span class="situation-grid__objective-pill"><span class="situation-grid__objective-icon" aria-hidden="true">${svgIcon("milestone", { className: "octicon octicon-milestone" })}</span>${escapeHtml(firstNonEmpty(objective?.title, objective?.name, objective?.id, "Objectif"))}</span>`).join("")}
       ${overflow > 0 ? `<span class="situation-grid__pill-overflow mono">+${overflow}</span>` : ""}
-    </span>
+      </span>
+      <span class="situation-grid__editable-caret" aria-hidden="true">${svgIcon("chevron-down", { className: "octicon octicon-chevron-down" })}</span>
+    </button>
   `;
 }
 
