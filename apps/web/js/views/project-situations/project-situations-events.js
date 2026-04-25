@@ -767,14 +767,157 @@ export function createProjectSituationsEvents({
   function bindSituationGridDnd(root) {
     const sortableRows = Array.from(root.querySelectorAll(".situation-grid [data-subissue-sortable-row='true']"));
     if (!sortableRows.length) return;
+    const dropContainer = sortableRows[0]?.parentElement || null;
     let draggingRow = null;
+    let dropTargetRow = null;
     let dropPlacement = "";
 
     const clearDropIndicators = () => {
       sortableRows.forEach((row) => {
         row.classList.remove("is-subissue-drop-before", "is-subissue-drop-after", "is-subissue-dragging");
+        row.style.removeProperty("--situation-grid-drop-indent");
       });
     };
+
+    const applyDropIndicator = (row, placement) => {
+      if (!row || !placement) return;
+      const depth = Math.max(0, Number(row.dataset.subissueDepth || 0));
+      const indent = depth * 20;
+      clearDropIndicators();
+      row.classList.add(placement === "before" ? "is-subissue-drop-before" : "is-subissue-drop-after");
+      row.style.setProperty("--situation-grid-drop-indent", `${indent}px`);
+      if (draggingRow) draggingRow.classList.add("is-subissue-dragging");
+      dropTargetRow = row;
+      dropPlacement = placement;
+    };
+
+    const resolveDropTargetFromPointer = (clientY) => {
+      const candidates = sortableRows.filter((row) => row !== draggingRow);
+      if (!candidates.length) return { row: null, placement: "" };
+      let target = candidates[0];
+      for (const row of candidates) {
+        const rect = row.getBoundingClientRect();
+        if (clientY <= rect.bottom) {
+          target = row;
+          break;
+        }
+        target = row;
+      }
+      const rect = target.getBoundingClientRect();
+      const placement = clientY < (rect.top + rect.height / 2) ? "before" : "after";
+      return { row: target, placement };
+    };
+
+    const persistDropFromTarget = async (targetRow) => {
+      const row = targetRow || dropTargetRow;
+      if (!draggingRow || !row || draggingRow === row || !dropPlacement) return;
+      const sourceId = normalizeSubjectId(draggingRow.dataset.childSubjectId);
+      const targetId = normalizeSubjectId(row.dataset.childSubjectId);
+      const nextParentId = normalizeSubjectId(row.dataset.parentSubjectId);
+      if (!sourceId || !targetId || sourceId === targetId) return;
+
+      const raw = store?.projectSubjectsView?.rawSubjectsResult || {};
+      const rootIds = sortSubjectIdsByOrder(raw?.rootSubjectIds || [], raw.subjectsById || {});
+      const sourceParentId = normalizeSubjectId(
+        raw?.parentBySubjectId?.[sourceId]
+        || raw?.subjectsById?.[sourceId]?.parent_subject_id
+        || raw?.subjectsById?.[sourceId]?.raw?.parent_subject_id
+      );
+      const resolveChildrenForParent = (parentId) => {
+        const normalizedParentId = normalizeSubjectId(parentId);
+        if (!normalizedParentId) return rootIds;
+        return Array.isArray(raw?.childrenBySubjectId?.[normalizedParentId]) ? raw.childrenBySubjectId[normalizedParentId] : [];
+      };
+      const sourceSiblings = sortSubjectIdsByOrder(resolveChildrenForParent(sourceParentId), raw.subjectsById || {});
+      const targetSiblings = sortSubjectIdsByOrder(resolveChildrenForParent(nextParentId), raw.subjectsById || {});
+      const nextSourceSiblings = sourceSiblings.filter((id) => id !== sourceId);
+      const nextTargetSiblings = sourceParentId === nextParentId
+        ? nextSourceSiblings
+        : targetSiblings.filter((id) => id !== sourceId);
+      const targetIndex = nextTargetSiblings.indexOf(targetId);
+      if (targetIndex < 0) return;
+      const insertionIndex = dropPlacement === "before" ? targetIndex : targetIndex + 1;
+      nextTargetSiblings.splice(Math.max(0, insertionIndex), 0, sourceId);
+
+      logSituationGridDnd("drop", {
+        sourceId,
+        targetId,
+        fromParentId: sourceParentId,
+        toParentId: nextParentId,
+        placement: dropPlacement
+      });
+
+      try {
+        if (sourceParentId !== nextParentId) {
+          await setSituationGridSubjectParent?.(sourceId, nextParentId || null);
+        }
+        if (nextParentId) {
+          await reorderSituationGridSubjectChildren?.(nextParentId, nextTargetSiblings);
+        } else {
+          await reorderSituationGridRootSubjects?.(nextTargetSiblings);
+        }
+        if (sourceParentId && sourceParentId !== nextParentId) {
+          await reorderSituationGridSubjectChildren?.(sourceParentId, nextSourceSiblings);
+        }
+
+        applySituationGridHierarchyPatch({
+          subjectId: sourceId,
+          nextParentId,
+          orderedByParentId: {
+            [nextParentId]: nextTargetSiblings,
+            ...(sourceParentId && sourceParentId !== nextParentId ? { [sourceParentId]: nextSourceSiblings } : {})
+          }
+        });
+        logSituationGridDnd("persist-success", {
+          sourceId,
+          nextParentId,
+          nextTargetSiblings
+        });
+        rerender(root);
+      } catch (error) {
+        logSituationGridDnd("persist-error", {
+          sourceId,
+          targetId,
+          message: error instanceof Error ? error.message : String(error || "")
+        });
+        console.error("situation grid dnd persist failed", error);
+        showSituationGridInlineError(root, error instanceof Error ? error.message : "Impossible de déplacer ce sujet.");
+        rerender(root);
+      }
+    };
+
+    if (dropContainer) {
+      dropContainer.addEventListener("dragover", (event) => {
+        if (!draggingRow) return;
+        event.preventDefault();
+        const { row, placement } = resolveDropTargetFromPointer(Number(event.clientY || 0));
+        if (!row || !placement) return;
+        applyDropIndicator(row, placement);
+        logSituationGridDnd("dragover", {
+          sourceId: normalizeSubjectId(draggingRow.dataset.childSubjectId),
+          targetId: normalizeSubjectId(row.dataset.childSubjectId),
+          placement
+        });
+      });
+
+      dropContainer.addEventListener("drop", async (event) => {
+        if (!draggingRow) return;
+        event.preventDefault();
+        const { row, placement } = resolveDropTargetFromPointer(Number(event.clientY || 0));
+        if (row && placement) {
+          dropPlacement = placement;
+          dropTargetRow = row;
+        }
+        try {
+          await persistDropFromTarget(dropTargetRow);
+        } finally {
+          clearDropIndicators();
+          draggingRow = null;
+          dropTargetRow = null;
+          dropPlacement = "";
+        }
+      });
+    }
 
     sortableRows.forEach((row) => {
       row.addEventListener("dragstart", (event) => {
@@ -795,114 +938,10 @@ export function createProjectSituationsEvents({
         });
       });
 
-      row.addEventListener("dragover", (event) => {
-        if (!draggingRow || draggingRow === row) return;
-        event.preventDefault();
-        const rect = row.getBoundingClientRect();
-        const before = Number(event.clientY || 0) < (rect.top + rect.height / 2);
-        dropPlacement = before ? "before" : "after";
-        clearDropIndicators();
-        row.classList.add(before ? "is-subissue-drop-before" : "is-subissue-drop-after");
-        logSituationGridDnd("dragover", {
-          sourceId: normalizeSubjectId(draggingRow.dataset.childSubjectId),
-          targetId: normalizeSubjectId(row.dataset.childSubjectId),
-          placement: dropPlacement
-        });
-      });
-
-      row.addEventListener("drop", async (event) => {
-        if (!draggingRow || draggingRow === row) return;
-        event.preventDefault();
-        const sourceId = normalizeSubjectId(draggingRow.dataset.childSubjectId);
-        const targetId = normalizeSubjectId(row.dataset.childSubjectId);
-        const nextParentId = normalizeSubjectId(row.dataset.parentSubjectId);
-        if (!sourceId || !targetId || !dropPlacement || sourceId === targetId) {
-          clearDropIndicators();
-          draggingRow = null;
-          return;
-        }
-
-        const raw = store?.projectSubjectsView?.rawSubjectsResult || {};
-        const rootIds = sortSubjectIdsByOrder(raw?.rootSubjectIds || [], raw.subjectsById || {});
-        const sourceParentId = normalizeSubjectId(
-          raw?.parentBySubjectId?.[sourceId]
-          || raw?.subjectsById?.[sourceId]?.parent_subject_id
-          || raw?.subjectsById?.[sourceId]?.raw?.parent_subject_id
-        );
-        const resolveChildrenForParent = (parentId) => {
-          const normalizedParentId = normalizeSubjectId(parentId);
-          if (!normalizedParentId) return rootIds;
-          return Array.isArray(raw?.childrenBySubjectId?.[normalizedParentId]) ? raw.childrenBySubjectId[normalizedParentId] : [];
-        };
-        const sourceSiblings = sortSubjectIdsByOrder(resolveChildrenForParent(sourceParentId), raw.subjectsById || {});
-        const targetSiblings = sortSubjectIdsByOrder(resolveChildrenForParent(nextParentId), raw.subjectsById || {});
-        const nextSourceSiblings = sourceSiblings.filter((id) => id !== sourceId);
-        const nextTargetSiblings = sourceParentId === nextParentId
-          ? nextSourceSiblings
-          : targetSiblings.filter((id) => id !== sourceId);
-        const targetIndex = nextTargetSiblings.indexOf(targetId);
-        if (targetIndex < 0) {
-          clearDropIndicators();
-          draggingRow = null;
-          return;
-        }
-        const insertionIndex = dropPlacement === "before" ? targetIndex : targetIndex + 1;
-        nextTargetSiblings.splice(Math.max(0, insertionIndex), 0, sourceId);
-
-        logSituationGridDnd("drop", {
-          sourceId,
-          targetId,
-          fromParentId: sourceParentId,
-          toParentId: nextParentId,
-          placement: dropPlacement
-        });
-
-        try {
-          if (sourceParentId !== nextParentId) {
-            await setSituationGridSubjectParent?.(sourceId, nextParentId || null);
-          }
-          if (nextParentId) {
-            await reorderSituationGridSubjectChildren?.(nextParentId, nextTargetSiblings);
-          } else {
-            await reorderSituationGridRootSubjects?.(nextTargetSiblings);
-          }
-          if (sourceParentId && sourceParentId !== nextParentId) {
-            await reorderSituationGridSubjectChildren?.(sourceParentId, nextSourceSiblings);
-          }
-
-          applySituationGridHierarchyPatch({
-            subjectId: sourceId,
-            nextParentId,
-            orderedByParentId: {
-              [nextParentId]: nextTargetSiblings,
-              ...(sourceParentId && sourceParentId !== nextParentId ? { [sourceParentId]: nextSourceSiblings } : {})
-            }
-          });
-          logSituationGridDnd("persist-success", {
-            sourceId,
-            nextParentId,
-            nextTargetSiblings
-          });
-          rerender(root);
-        } catch (error) {
-          logSituationGridDnd("persist-error", {
-            sourceId,
-            targetId,
-            message: error instanceof Error ? error.message : String(error || "")
-          });
-          console.error("situation grid dnd persist failed", error);
-          showSituationGridInlineError(root, error instanceof Error ? error.message : "Impossible de déplacer ce sujet.");
-          rerender(root);
-        } finally {
-          clearDropIndicators();
-          draggingRow = null;
-          dropPlacement = "";
-        }
-      });
-
       row.addEventListener("dragend", () => {
         clearDropIndicators();
         draggingRow = null;
+        dropTargetRow = null;
         dropPlacement = "";
       });
     });
