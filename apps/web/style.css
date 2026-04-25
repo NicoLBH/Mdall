@@ -3605,7 +3605,7 @@ body.is-resizing{
 .situation-grid .subissues-sortable-row.is-subissue-dragging{
   position:relative;
   background:color-mix(in srgb, rgb(31, 111, 235) 14%, transparent);
-  transform:translateY(-1px);
+  transform:translateY(-2px);
   box-shadow:
     inset 0 1px 0 0 rgb(31, 111, 235),
     inset 0 -1px 0 0 rgb(31, 111, 235);
