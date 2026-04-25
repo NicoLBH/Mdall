@@ -12,6 +12,8 @@ test("la grille situation ouvre un dropdown éditable ancré aux cellules", () =
   assert.match(eventsSource, /openSituationGridCellDropdown\(root, \{ field, anchor: node, subjectId, situationId \}\)/);
   assert.match(eventsSource, /openSharedSubjectMetaDropdown\?\.\(/);
   assert.match(eventsSource, /openSharedSubjectKanbanDropdown\?\.\(/);
+  assert.match(eventsSource, /const eventTarget = event\.target instanceof Element \? event\.target : null;/);
+  assert.match(eventsSource, /document\.addEventListener\(\"pointerdown\", \(event\) => \{/);
   assert.match(eventsSource, /document\.addEventListener\("keydown", \(event\) => \{\s*if \(event\.key !== "Escape"\) return;/s);
 });
 

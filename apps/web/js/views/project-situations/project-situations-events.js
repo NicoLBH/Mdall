@@ -337,7 +337,9 @@ export function createProjectSituationsEvents({
       document.body.dataset.situationGridDropdownGlobalBound = "true";
 
       document.addEventListener("click", async (event) => {
-        const actionNode = event.target.closest(
+        const eventTarget = event.target instanceof Element ? event.target : null;
+        if (!eventTarget) return;
+        const actionNode = eventTarget.closest(
           "[data-subject-kanban-select],[data-subject-assignee-toggle],[data-subject-label-toggle],[data-objective-select]"
         );
         if (actionNode) {
@@ -391,19 +393,20 @@ export function createProjectSituationsEvents({
         const state = ensureSituationGridCellDropdownState();
         if (!state.open) return;
         const host = document.getElementById("subjectMetaDropdownHost");
-        const target = event.target;
-        if (host?.contains(target)) return;
-        if (state.anchor && state.anchor.contains(target)) return;
+        if (host?.contains(eventTarget)) return;
+        if (state.anchor && state.anchor.contains(eventTarget)) return;
         closeSituationGridCellDropdown();
       });
 
       document.addEventListener("input", (event) => {
-        const metaSearch = event.target.closest("[data-subject-meta-search]");
+        const eventTarget = event.target instanceof Element ? event.target : null;
+        if (!eventTarget) return;
+        const metaSearch = eventTarget.closest("[data-subject-meta-search]");
         if (metaSearch && ensureSituationGridCellDropdownState().open) {
           setSharedSubjectMetaDropdownQuery?.(metaSearch.value || "", root);
           return;
         }
-        const kanbanSearch = event.target.closest("[data-subject-kanban-search]");
+        const kanbanSearch = eventTarget.closest("[data-subject-kanban-search]");
         if (kanbanSearch && ensureSituationGridCellDropdownState().open) {
           setSharedSubjectKanbanDropdownQuery?.(kanbanSearch.value || "", root);
         }
@@ -415,6 +418,17 @@ export function createProjectSituationsEvents({
         event.preventDefault();
         closeSituationGridCellDropdown();
       });
+
+      document.addEventListener("pointerdown", (event) => {
+        const eventTarget = event.target instanceof Element ? event.target : null;
+        if (!eventTarget) return;
+        const state = ensureSituationGridCellDropdownState();
+        if (!state.open) return;
+        const host = document.getElementById("subjectMetaDropdownHost");
+        if (host?.contains(eventTarget)) return;
+        if (state.anchor && state.anchor.contains(eventTarget)) return;
+        closeSituationGridCellDropdown();
+      }, true);
     }
   }
 
