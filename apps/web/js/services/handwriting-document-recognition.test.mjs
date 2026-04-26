@@ -38,31 +38,52 @@ test("recognizeHandwrittenDocument retourne Markdown + LaTeX en mode mock", asyn
   assert.match(result.markdown, /\\int_0\^1/);
 });
 
-test("recognizeHandwrittenDocument appelle l'Edge Function hors mock", async () => {
+test("recognizeHandwrittenDocument appelle l'Edge Function hors mock avec headers Supabase", async () => {
   withLocalStorage("0");
   globalThis.window = { MDALL_CONFIG: { supabaseUrl: "https://example.supabase.co" } };
+  globalThis.__MDALL_TEST_BUILD_SUPABASE_AUTH_HEADERS__ = async (extra = {}) => ({
+    ...extra,
+    Authorization: "Bearer test-token",
+    apikey: "test-anon-key"
+  });
+
   let calledUrl = "";
-  globalThis.fetch = async (url) => {
+  let calledPayload = null;
+  let calledHeaders = null;
+  globalThis.fetch = async (url, options = {}) => {
     calledUrl = String(url || "");
+    calledHeaders = options.headers || null;
+    calledPayload = JSON.parse(String(options.body || "{}"));
     return {
       ok: true,
       status: 200,
       async text() {
-        return JSON.stringify({ markdown: "## depuis edge", provider: "mock-backend" });
+        return JSON.stringify({ markdown: "## depuis edge", provider: "openai" });
       }
     };
   };
 
-  const result = await recognizeHandwrittenDocument({ strokes: [] });
+  const result = await recognizeHandwrittenDocument({
+    strokes: [{ id: "s1", points: [{ x: 0.2, y: 0.3 }] }],
+    imageDataUrl: "data:image/jpeg;base64,abc",
+    canvasSize: { width: 1200, height: 800 },
+    subjectContext: { subjectId: "subject-1", composerKind: "main" }
+  });
 
   assert.equal(result.markdown, "## depuis edge");
-  assert.equal(result.provider, "mock-backend");
+  assert.equal(result.provider, "openai");
   assert.match(calledUrl, new RegExp(`/functions/v1/${RECOGNITION_FUNCTION_NAME}$`));
+  assert.equal(calledPayload.imageDataUrl, "data:image/jpeg;base64,abc");
+  assert.equal(calledHeaders.Authorization, "Bearer test-token");
+  assert.equal(calledHeaders.apikey, "test-anon-key");
+
+  delete globalThis.__MDALL_TEST_BUILD_SUPABASE_AUTH_HEADERS__;
 });
 
 test("recognizeHandwrittenDocument remonte une erreur claire si l'Edge Function répond en erreur", async () => {
   withLocalStorage("0");
   globalThis.window = { MDALL_CONFIG: { supabaseUrl: "https://example.supabase.co" } };
+  globalThis.__MDALL_TEST_BUILD_SUPABASE_AUTH_HEADERS__ = async (extra = {}) => ({ ...extra, Authorization: "Bearer test-token", apikey: "anon" });
   globalThis.fetch = async () => ({
     ok: false,
     status: 503,
@@ -72,9 +93,11 @@ test("recognizeHandwrittenDocument remonte une erreur claire si l'Edge Function 
   });
 
   await assert.rejects(
-    () => recognizeHandwrittenDocument({ strokes: [] }),
+    () => recognizeHandwrittenDocument({ strokes: [], imageDataUrl: "data:image/jpeg;base64,abc" }),
     /Reconnaissance manuscrite non configurée/
   );
+
+  delete globalThis.__MDALL_TEST_BUILD_SUPABASE_AUTH_HEADERS__;
 });
 
 test("le markdown mock contient des blocs mathématiques $$...$$", async () => {

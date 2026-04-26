@@ -25,6 +25,60 @@ function cloneStroke(stroke = {}) {
   };
 }
 
+
+function exportRecognitionImageDataUrl({ strokes = [], width = 1, height = 1, maxDimension = 1600 } = {}) {
+  const safeWidth = Math.max(1, Math.floor(toNumber(width, 1)));
+  const safeHeight = Math.max(1, Math.floor(toNumber(height, 1)));
+  const longestSide = Math.max(safeWidth, safeHeight);
+  const scale = longestSide > maxDimension ? (maxDimension / longestSide) : 1;
+  const targetWidth = Math.max(1, Math.round(safeWidth * scale));
+  const targetHeight = Math.max(1, Math.round(safeHeight * scale));
+
+  const exportCanvas = document.createElement("canvas");
+  exportCanvas.width = targetWidth;
+  exportCanvas.height = targetHeight;
+
+  const ctx = exportCanvas.getContext("2d");
+  if (!ctx) {
+    throw new Error("Impossible de préparer l'image manuscrite");
+  }
+
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, targetWidth, targetHeight);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  const normalizedStrokes = Array.isArray(strokes) ? strokes : [];
+  normalizedStrokes.forEach((stroke) => {
+    const points = Array.isArray(stroke?.points) ? stroke.points : [];
+    if (!points.length) return;
+
+    const lineWidth = Math.max(1, toNumber(stroke?.width, 2.2) * scale);
+    ctx.strokeStyle = "#111827";
+    ctx.fillStyle = "#111827";
+    ctx.lineWidth = lineWidth;
+
+    if (points.length === 1) {
+      const x = Math.min(1, Math.max(0, toNumber(points[0]?.x, 0))) * targetWidth;
+      const y = Math.min(1, Math.max(0, toNumber(points[0]?.y, 0))) * targetHeight;
+      ctx.beginPath();
+      ctx.arc(x, y, Math.max(1, lineWidth / 2), 0, Math.PI * 2);
+      ctx.fill();
+      return;
+    }
+
+    ctx.beginPath();
+    points.forEach((point, index) => {
+      const x = Math.min(1, Math.max(0, toNumber(point?.x, 0))) * targetWidth;
+      const y = Math.min(1, Math.max(0, toNumber(point?.y, 0))) * targetHeight;
+      if (index === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+  });
+
+  return exportCanvas.toDataURL("image/jpeg", 0.88);
+}
 function cloneDraft(draft = {}) {
   return {
     strokes: Array.isArray(draft.strokes) ? draft.strokes.map(cloneStroke) : [],
@@ -295,8 +349,15 @@ export function mountHandwritingComposerOverlay({
     const previousLabel = btn.textContent;
     btn.textContent = "Conversion…";
     try {
+      const normalizedStrokes = drawing.strokes.map(cloneStroke);
+      const imageDataUrl = exportRecognitionImageDataUrl({
+        strokes: normalizedStrokes,
+        width: drawing.width,
+        height: drawing.height
+      });
       const recognition = await recognizeHandwrittenDocument({
-        strokes: drawing.strokes.map(cloneStroke),
+        strokes: normalizedStrokes,
+        imageDataUrl,
         canvasSize: { width: drawing.width, height: drawing.height },
         subjectContext: { subjectId: String(subjectId || ""), composerKind: String(composerKind || "main") }
       });
@@ -353,3 +414,8 @@ export function mountHandwritingComposerOverlay({
     }
   };
 }
+
+
+export const __handwritingComposerOverlayInternals = {
+  exportRecognitionImageDataUrl
+};
