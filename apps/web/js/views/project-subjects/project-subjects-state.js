@@ -49,6 +49,9 @@ export function createProjectSubjectsState({ store }) {
     if (!v.handwritingComposerDraftBySubjectId || typeof v.handwritingComposerDraftBySubjectId !== "object") {
       v.handwritingComposerDraftBySubjectId = {};
     }
+    if (!v.handwritingComposerDraftByKey || typeof v.handwritingComposerDraftByKey !== "object") {
+      v.handwritingComposerDraftByKey = {};
+    }
     if (!v.replyContext || typeof v.replyContext !== "object") {
       v.replyContext = {
         subjectId: "",

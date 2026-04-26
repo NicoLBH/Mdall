@@ -873,6 +873,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
     const normalizedDraft = String(draft || "");
     const hasReadyAttachment = pendingAttachments.some((attachment) => String(attachment?.uploadStatus || "").trim() === "ready" && !attachment?.error);
     const canSubmit = !!normalizedDraft.trim() || hasReadyAttachment;
+    const showHandwritingButton = shouldShowHandwritingButton();
     const pendingAttachmentsHtml = pendingAttachments.length
       ? `
         <div class="subject-composer-attachments">
@@ -930,6 +931,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
             : "",
           actionsHtml: `
             <div class="thread-inline-reply-editor__actions">
+              ${showHandwritingButton ? `<button class="gh-btn gh-btn--handwriting" type="button" data-action="open-handwriting-composer" data-composer-kind="reply" data-message-id="${escapeHtml(commentId)}" title="Écrire à la main">Formules</button>` : ""}
               <button class="gh-btn" type="button" data-action="thread-reply-cancel" data-message-id="${escapeHtml(commentId)}">Annuler</button>
               <button class="gh-btn gh-btn--comment gh-btn--primary" type="button" data-action="thread-reply-submit" data-message-id="${escapeHtml(commentId)}" ${canSubmit ? "" : "disabled"}>Répondre</button>
             </div>
@@ -972,6 +974,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
       : "comment-composer--thread-edit-root";
     const submitLabel = Number(depth || 0) > 0 ? "Mettre à jour la réponse" : "Mettre à jour le commentaire";
     const canSubmit = !!normalizedDraft.trim() || hasReadyAttachment;
+    const showHandwritingButton = shouldShowHandwritingButton();
     const pendingAttachmentsHtml = pendingAttachments.length
       ? `
         <div class="subject-composer-attachments">
@@ -1025,6 +1028,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
             : "",
           actionsHtml: `
             <div class="thread-inline-reply-editor__actions">
+              ${showHandwritingButton ? `<button class="gh-btn gh-btn--handwriting" type="button" data-action="open-handwriting-composer" data-composer-kind="edit" data-message-id="${escapeHtml(commentId)}" title="Écrire à la main">Formules</button>` : ""}
               <button class="gh-btn" type="button" data-action="thread-edit-cancel" data-message-id="${escapeHtml(commentId)}">Annuler</button>
               <button class="gh-btn gh-btn--comment gh-btn--primary" type="button" data-action="thread-edit-submit" data-message-id="${escapeHtml(commentId)}" data-original-body="${escapeHtml(String(originalMessage || ""))}" ${canSubmit ? "" : "disabled"}>${submitLabel}</button>
             </div>

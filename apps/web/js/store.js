@@ -77,7 +77,8 @@ function createSituationsViewState() {
     page: 1,
     pageSize: 80,
     detailsModalOpen: false,
-    handwritingComposerDraftBySubjectId: {}
+    handwritingComposerDraftBySubjectId: {},
+    handwritingComposerDraftByKey: {}
   };
 }
 

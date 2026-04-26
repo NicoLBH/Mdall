@@ -63,6 +63,8 @@ export function renderHandwritingComposerOverlay({ subjectId = "", draft = {} } 
 export function mountHandwritingComposerOverlay({
   root,
   subjectId = "",
+  composerKind = "main",
+  textareaSelector = "#humanCommentBox",
   draft = {},
   onClose,
   onSaveDraft,
@@ -296,10 +298,10 @@ export function mountHandwritingComposerOverlay({
       const recognition = await recognizeHandwrittenDocument({
         strokes: drawing.strokes.map(cloneStroke),
         canvasSize: { width: drawing.width, height: drawing.height },
-        subjectContext: { subjectId: String(subjectId || ""), composerKind: "main" }
+        subjectContext: { subjectId: String(subjectId || ""), composerKind: String(composerKind || "main") }
       });
       const markdown = String(recognition?.markdown || "");
-      const textarea = document.querySelector("#humanCommentBox");
+      const textarea = document.querySelector(String(textareaSelector || "#humanCommentBox"));
       const currentValue = String(textarea?.value || "");
       const previousRecognized = String(initialDraft.recognizedMarkdown || "");
       const shouldConfirmReplacement = !!currentValue.trim() && currentValue !== previousRecognized;
