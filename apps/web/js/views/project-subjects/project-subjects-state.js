@@ -46,6 +46,12 @@ export function createProjectSubjectsState({ store }) {
     if (typeof v.commentPreviewMode !== "boolean") v.commentPreviewMode = false;
     if (typeof v.commentDraft !== "string") v.commentDraft = "";
     if (typeof v.helpMode !== "boolean") v.helpMode = false;
+    if (!v.handwritingComposerDraftBySubjectId || typeof v.handwritingComposerDraftBySubjectId !== "object") {
+      v.handwritingComposerDraftBySubjectId = {};
+    }
+    if (!v.handwritingComposerDraftByKey || typeof v.handwritingComposerDraftByKey !== "object") {
+      v.handwritingComposerDraftByKey = {};
+    }
     if (!v.replyContext || typeof v.replyContext !== "object") {
       v.replyContext = {
         subjectId: "",

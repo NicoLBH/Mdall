@@ -1,5 +1,6 @@
 import { getAuthorIdentity } from "../ui/author-identity.js";
 import { renderSubjectMarkdownToolbar } from "../ui/subject-rich-editor.js";
+import { shouldShowHandwritingButton } from "../../utils/input-capabilities.js";
 import { renderSubjectAttachmentTile } from "./project-subjects-attachments-ui.js";
 import {
   buildBusinessActivitySummary,
@@ -872,6 +873,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
     const normalizedDraft = String(draft || "");
     const hasReadyAttachment = pendingAttachments.some((attachment) => String(attachment?.uploadStatus || "").trim() === "ready" && !attachment?.error);
     const canSubmit = !!normalizedDraft.trim() || hasReadyAttachment;
+    const showHandwritingButton = shouldShowHandwritingButton();
     const pendingAttachmentsHtml = pendingAttachments.length
       ? `
         <div class="subject-composer-attachments">
@@ -929,6 +931,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
             : "",
           actionsHtml: `
             <div class="thread-inline-reply-editor__actions">
+              ${showHandwritingButton ? `<button class="gh-btn gh-btn--handwriting" type="button" data-action="open-handwriting-composer" data-composer-kind="reply" data-message-id="${escapeHtml(commentId)}" title="Écrire à la main">Formules</button>` : ""}
               <button class="gh-btn" type="button" data-action="thread-reply-cancel" data-message-id="${escapeHtml(commentId)}">Annuler</button>
               <button class="gh-btn gh-btn--comment gh-btn--primary" type="button" data-action="thread-reply-submit" data-message-id="${escapeHtml(commentId)}" ${canSubmit ? "" : "disabled"}>Répondre</button>
             </div>
@@ -971,6 +974,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
       : "comment-composer--thread-edit-root";
     const submitLabel = Number(depth || 0) > 0 ? "Mettre à jour la réponse" : "Mettre à jour le commentaire";
     const canSubmit = !!normalizedDraft.trim() || hasReadyAttachment;
+    const showHandwritingButton = shouldShowHandwritingButton();
     const pendingAttachmentsHtml = pendingAttachments.length
       ? `
         <div class="subject-composer-attachments">
@@ -1024,6 +1028,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
             : "",
           actionsHtml: `
             <div class="thread-inline-reply-editor__actions">
+              ${showHandwritingButton ? `<button class="gh-btn gh-btn--handwriting" type="button" data-action="open-handwriting-composer" data-composer-kind="edit" data-message-id="${escapeHtml(commentId)}" title="Écrire à la main">Formules</button>` : ""}
               <button class="gh-btn" type="button" data-action="thread-edit-cancel" data-message-id="${escapeHtml(commentId)}">Annuler</button>
               <button class="gh-btn gh-btn--comment gh-btn--primary" type="button" data-action="thread-edit-submit" data-message-id="${escapeHtml(commentId)}" data-original-body="${escapeHtml(String(originalMessage || ""))}" ${canSubmit ? "" : "disabled"}>${submitLabel}</button>
             </div>
@@ -1904,11 +1909,20 @@ priority=${firstNonEmpty(subject.priority, "")}`
     const pendingAttachments = normalizedSubjectId && normalizeId(attachmentState.subjectId) === normalizedSubjectId
       ? attachmentState.items
       : [];
+    const showHandwritingButton = shouldShowHandwritingButton();
+    const handwritingActionHtml = showHandwritingButton
+      ? `
+      <button class="gh-btn gh-btn--handwriting" data-action="open-handwriting-composer" type="button" title="Écrire à la main">
+        <span>Formules</span>
+      </button>
+    `
+      : "";
     const actionsHtml = `
       <button class="gh-btn gh-btn--help-mode ${helpMode ? "is-on" : ""}" data-action="toggle-help" type="button">
         <span class="gh-btn__icon" aria-hidden="true">${svgIcon("stopwatch", { className: "octicon octicon-stopwatch" })}</span>
         <span>Mode éphémère</span>
       </button>
+      ${handwritingActionHtml}
 
       ${issueStatusActionHtml}
 
