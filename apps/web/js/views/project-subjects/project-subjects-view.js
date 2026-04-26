@@ -3117,6 +3117,7 @@ function renderDetailsDiscussionScopes(detailsHost, options = {}) {
 }
 
 async function applyCommentAction(root) {
+  if (store?.situationsView?.isCommentSubmitPending) return;
   const target = currentDecisionTarget(root);
   if (!target) return;
 
@@ -3158,6 +3159,8 @@ async function applyCommentAction(root) {
   if (helpActive && target.type === "sujet") {
     if (!message) return;
 
+    store.situationsView.isCommentSubmitPending = true;
+
     logEphemeralFlow("ephemeral-submit", {
       subjectId: String(target.id || "").trim(),
       hasParentMessageId: !!parentMessageId,
@@ -3179,6 +3182,8 @@ async function applyCommentAction(root) {
       });
       console.warn("[subject-mdall] ephemeral exchange failed", error);
       return;
+    } finally {
+      store.situationsView.isCommentSubmitPending = false;
     }
 
     ta.value = "";
@@ -3233,14 +3238,18 @@ async function applyCommentAction(root) {
   }
 
   const uploadSessionId = hasAttachmentsForTarget ? String(composerAttachments?.uploadSessionId || "").trim() : "";
-
-  await addComment(target.type, target.id, message, {
-    actor: "Human",
-    agent: "human",
-    parentMessageId: parentMessageId || undefined,
-    mentions,
-    uploadSessionId: uploadSessionId || undefined
-  });
+  store.situationsView.isCommentSubmitPending = true;
+  try {
+    await addComment(target.type, target.id, message, {
+      actor: "Human",
+      agent: "human",
+      parentMessageId: parentMessageId || undefined,
+      mentions,
+      uploadSessionId: uploadSessionId || undefined
+    });
+  } finally {
+    store.situationsView.isCommentSubmitPending = false;
+  }
   ta.value = "";
   store.situationsView.commentDraft = "";
   store.situationsView.commentPreviewMode = false;
