@@ -2,7 +2,6 @@ import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.j
 
 const SUPABASE_URL = getSupabaseUrl();
 const SUBJECT_MDALL_EXCHANGE_FN_URL = `${SUPABASE_URL}/functions/v1/subject-mdall-exchange`;
-const DEBUG_FLAG = "mdall:debug-subject-mdall";
 
 function normalizeId(value) {
   return String(value || "").trim();
@@ -12,31 +11,8 @@ function normalizeMarkdown(value) {
   return String(value || "").trim();
 }
 
-function isMdallDebugEnabled() {
-  const values = [];
-  try {
-    values.push(globalThis?.localStorage?.getItem(DEBUG_FLAG));
-  } catch {
-    // noop
-  }
-  try {
-    values.push(globalThis?.sessionStorage?.getItem(DEBUG_FLAG));
-  } catch {
-    // noop
-  }
-  return values.some((value) => {
-    const raw = String(value || "").trim().toLowerCase();
-    return raw && raw !== "0" && raw !== "false" && raw !== "off" && raw !== "no";
-  });
-}
-
 function debugLog(event, payload = {}) {
-  if (!isMdallDebugEnabled()) return;
-  try {
-    console.info(`[subject-mdall] ${event}`, payload);
-  } catch {
-    // noop
-  }
+  return undefined;
 }
 
 function safeJsonParse(text) {

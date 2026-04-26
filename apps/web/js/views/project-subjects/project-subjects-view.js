@@ -3137,9 +3137,7 @@ async function applyCommentAction(root) {
   const mentions = extractStructuredMentions(message);
 
   const logEphemeralFlow = (event, payload = {}) => {
-    try {
-      console.info(`[subject-mdall] ${event}`, payload);
-    } catch {}
+    return undefined;
   };
 
   const resolveScopeHost = () => {
@@ -3183,7 +3181,6 @@ async function applyCommentAction(root) {
         subjectId: String(target.id || "").trim(),
         message: String(error?.message || error || "unknown error")
       });
-      console.warn("[subject-mdall] ephemeral exchange failed", error);
       return;
     } finally {
       store.situationsView.isCommentSubmitPending = false;
@@ -3275,7 +3272,10 @@ async function applyCommentAction(root) {
         });
         refreshTimelineForCurrentScope(resolveScopeHost());
       } catch (error) {
-        console.warn("[subject-mdall] normal exchange failed", error);
+        logEphemeralFlow("normal-submit-error", {
+          subjectId: String(target.id || "").trim(),
+          message: String(error?.message || error || "unknown error")
+        });
       } finally {
         store.situationsView.mdallReplyPendingSubjectId = "";
       }
