@@ -14255,7 +14255,7 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 
 .handwriting-composer-overlay__error {
   margin: 0;
-  min-height: 18px;
+  display: none;
   color: #fca5a5;
   font-size: 13px;
   opacity: 0;
@@ -14263,6 +14263,7 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 }
 
 .handwriting-composer-overlay__error.is-visible {
+  display: block;
   opacity: 1;
 }
 
