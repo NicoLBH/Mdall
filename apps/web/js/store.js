@@ -76,7 +76,8 @@ function createSituationsViewState() {
     displayDepth: "situations",
     page: 1,
     pageSize: 80,
-    detailsModalOpen: false
+    detailsModalOpen: false,
+    handwritingComposerDraftBySubjectId: {}
   };
 }
 

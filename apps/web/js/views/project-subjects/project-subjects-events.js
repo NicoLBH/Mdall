@@ -118,6 +118,40 @@ export function createProjectSubjectsEvents(config) {
   let descriptionVersionsPositionBound = false;
   let isCreateSubjectSubmitHandling = false;
   const interactiveBindingEpochByRoot = new WeakMap();
+  const HANDWRITING_DEBUG_STORAGE_KEY = "mdall:debug-handwriting-composer";
+
+  function isHandwritingComposerDebugEnabled() {
+    try {
+      return String(window?.localStorage?.getItem?.(HANDWRITING_DEBUG_STORAGE_KEY) || "").trim() === "1";
+    } catch {
+      return false;
+    }
+  }
+
+  function debugHandwritingComposer(eventName, payload = {}) {
+    if (!isHandwritingComposerDebugEnabled()) return;
+    console.debug("[handwriting-composer]", eventName, payload);
+  }
+
+  function ensureHandwritingDraftForSubject(subjectId = "") {
+    const normalizedSubjectId = String(subjectId || "").trim();
+    if (!normalizedSubjectId) return null;
+    if (!store.situationsView.handwritingComposerDraftBySubjectId
+      || typeof store.situationsView.handwritingComposerDraftBySubjectId !== "object") {
+      store.situationsView.handwritingComposerDraftBySubjectId = {};
+    }
+    const drafts = store.situationsView.handwritingComposerDraftBySubjectId;
+    const existingDraft = drafts[normalizedSubjectId];
+    if (!existingDraft || typeof existingDraft !== "object") {
+      drafts[normalizedSubjectId] = {
+        strokes: [],
+        recognizedMarkdown: "",
+        updatedAt: Date.now()
+      };
+      debugHandwritingComposer("draft-created", { subjectId: normalizedSubjectId });
+    }
+    return drafts[normalizedSubjectId];
+  }
 
   function getTextareaAutosizeMeta(textarea) {
     const type = textarea?.matches?.("#humanCommentBox")
@@ -3453,6 +3487,18 @@ export function createProjectSubjectsEvents(config) {
       btn.onclick = () => {
         store.situationsView.helpMode = !store.situationsView.helpMode;
         rerenderDiscussionComposerScope(btn);
+      };
+    });
+    root.querySelectorAll("[data-action='open-handwriting-composer']").forEach((btn) => {
+      btn.onclick = () => {
+        const selection = getScopedSelection(btn) || getScopedSelection(root);
+        const subjectId = String(selection?.type === "sujet" ? selection?.item?.id || "" : "").trim();
+        if (!subjectId) {
+          debugHandwritingComposer("open-click-ignored-no-subject", {});
+          return;
+        }
+        ensureHandwritingDraftForSubject(subjectId);
+        debugHandwritingComposer("open-click", { subjectId });
       };
     });
 
