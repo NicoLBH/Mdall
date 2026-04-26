@@ -1,5 +1,6 @@
 import { getAuthorIdentity } from "../ui/author-identity.js";
 import { renderSubjectMarkdownToolbar } from "../ui/subject-rich-editor.js";
+import { shouldShowHandwritingButton } from "../../utils/input-capabilities.js";
 import { renderSubjectAttachmentTile } from "./project-subjects-attachments-ui.js";
 import {
   buildBusinessActivitySummary,
@@ -1904,11 +1905,20 @@ priority=${firstNonEmpty(subject.priority, "")}`
     const pendingAttachments = normalizedSubjectId && normalizeId(attachmentState.subjectId) === normalizedSubjectId
       ? attachmentState.items
       : [];
+    const showHandwritingButton = shouldShowHandwritingButton();
+    const handwritingActionHtml = showHandwritingButton
+      ? `
+      <button class="gh-btn gh-btn--handwriting" data-action="open-handwriting-composer" type="button" title="Écrire à la main">
+        <span>Formules</span>
+      </button>
+    `
+      : "";
     const actionsHtml = `
       <button class="gh-btn gh-btn--help-mode ${helpMode ? "is-on" : ""}" data-action="toggle-help" type="button">
         <span class="gh-btn__icon" aria-hidden="true">${svgIcon("stopwatch", { className: "octicon octicon-stopwatch" })}</span>
         <span>Mode éphémère</span>
       </button>
+      ${handwritingActionHtml}
 
       ${issueStatusActionHtml}
 

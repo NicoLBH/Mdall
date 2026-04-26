@@ -18,6 +18,7 @@ import { computeTextareaCaretRect } from "../../utils/textarea-caret-position.js
 import { autosizeTextarea } from "../../utils/textarea-autosize.js";
 import { renderSubjectAttachmentTile, renderSubjectAttachmentsPreviewList } from "./project-subjects-attachments-ui.js";
 import { isMetaDropdownOpenForAnchor } from "../ui/select-dropdown-controller.js";
+import { mountHandwritingComposerOverlay } from "../ui/handwriting-composer-overlay.js";
 
 export function createProjectSubjectsEvents(config) {
   const EMOJI_GRID_COLUMNS = 6;
@@ -118,6 +119,40 @@ export function createProjectSubjectsEvents(config) {
   let descriptionVersionsPositionBound = false;
   let isCreateSubjectSubmitHandling = false;
   const interactiveBindingEpochByRoot = new WeakMap();
+  const HANDWRITING_DEBUG_STORAGE_KEY = "mdall:debug-handwriting-composer";
+
+  function isHandwritingComposerDebugEnabled() {
+    try {
+      return String(window?.localStorage?.getItem?.(HANDWRITING_DEBUG_STORAGE_KEY) || "").trim() === "1";
+    } catch {
+      return false;
+    }
+  }
+
+  function debugHandwritingComposer(eventName, payload = {}) {
+    if (!isHandwritingComposerDebugEnabled()) return;
+    console.debug("[handwriting-composer]", eventName, payload);
+  }
+
+  function ensureHandwritingDraftForSubject(subjectId = "") {
+    const normalizedSubjectId = String(subjectId || "").trim();
+    if (!normalizedSubjectId) return null;
+    if (!store.situationsView.handwritingComposerDraftBySubjectId
+      || typeof store.situationsView.handwritingComposerDraftBySubjectId !== "object") {
+      store.situationsView.handwritingComposerDraftBySubjectId = {};
+    }
+    const drafts = store.situationsView.handwritingComposerDraftBySubjectId;
+    const existingDraft = drafts[normalizedSubjectId];
+    if (!existingDraft || typeof existingDraft !== "object") {
+      drafts[normalizedSubjectId] = {
+        strokes: [],
+        recognizedMarkdown: "",
+        updatedAt: Date.now()
+      };
+      debugHandwritingComposer("draft-created", { subjectId: normalizedSubjectId });
+    }
+    return drafts[normalizedSubjectId];
+  }
 
   function getTextareaAutosizeMeta(textarea) {
     const type = textarea?.matches?.("#humanCommentBox")
@@ -3453,6 +3488,40 @@ export function createProjectSubjectsEvents(config) {
       btn.onclick = () => {
         store.situationsView.helpMode = !store.situationsView.helpMode;
         rerenderDiscussionComposerScope(btn);
+      };
+    });
+    root.querySelectorAll("[data-action='open-handwriting-composer']").forEach((btn) => {
+      btn.onclick = () => {
+        const selection = getScopedSelection(btn) || getScopedSelection(root);
+        const subjectId = String(selection?.type === "sujet" ? selection?.item?.id || "" : "").trim();
+        if (!subjectId) {
+          debugHandwritingComposer("open-click-ignored-no-subject", {});
+          return;
+        }
+        const existingDraft = ensureHandwritingDraftForSubject(subjectId);
+        mountHandwritingComposerOverlay({
+          root: document.body,
+          subjectId,
+          draft: existingDraft,
+          onSaveDraft: (nextDraft = {}) => {
+            const normalized = ensureHandwritingDraftForSubject(subjectId);
+            if (!normalized) return;
+            normalized.strokes = Array.isArray(nextDraft.strokes) ? nextDraft.strokes : [];
+            normalized.recognizedMarkdown = String(nextDraft.recognizedMarkdown || normalized.recognizedMarkdown || "");
+            normalized.updatedAt = Number.isFinite(Number(nextDraft.updatedAt)) ? Number(nextDraft.updatedAt) : Date.now();
+            debugHandwritingComposer("draft-saved", {
+              subjectId,
+              strokeCount: normalized.strokes.length
+            });
+          },
+          onClose: ({ trigger } = {}) => {
+            debugHandwritingComposer("overlay-closed", { subjectId, trigger: String(trigger || "") });
+          },
+          onRecognizeAndInsert: () => {
+            debugHandwritingComposer("recognize-click-ignored-step2", { subjectId });
+          }
+        });
+        debugHandwritingComposer("open-click", { subjectId });
       };
     });
 
