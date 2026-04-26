@@ -18,6 +18,7 @@ import { computeTextareaCaretRect } from "../../utils/textarea-caret-position.js
 import { autosizeTextarea } from "../../utils/textarea-autosize.js";
 import { renderSubjectAttachmentTile, renderSubjectAttachmentsPreviewList } from "./project-subjects-attachments-ui.js";
 import { isMetaDropdownOpenForAnchor } from "../ui/select-dropdown-controller.js";
+import { mountHandwritingComposerOverlay } from "../ui/handwriting-composer-overlay.js";
 
 export function createProjectSubjectsEvents(config) {
   const EMOJI_GRID_COLUMNS = 6;
@@ -118,6 +119,48 @@ export function createProjectSubjectsEvents(config) {
   let descriptionVersionsPositionBound = false;
   let isCreateSubjectSubmitHandling = false;
   const interactiveBindingEpochByRoot = new WeakMap();
+  const HANDWRITING_DEBUG_STORAGE_KEY = "mdall:debug-handwriting-composer";
+
+  function isHandwritingComposerDebugEnabled() {
+    try {
+      return String(window?.localStorage?.getItem?.(HANDWRITING_DEBUG_STORAGE_KEY) || "").trim() === "1";
+    } catch {
+      return false;
+    }
+  }
+
+  function debugHandwritingComposer(eventName, payload = {}) {
+    if (!isHandwritingComposerDebugEnabled()) return;
+    console.debug("[handwriting-composer]", eventName, payload);
+  }
+
+  function ensureHandwritingDraftForKey(key = "", debugPayload = {}) {
+    const normalizedKey = String(key || "").trim();
+    if (!normalizedKey) return null;
+    if (!store.situationsView.handwritingComposerDraftByKey
+      || typeof store.situationsView.handwritingComposerDraftByKey !== "object") {
+      store.situationsView.handwritingComposerDraftByKey = {};
+    }
+    const drafts = store.situationsView.handwritingComposerDraftByKey;
+    let existingDraft = drafts[normalizedKey];
+    if (!existingDraft && normalizedKey.startsWith("main:")) {
+      const legacySubjectId = normalizedKey.slice(5);
+      const legacyDrafts = store.situationsView.handwritingComposerDraftBySubjectId;
+      if (legacyDrafts && typeof legacyDrafts === "object" && legacyDrafts[legacySubjectId]) {
+        existingDraft = legacyDrafts[legacySubjectId];
+        drafts[normalizedKey] = existingDraft;
+      }
+    }
+    if (!existingDraft || typeof existingDraft !== "object") {
+      drafts[normalizedKey] = {
+        strokes: [],
+        recognizedMarkdown: "",
+        updatedAt: Date.now()
+      };
+      debugHandwritingComposer("draft-created", { key: normalizedKey, ...debugPayload });
+    }
+    return drafts[normalizedKey];
+  }
 
   function getTextareaAutosizeMeta(textarea) {
     const type = textarea?.matches?.("#humanCommentBox")
@@ -3453,6 +3496,79 @@ export function createProjectSubjectsEvents(config) {
       btn.onclick = () => {
         store.situationsView.helpMode = !store.situationsView.helpMode;
         rerenderDiscussionComposerScope(btn);
+      };
+    });
+    root.querySelectorAll("[data-action='open-handwriting-composer']").forEach((btn) => {
+      btn.onclick = () => {
+        const selection = getScopedSelection(btn) || getScopedSelection(root);
+        const subjectId = String(selection?.type === "sujet" ? selection?.item?.id || "" : "").trim();
+        const composerKind = String(btn?.dataset?.composerKind || "main").trim().toLowerCase();
+        const messageId = String(btn?.dataset?.messageId || "").trim();
+        const escapedMessageId = messageId.replace(/["\\]/g, "\\$&");
+        if (!subjectId) {
+          debugHandwritingComposer("open-click-ignored-no-subject", {});
+          return;
+        }
+        let draftKey = `main:${subjectId}`;
+        let textareaSelector = "#humanCommentBox";
+        if (composerKind === "reply") {
+          if (!messageId) {
+            debugHandwritingComposer("open-click-ignored-no-message", { subjectId, composerKind });
+            return;
+          }
+          draftKey = `reply:${subjectId}:${messageId}`;
+          textareaSelector = `[data-thread-reply-draft="${escapedMessageId}"]`;
+        } else if (composerKind === "edit") {
+          if (!messageId) {
+            debugHandwritingComposer("open-click-ignored-no-message", { subjectId, composerKind });
+            return;
+          }
+          draftKey = `edit:${subjectId}:${messageId}`;
+          textareaSelector = `[data-thread-edit-draft="${escapedMessageId}"]`;
+        }
+        const existingDraft = ensureHandwritingDraftForKey(draftKey, { subjectId, composerKind, messageId });
+        mountHandwritingComposerOverlay({
+          root: document.body,
+          subjectId,
+          composerKind,
+          textareaSelector,
+          draft: existingDraft,
+          onSaveDraft: (nextDraft = {}) => {
+            const normalized = ensureHandwritingDraftForKey(draftKey, { subjectId, composerKind, messageId });
+            if (!normalized) return;
+            normalized.strokes = Array.isArray(nextDraft.strokes) ? nextDraft.strokes : [];
+            normalized.recognizedMarkdown = String(nextDraft.recognizedMarkdown || normalized.recognizedMarkdown || "");
+            normalized.updatedAt = Number.isFinite(Number(nextDraft.updatedAt)) ? Number(nextDraft.updatedAt) : Date.now();
+            if (composerKind === "main" && subjectId) {
+              if (!store.situationsView.handwritingComposerDraftBySubjectId
+                || typeof store.situationsView.handwritingComposerDraftBySubjectId !== "object") {
+                store.situationsView.handwritingComposerDraftBySubjectId = {};
+              }
+              store.situationsView.handwritingComposerDraftBySubjectId[subjectId] = normalized;
+            }
+            debugHandwritingComposer("draft-saved", {
+              key: draftKey,
+              subjectId,
+              composerKind,
+              messageId,
+              strokeCount: normalized.strokes.length
+            });
+          },
+          onClose: ({ trigger } = {}) => {
+            debugHandwritingComposer("overlay-closed", { key: draftKey, subjectId, composerKind, messageId, trigger: String(trigger || "") });
+          },
+          onRecognizeAndInsert: ({ recognition } = {}) => {
+            debugHandwritingComposer("recognize-inserted", {
+              key: draftKey,
+              subjectId,
+              composerKind,
+              messageId,
+              provider: String(recognition?.provider || ""),
+              hasMarkdown: !!String(recognition?.markdown || "").trim()
+            });
+          }
+        });
+        debugHandwritingComposer("open-click", { key: draftKey, subjectId, composerKind, messageId });
       };
     });
 
