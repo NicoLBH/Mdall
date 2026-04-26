@@ -4275,13 +4275,18 @@ body.drilldown-open .drilldown__inner,
 
 .gh-comment-box--help{
   border:1px dashed rgba(31,111,235,.65);
-  background: rgba(56,139,253,.04);
+  background: var(--bg);
 }
 .gh-comment-header--help{
   background: rgba(56,139,253,.10);
-  border-bottom:1px dashed rgba(31,111,235,.45);
   font-family: var(--font);
   font-size:14px;
+}
+.comment-composer__tabs.light-tabs.gh-comment-header--help .light-tabs__item.is-active{
+  border:1px dashed rgba(31,111,235,.70);
+  border-top:none;
+  border-bottom:1px solid var(--bg);
+  background:var(--bg);
 }
 .gh-comment-body--help{
   background: transparent;
