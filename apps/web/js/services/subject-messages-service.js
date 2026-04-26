@@ -116,8 +116,18 @@ export function createSubjectMessagesService({ repository } = {}) {
     return provider.unlockConversation({ subjectId });
   }
 
-  async function listCollaboratorsForMentions(projectId) {
-    return provider.listCollaboratorsForMentions({ projectId });
+  async function listCollaboratorsForMentions(projectIdOrOptions = "") {
+    if (projectIdOrOptions && typeof projectIdOrOptions === "object" && !Array.isArray(projectIdOrOptions)) {
+      return provider.listCollaboratorsForMentions({
+        projectId: projectIdOrOptions.projectId
+      });
+    }
+    return provider.listCollaboratorsForMentions({ projectId: projectIdOrOptions });
+  }
+
+  async function getOrCreateMdallPerson() {
+    if (typeof provider.getOrCreateMdallPerson !== "function") return null;
+    return provider.getOrCreateMdallPerson();
   }
 
   async function listUnreadConversationNotifications(context = {}) {
@@ -142,6 +152,7 @@ export function createSubjectMessagesService({ repository } = {}) {
     lockConversation,
     unlockConversation,
     listCollaboratorsForMentions,
+    getOrCreateMdallPerson,
     listUnreadConversationNotifications
   };
 }

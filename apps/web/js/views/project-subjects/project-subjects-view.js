@@ -16,7 +16,10 @@ import {
   syncSelectDropdownPosition
 } from "../ui/select-dropdown-controller.js";
 import { extractStructuredMentions } from "../../utils/subject-mentions.js";
-import { sendSubjectMdallExchange } from "../../services/subject-mdall-service.js";
+import {
+  sendSubjectMdallExchange,
+  sendSubjectMdallReplyForExistingMessage
+} from "../../services/subject-mdall-service.js";
 import { renderCommentComposer } from "../ui/comment-composer.js";
 import { renderSubjectMarkdownToolbar } from "../ui/subject-rich-editor.js";
 import { renderSubjectAttachmentsPreviewList } from "./project-subjects-attachments-ui.js";
@@ -3117,6 +3120,7 @@ function renderDetailsDiscussionScopes(detailsHost, options = {}) {
 }
 
 async function applyCommentAction(root) {
+  if (store?.situationsView?.isCommentSubmitPending) return;
   const target = currentDecisionTarget(root);
   if (!target) return;
 
@@ -3133,9 +3137,7 @@ async function applyCommentAction(root) {
   const mentions = extractStructuredMentions(message);
 
   const logEphemeralFlow = (event, payload = {}) => {
-    try {
-      console.info(`[subject-mdall] ${event}`, payload);
-    } catch {}
+    return undefined;
   };
 
   const resolveScopeHost = () => {
@@ -3158,6 +3160,8 @@ async function applyCommentAction(root) {
   if (helpActive && target.type === "sujet") {
     if (!message) return;
 
+    store.situationsView.isCommentSubmitPending = true;
+
     logEphemeralFlow("ephemeral-submit", {
       subjectId: String(target.id || "").trim(),
       hasParentMessageId: !!parentMessageId,
@@ -3177,8 +3181,9 @@ async function applyCommentAction(root) {
         subjectId: String(target.id || "").trim(),
         message: String(error?.message || error || "unknown error")
       });
-      console.warn("[subject-mdall] ephemeral exchange failed", error);
       return;
+    } finally {
+      store.situationsView.isCommentSubmitPending = false;
     }
 
     ta.value = "";
@@ -3233,17 +3238,51 @@ async function applyCommentAction(root) {
   }
 
   const uploadSessionId = hasAttachmentsForTarget ? String(composerAttachments?.uploadSessionId || "").trim() : "";
+  const shouldTriggerMdallNormalReply = (() => {
+    if (target.type !== "sujet" || helpActive) return false;
+    const rawTextMention = /(^|[\s(])@mdall\b/i.test(message);
+    if (rawTextMention) return true;
+    return Array.isArray(mentions)
+      && mentions.some((mention) => String(mention?.label || "").trim().toLowerCase() === "mdall");
+  })();
+  store.situationsView.mdallReplyPendingSubjectId = "";
+  store.situationsView.isCommentSubmitPending = true;
+  try {
+    const createdMessage = await addComment(target.type, target.id, message, {
+      actor: "Human",
+      agent: "human",
+      parentMessageId: parentMessageId || undefined,
+      mentions,
+      uploadSessionId: uploadSessionId || undefined
+    });
 
-  await addComment(target.type, target.id, message, {
-    actor: "Human",
-    agent: "human",
-    parentMessageId: parentMessageId || undefined,
-    mentions,
-    uploadSessionId: uploadSessionId || undefined
-  });
-  ta.value = "";
-  store.situationsView.commentDraft = "";
-  store.situationsView.commentPreviewMode = false;
+    ta.value = "";
+    store.situationsView.commentDraft = "";
+    store.situationsView.commentPreviewMode = false;
+
+    if (shouldTriggerMdallNormalReply && target.type === "sujet" && createdMessage?.id) {
+      store.situationsView.mdallReplyPendingSubjectId = String(target.id || "");
+      try {
+        await sendSubjectMdallReplyForExistingMessage({
+          subjectId: target.id,
+          userMessageId: createdMessage.id,
+          bodyMarkdown: message,
+          parentMessageId: parentMessageId || null,
+          mentions
+        });
+        refreshTimelineForCurrentScope(resolveScopeHost());
+      } catch (error) {
+        logEphemeralFlow("normal-submit-error", {
+          subjectId: String(target.id || "").trim(),
+          message: String(error?.message || error || "unknown error")
+        });
+      } finally {
+        store.situationsView.mdallReplyPendingSubjectId = "";
+      }
+    }
+  } finally {
+    store.situationsView.isCommentSubmitPending = false;
+  }
   if (store.situationsView?.replyContext) {
     store.situationsView.replyContext.subjectId = "";
     store.situationsView.replyContext.parentMessageId = "";

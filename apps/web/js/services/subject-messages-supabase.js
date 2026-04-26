@@ -483,7 +483,7 @@ export function createSubjectMessagesSupabaseRepository() {
       const params = new URLSearchParams();
       params.set(
         "select",
-        "id,project_id,subject_id,parent_message_id,author_person_id,author_user_id,body_markdown,created_at,updated_at,deleted_at,is_frozen,frozen_at,frozen_reason"
+        "id,project_id,subject_id,parent_message_id,author_person_id,author_user_id,body_markdown,created_at,updated_at,deleted_at,is_frozen,frozen_at,frozen_reason,visibility,visible_until,origin,llm_request_id,metadata"
       );
       params.set("subject_id", `eq.${normalizedSubjectId}`);
       params.set("order", "created_at.asc");
@@ -947,6 +947,18 @@ export function createSubjectMessagesSupabaseRepository() {
           roleGroupLabel: String(row?.role_group_label || "").trim()
         }))
         .filter((row) => !!row.personId);
+    },
+
+    async getOrCreateMdallPerson() {
+      const payload = await rpcCall("get_or_create_mdall_person", {});
+      const row = Array.isArray(payload) ? payload[0] : payload;
+      const personId = normalizeId(row?.person_id || row?.id);
+      if (!personId) return null;
+      return {
+        personId,
+        label: String(row?.label || "Mdall"),
+        email: String(row?.email || "mdall@system.local")
+      };
     },
 
     async listUnreadConversationNotifications({ projectId, personId = "" } = {}) {

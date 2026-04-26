@@ -103,6 +103,7 @@ export function createProjectSubjectsEvents(config) {
     getComposerAttachmentsState,
     mdToHtml,
     listCollaboratorsForMentions,
+    getOrCreateMdallPerson,
     ensureProjectCollaboratorsLoaded,
     uploadAttachmentFile,
     removeTemporaryAttachment,
@@ -1680,8 +1681,13 @@ export function createProjectSubjectsEvents(config) {
                 data-person-id="${escapeHtml(personId)}"
                 data-label="${escapeHtml(String(suggestion?.label || ""))}"
               >
-                <span class="subject-mention-popup__name">${escapeHtml(String(suggestion?.label || ""))}</span>
-                <span class="subject-mention-popup__meta">${escapeHtml(String(suggestion?.email || ""))}</span>
+                <span class="subject-mention-popup__name">
+                  ${String(suggestion?.avatarKind || "").toLowerCase() === "mdall"
+                    ? `<span class="subject-mention-popup__icon" aria-hidden="true">${svgIcon("heimdall")}</span>`
+                    : ""}
+                  ${escapeHtml(String(suggestion?.label || ""))}
+                </span>
+                <span class="subject-mention-popup__meta">${escapeHtml(String(suggestion?.subtitle || suggestion?.email || ""))}</span>
               </button>
             `;
     }).join("")
@@ -1875,10 +1881,12 @@ export function createProjectSubjectsEvents(config) {
       syncAutocompletePopups();
     };
 
+    const MDALL_EMAIL = "mdall@system.local";
     let mentionCollaborators = [];
     let mentionCollaboratorsLoaded = false;
     let mentionLoadPromise = null;
     let mentionCacheProjectKey = "";
+    let mdallMention = null;
 
     const getMentionState = () => {
       if (typeof getMentionUiState === "function") return getMentionUiState();
@@ -1956,6 +1964,7 @@ export function createProjectSubjectsEvents(config) {
       mentionCollaboratorsLoaded = false;
       mentionLoadPromise = null;
       mentionCacheProjectKey = String(projectKey || "").trim();
+      mdallMention = null;
       debugSubjectMentions("cache reset", { reason, projectKey: mentionCacheProjectKey });
     };
 
@@ -1978,14 +1987,56 @@ export function createProjectSubjectsEvents(config) {
         email,
         label,
         roleGroupCode: String(entry?.roleGroupCode || entry?.role_group_code || "").trim().toLowerCase(),
-        roleGroupLabel: String(entry?.roleGroupLabel || entry?.role_group_label || "").trim()
+        roleGroupLabel: String(entry?.roleGroupLabel || entry?.role_group_label || "").trim(),
+        avatarKind: String(entry?.avatarKind || "").trim().toLowerCase(),
+        subtitle: String(entry?.subtitle || "").trim()
       };
     };
 
     const buildMentionSuggestions = (entries = []) => entries
       .filter((entry) => String(entry?.status || "Actif").trim().toLowerCase() !== "retiré")
       .map((entry) => normalizeMentionCollaborator(entry))
-      .filter((entry) => !!entry?.personId);
+      .filter((entry) => {
+        if (!entry?.personId) return false;
+        const label = String(entry?.label || "").trim().toLowerCase();
+        const email = String(entry?.email || "").trim().toLowerCase();
+        const roleGroupCode = String(entry?.roleGroupCode || "").trim().toLowerCase();
+        const isRapso = roleGroupCode === "specialist_ps" || label === "rapso" || email === "rapso@system.local";
+        return !isRapso;
+      });
+
+    const resolveMdallMentionSuggestion = async () => {
+      if (mdallMention?.personId) return mdallMention;
+      if (typeof getOrCreateMdallPerson !== "function") return null;
+      try {
+        const row = await Promise.resolve(getOrCreateMdallPerson());
+        const personId = String(row?.personId || row?.person_id || "").trim();
+        if (!personId) return null;
+        mdallMention = {
+          personId,
+          userId: "",
+          email: MDALL_EMAIL,
+          label: "Mdall",
+          subtitle: "Assistant IA du projet",
+          roleGroupCode: "assistant",
+          roleGroupLabel: "Assistant IA",
+          avatarKind: "mdall"
+        };
+      } catch (error) {
+        console.warn("[subject-mentions] mdall person resolve failed", error);
+        mdallMention = null;
+      }
+      return mdallMention;
+    };
+
+    const mergeMdallMention = async (entries = []) => {
+      const list = Array.isArray(entries) ? entries.slice() : [];
+      const mdall = await resolveMdallMentionSuggestion();
+      if (!mdall?.personId) return list;
+      const exists = list.some((entry) => String(entry?.personId || "").trim() === mdall.personId);
+      if (!exists) list.unshift(mdall);
+      return list;
+    };
 
     const syncMentionCollaboratorsFromProjectStore = ({ projectKey = "", composerKey = "" } = {}) => {
       const storeRows = Array.isArray(store?.projectForm?.collaborators) ? store.projectForm.collaborators : [];
@@ -2012,7 +2063,10 @@ export function createProjectSubjectsEvents(config) {
       if (mentionLoadPromise) return mentionLoadPromise;
 
       const cachedFromStore = syncMentionCollaboratorsFromProjectStore({ projectKey, composerKey });
-      if (cachedFromStore.length) return cachedFromStore;
+      if (cachedFromStore.length) {
+        mentionCollaborators = await mergeMdallMention(cachedFromStore);
+        return mentionCollaborators;
+      }
 
       if (typeof ensureProjectCollaboratorsLoaded === "function") {
         debugSubjectMentions("fetch collaborators fallback", {
@@ -2022,7 +2076,10 @@ export function createProjectSubjectsEvents(config) {
         });
         await Promise.resolve(ensureProjectCollaboratorsLoaded());
         const hydratedFromStore = syncMentionCollaboratorsFromProjectStore({ projectKey, composerKey });
-        if (hydratedFromStore.length) return hydratedFromStore;
+        if (hydratedFromStore.length) {
+          mentionCollaborators = await mergeMdallMention(hydratedFromStore);
+          return mentionCollaborators;
+        }
       }
 
       if (!projectKey || typeof listCollaboratorsForMentions !== "function") {
@@ -2035,6 +2092,7 @@ export function createProjectSubjectsEvents(config) {
         mentionCollaborators = [];
         mentionCollaboratorsLoaded = true;
         mentionCacheProjectKey = projectKey;
+        mentionCollaborators = await mergeMdallMention(mentionCollaborators);
         return mentionCollaborators;
       }
       debugSubjectMentions("fetch collaborators fallback", {
@@ -2042,7 +2100,7 @@ export function createProjectSubjectsEvents(config) {
         projectKey,
         source: "listCollaboratorsForMentions"
       });
-      mentionLoadPromise = listCollaboratorsForMentions(projectKey)
+      mentionLoadPromise = listCollaboratorsForMentions({ projectId: projectKey })
         .then((rows) => {
           mentionCollaborators = buildMentionSuggestions(Array.isArray(rows) ? rows : []);
           mentionCollaboratorsLoaded = true;
@@ -2054,7 +2112,7 @@ export function createProjectSubjectsEvents(config) {
             suggestionsCount: mentionCollaborators.length,
             source: "listCollaboratorsForMentions"
           });
-          return mentionCollaborators;
+          return mergeMdallMention(mentionCollaborators);
         })
         .catch((error) => {
           console.warn("[subject-mentions] collaborators load failed", error);
@@ -2067,6 +2125,10 @@ export function createProjectSubjectsEvents(config) {
           mentionCollaborators = [];
           mentionCollaboratorsLoaded = true;
           mentionCacheProjectKey = projectKey;
+          return mergeMdallMention(mentionCollaborators);
+        })
+        .then((rows) => {
+          mentionCollaborators = Array.isArray(rows) ? rows : [];
           return mentionCollaborators;
         })
         .finally(() => {
@@ -2115,9 +2177,18 @@ export function createProjectSubjectsEvents(config) {
         return;
       }
 
+      const queryMatchesMdall = (queryValue = "") => {
+        const normalizedQuery = String(queryValue || "").trim().toLowerCase();
+        if (!normalizedQuery) return true;
+        return "mdall".startsWith(normalizedQuery);
+      };
+
       const suggestions = mentionCollaborators
         .filter((entry) => {
           if (!query) return true;
+          if (String(entry?.avatarKind || "").toLowerCase() === "mdall") {
+            return queryMatchesMdall(query);
+          }
           return [
             String(entry?.label || "").toLowerCase(),
             String(entry?.email || "").toLowerCase()
