@@ -549,7 +549,7 @@ body.sidebar-collapsed #sidebar{overflow:hidden;width:0;min-width:0;padding:0;ma
 
 /* Right panel body: responsive 2-col grid (main + metadata) */
 .subject-details-shell .details-grid{display:grid;grid-template-columns:minmax(0, 1fr) 296px;gap:24px;align-items:stretch;margin-top:10px;min-height:100%;}
-.details-main{min-width:0;}
+.details-main{min-width:0;padding-bottom:250px;}
 .details-meta-col{padding:0 0 16px 0;height:100%;overflow:auto;}
 .meta-title{
   font-size:16px;
@@ -9905,6 +9905,7 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
     #situationsDetailsHost{
       overflow:visible;
       min-height:0;
+      padding-bottom:250px;
     }
 
     #detailsBodyModal{
