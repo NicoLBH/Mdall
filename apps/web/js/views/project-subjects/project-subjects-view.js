@@ -16,6 +16,7 @@ import {
   syncSelectDropdownPosition
 } from "../ui/select-dropdown-controller.js";
 import { extractStructuredMentions } from "../../utils/subject-mentions.js";
+import { sendSubjectMdallExchange } from "../../services/subject-mdall-service.js";
 import { renderCommentComposer } from "../ui/comment-composer.js";
 import { renderSubjectMarkdownToolbar } from "../ui/subject-rich-editor.js";
 import { renderSubjectAttachmentsPreviewList } from "./project-subjects-attachments-ui.js";
@@ -3131,7 +3132,90 @@ async function applyCommentAction(root) {
   if (!message && !hasAttachmentsForTarget) return;
   const mentions = extractStructuredMentions(message);
 
+  const logEphemeralFlow = (event, payload = {}) => {
+    try {
+      console.info(`[subject-mdall] ${event}`, payload);
+    } catch {}
+  };
+
+  const resolveScopeHost = () => {
+    const detailsHost = root?.closest?.("#drilldownPanel") || document.getElementById("situationsDetailsHost");
+    return detailsHost?.closest?.("#drilldownPanel") ? "drilldown" : "main";
+  };
+
+  const refreshTimelineForCurrentScope = (scopeHost = "main") => {
+    const scopedSelection = getSelectionForScope(scopeHost);
+    ensureTimelineLoadedForSelection(scopedSelection, { scopeHost, force: true });
+  };
+
+  const replyContext = store.situationsView?.replyContext || {};
+  const replySubjectId = String(replyContext?.subjectId || "").trim();
+  const parentMessageId = target.type === "sujet" && replySubjectId === String(target.id || "").trim()
+    ? String(replyContext?.parentMessageId || "").trim()
+    : "";
+
   const helpActive = !!store.situationsView.helpMode;
+  if (helpActive && target.type === "sujet") {
+    if (!message) return;
+
+    logEphemeralFlow("ephemeral-submit", {
+      subjectId: String(target.id || "").trim(),
+      hasParentMessageId: !!parentMessageId,
+      mentionsCount: Array.isArray(mentions) ? mentions.length : 0
+    });
+
+    await sendSubjectMdallExchange({
+      subjectId: target.id,
+      bodyMarkdown: message,
+      isEphemeral: true,
+      parentMessageId: parentMessageId || null,
+      mentions
+    });
+
+    ta.value = "";
+    store.situationsView.commentDraft = "";
+    store.situationsView.commentPreviewMode = false;
+
+    const scopeHost = resolveScopeHost();
+    refreshTimelineForCurrentScope(scopeHost);
+
+    if (store.situationsView?.replyContext) {
+      store.situationsView.replyContext.subjectId = "";
+      store.situationsView.replyContext.parentMessageId = "";
+      store.situationsView.replyContext.parentPreview = "";
+    }
+
+    if (store.situationsView?.ephemeralRefreshTimer) {
+      clearTimeout(store.situationsView.ephemeralRefreshTimer);
+      store.situationsView.ephemeralRefreshTimer = null;
+    }
+
+    const refreshDelayMs = 61_000;
+    logEphemeralFlow("ephemeral-refresh-scheduled", {
+      subjectId: String(target.id || "").trim(),
+      refreshDelayMs
+    });
+
+    store.situationsView.ephemeralRefreshTimer = setTimeout(() => {
+      logEphemeralFlow("ephemeral-expired-refresh", {
+        subjectId: String(target.id || "").trim()
+      });
+      refreshTimelineForCurrentScope(scopeHost);
+      store.situationsView.ephemeralRefreshTimer = null;
+    }, refreshDelayMs);
+
+    const detailsHost = document.getElementById("situationsDetailsHost");
+    const composerHost = root?.closest?.("[data-details-composer-host]")
+      || detailsHost?.querySelector?.("[data-details-composer-host]");
+    if (composerHost) {
+      scheduleDetailsComposerRerender({ scopeHost });
+    } else {
+      rerenderScope(root);
+    }
+
+    return;
+  }
+
   if (helpActive) {
     ta.value = "";
     store.situationsView.commentDraft = "";
@@ -3139,11 +3223,6 @@ async function applyCommentAction(root) {
     return;
   }
 
-  const replyContext = store.situationsView?.replyContext || {};
-  const replySubjectId = String(replyContext?.subjectId || "").trim();
-  const parentMessageId = target.type === "sujet" && replySubjectId === String(target.id || "").trim()
-    ? String(replyContext?.parentMessageId || "").trim()
-    : "";
   const uploadSessionId = hasAttachmentsForTarget ? String(composerAttachments?.uploadSessionId || "").trim() : "";
 
   await addComment(target.type, target.id, message, {
