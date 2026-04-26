@@ -14,5 +14,6 @@ test("renderHandwritingComposerOverlay expose les actions attendues", () => {
   assert.match(html, /data-action="handwriting-undo"/);
   assert.match(html, /data-action="handwriting-recognize-insert"/);
   assert.match(html, /data-action="handwriting-close"/);
+  assert.match(html, /data-role="handwriting-overlay-error"/);
   assert.match(html, /data-subject-id="subject-123"/);
 });

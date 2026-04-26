@@ -14241,6 +14241,19 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   gap: 8px;
 }
 
+.handwriting-composer-overlay__error {
+  margin: 0;
+  min-height: 18px;
+  color: #fca5a5;
+  font-size: 13px;
+  opacity: 0;
+  transition: opacity 0.16s ease;
+}
+
+.handwriting-composer-overlay__error.is-visible {
+  opacity: 1;
+}
+
 .handwriting-composer-overlay__canvas-wrap {
   position: relative;
   flex: 1;

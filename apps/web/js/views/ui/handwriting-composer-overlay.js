@@ -1,3 +1,6 @@
+import { recognizeHandwrittenDocument } from "../../services/handwriting-document-recognition.js";
+import { replaceTextareaValueFromHandwriting } from "../../utils/textarea-insert.js";
+
 function toNumber(value, fallback = 0) {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : fallback;
@@ -49,6 +52,7 @@ export function renderHandwritingComposerOverlay({ subjectId = "", draft = {} } 
           <button type="button" class="gh-btn gh-btn--sm" data-action="handwriting-close">Fermer</button>
         </div>
       </div>
+      <p class="handwriting-composer-overlay__error" data-role="handwriting-overlay-error" aria-live="polite"></p>
       <div class="handwriting-composer-overlay__canvas-wrap" data-stroke-count="${strokeCount}">
         <canvas class="handwriting-composer-overlay__canvas" data-role="handwriting-canvas"></canvas>
       </div>
@@ -85,6 +89,7 @@ export function mountHandwritingComposerOverlay({
   const undoBtn = overlay.querySelector("[data-action='handwriting-undo']");
   const closeBtn = overlay.querySelector("[data-action='handwriting-close']");
   const recognizeBtn = overlay.querySelector("[data-action='handwriting-recognize-insert']");
+  const errorEl = overlay.querySelector("[data-role='handwriting-overlay-error']");
   const canvasWrap = overlay.querySelector(".handwriting-composer-overlay__canvas-wrap");
   const drawing = {
     strokes: initialDraft.strokes.map(cloneStroke),
@@ -105,6 +110,12 @@ export function mountHandwritingComposerOverlay({
       recognizedMarkdown: String(initialDraft.recognizedMarkdown || ""),
       updatedAt: Date.now()
     });
+  }
+
+  function setError(message = "") {
+    if (!errorEl) return;
+    errorEl.textContent = String(message || "").trim();
+    errorEl.classList.toggle("is-visible", !!String(message || "").trim());
   }
 
   function computeWidth(pointerType = "mouse", pressure = 0.5) {
@@ -275,8 +286,49 @@ export function mountHandwritingComposerOverlay({
   });
 
   recognizeBtn?.addEventListener("click", async () => {
-    if (typeof onRecognizeAndInsert === "function") {
-      await onRecognizeAndInsert({ subjectId: String(subjectId || ""), draft: { ...initialDraft, strokes: drawing.strokes.map(cloneStroke) } });
+    const btn = recognizeBtn;
+    if (!btn) return;
+    setError("");
+    btn.disabled = true;
+    const previousLabel = btn.textContent;
+    btn.textContent = "Conversion…";
+    try {
+      const recognition = await recognizeHandwrittenDocument({
+        strokes: drawing.strokes.map(cloneStroke),
+        canvasSize: { width: drawing.width, height: drawing.height },
+        subjectContext: { subjectId: String(subjectId || ""), composerKind: "main" }
+      });
+      const markdown = String(recognition?.markdown || "");
+      const textarea = document.querySelector("#humanCommentBox");
+      const currentValue = String(textarea?.value || "");
+      const previousRecognized = String(initialDraft.recognizedMarkdown || "");
+      const shouldConfirmReplacement = !!currentValue.trim() && currentValue !== previousRecognized;
+      if (shouldConfirmReplacement) {
+        const confirmed = window.confirm("Remplacer le contenu actuel par la transcription manuscrite ?");
+        if (!confirmed) return;
+      }
+      if (!textarea) {
+        throw new Error("Champ de saisie principal introuvable");
+      }
+      const inserted = replaceTextareaValueFromHandwriting(textarea, markdown);
+      if (!inserted) {
+        throw new Error("Impossible d'injecter la transcription manuscrite");
+      }
+      initialDraft.recognizedMarkdown = markdown;
+      saveDraft();
+      if (typeof onRecognizeAndInsert === "function") {
+        await onRecognizeAndInsert({
+          subjectId: String(subjectId || ""),
+          draft: { ...initialDraft, strokes: drawing.strokes.map(cloneStroke) },
+          recognition
+        });
+      }
+      closeOverlay("recognized-inserted");
+    } catch (error) {
+      setError(error?.message || "Échec de conversion manuscrite");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = previousLabel || "Convertir et insérer";
     }
   });
 
