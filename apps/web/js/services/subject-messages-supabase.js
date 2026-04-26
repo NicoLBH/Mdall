@@ -483,7 +483,7 @@ export function createSubjectMessagesSupabaseRepository() {
       const params = new URLSearchParams();
       params.set(
         "select",
-        "id,project_id,subject_id,parent_message_id,author_person_id,author_user_id,body_markdown,created_at,updated_at,deleted_at,is_frozen,frozen_at,frozen_reason"
+        "id,project_id,subject_id,parent_message_id,author_person_id,author_user_id,body_markdown,created_at,updated_at,deleted_at,is_frozen,frozen_at,frozen_reason,visibility,visible_until,origin,llm_request_id,metadata"
       );
       params.set("subject_id", `eq.${normalizedSubjectId}`);
       params.set("order", "created_at.asc");

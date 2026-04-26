@@ -122,16 +122,28 @@ export function createProjectSubjectsThread(config = {}) {
 
   function mapMessageRowToThreadComment(row = {}) {
     if (row?.deleted_at) return null;
+    const visibility = String(row?.visibility || "normal").trim().toLowerCase();
+    const visibleUntilRaw = firstNonEmpty(row?.visible_until, "");
+    const visibleUntilTs = Date.parse(String(visibleUntilRaw || ""));
+    if (visibility === "ephemeral" && (!Number.isFinite(visibleUntilTs) || visibleUntilTs <= Date.now())) {
+      return null;
+    }
+
+    const origin = String(row?.origin || "human").trim().toLowerCase();
+    const isMdall = origin === "mdall";
+    const isEphemeral = visibility === "ephemeral";
     const authorProfile = resolveAuthorProfile(row);
     const isFrozen = !!row.is_frozen;
     const stateLabel = isFrozen ? "figé (vu par un tiers)" : "modifiable";
+    const actor = isMdall ? "Mdall" : authorProfile.displayName;
+    const agent = isMdall ? "mdall" : "human";
     return {
       ts: firstNonEmpty(row.created_at, nowIso()),
       entity_type: "sujet",
       entity_id: normalizeId(row.subject_id),
       type: "COMMENT",
-      actor: authorProfile.displayName,
-      agent: "human",
+      actor,
+      agent,
       message: String(row.body_markdown || ""),
       pending: false,
       request_id: null,
@@ -147,6 +159,12 @@ export function createProjectSubjectsThread(config = {}) {
         is_frozen: isFrozen,
         is_deleted: false,
         state_label: stateLabel,
+        origin,
+        is_mdall: isMdall,
+        is_ephemeral: isEphemeral,
+        visible_until: isEphemeral ? (visibleUntilRaw || null) : null,
+        llm_request_id: normalizeId(row?.llm_request_id),
+        mdall_metadata: row?.metadata && typeof row.metadata === "object" ? row.metadata : {},
         mentions: Array.isArray(row?.mentions) ? row.mentions : [],
         attachments: Array.isArray(row?.attachments) ? row.attachments : [],
         reactions: Array.isArray(row?.reactions) ? row.reactions : []
@@ -1038,7 +1056,7 @@ priority=${firstNonEmpty(subject.priority, "")}`
     const currentUserId = normalizeId(store?.user?.id);
     const authorUserId = normalizeId(entry?.meta?.author_user_id);
     const isCurrentUserAuthor = !!authorUserId && !!currentUserId && authorUserId === currentUserId;
-    const agent = isCurrentUserAuthor ? "human" : "member";
+    const agent = String(entry?.agent || (isCurrentUserAuthor ? "human" : "member")).trim().toLowerCase();
     const isRapso = agent === "specialist_ps";
     if (isRapso) {
       return { displayName: "Agent specialist_ps", avatarType: "agent", avatarHtml: "", avatarInitial: "AS" };
@@ -1116,6 +1134,11 @@ priority=${firstNonEmpty(subject.priority, "")}`
     const classes = depth > 0
       ? `message-thread__comment--nested message-thread__comment--reply-item message-thread__comment--depth-${nestedDepth}`
       : "";
+    const semanticClasses = [
+      entry?.meta?.is_ephemeral ? "thread-item--ephemeral" : "",
+      entry?.meta?.is_mdall ? "thread-item--mdall" : ""
+    ].filter(Boolean).join(" ");
+    const commentClassName = entry?.meta?.is_ephemeral ? "gh-comment--ephemeral" : "";
     const isExpanded = replyUi.expandedMessageId === commentId;
     const isEditing = replyUi.editMessageId === commentId;
     const draft = String(replyUi.draftsByMessageId?.[commentId] || "");
@@ -1212,7 +1235,8 @@ priority=${firstNonEmpty(subject.priority, "")}`
       avatarType: identity.avatarType,
       avatarHtml: identity.avatarHtml,
       avatarInitial: identity.avatarInitial,
-      className: classes
+      className: `${classes} ${semanticClasses}`.trim(),
+      cardClassName: commentClassName
     });
   }
 
