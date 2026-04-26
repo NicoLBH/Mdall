@@ -18,6 +18,7 @@ import { computeTextareaCaretRect } from "../../utils/textarea-caret-position.js
 import { autosizeTextarea } from "../../utils/textarea-autosize.js";
 import { renderSubjectAttachmentTile, renderSubjectAttachmentsPreviewList } from "./project-subjects-attachments-ui.js";
 import { isMetaDropdownOpenForAnchor } from "../ui/select-dropdown-controller.js";
+import { mountHandwritingComposerOverlay } from "../ui/handwriting-composer-overlay.js";
 
 export function createProjectSubjectsEvents(config) {
   const EMOJI_GRID_COLUMNS = 6;
@@ -3497,7 +3498,29 @@ export function createProjectSubjectsEvents(config) {
           debugHandwritingComposer("open-click-ignored-no-subject", {});
           return;
         }
-        ensureHandwritingDraftForSubject(subjectId);
+        const existingDraft = ensureHandwritingDraftForSubject(subjectId);
+        mountHandwritingComposerOverlay({
+          root: document.body,
+          subjectId,
+          draft: existingDraft,
+          onSaveDraft: (nextDraft = {}) => {
+            const normalized = ensureHandwritingDraftForSubject(subjectId);
+            if (!normalized) return;
+            normalized.strokes = Array.isArray(nextDraft.strokes) ? nextDraft.strokes : [];
+            normalized.recognizedMarkdown = String(nextDraft.recognizedMarkdown || normalized.recognizedMarkdown || "");
+            normalized.updatedAt = Number.isFinite(Number(nextDraft.updatedAt)) ? Number(nextDraft.updatedAt) : Date.now();
+            debugHandwritingComposer("draft-saved", {
+              subjectId,
+              strokeCount: normalized.strokes.length
+            });
+          },
+          onClose: ({ trigger } = {}) => {
+            debugHandwritingComposer("overlay-closed", { subjectId, trigger: String(trigger || "") });
+          },
+          onRecognizeAndInsert: () => {
+            debugHandwritingComposer("recognize-click-ignored-step2", { subjectId });
+          }
+        });
         debugHandwritingComposer("open-click", { subjectId });
       };
     });
