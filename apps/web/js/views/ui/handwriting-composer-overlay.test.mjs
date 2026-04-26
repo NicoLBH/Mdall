@@ -66,3 +66,30 @@ test("exportRecognitionImageDataUrl génère une image data URL exploitable", ()
   assert.ok(operations.includes("fillRect"));
   assert.ok(operations.includes("stroke"));
 });
+
+test("shouldAcceptPointerStart accepte pen puis refuse touch après détection stylet", () => {
+  const gate = __handwritingComposerOverlayInternals.createPointerStartGate();
+  const now = 1000;
+  const penDecision = gate.shouldAcceptPointerStart({ pointerType: "pen", pointerId: 1 }, now);
+  assert.equal(penDecision.accepted, true);
+  assert.equal(gate.state.hasSeenPenInput, true);
+
+  const touchDecision = gate.shouldAcceptPointerStart({ pointerType: "touch", pointerId: 2 }, now + 10);
+  assert.equal(touchDecision.accepted, false);
+  assert.equal(touchDecision.reason, "palm-touch-after-pen");
+});
+
+test("shouldAcceptPointerStart garde mouse pour debug sans pointeur actif", () => {
+  const gate = __handwritingComposerOverlayInternals.createPointerStartGate();
+  const mouseDecision = gate.shouldAcceptPointerStart({ pointerType: "mouse", pointerId: 3 }, 500);
+  assert.equal(mouseDecision.accepted, true);
+});
+
+test("shouldAcceptPointerStart refuse un pointer concurrent", () => {
+  const gate = __handwritingComposerOverlayInternals.createPointerStartGate();
+  gate.state.activePointerId = 7;
+  gate.state.activePointerType = "pen";
+  const otherPointer = gate.shouldAcceptPointerStart({ pointerType: "touch", pointerId: 8 }, 500);
+  assert.equal(otherPointer.accepted, false);
+  assert.equal(otherPointer.reason, "active-pointer");
+});

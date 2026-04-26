@@ -149,12 +149,24 @@ export function mountHandwritingComposerOverlay({
   const canvasWrap = overlay.querySelector(".handwriting-composer-overlay__canvas-wrap");
   const drawing = {
     strokes: initialDraft.strokes.map(cloneStroke),
+    hasSeenPenInput: false,
     activePointerId: null,
+    activePointerType: null,
     activeStroke: null,
+    pendingPoints: [],
+    rafId: 0,
+    ignoreTouchUntil: 0,
     width: 1,
     height: 1,
     dpr: Math.max(1, toNumber(window?.devicePixelRatio, 1))
   };
+  const debugEnabled = (() => {
+    try {
+      return window?.localStorage?.getItem("mdall:debug-handwriting-composer") === "1";
+    } catch {
+      return false;
+    }
+  })();
 
   const previousBodyOverflow = document.body.style.overflow;
   document.body.style.overflow = "hidden";
@@ -175,10 +187,37 @@ export function mountHandwritingComposerOverlay({
   }
 
   function computeWidth(pointerType = "mouse", pressure = 0.5) {
-    const safePressure = Math.min(1, Math.max(0, toNumber(pressure, 0.5)));
-    if (pointerType === "pen") return 1.2 + safePressure * 2.8;
-    if (pointerType === "touch") return 2.6 + safePressure * 2.4;
-    return 1.8 + safePressure * 1.4;
+    const rawPressure = toNumber(pressure, 0.5);
+    const normalizedPressure = rawPressure <= 0 ? 0.5 : rawPressure;
+    const safePressure = Math.min(1, Math.max(0.2, normalizedPressure));
+    if (pointerType === "pen") return Math.min(4, Math.max(2, 2 + safePressure * 2));
+    if (pointerType === "touch") return Math.min(5, Math.max(3, 2.8 + safePressure * 2.2));
+    return Math.min(3.8, Math.max(2.2, 2 + safePressure * 1.8));
+  }
+
+  function debugLog(message, payload = undefined) {
+    if (!debugEnabled) return;
+    if (payload === undefined) {
+      console.debug("[handwriting-composer]", message);
+      return;
+    }
+    console.debug("[handwriting-composer]", message, payload);
+  }
+
+  function drawStrokeSegment(ctx, previousPoint, point, stroke) {
+    if (!ctx || !previousPoint || !point || !stroke) return;
+    const prevX = previousPoint.x * drawing.width;
+    const prevY = previousPoint.y * drawing.height;
+    const x = point.x * drawing.width;
+    const y = point.y * drawing.height;
+    const midX = (prevX + x) / 2;
+    const midY = (prevY + y) / 2;
+    ctx.strokeStyle = stroke.color;
+    ctx.lineWidth = stroke.width;
+    ctx.beginPath();
+    ctx.moveTo(prevX, prevY);
+    ctx.quadraticCurveTo(prevX, prevY, midX, midY);
+    ctx.stroke();
   }
 
   function redraw() {
@@ -209,8 +248,17 @@ export function mountHandwritingComposerOverlay({
         const x = point.x * drawing.width;
         const y = point.y * drawing.height;
         if (index === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
+        else {
+          const previous = points[index - 1];
+          const prevX = previous.x * drawing.width;
+          const prevY = previous.y * drawing.height;
+          const midX = (prevX + x) / 2;
+          const midY = (prevY + y) / 2;
+          ctx.quadraticCurveTo(prevX, prevY, midX, midY);
+        }
       });
+      const lastPoint = points[points.length - 1];
+      ctx.lineTo(lastPoint.x * drawing.width, lastPoint.y * drawing.height);
       ctx.stroke();
     });
 
@@ -246,6 +294,51 @@ export function mountHandwritingComposerOverlay({
     });
   }
 
+  function flushDraw() {
+    drawing.rafId = 0;
+    if (!canvas || !drawing.activeStroke || drawing.pendingPoints.length < 2) {
+      drawing.pendingPoints = drawing.pendingPoints.slice(-1);
+      return;
+    }
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    for (let index = 1; index < drawing.pendingPoints.length; index += 1) {
+      drawStrokeSegment(ctx, drawing.pendingPoints[index - 1], drawing.pendingPoints[index], drawing.activeStroke);
+    }
+    drawing.pendingPoints = drawing.pendingPoints.slice(-1);
+  }
+
+  function scheduleDraw() {
+    if (drawing.rafId) return;
+    drawing.rafId = requestAnimationFrame(flushDraw);
+  }
+
+  function shouldAcceptPointerStart(event) {
+    const pointerType = String(event?.pointerType || "mouse").toLowerCase();
+    const now = Date.now();
+    if (!["pen", "touch", "mouse"].includes(pointerType)) {
+      return { accepted: false, reason: "unsupported-pointer", pointerType };
+    }
+    if (drawing.activePointerId !== null && drawing.activePointerId !== event.pointerId) {
+      return { accepted: false, reason: "active-pointer", pointerType };
+    }
+    if (pointerType === "pen") {
+      drawing.hasSeenPenInput = true;
+      drawing.ignoreTouchUntil = now + 1500;
+      return { accepted: true, pointerType };
+    }
+    if (pointerType === "touch") {
+      if (drawing.hasSeenPenInput) return { accepted: false, reason: "palm-touch-after-pen", pointerType };
+      if (now < drawing.ignoreTouchUntil) return { accepted: false, reason: "touch-cooldown", pointerType };
+      if (drawing.activePointerType === "pen") return { accepted: false, reason: "active-pen", pointerType };
+      return { accepted: true, pointerType };
+    }
+    if (drawing.activePointerType && drawing.activePointerType !== "mouse") {
+      return { accepted: false, reason: "active-pointer", pointerType };
+    }
+    return { accepted: true, pointerType };
+  }
+
   function endCurrentStroke() {
     if (!drawing.activeStroke) return;
     if (drawing.activeStroke.points.length > 0) {
@@ -253,16 +346,27 @@ export function mountHandwritingComposerOverlay({
       saveDraft();
     }
     drawing.activePointerId = null;
+    drawing.activePointerType = null;
     drawing.activeStroke = null;
+    drawing.pendingPoints = [];
+    if (drawing.rafId) {
+      cancelAnimationFrame(drawing.rafId);
+      drawing.rafId = 0;
+    }
     redraw();
   }
 
   function onPointerDown(event) {
     if (!canvas) return;
-    const pointerType = String(event.pointerType || "mouse").toLowerCase();
-    if (!["pen", "touch", "mouse"].includes(pointerType)) return;
+    const decision = shouldAcceptPointerStart(event);
+    if (!decision.accepted) {
+      debugLog(`pointer rejected: ${decision.reason}`, { pointerType: decision.pointerType, pointerId: event.pointerId });
+      return;
+    }
+    const pointerType = decision.pointerType;
     event.preventDefault();
     drawing.activePointerId = event.pointerId;
+    drawing.activePointerType = pointerType;
     drawing.activeStroke = cloneStroke({
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       pointerType,
@@ -270,6 +374,7 @@ export function mountHandwritingComposerOverlay({
       width: computeWidth(pointerType, event.pressure),
       points: [toNormalizedPoint(event)]
     });
+    drawing.pendingPoints = drawing.activeStroke.points.slice(-1);
     if (typeof canvas.setPointerCapture === "function") {
       try {
         canvas.setPointerCapture(event.pointerId);
@@ -283,8 +388,13 @@ export function mountHandwritingComposerOverlay({
   function onPointerMove(event) {
     if (!drawing.activeStroke || drawing.activePointerId !== event.pointerId) return;
     event.preventDefault();
-    drawing.activeStroke.points.push(toNormalizedPoint(event));
-    redraw();
+    const events = typeof event.getCoalescedEvents === "function" ? event.getCoalescedEvents() : [event];
+    events.forEach((entry) => {
+      const point = toNormalizedPoint(entry);
+      drawing.activeStroke.points.push(point);
+      drawing.pendingPoints.push(point);
+    });
+    scheduleDraw();
   }
 
   function onPointerUp(event) {
@@ -309,6 +419,9 @@ export function mountHandwritingComposerOverlay({
     canvas?.removeEventListener("pointermove", onPointerMove);
     canvas?.removeEventListener("pointerup", onPointerUp);
     canvas?.removeEventListener("pointercancel", onPointerCancel);
+    canvas?.removeEventListener("touchstart", preventOverlayTouch, { passive: false });
+    overlay?.removeEventListener("touchmove", preventOverlayTouch, { passive: false });
+    overlay?.removeEventListener("touchstart", preventOverlayTouch, { passive: false });
     document.body.style.overflow = previousBodyOverflow;
     if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
     if (typeof onClose === "function") onClose({ trigger, draft: { ...initialDraft, strokes: drawing.strokes.map(cloneStroke) } });
@@ -325,6 +438,8 @@ export function mountHandwritingComposerOverlay({
     drawing.strokes = [];
     drawing.activeStroke = null;
     drawing.activePointerId = null;
+    drawing.activePointerType = null;
+    drawing.pendingPoints = [];
     saveDraft();
     redraw();
   });
@@ -399,6 +514,14 @@ export function mountHandwritingComposerOverlay({
   canvas?.addEventListener("pointermove", onPointerMove);
   canvas?.addEventListener("pointerup", onPointerUp);
   canvas?.addEventListener("pointercancel", onPointerCancel);
+  function preventOverlayTouch(event) {
+    const target = event.target;
+    if (target && target.closest?.("button, input, textarea, select, label, a")) return;
+    event.preventDefault();
+  }
+  canvas?.addEventListener("touchstart", preventOverlayTouch, { passive: false });
+  overlay?.addEventListener("touchstart", preventOverlayTouch, { passive: false });
+  overlay?.addEventListener("touchmove", preventOverlayTouch, { passive: false });
   window.addEventListener("resize", resizeCanvas);
   window.addEventListener("keydown", onWindowKeydown);
 
@@ -417,5 +540,40 @@ export function mountHandwritingComposerOverlay({
 
 
 export const __handwritingComposerOverlayInternals = {
-  exportRecognitionImageDataUrl
+  exportRecognitionImageDataUrl,
+  createPointerStartGate() {
+    const state = {
+      hasSeenPenInput: false,
+      activePointerId: null,
+      activePointerType: null,
+      ignoreTouchUntil: 0
+    };
+    return {
+      state,
+      shouldAcceptPointerStart(event, now = Date.now()) {
+        const pointerType = String(event?.pointerType || "mouse").toLowerCase();
+        if (!["pen", "touch", "mouse"].includes(pointerType)) {
+          return { accepted: false, reason: "unsupported-pointer", pointerType };
+        }
+        if (state.activePointerId !== null && state.activePointerId !== event.pointerId) {
+          return { accepted: false, reason: "active-pointer", pointerType };
+        }
+        if (pointerType === "pen") {
+          state.hasSeenPenInput = true;
+          state.ignoreTouchUntil = now + 1500;
+          return { accepted: true, pointerType };
+        }
+        if (pointerType === "touch") {
+          if (state.hasSeenPenInput) return { accepted: false, reason: "palm-touch-after-pen", pointerType };
+          if (now < state.ignoreTouchUntil) return { accepted: false, reason: "touch-cooldown", pointerType };
+          if (state.activePointerType === "pen") return { accepted: false, reason: "active-pen", pointerType };
+          return { accepted: true, pointerType };
+        }
+        if (state.activePointerType && state.activePointerType !== "mouse") {
+          return { accepted: false, reason: "active-pointer", pointerType };
+        }
+        return { accepted: true, pointerType };
+      }
+    };
+  }
 };
