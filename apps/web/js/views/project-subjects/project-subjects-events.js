@@ -3504,6 +3504,7 @@ export function createProjectSubjectsEvents(config) {
         const subjectId = String(selection?.type === "sujet" ? selection?.item?.id || "" : "").trim();
         const composerKind = String(btn?.dataset?.composerKind || "main").trim().toLowerCase();
         const messageId = String(btn?.dataset?.messageId || "").trim();
+        const entityId = String(btn?.dataset?.entityId || "").trim();
         const escapedMessageId = messageId.replace(/["\\]/g, "\\$&");
         if (!subjectId) {
           debugHandwritingComposer("open-click-ignored-no-subject", {});
@@ -3525,6 +3526,18 @@ export function createProjectSubjectsEvents(config) {
           }
           draftKey = `edit:${subjectId}:${messageId}`;
           textareaSelector = `[data-thread-edit-draft="${escapedMessageId}"]`;
+        } else if (composerKind === "description") {
+          const descriptionEntityId = entityId || messageId;
+          if (!descriptionEntityId) {
+            debugHandwritingComposer("open-click-ignored-no-description-entity", { subjectId, composerKind });
+            return;
+          }
+          const escapedEntityId = descriptionEntityId.replace(/["\\]/g, "\\$&");
+          draftKey = `description:${subjectId}:${descriptionEntityId}`;
+          textareaSelector = `[data-description-draft="${escapedEntityId}"]`;
+        } else if (composerKind === "create-subject") {
+          draftKey = `create-subject:${subjectId}`;
+          textareaSelector = "[data-create-subject-description]";
         }
         const existingDraft = ensureHandwritingDraftForKey(draftKey, { subjectId, composerKind, messageId });
         mountHandwritingComposerOverlay({

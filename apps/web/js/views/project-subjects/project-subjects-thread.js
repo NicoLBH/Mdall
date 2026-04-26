@@ -925,13 +925,19 @@ priority=${firstNonEmpty(subject.priority, "")}`
           tabPreviewAction: "thread-reply-tab-preview",
           tabsClassName: "comment-composer__tabs--thread-reply",
           composerClassName: "comment-composer--thread-reply-editor",
-          toolbarHtml: renderSubjectMarkdownToolbar({ buttonAction: "thread-reply-format", svgIcon, extraData: { messageId: commentId } }),
+          toolbarHtml: renderSubjectMarkdownToolbar({
+            buttonAction: "thread-reply-format",
+            svgIcon,
+            extraData: { messageId: commentId },
+            handwritingAction: showHandwritingButton
+              ? { action: "open-handwriting-composer", composerKind: "reply", messageId: commentId }
+              : null
+          }),
           previewHtml: normalizedDraft.trim()
             ? mdToHtml(normalizedDraft, { preserveMessageLineBreaks: true })
             : "",
           actionsHtml: `
             <div class="thread-inline-reply-editor__actions">
-              ${showHandwritingButton ? `<button class="gh-btn gh-btn--handwriting" type="button" data-action="open-handwriting-composer" data-composer-kind="reply" data-message-id="${escapeHtml(commentId)}" title="Écrire à la main">Formules</button>` : ""}
               <button class="gh-btn" type="button" data-action="thread-reply-cancel" data-message-id="${escapeHtml(commentId)}">Annuler</button>
               <button class="gh-btn gh-btn--comment gh-btn--primary" type="button" data-action="thread-reply-submit" data-message-id="${escapeHtml(commentId)}" ${canSubmit ? "" : "disabled"}>Répondre</button>
             </div>
@@ -1022,13 +1028,19 @@ priority=${firstNonEmpty(subject.priority, "")}`
           tabPreviewAction: "thread-edit-tab-preview",
           tabsClassName: "comment-composer__tabs--thread-reply",
           composerClassName: `comment-composer--thread-reply-editor ${composerEditClass}`,
-          toolbarHtml: renderSubjectMarkdownToolbar({ buttonAction: "thread-edit-format", svgIcon, extraData: { messageId: commentId } }),
+          toolbarHtml: renderSubjectMarkdownToolbar({
+            buttonAction: "thread-edit-format",
+            svgIcon,
+            extraData: { messageId: commentId },
+            handwritingAction: showHandwritingButton
+              ? { action: "open-handwriting-composer", composerKind: "edit", messageId: commentId }
+              : null
+          }),
           previewHtml: normalizedDraft.trim()
             ? mdToHtml(normalizedDraft, { preserveMessageLineBreaks: true })
             : "",
           actionsHtml: `
             <div class="thread-inline-reply-editor__actions">
-              ${showHandwritingButton ? `<button class="gh-btn gh-btn--handwriting" type="button" data-action="open-handwriting-composer" data-composer-kind="edit" data-message-id="${escapeHtml(commentId)}" title="Écrire à la main">Formules</button>` : ""}
               <button class="gh-btn" type="button" data-action="thread-edit-cancel" data-message-id="${escapeHtml(commentId)}">Annuler</button>
               <button class="gh-btn gh-btn--comment gh-btn--primary" type="button" data-action="thread-edit-submit" data-message-id="${escapeHtml(commentId)}" data-original-body="${escapeHtml(String(originalMessage || ""))}" ${canSubmit ? "" : "disabled"}>${submitLabel}</button>
             </div>
@@ -1878,6 +1890,8 @@ priority=${firstNonEmpty(subject.priority, "")}`
 
     const previewMode = !!store.situationsView.commentPreviewMode;
     const helpMode = !!store.situationsView.helpMode;
+    const normalizedSubjectId = type === "sujet" ? normalizeId(item.id) : "";
+    const showHandwritingButton = shouldShowHandwritingButton();
 
     const pendingMdallSubjectId = normalizeId(store?.situationsView?.mdallReplyPendingSubjectId);
     const hintHtml = type === "sujet" && pendingMdallSubjectId && pendingMdallSubjectId === normalizedSubjectId
@@ -1902,27 +1916,23 @@ priority=${firstNonEmpty(subject.priority, "")}`
       `
       : "";
 
-    const toolbarHtml = renderSubjectMarkdownToolbar({ buttonAction: "composer-format", svgIcon });
+    const toolbarHtml = renderSubjectMarkdownToolbar({
+      buttonAction: "composer-format",
+      svgIcon,
+      handwritingAction: showHandwritingButton
+        ? { action: "open-handwriting-composer", composerKind: "main" }
+        : null
+    });
 
     const attachmentState = getComposerAttachmentsState();
-    const normalizedSubjectId = type === "sujet" ? normalizeId(item.id) : "";
     const pendingAttachments = normalizedSubjectId && normalizeId(attachmentState.subjectId) === normalizedSubjectId
       ? attachmentState.items
       : [];
-    const showHandwritingButton = shouldShowHandwritingButton();
-    const handwritingActionHtml = showHandwritingButton
-      ? `
-      <button class="gh-btn gh-btn--handwriting" data-action="open-handwriting-composer" type="button" title="Écrire à la main">
-        <span>Formules</span>
-      </button>
-    `
-      : "";
     const actionsHtml = `
       <button class="gh-btn gh-btn--help-mode ${helpMode ? "is-on" : ""}" data-action="toggle-help" type="button">
         <span class="gh-btn__icon" aria-hidden="true">${svgIcon("stopwatch", { className: "octicon octicon-stopwatch" })}</span>
         <span>Mode éphémère</span>
       </button>
-      ${handwritingActionHtml}
 
       ${issueStatusActionHtml}
 

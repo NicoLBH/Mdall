@@ -1,5 +1,6 @@
 import { getAuthorIdentity } from "../ui/author-identity.js";
 import { renderSubjectMarkdownToolbar } from "../ui/subject-rich-editor.js";
+import { shouldShowHandwritingButton } from "../../utils/input-capabilities.js";
 import { renderSubjectAttachmentTile, renderSubjectAttachmentsPreviewList } from "./project-subjects-attachments-ui.js";
 
 export function createProjectSubjectsDescription(config = {}) {
@@ -1015,7 +1016,14 @@ export function createProjectSubjectsDescription(config = {}) {
               tabPreviewAction: "description-tab-preview",
               tabsClassName: "comment-composer__tabs--thread-reply",
               composerClassName: "comment-composer--thread-reply-editor comment-composer--thread-edit-root",
-              toolbarHtml: renderSubjectMarkdownToolbar({ buttonAction: "description-format", svgIcon, extraData: { entityId } }),
+              toolbarHtml: renderSubjectMarkdownToolbar({
+                buttonAction: "description-format",
+                svgIcon,
+                extraData: { entityId },
+                handwritingAction: shouldShowHandwritingButton()
+                  ? { action: "open-handwriting-composer", composerKind: "description", messageId: entityId, entityId }
+                  : null
+              }),
               previewHtml: String(edit.draft || "").trim()
                 ? mdToHtml(String(edit.draft || ""), { preserveMessageLineBreaks: true })
                 : "",

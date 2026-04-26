@@ -2630,10 +2630,9 @@ body.is-resizing{
 .human-action.comment-composer.comment-composer--thread-reply-editor.comment-composer--thread-edit-root .comment-general-block.comment-composer__main{padding:12px;}
 .comment-composer__toolbar{display:flex;align-items:center;justify-content:flex-end;min-height:39px;}
 .comment-toolbar-layout{
-  display:grid;
-  grid-template-columns:auto auto auto;
+  display:flex;
   align-items:center;
-  align-content:center;
+  width:100%;
   height:100%;
   gap:0;
 }
@@ -2645,6 +2644,10 @@ body.is-resizing{
 }
 .comment-toolbar-layout__group + .comment-toolbar-layout__group{
   margin-left:8px;
+  padding-left:8px;
+}
+.comment-toolbar-layout__group--push-right{
+  margin-left:auto !important;
   padding-left:8px;
 }
 .comment-toolbar-layout__group + .comment-toolbar-layout__group::before{
@@ -14238,12 +14241,6 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   color: #f8fafc;
 }
 
-.handwriting-composer-overlay__hint {
-  margin: 6px 0 0;
-  color: #b8c0cc;
-  font-size: 13px;
-}
-
 .handwriting-composer-overlay__hint,
 .handwriting-composer-overlay__title {
   pointer-events: none;
@@ -14275,14 +14272,15 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   border: 1px solid rgba(248, 250, 252, 0.2);
   border-radius: 12px;
   background: #111821;
-  overflow: hidden;
+  overflow: auto;
   overscroll-behavior: none;
-  touch-action: none;
+  touch-action: pan-y;
 }
 
 .handwriting-composer-overlay__canvas {
   width: 100%;
-  height: 100%;
+  height: auto;
+  min-height: 100%;
   display: block;
   touch-action: none;
   overscroll-behavior: none;

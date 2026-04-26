@@ -3,7 +3,8 @@ import { escapeHtml } from "../../utils/escape-html.js";
 export function renderSubjectMarkdownToolbar({
   buttonAction = "composer-format",
   svgIcon,
-  extraData = {}
+  extraData = {},
+  handwritingAction = null
 } = {}) {
   const toolbarButtons = [
     { action: "heading", icon: "markdown-heading", label: "Titre (H3)" },
@@ -40,6 +41,27 @@ export function renderSubjectMarkdownToolbar({
       ${svgIcon(button.icon)}
     </button>
   `;
+  const renderHandwritingButton = (config = {}) => {
+    const actionName = String(config?.action || "").trim();
+    if (!actionName) return "";
+    const composerKind = String(config?.composerKind || "main").trim();
+    const messageId = String(config?.messageId || "").trim();
+    const entityId = String(config?.entityId || "").trim();
+    return `
+      <button
+        class="comment-toolbar-btn"
+        type="button"
+        data-action="${escapeHtml(actionName)}"
+        data-composer-kind="${escapeHtml(composerKind)}"
+        ${messageId ? `data-message-id="${escapeHtml(messageId)}"` : ""}
+        ${entityId ? `data-entity-id="${escapeHtml(entityId)}"` : ""}
+        title="Écrire à la main"
+        aria-label="Écrire à la main"
+      >
+        ${svgIcon("north-star")}
+      </button>
+    `;
+  };
 
   const shouldUseComposerLayout = buttonAction === "composer-format"
     || buttonAction === "thread-reply-format"
@@ -87,6 +109,7 @@ export function renderSubjectMarkdownToolbar({
       <div class="comment-toolbar-layout__group">${renderGroup(groupOne)}</div>
       <div class="comment-toolbar-layout__group">${renderGroup(groupTwo)}</div>
       <div class="comment-toolbar-layout__group">${attachmentButton}${mentionButton ? renderToolbarButton(mentionButton) : ""}${subjectRefButton ? renderToolbarButton(subjectRefButton) : ""}</div>
+      ${handwritingAction ? `<div class="comment-toolbar-layout__group comment-toolbar-layout__group--push-right">${renderHandwritingButton(handwritingAction)}</div>` : ""}
     </div>
   `;
 }

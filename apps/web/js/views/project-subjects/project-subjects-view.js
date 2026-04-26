@@ -20,6 +20,7 @@ import {
   sendSubjectMdallExchange,
   sendSubjectMdallReplyForExistingMessage
 } from "../../services/subject-mdall-service.js";
+import { shouldShowHandwritingButton } from "../../utils/input-capabilities.js";
 import { renderCommentComposer } from "../ui/comment-composer.js";
 import { renderSubjectMarkdownToolbar } from "../ui/subject-rich-editor.js";
 import { renderSubjectAttachmentsPreviewList } from "./project-subjects-attachments-ui.js";
@@ -3647,7 +3648,13 @@ function renderCreateSubjectFormHtml() {
                   tabPreviewAction: "create-subject-tab-preview",
                   tabsClassName: "comment-composer__tabs--thread-reply",
                   composerClassName: "comment-composer--thread-reply-editor comment-composer--create-subject",
-                  toolbarHtml: renderSubjectMarkdownToolbar({ buttonAction: "create-subject-format", svgIcon }),
+                  toolbarHtml: renderSubjectMarkdownToolbar({
+                    buttonAction: "create-subject-format",
+                    svgIcon,
+                    handwritingAction: shouldShowHandwritingButton()
+                      ? { action: "open-handwriting-composer", composerKind: "create-subject" }
+                      : null
+                  }),
                   previewHtml: previewHtml || "",
                   previewEmptyHint: "Utilisez Markdown pour formater votre description",
                   footerHtml: `

@@ -95,9 +95,6 @@ export function renderHandwritingComposerOverlay({ subjectId = "", draft = {} } 
       <div class="handwriting-composer-overlay__header">
         <div class="handwriting-composer-overlay__title-wrap">
           <h2 class="handwriting-composer-overlay__title">Rédaction manuscrite</h2>
-          <p class="handwriting-composer-overlay__hint">
-            Écrivez votre réponse complète : texte, titres, formules, flèches. La conversion produira du Markdown + LaTeX.
-          </p>
         </div>
         <div class="handwriting-composer-overlay__actions">
           <button type="button" class="gh-btn gh-btn--sm" data-action="handwriting-clear">Effacer</button>
@@ -159,6 +156,10 @@ export function mountHandwritingComposerOverlay({
     width: 1,
     height: 1,
     dpr: Math.max(1, toNumber(window?.devicePixelRatio, 1))
+  };
+  const canvasState = {
+    virtualHeight: 0,
+    minHeight: 0
   };
   const debugEnabled = (() => {
     try {
@@ -269,6 +270,10 @@ export function mountHandwritingComposerOverlay({
 
   function resizeCanvas() {
     if (!canvas) return;
+    const wrapHeight = Math.max(1, Math.floor(toNumber(canvasWrap?.clientHeight, 1)));
+    if (!canvasState.minHeight) canvasState.minHeight = wrapHeight;
+    if (!canvasState.virtualHeight) canvasState.virtualHeight = wrapHeight;
+    canvas.style.height = `${Math.max(canvasState.minHeight, canvasState.virtualHeight)}px`;
     const rect = canvas.getBoundingClientRect();
     drawing.dpr = Math.max(1, toNumber(window?.devicePixelRatio, 1));
     drawing.width = Math.max(1, Math.floor(rect.width));
@@ -280,6 +285,29 @@ export function mountHandwritingComposerOverlay({
       ctx.setTransform(drawing.dpr, 0, 0, drawing.dpr, 0, 0);
     }
     redraw();
+  }
+
+  function maybeExtendCanvas(normalizedY = 0) {
+    if (!canvas || !canvasWrap) return;
+    const visibleHeight = Math.max(1, toNumber(canvasWrap.clientHeight, 1));
+    const currentHeight = Math.max(1, drawing.height);
+    const thresholdPx = Math.max(72, visibleHeight * 0.16);
+    const yPx = Math.max(0, Math.min(1, toNumber(normalizedY, 0))) * currentHeight;
+    if (yPx < currentHeight - thresholdPx) return;
+
+    const previousHeight = Math.max(1, canvasState.virtualHeight || currentHeight);
+    const growth = Math.max(180, Math.round(visibleHeight * 0.75));
+    const nextHeight = previousHeight + growth;
+    const ratio = previousHeight / nextHeight;
+    drawing.strokes.forEach((stroke) => {
+      const points = Array.isArray(stroke?.points) ? stroke.points : [];
+      points.forEach((point) => {
+        point.y = Math.min(1, Math.max(0, toNumber(point.y, 0) * ratio));
+      });
+    });
+    canvasState.virtualHeight = nextHeight;
+    resizeCanvas();
+    canvasWrap.scrollTop = Math.max(0, nextHeight - visibleHeight);
   }
 
   function toNormalizedPoint(event) {
@@ -393,6 +421,7 @@ export function mountHandwritingComposerOverlay({
       const point = toNormalizedPoint(entry);
       drawing.activeStroke.points.push(point);
       drawing.pendingPoints.push(point);
+      maybeExtendCanvas(point.y);
     });
     scheduleDraw();
   }
@@ -401,7 +430,9 @@ export function mountHandwritingComposerOverlay({
     if (drawing.activePointerId !== event.pointerId) return;
     event.preventDefault();
     if (drawing.activeStroke) {
-      drawing.activeStroke.points.push(toNormalizedPoint(event));
+      const point = toNormalizedPoint(event);
+      drawing.activeStroke.points.push(point);
+      maybeExtendCanvas(point.y);
     }
     endCurrentStroke();
   }
