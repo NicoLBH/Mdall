@@ -240,13 +240,24 @@ export async function sendSubjectMdallExchange({
   });
 
   try {
-    const response = await fetch(ASK_LLM_URL_PROD, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(llmPayload)
-    });
+    let response = null;
+    try {
+      response = await fetch(ASK_LLM_URL_PROD, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(llmPayload)
+      });
+    } catch (networkError) {
+      const isFetchFailure = /failed to fetch/i.test(String(networkError?.message || ""));
+      if (isFetchFailure) {
+        throw new Error(
+          "Impossible de contacter le webhook Mdall (erreur réseau/CORS). Vérifiez Access-Control-Allow-Origin."
+        );
+      }
+      throw networkError;
+    }
 
     if (!response.ok) {
       const text = await response.text().catch(() => "");

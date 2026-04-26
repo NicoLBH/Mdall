@@ -3164,13 +3164,22 @@ async function applyCommentAction(root) {
       mentionsCount: Array.isArray(mentions) ? mentions.length : 0
     });
 
-    await sendSubjectMdallExchange({
-      subjectId: target.id,
-      bodyMarkdown: message,
-      isEphemeral: true,
-      parentMessageId: parentMessageId || null,
-      mentions
-    });
+    try {
+      await sendSubjectMdallExchange({
+        subjectId: target.id,
+        bodyMarkdown: message,
+        isEphemeral: true,
+        parentMessageId: parentMessageId || null,
+        mentions
+      });
+    } catch (error) {
+      logEphemeralFlow("ephemeral-submit-error", {
+        subjectId: String(target.id || "").trim(),
+        message: String(error?.message || error || "unknown error")
+      });
+      console.warn("[subject-mdall] ephemeral exchange failed", error);
+      return;
+    }
 
     ta.value = "";
     store.situationsView.commentDraft = "";
