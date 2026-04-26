@@ -49,3 +49,4 @@ jobs:
           supabase functions deploy resolve-observations --no-verify-jwt --debug
           supabase functions deploy delete-account --no-verify-jwt --debug
           supabase functions deploy upload-subject-message-attachment --no-verify-jwt --debug
+          supabase functions deploy subject-mdall-exchange --no-verify-jwt --debug
