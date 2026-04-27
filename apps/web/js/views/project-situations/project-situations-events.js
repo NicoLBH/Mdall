@@ -74,7 +74,7 @@ export function createProjectSituationsEvents({
       trajectoryRuntimeModulesPromise = Promise.all([
         import("./trajectory/trajectory-time-scale.js"),
         import("./trajectory/trajectory-model.js"),
-        import("./trajectory/trajectory-canvas-renderer.js"),
+        import("./trajectory/trajectory-dom-renderer.js"),
         import("./trajectory/trajectory-virtualizer.js")
       ]);
     }
@@ -719,7 +719,7 @@ export function createProjectSituationsEvents({
     });
   }
 
-  function bindTrajectoryCanvas(root) {
+  function bindTrajectoryDom(root) {
     const trajectoryNodes = [...root.querySelectorAll("[data-situation-trajectory][data-situation-id]")];
     if (!trajectoryNodes.length) return;
 
@@ -727,14 +727,14 @@ export function createProjectSituationsEvents({
     if (layout !== "roadmap") return;
 
     loadTrajectoryRuntimeModules()
-      .then(([timeScaleModule, modelModule, canvasRendererModule, virtualizerModule]) => {
+      .then(([timeScaleModule, modelModule, domRendererModule, virtualizerModule]) => {
         const { createTrajectoryTimeScale } = timeScaleModule || {};
         const { buildTrajectoryModel } = modelModule || {};
-        const { renderTrajectoryCanvas } = canvasRendererModule || {};
+        const { renderTrajectoryDom } = domRendererModule || {};
         const { getTrajectoryVisibleWindow } = virtualizerModule || {};
         if (typeof createTrajectoryTimeScale !== "function"
           || typeof buildTrajectoryModel !== "function"
-          || typeof renderTrajectoryCanvas !== "function"
+          || typeof renderTrajectoryDom !== "function"
           || typeof getTrajectoryVisibleWindow !== "function") {
           return;
         }
@@ -743,12 +743,14 @@ export function createProjectSituationsEvents({
           const situationId = String(trajectoryNode.getAttribute("data-situation-id") || "").trim();
           const viewportNode = trajectoryNode.querySelector("[data-situation-trajectory-viewport]")
             || trajectoryNode.querySelector(".situation-trajectory__viewport");
-          const canvasNode = trajectoryNode.querySelector(".situation-trajectory__canvas");
+          const sceneNode = trajectoryNode.querySelector("[data-situation-trajectory-scene]");
+          const svgNode = trajectoryNode.querySelector("[data-situation-trajectory-svg]");
+          const itemsRootNode = trajectoryNode.querySelector("[data-situation-trajectory-items]");
           const leftContentNode = trajectoryNode.querySelector("[data-situation-trajectory-left-content]");
           const timelineContentNode = trajectoryNode.querySelector("[data-situation-trajectory-timeline-content]");
           const scrollSizerNode = trajectoryNode.querySelector("[data-situation-trajectory-scroll-sizer]");
           const spinnerNode = trajectoryNode.querySelector("[data-situation-trajectory-spinner]");
-          if (!viewportNode || !canvasNode) return;
+          if (!viewportNode || !sceneNode || !svgNode || !itemsRootNode) return;
 
           const subjects = resolveTrajectorySubjects(situationId);
           const rawSubjectsResult = store?.projectSubjectsView?.rawSubjectsResult || {};
@@ -781,15 +783,23 @@ export function createProjectSituationsEvents({
             today: new Date()
           });
 
-          const contentHeight = Math.max(viewportNode.clientHeight || 0, rows.length * TRAJECTORY_ROW_HEIGHT);
+          const totalWidth = Math.max(viewportNode.clientWidth || 0, timeScale.totalWidth);
+          const contentHeight = Math.max(360, rows.length * TRAJECTORY_ROW_HEIGHT);
           if (scrollSizerNode) {
-            scrollSizerNode.style.width = `${Math.max(viewportNode.clientWidth || 0, timeScale.totalWidth)}px`;
-            scrollSizerNode.style.height = `${Math.max(360, contentHeight)}px`;
+            scrollSizerNode.style.width = `${totalWidth}px`;
+            scrollSizerNode.style.height = `${contentHeight}px`;
           }
           if (timelineContentNode) {
-            timelineContentNode.style.width = `${Math.max(viewportNode.clientWidth || 0, timeScale.totalWidth)}px`;
+            timelineContentNode.style.width = `${totalWidth}px`;
             renderTrajectoryTimelineTicks(timelineContentNode, timeScale, { objectivesById });
           }
+
+          sceneNode.style.width = `${totalWidth}px`;
+          sceneNode.style.height = `${contentHeight}px`;
+          sceneNode.style.setProperty("--situation-trajectory-scene-width", `${totalWidth}px`);
+          sceneNode.style.setProperty("--situation-trajectory-scene-height", `${contentHeight}px`);
+
+          console.info("[trajectory] dom.bind", { situationId, rowCount: rows.length, totalWidth, contentHeight });
 
           let rafId = 0;
           const renderFrame = () => {
@@ -815,8 +825,10 @@ export function createProjectSituationsEvents({
             if (leftContentNode) leftContentNode.style.transform = `translateY(${-scrollTop}px)`;
             if (timelineContentNode) timelineContentNode.style.transform = `translate3d(${-scrollLeft}px,0,0)`;
 
-            renderTrajectoryCanvas({
-              canvas: canvasNode,
+            renderTrajectoryDom({
+              scene: sceneNode,
+              svg: svgNode,
+              itemsRoot: itemsRootNode,
               rows,
               relationEvents,
               timeScale,
@@ -834,8 +846,8 @@ export function createProjectSituationsEvents({
             rafId = window.requestAnimationFrame(renderFrame);
           };
 
-          if (!viewportNode.dataset.trajectoryCanvasBound) {
-            viewportNode.dataset.trajectoryCanvasBound = "true";
+          if (!viewportNode.dataset.trajectoryDomBound) {
+            viewportNode.dataset.trajectoryDomBound = "true";
             viewportNode.addEventListener("scroll", scheduleRender, { passive: true });
           }
 
@@ -1732,7 +1744,7 @@ export function createProjectSituationsEvents({
 
     bindSituationGridColumnResize(root);
     bindTrajectoryColumnResize(root);
-    bindTrajectoryCanvas(root);
+    bindTrajectoryDom(root);
     bindSituationGridEditableCells(root);
     bindSituationGridDnd(root);
 
