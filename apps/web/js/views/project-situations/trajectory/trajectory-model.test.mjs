@@ -251,3 +251,105 @@ test("buildTrajectoryModel conserve un point par évènement de statut et ajoute
     ]
   );
 });
+
+test("buildTrajectoryModel conserve un point à chaque évènement de cycle de vie avec les dates exactes", () => {
+  const result = buildTrajectoryModel({
+    subjects: [
+      { id: "s-lifecycle", created_at: "2026-01-01T00:00:00.000Z", status: "open" }
+    ],
+    subjectHistoryEvents: {
+      "s-lifecycle": [
+        { subject_id: "s-lifecycle", event_type: "subject_created", created_at: "2026-01-01T00:00:00.000Z" },
+        { subject_id: "s-lifecycle", event_type: "subject_closed", created_at: "2026-01-05T00:00:00.000Z", payload: { closed_status: "closed" } },
+        { subject_id: "s-lifecycle", event_type: "subject_reopened", created_at: "2026-01-07T00:00:00.000Z" },
+        { subject_id: "s-lifecycle", event_type: "subject_rejected", created_at: "2026-01-09T00:00:00.000Z" }
+      ]
+    },
+    today: "2026-01-10T00:00:00.000Z"
+  });
+
+  const [row] = result.rows;
+  assert.deepEqual(
+    row.statusPoints.map((point) => ({
+      at: point.at.toISOString(),
+      source: point.source,
+      icon: point.icon
+    })),
+    [
+      { at: "2026-01-01T00:00:00.000Z", source: "subject_created", icon: "open" },
+      { at: "2026-01-05T00:00:00.000Z", source: "subject_closed", icon: "close" },
+      { at: "2026-01-07T00:00:00.000Z", source: "subject_reopened", icon: "open" },
+      { at: "2026-01-09T00:00:00.000Z", source: "subject_rejected", icon: "reject" }
+    ]
+  );
+});
+
+test("buildTrajectoryModel rend plusieurs blocages entrants à des dates différentes sans casser le cycle de vie", () => {
+  const result = buildTrajectoryModel({
+    subjects: [{ id: "s-blocked", created_at: "2026-01-01T00:00:00.000Z", status: "open" }],
+    subjectHistoryEvents: {
+      "s-blocked": [
+        { subject_id: "s-blocked", event_type: "subject_blocked_by_added", created_at: "2026-01-03T00:00:00.000Z" },
+        { subject_id: "s-blocked", event_type: "subject_blocked_by_added", created_at: "2026-01-06T00:00:00.000Z" }
+      ]
+    },
+    today: "2026-01-07T00:00:00.000Z"
+  });
+
+  const [row] = result.rows;
+  const blockedPoints = row.statusPoints.filter((point) => point.source === "subject_blocked_by_added");
+  assert.equal(blockedPoints.length, 2);
+  assert.ok(blockedPoints.every((point) => point.icon === "open"));
+  assert.ok(blockedPoints.every((point) => point.hasBlockedIndicator === true));
+  assert.ok(blockedPoints.every((point) => point.contributesToLifecycle === false));
+  assert.deepEqual(blockedPoints.map((point) => point.at.toISOString()), [
+    "2026-01-03T00:00:00.000Z",
+    "2026-01-06T00:00:00.000Z"
+  ]);
+});
+
+test("buildTrajectoryModel transforme subject_objectives_changed added/removed/replaced en milestones non lifecycle", () => {
+  const result = buildTrajectoryModel({
+    subjects: [{ id: "s-objective-events", created_at: "2026-01-01T00:00:00.000Z", status: "open" }],
+    subjectHistoryEvents: {
+      "s-objective-events": [
+        {
+          subject_id: "s-objective-events",
+          event_type: "subject_objectives_changed",
+          created_at: "2026-01-03T00:00:00.000Z",
+          payload: { action: "added", delta: { added: ["o1"], removed: [] } }
+        },
+        {
+          subject_id: "s-objective-events",
+          event_type: "subject_objectives_changed",
+          created_at: "2026-01-04T00:00:00.000Z",
+          payload: { action: "removed", delta: { added: [], removed: ["o1"] } }
+        },
+        {
+          subject_id: "s-objective-events",
+          event_type: "subject_objectives_changed",
+          created_at: "2026-01-05T00:00:00.000Z",
+          payload: { action: "replaced", delta: { added: ["o2"], removed: ["o1"] } }
+        }
+      ]
+    },
+    today: "2026-01-06T00:00:00.000Z"
+  });
+
+  const [row] = result.rows;
+  const milestones = row.statusPoints.filter((point) => point.icon === "milestone");
+  assert.deepEqual(
+    milestones.map((point) => ({
+      at: point.at.toISOString(),
+      action: point.milestoneAction,
+      contributesToLifecycle: point.contributesToLifecycle,
+      markerColor: point.markerColor
+    })),
+    [
+      { at: "2026-01-03T00:00:00.000Z", action: "added", contributesToLifecycle: false, markerColor: "#fff" },
+      { at: "2026-01-04T00:00:00.000Z", action: "removed", contributesToLifecycle: false, markerColor: "var(--muted)" },
+      { at: "2026-01-05T00:00:00.000Z", action: "removed", contributesToLifecycle: false, markerColor: "var(--muted)" },
+      { at: "2026-01-05T00:00:00.000Z", action: "added", contributesToLifecycle: false, markerColor: "#fff" }
+    ]
+  );
+});
