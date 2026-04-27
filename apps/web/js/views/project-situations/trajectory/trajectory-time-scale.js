@@ -105,12 +105,6 @@ export function createTrajectoryTimeScale({
     return ticks;
   }
 
-  console.info("[trajectory] time-scale", {
-    startDate: new Date(startTs).toISOString(),
-    endDate: new Date(endTs).toISOString(),
-    zoom: normalizedZoom,
-    totalWidth
-  });
 
   return {
     startDate: new Date(startTs),

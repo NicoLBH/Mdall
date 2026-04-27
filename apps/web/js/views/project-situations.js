@@ -110,16 +110,8 @@ async function ensureTrajectoryHistory({ situationId = "", subjects = [] } = {})
     && cached.statusEventsBySubjectId
     && Array.isArray(cached.relationEvents);
 
-  console.info("[trajectory] history.ensure.start", {
-    situationId: normalizedSituationId,
-    subjectCount: subjectIds.length
-  });
 
   if (hasUsableCachedPayload && cachedSignature === subjectIdsSignature) {
-    console.info("[trajectory] history.ensure.cache-hit", {
-      situationId: normalizedSituationId,
-      subjectCount: subjectIds.length
-    });
     return cached;
   }
 
@@ -131,11 +123,6 @@ async function ensureTrajectoryHistory({ situationId = "", subjects = [] } = {})
       subjectIdsSignature
     };
     cacheBySituationId[normalizedSituationId] = emptyPayload;
-    console.info("[trajectory] history.ensure.done", {
-      situationId: normalizedSituationId,
-      subjectCount: subjectIds.length,
-      eventCount: 0
-    });
     return emptyPayload;
   }
 
@@ -151,11 +138,6 @@ async function ensureTrajectoryHistory({ situationId = "", subjects = [] } = {})
       subjectIdsSignature
     };
     cacheBySituationId[normalizedSituationId] = payload;
-    console.info("[trajectory] history.ensure.done", {
-      situationId: normalizedSituationId,
-      subjectCount: subjectIds.length,
-      eventCount: Object.values(payload.eventsBySubjectId).flat().length
-    });
     return payload;
   } catch (error) {
     console.error("[trajectory] history.ensure.error", error);

@@ -800,7 +800,6 @@ export function createProjectSituationsEvents({
           sceneNode.style.setProperty("--situation-trajectory-scene-width", `${totalWidth}px`);
           sceneNode.style.setProperty("--situation-trajectory-scene-height", `${contentHeight}px`);
 
-          console.info("[trajectory] dom.bind", { situationId, rowCount: rows.length, totalWidth, contentHeight });
 
           let rafId = 0;
           const renderFrame = () => {
@@ -808,7 +807,6 @@ export function createProjectSituationsEvents({
             const scrollTop = viewportNode.scrollTop;
             const scrollLeft = viewportNode.scrollLeft;
 
-            console.info("[trajectory] scroll", { scrollTop, scrollLeft });
 
             const windowState = getTrajectoryVisibleWindow({
               rowCount: rows.length,
@@ -1705,7 +1703,6 @@ export function createProjectSituationsEvents({
           ? "trajectory-dom"
           : "situations-view";
         if (source === "trajectory-dom") {
-          console.info("[trajectory] subject.open", { subjectId, source: "trajectory-dom" });
         }
         if (typeof openSubjectDrilldown === "function") {
           openSubjectDrilldown(subjectId);

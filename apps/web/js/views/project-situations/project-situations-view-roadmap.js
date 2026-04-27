@@ -74,7 +74,6 @@ export function renderSituationRoadmapView(situation, subjects = [], options = {
     : {};
   const leftColumnWidth = normalizeLeftColumnWidth(options?.store?.situationsView?.trajectoryLeftColumnWidthBySituationId?.[situationId]);
 
-  console.info("[trajectory] render.shell.dom-svg", { situationId });
 
   const projectDataAttribute = projectId ? ` data-project-id="${escapeHtml(projectId)}"` : "";
   let leftColumnHtml = "";
@@ -100,7 +99,6 @@ export function renderSituationRoadmapView(situation, subjects = [], options = {
       fallbackExpandedIds: [...selectedSubjectIds]
     });
 
-    console.info("[trajectory] render.tree", { subjectCount: selectedSubjectIds.size, rootCount: rootSubjectIds.length });
 
     if (!selectedSubjectIds.size || !rootSubjectIds.length) {
       emptyState = `

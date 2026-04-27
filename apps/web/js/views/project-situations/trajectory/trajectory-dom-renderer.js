@@ -403,15 +403,6 @@ export function renderTrajectoryDom({
   const visibleStart = new Date(visibleStartTs).toISOString();
   const visibleEnd = new Date(visibleEndTs).toISOString();
 
-  console.info("[trajectory] dom.render", {
-    visibleRows,
-    visibleStart,
-    visibleEnd,
-    segmentCount,
-    pointCount,
-    markerCount,
-    linkCount
-  });
 
   return {
     visibleRows,

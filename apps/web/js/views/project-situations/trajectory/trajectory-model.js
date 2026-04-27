@@ -235,11 +235,6 @@ export function buildTrajectoryModel({
       };
     });
 
-    console.info("[trajectory] model.subject", {
-      subjectId,
-      segmentCount: lifecycleSegments.length,
-      markerCount: objectiveMarkers.length
-    });
 
     return {
       subjectId,
