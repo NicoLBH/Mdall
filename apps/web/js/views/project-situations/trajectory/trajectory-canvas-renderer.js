@@ -1,3 +1,5 @@
+import { getTrajectoryVisibleWindow } from "./trajectory-virtualizer.js";
+
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
@@ -27,17 +29,18 @@ function normalizeOverscan(overscan) {
 }
 
 function getVisibleRowWindow({ rowCount, rowHeight, scrollTop, viewportHeight, overscanRows }) {
-  const safeRowHeight = Math.max(1, Number(rowHeight) || 32);
-  const safeScrollTop = Math.max(0, Number(scrollTop) || 0);
-  const safeViewportHeight = Math.max(0, Number(viewportHeight) || 0);
-
-  const start = clamp(Math.floor(safeScrollTop / safeRowHeight) - overscanRows, 0, Math.max(0, rowCount - 1));
-  const end = clamp(
-    Math.ceil((safeScrollTop + safeViewportHeight) / safeRowHeight) + overscanRows,
-    start,
-    Math.max(0, rowCount - 1)
-  );
-  return { rowStart: start, rowEnd: end };
+  const { rowStart, rowEnd } = getTrajectoryVisibleWindow({
+    rowCount,
+    rowHeight,
+    scrollTop,
+    viewportHeight,
+    overscanRows,
+    scrollLeft: 0,
+    viewportWidth: 0,
+    totalWidth: 0,
+    overscanPx: 0
+  });
+  return { rowStart, rowEnd };
 }
 
 function setupCanvas(canvas, viewportWidth, viewportHeight) {
@@ -197,18 +200,24 @@ export function renderTrajectoryCanvas({
 
   const safeRows = asArray(rows);
   const rowCount = safeRows.length;
-  const { rowStart, rowEnd } = getVisibleRowWindow({
+  const visibleWindow = getTrajectoryVisibleWindow({
     rowCount,
     rowHeight,
     scrollTop,
-    viewportHeight: height,
-    overscanRows: overscanConfig.rows
-  });
-
-  const visibleTimeRange = timeScale.getVisibleTimeRange({
     scrollLeft,
     viewportWidth: width,
+    viewportHeight: height,
+    totalWidth: timeScale.totalWidth,
+    overscanRows: overscanConfig.rows,
     overscanPx: overscanConfig.px
+  });
+
+  const { rowStart, rowEnd, timeScrollLeft, timeViewportWidth } = visibleWindow;
+
+  const visibleTimeRange = timeScale.getVisibleTimeRange({
+    scrollLeft: timeScrollLeft,
+    viewportWidth: timeViewportWidth,
+    overscanPx: 0
   });
 
   const visibleStartTs = toTimestamp(visibleTimeRange.start);
