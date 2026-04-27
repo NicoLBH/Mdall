@@ -10329,6 +10329,7 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   opacity:.95;
   pointer-events:auto;
   cursor:pointer;
+  z-index:1;
 }
 
 .situation-trajectory__segment--green{
@@ -10387,6 +10388,7 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   display:inline-flex;
   align-items:center;
   justify-content:center;
+  z-index:3;
 }
 
 .situation-trajectory__point-icon{
@@ -10398,6 +10400,12 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   border-radius:999px;
   background:rgb(21, 27, 35);
   color:var(--fgColor-muted, #8b949e);
+}
+
+.situation-trajectory__status-icon{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
 }
 
 .situation-trajectory__marker::before,
@@ -10433,6 +10441,14 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
 
 .situation-trajectory__point--reject .situation-trajectory__point-icon{
   color:var(--project-tabs-icon-color, rgb(248, 81, 73));
+}
+
+.situation-trajectory__point--milestone-added .situation-trajectory__point-icon svg{
+  color:#fff;
+}
+
+.situation-trajectory__point--milestone-removed .situation-trajectory__point-icon svg{
+  color:var(--muted);
 }
 
 .situation-trajectory__marker--cross::before,
