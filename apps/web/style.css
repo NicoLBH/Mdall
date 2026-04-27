@@ -10175,19 +10175,8 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   background:rgb(13, 17, 23);
 }
 
-.situation-trajectory__timeline::before{
-  content:"";
-  position:absolute;
-  top:0;
-  bottom:0;
-  left:var(--situation-trajectory-left-width);
-  width:1px;
-  background:var(--borderColor-default, #30363d);
-}
-
 .situation-trajectory__timeline-track{
   position:relative;
-  margin-left:var(--situation-trajectory-left-width);
   min-height:64px;
   overflow:hidden;
 }
@@ -10256,7 +10245,7 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
 .situation-trajectory__splitter{
   position:absolute;
   top:100%;
-  left:0;
+  left:var(--situation-trajectory-left-width);
   transform:translate(-50%, -50%) rotate(90deg);
   width:20px;
   height:20px;

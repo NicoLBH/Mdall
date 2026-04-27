@@ -115,6 +115,14 @@ function drawStatusIcon(ctx, { x, y, icon = "open" }) {
     ctx.beginPath();
     ctx.arc(x, y, 4, 0, Math.PI * 2);
     ctx.fill();
+  } else if (icon === "close") {
+    ctx.fillStyle = "#8c959f";
+    ctx.strokeStyle = "#8c959f";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(x, y, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
   } else if (icon === "rejected" || icon === "reject") {
     ctx.strokeStyle = "#cf222e";
     ctx.lineWidth = 2;
