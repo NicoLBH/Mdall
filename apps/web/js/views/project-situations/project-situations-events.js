@@ -556,6 +556,15 @@ export function createProjectSituationsEvents({
     trajectoryNode.style.setProperty("--situation-trajectory-left-width", `${normalizeTrajectoryColumnWidth(width)}px`);
   }
 
+  function syncTrajectoryHorizontalOffset(trajectoryNode) {
+    if (!trajectoryNode) return;
+    const viewportNode = trajectoryNode.querySelector("[data-situation-trajectory-viewport]")
+      || trajectoryNode.querySelector(".situation-trajectory__viewport");
+    const timelineContentNode = trajectoryNode.querySelector("[data-situation-trajectory-timeline-content]");
+    if (!viewportNode || !timelineContentNode) return;
+    timelineContentNode.style.transform = `translate3d(${-Math.max(0, Number(viewportNode.scrollLeft) || 0)}px,0,0)`;
+  }
+
   function hydrateTrajectoryColumnWidth(root) {
     root.querySelectorAll("[data-situation-trajectory][data-situation-id]").forEach((trajectoryNode) => {
       const situationId = String(trajectoryNode.getAttribute("data-situation-id") || "").trim();
@@ -566,6 +575,7 @@ export function createProjectSituationsEvents({
       const nextWidth = normalizeTrajectoryColumnWidth(fromStore ?? fromStorage);
       widthsBySituationId[situationId] = nextWidth;
       applyTrajectoryColumnWidth(trajectoryNode, nextWidth);
+      syncTrajectoryHorizontalOffset(trajectoryNode);
     });
   }
 
@@ -592,6 +602,7 @@ export function createProjectSituationsEvents({
           const nextWidth = normalizeTrajectoryColumnWidth(initialWidth + (pointerX - startX));
           widthsBySituationId[situationId] = nextWidth;
           applyTrajectoryColumnWidth(trajectoryNode, nextWidth);
+          syncTrajectoryHorizontalOffset(trajectoryNode);
         };
 
         const onPointerUp = () => {
@@ -600,6 +611,7 @@ export function createProjectSituationsEvents({
           window.removeEventListener("pointercancel", onPointerUp);
           trajectoryNode.classList.remove("is-resizing-left");
           persistTrajectoryColumnWidth(situationId, widthsBySituationId[situationId]);
+          syncTrajectoryHorizontalOffset(trajectoryNode);
         };
 
         event.preventDefault();
@@ -644,6 +656,14 @@ export function createProjectSituationsEvents({
     return Object.values(eventsBySubjectId)
       .flatMap((events) => (Array.isArray(events) ? events : []))
       .filter((event) => relationTypes.has(String(event?.event_type || "").trim().toLowerCase()));
+  }
+
+  function resolveTrajectorySituationStartDate(situationId = "") {
+    const normalizedSituationId = String(situationId || "").trim();
+    if (!normalizedSituationId) return null;
+    const situations = Array.isArray(store?.situationsView?.data) ? store.situationsView.data : [];
+    const currentSituation = situations.find((entry) => String(entry?.id || "").trim() === normalizedSituationId) || null;
+    return currentSituation?.created_at || null;
   }
 
   function resolveTrajectoryProjectStartDate() {
@@ -759,8 +779,10 @@ export function createProjectSituationsEvents({
           const objectivesById = rawSubjectsResult.objectivesById || {};
           const historyBySubjectId = resolveTrajectoryHistoryBySubjectId(situationId);
           const relationEvents = resolveTrajectoryRelationEvents(situationId);
+          const situationStartDate = resolveTrajectorySituationStartDate(situationId);
 
-          const projectStartDate = resolveTrajectoryProjectStartDate()
+          const effectiveTimelineAnchorDate = situationStartDate
+            || resolveTrajectoryProjectStartDate()
             || subjects.reduce((acc, subject) => {
               const createdAt = subject?.created_at ? new Date(subject.created_at) : null;
               if (!createdAt || Number.isNaN(createdAt.getTime())) return acc;
@@ -769,8 +791,11 @@ export function createProjectSituationsEvents({
             }, null)
             || new Date();
 
+          const timelineStartDate = new Date(effectiveTimelineAnchorDate);
+          timelineStartDate.setUTCMonth(timelineStartDate.getUTCMonth() - 1);
+
           const timeScale = createTrajectoryTimeScale({
-            startDate: projectStartDate,
+            startDate: timelineStartDate,
             endDate: resolveTrajectoryTimelineEndDate(),
             zoom: "day"
           });
@@ -780,7 +805,7 @@ export function createProjectSituationsEvents({
             subjectHistoryEvents: historyBySubjectId,
             objectivesById,
             objectiveIdsBySubjectId,
-            projectStartDate,
+            projectStartDate: effectiveTimelineAnchorDate,
             today: new Date()
           });
 
@@ -848,6 +873,13 @@ export function createProjectSituationsEvents({
           if (!viewportNode.dataset.trajectoryDomBound) {
             viewportNode.dataset.trajectoryDomBound = "true";
             viewportNode.addEventListener("scroll", scheduleRender, { passive: true });
+          }
+
+          const initialAnchorDate = new Date(effectiveTimelineAnchorDate);
+          if (Number.isFinite(initialAnchorDate.getTime()) && !viewportNode.dataset.trajectoryInitialAnchorApplied) {
+            const initialScrollLeft = Math.max(0, Math.round(timeScale.timeToX(initialAnchorDate)));
+            viewportNode.scrollLeft = initialScrollLeft;
+            viewportNode.dataset.trajectoryInitialAnchorApplied = "true";
           }
 
           scheduleRender();

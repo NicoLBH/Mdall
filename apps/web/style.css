@@ -10174,11 +10174,15 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   position:relative;
   min-height:64px;
   overflow:hidden;
+  padding-left:var(--situation-trajectory-left-width);
 }
 
 .situation-trajectory__timeline-content{
   position:absolute;
-  inset:0;
+  top:0;
+  right:0;
+  bottom:0;
+  left:var(--situation-trajectory-left-width);
   will-change:transform;
   pointer-events:none;
 }
