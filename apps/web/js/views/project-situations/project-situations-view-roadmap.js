@@ -74,7 +74,7 @@ export function renderSituationRoadmapView(situation, subjects = [], options = {
     : {};
   const leftColumnWidth = normalizeLeftColumnWidth(options?.store?.situationsView?.trajectoryLeftColumnWidthBySituationId?.[situationId]);
 
-  console.info("[trajectory] render.shell", { situationId, subjectCount });
+  console.info("[trajectory] render.shell.dom-svg", { situationId });
 
   const projectDataAttribute = projectId ? ` data-project-id="${escapeHtml(projectId)}"` : "";
   let leftColumnHtml = "";
@@ -200,7 +200,10 @@ export function renderSituationRoadmapView(situation, subjects = [], options = {
 
           <div class="situation-trajectory__viewport" aria-label="Trajectoire des sujets" data-situation-trajectory-viewport>
             <div class="situation-trajectory__scroll-sizer" data-situation-trajectory-scroll-sizer aria-hidden="true"></div>
-            <canvas class="situation-trajectory__canvas"></canvas>
+            <div class="situation-trajectory__scene" data-situation-trajectory-scene>
+              <svg class="situation-trajectory__svg" data-situation-trajectory-svg aria-hidden="true"></svg>
+              <div class="situation-trajectory__items" data-situation-trajectory-items></div>
+            </div>
             <div class="situation-trajectory__spinner" data-situation-trajectory-spinner hidden>
               <span class="ui-spinner ui-spinner--sm" aria-hidden="true"><span class="ui-spinner__ring"></span></span>
               <span>Chargement de la trajectoire…</span>

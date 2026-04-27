@@ -10289,14 +10289,196 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   min-height:360px;
 }
 
-.situation-trajectory__canvas{
-  display:block;
+.situation-trajectory__scene{
   position:absolute;
   top:0;
   left:0;
-  width:100%;
+  width:var(--situation-trajectory-scene-width, 100%);
+  height:var(--situation-trajectory-scene-height, 360px);
   min-height:360px;
+}
+
+.situation-trajectory__svg{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
   pointer-events:none;
+}
+
+.situation-trajectory__items{
+  position:absolute;
+  inset:0;
+}
+
+.situation-trajectory__segment,
+.situation-trajectory__point,
+.situation-trajectory__marker{
+  position:absolute;
+  transform:translate(-50%, -50%);
+}
+
+.situation-trajectory__segment{
+  height:4px;
+  border-radius:999px;
+  background:var(--fgColor-muted, #8b949e);
+  opacity:.95;
+  pointer-events:auto;
+  cursor:pointer;
+}
+
+.situation-trajectory__segment--green{
+  background:rgb(35, 134, 54);
+}
+
+.situation-trajectory__segment--red{
+  background:rgb(207, 34, 46);
+}
+
+.situation-trajectory__segment--gray{
+  background:rgb(99, 110, 123);
+}
+
+.situation-trajectory__segment--dashed{
+  background:transparent;
+  border-top:2px dashed rgb(99, 110, 123);
+  border-radius:0;
+  height:0;
+}
+
+.situation-trajectory__point,
+.situation-trajectory__marker{
+  width:14px;
+  height:14px;
+  appearance:none;
+  border:none;
+  padding:0;
+  border-radius:999px;
+  background:transparent;
+  color:var(--fgColor-muted, #8b949e);
+  cursor:pointer;
+  pointer-events:auto;
+}
+
+.situation-trajectory__point::before,
+.situation-trajectory__marker::before,
+.situation-trajectory__point::after,
+.situation-trajectory__marker::after{
+  content:"";
+  position:absolute;
+  inset:0;
+}
+
+.situation-trajectory__point::before{
+  inset:2px;
+  border-radius:999px;
+  background:rgb(139, 148, 158);
+}
+
+.situation-trajectory__marker::before,
+.situation-trajectory__marker::after{
+  border-top:2px solid rgb(248, 81, 73);
+  top:6px;
+}
+
+.situation-trajectory__marker::before{ transform:rotate(45deg); }
+.situation-trajectory__marker::after{ transform:rotate(-45deg); }
+
+.situation-trajectory__point:hover,
+.situation-trajectory__point:focus-visible,
+.situation-trajectory__marker:hover,
+.situation-trajectory__marker:focus-visible,
+.situation-trajectory__segment:hover,
+.situation-trajectory__segment:focus-visible{
+  filter:brightness(1.15);
+  outline:none;
+}
+
+.situation-trajectory__point--open::before{
+  inset:2px;
+  border-radius:999px;
+  background:rgb(35, 134, 54);
+}
+
+.situation-trajectory__point--close::before{
+  inset:2px;
+  border-radius:999px;
+  border:2px solid rgb(139, 148, 158);
+  background:rgb(22, 27, 34);
+}
+
+.situation-trajectory__point--reopen::before{
+  inset:1px;
+  border-radius:999px;
+  border:2px solid rgb(63, 185, 80);
+  border-right-color:transparent;
+  transform:rotate(30deg);
+}
+
+.situation-trajectory__point--reject::before,
+.situation-trajectory__marker--cross::before,
+.situation-trajectory__marker--cross::after{
+  inset:2px;
+  background:transparent;
+}
+
+.situation-trajectory__point--reject::before,
+.situation-trajectory__marker--cross::before{
+  border-top:2px solid rgb(248, 81, 73);
+  transform:rotate(45deg);
+  top:6px;
+}
+
+.situation-trajectory__point--reject::after,
+.situation-trajectory__marker--cross::after{
+  border-top:2px solid rgb(248, 81, 73);
+  transform:rotate(-45deg);
+  top:6px;
+}
+
+.situation-trajectory__marker--check::before{
+  width:4px;
+  height:8px;
+  border-right:2px solid rgb(63, 185, 80);
+  border-bottom:2px solid rgb(63, 185, 80);
+  transform:rotate(45deg);
+  left:4px;
+  top:1px;
+}
+
+.situation-trajectory__svg-line{
+  stroke:rgb(99, 110, 123);
+  stroke-width:1;
+  vector-effect:non-scaling-stroke;
+}
+
+.situation-trajectory__svg-line--today{
+  stroke:rgb(31, 111, 235);
+  stroke-width:2;
+}
+
+.situation-trajectory__svg-line--objective{
+  stroke:rgb(248, 81, 73);
+  stroke-dasharray:4 4;
+  opacity:.7;
+}
+
+.situation-trajectory__hierarchy-link{
+  fill:none;
+  stroke:rgb(139, 148, 158);
+  stroke-width:1.5;
+  vector-effect:non-scaling-stroke;
+}
+
+.situation-trajectory__hierarchy-link.is-removed{
+  stroke-dasharray:4 4;
+}
+
+.situation-trajectory__hierarchy-link[points],
+polygon.situation-trajectory__hierarchy-link,
+circle.situation-trajectory__hierarchy-link{
+  fill:rgb(139, 148, 158);
+  stroke:none;
 }
 
 .situation-trajectory__spinner{
@@ -10371,6 +10553,7 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   right:-4px;
   bottom:0;
   width:8px;
+  appearance:none;
   border:none;
   padding:0;
   margin:0;
@@ -10446,6 +10629,7 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   right:-5px;
   width:10px;
   height:100%;
+  appearance:none;
   border:none;
   padding:0;
   margin:0;
@@ -10484,6 +10668,7 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   right:-6px;
   width:10px;
   height:100%;
+  appearance:none;
   border:none;
   padding:0;
   margin:0;
@@ -12218,6 +12403,7 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
 .arkolia-identity-preview__textarea{
   min-height:120px;
   resize:vertical;
+  appearance:none;
   border:none;
   padding:0;
   background:transparent;

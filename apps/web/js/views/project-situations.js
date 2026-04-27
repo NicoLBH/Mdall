@@ -27,6 +27,7 @@ import {
   setSituationSubjectKanbanStatus,
   loadSituationKanbanStatusMap
 } from "../services/project-situations-supabase.js";
+import { loadProjectSituationsTrajectoryHistory } from "../services/project-situations-trajectory-service.js";
 import { createProjectSituationsState, getDefaultCreateForm, getSituationEditForm } from "./project-situations/project-situations-state.js";
 import { createProjectSituationsSelectors } from "./project-situations/project-situations-selectors.js";
 import { createProjectSituationsSelection } from "./project-situations/project-situations-selection.js";
@@ -77,6 +78,100 @@ const {
   setSelectedSituationId
 } = createProjectSituationsSelection({ store, ensureSituationsViewState });
 
+function normalizeId(value) {
+  return String(value || "").trim();
+}
+
+function normalizeSubjectIdsFromSelection(subjects = []) {
+  return [...new Set((Array.isArray(subjects) ? subjects : [])
+    .map((subject) => normalizeId(subject?.id))
+    .filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b));
+}
+
+async function ensureTrajectoryHistory({ situationId = "", subjects = [] } = {}) {
+  const normalizedSituationId = normalizeId(situationId);
+  const subjectIds = normalizeSubjectIdsFromSelection(subjects);
+  const subjectIdsSignature = subjectIds.join(",");
+
+  if (!store.projectSubjectsView || typeof store.projectSubjectsView !== "object") {
+    store.projectSubjectsView = {};
+  }
+  const cacheBySituationId = store.projectSubjectsView.trajectoryHistoryBySituationId && typeof store.projectSubjectsView.trajectoryHistoryBySituationId === "object"
+    ? store.projectSubjectsView.trajectoryHistoryBySituationId
+    : {};
+  store.projectSubjectsView.trajectoryHistoryBySituationId = cacheBySituationId;
+
+  const cached = cacheBySituationId[normalizedSituationId];
+  const cachedSignature = String(cached?.subjectIdsSignature || "").trim();
+  const hasUsableCachedPayload = cached
+    && typeof cached === "object"
+    && cached.eventsBySubjectId
+    && cached.statusEventsBySubjectId
+    && Array.isArray(cached.relationEvents);
+
+  console.info("[trajectory] history.ensure.start", {
+    situationId: normalizedSituationId,
+    subjectCount: subjectIds.length
+  });
+
+  if (hasUsableCachedPayload && cachedSignature === subjectIdsSignature) {
+    console.info("[trajectory] history.ensure.cache-hit", {
+      situationId: normalizedSituationId,
+      subjectCount: subjectIds.length
+    });
+    return cached;
+  }
+
+  if (!normalizedSituationId || !subjectIds.length) {
+    const emptyPayload = {
+      eventsBySubjectId: {},
+      relationEvents: [],
+      statusEventsBySubjectId: {},
+      subjectIdsSignature
+    };
+    cacheBySituationId[normalizedSituationId] = emptyPayload;
+    console.info("[trajectory] history.ensure.done", {
+      situationId: normalizedSituationId,
+      subjectCount: subjectIds.length,
+      eventCount: 0
+    });
+    return emptyPayload;
+  }
+
+  try {
+    const history = await loadProjectSituationsTrajectoryHistory({
+      projectId: normalizeId(store?.currentProjectId || store?.projectForm?.projectId || ""),
+      subjectIds
+    });
+    const payload = {
+      eventsBySubjectId: history?.eventsBySubjectId && typeof history.eventsBySubjectId === "object" ? history.eventsBySubjectId : {},
+      relationEvents: Array.isArray(history?.relationEvents) ? history.relationEvents : [],
+      statusEventsBySubjectId: history?.statusEventsBySubjectId && typeof history.statusEventsBySubjectId === "object" ? history.statusEventsBySubjectId : {},
+      subjectIdsSignature
+    };
+    cacheBySituationId[normalizedSituationId] = payload;
+    console.info("[trajectory] history.ensure.done", {
+      situationId: normalizedSituationId,
+      subjectCount: subjectIds.length,
+      eventCount: Object.values(payload.eventsBySubjectId).flat().length
+    });
+    return payload;
+  } catch (error) {
+    console.error("[trajectory] history.ensure.error", error);
+    const fallbackPayload = hasUsableCachedPayload
+      ? cached
+      : {
+          eventsBySubjectId: {},
+          relationEvents: [],
+          statusEventsBySubjectId: {},
+          subjectIdsSignature
+        };
+    cacheBySituationId[normalizedSituationId] = fallbackPayload;
+    return fallbackPayload;
+  }
+}
+
 const {
   getSituationById,
   loadSituationSelection,
@@ -90,6 +185,7 @@ const {
   loadFlatSubjectsForCurrentProject,
   loadSituationsForCurrentProject,
   loadSubjectsForSituation,
+  ensureTrajectoryHistory,
   loadSituationKanbanStatusMap,
   createSituation,
   updateSituation
@@ -444,6 +540,7 @@ const { bindEvents } = createProjectSituationsEvents({
   loadSituationSelection,
   loadSituationInsightsData,
   openSituationDrilldownFromSelection,
+  openSubjectDrilldown: (...args) => openSubjectDrilldownFromSituation(...args),
   openSharedSubjectMetaDropdown: (...args) => openSharedSubjectMetaDropdown(...args),
   openSharedSubjectKanbanDropdown: (...args) => openSharedSubjectKanbanDropdown(...args),
   closeSharedSubjectDropdowns: (...args) => closeSharedSubjectDropdowns(...args),

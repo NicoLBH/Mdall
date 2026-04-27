@@ -5,6 +5,7 @@ export function createProjectSituationsPersistence({
   loadFlatSubjectsForCurrentProject,
   loadSituationsForCurrentProject,
   loadSubjectsForSituation,
+  ensureTrajectoryHistory,
   loadSituationKanbanStatusMap,
   createSituation,
   updateSituation
@@ -31,6 +32,13 @@ export function createProjectSituationsPersistence({
     try {
       const subjects = await loadSubjectsForSituation(selectedSituation, store.projectSubjectsView);
       uiState.selectedSituationSubjects = safeArray(subjects);
+      const selectedLayout = String(store?.situationsView?.selectedSituationLayout || "").trim().toLowerCase();
+      if (selectedLayout === "roadmap" && typeof ensureTrajectoryHistory === "function") {
+        await ensureTrajectoryHistory({
+          situationId: normalizedId,
+          subjects: uiState.selectedSituationSubjects
+        });
+      }
       return uiState.selectedSituationSubjects;
     } catch (error) {
       console.error("loadSituationSelection failed", error);
