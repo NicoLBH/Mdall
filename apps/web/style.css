@@ -10166,7 +10166,9 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
 }
 
 .situation-trajectory__timeline{
-  position:relative;
+  position:sticky;
+  top:0;
+  z-index:5;
   display:grid;
   grid-template-columns:minmax(72px, var(--situation-trajectory-left-width)) minmax(0, 1fr);
   min-height:42px;
@@ -10180,6 +10182,36 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
 
 .situation-trajectory__timeline-track{
   position:relative;
+  overflow:hidden;
+}
+
+.situation-trajectory__timeline-content{
+  position:absolute;
+  inset:0;
+  will-change:transform;
+  pointer-events:none;
+}
+
+.situation-trajectory__timeline-row{
+  position:relative;
+  height:100%;
+}
+
+.situation-trajectory__timeline-day{
+  position:absolute;
+  top:0;
+  bottom:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:12px;
+  color:var(--fgColor-muted, #8b949e);
+  border-left:1px solid color-mix(in srgb, var(--borderColor-default, #30363d) 70%, transparent 30%);
+}
+
+.situation-trajectory__timeline-day.is-today{
+  color:var(--fgColor-accent, #2f81f7);
+  font-weight:600;
 }
 
 .situation-trajectory__splitter{
@@ -10211,7 +10243,12 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   position:relative;
   min-width:0;
   border-right:1px solid var(--borderColor-default, #30363d);
-  overflow:auto;
+  overflow:hidden;
+}
+
+.situation-trajectory__left-content{
+  min-width:100%;
+  will-change:transform;
 }
 
 .situation-trajectory.is-resizing-left .situation-trajectory__left{
@@ -10224,10 +10261,34 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   overflow:auto;
 }
 
+.situation-trajectory__scroll-sizer{
+  min-height:360px;
+}
+
 .situation-trajectory__canvas{
   display:block;
+  position:absolute;
+  top:0;
+  left:0;
   width:100%;
   min-height:360px;
+  pointer-events:none;
+}
+
+.situation-trajectory__spinner{
+  position:sticky;
+  left:16px;
+  bottom:16px;
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:6px 10px;
+  border:1px solid var(--borderColor-default, #30363d);
+  border-radius:999px;
+  background:color-mix(in srgb, var(--bgColor-default, #0d1117) 88%, white 12%);
+  color:var(--fgColor-muted, #8b949e);
+  font-size:12px;
+  z-index:2;
 }
 
 .situation-trajectory__empty-state{

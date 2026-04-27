@@ -173,7 +173,8 @@ export function renderSituationRoadmapView(situation, subjects = [], options = {
 
         <div class="situation-trajectory__timeline" role="presentation">
           <div class="situation-trajectory__timeline-left"></div>
-          <div class="situation-trajectory__timeline-track">
+          <div class="situation-trajectory__timeline-track" data-situation-trajectory-timeline-track>
+            <div class="situation-trajectory__timeline-content" data-situation-trajectory-timeline-content></div>
             <button
               type="button"
               class="situation-trajectory__splitter"
@@ -189,7 +190,9 @@ export function renderSituationRoadmapView(situation, subjects = [], options = {
 
         <div class="situation-trajectory__body">
           <aside class="situation-trajectory__left" aria-label="Sujets">
-            ${leftColumnHtml}
+            <div class="situation-trajectory__left-content" data-situation-trajectory-left-content>
+              ${leftColumnHtml}
+            </div>
             <button
               type="button"
               class="situation-trajectory__left-resize-handle"
@@ -200,8 +203,13 @@ export function renderSituationRoadmapView(situation, subjects = [], options = {
             ></button>
           </aside>
 
-          <div class="situation-trajectory__viewport" aria-label="Trajectoire des sujets">
+          <div class="situation-trajectory__viewport" aria-label="Trajectoire des sujets" data-situation-trajectory-viewport>
+            <div class="situation-trajectory__scroll-sizer" data-situation-trajectory-scroll-sizer aria-hidden="true"></div>
             <canvas class="situation-trajectory__canvas"></canvas>
+            <div class="situation-trajectory__spinner" data-situation-trajectory-spinner hidden>
+              <span class="ui-spinner ui-spinner--sm" aria-hidden="true"><span class="ui-spinner__ring"></span></span>
+              <span>Chargement de la trajectoire…</span>
+            </div>
             ${emptyState}
           </div>
         </div>
