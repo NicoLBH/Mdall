@@ -42,14 +42,14 @@ function getSubjectDisplayIdentifier(subject = {}) {
 
 function renderIssueStateIcon(subject = {}, { isBlocked = false } = {}) {
   const isClosed = normalizeIssueLifecycleStatus(subject?.status) === "closed";
+  const blockedIconHtml = isBlocked
+    ? `<span class="subject-status-blocked-indicator situation-trajectory__status-blocked-indicator" aria-hidden="true">${svgIcon("blocked", { className: "octicon octicon-blocked", width: 12, height: 12 })}</span>`
+    : "";
   return `<span class="issue-status-icon situation-trajectory__status-icon" aria-hidden="true">${
     isClosed
       ? svgIcon("check-circle", { style: "color: var(--fgColor-done)" })
       : svgIcon("issue-opened", { style: "color: var(--fgColor-open)" })
-  }${isBlocked
-    ? `<span class="subject-status-blocked-indicator situation-trajectory__status-blocked-indicator" aria-hidden="true">${svgIcon("blocked", { className: "octicon octicon-blocked", width: 12, height: 12 })}</span>`
-    : ""}
-  }</span>`;
+  }${blockedIconHtml}</span>`;
 }
 
 function renderZoomOptions() {
@@ -125,12 +125,12 @@ export function renderSituationRoadmapView(situation, subjects = [], options = {
           const isBlocked = hasBlockedByRelation(subjectId, options?.store || {}, rawSubjectsResult);
           return `
             <div class="situation-grid__cell situation-grid__cell--title situation-trajectory__subject-cell">
-              <div class="situation-trajectory__subject-main" style="--trajectory-tree-indent:${indentWidth}px;">
-                <span class="situation-trajectory__indent" aria-hidden="true"></span>
+              <div class="situation-grid__title-content situation-trajectory__subject-main" style="--situation-grid-indent:${indentWidth}px;">
+                <span class="situation-grid__indent" aria-hidden="true"></span>
                 ${hasChildren
                   ? `<button
                       type="button"
-                      class="situation-trajectory__toggle"
+                      class="situation-grid__toggle situation-trajectory__toggle"
                       data-situation-grid-toggle="${escapeHtml(subjectId)}"
                       data-situation-grid-situation-id="${escapeHtml(situationId)}"
                       aria-expanded="${isExpanded ? "true" : "false"}"
@@ -138,10 +138,10 @@ export function renderSituationRoadmapView(situation, subjects = [], options = {
                     >
                       ${svgIcon(isExpanded ? "chevron-down" : "chevron-right", { className: isExpanded ? "octicon octicon-chevron-down" : "octicon octicon-chevron-right" })}
                     </button>`
-                  : `<span class="situation-trajectory__toggle situation-trajectory__toggle--placeholder" aria-hidden="true"></span>`}
+                  : `<span class="situation-grid__toggle situation-grid__toggle--placeholder situation-trajectory__toggle situation-trajectory__toggle--placeholder" aria-hidden="true"></span>`}
                 ${renderIssueStateIcon(subject, { isBlocked })}
-                <span class="situation-trajectory__subject-number mono">${escapeHtml(identifier)}</span>
-                <button type="button" class="situation-trajectory__subject-title" data-open-situation-subject="${escapeHtml(subjectId)}">${escapeHtml(subjectTitle)}</button>
+                <button type="button" class="situation-grid__subject-title situation-trajectory__subject-title" data-open-situation-subject="${escapeHtml(subjectId)}">${escapeHtml(subjectTitle)}</button>
+                <span class="situation-grid__subject-id situation-trajectory__subject-number mono">${escapeHtml(identifier)}</span>
               </div>
             </div>
           `;
