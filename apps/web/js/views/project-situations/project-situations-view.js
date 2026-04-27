@@ -114,7 +114,7 @@ export function createProjectSituationsView({
     if (selectedLayout === "grille") {
       return renderSituationGridView(selectedSituation, uiState.selectedSituationSubjects, { store, uiState });
     }
-    return renderSituationRoadmapView(selectedSituation, uiState.selectedSituationSubjects);
+    return renderSituationRoadmapView(selectedSituation, uiState.selectedSituationSubjects, { store, uiState });
   }
 
   function renderSituationInsightsPanel() {

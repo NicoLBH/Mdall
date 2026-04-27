@@ -30,6 +30,11 @@ const SITUATION_GRID_KANBAN_OPTIONS = [
   { key: "in_arbitration", label: "En arbitrage", hint: "Décision en attente." },
   { key: "resolved", label: "Résolu", hint: "Sujet clôturé côté situation." }
 ];
+const TRAJECTORY_LEFT_COLUMN_WIDTH = {
+  min: 72,
+  max: 640,
+  default: 320
+};
 
 export function createProjectSituationsEvents({
   store,
@@ -487,6 +492,105 @@ export function createProjectSituationsEvents({
           window.addEventListener("pointerup", onPointerUp);
           window.addEventListener("pointercancel", onPointerUp);
         });
+      });
+    });
+  }
+
+  function getTrajectoryColumnStorageKey(situationId = "") {
+    const normalizedSituationId = String(situationId || "").trim();
+    return normalizedSituationId ? `mdall:situation-trajectory:left-column:${normalizedSituationId}` : "";
+  }
+
+  function readStoredTrajectoryColumnWidth(situationId = "") {
+    const storageKey = getTrajectoryColumnStorageKey(situationId);
+    if (!storageKey) return null;
+    try {
+      const raw = Number(window.localStorage?.getItem(storageKey));
+      return Number.isFinite(raw) ? raw : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function persistTrajectoryColumnWidth(situationId = "", width = TRAJECTORY_LEFT_COLUMN_WIDTH.default) {
+    const storageKey = getTrajectoryColumnStorageKey(situationId);
+    if (!storageKey) return;
+    try {
+      window.localStorage?.setItem(storageKey, String(width));
+    } catch (_) {
+      // No-op.
+    }
+  }
+
+  function ensureTrajectoryColumnWidthsBySituationId() {
+    if (!store.situationsView || typeof store.situationsView !== "object") store.situationsView = {};
+    if (!store.situationsView.trajectoryLeftColumnWidthBySituationId || typeof store.situationsView.trajectoryLeftColumnWidthBySituationId !== "object") {
+      store.situationsView.trajectoryLeftColumnWidthBySituationId = {};
+    }
+    return store.situationsView.trajectoryLeftColumnWidthBySituationId;
+  }
+
+  function normalizeTrajectoryColumnWidth(width) {
+    const numericWidth = Number(width);
+    if (!Number.isFinite(numericWidth)) return TRAJECTORY_LEFT_COLUMN_WIDTH.default;
+    return Math.max(TRAJECTORY_LEFT_COLUMN_WIDTH.min, Math.min(TRAJECTORY_LEFT_COLUMN_WIDTH.max, Math.round(numericWidth)));
+  }
+
+  function applyTrajectoryColumnWidth(trajectoryNode, width) {
+    if (!trajectoryNode || !trajectoryNode.style) return;
+    trajectoryNode.style.setProperty("--situation-trajectory-left-width", `${normalizeTrajectoryColumnWidth(width)}px`);
+  }
+
+  function hydrateTrajectoryColumnWidth(root) {
+    root.querySelectorAll("[data-situation-trajectory][data-situation-id]").forEach((trajectoryNode) => {
+      const situationId = String(trajectoryNode.getAttribute("data-situation-id") || "").trim();
+      if (!situationId) return;
+      const widthsBySituationId = ensureTrajectoryColumnWidthsBySituationId();
+      const fromStore = widthsBySituationId[situationId];
+      const fromStorage = readStoredTrajectoryColumnWidth(situationId);
+      const nextWidth = normalizeTrajectoryColumnWidth(fromStore ?? fromStorage);
+      widthsBySituationId[situationId] = nextWidth;
+      applyTrajectoryColumnWidth(trajectoryNode, nextWidth);
+    });
+  }
+
+  function bindTrajectoryColumnResize(root) {
+    hydrateTrajectoryColumnWidth(root);
+    root.querySelectorAll("[data-situation-trajectory-splitter]").forEach((splitterNode) => {
+      splitterNode.addEventListener("pointerdown", (event) => {
+        const trajectoryNode = splitterNode.closest("[data-situation-trajectory][data-situation-id]");
+        if (!trajectoryNode) return;
+        const situationId = String(trajectoryNode.getAttribute("data-situation-id") || "").trim();
+        if (!situationId) return;
+        const widthsBySituationId = ensureTrajectoryColumnWidthsBySituationId();
+        const startX = Number(event.clientX) || 0;
+        const initialWidth = normalizeTrajectoryColumnWidth(
+          widthsBySituationId[situationId]
+            ?? readStoredTrajectoryColumnWidth(situationId)
+            ?? trajectoryNode.style.getPropertyValue("--situation-trajectory-left-width")
+        );
+        widthsBySituationId[situationId] = initialWidth;
+        applyTrajectoryColumnWidth(trajectoryNode, initialWidth);
+
+        const onPointerMove = (moveEvent) => {
+          const pointerX = Number(moveEvent.clientX) || 0;
+          const nextWidth = normalizeTrajectoryColumnWidth(initialWidth + (pointerX - startX));
+          widthsBySituationId[situationId] = nextWidth;
+          applyTrajectoryColumnWidth(trajectoryNode, nextWidth);
+        };
+
+        const onPointerUp = () => {
+          window.removeEventListener("pointermove", onPointerMove);
+          window.removeEventListener("pointerup", onPointerUp);
+          window.removeEventListener("pointercancel", onPointerUp);
+          persistTrajectoryColumnWidth(situationId, widthsBySituationId[situationId]);
+        };
+
+        event.preventDefault();
+        event.stopPropagation();
+        window.addEventListener("pointermove", onPointerMove);
+        window.addEventListener("pointerup", onPointerUp);
+        window.addEventListener("pointercancel", onPointerUp);
       });
     });
   }
@@ -1375,6 +1479,7 @@ export function createProjectSituationsEvents({
     });
 
     bindSituationGridColumnResize(root);
+    bindTrajectoryColumnResize(root);
     bindSituationGridEditableCells(root);
     bindSituationGridDnd(root);
 
