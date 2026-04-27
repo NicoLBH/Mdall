@@ -88,7 +88,7 @@ test("test utils: row window + icon resolution", () => {
   );
 
   assert.equal(resolvePointIcon({ source: "subject_reopened", status: "open" }, { status: "closed" }), "reopen");
-  assert.equal(resolvePointIcon({ status: "closed_invalid" }), "rejected");
+  assert.equal(resolvePointIcon({ status: "closed_invalid" }), "reject");
   assert.equal(resolvePointIcon({ status: "closed" }), "close");
 
   const timestamps = collectObjectiveVerticalTimestamps([

@@ -172,7 +172,6 @@ export function renderSituationRoadmapView(situation, subjects = [], options = {
         </header>
 
         <div class="situation-trajectory__timeline" role="presentation">
-          <div class="situation-trajectory__timeline-left"></div>
           <div class="situation-trajectory__timeline-track" data-situation-trajectory-timeline-track>
             <div class="situation-trajectory__timeline-content" data-situation-trajectory-timeline-content></div>
             <button

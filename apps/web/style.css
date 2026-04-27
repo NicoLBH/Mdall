@@ -10169,34 +10169,26 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   position:sticky;
   top:0;
   z-index:5;
-  display:grid;
-  grid-template-columns:minmax(72px, var(--situation-trajectory-left-width)) minmax(0, 1fr);
+  display:block;
   min-height:64px;
   border-bottom:1px solid var(--borderColor-default, #30363d);
   background:rgb(13, 17, 23);
 }
 
-.situation-trajectory__timeline-left{
-  border-right:1px solid var(--borderColor-default, #30363d);
-  background:rgb(13, 17, 23);
-  position:relative;
-}
-
-.situation-trajectory__timeline-left::before,
-.situation-trajectory__timeline-left::after{
+.situation-trajectory__timeline::before{
   content:"";
   position:absolute;
-  left:0;
-  right:0;
-  height:32px;
-  border-bottom:1px solid color-mix(in srgb, var(--borderColor-default, #30363d) 70%, transparent 30%);
+  top:0;
+  bottom:0;
+  left:var(--situation-trajectory-left-width);
+  width:1px;
+  background:var(--borderColor-default, #30363d);
 }
-
-.situation-trajectory__timeline-left::before{ top:0; }
-.situation-trajectory__timeline-left::after{ top:32px; }
 
 .situation-trajectory__timeline-track{
   position:relative;
+  margin-left:var(--situation-trajectory-left-width);
+  min-height:64px;
   overflow:hidden;
 }
 
@@ -10213,11 +10205,11 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
 }
 
 .situation-trajectory__timeline-row--months{
-  border-bottom:1px solid color-mix(in srgb, var(--borderColor-default, #30363d) 70%, transparent 30%);
+  border-bottom:none;
 }
 
 .situation-trajectory__timeline-row--days{
-  border-bottom:1px solid color-mix(in srgb, var(--borderColor-default, #30363d) 70%, transparent 30%);
+  border-bottom:none;
 }
 
 .situation-trajectory__timeline-day{
@@ -10229,7 +10221,6 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   justify-content:center;
   font-size:12px;
   color:rgb(145, 152, 161);
-  border-left:1px solid color-mix(in srgb, var(--borderColor-default, #30363d) 70%, transparent 30%);
 }
 
 .situation-trajectory__timeline-day.is-today{
@@ -10264,7 +10255,7 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
 
 .situation-trajectory__splitter{
   position:absolute;
-  top:50%;
+  top:100%;
   left:0;
   transform:translate(-50%, -50%) rotate(90deg);
   width:20px;
