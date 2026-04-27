@@ -19,12 +19,47 @@ function normalizeZoom(zoom = "day") {
   return ZOOM_UNIT_MS[value] ? value : "day";
 }
 
+function parseDateLike(value) {
+  if (value instanceof Date) return new Date(value.getTime());
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    const dateOnlyMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (dateOnlyMatch) {
+      const [, yyyy, mm, dd] = dateOnlyMatch;
+      return new Date(Number(yyyy), Number(mm) - 1, Number(dd));
+    }
+  }
+  return new Date(value);
+}
+
 function toTimestamp(value, { fallback = null } = {}) {
-  const date = value instanceof Date ? value : new Date(value);
+  const date = parseDateLike(value);
   const ts = date.getTime();
   if (Number.isFinite(ts)) return ts;
   if (fallback === null) return Date.now();
   return toTimestamp(fallback);
+}
+
+function alignTimestampToUnitStart(timestamp, zoom) {
+  const date = new Date(timestamp);
+  if (zoom === "month") {
+    return new Date(date.getFullYear(), date.getMonth(), 1).getTime();
+  }
+  if (zoom === "week") {
+    const aligned = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const day = aligned.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    aligned.setDate(aligned.getDate() + diff);
+    return aligned.getTime();
+  }
+  if (zoom === "day") {
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  }
+  if (zoom === "half-day") {
+    const hour = date.getHours() >= 12 ? 12 : 0;
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate(), hour).getTime();
+  }
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), date.getHours()).getTime();
 }
 
 function formatTickLabel(timestamp, zoom) {
@@ -50,7 +85,8 @@ export function createTrajectoryTimeScale({
   const unitMs = ZOOM_UNIT_MS[normalizedZoom];
   const pxPerUnitValue = Math.max(1, Number(pxPerUnit) || DEFAULT_PX_PER_UNIT[normalizedZoom]);
 
-  const startTs = toTimestamp(startDate);
+  const rawStartTs = toTimestamp(startDate);
+  const startTs = alignTimestampToUnitStart(rawStartTs, normalizedZoom);
   const rawEndTs = toTimestamp(endDate, { fallback: startTs + unitMs });
   const endTs = Math.max(startTs + 1, rawEndTs);
   const durationMs = Math.max(1, endTs - startTs);

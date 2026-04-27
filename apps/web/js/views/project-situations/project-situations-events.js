@@ -10,6 +10,7 @@ import {
   normalizeSituationGridColumnWidths
 } from "./project-situations-view-grid.js";
 import { buildSubjectHierarchyIndexes } from "../../services/subject-hierarchy.js";
+import { getExpandedSubjectIdsSet, resolveSituationTreeData } from "./project-situations-tree-data.js";
 
 function syncSubmitButtonState(button, { submitting = false, title = "" } = {}) {
   if (!button) return;
@@ -36,6 +37,39 @@ const TRAJECTORY_LEFT_COLUMN_WIDTH = {
   default: 320
 };
 const TRAJECTORY_ROW_HEIGHT = 40;
+
+function parseLocalDate(value) {
+  if (value instanceof Date) return new Date(value.getTime());
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    const dateOnlyMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (dateOnlyMatch) {
+      const [, yyyy, mm, dd] = dateOnlyMatch;
+      return new Date(Number(yyyy), Number(mm) - 1, Number(dd));
+    }
+  }
+  return new Date(value);
+}
+
+function flattenVisibleSubjectIds({
+  rootSubjectIds = [],
+  childrenBySubjectId = {},
+  expandedSubjectIds = new Set()
+} = {}) {
+  const visibleIds = [];
+  const visit = (subjectId) => {
+    const normalizedId = String(subjectId || "").trim();
+    if (!normalizedId) return;
+    visibleIds.push(normalizedId);
+    if (!expandedSubjectIds.has(normalizedId)) return;
+    const children = Array.isArray(childrenBySubjectId?.[normalizedId])
+      ? childrenBySubjectId[normalizedId]
+      : [];
+    children.forEach(visit);
+  };
+  (Array.isArray(rootSubjectIds) ? rootSubjectIds : []).forEach(visit);
+  return visibleIds;
+}
 
 export function createProjectSituationsEvents({
   store,
@@ -627,7 +661,30 @@ export function createProjectSituationsEvents({
   function resolveTrajectorySubjects(situationId = "") {
     const selectedSituationId = String(store?.situationsView?.selectedSituationId || "").trim();
     if (situationId && selectedSituationId && situationId !== selectedSituationId) return [];
-    return Array.isArray(uiState?.selectedSituationSubjects) ? uiState.selectedSituationSubjects : [];
+    const selectedSituationSubjects = Array.isArray(uiState?.selectedSituationSubjects)
+      ? uiState.selectedSituationSubjects
+      : [];
+    const rawSubjectsResult = store?.projectSubjectsView?.rawSubjectsResult || {};
+    const {
+      subjectsById,
+      childrenBySubjectId,
+      rootSubjectIds,
+      selectedSubjectIds
+    } = resolveSituationTreeData(selectedSituationSubjects, rawSubjectsResult);
+    const expandedSubjectIds = getExpandedSubjectIdsSet({
+      store,
+      situationId: selectedSituationId || situationId,
+      rootSubjectIds,
+      fallbackExpandedIds: [...selectedSubjectIds]
+    });
+    const orderedVisibleSubjectIds = flattenVisibleSubjectIds({
+      rootSubjectIds,
+      childrenBySubjectId,
+      expandedSubjectIds
+    });
+    return orderedVisibleSubjectIds
+      .map((subjectId) => subjectsById?.[subjectId])
+      .filter(Boolean);
   }
 
   function resolveTrajectoryHistoryBySubjectId(situationId = "") {
@@ -728,7 +785,7 @@ export function createProjectSituationsEvents({
     const objectiveLabelsHtml = Object.values(objectivesById || {})
       .filter((objective) => objective && objective.due_date && objective.title)
       .map((objective) => {
-        const dueDate = new Date(objective.due_date);
+        const dueDate = parseLocalDate(objective.due_date);
         if (Number.isNaN(dueDate.getTime())) return "";
         const x = timeScale.timeToX(dueDate);
         const safeTitle = escapeHtml(String(objective.title));
