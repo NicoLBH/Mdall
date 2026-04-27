@@ -74,7 +74,8 @@ export function createProjectSituationsEvents({
       trajectoryRuntimeModulesPromise = Promise.all([
         import("./trajectory/trajectory-time-scale.js"),
         import("./trajectory/trajectory-model.js"),
-        import("./trajectory/trajectory-canvas-renderer.js")
+        import("./trajectory/trajectory-canvas-renderer.js"),
+        import("./trajectory/trajectory-virtualizer.js")
       ]);
     }
     return trajectoryRuntimeModulesPromise;
@@ -624,6 +625,26 @@ export function createProjectSituationsEvents({
     return scoped.statusEventsBySubjectId || scoped.eventsBySubjectId || {};
   }
 
+
+  function resolveTrajectoryRelationEvents(situationId = "") {
+    const bySituationId = store?.projectSubjectsView?.trajectoryHistoryBySituationId;
+    if (!bySituationId || typeof bySituationId !== "object") return [];
+    const scoped = bySituationId[situationId];
+    if (!scoped || typeof scoped !== "object") return [];
+    if (Array.isArray(scoped.relationEvents)) return scoped.relationEvents;
+    const eventsBySubjectId = scoped.eventsBySubjectId;
+    if (!eventsBySubjectId || typeof eventsBySubjectId !== "object") return [];
+    const relationTypes = new Set([
+      "subject_parent_added",
+      "subject_parent_removed",
+      "subject_child_added",
+      "subject_child_removed"
+    ]);
+    return Object.values(eventsBySubjectId)
+      .flatMap((events) => (Array.isArray(events) ? events : []))
+      .filter((event) => relationTypes.has(String(event?.event_type || "").trim().toLowerCase()));
+  }
+
   function resolveTrajectoryProjectStartDate() {
     return store?.projectForm?.project?.created_at
       || store?.project?.created_at
@@ -644,20 +665,27 @@ export function createProjectSituationsEvents({
     if (layout !== "roadmap") return;
 
     loadTrajectoryRuntimeModules()
-      .then(([timeScaleModule, modelModule, canvasRendererModule]) => {
+      .then(([timeScaleModule, modelModule, canvasRendererModule, virtualizerModule]) => {
         const { createTrajectoryTimeScale } = timeScaleModule || {};
         const { buildTrajectoryModel } = modelModule || {};
         const { renderTrajectoryCanvas } = canvasRendererModule || {};
+        const { getTrajectoryVisibleWindow } = virtualizerModule || {};
         if (typeof createTrajectoryTimeScale !== "function"
           || typeof buildTrajectoryModel !== "function"
-          || typeof renderTrajectoryCanvas !== "function") {
+          || typeof renderTrajectoryCanvas !== "function"
+          || typeof getTrajectoryVisibleWindow !== "function") {
           return;
         }
 
         trajectoryNodes.forEach((trajectoryNode) => {
           const situationId = String(trajectoryNode.getAttribute("data-situation-id") || "").trim();
-          const viewportNode = trajectoryNode.querySelector(".situation-trajectory__viewport");
+          const viewportNode = trajectoryNode.querySelector("[data-situation-trajectory-viewport]")
+            || trajectoryNode.querySelector(".situation-trajectory__viewport");
           const canvasNode = trajectoryNode.querySelector(".situation-trajectory__canvas");
+          const leftContentNode = trajectoryNode.querySelector("[data-situation-trajectory-left-content]");
+          const timelineContentNode = trajectoryNode.querySelector("[data-situation-trajectory-timeline-content]");
+          const scrollSizerNode = trajectoryNode.querySelector("[data-situation-trajectory-scroll-sizer]");
+          const spinnerNode = trajectoryNode.querySelector("[data-situation-trajectory-spinner]");
           if (!viewportNode || !canvasNode) return;
 
           const subjects = resolveTrajectorySubjects(situationId);
@@ -665,6 +693,7 @@ export function createProjectSituationsEvents({
           const objectiveIdsBySubjectId = rawSubjectsResult.objectiveIdsBySubjectId || {};
           const objectivesById = rawSubjectsResult.objectivesById || {};
           const historyBySubjectId = resolveTrajectoryHistoryBySubjectId(situationId);
+          const relationEvents = resolveTrajectoryRelationEvents(situationId);
 
           const projectStartDate = resolveTrajectoryProjectStartDate()
             || subjects.reduce((acc, subject) => {
@@ -690,23 +719,56 @@ export function createProjectSituationsEvents({
             today: new Date()
           });
 
+          const contentHeight = Math.max(viewportNode.clientHeight || 0, rows.length * TRAJECTORY_ROW_HEIGHT);
+          if (scrollSizerNode) {
+            scrollSizerNode.style.width = `${Math.max(viewportNode.clientWidth || 0, timeScale.totalWidth)}px`;
+            scrollSizerNode.style.height = `${Math.max(360, contentHeight)}px`;
+          }
+          if (timelineContentNode) {
+            timelineContentNode.style.width = `${Math.max(viewportNode.clientWidth || 0, timeScale.totalWidth)}px`;
+          }
+
           let rafId = 0;
+          const renderFrame = () => {
+            rafId = 0;
+            const scrollTop = viewportNode.scrollTop;
+            const scrollLeft = viewportNode.scrollLeft;
+
+            console.info("[trajectory] scroll", { scrollTop, scrollLeft });
+
+            const windowState = getTrajectoryVisibleWindow({
+              rowCount: rows.length,
+              rowHeight: TRAJECTORY_ROW_HEIGHT,
+              scrollTop,
+              scrollLeft,
+              viewportWidth: viewportNode.clientWidth,
+              viewportHeight: viewportNode.clientHeight,
+              totalWidth: timeScale.totalWidth,
+              overscanRows: 4,
+              overscanPx: 160
+            });
+
+            if (spinnerNode) spinnerNode.hidden = !windowState.isFastScrolling;
+            if (leftContentNode) leftContentNode.style.transform = `translateY(${-scrollTop}px)`;
+            if (timelineContentNode) timelineContentNode.style.transform = `translateX(${-scrollLeft}px)`;
+
+            renderTrajectoryCanvas({
+              canvas: canvasNode,
+              rows,
+              relationEvents,
+              timeScale,
+              scrollLeft,
+              scrollTop,
+              viewportWidth: viewportNode.clientWidth,
+              viewportHeight: viewportNode.clientHeight,
+              rowHeight: TRAJECTORY_ROW_HEIGHT,
+              overscan: { rows: 4, px: 160 }
+            });
+          };
+
           const scheduleRender = () => {
             if (rafId) return;
-            rafId = window.requestAnimationFrame(() => {
-              rafId = 0;
-              renderTrajectoryCanvas({
-                canvas: canvasNode,
-                rows,
-                timeScale,
-                scrollLeft: viewportNode.scrollLeft,
-                scrollTop: viewportNode.scrollTop,
-                viewportWidth: viewportNode.clientWidth,
-                viewportHeight: viewportNode.clientHeight,
-                rowHeight: TRAJECTORY_ROW_HEIGHT,
-                overscan: { rows: 4, px: 160 }
-              });
-            });
+            rafId = window.requestAnimationFrame(renderFrame);
           };
 
           if (!viewportNode.dataset.trajectoryCanvasBound) {

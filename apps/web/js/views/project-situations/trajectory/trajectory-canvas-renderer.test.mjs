@@ -14,7 +14,9 @@ function createMockCanvas() {
     beginPath: () => operations.push(["beginPath"]),
     moveTo: (...args) => operations.push(["moveTo", ...args]),
     lineTo: (...args) => operations.push(["lineTo", ...args]),
+    quadraticCurveTo: (...args) => operations.push(["quadraticCurveTo", ...args]),
     stroke: () => operations.push(["stroke"]),
+    closePath: () => operations.push(["closePath"]),
     fill: () => operations.push(["fill"]),
     arc: (...args) => operations.push(["arc", ...args]),
     rect: (...args) => operations.push(["rect", ...args]),
@@ -94,4 +96,53 @@ test("test utils: row window + icon resolution", () => {
     { objectiveMarkers: [{ at: "2026-01-07T00:00:00.000Z" }] }
   ]);
   assert.equal(timestamps.length, 2);
+});
+
+
+test("buildHierarchyLinks déduplique les événements double-sens parent/enfant", () => {
+  const { buildHierarchyLinks } = __trajectoryCanvasRendererTestUtils();
+  const links = buildHierarchyLinks([
+    {
+      event_type: "subject_parent_added",
+      subject_id: "child-1",
+      created_at: "2026-01-03T00:00:00.000Z",
+      payload: { counterpart_subject_id: "parent-1" }
+    },
+    {
+      event_type: "subject_child_added",
+      subject_id: "parent-1",
+      created_at: "2026-01-03T00:00:00.000Z",
+      payload: { counterpart_subject_id: "child-1" }
+    },
+    {
+      event_type: "subject_parent_removed",
+      subject_id: "child-1",
+      created_at: "2026-01-04T00:00:00.000Z",
+      payload: { counterpart_subject_id: "parent-1" }
+    }
+  ]);
+
+  assert.equal(links.length, 2);
+  assert.deepEqual(
+    links.map((link) => ({
+      parentId: link.parentId,
+      childId: link.childId,
+      action: link.action,
+      at: link.at.toISOString()
+    })),
+    [
+      {
+        parentId: "parent-1",
+        childId: "child-1",
+        action: "added",
+        at: "2026-01-03T00:00:00.000Z"
+      },
+      {
+        parentId: "parent-1",
+        childId: "child-1",
+        action: "removed",
+        at: "2026-01-04T00:00:00.000Z"
+      }
+    ]
+  );
 });

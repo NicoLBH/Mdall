@@ -10180,6 +10180,14 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
 
 .situation-trajectory__timeline-track{
   position:relative;
+  overflow:hidden;
+}
+
+.situation-trajectory__timeline-content{
+  position:absolute;
+  inset:0;
+  will-change:transform;
+  pointer-events:none;
 }
 
 .situation-trajectory__splitter{
@@ -10211,7 +10219,12 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   position:relative;
   min-width:0;
   border-right:1px solid var(--borderColor-default, #30363d);
-  overflow:auto;
+  overflow:hidden;
+}
+
+.situation-trajectory__left-content{
+  min-width:100%;
+  will-change:transform;
 }
 
 .situation-trajectory.is-resizing-left .situation-trajectory__left{
@@ -10224,10 +10237,34 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   overflow:auto;
 }
 
+.situation-trajectory__scroll-sizer{
+  min-height:360px;
+}
+
 .situation-trajectory__canvas{
   display:block;
+  position:sticky;
+  top:0;
+  left:0;
   width:100%;
   min-height:360px;
+  pointer-events:none;
+}
+
+.situation-trajectory__spinner{
+  position:sticky;
+  left:16px;
+  bottom:16px;
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:6px 10px;
+  border:1px solid var(--borderColor-default, #30363d);
+  border-radius:999px;
+  background:color-mix(in srgb, var(--bgColor-default, #0d1117) 88%, white 12%);
+  color:var(--fgColor-muted, #8b949e);
+  font-size:12px;
+  z-index:2;
 }
 
 .situation-trajectory__empty-state{
