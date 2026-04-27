@@ -38,7 +38,8 @@ const STATUS_EVENT_TYPES = new Set([
   "subject_reopened",
   "subject_rejected",
   "review_rejected",
-  "subject_invalidated"
+  "subject_invalidated",
+  "subject_blocked_by_added"
 ]);
 
 function normalizeId(value) {

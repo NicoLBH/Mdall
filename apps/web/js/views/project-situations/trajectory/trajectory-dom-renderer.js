@@ -87,7 +87,22 @@ function formatPointEventLabel(point = {}) {
   if (source === "subject_created") return "création";
   if (source === "subject_closed") return "fermeture";
   if (source === "subject_reopened") return "réouverture";
+  if (["subject_rejected", "review_rejected", "subject_invalidated"].includes(source)) return "rejet";
+  if (source === "subject_blocked_by_added") return "blocage entrant";
   return source || "mise à jour";
+}
+
+function renderPointIconHtml(pointType = "open", point = {}) {
+  const symbol = resolvePointSymbol(pointType);
+  const colorStyle = pointType === "close"
+    ? "var(--fgColor-done)"
+    : (pointType === "reject" ? "var(--project-tabs-icon-color, rgb(248, 81, 73))" : "var(--fgColor-open)");
+  const blockedIconHtml = point?.hasBlockedIndicator
+    ? `<span class="subject-status-blocked-indicator situation-trajectory__status-blocked-indicator" aria-hidden="true">${svgIcon("blocked", { className: "octicon octicon-blocked", width: 12, height: 12 })}</span>`
+    : "";
+  return `<span class="issue-status-icon situation-trajectory__status-icon" aria-hidden="true">${
+    svgIcon(symbol, { className: "ui-icon", width: 16, height: 16, style: `color: ${colorStyle}` })
+  }${blockedIconHtml}</span>`;
 }
 
 function buildHierarchyLinks(relationEvents = []) {
@@ -323,7 +338,7 @@ export function renderTrajectoryDom({
       const pointType = resolvePointIcon(point, statusPoints[pointIndex - 1] || null);
       pointNode.classList.add(`situation-trajectory__point--${pointType}`);
       pointNode.dataset.trajectoryPointType = pointType;
-      pointNode.innerHTML = `<span class="situation-trajectory__point-icon" aria-hidden="true">${svgIcon(resolvePointSymbol(pointType), { className: "octicon", width: 16, height: 16 })}</span>`;
+      pointNode.innerHTML = renderPointIconHtml(pointType, point);
       if (subjectId) {
         pointNode.dataset.trajectorySubjectId = subjectId;
         pointNode.dataset.openSituationSubject = subjectId;

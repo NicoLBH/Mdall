@@ -163,36 +163,38 @@ export function buildTrajectoryModel({
     const fallbackStartStatus = normalizeStatus(subject.status);
 
     const statusPoints = [];
-    const upsertStatusPoint = (ts, status, source) => {
+    const pushStatusPoint = (ts, status, source, extra = {}) => {
       const safeTs = Math.max(subjectCreatedTs, ts);
       const safeStatus = normalizeStatus(status);
-      const existing = statusPoints.find((point) => point.at.getTime() === safeTs);
-      if (existing) {
-        existing.status = safeStatus;
-        existing.icon = toStatusIcon(safeStatus);
-        existing.source = source;
-        return;
-      }
       statusPoints.push({
         at: new Date(safeTs),
         status: safeStatus,
-        icon: toStatusIcon(safeStatus),
-        source
+        icon: extra.icon || toStatusIcon(safeStatus),
+        source,
+        contributesToLifecycle: extra.contributesToLifecycle !== false,
+        hasBlockedIndicator: extra.hasBlockedIndicator === true
       });
     };
 
-    upsertStatusPoint(subjectCreatedTs, "open", createdEvent ? "subject_created" : "subject_fallback_created_at");
+    pushStatusPoint(subjectCreatedTs, "open", createdEvent ? "subject_created" : "subject_fallback_created_at");
 
     for (const event of events) {
       const ts = event.created_at.getTime();
       if (event.event_type === "subject_created") {
-        upsertStatusPoint(ts, "open", event.event_type);
+        continue;
       } else if (event.event_type === "subject_closed") {
-        upsertStatusPoint(ts, normalizeCloseStatus(event, subject.status), event.event_type);
+        pushStatusPoint(ts, normalizeCloseStatus(event, subject.status), event.event_type);
       } else if (event.event_type === "subject_reopened") {
-        upsertStatusPoint(ts, "open", event.event_type);
+        pushStatusPoint(ts, "open", event.event_type);
       } else if (["subject_rejected", "review_rejected", "subject_invalidated"].includes(event.event_type)) {
-        upsertStatusPoint(ts, "closed_invalid", event.event_type);
+        pushStatusPoint(ts, "closed_invalid", event.event_type);
+      } else if (event.event_type === "subject_blocked_by_added") {
+        const currentStatus = resolveStatusAtTimestamp(statusPoints, ts, fallbackStartStatus);
+        pushStatusPoint(ts, currentStatus, event.event_type, {
+          icon: "open",
+          contributesToLifecycle: false,
+          hasBlockedIndicator: true
+        });
       }
     }
 
@@ -201,9 +203,13 @@ export function buildTrajectoryModel({
     const rawSegments = [];
     for (let index = 0; index < statusPoints.length; index += 1) {
       const point = statusPoints[index];
+      if (point.contributesToLifecycle === false) continue;
       const nextPoint = statusPoints[index + 1];
       const segmentStartTs = point.at.getTime();
-      const segmentEndTs = nextPoint ? nextPoint.at.getTime() : endTs;
+      const nextLifecyclePoint = nextPoint && nextPoint.contributesToLifecycle !== false
+        ? nextPoint
+        : statusPoints.slice(index + 1).find((entry) => entry.contributesToLifecycle !== false);
+      const segmentEndTs = nextLifecyclePoint ? nextLifecyclePoint.at.getTime() : endTs;
       if (segmentEndTs <= segmentStartTs) continue;
       rawSegments.push({
         subjectId,
