@@ -10211,6 +10211,15 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   color:rgb(145, 152, 161);
 }
 
+.situation-trajectory__timeline-day::before{
+  content:"";
+  position:absolute;
+  left:0;
+  bottom:0;
+  height:10px;
+  border-left:1px solid var(--muted);
+}
+
 .situation-trajectory__timeline-day.is-today{
   color:rgb(145, 152, 161);
   font-weight:700;

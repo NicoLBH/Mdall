@@ -220,12 +220,14 @@ test("__trajectoryDomRendererTestUtils expose les helpers clés", () => {
   const {
     buildHierarchyLinks,
     resolvePointIcon,
-    collectObjectiveVerticalTimestamps
+    collectObjectiveVerticalTimestamps,
+    toRenderTimestamp
   } = __trajectoryDomRendererTestUtils();
 
   assert.equal(typeof buildHierarchyLinks, "function");
   assert.equal(typeof resolvePointIcon, "function");
   assert.equal(typeof collectObjectiveVerticalTimestamps, "function");
+  assert.equal(typeof toRenderTimestamp, "function");
 
   assert.equal(resolvePointIcon({ source: "subject_reopened", status: "open" }, { status: "closed" }), "reopen");
 
@@ -234,6 +236,10 @@ test("__trajectoryDomRendererTestUtils expose les helpers clés", () => {
     { objectiveMarkers: [{ at: "2026-01-07T00:00:00.000Z" }] }
   ]);
   assert.equal(timestamps.length, 2);
+
+  const dayRenderTs = toRenderTimestamp("2026-01-07T08:10:00.000Z", { zoom: "day" });
+  const dayRenderDate = new Date(dayRenderTs);
+  assert.equal(dayRenderDate.getHours(), 12);
 
   const links = buildHierarchyLinks([
     {

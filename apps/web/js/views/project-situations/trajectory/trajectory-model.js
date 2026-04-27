@@ -15,6 +15,15 @@ function resolveSubjectDisplayIdentifier(subject = {}, subjectId = "") {
 
 function toDate(value) {
   if (value instanceof Date) return new Date(value.getTime());
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    const dateOnlyMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (dateOnlyMatch) {
+      const [, yyyy, mm, dd] = dateOnlyMatch;
+      const localDate = new Date(Number(yyyy), Number(mm) - 1, Number(dd));
+      return Number.isFinite(localDate.getTime()) ? localDate : null;
+    }
+  }
   const date = new Date(value);
   return Number.isFinite(date.getTime()) ? date : null;
 }

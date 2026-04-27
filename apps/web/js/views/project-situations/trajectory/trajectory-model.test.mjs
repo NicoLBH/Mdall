@@ -200,6 +200,31 @@ test("buildTrajectoryModel mappe les événements de rejet vers closed_invalid/r
   assert.equal(rejectPoint.icon, "reject");
 });
 
+test("buildTrajectoryModel conserve la date calendaire des objectifs en format YYYY-MM-DD", () => {
+  const result = buildTrajectoryModel({
+    subjects: [
+      {
+        id: "s-date-only",
+        created_at: "2026-04-01T00:00:00.000Z",
+        status: "open"
+      }
+    ],
+    objectivesById: {
+      "o-date-only": { id: "o-date-only", due_date: "2026-04-19" }
+    },
+    objectiveIdsBySubjectId: {
+      "s-date-only": ["o-date-only"]
+    },
+    today: "2026-04-18T00:00:00.000Z"
+  });
+
+  const [row] = result.rows;
+  const objectiveDate = row.objectiveMarkers[0].at;
+  assert.equal(objectiveDate.getFullYear(), 2026);
+  assert.equal(objectiveDate.getMonth(), 3);
+  assert.equal(objectiveDate.getDate(), 19);
+});
+
 test("buildTrajectoryModel conserve un point par évènement de statut et ajoute un point bloqué sans casser le cycle de vie", () => {
   const result = buildTrajectoryModel({
     subjects: [

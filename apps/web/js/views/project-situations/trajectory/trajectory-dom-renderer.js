@@ -23,6 +23,19 @@ function toTimestamp(value, fallback = Date.now()) {
   return Number.isFinite(ts) ? ts : fallback;
 }
 
+function toDayCenterTimestamp(value, fallback = Date.now()) {
+  const ts = toTimestamp(value, fallback);
+  const date = new Date(ts);
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 12, 0, 0, 0).getTime();
+}
+
+function toRenderTimestamp(value, timeScale, fallback = Date.now()) {
+  const ts = toTimestamp(value, fallback);
+  const zoom = String(timeScale?.zoom || "").trim().toLowerCase();
+  if (zoom === "day") return toDayCenterTimestamp(ts, fallback);
+  return ts;
+}
+
 function intersectsRange(startTs, endTs, visibleStartTs, visibleEndTs) {
   return endTs >= visibleStartTs && startTs <= visibleEndTs;
 }
@@ -40,14 +53,15 @@ function normalizeOverscan(overscan) {
 function resolveTodayTimestamp(timeScale) {
   const startTs = toTimestamp(timeScale?.startDate, Date.now());
   const endTs = toTimestamp(timeScale?.endDate, startTs + 1);
-  return clamp(Date.now(), startTs, endTs);
+  const renderTs = toRenderTimestamp(Date.now(), timeScale, Date.now());
+  return clamp(renderTs, startTs, endTs);
 }
 
-function collectObjectiveVerticalTimestamps(rows = []) {
+function collectObjectiveVerticalTimestamps(rows = [], timeScale = null) {
   const values = new Set();
   for (const row of rows) {
     for (const marker of asArray(row?.objectiveMarkers)) {
-      values.add(toTimestamp(marker?.at));
+      values.add(toRenderTimestamp(marker?.at, timeScale));
     }
   }
   return [...values].sort((a, b) => a - b);
@@ -284,7 +298,7 @@ export function renderTrajectoryDom({
     fragmentSvg.appendChild(todayLine);
   }
 
-  const objectiveTimestamps = collectObjectiveVerticalTimestamps(safeRows);
+  const objectiveTimestamps = collectObjectiveVerticalTimestamps(safeRows, timeScale);
   for (const ts of objectiveTimestamps) {
     if (ts < visibleStartTs || ts > visibleEndTs) continue;
     const objectiveLine = createSvgLine({
@@ -312,6 +326,10 @@ export function renderTrajectoryDom({
       const startTs = toTimestamp(segment.startAt);
       const endTs = toTimestamp(segment.endAt);
       if (!intersectsRange(startTs, endTs, visibleStartTs, visibleEndTs)) continue;
+      const displayStartTs = toRenderTimestamp(startTs, timeScale, startTs);
+      const displayEndTs = toRenderTimestamp(endTs, timeScale, endTs);
+      const displayLeftTs = Math.min(displayStartTs, displayEndTs);
+      const displayRightTs = Math.max(displayStartTs, displayEndTs);
 
       const segmentNode = document.createElement("div");
       const segmentColor = String(segment?.lineColor || "").trim().toLowerCase();
@@ -321,9 +339,9 @@ export function renderTrajectoryDom({
         segmentColor ? `situation-trajectory__segment--${segmentColor}` : "",
         segmentStyle === "dashed" ? "situation-trajectory__segment--dashed" : ""
       ].filter(Boolean).join(" ");
-      segmentNode.style.left = `${timeScale.timeToX(startTs)}px`;
+      segmentNode.style.left = `${timeScale.timeToX(displayLeftTs)}px`;
       segmentNode.style.top = `${y}px`;
-      segmentNode.style.width = `${Math.max(0, timeScale.timeToX(endTs) - timeScale.timeToX(startTs))}px`;
+      segmentNode.style.width = `${Math.max(0, timeScale.timeToX(displayRightTs) - timeScale.timeToX(displayLeftTs))}px`;
       if (subjectId) {
         segmentNode.dataset.trajectorySubjectId = subjectId;
         segmentNode.dataset.openSituationSubject = subjectId;
@@ -360,6 +378,7 @@ export function renderTrajectoryDom({
       const point = statusPoints[pointIndex];
       const ts = toTimestamp(point.at);
       if (ts < visibleStartTs || ts > visibleEndTs) continue;
+      const displayTs = toRenderTimestamp(ts, timeScale, ts);
 
       const localOffset = statusPointUsedOffsetsByTs.get(ts) || 0;
       statusPointUsedOffsetsByTs.set(ts, localOffset + 1);
@@ -370,7 +389,7 @@ export function renderTrajectoryDom({
       const pointNode = document.createElement("button");
       pointNode.type = "button";
       pointNode.className = "situation-trajectory__point";
-      pointNode.style.left = `${timeScale.timeToX(ts) + pointOffsetPx}px`;
+      pointNode.style.left = `${timeScale.timeToX(displayTs) + pointOffsetPx}px`;
       pointNode.style.top = `${y}px`;
 
       const pointType = resolvePointIcon(point, statusPoints[pointIndex - 1] || null);
@@ -396,12 +415,13 @@ export function renderTrajectoryDom({
     for (const marker of asArray(row.objectiveMarkers)) {
       const ts = toTimestamp(marker.at);
       if (ts < visibleStartTs || ts > visibleEndTs) continue;
+      const displayTs = toRenderTimestamp(ts, timeScale, ts);
 
       const markerNode = document.createElement("button");
       markerNode.type = "button";
       const markerType = String(marker?.markerType || "").trim().toLowerCase() || "cross";
       markerNode.className = `situation-trajectory__marker situation-trajectory__marker--${markerType}`;
-      markerNode.style.left = `${timeScale.timeToX(ts)}px`;
+      markerNode.style.left = `${timeScale.timeToX(displayTs)}px`;
       markerNode.style.top = `${y}px`;
 
       if (subjectId) {
@@ -441,8 +461,9 @@ export function renderTrajectoryDom({
 
     const ts = toTimestamp(link.at);
     if (ts < visibleStartTs || ts > visibleEndTs) continue;
+    const displayTs = toRenderTimestamp(ts, timeScale, ts);
 
-    const x = timeScale.timeToX(ts);
+    const x = timeScale.timeToX(displayTs);
     const parentY = (parentIndex * safeRowHeight) + (safeRowHeight / 2);
     const childY = (childIndex * safeRowHeight) + (safeRowHeight / 2);
 
@@ -483,6 +504,8 @@ export function __trajectoryDomRendererTestUtils() {
     collectObjectiveVerticalTimestamps,
     resolvePointIcon,
     intersectsRange,
-    buildHierarchyLinks
+    buildHierarchyLinks,
+    toDayCenterTimestamp,
+    toRenderTimestamp
   };
 }
