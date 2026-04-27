@@ -712,6 +712,11 @@ export function createProjectSituationsEvents({
       <div role="row" class="situation-trajectory__timeline-row situation-trajectory__timeline-row--months">${monthTicksHtml}${objectiveLabelsHtml}</div>
       <div role="row" class="situation-trajectory__timeline-row situation-trajectory__timeline-row--days">${dayTicksHtml}</div>
     `;
+
+    timelineContentNode.querySelectorAll(".situation-trajectory__timeline-objective").forEach((objectiveNode) => {
+      const halfWidth = Math.round((objectiveNode.offsetWidth || 0) / 2);
+      objectiveNode.style.marginLeft = `${-halfWidth}px`;
+    });
   }
 
   function bindTrajectoryCanvas(root) {

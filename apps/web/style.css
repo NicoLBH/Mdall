@@ -10138,27 +10138,22 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   background:var(--bgColor-default, #0d1117);
 }
 
-.situation-trajectory__toolbar{
+.situation-trajectory__zoom{
+  position:absolute;
+  top:6px;
+  right:12px;
+  z-index:6;
   display:flex;
   align-items:center;
-  justify-content:space-between;
-  gap:12px;
-  padding:10px 12px;
-  border-bottom:1px solid var(--borderColor-default, #30363d);
-}
-
-.situation-trajectory__toolbar-title{
-  font-size:13px;
-  font-weight:600;
-  color:var(--fgColor-default, #e6edf3);
-}
-
-.situation-trajectory__zoom{
-  display:inline-flex;
-  align-items:center;
   gap:8px;
+  height:20px;
+  padding:2px 8px;
+  border-radius:999px;
+  background:color-mix(in srgb, var(--bgColor-default, #0d1117) 88%, transparent);
+  backdrop-filter:blur(2px);
   font-size:12px;
   color:var(--fgColor-muted, #8b949e);
+  pointer-events:auto;
 }
 
 .situation-trajectory__zoom select{
@@ -10230,7 +10225,7 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
 .situation-trajectory__timeline-objective{
   position:absolute;
   top:10px;
-  transform:translateX(-50%);
+  margin-left:-80px;
   max-width:160px;
   padding:1px 6px;
   border-radius:999px;

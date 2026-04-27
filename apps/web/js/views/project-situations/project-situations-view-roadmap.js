@@ -161,18 +161,14 @@ export function renderSituationRoadmapView(situation, subjects = [], options = {
         data-situation-id="${escapeHtml(situationId)}"${projectDataAttribute}
         style="--situation-trajectory-left-width:${leftColumnWidth}px;"
       >
-        <header class="situation-trajectory__toolbar">
-          <div class="situation-trajectory__toolbar-title">Trajectoire · ${escapeHtml(title)}</div>
-          <label class="situation-trajectory__zoom" for="trajectoryZoomSelect">
-            <span>Zoom</span>
-            <select id="trajectoryZoomSelect" name="trajectoryZoom">
-              ${renderZoomOptions()}
-            </select>
-          </label>
-        </header>
-
         <div class="situation-trajectory__timeline" role="presentation">
           <div class="situation-trajectory__timeline-track" data-situation-trajectory-timeline-track>
+            <label class="situation-trajectory__zoom" for="trajectoryZoomSelect">
+              <span>Zoom</span>
+              <select id="trajectoryZoomSelect" name="trajectoryZoom">
+                ${renderZoomOptions()}
+              </select>
+            </label>
             <div class="situation-trajectory__timeline-content" data-situation-trajectory-timeline-content></div>
             <button
               type="button"
