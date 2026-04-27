@@ -53,8 +53,29 @@ function renderProjectTabsFeatureCard(projectTabs) {
   `;
 }
 
+function resolveProjectCreatedAt() {
+  return store?.currentProject?.created_at
+    || store?.projectForm?.project?.created_at
+    || store?.projectForm?.created_at
+    || null;
+}
+
+function formatProjectCreatedAt(createdAtValue) {
+  const createdAt = new Date(createdAtValue || "");
+  if (Number.isNaN(createdAt.getTime())) return "Date inconnue";
+  return createdAt.toLocaleString("fr-FR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "UTC"
+  }).replace(",", " ·");
+}
+
 export function renderGeneralParametresContent() {
   const form = store.projectForm;
+  const projectCreatedAt = formatProjectCreatedAt(resolveProjectCreatedAt());
 
   return `${renderSettingsBlock({
     id: "parametres-general",
@@ -68,6 +89,10 @@ export function renderGeneralParametresContent() {
         description: "Description",
         body: `<div class="settings-form-grid settings-form-grid--thirds">
           ${renderInputField({ id: "projectName", label: "Nom de projet", value: form.projectName || "", placeholder: "Projet demo" })}
+          <div class="project-general-created-at">
+            <div class="gh-editable-field__label">Date de création du projet</div>
+            <div class="project-general-created-at__value">${escapeHtml(projectCreatedAt)}</div>
+          </div>
         </div>`
       }),
       renderSectionCard({
