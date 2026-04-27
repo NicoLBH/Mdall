@@ -7,6 +7,9 @@ const TRAJECTORY_EVENT_TYPES = [
   "subject_created",
   "subject_closed",
   "subject_reopened",
+  "subject_rejected",
+  "review_rejected",
+  "subject_invalidated",
   "subject_parent_added",
   "subject_parent_removed",
   "subject_child_added",
@@ -32,7 +35,10 @@ const RELATION_EVENT_TYPES = new Set([
 const STATUS_EVENT_TYPES = new Set([
   "subject_created",
   "subject_closed",
-  "subject_reopened"
+  "subject_reopened",
+  "subject_rejected",
+  "review_rejected",
+  "subject_invalidated"
 ]);
 
 function normalizeId(value) {

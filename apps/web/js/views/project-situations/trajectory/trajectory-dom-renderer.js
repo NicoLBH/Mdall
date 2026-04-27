@@ -159,16 +159,14 @@ function createHierarchyPath({ x, parentY, childY, isRemoved = false, isReverse 
   );
   path.setAttribute("class", `situation-trajectory__hierarchy-link${isRemoved ? " is-removed" : ""}`);
 
-  const markerCircle = !isRemoved
-    ? (() => {
-      const circle = document.createElementNS(SVG_NS, "circle");
-      circle.setAttribute("cx", String(laneStartX));
-      circle.setAttribute("cy", String(startY));
-      circle.setAttribute("r", "2.5");
-      circle.setAttribute("class", "situation-trajectory__hierarchy-link");
-      return circle;
-    })()
-    : null;
+  const markerCircle = (() => {
+    const circle = document.createElementNS(SVG_NS, "circle");
+    circle.setAttribute("cx", String(laneStartX));
+    circle.setAttribute("cy", String(startY));
+    circle.setAttribute("r", "2.5");
+    circle.setAttribute("class", `situation-trajectory__hierarchy-link${isRemoved ? " is-removed" : ""}`);
+    return circle;
+  })();
 
   const arrow = document.createElementNS(SVG_NS, "polygon");
   const arrowSize = 4;
@@ -180,7 +178,7 @@ function createHierarchyPath({ x, parentY, childY, isRemoved = false, isReverse 
       `${laneEndX - arrowSize},${endY + (direction * arrowSize)}`
     ].join(" ")
   );
-  arrow.setAttribute("class", "situation-trajectory__hierarchy-link");
+  arrow.setAttribute("class", `situation-trajectory__hierarchy-link${isRemoved ? " is-removed" : ""}`);
 
   return { path, markerCircle, arrow };
 }

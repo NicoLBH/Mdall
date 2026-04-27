@@ -181,7 +181,7 @@ export function buildTrajectoryModel({
       });
     };
 
-    upsertStatusPoint(subjectCreatedTs, createdEvent ? "open" : fallbackStartStatus, createdEvent ? "subject_created" : "subject_fallback_created_at");
+    upsertStatusPoint(subjectCreatedTs, "open", createdEvent ? "subject_created" : "subject_fallback_created_at");
 
     for (const event of events) {
       const ts = event.created_at.getTime();
@@ -191,6 +191,8 @@ export function buildTrajectoryModel({
         upsertStatusPoint(ts, normalizeCloseStatus(event, subject.status), event.event_type);
       } else if (event.event_type === "subject_reopened") {
         upsertStatusPoint(ts, "open", event.event_type);
+      } else if (["subject_rejected", "review_rejected", "subject_invalidated"].includes(event.event_type)) {
+        upsertStatusPoint(ts, "closed_invalid", event.event_type);
       }
     }
 
