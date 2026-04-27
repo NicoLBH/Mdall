@@ -393,19 +393,31 @@ export async function resolveCurrentBackendProjectId(options = {}) {
   return backendProjectId;
 }
 
-function applyProjectIdentityLocally({ frontendProjectId = getFrontendProjectKey(), backendProjectId = "", name = "" } = {}) {
+function applyProjectIdentityLocally({
+  frontendProjectId = getFrontendProjectKey(),
+  backendProjectId = "",
+  name = "",
+  createdAt = null
+} = {}) {
   const nextName = safeString(name);
   const frontendKey = safeString(frontendProjectId);
+  const nextCreatedAt = safeString(createdAt);
 
   let changed = false;
 
-  if (nextName && frontendKey) {
+  if ((nextName || nextCreatedAt) && frontendKey) {
     const currentList = Array.isArray(store.projects) ? store.projects : [];
     const nextProjects = currentList.map((project) => {
       if (safeString(project?.id) !== frontendKey) return project;
-      if (safeString(project?.name) === nextName) return project;
+      const sameName = !nextName || safeString(project?.name) === nextName;
+      const sameCreatedAt = !nextCreatedAt || safeString(project?.createdAt || project?.created_at) === nextCreatedAt;
+      if (sameName && sameCreatedAt) return project;
       changed = true;
-      return { ...project, name: nextName };
+      return {
+        ...project,
+        ...(nextName ? { name: nextName } : {}),
+        ...(nextCreatedAt ? { createdAt: nextCreatedAt, created_at: nextCreatedAt } : {})
+      };
     });
     store.projects = nextProjects;
   }
@@ -415,8 +427,14 @@ function applyProjectIdentityLocally({ frontendProjectId = getFrontendProjectKey
       ? store.currentProject
       : { id: frontendKey };
 
-    if (nextName && safeString(currentProject.name) !== nextName) {
-      store.currentProject = { ...currentProject, name: nextName };
+    const currentProjectCreatedAt = safeString(currentProject?.created_at || currentProject?.createdAt);
+    if ((nextName && safeString(currentProject.name) !== nextName)
+      || (nextCreatedAt && currentProjectCreatedAt !== nextCreatedAt)) {
+      store.currentProject = {
+        ...currentProject,
+        ...(nextName ? { name: nextName } : {}),
+        ...(nextCreatedAt ? { created_at: nextCreatedAt, createdAt: nextCreatedAt } : {})
+      };
       changed = true;
     } else if (!store.currentProject) {
       store.currentProject = currentProject;
@@ -425,6 +443,15 @@ function applyProjectIdentityLocally({ frontendProjectId = getFrontendProjectKey
     if (nextName && safeString(store.projectForm?.projectName) !== nextName) {
       store.projectForm.projectName = nextName;
       changed = true;
+    }
+    if (nextCreatedAt) {
+      if (!store.projectForm.project || typeof store.projectForm.project !== "object") {
+        store.projectForm.project = {};
+      }
+      if (safeString(store.projectForm.project.created_at) !== nextCreatedAt) {
+        store.projectForm.project.created_at = nextCreatedAt;
+        changed = true;
+      }
     }
   }
 
@@ -575,7 +602,7 @@ export async function syncCurrentProjectIdentityFromSupabase(options = {}) {
   if (!backendProjectId) return null;
 
   const params = new URLSearchParams();
-  params.set("select", "id,name");
+  params.set("select", "id,name,created_at");
   params.set("id", `eq.${backendProjectId}`);
   params.set("limit", "1");
 
@@ -586,14 +613,16 @@ export async function syncCurrentProjectIdentityFromSupabase(options = {}) {
   const changed = applyProjectIdentityLocally({
     frontendProjectId: getFrontendProjectKey(),
     backendProjectId,
-    name: row.name
+    name: row.name,
+    createdAt: row.created_at || null
   });
 
   if (changed) {
     dispatchProjectIdentityUpdated({
       section: "project",
       backendProjectId,
-      projectName: safeString(row.name)
+      projectName: safeString(row.name),
+      createdAt: row.created_at || null
     });
   }
 

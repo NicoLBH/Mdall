@@ -1,4 +1,5 @@
 import { getTrajectoryVisibleWindow } from "./trajectory-virtualizer.js";
+import { svgIcon } from "../../../ui/icons.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const HIERARCHY_EVENT_TYPES = new Set([
@@ -63,6 +64,12 @@ function resolvePointIcon(point = {}, previousPoint = null) {
   if (["closed", "closed_duplicate", "duplicate"].includes(status)) return "close";
   if (previousPoint && String(previousPoint?.status || "").trim().toLowerCase() !== "open") return "reopen";
   return "open";
+}
+
+function resolvePointSymbol(pointType = "open") {
+  if (pointType === "close") return "check-circle";
+  if (pointType === "reject") return "skip";
+  return "issue-opened";
 }
 
 function normalizeId(value) {
@@ -318,6 +325,7 @@ export function renderTrajectoryDom({
       const pointType = resolvePointIcon(point, statusPoints[pointIndex - 1] || null);
       pointNode.classList.add(`situation-trajectory__point--${pointType}`);
       pointNode.dataset.trajectoryPointType = pointType;
+      pointNode.innerHTML = `<span class="situation-trajectory__point-icon" aria-hidden="true">${svgIcon(resolvePointSymbol(pointType), { className: "octicon", width: 16, height: 16 })}</span>`;
       if (subjectId) {
         pointNode.dataset.trajectorySubjectId = subjectId;
         pointNode.dataset.openSituationSubject = subjectId;
