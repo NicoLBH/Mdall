@@ -35,6 +35,7 @@ const TRAJECTORY_LEFT_COLUMN_WIDTH = {
   max: 640,
   default: 320
 };
+const TRAJECTORY_ROW_HEIGHT = 36;
 
 export function createProjectSituationsEvents({
   store,
@@ -66,6 +67,18 @@ export function createProjectSituationsEvents({
   reorderSituationGridRootSubjects
 }) {
   let insightsRequestId = 0;
+  let trajectoryRuntimeModulesPromise = null;
+
+  function loadTrajectoryRuntimeModules() {
+    if (!trajectoryRuntimeModulesPromise) {
+      trajectoryRuntimeModulesPromise = Promise.all([
+        import("./trajectory/trajectory-time-scale.js"),
+        import("./trajectory/trajectory-model.js"),
+        import("./trajectory/trajectory-canvas-renderer.js")
+      ]);
+    }
+    return trajectoryRuntimeModulesPromise;
+  }
 
   function isSituationInsightsDebugEnabled() {
     try {
@@ -595,6 +608,118 @@ export function createProjectSituationsEvents({
         window.addEventListener("pointercancel", onPointerUp);
       });
     });
+  }
+
+  function resolveTrajectorySubjects(situationId = "") {
+    const selectedSituationId = String(store?.situationsView?.selectedSituationId || "").trim();
+    if (situationId && selectedSituationId && situationId !== selectedSituationId) return [];
+    return Array.isArray(uiState?.selectedSituationSubjects) ? uiState.selectedSituationSubjects : [];
+  }
+
+  function resolveTrajectoryHistoryBySubjectId(situationId = "") {
+    const bySituationId = store?.projectSubjectsView?.trajectoryHistoryBySituationId;
+    if (!bySituationId || typeof bySituationId !== "object") return {};
+    const scoped = bySituationId[situationId];
+    if (!scoped || typeof scoped !== "object") return {};
+    return scoped.statusEventsBySubjectId || scoped.eventsBySubjectId || {};
+  }
+
+  function resolveTrajectoryProjectStartDate() {
+    return store?.projectForm?.project?.created_at
+      || store?.project?.created_at
+      || null;
+  }
+
+  function resolveTrajectoryTimelineEndDate() {
+    const endDate = new Date();
+    endDate.setUTCMonth(endDate.getUTCMonth() + 6);
+    return endDate;
+  }
+
+  function bindTrajectoryCanvas(root) {
+    const trajectoryNodes = [...root.querySelectorAll("[data-situation-trajectory][data-situation-id]")];
+    if (!trajectoryNodes.length) return;
+
+    const layout = String(store?.situationsView?.selectedSituationLayout || "").trim().toLowerCase();
+    if (layout !== "roadmap") return;
+
+    loadTrajectoryRuntimeModules()
+      .then(([timeScaleModule, modelModule, canvasRendererModule]) => {
+        const { createTrajectoryTimeScale } = timeScaleModule || {};
+        const { buildTrajectoryModel } = modelModule || {};
+        const { renderTrajectoryCanvas } = canvasRendererModule || {};
+        if (typeof createTrajectoryTimeScale !== "function"
+          || typeof buildTrajectoryModel !== "function"
+          || typeof renderTrajectoryCanvas !== "function") {
+          return;
+        }
+
+        trajectoryNodes.forEach((trajectoryNode) => {
+          const situationId = String(trajectoryNode.getAttribute("data-situation-id") || "").trim();
+          const viewportNode = trajectoryNode.querySelector(".situation-trajectory__viewport");
+          const canvasNode = trajectoryNode.querySelector(".situation-trajectory__canvas");
+          if (!viewportNode || !canvasNode) return;
+
+          const subjects = resolveTrajectorySubjects(situationId);
+          const rawSubjectsResult = store?.projectSubjectsView?.rawSubjectsResult || {};
+          const objectiveIdsBySubjectId = rawSubjectsResult.objectiveIdsBySubjectId || {};
+          const objectivesById = rawSubjectsResult.objectivesById || {};
+          const historyBySubjectId = resolveTrajectoryHistoryBySubjectId(situationId);
+
+          const projectStartDate = resolveTrajectoryProjectStartDate()
+            || subjects.reduce((acc, subject) => {
+              const createdAt = subject?.created_at ? new Date(subject.created_at) : null;
+              if (!createdAt || Number.isNaN(createdAt.getTime())) return acc;
+              if (!acc) return createdAt;
+              return createdAt.getTime() < acc.getTime() ? createdAt : acc;
+            }, null)
+            || new Date();
+
+          const timeScale = createTrajectoryTimeScale({
+            startDate: projectStartDate,
+            endDate: resolveTrajectoryTimelineEndDate(),
+            zoom: "day"
+          });
+
+          const { rows } = buildTrajectoryModel({
+            subjects,
+            subjectHistoryEvents: historyBySubjectId,
+            objectivesById,
+            objectiveIdsBySubjectId,
+            projectStartDate,
+            today: new Date()
+          });
+
+          let rafId = 0;
+          const scheduleRender = () => {
+            if (rafId) return;
+            rafId = window.requestAnimationFrame(() => {
+              rafId = 0;
+              renderTrajectoryCanvas({
+                canvas: canvasNode,
+                rows,
+                timeScale,
+                scrollLeft: viewportNode.scrollLeft,
+                scrollTop: viewportNode.scrollTop,
+                viewportWidth: viewportNode.clientWidth,
+                viewportHeight: viewportNode.clientHeight,
+                rowHeight: TRAJECTORY_ROW_HEIGHT,
+                overscan: { rows: 4, px: 160 }
+              });
+            });
+          };
+
+          if (!viewportNode.dataset.trajectoryCanvasBound) {
+            viewportNode.dataset.trajectoryCanvasBound = "true";
+            viewportNode.addEventListener("scroll", scheduleRender, { passive: true });
+          }
+
+          scheduleRender();
+        });
+      })
+      .catch((error) => {
+        console.error("[trajectory] runtime.load.error", error);
+      });
   }
 
   async function handleSituationGridKanbanAction(root, actionNode, event = null) {
@@ -1482,6 +1607,7 @@ export function createProjectSituationsEvents({
 
     bindSituationGridColumnResize(root);
     bindTrajectoryColumnResize(root);
+    bindTrajectoryCanvas(root);
     bindSituationGridEditableCells(root);
     bindSituationGridDnd(root);
 
