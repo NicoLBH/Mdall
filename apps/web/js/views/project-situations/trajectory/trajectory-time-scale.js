@@ -29,10 +29,10 @@ function toTimestamp(value, { fallback = null } = {}) {
 
 function formatTickLabel(timestamp, zoom) {
   const date = new Date(timestamp);
-  const yyyy = date.getUTCFullYear();
-  const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
-  const dd = String(date.getUTCDate()).padStart(2, "0");
-  const hh = String(date.getUTCHours()).padStart(2, "0");
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  const hh = String(date.getHours()).padStart(2, "0");
   if (zoom === "hour") return `${dd}/${mm} ${hh}:00`;
   if (zoom === "half-day") return `${dd}/${mm} ${Number(hh) < 12 ? "AM" : "PM"}`;
   if (zoom === "day") return `${dd}/${mm}`;

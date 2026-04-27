@@ -67,6 +67,7 @@ function resolvePointIcon(point = {}, previousPoint = null) {
 }
 
 function resolvePointSymbol(pointType = "open") {
+  if (pointType === "milestone") return "milestone";
   if (pointType === "close") return "check-circle";
   if (pointType === "reject") return "skip";
   return "issue-opened";
@@ -89,18 +90,25 @@ function formatPointEventLabel(point = {}) {
   if (source === "subject_reopened") return "réouverture";
   if (["subject_rejected", "review_rejected", "subject_invalidated"].includes(source)) return "rejet";
   if (source === "subject_blocked_by_added") return "blocage entrant";
+  if (source === "subject_objectives_changed") {
+    if (point?.milestoneAction === "added") return "objectif ajouté";
+    if (point?.milestoneAction === "removed") return "objectif supprimé";
+    return "objectifs mis à jour";
+  }
   return source || "mise à jour";
 }
 
 function renderPointIconHtml(pointType = "open", point = {}) {
   const symbol = resolvePointSymbol(pointType);
-  const colorStyle = pointType === "close"
+  const colorStyle = pointType === "milestone"
+    ? (point?.markerColor || "var(--muted)")
+    : pointType === "close"
     ? "var(--fgColor-done)"
     : (pointType === "reject" ? "var(--project-tabs-icon-color, rgb(248, 81, 73))" : "var(--fgColor-open)");
   const blockedIconHtml = point?.hasBlockedIndicator
     ? `<span class="subject-status-blocked-indicator situation-trajectory__status-blocked-indicator" aria-hidden="true">${svgIcon("blocked", { className: "octicon octicon-blocked", width: 12, height: 12 })}</span>`
     : "";
-  return `<span class="issue-status-icon situation-trajectory__status-icon" aria-hidden="true">${
+  return `<span class="issue-status-icon situation-trajectory__point-icon situation-trajectory__status-icon" aria-hidden="true">${
     svgIcon(symbol, { className: "ui-icon", width: 16, height: 16, style: `color: ${colorStyle}` })
   }${blockedIconHtml}</span>`;
 }
@@ -297,6 +305,8 @@ export function renderTrajectoryDom({
     if (!row) continue;
     const y = (index * safeRowHeight) + (safeRowHeight / 2);
     const subjectId = normalizeId(row?.subjectId);
+    const subjectTitle = String(row?.subjectTitle || subjectId || "Sujet");
+    const subjectNumber = String(row?.subjectNumber || (subjectId ? `#${subjectId}` : "")).trim();
 
     for (const segment of asArray(row.lifecycleSegments)) {
       const startTs = toTimestamp(segment.startAt);
@@ -318,25 +328,58 @@ export function renderTrajectoryDom({
         segmentNode.dataset.trajectorySubjectId = subjectId;
         segmentNode.dataset.openSituationSubject = subjectId;
       }
+      const segmentLabelNode = document.createElement("span");
+      segmentLabelNode.className = "situation-trajectory__segment-label";
+
+      const segmentTitleNode = document.createElement("span");
+      segmentTitleNode.className = "situation-trajectory__segment-title";
+      segmentTitleNode.textContent = subjectTitle;
+      segmentLabelNode.appendChild(segmentTitleNode);
+
+      if (subjectNumber) {
+        const segmentNumberNode = document.createElement("span");
+        segmentNumberNode.className = "situation-trajectory__segment-number mono";
+        segmentNumberNode.textContent = subjectNumber;
+        segmentLabelNode.appendChild(segmentNumberNode);
+      }
+
+      segmentNode.appendChild(segmentLabelNode);
       segmentNode.title = `Sujet ${subjectId || "inconnu"} · ${formatDateLabel(segment.startAt)} → ${formatDateLabel(segment.endAt)} · statut ${String(segment?.status || "open").trim().toLowerCase() || "open"}`;
       fragmentItems.appendChild(segmentNode);
       segmentCount += 1;
     }
 
     const statusPoints = asArray(row.statusPoints);
+    const statusPointTotalsByTs = new Map();
+    for (const point of statusPoints) {
+      const ts = toTimestamp(point.at);
+      statusPointTotalsByTs.set(ts, (statusPointTotalsByTs.get(ts) || 0) + 1);
+    }
+    const statusPointUsedOffsetsByTs = new Map();
     for (let pointIndex = 0; pointIndex < statusPoints.length; pointIndex += 1) {
       const point = statusPoints[pointIndex];
       const ts = toTimestamp(point.at);
       if (ts < visibleStartTs || ts > visibleEndTs) continue;
 
+      const localOffset = statusPointUsedOffsetsByTs.get(ts) || 0;
+      statusPointUsedOffsetsByTs.set(ts, localOffset + 1);
+      const totalAtTimestamp = statusPointTotalsByTs.get(ts) || 1;
+      const pointOffsetIndex = Number.isInteger(point?.offsetIndex) ? point.offsetIndex : localOffset;
+      const pointOffsetPx = totalAtTimestamp > 1 ? (pointOffsetIndex - ((totalAtTimestamp - 1) / 2)) * 6 : 0;
+
       const pointNode = document.createElement("button");
       pointNode.type = "button";
       pointNode.className = "situation-trajectory__point";
-      pointNode.style.left = `${timeScale.timeToX(ts)}px`;
+      pointNode.style.left = `${timeScale.timeToX(ts) + pointOffsetPx}px`;
       pointNode.style.top = `${y}px`;
 
       const pointType = resolvePointIcon(point, statusPoints[pointIndex - 1] || null);
       pointNode.classList.add(`situation-trajectory__point--${pointType}`);
+      if (pointType === "milestone") {
+        pointNode.classList.add("situation-trajectory__point--milestone");
+        if (point?.milestoneAction === "added") pointNode.classList.add("situation-trajectory__point--milestone-added");
+        if (point?.milestoneAction === "removed") pointNode.classList.add("situation-trajectory__point--milestone-removed");
+      }
       pointNode.dataset.trajectoryPointType = pointType;
       pointNode.innerHTML = renderPointIconHtml(pointType, point);
       if (subjectId) {

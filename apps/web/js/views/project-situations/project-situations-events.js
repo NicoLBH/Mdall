@@ -690,14 +690,23 @@ export function createProjectSituationsEvents({
       return;
     }
 
-    const todayIsoDate = new Date().toISOString().slice(0, 10);
+    const toLocalIsoDate = (value) => {
+      const date = value instanceof Date ? value : new Date(value);
+      if (Number.isNaN(date.getTime())) return "";
+      const yyyy = date.getFullYear();
+      const mm = String(date.getMonth() + 1).padStart(2, "0");
+      const dd = String(date.getDate()).padStart(2, "0");
+      return `${yyyy}-${mm}-${dd}`;
+    };
+
+    const todayIsoDate = toLocalIsoDate(new Date());
 
     const dayTicksHtml = ticks.map((tick, index) => {
       const nextTick = ticks[index + 1];
       const tickWidth = Math.max(24, (nextTick?.x ?? timeScale.totalWidth) - tick.x);
       const date = tick.date instanceof Date ? tick.date : new Date(tick.timestamp);
-      const dayLabel = String(date.getUTCDate());
-      const isoDate = date.toISOString().slice(0, 10);
+      const dayLabel = String(date.getDate());
+      const isoDate = toLocalIsoDate(date);
       const isToday = isoDate === todayIsoDate;
       return `<time role="columnheader" data-index="${index}" datetime="${isoDate}" class="situation-trajectory__timeline-day${isToday ? " is-today" : ""}" style="left:${tick.x}px;width:${tickWidth}px;">${dayLabel}</time>`;
     }).join("");
@@ -705,16 +714,15 @@ export function createProjectSituationsEvents({
     const monthTicksHtml = ticks
       .filter((tick, index) => {
         const date = tick.date instanceof Date ? tick.date : new Date(tick.timestamp);
-        return index === 0 || date.getUTCDate() === 1;
+        return index === 0 || date.getDate() === 1;
       })
       .map((tick) => {
         const date = tick.date instanceof Date ? tick.date : new Date(tick.timestamp);
         const label = date.toLocaleDateString("fr-FR", {
           month: "long",
-          year: "numeric",
-          timeZone: "UTC"
+          year: "numeric"
         });
-        return `<time datetime="${date.toISOString().slice(0, 10)}" class="situation-trajectory__timeline-month" style="left:${tick.x}px;">${label}</time>`;
+        return `<time datetime="${toLocalIsoDate(date)}" class="situation-trajectory__timeline-month" style="left:${tick.x}px;">${label}</time>`;
       }).join("");
 
     const objectiveLabelsHtml = Object.values(objectivesById || {})
