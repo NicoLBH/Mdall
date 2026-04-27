@@ -40,6 +40,52 @@ function asArray(value) {
   return Array.isArray(value) ? value : [];
 }
 
+function toObjectiveDeltaArray(value) {
+  if (Array.isArray(value)) return value;
+  if (value && typeof value === "object") return Object.keys(value);
+  return [];
+}
+
+function resolveObjectiveMilestonePoints(event = {}, ts, currentStatus = "open") {
+  const payload = event?.payload && typeof event.payload === "object" ? event.payload : {};
+  const action = normalizeId(payload.action).toLowerCase();
+  const delta = payload?.delta && typeof payload.delta === "object" ? payload.delta : {};
+  const added = toObjectiveDeltaArray(delta.added);
+  const removed = toObjectiveDeltaArray(delta.removed);
+
+  const hasAdded = action === "added" || action === "replaced" || added.length > 0;
+  const hasRemoved = action === "removed" || action === "replaced" || removed.length > 0;
+  const points = [];
+
+  if (hasRemoved) {
+    points.push({
+      at: new Date(ts),
+      status: normalizeStatus(currentStatus),
+      icon: "milestone",
+      source: "subject_objectives_changed",
+      contributesToLifecycle: false,
+      milestoneAction: "removed",
+      markerColor: "var(--muted)",
+      offsetIndex: 0
+    });
+  }
+
+  if (hasAdded) {
+    points.push({
+      at: new Date(ts),
+      status: normalizeStatus(currentStatus),
+      icon: "milestone",
+      source: "subject_objectives_changed",
+      contributesToLifecycle: false,
+      milestoneAction: "added",
+      markerColor: "#fff",
+      offsetIndex: hasRemoved ? 1 : 0
+    });
+  }
+
+  return points;
+}
+
 function collectEventsForSubject(subjectId, subjectHistoryEvents) {
   if (Array.isArray(subjectHistoryEvents)) {
     return subjectHistoryEvents.filter((event) => normalizeId(event?.subject_id) === subjectId);
@@ -172,7 +218,10 @@ export function buildTrajectoryModel({
         icon: extra.icon || toStatusIcon(safeStatus),
         source,
         contributesToLifecycle: extra.contributesToLifecycle !== false,
-        hasBlockedIndicator: extra.hasBlockedIndicator === true
+        hasBlockedIndicator: extra.hasBlockedIndicator === true,
+        milestoneAction: extra.milestoneAction || "",
+        markerColor: extra.markerColor || "",
+        offsetIndex: Number.isInteger(extra.offsetIndex) ? extra.offsetIndex : undefined
       });
     };
 
@@ -195,6 +244,18 @@ export function buildTrajectoryModel({
           contributesToLifecycle: false,
           hasBlockedIndicator: true
         });
+      } else if (event.event_type === "subject_objectives_changed") {
+        const currentStatus = resolveStatusAtTimestamp(statusPoints, ts, fallbackStartStatus);
+        const milestonePoints = resolveObjectiveMilestonePoints(event, ts, currentStatus);
+        for (const point of milestonePoints) {
+          pushStatusPoint(ts, point.status, point.source, {
+            icon: point.icon,
+            contributesToLifecycle: false,
+            milestoneAction: point.milestoneAction,
+            markerColor: point.markerColor,
+            offsetIndex: point.offsetIndex
+          });
+        }
       }
     }
 

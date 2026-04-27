@@ -10323,43 +10323,45 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
 }
 
 .situation-trajectory__segment{
-  height:4px;
-  border-radius:999px;
-  background:var(--fgColor-muted, #8b949e);
+  height:28px;
+  border-radius:var(--radius);
+  background:rgb(13, 17, 23);
+  border:solid 1px currentColor;
+  outline-color:rgb(240, 246, 252);
+  box-shadow:rgba(1, 4, 9, 0.4) 0px 1px 1px 0px, rgba(1, 4, 9, 0.8) 0px 3px 6px 0px;
+  color:var(--fgColor-muted, #8b949e);
   opacity:.95;
   pointer-events:auto;
   cursor:pointer;
+  z-index:1;
 }
 
 .situation-trajectory__segment--green{
-  background:rgb(35, 134, 54);
+  color:rgb(35, 134, 54);
 }
 
 .situation-trajectory__segment--red{
-  background:rgb(207, 34, 46);
+  color:rgb(207, 34, 46);
 }
 
 .situation-trajectory__segment--gray{
-  background:rgb(99, 110, 123);
+  color:rgb(99, 110, 123);
 }
 
 .situation-trajectory__segment--dashed{
-  background:transparent;
-  border-top:2px dashed currentColor;
-  border-radius:0;
-  height:0;
+  border-style:dashed;
 }
 
 .situation-trajectory__segment--dashed.situation-trajectory__segment--green{
-  border-top-color:rgb(35, 134, 54);
+  border-color:rgb(35, 134, 54);
 }
 
 .situation-trajectory__segment--dashed.situation-trajectory__segment--red{
-  border-top-color:rgb(207, 34, 46);
+  border-color:rgb(207, 34, 46);
 }
 
 .situation-trajectory__segment--dashed.situation-trajectory__segment--gray{
-  border-top-color:rgb(99, 110, 123);
+  border-color:rgb(99, 110, 123);
 }
 
 .situation-trajectory__point,
@@ -10387,6 +10389,7 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   display:inline-flex;
   align-items:center;
   justify-content:center;
+  z-index:3;
 }
 
 .situation-trajectory__point-icon{
@@ -10398,6 +10401,12 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   border-radius:999px;
   background:rgb(21, 27, 35);
   color:var(--fgColor-muted, #8b949e);
+}
+
+.situation-trajectory__status-icon{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
 }
 
 .situation-trajectory__marker::before,
@@ -10433,6 +10442,14 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
 
 .situation-trajectory__point--reject .situation-trajectory__point-icon{
   color:var(--project-tabs-icon-color, rgb(248, 81, 73));
+}
+
+.situation-trajectory__point--milestone-added .situation-trajectory__point-icon svg{
+  color:#fff;
+}
+
+.situation-trajectory__point--milestone-removed .situation-trajectory__point-icon svg{
+  color:var(--muted);
 }
 
 .situation-trajectory__marker--cross::before,

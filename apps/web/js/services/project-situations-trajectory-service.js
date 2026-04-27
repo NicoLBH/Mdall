@@ -32,14 +32,15 @@ const RELATION_EVENT_TYPES = new Set([
   "subject_blocking_for_removed"
 ]);
 
-const STATUS_EVENT_TYPES = new Set([
+const ACTIVITY_EVENT_TYPES = new Set([
   "subject_created",
   "subject_closed",
   "subject_reopened",
   "subject_rejected",
   "review_rejected",
   "subject_invalidated",
-  "subject_blocked_by_added"
+  "subject_blocked_by_added",
+  "subject_objectives_changed"
 ]);
 
 function normalizeId(value) {
@@ -131,7 +132,7 @@ export async function loadProjectSituationsTrajectoryHistory({
   const eventsBySubjectId = groupEventsBySubjectId(normalizedEvents);
   const relationEvents = normalizedEvents.filter((event) => RELATION_EVENT_TYPES.has(event.event_type));
   const statusEventsBySubjectId = groupEventsBySubjectId(
-    normalizedEvents.filter((event) => STATUS_EVENT_TYPES.has(event.event_type))
+    normalizedEvents.filter((event) => ACTIVITY_EVENT_TYPES.has(event.event_type))
   );
 
 

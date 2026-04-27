@@ -393,3 +393,77 @@ test("renderTrajectoryDom affiche une icône par point de statut et ajoute l'ind
 
   globalThis.document = originalDocument;
 });
+
+test("renderTrajectoryDom affiche les milestones avec classes dédiées, icône milestone et décalage sur timestamp identique", () => {
+  const originalDocument = globalThis.document;
+  globalThis.document = createMockDocument();
+
+  const scene = new MockNode("div");
+  scene.clientHeight = 600;
+  const svg = new MockNode("svg");
+  const itemsRoot = new MockNode("div");
+
+  const rows = [
+    {
+      subjectId: "subject-ms",
+      lifecycleSegments: [],
+      statusPoints: [
+        {
+          at: new Date("2026-01-10T00:00:00.000Z"),
+          status: "open",
+          source: "subject_objectives_changed",
+          icon: "milestone",
+          milestoneAction: "removed",
+          markerColor: "var(--muted)",
+          contributesToLifecycle: false,
+          offsetIndex: 0
+        },
+        {
+          at: new Date("2026-01-10T00:00:00.000Z"),
+          status: "open",
+          source: "subject_objectives_changed",
+          icon: "milestone",
+          milestoneAction: "added",
+          markerColor: "#fff",
+          contributesToLifecycle: false,
+          offsetIndex: 1
+        }
+      ],
+      objectiveMarkers: []
+    }
+  ];
+
+  const timeScale = createTrajectoryTimeScale({
+    startDate: "2026-01-01T00:00:00.000Z",
+    endDate: "2026-01-20T00:00:00.000Z",
+    zoom: "day",
+    pxPerUnit: 10
+  });
+
+  renderTrajectoryDom({
+    scene,
+    svg,
+    itemsRoot,
+    rows,
+    relationEvents: [],
+    timeScale,
+    scrollLeft: 0,
+    scrollTop: 0,
+    viewportWidth: 800,
+    viewportHeight: 200,
+    rowHeight: 20,
+    overscan: 0
+  });
+
+  const points = queryByClass(itemsRoot, "situation-trajectory__point");
+  assert.equal(points.length, 2);
+  assert.ok(points.every((node) => String(node.className).includes("situation-trajectory__point--milestone")));
+  assert.ok(points.some((node) => String(node.className).includes("situation-trajectory__point--milestone-added")));
+  assert.ok(points.some((node) => String(node.className).includes("situation-trajectory__point--milestone-removed")));
+  assert.ok(points.every((node) => String(node.innerHTML || "").includes("milestone")));
+
+  const leftPositions = points.map((node) => node.style.left);
+  assert.equal(new Set(leftPositions).size, 2);
+
+  globalThis.document = originalDocument;
+});
