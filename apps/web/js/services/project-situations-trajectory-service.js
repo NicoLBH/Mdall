@@ -89,10 +89,8 @@ export async function loadProjectSituationsTrajectoryHistory({
   const resolvedProjectId = await resolveProjectId(projectId);
   const scopedSubjectIds = [...new Set(safeArray(subjectIds).map((value) => normalizeId(value)).filter(Boolean))];
 
-  console.info("[trajectory] history.fetch.start", { subjectCount: scopedSubjectIds.length });
 
   if (!resolvedProjectId || !scopedSubjectIds.length) {
-    console.info("[trajectory] history.fetch.done", { eventCount: 0 });
     return {
       eventsBySubjectId: {},
       relationEvents: [],
@@ -129,7 +127,6 @@ export async function loadProjectSituationsTrajectoryHistory({
     normalizedEvents.filter((event) => STATUS_EVENT_TYPES.has(event.event_type))
   );
 
-  console.info("[trajectory] history.fetch.done", { eventCount: normalizedEvents.length });
 
   return {
     eventsBySubjectId,

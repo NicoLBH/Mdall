@@ -66,11 +66,6 @@ export function getTrajectoryVisibleWindow({
     isFastScrolling
   };
 
-  console.info("[trajectory] virtualizer.window", {
-    rowStart,
-    rowEnd,
-    scrollLeft: safeScrollLeft
-  });
 
   return window;
 }
