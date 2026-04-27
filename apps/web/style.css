@@ -10219,7 +10219,7 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
 
 .situation-trajectory__timeline-month{
   position:absolute;
-  top:6px;
+  top:10px;
   transform:translateX(6px);
   font-size:12px;
   color:rgb(145, 152, 161);
@@ -10234,8 +10234,8 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   max-width:160px;
   padding:1px 6px;
   border-radius:999px;
-  background:color-mix(in srgb, #cf222e 22%, rgb(13, 17, 23) 78%);
-  color:#ffb4b7;
+  border: solid 1px var(--muted);
+  color: var(--muted);
   font-size:11px;
   overflow:hidden;
   text-overflow:ellipsis;
@@ -10246,7 +10246,7 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   position:absolute;
   top:100%;
   left:var(--situation-trajectory-left-width);
-  transform:translate(-50%, -50%) rotate(90deg);
+  transform:translate(-50%, calc(-100% - 5px)) rotate(90deg);
   width:20px;
   height:20px;
   border:1px solid var(--borderColor-default, #30363d);
