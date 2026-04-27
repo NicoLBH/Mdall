@@ -10345,9 +10345,21 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
 
 .situation-trajectory__segment--dashed{
   background:transparent;
-  border-top:2px dashed rgb(99, 110, 123);
+  border-top:2px dashed currentColor;
   border-radius:0;
   height:0;
+}
+
+.situation-trajectory__segment--dashed.situation-trajectory__segment--green{
+  border-top-color:rgb(35, 134, 54);
+}
+
+.situation-trajectory__segment--dashed.situation-trajectory__segment--red{
+  border-top-color:rgb(207, 34, 46);
+}
+
+.situation-trajectory__segment--dashed.situation-trajectory__segment--gray{
+  border-top-color:rgb(99, 110, 123);
 }
 
 .situation-trajectory__point,

@@ -16,6 +16,7 @@ class MockNode {
     this.clientWidth = 0;
     this.type = "";
     this.title = "";
+    this._innerHTML = "";
     this.classList = {
       add: (...tokens) => {
         const current = new Set(String(this.className || "").split(/\s+/).filter(Boolean));
@@ -70,7 +71,12 @@ class MockNode {
   }
 
   set innerHTML(_) {
+    this._innerHTML = String(_ || "");
     this.childNodes = [];
+  }
+
+  get innerHTML() {
+    return this._innerHTML;
   }
 }
 
@@ -238,4 +244,152 @@ test("__trajectoryDomRendererTestUtils expose les helpers clés", () => {
     }
   ]);
   assert.equal(links.length, 1);
+});
+
+test("renderTrajectoryDom applique les classes red+dashed et dessine un lien removed enfant -> parent avec circle+arrow", () => {
+  const originalDocument = globalThis.document;
+  const originalNow = Date.now;
+  globalThis.document = createMockDocument();
+  Date.now = () => new Date("2026-01-06T00:00:00.000Z").getTime();
+
+  const scene = new MockNode("div");
+  scene.clientHeight = 600;
+  const svg = new MockNode("svg");
+  const itemsRoot = new MockNode("div");
+
+  const rows = [
+    {
+      subjectId: "parent-1",
+      lifecycleSegments: [],
+      statusPoints: [],
+      objectiveMarkers: []
+    },
+    {
+      subjectId: "child-1",
+      lifecycleSegments: [
+        {
+          subjectId: "child-1",
+          status: "closed",
+          startAt: new Date("2026-01-05T00:00:00.000Z"),
+          endAt: new Date("2026-01-07T00:00:00.000Z"),
+          lineColor: "red",
+          lineStyle: "dashed"
+        }
+      ],
+      statusPoints: [],
+      objectiveMarkers: []
+    }
+  ];
+
+  const timeScale = createTrajectoryTimeScale({
+    startDate: "2026-01-01T00:00:00.000Z",
+    endDate: "2026-01-10T00:00:00.000Z",
+    zoom: "day",
+    pxPerUnit: 12
+  });
+
+  renderTrajectoryDom({
+    scene,
+    svg,
+    itemsRoot,
+    rows,
+    relationEvents: [
+      {
+        event_type: "subject_parent_removed",
+        subject_id: "child-1",
+        created_at: "2026-01-06T00:00:00.000Z",
+        payload: { counterpart_subject_id: "parent-1" }
+      }
+    ],
+    timeScale,
+    scrollLeft: 0,
+    scrollTop: 0,
+    viewportWidth: 600,
+    viewportHeight: 200,
+    rowHeight: 20,
+    overscan: 0
+  });
+
+  const [redDashedSegment] = queryByClass(itemsRoot, "situation-trajectory__segment--dashed");
+  assert.ok(redDashedSegment);
+  assert.ok(String(redDashedSegment.className).includes("situation-trajectory__segment--red"));
+
+  const removedPaths = queryByClass(svg, "situation-trajectory__hierarchy-link")
+    .filter((node) => node.tagName === "PATH" && String(node.className).includes("is-removed"));
+  const removedCircles = queryByClass(svg, "situation-trajectory__hierarchy-link")
+    .filter((node) => node.tagName === "CIRCLE" && String(node.className).includes("is-removed"));
+  const removedArrows = queryByClass(svg, "situation-trajectory__hierarchy-link")
+    .filter((node) => node.tagName === "POLYGON" && String(node.className).includes("is-removed"));
+
+  assert.equal(removedPaths.length, 1);
+  assert.equal(removedCircles.length, 1);
+  assert.equal(removedArrows.length, 1);
+  assert.equal(removedCircles[0].getAttribute("cy"), "30");
+
+  globalThis.document = originalDocument;
+  Date.now = originalNow;
+});
+
+test("renderTrajectoryDom affiche une icône par point de statut et ajoute l'indicateur bloqué", () => {
+  const originalDocument = globalThis.document;
+  globalThis.document = createMockDocument();
+
+  const scene = new MockNode("div");
+  scene.clientHeight = 600;
+  const svg = new MockNode("svg");
+  const itemsRoot = new MockNode("div");
+
+  const rows = [
+    {
+      subjectId: "subject-1",
+      lifecycleSegments: [
+        {
+          subjectId: "subject-1",
+          status: "open",
+          startAt: new Date("2026-01-01T00:00:00.000Z"),
+          endAt: new Date("2026-02-20T00:00:00.000Z"),
+          lineColor: "green",
+          lineStyle: "solid"
+        }
+      ],
+      statusPoints: [
+        { at: new Date("2026-01-01T00:00:00.000Z"), status: "open", source: "subject_created", icon: "open" },
+        { at: new Date("2026-01-20T00:00:00.000Z"), status: "closed", source: "subject_closed", icon: "close" },
+        { at: new Date("2026-02-04T00:00:00.000Z"), status: "open", source: "subject_reopened", icon: "open" },
+        { at: new Date("2026-02-10T00:00:00.000Z"), status: "open", source: "subject_blocked_by_added", icon: "open", hasBlockedIndicator: true },
+        { at: new Date("2026-02-18T00:00:00.000Z"), status: "closed_invalid", source: "subject_rejected", icon: "reject" }
+      ],
+      objectiveMarkers: []
+    }
+  ];
+
+  const timeScale = createTrajectoryTimeScale({
+    startDate: "2025-12-28T00:00:00.000Z",
+    endDate: "2026-02-25T00:00:00.000Z",
+    zoom: "day",
+    pxPerUnit: 8
+  });
+
+  renderTrajectoryDom({
+    scene,
+    svg,
+    itemsRoot,
+    rows,
+    relationEvents: [],
+    timeScale,
+    scrollLeft: 0,
+    scrollTop: 0,
+    viewportWidth: 1200,
+    viewportHeight: 200,
+    rowHeight: 20,
+    overscan: 0
+  });
+
+  const points = queryByClass(itemsRoot, "situation-trajectory__point");
+  assert.equal(points.length, 5);
+  assert.ok(points.some((node) => String(node.className).includes("situation-trajectory__point--close")));
+  assert.ok(points.some((node) => String(node.className).includes("situation-trajectory__point--reject")));
+  assert.ok(points.some((node) => String(node.innerHTML || "").includes("situation-trajectory__status-blocked-indicator")));
+
+  globalThis.document = originalDocument;
 });
