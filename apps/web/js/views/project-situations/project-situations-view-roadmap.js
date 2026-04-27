@@ -10,6 +10,11 @@ const TRAJECTORY_ZOOM_OPTIONS = [
   { value: "week", label: "Semaine" },
   { value: "month", label: "Mois" }
 ];
+const TRAJECTORY_LEFT_WIDTH = {
+  min: 72,
+  max: 640,
+  default: 320
+};
 
 function normalizeId(value) {
   const normalized = String(value || "").trim();
@@ -49,6 +54,12 @@ function renderZoomOptions() {
     .join("");
 }
 
+function normalizeLeftColumnWidth(value) {
+  const width = Number(value);
+  if (!Number.isFinite(width)) return TRAJECTORY_LEFT_WIDTH.default;
+  return Math.max(TRAJECTORY_LEFT_WIDTH.min, Math.min(TRAJECTORY_LEFT_WIDTH.max, Math.round(width)));
+}
+
 export function renderSituationRoadmapView(situation, subjects = [], options = {}) {
   const subjectCount = Array.isArray(subjects) ? subjects.length : 0;
   const title = String(situation?.title || "Situation");
@@ -57,6 +68,7 @@ export function renderSituationRoadmapView(situation, subjects = [], options = {
   const rawSubjectsResult = options?.store?.projectSubjectsView?.rawSubjectsResult && typeof options.store.projectSubjectsView.rawSubjectsResult === "object"
     ? options.store.projectSubjectsView.rawSubjectsResult
     : {};
+  const leftColumnWidth = normalizeLeftColumnWidth(options?.store?.situationsView?.trajectoryLeftColumnWidthBySituationId?.[situationId]);
 
   console.info("[trajectory] render.shell", { situationId, subjectCount });
 
@@ -140,6 +152,7 @@ export function renderSituationRoadmapView(situation, subjects = [], options = {
         class="situation-trajectory"
         data-situation-trajectory
         data-situation-id="${escapeHtml(situationId)}"${projectDataAttribute}
+        style="--situation-trajectory-left-width:${leftColumnWidth}px;"
       >
         <header class="situation-trajectory__toolbar">
           <div class="situation-trajectory__toolbar-title">Trajectoire · ${escapeHtml(title)}</div>
@@ -151,7 +164,21 @@ export function renderSituationRoadmapView(situation, subjects = [], options = {
           </label>
         </header>
 
-        <div class="situation-trajectory__timeline" role="presentation"></div>
+        <div class="situation-trajectory__timeline" role="presentation">
+          <div class="situation-trajectory__timeline-left"></div>
+          <div class="situation-trajectory__timeline-track">
+            <button
+              type="button"
+              class="situation-trajectory__splitter"
+              data-situation-trajectory-splitter
+              data-situation-trajectory-splitter-situation-id="${escapeHtml(situationId)}"
+              aria-label="Redimensionner la colonne des sujets"
+              title="Redimensionner la colonne des sujets"
+            >
+              ${svgIcon("unfold", { className: "octicon octicon-unfold", width: 16, height: 16 })}
+            </button>
+          </div>
+        </div>
 
         <div class="situation-trajectory__body">
           <aside class="situation-trajectory__left" aria-label="Sujets">${leftColumnHtml}</aside>

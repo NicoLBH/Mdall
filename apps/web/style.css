@@ -10130,6 +10130,7 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
 }
 
 .situation-trajectory{
+  --situation-trajectory-left-width:320px;
   display:flex;
   flex-direction:column;
   min-height:100%;
@@ -10165,14 +10166,43 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
 }
 
 .situation-trajectory__timeline{
+  position:relative;
+  display:grid;
+  grid-template-columns:minmax(72px, var(--situation-trajectory-left-width)) minmax(0, 1fr);
   min-height:42px;
   border-bottom:1px solid var(--borderColor-default, #30363d);
   background:color-mix(in srgb, var(--bgColor-default, #0d1117) 82%, white 18%);
 }
 
+.situation-trajectory__timeline-left{
+  border-right:1px solid var(--borderColor-default, #30363d);
+}
+
+.situation-trajectory__timeline-track{
+  position:relative;
+}
+
+.situation-trajectory__splitter{
+  position:absolute;
+  top:50%;
+  left:0;
+  transform:translate(-50%, -50%);
+  width:20px;
+  height:20px;
+  border:1px solid var(--borderColor-default, #30363d);
+  border-radius:6px;
+  color:var(--fgColor-muted, #8b949e);
+  background:var(--bgColor-default, #0d1117);
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  cursor:col-resize;
+  z-index:3;
+}
+
 .situation-trajectory__body{
   display:grid;
-  grid-template-columns:minmax(72px, 340px) minmax(0, 1fr);
+  grid-template-columns:minmax(72px, var(--situation-trajectory-left-width)) minmax(0, 1fr);
   min-height:0;
   flex:1 1 auto;
 }
@@ -10206,16 +10236,18 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
 }
 
 .situation-trajectory__subject-row{
-  min-height:36px;
+  height:40px;
+  min-height:40px;
   border-bottom:1px solid var(--borderColor-muted, #21262d);
 }
 
 .situation-trajectory__subject-main{
-  min-height:36px;
+  height:40px;
+  min-height:40px;
   display:flex;
   align-items:center;
   gap:8px;
-  padding:6px 10px;
+  padding:8px 10px;
   min-width:0;
   white-space:nowrap;
 }
@@ -10260,6 +10292,7 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   padding:0;
   margin:0;
   min-width:0;
+  flex:1 1 auto;
   overflow:hidden;
   text-overflow:ellipsis;
   white-space:nowrap;
