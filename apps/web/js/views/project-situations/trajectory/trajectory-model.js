@@ -122,8 +122,8 @@ function resolveStatusAtTimestamp(statusPoints = [], targetTs, fallback = "open"
 
 function toStatusIcon(status = "open") {
   const normalized = normalizeStatus(status);
-  if (normalized === "closed_invalid") return "rejected";
-  if (normalized === "closed_duplicate") return "close-duplicate";
+  if (normalized === "closed_invalid") return "reject";
+  if (normalized === "closed_duplicate") return "close";
   if (normalized.startsWith("closed")) return "close";
   return "open";
 }

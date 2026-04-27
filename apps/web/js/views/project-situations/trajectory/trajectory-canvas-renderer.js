@@ -70,15 +70,23 @@ function setupCanvas(canvas, viewportWidth, viewportHeight) {
   return { ctx, width, height, dpr };
 }
 
-function drawVerticalLine(ctx, { x, height, color = "#cf222e", alpha = 1, dashed = false }) {
+function drawVerticalLine(ctx, {
+  x,
+  height,
+  color = "#cf222e",
+  alpha = 1,
+  dashed = false,
+  lineWidth = 1
+}) {
   ctx.save();
   ctx.strokeStyle = color;
   ctx.globalAlpha = alpha;
-  ctx.lineWidth = 1;
+  ctx.lineWidth = lineWidth;
   if (dashed) ctx.setLineDash([4, 4]);
+  const alignX = lineWidth % 2 === 1 ? x + 0.5 : x;
   ctx.beginPath();
-  ctx.moveTo(x + 0.5, 0);
-  ctx.lineTo(x + 0.5, height);
+  ctx.moveTo(alignX, 0);
+  ctx.lineTo(alignX, height);
   ctx.stroke();
   ctx.restore();
 }
@@ -107,7 +115,15 @@ function drawStatusIcon(ctx, { x, y, icon = "open" }) {
     ctx.beginPath();
     ctx.arc(x, y, 4, 0, Math.PI * 2);
     ctx.fill();
-  } else if (icon === "rejected") {
+  } else if (icon === "close") {
+    ctx.fillStyle = "#8c959f";
+    ctx.strokeStyle = "#8c959f";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(x, y, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  } else if (icon === "rejected" || icon === "reject") {
     ctx.strokeStyle = "#cf222e";
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -177,7 +193,7 @@ function resolvePointIcon(point = {}, previousPoint = null) {
   if (source === "subject_reopened") return "reopen";
   if (source === "subject_closed") return "close";
   const status = String(point?.status || "").trim().toLowerCase();
-  if (["closed_invalid", "invalid", "rejected"].includes(status)) return "rejected";
+  if (["closed_invalid", "invalid", "rejected"].includes(status)) return "reject";
   if (["closed", "closed_duplicate", "duplicate"].includes(status)) return "close";
   if (previousPoint && String(previousPoint?.status || "").trim().toLowerCase() !== "open") return "reopen";
   return "open";
@@ -315,7 +331,7 @@ export function renderTrajectoryCanvas({
   const todayTs = resolveTodayTimestamp(timeScale);
   if (todayTs >= visibleStartTs && todayTs <= visibleEndTs) {
     const x = timeScale.timeToX(todayTs) - scrollLeft;
-    drawVerticalLine(ctx, { x, height, color: "#cf222e", alpha: 1 });
+    drawVerticalLine(ctx, { x, height, color: "rgb(31, 11, 235)", alpha: 1, lineWidth: 2 });
   }
 
   const objectiveTimestamps = collectObjectiveVerticalTimestamps(safeRows);
