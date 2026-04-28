@@ -200,13 +200,13 @@ function createHierarchyPath({ x, parentY, childY, isRemoved = false, isReverse 
     const circle = document.createElementNS(SVG_NS, "circle");
     circle.setAttribute("cx", String(laneStartX));
     circle.setAttribute("cy", String(startY));
-    circle.setAttribute("r", "2.5");
+    circle.setAttribute("r", "5");
     circle.setAttribute("class", `situation-trajectory__hierarchy-link${isRemoved ? " is-removed" : ""}`);
     return circle;
   })();
 
   const arrow = document.createElementNS(SVG_NS, "polygon");
-  const arrowSize = 4;
+  const arrowSize = 8;
   arrow.setAttribute(
     "points",
     [
