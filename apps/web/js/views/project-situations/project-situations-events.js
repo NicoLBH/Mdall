@@ -756,7 +756,11 @@ export function createProjectSituationsEvents({
       "subject_parent_added",
       "subject_parent_removed",
       "subject_child_added",
-      "subject_child_removed"
+      "subject_child_removed",
+      "subject_blocked_by_added",
+      "subject_blocked_by_removed",
+      "subject_blocking_for_added",
+      "subject_blocking_for_removed"
     ]);
     return Object.values(eventsBySubjectId)
       .flatMap((events) => (Array.isArray(events) ? events : []))
@@ -1884,6 +1888,75 @@ export function createProjectSituationsEvents({
   }
 
   function bindEvents(root) {
+    function ensureTrajectoryZoomDropdownHost() {
+      let host = document.getElementById("trajectoryZoomDropdownHost");
+      if (!host) {
+        host = document.createElement("div");
+        host.id = "trajectoryZoomDropdownHost";
+        host.className = "trajectory-zoom-dropdown-host";
+        host.setAttribute("aria-hidden", "true");
+        document.body.appendChild(host);
+      }
+      return host;
+    }
+
+    function closeTrajectoryZoomDropdown(rootNode = null) {
+      const host = ensureTrajectoryZoomDropdownHost();
+      const openMenu = host.querySelector("[data-situation-trajectory-zoom-menu]");
+      const ownerDropdownId = String(host.dataset.ownerDropdownId || "").trim();
+      if (openMenu && ownerDropdownId) {
+        const ownerDropdown = document.querySelector(`[data-situation-trajectory-zoom-dropdown-id="${CSS.escape(ownerDropdownId)}"]`);
+        const ownerAnchor = ownerDropdown?.querySelector?.("[data-situation-trajectory-zoom-menu-anchor]");
+        if (ownerAnchor) ownerAnchor.appendChild(openMenu);
+      }
+      host.innerHTML = "";
+      host.dataset.ownerDropdownId = "";
+      host.style.left = "0px";
+      host.style.top = "0px";
+      host.setAttribute("aria-hidden", "true");
+
+      const searchRoot = rootNode || root || document;
+      searchRoot.querySelectorAll("[data-situation-trajectory-zoom-menu]").forEach((node) => {
+        node.classList.remove("gh-menu--open");
+        node.hidden = true;
+      });
+      searchRoot.querySelectorAll("[data-situation-trajectory-zoom-trigger]").forEach((node) => {
+        node.setAttribute("aria-expanded", "false");
+      });
+    }
+
+    function openTrajectoryZoomDropdown(triggerNode, menuNode) {
+      const host = ensureTrajectoryZoomDropdownHost();
+      const dropdownNode = triggerNode?.closest?.(".situation-trajectory__zoom-dropdown");
+      if (!dropdownNode || !menuNode) return;
+      if (!dropdownNode.dataset.situationTrajectoryZoomDropdownId) {
+        dropdownNode.dataset.situationTrajectoryZoomDropdownId = `trajectory-zoom-${Math.random().toString(36).slice(2)}`;
+      }
+      const dropdownId = dropdownNode.dataset.situationTrajectoryZoomDropdownId;
+      dropdownNode.setAttribute("data-situation-trajectory-zoom-dropdown-id", dropdownId);
+
+      const triggerRect = triggerNode.getBoundingClientRect();
+      host.innerHTML = "";
+      host.appendChild(menuNode);
+      host.dataset.ownerDropdownId = dropdownId;
+      host.setAttribute("aria-hidden", "false");
+      menuNode.hidden = false;
+      menuNode.classList.add("gh-menu--open");
+      triggerNode.setAttribute("aria-expanded", "true");
+
+      const menuRect = menuNode.getBoundingClientRect();
+      const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
+      const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+      const margin = 12;
+      let left = triggerRect.right - menuRect.width;
+      let top = triggerRect.bottom + 6;
+      if (left < margin) left = margin;
+      if (left + menuRect.width > viewportWidth - margin) left = Math.max(margin, viewportWidth - menuRect.width - margin);
+      if (top + menuRect.height > viewportHeight - margin) top = Math.max(margin, triggerRect.top - menuRect.height - 6);
+      host.style.left = `${Math.round(left)}px`;
+      host.style.top = `${Math.round(top)}px`;
+    }
+
     const openButton = root.querySelector("#openCreateSituationButton");
     if (openButton) {
       openButton.onclick = () => openCreateModal(root);
@@ -2053,17 +2126,9 @@ export function createProjectSituationsEvents({
         const menuNode = dropdownNode?.querySelector("[data-situation-trajectory-zoom-menu]");
         if (!menuNode) return;
         const isOpen = menuNode.classList.contains("gh-menu--open");
-        root.querySelectorAll("[data-situation-trajectory-zoom-menu]").forEach((node) => {
-          node.classList.remove("gh-menu--open");
-          node.hidden = true;
-        });
-        root.querySelectorAll("[data-situation-trajectory-zoom-trigger]").forEach((node) => {
-          node.setAttribute("aria-expanded", "false");
-        });
+        closeTrajectoryZoomDropdown(root);
         if (!isOpen) {
-          menuNode.hidden = false;
-          menuNode.classList.add("gh-menu--open");
-          triggerNode.setAttribute("aria-expanded", "true");
+          openTrajectoryZoomDropdown(triggerNode, menuNode);
         }
       });
     });
@@ -2083,14 +2148,10 @@ export function createProjectSituationsEvents({
     if (!root.dataset.trajectoryZoomDropdownDocBound) {
       root.dataset.trajectoryZoomDropdownDocBound = "true";
       document.addEventListener("click", () => {
-        root.querySelectorAll("[data-situation-trajectory-zoom-menu]").forEach((node) => {
-          node.classList.remove("gh-menu--open");
-          node.hidden = true;
-        });
-        root.querySelectorAll("[data-situation-trajectory-zoom-trigger]").forEach((node) => {
-          node.setAttribute("aria-expanded", "false");
-        });
+        closeTrajectoryZoomDropdown(root);
       });
+      window.addEventListener("resize", () => closeTrajectoryZoomDropdown(root));
+      window.addEventListener("scroll", () => closeTrajectoryZoomDropdown(root), true);
     }
     bindSituationGridEditableCells(root);
     bindSituationGridDnd(root);
