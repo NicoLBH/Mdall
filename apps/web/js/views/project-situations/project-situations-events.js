@@ -37,6 +37,12 @@ const TRAJECTORY_LEFT_COLUMN_WIDTH = {
   default: 320
 };
 const TRAJECTORY_ROW_HEIGHT = 40;
+const TRAJECTORY_ZOOM_VALUES = new Set(["hour", "half-day", "day", "week", "month"]);
+
+function normalizeTrajectoryZoom(value, fallback = "day") {
+  const normalized = String(value || "").trim().toLowerCase();
+  return TRAJECTORY_ZOOM_VALUES.has(normalized) ? normalized : fallback;
+}
 
 function parseLocalDate(value) {
   if (value instanceof Date) return new Date(value.getTime());
@@ -588,6 +594,14 @@ export function createProjectSituationsEvents({
     return store.situationsView.trajectoryLeftColumnWidthBySituationId;
   }
 
+  function ensureTrajectoryZoomBySituationId() {
+    if (!store.situationsView || typeof store.situationsView !== "object") store.situationsView = {};
+    if (!store.situationsView.trajectoryZoomBySituationId || typeof store.situationsView.trajectoryZoomBySituationId !== "object") {
+      store.situationsView.trajectoryZoomBySituationId = {};
+    }
+    return store.situationsView.trajectoryZoomBySituationId;
+  }
+
   function normalizeTrajectoryColumnWidth(width) {
     const numericWidth = Number(width);
     if (!Number.isFinite(numericWidth)) return TRAJECTORY_LEFT_COLUMN_WIDTH.default;
@@ -792,28 +806,53 @@ export function createProjectSituationsEvents({
 
     const todayIsoDate = toLocalIsoDate(new Date());
 
+    const zoom = String(timeScale.zoom || "day").trim().toLowerCase();
     const dayTicksHtml = ticks.map((tick, index) => {
       const nextTick = ticks[index + 1];
       const tickWidth = Math.max(24, (nextTick?.x ?? timeScale.totalWidth) - tick.x);
       const date = tick.date instanceof Date ? tick.date : new Date(tick.timestamp);
-      const dayLabel = String(date.getDate());
       const isoDate = toLocalIsoDate(date);
       const isToday = isoDate === todayIsoDate;
-      return `<time role="columnheader" data-index="${index}" datetime="${isoDate}" class="situation-trajectory__timeline-day${isToday ? " is-today" : ""}" style="left:${tick.x}px;width:${tickWidth}px;">${dayLabel}</time>`;
+      let label = String(date.getDate());
+      if (zoom === "hour") {
+        label = `${String(date.getHours()).padStart(2, "0")}:00`;
+      } else if (zoom === "half-day") {
+        label = date.getHours() < 12 ? "AM" : "PM";
+      } else if (zoom === "week") {
+        const end = new Date(date.getTime());
+        end.setDate(end.getDate() + 6);
+        const startLabel = date.toLocaleDateString("fr-FR", { day: "2-digit", month: "short" });
+        const endLabel = end.toLocaleDateString("fr-FR", { day: "2-digit", month: "short" });
+        label = `${startLabel} → ${endLabel}`;
+      } else if (zoom === "month") {
+        label = date.toLocaleDateString("fr-FR", { month: "short" });
+      }
+      return `<time role="columnheader" data-index="${index}" datetime="${isoDate}" class="situation-trajectory__timeline-day${isToday ? " is-today" : ""}" style="left:${tick.x}px;width:${tickWidth}px;">${escapeHtml(label)}</time>`;
     }).join("");
 
     const monthTicksHtml = ticks
       .filter((tick, index) => {
         const date = tick.date instanceof Date ? tick.date : new Date(tick.timestamp);
-        return index === 0 || date.getDate() === 1;
+        if (index === 0) return true;
+        const previousDate = ticks[index - 1]?.date instanceof Date ? ticks[index - 1].date : new Date(ticks[index - 1]?.timestamp);
+        if (zoom === "hour" || zoom === "half-day" || zoom === "day") {
+          return previousDate
+            ? date.getMonth() !== previousDate.getMonth() || date.getFullYear() !== previousDate.getFullYear()
+            : true;
+        }
+        if (zoom === "week") {
+          return previousDate
+            ? date.getFullYear() !== previousDate.getFullYear() || date.getMonth() !== previousDate.getMonth()
+            : true;
+        }
+        return previousDate ? date.getFullYear() !== previousDate.getFullYear() : true;
       })
       .map((tick) => {
         const date = tick.date instanceof Date ? tick.date : new Date(tick.timestamp);
-        const label = date.toLocaleDateString("fr-FR", {
-          month: "long",
-          year: "numeric"
-        });
-        return `<time datetime="${toLocalIsoDate(date)}" class="situation-trajectory__timeline-month" style="left:${tick.x}px;">${label}</time>`;
+        const label = zoom === "month"
+          ? date.toLocaleDateString("fr-FR", { year: "numeric" })
+          : date.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+        return `<time datetime="${toLocalIsoDate(date)}" class="situation-trajectory__timeline-month" style="left:${tick.x}px;">${escapeHtml(label)}</time>`;
       }).join("");
 
     const objectiveLabelsHtml = Object.values(objectivesById || {})
@@ -899,10 +938,11 @@ export function createProjectSituationsEvents({
           const timelineStartDate = new Date(effectiveTimelineAnchorDate);
           timelineStartDate.setUTCMonth(timelineStartDate.getUTCMonth() - 1);
 
+          const zoomBySituationId = ensureTrajectoryZoomBySituationId();
           const timeScale = createTrajectoryTimeScale({
             startDate: timelineStartDate,
             endDate: resolveTrajectoryTimelineEndDate(),
-            zoom: "day"
+            zoom: normalizeTrajectoryZoom(zoomBySituationId[situationId], "day")
           });
 
           if (historyState.status !== "ready" || historyState.isComplete !== true) {
@@ -1957,6 +1997,53 @@ export function createProjectSituationsEvents({
       node.addEventListener("change", applyOpacity);
       applyOpacity();
     });
+    root.querySelectorAll("[data-situation-trajectory-zoom-trigger]").forEach((triggerNode) => {
+      triggerNode.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const dropdownNode = triggerNode.closest(".situation-trajectory__zoom-dropdown");
+        const menuNode = dropdownNode?.querySelector("[data-situation-trajectory-zoom-menu]");
+        if (!menuNode) return;
+        const isOpen = menuNode.classList.contains("gh-menu--open");
+        root.querySelectorAll("[data-situation-trajectory-zoom-menu]").forEach((node) => {
+          node.classList.remove("gh-menu--open");
+          node.hidden = true;
+        });
+        root.querySelectorAll("[data-situation-trajectory-zoom-trigger]").forEach((node) => {
+          node.setAttribute("aria-expanded", "false");
+        });
+        if (!isOpen) {
+          menuNode.hidden = false;
+          menuNode.classList.add("gh-menu--open");
+          triggerNode.setAttribute("aria-expanded", "true");
+        }
+      });
+    });
+    root.querySelectorAll("[data-situation-trajectory-zoom-option]").forEach((optionNode) => {
+      optionNode.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const nextZoom = normalizeTrajectoryZoom(optionNode.getAttribute("data-situation-trajectory-zoom-option"), "day");
+        const menuNode = optionNode.closest("[data-situation-trajectory-zoom-menu]");
+        const situationId = String(menuNode?.getAttribute("data-situation-trajectory-zoom-situation-id") || "").trim();
+        if (!situationId) return;
+        const bySituationId = ensureTrajectoryZoomBySituationId();
+        bySituationId[situationId] = nextZoom;
+        rerender(root);
+      });
+    });
+    if (!root.dataset.trajectoryZoomDropdownDocBound) {
+      root.dataset.trajectoryZoomDropdownDocBound = "true";
+      document.addEventListener("click", () => {
+        root.querySelectorAll("[data-situation-trajectory-zoom-menu]").forEach((node) => {
+          node.classList.remove("gh-menu--open");
+          node.hidden = true;
+        });
+        root.querySelectorAll("[data-situation-trajectory-zoom-trigger]").forEach((node) => {
+          node.setAttribute("aria-expanded", "false");
+        });
+      });
+    }
     bindSituationGridEditableCells(root);
     bindSituationGridDnd(root);
 
