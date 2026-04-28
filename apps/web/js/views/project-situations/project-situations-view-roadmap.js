@@ -53,10 +53,33 @@ function renderIssueStateIcon(subject = {}, { isBlocked = false } = {}) {
   }${blockedIconHtml}</span>`;
 }
 
-function renderZoomOptions() {
-  return TRAJECTORY_ZOOM_OPTIONS
-    .map((option) => `<option value="${option.value}">${escapeHtml(option.label)}</option>`)
-    .join("");
+function normalizeTrajectoryZoom(value, fallback = "day") {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (TRAJECTORY_ZOOM_VALUES.has(normalized)) return normalized;
+  return fallback;
+}
+
+function getTrajectoryZoomLabel(zoom = "day") {
+  const normalized = normalizeTrajectoryZoom(zoom);
+  return TRAJECTORY_ZOOM_OPTIONS.find((option) => option.value === normalized)?.label || "Jour";
+}
+
+function renderZoomDropdownOptions(selectedZoom = "day") {
+  const normalizedSelectedZoom = normalizeTrajectoryZoom(selectedZoom);
+  return TRAJECTORY_ZOOM_OPTIONS.map((option) => {
+    const normalizedOption = normalizeTrajectoryZoom(option.value);
+    return `
+      <button
+        type="button"
+        class="gh-menu__item${normalizedOption === normalizedSelectedZoom ? " is-active" : ""}"
+        role="menuitemradio"
+        aria-checked="${normalizedOption === normalizedSelectedZoom ? "true" : "false"}"
+        data-situation-trajectory-zoom-option="${escapeHtml(normalizedOption)}"
+      >
+        ${escapeHtml(option.label)}
+      </button>
+    `;
+  }).join("");
 }
 
 function normalizeTrajectoryZoom(value, fallback = "day") {
@@ -216,11 +239,11 @@ export function renderSituationRoadmapView(situation, subjects = [], options = {
                 <output class="mono" data-situation-trajectory-opacity-value="${escapeHtml(situationId)}">${escapeHtml(cardOpacityLabel)}</output>
               </label>
               <div class="situation-trajectory__zoom">
-                <span>Zoom</span>
                 <div class="situation-trajectory__zoom-dropdown">
                   <button
                     type="button"
                     class="gh-btn situation-trajectory__zoom-trigger"
+                    aria-label="Choisir le zoom de la trajectoire"
                     aria-haspopup="true"
                     aria-expanded="false"
                     data-situation-trajectory-zoom-trigger
@@ -240,10 +263,6 @@ export function renderSituationRoadmapView(situation, subjects = [], options = {
                     ${renderZoomDropdownOptions(selectedZoom)}
                   </div>
                 </div>
-                <label class="sr-only" for="trajectoryZoomSelect-${escapeHtml(situationId)}">Zoom trajectoire</label>
-                <select id="trajectoryZoomSelect-${escapeHtml(situationId)}" name="trajectoryZoom" data-situation-trajectory-zoom-select hidden>
-                  ${renderZoomOptions()}
-                </select>
               </div>
             </div>
             <div class="situation-trajectory__timeline-content" data-situation-trajectory-timeline-content></div>
