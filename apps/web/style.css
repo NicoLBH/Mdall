@@ -10422,7 +10422,15 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
 }
 
 .situation-trajectory__segment--red .situation-trajectory__segment-label::before{
-  --situation-trajectory-segment-accent-color:rgb(207, 34, 46);
+  display:none;
+}
+
+.situation-trajectory__segment--dashed.situation-trajectory__segment--gray .situation-trajectory__segment-label{
+  display:none;
+}
+
+.situation-trajectory__segment--red:not(.situation-trajectory__segment--dashed) .situation-trajectory__segment-label{
+  display:none;
 }
 
 .situation-trajectory__overdue-line{
@@ -10551,6 +10559,10 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
 
 .situation-trajectory__point--milestone-removed .situation-trajectory__point-icon svg{
   color:var(--muted);
+}
+
+.situation-trajectory__point--milestone{
+  transform:translate(-50%, calc(-50% - 28px));
 }
 
 .situation-trajectory__svg-line{
