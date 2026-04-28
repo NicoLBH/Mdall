@@ -155,8 +155,8 @@ function buildRelationLinks(relationEvents = [], { relationType = "hierarchy" } 
 
     if (isBlockedRelation) {
       const isBlockedByEvent = type.startsWith("subject_blocked_by_");
-      sourceId = isBlockedByEvent ? counterpartId : subjectId;
-      targetId = isBlockedByEvent ? subjectId : counterpartId;
+      sourceId = isBlockedByEvent ? subjectId : counterpartId;
+      targetId = isBlockedByEvent ? counterpartId : subjectId;
     } else {
       const isParentEvent = type.startsWith("subject_parent_");
       sourceId = isParentEvent ? counterpartId : subjectId;

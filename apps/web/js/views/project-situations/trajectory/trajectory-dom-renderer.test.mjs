@@ -532,10 +532,14 @@ test("renderTrajectoryDom dessine les liens bloqué par en rouge avec icône blo
 
   const blockedPaths = queryByClass(svg, "situation-trajectory__hierarchy-link--blocked")
     .filter((node) => node.tagName === "PATH");
+  const blockedArrows = queryByClass(svg, "situation-trajectory__hierarchy-link--blocked")
+    .filter((node) => node.tagName === "POLYGON");
   const blockedIcons = queryByClass(svg, "situation-trajectory__hierarchy-link--blocked")
     .filter((node) => node.tagName === "SVG");
 
   assert.equal(blockedPaths.length, 1);
+  assert.equal(blockedArrows.length, 1);
+  assert.ok(String(blockedArrows[0].getAttribute("points") || "").includes(",10"));
   assert.equal(blockedIcons.length, 1);
   assert.equal(blockedIcons[0].getAttribute("width"), "12");
   assert.equal(blockedIcons[0].childNodes[0]?.tagName, "CIRCLE");
