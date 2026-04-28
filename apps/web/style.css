@@ -10374,7 +10374,12 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
 }
 
 .situation-trajectory__segment--dashed{
-  border-style:dashed;
+  height:1px;
+  border:none;
+  border-top:1px dashed var(--situation-trajectory-segment-accent-color);
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
 }
 
 .situation-trajectory__segment--dashed.situation-trajectory__segment--green{
@@ -10488,6 +10493,11 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   justify-content:center;
   background:rgb(21, 27, 35);
   z-index:3;
+}
+
+.situation-trajectory__marker{
+  width:16px;
+  height:16px;
 }
 
 .situation-trajectory__point-icon{
