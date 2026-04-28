@@ -10621,6 +10621,7 @@ circle.situation-trajectory__hierarchy-link{
   stroke:none;
 }
 
+.situation-trajectory__hierarchy-link--blocked[points],
 polygon.situation-trajectory__hierarchy-link--blocked,
 circle.situation-trajectory__hierarchy-link--blocked,
 .situation-trajectory__hierarchy-link--blocked-icon .situation-trajectory__hierarchy-link--blocked-icon-glyph{
