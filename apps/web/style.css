@@ -10598,7 +10598,7 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
 .situation-trajectory__hierarchy-link{
   fill:none;
   stroke:rgb(139, 148, 158);
-  stroke-width:3;
+  stroke-width:1.5;
   vector-effect:non-scaling-stroke;
 }
 
