@@ -78,6 +78,7 @@ export function createProjectSituationsKanbanView({
   store,
   getSujetKanbanStatus,
   setSujetKanbanStatus,
+  reorderSituationKanbanSubjects,
   openSubjectDrilldown,
   refreshAfterKanbanChange
 }) {
@@ -128,7 +129,7 @@ export function createProjectSituationsKanbanView({
             </header>
             <div class="situation-kanban__cards" data-situation-kanban-dropzone="${escapeHtml(column.key)}" data-situation-kanban-situation-id="${escapeHtml(normalizedSituationId)}">
               ${cardsByColumn[column.key].length
-                ? cardsByColumn[column.key].map((subject) => {
+                ? cardsByColumn[column.key].map((subject, index) => {
                     const progress = getSubjectProgress(subject, subjectsById, childrenBySubjectId);
                     const isBlocked = hasBlockedByRelation(subject?.id, store, rawSubjectsResult);
                     return `
@@ -138,6 +139,7 @@ export function createProjectSituationsKanbanView({
                         data-situation-kanban-subject-id="${escapeHtml(subject.id)}"
                         data-situation-kanban-status="${escapeHtml(column.key)}"
                         data-situation-kanban-situation-id="${escapeHtml(normalizedSituationId)}"
+                        data-situation-kanban-order-index="${escapeHtml(String(index))}"
                         draggable="true"
                       >
                         <div class="situation-kanban-card__meta">
@@ -175,6 +177,93 @@ export function createProjectSituationsKanbanView({
   }
 
   function bindKanbanEvents(root) {
+    const dragState = {
+      subjectId: "",
+      situationId: "",
+      fromStatus: "",
+      draggingCard: null,
+      sourceZone: null
+    };
+
+    function clearDropIndicators() {
+      root.querySelectorAll(".situation-kanban__col").forEach((col) => col.classList.remove("is-drop-target"));
+      root.querySelectorAll(".situation-kanban-card").forEach((card) => card.classList.remove("is-drop-before"));
+    }
+
+    function getZoneCards(zone, { includeDragging = true } = {}) {
+      return [...zone.querySelectorAll("[data-situation-kanban-card]")]
+        .filter((card) => includeDragging || !card.classList.contains("is-dragging"));
+    }
+
+    function getInsertBeforeCard(zone, clientY) {
+      const cards = getZoneCards(zone, { includeDragging: false });
+      let closest = null;
+      let closestOffset = Number.NEGATIVE_INFINITY;
+      cards.forEach((card) => {
+        const rect = card.getBoundingClientRect();
+        const offset = clientY - (rect.top + (rect.height / 2));
+        if (offset < 0 && offset > closestOffset) {
+          closestOffset = offset;
+          closest = card;
+        }
+      });
+      return closest;
+    }
+
+    function syncZoneEmptyState(zone) {
+      const cards = getZoneCards(zone);
+      const emptySelector = ".situation-kanban__empty";
+      const existingEmpty = zone.querySelector(emptySelector);
+      if (!cards.length) {
+        if (!existingEmpty) {
+          const node = document.createElement("div");
+          node.className = "situation-kanban__empty";
+          node.textContent = "Aucun sujet dans cette colonne.";
+          zone.appendChild(node);
+        }
+        return;
+      }
+      if (existingEmpty) existingEmpty.remove();
+    }
+
+    function syncZoneCount(zone) {
+      const countNode = zone.closest(".situation-kanban__col")?.querySelector(".situation-kanban__count");
+      if (!countNode) return;
+      countNode.textContent = String(getZoneCards(zone).length);
+    }
+
+    function syncAllZoneUi() {
+      root.querySelectorAll("[data-situation-kanban-dropzone]").forEach((zone) => {
+        syncZoneEmptyState(zone);
+        syncZoneCount(zone);
+      });
+    }
+
+    function setCardStatusAttribute(card, status) {
+      const normalizedStatus = String(status || "").trim();
+      if (!normalizedStatus) return;
+      card.setAttribute("data-situation-kanban-status", normalizedStatus);
+    }
+
+    function applyDragPreview(zone, clientY) {
+      const draggingCard = dragState.draggingCard;
+      if (!draggingCard) return;
+      const beforeCard = getInsertBeforeCard(zone, clientY);
+      root.querySelectorAll(".situation-kanban-card").forEach((card) => card.classList.remove("is-drop-before"));
+      if (beforeCard) beforeCard.classList.add("is-drop-before");
+      if (beforeCard) {
+        if (beforeCard !== draggingCard.nextElementSibling) zone.insertBefore(draggingCard, beforeCard);
+      } else {
+        zone.appendChild(draggingCard);
+      }
+      setCardStatusAttribute(draggingCard, zone.getAttribute("data-situation-kanban-dropzone"));
+      syncAllZoneUi();
+    }
+
+    function getOrderedSubjectIds(zone) {
+      return getZoneCards(zone).map((card) => normalizeId(card.getAttribute("data-situation-kanban-subject-id"))).filter(Boolean);
+    }
+
     root.querySelectorAll("[data-open-situation-subject]").forEach((node) => {
       node.addEventListener("click", (event) => {
         event.preventDefault();
@@ -191,6 +280,11 @@ export function createProjectSituationsKanbanView({
         const situationId = String(node.getAttribute("data-situation-kanban-situation-id") || "").trim();
         const fromStatus = String(node.getAttribute("data-situation-kanban-status") || "").trim();
         if (!subjectId || !situationId || !fromStatus) return;
+        dragState.subjectId = subjectId;
+        dragState.situationId = situationId;
+        dragState.fromStatus = fromStatus;
+        dragState.draggingCard = node;
+        dragState.sourceZone = node.closest("[data-situation-kanban-dropzone]");
         node.classList.add("is-dragging");
         event.dataTransfer.effectAllowed = "move";
         event.dataTransfer.setData("application/json", JSON.stringify({ subjectId, situationId, fromStatus }));
@@ -198,7 +292,13 @@ export function createProjectSituationsKanbanView({
 
       node.addEventListener("dragend", () => {
         node.classList.remove("is-dragging");
-        root.querySelectorAll(".situation-kanban__col").forEach((col) => col.classList.remove("is-drop-target"));
+        dragState.subjectId = "";
+        dragState.situationId = "";
+        dragState.fromStatus = "";
+        dragState.draggingCard = null;
+        dragState.sourceZone = null;
+        clearDropIndicators();
+        syncAllZoneUi();
       });
     });
 
@@ -206,31 +306,43 @@ export function createProjectSituationsKanbanView({
       zone.addEventListener("dragover", (event) => {
         event.preventDefault();
         event.dataTransfer.dropEffect = "move";
+        clearDropIndicators();
         zone.closest(".situation-kanban__col")?.classList.add("is-drop-target");
+        applyDragPreview(zone, event.clientY);
       });
 
       zone.addEventListener("dragleave", () => {
         zone.closest(".situation-kanban__col")?.classList.remove("is-drop-target");
+        root.querySelectorAll(".situation-kanban-card").forEach((card) => card.classList.remove("is-drop-before"));
       });
 
       zone.addEventListener("drop", async (event) => {
         event.preventDefault();
-        zone.closest(".situation-kanban__col")?.classList.remove("is-drop-target");
-        let payload = null;
-        try {
-          payload = JSON.parse(event.dataTransfer.getData("application/json") || "{}");
-        } catch {
-          payload = null;
-        }
-        const subjectId = String(payload?.subjectId || "").trim();
-        const situationId = String(payload?.situationId || "").trim();
-        const fromStatus = String(payload?.fromStatus || "").trim();
+        clearDropIndicators();
+        applyDragPreview(zone, event.clientY);
+
+        const subjectId = dragState.subjectId || "";
+        const situationId = dragState.situationId || "";
+        const fromStatus = dragState.fromStatus || "";
         const targetStatus = String(zone.getAttribute("data-situation-kanban-dropzone") || "").trim();
-        if (!subjectId || !situationId || !targetStatus || fromStatus === targetStatus) return;
+        if (!subjectId || !situationId || !targetStatus) return;
+
+        const targetOrderedSubjectIds = getOrderedSubjectIds(zone);
+        const sourceOrderedSubjectIds = dragState.sourceZone && dragState.sourceZone !== zone
+          ? getOrderedSubjectIds(dragState.sourceZone)
+          : [];
 
         try {
-          const updated = await setSujetKanbanStatus(subjectId, targetStatus, { situationId });
-          if (!updated) return;
+          if (fromStatus !== targetStatus) {
+            const updated = await setSujetKanbanStatus(subjectId, targetStatus, { situationId });
+            if (!updated) return;
+            if (Array.isArray(sourceOrderedSubjectIds) && sourceOrderedSubjectIds.length) {
+              await reorderSituationKanbanSubjects?.(situationId, fromStatus, sourceOrderedSubjectIds);
+            }
+          }
+          if (Array.isArray(targetOrderedSubjectIds) && targetOrderedSubjectIds.length) {
+            await reorderSituationKanbanSubjects?.(situationId, targetStatus, targetOrderedSubjectIds);
+          }
           await refreshAfterKanbanChange?.();
         } catch (error) {
           console.error("situation kanban drop failed", error);

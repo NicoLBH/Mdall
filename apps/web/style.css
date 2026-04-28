@@ -11251,6 +11251,11 @@ circle.situation-trajectory__hierarchy-link--blocked,
   opacity:.55;
 }
 
+.situation-kanban-card.is-drop-before{
+  border-top-color:var(--fgColor-accent, #2f81f7);
+  box-shadow:0 -2px 0 0 var(--fgColor-accent, #2f81f7);
+}
+
 .situation-kanban-card__meta{
   display:flex;
   align-items:center;
