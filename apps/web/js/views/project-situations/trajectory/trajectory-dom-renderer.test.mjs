@@ -258,7 +258,7 @@ test("__trajectoryDomRendererTestUtils expose les helpers clés", () => {
   assert.equal(links.length, 1);
 });
 
-test("renderTrajectoryDom positionne les segments à partir de left (début) et conserve points/markers sur leur date", () => {
+test("renderTrajectoryDom conserve le timestamp réel pour subject_closed en zoom day", () => {
   const originalDocument = globalThis.document;
   globalThis.document = createMockDocument();
 
@@ -274,13 +274,13 @@ test("renderTrajectoryDom positionne les segments à partir de left (début) et 
         {
           subjectId: "subject-1",
           status: "open",
-          startAt: new Date("2026-04-11T00:00:00.000Z"),
-          endAt: new Date("2026-04-19T00:00:00.000Z"),
+          startAt: new Date("2026-04-11T09:27:08.186Z"),
+          endAt: new Date("2026-04-19T22:00:00.000Z"),
           lineColor: "green",
           lineStyle: "solid"
         }
       ],
-      statusPoints: [{ at: new Date("2026-04-13T00:00:00.000Z"), status: "open", source: "subject_created" }],
+      statusPoints: [{ at: new Date("2026-04-19T22:00:00.000Z"), status: "closed", source: "subject_closed" }],
       objectiveMarkers: [{ objectiveId: "obj-1", at: new Date("2026-04-17T00:00:00.000Z"), markerType: "check" }]
     }
   ];
@@ -316,20 +316,88 @@ test("renderTrajectoryDom positionne les segments à partir de left (début) et 
   assert.ok(marker);
 
   const { toRenderTimestamp } = __trajectoryDomRendererTestUtils();
-  const segmentStartTs = toRenderTimestamp("2026-04-11T00:00:00.000Z", timeScale);
-  const segmentEndTs = toRenderTimestamp("2026-04-19T00:00:00.000Z", timeScale);
-  const pointTs = toRenderTimestamp("2026-04-13T00:00:00.000Z", timeScale);
+  const realClosedTs = new Date("2026-04-19T22:00:00.000Z").getTime();
+  const centeredClosedTs = toRenderTimestamp("2026-04-19T22:00:00.000Z", timeScale);
   const markerTs = toRenderTimestamp("2026-04-17T00:00:00.000Z", timeScale);
 
-  const expectedSegmentLeft = `${timeScale.timeToX(segmentStartTs)}px`;
-  const expectedSegmentWidth = `${timeScale.timeToX(segmentEndTs) - timeScale.timeToX(segmentStartTs)}px`;
-  const expectedPointLeft = `${timeScale.timeToX(pointTs)}px`;
+  const expectedPointLeft = `${timeScale.timeToX(realClosedTs)}px`;
+  const centeredPointLeft = `${timeScale.timeToX(centeredClosedTs)}px`;
   const expectedMarkerLeft = `${timeScale.timeToX(markerTs)}px`;
 
-  assert.equal(segment.style.left, expectedSegmentLeft);
-  assert.equal(segment.style.width, expectedSegmentWidth);
   assert.equal(point.style.left, expectedPointLeft);
+  assert.notEqual(point.style.left, centeredPointLeft);
   assert.equal(marker.style.left, expectedMarkerLeft);
+
+  globalThis.document = originalDocument;
+});
+
+test("renderTrajectoryDom calcule left/width des segments depuis les timestamps réels en zoom day", () => {
+  const originalDocument = globalThis.document;
+  globalThis.document = createMockDocument();
+
+  const scene = new MockNode("div");
+  scene.clientHeight = 300;
+  const svg = new MockNode("svg");
+  const itemsRoot = new MockNode("div");
+
+  const rows = [
+    {
+      subjectId: "subject-1",
+      lifecycleSegments: [
+        {
+          subjectId: "subject-1",
+          status: "closed",
+          startAt: new Date("2026-04-11T09:27:08.186Z"),
+          endAt: new Date("2026-04-19T22:00:00.000Z"),
+          lineColor: "green",
+          lineStyle: "solid"
+        }
+      ],
+      statusPoints: [],
+      objectiveMarkers: []
+    }
+  ];
+
+  const timeScale = createTrajectoryTimeScale({
+    startDate: "2026-04-01T00:00:00.000Z",
+    endDate: "2026-04-30T00:00:00.000Z",
+    zoom: "day",
+    pxPerUnit: 12
+  });
+
+  renderTrajectoryDom({
+    scene,
+    svg,
+    itemsRoot,
+    rows,
+    relationEvents: [],
+    timeScale,
+    scrollLeft: 0,
+    scrollTop: 0,
+    viewportWidth: 2000,
+    viewportHeight: 200,
+    rowHeight: 20,
+    overscan: 0
+  });
+
+  const [segment] = queryByClass(itemsRoot, "situation-trajectory__segment");
+  assert.ok(segment);
+
+  const { toRenderTimestamp } = __trajectoryDomRendererTestUtils();
+  const realStartTs = new Date("2026-04-11T09:27:08.186Z").getTime();
+  const realEndTs = new Date("2026-04-19T22:00:00.000Z").getTime();
+  const centeredStartTs = toRenderTimestamp("2026-04-11T09:27:08.186Z", timeScale);
+  const centeredEndTs = toRenderTimestamp("2026-04-19T22:00:00.000Z", timeScale);
+
+  const expectedLeft = `${timeScale.timeToX(realStartTs)}px`;
+  const expectedWidth = `${timeScale.timeToX(realEndTs) - timeScale.timeToX(realStartTs)}px`;
+  const centeredLeft = `${timeScale.timeToX(centeredStartTs)}px`;
+  const centeredWidth = `${timeScale.timeToX(centeredEndTs) - timeScale.timeToX(centeredStartTs)}px`;
+
+  assert.equal(segment.style.left, expectedLeft);
+  assert.equal(segment.style.width, expectedWidth);
+  assert.notEqual(segment.style.left, centeredLeft);
+  assert.notEqual(segment.style.width, centeredWidth);
 
   globalThis.document = originalDocument;
 });
