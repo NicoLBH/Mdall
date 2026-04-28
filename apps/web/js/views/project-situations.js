@@ -108,7 +108,9 @@ async function ensureTrajectoryHistory({ situationId = "", subjects = [] } = {})
     && typeof cached === "object"
     && cached.eventsBySubjectId
     && cached.statusEventsBySubjectId
-    && Array.isArray(cached.relationEvents);
+    && Array.isArray(cached.relationEvents)
+    && cached.historyStatus === "ready"
+    && cached.isComplete === true;
 
 
   if (hasUsableCachedPayload && cachedSignature === subjectIdsSignature) {
@@ -120,11 +122,24 @@ async function ensureTrajectoryHistory({ situationId = "", subjects = [] } = {})
       eventsBySubjectId: {},
       relationEvents: [],
       statusEventsBySubjectId: {},
-      subjectIdsSignature
+      subjectIdsSignature,
+      historyStatus: "ready",
+      isComplete: true,
+      errorMessage: ""
     };
     cacheBySituationId[normalizedSituationId] = emptyPayload;
     return emptyPayload;
   }
+
+  cacheBySituationId[normalizedSituationId] = {
+    eventsBySubjectId: {},
+    relationEvents: [],
+    statusEventsBySubjectId: {},
+    subjectIdsSignature,
+    historyStatus: "loading",
+    isComplete: false,
+    errorMessage: ""
+  };
 
   try {
     const history = await loadProjectSituationsTrajectoryHistory({
@@ -135,22 +150,26 @@ async function ensureTrajectoryHistory({ situationId = "", subjects = [] } = {})
       eventsBySubjectId: history?.eventsBySubjectId && typeof history.eventsBySubjectId === "object" ? history.eventsBySubjectId : {},
       relationEvents: Array.isArray(history?.relationEvents) ? history.relationEvents : [],
       statusEventsBySubjectId: history?.statusEventsBySubjectId && typeof history.statusEventsBySubjectId === "object" ? history.statusEventsBySubjectId : {},
-      subjectIdsSignature
+      subjectIdsSignature,
+      historyStatus: "ready",
+      isComplete: true,
+      errorMessage: ""
     };
     cacheBySituationId[normalizedSituationId] = payload;
     return payload;
   } catch (error) {
     console.error("[trajectory] history.ensure.error", error);
-    const fallbackPayload = hasUsableCachedPayload
-      ? cached
-      : {
-          eventsBySubjectId: {},
-          relationEvents: [],
-          statusEventsBySubjectId: {},
-          subjectIdsSignature
-        };
-    cacheBySituationId[normalizedSituationId] = fallbackPayload;
-    return fallbackPayload;
+    const errorPayload = {
+      eventsBySubjectId: {},
+      relationEvents: [],
+      statusEventsBySubjectId: {},
+      subjectIdsSignature,
+      historyStatus: "error",
+      isComplete: false,
+      errorMessage: error instanceof Error ? error.message : "Impossible de charger l'historique de trajectoire."
+    };
+    cacheBySituationId[normalizedSituationId] = errorPayload;
+    return errorPayload;
   }
 }
 

@@ -704,6 +704,31 @@ export function createProjectSituationsEvents({
     return scoped.statusEventsBySubjectId || scoped.eventsBySubjectId || {};
   }
 
+  function resolveTrajectoryHistoryState(situationId = "", subjects = []) {
+    const bySituationId = store?.projectSubjectsView?.trajectoryHistoryBySituationId;
+    if (!bySituationId || typeof bySituationId !== "object") {
+      return { status: "loading", isComplete: false, errorMessage: "" };
+    }
+    const scoped = bySituationId[situationId];
+    if (!scoped || typeof scoped !== "object") {
+      return { status: "loading", isComplete: false, errorMessage: "" };
+    }
+    const subjectIdsSignature = [...new Set((Array.isArray(subjects) ? subjects : [])
+      .map((subject) => String(subject?.id || "").trim())
+      .filter(Boolean))]
+      .sort((a, b) => a.localeCompare(b))
+      .join(",");
+    const scopedSignature = String(scoped?.subjectIdsSignature || "").trim();
+    if (subjectIdsSignature && scopedSignature && scopedSignature !== subjectIdsSignature) {
+      return { status: "loading", isComplete: false, errorMessage: "" };
+    }
+    return {
+      status: String(scoped?.historyStatus || "").trim().toLowerCase() || "ready",
+      isComplete: scoped?.isComplete === true,
+      errorMessage: String(scoped?.errorMessage || "").trim()
+    };
+  }
+
 
   function resolveTrajectoryRelationEvents(situationId = "") {
     const bySituationId = store?.projectSubjectsView?.trajectoryHistoryBySituationId;
@@ -811,6 +836,11 @@ export function createProjectSituationsEvents({
     timelineContentNode.querySelectorAll(".situation-trajectory__timeline-objective").forEach((objectiveNode) => {
       const halfWidth = Math.round((objectiveNode.offsetWidth || 0) / 2);
       objectiveNode.style.marginLeft = `${-halfWidth}px`;
+      const lineHeight = Math.max(
+        0,
+        (timelineContentNode.clientHeight || 0) - ((objectiveNode.offsetTop || 0) + (objectiveNode.offsetHeight || 0))
+      );
+      objectiveNode.style.setProperty("--trajectory-objective-line-height", `${lineHeight}px`);
     });
   }
 
@@ -852,6 +882,7 @@ export function createProjectSituationsEvents({
           const objectiveIdsBySubjectId = rawSubjectsResult.objectiveIdsBySubjectId || {};
           const objectivesById = rawSubjectsResult.objectivesById || {};
           const historyBySubjectId = resolveTrajectoryHistoryBySubjectId(situationId);
+          const historyState = resolveTrajectoryHistoryState(situationId, subjects);
           const relationEvents = resolveTrajectoryRelationEvents(situationId);
           const situationStartDate = resolveTrajectorySituationStartDate(situationId);
 
@@ -873,6 +904,27 @@ export function createProjectSituationsEvents({
             endDate: resolveTrajectoryTimelineEndDate(),
             zoom: "day"
           });
+
+          if (historyState.status !== "ready" || historyState.isComplete !== true) {
+            if (itemsRootNode) itemsRootNode.innerHTML = "";
+            if (svgNode) svgNode.innerHTML = "";
+            if (spinnerNode) {
+              spinnerNode.hidden = false;
+              const spinnerLabel = spinnerNode.querySelector("span:last-child");
+              if (spinnerLabel) {
+                spinnerLabel.textContent = historyState.status === "error"
+                  ? "Trajectoire indisponible : historique incomplet."
+                  : "Chargement de la trajectoire…";
+              }
+            }
+            console.warn("[trajectory] history.incomplete", {
+              situationId,
+              status: historyState.status,
+              isComplete: historyState.isComplete,
+              message: historyState.errorMessage || ""
+            });
+            return;
+          }
 
           const { rows } = buildTrajectoryModel({
             subjects,
@@ -1840,6 +1892,17 @@ export function createProjectSituationsEvents({
         if (store.situationsView.selectedSituationLayout === nextLayout) return;
         store.situationsView.selectedSituationLayout = nextLayout;
         rerender(root);
+        if (nextLayout === "roadmap" && typeof loadSituationSelection === "function") {
+          const selectedSituationId = String(store?.situationsView?.selectedSituationId || "").trim();
+          if (selectedSituationId) {
+            loadSituationSelection(selectedSituationId)
+              .then(() => rerender(root))
+              .catch((error) => {
+                console.error("[trajectory] history.load.on.layout.error", error);
+                rerender(root);
+              });
+          }
+        }
       }
     });
 
@@ -1870,6 +1933,28 @@ export function createProjectSituationsEvents({
     bindSituationGridColumnResize(root);
     bindTrajectoryColumnResize(root);
     bindTrajectoryDom(root);
+    root.querySelectorAll("[data-situation-trajectory-opacity-input]").forEach((node) => {
+      const applyOpacity = () => {
+        const situationId = String(node.getAttribute("data-situation-trajectory-opacity-input") || "").trim();
+        if (!situationId) return;
+        const raw = Number(node.value);
+        const nextOpacity = Number.isFinite(raw) ? Math.max(0, Math.min(1, raw)) : 0.95;
+        if (!store.situationsView || typeof store.situationsView !== "object") store.situationsView = {};
+        if (!store.situationsView.trajectoryCardOpacityBySituationId || typeof store.situationsView.trajectoryCardOpacityBySituationId !== "object") {
+          store.situationsView.trajectoryCardOpacityBySituationId = {};
+        }
+        store.situationsView.trajectoryCardOpacityBySituationId[situationId] = nextOpacity;
+        const trajectoryNode = node.closest("[data-situation-trajectory]");
+        if (trajectoryNode) {
+          trajectoryNode.style.setProperty("--situation-trajectory-card-opacity", String(nextOpacity.toFixed(2)));
+          trajectoryNode.style.setProperty("--situation-trajectory-title-opacity", String(nextOpacity.toFixed(2)));
+        }
+        const valueNode = root.querySelector(`[data-situation-trajectory-opacity-value="${situationId}"]`);
+        if (valueNode) valueNode.textContent = nextOpacity.toFixed(2);
+      };
+      node.addEventListener("input", applyOpacity);
+      node.addEventListener("change", applyOpacity);
+    });
     bindSituationGridEditableCells(root);
     bindSituationGridDnd(root);
 
