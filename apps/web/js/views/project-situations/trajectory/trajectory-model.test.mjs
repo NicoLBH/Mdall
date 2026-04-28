@@ -309,6 +309,37 @@ test("buildTrajectoryModel conserve un point à chaque évènement de cycle de v
   );
 });
 
+test("buildTrajectoryModel reconstruit 4 segments pour open → close → reopen → close", () => {
+  const result = buildTrajectoryModel({
+    subjects: [
+      { id: "s-reopen-close", created_at: "2026-04-11T00:00:00.000Z", status: "closed" }
+    ],
+    subjectHistoryEvents: {
+      "s-reopen-close": [
+        { subject_id: "s-reopen-close", event_type: "subject_closed", created_at: "2026-04-19T18:03:00.000Z", payload: { closed_status: "closed" } },
+        { subject_id: "s-reopen-close", event_type: "subject_reopened", created_at: "2026-04-20T14:00:00.000Z" },
+        { subject_id: "s-reopen-close", event_type: "subject_closed", created_at: "2026-04-20T14:07:00.000Z", payload: { closed_status: "closed" } }
+      ]
+    },
+    today: "2026-04-28T00:00:00.000Z"
+  });
+
+  const [row] = result.rows;
+  assert.deepEqual(
+    row.lifecycleSegments.map((segment) => ({
+      status: segment.status,
+      start: segment.startAt.toISOString(),
+      end: segment.endAt.toISOString()
+    })),
+    [
+      { status: "open", start: "2026-04-11T00:00:00.000Z", end: "2026-04-19T18:03:00.000Z" },
+      { status: "closed", start: "2026-04-19T18:03:00.000Z", end: "2026-04-20T14:00:00.000Z" },
+      { status: "open", start: "2026-04-20T14:00:00.000Z", end: "2026-04-20T14:07:00.000Z" },
+      { status: "closed", start: "2026-04-20T14:07:00.000Z", end: "2026-04-28T00:00:00.000Z" }
+    ]
+  );
+});
+
 test("buildTrajectoryModel rend plusieurs blocages entrants à des dates différentes sans casser le cycle de vie", () => {
   const result = buildTrajectoryModel({
     subjects: [{ id: "s-blocked", created_at: "2026-01-01T00:00:00.000Z", status: "open" }],

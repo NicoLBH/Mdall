@@ -194,6 +194,76 @@ function toStatusIcon(status = "open") {
   return "open";
 }
 
+function resolveLifecycleStatusFromEvent(event = {}, fallbackStatus = "closed") {
+  const eventType = normalizeId(event?.event_type).toLowerCase();
+  if (["subject_rejected", "review_rejected", "subject_invalidated"].includes(eventType)) {
+    return "closed_invalid";
+  }
+  if (eventType === "subject_closed") {
+    return normalizeCloseStatus(event, fallbackStatus);
+  }
+  return "open";
+}
+
+function buildLifecycleSegments({
+  subjectId = "",
+  subjectCreatedTs,
+  lifecycleEvents = [],
+  endTs,
+  fallbackClosedStatus = "closed"
+} = {}) {
+  const safeEndTs = Math.max(endTs, subjectCreatedTs);
+  let state = "open";
+  let currentStart = subjectCreatedTs;
+  const segments = [];
+
+  for (const event of lifecycleEvents) {
+    const eventType = normalizeId(event?.event_type).toLowerCase();
+    const eventTs = toTimestamp(event?.created_at, currentStart);
+    const safeEventTs = Math.min(Math.max(eventTs, subjectCreatedTs), safeEndTs);
+
+    if (eventType === "subject_reopened") {
+      if (state !== "open" && safeEventTs > currentStart) {
+        segments.push({
+          subjectId,
+          status: state,
+          startAt: new Date(currentStart),
+          endAt: new Date(safeEventTs)
+        });
+        state = "open";
+        currentStart = safeEventTs;
+      }
+      continue;
+    }
+
+    if (!["subject_closed", "subject_rejected", "review_rejected", "subject_invalidated"].includes(eventType)) {
+      continue;
+    }
+
+    if (state === "open" && safeEventTs > currentStart) {
+      segments.push({
+        subjectId,
+        status: "open",
+        startAt: new Date(currentStart),
+        endAt: new Date(safeEventTs)
+      });
+      state = resolveLifecycleStatusFromEvent(event, fallbackClosedStatus);
+      currentStart = safeEventTs;
+    }
+  }
+
+  if (safeEndTs > currentStart) {
+    segments.push({
+      subjectId,
+      status: state,
+      startAt: new Date(currentStart),
+      endAt: new Date(safeEndTs)
+    });
+  }
+
+  return segments;
+}
+
 export function buildTrajectoryModel({
   subjects = [],
   subjectHistoryEvents = {},
@@ -283,24 +353,16 @@ export function buildTrajectoryModel({
 
     statusPoints.sort((a, b) => a.at.getTime() - b.at.getTime());
 
-    const rawSegments = [];
-    for (let index = 0; index < statusPoints.length; index += 1) {
-      const point = statusPoints[index];
-      if (point.contributesToLifecycle === false) continue;
-      const nextPoint = statusPoints[index + 1];
-      const segmentStartTs = point.at.getTime();
-      const nextLifecyclePoint = nextPoint && nextPoint.contributesToLifecycle !== false
-        ? nextPoint
-        : statusPoints.slice(index + 1).find((entry) => entry.contributesToLifecycle !== false);
-      const segmentEndTs = nextLifecyclePoint ? nextLifecyclePoint.at.getTime() : endTs;
-      if (segmentEndTs <= segmentStartTs) continue;
-      rawSegments.push({
-        subjectId,
-        status: point.status,
-        startAt: new Date(segmentStartTs),
-        endAt: new Date(segmentEndTs)
-      });
-    }
+    const lifecycleEvents = events.filter((event) => (
+      ["subject_closed", "subject_reopened", "subject_rejected", "review_rejected", "subject_invalidated"].includes(event.event_type)
+    ));
+    const rawSegments = buildLifecycleSegments({
+      subjectId,
+      subjectCreatedTs,
+      lifecycleEvents,
+      endTs,
+      fallbackClosedStatus: subject.status
+    });
 
     const lifecycleSegments = rawSegments
       .flatMap((segment) => splitSegmentByObjectiveBoundaries(segment, objectiveDates))
@@ -312,6 +374,8 @@ export function buildTrajectoryModel({
           objectiveDates
         })
       }));
+
+    console.log("[trajectory] lifecycleSegments", subjectId, lifecycleSegments);
 
     const objectiveMarkers = objectiveDates.map((entry) => {
       const statusAtDueDate = resolveStatusAtTimestamp(statusPoints, entry.dueDate.getTime(), fallbackStartStatus);
@@ -342,8 +406,10 @@ export function buildTrajectoryModel({
 
 export function __trajectoryModelTestUtils() {
   return {
+    buildLifecycleSegments,
     normalizeStatus,
     normalizeCloseStatus,
+    resolveLifecycleStatusFromEvent,
     resolveObjectiveDates,
     resolveStatusAtTimestamp,
     splitSegmentByObjectiveBoundaries,
