@@ -66,6 +66,10 @@ function toObjectiveDeltaArray(value) {
   return [];
 }
 
+function normalizeObjectiveIds(value) {
+  return asArray(value).map((entry) => normalizeId(entry)).filter(Boolean);
+}
+
 function resolveObjectiveMilestonePoints(event = {}, ts, currentStatus = "open") {
   const payload = event?.payload && typeof event.payload === "object" ? event.payload : {};
   const action = normalizeId(payload.action).toLowerCase();
@@ -139,64 +143,46 @@ function collectEventsForSubject(subjectHistoryEvents, subjectHistoryKeys = []) 
   return [];
 }
 
-function resolveObjectiveDates({ subjectId, objectivesById = {}, objectiveIdsBySubjectId = {} } = {}) {
-  return asArray(objectiveIdsBySubjectId[subjectId])
-    .map((objectiveId) => objectivesById?.[objectiveId])
+function resolveObjectiveDatesFromIds(objectiveIds = [], objectivesById = {}) {
+  return normalizeObjectiveIds(objectiveIds)
+    .map((objectiveId) => objectivesById?.[objectiveId] || { id: objectiveId })
     .map((objective = {}) => ({
-      objectiveId: normalizeId(objective.id),
+      objectiveId: normalizeId(objective.id) || normalizeId(objective.objective_id),
       dueDate: toDate(objective.due_date || objective.dueDate)
     }))
     .filter((entry) => !!entry.objectiveId && !!entry.dueDate)
     .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
 }
 
-function splitSegmentByObjectiveBoundaries(segment, objectiveDates = []) {
-  const boundaries = objectiveDates
-    .map((entry) => entry.dueDate.getTime())
-    .filter((ts) => ts > segment.startAt.getTime() && ts < segment.endAt.getTime());
+function splitSegmentByBoundaries(segment, boundaries = []) {
+  const splitPoints = boundaries
+    .filter((ts) => ts > segment.startAt.getTime() && ts < segment.endAt.getTime())
+    .sort((a, b) => a - b);
 
-  if (!boundaries.length) return [segment];
+  if (!splitPoints.length) return [segment];
 
   const splits = [];
   let startTs = segment.startAt.getTime();
-  for (const boundaryTs of boundaries) {
-    splits.push({
-      ...segment,
-      startAt: new Date(startTs),
-      endAt: new Date(boundaryTs)
-    });
+  for (const boundaryTs of splitPoints) {
+    if (boundaryTs <= startTs) continue;
+    splits.push({ ...segment, startAt: new Date(startTs), endAt: new Date(boundaryTs) });
     startTs = boundaryTs;
   }
-  splits.push({
-    ...segment,
-    startAt: new Date(startTs),
-    endAt: new Date(segment.endAt.getTime())
-  });
+  if (segment.endAt.getTime() > startTs) {
+    splits.push({ ...segment, startAt: new Date(startTs), endAt: new Date(segment.endAt.getTime()) });
+  }
   return splits;
 }
 
-function resolveSegmentStyle({ status, endAt, objectiveDates }) {
+function resolveSegmentStyle({ status, startAt, endAt, overdueWindows = [] }) {
   const statusKey = normalizeStatus(status);
+  const startTs = startAt.getTime();
   const endTs = endAt.getTime();
-  const hasObjectivePassed = objectiveDates.some((entry) => endTs > entry.dueDate.getTime());
-
-  if (hasObjectivePassed) {
-    return {
-      lineStyle: statusKey === "open" ? "solid" : "dashed",
-      lineColor: "red"
-    };
-  }
-
-  if (statusKey === "open") {
-    return {
-      lineStyle: "solid",
-      lineColor: "green"
-    };
-  }
+  const isOverdue = overdueWindows.some((window) => startTs >= window.startTs && endTs <= window.endTs);
 
   return {
-    lineStyle: "dashed",
-    lineColor: "gray"
+    lineStyle: statusKey === "open" ? "solid" : "dashed",
+    lineColor: isOverdue ? "red" : (statusKey === "open" ? "green" : "gray")
   };
 }
 
@@ -302,7 +288,9 @@ export function buildTrajectoryModel({
     const subjectId = normalizeId(subject.id);
     const subjectTitle = String(subject?.title || subjectId || "Sujet");
     const subjectNumber = resolveSubjectDisplayIdentifier(subject, subjectId);
-    const objectiveDates = resolveObjectiveDates({ subjectId, objectivesById, objectiveIdsBySubjectId });
+    const currentObjectiveIds = normalizeObjectiveIds(objectiveIdsBySubjectId[subjectId]);
+    const currentObjectiveDates = resolveObjectiveDatesFromIds(currentObjectiveIds, objectivesById);
+    const objectiveDates = currentObjectiveDates;
     const latestObjectiveTs = objectiveDates.length ? objectiveDates[objectiveDates.length - 1].dueDate.getTime() : null;
 
     const subjectHistoryKeys = resolveSubjectHistoryKeys(subject);
@@ -321,7 +309,11 @@ export function buildTrajectoryModel({
       fallbackProjectStartTs
     );
 
-    const endTs = Math.max(todayTs, latestObjectiveTs || 0, subjectCreatedTs);
+    const latestActivityTs = events.length ? events[events.length - 1].created_at.getTime() : subjectCreatedTs;
+    const normalizedSubjectStatus = normalizeStatus(subject.status);
+    const endTs = normalizedSubjectStatus === "open"
+      ? Math.max(todayTs, latestObjectiveTs || 0, subjectCreatedTs, latestActivityTs)
+      : Math.max(subjectCreatedTs, latestActivityTs);
     const fallbackStartStatus = normalizeStatus(subject.status);
 
     const statusPoints = [];
@@ -380,6 +372,18 @@ export function buildTrajectoryModel({
     const lifecycleEvents = events.filter((event) => (
       ["subject_closed", "subject_reopened", "subject_rejected", "review_rejected", "subject_invalidated"].includes(event.event_type)
     ));
+    const objectiveTimelineEvents = events
+      .filter((event) => event.event_type === "subject_objectives_changed")
+      .map((event) => {
+        const payload = event?.payload && typeof event.payload === "object" ? event.payload : {};
+        const delta = payload?.delta && typeof payload.delta === "object" ? payload.delta : {};
+        return {
+          atTs: event.created_at.getTime(),
+          added: normalizeObjectiveIds(toObjectiveDeltaArray(delta.added)),
+          removed: normalizeObjectiveIds(toObjectiveDeltaArray(delta.removed))
+        };
+      })
+      .sort((a, b) => a.atTs - b.atTs);
     const rawSegments = buildLifecycleSegments({
       subjectId,
       subjectCreatedTs,
@@ -388,18 +392,67 @@ export function buildTrajectoryModel({
       fallbackClosedStatus: subject.status
     });
 
+    const finalSegment = rawSegments[rawSegments.length - 1] || null;
+    const finalStatus = normalizeStatus(finalSegment?.status || fallbackStartStatus);
+    const finalClosedTs = finalStatus === "open" ? null : (finalSegment?.startAt?.getTime?.() ?? null);
+    const objectiveIdsFromHistory = objectiveTimelineEvents.flatMap((entry) => [...entry.added, ...entry.removed]);
+    const candidateObjectiveIds = [...new Set([...currentObjectiveIds, ...objectiveIdsFromHistory])];
+    const candidateObjectiveDates = resolveObjectiveDatesFromIds(candidateObjectiveIds, objectivesById);
+
+    const isObjectiveAssignedAt = (objectiveId, targetTs) => {
+      let assigned = currentObjectiveIds.includes(objectiveId);
+      for (let index = objectiveTimelineEvents.length - 1; index >= 0; index -= 1) {
+        const event = objectiveTimelineEvents[index];
+        if (event.atTs <= targetTs) continue;
+        const hasAdded = event.added.includes(objectiveId);
+        const hasRemoved = event.removed.includes(objectiveId);
+        if (hasAdded && !hasRemoved) assigned = false;
+        else if (hasRemoved && !hasAdded) assigned = true;
+      }
+      return assigned;
+    };
+
+    const overdueWindows = candidateObjectiveDates
+      .map((entry) => {
+        const dueTs = entry.dueDate.getTime();
+        let endTsForObjective = null;
+        if (finalStatus === "open") {
+          if (isObjectiveAssignedAt(entry.objectiveId, todayTs)) {
+            endTsForObjective = todayTs;
+          }
+        } else if (Number.isFinite(finalClosedTs) && isObjectiveAssignedAt(entry.objectiveId, finalClosedTs)) {
+          endTsForObjective = finalClosedTs;
+        }
+        if (!Number.isFinite(endTsForObjective) || endTsForObjective <= dueTs) return null;
+        return { objectiveId: entry.objectiveId, startTs: dueTs, endTs: endTsForObjective };
+      })
+      .filter(Boolean);
+
+    const splitBoundaries = [...new Set([
+      ...objectiveDates.map((entry) => entry.dueDate.getTime()),
+      ...overdueWindows.flatMap((window) => [window.startTs, window.endTs])
+    ])];
+
     const lifecycleSegments = rawSegments
-      .flatMap((segment) => splitSegmentByObjectiveBoundaries(segment, objectiveDates))
+      .flatMap((segment) => splitSegmentByBoundaries(segment, splitBoundaries))
       .map((segment) => ({
         ...segment,
         ...resolveSegmentStyle({
           status: segment.status,
+          startAt: segment.startAt,
           endAt: segment.endAt,
-          objectiveDates
+          overdueWindows
         })
       }));
 
-    console.log("[trajectory] lifecycleSegments", subjectId, lifecycleSegments);
+    const overdueLineStyle = finalStatus === "open" ? "solid" : "dashed";
+    const overdueLines = overdueWindows.map((window) => ({
+      subjectId,
+      objectiveId: window.objectiveId,
+      startAt: new Date(window.startTs),
+      endAt: new Date(window.endTs),
+      lineStyle: overdueLineStyle
+    }));
 
     const objectiveMarkers = objectiveDates.map((entry) => {
       const statusAtDueDate = resolveStatusAtTimestamp(statusPoints, entry.dueDate.getTime(), fallbackStartStatus);
@@ -421,6 +474,7 @@ export function buildTrajectoryModel({
       subjectNumber,
       statusPoints,
       lifecycleSegments,
+      overdueLines,
       objectiveMarkers
     };
   });
@@ -436,9 +490,9 @@ export function __trajectoryModelTestUtils() {
     normalizeCloseStatus,
     resolveSubjectHistoryKeys,
     resolveLifecycleStatusFromEvent,
-    resolveObjectiveDates,
+    resolveObjectiveDates: resolveObjectiveDatesFromIds,
     resolveStatusAtTimestamp,
-    splitSegmentByObjectiveBoundaries,
+    splitSegmentByObjectiveBoundaries: splitSegmentByBoundaries,
     resolveSegmentStyle
   };
 }
