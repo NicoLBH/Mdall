@@ -10344,11 +10344,13 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   width:100%;
   height:100%;
   pointer-events:none;
+  z-index:1;
 }
 
 .situation-trajectory__items{
   position:absolute;
   inset:0;
+  z-index:2;
 }
 
 .situation-trajectory__segment,
@@ -10596,7 +10598,7 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
 .situation-trajectory__hierarchy-link{
   fill:none;
   stroke:rgb(139, 148, 158);
-  stroke-width:1.5;
+  stroke-width:3;
   vector-effect:non-scaling-stroke;
 }
 
@@ -10609,6 +10611,16 @@ polygon.situation-trajectory__hierarchy-link,
 circle.situation-trajectory__hierarchy-link{
   fill:rgb(139, 148, 158);
   stroke:none;
+}
+
+.situation-trajectory[data-trajectory-opacity-zero="true"] .situation-trajectory__hierarchy-link:hover{
+  stroke:#fff;
+}
+
+.situation-trajectory[data-trajectory-opacity-zero="true"] .situation-trajectory__hierarchy-link[points]:hover,
+.situation-trajectory[data-trajectory-opacity-zero="true"] polygon.situation-trajectory__hierarchy-link:hover,
+.situation-trajectory[data-trajectory-opacity-zero="true"] circle.situation-trajectory__hierarchy-link:hover{
+  fill:#fff;
 }
 
 .situation-trajectory__spinner{
