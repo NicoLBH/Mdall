@@ -521,7 +521,8 @@ export function renderTrajectoryDom({
   const linkRowMax = Math.min(Math.max(0, rowCount - 1), rowEnd + 2);
   let linkCount = 0;
 
-  const renderLinks = (links = [], { isBlockedRelation = false } = {}) => {
+  const renderQueue = [];
+  const enqueueLinks = (links = [], { isBlockedRelation = false } = {}) => {
     for (const link of links) {
       const sourceIndex = rowIndexBySubjectId.get(link.sourceId);
       const targetIndex = rowIndexBySubjectId.get(link.targetId);
@@ -536,29 +537,62 @@ export function renderTrajectoryDom({
       if (ts < visibleStartTs || ts > visibleEndTs) continue;
       const displayTs = toRenderTimestamp(ts, timeScale, ts);
 
-      const x = timeScale.timeToX(displayTs);
-      const sourceY = (sourceIndex * safeRowHeight) + (safeRowHeight / 2);
-      const targetY = (targetIndex * safeRowHeight) + (safeRowHeight / 2);
-
-      const { path, markerCircle, arrow, blockedIcon } = createHierarchyPath({
-        x,
-        sourceY,
-        targetY,
-        isRemoved: link.action === "removed",
-        isReverse: link.action === "removed",
-        isBlockedRelation
+      renderQueue.push({
+        link,
+        isBlockedRelation,
+        x: timeScale.timeToX(displayTs),
+        sourceY: (sourceIndex * safeRowHeight) + (safeRowHeight / 2),
+        targetY: (targetIndex * safeRowHeight) + (safeRowHeight / 2),
+        minRow: Math.min(sourceIndex, targetIndex),
+        maxRow: Math.max(sourceIndex, targetIndex)
       });
-
-      fragmentSvg.appendChild(path);
-      if (markerCircle) fragmentSvg.appendChild(markerCircle);
-      if (blockedIcon) fragmentSvg.appendChild(blockedIcon);
-      fragmentSvg.appendChild(arrow);
-      linkCount += 1;
     }
   };
 
-  renderLinks(hierarchyLinks, { isBlockedRelation: false });
-  renderLinks(blockedLinks, { isBlockedRelation: true });
+  enqueueLinks(hierarchyLinks, { isBlockedRelation: false });
+  enqueueLinks(blockedLinks, { isBlockedRelation: true });
+
+  const laneStateByBucket = new Map();
+  const laneOrder = [0, 1, -1, 2, -2, 3, -3, 4, -4];
+  const laneSpacingPx = 7;
+  const laneBucketWidthPx = 6;
+
+  renderQueue.sort((a, b) => {
+    if (a.x !== b.x) return a.x - b.x;
+    if (a.minRow !== b.minRow) return a.minRow - b.minRow;
+    return a.maxRow - b.maxRow;
+  });
+
+  const rangesOverlap = (aMin, aMax, bMin, bMax) => !(aMax < bMin || bMax < aMin);
+  const resolveLaneShiftPx = ({ x, minRow, maxRow }) => {
+    const bucketKey = String(Math.round(x / laneBucketWidthPx));
+    const lanes = laneStateByBucket.get(bucketKey) || [];
+    const overlapping = lanes.filter((entry) => rangesOverlap(minRow, maxRow, entry.minRow, entry.maxRow));
+    const usedLanes = new Set(overlapping.map((entry) => entry.lane));
+
+    const lane = laneOrder.find((candidate) => !usedLanes.has(candidate)) ?? laneOrder[laneOrder.length - 1];
+    lanes.push({ lane, minRow, maxRow });
+    laneStateByBucket.set(bucketKey, lanes);
+    return lane * laneSpacingPx;
+  };
+
+  for (const item of renderQueue) {
+    const laneShiftPx = resolveLaneShiftPx(item);
+    const { path, markerCircle, arrow, blockedIcon } = createHierarchyPath({
+      x: item.x + laneShiftPx,
+      sourceY: item.sourceY,
+      targetY: item.targetY,
+      isRemoved: item.link.action === "removed",
+      isReverse: item.link.action === "removed",
+      isBlockedRelation: item.isBlockedRelation
+    });
+
+    fragmentSvg.appendChild(path);
+    if (markerCircle) fragmentSvg.appendChild(markerCircle);
+    if (blockedIcon) fragmentSvg.appendChild(blockedIcon);
+    fragmentSvg.appendChild(arrow);
+    linkCount += 1;
+  }
 
   svg.appendChild(fragmentSvg);
   itemsRoot.appendChild(fragmentItems);
