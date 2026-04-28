@@ -106,12 +106,35 @@ function resolveObjectiveMilestonePoints(event = {}, ts, currentStatus = "open")
   return points;
 }
 
-function collectEventsForSubject(subjectId, subjectHistoryEvents) {
+function resolveSubjectHistoryKeys(subject = {}) {
+  const keys = new Set([
+    normalizeId(subject?.id),
+    normalizeId(subject?.subject_id),
+    normalizeId(subject?.subjectId),
+    normalizeId(subject?.subject_number),
+    normalizeId(subject?.subjectNumber),
+    normalizeId(subject?.raw?.id),
+    normalizeId(subject?.raw?.subject_id),
+    normalizeId(subject?.raw?.subjectId),
+    normalizeId(subject?.raw?.subject_number),
+    normalizeId(subject?.raw?.subjectNumber)
+  ]);
+  keys.delete("");
+  return [...keys];
+}
+
+function collectEventsForSubject(subjectHistoryEvents, subjectHistoryKeys = []) {
+  const keysSet = new Set(asArray(subjectHistoryKeys).map((value) => normalizeId(value)).filter(Boolean));
+  if (!keysSet.size) return [];
   if (Array.isArray(subjectHistoryEvents)) {
-    return subjectHistoryEvents.filter((event) => normalizeId(event?.subject_id) === subjectId);
+    return subjectHistoryEvents.filter((event) => keysSet.has(normalizeId(event?.subject_id)));
   }
   if (subjectHistoryEvents && typeof subjectHistoryEvents === "object") {
-    return asArray(subjectHistoryEvents[subjectId]);
+    const collected = [];
+    for (const key of keysSet) {
+      collected.push(...asArray(subjectHistoryEvents[key]));
+    }
+    return collected;
   }
   return [];
 }
@@ -282,7 +305,8 @@ export function buildTrajectoryModel({
     const objectiveDates = resolveObjectiveDates({ subjectId, objectivesById, objectiveIdsBySubjectId });
     const latestObjectiveTs = objectiveDates.length ? objectiveDates[objectiveDates.length - 1].dueDate.getTime() : null;
 
-    const events = collectEventsForSubject(subjectId, subjectHistoryEvents)
+    const subjectHistoryKeys = resolveSubjectHistoryKeys(subject);
+    const events = collectEventsForSubject(subjectHistoryEvents, subjectHistoryKeys)
       .map((event = {}) => ({
         ...event,
         event_type: normalizeId(event.event_type).toLowerCase(),
@@ -407,8 +431,10 @@ export function buildTrajectoryModel({
 export function __trajectoryModelTestUtils() {
   return {
     buildLifecycleSegments,
+    collectEventsForSubject,
     normalizeStatus,
     normalizeCloseStatus,
+    resolveSubjectHistoryKeys,
     resolveLifecycleStatusFromEvent,
     resolveObjectiveDates,
     resolveStatusAtTimestamp,
