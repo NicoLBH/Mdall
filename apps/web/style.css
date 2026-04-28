@@ -10358,6 +10358,7 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
 }
 
 .situation-trajectory__segment{
+  --situation-trajectory-segment-accent-color:rgb(99, 110, 123);
   transform:translateY(-50%);
   height:28px;
   border-radius:var(--radius);
@@ -10371,19 +10372,28 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
 }
 
 .situation-trajectory__segment--dashed{
-  border-style:dashed;
+  height:2px;
+  border:none;
+  border-top:2px dashed var(--situation-trajectory-segment-accent-color);
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
 }
 
 .situation-trajectory__segment--dashed.situation-trajectory__segment--green{
-  border-color:rgb(61, 68, 77);
+  --situation-trajectory-segment-accent-color:rgb(35, 134, 54);
 }
 
 .situation-trajectory__segment--dashed.situation-trajectory__segment--red{
-  border-color:rgb(61, 68, 77);
+  --situation-trajectory-segment-accent-color:rgb(207, 34, 46);
 }
 
 .situation-trajectory__segment--dashed.situation-trajectory__segment--gray{
-  border-color:rgb(61, 68, 77);
+  --situation-trajectory-segment-accent-color:rgb(99, 110, 123);
+}
+
+.situation-trajectory__segment--dashed .situation-trajectory__segment-label{
+  display:none;
 }
 
 .situation-trajectory__segment-label{
@@ -10403,16 +10413,16 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   width:16px;
   height:16px;
   border-radius:999px;
-  background:rgb(99, 110, 123);
+  background:var(--situation-trajectory-segment-accent-color);
   flex:0 0 16px;
 }
 
 .situation-trajectory__segment--green .situation-trajectory__segment-label::before{
-  background:rgb(35, 134, 54);
+  --situation-trajectory-segment-accent-color:rgb(35, 134, 54);
 }
 
 .situation-trajectory__segment--red .situation-trajectory__segment-label::before{
-  background:rgb(207, 34, 46);
+  --situation-trajectory-segment-accent-color:rgb(207, 34, 46);
 }
 
 .situation-trajectory__segment-title{
