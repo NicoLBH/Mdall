@@ -10150,6 +10150,8 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   align-items:center;
   gap:10px;
   pointer-events:auto;
+  background: rgb(13, 17, 23);
+  height: 32px;
 }
 
 .situation-trajectory__opacity,
@@ -10360,7 +10362,7 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   height:28px;
   border-radius:var(--radius);
   background:rgba(13, 17, 23, var(--situation-trajectory-card-opacity, .95));
-  border:solid 1px rgb(61, 68, 77);
+  border: solid 1px rgba(61, 68, 77, var(--situation-trajectory-title-opacity, 0.95));
   outline-color:rgb(240, 246, 252);
   box-shadow:rgba(1, 4, 9, 0.4) 0px 1px 1px 0px, rgba(1, 4, 9, 0.8) 0px 3px 6px 0px;
   pointer-events:auto;
