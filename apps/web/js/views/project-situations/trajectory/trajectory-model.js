@@ -441,6 +441,15 @@ export function buildTrajectoryModel({
         })
       }));
 
+    const overdueLines = lifecycleSegments
+      .filter((segment) => segment.lineColor === "red")
+      .map((segment) => ({
+        subjectId,
+        startAt: new Date(segment.startAt.getTime()),
+        endAt: new Date(segment.endAt.getTime()),
+        lineStyle: segment.lineStyle
+      }));
+
     const objectiveMarkers = objectiveDates.map((entry) => {
       const statusAtDueDate = resolveStatusAtTimestamp(statusPoints, entry.dueDate.getTime(), fallbackStartStatus);
       const isClosedAtDueDate = normalizeStatus(statusAtDueDate) !== "open";
@@ -461,6 +470,7 @@ export function buildTrajectoryModel({
       subjectNumber,
       statusPoints,
       lifecycleSegments,
+      overdueLines,
       objectiveMarkers
     };
   });

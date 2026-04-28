@@ -10392,22 +10392,6 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   --situation-trajectory-segment-accent-color:rgb(99, 110, 123);
 }
 
-.situation-trajectory__segment--dashed .situation-trajectory__segment-label{
-  display:none;
-}
-
-.situation-trajectory__segment--red:not(.situation-trajectory__segment--dashed){
-  height:1px;
-  border:none;
-  border-radius:0;
-  background:rgb(207, 34, 46);
-  box-shadow:none;
-}
-
-.situation-trajectory__segment--red:not(.situation-trajectory__segment--dashed) .situation-trajectory__segment-label{
-  display:none;
-}
-
 .situation-trajectory__segment-label{
   display:flex;
   align-items:center;
@@ -10439,6 +10423,21 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
 
 .situation-trajectory__segment--red .situation-trajectory__segment-label::before{
   --situation-trajectory-segment-accent-color:rgb(207, 34, 46);
+}
+
+.situation-trajectory__overdue-line{
+  position:absolute;
+  transform:translateY(-50%);
+  height:1px;
+  background:rgb(207, 34, 46);
+  pointer-events:none;
+  z-index:4;
+}
+
+.situation-trajectory__overdue-line--dashed{
+  height:0;
+  background:transparent;
+  border-top:1px dashed rgb(207, 34, 46);
 }
 
 .situation-trajectory__segment-title{

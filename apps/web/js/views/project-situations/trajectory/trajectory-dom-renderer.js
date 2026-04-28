@@ -365,6 +365,24 @@ export function renderTrajectoryDom({
       segmentCount += 1;
     }
 
+    for (const overdueLine of asArray(row.overdueLines)) {
+      const startTs = toTimestamp(overdueLine.startAt);
+      const endTs = toTimestamp(overdueLine.endAt);
+      if (!intersectsRange(startTs, endTs, visibleStartTs, visibleEndTs)) continue;
+      const displayLeftTs = Math.min(startTs, endTs);
+      const displayRightTs = Math.max(startTs, endTs);
+      const overdueNode = document.createElement("div");
+      const lineStyle = String(overdueLine?.lineStyle || "").trim().toLowerCase();
+      overdueNode.className = [
+        "situation-trajectory__overdue-line",
+        lineStyle === "dashed" ? "situation-trajectory__overdue-line--dashed" : ""
+      ].filter(Boolean).join(" ");
+      overdueNode.style.left = `${timeScale.timeToX(displayLeftTs)}px`;
+      overdueNode.style.top = `${y}px`;
+      overdueNode.style.width = `${Math.max(0, timeScale.timeToX(displayRightTs) - timeScale.timeToX(displayLeftTs))}px`;
+      fragmentItems.appendChild(overdueNode);
+    }
+
     const statusPoints = asArray(row.statusPoints);
     const statusPointTotalsByTs = new Map();
     for (const point of statusPoints) {
