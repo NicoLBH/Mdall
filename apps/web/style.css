@@ -10217,32 +10217,6 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   display:block;
 }
 
-.situation-trajectory__zoom-dropdown{
-  position:relative;
-}
-
-.situation-trajectory__zoom-trigger{
-  display:inline-flex;
-  align-items:center;
-  gap:6px;
-  height:24px;
-  padding:0 8px;
-  border-radius:999px;
-}
-
-.situation-trajectory__zoom-menu{
-  position:absolute;
-  top:calc(100% + 6px);
-  right:0;
-  min-width:170px;
-  display:none;
-  z-index:20;
-}
-
-.situation-trajectory__zoom-menu.gh-menu--open{
-  display:block;
-}
-
 .situation-trajectory__timeline{
   position:sticky;
   top:0;

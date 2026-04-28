@@ -53,50 +53,21 @@ function renderIssueStateIcon(subject = {}, { isBlocked = false } = {}) {
   }${blockedIconHtml}</span>`;
 }
 
-function normalizeTrajectoryZoom(value, fallback = "day") {
+function normalizeRoadmapTrajectoryZoom(value, fallback = "day") {
   const normalized = String(value || "").trim().toLowerCase();
   if (TRAJECTORY_ZOOM_VALUES.has(normalized)) return normalized;
   return fallback;
 }
 
 function getTrajectoryZoomLabel(zoom = "day") {
-  const normalized = normalizeTrajectoryZoom(zoom);
+  const normalized = normalizeRoadmapTrajectoryZoom(zoom);
   return TRAJECTORY_ZOOM_OPTIONS.find((option) => option.value === normalized)?.label || "Jour";
 }
 
 function renderZoomDropdownOptions(selectedZoom = "day") {
-  const normalizedSelectedZoom = normalizeTrajectoryZoom(selectedZoom);
+  const normalizedSelectedZoom = normalizeRoadmapTrajectoryZoom(selectedZoom);
   return TRAJECTORY_ZOOM_OPTIONS.map((option) => {
-    const normalizedOption = normalizeTrajectoryZoom(option.value);
-    return `
-      <button
-        type="button"
-        class="gh-menu__item${normalizedOption === normalizedSelectedZoom ? " is-active" : ""}"
-        role="menuitemradio"
-        aria-checked="${normalizedOption === normalizedSelectedZoom ? "true" : "false"}"
-        data-situation-trajectory-zoom-option="${escapeHtml(normalizedOption)}"
-      >
-        ${escapeHtml(option.label)}
-      </button>
-    `;
-  }).join("");
-}
-
-function normalizeTrajectoryZoom(value, fallback = "day") {
-  const normalized = String(value || "").trim().toLowerCase();
-  if (TRAJECTORY_ZOOM_VALUES.has(normalized)) return normalized;
-  return fallback;
-}
-
-function getTrajectoryZoomLabel(zoom = "day") {
-  const normalized = normalizeTrajectoryZoom(zoom);
-  return TRAJECTORY_ZOOM_OPTIONS.find((option) => option.value === normalized)?.label || "Jour";
-}
-
-function renderZoomDropdownOptions(selectedZoom = "day") {
-  const normalizedSelectedZoom = normalizeTrajectoryZoom(selectedZoom);
-  return TRAJECTORY_ZOOM_OPTIONS.map((option) => {
-    const normalizedOption = normalizeTrajectoryZoom(option.value);
+    const normalizedOption = normalizeRoadmapTrajectoryZoom(option.value);
     return `
       <button
         type="button"
@@ -134,7 +105,7 @@ export function renderSituationRoadmapView(situation, subjects = [], options = {
   const leftColumnWidth = normalizeLeftColumnWidth(options?.store?.situationsView?.trajectoryLeftColumnWidthBySituationId?.[situationId]);
   const cardOpacity = normalizeTrajectoryOpacity(options?.store?.situationsView?.trajectoryCardOpacityBySituationId?.[situationId], 0.95);
   const cardOpacityLabel = cardOpacity.toFixed(2);
-  const selectedZoom = normalizeTrajectoryZoom(options?.store?.situationsView?.trajectoryZoomBySituationId?.[situationId], "day");
+  const selectedZoom = normalizeRoadmapTrajectoryZoom(options?.store?.situationsView?.trajectoryZoomBySituationId?.[situationId], "day");
   const selectedZoomLabel = getTrajectoryZoomLabel(selectedZoom);
 
 
