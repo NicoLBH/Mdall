@@ -5,6 +5,10 @@ import { resolveCurrentBackendProjectId } from "./project-supabase-sync.js";
 const SUPABASE_URL = getSupabaseUrl();
 const FRONT_PROJECT_MAP_STORAGE_KEY = "mdall.supabaseProjectMap.v1";
 
+function logSituationKanbanOrder(event, payload = {}) {
+  console.info(`[situation-kanban-order] ${event}`, payload);
+}
+
 
 function safeArray(value) {
   return Array.isArray(value) ? value : [];
@@ -631,9 +635,9 @@ export async function loadManualSituationSubjectIds(situationId) {
   if (!normalizedSituationId) return [];
 
   const url = new URL(`${SUPABASE_URL}/rest/v1/situation_subjects`);
-  url.searchParams.set("select", "subject_id,created_at,kanban_status");
+  url.searchParams.set("select", "subject_id,created_at,kanban_status,kanban_order");
   url.searchParams.set("situation_id", `eq.${normalizedSituationId}`);
-  url.searchParams.set("order", "created_at.asc");
+  url.searchParams.set("order", "kanban_order.asc,created_at.asc");
 
   const res = await fetch(url.toString(), {
     method: "GET",
@@ -646,7 +650,14 @@ export async function loadManualSituationSubjectIds(situationId) {
     throw new Error(`situation_subjects fetch failed (${res.status}): ${text}`);
   }
 
-  return normalizeArrayOfStrings(safeArray(await res.json()).map((row) => row?.subject_id));
+  const rows = safeArray(await res.json());
+  const subjectIds = normalizeArrayOfStrings(rows.map((row) => row?.subject_id));
+  logSituationKanbanOrder("load", {
+    source: "loadManualSituationSubjectIds",
+    situationId: normalizedSituationId,
+    count: subjectIds.length
+  });
+  return subjectIds;
 }
 
 export async function loadSituationSubjectIdsMap(situationIds = []) {
@@ -654,9 +665,9 @@ export async function loadSituationSubjectIdsMap(situationIds = []) {
   if (!normalizedIds.length) return {};
 
   const url = new URL(`${SUPABASE_URL}/rest/v1/situation_subjects`);
-  url.searchParams.set("select", "situation_id,subject_id,created_at,kanban_status");
+  url.searchParams.set("select", "situation_id,subject_id,created_at,kanban_status,kanban_order");
   url.searchParams.set("situation_id", `in.(${normalizedIds.join(",")})`);
-  url.searchParams.set("order", "created_at.asc");
+  url.searchParams.set("order", "situation_id.asc,kanban_order.asc,created_at.asc");
 
   const res = await fetch(url.toString(), {
     method: "GET",
@@ -678,6 +689,11 @@ export async function loadSituationSubjectIdsMap(situationIds = []) {
     if (!Array.isArray(map[situationId])) map[situationId] = [];
     if (!map[situationId].includes(subjectId)) map[situationId].push(subjectId);
   });
+  logSituationKanbanOrder("load", {
+    source: "loadSituationSubjectIdsMap",
+    situations: normalizedIds.length,
+    rows: rows.length
+  });
   return map;
 }
 
@@ -687,9 +703,9 @@ export async function loadSituationKanbanStatusMap(situationIds = []) {
   if (!normalizedIds.length) return {};
 
   const url = new URL(`${SUPABASE_URL}/rest/v1/situation_subjects`);
-  url.searchParams.set("select", "situation_id,subject_id,kanban_status,created_at");
+  url.searchParams.set("select", "situation_id,subject_id,kanban_status,created_at,kanban_order");
   url.searchParams.set("situation_id", `in.(${normalizedIds.join(",")})`);
-  url.searchParams.set("order", "created_at.asc");
+  url.searchParams.set("order", "situation_id.asc,kanban_order.asc,created_at.asc");
 
   const res = await fetch(url.toString(), {
     method: "GET",
@@ -712,7 +728,64 @@ export async function loadSituationKanbanStatusMap(situationIds = []) {
     if (!map[situationId] || typeof map[situationId] !== "object" || Array.isArray(map[situationId])) map[situationId] = {};
     map[situationId][subjectId] = kanbanStatus;
   });
+  logSituationKanbanOrder("load", {
+    source: "loadSituationKanbanStatusMap",
+    situations: normalizedIds.length,
+    rows: rows.length
+  });
   return map;
+}
+
+export async function reorderSituationKanbanSubjects(situationId, kanbanStatus, orderedSubjectIds = []) {
+  const normalizedSituationId = normalizeUuid(situationId);
+  const normalizedStatus = normalizeSituationKanbanStatus(kanbanStatus);
+  const normalizedSubjectIds = normalizeArrayOfStrings(orderedSubjectIds).map(normalizeUuid).filter(Boolean);
+  if (!normalizedSituationId) throw new Error("situationId is required");
+  if (!normalizedStatus) throw new Error("kanbanStatus is required");
+  if (!normalizedSubjectIds.length) throw new Error("orderedSubjectIds is required");
+
+  const payload = {
+    p_situation_id: normalizedSituationId,
+    p_kanban_status: normalizedStatus,
+    p_subject_ids: normalizedSubjectIds
+  };
+
+  logSituationKanbanOrder("reorder:start", {
+    situationId: normalizedSituationId,
+    kanbanStatus: normalizedStatus,
+    count: normalizedSubjectIds.length
+  });
+
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/reorder_situation_kanban_subjects`, {
+      method: "POST",
+      headers: await getSupabaseAuthHeaders({
+        Accept: "application/json",
+        "Content-Type": "application/json"
+      }),
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`reorder_situation_kanban_subjects failed (${res.status}): ${text}`);
+    }
+
+    const rows = safeArray(await res.json());
+    logSituationKanbanOrder("reorder:success", {
+      situationId: normalizedSituationId,
+      kanbanStatus: normalizedStatus,
+      updated: rows.length
+    });
+    return rows;
+  } catch (error) {
+    logSituationKanbanOrder("reorder:error", {
+      situationId: normalizedSituationId,
+      kanbanStatus: normalizedStatus,
+      message: error instanceof Error ? error.message : String(error || "unknown")
+    });
+    throw error;
+  }
 }
 
 export async function setSituationSubjectKanbanStatus(situationId, subjectId, kanbanStatus) {
@@ -753,21 +826,80 @@ export async function addSubjectToSituation(situationId, subjectId, options = {}
   if (!normalizedSituationId) throw new Error("situationId is required");
   if (!normalizedSubjectId) throw new Error("subjectId is required");
 
+  const explicitStatus = normalizeSituationKanbanStatus(options.kanbanStatus);
+  const targetStatus = explicitStatus || "non_active";
+
+  const existingUrl = new URL(`${SUPABASE_URL}/rest/v1/situation_subjects`);
+  existingUrl.searchParams.set("select", "situation_id,subject_id,kanban_status,kanban_order");
+  existingUrl.searchParams.set("situation_id", `eq.${normalizedSituationId}`);
+  existingUrl.searchParams.set("subject_id", `eq.${normalizedSubjectId}`);
+  existingUrl.searchParams.set("limit", "1");
+
+  const existingRes = await fetch(existingUrl.toString(), {
+    method: "GET",
+    headers: await getSupabaseAuthHeaders({ Accept: "application/json" }),
+    cache: "no-store"
+  });
+
+  if (!existingRes.ok) {
+    const text = await existingRes.text().catch(() => "");
+    throw new Error(`situation_subjects existing fetch failed (${existingRes.status}): ${text}`);
+  }
+
+  const existingRow = (safeArray(await existingRes.json())[0]) || null;
+  if (existingRow) {
+    return existingRow;
+  }
+
+  const orderUrl = new URL(`${SUPABASE_URL}/rest/v1/situation_subjects`);
+  orderUrl.searchParams.set("select", "kanban_order");
+  orderUrl.searchParams.set("situation_id", `eq.${normalizedSituationId}`);
+  orderUrl.searchParams.set("kanban_status", `eq.${targetStatus}`);
+  orderUrl.searchParams.set("order", "kanban_order.desc");
+  orderUrl.searchParams.set("limit", "1");
+
+  const orderRes = await fetch(orderUrl.toString(), {
+    method: "GET",
+    headers: await getSupabaseAuthHeaders({ Accept: "application/json" }),
+    cache: "no-store"
+  });
+
+  if (!orderRes.ok) {
+    const text = await orderRes.text().catch(() => "");
+    throw new Error(`situation_subjects order fetch failed (${orderRes.status}): ${text}`);
+  }
+
+  const highestOrderRow = (safeArray(await orderRes.json())[0]) || null;
+  const nextOrder = Number.isFinite(Number(highestOrderRow?.kanban_order))
+    ? (Number(highestOrderRow.kanban_order) + 1)
+    : 0;
+
   const res = await fetch(`${SUPABASE_URL}/rest/v1/situation_subjects`, {
     method: "POST",
     headers: await getSupabaseAuthHeaders({
       Accept: "application/json",
       "Content-Type": "application/json",
-      Prefer: "resolution=merge-duplicates,return=representation"
+      Prefer: "return=representation"
     }),
     body: JSON.stringify({
       situation_id: normalizedSituationId,
       subject_id: normalizedSubjectId,
-      ...(normalizeSituationKanbanStatus(options.kanbanStatus) ? { kanban_status: normalizeSituationKanbanStatus(options.kanbanStatus) } : {})
+      kanban_status: targetStatus,
+      kanban_order: nextOrder
     })
   });
 
   if (!res.ok) {
+    if (res.status === 409) {
+      const conflictRes = await fetch(existingUrl.toString(), {
+        method: "GET",
+        headers: await getSupabaseAuthHeaders({ Accept: "application/json" }),
+        cache: "no-store"
+      });
+      if (conflictRes.ok) {
+        return (safeArray(await conflictRes.json())[0]) || null;
+      }
+    }
     const text = await res.text().catch(() => "");
     throw new Error(`situation_subjects insert failed (${res.status}): ${text}`);
   }
@@ -806,7 +938,7 @@ export async function loadSubjectsForSituation(situation, projectSubjectsState =
 
   if (normalizedSituation.mode === "manual") {
     const subjectIds = await loadManualSituationSubjectIds(normalizedSituation.id);
-    return sortSubjects(subjectIds.map((subjectId) => subjectsById[subjectId]).filter(Boolean));
+    return subjectIds.map((subjectId) => subjectsById[subjectId]).filter(Boolean);
   }
 
   const flatSubjects = Object.values(subjectsById);
