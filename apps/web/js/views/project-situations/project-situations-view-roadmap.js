@@ -224,14 +224,16 @@ export function renderSituationRoadmapView(situation, subjects = [], options = {
                     <span data-situation-trajectory-zoom-current-label>${escapeHtml(selectedZoomLabel)}</span>
                     ${svgIcon("chevron-down", { className: "gh-chevron", width: 16, height: 16 })}
                   </button>
-                  <div
-                    class="gh-menu situation-trajectory__zoom-menu"
-                    role="menu"
-                    hidden
-                    data-situation-trajectory-zoom-menu
-                    data-situation-trajectory-zoom-situation-id="${escapeHtml(situationId)}"
-                  >
-                    ${renderZoomDropdownOptions(selectedZoom)}
+                  <div data-situation-trajectory-zoom-menu-anchor>
+                    <div
+                      class="gh-menu situation-trajectory__zoom-menu"
+                      role="menu"
+                      hidden
+                      data-situation-trajectory-zoom-menu
+                      data-situation-trajectory-zoom-situation-id="${escapeHtml(situationId)}"
+                    >
+                      ${renderZoomDropdownOptions(selectedZoom)}
+                    </div>
                   </div>
                 </div>
               </div>
