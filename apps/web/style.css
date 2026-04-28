@@ -10372,9 +10372,9 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
 }
 
 .situation-trajectory__segment--dashed{
-  height:2px;
+  height:1px;
   border:none;
-  border-top:2px dashed var(--situation-trajectory-segment-accent-color);
+  border-top:1px dashed var(--situation-trajectory-segment-accent-color);
   border-radius:0;
   background:transparent;
   box-shadow:none;
@@ -10393,6 +10393,18 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
 }
 
 .situation-trajectory__segment--dashed .situation-trajectory__segment-label{
+  display:none;
+}
+
+.situation-trajectory__segment--red:not(.situation-trajectory__segment--dashed){
+  height:1px;
+  border:none;
+  border-radius:0;
+  background:rgb(207, 34, 46);
+  box-shadow:none;
+}
+
+.situation-trajectory__segment--red:not(.situation-trajectory__segment--dashed) .situation-trajectory__segment-label{
   display:none;
 }
 
@@ -10455,14 +10467,18 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   pointer-events:auto;
 }
 
-.situation-trajectory__marker::before,
-.situation-trajectory__marker::after{
-  content:"";
-  position:absolute;
-  inset:0;
+.situation-trajectory__point{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:20px;
+  height:20px;
+  z-index:3;
 }
 
-.situation-trajectory__point{
+.situation-trajectory__marker{
+  width:16px;
+  height:16px;
   display:inline-flex;
   align-items:center;
   justify-content:center;
@@ -10493,14 +10509,16 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   justify-content:center;
 }
 
-.situation-trajectory__marker::before,
-.situation-trajectory__marker::after{
-  border-top:2px solid rgb(248, 81, 73);
-  top:4px;
+.situation-trajectory__marker-icon{
+  display:inline-flex;
+  width:16px;
+  height:16px;
+  color:rgb(248, 81, 73);
 }
 
-.situation-trajectory__marker::before{ transform:rotate(45deg); }
-.situation-trajectory__marker::after{ transform:rotate(-45deg); }
+.situation-trajectory__marker--check .situation-trajectory__marker-icon{
+  color:rgb(63, 185, 80);
+}
 
 .situation-trajectory__point:hover,
 .situation-trajectory__point:focus-visible,
@@ -10534,34 +10552,6 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
 
 .situation-trajectory__point--milestone-removed .situation-trajectory__point-icon svg{
   color:var(--muted);
-}
-
-.situation-trajectory__marker--cross::before,
-.situation-trajectory__marker--cross::after{
-  inset:2px;
-  background:transparent;
-}
-
-.situation-trajectory__marker--cross::before{
-  border-top:2px solid rgb(248, 81, 73);
-  transform:rotate(45deg);
-  top:4px;
-}
-
-.situation-trajectory__marker--cross::after{
-  border-top:2px solid rgb(248, 81, 73);
-  transform:rotate(-45deg);
-  top:4px;
-}
-
-.situation-trajectory__marker--check::before{
-  width:4px;
-  height:8px;
-  border-right:2px solid rgb(63, 185, 80);
-  border-bottom:2px solid rgb(63, 185, 80);
-  transform:rotate(45deg);
-  left:3px;
-  top:0;
 }
 
 .situation-trajectory__svg-line{
