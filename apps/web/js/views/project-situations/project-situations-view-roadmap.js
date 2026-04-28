@@ -11,6 +11,7 @@ const TRAJECTORY_ZOOM_OPTIONS = [
   { value: "week", label: "Semaine" },
   { value: "month", label: "Mois" }
 ];
+const TRAJECTORY_ZOOM_VALUES = new Set(TRAJECTORY_ZOOM_OPTIONS.map((option) => String(option.value || "").trim().toLowerCase()));
 const TRAJECTORY_LEFT_WIDTH = {
   min: 72,
   max: 640,
@@ -58,6 +59,35 @@ function renderZoomOptions() {
     .join("");
 }
 
+function normalizeTrajectoryZoom(value, fallback = "day") {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (TRAJECTORY_ZOOM_VALUES.has(normalized)) return normalized;
+  return fallback;
+}
+
+function getTrajectoryZoomLabel(zoom = "day") {
+  const normalized = normalizeTrajectoryZoom(zoom);
+  return TRAJECTORY_ZOOM_OPTIONS.find((option) => option.value === normalized)?.label || "Jour";
+}
+
+function renderZoomDropdownOptions(selectedZoom = "day") {
+  const normalizedSelectedZoom = normalizeTrajectoryZoom(selectedZoom);
+  return TRAJECTORY_ZOOM_OPTIONS.map((option) => {
+    const normalizedOption = normalizeTrajectoryZoom(option.value);
+    return `
+      <button
+        type="button"
+        class="gh-menu__item${normalizedOption === normalizedSelectedZoom ? " is-active" : ""}"
+        role="menuitemradio"
+        aria-checked="${normalizedOption === normalizedSelectedZoom ? "true" : "false"}"
+        data-situation-trajectory-zoom-option="${escapeHtml(normalizedOption)}"
+      >
+        ${escapeHtml(option.label)}
+      </button>
+    `;
+  }).join("");
+}
+
 function normalizeLeftColumnWidth(value) {
   const width = Number(value);
   if (!Number.isFinite(width)) return TRAJECTORY_LEFT_WIDTH.default;
@@ -81,6 +111,8 @@ export function renderSituationRoadmapView(situation, subjects = [], options = {
   const leftColumnWidth = normalizeLeftColumnWidth(options?.store?.situationsView?.trajectoryLeftColumnWidthBySituationId?.[situationId]);
   const cardOpacity = normalizeTrajectoryOpacity(options?.store?.situationsView?.trajectoryCardOpacityBySituationId?.[situationId], 0.95);
   const cardOpacityLabel = cardOpacity.toFixed(2);
+  const selectedZoom = normalizeTrajectoryZoom(options?.store?.situationsView?.trajectoryZoomBySituationId?.[situationId], "day");
+  const selectedZoomLabel = getTrajectoryZoomLabel(selectedZoom);
 
 
   const projectDataAttribute = projectId ? ` data-project-id="${escapeHtml(projectId)}"` : "";
@@ -183,12 +215,36 @@ export function renderSituationRoadmapView(situation, subjects = [], options = {
                 />
                 <output class="mono" data-situation-trajectory-opacity-value="${escapeHtml(situationId)}">${escapeHtml(cardOpacityLabel)}</output>
               </label>
-              <label class="situation-trajectory__zoom" for="trajectoryZoomSelect">
+              <div class="situation-trajectory__zoom">
                 <span>Zoom</span>
-                <select id="trajectoryZoomSelect" name="trajectoryZoom">
+                <div class="situation-trajectory__zoom-dropdown">
+                  <button
+                    type="button"
+                    class="gh-btn situation-trajectory__zoom-trigger"
+                    aria-haspopup="true"
+                    aria-expanded="false"
+                    data-situation-trajectory-zoom-trigger
+                    data-situation-trajectory-zoom-situation-id="${escapeHtml(situationId)}"
+                  >
+                    ${svgIcon("zoom-in", { className: "octicon octicon-zoom-in", width: 16, height: 16 })}
+                    <span data-situation-trajectory-zoom-current-label>${escapeHtml(selectedZoomLabel)}</span>
+                    ${svgIcon("chevron-down", { className: "gh-chevron", width: 16, height: 16 })}
+                  </button>
+                  <div
+                    class="gh-menu situation-trajectory__zoom-menu"
+                    role="menu"
+                    hidden
+                    data-situation-trajectory-zoom-menu
+                    data-situation-trajectory-zoom-situation-id="${escapeHtml(situationId)}"
+                  >
+                    ${renderZoomDropdownOptions(selectedZoom)}
+                  </div>
+                </div>
+                <label class="sr-only" for="trajectoryZoomSelect-${escapeHtml(situationId)}">Zoom trajectoire</label>
+                <select id="trajectoryZoomSelect-${escapeHtml(situationId)}" name="trajectoryZoom" data-situation-trajectory-zoom-select hidden>
                   ${renderZoomOptions()}
                 </select>
-              </label>
+              </div>
             </div>
             <div class="situation-trajectory__timeline-content" data-situation-trajectory-timeline-content></div>
             <button
