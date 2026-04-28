@@ -143,7 +143,7 @@ test("buildTrajectoryModel crée toujours un premier point open depuis subject.c
   assert.equal(row.statusPoints[0].at.toISOString(), "2026-01-01T00:00:00.000Z");
 });
 
-test("buildTrajectoryModel rend un segment red dashed après objectif quand le sujet est fermé après objectif", () => {
+test("buildTrajectoryModel arrête la ligne rouge à la fermeture finale puis repasse en gray dashed", () => {
   const result = buildTrajectoryModel({
     subjects: [
       {
@@ -169,10 +169,52 @@ test("buildTrajectoryModel rend un segment red dashed après objectif quand le s
   });
 
   const [row] = result.rows;
-  const redDashedSegment = row.lifecycleSegments.find((segment) => segment.startAt.toISOString() === "2026-01-08T00:00:00.000Z");
-  assert.ok(redDashedSegment);
-  assert.equal(redDashedSegment.lineColor, "red");
-  assert.equal(redDashedSegment.lineStyle, "dashed");
+  const redOpenSegment = row.lifecycleSegments.find((segment) => (
+    segment.startAt.toISOString() === "2026-01-05T00:00:00.000Z"
+    && segment.endAt.toISOString() === "2026-01-08T00:00:00.000Z"
+  ));
+  assert.ok(redOpenSegment);
+  assert.equal(redOpenSegment.lineColor, "red");
+  assert.equal(redOpenSegment.lineStyle, "solid");
+
+  const afterCloseSegment = row.lifecycleSegments.find((segment) => segment.startAt.toISOString() === "2026-01-08T00:00:00.000Z");
+  assert.ok(afterCloseSegment);
+  assert.equal(afterCloseSegment.lineColor, "gray");
+  assert.equal(afterCloseSegment.lineStyle, "dashed");
+});
+
+test("buildTrajectoryModel ne trace pas de ligne rouge si l'objectif n'est plus affecté au moment de la fermeture", () => {
+  const result = buildTrajectoryModel({
+    subjects: [
+      {
+        id: "s-objective-removed-before-close",
+        created_at: "2026-01-01T00:00:00.000Z",
+        status: "closed"
+      }
+    ],
+    subjectHistoryEvents: {
+      "s-objective-removed-before-close": [
+        { subject_id: "s-objective-removed-before-close", event_type: "subject_created", created_at: "2026-01-01T00:00:00.000Z" },
+        {
+          subject_id: "s-objective-removed-before-close",
+          event_type: "subject_objectives_changed",
+          created_at: "2026-01-06T00:00:00.000Z",
+          payload: { action: "removed", delta: { added: [], removed: ["o-removed"] } }
+        },
+        { subject_id: "s-objective-removed-before-close", event_type: "subject_closed", created_at: "2026-01-08T00:00:00.000Z", payload: { closed_status: "closed" } }
+      ]
+    },
+    objectivesById: {
+      "o-removed": { id: "o-removed", due_date: "2026-01-05T00:00:00.000Z" }
+    },
+    objectiveIdsBySubjectId: {
+      "s-objective-removed-before-close": []
+    },
+    today: "2026-01-10T00:00:00.000Z"
+  });
+
+  const [row] = result.rows;
+  assert.ok(row.lifecycleSegments.every((segment) => segment.lineColor !== "red"));
 });
 
 test("buildTrajectoryModel mappe les événements de rejet vers closed_invalid/reject", () => {

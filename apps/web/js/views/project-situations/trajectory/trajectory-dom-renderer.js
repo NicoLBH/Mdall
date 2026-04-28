@@ -427,6 +427,10 @@ export function renderTrajectoryDom({
       }
       const objectiveId = normalizeId(marker?.objectiveId);
       if (objectiveId) markerNode.dataset.trajectoryObjectiveId = objectiveId;
+      const markerSymbol = markerType === "check" ? "check" : "x";
+      markerNode.innerHTML = `<span class="situation-trajectory__marker-icon" aria-hidden="true">${
+        svgIcon(markerSymbol, { className: "ui-icon", width: 16, height: 16 })
+      }</span>`;
       markerNode.setAttribute("tabindex", "0");
       markerNode.setAttribute("role", "button");
       markerNode.title = `Objectif ${objectiveId || "inconnu"} · ${formatDateLabel(marker.at)} · ${markerType === "check" ? "check" : "cross"}`;
