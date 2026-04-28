@@ -25,7 +25,8 @@ import {
   loadSubjectsForSituation,
   loadSituationInsightsData,
   setSituationSubjectKanbanStatus,
-  loadSituationKanbanStatusMap
+  loadSituationKanbanStatusMap,
+  reorderSituationKanbanSubjects
 } from "../services/project-situations-supabase.js";
 import { loadProjectSituationsTrajectoryHistory } from "../services/project-situations-trajectory-service.js";
 import { createProjectSituationsState, getDefaultCreateForm, getSituationEditForm } from "./project-situations/project-situations-state.js";
@@ -255,6 +256,10 @@ const kanbanView = createProjectSituationsKanbanView({
       }).catch(() => undefined);
       throw error;
     }
+  },
+  reorderSituationKanbanSubjects: async (situationId, kanbanStatus, orderedSubjectIds = []) => {
+    await reorderSituationKanbanSubjects(situationId, kanbanStatus, orderedSubjectIds);
+    return true;
   },
   openSubjectDrilldown: (...args) => openSubjectDrilldownFromSituation(...args),
   refreshAfterKanbanChange: async () => {
