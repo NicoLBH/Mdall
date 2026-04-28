@@ -836,6 +836,11 @@ export function createProjectSituationsEvents({
     timelineContentNode.querySelectorAll(".situation-trajectory__timeline-objective").forEach((objectiveNode) => {
       const halfWidth = Math.round((objectiveNode.offsetWidth || 0) / 2);
       objectiveNode.style.marginLeft = `${-halfWidth}px`;
+      const lineHeight = Math.max(
+        0,
+        (timelineContentNode.clientHeight || 0) - ((objectiveNode.offsetTop || 0) + (objectiveNode.offsetHeight || 0))
+      );
+      objectiveNode.style.setProperty("--trajectory-objective-line-height", `${lineHeight}px`);
     });
   }
 
@@ -1928,6 +1933,28 @@ export function createProjectSituationsEvents({
     bindSituationGridColumnResize(root);
     bindTrajectoryColumnResize(root);
     bindTrajectoryDom(root);
+    root.querySelectorAll("[data-situation-trajectory-opacity-input]").forEach((node) => {
+      const applyOpacity = () => {
+        const situationId = String(node.getAttribute("data-situation-trajectory-opacity-input") || "").trim();
+        if (!situationId) return;
+        const raw = Number(node.value);
+        const nextOpacity = Number.isFinite(raw) ? Math.max(0, Math.min(1, raw)) : 0.95;
+        if (!store.situationsView || typeof store.situationsView !== "object") store.situationsView = {};
+        if (!store.situationsView.trajectoryCardOpacityBySituationId || typeof store.situationsView.trajectoryCardOpacityBySituationId !== "object") {
+          store.situationsView.trajectoryCardOpacityBySituationId = {};
+        }
+        store.situationsView.trajectoryCardOpacityBySituationId[situationId] = nextOpacity;
+        const trajectoryNode = node.closest("[data-situation-trajectory]");
+        if (trajectoryNode) {
+          trajectoryNode.style.setProperty("--situation-trajectory-card-opacity", String(nextOpacity.toFixed(2)));
+          trajectoryNode.style.setProperty("--situation-trajectory-title-opacity", String(nextOpacity.toFixed(2)));
+        }
+        const valueNode = root.querySelector(`[data-situation-trajectory-opacity-value="${situationId}"]`);
+        if (valueNode) valueNode.textContent = nextOpacity.toFixed(2);
+      };
+      node.addEventListener("input", applyOpacity);
+      node.addEventListener("change", applyOpacity);
+    });
     bindSituationGridEditableCells(root);
     bindSituationGridDnd(root);
 

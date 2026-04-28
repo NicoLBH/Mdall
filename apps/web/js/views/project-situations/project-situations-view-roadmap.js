@@ -64,6 +64,12 @@ function normalizeLeftColumnWidth(value) {
   return Math.max(TRAJECTORY_LEFT_WIDTH.min, Math.min(TRAJECTORY_LEFT_WIDTH.max, Math.round(width)));
 }
 
+function normalizeTrajectoryOpacity(value, fallback = 0.95) {
+  const opacity = Number(value);
+  if (!Number.isFinite(opacity)) return fallback;
+  return Math.max(0, Math.min(1, opacity));
+}
+
 export function renderSituationRoadmapView(situation, subjects = [], options = {}) {
   const subjectCount = Array.isArray(subjects) ? subjects.length : 0;
   const title = String(situation?.title || "Situation");
@@ -73,6 +79,8 @@ export function renderSituationRoadmapView(situation, subjects = [], options = {
     ? options.store.projectSubjectsView.rawSubjectsResult
     : {};
   const leftColumnWidth = normalizeLeftColumnWidth(options?.store?.situationsView?.trajectoryLeftColumnWidthBySituationId?.[situationId]);
+  const cardOpacity = normalizeTrajectoryOpacity(options?.store?.situationsView?.trajectoryCardOpacityBySituationId?.[situationId], 0.95);
+  const cardOpacityLabel = cardOpacity.toFixed(2);
 
 
   const projectDataAttribute = projectId ? ` data-project-id="${escapeHtml(projectId)}"` : "";
@@ -157,16 +165,31 @@ export function renderSituationRoadmapView(situation, subjects = [], options = {
         class="situation-trajectory"
         data-situation-trajectory
         data-situation-id="${escapeHtml(situationId)}"${projectDataAttribute}
-        style="--situation-trajectory-left-width:${leftColumnWidth}px;"
+        style="--situation-trajectory-left-width:${leftColumnWidth}px;--situation-trajectory-card-opacity:${cardOpacityLabel};--situation-trajectory-title-opacity:${cardOpacityLabel};"
       >
         <div class="situation-trajectory__timeline" role="presentation">
           <div class="situation-trajectory__timeline-track" data-situation-trajectory-timeline-track>
-            <label class="situation-trajectory__zoom" for="trajectoryZoomSelect">
-              <span>Zoom</span>
-              <select id="trajectoryZoomSelect" name="trajectoryZoom">
-                ${renderZoomOptions()}
-              </select>
-            </label>
+            <div class="situation-trajectory__toolbar">
+              <label class="situation-trajectory__opacity" for="trajectoryOpacityRange-${escapeHtml(situationId)}">
+                <span>Opacity</span>
+                <input
+                  id="trajectoryOpacityRange-${escapeHtml(situationId)}"
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value="${escapeHtml(cardOpacityLabel)}"
+                  data-situation-trajectory-opacity-input="${escapeHtml(situationId)}"
+                />
+                <output class="mono" data-situation-trajectory-opacity-value="${escapeHtml(situationId)}">${escapeHtml(cardOpacityLabel)}</output>
+              </label>
+              <label class="situation-trajectory__zoom" for="trajectoryZoomSelect">
+                <span>Zoom</span>
+                <select id="trajectoryZoomSelect" name="trajectoryZoom">
+                  ${renderZoomOptions()}
+                </select>
+              </label>
+            </div>
             <div class="situation-trajectory__timeline-content" data-situation-trajectory-timeline-content></div>
             <button
               type="button"

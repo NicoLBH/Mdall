@@ -10131,6 +10131,9 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
 
 .situation-trajectory{
   --situation-trajectory-left-width:320px;
+  --situation-trajectory-card-opacity:.95;
+  --situation-trajectory-title-opacity:.95;
+  --situation-trajectory-objective-color:rgb(248, 81, 73);
   display:flex;
   flex-direction:column;
   min-height:100%;
@@ -10138,11 +10141,19 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   background:var(--bgColor-default, #0d1117);
 }
 
-.situation-trajectory__zoom{
+.situation-trajectory__toolbar{
   position:absolute;
   top:6px;
   right:12px;
   z-index:6;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  pointer-events:auto;
+}
+
+.situation-trajectory__opacity,
+.situation-trajectory__zoom{
   display:flex;
   align-items:center;
   gap:8px;
@@ -10153,7 +10164,10 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   backdrop-filter:blur(2px);
   font-size:12px;
   color:var(--fgColor-muted, #8b949e);
-  pointer-events:auto;
+}
+
+.situation-trajectory__opacity input[type="range"]{
+  width:96px;
 }
 
 .situation-trajectory__zoom select{
@@ -10242,12 +10256,23 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   max-width:160px;
   padding:1px 6px;
   border-radius:999px;
-  border: solid 1px var(--muted);
-  color: var(--muted);
+  border:solid 1px var(--situation-trajectory-objective-color);
+  color:var(--situation-trajectory-objective-color);
   font-size:11px;
   overflow:hidden;
   text-overflow:ellipsis;
   white-space:nowrap;
+  --trajectory-objective-line-height:0px;
+}
+
+.situation-trajectory__timeline-objective::after{
+  content:"";
+  position:absolute;
+  left:50%;
+  top:100%;
+  height:var(--trajectory-objective-line-height, 0px);
+  border-left:1px dashed var(--situation-trajectory-objective-color);
+  opacity:.7;
 }
 
 .situation-trajectory__splitter{
@@ -10334,11 +10359,10 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   transform:translateY(-50%);
   height:28px;
   border-radius:var(--radius);
-  background:rgb(13, 17, 23);
+  background:rgba(13, 17, 23, var(--situation-trajectory-card-opacity, .95));
   border:solid 1px rgb(61, 68, 77);
   outline-color:rgb(240, 246, 252);
   box-shadow:rgba(1, 4, 9, 0.4) 0px 1px 1px 0px, rgba(1, 4, 9, 0.8) 0px 3px 6px 0px;
-  opacity:.95;
   pointer-events:auto;
   cursor:pointer;
   z-index:1;
@@ -10391,6 +10415,7 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
 
 .situation-trajectory__segment-title{
   color:rgb(145, 152, 161);
+  opacity:var(--situation-trajectory-title-opacity, .95);
   overflow:hidden;
   text-overflow:ellipsis;
   white-space:nowrap;
@@ -10530,7 +10555,7 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
 }
 
 .situation-trajectory__svg-line--objective{
-  stroke:rgb(248, 81, 73);
+  stroke:var(--situation-trajectory-objective-color);
   stroke-dasharray:4 4;
   opacity:.7;
 }
