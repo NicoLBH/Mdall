@@ -441,14 +441,14 @@ export function buildTrajectoryModel({
         })
       }));
 
-    const overdueLines = lifecycleSegments
-      .filter((segment) => segment.lineColor === "red")
-      .map((segment) => ({
-        subjectId,
-        startAt: new Date(segment.startAt.getTime()),
-        endAt: new Date(segment.endAt.getTime()),
-        lineStyle: segment.lineStyle
-      }));
+    const overdueLineStyle = finalStatus === "open" ? "solid" : "dashed";
+    const overdueLines = overdueWindows.map((window) => ({
+      subjectId,
+      objectiveId: window.objectiveId,
+      startAt: new Date(window.startTs),
+      endAt: new Date(window.endTs),
+      lineStyle: overdueLineStyle
+    }));
 
     const objectiveMarkers = objectiveDates.map((entry) => {
       const statusAtDueDate = resolveStatusAtTimestamp(statusPoints, entry.dueDate.getTime(), fallbackStartStatus);

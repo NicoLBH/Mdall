@@ -114,6 +114,42 @@ test("buildTrajectoryModel utilise subject.created_at si subject_created absent 
   assert.equal(row.objectiveMarkers[0].markerColor, "red");
 });
 
+test("buildTrajectoryModel démarre overdueLines à la due date (même si antérieure à la création du sujet)", () => {
+  const result = buildTrajectoryModel({
+    subjects: [
+      {
+        id: "s-overdue-before-creation",
+        created_at: "2026-04-22T12:31:00.000Z",
+        status: "open"
+      }
+    ],
+    subjectHistoryEvents: {
+      "s-overdue-before-creation": [
+        { subject_id: "s-overdue-before-creation", event_type: "subject_created", created_at: "2026-04-22T12:31:00.000Z" },
+        {
+          subject_id: "s-overdue-before-creation",
+          event_type: "subject_objectives_changed",
+          created_at: "2026-04-22T12:31:00.000Z",
+          payload: { action: "added", delta: { added: ["o-permis"], removed: [] } }
+        }
+      ]
+    },
+    objectivesById: {
+      "o-permis": { id: "o-permis", due_date: "2026-04-20T00:00:00.000Z" }
+    },
+    objectiveIdsBySubjectId: {
+      "s-overdue-before-creation": ["o-permis"]
+    },
+    today: "2026-04-28T06:58:22.818Z"
+  });
+
+  const [row] = result.rows;
+  assert.equal(row.overdueLines.length, 1);
+  assert.equal(row.overdueLines[0].startAt.toISOString(), "2026-04-20T00:00:00.000Z");
+  assert.equal(row.overdueLines[0].endAt.toISOString(), "2026-04-28T06:58:22.818Z");
+  assert.equal(row.overdueLines[0].lineStyle, "solid");
+});
+
 test("normalizeCloseStatus remonte closed_invalid et closed_duplicate depuis le payload", () => {
   const { normalizeCloseStatus } = __trajectoryModelTestUtils();
   assert.equal(normalizeCloseStatus({ payload: { closed_status: "invalid" } }), "closed_invalid");
