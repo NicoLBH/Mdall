@@ -704,6 +704,31 @@ export function createProjectSituationsEvents({
     return scoped.statusEventsBySubjectId || scoped.eventsBySubjectId || {};
   }
 
+  function resolveTrajectoryHistoryState(situationId = "", subjects = []) {
+    const bySituationId = store?.projectSubjectsView?.trajectoryHistoryBySituationId;
+    if (!bySituationId || typeof bySituationId !== "object") {
+      return { status: "loading", isComplete: false, errorMessage: "" };
+    }
+    const scoped = bySituationId[situationId];
+    if (!scoped || typeof scoped !== "object") {
+      return { status: "loading", isComplete: false, errorMessage: "" };
+    }
+    const subjectIdsSignature = [...new Set((Array.isArray(subjects) ? subjects : [])
+      .map((subject) => String(subject?.id || "").trim())
+      .filter(Boolean))]
+      .sort((a, b) => a.localeCompare(b))
+      .join(",");
+    const scopedSignature = String(scoped?.subjectIdsSignature || "").trim();
+    if (subjectIdsSignature && scopedSignature && scopedSignature !== subjectIdsSignature) {
+      return { status: "loading", isComplete: false, errorMessage: "" };
+    }
+    return {
+      status: String(scoped?.historyStatus || "").trim().toLowerCase() || "ready",
+      isComplete: scoped?.isComplete === true,
+      errorMessage: String(scoped?.errorMessage || "").trim()
+    };
+  }
+
 
   function resolveTrajectoryRelationEvents(situationId = "") {
     const bySituationId = store?.projectSubjectsView?.trajectoryHistoryBySituationId;
@@ -852,6 +877,7 @@ export function createProjectSituationsEvents({
           const objectiveIdsBySubjectId = rawSubjectsResult.objectiveIdsBySubjectId || {};
           const objectivesById = rawSubjectsResult.objectivesById || {};
           const historyBySubjectId = resolveTrajectoryHistoryBySubjectId(situationId);
+          const historyState = resolveTrajectoryHistoryState(situationId, subjects);
           const relationEvents = resolveTrajectoryRelationEvents(situationId);
           const situationStartDate = resolveTrajectorySituationStartDate(situationId);
 
@@ -873,6 +899,27 @@ export function createProjectSituationsEvents({
             endDate: resolveTrajectoryTimelineEndDate(),
             zoom: "day"
           });
+
+          if (historyState.status !== "ready" || historyState.isComplete !== true) {
+            if (itemsRootNode) itemsRootNode.innerHTML = "";
+            if (svgNode) svgNode.innerHTML = "";
+            if (spinnerNode) {
+              spinnerNode.hidden = false;
+              const spinnerLabel = spinnerNode.querySelector("span:last-child");
+              if (spinnerLabel) {
+                spinnerLabel.textContent = historyState.status === "error"
+                  ? "Trajectoire indisponible : historique incomplet."
+                  : "Chargement de la trajectoire…";
+              }
+            }
+            console.warn("[trajectory] history.incomplete", {
+              situationId,
+              status: historyState.status,
+              isComplete: historyState.isComplete,
+              message: historyState.errorMessage || ""
+            });
+            return;
+          }
 
           const { rows } = buildTrajectoryModel({
             subjects,
@@ -1840,6 +1887,17 @@ export function createProjectSituationsEvents({
         if (store.situationsView.selectedSituationLayout === nextLayout) return;
         store.situationsView.selectedSituationLayout = nextLayout;
         rerender(root);
+        if (nextLayout === "roadmap" && typeof loadSituationSelection === "function") {
+          const selectedSituationId = String(store?.situationsView?.selectedSituationId || "").trim();
+          if (selectedSituationId) {
+            loadSituationSelection(selectedSituationId)
+              .then(() => rerender(root))
+              .catch((error) => {
+                console.error("[trajectory] history.load.on.layout.error", error);
+                rerender(root);
+              });
+          }
+        }
       }
     });
 
