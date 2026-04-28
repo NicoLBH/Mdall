@@ -10358,6 +10358,7 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
 }
 
 .situation-trajectory__segment{
+  --situation-trajectory-segment-accent-color:rgb(99, 110, 123);
   transform:translateY(-50%);
   height:28px;
   border-radius:var(--radius);
@@ -10375,15 +10376,15 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
 }
 
 .situation-trajectory__segment--dashed.situation-trajectory__segment--green{
-  border-color:rgb(61, 68, 77);
+  --situation-trajectory-segment-accent-color:rgb(35, 134, 54);
 }
 
 .situation-trajectory__segment--dashed.situation-trajectory__segment--red{
-  border-color:rgb(61, 68, 77);
+  --situation-trajectory-segment-accent-color:rgb(207, 34, 46);
 }
 
 .situation-trajectory__segment--dashed.situation-trajectory__segment--gray{
-  border-color:rgb(61, 68, 77);
+  --situation-trajectory-segment-accent-color:rgb(99, 110, 123);
 }
 
 .situation-trajectory__segment-label{
@@ -10403,16 +10404,39 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   width:16px;
   height:16px;
   border-radius:999px;
-  background:rgb(99, 110, 123);
+  background:var(--situation-trajectory-segment-accent-color);
   flex:0 0 16px;
 }
 
 .situation-trajectory__segment--green .situation-trajectory__segment-label::before{
-  background:rgb(35, 134, 54);
+  --situation-trajectory-segment-accent-color:rgb(35, 134, 54);
+}
+
+.situation-trajectory__segment--green:not(.situation-trajectory__segment--dashed) .situation-trajectory__segment-label::before{
+  display:none;
 }
 
 .situation-trajectory__segment--red .situation-trajectory__segment-label::before{
+  display:none;
+}
+
+.situation-trajectory__segment--dashed.situation-trajectory__segment--gray .situation-trajectory__segment-label{
+  display:none;
+}
+
+.situation-trajectory__overdue-line{
+  position:absolute;
+  transform:translateY(-50%);
+  height:1px;
   background:rgb(207, 34, 46);
+  pointer-events:none;
+  z-index:4;
+}
+
+.situation-trajectory__overdue-line--dashed{
+  height:0;
+  background:transparent;
+  border-top:1px dashed rgb(207, 34, 46);
 }
 
 .situation-trajectory__segment-title{
@@ -10431,8 +10455,6 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
 .situation-trajectory__point,
 .situation-trajectory__marker{
   transform:translate(-50%, -50%);
-  width:20px;
-  height:20px;
   appearance:none;
   border:none;
   padding:0;
@@ -10443,14 +10465,18 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   pointer-events:auto;
 }
 
-.situation-trajectory__marker::before,
-.situation-trajectory__marker::after{
-  content:"";
-  position:absolute;
-  inset:0;
+.situation-trajectory__point{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:20px;
+  height:20px;
+  z-index:3;
 }
 
-.situation-trajectory__point{
+.situation-trajectory__marker{
+  width:16px;
+  height:16px;
   display:inline-flex;
   align-items:center;
   justify-content:center;
@@ -10474,14 +10500,16 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   justify-content:center;
 }
 
-.situation-trajectory__marker::before,
-.situation-trajectory__marker::after{
-  border-top:2px solid rgb(248, 81, 73);
-  top:6px;
+.situation-trajectory__marker-icon{
+  display:inline-flex;
+  width:16px;
+  height:16px;
+  color:rgb(248, 81, 73);
 }
 
-.situation-trajectory__marker::before{ transform:rotate(45deg); }
-.situation-trajectory__marker::after{ transform:rotate(-45deg); }
+.situation-trajectory__marker--check .situation-trajectory__marker-icon{
+  color:rgb(63, 185, 80);
+}
 
 .situation-trajectory__point:hover,
 .situation-trajectory__point:focus-visible,
@@ -10517,32 +10545,12 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   color:var(--muted);
 }
 
-.situation-trajectory__marker--cross::before,
-.situation-trajectory__marker--cross::after{
-  inset:2px;
+.situation-trajectory__point--milestone{
+  transform:translate(-50%, calc(-50% - 14px));
+}
+
+.situation-trajectory__point--milestone .situation-trajectory__point-icon{
   background:transparent;
-}
-
-.situation-trajectory__marker--cross::before{
-  border-top:2px solid rgb(248, 81, 73);
-  transform:rotate(45deg);
-  top:6px;
-}
-
-.situation-trajectory__marker--cross::after{
-  border-top:2px solid rgb(248, 81, 73);
-  transform:rotate(-45deg);
-  top:6px;
-}
-
-.situation-trajectory__marker--check::before{
-  width:4px;
-  height:8px;
-  border-right:2px solid rgb(63, 185, 80);
-  border-bottom:2px solid rgb(63, 185, 80);
-  transform:rotate(45deg);
-  left:4px;
-  top:1px;
 }
 
 .situation-trajectory__svg-line{
