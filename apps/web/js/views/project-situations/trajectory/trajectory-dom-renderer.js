@@ -326,10 +326,8 @@ export function renderTrajectoryDom({
       const startTs = toTimestamp(segment.startAt);
       const endTs = toTimestamp(segment.endAt);
       if (!intersectsRange(startTs, endTs, visibleStartTs, visibleEndTs)) continue;
-      const displayStartTs = toRenderTimestamp(startTs, timeScale, startTs);
-      const displayEndTs = toRenderTimestamp(endTs, timeScale, endTs);
-      const displayLeftTs = Math.min(displayStartTs, displayEndTs);
-      const displayRightTs = Math.max(displayStartTs, displayEndTs);
+      const displayLeftTs = Math.min(startTs, endTs);
+      const displayRightTs = Math.max(startTs, endTs);
 
       const segmentNode = document.createElement("div");
       const segmentColor = String(segment?.lineColor || "").trim().toLowerCase();
@@ -378,7 +376,6 @@ export function renderTrajectoryDom({
       const point = statusPoints[pointIndex];
       const ts = toTimestamp(point.at);
       if (ts < visibleStartTs || ts > visibleEndTs) continue;
-      const displayTs = toRenderTimestamp(ts, timeScale, ts);
 
       const localOffset = statusPointUsedOffsetsByTs.get(ts) || 0;
       statusPointUsedOffsetsByTs.set(ts, localOffset + 1);
@@ -389,7 +386,7 @@ export function renderTrajectoryDom({
       const pointNode = document.createElement("button");
       pointNode.type = "button";
       pointNode.className = "situation-trajectory__point";
-      pointNode.style.left = `${timeScale.timeToX(displayTs) + pointOffsetPx}px`;
+      pointNode.style.left = `${timeScale.timeToX(ts) + pointOffsetPx}px`;
       pointNode.style.top = `${y}px`;
 
       const pointType = resolvePointIcon(point, statusPoints[pointIndex - 1] || null);
