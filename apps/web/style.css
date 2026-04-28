@@ -10143,9 +10143,9 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
 
 .situation-trajectory__toolbar{
   position:absolute;
-  top:6px;
+  top:4px;
   right:12px;
-  z-index:6;
+  z-index:9;
   display:flex;
   align-items:center;
   gap:10px;
@@ -10154,8 +10154,7 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   height: 32px;
 }
 
-.situation-trajectory__opacity,
-.situation-trajectory__zoom{
+.situation-trajectory__opacity{
   display:flex;
   align-items:center;
   gap:8px;
@@ -10168,12 +10167,56 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   color:var(--fgColor-muted, #8b949e);
 }
 
+.situation-trajectory__zoom{
+  display:flex;
+  align-items:center;
+}
+
 .situation-trajectory__opacity input[type="range"]{
   width:96px;
 }
 
-.situation-trajectory__zoom select{
-  min-width:130px;
+.situation-trajectory__zoom-dropdown{
+  position:relative;
+}
+
+.situation-trajectory__zoom-trigger{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  height:24px;
+  padding:0 8px;
+  border-radius:var(--radius);
+  background:transparent;
+  border-color:transparent;
+  box-shadow:none;
+  color:rgb(145, 152, 161);
+  font-size:12px;
+}
+
+.situation-trajectory__zoom-trigger .octicon{
+  color:rgb(145, 152, 161);
+}
+
+.situation-trajectory__zoom-trigger:hover,
+.situation-trajectory__zoom-trigger:focus-visible{
+  background:#656c7633;
+  border-radius:var(--radius);
+  border-color:transparent;
+  box-shadow:none;
+}
+
+.situation-trajectory__zoom-menu{
+  position:absolute;
+  top:calc(100% + 6px);
+  right:0;
+  min-width:170px;
+  display:none;
+  z-index:30;
+}
+
+.situation-trajectory__zoom-menu.gh-menu--open{
+  display:block;
 }
 
 .situation-trajectory__timeline{
@@ -10189,8 +10232,25 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
 .situation-trajectory__timeline-track{
   position:relative;
   min-height:64px;
-  overflow:hidden;
+  overflow-x:hidden;
+  overflow-y:visible;
   padding-left:var(--situation-trajectory-left-width);
+}
+
+.situation-trajectory__timeline-sticky-label{
+  position:absolute;
+  top:10px;
+  left:var(--situation-trajectory-left-width);
+  z-index:7;
+  margin-left:8px;
+  padding:1px 8px;
+  border-radius:999px;
+  background:color-mix(in srgb, var(--bgColor-default, #0d1117) 86%, transparent);
+  border:1px solid var(--borderColor-muted, #30363d);
+  color:rgb(145, 152, 161);
+  font-size:11px;
+  white-space:nowrap;
+  pointer-events:none;
 }
 
 .situation-trajectory__timeline-content{
