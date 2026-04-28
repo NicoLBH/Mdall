@@ -10606,6 +10606,11 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   stroke-dasharray:4 4;
 }
 
+.situation-trajectory__hierarchy-link--blocked{
+  stroke:var(--danger-fg, #f85149);
+  fill:var(--danger-fg, #f85149);
+}
+
 .situation-trajectory__hierarchy-link[points],
 polygon.situation-trajectory__hierarchy-link,
 circle.situation-trajectory__hierarchy-link{
