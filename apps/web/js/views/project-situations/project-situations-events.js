@@ -1948,12 +1948,14 @@ export function createProjectSituationsEvents({
         if (trajectoryNode) {
           trajectoryNode.style.setProperty("--situation-trajectory-card-opacity", String(nextOpacity.toFixed(2)));
           trajectoryNode.style.setProperty("--situation-trajectory-title-opacity", String(nextOpacity.toFixed(2)));
+          trajectoryNode.setAttribute("data-trajectory-opacity-zero", nextOpacity === 0 ? "true" : "false");
         }
         const valueNode = root.querySelector(`[data-situation-trajectory-opacity-value="${situationId}"]`);
         if (valueNode) valueNode.textContent = nextOpacity.toFixed(2);
       };
       node.addEventListener("input", applyOpacity);
       node.addEventListener("change", applyOpacity);
+      applyOpacity();
     });
     bindSituationGridEditableCells(root);
     bindSituationGridDnd(root);
