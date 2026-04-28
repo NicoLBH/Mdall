@@ -236,6 +236,11 @@ export function renderSituationRoadmapView(situation, subjects = [], options = {
                 </div>
               </div>
             </div>
+            <div
+              class="situation-trajectory__timeline-sticky-label"
+              data-situation-trajectory-timeline-sticky-label
+              aria-live="polite"
+            ></div>
             <div class="situation-trajectory__timeline-content" data-situation-trajectory-timeline-content></div>
             <button
               type="button"

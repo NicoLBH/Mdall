@@ -10232,8 +10232,25 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
 .situation-trajectory__timeline-track{
   position:relative;
   min-height:64px;
-  overflow:visible;
+  overflow-x:hidden;
+  overflow-y:visible;
   padding-left:var(--situation-trajectory-left-width);
+}
+
+.situation-trajectory__timeline-sticky-label{
+  position:absolute;
+  top:4px;
+  left:var(--situation-trajectory-left-width);
+  z-index:7;
+  margin-left:8px;
+  padding:1px 8px;
+  border-radius:999px;
+  background:color-mix(in srgb, var(--bgColor-default, #0d1117) 86%, transparent);
+  border:1px solid var(--borderColor-muted, #30363d);
+  color:rgb(145, 152, 161);
+  font-size:11px;
+  white-space:nowrap;
+  pointer-events:none;
 }
 
 .situation-trajectory__timeline-content{

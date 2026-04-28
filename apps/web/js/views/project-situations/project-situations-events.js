@@ -783,6 +783,46 @@ export function createProjectSituationsEvents({
     return endDate;
   }
 
+  function formatTrajectoryStickyTimelineLabel(date, zoom = "day") {
+    const safeDate = date instanceof Date ? date : new Date(date);
+    if (Number.isNaN(safeDate.getTime())) return { label: "", title: "" };
+    const normalizedZoom = String(zoom || "day").trim().toLowerCase();
+    if (normalizedZoom === "hour") {
+      return {
+        label: safeDate.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" }),
+        title: ""
+      };
+    }
+    if (normalizedZoom === "half-day") {
+      return {
+        label: safeDate.toLocaleDateString("fr-FR", { day: "numeric", month: "long" }),
+        title: safeDate.toLocaleDateString("fr-FR", { year: "numeric" })
+      };
+    }
+    if (normalizedZoom === "day") {
+      return {
+        label: safeDate.toLocaleDateString("fr-FR", { month: "long", year: "numeric" }),
+        title: ""
+      };
+    }
+    if (normalizedZoom === "week") {
+      const monday = new Date(safeDate.getTime());
+      const day = monday.getDay();
+      const diff = day === 0 ? -6 : 1 - day;
+      monday.setDate(monday.getDate() + diff);
+      const sunday = new Date(monday.getTime());
+      sunday.setDate(sunday.getDate() + 6);
+      return {
+        label: `${monday.toLocaleDateString("fr-FR", { day: "2-digit", month: "short" })} → ${sunday.toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" })}`,
+        title: ""
+      };
+    }
+    return {
+      label: safeDate.toLocaleDateString("fr-FR", { year: "numeric" }),
+      title: ""
+    };
+  }
+
   function renderTrajectoryTimelineTicks(timelineContentNode, timeScale, { objectivesById = {} } = {}) {
     if (!timelineContentNode || !timeScale || typeof timeScale.buildTicks !== "function") return;
     const ticks = timeScale.buildTicks({
@@ -912,6 +952,7 @@ export function createProjectSituationsEvents({
           const itemsRootNode = trajectoryNode.querySelector("[data-situation-trajectory-items]");
           const leftContentNode = trajectoryNode.querySelector("[data-situation-trajectory-left-content]");
           const timelineContentNode = trajectoryNode.querySelector("[data-situation-trajectory-timeline-content]");
+          const timelineStickyLabelNode = trajectoryNode.querySelector("[data-situation-trajectory-timeline-sticky-label]");
           const scrollSizerNode = trajectoryNode.querySelector("[data-situation-trajectory-scroll-sizer]");
           const spinnerNode = trajectoryNode.querySelector("[data-situation-trajectory-spinner]");
           if (!viewportNode || !sceneNode || !svgNode || !itemsRootNode) return;
@@ -1014,6 +1055,13 @@ export function createProjectSituationsEvents({
             if (spinnerNode) spinnerNode.hidden = !windowState.isFastScrolling;
             if (leftContentNode) leftContentNode.style.transform = `translateY(${-scrollTop}px)`;
             if (timelineContentNode) timelineContentNode.style.transform = `translate3d(${-scrollLeft}px,0,0)`;
+            if (timelineStickyLabelNode && typeof timeScale.xToTime === "function") {
+              const stickyDate = timeScale.xToTime(scrollLeft);
+              const stickyLabel = formatTrajectoryStickyTimelineLabel(stickyDate, timeScale.zoom);
+              timelineStickyLabelNode.textContent = stickyLabel.label;
+              timelineStickyLabelNode.title = stickyLabel.title;
+              timelineStickyLabelNode.hidden = !stickyLabel.label;
+            }
 
             renderTrajectoryDom({
               scene: sceneNode,
