@@ -309,7 +309,11 @@ export function buildTrajectoryModel({
       fallbackProjectStartTs
     );
 
-    const endTs = Math.max(todayTs, latestObjectiveTs || 0, subjectCreatedTs);
+    const latestActivityTs = events.length ? events[events.length - 1].created_at.getTime() : subjectCreatedTs;
+    const normalizedSubjectStatus = normalizeStatus(subject.status);
+    const endTs = normalizedSubjectStatus === "open"
+      ? Math.max(todayTs, latestObjectiveTs || 0, subjectCreatedTs, latestActivityTs)
+      : Math.max(subjectCreatedTs, latestActivityTs);
     const fallbackStartStatus = normalizeStatus(subject.status);
 
     const statusPoints = [];

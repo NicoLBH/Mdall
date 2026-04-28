@@ -10429,10 +10429,6 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   display:none;
 }
 
-.situation-trajectory__segment--red:not(.situation-trajectory__segment--dashed) .situation-trajectory__segment-label{
-  display:none;
-}
-
 .situation-trajectory__overdue-line{
   position:absolute;
   transform:translateY(-50%);
@@ -10562,7 +10558,11 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
 }
 
 .situation-trajectory__point--milestone{
-  transform:translate(-50%, calc(-50% - 28px));
+  transform:translate(-50%, calc(-50% - 14px));
+}
+
+.situation-trajectory__point--milestone .situation-trajectory__point-icon{
+  background:transparent;
 }
 
 .situation-trajectory__svg-line{

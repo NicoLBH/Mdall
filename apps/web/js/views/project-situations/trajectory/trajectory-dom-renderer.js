@@ -369,8 +369,10 @@ export function renderTrajectoryDom({
       const startTs = toTimestamp(overdueLine.startAt);
       const endTs = toTimestamp(overdueLine.endAt);
       if (!intersectsRange(startTs, endTs, visibleStartTs, visibleEndTs)) continue;
-      const displayLeftTs = Math.min(startTs, endTs);
-      const displayRightTs = Math.max(startTs, endTs);
+      const displayStartTs = toRenderTimestamp(startTs, timeScale, startTs);
+      const displayEndTs = toRenderTimestamp(endTs, timeScale, endTs);
+      const displayLeftTs = Math.min(displayStartTs, displayEndTs);
+      const displayRightTs = Math.max(displayStartTs, displayEndTs);
       const overdueNode = document.createElement("div");
       const lineStyle = String(overdueLine?.lineStyle || "").trim().toLowerCase();
       overdueNode.className = [

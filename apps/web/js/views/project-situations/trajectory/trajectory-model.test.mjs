@@ -179,7 +179,7 @@ test("buildTrajectoryModel crée toujours un premier point open depuis subject.c
   assert.equal(row.statusPoints[0].at.toISOString(), "2026-01-01T00:00:00.000Z");
 });
 
-test("buildTrajectoryModel arrête la ligne rouge à la fermeture finale puis repasse en gray dashed", () => {
+test("buildTrajectoryModel arrête les segments à la dernière activité quand le sujet est fermé", () => {
   const result = buildTrajectoryModel({
     subjects: [
       {
@@ -214,9 +214,7 @@ test("buildTrajectoryModel arrête la ligne rouge à la fermeture finale puis re
   assert.equal(redOpenSegment.lineStyle, "solid");
 
   const afterCloseSegment = row.lifecycleSegments.find((segment) => segment.startAt.toISOString() === "2026-01-08T00:00:00.000Z");
-  assert.ok(afterCloseSegment);
-  assert.equal(afterCloseSegment.lineColor, "gray");
-  assert.equal(afterCloseSegment.lineStyle, "dashed");
+  assert.equal(afterCloseSegment, undefined);
 });
 
 test("buildTrajectoryModel ne trace pas de ligne rouge si l'objectif n'est plus affecté au moment de la fermeture", () => {
@@ -412,8 +410,7 @@ test("buildTrajectoryModel reconstruit 4 segments pour open → close → reopen
     [
       { status: "open", start: "2026-04-11T00:00:00.000Z", end: "2026-04-19T18:03:00.000Z" },
       { status: "closed", start: "2026-04-19T18:03:00.000Z", end: "2026-04-20T14:00:00.000Z" },
-      { status: "open", start: "2026-04-20T14:00:00.000Z", end: "2026-04-20T14:07:00.000Z" },
-      { status: "closed", start: "2026-04-20T14:07:00.000Z", end: "2026-04-28T00:00:00.000Z" }
+      { status: "open", start: "2026-04-20T14:00:00.000Z", end: "2026-04-20T14:07:00.000Z" }
     ]
   );
 });
@@ -443,8 +440,7 @@ test("buildTrajectoryModel récupère l'historique même si les événements son
     [
       { status: "open", start: "2026-04-11T09:28:07.836Z", end: "2026-04-19T18:03:00.000Z" },
       { status: "closed", start: "2026-04-19T18:03:00.000Z", end: "2026-04-20T14:00:00.000Z" },
-      { status: "open", start: "2026-04-20T14:00:00.000Z", end: "2026-04-20T14:07:00.000Z" },
-      { status: "closed", start: "2026-04-20T14:07:00.000Z", end: "2026-04-28T06:58:22.818Z" }
+      { status: "open", start: "2026-04-20T14:00:00.000Z", end: "2026-04-20T14:07:00.000Z" }
     ]
   );
 });
