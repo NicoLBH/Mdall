@@ -181,7 +181,7 @@ function createHierarchyPath({ x, parentY, childY, isRemoved = false, isReverse 
   const laneStartX = x + 2;
   const laneMidX = x + 18;
   const laneEndX = x + 34;
-  const curvePad = direction * 6;
+  const curvePad = direction * 12;
 
   const path = document.createElementNS(SVG_NS, "path");
   path.setAttribute(
@@ -200,13 +200,13 @@ function createHierarchyPath({ x, parentY, childY, isRemoved = false, isReverse 
     const circle = document.createElementNS(SVG_NS, "circle");
     circle.setAttribute("cx", String(laneStartX));
     circle.setAttribute("cy", String(startY));
-    circle.setAttribute("r", "5");
+    circle.setAttribute("r", "2.5");
     circle.setAttribute("class", `situation-trajectory__hierarchy-link${isRemoved ? " is-removed" : ""}`);
     return circle;
   })();
 
   const arrow = document.createElementNS(SVG_NS, "polygon");
-  const arrowSize = 8;
+  const arrowSize = 4;
   arrow.setAttribute(
     "points",
     [
