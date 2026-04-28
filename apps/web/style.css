@@ -10219,6 +10219,12 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
   display:block;
 }
 
+.situation-trajectory__zoom-menu.situation-trajectory__zoom-menu--portal{
+  position:static;
+  top:auto;
+  right:auto;
+}
+
 .trajectory-zoom-dropdown-host{
   position:fixed;
   z-index:120;

@@ -1905,6 +1905,7 @@ export function createProjectSituationsEvents({
       const openMenu = host.querySelector("[data-situation-trajectory-zoom-menu]");
       const ownerDropdownId = String(host.dataset.ownerDropdownId || "").trim();
       if (openMenu && ownerDropdownId) {
+        openMenu.classList.remove("situation-trajectory__zoom-menu--portal");
         const ownerDropdown = document.querySelector(`[data-situation-trajectory-zoom-dropdown-id="${CSS.escape(ownerDropdownId)}"]`);
         const ownerAnchor = ownerDropdown?.querySelector?.("[data-situation-trajectory-zoom-menu-anchor]");
         if (ownerAnchor) ownerAnchor.appendChild(openMenu);
@@ -1940,6 +1941,7 @@ export function createProjectSituationsEvents({
       host.appendChild(menuNode);
       host.dataset.ownerDropdownId = dropdownId;
       host.setAttribute("aria-hidden", "false");
+      menuNode.classList.add("situation-trajectory__zoom-menu--portal");
       menuNode.hidden = false;
       menuNode.classList.add("gh-menu--open");
       triggerNode.setAttribute("aria-expanded", "true");
