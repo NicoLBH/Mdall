@@ -82,6 +82,35 @@ function renderZoomDropdownOptions(selectedZoom = "day") {
   }).join("");
 }
 
+function normalizeTrajectoryZoom(value, fallback = "day") {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (TRAJECTORY_ZOOM_VALUES.has(normalized)) return normalized;
+  return fallback;
+}
+
+function getTrajectoryZoomLabel(zoom = "day") {
+  const normalized = normalizeTrajectoryZoom(zoom);
+  return TRAJECTORY_ZOOM_OPTIONS.find((option) => option.value === normalized)?.label || "Jour";
+}
+
+function renderZoomDropdownOptions(selectedZoom = "day") {
+  const normalizedSelectedZoom = normalizeTrajectoryZoom(selectedZoom);
+  return TRAJECTORY_ZOOM_OPTIONS.map((option) => {
+    const normalizedOption = normalizeTrajectoryZoom(option.value);
+    return `
+      <button
+        type="button"
+        class="gh-menu__item${normalizedOption === normalizedSelectedZoom ? " is-active" : ""}"
+        role="menuitemradio"
+        aria-checked="${normalizedOption === normalizedSelectedZoom ? "true" : "false"}"
+        data-situation-trajectory-zoom-option="${escapeHtml(normalizedOption)}"
+      >
+        ${escapeHtml(option.label)}
+      </button>
+    `;
+  }).join("");
+}
+
 function normalizeLeftColumnWidth(value) {
   const width = Number(value);
   if (!Number.isFinite(width)) return TRAJECTORY_LEFT_WIDTH.default;
