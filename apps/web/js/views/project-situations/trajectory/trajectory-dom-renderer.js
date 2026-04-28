@@ -248,11 +248,21 @@ function createHierarchyPath({ x, sourceY, targetY, isRemoved = false, isReverse
     icon.setAttribute("height", String(iconSize));
     icon.setAttribute("x", String(laneMidX - (iconSize / 2)));
     icon.setAttribute("y", String(((startY + endY) / 2) - (iconSize / 2)));
-    icon.setAttribute("class", `situation-trajectory__hierarchy-link situation-trajectory__hierarchy-link--blocked${isRemoved ? " is-removed" : ""}`);
+    icon.setAttribute("class", `situation-trajectory__hierarchy-link situation-trajectory__hierarchy-link--blocked situation-trajectory__hierarchy-link--blocked-icon${isRemoved ? " is-removed" : ""}`);
+
+    const backdrop = document.createElementNS(SVG_NS, "circle");
+    backdrop.setAttribute("cx", "8");
+    backdrop.setAttribute("cy", "8");
+    backdrop.setAttribute("r", "7");
+    backdrop.setAttribute("fill", "rgb(21, 27, 35)");
+    backdrop.setAttribute("class", "situation-trajectory__hierarchy-link--blocked-icon-backdrop");
 
     const use = document.createElementNS(SVG_NS, "use");
     use.setAttribute("href", "assets/icons.svg#blocked");
     use.setAttribute("xlink:href", "assets/icons.svg#blocked");
+    use.setAttribute("class", "situation-trajectory__hierarchy-link--blocked-icon-glyph");
+
+    icon.appendChild(backdrop);
     icon.appendChild(use);
     return icon;
   })() : null;

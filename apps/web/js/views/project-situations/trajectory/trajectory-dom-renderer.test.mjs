@@ -538,7 +538,9 @@ test("renderTrajectoryDom dessine les liens bloqué par en rouge avec icône blo
   assert.equal(blockedPaths.length, 1);
   assert.equal(blockedIcons.length, 1);
   assert.equal(blockedIcons[0].getAttribute("width"), "12");
-  assert.ok(String(blockedIcons[0].childNodes[0]?.getAttribute("href") || "").includes("#blocked"));
+  assert.equal(blockedIcons[0].childNodes[0]?.tagName, "CIRCLE");
+  assert.equal(blockedIcons[0].childNodes[0]?.getAttribute("fill"), "rgb(21, 27, 35)");
+  assert.ok(String(blockedIcons[0].childNodes[1]?.getAttribute("href") || "").includes("#blocked"));
 
   globalThis.document = originalDocument;
 });

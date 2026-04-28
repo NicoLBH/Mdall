@@ -10608,7 +10608,10 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
 
 .situation-trajectory__hierarchy-link--blocked{
   stroke:var(--danger-fg, #f85149);
-  fill:var(--danger-fg, #f85149);
+}
+
+path.situation-trajectory__hierarchy-link--blocked{
+  fill:none;
 }
 
 .situation-trajectory__hierarchy-link[points],
@@ -10616,6 +10619,16 @@ polygon.situation-trajectory__hierarchy-link,
 circle.situation-trajectory__hierarchy-link{
   fill:rgb(139, 148, 158);
   stroke:none;
+}
+
+polygon.situation-trajectory__hierarchy-link--blocked,
+circle.situation-trajectory__hierarchy-link--blocked,
+.situation-trajectory__hierarchy-link--blocked-icon .situation-trajectory__hierarchy-link--blocked-icon-glyph{
+  fill:var(--danger-fg, #f85149);
+}
+
+.situation-trajectory__hierarchy-link--blocked-icon .situation-trajectory__hierarchy-link--blocked-icon-backdrop{
+  fill:rgb(21, 27, 35);
 }
 
 .situation-trajectory[data-trajectory-opacity-zero="true"] .situation-trajectory__hierarchy-link:hover{
