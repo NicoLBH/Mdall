@@ -181,17 +181,19 @@ function createHierarchyPath({ x, parentY, childY, isRemoved = false, isReverse 
   const laneStartX = x + 2;
   const laneMidX = x + 18;
   const laneEndX = x + 34;
-  const curvePad = direction * 9;
+  const cornerRadius = 9;
+  const curvePad = direction * cornerRadius;
 
   const path = document.createElementNS(SVG_NS, "path");
   path.setAttribute(
     "d",
     [
       `M ${laneStartX} ${startY}`,
-      `L ${laneMidX - 3} ${startY}`,
+      `L ${laneMidX - cornerRadius} ${startY}`,
       `Q ${laneMidX} ${startY} ${laneMidX} ${startY + curvePad}`,
       `L ${laneMidX} ${endY - curvePad}`,
-      `Q ${laneMidX} ${endY} ${laneEndX} ${endY}`
+      `Q ${laneMidX} ${endY} ${laneMidX + cornerRadius} ${endY}`,
+      `L ${laneEndX} ${endY}`
     ].join(" ")
   );
   path.setAttribute("class", `situation-trajectory__hierarchy-link${isRemoved ? " is-removed" : ""}`);
