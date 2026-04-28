@@ -10328,10 +10328,10 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
 .situation-trajectory__point,
 .situation-trajectory__marker{
   position:absolute;
-  transform:translate(-50%, -50%);
 }
 
 .situation-trajectory__segment{
+  transform:translateY(-50%);
   height:28px;
   border-radius:var(--radius);
   background:rgb(13, 17, 23);
@@ -10403,6 +10403,7 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
 
 .situation-trajectory__point,
 .situation-trajectory__marker{
+  transform:translate(-50%, -50%);
   width:20px;
   height:20px;
   appearance:none;
