@@ -42,6 +42,11 @@ const ACTIVITY_EVENT_TYPES = new Set([
   "subject_blocked_by_added",
   "subject_objectives_changed"
 ]);
+const HISTORY_SELECT_CANDIDATES = [
+  "id,project_id,subject_id,event_type,event_payload,created_at,created_by",
+  "id,project_id,subject_id,event_type,payload,created_at,created_by",
+  "id,project_id,subject_id,event_type,created_at,created_by"
+];
 
 function normalizeId(value) {
   return String(value || "").trim();
@@ -71,12 +76,13 @@ function normalizeHistoryRow(row = {}) {
   const eventType = normalizeId(row.event_type || row.type).toLowerCase();
   const subjectId = normalizeId(row.subject_id || row.entity_id || row.subjectId);
   const createdAt = row.created_at || row.createdAt || "";
+  const payloadCandidate = row.event_payload ?? row.eventPayload ?? row.payload;
   return {
     ...row,
     event_type: eventType,
     subject_id: subjectId,
     created_at: createdAt,
-    payload: row.payload && typeof row.payload === "object" ? row.payload : {}
+    payload: payloadCandidate && typeof payloadCandidate === "object" ? payloadCandidate : {}
   };
 }
 
@@ -106,25 +112,42 @@ export async function loadProjectSituationsTrajectoryHistory({
     };
   }
 
-  const url = new URL(`${SUPABASE_URL}/rest/v1/subject_history`);
-  url.searchParams.set("select", "id,project_id,subject_id,event_type,payload,created_at,created_by");
-  url.searchParams.set("project_id", `eq.${resolvedProjectId}`);
-  url.searchParams.set("subject_id", buildInFilterValue(scopedSubjectIds));
-  url.searchParams.set("event_type", `in.(${TRAJECTORY_EVENT_TYPES.join(",")})`);
-  url.searchParams.set("order", "created_at.asc");
+  const headers = await getSupabaseAuthHeaders({ Accept: "application/json" });
+  let rows = null;
+  let lastErrorText = "";
+  let lastStatus = 0;
+  for (const select of HISTORY_SELECT_CANDIDATES) {
+    const url = new URL(`${SUPABASE_URL}/rest/v1/subject_history`);
+    url.searchParams.set("select", select);
+    url.searchParams.set("project_id", `eq.${resolvedProjectId}`);
+    url.searchParams.set("subject_id", buildInFilterValue(scopedSubjectIds));
+    url.searchParams.set("event_type", `in.(${TRAJECTORY_EVENT_TYPES.join(",")})`);
+    url.searchParams.set("order", "created_at.asc");
 
-  const response = await fetch(url.toString(), {
-    method: "GET",
-    headers: await getSupabaseAuthHeaders({ Accept: "application/json" }),
-    cache: "no-store"
-  });
+    const response = await fetch(url.toString(), {
+      method: "GET",
+      headers,
+      cache: "no-store"
+    });
 
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new Error(`trajectory history fetch failed (${response.status}): ${text}`);
+    if (response.ok) {
+      rows = safeArray(await response.json());
+      break;
+    }
+
+    lastStatus = response.status;
+    lastErrorText = await response.text().catch(() => "");
+    const isMissingColumnError = response.status === 400 && /column subject_history\.[a-z_]+ does not exist/i.test(lastErrorText);
+    if (!isMissingColumnError) {
+      throw new Error(`trajectory history fetch failed (${response.status}): ${lastErrorText}`);
+    }
   }
 
-  const normalizedEvents = safeArray(await response.json())
+  if (!rows) {
+    throw new Error(`trajectory history fetch failed (${lastStatus}): ${lastErrorText}`);
+  }
+
+  const normalizedEvents = safeArray(rows)
     .map(normalizeHistoryRow)
     .filter((event) => !!normalizeId(event.subject_id))
     .filter((event) => TRAJECTORY_EVENT_TYPES.includes(event.event_type));
