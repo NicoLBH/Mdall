@@ -212,19 +212,20 @@ test("renderTrajectoryDom rend uniquement les lignes visibles et les éléments 
   const hierarchyLinks = queryByClass(svg, "situation-trajectory__hierarchy-link");
   assert.ok(hierarchyLinks.length >= 1);
 
+
   globalThis.document = originalDocument;
   Date.now = originalNow;
 });
 
 test("__trajectoryDomRendererTestUtils expose les helpers clés", () => {
   const {
-    buildHierarchyLinks,
+    buildRelationLinks,
     resolvePointIcon,
     collectObjectiveVerticalTimestamps,
     toRenderTimestamp
   } = __trajectoryDomRendererTestUtils();
 
-  assert.equal(typeof buildHierarchyLinks, "function");
+  assert.equal(typeof buildRelationLinks, "function");
   assert.equal(typeof resolvePointIcon, "function");
   assert.equal(typeof collectObjectiveVerticalTimestamps, "function");
   assert.equal(typeof toRenderTimestamp, "function");
@@ -241,7 +242,7 @@ test("__trajectoryDomRendererTestUtils expose les helpers clés", () => {
   const dayRenderDate = new Date(dayRenderTs);
   assert.equal(dayRenderDate.getHours(), 12);
 
-  const links = buildHierarchyLinks([
+  const links = buildRelationLinks([
     {
       event_type: "subject_parent_added",
       subject_id: "child-1",
@@ -254,7 +255,7 @@ test("__trajectoryDomRendererTestUtils expose les helpers clés", () => {
       created_at: "2026-01-03T00:00:00.000Z",
       payload: { counterpart_subject_id: "child-1" }
     }
-  ]);
+  ], { relationType: "hierarchy" });
   assert.equal(links.length, 1);
 });
 
@@ -484,6 +485,64 @@ test("renderTrajectoryDom applique les classes red+dashed et dessine un lien rem
 
   globalThis.document = originalDocument;
   Date.now = originalNow;
+});
+
+test("renderTrajectoryDom dessine les liens bloqué par en rouge avec icône blocked au milieu", () => {
+  const originalDocument = globalThis.document;
+  globalThis.document = createMockDocument();
+
+  const scene = new MockNode("div");
+  scene.clientHeight = 300;
+  const svg = new MockNode("svg");
+  const itemsRoot = new MockNode("div");
+
+  const rows = [
+    { subjectId: "blocker", lifecycleSegments: [], statusPoints: [], objectiveMarkers: [] },
+    { subjectId: "blocked", lifecycleSegments: [], statusPoints: [], objectiveMarkers: [] }
+  ];
+
+  const timeScale = createTrajectoryTimeScale({
+    startDate: "2026-01-01T00:00:00.000Z",
+    endDate: "2026-01-10T00:00:00.000Z",
+    zoom: "day",
+    pxPerUnit: 12
+  });
+
+  renderTrajectoryDom({
+    scene,
+    svg,
+    itemsRoot,
+    rows,
+    relationEvents: [
+      {
+        event_type: "subject_blocked_by_added",
+        subject_id: "blocked",
+        created_at: "2026-01-06T00:00:00.000Z",
+        payload: { counterpart_subject_id: "blocker" }
+      }
+    ],
+    timeScale,
+    scrollLeft: 0,
+    scrollTop: 0,
+    viewportWidth: 600,
+    viewportHeight: 200,
+    rowHeight: 20,
+    overscan: 0
+  });
+
+  const blockedPaths = queryByClass(svg, "situation-trajectory__hierarchy-link--blocked")
+    .filter((node) => node.tagName === "PATH");
+  const blockedIcons = queryByClass(svg, "situation-trajectory__hierarchy-link--blocked")
+    .filter((node) => node.tagName === "SVG");
+
+  assert.equal(blockedPaths.length, 1);
+  assert.equal(blockedIcons.length, 1);
+  assert.equal(blockedIcons[0].getAttribute("width"), "12");
+  assert.equal(blockedIcons[0].childNodes[0]?.tagName, "CIRCLE");
+  assert.equal(blockedIcons[0].childNodes[0]?.getAttribute("fill"), "rgb(21, 27, 35)");
+  assert.ok(String(blockedIcons[0].childNodes[1]?.getAttribute("href") || "").includes("#blocked"));
+
+  globalThis.document = originalDocument;
 });
 
 test("renderTrajectoryDom affiche une icône par point de statut et ajoute l'indicateur bloqué", () => {

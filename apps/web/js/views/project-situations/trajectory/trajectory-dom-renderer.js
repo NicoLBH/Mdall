@@ -9,6 +9,13 @@ const HIERARCHY_EVENT_TYPES = new Set([
   "subject_child_removed"
 ]);
 
+const BLOCKED_RELATION_EVENT_TYPES = new Set([
+  "subject_blocked_by_added",
+  "subject_blocked_by_removed",
+  "subject_blocking_for_added",
+  "subject_blocking_for_removed"
+]);
+
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
@@ -127,11 +134,14 @@ function renderPointIconHtml(pointType = "open", point = {}) {
   }${blockedIconHtml}</span>`;
 }
 
-function buildHierarchyLinks(relationEvents = []) {
+function buildRelationLinks(relationEvents = [], { relationType = "hierarchy" } = {}) {
   const dedupe = new Map();
+  const safeRelationType = String(relationType || "hierarchy").trim().toLowerCase();
+  const isBlockedRelation = safeRelationType === "blocked";
+
   for (const event of asArray(relationEvents)) {
     const type = String(event?.event_type || "").trim().toLowerCase();
-    if (!HIERARCHY_EVENT_TYPES.has(type)) continue;
+    if (isBlockedRelation ? !BLOCKED_RELATION_EVENT_TYPES.has(type) : !HIERARCHY_EVENT_TYPES.has(type)) continue;
 
     const subjectId = normalizeId(event?.subject_id);
     const counterpartId = normalizeId(event?.payload?.counterpart_subject_id || event?.counterpart_subject_id);
@@ -140,21 +150,32 @@ function buildHierarchyLinks(relationEvents = []) {
     const at = new Date(event?.created_at || event?.at || Date.now());
     if (Number.isNaN(at.getTime())) continue;
 
-    const isParentEvent = type.startsWith("subject_parent_");
-    const parentId = isParentEvent ? counterpartId : subjectId;
-    const childId = isParentEvent ? subjectId : counterpartId;
-    const action = type.endsWith("_removed") ? "removed" : "added";
-    const key = `${parentId}|${childId}|${at.toISOString()}|${action}`;
+    let sourceId = "";
+    let targetId = "";
 
-    if (!dedupe.has(key) || isParentEvent) {
+    if (isBlockedRelation) {
+      const isBlockedByEvent = type.startsWith("subject_blocked_by_");
+      sourceId = isBlockedByEvent ? counterpartId : subjectId;
+      targetId = isBlockedByEvent ? subjectId : counterpartId;
+    } else {
+      const isParentEvent = type.startsWith("subject_parent_");
+      sourceId = isParentEvent ? counterpartId : subjectId;
+      targetId = isParentEvent ? subjectId : counterpartId;
+    }
+
+    const action = type.endsWith("_removed") ? "removed" : "added";
+    const key = `${sourceId}|${targetId}|${at.toISOString()}|${action}`;
+
+    if (!dedupe.has(key) || (!isBlockedRelation && type.startsWith("subject_parent_"))) {
       dedupe.set(key, {
-        parentId,
-        childId,
+        sourceId,
+        targetId,
         action,
         at
       });
     }
   }
+
   return [...dedupe.values()].sort((a, b) => a.at.getTime() - b.at.getTime());
 }
 
@@ -173,35 +194,37 @@ function createSvgLine({ x, y1, y2, classNames = [] } = {}) {
   return line;
 }
 
-function createHierarchyPath({ x, parentY, childY, isRemoved = false, isReverse = false } = {}) {
-  const startY = isReverse ? childY : parentY;
-  const endY = isReverse ? parentY : childY;
+function createHierarchyPath({ x, sourceY, targetY, isRemoved = false, isReverse = false, isBlockedRelation = false } = {}) {
+  const startY = isReverse ? targetY : sourceY;
+  const endY = isReverse ? sourceY : targetY;
   const direction = endY >= startY ? 1 : -1;
 
   const laneStartX = x + 2;
   const laneMidX = x + 18;
   const laneEndX = x + 34;
-  const curvePad = direction * 9;
+  const cornerRadius = 9;
+  const curvePad = direction * cornerRadius;
 
   const path = document.createElementNS(SVG_NS, "path");
   path.setAttribute(
     "d",
     [
       `M ${laneStartX} ${startY}`,
-      `L ${laneMidX - 3} ${startY}`,
+      `L ${laneMidX - cornerRadius} ${startY}`,
       `Q ${laneMidX} ${startY} ${laneMidX} ${startY + curvePad}`,
       `L ${laneMidX} ${endY - curvePad}`,
-      `Q ${laneMidX} ${endY} ${laneEndX} ${endY}`
+      `Q ${laneMidX} ${endY} ${laneMidX + cornerRadius} ${endY}`,
+      `L ${laneEndX} ${endY}`
     ].join(" ")
   );
-  path.setAttribute("class", `situation-trajectory__hierarchy-link${isRemoved ? " is-removed" : ""}`);
+  path.setAttribute("class", `situation-trajectory__hierarchy-link${isBlockedRelation ? " situation-trajectory__hierarchy-link--blocked" : ""}${isRemoved ? " is-removed" : ""}`);
 
   const markerCircle = (() => {
     const circle = document.createElementNS(SVG_NS, "circle");
     circle.setAttribute("cx", String(laneStartX));
     circle.setAttribute("cy", String(startY));
     circle.setAttribute("r", "2.5");
-    circle.setAttribute("class", `situation-trajectory__hierarchy-link${isRemoved ? " is-removed" : ""}`);
+    circle.setAttribute("class", `situation-trajectory__hierarchy-link${isBlockedRelation ? " situation-trajectory__hierarchy-link--blocked" : ""}${isRemoved ? " is-removed" : ""}`);
     return circle;
   })();
 
@@ -215,9 +238,36 @@ function createHierarchyPath({ x, parentY, childY, isRemoved = false, isReverse 
       `${laneEndX - arrowSize},${endY + (direction * arrowSize)}`
     ].join(" ")
   );
-  arrow.setAttribute("class", `situation-trajectory__hierarchy-link${isRemoved ? " is-removed" : ""}`);
+  arrow.setAttribute("class", `situation-trajectory__hierarchy-link${isBlockedRelation ? " situation-trajectory__hierarchy-link--blocked" : ""}${isRemoved ? " is-removed" : ""}`);
 
-  return { path, markerCircle, arrow };
+  const blockedIcon = isBlockedRelation ? (() => {
+    const iconSize = 12;
+    const icon = document.createElementNS(SVG_NS, "svg");
+    icon.setAttribute("viewBox", "0 0 16 16");
+    icon.setAttribute("width", String(iconSize));
+    icon.setAttribute("height", String(iconSize));
+    icon.setAttribute("x", String(laneMidX - (iconSize / 2)));
+    icon.setAttribute("y", String(((startY + endY) / 2) - (iconSize / 2)));
+    icon.setAttribute("class", `situation-trajectory__hierarchy-link situation-trajectory__hierarchy-link--blocked situation-trajectory__hierarchy-link--blocked-icon${isRemoved ? " is-removed" : ""}`);
+
+    const backdrop = document.createElementNS(SVG_NS, "circle");
+    backdrop.setAttribute("cx", "8");
+    backdrop.setAttribute("cy", "8");
+    backdrop.setAttribute("r", "7");
+    backdrop.setAttribute("fill", "rgb(21, 27, 35)");
+    backdrop.setAttribute("class", "situation-trajectory__hierarchy-link--blocked-icon-backdrop");
+
+    const use = document.createElementNS(SVG_NS, "use");
+    use.setAttribute("href", "assets/icons.svg#blocked");
+    use.setAttribute("xlink:href", "assets/icons.svg#blocked");
+    use.setAttribute("class", "situation-trajectory__hierarchy-link--blocked-icon-glyph");
+
+    icon.appendChild(backdrop);
+    icon.appendChild(use);
+    return icon;
+  })() : null;
+
+  return { path, markerCircle, arrow, blockedIcon };
 }
 
 export function renderTrajectoryDom({
@@ -465,42 +515,50 @@ export function renderTrajectoryDom({
     if (subjectId) rowIndexBySubjectId.set(subjectId, index);
   });
 
-  const hierarchyLinks = buildHierarchyLinks(relationEvents);
+  const hierarchyLinks = buildRelationLinks(relationEvents, { relationType: "hierarchy" });
+  const blockedLinks = buildRelationLinks(relationEvents, { relationType: "blocked" });
   const linkRowMin = Math.max(0, rowStart - 2);
   const linkRowMax = Math.min(Math.max(0, rowCount - 1), rowEnd + 2);
   let linkCount = 0;
 
-  for (const link of hierarchyLinks) {
-    const parentIndex = rowIndexBySubjectId.get(link.parentId);
-    const childIndex = rowIndexBySubjectId.get(link.childId);
-    if (!Number.isInteger(parentIndex) || !Number.isInteger(childIndex)) continue;
+  const renderLinks = (links = [], { isBlockedRelation = false } = {}) => {
+    for (const link of links) {
+      const sourceIndex = rowIndexBySubjectId.get(link.sourceId);
+      const targetIndex = rowIndexBySubjectId.get(link.targetId);
+      if (!Number.isInteger(sourceIndex) || !Number.isInteger(targetIndex)) continue;
 
-    if ((parentIndex < linkRowMin || parentIndex > linkRowMax)
-      && (childIndex < linkRowMin || childIndex > linkRowMax)) {
-      continue;
+      if ((sourceIndex < linkRowMin || sourceIndex > linkRowMax)
+        && (targetIndex < linkRowMin || targetIndex > linkRowMax)) {
+        continue;
+      }
+
+      const ts = toTimestamp(link.at);
+      if (ts < visibleStartTs || ts > visibleEndTs) continue;
+      const displayTs = toRenderTimestamp(ts, timeScale, ts);
+
+      const x = timeScale.timeToX(displayTs);
+      const sourceY = (sourceIndex * safeRowHeight) + (safeRowHeight / 2);
+      const targetY = (targetIndex * safeRowHeight) + (safeRowHeight / 2);
+
+      const { path, markerCircle, arrow, blockedIcon } = createHierarchyPath({
+        x,
+        sourceY,
+        targetY,
+        isRemoved: link.action === "removed",
+        isReverse: link.action === "removed",
+        isBlockedRelation
+      });
+
+      fragmentSvg.appendChild(path);
+      if (markerCircle) fragmentSvg.appendChild(markerCircle);
+      if (blockedIcon) fragmentSvg.appendChild(blockedIcon);
+      fragmentSvg.appendChild(arrow);
+      linkCount += 1;
     }
+  };
 
-    const ts = toTimestamp(link.at);
-    if (ts < visibleStartTs || ts > visibleEndTs) continue;
-    const displayTs = toRenderTimestamp(ts, timeScale, ts);
-
-    const x = timeScale.timeToX(displayTs);
-    const parentY = (parentIndex * safeRowHeight) + (safeRowHeight / 2);
-    const childY = (childIndex * safeRowHeight) + (safeRowHeight / 2);
-
-    const { path, markerCircle, arrow } = createHierarchyPath({
-      x,
-      parentY,
-      childY,
-      isRemoved: link.action === "removed",
-      isReverse: link.action === "removed"
-    });
-
-    fragmentSvg.appendChild(path);
-    if (markerCircle) fragmentSvg.appendChild(markerCircle);
-    fragmentSvg.appendChild(arrow);
-    linkCount += 1;
-  }
+  renderLinks(hierarchyLinks, { isBlockedRelation: false });
+  renderLinks(blockedLinks, { isBlockedRelation: true });
 
   svg.appendChild(fragmentSvg);
   itemsRoot.appendChild(fragmentItems);
@@ -525,7 +583,7 @@ export function __trajectoryDomRendererTestUtils() {
     collectObjectiveVerticalTimestamps,
     resolvePointIcon,
     intersectsRange,
-    buildHierarchyLinks,
+    buildRelationLinks,
     toDayCenterTimestamp,
     toRenderTimestamp
   };
