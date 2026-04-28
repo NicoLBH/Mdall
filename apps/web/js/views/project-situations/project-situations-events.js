@@ -806,28 +806,53 @@ export function createProjectSituationsEvents({
 
     const todayIsoDate = toLocalIsoDate(new Date());
 
+    const zoom = String(timeScale.zoom || "day").trim().toLowerCase();
     const dayTicksHtml = ticks.map((tick, index) => {
       const nextTick = ticks[index + 1];
       const tickWidth = Math.max(24, (nextTick?.x ?? timeScale.totalWidth) - tick.x);
       const date = tick.date instanceof Date ? tick.date : new Date(tick.timestamp);
-      const dayLabel = String(date.getDate());
       const isoDate = toLocalIsoDate(date);
       const isToday = isoDate === todayIsoDate;
-      return `<time role="columnheader" data-index="${index}" datetime="${isoDate}" class="situation-trajectory__timeline-day${isToday ? " is-today" : ""}" style="left:${tick.x}px;width:${tickWidth}px;">${dayLabel}</time>`;
+      let label = String(date.getDate());
+      if (zoom === "hour") {
+        label = `${String(date.getHours()).padStart(2, "0")}:00`;
+      } else if (zoom === "half-day") {
+        label = date.getHours() < 12 ? "AM" : "PM";
+      } else if (zoom === "week") {
+        const end = new Date(date.getTime());
+        end.setDate(end.getDate() + 6);
+        const startLabel = date.toLocaleDateString("fr-FR", { day: "2-digit", month: "short" });
+        const endLabel = end.toLocaleDateString("fr-FR", { day: "2-digit", month: "short" });
+        label = `${startLabel} → ${endLabel}`;
+      } else if (zoom === "month") {
+        label = date.toLocaleDateString("fr-FR", { month: "short" });
+      }
+      return `<time role="columnheader" data-index="${index}" datetime="${isoDate}" class="situation-trajectory__timeline-day${isToday ? " is-today" : ""}" style="left:${tick.x}px;width:${tickWidth}px;">${escapeHtml(label)}</time>`;
     }).join("");
 
     const monthTicksHtml = ticks
       .filter((tick, index) => {
         const date = tick.date instanceof Date ? tick.date : new Date(tick.timestamp);
-        return index === 0 || date.getDate() === 1;
+        if (index === 0) return true;
+        const previousDate = ticks[index - 1]?.date instanceof Date ? ticks[index - 1].date : new Date(ticks[index - 1]?.timestamp);
+        if (zoom === "hour" || zoom === "half-day" || zoom === "day") {
+          return previousDate
+            ? date.getMonth() !== previousDate.getMonth() || date.getFullYear() !== previousDate.getFullYear()
+            : true;
+        }
+        if (zoom === "week") {
+          return previousDate
+            ? date.getFullYear() !== previousDate.getFullYear() || date.getMonth() !== previousDate.getMonth()
+            : true;
+        }
+        return previousDate ? date.getFullYear() !== previousDate.getFullYear() : true;
       })
       .map((tick) => {
         const date = tick.date instanceof Date ? tick.date : new Date(tick.timestamp);
-        const label = date.toLocaleDateString("fr-FR", {
-          month: "long",
-          year: "numeric"
-        });
-        return `<time datetime="${toLocalIsoDate(date)}" class="situation-trajectory__timeline-month" style="left:${tick.x}px;">${label}</time>`;
+        const label = zoom === "month"
+          ? date.toLocaleDateString("fr-FR", { year: "numeric" })
+          : date.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+        return `<time datetime="${toLocalIsoDate(date)}" class="situation-trajectory__timeline-month" style="left:${tick.x}px;">${escapeHtml(label)}</time>`;
       }).join("");
 
     const objectiveLabelsHtml = Object.values(objectivesById || {})

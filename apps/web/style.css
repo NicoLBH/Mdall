@@ -10202,6 +10202,8 @@ body.route--project .project-simple-scroll.project-simple-scroll--situation-view
 .situation-trajectory__zoom-trigger:focus-visible{
   background:#656c7633;
   border-radius:var(--radius);
+  border-color:transparent;
+  box-shadow:none;
 }
 
 .situation-trajectory__zoom-menu{
