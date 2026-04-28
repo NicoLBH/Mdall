@@ -43,10 +43,11 @@ const ACTIVITY_EVENT_TYPES = new Set([
   "subject_objectives_changed"
 ]);
 const HISTORY_SELECT_CANDIDATES = [
-  "id,project_id,subject_id,event_type,event_payload,created_at,created_by",
-  "id,project_id,subject_id,event_type,payload,created_at,created_by",
-  "id,project_id,subject_id,event_type,created_at,created_by"
+  "id,project_id,subject_id,event_type,event_payload,created_at",
+  "id,project_id,subject_id,event_type,payload,created_at",
+  "id,project_id,subject_id,event_type,created_at"
 ];
+const TRAJECTORY_HISTORY_RPC_NAME = "list_subject_history_for_trajectory";
 
 function normalizeId(value) {
   return String(value || "").trim();
@@ -96,6 +97,75 @@ function groupEventsBySubjectId(events = []) {
   }, {});
 }
 
+function isMissingColumnError(status, rawBody = "") {
+  return status === 400 && /column subject_history\.[a-z_]+ does not exist/i.test(String(rawBody || ""));
+}
+
+function isMissingRpcFunctionError(status, rawBody = "") {
+  return (status === 404 || status === 400)
+    && /function\s+public\.list_subject_history_for_trajectory|could not find the function/i.test(String(rawBody || ""));
+}
+
+async function fetchTrajectoryHistoryViaRpc({ projectId, subjectIds, headers }) {
+  const rpcUrl = `${SUPABASE_URL}/rest/v1/rpc/${TRAJECTORY_HISTORY_RPC_NAME}`;
+  const response = await fetch(rpcUrl, {
+    method: "POST",
+    headers: {
+      ...headers,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      p_project_id: projectId,
+      p_subject_ids: subjectIds
+    }),
+    cache: "no-store"
+  });
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    const error = new Error(`trajectory history rpc failed (${response.status}): ${text}`);
+    error.status = response.status;
+    error.rawBody = text;
+    throw error;
+  }
+  return safeArray(await response.json().catch(() => []));
+}
+
+async function fetchTrajectoryHistoryViaRest({ projectId, subjectIds, headers }) {
+  let rows = null;
+  let lastErrorText = "";
+  let lastStatus = 0;
+  for (const select of HISTORY_SELECT_CANDIDATES) {
+    const url = new URL(`${SUPABASE_URL}/rest/v1/subject_history`);
+    url.searchParams.set("select", select);
+    url.searchParams.set("project_id", `eq.${projectId}`);
+    url.searchParams.set("subject_id", buildInFilterValue(subjectIds));
+    url.searchParams.set("event_type", `in.(${TRAJECTORY_EVENT_TYPES.join(",")})`);
+    url.searchParams.set("order", "created_at.asc");
+
+    const response = await fetch(url.toString(), {
+      method: "GET",
+      headers,
+      cache: "no-store"
+    });
+
+    if (response.ok) {
+      rows = safeArray(await response.json());
+      break;
+    }
+
+    lastStatus = response.status;
+    lastErrorText = await response.text().catch(() => "");
+    if (!isMissingColumnError(response.status, lastErrorText)) {
+      throw new Error(`trajectory history fetch failed (${response.status}): ${lastErrorText}`);
+    }
+  }
+
+  if (!rows) {
+    throw new Error(`trajectory history fetch failed (${lastStatus}): ${lastErrorText}`);
+  }
+  return rows;
+}
+
 export async function loadProjectSituationsTrajectoryHistory({
   projectId,
   subjectIds = []
@@ -113,38 +183,22 @@ export async function loadProjectSituationsTrajectoryHistory({
   }
 
   const headers = await getSupabaseAuthHeaders({ Accept: "application/json" });
-  let rows = null;
-  let lastErrorText = "";
-  let lastStatus = 0;
-  for (const select of HISTORY_SELECT_CANDIDATES) {
-    const url = new URL(`${SUPABASE_URL}/rest/v1/subject_history`);
-    url.searchParams.set("select", select);
-    url.searchParams.set("project_id", `eq.${resolvedProjectId}`);
-    url.searchParams.set("subject_id", buildInFilterValue(scopedSubjectIds));
-    url.searchParams.set("event_type", `in.(${TRAJECTORY_EVENT_TYPES.join(",")})`);
-    url.searchParams.set("order", "created_at.asc");
-
-    const response = await fetch(url.toString(), {
-      method: "GET",
-      headers,
-      cache: "no-store"
+  let rows = [];
+  try {
+    rows = await fetchTrajectoryHistoryViaRpc({
+      projectId: resolvedProjectId,
+      subjectIds: scopedSubjectIds,
+      headers
     });
-
-    if (response.ok) {
-      rows = safeArray(await response.json());
-      break;
+  } catch (error) {
+    if (!isMissingRpcFunctionError(error?.status, error?.rawBody)) {
+      throw error;
     }
-
-    lastStatus = response.status;
-    lastErrorText = await response.text().catch(() => "");
-    const isMissingColumnError = response.status === 400 && /column subject_history\.[a-z_]+ does not exist/i.test(lastErrorText);
-    if (!isMissingColumnError) {
-      throw new Error(`trajectory history fetch failed (${response.status}): ${lastErrorText}`);
-    }
-  }
-
-  if (!rows) {
-    throw new Error(`trajectory history fetch failed (${lastStatus}): ${lastErrorText}`);
+    rows = await fetchTrajectoryHistoryViaRest({
+      projectId: resolvedProjectId,
+      subjectIds: scopedSubjectIds,
+      headers
+    });
   }
 
   const normalizedEvents = safeArray(rows)
