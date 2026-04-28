@@ -179,8 +179,8 @@ function createHierarchyPath({ x, parentY, childY, isRemoved = false, isReverse 
   const direction = endY >= startY ? 1 : -1;
 
   const laneStartX = x + 2;
-  const laneMidX = x + 10;
-  const laneEndX = x + 18;
+  const laneMidX = x + 18;
+  const laneEndX = x + 34;
   const curvePad = direction * 6;
 
   const path = document.createElementNS(SVG_NS, "path");
