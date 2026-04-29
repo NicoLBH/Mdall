@@ -19,8 +19,9 @@ export function getGoogleMapsEmbedApiKey() {
   return readMetaContent("google-maps-embed-api-key");
 }
 
-export function hasGoogleMapsEmbedApiKey() {
-  return Boolean(getGoogleMapsEmbedApiKey());
+function toFiniteNumber(value, fallback = null) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : fallback;
 }
 
 export function buildGoogleMapsPlaceEmbedUrl({ latitude = null, longitude = null, zoom = 14, mapType = "roadmap" } = {}) {
@@ -31,12 +32,8 @@ export function buildGoogleMapsPlaceEmbedUrl({ latitude = null, longitude = null
 
   if (!key || !Number.isFinite(lat) || !Number.isFinite(lon)) return "";
 
-  const url = new URL("https://www.google.com/maps/embed/v1/place");
-  url.searchParams.set("key", key);
-  url.searchParams.set("q", `${lat},${lon}`);
-  url.searchParams.set("zoom", String(safeZoom));
-  url.searchParams.set("maptype", String(mapType || "roadmap"));
-  return url.toString();
+  console.info("[google-maps-embed] url.fetch.success", { latitude: lat, longitude: lon, zoom: safeZoom, mapType: safeMapType });
+  return embedUrl;
 }
 
 export function fetchGoogleMapsPlaceEmbedUrl({ latitude = null, longitude = null, zoom = 14, mapType = "roadmap" } = {}) {
