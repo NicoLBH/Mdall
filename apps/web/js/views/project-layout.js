@@ -8,7 +8,7 @@ import { store } from "../store.js";
 import { renderProjectDocuments } from "./project-documents.js";
 import { renderProjectSubjects } from "./project-subjects.js";
 import { renderProjectActions } from "./project-actions.js";
-import { renderProjectStudio } from "./project-studio.js";
+import { renderProjectStudio } from "./studio/project-studio.js";
 import { renderProjectSituations } from "./project-situations.js";
 import { renderProjectInsights } from "./project-insights.js";
 import { renderProjectParametres } from "./project-parametres.js";
