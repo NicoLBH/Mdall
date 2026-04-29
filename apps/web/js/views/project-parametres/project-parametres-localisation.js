@@ -67,7 +67,8 @@ function ensureLocalisationUiState() {
     parametresUiState.locationMapEmbed = {
       status: "idle",
       requestKey: "",
-      url: ""
+      url: "",
+      lastErrorAt: 0
     };
   }
 
@@ -77,6 +78,8 @@ function ensureLocalisationUiState() {
 function getLocationMapRequestKey({ latitude = null, longitude = null, zoom = 16, mapType = "satellite", nonce = 0 } = {}) {
   return `${latitude}|${longitude}|${zoom}|${mapType}|${nonce}`;
 }
+
+const MAP_EMBED_ERROR_RETRY_DELAY_MS = 30_000;
 
 async function refreshProjectLocationMapEmbedUrl({ latitude, longitude, zoom = 16, mapType = "satellite" } = {}) {
   const uiState = ensureLocalisationUiState();
@@ -96,10 +99,12 @@ async function refreshProjectLocationMapEmbedUrl({ latitude, longitude, zoom = 1
     if (uiState.locationMapEmbed.requestKey !== requestKey) return;
     uiState.locationMapEmbed.status = "success";
     uiState.locationMapEmbed.url = embedUrl;
+    uiState.locationMapEmbed.lastErrorAt = 0;
   } catch {
     if (uiState.locationMapEmbed.requestKey !== requestKey) return;
     uiState.locationMapEmbed.status = "error";
     uiState.locationMapEmbed.url = "";
+    uiState.locationMapEmbed.lastErrorAt = Date.now();
   } finally {
     if (uiState.locationMapEmbed.requestKey === requestKey) {
       rerenderProjectParametres();
@@ -275,7 +280,20 @@ function renderProjectLocationMapBlock() {
 
   const uiState = ensureLocalisationUiState();
   const mapEmbedState = uiState.locationMapEmbed;
-  void refreshProjectLocationMapEmbedUrl({ latitude, longitude, zoom: 16, mapType: "satellite" });
+  const requestKey = getLocationMapRequestKey({
+    latitude,
+    longitude,
+    zoom: 16,
+    mapType: "satellite",
+    nonce: Number(uiState.locationMapRefreshNonce || 0)
+  });
+  const shouldFetchMapEmbedUrl = mapEmbedState.requestKey !== requestKey
+    || mapEmbedState.status === "idle";
+  const errorRetryDelayElapsed = mapEmbedState.status !== "error"
+    || (Date.now() - Number(mapEmbedState.lastErrorAt || 0)) >= MAP_EMBED_ERROR_RETRY_DELAY_MS;
+  if (shouldFetchMapEmbedUrl && errorRetryDelayElapsed) {
+    void refreshProjectLocationMapEmbedUrl({ latitude, longitude, zoom: 16, mapType: "satellite" });
+  }
   if (mapEmbedState.status !== "success" || !mapEmbedState.url) {
     return `
       <div class="settings-location-map-card is-blurred">
