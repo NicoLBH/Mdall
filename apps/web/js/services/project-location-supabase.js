@@ -1,6 +1,8 @@
 import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
+import { store } from "../store.js";
 import { resolveCurrentBackendProjectId } from "./project-supabase-sync.js";
 import { listProjectContextFacts, upsertProjectContextFact } from "./project-context-facts-service.js";
+import { readPersistedProjectState } from "./project-state-storage.js";
 
 const SUPABASE_URL = getSupabaseUrl();
 
@@ -113,4 +115,72 @@ export async function loadProjectLocationFromSupabase(projectId) {
 
 export async function loadProjectContextFacts(projectId) {
   return listProjectContextFacts(projectId);
+}
+
+function applyLocationToStore(row = {}) {
+  const toText = (value) => safeString(value);
+  const toNumberOrNull = (value) => {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : null;
+  };
+  store.projectForm = {
+    ...store.projectForm,
+    address: toText(row?.address),
+    city: toText(row?.city),
+    postalCode: toText(row?.postal_code),
+    latitude: toNumberOrNull(row?.latitude),
+    longitude: toNumberOrNull(row?.longitude),
+    altitude: toNumberOrNull(row?.altitude),
+    codeInsee: toText(row?.code_insee)
+  };
+}
+
+function applyContextFactsToStore(facts = []) {
+  const normalizedFacts = Array.isArray(facts) ? facts : [];
+  store.projectContextFacts = normalizedFacts;
+  store.projectForm = {
+    ...store.projectForm,
+    contextFacts: normalizedFacts
+  };
+}
+
+export async function hydrateProjectLocationAndContextFromSupabase(projectId) {
+  const resolvedProjectId = await resolveProjectId(projectId);
+  if (!resolvedProjectId) return { source: "none", location: null, contextFacts: [] };
+
+  console.info("[project-location] hydrate.start", { projectId: resolvedProjectId });
+  try {
+    const [locationRow, contextFacts] = await Promise.all([
+      loadProjectLocationFromSupabase(resolvedProjectId),
+      loadProjectContextFacts(resolvedProjectId)
+    ]);
+    if (locationRow && typeof locationRow === "object") {
+      applyLocationToStore(locationRow);
+    }
+    applyContextFactsToStore(contextFacts);
+    console.info("[project-location] hydrate.success", {
+      projectId: resolvedProjectId,
+      locationLoaded: Boolean(locationRow),
+      contextFactsCount: Array.isArray(contextFacts) ? contextFacts.length : 0,
+      source: "supabase"
+    });
+    return { source: "supabase", location: locationRow, contextFacts: contextFacts || [] };
+  } catch (error) {
+    console.error("[project-location] hydrate.failure", {
+      projectId: resolvedProjectId,
+      message: error instanceof Error ? error.message : String(error)
+    });
+    const persistedState = readPersistedProjectState(resolvedProjectId);
+    const persistedForm = persistedState?.projectForm && typeof persistedState.projectForm === "object"
+      ? persistedState.projectForm
+      : null;
+    if (persistedForm) {
+      store.projectForm = {
+        ...store.projectForm,
+        ...persistedForm
+      };
+      applyContextFactsToStore(Array.isArray(persistedForm.contextFacts) ? persistedForm.contextFacts : []);
+    }
+    return { source: "localStorage", location: null, contextFacts: store.projectContextFacts || [] };
+  }
 }
