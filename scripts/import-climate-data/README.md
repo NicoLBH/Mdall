@@ -1,16 +1,20 @@
 # Climate data import helpers
 
-Ce dossier contient le socle technique pour importer progressivement les données climatiques vers Supabase.
+Imports climatiques générés fichier par fichier pour garder des diffs lisibles.
 
-## Pourquoi des imports découpés
+## Commandes
 
-Les données sources sont volumineuses. Les imports sont donc générés fichier JSON par fichier JSON pour éviter des diffs trop gros et faciliter la revue.
+- Un import : `npm run climate:seed:commune-cantons` (et autres commandes `climate:seed:*`).
+- Tous les imports : `npm run climate:seed:all`.
 
-## Ce qui est inclus à l'étape 2.0
+## Pourquoi c'est séparé
 
-- helpers Node réutilisables pour lire un JSON source ;
-- normaliser les noms de cantons (sans accents, apostrophes et tirets, en minuscules) ;
-- générer des instructions `INSERT` SQL ;
-- écrire des fichiers SQL de sortie.
+Les données source sont volumineuses ; on génère un SQL par source JSON pour éviter un seul gros diff.
 
-Les scripts d'import spécifiques (`2.1+`) seront ajoutés séparément, un fichier source à la fois.
+## Vérification
+
+Lancer les requêtes de `supabase/seed-data/climate/verify_climate_seed.sql` après import.
+
+## Important
+
+Ne pas déplacer les JSON source hors `apps/web/js/services/zoning` avant l'étape de nettoyage sécurité dédiée.
