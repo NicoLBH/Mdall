@@ -18,6 +18,7 @@ import {
   resolveFrenchPostalCode
 } from "../../services/georisques-service.js";
 import { persistCurrentProjectState } from "../../services/project-state-storage.js";
+import { saveProjectLocationToSupabase } from "../../services/project-location-supabase.js";
 import { svgIcon } from "../../ui/icons.js";
 import { buildGoogleMapsPlaceEmbedUrl, hasGoogleMapsEmbedApiKey } from "../../services/google-maps-embed-service.js";
 import {
@@ -758,6 +759,43 @@ async function refreshLocationDerivedData({ runEnrichment = false, triggerType =
 
   if (runEnrichment) {
     await runProjectBaseDataEnrichment({ triggerType, triggerLabel, force: true });
+  }
+
+  const codeInsee = String(store.projectForm?.georisques?.commune?.codeInsee || "").trim() || null;
+  const projectId = String(store.currentProjectId || "").trim();
+
+  console.info("[project-location] save.start", {
+    projectId,
+    address: String(store.projectForm.address || "").trim(),
+    city,
+    postalCode,
+    latitude: store.projectForm.latitude,
+    longitude: store.projectForm.longitude,
+    altitude: store.projectForm.altitude,
+    codeInsee
+  });
+
+  try {
+    const savedProject = await saveProjectLocationToSupabase({
+      projectId,
+      address: store.projectForm.address,
+      city,
+      postalCode,
+      latitude: store.projectForm.latitude,
+      longitude: store.projectForm.longitude,
+      altitude: store.projectForm.altitude,
+      codeInsee
+    });
+
+    console.info("[project-location] save.success", {
+      projectId,
+      savedProjectId: String(savedProject?.id || "").trim() || null
+    });
+  } catch (error) {
+    console.error("[project-location] save.failure", {
+      projectId,
+      message: error instanceof Error ? error.message : String(error)
+    });
   }
 
   persistCurrentProjectState();
