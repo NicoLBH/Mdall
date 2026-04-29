@@ -14,15 +14,17 @@ export async function renderSolidityWind(root, { force = false } = {}) {
   render(root);
 
   root.onclick = async (event) => {
-    const actionRoot = event.target.closest(".gh-action");
-    const actionId = String(actionRoot?.dataset?.actionId || "").trim();
-    if (actionId === "solidityToolCalculate-wind") {
-      console.info("[studio-tools] wind.calculate.click");
+    const calculateTrigger = event.target.closest('[data-action-id="solidityToolCalculate-wind"]');
+    if (calculateTrigger) {
+      console.info("[studio-tools] calculate.click", { toolKey: "wind" });
       await calculateClimateTool(state, "wind");
       render(root);
       return;
     }
-    if (actionId === "solidityToolToSubject-wind") {
+
+    const toSubjectTrigger = event.target.closest('[data-action-id="solidityToolToSubject-wind"]');
+    if (toSubjectTrigger) {
+      console.info("[studio-tools] transform-to-subject.click", { toolKey: "wind" });
       console.info("[studio-tools] transform-to-subject.todo", { toolKey: "wind" });
     }
   };
