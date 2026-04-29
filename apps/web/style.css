@@ -9193,7 +9193,7 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
 
 .settings-auto-fields{
   display:grid;
-  grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns:repeat(auto-fit, minmax(170px, 1fr));
   gap:12px;
   margin:16px 0px;
 }
