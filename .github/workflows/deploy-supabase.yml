@@ -38,13 +38,15 @@ jobs:
         run: |
           echo "Applying climate seed data..."
           DB_HOST="db.${SUPABASE_PROJECT_REF}.supabase.co"
-          DB_HOSTADDR="$(getent ahostsv4 "${DB_HOST}" | awk 'NR==1 { print $1 }')"
-          if [ -z "${DB_HOSTADDR}" ]; then
-            echo "Could not resolve IPv4 address for ${DB_HOST}"
-            exit 1
+          DB_DSN="host=${DB_HOST} port=5432 dbname=postgres user=postgres sslmode=require"
+
+          DB_HOSTADDR="$(getent ahostsv4 "${DB_HOST}" | awk 'NR==1 { print $1 }' || true)"
+          if [ -n "${DB_HOSTADDR}" ]; then
+            echo "Using IPv4 ${DB_HOSTADDR} for ${DB_HOST}"
+            DB_DSN="${DB_DSN} hostaddr=${DB_HOSTADDR}"
+          else
+            echo "IPv4 lookup unavailable for ${DB_HOST}; continuing with standard DNS resolution"
           fi
-          echo "Using IPv4 ${DB_HOSTADDR} for ${DB_HOST}"
-          DB_DSN="host=${DB_HOST} hostaddr=${DB_HOSTADDR} port=5432 dbname=postgres user=postgres sslmode=require"
           for sql_file in \
             supabase/seed-data/climate/001_commune_canton_2014.sql \
             supabase/seed-data/climate/002_canton_2014_names.sql \
