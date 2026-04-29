@@ -72,3 +72,4 @@ jobs:
           supabase functions deploy subject-mdall-exchange --no-verify-jwt --debug
           supabase functions deploy recognize-handwritten-document --no-verify-jwt --debug
           supabase functions deploy google-maps-embed-url --no-verify-jwt --debug
+          supabase functions deploy resolve-climate-tool --no-verify-jwt --debug
