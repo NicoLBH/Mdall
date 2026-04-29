@@ -19,7 +19,7 @@ function renderStudioNav() {
       className: "settings-nav__group settings-nav__group--project",
       items: [
         renderSideNavItem({
-          label: "Général",
+          label: "Bienvenue",
           targetId: "studio-general",
           iconHtml: svgIcon("gear", { className: "octicon octicon-gear" }),
           isActive: true,
@@ -33,12 +33,12 @@ function renderStudioNav() {
       sectionLabel: "Solidité",
       items: [
         renderSideNavItem({
-          label: "Général",
+          label: "Neige, Vent & Gel",
           targetId: "solidity-general",
           iconHtml: svgIcon("gear", { className: "octicon octicon-gear" })
         }),
         renderSideNavItem({
-          label: "Géorisques",
+          label: "Risques Naturels & Technologiques",
           targetId: "solidity-georisks",
           iconHtml: svgIcon("shield", { className: "octicon octicon-shield" })
         }),
