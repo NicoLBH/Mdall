@@ -18,7 +18,7 @@ import {
   resolveFrenchPostalCode
 } from "../../services/georisques-service.js";
 import { persistCurrentProjectState } from "../../services/project-state-storage.js";
-import { saveProjectLocationToSupabase } from "../../services/project-location-supabase.js";
+import { saveProjectLocationToSupabase, loadProjectLocationFromSupabase } from "../../services/project-location-supabase.js";
 import { svgIcon } from "../../ui/icons.js";
 import { buildGoogleMapsPlaceEmbedUrl, hasGoogleMapsEmbedApiKey } from "../../services/google-maps-embed-service.js";
 import {
@@ -57,11 +57,17 @@ function ensureLocalisationUiState() {
   if (!Number.isInteger(parametresUiState.locationMapRefreshNonce)) {
     parametresUiState.locationMapRefreshNonce = 0;
   }
+  if (!parametresUiState.locationSupabasePlaceholders || typeof parametresUiState.locationSupabasePlaceholders !== "object") {
+    parametresUiState.locationSupabasePlaceholders = { address: "", city: "", postalCode: "" };
+  }
+  if (typeof parametresUiState.locationSupabaseHydrating !== "boolean") {
+    parametresUiState.locationSupabaseHydrating = false;
+  }
 
   return parametresUiState;
 }
 
-function renderLocationAutocompleteField({ id, label, value = "", placeholder = "", width = "", fieldKey = "city", inputMode = "text" }) {
+function renderLocationAutocompleteField({ id, label, value = "", placeholder = "", width = "", fieldKey = "city", inputMode = "text", placeholderStrong = false }) {
   const pencil = svgIcon("pencil", { className: "octicon" });
   const check = svgIcon("check", { className: "octicon" });
   const dropdownId = `${id}AutocompleteList`;
@@ -76,7 +82,7 @@ function renderLocationAutocompleteField({ id, label, value = "", placeholder = 
               id="${escapeHtml(id)}"
               type="text"
               inputmode="${escapeHtml(inputMode)}"
-              class="gh-input gh-editable-field__input"
+              class="gh-input gh-editable-field__input${placeholderStrong ? " gh-input--placeholder-strong" : ""}"
               value="${escapeHtml(value)}"
               placeholder="${escapeHtml(placeholder)}"
               autocomplete="off"
@@ -161,11 +167,44 @@ function getLocationEditBaseSignature() {
 
 
 function getLocationFieldPlaceholder(fieldKey = "", fallback = "") {
+  const uiState = ensureLocalisationUiState();
+  const supabasePlaceholders = uiState.locationSupabasePlaceholders || {};
   const snapshot = store.projectForm?.locationSavedSnapshot || {};
-  if (fieldKey === "address") return String(snapshot.address || "").trim() || fallback;
-  if (fieldKey === "city") return String(snapshot.city || "").trim() || fallback;
-  if (fieldKey === "postalCode") return String(snapshot.postalCode || "").trim() || fallback;
+  if (fieldKey === "address") return String(supabasePlaceholders.address || snapshot.address || "").trim() || fallback;
+  if (fieldKey === "city") return String(supabasePlaceholders.city || snapshot.city || "").trim() || fallback;
+  if (fieldKey === "postalCode") return String(supabasePlaceholders.postalCode || snapshot.postalCode || "").trim() || fallback;
   return fallback;
+}
+
+
+function hasStrongPlaceholder(fieldKey = "") {
+  const uiState = ensureLocalisationUiState();
+  const fromSupabase = uiState.locationSupabasePlaceholders || {};
+  if (fieldKey === "address") return Boolean(String(fromSupabase.address || "").trim());
+  if (fieldKey === "city") return Boolean(String(fromSupabase.city || "").trim());
+  if (fieldKey === "postalCode") return Boolean(String(fromSupabase.postalCode || "").trim());
+  return false;
+}
+
+async function hydrateLocationPlaceholdersFromSupabase() {
+  const uiState = ensureLocalisationUiState();
+  if (uiState.locationSupabaseHydrating) return;
+  const projectId = String(store.currentProjectId || "").trim();
+  if (!projectId) return;
+  uiState.locationSupabaseHydrating = true;
+  try {
+    const row = await loadProjectLocationFromSupabase(projectId);
+    uiState.locationSupabasePlaceholders = {
+      address: String(row?.address || "").trim(),
+      city: String(row?.city || "").trim(),
+      postalCode: String(row?.postal_code || "").trim()
+    };
+    rerenderProjectParametres();
+  } catch (error) {
+    console.warn("[project-location] hydrate.placeholder.failure", error);
+  } finally {
+    uiState.locationSupabaseHydrating = false;
+  }
 }
 
 function renderProjectLocationMapBlock() {
@@ -1198,9 +1237,9 @@ export function renderLocalisationParametresContent() {
         description: "Localisation administrative et d’usage du projet.",
         badge: "LIVE",
         body: `<div class="settings-form-grid settings-form-grid--thirds">
-          ${renderLocationAutocompleteField({ id: "projectAddress", fieldKey: "address", label: "Adresse", value: form.address || "", placeholder: getLocationFieldPlaceholder("address", "Ex. 12 avenue de la Gare, Annecy") })}
-          ${renderLocationAutocompleteField({ id: "projectCity", fieldKey: "city", label: "Ville", value: form.city || "", placeholder: getLocationFieldPlaceholder("city", "Ex. Annecy") })}
-          ${renderLocationAutocompleteField({ id: "projectPostalCode", fieldKey: "postalCode", label: "CP", value: form.postalCode || "", placeholder: getLocationFieldPlaceholder("postalCode", "Ex. 74000"), inputMode: "numeric" })}
+          ${renderLocationAutocompleteField({ id: "projectAddress", fieldKey: "address", label: "Adresse", value: form.address || "", placeholder: getLocationFieldPlaceholder("address", "Ex. 12 avenue de la Gare, Annecy"), placeholderStrong: hasStrongPlaceholder("address") })}
+          ${renderLocationAutocompleteField({ id: "projectCity", fieldKey: "city", label: "Ville", value: form.city || "", placeholder: getLocationFieldPlaceholder("city", "Ex. Annecy"), placeholderStrong: hasStrongPlaceholder("city") })}
+          ${renderLocationAutocompleteField({ id: "projectPostalCode", fieldKey: "postalCode", label: "CP", value: form.postalCode || "", placeholder: getLocationFieldPlaceholder("postalCode", "Ex. 74000"), inputMode: "numeric", placeholderStrong: hasStrongPlaceholder("postalCode") })}
         </div>
         ${(ensureGeorisquesState().commune || Number.isFinite(form.latitude) || Number.isFinite(form.longitude)) ? `
           <div class="settings-auto-fields">
@@ -1229,6 +1268,7 @@ export function bindLocalisationParametresSection(root) {
   void root;
   ensureLocalisationUiState();
   bindBaseParametresUi();
+  void hydrateLocationPlaceholdersFromSupabase();
 
   bindGhEditableFields(document, {
     onEditStart: (id) => {

@@ -6188,6 +6188,11 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   border-color:var(--accent);
   box-shadow:0 0 0 3px rgba(88,166,255,.15);
 }
+.gh-input--placeholder-strong::placeholder{
+  color:rgb(240, 246, 252);
+  opacity:1;
+}
+
 
 .gh-input--sm{
   min-height:32px;
