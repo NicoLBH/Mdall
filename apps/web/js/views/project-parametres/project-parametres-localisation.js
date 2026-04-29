@@ -18,6 +18,7 @@ import {
   resolveFrenchPostalCode
 } from "../../services/georisques-service.js";
 import { persistCurrentProjectState } from "../../services/project-state-storage.js";
+import { saveProjectLocationToSupabase } from "../../services/project-location-supabase.js";
 import { svgIcon } from "../../ui/icons.js";
 import { buildGoogleMapsPlaceEmbedUrl, hasGoogleMapsEmbedApiKey } from "../../services/google-maps-embed-service.js";
 import {
@@ -52,6 +53,9 @@ function ensureLocalisationUiState() {
   }
   if (typeof parametresUiState.locationEditBaseSignature !== "string") {
     parametresUiState.locationEditBaseSignature = "";
+  }
+  if (!Number.isInteger(parametresUiState.locationMapRefreshNonce)) {
+    parametresUiState.locationMapRefreshNonce = 0;
   }
 
   return parametresUiState;
@@ -155,6 +159,15 @@ function getLocationEditBaseSignature() {
   return String(ensureLocalisationUiState().locationEditBaseSignature || "") || getProjectLocationSignature();
 }
 
+
+function getLocationFieldPlaceholder(fieldKey = "", fallback = "") {
+  const snapshot = store.projectForm?.locationSavedSnapshot || {};
+  if (fieldKey === "address") return String(snapshot.address || "").trim() || fallback;
+  if (fieldKey === "city") return String(snapshot.city || "").trim() || fallback;
+  if (fieldKey === "postalCode") return String(snapshot.postalCode || "").trim() || fallback;
+  return fallback;
+}
+
 function renderProjectLocationMapBlock() {
   const latitude = Number(store.projectForm.latitude);
   const longitude = Number(store.projectForm.longitude);
@@ -177,6 +190,7 @@ function renderProjectLocationMapBlock() {
     zoom: 16,
     mapType: "satellite"
   });
+  const mapRefreshNonce = Number(ensureLocalisationUiState().locationMapRefreshNonce || 0);
 
   if (!embedUrl) {
     return `
@@ -189,12 +203,23 @@ function renderProjectLocationMapBlock() {
     `;
   }
 
+  let iframeUrl = embedUrl;
+  if (mapRefreshNonce > 0) {
+    try {
+      const parsed = new URL(embedUrl);
+      parsed.searchParams.set("mdall_refresh", String(mapRefreshNonce));
+      iframeUrl = parsed.toString();
+    } catch {
+      iframeUrl = `${embedUrl}${embedUrl.includes("?") ? "&" : "?"}mdall_refresh=${mapRefreshNonce}`;
+    }
+  }
+
   return `
     <div class="settings-location-map-card">
       <div class="arkolia-map">
         <iframe
           title="Carte Google Maps de la localisation projet"
-          src="${escapeHtml(embedUrl)}"
+          src="${escapeHtml(iframeUrl)}"
           loading="lazy"
           allowfullscreen
           referrerpolicy="no-referrer-when-downgrade"
@@ -760,6 +785,50 @@ async function refreshLocationDerivedData({ runEnrichment = false, triggerType =
     await runProjectBaseDataEnrichment({ triggerType, triggerLabel, force: true });
   }
 
+  const codeInsee = String(store.projectForm?.georisques?.commune?.codeInsee || "").trim() || null;
+  const projectId = String(store.currentProjectId || "").trim();
+
+  console.info("[project-location] save.start", {
+    projectId,
+    address: String(store.projectForm.address || "").trim(),
+    city,
+    postalCode,
+    latitude: store.projectForm.latitude,
+    longitude: store.projectForm.longitude,
+    altitude: store.projectForm.altitude,
+    codeInsee
+  });
+
+  try {
+    const savedProject = await saveProjectLocationToSupabase({
+      projectId,
+      address: store.projectForm.address,
+      city,
+      postalCode,
+      latitude: store.projectForm.latitude,
+      longitude: store.projectForm.longitude,
+      altitude: store.projectForm.altitude,
+      codeInsee
+    });
+
+    store.projectForm.locationSavedSnapshot = {
+      address: String(store.projectForm.address || "").trim(),
+      city,
+      postalCode
+    };
+    ensureLocalisationUiState().locationMapRefreshNonce += 1;
+
+    console.info("[project-location] save.success", {
+      projectId,
+      savedProjectId: String(savedProject?.id || "").trim() || null
+    });
+  } catch (error) {
+    console.error("[project-location] save.failure", {
+      projectId,
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+
   persistCurrentProjectState();
   dispatchProjectLocationChanged();
   rerenderProjectParametres();
@@ -1129,9 +1198,9 @@ export function renderLocalisationParametresContent() {
         description: "Localisation administrative et d’usage du projet.",
         badge: "LIVE",
         body: `<div class="settings-form-grid settings-form-grid--thirds">
-          ${renderLocationAutocompleteField({ id: "projectAddress", fieldKey: "address", label: "Adresse", value: form.address || "", placeholder: "Ex. 12 avenue de la Gare, Annecy" })}
-          ${renderLocationAutocompleteField({ id: "projectCity", fieldKey: "city", label: "Ville", value: form.city || "", placeholder: "Ex. Annecy" })}
-          ${renderLocationAutocompleteField({ id: "projectPostalCode", fieldKey: "postalCode", label: "CP", value: form.postalCode || "", placeholder: "Ex. 74000", inputMode: "numeric" })}
+          ${renderLocationAutocompleteField({ id: "projectAddress", fieldKey: "address", label: "Adresse", value: form.address || "", placeholder: getLocationFieldPlaceholder("address", "Ex. 12 avenue de la Gare, Annecy") })}
+          ${renderLocationAutocompleteField({ id: "projectCity", fieldKey: "city", label: "Ville", value: form.city || "", placeholder: getLocationFieldPlaceholder("city", "Ex. Annecy") })}
+          ${renderLocationAutocompleteField({ id: "projectPostalCode", fieldKey: "postalCode", label: "CP", value: form.postalCode || "", placeholder: getLocationFieldPlaceholder("postalCode", "Ex. 74000"), inputMode: "numeric" })}
         </div>
         ${(ensureGeorisquesState().commune || Number.isFinite(form.latitude) || Number.isFinite(form.longitude)) ? `
           <div class="settings-auto-fields">
