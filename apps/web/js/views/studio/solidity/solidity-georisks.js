@@ -1,9 +1,9 @@
-import { store } from "../../store.js";
-import { fetchGeorisquesForCommune } from "../../services/georisques-service.js";
-import { escapeHtml } from "../../utils/escape-html.js";
-import { registerProjectPrimaryScrollSource } from "../project-shell-chrome.js";
-import { persistCurrentProjectState, readPersistedCurrentProjectState } from "../../services/project-state-storage.js";
-import { shouldAutoRunProjectBaseDataEnrichment } from "../../services/project-automation.js";
+import { store } from "../../../store.js";
+import { fetchGeorisquesForCommune } from "../../../services/georisques-service.js";
+import { escapeHtml } from "../../../utils/escape-html.js";
+import { registerProjectPrimaryScrollSource } from "../../project-shell-chrome.js";
+import { persistCurrentProjectState, readPersistedCurrentProjectState } from "../../../services/project-state-storage.js";
+import { shouldAutoRunProjectBaseDataEnrichment } from "../../../services/project-automation.js";
 
 const georisksUiState = {
   isLoading: false,
