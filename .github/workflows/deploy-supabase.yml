@@ -14,6 +14,7 @@ jobs:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
 
     steps:
       - name: Checkout repository
@@ -32,6 +33,40 @@ jobs:
 
       - name: Push database migrations
         run: supabase db push --debug
+
+      - name: Apply climate seed data
+        run: |
+          echo "Applying climate seed data..."
+          DB_DSN="host=db.${SUPABASE_PROJECT_REF}.supabase.co port=5432 dbname=postgres user=postgres sslmode=require"
+          for sql_file in \
+            supabase/seed-data/climate/001_commune_canton_2014.sql \
+            supabase/seed-data/climate/002_canton_2014_names.sql \
+            supabase/seed-data/climate/003_current_canton_names.sql \
+            supabase/seed-data/climate/004_snow_departments.sql \
+            supabase/seed-data/climate/005_snow_canton_overrides.sql \
+            supabase/seed-data/climate/006_wind_departments.sql \
+            supabase/seed-data/climate/007_wind_canton_overrides.sql \
+            supabase/seed-data/climate/008_frost_departments.sql; do
+            echo "Applying $(basename "$sql_file")"
+            PGPASSWORD="${SUPABASE_DB_PASSWORD}" psql "$DB_DSN" -v ON_ERROR_STOP=1 -f "$sql_file"
+          done
+
+          echo "Running climate seed verification..."
+          PGPASSWORD="${SUPABASE_DB_PASSWORD}" psql "$DB_DSN" -v ON_ERROR_STOP=1 -f supabase/seed-data/climate/verify_climate_seed.sql
+
+          snow_count="$(PGPASSWORD="${SUPABASE_DB_PASSWORD}" psql "$DB_DSN" -v ON_ERROR_STOP=1 -tA -c "SELECT COUNT(*) FROM public.mdall_climate_snow_departments;")"
+          wind_count="$(PGPASSWORD="${SUPABASE_DB_PASSWORD}" psql "$DB_DSN" -v ON_ERROR_STOP=1 -tA -c "SELECT COUNT(*) FROM public.mdall_climate_wind_departments;")"
+          frost_count="$(PGPASSWORD="${SUPABASE_DB_PASSWORD}" psql "$DB_DSN" -v ON_ERROR_STOP=1 -tA -c "SELECT COUNT(*) FROM public.mdall_climate_frost_departments;")"
+
+          echo "snow_count=${snow_count}"
+          echo "wind_count=${wind_count}"
+          echo "frost_count=${frost_count}"
+
+          if [ "$snow_count" = "0" ] || [ "$wind_count" = "0" ] || [ "$frost_count" = "0" ]; then
+            echo "Climate seed verification failed: one or more core tables are empty."
+            exit 1
+          fi
+          echo "Climate seed verification done"
 
       - name: Set Edge Function secrets
         env:
