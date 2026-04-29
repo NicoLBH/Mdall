@@ -275,7 +275,18 @@ function renderProjectLocationMapBlock() {
 
   const uiState = ensureLocalisationUiState();
   const mapEmbedState = uiState.locationMapEmbed;
-  void refreshProjectLocationMapEmbedUrl({ latitude, longitude, zoom: 16, mapType: "satellite" });
+  const requestKey = getLocationMapRequestKey({
+    latitude,
+    longitude,
+    zoom: 16,
+    mapType: "satellite",
+    nonce: Number(uiState.locationMapRefreshNonce || 0)
+  });
+  const shouldFetchMapEmbedUrl = mapEmbedState.requestKey !== requestKey
+    || mapEmbedState.status === "idle";
+  if (shouldFetchMapEmbedUrl) {
+    void refreshProjectLocationMapEmbedUrl({ latitude, longitude, zoom: 16, mapType: "satellite" });
+  }
   if (mapEmbedState.status !== "success" || !mapEmbedState.url) {
     return `
       <div class="settings-location-map-card is-blurred">
