@@ -1,14 +1,14 @@
-import { store } from "../../store.js";
-import { escapeHtml } from "../../utils/escape-html.js";
-import { registerProjectPrimaryScrollSource } from "../project-shell-chrome.js";
-import { renderGhEditableField, bindGhEditableFields } from "../ui/gh-input.js";
-import { renderGhSelectMenu, bindGhSelectMenus, bindGhActionButtons } from "../ui/gh-split-button.js";
+import { store } from "../../../store.js";
+import { escapeHtml } from "../../../utils/escape-html.js";
+import { registerProjectPrimaryScrollSource } from "../../project-shell-chrome.js";
+import { renderGhEditableField, bindGhEditableFields } from "../../ui/gh-input.js";
+import { renderGhSelectMenu, bindGhSelectMenus, bindGhActionButtons } from "../../ui/gh-split-button.js";
 import {
   getSeismicSizingValues,
   buildElasticResponseSpectrumTable,
   computeElasticResponseValue
-} from "../../services/seismic-spectrum.js";
-import { renderSvgLineChart, getNiceChartTicks } from "../../utils/svg-line-chart.js";
+} from "../../../services/seismic-spectrum.js";
+import { renderSvgLineChart, getNiceChartTicks } from "../../../utils/svg-line-chart.js";
 
 let currentSeismicRoot = null;
 
