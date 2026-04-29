@@ -50,7 +50,7 @@ function buildSqlValue(value) {
   return escapeSqlString(value);
 }
 
-export function buildInsertStatement({ tableName, columns, rows, onConflictClause = '' }) {
+export function buildInsertStatement({ tableName, columns, rows, onConflictClause = '', useRawColumns = new Set() }) {
   if (!rows.length) {
     return `-- No rows generated for ${tableName}.`;
   }
@@ -58,7 +58,13 @@ export function buildInsertStatement({ tableName, columns, rows, onConflictClaus
   const formattedColumns = columns.join(', ');
   const formattedRows = rows
     .map((row) => {
-      const values = columns.map((column) => buildSqlValue(row[column]));
+      const values = columns.map((column) => {
+        if (useRawColumns.has(column)) {
+          return row[column] ?? 'NULL';
+        }
+
+        return buildSqlValue(row[column]);
+      });
       return `  (${values.join(', ')})`;
     })
     .join(',\n');
