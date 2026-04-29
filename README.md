@@ -7,3 +7,17 @@ Before deploying:
 - In Google Cloud Console, restrict the key to your production/dev domains.
 - Restrict the key usage to **Maps Embed API** only.
 - Configure quotas to prevent abuse.
+
+## Console error checklist (Google Maps / Studio)
+
+The following error types were reviewed and guarded against in Studio-related files:
+- `does not provide an export named 'buildGoogleMapsPlaceEmbedUrl'`
+- `does not provide an export named 'hasGoogleMapsEmbedApiKey'`
+- `Identifier 'toFiniteNumber' has already been declared`
+- `Unexpected reserved word` (around async export parsing)
+- `Identifier 'fetchGoogleMapsPlaceEmbedUrl' has already been declared`
+
+Verification done:
+- `apps/web/js/services/google-maps-embed-service.js` now exposes stable exports without duplicate declarations.
+- Studio views only import `buildGoogleMapsPlaceEmbedUrl` and no longer depend on optional `hasGoogleMapsEmbedApiKey` export.
+- All `apps/web/js/views/studio/**/*.js` files pass a syntax check with `node --check`.
