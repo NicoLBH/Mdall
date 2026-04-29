@@ -16,7 +16,7 @@ import { renderGhActionButton } from "../../ui/gh-split-button.js";
 const solidityGeneralUiState = {
   loading: false,
   error: "",
-  detailsExpanded: false,
+  detailsExpanded: true,
   selected: null,
   locationSignature: "",
   requestSequence: 0
@@ -286,15 +286,15 @@ function renderSummaryCard(selected) {
     : "—";
 
   const extraRows = hasSelection ? [
-    renderKeyValue("Code INSEE", selected.codeInsee || "—", { compact: true }),
-    renderKeyValue("Coordonnées", `${normalizeCoordinate(selected.lat)} / ${normalizeCoordinate(selected.lon)}`, { compact: true }),
+    renderKeyValue("Zone de vent", selected.windZone || "—", { compact: true }),
+    renderKeyValue("Zone de neige", selected.snowZone || "—", { compact: true }),
     renderKeyValue("Altitude", normalizeAltitude(selected.altitude), { compact: true }),
     renderKeyValue("H0 retenu", selected.frostDepthH0Label || "—", { compact: true, muted: selected.hasMultipleFrostDepthH0Values }),
     renderKeyValue("H calculé", selected.frostDepthHLabel || "—", { compact: true }),
     renderKeyValue("Canton actuel", selected.currentCantonName || "—", { compact: true }),
     renderKeyValue("Canton 2014", selected.cantonName2014 || selected.cantonName || "—", { compact: true, muted: selected.hasCantonMismatch }),
-    renderKeyValue("Zone de vent", selected.windZone || "—", { compact: true }),
-    renderKeyValue("Zone de neige", selected.snowZone || "—", { compact: true })
+    renderKeyValue("Coordonnées", `${normalizeCoordinate(selected.lat)} / ${normalizeCoordinate(selected.lon)}`, { compact: true }),
+    renderKeyValue("Code INSEE", selected.codeInsee || "—", { compact: true })
   ].join("") : "";
 
   return `
@@ -570,7 +570,7 @@ export async function renderSolidityGeneral(root, { force = true } = {}) {
   if (!root) return;
   currentRoot = root;
   solidityGeneralUiState.error = "";
-  solidityGeneralUiState.detailsExpanded = false;
+  solidityGeneralUiState.detailsExpanded = true;
 
   if (root.dataset.solidityGeneralRendered !== "true") {
     root.innerHTML = `
