@@ -14,12 +14,15 @@ export async function renderSolidityFrost(root, { force = false } = {}) {
   render(root);
 
   root.onclick = async (event) => {
-    if (event.target.closest("#solidityToolCalculate-frost")) {
+    const actionRoot = event.target.closest(".gh-action");
+    const actionId = String(actionRoot?.dataset?.actionId || "").trim();
+    if (actionId === "solidityToolCalculate-frost") {
+      console.info("[studio-tools] frost.calculate.click");
       await calculateClimateTool(state, "frost");
       render(root);
       return;
     }
-    if (event.target.closest("#solidityToolToSubject-frost")) {
+    if (actionId === "solidityToolToSubject-frost") {
       console.info("[studio-tools] transform-to-subject.todo", { toolKey: "frost" });
     }
   };
