@@ -21,7 +21,7 @@ async function parseJsonResponseOrThrow(response, errorPrefix = "Studio tools re
   const payload = text ? safeJsonParse(text) : null;
 
   if (!response.ok) {
-    const details = payload?.error || payload?.details || text || `HTTP ${response.status}`;
+    const details = payload?.details || payload?.error || text || `HTTP ${response.status}`;
     throw new Error(`${errorPrefix} (${response.status}): ${details}`);
   }
 

@@ -11,6 +11,13 @@ const corsHeaders = {
 const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
 
 type ToolKey = "snow" | "wind" | "frost";
+class HttpError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: jsonHeaders });
@@ -95,6 +102,9 @@ Deno.serve(async (req: Request) => {
     return json({ tool_key: toolKey, input_signature: inputSignature, result: resolution.result, markdown_summary: resolution.markdownSummary });
   } catch (error) {
     console.error("[resolve-climate-tool] resolve.failure", error);
+    if (error instanceof HttpError) {
+      return json({ error: error.message }, error.status);
+    }
     return json({ error: "Internal server error", details: error instanceof Error ? error.message : String(error) }, 500);
   }
 });
@@ -102,6 +112,9 @@ Deno.serve(async (req: Request) => {
 async function resolveClimateTool(supabase: any, toolKey: ToolKey, location: any) {
   const codeInsee = String(location?.code_insee ?? "").trim();
   const altitude = Number(location?.altitude ?? 0);
+  if (!codeInsee) {
+    throw new HttpError(400, "code_insee is required in location payload");
+  }
 
   const { data: commune, error: communeError } = await supabase
     .from("mdall_climate_commune_cantons")
@@ -110,7 +123,7 @@ async function resolveClimateTool(supabase: any, toolKey: ToolKey, location: any
     .maybeSingle();
 
   if (communeError) throw new Error(`commune lookup failed: ${communeError.message}`);
-  if (!commune) throw new Error(`No commune mapping found for code_insee=${codeInsee}`);
+  if (!commune) throw new HttpError(400, `No commune mapping found for code_insee=${codeInsee}`);
 
   if (toolKey === "snow") {
     const warning = commune.canton_name_current && commune.canton_name_2014 && commune.canton_name_current !== commune.canton_name_2014
@@ -134,7 +147,7 @@ async function resolveClimateTool(supabase: any, toolKey: ToolKey, location: any
         .maybeSingle();
       zone = dept?.resolved_zone ?? null;
     }
-    if (!zone) throw new Error(`No snow zone found for department=${commune.department_code}`);
+    if (!zone) throw new HttpError(400, `No snow zone found for department=${commune.department_code}`);
 
     const result = { department_code: commune.department_code, canton_code_2014: commune.canton_code_2014, canton_name_2014: commune.canton_name_2014, canton_name_current: commune.canton_name_current, snow_zone: zone, warning };
     return { result, markdownSummary: `## Neige\n- Zone neige: **${zone}**\n- Département: **${commune.department_code}**\n${warning ? `- ⚠️ ${warning}\n` : ""}` };
@@ -162,7 +175,7 @@ async function resolveClimateTool(supabase: any, toolKey: ToolKey, location: any
         .maybeSingle();
       zone = dept?.resolved_zone ?? null;
     }
-    if (!zone) throw new Error(`No wind zone found for department=${commune.department_code}`);
+    if (!zone) throw new HttpError(400, `No wind zone found for department=${commune.department_code}`);
 
     const result = { department_code: commune.department_code, canton_code_2014: commune.canton_code_2014, canton_name_2014: commune.canton_name_2014, canton_name_current: commune.canton_name_current, wind_zone: zone, warning };
     return { result, markdownSummary: `## Vent\n- Zone vent: **${zone}**\n- Département: **${commune.department_code}**\n${warning ? `- ⚠️ ${warning}\n` : ""}` };
@@ -174,7 +187,7 @@ async function resolveClimateTool(supabase: any, toolKey: ToolKey, location: any
     .eq("department_code", commune.department_code)
     .maybeSingle();
 
-  if (!frost) throw new Error(`No frost data found for department=${commune.department_code}`);
+  if (!frost) throw new HttpError(400, `No frost data found for department=${commune.department_code}`);
 
   const h0 = Number(frost.h0_default_m ?? frost.h0_max_m ?? frost.h0_min_m ?? 0);
   const h = h0 + ((altitude - 150) / 4000);
