@@ -5,7 +5,7 @@ import { getSnowRegionsByDepartmentCode } from "../../../services/zoning/snow-re
 import { getWindZoneByDepartmentAndCanton } from "../../../services/zoning/wind-canton-regions-service.js";
 import { getSnowZoneByDepartmentAndCanton } from "../../../services/zoning/snow-canton-regions-service.js";
 import { getFrostDepthByDepartmentCode } from "../../../services/zoning/frost-depth-service.js";
-import { buildGoogleMapsPlaceEmbedUrl, hasGoogleMapsEmbedApiKey } from "../../../services/google-maps-embed-service.js";
+import { buildGoogleMapsPlaceEmbedUrl } from "../../../services/google-maps-embed-service.js";
 import { readPersistedCurrentProjectState } from "../../../services/project-state-storage.js";
 import { store } from "../../../store.js";
 import { svgIcon } from "../../../ui/icons.js";
@@ -198,7 +198,7 @@ function renderGoogleMapsBlock(selected) {
   const longitude = Number(selected?.lon);
   const hasCoordinates = Number.isFinite(latitude) && Number.isFinite(longitude);
 
-  if (!hasCoordinates || !hasGoogleMapsEmbedApiKey()) {
+  if (!hasCoordinates) {
     return `
       <div class="arkolia-map arkolia-map--placeholder${!selected ? " is-empty" : ""}" aria-hidden="true">
         <div class="arkolia-map__placeholder-surface"></div>
