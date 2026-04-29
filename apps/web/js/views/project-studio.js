@@ -47,24 +47,24 @@ function renderStudioNav() {
     renderSideNavSeparator(),
     renderSideNavGroup({
       className: "settings-nav__group settings-nav__group--project",
-      sectionLabel: "Socotec",
-      items: [
-        renderSideNavItem({
-          label: "ENR - PV hangard neuf",
-          targetId: "solidity-arkolia",
-          iconHtml: svgIcon("arkolia-a", { className: "octicon octicon-arkolia" })
-        })
-      ]
-    }),
-    renderSideNavSeparator(),
-    renderSideNavGroup({
-      className: "settings-nav__group settings-nav__group--project",
       sectionLabel: "Parasismique",
       items: [
         renderSideNavItem({
           label: "Spectre",
           targetId: "seismic-general",
           iconHtml: svgIcon("gear", { className: "octicon octicon-gear" })
+        })
+      ]
+    }),
+    renderSideNavSeparator(),
+    renderSideNavGroup({
+      className: "settings-nav__group settings-nav__group--project",
+      sectionLabel: "Socotec",
+      items: [
+        renderSideNavItem({
+          label: "ENR - PV hangard neuf",
+          targetId: "solidity-arkolia",
+          iconHtml: svgIcon("arkolia-a", { className: "octicon octicon-arkolia" })
         })
       ]
     })
