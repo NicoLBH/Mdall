@@ -1,5 +1,6 @@
 import { store, DEFAULT_PROJECT_PHASES } from "./store.js";
 import { syncCurrentProjectIdentityFromSupabase, syncProjectsCatalogFromSupabase } from "./services/project-supabase-sync.js";
+import { hydrateProjectLocationAndContextFromSupabase } from "./services/project-location-supabase.js";
 
 const STORAGE_KEYS = {
   userId: "rapsobot.demoUserId",
@@ -191,6 +192,7 @@ export function initializeDemoContext() {
       const hasActiveProject = catalog.some((project) => project.id === activeProjectId);
       setCurrentDemoProject(hasActiveProject ? activeProjectId : catalog[0].id);
       syncCurrentProjectIdentityFromSupabase().catch(() => undefined);
+      hydrateProjectLocationAndContextFromSupabase(store.currentProjectId).catch(() => undefined);
     })
     .catch(() => undefined);
 }
@@ -199,5 +201,6 @@ export function syncCurrentProjectFromRoute(projectId) {
   if (!projectId) return null;
   const project = setCurrentDemoProject(projectId);
   syncCurrentProjectIdentityFromSupabase().catch(() => undefined);
+  hydrateProjectLocationAndContextFromSupabase(projectId).catch(() => undefined);
   return project;
 }

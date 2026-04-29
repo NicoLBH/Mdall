@@ -134,8 +134,12 @@ export const store = {
     climateBaseTemperatures: "",
     projectTabs: { ...DEFAULT_PROJECT_TABS_VISIBILITY },
     webhookUrl: "",
-    pdfFile: null
+    pdfFile: null,
+    codeInsee: "",
+    contextFacts: []
   },
+
+  projectContextFacts: [],
 
   projectAutomation: {
     catalog: {
