@@ -19,6 +19,7 @@ import {
 } from "../../services/georisques-service.js";
 import { persistCurrentProjectState } from "../../services/project-state-storage.js";
 import { saveProjectLocationToSupabase, loadProjectLocationFromSupabase } from "../../services/project-location-supabase.js";
+import { upsertProjectContextFact } from "../../services/project-context-facts-service.js";
 import { svgIcon } from "../../ui/icons.js";
 import { fetchGoogleMapsPlaceEmbedUrl } from "../../services/google-maps-embed-service.js";
 import {
@@ -836,6 +837,64 @@ async function runProjectBaseDataEnrichment({ triggerType = "manual", triggerLab
 
   try {
     await loadGeorisquesForCurrentProject({ force });
+    const projectId = String(store.currentProjectId || "").trim();
+    const seismicSummary = getGeorisquesSismiqueSummary();
+    const naturalRisks = georisques.datasets
+      .filter((dataset) => dataset?.status === "success")
+      .map((dataset) => ({
+        key: String(dataset?.key || "").trim(),
+        title: String(dataset?.title || "").trim(),
+        summary: String(dataset?.summary || "").trim(),
+        values: Array.isArray(dataset?.values) ? dataset.values : []
+      }))
+      .filter((dataset) => dataset.key || dataset.summary || (Array.isArray(dataset.values) && dataset.values.length));
+
+    if (projectId) {
+      if (seismicSummary) {
+        await upsertProjectContextFact({
+          projectId,
+          factKey: "seismic_zone",
+          sourceType: "georisques",
+          sourceRef: georisques.commune?.codeInsee || "",
+          factValue: {
+            value: seismicSummary,
+            commune: georisques.commune?.name || null,
+            codeInsee: georisques.commune?.codeInsee || null
+          }
+        });
+      }
+
+      if (naturalRisks.length) {
+        await upsertProjectContextFact({
+          projectId,
+          factKey: "natural_risks",
+          sourceType: "georisques",
+          sourceRef: georisques.commune?.codeInsee || "",
+          factValue: {
+            commune: georisques.commune?.name || null,
+            codeInsee: georisques.commune?.codeInsee || null,
+            risks: naturalRisks
+          }
+        });
+      }
+
+      await upsertProjectContextFact({
+        projectId,
+        factKey: "georisques_summary",
+        sourceType: "georisques",
+        sourceRef: georisques.commune?.codeInsee || "",
+        factValue: {
+          commune: georisques.commune?.name || null,
+          codeInsee: georisques.commune?.codeInsee || null,
+          requestedAt: georisques.requestedAt || null,
+          datasetsCount: georisques.datasets.length,
+          successCount: georisques.datasets.filter((item) => item.status === "success").length,
+          errorCount: georisques.datasets.filter((item) => item.status !== "success").length,
+          datasets: georisques.datasets
+        }
+      });
+    }
+
     const details = buildProjectBaseDataEnrichmentDetails({ georisquesStatus: "success" });
     store.projectForm.baseDataEnrichment.lastLocationSignature = getProjectLocationSignature();
     return finishRunLogEntry(runEntry.id, {
