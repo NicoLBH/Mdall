@@ -33,7 +33,7 @@ function renderStudioNav() {
       sectionLabel: "Solidité",
       items: [
         renderSideNavItem({
-          label: "Neige, Venet et Gel",
+          label: "Neige, Vent & Gel",
           targetId: "solidity-general",
           iconHtml: svgIcon("gear", { className: "octicon octicon-gear" })
         }),
@@ -62,7 +62,7 @@ function renderStudioNav() {
       sectionLabel: "Parasismique",
       items: [
         renderSideNavItem({
-          label: "Général",
+          label: "Spectre",
           targetId: "seismic-general",
           iconHtml: svgIcon("gear", { className: "octicon octicon-gear" })
         })
