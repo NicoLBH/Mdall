@@ -21,7 +21,7 @@ function renderStudioNav() {
         renderSideNavItem({
           label: "Bienvenue",
           targetId: "studio-general",
-          iconHtml: svgIcon("gear", { className: "octicon octicon-gear" }),
+          iconHtml: svgIcon("home", { className: "octicon octicon-home" }),
           isActive: true,
           isPrimary: true
         })
