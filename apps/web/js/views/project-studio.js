@@ -10,7 +10,7 @@ import {
 import { renderStudioGeneral } from "./studio/studio-general.js";
 import { renderSolidityGeneral } from "./studio/solidity/solidity-general.js";
 import { renderSolidityGeorisks } from "./studio/solidity/solidity-georisks.js";
-import { renderSolidityArkolia } from "./studio/socotec/socotec-enr-pv-hangar-neuf.js";
+import { renderSolidityArkolia } from "./studio/socotec/socotec-enr-pv-hangard-neuf.js";
 import { renderSeismicGeneral } from "./studio/seismic/seismic-general.js";
 
 function renderStudioNav() {
