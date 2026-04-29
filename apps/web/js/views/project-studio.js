@@ -8,10 +8,10 @@ import {
   bindSideNavPanels
 } from "./ui/side-nav-layout.js";
 import { renderStudioGeneral } from "./studio/studio-general.js";
-import { renderSolidityGeneral } from "./solidity/solidity-general.js";
-import { renderSolidityGeorisks } from "./solidity/solidity-georisks.js";
-import { renderSolidityArkolia } from "./solidity/solidity-arkolia.js";
-import { renderSeismicGeneral } from "./seismic/seismic-general.js";
+import { renderSolidityGeneral } from "./studio/solidity/solidity-general.js";
+import { renderSolidityGeorisks } from "./studio/solidity/solidity-georisks.js";
+import { renderSolidityArkolia } from "./studio/solidity/solidity-arkolia.js";
+import { renderSeismicGeneral } from "./studio/seismic/seismic-general.js";
 
 function renderStudioNav() {
   return [
