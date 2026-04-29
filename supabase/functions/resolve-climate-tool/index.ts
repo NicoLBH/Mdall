@@ -193,7 +193,7 @@ async function resolveClimateTool(supabase: any, toolKey: ToolKey, location: any
     warning
   };
 
-  return { result, markdownSummary: `## Gel\n- H0 retenu: **${h0} m**\n- Altitude: **${altitude} m**\n- Profondeur hors gel (H): **${h.toFixed(3)} m**\n- Formule: \\`H = H0 + ((altitude - 150) / 4000)\\`\n${warning ? `- ⚠️ ${warning}\n` : ""}` };
+  return { result, markdownSummary: `## Gel\n- H0 retenu: **${h0} m**\n- Altitude: **${altitude} m**\n- Profondeur hors gel (H): **${h.toFixed(3)} m**\n- Formule: \`H = H0 + ((altitude - 150) / 4000)\`\n${warning ? `- ⚠️ ${warning}\n` : ""}` };
 }
 
 function normalizeName(value: string) {
