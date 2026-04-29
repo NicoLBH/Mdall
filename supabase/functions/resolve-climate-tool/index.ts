@@ -123,18 +123,30 @@ async function resolveClimateTool(supabase: any, toolKey: ToolKey, location: any
     .maybeSingle();
 
   if (communeError) throw new Error(`commune lookup failed: ${communeError.message}`);
-  if (!commune) throw new HttpError(400, `No commune mapping found for code_insee=${codeInsee}`);
+
+  const fallbackDepartmentCode = inferDepartmentCodeFromInsee(codeInsee);
+  const resolvedCommune = commune ?? {
+    insee_code: codeInsee,
+    canton_code_2014: null,
+    canton_name_2014: null,
+    canton_name_current: null,
+    department_code: fallbackDepartmentCode
+  };
+
+  if (!resolvedCommune.department_code) {
+    throw new HttpError(400, `No commune mapping found for code_insee=${codeInsee}`);
+  }
 
   if (toolKey === "snow") {
-    const warning = commune.canton_name_current && commune.canton_name_2014 && commune.canton_name_current !== commune.canton_name_2014
-      ? `Le canton courant (${commune.canton_name_current}) diffère du canton réglementaire 2014 (${commune.canton_name_2014}).`
+    const warning = resolvedCommune.canton_name_current && resolvedCommune.canton_name_2014 && resolvedCommune.canton_name_current !== resolvedCommune.canton_name_2014
+      ? `Le canton courant (${resolvedCommune.canton_name_current}) diffère du canton réglementaire 2014 (${resolvedCommune.canton_name_2014}).`
       : null;
 
     const { data: override } = await supabase
       .from("mdall_climate_snow_canton_overrides")
       .select("resolved_zone")
-      .eq("department_code", commune.department_code)
-      .eq("canton_name_normalized", normalizeName(commune.canton_name_2014 || commune.canton_name_current || ""))
+      .eq("department_code", resolvedCommune.department_code)
+      .eq("canton_name_normalized", normalizeName(resolvedCommune.canton_name_2014 || resolvedCommune.canton_name_current || ""))
       .maybeSingle();
 
     let zone = override?.resolved_zone ?? null;
@@ -142,27 +154,27 @@ async function resolveClimateTool(supabase: any, toolKey: ToolKey, location: any
       const { data: dept } = await supabase
         .from("mdall_climate_snow_departments")
         .select("resolved_zone")
-        .eq("department_code", commune.department_code)
+        .eq("department_code", resolvedCommune.department_code)
         .limit(1)
         .maybeSingle();
       zone = dept?.resolved_zone ?? null;
     }
-    if (!zone) throw new HttpError(400, `No snow zone found for department=${commune.department_code}`);
+    if (!zone) throw new HttpError(400, `No snow zone found for department=${resolvedCommune.department_code}`);
 
-    const result = { department_code: commune.department_code, canton_code_2014: commune.canton_code_2014, canton_name_2014: commune.canton_name_2014, canton_name_current: commune.canton_name_current, snow_zone: zone, warning };
-    return { result, markdownSummary: `## Neige\n- Zone neige: **${zone}**\n- Département: **${commune.department_code}**\n${warning ? `- ⚠️ ${warning}\n` : ""}` };
+    const result = { department_code: resolvedCommune.department_code, canton_code_2014: resolvedCommune.canton_code_2014, canton_name_2014: resolvedCommune.canton_name_2014, canton_name_current: resolvedCommune.canton_name_current, snow_zone: zone, warning };
+    return { result, markdownSummary: `## Neige\n- Zone neige: **${zone}**\n- Département: **${resolvedCommune.department_code}**\n${warning ? `- ⚠️ ${warning}\n` : ""}` };
   }
 
   if (toolKey === "wind") {
-    const warning = commune.canton_name_current && commune.canton_name_2014 && commune.canton_name_current !== commune.canton_name_2014
-      ? `Le canton courant (${commune.canton_name_current}) diffère du canton réglementaire 2014 (${commune.canton_name_2014}).`
+    const warning = resolvedCommune.canton_name_current && resolvedCommune.canton_name_2014 && resolvedCommune.canton_name_current !== resolvedCommune.canton_name_2014
+      ? `Le canton courant (${resolvedCommune.canton_name_current}) diffère du canton réglementaire 2014 (${resolvedCommune.canton_name_2014}).`
       : null;
 
     const { data: override } = await supabase
       .from("mdall_climate_wind_canton_overrides")
       .select("resolved_zone")
-      .eq("department_code", commune.department_code)
-      .eq("canton_name_normalized", normalizeName(commune.canton_name_2014 || commune.canton_name_current || ""))
+      .eq("department_code", resolvedCommune.department_code)
+      .eq("canton_name_normalized", normalizeName(resolvedCommune.canton_name_2014 || resolvedCommune.canton_name_current || ""))
       .maybeSingle();
 
     let zone = override?.resolved_zone ?? null;
@@ -170,24 +182,24 @@ async function resolveClimateTool(supabase: any, toolKey: ToolKey, location: any
       const { data: dept } = await supabase
         .from("mdall_climate_wind_departments")
         .select("resolved_zone")
-        .eq("department_code", commune.department_code)
+        .eq("department_code", resolvedCommune.department_code)
         .limit(1)
         .maybeSingle();
       zone = dept?.resolved_zone ?? null;
     }
-    if (!zone) throw new HttpError(400, `No wind zone found for department=${commune.department_code}`);
+    if (!zone) throw new HttpError(400, `No wind zone found for department=${resolvedCommune.department_code}`);
 
-    const result = { department_code: commune.department_code, canton_code_2014: commune.canton_code_2014, canton_name_2014: commune.canton_name_2014, canton_name_current: commune.canton_name_current, wind_zone: zone, warning };
-    return { result, markdownSummary: `## Vent\n- Zone vent: **${zone}**\n- Département: **${commune.department_code}**\n${warning ? `- ⚠️ ${warning}\n` : ""}` };
+    const result = { department_code: resolvedCommune.department_code, canton_code_2014: resolvedCommune.canton_code_2014, canton_name_2014: resolvedCommune.canton_name_2014, canton_name_current: resolvedCommune.canton_name_current, wind_zone: zone, warning };
+    return { result, markdownSummary: `## Vent\n- Zone vent: **${zone}**\n- Département: **${resolvedCommune.department_code}**\n${warning ? `- ⚠️ ${warning}\n` : ""}` };
   }
 
   const { data: frost } = await supabase
     .from("mdall_climate_frost_departments")
     .select("h0_min_m,h0_max_m,h0_default_m")
-    .eq("department_code", commune.department_code)
+    .eq("department_code", resolvedCommune.department_code)
     .maybeSingle();
 
-  if (!frost) throw new HttpError(400, `No frost data found for department=${commune.department_code}`);
+  if (!frost) throw new HttpError(400, `No frost data found for department=${resolvedCommune.department_code}`);
 
   const h0 = Number(frost.h0_default_m ?? frost.h0_max_m ?? frost.h0_min_m ?? 0);
   const h = h0 + ((altitude - 150) / 4000);
@@ -196,7 +208,7 @@ async function resolveClimateTool(supabase: any, toolKey: ToolKey, location: any
     : null;
 
   const result = {
-    department_code: commune.department_code,
+    department_code: resolvedCommune.department_code,
     altitude,
     h0_min_m: frost.h0_min_m,
     h0_max_m: frost.h0_max_m,
@@ -207,6 +219,16 @@ async function resolveClimateTool(supabase: any, toolKey: ToolKey, location: any
   };
 
   return { result, markdownSummary: `## Gel\n- H0 retenu: **${h0} m**\n- Altitude: **${altitude} m**\n- Profondeur hors gel (H): **${h.toFixed(3)} m**\n- Formule: \`H = H0 + ((altitude - 150) / 4000)\`\n${warning ? `- ⚠️ ${warning}\n` : ""}` };
+}
+
+
+function inferDepartmentCodeFromInsee(codeInsee: string) {
+  const normalized = String(codeInsee ?? "").trim().toUpperCase();
+  if (!normalized) return null;
+  if (normalized.startsWith("2A") || normalized.startsWith("2B")) return normalized.slice(0, 2);
+  if (/^97[1-6]/.test(normalized) || /^98[4678]/.test(normalized)) return normalized.slice(0, 3);
+  if (/^\d{5}$/.test(normalized)) return normalized.slice(0, 2);
+  return null;
 }
 
 function normalizeName(value: string) {
