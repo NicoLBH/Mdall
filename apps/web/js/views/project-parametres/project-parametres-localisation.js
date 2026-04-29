@@ -20,7 +20,7 @@ import {
 import { persistCurrentProjectState } from "../../services/project-state-storage.js";
 import { saveProjectLocationToSupabase, loadProjectLocationFromSupabase } from "../../services/project-location-supabase.js";
 import { svgIcon } from "../../ui/icons.js";
-import { buildGoogleMapsPlaceEmbedUrl, hasGoogleMapsEmbedApiKey } from "../../services/google-maps-embed-service.js";
+import { fetchGoogleMapsPlaceEmbedUrl } from "../../services/google-maps-embed-service.js";
 import {
   renderSettingsBlock,
   renderSectionCard,
@@ -63,8 +63,48 @@ function ensureLocalisationUiState() {
   if (typeof parametresUiState.locationSupabaseHydrating !== "boolean") {
     parametresUiState.locationSupabaseHydrating = false;
   }
+  if (!parametresUiState.locationMapEmbed || typeof parametresUiState.locationMapEmbed !== "object") {
+    parametresUiState.locationMapEmbed = {
+      status: "idle",
+      requestKey: "",
+      url: ""
+    };
+  }
 
   return parametresUiState;
+}
+
+function getLocationMapRequestKey({ latitude = null, longitude = null, zoom = 16, mapType = "satellite", nonce = 0 } = {}) {
+  return `${latitude}|${longitude}|${zoom}|${mapType}|${nonce}`;
+}
+
+async function refreshProjectLocationMapEmbedUrl({ latitude, longitude, zoom = 16, mapType = "satellite" } = {}) {
+  const uiState = ensureLocalisationUiState();
+  const mapRefreshNonce = Number(uiState.locationMapRefreshNonce || 0);
+  const requestKey = getLocationMapRequestKey({ latitude, longitude, zoom, mapType, nonce: mapRefreshNonce });
+  const mapEmbedState = uiState.locationMapEmbed;
+  if (mapEmbedState.requestKey === requestKey && mapEmbedState.status === "success" && mapEmbedState.url) return;
+  if (mapEmbedState.requestKey === requestKey && mapEmbedState.status === "loading") return;
+
+  mapEmbedState.status = "loading";
+  mapEmbedState.requestKey = requestKey;
+  mapEmbedState.url = "";
+  rerenderProjectParametres();
+
+  try {
+    const embedUrl = await fetchGoogleMapsPlaceEmbedUrl({ latitude, longitude, zoom, mapType });
+    if (uiState.locationMapEmbed.requestKey !== requestKey) return;
+    uiState.locationMapEmbed.status = "success";
+    uiState.locationMapEmbed.url = embedUrl;
+  } catch {
+    if (uiState.locationMapEmbed.requestKey !== requestKey) return;
+    uiState.locationMapEmbed.status = "error";
+    uiState.locationMapEmbed.url = "";
+  } finally {
+    if (uiState.locationMapEmbed.requestKey === requestKey) {
+      rerenderProjectParametres();
+    }
+  }
 }
 
 function renderLocationAutocompleteField({ id, label, value = "", placeholder = "", width = "", fieldKey = "city", inputMode = "text", placeholderStrong = false }) {
@@ -222,7 +262,7 @@ function renderProjectLocationMapBlock() {
   const longitude = Number(store.projectForm.longitude);
   const isValidLocation = Number.isFinite(latitude) && Number.isFinite(longitude);
 
-  if (!isValidLocation || !hasGoogleMapsEmbedApiKey()) {
+  if (!isValidLocation) {
     return `
       <div class="settings-location-map-card${!isValidLocation ? " is-blurred" : ""}">
         <div class="arkolia-map arkolia-map--placeholder${!isValidLocation ? " is-empty" : ""}" aria-hidden="true">
@@ -233,15 +273,10 @@ function renderProjectLocationMapBlock() {
     `;
   }
 
-  const embedUrl = buildGoogleMapsPlaceEmbedUrl({
-    latitude,
-    longitude,
-    zoom: 16,
-    mapType: "satellite"
-  });
-  const mapRefreshNonce = Number(ensureLocalisationUiState().locationMapRefreshNonce || 0);
-
-  if (!embedUrl) {
+  const uiState = ensureLocalisationUiState();
+  const mapEmbedState = uiState.locationMapEmbed;
+  void refreshProjectLocationMapEmbedUrl({ latitude, longitude, zoom: 16, mapType: "satellite" });
+  if (mapEmbedState.status !== "success" || !mapEmbedState.url) {
     return `
       <div class="settings-location-map-card is-blurred">
         <div class="arkolia-map arkolia-map--placeholder" aria-hidden="true">
@@ -252,23 +287,12 @@ function renderProjectLocationMapBlock() {
     `;
   }
 
-  let iframeUrl = embedUrl;
-  if (mapRefreshNonce > 0) {
-    try {
-      const parsed = new URL(embedUrl);
-      parsed.searchParams.set("mdall_refresh", String(mapRefreshNonce));
-      iframeUrl = parsed.toString();
-    } catch {
-      iframeUrl = `${embedUrl}${embedUrl.includes("?") ? "&" : "?"}mdall_refresh=${mapRefreshNonce}`;
-    }
-  }
-
   return `
     <div class="settings-location-map-card">
       <div class="arkolia-map">
         <iframe
           title="Carte Google Maps de la localisation projet"
-          src="${escapeHtml(iframeUrl)}"
+          src="${escapeHtml(mapEmbedState.url)}"
           loading="lazy"
           allowfullscreen
           referrerpolicy="no-referrer-when-downgrade"
