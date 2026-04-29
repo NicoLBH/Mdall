@@ -10,7 +10,7 @@ import {
 import { renderStudioGeneral } from "./studio-general.js";
 import { renderSolidityGeneral } from "./solidity/solidity-general.js";
 import { renderSolidityGeorisks } from "./solidity/solidity-georisks.js";
-import { renderSolidityArkolia } from "./solidity/solidity-arkolia.js";
+import { renderSolidityArkolia } from "./socotec/socotec-enr-pv-hangar-neuf.js";
 import { renderSeismicGeneral } from "./seismic/seismic-general.js";
 
 function renderStudioNav() {
@@ -42,8 +42,15 @@ function renderStudioNav() {
           targetId: "solidity-georisks",
           iconHtml: svgIcon("shield", { className: "octicon octicon-shield" })
         }),
+      ]
+    }),
+    renderSideNavSeparator(),
+    renderSideNavGroup({
+      className: "settings-nav__group settings-nav__group--project",
+      sectionLabel: "Socotec",
+      items: [
         renderSideNavItem({
-          label: "PV hangar agricole",
+          label: "ENR - PV hangard neuf",
           targetId: "solidity-arkolia",
           iconHtml: svgIcon("arkolia-a", { className: "octicon octicon-arkolia" })
         })
