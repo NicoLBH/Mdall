@@ -19,8 +19,9 @@ export function getGoogleMapsEmbedApiKey() {
   return readMetaContent("google-maps-embed-api-key");
 }
 
-export function hasGoogleMapsEmbedApiKey() {
-  return Boolean(getGoogleMapsEmbedApiKey());
+function toFiniteNumber(value, fallback = null) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : fallback;
 }
 
 export function buildGoogleMapsPlaceEmbedUrl({ latitude = null, longitude = null, zoom = 14, mapType = "roadmap" } = {}) {
