@@ -103,7 +103,8 @@ Deno.serve(async (req: Request) => {
   } catch (error) {
     console.error("[resolve-climate-tool] resolve.failure", error);
     if (error instanceof HttpError) {
-      return json({ error: error.message }, error.status);
+      const parsed = tryParseJson(error.message);
+      return json(parsed ?? { error: error.message }, error.status);
     }
     return json({ error: "Internal server error", details: error instanceof Error ? error.message : String(error) }, 500);
   }
@@ -112,6 +113,7 @@ Deno.serve(async (req: Request) => {
 async function resolveClimateTool(supabase: any, toolKey: ToolKey, location: any) {
   const codeInsee = String(location?.code_insee ?? "").trim();
   const altitude = Number(location?.altitude ?? 0);
+  console.log("[resolve-climate-tool] location input", { toolKey, location, codeInsee, altitude });
   if (!codeInsee) {
     throw new HttpError(400, "code_insee is required in location payload");
   }
@@ -136,8 +138,15 @@ async function resolveClimateTool(supabase: any, toolKey: ToolKey, location: any
   if (!resolvedCommune.department_code) {
     throw new HttpError(400, `No commune mapping found for code_insee=${codeInsee}`);
   }
+  const resolvedDepartmentCode = normalizeDepartmentCode(resolvedCommune.department_code);
+  console.log("[resolve-climate-tool] resolved department_code", {
+    raw: resolvedCommune.department_code,
+    normalized: resolvedDepartmentCode,
+    toolKey
+  });
 
   if (toolKey === "snow") {
+    const attemptedQueries: Array<{ type: string; department_code: string; row_count: number; raw: unknown }> = [];
     const warning = resolvedCommune.canton_name_current && resolvedCommune.canton_name_2014 && resolvedCommune.canton_name_current !== resolvedCommune.canton_name_2014
       ? `Le canton courant (${resolvedCommune.canton_name_current}) diffère du canton réglementaire 2014 (${resolvedCommune.canton_name_2014}).`
       : null;
@@ -145,24 +154,71 @@ async function resolveClimateTool(supabase: any, toolKey: ToolKey, location: any
     const { data: override } = await supabase
       .from("mdall_climate_snow_canton_overrides")
       .select("resolved_zone")
-      .eq("department_code", resolvedCommune.department_code)
+      .eq("department_code", resolvedDepartmentCode)
       .eq("canton_name_normalized", normalizeName(resolvedCommune.canton_name_2014 || resolvedCommune.canton_name_current || ""))
       .maybeSingle();
 
     let zone = override?.resolved_zone ?? null;
     if (!zone) {
-      const { data: dept } = await supabase
+      const { count: snowTableCount, error: snowTableCountError } = await supabase
         .from("mdall_climate_snow_departments")
-        .select("resolved_zone")
-        .eq("department_code", resolvedCommune.department_code)
-        .limit(1)
-        .maybeSingle();
-      zone = dept?.resolved_zone ?? null;
-    }
-    if (!zone) throw new HttpError(400, `No snow zone found for department=${resolvedCommune.department_code}`);
+        .select("department_code", { count: "exact", head: true });
+      console.log("[resolve-climate-tool] snow table count", { count: snowTableCount, error: snowTableCountError?.message ?? null });
+      if (snowTableCountError) throw new Error(`snow table count failed: ${snowTableCountError.message}`);
+      if ((snowTableCount ?? 0) === 0) {
+        throw new HttpError(400, "Snow data not seeded in database");
+      }
 
-    const result = { department_code: resolvedCommune.department_code, canton_code_2014: resolvedCommune.canton_code_2014, canton_name_2014: resolvedCommune.canton_name_2014, canton_name_current: resolvedCommune.canton_name_current, snow_zone: zone, warning };
-    return { result, markdownSummary: `## Neige\n- Zone neige: **${zone}**\n- Département: **${resolvedCommune.department_code}**\n${warning ? `- ⚠️ ${warning}\n` : ""}` };
+      console.log("[resolve-climate-tool] snow query start", { department_code: resolvedDepartmentCode, column: "department_code" });
+      const { data: deptRows, error: deptError } = await supabase
+        .from("mdall_climate_snow_departments")
+        .select("department_code,resolved_zone")
+        .eq("department_code", resolvedDepartmentCode);
+      if (deptError) throw new Error(`snow dept lookup failed: ${deptError.message}`);
+      attemptedQueries.push({ type: "eq", department_code: resolvedDepartmentCode, row_count: deptRows?.length ?? 0, raw: deptRows ?? null });
+      console.log("[resolve-climate-tool] snow query result", {
+        department_code: resolvedDepartmentCode,
+        row_count: deptRows?.length ?? 0,
+        raw: deptRows ?? null
+      });
+      zone = deptRows?.[0]?.resolved_zone ?? null;
+
+      if (!zone) {
+        console.log("[resolve-climate-tool] snow fallback attempt", { department_code: resolvedDepartmentCode, strategy: "ilike-trim-leading-zeroes" });
+        const fallbackPattern = `%${resolvedDepartmentCode}%`;
+        const { data: fallbackRows, error: fallbackError } = await supabase
+          .from("mdall_climate_snow_departments")
+          .select("department_code,resolved_zone")
+          .ilike("department_code", fallbackPattern);
+        if (fallbackError) throw new Error(`snow fallback lookup failed: ${fallbackError.message}`);
+
+        const normalizedMatches = (fallbackRows ?? []).filter((row: any) =>
+          normalizeDepartmentCode(row?.department_code) === resolvedDepartmentCode
+        );
+        attemptedQueries.push({
+          type: "ilike-normalized-match",
+          department_code: resolvedDepartmentCode,
+          row_count: normalizedMatches.length,
+          raw: fallbackRows ?? null
+        });
+        console.log("[resolve-climate-tool] snow fallback", {
+          department_code: resolvedDepartmentCode,
+          row_count: normalizedMatches.length,
+          raw: fallbackRows ?? null
+        });
+        zone = normalizedMatches[0]?.resolved_zone ?? null;
+      }
+    }
+    if (!zone) {
+      throw new HttpError(400, JSON.stringify({
+        code: "SNOW_ZONE_NOT_FOUND",
+        message: "No snow zone found",
+        debug: { department_code: resolvedDepartmentCode, attempted_queries: attemptedQueries }
+      }));
+    }
+
+    const result = { department_code: resolvedDepartmentCode, canton_code_2014: resolvedCommune.canton_code_2014, canton_name_2014: resolvedCommune.canton_name_2014, canton_name_current: resolvedCommune.canton_name_current, snow_zone: zone, warning };
+    return { result, markdownSummary: `## Neige\n- Zone neige: **${zone}**\n- Département: **${resolvedDepartmentCode}**\n${warning ? `- ⚠️ ${warning}\n` : ""}` };
   }
 
   if (toolKey === "wind") {
@@ -221,6 +277,14 @@ async function resolveClimateTool(supabase: any, toolKey: ToolKey, location: any
   return { result, markdownSummary: `## Gel\n- H0 retenu: **${h0} m**\n- Altitude: **${altitude} m**\n- Profondeur hors gel (H): **${h.toFixed(3)} m**\n- Formule: \`H = H0 + ((altitude - 150) / 4000)\`\n${warning ? `- ⚠️ ${warning}\n` : ""}` };
 }
 
+function normalizeDepartmentCode(value: unknown) {
+  const raw = String(value ?? "").trim().toUpperCase();
+  if (!raw) return "";
+  if (raw === "2A" || raw === "2B") return raw;
+  if (/^\d+$/.test(raw)) return String(Number(raw));
+  return raw.replace(/^0+/, "") || "0";
+}
+
 
 function inferDepartmentCodeFromInsee(codeInsee: string) {
   const normalized = String(codeInsee ?? "").trim().toUpperCase();
@@ -249,4 +313,12 @@ function mapToolResultToContextFact(toolKey: ToolKey, result: any) {
 
 function json(payload: unknown, status = 200) {
   return new Response(JSON.stringify(payload), { status, headers: jsonHeaders });
+}
+
+function tryParseJson(value: string) {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
 }
