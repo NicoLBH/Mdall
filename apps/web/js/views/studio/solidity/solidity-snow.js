@@ -14,15 +14,17 @@ export async function renderSoliditySnow(root, { force = false } = {}) {
   render(root);
 
   root.onclick = async (event) => {
-    const actionRoot = event.target.closest(".gh-action");
-    const actionId = String(actionRoot?.dataset?.actionId || "").trim();
-    if (actionId === "solidityToolCalculate-snow") {
-      console.info("[studio-tools] snow.calculate.click");
+    const calculateTrigger = event.target.closest('[data-action-id="solidityToolCalculate-snow"]');
+    if (calculateTrigger) {
+      console.info("[studio-tools] calculate.click", { toolKey: "snow" });
       await calculateClimateTool(state, "snow");
       render(root);
       return;
     }
-    if (actionId === "solidityToolToSubject-snow") {
+
+    const toSubjectTrigger = event.target.closest('[data-action-id="solidityToolToSubject-snow"]');
+    if (toSubjectTrigger) {
+      console.info("[studio-tools] transform-to-subject.click", { toolKey: "snow" });
       console.info("[studio-tools] transform-to-subject.todo", { toolKey: "snow" });
     }
   };
