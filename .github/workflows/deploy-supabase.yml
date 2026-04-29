@@ -43,6 +43,7 @@ jobs:
           MATHPIX_APP_ID: ${{ secrets.MATHPIX_APP_ID }}
           MATHPIX_APP_KEY: ${{ secrets.MATHPIX_APP_KEY }}
           MYSCRIPT_APP_KEY: ${{ secrets.MYSCRIPT_APP_KEY }}
+          GOOGLE_MAPS_EMBED_API_KEY: ${{ secrets.GOOGLE_MAPS_EMBED_API_KEY }}
         run: |
           ARGS=()
           [ -n "$SUPABASE_URL" ] && ARGS+=("SUPABASE_URL=$SUPABASE_URL")
@@ -53,6 +54,7 @@ jobs:
           [ -n "$MATHPIX_APP_ID" ] && ARGS+=("MATHPIX_APP_ID=$MATHPIX_APP_ID")
           [ -n "$MATHPIX_APP_KEY" ] && ARGS+=("MATHPIX_APP_KEY=$MATHPIX_APP_KEY")
           [ -n "$MYSCRIPT_APP_KEY" ] && ARGS+=("MYSCRIPT_APP_KEY=$MYSCRIPT_APP_KEY")
+          [ -n "$GOOGLE_MAPS_EMBED_API_KEY" ] && ARGS+=("GOOGLE_MAPS_EMBED_API_KEY=$GOOGLE_MAPS_EMBED_API_KEY")
           if [ "${#ARGS[@]}" -gt 0 ]; then
             supabase secrets set "${ARGS[@]}"
           else
@@ -69,3 +71,4 @@ jobs:
           supabase functions deploy upload-subject-message-attachment --no-verify-jwt --debug
           supabase functions deploy subject-mdall-exchange --no-verify-jwt --debug
           supabase functions deploy recognize-handwritten-document --no-verify-jwt --debug
+          supabase functions deploy google-maps-embed-url --no-verify-jwt --debug
