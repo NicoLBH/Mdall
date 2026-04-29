@@ -42,26 +42,65 @@ export async function upsertProjectContextFact({ projectId, factKey, factValue, 
   if (!resolvedProjectId) throw new Error("projectId is required");
   if (!normalizedFactKey) throw new Error("factKey is required");
 
+  const normalizedSourceType = safeString(sourceType) || "manual";
+  const normalizedSourceRef = toNullableText(sourceRef);
   const payload = {
     project_id: resolvedProjectId,
     fact_key: normalizedFactKey,
     fact_value: factValue && typeof factValue === "object" ? factValue : {},
-    source_type: safeString(sourceType) || "manual",
-    source_ref: toNullableText(sourceRef),
+    source_type: normalizedSourceType,
+    source_ref: normalizedSourceRef,
     confidence: confidence == null ? null : Number(confidence)
   };
 
-  const url = `${SUPABASE_URL}/rest/v1/project_context_facts`;
-  const res = await fetchJsonOrThrow(url, {
+  const findUrl = new URL(`${SUPABASE_URL}/rest/v1/project_context_facts`);
+  findUrl.searchParams.set("select", "id");
+  findUrl.searchParams.set("project_id", `eq.${resolvedProjectId}`);
+  findUrl.searchParams.set("fact_key", `eq.${normalizedFactKey}`);
+  findUrl.searchParams.set("source_type", `eq.${normalizedSourceType}`);
+  findUrl.searchParams.set(normalizedSourceRef == null ? "source_ref" : "source_ref", normalizedSourceRef == null ? "is.null" : `eq.${normalizedSourceRef}`);
+  findUrl.searchParams.set("limit", "1");
+
+  const findRes = await fetchJsonOrThrow(findUrl.toString(), {
+    method: "GET",
+    headers: await getAuthHeaders({ Accept: "application/json" }),
+    cache: "no-store"
+  }, "project_context_facts pre-upsert lookup failed");
+
+  const existing = (await findRes.json().catch(() => []))?.[0] || null;
+
+  if (existing?.id) {
+    const updateUrl = new URL(`${SUPABASE_URL}/rest/v1/project_context_facts`);
+    updateUrl.searchParams.set("id", `eq.${existing.id}`);
+    updateUrl.searchParams.set("select", "id,project_id,fact_key,fact_value,source_type,source_ref,confidence,created_at,updated_at");
+    const updateRes = await fetchJsonOrThrow(updateUrl.toString(), {
+      method: "PATCH",
+      headers: await getAuthHeaders({
+        "Content-Type": "application/json",
+        Prefer: "return=representation"
+      }),
+      body: JSON.stringify({
+        fact_value: payload.fact_value,
+        confidence: payload.confidence
+      })
+    }, "project_context_facts update failed");
+
+    const rows = await updateRes.json().catch(() => []);
+    return Array.isArray(rows) ? (rows[0] || null) : rows;
+  }
+
+  const insertUrl = new URL(`${SUPABASE_URL}/rest/v1/project_context_facts`);
+  insertUrl.searchParams.set("select", "id,project_id,fact_key,fact_value,source_type,source_ref,confidence,created_at,updated_at");
+  const insertRes = await fetchJsonOrThrow(insertUrl.toString(), {
     method: "POST",
     headers: await getAuthHeaders({
       "Content-Type": "application/json",
-      Prefer: "resolution=merge-duplicates,return=representation"
+      Prefer: "return=representation"
     }),
     body: JSON.stringify(payload)
-  }, "project_context_facts upsert failed");
+  }, "project_context_facts insert failed");
 
-  const rows = await res.json().catch(() => []);
+  const rows = await insertRes.json().catch(() => []);
   return Array.isArray(rows) ? (rows[0] || null) : rows;
 }
 
@@ -94,20 +133,27 @@ export async function saveProjectLocationToSupabase({ projectId, address, city, 
 
   const updatedRows = await projectRes.json().catch(() => []);
 
-  await upsertProjectContextFact({
-    projectId: resolvedProjectId,
-    factKey: "address",
-    sourceType: "manual",
-    factValue: {
-      address: toNullableText(address),
-      city: toNullableText(city),
-      postalCode: toNullableText(postalCode),
-      latitude: toNullableNumber(latitude),
-      longitude: toNullableNumber(longitude),
-      altitude: toNullableNumber(altitude),
-      codeInsee: toNullableText(codeInsee)
-    }
-  });
+  try {
+    await upsertProjectContextFact({
+      projectId: resolvedProjectId,
+      factKey: "address",
+      sourceType: "manual",
+      factValue: {
+        address: toNullableText(address),
+        city: toNullableText(city),
+        postalCode: toNullableText(postalCode),
+        latitude: toNullableNumber(latitude),
+        longitude: toNullableNumber(longitude),
+        altitude: toNullableNumber(altitude),
+        codeInsee: toNullableText(codeInsee)
+      }
+    });
+  } catch (error) {
+    console.warn("[project-location] context-fact.upsert.failure", {
+      projectId: resolvedProjectId,
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
 
   return Array.isArray(updatedRows) ? (updatedRows[0] || null) : updatedRows;
 }
