@@ -1,17 +1,17 @@
-import { resolveFrenchCommune, fetchFrenchAltitude } from "../../services/georisques-service.js";
-import { getCantonByCommuneCode } from "../../services/zoning/canton-service.js";
-import { getWindRegionsByDepartmentCode } from "../../services/zoning/wind-regions-service.js";
-import { getSnowRegionsByDepartmentCode } from "../../services/zoning/snow-regions-service.js";
-import { getWindZoneByDepartmentAndCanton } from "../../services/zoning/wind-canton-regions-service.js";
-import { getSnowZoneByDepartmentAndCanton } from "../../services/zoning/snow-canton-regions-service.js";
-import { getFrostDepthByDepartmentCode } from "../../services/zoning/frost-depth-service.js";
-import { buildGoogleMapsPlaceEmbedUrl, hasGoogleMapsEmbedApiKey } from "../../services/google-maps-embed-service.js";
-import { readPersistedCurrentProjectState } from "../../services/project-state-storage.js";
-import { store } from "../../store.js";
-import { svgIcon } from "../../ui/icons.js";
-import { escapeHtml } from "../../utils/escape-html.js";
-import { registerProjectPrimaryScrollSource } from "../project-shell-chrome.js";
-import { renderGhActionButton } from "../ui/gh-split-button.js";
+import { resolveFrenchCommune, fetchFrenchAltitude } from "../../../services/georisques-service.js";
+import { getCantonByCommuneCode } from "../../../services/zoning/canton-service.js";
+import { getWindRegionsByDepartmentCode } from "../../../services/zoning/wind-regions-service.js";
+import { getSnowRegionsByDepartmentCode } from "../../../services/zoning/snow-regions-service.js";
+import { getWindZoneByDepartmentAndCanton } from "../../../services/zoning/wind-canton-regions-service.js";
+import { getSnowZoneByDepartmentAndCanton } from "../../../services/zoning/snow-canton-regions-service.js";
+import { getFrostDepthByDepartmentCode } from "../../../services/zoning/frost-depth-service.js";
+import { buildGoogleMapsPlaceEmbedUrl, hasGoogleMapsEmbedApiKey } from "../../../services/google-maps-embed-service.js";
+import { readPersistedCurrentProjectState } from "../../../services/project-state-storage.js";
+import { store } from "../../../store.js";
+import { svgIcon } from "../../../ui/icons.js";
+import { escapeHtml } from "../../../utils/escape-html.js";
+import { registerProjectPrimaryScrollSource } from "../../project-shell-chrome.js";
+import { renderGhActionButton } from "../../ui/gh-split-button.js";
 
 const solidityGeneralUiState = {
   loading: false,
