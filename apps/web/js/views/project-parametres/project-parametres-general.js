@@ -1,7 +1,7 @@
 import { store } from "../../store.js";
 import { PROJECT_TAB_IDS } from "../../constants.js";
 import { escapeHtml } from "../../utils/escape-html.js";
-import { bindGhEditableFields } from "../ui/gh-input.js";
+import { bindGhEditableFields, renderGhEditableField } from "../ui/gh-input.js";
 import {
   persistCurrentProjectNameToSupabase,
   syncCurrentProjectIdentityFromSupabase
@@ -9,7 +9,6 @@ import {
 import {
   renderSettingsBlock,
   renderSectionCard,
-  renderInputField,
   bindBaseParametresUi,
   bindProjectTabToggles,
   refreshProjectTabsVisibility
@@ -27,7 +26,7 @@ function renderProjectTabsFeatureCard(projectTabs) {
       id: "tabVisibilitySituations",
       key: PROJECT_TAB_IDS.SITUATIONS,
       label: "Situations",
-      description: "Affiche l’onglet Situations actuellement branché sur les jalons projet."
+      description: "Affiche l’onglet Situations pour suivre les jalons et points clés du projet."
     }
   ];
 
@@ -89,13 +88,12 @@ export function renderGeneralParametresContent() {
     cards: [
       renderSectionCard({
         title: "Nom du projet",
-        description: "Description",
-        body: `<div class="settings-form-grid settings-form-grid--thirds">
-          ${renderInputField({ id: "projectName", label: "Nom de projet", value: form.projectName || "", placeholder: "Projet demo" })}
-          <div class="project-general-created-at">
-            <div class="gh-editable-field__label">Date de création du projet</div>
-            <div class="project-general-created-at__value">${escapeHtml(projectCreatedAt)}</div>
-          </div>
+        description: "Ajouter ou modifier le nom de votre projet.",
+        body: `<div class="form-row form-row--settings"><label for="projectName">Nom de projet</label></div>
+        ${renderGhEditableField({ id: "projectName", label: "", value: form.projectName || "", placeholder: "Projet demo" })}
+        <div class="form-row form-row--settings"><label>Date de création du projet</label></div>
+        <div class="project-general-created-at">
+          <div class="project-general-created-at__value">${escapeHtml(projectCreatedAt)}</div>
         </div>`
       }),
       renderSectionCard({
