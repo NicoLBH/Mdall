@@ -78,3 +78,46 @@ export function fetchGoogleMapsPlaceEmbedUrl({ latitude = null, longitude = null
       throw error;
     });
 }
+
+export function fetchGoogleMapsPlaceEmbedUrl({ latitude = null, longitude = null, zoom = 14, mapType = "roadmap" } = {}) {
+  const lat = toFinite(latitude);
+  const lon = toFinite(longitude);
+  const safeZoom = Math.max(3, Math.min(21, toFinite(zoom, 14)));
+  const safeMapType = String(mapType || "roadmap").trim() || "roadmap";
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return Promise.resolve("");
+
+  console.info("[google-maps-embed] url.fetch.start", { latitude: lat, longitude: lon, zoom: safeZoom, mapType: safeMapType });
+
+  return buildSupabaseAuthHeaders({ "Content-Type": "application/json", Accept: "application/json" })
+    .then((headers) => fetch(`${SUPABASE_URL}/functions/v1/google-maps-embed-url`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ latitude: lat, longitude: lon, zoom: safeZoom, mapType: safeMapType })
+    }))
+    .then(async (response) => {
+      if (!response.ok) {
+        const details = await response.text().catch(() => "");
+        throw new Error(`google-maps-embed-url failed (${response.status}): ${details}`);
+      }
+      return response.json().catch(() => ({}));
+    })
+    .then((data) => {
+      const embedUrl = String(data?.embedUrl || "").trim();
+      if (!embedUrl) {
+        throw new Error("google-maps-embed-url returned an empty embedUrl");
+      }
+      console.info("[google-maps-embed] url.fetch.success", { latitude: lat, longitude: lon, zoom: safeZoom, mapType: safeMapType });
+      return embedUrl;
+    })
+    .catch((error) => {
+      console.error("[google-maps-embed] url.fetch.failure", {
+        latitude: lat,
+        longitude: lon,
+        zoom: safeZoom,
+        mapType: safeMapType,
+        message: error instanceof Error ? error.message : String(error)
+      });
+      throw error;
+    });
+}
