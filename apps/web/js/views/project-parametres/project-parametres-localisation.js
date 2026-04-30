@@ -29,7 +29,7 @@ import {
   rerenderProjectParametres,
   getParametresUiState
 } from "./project-parametres-core.js";
-import { renderSpinnerHtml } from "../ui/spinner.js";
+import { renderProjectLocationMapCard } from "../shared/project-location-map-card.js";
 
 function ensureLocalisationUiState() {
   const parametresUiState = getParametresUiState();
@@ -317,46 +317,15 @@ function renderProjectLocationMapBlock() {
   const latitude = Number(store.projectForm.latitude);
   const longitude = Number(store.projectForm.longitude);
   const isValidLocation = Number.isFinite(latitude) && Number.isFinite(longitude);
-
-  if (!isValidLocation) {
-    return `
-      <div class="settings-location-map-card${!isValidLocation ? " is-blurred" : ""}">
-        <div class="arkolia-map arkolia-map--placeholder${!isValidLocation ? " is-empty" : ""}" aria-hidden="true">
-          <div class="arkolia-map__placeholder-surface"></div>
-          <div class="arkolia-map__placeholder-blur"></div>
-        </div>
-      </div>
-    `;
-  }
+  if (!isValidLocation) return renderProjectLocationMapCard({ latitude, longitude });
 
   const uiState = ensureLocalisationUiState();
   const mapEmbedState = uiState.locationMapEmbed;
   if (mapEmbedState.status !== "success" || !mapEmbedState.url) {
     const shouldShowSpinner = mapEmbedState.status === "loading" && Boolean(uiState.locationMapValidationPending);
-    return `
-      <div class="settings-location-map-card is-blurred">
-        <div class="arkolia-map arkolia-map--placeholder" aria-hidden="true">
-          <div class="arkolia-map__placeholder-surface"></div>
-          <div class="arkolia-map__placeholder-blur"></div>
-          ${shouldShowSpinner ? `<div class="settings-location-map__spinner">${renderSpinnerHtml({ label: "Chargement de la carte", size: "md" })}</div>` : ""}
-        </div>
-      </div>
-    `;
+    return renderProjectLocationMapCard({ latitude, longitude, isLoading: true, showSpinner: shouldShowSpinner });
   }
-
-  return `
-    <div class="settings-location-map-card">
-      <div class="arkolia-map">
-        <iframe
-          title="Carte Google Maps de la localisation projet"
-          src="${escapeHtml(mapEmbedState.url)}"
-          loading="lazy"
-          allowfullscreen
-          referrerpolicy="no-referrer-when-downgrade"
-        ></iframe>
-      </div>
-    </div>
-  `;
+  return renderProjectLocationMapCard({ latitude, longitude, embedUrl: mapEmbedState.url });
 }
 
 function renderProjectLocationMapBlockIntoDom() {
