@@ -4,6 +4,7 @@ import { renderStatusBadge } from "../ui/status-badges.js";
 import { renderTableHeadFilterToggle } from "../ui/table-head-filter-toggle.js";
 import { renderDataTableHead } from "../ui/data-table-shell.js";
 import { renderIssuesTable } from "../ui/issues-table.js";
+import { renderPaginationControls } from "../ui/pagination.js";
 
 export function createProjectSituationsTable({
   store,
@@ -87,13 +88,15 @@ export function createProjectSituationsTable({
       });
     }
 
-    return renderIssuesTable({
+    const tableHtml = renderIssuesTable({
       gridTemplate: "minmax(420px, 1.6fr) 90px",
       headHtml: getSituationsTableHeadHtml(),
       rowsHtml: situations.map((situation) => renderSituationTitleCell(situation)).join(""),
       emptyTitle: "Aucune situation",
       emptyDescription: "Aucune situation n’est disponible pour ce projet."
     });
+    const paginationHtml = renderPaginationControls(pagination, { entity: "situations" });
+    return `${tableHtml}${paginationHtml}`;
   }
 
   return {
