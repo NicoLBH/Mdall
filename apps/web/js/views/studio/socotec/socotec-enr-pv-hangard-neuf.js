@@ -9,6 +9,7 @@ import { escapeHtml } from "../../../utils/escape-html.js";
 import { fetchGoogleMapsPlaceEmbedUrl } from "../../../services/google-maps-embed-service.js";
 import { renderProjectLocationMapCard } from "../../shared/project-location-map-card.js";
 import { registerProjectPrimaryScrollSource } from "../../project-shell-chrome.js";
+import { resolveStudioClimateTool } from "../../../services/studio-tools-service.js";
 import { svgIcon } from "../../../ui/icons.js";
 import { store } from "../../../store.js";
 import { renderGhActionButton } from "../../ui/gh-split-button.js";
@@ -43,7 +44,8 @@ const arkoliaUiState = {
   debounceTimer: null,
   mapUrl: "",
   mapLoading: false,
-  detailsExpanded: false,
+  detailsExpanded: true,
+  summaryLoading: false,
   identity: { ...DEFAULT_IDENTITY },
   relation: { ...DEFAULT_RELATION },
   referenceName: DEFAULT_ARKOLIA_REFERENCE
@@ -944,6 +946,10 @@ function normalizeAltitude(value) {
   return Number.isFinite(value) ? `${value} m` : "—";
 }
 
+const ARKOLIA_SUMMARY_REQUIRED_FIELDS = [
+  "name", "hasCantonMismatch", "postalCode", "departmentCode", "departmentName", "codeInsee", "coordinates", "altitude", "frostDepthH", "frostDepthH0", "currentCantonName", "cantonName2014", "windZone", "snowZone"
+];
+
 function normalizeCoordinate(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number.toFixed(6) : "—";
@@ -1067,6 +1073,13 @@ function bindSummaryCardActions() {
   });
 }
 
+function renderMapCardOnly() {
+  if (!currentRoot) return;
+  const host = currentRoot.querySelector(".arkolia-map-card");
+  if (!host) return;
+  host.innerHTML = renderGoogleMapsBlock(arkoliaUiState.selected);
+}
+
 function renderResultCard() {
   if (!currentRoot) return;
 
@@ -1112,15 +1125,53 @@ async function refreshMapForSelection() {
   }
 
   arkoliaUiState.mapLoading = true;
-  renderResultCard();
+  renderMapCardOnly();
   try {
     arkoliaUiState.mapUrl = await fetchGoogleMapsPlaceEmbedUrl({ latitude, longitude, zoom: 16, mapType: "satellite" });
   } catch {
     arkoliaUiState.mapUrl = "";
   } finally {
     arkoliaUiState.mapLoading = false;
-    renderResultCard();
+    renderMapCardOnly();
   }
+}
+
+async function resolveArkoliaSummaryFromSupabase(item, { altitude, cantonName, cantonName2014, currentCantonName, departmentName, retainedH0, calculatedH } = {}) {
+  const projectId = String(store.currentProjectId || "").trim();
+  const locationPayload = {
+    city: item?.name || item?.label || "",
+    postalCode: (Array.isArray(item?.postalCodes) ? item.postalCodes[0] : item?.postalCode) || "",
+    codeInsee: item?.codeInsee || "",
+    latitude: Number(item?.lat),
+    longitude: Number(item?.lon),
+    altitude: Number.isFinite(Number(altitude)) ? Number(altitude) : null
+  };
+  const [wind, snow, frost] = await Promise.all([
+    resolveStudioClimateTool({ projectId, toolKey: "wind", location: locationPayload }).catch(() => null),
+    resolveStudioClimateTool({ projectId, toolKey: "snow", location: locationPayload }).catch(() => null),
+    resolveStudioClimateTool({ projectId, toolKey: "frost", location: locationPayload }).catch(() => null)
+  ]);
+
+  const windZone = String(wind?.result?.result_payload?.wind_zone || "").trim();
+  const snowZone = String(snow?.result?.result_payload?.snow_zone || "").trim();
+  const h0 = Number(frost?.result?.result_payload?.h0_selected_m);
+  const h = Number(frost?.result?.result_payload?.frost_depth_m);
+
+  return {
+    postalCode: locationPayload.postalCode || '—',
+    departmentCode: String(item?.departmentCode || '').trim(),
+    departmentName: String(departmentName || '').trim(),
+    codeInsee: String(item?.codeInsee || '').trim(),
+    altitude,
+    postalCode: locationPayload.postalCode || "—",
+    cantonName: cantonName2014 || cantonName,
+    cantonName2014: cantonName2014 || cantonName,
+    currentCantonName,
+    windZone: windZone || String(item?.windZone || '').trim(),
+    snowZone: snowZone || String(item?.snowZone || '').trim(),
+    frostDepthH0: Number.isFinite(h0) ? h0 : retainedH0,
+    frostDepthH: Number.isFinite(h) ? h : calculatedH
+  };
 }
 
 async function applySelection(item) {
@@ -1212,30 +1263,35 @@ async function applySelection(item) {
     ? retainedH0 + ((altitude - 150) / 4000)
     : null;
 
+  arkoliaUiState.summaryLoading = true;
+  const supabaseSummary = await resolveArkoliaSummaryFromSupabase(item, { altitude, cantonName, cantonName2014, currentCantonName, departmentName, retainedH0, calculatedH });
+
   arkoliaUiState.selected = {
     ...item,
     altitude,
+    postalCode: locationPayload.postalCode || "—",
     cantonName: cantonName2014 || cantonName,
     cantonName2014: cantonName2014 || cantonName,
     currentCantonName,
     hasCantonMismatch: Boolean(normalizedCurrentCantonName && normalizedCantonName2014 && normalizedCurrentCantonName !== normalizedCantonName2014),
-    departmentName,
+    departmentName: supabaseSummary.departmentName,
     windRegions,
-    windZone,
+    windZone: supabaseSummary.windZone,
     snowRegions,
-    snowZone,
+    snowZone: supabaseSummary.snowZone,
     frostDepthDepartmentName: frostDepthResult?.departmentName || departmentName || '',
     frostDepthH0Values,
-    frostDepthH0: retainedH0,
-    frostDepthH0Label: Number.isFinite(retainedH0) ? `${formatMeters(retainedH0, 1)} m` : '—',
+    frostDepthH0: supabaseSummary.frostDepthH0,
+    frostDepthH0Label: Number.isFinite(supabaseSummary.frostDepthH0) ? `${formatMeters(supabaseSummary.frostDepthH0, 1)} m` : '—',
     hasMultipleFrostDepthH0Values,
-    frostDepthH: calculatedH,
-    frostDepthHLabel: Number.isFinite(calculatedH) ? `${formatMeters(calculatedH, 2)} m` : '—'
+    frostDepthH: supabaseSummary.frostDepthH,
+    frostDepthHLabel: Number.isFinite(supabaseSummary.frostDepthH) ? `${formatMeters(supabaseSummary.frostDepthH, 2)} m` : '—'
   };
   resetSuggestions();
   renderAutocompleteDropdown();
   arkoliaUiState.mapUrl = "";
   renderResultCard();
+  arkoliaUiState.summaryLoading = false;
   await refreshMapForSelection();
 }
 
@@ -1260,7 +1316,7 @@ function bindCityAutocomplete() {
     arkoliaUiState.selected = null;
     arkoliaUiState.mapUrl = "";
     arkoliaUiState.mapLoading = false;
-    renderResultCard();
+    renderMapCardOnly();
 
     if (arkoliaUiState.debounceTimer) {
       clearTimeout(arkoliaUiState.debounceTimer);
@@ -1417,7 +1473,7 @@ export async function renderSolidityArkolia(root) {
                 ${renderNewSubjectButton()}
               </div>
             </div>
-            <p>Analyse autonome des fondations pour les hangars agricoles neufs avec panneaux photovoltaïques sur couverture bac acier. Recherche par ville avec auto-complétion, récupération du canton 2014 par code INSEE, affichage des coordonnées, détermination automatique des zones de vent et de neige. Définition automatique des dimensions minimales des fondations et profondeur hors gel à respecter.</p>
+            <p><strong>Informations requises pour la synthèse :</strong> ${ARKOLIA_SUMMARY_REQUIRED_FIELDS.join(', ')}<br>Analyse autonome des fondations pour les hangars agricoles neufs avec panneaux photovoltaïques sur couverture bac acier. Recherche par ville avec auto-complétion, récupération du canton 2014 par code INSEE, affichage des coordonnées, détermination automatique des zones de vent et de neige. Définition automatique des dimensions minimales des fondations et profondeur hors gel à respecter.</p>
           </div>
           <div class="arkolia-head-reference">
             <label class="arkolia-head-reference__field" for="solidityArkoliaReference">
