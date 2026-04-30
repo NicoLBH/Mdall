@@ -295,6 +295,65 @@ function renderNewSubjectButton() {
   });
 }
 
+
+function getSelectedSpanLabel() {
+  const identity = arkoliaUiState.identity || {};
+  const spanValue = identity.spanPreset === 'other'
+    ? normalizeDimension(identity.spanOther)
+    : normalizeDimension(identity.spanPreset);
+  return spanValue || '…';
+}
+
+function buildArkoliaDraftTitle() {
+  const selected = arkoliaUiState.selected || {};
+  const departmentCode = String(selected.departmentCode || '').trim() || '—';
+  const cityName = getSelectedCityName();
+  const length = normalizeDimension(arkoliaUiState.identity?.length) || '…';
+  const width = normalizeDimension(arkoliaUiState.identity?.width) || '…';
+  const span = getSelectedSpanLabel();
+  return `${departmentCode}_${cityName} : ENR - PV hangar neuf ${length} m x ${width} m, travée ${span} m`;
+}
+
+function buildArkoliaDraftDescription() {
+  const postalCode = getSelectedPostalCode();
+  const cityName = getSelectedCityName();
+  const relationName = String(arkoliaUiState.relation?.builderName || 'ARKOLIA').trim() || 'ARKOLIA';
+  const relationLabel = `**${relationName}**`;
+
+  const sections = [
+    ["Description de l'ouvrage", getIdentityDescription()],
+    ['Avis', getRelationSummary()],
+    ['Paramètres climatiques', getClimateText()],
+    ["Niveau d'assise", getAssiseText()],
+    ['Portance', getPortanceText()]
+  ];
+
+  const paragraphBlocks = sections
+    .map(([title, value]) => `\n### ${title}\n${value || '—'}`)
+    .join('\n\n');
+
+  const description = `## ${postalCode} ${cityName} ${relationLabel}\n\n${paragraphBlocks}`;
+  return description
+    .replace(/altitude\s+(\d+(?:[.,]\d+)?)\s+mètres/gi, (_match, value) => `altitude \`${String(value).replace(',', '.') } mètres\``)
+    .replace(/H\s*>\s*([0-9]+(?:[.,][0-9]+)?)\s*m/gi, (_match, value) => `\`H > ${String(value).replace(',', '.')} m\``);
+}
+
+function openArkoliaSubjectDraft() {
+  const opener = typeof window !== 'undefined' ? window.openStudioToolSubjectDraft : null;
+  if (typeof opener === 'function') {
+    opener({
+      origin: 'studio-arkolia-enr-pv-hangar-neuf',
+      title: buildArkoliaDraftTitle(),
+      description: buildArkoliaDraftDescription(),
+      meta: {
+        labels: ['enr', 'pv', 'hangar-neuf']
+      }
+    });
+  } else {
+    console.warn('[studio-tool-subject] open-draft unavailable', { toolKey: 'arkolia-enr-pv-hangar-neuf' });
+  }
+}
+
 function parseFrenchDecimalToNumber(value) {
   const normalized = String(value ?? '').trim().replace(/,/g, '.');
   const number = Number(normalized);
@@ -973,10 +1032,6 @@ function normalizeAltitude(value) {
   return Number.isFinite(value) ? `${value} m` : "—";
 }
 
-const ARKOLIA_SUMMARY_REQUIRED_FIELDS = [
-  "name", "hasCantonMismatch", "postalCode", "departmentCode", "departmentName", "codeInsee", "coordinates", "altitude", "frostDepthH", "frostDepthH0", "currentCantonName", "cantonName2014", "windZone", "snowZone"
-];
-
 function normalizeCoordinate(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number.toFixed(6) : "—";
@@ -1499,7 +1554,7 @@ export async function renderSolidityArkolia(root) {
                 ${renderNewSubjectButton()}
               </div>
             </div>
-            <p><strong>Informations requises pour la synthèse :</strong> ${ARKOLIA_SUMMARY_REQUIRED_FIELDS.join(', ')}<br>Analyse autonome des fondations pour les hangars agricoles neufs avec panneaux photovoltaïques sur couverture bac acier. Recherche par ville avec auto-complétion, récupération du canton 2014 par code INSEE, affichage des coordonnées, détermination automatique des zones de vent et de neige. Définition automatique des dimensions minimales des fondations et profondeur hors gel à respecter.</p>
+            <p>Analyse autonome des fondations pour les hangars agricoles neufs avec panneaux photovoltaïques sur couverture bac acier. Recherche par ville avec auto-complétion, récupération du canton 2014 par code INSEE, affichage des coordonnées, détermination automatique des zones de vent et de neige. Définition automatique des dimensions minimales des fondations et profondeur hors gel à respecter.</p>
           </div>
           <div class="arkolia-head-reference">
             <label class="arkolia-head-reference__field" for="solidityArkoliaReference">
@@ -1555,5 +1610,15 @@ export async function renderSolidityArkolia(root) {
   renderAutocompleteDropdown();
 
   renderResultCard();
+
+  if (root.dataset.arkoliaSubjectActionBound !== 'true') {
+    root.dataset.arkoliaSubjectActionBound = 'true';
+    root.addEventListener('click', (event) => {
+      const newSubjectTrigger = event.target.closest('[data-action-id="arkoliaNewSubjectAction"]');
+      if (!newSubjectTrigger) return;
+      openArkoliaSubjectDraft();
+    });
+  }
+
   registerProjectPrimaryScrollSource(root.closest("#projectSolidityRouterScroll") || document.getElementById("projectSolidityRouterScroll"));
 }
