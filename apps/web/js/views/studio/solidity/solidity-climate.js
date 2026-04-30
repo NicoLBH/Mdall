@@ -1,4 +1,5 @@
 import { escapeHtml } from "../../../utils/escape-html.js";
+import { store } from "../../../store.js";
 import { registerProjectPrimaryScrollSource } from "../../project-shell-chrome.js";
 import { getLastStudioToolResult, resolveStudioClimateTool } from "../../../services/studio-tools-service.js";
 import { getEffectiveProjectLocation } from "./solidity-climate-tool-common.js";
@@ -17,15 +18,38 @@ const TOOL_LABELS = {
 const state = { loading: false, error: "", projectId: "", location: null, results: {}, mapUrl: "", mapLoading: false };
 
 function buildClimateDraftDescription() {
-  return TOOL_KEYS
-    .map((toolKey) => String(state.results?.[toolKey]?.markdown_summary || "").trim())
-    .filter(Boolean)
-    .join("\n\n");
+  const projectName = String(store.projectForm?.projectName || store.currentProject?.name || "").trim() || "Nom_du projet";
+  const address = [state.location?.address, state.location?.postalCode, state.location?.city].filter(Boolean).join(", ") || "adresse_complète_du_projet_dans_localisation";
+
+  const snowResult = state.results?.snow?.result_payload || {};
+  const windResult = state.results?.wind?.result_payload || {};
+  const frostResult = state.results?.frost?.result_payload || {};
+
+  const snowZone = String(snowResult?.snow_zone || "—");
+  const altitude = Number(snowResult?.altitude ?? state.location?.altitude);
+  const altitudeText = Number.isFinite(altitude) ? `${altitude.toFixed(2)} m` : "—";
+  const windZone = String(windResult?.wind_zone || "—");
+  const frostDepth = Number(frostResult?.frost_depth_m);
+  const frostDepthText = Number.isFinite(frostDepth) ? `${frostDepth.toFixed(3)} m` : "—";
+  const h0Selected = Number(frostResult?.h0_selected_m);
+  const h0SelectedText = Number.isFinite(h0Selected) ? `${h0Selected.toFixed(1)} m` : "—";
+
+  return `Le projet \`${projectName}\` est situé ${address}. Les charges climatiques qui lui sont applicables sont les suivantes :
+
+- Zone neige: **${snowZone}**
+- Altitude: **${altitudeText}**
+- Zone vent: **${windZone}**
+
+
+En application du NF DTU 13.1, les fondations devront respecter la cote hors gel mini par rapport au niveau extérieur fini H (en mètres) tel que:
+H >  **${frostDepthText}**
+
+avec H0 retenu: **${h0SelectedText}**`;
 }
 
 function buildClimateDraftTitle() {
   const city = String(state.location?.city || "").trim();
-  return city ? `Charges climatiques — ${city}` : "";
+  return `Charges climatiques applicables au projet (neige, vent et gel) - ${city || "Ville inconnue"}`;
 }
 
 export async function renderSolidityClimate(root, { force = false } = {}) {
