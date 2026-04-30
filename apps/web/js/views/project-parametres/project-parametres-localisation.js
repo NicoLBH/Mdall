@@ -106,10 +106,11 @@ async function refreshProjectLocationMapEmbedUrl({ latitude, longitude, zoom = 1
   if (mapEmbedState.requestKey === requestKey && mapEmbedState.status === "success" && mapEmbedState.url) return;
   if (mapEmbedState.requestKey === requestKey && mapEmbedState.status === "loading") return;
 
+  console.info("[project-location] map.fetch.start", { requestKey, latitude, longitude });
   mapEmbedState.status = "loading";
   mapEmbedState.requestKey = requestKey;
   mapEmbedState.url = "";
-  rerenderProjectParametres();
+  renderProjectLocationMapBlockIntoDom();
 
   try {
     const embedUrl = await fetchGoogleMapsPlaceEmbedUrl({ latitude, longitude, zoom, mapType });
@@ -117,6 +118,7 @@ async function refreshProjectLocationMapEmbedUrl({ latitude, longitude, zoom = 1
     uiState.locationMapEmbed.status = "success";
     uiState.locationMapEmbed.url = embedUrl;
     uiState.locationMapEmbed.lastErrorAt = 0;
+    console.info("[project-location] map.fetch.success", { requestKey });
   } catch {
     if (uiState.locationMapEmbed.requestKey !== requestKey) return;
     uiState.locationMapEmbed.status = "error";
@@ -127,7 +129,7 @@ async function refreshProjectLocationMapEmbedUrl({ latitude, longitude, zoom = 1
       if (uiState.locationMapEmbed.status !== "loading") {
         uiState.locationMapValidationPending = false;
       }
-      rerenderProjectParametres();
+      renderProjectLocationMapBlockIntoDom();
     }
   }
 }
@@ -329,20 +331,6 @@ function renderProjectLocationMapBlock() {
 
   const uiState = ensureLocalisationUiState();
   const mapEmbedState = uiState.locationMapEmbed;
-  const requestKey = getLocationMapRequestKey({
-    latitude,
-    longitude,
-    zoom: 16,
-    mapType: "satellite",
-    nonce: Number(uiState.locationMapRefreshNonce || 0)
-  });
-  const shouldFetchMapEmbedUrl = mapEmbedState.requestKey !== requestKey
-    || mapEmbedState.status === "idle";
-  const errorRetryDelayElapsed = mapEmbedState.status !== "error"
-    || (Date.now() - Number(mapEmbedState.lastErrorAt || 0)) >= MAP_EMBED_ERROR_RETRY_DELAY_MS;
-  if (shouldFetchMapEmbedUrl && errorRetryDelayElapsed) {
-    void refreshProjectLocationMapEmbedUrl({ latitude, longitude, zoom: 16, mapType: "satellite" });
-  }
   if (mapEmbedState.status !== "success" || !mapEmbedState.url) {
     const shouldShowSpinner = mapEmbedState.status === "loading" && Boolean(uiState.locationMapValidationPending);
     return `
@@ -369,6 +357,29 @@ function renderProjectLocationMapBlock() {
       </div>
     </div>
   `;
+}
+
+function renderProjectLocationMapBlockIntoDom() {
+  const host = document.querySelector("[data-project-location-map-host]");
+  if (!host) return;
+  console.info("[project-location] map.local-render");
+  host.innerHTML = renderProjectLocationMapBlock();
+}
+
+function ensureProjectLocationMapEmbedUrl({ latitude = null, longitude = null, zoom = 16, mapType = "satellite" } = {}) {
+  const uiState = ensureLocalisationUiState();
+  const mapEmbedState = uiState.locationMapEmbed;
+  const requestKey = getLocationMapRequestKey({ latitude, longitude, zoom, mapType, nonce: Number(uiState.locationMapRefreshNonce || 0) });
+  const shouldFetchMapEmbedUrl = mapEmbedState.requestKey !== requestKey || mapEmbedState.status === "idle";
+  const errorRetryDelayElapsed = mapEmbedState.status !== "error"
+    || (Date.now() - Number(mapEmbedState.lastErrorAt || 0)) >= MAP_EMBED_ERROR_RETRY_DELAY_MS;
+
+  if (!shouldFetchMapEmbedUrl || !errorRetryDelayElapsed) {
+    console.info("[project-location] map.fetch.skip", { requestKey, status: mapEmbedState.status, hasUrl: Boolean(mapEmbedState.url) });
+    return;
+  }
+
+  void refreshProjectLocationMapEmbedUrl({ latitude, longitude, zoom, mapType });
 }
 
 function hasProjectLocationChanged(previousSignature = "") {
@@ -400,7 +411,7 @@ function dispatchProjectLocationChanged() {
   }));
 }
 
-async function refreshAltitudeForCurrentProject() {
+async function refreshAltitudeForCurrentProject({ render = true } = {}) {
   const latitude = store.projectForm.latitude;
   const longitude = store.projectForm.longitude;
   const parametresUiState = ensureLocalisationUiState();
@@ -411,7 +422,7 @@ async function refreshAltitudeForCurrentProject() {
   }
 
   parametresUiState.altitudeIsLoading = true;
-  rerenderProjectParametres();
+  if (render) rerenderProjectParametres();
 
   try {
     const result = await fetchFrenchAltitude({ latitude, longitude });
@@ -420,7 +431,7 @@ async function refreshAltitudeForCurrentProject() {
     store.projectForm.altitude = null;
   } finally {
     parametresUiState.altitudeIsLoading = false;
-    rerenderProjectParametres();
+    if (render) rerenderProjectParametres();
   }
 }
 
@@ -967,6 +978,9 @@ async function runProjectBaseDataEnrichment({ triggerType = "manual", triggerLab
 
 async function refreshLocationDerivedData({ runEnrichment = false, triggerType = "manual", triggerLabel = "" } = {}) {
   syncLocationDerivedStaleUi();
+  const previousSignature = getProjectLocationSignature();
+  const previousLatitude = Number.isFinite(store.projectForm.latitude) ? store.projectForm.latitude : null;
+  const previousLongitude = Number.isFinite(store.projectForm.longitude) ? store.projectForm.longitude : null;
 
   const city = String(store.projectForm.city || "").trim();
   const postalCode = String(store.projectForm.postalCode || "").trim();
@@ -974,12 +988,11 @@ async function refreshLocationDerivedData({ runEnrichment = false, triggerType =
   if (!city || !postalCode) {
     store.projectForm.altitude = null;
     persistCurrentProjectState();
-    dispatchProjectLocationChanged();
-    rerenderProjectParametres();
+    if (hasProjectLocationChanged(previousSignature)) dispatchProjectLocationChanged();
     return;
   }
 
-  await refreshAltitudeForCurrentProject();
+  await refreshAltitudeForCurrentProject({ render: false });
 
   if (runEnrichment) {
     await runProjectBaseDataEnrichment({ triggerType, triggerLabel, force: true });
@@ -1027,10 +1040,14 @@ async function refreshLocationDerivedData({ runEnrichment = false, triggerType =
     };
     const uiState = ensureLocalisationUiState();
     uiState.locationSupabasePlaceholders = { ...store.projectForm.locationSavedSnapshot };
-    uiState.locationMapRefreshNonce += 1;
-    uiState.locationMapEmbed.requestKey = "";
-    uiState.locationMapEmbed.status = "idle";
-    uiState.locationMapEmbed.url = "";
+    const latitudeChanged = previousLatitude !== (Number.isFinite(store.projectForm.latitude) ? store.projectForm.latitude : null);
+    const longitudeChanged = previousLongitude !== (Number.isFinite(store.projectForm.longitude) ? store.projectForm.longitude : null);
+    if (latitudeChanged || longitudeChanged) {
+      uiState.locationMapRefreshNonce += 1;
+      uiState.locationMapEmbed.requestKey = "";
+      uiState.locationMapEmbed.status = "idle";
+      uiState.locationMapEmbed.url = "";
+    }
 
     console.info("[project-location] save.success", {
       projectId,
@@ -1049,8 +1066,7 @@ async function refreshLocationDerivedData({ runEnrichment = false, triggerType =
   }
 
   persistCurrentProjectState();
-  dispatchProjectLocationChanged();
-  rerenderProjectParametres();
+  if (hasProjectLocationChanged(previousSignature)) dispatchProjectLocationChanged();
 }
 
 async function loadGeorisquesForCurrentProject({ force = false } = {}) {
@@ -1444,7 +1460,7 @@ export function renderLocalisationParametresContent() {
             )}
           </div>
         ` : ""}
-        ${renderProjectLocationMapBlock()}
+        <div data-project-location-map-host>${renderProjectLocationMapBlock()}</div>
       `
       })
     ]
@@ -1483,34 +1499,53 @@ export function bindLocalisationParametresSection(root) {
         case "projectAddress": {
           const parametresUiState = ensureLocalisationUiState();
           const previousLocationSignature = getLocationEditBaseSignature();
+          const inputValue = String(value || "").trim();
           console.info("[project-location] validate.start", {
-            inputValue: value,
+            inputValue,
             address: store.projectForm.address,
             city: store.projectForm.city,
             postalCode: store.projectForm.postalCode
           });
-          parametresUiState.locationSaveInProgress = true;
-          try {
-            if (parametresUiState.locationPendingSelectionPromise) await parametresUiState.locationPendingSelectionPromise;
-            if (String(store.projectForm.address || "").trim() !== String(value || "").trim()) {
-              const resolved = await resolveFrenchAddress(value);
-              syncProjectLocationFields({ address: resolved.address, city: resolved.city, postalCode: resolved.postalCode, latitude: resolved.lat, longitude: resolved.lon });
-            }
-          } catch {
-            syncProjectLocationFields({ address: value, altitude: null });
-          }
-
-          const locationHasChanged = hasProjectLocationChanged(previousLocationSignature);
-          if (!locationHasChanged) {
+          if (parametresUiState.locationPendingSelectionPromise) await parametresUiState.locationPendingSelectionPromise;
+          if (getProjectLocationSignature() === previousLocationSignature && String(store.projectForm.address || "").trim() === inputValue) {
+            console.info("[project-location] validate.noop");
+            console.info("[project-location] rerender.global.avoided");
             parametresUiState.locationEditBaseSignature = "";
             parametresUiState.locationEditInProgress = false;
             parametresUiState.locationSaveInProgress = false;
             return;
           }
 
+          parametresUiState.locationSaveInProgress = true;
+          try {
+            if (String(store.projectForm.address || "").trim() !== inputValue) {
+              const resolved = await resolveFrenchAddress(inputValue);
+              syncProjectLocationFields({ address: resolved.address, city: resolved.city, postalCode: resolved.postalCode, latitude: resolved.lat, longitude: resolved.lon });
+            }
+          } catch {
+            syncProjectLocationFields({ address: inputValue, altitude: null });
+          }
+
+          const locationHasChanged = hasProjectLocationChanged(previousLocationSignature);
+          if (!locationHasChanged) {
+            console.info("[project-location] validate.noop");
+            console.info("[project-location] rerender.global.avoided");
+            parametresUiState.locationEditBaseSignature = "";
+            parametresUiState.locationEditInProgress = false;
+            parametresUiState.locationSaveInProgress = false;
+            return;
+          }
+
+          console.info("[project-location] validate.changed");
           parametresUiState.locationMapValidationPending = true;
           try {
             await refreshLocationDerivedData({ runEnrichment: locationHasChanged && shouldAutoRunProjectBaseDataEnrichment(), triggerType: "automatic", triggerLabel: "Validation d’une modification de la localisation projet" });
+            ensureProjectLocationMapEmbedUrl({
+              latitude: Number(store.projectForm.latitude),
+              longitude: Number(store.projectForm.longitude),
+              zoom: 16,
+              mapType: "satellite"
+            });
           } finally {
             parametresUiState.locationEditBaseSignature = "";
             parametresUiState.locationEditInProgress = false;
@@ -1531,6 +1566,11 @@ export function bindLocalisationParametresSection(root) {
 
   bindProjectLocationAutocomplete();
   syncLocationDerivedStaleUi();
+  const latitude = Number(store.projectForm.latitude);
+  const longitude = Number(store.projectForm.longitude);
+  if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+    ensureProjectLocationMapEmbedUrl({ latitude, longitude, zoom: 16, mapType: "satellite" });
+  }
 
   const georisquesFetchBtn = document.getElementById("projectGeorisquesFetchBtn");
   if (georisquesFetchBtn) {
