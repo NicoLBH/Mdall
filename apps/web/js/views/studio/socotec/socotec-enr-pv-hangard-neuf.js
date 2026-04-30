@@ -1093,6 +1093,7 @@ function renderKeyValue(label, value, options = {}) {
 
 function renderSummaryCard(selected) {
   const hasSelection = Boolean(selected);
+  const isLoading = Boolean(arkoliaUiState.summaryLoading);
   const postalCode = hasSelection ? ((selected.postalCodes && selected.postalCodes[0]) || selected.postalCode || '—') : '—';
   const departmentValue = hasSelection
     ? [selected.departmentCode || '', selected.departmentName || ''].filter(Boolean).join(' — ') || '—'
@@ -1111,7 +1112,7 @@ function renderSummaryCard(selected) {
   ].join('') : '';
 
   return `
-    <div class="settings-seismic-summary-card arkolia-summary-card">
+    <div class="settings-seismic-summary-card arkolia-summary-card${isLoading ? ' is-loading' : ''}">
       ${renderCityHeader(selected)}
 
       <div class="arkolia-summary-card__body">
@@ -1140,6 +1141,12 @@ function renderSummaryCard(selected) {
           </div>
         </div>
       </div>
+      ${isLoading ? `
+        <div class="arkolia-summary-card__loading" aria-live="polite" aria-busy="true">
+          <div class="ui-spinner ui-spinner--md"><span class="ui-spinner__ring"></span></div>
+          <span>Chargement des informations…</span>
+        </div>
+      ` : ''}
     </div>
   `;
 }
@@ -1345,35 +1352,40 @@ async function applySelection(item) {
     : null;
 
   arkoliaUiState.summaryLoading = true;
-  const supabaseSummary = await resolveArkoliaSummaryFromSupabase(item, { altitude, cantonName, cantonName2014, currentCantonName, departmentName, retainedH0, calculatedH });
-
-  arkoliaUiState.selected = {
-    ...item,
-    altitude: supabaseSummary.altitude,
-    postalCode: supabaseSummary.postalCode,
-    cantonName: supabaseSummary.cantonName,
-    cantonName2014: supabaseSummary.cantonName2014,
-    currentCantonName: supabaseSummary.currentCantonName,
-    hasCantonMismatch: Boolean(normalizedCurrentCantonName && normalizedCantonName2014 && normalizedCurrentCantonName !== normalizedCantonName2014),
-    departmentName: supabaseSummary.departmentName,
-    windRegions,
-    windZone: supabaseSummary.windZone,
-    snowRegions,
-    snowZone: supabaseSummary.snowZone,
-    frostDepthDepartmentName: frostDepthResult?.departmentName || departmentName || '',
-    frostDepthH0Values,
-    frostDepthH0: supabaseSummary.frostDepthH0,
-    frostDepthH0Label: Number.isFinite(supabaseSummary.frostDepthH0) ? `${formatMeters(supabaseSummary.frostDepthH0, 1)} m` : '—',
-    hasMultipleFrostDepthH0Values,
-    frostDepthH: supabaseSummary.frostDepthH,
-    frostDepthHLabel: Number.isFinite(supabaseSummary.frostDepthH) ? `${formatMeters(supabaseSummary.frostDepthH, 2)} m` : '—'
-  };
-  resetSuggestions();
-  renderAutocompleteDropdown();
-  arkoliaUiState.mapUrl = "";
   renderResultCard();
-  arkoliaUiState.summaryLoading = false;
-  await refreshMapForSelection();
+
+  try {
+    const supabaseSummary = await resolveArkoliaSummaryFromSupabase(item, { altitude, cantonName, cantonName2014, currentCantonName, departmentName, retainedH0, calculatedH });
+
+    arkoliaUiState.selected = {
+      ...item,
+      altitude: supabaseSummary.altitude,
+      postalCode: supabaseSummary.postalCode,
+      cantonName: supabaseSummary.cantonName,
+      cantonName2014: supabaseSummary.cantonName2014,
+      currentCantonName: supabaseSummary.currentCantonName,
+      hasCantonMismatch: Boolean(normalizedCurrentCantonName && normalizedCantonName2014 && normalizedCurrentCantonName !== normalizedCantonName2014),
+      departmentName: supabaseSummary.departmentName,
+      windRegions,
+      windZone: supabaseSummary.windZone,
+      snowRegions,
+      snowZone: supabaseSummary.snowZone,
+      frostDepthDepartmentName: frostDepthResult?.departmentName || departmentName || '',
+      frostDepthH0Values,
+      frostDepthH0: supabaseSummary.frostDepthH0,
+      frostDepthH0Label: Number.isFinite(supabaseSummary.frostDepthH0) ? `${formatMeters(supabaseSummary.frostDepthH0, 1)} m` : '—',
+      hasMultipleFrostDepthH0Values,
+      frostDepthH: supabaseSummary.frostDepthH,
+      frostDepthHLabel: Number.isFinite(supabaseSummary.frostDepthH) ? `${formatMeters(supabaseSummary.frostDepthH, 2)} m` : '—'
+    };
+    resetSuggestions();
+    renderAutocompleteDropdown();
+    arkoliaUiState.mapUrl = "";
+    await refreshMapForSelection();
+  } finally {
+    arkoliaUiState.summaryLoading = false;
+    renderResultCard();
+  }
 }
 
 function bindCityAutocomplete() {

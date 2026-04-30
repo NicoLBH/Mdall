@@ -12416,6 +12416,7 @@ circle.situation-trajectory__hierarchy-link--blocked,
   padding:14px;
   display:flex;
   flex-direction:column;
+  position:relative;
 }
 
 .arkolia-summary-card__header{
@@ -12567,6 +12568,23 @@ circle.situation-trajectory__hierarchy-link--blocked,
   font-size:12px;
   line-height:1.5;
   color:var(--muted);
+}
+
+.arkolia-summary-card__loading{
+  position:absolute;
+  inset:0;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  align-items:center;
+  justify-content:center;
+  background:rgba(13,17,23,.72);
+  backdrop-filter:blur(2px);
+  color:var(--text);
+  font-size:13px;
+  font-weight:600;
+  z-index:2;
+  border-radius:inherit;
 }
 
 .arkolia-stack--lg{padding:14px;border:solid 1px var(--bg-input);border-radius:var(--radius);}
