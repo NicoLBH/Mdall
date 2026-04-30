@@ -3,11 +3,13 @@ import { setProjectViewHeader, clearProjectActiveScrollSource, debugProjectScrol
 import { getRunLogEntries, getRunMetrics } from "../services/project-automation.js";
 import { syncProjectActionsFromSupabase } from "../services/project-supabase-sync.js";
 import { svgIcon } from "../ui/icons.js";
+import { store } from "../store.js";
 import {
   renderDataTableEmptyState,
   renderDataTableHead,
   renderDataTableShell
 } from "./ui/data-table-shell.js";
+import { normalizePaginationState, paginateItems, renderPaginationControls } from "./ui/pagination.js";
 
 function getRunSuccessIconSvg() {
   return svgIcon("check-circle-fill", {
@@ -332,8 +334,27 @@ function renderRunRows(entries) {
 
 function renderRunsTable() {
   const entries = getRunLogEntries();
+  if (!store.projectActionsView || typeof store.projectActionsView !== "object") {
+    store.projectActionsView = { pagination: { mode: "client", pageSize: 25, currentPage: 1 } };
+  }
+  const pagination = normalizePaginationState({
+    totalItems: entries.length,
+    pageSize: store.projectActionsView?.pagination?.pageSize,
+    currentPage: store.projectActionsView?.pagination?.currentPage
+  });
+  store.projectActionsView.pagination = {
+    ...(store.projectActionsView.pagination && typeof store.projectActionsView.pagination === "object"
+      ? store.projectActionsView.pagination
+      : {}),
+    mode: "client",
+    pageSize: pagination.pageSize,
+    currentPage: pagination.currentPage,
+    totalPages: pagination.totalPages,
+    totalItems: pagination.totalItems
+  };
+  const paged = paginateItems(entries, pagination);
 
-  return renderDataTableShell({
+  const tableHtml = renderDataTableShell({
     className: "workflow-runs-table data-table-shell--document-scroll",
     gridTemplate: "minmax(280px,1.6fr) 220px 170px 120px 120px",
     headHtml: renderDataTableHead({
@@ -348,13 +369,14 @@ function renderRunsTable() {
         "Statut"
       ]
     }),
-    bodyHtml: renderRunRows(entries),
-    state: entries.length ? "ready" : "empty",
+    bodyHtml: renderRunRows(paged.items),
+    state: paged.items.length ? "ready" : "empty",
     emptyHtml: renderDataTableEmptyState({
       title: "Aucune action exécutée",
       description: "Lance une analyse ou un enrichissement manuel pour alimenter le journal d’exécution."
     })
   });
+  return `${tableHtml}${renderPaginationControls(pagination, { entity: "actions" })}`;
 }
 
 function renderProjectActionsContent(root) {
@@ -377,11 +399,36 @@ export function renderProjectActions(root) {
   });
 
   renderProjectActionsContent(root);
+  root.onclick = (event) => {
+    const trigger = event.target?.closest?.('[data-pagination-entity="actions"][data-pagination-page]');
+    if (!trigger) return;
+    event.preventDefault();
+    const nextPage = Math.max(1, Number.parseInt(trigger.getAttribute("data-pagination-page") || "1", 10) || 1);
+    if (!store.projectActionsView || typeof store.projectActionsView !== "object") store.projectActionsView = {};
+    if (!store.projectActionsView.pagination || typeof store.projectActionsView.pagination !== "object") {
+      store.projectActionsView.pagination = { mode: "client", pageSize: 25, currentPage: 1 };
+    }
+    store.projectActionsView.pagination.currentPage = nextPage;
+    renderProjectActionsContent(root);
+  };
   debugProjectScrollPolicy("render-project-actions");
 
   syncProjectActionsFromSupabase({ force: true })
     .then(() => {
       if (!root?.isConnected) return;
+      const entries = getRunLogEntries();
+      const pagination = normalizePaginationState({
+        totalItems: entries.length,
+        pageSize: store.projectActionsView?.pagination?.pageSize,
+        currentPage: store.projectActionsView?.pagination?.currentPage
+      });
+      if (!store.projectActionsView || typeof store.projectActionsView !== "object") {
+        store.projectActionsView = { pagination: { mode: "client", pageSize: 25, currentPage: 1 } };
+      }
+      if (!store.projectActionsView.pagination || typeof store.projectActionsView.pagination !== "object") {
+        store.projectActionsView.pagination = { mode: "client", pageSize: 25, currentPage: 1 };
+      }
+      store.projectActionsView.pagination.currentPage = pagination.currentPage;
       renderProjectActionsContent(root);
     })
     .catch((error) => {
