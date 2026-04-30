@@ -125,7 +125,7 @@ function renderCards() {
 function renderAddressCard() {
   const location = state.location || {};
   const address = [location.address, location.postalCode, location.city].filter(Boolean).join(", ");
-  return `<article class="studio-tool-info-card"><strong>Adresse</strong><div>${escapeHtml(address || "—")}</div></article>`;
+  return `<article class="studio-tool-info-card"><h4>Adresse</h4><ul><li>${escapeHtml(address || "—")}</li></ul></article>`;
 }
 
 function renderToolCard(toolKey) {
@@ -155,7 +155,7 @@ function renderMapCard() {
     isLoading: state.mapLoading,
     showSpinner: true,
     iframeTitle: "Carte Google Maps de la localisation du projet",
-    height: "calc(100vh - 186px)",
+    height: "calc(100vh - 210px)",
     containerClassName: "studio-tool-map-card"
   });
 }

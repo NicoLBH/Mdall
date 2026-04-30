@@ -21,9 +21,9 @@ export function renderProjectLocationMapCard({
   if (!isValidLocation) {
     return `
       <div class="${wrapperClass} is-blurred"${wrapperStyle}>
-        <div class="arkolia-map arkolia-map--placeholder is-empty" aria-hidden="true">
-          <div class="arkolia-map__placeholder-surface"></div>
-          <div class="arkolia-map__placeholder-blur"></div>
+        <div class="studio-map studio-map--placeholder is-empty" aria-hidden="true">
+          <div class="studio-map__placeholder-surface"></div>
+          <div class="studio-map__placeholder-blur"></div>
         </div>
       </div>
     `;
@@ -32,9 +32,9 @@ export function renderProjectLocationMapCard({
   if (!embedUrl) {
     return `
       <div class="${wrapperClass} is-blurred"${wrapperStyle}>
-        <div class="arkolia-map arkolia-map--placeholder" aria-hidden="true">
-          <div class="arkolia-map__placeholder-surface"></div>
-          <div class="arkolia-map__placeholder-blur"></div>
+        <div class="studio-map studio-map--placeholder" aria-hidden="true">
+          <div class="studio-map__placeholder-surface"></div>
+          <div class="studio-map__placeholder-blur"></div>
           ${isLoading && showSpinner ? `<div class="settings-location-map__spinner">${renderSpinnerHtml({ label: "Chargement de la carte", size: "md" })}</div>` : ""}
         </div>
       </div>
@@ -43,7 +43,7 @@ export function renderProjectLocationMapCard({
 
   return `
     <div class="${wrapperClass}"${wrapperStyle}>
-      <div class="arkolia-map">
+      <div class="studio-map">
         <iframe
           title="${escapeHtml(iframeTitle)}"
           src="${escapeHtml(embedUrl)}"
