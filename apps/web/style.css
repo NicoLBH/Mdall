@@ -5265,7 +5265,6 @@ color:var(--text);
 
   .settings-nav__group{
     border-right:none;
-    border-bottom:1px solid var(--border);
     padding-right:0;
     padding-bottom:12px;
   }
@@ -5443,7 +5442,6 @@ color:var(--text);
 
   .settings-nav__group--project{
     border-right:none;
-    border-bottom:1px solid var(--border);
     padding-right:0;
     padding-bottom:12px;
   }
