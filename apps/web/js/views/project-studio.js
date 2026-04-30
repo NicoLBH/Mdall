@@ -62,9 +62,9 @@ function renderStudioNav() {
       sectionLabel: "Socotec",
       items: [
         renderSideNavItem({
-          label: "ENR - PV hangard neuf",
+          label: "ENR - PV hangar neuf",
           targetId: "solidity-arkolia",
-          iconHtml: svgIcon("arkolia-a", { className: "octicon octicon-arkolia" })
+          iconHtml: svgIcon("eye", { className: "octicon octicon-eye" })
         })
       ]
     })
