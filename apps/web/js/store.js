@@ -44,7 +44,7 @@ function createProjectSubjectsViewState() {
   search: "",
   displayDepth: "situations",
   page: 1,
-  pageSize: 80,
+  pageSize: 25,
   detailsModalOpen: false
   };
 }
@@ -75,7 +75,7 @@ function createSituationsViewState() {
     search: "",
     displayDepth: "situations",
     page: 1,
-    pageSize: 80,
+    pageSize: 25,
     detailsModalOpen: false,
     handwritingComposerDraftBySubjectId: {},
     handwritingComposerDraftByKey: {}

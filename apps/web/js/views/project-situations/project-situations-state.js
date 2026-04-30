@@ -123,7 +123,7 @@ export function createProjectSituationsState({ store }) {
     if (!Number.isFinite(Number(view.pagination.currentPage)) || Number(view.pagination.currentPage) < 1) view.pagination.currentPage = 1;
     if (!Number.isFinite(Number(view.pagination.totalItems)) || Number(view.pagination.totalItems) < 0) view.pagination.totalItems = 0;
     if (!Number.isFinite(Number(view.pagination.loadedItems)) || Number(view.pagination.loadedItems) < 0) view.pagination.loadedItems = 0;
-    if (!Number.isFinite(Number(view.pagination.pageSize)) || Number(view.pagination.pageSize) <= 0) view.pagination.pageSize = null;
+    if (!Number.isFinite(Number(view.pagination.pageSize)) || Number(view.pagination.pageSize) <= 0) view.pagination.pageSize = 25;
     if (typeof view.pagination.hasNextPage !== "boolean") view.pagination.hasNextPage = false;
     if (typeof view.pagination.sourceComplete !== "boolean") view.pagination.sourceComplete = true;
     if (typeof view.pagination.nextCursor !== "string" && view.pagination.nextCursor !== null) view.pagination.nextCursor = null;
