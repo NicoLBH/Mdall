@@ -295,6 +295,65 @@ function renderNewSubjectButton() {
   });
 }
 
+
+function getSelectedSpanLabel() {
+  const identity = arkoliaUiState.identity || {};
+  const spanValue = identity.spanPreset === 'other'
+    ? normalizeDimension(identity.spanOther)
+    : normalizeDimension(identity.spanPreset);
+  return spanValue || '…';
+}
+
+function buildArkoliaDraftTitle() {
+  const selected = arkoliaUiState.selected || {};
+  const departmentCode = String(selected.departmentCode || '').trim() || '—';
+  const cityName = getSelectedCityName();
+  const length = normalizeDimension(arkoliaUiState.identity?.length) || '…';
+  const width = normalizeDimension(arkoliaUiState.identity?.width) || '…';
+  const span = getSelectedSpanLabel();
+  return `${departmentCode}_${cityName} : ENR - PV hangar neuf ${length} m x ${width} m, travée ${span} m`;
+}
+
+function buildArkoliaDraftDescription() {
+  const postalCode = getSelectedPostalCode();
+  const cityName = getSelectedCityName();
+  const relationName = String(arkoliaUiState.relation?.builderName || 'ARKOLIA').trim() || 'ARKOLIA';
+  const relationLabel = `**${relationName}**`;
+
+  const sections = [
+    ["Description de l'ouvrage", getIdentityDescription()],
+    ['Avis', getRelationSummary()],
+    ['Paramètres climatiques', getClimateText()],
+    ["Niveau d'assise", getAssiseText()],
+    ['Portance', getPortanceText()]
+  ];
+
+  const paragraphBlocks = sections
+    .map(([title, value]) => `\n### ${title}\n${value || '—'}`)
+    .join('\n\n');
+
+  const description = `## ${postalCode} ${cityName} ${relationLabel}\n\n${paragraphBlocks}`;
+  return description
+    .replace(/altitude\s+(\d+(?:[.,]\d+)?)\s+mètres/gi, (_match, value) => `altitude \`${String(value).replace(',', '.') } mètres\``)
+    .replace(/H\s*>\s*([0-9]+(?:[.,][0-9]+)?)\s*m/gi, (_match, value) => `\`H > ${String(value).replace(',', '.')} m\``);
+}
+
+function openArkoliaSubjectDraft() {
+  const opener = typeof window !== 'undefined' ? window.openStudioToolSubjectDraft : null;
+  if (typeof opener === 'function') {
+    opener({
+      origin: 'studio-arkolia-enr-pv-hangar-neuf',
+      title: buildArkoliaDraftTitle(),
+      description: buildArkoliaDraftDescription(),
+      meta: {
+        labels: ['enr', 'pv', 'hangar-neuf']
+      }
+    });
+  } else {
+    console.warn('[studio-tool-subject] open-draft unavailable', { toolKey: 'arkolia-enr-pv-hangar-neuf' });
+  }
+}
+
 function parseFrenchDecimalToNumber(value) {
   const normalized = String(value ?? '').trim().replace(/,/g, '.');
   const number = Number(normalized);
@@ -1555,5 +1614,15 @@ export async function renderSolidityArkolia(root) {
   renderAutocompleteDropdown();
 
   renderResultCard();
+
+  if (root.dataset.arkoliaSubjectActionBound !== 'true') {
+    root.dataset.arkoliaSubjectActionBound = 'true';
+    root.addEventListener('click', (event) => {
+      const newSubjectTrigger = event.target.closest('[data-action-id="arkoliaNewSubjectAction"]');
+      if (!newSubjectTrigger) return;
+      openArkoliaSubjectDraft();
+    });
+  }
+
   registerProjectPrimaryScrollSource(root.closest("#projectSolidityRouterScroll") || document.getElementById("projectSolidityRouterScroll"));
 }
