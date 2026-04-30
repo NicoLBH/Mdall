@@ -1,4 +1,4 @@
--- Generated from apps/web/js/services/zoning/canton-2014-names-map.json
+-- Climate seed data for Supabase
 INSERT INTO public.mdall_climate_commune_cantons (insee_code, canton_code_2014, canton_name_2014, canton_name_2014_normalized, department_code, source_payload)
 VALUES
   (NULL, '1001', 'Aix-en-Othe', 'aix en othe', '10', '{"canton_code_2014":"1001","canton_name_2014":"Aix-en-Othe"}'::jsonb),

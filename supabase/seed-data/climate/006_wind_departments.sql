@@ -1,4 +1,4 @@
--- Generated from apps/web/js/services/zoning/wind-regions-departments.json
+-- Climate seed data for Supabase
 INSERT INTO public.mdall_climate_wind_departments (department_code, resolved_zone, source_payload)
 VALUES
   ('01', '1', '{"department_code":"01","department_name":"Ain","resolved_zone":1}'::jsonb),

@@ -1,10 +1,4 @@
 import { searchFrenchCommunes, fetchFrenchAltitude } from "../../../services/georisques-service.js";
-import { getCantonByCommuneCode } from "../../../services/zoning/canton-service.js";
-import { getWindRegionsByDepartmentCode } from "../../../services/zoning/wind-regions-service.js";
-import { getSnowRegionsByDepartmentCode } from "../../../services/zoning/snow-regions-service.js";
-import { getWindZoneByDepartmentAndCanton } from "../../../services/zoning/wind-canton-regions-service.js";
-import { getSnowZoneByDepartmentAndCanton } from "../../../services/zoning/snow-canton-regions-service.js";
-import { getFrostDepthByDepartmentCode } from "../../../services/zoning/frost-depth-service.js";
 import { escapeHtml } from "../../../utils/escape-html.js";
 import { fetchGoogleMapsPlaceEmbedUrl } from "../../../services/google-maps-embed-service.js";
 import { renderProjectLocationMapCard } from "../../shared/project-location-map-card.js";
@@ -354,31 +348,21 @@ function openArkoliaSubjectDraft() {
   }
 }
 
-function parseFrenchDecimalToNumber(value) {
-  const normalized = String(value ?? '').trim().replace(/,/g, '.');
-  const number = Number(normalized);
-  return Number.isFinite(number) ? number : null;
-}
-
 function formatMeters(value, digits = 2) {
   return Number.isFinite(value) ? value.toFixed(digits) : '—';
 }
 
 function getFrostDepthCalculation() {
   const selected = arkoliaUiState.selected || {};
-  const rawValues = Array.isArray(selected.frostDepthH0Values) ? selected.frostDepthH0Values : [];
-  const h0Numbers = rawValues.map(parseFrenchDecimalToNumber).filter((value) => Number.isFinite(value));
-  const h0 = h0Numbers.length ? Math.max(...h0Numbers) : null;
+  const h0 = Number(selected.frostDepthH0);
   const altitude = Number(selected.altitude);
-  const h = Number.isFinite(h0) && Number.isFinite(altitude)
-    ? h0 + ((altitude - 150) / 4000)
-    : null;
+  const h = Number(selected.frostDepthH);
 
   return {
-    h0,
+    h0: Number.isFinite(h0) ? h0 : null,
     h,
     altitude: Number.isFinite(altitude) ? altitude : null,
-    hasMultipleH0Values: h0Numbers.length > 1
+    hasMultipleH0Values: false
   };
 }
 
@@ -1225,7 +1209,7 @@ async function refreshMapForSelection() {
   }
 }
 
-async function resolveArkoliaSummaryFromSupabase(item, { altitude, cantonName, cantonName2014, currentCantonName, departmentName, retainedH0, calculatedH } = {}) {
+async function resolveArkoliaSummaryFromSupabase(item, { altitude } = {}) {
   const projectId = String(store.currentProjectId || "").trim();
   const locationPayload = {
     city: item?.name || item?.label || "",
@@ -1241,24 +1225,47 @@ async function resolveArkoliaSummaryFromSupabase(item, { altitude, cantonName, c
     resolveStudioClimateTool({ projectId, toolKey: "frost", location: locationPayload }).catch(() => null)
   ]);
 
-  const windZone = String(wind?.result?.wind_zone || "").trim();
-  const snowZone = String(snow?.result?.snow_zone || "").trim();
+  const windResult = wind?.result || {};
+  const snowResult = snow?.result || {};
+  const frostResult = frost?.result || {};
+  const windZone = String(windResult.wind_zone || "").trim();
+  const snowZone = String(snowResult.snow_zone || "").trim();
+  const departmentCode = String(
+    windResult.department_code
+    || snowResult.department_code
+    || frostResult.department_code
+    || item?.departmentCode
+    || ''
+  ).trim();
+  const cantonName2014 = String(
+    windResult.canton_name_2014
+    || snowResult.canton_name_2014
+    || ''
+  ).trim();
+  const currentCantonName = String(
+    windResult.canton_name_current
+    || snowResult.canton_name_current
+    || ''
+  ).trim();
   const h0 = Number(frost?.result?.h0_selected_m);
   const h = Number(frost?.result?.frost_depth_m);
+
+  if (!windZone || !snowZone || !Number.isFinite(h0) || !Number.isFinite(h)) {
+    throw new Error("La résolution climatique via Supabase a échoué.");
+  }
 
   return {
     altitude,
     postalCode: locationPayload.postalCode || '—',
-    departmentCode: String(item?.departmentCode || '').trim(),
-    departmentName: String(departmentName || '').trim(),
+    departmentCode,
     codeInsee: String(item?.codeInsee || '').trim(),
-    cantonName: cantonName2014 || cantonName,
-    cantonName2014: cantonName2014 || cantonName,
+    cantonName: cantonName2014 || currentCantonName,
+    cantonName2014,
     currentCantonName,
-    windZone: windZone || String(item?.windZone || '').trim(),
-    snowZone: snowZone || String(item?.snowZone || '').trim(),
-    frostDepthH0: Number.isFinite(h0) ? h0 : retainedH0,
-    frostDepthH: Number.isFinite(h) ? h : calculatedH
+    windZone,
+    snowZone,
+    frostDepthH0: h0,
+    frostDepthH: h
   };
 }
 
@@ -1271,91 +1278,23 @@ async function applySelection(item) {
   }
 
   let altitude = null;
-  let cantonName = "";
-  let cantonName2014 = "";
-  let currentCantonName = "";
-  let departmentName = "";
-  let windRegions = [];
-  let windZone = "";
-  let snowRegions = [];
-  let snowZone = "";
-  let frostDepthResult = null;
-
-  const [altitudeResult, cantonResult, windRegionsResult, snowRegionsResult, frostDepthLookupResult] = await Promise.allSettled([
-    fetchFrenchAltitude({ longitude: item.lon, latitude: item.lat }),
-    getCantonByCommuneCode(item.codeInsee),
-    getWindRegionsByDepartmentCode(item.departmentCode),
-    getSnowRegionsByDepartmentCode(item.departmentCode),
-    getFrostDepthByDepartmentCode(item.departmentCode)
+  const [altitudeResult] = await Promise.allSettled([
+    fetchFrenchAltitude({ longitude: item.lon, latitude: item.lat })
   ]);
 
   if (altitudeResult.status === 'fulfilled') {
     altitude = altitudeResult.value?.altitude ?? null;
   }
 
-  if (cantonResult.status === 'fulfilled') {
-    cantonName = cantonResult.value?.cantonName || "";
-    cantonName2014 = cantonResult.value?.cantonName2014 || cantonResult.value?.cantonName || "";
-    currentCantonName = cantonResult.value?.cantonNameCurrent || "";
-  }
-
-  if (windRegionsResult.status === 'fulfilled') {
-    departmentName = windRegionsResult.value?.departmentName || "";
-    windRegions = Array.isArray(windRegionsResult.value?.windRegions) ? windRegionsResult.value.windRegions : [];
-  }
-
-  if (snowRegionsResult.status === 'fulfilled') {
-    if (!departmentName) {
-      departmentName = snowRegionsResult.value?.departmentName || "";
-    }
-    snowRegions = Array.isArray(snowRegionsResult.value?.snowRegions) ? snowRegionsResult.value.snowRegions : [];
-  }
-
-  if (frostDepthLookupResult.status === 'fulfilled') {
-    frostDepthResult = frostDepthLookupResult.value || null;
-  }
-
-  if (cantonName) {
-    try {
-      const windZoneResult = await getWindZoneByDepartmentAndCanton(item.departmentCode, cantonName);
-      windZone = windZoneResult?.windZone ? String(windZoneResult.windZone) : "";
-    } catch (_error) {
-      windZone = "";
-    }
-  } else if (Array.isArray(windRegions) && windRegions.length === 1) {
-    windZone = String(windRegions[0]);
-  }
-
-  if (cantonName) {
-    try {
-      const snowZoneResult = await getSnowZoneByDepartmentAndCanton(item.departmentCode, cantonName);
-      snowZone = snowZoneResult?.snowZone ? String(snowZoneResult.snowZone) : "";
-    } catch (_error) {
-      snowZone = "";
-    }
-  } else if (Array.isArray(snowRegions) && snowRegions.length === 1) {
-    snowZone = String(snowRegions[0]);
-  }
-
   arkoliaUiState.query = item.name || item.label || "";
-  const normalizedCurrentCantonName = String(currentCantonName || "").trim().normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
-  const normalizedCantonName2014 = String(cantonName2014 || cantonName || "").trim().normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
-
-  const frostDepthH0Values = Array.isArray(frostDepthResult?.h0Values)
-    ? frostDepthResult.h0Values.map((value) => String(value ?? '').trim()).filter(Boolean)
-    : [];
-  const frostDepthH0Numbers = frostDepthH0Values.map(parseFrenchDecimalToNumber).filter((value) => Number.isFinite(value));
-  const retainedH0 = frostDepthH0Numbers.length ? Math.max(...frostDepthH0Numbers) : null;
-  const hasMultipleFrostDepthH0Values = frostDepthH0Numbers.length > 1;
-  const calculatedH = Number.isFinite(retainedH0) && Number.isFinite(altitude)
-    ? retainedH0 + ((altitude - 150) / 4000)
-    : null;
 
   arkoliaUiState.summaryLoading = true;
   renderResultCard();
 
   try {
-    const supabaseSummary = await resolveArkoliaSummaryFromSupabase(item, { altitude, cantonName, cantonName2014, currentCantonName, departmentName, retainedH0, calculatedH });
+    const supabaseSummary = await resolveArkoliaSummaryFromSupabase(item, { altitude });
+    const normalizedCurrentCantonName = String(supabaseSummary.currentCantonName || "").trim().normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+    const normalizedCantonName2014 = String(supabaseSummary.cantonName2014 || supabaseSummary.cantonName || "").trim().normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
     arkoliaUiState.selected = {
       ...item,
@@ -1365,16 +1304,16 @@ async function applySelection(item) {
       cantonName2014: supabaseSummary.cantonName2014,
       currentCantonName: supabaseSummary.currentCantonName,
       hasCantonMismatch: Boolean(normalizedCurrentCantonName && normalizedCantonName2014 && normalizedCurrentCantonName !== normalizedCantonName2014),
-      departmentName: supabaseSummary.departmentName,
-      windRegions,
+      departmentName: '',
+      windRegions: [],
       windZone: supabaseSummary.windZone,
-      snowRegions,
+      snowRegions: [],
       snowZone: supabaseSummary.snowZone,
-      frostDepthDepartmentName: frostDepthResult?.departmentName || departmentName || '',
-      frostDepthH0Values,
+      frostDepthDepartmentName: '',
+      frostDepthH0Values: [],
       frostDepthH0: supabaseSummary.frostDepthH0,
       frostDepthH0Label: Number.isFinite(supabaseSummary.frostDepthH0) ? `${formatMeters(supabaseSummary.frostDepthH0, 1)} m` : '—',
-      hasMultipleFrostDepthH0Values,
+      hasMultipleFrostDepthH0Values: false,
       frostDepthH: supabaseSummary.frostDepthH,
       frostDepthHLabel: Number.isFinite(supabaseSummary.frostDepthH) ? `${formatMeters(supabaseSummary.frostDepthH, 2)} m` : '—'
     };

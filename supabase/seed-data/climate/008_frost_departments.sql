@@ -1,4 +1,4 @@
--- Generated from apps/web/js/services/zoning/frost-depth-departments.json
+-- Climate seed data for Supabase
 INSERT INTO public.mdall_climate_frost_departments (department_code, h0_min_m, h0_max_m, h0_default_m, source_payload)
 VALUES
   ('01', 0.7, 0.7, 0.7, '{"department_code":"01","department_name":"Ain","h0_values":["0,7"]}'::jsonb),
