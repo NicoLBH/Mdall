@@ -674,11 +674,11 @@ function renderIdentitySection() {
       </div>
     </div>
 
-    <div class="settings-seismic-sizing-layout__row settings-seismic-sizing-layout__row--top arkolia-result-layout arkolia-identity-row">
-      <div class="settings-stack settings-stack--lg">
+    <div class="settings-seismic-sizing-layout__row settings-seismic-sizing-layout__row--top arkolia-result-layout arkolia-identity-row arkolia-identity-row--analysis">
+      <div class="settings-stack settings-stack--lg arkolia-analysis-assise">
         ${renderAssiseCard()}
       </div>
-      <div class="settings-stack settings-stack--lg">
+      <div class="settings-stack settings-stack--lg arkolia-analysis-climate">
         <div class="arkolia-identity-preview arkolia-identity-preview--compact">
           <div class="arkolia-identity-preview__head">
             <div class="arkolia-identity-preview__title">Avis</div>

@@ -12779,6 +12779,14 @@ circle.situation-trajectory__hierarchy-link--blocked,
     height:100%;
     min-height:100%;
   }
+
+  .arkolia-identity-row--analysis .arkolia-analysis-climate{
+    order:1;
+  }
+
+  .arkolia-identity-row--analysis .arkolia-analysis-assise{
+    order:2;
+  }
 }
 
 /* ===== Arkolia responsive refinements ===== */
