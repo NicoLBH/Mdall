@@ -5411,10 +5411,6 @@ color:var(--text);
   line-height:1.6;
 }
 
-.settings-card--param{
-  padding:40px 0 0px;
-}
-
 .settings-block--no-head > .settings-card--param:first-of-type{
   padding-top:0;
 }
@@ -14996,17 +14992,10 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   cursor: crosshair;
 }
 
-.studio-tool-card__head{
-  display:flex;
-  align-items:flex-start;
-  justify-content:space-between;
-  gap:12px;
-}
 .studio-tool-card__actions{
   display:flex;
   align-items:center;
   gap:8px;
-  margin-top:8px;
 }
 .studio-tool-card__body{
   position:relative;
@@ -15036,16 +15025,17 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 }
 .studio-tool-info-card{
   padding:10px;
-  border:1px solid var(--border-default);
-  border-radius:12px;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
   background:var(--bg);
-  backdrop-filter:blur(1px);
 }
 .studio-tool-info-card-title{
   margin:0 0 8px;
   font-size:14px;
+  color:var(--muted);
 }
 .studio-tool-info-card ul{
   margin:0;
   padding-left:16px;
+  font-size:13px;
 }
