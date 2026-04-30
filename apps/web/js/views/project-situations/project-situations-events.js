@@ -2041,6 +2041,20 @@ export function createProjectSituationsEvents({
         }
         store.situationsView.situationsStatusFilter = value;
         store.situationsView.filters.status = value;
+        ensureSituationsPaginationState().currentPage = 1;
+        rerender(root);
+      });
+    });
+
+    root.querySelectorAll('[data-pagination-entity="situations"][data-pagination-page]').forEach((node) => {
+      node.addEventListener("click", (event) => {
+        event.preventDefault();
+        const nextPage = Math.max(1, Number.parseInt(node.getAttribute("data-pagination-page") || "1", 10) || 1);
+        const pagination = ensureSituationsPaginationState();
+        const totalPages = Math.max(1, Number.parseInt(pagination.totalPages, 10) || 1);
+        const previousPage = Math.max(1, Number.parseInt(pagination.currentPage, 10) || 1);
+        pagination.currentPage = Math.min(nextPage, totalPages);
+        logPagination({ entity: "situations", previousPage, nextPage: pagination.currentPage, totalPages });
         rerender(root);
       });
     });
@@ -2169,3 +2183,21 @@ export function createProjectSituationsEvents({
     bindEvents
   };
 }
+  function ensureSituationsPaginationState() {
+    if (!store.situationsView || typeof store.situationsView !== "object") store.situationsView = {};
+    if (!store.situationsView.pagination || typeof store.situationsView.pagination !== "object") {
+      store.situationsView.pagination = { currentPage: 1, pageSize: 25 };
+    }
+    return store.situationsView.pagination;
+  }
+  function isPaginationDebugEnabled() {
+    try {
+      return String(window?.localStorage?.getItem?.("debug:pagination") || "").trim() === "1";
+    } catch (_) {
+      return false;
+    }
+  }
+  function logPagination({ entity, previousPage, nextPage, totalPages }) {
+    if (!isPaginationDebugEnabled()) return;
+    console.info("[pagination]", { entity, previousPage, nextPage, totalPages });
+  }
