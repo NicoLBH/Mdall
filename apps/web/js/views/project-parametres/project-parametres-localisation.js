@@ -64,6 +64,18 @@ function ensureLocalisationUiState() {
   if (typeof parametresUiState.locationSupabaseHydrating !== "boolean") {
     parametresUiState.locationSupabaseHydrating = false;
   }
+  if (typeof parametresUiState.locationHydratedProjectId !== "string") {
+    parametresUiState.locationHydratedProjectId = "";
+  }
+  if (typeof parametresUiState.locationSaveInProgress !== "boolean") {
+    parametresUiState.locationSaveInProgress = false;
+  }
+  if (typeof parametresUiState.locationEditInProgress !== "boolean") {
+    parametresUiState.locationEditInProgress = false;
+  }
+  if (!parametresUiState.locationPendingSelectionPromise || typeof parametresUiState.locationPendingSelectionPromise.then !== "function") {
+    parametresUiState.locationPendingSelectionPromise = null;
+  }
   if (!parametresUiState.locationMapEmbed || typeof parametresUiState.locationMapEmbed !== "object") {
     parametresUiState.locationMapEmbed = {
       status: "idle",
@@ -234,9 +246,27 @@ function hasStrongPlaceholder(fieldKey = "") {
 
 async function hydrateLocationPlaceholdersFromSupabase() {
   const uiState = ensureLocalisationUiState();
-  if (uiState.locationSupabaseHydrating) return;
   const projectId = String(store.currentProjectId || "").trim();
-  if (!projectId) return;
+  if (!projectId) {
+    console.info("[project-location] hydrate.skip", { reason: "missing-project-id", projectId, editing: uiState.locationEditInProgress, saving: uiState.locationSaveInProgress, hydratedProjectId: uiState.locationHydratedProjectId });
+    return;
+  }
+  if (uiState.locationSupabaseHydrating) {
+    console.info("[project-location] hydrate.skip", { reason: "already-hydrating", projectId, editing: uiState.locationEditInProgress, saving: uiState.locationSaveInProgress, hydratedProjectId: uiState.locationHydratedProjectId });
+    return;
+  }
+  if (uiState.locationSaveInProgress) {
+    console.info("[project-location] hydrate.skip", { reason: "save-in-progress", projectId, editing: uiState.locationEditInProgress, saving: uiState.locationSaveInProgress, hydratedProjectId: uiState.locationHydratedProjectId });
+    return;
+  }
+  if (uiState.locationEditInProgress) {
+    console.info("[project-location] hydrate.skip", { reason: "edit-in-progress", projectId, editing: uiState.locationEditInProgress, saving: uiState.locationSaveInProgress, hydratedProjectId: uiState.locationHydratedProjectId });
+    return;
+  }
+  if (uiState.locationHydratedProjectId === projectId) {
+    console.info("[project-location] hydrate.skip", { reason: "already-hydrated-for-project", projectId, editing: uiState.locationEditInProgress, saving: uiState.locationSaveInProgress, hydratedProjectId: uiState.locationHydratedProjectId });
+    return;
+  }
   uiState.locationSupabaseHydrating = true;
   try {
     const row = await loadProjectLocationFromSupabase(projectId);
@@ -246,13 +276,24 @@ async function hydrateLocationPlaceholdersFromSupabase() {
       postalCode: String(row?.postal_code || "").trim()
     };
 
-    syncProjectLocationFields({
-      address: row?.address,
-      city: row?.city,
-      postalCode: row?.postal_code,
-      latitude: row?.latitude,
-      longitude: row?.longitude,
-      altitude: row?.altitude
+    if (!uiState.locationEditInProgress && !uiState.locationSaveInProgress) {
+      syncProjectLocationFields({
+        address: row?.address,
+        city: row?.city,
+        postalCode: row?.postal_code,
+        latitude: row?.latitude,
+        longitude: row?.longitude,
+        altitude: row?.altitude
+      });
+    }
+    uiState.locationHydratedProjectId = projectId;
+    console.info("[project-location] hydrate.apply", {
+      projectId,
+      address: String(row?.address || "").trim(),
+      city: String(row?.city || "").trim(),
+      postalCode: String(row?.postal_code || "").trim(),
+      latitude: Number.isFinite(row?.latitude) ? row.latitude : null,
+      longitude: Number.isFinite(row?.longitude) ? row.longitude : null
     });
 
     rerenderProjectParametres();
@@ -961,16 +1002,35 @@ async function refreshLocationDerivedData({ runEnrichment = false, triggerType =
       codeInsee
     });
 
+    syncProjectLocationFields({
+      address: savedProject?.address ?? store.projectForm.address,
+      city: savedProject?.city ?? city,
+      postalCode: savedProject?.postal_code ?? postalCode,
+      latitude: savedProject?.latitude ?? store.projectForm.latitude,
+      longitude: savedProject?.longitude ?? store.projectForm.longitude,
+      altitude: savedProject?.altitude ?? store.projectForm.altitude
+    });
+    store.projectForm.codeInsee = String(savedProject?.code_insee || codeInsee || "").trim();
     store.projectForm.locationSavedSnapshot = {
       address: String(store.projectForm.address || "").trim(),
-      city,
-      postalCode
+      city: String(store.projectForm.city || "").trim(),
+      postalCode: String(store.projectForm.postalCode || "").trim()
     };
-    ensureLocalisationUiState().locationMapRefreshNonce += 1;
+    const uiState = ensureLocalisationUiState();
+    uiState.locationSupabasePlaceholders = { ...store.projectForm.locationSavedSnapshot };
+    uiState.locationMapRefreshNonce += 1;
+    uiState.locationMapEmbed.requestKey = "";
+    uiState.locationMapEmbed.status = "idle";
+    uiState.locationMapEmbed.url = "";
 
     console.info("[project-location] save.success", {
       projectId,
-      savedProjectId: String(savedProject?.id || "").trim() || null
+      savedProjectId: String(savedProject?.id || "").trim() || null,
+      address: store.projectForm.address,
+      city: store.projectForm.city,
+      postalCode: store.projectForm.postalCode,
+      latitude: store.projectForm.latitude,
+      longitude: store.projectForm.longitude
     });
   } catch (error) {
     console.error("[project-location] save.failure", {
@@ -1132,14 +1192,16 @@ function syncProjectLocationFields({ address, city, postalCode, latitude, longit
 }
 
 function applyLocationSelection(fieldKey, item) {
-  if (!item) return;
+  if (!item) return Promise.resolve();
+  const uiState = ensureLocalisationUiState();
 
   const addressInput = document.getElementById("projectAddress");
   const cityInput = document.getElementById("projectCity");
   const postalCodeInput = document.getElementById("projectPostalCode");
 
   if (fieldKey === "address") {
-    resolveFrenchAddress(item.label || item.name || "")
+    console.info("[project-location] selection.apply.start", { fieldKey, query: item.label || item.name || "" });
+    const selectionPromise = resolveFrenchAddress(item.label || item.name || "")
       .then((resolved) => {
         if (addressInput) addressInput.value = resolved.address || item.label || "";
         if (cityInput) cityInput.value = resolved.city || "";
@@ -1153,9 +1215,19 @@ function applyLocationSelection(fieldKey, item) {
         });
         resetLocationAutocompleteState(fieldKey);
         renderLocationAutocompleteDropdown(fieldKey, document.querySelector('[data-location-autocomplete-suggestions="address"]'), addressInput);
+        console.info("[project-location] selection.apply.success", {
+          address: store.projectForm.address,
+          city: store.projectForm.city,
+          postalCode: store.projectForm.postalCode,
+          latitude: store.projectForm.latitude,
+          longitude: store.projectForm.longitude
+        });
       })
       .catch(() => {});
-    return;
+    uiState.locationPendingSelectionPromise = selectionPromise;
+    return selectionPromise.finally(() => {
+      if (uiState.locationPendingSelectionPromise === selectionPromise) uiState.locationPendingSelectionPromise = null;
+    });
   }
 
   if (fieldKey === "city") {
@@ -1170,7 +1242,7 @@ function applyLocationSelection(fieldKey, item) {
     });
     resetLocationAutocompleteState(fieldKey);
     renderLocationAutocompleteDropdown(fieldKey, document.querySelector('[data-location-autocomplete-suggestions="city"]'), cityInput);
-    return;
+    return Promise.resolve();
   }
 
   if (fieldKey === "postalCode") {
@@ -1186,6 +1258,7 @@ function applyLocationSelection(fieldKey, item) {
     resetLocationAutocompleteState(fieldKey);
     renderLocationAutocompleteDropdown(fieldKey, document.querySelector('[data-location-autocomplete-suggestions="postalCode"]'), postalCodeInput);
   }
+  return Promise.resolve();
 }
 
 function bindLocationAutocompleteField(fieldKey) {
@@ -1280,7 +1353,7 @@ function bindLocationAutocompleteField(fieldKey) {
       const selected = state.items[state.activeIndex] || state.items[0];
       if (!selected) return;
       event.preventDefault();
-      applyLocationSelection(fieldKey, selected);
+      void applyLocationSelection(fieldKey, selected);
       return;
     }
 
@@ -1296,7 +1369,7 @@ function bindLocationAutocompleteField(fieldKey) {
     event.preventDefault();
     const index = Number(option.getAttribute("data-location-option-index"));
     const selected = getLocationAutocompleteState(fieldKey).items[index];
-    applyLocationSelection(fieldKey, selected);
+    void applyLocationSelection(fieldKey, selected);
   });
 
   input.addEventListener("blur", () => {
@@ -1373,7 +1446,9 @@ export function bindLocalisationParametresSection(root) {
   void root;
   ensureLocalisationUiState();
   bindBaseParametresUi();
-  void hydrateLocationPlaceholdersFromSupabase();
+  const uiState = ensureLocalisationUiState();
+  const projectId = String(store.currentProjectId || "").trim();
+  if (projectId && uiState.locationHydratedProjectId !== projectId) void hydrateLocationPlaceholdersFromSupabase();
 
   bindGhEditableFields(document, {
     onEditStart: (id) => {
@@ -1383,7 +1458,9 @@ export function bindLocalisationParametresSection(root) {
       const parametresUiState = ensureLocalisationUiState();
 
       if (id === "projectAddress") {
+        parametresUiState.locationEditInProgress = true;
         parametresUiState.locationEditBaseSignature = getProjectLocationSignature();
+        console.info("[project-location] edit.start", { signature: parametresUiState.locationEditBaseSignature });
       }
       if (id === "projectAddress") {
         syncProjectLocationFields({ address: store.projectForm.address, city: "", postalCode: "", latitude: null, longitude: null, altitude: null });
@@ -1395,15 +1472,38 @@ export function bindLocalisationParametresSection(root) {
     onValidate: async (id, value) => {
       switch (id) {
         case "projectAddress": {
+          const parametresUiState = ensureLocalisationUiState();
           const previousLocationSignature = getLocationEditBaseSignature();
+          console.info("[project-location] validate.start", {
+            inputValue: value,
+            address: store.projectForm.address,
+            city: store.projectForm.city,
+            postalCode: store.projectForm.postalCode
+          });
+          parametresUiState.locationSaveInProgress = true;
           try {
-            const resolved = await resolveFrenchAddress(value);
-            syncProjectLocationFields({ address: resolved.address, city: resolved.city, postalCode: resolved.postalCode, latitude: resolved.lat, longitude: resolved.lon });
+            if (parametresUiState.locationPendingSelectionPromise) await parametresUiState.locationPendingSelectionPromise;
+            if (String(store.projectForm.address || "").trim() !== String(value || "").trim()) {
+              const resolved = await resolveFrenchAddress(value);
+              syncProjectLocationFields({ address: resolved.address, city: resolved.city, postalCode: resolved.postalCode, latitude: resolved.lat, longitude: resolved.lon });
+            }
           } catch {
             syncProjectLocationFields({ address: value, altitude: null });
           }
-          await refreshLocationDerivedData({ runEnrichment: hasProjectLocationChanged(previousLocationSignature) && shouldAutoRunProjectBaseDataEnrichment(), triggerType: "automatic", triggerLabel: "Validation d’une modification de la localisation projet" });
-          ensureLocalisationUiState().locationEditBaseSignature = "";
+          try {
+            await refreshLocationDerivedData({ runEnrichment: hasProjectLocationChanged(previousLocationSignature) && shouldAutoRunProjectBaseDataEnrichment(), triggerType: "automatic", triggerLabel: "Validation d’une modification de la localisation projet" });
+          } finally {
+            parametresUiState.locationEditBaseSignature = "";
+            parametresUiState.locationEditInProgress = false;
+            parametresUiState.locationSaveInProgress = false;
+            console.info("[project-location] validate.end", {
+              address: store.projectForm.address,
+              city: store.projectForm.city,
+              postalCode: store.projectForm.postalCode,
+              latitude: store.projectForm.latitude,
+              longitude: store.projectForm.longitude
+            });
+          }
           break;
         }
       }
