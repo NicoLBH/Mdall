@@ -17,11 +17,17 @@ where schemaname = 'public'
 order by tablename, indexname;
 
 -- Ensure no public/authenticated SELECT policy exists on mdall_climate_* tables
-select polrelid::regclass as table_name, polname, polcmd, polroles
-from pg_policy
-where schemaname = 'public'
-  and polrelid::regclass::text like 'mdall_climate_%'
-  and polcmd = 'r';
+select
+  p.polrelid::regclass as table_name,
+  p.polname,
+  p.polcmd,
+  p.polroles
+from pg_policy p
+join pg_class c on c.oid = p.polrelid
+join pg_namespace n on n.oid = c.relnamespace
+where n.nspname = 'public'
+  and c.relname like 'mdall_climate_%'
+  and p.polcmd = 'r';
 
 -- Sample dynamic commune lookup (first available commune)
 with any_commune as (
