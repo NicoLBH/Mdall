@@ -5,16 +5,7 @@
   "scripts": {
     "test": "node --test $(find apps/web/js -name '*.test.mjs' -print)",
     "prepare:katex": "node scripts/prepare-katex.mjs",
-    "build:web": "npm run prepare:katex",
-    "climate:seed:commune-cantons": "node scripts/import-climate-data/generate-commune-canton-2014.mjs",
-    "climate:seed:canton-2014-names": "node scripts/import-climate-data/generate-canton-2014-names.mjs",
-    "climate:seed:canton-current-names": "node scripts/import-climate-data/generate-canton-current-names.mjs",
-    "climate:seed:snow-departments": "node scripts/import-climate-data/generate-snow-departments.mjs",
-    "climate:seed:snow-canton-overrides": "node scripts/import-climate-data/generate-snow-canton-overrides.mjs",
-    "climate:seed:wind-departments": "node scripts/import-climate-data/generate-wind-departments.mjs",
-    "climate:seed:wind-canton-overrides": "node scripts/import-climate-data/generate-wind-canton-overrides.mjs",
-    "climate:seed:frost-departments": "node scripts/import-climate-data/generate-frost-departments.mjs",
-    "climate:seed:all": "node scripts/import-climate-data/generate-all.mjs"
+    "build:web": "npm run prepare:katex"
   },
   "dependencies": {
     "katex": "^0.16.9"

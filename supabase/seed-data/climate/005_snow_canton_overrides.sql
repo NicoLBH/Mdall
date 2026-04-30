@@ -1,4 +1,4 @@
--- Generated from apps/web/js/services/zoning/snow-canton-regions.json
+-- Climate seed data for Supabase
 INSERT INTO public.mdall_climate_snow_canton_overrides (department_code, canton_name, canton_name_normalized, resolved_zone, source_payload)
 VALUES
   ('01', 'Bâgé-le-Châtel', 'bage le chatel', 'A2', '{"department_code":"01","resolved_zone":"A2","canton_name":"Bâgé-le-Châtel"}'::jsonb),

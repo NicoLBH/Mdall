@@ -1,4 +1,4 @@
--- Generated from apps/web/js/services/zoning/canton-names-map.json
+-- Climate seed data for Supabase
 INSERT INTO public.mdall_climate_commune_cantons (insee_code, canton_code_2014, canton_name_current, canton_name_current_normalized, department_code, source_payload)
 VALUES
   (NULL, '1001', 'Aix-Villemaur-Pâlis', 'aix villemaur palis', '10', '{"canton_code_2014":"1001","canton_name_current":"Aix-Villemaur-Pâlis"}'::jsonb),
