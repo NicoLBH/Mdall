@@ -29,6 +29,7 @@ import {
   rerenderProjectParametres,
   getParametresUiState
 } from "./project-parametres-core.js";
+import { renderSpinnerHtml } from "../ui/spinner.js";
 
 function ensureLocalisationUiState() {
   const parametresUiState = getParametresUiState();
@@ -76,6 +77,9 @@ function ensureLocalisationUiState() {
   if (!parametresUiState.locationPendingSelectionPromise || typeof parametresUiState.locationPendingSelectionPromise.then !== "function") {
     parametresUiState.locationPendingSelectionPromise = null;
   }
+  if (typeof parametresUiState.locationMapValidationPending !== "boolean") {
+    parametresUiState.locationMapValidationPending = false;
+  }
   if (!parametresUiState.locationMapEmbed || typeof parametresUiState.locationMapEmbed !== "object") {
     parametresUiState.locationMapEmbed = {
       status: "idle",
@@ -120,6 +124,9 @@ async function refreshProjectLocationMapEmbedUrl({ latitude, longitude, zoom = 1
     uiState.locationMapEmbed.lastErrorAt = Date.now();
   } finally {
     if (uiState.locationMapEmbed.requestKey === requestKey) {
+      if (uiState.locationMapEmbed.status !== "loading") {
+        uiState.locationMapValidationPending = false;
+      }
       rerenderProjectParametres();
     }
   }
@@ -337,11 +344,13 @@ function renderProjectLocationMapBlock() {
     void refreshProjectLocationMapEmbedUrl({ latitude, longitude, zoom: 16, mapType: "satellite" });
   }
   if (mapEmbedState.status !== "success" || !mapEmbedState.url) {
+    const shouldShowSpinner = mapEmbedState.status === "loading" && Boolean(uiState.locationMapValidationPending);
     return `
       <div class="settings-location-map-card is-blurred">
         <div class="arkolia-map arkolia-map--placeholder" aria-hidden="true">
           <div class="arkolia-map__placeholder-surface"></div>
           <div class="arkolia-map__placeholder-blur"></div>
+          ${shouldShowSpinner ? `<div class="settings-location-map__spinner">${renderSpinnerHtml({ label: "Chargement de la carte", size: "md" })}</div>` : ""}
         </div>
       </div>
     `;
@@ -1490,8 +1499,18 @@ export function bindLocalisationParametresSection(root) {
           } catch {
             syncProjectLocationFields({ address: value, altitude: null });
           }
+
+          const locationHasChanged = hasProjectLocationChanged(previousLocationSignature);
+          if (!locationHasChanged) {
+            parametresUiState.locationEditBaseSignature = "";
+            parametresUiState.locationEditInProgress = false;
+            parametresUiState.locationSaveInProgress = false;
+            return;
+          }
+
+          parametresUiState.locationMapValidationPending = true;
           try {
-            await refreshLocationDerivedData({ runEnrichment: hasProjectLocationChanged(previousLocationSignature) && shouldAutoRunProjectBaseDataEnrichment(), triggerType: "automatic", triggerLabel: "Validation d’une modification de la localisation projet" });
+            await refreshLocationDerivedData({ runEnrichment: locationHasChanged && shouldAutoRunProjectBaseDataEnrichment(), triggerType: "automatic", triggerLabel: "Validation d’une modification de la localisation projet" });
           } finally {
             parametresUiState.locationEditBaseSignature = "";
             parametresUiState.locationEditInProgress = false;
