@@ -38,9 +38,15 @@ jobs:
         run: |
           echo "Applying climate seed data..."
           DB_HOST="db.${SUPABASE_PROJECT_REF}.supabase.co"
-          DB_HOSTADDR="$(getent ahostsv4 "${DB_HOST}" | awk 'NR==1 { print $1 }')"
+          DB_HOSTADDR="$(getent ahostsv4 "${DB_HOST}" | awk 'NR==1 { print $1 }' || true)"
           if [ -z "${DB_HOSTADDR}" ]; then
-            echo "Could not resolve IPv4 address for ${DB_HOST}"
+            DB_HOSTADDR="$(dig +short A "${DB_HOST}" | head -n1 || true)"
+          fi
+          if [ -z "${DB_HOSTADDR}" ]; then
+            DB_HOSTADDR="$(nslookup -query=A "${DB_HOST}" 2>/dev/null | awk '/^Address: / { print $2; exit }' || true)"
+          fi
+          if [ -z "${DB_HOSTADDR}" ]; then
+            echo "Could not resolve an IPv4 address for ${DB_HOST}; GitHub runner cannot reach IPv6-only endpoints."
             exit 1
           fi
           echo "Using IPv4 ${DB_HOSTADDR} for ${DB_HOST}"
