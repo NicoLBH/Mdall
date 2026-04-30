@@ -5714,6 +5714,7 @@ export function createProjectSubjectsEvents(config) {
       const searchInput = event.target.closest?.("#situationsSearch");
       if (!searchInput) return;
       store.situationsView.search = String(searchInput.value || "");
+      resetSubjectsPaginationPage();
       rerenderPanels();
     });
 
@@ -5981,6 +5982,7 @@ export function createProjectSubjectsEvents(config) {
       if (subjectsStatusFilterButton) {
         event.preventDefault();
         store.situationsView.subjectsStatusFilter = String(subjectsStatusFilterButton.dataset.subjectsStatusFilter || "open").toLowerCase() === "closed" ? "closed" : "open";
+        resetSubjectsPaginationPage();
         rerenderPanels();
         return;
       }
@@ -6006,12 +6008,28 @@ export function createProjectSubjectsEvents(config) {
         event.stopPropagation();
 
         store.situationsView.subjectsPriorityFilter = normalizeBackendPriority(subjectsPriorityItem.dataset.subjectsPriorityFilter || "");
+        resetSubjectsPaginationPage();
 
         const currentBtn = root.querySelector("#subjectsPriorityHeadBtn");
         const currentDropdown = root.querySelector("#subjectsPriorityHeadDropdown");
         if (currentDropdown) currentDropdown.classList.remove("gh-menu--open");
         if (currentBtn) currentBtn.setAttribute("aria-expanded", "false");
 
+        rerenderPanels();
+        return;
+      }
+
+      const paginationButton = event.target.closest('[data-pagination-entity="subjects"][data-pagination-page]');
+      if (paginationButton) {
+        event.preventDefault();
+        const nextPage = Math.max(1, Number.parseInt(paginationButton.dataset.paginationPage || "1", 10) || 1);
+        const pagination = store.projectSubjectsView?.pagination && typeof store.projectSubjectsView.pagination === "object"
+          ? store.projectSubjectsView.pagination
+          : (store.projectSubjectsView.pagination = { currentPage: 1, pageSize: 25 });
+        const totalPages = Math.max(1, Number.parseInt(pagination.totalPages, 10) || 1);
+        const previousPage = Math.max(1, Number.parseInt(pagination.currentPage, 10) || 1);
+        pagination.currentPage = Math.min(nextPage, totalPages);
+        logPagination({ entity: "subjects", previousPage, nextPage: pagination.currentPage, totalPages });
         rerenderPanels();
         return;
       }
@@ -6166,3 +6184,21 @@ export function createProjectSubjectsEvents(config) {
     bindSituationsEvents
   };
 }
+    const resetSubjectsPaginationPage = () => {
+      if (!store.projectSubjectsView || typeof store.projectSubjectsView !== "object") store.projectSubjectsView = {};
+      if (!store.projectSubjectsView.pagination || typeof store.projectSubjectsView.pagination !== "object") {
+        store.projectSubjectsView.pagination = { currentPage: 1, pageSize: 25 };
+      }
+      store.projectSubjectsView.pagination.currentPage = 1;
+    };
+    const isPaginationDebugEnabled = () => {
+      try {
+        return String(window?.localStorage?.getItem?.("debug:pagination") || "").trim() === "1";
+      } catch {
+        return false;
+      }
+    };
+    const logPagination = ({ entity, previousPage, nextPage, totalPages }) => {
+      if (!isPaginationDebugEnabled()) return;
+      console.info("[pagination]", { entity, previousPage, nextPage, totalPages });
+    };
