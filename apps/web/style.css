@@ -12380,6 +12380,40 @@ circle.situation-trajectory__hierarchy-link--blocked,
   background:linear-gradient(180deg, rgba(13,17,23,.08), rgba(13,17,23,.2));
 }
 
+
+.studio-map--placeholder{
+  position:relative;
+  overflow:hidden;
+  background:
+    linear-gradient(135deg, rgba(110,118,129,.1), rgba(110,118,129,.04)),
+    radial-gradient(circle at 20% 30%, rgba(255,255,255,.08), transparent 34%),
+    linear-gradient(90deg, rgba(255,255,255,.03) 0, rgba(255,255,255,.03) 8%, transparent 8%, transparent 18%, rgba(255,255,255,.025) 18%, rgba(255,255,255,.025) 26%, transparent 26%, transparent 100%),
+    linear-gradient(0deg, rgba(34,139,34,.18), rgba(34,139,34,.08));
+}
+
+.studio-map__placeholder-surface,
+.studio-map__placeholder-blur{
+  position:absolute;
+  inset:0;
+}
+
+.studio-map__placeholder-surface{
+  background:
+    linear-gradient(115deg, rgba(166,124,82,.25) 0 12%, transparent 12% 100%),
+    linear-gradient(90deg, transparent 0 14%, rgba(255,255,255,.09) 14% 15%, transparent 15% 48%, rgba(255,255,255,.06) 48% 49%, transparent 49% 100%),
+    linear-gradient(180deg, rgba(255,255,255,.04), transparent 40%),
+    radial-gradient(circle at 72% 28%, rgba(30,64,34,.5), transparent 18%),
+    radial-gradient(circle at 78% 34%, rgba(30,64,34,.42), transparent 20%),
+    radial-gradient(circle at 61% 72%, rgba(255,255,255,.08), transparent 12%),
+    linear-gradient(0deg, rgba(59,92,44,.55), rgba(84,111,54,.38));
+  transform:scale(1.04);
+}
+
+.studio-map__placeholder-blur{
+  backdrop-filter:blur(2.5px) saturate(.9);
+  background:linear-gradient(180deg, rgba(13,17,23,.08), rgba(13,17,23,.2));
+}
+
 .settings-seismic-summary-card.arkolia-summary-card{
   padding:14px;
   display:flex;
@@ -15009,6 +15043,17 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .studio-tool-map-card{
   margin-top:0;
   width:100%;
+  height:calc(100vh - 210px);
+}
+.studio-tool-map-card .studio-map{
+  height:100%;
+  width:100%;
+}
+.studio-tool-map-card .studio-map > iframe{
+  height:100%;
+  width:100%;
+  border:none;
+  border-radius:var(--radius);
 }
 .studio-tool-overlay-grid{
   position:relative;
@@ -15029,13 +15074,15 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   border-radius:var(--radius);
   background:var(--bg);
 }
-.studio-tool-info-card-title{
+ .studio-tool-info-card-title,
+.studio-tool-info-card > h4{
   margin:0 0 8px;
   font-size:14px;
   color:var(--muted);
 }
 .studio-tool-info-card ul{
   margin:0;
-  padding-left:16px;
-  font-size:13px;
+  padding-left:0;
+  list-style:none;
+  font-size:14px;
 }
