@@ -1,7 +1,7 @@
 import { renderProblemsCountsIconHtml } from "../ui/subissues-counts.js";
 import { getDisplayAuthorName } from "../ui/author-identity.js";
 import { findCollaboratorByAssigneeId, normalizeAssigneeIds } from "../../services/subject-assignees-service.js";
-import { normalizePaginationState, renderPaginationControls } from "../ui/pagination.js";
+import { normalizePaginationState, paginateItems, renderPaginationControls } from "../ui/pagination.js";
 export function getSituationsTableGridTemplate() {
   return "minmax(0, 1fr) 84px max-content";
 }
@@ -230,7 +230,6 @@ export function renderProjectSubjectsTable({ filteredSituations, deps }) {
     store,
     renderIssuesTable,
     getFilteredFlatSubjects,
-    getPaginatedFilteredFlatSubjects,
     getSubjectsPaginationState,
     getCurrentSubjectsStatusFilter,
     getCurrentSubjectsPriorityFilter,
@@ -245,7 +244,6 @@ export function renderProjectSubjectsTable({ filteredSituations, deps }) {
     pageSize: store?.projectSubjectsView?.pagination?.pageSize ?? selectorPagination?.pageSize,
     currentPage: store?.projectSubjectsView?.pagination?.currentPage ?? selectorPagination?.currentPage
   });
-  const selectorFlatSubjects = Array.isArray(getPaginatedFilteredFlatSubjects?.()) ? getPaginatedFilteredFlatSubjects() : allFilteredFlatSubjects;
   const rawPayload = store.projectSubjectsView?.rawSubjectsResult && typeof store.projectSubjectsView.rawSubjectsResult === "object"
     ? store.projectSubjectsView.rawSubjectsResult
     : (store.projectSubjectsView?.rawResult && typeof store.projectSubjectsView.rawResult === "object"
@@ -262,8 +260,9 @@ export function renderProjectSubjectsTable({ filteredSituations, deps }) {
     if (typeof sujetMatchesPriorityFilter === "function" && !sujetMatchesPriorityFilter(subject, activePriorityFilter)) return false;
     return true;
   });
-  const flatSubjects = selectorFlatSubjects.length ? selectorFlatSubjects : fallbackFlatSubjects;
-  const hasAnySubjects = !!Object.keys(rawSubjectsById).length || !!flatSubjects.length;
+  const pagedSubjects = paginateItems(allFilteredFlatSubjects, pagination);
+  const flatSubjects = pagedSubjects.items.length ? pagedSubjects.items : fallbackFlatSubjects.slice(0, pagination.pageSize);
+  const hasAnySubjects = !!Object.keys(rawSubjectsById).length || !!allFilteredFlatSubjects.length || !!fallbackFlatSubjects.length;
   const isLoading = !!store.projectSubjectsView?.loading;
 
   if (isLoading && !hasAnySubjects) {
