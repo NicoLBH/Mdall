@@ -13,7 +13,6 @@ jobs:
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
       SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
       SUPABASE_DB_DSN: ${{ secrets.SUPABASE_DB_DSN }}
 
@@ -36,28 +35,12 @@ jobs:
         run: supabase db push --debug
 
       - name: Apply climate seed data
+        env:
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: |
           echo "Applying climate seed data..."
-          if [ -n "${SUPABASE_DB_DSN}" ]; then
-            echo "Using SUPABASE_DB_DSN secret for database connectivity."
-            DB_DSN="${SUPABASE_DB_DSN}"
-          else
-            DB_HOST="db.${SUPABASE_PROJECT_REF}.supabase.co"
-            DB_HOSTADDR="$(getent ahostsv4 "${DB_HOST}" | awk 'NR==1 { print $1 }' || true)"
-            if [ -z "${DB_HOSTADDR}" ]; then
-              DB_HOSTADDR="$(dig +short A "${DB_HOST}" | head -n1 || true)"
-            fi
-            if [ -z "${DB_HOSTADDR}" ]; then
-              DB_HOSTADDR="$(nslookup -query=A "${DB_HOST}" 2>/dev/null | awk '/^Address: / { print $2; exit }' || true)"
-            fi
-            if [ -z "${DB_HOSTADDR}" ]; then
-              echo "Could not resolve an IPv4 address for ${DB_HOST}."
-              echo "Set SUPABASE_DB_DSN secret to a Supabase Session Pooler DSN to run seeds from GitHub Actions."
-              exit 1
-            fi
-            echo "Using IPv4 ${DB_HOSTADDR} for ${DB_HOST}"
-            DB_DSN="host=${DB_HOST} hostaddr=${DB_HOSTADDR} port=5432 dbname=postgres user=postgres sslmode=require"
-          fi
+          DB_DSN="host=db.${SUPABASE_PROJECT_REF}.supabase.co port=5432 dbname=postgres user=postgres sslmode=require"
           for sql_file in \
             supabase/seed-data/climate/001_commune_canton_2014.sql \
             supabase/seed-data/climate/002_canton_2014_names.sql \
@@ -71,7 +54,7 @@ jobs:
             PGPASSWORD="${SUPABASE_DB_PASSWORD}" psql "$DB_DSN" -v ON_ERROR_STOP=1 -f "$sql_file"
           done
 
-          echo "Running climate seed verification..."
+          echo "Verifying climate seed data..."
           PGPASSWORD="${SUPABASE_DB_PASSWORD}" psql "$DB_DSN" -v ON_ERROR_STOP=1 -f supabase/seed-data/climate/verify_climate_seed.sql
 
           snow_count="$(PGPASSWORD="${SUPABASE_DB_PASSWORD}" psql "$DB_DSN" -v ON_ERROR_STOP=1 -tA -c "SELECT COUNT(*) FROM public.mdall_climate_snow_departments;")"
