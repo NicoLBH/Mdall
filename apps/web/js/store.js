@@ -84,6 +84,13 @@ function createSituationsViewState() {
 
 const projectSubjectsView = createProjectSubjectsViewState();
 const situationsView = createSituationsViewState();
+const projectActionsView = {
+  pagination: {
+    mode: "client",
+    pageSize: 25,
+    currentPage: 1
+  }
+};
 
 export const store = {
   user: null,
@@ -171,5 +178,6 @@ export const store = {
   },
 
   projectSubjectsView,
-  situationsView
+  situationsView,
+  projectActionsView
 };
