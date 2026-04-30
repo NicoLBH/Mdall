@@ -1442,7 +1442,7 @@ export function renderLocalisationParametresContent() {
       renderSectionCard({
         title: "Localisation",
         description: "Localisation administrative et d’usage du projet.",
-        badge: "LIVE",
+        badge: "",
         body: `${renderLocationAutocompleteField({ id: "projectAddress", width: "col-span-2", fieldKey: "address", label: "Adresse", value: form.address || "", placeholder: getLocationFieldPlaceholder("address", "Ex. 12 avenue de la Gare, Annecy"), placeholderStrong: hasStrongPlaceholder("address") })}
         ${(ensureGeorisquesState().commune || Number.isFinite(form.latitude) || Number.isFinite(form.longitude)) ? `
           <div class="settings-auto-fields">
