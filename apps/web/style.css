@@ -1986,6 +1986,75 @@ body.subject-create-subissue-modal-open #situationsDetailsHost{
 .issue-row:hover{background: rgba(110, 118, 129, .06);}
 .details-subissues .issue-row{padding:12px 16px 12px 0px;}
 
+.project-pagination{
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  gap:6px;
+  margin-top:20px;
+  flex-wrap:wrap;
+}
+
+.project-pagination__button{
+  appearance:none;
+  border:1px solid transparent;
+  border-radius:8px;
+  min-width:32px;
+  height:32px;
+  padding:0 10px;
+  background:transparent;
+  color:var(--text);
+  font:inherit;
+  font-size:14px;
+  line-height:1;
+  cursor:pointer;
+  transition:background-color .15s ease, color .15s ease, border-color .15s ease, opacity .15s ease;
+}
+
+.project-pagination__button:hover{
+  background:rgba(110,118,129,.12);
+  border-color:rgba(110,118,129,.24);
+}
+
+.project-pagination__button:focus-visible{
+  outline:2px solid rgba(56,139,253,.75);
+  outline-offset:1px;
+}
+
+.project-pagination__button--active{
+  background:#1f6feb;
+  color:#fff;
+  border-color:#1f6feb;
+  font-weight:600;
+}
+
+.project-pagination__button--active:hover{
+  background:#388bfd;
+  border-color:#388bfd;
+}
+
+.project-pagination__button--disabled,
+.project-pagination__button[aria-disabled="true"]{
+  opacity:.5;
+  cursor:default;
+  pointer-events:none;
+}
+
+.project-pagination__button--disabled:hover,
+.project-pagination__button[aria-disabled="true"]:hover{
+  background:transparent;
+  border-color:transparent;
+}
+
+.project-pagination__ellipsis{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:20px;
+  color:var(--muted);
+  font-size:14px;
+}
+
 .subjects-priority-head{
   position:relative;
   display:flex;
