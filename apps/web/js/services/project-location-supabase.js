@@ -148,7 +148,6 @@ export async function hydrateProjectLocationAndContextFromSupabase(projectId) {
   const resolvedProjectId = await resolveProjectId(projectId);
   if (!resolvedProjectId) return { source: "none", location: null, contextFacts: [] };
 
-  console.info("[project-location] hydrate.start", { projectId: resolvedProjectId });
   try {
     const [locationRow, contextFacts] = await Promise.all([
       loadProjectLocationFromSupabase(resolvedProjectId),

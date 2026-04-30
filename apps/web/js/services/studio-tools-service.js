@@ -98,11 +98,6 @@ export async function getLastStudioToolResult({ projectId, toolKey } = {}) {
   url.searchParams.set("order", "updated_at.desc");
   url.searchParams.set("limit", "1");
 
-  console.info("[studio-tools] previous-result.fetch", {
-    projectId: normalizedProjectId,
-    toolKey: normalizedToolKey
-  });
-
   const response = await fetch(url.toString(), {
     method: "GET",
     headers: await buildSupabaseAuthHeaders({ Accept: "application/json" }),

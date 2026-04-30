@@ -44,7 +44,7 @@ const arkoliaUiState = {
   debounceTimer: null,
   mapUrl: "",
   mapLoading: false,
-  detailsExpanded: true,
+  detailsExpanded: false,
   summaryLoading: false,
   identity: { ...DEFAULT_IDENTITY },
   relation: { ...DEFAULT_RELATION },
