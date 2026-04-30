@@ -90,23 +90,27 @@ function render(root) {
   const actionLabel = state.loading ? "Calcul en cours..." : hasResult ? "Recalculer" : "Calculer";
 
   root.innerHTML = `
-    <section class="arkolia-identity-preview arkolia-assise-card" data-solidity-tool-card="climate" style="display:grid;gap:16px;">
-      <header class="arkolia-identity-preview__header">
-        <div>
-          <h3 class="arkolia-identity-preview__title">Zones et charges climatiques</h3>
+    <section class="settings-section is-active" data-solidity-tool-card="climate">
+      <div class="settings-card settings-card--param studio-tool-card">
+        <div class="settings-card__head studio-tool-card__head">
+          <div>
+            <span class="settings-card__head-title">
+              <h4>Zones et charges climatiques</h4>
+            </span>
+          </div>
+          <div class="studio-tool-card__actions">
+            ${renderGhActionButton({ id: "solidityToolToSubject-climate", label: "Transformer en sujet", tone: "default", size: "md", disabled: !hasResult, mainAction: "" })}
+            ${renderGhActionButton({ id: "solidityToolCalculate-climate", label: actionLabel, tone: "primary", size: "md", disabled: !!state.loading, mainAction: "" })}
+          </div>
         </div>
-        <div class="arkolia-identity-preview__actions" style="display:flex;gap:8px;align-items:center;margin-left:auto;">
-          ${renderGhActionButton({ id: "solidityToolToSubject-climate", label: "Transformer en sujet", tone: "default", size: "md", disabled: !hasResult, mainAction: "" })}
-          ${renderGhActionButton({ id: "solidityToolCalculate-climate", label: actionLabel, tone: "primary", size: "md", disabled: !!state.loading, mainAction: "" })}
-        </div>
-      </header>
-      <div class="arkolia-identity-preview__body" style="padding:0;position:relative;min-height:540px;">
-        ${state.error ? `<p class="gh-text-muted" style="color:var(--danger);">${escapeHtml(state.error)}</p>` : ""}
-        <div data-solidity-climate-map style="position:absolute;inset:0;z-index:1;">
-          ${renderMapCard()}
-        </div>
-        <div style="display:grid;grid-template-columns:300px minmax(0px, 1fr);gap:16px;align-items:start;position:relative;z-index:2;padding:16px;pointer-events:none;">
-          ${renderCards()}
+        <div class="settings-card__body studio-tool-card__body">
+          ${state.error ? `<p class="gh-text-muted" style="color:var(--danger);">${escapeHtml(state.error)}</p>` : ""}
+          <div data-solidity-climate-map class="studio-tool-climate__map-layer">
+            ${renderMapCard()}
+          </div>
+          <div class="studio-tool-climate__overlay-grid" style="display:grid;grid-template-columns:300px minmax(0px, 1fr);gap:16px;align-items:start;">
+            ${renderCards()}
+          </div>
         </div>
       </div>
     </section>
@@ -115,12 +119,13 @@ function render(root) {
 }
 
 function renderCards() {
-  return `<div style="display:grid;grid-template-columns:minmax(0,1fr);gap:8px;pointer-events:auto;">${renderAddressCard()}${TOOL_KEYS.map((toolKey) => renderToolCard(toolKey)).join("")}</div><div></div>`;
+  return `<div class="studio-tool-climate__cards-column">${renderAddressCard()}${TOOL_KEYS.map((toolKey) => renderToolCard(toolKey)).join("")}</div><div></div>`;
 }
+
 function renderAddressCard() {
   const location = state.location || {};
   const address = [location.address, location.postalCode, location.city].filter(Boolean).join(", ");
-  return `<article class="arkolia-assise-card" style="padding:10px;"><strong>Adresse</strong><div>${escapeHtml(address || "—")}</div></article>`;
+  return `<article class="studio-tool-climate__info-card"><strong>Adresse</strong><div>${escapeHtml(address || "—")}</div></article>`;
 }
 
 function renderToolCard(toolKey) {
@@ -135,8 +140,8 @@ function renderToolCard(toolKey) {
       : `<li>Profondeur hors gel: <strong>${escapeHtml(String(result?.frost_depth_m ?? "—"))}</strong></li><li>H0: <strong>${escapeHtml(String(result?.h0_selected_m ?? "—"))}</strong></li>`;
 
   return `
-    <article class="arkolia-assise-card" style="padding:10px;">
-      <h4 class="arkolia-identity-preview__title" style="font-size:14px;">${escapeHtml(title)}</h4>
+    <article class="studio-tool-climate__info-card">
+      <h4 class="studio-tool-climate__info-card-title">${escapeHtml(title)}</h4>
       <ul>${details}</ul>
     </article>
   `;
