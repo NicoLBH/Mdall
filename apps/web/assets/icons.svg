@@ -1,4 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg">
+  <symbol id="climate-tools" viewBox="0 0 16 16">
+    <path fill="currentColor" fill-rule="evenodd" d="M13 .5H3A2.5 2.5 0 0 0 .5 3v10A2.5 2.5 0 0 0 3 15.5h10a2.5 2.5 0 0 0 2.5-2.5V3A2.5 2.5 0 0 0 13 .5M2 3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1zm6 6.25a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5M12.25 5a1.25 1.25 0 1 1-2.5 0 1.25 1.25 0 0 1 2.5 0M5 12.25a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5" clip-rule="evenodd"></path>
+  </symbol>
+
   <symbol id="heimdall" viewBox="0 0 24 24">
     <circle cx="12" cy="12" r="11" fill="white"/>
     <g fill="none" stroke="black" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
