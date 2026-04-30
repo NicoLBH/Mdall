@@ -14,7 +14,6 @@ jobs:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
-      SUPABASE_DB_DSN: ${{ secrets.SUPABASE_DB_DSN }}
 
     steps:
       - name: Checkout repository
@@ -36,25 +35,21 @@ jobs:
 
       - name: Apply climate seed data
         env:
-          SUPABASE_DB_DSN: ${{ secrets.SUPABASE_DB_DSN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          SUPABASE_DB_HOST: ${{ secrets.SUPABASE_DB_HOST }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: |
           echo "Applying climate seed data..."
-          if [ -z "$SUPABASE_DB_DSN" ]; then
-            echo "ERROR: SUPABASE_DB_DSN is not set. You must configure a Supabase pooler connection string (IPv4 compatible)."
+          if [ -z "$SUPABASE_DB_HOST" ] || [ -z "$SUPABASE_DB_PASSWORD" ] || [ -z "$SUPABASE_PROJECT_REF" ]; then
+            echo "ERROR: Missing Supabase DB configuration (SUPABASE_DB_HOST / PASSWORD / PROJECT_REF)"
             exit 1
           fi
           # IMPORTANT:
-          # Do not use direct Supabase DB connection (IPv6)
-          # GitHub Actions requires IPv4 → use Supavisor pooler
-          DB_DSN="${SUPABASE_DB_DSN}"
-          echo "Using Supabase pooler connection (IPv4 compatible)"
-
-          if printf '%s' "$DB_DSN" | grep -Eq ':[^:@/]+@'; then
-            PSQL_BASE_CMD=(psql "$DB_DSN" -v ON_ERROR_STOP=1)
-          else
-            PSQL_BASE_CMD=(env PGPASSWORD="${SUPABASE_DB_PASSWORD}" psql "$DB_DSN" -v ON_ERROR_STOP=1)
-          fi
+          # Use Supabase pooler (IPv4)
+          # Direct DB connection (db.<project-ref>) uses IPv6 and fails in GitHub Actions
+          DB_DSN="postgresql://postgres.${SUPABASE_PROJECT_REF}:${SUPABASE_DB_PASSWORD}@${SUPABASE_DB_HOST}:5432/postgres?sslmode=require"
+          echo "Using Supabase pooler connection (IPv4)"
+          PSQL_BASE_CMD=(psql "$DB_DSN" -v ON_ERROR_STOP=1)
 
           for sql_file in \
             supabase/seed-data/climate/001_commune_canton_2014.sql \
