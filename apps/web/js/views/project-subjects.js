@@ -1080,6 +1080,19 @@ export function openStudioToolSubjectDraft({
     titleLength: options.initialTitle.length,
     descriptionLength: options.initialDescription.length
   });
+
+  const currentHash = String(window.location?.hash || "");
+  const projectId = String(store.currentProjectId || "").trim();
+  const subjectsHash = projectId ? `#project/${projectId}/sujets` : "";
+  const isOnSubjectsTab = projectId
+    ? currentHash.startsWith(subjectsHash)
+    : currentHash.includes("/sujets");
+
+  if (!isOnSubjectsTab && subjectsHash) {
+    window.location.hash = subjectsHash;
+    return true;
+  }
+
   rerenderPanels();
   return true;
 }
