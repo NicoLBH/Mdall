@@ -5491,6 +5491,7 @@ color:var(--text);
   top:0;
   align-self:start;
   height:max-content;
+  margin-top:2px;
 }
 
 .settings-nav__group--project{
@@ -9223,7 +9224,7 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
 
 .settings-auto-field__hint{
   margin-top:6px;
-  color:var(--fg-muted);
+  color:var(--muted);
 }
 
 .settings-auto-field__asterisk{
