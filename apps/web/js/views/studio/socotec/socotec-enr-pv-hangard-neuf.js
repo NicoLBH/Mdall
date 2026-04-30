@@ -584,7 +584,7 @@ function renderIdentitySection() {
             <div class="arkolia-identity-preview__title">Description de l'ouvrage</div>
             ${renderCopyButton({ action: 'data-arkolia-copy-description', title: 'Copier dans le presse-papier' })}
           </div>
-          <textarea class="gh-textarea arkolia-identity-preview__textarea" readonly data-arkolia-description-output>${escapeHtml(description)}</textarea>
+          <textarea class="gh-textarea arkolia-identity-preview__textarea arkolia-description" readonly data-arkolia-description-output>${escapeHtml(description)}</textarea>
         </div>
 
         <div class="arkolia-identity-sidecard">
