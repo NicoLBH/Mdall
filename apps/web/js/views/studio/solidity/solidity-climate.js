@@ -16,6 +16,18 @@ const TOOL_LABELS = {
 
 const state = { loading: false, error: "", projectId: "", location: null, results: {}, mapUrl: "", mapLoading: false };
 
+function buildClimateDraftDescription() {
+  return TOOL_KEYS
+    .map((toolKey) => String(state.results?.[toolKey]?.markdown_summary || "").trim())
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+function buildClimateDraftTitle() {
+  const city = String(state.location?.city || "").trim();
+  return city ? `Charges climatiques — ${city}` : "";
+}
+
 export async function renderSolidityClimate(root, { force = false } = {}) {
   if (!root) return;
   if (!force && root.dataset.solidityClimateMounted === "true") return;
@@ -34,8 +46,21 @@ export async function renderSolidityClimate(root, { force = false } = {}) {
 
     const toSubjectTrigger = event.target.closest('[data-action-id="solidityToolToSubject-climate"]');
     if (toSubjectTrigger) {
-      console.info("[studio-tools] transform-to-subject.click", { toolKey: "climate" });
-      console.info("[studio-tools] transform-to-subject.todo", { toolKeys: TOOL_KEYS });
+      const description = buildClimateDraftDescription();
+      const title = buildClimateDraftTitle();
+      const opener = typeof window !== "undefined" ? window.openStudioToolSubjectDraft : null;
+      if (typeof opener === "function") {
+        opener({
+          origin: "studio-climate",
+          title,
+          description,
+          meta: {
+            labels: ["climatique"]
+          }
+        });
+      } else {
+        console.warn("[studio-tool-subject] open-draft unavailable", { toolKey: "climate" });
+      }
     }
   };
 
