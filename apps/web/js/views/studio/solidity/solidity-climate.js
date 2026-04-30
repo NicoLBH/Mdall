@@ -91,23 +91,23 @@ function render(root) {
 
   root.innerHTML = `
     <section class="arkolia-identity-preview arkolia-assise-card" data-solidity-tool-card="climate" style="display:grid;gap:16px;">
-      <header class="arkolia-summary-card__title-row">
+      <header class="arkolia-identity-preview__header">
         <div>
           <h3 class="arkolia-identity-preview__title">Zones et charges climatiques</h3>
         </div>
-        <div style="display:flex;gap:8px;align-items:center;margin-left:auto;">
+        <div class="arkolia-identity-preview__actions" style="display:flex;gap:8px;align-items:center;margin-left:auto;">
           ${renderGhActionButton({ id: "solidityToolToSubject-climate", label: "Transformer en sujet", tone: "default", size: "md", disabled: !hasResult, mainAction: "" })}
           ${renderGhActionButton({ id: "solidityToolCalculate-climate", label: actionLabel, tone: "primary", size: "md", disabled: !!state.loading, mainAction: "" })}
         </div>
       </header>
-      <div class="arkolia-identity-preview__body" style="padding:0;">
+      <div class="arkolia-identity-preview__body" style="padding:0;position:relative;min-height:540px;">
         ${state.error ? `<p class="gh-text-muted" style="color:var(--danger);">${escapeHtml(state.error)}</p>` : ""}
-        <div style="display:grid;grid-template-columns:300px minmax(0px, 1fr);gap:16px;align-items:start;">
+        <div data-solidity-climate-map style="position:absolute;inset:0;z-index:1;">
+          ${renderMapCard()}
+        </div>
+        <div style="display:grid;grid-template-columns:300px minmax(0px, 1fr);gap:16px;align-items:start;position:relative;z-index:2;padding:16px;pointer-events:none;">
           ${renderCards()}
         </div>
-      </div>
-      <div data-solidity-climate-map>
-        ${renderMapCard()}
       </div>
     </section>
   `;
@@ -115,7 +115,7 @@ function render(root) {
 }
 
 function renderCards() {
-  return `<div style="display:grid;grid-template-columns:minmax(0,1fr);gap:8px;">${renderAddressCard()}${TOOL_KEYS.map((toolKey) => renderToolCard(toolKey)).join("")}</div><div></div>`;
+  return `<div style="display:grid;grid-template-columns:minmax(0,1fr);gap:8px;pointer-events:auto;">${renderAddressCard()}${TOOL_KEYS.map((toolKey) => renderToolCard(toolKey)).join("")}</div><div></div>`;
 }
 function renderAddressCard() {
   const location = state.location || {};
