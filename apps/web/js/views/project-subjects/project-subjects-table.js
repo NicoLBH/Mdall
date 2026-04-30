@@ -188,7 +188,6 @@ export function renderFlatSujetRow(sujet, situationId, options = {}) {
     agent: firstNonEmpty(descriptionState?.agent, sujet?.agent, sujet?.raw?.agent, "system"),
     fallback: "System"
   });
-  const descriptionState = getEntityDescriptionState("sujet", sujet.id) || {};
   const authorIdentity = getAuthorIdentity({
     author,
     agent: firstNonEmpty(descriptionState?.agent, sujet?.agent, sujet?.raw?.agent, "system"),
