@@ -475,7 +475,7 @@ function renderIdentitySection() {
 
   return `
     <div class="settings-card__head arkolia-section-heading arkolia-layout-heading">
-      <span class="settings-card__head-title"><h4>Fiche d'identité</h4></span>
+      <span class="settings-card__head-title"><h4>Analyse et avis</h4></span>
     </div>
 
     <div class="settings-seismic-sizing-layout__row settings-seismic-sizing-layout__row--top arkolia-result-layout arkolia-identity-row">
@@ -548,31 +548,29 @@ function renderIdentitySection() {
         </div>
 
         <div class="arkolia-identity-section">
-          <div class="arkolia-relation-generalities-card">
-            <div class="arkolia-identity-section__title">Généralités</div>
-            <div class="arkolia-relation-generalities">
-              <div class="arkolia-relation-generalities__line arkolia-relation-generalities__line--inline">
-                ${renderIdentityRadioGroup('buildingOpen', [
-                  { value: 'open', label: 'Bâtiment ouvert' }
-                ], relation.buildingOpen ? 'open' : '', { dataAttribute: 'data-arkolia-relation-radio' })}
-                <div class="arkolia-relation-generalities__label">Bâtiment fermé :</div>
-                ${renderIdentityRadioGroup('closedFacades', [
-                  { value: 'Nord', label: 'Nord' },
-                  { value: 'Sud', label: 'Sud' },
-                  { value: 'Est', label: 'Est' },
-                  { value: 'Ouest', label: 'Ouest' }
-                ], relation.closedFacades, { type: 'checkbox', dataAttribute: 'data-arkolia-relation-checkbox' })}
-              </div>
+          <div class="arkolia-identity-section__title">Perméabilité au vent</div>
+          <div class="arkolia-relation-generalities">
+            <div class="arkolia-relation-generalities__line arkolia-relation-generalities__line--inline">
+              ${renderIdentityRadioGroup('buildingOpen', [
+                { value: 'open', label: 'Bâtiment ouvert' }
+              ], relation.buildingOpen ? 'open' : '', { dataAttribute: 'data-arkolia-relation-radio' })}
+              <div class="arkolia-relation-generalities__label">Bâtiment fermé :</div>
+              ${renderIdentityRadioGroup('closedFacades', [
+                { value: 'Nord', label: 'Nord' },
+                { value: 'Sud', label: 'Sud' },
+                { value: 'Est', label: 'Est' },
+                { value: 'Ouest', label: 'Ouest' }
+              ], relation.closedFacades, { type: 'checkbox', dataAttribute: 'data-arkolia-relation-checkbox' })}
+            </div>
     
-              <div class="arkolia-relation-generalities__line arkolia-relation-generalities__line--inline">
-                <div class="arkolia-relation-generalities__label">Rugosité du terrain :</div>
-                ${renderIdentityRadioGroup('terrainRoughness', [
-                  { value: 'II', label: 'II' },
-                  { value: 'IIIa', label: 'IIIa' },
-                  { value: 'IIIb', label: 'IIIb' },
-                  { value: 'IV', label: 'IV' }
-                ], relation.terrainRoughness || 'IIIa', { dataAttribute: 'data-arkolia-relation-radio' })}
-              </div>
+            <div class="arkolia-relation-generalities__line arkolia-relation-generalities__line--inline">
+              <div class="arkolia-relation-generalities__label">Rugosité du terrain :</div>
+              ${renderIdentityRadioGroup('terrainRoughness', [
+                { value: 'II', label: 'II' },
+                { value: 'IIIa', label: 'IIIa' },
+                { value: 'IIIb', label: 'IIIb' },
+                { value: 'IV', label: 'IV' }
+              ], relation.terrainRoughness || 'IIIa', { dataAttribute: 'data-arkolia-relation-radio' })}
             </div>
           </div>
         </div>
@@ -626,21 +624,21 @@ function renderIdentitySection() {
       </div>
     </div>
 
-    <div class="settings-card__head arkolia-section-heading arkolia-layout-heading">
-      <span class="settings-card__head-title"><h4>Relation et avis</h4></span>
-    </div>
-
-    <div class="settings-stack settings-stack--lg">
-      <div class="arkolia-identity-preview arkolia-identity-preview--compact">
-        <div class="arkolia-identity-preview__head">
-          <div class="arkolia-identity-preview__title">Paramètres climatiques</div>
-          ${renderCopyButton({ action: '', value: 'climate', title: 'Copier les paramètres climatiques' })}
+    <div class="settings-seismic-sizing-layout__row settings-seismic-sizing-layout__row--top arkolia-result-layout arkolia-identity-row">
+      <div class="settings-stack settings-stack--lg">
+        ${renderAssiseCard()}
+      </div>
+      <div class="settings-stack settings-stack--lg">
+        <div class="arkolia-identity-preview arkolia-identity-preview--compact">
+          <div class="arkolia-identity-preview__head">
+            <div class="arkolia-identity-preview__title">Paramètres climatiques</div>
+            ${renderCopyButton({ action: '', value: 'climate', title: 'Copier les paramètres climatiques' })}
+          </div>
+          <textarea class="gh-textarea arkolia-identity-preview__textarea" readonly data-arkolia-climate-output>${escapeHtml(climateText)}</textarea>
         </div>
-        <textarea class="gh-textarea arkolia-identity-preview__textarea" readonly data-arkolia-climate-output>${escapeHtml(climateText)}</textarea>
       </div>
     </div>
-
-    ${renderAssiseCard()}
+    
     ${renderPortanceCard()}
   `;
 }
