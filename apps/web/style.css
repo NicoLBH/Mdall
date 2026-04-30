@@ -12861,6 +12861,7 @@ circle.situation-trajectory__hierarchy-link--blocked,
 
 .arkolia-identity-sidecard{
   overflow:hidden;
+  margin-bottom:8px;
 }
 
 .arkolia-identity-sidecard__item + .arkolia-identity-sidecard__item{
@@ -12868,7 +12869,7 @@ circle.situation-trajectory__hierarchy-link--blocked,
 }
 
 .arkolia-identity-sidecard__item{
-  padding:14px;
+
 }
 
 .arkolia-identity-preview__head,
