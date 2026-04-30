@@ -548,15 +548,20 @@ function openCreateSubjectForm(options = {}) {
     ? (String(options.parentSubjectId || sourceSubjectId || "").trim() || null)
     : null;
   const scopeHost = String(options.scopeHost || "").trim().toLowerCase() === "drilldown" ? "drilldown" : "main";
+  const initialTitle = String(options.initialTitle || "");
+  const initialDescription = String(options.initialDescription || "");
+  const initialMeta = options.meta && typeof options.meta === "object" ? options.meta : null;
   store.situationsView.subjectsSubview = "subjects";
   if (mode !== "subissue") store.situationsView.showTableOnly = true;
   store.situationsView.createSubjectForm = {
     isOpen: true,
-    title: "",
-    description: "",
+    title: initialTitle,
+    description: initialDescription,
     previewMode: false,
     createMore: mode === "subissue" ? false : previousCreateMore,
-    meta: mode === "subissue" ? buildSubissueDraftMeta(parentSubjectId) : buildDefaultDraftSubjectMeta(),
+    meta: mode === "subissue"
+      ? buildSubissueDraftMeta(parentSubjectId)
+      : (initialMeta ? { ...buildDefaultDraftSubjectMeta(), ...initialMeta } : buildDefaultDraftSubjectMeta()),
     validationError: "",
     isSubmitting: false,
     uploadSessionId: "",
