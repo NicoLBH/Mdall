@@ -479,7 +479,7 @@ function renderIdentitySection() {
     </div>
 
     <div class="settings-seismic-sizing-layout__row settings-seismic-sizing-layout__row--top arkolia-result-layout arkolia-identity-row">
-      <div class="settings-stack settings-stack--lg">
+      <div class="settings-stack settings-stack--lg arkolia-stack--lg">
         <div class="arkolia-identity-section">
           <div class="arkolia-identity-section__title">Dimensions du bâtiment</div>
           <div class="arkolia-identity-dimensions">
