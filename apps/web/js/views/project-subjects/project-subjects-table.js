@@ -1,7 +1,7 @@
 import { renderProblemsCountsIconHtml } from "../ui/subissues-counts.js";
 import { getDisplayAuthorName } from "../ui/author-identity.js";
 import { findCollaboratorByAssigneeId, normalizeAssigneeIds } from "../../services/subject-assignees-service.js";
-import { renderPaginationControls } from "../ui/pagination.js";
+import { normalizePaginationState, renderPaginationControls } from "../ui/pagination.js";
 export function getSituationsTableGridTemplate() {
   return "minmax(0, 1fr) 84px max-content";
 }
@@ -239,7 +239,12 @@ export function renderProjectSubjectsTable({ filteredSituations, deps }) {
   } = deps;
 
   const allFilteredFlatSubjects = Array.isArray(getFilteredFlatSubjects?.()) ? getFilteredFlatSubjects() : [];
-  const pagination = typeof getSubjectsPaginationState === "function" ? getSubjectsPaginationState(allFilteredFlatSubjects.length) : null;
+  const selectorPagination = typeof getSubjectsPaginationState === "function" ? getSubjectsPaginationState(allFilteredFlatSubjects.length) : null;
+  const pagination = normalizePaginationState({
+    totalItems: allFilteredFlatSubjects.length,
+    pageSize: store?.projectSubjectsView?.pagination?.pageSize ?? selectorPagination?.pageSize,
+    currentPage: store?.projectSubjectsView?.pagination?.currentPage ?? selectorPagination?.currentPage
+  });
   const selectorFlatSubjects = Array.isArray(getPaginatedFilteredFlatSubjects?.()) ? getPaginatedFilteredFlatSubjects() : allFilteredFlatSubjects;
   const rawPayload = store.projectSubjectsView?.rawSubjectsResult && typeof store.projectSubjectsView.rawSubjectsResult === "object"
     ? store.projectSubjectsView.rawSubjectsResult
@@ -308,7 +313,7 @@ export function renderProjectSubjectsTable({ filteredSituations, deps }) {
     });
   }
 
-  return renderIssuesTable({
+  const tableHtml = renderIssuesTable({
     gridTemplate: getSituationsTableGridTemplate(),
     headHtml: renderSituationsTableHeadHtml({
       deps,

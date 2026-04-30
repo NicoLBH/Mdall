@@ -4,7 +4,7 @@ import { renderStatusBadge } from "../ui/status-badges.js";
 import { renderTableHeadFilterToggle } from "../ui/table-head-filter-toggle.js";
 import { renderDataTableHead } from "../ui/data-table-shell.js";
 import { renderIssuesTable } from "../ui/issues-table.js";
-import { renderPaginationControls } from "../ui/pagination.js";
+import { normalizePaginationState, renderPaginationControls } from "../ui/pagination.js";
 
 export function createProjectSituationsTable({
   store,
@@ -72,7 +72,12 @@ export function createProjectSituationsTable({
 
   function renderSituationsTable() {
     const allSituations = getSituations();
-    const pagination = typeof getSituationsPaginationState === "function" ? getSituationsPaginationState(allSituations.length) : null;
+    const selectorPagination = typeof getSituationsPaginationState === "function" ? getSituationsPaginationState(allSituations.length) : null;
+    const pagination = normalizePaginationState({
+      totalItems: allSituations.length,
+      pageSize: store?.situationsView?.pagination?.pageSize ?? selectorPagination?.pageSize,
+      currentPage: store?.situationsView?.pagination?.currentPage ?? selectorPagination?.currentPage
+    });
     const situations = typeof getPaginatedSituations === "function" ? getPaginatedSituations() : allSituations;
 
     if (uiState.error) {
