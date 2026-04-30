@@ -12573,17 +12573,15 @@ circle.situation-trajectory__hierarchy-link--blocked,
 .arkolia-identity-section{
   display:flex;
   flex-direction:column;
-  gap:10px;
-  padding-bottom: 8px;
+  gap:8px;
+  padding-bottom: 20px;
 }
-
 .arkolia-identity-section__title,
 .arkolia-identity-preview__title{
   font-size:13px;
   line-height:1.4;
   font-weight:600;
   color:var(--muted);
-  padding-bottom:8px;
 }
 
 .arkolia-identity-dimensions{
@@ -12591,7 +12589,7 @@ circle.situation-trajectory__hierarchy-link--blocked,
   grid-template-columns:repeat(2, minmax(0, 1fr));
   gap:12px;
 }
-
+.arkolia-identity-dimensions .gh-editable-field{padding-bottom:0px;} 
 .arkolia-identity-options{
   display:flex;
   flex-wrap:wrap;
@@ -12641,6 +12639,7 @@ circle.situation-trajectory__hierarchy-link--blocked,
 
 .arkolia-identity-other-field{
   max-width:180px;
+  padding-bottom:0px !important;
 }
 
 .arkolia-identity-preview-grid{
@@ -12927,7 +12926,7 @@ circle.situation-trajectory__hierarchy-link--blocked,
 }
 
 .arkolia-identity-preview--compact .arkolia-identity-preview__textarea{
-  min-height:72px;
+  min-height:40px;
 }
 
 .arkolia-identity-sidecard__label{
