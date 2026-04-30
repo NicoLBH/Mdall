@@ -1032,10 +1032,6 @@ function normalizeAltitude(value) {
   return Number.isFinite(value) ? `${value} m` : "—";
 }
 
-const ARKOLIA_SUMMARY_REQUIRED_FIELDS = [
-  "name", "hasCantonMismatch", "postalCode", "departmentCode", "departmentName", "codeInsee", "coordinates", "altitude", "frostDepthH", "frostDepthH0", "currentCantonName", "cantonName2014", "windZone", "snowZone"
-];
-
 function normalizeCoordinate(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number.toFixed(6) : "—";
@@ -1558,7 +1554,7 @@ export async function renderSolidityArkolia(root) {
                 ${renderNewSubjectButton()}
               </div>
             </div>
-            <p><strong>Informations requises pour la synthèse :</strong> ${ARKOLIA_SUMMARY_REQUIRED_FIELDS.join(', ')}<br>Analyse autonome des fondations pour les hangars agricoles neufs avec panneaux photovoltaïques sur couverture bac acier. Recherche par ville avec auto-complétion, récupération du canton 2014 par code INSEE, affichage des coordonnées, détermination automatique des zones de vent et de neige. Définition automatique des dimensions minimales des fondations et profondeur hors gel à respecter.</p>
+            <p>Analyse autonome des fondations pour les hangars agricoles neufs avec panneaux photovoltaïques sur couverture bac acier. Recherche par ville avec auto-complétion, récupération du canton 2014 par code INSEE, affichage des coordonnées, détermination automatique des zones de vent et de neige. Définition automatique des dimensions minimales des fondations et profondeur hors gel à respecter.</p>
           </div>
           <div class="arkolia-head-reference">
             <label class="arkolia-head-reference__field" for="solidityArkoliaReference">

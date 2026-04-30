@@ -12764,10 +12764,20 @@ circle.situation-trajectory__hierarchy-link--blocked,
     grid-template-columns:minmax(0,1fr);
   }
 
-  .settings-seismic-chart-card.arkolia-map-card,
+  .settings-seismic-chart-card.arkolia-map-card{
+    height:490px;
+    min-height:490px;
+  }
+
   .settings-seismic-summary-card.arkolia-summary-card{
     height:auto;
     min-height:490px;
+  }
+
+  .settings-seismic-chart-card.arkolia-map-card .arkolia-map,
+  .settings-seismic-chart-card.arkolia-map-card .arkolia-map iframe{
+    height:100%;
+    min-height:100%;
   }
 }
 
