@@ -52,7 +52,7 @@ function renderStudioNav() {
         renderSideNavItem({
           label: "Spectre",
           targetId: "seismic-general",
-          iconHtml: svgIcon("gear", { className: "octicon octicon-gear" })
+          iconHtml: svgIcon("pulse", { className: "octicon octicon-pulse" })
         })
       ]
     }),
