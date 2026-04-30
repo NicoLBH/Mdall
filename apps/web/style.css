@@ -14995,3 +14995,57 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   overscroll-behavior: none;
   cursor: crosshair;
 }
+
+.studio-tool-card__head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+}
+.studio-tool-card__actions{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin-top:8px;
+}
+.studio-tool-card__body{
+  position:relative;
+  min-height:calc(100vh - 170px);
+}
+.studio-tool-map-layer{
+  position:absolute;
+  inset:0;
+  z-index:1;
+}
+.studio-tool-map-card{
+  margin-top:0;
+  width:100%;
+}
+.studio-tool-overlay-grid{
+  position:relative;
+  z-index:2;
+  padding:16px;
+  pointer-events:none;
+}
+.studio-tool-cards-column{
+  display:grid;
+  grid-template-columns:minmax(0,1fr);
+  gap:8px;
+  pointer-events:auto;
+  padding-top:16px;
+}
+.studio-tool-info-card{
+  padding:10px;
+  border:1px solid var(--border-default);
+  border-radius:12px;
+  background:var(--bg);
+  backdrop-filter:blur(1px);
+}
+.studio-tool-info-card-title{
+  margin:0 0 8px;
+  font-size:14px;
+}
+.studio-tool-info-card ul{
+  margin:0;
+  padding-left:16px;
+}
