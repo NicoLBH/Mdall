@@ -6,7 +6,8 @@ const SUPABASE_URL = getSupabaseUrl();
 const FRONT_PROJECT_MAP_STORAGE_KEY = "mdall.supabaseProjectMap.v1";
 
 function logSituationKanbanOrder(event, payload = {}) {
-  console.info(`[situation-kanban-order] ${event}`, payload);
+  void event;
+  void payload;
 }
 
 

@@ -1068,7 +1068,6 @@ export function openStudioToolSubjectDraft({
   meta = null,
   origin = "studio-tool"
 } = {}) {
-  console.info("[studio-tool-subject] open-draft", { origin });
   const options = {
     origin: "table",
     initialTitle: String(title || ""),
@@ -1076,10 +1075,7 @@ export function openStudioToolSubjectDraft({
   };
   if (meta && typeof meta === "object") options.meta = meta;
   openCreateSubjectForm(options);
-  console.info("[studio-tool-subject] draft-prefilled", {
-    titleLength: options.initialTitle.length,
-    descriptionLength: options.initialDescription.length
-  });
+  void origin;
 
   const currentHash = String(window.location?.hash || "");
   const projectId = String(store.currentProjectId || "").trim();
