@@ -60,12 +60,6 @@ export async function resolveStudioClimateTool({ projectId, toolKey, location } 
     location: buildClimateToolLocationPayload(location)
   };
 
-  console.info("[studio-tools] resolve.start", {
-    projectId: normalizedProjectId,
-    toolKey: normalizedToolKey,
-    hasCodeInsee: Boolean(payload.location.code_insee)
-  });
-
   try {
     const response = await fetch(RESOLVE_CLIMATE_TOOL_FN_URL, {
       method: "POST",
@@ -78,12 +72,6 @@ export async function resolveStudioClimateTool({ projectId, toolKey, location } 
     });
 
     const data = await parseJsonResponseOrThrow(response, "resolve-climate-tool failed");
-
-    console.info("[studio-tools] resolve.success", {
-      projectId: normalizedProjectId,
-      toolKey: normalizedToolKey,
-      hasResult: Boolean(data?.result)
-    });
 
     return data;
   } catch (error) {
@@ -109,11 +97,6 @@ export async function getLastStudioToolResult({ projectId, toolKey } = {}) {
   url.searchParams.set("select", "id,project_id,tool_key,input_signature,input_payload,result_payload,markdown_summary,created_at,updated_at");
   url.searchParams.set("order", "updated_at.desc");
   url.searchParams.set("limit", "1");
-
-  console.info("[studio-tools] previous-result.fetch", {
-    projectId: normalizedProjectId,
-    toolKey: normalizedToolKey
-  });
 
   const response = await fetch(url.toString(), {
     method: "GET",
