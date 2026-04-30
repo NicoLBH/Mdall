@@ -1158,15 +1158,14 @@ async function resolveArkoliaSummaryFromSupabase(item, { altitude, cantonName, c
   const h = Number(frost?.result?.result_payload?.frost_depth_m);
 
   return {
+    altitude,
     postalCode: locationPayload.postalCode || '—',
     departmentCode: String(item?.departmentCode || '').trim(),
     departmentName: String(departmentName || '').trim(),
     codeInsee: String(item?.codeInsee || '').trim(),
-    altitude: supabaseSummary.altitude,
-    postalCode: supabaseSummary.postalCode,
-    cantonName: supabaseSummary.cantonName,
-    cantonName2014: supabaseSummary.cantonName2014,
-    currentCantonName: supabaseSummary.currentCantonName,
+    cantonName: cantonName2014 || cantonName,
+    cantonName2014: cantonName2014 || cantonName,
+    currentCantonName,
     windZone: windZone || String(item?.windZone || '').trim(),
     snowZone: snowZone || String(item?.snowZone || '').trim(),
     frostDepthH0: Number.isFinite(h0) ? h0 : retainedH0,
