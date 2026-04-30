@@ -6,33 +6,33 @@ union all select 'mdall_climate_wind_departments', count(*) from public.mdall_cl
 union all select 'mdall_climate_wind_canton_overrides', count(*) from public.mdall_climate_wind_canton_overrides
 union all select 'mdall_climate_frost_departments', count(*) from public.mdall_climate_frost_departments;
 
--- Key indexes presence
-select schemaname, tablename, indexname
-from pg_indexes
-where schemaname = 'public'
-  and tablename in (
-    'mdall_climate_commune_cantons','mdall_climate_snow_departments','mdall_climate_snow_canton_overrides',
-    'mdall_climate_wind_departments','mdall_climate_wind_canton_overrides','mdall_climate_frost_departments'
-  )
-order by tablename, indexname;
+-- Commune 44182 -> canton code 4432 + department
+select insee_code, canton_code_2014, department_code
+from public.mdall_climate_commune_cantons
+where insee_code = '44182';
 
--- Ensure no public/authenticated SELECT policy exists on mdall_climate_* tables
-select
-  p.polrelid::regclass as table_name,
-  p.polname,
-  p.polcmd,
-  p.polroles
-from pg_policy p
-join pg_class c on c.oid = p.polrelid
-join pg_namespace n on n.oid = c.relnamespace
-where n.nspname = 'public'
-  and c.relname like 'mdall_climate_%'
-  and p.polcmd = 'r';
+-- Canton lookup 4432 -> Pornic (2014)
+select insee_code, canton_code_2014, canton_name_2014, canton_name_current
+from public.mdall_climate_commune_cantons
+where insee_code is null and canton_code_2014 = '4432';
 
--- Sample dynamic commune lookup (first available commune)
-with any_commune as (
-  select insee_code from public.mdall_climate_commune_cantons where insee_code is not null order by insee_code limit 1
-)
-select c.insee_code, c.canton_code_2014, c.canton_name_2014, c.canton_name_current, c.department_code
-from public.mdall_climate_commune_cantons c
-join any_commune a on a.insee_code = c.insee_code;
+-- Wind overrides for department 44, including "Tous les autres cantons"
+select department_code, canton_name_normalized, resolved_zone
+from public.mdall_climate_wind_canton_overrides
+where department_code = '44'
+order by canton_name_normalized;
+
+-- Wind department rows for 44 must include multi-zone (2 and 3)
+select department_code, resolved_zone
+from public.mdall_climate_wind_departments
+where department_code = '44'
+order by resolved_zone;
+
+-- Snow and frost department rows for 44
+select department_code, resolved_zone
+from public.mdall_climate_snow_departments
+where department_code = '44';
+
+select department_code, h0_min_m, h0_max_m, h0_default_m
+from public.mdall_climate_frost_departments
+where department_code = '44';
