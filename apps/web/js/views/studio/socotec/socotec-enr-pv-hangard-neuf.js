@@ -612,15 +612,6 @@ function renderIdentitySection() {
           </div>
           <div class="arkolia-identity-sidecard__value" data-arkolia-relation-name-output>${escapeHtml(relation.builderName || 'ARKOLIA')}</div>
         </div>
-  
-        <div class="arkolia-identity-preview arkolia-identity-preview--compact">
-          <div class="arkolia-identity-preview__head">
-            <div class="arkolia-identity-preview__title">Avis</div>
-            ${renderCopyButton({ action: '', value: 'relationSummary', title: 'Copier le texte' })}
-          </div>
-          <textarea class="gh-textarea arkolia-identity-preview__textarea" readonly data-arkolia-relation-summary-output>${escapeHtml(relationSummary)}</textarea>
-        </div>
-
       </div>
     </div>
 
@@ -629,6 +620,13 @@ function renderIdentitySection() {
         ${renderAssiseCard()}
       </div>
       <div class="settings-stack settings-stack--lg">
+        <div class="arkolia-identity-preview arkolia-identity-preview--compact">
+          <div class="arkolia-identity-preview__head">
+            <div class="arkolia-identity-preview__title">Avis</div>
+            ${renderCopyButton({ action: '', value: 'relationSummary', title: 'Copier le texte' })}
+          </div>
+          <textarea class="gh-textarea arkolia-identity-preview__textarea" readonly data-arkolia-relation-summary-output>${escapeHtml(relationSummary)}</textarea>
+        </div>
         <div class="arkolia-identity-preview arkolia-identity-preview--compact">
           <div class="arkolia-identity-preview__head">
             <div class="arkolia-identity-preview__title">Paramètres climatiques</div>
