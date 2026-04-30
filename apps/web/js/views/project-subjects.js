@@ -1061,6 +1061,46 @@ function ensureSubjectsCollaboratorsLoaded() {
 
 
 
+
+export function openStudioToolSubjectDraft({
+  title = "",
+  description = "",
+  meta = null,
+  origin = "studio-tool"
+} = {}) {
+  console.info("[studio-tool-subject] open-draft", { origin });
+  const options = {
+    origin: "table",
+    initialTitle: String(title || ""),
+    initialDescription: String(description || "")
+  };
+  if (meta && typeof meta === "object") options.meta = meta;
+  openCreateSubjectForm(options);
+  console.info("[studio-tool-subject] draft-prefilled", {
+    titleLength: options.initialTitle.length,
+    descriptionLength: options.initialDescription.length
+  });
+
+  const currentHash = String(window.location?.hash || "");
+  const projectId = String(store.currentProjectId || "").trim();
+  const subjectsHash = projectId ? `#project/${projectId}/sujets` : "";
+  const isOnSubjectsTab = projectId
+    ? currentHash.startsWith(subjectsHash)
+    : currentHash.includes("/sujets");
+
+  if (!isOnSubjectsTab && subjectsHash) {
+    window.location.hash = subjectsHash;
+    return true;
+  }
+
+  rerenderPanels();
+  return true;
+}
+
+if (typeof window !== "undefined") {
+  window.openStudioToolSubjectDraft = openStudioToolSubjectDraft;
+}
+
 /* =========================================================
    Public render
 ========================================================= */
