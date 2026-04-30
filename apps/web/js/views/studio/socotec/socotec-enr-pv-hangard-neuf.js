@@ -6,7 +6,8 @@ import { getWindZoneByDepartmentAndCanton } from "../../../services/zoning/wind-
 import { getSnowZoneByDepartmentAndCanton } from "../../../services/zoning/snow-canton-regions-service.js";
 import { getFrostDepthByDepartmentCode } from "../../../services/zoning/frost-depth-service.js";
 import { escapeHtml } from "../../../utils/escape-html.js";
-import { buildGoogleMapsPlaceEmbedUrl } from "../../../services/google-maps-embed-service.js";
+import { fetchGoogleMapsPlaceEmbedUrl } from "../../../services/google-maps-embed-service.js";
+import { renderProjectLocationMapCard } from "../../shared/project-location-map-card.js";
 import { registerProjectPrimaryScrollSource } from "../../project-shell-chrome.js";
 import { svgIcon } from "../../../ui/icons.js";
 import { store } from "../../../store.js";
@@ -40,6 +41,8 @@ const arkoliaUiState = {
   isOpen: false,
   requestSequence: 0,
   debounceTimer: null,
+  mapUrl: "",
+  mapLoading: false,
   detailsExpanded: false,
   identity: { ...DEFAULT_IDENTITY },
   relation: { ...DEFAULT_RELATION },
@@ -947,46 +950,15 @@ function normalizeCoordinate(value) {
 }
 
 function renderGoogleMapsBlock(selected) {
-  const latitude = Number(selected?.lat);
-  const longitude = Number(selected?.lon);
-  const hasCoordinates = Number.isFinite(latitude) && Number.isFinite(longitude);
-
-  if (!hasCoordinates) {
-    return `
-      <div class="arkolia-map arkolia-map--placeholder${!selected ? ' is-empty' : ''}" aria-hidden="true">
-        <div class="arkolia-map__placeholder-surface"></div>
-        <div class="arkolia-map__placeholder-blur"></div>
-      </div>
-    `;
-  }
-
-  const embedUrl = buildGoogleMapsPlaceEmbedUrl({
-    latitude,
-    longitude,
-    zoom: 16,
-    mapType: "satellite"
+  return renderProjectLocationMapCard({
+    latitude: selected?.lat,
+    longitude: selected?.lon,
+    embedUrl: arkoliaUiState.mapUrl,
+    isLoading: arkoliaUiState.mapLoading,
+    showSpinner: true,
+    iframeTitle: "Carte Google Maps de la commune sélectionnée",
+    containerClassName: "arkolia-map"
   });
-
-  if (!embedUrl) {
-    return `
-      <div class="arkolia-map arkolia-map--placeholder" aria-hidden="true">
-        <div class="arkolia-map__placeholder-surface"></div>
-        <div class="arkolia-map__placeholder-blur"></div>
-      </div>
-    `;
-  }
-
-  return `
-    <div class="arkolia-map">
-      <iframe
-        title="Carte Google Maps de la commune sélectionnée"
-        src="${escapeHtml(embedUrl)}"
-        loading="lazy"
-        allowfullscreen
-        referrerpolicy="no-referrer-when-downgrade"
-      ></iframe>
-    </div>
-  `;
 }
 
 function renderCityHeader(selected) {
@@ -1128,6 +1100,29 @@ function renderResultCard() {
   updateIdentityDescriptionOutput();
 }
 
+
+async function refreshMapForSelection() {
+  const selected = arkoliaUiState.selected;
+  const latitude = Number(selected?.lat);
+  const longitude = Number(selected?.lon);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    arkoliaUiState.mapUrl = "";
+    arkoliaUiState.mapLoading = false;
+    return;
+  }
+
+  arkoliaUiState.mapLoading = true;
+  renderResultCard();
+  try {
+    arkoliaUiState.mapUrl = await fetchGoogleMapsPlaceEmbedUrl({ latitude, longitude, zoom: 16, mapType: "satellite" });
+  } catch {
+    arkoliaUiState.mapUrl = "";
+  } finally {
+    arkoliaUiState.mapLoading = false;
+    renderResultCard();
+  }
+}
+
 async function applySelection(item) {
   if (!item || !currentRoot) return;
 
@@ -1239,7 +1234,9 @@ async function applySelection(item) {
   };
   resetSuggestions();
   renderAutocompleteDropdown();
+  arkoliaUiState.mapUrl = "";
   renderResultCard();
+  await refreshMapForSelection();
 }
 
 function bindCityAutocomplete() {
@@ -1261,6 +1258,8 @@ function bindCityAutocomplete() {
     const query = String(input.value || '').trim();
     arkoliaUiState.query = query;
     arkoliaUiState.selected = null;
+    arkoliaUiState.mapUrl = "";
+    arkoliaUiState.mapLoading = false;
     renderResultCard();
 
     if (arkoliaUiState.debounceTimer) {
@@ -1412,7 +1411,7 @@ export async function renderSolidityArkolia(root) {
           <div class="arkolia-head-main">
             <div class="arkolia-head-main__top">
               <span class="settings-card__head-title">
-                <h4>PV hangar agricole</h4>
+                <h4>PV hangar neuf</h4>
               </span>
               <div class="arkolia-head-main__actions">
                 ${renderNewSubjectButton()}
