@@ -38,9 +38,25 @@ jobs:
         run: |
           echo "Applying climate seed data..."
           DB_HOST="db.${SUPABASE_PROJECT_REF}.supabase.co"
-          DB_HOSTADDR="$(getent ahostsv4 "${DB_HOST}" | awk 'NR==1 { print $1 }')"
+          DB_HOSTADDR="$(python3 - <<'PY' "${DB_HOST}"
+import socket
+import sys
+
+host = sys.argv[1]
+seen = set()
+for family, _, _, _, sockaddr in socket.getaddrinfo(host, 5432, socket.AF_INET, socket.SOCK_STREAM):
+    ip = sockaddr[0]
+    if ip not in seen:
+        seen.add(ip)
+        print(ip)
+        break
+PY
+)"
           if [ -z "${DB_HOSTADDR}" ]; then
-            echo "Could not resolve IPv4 address for ${DB_HOST}"
+            DB_HOSTADDR="$(dig +short A "${DB_HOST}" | head -n1 || true)"
+          fi
+          if [ -z "${DB_HOSTADDR}" ]; then
+            echo "Could not resolve an IPv4 address for ${DB_HOST}; GitHub runner cannot reach IPv6-only endpoints."
             exit 1
           fi
           echo "Using IPv4 ${DB_HOSTADDR} for ${DB_HOST}"
