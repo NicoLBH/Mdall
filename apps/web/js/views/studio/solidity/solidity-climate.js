@@ -97,18 +97,18 @@ function render(root) {
             <span class="settings-card__head-title">
               <h4>Zones et charges climatiques</h4>
             </span>
-          </div>
-          <div class="studio-tool-card__actions">
-            ${renderGhActionButton({ id: "solidityToolToSubject-climate", label: "Transformer en sujet", tone: "default", size: "md", disabled: !hasResult, mainAction: "" })}
-            ${renderGhActionButton({ id: "solidityToolCalculate-climate", label: actionLabel, tone: "primary", size: "md", disabled: !!state.loading, mainAction: "" })}
+            <div class="studio-tool-card__actions">
+              ${renderGhActionButton({ id: "solidityToolToSubject-climate", label: "Transformer en sujet", tone: "default", size: "md", disabled: !hasResult, mainAction: "" })}
+              ${renderGhActionButton({ id: "solidityToolCalculate-climate", label: actionLabel, tone: "primary", size: "md", disabled: !!state.loading, mainAction: "" })}
+            </div>
           </div>
         </div>
         <div class="settings-card__body studio-tool-card__body">
           ${state.error ? `<p class="gh-text-muted" style="color:var(--danger);">${escapeHtml(state.error)}</p>` : ""}
-          <div data-solidity-climate-map class="studio-tool-climate__map-layer">
+          <div data-solidity-climate-map class="studio-tool-map-layer">
             ${renderMapCard()}
           </div>
-          <div class="studio-tool-climate__overlay-grid" style="display:grid;grid-template-columns:300px minmax(0px, 1fr);gap:16px;align-items:start;">
+          <div class="studio-tool-overlay-grid" style="display:grid;grid-template-columns:300px minmax(0px, 1fr);gap:16px;align-items:start;">
             ${renderCards()}
           </div>
         </div>
@@ -119,13 +119,13 @@ function render(root) {
 }
 
 function renderCards() {
-  return `<div class="studio-tool-climate__cards-column">${renderAddressCard()}${TOOL_KEYS.map((toolKey) => renderToolCard(toolKey)).join("")}</div><div></div>`;
+  return `<div class="studio-tool-cards-column">${renderAddressCard()}${TOOL_KEYS.map((toolKey) => renderToolCard(toolKey)).join("")}</div><div></div>`;
 }
 
 function renderAddressCard() {
   const location = state.location || {};
   const address = [location.address, location.postalCode, location.city].filter(Boolean).join(", ");
-  return `<article class="studio-tool-climate__info-card"><strong>Adresse</strong><div>${escapeHtml(address || "—")}</div></article>`;
+  return `<article class="studio-tool-info-card"><strong>Adresse</strong><div>${escapeHtml(address || "—")}</div></article>`;
 }
 
 function renderToolCard(toolKey) {
@@ -140,8 +140,8 @@ function renderToolCard(toolKey) {
       : `<li>Profondeur hors gel: <strong>${escapeHtml(String(result?.frost_depth_m ?? "—"))}</strong></li><li>H0: <strong>${escapeHtml(String(result?.h0_selected_m ?? "—"))}</strong></li>`;
 
   return `
-    <article class="studio-tool-climate__info-card">
-      <h4 class="studio-tool-climate__info-card-title">${escapeHtml(title)}</h4>
+    <article class="studio-tool-info-card">
+      <h4 class="studio-tool-info-card-title">${escapeHtml(title)}</h4>
       <ul>${details}</ul>
     </article>
   `;
