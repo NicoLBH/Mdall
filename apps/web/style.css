@@ -15045,11 +15045,11 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   width:100%;
   height:calc(100vh - 210px);
 }
-.studio-tool-map-card .studio-map{
+.studio-map{
   height:100%;
   width:100%;
 }
-.studio-tool-map-card .studio-map > iframe{
+.studio-map > iframe{
   height:100%;
   width:100%;
   border:none;
