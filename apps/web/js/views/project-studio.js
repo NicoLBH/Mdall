@@ -8,9 +8,7 @@ import {
   bindSideNavPanels
 } from "./ui/side-nav-layout.js";
 import { renderStudioGeneral } from "./studio/studio-general.js";
-import { renderSoliditySnow } from "./studio/solidity/solidity-snow.js";
-import { renderSolidityWind } from "./studio/solidity/solidity-wind.js";
-import { renderSolidityFrost } from "./studio/solidity/solidity-frost.js";
+import { renderSolidityClimate } from "./studio/solidity/solidity-climate.js";
 import { renderSolidityGeorisks } from "./studio/solidity/solidity-georisks.js";
 import { renderSolidityArkolia } from "./studio/socotec/socotec-enr-pv-hangard-neuf.js";
 import { renderSeismicGeneral } from "./studio/seismic/seismic-general.js";
@@ -35,19 +33,9 @@ function renderStudioNav() {
       sectionLabel: "Solidité",
       items: [
         renderSideNavItem({
-          label: "Neige",
-          targetId: "solidity-snow",
-          iconHtml: svgIcon("gear", { className: "octicon octicon-gear" })
-        }),
-        renderSideNavItem({
-          label: "Vent",
-          targetId: "solidity-wind",
-          iconHtml: svgIcon("gear", { className: "octicon octicon-gear" })
-        }),
-        renderSideNavItem({
-          label: "Gel",
-          targetId: "solidity-frost",
-          iconHtml: svgIcon("gear", { className: "octicon octicon-gear" })
+          label: "Neige, Vent & Gel",
+          targetId: "solidity-climate",
+          iconHtml: svgIcon("climate-tools", { className: "octicon octicon-gear" })
         }),
         renderSideNavItem({
           label: "Risques Naturels & Technologiques",
@@ -97,14 +85,8 @@ function getRouterHtml() {
               <section class="project-studio-router__panel is-active" data-side-nav-panel="studio-general">
                 <div id="projectStudioGeneralPanel"></div>
               </section>
-              <section class="project-studio-router__panel" data-side-nav-panel="solidity-snow">
-                <div id="projectStudioSoliditySnowPanel"></div>
-              </section>
-              <section class="project-studio-router__panel" data-side-nav-panel="solidity-wind">
-                <div id="projectStudioSolidityWindPanel"></div>
-              </section>
-              <section class="project-studio-router__panel" data-side-nav-panel="solidity-frost">
-                <div id="projectStudioSolidityFrostPanel"></div>
+              <section class="project-studio-router__panel" data-side-nav-panel="solidity-climate">
+                <div id="projectStudioSolidityClimatePanel"></div>
               </section>
               <section class="project-studio-router__panel" data-side-nav-panel="solidity-georisks">
                 <div id="projectStudioSolidityGeorisksPanel"></div>
@@ -129,17 +111,13 @@ export function renderProjectStudio(root) {
   root.innerHTML = getRouterHtml();
 
   const generalRoot = root.querySelector("#projectStudioGeneralPanel");
-  const soliditySnowRoot = root.querySelector("#projectStudioSoliditySnowPanel");
-  const solidityWindRoot = root.querySelector("#projectStudioSolidityWindPanel");
-  const solidityFrostRoot = root.querySelector("#projectStudioSolidityFrostPanel");
+  const solidityClimateRoot = root.querySelector("#projectStudioSolidityClimatePanel");
   const solidityGeorisksRoot = root.querySelector("#projectStudioSolidityGeorisksPanel");
   const solidityArkoliaRoot = root.querySelector("#projectStudioSolidityArkoliaPanel");
   const seismicGeneralRoot = root.querySelector("#projectStudioSeismicGeneralPanel");
 
   if (generalRoot) renderStudioGeneral(generalRoot);
-  if (soliditySnowRoot) renderSoliditySnow(soliditySnowRoot, { force: true });
-  if (solidityWindRoot) renderSolidityWind(solidityWindRoot, { force: true });
-  if (solidityFrostRoot) renderSolidityFrost(solidityFrostRoot, { force: true });
+  if (solidityClimateRoot) renderSolidityClimate(solidityClimateRoot, { force: true });
   if (solidityGeorisksRoot) renderSolidityGeorisks(solidityGeorisksRoot);
   if (solidityArkoliaRoot) renderSolidityArkolia(solidityArkoliaRoot);
   if (seismicGeneralRoot) renderSeismicGeneral(seismicGeneralRoot);
@@ -156,9 +134,7 @@ export function renderProjectStudio(root) {
       registerProjectPrimaryScrollSource(getScrollSource());
 
       const targetId = String(button.dataset.sideNavTarget || "").trim();
-      if (targetId === "solidity-snow" && soliditySnowRoot) renderSoliditySnow(soliditySnowRoot, { force: true });
-      if (targetId === "solidity-wind" && solidityWindRoot) renderSolidityWind(solidityWindRoot, { force: true });
-      if (targetId === "solidity-frost" && solidityFrostRoot) renderSolidityFrost(solidityFrostRoot, { force: true });
+      if (targetId === "solidity-climate" && solidityClimateRoot) renderSolidityClimate(solidityClimateRoot, { force: true });
     });
   });
 
