@@ -36,11 +36,26 @@ jobs:
 
       - name: Apply climate seed data
         env:
-          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          SUPABASE_DB_DSN: ${{ secrets.SUPABASE_DB_DSN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: |
           echo "Applying climate seed data..."
-          DB_DSN="host=db.${SUPABASE_PROJECT_REF}.supabase.co port=5432 dbname=postgres user=postgres sslmode=require"
+          if [ -z "$SUPABASE_DB_DSN" ]; then
+            echo "ERROR: SUPABASE_DB_DSN is not set. You must configure a Supabase pooler connection string (IPv4 compatible)."
+            exit 1
+          fi
+          # IMPORTANT:
+          # Do not use direct Supabase DB connection (IPv6)
+          # GitHub Actions requires IPv4 → use Supavisor pooler
+          DB_DSN="${SUPABASE_DB_DSN}"
+          echo "Using Supabase pooler connection (IPv4 compatible)"
+
+          if printf '%s' "$DB_DSN" | grep -Eq ':[^:@/]+@'; then
+            PSQL_BASE_CMD=(psql "$DB_DSN" -v ON_ERROR_STOP=1)
+          else
+            PSQL_BASE_CMD=(env PGPASSWORD="${SUPABASE_DB_PASSWORD}" psql "$DB_DSN" -v ON_ERROR_STOP=1)
+          fi
+
           for sql_file in \
             supabase/seed-data/climate/001_commune_canton_2014.sql \
             supabase/seed-data/climate/002_canton_2014_names.sql \
@@ -51,15 +66,15 @@ jobs:
             supabase/seed-data/climate/007_wind_canton_overrides.sql \
             supabase/seed-data/climate/008_frost_departments.sql; do
             echo "Applying $(basename "$sql_file")"
-            PGPASSWORD="${SUPABASE_DB_PASSWORD}" psql "$DB_DSN" -v ON_ERROR_STOP=1 -f "$sql_file"
+            "${PSQL_BASE_CMD[@]}" -f "$sql_file"
           done
 
           echo "Verifying climate seed data..."
-          PGPASSWORD="${SUPABASE_DB_PASSWORD}" psql "$DB_DSN" -v ON_ERROR_STOP=1 -f supabase/seed-data/climate/verify_climate_seed.sql
+          "${PSQL_BASE_CMD[@]}" -f supabase/seed-data/climate/verify_climate_seed.sql
 
-          snow_count="$(PGPASSWORD="${SUPABASE_DB_PASSWORD}" psql "$DB_DSN" -v ON_ERROR_STOP=1 -tA -c "SELECT COUNT(*) FROM public.mdall_climate_snow_departments;")"
-          wind_count="$(PGPASSWORD="${SUPABASE_DB_PASSWORD}" psql "$DB_DSN" -v ON_ERROR_STOP=1 -tA -c "SELECT COUNT(*) FROM public.mdall_climate_wind_departments;")"
-          frost_count="$(PGPASSWORD="${SUPABASE_DB_PASSWORD}" psql "$DB_DSN" -v ON_ERROR_STOP=1 -tA -c "SELECT COUNT(*) FROM public.mdall_climate_frost_departments;")"
+          snow_count="$("${PSQL_BASE_CMD[@]}" -tA -c "SELECT COUNT(*) FROM public.mdall_climate_snow_departments;")"
+          wind_count="$("${PSQL_BASE_CMD[@]}" -tA -c "SELECT COUNT(*) FROM public.mdall_climate_wind_departments;")"
+          frost_count="$("${PSQL_BASE_CMD[@]}" -tA -c "SELECT COUNT(*) FROM public.mdall_climate_frost_departments;")"
 
           echo "snow_count=${snow_count}"
           echo "wind_count=${wind_count}"
