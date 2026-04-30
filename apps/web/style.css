@@ -12569,7 +12569,7 @@ circle.situation-trajectory__hierarchy-link--blocked,
   color:var(--muted);
 }
 
-.settings-stack--lg{padding:14px;border:solid 1px var(--border);border-radius:var(--radius);}
+.arkolia-stack--lg{padding:14px;border:solid 1px var(--bg-input);border-radius:var(--radius);}
 
 .arkolia-identity-section{
   display:flex;
