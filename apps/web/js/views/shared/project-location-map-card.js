@@ -7,15 +7,20 @@ export function renderProjectLocationMapCard({
   embedUrl = "",
   isLoading = false,
   showSpinner = false,
-  iframeTitle = "Carte Google Maps de la localisation projet"
+  iframeTitle = "Carte Google Maps de la localisation projet",
+  height = "",
+  containerClassName = "settings-location-map-card"
 } = {}) {
   const lat = Number(latitude);
   const lng = Number(longitude);
   const isValidLocation = Number.isFinite(lat) && Number.isFinite(lng);
 
+  const wrapperStyle = String(height || "").trim() ? ` style="height:${escapeHtml(String(height))};"` : "";
+  const wrapperClass = escapeHtml(String(containerClassName || "settings-location-map-card"));
+
   if (!isValidLocation) {
     return `
-      <div class="settings-location-map-card is-blurred">
+      <div class="${wrapperClass} is-blurred"${wrapperStyle}>
         <div class="arkolia-map arkolia-map--placeholder is-empty" aria-hidden="true">
           <div class="arkolia-map__placeholder-surface"></div>
           <div class="arkolia-map__placeholder-blur"></div>
@@ -26,7 +31,7 @@ export function renderProjectLocationMapCard({
 
   if (!embedUrl) {
     return `
-      <div class="settings-location-map-card is-blurred">
+      <div class="${wrapperClass} is-blurred"${wrapperStyle}>
         <div class="arkolia-map arkolia-map--placeholder" aria-hidden="true">
           <div class="arkolia-map__placeholder-surface"></div>
           <div class="arkolia-map__placeholder-blur"></div>
@@ -37,7 +42,7 @@ export function renderProjectLocationMapCard({
   }
 
   return `
-    <div class="settings-location-map-card">
+    <div class="${wrapperClass}"${wrapperStyle}>
       <div class="arkolia-map">
         <iframe
           title="${escapeHtml(iframeTitle)}"

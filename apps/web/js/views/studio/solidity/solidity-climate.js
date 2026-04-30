@@ -96,11 +96,11 @@ function render(root) {
           <div>
             <span class="settings-card__head-title">
               <h4>Zones et charges climatiques</h4>
+              <div class="studio-tool-card__actions">
+                ${renderGhActionButton({ id: "solidityToolToSubject-climate", label: "Transformer en sujet", tone: "default", size: "md", disabled: !hasResult, mainAction: "" })}
+                ${renderGhActionButton({ id: "solidityToolCalculate-climate", label: actionLabel, tone: "primary", size: "md", disabled: !!state.loading, mainAction: "" })}
+              </div>
             </span>
-            <div class="studio-tool-card__actions">
-              ${renderGhActionButton({ id: "solidityToolToSubject-climate", label: "Transformer en sujet", tone: "default", size: "md", disabled: !hasResult, mainAction: "" })}
-              ${renderGhActionButton({ id: "solidityToolCalculate-climate", label: actionLabel, tone: "primary", size: "md", disabled: !!state.loading, mainAction: "" })}
-            </div>
           </div>
         </div>
         <div class="settings-card__body studio-tool-card__body">
@@ -154,7 +154,9 @@ function renderMapCard() {
     embedUrl: state.mapUrl,
     isLoading: state.mapLoading,
     showSpinner: true,
-    iframeTitle: "Carte Google Maps de la localisation du projet"
+    iframeTitle: "Carte Google Maps de la localisation du projet",
+    height: "calc(100vh - 186px)",
+    containerClassName: "studio-tool-map-card"
   });
 }
 

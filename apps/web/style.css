@@ -15017,6 +15017,10 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   inset:0;
   z-index:1;
 }
+.studio-tool-map-card{
+  margin-top:0;
+  width:100%;
+}
 .studio-tool-overlay-grid{
   position:relative;
   z-index:2;
