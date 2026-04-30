@@ -91,7 +91,7 @@ export function createProjectSubjectsState({ store }) {
     if (!Number.isFinite(Number(v.pagination.currentPage)) || Number(v.pagination.currentPage) < 1) v.pagination.currentPage = 1;
     if (!Number.isFinite(Number(v.pagination.totalItems)) || Number(v.pagination.totalItems) < 0) v.pagination.totalItems = 0;
     if (!Number.isFinite(Number(v.pagination.loadedItems)) || Number(v.pagination.loadedItems) < 0) v.pagination.loadedItems = 0;
-    if (!Number.isFinite(Number(v.pagination.pageSize)) || Number(v.pagination.pageSize) <= 0) v.pagination.pageSize = null;
+    if (!Number.isFinite(Number(v.pagination.pageSize)) || Number(v.pagination.pageSize) <= 0) v.pagination.pageSize = 25;
     if (typeof v.pagination.hasNextPage !== "boolean") v.pagination.hasNextPage = false;
     if (typeof v.pagination.sourceComplete !== "boolean") v.pagination.sourceComplete = true;
     if (typeof v.pagination.nextCursor !== "string" && v.pagination.nextCursor !== null) v.pagination.nextCursor = null;

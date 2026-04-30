@@ -1,6 +1,7 @@
 import { renderProblemsCountsIconHtml } from "../ui/subissues-counts.js";
 import { getDisplayAuthorName } from "../ui/author-identity.js";
 import { findCollaboratorByAssigneeId, normalizeAssigneeIds } from "../../services/subject-assignees-service.js";
+import { renderPaginationControls } from "../ui/pagination.js";
 export function getSituationsTableGridTemplate() {
   return "minmax(0, 1fr) 84px max-content";
 }
@@ -54,7 +55,7 @@ function renderSubjectChildrenCounterHtml(sujet, deps) {
 
 function renderWelcomeHtml(deps) {
   const { renderIssuesTable } = deps;
-  return renderIssuesTable({
+  const tableHtml = renderIssuesTable({
     gridTemplate: getSituationsTableGridTemplate(),
     headHtml: renderSituationsTableHeadHtml({
       deps,
@@ -323,4 +324,6 @@ export function renderProjectSubjectsTable({ filteredSituations, deps }) {
       ? "Aucun résultat pour cette page avec les filtres actuels."
       : "Aucun résultat pour les filtres actuels."
   });
+  const paginationHtml = renderPaginationControls(pagination, { entity: "subjects" });
+  return `${tableHtml}${paginationHtml}`;
 }
