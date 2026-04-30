@@ -1,6 +1,5 @@
 import { renderProblemsCountsIconHtml } from "../ui/subissues-counts.js";
 import { getDisplayAuthorName } from "../ui/author-identity.js";
-import { getAuthorIdentity } from "../ui/author-identity.js";
 import { findCollaboratorByAssigneeId, normalizeAssigneeIds } from "../../services/subject-assignees-service.js";
 import { normalizePaginationState, paginateItems, renderPaginationControls } from "../ui/pagination.js";
 export function getSituationsTableGridTemplate() {
@@ -188,17 +187,6 @@ export function renderFlatSujetRow(sujet, situationId, options = {}) {
     agent: firstNonEmpty(descriptionState?.agent, sujet?.agent, sujet?.raw?.agent, "system"),
     fallback: "System"
   });
-  const descriptionState = getEntityDescriptionState("sujet", sujet.id) || {};
-  const authorIdentity = getAuthorIdentity({
-    author,
-    agent: firstNonEmpty(descriptionState?.agent, sujet?.agent, sujet?.raw?.agent, "system"),
-    avatarUrl: firstNonEmpty(descriptionState?.avatarUrl, descriptionState?.avatar_url, ""),
-    currentUserAvatar: String(deps?.store?.user?.avatar || ""),
-    fallbackName: "System"
-  });
-  const authorAvatarHtml = authorIdentity.avatarHtml
-    ? `<span class="issue-row-author-avatar issue-row-author-avatar--${escapeHtml(authorIdentity.avatarType || "agent")}" aria-hidden="true">${authorIdentity.avatarHtml}</span>`
-    : `<span class="issue-row-author-avatar issue-row-author-avatar--fallback" aria-hidden="true">${escapeHtml(authorIdentity.avatarInitial || "S")}</span>`;
   const openedLabel = formatRelativeTimeLabel(getEntityListTimestamp("sujet", sujet), "opened");
   const subjectMeta = getSubjectSidebarMeta(sujet.id);
   const subjectLabelsHtml = subjectMeta.labels
@@ -229,7 +217,7 @@ export function renderFlatSujetRow(sujet, situationId, options = {}) {
             <button type="button" class="row-title-trigger js-row-title-trigger theme-text theme-text--pb ${titleSeenClass}" data-row-entity-type="sujet" data-row-entity-id="${escapeHtml(sujet.id)}">${escapeHtml(firstNonEmpty(sujet.title, sujet.id, "Non classé"))}</button>
             ${renderSubjectChildrenCounterHtml(sujet, deps)}${subjectLabelsHtml ? `<span class="issue-row-subject-labels">${subjectLabelsHtml}</span>` : ""}
           </span>
-          <span class="issue-row-title-grid__meta issue-row-meta-text mono-small">${blockedBadge}${escapeHtml(displayRef)} - ${authorAvatarHtml}<span class="issue-row-author-name">${escapeHtml(author)}</span> • ${escapeHtml(openedLabel)}${objectiveLabel}</span>
+          <span class="issue-row-title-grid__meta issue-row-meta-text mono-small">${blockedBadge}${escapeHtml(displayRef)} - <span class="issue-row-author-name">${escapeHtml(author)}</span> • ${escapeHtml(openedLabel)}${objectiveLabel}</span>
         </span>
       </div>
       <div class="cell cell-messages-value">${renderSubjectMessagesCountCellHtml(sujet, deps)}</div>
