@@ -4,6 +4,8 @@ import { getLastStudioToolResult, resolveStudioClimateTool } from "../../../serv
 import { getEffectiveProjectLocation } from "./solidity-climate-tool-common.js";
 import { resolveCurrentBackendProjectId } from "../../../services/project-supabase-sync.js";
 import { renderGhActionButton } from "../../ui/gh-split-button.js";
+import { fetchGoogleMapsPlaceEmbedUrl } from "../../../services/google-maps-embed-service.js";
+import { renderProjectLocationMapCard } from "../../shared/project-location-map-card.js";
 
 const TOOL_KEYS = ["snow", "wind", "frost"];
 const TOOL_LABELS = {
@@ -12,7 +14,7 @@ const TOOL_LABELS = {
   frost: "Gel"
 };
 
-const state = { loading: false, error: "", projectId: "", location: null, results: {} };
+const state = { loading: false, error: "", projectId: "", location: null, results: {}, mapUrl: "", mapLoading: false };
 
 export async function renderSolidityClimate(root, { force = false } = {}) {
   if (!root) return;
@@ -88,43 +90,85 @@ function render(root) {
   const actionLabel = state.loading ? "Calcul en cours..." : hasResult ? "Recalculer" : "Calculer";
 
   root.innerHTML = `
-    <section class="arkolia-identity-preview arkolia-assise-card" data-solidity-tool-card="climate">
-      <header class="arkolia-identity-preview__header">
-        <div>
-          <h3 class="arkolia-identity-preview__title">Neige, Vent &amp; Gel</h3>
-          <p class="arkolia-identity-preview__meta">Résolution via service Supabase</p>
+    <section class="settings-section is-active" data-solidity-tool-card="climate">
+      <div class="settings-card settings-card--param studio-tool-card">
+        <div class="settings-card__head studio-tool-card__head">
+          <div>
+            <span class="settings-card__head-title">
+              <h4>Zones et charges climatiques</h4>
+            </span>
+          </div>
+          <div class="studio-tool-card__actions">
+            ${renderGhActionButton({ id: "solidityToolToSubject-climate", label: "Transformer en sujet", tone: "default", size: "md", disabled: !hasResult, mainAction: "" })}
+            ${renderGhActionButton({ id: "solidityToolCalculate-climate", label: actionLabel, tone: "primary", size: "md", disabled: !!state.loading, mainAction: "" })}
+          </div>
         </div>
-      </header>
-      <div class="arkolia-identity-preview__body">
-        <p class="arkolia-identity-preview__meta">${escapeHtml(state.loading ? "Chargement..." : "Utilise la localisation projet actuelle.")}</p>
-        ${state.error ? `<p class="gh-text-muted" style="color:var(--danger);">${escapeHtml(state.error)}</p>` : ""}
-        <div class="arkolia-identity-preview__coordinates">${renderCards()}</div>
+        <div class="settings-card__body studio-tool-card__body">
+          ${state.error ? `<p class="gh-text-muted" style="color:var(--danger);">${escapeHtml(state.error)}</p>` : ""}
+          <div data-solidity-climate-map class="studio-tool-climate__map-layer">
+            ${renderMapCard()}
+          </div>
+          <div class="studio-tool-climate__overlay-grid" style="display:grid;grid-template-columns:300px minmax(0px, 1fr);gap:16px;align-items:start;">
+            ${renderCards()}
+          </div>
+        </div>
       </div>
-      <footer class="arkolia-identity-preview__footer" style="display:flex;gap:8px;">
-        ${renderGhActionButton({ id: "solidityToolCalculate-climate", label: actionLabel, tone: "primary", size: "md", disabled: !!state.loading, mainAction: "" })}
-        ${renderGhActionButton({ id: "solidityToolToSubject-climate", label: "Transformer en sujet", tone: "default", size: "md", disabled: !hasResult, mainAction: "" })}
-      </footer>
     </section>
   `;
+  void refreshMapCard(root);
 }
 
 function renderCards() {
-  return `<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;">${TOOL_KEYS.map((toolKey) => renderToolCard(toolKey)).join("")}</div>`;
+  return `<div class="studio-tool-climate__cards-column">${renderAddressCard()}${TOOL_KEYS.map((toolKey) => renderToolCard(toolKey)).join("")}</div><div></div>`;
+}
+
+function renderAddressCard() {
+  const location = state.location || {};
+  const address = [location.address, location.postalCode, location.city].filter(Boolean).join(", ");
+  return `<article class="studio-tool-climate__info-card"><strong>Adresse</strong><div>${escapeHtml(address || "—")}</div></article>`;
 }
 
 function renderToolCard(toolKey) {
   const result = state.results?.[toolKey]?.result_payload || null;
   const title = TOOL_LABELS[toolKey] || toolKey;
+  const altitudeValue = Number(result?.altitude ?? state.location?.altitude);
+  const altitudeLabel = Number.isFinite(altitudeValue) ? `${Math.round(altitudeValue)} m` : "—";
   const details = toolKey === "snow"
-    ? `<li>Zone neige: <strong>${escapeHtml(result?.snow_zone || "—")}</strong></li><li>Département: <strong>${escapeHtml(result?.department_code || "—")}</strong></li>`
+    ? `<li>Région: <strong>${escapeHtml(result?.snow_zone || "—")}</strong></li><li>Altitude: <strong>${escapeHtml(altitudeLabel)}</strong></li>`
     : toolKey === "wind"
-      ? `<li>Zone vent: <strong>${escapeHtml(result?.wind_zone || "—")}</strong></li><li>Département: <strong>${escapeHtml(result?.department_code || "—")}</strong></li>`
-      : `<li>H0: <strong>${escapeHtml(String(result?.h0_selected_m ?? "—"))}</strong></li><li>Altitude: <strong>${escapeHtml(String(result?.altitude ?? "—"))}</strong></li><li>H: <strong>${escapeHtml(String(result?.frost_depth_m ?? "—"))}</strong></li>`;
+      ? `<li>Région: <strong>${escapeHtml(result?.wind_zone || "—")}</strong></li>`
+      : `<li>Profondeur hors gel: <strong>${escapeHtml(String(result?.frost_depth_m ?? "—"))}</strong></li><li>H0: <strong>${escapeHtml(String(result?.h0_selected_m ?? "—"))}</strong></li>`;
 
   return `
-    <article class="arkolia-assise-card" style="padding:10px;">
-      <h4 class="arkolia-identity-preview__title" style="font-size:14px;">${escapeHtml(title)}</h4>
+    <article class="studio-tool-climate__info-card">
+      <h4 class="studio-tool-climate__info-card-title">${escapeHtml(title)}</h4>
       <ul>${details}</ul>
     </article>
   `;
+}
+
+function renderMapCard() {
+  return renderProjectLocationMapCard({
+    latitude: state.location?.latitude,
+    longitude: state.location?.longitude,
+    embedUrl: state.mapUrl,
+    isLoading: state.mapLoading,
+    showSpinner: true,
+    iframeTitle: "Carte Google Maps de la localisation du projet"
+  });
+}
+
+async function refreshMapCard(root) {
+  if (!root || !Number.isFinite(Number(state.location?.latitude)) || !Number.isFinite(Number(state.location?.longitude))) return;
+  state.mapLoading = true;
+  const host = root.querySelector("[data-solidity-climate-map]");
+  if (host) host.innerHTML = renderMapCard();
+  try {
+    state.mapUrl = await fetchGoogleMapsPlaceEmbedUrl({ latitude: Number(state.location.latitude), longitude: Number(state.location.longitude), zoom: 16, mapType: "satellite" });
+  } catch {
+    state.mapUrl = "";
+  } finally {
+    state.mapLoading = false;
+    if (host) host.innerHTML = renderMapCard();
+  }
 }
