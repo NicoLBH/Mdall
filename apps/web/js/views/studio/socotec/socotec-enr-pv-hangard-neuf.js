@@ -1152,10 +1152,10 @@ async function resolveArkoliaSummaryFromSupabase(item, { altitude, cantonName, c
     resolveStudioClimateTool({ projectId, toolKey: "frost", location: locationPayload }).catch(() => null)
   ]);
 
-  const windZone = String(wind?.result?.result_payload?.wind_zone || "").trim();
-  const snowZone = String(snow?.result?.result_payload?.snow_zone || "").trim();
-  const h0 = Number(frost?.result?.result_payload?.h0_selected_m);
-  const h = Number(frost?.result?.result_payload?.frost_depth_m);
+  const windZone = String(wind?.result?.wind_zone || "").trim();
+  const snowZone = String(snow?.result?.snow_zone || "").trim();
+  const h0 = Number(frost?.result?.h0_selected_m);
+  const h = Number(frost?.result?.frost_depth_m);
 
   return {
     altitude,

@@ -48,7 +48,6 @@ const fetchGoogleMapsPlaceEmbedUrlFromEdge = ({ latitude = null, longitude = nul
 
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return Promise.resolve("");
 
-  console.info("[google-maps-embed] url.fetch.start", { latitude: lat, longitude: lon, zoom: safeZoom, mapType: safeMapType });
 
   return buildSupabaseAuthHeaders({ "Content-Type": "application/json", Accept: "application/json" })
     .then((headers) => fetch(`${SUPABASE_URL}/functions/v1/google-maps-embed-url`, {
@@ -68,7 +67,6 @@ const fetchGoogleMapsPlaceEmbedUrlFromEdge = ({ latitude = null, longitude = nul
       if (!embedUrl) {
         throw new Error("google-maps-embed-url returned an empty embedUrl");
       }
-      console.info("[google-maps-embed] url.fetch.success", { latitude: lat, longitude: lon, zoom: safeZoom, mapType: safeMapType });
       return embedUrl;
     })
     .catch((error) => {

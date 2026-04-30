@@ -158,12 +158,6 @@ export async function hydrateProjectLocationAndContextFromSupabase(projectId) {
       applyLocationToStore(locationRow);
     }
     applyContextFactsToStore(contextFacts);
-    console.info("[project-location] hydrate.success", {
-      projectId: resolvedProjectId,
-      locationLoaded: Boolean(locationRow),
-      contextFactsCount: Array.isArray(contextFacts) ? contextFacts.length : 0,
-      source: "supabase"
-    });
     return { source: "supabase", location: locationRow, contextFacts: contextFacts || [] };
   } catch (error) {
     console.error("[project-location] hydrate.failure", {
