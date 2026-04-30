@@ -311,13 +311,14 @@ function buildArkoliaDraftTitle() {
   const length = normalizeDimension(arkoliaUiState.identity?.length) || '…';
   const width = normalizeDimension(arkoliaUiState.identity?.width) || '…';
   const span = getSelectedSpanLabel();
-  return `${departmentCode} ${cityName} ENR - PV hangar neuf ${length} m x ${width} m, travée ${span} m`;
+  return `${departmentCode}_${cityName} : ENR - PV hangar neuf ${length} m x ${width} m, travée ${span} m`;
 }
 
 function buildArkoliaDraftDescription() {
   const postalCode = getSelectedPostalCode();
   const cityName = getSelectedCityName();
   const relationName = String(arkoliaUiState.relation?.builderName || 'ARKOLIA').trim() || 'ARKOLIA';
+  const relationLabel = `**${relationName}**`;
 
   const sections = [
     ["Description de l'ouvrage", getIdentityDescription()],
@@ -328,10 +329,13 @@ function buildArkoliaDraftDescription() {
   ];
 
   const paragraphBlocks = sections
-    .map(([title, value]) => `### ${title}\n${value || '—'}`)
+    .map(([title, value]) => `\n### ${title}\n${value || '—'}`)
     .join('\n\n');
 
-  return `${postalCode} ${cityName} ${relationName}\n\n${paragraphBlocks}`;
+  const description = `## ${postalCode} ${cityName} ${relationLabel}\n\n${paragraphBlocks}`;
+  return description
+    .replace(/altitude\s+(\d+(?:[.,]\d+)?)\s+mètres/gi, (_match, value) => `altitude \`${String(value).replace(',', '.') } mètres\``)
+    .replace(/H\s*>\s*([0-9]+(?:[.,][0-9]+)?)\s*m/gi, (_match, value) => `\`H > ${String(value).replace(',', '.')} m\``);
 }
 
 function openArkoliaSubjectDraft() {
