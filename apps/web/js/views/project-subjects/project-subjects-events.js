@@ -6026,9 +6026,9 @@ export function createProjectSubjectsEvents(config) {
         const pagination = store.projectSubjectsView?.pagination && typeof store.projectSubjectsView.pagination === "object"
           ? store.projectSubjectsView.pagination
           : (store.projectSubjectsView.pagination = { currentPage: 1, pageSize: 25 });
-        const totalPages = Math.max(1, Number.parseInt(pagination.totalPages, 10) || 1);
         const previousPage = Math.max(1, Number.parseInt(pagination.currentPage, 10) || 1);
-        pagination.currentPage = Math.min(nextPage, totalPages);
+        pagination.currentPage = nextPage;
+        const totalPages = Math.max(1, Number.parseInt(pagination.totalPages, 10) || nextPage);
         logPagination({ entity: "subjects", previousPage, nextPage: pagination.currentPage, totalPages });
         rerenderPanels();
         return;
