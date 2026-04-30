@@ -2270,36 +2270,6 @@ body.subject-create-subissue-modal-open #situationsDetailsHost{
 .issue-row-blocked-pill .octicon-blocked{color:var(--danger-fg,#f85149);fill:currentColor;}
 .issue-row-subject-children-counter{margin-left:2px;flex:0 0 auto;}
 .issue-row-subject-children-counter span:last-child{white-space:nowrap;}
-.issue-row-author-avatar{
-  display:inline-flex;
-  width:16px;
-  height:16px;
-  border-radius:50%;
-  overflow:hidden;
-  align-items:center;
-  justify-content:center;
-  margin:0 4px 0 0;
-  vertical-align:middle;
-  flex:0 0 auto;
-}
-.issue-row-author-avatar img{
-  width:100%;
-  height:100%;
-  object-fit:cover;
-}
-.issue-row-author-avatar--fallback{
-  border:1px solid var(--border);
-  background:var(--panel);
-  color:var(--muted);
-  font-size:10px;
-  font-weight:600;
-  line-height:1;
-}
-.issue-row-author-name{
-  vertical-align:middle;
-}
-
-
 /* Verdict badges (F/D/S/HM/PM/SO) */
 .verdict-badge{
   display:inline-flex;
