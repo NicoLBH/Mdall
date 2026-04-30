@@ -182,8 +182,9 @@ export function renderFlatSujetRow(sujet, situationId, options = {}) {
   const meta = getEntityReviewMeta("sujet", sujet.id);
   const titleSeenClass = getReviewTitleStateClass("sujet", sujet.id);
   const displayRef = getEntityDisplayRef("sujet", sujet.id);
-  const author = getDisplayAuthorName(firstNonEmpty(getEntityDescriptionState("sujet", sujet.id)?.author, sujet?.agent, sujet?.raw?.agent, "system"), {
-    agent: firstNonEmpty(getEntityDescriptionState("sujet", sujet.id)?.agent, sujet?.agent, sujet?.raw?.agent, "system"),
+  const descriptionState = getEntityDescriptionState("sujet", sujet.id) || {};
+  const author = getDisplayAuthorName(firstNonEmpty(descriptionState?.author, sujet?.agent, sujet?.raw?.agent, "system"), {
+    agent: firstNonEmpty(descriptionState?.agent, sujet?.agent, sujet?.raw?.agent, "system"),
     fallback: "System"
   });
   const openedLabel = formatRelativeTimeLabel(getEntityListTimestamp("sujet", sujet), "opened");

@@ -2270,8 +2270,6 @@ body.subject-create-subissue-modal-open #situationsDetailsHost{
 .issue-row-blocked-pill .octicon-blocked{color:var(--danger-fg,#f85149);fill:currentColor;}
 .issue-row-subject-children-counter{margin-left:2px;flex:0 0 auto;}
 .issue-row-subject-children-counter span:last-child{white-space:nowrap;}
-
-
 /* Verdict badges (F/D/S/HM/PM/SO) */
 .verdict-badge{
   display:inline-flex;
