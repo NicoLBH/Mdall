@@ -12569,6 +12569,7 @@ circle.situation-trajectory__hierarchy-link--blocked,
   color:var(--muted);
 }
 
+.settings-stack--lg{padding:14px;border:solid 1px var(--border);border-radius:var(--radius);}
 
 .arkolia-identity-section{
   display:flex;
@@ -12848,7 +12849,7 @@ circle.situation-trajectory__hierarchy-link--blocked,
 .arkolia-identity-sidecard,
 .arkolia-relation-card{
   border:1px solid var(--border);
-  border-radius:12px;
+  border-radius:var(--radius);
   background:var(--panel);
 }
 
