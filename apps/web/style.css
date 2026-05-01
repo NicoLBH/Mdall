@@ -6596,8 +6596,12 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   padding:0;
 }
 .documents-pdf-sticky-mode .project-shell__body{
-  position:sticky;
+  position:fixed;
   top:0;
+  left:0;
+  right:0;
+  bottom:0;
+  overflow:auto;
   z-index:30;
 }
 .documents-pdf-sticky-mode .project-context-header{
