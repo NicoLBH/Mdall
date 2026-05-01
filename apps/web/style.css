@@ -6401,6 +6401,11 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   max-width:1280px;
   margin:0 auto;
 }
+.documents-shell.documents-layout:not(.is-root){
+  width:100%;
+  max-width:none;
+  margin:0;
+}
 
 .documents-shell--pdf-preview{
   width:100%;
