@@ -6596,13 +6596,21 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   padding:0;
 }
 .documents-pdf-sticky-mode .project-shell__body{
-  position:fixed;
-  top:0;
-  left:0;
-  right:0;
-  bottom:0;
-  overflow:auto;
-  z-index:30;
+  position:relative;
+  top:auto;
+  overflow:visible;
+  z-index:auto;
+}
+body.route--project.documents-pdf-sticky-mode.project-shell-compact #globalHeaderHost,
+body.route--project.documents-pdf-sticky-mode.project-shell-compact .gh-header.gh-header--project{
+  transform:translateY(-100%);
+  opacity:0;
+  pointer-events:none;
+  transition:transform .16s ease, opacity .16s ease;
+}
+body.route--project.documents-pdf-sticky-mode.project-shell-compact .project-shell__body{
+  margin-top:calc(-1 * var(--header-h-compact));
+  padding-top:var(--header-h-compact);
 }
 .documents-pdf-sticky-mode .project-context-header{
   position:static;
