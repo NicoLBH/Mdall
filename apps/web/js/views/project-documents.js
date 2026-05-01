@@ -51,7 +51,15 @@ const pdfPreviewController = {
   activeSearchIndex: -1
 };
 
-function logPdfPreviewDebug() {}
+function logPdfPreviewDebug(label, payload = {}) {
+  try {
+    if (window.localStorage?.getItem("debug:project-scroll-policy") !== "1") return;
+  } catch (_) {
+    return;
+  }
+
+  console.info("[documents-pdf-preview]", label, payload);
+}
 
 const docsViewState = {
   mode: "list", // "list" | "upload" | "report-preview" | "pdf-preview"
@@ -2501,6 +2509,19 @@ function renderProjectDocumentsContent(root) {
         : renderDocumentsListView();
 
   document.body.classList.toggle("documents-pdf-sticky-mode", docsViewState.mode === "pdf-preview");
+
+  if (docsViewState.mode === "pdf-preview") {
+    const projectShellBody = document.querySelector(".project-shell__body");
+    const projectShellBodyStyle = projectShellBody ? window.getComputedStyle(projectShellBody) : null;
+    const scrollingElement = document.scrollingElement || document.documentElement || document.body || null;
+    logPdfPreviewDebug("scroll-policy", {
+      bodyClassName: document.body?.className || "",
+      windowScrollY: Number(window.scrollY || 0),
+      documentScrollingElementScrollTop: Number(scrollingElement?.scrollTop || 0),
+      projectShellBodyOverflow: projectShellBodyStyle?.overflow || null,
+      projectShellBodyPosition: projectShellBodyStyle?.position || null
+    });
+  }
 
   bindDocumentsView(root);
 }
