@@ -1660,7 +1660,7 @@ function renderDocumentsSidebarTree() {
     const files = filesByFolder.get(id) || [];
     const hasChildren = childFolders.length > 0 || files.length > 0;
     const isExpanded = expandedSet.has(id);
-    const caret = hasChildren ? `<button type="button" class="documents-tree__caret" data-tree-toggle-folder-id="${escapeHtml(id)}">${isExpanded ? "▾" : "▸"}</button>` : `<span class="documents-tree__caret-spacer"></span>`;
+    const caret = hasChildren ? `<button type="button" class="documents-tree__caret" data-tree-toggle-folder-id="${escapeHtml(id)}">${svgIcon(isExpanded ? "chevron-down" : "chevron-right", { className: isExpanded ? "octicon octicon-chevron-down" : "octicon octicon-chevron-right" })}</button>` : `<span class="documents-tree__caret-spacer"></span>`;
     const row = `<div class="documents-tree__row" style="padding-left:${12 + Math.min(depth, 8) * 18}px">${caret}<button type="button" class="documents-tree__item${active ? " is-active" : ""}" data-tree-folder-id="${escapeHtml(id)}">${isExpanded ? getFolderOpenIconSvg() : getFolderClosedIconSvg()} ${escapeHtml(folder.name || "Dossier")}</button></div>`;
     if (!isExpanded) return row;
     const fileRows = files.map((file) => `<div class="documents-tree__file" style="padding-left:${34 + Math.min(depth + 1, 9) * 18}px">${getDocumentIconSvg()} ${escapeHtml(file?.name || file?.original_filename || file?.filename || "Fichier")}</div>`).join("");
@@ -2359,6 +2359,12 @@ function bindDocumentsView(root) {
 
 function renderProjectDocumentsContent(root) {
   syncDocumentsProjectViewHeader();
+  const contentHost = document.getElementById("project-content");
+  if (contentHost) {
+    const top = contentHost.getBoundingClientRect().top || 0;
+    const height = Math.max(320, Math.floor((window.innerHeight || 0) - top - 8));
+    contentHost.style.setProperty("--documents-content-height", `${height}px`);
+  }
 
   root.innerHTML = docsViewState.mode === "upload"
     ? renderUploadView()

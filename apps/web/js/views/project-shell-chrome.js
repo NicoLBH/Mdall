@@ -131,6 +131,19 @@ function refreshProjectShellChromeRefs() {
   shellState.compactTabLabelSuffixEl = document.getElementById("projectCompactTabLabelSuffix");
 }
 
+function ensureProjectViewHeaderHost() {
+  let host = document.getElementById("projectViewHeaderHost");
+  if (host) return host;
+  const shellBody = document.querySelector(".project-shell__body");
+  const projectContent = document.getElementById("project-content");
+  if (!shellBody || !projectContent) return null;
+  host = document.createElement("div");
+  host.id = "projectViewHeaderHost";
+  host.className = "project-view-header-host";
+  shellBody.insertBefore(host, projectContent);
+  return host;
+}
+
 export function setProjectStickyChrome(html = "") {
   const host = getStickyChromeHostEl();
   if (!host) return;
@@ -363,6 +376,9 @@ export function mountProjectShellChrome({ projectId, tab }) {
 }
 
 export function setProjectViewHeader(config = {}) {
+  if (!shellState.viewHeaderHostEl) {
+    shellState.viewHeaderHostEl = ensureProjectViewHeaderHost();
+  }
   if (!shellState.viewHeaderHostEl) return;
 
   shellState.compactTabCustomLabel = String(config.compactLabel || config.contextLabel || "").trim();
@@ -380,6 +396,10 @@ export function setProjectViewHeader(config = {}) {
   });
 
   getViewHeaderEl()?.classList.toggle("project-view-header--compact", shellState.isCompact);
+  if (!String(shellState.viewHeaderHostEl.innerHTML || "").trim()) {
+    shellState.viewHeaderHostEl.remove();
+    shellState.viewHeaderHostEl = null;
+  }
   syncCompactTabLabel();
 }
 

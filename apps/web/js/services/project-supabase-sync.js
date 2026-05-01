@@ -765,6 +765,7 @@ function mapDocumentRowToViewModel(row = {}) {
     localPreviewUrl: "",
     localFile: null,
     extension: displayName.includes(".") ? displayName.split(".").pop().toLowerCase() : "",
+    folder_id: safeString(row.folder_id || "") || null,
     storageBucket: safeString(row.storage_bucket),
     storagePath: safeString(row.storage_path),
     uploadStatus: safeString(row.upload_status),
