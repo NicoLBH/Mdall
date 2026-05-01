@@ -6587,6 +6587,7 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
 .documents-tree__item.is-active{color:#58a6ff;}
 .documents-tree__file{display:flex;align-items:center;gap:8px;font-size:13px;padding:0;height:34px;min-width:0;border:0;background:transparent;color:var(--text);cursor:pointer;position:relative;border-radius:6px;}
 .documents-tree__item,.documents-tree__file{min-width:0;}
+.documents-tree__icon-slot{width:16px;min-width:16px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 16px;}
 .documents-tree__label{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .documents-tree__file:hover{background:rgba(110,118,129,.16);}
 .documents-tree__file:hover .documents-tree__label{color:#58a6ff;text-decoration:underline;}
