@@ -1741,14 +1741,14 @@ function renderDocumentsSidebarTree() {
       .map(() => `<span class="documents-tree__divider${dividerStateClass}" aria-hidden="true"></span>`)
       .join("");
     const caret = hasChildren ? `<button type="button" class="documents-tree__caret" data-tree-toggle-folder-id="${escapeHtml(id)}">${svgIcon(isExpanded ? "chevron-down" : "chevron-right", { className: isExpanded ? "octicon octicon-chevron-down" : "octicon octicon-chevron-right" })}</button>` : `<span class="documents-tree__caret-spacer"></span>`;
-    const row = `<div class="documents-tree__row${active ? " is-active" : ""}" style="--tree-indent:${12 + Math.min(depth, 8) * 18}px"><span class="documents-tree__indent">${indentDividers}</span>${caret}<button type="button" class="documents-tree__item${active ? " is-active" : ""}" data-tree-folder-id="${escapeHtml(id)}"><span class="documents-tree__icon-slot">${isExpanded ? getFolderOpenIconSvg() : getFolderClosedIconSvg()}</span> <span class="documents-tree__label">${escapeHtml(folder.name || "Dossier")}</span></button></div>`;
+    const row = `<div class="documents-tree__row${active ? " is-active" : ""}"><span class="documents-tree__indent">${indentDividers}</span>${caret}<button type="button" class="documents-tree__item${active ? " is-active" : ""}" data-tree-folder-id="${escapeHtml(id)}"><span class="documents-tree__icon-slot">${isExpanded ? getFolderOpenIconSvg() : getFolderClosedIconSvg()}</span> <span class="documents-tree__label">${escapeHtml(folder.name || "Dossier")}</span></button></div>`;
     if (!isExpanded) return row;
     const fileRows = files.map((file) => {
       const fileIndentDividers = Array.from({ length: Math.max(0, depth + 1) })
         .map(() => `<span class="documents-tree__divider${isExpanded ? " is-expanded" : ""}" aria-hidden="true"></span>`)
         .join("");
       const fileChevronSpacer = levelHasChevron ? `<span class="documents-tree__caret-spacer"></span>` : "";
-      return `<button type="button" class="documents-tree__file" data-tree-document-id="${escapeHtml(String(file?.id || ""))}" style="--tree-indent:${12 + Math.min(depth + 1, 9) * 18}px"><span class="documents-tree__indent">${fileIndentDividers}</span>${fileChevronSpacer}<span class="documents-tree__icon-slot">${getDocumentIconSvg()}</span> <span class="documents-tree__label">${escapeHtml(file?.name || file?.original_filename || file?.filename || "Fichier")}</span></button>`;
+      return `<button type="button" class="documents-tree__file" data-tree-document-id="${escapeHtml(String(file?.id || ""))}"><span class="documents-tree__indent">${fileIndentDividers}</span>${fileChevronSpacer}<span class="documents-tree__icon-slot">${getDocumentIconSvg()}</span> <span class="documents-tree__label">${escapeHtml(file?.name || file?.original_filename || file?.filename || "Fichier")}</span></button>`;
     }).join("");
     return `${row}${walk(id, depth + 1).join("")}${fileRows}`;
     });
