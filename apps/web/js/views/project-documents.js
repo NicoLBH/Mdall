@@ -1148,7 +1148,7 @@ function renderDocumentsTopBar() {
         <button type="button" class="documents-tree__toggle" id="documentsTreeToggleBtn">${toggleIcon}</button>
         ${renderDocumentsBreadcrumb()}
       </div>
-      <div class="documents-topbar__right">
+      ${docsViewState.mode === "pdf-preview" ? "" : `<div class="documents-topbar__right">
         <button type="button" class="gh-btn" id="documentsAddFolderBtn">Ajouter un dossier</button>
         ${renderGhActionButton({
           id: "documentsAddAction",
@@ -1157,7 +1157,7 @@ function renderDocumentsTopBar() {
           tone: "primary",
           mainAction: "add-documents"
         })}
-      </div>
+      </div>`}
     </div>
   `;
 }
@@ -1437,11 +1437,15 @@ function renderPdfPreviewView() {
   const previewErrorMessage = String(docsViewState.pdfPreview?.errorMessage || "").trim();
   const hasPdfBytes = docsViewState.pdfPreview?.bytes instanceof Uint8Array && docsViewState.pdfPreview.bytes.byteLength > 0;
 
+  const treeHtml = docsViewState.currentFolderId ? renderDocumentsSidebarTree() : "";
+  const topBar = renderDocumentsTopBar();
   return `
     <section class="project-simple-page project-simple-page--documents">
-      <div class="documents-shell documents-shell--report documents-shell--pdf-preview documents-shell--project-page" id="projectDocumentScroll">
+      <div class="documents-shell documents-shell--project-page documents-layout${docsViewState.currentFolderId ? "" : " is-root"}" id="projectDocumentScroll" style="--documents-tree-width:${docsViewState.currentFolderId ? (docsViewState.documentTreeOpen ? Math.max(220, Math.min(520, Number(docsViewState.treeWidth || 280))) : 0) : 0}px">
+        ${treeHtml}
+        <div class="documents-main">
+          ${topBar}
           ${renderDocumentsActivityBanner()}
-
           <div class="documents-report">
             <div class="documents-report__path">${escapeHtml(breadcrumb)}</div>
 
@@ -1592,6 +1596,7 @@ function renderPdfPreviewView() {
             </section>
           </div>
         </div>
+      </div>
     </section>
   `;
 }
