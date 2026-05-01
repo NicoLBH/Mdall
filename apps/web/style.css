@@ -6592,16 +6592,23 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
 .documents-tree__file:hover{background:rgba(110,118,129,.16);}
 .documents-tree__file:hover .documents-tree__label{color:#58a6ff;text-decoration:underline;}
 .documents-tree__row,.documents-tree__file{position:relative;}
-.documents-pdf-sticky-mode .gh-header.gh-header--project,
-.documents-pdf-sticky-mode .project-shell__body,
-.documents-pdf-sticky-mode .documents-topbar,
-.documents-pdf-sticky-mode .documents-report-table__header.documents-report-table__header--pdf-preview{
+.documents-pdf-sticky-mode main#app{
+  padding:0;
+}
+.documents-pdf-sticky-mode .project-shell__body{
   position:sticky;
   top:0;
   z-index:30;
 }
 .documents-pdf-sticky-mode .project-context-header{
   position:static;
+}
+.documents-pdf-sticky-mode .gh-header.gh-header--project,
+.documents-pdf-sticky-mode .documents-topbar,
+.documents-pdf-sticky-mode .documents-report-table__header.documents-report-table__header--pdf-preview{
+  position:relative;
+  top:auto;
+  z-index:auto;
 }
 .documents-tree .documents-repo__icon--folder,.documents-tree .octicon-file-directory-fill,.documents-tree .octicon-file-directory-open-fill{fill:rgb(145, 152, 161);color:rgb(145, 152, 161);}
 .documents-tree__resize-handle{position:absolute;top:0;right:-6px;width:12px;height:100%;cursor:col-resize;}
