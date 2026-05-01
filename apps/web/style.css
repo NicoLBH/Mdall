@@ -6401,6 +6401,11 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   max-width:1280px;
   margin:0 auto;
 }
+.documents-shell.documents-layout:not(.is-root){
+  width:100%;
+  max-width:none;
+  margin:0;
+}
 
 .documents-shell--pdf-preview{
   width:100%;
@@ -6471,6 +6476,32 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
 .documents-repo__icon--document{
   color:var(--fg);
 }
+.documents-repo__icon--folder{
+  color:#58a6ff;
+}
+.documents-breadcrumb{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin:8px 0 12px;
+  color:var(--muted);
+  font-size:13px;
+  flex-wrap:wrap;
+}
+.documents-breadcrumb__link{
+  appearance:none;
+  border:0;
+  background:none;
+  color:var(--blueLink);
+  padding:0;
+  cursor:pointer;
+  font:inherit;
+}
+.documents-breadcrumb__link:hover,
+.documents-breadcrumb__link:focus-visible{
+  text-decoration:underline;
+}
+.documents-breadcrumb__sep{color:var(--muted);}
 .documents-repo__message-main{
   color:var(--muted);
   font-size:13px;
@@ -6491,6 +6522,12 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   flex-wrap:wrap;
   gap:6px;
   align-items:center;
+}
+.documents-repo__stats-actions{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  justify-content:space-between;
 }
 .documents-count-badge{
   display:inline-flex;
@@ -6513,6 +6550,28 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   width:8px;
   height:8px;
 }
+.documents-move-modal__backdrop{position:fixed;inset:0;background:rgba(1,4,9,.65);display:flex;align-items:center;justify-content:center;z-index:2000;}
+.documents-move-modal{width:min(680px,92vw);max-height:80vh;overflow:auto;background:var(--bgAssistPanel);border:1px solid var(--border);border-radius:12px;padding:16px;}
+.documents-move-modal__header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;}
+.documents-move-modal__targets{display:flex;flex-direction:column;gap:6px;margin-top:10px;}
+.documents-move-modal__target{display:flex;align-items:center;gap:8px;border:1px solid var(--border);background:transparent;color:var(--text);border-radius:8px;padding:8px 12px;text-align:left;cursor:pointer;}
+.documents-move-modal__target.is-active{border-color:#58a6ff;background:rgba(56,139,253,.15);}
+.documents-move-modal__actions{display:flex;justify-content:flex-end;margin-top:12px;}
+.documents-layout{display:grid;grid-template-columns:auto 1fr;align-items:start;gap:12px;}
+.documents-layout.is-root{grid-template-columns:minmax(0,1100px);justify-content:center;}
+.documents-main{min-width:0;}
+.documents-topbar{display:flex;align-items:center;gap:12px;justify-content:space-between;margin-bottom:8px;}
+.documents-topbar__left{display:flex;align-items:center;gap:10px;min-width:0;flex:1 1 auto;}
+.documents-topbar__right{display:flex;align-items:center;gap:8px;flex:0 0 auto;}
+.documents-topbar .documents-breadcrumb{margin:0;white-space:nowrap;overflow:auto;}
+.documents-tree{position:relative;}
+.documents-tree.is-collapsed .documents-tree__panel,.documents-tree.is-collapsed .documents-tree__resize-handle,.documents-tree.is-collapsed .documents-tree__resize-guide{display:none;}
+.documents-tree__toggle{width:32px;height:32px;border:1px solid var(--border);background:var(--bgElev);color:var(--muted);border-radius:8px;display:inline-flex;align-items:center;justify-content:center;}
+.documents-tree__panel{width:var(--documents-tree-width);min-height:240px;max-height:70vh;overflow:auto;border:1px solid var(--border);border-radius:10px;background:var(--bgElev);padding:8px;display:flex;flex-direction:column;gap:6px;}
+.documents-tree__item{display:flex;align-items:center;gap:8px;padding:8px 12px;border:0;background:transparent;color:var(--text);border-radius:8px;text-align:left;cursor:pointer;}
+.documents-tree__item.is-active{background:rgba(56,139,253,.15);color:#58a6ff;}
+.documents-tree__resize-handle{position:absolute;top:0;right:-6px;width:12px;height:100%;cursor:col-resize;}
+.documents-tree__resize-guide{position:absolute;top:0;bottom:0;width:2px;background:#2f81f7;display:none;pointer-events:none;}
 .documents-count-badge__count{
   font-variant-numeric:tabular-nums;
 }
