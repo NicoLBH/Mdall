@@ -6553,6 +6553,11 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
 .documents-move-modal__target.is-active{border-color:#58a6ff;background:rgba(56,139,253,.15);}
 .documents-move-modal__actions{display:flex;justify-content:flex-end;margin-top:12px;}
 .documents-layout{display:grid;grid-template-columns:auto 1fr;align-items:start;gap:12px;}
+.documents-layout.is-root{grid-template-columns:minmax(0,1100px);justify-content:center;}
+.documents-topbar{display:flex;align-items:center;gap:12px;justify-content:space-between;margin-bottom:8px;}
+.documents-topbar__left{display:flex;align-items:center;gap:10px;min-width:0;flex:1 1 auto;}
+.documents-topbar__right{display:flex;align-items:center;gap:8px;flex:0 0 auto;}
+.documents-topbar .documents-breadcrumb{margin:0;white-space:nowrap;overflow:auto;}
 .documents-tree{position:relative;}
 .documents-tree.is-collapsed .documents-tree__panel,.documents-tree.is-collapsed .documents-tree__resize-handle,.documents-tree.is-collapsed .documents-tree__resize-guide{display:none;}
 .documents-tree__toggle{width:32px;height:32px;border:1px solid var(--border);background:var(--bgElev);color:var(--muted);border-radius:8px;display:inline-flex;align-items:center;justify-content:center;}

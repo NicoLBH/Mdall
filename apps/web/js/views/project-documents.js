@@ -1136,6 +1136,32 @@ function renderDocumentsToolbar() {
   });
 }
 
+function renderDocumentsTopBar() {
+  const isRoot = !docsViewState.currentFolderId;
+  if (isRoot) return "";
+  const toggleIcon = docsViewState.documentTreeOpen
+    ? svgIcon("sidebar-expand", { className: "octicon octicon-sidebar-expand" })
+    : svgIcon("sidebar-collapse", { className: "octicon octicon-sidebar-collapse" });
+  return `
+    <div class="documents-topbar">
+      <div class="documents-topbar__left">
+        <button type="button" class="documents-tree__toggle" id="documentsTreeToggleBtn">${toggleIcon}</button>
+        ${renderDocumentsBreadcrumb()}
+      </div>
+      <div class="documents-topbar__right">
+        <button type="button" class="gh-btn" id="documentsAddFolderBtn">Ajouter un dossier</button>
+        ${renderGhActionButton({
+          id: "documentsAddAction",
+          label: "Documents",
+          icon: getPlusIconSvg(),
+          tone: "primary",
+          mainAction: "add-documents"
+        })}
+      </div>
+    </div>
+  `;
+}
+
 function renderDocumentsBreadcrumb() {
   const crumbButtons = [`<button type="button" class="documents-breadcrumb__link" data-breadcrumb-folder-id="">Documents</button>`];
   docsViewState.breadcrumb.forEach((folder) => {
@@ -1576,15 +1602,17 @@ function renderDocumentsListView() {
   const hasDocuments = folders.length + documents.length > 0;
   const bodyHtml = [...folders.map(renderRepoFolderRow), ...documents.map(renderRepoDocumentRow)].join("");
 
-  const treeHtml = renderDocumentsSidebarTree();
+  const isRoot = !docsViewState.currentFolderId;
+  const treeHtml = isRoot ? "" : renderDocumentsSidebarTree();
+  const topBar = renderDocumentsTopBar();
   const moveModalHtml = docsViewState.moveModal?.isOpen ? renderMoveFileModal() : "";
   return `
     <section class="project-simple-page project-simple-page--documents">
-      <div class="documents-shell documents-shell--project-page documents-layout" id="projectDocumentScroll">
+      <div class="documents-shell documents-shell--project-page documents-layout${isRoot ? " is-root" : ""}" id="projectDocumentScroll">
           ${treeHtml}
-          ${renderDocumentsToolbar()}
+          ${isRoot ? renderDocumentsToolbar() : topBar}
           ${renderDocumentsActivityBanner()}
-          ${renderDocumentsBreadcrumb()}
+          ${isRoot ? renderDocumentsBreadcrumb() : ""}
 
           ${renderDataTableShell({
             className: "documents-repo data-table-shell--document-scroll",
@@ -1621,10 +1649,8 @@ function renderDocumentsSidebarTree() {
     return `${row}${walk(id, depth + 1).join("")}`;
   });
   const opened = !!docsViewState.documentTreeOpen;
-  const toggleIcon = opened ? svgIcon("sidebar-expand", { className: "octicon octicon-sidebar-expand" }) : svgIcon("sidebar-collapse", { className: "octicon octicon-sidebar-collapse" });
   return `
     <aside class="documents-tree${opened ? " is-open" : " is-collapsed"}" style="--documents-tree-width:${Math.max(220, Math.min(520, Number(docsViewState.treeWidth || 280)))}px">
-      <button type="button" class="documents-tree__toggle" id="documentsTreeToggleBtn">${toggleIcon}</button>
       ${opened ? `<div class="documents-tree__panel"><button type="button" class="documents-tree__item${docsViewState.currentFolderId ? "" : " is-active"}" data-tree-folder-id="">${getFolderOpenIconSvg()} Racine / Documents</button>${walk("").join("")}</div><div class="documents-tree__resize-handle" id="documentsTreeResizeHandle"></div><div class="documents-tree__resize-guide" id="documentsTreeResizeGuide"></div>` : ""}
     </aside>
   `;
