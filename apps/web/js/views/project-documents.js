@@ -1148,7 +1148,7 @@ function renderDocumentsTopBar() {
         <button type="button" class="documents-tree__toggle" id="documentsTreeToggleBtn">${toggleIcon}</button>
         ${renderDocumentsBreadcrumb()}
       </div>
-      <div class="documents-topbar__right">
+      ${docsViewState.mode === "pdf-preview" ? "" : `<div class="documents-topbar__right">
         <button type="button" class="gh-btn" id="documentsAddFolderBtn">Ajouter un dossier</button>
         ${renderGhActionButton({
           id: "documentsAddAction",
@@ -1157,17 +1157,22 @@ function renderDocumentsTopBar() {
           tone: "primary",
           mainAction: "add-documents"
         })}
-      </div>
+      </div>`}
     </div>
   `;
 }
 
 function renderDocumentsBreadcrumb() {
+  const selectedDocument = docsViewState.mode === "pdf-preview" ? decorateDocumentWithPhase(getSelectedPdfDocument()) : null;
   const crumbButtons = [`<button type="button" class="documents-breadcrumb__link" data-breadcrumb-folder-id="">Documents</button>`];
   docsViewState.breadcrumb.forEach((folder) => {
     crumbButtons.push(`<span class="documents-breadcrumb__sep">/</span><button type="button" class="documents-breadcrumb__link" data-breadcrumb-folder-id="${escapeHtml(String(folder.id || ""))}">${escapeHtml(String(folder.name || "Dossier"))}</button>`);
   });
-  crumbButtons.push(`<span class="documents-breadcrumb__sep">/</span>`);
+  if (selectedDocument?.name) {
+    crumbButtons.push(`<span class="documents-breadcrumb__sep">/</span><span class="documents-breadcrumb__current">${escapeHtml(String(selectedDocument.name || "Document"))}</span>`);
+  } else {
+    crumbButtons.push(`<span class="documents-breadcrumb__sep">/</span>`);
+  }
   return `<div class="documents-breadcrumb">${crumbButtons.join("")}</div>`;
 }
 
@@ -1382,8 +1387,6 @@ function renderReportPreviewView() {
           ${renderDocumentsActivityBanner()}
 
           <div class="documents-report">
-            <div class="documents-report__path">${escapeHtml(breadcrumb)}</div>
-
             <section class="documents-report-table">
               <header class="documents-report-table__header">
                 <div class="documents-report-table__author">${escapeHtml(authorName)}</div>
@@ -1428,7 +1431,6 @@ function renderPdfPreviewView() {
     return renderDocumentsListView();
   }
 
-  const breadcrumb = `${projectName} / Documents / ${documentItem.name}`;
   const previewUrl = String(docsViewState.pdfPreview?.objectUrl || "").trim()
     || String(docsViewState.pdfPreview?.signedUrl || "").trim()
     || getProjectDocumentPreviewUrl(documentItem);
@@ -1437,13 +1439,16 @@ function renderPdfPreviewView() {
   const previewErrorMessage = String(docsViewState.pdfPreview?.errorMessage || "").trim();
   const hasPdfBytes = docsViewState.pdfPreview?.bytes instanceof Uint8Array && docsViewState.pdfPreview.bytes.byteLength > 0;
 
+  const treeHtml = docsViewState.currentFolderId ? renderDocumentsSidebarTree() : "";
+  const topBar = renderDocumentsTopBar();
   return `
     <section class="project-simple-page project-simple-page--documents">
-      <div class="documents-shell documents-shell--report documents-shell--pdf-preview documents-shell--project-page" id="projectDocumentScroll">
+      <div class="documents-shell documents-shell--project-page documents-layout${docsViewState.currentFolderId ? "" : " is-root"}" id="projectDocumentScroll" style="--documents-tree-width:${docsViewState.currentFolderId ? (docsViewState.documentTreeOpen ? Math.max(220, Math.min(520, Number(docsViewState.treeWidth || 280))) : 0) : 0}px">
+        ${treeHtml}
+        <div class="documents-main">
+          ${topBar}
           ${renderDocumentsActivityBanner()}
-
           <div class="documents-report">
-            <div class="documents-report__path">${escapeHtml(breadcrumb)}</div>
 
             <section class="documents-report-table documents-report-table--pdf">
               <header class="documents-report-table__header documents-report-table__header--pdf-preview">
@@ -1592,6 +1597,7 @@ function renderPdfPreviewView() {
             </section>
           </div>
         </div>
+      </div>
     </section>
   `;
 }
@@ -1608,7 +1614,7 @@ function renderDocumentsListView() {
   const moveModalHtml = docsViewState.moveModal?.isOpen ? renderMoveFileModal() : "";
   return `
     <section class="project-simple-page project-simple-page--documents">
-      <div class="documents-shell documents-shell--project-page documents-layout${isRoot ? " is-root" : ""}" id="projectDocumentScroll">
+      <div class="documents-shell documents-shell--project-page documents-layout${isRoot ? " is-root" : ""}" id="projectDocumentScroll" style="--documents-tree-width:${isRoot ? 0 : (docsViewState.documentTreeOpen ? Math.max(220, Math.min(520, Number(docsViewState.treeWidth || 280))) : 0)}px">
           ${treeHtml}
           <div class="documents-main">
             ${isRoot ? renderDocumentsToolbar() : topBar}
@@ -1659,13 +1665,13 @@ function renderDocumentsSidebarTree() {
     const hasChildren = childFolders.length > 0 || files.length > 0;
     const isExpanded = expandedSet.has(id);
     const caret = hasChildren ? `<button type="button" class="documents-tree__caret" data-tree-toggle-folder-id="${escapeHtml(id)}">${svgIcon(isExpanded ? "chevron-down" : "chevron-right", { className: isExpanded ? "octicon octicon-chevron-down" : "octicon octicon-chevron-right" })}</button>` : `<span class="documents-tree__caret-spacer"></span>`;
-    const row = `<div class="documents-tree__row${active ? " is-active" : ""}" style="padding-left:${12 + Math.min(depth, 8) * 18}px">${caret}<button type="button" class="documents-tree__item${active ? " is-active" : ""}" data-tree-folder-id="${escapeHtml(id)}">${isExpanded ? getFolderOpenIconSvg() : getFolderClosedIconSvg()} ${escapeHtml(folder.name || "Dossier")}</button></div>`;
+    const row = `<div class="documents-tree__row${active ? " is-active" : ""}" style="--tree-indent:${12 + Math.min(depth, 8) * 18}px;padding-left:${12 + Math.min(depth, 8) * 18}px">${caret}<button type="button" class="documents-tree__item${active ? " is-active" : ""}" data-tree-folder-id="${escapeHtml(id)}">${isExpanded ? getFolderOpenIconSvg() : getFolderClosedIconSvg()} <span class="documents-tree__label">${escapeHtml(folder.name || "Dossier")}</span></button></div>`;
     if (!isExpanded) return row;
-    const fileRows = files.map((file) => `<div class="documents-tree__file" style="padding-left:${34 + Math.min(depth + 1, 9) * 18}px">${getDocumentIconSvg()} ${escapeHtml(file?.name || file?.original_filename || file?.filename || "Fichier")}</div>`).join("");
+    const fileRows = files.map((file) => `<button type="button" class="documents-tree__file" data-tree-document-id="${escapeHtml(String(file?.id || ""))}" style="--tree-indent:${12 + Math.min(depth + 2, 10) * 24}px;padding-left:${12 + Math.min(depth + 2, 10) * 24}px">${getDocumentIconSvg()} <span class="documents-tree__label">${escapeHtml(file?.name || file?.original_filename || file?.filename || "Fichier")}</span></button>`).join("");
     return `${row}${walk(id, depth + 1).join("")}${fileRows}`;
   });
   const opened = !!docsViewState.documentTreeOpen;
-  const treeBody = `<div class="documents-tree__panel"><div class="documents-tree__row${docsViewState.currentFolderId ? "" : " is-active"}"><span class="documents-tree__caret-spacer"></span><button type="button" class="documents-tree__item${docsViewState.currentFolderId ? "" : " is-active"}" data-tree-folder-id="">${getFolderOpenIconSvg()} Racine / Documents</button></div>${walk("").join("")}</div>`;
+  const treeBody = `<div class="documents-tree__panel"><div class="documents-tree__row${docsViewState.currentFolderId ? "" : " is-active"}"><span class="documents-tree__caret-spacer"></span><button type="button" class="documents-tree__item${docsViewState.currentFolderId ? "" : " is-active"}" data-tree-folder-id="">${getFolderOpenIconSvg()} <span class="documents-tree__label">Racine / Documents</span></button></div>${walk("").join("")}</div>`;
   return `
     <aside class="documents-tree${opened ? " is-open" : " is-collapsed"}" style="--documents-tree-width:${Math.max(220, Math.min(520, Number(docsViewState.treeWidth || 280)))}px">
       ${treeBody}
@@ -1705,7 +1711,7 @@ function renderMoveFileModal() {
         <header class="documents-move-modal__header"><h3>Déplacer le fichier</h3><button type="button" class="gh-btn" id="documentsMoveModalCloseBtn">Fermer</button></header>
         <div class="documents-move-modal__current">Dossier actuel : <strong>${escapeHtml(sourceLabel)}</strong></div>
         <div class="documents-move-modal__targets">
-          <button type="button" class="documents-move-modal__target${rootSelected ? " is-active" : ""}" data-move-target-folder-id="">${getFolderOpenIconSvg()} Racine / Documents</button>
+          <button type="button" class="documents-move-modal__target${rootSelected ? " is-active" : ""}" data-move-target-folder-id="">${getFolderOpenIconSvg()} <span class="documents-tree__label">Racine / Documents</span></button>
           ${flatten("").join("")}
         </div>
         <footer class="documents-move-modal__actions"><button type="button" class="gh-btn gh-btn--validate" id="documentsMoveModalConfirmBtn">Déplacer ici</button></footer>
@@ -2064,6 +2070,14 @@ function bindDocumentsView(root) {
       console.info("[documents-tree] select-folder", { folderId: folderId || null });
       await loadCurrentDirectory({ forceFolderId: folderId || null });
       renderProjectDocumentsContent(root);
+    });
+  });
+  document.querySelectorAll("[data-tree-document-id]").forEach((node) => {
+    node.addEventListener("click", async () => {
+      const documentId = String(node.getAttribute("data-tree-document-id") || "").trim();
+      if (!documentId) return;
+      console.info("[documents-view] open-file", { documentId, source: "tree" });
+      await openPdfPreview(root, documentId);
     });
   });
   document.querySelectorAll("[data-tree-toggle-folder-id]").forEach((node) => {
@@ -2438,6 +2452,8 @@ export function renderProjectDocuments(root) {
       const onMove = (moveEvent) => {
         const next = Math.max(220, Math.min(520, startWidth + (moveEvent.clientX - startX)));
         docsViewState.treeWidth = next;
+        const shell = document.getElementById("projectDocumentScroll");
+        if (shell) shell.style.setProperty("--documents-tree-width", `${next}px`);
         if (guide) {
           guide.style.display = "block";
           guide.style.left = `${next}px`;
