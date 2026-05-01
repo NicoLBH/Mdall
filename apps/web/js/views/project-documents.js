@@ -32,6 +32,9 @@ const SUPABASE_ANON_KEY = getSupabaseAnonKey();
 const PDFJS_CDN_VERSION = "4.4.168";
 const PDFJS_MODULE_URL = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_CDN_VERSION}/build/pdf.min.mjs`;
 const PDFJS_WORKER_MODULE_URL = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_CDN_VERSION}/build/pdf.worker.min.mjs`;
+const PDF_PREVIEW_ZOOM_STEPS = [
+  0.01, 0.0625, 0.0833, 0.125, 0.25, 0.333, 0.5, 0.667, 0.75, 0.79, 1, 1.25, 1.5, 2, 2.38, 3, 4, 6, 8, 12, 16, 24, 32, 64
+];
 
 let pdfJsLibPromise = null;
 let pdfPreviewRenderToken = 0;
@@ -317,7 +320,7 @@ function updatePdfPreviewToolbarState(root = null) {
 
   const zoomNode = activeRoot.querySelector("#documentsPdfZoomValue");
   if (zoomNode) {
-    zoomNode.textContent = formatPdfPreviewZoomPercent(docsViewState.pdfPreview?.zoomLevel || 1);
+    zoomNode.value = formatPdfPreviewZoomPercent(docsViewState.pdfPreview?.zoomLevel || 1);
   }
 
   const darkModeButton = activeRoot.querySelector('[data-pdf-preview-action="toggle-dark-mode"]');
@@ -595,11 +598,35 @@ function bindPdfPreviewControls(root) {
   root.addEventListener("keydown", (event) => {
     const target = event.target;
     if (!(target instanceof HTMLInputElement)) return;
+    if (target.id === "documentsPdfZoomValue" && event.key === "Enter") {
+      event.preventDefault();
+      const parsed = parsePdfZoomInputValue(target.value);
+      if (parsed) {
+        docsViewState.pdfPreview.zoomLevel = parsed;
+        updatePdfPreviewToolbarState(root);
+        schedulePdfPreviewRender(root);
+      } else {
+        updatePdfPreviewToolbarState(root);
+      }
+      return;
+    }
     if (target.id !== "documentsPdfSearchInput") return;
     if (event.key === "Enter") {
       event.preventDefault();
       movePdfPreviewSearchSelection(root, event.shiftKey ? -1 : 1);
     }
+  });
+
+  root.addEventListener("focusout", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement)) return;
+    if (target.id !== "documentsPdfZoomValue") return;
+    const parsed = parsePdfZoomInputValue(target.value);
+    if (parsed) {
+      docsViewState.pdfPreview.zoomLevel = parsed;
+      schedulePdfPreviewRender(root);
+    }
+    updatePdfPreviewToolbarState(root);
   });
 
   pdfPreviewController.isBound = true;
@@ -837,7 +864,7 @@ async function renderPdfPreviewPages(root) {
       cacheKey,
       reusedCachedDocument: pdfPreviewController.documentCacheKey === cacheKey
     });
-    const zoomLevel = Math.min(3, Math.max(0.5, Number(docsViewState.pdfPreview?.zoomLevel || 1)));
+    const zoomLevel = Math.min(64, Math.max(0.01, Number(docsViewState.pdfPreview?.zoomLevel || 1)));
     const rotation = Number(docsViewState.pdfPreview?.rotation || 0);
     const outputScale = window.devicePixelRatio && window.devicePixelRatio > 1 ? window.devicePixelRatio : 1;
 
@@ -1025,7 +1052,9 @@ function updatePdfPreviewZoom(root, direction = 0) {
     return;
   }
   const currentZoom = Number(docsViewState.pdfPreview?.zoomLevel || 1);
-  const nextZoom = Math.min(3, Math.max(0.5, Number((currentZoom + direction).toFixed(2))));
+  const currentIndex = resolveClosestPdfZoomStepIndex(currentZoom);
+  const nextIndex = Math.min(PDF_PREVIEW_ZOOM_STEPS.length - 1, Math.max(0, currentIndex + (direction >= 0 ? 1 : -1)));
+  const nextZoom = PDF_PREVIEW_ZOOM_STEPS[nextIndex];
   if (Math.abs(nextZoom - currentZoom) < 0.001) {
     logPdfPreviewDebug("zoom ignored: unchanged after clamp", { currentZoom, nextZoom, direction });
     return;
@@ -1033,6 +1062,28 @@ function updatePdfPreviewZoom(root, direction = 0) {
   docsViewState.pdfPreview.zoomLevel = nextZoom;
   logPdfPreviewDebug("zoom updated", { currentZoom, nextZoom, direction });
   schedulePdfPreviewRender(root);
+}
+
+function resolveClosestPdfZoomStepIndex(zoomLevel = 1) {
+  const target = Number(zoomLevel);
+  if (!Number.isFinite(target)) return 10;
+  let bestIndex = 0;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  PDF_PREVIEW_ZOOM_STEPS.forEach((step, index) => {
+    const distance = Math.abs(step - target);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestIndex = index;
+    }
+  });
+  return bestIndex;
+}
+
+function parsePdfZoomInputValue(value = "") {
+  const normalized = String(value || "").replace(",", ".").replace("%", "").trim();
+  const numeric = Number(normalized);
+  if (!Number.isFinite(numeric)) return null;
+  return Math.min(64, Math.max(0.01, numeric / 100));
 }
 
 function updatePdfPreviewRotation(root, direction = 0) {
@@ -1484,7 +1535,14 @@ function renderPdfPreviewView() {
                     >
                       ${getPdfZoomOutIconSvg()}
                     </button>
-                    <span class="documents-pdf-viewer__zoom-value" id="documentsPdfZoomValue">${formatPdfPreviewZoomPercent(docsViewState.pdfPreview?.zoomLevel || 1)}</span>
+                    <input
+                      type="text"
+                      class="gh-input documents-pdf-viewer__zoom-value"
+                      id="documentsPdfZoomValue"
+                      inputmode="decimal"
+                      value="${formatPdfPreviewZoomPercent(docsViewState.pdfPreview?.zoomLevel || 1)}"
+                      aria-label="Niveau de zoom du PDF"
+                    />
                     <button
                       type="button"
                       class="gh-btn documents-report-table__icon-btn"
@@ -1612,6 +1670,10 @@ function renderDocumentsListView() {
   const treeHtml = isRoot ? "" : renderDocumentsSidebarTree();
   const topBar = renderDocumentsTopBar();
   const moveModalHtml = docsViewState.moveModal?.isOpen ? renderMoveFileModal() : "";
+  const emptyTitle = isRoot ? "La racine est vide." : "Ce dossier est vide.";
+  const emptyDescription = isRoot
+    ? "Ajoutez un dossier ou importez un document pour commencer."
+    : "Ajoutez un sous-dossier ou importez un document dans ce dossier.";
   return `
     <section class="project-simple-page project-simple-page--documents">
       <div class="documents-shell documents-shell--project-page documents-layout${isRoot ? " is-root" : ""}" id="projectDocumentScroll" style="--documents-tree-width:${isRoot ? 0 : (docsViewState.documentTreeOpen ? Math.max(220, Math.min(520, Number(docsViewState.treeWidth || 280))) : 0)}px">
@@ -1627,8 +1689,8 @@ function renderDocumentsListView() {
               bodyHtml,
               state: hasDocuments ? "ready" : "empty",
               emptyHtml: renderDataTableEmptyState({
-                title: "Aucun document n’a encore été déposé.",
-                description: "Ajoutez des documents pour commencer à constituer le dossier du projet."
+                title: emptyTitle,
+                description: emptyDescription
               })
             })}
           </div>
@@ -1664,10 +1726,18 @@ function renderDocumentsSidebarTree() {
     const files = filesByFolder.get(id) || [];
     const hasChildren = childFolders.length > 0 || files.length > 0;
     const isExpanded = expandedSet.has(id);
+    const indentDividers = Array.from({ length: Math.max(0, depth) })
+      .map(() => `<span class="documents-tree__divider${isExpanded ? " is-expanded" : ""}" aria-hidden="true"></span>`)
+      .join("");
     const caret = hasChildren ? `<button type="button" class="documents-tree__caret" data-tree-toggle-folder-id="${escapeHtml(id)}">${svgIcon(isExpanded ? "chevron-down" : "chevron-right", { className: isExpanded ? "octicon octicon-chevron-down" : "octicon octicon-chevron-right" })}</button>` : `<span class="documents-tree__caret-spacer"></span>`;
-    const row = `<div class="documents-tree__row${active ? " is-active" : ""}" style="--tree-indent:${12 + Math.min(depth, 8) * 18}px;padding-left:${12 + Math.min(depth, 8) * 18}px">${caret}<button type="button" class="documents-tree__item${active ? " is-active" : ""}" data-tree-folder-id="${escapeHtml(id)}">${isExpanded ? getFolderOpenIconSvg() : getFolderClosedIconSvg()} <span class="documents-tree__label">${escapeHtml(folder.name || "Dossier")}</span></button></div>`;
+    const row = `<div class="documents-tree__row${active ? " is-active" : ""}" style="--tree-indent:${12 + Math.min(depth, 8) * 18}px"><span class="documents-tree__indent">${indentDividers}</span>${caret}<button type="button" class="documents-tree__item${active ? " is-active" : ""}" data-tree-folder-id="${escapeHtml(id)}">${isExpanded ? getFolderOpenIconSvg() : getFolderClosedIconSvg()} <span class="documents-tree__label">${escapeHtml(folder.name || "Dossier")}</span></button></div>`;
     if (!isExpanded) return row;
-    const fileRows = files.map((file) => `<button type="button" class="documents-tree__file" data-tree-document-id="${escapeHtml(String(file?.id || ""))}" style="--tree-indent:${12 + Math.min(depth + 2, 10) * 24}px;padding-left:${12 + Math.min(depth + 2, 10) * 24}px">${getDocumentIconSvg()} <span class="documents-tree__label">${escapeHtml(file?.name || file?.original_filename || file?.filename || "Fichier")}</span></button>`).join("");
+    const fileRows = files.map((file) => {
+      const fileIndentDividers = Array.from({ length: Math.max(0, depth + 1) })
+        .map(() => `<span class="documents-tree__divider${isExpanded ? " is-expanded" : ""}" aria-hidden="true"></span>`)
+        .join("");
+      return `<button type="button" class="documents-tree__file" data-tree-document-id="${escapeHtml(String(file?.id || ""))}" style="--tree-indent:${12 + Math.min(depth + 2, 10) * 24}px"><span class="documents-tree__indent">${fileIndentDividers}</span>${getDocumentIconSvg()} <span class="documents-tree__label">${escapeHtml(file?.name || file?.original_filename || file?.filename || "Fichier")}</span></button>`;
+    }).join("");
     return `${row}${walk(id, depth + 1).join("")}${fileRows}`;
   });
   const opened = !!docsViewState.documentTreeOpen;
@@ -1978,6 +2048,7 @@ function buildRepoDocumentFromState() {
 
 function triggerAutoAnalysisAfterDirectUpload(root, document = null) {
   const documentName = document?.name || "";
+  const currentFolderId = docsViewState.currentFolderId || null;
   if (!shouldAutoRunAnalysisAfterUpload()) {
     setDocumentsActivity({
       tone: "info",
@@ -2007,6 +2078,7 @@ function triggerAutoAnalysisAfterDirectUpload(root, document = null) {
     triggerType: "document-upload",
     triggerLabel: "Dépôt de document",
     documentName,
+    currentFolderId,
     documentIds: document?.id ? [document.id] : [],
     summary: "Analyse déclenchée automatiquement après dépôt réussi d’un document."
   });
@@ -2029,6 +2101,15 @@ function commitDirectDocument(root) {
 function handleSubmit(root) {
   if (!canSubmitUpload()) return;
   commitDirectDocument(root);
+  loadCurrentDirectory()
+    .then(() => {
+      renderProjectDocumentsContent(root);
+    })
+    .catch((error) => {
+      console.error("[documents-upload] refresh-current-directory.failed", {
+        error: error instanceof Error ? error.message : String(error || "")
+      });
+    });
 }
 
 function bindDocumentsSplitActions(root) {
@@ -2123,13 +2204,22 @@ function bindDocumentsView(root) {
   const addFolderBtn = document.getElementById("documentsAddFolderBtn");
   if (addFolderBtn) {
     addFolderBtn.addEventListener("click", async () => {
-      const name = window.prompt("Nom du dossier ?");
-      if (!name) return;
-      console.info("[documents-view] create-folder.submit", { parentFolderId: docsViewState.currentFolderId || null });
-      await createDocumentFolder(String(store.currentProject?.backendProjectId || store.currentProject?.id || store.currentProjectId || ""), docsViewState.currentFolderId || null, name);
-      await loadCurrentDirectory();
-      if (docsViewState.documentTreeOpen) console.info("[documents-tree] refresh-after-mutation", { action: "create-folder" });
-      renderProjectDocumentsContent(root);
+      const name = String(window.prompt("Nom du dossier ?") || "").trim();
+      if (!name) {
+        setDocumentsActivity({ tone: "warning", title: "Nom invalide", message: "Le nom du dossier ne peut pas être vide." });
+        renderProjectDocumentsContent(root);
+        return;
+      }
+      try {
+        console.info("[documents-view] create-folder.submit", { parentFolderId: docsViewState.currentFolderId || null });
+        await createDocumentFolder(String(store.currentProject?.backendProjectId || store.currentProject?.id || store.currentProjectId || ""), docsViewState.currentFolderId || null, name);
+        await loadCurrentDirectory();
+        if (docsViewState.documentTreeOpen) console.info("[documents-tree] refresh-after-mutation", { action: "create-folder" });
+        renderProjectDocumentsContent(root);
+      } catch (error) {
+        setDocumentsActivity({ tone: "error", title: "Création impossible", message: error instanceof Error ? error.message : "Erreur Supabase lors de la création du dossier." });
+        renderProjectDocumentsContent(root);
+      }
     });
   }
 
@@ -2138,13 +2228,22 @@ function bindDocumentsView(root) {
       event.stopPropagation();
       const folderId = btn.getAttribute("data-folder-rename-id") || "";
       const currentName = btn.getAttribute("data-folder-rename-name") || "";
-      const name = window.prompt("Nouveau nom du dossier :", currentName);
-      if (!name) return;
-      console.info("[documents-view] rename-folder.submit", { folderId });
-      await renameDocumentFolder(String(store.currentProject?.backendProjectId || store.currentProject?.id || store.currentProjectId || ""), folderId, name);
-      await loadCurrentDirectory();
-      if (docsViewState.documentTreeOpen) console.info("[documents-tree] refresh-after-mutation", { action: "rename-folder" });
-      renderProjectDocumentsContent(root);
+      const name = String(window.prompt("Nouveau nom du dossier :", currentName) || "").trim();
+      if (!name) {
+        setDocumentsActivity({ tone: "warning", title: "Nom invalide", message: "Le nom du dossier ne peut pas être vide." });
+        renderProjectDocumentsContent(root);
+        return;
+      }
+      try {
+        console.info("[documents-view] rename-folder.submit", { folderId });
+        await renameDocumentFolder(String(store.currentProject?.backendProjectId || store.currentProject?.id || store.currentProjectId || ""), folderId, name);
+        await loadCurrentDirectory();
+        if (docsViewState.documentTreeOpen) console.info("[documents-tree] refresh-after-mutation", { action: "rename-folder" });
+        renderProjectDocumentsContent(root);
+      } catch (error) {
+        setDocumentsActivity({ tone: "error", title: "Renommage impossible", message: error instanceof Error ? error.message : "Erreur Supabase lors du renommage du dossier." });
+        renderProjectDocumentsContent(root);
+      }
     });
   });
 
