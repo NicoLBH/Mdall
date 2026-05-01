@@ -32,6 +32,9 @@ const SUPABASE_ANON_KEY = getSupabaseAnonKey();
 const PDFJS_CDN_VERSION = "4.4.168";
 const PDFJS_MODULE_URL = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_CDN_VERSION}/build/pdf.min.mjs`;
 const PDFJS_WORKER_MODULE_URL = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_CDN_VERSION}/build/pdf.worker.min.mjs`;
+const PDF_PREVIEW_ZOOM_STEPS = [
+  0.01, 0.0625, 0.0833, 0.125, 0.25, 0.333, 0.5, 0.667, 0.75, 0.79, 1, 1.25, 1.5, 2, 2.38, 3, 4, 6, 8, 12, 16, 24, 32, 64
+];
 
 let pdfJsLibPromise = null;
 let pdfPreviewRenderToken = 0;
@@ -317,7 +320,7 @@ function updatePdfPreviewToolbarState(root = null) {
 
   const zoomNode = activeRoot.querySelector("#documentsPdfZoomValue");
   if (zoomNode) {
-    zoomNode.textContent = formatPdfPreviewZoomPercent(docsViewState.pdfPreview?.zoomLevel || 1);
+    zoomNode.value = formatPdfPreviewZoomPercent(docsViewState.pdfPreview?.zoomLevel || 1);
   }
 
   const darkModeButton = activeRoot.querySelector('[data-pdf-preview-action="toggle-dark-mode"]');
@@ -595,11 +598,35 @@ function bindPdfPreviewControls(root) {
   root.addEventListener("keydown", (event) => {
     const target = event.target;
     if (!(target instanceof HTMLInputElement)) return;
+    if (target.id === "documentsPdfZoomValue" && event.key === "Enter") {
+      event.preventDefault();
+      const parsed = parsePdfZoomInputValue(target.value);
+      if (parsed) {
+        docsViewState.pdfPreview.zoomLevel = parsed;
+        updatePdfPreviewToolbarState(root);
+        schedulePdfPreviewRender(root);
+      } else {
+        updatePdfPreviewToolbarState(root);
+      }
+      return;
+    }
     if (target.id !== "documentsPdfSearchInput") return;
     if (event.key === "Enter") {
       event.preventDefault();
       movePdfPreviewSearchSelection(root, event.shiftKey ? -1 : 1);
     }
+  });
+
+  root.addEventListener("focusout", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement)) return;
+    if (target.id !== "documentsPdfZoomValue") return;
+    const parsed = parsePdfZoomInputValue(target.value);
+    if (parsed) {
+      docsViewState.pdfPreview.zoomLevel = parsed;
+      schedulePdfPreviewRender(root);
+    }
+    updatePdfPreviewToolbarState(root);
   });
 
   pdfPreviewController.isBound = true;
@@ -837,7 +864,7 @@ async function renderPdfPreviewPages(root) {
       cacheKey,
       reusedCachedDocument: pdfPreviewController.documentCacheKey === cacheKey
     });
-    const zoomLevel = Math.min(3, Math.max(0.5, Number(docsViewState.pdfPreview?.zoomLevel || 1)));
+    const zoomLevel = Math.min(64, Math.max(0.01, Number(docsViewState.pdfPreview?.zoomLevel || 1)));
     const rotation = Number(docsViewState.pdfPreview?.rotation || 0);
     const outputScale = window.devicePixelRatio && window.devicePixelRatio > 1 ? window.devicePixelRatio : 1;
 
@@ -1025,7 +1052,9 @@ function updatePdfPreviewZoom(root, direction = 0) {
     return;
   }
   const currentZoom = Number(docsViewState.pdfPreview?.zoomLevel || 1);
-  const nextZoom = Math.min(3, Math.max(0.5, Number((currentZoom + direction).toFixed(2))));
+  const currentIndex = resolveClosestPdfZoomStepIndex(currentZoom);
+  const nextIndex = Math.min(PDF_PREVIEW_ZOOM_STEPS.length - 1, Math.max(0, currentIndex + (direction >= 0 ? 1 : -1)));
+  const nextZoom = PDF_PREVIEW_ZOOM_STEPS[nextIndex];
   if (Math.abs(nextZoom - currentZoom) < 0.001) {
     logPdfPreviewDebug("zoom ignored: unchanged after clamp", { currentZoom, nextZoom, direction });
     return;
@@ -1033,6 +1062,28 @@ function updatePdfPreviewZoom(root, direction = 0) {
   docsViewState.pdfPreview.zoomLevel = nextZoom;
   logPdfPreviewDebug("zoom updated", { currentZoom, nextZoom, direction });
   schedulePdfPreviewRender(root);
+}
+
+function resolveClosestPdfZoomStepIndex(zoomLevel = 1) {
+  const target = Number(zoomLevel);
+  if (!Number.isFinite(target)) return 10;
+  let bestIndex = 0;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  PDF_PREVIEW_ZOOM_STEPS.forEach((step, index) => {
+    const distance = Math.abs(step - target);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestIndex = index;
+    }
+  });
+  return bestIndex;
+}
+
+function parsePdfZoomInputValue(value = "") {
+  const normalized = String(value || "").replace(",", ".").replace("%", "").trim();
+  const numeric = Number(normalized);
+  if (!Number.isFinite(numeric)) return null;
+  return Math.min(64, Math.max(0.01, numeric / 100));
 }
 
 function updatePdfPreviewRotation(root, direction = 0) {
@@ -1484,7 +1535,14 @@ function renderPdfPreviewView() {
                     >
                       ${getPdfZoomOutIconSvg()}
                     </button>
-                    <span class="documents-pdf-viewer__zoom-value" id="documentsPdfZoomValue">${formatPdfPreviewZoomPercent(docsViewState.pdfPreview?.zoomLevel || 1)}</span>
+                    <input
+                      type="text"
+                      class="gh-input documents-pdf-viewer__zoom-value"
+                      id="documentsPdfZoomValue"
+                      inputmode="decimal"
+                      value="${formatPdfPreviewZoomPercent(docsViewState.pdfPreview?.zoomLevel || 1)}"
+                      aria-label="Niveau de zoom du PDF"
+                    />
                     <button
                       type="button"
                       class="gh-btn documents-report-table__icon-btn"
