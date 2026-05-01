@@ -917,10 +917,15 @@ export async function createDocumentFolder(projectId = "", parentFolderId = null
   const backendProjectId = ensureBackendProjectIdOrThrow(projectId);
   const normalizedParentFolderId = safeString(parentFolderId || "") || null;
   const normalizedName = safeString(name);
-  if (!normalizedName) throw new Error("Folder name is required.");
+  if (!normalizedName) throw new Error("Le nom du dossier ne peut pas être vide.");
   console.info("[documents-folders] create.start", { projectId: backendProjectId, parentFolderId: normalizedParentFolderId, name: normalizedName });
 
   try {
+    const siblings = await listDocumentFolderChildren(backendProjectId, normalizedParentFolderId);
+    const duplicate = siblings.some((folder) => safeString(folder.name).toLocaleLowerCase("fr-FR") === normalizedName.toLocaleLowerCase("fr-FR"));
+    if (duplicate) {
+      throw new Error("Un dossier avec ce nom existe déjà dans ce dossier parent.");
+    }
     return await restInsert("project_document_folders", {
       project_id: backendProjectId,
       parent_folder_id: normalizedParentFolderId,
@@ -929,6 +934,9 @@ export async function createDocumentFolder(projectId = "", parentFolderId = null
       select: "id,project_id,parent_folder_id,name,created_at,updated_at,created_by"
     });
   } catch (error) {
+    if (String(error?.message || "").toLowerCase().includes("duplicate key")) {
+      throw new Error("Un dossier avec ce nom existe déjà dans ce dossier parent.");
+    }
     console.error("[documents-folders] failure", { action: "createDocumentFolder", projectId: backendProjectId, parentFolderId: normalizedParentFolderId, error: error instanceof Error ? error.message : String(error || "") });
     throw error;
   }
@@ -939,10 +947,22 @@ export async function renameDocumentFolder(projectId = "", folderId = "", name =
   const normalizedFolderId = safeString(folderId);
   const normalizedName = safeString(name);
   if (!normalizedFolderId) throw new Error("Folder id is required.");
-  if (!normalizedName) throw new Error("Folder name is required.");
+  if (!normalizedName) throw new Error("Le nom du dossier ne peut pas être vide.");
   console.info("[documents-folders] rename.start", { projectId: backendProjectId, folderId: normalizedFolderId, name: normalizedName });
 
   try {
+    const current = await restFetch("project_document_folders", new URLSearchParams({
+      select: "id,parent_folder_id,name,project_id",
+      id: `eq.${normalizedFolderId}`,
+      project_id: `eq.${backendProjectId}`,
+      limit: "1"
+    }));
+    const currentFolder = Array.isArray(current) ? current[0] : null;
+    if (!currentFolder) throw new Error("Dossier introuvable.");
+    const siblings = await listDocumentFolderChildren(backendProjectId, safeString(currentFolder.parent_folder_id || "") || null);
+    const duplicate = siblings.some((folder) => safeString(folder.id) !== normalizedFolderId
+      && safeString(folder.name).toLocaleLowerCase("fr-FR") === normalizedName.toLocaleLowerCase("fr-FR"));
+    if (duplicate) throw new Error("Un dossier avec ce nom existe déjà dans ce dossier parent.");
     const updated = await restUpdate("project_document_folders", {
       id: normalizedFolderId,
       project_id: backendProjectId
@@ -956,6 +976,9 @@ export async function renameDocumentFolder(projectId = "", folderId = "", name =
     }
     return updated;
   } catch (error) {
+    if (String(error?.message || "").toLowerCase().includes("duplicate key")) {
+      throw new Error("Un dossier avec ce nom existe déjà dans ce dossier parent.");
+    }
     console.error("[documents-folders] failure", { action: "renameDocumentFolder", projectId: backendProjectId, folderId: normalizedFolderId, error: error instanceof Error ? error.message : String(error || "") });
     throw error;
   }
@@ -1033,6 +1056,17 @@ export async function moveDocumentFile(projectId = "", fileId = "", targetFolder
   console.info("[documents-files] move.start", { projectId: backendProjectId, fileId: normalizedFileId, targetFolderId: normalizedTargetFolderId });
 
   try {
+    if (normalizedTargetFolderId) {
+      const rows = await restFetch("project_document_folders", new URLSearchParams({
+        select: "id,project_id",
+        id: `eq.${normalizedTargetFolderId}`,
+        project_id: `eq.${backendProjectId}`,
+        limit: "1"
+      }));
+      if (!Array.isArray(rows) || !rows.length) {
+        throw new Error("Dossier cible introuvable.");
+      }
+    }
     const payload = await rpcCall("move_project_document_file", {
       file_id: normalizedFileId,
       target_folder_id: normalizedTargetFolderId
