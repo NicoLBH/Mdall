@@ -1719,14 +1719,22 @@ function renderDocumentsSidebarTree() {
     filesByFolder.get(key).push(doc);
   });
   const expandedSet = new Set(Array.isArray(docsViewState.treeExpandedFolderIds) ? docsViewState.treeExpandedFolderIds : []);
-  const walk = (parentKey = "", depth = 0) => (byParent.get(parentKey) || []).map((folder) => {
+  const walk = (parentKey = "", depth = 0) => {
+    const levelFolders = byParent.get(parentKey) || [];
+    const levelHasChevron = levelFolders.some((entry) => {
+      const entryId = String(entry.id || "");
+      const entryChildren = byParent.get(entryId) || [];
+      const entryFiles = filesByFolder.get(entryId) || [];
+      return entryChildren.length > 0 || entryFiles.length > 0;
+    });
+    return levelFolders.map((folder) => {
     const id = String(folder.id || "");
     const active = String(docsViewState.currentFolderId || "") === id;
     const childFolders = byParent.get(id) || [];
     const files = filesByFolder.get(id) || [];
     const hasChildren = childFolders.length > 0 || files.length > 0;
     const isExpanded = expandedSet.has(id);
-    const dividerStateClass = hasChildren
+    const dividerStateClass = (hasChildren || levelHasChevron)
       ? (isExpanded ? " is-expanded" : " is-collapsed")
       : "";
     const indentDividers = Array.from({ length: Math.max(0, depth) })
@@ -1739,10 +1747,12 @@ function renderDocumentsSidebarTree() {
       const fileIndentDividers = Array.from({ length: Math.max(0, depth + 1) })
         .map(() => `<span class="documents-tree__divider${isExpanded ? " is-expanded" : ""}" aria-hidden="true"></span>`)
         .join("");
-      return `<button type="button" class="documents-tree__file" data-tree-document-id="${escapeHtml(String(file?.id || ""))}" style="--tree-indent:${12 + Math.min(depth + 2, 10) * 24}px"><span class="documents-tree__indent">${fileIndentDividers}</span>${getDocumentIconSvg()} <span class="documents-tree__label">${escapeHtml(file?.name || file?.original_filename || file?.filename || "Fichier")}</span></button>`;
+      const fileChevronSpacer = levelHasChevron ? `<span class="documents-tree__caret-spacer"></span>` : "";
+      return `<button type="button" class="documents-tree__file" data-tree-document-id="${escapeHtml(String(file?.id || ""))}" style="--tree-indent:${12 + Math.min(depth + 2, 10) * 24}px"><span class="documents-tree__indent">${fileIndentDividers}</span>${fileChevronSpacer}${getDocumentIconSvg()} <span class="documents-tree__label">${escapeHtml(file?.name || file?.original_filename || file?.filename || "Fichier")}</span></button>`;
     }).join("");
     return `${row}${walk(id, depth + 1).join("")}${fileRows}`;
-  });
+    });
+  };
   const opened = !!docsViewState.documentTreeOpen;
   const treeBody = `<div class="documents-tree__panel"><div class="documents-tree__row${docsViewState.currentFolderId ? "" : " is-active"}"><span class="documents-tree__caret-spacer"></span><button type="button" class="documents-tree__item${docsViewState.currentFolderId ? "" : " is-active"}" data-tree-folder-id="">${getFolderOpenIconSvg()} <span class="documents-tree__label">Racine / Documents</span></button></div>${walk("").join("")}</div>`;
   return `
