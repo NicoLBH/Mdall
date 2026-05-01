@@ -859,6 +859,198 @@ export async function syncProjectDocumentsFromSupabase(options = {}) {
   return nextItems;
 }
 
+function ensureBackendProjectIdOrThrow(projectId = "") {
+  const normalizedProjectId = safeString(projectId);
+  if (!normalizedProjectId) {
+    throw new Error("Project id is required.");
+  }
+
+  return normalizedProjectId;
+}
+
+export async function listDocumentFolders(projectId = "") {
+  const backendProjectId = ensureBackendProjectIdOrThrow(projectId);
+  console.info("[documents-folders] list.start", { projectId: backendProjectId, parentFolderId: null });
+
+  try {
+    const params = new URLSearchParams();
+    params.set("select", "id,project_id,parent_folder_id,name,created_at,updated_at,created_by");
+    params.set("project_id", `eq.${backendProjectId}`);
+    params.set("order", "name.asc");
+    const rows = await restFetch("project_document_folders", params);
+    const items = Array.isArray(rows) ? rows : [];
+    console.info("[documents-folders] list.success", { projectId: backendProjectId, count: items.length, parentFolderId: null });
+    return items;
+  } catch (error) {
+    console.error("[documents-folders] failure", { action: "listDocumentFolders", projectId: backendProjectId, error: error instanceof Error ? error.message : String(error || "") });
+    throw error;
+  }
+}
+
+export async function listDocumentFolderChildren(projectId = "", parentFolderId = null) {
+  const backendProjectId = ensureBackendProjectIdOrThrow(projectId);
+  const normalizedParentFolderId = safeString(parentFolderId || "") || null;
+  console.info("[documents-folders] list.start", { projectId: backendProjectId, parentFolderId: normalizedParentFolderId });
+
+  try {
+    const params = new URLSearchParams();
+    params.set("select", "id,project_id,parent_folder_id,name,created_at,updated_at,created_by");
+    params.set("project_id", `eq.${backendProjectId}`);
+    if (normalizedParentFolderId) {
+      params.set("parent_folder_id", `eq.${normalizedParentFolderId}`);
+    } else {
+      params.set("parent_folder_id", "is.null");
+    }
+    params.set("order", "name.asc");
+    const rows = await restFetch("project_document_folders", params);
+    const items = Array.isArray(rows) ? rows : [];
+    console.info("[documents-folders] list.success", { projectId: backendProjectId, count: items.length, parentFolderId: normalizedParentFolderId });
+    return items;
+  } catch (error) {
+    console.error("[documents-folders] failure", { action: "listDocumentFolderChildren", projectId: backendProjectId, parentFolderId: normalizedParentFolderId, error: error instanceof Error ? error.message : String(error || "") });
+    throw error;
+  }
+}
+
+export async function createDocumentFolder(projectId = "", parentFolderId = null, name = "") {
+  const backendProjectId = ensureBackendProjectIdOrThrow(projectId);
+  const normalizedParentFolderId = safeString(parentFolderId || "") || null;
+  const normalizedName = safeString(name);
+  if (!normalizedName) throw new Error("Folder name is required.");
+  console.info("[documents-folders] create.start", { projectId: backendProjectId, parentFolderId: normalizedParentFolderId, name: normalizedName });
+
+  try {
+    return await restInsert("project_document_folders", {
+      project_id: backendProjectId,
+      parent_folder_id: normalizedParentFolderId,
+      name: normalizedName
+    }, {
+      select: "id,project_id,parent_folder_id,name,created_at,updated_at,created_by"
+    });
+  } catch (error) {
+    console.error("[documents-folders] failure", { action: "createDocumentFolder", projectId: backendProjectId, parentFolderId: normalizedParentFolderId, error: error instanceof Error ? error.message : String(error || "") });
+    throw error;
+  }
+}
+
+export async function renameDocumentFolder(projectId = "", folderId = "", name = "") {
+  const backendProjectId = ensureBackendProjectIdOrThrow(projectId);
+  const normalizedFolderId = safeString(folderId);
+  const normalizedName = safeString(name);
+  if (!normalizedFolderId) throw new Error("Folder id is required.");
+  if (!normalizedName) throw new Error("Folder name is required.");
+  console.info("[documents-folders] rename.start", { projectId: backendProjectId, folderId: normalizedFolderId, name: normalizedName });
+
+  try {
+    const updated = await restUpdate("project_document_folders", {
+      id: normalizedFolderId,
+      project_id: backendProjectId
+    }, {
+      name: normalizedName
+    }, {
+      select: "id,project_id,parent_folder_id,name,created_at,updated_at,created_by"
+    });
+    if (!updated) {
+      throw new Error("Folder not found or update not allowed.");
+    }
+    return updated;
+  } catch (error) {
+    console.error("[documents-folders] failure", { action: "renameDocumentFolder", projectId: backendProjectId, folderId: normalizedFolderId, error: error instanceof Error ? error.message : String(error || "") });
+    throw error;
+  }
+}
+
+export async function getDocumentFolderPath(projectId = "", folderId = null) {
+  const backendProjectId = ensureBackendProjectIdOrThrow(projectId);
+  const normalizedFolderId = safeString(folderId || "") || null;
+  if (!normalizedFolderId) return [];
+
+  const folders = await listDocumentFolders(backendProjectId);
+  const foldersById = new Map(folders.map((folder) => [safeString(folder.id), folder]));
+  const breadcrumb = [];
+  let cursorId = normalizedFolderId;
+
+  while (cursorId) {
+    const folder = foldersById.get(cursorId);
+    if (!folder || safeString(folder.project_id) !== backendProjectId) break;
+    breadcrumb.unshift(folder);
+    const nextCursor = safeString(folder.parent_folder_id || "");
+    if (!nextCursor || nextCursor === cursorId) break;
+    cursorId = nextCursor;
+  }
+
+  return breadcrumb;
+}
+
+export async function listDocumentDirectory(projectId = "", folderId = null) {
+  const backendProjectId = ensureBackendProjectIdOrThrow(projectId);
+  const normalizedFolderId = safeString(folderId || "") || null;
+  console.info("[documents-folders] list.start", { projectId: backendProjectId, folderId: normalizedFolderId });
+
+  try {
+    const [allFolders, breadcrumb] = await Promise.all([
+      listDocumentFolders(backendProjectId),
+      getDocumentFolderPath(backendProjectId, normalizedFolderId)
+    ]);
+    const currentFolder = normalizedFolderId
+      ? (allFolders.find((folder) => safeString(folder.id) === normalizedFolderId) || null)
+      : null;
+    const folders = allFolders.filter((folder) => safeString(folder.parent_folder_id || "") === safeString(normalizedFolderId || ""));
+
+    const fileParams = new URLSearchParams();
+    fileParams.set("select", "id,project_id,folder_id,filename,original_filename,mime_type,storage_bucket,storage_path,document_kind,upload_status,created_at,updated_at,deleted_at");
+    fileParams.set("project_id", `eq.${backendProjectId}`);
+    fileParams.set("deleted_at", "is.null");
+    if (normalizedFolderId) {
+      fileParams.set("folder_id", `eq.${normalizedFolderId}`);
+    } else {
+      fileParams.set("folder_id", "is.null");
+    }
+    fileParams.set("order", "created_at.desc");
+
+    const fileRows = await restFetch("documents", fileParams);
+    const files = (Array.isArray(fileRows) ? fileRows : []).map(mapDocumentRowToViewModel);
+    console.info("[documents-folders] list.success", { projectId: backendProjectId, folderId: normalizedFolderId, foldersCount: folders.length, filesCount: files.length });
+
+    return {
+      currentFolder,
+      breadcrumb,
+      folders,
+      files
+    };
+  } catch (error) {
+    console.error("[documents-folders] failure", { action: "listDocumentDirectory", projectId: backendProjectId, folderId: normalizedFolderId, error: error instanceof Error ? error.message : String(error || "") });
+    throw error;
+  }
+}
+
+export async function moveDocumentFile(projectId = "", fileId = "", targetFolderId = null) {
+  const backendProjectId = ensureBackendProjectIdOrThrow(projectId);
+  const normalizedFileId = safeString(fileId);
+  const normalizedTargetFolderId = safeString(targetFolderId || "") || null;
+  if (!normalizedFileId) throw new Error("File id is required.");
+  console.info("[documents-files] move.start", { projectId: backendProjectId, fileId: normalizedFileId, targetFolderId: normalizedTargetFolderId });
+
+  try {
+    const payload = await rpcCall("move_project_document_file", {
+      file_id: normalizedFileId,
+      target_folder_id: normalizedTargetFolderId
+    });
+    const moved = Array.isArray(payload) ? (payload[0] || null) : payload;
+    if (!moved) {
+      throw new Error("No row returned by move_project_document_file.");
+    }
+    if (safeString(moved.project_id) !== backendProjectId) {
+      throw new Error("Moved file does not belong to the requested project.");
+    }
+    console.info("[documents-files] move.success", { projectId: backendProjectId, fileId: normalizedFileId, targetFolderId: normalizedTargetFolderId });
+    return moved;
+  } catch (error) {
+    console.error("[documents-files] move.failure", { projectId: backendProjectId, fileId: normalizedFileId, targetFolderId: normalizedTargetFolderId, error: error instanceof Error ? error.message : String(error || "") });
+    throw error;
+  }
+}
+
 export async function syncProjectActionsFromSupabase(options = {}) {
   const force = Boolean(options.force);
   const frontendProjectId = getFrontendProjectKey();
