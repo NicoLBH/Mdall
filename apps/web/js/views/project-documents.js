@@ -200,13 +200,11 @@ function getProjectViewCompactHeaderState() {
 }
 
 function syncDocumentsProjectViewHeader() {
-  const compactHeaderState = getProjectViewCompactHeaderState();
-  setProjectViewHeader({
-    contextLabel: "Documents",
-    compactLabel: compactHeaderState.compactLabel,
-    compactLabelSuffix: compactHeaderState.compactLabelSuffix,
-    variant: "documents"
-  });
+  const host = document.getElementById("projectViewHeaderHost");
+  if (host) {
+    host.innerHTML = "";
+    host.remove();
+  }
 }
 
 function getDocumentsTableGridTemplate() {
@@ -1661,13 +1659,13 @@ function renderDocumentsSidebarTree() {
     const hasChildren = childFolders.length > 0 || files.length > 0;
     const isExpanded = expandedSet.has(id);
     const caret = hasChildren ? `<button type="button" class="documents-tree__caret" data-tree-toggle-folder-id="${escapeHtml(id)}">${svgIcon(isExpanded ? "chevron-down" : "chevron-right", { className: isExpanded ? "octicon octicon-chevron-down" : "octicon octicon-chevron-right" })}</button>` : `<span class="documents-tree__caret-spacer"></span>`;
-    const row = `<div class="documents-tree__row" style="padding-left:${12 + Math.min(depth, 8) * 18}px">${caret}<button type="button" class="documents-tree__item${active ? " is-active" : ""}" data-tree-folder-id="${escapeHtml(id)}">${isExpanded ? getFolderOpenIconSvg() : getFolderClosedIconSvg()} ${escapeHtml(folder.name || "Dossier")}</button></div>`;
+    const row = `<div class="documents-tree__row${active ? " is-active" : ""}" style="padding-left:${12 + Math.min(depth, 8) * 18}px">${caret}<button type="button" class="documents-tree__item${active ? " is-active" : ""}" data-tree-folder-id="${escapeHtml(id)}">${isExpanded ? getFolderOpenIconSvg() : getFolderClosedIconSvg()} ${escapeHtml(folder.name || "Dossier")}</button></div>`;
     if (!isExpanded) return row;
     const fileRows = files.map((file) => `<div class="documents-tree__file" style="padding-left:${34 + Math.min(depth + 1, 9) * 18}px">${getDocumentIconSvg()} ${escapeHtml(file?.name || file?.original_filename || file?.filename || "Fichier")}</div>`).join("");
     return `${row}${walk(id, depth + 1).join("")}${fileRows}`;
   });
   const opened = !!docsViewState.documentTreeOpen;
-  const treeBody = `<div class="documents-tree__panel"><button type="button" class="documents-tree__item${docsViewState.currentFolderId ? "" : " is-active"}" data-tree-folder-id="">${getFolderOpenIconSvg()} Racine / Documents</button>${walk("").join("")}</div>`;
+  const treeBody = `<div class="documents-tree__panel"><div class="documents-tree__row${docsViewState.currentFolderId ? "" : " is-active"}"><span class="documents-tree__caret-spacer"></span><button type="button" class="documents-tree__item${docsViewState.currentFolderId ? "" : " is-active"}" data-tree-folder-id="">${getFolderOpenIconSvg()} Racine / Documents</button></div>${walk("").join("")}</div>`;
   return `
     <aside class="documents-tree${opened ? " is-open" : " is-collapsed"}" style="--documents-tree-width:${Math.max(220, Math.min(520, Number(docsViewState.treeWidth || 280)))}px">
       ${treeBody}
@@ -2091,6 +2089,8 @@ function bindDocumentsView(root) {
       const onMove = (moveEvent) => {
         const next = Math.max(220, Math.min(520, startWidth + (moveEvent.clientX - startX)));
         docsViewState.treeWidth = next;
+        const shell = document.getElementById("projectDocumentScroll");
+        if (shell) shell.style.setProperty("--documents-tree-width", `${next}px`);
         if (guide) {
           guide.style.display = "block";
           guide.style.left = `${next}px`;
