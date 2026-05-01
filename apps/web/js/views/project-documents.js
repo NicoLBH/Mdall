@@ -1978,6 +1978,8 @@ function buildRepoDocumentFromState() {
 
 function triggerAutoAnalysisAfterDirectUpload(root, document = null) {
   const documentName = document?.name || "";
+  const currentFolderId = docsViewState.currentFolderId || null;
+  console.info("[documents-upload] current-folder", { currentFolderId });
   if (!shouldAutoRunAnalysisAfterUpload()) {
     setDocumentsActivity({
       tone: "info",
@@ -2007,6 +2009,7 @@ function triggerAutoAnalysisAfterDirectUpload(root, document = null) {
     triggerType: "document-upload",
     triggerLabel: "Dépôt de document",
     documentName,
+    currentFolderId,
     documentIds: document?.id ? [document.id] : [],
     summary: "Analyse déclenchée automatiquement après dépôt réussi d’un document."
   });
@@ -2029,6 +2032,16 @@ function commitDirectDocument(root) {
 function handleSubmit(root) {
   if (!canSubmitUpload()) return;
   commitDirectDocument(root);
+  loadCurrentDirectory()
+    .then(() => {
+      console.info("[documents-upload] refresh-current-directory", { currentFolderId: docsViewState.currentFolderId || null });
+      renderProjectDocumentsContent(root);
+    })
+    .catch((error) => {
+      console.error("[documents-upload] refresh-current-directory.failed", {
+        error: error instanceof Error ? error.message : String(error || "")
+      });
+    });
 }
 
 function bindDocumentsSplitActions(root) {
