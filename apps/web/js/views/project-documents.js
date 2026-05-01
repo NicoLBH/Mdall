@@ -23,7 +23,7 @@ import {
 } from "../services/analysis-runner.js";
 import { addProjectDocument, decorateDocumentWithPhase, getEnabledProjectPhasesCatalog, getProjectDocumentById, getProjectDocumentPreviewUrl, getProjectDocuments, resolveDocumentRefs, setActiveProjectDocument } from "../services/project-documents-store.js";
 import { getDocumentStatsMap } from "../services/project-document-selectors.js";
-import { listDocumentDirectory, createDocumentFolder, renameDocumentFolder, syncProjectDocumentsFromSupabase } from "../services/project-supabase-sync.js";
+import { listDocumentDirectory, listDocumentFolders, createDocumentFolder, renameDocumentFolder, moveDocumentFile, syncProjectDocumentsFromSupabase } from "../services/project-supabase-sync.js";
 import { getEffectiveSituationStatus, getEffectiveSujetStatus } from "./project-situations.js";
 import { buildSupabaseAuthHeaders, getSupabaseAnonKey, getSupabaseUrl } from "../../assets/js/auth.js";
 
@@ -82,7 +82,14 @@ const docsViewState = {
   breadcrumb: [],
   folders: [],
   files: [],
-  documentTreeOpen: false
+  documentTreeOpen: false,
+  moveModal: {
+    isOpen: false,
+    fileId: "",
+    sourceFolderId: null,
+    targetFolderId: null,
+    folders: []
+  }
 };
 
 function getFolderClosedIconSvg() {
@@ -1567,6 +1574,7 @@ function renderDocumentsListView() {
   const hasDocuments = folders.length + documents.length > 0;
   const bodyHtml = [...folders.map(renderRepoFolderRow), ...documents.map(renderRepoDocumentRow)].join("");
 
+  const moveModalHtml = docsViewState.moveModal?.isOpen ? renderMoveFileModal() : "";
   return `
     <section class="project-simple-page project-simple-page--documents">
       <div class="documents-shell documents-shell--project-page" id="projectDocumentScroll">
@@ -1586,7 +1594,47 @@ function renderDocumentsListView() {
             })
           })}
         </div>
+        ${moveModalHtml}
     </section>
+  `;
+}
+
+function renderMoveFolderOption(folder, depth = 0) {
+  const indent = Math.min(depth, 6) * 16;
+  const folderId = String(folder.id || "");
+  const selected = String(docsViewState.moveModal?.targetFolderId || "") === folderId;
+  return `<button type="button" class="documents-move-modal__target${selected ? " is-active" : ""}" data-move-target-folder-id="${escapeHtml(folderId)}" style="padding-left:${indent + 12}px">${getFolderClosedIconSvg()} ${escapeHtml(folder.name || "Dossier")}</button>`;
+}
+
+function renderMoveFileModal() {
+  const folders = Array.isArray(docsViewState.moveModal?.folders) ? docsViewState.moveModal.folders : [];
+  const folderMap = new Map(folders.map((f) => [String(f.id || ""), f]));
+  const byParent = new Map();
+  folders.forEach((folder) => {
+    const parentKey = String(folder.parent_folder_id || "");
+    if (!byParent.has(parentKey)) byParent.set(parentKey, []);
+    byParent.get(parentKey).push(folder);
+  });
+  byParent.forEach((items) => items.sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "fr")));
+  const flatten = (parentKey = "", depth = 0) => {
+    const items = byParent.get(parentKey) || [];
+    return items.flatMap((item) => [renderMoveFolderOption(item, depth), ...flatten(String(item.id || ""), depth + 1)]);
+  };
+  const sourceFolder = docsViewState.moveModal?.sourceFolderId ? folderMap.get(String(docsViewState.moveModal.sourceFolderId || "")) : null;
+  const sourceLabel = sourceFolder ? String(sourceFolder.name || "Dossier") : "Racine / Documents";
+  const rootSelected = docsViewState.moveModal?.targetFolderId == null;
+  return `
+    <div class="documents-move-modal__backdrop" id="documentsMoveModalBackdrop">
+      <div class="documents-move-modal" role="dialog" aria-modal="true" aria-label="Déplacer le fichier">
+        <header class="documents-move-modal__header"><h3>Déplacer le fichier</h3><button type="button" class="gh-btn" id="documentsMoveModalCloseBtn">Fermer</button></header>
+        <div class="documents-move-modal__current">Dossier actuel : <strong>${escapeHtml(sourceLabel)}</strong></div>
+        <div class="documents-move-modal__targets">
+          <button type="button" class="documents-move-modal__target${rootSelected ? " is-active" : ""}" data-move-target-folder-id="">${getFolderOpenIconSvg()} Racine / Documents</button>
+          ${flatten("").join("")}
+        </div>
+        <footer class="documents-move-modal__actions"><button type="button" class="gh-btn gh-btn--validate" id="documentsMoveModalConfirmBtn">Déplacer ici</button></footer>
+      </div>
+    </div>
   `;
 }
 
@@ -1966,10 +2014,64 @@ function bindDocumentsView(root) {
   });
 
   document.querySelectorAll("[data-document-move-id]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      console.info("[documents-view] move-file.open", { fileId: btn.getAttribute("data-document-move-id") || "" });
+    btn.addEventListener("click", async () => {
+      const fileId = btn.getAttribute("data-document-move-id") || "";
+      const file = (Array.isArray(docsViewState.files) ? docsViewState.files : []).find((item) => String(item.id || "") === fileId) || null;
+      const projectId = String(store.currentProject?.backendProjectId || store.currentProject?.id || store.currentProjectId || "");
+      docsViewState.moveModal = {
+        isOpen: true,
+        fileId,
+        sourceFolderId: file?.folder_id || null,
+        targetFolderId: file?.folder_id || null,
+        folders: await listDocumentFolders(projectId)
+      };
+      console.info("[documents-view] move-file.open", { fileId });
+      console.info("[documents-files] move-modal.open", { fileId });
+      renderProjectDocumentsContent(root);
     });
   });
+
+  const moveCloseBtn = document.getElementById("documentsMoveModalCloseBtn");
+  if (moveCloseBtn) {
+    moveCloseBtn.addEventListener("click", () => {
+      docsViewState.moveModal.isOpen = false;
+      renderProjectDocumentsContent(root);
+    });
+  }
+  document.querySelectorAll("[data-move-target-folder-id]").forEach((targetBtn) => {
+    targetBtn.addEventListener("click", () => {
+      const targetFolderId = targetBtn.getAttribute("data-move-target-folder-id") || null;
+      docsViewState.moveModal.targetFolderId = targetFolderId || null;
+      console.info("[documents-files] move-modal.select-target", { targetFolderId: targetFolderId || null });
+      renderProjectDocumentsContent(root);
+    });
+  });
+  const moveConfirmBtn = document.getElementById("documentsMoveModalConfirmBtn");
+  if (moveConfirmBtn) {
+    moveConfirmBtn.addEventListener("click", async () => {
+      const projectId = String(store.currentProject?.backendProjectId || store.currentProject?.id || store.currentProjectId || "");
+      const { fileId, sourceFolderId, targetFolderId } = docsViewState.moveModal;
+      if (!fileId) return;
+      if ((sourceFolderId || null) === (targetFolderId || null)) {
+        setDocumentsActivity({ tone: "info", title: "Déplacement", message: "Le fichier est déjà dans ce dossier." });
+        docsViewState.moveModal.isOpen = false;
+        renderProjectDocumentsContent(root);
+        return;
+      }
+      console.info("[documents-files] move-modal.confirm", { fileId, targetFolderId: targetFolderId || null });
+      try {
+        await moveDocumentFile(projectId, fileId, targetFolderId || null);
+        console.info("[documents-files] move-modal.success", { fileId, targetFolderId: targetFolderId || null });
+        docsViewState.moveModal.isOpen = false;
+        await loadCurrentDirectory();
+        renderProjectDocumentsContent(root);
+      } catch (error) {
+        console.info("[documents-files] move-modal.failure", { fileId, error: error instanceof Error ? error.message : String(error || "") });
+        setDocumentsActivity({ tone: "error", title: "Déplacement impossible", message: error instanceof Error ? error.message : "Erreur inconnue." });
+        renderProjectDocumentsContent(root);
+      }
+    });
+  }
 
     const activityCloseBtn = document.getElementById("documentsActivityCloseBtn");
   if (activityCloseBtn) {
