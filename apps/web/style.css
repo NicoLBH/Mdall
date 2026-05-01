@@ -6496,7 +6496,7 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   color:var(--blueLink);
   padding:0;
   cursor:pointer;
-  font-size:16px;
+  font-size:15px;
   line-height:24px;
   font-weight:400;
 }
@@ -6506,7 +6506,7 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
 }
 .documents-breadcrumb__sep{color:var(--muted);}
 .documents-breadcrumb__link:first-of-type{font-weight:600;}
-.documents-breadcrumb__current{font-size:16px;line-height:24px;font-weight:600;color:rgb(240, 246, 252);}
+.documents-breadcrumb__current{font-size:15px;line-height:24px;font-weight:600;color:rgb(240, 246, 252);}
 .documents-repo__message-main{
   color:var(--muted);
   font-size:13px;
