@@ -116,18 +116,6 @@ async function loadCurrentDirectory({ forceFolderId } = {}) {
   console.info("[documents-view] load-directory.success", { projectId, folderId: docsViewState.currentFolderId, folders: docsViewState.folders.length, files: docsViewState.files.length });
 }
 
-async function loadCurrentDirectory({ forceFolderId } = {}) {
-  const projectId = String(store.currentProject?.backendProjectId || store.currentProject?.id || store.currentProjectId || "").trim();
-  const folderId = forceFolderId === undefined ? docsViewState.currentFolderId : (forceFolderId || null);
-  console.info("[documents-view] load-directory.start", { projectId, folderId });
-  const directory = await listDocumentDirectory(projectId, folderId);
-  docsViewState.currentFolderId = directory?.currentFolder?.id || null;
-  docsViewState.breadcrumb = Array.isArray(directory?.breadcrumb) ? directory.breadcrumb : [];
-  docsViewState.folders = Array.isArray(directory?.folders) ? directory.folders : [];
-  docsViewState.files = Array.isArray(directory?.files) ? directory.files : [];
-  console.info("[documents-view] load-directory.success", { projectId, folderId: docsViewState.currentFolderId, folders: docsViewState.folders.length, files: docsViewState.files.length });
-}
-
 function syncDocumentsSelectedPhase() {
   const enabledPhases = getEnabledProjectPhasesCatalog();
   const fallbackPhase = enabledPhases[0]?.code || "APS";
