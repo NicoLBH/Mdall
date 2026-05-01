@@ -6554,6 +6554,7 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
 .documents-move-modal__actions{display:flex;justify-content:flex-end;margin-top:12px;}
 .documents-layout{display:grid;grid-template-columns:auto 1fr;align-items:start;gap:12px;}
 .documents-layout.is-root{grid-template-columns:minmax(0,1100px);justify-content:center;}
+.documents-main{min-width:0;}
 .documents-topbar{display:flex;align-items:center;gap:12px;justify-content:space-between;margin-bottom:8px;}
 .documents-topbar__left{display:flex;align-items:center;gap:10px;min-width:0;flex:1 1 auto;}
 .documents-topbar__right{display:flex;align-items:center;gap:8px;flex:0 0 auto;}

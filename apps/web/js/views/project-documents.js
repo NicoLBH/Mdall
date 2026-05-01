@@ -1610,21 +1610,22 @@ function renderDocumentsListView() {
     <section class="project-simple-page project-simple-page--documents">
       <div class="documents-shell documents-shell--project-page documents-layout${isRoot ? " is-root" : ""}" id="projectDocumentScroll">
           ${treeHtml}
-          ${isRoot ? renderDocumentsToolbar() : topBar}
-          ${renderDocumentsActivityBanner()}
-          ${isRoot ? renderDocumentsBreadcrumb() : ""}
-
-          ${renderDataTableShell({
-            className: "documents-repo data-table-shell--document-scroll",
-            gridTemplate: getDocumentsTableGridTemplate(),
-            headHtml: renderDocumentsTableHeadHtml(),
-            bodyHtml,
-            state: hasDocuments ? "ready" : "empty",
-            emptyHtml: renderDataTableEmptyState({
-              title: "Aucun document n’a encore été déposé.",
-              description: "Ajoutez des documents pour commencer à constituer le dossier du projet."
-            })
-          })}
+          <div class="documents-main">
+            ${isRoot ? renderDocumentsToolbar() : topBar}
+            ${renderDocumentsActivityBanner()}
+            ${isRoot ? renderDocumentsBreadcrumb() : ""}
+            ${renderDataTableShell({
+              className: "documents-repo data-table-shell--document-scroll",
+              gridTemplate: getDocumentsTableGridTemplate(),
+              headHtml: renderDocumentsTableHeadHtml(),
+              bodyHtml,
+              state: hasDocuments ? "ready" : "empty",
+              emptyHtml: renderDataTableEmptyState({
+                title: "Aucun document n’a encore été déposé.",
+                description: "Ajoutez des documents pour commencer à constituer le dossier du projet."
+              })
+            })}
+          </div>
         </div>
         ${moveModalHtml}
     </section>
@@ -1649,9 +1650,12 @@ function renderDocumentsSidebarTree() {
     return `${row}${walk(id, depth + 1).join("")}`;
   });
   const opened = !!docsViewState.documentTreeOpen;
+  const treeBody = `<div class="documents-tree__panel"><button type="button" class="documents-tree__item${docsViewState.currentFolderId ? "" : " is-active"}" data-tree-folder-id="">${getFolderOpenIconSvg()} Racine / Documents</button>${walk("").join("")}</div>`;
   return `
     <aside class="documents-tree${opened ? " is-open" : " is-collapsed"}" style="--documents-tree-width:${Math.max(220, Math.min(520, Number(docsViewState.treeWidth || 280)))}px">
-      ${opened ? `<div class="documents-tree__panel"><button type="button" class="documents-tree__item${docsViewState.currentFolderId ? "" : " is-active"}" data-tree-folder-id="">${getFolderOpenIconSvg()} Racine / Documents</button>${walk("").join("")}</div><div class="documents-tree__resize-handle" id="documentsTreeResizeHandle"></div><div class="documents-tree__resize-guide" id="documentsTreeResizeGuide"></div>` : ""}
+      ${treeBody}
+      <div class="documents-tree__resize-handle" id="documentsTreeResizeHandle"></div>
+      <div class="documents-tree__resize-guide" id="documentsTreeResizeGuide"></div>
     </aside>
   `;
 }
