@@ -2405,3 +2405,51 @@ export function renderProjectDocuments(root) {
       console.warn("syncProjectDocumentsFromSupabase failed", error);
     });
 }
+  const treeToggleBtn = document.getElementById("documentsTreeToggleBtn");
+  if (treeToggleBtn) {
+    treeToggleBtn.addEventListener("click", async () => {
+      docsViewState.documentTreeOpen = !docsViewState.documentTreeOpen;
+      console.info("[documents-tree] toggle", { open: docsViewState.documentTreeOpen });
+      if (docsViewState.documentTreeOpen) {
+        const projectId = String(store.currentProject?.backendProjectId || store.currentProject?.id || store.currentProjectId || "");
+        console.info("[documents-tree] load.start", { projectId });
+        docsViewState.moveModal.folders = await listDocumentFolders(projectId);
+        console.info("[documents-tree] load.success", { count: docsViewState.moveModal.folders.length });
+      }
+      renderProjectDocumentsContent(root);
+    });
+  }
+  document.querySelectorAll("[data-tree-folder-id]").forEach((node) => {
+    node.addEventListener("click", async () => {
+      const folderId = node.getAttribute("data-tree-folder-id") || null;
+      console.info("[documents-tree] select-folder", { folderId: folderId || null });
+      await loadCurrentDirectory({ forceFolderId: folderId || null });
+      renderProjectDocumentsContent(root);
+    });
+  });
+  const resizeHandle = document.getElementById("documentsTreeResizeHandle");
+  if (resizeHandle) {
+    resizeHandle.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      const startX = event.clientX;
+      const startWidth = Number(docsViewState.treeWidth || 280);
+      docsViewState.treeResizeActive = true;
+      const guide = document.getElementById("documentsTreeResizeGuide");
+      const onMove = (moveEvent) => {
+        const next = Math.max(220, Math.min(520, startWidth + (moveEvent.clientX - startX)));
+        docsViewState.treeWidth = next;
+        if (guide) {
+          guide.style.display = "block";
+          guide.style.left = `${next}px`;
+        }
+      };
+      const onUp = () => {
+        docsViewState.treeResizeActive = false;
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        renderProjectDocumentsContent(root);
+      };
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+    });
+  }
