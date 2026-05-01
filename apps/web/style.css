@@ -6582,6 +6582,7 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
 .documents-tree__indent .documents-tree__divider:first-child{border-left-color:transparent !important;}
 .documents-tree__divider{width:14px;height:100%;display:inline-block;position:relative;flex:0 0 14px;}
 .documents-tree__divider.is-expanded::after{content:"";position:absolute;top:50%;right:0;transform:translateY(-50%);height:36px;width:1px;background:#ffff;}
+.documents-tree__divider.is-collapsed::after{content:"";position:absolute;top:50%;right:0;transform:translateY(-50%);height:36px;width:1px;background:#ffff;}
 .documents-tree__item{display:flex;align-items:center;gap:8px;padding:8px 12px 8px 0px;border:0;background:transparent;color:var(--text);border-radius:8px;text-align:left;cursor:pointer;width:100%;}
 .documents-tree__item.is-active{color:#58a6ff;}
 .documents-tree__file{display:flex;align-items:center;gap:8px;font-size:13px;padding:0;height:34px;min-width:0;border:0;background:transparent;color:var(--text);cursor:pointer;position:relative;border-radius:6px;}
