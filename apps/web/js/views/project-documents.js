@@ -116,6 +116,26 @@ async function loadCurrentDirectory({ forceFolderId } = {}) {
   console.info("[documents-view] load-directory.success", { projectId, folderId: docsViewState.currentFolderId, folders: docsViewState.folders.length, files: docsViewState.files.length });
 }
 
+function getFolderClosedIconSvg() {
+  return `<svg data-component="Octicon" aria-hidden="true" focusable="false" class="octicon octicon-file-directory-fill" viewBox="0 0 16 16" width="16" height="16" fill="currentColor"><path d="M1.75 1A1.75 1.75 0 0 0 0 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0 0 16 13.25v-8.5A1.75 1.75 0 0 0 14.25 3H7.5a.25.25 0 0 1-.2-.1l-.9-1.2C6.07 1.26 5.55 1 5 1H1.75Z"></path></svg>`;
+}
+
+function getFolderOpenIconSvg() {
+  return `<svg data-component="Octicon" aria-hidden="true" focusable="false" class="octicon octicon-file-directory-open-fill" viewBox="0 0 16 16" width="16" height="16" fill="currentColor"><path d="M.513 1.513A1.75 1.75 0 0 1 1.75 1h3.5c.55 0 1.07.26 1.4.7l.9 1.2a.25.25 0 0 0 .2.1H13a1 1 0 0 1 1 1v.5H2.75a.75.75 0 0 0 0 1.5h11.978a1 1 0 0 1 .994 1.117L15 13.25A1.75 1.75 0 0 1 13.25 15H1.75A1.75 1.75 0 0 1 0 13.25V2.75c0-.464.184-.91.513-1.237Z"></path></svg>`;
+}
+
+async function loadCurrentDirectory({ forceFolderId } = {}) {
+  const projectId = String(store.currentProject?.backendProjectId || store.currentProject?.id || store.currentProjectId || "").trim();
+  const folderId = forceFolderId === undefined ? docsViewState.currentFolderId : (forceFolderId || null);
+  console.info("[documents-view] load-directory.start", { projectId, folderId });
+  const directory = await listDocumentDirectory(projectId, folderId);
+  docsViewState.currentFolderId = directory?.currentFolder?.id || null;
+  docsViewState.breadcrumb = Array.isArray(directory?.breadcrumb) ? directory.breadcrumb : [];
+  docsViewState.folders = Array.isArray(directory?.folders) ? directory.folders : [];
+  docsViewState.files = Array.isArray(directory?.files) ? directory.files : [];
+  console.info("[documents-view] load-directory.success", { projectId, folderId: docsViewState.currentFolderId, folders: docsViewState.folders.length, files: docsViewState.files.length });
+}
+
 function syncDocumentsSelectedPhase() {
   const enabledPhases = getEnabledProjectPhasesCatalog();
   const fallbackPhase = enabledPhases[0]?.code || "APS";
@@ -2399,3 +2419,51 @@ export function renderProjectDocuments(root) {
       console.warn("syncProjectDocumentsFromSupabase failed", error);
     });
 }
+  const treeToggleBtn = document.getElementById("documentsTreeToggleBtn");
+  if (treeToggleBtn) {
+    treeToggleBtn.addEventListener("click", async () => {
+      docsViewState.documentTreeOpen = !docsViewState.documentTreeOpen;
+      console.info("[documents-tree] toggle", { open: docsViewState.documentTreeOpen });
+      if (docsViewState.documentTreeOpen) {
+        const projectId = String(store.currentProject?.backendProjectId || store.currentProject?.id || store.currentProjectId || "");
+        console.info("[documents-tree] load.start", { projectId });
+        docsViewState.moveModal.folders = await listDocumentFolders(projectId);
+        console.info("[documents-tree] load.success", { count: docsViewState.moveModal.folders.length });
+      }
+      renderProjectDocumentsContent(root);
+    });
+  }
+  document.querySelectorAll("[data-tree-folder-id]").forEach((node) => {
+    node.addEventListener("click", async () => {
+      const folderId = node.getAttribute("data-tree-folder-id") || null;
+      console.info("[documents-tree] select-folder", { folderId: folderId || null });
+      await loadCurrentDirectory({ forceFolderId: folderId || null });
+      renderProjectDocumentsContent(root);
+    });
+  });
+  const resizeHandle = document.getElementById("documentsTreeResizeHandle");
+  if (resizeHandle) {
+    resizeHandle.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      const startX = event.clientX;
+      const startWidth = Number(docsViewState.treeWidth || 280);
+      docsViewState.treeResizeActive = true;
+      const guide = document.getElementById("documentsTreeResizeGuide");
+      const onMove = (moveEvent) => {
+        const next = Math.max(220, Math.min(520, startWidth + (moveEvent.clientX - startX)));
+        docsViewState.treeWidth = next;
+        if (guide) {
+          guide.style.display = "block";
+          guide.style.left = `${next}px`;
+        }
+      };
+      const onUp = () => {
+        docsViewState.treeResizeActive = false;
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        renderProjectDocumentsContent(root);
+      };
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+    });
+  }
