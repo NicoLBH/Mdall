@@ -23,7 +23,7 @@ import {
 } from "../services/analysis-runner.js";
 import { addProjectDocument, decorateDocumentWithPhase, getEnabledProjectPhasesCatalog, getProjectDocumentById, getProjectDocumentPreviewUrl, getProjectDocuments, resolveDocumentRefs, setActiveProjectDocument } from "../services/project-documents-store.js";
 import { getDocumentStatsMap } from "../services/project-document-selectors.js";
-import { syncProjectDocumentsFromSupabase } from "../services/project-supabase-sync.js";
+import { listDocumentDirectory, createDocumentFolder, renameDocumentFolder, syncProjectDocumentsFromSupabase } from "../services/project-supabase-sync.js";
 import { getEffectiveSituationStatus, getEffectiveSujetStatus } from "./project-situations.js";
 import { buildSupabaseAuthHeaders, getSupabaseAnonKey, getSupabaseUrl } from "../../assets/js/auth.js";
 
@@ -77,8 +77,33 @@ const docsViewState = {
     rotation: 0,
     searchQuery: "",
     darkMode: false
-  }
+  },
+  currentFolderId: null,
+  breadcrumb: [],
+  folders: [],
+  files: [],
+  documentTreeOpen: false
 };
+
+function getFolderClosedIconSvg() {
+  return `<svg data-component="Octicon" aria-hidden="true" focusable="false" class="octicon octicon-file-directory-fill" viewBox="0 0 16 16" width="16" height="16" fill="currentColor"><path d="M1.75 1A1.75 1.75 0 0 0 0 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0 0 16 13.25v-8.5A1.75 1.75 0 0 0 14.25 3H7.5a.25.25 0 0 1-.2-.1l-.9-1.2C6.07 1.26 5.55 1 5 1H1.75Z"></path></svg>`;
+}
+
+function getFolderOpenIconSvg() {
+  return `<svg data-component="Octicon" aria-hidden="true" focusable="false" class="octicon octicon-file-directory-open-fill" viewBox="0 0 16 16" width="16" height="16" fill="currentColor"><path d="M.513 1.513A1.75 1.75 0 0 1 1.75 1h3.5c.55 0 1.07.26 1.4.7l.9 1.2a.25.25 0 0 0 .2.1H13a1 1 0 0 1 1 1v.5H2.75a.75.75 0 0 0 0 1.5h11.978a1 1 0 0 1 .994 1.117L15 13.25A1.75 1.75 0 0 1 13.25 15H1.75A1.75 1.75 0 0 1 0 13.25V2.75c0-.464.184-.91.513-1.237Z"></path></svg>`;
+}
+
+async function loadCurrentDirectory({ forceFolderId } = {}) {
+  const projectId = String(store.currentProject?.backendProjectId || store.currentProject?.id || store.currentProjectId || "").trim();
+  const folderId = forceFolderId === undefined ? docsViewState.currentFolderId : (forceFolderId || null);
+  console.info("[documents-view] load-directory.start", { projectId, folderId });
+  const directory = await listDocumentDirectory(projectId, folderId);
+  docsViewState.currentFolderId = directory?.currentFolder?.id || null;
+  docsViewState.breadcrumb = Array.isArray(directory?.breadcrumb) ? directory.breadcrumb : [];
+  docsViewState.folders = Array.isArray(directory?.folders) ? directory.folders : [];
+  docsViewState.files = Array.isArray(directory?.files) ? directory.files : [];
+  console.info("[documents-view] load-directory.success", { projectId, folderId: docsViewState.currentFolderId, folders: docsViewState.folders.length, files: docsViewState.files.length });
+}
 
 function syncDocumentsSelectedPhase() {
   const enabledPhases = getEnabledProjectPhasesCatalog();
@@ -1089,7 +1114,9 @@ function renderDocumentsToolbar() {
     mainAction: "add-documents"
   });
 
+  const addFolderButton = `<button type="button" class="gh-btn" id="documentsAddFolderBtn">Ajouter un dossier</button>`;
   const rightHtml = [
+    renderProjectTableToolbarGroup({ html: addFolderButton }),
     renderProjectTableToolbarGroup({ html: documentsButton })
   ].join("");
 
@@ -1098,6 +1125,29 @@ function renderDocumentsToolbar() {
     leftHtml: "",
     rightHtml
   });
+}
+
+function renderDocumentsBreadcrumb() {
+  const crumbButtons = [`<button type="button" class="documents-breadcrumb__link" data-breadcrumb-folder-id="">Documents</button>`];
+  docsViewState.breadcrumb.forEach((folder) => {
+    crumbButtons.push(`<span class="documents-breadcrumb__sep">/</span><button type="button" class="documents-breadcrumb__link" data-breadcrumb-folder-id="${escapeHtml(String(folder.id || ""))}">${escapeHtml(String(folder.name || "Dossier"))}</button>`);
+  });
+  crumbButtons.push(`<span class="documents-breadcrumb__sep">/</span>`);
+  return `<div class="documents-breadcrumb">${crumbButtons.join("")}</div>`;
+}
+
+function renderRepoFolderRow(folder) {
+  return `
+    <div class="documents-repo__row documents-repo__row--folder is-clickable" data-folder-id="${escapeHtml(folder.id || "")}" role="button" tabindex="0" aria-label="Ouvrir le dossier">
+      <div class="documents-repo__cell documents-repo__cell--name">
+        <span class="documents-repo__icon documents-repo__icon--folder">${getFolderClosedIconSvg()}</span>
+        <button type="button" class="documents-repo__name documents-repo__name-trigger js-folder-open-trigger" data-folder-id="${escapeHtml(folder.id || "")}">${escapeHtml(folder.name || "Dossier")}</button>
+      </div>
+      <div class="documents-repo__cell documents-repo__cell--message"><div class="documents-repo__message-main">Dossier</div></div>
+      <div class="documents-repo__cell documents-repo__cell--date">${escapeHtml(String(folder.updated_at || folder.created_at || "À l'instant"))}</div>
+      <div class="documents-repo__cell documents-repo__cell--stats"><button type="button" class="gh-btn" data-folder-rename-id="${escapeHtml(folder.id || "")}" data-folder-rename-name="${escapeHtml(folder.name || "")}">Renommer</button></div>
+    </div>
+  `;
 }
 
 
@@ -1150,7 +1200,9 @@ function renderRepoDocumentRow(doc) {
         <div class="documents-repo__message-meta">${escapeHtml(`${decoratedDoc.phaseCode}${decoratedDoc.phaseLabel ? ` - ${decoratedDoc.phaseLabel}` : ""}`)}</div>
       </div>
       <div class="documents-repo__cell documents-repo__cell--date">${escapeHtml(decoratedDoc.updatedAt || "À l'instant")}</div>
-      <div class="documents-repo__cell documents-repo__cell--stats">${renderDocumentStatsCell(decoratedDoc)}</div>
+      <div class="documents-repo__cell documents-repo__cell--stats">
+        <div class="documents-repo__stats-actions">${renderDocumentStatsCell(decoratedDoc)}<button type="button" class="gh-btn" data-document-move-id="${escapeHtml(decoratedDoc.id || "")}">Déplacer</button></div>
+      </div>
     </div>
   `;
 }
@@ -1510,15 +1562,17 @@ function renderPdfPreviewView() {
 }
 
 function renderDocumentsListView() {
-  const documents = getProjectDocuments();
-  const hasDocuments = documents.length > 0;
-  const bodyHtml = documents.map(renderRepoDocumentRow).join("");
+  const folders = Array.isArray(docsViewState.folders) ? docsViewState.folders : [];
+  const documents = Array.isArray(docsViewState.files) ? docsViewState.files : [];
+  const hasDocuments = folders.length + documents.length > 0;
+  const bodyHtml = [...folders.map(renderRepoFolderRow), ...documents.map(renderRepoDocumentRow)].join("");
 
   return `
     <section class="project-simple-page project-simple-page--documents">
       <div class="documents-shell documents-shell--project-page" id="projectDocumentScroll">
           ${renderDocumentsToolbar()}
           ${renderDocumentsActivityBanner()}
+          ${renderDocumentsBreadcrumb()}
 
           ${renderDataTableShell({
             className: "documents-repo data-table-shell--document-scroll",
@@ -1866,6 +1920,56 @@ function bindDocumentsSplitActions(root) {
 
 function bindDocumentsView(root) {
   bindDocumentsSplitActions(root);
+  const addFolderBtn = document.getElementById("documentsAddFolderBtn");
+  if (addFolderBtn) {
+    addFolderBtn.addEventListener("click", async () => {
+      const name = window.prompt("Nom du dossier ?");
+      if (!name) return;
+      console.info("[documents-view] create-folder.submit", { parentFolderId: docsViewState.currentFolderId || null });
+      await createDocumentFolder(String(store.currentProject?.backendProjectId || store.currentProject?.id || store.currentProjectId || ""), docsViewState.currentFolderId || null, name);
+      await loadCurrentDirectory();
+      renderProjectDocumentsContent(root);
+    });
+  }
+
+  document.querySelectorAll("[data-folder-rename-id]").forEach((btn) => {
+    btn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      const folderId = btn.getAttribute("data-folder-rename-id") || "";
+      const currentName = btn.getAttribute("data-folder-rename-name") || "";
+      const name = window.prompt("Nouveau nom du dossier :", currentName);
+      if (!name) return;
+      console.info("[documents-view] rename-folder.submit", { folderId });
+      await renameDocumentFolder(String(store.currentProject?.backendProjectId || store.currentProject?.id || store.currentProjectId || ""), folderId, name);
+      await loadCurrentDirectory();
+      renderProjectDocumentsContent(root);
+    });
+  });
+
+  document.querySelectorAll(".js-folder-open-trigger[data-folder-id]").forEach((trigger) => {
+    const folderId = trigger.getAttribute("data-folder-id") || "";
+    trigger.addEventListener("click", async (event) => {
+      event.preventDefault();
+      console.info("[documents-view] open-folder", { folderId });
+      await loadCurrentDirectory({ forceFolderId: folderId });
+      renderProjectDocumentsContent(root);
+    });
+  });
+
+  document.querySelectorAll("[data-breadcrumb-folder-id]").forEach((crumb) => {
+    crumb.addEventListener("click", async () => {
+      const folderId = crumb.getAttribute("data-breadcrumb-folder-id") || null;
+      console.info("[documents-view] breadcrumb-click", { folderId: folderId || null });
+      await loadCurrentDirectory({ forceFolderId: folderId || null });
+      renderProjectDocumentsContent(root);
+    });
+  });
+
+  document.querySelectorAll("[data-document-move-id]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      console.info("[documents-view] move-file.open", { fileId: btn.getAttribute("data-document-move-id") || "" });
+    });
+  });
 
     const activityCloseBtn = document.getElementById("documentsActivityCloseBtn");
   if (activityCloseBtn) {
@@ -1928,6 +2032,7 @@ function bindDocumentsView(root) {
 
     trigger.addEventListener("click", async (event) => {
       event.preventDefault();
+      console.info("[documents-view] open-file", { documentId });
       await openPdfPreview(root, documentId);
     });
   });
@@ -2029,10 +2134,11 @@ export function renderProjectDocuments(root) {
   root.className = "project-shell__content";
   clearProjectActiveScrollSource();
 
-  renderProjectDocumentsContent(root);
   debugProjectScrollPolicy("render-project-documents", { mode: docsViewState.mode });
-
-  syncProjectDocumentsFromSupabase({ force: true })
+  Promise.all([
+    syncProjectDocumentsFromSupabase({ force: true }),
+    loadCurrentDirectory()
+  ])
     .then(() => {
       if (!root?.isConnected) return;
       renderProjectDocumentsContent(root);
