@@ -1803,7 +1803,7 @@ function renderUploadView() {
                   ${renderGhInput({
                     id: "documentsTitleInput",
                     value: docsViewState.title,
-                    placeholder: "Ex. Note d'hypothèses parasismiques - version 03",
+                    placeholder: "Ex. Note d'hypothèses - version 03",
                     icon: getDocumentIconSvg()
                   })}
                 </div>
@@ -2002,7 +2002,7 @@ function triggerAutoAnalysisAfterDirectUpload(root, document = null) {
   setDocumentsActivity({
     tone: "success",
     title: "Document déposé",
-    message: "Le dépôt a été enregistré et l’analyse parasismique automatique a été lancée."
+    message: "Le dépôt a été enregistré et l’analyse automatique a été lancée."
   });
 
   runAnalysis({
