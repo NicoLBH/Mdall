@@ -23,7 +23,7 @@ import {
 } from "../services/analysis-runner.js";
 import { addProjectDocument, decorateDocumentWithPhase, getEnabledProjectPhasesCatalog, getProjectDocumentById, getProjectDocumentPreviewUrl, getProjectDocuments, resolveDocumentRefs, setActiveProjectDocument } from "../services/project-documents-store.js";
 import { getDocumentStatsMap } from "../services/project-document-selectors.js";
-import { syncProjectDocumentsFromSupabase } from "../services/project-supabase-sync.js";
+import { listDocumentDirectory, listDocumentFolders, createDocumentFolder, renameDocumentFolder, moveDocumentFile, syncProjectDocumentsFromSupabase } from "../services/project-supabase-sync.js";
 import { getEffectiveSituationStatus, getEffectiveSujetStatus } from "./project-situations.js";
 import { buildSupabaseAuthHeaders, getSupabaseAnonKey, getSupabaseUrl } from "../../assets/js/auth.js";
 
@@ -77,8 +77,44 @@ const docsViewState = {
     rotation: 0,
     searchQuery: "",
     darkMode: false
-  }
+  },
+  currentFolderId: null,
+  breadcrumb: [],
+  folders: [],
+  files: [],
+  documentTreeOpen: false,
+  moveModal: {
+    isOpen: false,
+    fileId: "",
+    sourceFolderId: null,
+    targetFolderId: null,
+    folders: []
+  },
+  treeWidth: 280,
+  treeResizeActive: false,
+  treeExpandedFolderIds: []
 };
+const DOCUMENTS_TREE_EXPANDED_STORAGE_KEY = "mdall.documents.tree.expanded.v1";
+
+function getFolderClosedIconSvg() {
+  return `<svg data-component="Octicon" aria-hidden="true" focusable="false" class="octicon octicon-file-directory-fill" viewBox="0 0 16 16" width="16" height="16" fill="currentColor"><path d="M1.75 1A1.75 1.75 0 0 0 0 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0 0 16 13.25v-8.5A1.75 1.75 0 0 0 14.25 3H7.5a.25.25 0 0 1-.2-.1l-.9-1.2C6.07 1.26 5.55 1 5 1H1.75Z"></path></svg>`;
+}
+
+function getFolderOpenIconSvg() {
+  return `<svg data-component="Octicon" aria-hidden="true" focusable="false" class="octicon octicon-file-directory-open-fill" viewBox="0 0 16 16" width="16" height="16" fill="currentColor"><path d="M.513 1.513A1.75 1.75 0 0 1 1.75 1h3.5c.55 0 1.07.26 1.4.7l.9 1.2a.25.25 0 0 0 .2.1H13a1 1 0 0 1 1 1v.5H2.75a.75.75 0 0 0 0 1.5h11.978a1 1 0 0 1 .994 1.117L15 13.25A1.75 1.75 0 0 1 13.25 15H1.75A1.75 1.75 0 0 1 0 13.25V2.75c0-.464.184-.91.513-1.237Z"></path></svg>`;
+}
+
+async function loadCurrentDirectory({ forceFolderId } = {}) {
+  const projectId = String(store.currentProject?.backendProjectId || store.currentProject?.id || store.currentProjectId || "").trim();
+  const folderId = forceFolderId === undefined ? docsViewState.currentFolderId : (forceFolderId || null);
+  console.info("[documents-view] load-directory.start", { projectId, folderId });
+  const directory = await listDocumentDirectory(projectId, folderId);
+  docsViewState.currentFolderId = directory?.currentFolder?.id || null;
+  docsViewState.breadcrumb = Array.isArray(directory?.breadcrumb) ? directory.breadcrumb : [];
+  docsViewState.folders = Array.isArray(directory?.folders) ? directory.folders : [];
+  docsViewState.files = Array.isArray(directory?.files) ? directory.files : [];
+  console.info("[documents-view] load-directory.success", { projectId, folderId: docsViewState.currentFolderId, folders: docsViewState.folders.length, files: docsViewState.files.length });
+}
 
 function syncDocumentsSelectedPhase() {
   const enabledPhases = getEnabledProjectPhasesCatalog();
@@ -1089,7 +1125,9 @@ function renderDocumentsToolbar() {
     mainAction: "add-documents"
   });
 
+  const addFolderButton = `<button type="button" class="gh-btn" id="documentsAddFolderBtn">Ajouter un dossier</button>`;
   const rightHtml = [
+    renderProjectTableToolbarGroup({ html: addFolderButton }),
     renderProjectTableToolbarGroup({ html: documentsButton })
   ].join("");
 
@@ -1098,6 +1136,55 @@ function renderDocumentsToolbar() {
     leftHtml: "",
     rightHtml
   });
+}
+
+function renderDocumentsTopBar() {
+  const isRoot = !docsViewState.currentFolderId;
+  if (isRoot) return "";
+  const toggleIcon = docsViewState.documentTreeOpen
+    ? svgIcon("sidebar-expand", { className: "octicon octicon-sidebar-expand" })
+    : svgIcon("sidebar-collapse", { className: "octicon octicon-sidebar-collapse" });
+  return `
+    <div class="documents-topbar">
+      <div class="documents-topbar__left">
+        <button type="button" class="documents-tree__toggle" id="documentsTreeToggleBtn">${toggleIcon}</button>
+        ${renderDocumentsBreadcrumb()}
+      </div>
+      <div class="documents-topbar__right">
+        <button type="button" class="gh-btn" id="documentsAddFolderBtn">Ajouter un dossier</button>
+        ${renderGhActionButton({
+          id: "documentsAddAction",
+          label: "Documents",
+          icon: getPlusIconSvg(),
+          tone: "primary",
+          mainAction: "add-documents"
+        })}
+      </div>
+    </div>
+  `;
+}
+
+function renderDocumentsBreadcrumb() {
+  const crumbButtons = [`<button type="button" class="documents-breadcrumb__link" data-breadcrumb-folder-id="">Documents</button>`];
+  docsViewState.breadcrumb.forEach((folder) => {
+    crumbButtons.push(`<span class="documents-breadcrumb__sep">/</span><button type="button" class="documents-breadcrumb__link" data-breadcrumb-folder-id="${escapeHtml(String(folder.id || ""))}">${escapeHtml(String(folder.name || "Dossier"))}</button>`);
+  });
+  crumbButtons.push(`<span class="documents-breadcrumb__sep">/</span>`);
+  return `<div class="documents-breadcrumb">${crumbButtons.join("")}</div>`;
+}
+
+function renderRepoFolderRow(folder) {
+  return `
+    <div class="documents-repo__row documents-repo__row--folder is-clickable" data-folder-id="${escapeHtml(folder.id || "")}" role="button" tabindex="0" aria-label="Ouvrir le dossier">
+      <div class="documents-repo__cell documents-repo__cell--name">
+        <span class="documents-repo__icon documents-repo__icon--folder">${getFolderClosedIconSvg()}</span>
+        <button type="button" class="documents-repo__name documents-repo__name-trigger js-folder-open-trigger" data-folder-id="${escapeHtml(folder.id || "")}">${escapeHtml(folder.name || "Dossier")}</button>
+      </div>
+      <div class="documents-repo__cell documents-repo__cell--message"><div class="documents-repo__message-main">Dossier</div></div>
+      <div class="documents-repo__cell documents-repo__cell--date">${escapeHtml(String(folder.updated_at || folder.created_at || "À l'instant"))}</div>
+      <div class="documents-repo__cell documents-repo__cell--stats"><button type="button" class="gh-btn" data-folder-rename-id="${escapeHtml(folder.id || "")}" data-folder-rename-name="${escapeHtml(folder.name || "")}">Renommer</button></div>
+    </div>
+  `;
 }
 
 
@@ -1150,7 +1237,9 @@ function renderRepoDocumentRow(doc) {
         <div class="documents-repo__message-meta">${escapeHtml(`${decoratedDoc.phaseCode}${decoratedDoc.phaseLabel ? ` - ${decoratedDoc.phaseLabel}` : ""}`)}</div>
       </div>
       <div class="documents-repo__cell documents-repo__cell--date">${escapeHtml(decoratedDoc.updatedAt || "À l'instant")}</div>
-      <div class="documents-repo__cell documents-repo__cell--stats">${renderDocumentStatsCell(decoratedDoc)}</div>
+      <div class="documents-repo__cell documents-repo__cell--stats">
+        <div class="documents-repo__stats-actions">${renderDocumentStatsCell(decoratedDoc)}<button type="button" class="gh-btn" data-document-move-id="${escapeHtml(decoratedDoc.id || "")}">Déplacer</button></div>
+      </div>
     </div>
   `;
 }
@@ -1510,29 +1599,120 @@ function renderPdfPreviewView() {
 }
 
 function renderDocumentsListView() {
-  const documents = getProjectDocuments();
-  const hasDocuments = documents.length > 0;
-  const bodyHtml = documents.map(renderRepoDocumentRow).join("");
+  const folders = Array.isArray(docsViewState.folders) ? docsViewState.folders : [];
+  const documents = Array.isArray(docsViewState.files) ? docsViewState.files : [];
+  const hasDocuments = folders.length + documents.length > 0;
+  const bodyHtml = [...folders.map(renderRepoFolderRow), ...documents.map(renderRepoDocumentRow)].join("");
 
+  const isRoot = !docsViewState.currentFolderId;
+  const treeHtml = isRoot ? "" : renderDocumentsSidebarTree();
+  const topBar = renderDocumentsTopBar();
+  const moveModalHtml = docsViewState.moveModal?.isOpen ? renderMoveFileModal() : "";
   return `
     <section class="project-simple-page project-simple-page--documents">
-      <div class="documents-shell documents-shell--project-page" id="projectDocumentScroll">
-          ${renderDocumentsToolbar()}
-          ${renderDocumentsActivityBanner()}
-
-          ${renderDataTableShell({
-            className: "documents-repo data-table-shell--document-scroll",
-            gridTemplate: getDocumentsTableGridTemplate(),
-            headHtml: renderDocumentsTableHeadHtml(),
-            bodyHtml,
-            state: hasDocuments ? "ready" : "empty",
-            emptyHtml: renderDataTableEmptyState({
-              title: "Aucun document n’a encore été déposé.",
-              description: "Ajoutez des documents pour commencer à constituer le dossier du projet."
-            })
-          })}
+      <div class="documents-shell documents-shell--project-page documents-layout${isRoot ? " is-root" : ""}" id="projectDocumentScroll">
+          ${treeHtml}
+          <div class="documents-main">
+            ${isRoot ? renderDocumentsToolbar() : topBar}
+            ${renderDocumentsActivityBanner()}
+            ${isRoot ? renderDocumentsBreadcrumb() : ""}
+            ${renderDataTableShell({
+              className: "documents-repo data-table-shell--document-scroll",
+              gridTemplate: getDocumentsTableGridTemplate(),
+              headHtml: renderDocumentsTableHeadHtml(),
+              bodyHtml,
+              state: hasDocuments ? "ready" : "empty",
+              emptyHtml: renderDataTableEmptyState({
+                title: "Aucun document n’a encore été déposé.",
+                description: "Ajoutez des documents pour commencer à constituer le dossier du projet."
+              })
+            })}
+          </div>
         </div>
+        ${moveModalHtml}
     </section>
+  `;
+}
+
+function renderDocumentsSidebarTree() {
+  const folders = Array.isArray(docsViewState.moveModal?.folders) && docsViewState.moveModal.folders.length
+    ? docsViewState.moveModal.folders
+    : (Array.isArray(docsViewState.folders) ? docsViewState.folders : []);
+  const byParent = new Map();
+  folders.forEach((folder) => {
+    const parentKey = String(folder.parent_folder_id || "");
+    if (!byParent.has(parentKey)) byParent.set(parentKey, []);
+    byParent.get(parentKey).push(folder);
+  });
+  byParent.forEach((items) => items.sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "fr")));
+  const docs = Array.isArray(getProjectDocuments()) ? getProjectDocuments() : [];
+  const filesByFolder = new Map();
+  docs.forEach((doc) => {
+    const key = String(doc?.folder_id || "");
+    if (!filesByFolder.has(key)) filesByFolder.set(key, []);
+    filesByFolder.get(key).push(doc);
+  });
+  const expandedSet = new Set(Array.isArray(docsViewState.treeExpandedFolderIds) ? docsViewState.treeExpandedFolderIds : []);
+  const walk = (parentKey = "", depth = 0) => (byParent.get(parentKey) || []).map((folder) => {
+    const id = String(folder.id || "");
+    const active = String(docsViewState.currentFolderId || "") === id;
+    const childFolders = byParent.get(id) || [];
+    const files = filesByFolder.get(id) || [];
+    const hasChildren = childFolders.length > 0 || files.length > 0;
+    const isExpanded = expandedSet.has(id);
+    const caret = hasChildren ? `<button type="button" class="documents-tree__caret" data-tree-toggle-folder-id="${escapeHtml(id)}">${svgIcon(isExpanded ? "chevron-down" : "chevron-right", { className: isExpanded ? "octicon octicon-chevron-down" : "octicon octicon-chevron-right" })}</button>` : `<span class="documents-tree__caret-spacer"></span>`;
+    const row = `<div class="documents-tree__row" style="padding-left:${12 + Math.min(depth, 8) * 18}px">${caret}<button type="button" class="documents-tree__item${active ? " is-active" : ""}" data-tree-folder-id="${escapeHtml(id)}">${isExpanded ? getFolderOpenIconSvg() : getFolderClosedIconSvg()} ${escapeHtml(folder.name || "Dossier")}</button></div>`;
+    if (!isExpanded) return row;
+    const fileRows = files.map((file) => `<div class="documents-tree__file" style="padding-left:${34 + Math.min(depth + 1, 9) * 18}px">${getDocumentIconSvg()} ${escapeHtml(file?.name || file?.original_filename || file?.filename || "Fichier")}</div>`).join("");
+    return `${row}${walk(id, depth + 1).join("")}${fileRows}`;
+  });
+  const opened = !!docsViewState.documentTreeOpen;
+  const treeBody = `<div class="documents-tree__panel"><button type="button" class="documents-tree__item${docsViewState.currentFolderId ? "" : " is-active"}" data-tree-folder-id="">${getFolderOpenIconSvg()} Racine / Documents</button>${walk("").join("")}</div>`;
+  return `
+    <aside class="documents-tree${opened ? " is-open" : " is-collapsed"}" style="--documents-tree-width:${Math.max(220, Math.min(520, Number(docsViewState.treeWidth || 280)))}px">
+      ${treeBody}
+      <div class="documents-tree__resize-handle" id="documentsTreeResizeHandle"></div>
+      <div class="documents-tree__resize-guide" id="documentsTreeResizeGuide"></div>
+    </aside>
+  `;
+}
+
+function renderMoveFolderOption(folder, depth = 0) {
+  const indent = Math.min(depth, 6) * 16;
+  const folderId = String(folder.id || "");
+  const selected = String(docsViewState.moveModal?.targetFolderId || "") === folderId;
+  return `<button type="button" class="documents-move-modal__target${selected ? " is-active" : ""}" data-move-target-folder-id="${escapeHtml(folderId)}" style="padding-left:${indent + 12}px">${getFolderClosedIconSvg()} ${escapeHtml(folder.name || "Dossier")}</button>`;
+}
+
+function renderMoveFileModal() {
+  const folders = Array.isArray(docsViewState.moveModal?.folders) ? docsViewState.moveModal.folders : [];
+  const folderMap = new Map(folders.map((f) => [String(f.id || ""), f]));
+  const byParent = new Map();
+  folders.forEach((folder) => {
+    const parentKey = String(folder.parent_folder_id || "");
+    if (!byParent.has(parentKey)) byParent.set(parentKey, []);
+    byParent.get(parentKey).push(folder);
+  });
+  byParent.forEach((items) => items.sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "fr")));
+  const flatten = (parentKey = "", depth = 0) => {
+    const items = byParent.get(parentKey) || [];
+    return items.flatMap((item) => [renderMoveFolderOption(item, depth), ...flatten(String(item.id || ""), depth + 1)]);
+  };
+  const sourceFolder = docsViewState.moveModal?.sourceFolderId ? folderMap.get(String(docsViewState.moveModal.sourceFolderId || "")) : null;
+  const sourceLabel = sourceFolder ? String(sourceFolder.name || "Dossier") : "Racine / Documents";
+  const rootSelected = docsViewState.moveModal?.targetFolderId == null;
+  return `
+    <div class="documents-move-modal__backdrop" id="documentsMoveModalBackdrop">
+      <div class="documents-move-modal" role="dialog" aria-modal="true" aria-label="Déplacer le fichier">
+        <header class="documents-move-modal__header"><h3>Déplacer le fichier</h3><button type="button" class="gh-btn" id="documentsMoveModalCloseBtn">Fermer</button></header>
+        <div class="documents-move-modal__current">Dossier actuel : <strong>${escapeHtml(sourceLabel)}</strong></div>
+        <div class="documents-move-modal__targets">
+          <button type="button" class="documents-move-modal__target${rootSelected ? " is-active" : ""}" data-move-target-folder-id="">${getFolderOpenIconSvg()} Racine / Documents</button>
+          ${flatten("").join("")}
+        </div>
+        <footer class="documents-move-modal__actions"><button type="button" class="gh-btn gh-btn--validate" id="documentsMoveModalConfirmBtn">Déplacer ici</button></footer>
+      </div>
+    </div>
   `;
 }
 
@@ -1866,6 +2046,173 @@ function bindDocumentsSplitActions(root) {
 
 function bindDocumentsView(root) {
   bindDocumentsSplitActions(root);
+  const treeToggleBtn = document.getElementById("documentsTreeToggleBtn");
+  if (treeToggleBtn) {
+    treeToggleBtn.addEventListener("click", async () => {
+      docsViewState.documentTreeOpen = !docsViewState.documentTreeOpen;
+      console.info("[documents-tree] toggle", { open: docsViewState.documentTreeOpen });
+      if (docsViewState.documentTreeOpen) {
+        const projectId = String(store.currentProject?.backendProjectId || store.currentProject?.id || store.currentProjectId || "");
+        console.info("[documents-tree] load.start", { projectId });
+        docsViewState.moveModal.folders = await listDocumentFolders(projectId);
+        console.info("[documents-tree] load.success", { count: docsViewState.moveModal.folders.length });
+      }
+      renderProjectDocumentsContent(root);
+    });
+  }
+  document.querySelectorAll("[data-tree-folder-id]").forEach((node) => {
+    node.addEventListener("click", async () => {
+      const folderId = node.getAttribute("data-tree-folder-id") || null;
+      console.info("[documents-tree] select-folder", { folderId: folderId || null });
+      await loadCurrentDirectory({ forceFolderId: folderId || null });
+      renderProjectDocumentsContent(root);
+    });
+  });
+  document.querySelectorAll("[data-tree-toggle-folder-id]").forEach((node) => {
+    node.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const folderId = String(node.getAttribute("data-tree-toggle-folder-id") || "");
+      const set = new Set(Array.isArray(docsViewState.treeExpandedFolderIds) ? docsViewState.treeExpandedFolderIds : []);
+      if (set.has(folderId)) set.delete(folderId); else set.add(folderId);
+      docsViewState.treeExpandedFolderIds = Array.from(set);
+      try { localStorage.setItem(DOCUMENTS_TREE_EXPANDED_STORAGE_KEY, JSON.stringify(docsViewState.treeExpandedFolderIds)); } catch {}
+      renderProjectDocumentsContent(root);
+    });
+  });
+  const resizeHandle = document.getElementById("documentsTreeResizeHandle");
+  if (resizeHandle) {
+    resizeHandle.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      const startX = event.clientX;
+      const startWidth = Number(docsViewState.treeWidth || 280);
+      docsViewState.treeResizeActive = true;
+      const guide = document.getElementById("documentsTreeResizeGuide");
+      const onMove = (moveEvent) => {
+        const next = Math.max(220, Math.min(520, startWidth + (moveEvent.clientX - startX)));
+        docsViewState.treeWidth = next;
+        if (guide) {
+          guide.style.display = "block";
+          guide.style.left = `${next}px`;
+        }
+      };
+      const onUp = () => {
+        docsViewState.treeResizeActive = false;
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        renderProjectDocumentsContent(root);
+      };
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+    });
+  }
+  const addFolderBtn = document.getElementById("documentsAddFolderBtn");
+  if (addFolderBtn) {
+    addFolderBtn.addEventListener("click", async () => {
+      const name = window.prompt("Nom du dossier ?");
+      if (!name) return;
+      console.info("[documents-view] create-folder.submit", { parentFolderId: docsViewState.currentFolderId || null });
+      await createDocumentFolder(String(store.currentProject?.backendProjectId || store.currentProject?.id || store.currentProjectId || ""), docsViewState.currentFolderId || null, name);
+      await loadCurrentDirectory();
+      if (docsViewState.documentTreeOpen) console.info("[documents-tree] refresh-after-mutation", { action: "create-folder" });
+      renderProjectDocumentsContent(root);
+    });
+  }
+
+  document.querySelectorAll("[data-folder-rename-id]").forEach((btn) => {
+    btn.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      const folderId = btn.getAttribute("data-folder-rename-id") || "";
+      const currentName = btn.getAttribute("data-folder-rename-name") || "";
+      const name = window.prompt("Nouveau nom du dossier :", currentName);
+      if (!name) return;
+      console.info("[documents-view] rename-folder.submit", { folderId });
+      await renameDocumentFolder(String(store.currentProject?.backendProjectId || store.currentProject?.id || store.currentProjectId || ""), folderId, name);
+      await loadCurrentDirectory();
+      if (docsViewState.documentTreeOpen) console.info("[documents-tree] refresh-after-mutation", { action: "rename-folder" });
+      renderProjectDocumentsContent(root);
+    });
+  });
+
+  document.querySelectorAll(".js-folder-open-trigger[data-folder-id]").forEach((trigger) => {
+    const folderId = trigger.getAttribute("data-folder-id") || "";
+    trigger.addEventListener("click", async (event) => {
+      event.preventDefault();
+      console.info("[documents-view] open-folder", { folderId });
+      await loadCurrentDirectory({ forceFolderId: folderId });
+      renderProjectDocumentsContent(root);
+    });
+  });
+
+  document.querySelectorAll("[data-breadcrumb-folder-id]").forEach((crumb) => {
+    crumb.addEventListener("click", async () => {
+      const folderId = crumb.getAttribute("data-breadcrumb-folder-id") || null;
+      console.info("[documents-view] breadcrumb-click", { folderId: folderId || null });
+      await loadCurrentDirectory({ forceFolderId: folderId || null });
+      renderProjectDocumentsContent(root);
+    });
+  });
+
+  document.querySelectorAll("[data-document-move-id]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const fileId = btn.getAttribute("data-document-move-id") || "";
+      const file = (Array.isArray(docsViewState.files) ? docsViewState.files : []).find((item) => String(item.id || "") === fileId) || null;
+      const projectId = String(store.currentProject?.backendProjectId || store.currentProject?.id || store.currentProjectId || "");
+      docsViewState.moveModal = {
+        isOpen: true,
+        fileId,
+        sourceFolderId: file?.folder_id || null,
+        targetFolderId: file?.folder_id || null,
+        folders: await listDocumentFolders(projectId)
+      };
+      console.info("[documents-view] move-file.open", { fileId });
+      console.info("[documents-files] move-modal.open", { fileId });
+      renderProjectDocumentsContent(root);
+    });
+  });
+
+  const moveCloseBtn = document.getElementById("documentsMoveModalCloseBtn");
+  if (moveCloseBtn) {
+    moveCloseBtn.addEventListener("click", () => {
+      docsViewState.moveModal.isOpen = false;
+      renderProjectDocumentsContent(root);
+    });
+  }
+  document.querySelectorAll("[data-move-target-folder-id]").forEach((targetBtn) => {
+    targetBtn.addEventListener("click", () => {
+      const targetFolderId = targetBtn.getAttribute("data-move-target-folder-id") || null;
+      docsViewState.moveModal.targetFolderId = targetFolderId || null;
+      console.info("[documents-files] move-modal.select-target", { targetFolderId: targetFolderId || null });
+      renderProjectDocumentsContent(root);
+    });
+  });
+  const moveConfirmBtn = document.getElementById("documentsMoveModalConfirmBtn");
+  if (moveConfirmBtn) {
+    moveConfirmBtn.addEventListener("click", async () => {
+      const projectId = String(store.currentProject?.backendProjectId || store.currentProject?.id || store.currentProjectId || "");
+      const { fileId, sourceFolderId, targetFolderId } = docsViewState.moveModal;
+      if (!fileId) return;
+      if ((sourceFolderId || null) === (targetFolderId || null)) {
+        setDocumentsActivity({ tone: "info", title: "Déplacement", message: "Le fichier est déjà dans ce dossier." });
+        docsViewState.moveModal.isOpen = false;
+        renderProjectDocumentsContent(root);
+        return;
+      }
+      console.info("[documents-files] move-modal.confirm", { fileId, targetFolderId: targetFolderId || null });
+      try {
+        await moveDocumentFile(projectId, fileId, targetFolderId || null);
+        console.info("[documents-files] move-modal.success", { fileId, targetFolderId: targetFolderId || null });
+        docsViewState.moveModal.isOpen = false;
+        await loadCurrentDirectory();
+        if (docsViewState.documentTreeOpen) console.info("[documents-tree] refresh-after-mutation", { action: "move-file" });
+        renderProjectDocumentsContent(root);
+      } catch (error) {
+        console.info("[documents-files] move-modal.failure", { fileId, error: error instanceof Error ? error.message : String(error || "") });
+        setDocumentsActivity({ tone: "error", title: "Déplacement impossible", message: error instanceof Error ? error.message : "Erreur inconnue." });
+        renderProjectDocumentsContent(root);
+      }
+    });
+  }
 
     const activityCloseBtn = document.getElementById("documentsActivityCloseBtn");
   if (activityCloseBtn) {
@@ -1928,6 +2275,7 @@ function bindDocumentsView(root) {
 
     trigger.addEventListener("click", async (event) => {
       event.preventDefault();
+      console.info("[documents-view] open-file", { documentId });
       await openPdfPreview(root, documentId);
     });
   });
@@ -2011,6 +2359,12 @@ function bindDocumentsView(root) {
 
 function renderProjectDocumentsContent(root) {
   syncDocumentsProjectViewHeader();
+  const contentHost = document.getElementById("project-content");
+  if (contentHost) {
+    const top = contentHost.getBoundingClientRect().top || 0;
+    const height = Math.max(320, Math.floor((window.innerHeight || 0) - top - 8));
+    contentHost.style.setProperty("--documents-content-height", `${height}px`);
+  }
 
   root.innerHTML = docsViewState.mode === "upload"
     ? renderUploadView()
@@ -2025,14 +2379,24 @@ function renderProjectDocumentsContent(root) {
 
 export function renderProjectDocuments(root) {
   syncDocumentsSelectedPhase();
+  if (!Array.isArray(docsViewState.treeExpandedFolderIds) || !docsViewState.treeExpandedFolderIds.length) {
+    try {
+      const raw = localStorage.getItem(DOCUMENTS_TREE_EXPANDED_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      docsViewState.treeExpandedFolderIds = Array.isArray(parsed) ? parsed.map((item) => String(item || "")).filter(Boolean) : [];
+    } catch {
+      docsViewState.treeExpandedFolderIds = [];
+    }
+  }
 
   root.className = "project-shell__content";
   clearProjectActiveScrollSource();
 
-  renderProjectDocumentsContent(root);
   debugProjectScrollPolicy("render-project-documents", { mode: docsViewState.mode });
-
-  syncProjectDocumentsFromSupabase({ force: true })
+  Promise.all([
+    syncProjectDocumentsFromSupabase({ force: true }),
+    loadCurrentDirectory()
+  ])
     .then(() => {
       if (!root?.isConnected) return;
       renderProjectDocumentsContent(root);

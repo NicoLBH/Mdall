@@ -57,7 +57,6 @@ export function renderProjectLayout(root, projectId, tab) {
 
       <div class="${shellBodyClassName}">
         ${renderProjectSituationsTopBanner()}
-        <div id="projectViewHeaderHost" class="project-view-header-host"></div>
         <div id="situationsToolbarHost" class="project-situations-toolbar-host"></div>
         <div id="project-content" class="project-shell__content"></div>
       </div>
