@@ -89,7 +89,9 @@ const docsViewState = {
     sourceFolderId: null,
     targetFolderId: null,
     folders: []
-  }
+  },
+  treeWidth: 280,
+  treeResizeActive: false
 };
 
 function getFolderClosedIconSvg() {
@@ -1574,10 +1576,12 @@ function renderDocumentsListView() {
   const hasDocuments = folders.length + documents.length > 0;
   const bodyHtml = [...folders.map(renderRepoFolderRow), ...documents.map(renderRepoDocumentRow)].join("");
 
+  const treeHtml = renderDocumentsSidebarTree();
   const moveModalHtml = docsViewState.moveModal?.isOpen ? renderMoveFileModal() : "";
   return `
     <section class="project-simple-page project-simple-page--documents">
-      <div class="documents-shell documents-shell--project-page" id="projectDocumentScroll">
+      <div class="documents-shell documents-shell--project-page documents-layout" id="projectDocumentScroll">
+          ${treeHtml}
           ${renderDocumentsToolbar()}
           ${renderDocumentsActivityBanner()}
           ${renderDocumentsBreadcrumb()}
@@ -1596,6 +1600,33 @@ function renderDocumentsListView() {
         </div>
         ${moveModalHtml}
     </section>
+  `;
+}
+
+function renderDocumentsSidebarTree() {
+  const folders = Array.isArray(docsViewState.moveModal?.folders) && docsViewState.moveModal.folders.length
+    ? docsViewState.moveModal.folders
+    : (Array.isArray(docsViewState.folders) ? docsViewState.folders : []);
+  const byParent = new Map();
+  folders.forEach((folder) => {
+    const parentKey = String(folder.parent_folder_id || "");
+    if (!byParent.has(parentKey)) byParent.set(parentKey, []);
+    byParent.get(parentKey).push(folder);
+  });
+  byParent.forEach((items) => items.sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "fr")));
+  const walk = (parentKey = "", depth = 0) => (byParent.get(parentKey) || []).map((folder) => {
+    const id = String(folder.id || "");
+    const active = String(docsViewState.currentFolderId || "") === id;
+    const row = `<button type="button" class="documents-tree__item${active ? " is-active" : ""}" data-tree-folder-id="${escapeHtml(id)}" style="padding-left:${12 + Math.min(depth, 8) * 18}px">${getFolderClosedIconSvg()} ${escapeHtml(folder.name || "Dossier")}</button>`;
+    return `${row}${walk(id, depth + 1).join("")}`;
+  });
+  const opened = !!docsViewState.documentTreeOpen;
+  const toggleIcon = opened ? svgIcon("sidebar-expand", { className: "octicon octicon-sidebar-expand" }) : svgIcon("sidebar-collapse", { className: "octicon octicon-sidebar-collapse" });
+  return `
+    <aside class="documents-tree${opened ? " is-open" : " is-collapsed"}" style="--documents-tree-width:${Math.max(220, Math.min(520, Number(docsViewState.treeWidth || 280)))}px">
+      <button type="button" class="documents-tree__toggle" id="documentsTreeToggleBtn">${toggleIcon}</button>
+      ${opened ? `<div class="documents-tree__panel"><button type="button" class="documents-tree__item${docsViewState.currentFolderId ? "" : " is-active"}" data-tree-folder-id="">${getFolderOpenIconSvg()} Racine / Documents</button>${walk("").join("")}</div><div class="documents-tree__resize-handle" id="documentsTreeResizeHandle"></div><div class="documents-tree__resize-guide" id="documentsTreeResizeGuide"></div>` : ""}
+    </aside>
   `;
 }
 
@@ -1976,6 +2007,7 @@ function bindDocumentsView(root) {
       console.info("[documents-view] create-folder.submit", { parentFolderId: docsViewState.currentFolderId || null });
       await createDocumentFolder(String(store.currentProject?.backendProjectId || store.currentProject?.id || store.currentProjectId || ""), docsViewState.currentFolderId || null, name);
       await loadCurrentDirectory();
+      if (docsViewState.documentTreeOpen) console.info("[documents-tree] refresh-after-mutation", { action: "create-folder" });
       renderProjectDocumentsContent(root);
     });
   }
@@ -1990,6 +2022,7 @@ function bindDocumentsView(root) {
       console.info("[documents-view] rename-folder.submit", { folderId });
       await renameDocumentFolder(String(store.currentProject?.backendProjectId || store.currentProject?.id || store.currentProjectId || ""), folderId, name);
       await loadCurrentDirectory();
+      if (docsViewState.documentTreeOpen) console.info("[documents-tree] refresh-after-mutation", { action: "rename-folder" });
       renderProjectDocumentsContent(root);
     });
   });
@@ -2064,6 +2097,7 @@ function bindDocumentsView(root) {
         console.info("[documents-files] move-modal.success", { fileId, targetFolderId: targetFolderId || null });
         docsViewState.moveModal.isOpen = false;
         await loadCurrentDirectory();
+        if (docsViewState.documentTreeOpen) console.info("[documents-tree] refresh-after-mutation", { action: "move-file" });
         renderProjectDocumentsContent(root);
       } catch (error) {
         console.info("[documents-files] move-modal.failure", { fileId, error: error instanceof Error ? error.message : String(error || "") });
@@ -2249,3 +2283,51 @@ export function renderProjectDocuments(root) {
       console.warn("syncProjectDocumentsFromSupabase failed", error);
     });
 }
+  const treeToggleBtn = document.getElementById("documentsTreeToggleBtn");
+  if (treeToggleBtn) {
+    treeToggleBtn.addEventListener("click", async () => {
+      docsViewState.documentTreeOpen = !docsViewState.documentTreeOpen;
+      console.info("[documents-tree] toggle", { open: docsViewState.documentTreeOpen });
+      if (docsViewState.documentTreeOpen) {
+        const projectId = String(store.currentProject?.backendProjectId || store.currentProject?.id || store.currentProjectId || "");
+        console.info("[documents-tree] load.start", { projectId });
+        docsViewState.moveModal.folders = await listDocumentFolders(projectId);
+        console.info("[documents-tree] load.success", { count: docsViewState.moveModal.folders.length });
+      }
+      renderProjectDocumentsContent(root);
+    });
+  }
+  document.querySelectorAll("[data-tree-folder-id]").forEach((node) => {
+    node.addEventListener("click", async () => {
+      const folderId = node.getAttribute("data-tree-folder-id") || null;
+      console.info("[documents-tree] select-folder", { folderId: folderId || null });
+      await loadCurrentDirectory({ forceFolderId: folderId || null });
+      renderProjectDocumentsContent(root);
+    });
+  });
+  const resizeHandle = document.getElementById("documentsTreeResizeHandle");
+  if (resizeHandle) {
+    resizeHandle.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      const startX = event.clientX;
+      const startWidth = Number(docsViewState.treeWidth || 280);
+      docsViewState.treeResizeActive = true;
+      const guide = document.getElementById("documentsTreeResizeGuide");
+      const onMove = (moveEvent) => {
+        const next = Math.max(220, Math.min(520, startWidth + (moveEvent.clientX - startX)));
+        docsViewState.treeWidth = next;
+        if (guide) {
+          guide.style.display = "block";
+          guide.style.left = `${next}px`;
+        }
+      };
+      const onUp = () => {
+        docsViewState.treeResizeActive = false;
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        renderProjectDocumentsContent(root);
+      };
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+    });
+  }
