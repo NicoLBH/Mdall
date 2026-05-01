@@ -6506,7 +6506,7 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
 }
 .documents-breadcrumb__sep{color:var(--muted);}
 .documents-breadcrumb__link:first-of-type{font-weight:600;}
-.documents-breadcrumb__link:last-of-type{font-weight:600;color:rgb(240, 246, 252);}
+.documents-breadcrumb__current{font-size:16px;line-height:24px;font-weight:600;color:rgb(240, 246, 252);}
 .documents-repo__message-main{
   color:var(--muted);
   font-size:13px;
@@ -6587,7 +6587,6 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
 .documents-tree__file:hover{background:rgba(110,118,129,.16);}
 .documents-tree__file:hover .documents-tree__label{color:#58a6ff;text-decoration:underline;}
 .documents-tree__row,.documents-tree__file{position:relative;}
-.documents-tree__row::after,.documents-tree__file::after{content:"";position:absolute;left:calc(var(--tree-indent, 12px) - 10px);top:4px;bottom:4px;width:1px;background:rgba(240,246,252,.24);pointer-events:none;}
 .documents-tree .documents-repo__icon--folder,.documents-tree .octicon-file-directory-fill,.documents-tree .octicon-file-directory-open-fill{fill:rgb(145, 152, 161);color:rgb(145, 152, 161);}
 .documents-tree__resize-handle{position:absolute;top:0;right:-6px;width:12px;height:100%;cursor:col-resize;}
 .documents-tree__resize-guide{position:absolute;top:0;bottom:0;width:2px;background:#2f81f7;display:none;pointer-events:none;}
