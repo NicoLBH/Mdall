@@ -1754,7 +1754,7 @@ function renderDocumentsSidebarTree() {
     });
   };
   const opened = !!docsViewState.documentTreeOpen;
-  const treeBody = `<div class="documents-tree__panel"><div class="documents-tree__row${docsViewState.currentFolderId ? "" : " is-active"}"><span class="documents-tree__caret-spacer"></span><button type="button" class="documents-tree__item${docsViewState.currentFolderId ? "" : " is-active"}" data-tree-folder-id="">${getFolderOpenIconSvg()} <span class="documents-tree__label">Racine / Documents</span></button></div>${walk("").join("")}</div>`;
+  const treeBody = `<div class="documents-tree__panel"><div class="documents-tree__row${docsViewState.currentFolderId ? "" : " is-active"}"><span class="documents-tree__caret-spacer"></span><button type="button" class="documents-tree__item${docsViewState.currentFolderId ? "" : " is-active"}" data-tree-folder-id="">${getFolderOpenIconSvg()} <span class="documents-tree__label">Documents</span></button></div>${walk("").join("")}</div>`;
   return `
     <aside class="documents-tree${opened ? " is-open" : " is-collapsed"}" style="--documents-tree-width:${Math.max(220, Math.min(520, Number(docsViewState.treeWidth || 280)))}px">
       ${treeBody}

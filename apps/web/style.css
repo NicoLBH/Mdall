@@ -6576,8 +6576,8 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
 .documents-tree__row.is-active{background:rgba(110, 118, 129, .14);}
 .documents-tree__row:hover{background:rgba(110,118,129,.16);}
 .documents-tree__row.is-active::before{content:"";position:absolute;left:-6px;top:4px;bottom:4px;width:3px;border-radius:3px;background:#2f81f7;}
-.documents-tree__caret{border:0;background:transparent;color:var(--muted);cursor:pointer;padding:0 4px;}
-.documents-tree__caret-spacer{display:inline-block;width:16px;}
+.documents-tree__caret{border:0;background:transparent;color:var(--muted);cursor:pointer;padding:0 4px;width:24px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 24px;}
+.documents-tree__caret-spacer{display:inline-block;width:24px;flex:0 0 24px;}
 .documents-tree__indent{display:flex;align-items:stretch;align-self:stretch;gap:0;min-width:0;}
 .documents-tree__indent .documents-tree__divider:first-child{border-left-color:transparent !important;}
 .documents-tree__divider{width:14px;height:100%;display:inline-block;position:relative;flex:0 0 14px;}
