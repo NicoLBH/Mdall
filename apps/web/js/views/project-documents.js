@@ -1748,7 +1748,7 @@ function renderDocumentsSidebarTree() {
         .map(() => `<span class="documents-tree__divider${isExpanded ? " is-expanded" : ""}" aria-hidden="true"></span>`)
         .join("");
       const fileChevronSpacer = levelHasChevron ? `<span class="documents-tree__caret-spacer"></span>` : "";
-      return `<button type="button" class="documents-tree__file" data-tree-document-id="${escapeHtml(String(file?.id || ""))}" style="--tree-indent:${12 + Math.min(depth + 2, 10) * 24}px"><span class="documents-tree__indent">${fileIndentDividers}</span>${fileChevronSpacer}<span class="documents-tree__icon-slot">${getDocumentIconSvg()}</span> <span class="documents-tree__label">${escapeHtml(file?.name || file?.original_filename || file?.filename || "Fichier")}</span></button>`;
+      return `<button type="button" class="documents-tree__file" data-tree-document-id="${escapeHtml(String(file?.id || ""))}" style="--tree-indent:${12 + Math.min(depth + 1, 9) * 18}px"><span class="documents-tree__indent">${fileIndentDividers}</span>${fileChevronSpacer}<span class="documents-tree__icon-slot">${getDocumentIconSvg()}</span> <span class="documents-tree__label">${escapeHtml(file?.name || file?.original_filename || file?.filename || "Fichier")}</span></button>`;
     }).join("");
     return `${row}${walk(id, depth + 1).join("")}${fileRows}`;
     });
