@@ -91,8 +91,30 @@ const docsViewState = {
     folders: []
   },
   treeWidth: 280,
-  treeResizeActive: false
+  treeResizeActive: false,
+  treeExpandedFolderIds: []
 };
+const DOCUMENTS_TREE_EXPANDED_STORAGE_KEY = "mdall.documents.tree.expanded.v1";
+
+function getFolderClosedIconSvg() {
+  return `<svg data-component="Octicon" aria-hidden="true" focusable="false" class="octicon octicon-file-directory-fill" viewBox="0 0 16 16" width="16" height="16" fill="currentColor"><path d="M1.75 1A1.75 1.75 0 0 0 0 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0 0 16 13.25v-8.5A1.75 1.75 0 0 0 14.25 3H7.5a.25.25 0 0 1-.2-.1l-.9-1.2C6.07 1.26 5.55 1 5 1H1.75Z"></path></svg>`;
+}
+
+function getFolderOpenIconSvg() {
+  return `<svg data-component="Octicon" aria-hidden="true" focusable="false" class="octicon octicon-file-directory-open-fill" viewBox="0 0 16 16" width="16" height="16" fill="currentColor"><path d="M.513 1.513A1.75 1.75 0 0 1 1.75 1h3.5c.55 0 1.07.26 1.4.7l.9 1.2a.25.25 0 0 0 .2.1H13a1 1 0 0 1 1 1v.5H2.75a.75.75 0 0 0 0 1.5h11.978a1 1 0 0 1 .994 1.117L15 13.25A1.75 1.75 0 0 1 13.25 15H1.75A1.75 1.75 0 0 1 0 13.25V2.75c0-.464.184-.91.513-1.237Z"></path></svg>`;
+}
+
+async function loadCurrentDirectory({ forceFolderId } = {}) {
+  const projectId = String(store.currentProject?.backendProjectId || store.currentProject?.id || store.currentProjectId || "").trim();
+  const folderId = forceFolderId === undefined ? docsViewState.currentFolderId : (forceFolderId || null);
+  console.info("[documents-view] load-directory.start", { projectId, folderId });
+  const directory = await listDocumentDirectory(projectId, folderId);
+  docsViewState.currentFolderId = directory?.currentFolder?.id || null;
+  docsViewState.breadcrumb = Array.isArray(directory?.breadcrumb) ? directory.breadcrumb : [];
+  docsViewState.folders = Array.isArray(directory?.folders) ? directory.folders : [];
+  docsViewState.files = Array.isArray(directory?.files) ? directory.files : [];
+  console.info("[documents-view] load-directory.success", { projectId, folderId: docsViewState.currentFolderId, folders: docsViewState.folders.length, files: docsViewState.files.length });
+}
 
 function getFolderClosedIconSvg() {
   return `<svg data-component="Octicon" aria-hidden="true" focusable="false" class="octicon octicon-file-directory-fill" viewBox="0 0 16 16" width="16" height="16" fill="currentColor"><path d="M1.75 1A1.75 1.75 0 0 0 0 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0 0 16 13.25v-8.5A1.75 1.75 0 0 0 14.25 3H7.5a.25.25 0 0 1-.2-.1l-.9-1.2C6.07 1.26 5.55 1 5 1H1.75Z"></path></svg>`;
@@ -1643,11 +1665,26 @@ function renderDocumentsSidebarTree() {
     byParent.get(parentKey).push(folder);
   });
   byParent.forEach((items) => items.sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "fr")));
+  const docs = Array.isArray(getProjectDocuments()) ? getProjectDocuments() : [];
+  const filesByFolder = new Map();
+  docs.forEach((doc) => {
+    const key = String(doc?.folder_id || "");
+    if (!filesByFolder.has(key)) filesByFolder.set(key, []);
+    filesByFolder.get(key).push(doc);
+  });
+  const expandedSet = new Set(Array.isArray(docsViewState.treeExpandedFolderIds) ? docsViewState.treeExpandedFolderIds : []);
   const walk = (parentKey = "", depth = 0) => (byParent.get(parentKey) || []).map((folder) => {
     const id = String(folder.id || "");
     const active = String(docsViewState.currentFolderId || "") === id;
-    const row = `<button type="button" class="documents-tree__item${active ? " is-active" : ""}" data-tree-folder-id="${escapeHtml(id)}" style="padding-left:${12 + Math.min(depth, 8) * 18}px">${getFolderClosedIconSvg()} ${escapeHtml(folder.name || "Dossier")}</button>`;
-    return `${row}${walk(id, depth + 1).join("")}`;
+    const childFolders = byParent.get(id) || [];
+    const files = filesByFolder.get(id) || [];
+    const hasChildren = childFolders.length > 0 || files.length > 0;
+    const isExpanded = expandedSet.has(id);
+    const caret = hasChildren ? `<button type="button" class="documents-tree__caret" data-tree-toggle-folder-id="${escapeHtml(id)}">${isExpanded ? "▾" : "▸"}</button>` : `<span class="documents-tree__caret-spacer"></span>`;
+    const row = `<div class="documents-tree__row" style="padding-left:${12 + Math.min(depth, 8) * 18}px">${caret}<button type="button" class="documents-tree__item${active ? " is-active" : ""}" data-tree-folder-id="${escapeHtml(id)}">${isExpanded ? getFolderOpenIconSvg() : getFolderClosedIconSvg()} ${escapeHtml(folder.name || "Dossier")}</button></div>`;
+    if (!isExpanded) return row;
+    const fileRows = files.map((file) => `<div class="documents-tree__file" style="padding-left:${34 + Math.min(depth + 1, 9) * 18}px">${getDocumentIconSvg()} ${escapeHtml(file?.name || file?.original_filename || file?.filename || "Fichier")}</div>`).join("");
+    return `${row}${walk(id, depth + 1).join("")}${fileRows}`;
   });
   const opened = !!docsViewState.documentTreeOpen;
   const treeBody = `<div class="documents-tree__panel"><button type="button" class="documents-tree__item${docsViewState.currentFolderId ? "" : " is-active"}" data-tree-folder-id="">${getFolderOpenIconSvg()} Racine / Documents</button>${walk("").join("")}</div>`;
@@ -2051,6 +2088,18 @@ function bindDocumentsView(root) {
       renderProjectDocumentsContent(root);
     });
   });
+  document.querySelectorAll("[data-tree-toggle-folder-id]").forEach((node) => {
+    node.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const folderId = String(node.getAttribute("data-tree-toggle-folder-id") || "");
+      const set = new Set(Array.isArray(docsViewState.treeExpandedFolderIds) ? docsViewState.treeExpandedFolderIds : []);
+      if (set.has(folderId)) set.delete(folderId); else set.add(folderId);
+      docsViewState.treeExpandedFolderIds = Array.from(set);
+      try { localStorage.setItem(DOCUMENTS_TREE_EXPANDED_STORAGE_KEY, JSON.stringify(docsViewState.treeExpandedFolderIds)); } catch {}
+      renderProjectDocumentsContent(root);
+    });
+  });
   const resizeHandle = document.getElementById("documentsTreeResizeHandle");
   if (resizeHandle) {
     resizeHandle.addEventListener("pointerdown", (event) => {
@@ -2344,6 +2393,15 @@ function renderProjectDocumentsContent(root) {
 
 export function renderProjectDocuments(root) {
   syncDocumentsSelectedPhase();
+  if (!Array.isArray(docsViewState.treeExpandedFolderIds) || !docsViewState.treeExpandedFolderIds.length) {
+    try {
+      const raw = localStorage.getItem(DOCUMENTS_TREE_EXPANDED_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      docsViewState.treeExpandedFolderIds = Array.isArray(parsed) ? parsed.map((item) => String(item || "")).filter(Boolean) : [];
+    } catch {
+      docsViewState.treeExpandedFolderIds = [];
+    }
+  }
 
   root.className = "project-shell__content";
   clearProjectActiveScrollSource();
