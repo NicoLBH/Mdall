@@ -842,7 +842,7 @@ export async function syncProjectDocumentsFromSupabase(options = {}) {
   }
 
   const params = new URLSearchParams();
-  params.set("select", "id,filename,original_filename,mime_type,storage_bucket,storage_path,document_kind,upload_status,created_at,updated_at");
+  params.set("select", "id,filename,original_filename,mime_type,storage_bucket,storage_path,folder_id,document_kind,upload_status,created_at,updated_at");
   params.set("project_id", `eq.${backendProjectId}`);
   params.set("deleted_at", "is.null");
   params.set("order", "created_at.desc");
