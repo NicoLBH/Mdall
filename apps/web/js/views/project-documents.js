@@ -1496,7 +1496,7 @@ function renderPdfPreviewView() {
     <section class="project-simple-page project-simple-page--documents">
       <div class="documents-shell documents-shell--project-page documents-layout${docsViewState.currentFolderId ? "" : " is-root"}" id="projectDocumentScroll" style="--documents-tree-width:${docsViewState.currentFolderId ? (docsViewState.documentTreeOpen ? Math.max(220, Math.min(520, Number(docsViewState.treeWidth || 280))) : 0) : 0}px">
         ${treeHtml}
-        <div class="documents-main">
+        <main class="documents-main">
           ${topBar}
           ${renderDocumentsActivityBanner()}
           <div class="documents-report">
@@ -1654,7 +1654,7 @@ function renderPdfPreviewView() {
               </div>
             </section>
           </div>
-        </div>
+        </main>
       </div>
     </section>
   `;
@@ -1678,7 +1678,7 @@ function renderDocumentsListView() {
     <section class="project-simple-page project-simple-page--documents">
       <div class="documents-shell documents-shell--project-page documents-layout${isRoot ? " is-root" : ""}" id="projectDocumentScroll" style="--documents-tree-width:${isRoot ? 0 : (docsViewState.documentTreeOpen ? Math.max(220, Math.min(520, Number(docsViewState.treeWidth || 280))) : 0)}px">
           ${treeHtml}
-          <div class="documents-main">
+          <main class="documents-main">
             ${isRoot ? renderDocumentsToolbar() : topBar}
             ${renderDocumentsActivityBanner()}
             ${isRoot ? renderDocumentsBreadcrumb() : ""}
@@ -1693,7 +1693,7 @@ function renderDocumentsListView() {
                 description: emptyDescription
               })
             })}
-          </div>
+          </main>
         </div>
         ${moveModalHtml}
     </section>
@@ -1754,7 +1754,7 @@ function renderDocumentsSidebarTree() {
     });
   };
   const opened = !!docsViewState.documentTreeOpen;
-  const treeBody = `<div class="documents-tree__panel"><div class="documents-tree__row${docsViewState.currentFolderId ? "" : " is-active"}"><span class="documents-tree__caret-spacer"></span><button type="button" class="documents-tree__item${docsViewState.currentFolderId ? "" : " is-active"}" data-tree-folder-id=""><span class="documents-tree__icon-slot">${getFolderOpenIconSvg()}</span> <span class="documents-tree__label">Documents</span></button></div>${walk("").join("")}</div>`;
+  const treeBody = `<div class="documents-tree__panel"><div class="documents-tree__row${docsViewState.currentFolderId ? "" : " is-active"}"><button type="button" class="documents-tree__item${docsViewState.currentFolderId ? "" : " is-active"}" data-tree-folder-id=""><span class="documents-tree__icon-slot">${getFolderOpenIconSvg()}</span> <span class="documents-tree__label">Documents</span></button></div>${walk("").join("")}</div>`;
   return `
     <aside class="documents-tree${opened ? " is-open" : " is-collapsed"}" style="--documents-tree-width:${Math.max(220, Math.min(520, Number(docsViewState.treeWidth || 280)))}px">
       ${treeBody}
@@ -2499,6 +2499,8 @@ function renderProjectDocumentsContent(root) {
       : docsViewState.mode === "pdf-preview"
         ? renderPdfPreviewView()
         : renderDocumentsListView();
+
+  document.body.classList.toggle("documents-pdf-sticky-mode", docsViewState.mode === "pdf-preview");
 
   bindDocumentsView(root);
 }

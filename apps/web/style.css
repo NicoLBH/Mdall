@@ -6585,13 +6585,22 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
 .documents-tree__divider.is-collapsed::after{content:"";position:absolute;top:50%;right:0;transform:translateY(-50%);height:36px;width:1px;background:#ffff;}
 .documents-tree__item{display:flex;align-items:center;gap:8px;padding:8px 12px 8px 0px;border:0;background:transparent;color:var(--text);border-radius:8px;text-align:left;cursor:pointer;width:100%;}
 .documents-tree__item.is-active{color:#58a6ff;}
-.documents-tree__file{display:flex;align-items:center;gap:8px;font-size:13px;padding:0;height:34px;min-width:0;border:0;background:transparent;color:var(--text);cursor:pointer;position:relative;border-radius:6px;}
+.documents-tree__file{display:flex;align-items:center;gap:4px;font-size:13px;padding:0;height:34px;min-width:0;border:0;background:transparent;color:var(--text);cursor:pointer;position:relative;border-radius:6px;}
 .documents-tree__item,.documents-tree__file{min-width:0;}
 .documents-tree__icon-slot{width:16px;min-width:16px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 16px;}
 .documents-tree__label{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .documents-tree__file:hover{background:rgba(110,118,129,.16);}
 .documents-tree__file:hover .documents-tree__label{color:#58a6ff;text-decoration:underline;}
 .documents-tree__row,.documents-tree__file{position:relative;}
+.documents-pdf-sticky-mode .gh-header.gh-header--project,
+.documents-pdf-sticky-mode .project-context-header,
+.documents-pdf-sticky-mode .project-shell__body,
+.documents-pdf-sticky-mode .documents-topbar,
+.documents-pdf-sticky-mode .documents-report-table__header.documents-report-table__header--pdf-preview{
+  position:sticky;
+  top:0;
+  z-index:30;
+}
 .documents-tree .documents-repo__icon--folder,.documents-tree .octicon-file-directory-fill,.documents-tree .octicon-file-directory-open-fill{fill:rgb(145, 152, 161);color:rgb(145, 152, 161);}
 .documents-tree__resize-handle{position:absolute;top:0;right:-6px;width:12px;height:100%;cursor:col-resize;}
 .documents-tree__resize-guide{position:absolute;top:0;bottom:0;width:2px;background:#2f81f7;display:none;pointer-events:none;}
