@@ -6471,6 +6471,32 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
 .documents-repo__icon--document{
   color:var(--fg);
 }
+.documents-repo__icon--folder{
+  color:#58a6ff;
+}
+.documents-breadcrumb{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin:8px 0 12px;
+  color:var(--muted);
+  font-size:13px;
+  flex-wrap:wrap;
+}
+.documents-breadcrumb__link{
+  appearance:none;
+  border:0;
+  background:none;
+  color:var(--blueLink);
+  padding:0;
+  cursor:pointer;
+  font:inherit;
+}
+.documents-breadcrumb__link:hover,
+.documents-breadcrumb__link:focus-visible{
+  text-decoration:underline;
+}
+.documents-breadcrumb__sep{color:var(--muted);}
 .documents-repo__message-main{
   color:var(--muted);
   font-size:13px;
@@ -6491,6 +6517,12 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   flex-wrap:wrap;
   gap:6px;
   align-items:center;
+}
+.documents-repo__stats-actions{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  justify-content:space-between;
 }
 .documents-count-badge{
   display:inline-flex;
@@ -6513,6 +6545,13 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   width:8px;
   height:8px;
 }
+.documents-move-modal__backdrop{position:fixed;inset:0;background:rgba(1,4,9,.65);display:flex;align-items:center;justify-content:center;z-index:2000;}
+.documents-move-modal{width:min(680px,92vw);max-height:80vh;overflow:auto;background:var(--bgElev);border:1px solid var(--border);border-radius:12px;padding:16px;}
+.documents-move-modal__header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;}
+.documents-move-modal__targets{display:flex;flex-direction:column;gap:6px;margin-top:10px;}
+.documents-move-modal__target{display:flex;align-items:center;gap:8px;border:1px solid var(--border);background:transparent;color:var(--text);border-radius:8px;padding:8px 12px;text-align:left;cursor:pointer;}
+.documents-move-modal__target.is-active{border-color:#58a6ff;background:rgba(56,139,253,.15);}
+.documents-move-modal__actions{display:flex;justify-content:flex-end;margin-top:12px;}
 .documents-count-badge__count{
   font-variant-numeric:tabular-nums;
 }
