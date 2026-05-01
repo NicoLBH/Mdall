@@ -1612,6 +1612,10 @@ function renderDocumentsListView() {
   const treeHtml = isRoot ? "" : renderDocumentsSidebarTree();
   const topBar = renderDocumentsTopBar();
   const moveModalHtml = docsViewState.moveModal?.isOpen ? renderMoveFileModal() : "";
+  const emptyTitle = isRoot ? "La racine est vide." : "Ce dossier est vide.";
+  const emptyDescription = isRoot
+    ? "Ajoutez un dossier ou importez un document pour commencer."
+    : "Ajoutez un sous-dossier ou importez un document dans ce dossier.";
   return `
     <section class="project-simple-page project-simple-page--documents">
       <div class="documents-shell documents-shell--project-page documents-layout${isRoot ? " is-root" : ""}" id="projectDocumentScroll" style="--documents-tree-width:${isRoot ? 0 : (docsViewState.documentTreeOpen ? Math.max(220, Math.min(520, Number(docsViewState.treeWidth || 280))) : 0)}px">
@@ -1627,8 +1631,8 @@ function renderDocumentsListView() {
               bodyHtml,
               state: hasDocuments ? "ready" : "empty",
               emptyHtml: renderDataTableEmptyState({
-                title: "Aucun document n’a encore été déposé.",
-                description: "Ajoutez des documents pour commencer à constituer le dossier du projet."
+                title: emptyTitle,
+                description: emptyDescription
               })
             })}
           </div>
@@ -1979,7 +1983,6 @@ function buildRepoDocumentFromState() {
 function triggerAutoAnalysisAfterDirectUpload(root, document = null) {
   const documentName = document?.name || "";
   const currentFolderId = docsViewState.currentFolderId || null;
-  console.info("[documents-upload] current-folder", { currentFolderId });
   if (!shouldAutoRunAnalysisAfterUpload()) {
     setDocumentsActivity({
       tone: "info",
@@ -2034,7 +2037,6 @@ function handleSubmit(root) {
   commitDirectDocument(root);
   loadCurrentDirectory()
     .then(() => {
-      console.info("[documents-upload] refresh-current-directory", { currentFolderId: docsViewState.currentFolderId || null });
       renderProjectDocumentsContent(root);
     })
     .catch((error) => {
@@ -2136,13 +2138,22 @@ function bindDocumentsView(root) {
   const addFolderBtn = document.getElementById("documentsAddFolderBtn");
   if (addFolderBtn) {
     addFolderBtn.addEventListener("click", async () => {
-      const name = window.prompt("Nom du dossier ?");
-      if (!name) return;
-      console.info("[documents-view] create-folder.submit", { parentFolderId: docsViewState.currentFolderId || null });
-      await createDocumentFolder(String(store.currentProject?.backendProjectId || store.currentProject?.id || store.currentProjectId || ""), docsViewState.currentFolderId || null, name);
-      await loadCurrentDirectory();
-      if (docsViewState.documentTreeOpen) console.info("[documents-tree] refresh-after-mutation", { action: "create-folder" });
-      renderProjectDocumentsContent(root);
+      const name = String(window.prompt("Nom du dossier ?") || "").trim();
+      if (!name) {
+        setDocumentsActivity({ tone: "warning", title: "Nom invalide", message: "Le nom du dossier ne peut pas être vide." });
+        renderProjectDocumentsContent(root);
+        return;
+      }
+      try {
+        console.info("[documents-view] create-folder.submit", { parentFolderId: docsViewState.currentFolderId || null });
+        await createDocumentFolder(String(store.currentProject?.backendProjectId || store.currentProject?.id || store.currentProjectId || ""), docsViewState.currentFolderId || null, name);
+        await loadCurrentDirectory();
+        if (docsViewState.documentTreeOpen) console.info("[documents-tree] refresh-after-mutation", { action: "create-folder" });
+        renderProjectDocumentsContent(root);
+      } catch (error) {
+        setDocumentsActivity({ tone: "error", title: "Création impossible", message: error instanceof Error ? error.message : "Erreur Supabase lors de la création du dossier." });
+        renderProjectDocumentsContent(root);
+      }
     });
   }
 
@@ -2151,13 +2162,22 @@ function bindDocumentsView(root) {
       event.stopPropagation();
       const folderId = btn.getAttribute("data-folder-rename-id") || "";
       const currentName = btn.getAttribute("data-folder-rename-name") || "";
-      const name = window.prompt("Nouveau nom du dossier :", currentName);
-      if (!name) return;
-      console.info("[documents-view] rename-folder.submit", { folderId });
-      await renameDocumentFolder(String(store.currentProject?.backendProjectId || store.currentProject?.id || store.currentProjectId || ""), folderId, name);
-      await loadCurrentDirectory();
-      if (docsViewState.documentTreeOpen) console.info("[documents-tree] refresh-after-mutation", { action: "rename-folder" });
-      renderProjectDocumentsContent(root);
+      const name = String(window.prompt("Nouveau nom du dossier :", currentName) || "").trim();
+      if (!name) {
+        setDocumentsActivity({ tone: "warning", title: "Nom invalide", message: "Le nom du dossier ne peut pas être vide." });
+        renderProjectDocumentsContent(root);
+        return;
+      }
+      try {
+        console.info("[documents-view] rename-folder.submit", { folderId });
+        await renameDocumentFolder(String(store.currentProject?.backendProjectId || store.currentProject?.id || store.currentProjectId || ""), folderId, name);
+        await loadCurrentDirectory();
+        if (docsViewState.documentTreeOpen) console.info("[documents-tree] refresh-after-mutation", { action: "rename-folder" });
+        renderProjectDocumentsContent(root);
+      } catch (error) {
+        setDocumentsActivity({ tone: "error", title: "Renommage impossible", message: error instanceof Error ? error.message : "Erreur Supabase lors du renommage du dossier." });
+        renderProjectDocumentsContent(root);
+      }
     });
   });
 

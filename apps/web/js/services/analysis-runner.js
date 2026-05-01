@@ -852,11 +852,6 @@ export async function runAnalysis(options = {}) {
 
       setSystemStatus("running", "En cours d’analyse", "Création du document");
       const currentUser = await getCurrentUser();
-      console.info("[documents-upload] create-record.start", {
-        projectId: backendProjectId,
-        currentFolderId
-      });
-
       const documentRow = await restInsert("documents", {
         project_id: backendProjectId,
         folder_id: currentFolderId,
@@ -870,12 +865,6 @@ export async function runAnalysis(options = {}) {
         upload_status: "uploaded",
         document_kind: "source_pdf"
       }, "id,project_id,storage_bucket,storage_path");
-      console.info("[documents-upload] create-record.success", {
-        documentId: String(documentRow?.id || ""),
-        projectId: backendProjectId,
-        currentFolderId
-      });
-
       setSystemStatus("running", "En cours d’analyse", "Création du run");
       await restInsert("analysis_runs", {
         id: runId,
