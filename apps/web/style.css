@@ -6610,7 +6610,7 @@ body.route--project.documents-pdf-sticky-mode.project-shell-compact .gh-header.g
   transition:transform .16s ease, opacity .16s ease;
 }
 .documents-shell--pdf-preview{
-  --documents-pdf-topbar-h:44px;
+  --documents-pdf-topbar-h:32px;
   --documents-pdf-toolbar-h:52px;
   width:100%;
   max-width:none;
@@ -6626,6 +6626,7 @@ body.route--project.documents-pdf-sticky-mode.project-shell-compact .gh-header.g
   position:sticky;
   top:var(--app-top);
   z-index:calc(var(--z-header) - 3);
+  background:var(--bg);
 }
 body.route--project.project-shell-compact .documents-shell .documents-topbar,
 body.documents-local-chrome-compact .documents-shell .documents-topbar,
@@ -6641,7 +6642,7 @@ body.documents-local-chrome-compact .documents-shell .documents-topbar,
 body.route--project.project-shell-compact .documents-shell--pdf-preview .documents-report-table__header--pdf-preview,
 body.documents-local-chrome-compact .documents-shell--pdf-preview .documents-report-table__header--pdf-preview,
 .documents-shell--pdf-preview.project-local-chrome--compact .documents-report-table__header--pdf-preview{
-  top:var(--documents-pdf-topbar-h, 44px);
+  top:var(--documents-pdf-topbar-h, 32px);
 }
 .documents-shell--pdf-preview .documents-report-table__body--pdf{
   min-height:0;
