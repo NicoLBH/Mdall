@@ -1,5 +1,5 @@
 import { store } from "../store.js";
-import { setProjectViewHeader, clearProjectActiveScrollSource, debugProjectScrollPolicy } from "./project-shell-chrome.js";
+import { setProjectViewHeader, clearProjectActiveScrollSource, debugProjectScrollPolicy, resetProjectShellCompactState, bindProjectDocumentChromeCompact } from "./project-shell-chrome.js";
 import {
   bindGhActionButtons,
   initGhActionButton,
@@ -1502,7 +1502,7 @@ function renderPdfPreviewView() {
   const topBar = renderDocumentsTopBar();
   return `
     <section class="project-simple-page project-simple-page--documents">
-      <div class="documents-shell documents-shell--project-page documents-layout${docsViewState.currentFolderId ? "" : " is-root"}" id="projectDocumentScroll" style="--documents-tree-width:${docsViewState.currentFolderId ? (docsViewState.documentTreeOpen ? Math.max(220, Math.min(520, Number(docsViewState.treeWidth || 280))) : 0) : 0}px">
+      <div class="documents-shell documents-shell--project-page documents-shell--pdf-preview documents-layout${docsViewState.currentFolderId ? "" : " is-root"}" id="projectDocumentScroll" style="--documents-tree-width:${docsViewState.currentFolderId ? (docsViewState.documentTreeOpen ? Math.max(220, Math.min(520, Number(docsViewState.treeWidth || 280))) : 0) : 0}px">
         ${treeHtml}
         <main class="documents-main">
           ${topBar}
@@ -1989,6 +1989,20 @@ async function openPdfPreview(root, documentId) {
 
   setActiveProjectDocument(documentItem.id);
   docsViewState.mode = "pdf-preview";
+  debugProjectScrollPolicy("documents-open-pdf-preview-reset-compact", {
+    beforeBodyClass: document.body?.className || "",
+    beforeScrollY: Number(window.scrollY || 0)
+  });
+  resetProjectShellCompactState({ scrollToTop: false });
+  requestAnimationFrame(() => {
+    if (docsViewState.mode !== "pdf-preview") return;
+    resetProjectShellCompactState({ scrollToTop: false });
+  });
+  debugProjectScrollPolicy("documents-open-pdf-preview-after-reset", {
+    afterBodyClass: document.body?.className || "",
+    afterScrollY: Number(window.scrollY || 0),
+    tabsClass: document.querySelector(".project-tabs")?.className || null
+  });
   docsViewState.pdfPreview = {
     objectUrl: "",
     signedUrl: "",
@@ -2152,6 +2166,17 @@ function bindDocumentsSplitActions(root) {
 
 function bindDocumentsView(root) {
   bindDocumentsSplitActions(root);
+  const documentsShell = root.querySelector(".documents-shell");
+  if (documentsShell) {
+    bindProjectDocumentChromeCompact({
+      scrollEl: document,
+      chromeEl: documentsShell,
+      classHost: document.body,
+      bodyClassName: "documents-local-chrome-compact",
+      compactThreshold: 8,
+      key: docsViewState.mode === "pdf-preview" ? "documents-pdf-shell" : "documents-list-shell"
+    });
+  }
   const treeToggleBtn = document.getElementById("documentsTreeToggleBtn");
   if (treeToggleBtn) {
     treeToggleBtn.addEventListener("click", async () => {
@@ -2513,13 +2538,34 @@ function renderProjectDocumentsContent(root) {
   if (docsViewState.mode === "pdf-preview") {
     const projectShellBody = document.querySelector(".project-shell__body");
     const projectShellBodyStyle = projectShellBody ? window.getComputedStyle(projectShellBody) : null;
+    const topbar = document.querySelector(".documents-topbar");
+    const pdfToolbar = document.querySelector(".documents-report-table__header--pdf-preview");
+    const pdfBody = document.querySelector(".documents-report-table__body--pdf");
+    const treePanel = document.querySelector(".documents-tree__panel");
+    const getNodeStyle = (node) => {
+      if (!node) return null;
+      const computed = window.getComputedStyle(node);
+      return {
+        position: computed.position,
+        top: computed.top,
+        overflow: computed.overflow,
+        overflowX: computed.overflowX,
+        overflowY: computed.overflowY,
+        height: computed.height,
+        maxHeight: computed.maxHeight
+      };
+    };
     const scrollingElement = document.scrollingElement || document.documentElement || document.body || null;
     logPdfPreviewDebug("scroll-policy", {
       bodyClassName: document.body?.className || "",
       windowScrollY: Number(window.scrollY || 0),
       documentScrollingElementScrollTop: Number(scrollingElement?.scrollTop || 0),
       projectShellBodyOverflow: projectShellBodyStyle?.overflow || null,
-      projectShellBodyPosition: projectShellBodyStyle?.position || null
+      projectShellBodyPosition: projectShellBodyStyle?.position || null,
+      documentsTopbar: getNodeStyle(topbar),
+      documentsPdfToolbar: getNodeStyle(pdfToolbar),
+      documentsPdfBody: getNodeStyle(pdfBody),
+      documentsTreePanel: getNodeStyle(treePanel)
     });
   }
 

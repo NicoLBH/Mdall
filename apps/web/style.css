@@ -5921,7 +5921,7 @@ color:var(--text);
 
 .documents-report-table__header--pdf-preview{
   position:sticky;
-  top:0;
+  top:calc(var(--app-top) + var(--documents-pdf-topbar-h, 44px));
   z-index:calc(var(--z-header) - 1);
   justify-content:flex-end;
   padding:10px 16px;
@@ -6011,8 +6011,12 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
 }
 
 .documents-report-table__body--pdf{
-  min-height:calc(100vh - 220px);
+  min-height:0;
+  height:calc(100dvh - var(--documents-pdf-topbar-h, 44px) - var(--documents-pdf-toolbar-h, 52px));
   padding:0;
+  overflow:auto;
+  overflow-x:auto;
+  overflow-y:auto;
 }
 
 .documents-report__page-break{
@@ -6062,8 +6066,8 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
 
 .documents-pdf-viewer{
   background:var(--panel);
-  overflow:auto;
-  min-height:calc(100vh - 220px);
+  overflow:visible;
+  min-height:100%;
 }
 
 .documents-pdf-viewer__frame{
@@ -6076,9 +6080,9 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
 
 .documents-pdf-viewer__canvas-shell{
   position:relative;
-  min-height:calc(100vh - 220px);
+  min-height:100%;
   background:#f6f8fa;
-  overflow:auto;
+  overflow:visible;
 }
 
 .documents-pdf-viewer__canvas-shell.is-dark-mode{
@@ -6095,8 +6099,8 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   align-items:flex-start;
   gap:24px;
   padding:16px 12px 24px;
-  min-height:calc(100vh - 220px);
-  min-width:100%;
+  min-height:100%;
+  min-width:max-content;
   background:var(--headbg);
 }
 
@@ -6592,9 +6596,6 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
 .documents-tree__file:hover{background:rgba(110,118,129,.16);}
 .documents-tree__file:hover .documents-tree__label{color:#58a6ff;text-decoration:underline;}
 .documents-tree__row,.documents-tree__file{position:relative;}
-.documents-pdf-sticky-mode main#app{
-  padding:0;
-}
 .documents-pdf-sticky-mode .project-shell__body{
   position:relative;
   top:auto;
@@ -6608,19 +6609,55 @@ body.route--project.documents-pdf-sticky-mode.project-shell-compact .gh-header.g
   pointer-events:none;
   transition:transform .16s ease, opacity .16s ease;
 }
-body.route--project.documents-pdf-sticky-mode.project-shell-compact .project-shell__body{
-  margin-top:calc(-1 * var(--header-h-compact));
-  padding-top:var(--header-h-compact);
+.documents-shell--pdf-preview{
+  --documents-pdf-topbar-h:44px;
+  --documents-pdf-toolbar-h:52px;
+  width:100%;
+  max-width:none;
+  overflow:visible;
 }
-.documents-pdf-sticky-mode .project-context-header{
-  position:static;
+.documents-shell--pdf-preview .documents-main{
+  min-width:0;
+  height:auto;
+  max-height:none;
+  overflow:visible;
 }
-.documents-pdf-sticky-mode .gh-header.gh-header--project,
-.documents-pdf-sticky-mode .documents-topbar,
-.documents-pdf-sticky-mode .documents-report-table__header.documents-report-table__header--pdf-preview{
-  position:relative;
-  top:auto;
-  z-index:auto;
+.documents-shell .documents-topbar{
+  position:sticky;
+  top:var(--app-top);
+  z-index:calc(var(--z-header) - 3);
+  background:var(--headbg);
+}
+body.route--project.project-shell-compact .documents-shell .documents-topbar,
+body.documents-local-chrome-compact .documents-shell .documents-topbar,
+.documents-shell.project-local-chrome--compact .documents-topbar{
+  top:0;
+}
+.documents-shell--pdf-preview .documents-report-table__header--pdf-preview{
+  position:sticky;
+  top:calc(var(--app-top) + var(--documents-pdf-topbar-h, 44px));
+  z-index:calc(var(--z-header) - 2);
+  background:var(--headbgtight);
+}
+body.route--project.project-shell-compact .documents-shell--pdf-preview .documents-report-table__header--pdf-preview,
+body.documents-local-chrome-compact .documents-shell--pdf-preview .documents-report-table__header--pdf-preview,
+.documents-shell--pdf-preview.project-local-chrome--compact .documents-report-table__header--pdf-preview{
+  top:var(--documents-pdf-topbar-h, 44px);
+}
+.documents-shell--pdf-preview .documents-report-table__body--pdf{
+  min-height:0;
+  height:calc(100dvh - var(--documents-pdf-topbar-h, 44px) - var(--documents-pdf-toolbar-h, 52px));
+  overflow:auto;
+  overflow-x:auto;
+  overflow-y:auto;
+}
+.documents-shell--pdf-preview .documents-pdf-viewer,
+.documents-shell--pdf-preview .documents-pdf-viewer__canvas-shell{
+  min-height:100%;
+  overflow:visible;
+}
+.documents-shell--pdf-preview .documents-pdf-viewer__pages{
+  min-width:max-content;
 }
 .documents-tree .documents-repo__icon--folder,.documents-tree .octicon-file-directory-fill,.documents-tree .octicon-file-directory-open-fill{fill:rgb(145, 152, 161);color:rgb(145, 152, 161);}
 .documents-tree__resize-handle{position:absolute;top:0;right:-6px;width:12px;height:100%;cursor:col-resize;}

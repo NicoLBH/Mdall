@@ -491,6 +491,72 @@ export function clearProjectActiveScrollSource(el = null) {
   debugProjectScrollPolicy("clear-active-scroll-source");
 }
 
+export function resetProjectShellCompactState({ scrollToTop = false } = {}) {
+  refreshProjectShellChromeRefs();
+
+  shellState.cleanupActiveScrollSource?.();
+  shellState.cleanupActiveScrollSource = null;
+  shellState.activeScrollSourceEl = null;
+  shellState.activeScrollSourceResolver = null;
+
+  if (scrollToTop) {
+    try {
+      window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    } catch (_) {
+      window.scrollTo(0, 0);
+    }
+    if (document.documentElement) document.documentElement.scrollTop = 0;
+    if (document.body) document.body.scrollTop = 0;
+  }
+
+  applyCompactState(false);
+  debugProjectScrollPolicy("reset-project-shell-compact-state", {
+    scrollToTop: scrollToTop === true,
+    bodyClassName: document.body?.className || "",
+    scrollY: Number(window.scrollY || 0)
+  });
+}
+
+export function bindProjectDocumentChromeCompact({
+  scrollEl = document,
+  chromeEl = null,
+  classHost = document.body,
+  bodyClassName = "",
+  compactThreshold = 8,
+  key = "local-document-chrome",
+  onCompactChange = null
+} = {}) {
+  if (!chromeEl) return;
+
+  const isDocumentLike = scrollEl === document || scrollEl === document.documentElement || scrollEl === document.body;
+  const eventTarget = isDocumentLike ? window : scrollEl;
+  const stateTarget = isDocumentLike ? (document.scrollingElement || document.documentElement || document.body) : scrollEl;
+  const safeKey = String(key || "local-document-chrome").replace(/[^a-zA-Z0-9_-]/g, "").toLowerCase();
+  const attr = `data-project-document-chrome-bound-${safeKey}`;
+  const sync = () => {
+    const scrolled = Number(stateTarget?.scrollTop || window.scrollY || 0) > compactThreshold;
+    if (bodyClassName && classHost?.classList) {
+      classHost.classList.toggle(bodyClassName, scrolled);
+    }
+    chromeEl.classList.toggle("project-local-chrome--compact", scrolled);
+    onCompactChange?.(scrolled);
+  };
+
+  chromeEl.__syncProjectDocumentChromeCompact = sync;
+
+  if (chromeEl.getAttribute?.(attr) === "1") {
+    sync();
+    return;
+  }
+
+  chromeEl.setAttribute?.(attr, "1");
+  eventTarget.addEventListener("scroll", sync, { passive: true });
+  window.addEventListener("resize", sync, { passive: true });
+
+  sync();
+  setTimeout(sync, 0);
+}
+
 export function setProjectCompactEnabled(enabled = true) {
   shellState.compactEnabled = enabled !== false;
   if (!shellState.compactEnabled) {
