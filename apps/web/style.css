@@ -6101,7 +6101,7 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
   padding:16px 12px 24px;
   min-height:100%;
   min-width:max-content;
-  background:var(--headbg);
+  background:var(--bg);
 }
 
 .documents-pdf-viewer__page{
