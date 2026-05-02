@@ -1,5 +1,5 @@
 import { store } from "../store.js";
-import { setProjectViewHeader, clearProjectActiveScrollSource, debugProjectScrollPolicy, resetProjectShellCompactState } from "./project-shell-chrome.js";
+import { setProjectViewHeader, clearProjectActiveScrollSource, debugProjectScrollPolicy, resetProjectShellCompactState, bindProjectDocumentChromeCompact } from "./project-shell-chrome.js";
 import {
   bindGhActionButtons,
   initGhActionButton,
@@ -2162,6 +2162,24 @@ function bindDocumentsSplitActions(root) {
 
 function bindDocumentsView(root) {
   bindDocumentsSplitActions(root);
+  const documentsTopbar = root.querySelector(".documents-topbar");
+  if (documentsTopbar) {
+    bindProjectDocumentChromeCompact({
+      scrollEl: document,
+      chromeEl: documentsTopbar,
+      compactThreshold: 8,
+      key: docsViewState.mode === "pdf-preview" ? "documents-pdf-topbar" : "documents-list-topbar"
+    });
+  }
+  const pdfToolbar = root.querySelector(".documents-report-table__header--pdf-preview");
+  if (pdfToolbar) {
+    bindProjectDocumentChromeCompact({
+      scrollEl: document,
+      chromeEl: pdfToolbar,
+      compactThreshold: 8,
+      key: "documents-pdf-toolbar"
+    });
+  }
   const treeToggleBtn = document.getElementById("documentsTreeToggleBtn");
   if (treeToggleBtn) {
     treeToggleBtn.addEventListener("click", async () => {
