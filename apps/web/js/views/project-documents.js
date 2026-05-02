@@ -1,5 +1,5 @@
 import { store } from "../store.js";
-import { setProjectViewHeader, clearProjectActiveScrollSource, debugProjectScrollPolicy } from "./project-shell-chrome.js";
+import { setProjectViewHeader, clearProjectActiveScrollSource, debugProjectScrollPolicy, resetProjectShellCompactState } from "./project-shell-chrome.js";
 import {
   bindGhActionButtons,
   initGhActionButton,
@@ -1989,6 +1989,16 @@ async function openPdfPreview(root, documentId) {
 
   setActiveProjectDocument(documentItem.id);
   docsViewState.mode = "pdf-preview";
+  debugProjectScrollPolicy("documents-open-pdf-preview-reset-compact", {
+    beforeBodyClass: document.body?.className || "",
+    beforeScrollY: Number(window.scrollY || 0)
+  });
+  resetProjectShellCompactState({ scrollToTop: true });
+  debugProjectScrollPolicy("documents-open-pdf-preview-after-reset", {
+    afterBodyClass: document.body?.className || "",
+    afterScrollY: Number(window.scrollY || 0),
+    tabsClass: document.querySelector(".project-tabs")?.className || null
+  });
   docsViewState.pdfPreview = {
     objectUrl: "",
     signedUrl: "",

@@ -491,6 +491,32 @@ export function clearProjectActiveScrollSource(el = null) {
   debugProjectScrollPolicy("clear-active-scroll-source");
 }
 
+export function resetProjectShellCompactState({ scrollToTop = false } = {}) {
+  refreshProjectShellChromeRefs();
+
+  shellState.cleanupActiveScrollSource?.();
+  shellState.cleanupActiveScrollSource = null;
+  shellState.activeScrollSourceEl = null;
+  shellState.activeScrollSourceResolver = null;
+
+  if (scrollToTop) {
+    try {
+      window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    } catch (_) {
+      window.scrollTo(0, 0);
+    }
+    if (document.documentElement) document.documentElement.scrollTop = 0;
+    if (document.body) document.body.scrollTop = 0;
+  }
+
+  applyCompactState(false);
+  debugProjectScrollPolicy("reset-project-shell-compact-state", {
+    scrollToTop: scrollToTop === true,
+    bodyClassName: document.body?.className || "",
+    scrollY: Number(window.scrollY || 0)
+  });
+}
+
 export function setProjectCompactEnabled(enabled = true) {
   shellState.compactEnabled = enabled !== false;
   if (!shellState.compactEnabled) {
