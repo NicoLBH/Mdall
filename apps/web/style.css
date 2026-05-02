@@ -5920,8 +5920,8 @@ color:var(--text);
 }
 
 .documents-report-table__header--pdf-preview{
-  position:relative;
-  top:auto;
+  position:sticky;
+  top:calc(var(--app-top) + var(--documents-pdf-topbar-h, 44px));
   z-index:calc(var(--z-header) - 1);
   justify-content:flex-end;
   padding:10px 16px;
@@ -6596,10 +6596,6 @@ body.route--project.project-shell-compact .documents-report-table__header--pdf-p
 .documents-tree__file:hover{background:rgba(110,118,129,.16);}
 .documents-tree__file:hover .documents-tree__label{color:#58a6ff;text-decoration:underline;}
 .documents-tree__row,.documents-tree__file{position:relative;}
-.documents-pdf-sticky-mode main#app{
-  padding:0;
-  overflow:visible;
-}
 .documents-pdf-sticky-mode .project-shell__body{
   position:relative;
   top:auto;
@@ -6613,75 +6609,54 @@ body.route--project.documents-pdf-sticky-mode.project-shell-compact .gh-header.g
   pointer-events:none;
   transition:transform .16s ease, opacity .16s ease;
 }
-body.route--project.documents-pdf-sticky-mode.project-shell-compact .project-shell__body{
-  margin-top:calc(-1 * var(--header-h-compact));
-  padding-top:var(--header-h-compact);
-}
-.documents-pdf-sticky-mode .project-context-header{
-  position:static;
-}
-.documents-pdf-sticky-mode .gh-header.gh-header--project{
-  position:fixed;
-}
-.documents-pdf-sticky-mode .documents-shell.documents-shell--pdf-preview{
+.documents-shell--pdf-preview{
   --documents-pdf-topbar-h:44px;
   --documents-pdf-toolbar-h:52px;
   width:100%;
   max-width:none;
-  margin:0;
-  align-items:start;
   overflow:visible;
 }
-.documents-pdf-sticky-mode .documents-shell.documents-shell--pdf-preview.documents-layout{
-  grid-template-columns:var(--documents-tree-width, auto) minmax(0, 1fr);
-}
-.documents-pdf-sticky-mode .documents-shell.documents-shell--pdf-preview .documents-main{
+.documents-shell--pdf-preview .documents-main{
   min-width:0;
-  min-height:0;
   height:auto;
   max-height:none;
   overflow:visible;
 }
-.documents-pdf-sticky-mode .documents-shell.documents-shell--pdf-preview .documents-tree{
-  align-self:start;
-}
-.documents-pdf-sticky-mode .documents-shell.documents-shell--pdf-preview .documents-tree__panel{
+.documents-shell .documents-topbar{
   position:sticky;
-  top:0;
-  height:calc(100dvh - var(--documents-pdf-tree-offset, 0px));
-  max-height:calc(100dvh - var(--documents-pdf-tree-offset, 0px));
-  overflow:auto;
-}
-.documents-shell .documents-topbar.project-local-chrome--compact{
-  position:sticky;
-  top:0;
+  top:var(--app-top);
   z-index:calc(var(--z-header) - 3);
   background:var(--headbg);
 }
-.documents-pdf-sticky-mode .documents-shell.documents-shell--pdf-preview .documents-report-table{
-  display:flex;
-  flex-direction:column;
-  min-height:0;
+body.route--project.project-shell-compact .documents-shell .documents-topbar,
+body.documents-local-chrome-compact .documents-shell .documents-topbar,
+.documents-shell.project-local-chrome--compact .documents-topbar{
+  top:0;
 }
-.documents-shell .documents-report-table__header--pdf-preview.project-local-chrome--compact{
+.documents-shell--pdf-preview .documents-report-table__header--pdf-preview{
   position:sticky;
-  top:var(--documents-pdf-topbar-h, 44px);
+  top:calc(var(--app-top) + var(--documents-pdf-topbar-h, 44px));
   z-index:calc(var(--z-header) - 2);
   background:var(--headbgtight);
 }
-.documents-pdf-sticky-mode .documents-shell.documents-shell--pdf-preview .documents-report-table__body--pdf{
+body.route--project.project-shell-compact .documents-shell--pdf-preview .documents-report-table__header--pdf-preview,
+body.documents-local-chrome-compact .documents-shell--pdf-preview .documents-report-table__header--pdf-preview,
+.documents-shell--pdf-preview.project-local-chrome--compact .documents-report-table__header--pdf-preview{
+  top:var(--documents-pdf-topbar-h, 44px);
+}
+.documents-shell--pdf-preview .documents-report-table__body--pdf{
   min-height:0;
   height:calc(100dvh - var(--documents-pdf-topbar-h, 44px) - var(--documents-pdf-toolbar-h, 52px));
   overflow:auto;
   overflow-x:auto;
   overflow-y:auto;
 }
-.documents-pdf-sticky-mode .documents-shell.documents-shell--pdf-preview .documents-pdf-viewer,
-.documents-pdf-sticky-mode .documents-shell.documents-shell--pdf-preview .documents-pdf-viewer__canvas-shell{
+.documents-shell--pdf-preview .documents-pdf-viewer,
+.documents-shell--pdf-preview .documents-pdf-viewer__canvas-shell{
   min-height:100%;
   overflow:visible;
 }
-.documents-pdf-sticky-mode .documents-shell.documents-shell--pdf-preview .documents-pdf-viewer__pages{
+.documents-shell--pdf-preview .documents-pdf-viewer__pages{
   min-width:max-content;
 }
 .documents-tree .documents-repo__icon--folder,.documents-tree .octicon-file-directory-fill,.documents-tree .octicon-file-directory-open-fill{fill:rgb(145, 152, 161);color:rgb(145, 152, 161);}

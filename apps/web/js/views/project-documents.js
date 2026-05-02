@@ -1993,7 +1993,11 @@ async function openPdfPreview(root, documentId) {
     beforeBodyClass: document.body?.className || "",
     beforeScrollY: Number(window.scrollY || 0)
   });
-  resetProjectShellCompactState({ scrollToTop: true });
+  resetProjectShellCompactState({ scrollToTop: false });
+  requestAnimationFrame(() => {
+    if (docsViewState.mode !== "pdf-preview") return;
+    resetProjectShellCompactState({ scrollToTop: false });
+  });
   debugProjectScrollPolicy("documents-open-pdf-preview-after-reset", {
     afterBodyClass: document.body?.className || "",
     afterScrollY: Number(window.scrollY || 0),
@@ -2162,22 +2166,15 @@ function bindDocumentsSplitActions(root) {
 
 function bindDocumentsView(root) {
   bindDocumentsSplitActions(root);
-  const documentsTopbar = root.querySelector(".documents-topbar");
-  if (documentsTopbar) {
+  const documentsShell = root.querySelector(".documents-shell");
+  if (documentsShell) {
     bindProjectDocumentChromeCompact({
       scrollEl: document,
-      chromeEl: documentsTopbar,
+      chromeEl: documentsShell,
+      classHost: document.body,
+      bodyClassName: "documents-local-chrome-compact",
       compactThreshold: 8,
-      key: docsViewState.mode === "pdf-preview" ? "documents-pdf-topbar" : "documents-list-topbar"
-    });
-  }
-  const pdfToolbar = root.querySelector(".documents-report-table__header--pdf-preview");
-  if (pdfToolbar) {
-    bindProjectDocumentChromeCompact({
-      scrollEl: document,
-      chromeEl: pdfToolbar,
-      compactThreshold: 8,
-      key: "documents-pdf-toolbar"
+      key: docsViewState.mode === "pdf-preview" ? "documents-pdf-shell" : "documents-list-shell"
     });
   }
   const treeToggleBtn = document.getElementById("documentsTreeToggleBtn");
