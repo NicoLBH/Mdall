@@ -732,6 +732,10 @@ export function createProjectSubjectsEvents(config) {
 
     dropdownHost.querySelectorAll("[data-action='open-create-subissue']").forEach((btn) => {
       btn.onclick = (event) => {
+        if (isSituationGridOwnedDropdown()) {
+          logSituationGridGenericSkip();
+          return;
+        }
         event.preventDefault();
         event.stopPropagation();
         const dropdown = getSubjectsViewState().subjectMetaDropdown || {};
@@ -760,6 +764,10 @@ export function createProjectSubjectsEvents(config) {
 
     dropdownHost.querySelectorAll("[data-action='open-link-existing-subissue']").forEach((btn) => {
       btn.onclick = (event) => {
+        if (isSituationGridOwnedDropdown()) {
+          logSituationGridGenericSkip();
+          return;
+        }
         event.preventDefault();
         event.stopPropagation();
         const dropdown = getSubjectsViewState().subjectMetaDropdown || {};
@@ -781,6 +789,10 @@ export function createProjectSubjectsEvents(config) {
 
     dropdownHost.querySelectorAll("[data-subject-subissue-existing-entry]").forEach((btn) => {
       btn.onclick = async (event) => {
+        if (isSituationGridOwnedDropdown()) {
+          logSituationGridGenericSkip();
+          return;
+        }
         event.preventDefault();
         event.stopPropagation();
         if (typeof setSubjectParent !== "function") return;
