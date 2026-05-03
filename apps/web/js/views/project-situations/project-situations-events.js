@@ -1196,6 +1196,26 @@ export function createProjectSituationsEvents({
         openSituationGridCellDropdown(root, { field, anchor: node, subjectId, situationId });
       });
     });
+    root.querySelectorAll("[data-action='open-subissue-action-menu'][data-subject-id]").forEach((node) => {
+      node.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const subjectId = String(node.getAttribute("data-subject-id") || "").trim();
+        const situationId = String(node.getAttribute("data-situation-grid-situation-id") || store?.situationsView?.selectedSituationId || "").trim();
+        if (!subjectId) return;
+        const state = ensureSituationGridCellDropdownState();
+        if (state.open && state.field === "subissue-actions" && state.subjectId === subjectId && state.anchor === node) {
+          closeSituationGridCellDropdown();
+          return;
+        }
+        openSituationGridCellDropdown(root, {
+          field: "subissue-actions",
+          anchor: node,
+          subjectId,
+          situationId
+        });
+      });
+    });
     uiState?.situationGridDropdownAbortController?.abort?.();
     uiState.situationGridDropdownAbortController = new AbortController();
     const signal = uiState.situationGridDropdownAbortController.signal;
@@ -1981,10 +2001,6 @@ export function createProjectSituationsEvents({
         if (!drilldownBody) return;
         drilldownBody.innerHTML = renderProjectSituationDrilldown(selectedSituation, {
           closeButtonId: "projectSituationDrilldownClose"
-        });
-
-        drilldownBody.querySelector("#projectSituationDrilldownClose")?.addEventListener("click", () => {
-          document.getElementById("drilldownClose")?.click();
         });
 
         drilldownBody.querySelector(".project-situation-drilldown__section-action")?.addEventListener("click", () => {
