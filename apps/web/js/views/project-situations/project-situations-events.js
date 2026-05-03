@@ -245,6 +245,77 @@ export function createProjectSituationsEvents({
     }
   }
 
+  function bindSituationGridSubissueDropdownHost(root) {
+    if (!uiState || typeof uiState !== "object") return;
+    const host = document.getElementById("subjectMetaDropdownHost");
+    if (!host) return;
+    if (uiState?.situationGridSubissueDropdownHost === host && uiState?.situationGridSubissueDropdownAbortController) return;
+    uiState?.situationGridSubissueDropdownAbortController?.abort?.();
+    uiState.situationGridSubissueDropdownHost = host;
+    uiState.situationGridSubissueDropdownAbortController = new AbortController();
+    const signal = uiState.situationGridSubissueDropdownAbortController.signal;
+    host.addEventListener("click", async (event) => {
+      const eventTarget = event.target instanceof Element ? event.target : null;
+      if (!eventTarget) return;
+      if (String(host.dataset?.situationGridOwned || "") !== "1") return;
+      const state = ensureSituationGridCellDropdownState();
+      if (!state.open || String(state.field || "").trim().toLowerCase() !== "subissue-actions") return;
+
+      const createButton = eventTarget.closest('[data-action="open-create-subissue"]');
+      if (createButton) {
+        event.preventDefault();
+        event.stopPropagation();
+        const parentSubjectId = String(state.subjectId || "").trim();
+        if (!parentSubjectId) return;
+        closeSituationGridCellDropdown();
+        openSharedCreateSubissueModal?.({
+          parentSubjectId,
+          sourceSubjectId: parentSubjectId,
+          scopeHost: "main",
+          root
+        });
+        return;
+      }
+
+      const existingButton = eventTarget.closest('[data-action="open-link-existing-subissue"]');
+      if (existingButton) {
+        event.preventDefault();
+        event.stopPropagation();
+        const dropdown = store?.projectSubjectsView?.subjectMetaDropdown;
+        if (!dropdown || typeof dropdown !== "object") return;
+        dropdown.subissueActionsView = "existing-subissue";
+        dropdown.subissueActionIntent = "link-existing";
+        dropdown.subissueActionSubjectId = String(state.subjectId || "").trim();
+        dropdown.subissueActionScopeHost = "main";
+        dropdown.query = "";
+        dropdown.activeKey = "";
+        setSharedSubjectMetaDropdownQuery?.("", root);
+        const refreshedHost = document.getElementById("subjectMetaDropdownHost");
+        if (refreshedHost?.dataset) refreshedHost.dataset.situationGridOwned = "1";
+        bindSituationGridSubissueDropdownHost(root);
+        return;
+      }
+
+      const subissueExistingEntry = eventTarget.closest("[data-subject-subissue-existing-entry]");
+      if (subissueExistingEntry) {
+        event.preventDefault();
+        event.stopPropagation();
+        const childSubjectId = String(subissueExistingEntry.dataset?.subjectSubissueExistingEntry || "").trim();
+        const parentSubjectId = String(state.subjectId || store?.projectSubjectsView?.subjectMetaDropdown?.subissueActionSubjectId || "").trim();
+        if (!parentSubjectId || !childSubjectId || parentSubjectId === childSubjectId) return;
+        const linked = await linkExistingSubjectAsSubissueFromSharedDropdown?.({
+          parentSubjectId,
+          childSubjectId,
+          root
+        });
+        if (!linked) return;
+        closeSituationGridCellDropdown();
+        await refreshSituationsData?.();
+        rerender(root);
+      }
+    }, { capture: true, signal });
+  }
+
   function resolveSituationGridDropdownRoot() {
     if (uiState?.situationGridDropdownRoot?.isConnected) return uiState.situationGridDropdownRoot;
     const state = ensureSituationGridCellDropdownState();
@@ -262,14 +333,12 @@ export function createProjectSituationsEvents({
       ? "situation-grid-subissue-actions"
       : "situation-grid";
     const state = ensureSituationGridCellDropdownState();
-    const host = document.getElementById("subjectMetaDropdownHost");
     closeSituationGridCellDropdown();
     state.open = true;
     state.field = String(field || "").trim().toLowerCase();
     state.subjectId = String(subjectId || "").trim();
     state.situationId = String(situationId || "").trim();
     state.anchor = anchor;
-    if (host?.dataset) host.dataset.situationGridOwned = "1";
     anchor.closest?.(".situation-grid__cell")?.classList?.add?.("situation-grid__cell--active");
     anchor.setAttribute("aria-expanded", "true");
     logSituationGridDropdown("open", buildSituationGridDropdownDebugPayload({
@@ -306,6 +375,9 @@ export function createProjectSituationsEvents({
       dropdown.subissueActionScopeHost = "main";
       dropdown.subissueActionIntent = "";
       setSharedSubjectMetaDropdownQuery?.("", scopeRoot);
+      const refreshedHost = document.getElementById("subjectMetaDropdownHost");
+      if (refreshedHost?.dataset) refreshedHost.dataset.situationGridOwned = "1";
+      bindSituationGridSubissueDropdownHost(root);
     }
     if (!opened) closeSituationGridCellDropdown();
   }
@@ -1251,49 +1323,6 @@ export function createProjectSituationsEvents({
       const eventTarget = event.target instanceof Element ? event.target : null;
       if (!eventTarget) return;
       const root = resolveSituationGridDropdownRoot();
-      const actionButton = eventTarget.closest("[data-action='open-create-subissue'],[data-action='open-link-existing-subissue']");
-      if (actionButton) {
-        const state = ensureSituationGridCellDropdownState();
-        if (!state.open || String(state.field || "").trim().toLowerCase() !== "subissue-actions") return;
-        event.preventDefault();
-        event.stopPropagation();
-        if (actionButton.matches("[data-action='open-link-existing-subissue']")) {
-          const dropdown = store?.projectSubjectsView?.subjectMetaDropdown;
-          if (!dropdown || typeof dropdown !== "object") return;
-          dropdown.subissueActionsView = "existing-subissue";
-          dropdown.subissueActionIntent = "link-existing";
-          dropdown.subissueActionSubjectId = String(state.subjectId || "").trim();
-          dropdown.subissueActionScopeHost = "main";
-          dropdown.query = "";
-          dropdown.activeKey = "";
-          setSharedSubjectMetaDropdownQuery?.("", root);
-          return;
-        }
-        closeSituationGridCellDropdown();
-        openSharedCreateSubissueModal?.({
-          parentSubjectId: state.subjectId,
-          sourceSubjectId: state.subjectId,
-          scopeHost: "main",
-          root
-        });
-        return;
-      }
-      const subissueExistingEntry = eventTarget.closest("[data-subject-subissue-existing-entry]");
-      if (subissueExistingEntry) {
-        const state = ensureSituationGridCellDropdownState();
-        if (!state.open || String(state.field || "").trim().toLowerCase() !== "subissue-actions") return;
-        const childSubjectId = String(subissueExistingEntry.getAttribute("data-subject-subissue-existing-entry") || "").trim();
-        const parentSubjectId = String(state.subjectId || store?.projectSubjectsView?.subjectMetaDropdown?.subissueActionSubjectId || "").trim();
-        if (!parentSubjectId || !childSubjectId || parentSubjectId === childSubjectId) return;
-        event.preventDefault();
-        event.stopPropagation();
-        const linked = await linkExistingSubjectAsSubissueFromSharedDropdown?.({ parentSubjectId, childSubjectId, root });
-        if (!linked) return;
-        closeSituationGridCellDropdown();
-        rerender(root);
-        return;
-      }
-
       const actionNode = eventTarget.closest(
         "[data-subject-kanban-select],[data-subject-assignee-toggle],[data-subject-label-toggle],[data-objective-select]"
       );
