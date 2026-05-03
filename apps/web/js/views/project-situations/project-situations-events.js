@@ -254,6 +254,7 @@ export function createProjectSituationsEvents({
 
   function openSituationGridCellDropdown(root, { field = "", anchor = null, subjectId = "", situationId = "" } = {}) {
     if (!anchor) return;
+    const scopeRoot = resolveSituationGridDropdownRoot();
     const state = ensureSituationGridCellDropdownState();
     const host = document.getElementById("subjectMetaDropdownHost");
     closeSituationGridCellDropdown();
@@ -272,7 +273,7 @@ export function createProjectSituationsEvents({
     }));
     if (state.field === "kanban") {
       const opened = openSharedSubjectKanbanDropdown?.({
-        root,
+        root: scopeRoot,
         subjectId: state.subjectId,
         situationId: state.situationId
       });
@@ -281,7 +282,7 @@ export function createProjectSituationsEvents({
     }
 
     const opened = openSharedSubjectMetaDropdown?.({
-      root,
+      root: scopeRoot,
       field: state.field,
       subjectId: state.subjectId,
       anchor,
@@ -1172,7 +1173,8 @@ export function createProjectSituationsEvents({
   }
 
   function bindSituationGridEditableCells(root) {
-    setSituationGridDropdownRoot(root);
+    const scopeRoot = root?.closest?.(".project-shell__content") || root;
+    setSituationGridDropdownRoot(scopeRoot);
     root.querySelectorAll("[data-situation-grid-edit-cell]").forEach((node) => {
       node.addEventListener("click", (event) => {
         const caretNode = event.target instanceof Element
