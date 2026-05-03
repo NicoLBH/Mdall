@@ -112,6 +112,39 @@ function getSituationGridMetaAnchorKey(field = "", subjectId = "") {
   });
 }
 
+function renderSituationGridAddSubissueButton(subjectId = "", situationId = "") {
+  const normalizedSubjectId = normalizeId(subjectId);
+  const normalizedSituationId = normalizeId(situationId);
+  if (!normalizedSubjectId) return "";
+  const anchorKey = buildSubjectMetaAnchorKey({
+    field: "subissue-actions",
+    scope: "situation-grid",
+    scopeHost: "main",
+    subjectId: normalizedSubjectId,
+    instance: "situation-grid-subissue-actions"
+  });
+  return `
+    <button
+      type="button"
+      class="situation-grid__add-subissue-trigger"
+      data-action="open-subissue-action-menu"
+      data-subject-id="${escapeHtml(normalizedSubjectId)}"
+      data-subject-meta-anchor="${escapeHtml(anchorKey)}"
+      data-subject-meta-instance="situation-grid-subissue-actions"
+      data-subject-meta-scope="situation-grid"
+      data-subject-meta-scope-host="main"
+      data-subject-meta-subject-id="${escapeHtml(normalizedSubjectId)}"
+      data-situation-grid-situation-id="${escapeHtml(normalizedSituationId)}"
+      aria-haspopup="menu"
+      aria-expanded="false"
+      aria-label="Ajouter un sous-sujet"
+      title="Ajouter un sous-sujet"
+    >
+      ${svgIcon("plus", { className: "octicon octicon-plus" })}
+    </button>
+  `;
+}
+
 function getSubjectProgress(subject, subjectsById = {}, childrenBySubjectId = {}) {
   const subjectId = normalizeId(subject?.id);
   const childIds = Array.isArray(childrenBySubjectId?.[subjectId]) ? childrenBySubjectId[subjectId] : [];
@@ -498,6 +531,8 @@ export function renderSituationGridView(situation, subjects = [], options = {}) 
             ${renderIssueStateIcon(subject, { isBlocked })}
             <button type="button" class="situation-grid__subject-title" data-open-situation-subject="${escapeHtml(subjectId)}">${escapeHtml(subjectTitle)}</button>
             <span class="situation-grid__subject-id mono">${escapeHtml(identifier)}</span>
+            <span class="situation-grid__title-spacer" aria-hidden="true"></span>
+            ${renderSituationGridAddSubissueButton(subjectId, normalizedSituationId)}
           </div>
         </div>
       `;
