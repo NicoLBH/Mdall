@@ -96,3 +96,14 @@ test("les indicateurs de drop de la grille situation utilisent une ligne plus é
   assert.match(styleSource, /\.situation-grid \.subissues-sortable-row\.is-subissue-dragging::after\{bottom:0;\}/);
   assert.match(styleSource, /\.subject-status-blocked-indicator \.octicon-blocked\{[\s\S]*background:var\(--bg\);/);
 });
+
+test("les actions sous-sujet de la grille réutilisent les flux partagés", () => {
+  assert.match(eventsSource, /dropdown\.subissueActionsView = "menu";/);
+  assert.match(eventsSource, /dropdown\.subissueActionSubjectId = state\.subjectId;/);
+  assert.match(eventsSource, /openSharedCreateSubissueModal\?\.\(\{/);
+  assert.doesNotMatch(eventsSource, /store\.situationsView\.createSubjectForm = \{/);
+  assert.match(eventsSource, /dropdown\.subissueActionsView = "existing-subissue";/);
+  assert.match(eventsSource, /dropdown\.subissueActionSubjectId = String\(state\.subjectId \|\| ""\)\.trim\(\);/);
+  assert.match(eventsSource, /const subissueExistingEntry = eventTarget\.closest\("\[data-subject-subissue-existing-entry\]"\);/);
+  assert.match(eventsSource, /linkExistingSubjectAsSubissueFromSharedDropdown\?\.\(\{ parentSubjectId, childSubjectId, root \}\);/);
+});

@@ -3841,6 +3841,7 @@ function getObjectiveById(objectiveId) {
     buildDefaultDraftSubjectMeta,
     resetCreateSubjectForm,
     openCreateSubjectForm,
+    rerenderCreateSubissueModal,
     getCustomSubjects,
     createSubjectFromDraft,
     normalizeSujetKanbanStatus,

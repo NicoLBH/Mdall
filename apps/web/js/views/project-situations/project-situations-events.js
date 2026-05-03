@@ -111,6 +111,8 @@ export function createProjectSituationsEvents({
   toggleSubjectAssigneeFromSharedDropdown,
   toggleSubjectLabelFromSharedDropdown,
   toggleSubjectObjectiveFromSharedDropdown,
+  openSharedCreateSubissueModal,
+  linkExistingSubjectAsSubissueFromSharedDropdown,
   setSituationGridKanbanStatus,
   setSituationGridSubjectParent,
   reorderSituationGridSubjectChildren,
@@ -295,6 +297,16 @@ export function createProjectSituationsEvents({
       instanceKey,
       openedFrom: "situation-grid"
     });
+    if (opened && state.field === "subissue-actions" && store?.projectSubjectsView?.subjectMetaDropdown) {
+      const dropdown = store.projectSubjectsView.subjectMetaDropdown;
+      dropdown.subissueActionsView = "menu";
+      dropdown.query = "";
+      dropdown.activeKey = "";
+      dropdown.subissueActionSubjectId = state.subjectId;
+      dropdown.subissueActionScopeHost = "main";
+      dropdown.subissueActionIntent = "";
+      setSharedSubjectMetaDropdownQuery?.("", scopeRoot);
+    }
     if (!opened) closeSituationGridCellDropdown();
   }
 
@@ -1246,35 +1258,42 @@ export function createProjectSituationsEvents({
         event.preventDefault();
         event.stopPropagation();
         if (actionButton.matches("[data-action='open-link-existing-subissue']")) {
-          if (!store.projectSubjectsView || typeof store.projectSubjectsView !== "object") return;
-          if (!store.projectSubjectsView.subjectMetaDropdown || typeof store.projectSubjectsView.subjectMetaDropdown !== "object") return;
-          store.projectSubjectsView.subjectMetaDropdown.subissueActionsView = "existing-subissue";
-          store.projectSubjectsView.subjectMetaDropdown.subissueActionIntent = "link-existing";
-          store.projectSubjectsView.subjectMetaDropdown.query = "";
-          rerender(root);
+          const dropdown = store?.projectSubjectsView?.subjectMetaDropdown;
+          if (!dropdown || typeof dropdown !== "object") return;
+          dropdown.subissueActionsView = "existing-subissue";
+          dropdown.subissueActionIntent = "link-existing";
+          dropdown.subissueActionSubjectId = String(state.subjectId || "").trim();
+          dropdown.subissueActionScopeHost = "main";
+          dropdown.query = "";
+          dropdown.activeKey = "";
+          setSharedSubjectMetaDropdownQuery?.("", root);
           return;
         }
-        if (!store.situationsView || typeof store.situationsView !== "object") return;
-        const existing = store.situationsView.createSubjectForm && typeof store.situationsView.createSubjectForm === "object"
-          ? store.situationsView.createSubjectForm
-          : {};
-        store.situationsView.createSubjectForm = {
-          ...existing,
-          isOpen: true,
-          title: "",
-          description: "",
-          validationError: "",
-          isSubmitting: false,
-          mode: "subissue",
-          parentSubjectId: String(state.subjectId || "").trim() || null,
-          sourceSubjectId: String(state.subjectId || "").trim() || null,
-          origin: "detail",
-          scopeHost: "main"
-        };
+        closeSituationGridCellDropdown();
+        openSharedCreateSubissueModal?.({
+          parentSubjectId: state.subjectId,
+          sourceSubjectId: state.subjectId,
+          scopeHost: "main",
+          root
+        });
+        return;
+      }
+      const subissueExistingEntry = eventTarget.closest("[data-subject-subissue-existing-entry]");
+      if (subissueExistingEntry) {
+        const state = ensureSituationGridCellDropdownState();
+        if (!state.open || String(state.field || "").trim().toLowerCase() !== "subissue-actions") return;
+        const childSubjectId = String(subissueExistingEntry.getAttribute("data-subject-subissue-existing-entry") || "").trim();
+        const parentSubjectId = String(state.subjectId || store?.projectSubjectsView?.subjectMetaDropdown?.subissueActionSubjectId || "").trim();
+        if (!parentSubjectId || !childSubjectId || parentSubjectId === childSubjectId) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const linked = linkExistingSubjectAsSubissueFromSharedDropdown?.({ parentSubjectId, childSubjectId, root });
+        if (!linked) return;
         closeSituationGridCellDropdown();
         rerender(root);
         return;
       }
+
       const actionNode = eventTarget.closest(
         "[data-subject-kanban-select],[data-subject-assignee-toggle],[data-subject-label-toggle],[data-objective-select]"
       );
