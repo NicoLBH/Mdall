@@ -1997,6 +1997,25 @@ export function createProjectSituationsEvents({
     });
   }
 
+  function ensureSituationsPaginationState() {
+    if (!store.situationsView || typeof store.situationsView !== "object") store.situationsView = {};
+    if (!store.situationsView.pagination || typeof store.situationsView.pagination !== "object") {
+      store.situationsView.pagination = { currentPage: 1, pageSize: 25 };
+    }
+    return store.situationsView.pagination;
+  }
+  function isPaginationDebugEnabled() {
+    try {
+      return String(window?.localStorage?.getItem?.("debug:pagination") || "").trim() === "1";
+    } catch (_) {
+      return false;
+    }
+  }
+  function logPagination({ entity, previousPage, nextPage, totalPages }) {
+    if (!isPaginationDebugEnabled()) return;
+    console.info("[pagination]", { entity, previousPage, nextPage, totalPages });
+  }
+
   function bindEvents(root) {
     function ensureTrajectoryZoomDropdownHost() {
       let host = document.getElementById("trajectoryZoomDropdownHost");
@@ -2289,21 +2308,3 @@ export function createProjectSituationsEvents({
     bindEvents
   };
 }
-  function ensureSituationsPaginationState() {
-    if (!store.situationsView || typeof store.situationsView !== "object") store.situationsView = {};
-    if (!store.situationsView.pagination || typeof store.situationsView.pagination !== "object") {
-      store.situationsView.pagination = { currentPage: 1, pageSize: 25 };
-    }
-    return store.situationsView.pagination;
-  }
-  function isPaginationDebugEnabled() {
-    try {
-      return String(window?.localStorage?.getItem?.("debug:pagination") || "").trim() === "1";
-    } catch (_) {
-      return false;
-    }
-  }
-  function logPagination({ entity, previousPage, nextPage, totalPages }) {
-    if (!isPaginationDebugEnabled()) return;
-    console.info("[pagination]", { entity, previousPage, nextPage, totalPages });
-  }
