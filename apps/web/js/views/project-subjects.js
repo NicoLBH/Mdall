@@ -1026,7 +1026,7 @@ export function toggleSubjectObjectiveFromSharedDropdown(...args) {
   return toggleSubjectObjective(...args);
 }
 
-export function linkExistingSubjectAsSubissueFromSharedDropdown({
+export async function linkExistingSubjectAsSubissueFromSharedDropdown({
   parentSubjectId = "",
   childSubjectId = "",
   root = document
@@ -1034,7 +1034,7 @@ export function linkExistingSubjectAsSubissueFromSharedDropdown({
   const normalizedParentSubjectId = String(parentSubjectId || "").trim();
   const normalizedChildSubjectId = String(childSubjectId || "").trim();
   if (!normalizedParentSubjectId || !normalizedChildSubjectId || normalizedParentSubjectId === normalizedChildSubjectId) return false;
-  const linked = setSubjectParent(normalizedChildSubjectId, normalizedParentSubjectId, { root, skipRerender: true });
+  const linked = await setSubjectParent(normalizedChildSubjectId, normalizedParentSubjectId, { root, skipRerender: true });
   if (!linked) return false;
   closeSubjectMetaDropdown();
   renderSubjectMetaDropdownHost(root);
