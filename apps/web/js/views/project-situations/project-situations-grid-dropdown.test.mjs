@@ -20,6 +20,9 @@ test("la grille situation ouvre un dropdown éditable ancré aux cellules", () =
   assert.match(eventsSource, /uiState\?\.situationGridDropdownAbortController\?\.abort\?\.\(\);/);
   assert.match(eventsSource, /uiState\.situationGridDropdownAbortController = new AbortController\(\);/);
   assert.match(eventsSource, /document\.addEventListener\("pointerdown", \(event\) => \{[\s\S]*closeSituationGridCellDropdown\(\);[\s\S]*\}, \{ capture: true, signal \}\);/s);
+  assert.match(eventsSource, /const normalizedField = String\(field \|\| ""\)\.trim\(\)\.toLowerCase\(\);/);
+  assert.match(eventsSource, /const instanceKey = normalizedField === "subissue-actions"[\s\S]*\? "situation-grid-subissue-actions"[\s\S]*: "situation-grid";/s);
+  assert.doesNotMatch(eventsSource, /^\s*const instanceKey = String\(anchor\?\.dataset\?\.subjectMetaInstance/m);
 });
 
 test("la mise à jour kanban snapshot les ids avant fermeture et rollback avec ces constantes", () => {
