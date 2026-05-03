@@ -288,7 +288,7 @@ export function createProjectSituationsEvents({
       anchor,
       scope: "situation-grid",
       scopeHost: "main",
-      instanceKey: "situation-grid",
+      instanceKey,
       openedFrom: "situation-grid"
     });
     if (!opened) closeSituationGridCellDropdown();
@@ -2219,3 +2219,4 @@ export function createProjectSituationsEvents({
     if (!isPaginationDebugEnabled()) return;
     console.info("[pagination]", { entity, previousPage, nextPage, totalPages });
   }
+    const instanceKey = String(anchor?.dataset?.subjectMetaInstance || "situation-grid").trim() || "situation-grid";
