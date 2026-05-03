@@ -24,7 +24,7 @@ export function renderProjectSituationDrilldown(situation, options = {}) {
         <button
           type="button"
           id="${escapeHtml(closeButtonId)}"
-          class="project-situation-drilldown__close"
+          class="project-situation-drilldown__close overlay-chrome__close"
           aria-label="${escapeHtml(closeButtonLabel)}"
           title="${escapeHtml(closeButtonLabel)}"
         >✕</button>

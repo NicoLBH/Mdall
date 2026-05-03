@@ -254,6 +254,7 @@ export function createProjectSituationsEvents({
 
   function openSituationGridCellDropdown(root, { field = "", anchor = null, subjectId = "", situationId = "" } = {}) {
     if (!anchor) return;
+    const scopeRoot = resolveSituationGridDropdownRoot();
     const state = ensureSituationGridCellDropdownState();
     const host = document.getElementById("subjectMetaDropdownHost");
     closeSituationGridCellDropdown();
@@ -272,7 +273,7 @@ export function createProjectSituationsEvents({
     }));
     if (state.field === "kanban") {
       const opened = openSharedSubjectKanbanDropdown?.({
-        root,
+        root: scopeRoot,
         subjectId: state.subjectId,
         situationId: state.situationId
       });
@@ -281,13 +282,13 @@ export function createProjectSituationsEvents({
     }
 
     const opened = openSharedSubjectMetaDropdown?.({
-      root,
+      root: scopeRoot,
       field: state.field,
       subjectId: state.subjectId,
       anchor,
       scope: "situation-grid",
       scopeHost: "main",
-      instanceKey: "situation-grid",
+      instanceKey,
       openedFrom: "situation-grid"
     });
     if (!opened) closeSituationGridCellDropdown();
@@ -1172,7 +1173,8 @@ export function createProjectSituationsEvents({
   }
 
   function bindSituationGridEditableCells(root) {
-    setSituationGridDropdownRoot(root);
+    const scopeRoot = root?.closest?.(".project-shell__content") || root;
+    setSituationGridDropdownRoot(scopeRoot);
     root.querySelectorAll("[data-situation-grid-edit-cell]").forEach((node) => {
       node.addEventListener("click", (event) => {
         const caretNode = event.target instanceof Element
@@ -1194,6 +1196,26 @@ export function createProjectSituationsEvents({
           return;
         }
         openSituationGridCellDropdown(root, { field, anchor: node, subjectId, situationId });
+      });
+    });
+    root.querySelectorAll("[data-action='open-subissue-action-menu'][data-subject-id]").forEach((node) => {
+      node.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const subjectId = String(node.getAttribute("data-subject-id") || "").trim();
+        const situationId = String(node.getAttribute("data-situation-grid-situation-id") || store?.situationsView?.selectedSituationId || "").trim();
+        if (!subjectId) return;
+        const state = ensureSituationGridCellDropdownState();
+        if (state.open && state.field === "subissue-actions" && state.subjectId === subjectId && state.anchor === node) {
+          closeSituationGridCellDropdown();
+          return;
+        }
+        openSituationGridCellDropdown(root, {
+          field: "subissue-actions",
+          anchor: node,
+          subjectId,
+          situationId
+        });
       });
     });
     uiState?.situationGridDropdownAbortController?.abort?.();
@@ -1983,10 +2005,6 @@ export function createProjectSituationsEvents({
           closeButtonId: "projectSituationDrilldownClose"
         });
 
-        drilldownBody.querySelector("#projectSituationDrilldownClose")?.addEventListener("click", () => {
-          document.getElementById("drilldownClose")?.click();
-        });
-
         drilldownBody.querySelector(".project-situation-drilldown__section-action")?.addEventListener("click", () => {
           openEditPanel(root, selectedSituationId);
         });
@@ -2201,3 +2219,4 @@ export function createProjectSituationsEvents({
     if (!isPaginationDebugEnabled()) return;
     console.info("[pagination]", { entity, previousPage, nextPage, totalPages });
   }
+    const instanceKey = String(anchor?.dataset?.subjectMetaInstance || "situation-grid").trim() || "situation-grid";
