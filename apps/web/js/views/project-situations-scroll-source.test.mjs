@@ -68,3 +68,9 @@ test("la vue Situations conserve une source locale pour le Kanban", () => {
 test("la vue Situations réinitialise la source active hors Kanban", () => {
   assert.match(situationsSource, /if \(kanbanColumns\.length\) \{[\s\S]*?\} else \{[\s\S]*?clearProjectActiveScrollSource\(\);/);
 });
+
+
+test("la vue Situations transmet les dépendances sous-sujet partagées aux events", () => {
+  assert.match(situationsSource, /openSharedCreateSubissueModal:\s*\(\.\.\.args\)\s*=>\s*openSharedCreateSubissueModal\(\.\.\.args\)/);
+  assert.match(situationsSource, /linkExistingSubjectAsSubissueFromSharedDropdown:\s*\(\.\.\.args\)\s*=>\s*linkExistingSubjectAsSubissueFromSharedDropdown\(\.\.\.args\)/);
+});

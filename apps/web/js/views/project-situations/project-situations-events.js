@@ -1287,7 +1287,7 @@ export function createProjectSituationsEvents({
         if (!parentSubjectId || !childSubjectId || parentSubjectId === childSubjectId) return;
         event.preventDefault();
         event.stopPropagation();
-        const linked = linkExistingSubjectAsSubissueFromSharedDropdown?.({ parentSubjectId, childSubjectId, root });
+        const linked = await linkExistingSubjectAsSubissueFromSharedDropdown?.({ parentSubjectId, childSubjectId, root });
         if (!linked) return;
         closeSituationGridCellDropdown();
         rerender(root);
