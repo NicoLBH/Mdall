@@ -2220,3 +2220,4 @@ export function createProjectSituationsEvents({
     if (!isPaginationDebugEnabled()) return;
     console.info("[pagination]", { entity, previousPage, nextPage, totalPages });
   }
+    const instanceKey = String(anchor?.dataset?.subjectMetaInstance || "situation-grid").trim() || "situation-grid";
