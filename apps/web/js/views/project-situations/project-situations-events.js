@@ -255,6 +255,7 @@ export function createProjectSituationsEvents({
   function openSituationGridCellDropdown(root, { field = "", anchor = null, subjectId = "", situationId = "" } = {}) {
     if (!anchor) return;
     const scopeRoot = resolveSituationGridDropdownRoot();
+    const instanceKey = String(anchor?.dataset?.subjectMetaInstance || "situation-grid").trim() || "situation-grid";
     const state = ensureSituationGridCellDropdownState();
     const host = document.getElementById("subjectMetaDropdownHost");
     closeSituationGridCellDropdown();
