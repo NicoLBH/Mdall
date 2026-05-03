@@ -1983,10 +1983,6 @@ export function createProjectSituationsEvents({
           closeButtonId: "projectSituationDrilldownClose"
         });
 
-        drilldownBody.querySelector("#projectSituationDrilldownClose")?.addEventListener("click", () => {
-          document.getElementById("drilldownClose")?.click();
-        });
-
         drilldownBody.querySelector(".project-situation-drilldown__section-action")?.addEventListener("click", () => {
           openEditPanel(root, selectedSituationId);
         });
