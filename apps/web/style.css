@@ -11323,6 +11323,39 @@ circle.situation-trajectory__hierarchy-link--blocked,
   flex:0 0 auto;
 }
 
+.situation-grid__title-spacer{
+  flex:1 1 auto;
+  min-width:0;
+}
+
+.situation-grid__add-subissue-trigger{
+  width:24px;
+  height:24px;
+  border:1px solid transparent;
+  border-radius:6px;
+  background:transparent;
+  color:var(--fgColor-muted, #8b949e);
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  opacity:0;
+  pointer-events:none;
+  transition:opacity .12s ease, color .12s ease, background-color .12s ease, border-color .12s ease;
+}
+
+.situation-grid__row:hover .situation-grid__add-subissue-trigger,
+.situation-grid__row:focus-within .situation-grid__add-subissue-trigger{
+  opacity:1;
+  pointer-events:auto;
+}
+
+.situation-grid__add-subissue-trigger:hover,
+.situation-grid__add-subissue-trigger:focus-visible{
+  color:var(--fgColor-accent, #2f81f7);
+  border-color:var(--borderColor-default, #30363d);
+  background:var(--bgColor-muted, rgba(110,118,129,.1));
+}
+
 .situation-grid__empty-cell{
   width:100%;
   min-height:1px;
