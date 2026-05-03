@@ -1239,6 +1239,42 @@ export function createProjectSituationsEvents({
       const eventTarget = event.target instanceof Element ? event.target : null;
       if (!eventTarget) return;
       const root = resolveSituationGridDropdownRoot();
+      const actionButton = eventTarget.closest("[data-action='open-create-subissue'],[data-action='open-link-existing-subissue']");
+      if (actionButton) {
+        const state = ensureSituationGridCellDropdownState();
+        if (!state.open || String(state.field || "").trim().toLowerCase() !== "subissue-actions") return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (actionButton.matches("[data-action='open-link-existing-subissue']")) {
+          if (!store.projectSubjectsView || typeof store.projectSubjectsView !== "object") return;
+          if (!store.projectSubjectsView.subjectMetaDropdown || typeof store.projectSubjectsView.subjectMetaDropdown !== "object") return;
+          store.projectSubjectsView.subjectMetaDropdown.subissueActionsView = "existing-subissue";
+          store.projectSubjectsView.subjectMetaDropdown.subissueActionIntent = "link-existing";
+          store.projectSubjectsView.subjectMetaDropdown.query = "";
+          rerender(root);
+          return;
+        }
+        if (!store.situationsView || typeof store.situationsView !== "object") return;
+        const existing = store.situationsView.createSubjectForm && typeof store.situationsView.createSubjectForm === "object"
+          ? store.situationsView.createSubjectForm
+          : {};
+        store.situationsView.createSubjectForm = {
+          ...existing,
+          isOpen: true,
+          title: "",
+          description: "",
+          validationError: "",
+          isSubmitting: false,
+          mode: "subissue",
+          parentSubjectId: String(state.subjectId || "").trim() || null,
+          sourceSubjectId: String(state.subjectId || "").trim() || null,
+          origin: "detail",
+          scopeHost: "main"
+        };
+        closeSituationGridCellDropdown();
+        rerender(root);
+        return;
+      }
       const actionNode = eventTarget.closest(
         "[data-subject-kanban-select],[data-subject-assignee-toggle],[data-subject-label-toggle],[data-objective-select]"
       );
@@ -2223,4 +2259,3 @@ export function createProjectSituationsEvents({
     if (!isPaginationDebugEnabled()) return;
     console.info("[pagination]", { entity, previousPage, nextPage, totalPages });
   }
-    const instanceKey = String(anchor?.dataset?.subjectMetaInstance || "situation-grid").trim() || "situation-grid";
