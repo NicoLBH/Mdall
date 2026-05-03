@@ -55,7 +55,9 @@ import {
   setSharedSubjectKanbanDropdownQuery,
   toggleSubjectAssigneeFromSharedDropdown,
   toggleSubjectLabelFromSharedDropdown,
-  toggleSubjectObjectiveFromSharedDropdown
+  toggleSubjectObjectiveFromSharedDropdown,
+  openSharedCreateSubissueModal,
+  linkExistingSubjectAsSubissueFromSharedDropdown
 } from "./project-subjects.js";
 
 const { uiState, ensureSituationsViewState } = createProjectSituationsState({ store });

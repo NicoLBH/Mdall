@@ -894,6 +894,7 @@ const getDraftSubjectSelection = (...args) => projectSubjectsView.getDraftSubjec
 const buildDefaultDraftSubjectMeta = (...args) => projectSubjectsView.buildDefaultDraftSubjectMeta(...args);
 const resetCreateSubjectForm = (...args) => projectSubjectsView.resetCreateSubjectForm(...args);
 const openCreateSubjectForm = (...args) => projectSubjectsView.openCreateSubjectForm(...args);
+const rerenderCreateSubissueModal = (...args) => projectSubjectsView.rerenderCreateSubissueModal?.(...args);
 const getCustomSubjects = (...args) => projectSubjectsView.getCustomSubjects(...args);
 const createSubjectFromDraft = (...args) => projectSubjectsView.createSubjectFromDraft(...args);
 const normalizeSujetKanbanStatus = (...args) => projectSubjectsView.normalizeSujetKanbanStatus(...args);
@@ -1023,6 +1024,44 @@ export function toggleSubjectLabelFromSharedDropdown(...args) {
 
 export function toggleSubjectObjectiveFromSharedDropdown(...args) {
   return toggleSubjectObjective(...args);
+}
+
+export function linkExistingSubjectAsSubissueFromSharedDropdown({
+  parentSubjectId = "",
+  childSubjectId = "",
+  root = document
+} = {}) {
+  const normalizedParentSubjectId = String(parentSubjectId || "").trim();
+  const normalizedChildSubjectId = String(childSubjectId || "").trim();
+  if (!normalizedParentSubjectId || !normalizedChildSubjectId || normalizedParentSubjectId === normalizedChildSubjectId) return false;
+  const linked = setSubjectParent(normalizedChildSubjectId, normalizedParentSubjectId, { root, skipRerender: true });
+  if (!linked) return false;
+  closeSubjectMetaDropdown();
+  renderSubjectMetaDropdownHost(root);
+  syncSubjectMetaDropdownPosition(root);
+  rerenderCreateSubissueModal?.();
+  rerenderPanels?.();
+  return true;
+}
+
+export function openSharedCreateSubissueModal({
+  parentSubjectId = "",
+  sourceSubjectId = "",
+  scopeHost = "main",
+  root = document
+} = {}) {
+  const normalizedParentSubjectId = String(parentSubjectId || "").trim();
+  if (!normalizedParentSubjectId) return false;
+  projectSubjectsView.openCreateSubjectForm({
+    mode: "subissue",
+    parentSubjectId: normalizedParentSubjectId,
+    sourceSubjectId: String(sourceSubjectId || normalizedParentSubjectId).trim() || normalizedParentSubjectId,
+    origin: "detail",
+    scopeHost
+  });
+  projectSubjectsView.rerenderCreateSubissueModal?.();
+  void root;
+  return true;
 }
 
 let collaboratorsHydrationInFlight = null;
