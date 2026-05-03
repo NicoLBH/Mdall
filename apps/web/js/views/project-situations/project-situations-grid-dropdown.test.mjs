@@ -105,5 +105,26 @@ test("les actions sous-sujet de la grille réutilisent les flux partagés", () =
   assert.match(eventsSource, /dropdown\.subissueActionsView = "existing-subissue";/);
   assert.match(eventsSource, /dropdown\.subissueActionSubjectId = String\(state\.subjectId \|\| ""\)\.trim\(\);/);
   assert.match(eventsSource, /const subissueExistingEntry = eventTarget\.closest\("\[data-subject-subissue-existing-entry\]"\);/);
-  assert.match(eventsSource, /linkExistingSubjectAsSubissueFromSharedDropdown\?\.\(\{ parentSubjectId, childSubjectId, root \}\);/);
+  assert.match(eventsSource, /linkExistingSubjectAsSubissueFromSharedDropdown\?\.\(\{[\s\S]*parentSubjectId,[\s\S]*childSubjectId,[\s\S]*root[\s\S]*\}\);/s);
+});
+
+test("le host dédié gère les actions sous-sujet de la grille situation", () => {
+  assert.match(eventsSource, /function bindSituationGridSubissueDropdownHost\(root\)/);
+  assert.match(eventsSource, /document\.getElementById\("subjectMetaDropdownHost"\)/);
+  assert.match(eventsSource, /uiState\.situationGridSubissueDropdownAbortController = new AbortController\(\);/);
+  assert.match(eventsSource, /host\.addEventListener\("click", async \(event\) => \{[\s\S]*\}, \{ capture: true, signal \}\);/s);
+  assert.match(eventsSource, /String\(host\.dataset\?\.situationGridOwned \|\| ""\) !== "1"/);
+  assert.match(eventsSource, /state\.field \|\| ""\)\.trim\(\)\.toLowerCase\(\) !== "subissue-actions"/);
+  assert.match(eventsSource, /const createButton = eventTarget\.closest\('\[data-action="open-create-subissue"\]'\);/);
+  assert.match(eventsSource, /openSharedCreateSubissueModal\?\.\(\{[\s\S]*parentSubjectId,[\s\S]*sourceSubjectId: parentSubjectId,[\s\S]*scopeHost: "main",[\s\S]*root[\s\S]*\}\);/s);
+  assert.match(eventsSource, /const existingButton = eventTarget\.closest\('\[data-action="open-link-existing-subissue"\]'\);/);
+  assert.match(eventsSource, /dropdown\.subissueActionsView = "existing-subissue";/);
+  assert.match(eventsSource, /dropdown\.subissueActionIntent = "link-existing";/);
+  assert.match(eventsSource, /dropdown\.subissueActionSubjectId = String\(state\.subjectId \|\| ""\)\.trim\(\);/);
+  assert.match(eventsSource, /setSharedSubjectMetaDropdownQuery\?\.\("", root\);/);
+  assert.match(eventsSource, /bindSituationGridSubissueDropdownHost\(root\);/);
+  assert.match(eventsSource, /const subissueExistingEntry = eventTarget\.closest\("\[data-subject-subissue-existing-entry\]"\);/);
+  assert.match(eventsSource, /const childSubjectId = String\(subissueExistingEntry\.dataset\?\.subjectSubissueExistingEntry \|\| ""\)\.trim\(\);/);
+  assert.match(eventsSource, /const parentSubjectId = String\(state\.subjectId \|\| store\?\.projectSubjectsView\?\.subjectMetaDropdown\?\.subissueActionSubjectId \|\| ""\)\.trim\(\);/);
+  assert.match(eventsSource, /await refreshSituationsData\?\.\(\);/);
 });
