@@ -115,3 +115,50 @@ where department_code = '44';
 select department_code, h0_min_m, h0_max_m, h0_default_m
 from public.mdall_climate_frost_departments
 where department_code = '44';
+
+-- Guardrails: Tableau 2 Eurocode neige, Vosges must be A1/B1/C1 (not A2/C2).
+DO $$
+DECLARE
+  bad_count integer;
+BEGIN
+  SELECT COUNT(*) INTO bad_count
+  FROM public.mdall_climate_snow_canton_overrides
+  WHERE department_code = '88'
+    AND (
+      (canton_name_normalized IN ('bulgneville','chatenois','coussey','lamarche','mirecourt','neufchateau','vittel') AND resolved_zone <> 'A1')
+      OR (canton_name_normalized = 'tous les autres cantons' AND resolved_zone <> 'C1')
+    );
+
+  IF bad_count > 0 THEN
+    RAISE EXCEPTION 'Invalid snow overrides for Vosges (88): % row(s) do not match Tableau 2', bad_count;
+  END IF;
+END $$;
+
+-- Guardrails: libellés aligned with Tableau 2 and lookup rows used by the resolver.
+DO $$
+DECLARE
+  bad_count integer;
+BEGIN
+  SELECT COUNT(*) INTO bad_count
+  FROM public.mdall_climate_snow_canton_overrides
+  WHERE (department_code = '01' AND canton_name_normalized = 'pont de veyle')
+     OR (department_code = '57' AND canton_name_normalized = 'volmunster')
+     OR (department_code = '66' AND canton_name_normalized = 'saillegouse');
+
+  IF bad_count > 0 THEN
+    RAISE EXCEPTION 'Invalid legacy snow override labels still present: % row(s)', bad_count;
+  END IF;
+
+  SELECT COUNT(*) INTO bad_count
+  FROM public.mdall_climate_commune_cantons
+  WHERE insee_code IS NULL
+    AND (
+      (department_code = '01' AND canton_code_2014 = '0127' AND canton_name_2014_normalized <> 'ponte de veyle')
+      OR (department_code = '57' AND canton_code_2014 = '5736' AND canton_name_2014_normalized <> 'volmuster')
+      OR (department_code = '66' AND canton_code_2014 = '6613' AND canton_name_2014_normalized <> 'saillagouse')
+    );
+
+  IF bad_count > 0 THEN
+    RAISE EXCEPTION 'Invalid canton lookup labels for table-2 snow overrides: % row(s)', bad_count;
+  END IF;
+END $$;
