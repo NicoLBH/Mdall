@@ -2298,5 +2298,5 @@ ON CONFLICT (canton_code_2014) WHERE insee_code IS NULL DO UPDATE
 SET canton_name_current = EXCLUDED.canton_name_current,
     canton_name_current_normalized = EXCLUDED.canton_name_current_normalized,
     department_code = EXCLUDED.department_code,
-    source_payload = EXCLUDED.source_payload,
+    source_payload = coalesce(public.mdall_climate_commune_cantons.source_payload, '{}'::jsonb) || EXCLUDED.source_payload,
     updated_at = now();
