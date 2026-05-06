@@ -9658,7 +9658,7 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
   color:var(--muted);
 }
 
-.svg-line-chart__svg--responsive{
+.project-situation-insights__chart-shell .svg-line-chart__frame > .svg-line-chart__svg{
   height:auto;
 }
 
