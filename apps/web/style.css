@@ -9652,8 +9652,9 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
 }
 
 .svg-line-chart__svg{
-  display:block;
   width:100%;
+  height:auto;
+  display:block;
   color:var(--muted);
 }
 
