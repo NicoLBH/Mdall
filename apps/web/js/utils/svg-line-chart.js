@@ -146,7 +146,7 @@ export function renderSvgLineChart({
   return `
     <div class="svg-line-chart${interactive ? " svg-line-chart--interactive" : ""}"${interactive ? ` data-chart-model="${chartModel}" data-chart-id="${chartId}"` : ""}>
       <div class="svg-line-chart__frame">
-      <svg class="svg-line-chart__svg" width="${safeWidth}" height="${safeHeight}" role="img" aria-describedby="${descriptionId}"${interactive ? ` data-chart-svg="${chartId}"` : ""}>
+      <svg class="svg-line-chart__svg" viewBox="0 0 ${safeWidth} ${safeHeight}" preserveAspectRatio="xMidYMid meet" role="img" aria-describedby="${descriptionId}"${interactive ? ` data-chart-svg="${chartId}"` : ""}>
         <desc id="${descriptionId}">${escapeHtml(ariaDescription || subtitle || title)}</desc>
         <g transform="translate(${margin.left},${margin.top})">
           ${safeYGrid.show ? `
