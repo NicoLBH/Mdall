@@ -40,7 +40,7 @@ export function createProjectSituationsView({
     return `
       <div class="svg-line-chart">
         <div class="svg-line-chart__frame">
-          <svg class="svg-line-chart__svg" width="${width}" height="${height}" role="img" aria-label="Distribution des sujets">
+          <svg class="svg-line-chart__svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Distribution des sujets">
             <g transform="translate(${margin.left},${margin.top})">
               <g class="svg-line-chart__grid svg-line-chart__grid--x svg-line-chart__grid--dashed" transform="translate(0,${innerHeight})">
                 ${(Array.isArray(yTicks) ? yTicks : []).map((tick) => {
