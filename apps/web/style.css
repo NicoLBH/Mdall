@@ -9657,6 +9657,10 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
   color:var(--muted);
 }
 
+.project-situation-insights__chart-shell .svg-line-chart__frame > .svg-line-chart__svg{
+  height:auto;
+}
+
 .svg-line-chart__grid .svg-line-chart__tick line{
   stroke:rgba(139,148,158,.28);
   stroke-width:1;
