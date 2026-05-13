@@ -39,9 +39,19 @@ jobs:
         run: npm run build:web
 
       - name: Prepare site
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
           mkdir -p dist
           cp -R apps/web/. dist/
+          cat > dist/config.js <<EOF
+          window.MDALL_CONFIG = window.MDALL_CONFIG || {};
+          window.MDALL_CONFIG.supabaseUrl = "${SUPABASE_URL:-https://nsdgfxnvwoieroyaxzxb.supabase.co}";
+          window.MDALL_CONFIG.supabaseAnonKey = "${SUPABASE_ANON_KEY}";
+          window.SUPABASE_URL = window.MDALL_CONFIG.supabaseUrl;
+          window.SUPABASE_ANON_KEY = window.MDALL_CONFIG.supabaseAnonKey;
+          EOF
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
