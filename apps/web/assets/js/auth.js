@@ -3,13 +3,13 @@ import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 const SUPABASE_URL = String(
   window.MDALL_CONFIG?.supabaseUrl ||
   window.SUPABASE_URL ||
-  'https://olgxhfgdzyghlzxmremz.supabase.co'
+  'https://nsdgfxnvwoieroyaxzxb.supabase.co'
 ).trim();
 
 const SUPABASE_ANON_KEY = String(
   window.MDALL_CONFIG?.supabaseAnonKey ||
   window.SUPABASE_ANON_KEY ||
-  'sb_publishable_08nUL61_ATl-6KpD8dOYPw_RM5lMtEz'
+  ''
 ).trim();
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
