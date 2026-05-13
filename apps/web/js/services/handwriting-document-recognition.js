@@ -1,6 +1,6 @@
 const HANDWRITING_MOCK_STORAGE_KEY = "mdall:debug-handwriting-document-mock";
 const RECOGNITION_FUNCTION_NAME = "recognize-handwritten-document";
-const DEFAULT_SUPABASE_URL = "https://nsdgfxnvwoieroyaxzxb.supabase.co";
+const DEFAULT_SUPABASE_URL = "https://olgxhfgdzyghlzxmremz.supabase.co";
 
 const MOCK_MARKDOWN = `### Résolution
 
