@@ -1,0 +1,49 @@
+{
+  "schema": "mdall.spike.ground-truth/1",
+  "case_id": "example-harness-case",
+  "annotator": "fixture synthétique",
+  "annotated_at": "2026-08-26",
+  "notes": "Labels posés à la main sur une fixture inventée. Trois natures d'attente sont représentées : PRESENT, ABSENT et ABSTENTION.",
+  "items": [
+    {
+      "key": "doc-a:item-65",
+      "kind": "demo_extraction",
+      "expectation": "PRESENT",
+      "value": { "status_raw": "à préciser — attente de la note de calcul." },
+      "provenance": { "source_id": "doc-a", "excerpt": "ITEM 65 : à préciser — attente de la note de calcul." }
+    },
+    {
+      "key": "doc-a:item-66",
+      "kind": "demo_extraction",
+      "expectation": "PRESENT",
+      "value": { "status_raw": "favorable." },
+      "provenance": { "source_id": "doc-a", "excerpt": "ITEM 66 : favorable." }
+    },
+    {
+      "key": "doc-a:item-67",
+      "kind": "demo_extraction",
+      "expectation": "ABSTENTION",
+      "notes": "Deux lignes portent la même référence dans doc-a : le comportement correct est de s'abstenir, pas de choisir."
+    },
+    {
+      "key": "doc-b:item-65",
+      "kind": "demo_extraction",
+      "expectation": "PRESENT",
+      "value": { "status_raw": "défavorable — note de calcul non conforme." },
+      "provenance": { "source_id": "doc-b", "excerpt": "ITEM 65 : défavorable — note de calcul non conforme." }
+    },
+    {
+      "key": "doc-b:item-66",
+      "kind": "demo_extraction",
+      "expectation": "PRESENT",
+      "value": { "status_raw": "favorable." },
+      "provenance": { "source_id": "doc-b", "excerpt": "ITEM 66 : favorable." }
+    },
+    {
+      "key": "doc-b:item-67",
+      "kind": "demo_extraction",
+      "expectation": "ABSENT",
+      "notes": "ITEM 67 n'apparaît plus dans doc-b. Rien ne doit être affirmé — et surtout pas une levée déduite de l'absence."
+    }
+  ]
+}
