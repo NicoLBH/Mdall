@@ -12,6 +12,7 @@ import { renderSolidityClimate } from "./studio/solidity/solidity-climate.js";
 import { renderSolidityGeorisks } from "./studio/solidity/solidity-georisks.js";
 import { renderSolidityArkolia } from "./studio/socotec/socotec-enr-pv-hangard-neuf.js";
 import { renderSeismicGeneral } from "./studio/seismic/seismic-general.js";
+import { renderCtContinuityLab } from "./studio/dev/ct-continuity-lab.js";
 
 function renderStudioNav() {
   return [
@@ -67,6 +68,19 @@ function renderStudioNav() {
           iconHtml: svgIcon("eye", { className: "octicon octicon-eye" })
         })
       ]
+    }),
+    renderSideNavSeparator(),
+    renderSideNavGroup({
+      className: "settings-nav__group settings-nav__group--project",
+      sectionLabel: "Développements",
+      items: [
+        renderSideNavItem({
+          label: "CT Continuity Lab",
+          targetId: "dev-ct-continuity-lab",
+          iconHtml: svgIcon("history", { className: "octicon octicon-history" }),
+          tag: "spike"
+        })
+      ]
     })
   ].join("");
 }
@@ -97,6 +111,9 @@ function getRouterHtml() {
               <section class="project-studio-router__panel" data-side-nav-panel="seismic-general">
                 <div id="projectStudioSeismicGeneralPanel"></div>
               </section>
+              <section class="project-studio-router__panel" data-side-nav-panel="dev-ct-continuity-lab">
+                <div id="projectStudioCtContinuityLabPanel"></div>
+              </section>
             `
           })}
         </div>
@@ -115,12 +132,14 @@ export function renderProjectStudio(root) {
   const solidityGeorisksRoot = root.querySelector("#projectStudioSolidityGeorisksPanel");
   const solidityArkoliaRoot = root.querySelector("#projectStudioSolidityArkoliaPanel");
   const seismicGeneralRoot = root.querySelector("#projectStudioSeismicGeneralPanel");
+  const ctContinuityLabRoot = root.querySelector("#projectStudioCtContinuityLabPanel");
 
   if (generalRoot) renderStudioGeneral(generalRoot);
   if (solidityClimateRoot) renderSolidityClimate(solidityClimateRoot, { force: true });
   if (solidityGeorisksRoot) renderSolidityGeorisks(solidityGeorisksRoot);
   if (solidityArkoliaRoot) renderSolidityArkolia(solidityArkoliaRoot);
   if (seismicGeneralRoot) renderSeismicGeneral(seismicGeneralRoot);
+  if (ctContinuityLabRoot) renderCtContinuityLab(ctContinuityLabRoot);
 
   const getScrollSource = () => root.querySelector("#projectStudioRouterScroll");
 

@@ -7,7 +7,7 @@
  */
 
 import { OUTCOME, REASON } from "./metrics.mjs";
-import { stableStringify } from "./json-io.mjs";
+import { stableStringify } from "./stable-json.mjs";
 
 const ERROR_OUTCOMES = new Set([OUTCOME.FALSE_POSITIVE, OUTCOME.FALSE_NEGATIVE]);
 

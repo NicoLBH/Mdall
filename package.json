@@ -6,10 +6,13 @@
     "test": "node --test $(find apps/web/js -name '*.test.mjs' -print)",
     "test:spikes": "node --test $(find spikes -name '*.test.mjs' -print)",
     "prepare:katex": "node scripts/prepare-katex.mjs",
+    "prepare:unpdf": "node scripts/prepare-unpdf.mjs",
+    "prepare:spike-engine": "node scripts/prepare-spike-engine.mjs",
     "build": "npm run build:web",
-    "build:web": "npm run prepare:katex"
+    "build:web": "npm run prepare:katex && npm run prepare:unpdf && npm run prepare:spike-engine"
   },
   "dependencies": {
-    "katex": "^0.16.9"
+    "katex": "^0.16.9",
+    "unpdf": "^1.8.1"
   }
 }

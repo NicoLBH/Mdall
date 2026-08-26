@@ -1,0 +1,4 @@
+node_modules/
+
+# Dépendances copiées au build (npm run build:web), jamais versionnées.
+apps/web/vendor/

@@ -125,23 +125,53 @@ sur un petit corpus, une erreur unitaire compte davantage qu'un pourcentage.
 cité doit se trouver dans la source citée, et à la page citée quand la source est
 paginée. Une page connaissable et non renseignée compte comme un échec.
 
-## Phase B — adaptateur PDF : indisponible, et pourquoi
+## Lecture des PDF
 
-L'extraction PDF de Mdall (`supabase/functions/extract-pdf-text/index.ts`) est
-une Edge Function Deno qui dépend de `npm:unpdf`, lit un `analysis_run`,
-télécharge depuis le storage Supabase et réécrit en base. Elle n'est pas
-appelable depuis un spike Node sans ajouter une dépendance au dépôt ou toucher
-à la production — les deux sont hors périmètre.
+Deux chemins, une seule bibliothèque : `unpdf`, celle qu'emploie déjà la
+fonction Edge `supabase/functions/extract-pdf-text`.
 
-Elle appelle par ailleurs `extractText(pdf, { mergePages: true })` : **les pages
-sont fusionnées**, et le texte produit ne porte plus aucun numéro de page. Le
-`source_page` stocké aujourd'hui en base vient donc de ce que le modèle déclare,
-sans moyen de le vérifier.
+| Chemin | Où | Ce qu'il fait |
+| --- | --- | --- |
+| `pdf-adapter.mjs` | Node, pour la CLI et les tests | lit un fichier, rend les pages |
+| Atelier › Développements › CT Continuity Lab | navigateur | lit les PDF chargés à la main, sans rien envoyer |
 
-Conséquence : le spike consomme du texte déjà extrait. `content_ref` pour du
-texte plat, `pages_ref` pour conserver la pagination — et la provenance à la page
-n'est mesurable que dans le second cas. Le contrat qu'un futur adaptateur devra
-respecter est décrit dans `pdf-adapter.mjs` ; il devra extraire page par page.
+Deux différences avec la fonction de production, et elles comptent :
+
+- **`mergePages: false`.** La fonction de production fusionne les pages : le
+  texte qu'elle produit ne porte plus aucun numéro de page, et le `source_page`
+  stocké en base vient donc de ce que le modèle déclare, sans moyen de le
+  vérifier. Ici la pagination est conservée, et `provenance_accuracy` redevient
+  une vérification réelle.
+- **Aucun accès à Supabase.** Ni `analysis_run`, ni storage, ni écriture en base.
+
+Côté navigateur, `unpdf` et le sous-ensemble pur du moteur sont copiés dans
+`apps/web/vendor/` par `npm run build:web`. Le moteur n'est donc versionné qu'à
+un seul endroit — ici — et le laboratoire exécute exactement le code que
+`npm run test:spikes` couvre.
+
+## Le laboratoire de l'Atelier
+
+`Atelier › Développements › CT Continuity Lab` sert à passer de vrais rapports
+sans écrire une ligne de ground truth au préalable :
+
+1. dix boutons « Ajouter rapport N », dans l'ordre chronologique ;
+2. extraction locale, puis exécution du moteur ;
+3. un tableau référence × rapport, chaque case cliquable montrant sa provenance,
+   ses deux confiances et sa méthode de rapprochement ;
+4. les indicateurs auto-vérifiables et les garde-fous ;
+5. un export du cas au format `mdall.spike.case/1`, pages incluses.
+
+**Ce que le laboratoire n'affiche pas : precision et recall.** Ils exigent une
+ground truth annotée à la main ; sans elle, ces chiffres n'existent pas et le
+laboratoire n'en invente aucun. Ce qu'il montre à la place se vérifie seul
+contre les PDF chargés : provenance retrouvée à la page, proportion d'avis
+reconnus par le lexique, abstentions, violations de garde-fou, et des alertes
+d'extraction — dont celle qui compte le plus : *un rapport dont rien n'a été
+extrait produit des `NOT_FOUND` qui sont des artefacts, pas des informations.*
+
+L'export ne contient que la couche source. L'interprétation produite par le
+moteur ne doit jamais être recyclée en ground truth : c'est ce qu'on cherche
+justement à évaluer.
 
 ## Fixtures
 
@@ -162,7 +192,9 @@ Les rapports réels vont dans `spikes/fixtures/private/`, qui est gitignoré.
    réels de plusieurs organismes.
 2. **Aucune donnée réelle n'a encore été passée.** Le corpus reste à constituer
    et à annoter à la main.
-3. **Pas de lecture PDF** (ci-dessus) : les fixtures sont textuelles.
+3. **Le laboratoire ne mesure pas la justesse.** Il montre ce que le moteur a
+   compris et ce qui se vérifie tout seul. Conclure demande une ground truth
+   annotée puis un run de la CLI.
 4. **Aucun rapprochement sémantique.** Une référence renumérotée d'un rapport à
    l'autre est vue comme un `NOT_FOUND` plus un `NEW`. C'est délibéré pour cette
    première version — mesurer d'abord le cas déterministe — et c'est précisément

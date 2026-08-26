@@ -1,58 +1,73 @@
 /**
- * Spike 1 — Phase B : adaptateur PDF.
+ * Spike 1 — Phase B : adaptateur PDF (Node).
  *
- * ÉTAT : non disponible, volontairement.
+ * Utilise `unpdf`, la bibliothèque déjà employée par la fonction Edge
+ * `supabase/functions/extract-pdf-text`. Deux différences avec elle, et elles
+ * comptent :
  *
- * L'extraction PDF de Mdall vit dans une Edge Function Deno
- * (`supabase/functions/extract-pdf-text/index.ts`) qui :
- *   - dépend de `npm:unpdf`, du runtime Deno et du client Supabase ;
- *   - lit un `analysis_run`, télécharge le document depuis le storage, puis
- *     écrit le texte extrait dans la base ;
- *   - appelle `extractText(pdf, { mergePages: true })`, ce qui **fusionne les
- *     pages** : le texte produit ne porte plus aucun numéro de page.
+ *  1. `mergePages: false`. La fonction de production fusionne les pages, donc le
+ *     texte qu'elle produit ne porte plus aucun numéro de page et `source_page`
+ *     y est invérifiable. Ici la pagination est conservée, et la provenance
+ *     redevient contrôlable.
+ *  2. Aucun accès à Supabase : ni `analysis_run`, ni storage, ni écriture en
+ *     base. On lit un fichier, on rend du texte.
  *
- * Elle n'est donc pas réutilisable depuis un spike Node sans, au choix,
- * ajouter `unpdf` en dépendance du dépôt, ou appeler la fonction déployée —
- * c'est-à-dire toucher à la production. Les deux sont hors du périmètre du
- * Spike 1.
- *
- * Conséquence assumée : le spike travaille sur du texte déjà extrait, fourni
- * par la fixture (`content_ref`, ou `pages_ref` pour conserver la pagination).
- * La provenance à la page n'est mesurable que sur des fixtures paginées.
- *
- * Le jour où un adaptateur sera écrit, il devra respecter ce contrat.
+ * Le laboratoire de l'Atelier fait exactement la même chose dans le navigateur,
+ * avec la même bibliothèque copiée au build.
  */
 
-export class PdfAdapterUnavailableError extends Error {
-  constructor(message) {
-    super(message);
-    this.name = "PdfAdapterUnavailableError";
+import { readFile } from "node:fs/promises";
+
+/**
+ * Extrait le texte d'un PDF, page par page.
+ *
+ * @param {{path?: string, bytes?: Uint8Array}} input
+ * @returns {Promise<{pages: {page: number, text: string}[], pageCount: number}>}
+ */
+export async function extractPages({ path, bytes } = {}) {
+  if (!path && !bytes) {
+    throw new Error("pdf-adapter: fournir `path` ou `bytes`");
   }
+
+  let unpdf;
+  try {
+    unpdf = await import("unpdf");
+  } catch (error) {
+    throw new Error(
+      `pdf-adapter: unpdf est introuvable (${error.message}). Lancer « npm install » à la racine du dépôt.`
+    );
+  }
+
+  const data = bytes ?? new Uint8Array(await readFile(path));
+  const document = await unpdf.getDocumentProxy(data);
+  const { totalPages, text } = await unpdf.extractText(document, { mergePages: false });
+
+  const pages = (Array.isArray(text) ? text : [text]).map((pageText, index) => ({
+    page: index + 1,
+    text: String(pageText ?? "")
+  }));
+
+  return { pages, pageCount: Number.isInteger(totalPages) ? totalPages : pages.length };
 }
 
 /**
- * Contrat attendu d'un futur adaptateur.
- *
- * @typedef {object} PdfAdapter
- * @property {(input: {path?: string, bytes?: Uint8Array}) => Promise<{pages: {page: number, text: string}[]}>} extractPages
- *
- * `extractPages` doit rendre une page par page — donc `mergePages: false` —
- * faute de quoi `source_page` reste invérifiable et la métrique
- * `provenance_accuracy` perd son sens.
+ * Construit une source de cas à partir d'un PDF, prête pour le harness.
+ * Le contenu est laissé paginé : c'est ce qui rend la provenance vérifiable.
  */
+export async function buildSourceFromPdf({ path, sourceId, sourceType = "control_office_report", issuer = null, issuedAt = null, order = 0 }) {
+  const { pages, pageCount } = await extractPages({ path });
 
-export const pdfAdapter = {
-  available: false,
-  reason:
-    "L'extraction PDF de production est une Edge Function Deno couplée à Supabase, et fusionne les pages. " +
-    "Le spike consomme du texte déjà extrait (content_ref) ou paginé (pages_ref).",
+  return {
+    source_id: sourceId,
+    source_type: sourceType,
+    issuer,
+    issued_at: issuedAt,
+    order,
+    pages,
+    metadata: { path, page_count: pageCount }
+  };
+}
 
-  async extractPages() {
-    throw new PdfAdapterUnavailableError(
-      "Aucun adaptateur PDF utilisable depuis le spike. Fournir le texte via content_ref ou pages_ref. " +
-        "Voir spikes/ct-continuity/README.md, section « Phase B »."
-    );
-  }
-};
+export const pdfAdapter = { available: true, extractPages, buildSourceFromPdf };
 
 export default pdfAdapter;

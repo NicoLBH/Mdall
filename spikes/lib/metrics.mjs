@@ -8,7 +8,7 @@
  *     rapport puisse montrer les erreurs une par une et pas seulement un score.
  */
 
-import { stableStringify } from "./json-io.mjs";
+import { stableStringify } from "./stable-json.mjs";
 import { normalizeConfidence } from "./normalize.mjs";
 
 /** Nature de ce que la ground truth attend pour une clé donnée. */

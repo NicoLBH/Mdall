@@ -197,10 +197,28 @@ domaine c'est exactement l'inversion qu'il ne faut pas laisser passer.
 
 | Spike | Statut |
 | --- | --- |
-| 1 — `ct-continuity` | implémenté, évalué sur fixture synthétique uniquement |
+| 1 — `ct-continuity` | implémenté, évalué sur fixture synthétique uniquement, avec un laboratoire manuel dans l'Atelier |
 | 2 — `site-minutes-continuity` | non implémenté |
 | 3 — `email-continuity` | non implémenté |
 | 4 — `targeted-revision-impact` | non implémenté |
+
+## Le moteur dans l'application
+
+Le Spike 1 dispose d'un banc d'essai manuel : `Atelier › Développements ›
+CT Continuity Lab`. Il charge des PDF à la main, les lit **dans le navigateur**
+et exécute le moteur — sans rien envoyer, sans rien enregistrer, sans toucher à
+un seul sujet Mdall.
+
+Pour cela, `npm run build:web` copie dans `apps/web/vendor/` :
+
+- `unpdf`, la bibliothèque d'extraction déjà utilisée par la fonction Edge de
+  production, mais appelée ici avec `mergePages: false` ;
+- le sous-ensemble **pur** du moteur (`scripts/prepare-spike-engine.mjs`).
+
+Le moteur reste versionné uniquement dans `spikes/` : rien n'est dupliqué dans
+le dépôt. Le script de copie échoue si l'un des modules concernés se met à
+importer un module Node — mieux vaut casser le build que livrer une page qui
+plante à l'ouverture.
 
 ## Écrire un spike
 
