@@ -1,0 +1,29 @@
+{
+  "schema": "mdall.spike.case/1",
+  "case_id": "example-harness-case",
+  "spike": "harness-selfcheck",
+  "title": "Cas de démonstration du harness",
+  "description": "Fixture entièrement synthétique. Elle ne sert qu'à vérifier le harness de bout en bout : chargement, confrontation à la ground truth, garde-fous, métriques, rapport. Elle ne préjuge d'aucun format réel de document.",
+  "params": {
+    "assertion_threshold": 0.6
+  },
+  "sources": [
+    {
+      "source_id": "doc-a",
+      "source_type": "demo_text",
+      "issuer": "Fixture synthétique",
+      "issued_at": "2026-03-12",
+      "order": 1,
+      "content_ref": "./texts/doc-a.txt"
+    },
+    {
+      "source_id": "doc-b",
+      "source_type": "demo_text",
+      "issuer": "Fixture synthétique",
+      "issued_at": "2026-03-25",
+      "order": 2,
+      "content_ref": "./texts/doc-b.txt"
+    }
+  ],
+  "ground_truth_ref": "./ground-truth.json"
+}

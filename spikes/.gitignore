@@ -1,0 +1,10 @@
+# Sorties de run : régénérables, jamais versionnées.
+outputs/**
+!outputs/.gitkeep
+reports/**
+!reports/.gitkeep
+
+# Fixtures privées (documents réels de projet) : jamais committées.
+fixtures/private/**
+!fixtures/private/.gitkeep
+!fixtures/private/README.md

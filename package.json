@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "test": "node --test $(find apps/web/js -name '*.test.mjs' -print)",
+    "test:spikes": "node --test $(find spikes -name '*.test.mjs' -print)",
     "prepare:katex": "node scripts/prepare-katex.mjs",
     "build": "npm run build:web",
     "build:web": "npm run prepare:katex"
