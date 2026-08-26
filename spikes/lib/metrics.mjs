@@ -296,10 +296,12 @@ export function provenanceAccuracy(outcomes, isProvenanceCorrect) {
 /** Métriques standard produites pour tous les spikes. */
 export function standardMetrics(counts) {
   return [
-    { id: "precision", label: "Precision", ...precision(counts) },
-    { id: "recall", label: "Recall", ...recall(counts) },
-    { id: "f1", label: "F1", ...f1(counts) },
-    { id: "false_positive_rate", label: "False positive rate", ...falsePositiveRate(counts) },
-    { id: "abstention_quality", label: "Abstention quality", ...abstentionQuality(counts) }
+    { id: "precision", label: "Precision", kind: "ratio", ...precision(counts) },
+    { id: "recall", label: "Recall", kind: "ratio", ...recall(counts) },
+    // Le numérateur et le dénominateur de F1 sont des artefacts de calcul :
+    // les afficher n'apprendrait rien, la valeur suffit.
+    { id: "f1", label: "F1", kind: "score", ...f1(counts) },
+    { id: "false_positive_rate", label: "False positive rate", kind: "ratio", ...falsePositiveRate(counts) },
+    { id: "abstention_quality", label: "Abstention quality", kind: "ratio", ...abstentionQuality(counts) }
   ];
 }

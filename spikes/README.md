@@ -33,7 +33,7 @@ spikes/
 ├── outputs/                      enregistrements de run JSON — gitignoré
 ├── reports/                      rapports Markdown — gitignoré
 ├── selfcheck.mjs                 vérification de bout en bout du harness
-├── ct-continuity/                Spike 1 — non implémenté
+├── ct-continuity/                Spike 1 — implémenté
 ├── site-minutes-continuity/      Spike 2 — non implémenté
 ├── email-continuity/             Spike 3 — non implémenté
 └── targeted-revision-impact/     Spike 4 — non implémenté
@@ -42,9 +42,12 @@ spikes/
 ## Commandes
 
 ```bash
-npm run test:spikes          # tests du harness (n'affecte pas npm test)
+npm run test:spikes          # tests du harness et des spikes (n'affecte pas npm test)
 node spikes/selfcheck.mjs    # run de démonstration : écrit outputs/ + reports/
 node spikes/selfcheck.mjs --dry-run   # affiche le rapport sans rien écrire
+
+# Spike 1
+node spikes/ct-continuity/run.mjs --case spikes/fixtures/ct-continuity-synthetic/case.json
 ```
 
 `npm test` reste strictement inchangé : il ne parcourt que `apps/web/js`.
@@ -79,6 +82,10 @@ aucune interprétation.
 Une source sans contenu exploitable reste chargeable : elle est marquée
 `content_available: false` plutôt que d'échouer silencieusement. Chaque contenu
 chargé reçoit un `content_sha256` : un run est rattaché à un contenu précis.
+
+Une source peut être **paginée**, via `pages_ref` (fichier `{ "pages": [{ "page": 1,
+"text": "…" }] }`) ou `pages` en ligne. C'est la seule façon de vérifier réellement
+une provenance à la page : sans pagination, `source_page` reste invérifiable.
 
 **L'interprétation** est produite par le pipeline du spike, sous forme de
 prédictions :
@@ -151,14 +158,20 @@ false positive rate et abstention quality. Trois règles :
    le rapport montre les erreurs une par une. Sur un corpus de dix documents, un
    pourcentage ne veut rien dire ; une erreur unitaire, si.
 
-Un spike ajoute ses propres métriques sans modifier le harness :
+Un spike ajoute ses propres métriques sans modifier le harness. `extraMetrics`
+accepte un tableau, ou une fabrique recevant le cas chargé quand la métrique a
+besoin des sources (vérifier une provenance, par exemple) :
 
 ```js
-extraMetrics: [
-  { id: "false_merge_count", label: "False merge count",
+extraMetrics: (testCase) => [
+  { id: "false_merge_count", label: "False merge count", kind: "count",
     compute: ({ outcomes }) => ({ value: countFalseMerges(outcomes) }) }
 ]
 ```
+
+`kind` décide du rendu : `ratio` (défaut, affiché avec sa fraction), `score`
+(valeur seule, pour un F1 dont la fraction n'apprendrait rien) ou `count` (un
+effectif — l'afficher en pourcentage n'aurait aucun sens).
 
 ## Garde-fous
 
@@ -169,11 +182,25 @@ indépendamment des scores. Une violation est affichée **avant** les métriques
 | --- | --- |
 | `provenance_required` | toute affirmation porte une source et un extrait |
 | `excerpt_must_exist_in_source` | l'extrait cité existe réellement dans la source citée |
-| `absence_is_not_a_conclusion` | aucune conclusion positive déduite d'une absence |
+| `absence_is_not_a_conclusion` | aucune conclusion positive déduite d'une absence : une prédiction fondée sur une absence ne peut affirmer qu'un état non conclusif |
 | `ambiguity_not_presented_as_certain` | aucun rapprochement ambigu affirmé comme certain |
 
 Les trois premiers sont exportés par `commonGuards`. Chaque spike ajoute les
-siens.
+siens — le Spike 1 y ajoute par exemple « aucun statut de sujet Mdall dans une
+prédiction » et « l'avis restitué figure littéralement dans l'extrait cité ».
+
+Les recherches de texte de ces garde-fous exigent des frontières de mot
+(`containsPhrase`) : « favorable » est contenu dans « défavorable », et sur ce
+domaine c'est exactement l'inversion qu'il ne faut pas laisser passer.
+
+## Spikes
+
+| Spike | Statut |
+| --- | --- |
+| 1 — `ct-continuity` | implémenté, évalué sur fixture synthétique uniquement |
+| 2 — `site-minutes-continuity` | non implémenté |
+| 3 — `email-continuity` | non implémenté |
+| 4 — `targeted-revision-impact` | non implémenté |
 
 ## Écrire un spike
 

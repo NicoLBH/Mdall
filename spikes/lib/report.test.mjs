@@ -139,3 +139,19 @@ test("le rendu est déterministe pour un même enregistrement", () => {
   const record = baseRecord();
   assert.equal(renderRunReport(record), renderRunReport(record));
 });
+
+test("un effectif s'affiche comme un effectif, jamais en pourcentage", () => {
+  assert.equal(formatRatio({ kind: "count", value: 2 }), "2");
+  assert.equal(formatRatio({ kind: "count", value: 0 }), "0");
+  assert.equal(formatRatio({ kind: "count", value: null }), "0");
+});
+
+test("un score s'affiche sans fraction, une fraction avec la sienne", () => {
+  assert.equal(formatRatio({ kind: "score", value: 0.8, numerator: 1.6, denominator: 2 }), "0.800 — 80.0 %");
+  assert.equal(formatRatio({ kind: "ratio", value: 0.25, numerator: 1, denominator: 4 }), "0.250 — 25.0 % (1/4)");
+});
+
+test("un dénominateur nul reste n/a pour un taux, et 0 pour un effectif", () => {
+  assert.equal(formatRatio({ kind: "ratio", value: null, numerator: 0, denominator: 0 }), "n/a (dénominateur = 0)");
+  assert.equal(formatRatio({ kind: "count", value: null }), "0");
+});

@@ -162,3 +162,71 @@ test("un content_ref pointe bien vers un fichier lu depuis le dossier du manifes
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("une source paginée conserve ses numéros de page et les trie", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "mdall-spikes-"));
+  try {
+    await writeJsonFile(join(dir, "pages.json"), {
+      pages: [
+        { page: 3, text: "troisième" },
+        { page: 1, text: "première" }
+      ]
+    });
+    const path = join(dir, "case.json");
+    await writeJsonFile(path, {
+      schema: "mdall.spike.case/1",
+      case_id: "pagine",
+      spike: "demo",
+      sources: [{ source_id: "a", source_type: "pdf_text", pages_ref: "./pages.json" }]
+    });
+
+    const testCase = await loadCase(path);
+    assert.deepEqual(testCase.sources[0].pages.map((page) => page.page), [1, 3]);
+    assert.equal(testCase.sources[0].content, "première\ntroisième");
+    assert.equal(testCase.sources[0].content_available, true);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("une pagination invalide est refusée explicitement", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "mdall-spikes-"));
+  try {
+    const duplicate = join(dir, "case.json");
+    await writeJsonFile(duplicate, {
+      schema: "mdall.spike.case/1",
+      case_id: "x",
+      spike: "demo",
+      sources: [
+        {
+          source_id: "a",
+          source_type: "pdf_text",
+          pages: [
+            { page: 1, text: "a" },
+            { page: 1, text: "b" }
+          ]
+        }
+      ]
+    });
+    await assert.rejects(() => loadCase(duplicate), /page 1 déclarée deux fois/);
+
+    const noText = join(dir, "no-text.json");
+    await writeJsonFile(noText, {
+      schema: "mdall.spike.case/1",
+      case_id: "x",
+      spike: "demo",
+      sources: [{ source_id: "a", source_type: "pdf_text", pages: [{ page: 1 }] }]
+    });
+    await assert.rejects(() => loadCase(noText), /n'a pas de texte/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("la fixture CT synthétique se charge : trois rapports paginés et 36 labels", async () => {
+  const testCase = await loadCase(resolve(FIXTURES_DIR, "ct-continuity-synthetic/case.json"));
+
+  assert.deepEqual(testCase.sources.map((source) => source.source_id), ["rapport-a", "rapport-b", "rapport-c"]);
+  assert.ok(testCase.sources.every((source) => Array.isArray(source.pages) && source.pages.length === 2));
+  assert.equal(testCase.groundTruth.items.length, 36);
+});

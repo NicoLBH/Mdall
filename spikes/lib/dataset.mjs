@@ -28,6 +28,35 @@ function resolveRef(baseDir, ref) {
 }
 
 /**
+ * Pagination d'une source : [{ page, text }], triée et validée.
+ *
+ * Une source paginée permet de vérifier réellement une provenance page à page.
+ * L'extraction PDF de production fusionne les pages (`mergePages: true`) : elle
+ * ne peut donc pas alimenter ce format en l'état — cf. `spikes/ct-continuity/README.md`.
+ */
+function normalizePages(rawPages, context) {
+  if (!Array.isArray(rawPages)) {
+    throw new Error(`${context}: "pages" doit être un tableau de { page, text }`);
+  }
+
+  const seen = new Set();
+  const pages = rawPages.map((rawPage, index) => {
+    const number = Number(rawPage?.page ?? index + 1);
+    if (!Number.isInteger(number) || number < 1) {
+      throw new Error(`${context}: numéro de page invalide "${rawPage?.page}"`);
+    }
+    if (seen.has(number)) throw new Error(`${context}: page ${number} déclarée deux fois`);
+    seen.add(number);
+    if (typeof rawPage?.text !== "string") {
+      throw new Error(`${context}: la page ${number} n'a pas de texte`);
+    }
+    return { page: number, text: rawPage.text };
+  });
+
+  return pages.sort((a, b) => a.page - b.page);
+}
+
+/**
  * Charge un manifest de cas et résout le contenu des sources.
  * `content` (inline) ou `content_ref` (fichier relatif au manifest) sont acceptés ;
  * une source sans contenu reste chargeable, avec `content: null` et
@@ -67,10 +96,23 @@ export async function loadCase(manifestPath) {
       content = await readTextFile(contentPath);
     }
 
+    let pages = null;
+    if (Array.isArray(rawSource.pages)) {
+      pages = normalizePages(rawSource.pages, sourceContext);
+    } else if (typeof rawSource.pages_ref === "string") {
+      const payload = await readJsonFile(resolveRef(baseDir, rawSource.pages_ref));
+      pages = normalizePages(payload?.pages ?? payload, sourceContext);
+    }
+
+    if (pages && content === null) {
+      content = pages.map((page) => page.text).join("\n");
+    }
+
     sources.push({
       ...rawSource,
       order: Number.isFinite(rawSource.order) ? rawSource.order : index,
       content,
+      pages,
       content_available: content !== null,
       content_path: contentPath,
       content_sha256: content === null ? null : sha256(content)

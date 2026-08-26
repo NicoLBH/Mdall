@@ -18,13 +18,27 @@ const ABSTENTION_REASONS = new Set([
   REASON.ABSTAINED_WITHOUT_GROUND_TRUTH
 ]);
 
+/**
+ * Trois natures de métrique, trois rendus.
+ *  - `count` : un effectif. L'afficher en pourcentage n'a aucun sens.
+ *  - `score` : une valeur dans [0, 1] sans fraction lisible (F1, par exemple).
+ *  - `ratio` : une fraction, affichée avec son numérateur et son dénominateur.
+ */
 export function formatRatio(metric) {
   if (!metric || metric.value === null || metric.value === undefined) {
-    return "n/a (dénominateur = 0)";
+    return metric?.kind === "count" ? "0" : "n/a (dénominateur = 0)";
   }
+
+  if (metric.kind === "count") {
+    return String(metric.value);
+  }
+
   const percent = (metric.value * 100).toFixed(1);
-  const detail = metric.denominator === undefined ? "" : ` (${metric.numerator}/${metric.denominator})`;
-  return `${metric.value.toFixed(3)} — ${percent} %${detail}`;
+  if (metric.kind === "score" || metric.denominator === undefined) {
+    return `${metric.value.toFixed(3)} — ${percent} %`;
+  }
+
+  return `${metric.value.toFixed(3)} — ${percent} % (${metric.numerator}/${metric.denominator})`;
 }
 
 export function escapeCell(value, maxLength = 120) {
