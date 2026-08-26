@@ -55,6 +55,31 @@ export function normalizeConfidence(value) {
   return numeric;
 }
 
+/**
+ * Cherche une expression dans un texte, en exigeant des frontières de mot.
+ *
+ * Une simple inclusion de sous-chaîne ne suffit pas : « favorable » est
+ * contenu dans « défavorable ». Sur ce domaine, c'est exactement l'erreur
+ * qu'il ne faut pas laisser passer.
+ */
+export function containsPhrase(haystack, needle) {
+  const text = normalizeTextKey(haystack);
+  const phrase = normalizeTextKey(needle);
+  if (phrase === "") return false;
+
+  const isLetter = (char) => char !== undefined && /\p{L}|\p{N}/u.test(char);
+
+  let from = 0;
+  while (from <= text.length - phrase.length) {
+    const at = text.indexOf(phrase, from);
+    if (at === -1) return false;
+    if (!isLetter(text[at - 1]) && !isLetter(text[at + phrase.length])) return true;
+    from = at + 1;
+  }
+
+  return false;
+}
+
 /** Horodatage compact et triable, utilisé pour les identifiants de run. */
 export function slugifyTimestamp(date) {
   const iso = (date instanceof Date ? date : new Date(date)).toISOString();

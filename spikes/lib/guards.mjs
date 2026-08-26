@@ -9,7 +9,7 @@
  * `context` = { expected, predicted, outcomes, counts, sources, params }
  */
 
-import { normalizeTextKey } from "./normalize.mjs";
+import { containsPhrase } from "./normalize.mjs";
 import { isAbstentionByDefault } from "./metrics.mjs";
 
 function assertedPredictions(context) {
@@ -66,7 +66,7 @@ export const excerptMustExistInSource = {
         continue;
       }
       if (!source.content_available) continue;
-      if (!normalizeTextKey(source.content).includes(normalizeTextKey(provenance.excerpt))) {
+      if (!containsPhrase(source.content, provenance.excerpt)) {
         issues.push({
           key,
           message: `extrait introuvable dans la source "${provenance.source_id}"`
@@ -82,23 +82,32 @@ export const excerptMustExistInSource = {
  * Règle §28.5 : « absence dans le document suivant ≠ clôture ».
  *
  * Une prédiction qui s'appuie sur une absence doit le déclarer
- * (`derived_from_absence: true`) et rester non affirmative.
+ * (`derived_from_absence: true`) et ne peut affirmer qu'un état non conclusif :
+ * constater qu'une information n'a pas été retrouvée est permis, en tirer une
+ * levée ou une clôture ne l'est pas.
  */
-export const absenceIsNotAConclusion = {
-  id: "absence_is_not_a_conclusion",
-  label: "Aucune conclusion positive déduite d'une simple absence",
-  detect(context) {
-    const issues = [];
-    for (const prediction of assertedPredictions(context)) {
-      if (prediction.derived_from_absence !== true) continue;
-      issues.push({
-        key: prediction.key ?? prediction.id ?? "(sans clé)",
-        message: "conclusion affirmée à partir d'une absence de donnée"
-      });
+export function createAbsenceIsNotAConclusion({ nonConclusiveStates = ["NOT_FOUND", "UNRESOLVED"] } = {}) {
+  const allowed = new Set(nonConclusiveStates);
+  return {
+    id: "absence_is_not_a_conclusion",
+    label: `Aucune conclusion positive déduite d'une absence (états non conclusifs : ${[...allowed].join(", ")})`,
+    detect(context) {
+      const issues = [];
+      for (const prediction of assertedPredictions(context)) {
+        if (prediction.derived_from_absence !== true) continue;
+        const state = prediction.value?.state ?? null;
+        if (state !== null && allowed.has(state)) continue;
+        issues.push({
+          key: prediction.key ?? prediction.id ?? "(sans clé)",
+          message: `conclusion "${state ?? "non déclarée"}" affirmée à partir d'une absence de donnée`
+        });
+      }
+      return issues;
     }
-    return issues;
-  }
-};
+  };
+}
+
+export const absenceIsNotAConclusion = createAbsenceIsNotAConclusion();
 
 /**
  * Un rapprochement ambigu ne doit jamais être présenté comme certain.

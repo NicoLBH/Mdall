@@ -1,0 +1,459 @@
+{
+  "schema": "mdall.spike.ground-truth/1",
+  "case_id": "ct-continuity-synthetic",
+  "annotator": "fixture synthétique (labels posés à la main depuis le texte des rapports)",
+  "annotated_at": "2026-08-26",
+  "notes": "Couvre les dix cas obligatoires du §28.4 : avis inchangé, avis modifié, favorable après défavorable, avis nouveau, avis absent du rapport suivant, numérotation ambiguë, statut non reconnu, texte reformulé, référence mal extraite, plusieurs avis proches.",
+  "items": [
+    {
+      "key": "extraction:rapport-a:65",
+      "kind": "extraction",
+      "expectation": "PRESENT",
+      "value": {
+        "external_reference_raw": "65",
+        "external_reference_normalized": "65",
+        "opinion_raw": "À préciser",
+        "source_page": 2
+      },
+      "provenance": {
+        "source_id": "rapport-a",
+        "page": 2,
+        "excerpt": "Avis n° 65 : À préciser — la note de calcul de la charpente métallique n'a pas été transmise."
+      }
+    },
+    {
+      "key": "extraction:rapport-a:66",
+      "kind": "extraction",
+      "expectation": "PRESENT",
+      "value": {
+        "external_reference_raw": "66",
+        "external_reference_normalized": "66",
+        "opinion_raw": "Favorable",
+        "source_page": 2
+      },
+      "provenance": {
+        "source_id": "rapport-a",
+        "page": 2,
+        "excerpt": "Avis n° 66 : Favorable — étanchéité de toiture conforme au descriptif."
+      }
+    },
+    {
+      "key": "extraction:rapport-a:67",
+      "kind": "extraction",
+      "expectation": "PRESENT",
+      "value": {
+        "external_reference_raw": "67",
+        "external_reference_normalized": "67",
+        "opinion_raw": "Défavorable",
+        "source_page": 2
+      },
+      "provenance": {
+        "source_id": "rapport-a",
+        "page": 2,
+        "excerpt": "Avis n° 67 : Défavorable — le désenfumage de la cage d'escalier n'est pas justifié."
+      }
+    },
+    {
+      "key": "extraction:rapport-a:70",
+      "kind": "extraction",
+      "expectation": "PRESENT",
+      "value": {
+        "external_reference_raw": "70",
+        "external_reference_normalized": "70",
+        "opinion_raw": null,
+        "source_page": 2
+      },
+      "provenance": {
+        "source_id": "rapport-a",
+        "page": 2,
+        "excerpt": "Avis n° 70 : Réservé au lot 04 dans l'attente de la désignation de l'entreprise."
+      },
+      "notes": "Statut non reconnu : aucune formulation d'avis connue. opinion_raw doit rester null — inventer une catégorie serait une faute."
+    },
+    {
+      "key": "extraction:rapport-b:65",
+      "kind": "extraction",
+      "expectation": "PRESENT",
+      "value": {
+        "external_reference_raw": "65",
+        "external_reference_normalized": "65",
+        "opinion_raw": "Défavorable",
+        "source_page": 2
+      },
+      "provenance": {
+        "source_id": "rapport-b",
+        "page": 2,
+        "excerpt": "Avis n° 65 : Défavorable — la note de calcul transmise ne justifie pas la stabilité au feu."
+      }
+    },
+    {
+      "key": "extraction:rapport-b:66",
+      "kind": "extraction",
+      "expectation": "PRESENT",
+      "value": {
+        "external_reference_raw": "66",
+        "external_reference_normalized": "66",
+        "opinion_raw": "Favorable",
+        "source_page": 2
+      },
+      "provenance": {
+        "source_id": "rapport-b",
+        "page": 2,
+        "excerpt": "Avis n° 66 : Favorable — étanchéité conforme, sans observation nouvelle."
+      }
+    },
+    {
+      "key": "extraction:rapport-b:68",
+      "kind": "extraction",
+      "expectation": "PRESENT",
+      "value": {
+        "external_reference_raw": "68",
+        "external_reference_normalized": "68",
+        "opinion_raw": "À préciser",
+        "source_page": 2
+      },
+      "provenance": {
+        "source_id": "rapport-b",
+        "page": 2,
+        "excerpt": "Avis n° 68 : À préciser — préciser la nature de la protection retenue pour la charpente."
+      }
+    },
+    {
+      "key": "extraction:rapport-b:69",
+      "kind": "extraction",
+      "expectation": "ABSTENTION",
+      "notes": "Deux lignes portent l'avis n° 69 dans le même rapport : la bonne réponse est de s'abstenir, pas de choisir."
+    },
+    {
+      "key": "extraction:rapport-b:65-1",
+      "kind": "extraction",
+      "expectation": "PRESENT",
+      "value": {
+        "external_reference_raw": "65.1",
+        "external_reference_normalized": "65-1",
+        "opinion_raw": "Favorable",
+        "source_page": 2
+      },
+      "provenance": {
+        "source_id": "rapport-b",
+        "page": 2,
+        "excerpt": "Avis n° 65.1 : Favorable — reprise de la note de calcul acceptée."
+      },
+      "notes": "Référence proche de 65 : ne doit jamais être fusionnée avec elle."
+    },
+    {
+      "key": "extraction:rapport-b:651",
+      "kind": "extraction",
+      "expectation": "PRESENT",
+      "value": {
+        "external_reference_raw": "651",
+        "external_reference_normalized": "651",
+        "opinion_raw": "Défavorable",
+        "source_page": 2
+      },
+      "provenance": {
+        "source_id": "rapport-b",
+        "page": 2,
+        "excerpt": "Avis n° 651 : Défavorable — ventilation du local TGBT insuffisante."
+      },
+      "notes": "Référence proche de 65 et de 65.1 : trois avis distincts."
+    },
+    {
+      "key": "extraction:rapport-c:65",
+      "kind": "extraction",
+      "expectation": "PRESENT",
+      "value": {
+        "external_reference_raw": "65",
+        "external_reference_normalized": "65",
+        "opinion_raw": "Favorable",
+        "source_page": 2
+      },
+      "provenance": {
+        "source_id": "rapport-c",
+        "page": 2,
+        "excerpt": "Avis n° 65 : Favorable — PV de résistance au feu reçu et conforme."
+      }
+    },
+    {
+      "key": "extraction:rapport-c:66",
+      "kind": "extraction",
+      "expectation": "PRESENT",
+      "value": {
+        "external_reference_raw": "66",
+        "external_reference_normalized": "66",
+        "opinion_raw": "Favorable",
+        "source_page": 2
+      },
+      "provenance": {
+        "source_id": "rapport-c",
+        "page": 2,
+        "excerpt": "| 66 | Favorable | Étanchéité de toiture : aucune observation nouvelle. |"
+      },
+      "notes": "Mise en page différente (tableau) : la référence et l'avis restent les mêmes."
+    },
+    {
+      "key": "extraction:rapport-c:68",
+      "kind": "extraction",
+      "expectation": "PRESENT",
+      "value": {
+        "external_reference_raw": "68",
+        "external_reference_normalized": "68",
+        "opinion_raw": "Favorable",
+        "source_page": 2
+      },
+      "provenance": {
+        "source_id": "rapport-c",
+        "page": 2,
+        "excerpt": "Avis n° 68 : Favorable — protection par peinture intumescente justifiée."
+      }
+    },
+    {
+      "key": "extraction:rapport-c:65-1",
+      "kind": "extraction",
+      "expectation": "PRESENT",
+      "value": {
+        "external_reference_raw": "65.1",
+        "external_reference_normalized": "65-1",
+        "opinion_raw": "Favorable",
+        "source_page": 2
+      },
+      "provenance": {
+        "source_id": "rapport-c",
+        "page": 2,
+        "excerpt": "Avis n° 65.1 : Favorable — reprise de la note de calcul acceptée."
+      }
+    },
+    {
+      "key": "extraction:rapport-c:6S",
+      "kind": "extraction",
+      "expectation": "PRESENT",
+      "value": {
+        "external_reference_raw": "6S",
+        "external_reference_normalized": "6S",
+        "opinion_raw": "Favorable",
+        "source_page": 2
+      },
+      "provenance": {
+        "source_id": "rapport-c",
+        "page": 2,
+        "excerpt": "Avis n° 6S : Favorable — référence dégradée à la lecture, à ne surtout pas rapprocher de l'avis 65."
+      },
+      "notes": "Référence mal lue. Le comportement attendu est un avis NOUVEAU, pas un rapprochement avec 65 : precision avant recall."
+    },
+    {
+      "key": "continuity:rapport-a:65",
+      "kind": "continuity",
+      "expectation": "PRESENT",
+      "value": {
+        "state": "NEW",
+        "opinion_change": null,
+        "previous_document_id": null
+      }
+    },
+    {
+      "key": "continuity:rapport-b:65",
+      "kind": "continuity",
+      "expectation": "PRESENT",
+      "value": {
+        "state": "MATCHED",
+        "opinion_change": "CHANGED",
+        "previous_document_id": "rapport-a"
+      },
+      "notes": "À préciser -> Défavorable."
+    },
+    {
+      "key": "continuity:rapport-c:65",
+      "kind": "continuity",
+      "expectation": "PRESENT",
+      "value": {
+        "state": "MATCHED",
+        "opinion_change": "CHANGED",
+        "previous_document_id": "rapport-b"
+      },
+      "notes": "Défavorable -> Favorable : avis favorable après avis défavorable."
+    },
+    {
+      "key": "continuity:rapport-a:66",
+      "kind": "continuity",
+      "expectation": "PRESENT",
+      "value": {
+        "state": "NEW",
+        "opinion_change": null,
+        "previous_document_id": null
+      }
+    },
+    {
+      "key": "continuity:rapport-b:66",
+      "kind": "continuity",
+      "expectation": "PRESENT",
+      "value": {
+        "state": "MATCHED",
+        "opinion_change": "UNCHANGED",
+        "previous_document_id": "rapport-a"
+      }
+    },
+    {
+      "key": "continuity:rapport-c:66",
+      "kind": "continuity",
+      "expectation": "PRESENT",
+      "value": {
+        "state": "MATCHED",
+        "opinion_change": "UNCHANGED",
+        "previous_document_id": "rapport-b"
+      },
+      "notes": "Texte reformulé et mise en page différente : l'avis, lui, n'a pas changé."
+    },
+    {
+      "key": "continuity:rapport-a:67",
+      "kind": "continuity",
+      "expectation": "PRESENT",
+      "value": {
+        "state": "NEW",
+        "opinion_change": null,
+        "previous_document_id": null
+      }
+    },
+    {
+      "key": "continuity:rapport-b:67",
+      "kind": "continuity",
+      "expectation": "PRESENT",
+      "value": {
+        "state": "NOT_FOUND",
+        "opinion_change": null,
+        "previous_document_id": "rapport-a"
+      },
+      "notes": "Absent du rapport suivant. NOT_FOUND, jamais une levée."
+    },
+    {
+      "key": "continuity:rapport-c:67",
+      "kind": "continuity",
+      "expectation": "PRESENT",
+      "value": {
+        "state": "NOT_FOUND",
+        "opinion_change": null,
+        "previous_document_id": "rapport-a"
+      },
+      "notes": "Toujours absent : l'absence se répète, elle ne conclut toujours rien."
+    },
+    {
+      "key": "continuity:rapport-a:70",
+      "kind": "continuity",
+      "expectation": "PRESENT",
+      "value": {
+        "state": "NEW",
+        "opinion_change": null,
+        "previous_document_id": null
+      }
+    },
+    {
+      "key": "continuity:rapport-b:70",
+      "kind": "continuity",
+      "expectation": "PRESENT",
+      "value": {
+        "state": "NOT_FOUND",
+        "opinion_change": null,
+        "previous_document_id": "rapport-a"
+      }
+    },
+    {
+      "key": "continuity:rapport-c:70",
+      "kind": "continuity",
+      "expectation": "PRESENT",
+      "value": {
+        "state": "NOT_FOUND",
+        "opinion_change": null,
+        "previous_document_id": "rapport-a"
+      }
+    },
+    {
+      "key": "continuity:rapport-b:68",
+      "kind": "continuity",
+      "expectation": "PRESENT",
+      "value": {
+        "state": "NEW",
+        "opinion_change": null,
+        "previous_document_id": null
+      },
+      "notes": "Avis nouveau, apparu au deuxième rapport."
+    },
+    {
+      "key": "continuity:rapport-c:68",
+      "kind": "continuity",
+      "expectation": "PRESENT",
+      "value": {
+        "state": "MATCHED",
+        "opinion_change": "CHANGED",
+        "previous_document_id": "rapport-b"
+      },
+      "notes": "À préciser -> Favorable."
+    },
+    {
+      "key": "continuity:rapport-b:69",
+      "kind": "continuity",
+      "expectation": "ABSTENTION",
+      "notes": "Référence ambiguë dans le rapport : aucune continuité ne peut être affirmée."
+    },
+    {
+      "key": "continuity:rapport-c:69",
+      "kind": "continuity",
+      "expectation": "PRESENT",
+      "value": {
+        "state": "NOT_FOUND",
+        "opinion_change": null,
+        "previous_document_id": "rapport-b"
+      },
+      "notes": "Vu (ambigu) en B, absent en C : NOT_FOUND, toujours pas une levée."
+    },
+    {
+      "key": "continuity:rapport-b:65-1",
+      "kind": "continuity",
+      "expectation": "PRESENT",
+      "value": {
+        "state": "NEW",
+        "opinion_change": null,
+        "previous_document_id": null
+      }
+    },
+    {
+      "key": "continuity:rapport-c:65-1",
+      "kind": "continuity",
+      "expectation": "PRESENT",
+      "value": {
+        "state": "MATCHED",
+        "opinion_change": "UNCHANGED",
+        "previous_document_id": "rapport-b"
+      }
+    },
+    {
+      "key": "continuity:rapport-b:651",
+      "kind": "continuity",
+      "expectation": "PRESENT",
+      "value": {
+        "state": "NEW",
+        "opinion_change": null,
+        "previous_document_id": null
+      }
+    },
+    {
+      "key": "continuity:rapport-c:651",
+      "kind": "continuity",
+      "expectation": "PRESENT",
+      "value": {
+        "state": "NOT_FOUND",
+        "opinion_change": null,
+        "previous_document_id": "rapport-b"
+      }
+    },
+    {
+      "key": "continuity:rapport-c:6S",
+      "kind": "continuity",
+      "expectation": "PRESENT",
+      "value": {
+        "state": "NEW",
+        "opinion_change": null,
+        "previous_document_id": null
+      },
+      "notes": "Doit rester un avis nouveau. Un rapprochement avec 65 serait un faux merge — l'erreur critique du spike."
+    }
+  ]
+}

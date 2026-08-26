@@ -1,0 +1,12 @@
+{
+  "pages": [
+    {
+      "page": 1,
+      "text": "RAPPORT INITIAL DE CONTRÔLE TECHNIQUE (fixture synthétique)\nOrganisme fictif ALPHA — Affaire n° 0000\nDate : 12/03/2026\n\nLe présent document est inventé de toutes pièces pour les besoins du spike.\nIl ne reproduit la mise en page d'aucun organisme réel."
+    },
+    {
+      "page": 2,
+      "text": "SUIVI DES AVIS\n\nAvis n° 65 : À préciser — la note de calcul de la charpente métallique n'a pas été transmise.\nAvis n° 66 : Favorable — étanchéité de toiture conforme au descriptif.\nAvis n° 67 : Défavorable — le désenfumage de la cage d'escalier n'est pas justifié.\nAvis n° 70 : Réservé au lot 04 dans l'attente de la désignation de l'entreprise."
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "schema": "mdall.spike.case/1",
+  "case_id": "ct-continuity-synthetic",
+  "spike": "ct-continuity",
+  "title": "Trois rapports de contrôle technique successifs (fixture synthétique)",
+  "description": "Fixture entièrement inventée. Elle ne reproduit la nomenclature ni la mise en page d'aucun organisme réel : elle sert à exercer les dix cas obligatoires du cadrage (§28.4) avant toute confrontation à un corpus réel. Les deux dernières sources emploient volontairement deux mises en page différentes.",
+  "params": {},
+  "sources": [
+    {
+      "source_id": "rapport-a",
+      "source_type": "control_office_report",
+      "issuer": "Organisme fictif ALPHA",
+      "issued_at": "2026-03-12",
+      "order": 1,
+      "pages_ref": "./pages/rapport-a.json"
+    },
+    {
+      "source_id": "rapport-b",
+      "source_type": "control_office_report",
+      "issuer": "Organisme fictif ALPHA",
+      "issued_at": "2026-03-25",
+      "order": 2,
+      "pages_ref": "./pages/rapport-b.json"
+    },
+    {
+      "source_id": "rapport-c",
+      "source_type": "control_office_report",
+      "issuer": "Organisme fictif BÊTA",
+      "issued_at": "2026-04-08",
+      "order": 3,
+      "pages_ref": "./pages/rapport-c.json"
+    }
+  ],
+  "ground_truth_ref": "./ground-truth.json"
+}

@@ -63,6 +63,7 @@ export function evaluateCase({
     metrics.push({
       id: metric.id,
       label: metric.label ?? metric.id,
+      kind: computed.kind ?? metric.kind ?? "ratio",
       value: computed.value ?? null,
       numerator: computed.numerator,
       denominator: computed.denominator,
@@ -80,6 +81,7 @@ export function evaluateCase({
  * @param {string} options.manifestPath chemin du `case.json`
  * @param {object} options.pipeline     pipeline du spike (cf. contrat ci-dessus)
  * @param {Function} [options.clock]    horloge injectable (tests reproductibles)
+ * @param {Array|Function} [options.extraMetrics] métriques du spike, ou fabrique recevant le cas chargé
  * @param {boolean} [options.write]     écrire outputs/ et reports/ (défaut: true)
  */
 export async function runSpikeCase({
@@ -121,7 +123,9 @@ export async function runSpikeCase({
     keyOf,
     isMatch,
     isAbstention,
-    extraMetrics
+    // Un spike peut avoir besoin du cas lui-même pour construire ses métriques
+    // (vérifier une provenance suppose d'avoir les sources sous la main).
+    extraMetrics: typeof extraMetrics === "function" ? extraMetrics(testCase) : extraMetrics
   });
 
   const guardViolations = runGuards(guards, {

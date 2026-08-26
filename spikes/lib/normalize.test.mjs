@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  containsPhrase,
   normalizeConfidence,
   normalizeReferenceKey,
   normalizeTextKey,
@@ -72,4 +73,17 @@ test("slugifyTimestamp et slugifyIdentifier produisent des identifiants stables"
   assert.equal(slugifyTimestamp(new Date("2026-08-26T13:45:00.000Z")), "20260826T134500Z");
   assert.equal(slugifyIdentifier("Rapport CT — Avis n° 65"), "rapport-ct-avis-n-65");
   assert.equal(slugifyIdentifier("   "), "sans-id");
+});
+
+test("containsPhrase exige des frontières de mot : « favorable » n'est pas dans « défavorable »", () => {
+  assert.equal(containsPhrase("Avis n° 65 : Défavorable — texte.", "Défavorable"), true);
+  assert.equal(containsPhrase("Avis n° 65 : Défavorable — texte.", "Favorable"), false);
+  assert.equal(containsPhrase("Observation levée ce jour.", "levée"), true);
+  assert.equal(containsPhrase("Observation non levée.", "non levée"), true);
+  assert.equal(containsPhrase("Le calepinage est prévu.", "calepin"), false);
+});
+
+test("containsPhrase ignore casse, accents et espaces multiples", () => {
+  assert.equal(containsPhrase("Avis   n° 65 :   À  préciser", "à préciser"), true);
+  assert.equal(containsPhrase("texte", ""), false);
 });
