@@ -440,8 +440,13 @@ function opinionTone(code, label = null) {
 /**
  * Le moteur n'a pas su lire le code : ce n'est pas un code, c'est une
  * abstention. L'afficher comme « ? » laissait croire à un avis exotique.
+ *
+ * Le cas se rencontre pour de bon : une fiche numérote sa ligne — donc le
+ * bureau de contrôle entend la suivre — mais laisse la colonne des avis vide.
+ * L'observation, elle, est bien écrite, et c'est elle qu'on est venu lire.
  */
 const ABSTENTION_CODE = "?";
+const ABSTENTION_LABEL = "sans appréciation";
 
 function opinionLabel(entry) {
   if (entry.code === ABSTENTION_CODE) return "sans code lisible — abstention";
@@ -2653,7 +2658,7 @@ export function recallTone(age) {
   return "info";
 }
 
-function renderTraceStep(cell, document, { appearance = null, fallbackTitle = null, previous = null, raisedAt = null } = {}) {
+export function renderTraceStep(cell, document, { appearance = null, fallbackTitle = null, previous = null, raisedAt = null } = {}) {
   const continuity = cell.continuity;
   const state = continuity?.state === "AMBIGUOUS" ? "AMBIGUOUS" : continuity?.value?.state ?? "AMBIGUOUS";
   const lifted = Boolean(continuity?.lifting_statement);
@@ -2762,14 +2767,16 @@ function renderTraceStep(cell, document, { appearance = null, fallbackTitle = nu
             : ""
         }
         ${
-          state === "NOT_FOUND" || !opinion
+          state === "NOT_FOUND"
             ? lifted && secondLine
               ? `<div class="ctlab__pipeline-line ctlab__pipeline-text issue-row-meta-text">${escapeHtml(secondLine)}</div>`
               : ""
-            : `<div class="ctlab__pipeline-line ctlab__pipeline-text">
-                 ${renderOpinion(opinion, opinionLabelText)}
-                 <span class="ctlab__observation">${escapeHtml(sameComment ? "Observation inchangée." : secondLine)}</span>
-               </div>`
+            : opinion || secondLine
+              ? `<div class="ctlab__pipeline-line ctlab__pipeline-text">
+                   ${renderOpinion(opinion ?? ABSTENTION_CODE, opinion ? opinionLabelText : ABSTENTION_LABEL)}
+                   <span class="ctlab__observation">${escapeHtml(sameComment ? "Observation inchangée." : secondLine)}</span>
+                 </div>`
+              : ""
         }
         ${
           complement

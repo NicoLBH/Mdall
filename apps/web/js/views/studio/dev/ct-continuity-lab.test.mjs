@@ -18,6 +18,7 @@ import {
   lastSeenWording,
   pickAxisTicks,
   recallTone,
+  renderTraceStep,
   shortDocumentName,
   tabLabel,
   titleCase,
@@ -386,4 +387,60 @@ test("un avis rouvert le reste tant qu'il n'est pas refermé", () => {
     label: "fermé",
     tone: "closed"
   });
+});
+
+
+/**
+ * Une étape de frise, telle que le moteur la donne.
+ */
+function etape(extraction) {
+  return {
+    documentId: "doc-1",
+    continuity: { value: { state: "NEW" } },
+    extraction
+  };
+}
+
+/**
+ * Une observation ne dépend pas d'une appréciation.
+ *
+ * Une fiche numérote parfois sa ligne — le bureau de contrôle entend donc la
+ * suivre — tout en laissant la colonne des avis vide. L'observation, elle, est
+ * bien écrite. La frise la rendait à l'intérieur du bloc de l'appréciation :
+ * faute de code, les deux disparaissaient ensemble, et l'avis 234 s'ouvrait
+ * sur un intitulé seul quand le tableau, lui, montrait son observation.
+ */
+test("une ligne sans appréciation garde son observation", () => {
+  const html = renderTraceStep(
+    etape({
+      value: { opinion_raw: null },
+      opinion_label: null,
+      title_raw: "Couche de fondation du dallage",
+      description_raw: "Présence de matières organiques au niveau de l'arase de terrassement."
+    }),
+    { issued_at: "2025-05-20" },
+    { appearance: "NEW" }
+  );
+
+  assert.ok(html.includes("Présence de matières organiques"), "l'observation est ce qu'on vient lire");
+  // Et l'on dit pourquoi la case est vide, plutôt que de laisser un blanc dont
+  // le lecteur ne saurait s'il vient du rapport ou de l'outil.
+  assert.ok(html.includes("SANS APPRÉCIATION"));
+});
+
+test("une ligne avec appréciation la montre avec son observation", () => {
+  const html = renderTraceStep(
+    etape({
+      value: { opinion_raw: "S" },
+      opinion_label: "Suspendu",
+      title_raw: "Protection des circuits par DDR",
+      description_raw: "Les circuits terminaux devront être protégés."
+    }),
+    { issued_at: "2025-10-09" },
+    { appearance: "NEW" }
+  );
+
+  assert.ok(html.includes("SUSPENDU"));
+  assert.ok(html.includes("Les circuits terminaux devront être protégés."));
+  assert.ok(!html.includes("SANS APPRÉCIATION"));
 });
