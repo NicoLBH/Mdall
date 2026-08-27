@@ -285,6 +285,27 @@ function renderAvisRow({
 }
 
 /**
+ * L'état d'un avis, qu'il porte un numéro ou non.
+ *
+ * Le tableau « Où en est-on » ne suit que les avis numérotés, et tenait leur
+ * état du moteur de continuité. L'onglet « Avis » les montre tous, et n'en
+ * affichait aucun : la même ligne y paraissait donc sans état, comme si
+ * l'information manquait — alors qu'elle se lit dans l'appréciation elle-même.
+ *
+ * Un avis favorable, sans objet, hors mission ou pour mémoire n'appelle aucune
+ * action : il est clos dès sa première écriture. Seuls suspendu, défavorable et
+ * non conforme laissent quelque chose d'ouvert. Quand le moteur a mieux à dire
+ * — levé, sans nouvelles — c'est lui qui a le dernier mot.
+ */
+export function avisRowState(code, label, status = null) {
+  if (status) return { tag: STATUS_LABELS[status] ?? status, tagStatus: status };
+
+  const tone = opinionTone(code, label);
+  const settled = tone !== "pending" && tone !== "danger" && tone !== "unknown";
+  return settled ? { tag: "fermé", tagStatus: "RESOLVED" } : { tag: "ouvert", tagStatus: "OPEN" };
+}
+
+/**
  * L'état d'un avis, dans la pastille des sujets.
  *
  * Vert « Open » tant qu'il appelle une action, violet « Closed » une fois levé.
@@ -340,11 +361,11 @@ function lowerFirst(value) {
 
 /** « OUVERT » crie ; « Ouvert » se lit. */
 export function titleCase(value) {
-  return String(value ?? "")
-    .toLocaleLowerCase("fr")
-    .split(" ")
-    .map((word) => (word.length === 0 ? word : word[0].toLocaleUpperCase("fr") + word.slice(1)))
-    .join(" ");
+  // En français, une majuscule à chaque mot est une manière anglaise
+  // d'écrire : « Sans Nouvelles » se lit comme un titre d'ouvrage. Seule la
+  // première lettre se relève.
+  const text = String(value ?? "").toLocaleLowerCase("fr");
+  return text.length === 0 ? text : text[0].toLocaleUpperCase("fr") + text.slice(1);
 }
 
 function opinionTone(code, label = null) {
@@ -596,7 +617,16 @@ const STYLE = `
 .ctlab__pipeline-title { font-weight: 600; }
 .ctlab__pipeline-detail { margin-top: 6px; }
 .ctlab__pipeline-title { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; font-weight: 400; min-width: 0; }
-.ctlab__pipeline-date { white-space: nowrap; }
+/* « Absent de la fiche… », son label et « Vu pour la dernière fois… » disent une
+   seule chose : où l'avis a cessé de paraître. Répartis sur deux lignes par le
+   retour automatique, ils se lisaient comme deux constats sans rapport. Ici
+   rien ne passe à la ligne — c'est la fin de la phrase qui s'abrège si la
+   place manque, et le titre complet reste dans l'infobulle. */
+.ctlab__pipeline-title--inline { flex-wrap: nowrap; }
+.ctlab__pipeline-title--inline .ctlab__pipeline-headline { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ctlab__pipeline-title--inline .subject-label-badge { flex: 0 0 auto; }
+.ctlab__pipeline-trail { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ctlab__pipeline-date { white-space: nowrap; flex: 0 0 auto; }
 .ctlab__pipeline-headline { font-weight: 700; color: var(--ctlab-text); overflow-wrap: anywhere; }
 .ctlab__pipeline-headline--muted { font-weight: 400; color: var(--ctlab-muted); }
 .ctlab__pipeline-line { margin-top: 3px; min-width: 0; }
@@ -691,6 +721,8 @@ const STYLE = `
 .ctlab__tag--muted { --subject-label-border: var(--ctlab-line); --subject-label-fg: var(--ctlab-muted); --subject-label-bg: transparent; }
 .ctlab__tag--info { --subject-label-border: var(--ctlab-info); --subject-label-fg: var(--ctlab-info); --subject-label-bg: rgba(88, 166, 255, .12); }
 .ctlab__tag--ok { --subject-label-border: var(--ctlab-ok); --subject-label-fg: var(--ctlab-ok); --subject-label-bg: rgba(63, 185, 80, .12); }
+/* Un rappel qui dure : la couleur monte avec l'attente, du bleu au rouge. */
+.ctlab__tag--pending { --subject-label-border: var(--ctlab-warn); --subject-label-fg: var(--ctlab-warn); --subject-label-bg: rgba(210, 153, 34, .12); }
 .ctlab__chart { max-width: 100%; }
 .ctlab__charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-bottom: 16px; }
 @media (max-width: 1000px) { .ctlab__charts { grid-template-columns: minmax(0, 1fr); } }
@@ -1842,6 +1874,12 @@ function renderAvisTable(state) {
   const pagination = paginateItems(filtered, { pageSize: PAGE_SIZE, currentPage: state.avisPage });
   const visible = pagination.items;
 
+  // Ce que le moteur sait déjà d'un avis numéroté : son état suivi et la date
+  // où il a été soulevé. L'onglet le reprend tel quel plutôt que de le
+  // recalculer autrement, sans quoi les deux écrans se contrediraient.
+  const tracked = new Map((state.result.avisStatus ?? []).map((entry) => [entry.reference, entry.status]));
+  const trackedAt = new Map((state.result.avisStatus ?? []).map((entry) => [entry.reference, entry.raised_at]));
+
   // Une ligne se lit comme une ligne de sujet : l'intitulé porte le clic — il
   // passe en bleu au survol —, le reste tient sur une seconde ligne discrète.
   // Seul un avis numéroté a une vie à raconter ; les autres ne sont pas
@@ -1852,6 +1890,12 @@ function renderAvisTable(state) {
       const reference = avis.value?.external_reference_raw ?? null;
       const opinion = avis.opinion_label && avis.opinion_label !== code ? `${code} (${avis.opinion_label})` : code;
 
+      // Un avis numéroté a un état suivi ; les autres tiennent le leur de leur
+      // appréciation. Dans les deux cas la ligne est celle de « Où en est-on » :
+      // mêmes classes, même ordre, même badge — c'est le même objet.
+      const status = tracked.get(reference) ?? null;
+      const { tag, tagStatus } = avisRowState(code, avis.opinion_label, status);
+
       return renderAvisRow({
         reference,
         // Tout avis se consulte, numéroté ou non. Sans numéro, il n'a pas de
@@ -1861,11 +1905,17 @@ function renderAvisTable(state) {
         code,
         label: avis.opinion_label,
         title: firstText(avis.title_raw, avis.description_raw, "(ligne sans libellé lu)"),
-        tag: null,
-        meta: [reference ? `N° ${reference}` : "sans n°", opinion, avis.provenance?.page ? `page ${avis.provenance.page}` : null]
+        tag,
+        tagStatus,
+        meta: [
+          reference ? `N° ${reference}` : "sans n°",
+          opinion,
+          avis.provenance?.page ? `page ${avis.provenance.page}` : null,
+          status && trackedAt.get(reference) ? `soulevé le ${formatDate(trackedAt.get(reference))}` : null
+        ]
           .filter(Boolean)
           .join(" · "),
-        seenIn: documentLabel(avis.provenance?.source_id),
+        seenIn: `vu dans ${documentLabel(avis.provenance?.source_id)}`,
         comment:
           firstText(avis.title_raw) && firstText(avis.description_raw) !== firstText(avis.title_raw)
             ? avis.description_raw
@@ -1979,9 +2029,9 @@ function renderResults(state) {
     return `<div class="ctlab__section"><div class="ctlab__alert">${escapeHtml(state.error)}</div></div>`;
   }
   if (state.running || state.loading) return "";
-  if (!state.result) {
-    return `<div class="ctlab__section"><p class="ctlab__empty">Déposer des documents, puis lancer l'analyse.</p></div>`;
-  }
+  // Avant l'analyse, la zone de dépôt dit déjà tout ce qu'il y a à faire : un
+  // cadre en dessous pour le répéter n'ajoutait qu'une ligne à regarder.
+  if (!state.result) return "";
 
   // Le détail d'un avis remplace la vue, il ne s'y ajoute pas : c'est la place
   // qui rend la frise lisible, et le retour arrière qui rend la navigation
@@ -2317,7 +2367,8 @@ function renderAvisTrace(state) {
             renderTraceStep(cell, document, {
               appearance: cell.appearance ?? null,
               fallbackTitle: context.title ?? null,
-              previous: lastSeenWording(steps, index)
+              previous: lastSeenWording(steps, index),
+              raisedAt: summary?.raised_at ?? null
             })
           )
           .join("")}
@@ -2422,37 +2473,38 @@ function renderSingleOccurrence(state, back) {
     (entry) => entry.source_id === avis.provenance?.source_id
   );
 
+  // La frise d'un avis sans numéro n'a qu'une étape, mais c'est la même étape :
+  // même icône, même badge, même arborescence, même complément, même lien vers
+  // la page citée. Elle avait sa mise en page à elle — une pastille et un code
+  // en gras — et l'onglet « Avis » semblait montrer autre chose que « Où en
+  // est-on ». Il montre la même chose, vue une seule fois.
+  const cell = {
+    documentId: avis.provenance?.source_id ?? null,
+    continuity: null,
+    extraction: {
+      value: { opinion_raw: code },
+      opinion_label: avis.opinion_label ?? null,
+      title_raw: avis.title_raw ?? null,
+      description_raw: avis.description_raw ?? null,
+      ancestors: avis.ancestors ?? null,
+      complement_raw: avis.complement_raw ?? null,
+      provenance: avis.provenance ?? null
+    }
+  };
+
   return `
     <div class="ctlab__section">
       ${back}
       <div class="ctlab__trace-head">
         <h3>${escapeHtml(firstText(avis.title_raw, avis.description_raw, "(ligne sans libellé lu)"))}</h3>
+        ${renderStatePill(avisRowState(code, avis.opinion_label).tagStatus)}
       </div>
       <p class="ctlab__hint">
         Cet avis ne porte pas de numéro dans le rapport : le bureau de contrôle ne numérote que ce qui
         appelle une action. Il ne peut donc pas être suivi d'un document à l'autre.
       </p>
       <ol class="ctlab__pipeline">
-        <li class="ctlab__pipeline-step ctlab__pipeline-step--neutral">
-          <span class="ctlab__pipeline-mark" aria-hidden="true">${svgIcon("file", { className: "octicon" })}</span>
-          <div class="ctlab__pipeline-body">
-            <div class="ctlab__pipeline-title">
-              <span class="issue-row-meta-text ctlab__pipeline-date">${escapeHtml(formatDate(document?.issued_at))}</span>
-              <span class="ctlab__pipeline-headline">${escapeHtml(firstText(avis.title_raw, "(ligne sans libellé lu)"))}</span>
-              <span class="ctlab__dot ctlab__dot--${opinionTone(code, avis.opinion_label)}" aria-hidden="true"></span>
-              <b>${escapeHtml(code)}</b>
-            </div>
-            ${avis.description_raw ? `<div class="issue-row-meta-text ctlab__pipeline-line ctlab__pipeline-text">${escapeHtml(avis.description_raw)}</div>` : ""}
-            <div class="ctlab__pipeline-line ctlab__pipeline-source">
-              ${renderSourceLink({
-                sourceId: avis.provenance?.source_id,
-                page: avis.provenance?.page,
-                excerpt: avis.provenance?.excerpt,
-                prefix: "Source :"
-              })}
-            </div>
-          </div>
-        </li>
+        ${renderTraceStep(cell, document, { appearance: "NEW", raisedAt: document?.issued_at ?? null })}
       </ol>
     </div>
   `;
@@ -2487,7 +2539,41 @@ export function lastSeenWording(steps, index) {
  * que c'est exactement ce qui se joue : un avis qui reparaît après avoir
  * disparu est une réouverture, et il faut que ça se voie.
  */
-function renderTraceStep(cell, document, { appearance = null, fallbackTitle = null, previous = null } = {}) {
+/**
+ * Depuis combien de temps un avis attend, au jour où ce rapport a été émis.
+ */
+function daysBetween(from, to) {
+  const start = Date.parse(from ?? "");
+  const end = Date.parse(to ?? "");
+  if (Number.isNaN(start) || Number.isNaN(end)) return null;
+  return Math.round((end - start) / 86400000);
+}
+
+/**
+ * Ce que vaut un rappel, selon le temps qu'il dure.
+ *
+ * Un avis rappelé n'est pas une nouvelle : c'est la même question posée une
+ * fois de plus. Toutes ne se valent pourtant pas, et le gris les mettait sur
+ * un pied d'égalité. Le rythme du chantier donne l'échelle : un rapport est
+ * réémis à chaque phase, et une phase dure de l'ordre du semestre.
+ *
+ *  - **moins de six mois** : l'avis vit encore dans la phase qui l'a vu naître ;
+ *    le rappel est une relance ordinaire, et le bleu suffit à le dire ;
+ *  - **de six mois à un an** : il a franchi une phase sans être levé — l'orange ;
+ *  - **au-delà d'un an** : il a traversé toutes les éditions d'un dossier
+ *    complet sans réponse. Ce n'est plus un rappel, c'est un point dur.
+ */
+const RECALL_PHASE_DAYS = 180;
+const RECALL_YEAR_DAYS = 365;
+
+export function recallTone(age) {
+  if (age === null) return "info";
+  if (age >= RECALL_YEAR_DAYS) return "danger";
+  if (age >= RECALL_PHASE_DAYS) return "pending";
+  return "info";
+}
+
+function renderTraceStep(cell, document, { appearance = null, fallbackTitle = null, previous = null, raisedAt = null } = {}) {
   const continuity = cell.continuity;
   const state = continuity?.state === "AMBIGUOUS" ? "AMBIGUOUS" : continuity?.value?.state ?? "AMBIGUOUS";
   const lifted = Boolean(continuity?.lifting_statement);
@@ -2500,10 +2586,18 @@ function renderTraceStep(cell, document, { appearance = null, fallbackTitle = nu
   const ancestors = Array.isArray(cell.extraction?.ancestors) ? cell.extraction.ancestors : null;
   const complement = firstText(cell.extraction?.complement_raw) || null;
 
+  // Un avis favorable, sans objet, hors mission ou pour mémoire n'appelle
+  // aucune action : il naît clos. Le montrer « ouvert » dès sa première
+  // apparition faisait de six cents lignes favorables autant de dossiers à
+  // traiter, et noyait les quarante qui en sont vraiment.
+  const tone = opinion ? opinionTone(opinion, opinionLabelText) : null;
+  const settled = tone !== null && tone !== "pending" && tone !== "danger";
+
   // Le cycle de vie, dit avec les icônes des sujets.
   let lifecycle;
   if (lifted) lifecycle = { icon: "check-circle", color: "var(--fgColor-done)" };
   else if (state === "NOT_FOUND") lifecycle = { icon: "skip", color: "var(--muted)" };
+  else if (settled) lifecycle = { icon: "check-circle", color: "var(--fgColor-done)" };
   else if (appearance === "REOPENED") lifecycle = { icon: "issue-reopened", color: "var(--fgColor-open)" };
   else lifecycle = { icon: "issue-opened", color: "var(--fgColor-open)" };
 
@@ -2513,16 +2607,21 @@ function renderTraceStep(cell, document, { appearance = null, fallbackTitle = nu
   //
   // Un avis rappelé par un rapport d'étape n'est pas un avis rouvert : la
   // distinction vient du moteur, l'écran la restitue.
+  const age = daysBetween(raisedAt, document?.issued_at);
   const APPEARANCE_BADGES = {
     NEW: { label: "NOUVEAU", tone: "info" },
     TRACKED: { label: "SUIVI", tone: "ok" },
-    RECALLED: { label: "RAPPEL", tone: "muted" },
+    RECALLED: { label: "RAPPEL", tone: recallTone(age) },
     REOPENED: { label: "RÉOUVERT", tone: "danger" }
   };
 
   const fromAppearance = APPEARANCE_BADGES[appearance] ?? null;
-  const badge = lifted ? "LEVÉ" : fromAppearance?.label ?? STATE_LABELS[state] ?? state;
-  const badgeTone = lifted ? "ok" : fromAppearance?.tone ?? "muted";
+  const badge = lifted
+    ? "LEVÉ"
+    : state !== "NOT_FOUND" && settled
+      ? "FERMÉ"
+      : fromAppearance?.label ?? STATE_LABELS[state] ?? state;
+  const badgeTone = lifted || (state !== "NOT_FOUND" && settled) ? "ok" : fromAppearance?.tone ?? "muted";
 
   // « Absent de ce rapport » oblige à chercher lequel ; « Absent du RICT
   // version 4 » se lit d'un coup.
@@ -2558,13 +2657,13 @@ function renderTraceStep(cell, document, { appearance = null, fallbackTitle = nu
         ${svgIcon(lifecycle.icon, { className: "octicon" })}
       </span>
       <div class="ctlab__pipeline-body">
-        <div class="ctlab__pipeline-title">
+        <div class="ctlab__pipeline-title ${state === "NOT_FOUND" && !lifted ? "ctlab__pipeline-title--inline" : ""}">
           <span class="issue-row-meta-text ctlab__pipeline-date">${escapeHtml(formatDate(document?.issued_at))}</span>
           <span class="ctlab__pipeline-headline ${state === "NOT_FOUND" ? "ctlab__pipeline-headline--muted" : ""}">${escapeHtml(headline)}</span>
           <span class="subject-label-badge ctlab__tag ctlab__tag--${escapeHtml(badgeTone)}">${escapeHtml(badge.toLocaleUpperCase("fr"))}</span>
           ${
             state === "NOT_FOUND" && !lifted && secondLine
-              ? `<span class="issue-row-meta-text">— ${escapeHtml(secondLine)}</span>`
+              ? `<span class="issue-row-meta-text ctlab__pipeline-trail">— ${escapeHtml(secondLine)}</span>`
               : ""
           }
         </div>

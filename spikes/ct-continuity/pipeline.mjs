@@ -81,7 +81,8 @@ function toBlockPrediction(occurrence, index) {
     provenance: {
       source_id: occurrence.source_document_id,
       page: occurrence.source_page,
-      excerpt: occurrence.source_excerpt
+      excerpt: occurrence.source_excerpt,
+      opinion_cell: occurrence.opinion_cell ?? null
     },
     title_raw: occurrence.title_raw,
     description_raw: occurrence.description_raw,
@@ -129,7 +130,8 @@ function toExtractionPrediction(occurrence) {
     provenance: {
       source_id: occurrence.source_document_id,
       page: occurrence.source_page,
-      excerpt: occurrence.source_excerpt
+      excerpt: occurrence.source_excerpt,
+      opinion_cell: occurrence.opinion_cell ?? null
     },
     extraction_state: occurrence.extraction_state,
     // Confiance de reconnaissance de l'avis, distincte de la confiance de lecture

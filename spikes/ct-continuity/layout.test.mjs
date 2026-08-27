@@ -1,7 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { deriveColumns, extractAvisFromLayout, readTableRows, splitDispositionBand, toParagraphs } from "./layout.mjs";
+import {
+  deriveColumns,
+  extractAvisFromLayout,
+  mergeWrappedLines,
+  outlineDepth,
+  pickExcerpt,
+  readTableRows,
+  splitDispositionBand,
+  toParagraphs
+} from "./layout.mjs";
 
 /**
  * Une page de RICT, telle que le PDF la décrit : des fragments avec leur
@@ -156,4 +165,220 @@ test("sans coordonnées, la géométrie se retire et laisse la place", () => {
   assert.equal(extractAvisFromLayout({ source_id: "doc", pages: [{ page: 1, items: [] }] }, { legend: LEGEND }), null);
   assert.equal(extractAvisFromLayout({ source_id: "doc", pages: [] }, { legend: LEGEND }), null);
   assert.equal(extractAvisFromLayout({ source_id: "doc", pages: [PAGE] }, { legend: { codes: [] } }), null);
+});
+
+/**
+ * Une page de rapport APD. Même tableau, deux différences qui changent tout :
+ * une colonne « Articles du règlement » tout à gauche, et un référentiel
+ * numéroté dont les lignes de continuation reviennent à la marge de la cellule
+ * — donc **plus à gauche** que l'intitulé qu'elles poursuivent.
+ */
+const APD = {
+  page: 9,
+  items: [
+    item("Articles", 43, 690),
+    item("du", 54, 676),
+    item("Dispositions du projet", 140, 676),
+    item("Avis*", 301, 676),
+    item("Observations et commentaires", 356, 676),
+    item("N°", 542, 676),
+    item("règlement", 38, 662),
+
+    item("6.1 ETABLISSEMENTS RECEVANT", 90, 640),
+    item("DU PUBLIC DE 5E CATÉGORIE", 90, 628),
+
+    item("GN5", 50, 616),
+    item("6.1.1 Bilan dans le cas", 109, 616),
+    item("F", 308, 616),
+    item("Restaurant scolaire", 327, 616),
+
+    item("PE4", 50, 604),
+    item("6.1.2 Nombre et maillage des", 109, 604),
+    item("F", 308, 604),
+    item("sondages", 90, 592),
+
+    item("GN8", 50, 580),
+    item("6.1.3 Choix des principes", 109, 580),
+    item("F", 308, 580)
+  ]
+};
+
+const APD_LEGEND = { codes: [{ code: "F", id: "FAVORABLE", label: "Favorable" }] };
+
+test("la numérotation d'un intitulé dit sa profondeur, sa continuation n'en a pas", () => {
+  assert.equal(outlineDepth("6.1.1.1 Établissements assujettis"), 4);
+  assert.equal(outlineDepth("6.1 ETABLISSEMENTS RECEVANT"), 2);
+  assert.equal(outlineDepth("sondages"), null);
+  // Le RICT porte son propre référentiel dans la même colonne, mais suivi d'une
+  // barre : le confondre avec une numérotation d'intitulé ferait lire un
+  // rapport pour l'autre.
+  assert.equal(outlineDepth("15.20.5 | Zone"), null);
+});
+
+test("une ligne sans numéro poursuit la précédente, fût-elle cadrée plus à gauche", () => {
+  const merged = mergeWrappedLines([
+    { x: 109, y: 604, text: "6.1.2 Nombre et maillage des", italic: false },
+    { x: 90, y: 592, text: "sondages", italic: false },
+    { x: 109, y: 580, text: "6.1.3 Choix des principes", italic: false }
+  ]);
+
+  assert.equal(merged.length, 2);
+  assert.equal(merged[0].text, "6.1.2 Nombre et maillage des sondages");
+  assert.equal(merged[0].x, 109, "l'indentation reste celle de la première ligne");
+});
+
+test("la colonne des articles du règlement ne se mêle pas à l'arborescence", () => {
+  const { occurrences } = extractAvisFromLayout(
+    { source_id: "apd", pages: [APD] },
+    { legend: APD_LEGEND }
+  );
+
+  assert.equal(occurrences.length, 3);
+  assert.deepEqual(
+    occurrences.map((entry) => entry.regulation_article_raw),
+    ["GN5", "PE4", "GN8"]
+  );
+  // Sans colonne reconnue, « règlement » — le mot de l'en-tête resté sous sa
+  // ligne — et les sigles eux-mêmes ouvraient l'arborescence de chaque avis.
+  for (const occurrence of occurrences) {
+    assert.deepEqual(occurrence.ancestors, ["6.1 ETABLISSEMENTS RECEVANT DU PUBLIC DE 5E CATÉGORIE"]);
+  }
+});
+
+test("un intitulé numéroté se recolle, même revenu à la marge", () => {
+  const { occurrences } = extractAvisFromLayout(
+    { source_id: "apd", pages: [APD] },
+    { legend: APD_LEGEND }
+  );
+
+  // La numérotation se détache de l'intitulé, comme partout ailleurs : elle dit
+  // la place dans le référentiel, pas ce qui est prescrit.
+  assert.equal(occurrences[1].title_raw, "Nombre et maillage des sondages");
+  assert.equal(occurrences[1].section_number_raw, "6.1.2");
+});
+
+test("un intertitre court n'est pas avalé par l'intitulé qui le précède", () => {
+  // Deux lignes à la même abscisse, dans un rapport qui ne numérote pas : rien
+  // ne les distingue, sinon que la première s'arrête au tiers de la colonne.
+  // « MOYENS » y tenait vingt fois : elle n'a donc pas débordé.
+  const band = [
+    { x: 45, y: 573, right: 121, text: "ASCENSEURS", italic: false },
+    { x: 45, y: 559, right: 170, text: "MOYENS DE SECOURS", italic: false }
+  ];
+
+  const { title, outlineUpdates } = splitDispositionBand(band, { columnRight: 267 });
+
+  assert.deepEqual(title, ["ASCENSEURS"]);
+  assert.deepEqual(outlineUpdates.map((entry) => entry.text), ["MOYENS DE SECOURS"]);
+});
+
+test("un intitulé qui a vraiment débordé garde sa suite", () => {
+  // « déverrouillage » ne tenait pas au bout de la première ligne : elle a bien
+  // débordé, et les deux lignes sont un seul intitulé.
+  const band = [
+    { x: 52, y: 545, right: 202, text: "Signal sonore et lumineux du", italic: false },
+    { x: 52, y: 533, right: 256, text: "déverrouillage des portes à verrouillage", italic: false }
+  ];
+
+  const { title, outlineUpdates } = splitDispositionBand(band, { columnRight: 267 });
+
+  assert.deepEqual(title, ["Signal sonore et lumineux du", "déverrouillage des portes à verrouillage"]);
+  assert.deepEqual(outlineUpdates, []);
+});
+
+test("l'extrait cité est celui que le document contient vraiment", () => {
+  const row = {
+    opinion_raw: "F",
+    comment_lines: [],
+    title_lines: ["6.1.2 Nombre et maillage des sondages"]
+  };
+
+  // Le PDF aplati recolle le code derrière l'intitulé dans un rapport APD…
+  assert.equal(
+    pickExcerpt("6.1.2 Nombre et maillage des\nsondages\nF\n", row),
+    "6.1.2 Nombre et maillage des sondages F"
+  );
+  // …et devant dans un autre. On ne parie sur aucun des deux.
+  assert.equal(
+    pickExcerpt("m1.\nF 6.1.2 Nombre et maillage des sondages\n", row),
+    "F 6.1.2 Nombre et maillage des sondages"
+  );
+});
+
+test("une page qui porte deux tableaux est lue comme deux tableaux", () => {
+  const items = [
+    ...APD.items,
+    item("* F: Favorable", 34, 560),
+
+    item("Dispositions du projet", 101, 540),
+    item("Avis*", 274, 540),
+    item("Observations et commentaires", 343, 540),
+    item("N°", 542, 540),
+    item("7.1.1 Largeur ≥ 1,40 m", 57, 520),
+    item("F", 280, 520),
+    item("Conforme", 300, 520),
+    item("7.1.2 Ressaut", 57, 508),
+    item("F", 280, 508),
+    item("Conforme", 300, 508),
+    item("7.1.3 Pente", 57, 496),
+    item("F", 280, 496),
+    item("Conforme", 300, 496)
+  ];
+
+  const table = readTableRows({ page: 9, items }, ["F"]);
+
+  // Les deux tableaux n'ont ni les mêmes colonnes ni la même géométrie : lus
+  // comme un seul, la colonne des avis se plaçait entre les deux, là où il n'y
+  // a rien, et le tableau ressortait vide.
+  assert.equal(table.rows.length, 6);
+  assert.deepEqual(
+    table.rows.slice(3).map((row) => row.title_lines.join(" ")),
+    ["7.1.1 Largeur ≥ 1,40 m", "7.1.2 Ressaut", "7.1.3 Pente"]
+  );
+});
+
+test("un chapitre ouvert en bas de page porte encore les avis de la suivante", () => {
+  const suite = {
+    page: 10,
+    items: [
+      item("Articles", 43, 690),
+      item("du", 54, 676),
+      item("Dispositions du projet", 140, 676),
+      item("Avis*", 301, 676),
+      item("Observations et commentaires", 356, 676),
+      item("N°", 542, 676),
+      item("règlement", 38, 662),
+
+      item("GN1", 50, 640),
+      item("6.1.4 Vérifications techniques", 109, 640),
+      item("F", 308, 640),
+      item("PE5", 50, 628),
+      item("6.1.5 Évacuation", 109, 628),
+      item("F", 308, 628),
+      item("PE6", 50, 616),
+      item("6.1.6 Désenfumage", 109, 616),
+      item("F", 308, 616)
+    ]
+  };
+
+  const { occurrences } = extractAvisFromLayout(
+    { source_id: "apd", pages: [APD, suite] },
+    { legend: APD_LEGEND }
+  );
+
+  assert.equal(occurrences.length, 6);
+  assert.deepEqual(
+    occurrences[3].ancestors,
+    ["6.1 ETABLISSEMENTS RECEVANT DU PUBLIC DE 5E CATÉGORIE"],
+    "le chapitre ouvert page 9 vaut encore page 10"
+  );
+});
+
+test("la cellule d'où l'avis a été lu est consignée", () => {
+  const { occurrences } = extractAvisFromLayout(
+    { source_id: "apd", pages: [APD] },
+    { legend: APD_LEGEND }
+  );
+
+  assert.deepEqual(occurrences[0].opinion_cell, { page: 9, x: 308, y: 616, text: "F" });
 });

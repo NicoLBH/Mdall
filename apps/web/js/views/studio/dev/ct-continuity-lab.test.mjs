@@ -13,9 +13,11 @@ import * as analytics from "../../../../../../spikes/ct-continuity/analytics.mjs
 import { runCtLab } from "../../../services/ct-lab-engine.js";
 import {
   TABS,
+  avisRowState,
   firstText,
   lastSeenWording,
   pickAxisTicks,
+  recallTone,
   shortDocumentName,
   tabLabel,
   titleCase,
@@ -234,7 +236,7 @@ test("un tracé étroit ne garde que ses bornes", () => {
 });
 
 test("les états d'avis s'écrivent en capitale initiale, pas en capitales", () => {
-  assert.equal(titleCase("SANS NOUVELLES"), "Sans Nouvelles");
+  assert.equal(titleCase("SANS NOUVELLES"), "Sans nouvelles");
   assert.equal(titleCase("LEVÉ"), "Levé");
   assert.equal(titleCase(""), "");
 });
@@ -326,4 +328,38 @@ test("l'article s'accorde au document cité", () => {
 test("un document non typé garde un article neutre", () => {
   assert.equal(withArticle("rapport-mystere.pdf", null), "du rapport-mystere.pdf");
   assert.equal(withArticle("", "rapport_initial"), "ce document");
+});
+
+
+/**
+ * Un rappel qui dure change de nature. Le rythme du chantier donne l'échelle :
+ * un rapport est réémis à chaque phase, et une phase dure de l'ordre du
+ * semestre.
+ */
+test("la couleur d'un rappel monte avec le temps qu'il dure", () => {
+  assert.equal(recallTone(0), "info", "un rappel du mois est une relance ordinaire");
+  assert.equal(recallTone(179), "info");
+  assert.equal(recallTone(180), "pending", "une phase franchie sans levée");
+  assert.equal(recallTone(364), "pending");
+  assert.equal(recallTone(365), "danger", "un an de rapports sans réponse");
+  // Sans date de départ connue, rien ne permet d'alarmer : on n'invente pas
+  // une ancienneté pour colorer une pastille.
+  assert.equal(recallTone(null), "info");
+});
+
+/**
+ * Les deux onglets montrent les mêmes avis ; ils doivent en dire la même chose.
+ */
+test("un avis tient son état de son appréciation, sauf si le moteur en sait plus", () => {
+  assert.deepEqual(avisRowState("F", "Favorable"), { tag: "fermé", tagStatus: "RESOLVED" });
+  assert.deepEqual(avisRowState("SO", "Sans objet"), { tag: "fermé", tagStatus: "RESOLVED" });
+  assert.deepEqual(avisRowState("PM", "Pour mémoire"), { tag: "fermé", tagStatus: "RESOLVED" });
+  assert.deepEqual(avisRowState("HM", "Hors mission"), { tag: "fermé", tagStatus: "RESOLVED" });
+  assert.deepEqual(avisRowState("S", "Suspendu"), { tag: "ouvert", tagStatus: "OPEN" });
+  assert.deepEqual(avisRowState("D", "Défavorable"), { tag: "ouvert", tagStatus: "OPEN" });
+
+  // Un avis suivi d'un rapport à l'autre a une histoire : elle prime sur la
+  // seule lecture de son code.
+  assert.deepEqual(avisRowState("S", "Suspendu", "RESOLVED"), { tag: "levé", tagStatus: "RESOLVED" });
+  assert.deepEqual(avisRowState("F", "Favorable", "NO_NEWS"), { tag: "sans nouvelles", tagStatus: "NO_NEWS" });
 });

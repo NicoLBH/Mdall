@@ -59,7 +59,7 @@ export const noMdallSubjectStatus = {
  */
 export const opinionMustComeFromSource = {
   id: "opinion_must_come_from_source",
-  label: "L'avis restitué figure littéralement dans l'extrait cité",
+  label: "L'avis restitué est justifié par sa source — extrait cité ou cellule lue",
   detect(context) {
     const issues = [];
 
@@ -69,12 +69,21 @@ export const opinionMustComeFromSource = {
       if (!opinion) continue;
 
       const excerpt = prediction.provenance?.excerpt ?? "";
-      if (!containsPhrase(excerpt, opinion)) {
-        issues.push({
-          key: prediction.key ?? "(sans clé)",
-          message: `avis "${opinion}" absent de l'extrait cité`
-        });
-      }
+      if (containsPhrase(excerpt, opinion)) continue;
+
+      // Une lecture par la géométrie sait mieux que ça d'où vient l'avis : elle
+      // le tient d'une cellule, à une page et à un point donnés. Le texte aplati
+      // du PDF, lui, recolle parfois cette cellule loin de la ligne qu'elle
+      // qualifie, et aucun extrait ne peut alors la citer sans mentir sur la
+      // source. La cellule vaut donc provenance à part entière — à condition
+      // qu'elle porte bien l'avis affirmé, ce qui reste à vérifier ici.
+      const cell = prediction.provenance?.opinion_cell;
+      if (cell && cell.text === opinion && cell.page !== null && Number.isFinite(cell.x)) continue;
+
+      issues.push({
+        key: prediction.key ?? "(sans clé)",
+        message: `avis "${opinion}" absent de l'extrait cité`
+      });
     }
 
     return issues;
