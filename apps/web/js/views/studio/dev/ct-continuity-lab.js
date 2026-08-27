@@ -20,6 +20,13 @@
 import { escapeHtml } from "../../../utils/escape-html.js";
 import { extractPagesFromFile } from "../../../services/ct-lab-pdf.js";
 import { buildCaseExport, runCtLab } from "../../../services/ct-lab-engine.js";
+import {
+  DEFAULT_LEXICON_TEXT,
+  DEFAULT_PATTERN_TEXT,
+  buildExtractionParams,
+  parsePatterns,
+  previewMatches
+} from "../../../services/ct-lab-patterns.js";
 
 const SLOT_COUNT = 10;
 
@@ -36,44 +43,127 @@ const CHANGE_LABELS = {
   UNKNOWN: "évolution inconnue"
 };
 
+/**
+ * Le laboratoire vit dans un thème sombre. Toute couleur de fond est donc
+ * posée avec sa couleur de texte : un bandeau clair sur du texte clair est
+ * illisible, et c'est exactement ce qui s'était produit.
+ */
 const STYLE = `
-.ctlab { --ctlab-line: #d0d7de; --ctlab-muted: #57606a; font-size: 13px; }
-.ctlab__banner { border: 2px solid #bf8700; background: #fff8c5; padding: 10px 12px; margin-bottom: 16px; }
-.ctlab__section { border: 1px solid var(--ctlab-line); padding: 12px; margin-bottom: 16px; }
+.ctlab {
+  --ctlab-line: var(--border, #30363d);
+  --ctlab-text: var(--text, #e6edf3);
+  --ctlab-muted: var(--muted, #8b949e);
+  --ctlab-danger: var(--danger, #f85149);
+  --ctlab-warn: #d29922;
+  --ctlab-info: var(--accent, #58a6ff);
+  --ctlab-ok: var(--success, #3fb950);
+  color: var(--ctlab-text);
+  font-size: 13px;
+}
+.ctlab h2, .ctlab h3, .ctlab h4 { color: var(--ctlab-text); }
+.ctlab__banner {
+  border: 1px solid var(--ctlab-warn);
+  background: rgba(210, 153, 34, .12);
+  color: var(--ctlab-text);
+  padding: 10px 12px;
+  margin-bottom: 16px;
+  border-radius: var(--radius, 6px);
+}
+.ctlab__section {
+  border: 1px solid var(--ctlab-line);
+  border-radius: var(--radius, 6px);
+  padding: 12px;
+  margin-bottom: 16px;
+}
 .ctlab__section > h3 { margin: 0 0 8px; font-size: 14px; }
 .ctlab__hint { color: var(--ctlab-muted); margin: 0 0 10px; }
 .ctlab__slots { display: grid; gap: 6px; }
 .ctlab__slot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.ctlab__btn { border: 2px solid #24292f; background: #eaeef2; padding: 4px 10px; cursor: pointer; font: inherit; }
+.ctlab__btn {
+  border: 1px solid var(--ctlab-line);
+  background: var(--btn-bg, rgb(33, 40, 48));
+  color: var(--ctlab-text);
+  padding: 4px 10px;
+  border-radius: var(--radius, 6px);
+  cursor: pointer;
+  font: inherit;
+}
 .ctlab__btn:disabled { opacity: .5; cursor: not-allowed; }
-.ctlab__btn--go { background: #1f883d; border-color: #1a7f37; color: #fff; font-weight: 700; }
+.ctlab__btn--go { background: var(--btn-bg-success, rgb(35, 134, 54)); border-color: transparent; font-weight: 700; }
 .ctlab__slot-state { color: var(--ctlab-muted); }
-.ctlab__slot-state--loaded { color: #1a7f37; }
-.ctlab__slot-state--error { color: #cf222e; }
+.ctlab__slot-state--loaded { color: var(--ctlab-ok); }
+.ctlab__slot-state--error { color: var(--ctlab-danger); }
 .ctlab__actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
-.ctlab__alert { border-left: 4px solid #cf222e; background: #ffebe9; padding: 8px 10px; margin-bottom: 6px; }
-.ctlab__alert--attention { border-left-color: #bf8700; background: #fff8c5; }
-.ctlab__alert--info { border-left-color: #0969da; background: #ddf4ff; }
-.ctlab__kpis { display: flex; gap: 16px; flex-wrap: wrap; }
-.ctlab__kpi { border: 1px solid var(--ctlab-line); padding: 8px 12px; min-width: 150px; }
-.ctlab__kpi b { display: block; font-size: 18px; }
+.ctlab__alert {
+  border-left: 4px solid var(--ctlab-danger);
+  background: rgba(248, 81, 73, .12);
+  color: var(--ctlab-text);
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  border-radius: 0 var(--radius, 6px) var(--radius, 6px) 0;
+}
+.ctlab__alert b { color: var(--ctlab-text); }
+.ctlab__alert--attention { border-left-color: var(--ctlab-warn); background: rgba(210, 153, 34, .12); }
+.ctlab__alert--info { border-left-color: var(--ctlab-info); background: rgba(88, 166, 255, .12); }
+.ctlab__kpis { display: flex; gap: 12px; flex-wrap: wrap; }
+.ctlab__kpi { border: 1px solid var(--ctlab-line); border-radius: var(--radius, 6px); padding: 8px 12px; min-width: 150px; }
+.ctlab__kpi b { display: block; font-size: 18px; color: var(--ctlab-text); }
 .ctlab__kpi span { color: var(--ctlab-muted); }
 .ctlab__scroll { overflow-x: auto; }
 .ctlab__grid { border-collapse: collapse; width: 100%; }
 .ctlab__grid th, .ctlab__grid td { border: 1px solid var(--ctlab-line); padding: 6px 8px; text-align: left; vertical-align: top; }
-.ctlab__grid th { background: #f6f8fa; }
-.ctlab__cell { background: none; border: 0; padding: 0; font: inherit; text-align: left; cursor: pointer; width: 100%; }
-.ctlab__badge { display: inline-block; border: 1px solid var(--ctlab-line); padding: 0 4px; font-size: 11px; text-transform: uppercase; }
-.ctlab__badge--NEW { background: #ddf4ff; }
-.ctlab__badge--MATCHED { background: #dafbe1; }
-.ctlab__badge--NOT_FOUND { background: #fff1e5; }
-.ctlab__badge--AMBIGUOUS { background: #f6f8fa; border-style: dashed; }
-.ctlab__change { color: var(--ctlab-muted); }
-.ctlab__detail { border: 1px dashed var(--ctlab-line); padding: 10px; margin-top: 10px; }
+.ctlab__grid th { background: var(--headbgtight, #151b23); color: var(--ctlab-text); }
+.ctlab__cell { background: none; border: 0; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; width: 100%; }
+.ctlab__badge { display: inline-block; border: 1px solid var(--ctlab-line); border-radius: 999px; padding: 0 6px; font-size: 11px; text-transform: uppercase; }
+.ctlab__badge--NEW { border-color: var(--ctlab-info); color: var(--ctlab-info); }
+.ctlab__badge--MATCHED { border-color: var(--ctlab-ok); color: var(--ctlab-ok); }
+.ctlab__badge--NOT_FOUND { border-color: var(--ctlab-warn); color: var(--ctlab-warn); }
+.ctlab__badge--AMBIGUOUS { border-style: dashed; color: var(--ctlab-muted); }
+.ctlab__detail { border: 1px dashed var(--ctlab-line); border-radius: var(--radius, 6px); padding: 10px; margin-top: 10px; }
 .ctlab__detail dt { font-weight: 700; margin-top: 6px; }
-.ctlab__detail dd { margin: 0; }
-.ctlab__excerpt { background: #f6f8fa; padding: 6px; white-space: pre-wrap; }
+.ctlab__detail dd { margin: 0; color: var(--ctlab-text); }
+.ctlab__excerpt {
+  background: var(--bg-input, rgb(21, 27, 35));
+  color: var(--ctlab-text);
+  border: 1px solid var(--ctlab-line);
+  border-radius: var(--radius, 6px);
+  padding: 6px;
+  white-space: pre-wrap;
+  font-family: var(--mono, monospace);
+  font-size: 12px;
+}
 .ctlab__empty { color: var(--ctlab-muted); }
+.ctlab__field { display: block; margin-bottom: 10px; }
+.ctlab__field > span { display: block; margin-bottom: 4px; color: var(--ctlab-muted); }
+.ctlab__textarea {
+  width: 100%;
+  min-height: 130px;
+  background: var(--bg-input, rgb(21, 27, 35));
+  color: var(--ctlab-text);
+  border: 1px solid var(--ctlab-line);
+  border-radius: var(--radius, 6px);
+  padding: 8px;
+  font-family: var(--mono, monospace);
+  font-size: 12px;
+  resize: vertical;
+}
+.ctlab__pages { display: grid; gap: 4px; }
+.ctlab__page { border: 1px solid var(--ctlab-line); border-radius: var(--radius, 6px); padding: 6px 8px; }
+.ctlab__page > summary { cursor: pointer; color: var(--ctlab-muted); }
+.ctlab__page pre {
+  margin: 8px 0 0;
+  max-height: 320px;
+  overflow: auto;
+  white-space: pre-wrap;
+  background: var(--bg-input, rgb(21, 27, 35));
+  border: 1px solid var(--ctlab-line);
+  border-radius: var(--radius, 6px);
+  padding: 8px;
+  font-family: var(--mono, monospace);
+  font-size: 12px;
+}
+.ctlab__match { color: var(--ctlab-ok); }
+.ctlab__nomatch { color: var(--ctlab-warn); }
 `;
 
 function formatRatio(correct, total) {
@@ -223,7 +313,7 @@ function renderTimeline(result) {
     .map(
       (row) => `
         <tr>
-          <th>${escapeHtml(row.reference)}</th>
+          <th title="${escapeHtml(row.reference)}">${escapeHtml(row.referenceRaw ?? row.reference)}</th>
           ${row.cells.map((cell) => `<td>${renderCell(cell)}</td>`).join("")}
         </tr>
       `
@@ -317,6 +407,106 @@ function renderSuggestions(suggestions) {
   `;
 }
 
+/**
+ * Texte réellement extrait, page par page.
+ *
+ * C'est la section la plus importante quand rien ne sort : elle montre ce que
+ * le moteur a sous les yeux. Un tableau à colonnes, par exemple, ressort de
+ * l'extraction PDF sous forme de cellules isolées, une par ligne — et aucun
+ * motif orienté « ligne complète » ne peut alors reconnaître quoi que ce soit.
+ */
+function renderExtractedText(state) {
+  const reports = state.reports.filter((report) => report && !report.error && !report.loading);
+
+  if (reports.length === 0) {
+    return `<p class="ctlab__empty">Aucun rapport chargé.</p>`;
+  }
+
+  const { patterns } = parsePatterns(state.patternText);
+
+  return `
+    <p class="ctlab__hint">
+      Le texte ci-dessous est exactement ce que le moteur reçoit. S'il est vide, le PDF est une image.
+      S'il est présent mais qu'aucune ligne n'est reconnue, ce sont les motifs qu'il faut corriger.
+    </p>
+    ${reports
+      .map((report) => {
+        const text = report.pages.map((page) => page.text).join("\n");
+        const preview = previewMatches(text, patterns, { limit: 8 });
+        const verdict =
+          preview.matchedCount > 0
+            ? `<span class="ctlab__match">${preview.matchedCount} ligne(s) reconnue(s)</span>`
+            : `<span class="ctlab__nomatch">aucune ligne reconnue</span>`;
+
+        return `
+          <div class="ctlab__section">
+            <h4>${escapeHtml(report.filename)}</h4>
+            <p class="ctlab__hint">
+              ${report.pages.length} page(s) · ${preview.nonEmptyLineCount} ligne(s) non vides · ${verdict}
+            </p>
+            ${
+              preview.samples.length > 0
+                ? `<div class="ctlab__excerpt">${preview.samples
+                    .map((sample) => escapeHtml(`ligne ${sample.lineNumber} → référence « ${sample.reference} » : ${sample.line}`))
+                    .join("\n")}</div>`
+                : ""
+            }
+            <div class="ctlab__pages">
+              ${report.pages
+                .map(
+                  (page) => `
+                    <details class="ctlab__page">
+                      <summary>page ${page.page} — ${page.text.trim().length} caractères</summary>
+                      <pre>${escapeHtml(page.text || "(page sans texte)")}</pre>
+                    </details>
+                  `
+                )
+                .join("")}
+            </div>
+            <div class="ctlab__actions">
+              <button type="button" class="ctlab__btn" data-ctlab-export-text="${escapeHtml(report.sourceId)}">
+                Exporter ce texte (TXT)
+              </button>
+            </div>
+          </div>
+        `;
+      })
+      .join("")}
+  `;
+}
+
+/**
+ * Motifs et lexique éditables.
+ *
+ * Les valeurs par défaut ont été écrites contre une fixture inventée : elles ne
+ * valent rien tant qu'elles n'ont pas rencontré de vrais rapports. Les corriger
+ * ici évite un cycle de déploiement par essai.
+ */
+function renderPatternEditor(state) {
+  return `
+    <p class="ctlab__hint">
+      Aucune nomenclature d'organisme n'est présumée. Regarder le texte extrait ci-dessus, puis ajuster.
+    </p>
+    ${
+      state.patternErrors.length > 0
+        ? `<div class="ctlab__alert">${state.patternErrors.map((error) => `<div>${escapeHtml(error)}</div>`).join("")}</div>`
+        : ""
+    }
+    <label class="ctlab__field">
+      <span>Motifs — une expression régulière par ligne, avec les groupes (?&lt;reference&gt;…) et (?&lt;rest&gt;…) ou (?&lt;opinion&gt;…)</span>
+      <textarea class="ctlab__textarea" data-ctlab-patterns spellcheck="false">${escapeHtml(state.patternText)}</textarea>
+    </label>
+    <label class="ctlab__field">
+      <span>Lexique d'avis — une entrée par ligne : identifiant = libellé | autre libellé</span>
+      <textarea class="ctlab__textarea" data-ctlab-lexicon spellcheck="false">${escapeHtml(state.lexiconText)}</textarea>
+    </label>
+    <div class="ctlab__actions">
+      <button type="button" class="ctlab__btn" data-ctlab-apply-patterns>Appliquer et réanalyser</button>
+      <button type="button" class="ctlab__btn" data-ctlab-reset-patterns>Revenir aux motifs par défaut</button>
+    </div>
+  `;
+}
+
 function renderResults(state) {
   if (state.error) {
     return `<div class="ctlab__section"><div class="ctlab__alert">${escapeHtml(state.error)}</div></div>`;
@@ -385,6 +575,16 @@ function render(root, state) {
         </div>
       </div>
 
+      <div class="ctlab__section">
+        <h3>Texte extrait</h3>
+        ${renderExtractedText(state)}
+      </div>
+
+      <div class="ctlab__section">
+        <h3>Motifs d'extraction</h3>
+        ${renderPatternEditor(state)}
+      </div>
+
       <div data-ctlab-results>${renderResults(state)}</div>
     </div>
   `;
@@ -398,7 +598,10 @@ export function renderCtContinuityLab(root) {
     result: null,
     running: false,
     error: null,
-    selectedCell: null
+    selectedCell: null,
+    patternText: DEFAULT_PATTERN_TEXT,
+    lexiconText: DEFAULT_LEXICON_TEXT,
+    patternErrors: []
   };
 
   const input = document.createElement("input");
@@ -408,6 +611,14 @@ export function renderCtContinuityLab(root) {
   root.appendChild(input);
 
   let pendingSlot = null;
+
+  /** Les zones de texte sont la seule saisie de la page : ne jamais la perdre. */
+  const captureEditors = () => {
+    const patterns = root.querySelector("[data-ctlab-patterns]");
+    const lexicon = root.querySelector("[data-ctlab-lexicon]");
+    if (patterns) state.patternText = patterns.value;
+    if (lexicon) state.lexiconText = lexicon.value;
+  };
 
   const refresh = () => {
     render(root, state);
@@ -448,8 +659,41 @@ export function renderCtContinuityLab(root) {
   });
 
   root.addEventListener("click", async (event) => {
-    const target = event.target.closest("[data-ctlab-pick], [data-ctlab-clear], [data-ctlab-run], [data-ctlab-reset], [data-ctlab-cell], [data-ctlab-export]");
+    const target = event.target.closest(
+      "[data-ctlab-pick], [data-ctlab-clear], [data-ctlab-run], [data-ctlab-reset], [data-ctlab-cell], " +
+        "[data-ctlab-export], [data-ctlab-export-text], [data-ctlab-apply-patterns], [data-ctlab-reset-patterns]"
+    );
     if (!target) return;
+
+    if (target.dataset.ctlabExportText !== undefined) {
+      const report = state.reports.find((entry) => entry?.sourceId === target.dataset.ctlabExportText);
+      if (!report) return;
+      const content = report.pages
+        .map((page) => `----- page ${page.page} -----\n${page.text}`)
+        .join("\n\n");
+      download(`${report.sourceId}-texte-extrait.txt`, content, "text/plain");
+      return;
+    }
+
+    if (target.dataset.ctlabResetPatterns !== undefined) {
+      state.patternText = DEFAULT_PATTERN_TEXT;
+      state.lexiconText = DEFAULT_LEXICON_TEXT;
+      state.patternErrors = [];
+      refresh();
+      return;
+    }
+
+    if (target.dataset.ctlabApplyPatterns !== undefined) {
+      captureEditors();
+      state.patternErrors = buildExtractionParams(state.patternText, state.lexiconText).errors;
+      refresh();
+      if (state.reports.some((report) => report && !report.error && !report.loading)) {
+        root.querySelector("[data-ctlab-run]")?.click();
+      }
+      return;
+    }
+
+    captureEditors();
 
     if (target.dataset.ctlabPick !== undefined) {
       pendingSlot = Number(target.dataset.ctlabPick);
@@ -495,6 +739,8 @@ export function renderCtContinuityLab(root) {
       return;
     }
 
+    captureEditors();
+
     if (target.dataset.ctlabRun !== undefined) {
       const reports = state.reports.filter((report) => report && !report.error && !report.loading);
       if (reports.length === 0) return;
@@ -504,8 +750,11 @@ export function renderCtContinuityLab(root) {
       state.selectedCell = null;
       refresh();
 
+      const { params, errors } = buildExtractionParams(state.patternText, state.lexiconText);
+      state.patternErrors = errors;
+
       try {
-        state.result = await runCtLab(reports);
+        state.result = await runCtLab(reports, { params });
       } catch (error) {
         state.result = null;
         state.error = error.message;

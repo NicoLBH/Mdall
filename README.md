@@ -18,6 +18,10 @@ Sans `npm run build:web`, la page affiche un message explicite plutôt qu'une
 erreur d'import : les dépendances vendues (`apps/web/vendor/`) ne sont pas
 versionnées.
 
+Si aucun avis ne ressort, c'est attendu au premier contact avec un nouveau
+format : ouvrir **Texte extrait** pour voir ce que le moteur reçoit, puis
+ajuster les **Motifs d'extraction** directement dans la page.
+
 Détail du moteur, des indicateurs et de leurs limites :
 [`spikes/ct-continuity/README.md`](spikes/ct-continuity/README.md).
 
