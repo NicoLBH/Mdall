@@ -162,7 +162,7 @@ function isSectionLabel(line) {
   return letters.length > 3 && letters === letters.toUpperCase();
 }
 
-function splitTitle(titleLines) {
+export function splitTitle(titleLines) {
   // La section et l'intitulé sont deux informations distinctes : les coller
   // donnerait « PARAMÈTRES CLIMATIQUES Vent » là où le rapport dit « Vent ».
   let sectionLabel = null;
@@ -428,7 +428,7 @@ export function extractAvisBlocks(source, { legend = null } = {}) {
  * observation, vue deux fois. Seules des occurrences qui se contredisent le
  * sont, et là le spike s'abstient.
  */
-function markAmbiguous(occurrences) {
+export function markAmbiguous(occurrences) {
   const groups = new Map();
   for (const occurrence of occurrences) {
     const key = occurrence.external_reference_normalized;

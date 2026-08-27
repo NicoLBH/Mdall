@@ -554,6 +554,19 @@ const STYLE = `
    frise hors de son cadre. */
 .ctlab__pipeline-text { overflow-wrap: anywhere; white-space: normal; }
 .ctlab__pipeline-rephrased { color: var(--ctlab-info); }
+/* L'arborescence du référentiel : présente mais discrète, elle situe l'avis
+   sans lui voler la vedette. */
+.ctlab__breadcrumb { color: var(--ctlab-muted); font-size: 12px; overflow-wrap: anywhere; }
+.ctlab__breadcrumb span { opacity: .6; margin: 0 2px; }
+/* Le complément d'observation, écrit en italique dans le rapport. */
+.ctlab__pipeline-complement {
+  color: var(--ctlab-muted);
+  font-size: 12px;
+  font-style: italic;
+  border-left: 2px solid var(--ctlab-line);
+  padding-left: 8px;
+  overflow-wrap: anywhere;
+}
 .ctlab__pipeline-source { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
 .ctlab__pipeline-source { display: block; }
 
@@ -1115,7 +1128,9 @@ function buildAvisContext(result) {
       // Un rapport en colonnes porte un intitulé ; un rapport lu ligne à ligne
       // n'a que son commentaire. On prend ce qui existe plutôt que rien.
       title: firstText(avis.title_raw, avis.description_raw) || null,
-      comment: firstText(avis.description_raw) || null
+      comment: firstText(avis.description_raw) || null,
+      ancestors: Array.isArray(avis.ancestors) ? avis.ancestors : null,
+      complement: firstText(avis.complement_raw) || null
     });
   }
 
@@ -2420,6 +2435,8 @@ function renderTraceStep(cell, document, { reopened = false, fallbackTitle = nul
   const opinionLabelText = cell.extraction?.opinion_label ?? continuity?.matched_opinion_label ?? null;
   const comment = firstText(cell.extraction?.description_raw) || null;
   const title = firstText(cell.extraction?.title_raw) || null;
+  const ancestors = Array.isArray(cell.extraction?.ancestors) ? cell.extraction.ancestors : null;
+  const complement = firstText(cell.extraction?.complement_raw) || null;
 
   // Le cycle de vie, dit avec les icônes des sujets.
   let lifecycle;
@@ -2488,6 +2505,13 @@ function renderTraceStep(cell, document, { reopened = false, fallbackTitle = nul
           <span class="subject-label-badge ctlab__tag ctlab__tag--${escapeHtml(badgeTone)}">${escapeHtml(badge.toLocaleUpperCase("fr"))}</span>
         </div>
         ${
+          ancestors && ancestors.length > 0
+            ? `<div class="ctlab__pipeline-line ctlab__breadcrumb" title="Arborescence du référentiel, lue dans l'indentation du rapport">
+                 ${ancestors.map((step) => escapeHtml(step)).join(" <span aria-hidden=\"true\">›</span> ")}
+               </div>`
+            : ""
+        }
+        ${
           rephrased
             ? `<div class="ctlab__pipeline-line ctlab__pipeline-rephrased">
                  Intitulé reformulé par ce rapport — même numéro, même observation.
@@ -2504,6 +2528,11 @@ function renderTraceStep(cell, document, { reopened = false, fallbackTitle = nul
                  }
                  <span class="issue-row-meta-text">${escapeHtml(sameComment ? "Observation inchangée." : secondLine)}</span>
                </div>`
+            : ""
+        }
+        ${
+          complement
+            ? `<div class="ctlab__pipeline-line ctlab__pipeline-complement">${escapeHtml(complement)}</div>`
             : ""
         }
         <div class="ctlab__pipeline-line ctlab__pipeline-source">
