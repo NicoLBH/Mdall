@@ -96,3 +96,38 @@ test("un document sans date lisible est rejeté en fin de liste et signalé", ()
   assert.deepEqual(ordered.map((entry) => entry.source_id), ["daté", "sans-date"]);
   assert.deepEqual(undatedSourceIds, ["sans-date"]);
 });
+
+
+/**
+ * Un type de rapport que l'outil ne reconnaît pas se rabat sur son nom de
+ * fichier — cent trente caractères d'affaire, de commune et de chrono, là où
+ * une frise attend trois mots.
+ */
+test("les autres livrables du bureau de contrôle se nomment aussi", () => {
+  const lire = (titre) =>
+    readDocumentMeta({ content_available: true, content: `${titre}\nCONTROLE TECHNIQUE\nDate d’émission : 12/03/2025` });
+
+  assert.equal(lire("RAPPORT DE VERIFICATIONS REGLEMENTAIRES APRES TRAVAUX").document_type, "rvrat");
+  assert.equal(lire("RVRAT - INSTALLATIONS ELECTRIQUES").document_type, "rvrat");
+  assert.equal(lire("FICHE DE CORRESPONDANCE").document_type, "fiche_correspondance");
+  assert.equal(lire("RAPPORT FINAL DE CONTROLE TECHNIQUE").document_type, "rapport_final");
+  assert.equal(lire("RFCT").document_type, "rapport_final");
+  assert.equal(lire("RAPPORT PREALABLE / APS").document_type, "rapport_prealable_aps");
+  assert.equal(lire("RAPPORT PREALABLE / APD").document_type, "rapport_prealable");
+  assert.equal(lire("Rapport RICT").document_type, "rapport_initial");
+});
+
+/**
+ * Une vérification après travaux constate la conformité d'installations ; elle
+ * ne reprend pas l'état des avis. En faire un point de contrôle déclarerait
+ * disparus des avis que ce rapport n'avait jamais vocation à porter.
+ */
+test("seuls les livrables qui reprennent tout font point de contrôle", () => {
+  const type = (titre) =>
+    readDocumentMeta({ content_available: true, content: `${titre}\nDate d’émission : 12/03/2025` }).recapitulative;
+
+  assert.equal(type("RAPPORT PREALABLE / APS"), true);
+  assert.equal(type("RAPPORT FINAL DE CONTROLE TECHNIQUE"), true);
+  assert.equal(type("RVRAT"), false);
+  assert.equal(type("FICHE DE CORRESPONDANCE"), false);
+});

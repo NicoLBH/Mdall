@@ -40,11 +40,25 @@ const VERSION = /\bversion\s*:?\s*(\d{1,2})\b/i;
  */
 const TYPES = [
   { id: "rapport_etape", label: "Rapport d'étape", recapitulative: true, pattern: /rapport\s+d['’]?\s*etape|rapport\s+d['’]?\s*étape/i },
-  { id: "rapport_prealable", label: "Rapport préalable / APD", recapitulative: true, pattern: /rapport\s+prealable|rapport\s+préalable/i },
-  { id: "rapport_initial", label: "Rapport initial (RICT)", recapitulative: true, pattern: /rapport\s+initial/i },
-  { id: "rapport_final", label: "Rapport final", recapitulative: true, pattern: /rapport\s+final/i },
+  // L'APS et l'APD sont deux phases distinctes de la conception, et le même
+  // rapport préalable les couvre l'une après l'autre : les confondre sous un
+  // seul nom faisait passer un avant-projet sommaire pour un définitif.
+  { id: "rapport_prealable_aps", label: "Rapport préalable / APS", recapitulative: true, pattern: /rapport\s+pr[ée]alable[^\n]{0,12}\bAPS\b/i },
+  { id: "rapport_prealable", label: "Rapport préalable / APD", recapitulative: true, pattern: /rapport\s+pr[ée]alable/i },
+  { id: "rapport_initial", label: "Rapport initial (RICT)", recapitulative: true, pattern: /rapport\s+initial|\bRICT\b/i },
+  { id: "rapport_final", label: "Rapport final", recapitulative: true, pattern: /rapport\s+final|\bRFCT\b/i },
+  // Une vérification réglementaire après travaux constate la conformité des
+  // installations ; elle ne reprend pas l'état des avis du contrôle technique.
+  // Ce n'est donc pas un point de contrôle : une absence n'y prouve rien.
+  {
+    id: "rvrat",
+    label: "Rapport de vérification après travaux (RVRAT)",
+    recapitulative: false,
+    pattern: /\bRVRAT\b|v[ée]rifications?\s+r[ée]glementaires?\s+apr[èe]s\s+travaux/i
+  },
   { id: "fiche_avis_travaux", label: "Fiche avis travaux", recapitulative: false, pattern: /avis\s+en\s+phase\s+de\s+r[ée]alisation/i },
   { id: "fiche_examen_document", label: "Fiche examen de document", recapitulative: false, pattern: /avis\s+suite\s+a\s+examen\s+de\s+documents?/i },
+  { id: "fiche_correspondance", label: "Fiche de correspondance", recapitulative: false, pattern: /fiche\s+de\s+correspondance/i },
   { id: "attestation", label: "Attestation", recapitulative: false, pattern: /attestation/i }
 ];
 

@@ -8,8 +8,7 @@ import {
   outlineDepth,
   pickExcerpt,
   readTableRows,
-  splitDispositionBand,
-  toParagraphs
+  toRowCandidates
 } from "./layout.mjs";
 
 /**
@@ -29,7 +28,9 @@ const PAGE = {
     item("Observations et commentaires", 343, 676),
     item("N°", 542, 676),
 
-    item("PREVENTION DES BRULURES,", 37, 662),
+    // La virgule finale dit que la ligne était pleine : « INCENDIES » n'y
+    // tenait plus. La largeur le dit aussi, et c'est elle que le module lit.
+    item("PREVENTION DES BRULURES,", 37, 662, { width: 168 }),
     item("INCENDIES ET EXPLOSIONS D'ORIGINE", 37, 650),
     item("ELECTRIQUE", 37, 638),
     item("Prescriptions spécifiques pour les", 45, 620),
@@ -117,32 +118,44 @@ test("une page sans fragments positionnés ne produit rien", () => {
   assert.equal(readTableRows({ page: 1 }, ["S"]), null);
 });
 
+/** Une ligne de colonne, telle que la lecture des fragments la rend. */
+function ligne(text, x, y, right, extra = {}) {
+  return { text, x, y, right, italic: false, ...extra };
+}
+
 test("un intertitre écrit sur trois lignes reste un seul intertitre", () => {
   // Sans regroupement, seul le dernier fragment survivait et l'arborescence
   // affichait « CONSTRUCTION » au lieu du titre entier.
-  const paragraphs = toParagraphs([
-    { x: 37, y: 662, text: "DISPOSITIONS RELATIVES A LA", italic: false },
-    { x: 37, y: 650, text: "SECURITE DES PERSONNES", italic: false },
-    { x: 37, y: 638, text: "DANS LA CONSTRUCTION", italic: false },
-    { x: 37, y: 620, text: "AUTRE CHAPITRE", italic: false }
-  ]);
+  const paragraphs = toRowCandidates(
+    [
+      ligne("DISPOSITIONS RELATIVES A LA", 37, 662, 260),
+      ligne("SECURITE DES PERSONNES", 37, 650, 258),
+      ligne("DANS LA CONSTRUCTION", 37, 638, 120),
+      ligne("AUTRE CHAPITRE", 37, 620, 130)
+    ],
+    { numbered: false, columnRight: 268 }
+  );
 
-  assert.equal(paragraphs.length, 2, "l'air entre deux paragraphes les sépare");
+  assert.equal(paragraphs.length, 2, "« CONSTRUCTION » ne tenait pas au bout de la ligne précédente");
   assert.equal(paragraphs[0].text, "DISPOSITIONS RELATIVES A LA SECURITE DES PERSONNES DANS LA CONSTRUCTION");
   assert.equal(paragraphs[1].text, "AUTRE CHAPITRE");
 });
 
-test("un retour à gauche annonce la ligne suivante, pas celle en cours", () => {
-  const band = [
-    { x: 75, y: 540, text: "Intitulé de la ligne", italic: false },
-    { x: 75, y: 528, text: "suite de l'intitulé", italic: false },
-    { x: 60, y: 510, text: "NOUVEAU CHAPITRE", italic: false }
+test("un intitulé qui porte son avis ouvre sa propre ligne de tableau", () => {
+  // « Nombre et maillage des sondages » s'arrête si près du bord que
+  // « Profondeur » n'y tenait pas : la règle typographique concluait au
+  // débordement. Mais chacun des deux porte son F, et le tableau a le dernier
+  // mot — sans quoi soixante-dix intitulés se recollaient deux à deux.
+  const lines = [
+    ligne("Nombre et maillage des sondages", 52, 509, 227),
+    ligne("Profondeur des sondages", 52, 494, 182)
   ];
 
-  const { title, outlineUpdates } = splitDispositionBand(band);
-
-  assert.deepEqual(title, ["Intitulé de la ligne", "suite de l'intitulé"]);
-  assert.deepEqual(outlineUpdates.map((entry) => entry.text), ["NOUVEAU CHAPITRE"]);
+  assert.equal(toRowCandidates(lines, { numbered: false, columnRight: 269 }).length, 1);
+  assert.equal(
+    toRowCandidates(lines, { numbered: false, columnRight: 269, scored: [509, 494] }).length,
+    2
+  );
 });
 
 test("les occurrences produites portent l'arborescence et le complément", () => {
@@ -261,29 +274,28 @@ test("un intertitre court n'est pas avalé par l'intitulé qui le précède", ()
   // Deux lignes à la même abscisse, dans un rapport qui ne numérote pas : rien
   // ne les distingue, sinon que la première s'arrête au tiers de la colonne.
   // « MOYENS » y tenait vingt fois : elle n'a donc pas débordé.
-  const band = [
-    { x: 45, y: 573, right: 121, text: "ASCENSEURS", italic: false },
-    { x: 45, y: 559, right: 170, text: "MOYENS DE SECOURS", italic: false }
-  ];
+  const paragraphs = toRowCandidates(
+    [ligne("ASCENSEURS", 45, 573, 121), ligne("MOYENS DE SECOURS", 45, 559, 170)],
+    { numbered: false, columnRight: 267 }
+  );
 
-  const { title, outlineUpdates } = splitDispositionBand(band, { columnRight: 267 });
-
-  assert.deepEqual(title, ["ASCENSEURS"]);
-  assert.deepEqual(outlineUpdates.map((entry) => entry.text), ["MOYENS DE SECOURS"]);
+  assert.deepEqual(paragraphs.map((entry) => entry.text), ["ASCENSEURS", "MOYENS DE SECOURS"]);
 });
 
 test("un intitulé qui a vraiment débordé garde sa suite", () => {
   // « déverrouillage » ne tenait pas au bout de la première ligne : elle a bien
   // débordé, et les deux lignes sont un seul intitulé.
-  const band = [
-    { x: 52, y: 545, right: 202, text: "Signal sonore et lumineux du", italic: false },
-    { x: 52, y: 533, right: 256, text: "déverrouillage des portes à verrouillage", italic: false }
-  ];
+  const paragraphs = toRowCandidates(
+    [
+      ligne("Signal sonore et lumineux du", 52, 545, 202),
+      ligne("déverrouillage des portes à verrouillage", 52, 533, 256)
+    ],
+    { numbered: false, columnRight: 267 }
+  );
 
-  const { title, outlineUpdates } = splitDispositionBand(band, { columnRight: 267 });
-
-  assert.deepEqual(title, ["Signal sonore et lumineux du", "déverrouillage des portes à verrouillage"]);
-  assert.deepEqual(outlineUpdates, []);
+  assert.deepEqual(paragraphs.map((entry) => entry.text), [
+    "Signal sonore et lumineux du déverrouillage des portes à verrouillage"
+  ]);
 });
 
 test("l'extrait cité est celui que le document contient vraiment", () => {
@@ -381,4 +393,106 @@ test("la cellule d'où l'avis a été lu est consignée", () => {
   );
 
   assert.deepEqual(occurrences[0].opinion_cell, { page: 9, x: 308, y: 616, text: "F" });
+});
+
+/**
+ * Une fiche d'avis travaux, telle que le PDF la décrit.
+ *
+ * Deux différences avec un rapport, et chacune défaisait une hypothèse : sa
+ * première colonne s'intitule « Éléments examinés », et son intitulé est
+ * centré verticalement dans sa cellule quand l'observation, elle, part du
+ * haut. La deuxième ligne, enfin, n'a pas d'appréciation — le bureau de
+ * contrôle a laissé la case vide tout en lui donnant un numéro.
+ */
+const FICHE = {
+  page: 1,
+  items: [
+    item("Éléments examinés", 98, 394),
+    item("Avis*", 274, 394),
+    item("Observations et commentaires", 320, 394),
+    item("N°", 533, 394),
+
+    item("Rappel de l'observation précédente :", 300, 378),
+    item("La distance de 40 cm n'est pas respectée", 300, 366),
+    item("Ext > 40 cm angle rentrant", 37, 360),
+    item("F", 282, 354),
+    item("pour la porte WC Scol. 1", 300, 354),
+    item("L'avis 171 est levé.", 300, 331),
+
+    item("Couche de fondation du dallage", 37, 313),
+    item("Présence de matières organiques au", 300, 313),
+    item("niveau de l'arase de terrassement:", 300, 302),
+    item("des purges seront à prévoir avant la", 300, 290),
+    item("234", 532, 217),
+
+    item("SOCOTEC Construction - S.A.S. au capital de 9 116 700 euros", 34, 52),
+    item("Siège social : Immeuble Mirabeau - 5, place des Frères Montgolfier", 34, 44)
+  ]
+};
+
+const FICHE_LEGEND = { codes: [{ code: "F", id: "FAVORABLE", label: "Favorable" }] };
+
+/** La seconde page d'une fiche : sa légende, et le même pied de page. */
+const FICHE_SUITE = {
+  page: 2,
+  items: [
+    item("* F: Favorable , D: Défavorable", 34, 776),
+    item("Date d’émission : 20/05/2025", 34, 614),
+    item("SOCOTEC Construction - S.A.S. au capital de 9 116 700 euros", 34, 52),
+    item("Siège social : Immeuble Mirabeau - 5, place des Frères Montgolfier", 34, 44)
+  ]
+};
+
+test("une fiche nomme sa première colonne autrement, et c'est le même tableau", () => {
+  const table = readTableRows(FICHE, ["F"]);
+
+  assert.ok(table, "« Éléments examinés » vaut « Dispositions du projet »");
+  assert.equal(table.rows.length, 2);
+});
+
+test("une observation écrite au-dessus de son intitulé lui revient tout entière", () => {
+  const [premiere] = readTableRows(FICHE, ["F"]).rows;
+
+  // Ancrée sur le F, la ligne perdait les deux premières lignes de son
+  // observation : elles sont écrites plus haut que l'intitulé qu'elles
+  // commentent.
+  assert.equal(premiere.title_lines.join(" "), "Ext > 40 cm angle rentrant");
+  assert.deepEqual(premiere.comment_lines, [
+    "Rappel de l'observation précédente :",
+    "La distance de 40 cm n'est pas respectée",
+    "pour la porte WC Scol. 1",
+    "L'avis 171 est levé."
+  ]);
+});
+
+test("une ligne numérotée sans appréciation reste une ligne", () => {
+  const { occurrences } = extractAvisFromLayout(
+    { source_id: "fiche", pages: [FICHE, FICHE_SUITE] },
+    { legend: FICHE_LEGEND }
+  );
+
+  const numerotee = occurrences.find((entry) => entry.external_reference_raw === "234");
+
+  // Le bureau de contrôle ne numérote que ce qu'il entend suivre. Taire cette
+  // ligne faisait disparaître la création de l'avis : il ne réapparaissait
+  // qu'au récapitulatif suivant, un an plus tard, sans commencement.
+  assert.ok(numerotee, "l'avis numéroté existe, même sans code lu");
+  assert.equal(numerotee.title_raw, "Couche de fondation du dallage");
+  assert.equal(numerotee.opinion_raw, null);
+  assert.equal(numerotee.opinion_normalized, null);
+  assert.equal(numerotee.opinion_confidence, null, "aucun avis reconnu n'est pas un avis douteux");
+  assert.equal(numerotee.opinion_cell, null);
+});
+
+test("ce qu'un document répète à chaque page n'est pas le contenu d'un tableau", () => {
+  const { occurrences } = extractAvisFromLayout(
+    { source_id: "fiche", pages: [FICHE, FICHE_SUITE] },
+    { legend: FICHE_LEGEND }
+  );
+
+  // Raison sociale et siège social sont cadrés tout à gauche, sous le tableau :
+  // ils devenaient le premier chapitre de l'arborescence de chaque avis.
+  for (const occurrence of occurrences) {
+    assert.deepEqual(occurrence.ancestors, [], "le cadre du document n'est pas son référentiel");
+  }
 });
