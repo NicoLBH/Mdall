@@ -11,7 +11,16 @@ import * as status from "../../../../../../spikes/ct-continuity/status.mjs";
 import * as analytics from "../../../../../../spikes/ct-continuity/analytics.mjs";
 
 import { runCtLab } from "../../../services/ct-lab-engine.js";
-import { TABS, firstText, pickAxisTicks, tabLabel, titleCase, toAvisCsv, toStatusCsv } from "./ct-continuity-lab.js";
+import {
+  TABS,
+  firstText,
+  lastSeenWording,
+  pickAxisTicks,
+  tabLabel,
+  titleCase,
+  toAvisCsv,
+  toStatusCsv
+} from "./ct-continuity-lab.js";
 
 /**
  * Les CSV sont ce qu'un humain ouvre dans Excel pour relire un dossier : ils
@@ -129,7 +138,7 @@ test("les onglets annoncent leur effectif", async () => {
   const result = await run();
   const labels = TABS.map((tab) => tabLabel(tab, { result }));
 
-  assert.deepEqual(labels, ["Où en est-on", "Documents (2)", "Avis (3)", "Indicateurs", "Preuves (1)", "Technique"]);
+  assert.deepEqual(labels, ["Où en est-on", "Documents (2)", "Avis (3)", "Indicateurs", "Preuves (1)", "Qualité de lecture"]);
 });
 
 test("sans résultat, un onglet ne prétend pas contenir quelque chose", () => {
@@ -235,4 +244,36 @@ test("un intitulé vide n'est pas un intitulé absent", () => {
   assert.equal(firstText("   ", null, "défaut"), "défaut");
   assert.equal(firstText("intitulé", "commentaire"), "intitulé");
   assert.equal(firstText(null, undefined, ""), "");
+});
+
+test("la formulation de référence remonte à la dernière apparition réelle", () => {
+  // Un avis 238 réel : le RICT et le rapport d'étape suivant le rattachent à
+  // deux lignes différentes du référentiel, avec le même numéro et le même
+  // commentaire. Entre les deux, plusieurs rapports ne le mentionnent pas.
+  const steps = [
+    { cell: { extraction: { title_raw: "Les organes des coupures du bâtiment", description_raw: "À reporter sur le plan." } } },
+    { cell: { extraction: null } },
+    { cell: { extraction: null } },
+    { cell: { extraction: { title_raw: "Pour tout circuit terminal", description_raw: "À reporter sur le plan." } } }
+  ];
+
+  assert.equal(lastSeenWording(steps, 0), null, "la première étape n'a rien avant elle");
+  assert.deepEqual(lastSeenWording(steps, 3), {
+    title: "Les organes des coupures du bâtiment",
+    comment: "À reporter sur le plan."
+  });
+  assert.deepEqual(
+    lastSeenWording(steps, 2),
+    { title: "Les organes des coupures du bâtiment", comment: "À reporter sur le plan." },
+    "les rapports muets ne disent rien du libellé : on remonte au-delà"
+  );
+});
+
+test("un intitulé vide ne compte pas comme une formulation", () => {
+  const steps = [
+    { cell: { extraction: { title_raw: "Vrai intitulé", description_raw: "" } } },
+    { cell: { extraction: { title_raw: "   ", description_raw: "commentaire" } } }
+  ];
+
+  assert.equal(lastSeenWording(steps, 1).title, "Vrai intitulé");
 });

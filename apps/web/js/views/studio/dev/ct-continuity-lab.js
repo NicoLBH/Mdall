@@ -49,7 +49,7 @@ export const TABS = [
   { id: "avis", label: "Avis" },
   { id: "indicators", label: "Indicateurs" },
   { id: "evidence", label: "Preuves" },
-  { id: "technical", label: "Technique" }
+  { id: "technical", label: "Qualité de lecture" }
 ];
 
 /** Une page de tableau : deux mille lignes d'un coup figent le navigateur. */
@@ -185,7 +185,20 @@ function avisIcon(code, label = null) {
  * @param {object} avis      code, libellé, intitulé, commentaire, méta
  * @param {string|null} tag  état de l'avis, rendu comme un label de sujet
  */
-function renderAvisRow({ reference, traceKey, code, label, title, meta, seenIn, comment, tag, tagStatus, evidence }) {
+function renderAvisRow({
+  reference,
+  traceKey,
+  code,
+  label,
+  title,
+  meta,
+  seenIn,
+  comment,
+  tag,
+  tagStatus,
+  evidence,
+  evidenceSource
+}) {
   const target = traceKey ?? reference;
 
   return `
@@ -217,6 +230,7 @@ function renderAvisRow({ reference, traceKey, code, label, title, meta, seenIn, 
               ? `<span class="ctlab__row-line ctlab__row-evidence">
                    <span class="ctlab__dot ctlab__dot--ok" aria-hidden="true"></span>
                    <span class="issue-row-meta-text">${escapeHtml(truncate(evidence, 260))}</span>
+                   ${evidenceSource ? renderSourceLink({ ...evidenceSource, label: "Vérifier" }) : ""}
                  </span>`
               : ""
           }
@@ -495,6 +509,44 @@ const STYLE = `
 /* Un commentaire de plusieurs centaines de caractères ne doit pas pousser la
    frise hors de son cadre. */
 .ctlab__pipeline-text { overflow-wrap: anywhere; white-space: normal; }
+.ctlab__pipeline-rephrased { color: var(--ctlab-info); }
+.ctlab__pipeline-source { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.ctlab__pipeline-source > .ctlab__ellipsis { min-width: 0; flex: 1 1 auto; }
+
+/* Ouvrir la source : discret dans la ligne, franc au survol. */
+.ctlab__source-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-size: 12px;
+  color: var(--ctlab-info);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ctlab__source-link:hover { text-decoration: underline; }
+
+/* La page citée, dans le cadre du lecteur de l'onglet Documents. */
+.ctlab__pdf {
+  margin-top: 12px;
+  max-height: 70vh;
+  overflow: auto;
+  border: 1px solid var(--ctlab-line);
+  border-radius: var(--radius, 6px);
+  background: var(--bg-input, rgb(21, 27, 35));
+  padding: 4px;
+}
+.ctlab__pdf-excerpt { border-left: 3px solid var(--ctlab-info); padding-left: 10px; }
+/* La couche de texte est transparente : seul l'extrait cité se voit. */
+.ctlab-pdf__cited {
+  background: rgba(210, 153, 34, .45);
+  border-radius: 2px;
+  color: transparent;
+}
 .ctlab__tag--muted { --subject-label-border: var(--ctlab-line); --subject-label-fg: var(--ctlab-muted); --subject-label-bg: transparent; }
 .ctlab__tag--info { --subject-label-border: var(--ctlab-info); --subject-label-fg: var(--ctlab-info); --subject-label-bg: rgba(88, 166, 255, .12); }
 .ctlab__tag--ok { --subject-label-border: var(--ctlab-ok); --subject-label-fg: var(--ctlab-ok); --subject-label-bg: rgba(63, 185, 80, .12); }
@@ -1055,7 +1107,14 @@ function renderStatusView(state) {
         // caractères : les mêler aux métadonnées écrasait tout le reste.
         seenIn: `vu dans ${documentLabel(summary.last_seen_document_id)}`,
         comment: info.comment,
-        evidence: summary.evidence?.sentence ?? ""
+        evidence: summary.evidence?.sentence ?? "",
+        evidenceSource: summary.evidence?.source_document_id
+          ? {
+              sourceId: summary.evidence.source_document_id,
+              page: summary.evidence.source_page,
+              excerpt: summary.evidence.sentence
+            }
+          : null
       });
     })
     .join("");
@@ -1472,7 +1531,7 @@ function renderLiftings(state) {
     </p>
     <div class="ctlab__scroll">
       <table class="ctlab__grid">
-        <thead><tr><th>N°</th><th>Rapport</th><th>Page</th><th>Phrase</th></tr></thead>
+        <thead><tr><th>N°</th><th>Rapport</th><th>Page</th><th>Phrase</th><th>Source</th></tr></thead>
         <tbody>
           ${statements
             .map(
@@ -1482,6 +1541,12 @@ function renderLiftings(state) {
                   <td>${escapeHtml(documentLabel(statement.source_document_id))}</td>
                   <td>${statement.source_page ?? "—"}</td>
                   <td>${escapeHtml(statement.sentence)}</td>
+                  <td>${renderSourceLink({
+                    sourceId: statement.source_document_id,
+                    page: statement.source_page,
+                    excerpt: statement.sentence,
+                    label: "Vérifier"
+                  })}</td>
                 </tr>
               `
             )
@@ -1780,6 +1845,9 @@ function renderResults(state) {
   // Le détail d'un avis remplace la vue, il ne s'y ajoute pas : c'est la place
   // qui rend la frise lisible, et le retour arrière qui rend la navigation
   // évidente.
+  // La page citée passe devant tout le reste : on y va pour vérifier une
+  // phrase précise, pas pour naviguer.
+  if (state.pdfView) return renderPdfPanel(state);
   if (state.selectedReference) return renderAvisTrace(state);
 
   switch (state.activeTab) {
@@ -2119,12 +2187,75 @@ function renderAvisTrace(state) {
           .map(({ cell, document }, index) =>
             renderTraceStep(cell, document, {
               reopened: reopenedAt.has(index),
-              fallbackTitle: context.title ?? null
+              fallbackTitle: context.title ?? null,
+              previous: lastSeenWording(steps, index)
             })
           )
           .join("")}
       </ol>
       <div data-ctlab-detail></div>
+    </div>
+  `;
+}
+
+/**
+ * Le bouton qui ouvre la page citée.
+ *
+ * Il n'apparaît que si le document est encore chargé dans la session et si la
+ * page est connue : proposer d'ouvrir ce qu'on ne peut pas montrer serait pire
+ * que de ne rien proposer.
+ */
+function renderSourceLink({ sourceId, page, excerpt = "", label = "Voir dans le PDF" }) {
+  if (!sourceId || !Number.isInteger(Number(page))) return "";
+
+  return `
+    <button type="button" class="ctlab__source-link"
+            data-ctlab-open-pdf="${escapeHtml(sourceId)}"
+            data-ctlab-pdf-page="${escapeHtml(String(page))}"
+            data-ctlab-pdf-excerpt="${escapeHtml(excerpt ?? "")}">
+      ${svgIcon("file-pdf", { className: "octicon" })}
+      <span>${escapeHtml(label)}</span>
+    </button>
+  `;
+}
+
+/**
+ * La page du PDF, à l'endroit cité.
+ *
+ * C'est la contrepartie de la règle qui gouverne tout cet écran : on ne conclut
+ * pas sans preuve citée. Une phrase comme « L'avis 145 est levé » ne vaut que
+ * si on peut l'aller voir — sinon elle demande qu'on lui fasse confiance, ce
+ * qui est exactement ce que l'outil refuse de demander.
+ */
+function renderPdfPanel(state) {
+  const view = state.pdfView;
+  const report = state.reports.find((entry) => entry.sourceId === view.sourceId);
+
+  return `
+    <div class="ctlab__section">
+      <button type="button" class="ctlab__back" data-ctlab-pdf-close>
+        ${svgIcon("arrow-left", { className: "octicon" })}
+        <span>${escapeHtml(view.backLabel ?? "Retour")}</span>
+      </button>
+      <div class="ctlab__trace-head">
+        <h3>${escapeHtml(documentLabel(view.sourceId))}</h3>
+        <span class="subject-label-badge ctlab__tag ctlab__tag--muted">page ${view.page}</span>
+      </div>
+      ${
+        view.excerpt
+          ? `<p class="ctlab__hint ctlab__pdf-excerpt">Extrait cité : « ${escapeHtml(truncate(view.excerpt, 220))} »</p>`
+          : ""
+      }
+      ${
+        report?.file
+          ? `<div class="ctlab__pdf" data-ctlab-pdf-canvas aria-busy="true">
+               <p class="ctlab__empty">Ouverture du document…</p>
+             </div>`
+          : `<div class="ctlab__alert ctlab__alert--attention">
+               Le fichier d'origine n'est plus disponible dans cette session : rechargez-le pour vérifier la citation.
+             </div>`
+      }
+      <p class="ctlab__hint" data-ctlab-pdf-note></p>
     </div>
   `;
 }
@@ -2170,14 +2301,39 @@ function renderSingleOccurrence(state, back) {
               <b>${escapeHtml(code)}</b>
             </div>
             ${avis.description_raw ? `<div class="issue-row-meta-text ctlab__pipeline-line ctlab__pipeline-text">${escapeHtml(avis.description_raw)}</div>` : ""}
-            <div class="issue-row-meta-text ctlab__pipeline-line ctlab__ellipsis">
-              ${escapeHtml(documentLabel(avis.provenance?.source_id))}${avis.provenance?.page ? ` · page ${avis.provenance.page}` : ""}
+            <div class="ctlab__pipeline-line ctlab__pipeline-source">
+              <span class="issue-row-meta-text ctlab__ellipsis">
+                ${escapeHtml(documentLabel(avis.provenance?.source_id))}${avis.provenance?.page ? ` · page ${avis.provenance.page}` : ""}
+              </span>
+              ${renderSourceLink({
+                sourceId: avis.provenance?.source_id,
+                page: avis.provenance?.page,
+                excerpt: avis.provenance?.excerpt
+              })}
             </div>
           </div>
         </li>
       </ol>
     </div>
   `;
+}
+
+/**
+ * La dernière formulation connue avant cette étape.
+ *
+ * Les rapports où l'avis est absent ne disent rien de son libellé : on remonte
+ * jusqu'à la dernière apparition réelle, sinon chaque disparition ferait
+ * croire à une reformulation.
+ */
+export function lastSeenWording(steps, index) {
+  for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+    const extraction = steps[cursor]?.cell?.extraction;
+    if (!extraction) continue;
+    const title = firstText(extraction.title_raw);
+    if (title === "") continue;
+    return { title, comment: firstText(extraction.description_raw) };
+  }
+  return null;
 }
 
 /**
@@ -2191,11 +2347,11 @@ function renderSingleOccurrence(state, back) {
  * que c'est exactement ce qui se joue : un avis qui reparaît après avoir
  * disparu est une réouverture, et il faut que ça se voie.
  */
-function renderTraceStep(cell, document, { reopened = false, fallbackTitle = null } = {}) {
+function renderTraceStep(cell, document, { reopened = false, fallbackTitle = null, previous = null } = {}) {
   const continuity = cell.continuity;
   const state = continuity?.state === "AMBIGUOUS" ? "AMBIGUOUS" : continuity?.value?.state ?? "AMBIGUOUS";
   const lifted = Boolean(continuity?.lifting_statement);
-  const previous = continuity?.value?.previous_document_id;
+  const previousDocument = continuity?.value?.previous_document_id;
 
   const opinion = cell.extraction?.value?.opinion_raw ?? continuity?.matched_opinion_raw ?? null;
   const opinionLabelText = cell.extraction?.opinion_label ?? continuity?.matched_opinion_label ?? null;
@@ -2209,10 +2365,24 @@ function renderTraceStep(cell, document, { reopened = false, fallbackTitle = nul
   else if (reopened) lifecycle = { icon: "issue-reopened", tone: "info", color: "var(--fgColor-done)" };
   else lifecycle = { icon: "issue-opened", tone: "pending", color: "var(--fgColor-open)" };
 
-  const badge = reopened && state !== "NOT_FOUND" && !lifted ? "RÉOUVERT" : STATE_LABELS[state] ?? state;
-  // Le libellé d'état porte la couleur de ce qu'il annonce : une apparition
-  // est un fait neuf, une absence n'est qu'un silence.
-  const badgeTone = state === "NOT_FOUND" ? "muted" : lifted ? "ok" : state === "NEW" || reopened ? "info" : "muted";
+  // Le libellé dit la conclusion, pas l'état brut : « déclaré levé » assorti de
+  // « NON RETROUVÉ » se lisait comme une contradiction, alors que les deux
+  // étaient vrais — l'avis a disparu du tableau parce qu'il a été levé.
+  const badge = lifted
+    ? "LEVÉ"
+    : reopened && state !== "NOT_FOUND"
+      ? "RÉOUVERT"
+      : STATE_LABELS[state] ?? state;
+
+  // La couleur porte le sens : vert ce qui est acquis, bleu ce qui est neuf,
+  // gris ce qui n'est qu'un silence.
+  const badgeTone = lifted
+    ? "ok"
+    : state === "MATCHED" || state === "MATCHED_BY_TITLE"
+      ? "ok"
+      : state === "NEW" || reopened
+        ? "info"
+        : "muted";
 
   const headline =
     state === "NOT_FOUND"
@@ -2225,10 +2395,20 @@ function renderTraceStep(cell, document, { reopened = false, fallbackTitle = nul
     state === "NOT_FOUND"
       ? lifted
         ? `« ${continuity.lifting_statement.sentence} »`
-        : previous
-          ? `vu pour la dernière fois dans ${documentLabel(previous)}`
+        : previousDocument
+          ? `vu pour la dernière fois dans ${documentLabel(previousDocument)}`
           : "aucune apparition antérieure connue"
       : comment ?? "";
+
+  // Un même avis n'est pas libellé de la même façon d'un rapport à l'autre :
+  // chaque édition le rattache à sa propre ligne du référentiel. Sur un corpus
+  // réel, l'avis 238 est « Les organes des coupures… » dans un RICT et « Pour
+  // tout circuit terminal… » dans le rapport d'étape suivant — même numéro,
+  // même commentaire, mot pour mot. Ce n'est pas une confusion de l'outil,
+  // c'est le document qui reformule ; l'écran doit le dire, sinon le lecteur
+  // croit avoir changé d'avis en cours de route.
+  const rephrased = Boolean(previous?.title && title && previous.title !== title);
+  const sameComment = Boolean(previous?.comment && comment && previous.comment === comment);
 
   return `
     <li class="ctlab__pipeline-step ctlab__pipeline-step--${lifecycle.tone}">
@@ -2246,8 +2426,33 @@ function renderTraceStep(cell, document, { reopened = false, fallbackTitle = nul
           }
           <span class="subject-label-badge ctlab__tag ctlab__tag--${escapeHtml(badgeTone)}">${escapeHtml(badge.toLocaleUpperCase("fr"))}</span>
         </div>
-        ${secondLine ? `<div class="issue-row-meta-text ctlab__pipeline-line ctlab__pipeline-text">${escapeHtml(secondLine)}</div>` : ""}
-        <div class="issue-row-meta-text ctlab__pipeline-line ctlab__ellipsis">${escapeHtml(documentLabel(cell.documentId))}</div>
+        ${
+          rephrased
+            ? `<div class="ctlab__pipeline-line ctlab__pipeline-rephrased">
+                 Intitulé reformulé par ce rapport — même numéro, même observation.
+               </div>`
+            : ""
+        }
+        ${
+          secondLine
+            ? sameComment
+              ? `<div class="issue-row-meta-text ctlab__pipeline-line">Observation inchangée.</div>`
+              : `<div class="issue-row-meta-text ctlab__pipeline-line ctlab__pipeline-text">${escapeHtml(secondLine)}</div>`
+            : ""
+        }
+        <div class="ctlab__pipeline-line ctlab__pipeline-source">
+          <span class="issue-row-meta-text ctlab__ellipsis">${escapeHtml(documentLabel(cell.documentId))}</span>
+          ${renderSourceLink({
+            sourceId: lifted ? continuity.lifting_statement.source_document_id : cell.documentId,
+            page: lifted
+              ? continuity.lifting_statement.source_page
+              : cell.extraction?.provenance?.page ?? continuity?.provenance?.page,
+            excerpt: lifted
+              ? continuity.lifting_statement.sentence
+              : cell.extraction?.provenance?.excerpt ?? continuity?.provenance?.excerpt,
+            label: lifted ? "Vérifier la levée" : "Voir dans le PDF"
+          })}
+        </div>
       </div>
     </li>
   `;
@@ -2271,6 +2476,12 @@ function renderClearances(state) {
             <div class="ctlab__alert ctlab__alert--info">
               <b>${escapeHtml(documentLabel(clearance.source_document_id))}</b>, page ${clearance.source_page ?? "?"} —
               « ${escapeHtml(clearance.sentence)} »
+              <div>${renderSourceLink({
+                sourceId: clearance.source_document_id,
+                page: clearance.source_page,
+                excerpt: clearance.sentence,
+                label: "Vérifier dans le rapport"
+              })}</div>
             </div>
           `
         )
@@ -2383,23 +2594,36 @@ function renderDisagreements(state) {
 function renderDetails(state) {
   return `
     <div class="ctlab__section">
-      <h3>Indicateurs de fiabilité</h3>
+      <h3>Peut-on se fier à cette lecture ?</h3>
+      <p class="ctlab__hint">
+        Chaque chiffre se vérifie contre les PDF chargés, sans qu'on ait à croire l'outil sur parole.
+      </p>
       ${renderIndicators(state.result.indicators)}
     </div>
     <div class="ctlab__section">
-      <h3>Alertes d'extraction</h3>
+      <h3>Ce qui n'a pas pu être lu</h3>
+      <p class="ctlab__hint">
+        Un PDF scanné, une page sans avis, un format inattendu : ce qui a résisté à la lecture est listé ici,
+        document par document.
+      </p>
       ${renderAlerts(state.result.indicators.alerts)}
     </div>
     <div class="ctlab__section">
-      <h3>Motifs d'extraction</h3>
+      <h3>Comment les avis sont repérés dans le texte</h3>
+      <p class="ctlab__hint">
+        Pour retrouver un avis, l'outil cherche dans le texte des formulations connues — « Avis n° 65 »,
+        « OBS-65 » — et un vocabulaire d'avis. Sur un rapport en tableau, il lit la légende du document
+        lui-même et n'a pas besoin de ces réglages. Ils servent aux rapports rédigés en phrases, ou à un
+        format qu'il n'aurait pas su lire : on ajuste ici, on relance, et on regarde ce que ça change.
+      </p>
       ${renderPatternEditor(state)}
     </div>
     <div class="ctlab__section">
-      <h3>Suggestions</h3>
+      <h3>Pistes signalées par la lecture</h3>
       ${renderSuggestions(state.result.suggestions)}
     </div>
     <div class="ctlab__section">
-      <h3>Texte extrait</h3>
+      <h3>Le texte brut des documents</h3>
       <p class="ctlab__hint">
         La matière brute, telle que le navigateur l'a lue. Volumineuse par nature : repliée par défaut.
       </p>
@@ -2549,6 +2773,8 @@ export function renderCtContinuityLab(root) {
     selectedCell: null,
     selectedReference: null,
     avisPage: 1,
+    /** Page de PDF ouverte pour vérifier une citation. */
+    pdfView: null,
     /** La remontée dans le temps s'active à la demande, jamais par accident. */
     timeTravel: false,
     asOf: "",
@@ -2582,6 +2808,51 @@ export function renderCtContinuityLab(root) {
     if (state.selectedCell) {
       const holder = root.querySelector("[data-ctlab-detail]");
       if (holder) holder.innerHTML = renderDetail(state.selectedCell);
+    }
+    // Le rendu d'une page tient dans un canvas, que le prochain rendu HTML
+    // effacerait : on le dessine après coup, et une seule fois par ouverture.
+    if (state.pdfView && !state.pdfView.drawn) drawPdfPage();
+  };
+
+  /**
+   * Dessine la page citée.
+   *
+   * Les octets sont relus depuis le `File` au moment de l'affichage : ce qui
+   * évite de garder cent vingt PDF en mémoire pour une page qu'on ouvrira
+   * peut-être une fois.
+   */
+  const drawPdfPage = async () => {
+    const view = state.pdfView;
+    const container = root.querySelector("[data-ctlab-pdf-canvas]");
+    const note = root.querySelector("[data-ctlab-pdf-note]");
+    const report = state.reports.find((entry) => entry.sourceId === view?.sourceId);
+    if (!view || !container || !report?.file) return;
+
+    view.drawn = true;
+
+    try {
+      const { renderPdfPage } = await import("../../../services/ct-lab-pdf-view.js");
+      const bytes = await report.file.arrayBuffer();
+      const width = Math.max(320, (container.clientWidth || 900) - 8);
+      const { pageCount, highlighted } = await renderPdfPage(container, {
+        bytes,
+        page: view.page,
+        excerpt: view.excerpt,
+        width
+      });
+      container.setAttribute("aria-busy", "false");
+
+      if (note) {
+        // Dire quand la phrase n'a pas pu être située : un surlignage absent
+        // sans explication ferait douter de la preuve elle-même.
+        note.textContent = highlighted
+          ? `Page ${view.page} sur ${pageCount} — l'extrait cité est surligné.`
+          : `Page ${view.page} sur ${pageCount} — l'extrait n'a pas pu être situé précisément sur la page : `
+            + `la lecture du texte et l'affichage ne découpent pas les mots de la même façon.`;
+      }
+    } catch (error) {
+      container.innerHTML = `<div class="ctlab__alert">${escapeHtml(error.message)}</div>`;
+      container.setAttribute("aria-busy", "false");
     }
   };
 
@@ -2662,7 +2933,11 @@ export function renderCtContinuityLab(root) {
         nextDocumentNumber += 1;
         try {
           const extracted = await extractPagesFromFile(file);
-          state.reports.push({ ...extracted, sourceId });
+          // Le `File` est conservé, pas ses octets : le navigateur tient la
+          // poignée pour rien, alors que garder cent vingt PDF en mémoire
+          // coûterait des centaines de mégaoctets. Il est relu à la demande,
+          // uniquement quand on ouvre la page citée.
+          state.reports.push({ ...extracted, sourceId, file });
         } catch (error) {
           state.reports.push({ sourceId, filename: file.name, sizeBytes: file.size, pageCount: 0, pages: [], error: error.message });
         }
@@ -2856,6 +3131,7 @@ export function renderCtContinuityLab(root) {
       // navigation, c'est une impasse.
       state.selectedReference = null;
       state.selectedCell = null;
+      state.pdfView = null;
       refresh();
       return;
     }
@@ -2864,6 +3140,7 @@ export function renderCtContinuityLab(root) {
 
     const target = event.target.closest(
       "[data-ctlab-pick], [data-ctlab-remove], [data-ctlab-cell], [data-ctlab-trace], [data-ctlab-back], " +
+        "[data-ctlab-open-pdf], [data-ctlab-pdf-close], " +
         "[data-ctlab-as-of], " +
         "[data-pagination-entity='ctlab-avis'], " +
         "[data-ctlab-export-text], [data-ctlab-apply-patterns], [data-ctlab-reset-patterns], " +
@@ -2915,6 +3192,25 @@ export function renderCtContinuityLab(root) {
       captureEditors();
       state.selectedReference = target.dataset.ctlabTrace;
       state.selectedCell = null;
+      refresh();
+      return;
+    }
+
+    if (target.dataset.ctlabOpenPdf !== undefined) {
+      captureEditors();
+      state.pdfView = {
+        sourceId: target.dataset.ctlabOpenPdf,
+        page: Number(target.dataset.ctlabPdfPage),
+        excerpt: target.dataset.ctlabPdfExcerpt ?? "",
+        backLabel: state.selectedReference ? "Retour à l'avis" : "Retour",
+        drawn: false
+      };
+      refresh();
+      return;
+    }
+
+    if (target.dataset.ctlabPdfClose !== undefined) {
+      state.pdfView = null;
       refresh();
       return;
     }
