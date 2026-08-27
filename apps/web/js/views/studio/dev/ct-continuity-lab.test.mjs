@@ -10,7 +10,7 @@ import * as runRecord from "../../../../../../spikes/lib/run-record.mjs";
 import * as status from "../../../../../../spikes/ct-continuity/status.mjs";
 
 import { runCtLab } from "../../../services/ct-lab-engine.js";
-import { toAvisCsv, toStatusCsv } from "./ct-continuity-lab.js";
+import { TABS, tabLabel, toAvisCsv, toStatusCsv } from "./ct-continuity-lab.js";
 
 /**
  * Les CSV sont ce qu'un humain ouvre dans Excel pour relire un dossier : ils
@@ -122,4 +122,80 @@ test("la matrice de suivi est construite sur les colonnes chronologiques", async
   assert.deepEqual(row.cells.map((cell) => cell.documentId), ["doc-2", "doc-1"]);
   assert.equal(row.cells[0].continuity.value.state, "NEW", "l'avis naît dans le rapport le plus ancien");
   assert.equal(row.cells[1].continuity.value.state, "MATCHED");
+});
+
+test("les onglets annoncent leur effectif", async () => {
+  const result = await run();
+  const labels = TABS.map((tab) => tabLabel(tab, { result }));
+
+  assert.deepEqual(labels, ["Où en est-on", "Documents (2)", "Avis (3)", "Preuves (1)", "Technique"]);
+});
+
+test("sans résultat, un onglet ne prétend pas contenir quelque chose", () => {
+  assert.deepEqual(
+    TABS.map((tab) => tabLabel(tab, { result: null })),
+    TABS.map((tab) => tab.label)
+  );
+});
+
+test("l'onglet Preuves compte aussi les clôtures générales", async () => {
+  const withClearance = [
+    REPORTS[1],
+    {
+      sourceId: "doc-3",
+      filename: "rapport-final.pdf",
+      pages: [
+        {
+          page: 1,
+          text: [
+            "RAPPORT FINAL",
+            "CONTROLE TECHNIQUE",
+            "CT/13860/0125/0283",
+            "Date d’émission : 29/01/2026",
+            "À notre connaissance, l'ensemble des avis que nous avons émis ont été suivis d'effet."
+          ].join("\n")
+        }
+      ]
+    }
+  ];
+
+  const result = await runCtLab(withClearance, { modules: MODULES, now: NOW });
+
+  assert.equal(result.globalClearances.length, 1);
+  assert.equal(tabLabel({ id: "evidence", label: "Preuves" }, { result }), "Preuves (1)");
+
+  // Et l'effet sur le fond : les avis du dossier sont réputés suivis d'effet.
+  const avis = result.avisStatus.find((entry) => entry.reference === "65");
+  assert.equal(avis.status, "RESOLVED");
+  assert.equal(avis.resolution_reason, "DECLARED_GLOBALLY");
+});
+
+test("le CSV d'état nomme le rapport qui a prononcé la clôture générale", async () => {
+  const result = await runCtLab(
+    [
+      REPORTS[1],
+      {
+        sourceId: "doc-3",
+        filename: "rapport-final.pdf",
+        pages: [
+          {
+            page: 1,
+            text: [
+              "RAPPORT FINAL",
+              "CONTROLE TECHNIQUE",
+              "Date d’émission : 29/01/2026",
+              "Tous les avis ont été suivis d'effet."
+            ].join("\n")
+          }
+        ]
+      }
+    ],
+    { modules: MODULES, now: NOW }
+  );
+
+  const csv = toStatusCsv(result);
+  const row = csv.split("\r\n").find((line) => line.startsWith("65;"));
+
+  assert.equal(row.split(";")[6], "rapport-final.pdf", "« Levé dans »");
+  assert.equal(row.split(";")[7], "2026-01-29");
 });

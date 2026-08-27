@@ -1,9 +1,9 @@
 /**
- * Laboratoire CT Continuity — Atelier › Développements.
+ * Suivi des avis du Bureau de Contrôle — Atelier › Développements.
  *
- * Page d'expérimentation manuelle du Spike 1 : on charge des rapports de
- * contrôle technique à la main, dans l'ordre chronologique, et on lit ce que le
- * moteur en tire.
+ * On dépose les livrables d'un bureau de contrôle — cent vingt sur un gros
+ * chantier, dans n'importe quel ordre — et la page restitue leur chronologie,
+ * l'état de chaque avis, et ce qui manque au dossier.
  *
  * Ce que cette page ne fait pas, et ne doit jamais faire :
  *  - rien n'est envoyé sur le réseau : les PDF sont lus dans le navigateur ;
@@ -13,8 +13,10 @@
  *    annotée, ces chiffres n'existent pas. Seuls des indicateurs
  *    auto-vérifiables sont montrés.
  *
- * Le style est volontairement rudimentaire : c'est un banc d'essai, pas un
- * écran produit.
+ * L'écran suit la hiérarchie de ce qu'on vient y chercher : la réponse
+ * d'abord, les pièces ensuite, la mécanique en dernier. Les composants
+ * viennent de l'application — en-tête d'utilitaire, onglets, boutons,
+ * sélecteur de date — pour que l'outil ne soit pas une pièce rapportée.
  */
 
 import { escapeHtml } from "../../../utils/escape-html.js";
@@ -27,8 +29,38 @@ import {
   parsePatterns,
   previewMatches
 } from "../../../services/ct-lab-patterns.js";
+import { renderGhActionButton } from "../../ui/gh-split-button.js";
+import { renderLightTabs } from "../../ui/light-tabs.js";
+import {
+  formatSharedDateInputValue,
+  parseSharedDateInputValue,
+  renderSharedDatePicker,
+  shiftSharedCalendarMonth
+} from "../../ui/shared-date-picker.js";
 
-const SLOT_COUNT = 20;
+/** Les onglets, dans l'ordre où on les consulte. */
+export const TABS = [
+  { id: "state", label: "Où en est-on" },
+  { id: "documents", label: "Documents" },
+  { id: "avis", label: "Avis" },
+  { id: "evidence", label: "Preuves" },
+  { id: "technical", label: "Technique" }
+];
+
+/** Une page de tableau : deux mille lignes d'un coup figent le navigateur. */
+const PAGE_SIZE = 50;
+
+/** Ce que le moteur est en train de faire, en français. */
+const STAGE_LABELS = {
+  chronology: "Reconstitution de la chronologie",
+  completeness: "Contrôle de complétude du lot",
+  extraction: "Lecture des avis",
+  lifting: "Recherche des levées déclarées",
+  continuity: "Rapprochement des avis d'un rapport à l'autre",
+  notes: "Rédaction des constats",
+  guards: "Vérification des garde-fous",
+  report: "Assemblage du rapport"
+};
 
 /**
  * `doc-3` est l'identité interne d'un document ; personne ne relit un dossier
@@ -74,14 +106,6 @@ const STYLE = `
   font-size: 13px;
 }
 .ctlab h2, .ctlab h3, .ctlab h4 { color: var(--ctlab-text); }
-.ctlab__banner {
-  border: 1px solid var(--ctlab-warn);
-  background: rgba(210, 153, 34, .12);
-  color: var(--ctlab-text);
-  padding: 10px 12px;
-  margin-bottom: 16px;
-  border-radius: var(--radius, 6px);
-}
 .ctlab__section {
   border: 1px solid var(--ctlab-line);
   border-radius: var(--radius, 6px);
@@ -90,23 +114,37 @@ const STYLE = `
 }
 .ctlab__section > h3 { margin: 0 0 8px; font-size: 14px; }
 .ctlab__hint { color: var(--ctlab-muted); margin: 0 0 10px; }
-.ctlab__slots { display: grid; gap: 6px; }
-.ctlab__slot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.ctlab__btn {
-  border: 1px solid var(--ctlab-line);
-  background: var(--btn-bg, rgb(33, 40, 48));
-  color: var(--ctlab-text);
-  padding: 4px 10px;
-  border-radius: var(--radius, 6px);
-  cursor: pointer;
+.ctlab__actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+.ctlab__toolbar { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+.ctlab__spacer { flex: 1 1 auto; }
+.ctlab__link {
+  background: none;
+  border: 0;
+  padding: 0;
   font: inherit;
+  color: var(--ctlab-info);
+  cursor: pointer;
 }
-.ctlab__btn:disabled { opacity: .5; cursor: not-allowed; }
-.ctlab__btn--go { background: var(--btn-bg-success, rgb(35, 134, 54)); border-color: transparent; font-weight: 700; }
-.ctlab__slot-state { color: var(--ctlab-muted); }
-.ctlab__slot-state--loaded { color: var(--ctlab-ok); }
-.ctlab__slot-state--error { color: var(--ctlab-danger); }
-.ctlab__actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.ctlab__link:hover { text-decoration: underline; }
+/* Le travail en cours, montré plutôt que subi : une ligne par étape franchie. */
+.ctlab__stages { margin: 10px 0 0; padding: 0; list-style: none; }
+.ctlab__stage { display: flex; gap: 8px; align-items: baseline; padding: 2px 0; color: var(--ctlab-muted); }
+.ctlab__stage--done { color: var(--ctlab-ok); }
+.ctlab__stage--current { color: var(--ctlab-text); }
+.ctlab__stage-mark { width: 14px; flex: 0 0 14px; text-align: center; }
+.ctlab__spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--ctlab-line);
+  border-top-color: var(--ctlab-info);
+  border-radius: 50%;
+  animation: ctlab-spin .7s linear infinite;
+  vertical-align: -1px;
+}
+@keyframes ctlab-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .ctlab__spinner { animation: none; } }
+.ctlab__stage-detail { color: var(--ctlab-muted); font-family: var(--mono, monospace); font-size: 12px; }
 .ctlab__alert {
   border-left: 4px solid var(--ctlab-danger);
   background: rgba(248, 81, 73, .12);
@@ -134,6 +172,8 @@ const STYLE = `
 .ctlab__badge--NOT_FOUND { border-color: var(--ctlab-warn); color: var(--ctlab-warn); }
 .ctlab__badge--AMBIGUOUS { border-style: dashed; color: var(--ctlab-muted); }
 .ctlab__detail { border: 1px dashed var(--ctlab-line); border-radius: var(--radius, 6px); padding: 10px; margin-top: 10px; }
+.ctlab__error { color: var(--ctlab-danger); }
+.ctlab__row--selected > td { background: rgba(88, 166, 255, .10); }
 .ctlab__detail dt { font-weight: 700; margin-top: 6px; }
 .ctlab__detail dd { margin: 0; color: var(--ctlab-text); }
 .ctlab__excerpt {
@@ -193,7 +233,6 @@ const STYLE = `
   margin-bottom: 12px;
 }
 .ctlab__drop.is-over { border-color: var(--ctlab-info); background: rgba(88, 166, 255, .08); }
-.ctlab__drop--busy { border-style: solid; }
 .ctlab__drop .ctlab__hint { margin: 6px 0 10px; }
 .ctlab__progress {
   height: 6px;
@@ -204,17 +243,6 @@ const STYLE = `
   max-width: 420px;
 }
 .ctlab__progress span { display: block; height: 100%; background: var(--ctlab-info); transition: width .2s; }
-/* Lien d'approfondissement, à la couleur d'accent de l'application. */
-.ctlab__more {
-  background: none;
-  border: 0;
-  padding: 0;
-  font: inherit;
-  color: var(--ctlab-info);
-  cursor: pointer;
-  text-decoration: none;
-}
-.ctlab__more:hover { text-decoration: underline; }
 .ctlab__badge--OPEN { border-color: var(--ctlab-warn); color: var(--ctlab-warn); }
 .ctlab__badge--NO_NEWS { border-color: var(--ctlab-danger); color: var(--ctlab-danger); }
 .ctlab__badge--RESOLVED { border-color: var(--ctlab-ok); color: var(--ctlab-ok); }
@@ -322,18 +350,15 @@ function formatConfidence(value) {
  * contrôle produit cent vingt livrables, et l'ordre de chargement ne peut plus
  * servir d'ordre chronologique. Celui-ci est reconstruit depuis les documents.
  */
+function renderProgressBar(done, total) {
+  const percent = total === 0 ? 0 : Math.round((done / total) * 100);
+  return `<div class="ctlab__progress"><span style="width:${percent}%"></span></div>`;
+}
+
 function renderDropZone(state) {
-  if (state.loading) {
-    const { done, total, current } = state.loading;
-    const percent = total === 0 ? 0 : Math.round((done / total) * 100);
-    return `
-      <div class="ctlab__drop ctlab__drop--busy">
-        <b>Lecture ${done} / ${total}</b>
-        <div class="ctlab__progress"><span style="width:${percent}%"></span></div>
-        <div class="ctlab__hint">${escapeHtml(current ?? "")}</div>
-      </div>
-    `;
-  }
+  // Pendant un chargement ou une analyse, la zone s'efface : c'est le
+  // déroulé du travail qui occupe la place.
+  if (state.loading || state.running) return "";
 
   return `
     <div class="ctlab__drop" data-ctlab-drop>
@@ -342,7 +367,11 @@ function renderDropZone(state) {
         Autant de fichiers que nécessaire, dans n'importe quel ordre.
         Un second lot peut être ajouté plus tard : l'analyse est recalculée.
       </div>
-      <button type="button" class="ctlab__btn" data-ctlab-pick>Choisir des fichiers…</button>
+      <div class="ctlab__hint">
+        Les PDF sont lus <b>dans ce navigateur</b> : rien n'est envoyé, rien n'est enregistré,
+        aucun sujet Mdall n'est créé ni modifié. Fermer l'onglet efface tout.
+      </div>
+      <button type="button" class="gh-btn gh-btn--sm" data-ctlab-pick>Choisir des fichiers…</button>
     </div>
   `;
 }
@@ -369,8 +398,8 @@ function renderDocumentList(state) {
           <td>${meta?.issued_at ?? `<span class="ctlab__empty">date inconnue</span>`}</td>
           <td>${escapeHtml(meta?.document_type_label ?? "—")}</td>
           <td>${escapeHtml(truncate(report.filename, 60))}</td>
-          <td>${failed ? `<span class="ctlab__slot-state--error">${escapeHtml(report.error)}</span>` : `${report.pageCount} p.`}</td>
-          <td><button type="button" class="ctlab__btn" data-ctlab-remove="${escapeHtml(report.sourceId)}">Retirer</button></td>
+          <td>${failed ? `<span class="ctlab__error">${escapeHtml(report.error)}</span>` : `${report.pageCount} p.`}</td>
+          <td><button type="button" class="gh-btn gh-btn--sm" data-ctlab-remove="${escapeHtml(report.sourceId)}">Retirer</button></td>
         </tr>
       `;
     })
@@ -501,9 +530,14 @@ function renderStatusView(state) {
   const rows = avisStatus
     .map((summary) => {
       const months = summary.age_days === null ? null : Math.round(summary.age_days / 30);
+      const selected = state.selectedReference === summary.reference;
       return `
-        <tr>
-          <td><b>${escapeHtml(summary.reference)}</b></td>
+        <tr class="${selected ? "ctlab__row--selected" : ""}">
+          <td>
+            <button type="button" class="ctlab__link" data-ctlab-trace="${escapeHtml(summary.reference)}">
+              <b>${escapeHtml(summary.reference)}</b>
+            </button>
+          </td>
           <td><span class="ctlab__badge ctlab__badge--${escapeHtml(summary.status)}">${escapeHtml(STATUS_LABELS[summary.status])}</span></td>
           <td>${escapeHtml(RESOLUTION_LABELS[summary.resolution_reason] ?? "")}</td>
           <td>${escapeHtml(summary.raised_at ?? "?")}</td>
@@ -516,15 +550,12 @@ function renderStatusView(state) {
     .join("");
 
   return `
-    <div class="ctlab__actions">
-      <label class="ctlab__inline">
-        État arrêté au
-        <input type="date" data-ctlab-as-of value="${escapeHtml(state.asOf)}">
-      </label>
-      ${state.asOf ? `<button type="button" class="ctlab__btn" data-ctlab-as-of-clear>Revenir à aujourd'hui</button>` : ""}
+    <div class="ctlab__toolbar">
       <span class="ctlab__hint">${chronology.ordered_source_ids.length} document(s) retenu(s)${
         chronology.excluded_by_date > 0 ? `, ${chronology.excluded_by_date} écarté(s) car postérieur(s)` : ""
       }</span>
+      <span class="ctlab__spacer"></span>
+      ${renderTimeTravelControl(state)}
     </div>
     <div class="ctlab__kpis">
       <div class="ctlab__kpi"><b>${statusCounts.OPEN}</b><span>ouverts</span></div>
@@ -540,6 +571,58 @@ function renderStatusView(state) {
         </thead>
         <tbody>${rows}</tbody>
       </table>
+    </div>
+  `;
+}
+
+/**
+ * « Que savait-on à telle date ? »
+ *
+ * Ce mode a été subi avant d'être voulu : une date saisie au passage avait
+ * arrêté toute une analyse au 13/05/2026 sans que rien ne le dise autrement
+ * qu'en gris. Il s'active donc explicitement, et tant qu'il est actif un
+ * bandeau le rappelle en haut de page.
+ */
+function renderTimeTravelControl(state) {
+  if (!state.timeTravel) {
+    return `<button type="button" class="ctlab__link" data-ctlab-time-travel="on">Remonter le temps…</button>`;
+  }
+
+  const selectedDate = parseSharedDateInputValue(state.asOf);
+  const view = state.asOfView ?? currentCalendarView(selectedDate);
+
+  return `
+    <span class="ctlab__hint">État arrêté au</span>
+    ${renderSharedDatePicker({
+      idBase: "ctlabAsOf",
+      value: state.asOf,
+      selectedDate,
+      viewYear: view.year,
+      viewMonth: view.month,
+      isOpen: state.asOfPickerOpen === true,
+      placeholder: "Choisir une date",
+      inputLabel: formatSharedDateInputValue(selectedDate) || "Choisir une date",
+      calendarLabel: "Date à laquelle arrêter l'état des avis"
+    })}
+    <button type="button" class="ctlab__link" data-ctlab-time-travel="off">Revenir à aujourd'hui</button>
+  `;
+}
+
+function currentCalendarView(date) {
+  const base = date instanceof Date && !Number.isNaN(date.getTime()) ? date : new Date();
+  return { year: base.getFullYear(), month: base.getMonth() };
+}
+
+/** Tant qu'une date est active, la page entière doit le dire. */
+function renderTimeTravelBanner(state) {
+  if (!state.result || !state.result.chronology?.as_of) return "";
+
+  const excluded = state.result.chronology.excluded_by_date;
+  return `
+    <div class="ctlab__alert ctlab__alert--attention">
+      <b>État arrêté au ${escapeHtml(state.result.chronology.as_of)}.</b>
+      ${excluded > 0 ? `${excluded} document(s) postérieur(s) sont écartés de toute l'analyse.` : "Aucun document n'est postérieur à cette date."}
+      <button type="button" class="ctlab__link" data-ctlab-time-travel="off">Revenir à aujourd'hui</button>
     </div>
   `;
 }
@@ -651,37 +734,6 @@ function renderCell(cell) {
       ${body}
       ${change && state !== "NOT_FOUND" ? `<div class="ctlab__change">${escapeHtml(CHANGE_LABELS[change] ?? change)}</div>` : ""}
     </button>
-  `;
-}
-
-function renderTimeline(result) {
-  if (result.timeline.length === 0) {
-    return `<p class="ctlab__empty">Aucun avis reconnu dans les rapports chargés.</p>`;
-  }
-
-  const header = result.sources
-    .map((source) => `<th>${escapeHtml(source.metadata?.filename ?? source.source_id)}</th>`)
-    .join("");
-
-  const rows = result.timeline
-    .map(
-      (row) => `
-        <tr>
-          <th title="${escapeHtml(row.reference)}">${escapeHtml(row.referenceRaw ?? row.reference)}</th>
-          ${row.cells.map((cell) => `<td>${renderCell(cell)}</td>`).join("")}
-        </tr>
-      `
-    )
-    .join("");
-
-  return `
-    <div class="ctlab__scroll">
-      <table class="ctlab__grid">
-        <thead><tr><th>Référence</th>${header}</tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>
-    <div data-ctlab-detail></div>
   `;
 }
 
@@ -858,7 +910,7 @@ function renderExtractedText(state) {
                 .join("")}
             </div>
             <div class="ctlab__actions">
-              <button type="button" class="ctlab__btn" data-ctlab-export-text="${escapeHtml(report.sourceId)}">
+              <button type="button" class="gh-btn gh-btn--sm" data-ctlab-export-text="${escapeHtml(report.sourceId)}">
                 Exporter ce texte (TXT)
               </button>
             </div>
@@ -895,8 +947,8 @@ function renderPatternEditor(state) {
       <textarea class="ctlab__textarea" data-ctlab-lexicon spellcheck="false">${escapeHtml(state.lexiconText)}</textarea>
     </label>
     <div class="ctlab__actions">
-      <button type="button" class="ctlab__btn" data-ctlab-apply-patterns>Appliquer et réanalyser</button>
-      <button type="button" class="ctlab__btn" data-ctlab-reset-patterns>Revenir aux motifs par défaut</button>
+      <button type="button" class="gh-btn gh-btn--sm gh-btn--primary" data-ctlab-apply-patterns>Appliquer et réanalyser</button>
+      <button type="button" class="gh-btn gh-btn--sm" data-ctlab-reset-patterns>Revenir aux motifs par défaut</button>
     </div>
   `;
 }
@@ -923,7 +975,14 @@ function renderAvisTable(state) {
 
   const codes = state.result.indicators.byOpinion;
 
-  const rows = filtered
+  // Deux mille six cent quatre-vingt-huit lignes d'un coup figent la page :
+  // on n'en construit qu'une page à la fois.
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const page = Math.min(state.avisPage, pageCount);
+  const start = (page - 1) * PAGE_SIZE;
+  const visible = filtered.slice(start, start + PAGE_SIZE);
+
+  const rows = visible
     .map((avis) => {
       const code = avis.value?.opinion_raw ?? avis.opinion_raw ?? "?";
       const reference = avis.value?.external_reference_raw;
@@ -943,6 +1002,7 @@ function renderAvisTable(state) {
     .join("");
 
   return `
+    <h3>Tous les avis identifiés</h3>
     <p class="ctlab__hint">
       ${all.length} avis lus, dont <b>${state.result.indicators.numberedCount}</b> portant un numéro —
       seuls ceux-là peuvent être suivis d'un rapport à l'autre. Les autres sont listés ici, sans identité
@@ -982,7 +1042,7 @@ function renderAvisTable(state) {
         <input type="checkbox" data-ctlab-filter-numbered ${filter.numberedOnly ? "checked" : ""}>
         numérotés seulement
       </label>
-      <span class="ctlab__hint">${filtered.length} affiché(s)</span>
+      <span class="ctlab__hint">${filtered.length} retenu(s)</span>
     </div>
     <div class="ctlab__scroll">
       <table class="ctlab__grid">
@@ -992,54 +1052,81 @@ function renderAvisTable(state) {
         <tbody>${rows}</tbody>
       </table>
     </div>
+    ${renderPager(page, pageCount, start + visible.length, filtered.length)}
   `;
 }
 
+function renderPager(page, pageCount, shown, total) {
+  if (total === 0) return `<p class="ctlab__empty">Aucun avis ne correspond à ce filtre.</p>`;
+  if (pageCount === 1) return "";
+
+  return `
+    <div class="ctlab__actions">
+      <button type="button" class="gh-btn gh-btn--sm" data-ctlab-page="${page - 1}" ${page <= 1 ? "disabled" : ""}>Précédents</button>
+      <span class="ctlab__hint">${shown} / ${total} — page ${page} sur ${pageCount}</span>
+      <button type="button" class="gh-btn gh-btn--sm" data-ctlab-page="${page + 1}" ${page >= pageCount ? "disabled" : ""}>Suivants</button>
+    </div>
+  `;
+}
+
+/**
+ * Un onglet à la fois.
+ *
+ * Sur un chantier réel, un seul écran contenait 206 avis suivis, 118 colonnes,
+ * 2 688 lignes et 175 suggestions : cent mille nœuds, illisibles et trop lourds
+ * pour le navigateur. Chaque section vit maintenant dans son onglet, et n'est
+ * construite que si on l'ouvre.
+ */
 function renderResults(state) {
   if (state.error) {
     return `<div class="ctlab__section"><div class="ctlab__alert">${escapeHtml(state.error)}</div></div>`;
   }
-  if (state.running) {
-    return `<div class="ctlab__section"><p>Analyse en cours…</p></div>`;
-  }
+  if (state.running || state.loading) return "";
   if (!state.result) {
     return `<div class="ctlab__section"><p class="ctlab__empty">Déposer des documents, puis lancer l'analyse.</p></div>`;
   }
 
+  switch (state.activeTab) {
+    case "documents":
+      return `
+        <div class="ctlab__section">
+          <h3>Chronologie et complétude du lot</h3>
+          ${renderChronology(state)}
+        </div>
+        <div class="ctlab__section">
+          <h3>Documents chargés</h3>
+          ${renderDocumentList(state)}
+        </div>
+      `;
+    case "avis":
+      return `<div class="ctlab__section">${renderAvisTable(state)}</div>`;
+    case "evidence":
+      return `
+        ${renderClearances(state)}
+        <div class="ctlab__section">
+          <h3>Levées déclarées dans les documents</h3>
+          ${renderLiftings(state)}
+        </div>
+        <div class="ctlab__section">
+          <h3>Désaccords d'identité</h3>
+          ${renderDisagreements(state)}
+        </div>
+      `;
+    case "technical":
+      return `${renderDetails(state)}${renderExports()}`;
+    case "state":
+    default:
+      return `
+        <div class="ctlab__section">
+          ${renderStatusView(state)}
+        </div>
+        ${renderAvisTrace(state)}
+      `;
+  }
+}
+
+function renderExports() {
   return `
-    <div class="ctlab__section">
-      <h3>Où en est-on ?</h3>
-      ${renderStatusView(state)}
-    </div>
-
-    <div class="ctlab__section">
-      <h3>Chronologie et complétude du lot</h3>
-      ${renderChronology(state)}
-    </div>
-
-    <div class="ctlab__section">
-      <h3>Tous les avis identifiés</h3>
-      ${renderAvisTable(state)}
-    </div>
-
-    <div class="ctlab__section">
-      <h3>Suivi des avis numérotés</h3>
-      <p class="ctlab__hint">Une ligne par référence, une colonne par document, dans l'ordre chronologique. Cliquer une case pour voir sa provenance.</p>
-      ${renderTimeline(state.result)}
-    </div>
-
-    <div class="ctlab__section">
-      <h3>Levées déclarées dans les documents</h3>
-      ${renderLiftings(state)}
-    </div>
-
-    <div class="ctlab__section">
-      <button type="button" class="ctlab__more" data-ctlab-toggle-details>
-        ${state.showDetails ? "Masquer les détails techniques" : "Afficher plus de détail"}
-      </button>
-      ${state.showDetails ? renderDetails(state) : ""}
-    </div>
-
     <div class="ctlab__section">
       <h3>Exports</h3>
       <p class="ctlab__hint">
@@ -1048,12 +1135,118 @@ function renderResults(state) {
         rapports : à ne transmettre qu'à qui a le droit de les lire.
       </p>
       <div class="ctlab__actions">
-        <button type="button" class="ctlab__btn ctlab__btn--go" data-ctlab-export="all">Exporter tout (JSON)</button>
-        <button type="button" class="ctlab__btn" data-ctlab-export="avis-csv">Tableau des avis (CSV)</button>
-        <button type="button" class="ctlab__btn" data-ctlab-export="status-csv">État des avis (CSV)</button>
-        <button type="button" class="ctlab__btn" data-ctlab-export="case">Exporter le cas (JSON)</button>
-        <button type="button" class="ctlab__btn" data-ctlab-export="report">Rapport (Markdown)</button>
+        <button type="button" class="gh-btn gh-btn--sm gh-btn--primary" data-ctlab-export="all">Exporter tout (JSON)</button>
+        <button type="button" class="gh-btn gh-btn--sm" data-ctlab-export="avis-csv">Tableau des avis (CSV)</button>
+        <button type="button" class="gh-btn gh-btn--sm" data-ctlab-export="status-csv">État des avis (CSV)</button>
+        <button type="button" class="gh-btn gh-btn--sm" data-ctlab-export="case">Exporter le cas (JSON)</button>
+        <button type="button" class="gh-btn gh-btn--sm" data-ctlab-export="report">Rapport (Markdown)</button>
       </div>
+    </div>
+  `;
+}
+
+/**
+ * La vie d'un avis, un avis à la fois.
+ *
+ * La matrice complète — une ligne par avis, une colonne par document — comptait
+ * 24 308 cases sur le corpus réel. Personne ne lit ça. On sélectionne un avis
+ * dans le tableau d'état et on suit son parcours document par document.
+ */
+function renderAvisTrace(state) {
+  const reference = state.selectedReference;
+  if (!reference) return "";
+
+  const row = state.result.timeline.find((entry) => entry.reference === reference);
+  if (!row) return "";
+
+  const summary = state.result.avisStatus.find((entry) => entry.reference === reference) ?? null;
+  const steps = row.cells
+    .map((cell, index) => ({ cell, document: state.result.sources[index] }))
+    .filter(({ cell }) => cell.continuity || cell.extraction);
+
+  return `
+    <div class="ctlab__section">
+      <h3>Avis n° ${escapeHtml(reference)} — son parcours</h3>
+      ${summary ? `<p class="ctlab__hint">Soulevé dans ${escapeHtml(documentLabel(summary.raised_in))} le ${escapeHtml(summary.raised_at ?? "?")}.</p>` : ""}
+      <div class="ctlab__scroll">
+        <table class="ctlab__grid">
+          <thead><tr><th>Émis le</th><th>Document</th><th>Ce que dit ce document</th></tr></thead>
+          <tbody>
+            ${steps
+              .map(
+                ({ cell, document }) => `
+                  <tr>
+                    <td>${escapeHtml(document?.issued_at ?? "—")}</td>
+                    <td>${escapeHtml(documentLabel(cell.documentId))}</td>
+                    <td>${renderCell(cell)}</td>
+                  </tr>
+                `
+              )
+              .join("")}
+          </tbody>
+        </table>
+      </div>
+      <div data-ctlab-detail></div>
+    </div>
+  `;
+}
+
+/** Les clôtures globales : une phrase qui vaut pour tout le dossier. */
+function renderClearances(state) {
+  const clearances = state.result.globalClearances ?? [];
+  if (clearances.length === 0) return "";
+
+  return `
+    <div class="ctlab__section">
+      <h3>Clôture générale déclarée</h3>
+      <p class="ctlab__hint">
+        Un rapport final peut clore l'ensemble du dossier d'une seule phrase. C'est la preuve la plus
+        forte du lot : tous les avis qui la précèdent sont réputés suivis d'effet, à la date de ce rapport.
+      </p>
+      ${clearances
+        .map(
+          (clearance) => `
+            <div class="ctlab__alert ctlab__alert--info">
+              <b>${escapeHtml(documentLabel(clearance.source_document_id))}</b>, page ${clearance.source_page ?? "?"} —
+              « ${escapeHtml(clearance.sentence)} »
+            </div>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+/** Deux identités qui se contredisent : à trancher par un humain. */
+function renderDisagreements(state) {
+  const disagreements = state.result.identityDisagreements ?? [];
+  if (disagreements.length === 0) {
+    return `<p class="ctlab__empty">Aucun désaccord entre le numéro et l'intitulé.</p>`;
+  }
+
+  return `
+    <p class="ctlab__hint">
+      Le même intitulé porte deux numéros différents d'un document à l'autre. Aucun rapprochement n'a été
+      retenu : deviner lequel est le bon reviendrait à inventer une identité.
+    </p>
+    <div class="ctlab__scroll">
+      <table class="ctlab__grid">
+        <thead><tr><th>N°</th><th>Autre n°</th><th>Document</th><th>Intitulé</th></tr></thead>
+        <tbody>
+          ${disagreements
+            .map(
+              (entry) => `
+                <tr>
+                  <td>${escapeHtml(entry.reference)}</td>
+                  <td>${escapeHtml(entry.other_reference)}</td>
+                  <td>${escapeHtml(documentLabel(entry.document_id))}</td>
+                  <td>${escapeHtml(truncate(entry.title ?? "", 120))}</td>
+                </tr>
+              `
+            )
+            .join("")}
+        </tbody>
+      </table>
     </div>
   `;
 }
@@ -1087,38 +1280,109 @@ function renderDetails(state) {
   `;
 }
 
-function render(root, state) {
-  const loaded = state.reports.filter((report) => !report.error).length;
+/**
+ * Le travail en cours, écrit ligne à ligne.
+ *
+ * Cent dix-neuf PDF, ça prend du temps ; un écran immobile pendant ce temps-là
+ * ne se distingue pas d'une page plantée. Chaque étape franchie reste
+ * affichée : on voit ce qui a été fait, pas seulement qu'on attend.
+ */
+function renderProgress(state) {
+  const { loading, running, stages } = state;
+  if (!loading && !running) return "";
 
+  const lines = stages.map((stage, index) => {
+    const isLast = index === stages.length - 1;
+    return `
+      <li class="ctlab__stage ${isLast ? "ctlab__stage--current" : "ctlab__stage--done"}">
+        <span class="ctlab__stage-mark" aria-hidden="true">${isLast ? `<span class="ctlab__spinner"></span>` : "✓"}</span>
+        <span>${escapeHtml(stage.label)}</span>
+        ${stage.detail ? `<span class="ctlab__stage-detail">${escapeHtml(stage.detail)}</span>` : ""}
+      </li>
+    `;
+  });
+
+  const title = loading
+    ? `Lecture des documents — ${loading.done}/${loading.total}`
+    : "Analyse en cours";
+
+  return `
+    <div class="ctlab__section" role="status" aria-live="polite">
+      <h3>${escapeHtml(title)}</h3>
+      ${loading ? renderProgressBar(loading.done, loading.total) : ""}
+      <ul class="ctlab__stages">${lines.join("")}</ul>
+    </div>
+  `;
+}
+
+/** L'en-tête d'utilitaire de l'Atelier : titre à gauche, actions à droite. */
+function renderHeader(state) {
+  const loaded = state.reports.filter((report) => !report.error).length;
+  const busy = Boolean(state.running || state.loading);
+
+  return `
+    <div class="settings-card__head studio-tool-card__head">
+      <div>
+        <span class="settings-card__head-title">
+          <h4>Suivi des avis du Bureau de Contrôle</h4>
+          <div class="studio-tool-card__actions">
+            ${renderGhActionButton({
+              id: "ctlabReset",
+              label: "Tout réinitialiser",
+              tone: "default",
+              size: "md",
+              disabled: state.reports.length === 0 || busy,
+              mainAction: ""
+            })}
+            ${renderGhActionButton({
+              id: "ctlabRun",
+              label: `${state.result ? "Recalculer" : "Analyser"} ${loaded} document${loaded > 1 ? "s" : ""}`,
+              tone: "primary",
+              size: "md",
+              disabled: loaded === 0 || busy,
+              mainAction: ""
+            })}
+          </div>
+        </span>
+      </div>
+    </div>
+  `;
+}
+
+function render(root, state) {
   DOCUMENT_LABELS = new Map(
     state.reports.map((report) => [report.sourceId, report.filename ?? report.sourceId])
   );
 
+  const tabs = TABS.map((tab) => ({ ...tab, label: tabLabel(tab, state) }));
+
   root.innerHTML = `
     <style>${STYLE}</style>
-    <div class="ctlab">
-      <h2>CT Continuity Lab</h2>
-      <div class="ctlab__banner">
-        Suivi et historisation des avis d'un bureau de contrôle. Les PDF sont lus <b>dans ce navigateur</b> :
-        rien n'est envoyé, rien n'est enregistré, aucun sujet Mdall n'est créé ni modifié.
-        Fermer l'onglet efface tout.
-      </div>
-
-      <div class="ctlab__section">
-        <h3>Documents</h3>
-        ${renderDropZone(state)}
-        ${renderDocumentList(state)}
-        <div class="ctlab__actions">
-          <button type="button" class="ctlab__btn ctlab__btn--go" data-ctlab-run ${loaded === 0 || state.running || state.loading ? "disabled" : ""}>
-            ${state.result ? "Recalculer" : "Analyser"} ${loaded} document(s)
-          </button>
-          <button type="button" class="ctlab__btn" data-ctlab-reset>Tout réinitialiser</button>
+    <section class="settings-section is-active ctlab">
+      <div class="settings-card settings-card--param studio-tool-card">
+        ${renderHeader(state)}
+        <div class="settings-card__body studio-tool-card__body">
+          ${renderTimeTravelBanner(state)}
+          ${renderDropZone(state)}
+          ${renderProgress(state)}
+          ${state.result ? renderLightTabs({ tabs, activeTabId: state.activeTab, ariaLabel: "Sections du suivi" }) : ""}
+          <div data-ctlab-results>${renderResults(state)}</div>
         </div>
       </div>
-
-      <div data-ctlab-results>${renderResults(state)}</div>
-    </div>
+    </section>
   `;
+}
+
+/** Un onglet porte son effectif : on sait ce qu'il y a derrière avant d'y aller. */
+export function tabLabel(tab, state) {
+  const result = state.result;
+  if (!result) return tab.label;
+  const counts = {
+    documents: result.chronology?.ordered_source_ids?.length ?? 0,
+    avis: collectAvis(result.predictions).length,
+    evidence: (result.liftingStatements?.length ?? 0) + (result.globalClearances?.length ?? 0)
+  };
+  return counts[tab.id] === undefined ? tab.label : `${tab.label} (${counts[tab.id]})`;
 }
 
 export function renderCtContinuityLab(root) {
@@ -1129,10 +1393,18 @@ export function renderCtContinuityLab(root) {
     result: null,
     running: false,
     loading: null,
+    /** Étapes franchies, la dernière étant celle en cours. */
+    stages: [],
     error: null,
+    activeTab: "state",
     selectedCell: null,
-    showDetails: false,
+    selectedReference: null,
+    avisPage: 1,
+    /** La remontée dans le temps s'active à la demande, jamais par accident. */
+    timeTravel: false,
     asOf: "",
+    asOfView: null,
+    asOfPickerOpen: false,
     avisFilter: { code: "", documentId: "", numberedOnly: false },
     patternText: DEFAULT_PATTERN_TEXT,
     lexiconText: DEFAULT_LEXICON_TEXT,
@@ -1178,15 +1450,34 @@ export function renderCtContinuityLab(root) {
    * doivent pas figer la page pendant plusieurs minutes. */
   const yieldToBrowser = () => new Promise((resolve) => setTimeout(resolve, 0));
 
+  /** Une étape de plus dans le déroulé affiché. */
+  const pushStage = (label, detail = null) => {
+    state.stages = [...state.stages, { label, detail }];
+  };
+
   const addFiles = async (fileList) => {
     const files = [...fileList].filter((file) => /\.pdf$/i.test(file.name) || file.type === "application/pdf");
     if (files.length === 0) return;
 
+    // Le résultat précédent est retiré avant la boucle, pas après : le
+    // reconstruire à chaque fichier chargé, c'est cent dix-neuf fois
+    // vingt-quatre mille cellules, et la page se fige.
+    state.result = null;
+    state.selectedReference = null;
+    state.selectedCell = null;
+    state.stages = [];
     state.loading = { done: 0, total: files.length, current: null };
+    pushStage(`Ouverture de ${files.length} fichier(s)`);
     refresh();
+
+    let added = 0;
+    let skipped = 0;
 
     for (const file of files) {
       state.loading.current = file.name;
+      // La dernière étape porte le fichier en cours : le déroulé avance sans
+      // s'allonger d'une ligne par PDF.
+      state.stages[state.stages.length - 1].detail = file.name;
       refresh();
       await yieldToBrowser();
 
@@ -1196,7 +1487,9 @@ export function renderCtContinuityLab(root) {
         (report) => report.filename === file.name && report.sizeBytes === file.size
       );
 
-      if (!already) {
+      if (already) {
+        skipped += 1;
+      } else {
         const sourceId = `doc-${nextDocumentNumber}`;
         nextDocumentNumber += 1;
         try {
@@ -1205,16 +1498,68 @@ export function renderCtContinuityLab(root) {
         } catch (error) {
           state.reports.push({ sourceId, filename: file.name, sizeBytes: file.size, pageCount: 0, pages: [], error: error.message });
         }
+        added += 1;
       }
 
       state.loading.done += 1;
       refresh();
     }
 
+    state.stages[state.stages.length - 1].detail =
+      `${added} ajouté(s)${skipped > 0 ? `, ${skipped} déjà présent(s)` : ""}`;
     state.loading = null;
-    // Un nouveau lot invalide le résultat précédent : il faut recalculer.
-    state.result = null;
     refresh();
+  };
+
+  const resetAll = () => {
+    state.reports = [];
+    state.result = null;
+    state.selectedCell = null;
+    state.selectedReference = null;
+    state.error = null;
+    state.stages = [];
+    state.timeTravel = false;
+    state.asOf = "";
+    state.asOfPickerOpen = false;
+    state.avisPage = 1;
+    state.activeTab = "state";
+    refresh();
+  };
+
+  /**
+   * Le sélecteur de date partagé publie ses propres attributs — déclencheur,
+   * navigation de mois, jour choisi. On les traite ici plutôt que de recopier
+   * un champ date maison.
+   */
+  const handleDatePickerClick = (event) => {
+    const trigger = event.target.closest("[data-shared-date-input-trigger='ctlabAsOf']");
+    if (trigger) {
+      state.asOfPickerOpen = !state.asOfPickerOpen;
+      state.asOfView = state.asOfView ?? currentCalendarView(parseSharedDateInputValue(state.asOf));
+      refresh();
+      return true;
+    }
+
+    const nav = event.target.closest("[data-shared-date-nav^='ctlabAsOf']");
+    if (nav) {
+      const delta = nav.getAttribute("data-shared-date-nav").endsWith("next") ? 1 : -1;
+      const view = state.asOfView ?? currentCalendarView(parseSharedDateInputValue(state.asOf));
+      state.asOfView = shiftSharedCalendarMonth(view.year, view.month, delta);
+      refresh();
+      return true;
+    }
+
+    const day = event.target.closest("[data-shared-date-owner='ctlabAsOf'][data-shared-date-day]");
+    if (day) {
+      state.asOf = day.getAttribute("data-shared-date-day");
+      state.asOfPickerOpen = false;
+      state.asOfView = currentCalendarView(parseSharedDateInputValue(state.asOf));
+      captureEditors();
+      runAnalysis();
+      return true;
+    }
+
+    return false;
   };
 
   const runAnalysis = async () => {
@@ -1225,18 +1570,42 @@ export function renderCtContinuityLab(root) {
     state.patternErrors = errors;
     state.running = true;
     state.error = null;
+    state.result = null;
     state.selectedCell = null;
+    state.selectedReference = null;
+    state.avisPage = 1;
+    state.stages = [];
     refresh();
+
+    // Le moteur annonce chaque étape ; on la montre, et on rend la main au
+    // navigateur pour qu'il ait le temps de la dessiner.
+    let lastStage = null;
+    const onProgress = async ({ stage, done, total, label }) => {
+      const heading = STAGE_LABELS[stage] ?? stage;
+      if (stage !== lastStage) {
+        lastStage = stage;
+        pushStage(heading);
+      }
+      const current = state.stages[state.stages.length - 1];
+      current.detail = total ? `${done}/${total}${label ? ` — ${label}` : ""}` : label ?? "";
+      refresh();
+      await yieldToBrowser();
+    };
 
     try {
       state.result = await runCtLab(reports, {
-        params: { ...params, chronology: state.asOf ? { asOf: state.asOf } : {} }
+        onProgress,
+        params: {
+          ...params,
+          chronology: state.timeTravel && state.asOf ? { asOf: state.asOf } : {}
+        }
       });
     } catch (error) {
       state.result = null;
       state.error = error.message;
     }
     state.running = false;
+    state.stages = [];
     refresh();
   };
 
@@ -1271,40 +1640,77 @@ export function renderCtContinuityLab(root) {
     if (target.dataset?.ctlabFilterCode !== undefined) state.avisFilter.code = target.value;
     else if (target.dataset?.ctlabFilterDocument !== undefined) state.avisFilter.documentId = target.value;
     else if (target.dataset?.ctlabFilterNumbered !== undefined) state.avisFilter.numberedOnly = target.checked;
-    else if (target.dataset?.ctlabAsOf !== undefined) {
-      state.asOf = target.value;
-      captureEditors();
-      runAnalysis();
-      return;
-    } else return;
+    else return;
 
     captureEditors();
     refresh();
   });
 
   root.addEventListener("click", async (event) => {
+    // Les onglets et le sélecteur de date sont des composants de l'application :
+    // ils arrivent avec leurs propres attributs, traités avant les nôtres.
+    const tab = event.target.closest("[data-light-tab-target]");
+    if (tab) {
+      captureEditors();
+      state.activeTab = tab.getAttribute("data-light-tab-target");
+      state.avisPage = 1;
+      state.asOfPickerOpen = false;
+      refresh();
+      return;
+    }
+
+    if (handleDatePickerClick(event)) return;
+
     const target = event.target.closest(
-      "[data-ctlab-pick], [data-ctlab-remove], [data-ctlab-run], [data-ctlab-reset], [data-ctlab-cell], " +
+      "[data-ctlab-pick], [data-ctlab-remove], [data-ctlab-cell], [data-ctlab-trace], [data-ctlab-page], " +
         "[data-ctlab-export], [data-ctlab-export-text], [data-ctlab-apply-patterns], [data-ctlab-reset-patterns], " +
-        "[data-ctlab-toggle-details], [data-ctlab-as-of-clear]"
+        "[data-ctlab-time-travel], [data-action-id='ctlabRun'], [data-action-id='ctlabReset']"
     );
     if (!target) return;
+
+    if (target.dataset.actionId === "ctlabRun") {
+      captureEditors();
+      await runAnalysis();
+      return;
+    }
+
+    if (target.dataset.actionId === "ctlabReset") {
+      resetAll();
+      return;
+    }
 
     if (target.dataset.ctlabPick !== undefined) {
       input.click();
       return;
     }
 
-    if (target.dataset.ctlabToggleDetails !== undefined) {
+    if (target.dataset.ctlabTimeTravel !== undefined) {
       captureEditors();
-      state.showDetails = !state.showDetails;
+      const turningOn = target.dataset.ctlabTimeTravel === "on";
+      state.timeTravel = turningOn;
+      state.asOfPickerOpen = turningOn;
+      if (!turningOn && state.asOf) {
+        state.asOf = "";
+        await runAnalysis();
+        return;
+      }
+      state.asOf = turningOn ? state.asOf : "";
       refresh();
       return;
     }
 
-    if (target.dataset.ctlabAsOfClear !== undefined) {
-      state.asOf = "";
-      await runAnalysis();
+    if (target.dataset.ctlabTrace !== undefined) {
+      state.selectedReference =
+        state.selectedReference === target.dataset.ctlabTrace ? null : target.dataset.ctlabTrace;
+      state.selectedCell = null;
+      refresh();
+      return;
+    }
+
+    if (target.dataset.ctlabPage !== undefined) {
+      captureEditors();
+      state.avisPage = Number(target.dataset.ctlabPage);
+      refresh();
       return;
     }
 
@@ -1312,16 +1718,7 @@ export function renderCtContinuityLab(root) {
       state.reports = state.reports.filter((report) => report.sourceId !== target.dataset.ctlabRemove);
       state.result = null;
       state.selectedCell = null;
-      refresh();
-      return;
-    }
-
-    if (target.dataset.ctlabReset !== undefined) {
-      state.reports = [];
-      state.result = null;
-      state.selectedCell = null;
-      state.error = null;
-      state.asOf = "";
+      state.selectedReference = null;
       refresh();
       return;
     }
@@ -1380,10 +1777,6 @@ export function renderCtContinuityLab(root) {
       return;
     }
 
-    if (target.dataset.ctlabRun !== undefined) {
-      captureEditors();
-      await runAnalysis();
-    }
   });
 
   refresh();

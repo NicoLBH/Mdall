@@ -191,7 +191,7 @@ fonction Edge `supabase/functions/extract-pdf-text`.
 | Chemin | Où | Ce qu'il fait |
 | --- | --- | --- |
 | `pdf-adapter.mjs` | Node, pour la CLI et les tests | lit un fichier, rend les pages |
-| Atelier › Développements › CT Continuity Lab | navigateur | lit les PDF chargés à la main, sans rien envoyer |
+| Atelier › Développements › Suivi des avis BC | navigateur | lit les PDF chargés à la main, sans rien envoyer |
 
 Deux différences avec la fonction de production, et elles comptent :
 
@@ -209,7 +209,7 @@ un seul endroit — ici — et le laboratoire exécute exactement le code que
 
 ## Le laboratoire de l'Atelier
 
-`Atelier › Développements › CT Continuity Lab` sert à passer de vrais rapports
+`Atelier › Développements › Suivi des avis BC` sert à passer de vrais rapports
 sans écrire une ligne de ground truth au préalable :
 
 1. dix boutons « Ajouter rapport N », dans l'ordre chronologique ;

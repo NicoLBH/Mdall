@@ -9,7 +9,7 @@
  * `context` = { expected, predicted, outcomes, counts, sources, params }
  */
 
-import { containsPhrase } from "./normalize.mjs";
+import { containsNormalizedPhrase, normalizeTextKey } from "./normalize.mjs";
 import { isAbstentionByDefault } from "./metrics.mjs";
 
 function assertedPredictions(context) {
@@ -54,6 +54,15 @@ export const excerptMustExistInSource = {
   detect(context) {
     const issues = [];
     const bySourceId = new Map((context.sources ?? []).map((source) => [source.source_id, source]));
+    // Chaque document n'est normalisé qu'une fois, quel que soit le nombre
+    // d'extraits qui le citent.
+    const normalizedContent = new Map();
+    const contentOf = (source) => {
+      if (!normalizedContent.has(source.source_id)) {
+        normalizedContent.set(source.source_id, normalizeTextKey(source.content));
+      }
+      return normalizedContent.get(source.source_id);
+    };
 
     for (const prediction of assertedPredictions(context)) {
       const provenance = prediction.provenance;
@@ -66,7 +75,7 @@ export const excerptMustExistInSource = {
         continue;
       }
       if (!source.content_available) continue;
-      if (!containsPhrase(source.content, provenance.excerpt)) {
+      if (!containsNormalizedPhrase(contentOf(source), provenance.excerpt)) {
         issues.push({
           key,
           message: `extrait introuvable dans la source "${provenance.source_id}"`

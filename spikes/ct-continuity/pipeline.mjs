@@ -22,7 +22,7 @@ import {
 import { assessCompleteness } from "./completeness.mjs";
 import { orderChronologically } from "./document-meta.mjs";
 import { discoverLegend, mergeLegends } from "./legend.mjs";
-import { findLiftingStatements, indexStatements } from "./lifting.mjs";
+import { findGlobalClearances, findLiftingStatements, indexStatements } from "./lifting.mjs";
 
 export const STRATEGY = {
   /** Choisit `blocks` si le document déclare sa propre légende d'avis. */
@@ -221,7 +221,19 @@ export const ctContinuityPipeline = {
   description:
     "Extraction déterministe des avis d'un rapport de contrôle technique et reconstruction de leur continuité entre rapports successifs.",
 
-  async run({ sources: rawSources, params = {} }) {
+  /**
+   * @param {object} input
+   * @param {Function|null} input.onProgress appelé entre les étapes, et attendu :
+   *   un lot de cent vingt rapports bloque la page plusieurs secondes si
+   *   personne ne rend la main au navigateur. C'est aussi ce qui permet de
+   *   montrer le travail en cours plutôt qu'un écran figé.
+   */
+  async run({ sources: rawSources, params = {}, onProgress = null }) {
+    const report = onProgress
+      ? (stage, done = null, total = null, label = null) => onProgress({ stage, done, total, label })
+      : () => Promise.resolve();
+
+    await report("chronology");
     // L'ordre chronologique se lit dans les documents. Le déduire du nom de
     // fichier suffirait à tout fausser : « 10_… » précède « 2_… » dans un tri
     // alphabétique, et la continuité en dépend entièrement.
@@ -237,6 +249,7 @@ export const ctContinuityPipeline = {
       : chronology.ordered;
 
     const completeness = assessCompleteness(sources);
+    await report("completeness", sources.length, sources.length);
 
     const extractionParams = {
       patterns: params.extraction?.patterns ?? DEFAULT_REFERENCE_PATTERNS,
@@ -263,7 +276,11 @@ export const ctContinuityPipeline = {
           }
         : { codes: [] };
 
+    let readCount = 0;
     for (const source of sources) {
+      readCount += 1;
+      await report("extraction", readCount, sources.length, source.metadata?.filename ?? source.source_id);
+
       if (!source.content_available) {
         skippedSources.push(source.source_id);
         documents.push({ source, occurrences: [] });
@@ -297,7 +314,10 @@ export const ctContinuityPipeline = {
 
     // Déclarations explicites de levée : la preuve que le cadrage exige avant
     // de considérer qu'un avis a été suivi d'effet.
+    await report("lifting");
     const liftingStatements = sources.flatMap((source) => findLiftingStatements(source));
+    // Un rapport final peut clore l'ensemble du dossier d'une seule phrase.
+    const globalClearances = sources.flatMap((source) => findGlobalClearances(source));
     const liftingIndex = indexStatements(liftingStatements);
 
     for (const statement of liftingStatements) {
@@ -319,6 +339,7 @@ export const ctContinuityPipeline = {
       });
     }
 
+    await report("continuity");
     const { items: continuityItems, identityDisagreements } = buildContinuity(documents, {
       matchByTitle: params.continuity?.matchByTitle ?? true
     });
@@ -328,6 +349,8 @@ export const ctContinuityPipeline = {
       const evidence = liftingIndex.get(`${item.document_id}:${item.reference}`) ?? null;
       predictions.push(toContinuityPrediction({ ...item, lifting_statement: evidence?.[0] ?? null }));
     }
+
+    await report("notes");
 
     const notes = [
       `Stratégie de lecture : ${strategy}.`,
@@ -369,6 +392,7 @@ export const ctContinuityPipeline = {
       legends,
       identity_disagreements: identityDisagreements,
       lifting_statements: liftingStatements,
+      global_clearances: globalClearances,
       experimental_suggestions: [
         ...buildExperimentalSuggestions(continuityItems),
         ...liftingStatements.map((statement) => ({

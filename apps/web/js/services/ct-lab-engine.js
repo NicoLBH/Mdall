@@ -258,7 +258,10 @@ export function indicatorsAsMetrics(indicators) {
  * Exécute le moteur sur les rapports chargés.
  * `modules` est injectable pour que les tests utilisent directement `spikes/`.
  */
-export async function runCtLab(reports, { modules = null, now = () => new Date(), params = {} } = {}) {
+export async function runCtLab(
+  reports,
+  { modules = null, now = () => new Date(), params = {}, onProgress = null } = {}
+) {
   const resolved = modules ?? (await getSpikeModules());
   const sources = buildSources(reports);
 
@@ -267,9 +270,11 @@ export async function runCtLab(reports, { modules = null, now = () => new Date()
   }
 
   const startedAt = now();
-  const result = await resolved.pipeline.ctContinuityPipeline.run({ sources, params });
+  const result = await resolved.pipeline.ctContinuityPipeline.run({ sources, params, onProgress });
   if (!result.chronology) throw new Error("Le moteur vendu est obsolète : lancer « npm run build:web ».");
   const finishedAt = now();
+
+  if (onProgress) await onProgress({ stage: "guards" });
 
   const guards = [
     ...resolved.libGuards.commonGuards.filter((guard) => guard.id !== "absence_is_not_a_conclusion"),
@@ -294,10 +299,12 @@ export async function runCtLab(reports, { modules = null, now = () => new Date()
     isProvenanceCorrect: resolved.ctMetrics.createProvenanceChecker(sources)
   });
 
+  if (onProgress) await onProgress({ stage: "report" });
+
   const record = resolved.runRecord.buildRunRecord({
     spike: "ct-continuity",
     caseId: "atelier-ct-continuity-lab",
-    title: "Laboratoire CT Continuity (Atelier)",
+    title: "Suivi des avis du Bureau de Contrôle (Atelier)",
     pipeline: resolved.pipeline.ctContinuityPipeline,
     params,
     startedAt,
@@ -315,7 +322,10 @@ export async function runCtLab(reports, { modules = null, now = () => new Date()
   });
 
   const chronology = result.chronology ?? { documents: [], ordered_source_ids: [] };
-  const statusSummaries = resolved.status.summariseAvisStatus(result.predictions, chronology.documents);
+  const globalClearances = result.global_clearances ?? [];
+  const statusSummaries = resolved.status.summariseAvisStatus(result.predictions, chronology.documents, {
+    globalClearances
+  });
 
   // Tout ce qui est présenté suit la chronologie reconstruite, pas l'ordre de
   // dépôt : la matrice doit être construite sur les mêmes colonnes que son
@@ -333,6 +343,7 @@ export async function runCtLab(reports, { modules = null, now = () => new Date()
     strategy: result.strategy ?? null,
     legends: result.legends ?? {},
     liftingStatements: result.lifting_statements ?? [],
+    globalClearances,
     identityDisagreements: result.identity_disagreements ?? [],
     predictions: result.predictions,
     suggestions: result.experimental_suggestions ?? [],
@@ -364,6 +375,7 @@ export function buildFullExport(result, { generatedAt = null } = {}) {
     avis_status: result.avisStatus,
     avis: collectAvis(result.predictions),
     lifting_statements: result.liftingStatements,
+    global_clearances: result.globalClearances,
     identity_disagreements: result.identityDisagreements,
     continuity: result.predictions.filter((prediction) => prediction.kind === "continuity"),
     suggestions: result.suggestions,

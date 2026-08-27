@@ -205,7 +205,7 @@ domaine c'est exactement l'inversion qu'il ne faut pas laisser passer.
 ## Le moteur dans l'application
 
 Le Spike 1 dispose d'un banc d'essai manuel : `Atelier › Développements ›
-CT Continuity Lab`. Il charge des PDF à la main, les lit **dans le navigateur**
+Suivi des avis BC`. Il charge des PDF à la main, les lit **dans le navigateur**
 et exécute le moteur — sans rien envoyer, sans rien enregistrer, sans toucher à
 un seul sujet Mdall.
 

@@ -63,7 +63,18 @@ export function normalizeConfidence(value) {
  * qu'il ne faut pas laisser passer.
  */
 export function containsPhrase(haystack, needle) {
-  const text = normalizeTextKey(haystack);
+  return containsNormalizedPhrase(normalizeTextKey(haystack), needle);
+}
+
+/**
+ * Même règle, mais sur un texte déjà normalisé.
+ *
+ * Normaliser un document entier coûte cher, et le garde-fou d'extrait le
+ * faisait une fois par prédiction : sur un chantier réel, 2 682 extraits contre
+ * 118 documents, la vérification prenait quatre-vingt-quinze secondes à elle
+ * seule. Le texte se normalise une fois, les extraits se comparent ensuite.
+ */
+export function containsNormalizedPhrase(text, needle) {
   const phrase = normalizeTextKey(needle);
   if (phrase === "") return false;
 

@@ -25,15 +25,27 @@ const VERSION = /\bversion\s*:?\s*(\d{1,2})\b/i;
 /**
  * Types rencontrés, reconnus sur les premières lignes du document.
  * La liste est ouverte : un type inconnu reste `null` plutôt que d'être forcé.
+ *
+ * `recapitulative` distingue deux natures de livrable, et cette distinction
+ * décide de tout le suivi :
+ *
+ *  - un **récapitulatif** (RICT, rapport d'étape, rapport final, APD) reprend
+ *    l'état complet des avis à sa date. Un avis qui n'y figure plus a vraiment
+ *    disparu : le document avait vocation à le porter.
+ *  - une **fiche** traite son sujet et ne répète pas les avis des fiches
+ *    précédentes. Qu'un numéro n'y figure pas ne dit rien du tout.
+ *
+ * Confondre les deux fait déclarer « sans nouvelles » des avis que personne
+ * n'a jamais eu l'intention de reconduire.
  */
 const TYPES = [
-  { id: "rapport_etape", label: "Rapport d'étape", pattern: /rapport\s+d['’]?\s*etape|rapport\s+d['’]?\s*étape/i },
-  { id: "rapport_prealable", label: "Rapport préalable / APD", pattern: /rapport\s+prealable|rapport\s+préalable/i },
-  { id: "rapport_initial", label: "Rapport initial (RICT)", pattern: /rapport\s+initial/i },
-  { id: "rapport_final", label: "Rapport final", pattern: /rapport\s+final/i },
-  { id: "fiche_avis_travaux", label: "Fiche avis travaux", pattern: /avis\s+en\s+phase\s+de\s+r[ée]alisation/i },
-  { id: "fiche_examen_document", label: "Fiche examen de document", pattern: /avis\s+suite\s+a\s+examen\s+de\s+documents?/i },
-  { id: "attestation", label: "Attestation", pattern: /attestation/i }
+  { id: "rapport_etape", label: "Rapport d'étape", recapitulative: true, pattern: /rapport\s+d['’]?\s*etape|rapport\s+d['’]?\s*étape/i },
+  { id: "rapport_prealable", label: "Rapport préalable / APD", recapitulative: true, pattern: /rapport\s+prealable|rapport\s+préalable/i },
+  { id: "rapport_initial", label: "Rapport initial (RICT)", recapitulative: true, pattern: /rapport\s+initial/i },
+  { id: "rapport_final", label: "Rapport final", recapitulative: true, pattern: /rapport\s+final/i },
+  { id: "fiche_avis_travaux", label: "Fiche avis travaux", recapitulative: false, pattern: /avis\s+en\s+phase\s+de\s+r[ée]alisation/i },
+  { id: "fiche_examen_document", label: "Fiche examen de document", recapitulative: false, pattern: /avis\s+suite\s+a\s+examen\s+de\s+documents?/i },
+  { id: "attestation", label: "Attestation", recapitulative: false, pattern: /attestation/i }
 ];
 
 function toIsoDate(day, month, year) {
@@ -72,6 +84,9 @@ export function readDocumentMeta(source) {
     chrono_reference: chrono ? chrono[1] : null,
     document_type: type?.id ?? null,
     document_type_label: type?.label ?? null,
+    // Un type inconnu n'est pas présumé récapitulatif : on ne fait pas d'un
+    // document qu'on n'a pas su lire un point de contrôle.
+    recapitulative: type?.recapitulative === true,
     sheet_number: sheet ? Number(sheet[1]) : null,
     version: version ? Number(version[1]) : null
   };
