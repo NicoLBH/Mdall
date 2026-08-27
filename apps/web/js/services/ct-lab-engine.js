@@ -70,6 +70,9 @@ export function buildTimeline(sources, predictions) {
 
   for (const prediction of predictions) {
     const [kind, documentId] = prediction.key.split(":");
+    // Les avis sans numéro n'ont pas d'identité suivable : ils sont listés
+    // dans le tableau des avis, jamais dans la matrice de continuité.
+    if (kind !== "extraction" && kind !== "continuity") continue;
     const reference = referenceOf(prediction.key);
 
     const row = byReference.get(reference) ?? { reference, cells: new Map() };
@@ -105,8 +108,15 @@ export function buildTimeline(sources, predictions) {
  * Indicateurs de fiabilité **auto-vérifiables**, c'est-à-dire contrôlables
  * contre les sources sans qu'un humain ait annoté quoi que ce soit.
  */
+/** Tous les avis lus, numérotés ou non, dans l'ordre des documents. */
+export function collectAvis(predictions) {
+  return predictions.filter(
+    (prediction) => prediction.kind === "extraction" || prediction.kind === "observation"
+  );
+}
+
 export function buildIndicators({ sources, predictions, violations, isProvenanceCorrect }) {
-  const extractions = predictions.filter((prediction) => prediction.kind === "extraction");
+  const extractions = collectAvis(predictions);
   const continuities = predictions.filter((prediction) => prediction.kind === "continuity");
 
   const asserted = extractions.filter((prediction) => prediction.state === "PREDICTED");
@@ -170,10 +180,22 @@ export function buildIndicators({ sources, predictions, violations, isProvenance
     }
   }
 
+  const byOpinion = {};
+  for (const prediction of extractions) {
+    const code = prediction.value?.opinion_raw ?? prediction.opinion_raw ?? "?";
+    const label = prediction.opinion_label ?? null;
+    byOpinion[code] = byOpinion[code] ?? { code, label, count: 0, numbered: 0 };
+    byOpinion[code].count += 1;
+    if (prediction.kind === "extraction") byOpinion[code].numbered += 1;
+  }
+
   return {
     reportCount: sources.length,
     pageCount: sources.reduce((total, source) => total + (source.pages?.length ?? 0), 0),
     extractionCount: extractions.length,
+    numberedCount: predictions.filter((prediction) => prediction.kind === "extraction").length,
+    unnumberedCount: predictions.filter((prediction) => prediction.kind === "observation").length,
+    byOpinion: Object.values(byOpinion).sort((a, b) => b.count - a.count),
     assertedCount: asserted.length,
     abstentionCount: predictions.filter((prediction) => prediction.state === "AMBIGUOUS").length,
     recognizedOpinions: { correct: recognizedOpinions.length, total: asserted.length },
@@ -287,12 +309,38 @@ export async function runCtLab(reports, { modules = null, now = () => new Date()
 
   return {
     sources,
+    strategy: result.strategy ?? null,
+    legends: result.legends ?? {},
     predictions: result.predictions,
     suggestions: result.experimental_suggestions ?? [],
     timeline: buildTimeline(sources, result.predictions),
     indicators,
     record,
     reportMarkdown: resolved.report.renderRunReport(record)
+  };
+}
+
+/**
+ * Export complet d'une session : tout ce qu'il faut pour analyser un résultat
+ * sans avoir les PDF sous la main — sources paginées, avis lus, continuité,
+ * indicateurs, garde-fous et rapport.
+ *
+ * Contient le texte intégral des rapports : à ne transmettre qu'à qui a le
+ * droit de les lire.
+ */
+export function buildFullExport(result, { generatedAt = null } = {}) {
+  return {
+    schema: "mdall.spike.ct-lab-export/1",
+    generated_at: generatedAt,
+    strategy: result.strategy,
+    legends: result.legends,
+    case: buildCaseExport(result.sources),
+    indicators: result.indicators,
+    avis: collectAvis(result.predictions),
+    continuity: result.predictions.filter((prediction) => prediction.kind === "continuity"),
+    suggestions: result.suggestions,
+    run: result.record,
+    report_markdown: result.reportMarkdown
   };
 }
 

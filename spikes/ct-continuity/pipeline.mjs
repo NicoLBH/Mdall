@@ -11,6 +11,7 @@
  *  - aucun rapprochement sémantique entre deux références différentes.
  */
 
+import { extractAvisBlocks, EXTRACTION_STATE as BLOCK_STATE, IDENTITY_SOURCE } from "./block-extraction.mjs";
 import { buildContinuity, buildExperimentalSuggestions, CONTINUITY_STATE } from "./continuity.mjs";
 import {
   DEFAULT_OPINION_LEXICON,
@@ -18,11 +19,78 @@ import {
   EXTRACTION_STATE,
   extractOccurrences
 } from "./extraction.mjs";
+import { discoverLegend } from "./legend.mjs";
+
+export const STRATEGY = {
+  /** Choisit `blocks` si le document déclare sa propre légende d'avis. */
+  AUTO: "auto",
+  /** Lecture en blocs : tableau à colonnes aplati par l'extraction PDF. */
+  BLOCKS: "blocks",
+  /** Lecture ligne à ligne, pilotée par des motifs. */
+  LINES: "lines"
+};
 
 export const PIPELINE_VERSION = "0.1.0";
 
 export function extractionKey(documentId, reference) {
   return `extraction:${documentId}:${reference}`;
+}
+
+/** Un avis sans numéro n'a pas d'identité suivable : il porte sa propre clé. */
+export function observationKey(documentId, index) {
+  return `observation:${documentId}:${index}`;
+}
+
+/**
+ * Choisit la stratégie de lecture. Un document qui déclare sa légende d'avis
+ * est un tableau : le lire ligne à ligne ne donnerait rien.
+ */
+export function resolveStrategy(sources, requested = STRATEGY.AUTO) {
+  if (requested !== STRATEGY.AUTO) return requested;
+
+  const hasLegend = sources.some(
+    (source) => source.content_available && discoverLegend(source.content).codes.length > 0
+  );
+  return hasLegend ? STRATEGY.BLOCKS : STRATEGY.LINES;
+}
+
+/** Une occurrence lue en blocs devient une prédiction. */
+function toBlockPrediction(occurrence, index) {
+  const numbered = occurrence.identity_source === IDENTITY_SOURCE.NUMBER_COLUMN;
+  const ambiguous = occurrence.extraction_state === BLOCK_STATE.AMBIGUOUS_REFERENCE;
+
+  return {
+    key: numbered
+      ? extractionKey(occurrence.source_document_id, occurrence.external_reference_normalized)
+      : observationKey(occurrence.source_document_id, index),
+    kind: numbered ? "extraction" : "observation",
+    state: ambiguous ? "AMBIGUOUS" : "PREDICTED",
+    confidence: occurrence.confidence,
+    value: ambiguous
+      ? null
+      : {
+          external_reference_raw: occurrence.external_reference_raw,
+          external_reference_normalized: occurrence.external_reference_normalized,
+          opinion_raw: occurrence.opinion_raw,
+          source_page: occurrence.source_page
+        },
+    provenance: {
+      source_id: occurrence.source_document_id,
+      page: occurrence.source_page,
+      excerpt: occurrence.source_excerpt
+    },
+    title_raw: occurrence.title_raw,
+    description_raw: occurrence.description_raw,
+    section_label_raw: occurrence.section_label_raw,
+    section_number_raw: occurrence.section_number_raw,
+    regulation_article_raw: occurrence.regulation_article_raw,
+    opinion_label: occurrence.opinion_label,
+    opinion_normalized: occurrence.opinion_normalized,
+    opinion_confidence: occurrence.opinion_confidence,
+    identity_source: occurrence.identity_source,
+    occurrence_count_in_document: occurrence.occurrence_count_in_document ?? 1,
+    extraction_state: occurrence.extraction_state
+  };
 }
 
 export function continuityKey(documentId, reference) {
@@ -147,14 +215,30 @@ export const ctContinuityPipeline = {
       lexicon: params.extraction?.lexicon ?? DEFAULT_OPINION_LEXICON
     };
 
+    const strategy = resolveStrategy(sources, params.extraction?.strategy ?? STRATEGY.AUTO);
     const documents = [];
     const predictions = [];
     const skippedSources = [];
+    const legends = {};
 
     for (const source of sources) {
       if (!source.content_available) {
         skippedSources.push(source.source_id);
         documents.push({ source, occurrences: [] });
+        continue;
+      }
+
+      if (strategy === STRATEGY.BLOCKS) {
+        const { occurrences, legend } = extractAvisBlocks(source);
+        legends[source.source_id] = legend;
+
+        // Seuls les avis portant un numéro entrent dans la continuité :
+        // les autres n'ont pas d'identité que le métier ait déjà fixée.
+        documents.push({
+          source,
+          occurrences: occurrences.filter((occurrence) => occurrence.external_reference_normalized)
+        });
+        occurrences.forEach((occurrence, index) => predictions.push(toBlockPrediction(occurrence, index)));
         continue;
       }
 
@@ -176,6 +260,7 @@ export const ctContinuityPipeline = {
     }
 
     const notes = [
+      `Stratégie de lecture : ${strategy}.`,
       skippedSources.length > 0
         ? `Sources sans contenu exploitable, ignorées sans conclusion : ${skippedSources.join(", ")}.`
         : null,
@@ -187,6 +272,8 @@ export const ctContinuityPipeline = {
     return {
       predictions,
       notes,
+      strategy,
+      legends,
       experimental_suggestions: buildExperimentalSuggestions(continuityItems)
     };
   }

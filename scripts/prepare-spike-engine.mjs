@@ -28,6 +28,8 @@ const BROWSER_SAFE_MODULES = [
   "lib/guards.mjs",
   "lib/report.mjs",
   "lib/run-record.mjs",
+  "ct-continuity/legend.mjs",
+  "ct-continuity/block-extraction.mjs",
   "ct-continuity/extraction.mjs",
   "ct-continuity/continuity.mjs",
   "ct-continuity/pipeline.mjs",
@@ -36,8 +38,10 @@ const BROWSER_SAFE_MODULES = [
 ];
 
 const NODE_IMPORT = /from\s+["']node:[^"']+["']|import\s*\(\s*["']node:[^"']+["']\s*\)/;
+const RELATIVE_IMPORT = /from\s+["'](\.[^"']+)["']/g;
 
 const copied = [];
+const contents = new Map();
 
 for (const relativePath of BROWSER_SAFE_MODULES) {
   const content = await readFile(path.join(sourceDir, relativePath), "utf8");
@@ -49,6 +53,29 @@ for (const relativePath of BROWSER_SAFE_MODULES) {
     );
   }
 
+  contents.set(relativePath, content);
+}
+
+// Un module copié dont une dépendance manque produit un 404 au chargement de la
+// page, sans rien dans la console de build. Mieux vaut casser le build ici.
+const declared = new Set(BROWSER_SAFE_MODULES);
+for (const [relativePath, content] of contents) {
+  for (const match of content.matchAll(RELATIVE_IMPORT)) {
+    const dependency = path
+      .relative(sourceDir, path.resolve(path.dirname(path.join(sourceDir, relativePath)), match[1]))
+      .split(path.sep)
+      .join("/");
+
+    if (!declared.has(dependency)) {
+      throw new Error(
+        `prepare-spike-engine: ${relativePath} importe ${dependency}, qui n'est pas copié. ` +
+          `Ajouter ce module à BROWSER_SAFE_MODULES.`
+      );
+    }
+  }
+}
+
+for (const [relativePath, content] of contents) {
   const destination = path.join(targetDir, relativePath);
   await mkdir(path.dirname(destination), { recursive: true });
   await writeFile(destination, content, "utf8");

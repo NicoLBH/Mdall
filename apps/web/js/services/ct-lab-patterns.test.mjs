@@ -139,14 +139,24 @@ test("le motif tableau reconnaît « 2.1.3 Défavorable texte »", () => {
   const preview = previewMatches(
     [
       "2.1.3 Défavorable Stabilité au feu de la charpente non justifiée",
-      "2.1.4 Favorable Étanchéité de toiture conforme",
-      "3.2.1 D Désenfumage : PV non transmis"
+      "2.1.4 Favorable Étanchéité de toiture conforme"
     ].join("\n"),
     patterns
   );
 
-  assert.equal(preview.matchedCount, 3);
-  assert.deepEqual(preview.samples.map((sample) => sample.reference), ["2.1.3", "2.1.4", "3.2.1"]);
+  assert.equal(preview.matchedCount, 2);
+  assert.deepEqual(preview.samples.map((sample) => sample.reference), ["2.1.3", "2.1.4"]);
+});
+
+test("un code isolé n'est pas un avis pour les motifs de ligne", () => {
+  const { patterns } = parsePatterns(DEFAULT_PATTERN_TEXT);
+
+  // « D » n'est un avis que si la légende du document le déclare : c'est la
+  // lecture en blocs qui s'en charge. Le reconnaître ici reviendrait à inventer
+  // un vocabulaire — c'est ainsi qu'un avis « R » était apparu.
+  const preview = previewMatches("3.2.1 D Désenfumage : PV non transmis\n4.1 R Texte quelconque", patterns);
+
+  assert.equal(preview.matchedCount, 0);
 });
 
 test("le motif tableau ne transforme pas n'importe quelle ligne numérotée en avis", () => {

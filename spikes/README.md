@@ -197,7 +197,7 @@ domaine c'est exactement l'inversion qu'il ne faut pas laisser passer.
 
 | Spike | Statut |
 | --- | --- |
-| 1 — `ct-continuity` | implémenté, évalué sur fixture synthétique uniquement, avec un laboratoire manuel dans l'Atelier |
+| 1 — `ct-continuity` | implémenté, confronté à deux rapports réels, avec un laboratoire manuel dans l'Atelier |
 | 2 — `site-minutes-continuity` | non implémenté |
 | 3 — `email-continuity` | non implémenté |
 | 4 — `targeted-revision-impact` | non implémenté |
