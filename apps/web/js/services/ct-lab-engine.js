@@ -15,16 +15,17 @@ const VENDOR_BASE = "../../vendor/spikes";
 let modulesPromise = null;
 
 async function loadVendoredModules() {
-  const [pipeline, libGuards, ctGuards, ctMetrics, report, runRecord] = await Promise.all([
+  const [pipeline, libGuards, ctGuards, ctMetrics, report, runRecord, status] = await Promise.all([
     import(`${VENDOR_BASE}/ct-continuity/pipeline.mjs`),
     import(`${VENDOR_BASE}/lib/guards.mjs`),
     import(`${VENDOR_BASE}/ct-continuity/guards.mjs`),
     import(`${VENDOR_BASE}/ct-continuity/metrics.mjs`),
     import(`${VENDOR_BASE}/lib/report.mjs`),
-    import(`${VENDOR_BASE}/lib/run-record.mjs`)
+    import(`${VENDOR_BASE}/lib/run-record.mjs`),
+    import(`${VENDOR_BASE}/ct-continuity/status.mjs`)
   ]);
 
-  return { pipeline, libGuards, ctGuards, ctMetrics, report, runRecord };
+  return { pipeline, libGuards, ctGuards, ctMetrics, report, runRecord, status };
 }
 
 export function getSpikeModules() {
@@ -46,6 +47,7 @@ export function buildSources(reports) {
     .filter((report) => report && Array.isArray(report.pages))
     .map((report, index) => ({
       source_id: report.sourceId,
+      content_sha256: report.contentHash ?? null,
       source_type: "control_office_report",
       issuer: report.issuer || null,
       issued_at: report.issuedAt || null,
@@ -266,6 +268,7 @@ export async function runCtLab(reports, { modules = null, now = () => new Date()
 
   const startedAt = now();
   const result = await resolved.pipeline.ctContinuityPipeline.run({ sources, params });
+  if (!result.chronology) throw new Error("Le moteur vendu est obsolète : lancer « npm run build:web ».");
   const finishedAt = now();
 
   const guards = [
@@ -311,15 +314,29 @@ export async function runCtLab(reports, { modules = null, now = () => new Date()
       (result.notes ?? "")
   });
 
+  const chronology = result.chronology ?? { documents: [], ordered_source_ids: [] };
+  const statusSummaries = resolved.status.summariseAvisStatus(result.predictions, chronology.documents);
+
+  // Tout ce qui est présenté suit la chronologie reconstruite, pas l'ordre de
+  // dépôt : la matrice doit être construite sur les mêmes colonnes que son
+  // en-tête, sinon chaque case est lue sous le mauvais rapport.
+  const orderedSources = chronology.ordered_source_ids
+    .map((id) => sources.find((source) => source.source_id === id))
+    .filter(Boolean);
+
   return {
-    sources,
+    sources: orderedSources,
+    chronology,
+    completeness: result.completeness ?? null,
+    avisStatus: statusSummaries,
+    statusCounts: resolved.status.countByStatus(statusSummaries),
     strategy: result.strategy ?? null,
     legends: result.legends ?? {},
     liftingStatements: result.lifting_statements ?? [],
     identityDisagreements: result.identity_disagreements ?? [],
     predictions: result.predictions,
     suggestions: result.experimental_suggestions ?? [],
-    timeline: buildTimeline(sources, result.predictions),
+    timeline: buildTimeline(orderedSources, result.predictions),
     indicators,
     record,
     reportMarkdown: resolved.report.renderRunReport(record)
@@ -342,6 +359,9 @@ export function buildFullExport(result, { generatedAt = null } = {}) {
     legends: result.legends,
     case: buildCaseExport(result.sources),
     indicators: result.indicators,
+    chronology: result.chronology,
+    completeness: result.completeness,
+    avis_status: result.avisStatus,
     avis: collectAvis(result.predictions),
     lifting_statements: result.liftingStatements,
     identity_disagreements: result.identityDisagreements,
