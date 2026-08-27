@@ -23,7 +23,9 @@ export const DEFAULT_PATTERN_TEXT = [
   "^\\|?\\s*(?<reference>[0-9A-Za-z]+(?:[.\\-/][0-9A-Za-z]+)*)\\s*\\|\\s*(?<opinion>[^|]+?)\\s*\\|\\s*(?<rest>[^|]+?)\\s*\\|?\\s*$",
   "# Tableau sans séparateur : « 2.1.3 Défavorable texte ». L'avis doit être une formulation connue,",
   "# sinon toute ligne commençant par un nombre deviendrait un faux avis.",
-  "^(?<reference>[0-9]+(?:[.\\-][0-9A-Za-z]+)+)\\s+(?<opinion>avis favorable|avis défavorable|défavorable|favorable|à préciser|suspendu|sans objet|non levée|non levé|levée|levé|maintenue|maintenu|SO|[FDSR])\\b\\s*[-–—:.]?\\s*(?<rest>.+)$"
+  "# Les codes courts (F, D, S…) ne figurent pas ici : un code n'est un avis que si la légende du",
+  "# document le déclare. La lecture en blocs s'en charge — voir spikes/ct-continuity/legend.mjs.",
+  "^(?<reference>[0-9]+(?:[.\\-][0-9A-Za-z]+)+)\\s+(?<opinion>avis favorable|avis défavorable|défavorable|favorable|à préciser|suspendu|sans objet|non levée|non levé|levée|levé|maintenue|maintenu|SO)\\b\\s*[-–—:.]?\\s*(?<rest>.+)$"
 ].join("\n");
 
 export const DEFAULT_LEXICON_TEXT = [

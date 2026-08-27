@@ -19,7 +19,7 @@
 
 import { escapeHtml } from "../../../utils/escape-html.js";
 import { extractPagesFromFile } from "../../../services/ct-lab-pdf.js";
-import { buildCaseExport, runCtLab } from "../../../services/ct-lab-engine.js";
+import { buildCaseExport, buildFullExport, collectAvis, runCtLab } from "../../../services/ct-lab-engine.js";
 import {
   DEFAULT_LEXICON_TEXT,
   DEFAULT_PATTERN_TEXT,
@@ -162,9 +162,23 @@ const STYLE = `
   font-family: var(--mono, monospace);
   font-size: 12px;
 }
+.ctlab__inline { display: inline-flex; align-items: center; gap: 6px; color: var(--ctlab-muted); }
+.ctlab__inline select {
+  background: var(--bg-input, rgb(21, 27, 35));
+  color: var(--ctlab-text);
+  border: 1px solid var(--ctlab-line);
+  border-radius: var(--radius, 6px);
+  padding: 3px 6px;
+  font: inherit;
+}
 .ctlab__match { color: var(--ctlab-ok); }
 .ctlab__nomatch { color: var(--ctlab-warn); }
 `;
+
+function truncate(text, maxLength) {
+  const value = String(text ?? "");
+  return value.length <= maxLength ? value : `${value.slice(0, maxLength)}…`;
+}
 
 function formatRatio(correct, total) {
   if (!total) return "n/a";
@@ -507,6 +521,100 @@ function renderPatternEditor(state) {
   `;
 }
 
+/**
+ * Tous les avis lus, numérotés ou non.
+ *
+ * Sans cette table, la matrice de continuité est illisible : elle ne montre que
+ * les avis porteurs d'un numéro, c'est-à-dire ceux qui appellent une suite.
+ * Ici on voit tout — y compris les F, SO, PM, HM qui constituent l'essentiel
+ * d'un rapport et n'apparaissent nulle part ailleurs.
+ */
+function renderAvisTable(state) {
+  const all = collectAvis(state.result.predictions);
+  const filter = state.avisFilter;
+
+  const filtered = all.filter((avis) => {
+    const code = avis.value?.opinion_raw ?? avis.opinion_raw ?? "";
+    if (filter.code && code !== filter.code) return false;
+    if (filter.numberedOnly && avis.kind !== "extraction") return false;
+    if (filter.documentId && avis.provenance?.source_id !== filter.documentId) return false;
+    return true;
+  });
+
+  const codes = state.result.indicators.byOpinion;
+
+  const rows = filtered
+    .map((avis) => {
+      const code = avis.value?.opinion_raw ?? avis.opinion_raw ?? "?";
+      const reference = avis.value?.external_reference_raw;
+
+      return `
+        <tr>
+          <td>${escapeHtml(avis.provenance?.source_id ?? "—")}</td>
+          <td>${avis.provenance?.page ?? "—"}</td>
+          <td>${reference ? `<b>${escapeHtml(reference)}</b>` : `<span class="ctlab__empty">sans n°</span>`}</td>
+          <td>${escapeHtml(avis.section_label_raw ?? avis.section_number_raw ?? "—")}</td>
+          <td>${escapeHtml(avis.title_raw ?? "—")}</td>
+          <td><span class="ctlab__badge">${escapeHtml(code)}</span> ${escapeHtml(avis.opinion_label ?? "")}</td>
+          <td>${escapeHtml(truncate(avis.description_raw ?? "", 400))}</td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  return `
+    <p class="ctlab__hint">
+      ${all.length} avis lus, dont <b>${state.result.indicators.numberedCount}</b> portant un numéro —
+      seuls ceux-là peuvent être suivis d'un rapport à l'autre. Les autres sont listés ici, sans identité
+      que le métier ait déjà fixée : leur inventer une reviendrait à deviner.
+    </p>
+    <p class="ctlab__hint">
+      ${codes
+        .map((entry) => `${escapeHtml(entry.code)} (${escapeHtml(entry.label ?? "?")}) : ${entry.count}`)
+        .join(" · ")}
+    </p>
+    <div class="ctlab__actions">
+      <label class="ctlab__inline">
+        Avis
+        <select data-ctlab-filter-code>
+          <option value="">tous</option>
+          ${codes
+            .map(
+              (entry) =>
+                `<option value="${escapeHtml(entry.code)}" ${filter.code === entry.code ? "selected" : ""}>${escapeHtml(entry.code)} — ${escapeHtml(entry.label ?? "?")}</option>`
+            )
+            .join("")}
+        </select>
+      </label>
+      <label class="ctlab__inline">
+        Rapport
+        <select data-ctlab-filter-document>
+          <option value="">tous</option>
+          ${state.result.sources
+            .map(
+              (source) =>
+                `<option value="${escapeHtml(source.source_id)}" ${filter.documentId === source.source_id ? "selected" : ""}>${escapeHtml(source.metadata?.filename ?? source.source_id)}</option>`
+            )
+            .join("")}
+        </select>
+      </label>
+      <label class="ctlab__inline">
+        <input type="checkbox" data-ctlab-filter-numbered ${filter.numberedOnly ? "checked" : ""}>
+        numérotés seulement
+      </label>
+      <span class="ctlab__hint">${filtered.length} affiché(s)</span>
+    </div>
+    <div class="ctlab__scroll">
+      <table class="ctlab__grid">
+        <thead>
+          <tr><th>Rapport</th><th>Page</th><th>N°</th><th>Section</th><th>Intitulé</th><th>Avis</th><th>Commentaire</th></tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
 function renderResults(state) {
   if (state.error) {
     return `<div class="ctlab__section"><div class="ctlab__alert">${escapeHtml(state.error)}</div></div>`;
@@ -528,7 +636,11 @@ function renderResults(state) {
       ${renderIndicators(state.result.indicators)}
     </div>
     <div class="ctlab__section">
-      <h3>Suivi des avis</h3>
+      <h3>Tous les avis identifiés</h3>
+      ${renderAvisTable(state)}
+    </div>
+    <div class="ctlab__section">
+      <h3>Suivi des avis numérotés</h3>
       <p class="ctlab__hint">Une ligne par référence, une colonne par rapport, dans l'ordre de chargement. Cliquer une case pour voir sa provenance.</p>
       ${renderTimeline(state.result)}
     </div>
@@ -539,10 +651,16 @@ function renderResults(state) {
     <div class="ctlab__section">
       <h3>Exports</h3>
       <p class="ctlab__hint">
-        Le cas exporté ne contient que les sources. La ground truth s'écrit à la main, en relisant les rapports —
+        <b>Exporter tout</b> réunit dans un seul fichier les sources paginées, les avis lus, la continuité,
+        les indicateurs, les garde-fous et le rapport — de quoi analyser un résultat sans avoir les PDF sous
+        la main. Il contient donc le texte intégral des rapports : à ne transmettre qu'à qui a le droit de les lire.
+      </p>
+      <p class="ctlab__hint">
+        Le cas exporté, lui, ne contient que les sources. La ground truth s'écrit à la main, en relisant les rapports —
         jamais à partir de ce que le moteur a produit.
       </p>
       <div class="ctlab__actions">
+        <button type="button" class="ctlab__btn ctlab__btn--go" data-ctlab-export="all">Exporter tout (JSON)</button>
         <button type="button" class="ctlab__btn" data-ctlab-export="case">Exporter le cas (JSON)</button>
         <button type="button" class="ctlab__btn" data-ctlab-export="run">Exporter le run (JSON)</button>
         <button type="button" class="ctlab__btn" data-ctlab-export="report">Exporter le rapport (Markdown)</button>
@@ -599,6 +717,7 @@ export function renderCtContinuityLab(root) {
     running: false,
     error: null,
     selectedCell: null,
+    avisFilter: { code: "", documentId: "", numberedOnly: false },
     patternText: DEFAULT_PATTERN_TEXT,
     lexiconText: DEFAULT_LEXICON_TEXT,
     patternErrors: []
@@ -655,6 +774,17 @@ export function renderCtContinuityLab(root) {
     } catch (error) {
       state.reports[slot] = { filename: file.name, error: error.message };
     }
+    refresh();
+  });
+
+  root.addEventListener("change", (event) => {
+    const target = event.target;
+    if (target.dataset?.ctlabFilterCode !== undefined) state.avisFilter.code = target.value;
+    else if (target.dataset?.ctlabFilterDocument !== undefined) state.avisFilter.documentId = target.value;
+    else if (target.dataset?.ctlabFilterNumbered !== undefined) state.avisFilter.numberedOnly = target.checked;
+    else return;
+
+    captureEditors();
     refresh();
   });
 
@@ -729,7 +859,13 @@ export function renderCtContinuityLab(root) {
 
     if (target.dataset.ctlabExport !== undefined && state.result) {
       const kind = target.dataset.ctlabExport;
-      if (kind === "case") {
+      if (kind === "all") {
+        download(
+          "ct-lab-export-complet.json",
+          JSON.stringify(buildFullExport(state.result, { generatedAt: new Date().toISOString() }), null, 2),
+          "application/json"
+        );
+      } else if (kind === "case") {
         download("case.json", JSON.stringify(buildCaseExport(state.result.sources), null, 2), "application/json");
       } else if (kind === "run") {
         download("run.json", JSON.stringify(state.result.record, null, 2), "application/json");

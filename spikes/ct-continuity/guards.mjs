@@ -64,7 +64,7 @@ export const opinionMustComeFromSource = {
     const issues = [];
 
     for (const prediction of asserted(context)) {
-      if (prediction.kind !== "extraction") continue;
+      if (prediction.kind !== "extraction" && prediction.kind !== "observation") continue;
       const opinion = prediction.value?.opinion_raw;
       if (!opinion) continue;
 

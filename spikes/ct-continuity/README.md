@@ -37,7 +37,56 @@ Le code de sortie vaut 1 si un garde-fou a été violé.
 | `pdf-adapter.mjs` | Phase B — contrat d'adaptateur PDF, **indisponible** |
 | `run.mjs` | CLI |
 
-## Phase A — extraction
+## Deux façons de lire un rapport
+
+| Stratégie | Quand | Ce qu'elle lit |
+| --- | --- | --- |
+| `blocks` | le document déclare sa légende d'avis | le tableau à colonnes aplati par l'extraction PDF |
+| `lines` | sinon | une observation par ligne, pilotée par des motifs |
+
+`auto` (défaut) choisit la première dès qu'une légende est trouvée.
+
+### Le vocabulaire vient du document
+
+Un rapport de contrôle technique porte sa propre légende, répétée sous chaque
+tableau :
+
+```
+* F: Favorable , D: Défavorable , S: Suspendu , HM: Hors Mission , PM: Pour Mémoire , SO: Sans Objet
+```
+
+`legend.mjs` la lit au lieu de la présumer. C'est le §13 appliqué — exploiter
+les identités que le métier a déjà créées — et c'est la seule protection
+sérieuse contre l'invention d'un code : **un code absent de la légende n'est pas
+un avis**. Un autre organisme écrira `C: Conforme , NC: Non conforme` : il sera
+lu tel quel, sans être ramené au vocabulaire d'un autre.
+
+### Une observation est un bloc, pas une ligne
+
+L'extraction PDF aplatit le tableau `Dispositions du projet | Avis | Observations
+et commentaires | N°`. Une observation est donc un **bloc** : un intitulé,
+un code d'avis, un commentaire, et éventuellement un numéro seul sur sa ligne —
+la colonne N°.
+
+Ce numéro est **la seule identité stable d'un rapport à l'autre**, et il ne
+figure que sur les avis qui appellent une suite. Les avis sans numéro sont
+extraits et affichés, jamais suivis : leur inventer une identité serait deviner.
+
+Trois signaux structurels sont exploités, tous lus dans le document :
+
+- l'en-tête de tableau borne les zones où un avis peut exister — hors tableau,
+  le sommaire produirait de faux avis (« ÉLÉMENTS D » finit par un D qui est le
+  début de « D´ÉQUIPEMENT » coupé en fin de ligne) ;
+- le texte répété de page en page est détecté par répétition, sans inscrire
+  dans le code les habitudes d'un organisme ;
+- une référence d'article coupée (`PE14§1` puis `2`) ne produit pas un
+  numéro d'avis.
+
+Un même numéro peut figurer deux fois — récapitulatif en tête, détail en
+chapitre. Deux occurrences qui portent le même avis sont la même observation ;
+deux qui se contredisent restent ambiguës, et le spike s'abstient.
+
+## Phase A — extraction (stratégie `lines`)
 
 Chaque occurrence produit :
 
@@ -223,6 +272,12 @@ Les rapports réels vont dans `spikes/fixtures/private/`, qui est gitignoré.
    ce que le Spike 2 devra affronter.
 5. **Le lexique d'avis est court** et français. Une formulation absente du
    lexique donne `opinion_raw: null` : le moteur ne devine pas.
-6. **Un rapport qui renumérote intégralement ses avis** produira beaucoup de
+6. **Un numéro resté sur la même ligne que son commentaire n'est pas reconnu.**
+   Non observé sur le corpus réel — les commentaires y sont assez longs pour que
+   la colonne N° tombe sur sa propre ligne — mais un organisme plus laconique
+   produirait ce cas. Rien n'a été ajouté pour le couvrir : une heuristique
+   « dernier nombre du commentaire » créerait de fausses identités, donc de
+   faux rapprochements.
+7. **Un rapport qui renumérote intégralement ses avis** produira beaucoup de
    `NOT_FOUND` et de `NEW`. C'est un résultat honnête, pas un bon résultat : ce
    sera le premier signal à surveiller sur corpus réel.

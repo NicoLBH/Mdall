@@ -8,7 +8,15 @@ import * as ctMetrics from "../../../../spikes/ct-continuity/metrics.mjs";
 import * as report from "../../../../spikes/lib/report.mjs";
 import * as runRecord from "../../../../spikes/lib/run-record.mjs";
 
-import { buildCaseExport, buildSources, buildTimeline, indicatorsAsMetrics, runCtLab } from "./ct-lab-engine.js";
+import {
+  buildCaseExport,
+  buildFullExport,
+  buildSources,
+  buildTimeline,
+  collectAvis,
+  indicatorsAsMetrics,
+  runCtLab
+} from "./ct-lab-engine.js";
 
 /**
  * Le laboratoire charge le moteur depuis apps/web/vendor (copié au build).
@@ -192,4 +200,90 @@ test("buildTimeline tolère une référence absente d'un rapport", () => {
   assert.equal(timeline.length, 1);
   assert.equal(timeline[0].cells[0].extraction, undefined);
   assert.equal(timeline[0].cells[1].extraction.value.opinion_raw, "Favorable");
+});
+
+const SOCOTEC_STYLE = [
+  {
+    sourceId: "rapport-1",
+    filename: "rapport-1.pdf",
+    pages: [
+      { page: 1, text: "SOMMAIRE\n2. MISSION L RELATIVE À LA SOLIDITÉ DES ÉLÉMENTS D\n´ÉQUIPEMENT INDISSOCIABLES\n7" },
+      {
+        page: 2,
+        text: [
+          "Dispositions du projet Avis* Observations et commentaires N°",
+          "PARAMÈTRES CLIMATIQUES",
+          "Vent F Vent Région 1",
+          "Portes d'intercommunication S Les portes devront être CF 1/2h",
+          "et équipées de ferme porte.",
+          "43",
+          "* F: Favorable , D: Défavorable , S: Suspendu , HM: Hors Mission , PM: Pour Mémoire , SO: Sans Objet"
+        ].join("\n")
+      }
+    ]
+  },
+  {
+    sourceId: "rapport-2",
+    filename: "rapport-2.pdf",
+    pages: [
+      {
+        page: 1,
+        text: [
+          "Dispositions du projet Avis* Observations et commentaires N°",
+          "Portes d'intercommunication D Prévoir crémone pompier à",
+          "rotation.",
+          "43",
+          "* F: Favorable , D: Défavorable , S: Suspendu , HM: Hors Mission , PM: Pour Mémoire , SO: Sans Objet"
+        ].join("\n")
+      }
+    ]
+  }
+];
+
+test("un rapport à colonnes est lu en blocs, sans qu'on ait à le demander", async () => {
+  const { record, strategy } = await runCtLab(SOCOTEC_STYLE, { modules: MODULES, now: NOW });
+
+  assert.equal(strategy, "blocks");
+  const avis = record.predictions.filter((prediction) => prediction.kind === "extraction" || prediction.kind === "observation");
+  assert.ok(avis.length >= 3);
+  assert.equal(avis[0].opinion_label, "Favorable", "le libellé vient de la légende du document");
+});
+
+test("le numéro de la colonne N° porte la continuité, pas l'intitulé", async () => {
+  const { record } = await runCtLab(SOCOTEC_STYLE, { modules: MODULES, now: NOW });
+  const continuity = record.predictions.find((prediction) => prediction.key === "continuity:rapport-2:43");
+
+  assert.equal(continuity.value.state, "MATCHED");
+  assert.equal(continuity.value.opinion_change, "CHANGED");
+});
+
+test("un avis sans numéro est listé mais reste hors de la continuité", async () => {
+  const { record, timeline } = await runCtLab(SOCOTEC_STYLE, { modules: MODULES, now: NOW });
+
+  const unnumbered = record.predictions.filter((prediction) => prediction.kind === "observation");
+  assert.ok(unnumbered.length >= 1);
+  assert.ok(unnumbered.every((prediction) => prediction.identity_source === "NONE"));
+  assert.deepEqual(timeline.map((row) => row.reference), ["43"], "seuls les avis numérotés entrent dans la matrice");
+});
+
+test("collectAvis rend tous les avis lus, numérotés ou non", async () => {
+  const { record, indicators } = await runCtLab(SOCOTEC_STYLE, { modules: MODULES, now: NOW });
+
+  assert.equal(collectAvis(record.predictions).length, indicators.extractionCount);
+  assert.equal(indicators.numberedCount + indicators.unnumberedCount, indicators.extractionCount);
+  assert.ok(indicators.byOpinion.some((entry) => entry.code === "F" && entry.label === "Favorable"));
+});
+
+test("l'export complet réunit sources, avis, continuité, indicateurs et rapport", async () => {
+  const result = await runCtLab(SOCOTEC_STYLE, { modules: MODULES, now: NOW });
+  const exported = buildFullExport(result, { generatedAt: "2026-08-26T12:00:00.000Z" });
+
+  assert.equal(exported.schema, "mdall.spike.ct-lab-export/1");
+  assert.equal(exported.strategy, "blocks");
+  assert.equal(exported.case.sources.length, 2);
+  assert.ok(exported.avis.length >= 3);
+  assert.ok(exported.continuity.length >= 1);
+  assert.ok(exported.report_markdown.includes("Spike run"));
+  assert.deepEqual(exported.run.guard_violations, []);
+  assert.ok(exported.legends["rapport-1"].some((entry) => entry.code === "SO"));
 });
