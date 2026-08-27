@@ -19,7 +19,7 @@
  * document (voir `legend.mjs`).
  */
 
-import { normalizeReferenceKey, normalizeWhitespace } from "../lib/normalize.mjs";
+import { normalizeReferenceKey, normalizeWhitespace, stripDiacritics } from "../lib/normalize.mjs";
 import { discoverLegend, legendToLexicon } from "./legend.mjs";
 
 export const EXTRACTION_STATE = {
@@ -91,6 +91,32 @@ function looksLikeHeading(line) {
   if (/^(?:[A-Z]{1,4}\d*(?:§\d+)?\s+)*\d+(\.\d+)*\s+\S/u.test(line)) return true;
   const letters = line.replace(/[^A-Za-zÀ-ÿ]/g, "");
   return letters.length > 3 && letters === letters.toUpperCase();
+}
+
+/**
+ * Les avis qui appellent une action portent un numéro dans le PDF ; les autres
+ * non.
+ *
+ * L'organisme numérote ce qu'il faut suivre — suspendu, défavorable, non
+ * conforme. Un avis favorable, sans objet, pour mémoire ou hors mission a bien
+ * un numéro dans le logiciel métier, mais celui-ci n'est pas reporté dans le
+ * rapport.
+ *
+ * Cette règle sert de garde-fou à l'attribution des numéros. Sur un lot réel
+ * de dix-sept rapports, 41 des 43 avis numérotés portaient S, D ou NC ; les
+ * deux exceptions étaient toutes deux des lignes de tableau fusionnées, où le
+ * numéro d'une disposition avait atterri sur la précédente.
+ *
+ * Le libellé du document prime sur la lettre : c'est la légende qui fait foi,
+ * pas une liste de codes que nous aurions décidée.
+ */
+const ACTION_LABELS = /suspendu|defavorable|non\s*conforme/i;
+const ACTION_CODES = new Set(["S", "D", "NC"]);
+
+function requiresAction({ opinion_raw, opinion_label }) {
+  const label = stripDiacritics(String(opinion_label ?? ""));
+  if (label !== "") return ACTION_LABELS.test(label);
+  return ACTION_CODES.has(String(opinion_raw ?? "").toUpperCase());
 }
 
 function buildCodeMatchers(codes) {
@@ -204,6 +230,8 @@ export function extractAvisBlocks(source, { legend = null } = {}) {
   const legendLines = new Set(discovered.lines ?? []);
 
   const occurrences = [];
+  /** Numéros refusés faute d'appartenir au bloc courant : à signaler, pas à taire. */
+  const orphanReferences = [];
   let pendingTitle = [];
   let current = null;
   let tail = [];
@@ -344,10 +372,25 @@ export function extractAvisBlocks(source, { legend = null } = {}) {
         const reference = line;
         current.commentLines.push(...tail);
         tail = [];
-        current.external_reference_raw = reference;
-        current.external_reference_normalized = normalizeReferenceKey(reference);
-        current.identity_source = IDENTITY_SOURCE.NUMBER_COLUMN;
-        current.extraction_state = EXTRACTION_STATE.EXTRACTED;
+
+        if (requiresAction(current)) {
+          current.external_reference_raw = reference;
+          current.external_reference_normalized = normalizeReferenceKey(reference);
+          current.identity_source = IDENTITY_SOURCE.NUMBER_COLUMN;
+          current.extraction_state = EXTRACTION_STATE.EXTRACTED;
+        } else {
+          // Ce numéro termine la ligne de tableau d'une autre disposition, dont
+          // le code n'a pas encore été lu : les deux lignes ont fusionné à
+          // l'aplatissement du PDF. Lui donner ce numéro fabriquerait une
+          // identité fausse, et deux avis distincts finiraient rapprochés.
+          orphanReferences.push({
+            reference,
+            attached_to_title: current.title_raw,
+            opinion_raw: current.opinion_raw,
+            page: current.source_page
+          });
+        }
+
         closeCurrent();
         continue;
       }
@@ -373,6 +416,7 @@ export function extractAvisBlocks(source, { legend = null } = {}) {
     legend: discovered.codes,
     legendSource,
     lexicon: legendToLexicon(discovered.codes),
+    orphanReferences,
     skipped
   };
 }

@@ -262,6 +262,8 @@ export const ctContinuityPipeline = {
     const skippedSources = [];
     const legends = {};
     const borrowedLegend = [];
+    /** Numéros lus mais refusés : deux lignes de tableau fusionnées. */
+    const orphanReferences = [];
 
     // Vocabulaire du lot : une pièce qui ne rappelle pas la légende de son
     // organisme peut s'appuyer sur celle de ses voisines.
@@ -288,7 +290,12 @@ export const ctContinuityPipeline = {
       }
 
       if (strategy === STRATEGY.BLOCKS) {
-        const { occurrences, legend, legendSource } = extractAvisBlocks(source, { legend: batchLegend });
+        const { occurrences, legend, legendSource, orphanReferences: orphans } = extractAvisBlocks(source, {
+          legend: batchLegend
+        });
+        for (const orphan of orphans ?? []) {
+          orphanReferences.push({ ...orphan, source_document_id: source.source_id });
+        }
         legends[source.source_id] = { codes: legend, source: legendSource };
         if (legendSource === "other_documents") borrowedLegend.push(source.source_id);
 
@@ -364,6 +371,9 @@ export const ctContinuityPipeline = {
       borrowedLegend.length > 0
         ? `Légende d'avis empruntée aux autres documents du lot pour : ${borrowedLegend.join(", ")}.`
         : null,
+      orphanReferences.length > 0
+        ? `${orphanReferences.length} numéro(s) refusé(s) : ils terminaient une ligne de tableau fusionnée avec la précédente, dont l'avis n'appelle pas d'action.`
+        : null,
       skippedSources.length > 0
         ? `Sources sans contenu exploitable, ignorées sans conclusion : ${skippedSources.join(", ")}.`
         : null,
@@ -393,6 +403,7 @@ export const ctContinuityPipeline = {
       identity_disagreements: identityDisagreements,
       lifting_statements: liftingStatements,
       global_clearances: globalClearances,
+      orphan_references: orphanReferences,
       experimental_suggestions: [
         ...buildExperimentalSuggestions(continuityItems),
         ...liftingStatements.map((statement) => ({
