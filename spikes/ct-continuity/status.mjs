@@ -25,6 +25,7 @@
  */
 
 import { CONTINUITY_STATE } from "./continuity.mjs";
+import { requiresAction } from "./block-extraction.mjs";
 
 export const AVIS_STATUS = {
   OPEN: "OPEN",
@@ -213,4 +214,48 @@ export function countByStatus(summaries) {
     (counts, summary) => ({ ...counts, [summary.status]: (counts[summary.status] ?? 0) + 1 }),
     { OPEN: 0, RESOLVED: 0, NO_NEWS: 0 }
   );
+}
+
+
+/**
+ * Ce qu'une apparition d'avis raconte, d'un document à l'autre.
+ *
+ * La distinction qui compte est celle entre un **rappel** et une
+ * **réouverture**, et elle n'a rien à voir avec la présence ou l'absence :
+ *
+ *  - un rapport d'étape **rappelle** les avis en cours. L'avis reparaît après
+ *    plusieurs fiches qui ne le mentionnaient pas, mais rien n'a changé : il
+ *    n'a jamais cessé d'être suspendu.
+ *  - une **réouverture** est un retour en arrière du dossier : un point jugé
+ *    favorable, pour mémoire, hors mission ou sans objet redevient suspendu,
+ *    défavorable ou non conforme. C'est un fait de chantier, pas un effet de
+ *    mise en page.
+ *
+ * Confondre les deux faisait annoncer « RÉOUVERT » à chaque récapitulatif, et
+ * noyait les vraies régressions dans le bruit.
+ */
+export const APPEARANCE = {
+  /** Première apparition connue. */
+  NEW: "NEW",
+  /** Présent dans le document précédent, toujours là. */
+  TRACKED: "TRACKED",
+  /** Reparaît après une absence, sans changement d'appréciation. */
+  RECALLED: "RECALLED",
+  /** Repasse d'une appréciation sans suite à une appréciation qui en appelle une. */
+  REOPENED: "REOPENED"
+};
+
+/**
+ * @param {{opinion_raw: string, opinion_label: string}|null} previous dernière apparition connue
+ * @param {{opinion_raw: string, opinion_label: string}|null} current apparition courante
+ * @param {{afterGap: boolean}} context le document précédent ne le mentionnait pas
+ */
+export function classifyAppearance(previous, current, { afterGap = false } = {}) {
+  if (!previous) return APPEARANCE.NEW;
+  if (!current) return APPEARANCE.TRACKED;
+
+  // Le retour en arrière se lit sur l'appréciation, pas sur la présence.
+  if (!requiresAction(previous) && requiresAction(current)) return APPEARANCE.REOPENED;
+
+  return afterGap ? APPEARANCE.RECALLED : APPEARANCE.TRACKED;
 }

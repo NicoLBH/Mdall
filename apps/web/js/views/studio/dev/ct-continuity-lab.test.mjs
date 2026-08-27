@@ -20,6 +20,7 @@ import {
   tabLabel,
   titleCase,
   toAvisCsv,
+  withArticle,
   toStatusCsv
 } from "./ct-continuity-lab.js";
 
@@ -311,4 +312,18 @@ test("un type connu sans repère se nomme quand même", () => {
     "Attestation Handicap",
     "un type hors liste garde son libellé complet"
   );
+});
+
+test("l'article s'accorde au document cité", () => {
+  // « Absent du fiche travaux n° 9 » se lit mal ; le genre se déduit du type,
+  // que le document déclare lui-même.
+  assert.equal(withArticle("RICT version 4", "rapport_initial"), "du RICT version 4", "un sigle garde ses capitales");
+  assert.equal(withArticle("Fiche travaux n° 9", "fiche_avis_travaux"), "de la fiche travaux n° 9");
+  assert.equal(withArticle("Fiche examen n° 8", "fiche_examen_document"), "de la fiche examen n° 8");
+  assert.equal(withArticle("Rapport d'étape du 27/08/2026", "rapport_etape"), "du rapport d'étape du 27/08/2026");
+});
+
+test("un document non typé garde un article neutre", () => {
+  assert.equal(withArticle("rapport-mystere.pdf", null), "du rapport-mystere.pdf");
+  assert.equal(withArticle("", "rapport_initial"), "ce document");
 });
