@@ -16,6 +16,7 @@ import {
   firstText,
   lastSeenWording,
   pickAxisTicks,
+  shortDocumentName,
   tabLabel,
   titleCase,
   toAvisCsv,
@@ -276,4 +277,38 @@ test("un intitulé vide ne compte pas comme une formulation", () => {
   ];
 
   assert.equal(lastSeenWording(steps, 1).title, "Vrai intitulé");
+});
+
+test("un document se nomme par ce qu'il déclare, pas par son fichier", () => {
+  // « 12_09-10-25 - 74LEREPOSOIRMAIRIEREHABILITATION DU PRESBYTERECT-Rapport
+  // RICT-CT-13860-1025-0114.pdf » écrase tout ce qui l'entoure sur une frise.
+  assert.equal(
+    shortDocumentName({ document_type: "rapport_initial", version: 4, issued_at: "2025-10-09" }),
+    "RICT version 4"
+  );
+  assert.equal(
+    shortDocumentName({ document_type: "fiche_examen_document", sheet_number: 3, issued_at: "2025-05-26" }),
+    "Fiche examen n° 3"
+  );
+  assert.equal(
+    shortDocumentName({ document_type: "rapport_etape", issued_at: "2026-08-27" }),
+    "Rapport d'étape du 27/08/2026",
+    "sans version ni numéro, la date sert de repère"
+  );
+});
+
+test("un type non reconnu garde le nom du fichier", () => {
+  // Deviner un nom court pour un document qu'on n'a pas su typer reviendrait à
+  // masquer la seule identité vérifiable qu'on ait : son fichier.
+  assert.equal(shortDocumentName({ issued_at: "2025-01-01" }, "rapport-mystere.pdf"), "rapport-mystere.pdf");
+  assert.equal(shortDocumentName(null, "rapport-mystere.pdf"), "rapport-mystere.pdf");
+});
+
+test("un type connu sans repère se nomme quand même", () => {
+  assert.equal(shortDocumentName({ document_type: "rapport_final" }), "Rapport final");
+  assert.equal(
+    shortDocumentName({ document_type_label: "Attestation Handicap" }),
+    "Attestation Handicap",
+    "un type hors liste garde son libellé complet"
+  );
 });
