@@ -19,7 +19,8 @@ function documents(entries) {
   });
 }
 
-function itemFor(items, documentId, reference) {
+function itemFor(result, documentId, reference) {
+  const items = Array.isArray(result) ? result : result.items;
   return items.find((item) => item.document_id === documentId && item.reference === reference);
 }
 
@@ -200,9 +201,84 @@ test("les suggestions expérimentales n'appliquent aucun statut Mdall", () => {
     ])
   );
 
-  const suggestions = buildExperimentalSuggestions(items);
+  const suggestions = buildExperimentalSuggestions(items.items);
   assert.equal(suggestions.length, 1);
   assert.equal(suggestions[0].suggestion, "HUMAN_REVIEW_SUGGESTED");
   assert.equal(suggestions[0].applies_mdall_status, false);
   assert.ok(!JSON.stringify(suggestions).includes("closed"));
+});
+
+test("un avis qui perd son numéro est retrouvé par son intitulé, sans être confondu avec un rapprochement par numéro", () => {
+  const { items } = buildContinuity([
+    {
+      source: { source_id: "r1" },
+      occurrences: [
+        { external_reference_normalized: "56", external_reference_raw: "56", title_raw: "Extincteurs", opinion_normalized: "suspendu", opinion_raw: "S", description_raw: "à confirmer" }
+      ]
+    },
+    {
+      source: { source_id: "r2" },
+      occurrences: [
+        { external_reference_normalized: null, external_reference_raw: null, title_raw: "Extincteurs", opinion_normalized: "favorable", opinion_raw: "F", description_raw: "" }
+      ]
+    }
+  ]);
+
+  const item = itemFor(items, "r2", "56");
+  assert.equal(item.state, CONTINUITY_STATE.MATCHED_BY_TITLE);
+  assert.notEqual(item.state, CONTINUITY_STATE.MATCHED, "les deux identités ne se confondent pas");
+  assert.equal(item.match_method, MATCH_METHOD.TITLE_EXACT);
+  assert.equal(item.opinion_change, OPINION_CHANGE.CHANGED);
+  assert.equal(item.confidence, 0.75, "un intitulé vaut moins qu'un numéro");
+});
+
+test("un intitulé portant un autre numéro n'est pas rapproché, et le désaccord est enregistré", () => {
+  const { items, identityDisagreements } = buildContinuity([
+    {
+      source: { source_id: "r1" },
+      occurrences: [{ external_reference_normalized: "56", external_reference_raw: "56", title_raw: "Extincteurs", opinion_normalized: "suspendu", opinion_raw: "S" }]
+    },
+    {
+      source: { source_id: "r2" },
+      occurrences: [{ external_reference_normalized: "99", external_reference_raw: "99", title_raw: "Extincteurs", opinion_normalized: "favorable", opinion_raw: "F" }]
+    }
+  ]);
+
+  assert.equal(itemFor(items, "r2", "56").state, CONTINUITY_STATE.NOT_FOUND);
+  assert.deepEqual(identityDisagreements.map((entry) => entry.other_reference), ["99"]);
+});
+
+test("deux intitulés identiques dans un document ne permettent pas de trancher", () => {
+  const { items } = buildContinuity([
+    {
+      source: { source_id: "r1" },
+      occurrences: [{ external_reference_normalized: "56", external_reference_raw: "56", title_raw: "Extincteurs", opinion_normalized: "suspendu", opinion_raw: "S" }]
+    },
+    {
+      source: { source_id: "r2" },
+      occurrences: [
+        { external_reference_normalized: null, title_raw: "Extincteurs", opinion_normalized: "favorable", opinion_raw: "F" },
+        { external_reference_normalized: null, title_raw: "Extincteurs", opinion_normalized: "sans_objet", opinion_raw: "SO" }
+      ]
+    }
+  ]);
+
+  const item = itemFor(items, "r2", "56");
+  assert.equal(item.state, CONTINUITY_STATE.NOT_FOUND);
+  assert.equal(item.title_lookup, "AMBIGUOUS");
+});
+
+test("le rapprochement par intitulé peut être coupé", () => {
+  const documents = [
+    {
+      source: { source_id: "r1" },
+      occurrences: [{ external_reference_normalized: "56", external_reference_raw: "56", title_raw: "Extincteurs", opinion_normalized: "suspendu", opinion_raw: "S" }]
+    },
+    {
+      source: { source_id: "r2" },
+      occurrences: [{ external_reference_normalized: null, title_raw: "Extincteurs", opinion_normalized: "favorable", opinion_raw: "F" }]
+    }
+  ];
+
+  assert.equal(itemFor(buildContinuity(documents, { matchByTitle: false }).items, "r2", "56").state, CONTINUITY_STATE.NOT_FOUND);
 });

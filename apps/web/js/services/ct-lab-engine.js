@@ -196,6 +196,10 @@ export function buildIndicators({ sources, predictions, violations, isProvenance
     numberedCount: predictions.filter((prediction) => prediction.kind === "extraction").length,
     unnumberedCount: predictions.filter((prediction) => prediction.kind === "observation").length,
     byOpinion: Object.values(byOpinion).sort((a, b) => b.count - a.count),
+    matchedByTitleCount: predictions.filter(
+      (prediction) => prediction.kind === "continuity" && prediction.value?.state === "MATCHED_BY_TITLE"
+    ).length,
+    liftingCount: predictions.filter((prediction) => prediction.kind === "lifting_statement").length,
     assertedCount: asserted.length,
     abstentionCount: predictions.filter((prediction) => prediction.state === "AMBIGUOUS").length,
     recognizedOpinions: { correct: recognizedOpinions.length, total: asserted.length },
@@ -311,6 +315,8 @@ export async function runCtLab(reports, { modules = null, now = () => new Date()
     sources,
     strategy: result.strategy ?? null,
     legends: result.legends ?? {},
+    liftingStatements: result.lifting_statements ?? [],
+    identityDisagreements: result.identity_disagreements ?? [],
     predictions: result.predictions,
     suggestions: result.experimental_suggestions ?? [],
     timeline: buildTimeline(sources, result.predictions),
@@ -337,6 +343,8 @@ export function buildFullExport(result, { generatedAt = null } = {}) {
     case: buildCaseExport(result.sources),
     indicators: result.indicators,
     avis: collectAvis(result.predictions),
+    lifting_statements: result.liftingStatements,
+    identity_disagreements: result.identityDisagreements,
     continuity: result.predictions.filter((prediction) => prediction.kind === "continuity"),
     suggestions: result.suggestions,
     run: result.record,

@@ -178,6 +178,10 @@ export async function loadGroundTruth(groundTruthPath) {
     annotator: payload.annotator ?? null,
     annotatedAt: payload.annotated_at ?? null,
     notes: payload.notes ?? "",
+    // Une ground truth partielle déclare son périmètre. Hors de ce périmètre,
+    // le moteur n'est ni crédité ni pénalisé : annoter dix items sur mille ne
+    // doit pas transformer les 990 autres en faux positifs.
+    scope: payload.scope ?? null,
     items
   };
 }

@@ -264,6 +264,37 @@ avis proches.
 
 Les rapports réels vont dans `spikes/fixtures/private/`, qui est gitignoré.
 
+## Deux identités, jamais confondues
+
+| Identité | État | Confiance | D'où elle vient |
+| --- | --- | --- | --- |
+| numéro de la colonne N° | `MATCHED` | 0,95 | l'organisme la fixe, sur les avis appelant une action |
+| intitulé de la disposition | `MATCHED_BY_TITLE` | 0,75 | entrée du référentiel de l'organisme, reprise à l'identique |
+
+Un avis qui repasse en favorable **perd son numéro** : l'organisme ne numérote
+que ce qui appelle une action. Sans seconde identité, la mémoire dirait « avis
+non retrouvé » là où le document dit « avis levé, disposition conforme ».
+
+Ce n'est pas du rapprochement sémantique — l'intitulé est repris mot pour mot,
+pas reformulé. Mesuré sur 17 documents réels : 6 rapprochements par intitulé,
+**0 désaccord** avec l'oracle du numéro. Quand un intitulé identique porte un
+autre numéro, rien n'est rapproché et le désaccord est enregistré : c'est ce
+compteur qui mesure la fiabilité de cette seconde identité.
+
+Deux intitulés identiques dans un même document donnent `AMBIGUOUS`. Le
+rapprochement par intitulé se coupe avec `params.continuity.matchByTitle`.
+
+## Une levée se déclare, elle ne se déduit pas
+
+`lifting.mjs` lit les phrases du type « L'avis 171 est levé » — 19 dans le
+corpus réel. C'est la preuve que le §28.5 exige : l'absence d'un avis ne prouve
+rien, une phrase qui le déclare, si.
+
+Elle ne change **aucun état** : la preuve est versée au dossier et affichée, le
+statut du sujet reste une décision Mdall (§11). Sans numéro explicite dans la
+phrase, rien n'est produit — « cet avis sera levé après réception » ne prouve
+rien.
+
 ## Ce que le corpus réel a validé
 
 Sur un rapport préalable APD réel, le document se déclare lui-même :
@@ -276,6 +307,26 @@ même projet retrouve exactement les 13 avis de son « Récapitulatif des avis S
 et D ». Ces comptes ne sont pas une ground truth annotée — mais ils sont écrits
 par l'organisme, dans le document, sans rapport avec le moteur.
 
+## Évaluation sur ground truth réelle
+
+Une ground truth de 32 items a été transcrite à la main depuis ce que les
+documents déclarent d'eux-mêmes — jamais depuis une sortie du moteur :
+
+- la section 4 du rapport d'étape, « avis qui n'ont pas été suivis d'effets »,
+  qui énumère les 8 avis encore ouverts à une date donnée ;
+- les 19 phrases « L'avis N est levé » ;
+- 5 transitions vérifiées en comparant deux documents à la main.
+
+Résultat : **30 vrais positifs, 1 faux positif, 2 faux négatifs, 0 violation de
+garde-fou.** Les deux erreurs s'expliquent l'une et l'autre par la limite n° 6
+(les lignes de fiche sans code d'avis) et la limite n° 7 (le numéro resté en
+ligne).
+
+Une ground truth partielle déclare son périmètre (`scope`) : hors périmètre, le
+moteur n'est ni crédité ni pénalisé. Annoter 32 items sur 1 300 prédictions ne
+doit pas transformer les 1 268 autres en faux positifs.
+
+## Ce que le laboratoire n'affiche pas
 ## Limites connues
 
 1. **Le score sur la fixture synthétique ne prouve rien.** La fixture a été
@@ -297,12 +348,15 @@ par l'organisme, dans le document, sans rapport avec le moteur.
    lignes n'ont aucun code dans la colonne « Avis » : le lecteur en blocs, qui
    démarre une observation à un code, les rattache alors à l'observation
    précédente. Rien n'a été tenté pour deviner où commence une ligne sans avis.
-7. **Un numéro resté sur la même ligne que son commentaire n'est pas reconnu.**
-   Non observé sur le corpus réel — les commentaires y sont assez longs pour que
-   la colonne N° tombe sur sa propre ligne — mais un organisme plus laconique
-   produirait ce cas. Rien n'a été ajouté pour le couvrir : une heuristique
-   « dernier nombre du commentaire » créerait de fausses identités, donc de
-   faux rapprochements.
+7. **Un numéro resté sur la même ligne que son commentaire n'est pas reconnu**,
+   et le cas existe : 1 avis sur 8 dans le rapport d'étape du corpus réel.
+   Rien n'a pourtant été ajouté pour le couvrir, et la mesure explique pourquoi.
+   Sur ces 17 documents, **15 commentaires se terminent par un nombre isolé, et
+   13 sont des faux** — « Vent Région **1** », « Zone sismique **4** », « voir
+   article PE **6** », « faux plafond 1 BA **13** ». Une heuristique « dernier
+   nombre du commentaire » gagnerait un avis et fabriquerait quatorze fausses
+   identités, donc autant de faux rapprochements. Le rapport de run le montre :
+   `false_merge_count` est l'erreur critique du spike.
 8. **Un rapport qui renumérote intégralement ses avis** produira beaucoup de
    `NOT_FOUND` et de `NEW`. C'est un résultat honnête, pas un bon résultat : ce
    sera le premier signal à surveiller sur corpus réel.

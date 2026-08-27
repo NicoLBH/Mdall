@@ -33,6 +33,7 @@ const SLOT_COUNT = 20;
 const STATE_LABELS = {
   NEW: "nouveau",
   MATCHED: "suivi",
+  MATCHED_BY_TITLE: "suivi par intitulé",
   NOT_FOUND: "non retrouvé",
   AMBIGUOUS: "ambigu"
 };
@@ -117,6 +118,7 @@ const STYLE = `
 .ctlab__badge { display: inline-block; border: 1px solid var(--ctlab-line); border-radius: 999px; padding: 0 6px; font-size: 11px; text-transform: uppercase; }
 .ctlab__badge--NEW { border-color: var(--ctlab-info); color: var(--ctlab-info); }
 .ctlab__badge--MATCHED { border-color: var(--ctlab-ok); color: var(--ctlab-ok); }
+.ctlab__badge--MATCHED_BY_TITLE { border-color: var(--ctlab-ok); border-style: dashed; color: var(--ctlab-ok); }
 .ctlab__badge--NOT_FOUND { border-color: var(--ctlab-warn); color: var(--ctlab-warn); }
 .ctlab__badge--AMBIGUOUS { border-style: dashed; color: var(--ctlab-muted); }
 .ctlab__detail { border: 1px dashed var(--ctlab-line); border-radius: var(--radius, 6px); padding: 10px; margin-top: 10px; }
@@ -254,6 +256,14 @@ function renderIndicators(indicators) {
         <span>abstentions assumées</span>
       </div>
       <div class="ctlab__kpi">
+        <b>${indicators.matchedByTitleCount}</b>
+        <span>suivis retrouvés par intitulé<br>(avis ayant perdu leur numéro)</span>
+      </div>
+      <div class="ctlab__kpi">
+        <b>${indicators.liftingCount}</b>
+        <span>levées déclarées dans les documents</span>
+      </div>
+      <div class="ctlab__kpi">
         <b>${indicators.guardViolations.length}</b>
         <span>violations de garde-fou</span>
       </div>
@@ -294,11 +304,17 @@ function renderCell(cell) {
 
   let body;
   if (state === "NOT_FOUND") {
-    body =
-      `<div class="ctlab__empty">absent de ce rapport</div>` +
-      (previous ? `<div class="ctlab__change">vu pour la dernière fois dans ${escapeHtml(previous)}</div>` : "");
+    const lifting = continuity?.lifting_statement;
+    body = lifting
+      ? `<div>déclaré levé</div><div class="ctlab__change">« ${escapeHtml(truncate(lifting.sentence, 90))} »</div>`
+      : `<div class="ctlab__empty">absent de ce rapport</div>` +
+        (previous ? `<div class="ctlab__change">vu pour la dernière fois dans ${escapeHtml(previous)}</div>` : "");
   } else if (state === "AMBIGUOUS") {
     body = `<div class="ctlab__empty">référence ambiguë — aucun avis retenu</div>`;
+  } else if (state === "MATCHED_BY_TITLE" && continuity?.matched_opinion_raw) {
+    body =
+      `<div>${escapeHtml(continuity.matched_opinion_raw)} ${escapeHtml(continuity.matched_opinion_label ?? "")}</div>` +
+      `<div class="ctlab__change">retrouvé par son intitulé, sans numéro</div>`;
   } else if (extraction?.value?.opinion_raw) {
     body = `<div>${escapeHtml(extraction.value.opinion_raw)}</div>`;
   } else {
@@ -401,6 +417,46 @@ function renderDetail(cell) {
             : ""
         }
       </dl>
+    </div>
+  `;
+}
+
+/**
+ * Phrases par lesquelles un document déclare qu'un avis est levé.
+ *
+ * C'est la seule preuve admissible d'une levée : l'absence d'un avis dans un
+ * rapport ultérieur, elle, ne prouve rien. Elles sont affichées telles quelles,
+ * avec leur page, et ne ferment aucun sujet.
+ */
+function renderLiftings(state) {
+  const statements = state.result.liftingStatements;
+  if (statements.length === 0) {
+    return `<p class="ctlab__empty">Aucune déclaration de levée trouvée.</p>`;
+  }
+
+  return `
+    <p class="ctlab__hint">
+      ${statements.length} déclaration(s). Une absence ne prouve rien ; une phrase, si.
+      Aucun statut n'est modifié : c'est une preuve versée au dossier.
+    </p>
+    <div class="ctlab__scroll">
+      <table class="ctlab__grid">
+        <thead><tr><th>N°</th><th>Rapport</th><th>Page</th><th>Phrase</th></tr></thead>
+        <tbody>
+          ${statements
+            .map(
+              (statement) => `
+                <tr>
+                  <td><b>${escapeHtml(statement.reference_raw)}</b></td>
+                  <td>${escapeHtml(statement.source_document_id)}</td>
+                  <td>${statement.source_page ?? "—"}</td>
+                  <td>${escapeHtml(statement.sentence)}</td>
+                </tr>
+              `
+            )
+            .join("")}
+        </tbody>
+      </table>
     </div>
   `;
 }
@@ -643,6 +699,10 @@ function renderResults(state) {
       <h3>Suivi des avis numérotés</h3>
       <p class="ctlab__hint">Une ligne par référence, une colonne par rapport, dans l'ordre de chargement. Cliquer une case pour voir sa provenance.</p>
       ${renderTimeline(state.result)}
+    </div>
+    <div class="ctlab__section">
+      <h3>Levées déclarées dans les documents</h3>
+      ${renderLiftings(state)}
     </div>
     <div class="ctlab__section">
       <h3>Suggestions</h3>
