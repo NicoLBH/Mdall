@@ -1,7 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { AVIS_STATUS, OPEN_REASON, RESOLUTION_REASON, countByStatus, summariseAvisStatus } from "./status.mjs";
+import {
+  APPEARANCE,
+  AVIS_STATUS,
+  OPEN_REASON,
+  RESOLUTION_REASON,
+  classifyAppearance,
+  countByStatus,
+  summariseAvisStatus
+} from "./status.mjs";
 
 /**
  * Deux fiches, puis un rapport d'étape. Seul le troisième est un point de
@@ -262,4 +270,40 @@ test("une clôture portée par un document hors du lot retenu est ignorée", () 
   );
 
   assert.equal(summary.status, AVIS_STATUS.NO_NEWS, "une preuve écartée par la date ne clôt rien");
+});
+
+test("un avis rappelé par un rapport d'étape n'est pas un avis rouvert", () => {
+  // Le cas qui annonçait « RÉOUVERT » à chaque récapitulatif : l'avis reparaît
+  // après plusieurs fiches muettes, mais il n'a jamais cessé d'être suspendu.
+  const suspendu = { opinion_raw: "S", opinion_label: "Suspendu" };
+
+  assert.equal(classifyAppearance(suspendu, suspendu, { afterGap: true }), APPEARANCE.RECALLED);
+  assert.equal(classifyAppearance(suspendu, suspendu, { afterGap: false }), APPEARANCE.TRACKED);
+});
+
+test("une réouverture est un retour en arrière du dossier", () => {
+  const favorable = { opinion_raw: "F", opinion_label: "Favorable" };
+  const defavorable = { opinion_raw: "D", opinion_label: "Défavorable" };
+
+  assert.equal(classifyAppearance(favorable, defavorable, { afterGap: true }), APPEARANCE.REOPENED);
+  assert.equal(
+    classifyAppearance(favorable, defavorable, { afterGap: false }),
+    APPEARANCE.REOPENED,
+    "sans absence non plus : c'est l'appréciation qui fait la réouverture"
+  );
+  assert.equal(
+    classifyAppearance({ opinion_raw: "SO", opinion_label: "Sans Objet" }, { opinion_raw: "NC", opinion_label: "Non conforme" }),
+    APPEARANCE.REOPENED
+  );
+});
+
+test("passer de suspendu à favorable n'est pas une réouverture", () => {
+  assert.equal(
+    classifyAppearance({ opinion_raw: "S", opinion_label: "Suspendu" }, { opinion_raw: "F", opinion_label: "Favorable" }),
+    APPEARANCE.TRACKED
+  );
+});
+
+test("la première apparition n'a rien derrière elle", () => {
+  assert.equal(classifyAppearance(null, { opinion_raw: "S", opinion_label: "Suspendu" }), APPEARANCE.NEW);
 });

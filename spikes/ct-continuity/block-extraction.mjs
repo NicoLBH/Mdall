@@ -113,7 +113,7 @@ function looksLikeHeading(line) {
 const ACTION_LABELS = /suspendu|defavorable|non\s*conforme/i;
 const ACTION_CODES = new Set(["S", "D", "NC"]);
 
-function requiresAction({ opinion_raw, opinion_label }) {
+export function requiresAction({ opinion_raw, opinion_label }) {
   const label = stripDiacritics(String(opinion_label ?? ""));
   if (label !== "") return ACTION_LABELS.test(label);
   return ACTION_CODES.has(String(opinion_raw ?? "").toUpperCase());

@@ -284,6 +284,60 @@ function renderAvisRow({
   `;
 }
 
+/**
+ * L'état d'un avis, dans la pastille des sujets.
+ *
+ * Vert « Open » tant qu'il appelle une action, violet « Closed » une fois levé.
+ * Un avis sans nouvelles reste ouvert — il n'a jamais été refermé, personne
+ * n'en a rien dit.
+ */
+function renderStatePill(status) {
+  const closed = status === "RESOLVED";
+  const icon = svgIcon(closed ? "check-circle" : "issue-opened", { style: "color: #fff" });
+
+  return `
+    <span class="gh-state ${closed ? "gh-state--closed" : "gh-state--open"}">
+      <span class="gh-state-dot" aria-hidden="true">${icon}</span>${closed ? "Levé" : "Ouvert"}
+    </span>
+  `;
+}
+
+/**
+ * L'appréciation, écrite en toutes lettres.
+ *
+ * Une pastille et une majuscule en gras — « ● S » — demandaient de connaître la
+ * légende par cœur. Le mot entier, dans la couleur de ce qu'il implique, se lit
+ * sans traduction.
+ */
+function renderOpinion(code, label) {
+  if (!code) return "";
+  const tone = opinionTone(code, label);
+  const text = firstText(label, code).toLocaleUpperCase("fr");
+
+  return `<span class="ctlab__opinion ctlab__opinion--${tone}" title="${escapeHtml(code)}">${escapeHtml(text)}</span>`;
+}
+
+/**
+ * L'article qui convient au document cité.
+ *
+ * « Absent du fiche travaux n° 9 » se lit mal. Le genre se déduit du type de
+ * document, que celui-ci déclare.
+ */
+const FEMININE_TYPES = new Set(["fiche_avis_travaux", "fiche_examen_document", "attestation"]);
+
+export function withArticle(name, documentType) {
+  if (!name) return "ce document";
+  return FEMININE_TYPES.has(documentType) ? `de la ${lowerFirst(name)}` : `du ${lowerFirst(name)}`;
+}
+
+/** Un sigle garde ses capitales : « du RICT », pas « du rICT ». */
+function lowerFirst(value) {
+  const text = String(value ?? "");
+  if (text === "") return text;
+  if (/^\p{Lu}\p{Lu}/u.test(text)) return text;
+  return `${text.charAt(0).toLocaleLowerCase("fr")}${text.slice(1)}`;
+}
+
 /** « OUVERT » crie ; « Ouvert » se lit. */
 export function titleCase(value) {
   return String(value ?? "")
@@ -526,22 +580,18 @@ const STYLE = `
 }
 .ctlab__pipeline-step:last-child { padding-bottom: 0; }
 .ctlab__pipeline-step:last-child::before { display: none; }
+/* Rien autour de l'icône : ce sont celles des sujets, elles se suffisent. */
 .ctlab__pipeline-mark {
   flex: 0 0 24px;
   width: 24px;
   height: 24px;
-  border-radius: 50%;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--ctlab-line);
-  background: var(--headbgtight, #151b23);
+  background: var(--panel, #0d1117);
   color: var(--ctlab-muted);
   z-index: 1;
 }
-.ctlab__pipeline-step--ok .ctlab__pipeline-mark { color: var(--ctlab-ok); border-color: var(--ctlab-ok); }
-.ctlab__pipeline-step--pending .ctlab__pipeline-mark { color: var(--ctlab-warn); border-color: var(--ctlab-warn); }
-.ctlab__pipeline-step--info .ctlab__pipeline-mark { color: var(--ctlab-info); border-color: var(--ctlab-info); }
 .ctlab__pipeline-body { min-width: 0; flex: 1 1 auto; }
 .ctlab__pipeline-title { font-weight: 600; }
 .ctlab__pipeline-detail { margin-top: 6px; }
@@ -559,6 +609,30 @@ const STYLE = `
 .ctlab__breadcrumb { color: var(--ctlab-muted); font-size: 12px; overflow-wrap: anywhere; }
 .ctlab__breadcrumb span { opacity: .6; margin: 0 2px; }
 /* Le complément d'observation, écrit en italique dans le rapport. */
+/* L'appréciation, en toutes lettres et à la couleur de ce qu'elle implique. */
+.ctlab__opinion {
+  display: inline-block;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  vertical-align: 1px;
+  margin-right: 6px;
+}
+.ctlab__opinion--ok { color: var(--ctlab-ok); }
+.ctlab__opinion--pending { color: var(--ctlab-warn); }
+.ctlab__opinion--danger { color: var(--ctlab-danger); }
+.ctlab__opinion--info { color: var(--ctlab-info); }
+.ctlab__opinion--neutral,
+.ctlab__opinion--unknown { color: var(--ctlab-muted); }
+
+/* L'observation est le fond du dossier : elle se lit, elle ne se devine pas. */
+.ctlab__observation { color: var(--ctlab-text); }
+
+.ctlab__tag--danger { --subject-label-border: var(--ctlab-danger); --subject-label-fg: var(--ctlab-danger); --subject-label-bg: rgba(248, 81, 73, .12); }
+
 .ctlab__pipeline-complement {
   color: var(--ctlab-muted);
   font-size: 12px;
@@ -2220,25 +2294,13 @@ function renderAvisTrace(state) {
     .map((cell) => ({ cell, document: metaById.get(cell.documentId) ?? null }))
     .filter(({ cell }) => cell.continuity || cell.extraction);
 
-  // Une réouverture, c'est un avis qui reparaît après avoir disparu. Le cas
-  // existe : un récapitulatif l'oublie, le suivant le remet. Le taire ferait
-  // de deux évènements distincts une seule ligne de vie continue.
-  const reopenedAt = new Set();
-  let absent = false;
-  steps.forEach(({ cell }, index) => {
-    const stepState = cell.continuity?.value?.state ?? null;
-    const present = stepState === "NEW" || stepState === "MATCHED" || stepState === "MATCHED_BY_TITLE";
-    if (present && absent) reopenedAt.add(index);
-    if (!present) absent = true;
-    else absent = false;
-  });
 
   return `
     <div class="ctlab__section">
       ${back}
       <div class="ctlab__trace-head">
         <h3>Avis n° ${escapeHtml(reference)}</h3>
-        ${summary ? `<span class="ctlab__badge ctlab__badge--${escapeHtml(summary.status)}">${escapeHtml(STATUS_LABELS[summary.status])}</span>` : ""}
+        ${summary ? renderStatePill(summary.status) : ""}
       </div>
       ${
         summary
@@ -2253,7 +2315,7 @@ function renderAvisTrace(state) {
         ${steps
           .map(({ cell, document }, index) =>
             renderTraceStep(cell, document, {
-              reopened: reopenedAt.has(index),
+              appearance: cell.appearance ?? null,
               fallbackTitle: context.title ?? null,
               previous: lastSeenWording(steps, index)
             })
@@ -2425,7 +2487,7 @@ export function lastSeenWording(steps, index) {
  * que c'est exactement ce qui se joue : un avis qui reparaît après avoir
  * disparu est une réouverture, et il faut que ça se voie.
  */
-function renderTraceStep(cell, document, { reopened = false, fallbackTitle = null, previous = null } = {}) {
+function renderTraceStep(cell, document, { appearance = null, fallbackTitle = null, previous = null } = {}) {
   const continuity = cell.continuity;
   const state = continuity?.state === "AMBIGUOUS" ? "AMBIGUOUS" : continuity?.value?.state ?? "AMBIGUOUS";
   const lifted = Boolean(continuity?.lifting_statement);
@@ -2440,38 +2502,35 @@ function renderTraceStep(cell, document, { reopened = false, fallbackTitle = nul
 
   // Le cycle de vie, dit avec les icônes des sujets.
   let lifecycle;
-  if (lifted) lifecycle = { icon: "check-circle", tone: "ok", color: "var(--fgColor-open)" };
-  else if (state === "NOT_FOUND") lifecycle = { icon: "skip", tone: "neutral", color: "var(--muted)" };
-  else if (reopened) lifecycle = { icon: "issue-reopened", tone: "info", color: "var(--fgColor-done)" };
-  else lifecycle = { icon: "issue-opened", tone: "pending", color: "var(--fgColor-open)" };
+  if (lifted) lifecycle = { icon: "check-circle", color: "var(--fgColor-done)" };
+  else if (state === "NOT_FOUND") lifecycle = { icon: "skip", color: "var(--muted)" };
+  else if (appearance === "REOPENED") lifecycle = { icon: "issue-reopened", color: "var(--fgColor-open)" };
+  else lifecycle = { icon: "issue-opened", color: "var(--fgColor-open)" };
 
   // Le libellé dit la conclusion, pas l'état brut : « déclaré levé » assorti de
   // « NON RETROUVÉ » se lisait comme une contradiction, alors que les deux
   // étaient vrais — l'avis a disparu du tableau parce qu'il a été levé.
-  const badge = lifted
-    ? "LEVÉ"
-    : reopened && state !== "NOT_FOUND"
-      ? "RÉOUVERT"
-      : STATE_LABELS[state] ?? state;
+  //
+  // Un avis rappelé par un rapport d'étape n'est pas un avis rouvert : la
+  // distinction vient du moteur, l'écran la restitue.
+  const APPEARANCE_BADGES = {
+    NEW: { label: "NOUVEAU", tone: "info" },
+    TRACKED: { label: "SUIVI", tone: "ok" },
+    RECALLED: { label: "RAPPEL", tone: "muted" },
+    REOPENED: { label: "RÉOUVERT", tone: "danger" }
+  };
 
-  // La couleur porte le sens : vert ce qui est acquis, bleu ce qui est neuf,
-  // gris ce qui n'est qu'un silence.
-  const badgeTone = lifted
-    ? "ok"
-    : state === "MATCHED" || state === "MATCHED_BY_TITLE"
-      ? "ok"
-      : state === "NEW" || reopened
-        ? "info"
-        : "muted";
+  const fromAppearance = APPEARANCE_BADGES[appearance] ?? null;
+  const badge = lifted ? "LEVÉ" : fromAppearance?.label ?? STATE_LABELS[state] ?? state;
+  const badgeTone = lifted ? "ok" : fromAppearance?.tone ?? "muted";
 
   // « Absent de ce rapport » oblige à chercher lequel ; « Absent du RICT
   // version 4 » se lit d'un coup.
-  const documentName = documentLabel(cell.documentId);
   const headline =
     state === "NOT_FOUND"
       ? lifted
         ? "Déclaré levé"
-        : `Absent du ${documentName.charAt(0).toLocaleLowerCase("fr")}${documentName.slice(1)}`
+        : `Absent ${withArticle(documentLabel(cell.documentId), DOCUMENT_META.get(cell.documentId)?.document_type)}`
       : firstText(title, fallbackTitle, "Figure dans ce rapport");
 
   const secondLine =
@@ -2494,7 +2553,7 @@ function renderTraceStep(cell, document, { reopened = false, fallbackTitle = nul
   const sameComment = Boolean(previous?.comment && comment && previous.comment === comment);
 
   return `
-    <li class="ctlab__pipeline-step ctlab__pipeline-step--${lifecycle.tone}">
+    <li class="ctlab__pipeline-step">
       <span class="ctlab__pipeline-mark" style="color:${lifecycle.color}" aria-hidden="true">
         ${svgIcon(lifecycle.icon, { className: "octicon" })}
       </span>
@@ -2503,6 +2562,11 @@ function renderTraceStep(cell, document, { reopened = false, fallbackTitle = nul
           <span class="issue-row-meta-text ctlab__pipeline-date">${escapeHtml(formatDate(document?.issued_at))}</span>
           <span class="ctlab__pipeline-headline ${state === "NOT_FOUND" ? "ctlab__pipeline-headline--muted" : ""}">${escapeHtml(headline)}</span>
           <span class="subject-label-badge ctlab__tag ctlab__tag--${escapeHtml(badgeTone)}">${escapeHtml(badge.toLocaleUpperCase("fr"))}</span>
+          ${
+            state === "NOT_FOUND" && !lifted && secondLine
+              ? `<span class="issue-row-meta-text">— ${escapeHtml(secondLine)}</span>`
+              : ""
+          }
         </div>
         ${
           ancestors && ancestors.length > 0
@@ -2519,16 +2583,14 @@ function renderTraceStep(cell, document, { reopened = false, fallbackTitle = nul
             : ""
         }
         ${
-          secondLine || opinion
-            ? `<div class="ctlab__pipeline-line ctlab__pipeline-text">
-                 ${
-                   opinion
-                     ? `<span class="ctlab__dot ctlab__dot--${opinionTone(opinion, opinionLabelText)}" aria-hidden="true"></span><b>${escapeHtml(opinion)}</b> `
-                     : ""
-                 }
-                 <span class="issue-row-meta-text">${escapeHtml(sameComment ? "Observation inchangée." : secondLine)}</span>
+          state === "NOT_FOUND" || !opinion
+            ? lifted && secondLine
+              ? `<div class="ctlab__pipeline-line ctlab__pipeline-text issue-row-meta-text">${escapeHtml(secondLine)}</div>`
+              : ""
+            : `<div class="ctlab__pipeline-line ctlab__pipeline-text">
+                 ${renderOpinion(opinion, opinionLabelText)}
+                 <span class="ctlab__observation">${escapeHtml(sameComment ? "Observation inchangée." : secondLine)}</span>
                </div>`
-            : ""
         }
         ${
           complement

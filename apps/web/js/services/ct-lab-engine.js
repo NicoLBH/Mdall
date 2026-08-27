@@ -350,11 +350,49 @@ export async function runCtLab(
     identityDisagreements: result.identity_disagreements ?? [],
     predictions: result.predictions,
     suggestions: result.experimental_suggestions ?? [],
-    timeline: buildTimeline(orderedSources, result.predictions),
+    timeline: classifyTimeline(buildTimeline(orderedSources, result.predictions), resolved.status),
     indicators,
     record,
     reportMarkdown: resolved.report.renderRunReport(record)
   };
+}
+
+/**
+ * Qualifie chaque case de la matrice : nouveau, suivi, rappelé, rouvert.
+ *
+ * La règle vit dans le moteur de spike — un avis rappelé par un rapport
+ * d'étape n'est pas un avis rouvert — et s'applique ici aux appréciations
+ * réellement lues, document par document. L'écran n'a plus qu'à les afficher.
+ */
+function classifyTimeline(timeline, status) {
+  if (!status?.classifyAppearance) return timeline;
+
+  return timeline.map((row) => {
+    let previous = null;
+    let gap = false;
+
+    const cells = row.cells.map((cell) => {
+      const state = cell.continuity?.value?.state ?? null;
+      const present = state === "NEW" || state === "MATCHED" || state === "MATCHED_BY_TITLE";
+
+      if (!present) {
+        gap = true;
+        return { ...cell, appearance: null };
+      }
+
+      const current = {
+        opinion_raw: cell.extraction?.value?.opinion_raw ?? cell.continuity?.matched_opinion_raw ?? null,
+        opinion_label: cell.extraction?.opinion_label ?? cell.continuity?.matched_opinion_label ?? null
+      };
+
+      const appearance = status.classifyAppearance(previous, current, { afterGap: gap });
+      previous = current;
+      gap = false;
+      return { ...cell, appearance };
+    });
+
+    return { ...row, cells };
+  });
 }
 
 /**
