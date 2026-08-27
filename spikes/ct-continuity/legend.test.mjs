@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { discoverLegend, isLegendLine, legendToLexicon } from "./legend.mjs";
+import { discoverLegend, isLegendLine, legendToLexicon, mergeLegends } from "./legend.mjs";
 
 const SOCOTEC_LEGEND =
   "* F: Favorable , D: Défavorable , S: Suspendu , HM: Hors Mission , PM: Pour Mémoire , SO: Sans Objet";
@@ -52,4 +52,25 @@ test("legendToLexicon garde le libellé et le code comme graphies acceptées", (
   const lexicon = legendToLexicon(codes);
 
   assert.deepEqual(lexicon.find((entry) => entry.id === "favorable").labels, ["Favorable", "F"]);
+});
+
+test("une fiche de visite n'énumère parfois que deux codes, sous astérisque", () => {
+  const { codes } = discoverLegend("* D: Défavorable , F: Favorable");
+
+  assert.deepEqual(codes.map((entry) => entry.code), ["D", "F"]);
+});
+
+test("sans l'astérisque, deux couples restent une phrase ordinaire", () => {
+  assert.deepEqual(discoverLegend("Contact: Jean Dupont , Tel: 0102030405").codes, []);
+});
+
+test("mergeLegends réunit les vocabulaires d'un lot, la première graphie gagnant", () => {
+  const batch = mergeLegends([
+    discoverLegend("* F: Favorable , D: Défavorable , S: Suspendu , HM: Hors Mission"),
+    discoverLegend("* D: Défavorable , F: Favorable"),
+    discoverLegend("C: Conforme , NC: Non conforme , SO: Sans objet")
+  ]);
+
+  assert.deepEqual(batch.map((entry) => entry.code).sort(), ["C", "D", "F", "HM", "NC", "S", "SO"]);
+  assert.equal(batch.find((entry) => entry.code === "F").label, "Favorable");
 });

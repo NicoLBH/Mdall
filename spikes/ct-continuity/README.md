@@ -72,6 +72,15 @@ Ce numéro est **la seule identité stable d'un rapport à l'autre**, et il ne
 figure que sur les avis qui appellent une suite. Les avis sans numéro sont
 extraits et affichés, jamais suivis : leur inventer une identité serait deviner.
 
+Quand une pièce n'énonce pas sa légende — les fiches de visite, par exemple —
+celle des autres documents du même lot est reprise, et le run déclare pour
+quelles sources. La lire ailleurs n'est pas l'inventer ; ne pas dire d'où elle
+vient, si.
+
+Un code d'avis seul sur sa ligne est protégé de la détection de texte répété :
+il se répète forcément de page en page, et le confondre avec un pied de page
+faisait disparaître des avis entiers — 16 sur 68 dans un cas mesuré.
+
 Trois signaux structurels sont exploités, tous lus dans le document :
 
 - l'en-tête de tableau borne les zones où un avis peut exister — hors tableau,
@@ -255,6 +264,18 @@ avis proches.
 
 Les rapports réels vont dans `spikes/fixtures/private/`, qui est gitignoré.
 
+## Ce que le corpus réel a validé
+
+Sur un rapport préalable APD réel, le document se déclare lui-même :
+
+> « Le présent rapport comporte au total 68 avis, dont 43 avis favorables,
+> 5 avis suspendus »
+
+Le moteur en extrait **68**, dont **43 F** et **5 S**. Le rapport initial du
+même projet retrouve exactement les 13 avis de son « Récapitulatif des avis S
+et D ». Ces comptes ne sont pas une ground truth annotée — mais ils sont écrits
+par l'organisme, dans le document, sans rapport avec le moteur.
+
 ## Limites connues
 
 1. **Le score sur la fixture synthétique ne prouve rien.** La fixture a été
@@ -272,12 +293,16 @@ Les rapports réels vont dans `spikes/fixtures/private/`, qui est gitignoré.
    ce que le Spike 2 devra affronter.
 5. **Le lexique d'avis est court** et français. Une formulation absente du
    lexique donne `opinion_raw: null` : le moteur ne devine pas.
-6. **Un numéro resté sur la même ligne que son commentaire n'est pas reconnu.**
+6. **Les fiches de visite ne sont lues que partiellement.** Certaines de leurs
+   lignes n'ont aucun code dans la colonne « Avis » : le lecteur en blocs, qui
+   démarre une observation à un code, les rattache alors à l'observation
+   précédente. Rien n'a été tenté pour deviner où commence une ligne sans avis.
+7. **Un numéro resté sur la même ligne que son commentaire n'est pas reconnu.**
    Non observé sur le corpus réel — les commentaires y sont assez longs pour que
    la colonne N° tombe sur sa propre ligne — mais un organisme plus laconique
    produirait ce cas. Rien n'a été ajouté pour le couvrir : une heuristique
    « dernier nombre du commentaire » créerait de fausses identités, donc de
    faux rapprochements.
-7. **Un rapport qui renumérote intégralement ses avis** produira beaucoup de
+8. **Un rapport qui renumérote intégralement ses avis** produira beaucoup de
    `NOT_FOUND` et de `NEW`. C'est un résultat honnête, pas un bon résultat : ce
    sera le premier signal à surveiller sur corpus réel.
