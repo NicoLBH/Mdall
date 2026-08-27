@@ -199,3 +199,48 @@ test("un pipeline sans run() est refusé explicitement", async () => {
     /`pipeline.run` est obligatoire/
   );
 });
+
+test("une ground truth partielle déclare son périmètre : hors périmètre, rien n'est pénalisé", () => {
+  const evaluation = evaluateCase({
+    expected: [{ key: "extraction:a:1", kind: "extraction", value: { x: 1 } }],
+    predicted: [
+      { key: "extraction:a:1", kind: "extraction", state: "PREDICTED", value: { x: 1 } },
+      { key: "observation:a:0", kind: "observation", state: "PREDICTED", value: { x: 9 } },
+      { key: "observation:a:1", kind: "observation", state: "PREDICTED", value: { x: 9 } }
+    ],
+    scope: { key_prefixes: ["extraction:"] }
+  });
+
+  assert.equal(evaluation.counts.truePositives, 1);
+  assert.equal(evaluation.counts.falsePositives, 0, "les prédictions hors périmètre ne sont pas des faux positifs");
+  assert.equal(evaluation.counts.outOfScopePredictions, 2);
+});
+
+test("le périmètre accepte aussi des clés explicites", () => {
+  const evaluation = evaluateCase({
+    expected: [{ key: "continuity:b:7", kind: "continuity", value: { state: "MATCHED" } }],
+    predicted: [
+      { key: "continuity:b:7", kind: "continuity", state: "PREDICTED", value: { state: "MATCHED" } },
+      { key: "continuity:b:8", kind: "continuity", state: "PREDICTED", value: { state: "NEW" } }
+    ],
+    scope: { keys: ["continuity:b:7"] }
+  });
+
+  assert.equal(evaluation.counts.truePositives, 1);
+  assert.equal(evaluation.counts.falsePositives, 0);
+  assert.equal(evaluation.counts.outOfScopePredictions, 1);
+});
+
+test("sans périmètre déclaré, tout est évalué comme avant", () => {
+  const evaluation = evaluateCase({
+    expected: [{ key: "a", kind: "k", value: { x: 1 } }],
+    predicted: [
+      { key: "a", kind: "k", state: "PREDICTED", value: { x: 1 } },
+      { key: "b", kind: "k", state: "PREDICTED", value: { x: 2 } }
+    ]
+  });
+
+  assert.equal(evaluation.counts.truePositives, 1);
+  assert.equal(evaluation.counts.falsePositives, 1);
+  assert.equal(evaluation.counts.outOfScopePredictions, 0);
+});

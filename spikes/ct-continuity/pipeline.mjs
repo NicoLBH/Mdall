@@ -20,6 +20,7 @@ import {
   extractOccurrences
 } from "./extraction.mjs";
 import { discoverLegend, mergeLegends } from "./legend.mjs";
+import { findLiftingStatements, indexStatements } from "./lifting.mjs";
 
 export const STRATEGY = {
   /** Choisit `blocks` si le document déclare sa propre légende d'avis. */
@@ -184,6 +185,15 @@ function toContinuityPrediction(item) {
     derived_from_absence: item.derived_from_absence,
     absent_from_document_id: item.state === CONTINUITY_STATE.NOT_FOUND ? item.document_id : null,
     match_method: item.match_method,
+    // Preuve de levée, quand le document la porte. Elle n'altère pas `value` :
+    // le statut de la source et celui d'un sujet Mdall restent distincts.
+    lifting_statement: item.lifting_statement ?? null,
+    matched_title: item.matched_title ?? null,
+    // L'avis retrouvé par intitulé n'appartient à aucune prédiction numérotée :
+    // sans cela, la case du tableau n'aurait rien à afficher.
+    matched_opinion_raw: item.occurrence?.opinion_raw ?? null,
+    matched_opinion_label: item.occurrence?.opinion_label ?? null,
+    title_lookup: item.title_lookup ?? null,
     description_changed: item.description_changed,
     candidates: item.candidates?.map((occurrence) => ({
       external_reference_raw: occurrence.external_reference_raw,
@@ -247,12 +257,10 @@ export const ctContinuityPipeline = {
         legends[source.source_id] = { codes: legend, source: legendSource };
         if (legendSource === "other_documents") borrowedLegend.push(source.source_id);
 
-        // Seuls les avis portant un numéro entrent dans la continuité :
-        // les autres n'ont pas d'identité que le métier ait déjà fixée.
-        documents.push({
-          source,
-          occurrences: occurrences.filter((occurrence) => occurrence.external_reference_normalized)
-        });
+        // Toutes les occurrences sont transmises : les numérotées portent la
+        // continuité, les autres permettent de retrouver par intitulé un avis
+        // qui a perdu son numéro en repassant favorable.
+        documents.push({ source, occurrences });
         occurrences.forEach((occurrence, index) => predictions.push(toBlockPrediction(occurrence, index)));
         continue;
       }
@@ -269,9 +277,38 @@ export const ctContinuityPipeline = {
       }
     }
 
-    const continuityItems = buildContinuity(documents);
+    // Déclarations explicites de levée : la preuve que le cadrage exige avant
+    // de considérer qu'un avis a été suivi d'effet.
+    const liftingStatements = sources.flatMap((source) => findLiftingStatements(source));
+    const liftingIndex = indexStatements(liftingStatements);
+
+    for (const statement of liftingStatements) {
+      predictions.push({
+        key: `lifting:${statement.source_document_id}:${statement.reference_normalized}`,
+        kind: "lifting_statement",
+        state: "PREDICTED",
+        confidence: 0.95,
+        value: {
+          external_reference_raw: statement.reference_raw,
+          external_reference_normalized: statement.reference_normalized,
+          declared: "LEVE"
+        },
+        provenance: {
+          source_id: statement.source_document_id,
+          page: statement.source_page,
+          excerpt: statement.sentence
+        }
+      });
+    }
+
+    const { items: continuityItems, identityDisagreements } = buildContinuity(documents, {
+      matchByTitle: params.continuity?.matchByTitle ?? true
+    });
+
     for (const item of continuityItems) {
-      predictions.push(toContinuityPrediction(item));
+      // La preuve est versée au dossier ; elle ne change aucun état.
+      const evidence = liftingIndex.get(`${item.document_id}:${item.reference}`) ?? null;
+      predictions.push(toContinuityPrediction({ ...item, lifting_statement: evidence?.[0] ?? null }));
     }
 
     const notes = [
@@ -292,7 +329,19 @@ export const ctContinuityPipeline = {
       notes,
       strategy,
       legends,
-      experimental_suggestions: buildExperimentalSuggestions(continuityItems)
+      identity_disagreements: identityDisagreements,
+      lifting_statements: liftingStatements,
+      experimental_suggestions: [
+        ...buildExperimentalSuggestions(continuityItems),
+        ...liftingStatements.map((statement) => ({
+          reference: statement.reference_normalized,
+          document_id: statement.source_document_id,
+          suggestion: "LIFTING_DECLARED_IN_SOURCE",
+          rationale:
+            `${statement.source_document_id} p.${statement.source_page ?? "?"} déclare : « ${statement.sentence} »`,
+          applies_mdall_status: false
+        }))
+      ]
     };
   }
 };

@@ -29,6 +29,7 @@ const BROWSER_SAFE_MODULES = [
   "lib/report.mjs",
   "lib/run-record.mjs",
   "ct-continuity/legend.mjs",
+  "ct-continuity/lifting.mjs",
   "ct-continuity/block-extraction.mjs",
   "ct-continuity/extraction.mjs",
   "ct-continuity/continuity.mjs",

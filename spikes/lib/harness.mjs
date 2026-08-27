@@ -46,16 +46,47 @@ import { buildRunRecord } from "./run-record.mjs";
  * `extraMetrics` permet à chaque spike d'ajouter ses métriques propres sans
  * modifier le harness : [{ id, label, compute(context) -> {value, numerator, denominator, note} }]
  */
+/**
+ * Construit le filtre de périmètre d'une ground truth partielle.
+ *
+ * `scope: { key_prefixes: [...], keys: [...] }` — une prédiction hors périmètre
+ * est ignorée : ni vraie, ni fausse, simplement non évaluée.
+ */
+export function createScopeFilter(scope) {
+  if (!scope) return () => true;
+
+  const prefixes = scope.key_prefixes ?? [];
+  const keys = new Set(scope.keys ?? []);
+  if (prefixes.length === 0 && keys.size === 0) return () => true;
+
+  return (prediction) => {
+    const key = String(prediction?.key ?? "");
+    return keys.has(key) || prefixes.some((prefix) => key.startsWith(prefix));
+  };
+}
+
 export function evaluateCase({
   expected = [],
   predicted = [],
   keyOf = defaultKeyOf,
   isMatch = defaultIsMatch,
   isAbstention = isAbstentionByDefault,
-  extraMetrics = []
+  extraMetrics = [],
+  scope = null
 } = {}) {
-  const { counts, outcomes } = compareItems({ expected, predicted, keyOf, isMatch, isAbstention });
-  const context = { expected, predicted, counts, outcomes };
+  const inScope = createScopeFilter(scope);
+  const scopedPredictions = predicted.filter(inScope);
+  const ignoredCount = predicted.length - scopedPredictions.length;
+
+  const { counts, outcomes } = compareItems({
+    expected,
+    predicted: scopedPredictions,
+    keyOf,
+    isMatch,
+    isAbstention
+  });
+  counts.outOfScopePredictions = ignoredCount;
+  const context = { expected, predicted: scopedPredictions, counts, outcomes };
 
   const metrics = [...standardMetrics(counts)];
   for (const metric of extraMetrics) {
@@ -125,7 +156,8 @@ export async function runSpikeCase({
     isAbstention,
     // Un spike peut avoir besoin du cas lui-même pour construire ses métriques
     // (vérifier une provenance suppose d'avoir les sources sous la main).
-    extraMetrics: typeof extraMetrics === "function" ? extraMetrics(testCase) : extraMetrics
+    extraMetrics: typeof extraMetrics === "function" ? extraMetrics(testCase) : extraMetrics,
+    scope: testCase.groundTruth?.scope ?? null
   });
 
   const guardViolations = runGuards(guards, {

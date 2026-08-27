@@ -17,7 +17,20 @@ import { EXTRACTION_STATE } from "./extraction.mjs";
 
 export const CONTINUITY_STATE = {
   NEW: "NEW",
+  /** Rapprochement par référence externe : l'identité que le métier a fixée. */
   MATCHED: "MATCHED",
+  /**
+   * Rapprochement par intitulé, quand la référence a disparu.
+   *
+   * Un avis qui repasse en favorable perd son numéro : l'organisme ne numérote
+   * que ce qui appelle une action. L'intitulé, lui, est une entrée de son
+   * référentiel, reprise à l'identique d'un rapport à l'autre — c'est une
+   * seconde identité fournie par le métier, pas un rapprochement sémantique.
+   *
+   * Jamais confondu avec MATCHED : l'état dit toujours par quoi le
+   * rapprochement a été obtenu.
+   */
+  MATCHED_BY_TITLE: "MATCHED_BY_TITLE",
   NOT_FOUND: "NOT_FOUND",
   AMBIGUOUS: "AMBIGUOUS"
 };
@@ -31,6 +44,7 @@ export const OPINION_CHANGE = {
 export const MATCH_METHOD = {
   EXACT_RAW: "EXACT_RAW",
   NORMALIZED: "NORMALIZED",
+  TITLE_EXACT: "TITLE_EXACT",
   NONE: "NONE"
 };
 
@@ -38,6 +52,11 @@ export const CONTINUITY_CONFIDENCE = {
   MATCHED_KNOWN_OPINIONS: 0.95,
   MATCHED_UNKNOWN_OPINION: 0.7,
   NEW: 0.9,
+  /**
+   * Un intitulé identique est une identité moins forte qu'un numéro : rien ne
+   * garantit que l'organisme ne réemploie pas le même libellé ailleurs.
+   */
+  MATCHED_BY_TITLE: 0.75,
   /** L'absence observée dépend du rappel de l'extraction : elle vaut moins qu'une présence lue. */
   NOT_FOUND: 0.7
 };
@@ -66,6 +85,42 @@ function matchMethodBetween(previous, current) {
   return MATCH_METHOD.NORMALIZED;
 }
 
+/** Index des occurrences d'un document par intitulé normalisé. */
+function buildTitleIndex(occurrences) {
+  const index = new Map();
+  for (const occurrence of occurrences) {
+    const key = normalizeTextKey(occurrence.title_raw ?? "");
+    if (key === "") continue;
+    index.set(key, [...(index.get(key) ?? []), occurrence]);
+  }
+  return index;
+}
+
+/**
+ * Cherche, dans un document, une occurrence portant le même intitulé.
+ *
+ * Trois issues, et elles ne disent pas la même chose :
+ *  - une seule occurrence sans numéro : rapprochement par intitulé ;
+ *  - une occurrence portant un AUTRE numéro : les deux identités se
+ *    contredisent, on ne tranche pas — et on l'enregistre, car c'est ce
+ *    désaccord qui mesure la fiabilité du rapprochement par intitulé ;
+ *  - plusieurs candidats : ambiguïté.
+ */
+function findByTitle(titleIndex, occurrence, reference) {
+  const key = normalizeTextKey(occurrence?.title_raw ?? "");
+  if (key === "") return { outcome: "NONE" };
+
+  const candidates = titleIndex.get(key) ?? [];
+  if (candidates.length === 0) return { outcome: "NONE" };
+  if (candidates.length > 1) return { outcome: "AMBIGUOUS", candidates };
+
+  const [candidate] = candidates;
+  if (candidate.external_reference_normalized && candidate.external_reference_normalized !== reference) {
+    return { outcome: "CONTRADICTS_NUMBER", candidate };
+  }
+  return { outcome: "MATCHED", candidate };
+}
+
 function isAmbiguous(occurrences) {
   return occurrences.length > 1 || occurrences.some((occurrence) => occurrence.extraction_state === EXTRACTION_STATE.AMBIGUOUS_REFERENCE);
 }
@@ -76,15 +131,21 @@ function isAmbiguous(occurrences) {
  * @param {{source: object, occurrences: object[]}[]} documents dans l'ordre chronologique
  * @returns {object[]} items de continuité
  */
-export function buildContinuity(documents) {
+export function buildContinuity(documents, { matchByTitle = true } = {}) {
   const byDocument = documents.map(({ source, occurrences }) => {
     const index = new Map();
     for (const occurrence of occurrences) {
       const key = occurrence.external_reference_normalized;
+      if (!key) continue;
       index.set(key, [...(index.get(key) ?? []), occurrence]);
     }
-    return { source, index };
+    // L'index par intitulé couvre TOUTES les occurrences, numérotées ou non :
+    // c'est justement une occurrence sans numéro que l'on cherche.
+    return { source, index, titleIndex: buildTitleIndex(occurrences) };
   });
+
+  /** Désaccords entre les deux identités : ils mesurent la seconde. */
+  const identityDisagreements = [];
 
   const references = new Set(byDocument.flatMap((document) => [...document.index.keys()]));
   const items = [];
@@ -102,11 +163,51 @@ export function buildContinuity(documents) {
     /** Dernier document où la référence a été vue, ambiguë ou non. */
     let lastSeenDocumentId = null;
 
-    for (const { source, index } of byDocument) {
+    for (const { source, index, titleIndex } of byDocument) {
       const occurrences = index.get(reference) ?? [];
 
       if (occurrences.length === 0) {
         if (lastSeenDocumentId === null) continue;
+
+        const byTitle = matchByTitle ? findByTitle(titleIndex, lastSeen, reference) : { outcome: "NONE" };
+
+        if (byTitle.outcome === "CONTRADICTS_NUMBER") {
+          identityDisagreements.push({
+            reference,
+            document_id: source.source_id,
+            other_reference: byTitle.candidate.external_reference_raw,
+            title: lastSeen?.title_raw ?? null
+          });
+        }
+
+        if (byTitle.outcome === "MATCHED") {
+          const occurrence = byTitle.candidate;
+          const opinionChange = lastResolved ? compareOpinions(lastResolved, occurrence) : OPINION_CHANGE.UNKNOWN;
+
+          items.push({
+            reference,
+            document_id: source.source_id,
+            state: CONTINUITY_STATE.MATCHED_BY_TITLE,
+            opinion_change: opinionChange,
+            previous_document_id: lastSeenDocumentId,
+            match_method: MATCH_METHOD.TITLE_EXACT,
+            matched_title: occurrence.title_raw,
+            confidence: CONTINUITY_CONFIDENCE.MATCHED_BY_TITLE,
+            occurrence,
+            previous_occurrence: lastResolved,
+            last_seen_occurrence: lastSeen,
+            description_changed: lastResolved
+              ? normalizeTextKey(lastResolved.description_raw ?? "") !== normalizeTextKey(occurrence.description_raw ?? "")
+              : null,
+            derived_from_absence: false
+          });
+
+          lastResolved = occurrence;
+          lastSeen = occurrence;
+          lastSeenDocumentId = source.source_id;
+          continue;
+        }
+
         items.push({
           reference,
           document_id: source.source_id,
@@ -114,6 +215,7 @@ export function buildContinuity(documents) {
           opinion_change: null,
           previous_document_id: lastSeenDocumentId,
           match_method: MATCH_METHOD.NONE,
+          title_lookup: byTitle.outcome,
           confidence: CONTINUITY_CONFIDENCE.NOT_FOUND,
           occurrence: null,
           previous_occurrence: lastResolved,
@@ -191,7 +293,7 @@ export function buildContinuity(documents) {
     }
   }
 
-  return items;
+  return { items, identityDisagreements };
 }
 
 /**

@@ -209,6 +209,9 @@ export function extractAvisBlocks(source, { legend = null } = {}) {
   let tail = [];
   let skipped = 0;
   let previousLine = "";
+  /** Dernière ligne non vide rencontrée, quelle qu'elle soit : seule garantie
+   * de contiguïté pour bâtir un extrait vérifiable dans la source. */
+  let previousRawLine = "";
 
   const closeCurrent = (extraCommentLines = []) => {
     if (!current) return;
@@ -263,6 +266,9 @@ export function extractAvisBlocks(source, { legend = null } = {}) {
       const line = normalizeWhitespace(rawLine);
       if (line === "") continue;
 
+      const contiguousExcerpt = previousRawLine === "" ? line : `${previousRawLine} ${line}`;
+      previousRawLine = line;
+
       if (hasTableHeaders && TABLE_HEADER.test(line)) {
         insideTable = true;
         skipped += 1;
@@ -291,7 +297,9 @@ export function extractAvisBlocks(source, { legend = null } = {}) {
         startBlock({
           code: codeOnly.groups.code,
           page: page.page,
-          excerpt: normalizeWhitespace([...pendingTitle, ...tail, line].slice(-4).join(" ")),
+          // L'extrait doit se retrouver tel quel dans la source : joindre des
+          // lignes non voisines produirait une citation introuvable.
+          excerpt: contiguousExcerpt,
           titleLines: [...pendingTitle],
           firstComment: null
         });
