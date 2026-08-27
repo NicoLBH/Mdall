@@ -161,6 +161,28 @@ sans écrire une ligne de ground truth au préalable :
 4. les indicateurs auto-vérifiables et les garde-fous ;
 5. un export du cas au format `mdall.spike.case/1`, pages incluses.
 
+### Quand rien ne sort
+
+C'est le cas normal au premier contact avec un corpus réel, et la page est
+outillée pour ça :
+
+- **Texte extrait** — le texte page par page, tel que le moteur le reçoit, avec
+  le nombre de lignes reconnues par les motifs. Vide ⇒ le PDF est une image.
+  Plein mais zéro ligne reconnue ⇒ ce sont les motifs qu'il faut corriger, et la
+  page le dit plutôt que d'afficher des `NOT_FOUND` qui n'apprendraient rien.
+- **Motifs d'extraction** — motifs et lexique éditables dans la page, appliqués
+  à chaud. Un motif est refusé s'il ne compile pas ou s'il lui manque
+  `(?<reference>…)` et `(?<rest>…)`/`(?<opinion>…)`.
+- **Export du texte** — pour analyser une mise en page hors ligne.
+
+Les motifs par défaut couvrent trois mises en page (`Avis n° 65 : …`, tableau à
+séparateurs, et `2.1.3 Défavorable …`). Le troisième exige une **formulation
+d'avis connue** : sans cette contrainte, toute ligne commençant par un nombre
+deviendrait un faux avis — « 12.5 m de hauteur » en tête.
+
+Trois mises en page ne font pas une couverture. Chaque organisme rencontré
+demandera de vérifier, et souvent d'ajouter un motif.
+
 **Ce que le laboratoire n'affiche pas : precision et recall.** Ils exigent une
 ground truth annotée à la main ; sans elle, ces chiffres n'existent pas et le
 laboratoire n'en invente aucun. Ce qu'il montre à la place se vérifie seul

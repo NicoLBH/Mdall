@@ -87,10 +87,18 @@ export function buildTimeline(sources, predictions) {
 
   return [...byReference.values()]
     .sort((a, b) => a.reference.localeCompare(b.reference, "fr", { numeric: true }))
-    .map((row) => ({
-      reference: row.reference,
-      cells: documentIds.map((documentId) => row.cells.get(documentId) ?? { documentId, reference: row.reference })
-    }));
+    .map((row) => {
+      const cells = documentIds.map((documentId) => row.cells.get(documentId) ?? { documentId, reference: row.reference });
+
+      // La clé normalisée sert au rapprochement ; c'est la graphie source qui
+      // doit s'afficher. Montrer « 2-1-3 » là où le rapport écrit « 2.1.3 »
+      // reviendrait à présenter une valeur dérivée comme si c'était la source.
+      const referenceRaw =
+        cells.find((cell) => cell.extraction?.value?.external_reference_raw)?.extraction.value
+          .external_reference_raw ?? row.reference;
+
+      return { reference: row.reference, referenceRaw, cells };
+    });
 }
 
 /**
@@ -222,7 +230,7 @@ export function indicatorsAsMetrics(indicators) {
  * Exécute le moteur sur les rapports chargés.
  * `modules` est injectable pour que les tests utilisent directement `spikes/`.
  */
-export async function runCtLab(reports, { modules = null, now = () => new Date() } = {}) {
+export async function runCtLab(reports, { modules = null, now = () => new Date(), params = {} } = {}) {
   const resolved = modules ?? (await getSpikeModules());
   const sources = buildSources(reports);
 
@@ -231,7 +239,7 @@ export async function runCtLab(reports, { modules = null, now = () => new Date()
   }
 
   const startedAt = now();
-  const result = await resolved.pipeline.ctContinuityPipeline.run({ sources, params: {} });
+  const result = await resolved.pipeline.ctContinuityPipeline.run({ sources, params });
   const finishedAt = now();
 
   const guards = [
@@ -247,7 +255,7 @@ export async function runCtLab(reports, { modules = null, now = () => new Date()
     outcomes: [],
     counts: {},
     sources,
-    params: {}
+    params
   });
 
   const indicators = buildIndicators({
@@ -262,7 +270,7 @@ export async function runCtLab(reports, { modules = null, now = () => new Date()
     caseId: "atelier-ct-continuity-lab",
     title: "Laboratoire CT Continuity (Atelier)",
     pipeline: resolved.pipeline.ctContinuityPipeline,
-    params: {},
+    params,
     startedAt,
     finishedAt,
     sources,
