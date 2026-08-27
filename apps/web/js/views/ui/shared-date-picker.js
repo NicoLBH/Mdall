@@ -69,7 +69,16 @@ export function renderSharedDatePicker({
   isOpen = false,
   placeholder = "Select a date",
   inputLabel = "",
-  calendarLabel = "Select a date"
+  calendarLabel = "Select a date",
+  /**
+   * Navigation par année, en plus des mois.
+   *
+   * Optionnelle, et désactivée par défaut : les appelants existants ne
+   * connaissent que `-prev` et `-next`, et afficher des boutons qu'ils ne
+   * savent pas traiter donnerait des commandes mortes. Remonter trois ans en
+   * arrière demandait sinon trente-six clics.
+   */
+  showYearNav = false
 } = {}) {
   const matrix = getSharedCalendarMatrix(viewYear, viewMonth);
   const todayValue = toSharedDateInputValue(new Date());
@@ -91,9 +100,11 @@ export function renderSharedDatePicker({
         <div class="shared-date-picker__popover" role="dialog" aria-label="${escapeHtml(calendarLabel)}">
           <div class="shared-date-picker__calendar">
             <div class="shared-date-picker__calendar-head">
-              <button type="button" class="shared-date-picker__nav" data-shared-date-nav="${escapeHtml(idBase)}-prev" aria-label="Mois prÃŠcÃŠdent">&#x2039;</button>
+              ${showYearNav ? `<button type="button" class="shared-date-picker__nav" data-shared-date-nav="${escapeHtml(idBase)}-year-prev" aria-label="Année précédente">&#x00AB;</button>` : ""}
+              <button type="button" class="shared-date-picker__nav" data-shared-date-nav="${escapeHtml(idBase)}-prev" aria-label="Mois précédent">&#x2039;</button>
               <div class="shared-date-picker__month-label">${escapeHtml(formatSharedDateLong(new Date(viewYear, viewMonth, 1)))}</div>
               <button type="button" class="shared-date-picker__nav" data-shared-date-nav="${escapeHtml(idBase)}-next" aria-label="Mois suivant">&#x203A;</button>
+              ${showYearNav ? `<button type="button" class="shared-date-picker__nav" data-shared-date-nav="${escapeHtml(idBase)}-year-next" aria-label="Année suivante">&#x00BB;</button>` : ""}
             </div>
             <div class="shared-date-picker__weekdays">
               ${WEEKDAY_LABELS.map((label) => `<span>${escapeHtml(label)}</span>`).join("")}

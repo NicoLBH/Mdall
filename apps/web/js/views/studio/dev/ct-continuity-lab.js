@@ -29,8 +29,11 @@ import {
   parsePatterns,
   previewMatches
 } from "../../../services/ct-lab-patterns.js";
-import { renderGhActionButton } from "../../ui/gh-split-button.js";
+import { bindGhActionButtons, renderGhActionButton } from "../../ui/gh-split-button.js";
 import { renderLightTabs } from "../../ui/light-tabs.js";
+import { paginateItems, renderPaginationControls } from "../../ui/pagination.js";
+import { svgIcon } from "../../../ui/icons.js";
+import { getNiceChartTicks, renderSvgLineChart } from "../../../utils/svg-line-chart.js";
 import {
   formatSharedDateInputValue,
   parseSharedDateInputValue,
@@ -43,6 +46,7 @@ export const TABS = [
   { id: "state", label: "Où en est-on" },
   { id: "documents", label: "Documents" },
   { id: "avis", label: "Avis" },
+  { id: "indicators", label: "Indicateurs" },
   { id: "evidence", label: "Preuves" },
   { id: "technical", label: "Technique" }
 ];
@@ -72,6 +76,67 @@ let DOCUMENT_LABELS = new Map();
 function documentLabel(sourceId) {
   if (!sourceId) return "—";
   return DOCUMENT_LABELS.get(sourceId) ?? sourceId;
+}
+
+/**
+ * `2025-09-12` se lit mal sur un dossier français. Les dates restent en ISO
+ * dans les données et les exports — triables, non ambiguës — et ne passent au
+ * format du métier qu'au moment de s'afficher.
+ */
+function formatDate(iso) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso ?? ""));
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : "—";
+}
+
+/**
+ * Le code d'avis porte une couleur, et cette couleur dit une action : vert on
+ * peut avancer, orange en attente, rouge il faut reprendre, gris rien à faire,
+ * bleu pour information. L'application n'en définissait aucune ; celles-ci
+ * s'appuient sur ses jetons de statut.
+ */
+const OPINION_TONES = {
+  F: "ok",
+  C: "ok",
+  SO: "neutral",
+  HM: "neutral",
+  PM: "info",
+  S: "pending",
+  D: "danger",
+  NC: "danger"
+};
+
+const OPINION_LABEL_TONES = {
+  FAVORABLE: "ok",
+  CONFORME: "ok",
+  "SANS OBJET": "neutral",
+  "HORS MISSION": "neutral",
+  "POUR MEMOIRE": "info",
+  SUSPENDU: "pending",
+  DEFAVORABLE: "danger",
+  "NON CONFORME": "danger"
+};
+
+function opinionTone(code, label = null) {
+  const byCode = OPINION_TONES[String(code ?? "").toUpperCase()];
+  if (byCode) return byCode;
+
+  // Un rapport lu ligne à ligne écrit le libellé en toutes lettres, sans code.
+  const key = String(label ?? code ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase();
+  return OPINION_LABEL_TONES[key] ?? "unknown";
+}
+
+/**
+ * Le moteur n'a pas su lire le code : ce n'est pas un code, c'est une
+ * abstention. L'afficher comme « ? » laissait croire à un avis exotique.
+ */
+const ABSTENTION_CODE = "?";
+
+function opinionLabel(entry) {
+  if (entry.code === ABSTENTION_CODE) return "sans code lisible — abstention";
+  return entry.label ? `${entry.code} (${entry.label})` : entry.code;
 }
 
 const STATE_LABELS = {
@@ -156,7 +221,7 @@ const STYLE = `
 .ctlab__alert b { color: var(--ctlab-text); }
 .ctlab__alert--attention { border-left-color: var(--ctlab-warn); background: rgba(210, 153, 34, .12); }
 .ctlab__alert--info { border-left-color: var(--ctlab-info); background: rgba(88, 166, 255, .12); }
-.ctlab__kpis { display: flex; gap: 12px; flex-wrap: wrap; }
+.ctlab__kpis { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
 .ctlab__kpi { border: 1px solid var(--ctlab-line); border-radius: var(--radius, 6px); padding: 8px 12px; min-width: 150px; }
 .ctlab__kpi b { display: block; font-size: 18px; color: var(--ctlab-text); }
 .ctlab__kpi span { color: var(--ctlab-muted); }
@@ -173,6 +238,184 @@ const STYLE = `
 .ctlab__badge--AMBIGUOUS { border-style: dashed; color: var(--ctlab-muted); }
 .ctlab__detail { border: 1px dashed var(--ctlab-line); border-radius: var(--radius, 6px); padding: 10px; margin-top: 10px; }
 .ctlab__error { color: var(--ctlab-danger); }
+/* Pastilles de code d'avis : la couleur dit l'action attendue, pas le code. */
+.ctlab__dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 4px;
+  vertical-align: -1px;
+  background: var(--ctlab-muted);
+}
+.ctlab__dot--ok { background: var(--ctlab-ok); }
+.ctlab__dot--pending { background: var(--ctlab-warn); }
+.ctlab__dot--danger { background: var(--ctlab-danger); }
+.ctlab__dot--info { background: var(--ctlab-info); }
+.ctlab__dot--neutral { background: var(--ctlab-muted); }
+.ctlab__dot--unknown { background: transparent; border: 1px dashed var(--ctlab-muted); }
+
+/* Répartition en une barre, comme les langages d'un dépôt. */
+.ctlab__breakdown { margin: 0 0 16px; }
+.ctlab__breakdown-bar {
+  display: flex;
+  height: 8px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--ctlab-line);
+}
+.ctlab__breakdown-segment { display: block; height: 100%; }
+.ctlab__breakdown-segment--ok { background: var(--ctlab-ok); }
+.ctlab__breakdown-segment--pending { background: var(--ctlab-warn); }
+.ctlab__breakdown-segment--danger { background: var(--ctlab-danger); }
+.ctlab__breakdown-segment--info { background: var(--ctlab-info); }
+.ctlab__breakdown-segment--neutral { background: var(--ctlab-muted); }
+.ctlab__breakdown-segment--unknown { background: repeating-linear-gradient(45deg, var(--ctlab-muted) 0 3px, transparent 3px 6px); }
+.ctlab__breakdown-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 20px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.ctlab__breakdown-legend li { display: flex; align-items: baseline; gap: 4px; }
+
+/* Filtres sur une ligne, sans déborder de leur conteneur. */
+.ctlab__filters {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 0 0 12px;
+}
+.ctlab__select {
+  max-width: 220px;
+  border: 1px solid var(--ctlab-line);
+  background: var(--bg-input, rgb(21, 27, 35));
+  color: var(--ctlab-text);
+  border-radius: var(--radius, 6px);
+  padding: 4px 8px;
+  font: inherit;
+}
+.ctlab__select--wide { max-width: 360px; }
+
+/* Lignes de tableau à la manière des sujets : intitulé cliquable, reste en petit. */
+.ctlab__title-cell { max-width: 0; }
+.ctlab__title-cell .row-title-trigger { font-size: 13px; }
+.ctlab__title-static { color: var(--ctlab-text); font-weight: 600; }
+.ctlab__row-comment {
+  color: var(--ctlab-muted);
+  font-size: 12px;
+  margin-top: 4px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Retour arrière et frise de vie d'un avis. */
+.ctlab__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin-bottom: 12px;
+  font: inherit;
+  color: var(--ctlab-muted);
+  cursor: pointer;
+}
+.ctlab__back:hover { color: var(--ctlab-info); }
+.ctlab__trace-head { display: flex; align-items: center; gap: 10px; }
+.ctlab__trace-head h3 { margin: 0; }
+.ctlab__pipeline { list-style: none; margin: 16px 0 0; padding: 0; }
+.ctlab__pipeline-step {
+  display: flex;
+  gap: 12px;
+  padding: 0 0 18px;
+  position: relative;
+}
+/* Le trait qui relie les étapes, sauf après la dernière. */
+.ctlab__pipeline-step::before {
+  content: "";
+  position: absolute;
+  left: 11px;
+  top: 24px;
+  bottom: 0;
+  width: 2px;
+  background: var(--ctlab-line);
+}
+.ctlab__pipeline-step:last-child { padding-bottom: 0; }
+.ctlab__pipeline-step:last-child::before { display: none; }
+.ctlab__pipeline-mark {
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--ctlab-line);
+  background: var(--headbgtight, #151b23);
+  color: var(--ctlab-muted);
+  z-index: 1;
+}
+.ctlab__pipeline-step--ok .ctlab__pipeline-mark { color: var(--ctlab-ok); border-color: var(--ctlab-ok); }
+.ctlab__pipeline-step--pending .ctlab__pipeline-mark { color: var(--ctlab-warn); border-color: var(--ctlab-warn); }
+.ctlab__pipeline-step--info .ctlab__pipeline-mark { color: var(--ctlab-info); border-color: var(--ctlab-info); }
+.ctlab__pipeline-body { min-width: 0; flex: 1 1 auto; }
+.ctlab__pipeline-title { font-weight: 600; }
+.ctlab__pipeline-detail { margin-top: 6px; }
+.ctlab__chart { overflow-x: auto; }
+
+/* Remonter le temps : une fonction stratégique, pas un lien perdu. */
+.ctlab__time-travel { display: inline-flex; align-items: center; gap: 6px; }
+.ctlab__time-travel-active {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  border: 1px solid var(--ctlab-warn);
+  background: rgba(210, 153, 34, .10);
+  border-radius: var(--radius, 6px);
+  padding: 6px 10px;
+}
+.ctlab__milestones { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; flex-basis: 100%; }
+
+/* Constats gradués : le rouge est réservé à ce qui l'exige. */
+.ctlab__notice {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 6px 10px;
+  margin-bottom: 4px;
+  border-radius: var(--radius, 6px);
+  border-left: 3px solid var(--ctlab-line);
+  color: var(--ctlab-text);
+}
+.ctlab__notice-icon { flex: 0 0 16px; color: var(--ctlab-muted); }
+.ctlab__notice--danger { border-left-color: var(--ctlab-danger); background: rgba(248, 81, 73, .12); }
+.ctlab__notice--danger .ctlab__notice-icon { color: var(--ctlab-danger); }
+.ctlab__notice--warn { border-left-color: var(--ctlab-warn); background: rgba(210, 153, 34, .12); }
+.ctlab__notice--warn .ctlab__notice-icon { color: var(--ctlab-warn); }
+.ctlab__notice--info { border-left-color: transparent; background: none; padding-left: 0; }
+
+/* Repli : ce qui est volumineux ne doit pas enterrer ce qui est actionnable. */
+.ctlab__fold > summary {
+  cursor: pointer;
+  color: var(--ctlab-muted);
+  padding: 4px 0;
+}
+.ctlab__fold > summary:hover { color: var(--ctlab-info); }
+.ctlab__fold-body { margin-top: 10px; }
+
+/* Un indicateur au vert se voit. */
+.ctlab__kpi b { display: flex; align-items: center; gap: 6px; }
+.ctlab__kpi--ok b { color: var(--ctlab-ok); }
+.ctlab__kpi--warn b { color: var(--ctlab-warn); }
+.ctlab__kpi--danger b { color: var(--ctlab-danger); }
 .ctlab__row--selected > td { background: rgba(88, 166, 255, .10); }
 .ctlab__detail dt { font-weight: 700; margin-top: 6px; }
 .ctlab__detail dd { margin: 0; color: var(--ctlab-text); }
@@ -395,7 +638,7 @@ function renderDocumentList(state) {
       return `
         <tr>
           <td>${meta?.order ?? "—"}</td>
-          <td>${meta?.issued_at ?? `<span class="ctlab__empty">date inconnue</span>`}</td>
+          <td>${meta?.issued_at ? escapeHtml(formatDate(meta.issued_at)) : `<span class="ctlab__empty">date inconnue</span>`}</td>
           <td>${escapeHtml(meta?.document_type_label ?? "—")}</td>
           <td>${escapeHtml(truncate(report.filename, 60))}</td>
           <td>${failed ? `<span class="ctlab__error">${escapeHtml(report.error)}</span>` : `${report.pageCount} p.`}</td>
@@ -437,7 +680,7 @@ function renderChronology(state) {
                 (entry) => `
                   <tr>
                     <td>${escapeHtml(entry.chrono_reference)}</td>
-                    <td>${escapeHtml(entry.issued_at)}</td>
+                    <td>${escapeHtml(formatDate(entry.issued_at))}</td>
                     <td>${escapeHtml(entry.designation)}</td>
                     <td>${escapeHtml(documentLabel(entry.declared_in))}</td>
                   </tr>
@@ -520,6 +763,36 @@ const RESOLUTION_LABELS = {
  * Trois colonnes, et la troisième est la raison d'être de l'écran : un avis
  * disparu sans explication n'est ni ouvert ni levé. C'est une question à poser.
  */
+/**
+ * Ce que les documents disent d'un avis, indexé par son numéro.
+ *
+ * La dernière occurrence gagne : c'est la formulation la plus récente que
+ * l'organisme ait donnée de cet avis, et c'est celle qu'on lit dans un dossier.
+ */
+function buildAvisContext(result) {
+  const order = new Map(result.sources.map((source, index) => [source.source_id, index]));
+  const context = new Map();
+
+  for (const avis of collectAvis(result.predictions)) {
+    const reference = avis.value?.external_reference_raw;
+    if (!reference) continue;
+
+    const position = order.get(avis.provenance?.source_id) ?? -1;
+    const previous = context.get(reference);
+    if (previous && previous.position > position) continue;
+
+    context.set(reference, {
+      position,
+      code: avis.value?.opinion_raw ?? avis.opinion_raw ?? null,
+      label: avis.opinion_label ?? null,
+      title: avis.title_raw ?? null,
+      comment: avis.description_raw ?? null
+    });
+  }
+
+  return context;
+}
+
 function renderStatusView(state) {
   const { avisStatus, statusCounts, chronology } = state.result;
 
@@ -527,23 +800,40 @@ function renderStatusView(state) {
     return `<p class="ctlab__empty">Aucun avis numéroté dans les documents retenus.</p>`;
   }
 
+  // Un numéro seul ne dit rien. Chaque ligne porte le code d'avis, son
+  // intitulé, et le commentaire du contrôleur en seconde ligne — la même
+  // lecture que le tableau des sujets.
+  const context = buildAvisContext(state.result);
+
   const rows = avisStatus
     .map((summary) => {
       const months = summary.age_days === null ? null : Math.round(summary.age_days / 30);
-      const selected = state.selectedReference === summary.reference;
+      const info = context.get(summary.reference) ?? {};
+      const code = info.code ?? summary.opinion_raw ?? ABSTENTION_CODE;
+
       return `
-        <tr class="${selected ? "ctlab__row--selected" : ""}">
+        <tr>
+          <td><b>${escapeHtml(summary.reference)}</b></td>
           <td>
-            <button type="button" class="ctlab__link" data-ctlab-trace="${escapeHtml(summary.reference)}">
-              <b>${escapeHtml(summary.reference)}</b>
-            </button>
+            <span class="ctlab__badge ctlab__badge--${escapeHtml(summary.status)}">${escapeHtml(STATUS_LABELS[summary.status])}</span>
+            ${summary.resolution_reason ? `<div class="issue-row-meta-text">${escapeHtml(RESOLUTION_LABELS[summary.resolution_reason] ?? "")}</div>` : ""}
           </td>
-          <td><span class="ctlab__badge ctlab__badge--${escapeHtml(summary.status)}">${escapeHtml(STATUS_LABELS[summary.status])}</span></td>
-          <td>${escapeHtml(RESOLUTION_LABELS[summary.resolution_reason] ?? "")}</td>
-          <td>${escapeHtml(summary.raised_at ?? "?")}</td>
-          <td>${months === null ? "—" : `${months} mois`}</td>
-          <td>${escapeHtml(documentLabel(summary.last_seen_document_id))}</td>
-          <td>${summary.evidence?.sentence ? escapeHtml(truncate(summary.evidence.sentence, 90)) : ""}</td>
+          <td>
+            <span class="ctlab__dot ctlab__dot--${opinionTone(code, info.label)}" aria-hidden="true"></span>
+            ${escapeHtml(code)}
+            ${info.label && info.label !== code ? `<span class="ctlab__hint">${escapeHtml(info.label)}</span>` : ""}
+          </td>
+          <td class="ctlab__title-cell">
+            <button type="button" class="row-title-trigger" data-ctlab-trace="${escapeHtml(summary.reference)}">
+              ${escapeHtml(truncate(info.title ?? "(sans intitulé)", 140))}
+            </button>
+            <div class="issue-row-meta-text">
+              soulevé le ${escapeHtml(formatDate(summary.raised_at))}${months === null ? "" : ` · ${months} mois`}
+              · vu dans ${escapeHtml(documentLabel(summary.last_seen_document_id))}
+            </div>
+            ${info.comment ? `<div class="ctlab__row-comment">${escapeHtml(truncate(info.comment, 200))}</div>` : ""}
+          </td>
+          <td>${summary.evidence?.sentence ? `<span class="ctlab__hint">${escapeHtml(truncate(summary.evidence.sentence, 120))}</span>` : ""}</td>
         </tr>
       `;
     })
@@ -567,7 +857,13 @@ function renderStatusView(state) {
     <div class="ctlab__scroll">
       <table class="ctlab__grid">
         <thead>
-          <tr><th>N°</th><th>État</th><th>Motif</th><th>Soulevé le</th><th>Ancienneté</th><th>Vu pour la dernière fois</th><th>Preuve</th></tr>
+          <tr>
+            <th style="width:60px">N°</th>
+            <th style="width:130px">État</th>
+            <th style="width:130px">Avis</th>
+            <th>Intitulé et commentaire</th>
+            <th style="width:240px">Preuve</th>
+          </tr>
         </thead>
         <tbody>${rows}</tbody>
       </table>
@@ -585,26 +881,70 @@ function renderStatusView(state) {
  */
 function renderTimeTravelControl(state) {
   if (!state.timeTravel) {
-    return `<button type="button" class="ctlab__link" data-ctlab-time-travel="on">Remonter le temps…</button>`;
+    return `
+      <button type="button" class="gh-btn gh-btn--sm ctlab__time-travel" data-ctlab-time-travel="on">
+        ${svgIcon("history", { className: "octicon" })}
+        <span>Remonter le temps</span>
+      </button>
+    `;
   }
 
   const selectedDate = parseSharedDateInputValue(state.asOf);
   const view = state.asOfView ?? currentCalendarView(selectedDate);
 
   return `
-    <span class="ctlab__hint">État arrêté au</span>
-    ${renderSharedDatePicker({
-      idBase: "ctlabAsOf",
-      value: state.asOf,
-      selectedDate,
-      viewYear: view.year,
-      viewMonth: view.month,
-      isOpen: state.asOfPickerOpen === true,
-      placeholder: "Choisir une date",
-      inputLabel: formatSharedDateInputValue(selectedDate) || "Choisir une date",
-      calendarLabel: "Date à laquelle arrêter l'état des avis"
-    })}
-    <button type="button" class="ctlab__link" data-ctlab-time-travel="off">Revenir à aujourd'hui</button>
+    <div class="ctlab__time-travel-active">
+      ${svgIcon("history", { className: "octicon" })}
+      <span class="ctlab__hint">État arrêté au</span>
+      ${renderSharedDatePicker({
+        idBase: "ctlabAsOf",
+        value: state.asOf,
+        selectedDate,
+        viewYear: view.year,
+        viewMonth: view.month,
+        isOpen: state.asOfPickerOpen === true,
+        placeholder: "Choisir une date",
+        inputLabel: state.asOf ? formatDate(state.asOf) : "Choisir une date",
+        calendarLabel: "Date à laquelle arrêter l'état des avis",
+        showYearNav: true
+      })}
+      <button type="button" class="ctlab__link" data-ctlab-time-travel="off">Revenir à aujourd'hui</button>
+      ${renderMilestones(state)}
+    </div>
+  `;
+}
+
+/**
+ * Les jalons du dossier, en un clic.
+ *
+ * On demande rarement « que savait-on le 17 mars ? ». On demande « que
+ * savait-on au rapport d'étape précédent ? ». Les récapitulatifs sont
+ * précisément les dates où le bureau de contrôle a fait le point : ce sont
+ * elles qu'un juriste ou un maître d'ouvrage vise. Le calendrier reste
+ * disponible pour tout le reste.
+ */
+function renderMilestones(state) {
+  const milestones = (state.result?.chronology?.documents ?? [])
+    .filter((document) => document.recapitulative === true && document.issued_at)
+    .reverse();
+
+  if (milestones.length === 0) return "";
+
+  return `
+    <div class="ctlab__milestones">
+      <span class="ctlab__hint">Jalons :</span>
+      ${milestones
+        .slice(0, 6)
+        .map(
+          (document) => `
+            <button type="button" class="ctlab__link" data-ctlab-as-of="${escapeHtml(document.issued_at)}"
+                    title="${escapeHtml(documentLabel(document.source_id))}">
+              ${escapeHtml(document.document_type_label ?? "Récapitulatif")} ${escapeHtml(formatDate(document.issued_at))}
+            </button>
+          `
+        )
+        .join("")}
+    </div>
   `;
 }
 
@@ -620,27 +960,86 @@ function renderTimeTravelBanner(state) {
   const excluded = state.result.chronology.excluded_by_date;
   return `
     <div class="ctlab__alert ctlab__alert--attention">
-      <b>État arrêté au ${escapeHtml(state.result.chronology.as_of)}.</b>
+      <b>État arrêté au ${escapeHtml(formatDate(state.result.chronology.as_of))}.</b>
       ${excluded > 0 ? `${excluded} document(s) postérieur(s) sont écartés de toute l'analyse.` : "Aucun document n'est postérieur à cette date."}
       <button type="button" class="ctlab__link" data-ctlab-time-travel="off">Revenir à aujourd'hui</button>
     </div>
   `;
 }
 
+const ALERT_TONES = {
+  critique: { tone: "danger", icon: "stop-alert", title: "à vérifier avant d'exploiter le résultat" },
+  attention: { tone: "warn", icon: "alert", title: "point d'attention" },
+  info: { tone: "info", icon: "check-circle", title: "constat de couverture" }
+};
+
+/**
+ * Graduer, et ne pas crier.
+ *
+ * Les cent huit constats « aucun avis reconnu page 1 » d'un lot réel
+ * s'affichaient tous en rouge, faute d'une classe pour le niveau `info` : on
+ * en concluait que toute l'analyse était fausse. Or ce sont des pages de
+ * garde, et c'est une information de couverture, pas une alerte.
+ *
+ * Trois niveaux, trois traitements : le critique garde son fond rouge, le
+ * point d'attention son fond ambré, et l'information devient une ligne sobre,
+ * repliée derrière son total.
+ */
 function renderAlerts(alerts) {
   if (alerts.length === 0) {
     return `<p class="ctlab__empty">Aucune alerte d'extraction.</p>`;
   }
 
-  return alerts
-    .map(
-      (alert) => `
-        <div class="ctlab__alert ${alert.level === "attention" ? "ctlab__alert--attention" : ""}">
-          <b>${escapeHtml(documentLabel(alert.sourceId))}</b> — ${escapeHtml(alert.message)}
-        </div>
-      `
-    )
-    .join("");
+  const line = (alert) => {
+    const { tone, icon } = ALERT_TONES[alert.level] ?? ALERT_TONES.info;
+    return `
+      <div class="ctlab__notice ctlab__notice--${tone}">
+        <span class="ctlab__notice-icon" aria-hidden="true">${svgIcon(icon, { className: "octicon" })}</span>
+        <div><b>${escapeHtml(documentLabel(alert.sourceId))}</b> — ${escapeHtml(alert.message)}</div>
+      </div>
+    `;
+  };
+
+  const bySeverity = (level) => alerts.filter((alert) => alert.level === level);
+  const critical = bySeverity("critique");
+  const attention = bySeverity("attention");
+  const info = alerts.filter((alert) => alert.level !== "critique" && alert.level !== "attention");
+
+  return `
+    ${critical.map(line).join("")}
+    ${attention.map(line).join("")}
+    ${
+      info.length === 0
+        ? ""
+        : `<details class="ctlab__fold">
+             <summary>
+               <span class="ctlab__dot ctlab__dot--neutral" aria-hidden="true"></span>
+               ${info.length} constat(s) de couverture — pages sans avis, normal pour une page de garde
+             </summary>
+             <div class="ctlab__fold-body">${info.map(line).join("")}</div>
+           </details>`
+    }
+  `;
+}
+
+/**
+ * Un taux se lit mieux avec un signe : vert et coché à 100 %, ambré en dessous
+ * de 95 %. Sans repère, « 2 674/2 682 » ne dit à personne si c'est bon.
+ */
+function renderRatioKpi(label, correct, total) {
+  const perfect = total > 0 && correct === total;
+  const weak = total > 0 && correct / total < 0.95;
+  const tone = perfect ? "ok" : weak ? "warn" : "";
+
+  return `
+    <div class="ctlab__kpi ${tone ? `ctlab__kpi--${tone}` : ""}">
+      <b>
+        ${perfect ? svgIcon("check-circle-fill", { className: "octicon" }) : ""}
+        ${formatRatio(correct, total)}
+      </b>
+      <span>${label}</span>
+    </div>
+  `;
 }
 
 function renderIndicators(indicators) {
@@ -650,14 +1049,8 @@ function renderIndicators(indicators) {
 
   return `
     <div class="ctlab__kpis">
-      <div class="ctlab__kpi">
-        <b>${formatRatio(indicators.provenance.correct, indicators.provenance.total)}</b>
-        <span>provenance vérifiée<br>(source + page + extrait)</span>
-      </div>
-      <div class="ctlab__kpi">
-        <b>${formatRatio(indicators.recognizedOpinions.correct, indicators.recognizedOpinions.total)}</b>
-        <span>avis reconnus par le lexique</span>
-      </div>
+      ${renderRatioKpi("provenance vérifiée<br>(source + page + extrait)", indicators.provenance.correct, indicators.provenance.total)}
+      ${renderRatioKpi("avis reconnus par le lexique", indicators.recognizedOpinions.correct, indicators.recognizedOpinions.total)}
       <div class="ctlab__kpi">
         <b>${indicators.abstentionCount}</b>
         <span>abstentions assumées</span>
@@ -670,8 +1063,11 @@ function renderIndicators(indicators) {
         <b>${indicators.liftingCount}</b>
         <span>levées déclarées dans les documents</span>
       </div>
-      <div class="ctlab__kpi">
-        <b>${indicators.guardViolations.length}</b>
+      <div class="ctlab__kpi ${indicators.guardViolations.length === 0 ? "ctlab__kpi--ok" : "ctlab__kpi--danger"}">
+        <b>
+          ${indicators.guardViolations.length === 0 ? svgIcon("check-circle-fill", { className: "octicon" }) : ""}
+          ${indicators.guardViolations.length}
+        </b>
         <span>violations de garde-fou</span>
       </div>
     </div>
@@ -975,27 +1371,50 @@ function renderAvisTable(state) {
 
   const codes = state.result.indicators.byOpinion;
 
-  // Deux mille six cent quatre-vingt-huit lignes d'un coup figent la page :
-  // on n'en construit qu'une page à la fois.
-  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const page = Math.min(state.avisPage, pageCount);
-  const start = (page - 1) * PAGE_SIZE;
-  const visible = filtered.slice(start, start + PAGE_SIZE);
+  // Deux mille six cent quatre-vingt-neuf lignes d'un coup figent la page :
+  // on n'en construit qu'une page à la fois, avec la pagination de
+  // l'application — celle du tableau des sujets.
+  const pagination = paginateItems(filtered, { pageSize: PAGE_SIZE, currentPage: state.avisPage });
+  const visible = pagination.items;
 
+  // Une ligne se lit comme une ligne de sujet : l'intitulé porte le clic — il
+  // passe en bleu au survol —, le reste tient sur une seconde ligne discrète.
+  // Seul un avis numéroté a une vie à raconter ; les autres ne sont pas
+  // cliquables, et le dire par l'absence de lien vaut mieux qu'un clic mort.
   const rows = visible
     .map((avis) => {
-      const code = avis.value?.opinion_raw ?? avis.opinion_raw ?? "?";
+      const code = avis.value?.opinion_raw ?? avis.opinion_raw ?? ABSTENTION_CODE;
       const reference = avis.value?.external_reference_raw;
+      const title = avis.title_raw ?? avis.description_raw ?? "(sans intitulé)";
+      const meta = [
+        documentLabel(avis.provenance?.source_id),
+        avis.provenance?.page ? `page ${avis.provenance.page}` : null,
+        avis.section_label_raw ?? avis.section_number_raw ?? null
+      ]
+        .filter(Boolean)
+        .join(" · ");
 
       return `
         <tr>
-          <td>${escapeHtml(documentLabel(avis.provenance?.source_id))}</td>
-          <td>${avis.provenance?.page ?? "—"}</td>
           <td>${reference ? `<b>${escapeHtml(reference)}</b>` : `<span class="ctlab__empty">sans n°</span>`}</td>
-          <td>${escapeHtml(avis.section_label_raw ?? avis.section_number_raw ?? "—")}</td>
-          <td>${escapeHtml(avis.title_raw ?? "—")}</td>
-          <td><span class="ctlab__badge">${escapeHtml(code)}</span> ${escapeHtml(avis.opinion_label ?? "")}</td>
-          <td>${escapeHtml(truncate(avis.description_raw ?? "", 400))}</td>
+          <td>
+            <span class="ctlab__dot ctlab__dot--${opinionTone(code, avis.opinion_label)}" aria-hidden="true"></span>
+            ${escapeHtml(code)}
+            ${avis.opinion_label && avis.opinion_label !== code ? `<span class="ctlab__hint">${escapeHtml(avis.opinion_label)}</span>` : ""}
+          </td>
+          <td class="ctlab__title-cell">
+            ${
+              reference
+                ? `<button type="button" class="row-title-trigger" data-ctlab-trace="${escapeHtml(reference)}">${escapeHtml(truncate(title, 160))}</button>`
+                : `<span class="ctlab__title-static">${escapeHtml(truncate(title, 160))}</span>`
+            }
+            <div class="issue-row-meta-text">${escapeHtml(meta)}</div>
+            ${
+              avis.description_raw && avis.description_raw !== title
+                ? `<div class="ctlab__row-comment">${escapeHtml(truncate(avis.description_raw, 220))}</div>`
+                : ""
+            }
+          </td>
         </tr>
       `;
     })
@@ -1008,27 +1427,23 @@ function renderAvisTable(state) {
       seuls ceux-là peuvent être suivis d'un rapport à l'autre. Les autres sont listés ici, sans identité
       que le métier ait déjà fixée : leur inventer une reviendrait à deviner.
     </p>
-    <p class="ctlab__hint">
-      ${codes
-        .map((entry) => `${escapeHtml(entry.code)} (${escapeHtml(entry.label ?? "?")}) : ${entry.count}`)
-        .join(" · ")}
-    </p>
-    <div class="ctlab__actions">
+    ${renderOpinionBreakdown(codes, all.length)}
+    <div class="ctlab__filters">
       <label class="ctlab__inline">
         Avis
-        <select data-ctlab-filter-code>
+        <select class="ctlab__select" data-ctlab-filter-code>
           <option value="">tous</option>
           ${codes
             .map(
               (entry) =>
-                `<option value="${escapeHtml(entry.code)}" ${filter.code === entry.code ? "selected" : ""}>${escapeHtml(entry.code)} — ${escapeHtml(entry.label ?? "?")}</option>`
+                `<option value="${escapeHtml(entry.code)}" ${filter.code === entry.code ? "selected" : ""}>${escapeHtml(opinionLabel(entry))}</option>`
             )
             .join("")}
         </select>
       </label>
       <label class="ctlab__inline">
         Rapport
-        <select data-ctlab-filter-document>
+        <select class="ctlab__select ctlab__select--wide" data-ctlab-filter-document>
           <option value="">tous</option>
           ${state.result.sources
             .map(
@@ -1042,31 +1457,66 @@ function renderAvisTable(state) {
         <input type="checkbox" data-ctlab-filter-numbered ${filter.numberedOnly ? "checked" : ""}>
         numérotés seulement
       </label>
+      <span class="ctlab__spacer"></span>
       <span class="ctlab__hint">${filtered.length} retenu(s)</span>
     </div>
     <div class="ctlab__scroll">
       <table class="ctlab__grid">
         <thead>
-          <tr><th>Rapport</th><th>Page</th><th>N°</th><th>Section</th><th>Intitulé</th><th>Avis</th><th>Commentaire</th></tr>
+          <tr><th style="width:70px">N°</th><th style="width:150px">Avis</th><th>Intitulé, provenance et commentaire</th></tr>
         </thead>
         <tbody>${rows}</tbody>
       </table>
     </div>
-    ${renderPager(page, pageCount, start + visible.length, filtered.length)}
+    ${renderPager(pagination, filtered.length)}
   `;
 }
 
-function renderPager(page, pageCount, shown, total) {
-  if (total === 0) return `<p class="ctlab__empty">Aucun avis ne correspond à ce filtre.</p>`;
-  if (pageCount === 1) return "";
+/**
+ * Répartition des avis, dans l'esprit de la barre de langages d'un dépôt :
+ * une seule barre à cent pour cent, puis la légende avec ses pastilles.
+ * On voit d'un coup d'œil si un dossier est majoritairement favorable ou
+ * majoritairement en attente — ce qu'une liste de nombres ne montre pas.
+ */
+function renderOpinionBreakdown(codes, total) {
+  if (total === 0 || codes.length === 0) return "";
+
+  const segments = codes
+    .map((entry) => ({ ...entry, share: (entry.count / total) * 100 }))
+    .filter((entry) => entry.share > 0);
 
   return `
-    <div class="ctlab__actions">
-      <button type="button" class="gh-btn gh-btn--sm" data-ctlab-page="${page - 1}" ${page <= 1 ? "disabled" : ""}>Précédents</button>
-      <span class="ctlab__hint">${shown} / ${total} — page ${page} sur ${pageCount}</span>
-      <button type="button" class="gh-btn gh-btn--sm" data-ctlab-page="${page + 1}" ${page >= pageCount ? "disabled" : ""}>Suivants</button>
+    <div class="ctlab__breakdown">
+      <div class="ctlab__breakdown-bar" role="img" aria-label="Répartition des avis par code">
+        ${segments
+          .map(
+            (entry) =>
+              `<span class="ctlab__breakdown-segment ctlab__breakdown-segment--${opinionTone(entry.code, entry.label)}"
+                     style="width:${entry.share.toFixed(2)}%"
+                     title="${escapeHtml(opinionLabel(entry))} : ${entry.count} (${entry.share.toFixed(1)} %)"></span>`
+          )
+          .join("")}
+      </div>
+      <ul class="ctlab__breakdown-legend">
+        ${segments
+          .map(
+            (entry) => `
+              <li>
+                <span class="ctlab__dot ctlab__dot--${opinionTone(entry.code, entry.label)}" aria-hidden="true"></span>
+                <b>${escapeHtml(opinionLabel(entry))}</b>
+                <span class="ctlab__hint">${entry.count} · ${entry.share.toFixed(1)} %</span>
+              </li>
+            `
+          )
+          .join("")}
+      </ul>
     </div>
   `;
+}
+
+function renderPager(pagination, total) {
+  if (total === 0) return `<p class="ctlab__empty">Aucun avis ne correspond à ce filtre.</p>`;
+  return renderPaginationControls(pagination, { entity: "ctlab-avis" });
 }
 
 /**
@@ -1086,6 +1536,11 @@ function renderResults(state) {
     return `<div class="ctlab__section"><p class="ctlab__empty">Déposer des documents, puis lancer l'analyse.</p></div>`;
   }
 
+  // Le détail d'un avis remplace la vue, il ne s'y ajoute pas : c'est la place
+  // qui rend la frise lisible, et le retour arrière qui rend la navigation
+  // évidente.
+  if (state.selectedReference) return renderAvisTrace(state);
+
   switch (state.activeTab) {
     case "documents":
       return `
@@ -1100,6 +1555,8 @@ function renderResults(state) {
       `;
     case "avis":
       return `<div class="ctlab__section">${renderAvisTable(state)}</div>`;
+    case "indicators":
+      return renderAnalytics(state);
     case "evidence":
       return `
         ${renderClearances(state)}
@@ -1113,81 +1570,294 @@ function renderResults(state) {
         </div>
       `;
     case "technical":
-      return `${renderDetails(state)}${renderExports()}`;
+      return renderDetails(state);
     case "state":
     default:
-      return `
-        <div class="ctlab__section">
-          ${renderStatusView(state)}
-        </div>
-        ${renderAvisTrace(state)}
-      `;
+      return `<div class="ctlab__section">${renderStatusView(state)}</div>`;
   }
 }
 
-function renderExports() {
+
+/**
+ * Les indicateurs de pilotage.
+ *
+ * Ce que chacun vient y chercher :
+ *  - le maître d'ouvrage, l'encours à chaque jalon — le dossier se résorbe-t-il ?
+ *  - l'OPC, le flux trimestriel — émet-on plus qu'on ne lève ?
+ *  - la maîtrise d'œuvre, l'ancienneté de ce qui reste ouvert — que traiter d'abord ?
+ *  - tout le monde, le délai de levée — la réactivité du projet, opposable en réunion.
+ *
+ * Aucun de ces chiffres n'est estimé : ils comptent des dates lues dans les
+ * documents. Ce qui n'est pas calculable est écrit noir sur blanc en bas.
+ */
+function renderAnalytics(state) {
+  const analytics = state.result.analytics;
+  if (!analytics || analytics.quarters.length === 0) {
+    return `<div class="ctlab__section"><p class="ctlab__empty">Aucune date d'émission lisible : rien à mettre en courbe.</p></div>`;
+  }
+
+  const delay = analytics.delay;
+
   return `
     <div class="ctlab__section">
-      <h3>Exports</h3>
-      <p class="ctlab__hint">
-        <b>Exporter tout</b> réunit dans un seul fichier les sources paginées, la chronologie, les avis lus,
-        la continuité, les indicateurs, les garde-fous et le rapport. Il contient le texte intégral des
-        rapports : à ne transmettre qu'à qui a le droit de les lire.
-      </p>
-      <div class="ctlab__actions">
-        <button type="button" class="gh-btn gh-btn--sm gh-btn--primary" data-ctlab-export="all">Exporter tout (JSON)</button>
-        <button type="button" class="gh-btn gh-btn--sm" data-ctlab-export="avis-csv">Tableau des avis (CSV)</button>
-        <button type="button" class="gh-btn gh-btn--sm" data-ctlab-export="status-csv">État des avis (CSV)</button>
-        <button type="button" class="gh-btn gh-btn--sm" data-ctlab-export="case">Exporter le cas (JSON)</button>
-        <button type="button" class="gh-btn gh-btn--sm" data-ctlab-export="report">Rapport (Markdown)</button>
+      <h3>Le dossier en six chiffres</h3>
+      <div class="ctlab__kpis">
+        <div class="ctlab__kpi"><b>${analytics.stillOpenCount}</b><span>avis encore à traiter</span></div>
+        <div class="ctlab__kpi ${delay.median === null ? "" : delay.median > 180 ? "ctlab__kpi--warn" : "ctlab__kpi--ok"}">
+          <b>${delay.median === null ? "n/a" : `${Math.round(delay.median / 30)} mois`}</b>
+          <span>délai médian de levée<br>sur ${delay.count} avis levés</span>
+        </div>
+        <div class="ctlab__kpi"><b>${analytics.backlog.at(-1)?.open ?? 0}</b><span>encours au dernier jalon</span></div>
+        <div class="ctlab__kpi"><b>${analytics.quarters.length}</b><span>trimestres de suivi</span></div>
+        <div class="ctlab__kpi"><b>${analytics.production.reduce((total, entry) => total + entry.count, 0)}</b><span>livrables du bureau de contrôle</span></div>
+        <div class="ctlab__kpi ${analytics.ageBands.at(-1).count > 0 ? "ctlab__kpi--danger" : "ctlab__kpi--ok"}">
+          <b>${analytics.ageBands.at(-1).count}</b><span>ouverts depuis plus d'un an</span>
+        </div>
       </div>
+    </div>
+
+    <div class="ctlab__section">
+      <h3>Encours aux jalons</h3>
+      <p class="ctlab__hint">
+        Nombre d'avis non levés à la date de chaque récapitulatif — RICT, rapport d'étape, rapport final.
+        Une courbe qui monte est un dossier qui accumule.
+      </p>
+      ${renderBacklogChart(analytics.backlog)}
+    </div>
+
+    <div class="ctlab__section">
+      <h3>Flux trimestriel</h3>
+      <p class="ctlab__hint">Avis émis et avis levés, par trimestre. Un trimestre qui émet plus qu'il ne lève creuse la dette.</p>
+      ${renderFlowChart(analytics.flow)}
+    </div>
+
+    <div class="ctlab__section">
+      <h3>Ancienneté de ce qui reste ouvert</h3>
+      ${renderAgeBands(analytics.ageBands, analytics.stillOpenCount)}
+    </div>
+
+    <div class="ctlab__section">
+      <h3>Production du bureau de contrôle</h3>
+      <p class="ctlab__hint">Le rythme du contrôle lui-même : combien de livrables, de quelle nature.</p>
+      <div class="ctlab__scroll">
+        <table class="ctlab__grid">
+          <thead><tr><th>Nature du livrable</th><th style="width:100px">Nombre</th></tr></thead>
+          <tbody>
+            ${analytics.documentsByType
+              .map((entry) => `<tr><td>${escapeHtml(entry.label)}</td><td>${entry.count}</td></tr>`)
+              .join("")}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="ctlab__section">
+      <h3>Ce que ces documents ne permettent pas de calculer</h3>
+      ${analytics.notAvailable
+        .map(
+          (line) => `
+            <div class="ctlab__notice ctlab__notice--info">
+              <span class="ctlab__notice-icon" aria-hidden="true">${svgIcon("alert", { className: "octicon" })}</span>
+              <div>${escapeHtml(line)}</div>
+            </div>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function renderBacklogChart(backlog) {
+  if (backlog.length < 2) {
+    return `<p class="ctlab__empty">Il faut au moins deux récapitulatifs pour tracer une évolution.</p>`;
+  }
+
+  const values = backlog.map((entry) => entry.open);
+  const ticks = getNiceChartTicks(Math.max(...values, 1), 4);
+
+  return `
+    <div class="ctlab__chart">
+      ${renderSvgLineChart({
+        title: "Encours aux jalons",
+        xLabel: "jalon",
+        yLabel: "avis non levés",
+        xDomain: [0, Math.max(backlog.length - 1, 1)],
+        yDomain: [0, Math.max(ticks.at(-1) ?? 1, 1)],
+        xTicks: backlog.map((_, index) => index),
+        yTicks: ticks,
+        xTickFormatter: (tick) => formatDate(backlog[tick]?.at),
+        yGrid: { show: true, lineStyle: "dashed" },
+        xGrid: { show: false },
+        series: [
+          {
+            label: "avis non levés",
+            points: values.map((value, index) => ({ x: index, y: value })),
+            fill: true,
+            pointsVisible: true
+          }
+        ]
+      })}
+    </div>
+  `;
+}
+
+function renderFlowChart(flow) {
+  if (flow.length === 0) return `<p class="ctlab__empty">Aucun trimestre à afficher.</p>`;
+
+  const maxValue = Math.max(1, ...flow.flatMap((entry) => [entry.raised, entry.resolved]));
+  const ticks = getNiceChartTicks(maxValue, 4);
+
+  return `
+    <div class="ctlab__chart">
+      ${renderSvgLineChart({
+        title: "Flux trimestriel",
+        xLabel: "trimestre",
+        yLabel: "avis",
+        xDomain: [0, Math.max(flow.length - 1, 1)],
+        yDomain: [0, Math.max(ticks.at(-1) ?? 1, 1)],
+        xTicks: flow.map((_, index) => index),
+        yTicks: ticks,
+        xTickFormatter: (tick) => flow[tick]?.quarter ?? "",
+        yGrid: { show: true, lineStyle: "dashed" },
+        xGrid: { show: false },
+        series: [
+          { label: "émis", points: flow.map((entry, index) => ({ x: index, y: entry.raised })), pointsVisible: true },
+          { label: "levés", points: flow.map((entry, index) => ({ x: index, y: entry.resolved })), pointsVisible: true }
+        ]
+      })}
+    </div>
+  `;
+}
+
+function renderAgeBands(bands, total) {
+  if (total === 0) {
+    return `<p class="ctlab__empty">Aucun avis en attente : rien à prioriser.</p>`;
+  }
+
+  const tones = { "0-3": "ok", "3-6": "info", "6-12": "pending", "12+": "danger" };
+
+  return `
+    <div class="ctlab__breakdown">
+      <div class="ctlab__breakdown-bar" role="img" aria-label="Ancienneté des avis ouverts">
+        ${bands
+          .filter((band) => band.count > 0)
+          .map(
+            (band) =>
+              `<span class="ctlab__breakdown-segment ctlab__breakdown-segment--${tones[band.id]}"
+                     style="width:${((band.count / total) * 100).toFixed(2)}%"
+                     title="${escapeHtml(band.label)} : ${band.count}"></span>`
+          )
+          .join("")}
+      </div>
+      <ul class="ctlab__breakdown-legend">
+        ${bands
+          .map(
+            (band) => `
+              <li>
+                <span class="ctlab__dot ctlab__dot--${tones[band.id]}" aria-hidden="true"></span>
+                <b>${escapeHtml(band.label)}</b>
+                <span class="ctlab__hint">${band.count}</span>
+              </li>
+            `
+          )
+          .join("")}
+      </ul>
     </div>
   `;
 }
 
 /**
- * La vie d'un avis, un avis à la fois.
+ * La vie d'un avis, en plein écran.
  *
- * La matrice complète — une ligne par avis, une colonne par document — comptait
- * 24 308 cases sur le corpus réel. Personne ne lit ça. On sélectionne un avis
- * dans le tableau d'état et on suit son parcours document par document.
+ * La matrice complète — une ligne par avis, une colonne par document —
+ * comptait 24 308 cases sur le corpus réel. Personne ne lit ça. On clique
+ * l'intitulé d'un avis et le tableau cède la place à sa frise, avec un retour
+ * arrière discret, comme le détail d'une exécution : on suit une chaîne
+ * d'étapes datées, chacune disant ce que le document a apporté.
+ *
+ * Le vocabulaire visuel reste celui d'un document, jamais celui d'un sujet
+ * Mdall : pas d'avatar, pas de fil de discussion, pas de bouton d'état. Un avis
+ * n'est pas encore un sujet, et l'écran ne doit pas laisser croire l'inverse.
  */
 function renderAvisTrace(state) {
   const reference = state.selectedReference;
-  if (!reference) return "";
-
   const row = state.result.timeline.find((entry) => entry.reference === reference);
-  if (!row) return "";
-
   const summary = state.result.avisStatus.find((entry) => entry.reference === reference) ?? null;
+
+  const back = `
+    <button type="button" class="ctlab__back" data-ctlab-back>
+      ${svgIcon("arrow-left", { className: "octicon" })}
+      <span>Tous les avis identifiés</span>
+    </button>
+  `;
+
+  if (!row) {
+    return `
+      <div class="ctlab__section">
+        ${back}
+        <p class="ctlab__empty">Cet avis ne porte pas de numéro : il n'a pas de continuité à retracer.</p>
+      </div>
+    `;
+  }
+
   const steps = row.cells
     .map((cell, index) => ({ cell, document: state.result.sources[index] }))
     .filter(({ cell }) => cell.continuity || cell.extraction);
 
   return `
     <div class="ctlab__section">
-      <h3>Avis n° ${escapeHtml(reference)} — son parcours</h3>
-      ${summary ? `<p class="ctlab__hint">Soulevé dans ${escapeHtml(documentLabel(summary.raised_in))} le ${escapeHtml(summary.raised_at ?? "?")}.</p>` : ""}
-      <div class="ctlab__scroll">
-        <table class="ctlab__grid">
-          <thead><tr><th>Émis le</th><th>Document</th><th>Ce que dit ce document</th></tr></thead>
-          <tbody>
-            ${steps
-              .map(
-                ({ cell, document }) => `
-                  <tr>
-                    <td>${escapeHtml(document?.issued_at ?? "—")}</td>
-                    <td>${escapeHtml(documentLabel(cell.documentId))}</td>
-                    <td>${renderCell(cell)}</td>
-                  </tr>
-                `
-              )
-              .join("")}
-          </tbody>
-        </table>
+      ${back}
+      <div class="ctlab__trace-head">
+        <h3>Avis n° ${escapeHtml(reference)}</h3>
+        ${summary ? `<span class="ctlab__badge ctlab__badge--${escapeHtml(summary.status)}">${escapeHtml(STATUS_LABELS[summary.status])}</span>` : ""}
       </div>
+      ${
+        summary
+          ? `<p class="ctlab__hint">
+               Soulevé dans ${escapeHtml(documentLabel(summary.raised_in))} le ${escapeHtml(formatDate(summary.raised_at))}
+               ${summary.resolved_at ? `, levé le ${escapeHtml(formatDate(summary.resolved_at))} — ${escapeHtml(RESOLUTION_LABELS[summary.resolution_reason] ?? "")}` : ""}.
+               ${steps.length} document(s) le mentionnent ou l'attendaient.
+             </p>`
+          : ""
+      }
+      <ol class="ctlab__pipeline">
+        ${steps.map(({ cell, document }) => renderTraceStep(cell, document)).join("")}
+      </ol>
       <div data-ctlab-detail></div>
     </div>
+  `;
+}
+
+/** Une étape de la frise : un document, sa date, ce qu'il dit de cet avis. */
+function renderTraceStep(cell, document) {
+  const continuity = cell.continuity;
+  const state = continuity?.state === "AMBIGUOUS" ? "AMBIGUOUS" : continuity?.value?.state ?? "AMBIGUOUS";
+  const present = state === "NEW" || state === "MATCHED" || state === "MATCHED_BY_TITLE";
+  const lifted = Boolean(continuity?.lifting_statement);
+
+  const tone = lifted ? "ok" : present ? (state === "NEW" ? "info" : "pending") : "neutral";
+  const icon = lifted ? "check-circle-fill" : present ? "alert" : "history";
+
+  const opinion =
+    cell.extraction?.value?.opinion_raw ??
+    continuity?.matched_opinion_raw ??
+    null;
+
+  return `
+    <li class="ctlab__pipeline-step ctlab__pipeline-step--${tone}">
+      <span class="ctlab__pipeline-mark" aria-hidden="true">${svgIcon(icon, { className: "octicon" })}</span>
+      <div class="ctlab__pipeline-body">
+        <div class="ctlab__pipeline-title">
+          ${escapeHtml(documentLabel(cell.documentId))}
+          ${opinion ? `<span class="ctlab__dot ctlab__dot--${opinionTone(opinion)}" aria-hidden="true"></span><span class="ctlab__hint">${escapeHtml(opinion)}</span>` : ""}
+        </div>
+        <div class="issue-row-meta-text">
+          ${escapeHtml(formatDate(document?.issued_at))}
+          ${document?.meta?.document_type_label ? ` · ${escapeHtml(document.meta.document_type_label)}` : ""}
+        </div>
+        <div class="ctlab__pipeline-detail">${renderCell(cell)}</div>
+      </div>
+    </li>
   `;
 }
 
@@ -1255,15 +1925,28 @@ function renderDisagreements(state) {
  * Diagnostic : ce qui sert à comprendre pourquoi le moteur voit ce qu'il voit.
  * Rangé derrière un lien, parce que ce n'est pas la réponse — c'est l'enquête.
  */
+/**
+ * L'onglet technique, du verdict vers la matière brute.
+ *
+ * L'ordre précédent enterrait les motifs d'extraction et les exports sous le
+ * texte intégral de cent dix-neuf rapports : les seules commandes de la page
+ * étaient hors d'atteinte. On commence donc par ce qui se juge — les
+ * indicateurs —, puis ce qui s'agit — les motifs —, et le texte extrait ferme
+ * la marche, replié.
+ */
 function renderDetails(state) {
   return `
+    <div class="ctlab__section">
+      <h3>Indicateurs de fiabilité</h3>
+      ${renderIndicators(state.result.indicators)}
+    </div>
     <div class="ctlab__section">
       <h3>Alertes d'extraction</h3>
       ${renderAlerts(state.result.indicators.alerts)}
     </div>
     <div class="ctlab__section">
-      <h3>Indicateurs de fiabilité</h3>
-      ${renderIndicators(state.result.indicators)}
+      <h3>Motifs d'extraction</h3>
+      ${renderPatternEditor(state)}
     </div>
     <div class="ctlab__section">
       <h3>Suggestions</h3>
@@ -1271,11 +1954,13 @@ function renderDetails(state) {
     </div>
     <div class="ctlab__section">
       <h3>Texte extrait</h3>
-      ${renderExtractedText(state)}
-    </div>
-    <div class="ctlab__section">
-      <h3>Motifs d'extraction</h3>
-      ${renderPatternEditor(state)}
+      <p class="ctlab__hint">
+        La matière brute, telle que le navigateur l'a lue. Volumineuse par nature : repliée par défaut.
+      </p>
+      <details class="ctlab__fold">
+        <summary>Afficher le texte extrait des ${state.reports.length} document(s)</summary>
+        <div class="ctlab__fold-body">${renderExtractedText(state)}</div>
+      </details>
     </div>
   `;
 }
@@ -1333,6 +2018,21 @@ function renderHeader(state) {
               size: "md",
               disabled: state.reports.length === 0 || busy,
               mainAction: ""
+            })}
+            ${renderGhActionButton({
+              id: "ctlabExport",
+              label: "Exporter",
+              tone: "default",
+              size: "md",
+              disabled: !state.result || busy,
+              mainAction: "ctlab-export-all",
+              items: [
+                { action: "ctlab-export-all", label: "Tout (JSON)" },
+                { action: "ctlab-export-avis-csv", label: "Tableau des avis (CSV)" },
+                { action: "ctlab-export-status-csv", label: "État des avis (CSV)" },
+                { action: "ctlab-export-case", label: "Cas rejouable (JSON)" },
+                { action: "ctlab-export-report", label: "Rapport (Markdown)" }
+              ]
             })}
             ${renderGhActionButton({
               id: "ctlabRun",
@@ -1433,6 +2133,25 @@ export function renderCtContinuityLab(root) {
     if (state.selectedCell) {
       const holder = root.querySelector("[data-ctlab-detail]");
       if (holder) holder.innerHTML = renderDetail(state.selectedCell);
+    }
+  };
+
+  const exportAs = (kind) => {
+    if (!state.result) return;
+    if (kind === "all") {
+      download(
+        "ct-lab-export-complet.json",
+        JSON.stringify(buildFullExport(state.result, { generatedAt: new Date().toISOString() }), null, 2),
+        "application/json"
+      );
+    } else if (kind === "case") {
+      download("case.json", JSON.stringify(buildCaseExport(state.result.sources), null, 2), "application/json");
+    } else if (kind === "avis-csv") {
+      download("avis.csv", toAvisCsv(state.result), "text/csv;charset=utf-8");
+    } else if (kind === "status-csv") {
+      download("etat-des-avis.csv", toStatusCsv(state.result), "text/csv;charset=utf-8");
+    } else {
+      download("report.md", state.result.reportMarkdown, "text/markdown");
     }
   };
 
@@ -1542,9 +2261,12 @@ export function renderCtContinuityLab(root) {
 
     const nav = event.target.closest("[data-shared-date-nav^='ctlabAsOf']");
     if (nav) {
-      const delta = nav.getAttribute("data-shared-date-nav").endsWith("next") ? 1 : -1;
+      const action = nav.getAttribute("data-shared-date-nav");
+      const direction = action.endsWith("next") ? 1 : -1;
+      // Un pas d'un an, sinon remonter trois ans demande trente-six clics.
+      const step = action.includes("year") ? 12 : 1;
       const view = state.asOfView ?? currentCalendarView(parseSharedDateInputValue(state.asOf));
-      state.asOfView = shiftSharedCalendarMonth(view.year, view.month, delta);
+      state.asOfView = shiftSharedCalendarMonth(view.year, view.month, direction * step);
       refresh();
       return true;
     }
@@ -1646,6 +2368,14 @@ export function renderCtContinuityLab(root) {
     refresh();
   });
 
+  bindGhActionButtons();
+
+  root.addEventListener("ghaction:action", (event) => {
+    const action = String(event.detail?.action ?? "");
+    if (!action.startsWith("ctlab-export-")) return;
+    exportAs(action.replace("ctlab-export-", ""));
+  });
+
   root.addEventListener("click", async (event) => {
     // Les onglets et le sélecteur de date sont des composants de l'application :
     // ils arrivent avec leurs propres attributs, traités avant les nôtres.
@@ -1662,8 +2392,10 @@ export function renderCtContinuityLab(root) {
     if (handleDatePickerClick(event)) return;
 
     const target = event.target.closest(
-      "[data-ctlab-pick], [data-ctlab-remove], [data-ctlab-cell], [data-ctlab-trace], [data-ctlab-page], " +
-        "[data-ctlab-export], [data-ctlab-export-text], [data-ctlab-apply-patterns], [data-ctlab-reset-patterns], " +
+      "[data-ctlab-pick], [data-ctlab-remove], [data-ctlab-cell], [data-ctlab-trace], [data-ctlab-back], " +
+        "[data-ctlab-as-of], " +
+        "[data-pagination-entity='ctlab-avis'], " +
+        "[data-ctlab-export-text], [data-ctlab-apply-patterns], [data-ctlab-reset-patterns], " +
         "[data-ctlab-time-travel], [data-action-id='ctlabRun'], [data-action-id='ctlabReset']"
     );
     if (!target) return;
@@ -1684,6 +2416,15 @@ export function renderCtContinuityLab(root) {
       return;
     }
 
+    if (target.dataset.ctlabAsOf !== undefined) {
+      captureEditors();
+      state.asOf = target.dataset.ctlabAsOf;
+      state.asOfPickerOpen = false;
+      state.asOfView = currentCalendarView(parseSharedDateInputValue(state.asOf));
+      await runAnalysis();
+      return;
+    }
+
     if (target.dataset.ctlabTimeTravel !== undefined) {
       captureEditors();
       const turningOn = target.dataset.ctlabTimeTravel === "on";
@@ -1700,16 +2441,24 @@ export function renderCtContinuityLab(root) {
     }
 
     if (target.dataset.ctlabTrace !== undefined) {
-      state.selectedReference =
-        state.selectedReference === target.dataset.ctlabTrace ? null : target.dataset.ctlabTrace;
+      captureEditors();
+      state.selectedReference = target.dataset.ctlabTrace;
       state.selectedCell = null;
       refresh();
       return;
     }
 
-    if (target.dataset.ctlabPage !== undefined) {
+    if (target.dataset.ctlabBack !== undefined) {
+      state.selectedReference = null;
+      state.selectedCell = null;
+      refresh();
+      return;
+    }
+
+    if (target.dataset.paginationEntity === "ctlab-avis") {
+      if (target.getAttribute("aria-disabled") === "true") return;
       captureEditors();
-      state.avisPage = Number(target.dataset.ctlabPage);
+      state.avisPage = Number(target.dataset.paginationPage);
       refresh();
       return;
     }
@@ -1754,26 +2503,6 @@ export function renderCtContinuityLab(root) {
       state.selectedCell = row?.cells.find((cell) => cell.documentId === documentId) ?? null;
       const holder = root.querySelector("[data-ctlab-detail]");
       if (holder) holder.innerHTML = renderDetail(state.selectedCell);
-      return;
-    }
-
-    if (target.dataset.ctlabExport !== undefined && state.result) {
-      const kind = target.dataset.ctlabExport;
-      if (kind === "all") {
-        download(
-          "ct-lab-export-complet.json",
-          JSON.stringify(buildFullExport(state.result, { generatedAt: new Date().toISOString() }), null, 2),
-          "application/json"
-        );
-      } else if (kind === "case") {
-        download("case.json", JSON.stringify(buildCaseExport(state.result.sources), null, 2), "application/json");
-      } else if (kind === "avis-csv") {
-        download("avis.csv", toAvisCsv(state.result), "text/csv;charset=utf-8");
-      } else if (kind === "status-csv") {
-        download("etat-des-avis.csv", toStatusCsv(state.result), "text/csv;charset=utf-8");
-      } else {
-        download("report.md", state.result.reportMarkdown, "text/markdown");
-      }
       return;
     }
 

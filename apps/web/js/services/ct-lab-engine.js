@@ -15,17 +15,18 @@ const VENDOR_BASE = "../../vendor/spikes";
 let modulesPromise = null;
 
 async function loadVendoredModules() {
-  const [pipeline, libGuards, ctGuards, ctMetrics, report, runRecord, status] = await Promise.all([
+  const [pipeline, libGuards, ctGuards, ctMetrics, report, runRecord, status, analytics] = await Promise.all([
     import(`${VENDOR_BASE}/ct-continuity/pipeline.mjs`),
     import(`${VENDOR_BASE}/lib/guards.mjs`),
     import(`${VENDOR_BASE}/ct-continuity/guards.mjs`),
     import(`${VENDOR_BASE}/ct-continuity/metrics.mjs`),
     import(`${VENDOR_BASE}/lib/report.mjs`),
     import(`${VENDOR_BASE}/lib/run-record.mjs`),
-    import(`${VENDOR_BASE}/ct-continuity/status.mjs`)
+    import(`${VENDOR_BASE}/ct-continuity/status.mjs`),
+    import(`${VENDOR_BASE}/ct-continuity/analytics.mjs`)
   ]);
 
-  return { pipeline, libGuards, ctGuards, ctMetrics, report, runRecord, status };
+  return { pipeline, libGuards, ctGuards, ctMetrics, report, runRecord, status, analytics };
 }
 
 export function getSpikeModules() {
@@ -340,6 +341,7 @@ export async function runCtLab(
     completeness: result.completeness ?? null,
     avisStatus: statusSummaries,
     statusCounts: resolved.status.countByStatus(statusSummaries),
+    analytics: resolved.analytics.buildAnalytics(statusSummaries, chronology.documents),
     strategy: result.strategy ?? null,
     legends: result.legends ?? {},
     liftingStatements: result.lifting_statements ?? [],
@@ -373,6 +375,7 @@ export function buildFullExport(result, { generatedAt = null } = {}) {
     chronology: result.chronology,
     completeness: result.completeness,
     avis_status: result.avisStatus,
+    analytics: result.analytics,
     avis: collectAvis(result.predictions),
     lifting_statements: result.liftingStatements,
     global_clearances: result.globalClearances,

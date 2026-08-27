@@ -8,6 +8,7 @@ import * as ctMetrics from "../../../../../../spikes/ct-continuity/metrics.mjs";
 import * as report from "../../../../../../spikes/lib/report.mjs";
 import * as runRecord from "../../../../../../spikes/lib/run-record.mjs";
 import * as status from "../../../../../../spikes/ct-continuity/status.mjs";
+import * as analytics from "../../../../../../spikes/ct-continuity/analytics.mjs";
 
 import { runCtLab } from "../../../services/ct-lab-engine.js";
 import { TABS, tabLabel, toAvisCsv, toStatusCsv } from "./ct-continuity-lab.js";
@@ -16,7 +17,7 @@ import { TABS, tabLabel, toAvisCsv, toStatusCsv } from "./ct-continuity-lab.js";
  * Les CSV sont ce qu'un humain ouvre dans Excel pour relire un dossier : ils
  * doivent citer des noms de fichiers, jamais les identifiants internes.
  */
-const MODULES = { pipeline, libGuards, ctGuards, ctMetrics, report, runRecord, status };
+const MODULES = { pipeline, libGuards, ctGuards, ctMetrics, report, runRecord, status, analytics };
 const NOW = () => new Date("2026-08-26T12:00:00.000Z");
 
 const REPORTS = [
@@ -128,7 +129,7 @@ test("les onglets annoncent leur effectif", async () => {
   const result = await run();
   const labels = TABS.map((tab) => tabLabel(tab, { result }));
 
-  assert.deepEqual(labels, ["Où en est-on", "Documents (2)", "Avis (3)", "Preuves (1)", "Technique"]);
+  assert.deepEqual(labels, ["Où en est-on", "Documents (2)", "Avis (3)", "Indicateurs", "Preuves (1)", "Technique"]);
 });
 
 test("sans résultat, un onglet ne prétend pas contenir quelque chose", () => {

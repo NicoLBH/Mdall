@@ -8,6 +8,7 @@ import * as ctMetrics from "../../../../spikes/ct-continuity/metrics.mjs";
 import * as report from "../../../../spikes/lib/report.mjs";
 import * as runRecord from "../../../../spikes/lib/run-record.mjs";
 import * as status from "../../../../spikes/ct-continuity/status.mjs";
+import * as analytics from "../../../../spikes/ct-continuity/analytics.mjs";
 
 import {
   buildCaseExport,
@@ -24,7 +25,7 @@ import {
  * Les tests, eux, injectent directement les modules de `spikes/` : c'est la
  * même source, sans dépendre d'un build préalable.
  */
-const MODULES = { pipeline, libGuards, ctGuards, ctMetrics, report, runRecord, status };
+const MODULES = { pipeline, libGuards, ctGuards, ctMetrics, report, runRecord, status, analytics };
 const NOW = () => new Date("2026-08-26T12:00:00.000Z");
 
 const REPORTS = [
