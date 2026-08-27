@@ -99,12 +99,16 @@ export function renderSharedDatePicker({
       ${isOpen ? `
         <div class="shared-date-picker__popover" role="dialog" aria-label="${escapeHtml(calendarLabel)}">
           <div class="shared-date-picker__calendar">
-            <div class="shared-date-picker__calendar-head">
-              ${showYearNav ? `<button type="button" class="shared-date-picker__nav" data-shared-date-nav="${escapeHtml(idBase)}-year-prev" aria-label="Année précédente">&#x00AB;</button>` : ""}
-              <button type="button" class="shared-date-picker__nav" data-shared-date-nav="${escapeHtml(idBase)}-prev" aria-label="Mois précédent">&#x2039;</button>
+            <div class="shared-date-picker__calendar-head ${showYearNav ? "shared-date-picker__calendar-head--grouped" : ""}">
+              <span class="shared-date-picker__nav-group">
+                ${showYearNav ? `<button type="button" class="shared-date-picker__nav" data-shared-date-nav="${escapeHtml(idBase)}-year-prev" aria-label="Année précédente">&#x00AB;</button>` : ""}
+                <button type="button" class="shared-date-picker__nav" data-shared-date-nav="${escapeHtml(idBase)}-prev" aria-label="Mois précédent">&#x2039;</button>
+              </span>
               <div class="shared-date-picker__month-label">${escapeHtml(formatSharedDateLong(new Date(viewYear, viewMonth, 1)))}</div>
-              <button type="button" class="shared-date-picker__nav" data-shared-date-nav="${escapeHtml(idBase)}-next" aria-label="Mois suivant">&#x203A;</button>
-              ${showYearNav ? `<button type="button" class="shared-date-picker__nav" data-shared-date-nav="${escapeHtml(idBase)}-year-next" aria-label="Année suivante">&#x00BB;</button>` : ""}
+              <span class="shared-date-picker__nav-group shared-date-picker__nav-group--end">
+                <button type="button" class="shared-date-picker__nav" data-shared-date-nav="${escapeHtml(idBase)}-next" aria-label="Mois suivant">&#x203A;</button>
+                ${showYearNav ? `<button type="button" class="shared-date-picker__nav" data-shared-date-nav="${escapeHtml(idBase)}-year-next" aria-label="Année suivante">&#x00BB;</button>` : ""}
+              </span>
             </div>
             <div class="shared-date-picker__weekdays">
               ${WEEKDAY_LABELS.map((label) => `<span>${escapeHtml(label)}</span>`).join("")}
