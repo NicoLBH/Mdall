@@ -19,7 +19,7 @@ import {
   EXTRACTION_STATE,
   extractOccurrences
 } from "./extraction.mjs";
-import { discoverLegend } from "./legend.mjs";
+import { discoverLegend, mergeLegends } from "./legend.mjs";
 
 export const STRATEGY = {
   /** Choisit `blocks` si le document déclare sa propre légende d'avis. */
@@ -220,6 +220,20 @@ export const ctContinuityPipeline = {
     const predictions = [];
     const skippedSources = [];
     const legends = {};
+    const borrowedLegend = [];
+
+    // Vocabulaire du lot : une pièce qui ne rappelle pas la légende de son
+    // organisme peut s'appuyer sur celle de ses voisines.
+    const batchLegend =
+      strategy === STRATEGY.BLOCKS
+        ? {
+            codes: mergeLegends(
+              sources
+                .filter((source) => source.content_available)
+                .map((source) => discoverLegend(source.content))
+            )
+          }
+        : { codes: [] };
 
     for (const source of sources) {
       if (!source.content_available) {
@@ -229,8 +243,9 @@ export const ctContinuityPipeline = {
       }
 
       if (strategy === STRATEGY.BLOCKS) {
-        const { occurrences, legend } = extractAvisBlocks(source);
-        legends[source.source_id] = legend;
+        const { occurrences, legend, legendSource } = extractAvisBlocks(source, { legend: batchLegend });
+        legends[source.source_id] = { codes: legend, source: legendSource };
+        if (legendSource === "other_documents") borrowedLegend.push(source.source_id);
 
         // Seuls les avis portant un numéro entrent dans la continuité :
         // les autres n'ont pas d'identité que le métier ait déjà fixée.
@@ -261,6 +276,9 @@ export const ctContinuityPipeline = {
 
     const notes = [
       `Stratégie de lecture : ${strategy}.`,
+      borrowedLegend.length > 0
+        ? `Légende d'avis empruntée aux autres documents du lot pour : ${borrowedLegend.join(", ")}.`
+        : null,
       skippedSources.length > 0
         ? `Sources sans contenu exploitable, ignorées sans conclusion : ${skippedSources.join(", ")}.`
         : null,

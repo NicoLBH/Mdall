@@ -285,5 +285,6 @@ test("l'export complet réunit sources, avis, continuité, indicateurs et rappor
   assert.ok(exported.continuity.length >= 1);
   assert.ok(exported.report_markdown.includes("Spike run"));
   assert.deepEqual(exported.run.guard_violations, []);
-  assert.ok(exported.legends["rapport-1"].some((entry) => entry.code === "SO"));
+  assert.ok(exported.legends["rapport-1"].codes.some((entry) => entry.code === "SO"));
+  assert.equal(exported.legends["rapport-1"].source, "own_document", "la légende doit venir du document lui-même");
 });

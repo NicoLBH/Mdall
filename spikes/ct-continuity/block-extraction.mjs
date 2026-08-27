@@ -56,12 +56,16 @@ const NOISE = [
  * Le détecter par répétition évite d'inscrire dans le code les habitudes d'un
  * organisme particulier.
  */
-export function detectBoilerplate(pages, { minPages = 3, minRatio = 0.3 } = {}) {
+export function detectBoilerplate(pages, { minPages = 3, minRatio = 0.3, protectedLines = [] } = {}) {
+  // Un code d'avis seul sur sa ligne se répète forcément de page en page :
+  // le confondre avec un pied de page ferait disparaître des avis entiers.
+  const protectedSet = new Set(protectedLines);
   const seen = new Map();
 
   for (const page of pages) {
     const unique = new Set(page.text.split(/\r?\n/).map((line) => normalizeWhitespace(line)).filter(Boolean));
     for (const line of unique) {
+      if (protectedSet.has(line)) continue;
       seen.set(line, (seen.get(line) ?? 0) + 1);
     }
   }
@@ -176,14 +180,27 @@ export function extractAvisBlocks(source, { legend = null } = {}) {
     ? source.pages
     : [{ page: null, text: source.content }];
 
-  const discovered = legend ?? discoverLegend(pages.map((page) => page.text).join("\n"));
+  const own = discoverLegend(pages.map((page) => page.text).join("\n"));
+  // La légende du document prime toujours ; celle fournie par le lot ne sert
+  // qu'à défaut, et le résultat dit laquelle a servi.
+  const discovered = own.codes.length > 0 ? own : { codes: legend?.codes ?? [], lines: own.lines };
+  const legendSource = own.codes.length > 0 ? "own_document" : legend?.codes?.length ? "other_documents" : "none";
+
   if (discovered.codes.length === 0) {
-    return { occurrences: [], legend: [], skipped: 0, reason: "aucune légende d'avis trouvée dans le document" };
+    return {
+      occurrences: [],
+      legend: [],
+      legendSource,
+      skipped: 0,
+      reason: "aucune légende d'avis, ni dans ce document ni dans les autres du lot"
+    };
   }
 
   const byCode = new Map(discovered.codes.map((entry) => [entry.code, entry]));
   const matchers = buildCodeMatchers(discovered.codes);
-  const boilerplate = detectBoilerplate(pages);
+  const boilerplate = detectBoilerplate(pages, {
+    protectedLines: discovered.codes.map((entry) => entry.code)
+  });
   const legendLines = new Set(discovered.lines ?? []);
 
   const occurrences = [];
@@ -346,6 +363,7 @@ export function extractAvisBlocks(source, { legend = null } = {}) {
   return {
     occurrences: markAmbiguous(occurrences),
     legend: discovered.codes,
+    legendSource,
     lexicon: legendToLexicon(discovered.codes),
     skipped
   };

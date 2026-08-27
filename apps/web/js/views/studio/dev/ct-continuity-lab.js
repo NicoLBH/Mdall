@@ -28,7 +28,7 @@ import {
   previewMatches
 } from "../../../services/ct-lab-patterns.js";
 
-const SLOT_COUNT = 10;
+const SLOT_COUNT = 20;
 
 const STATE_LABELS = {
   NEW: "nouveau",

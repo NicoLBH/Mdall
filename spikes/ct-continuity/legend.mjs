@@ -18,8 +18,14 @@ import { normalizeWhitespace, stripDiacritics } from "../lib/normalize.mjs";
 /** `F: Favorable`, `HM : Hors Mission`, `NC: Non conforme`… */
 const PAIR = /\b(?<code>[A-Z]{1,4})\s*:\s*(?<label>[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ'’\- ]{2,40}?)(?=\s*[,;.]|\s{2,}|$)/g;
 
-/** Une légende contient au moins trois couples : deux, c'est une phrase ordinaire. */
+/**
+ * Une légende contient au moins trois couples — « Contact: X , Tél: Y » n'en
+ * est pas une. Sauf quand la ligne porte l'astérisque qui renvoie à la colonne
+ * « Avis* » : les fiches de visite n'énumèrent parfois que deux codes.
+ */
 const MIN_PAIRS = 3;
+const MIN_PAIRS_WITH_MARKER = 2;
+const LEGEND_MARKER = /^\*/;
 
 function slugify(label) {
   return stripDiacritics(normalizeWhitespace(label))
@@ -40,7 +46,8 @@ export function discoverLegend(text) {
     if (line === "") continue;
 
     const pairs = [...line.matchAll(PAIR)];
-    if (pairs.length < MIN_PAIRS) continue;
+    const required = LEGEND_MARKER.test(line) ? MIN_PAIRS_WITH_MARKER : MIN_PAIRS;
+    if (pairs.length < required) continue;
 
     lines.push(line);
     for (const pair of pairs) {
@@ -57,6 +64,25 @@ export function discoverLegend(text) {
 export function isLegendLine(line, legendLines) {
   const normalized = normalizeWhitespace(line);
   return legendLines.some((legend) => legend === normalized);
+}
+
+/**
+ * Fusionne les légendes de plusieurs documents d'un même lot.
+ *
+ * Certaines pièces — les fiches de visite, par exemple — emploient le
+ * vocabulaire de l'organisme sans le rappeler. Reprendre la légende lue dans
+ * les rapports du même lot n'est pas l'inventer : c'est la lire ailleurs. Le
+ * document qui l'emprunte doit le déclarer, faute de quoi on ne saurait plus
+ * d'où vient le vocabulaire.
+ */
+export function mergeLegends(legends) {
+  const byCode = new Map();
+  for (const legend of legends) {
+    for (const entry of legend?.codes ?? []) {
+      if (!byCode.has(entry.code)) byCode.set(entry.code, entry);
+    }
+  }
+  return [...byCode.values()];
 }
 
 /** Convertit la légende découverte en lexique utilisable par le moteur. */

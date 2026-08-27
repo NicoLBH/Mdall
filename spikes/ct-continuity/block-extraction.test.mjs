@@ -167,3 +167,26 @@ test("deux occurrences d'un même numéro qui se contredisent restent ambiguës"
     assert.equal(occurrence.confidence, null);
   }
 });
+
+test("un code d'avis seul sur sa ligne n'est jamais pris pour un pied de page", () => {
+  const pages = Array.from({ length: 4 }, (_, index) => ({
+    page: index + 1,
+    text: [
+      "Éléments examinés Avis* Observations et commentaires N°",
+      "PIED DE PAGE RÉPÉTÉ",
+      `Élément examiné ${index}`,
+      "F",
+      "* D: Défavorable , F: Favorable"
+    ].join("\n")
+  }));
+
+  const { occurrences } = extractAvisBlocks({
+    source_id: "fiche",
+    pages,
+    content: pages.map((page) => page.text).join("\n"),
+    content_available: true
+  });
+
+  assert.equal(occurrences.length, 4, "chaque page porte un avis, malgré la répétition du code");
+  assert.ok(occurrences.every((occurrence) => occurrence.opinion_raw === "F"));
+});
