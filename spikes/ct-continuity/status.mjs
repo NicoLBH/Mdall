@@ -250,12 +250,23 @@ export const APPEARANCE = {
  * @param {{opinion_raw: string, opinion_label: string}|null} current apparition courante
  * @param {{afterGap: boolean}} context le document précédent ne le mentionnait pas
  */
+/** Vrai si le document a écrit une appréciation pour cette occurrence. */
+function isScored(occurrence) {
+  return Boolean(occurrence?.opinion_raw || occurrence?.opinion_label);
+}
+
 export function classifyAppearance(previous, current, { afterGap = false } = {}) {
   if (!previous) return APPEARANCE.NEW;
   if (!current) return APPEARANCE.TRACKED;
 
-  // Le retour en arrière se lit sur l'appréciation, pas sur la présence.
-  if (!requiresAction(previous) && requiresAction(current)) return APPEARANCE.REOPENED;
+  // Le retour en arrière se lit sur l'appréciation, pas sur la présence — et il
+  // suppose qu'une appréciation ait été lue. Une fiche laisse parfois sa case
+  // d'avis vide tout en numérotant la ligne : l'avis n'y était pas favorable,
+  // il n'y était rien du tout. Le voir suspendu au récapitulatif suivant n'est
+  // pas une régression, c'est la première fois qu'on peut le lire.
+  if (isScored(previous) && !requiresAction(previous) && requiresAction(current)) {
+    return APPEARANCE.REOPENED;
+  }
 
   return afterGap ? APPEARANCE.RECALLED : APPEARANCE.TRACKED;
 }

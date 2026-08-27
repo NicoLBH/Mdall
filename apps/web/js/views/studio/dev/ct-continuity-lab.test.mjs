@@ -13,7 +13,7 @@ import * as analytics from "../../../../../../spikes/ct-continuity/analytics.mjs
 import { runCtLab } from "../../../services/ct-lab-engine.js";
 import {
   TABS,
-  avisRowState,
+  avisLifecycle,
   firstText,
   lastSeenWording,
   pickAxisTicks,
@@ -351,15 +351,39 @@ test("la couleur d'un rappel monte avec le temps qu'il dure", () => {
  * Les deux onglets montrent les mêmes avis ; ils doivent en dire la même chose.
  */
 test("un avis tient son état de son appréciation, sauf si le moteur en sait plus", () => {
-  assert.deepEqual(avisRowState("F", "Favorable"), { tag: "fermé", tagStatus: "RESOLVED" });
-  assert.deepEqual(avisRowState("SO", "Sans objet"), { tag: "fermé", tagStatus: "RESOLVED" });
-  assert.deepEqual(avisRowState("PM", "Pour mémoire"), { tag: "fermé", tagStatus: "RESOLVED" });
-  assert.deepEqual(avisRowState("HM", "Hors mission"), { tag: "fermé", tagStatus: "RESOLVED" });
-  assert.deepEqual(avisRowState("S", "Suspendu"), { tag: "ouvert", tagStatus: "OPEN" });
-  assert.deepEqual(avisRowState("D", "Défavorable"), { tag: "ouvert", tagStatus: "OPEN" });
+  const ferme = { label: "fermé", tone: "closed" };
+  const ouvert = { label: "ouvert", tone: "open" };
+
+  assert.deepEqual(avisLifecycle("F", "Favorable"), ferme);
+  assert.deepEqual(avisLifecycle("SO", "Sans objet"), ferme);
+  assert.deepEqual(avisLifecycle("PM", "Pour mémoire"), ferme);
+  assert.deepEqual(avisLifecycle("HM", "Hors mission"), ferme);
+  assert.deepEqual(avisLifecycle("S", "Suspendu"), ouvert);
+  assert.deepEqual(avisLifecycle("D", "Défavorable"), ouvert);
 
   // Un avis suivi d'un rapport à l'autre a une histoire : elle prime sur la
   // seule lecture de son code.
-  assert.deepEqual(avisRowState("S", "Suspendu", "RESOLVED"), { tag: "levé", tagStatus: "RESOLVED" });
-  assert.deepEqual(avisRowState("F", "Favorable", "NO_NEWS"), { tag: "sans nouvelles", tagStatus: "NO_NEWS" });
+  assert.deepEqual(avisLifecycle("S", "Suspendu", "RESOLVED"), ferme);
+});
+
+/**
+ * Trois vocabulaires se superposent, et les mêler ne rendait service à
+ * personne : un avis « Levé » sur fond violet empruntait à ce qu'apporte un
+ * rapport la couleur du cycle de vie.
+ */
+test("sans nouvelles n'est pas fermé : personne n'a refermé cet avis", () => {
+  assert.deepEqual(avisLifecycle("S", "Suspendu", "NO_NEWS"), { label: "ouvert", tone: "open" });
+  assert.deepEqual(avisLifecycle("F", "Favorable", "NO_NEWS"), { label: "ouvert", tone: "open" });
+});
+
+test("un avis rouvert le reste tant qu'il n'est pas refermé", () => {
+  assert.deepEqual(avisLifecycle("D", "Défavorable", "OPEN", true), {
+    label: "réouvert",
+    tone: "open"
+  });
+  // Rouvert puis levé est levé : c'est la dernière étape qui compte.
+  assert.deepEqual(avisLifecycle("D", "Défavorable", "RESOLVED", true), {
+    label: "fermé",
+    tone: "closed"
+  });
 });

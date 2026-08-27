@@ -88,10 +88,13 @@ let DOCUMENT_LABELS = new Map();
 const SHORT_TYPES = {
   rapport_initial: "RICT",
   rapport_prealable: "Rapport APD",
+  rapport_prealable_aps: "Rapport APS",
   rapport_etape: "Rapport d'étape",
   rapport_final: "Rapport final",
+  rvrat: "RVRAT",
   fiche_avis_travaux: "Fiche travaux",
   fiche_examen_document: "Fiche examen",
+  fiche_correspondance: "Fiche de correspondance",
   attestation: "Attestation"
 };
 
@@ -285,40 +288,89 @@ function renderAvisRow({
 }
 
 /**
- * L'état d'un avis, qu'il porte un numéro ou non.
+ * Le cycle de vie d'un avis : ouvert, fermé, réouvert. Rien d'autre.
+ *
+ * Trois vocabulaires se superposent dans cet écran, et les mêler ne rendait
+ * service à personne :
+ *
+ *  - **le cycle de vie** — ouvert, fermé, réouvert — dit s'il reste quelque
+ *    chose à faire. C'est celui des sujets Mdall, et ses couleurs sont les
+ *    leurs : vert tant que c'est ouvert, violet une fois fermé ;
+ *  - **ce qu'un rapport apporte** — nouveau, rappel, levé, sans nouvelles —
+ *    se lit étape par étape sur la frise, et ne vaut que pour cette étape ;
+ *  - **l'appréciation** — favorable, suspendu, défavorable — est le jugement
+ *    du bureau de contrôle, et n'appartient qu'au document qui l'a écrit.
+ *
+ * Un avis étiqueté « Levé » sur fond violet empruntait au deuxième vocabulaire
+ * la couleur du premier.
+ */
+const LIFECYCLE = {
+  OPEN: { label: "ouvert", tone: "open" },
+  CLOSED: { label: "fermé", tone: "closed" },
+  REOPENED: { label: "réouvert", tone: "open" }
+};
+
+/**
+ * Où en est un avis, qu'il porte un numéro ou non.
  *
  * Le tableau « Où en est-on » ne suit que les avis numérotés, et tenait leur
  * état du moteur de continuité. L'onglet « Avis » les montre tous, et n'en
- * affichait aucun : la même ligne y paraissait donc sans état, comme si
+ * affichait aucun : la même ligne y paraissait sans état, comme si
  * l'information manquait — alors qu'elle se lit dans l'appréciation elle-même.
  *
  * Un avis favorable, sans objet, hors mission ou pour mémoire n'appelle aucune
  * action : il est clos dès sa première écriture. Seuls suspendu, défavorable et
- * non conforme laissent quelque chose d'ouvert. Quand le moteur a mieux à dire
- * — levé, sans nouvelles — c'est lui qui a le dernier mot.
+ * non conforme laissent quelque chose d'ouvert. Un avis sans nouvelles, lui,
+ * n'a jamais été refermé : personne n'en a rien dit, et il reste ouvert.
  */
-export function avisRowState(code, label, status = null) {
-  if (status) return { tag: STATUS_LABELS[status] ?? status, tagStatus: status };
+export function avisLifecycle(code, label, status = null, reopened = false) {
+  if (status === "RESOLVED") return LIFECYCLE.CLOSED;
+  if (status === "OPEN" || status === "NO_NEWS") return reopened ? LIFECYCLE.REOPENED : LIFECYCLE.OPEN;
 
   const tone = opinionTone(code, label);
   const settled = tone !== "pending" && tone !== "danger" && tone !== "unknown";
-  return settled ? { tag: "fermé", tagStatus: "RESOLVED" } : { tag: "ouvert", tagStatus: "OPEN" };
+  return settled ? LIFECYCLE.CLOSED : LIFECYCLE.OPEN;
 }
 
 /**
- * L'état d'un avis, dans la pastille des sujets.
+ * Les avis qu'un rapport a rouverts.
  *
- * Vert « Open » tant qu'il appelle une action, violet « Closed » une fois levé.
- * Un avis sans nouvelles reste ouvert — il n'a jamais été refermé, personne
- * n'en a rien dit.
+ * Un avis rouvert est un avis passé de favorable, sans objet, hors mission ou
+ * pour mémoire à suspendu, défavorable ou non conforme. Ce n'est ni un rappel
+ * — la même question posée une fois de plus — ni un nouvel avis. Le moteur le
+ * dit étape par étape ; l'écran ne retient que la dernière, car un avis rouvert
+ * puis levé est levé.
  */
-function renderStatePill(status) {
-  const closed = status === "RESOLVED";
-  const icon = svgIcon(closed ? "check-circle" : "issue-opened", { style: "color: #fff" });
+function reopenedReferences(result) {
+  const reopened = new Set();
+
+  for (const row of result.timeline ?? []) {
+    let last = null;
+    for (const cell of row.cells ?? []) {
+      if (cell.appearance) last = cell.appearance;
+    }
+    if (last === "REOPENED") reopened.add(row.reference);
+  }
+
+  return reopened;
+}
+
+/**
+ * Le cycle de vie d'un avis, dans la pastille des sujets.
+ *
+ * Vert tant qu'il reste quelque chose à faire, violet une fois refermé — les
+ * couleurs des sujets Mdall, pour la même notion.
+ */
+function renderStatePill(lifecycle) {
+  const closed = lifecycle.tone === "closed";
+  const icon = svgIcon(
+    closed ? "check-circle" : lifecycle === LIFECYCLE.REOPENED ? "issue-reopened" : "issue-opened",
+    { style: "color: #fff" }
+  );
 
   return `
     <span class="gh-state ${closed ? "gh-state--closed" : "gh-state--open"}">
-      <span class="gh-state-dot" aria-hidden="true">${icon}</span>${closed ? "Levé" : "Ouvert"}
+      <span class="gh-state-dot" aria-hidden="true">${icon}</span>${titleCase(lifecycle.label)}
     </span>
   `;
 }
@@ -344,7 +396,12 @@ function renderOpinion(code, label) {
  * « Absent du fiche travaux n° 9 » se lit mal. Le genre se déduit du type de
  * document, que celui-ci déclare.
  */
-const FEMININE_TYPES = new Set(["fiche_avis_travaux", "fiche_examen_document", "attestation"]);
+const FEMININE_TYPES = new Set([
+  "fiche_avis_travaux",
+  "fiche_examen_document",
+  "fiche_correspondance",
+  "attestation"
+]);
 
 export function withArticle(name, documentType) {
   if (!name) return "ce document";
@@ -419,6 +476,7 @@ const STYLE = `
   --ctlab-warn: #d29922;
   --ctlab-info: var(--accent, #58a6ff);
   --ctlab-ok: var(--success, #3fb950);
+  --ctlab-closed: var(--fgColor-done, #a371f7);
   color: var(--ctlab-text);
   font-size: 13px;
 }
@@ -618,14 +676,19 @@ const STYLE = `
 .ctlab__pipeline-detail { margin-top: 6px; }
 .ctlab__pipeline-title { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; font-weight: 400; min-width: 0; }
 /* « Absent de la fiche… », son label et « Vu pour la dernière fois… » disent une
-   seule chose : où l'avis a cessé de paraître. Répartis sur deux lignes par le
-   retour automatique, ils se lisaient comme deux constats sans rapport. Ici
-   rien ne passe à la ligne — c'est la fin de la phrase qui s'abrège si la
-   place manque, et le titre complet reste dans l'infobulle. */
-.ctlab__pipeline-title--inline { flex-wrap: nowrap; }
-.ctlab__pipeline-title--inline .ctlab__pipeline-headline { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ctlab__pipeline-title--inline .subject-label-badge { flex: 0 0 auto; }
-.ctlab__pipeline-trail { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+   seule chose : où l'avis a cessé de paraître. Trois éléments de flex se les
+   partageaient, chacun tirant sur la largeur : le label finissait hors du
+   cadre et le reste passait à la ligne. Ce n'est pas une rangée d'éléments,
+   c'est une phrase — donc une ligne de texte, où le label prend place comme un
+   mot, et que la fin abrège si la place manque. */
+.ctlab__pipeline-title--inline {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ctlab__pipeline-title--inline > * { display: inline; }
+.ctlab__pipeline-title--inline .subject-label-badge { display: inline-block; margin: 0 4px; vertical-align: 1px; }
 .ctlab__pipeline-date { white-space: nowrap; flex: 0 0 auto; }
 .ctlab__pipeline-headline { font-weight: 700; color: var(--ctlab-text); overflow-wrap: anywhere; }
 .ctlab__pipeline-headline--muted { font-weight: 400; color: var(--ctlab-muted); }
@@ -723,6 +786,10 @@ const STYLE = `
 .ctlab__tag--ok { --subject-label-border: var(--ctlab-ok); --subject-label-fg: var(--ctlab-ok); --subject-label-bg: rgba(63, 185, 80, .12); }
 /* Un rappel qui dure : la couleur monte avec l'attente, du bleu au rouge. */
 .ctlab__tag--pending { --subject-label-border: var(--ctlab-warn); --subject-label-fg: var(--ctlab-warn); --subject-label-bg: rgba(210, 153, 34, .12); }
+/* Le cycle de vie emprunte aux sujets leurs couleurs : vert tant qu'il reste
+   quelque chose à faire, violet une fois refermé. */
+.ctlab__tag--open { --subject-label-border: var(--ctlab-ok); --subject-label-fg: var(--ctlab-ok); --subject-label-bg: rgba(63, 185, 80, .12); }
+.ctlab__tag--closed { --subject-label-border: var(--ctlab-closed); --subject-label-fg: var(--ctlab-closed); --subject-label-bg: rgba(163, 113, 247, .12); }
 .ctlab__chart { max-width: 100%; }
 .ctlab__charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-bottom: 16px; }
 @media (max-width: 1000px) { .ctlab__charts { grid-template-columns: minmax(0, 1fr); } }
@@ -746,9 +813,7 @@ const STYLE = `
 }
 .ctlab__row-evidence { display: block; overflow-wrap: anywhere; }
 .ctlab__row .issue-row-title-grid__meta { height: auto; }
-.ctlab__tag--OPEN { --subject-label-border: var(--ctlab-warn); --subject-label-fg: var(--ctlab-warn); --subject-label-bg: rgba(210, 153, 34, .12); }
-.ctlab__tag--NO_NEWS { --subject-label-border: var(--ctlab-danger); --subject-label-fg: var(--ctlab-danger); --subject-label-bg: rgba(248, 81, 73, .12); }
-.ctlab__tag--RESOLVED { --subject-label-border: var(--ctlab-ok); --subject-label-fg: var(--ctlab-ok); --subject-label-bg: rgba(63, 185, 80, .12); }
+
 
 
 /* Remonter le temps : une fonction stratégique, pas un lien perdu. */
@@ -1254,6 +1319,7 @@ function renderStatusView(state) {
   // intitulé, et le commentaire du contrôleur en seconde ligne — la même
   // lecture que le tableau des sujets.
   const context = buildAvisContext(state.result);
+  const reopened = reopenedReferences(state.result);
 
   const rows = avisStatus
     .map((summary) => {
@@ -1261,19 +1327,23 @@ function renderStatusView(state) {
       const info = context.get(summary.reference) ?? {};
       const code = info.code ?? summary.opinion_raw ?? ABSTENTION_CODE;
       const opinion = info.label && info.label !== code ? `${code} (${info.label})` : code;
+      const lifecycle = avisLifecycle(code, info.label, summary.status, reopened.has(summary.reference));
 
       return renderAvisRow({
         reference: summary.reference,
         code,
         label: info.label,
         title: firstText(info.title, "(ligne sans libellé lu)"),
-        tag: STATUS_LABELS[summary.status],
-        tagStatus: summary.status,
+        tag: lifecycle.label,
+        tagStatus: lifecycle.tone,
         meta: [
           `N° ${summary.reference}`,
           opinion,
           `soulevé le ${formatDate(summary.raised_at)}`,
           months === null ? null : `${months} mois`,
+          // Ce que le suivi ajoute au cycle de vie : pourquoi il est fermé,
+          // ou que personne n'en a plus rien dit.
+          summary.status === "NO_NEWS" ? STATUS_LABELS.NO_NEWS : null,
           RESOLUTION_LABELS[summary.resolution_reason] ?? null
         ]
           .filter(Boolean)
@@ -1879,6 +1949,7 @@ function renderAvisTable(state) {
   // recalculer autrement, sans quoi les deux écrans se contrediraient.
   const tracked = new Map((state.result.avisStatus ?? []).map((entry) => [entry.reference, entry.status]));
   const trackedAt = new Map((state.result.avisStatus ?? []).map((entry) => [entry.reference, entry.raised_at]));
+  const reopened = reopenedReferences(state.result);
 
   // Une ligne se lit comme une ligne de sujet : l'intitulé porte le clic — il
   // passe en bleu au survol —, le reste tient sur une seconde ligne discrète.
@@ -1894,7 +1965,7 @@ function renderAvisTable(state) {
       // appréciation. Dans les deux cas la ligne est celle de « Où en est-on » :
       // mêmes classes, même ordre, même badge — c'est le même objet.
       const status = tracked.get(reference) ?? null;
-      const { tag, tagStatus } = avisRowState(code, avis.opinion_label, status);
+      const lifecycle = avisLifecycle(code, avis.opinion_label, status, reopened.has(reference));
 
       return renderAvisRow({
         reference,
@@ -1905,13 +1976,16 @@ function renderAvisTable(state) {
         code,
         label: avis.opinion_label,
         title: firstText(avis.title_raw, avis.description_raw, "(ligne sans libellé lu)"),
-        tag,
-        tagStatus,
+        tag: lifecycle.label,
+        tagStatus: lifecycle.tone,
         meta: [
           reference ? `N° ${reference}` : "sans n°",
           opinion,
           avis.provenance?.page ? `page ${avis.provenance.page}` : null,
-          status && trackedAt.get(reference) ? `soulevé le ${formatDate(trackedAt.get(reference))}` : null
+          status && trackedAt.get(reference) ? `soulevé le ${formatDate(trackedAt.get(reference))}` : null,
+          // « Sans nouvelles » n'est pas un état du cycle de vie — l'avis est
+          // ouvert — mais c'est une information : personne n'en a rien dit.
+          status === "NO_NEWS" ? STATUS_LABELS.NO_NEWS : null
         ]
           .filter(Boolean)
           .join(" · "),
@@ -2350,7 +2424,13 @@ function renderAvisTrace(state) {
       ${back}
       <div class="ctlab__trace-head">
         <h3>Avis n° ${escapeHtml(reference)}</h3>
-        ${summary ? renderStatePill(summary.status) : ""}
+        ${
+          summary
+            ? renderStatePill(
+                avisLifecycle(context.code, context.label, summary.status, reopenedReferences(state.result).has(reference))
+              )
+            : ""
+        }
       </div>
       ${
         summary
@@ -2497,7 +2577,7 @@ function renderSingleOccurrence(state, back) {
       ${back}
       <div class="ctlab__trace-head">
         <h3>${escapeHtml(firstText(avis.title_raw, avis.description_raw, "(ligne sans libellé lu)"))}</h3>
-        ${renderStatePill(avisRowState(code, avis.opinion_label).tagStatus)}
+        ${renderStatePill(avisLifecycle(code, avis.opinion_label))}
       </div>
       <p class="ctlab__hint">
         Cet avis ne porte pas de numéro dans le rapport : le bureau de contrôle ne numérote que ce qui

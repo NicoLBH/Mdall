@@ -307,3 +307,21 @@ test("passer de suspendu à favorable n'est pas une réouverture", () => {
 test("la première apparition n'a rien derrière elle", () => {
   assert.equal(classifyAppearance(null, { opinion_raw: "S", opinion_label: "Suspendu" }), APPEARANCE.NEW);
 });
+
+/**
+ * Une fiche laisse parfois sa case d'avis vide tout en numérotant la ligne :
+ * le bureau de contrôle entend la suivre, mais n'a rien écrit dans la colonne.
+ */
+test("un avis sans appréciation lue n'est pas un avis qu'on rouvre", () => {
+  const muet = { opinion_raw: null, opinion_label: null };
+  const suspendu = { opinion_raw: "S", opinion_label: "Suspendu" };
+
+  assert.equal(classifyAppearance(muet, suspendu, { afterGap: true }), APPEARANCE.RECALLED);
+  assert.equal(classifyAppearance(muet, suspendu), APPEARANCE.TRACKED);
+
+  // Une vraie régression, elle, reste une réouverture.
+  assert.equal(
+    classifyAppearance({ opinion_raw: "F", opinion_label: "Favorable" }, suspendu),
+    APPEARANCE.REOPENED
+  );
+});

@@ -36,7 +36,10 @@ import {
 
 /** En-têtes de colonnes d'un tableau d'avis, tels qu'ils sont écrits. */
 const HEADERS = [
-  { id: "disposition", pattern: /dispositions?\s+du\s+projet/i },
+  // Un rapport intitule sa première colonne « Dispositions du projet », une
+  // fiche « Éléments examinés » : c'est le même tableau, et la fiche restait
+  // illisible par la géométrie faute de reconnaître son en-tête.
+  { id: "disposition", pattern: /dispositions?\s+du\s+projet|[ée]l[ée]ments?\s+examin[ée]s?/i },
   { id: "opinion", pattern: /^avis\s*\*?$/i },
   { id: "comment", pattern: /observations?\s+et\s+commentaires?/i },
   { id: "reference", pattern: /^n[°o]\s*$/i }
@@ -109,7 +112,15 @@ export function mergeWrappedLines(lines) {
  * le premier chapitre du référentiel, et l'arborescence de chaque avis d'un
  * rapport APD commençait par « règlement ».
  */
-const HEADER_WORD = /^(articles?|du|r[eè]glement|dispositions?|projet|avis\s*\*?|observations?|et|commentaires?|n[°o])$/i;
+const HEADER_WORD = /^(articles?|du|r[eè]glement|dispositions?|projet|[ée]l[ée]ments?|examin[ée]s?|avis\s*\*?|observations?|et|commentaires?|n[°o])$/i;
+
+/** Abscisse de l'en-tête « Avis* », dernier repère quand aucun code n'est écrit. */
+function opinionHeaderX(items, headerY) {
+  const header = items.find(
+    (item) => Math.abs(item.y - headerY) <= SAME_LINE && /^avis\s*\*?$/i.test(normalizeWhitespace(item.text))
+  );
+  return header ? header.x : null;
+}
 
 /** Ordonnée sous laquelle l'en-tête, débordements compris, est passé. */
 function headerBottom(items, headerY) {
@@ -186,13 +197,17 @@ function modal(values) {
  *
  * @returns {{articleX: number, opinionX: number, referenceX: number}|null}
  */
-export function deriveColumns(items, codes) {
+export function deriveColumns(items, codes, headerX = null) {
   const known = new Set(codes ?? []);
 
-  const opinionX = modal(
-    items.filter((item) => known.has(normalizeWhitespace(item.text))).map((item) => item.x)
-  );
-  if (opinionX === null) return null;
+  // Une fiche dont toutes les lignes attendent encore leur appréciation n'écrit
+  // aucun code : le contenu ne dit alors rien des colonnes, et l'en-tête reste
+  // le seul repère. Il est centré, donc approximatif — mais la colonne qu'il
+  // borne est vide, et l'approximation ne coûte rien.
+  const opinionX =
+    modal(items.filter((item) => known.has(normalizeWhitespace(item.text))).map((item) => item.x)) ??
+    headerX;
+  if (opinionX === null || opinionX === undefined) return null;
 
   const numbers = items.filter(
     (item) => /^\d{1,4}$/.test(normalizeWhitespace(item.text)) && item.x > opinionX
@@ -276,80 +291,59 @@ function toLines(items) {
   return lines.map((line) => ({ ...line, text: normalizeWhitespace(line.text) }));
 }
 
-/**
- * Ordonnée sous laquelle le tableau a cédé la place au pied de page.
- *
- * Sous la dernière ligne du tableau, le document reprend sa vie propre — la
- * légende des codes, la raison sociale, le numéro de page. Ces lignes sont
- * cadrées tout à gauche : laissées là, elles devenaient le premier chapitre de
- * l'arborescence, et « 7 / 12 » se retrouvait cité comme observation.
- *
- * Le tableau s'arrête là où l'interligne se rompt franchement — le pied de page
- * est séparé du corps par un vide sans commune mesure avec un saut de ligne.
- */
-function footerY(items) {
-  const ys = [...new Set(items.map((item) => Math.round(item.y)))].sort((a, b) => b - a);
-  if (ys.length < 3) return -Infinity;
-
-  const gaps = [];
-  for (let index = 1; index < ys.length; index += 1) gaps.push(ys[index - 1] - ys[index]);
-  const spacing = modal(gaps);
-  if (!spacing) return -Infinity;
-
-  // La coupe se mesure sur toute la page, jamais colonne par colonne : une
-  // observation de six lignes creuse dans la colonne des intitulés un vide
-  // aussi large qu'un pied de page, et le tableau se serait arrêté au milieu.
-  const limit = spacing * 4;
-  for (let index = 1; index < ys.length; index += 1) {
-    if (ys[index - 1] - ys[index] > limit) return ys[index - 1];
-  }
-  return -Infinity;
-}
+/** Un numéro de page : « 7 / 12 ». Il change à chaque page, mais reste un pied. */
+const PAGE_NUMBER = /^\d{1,3}\s*\/\s*\d{1,3}$/;
 
 /**
- * Regroupe les lignes d'un même paragraphe.
+ * Ce qui, dans un document, ne dit rien de ses tableaux.
  *
- * « DISPOSITIONS RELATIVES A LA / SECURITE DES PERSONNES DANS LA /
- * CONSTRUCTION » est un seul intertitre écrit sur trois lignes, pas trois
- * intertitres. Sans ce regroupement, seul le dernier fragment survivait, et
- * l'arborescence affichait « CONSTRUCTION ».
+ * Sous la dernière ligne du tableau, le document reprend sa vie propre : la
+ * raison sociale, le siège, la référence du chrono, le numéro de page. Ces
+ * lignes sont cadrées tout à gauche ; laissées dans la bande, elles devenaient
+ * le premier chapitre de l'arborescence, et « 7 / 12 » se citait comme une
+ * observation.
  *
- * Le signal est l'interligne : à l'intérieur d'un paragraphe il est régulier ;
- * entre deux paragraphes le document ajoute de l'air. On calibre donc sur
- * l'interligne le plus fréquent de la colonne plutôt que sur une valeur en dur,
- * qui ne survivrait pas au premier document composé autrement.
+ * On a d'abord cherché à les couper sur un vide : le pied de page est loin
+ * sous le tableau. Mais une fiche écrit son appréciation au milieu d'une
+ * cellule haute, et son numéro d'avis plus bas encore — des vides tout aussi
+ * larges, à l'intérieur du tableau. Aucun seuil ne les sépare.
+ *
+ * Ce qui les sépare, c'est que le pied de page **se répète**. Une ligne écrite
+ * mot pour mot, à la même abscisse, sur presque toutes les pages d'un document
+ * n'est pas le contenu d'un tableau : c'est son cadre.
  */
-export function toParagraphs(lines) {
-  if (lines.length <= 1) return lines.map((line) => ({ ...line }));
+const MIN_FRAME_LENGTH = 6;
 
-  // L'interligne se mesure entre lignes de même indentation : ce sont les
-  // seules qui puissent appartenir au même paragraphe. Le mesurer sur toute la
-  // colonne y mêlait les sauts entre niveaux, et l'écart de référence devenait
-  // si large que tout se collait en un bloc.
-  const gaps = [];
-  for (let index = 1; index < lines.length; index += 1) {
-    if (Math.abs(lines[index - 1].x - lines[index].x) >= 1) continue;
-    const gap = Math.round(lines[index - 1].y - lines[index].y);
-    if (gap > 0) gaps.push(gap);
-  }
-  const spacing = modal(gaps) ?? 0;
-  const limit = spacing > 0 ? spacing * 1.2 : Infinity;
+/** En deçà, une colonne est trop clairsemée pour que son contenu en dise le bord. */
+const WIDE_ENOUGH = 8;
 
-  const paragraphs = [];
-  for (const line of lines) {
-    const last = paragraphs[paragraphs.length - 1];
-    const continues =
-      last && Math.abs(last.x - line.x) < 1 && last.lastY - line.y <= limit && last.italic === line.italic;
+function repeatedLines(pages) {
+  const seen = new Map();
+  let counted = 0;
 
-    if (continues) {
-      last.text = `${last.text} ${line.text}`;
-      last.lastY = line.y;
-      continue;
-    }
-    paragraphs.push({ ...line, lastY: line.y });
+  for (const page of pages) {
+    const items = Array.isArray(page?.items) ? page.items : null;
+    if (!items || items.length === 0) continue;
+    counted += 1;
+    // Une cellule d'avis ne contient qu'une lettre, un numéro guère plus, et
+    // les mêmes reviennent à la même abscisse sur toutes les pages : les
+    // compter comme un cadre effaçait la colonne des appréciations. Le cadre,
+    // lui, est fait de mots — jusqu'à la date d'émission rappelée en tête de
+    // chaque page, qui s'invitait sinon en haut de l'arborescence.
+    const onThisPage = new Set(
+      toLines(items)
+        .filter((line) => line.text.length >= MIN_FRAME_LENGTH)
+        .map((line) => `${Math.round(line.x)}|${line.text}`)
+    );
+    for (const key of onThisPage) seen.set(key, (seen.get(key) ?? 0) + 1);
   }
 
-  return paragraphs;
+  // Deux pages au moins, et la ligne doit figurer sur la quasi-totalité :
+  // un intitulé qui reviendrait sur la moitié des pages reste un intitulé.
+  const floor = Math.max(2, Math.ceil(counted * 0.8));
+  const repeated = new Set();
+  for (const [key, count] of seen) if (count >= floor) repeated.add(key);
+  return repeated;
 }
 
 /**
@@ -359,7 +353,7 @@ export function toParagraphs(lines) {
  * @param {string[]} codes codes d'avis déclarés par la légende du document
  * @returns {{rows: object[], columns: object[]}|null}
  */
-export function readTableRows(page, codes, { stack = [] } = {}) {
+export function readTableRows(page, codes, { stack = [], repeated = new Set() } = {}) {
   const items = Array.isArray(page?.items) ? page.items : null;
   if (!items || items.length === 0) return null;
 
@@ -373,19 +367,34 @@ export function readTableRows(page, codes, { stack = [] } = {}) {
   for (const [index, headerY] of headers.entries()) {
     const ceiling = headerBottom(items, headerY);
     const floor = index + 1 < headers.length ? headers[index + 1] : -Infinity;
-    const span = items.filter((item) => item.y < ceiling - SAME_LINE && item.y > floor);
+    const span = items
+      .filter((item) => item.y < ceiling - SAME_LINE && item.y > floor)
+      .filter((item) => !PAGE_NUMBER.test(normalizeWhitespace(item.text)));
 
     // La légende — « * F: Favorable , D: Défavorable , … » — clôt le tableau.
     // Ses fragments sont dispersés sur toute la largeur de la page ; laissés
     // dans la bande, ils y creusaient un vide plus large que celui qui sépare
     // les articles des intitulés, et c'est là que la colonne se coupait.
+    // L'astérisque forme parfois un fragment à lui seul — « * », puis « D »,
+    // puis « : Défavorable , F: Favorable ». Ne reconnaître que « * F… »
+    // laissait le « D » dans la bande, où il passait pour une appréciation :
+    // la colonne des avis se plaçait alors sur la marge de gauche, et la
+    // fiche entière ressortait vide.
     const legend = span
-      .filter((item) => /^\*\s/.test(normalizeWhitespace(item.text)))
+      .filter((item) => /^\*(\s|$)/.test(normalizeWhitespace(item.text)))
       .map((item) => item.y);
     const closing = legend.length > 0 ? Math.max(...legend) : -Infinity;
-    const region = span.filter((item) => item.y > closing + SAME_LINE);
+    const below = span.filter((item) => item.y > closing + SAME_LINE);
+    // Les ordonnées des lignes que le document répète de page en page : leur
+    // contenu appartient au cadre, pas au tableau.
+    const framed = new Set(
+      toLines(below)
+        .filter((line) => repeated.has(`${Math.round(line.x)}|${line.text}`))
+        .map((line) => Math.round(line.y))
+    );
+    const region = below.filter((item) => !framed.has(Math.round(item.y)));
 
-    const table = readTableRegion(region.filter((item) => item.y > footerY(region) - SAME_LINE), codes, carried);
+    const table = readTableRegion(region, codes, carried, opinionHeaderX(items, headerY));
     if (!table) continue;
     columns = columns ?? table.columns;
     carried = table.stack;
@@ -393,66 +402,6 @@ export function readTableRows(page, codes, { stack = [] } = {}) {
   }
 
   return { rows, columns, stack: carried };
-}
-
-/** Lit un tableau, une fois sa page réduite à la bande qu'il occupe. */
-function readTableRegion(below, codes, stack) {
-  const known = new Set(codes ?? []);
-  const layout = deriveColumns(below, codes);
-  if (!layout) return { rows: [], columns: null, stack };
-
-  const byColumn = { article: [], disposition: [], opinion: [], comment: [], reference: [] };
-  for (const item of below) byColumn[columnOf(layout, item)].push(item);
-
-  // Chaque ligne du tableau est ancrée par son code d'avis : c'est la seule
-  // cellule qui y figure exactement une fois.
-  const anchors = toLines(byColumn.opinion)
-    .filter((line) => known.has(line.text))
-    .sort((a, b) => b.y - a.y);
-
-  if (anchors.length === 0) return { rows: [], columns: layout, stack };
-
-  const dispositionLines = toLines(byColumn.disposition);
-  const commentLines = toLines(byColumn.comment);
-  const referenceLines = toLines(byColumn.reference);
-  const articleLines = toLines(byColumn.article);
-  const numbered = isOutlineNumbered(dispositionLines);
-  const columnRight = Math.max(
-    ...dispositionLines.map((line) => line.right).filter((right) => Number.isFinite(right)),
-    -Infinity
-  );
-
-  const rows = anchors.map((anchor, index) => {
-    const top = anchor.y + SAME_LINE;
-    const bottom = index + 1 < anchors.length ? anchors[index + 1].y + SAME_LINE : -Infinity;
-    const inBand = (line) => line.y <= top && line.y > bottom;
-
-    const band = dispositionLines.filter(inBand);
-    const { title, complement, outlineUpdates } = splitDispositionBand(band, { numbered, columnRight });
-    const titleText = title[0] ?? band[0]?.text ?? "";
-
-    return {
-      opinion_raw: anchor.text,
-      opinion_x: anchor.x,
-      y: anchor.y,
-      title_lines: title,
-      title_x: band[0]?.x ?? null,
-      // La profondeur de l'intitulé, prise à sa numérotation quand le document
-      // en porte une, à son indentation sinon.
-      title_depth: numbered ? outlineDepth(titleText) : null,
-      complement_lines: complement,
-      outline_updates: outlineUpdates,
-      comment_lines: commentLines.filter(inBand).map((line) => line.text),
-      // L'article du règlement a sa propre colonne dans un rapport APD ; seule
-      // la ligne d'ancrage le porte, les continuations sont vides.
-      article_raw: articleLines.filter(inBand).map((line) => line.text).join(" ") || null,
-      reference_raw:
-        referenceLines.filter(inBand).map((line) => line.text).find((text) => /^\d{1,4}$/.test(text)) ?? null
-    };
-  });
-
-  const outlined = withAncestors(rows, dispositionLines, anchors[0].y + SAME_LINE, numbered, stack);
-  return { rows: outlined.rows, columns: layout, stack: outlined.stack };
 }
 
 /** Largeur moyenne d'un caractère de la ligne, telle que le PDF l'a composée. */
@@ -490,57 +439,183 @@ function wraps(line, next, columnRight) {
 }
 
 /**
- * Sépare, dans la cellule « dispositions », ce qui appartient à la ligne
- * courante de ce qui annonce la suivante.
+ * Découpe la colonne des dispositions en intitulés, un par ligne du tableau.
  *
- * L'intitulé de la ligne commence à la hauteur du code d'avis, à une certaine
- * indentation. Ses lignes de continuation gardent cette indentation. Dès qu'un
- * fragment revient plus à gauche, on a changé de niveau : c'est un intertitre,
- * et il vaut pour les lignes suivantes, pas pour celle-ci.
- *
- * L'italique, lui, est un complément d'observation : il précise l'intitulé sans
- * en faire partie.
- *
- * Quand le document numérote son référentiel, l'indentation ne décide plus de
- * rien : les continuations sont d'abord recollées à leur intitulé, et tout ce
- * qui suit — nécessairement numéroté, donc nécessairement un nouveau titre —
- * annonce la ligne suivante.
+ * C'est le même regroupement qu'auparavant — une ligne sans numéro, ou qui ne
+ * pouvait pas déborder, poursuit la précédente — mais mené sur toute la
+ * colonne au lieu d'une bande à la fois. Il fallait pour cela cesser de tenir
+ * la colonne des avis pour le repère des lignes.
  */
-export function splitDispositionBand(band, { numbered = false, columnRight = NaN } = {}) {
-  if (band.length === 0) return { title: [], complement: [], outlineUpdates: [] };
+export function toRowCandidates(lines, { numbered, columnRight, scored = [], spacing = null }) {
+  const merged = [];
+  // Un paragraphe a son interligne ; entre deux paragraphes le document ajoute
+  // de l'air. « REGLEMENTATION PARASISMIQUE » et « DISPOSITIONS RELATIVES A LA
+  // SECURITE DES PERSONNES » sont deux chapitres, et le mot « DISPOSITIONS »
+  // était trop long pour tenir au bout du premier : la seule règle du
+  // débordement les recollait en un seul.
+  const limit = spacing ? spacing * 1.2 : Infinity;
 
-  const lines = numbered ? mergeWrappedLines(band) : band;
-  const titleX = lines[0].x;
-  const title = [];
-  const complement = [];
-  const outlineUpdates = [];
-  let ended = false;
+  // Un intitulé écrit à la hauteur de sa propre appréciation ouvre sa ligne :
+  // c'est ce que dit le tableau, et aucune règle typographique ne saurait le
+  // contredire. « Nombre et maillage des sondages » s'arrête si près du bord
+  // que « Profondeur » n'y tenait pas — les deux intitulés se recollaient,
+  // alors que chacun porte son F.
+  const opens = (line) => scored.some((y) => Math.abs(y - line.y) <= SAME_LINE);
 
-  for (const [index, line] of lines.entries()) {
-    const starts = numbered
-      ? index > 0 && !line.italic
-      : index > 0 &&
-        !line.italic &&
-        (Math.abs(line.x - titleX) > 1 || !wraps(lines[index - 1], line, columnRight));
-    if (ended || starts) {
-      ended = true;
-      outlineUpdates.push({ x: line.x, y: line.y, text: line.text, italic: line.italic });
+  for (const line of lines) {
+    const last = merged[merged.length - 1];
+    const continues =
+      last &&
+      last.italic === line.italic &&
+      !opens(line) &&
+      (numbered
+        ? outlineDepth(line.text) === null
+        : Math.abs(line.x - last.x) <= 1 &&
+          last.lastY - line.y <= limit &&
+          wraps(last, line, columnRight));
+
+    if (continues) {
+      last.text = `${last.text} ${line.text}`;
+      // Le débordement se juge sur la dernière ligne écrite, pas sur la
+      // première du paragraphe.
+      last.right = line.right;
+      last.lastY = line.y;
       continue;
     }
-    if (line.italic) complement.push(line.text);
-    else title.push(line.text);
+    merged.push({ ...line, lastY: line.y });
   }
 
-  return { title, complement, outlineUpdates };
+  return merged;
 }
 
 /**
- * Rattache chaque ligne à son arborescence.
+ * Lit un tableau, une fois sa page réduite à la bande qu'il occupe.
  *
- * La pile d'intertitres se lit de gauche à droite : un niveau plus à gauche
- * remplace tous ceux qui sont à sa droite, comme un plan de document.
+ * Une ligne de tableau commence où commence sa première colonne. C'est
+ * évident, et ce n'était pourtant pas ce que faisait ce module : il ancrait
+ * chaque ligne sur son **code d'avis**, parce que dans un RICT le code, son
+ * intitulé et son observation commencent tous à la même hauteur.
+ *
+ * Une fiche d'avis travaux ne compose pas ainsi. Son intitulé est centré
+ * verticalement dans sa cellule, tandis que l'observation part du haut :
+ *
+ *     378                     Rappel de l'observation précédente :
+ *     366                     La distance de 40 cm n'est pas respectée
+ *     360  Ext > 40 cm angle rentrant
+ *     354                 F   pour la porte WC Scol. 1
+ *
+ * Ancrée sur le F, la ligne perdait les deux premières lignes de son
+ * observation. Pire : la disposition suivante — « Couche de fondation du
+ * dallage », dont le bureau de contrôle a laissé la case d'avis vide tout en
+ * lui donnant le numéro 234 — n'existait pas du tout, faute de code sur lequel
+ * s'ancrer. L'avis 234 était bien lu par le rapport d'étape un an plus tard,
+ * mais sa création restait invisible.
+ *
+ * On ancre donc sur les intitulés. Chacun ouvre une bande qui va jusqu'au
+ * suivant, la première remontant jusqu'à l'en-tête du tableau. Un intitulé
+ * dont la bande ne porte ni code ni numéro n'est pas une ligne : c'est un
+ * intertitre, et il rejoint l'arborescence.
  */
-function withAncestors(rows, dispositionLines, firstTop, numbered = false, inherited = []) {
+function readTableRegion(below, codes, stack, headerX = null) {
+  const known = new Set(codes ?? []);
+  const layout = deriveColumns(below, codes, headerX);
+  if (!layout) return { rows: [], columns: null, stack };
+
+  const byColumn = { article: [], disposition: [], opinion: [], comment: [], reference: [] };
+  for (const item of below) byColumn[columnOf(layout, item)].push(item);
+
+  const dispositionLines = toLines(byColumn.disposition);
+  const commentLines = toLines(byColumn.comment);
+  const referenceLines = toLines(byColumn.reference);
+  const articleLines = toLines(byColumn.article);
+  const opinionLines = toLines(byColumn.opinion).filter((line) => known.has(line.text));
+
+  if (dispositionLines.length === 0 && opinionLines.length === 0) {
+    return { rows: [], columns: layout, stack };
+  }
+
+  const numbered = isOutlineNumbered(dispositionLines);
+  // Jusqu'où un intitulé peut s'étendre avant de passer à la ligne.
+  //
+  // Le contenu le dit mieux que l'en-tête, qui est centré — à condition qu'il
+  // y en ait assez pour qu'une ligne au moins soit allée jusqu'au bord. Une
+  // fiche n'a que deux intitulés courts : son plus long y passait pour le bord
+  // de la colonne, et les deux se recollaient en un seul. Sous ce seuil, on
+  // s'en remet à la colonne des avis, qui borne la précédente.
+  const contentRight = Math.max(
+    ...dispositionLines.map((line) => line.right).filter((right) => Number.isFinite(right)),
+    -Infinity
+  );
+  const columnRight =
+    dispositionLines.length >= WIDE_ENOUGH && Number.isFinite(contentRight)
+      ? contentRight
+      : layout.opinionX - MARGIN;
+
+  const paragraphs = toRowCandidates(dispositionLines, {
+    numbered,
+    columnRight,
+    spacing: medianGap(dispositionLines),
+    scored: [
+      ...opinionLines.map((line) => line.y),
+      ...referenceLines.filter((line) => isReference(line.text)).map((line) => line.y)
+    ]
+  });
+  // L'italique est un complément d'observation : il précise l'intitulé qui le
+  // précède, il n'en ouvre pas un nouveau.
+  const candidates = paragraphs.filter((paragraph) => !paragraph.italic);
+  const complements = paragraphs.filter((paragraph) => paragraph.italic);
+
+  const outlined = withAncestors({
+    candidates,
+    complements,
+    opinionLines,
+    commentLines,
+    referenceLines,
+    articleLines,
+    numbered,
+    inherited: stack
+  });
+
+  return { rows: outlined.rows, columns: layout, stack: outlined.stack };
+}
+
+/** Interligne courant d'une colonne : la médiane de ses écarts verticaux. */
+function medianGap(lines) {
+  const gaps = [];
+  for (let index = 1; index < lines.length; index += 1) {
+    const gap = Math.round(lines[index - 1].y - lines[index].y);
+    if (gap > 0) gaps.push(gap);
+  }
+  if (gaps.length === 0) return null;
+  gaps.sort((a, b) => a - b);
+  return gaps[Math.floor(gaps.length / 2)];
+}
+
+/** Vrai si le texte est un numéro d'avis, et rien d'autre. */
+function isReference(text) {
+  return /^\d{1,4}$/.test(text);
+}
+
+/**
+ * Trie les intitulés entre lignes de tableau et intertitres, et rattache
+ * chacune des premières à son arborescence.
+ *
+ * Un intitulé dont la bande ne porte ni appréciation ni numéro n'annonce rien :
+ * c'est un chapitre du référentiel. Il rejoint la pile, où il vaudra pour les
+ * lignes qui suivent. La pile se lit de gauche à droite — ou de profondeur en
+ * profondeur quand le document numérote — et un niveau supérieur remplace tous
+ * ceux qu'il domine, comme un plan de document.
+ */
+function withAncestors({
+  candidates,
+  complements,
+  opinionLines,
+  commentLines,
+  referenceLines,
+  articleLines,
+  numbered,
+  inherited
+}) {
   // Un chapitre ouvert en bas d'une page porte encore les avis du haut de la
   // suivante : la pile se poursuit d'une page à l'autre, sans quoi la première
   // ligne de chaque page ressortait sans arborescence.
@@ -548,8 +623,8 @@ function withAncestors(rows, dispositionLines, firstTop, numbered = false, inher
 
   // Le rang dit la place d'un intertitre dans le plan : sa profondeur de
   // numérotation quand le document en porte une, son indentation sinon. Une
-  // ligne numérotée pèse toujours plus qu'un fragment qui ne l'est pas — ce
-  // dernier ne peut porter personne, et se retrouve écarté de la pile.
+  // ligne qui n'est pas numérotée, dans un document qui l'est, ne peut porter
+  // personne : elle est écartée de la pile.
   const rankOf = (entry) =>
     numbered ? outlineDepth(entry.text) ?? Number.MAX_SAFE_INTEGER : entry.x;
 
@@ -560,24 +635,60 @@ function withAncestors(rows, dispositionLines, firstTop, numbered = false, inher
     stack.push({ rank, text: entry.text });
   };
 
-  const prepare = (lines) => (numbered ? mergeWrappedLines(lines) : toParagraphs(lines));
+  const rows = [];
 
-  // Tout ce qui précède la première ligne du tableau est de l'intertitre.
-  for (const line of prepare(dispositionLines.filter((line) => line.y > firstTop))) push(line);
+  for (const [index, candidate] of candidates.entries()) {
+    // La première bande remonte jusqu'à l'en-tête : dans une fiche, les
+    // premières lignes de l'observation sont écrites au-dessus de l'intitulé
+    // qu'elles commentent.
+    const top = index === 0 ? Infinity : candidate.y + SAME_LINE;
+    const bottom = index + 1 < candidates.length ? candidates[index + 1].y + SAME_LINE : -Infinity;
+    const inBand = (line) => line.y <= top && line.y > bottom;
 
-  const outlined = rows.map((row) => {
-    // Un intertitre est forcément au-dessus de l'intitulé qu'il porte. Sans ce
-    // filtre, une ligne de continuation restée dans la pile passait pour un
-    // chapitre et l'arborescence devenait absurde.
-    const limit = numbered ? row.title_depth ?? Number.MAX_SAFE_INTEGER : (row.title_x ?? Infinity) - 1;
+    const opinions = opinionLines.filter(inBand);
+    const references = referenceLines.filter(inBand).filter((line) => isReference(line.text));
+
+    if (opinions.length === 0 && references.length === 0) {
+      push(candidate);
+      continue;
+    }
+
+    const limit = numbered
+      ? outlineDepth(candidate.text) ?? Number.MAX_SAFE_INTEGER
+      : candidate.x - 1;
     const ancestors = stack.filter((entry) => entry.rank < limit).map((entry) => entry.text);
-    for (const update of prepare(row.outline_updates)) push(update);
-    return { ...row, ancestors };
-  });
 
-  return { rows: outlined, stack };
+    // Deux appréciations dans une même bande : deux lignes de tableau dont la
+    // seconde n'a pas d'intitulé propre. On les sépare sur leurs codes, comme
+    // avant — l'intitulé revient à la première, seule à en avoir un.
+    const cuts = opinions.length > 1 ? opinions : [opinions[0] ?? null];
+
+    for (const [rank, opinion] of cuts.entries()) {
+      const cutTop = rank === 0 ? top : opinion.y + SAME_LINE;
+      const cutBottom = rank + 1 < cuts.length ? cuts[rank + 1].y + SAME_LINE : bottom;
+      const inCut = (line) => line.y <= cutTop && line.y > cutBottom;
+
+      rows.push({
+        opinion_raw: opinion?.text ?? null,
+        opinion_x: opinion?.x ?? null,
+        y: opinion?.y ?? candidate.y,
+        title_lines: rank === 0 ? [candidate.text] : [],
+        title_x: rank === 0 ? candidate.x : null,
+        // La profondeur de l'intitulé, prise à sa numérotation quand le
+        // document en porte une, à son indentation sinon.
+        title_depth: numbered && rank === 0 ? outlineDepth(candidate.text) : null,
+        ancestors,
+        complement_lines: complements.filter(inCut).map((line) => line.text),
+        comment_lines: commentLines.filter(inCut).map((line) => line.text),
+        // L'article du règlement a sa propre colonne dans un rapport APD.
+        article_raw: articleLines.filter(inCut).map((line) => line.text).join(" ") || null,
+        reference_raw: referenceLines.filter(inCut).map((line) => line.text).find(isReference) ?? null
+      });
+    }
+  }
+
+  return { rows, stack };
 }
-
 
 /**
  * Choisit un extrait qui existe vraiment dans le document.
@@ -618,6 +729,20 @@ export function pickExcerpt(content, row) {
     if (text !== "" && containsPhrase(text, candidate)) return candidate;
   }
 
+  // Aucun candidat entier ne se retrouve : deux intitulés que l'aplatissement
+  // a recollés, une observation coupée par un saut de page. Le début de
+  // l'intitulé, lui, vient bien du document — on cite ce qu'on peut prouver,
+  // quitte à en dire moins. L'appréciation, elle, garde sa cellule pour
+  // provenance.
+  for (const candidate of [firstTitle, first]) {
+    if (!candidate || text === "") continue;
+    const words = normalizeWhitespace(candidate).split(" ");
+    for (let take = words.length - 1; take >= 3; take -= 1) {
+      const prefix = words.slice(0, take).join(" ");
+      if (containsPhrase(text, prefix)) return prefix;
+    }
+  }
+
   return candidates[0] ?? code;
 }
 
@@ -647,16 +772,22 @@ export function extractAvisFromLayout(source, { legend } = {}) {
   const occurrences = [];
   let tables = 0;
 
+  const repeated = repeatedLines(pages);
+
   let stack = [];
   for (const page of pages) {
-    const table = readTableRows(page, codes, { stack });
+    const table = readTableRows(page, codes, { stack, repeated });
     if (!table) continue;
     tables += 1;
     stack = table.stack ?? stack;
 
     for (const row of table.rows) {
-      const entry = byCode.get(row.opinion_raw);
-      if (!entry) continue;
+      const entry = byCode.get(row.opinion_raw) ?? null;
+      // Une ligne sans appréciation lisible mais numérotée reste une ligne :
+      // le bureau de contrôle ne donne un numéro qu'à ce qu'il entend suivre.
+      // La taire ferait disparaître la création de l'avis, qui ne réapparaît
+      // qu'au récapitulatif suivant — un an plus tard, sans commencement.
+      if (!entry && !row.reference_raw) continue;
 
       // L'article réglementaire et la numérotation se détachent de l'intitulé
       // comme dans la lecture par lignes : « PE11§2 6.1.2.6.2.1 Dispositif de
@@ -672,8 +803,8 @@ export function extractAvisFromLayout(source, { legend } = {}) {
         external_reference_normalized: row.reference_raw ? normalizeReferenceKey(row.reference_raw) : null,
         identity_source: row.reference_raw ? IDENTITY_SOURCE.NUMBER_COLUMN : IDENTITY_SOURCE.NONE,
         opinion_raw: row.opinion_raw,
-        opinion_normalized: entry.id,
-        opinion_label: entry.label,
+        opinion_normalized: entry?.id ?? null,
+        opinion_label: entry?.label ?? null,
         title_raw: title_raw,
         // L'arborescence du référentiel, du plus général au plus précis.
         ancestors: row.ancestors,
@@ -699,14 +830,13 @@ export function extractAvisFromLayout(source, { legend } = {}) {
         // retrouve alors introuvable à côté de l'intitulé qu'il porte, et
         // aucun extrait ne peut honnêtement le citer. La géométrie, elle, sait
         // exactement d'où il vient, et le dit.
-        opinion_cell: {
-          page: page.page ?? null,
-          x: row.opinion_x,
-          y: row.y,
-          text: row.opinion_raw
-        },
+        opinion_cell: row.opinion_raw
+          ? { page: page.page ?? null, x: row.opinion_x, y: row.y, text: row.opinion_raw }
+          : null,
         confidence: page.page === null ? CONFIDENCE.OCCURRENCE_WITHOUT_PAGE : CONFIDENCE.OCCURRENCE_WITH_PAGE,
-        opinion_confidence: CONFIDENCE.OPINION_FROM_LEGEND,
+        // Sans code lu, il n'y a pas d'avis reconnu : `null` dit l'abstention,
+        // là où une confiance basse laisserait croire à une lecture douteuse.
+        opinion_confidence: entry ? CONFIDENCE.OPINION_FROM_LEGEND : null,
         extraction_state: row.reference_raw
           ? EXTRACTION_STATE.EXTRACTED
           : EXTRACTION_STATE.NO_EXTERNAL_REFERENCE,
