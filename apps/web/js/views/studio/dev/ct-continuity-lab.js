@@ -74,6 +74,21 @@ const STAGE_LABELS = {
  */
 let DOCUMENT_LABELS = new Map();
 
+/**
+ * Premier texte réellement présent.
+ *
+ * L'extraction rend `""` — pas `null` — quand elle n'a rien lu. `??` ne se
+ * déclenche donc pas, et 290 intitulés sur 1 024 s'affichaient vides sur un
+ * corpus réel, sans que rien ne dise pourquoi.
+ */
+export function firstText(...values) {
+  for (const value of values) {
+    const text = String(value ?? "").trim();
+    if (text !== "") return text;
+  }
+  return "";
+}
+
 function documentLabel(sourceId) {
   if (!sourceId) return "—";
   return DOCUMENT_LABELS.get(sourceId) ?? sourceId;
@@ -170,8 +185,8 @@ function avisIcon(code, label = null) {
  * @param {object} avis      code, libellé, intitulé, commentaire, méta
  * @param {string|null} tag  état de l'avis, rendu comme un label de sujet
  */
-function renderAvisRow({ reference, code, label, title, meta, comment, tag, tagStatus, evidence }) {
-  const clickable = Boolean(reference);
+function renderAvisRow({ reference, traceKey, code, label, title, meta, seenIn, comment, tag, tagStatus, evidence }) {
+  const target = traceKey ?? reference;
 
   return `
     <div class="issue-row ctlab__row">
@@ -180,8 +195,8 @@ function renderAvisRow({ reference, code, label, title, meta, comment, tag, tagS
           <span class="issue-row-title-grid__status">${avisIcon(code, label)}</span>
           <span class="issue-row-title-grid__title issue-row-subject-title-line">
             ${
-              clickable
-                ? `<button type="button" class="row-title-trigger theme-text" data-ctlab-trace="${escapeHtml(reference)}">${escapeHtml(title)}</button>`
+              target
+                ? `<button type="button" class="row-title-trigger theme-text" data-ctlab-trace="${escapeHtml(target)}">${escapeHtml(title)}</button>`
                 : `<span class="theme-text">${escapeHtml(title)}</span>`
             }
             ${
@@ -191,10 +206,22 @@ function renderAvisRow({ reference, code, label, title, meta, comment, tag, tagS
             }
           </span>
           <span class="issue-row-title-grid__meta issue-row-meta-text mono-small">${escapeHtml(meta)}</span>
-          ${comment ? `<span class="ctlab__row-grid-comment issue-row-meta-text">${escapeHtml(truncate(comment, 220))}</span>` : ""}
+          ${
+            seenIn
+              ? `<span class="ctlab__row-line issue-row-meta-text ctlab__ellipsis" title="${escapeHtml(seenIn)}">${escapeHtml(seenIn)}</span>`
+              : ""
+          }
+          ${comment ? `<span class="ctlab__row-line issue-row-meta-text ctlab__clamp">${escapeHtml(truncate(comment, 320))}</span>` : ""}
+          ${
+            evidence
+              ? `<span class="ctlab__row-line ctlab__row-evidence">
+                   <span class="ctlab__dot ctlab__dot--ok" aria-hidden="true"></span>
+                   <span class="issue-row-meta-text">${escapeHtml(truncate(evidence, 260))}</span>
+                 </span>`
+              : ""
+          }
         </span>
       </div>
-      ${evidence === undefined ? "" : `<div class="cell ctlab__row-evidence">${evidence ? `<span class="issue-row-meta-text">${escapeHtml(truncate(evidence, 120))}</span>` : ""}</div>`}
     </div>
   `;
 }
@@ -460,41 +487,44 @@ const STYLE = `
 .ctlab__pipeline-body { min-width: 0; flex: 1 1 auto; }
 .ctlab__pipeline-title { font-weight: 600; }
 .ctlab__pipeline-detail { margin-top: 6px; }
-.ctlab__pipeline-title { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; font-weight: 400; }
+.ctlab__pipeline-title { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; font-weight: 400; min-width: 0; }
 .ctlab__pipeline-date { white-space: nowrap; }
-.ctlab__pipeline-dash { color: var(--ctlab-muted); }
-.ctlab__pipeline-headline { font-weight: 700; color: var(--ctlab-text); }
-.ctlab__pipeline-line { margin-top: 3px; }
-.ctlab__tag--state { --subject-label-border: var(--ctlab-line); --subject-label-fg: var(--ctlab-muted); --subject-label-bg: transparent; }
+.ctlab__pipeline-headline { font-weight: 700; color: var(--ctlab-text); overflow-wrap: anywhere; }
+.ctlab__pipeline-headline--muted { font-weight: 400; color: var(--ctlab-muted); }
+.ctlab__pipeline-line { margin-top: 3px; min-width: 0; }
+/* Un commentaire de plusieurs centaines de caractères ne doit pas pousser la
+   frise hors de son cadre. */
+.ctlab__pipeline-text { overflow-wrap: anywhere; white-space: normal; }
+.ctlab__tag--muted { --subject-label-border: var(--ctlab-line); --subject-label-fg: var(--ctlab-muted); --subject-label-bg: transparent; }
+.ctlab__tag--info { --subject-label-border: var(--ctlab-info); --subject-label-fg: var(--ctlab-info); --subject-label-bg: rgba(88, 166, 255, .12); }
+.ctlab__tag--ok { --subject-label-border: var(--ctlab-ok); --subject-label-fg: var(--ctlab-ok); --subject-label-bg: rgba(63, 185, 80, .12); }
 .ctlab__chart { max-width: 100%; }
 .ctlab__charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-bottom: 16px; }
 @media (max-width: 1000px) { .ctlab__charts { grid-template-columns: minmax(0, 1fr); } }
 
 /* Lignes d'avis : la grammaire du tableau des sujets, sans trait vertical. */
 .ctlab__rows { border: 1px solid var(--ctlab-line); border-radius: var(--radius, 6px); overflow: hidden; }
-.ctlab__row { grid-template-columns: minmax(0, 1fr) 260px; align-items: start; }
+/* Une seule colonne : la preuve descend sur sa propre ligne plutôt que de
+   voler la moitié de la largeur au texte. */
+.ctlab__row { grid-template-columns: minmax(0, 1fr); align-items: start; }
 .ctlab__row-main { min-width: 0; }
-.ctlab__row-evidence { min-width: 0; padding-left: 12px; }
-/* Trois lignes empilées : intitulé, métadonnées, commentaire. */
-.ctlab__row-grid { grid-template-rows: auto auto auto; }
-.ctlab__row-grid-comment {
-  grid-column: 3;
-  grid-row: 3;
-  min-width: 0;
+.ctlab__row-grid { grid-template-rows: auto; }
+.ctlab__row-line { grid-column: 3; min-width: 0; margin-top: 3px; }
+.ctlab__ellipsis { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ctlab__clamp {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
   white-space: normal;
+  overflow-wrap: anywhere;
 }
+.ctlab__row-evidence { display: block; overflow-wrap: anywhere; }
 .ctlab__row .issue-row-title-grid__meta { height: auto; }
 .ctlab__tag--OPEN { --subject-label-border: var(--ctlab-warn); --subject-label-fg: var(--ctlab-warn); --subject-label-bg: rgba(210, 153, 34, .12); }
 .ctlab__tag--NO_NEWS { --subject-label-border: var(--ctlab-danger); --subject-label-fg: var(--ctlab-danger); --subject-label-bg: rgba(248, 81, 73, .12); }
 .ctlab__tag--RESOLVED { --subject-label-border: var(--ctlab-ok); --subject-label-fg: var(--ctlab-ok); --subject-label-bg: rgba(63, 185, 80, .12); }
-@media (max-width: 900px) {
-  .ctlab__row { grid-template-columns: minmax(0, 1fr); }
-  .ctlab__row-evidence { padding-left: 0; }
-}
+
 
 /* Remonter le temps : une fonction stratégique, pas un lien perdu. */
 .ctlab__time-travel { display: inline-flex; align-items: center; gap: 6px; }
@@ -541,6 +571,7 @@ const STYLE = `
 .ctlab__milestone:hover { background: rgba(110, 118, 129, .12); }
 .ctlab__milestone-date { grid-row: 1 / span 2; color: var(--ctlab-muted); }
 .ctlab__milestone-label { font-weight: 600; }
+.ctlab__milestone-note { padding: 6px 8px; border-bottom: 1px solid var(--ctlab-line); margin-bottom: 4px; }
 
 /* Constats gradués : le rouge est réservé à ce qui l'exige. */
 .ctlab__notice {
@@ -627,14 +658,20 @@ const STYLE = `
   font: inherit;
 }
 .ctlab__drop {
-  border: 2px dashed var(--ctlab-line);
+  border: 1px dashed var(--ctlab-line);
   border-radius: var(--radius, 6px);
-  padding: 20px;
+  padding: 24px 16px;
   text-align: center;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
 }
-.ctlab__drop.is-over { border-color: var(--ctlab-info); background: rgba(88, 166, 255, .08); }
-.ctlab__drop .ctlab__hint { margin: 6px 0 10px; }
+.ctlab__drop.is-over { border-color: var(--ctlab-info); background: rgba(88, 166, 255, .06); }
+.ctlab__drop--loaded { border-style: solid; }
+.ctlab__drop-icon { display: block; color: var(--ctlab-muted); margin-bottom: 8px; }
+.ctlab__drop--loaded .ctlab__drop-icon { color: var(--ctlab-ok); }
+.ctlab__drop-title { display: block; font-size: 16px; color: var(--ctlab-text); }
+.ctlab__drop-lead { color: var(--ctlab-muted); margin: 6px auto 0; max-width: 60ch; }
+.ctlab__drop-actions { margin-top: 12px; }
+.ctlab__drop-note { margin: 12px auto 0; max-width: 70ch; font-size: 12px; }
 .ctlab__progress {
   height: 6px;
   background: var(--bg-input, rgb(21, 27, 35));
@@ -761,21 +798,47 @@ function renderDropZone(state) {
   // déroulé du travail qui occupe la place.
   if (state.loading || state.running) return "";
 
+  const loaded = state.reports.filter((report) => !report.error).length;
+  const failed = state.reports.length - loaded;
+
+  // Deux états, et l'écran doit dire lequel : sans documents, on invite à en
+  // déposer ; avec des documents, on dit combien et ce qu'il reste à faire.
+  // Auparavant le texte sous la zone restait « Déposer des documents, puis
+  // lancer l'analyse » alors que le bouton annonçait « Analyser 17 documents ».
+  const empty = loaded === 0;
+
   return `
-    <div class="ctlab__drop" data-ctlab-drop>
-      <b>Déposer les PDF ici</b>
-      <div class="ctlab__hint">
-        Autant de fichiers que nécessaire, dans n'importe quel ordre.
-        Un second lot peut être ajouté plus tard : l'analyse est recalculée.
+    <div class="ctlab__drop ${empty ? "" : "ctlab__drop--loaded"}" data-ctlab-drop>
+      <span class="ctlab__drop-icon" aria-hidden="true">
+        ${svgIcon(empty ? "file-pdf" : "file-directory", { className: "octicon", width: 24, height: 24 })}
+      </span>
+      <b class="ctlab__drop-title">
+        ${
+          empty
+            ? "Aucun document chargé"
+            : `${loaded} document${loaded > 1 ? "s" : ""} chargé${loaded > 1 ? "s" : ""}`
+        }
+      </b>
+      <div class="ctlab__drop-lead">
+        ${
+          empty
+            ? "Déposez ici les livrables du bureau de contrôle — autant de fichiers que nécessaire, dans n'importe quel ordre."
+            : `Vous pouvez en ajouter d'autres, ou lancer l'analyse.${failed > 0 ? ` ${failed} fichier(s) illisible(s).` : ""}`
+        }
       </div>
-      <div class="ctlab__hint">
+      <div class="ctlab__drop-actions">
+        <button type="button" class="gh-btn gh-btn--sm" data-ctlab-pick>
+          ${empty ? "Choisir des fichiers…" : "Ajouter des fichiers…"}
+        </button>
+      </div>
+      <div class="ctlab__hint ctlab__drop-note">
         Les PDF sont lus <b>dans ce navigateur</b> : rien n'est envoyé, rien n'est enregistré,
         aucun sujet Mdall n'est créé ni modifié. Fermer l'onglet efface tout.
       </div>
-      <button type="button" class="gh-btn gh-btn--sm" data-ctlab-pick>Choisir des fichiers…</button>
     </div>
   `;
 }
+
 
 /** Liste compacte des documents chargés, dans l'ordre reconstruit s'il existe. */
 function renderDocumentList(state) {
@@ -945,8 +1008,8 @@ function buildAvisContext(result) {
       label: avis.opinion_label ?? null,
       // Un rapport en colonnes porte un intitulé ; un rapport lu ligne à ligne
       // n'a que son commentaire. On prend ce qui existe plutôt que rien.
-      title: avis.title_raw ?? avis.description_raw ?? null,
-      comment: avis.description_raw ?? null
+      title: firstText(avis.title_raw, avis.description_raw) || null,
+      comment: firstText(avis.description_raw) || null
     });
   }
 
@@ -976,7 +1039,7 @@ function renderStatusView(state) {
         reference: summary.reference,
         code,
         label: info.label,
-        title: info.title ?? "(sans intitulé)",
+        title: firstText(info.title, "(ligne sans libellé lu)"),
         tag: STATUS_LABELS[summary.status],
         tagStatus: summary.status,
         meta: [
@@ -984,11 +1047,13 @@ function renderStatusView(state) {
           opinion,
           `soulevé le ${formatDate(summary.raised_at)}`,
           months === null ? null : `${months} mois`,
-          `vu dans ${documentLabel(summary.last_seen_document_id)}`,
           RESOLUTION_LABELS[summary.resolution_reason] ?? null
         ]
           .filter(Boolean)
           .join(" · "),
+        // Les noms de fichiers du bureau de contrôle dépassent souvent cent
+        // caractères : les mêler aux métadonnées écrasait tout le reste.
+        seenIn: `vu dans ${documentLabel(summary.last_seen_document_id)}`,
         comment: info.comment,
         evidence: summary.evidence?.sentence ?? ""
       });
@@ -1114,11 +1179,17 @@ function renderMilestones(state) {
   const milestones = collectMilestones(state);
   if (milestones.length === 0) return "";
 
+  const phases = milestones.filter((milestone) => milestone.origin === "phase").length;
+
   return `
     <div class="ctlab__milestones">
       <details class="ctlab__milestone-menu" ${state.milestonesOpen ? "open" : ""}>
         <summary class="gh-btn gh-btn--sm">Choisir un jalon temporel</summary>
         <div class="ctlab__milestone-list">
+          <div class="ctlab__milestone-note issue-row-meta-text">
+            ${milestones.length - phases} récapitulatif(s) du bureau de contrôle
+            ${phases > 0 ? `· ${phases} phase(s) du projet` : "· aucune phase datée dans les paramètres du projet"}
+          </div>
           ${milestones
             .map(
               (milestone) => `
@@ -1577,19 +1648,22 @@ function renderAvisTable(state) {
 
       return renderAvisRow({
         reference,
+        // Tout avis se consulte, numéroté ou non. Sans numéro, il n'a pas de
+        // continuité à raconter, mais il a une provenance à montrer — et un
+        // intitulé qui ne réagit pas au clic est une promesse non tenue.
+        traceKey: reference ?? `key:${avis.key}`,
         code,
         label: avis.opinion_label,
-        title: avis.title_raw ?? avis.description_raw ?? "(sans intitulé)",
+        title: firstText(avis.title_raw, avis.description_raw, "(ligne sans libellé lu)"),
         tag: null,
-        meta: [
-          reference ? `N° ${reference}` : "sans n°",
-          opinion,
-          documentLabel(avis.provenance?.source_id),
-          avis.provenance?.page ? `page ${avis.provenance.page}` : null
-        ]
+        meta: [reference ? `N° ${reference}` : "sans n°", opinion, avis.provenance?.page ? `page ${avis.provenance.page}` : null]
           .filter(Boolean)
           .join(" · "),
-        comment: avis.description_raw && avis.description_raw !== avis.title_raw ? avis.description_raw : null
+        seenIn: documentLabel(avis.provenance?.source_id),
+        comment:
+          firstText(avis.title_raw) && firstText(avis.description_raw) !== firstText(avis.title_raw)
+            ? avis.description_raw
+            : null
       });
     })
     .join("");
@@ -1735,6 +1809,7 @@ function renderResults(state) {
           <h3>Désaccords d'identité</h3>
           ${renderDisagreements(state)}
         </div>
+        ${renderOrphanReferences(state)}
       `;
     case "technical":
       return renderDetails(state);
@@ -1996,14 +2071,9 @@ function renderAvisTrace(state) {
     </button>
   `;
 
-  if (!row) {
-    return `
-      <div class="ctlab__section">
-        ${back}
-        <p class="ctlab__empty">Cet avis ne porte pas de numéro : il n'a pas de continuité à retracer.</p>
-      </div>
-    `;
-  }
+  // Un avis sans numéro n'a pas de continuité, mais il a une provenance :
+  // on montre ce qu'on en sait, plutôt que d'ouvrir sur une impasse.
+  if (!row) return renderSingleOccurrence(state, back);
 
   // La date d'émission vit dans la chronologie, pas dans la source paginée :
   // aller la chercher ailleurs affichait « — » à chaque étape.
@@ -2060,6 +2130,57 @@ function renderAvisTrace(state) {
 }
 
 /**
+ * Le détail d'un avis non numéroté : une seule occurrence, sans suite.
+ *
+ * Le métier ne lui a pas donné d'identité — lui en inventer une permettrait de
+ * le suivre, au prix d'un rapprochement que rien ne fonde. L'écran le dit, et
+ * montre ce qui est vérifiable : le document, la page, l'extrait.
+ */
+function renderSingleOccurrence(state, back) {
+  const key = String(state.selectedReference ?? "").replace(/^key:/, "");
+  const avis = collectAvis(state.result.predictions).find((entry) => entry.key === key);
+
+  if (!avis) {
+    return `<div class="ctlab__section">${back}<p class="ctlab__empty">Cet avis n'est plus dans le lot analysé.</p></div>`;
+  }
+
+  const code = avis.value?.opinion_raw ?? avis.opinion_raw ?? ABSTENTION_CODE;
+  const document = (state.result.chronology?.documents ?? []).find(
+    (entry) => entry.source_id === avis.provenance?.source_id
+  );
+
+  return `
+    <div class="ctlab__section">
+      ${back}
+      <div class="ctlab__trace-head">
+        <h3>${escapeHtml(firstText(avis.title_raw, avis.description_raw, "(ligne sans libellé lu)"))}</h3>
+      </div>
+      <p class="ctlab__hint">
+        Cet avis ne porte pas de numéro dans le rapport : le bureau de contrôle ne numérote que ce qui
+        appelle une action. Il ne peut donc pas être suivi d'un document à l'autre.
+      </p>
+      <ol class="ctlab__pipeline">
+        <li class="ctlab__pipeline-step ctlab__pipeline-step--neutral">
+          <span class="ctlab__pipeline-mark" aria-hidden="true">${svgIcon("file", { className: "octicon" })}</span>
+          <div class="ctlab__pipeline-body">
+            <div class="ctlab__pipeline-title">
+              <span class="issue-row-meta-text ctlab__pipeline-date">${escapeHtml(formatDate(document?.issued_at))}</span>
+              <span class="ctlab__pipeline-headline">${escapeHtml(firstText(avis.title_raw, "(ligne sans libellé lu)"))}</span>
+              <span class="ctlab__dot ctlab__dot--${opinionTone(code, avis.opinion_label)}" aria-hidden="true"></span>
+              <b>${escapeHtml(code)}</b>
+            </div>
+            ${avis.description_raw ? `<div class="issue-row-meta-text ctlab__pipeline-line ctlab__pipeline-text">${escapeHtml(avis.description_raw)}</div>` : ""}
+            <div class="issue-row-meta-text ctlab__pipeline-line ctlab__ellipsis">
+              ${escapeHtml(documentLabel(avis.provenance?.source_id))}${avis.provenance?.page ? ` · page ${avis.provenance.page}` : ""}
+            </div>
+          </div>
+        </li>
+      </ol>
+    </div>
+  `;
+}
+
+/**
  * Une étape de la frise.
  *
  * Trois lignes, toujours dans le même ordre : ce qui s'est passé, ce que
@@ -2078,8 +2199,8 @@ function renderTraceStep(cell, document, { reopened = false, fallbackTitle = nul
 
   const opinion = cell.extraction?.value?.opinion_raw ?? continuity?.matched_opinion_raw ?? null;
   const opinionLabelText = cell.extraction?.opinion_label ?? continuity?.matched_opinion_label ?? null;
-  const comment = cell.extraction?.description_raw ?? null;
-  const title = cell.extraction?.title_raw ?? null;
+  const comment = firstText(cell.extraction?.description_raw) || null;
+  const title = firstText(cell.extraction?.title_raw) || null;
 
   // Le cycle de vie, dit avec les icônes des sujets.
   let lifecycle;
@@ -2089,13 +2210,16 @@ function renderTraceStep(cell, document, { reopened = false, fallbackTitle = nul
   else lifecycle = { icon: "issue-opened", tone: "pending", color: "var(--fgColor-open)" };
 
   const badge = reopened && state !== "NOT_FOUND" && !lifted ? "RÉOUVERT" : STATE_LABELS[state] ?? state;
+  // Le libellé d'état porte la couleur de ce qu'il annonce : une apparition
+  // est un fait neuf, une absence n'est qu'un silence.
+  const badgeTone = state === "NOT_FOUND" ? "muted" : lifted ? "ok" : state === "NEW" || reopened ? "info" : "muted";
 
   const headline =
     state === "NOT_FOUND"
       ? lifted
-        ? "déclaré levé"
-        : "absent de ce rapport"
-      : title ?? fallbackTitle ?? "figure dans ce rapport";
+        ? "Déclaré levé"
+        : "Absent de ce rapport"
+      : firstText(title, fallbackTitle, "Figure dans ce rapport");
 
   const secondLine =
     state === "NOT_FOUND"
@@ -2114,19 +2238,16 @@ function renderTraceStep(cell, document, { reopened = false, fallbackTitle = nul
       <div class="ctlab__pipeline-body">
         <div class="ctlab__pipeline-title">
           <span class="issue-row-meta-text ctlab__pipeline-date">${escapeHtml(formatDate(document?.issued_at))}</span>
-          <span class="ctlab__pipeline-dash">-</span>
-          <span class="ctlab__pipeline-headline">${escapeHtml(headline)}</span>
-          <span class="subject-label-badge ctlab__tag ctlab__tag--state">${escapeHtml(badge.toLocaleUpperCase("fr"))}</span>
+          <span class="ctlab__pipeline-headline ${state === "NOT_FOUND" ? "ctlab__pipeline-headline--muted" : ""}">${escapeHtml(headline)}</span>
+          ${
+            opinion
+              ? `<span class="ctlab__dot ctlab__dot--${opinionTone(opinion, opinionLabelText)}" aria-hidden="true"></span><b>${escapeHtml(opinion)}</b>`
+              : ""
+          }
+          <span class="subject-label-badge ctlab__tag ctlab__tag--${escapeHtml(badgeTone)}">${escapeHtml(badge.toLocaleUpperCase("fr"))}</span>
         </div>
-        ${
-          state === "NOT_FOUND"
-            ? `<div class="issue-row-meta-text ctlab__pipeline-line">${escapeHtml(secondLine)}</div>`
-            : `<div class="ctlab__pipeline-line">
-                 ${opinion ? `<span class="ctlab__dot ctlab__dot--${opinionTone(opinion, opinionLabelText)}" aria-hidden="true"></span><b>${escapeHtml(opinion)}</b>` : ""}
-                 <span class="issue-row-meta-text">${escapeHtml(secondLine)}</span>
-               </div>`
-        }
-        <div class="issue-row-meta-text ctlab__pipeline-line">${escapeHtml(documentLabel(cell.documentId))}</div>
+        ${secondLine ? `<div class="issue-row-meta-text ctlab__pipeline-line ctlab__pipeline-text">${escapeHtml(secondLine)}</div>` : ""}
+        <div class="issue-row-meta-text ctlab__pipeline-line ctlab__ellipsis">${escapeHtml(documentLabel(cell.documentId))}</div>
       </div>
     </li>
   `;
@@ -2154,6 +2275,60 @@ function renderClearances(state) {
           `
         )
         .join("")}
+    </div>
+  `;
+}
+
+/**
+ * Numéros lus, mais refusés.
+ *
+ * L'organisme ne numérote dans le PDF que ce qui appelle une action —
+ * suspendu, défavorable, non conforme. Un numéro qui termine la ligne d'un
+ * avis favorable ou sans objet vient donc d'une ligne de tableau fusionnée
+ * avec la suivante à l'aplatissement du document : le donner à cet avis
+ * fabriquerait une identité fausse, et deux dispositions distinctes finiraient
+ * rapprochées d'un rapport à l'autre.
+ *
+ * On le refuse, et on le montre : c'est une mesure de la qualité de lecture du
+ * lot, pas un détail à taire.
+ */
+function renderOrphanReferences(state) {
+  const orphans = state.result.orphanReferences ?? [];
+  if (orphans.length === 0) return "";
+
+  return `
+    <div class="ctlab__section">
+      <h3>Numéros refusés</h3>
+      <p class="ctlab__hint">
+        ${orphans.length} numéro(s) terminaient la ligne d'un avis qui n'en porte pas dans le rapport.
+        Les avis concernés restent listés, sans numéro : ils ne peuvent pas être suivis d'un document à l'autre.
+      </p>
+      <details class="ctlab__fold">
+        <summary>Voir le détail</summary>
+        <div class="ctlab__fold-body">
+          <div class="ctlab__scroll">
+            <table class="ctlab__grid">
+              <thead><tr><th>N° refusé</th><th>Avis</th><th>Document</th><th>Page</th><th>Intitulé du bloc</th></tr></thead>
+              <tbody>
+                ${orphans
+                  .slice(0, 200)
+                  .map(
+                    (orphan) => `
+                      <tr>
+                        <td>${escapeHtml(orphan.reference)}</td>
+                        <td>${escapeHtml(orphan.opinion_raw ?? "—")}</td>
+                        <td>${escapeHtml(documentLabel(orphan.source_document_id))}</td>
+                        <td>${orphan.page ?? "—"}</td>
+                        <td>${escapeHtml(firstText(orphan.attached_to_title, "(ligne sans libellé lu)"))}</td>
+                      </tr>
+                    `
+                  )
+                  .join("")}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </details>
     </div>
   `;
 }
@@ -2351,7 +2526,10 @@ export function tabLabel(tab, state) {
   const counts = {
     documents: result.chronology?.ordered_source_ids?.length ?? 0,
     avis: collectAvis(result.predictions).length,
-    evidence: (result.liftingStatements?.length ?? 0) + (result.globalClearances?.length ?? 0)
+    evidence:
+      (result.liftingStatements?.length ?? 0) +
+      (result.globalClearances?.length ?? 0) +
+      (result.orphanReferences?.length ?? 0)
   };
   return counts[tab.id] === undefined ? tab.label : `${tab.label} (${counts[tab.id]})`;
 }
@@ -2640,6 +2818,23 @@ export function renderCtContinuityLab(root) {
   });
 
   bindGhActionButtons();
+
+  // Les phases du projet ne sont hydratées que lorsqu'on ouvre Paramètres ›
+  // Phases. Arrivé directement dans l'Atelier, le catalogue n'a aucune date, et
+  // le menu des jalons paraissait vide alors qu'il fonctionnait. Lecture seule :
+  // cet écran n'écrit jamais de paramètre de projet.
+  // Import différé : ce module tire le SDK Supabase depuis une URL distante,
+  // que Node ne sait pas charger. Le charger à la demande garde cette vue
+  // testable hors navigateur.
+  import("../../../services/profile-supabase-sync.js")
+    .then(({ syncProjectPhasesFromSupabase }) => syncProjectPhasesFromSupabase())
+    .then(() => {
+      if (state.result) refresh();
+    })
+    .catch(() => {
+      // Hors ligne ou sans projet courant : les jalons se limitent aux
+      // récapitulatifs lus dans les documents, et l'écran le dit.
+    });
 
   root.addEventListener("ghaction:action", (event) => {
     const action = String(event.detail?.action ?? "");

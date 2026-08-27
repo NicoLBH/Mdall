@@ -153,7 +153,7 @@ test("deux occurrences d'un même numéro qui se contredisent restent ambiguës"
     "Dispositions du projet Avis* Observations et commentaires N°",
     "Alarme D Prévoir un déclencheur manuel.",
     "57",
-    "Alarme F Rien à signaler.",
+    "Alarme S En attente du PV de réception.",
     "57",
     "* F: Favorable , D: Défavorable , S: Suspendu , HM: Hors Mission , PM: Pour Mémoire , SO: Sans Objet"
   ].join("\n");
@@ -189,4 +189,66 @@ test("un code d'avis seul sur sa ligne n'est jamais pris pour un pied de page", 
 
   assert.equal(occurrences.length, 4, "chaque page porte un avis, malgré la répétition du code");
   assert.ok(occurrences.every((occurrence) => occurrence.opinion_raw === "F"));
+});
+
+test("un numéro ne s'attache pas à un avis qui n'en porte pas", () => {
+  // Deux lignes de tableau fusionnées à l'aplatissement du PDF : le numéro
+  // termine la ligne de la seconde disposition, pas celle de la première.
+  // L'organisme ne numérote que ce qui appelle une action.
+  const text = [
+    "Dispositions du projet Avis* Observations et commentaires N°",
+    "Ext > 40 cm angle rentrant F La distance de 40 cm n'est pas respectée.",
+    "Couche de fondation du dallage",
+    "Présence de matières organiques.",
+    "234",
+    "* F: Favorable , D: Défavorable , S: Suspendu , HM: Hors Mission , PM: Pour Mémoire , SO: Sans Objet"
+  ].join("\n");
+
+  const { occurrences, orphanReferences } = extractAvisBlocks({
+    source_id: "doc",
+    content: text,
+    content_available: true
+  });
+
+  const favorable = occurrences.find((occurrence) => occurrence.opinion_raw === "F");
+  assert.equal(favorable.external_reference_raw, null, "un avis favorable ne porte pas de numéro");
+  assert.equal(favorable.identity_source, "NONE");
+
+  assert.equal(orphanReferences.length, 1, "le numéro refusé est signalé, pas perdu en silence");
+  assert.equal(orphanReferences[0].reference, "234");
+  assert.equal(orphanReferences[0].opinion_raw, "F");
+});
+
+test("un avis suspendu garde bien son numéro", () => {
+  const text = [
+    "Dispositions du projet Avis* Observations et commentaires N°",
+    "Couche de fondation du dallage S Présence de matières organiques.",
+    "234",
+    "* F: Favorable , D: Défavorable , S: Suspendu , HM: Hors Mission , PM: Pour Mémoire , SO: Sans Objet"
+  ].join("\n");
+
+  const { occurrences, orphanReferences } = extractAvisBlocks({
+    source_id: "doc",
+    content: text,
+    content_available: true
+  });
+
+  const suspended = occurrences.find((occurrence) => occurrence.opinion_raw === "S");
+  assert.equal(suspended.external_reference_raw, "234");
+  assert.deepEqual(orphanReferences, []);
+});
+
+test("la règle suit la légende du document, pas une liste de lettres décidée d'avance", () => {
+  // Un organisme qui écrirait « X : Défavorable » doit être suivi.
+  const text = [
+    "Dispositions du projet Avis* Observations et commentaires N°",
+    "Alarme X Prévoir un déclencheur manuel.",
+    "57",
+    "* X: Défavorable , F: Favorable , S: Suspendu"
+  ].join("\n");
+
+  const { occurrences } = extractAvisBlocks({ source_id: "doc", content: text, content_available: true });
+  const avis = occurrences.find((occurrence) => occurrence.opinion_raw === "X");
+
+  assert.equal(avis.external_reference_raw, "57", "c'est le libellé qui fait foi, pas la lettre");
 });

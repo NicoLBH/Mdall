@@ -11,7 +11,7 @@ import * as status from "../../../../../../spikes/ct-continuity/status.mjs";
 import * as analytics from "../../../../../../spikes/ct-continuity/analytics.mjs";
 
 import { runCtLab } from "../../../services/ct-lab-engine.js";
-import { TABS, pickAxisTicks, tabLabel, titleCase, toAvisCsv, toStatusCsv } from "./ct-continuity-lab.js";
+import { TABS, firstText, pickAxisTicks, tabLabel, titleCase, toAvisCsv, toStatusCsv } from "./ct-continuity-lab.js";
 
 /**
  * Les CSV sont ce qu'un humain ouvre dans Excel pour relire un dossier : ils
@@ -226,4 +226,13 @@ test("les états d'avis s'écrivent en capitale initiale, pas en capitales", () 
   assert.equal(titleCase("SANS NOUVELLES"), "Sans Nouvelles");
   assert.equal(titleCase("LEVÉ"), "Levé");
   assert.equal(titleCase(""), "");
+});
+
+test("un intitulé vide n'est pas un intitulé absent", () => {
+  // L'extraction rend "" et non null : `??` ne se déclenchait pas, et
+  // 290 intitulés sur 1 024 s'affichaient vides sur un corpus réel.
+  assert.equal(firstText("", "commentaire de repli"), "commentaire de repli");
+  assert.equal(firstText("   ", null, "défaut"), "défaut");
+  assert.equal(firstText("intitulé", "commentaire"), "intitulé");
+  assert.equal(firstText(null, undefined, ""), "");
 });
