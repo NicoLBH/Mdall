@@ -32,6 +32,7 @@ const BROWSER_SAFE_MODULES = [
   "ct-continuity/completeness.mjs",
   "ct-continuity/status.mjs",
   "ct-continuity/analytics.mjs",
+  "ct-continuity/layout.mjs",
   "ct-continuity/legend.mjs",
   "ct-continuity/lifting.mjs",
   "ct-continuity/block-extraction.mjs",

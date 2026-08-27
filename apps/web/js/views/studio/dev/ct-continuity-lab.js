@@ -75,6 +75,44 @@ const STAGE_LABELS = {
 let DOCUMENT_LABELS = new Map();
 
 /**
+ * Le nom court d'un document.
+ *
+ * « 12_09-10-25 - 74LEREPOSOIRMAIRIEREHABILITATION DU PRESBYTERECT-Rapport
+ * RICT-CT-13860-1025-0114.pdf » ne se lit pas : sur une frise, il écrase
+ * l'information qu'on est venu chercher. Le document, lui, déclare son type,
+ * sa version et sa date — de quoi l'appeler « RICT version 4 ».
+ *
+ * Le nom de fichier n'est pas perdu pour autant : il reste en infobulle, parce
+ * qu'un dossier se vérifie sur des pièces nommées.
+ */
+const SHORT_TYPES = {
+  rapport_initial: "RICT",
+  rapport_prealable: "Rapport APD",
+  rapport_etape: "Rapport d'étape",
+  rapport_final: "Rapport final",
+  fiche_avis_travaux: "Fiche travaux",
+  fiche_examen_document: "Fiche examen",
+  attestation: "Attestation"
+};
+
+/** Métadonnées des documents du run courant, pour les nommer. */
+let DOCUMENT_META = new Map();
+
+export function shortDocumentName(meta, fallback = "") {
+  if (!meta) return fallback;
+
+  const type = SHORT_TYPES[meta.document_type] ?? meta.document_type_label;
+  if (!type) return fallback;
+
+  // La version distingue deux éditions d'un même rapport, le numéro de fiche
+  // deux fiches, la date le reste. On prend le repère le plus parlant.
+  if (Number.isInteger(meta.version) && meta.version > 0) return `${type} version ${meta.version}`;
+  if (Number.isInteger(meta.sheet_number)) return `${type} n° ${meta.sheet_number}`;
+  if (meta.issued_at) return `${type} du ${formatDate(meta.issued_at)}`;
+  return type;
+}
+
+/**
  * Premier texte réellement présent.
  *
  * L'extraction rend `""` — pas `null` — quand elle n'a rien lu. `??` ne se
@@ -91,6 +129,12 @@ export function firstText(...values) {
 
 function documentLabel(sourceId) {
   if (!sourceId) return "—";
+  return shortDocumentName(DOCUMENT_META.get(sourceId), DOCUMENT_LABELS.get(sourceId) ?? sourceId);
+}
+
+/** Le nom de fichier complet, pour l'infobulle et les exports. */
+function documentFilename(sourceId) {
+  if (!sourceId) return "";
   return DOCUMENT_LABELS.get(sourceId) ?? sourceId;
 }
 
@@ -230,7 +274,7 @@ function renderAvisRow({
               ? `<span class="ctlab__row-line ctlab__row-evidence">
                    <span class="ctlab__dot ctlab__dot--ok" aria-hidden="true"></span>
                    <span class="issue-row-meta-text">${escapeHtml(truncate(evidence, 260))}</span>
-                   ${evidenceSource ? renderSourceLink({ ...evidenceSource, label: "Vérifier" }) : ""}
+                   ${evidenceSource ? renderSourceLink({ ...evidenceSource, prefix: "Source :" }) : ""}
                  </span>`
               : ""
           }
@@ -510,25 +554,48 @@ const STYLE = `
    frise hors de son cadre. */
 .ctlab__pipeline-text { overflow-wrap: anywhere; white-space: normal; }
 .ctlab__pipeline-rephrased { color: var(--ctlab-info); }
+/* L'arborescence du référentiel : présente mais discrète, elle situe l'avis
+   sans lui voler la vedette. */
+.ctlab__breadcrumb { color: var(--ctlab-muted); font-size: 12px; overflow-wrap: anywhere; }
+.ctlab__breadcrumb span { opacity: .6; margin: 0 2px; }
+/* Le complément d'observation, écrit en italique dans le rapport. */
+.ctlab__pipeline-complement {
+  color: var(--ctlab-muted);
+  font-size: 12px;
+  font-style: italic;
+  border-left: 2px solid var(--ctlab-line);
+  padding-left: 8px;
+  overflow-wrap: anywhere;
+}
 .ctlab__pipeline-source { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
-.ctlab__pipeline-source > .ctlab__ellipsis { min-width: 0; flex: 1 1 auto; }
+.ctlab__pipeline-source { display: block; }
 
-/* Ouvrir la source : discret dans la ligne, franc au survol. */
-.ctlab__source-link {
+/* Citer un document : l'icône, le nom court, et la mention qui n'apparaît
+   qu'au survol — l'invitation ne doit pas peser dans la lecture. */
+.ctlab__source {
   display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  flex: 0 0 auto;
+  align-items: baseline;
+  gap: 5px;
+  max-width: 100%;
+  min-width: 0;
   background: none;
   border: 0;
   padding: 0;
   font: inherit;
   font-size: 12px;
-  color: var(--ctlab-info);
-  cursor: pointer;
-  white-space: nowrap;
+  color: var(--ctlab-muted);
+  text-align: left;
 }
-.ctlab__source-link:hover { text-decoration: underline; }
+.ctlab__source--open { cursor: pointer; }
+.ctlab__source .octicon { flex: 0 0 auto; align-self: center; }
+.ctlab__source-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ctlab__source-hint { flex: 0 0 auto; opacity: 0; white-space: nowrap; }
+.ctlab__source--open:hover { color: var(--ctlab-info); }
+.ctlab__source--open:hover .ctlab__source-hint,
+.ctlab__source--open:focus-visible .ctlab__source-hint { opacity: 1; }
+@media (prefers-reduced-motion: no-preference) {
+  .ctlab__source-hint { transition: opacity .12s; }
+}
 
 /* La page citée, dans le cadre du lecteur de l'onglet Documents. */
 .ctlab__pdf {
@@ -1061,7 +1128,9 @@ function buildAvisContext(result) {
       // Un rapport en colonnes porte un intitulé ; un rapport lu ligne à ligne
       // n'a que son commentaire. On prend ce qui existe plutôt que rien.
       title: firstText(avis.title_raw, avis.description_raw) || null,
-      comment: firstText(avis.description_raw) || null
+      comment: firstText(avis.description_raw) || null,
+      ancestors: Array.isArray(avis.ancestors) ? avis.ancestors : null,
+      complement: firstText(avis.complement_raw) || null
     });
   }
 
@@ -1531,21 +1600,19 @@ function renderLiftings(state) {
     </p>
     <div class="ctlab__scroll">
       <table class="ctlab__grid">
-        <thead><tr><th>N°</th><th>Rapport</th><th>Page</th><th>Phrase</th><th>Source</th></tr></thead>
+        <thead><tr><th>N°</th><th>Page</th><th>Phrase</th><th>Source</th></tr></thead>
         <tbody>
           ${statements
             .map(
               (statement) => `
                 <tr>
                   <td><b>${escapeHtml(statement.reference_raw)}</b></td>
-                  <td>${escapeHtml(documentLabel(statement.source_document_id))}</td>
                   <td>${statement.source_page ?? "—"}</td>
                   <td>${escapeHtml(statement.sentence)}</td>
                   <td>${renderSourceLink({
                     sourceId: statement.source_document_id,
                     page: statement.source_page,
-                    excerpt: statement.sentence,
-                    label: "Vérifier"
+                    excerpt: statement.sentence
                   })}</td>
                 </tr>
               `
@@ -2205,16 +2272,29 @@ function renderAvisTrace(state) {
  * page est connue : proposer d'ouvrir ce qu'on ne peut pas montrer serait pire
  * que de ne rien proposer.
  */
-function renderSourceLink({ sourceId, page, excerpt = "", label = "Voir dans le PDF" }) {
-  if (!sourceId || !Number.isInteger(Number(page))) return "";
+function renderSourceLink({ sourceId, page, excerpt = "", prefix = "" }) {
+  const name = documentLabel(sourceId);
+  const filename = documentFilename(sourceId);
+  const openable = sourceId && Number.isInteger(Number(page));
+
+  // Sans page connue, le document se nomme mais ne s'ouvre pas : proposer
+  // d'aller voir ce qu'on ne sait pas montrer serait pire que de se taire.
+  if (!openable) {
+    return `<span class="ctlab__source issue-row-meta-text" title="${escapeHtml(filename)}">
+              ${prefix ? `${escapeHtml(prefix)} ` : ""}${escapeHtml(name)}
+            </span>`;
+  }
 
   return `
-    <button type="button" class="ctlab__source-link"
+    <button type="button" class="ctlab__source ctlab__source--open"
+            title="${escapeHtml(filename)}"
             data-ctlab-open-pdf="${escapeHtml(sourceId)}"
             data-ctlab-pdf-page="${escapeHtml(String(page))}"
             data-ctlab-pdf-excerpt="${escapeHtml(excerpt ?? "")}">
+      ${prefix ? `<span class="ctlab__source-prefix">${escapeHtml(prefix)}</span>` : ""}
       ${svgIcon("file-pdf", { className: "octicon" })}
-      <span>${escapeHtml(label)}</span>
+      <span class="ctlab__source-name">${escapeHtml(name)}</span>
+      <span class="ctlab__source-hint"> — Voir dans le PDF</span>
     </button>
   `;
 }
@@ -2302,13 +2382,11 @@ function renderSingleOccurrence(state, back) {
             </div>
             ${avis.description_raw ? `<div class="issue-row-meta-text ctlab__pipeline-line ctlab__pipeline-text">${escapeHtml(avis.description_raw)}</div>` : ""}
             <div class="ctlab__pipeline-line ctlab__pipeline-source">
-              <span class="issue-row-meta-text ctlab__ellipsis">
-                ${escapeHtml(documentLabel(avis.provenance?.source_id))}${avis.provenance?.page ? ` · page ${avis.provenance.page}` : ""}
-              </span>
               ${renderSourceLink({
                 sourceId: avis.provenance?.source_id,
                 page: avis.provenance?.page,
-                excerpt: avis.provenance?.excerpt
+                excerpt: avis.provenance?.excerpt,
+                prefix: "Source :"
               })}
             </div>
           </div>
@@ -2357,6 +2435,8 @@ function renderTraceStep(cell, document, { reopened = false, fallbackTitle = nul
   const opinionLabelText = cell.extraction?.opinion_label ?? continuity?.matched_opinion_label ?? null;
   const comment = firstText(cell.extraction?.description_raw) || null;
   const title = firstText(cell.extraction?.title_raw) || null;
+  const ancestors = Array.isArray(cell.extraction?.ancestors) ? cell.extraction.ancestors : null;
+  const complement = firstText(cell.extraction?.complement_raw) || null;
 
   // Le cycle de vie, dit avec les icônes des sujets.
   let lifecycle;
@@ -2384,11 +2464,14 @@ function renderTraceStep(cell, document, { reopened = false, fallbackTitle = nul
         ? "info"
         : "muted";
 
+  // « Absent de ce rapport » oblige à chercher lequel ; « Absent du RICT
+  // version 4 » se lit d'un coup.
+  const documentName = documentLabel(cell.documentId);
   const headline =
     state === "NOT_FOUND"
       ? lifted
         ? "Déclaré levé"
-        : "Absent de ce rapport"
+        : `Absent du ${documentName.charAt(0).toLocaleLowerCase("fr")}${documentName.slice(1)}`
       : firstText(title, fallbackTitle, "Figure dans ce rapport");
 
   const secondLine =
@@ -2396,8 +2479,8 @@ function renderTraceStep(cell, document, { reopened = false, fallbackTitle = nul
       ? lifted
         ? `« ${continuity.lifting_statement.sentence} »`
         : previousDocument
-          ? `vu pour la dernière fois dans ${documentLabel(previousDocument)}`
-          : "aucune apparition antérieure connue"
+          ? `Vu pour la dernière fois dans ${documentLabel(previousDocument)}`
+          : "Aucune apparition antérieure connue"
       : comment ?? "";
 
   // Un même avis n'est pas libellé de la même façon d'un rapport à l'autre :
@@ -2419,13 +2502,15 @@ function renderTraceStep(cell, document, { reopened = false, fallbackTitle = nul
         <div class="ctlab__pipeline-title">
           <span class="issue-row-meta-text ctlab__pipeline-date">${escapeHtml(formatDate(document?.issued_at))}</span>
           <span class="ctlab__pipeline-headline ${state === "NOT_FOUND" ? "ctlab__pipeline-headline--muted" : ""}">${escapeHtml(headline)}</span>
-          ${
-            opinion
-              ? `<span class="ctlab__dot ctlab__dot--${opinionTone(opinion, opinionLabelText)}" aria-hidden="true"></span><b>${escapeHtml(opinion)}</b>`
-              : ""
-          }
           <span class="subject-label-badge ctlab__tag ctlab__tag--${escapeHtml(badgeTone)}">${escapeHtml(badge.toLocaleUpperCase("fr"))}</span>
         </div>
+        ${
+          ancestors && ancestors.length > 0
+            ? `<div class="ctlab__pipeline-line ctlab__breadcrumb" title="Arborescence du référentiel, lue dans l'indentation du rapport">
+                 ${ancestors.map((step) => escapeHtml(step)).join(" <span aria-hidden=\"true\">›</span> ")}
+               </div>`
+            : ""
+        }
         ${
           rephrased
             ? `<div class="ctlab__pipeline-line ctlab__pipeline-rephrased">
@@ -2434,14 +2519,23 @@ function renderTraceStep(cell, document, { reopened = false, fallbackTitle = nul
             : ""
         }
         ${
-          secondLine
-            ? sameComment
-              ? `<div class="issue-row-meta-text ctlab__pipeline-line">Observation inchangée.</div>`
-              : `<div class="issue-row-meta-text ctlab__pipeline-line ctlab__pipeline-text">${escapeHtml(secondLine)}</div>`
+          secondLine || opinion
+            ? `<div class="ctlab__pipeline-line ctlab__pipeline-text">
+                 ${
+                   opinion
+                     ? `<span class="ctlab__dot ctlab__dot--${opinionTone(opinion, opinionLabelText)}" aria-hidden="true"></span><b>${escapeHtml(opinion)}</b> `
+                     : ""
+                 }
+                 <span class="issue-row-meta-text">${escapeHtml(sameComment ? "Observation inchangée." : secondLine)}</span>
+               </div>`
+            : ""
+        }
+        ${
+          complement
+            ? `<div class="ctlab__pipeline-line ctlab__pipeline-complement">${escapeHtml(complement)}</div>`
             : ""
         }
         <div class="ctlab__pipeline-line ctlab__pipeline-source">
-          <span class="issue-row-meta-text ctlab__ellipsis">${escapeHtml(documentLabel(cell.documentId))}</span>
           ${renderSourceLink({
             sourceId: lifted ? continuity.lifting_statement.source_document_id : cell.documentId,
             page: lifted
@@ -2450,7 +2544,7 @@ function renderTraceStep(cell, document, { reopened = false, fallbackTitle = nul
             excerpt: lifted
               ? continuity.lifting_statement.sentence
               : cell.extraction?.provenance?.excerpt ?? continuity?.provenance?.excerpt,
-            label: lifted ? "Vérifier la levée" : "Voir dans le PDF"
+            prefix: "Source :"
           })}
         </div>
       </div>
@@ -2474,13 +2568,12 @@ function renderClearances(state) {
         .map(
           (clearance) => `
             <div class="ctlab__alert ctlab__alert--info">
-              <b>${escapeHtml(documentLabel(clearance.source_document_id))}</b>, page ${clearance.source_page ?? "?"} —
               « ${escapeHtml(clearance.sentence)} »
               <div>${renderSourceLink({
                 sourceId: clearance.source_document_id,
                 page: clearance.source_page,
                 excerpt: clearance.sentence,
-                label: "Vérifier dans le rapport"
+                prefix: "Source :"
               })}</div>
             </div>
           `
@@ -2722,6 +2815,9 @@ function renderHeader(state) {
 function render(root, state) {
   DOCUMENT_LABELS = new Map(
     state.reports.map((report) => [report.sourceId, report.filename ?? report.sourceId])
+  );
+  DOCUMENT_META = new Map(
+    (state.result?.chronology?.documents ?? []).map((document) => [document.source_id, document])
   );
 
   const tabs = TABS.map((tab) => ({ ...tab, label: tabLabel(tab, state) }));

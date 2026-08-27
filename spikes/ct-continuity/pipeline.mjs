@@ -22,6 +22,7 @@ import {
 import { assessCompleteness } from "./completeness.mjs";
 import { orderChronologically } from "./document-meta.mjs";
 import { discoverLegend, mergeLegends } from "./legend.mjs";
+import { extractAvisFromLayout } from "./layout.mjs";
 import { findGlobalClearances, findLiftingStatements, indexStatements } from "./lifting.mjs";
 
 export const STRATEGY = {
@@ -84,6 +85,9 @@ function toBlockPrediction(occurrence, index) {
     },
     title_raw: occurrence.title_raw,
     description_raw: occurrence.description_raw,
+    // Lues dans la géométrie du tableau : absentes d'une lecture ligne à ligne.
+    ancestors: occurrence.ancestors ?? null,
+    complement_raw: occurrence.complement_raw ?? null,
     section_label_raw: occurrence.section_label_raw,
     section_number_raw: occurrence.section_number_raw,
     regulation_article_raw: occurrence.regulation_article_raw,
@@ -264,6 +268,8 @@ export const ctContinuityPipeline = {
     const borrowedLegend = [];
     /** Numéros lus mais refusés : deux lignes de tableau fusionnées. */
     const orphanReferences = [];
+    /** Documents lus par la géométrie du tableau plutôt que ligne à ligne. */
+    const layoutSources = [];
 
     // Vocabulaire du lot : une pièce qui ne rappelle pas la légende de son
     // organisme peut s'appuyer sur celle de ses voisines.
@@ -290,9 +296,19 @@ export const ctContinuityPipeline = {
       }
 
       if (strategy === STRATEGY.BLOCKS) {
-        const { occurrences, legend, legendSource, orphanReferences: orphans } = extractAvisBlocks(source, {
+        const { occurrences: blockOccurrences, legend, legendSource, orphanReferences: orphans } = extractAvisBlocks(source, {
           legend: batchLegend
         });
+
+        // Quand le PDF a livré ses coordonnées, on lit le tableau par sa
+        // géométrie : les colonnes ne sont plus devinées, l'arborescence du
+        // référentiel et le complément en italique deviennent lisibles. Sur un
+        // RICT réel, cette lecture trouve 230 avis contre 218, deux fois plus
+        // de numéros, et aucun intitulé vide. Sans coordonnées — un PDF scanné,
+        // un format inattendu — la lecture par lignes reprend la main.
+        const layout = extractAvisFromLayout(source, { legend: { codes: legend } });
+        const occurrences = layout ? layout.occurrences : blockOccurrences;
+        if (layout) layoutSources.push(source.source_id);
         for (const orphan of orphans ?? []) {
           orphanReferences.push({ ...orphan, source_document_id: source.source_id });
         }
@@ -361,6 +377,9 @@ export const ctContinuityPipeline = {
 
     const notes = [
       `Stratégie de lecture : ${strategy}.`,
+      layoutSources.length > 0
+        ? `${layoutSources.length} document(s) lu(s) par la géométrie du tableau : colonnes, arborescence et compléments en italique.`
+        : null,
       asOf ? `État arrêté au ${asOf} : ${chronology.ordered.length - sources.length} document(s) postérieur(s) écarté(s).` : null,
       completeness.missing.length > 0
         ? `${completeness.missing.length} livrable(s) déclaré(s) par vos documents mais absent(s) du lot.`
@@ -404,6 +423,7 @@ export const ctContinuityPipeline = {
       lifting_statements: liftingStatements,
       global_clearances: globalClearances,
       orphan_references: orphanReferences,
+      layout_sources: layoutSources,
       experimental_suggestions: [
         ...buildExperimentalSuggestions(continuityItems),
         ...liftingStatements.map((statement) => ({
