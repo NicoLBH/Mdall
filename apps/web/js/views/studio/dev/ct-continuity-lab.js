@@ -49,7 +49,7 @@ export const TABS = [
   { id: "avis", label: "Avis" },
   { id: "indicators", label: "Indicateurs" },
   { id: "evidence", label: "Preuves" },
-  { id: "technical", label: "Technique" }
+  { id: "technical", label: "Qualité de lecture" }
 ];
 
 /** Une page de tableau : deux mille lignes d'un coup figent le navigateur. */
@@ -495,6 +495,7 @@ const STYLE = `
 /* Un commentaire de plusieurs centaines de caractères ne doit pas pousser la
    frise hors de son cadre. */
 .ctlab__pipeline-text { overflow-wrap: anywhere; white-space: normal; }
+.ctlab__pipeline-rephrased { color: var(--ctlab-info); }
 .ctlab__tag--muted { --subject-label-border: var(--ctlab-line); --subject-label-fg: var(--ctlab-muted); --subject-label-bg: transparent; }
 .ctlab__tag--info { --subject-label-border: var(--ctlab-info); --subject-label-fg: var(--ctlab-info); --subject-label-bg: rgba(88, 166, 255, .12); }
 .ctlab__tag--ok { --subject-label-border: var(--ctlab-ok); --subject-label-fg: var(--ctlab-ok); --subject-label-bg: rgba(63, 185, 80, .12); }
@@ -2119,7 +2120,8 @@ function renderAvisTrace(state) {
           .map(({ cell, document }, index) =>
             renderTraceStep(cell, document, {
               reopened: reopenedAt.has(index),
-              fallbackTitle: context.title ?? null
+              fallbackTitle: context.title ?? null,
+              previous: lastSeenWording(steps, index)
             })
           )
           .join("")}
@@ -2181,6 +2183,24 @@ function renderSingleOccurrence(state, back) {
 }
 
 /**
+ * La dernière formulation connue avant cette étape.
+ *
+ * Les rapports où l'avis est absent ne disent rien de son libellé : on remonte
+ * jusqu'à la dernière apparition réelle, sinon chaque disparition ferait
+ * croire à une reformulation.
+ */
+export function lastSeenWording(steps, index) {
+  for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+    const extraction = steps[cursor]?.cell?.extraction;
+    if (!extraction) continue;
+    const title = firstText(extraction.title_raw);
+    if (title === "") continue;
+    return { title, comment: firstText(extraction.description_raw) };
+  }
+  return null;
+}
+
+/**
  * Une étape de la frise.
  *
  * Trois lignes, toujours dans le même ordre : ce qui s'est passé, ce que
@@ -2191,11 +2211,11 @@ function renderSingleOccurrence(state, back) {
  * que c'est exactement ce qui se joue : un avis qui reparaît après avoir
  * disparu est une réouverture, et il faut que ça se voie.
  */
-function renderTraceStep(cell, document, { reopened = false, fallbackTitle = null } = {}) {
+function renderTraceStep(cell, document, { reopened = false, fallbackTitle = null, previous = null } = {}) {
   const continuity = cell.continuity;
   const state = continuity?.state === "AMBIGUOUS" ? "AMBIGUOUS" : continuity?.value?.state ?? "AMBIGUOUS";
   const lifted = Boolean(continuity?.lifting_statement);
-  const previous = continuity?.value?.previous_document_id;
+  const previousDocument = continuity?.value?.previous_document_id;
 
   const opinion = cell.extraction?.value?.opinion_raw ?? continuity?.matched_opinion_raw ?? null;
   const opinionLabelText = cell.extraction?.opinion_label ?? continuity?.matched_opinion_label ?? null;
@@ -2209,10 +2229,24 @@ function renderTraceStep(cell, document, { reopened = false, fallbackTitle = nul
   else if (reopened) lifecycle = { icon: "issue-reopened", tone: "info", color: "var(--fgColor-done)" };
   else lifecycle = { icon: "issue-opened", tone: "pending", color: "var(--fgColor-open)" };
 
-  const badge = reopened && state !== "NOT_FOUND" && !lifted ? "RÉOUVERT" : STATE_LABELS[state] ?? state;
-  // Le libellé d'état porte la couleur de ce qu'il annonce : une apparition
-  // est un fait neuf, une absence n'est qu'un silence.
-  const badgeTone = state === "NOT_FOUND" ? "muted" : lifted ? "ok" : state === "NEW" || reopened ? "info" : "muted";
+  // Le libellé dit la conclusion, pas l'état brut : « déclaré levé » assorti de
+  // « NON RETROUVÉ » se lisait comme une contradiction, alors que les deux
+  // étaient vrais — l'avis a disparu du tableau parce qu'il a été levé.
+  const badge = lifted
+    ? "LEVÉ"
+    : reopened && state !== "NOT_FOUND"
+      ? "RÉOUVERT"
+      : STATE_LABELS[state] ?? state;
+
+  // La couleur porte le sens : vert ce qui est acquis, bleu ce qui est neuf,
+  // gris ce qui n'est qu'un silence.
+  const badgeTone = lifted
+    ? "ok"
+    : state === "MATCHED" || state === "MATCHED_BY_TITLE"
+      ? "ok"
+      : state === "NEW" || reopened
+        ? "info"
+        : "muted";
 
   const headline =
     state === "NOT_FOUND"
@@ -2225,10 +2259,20 @@ function renderTraceStep(cell, document, { reopened = false, fallbackTitle = nul
     state === "NOT_FOUND"
       ? lifted
         ? `« ${continuity.lifting_statement.sentence} »`
-        : previous
-          ? `vu pour la dernière fois dans ${documentLabel(previous)}`
+        : previousDocument
+          ? `vu pour la dernière fois dans ${documentLabel(previousDocument)}`
           : "aucune apparition antérieure connue"
       : comment ?? "";
+
+  // Un même avis n'est pas libellé de la même façon d'un rapport à l'autre :
+  // chaque édition le rattache à sa propre ligne du référentiel. Sur un corpus
+  // réel, l'avis 238 est « Les organes des coupures… » dans un RICT et « Pour
+  // tout circuit terminal… » dans le rapport d'étape suivant — même numéro,
+  // même commentaire, mot pour mot. Ce n'est pas une confusion de l'outil,
+  // c'est le document qui reformule ; l'écran doit le dire, sinon le lecteur
+  // croit avoir changé d'avis en cours de route.
+  const rephrased = Boolean(previous?.title && title && previous.title !== title);
+  const sameComment = Boolean(previous?.comment && comment && previous.comment === comment);
 
   return `
     <li class="ctlab__pipeline-step ctlab__pipeline-step--${lifecycle.tone}">
@@ -2246,7 +2290,20 @@ function renderTraceStep(cell, document, { reopened = false, fallbackTitle = nul
           }
           <span class="subject-label-badge ctlab__tag ctlab__tag--${escapeHtml(badgeTone)}">${escapeHtml(badge.toLocaleUpperCase("fr"))}</span>
         </div>
-        ${secondLine ? `<div class="issue-row-meta-text ctlab__pipeline-line ctlab__pipeline-text">${escapeHtml(secondLine)}</div>` : ""}
+        ${
+          rephrased
+            ? `<div class="ctlab__pipeline-line ctlab__pipeline-rephrased">
+                 Intitulé reformulé par ce rapport — même numéro, même observation.
+               </div>`
+            : ""
+        }
+        ${
+          secondLine
+            ? sameComment
+              ? `<div class="issue-row-meta-text ctlab__pipeline-line">Observation inchangée.</div>`
+              : `<div class="issue-row-meta-text ctlab__pipeline-line ctlab__pipeline-text">${escapeHtml(secondLine)}</div>`
+            : ""
+        }
         <div class="issue-row-meta-text ctlab__pipeline-line ctlab__ellipsis">${escapeHtml(documentLabel(cell.documentId))}</div>
       </div>
     </li>
@@ -2383,23 +2440,36 @@ function renderDisagreements(state) {
 function renderDetails(state) {
   return `
     <div class="ctlab__section">
-      <h3>Indicateurs de fiabilité</h3>
+      <h3>Peut-on se fier à cette lecture ?</h3>
+      <p class="ctlab__hint">
+        Chaque chiffre se vérifie contre les PDF chargés, sans qu'on ait à croire l'outil sur parole.
+      </p>
       ${renderIndicators(state.result.indicators)}
     </div>
     <div class="ctlab__section">
-      <h3>Alertes d'extraction</h3>
+      <h3>Ce qui n'a pas pu être lu</h3>
+      <p class="ctlab__hint">
+        Un PDF scanné, une page sans avis, un format inattendu : ce qui a résisté à la lecture est listé ici,
+        document par document.
+      </p>
       ${renderAlerts(state.result.indicators.alerts)}
     </div>
     <div class="ctlab__section">
-      <h3>Motifs d'extraction</h3>
+      <h3>Comment les avis sont repérés dans le texte</h3>
+      <p class="ctlab__hint">
+        Pour retrouver un avis, l'outil cherche dans le texte des formulations connues — « Avis n° 65 »,
+        « OBS-65 » — et un vocabulaire d'avis. Sur un rapport en tableau, il lit la légende du document
+        lui-même et n'a pas besoin de ces réglages. Ils servent aux rapports rédigés en phrases, ou à un
+        format qu'il n'aurait pas su lire : on ajuste ici, on relance, et on regarde ce que ça change.
+      </p>
       ${renderPatternEditor(state)}
     </div>
     <div class="ctlab__section">
-      <h3>Suggestions</h3>
+      <h3>Pistes signalées par la lecture</h3>
       ${renderSuggestions(state.result.suggestions)}
     </div>
     <div class="ctlab__section">
-      <h3>Texte extrait</h3>
+      <h3>Le texte brut des documents</h3>
       <p class="ctlab__hint">
         La matière brute, telle que le navigateur l'a lue. Volumineuse par nature : repliée par défaut.
       </p>
