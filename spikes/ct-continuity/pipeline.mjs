@@ -19,6 +19,8 @@ import {
   EXTRACTION_STATE,
   extractOccurrences
 } from "./extraction.mjs";
+import { assessCompleteness } from "./completeness.mjs";
+import { orderChronologically } from "./document-meta.mjs";
 import { discoverLegend, mergeLegends } from "./legend.mjs";
 import { findLiftingStatements, indexStatements } from "./lifting.mjs";
 
@@ -219,7 +221,23 @@ export const ctContinuityPipeline = {
   description:
     "Extraction déterministe des avis d'un rapport de contrôle technique et reconstruction de leur continuité entre rapports successifs.",
 
-  async run({ sources, params = {} }) {
+  async run({ sources: rawSources, params = {} }) {
+    // L'ordre chronologique se lit dans les documents. Le déduire du nom de
+    // fichier suffirait à tout fausser : « 10_… » précède « 2_… » dans un tri
+    // alphabétique, et la continuité en dépend entièrement.
+    const chronology =
+      params.chronology?.fromDocuments === false
+        ? { ordered: rawSources, undatedSourceIds: [] }
+        : orderChronologically(rawSources);
+
+    // « Que savait-on à telle date ? » — on ne garde que ce qui était émis.
+    const asOf = params.chronology?.asOf ?? null;
+    const sources = asOf
+      ? chronology.ordered.filter((source) => source.issued_at === null || source.issued_at <= asOf)
+      : chronology.ordered;
+
+    const completeness = assessCompleteness(sources);
+
     const extractionParams = {
       patterns: params.extraction?.patterns ?? DEFAULT_REFERENCE_PATTERNS,
       lexicon: params.extraction?.lexicon ?? DEFAULT_OPINION_LEXICON
@@ -313,6 +331,13 @@ export const ctContinuityPipeline = {
 
     const notes = [
       `Stratégie de lecture : ${strategy}.`,
+      asOf ? `État arrêté au ${asOf} : ${chronology.ordered.length - sources.length} document(s) postérieur(s) écarté(s).` : null,
+      completeness.missing.length > 0
+        ? `${completeness.missing.length} livrable(s) déclaré(s) par vos documents mais absent(s) du lot.`
+        : null,
+      chronology.undatedSourceIds.length > 0
+        ? `Date d'émission illisible pour : ${chronology.undatedSourceIds.join(", ")} — placés en fin de série.`
+        : null,
       borrowedLegend.length > 0
         ? `Légende d'avis empruntée aux autres documents du lot pour : ${borrowedLegend.join(", ")}.`
         : null,
@@ -328,6 +353,19 @@ export const ctContinuityPipeline = {
       predictions,
       notes,
       strategy,
+      chronology: {
+        ordered_source_ids: sources.map((source) => source.source_id),
+        undated_source_ids: chronology.undatedSourceIds,
+        as_of: asOf,
+        excluded_by_date: chronology.ordered.length - sources.length,
+        documents: sources.map((source) => ({
+          source_id: source.source_id,
+          order: source.order ?? null,
+          issued_at: source.issued_at ?? null,
+          ...(source.meta ?? {})
+        }))
+      },
+      completeness,
       legends,
       identity_disagreements: identityDisagreements,
       lifting_statements: liftingStatements,

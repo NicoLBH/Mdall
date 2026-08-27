@@ -30,6 +30,18 @@ import {
 
 const SLOT_COUNT = 20;
 
+/**
+ * `doc-3` est l'identité interne d'un document ; personne ne relit un dossier
+ * avec ça sous les yeux. Tout ce qui s'affiche cite le nom du fichier.
+ * Le registre est reconstruit à chaque rendu, à partir des sources du run.
+ */
+let DOCUMENT_LABELS = new Map();
+
+function documentLabel(sourceId) {
+  if (!sourceId) return "—";
+  return DOCUMENT_LABELS.get(sourceId) ?? sourceId;
+}
+
 const STATE_LABELS = {
   NEW: "nouveau",
   MATCHED: "suivi",
@@ -173,9 +185,120 @@ const STYLE = `
   padding: 3px 6px;
   font: inherit;
 }
+.ctlab__drop {
+  border: 2px dashed var(--ctlab-line);
+  border-radius: var(--radius, 6px);
+  padding: 20px;
+  text-align: center;
+  margin-bottom: 12px;
+}
+.ctlab__drop.is-over { border-color: var(--ctlab-info); background: rgba(88, 166, 255, .08); }
+.ctlab__drop--busy { border-style: solid; }
+.ctlab__drop .ctlab__hint { margin: 6px 0 10px; }
+.ctlab__progress {
+  height: 6px;
+  background: var(--bg-input, rgb(21, 27, 35));
+  border-radius: 999px;
+  overflow: hidden;
+  margin: 10px auto;
+  max-width: 420px;
+}
+.ctlab__progress span { display: block; height: 100%; background: var(--ctlab-info); transition: width .2s; }
+/* Lien d'approfondissement, à la couleur d'accent de l'application. */
+.ctlab__more {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--ctlab-info);
+  cursor: pointer;
+  text-decoration: none;
+}
+.ctlab__more:hover { text-decoration: underline; }
+.ctlab__badge--OPEN { border-color: var(--ctlab-warn); color: var(--ctlab-warn); }
+.ctlab__badge--NO_NEWS { border-color: var(--ctlab-danger); color: var(--ctlab-danger); }
+.ctlab__badge--RESOLVED { border-color: var(--ctlab-ok); color: var(--ctlab-ok); }
+.ctlab__inline input[type="date"] {
+  background: var(--bg-input, rgb(21, 27, 35));
+  color: var(--ctlab-text);
+  border: 1px solid var(--ctlab-line);
+  border-radius: var(--radius, 6px);
+  padding: 3px 6px;
+  font: inherit;
+}
 .ctlab__match { color: var(--ctlab-ok); }
 .ctlab__nomatch { color: var(--ctlab-warn); }
 `;
+
+/** Échappement CSV minimal : guillemets doublés, champ cité s'il le faut. */
+function csvCell(value) {
+  const text = String(value ?? "");
+  return /[";\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function toCsv(headers, rows) {
+  // Point-virgule : c'est ce qu'attend Excel en configuration française.
+  return [headers, ...rows].map((row) => row.map(csvCell).join(";")).join("\r\n");
+}
+
+/** `doc-3` n'est lisible par personne : les exports citent le nom du fichier. */
+function filenameIndex(result) {
+  return new Map(
+    result.sources.map((source) => [source.source_id, source.metadata?.filename ?? source.source_id])
+  );
+}
+
+export function toAvisCsv(result) {
+  const filenames = filenameIndex(result);
+  const dates = new Map((result.chronology?.documents ?? []).map((document) => [document.source_id, document.issued_at]));
+
+  return toCsv(
+    ["Document", "Émis le", "Page", "N°", "Section", "Intitulé", "Avis", "Libellé", "Commentaire"],
+    collectAvis(result.predictions).map((avis) => [
+      filenames.get(avis.provenance?.source_id) ?? "",
+      dates.get(avis.provenance?.source_id) ?? "",
+      avis.provenance?.page ?? "",
+      avis.value?.external_reference_raw ?? "",
+      avis.section_label_raw ?? avis.section_number_raw ?? "",
+      avis.title_raw ?? "",
+      avis.value?.opinion_raw ?? "",
+      avis.opinion_label ?? "",
+      avis.description_raw ?? ""
+    ])
+  );
+}
+
+export function toStatusCsv(result) {
+  const filenames = filenameIndex(result);
+  const named = (sourceId) => (sourceId ? filenames.get(sourceId) ?? sourceId : "");
+
+  return toCsv(
+    [
+      "N°",
+      "État",
+      "Motif",
+      "Soulevé dans",
+      "Soulevé le",
+      "Ancienneté (jours)",
+      "Levé dans",
+      "Levé le",
+      "Vu pour la dernière fois",
+      "Preuve"
+    ],
+    result.avisStatus.map((summary) => [
+      summary.reference,
+      summary.status,
+      summary.resolution_reason ?? "",
+      named(summary.raised_in),
+      summary.raised_at ?? "",
+      summary.age_days ?? "",
+      named(summary.resolved_in),
+      summary.resolved_at ?? "",
+      named(summary.last_seen_document_id),
+      summary.evidence?.sentence ?? ""
+    ])
+  );
+}
 
 function truncate(text, maxLength) {
   const value = String(text ?? "");
@@ -192,32 +315,233 @@ function formatConfidence(value) {
   return String(value);
 }
 
-function renderSlots(state) {
-  return state.reports
-    .map((report, index) => {
-      const position = index + 1;
-      let status = `<span class="ctlab__slot-state">vide</span>`;
+/**
+ * Zone de dépôt.
+ *
+ * Les emplacements numérotés ont disparu : sur un chantier réel, le bureau de
+ * contrôle produit cent vingt livrables, et l'ordre de chargement ne peut plus
+ * servir d'ordre chronologique. Celui-ci est reconstruit depuis les documents.
+ */
+function renderDropZone(state) {
+  if (state.loading) {
+    const { done, total, current } = state.loading;
+    const percent = total === 0 ? 0 : Math.round((done / total) * 100);
+    return `
+      <div class="ctlab__drop ctlab__drop--busy">
+        <b>Lecture ${done} / ${total}</b>
+        <div class="ctlab__progress"><span style="width:${percent}%"></span></div>
+        <div class="ctlab__hint">${escapeHtml(current ?? "")}</div>
+      </div>
+    `;
+  }
 
-      if (report?.error) {
-        status = `<span class="ctlab__slot-state ctlab__slot-state--error">échec : ${escapeHtml(report.error)}</span>`;
-      } else if (report?.loading) {
-        status = `<span class="ctlab__slot-state">lecture en cours…</span>`;
-      } else if (report) {
-        status =
-          `<span class="ctlab__slot-state ctlab__slot-state--loaded">` +
-          `${escapeHtml(report.filename)} — ${report.pageCount} page(s), ${report.charCount} caractères` +
-          `</span>`;
-      }
+  return `
+    <div class="ctlab__drop" data-ctlab-drop>
+      <b>Déposer les PDF ici</b>
+      <div class="ctlab__hint">
+        Autant de fichiers que nécessaire, dans n'importe quel ordre.
+        Un second lot peut être ajouté plus tard : l'analyse est recalculée.
+      </div>
+      <button type="button" class="ctlab__btn" data-ctlab-pick>Choisir des fichiers…</button>
+    </div>
+  `;
+}
+
+/** Liste compacte des documents chargés, dans l'ordre reconstruit s'il existe. */
+function renderDocumentList(state) {
+  if (state.reports.length === 0) {
+    return `<p class="ctlab__empty">Aucun document chargé.</p>`;
+  }
+
+  const orderById = new Map(
+    (state.result?.chronology?.documents ?? []).map((document) => [document.source_id, document])
+  );
+
+  const rows = [...state.reports]
+    .sort((a, b) => (orderById.get(a.sourceId)?.order ?? 999) - (orderById.get(b.sourceId)?.order ?? 999))
+    .map((report) => {
+      const meta = orderById.get(report.sourceId);
+      const failed = Boolean(report.error);
 
       return `
-        <div class="ctlab__slot">
-          <button type="button" class="ctlab__btn" data-ctlab-pick="${index}">Ajouter rapport ${position}</button>
-          ${status}
-          ${report && !report.loading ? `<button type="button" class="ctlab__btn" data-ctlab-clear="${index}">Retirer</button>` : ""}
-        </div>
+        <tr>
+          <td>${meta?.order ?? "—"}</td>
+          <td>${meta?.issued_at ?? `<span class="ctlab__empty">date inconnue</span>`}</td>
+          <td>${escapeHtml(meta?.document_type_label ?? "—")}</td>
+          <td>${escapeHtml(truncate(report.filename, 60))}</td>
+          <td>${failed ? `<span class="ctlab__slot-state--error">${escapeHtml(report.error)}</span>` : `${report.pageCount} p.`}</td>
+          <td><button type="button" class="ctlab__btn" data-ctlab-remove="${escapeHtml(report.sourceId)}">Retirer</button></td>
+        </tr>
       `;
     })
     .join("");
+
+  return `
+    <div class="ctlab__scroll">
+      <table class="ctlab__grid">
+        <thead><tr><th>#</th><th>Émis le</th><th>Type</th><th>Fichier</th><th>Pages</th><th></th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+/**
+ * Chronologie reconstruite et complétude du lot.
+ *
+ * L'outil dépend de ce qu'on lui donne ; son devoir est de dire ce qui manque,
+ * pas de combler les trous.
+ */
+function renderChronology(state) {
+  const { chronology, completeness } = state.result;
+  const alerts = [];
+
+  if (completeness.missing.length > 0) {
+    alerts.push(`
+      <div class="ctlab__alert ctlab__alert--attention">
+        <b>${completeness.missing.length} livrable(s) déclaré(s) par vos documents mais absent(s) du lot.</b>
+        <table class="ctlab__grid" style="margin-top:8px">
+          <thead><tr><th>Référence</th><th>Émis le</th><th>Désignation</th><th>Déclaré par</th></tr></thead>
+          <tbody>
+            ${completeness.missing
+              .map(
+                (entry) => `
+                  <tr>
+                    <td>${escapeHtml(entry.chrono_reference)}</td>
+                    <td>${escapeHtml(entry.issued_at)}</td>
+                    <td>${escapeHtml(entry.designation)}</td>
+                    <td>${escapeHtml(documentLabel(entry.declared_in))}</td>
+                  </tr>
+                `
+              )
+              .join("")}
+          </tbody>
+        </table>
+      </div>
+    `);
+  }
+
+  if (completeness.sequenceGaps.length > 0) {
+    alerts.push(`
+      <div class="ctlab__alert ctlab__alert--attention">
+        Numérotation des fiches discontinue : ${completeness.sequenceGaps.join(", ")} manquante(s).
+      </div>
+    `);
+  }
+
+  if (completeness.unresolvedReferences.length > 0) {
+    alerts.push(`
+      <div class="ctlab__alert ctlab__alert--info">
+        ${completeness.unresolvedReferences.length} renvoi(s) vers un document absent :
+        ${completeness.unresolvedReferences
+          .slice(0, 6)
+          .map((reference) => `« ${escapeHtml(reference.label)} »`)
+          .join(", ")}
+      </div>
+    `);
+  }
+
+  if (completeness.duplicates.length > 0) {
+    alerts.push(`
+      <div class="ctlab__alert ctlab__alert--info">
+        ${completeness.duplicates.length} document(s) chargé(s) en double :
+        ${completeness.duplicates
+          .map((entry) => entry.source_ids.map((id) => escapeHtml(documentLabel(id))).join(" = "))
+          .join(" · ")}.
+      </div>
+    `);
+  }
+
+  if (chronology.undated_source_ids.length > 0) {
+    alerts.push(`
+      <div class="ctlab__alert ctlab__alert--attention">
+        Date d'émission illisible pour ${chronology.undated_source_ids.length} document(s) :
+        ${chronology.undated_source_ids.map((id) => escapeHtml(documentLabel(id))).join(", ")}.
+        Placés en fin de série, leur position dans l'historique n'est pas garantie.
+      </div>
+    `);
+  }
+
+  return `
+    <p class="ctlab__hint">
+      L'ordre est reconstruit depuis la date d'émission déclarée par chaque document,
+      jamais depuis le nom du fichier.
+      ${completeness.declared.length > 0
+        ? `${completeness.declared.length} livrables sont énumérés par vos documents.`
+        : "Aucun document du lot n'énumère les livrables de l'affaire : seuls les trous de numérotation sont détectables."}
+    </p>
+    ${alerts.length > 0 ? alerts.join("") : `<p class="ctlab__empty">Aucune discontinuité détectée.</p>`}
+  `;
+}
+
+const STATUS_LABELS = {
+  OPEN: "ouvert",
+  RESOLVED: "levé",
+  NO_NEWS: "sans nouvelles"
+};
+
+const RESOLUTION_LABELS = {
+  DECLARED_LIFTED: "déclaré levé",
+  BACK_TO_FAVOURABLE: "repassé favorable"
+};
+
+/**
+ * « Où en est-on ? », à la date choisie.
+ *
+ * Trois colonnes, et la troisième est la raison d'être de l'écran : un avis
+ * disparu sans explication n'est ni ouvert ni levé. C'est une question à poser.
+ */
+function renderStatusView(state) {
+  const { avisStatus, statusCounts, chronology } = state.result;
+
+  if (avisStatus.length === 0) {
+    return `<p class="ctlab__empty">Aucun avis numéroté dans les documents retenus.</p>`;
+  }
+
+  const rows = avisStatus
+    .map((summary) => {
+      const months = summary.age_days === null ? null : Math.round(summary.age_days / 30);
+      return `
+        <tr>
+          <td><b>${escapeHtml(summary.reference)}</b></td>
+          <td><span class="ctlab__badge ctlab__badge--${escapeHtml(summary.status)}">${escapeHtml(STATUS_LABELS[summary.status])}</span></td>
+          <td>${escapeHtml(RESOLUTION_LABELS[summary.resolution_reason] ?? "")}</td>
+          <td>${escapeHtml(summary.raised_at ?? "?")}</td>
+          <td>${months === null ? "—" : `${months} mois`}</td>
+          <td>${escapeHtml(documentLabel(summary.last_seen_document_id))}</td>
+          <td>${summary.evidence?.sentence ? escapeHtml(truncate(summary.evidence.sentence, 90)) : ""}</td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  return `
+    <div class="ctlab__actions">
+      <label class="ctlab__inline">
+        État arrêté au
+        <input type="date" data-ctlab-as-of value="${escapeHtml(state.asOf)}">
+      </label>
+      ${state.asOf ? `<button type="button" class="ctlab__btn" data-ctlab-as-of-clear>Revenir à aujourd'hui</button>` : ""}
+      <span class="ctlab__hint">${chronology.ordered_source_ids.length} document(s) retenu(s)${
+        chronology.excluded_by_date > 0 ? `, ${chronology.excluded_by_date} écarté(s) car postérieur(s)` : ""
+      }</span>
+    </div>
+    <div class="ctlab__kpis">
+      <div class="ctlab__kpi"><b>${statusCounts.OPEN}</b><span>ouverts</span></div>
+      <div class="ctlab__kpi"><b>${statusCounts.NO_NEWS}</b><span>sans nouvelles${
+        statusCounts.NO_NEWS > 0 ? "<br>— à demander au contrôleur" : ""
+      }</span></div>
+      <div class="ctlab__kpi"><b>${statusCounts.RESOLVED}</b><span>levés, avec preuve</span></div>
+    </div>
+    <div class="ctlab__scroll">
+      <table class="ctlab__grid">
+        <thead>
+          <tr><th>N°</th><th>État</th><th>Motif</th><th>Soulevé le</th><th>Ancienneté</th><th>Vu pour la dernière fois</th><th>Preuve</th></tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
 }
 
 function renderAlerts(alerts) {
@@ -229,7 +553,7 @@ function renderAlerts(alerts) {
     .map(
       (alert) => `
         <div class="ctlab__alert ${alert.level === "attention" ? "ctlab__alert--attention" : ""}">
-          <b>${escapeHtml(alert.sourceId)}</b> — ${escapeHtml(alert.message)}
+          <b>${escapeHtml(documentLabel(alert.sourceId))}</b> — ${escapeHtml(alert.message)}
         </div>
       `
     )
@@ -308,7 +632,7 @@ function renderCell(cell) {
     body = lifting
       ? `<div>déclaré levé</div><div class="ctlab__change">« ${escapeHtml(truncate(lifting.sentence, 90))} »</div>`
       : `<div class="ctlab__empty">absent de ce rapport</div>` +
-        (previous ? `<div class="ctlab__change">vu pour la dernière fois dans ${escapeHtml(previous)}</div>` : "");
+        (previous ? `<div class="ctlab__change">vu pour la dernière fois dans ${escapeHtml(documentLabel(previous))}</div>` : "");
   } else if (state === "AMBIGUOUS") {
     body = `<div class="ctlab__empty">référence ambiguë — aucun avis retenu</div>`;
   } else if (state === "MATCHED_BY_TITLE" && continuity?.matched_opinion_raw) {
@@ -372,7 +696,7 @@ function renderDetail(cell) {
 
   return `
     <div class="ctlab__detail">
-      <h4>${escapeHtml(cell.reference)} — ${escapeHtml(cell.documentId)}</h4>
+      <h4>${escapeHtml(cell.reference)} — ${escapeHtml(documentLabel(cell.documentId))}</h4>
       <dl>
         <dt>Avis, tel qu'écrit dans la source</dt>
         <dd>${
@@ -389,7 +713,7 @@ function renderDetail(cell) {
         <dt>Provenance</dt>
         <dd>${
           provenance
-            ? `${escapeHtml(provenance.source_id)} · page ${provenance.page ?? "?"}
+            ? `${escapeHtml(documentLabel(provenance.source_id))} · page ${provenance.page ?? "?"}
                <div class="ctlab__excerpt">${escapeHtml(provenance.excerpt ?? "")}</div>`
             : "aucune"
         }</dd>
@@ -404,7 +728,7 @@ function renderDetail(cell) {
         <dt>Rapprochement</dt>
         <dd>
           ${escapeHtml(continuity?.match_method ?? "—")}
-          ${continuity?.value?.previous_document_id ? ` depuis ${escapeHtml(continuity.value.previous_document_id)}` : ""}
+          ${continuity?.value?.previous_document_id ? ` depuis ${escapeHtml(documentLabel(continuity.value.previous_document_id))}` : ""}
           ${continuity?.derived_from_absence ? " · constat d'absence, aucune conclusion" : ""}
         </dd>
 
@@ -448,7 +772,7 @@ function renderLiftings(state) {
               (statement) => `
                 <tr>
                   <td><b>${escapeHtml(statement.reference_raw)}</b></td>
-                  <td>${escapeHtml(statement.source_document_id)}</td>
+                  <td>${escapeHtml(documentLabel(statement.source_document_id))}</td>
                   <td>${statement.source_page ?? "—"}</td>
                   <td>${escapeHtml(statement.sentence)}</td>
                 </tr>
@@ -606,7 +930,7 @@ function renderAvisTable(state) {
 
       return `
         <tr>
-          <td>${escapeHtml(avis.provenance?.source_id ?? "—")}</td>
+          <td>${escapeHtml(documentLabel(avis.provenance?.source_id))}</td>
           <td>${avis.provenance?.page ?? "—"}</td>
           <td>${reference ? `<b>${escapeHtml(reference)}</b>` : `<span class="ctlab__empty">sans n°</span>`}</td>
           <td>${escapeHtml(avis.section_label_raw ?? avis.section_number_raw ?? "—")}</td>
@@ -679,9 +1003,66 @@ function renderResults(state) {
     return `<div class="ctlab__section"><p>Analyse en cours…</p></div>`;
   }
   if (!state.result) {
-    return `<div class="ctlab__section"><p class="ctlab__empty">Charger au moins un rapport, puis lancer l'analyse.</p></div>`;
+    return `<div class="ctlab__section"><p class="ctlab__empty">Déposer des documents, puis lancer l'analyse.</p></div>`;
   }
 
+  return `
+    <div class="ctlab__section">
+      <h3>Où en est-on ?</h3>
+      ${renderStatusView(state)}
+    </div>
+
+    <div class="ctlab__section">
+      <h3>Chronologie et complétude du lot</h3>
+      ${renderChronology(state)}
+    </div>
+
+    <div class="ctlab__section">
+      <h3>Tous les avis identifiés</h3>
+      ${renderAvisTable(state)}
+    </div>
+
+    <div class="ctlab__section">
+      <h3>Suivi des avis numérotés</h3>
+      <p class="ctlab__hint">Une ligne par référence, une colonne par document, dans l'ordre chronologique. Cliquer une case pour voir sa provenance.</p>
+      ${renderTimeline(state.result)}
+    </div>
+
+    <div class="ctlab__section">
+      <h3>Levées déclarées dans les documents</h3>
+      ${renderLiftings(state)}
+    </div>
+
+    <div class="ctlab__section">
+      <button type="button" class="ctlab__more" data-ctlab-toggle-details>
+        ${state.showDetails ? "Masquer les détails techniques" : "Afficher plus de détail"}
+      </button>
+      ${state.showDetails ? renderDetails(state) : ""}
+    </div>
+
+    <div class="ctlab__section">
+      <h3>Exports</h3>
+      <p class="ctlab__hint">
+        <b>Exporter tout</b> réunit dans un seul fichier les sources paginées, la chronologie, les avis lus,
+        la continuité, les indicateurs, les garde-fous et le rapport. Il contient le texte intégral des
+        rapports : à ne transmettre qu'à qui a le droit de les lire.
+      </p>
+      <div class="ctlab__actions">
+        <button type="button" class="ctlab__btn ctlab__btn--go" data-ctlab-export="all">Exporter tout (JSON)</button>
+        <button type="button" class="ctlab__btn" data-ctlab-export="avis-csv">Tableau des avis (CSV)</button>
+        <button type="button" class="ctlab__btn" data-ctlab-export="status-csv">État des avis (CSV)</button>
+        <button type="button" class="ctlab__btn" data-ctlab-export="case">Exporter le cas (JSON)</button>
+        <button type="button" class="ctlab__btn" data-ctlab-export="report">Rapport (Markdown)</button>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Diagnostic : ce qui sert à comprendre pourquoi le moteur voit ce qu'il voit.
+ * Rangé derrière un lien, parce que ce n'est pas la réponse — c'est l'enquête.
+ */
+function renderDetails(state) {
   return `
     <div class="ctlab__section">
       <h3>Alertes d'extraction</h3>
@@ -692,75 +1073,47 @@ function renderResults(state) {
       ${renderIndicators(state.result.indicators)}
     </div>
     <div class="ctlab__section">
-      <h3>Tous les avis identifiés</h3>
-      ${renderAvisTable(state)}
-    </div>
-    <div class="ctlab__section">
-      <h3>Suivi des avis numérotés</h3>
-      <p class="ctlab__hint">Une ligne par référence, une colonne par rapport, dans l'ordre de chargement. Cliquer une case pour voir sa provenance.</p>
-      ${renderTimeline(state.result)}
-    </div>
-    <div class="ctlab__section">
-      <h3>Levées déclarées dans les documents</h3>
-      ${renderLiftings(state)}
-    </div>
-    <div class="ctlab__section">
       <h3>Suggestions</h3>
       ${renderSuggestions(state.result.suggestions)}
     </div>
     <div class="ctlab__section">
-      <h3>Exports</h3>
-      <p class="ctlab__hint">
-        <b>Exporter tout</b> réunit dans un seul fichier les sources paginées, les avis lus, la continuité,
-        les indicateurs, les garde-fous et le rapport — de quoi analyser un résultat sans avoir les PDF sous
-        la main. Il contient donc le texte intégral des rapports : à ne transmettre qu'à qui a le droit de les lire.
-      </p>
-      <p class="ctlab__hint">
-        Le cas exporté, lui, ne contient que les sources. La ground truth s'écrit à la main, en relisant les rapports —
-        jamais à partir de ce que le moteur a produit.
-      </p>
-      <div class="ctlab__actions">
-        <button type="button" class="ctlab__btn ctlab__btn--go" data-ctlab-export="all">Exporter tout (JSON)</button>
-        <button type="button" class="ctlab__btn" data-ctlab-export="case">Exporter le cas (JSON)</button>
-        <button type="button" class="ctlab__btn" data-ctlab-export="run">Exporter le run (JSON)</button>
-        <button type="button" class="ctlab__btn" data-ctlab-export="report">Exporter le rapport (Markdown)</button>
-      </div>
+      <h3>Texte extrait</h3>
+      ${renderExtractedText(state)}
+    </div>
+    <div class="ctlab__section">
+      <h3>Motifs d'extraction</h3>
+      ${renderPatternEditor(state)}
     </div>
   `;
 }
 
 function render(root, state) {
-  const loadedCount = state.reports.filter((report) => report && !report.error && !report.loading).length;
+  const loaded = state.reports.filter((report) => !report.error).length;
+
+  DOCUMENT_LABELS = new Map(
+    state.reports.map((report) => [report.sourceId, report.filename ?? report.sourceId])
+  );
 
   root.innerHTML = `
     <style>${STYLE}</style>
     <div class="ctlab">
       <h2>CT Continuity Lab</h2>
       <div class="ctlab__banner">
-        Banc d'essai du Spike 1. Les PDF sont lus <b>dans ce navigateur</b> : rien n'est envoyé, rien n'est
-        enregistré, aucun sujet Mdall n'est créé ni modifié. Fermer l'onglet efface tout.
+        Suivi et historisation des avis d'un bureau de contrôle. Les PDF sont lus <b>dans ce navigateur</b> :
+        rien n'est envoyé, rien n'est enregistré, aucun sujet Mdall n'est créé ni modifié.
+        Fermer l'onglet efface tout.
       </div>
 
       <div class="ctlab__section">
-        <h3>Rapports</h3>
-        <p class="ctlab__hint">Charger dans l'ordre chronologique : rapport 1 = le plus ancien.</p>
-        <div class="ctlab__slots">${renderSlots(state)}</div>
+        <h3>Documents</h3>
+        ${renderDropZone(state)}
+        ${renderDocumentList(state)}
         <div class="ctlab__actions">
-          <button type="button" class="ctlab__btn ctlab__btn--go" data-ctlab-run ${loadedCount === 0 || state.running ? "disabled" : ""}>
-            Analyser ${loadedCount} rapport(s)
+          <button type="button" class="ctlab__btn ctlab__btn--go" data-ctlab-run ${loaded === 0 || state.running || state.loading ? "disabled" : ""}>
+            ${state.result ? "Recalculer" : "Analyser"} ${loaded} document(s)
           </button>
           <button type="button" class="ctlab__btn" data-ctlab-reset>Tout réinitialiser</button>
         </div>
-      </div>
-
-      <div class="ctlab__section">
-        <h3>Texte extrait</h3>
-        ${renderExtractedText(state)}
-      </div>
-
-      <div class="ctlab__section">
-        <h3>Motifs d'extraction</h3>
-        ${renderPatternEditor(state)}
       </div>
 
       <div data-ctlab-results>${renderResults(state)}</div>
@@ -772,26 +1125,29 @@ export function renderCtContinuityLab(root) {
   if (!root) return;
 
   const state = {
-    reports: Array.from({ length: SLOT_COUNT }, () => null),
+    reports: [],
     result: null,
     running: false,
+    loading: null,
     error: null,
     selectedCell: null,
+    showDetails: false,
+    asOf: "",
     avisFilter: { code: "", documentId: "", numberedOnly: false },
     patternText: DEFAULT_PATTERN_TEXT,
     lexiconText: DEFAULT_LEXICON_TEXT,
     patternErrors: []
   };
 
+  let nextDocumentNumber = 1;
+
   const input = document.createElement("input");
   input.type = "file";
   input.accept = "application/pdf,.pdf";
+  input.multiple = true;
   input.style.display = "none";
   root.appendChild(input);
 
-  let pendingSlot = null;
-
-  /** Les zones de texte sont la seule saisie de la page : ne jamais la perdre. */
   const captureEditors = () => {
     const patterns = root.querySelector("[data-ctlab-patterns]");
     const lexicon = root.querySelector("[data-ctlab-lexicon]");
@@ -818,23 +1174,96 @@ export function renderCtContinuityLab(root) {
     URL.revokeObjectURL(url);
   };
 
-  input.addEventListener("change", async () => {
-    const file = input.files?.[0];
-    const slot = pendingSlot;
-    input.value = "";
-    pendingSlot = null;
-    if (!file || slot === null) return;
+  /** Laisse le navigateur redessiner entre deux fichiers : cent vingt PDF ne
+   * doivent pas figer la page pendant plusieurs minutes. */
+  const yieldToBrowser = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-    state.reports[slot] = { loading: true, filename: file.name };
+  const addFiles = async (fileList) => {
+    const files = [...fileList].filter((file) => /\.pdf$/i.test(file.name) || file.type === "application/pdf");
+    if (files.length === 0) return;
+
+    state.loading = { done: 0, total: files.length, current: null };
+    refresh();
+
+    for (const file of files) {
+      state.loading.current = file.name;
+      refresh();
+      await yieldToBrowser();
+
+      // Un même fichier redéposé n'est pas rechargé : le lot s'enrichit, il ne
+      // se duplique pas.
+      const already = state.reports.some(
+        (report) => report.filename === file.name && report.sizeBytes === file.size
+      );
+
+      if (!already) {
+        const sourceId = `doc-${nextDocumentNumber}`;
+        nextDocumentNumber += 1;
+        try {
+          const extracted = await extractPagesFromFile(file);
+          state.reports.push({ ...extracted, sourceId });
+        } catch (error) {
+          state.reports.push({ sourceId, filename: file.name, sizeBytes: file.size, pageCount: 0, pages: [], error: error.message });
+        }
+      }
+
+      state.loading.done += 1;
+      refresh();
+    }
+
+    state.loading = null;
+    // Un nouveau lot invalide le résultat précédent : il faut recalculer.
+    state.result = null;
+    refresh();
+  };
+
+  const runAnalysis = async () => {
+    const reports = state.reports.filter((report) => !report.error);
+    if (reports.length === 0) return;
+
+    const { params, errors } = buildExtractionParams(state.patternText, state.lexiconText);
+    state.patternErrors = errors;
+    state.running = true;
+    state.error = null;
+    state.selectedCell = null;
     refresh();
 
     try {
-      const extracted = await extractPagesFromFile(file);
-      state.reports[slot] = { ...extracted, sourceId: `rapport-${slot + 1}` };
+      state.result = await runCtLab(reports, {
+        params: { ...params, chronology: state.asOf ? { asOf: state.asOf } : {} }
+      });
     } catch (error) {
-      state.reports[slot] = { filename: file.name, error: error.message };
+      state.result = null;
+      state.error = error.message;
     }
+    state.running = false;
     refresh();
+  };
+
+  input.addEventListener("change", async () => {
+    // La liste doit être recopiée avant de vider le champ : `input.value = ""`
+    // vide la FileList elle-même, et `files` pointe sur le même objet.
+    const files = [...(input.files ?? [])];
+    input.value = "";
+    if (files.length > 0) await addFiles(files);
+  });
+
+  root.addEventListener("dragover", (event) => {
+    if (!event.target.closest("[data-ctlab-drop]")) return;
+    event.preventDefault();
+    event.target.closest("[data-ctlab-drop]").classList.add("is-over");
+  });
+
+  root.addEventListener("dragleave", (event) => {
+    event.target.closest("[data-ctlab-drop]")?.classList.remove("is-over");
+  });
+
+  root.addEventListener("drop", async (event) => {
+    const zone = event.target.closest("[data-ctlab-drop]");
+    if (!zone) return;
+    event.preventDefault();
+    zone.classList.remove("is-over");
+    if (event.dataTransfer?.files) await addFiles(event.dataTransfer.files);
   });
 
   root.addEventListener("change", (event) => {
@@ -842,7 +1271,12 @@ export function renderCtContinuityLab(root) {
     if (target.dataset?.ctlabFilterCode !== undefined) state.avisFilter.code = target.value;
     else if (target.dataset?.ctlabFilterDocument !== undefined) state.avisFilter.documentId = target.value;
     else if (target.dataset?.ctlabFilterNumbered !== undefined) state.avisFilter.numberedOnly = target.checked;
-    else return;
+    else if (target.dataset?.ctlabAsOf !== undefined) {
+      state.asOf = target.value;
+      captureEditors();
+      runAnalysis();
+      return;
+    } else return;
 
     captureEditors();
     refresh();
@@ -850,18 +1284,56 @@ export function renderCtContinuityLab(root) {
 
   root.addEventListener("click", async (event) => {
     const target = event.target.closest(
-      "[data-ctlab-pick], [data-ctlab-clear], [data-ctlab-run], [data-ctlab-reset], [data-ctlab-cell], " +
-        "[data-ctlab-export], [data-ctlab-export-text], [data-ctlab-apply-patterns], [data-ctlab-reset-patterns]"
+      "[data-ctlab-pick], [data-ctlab-remove], [data-ctlab-run], [data-ctlab-reset], [data-ctlab-cell], " +
+        "[data-ctlab-export], [data-ctlab-export-text], [data-ctlab-apply-patterns], [data-ctlab-reset-patterns], " +
+        "[data-ctlab-toggle-details], [data-ctlab-as-of-clear]"
     );
     if (!target) return;
 
+    if (target.dataset.ctlabPick !== undefined) {
+      input.click();
+      return;
+    }
+
+    if (target.dataset.ctlabToggleDetails !== undefined) {
+      captureEditors();
+      state.showDetails = !state.showDetails;
+      refresh();
+      return;
+    }
+
+    if (target.dataset.ctlabAsOfClear !== undefined) {
+      state.asOf = "";
+      await runAnalysis();
+      return;
+    }
+
+    if (target.dataset.ctlabRemove !== undefined) {
+      state.reports = state.reports.filter((report) => report.sourceId !== target.dataset.ctlabRemove);
+      state.result = null;
+      state.selectedCell = null;
+      refresh();
+      return;
+    }
+
+    if (target.dataset.ctlabReset !== undefined) {
+      state.reports = [];
+      state.result = null;
+      state.selectedCell = null;
+      state.error = null;
+      state.asOf = "";
+      refresh();
+      return;
+    }
+
     if (target.dataset.ctlabExportText !== undefined) {
-      const report = state.reports.find((entry) => entry?.sourceId === target.dataset.ctlabExportText);
+      const report = state.reports.find((entry) => entry.sourceId === target.dataset.ctlabExportText);
       if (!report) return;
-      const content = report.pages
-        .map((page) => `----- page ${page.page} -----\n${page.text}`)
-        .join("\n\n");
-      download(`${report.sourceId}-texte-extrait.txt`, content, "text/plain");
+      download(
+        `${report.sourceId}-texte-extrait.txt`,
+        report.pages.map((page) => `----- page ${page.page} -----\n${page.text}`).join("\n\n"),
+        "text/plain"
+      );
       return;
     }
 
@@ -875,36 +1347,7 @@ export function renderCtContinuityLab(root) {
 
     if (target.dataset.ctlabApplyPatterns !== undefined) {
       captureEditors();
-      state.patternErrors = buildExtractionParams(state.patternText, state.lexiconText).errors;
-      refresh();
-      if (state.reports.some((report) => report && !report.error && !report.loading)) {
-        root.querySelector("[data-ctlab-run]")?.click();
-      }
-      return;
-    }
-
-    captureEditors();
-
-    if (target.dataset.ctlabPick !== undefined) {
-      pendingSlot = Number(target.dataset.ctlabPick);
-      input.click();
-      return;
-    }
-
-    if (target.dataset.ctlabClear !== undefined) {
-      state.reports[Number(target.dataset.ctlabClear)] = null;
-      state.result = null;
-      state.selectedCell = null;
-      refresh();
-      return;
-    }
-
-    if (target.dataset.ctlabReset !== undefined) {
-      state.reports = Array.from({ length: SLOT_COUNT }, () => null);
-      state.result = null;
-      state.selectedCell = null;
-      state.error = null;
-      refresh();
+      await runAnalysis();
       return;
     }
 
@@ -927,36 +1370,19 @@ export function renderCtContinuityLab(root) {
         );
       } else if (kind === "case") {
         download("case.json", JSON.stringify(buildCaseExport(state.result.sources), null, 2), "application/json");
-      } else if (kind === "run") {
-        download("run.json", JSON.stringify(state.result.record, null, 2), "application/json");
+      } else if (kind === "avis-csv") {
+        download("avis.csv", toAvisCsv(state.result), "text/csv;charset=utf-8");
+      } else if (kind === "status-csv") {
+        download("etat-des-avis.csv", toStatusCsv(state.result), "text/csv;charset=utf-8");
       } else {
         download("report.md", state.result.reportMarkdown, "text/markdown");
       }
       return;
     }
 
-    captureEditors();
-
     if (target.dataset.ctlabRun !== undefined) {
-      const reports = state.reports.filter((report) => report && !report.error && !report.loading);
-      if (reports.length === 0) return;
-
-      state.running = true;
-      state.error = null;
-      state.selectedCell = null;
-      refresh();
-
-      const { params, errors } = buildExtractionParams(state.patternText, state.lexiconText);
-      state.patternErrors = errors;
-
-      try {
-        state.result = await runCtLab(reports, { params });
-      } catch (error) {
-        state.result = null;
-        state.error = error.message;
-      }
-      state.running = false;
-      refresh();
+      captureEditors();
+      await runAnalysis();
     }
   });
 

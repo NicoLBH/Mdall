@@ -69,6 +69,13 @@ export async function extractPdfPages(bytes, { unpdf = null } = {}) {
   };
 }
 
+/** Empreinte du texte extrait : sert à repérer un document chargé deux fois. */
+async function sha256Hex(text) {
+  if (!globalThis.crypto?.subtle) return null;
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 /** Lit un File du navigateur et en extrait les pages. */
 export async function extractPagesFromFile(file, options = {}) {
   const buffer = await file.arrayBuffer();
@@ -78,6 +85,7 @@ export async function extractPagesFromFile(file, options = {}) {
     ...extracted,
     filename: file.name,
     sizeBytes: file.size,
-    lastModified: file.lastModified ?? null
+    lastModified: file.lastModified ?? null,
+    contentHash: await sha256Hex(extracted.pages.map((page) => page.text).join("\n"))
   };
 }
