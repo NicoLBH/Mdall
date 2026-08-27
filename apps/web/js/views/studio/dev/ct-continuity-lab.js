@@ -19,6 +19,7 @@
  * sélecteur de date — pour que l'outil ne soit pas une pièce rapportée.
  */
 
+import { store } from "../../../store.js";
 import { escapeHtml } from "../../../utils/escape-html.js";
 import { extractPagesFromFile } from "../../../services/ct-lab-pdf.js";
 import { buildCaseExport, buildFullExport, collectAvis, runCtLab } from "../../../services/ct-lab-engine.js";
@@ -115,6 +116,97 @@ const OPINION_LABEL_TONES = {
   DEFAVORABLE: "danger",
   "NON CONFORME": "danger"
 };
+
+/**
+ * Deux pictogrammes que le sprite de l'application ne porte pas, parce qu'ils
+ * n'existent que dans ce métier : un avis suspendu attend une réponse, un avis
+ * défavorable ou non conforme exige une reprise. Les tracés sont ceux du
+ * sprite — l'anneau de `issue-opened`, le triangle de `alert` — complétés du
+ * signe qui les distingue.
+ */
+function pendingIcon() {
+  return `
+    <svg class="ui-icon octicon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+      <path fill="currentColor" d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Z"></path>
+      <text x="8" y="11.6" text-anchor="middle" font-size="9" font-weight="700" fill="currentColor">?</text>
+    </svg>
+  `;
+}
+
+function blockingIcon() {
+  return `
+    <svg class="ui-icon octicon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+      <path fill="currentColor" d="M6.457 1.047c.659-1.234 2.427-1.234 3.086 0l6.082 11.378A1.75 1.75 0 0 1 14.082 15H1.918a1.75 1.75 0 0 1-1.543-2.575Zm1.763.707a.25.25 0 0 0-.44 0L1.698 13.132a.25.25 0 0 0 .22.368h12.164a.25.25 0 0 0 .22-.368Zm.53 3.996v2.5a.75.75 0 0 1-1.5 0v-2.5a.75.75 0 0 1 1.5 0ZM9 11a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z"></path>
+    </svg>
+  `;
+}
+
+/**
+ * L'icône d'une ligne d'avis : elle dit ce qu'il faut en faire, avant même
+ * qu'on ait lu l'intitulé.
+ */
+function avisIcon(code, label = null) {
+  const tone = opinionTone(code, label);
+  if (tone === "danger") {
+    return `<span class="issue-status-icon" style="color: var(--fgColor-danger)">${blockingIcon()}</span>`;
+  }
+  if (tone === "pending") {
+    return `<span class="issue-status-icon" style="color: var(--ctlab-warn)">${pendingIcon()}</span>`;
+  }
+  if (tone === "ok") {
+    return `<span class="issue-status-icon" style="color: var(--fgColor-open)">${svgIcon("check-circle", { className: "octicon" })}</span>`;
+  }
+  return `<span class="issue-status-icon" style="color: var(--muted)">${svgIcon("issue-opened", { className: "octicon" })}</span>`;
+}
+
+/**
+ * Une ligne d'avis, dans la grammaire du tableau des sujets.
+ *
+ * Même structure, mêmes classes : `issue-row` pose les colonnes et l'unique
+ * filet horizontal — pas de trait vertical —, `issue-row-title-grid` empile
+ * l'intitulé cliquable, les métadonnées et le commentaire. Trois lignes au lieu
+ * de deux : le commentaire du contrôleur mérite sa place.
+ *
+ * @param {object} avis      code, libellé, intitulé, commentaire, méta
+ * @param {string|null} tag  état de l'avis, rendu comme un label de sujet
+ */
+function renderAvisRow({ reference, code, label, title, meta, comment, tag, tagStatus, evidence }) {
+  const clickable = Boolean(reference);
+
+  return `
+    <div class="issue-row ctlab__row">
+      <div class="cell ctlab__row-main">
+        <span class="issue-row-title-grid ctlab__row-grid">
+          <span class="issue-row-title-grid__status">${avisIcon(code, label)}</span>
+          <span class="issue-row-title-grid__title issue-row-subject-title-line">
+            ${
+              clickable
+                ? `<button type="button" class="row-title-trigger theme-text" data-ctlab-trace="${escapeHtml(reference)}">${escapeHtml(title)}</button>`
+                : `<span class="theme-text">${escapeHtml(title)}</span>`
+            }
+            ${
+              tag
+                ? `<span class="issue-row-subject-labels"><span class="subject-label-badge ctlab__tag ctlab__tag--${escapeHtml(tagStatus ?? "")}">${escapeHtml(titleCase(tag))}</span></span>`
+                : ""
+            }
+          </span>
+          <span class="issue-row-title-grid__meta issue-row-meta-text mono-small">${escapeHtml(meta)}</span>
+          ${comment ? `<span class="ctlab__row-grid-comment issue-row-meta-text">${escapeHtml(truncate(comment, 220))}</span>` : ""}
+        </span>
+      </div>
+      ${evidence === undefined ? "" : `<div class="cell ctlab__row-evidence">${evidence ? `<span class="issue-row-meta-text">${escapeHtml(truncate(evidence, 120))}</span>` : ""}</div>`}
+    </div>
+  `;
+}
+
+/** « OUVERT » crie ; « Ouvert » se lit. */
+export function titleCase(value) {
+  return String(value ?? "")
+    .toLocaleLowerCase("fr")
+    .split(" ")
+    .map((word) => (word.length === 0 ? word : word[0].toLocaleUpperCase("fr") + word.slice(1)))
+    .join(" ");
+}
 
 function opinionTone(code, label = null) {
   const byCode = OPINION_TONES[String(code ?? "").toUpperCase()];
@@ -368,7 +460,41 @@ const STYLE = `
 .ctlab__pipeline-body { min-width: 0; flex: 1 1 auto; }
 .ctlab__pipeline-title { font-weight: 600; }
 .ctlab__pipeline-detail { margin-top: 6px; }
-.ctlab__chart { overflow-x: auto; }
+.ctlab__pipeline-title { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; font-weight: 400; }
+.ctlab__pipeline-date { white-space: nowrap; }
+.ctlab__pipeline-dash { color: var(--ctlab-muted); }
+.ctlab__pipeline-headline { font-weight: 700; color: var(--ctlab-text); }
+.ctlab__pipeline-line { margin-top: 3px; }
+.ctlab__tag--state { --subject-label-border: var(--ctlab-line); --subject-label-fg: var(--ctlab-muted); --subject-label-bg: transparent; }
+.ctlab__chart { max-width: 100%; }
+.ctlab__charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-bottom: 16px; }
+@media (max-width: 1000px) { .ctlab__charts { grid-template-columns: minmax(0, 1fr); } }
+
+/* Lignes d'avis : la grammaire du tableau des sujets, sans trait vertical. */
+.ctlab__rows { border: 1px solid var(--ctlab-line); border-radius: var(--radius, 6px); overflow: hidden; }
+.ctlab__row { grid-template-columns: minmax(0, 1fr) 260px; align-items: start; }
+.ctlab__row-main { min-width: 0; }
+.ctlab__row-evidence { min-width: 0; padding-left: 12px; }
+/* Trois lignes empilées : intitulé, métadonnées, commentaire. */
+.ctlab__row-grid { grid-template-rows: auto auto auto; }
+.ctlab__row-grid-comment {
+  grid-column: 3;
+  grid-row: 3;
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: normal;
+}
+.ctlab__row .issue-row-title-grid__meta { height: auto; }
+.ctlab__tag--OPEN { --subject-label-border: var(--ctlab-warn); --subject-label-fg: var(--ctlab-warn); --subject-label-bg: rgba(210, 153, 34, .12); }
+.ctlab__tag--NO_NEWS { --subject-label-border: var(--ctlab-danger); --subject-label-fg: var(--ctlab-danger); --subject-label-bg: rgba(248, 81, 73, .12); }
+.ctlab__tag--RESOLVED { --subject-label-border: var(--ctlab-ok); --subject-label-fg: var(--ctlab-ok); --subject-label-bg: rgba(63, 185, 80, .12); }
+@media (max-width: 900px) {
+  .ctlab__row { grid-template-columns: minmax(0, 1fr); }
+  .ctlab__row-evidence { padding-left: 0; }
+}
 
 /* Remonter le temps : une fonction stratégique, pas un lien perdu. */
 .ctlab__time-travel { display: inline-flex; align-items: center; gap: 6px; }
@@ -382,7 +508,39 @@ const STYLE = `
   border-radius: var(--radius, 6px);
   padding: 6px 10px;
 }
-.ctlab__milestones { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; flex-basis: 100%; }
+.ctlab__milestones { position: relative; }
+.ctlab__milestone-menu > summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; }
+.ctlab__milestone-menu > summary::-webkit-details-marker { display: none; }
+.ctlab__milestone-list {
+  position: absolute;
+  z-index: 30;
+  margin-top: 4px;
+  min-width: 300px;
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid var(--ctlab-line);
+  border-radius: var(--radius, 6px);
+  background: var(--panel, #0d1117);
+  box-shadow: 0 8px 24px rgba(1, 4, 9, .6);
+  padding: 4px;
+}
+.ctlab__milestone {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 2px 10px;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: none;
+  color: var(--ctlab-text);
+  font: inherit;
+  padding: 6px 8px;
+  border-radius: var(--radius, 6px);
+  cursor: pointer;
+}
+.ctlab__milestone:hover { background: rgba(110, 118, 129, .12); }
+.ctlab__milestone-date { grid-row: 1 / span 2; color: var(--ctlab-muted); }
+.ctlab__milestone-label { font-weight: 600; }
 
 /* Constats gradués : le rouge est réservé à ce qui l'exige. */
 .ctlab__notice {
@@ -785,7 +943,9 @@ function buildAvisContext(result) {
       position,
       code: avis.value?.opinion_raw ?? avis.opinion_raw ?? null,
       label: avis.opinion_label ?? null,
-      title: avis.title_raw ?? null,
+      // Un rapport en colonnes porte un intitulé ; un rapport lu ligne à ligne
+      // n'a que son commentaire. On prend ce qui existe plutôt que rien.
+      title: avis.title_raw ?? avis.description_raw ?? null,
       comment: avis.description_raw ?? null
     });
   }
@@ -810,32 +970,28 @@ function renderStatusView(state) {
       const months = summary.age_days === null ? null : Math.round(summary.age_days / 30);
       const info = context.get(summary.reference) ?? {};
       const code = info.code ?? summary.opinion_raw ?? ABSTENTION_CODE;
+      const opinion = info.label && info.label !== code ? `${code} (${info.label})` : code;
 
-      return `
-        <tr>
-          <td><b>${escapeHtml(summary.reference)}</b></td>
-          <td>
-            <span class="ctlab__badge ctlab__badge--${escapeHtml(summary.status)}">${escapeHtml(STATUS_LABELS[summary.status])}</span>
-            ${summary.resolution_reason ? `<div class="issue-row-meta-text">${escapeHtml(RESOLUTION_LABELS[summary.resolution_reason] ?? "")}</div>` : ""}
-          </td>
-          <td>
-            <span class="ctlab__dot ctlab__dot--${opinionTone(code, info.label)}" aria-hidden="true"></span>
-            ${escapeHtml(code)}
-            ${info.label && info.label !== code ? `<span class="ctlab__hint">${escapeHtml(info.label)}</span>` : ""}
-          </td>
-          <td class="ctlab__title-cell">
-            <button type="button" class="row-title-trigger" data-ctlab-trace="${escapeHtml(summary.reference)}">
-              ${escapeHtml(truncate(info.title ?? "(sans intitulé)", 140))}
-            </button>
-            <div class="issue-row-meta-text">
-              soulevé le ${escapeHtml(formatDate(summary.raised_at))}${months === null ? "" : ` · ${months} mois`}
-              · vu dans ${escapeHtml(documentLabel(summary.last_seen_document_id))}
-            </div>
-            ${info.comment ? `<div class="ctlab__row-comment">${escapeHtml(truncate(info.comment, 200))}</div>` : ""}
-          </td>
-          <td>${summary.evidence?.sentence ? `<span class="ctlab__hint">${escapeHtml(truncate(summary.evidence.sentence, 120))}</span>` : ""}</td>
-        </tr>
-      `;
+      return renderAvisRow({
+        reference: summary.reference,
+        code,
+        label: info.label,
+        title: info.title ?? "(sans intitulé)",
+        tag: STATUS_LABELS[summary.status],
+        tagStatus: summary.status,
+        meta: [
+          `N° ${summary.reference}`,
+          opinion,
+          `soulevé le ${formatDate(summary.raised_at)}`,
+          months === null ? null : `${months} mois`,
+          `vu dans ${documentLabel(summary.last_seen_document_id)}`,
+          RESOLUTION_LABELS[summary.resolution_reason] ?? null
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        comment: info.comment,
+        evidence: summary.evidence?.sentence ?? ""
+      });
     })
     .join("");
 
@@ -854,20 +1010,7 @@ function renderStatusView(state) {
       }</span></div>
       <div class="ctlab__kpi"><b>${statusCounts.RESOLVED}</b><span>levés, avec preuve</span></div>
     </div>
-    <div class="ctlab__scroll">
-      <table class="ctlab__grid">
-        <thead>
-          <tr>
-            <th style="width:60px">N°</th>
-            <th style="width:130px">État</th>
-            <th style="width:130px">Avis</th>
-            <th>Intitulé et commentaire</th>
-            <th style="width:240px">Preuve</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>
+    <div class="ctlab__rows">${rows}</div>
   `;
 }
 
@@ -896,6 +1039,7 @@ function renderTimeTravelControl(state) {
     <div class="ctlab__time-travel-active">
       ${svgIcon("history", { className: "octicon" })}
       <span class="ctlab__hint">État arrêté au</span>
+      ${renderMilestones(state)}
       ${renderSharedDatePicker({
         idBase: "ctlabAsOf",
         value: state.asOf,
@@ -909,7 +1053,6 @@ function renderTimeTravelControl(state) {
         showYearNav: true
       })}
       <button type="button" class="ctlab__link" data-ctlab-time-travel="off">Revenir à aujourd'hui</button>
-      ${renderMilestones(state)}
     </div>
   `;
 }
@@ -918,32 +1061,77 @@ function renderTimeTravelControl(state) {
  * Les jalons du dossier, en un clic.
  *
  * On demande rarement « que savait-on le 17 mars ? ». On demande « que
- * savait-on au rapport d'étape précédent ? ». Les récapitulatifs sont
- * précisément les dates où le bureau de contrôle a fait le point : ce sont
- * elles qu'un juriste ou un maître d'ouvrage vise. Le calendrier reste
- * disponible pour tout le reste.
+ * savait-on au rapport d'étape précédent ? », ou « à la réception ? ». Deux
+ * sources, toutes deux datées et vérifiables :
+ *
+ *  - les **récapitulatifs** du bureau de contrôle, lus dans les documents ;
+ *  - les **phases du projet** renseignées dans Paramètres, lorsqu'elles portent
+ *    une date.
+ *
+ * Le calendrier reste là pour tout le reste — une date de contentieux, par
+ * exemple, n'est pas un jalon du chantier.
  */
-function renderMilestones(state) {
-  const milestones = (state.result?.chronology?.documents ?? [])
+function collectMilestones(state) {
+  const fromDocuments = (state.result?.chronology?.documents ?? [])
     .filter((document) => document.recapitulative === true && document.issued_at)
-    .reverse();
+    .map((document) => ({
+      at: document.issued_at,
+      label: document.document_type_label ?? "Récapitulatif",
+      hint: documentLabel(document.source_id),
+      origin: "document"
+    }));
 
+  const fromPhases = readProjectPhases().map((phase) => ({
+    at: phase.phaseDate,
+    label: phase.label,
+    hint: `Phase ${phase.code}`,
+    origin: "phase"
+  }));
+
+  return [...fromDocuments, ...fromPhases].sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
+}
+
+/**
+ * Phases activées du projet, avec leur date.
+ *
+ * Lues depuis le store de l'application, sans y écrire : cet écran ne modifie
+ * aucun paramètre de projet. Une phase sans date n'est pas un jalon.
+ */
+function readProjectPhases() {
+  const catalog = Array.isArray(store?.projectForm?.phasesCatalog) ? store.projectForm.phasesCatalog : [];
+
+  return catalog
+    .filter((item) => item?.enabled !== false)
+    .map((item) => ({
+      code: String(item?.code ?? "").trim(),
+      label: String(item?.label ?? "").trim(),
+      phaseDate: String(item?.phaseDate ?? item?.phase_date ?? "").trim()
+    }))
+    .filter((item) => item.code && item.label && /^\d{4}-\d{2}-\d{2}$/.test(item.phaseDate));
+}
+
+function renderMilestones(state) {
+  const milestones = collectMilestones(state);
   if (milestones.length === 0) return "";
 
   return `
     <div class="ctlab__milestones">
-      <span class="ctlab__hint">Jalons :</span>
-      ${milestones
-        .slice(0, 6)
-        .map(
-          (document) => `
-            <button type="button" class="ctlab__link" data-ctlab-as-of="${escapeHtml(document.issued_at)}"
-                    title="${escapeHtml(documentLabel(document.source_id))}">
-              ${escapeHtml(document.document_type_label ?? "Récapitulatif")} ${escapeHtml(formatDate(document.issued_at))}
-            </button>
-          `
-        )
-        .join("")}
+      <details class="ctlab__milestone-menu" ${state.milestonesOpen ? "open" : ""}>
+        <summary class="gh-btn gh-btn--sm">Choisir un jalon temporel</summary>
+        <div class="ctlab__milestone-list">
+          ${milestones
+            .map(
+              (milestone) => `
+                <button type="button" class="ctlab__milestone" data-ctlab-as-of="${escapeHtml(milestone.at)}">
+                  <span class="ctlab__milestone-date">${escapeHtml(formatDate(milestone.at))}</span>
+                  <span class="ctlab__milestone-label">${escapeHtml(milestone.label)}</span>
+                  <span class="issue-row-meta-text">${escapeHtml(milestone.hint)}</span>
+                </button>
+              `
+            )
+            .join("")}
+        </div>
+      </details>
     </div>
   `;
 }
@@ -1384,39 +1572,25 @@ function renderAvisTable(state) {
   const rows = visible
     .map((avis) => {
       const code = avis.value?.opinion_raw ?? avis.opinion_raw ?? ABSTENTION_CODE;
-      const reference = avis.value?.external_reference_raw;
-      const title = avis.title_raw ?? avis.description_raw ?? "(sans intitulé)";
-      const meta = [
-        documentLabel(avis.provenance?.source_id),
-        avis.provenance?.page ? `page ${avis.provenance.page}` : null,
-        avis.section_label_raw ?? avis.section_number_raw ?? null
-      ]
-        .filter(Boolean)
-        .join(" · ");
+      const reference = avis.value?.external_reference_raw ?? null;
+      const opinion = avis.opinion_label && avis.opinion_label !== code ? `${code} (${avis.opinion_label})` : code;
 
-      return `
-        <tr>
-          <td>${reference ? `<b>${escapeHtml(reference)}</b>` : `<span class="ctlab__empty">sans n°</span>`}</td>
-          <td>
-            <span class="ctlab__dot ctlab__dot--${opinionTone(code, avis.opinion_label)}" aria-hidden="true"></span>
-            ${escapeHtml(code)}
-            ${avis.opinion_label && avis.opinion_label !== code ? `<span class="ctlab__hint">${escapeHtml(avis.opinion_label)}</span>` : ""}
-          </td>
-          <td class="ctlab__title-cell">
-            ${
-              reference
-                ? `<button type="button" class="row-title-trigger" data-ctlab-trace="${escapeHtml(reference)}">${escapeHtml(truncate(title, 160))}</button>`
-                : `<span class="ctlab__title-static">${escapeHtml(truncate(title, 160))}</span>`
-            }
-            <div class="issue-row-meta-text">${escapeHtml(meta)}</div>
-            ${
-              avis.description_raw && avis.description_raw !== title
-                ? `<div class="ctlab__row-comment">${escapeHtml(truncate(avis.description_raw, 220))}</div>`
-                : ""
-            }
-          </td>
-        </tr>
-      `;
+      return renderAvisRow({
+        reference,
+        code,
+        label: avis.opinion_label,
+        title: avis.title_raw ?? avis.description_raw ?? "(sans intitulé)",
+        tag: null,
+        meta: [
+          reference ? `N° ${reference}` : "sans n°",
+          opinion,
+          documentLabel(avis.provenance?.source_id),
+          avis.provenance?.page ? `page ${avis.provenance.page}` : null
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        comment: avis.description_raw && avis.description_raw !== avis.title_raw ? avis.description_raw : null
+      });
     })
     .join("");
 
@@ -1460,14 +1634,7 @@ function renderAvisTable(state) {
       <span class="ctlab__spacer"></span>
       <span class="ctlab__hint">${filtered.length} retenu(s)</span>
     </div>
-    <div class="ctlab__scroll">
-      <table class="ctlab__grid">
-        <thead>
-          <tr><th style="width:70px">N°</th><th style="width:150px">Avis</th><th>Intitulé, provenance et commentaire</th></tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>
+    <div class="ctlab__rows">${rows}</div>
     ${renderPager(pagination, filtered.length)}
   `;
 }
@@ -1616,19 +1783,25 @@ function renderAnalytics(state) {
       </div>
     </div>
 
-    <div class="ctlab__section">
-      <h3>Encours aux jalons</h3>
-      <p class="ctlab__hint">
-        Nombre d'avis non levés à la date de chaque récapitulatif — RICT, rapport d'étape, rapport final.
-        Une courbe qui monte est un dossier qui accumule.
-      </p>
-      ${renderBacklogChart(analytics.backlog)}
-    </div>
-
-    <div class="ctlab__section">
-      <h3>Flux trimestriel</h3>
-      <p class="ctlab__hint">Avis émis et avis levés, par trimestre. Un trimestre qui émet plus qu'il ne lève creuse la dette.</p>
-      ${renderFlowChart(analytics.flow)}
+    <div class="ctlab__charts">
+      <article class="pilotage-chart-card">
+        <div class="pilotage-chart-card__head">
+          <div>
+            <h4>Encours aux jalons</h4>
+            <p>Avis non levés à la date de chaque récapitulatif. Une courbe qui monte est un dossier qui accumule.</p>
+          </div>
+        </div>
+        <div class="pilotage-chart-card__body">${renderBacklogChart(analytics.backlog)}</div>
+      </article>
+      <article class="pilotage-chart-card">
+        <div class="pilotage-chart-card__head">
+          <div>
+            <h4>Flux trimestriel</h4>
+            <p>Avis émis et avis levés. Un trimestre qui émet plus qu'il ne lève creuse la dette.</p>
+          </div>
+        </div>
+        <div class="pilotage-chart-card__body">${renderFlowChart(analytics.flow)}</div>
+      </article>
     </div>
 
     <div class="ctlab__section">
@@ -1667,6 +1840,35 @@ function renderAnalytics(state) {
   `;
 }
 
+/**
+ * Règle de mise à l'échelle de l'axe des abscisses.
+ *
+ * Dix-neuf trimestres sur quatre cents pixels donnent des étiquettes
+ * superposées, donc illisibles — le graphique ment alors par excès de zèle.
+ * On garde une graduation sur `k`, en choisissant `k` pour que chaque
+ * étiquette dispose de la largeur qu'il lui faut, et on conserve toujours la
+ * première et la dernière : ce sont les bornes de la période.
+ *
+ * @param {number} count nombre de points
+ * @param {number} innerWidth largeur utile du tracé, en pixels
+ * @param {number} labelWidth largeur minimale d'une étiquette
+ */
+export function pickAxisTicks(count, innerWidth, labelWidth = 64) {
+  if (count <= 0) return [];
+  if (count === 1) return [0];
+
+  const maxTicks = Math.max(2, Math.floor(innerWidth / labelWidth));
+  const stride = Math.max(1, Math.ceil((count - 1) / (maxTicks - 1)));
+
+  const ticks = [];
+  for (let index = 0; index < count; index += stride) ticks.push(index);
+  if (ticks[ticks.length - 1] !== count - 1) ticks.push(count - 1);
+  return ticks;
+}
+
+/** Format commun aux graphiques de cet écran : compact, deux par ligne. */
+const CHART_SIZE = { width: 460, height: 220, margin: { top: 16, right: 16, bottom: 44, left: 48 } };
+
 function renderBacklogChart(backlog) {
   if (backlog.length < 2) {
     return `<p class="ctlab__empty">Il faut au moins deux récapitulatifs pour tracer une évolution.</p>`;
@@ -1678,12 +1880,13 @@ function renderBacklogChart(backlog) {
   return `
     <div class="ctlab__chart">
       ${renderSvgLineChart({
+        ...CHART_SIZE,
         title: "Encours aux jalons",
         xLabel: "jalon",
         yLabel: "avis non levés",
         xDomain: [0, Math.max(backlog.length - 1, 1)],
         yDomain: [0, Math.max(ticks.at(-1) ?? 1, 1)],
-        xTicks: backlog.map((_, index) => index),
+        xTicks: pickAxisTicks(backlog.length, CHART_SIZE.width - CHART_SIZE.margin.left - CHART_SIZE.margin.right, 72),
         yTicks: ticks,
         xTickFormatter: (tick) => formatDate(backlog[tick]?.at),
         yGrid: { show: true, lineStyle: "dashed" },
@@ -1710,12 +1913,13 @@ function renderFlowChart(flow) {
   return `
     <div class="ctlab__chart">
       ${renderSvgLineChart({
+        ...CHART_SIZE,
         title: "Flux trimestriel",
         xLabel: "trimestre",
         yLabel: "avis",
         xDomain: [0, Math.max(flow.length - 1, 1)],
         yDomain: [0, Math.max(ticks.at(-1) ?? 1, 1)],
-        xTicks: flow.map((_, index) => index),
+        xTicks: pickAxisTicks(flow.length, CHART_SIZE.width - CHART_SIZE.margin.left - CHART_SIZE.margin.right, 58),
         yTicks: ticks,
         xTickFormatter: (tick) => flow[tick]?.quarter ?? "",
         yGrid: { show: true, lineStyle: "dashed" },
@@ -1783,6 +1987,7 @@ function renderAvisTrace(state) {
   const reference = state.selectedReference;
   const row = state.result.timeline.find((entry) => entry.reference === reference);
   const summary = state.result.avisStatus.find((entry) => entry.reference === reference) ?? null;
+  const context = buildAvisContext(state.result).get(reference) ?? {};
 
   const back = `
     <button type="button" class="ctlab__back" data-ctlab-back>
@@ -1800,9 +2005,28 @@ function renderAvisTrace(state) {
     `;
   }
 
+  // La date d'émission vit dans la chronologie, pas dans la source paginée :
+  // aller la chercher ailleurs affichait « — » à chaque étape.
+  const metaById = new Map(
+    (state.result.chronology?.documents ?? []).map((document) => [document.source_id, document])
+  );
+
   const steps = row.cells
-    .map((cell, index) => ({ cell, document: state.result.sources[index] }))
+    .map((cell) => ({ cell, document: metaById.get(cell.documentId) ?? null }))
     .filter(({ cell }) => cell.continuity || cell.extraction);
+
+  // Une réouverture, c'est un avis qui reparaît après avoir disparu. Le cas
+  // existe : un récapitulatif l'oublie, le suivant le remet. Le taire ferait
+  // de deux évènements distincts une seule ligne de vie continue.
+  const reopenedAt = new Set();
+  let absent = false;
+  steps.forEach(({ cell }, index) => {
+    const stepState = cell.continuity?.value?.state ?? null;
+    const present = stepState === "NEW" || stepState === "MATCHED" || stepState === "MATCHED_BY_TITLE";
+    if (present && absent) reopenedAt.add(index);
+    if (!present) absent = true;
+    else absent = false;
+  });
 
   return `
     <div class="ctlab__section">
@@ -1821,41 +2045,88 @@ function renderAvisTrace(state) {
           : ""
       }
       <ol class="ctlab__pipeline">
-        ${steps.map(({ cell, document }) => renderTraceStep(cell, document)).join("")}
+        ${steps
+          .map(({ cell, document }, index) =>
+            renderTraceStep(cell, document, {
+              reopened: reopenedAt.has(index),
+              fallbackTitle: context.title ?? null
+            })
+          )
+          .join("")}
       </ol>
       <div data-ctlab-detail></div>
     </div>
   `;
 }
 
-/** Une étape de la frise : un document, sa date, ce qu'il dit de cet avis. */
-function renderTraceStep(cell, document) {
+/**
+ * Une étape de la frise.
+ *
+ * Trois lignes, toujours dans le même ordre : ce qui s'est passé, ce que
+ * l'organisme en a dit, d'où ça vient. La date ouvre la ligne parce que c'est
+ * l'axe de lecture d'un historique.
+ *
+ * L'icône reprend le vocabulaire des sujets — ouvert, fermé, rouvert — parce
+ * que c'est exactement ce qui se joue : un avis qui reparaît après avoir
+ * disparu est une réouverture, et il faut que ça se voie.
+ */
+function renderTraceStep(cell, document, { reopened = false, fallbackTitle = null } = {}) {
   const continuity = cell.continuity;
   const state = continuity?.state === "AMBIGUOUS" ? "AMBIGUOUS" : continuity?.value?.state ?? "AMBIGUOUS";
-  const present = state === "NEW" || state === "MATCHED" || state === "MATCHED_BY_TITLE";
   const lifted = Boolean(continuity?.lifting_statement);
+  const previous = continuity?.value?.previous_document_id;
 
-  const tone = lifted ? "ok" : present ? (state === "NEW" ? "info" : "pending") : "neutral";
-  const icon = lifted ? "check-circle-fill" : present ? "alert" : "history";
+  const opinion = cell.extraction?.value?.opinion_raw ?? continuity?.matched_opinion_raw ?? null;
+  const opinionLabelText = cell.extraction?.opinion_label ?? continuity?.matched_opinion_label ?? null;
+  const comment = cell.extraction?.description_raw ?? null;
+  const title = cell.extraction?.title_raw ?? null;
 
-  const opinion =
-    cell.extraction?.value?.opinion_raw ??
-    continuity?.matched_opinion_raw ??
-    null;
+  // Le cycle de vie, dit avec les icônes des sujets.
+  let lifecycle;
+  if (lifted) lifecycle = { icon: "check-circle", tone: "ok", color: "var(--fgColor-open)" };
+  else if (state === "NOT_FOUND") lifecycle = { icon: "skip", tone: "neutral", color: "var(--muted)" };
+  else if (reopened) lifecycle = { icon: "issue-reopened", tone: "info", color: "var(--fgColor-done)" };
+  else lifecycle = { icon: "issue-opened", tone: "pending", color: "var(--fgColor-open)" };
+
+  const badge = reopened && state !== "NOT_FOUND" && !lifted ? "RÉOUVERT" : STATE_LABELS[state] ?? state;
+
+  const headline =
+    state === "NOT_FOUND"
+      ? lifted
+        ? "déclaré levé"
+        : "absent de ce rapport"
+      : title ?? fallbackTitle ?? "figure dans ce rapport";
+
+  const secondLine =
+    state === "NOT_FOUND"
+      ? lifted
+        ? `« ${continuity.lifting_statement.sentence} »`
+        : previous
+          ? `vu pour la dernière fois dans ${documentLabel(previous)}`
+          : "aucune apparition antérieure connue"
+      : comment ?? "";
 
   return `
-    <li class="ctlab__pipeline-step ctlab__pipeline-step--${tone}">
-      <span class="ctlab__pipeline-mark" aria-hidden="true">${svgIcon(icon, { className: "octicon" })}</span>
+    <li class="ctlab__pipeline-step ctlab__pipeline-step--${lifecycle.tone}">
+      <span class="ctlab__pipeline-mark" style="color:${lifecycle.color}" aria-hidden="true">
+        ${svgIcon(lifecycle.icon, { className: "octicon" })}
+      </span>
       <div class="ctlab__pipeline-body">
         <div class="ctlab__pipeline-title">
-          ${escapeHtml(documentLabel(cell.documentId))}
-          ${opinion ? `<span class="ctlab__dot ctlab__dot--${opinionTone(opinion)}" aria-hidden="true"></span><span class="ctlab__hint">${escapeHtml(opinion)}</span>` : ""}
+          <span class="issue-row-meta-text ctlab__pipeline-date">${escapeHtml(formatDate(document?.issued_at))}</span>
+          <span class="ctlab__pipeline-dash">-</span>
+          <span class="ctlab__pipeline-headline">${escapeHtml(headline)}</span>
+          <span class="subject-label-badge ctlab__tag ctlab__tag--state">${escapeHtml(badge.toLocaleUpperCase("fr"))}</span>
         </div>
-        <div class="issue-row-meta-text">
-          ${escapeHtml(formatDate(document?.issued_at))}
-          ${document?.meta?.document_type_label ? ` · ${escapeHtml(document.meta.document_type_label)}` : ""}
-        </div>
-        <div class="ctlab__pipeline-detail">${renderCell(cell)}</div>
+        ${
+          state === "NOT_FOUND"
+            ? `<div class="issue-row-meta-text ctlab__pipeline-line">${escapeHtml(secondLine)}</div>`
+            : `<div class="ctlab__pipeline-line">
+                 ${opinion ? `<span class="ctlab__dot ctlab__dot--${opinionTone(opinion, opinionLabelText)}" aria-hidden="true"></span><b>${escapeHtml(opinion)}</b>` : ""}
+                 <span class="issue-row-meta-text">${escapeHtml(secondLine)}</span>
+               </div>`
+        }
+        <div class="issue-row-meta-text ctlab__pipeline-line">${escapeHtml(documentLabel(cell.documentId))}</div>
       </div>
     </li>
   `;
@@ -2385,6 +2656,11 @@ export function renderCtContinuityLab(root) {
       state.activeTab = tab.getAttribute("data-light-tab-target");
       state.avisPage = 1;
       state.asOfPickerOpen = false;
+      // Un onglet reprend la main sur le détail affiché : rester prisonnier
+      // d'une frise jusqu'à avoir trouvé le retour arrière n'est pas une
+      // navigation, c'est une impasse.
+      state.selectedReference = null;
+      state.selectedCell = null;
       refresh();
       return;
     }

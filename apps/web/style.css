@@ -12038,7 +12038,11 @@ circle.situation-trajectory__hierarchy-link--blocked,
 .shared-date-picker__trigger-label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .shared-date-picker__popover{position:absolute;z-index:1402;top:calc(100% + 6px);left:0;}
 .shared-date-picker__calendar{width:320px;padding:16px;border:1px solid var(--border);border-radius:12px;background:var(--bg);box-shadow:var(--shadow-lg, 0 16px 48px rgba(1,4,9,.4));}
-.shared-date-picker__calendar-head{display:grid;grid-template-columns:40px 1fr 40px;align-items:center;gap:8px;margin-bottom:16px;}
+.shared-date-picker__calendar-head{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:8px;margin-bottom:16px;}
+/* Les deux groupes de navigation restent collés aux bords : le mois garde
+   sa place au centre, quel que soit le nombre de flèches. */
+.shared-date-picker__nav-group{display:inline-flex;align-items:center;gap:4px;justify-content:flex-start;}
+.shared-date-picker__nav-group--end{justify-content:flex-end;}
 .shared-date-picker__nav{width:40px;height:28px;border:1px solid var(--border);border-radius:var(--radius);background:var(--btn-bg);color:var(--text);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;}
 .shared-date-picker__month-label{text-align:center;font-size:13px;font-weight:600;color:var(--text);}
 .shared-date-picker__weekdays,.shared-date-picker__days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;}

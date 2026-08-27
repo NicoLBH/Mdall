@@ -11,7 +11,7 @@ import * as status from "../../../../../../spikes/ct-continuity/status.mjs";
 import * as analytics from "../../../../../../spikes/ct-continuity/analytics.mjs";
 
 import { runCtLab } from "../../../services/ct-lab-engine.js";
-import { TABS, tabLabel, toAvisCsv, toStatusCsv } from "./ct-continuity-lab.js";
+import { TABS, pickAxisTicks, tabLabel, titleCase, toAvisCsv, toStatusCsv } from "./ct-continuity-lab.js";
 
 /**
  * Les CSV sont ce qu'un humain ouvre dans Excel pour relire un dossier : ils
@@ -199,4 +199,31 @@ test("le CSV d'état nomme le rapport qui a prononcé la clôture générale", a
 
   assert.equal(row.split(";")[6], "rapport-final.pdf", "« Levé dans »");
   assert.equal(row.split(";")[7], "2026-01-29");
+});
+
+test("l'axe des abscisses ne montre que les graduations qui tiennent", () => {
+  // 19 trimestres sur 396 px de tracé : au-delà de six étiquettes elles se
+  // chevauchent, et un graphique illisible ne vaut pas mieux qu'aucun.
+  const ticks = pickAxisTicks(19, 396, 58);
+
+  assert.ok(ticks.length <= 7, `six à sept graduations au plus, pas ${ticks.length}`);
+  assert.equal(ticks[0], 0, "la première borne est toujours montrée");
+  assert.equal(ticks.at(-1), 18, "la dernière aussi");
+  assert.deepEqual([...ticks].sort((a, b) => a - b), ticks, "les graduations restent ordonnées");
+});
+
+test("peu de points : toutes les graduations sont montrées", () => {
+  assert.deepEqual(pickAxisTicks(4, 396, 58), [0, 1, 2, 3]);
+  assert.deepEqual(pickAxisTicks(1, 396), [0]);
+  assert.deepEqual(pickAxisTicks(0, 396), []);
+});
+
+test("un tracé étroit ne garde que ses bornes", () => {
+  assert.deepEqual(pickAxisTicks(10, 100, 58), [0, 9]);
+});
+
+test("les états d'avis s'écrivent en capitale initiale, pas en capitales", () => {
+  assert.equal(titleCase("SANS NOUVELLES"), "Sans Nouvelles");
+  assert.equal(titleCase("LEVÉ"), "Levé");
+  assert.equal(titleCase(""), "");
 });
