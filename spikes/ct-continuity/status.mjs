@@ -10,6 +10,18 @@
  *  - `NO_NEWS` — il a disparu sans que rien ne l'explique. Ce n'est pas une
  *    clôture (§28.5), ce n'est pas non plus un avis ouvert : c'est une question
  *    à poser au bureau de contrôle. L'outil ne tranche pas à sa place.
+ *
+ * Encore faut-il qu'une disparition en soit une. Un avis ne « disparaît » que
+ * d'un document qui avait vocation à le porter : un récapitulatif — RICT,
+ * rapport d'étape, rapport final, APD — reprend l'état complet des avis à sa
+ * date. Une fiche, non : elle traite son sujet et ignore les autres.
+ *
+ * D'où la règle, qui est le cœur de ce module : la disparition ne se lit qu'aux
+ * **points de contrôle**. Tant qu'aucun récapitulatif n'a été émis depuis la
+ * dernière apparition d'un avis, son silence ne prouve rien et l'avis reste
+ * ouvert. Sans cette règle, un chantier livrant surtout des fiches voit tous
+ * ses avis basculer « sans nouvelles » dès la fiche suivante — ce qui n'a
+ * aucun sens et noie les vrais oubliés.
  */
 
 import { CONTINUITY_STATE } from "./continuity.mjs";
@@ -22,8 +34,33 @@ export const AVIS_STATUS = {
 
 export const RESOLUTION_REASON = {
   DECLARED_LIFTED: "DECLARED_LIFTED",
-  BACK_TO_FAVOURABLE: "BACK_TO_FAVOURABLE"
+  BACK_TO_FAVOURABLE: "BACK_TO_FAVOURABLE",
+  /**
+   * Le rapport final déclare l'ensemble des avis suivis d'effet. C'est la
+   * clôture la plus forte du corpus : une phrase datée qui couvre tout le
+   * dossier. Elle ne vaut que pour les avis émis avant elle, et elle tombe si
+   * un document postérieur ressort l'avis.
+   */
+  DECLARED_GLOBALLY: "DECLARED_GLOBALLY"
 };
+
+/** Pourquoi un avis est encore ouvert — deux situations très différentes. */
+export const OPEN_REASON = {
+  /** Il figure toujours dans le dernier récapitulatif : ouvert, sans ambiguïté. */
+  STILL_LISTED: "STILL_LISTED",
+  /** Il a disparu, mais aucun récapitulatif n'a été émis depuis : rien ne prouve
+   *  qu'il soit tombé, rien ne prouve qu'il tienne. On ne conclut pas. */
+  NO_CHECKPOINT_SINCE: "NO_CHECKPOINT_SINCE"
+};
+
+/** Un avis figure-t-il dans ce document, ou en est-il absent ? */
+function isPresent(state) {
+  return (
+    state === CONTINUITY_STATE.NEW ||
+    state === CONTINUITY_STATE.MATCHED ||
+    state === CONTINUITY_STATE.MATCHED_BY_TITLE
+  );
+}
 
 function daysBetween(fromIso, toIso) {
   if (!fromIso || !toIso) return null;
@@ -39,10 +76,22 @@ function daysBetween(fromIso, toIso) {
  * @param {object[]} predictions sorties du pipeline
  * @param {{source_id: string, issued_at: string|null}[]} documents dans l'ordre chronologique
  */
-export function summariseAvisStatus(predictions, documents) {
+export function summariseAvisStatus(predictions, documents, { globalClearances = [] } = {}) {
   const order = new Map(documents.map((document, index) => [document.source_id, index]));
   const dateOf = new Map(documents.map((document) => [document.source_id, document.issued_at ?? null]));
   const lastDate = documents.length > 0 ? documents[documents.length - 1].issued_at ?? null : null;
+
+  // Les points de contrôle, dans l'ordre : les seuls documents dont le silence
+  // ait valeur de constat.
+  const checkpoints = documents
+    .map((document, index) => ({ ...document, position: index }))
+    .filter((document) => document.recapitulative === true);
+
+  // Clôtures globales retenues dans l'ordre, avec la position de leur document.
+  const clearances = globalClearances
+    .filter((clearance) => order.has(clearance.source_document_id))
+    .map((clearance) => ({ ...clearance, position: order.get(clearance.source_document_id) }))
+    .sort((a, b) => a.position - b.position);
 
   const byReference = new Map();
 
@@ -68,27 +117,52 @@ export function summariseAvisStatus(predictions, documents) {
     const raisedIn = first.documentId;
     const raisedAt = dateOf.get(raisedIn) ?? null;
 
+    // Le dernier document où l'avis figure réellement — pas le dernier du lot.
+    const presentSteps = entry.steps.filter((step) =>
+      isPresent(step.prediction.state === "AMBIGUOUS" ? CONTINUITY_STATE.AMBIGUOUS : step.prediction.value?.state)
+    );
+    const lastPresent = presentSteps[presentSteps.length - 1] ?? entry.steps[0];
+
+    // Récapitulatifs postérieurs à cette dernière apparition : ceux-là auraient
+    // dû le reprendre. Leur silence, et lui seul, fait la disparition.
+    const missedCheckpoints = checkpoints.filter(
+      (document) => document.position > lastPresent.position
+    );
+
     let status = AVIS_STATUS.OPEN;
     let reason = null;
+    let openReason = OPEN_REASON.STILL_LISTED;
     let evidence = null;
     let resolvedIn = null;
 
-    if (state === CONTINUITY_STATE.MATCHED_BY_TITLE) {
+    // Une levée déclarée, où qu'elle figure dans la série, vaut preuve — et
+    // elle prime sur tout le reste : c'est la seule clôture admissible.
+    const lifted = entry.steps.find((step) => step.prediction.lifting_statement);
+
+    // Une clôture globale ne couvre que ce qui la précède : si l'avis reparaît
+    // après elle, elle ne dit plus rien de lui.
+    const globalClearance = clearances.find((clearance) => clearance.position >= lastPresent.position) ?? null;
+
+    if (lifted) {
+      status = AVIS_STATUS.RESOLVED;
+      reason = RESOLUTION_REASON.DECLARED_LIFTED;
+      evidence = lifted.prediction.lifting_statement;
+      resolvedIn = lifted.documentId;
+    } else if (state === CONTINUITY_STATE.MATCHED_BY_TITLE) {
       status = AVIS_STATUS.RESOLVED;
       reason = RESOLUTION_REASON.BACK_TO_FAVOURABLE;
       evidence = last.prediction.provenance ?? null;
       resolvedIn = last.documentId;
-    } else if (state === CONTINUITY_STATE.NOT_FOUND) {
-      // Une levée déclarée, où qu'elle figure dans la série, vaut preuve.
-      const lifted = entry.steps.find((step) => step.prediction.lifting_statement);
-      if (lifted) {
-        status = AVIS_STATUS.RESOLVED;
-        reason = RESOLUTION_REASON.DECLARED_LIFTED;
-        evidence = lifted.prediction.lifting_statement;
-        resolvedIn = lifted.documentId;
-      } else {
-        status = AVIS_STATUS.NO_NEWS;
-      }
+    } else if (globalClearance) {
+      status = AVIS_STATUS.RESOLVED;
+      reason = RESOLUTION_REASON.DECLARED_GLOBALLY;
+      evidence = globalClearance;
+      resolvedIn = globalClearance.source_document_id;
+    } else if (missedCheckpoints.length > 0) {
+      status = AVIS_STATUS.NO_NEWS;
+    } else if (!isPresent(state)) {
+      // Disparu, mais d'aucun document qui avait vocation à le porter.
+      openReason = OPEN_REASON.NO_CHECKPOINT_SINCE;
     }
 
     // L'ancienneté d'un avis levé s'arrête le jour de sa levée : la faire
@@ -99,6 +173,12 @@ export function summariseAvisStatus(predictions, documents) {
       reference: entry.reference,
       status,
       resolution_reason: reason,
+      open_reason: status === AVIS_STATUS.OPEN ? openReason : null,
+      // Le récapitulatif qui aurait dû le reprendre et ne l'a pas fait : c'est
+      // lui qu'on cite au bureau de contrôle, pas une absence en général.
+      missed_checkpoint_id: status === AVIS_STATUS.NO_NEWS ? missedCheckpoints[0].source_id : null,
+      missed_checkpoint_at: status === AVIS_STATUS.NO_NEWS ? missedCheckpoints[0].issued_at ?? null : null,
+      missed_checkpoints: status === AVIS_STATUS.NO_NEWS ? missedCheckpoints.length : 0,
       evidence,
       resolved_in: resolvedIn,
       resolved_at: resolvedAt,
@@ -107,10 +187,7 @@ export function summariseAvisStatus(predictions, documents) {
       // « Vu pour la dernière fois » n'a de sens que s'il a disparu : tant
       // qu'il figure encore, le dernier document où il apparaît est le dernier
       // document tout court.
-      last_seen_document_id:
-        state === CONTINUITY_STATE.NOT_FOUND
-          ? last.prediction.value?.previous_document_id ?? last.documentId
-          : last.documentId,
+      last_seen_document_id: lastPresent.documentId,
       raised_in: raisedIn,
       raised_at: raisedAt,
       age_days: daysBetween(raisedAt, resolvedAt ?? lastDate),

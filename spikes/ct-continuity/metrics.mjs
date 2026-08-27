@@ -85,6 +85,28 @@ export function falseClosures(predictions) {
 export function createProvenanceChecker(sources) {
   const bySourceId = new Map(sources.map((source) => [source.source_id, source]));
 
+  // Le vérificateur est appelé une fois par prédiction — plusieurs milliers sur
+  // un chantier réel — et normalisait à chaque fois le document entier, puis la
+  // page. Les deux ne dépendent que de la source : on les garde.
+  const normalizedContent = new Map();
+  const normalizedPages = new Map();
+
+  const contentOf = (source) => {
+    if (!normalizedContent.has(source.source_id)) {
+      normalizedContent.set(source.source_id, normalizeTextKey(source.content));
+    }
+    return normalizedContent.get(source.source_id);
+  };
+
+  const pageOf = (source, pageNumber) => {
+    const key = `${source.source_id}:${pageNumber}`;
+    if (!normalizedPages.has(key)) {
+      const page = (source.pages ?? []).find((entry) => entry.page === pageNumber);
+      normalizedPages.set(key, page ? normalizeTextKey(page.text) : null);
+    }
+    return normalizedPages.get(key);
+  };
+
   return (outcome) => {
     const prediction = outcome.predicted;
     if (!prediction) return null;
@@ -98,7 +120,7 @@ export function createProvenanceChecker(sources) {
     if (!provenance.excerpt) return false;
 
     const excerpt = normalizeTextKey(provenance.excerpt);
-    if (!normalizeTextKey(source.content).includes(excerpt)) return false;
+    if (!contentOf(source).includes(excerpt)) return false;
 
     const pages = Array.isArray(source.pages) ? source.pages : null;
     if (!pages) return true;
@@ -106,8 +128,8 @@ export function createProvenanceChecker(sources) {
     // La page est connaissable : ne pas la renseigner est une provenance incomplète.
     if (provenance.page === null || provenance.page === undefined) return false;
 
-    const page = pages.find((entry) => entry.page === provenance.page);
-    return Boolean(page && normalizeTextKey(page.text).includes(excerpt));
+    const pageText = pageOf(source, provenance.page);
+    return Boolean(pageText !== null && pageText.includes(excerpt));
   };
 }
 

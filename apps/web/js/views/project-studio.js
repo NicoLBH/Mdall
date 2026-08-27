@@ -75,7 +75,7 @@ function renderStudioNav() {
       sectionLabel: "Développements",
       items: [
         renderSideNavItem({
-          label: "CT Continuity Lab",
+          label: "Suivi des avis BC",
           targetId: "dev-ct-continuity-lab",
           iconHtml: svgIcon("history", { className: "octicon octicon-history" }),
           tag: "spike"

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { findLiftingStatements, indexStatements } from "./lifting.mjs";
+import { findGlobalClearances, findLiftingStatements, indexStatements } from "./lifting.mjs";
 
 function source(text, { pages = null } = {}) {
   return pages
@@ -70,4 +70,56 @@ test("indexStatements permet de rattacher une preuve à un document et un numér
   assert.equal(index.get("doc:56").length, 1);
   assert.equal(index.get("doc:57").length, 1);
   assert.equal(index.get("doc:99"), undefined);
+});
+
+test("le rapport final clôt le dossier d'une phrase, et cette phrase est lisible", () => {
+  // Page 14 d'un rapport final réel : le titre de la section dit l'inverse de
+  // la phrase qui le suit, et il n'a pas de point final.
+  const [clearance] = findGlobalClearances({
+    source_id: "rapport-final",
+    content_available: true,
+    pages: [
+      {
+        page: 14,
+        text: [
+          "4. AVIS, QUI A LA CONNAISSANCE DE SOCOTEC, N’ONT PAS ETE SUIVIS",
+          "D’EFFETS",
+          "À notre connaissance, l'ensemble des avis que nous avons émis dans le cadre de notre mission au",
+          "cours de l'opération ont été suivis d'effet."
+        ].join("\n")
+      }
+    ]
+  });
+
+  assert.equal(clearance.scope, "ALL_AVIS");
+  assert.equal(clearance.source_page, 14);
+  assert.ok(
+    clearance.sentence.startsWith("À notre connaissance"),
+    "la citation ne doit pas commencer par le titre qui la contredit"
+  );
+  assert.ok(!clearance.sentence.includes("N’ONT PAS"));
+});
+
+test("une phrase qui dit l'inverse n'est pas une clôture", () => {
+  const found = findGlobalClearances({
+    source_id: "rapport-final",
+    content_available: true,
+    pages: [{ page: 1, text: "L'ensemble des avis que nous avons émis n’ont pas été suivis d’effet." }]
+  });
+
+  assert.deepEqual(found, [], "la négation est à deux mots de la formulation recherchée");
+});
+
+test("le titre de section seul ne clôt rien", () => {
+  const found = findGlobalClearances({
+    source_id: "rapport-final",
+    content_available: true,
+    pages: [{ page: 14, text: "4. AVIS, QUI A LA CONNAISSANCE DE SOCOTEC, N’ONT PAS ETE SUIVIS D’EFFETS" }]
+  });
+
+  assert.deepEqual(found, []);
+});
+
+test("aucune clôture n'est lue dans un document sans texte", () => {
+  assert.deepEqual(findGlobalClearances({ source_id: "scan", content_available: false }), []);
 });
