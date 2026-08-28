@@ -344,6 +344,10 @@ export async function runCtLab(
     analytics: resolved.analytics.buildAnalytics(statusSummaries, chronology.documents),
     strategy: result.strategy ?? null,
     legends: result.legends ?? {},
+    // Quel pack de lecture a lu quel document, et dans quelle version : c'est
+    // ce qui permettra, face à un écart, de dire si la cause est le document
+    // ou une correction du vocabulaire.
+    packsUsed: result.packs_used ?? {},
     liftingStatements: result.lifting_statements ?? [],
     orphanReferences: result.orphan_references ?? [],
     globalClearances,

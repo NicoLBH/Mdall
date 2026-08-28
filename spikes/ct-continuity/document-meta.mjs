@@ -10,57 +10,15 @@
  */
 
 import { normalizeWhitespace } from "../lib/normalize.mjs";
-
-/** `CT/13860/0923/0222` — organisme / affaire / MMAA / séquence. */
-const CHRONO = /\b([A-Z]{1,4}\/\d{3,6}\/\d{4}\/\d{3,5})\b/;
-
-const EMISSION_DATE = /date\s+d[’']\s*émission\s*:?\s*(\d{1,2})\/(\d{1,2})\/(\d{4})/i;
-const ANY_DATE = /\b(\d{1,2})\/(\d{1,2})\/(\d{4})\b/;
-
-/** `FICHE N° : 2` — numéro de fiche propre à l'affaire. */
-const SHEET_NUMBER = /fiche\s*n[°o]\s*:?\s*(\d{1,3})\b/i;
-
-const VERSION = /\bversion\s*:?\s*(\d{1,2})\b/i;
+import { DEFAULT_PACK } from "./packs/index.mjs";
 
 /**
- * Types rencontrés, reconnus sur les premières lignes du document.
- * La liste est ouverte : un type inconnu reste `null` plutôt que d'être forcé.
- *
- * `recapitulative` distingue deux natures de livrable, et cette distinction
- * décide de tout le suivi :
- *
- *  - un **récapitulatif** (RICT, rapport d'étape, rapport final, APD) reprend
- *    l'état complet des avis à sa date. Un avis qui n'y figure plus a vraiment
- *    disparu : le document avait vocation à le porter.
- *  - une **fiche** traite son sujet et ne répète pas les avis des fiches
- *    précédentes. Qu'un numéro n'y figure pas ne dit rien du tout.
- *
- * Confondre les deux fait déclarer « sans nouvelles » des avis que personne
- * n'a jamais eu l'intention de reconduire.
+ * Ce qui suit ne dépend d'aucun organisme : n'importe quelle date écrite dans
+ * un document français a cette forme. Le reste — le format de la référence
+ * chrono, les mots « Date d'émission », la liste des livrables — est du
+ * vocabulaire d'émetteur, et vit dans son pack.
  */
-const TYPES = [
-  { id: "rapport_etape", label: "Rapport d'étape", recapitulative: true, pattern: /rapport\s+d['’]?\s*etape|rapport\s+d['’]?\s*étape/i },
-  // L'APS et l'APD sont deux phases distinctes de la conception, et le même
-  // rapport préalable les couvre l'une après l'autre : les confondre sous un
-  // seul nom faisait passer un avant-projet sommaire pour un définitif.
-  { id: "rapport_prealable_aps", label: "Rapport préalable / APS", recapitulative: true, pattern: /rapport\s+pr[ée]alable[^\n]{0,12}\bAPS\b/i },
-  { id: "rapport_prealable", label: "Rapport préalable / APD", recapitulative: true, pattern: /rapport\s+pr[ée]alable/i },
-  { id: "rapport_initial", label: "Rapport initial (RICT)", recapitulative: true, pattern: /rapport\s+initial|\bRICT\b/i },
-  { id: "rapport_final", label: "Rapport final", recapitulative: true, pattern: /rapport\s+final|\bRFCT\b/i },
-  // Une vérification réglementaire après travaux constate la conformité des
-  // installations ; elle ne reprend pas l'état des avis du contrôle technique.
-  // Ce n'est donc pas un point de contrôle : une absence n'y prouve rien.
-  {
-    id: "rvrat",
-    label: "Rapport de vérification après travaux (RVRAT)",
-    recapitulative: false,
-    pattern: /\bRVRAT\b|v[ée]rifications?\s+r[ée]glementaires?\s+apr[èe]s\s+travaux/i
-  },
-  { id: "fiche_avis_travaux", label: "Fiche avis travaux", recapitulative: false, pattern: /avis\s+en\s+phase\s+de\s+r[ée]alisation/i },
-  { id: "fiche_examen_document", label: "Fiche examen de document", recapitulative: false, pattern: /avis\s+suite\s+a\s+examen\s+de\s+documents?/i },
-  { id: "fiche_correspondance", label: "Fiche de correspondance", recapitulative: false, pattern: /fiche\s+de\s+correspondance/i },
-  { id: "attestation", label: "Attestation", recapitulative: false, pattern: /attestation/i }
-];
+const ANY_DATE = /\b(\d{1,2})\/(\d{1,2})\/(\d{4})\b/;
 
 function toIsoDate(day, month, year) {
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
@@ -71,20 +29,20 @@ function toIsoDate(day, month, year) {
  *            document_type: string|null, document_type_label: string|null,
  *            sheet_number: number|null, version: number|null}}
  */
-export function readDocumentMeta(source) {
+export function readDocumentMeta(source, { pack = DEFAULT_PACK } = {}) {
   const text = source?.content_available ? source.content : "";
   const head = text.split(/\r?\n/).slice(0, 60).map(normalizeWhitespace).join("\n");
 
-  const emission = EMISSION_DATE.exec(text);
+  const emission = pack.emissionDate.exec(text);
   const fallback = emission ? null : ANY_DATE.exec(head);
 
-  const chrono = CHRONO.exec(text);
-  const sheet = SHEET_NUMBER.exec(head);
-  const version = VERSION.exec(head);
+  const chrono = pack.chrono.exec(text);
+  const sheet = pack.sheetNumber.exec(head);
+  const version = pack.documentVersion.exec(head);
   // Le type se lit dans le titre, pas dans le corps : une fiche qui mentionne
   // « notre Rapport Final de Contrôle technique » n'est pas un rapport final.
   const title = text.split(/\r?\n/).map(normalizeWhitespace).filter(Boolean).slice(0, 4).join("\n");
-  const type = TYPES.find((entry) => entry.pattern.test(title)) ?? null;
+  const type = pack.documentTypes.find((entry) => entry.pattern.test(title)) ?? null;
 
   return {
     issued_at: emission
@@ -112,11 +70,11 @@ export function readDocumentMeta(source) {
  * Un document sans date lisible ne peut pas être placé : il est rejeté en fin
  * de liste et signalé, plutôt que d'être glissé n'importe où dans la série.
  */
-export function orderChronologically(sources) {
+export function orderChronologically(sources, { pack = DEFAULT_PACK } = {}) {
   const withMeta = sources.map((source, index) => ({
     source,
     index,
-    meta: readDocumentMeta(source)
+    meta: readDocumentMeta(source, { pack })
   }));
 
   const dated = withMeta.filter((entry) => entry.meta.issued_at !== null);

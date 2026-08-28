@@ -26,6 +26,7 @@
  */
 
 import { containsPhrase, normalizeReferenceKey, normalizeWhitespace } from "../lib/normalize.mjs";
+import { DEFAULT_PACK } from "./packs/index.mjs";
 import {
   CONFIDENCE,
   EXTRACTION_STATE,
@@ -33,17 +34,6 @@ import {
   markAmbiguous,
   splitTitle
 } from "./block-extraction.mjs";
-
-/** En-têtes de colonnes d'un tableau d'avis, tels qu'ils sont écrits. */
-const HEADERS = [
-  // Un rapport intitule sa première colonne « Dispositions du projet », une
-  // fiche « Éléments examinés » : c'est le même tableau, et la fiche restait
-  // illisible par la géométrie faute de reconnaître son en-tête.
-  { id: "disposition", pattern: /dispositions?\s+du\s+projet|[ée]l[ée]ments?\s+examin[ée]s?/i },
-  { id: "opinion", pattern: /^avis\s*\*?$/i },
-  { id: "comment", pattern: /observations?\s+et\s+commentaires?/i },
-  { id: "reference", pattern: /^n[°o]\s*$/i }
-];
 
 /** Deux fragments sont sur la même ligne s'ils sont à moins de ça l'un de l'autre. */
 const SAME_LINE = 3;
@@ -104,30 +94,28 @@ export function mergeWrappedLines(lines) {
   return merged;
 }
 
+/** Abscisse de l'en-tête « Avis* », dernier repère quand aucun code n'est écrit. */
+function opinionHeaderX(items, headerY, pack) {
+  const opinion = pack.tableHeaders.find((header) => header.id === "opinion");
+  const header = items.find(
+    (item) => Math.abs(item.y - headerY) <= SAME_LINE && opinion.pattern.test(normalizeWhitespace(item.text))
+  );
+  return header ? header.x : null;
+}
+
 /**
- * Mots qui n'appartiennent qu'à l'en-tête du tableau.
+ * Ordonnée sous laquelle l'en-tête, débordements compris, est passé.
  *
  * « Articles du règlement » ne tient pas sur la ligne d'en-tête : le mot
  * « règlement » déborde en dessous, cadré tout à gauche. Il passait alors pour
  * le premier chapitre du référentiel, et l'arborescence de chaque avis d'un
  * rapport APD commençait par « règlement ».
  */
-const HEADER_WORD = /^(articles?|du|r[eè]glement|dispositions?|projet|[ée]l[ée]ments?|examin[ée]s?|avis\s*\*?|observations?|et|commentaires?|n[°o])$/i;
-
-/** Abscisse de l'en-tête « Avis* », dernier repère quand aucun code n'est écrit. */
-function opinionHeaderX(items, headerY) {
-  const header = items.find(
-    (item) => Math.abs(item.y - headerY) <= SAME_LINE && /^avis\s*\*?$/i.test(normalizeWhitespace(item.text))
-  );
-  return header ? header.x : null;
-}
-
-/** Ordonnée sous laquelle l'en-tête, débordements compris, est passé. */
-function headerBottom(items, headerY) {
+function headerBottom(items, headerY, pack) {
   let bottom = headerY;
   for (const item of items) {
     if (item.y >= headerY || item.y < headerY - 40) continue;
-    if (HEADER_WORD.test(normalizeWhitespace(item.text))) bottom = Math.min(bottom, item.y);
+    if (pack.headerWords.test(normalizeWhitespace(item.text))) bottom = Math.min(bottom, item.y);
   }
   return bottom;
 }
@@ -141,22 +129,22 @@ function headerBottom(items, headerY) {
  * seul mêlait deux géométries, et la colonne des avis se plaçait entre les
  * deux, là où il n'y a rien.
  */
-export function tableHeaderYs(items) {
+export function tableHeaderYs(items, pack = DEFAULT_PACK) {
   const ys = [];
   for (const candidate of items) {
     if (ys.some((y) => Math.abs(y - candidate.y) <= SAME_LINE)) continue;
     const sameLine = items.filter((item) => Math.abs(item.y - candidate.y) <= SAME_LINE);
-    const matched = HEADERS.filter((header) =>
+    const matched = pack.tableHeaders.filter((header) =>
       sameLine.some((item) => header.pattern.test(normalizeWhitespace(item.text)))
     );
-    if (matched.length === HEADERS.length) ys.push(candidate.y);
+    if (matched.length === pack.tableHeaders.length) ys.push(candidate.y);
   }
   return ys.sort((a, b) => b - a);
 }
 
 /** Vrai si la page porte l'en-tête d'un tableau d'avis. */
-export function hasTableHeader(items) {
-  return tableHeaderYs(items)[0] ?? null;
+export function hasTableHeader(items, pack = DEFAULT_PACK) {
+  return tableHeaderYs(items, pack)[0] ?? null;
 }
 
 /** Tolérance d'appartenance à une colonne, de part et d'autre de son abscisse. */
@@ -353,11 +341,11 @@ function repeatedLines(pages) {
  * @param {string[]} codes codes d'avis déclarés par la légende du document
  * @returns {{rows: object[], columns: object[]}|null}
  */
-export function readTableRows(page, codes, { stack = [], repeated = new Set() } = {}) {
+export function readTableRows(page, codes, { stack = [], repeated = new Set(), pack = DEFAULT_PACK } = {}) {
   const items = Array.isArray(page?.items) ? page.items : null;
   if (!items || items.length === 0) return null;
 
-  const headers = tableHeaderYs(items);
+  const headers = tableHeaderYs(items, pack);
   if (headers.length === 0) return null;
 
   const rows = [];
@@ -365,7 +353,7 @@ export function readTableRows(page, codes, { stack = [], repeated = new Set() } 
   let carried = stack;
 
   for (const [index, headerY] of headers.entries()) {
-    const ceiling = headerBottom(items, headerY);
+    const ceiling = headerBottom(items, headerY, pack);
     const floor = index + 1 < headers.length ? headers[index + 1] : -Infinity;
     const span = items
       .filter((item) => item.y < ceiling - SAME_LINE && item.y > floor)
@@ -394,7 +382,7 @@ export function readTableRows(page, codes, { stack = [], repeated = new Set() } 
     );
     const region = below.filter((item) => !framed.has(Math.round(item.y)));
 
-    const table = readTableRegion(region, codes, carried, opinionHeaderX(items, headerY));
+    const table = readTableRegion(region, codes, carried, opinionHeaderX(items, headerY, pack));
     if (!table) continue;
     columns = columns ?? table.columns;
     carried = table.stack;
@@ -761,7 +749,7 @@ export function pickExcerpt(content, row) {
  * @param {object} source document paginé, pages porteuses de `items`
  * @param {{codes: {code: string, id: string, label: string}[]}} legend
  */
-export function extractAvisFromLayout(source, { legend } = {}) {
+export function extractAvisFromLayout(source, { legend, pack = DEFAULT_PACK } = {}) {
   const entries = legend?.codes ?? [];
   if (entries.length === 0) return null;
 
@@ -776,7 +764,7 @@ export function extractAvisFromLayout(source, { legend } = {}) {
 
   let stack = [];
   for (const page of pages) {
-    const table = readTableRows(page, codes, { stack, repeated });
+    const table = readTableRows(page, codes, { stack, repeated, pack });
     if (!table) continue;
     tables += 1;
     stack = table.stack ?? stack;
