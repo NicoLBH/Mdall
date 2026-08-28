@@ -9,10 +9,14 @@ import {
 } from "./project-automation.js";
 import { buildSupabaseAuthHeaders, getCurrentUser, getSupabaseAnonKey, getSupabaseUrl } from "../../assets/js/auth.js";
 import { buildSubjectHierarchyIndexes } from "./subject-hierarchy.js";
+import {
+  fetchDocumentIdentities,
+  insertDocumentRow,
+  uploadDocumentToStorage
+} from "./document-deposit.js";
 
 const SUPABASE_URL = getSupabaseUrl();
 const SUPABASE_ANON_KEY = getSupabaseAnonKey();
-const STORAGE_BUCKET = "documents";
 const FRONT_PROJECT_MAP_STORAGE_KEY = "mdall.supabaseProjectMap.v1";
 
 const FETCH_TIMEOUT_MS = 60_000;
@@ -181,17 +185,6 @@ async function getSupabaseAuthHeaders(extra = {}) {
   return buildSupabaseAuthHeaders(extra);
 }
 
-function sanitizeFileName(fileName = "document.pdf") {
-  const safe = String(fileName || "document.pdf")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-zA-Z0-9._-]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
-
-  return safe || "document.pdf";
-}
-
 function getFrontendProjectKey() {
   return String(store.currentProjectId || store.currentProject?.id || "default").trim() || "default";
 }
@@ -272,36 +265,6 @@ async function ensureBackendProject() {
   return row.id;
 }
 
-async function uploadFileToStorage(file, projectId, runId) {
-  const currentUser = await getCurrentUser();
-  if (!currentUser?.id) {
-    throw new Error("Utilisateur authentifié introuvable pour l'upload du document.");
-  }
-
-  const safeFileName = sanitizeFileName(file?.name || "document.pdf");
-  const path = `${currentUser.id}/${projectId}/${runId}/${safeFileName}`;
-  const url = `${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${path}`;
-
-  const res = await fetch(url, {
-    method: "POST",
-    headers: await getSupabaseAuthHeaders({
-      "x-upsert": "false",
-      "Content-Type": file?.type || "application/pdf"
-    }),
-    body: file
-  });
-
-  if (!res.ok) {
-    const txt = await res.text().catch(() => "");
-    throw new Error(`storage upload failed (${res.status}): ${txt}`);
-  }
-
-  return {
-    storage_bucket: STORAGE_BUCKET,
-    storage_path: path
-  };
-}
-
 async function invokeRunAnalysis(runId) {
   const res = await fetch(`${SUPABASE_URL}/functions/v1/run-analysis`, {
     method: "POST",
@@ -361,33 +324,6 @@ async function fetchAnalysisRunProjectId(runId) {
 
   const rows = await res.json();
   return rows?.[0]?.project_id || null;
-}
-
-/**
- * Les documents déjà connus du projet, réduits à ce qui fait leur identité.
- *
- * Le nom de fichier n'y figure que pour pouvoir nommer l'autre document dans
- * la phrase qui expliquera l'écart : « même contenu que… ». Ce qui compare,
- * c'est l'empreinte et la référence déclarée.
- */
-async function fetchDocumentIdentities(projectId) {
-  if (!projectId) return [];
-
-  const url = new URL(`${SUPABASE_URL}/rest/v1/documents`);
-  url.searchParams.set("select", "id,filename,original_filename,content_fingerprint,declared_reference");
-  url.searchParams.set("project_id", `eq.${projectId}`);
-  url.searchParams.set("deleted_at", "is.null");
-
-  const res = await fetch(url.toString(), {
-    method: "GET",
-    headers: await getSupabaseAuthHeaders({ Accept: "application/json" }),
-    cache: "no-store"
-  });
-
-  // Ne pas savoir ce qui existe déjà n'empêche pas de déposer : le document
-  // entre sans lien, plutôt que de ne pas entrer du tout.
-  if (!res.ok) return [];
-  return (await res.json()) ?? [];
 }
 
 async function fetchSubjectsByProject(projectId) {
@@ -875,7 +811,10 @@ export async function runAnalysis(options = {}) {
       const backendProjectId = await ensureBackendProject();
 
       setSystemStatus("running", "En cours d’analyse", "Upload du document");
-      const storageInfo = await uploadFileToStorage(inputs.pdfFile, backendProjectId, runId);
+      const storageInfo = await uploadDocumentToStorage(inputs.pdfFile, {
+        projectId: backendProjectId,
+        scope: runId
+      });
 
       // Examiner le document au moment où il entre, pendant qu'on a le fichier
       // sous la main : ce que c'est, son empreinte, et s'il est déjà là.
@@ -888,7 +827,7 @@ export async function runAnalysis(options = {}) {
 
       setSystemStatus("running", "En cours d’analyse", "Création du document");
       const currentUser = await getCurrentUser();
-      const documentRow = await restInsert("documents", {
+      const documentRow = await insertDocumentRow({
         project_id: backendProjectId,
         folder_id: currentFolderId,
         created_by: currentUser?.id || null,
@@ -901,7 +840,7 @@ export async function runAnalysis(options = {}) {
         upload_status: "uploaded",
         document_kind: "source_pdf",
         ...toDocumentColumns(inspection, related)
-      }, "id,project_id,storage_bucket,storage_path");
+      });
       setSystemStatus("running", "En cours d’analyse", "Création du run");
       await restInsert("analysis_runs", {
         id: runId,

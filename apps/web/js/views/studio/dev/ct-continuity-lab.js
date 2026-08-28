@@ -5,10 +5,17 @@
  * chantier, dans n'importe quel ordre — et la page restitue leur chronologie,
  * l'état de chaque avis, et ce qui manque au dossier.
  *
+ * Les PDF sont lus dans le navigateur, puis **déposés dans le projet comme des
+ * documents ordinaires** — dans un dossier de l'onglet Documents, avec les
+ * mêmes colonnes que n'importe quel autre fichier. Ce qui distingue un livrable
+ * de bureau de contrôle, c'est ce qu'on en tire, pas la façon dont il entre.
+ * C'est aussi ce qui permet de reprendre une analyse sans redemander les
+ * fichiers : ils sont déjà là.
+ *
  * Ce que cette page ne fait pas, et ne doit jamais faire :
- *  - rien n'est envoyé sur le réseau : les PDF sont lus dans le navigateur ;
- *  - rien n'est enregistré : ni document, ni analysis_run, ni sujet ;
  *  - aucun sujet Mdall n'est créé, fermé ou rouvert ;
+ *  - aucun document n'est supprimé, et aucun avis non plus : celui qui ne
+ *    ressort plus du lot est marqué absent ;
  *  - aucune precision ni aucun recall n'est affiché : sans ground truth
  *    annotée, ces chiffres n'existent pas. Seuls des indicateurs
  *    auto-vérifiables sont montrés.
@@ -25,6 +32,8 @@ import { extractPagesFromFile } from "../../../services/pdf-extraction.js";
 import { RECOGNITION } from "../../../services/document-recognition.js";
 import { recognize } from "../../../services/document-recognizers.js";
 import { IDENTITY, findRelated } from "../../../services/document-identity.js";
+import { resolveDepositFolder } from "../../../services/document-filing.js";
+import { relateToKnown, toDocumentColumns } from "../../../services/document-intake.js";
 import { corpusFingerprint } from "../../../services/ct-analysis-store.js";
 import { buildCaseExport, buildFullExport, collectAvis, runCtLab } from "../../../services/ct-lab-engine.js";
 import {
@@ -79,25 +88,71 @@ function setAsideReason(report) {
 }
 
 /**
+ * Les livrables enregistrés que le stockage n'a pas rendus.
+ *
+ * Une analyse amputée d'un rapport sans le dire vaut moins qu'une analyse qui
+ * n'a pas eu lieu : la chronologie paraît complète, et la disparition d'un avis
+ * se lit comme un fait alors qu'elle n'est qu'un trou.
+ */
+function renderUnreachable(state) {
+  if (!state.unreachable) return "";
+
+  const { count, analyzed } = state.unreachable;
+  return `
+    <div class="ctlab__set-aside">
+      <b>${count} livrable(s) enregistré(s) n'ont pas pu être rapatriés</b>
+      <ul>
+        <li>
+          L'analyse ne porte que sur ${analyzed} document(s). Ce qui manque au dossier,
+          et les avis sans nouvelles, sont à lire avec cette réserve.
+        </li>
+      </ul>
+    </div>
+  `;
+}
+
+/**
  * Ce que le projet garde d'une ouverture à l'autre.
  *
- * Les avis sont conservés, pas les documents relus : la géométrie extraite
- * pèse vingt fois plus que les PDF dont elle sort, et elle périme au moindre
- * progrès du moteur. L'écran dit donc ce qu'on sait — combien d'avis, à quelle
- * date, lus par quel vocabulaire — et ce qu'il reste à faire pour le mettre à
- * jour : redéposer les documents.
+ * Deux choses s'y conservent, et il ne faut pas les confondre.
  *
- * Il dit aussi, après coup, si l'analyse a bien été conservée. Laisser croire
- * qu'elle l'a été alors que la base n'a pas répondu serait pire que de ne rien
- * dire.
+ * Les **livrables** sont des faits : ils sont déposés dans le projet comme
+ * n'importe quel document, et rien ne les périme. On peut donc les reprendre,
+ * et c'est le sens du bouton : nul besoin de redéposer dix-sept PDF qui sont
+ * déjà là.
+ *
+ * Le **suivi** n'est qu'une conséquence : il se recalcule, et la moindre
+ * correction du moteur ou du vocabulaire peut le changer. Il est donc affiché
+ * comme ce qu'il est — un état daté, avec le nombre de documents qui l'ont
+ * produit et le vocabulaire qui les a lus —, jamais comme une vérité courante.
+ *
+ * Quand le lot enregistré ne correspond plus aux livrables du projet, l'écran
+ * le dit. C'est le seul cas où reprendre l'analyse change quelque chose, et
+ * l'utilisateur doit pouvoir le savoir avant de cliquer.
+ *
+ * Il dit aussi, après coup, si l'analyse a bien été conservée et où les
+ * documents ont été rangés. Laisser croire qu'elle l'a été alors que la base
+ * n'a pas répondu serait pire que de ne rien dire.
  */
 function renderMemory(state) {
   if (state.saved?.status === "saved") {
     const { saved, marked } = state.saved;
+    const filed = state.filed;
     return `
       <div class="ctlab__set-aside ctlab__set-aside--ok">
         <b>Suivi enregistré pour ce projet</b>
-        <ul><li>${saved} avis conservé(s)${marked > 0 ? `, ${marked} marqué(s) absent(s) du lot — aucun n'est supprimé` : ""}.</li></ul>
+        <ul>
+          <li>${saved} avis conservé(s)${marked > 0 ? `, ${marked} marqué(s) absent(s) du lot — aucun n'est supprimé` : ""}.</li>
+          ${filed?.deposited > 0
+            ? `<li>
+                 ${filed.deposited} document(s) déposé(s) dans Documents${filed.folder ? ` › ${escapeHtml(filed.folder)}` : ""}${
+                   filed.reused > 0 ? `, ${filed.reused} déjà présent(s)` : ""
+                 }.
+               </li>`
+            : filed?.reused > 0
+              ? `<li>${filed.reused} document(s) déjà présent(s) dans Documents : aucun n'a été redéposé.</li>`
+              : ""}
+        </ul>
       </div>
     `;
   }
@@ -111,22 +166,47 @@ function renderMemory(state) {
     `;
   }
 
-  const run = state.memory?.run;
-  if (!run || state.result) return "";
+  if (state.result) return "";
 
-  const packs = Object.values(run.packs_used ?? {});
+  const run = state.memory?.run ?? null;
+  const stored = state.stored?.documents ?? [];
+  if (!run && stored.length === 0) return "";
+
+  const packs = Object.values(run?.packs_used ?? {});
   const vocabulaire = packs.length > 0 ? `${packs[0].pack_id} v${packs[0].pack_version}` : null;
+
+  // Le lot enregistré et les livrables du projet peuvent avoir divergé : un
+  // document déposé depuis l'onglet Documents, un livrable retiré. Les
+  // empreintes de contenu le disent sans qu'on ait à rouvrir un seul PDF.
+  const diverge = Boolean(run && state.stored && state.stored.matchesRun === false);
+
+  const lignes = [
+    run
+      ? `<li>
+           ${run.tracked_avis_count} avis suivis, sur ${run.document_count} document(s),
+           au ${escapeHtml(formatDate(run.computed_at))}${vocabulaire ? ` — lu par ${escapeHtml(vocabulaire)}` : ""}.
+         </li>`
+      : "",
+    stored.length > 0
+      ? `<li>
+           ${stored.length} livrable(s) du bureau de contrôle enregistré(s) dans ce projet${
+             diverge ? " — le lot a changé depuis la dernière analyse" : ""
+           }.
+         </li>`
+      : `<li>Aucun livrable n'est enregistré dans ce projet : déposez-les pour mettre le suivi à jour.</li>`
+  ].filter(Boolean);
 
   return `
     <div class="ctlab__set-aside ctlab__set-aside--info">
-      <b>Ce projet a déjà un suivi enregistré</b>
-      <ul>
-        <li>
-          ${run.tracked_avis_count} avis suivis, sur ${run.document_count} document(s),
-          au ${escapeHtml(formatDate(run.computed_at))}${vocabulaire ? ` — lu par ${escapeHtml(vocabulaire)}` : ""}.
-          Redéposez les documents pour le remettre à jour : tout est recalculé, jamais complété.
-        </li>
-      </ul>
+      <b>${stored.length > 0 && !run ? "Des livrables attendent d'être analysés" : "Ce projet a déjà un suivi enregistré"}</b>
+      <ul>${lignes.join("")}</ul>
+      ${stored.length > 0
+        ? `<div class="ctlab__drop-actions">
+             <button type="button" class="gh-btn gh-btn--sm gh-btn--primary" data-ctlab-resume>
+               Reprendre les ${stored.length} livrable(s) enregistré(s)
+             </button>
+           </div>`
+        : ""}
     </div>
   `;
 }
@@ -199,6 +279,16 @@ export const TABS = [
 
 /** Une page de tableau : deux mille lignes d'un coup figent le navigateur. */
 const PAGE_SIZE = 50;
+
+/**
+ * La famille de documents que cet atelier sait exploiter.
+ *
+ * C'est le reconnaisseur qui la pose sur chaque document au moment du dépôt ;
+ * ici, elle ne sert qu'à retrouver dans le projet les livrables qui nous
+ * concernent. Un compte rendu de chantier déposé dans le même projet ne sera
+ * pas repris par erreur.
+ */
+const CT_REPORT_KIND = "ct_report";
 
 /** Ce que le moteur est en train de faire, en français. */
 const STAGE_LABELS = {
@@ -1324,6 +1414,7 @@ function renderDropZone(state) {
       </div>
       ${renderSetAside(setAside)}
       ${renderReissues(state.reports.filter((report) => !report.error && isReissue(report)))}
+      ${renderUnreachable(state)}
       ${renderMemory(state)}
       <div class="ctlab__drop-actions">
         <button type="button" class="gh-btn gh-btn--sm" data-ctlab-pick>
@@ -3352,8 +3443,17 @@ export function renderCtContinuityLab(root) {
     patternErrors: [],
     /** Le suivi déjà enregistré pour ce projet, s'il y en a un. */
     memory: null,
+    /**
+     * Les livrables déjà déposés dans ce projet, prêts à être relus.
+     * `matchesRun` dit si le lot enregistré est encore celui du suivi conservé.
+     */
+    stored: null,
     /** Ce qu'est devenue la dernière analyse : conservée, ou seulement affichée. */
-    saved: null
+    saved: null,
+    /** Ce que le dernier dépôt a rangé dans Documents. */
+    filed: null,
+    /** Les livrables enregistrés que le stockage n'a pas rendus. */
+    unreachable: null
   };
 
   let nextDocumentNumber = 1;
@@ -3364,15 +3464,49 @@ export function renderCtContinuityLab(root) {
   // L'import est différé : ce service passe par le SDK Supabase, chargé depuis
   // le réseau, que l'exécution des tests hors navigateur ne saurait résoudre.
   const persistence = () => import("../../../services/ct-analysis-supabase.js");
+  const deposit = () => import("../../../services/document-deposit.js");
+  const documentFolders = () => import("../../../services/project-supabase-sync.js");
+
+  /**
+   * Relit les livrables que le projet contient, et dit s'ils sont encore ceux
+   * du suivi enregistré.
+   *
+   * La comparaison ne coûte aucune lecture de PDF : les empreintes de contenu
+   * sont en base, posées au dépôt. `matchesRun` vaut `null` quand il n'y a rien
+   * à comparer — ne pas savoir n'est pas répondre « non ».
+   */
+  const refreshStoredDocuments = async (projectId) => {
+    if (!projectId) return;
+    try {
+      const { listProjectDocuments } = await deposit();
+      const documents = await listProjectDocuments(projectId, { kind: CT_REPORT_KIND });
+      const run = state.memory?.run ?? null;
+
+      state.stored = documents.length > 0
+        ? {
+            documents,
+            matchesRun: run?.corpus_fingerprint
+              ? (await corpusFingerprint(documents)) === run.corpus_fingerprint
+              : null
+          }
+        : null;
+    } catch {
+      // Le projet est peut-être injoignable. On ne prétend pas savoir ce qu'il
+      // contient : l'écran retombe sur le dépôt manuel, qui a toujours marché.
+      state.stored = null;
+    }
+  };
 
   (async () => {
     try {
       const { getCurrentProjectId, loadCtAnalysis } = await persistence();
       const projectId = await getCurrentProjectId();
       if (!projectId) return;
-      const memory = await loadCtAnalysis(projectId);
-      if (!memory?.run) return;
-      state.memory = { projectId, ...memory };
+
+      state.memory = { projectId, ...((await loadCtAnalysis(projectId)) ?? {}) };
+      await refreshStoredDocuments(projectId);
+
+      if (!state.memory.run && !state.stored) return;
       refresh();
     } catch {
       // Pas de mémoire joignable : l'atelier fonctionne comme il l'a toujours
@@ -3486,7 +3620,7 @@ export function renderCtContinuityLab(root) {
     state.stages = [...state.stages, { label, detail }];
   };
 
-  const addFiles = async (fileList) => {
+  const addFiles = async (fileList, { documentIds = new Map() } = {}) => {
     const files = [...fileList].filter((file) => /\.pdf$/i.test(file.name) || file.type === "application/pdf");
     if (files.length === 0) return;
 
@@ -3496,6 +3630,7 @@ export function renderCtContinuityLab(root) {
     state.result = null;
     state.selectedReference = null;
     state.selectedCell = null;
+    state.unreachable = null;
     state.stages = [];
     state.loading = { done: 0, total: files.length, current: null };
     pushStage(`Ouverture de ${files.length} fichier(s)`);
@@ -3543,7 +3678,20 @@ export function renderCtContinuityLab(root) {
         // poignée pour rien, alors que garder cent vingt PDF en mémoire
         // coûterait des centaines de mégaoctets. Il est relu à la demande,
         // uniquement quand on ouvre la page citée.
-        state.reports.push({ ...extracted, ...identity, sourceId, file, recognition, related });
+        state.reports.push({
+          ...extracted,
+          ...identity,
+          sourceId,
+          file,
+          recognition,
+          related,
+          // Le document dont ce fichier vient, quand il a été rapatrié du
+          // stockage. Il évite de le redéposer, et c'est lui qui reliera les
+          // avis au livrable qui les porte. La correspondance porte sur le
+          // fichier lui-même, non sur son rang : `files` est refiltré plus haut,
+          // et un décalage d'indice rattacherait un avis au mauvais document.
+          documentId: documentIds.get(file) ?? null
+        });
       } catch (error) {
         state.reports.push({ sourceId, filename: file.name, sizeBytes: file.size, pageCount: 0, pages: [], error: error.message });
       }
@@ -3557,6 +3705,117 @@ export function renderCtContinuityLab(root) {
       `${added} ajouté(s)${duplicated > 0 ? `, ${duplicated} doublon(s)` : ""}`;
     state.loading = null;
     refresh();
+  };
+
+  /**
+   * Dépose dans le projet les livrables qui viennent d'être analysés.
+   *
+   * Ils entrent **comme des documents ordinaires** : même stockage, même table,
+   * mêmes colonnes de reconnaissance et d'identité que n'importe quel fichier
+   * déposé depuis l'onglet Documents. Rien ici ne leur est propre, sinon le
+   * dossier où ils atterrissent — et ce dossier se déduit de la famille
+   * reconnue, pas d'une exception écrite pour le contrôle technique.
+   *
+   * Trois précautions, qui tiennent en trois refus :
+   *
+   *  - un document dont le contenu est déjà dans le projet n'est **pas**
+   *    redéposé : on récupère l'identifiant de celui qui y est. Déposer le même
+   *    rapport à chaque analyse remplirait l'onglet Documents de copies ;
+   *  - un échec sur un fichier n'arrête pas les autres, et n'annule pas
+   *    l'analyse : le suivi vaut d'être conservé même si un dépôt a échoué ;
+   *  - rien n'est déposé pour un lot travaillé hors projet. L'atelier a
+   *    toujours su fonctionner sur des fichiers isolés, et doit le rester.
+   *
+   * @returns {Promise<{deposited: number, reused: number, folder: string|null}|null>}
+   */
+  const fileReports = async (reports, projectId) => {
+    if (!projectId || reports.length === 0) return null;
+
+    // Les deux modules restent distincts : les fondre en un seul objet ferait
+    // qu'un jour, un export homonyme en masquerait un autre sans bruit.
+    let documents = null;
+    let folders = null;
+    try {
+      [documents, folders] = await Promise.all([deposit(), documentFolders()]);
+    } catch {
+      return null;
+    }
+
+    const { currentUserId, fetchDocumentIdentities, insertDocumentRow, uploadDocumentToStorage } = documents;
+    const { createDocumentFolder, listDocumentFolderChildren } = folders;
+
+    const known = await fetchDocumentIdentities(projectId).catch(() => []);
+    const createdBy = await currentUserId().catch(() => null);
+    // Un lot, un emplacement : deux dépôts du même fichier ne s'écrasent pas.
+    const scope = `ctlab-${Date.now().toString(36)}`;
+    const foldersByKind = new Map();
+    let deposited = 0;
+    let reused = 0;
+    let folderName = null;
+
+    for (const report of reports) {
+      // Déjà rapatrié du stockage : il est en base, il n'a rien à y refaire.
+      if (report.documentId) {
+        reused += 1;
+        continue;
+      }
+
+      // Le même contenu est déjà dans le projet, sous quelque nom que ce soit.
+      const related = relateToKnown(report, known);
+      if (related?.verdict === IDENTITY.DUPLICATE) {
+        report.documentId = related.document.id;
+        reused += 1;
+        continue;
+      }
+
+      try {
+        const kind = report.recognition?.kind ?? null;
+        if (!foldersByKind.has(kind)) {
+          foldersByKind.set(
+            kind,
+            await resolveDepositFolder({
+              projectId,
+              kind,
+              listFolders: listDocumentFolderChildren,
+              createFolder: createDocumentFolder
+            })
+          );
+        }
+        const folder = foldersByKind.get(kind);
+        if (folder?.name) folderName = folder.name;
+
+        const storage = await uploadDocumentToStorage(report.file, { projectId, scope });
+        const row = await insertDocumentRow({
+          project_id: projectId,
+          folder_id: folder?.id ?? null,
+          created_by: createdBy,
+          filename: report.file.name,
+          original_filename: report.file.name,
+          mime_type: report.file.type || "application/pdf",
+          storage_bucket: storage.storage_bucket,
+          storage_path: storage.storage_path,
+          file_size_bytes: report.file.size || null,
+          upload_status: "uploaded",
+          document_kind: "source_pdf",
+          // Ce qu'on a appris du document en le lisant, écrit par le même
+          // traducteur que pour n'importe quel dépôt.
+          ...toDocumentColumns(report, related)
+        }, "id,content_fingerprint,declared_reference,original_filename");
+
+        if (row?.id) {
+          report.documentId = row.id;
+          // Le document suivant doit pouvoir se comparer à celui-ci : deux
+          // copies du même rapport dans un même lot n'entrent qu'une fois.
+          known.push(row);
+          deposited += 1;
+        }
+      } catch {
+        // Ce fichier n'est pas entré. Les autres continuent, et l'avis qu'il
+        // portait restera simplement sans lien vers son document.
+      }
+    }
+
+    return { deposited, reused, folder: folderName };
   };
 
   /**
@@ -3581,15 +3840,27 @@ export function renderCtContinuityLab(root) {
     }
     if (!projectId) return { status: "no-project" };
 
+    // Déposer d'abord, enregistrer ensuite : c'est le dépôt qui donne aux avis
+    // l'identifiant du livrable qui les porte. L'inverse laisserait les liens
+    // vides jusqu'à la prochaine analyse.
+    state.filed = await fileReports(reports, projectId);
+
     try {
       const { loadCtAnalysis, saveCtAnalysis } = api;
       const fingerprint = await corpusFingerprint(reports);
-      // Les documents ont été déposés à la main, pas repris du stockage : ils
-      // n'ont pas d'identifiant en base, et les liens vers eux restent vides.
-      // Ils se rempliront quand les livrables entreront par l'onglet Documents.
+      // L'empreinte d'un document déposé est celle que l'atelier vient de
+      // calculer : `pdf-extraction` et `document-intake` la tirent du même
+      // texte, par la même fonction. C'est ce qui permettra, à la prochaine
+      // ouverture, de dire si le lot enregistré est encore celui du projet —
+      // sans rouvrir un seul PDF.
+      const documentIds = Object.fromEntries(
+        reports.filter((report) => report.documentId).map((report) => [report.sourceId, report.documentId])
+      );
+
       const outcome = await saveCtAnalysis({
         projectId,
         result: state.result,
+        documentIds,
         corpusFingerprint: fingerprint,
         documentCount: reports.length
       });
@@ -3597,15 +3868,101 @@ export function renderCtContinuityLab(root) {
       if (!outcome) return { status: "failed" };
 
       state.memory = { projectId, ...((await loadCtAnalysis(projectId)) ?? {}) };
+      // Ce que le projet contient a changé sous nos pieds : le relire évite que
+      // l'écran annonce encore le lot d'avant.
+      await refreshStoredDocuments(projectId);
       return { status: "saved", ...outcome };
     } catch {
       return { status: "failed" };
     }
   };
 
+  /**
+   * Reprend les livrables déjà enregistrés dans le projet.
+   *
+   * C'est la réponse à une absurdité : les dix-sept PDF étaient dans Supabase,
+   * et l'atelier demandait pourtant de les redéposer à la main. Ils sont
+   * rapatriés, relus, et l'analyse repart — au terme, exactement le même écran
+   * que si on les avait déposés soi-même.
+   *
+   * **Tout est relu, jamais complété.** C'est la règle posée avec la
+   * persistance : un rapport ancien arrivé en retard réécrit la chronologie, et
+   * invalider finement une chaîne ordonnée produirait des anomalies
+   * irreproductibles. Dix-sept documents se relisent en une seconde.
+   *
+   * Un livrable que le stockage ne rend pas est signalé, pas contourné : une
+   * analyse amputée d'un rapport sans le dire vaut moins qu'une analyse qui
+   * n'a pas eu lieu.
+   */
+  const resumeFromStorage = async () => {
+    const documents = state.stored?.documents ?? [];
+    // `state.running` ne couvre que l'analyse : pendant le rapatriement, le
+    // bouton est encore là et un second clic lancerait un second téléchargement.
+    if (documents.length === 0 || state.running || state.loading) return;
+
+    state.reports = [];
+    state.result = null;
+    state.error = null;
+    state.unreachable = null;
+    nextDocumentNumber = 1;
+    state.stages = [];
+    state.loading = { done: 0, total: documents.length, current: null };
+    pushStage(`Reprise de ${documents.length} livrable(s) enregistré(s)`);
+    refresh();
+
+    const files = [];
+    const documentIds = new Map();
+    let unreachable = 0;
+
+    try {
+      const { downloadDocumentFile } = await deposit();
+
+      for (const row of documents) {
+        state.loading.current = row.original_filename ?? row.filename ?? "";
+        state.stages[state.stages.length - 1].detail = state.loading.current;
+        refresh();
+        await yieldToBrowser();
+
+        try {
+          const file = await downloadDocumentFile(row);
+          files.push(file);
+          // Ce qui relie le fichier rapatrié au document dont il vient.
+          documentIds.set(file, row.id);
+        } catch {
+          unreachable += 1;
+        }
+        state.loading.done += 1;
+        refresh();
+      }
+    } catch {
+      state.loading = null;
+      state.stages = [];
+      state.error = "Les livrables enregistrés n'ont pas pu être rapatriés.";
+      refresh();
+      return;
+    }
+
+    state.loading = null;
+    state.stages = [];
+
+    if (files.length === 0) {
+      state.error = "Aucun livrable n'a pu être rapatrié depuis le projet.";
+      refresh();
+      return;
+    }
+
+    await addFiles(files, { documentIds });
+    // Un avertissement, pas une erreur : l'analyse a bien lieu, elle porte
+    // simplement sur moins de documents — et l'écran doit le dire à côté du
+    // résultat, pas à sa place.
+    state.unreachable = unreachable > 0 ? { count: unreachable, analyzed: files.length } : null;
+    await runAnalysis();
+  };
+
   const resetAll = () => {
     state.reports = [];
     state.result = null;
+    state.unreachable = null;
     state.selectedCell = null;
     state.selectedReference = null;
     state.error = null;
@@ -3803,7 +4160,7 @@ export function renderCtContinuityLab(root) {
     if (handleDatePickerClick(event)) return;
 
     const target = event.target.closest(
-      "[data-ctlab-pick], [data-ctlab-remove], [data-ctlab-cell], [data-ctlab-trace], [data-ctlab-back], " +
+      "[data-ctlab-pick], [data-ctlab-resume], [data-ctlab-remove], [data-ctlab-cell], [data-ctlab-trace], [data-ctlab-back], " +
         "[data-ctlab-open-pdf], [data-ctlab-pdf-close], " +
         "[data-ctlab-as-of], " +
         "[data-pagination-entity='ctlab-avis'], " +
@@ -3825,6 +4182,12 @@ export function renderCtContinuityLab(root) {
 
     if (target.dataset.ctlabPick !== undefined) {
       input.click();
+      return;
+    }
+
+    if (target.dataset.ctlabResume !== undefined) {
+      captureEditors();
+      await resumeFromStorage();
       return;
     }
 
