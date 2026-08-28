@@ -850,6 +850,13 @@ export async function runAnalysis(options = {}) {
       setSystemStatus("running", "En cours d’analyse", "Upload du document");
       const storageInfo = await uploadFileToStorage(inputs.pdfFile, backendProjectId, runId);
 
+      // Reconnaître ce qu'est le document au moment où il entre, pendant qu'on
+      // a le fichier sous la main. La reconnaissance enrichit le dépôt, elle ne
+      // le conditionne pas : un PDF qu'on ne sait pas lire se dépose quand même.
+      setSystemStatus("running", "En cours d’analyse", "Reconnaissance du document");
+      const { recognizeFile, toDocumentColumns } = await import("./document-recognizers.js");
+      const recognition = await recognizeFile(inputs.pdfFile);
+
       setSystemStatus("running", "En cours d’analyse", "Création du document");
       const currentUser = await getCurrentUser();
       const documentRow = await restInsert("documents", {
@@ -863,7 +870,8 @@ export async function runAnalysis(options = {}) {
         storage_path: storageInfo.storage_path,
         file_size_bytes: inputs.pdfFile.size || null,
         upload_status: "uploaded",
-        document_kind: "source_pdf"
+        document_kind: "source_pdf",
+        ...toDocumentColumns(recognition)
       }, "id,project_id,storage_bucket,storage_path");
       setSystemStatus("running", "En cours d’analyse", "Création du run");
       await restInsert("analysis_runs", {

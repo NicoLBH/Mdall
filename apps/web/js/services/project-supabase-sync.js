@@ -769,7 +769,18 @@ function mapDocumentRowToViewModel(row = {}) {
     storageBucket: safeString(row.storage_bucket),
     storagePath: safeString(row.storage_path),
     uploadStatus: safeString(row.upload_status),
-    documentKind
+    documentKind,
+    // Ce que Mdall a reconnu du document : sa nature, son émetteur, et la
+    // raison quand il n'a pas su. Générique par construction — demain un
+    // compte rendu de chantier remplira les mêmes colonnes.
+    detection: {
+      status: safeString(row.detection_status) || null,
+      reason: safeString(row.detection_reason) || null,
+      kind: safeString(row.detected_kind) || null,
+      kindLabel: safeString(row.detected_kind_label) || null,
+      author: safeString(row.detected_author) || null,
+      confidence: safeString(row.detection_confidence) || null
+    }
   };
 }
 
@@ -842,7 +853,7 @@ export async function syncProjectDocumentsFromSupabase(options = {}) {
   }
 
   const params = new URLSearchParams();
-  params.set("select", "id,filename,original_filename,mime_type,storage_bucket,storage_path,folder_id,document_kind,upload_status,created_at,updated_at");
+  params.set("select", "id,filename,original_filename,mime_type,storage_bucket,storage_path,folder_id,document_kind,upload_status,created_at,updated_at,detection_status,detection_reason,detected_kind,detected_kind_label,detected_author,detection_confidence");
   params.set("project_id", `eq.${backendProjectId}`);
   params.set("deleted_at", "is.null");
   params.set("order", "created_at.desc");
@@ -1022,7 +1033,7 @@ export async function listDocumentDirectory(projectId = "", folderId = null) {
     const folders = allFolders.filter((folder) => safeString(folder.parent_folder_id || "") === safeString(normalizedFolderId || ""));
 
     const fileParams = new URLSearchParams();
-    fileParams.set("select", "id,project_id,folder_id,filename,original_filename,mime_type,storage_bucket,storage_path,document_kind,upload_status,created_at,updated_at,deleted_at");
+    fileParams.set("select", "id,project_id,folder_id,filename,original_filename,mime_type,storage_bucket,storage_path,document_kind,upload_status,created_at,updated_at,deleted_at,detection_status,detection_reason,detected_kind,detected_kind_label,detected_author,detection_confidence");
     fileParams.set("project_id", `eq.${backendProjectId}`);
     fileParams.set("deleted_at", "is.null");
     if (normalizedFolderId) {

@@ -1,5 +1,11 @@
 /**
- * Extraction PDF locale pour le laboratoire CT Continuity.
+ * Extraction PDF locale.
+ *
+ * Ce module ne sait rien du contrôle technique : il rend le texte d'un PDF, et
+ * sa géométrie quand elle est lisible. Il s'appelait « ct-lab-pdf » tant qu'il
+ * n'avait qu'un client ; il en a maintenant deux — l'atelier des avis, et la
+ * reconnaissance des documents — et il en aura d'autres à mesure que Mdall
+ * apprendra à lire les comptes rendus de chantier ou les notices.
  *
  * Utilise unpdf — la même bibliothèque que la fonction Edge `extract-pdf-text`
  * — mais dans le navigateur, et avec `mergePages: false`.

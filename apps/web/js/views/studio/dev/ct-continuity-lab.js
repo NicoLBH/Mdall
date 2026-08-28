@@ -21,7 +21,9 @@
 
 import { store } from "../../../store.js";
 import { escapeHtml } from "../../../utils/escape-html.js";
-import { extractPagesFromFile } from "../../../services/ct-lab-pdf.js";
+import { extractPagesFromFile } from "../../../services/pdf-extraction.js";
+import { RECOGNITION } from "../../../services/document-recognition.js";
+import { recognize } from "../../../services/document-recognizers.js";
 import { buildCaseExport, buildFullExport, collectAvis, runCtLab } from "../../../services/ct-lab-engine.js";
 import {
   DEFAULT_LEXICON_TEXT,
@@ -41,6 +43,48 @@ import {
   renderSharedDatePicker,
   shiftSharedCalendarMonth
 } from "../../ui/shared-date-picker.js";
+
+/**
+ * Vrai si ce document n'a rien à faire dans une analyse d'avis.
+ *
+ * Deux cas, et deux seulement : personne ne l'a reconnu, ou il n'y a pas de
+ * texte à y lire. Un livrable reconnu mais sans tableau d'avis — une
+ * attestation, une fiche de correspondance — reste dans le lot : il compte
+ * dans la chronologie du dossier, et l'écarter fabriquerait un trou.
+ *
+ * Une reconnaissance qui n'a pas abouti n'écarte rien non plus : on ne
+ * sanctionne pas un document sur notre propre ignorance.
+ */
+function isSetAside(report) {
+  const status = report?.recognition?.status;
+  return status === RECOGNITION.UNRECOGNIZED || status === RECOGNITION.NO_TEXT_LAYER;
+}
+
+/**
+ * Les documents écartés, nommés un par un, avec la raison de leur écart.
+ *
+ * Un intrus dans le lot ne produisait aucun avis, et le silence laissait
+ * croire à un défaut de l'outil. Le dire coûte trois lignes et fait gagner une
+ * demi-heure de doute.
+ */
+function renderSetAside(reports) {
+  if (reports.length === 0) return "";
+
+  return `
+    <div class="ctlab__set-aside">
+      <b>${reports.length} document${reports.length > 1 ? "s" : ""} écarté${reports.length > 1 ? "s" : ""} de l'analyse</b>
+      <ul>
+        ${reports
+          .map(
+            (report) =>
+              `<li><span class="ctlab__set-aside-name">${escapeHtml(report.filename ?? report.sourceId)}</span>
+                 — ${escapeHtml(report.recognition?.reason ?? "")}</li>`
+          )
+          .join("")}
+      </ul>
+    </div>
+  `;
+}
 
 /** Les onglets, dans l'ordre où on les consulte. */
 export const TABS = [
@@ -1007,6 +1051,19 @@ const STYLE = `
 .ctlab__drop-title { display: block; font-size: 16px; color: var(--ctlab-text); }
 .ctlab__drop-lead { color: var(--ctlab-muted); margin: 6px auto 0; max-width: 60ch; }
 .ctlab__drop-actions { margin-top: 12px; }
+/* Ce qui a été écarté, et pourquoi. Discret, mais jamais tu. */
+.ctlab__set-aside {
+  margin: 14px auto 0;
+  max-width: 70ch;
+  text-align: left;
+  font-size: 12px;
+  color: var(--ctlab-muted);
+  border-left: 2px solid var(--ctlab-warn);
+  padding-left: 10px;
+}
+.ctlab__set-aside b { color: var(--ctlab-text); font-weight: 600; }
+.ctlab__set-aside ul { margin: 4px 0 0; padding-left: 16px; }
+.ctlab__set-aside-name { color: var(--ctlab-text); }
 .ctlab__progress {
   height: 6px;
   background: var(--bg-input, rgb(21, 27, 35));
@@ -1133,8 +1190,9 @@ function renderDropZone(state) {
   // déroulé du travail qui occupe la place.
   if (state.loading || state.running) return "";
 
-  const loaded = state.reports.filter((report) => !report.error).length;
-  const failed = state.reports.length - loaded;
+  const setAside = state.reports.filter((report) => !report.error && isSetAside(report));
+  const loaded = state.reports.filter((report) => !report.error && !isSetAside(report)).length;
+  const failed = state.reports.length - loaded - setAside.length;
 
   // Deux états, et l'écran doit dire lequel : sans documents, on invite à en
   // déposer ; avec des documents, on dit combien et ce qu'il reste à faire.
@@ -1161,6 +1219,7 @@ function renderDropZone(state) {
             : `Vous pouvez en ajouter d'autres, ou lancer l'analyse.${failed > 0 ? ` ${failed} fichier(s) illisible(s).` : ""}`
         }
       </div>
+      ${renderSetAside(setAside)}
       <div class="ctlab__drop-actions">
         <button type="button" class="gh-btn gh-btn--sm" data-ctlab-pick>
           ${empty ? "Choisir des fichiers…" : "Ajouter des fichiers…"}
@@ -3035,7 +3094,10 @@ function renderProgress(state) {
 
 /** L'en-tête d'utilitaire de l'Atelier : titre à gauche, actions à droite. */
 function renderHeader(state) {
-  const loaded = state.reports.filter((report) => !report.error).length;
+  // Le bouton annonce ce qu'il fera, pas ce qui a été déposé : promettre
+  // « Analyser 4 documents » quand deux sont écartés est un mensonge, et
+  // c'est celui-là que le lecteur découvrira en comparant les compteurs.
+  const loaded = state.reports.filter((report) => !report.error && !isSetAside(report)).length;
   const busy = Boolean(state.running || state.loading);
 
   return `
@@ -3299,11 +3361,19 @@ export function renderCtContinuityLab(root) {
         nextDocumentNumber += 1;
         try {
           const extracted = await extractPagesFromFile(file);
+          // Un PDF étranger glissé dans le lot ne produisait aucun avis, sans
+          // qu'on sache si le document était muet ou l'outil impuissant. On le
+          // reconnaît avant de l'analyser, et on dit ce qu'on en a compris.
+          const recognition = await recognize({
+            pages: extracted.pages,
+            filename: file.name,
+            mimeType: file.type || "application/pdf"
+          }).catch(() => null);
           // Le `File` est conservé, pas ses octets : le navigateur tient la
           // poignée pour rien, alors que garder cent vingt PDF en mémoire
           // coûterait des centaines de mégaoctets. Il est relu à la demande,
           // uniquement quand on ouvre la page citée.
-          state.reports.push({ ...extracted, sourceId, file });
+          state.reports.push({ ...extracted, sourceId, file, recognition });
         } catch (error) {
           state.reports.push({ sourceId, filename: file.name, sizeBytes: file.size, pageCount: 0, pages: [], error: error.message });
         }
@@ -3375,7 +3445,12 @@ export function renderCtContinuityLab(root) {
   };
 
   const runAnalysis = async () => {
-    const reports = state.reports.filter((report) => !report.error);
+    // Un document que personne ne reconnaît, ou dont il n'y a rien à lire, est
+    // écarté de l'analyse : le laisser entrer fausserait la chronologie et la
+    // complétude du lot en prêtant à un intrus la valeur d'un livrable. On ne
+    // l'écarte pas en silence pour autant — la zone de dépôt le dit, et dit
+    // pourquoi.
+    const reports = state.reports.filter((report) => !report.error && !isSetAside(report));
     if (reports.length === 0) return;
 
     const { params, errors } = buildExtractionParams(state.patternText, state.lexiconText);
