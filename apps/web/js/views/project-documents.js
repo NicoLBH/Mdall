@@ -1283,6 +1283,7 @@ function renderRepoDocumentRow(doc) {
   const decoratedDoc = decorateDocumentWithPhase(doc);
   const isPdf = isPdfDocument(decoratedDoc);
   const isPreviewablePdf = canPreviewPdf(decoratedDoc);
+  const recognition = describeRecognition(decoratedDoc);
 
   return `
     <div
@@ -1295,8 +1296,8 @@ function renderRepoDocumentRow(doc) {
         <button type="button" class="documents-repo__name documents-repo__name-trigger js-document-title-trigger" data-document-id="${escapeHtml(decoratedDoc.id || "")}">${escapeHtml(decoratedDoc.name)}</button>
       </div>
       <div class="documents-repo__cell documents-repo__cell--message">
-        <div class="documents-repo__message-main">${escapeHtml(decoratedDoc.note || "Document prêt pour l'analyse")}</div>
-        <div class="documents-repo__message-meta">${escapeHtml(`${decoratedDoc.phaseCode}${decoratedDoc.phaseLabel ? ` - ${decoratedDoc.phaseLabel}` : ""}`)}</div>
+        <div class="documents-repo__message-main${recognition.known ? " documents-repo__message-main--known" : ""}" title="${escapeHtml(recognition.title)}">${escapeHtml(recognition.main)}</div>
+        <div class="documents-repo__message-meta">${escapeHtml(recognition.meta)}</div>
       </div>
       <div class="documents-repo__cell documents-repo__cell--date">${escapeHtml(decoratedDoc.updatedAt || "À l'instant")}</div>
       <div class="documents-repo__cell documents-repo__cell--stats">
@@ -1304,6 +1305,37 @@ function renderRepoDocumentRow(doc) {
       </div>
     </div>
   `;
+}
+
+/**
+ * Ce que Mdall a reconnu du document, dit sur la ligne du dépôt.
+ *
+ * La ligne annonçait jusqu'ici « source_pdf » ou « Document prêt pour
+ * l'analyse » — un état technique qui n'apprenait rien. Elle annonce
+ * maintenant la nature du document quand elle est connue, et la raison quand
+ * elle ne l'est pas : un refus muet laisse chercher, un refus expliqué se
+ * traite.
+ *
+ * La reconnaissance est générique : demain la même ligne dira « compte rendu
+ * de chantier » sans qu'on ait à toucher ici.
+ */
+function describeRecognition(document = {}) {
+  const detection = document.detection ?? null;
+  const phase = `${document.phaseCode || ""}${document.phaseLabel ? ` - ${document.phaseLabel}` : ""}`;
+  const fallback = document.note || "Document prêt pour l'analyse";
+
+  if (!detection?.status) return { known: false, main: fallback, meta: phase, title: fallback };
+
+  const known = detection.status === "RECOGNIZED" || detection.status === "RECOGNIZED_WITHOUT_CONTENT";
+  const main = known ? detection.kindLabel || fallback : detection.reason || fallback;
+  const parts = [
+    detection.author ? detection.author.toLocaleUpperCase("fr") : null,
+    detection.status === "RECOGNIZED_WITHOUT_CONTENT" ? "sans contenu exploitable" : null,
+    detection.confidence === "probable" ? "reconnaissance probable" : null,
+    phase || null
+  ].filter(Boolean);
+
+  return { known, main, meta: parts.join(" · "), title: detection.reason || main };
 }
 
 function getReportTitle() {
