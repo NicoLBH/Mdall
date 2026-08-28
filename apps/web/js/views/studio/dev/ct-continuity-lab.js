@@ -238,8 +238,11 @@ function renderAvisRow({
   code,
   label,
   title,
-  meta,
-  seenIn,
+  page = null,
+  raisedAt = null,
+  ageMonths = null,
+  notes = [],
+  seenIn = null,
   comment,
   tag,
   tagStatus,
@@ -247,6 +250,7 @@ function renderAvisRow({
   evidenceSource
 }) {
   const target = traceKey ?? reference;
+  const meta = avisRowMeta({ reference, code, label, page, raisedAt, ageMonths, notes, seenIn });
 
   return `
     <div class="issue-row ctlab__row">
@@ -265,13 +269,8 @@ function renderAvisRow({
                 : ""
             }
           </span>
-          <span class="issue-row-title-grid__meta issue-row-meta-text mono-small">${escapeHtml(meta)}</span>
-          ${
-            seenIn
-              ? `<span class="ctlab__row-line issue-row-meta-text ctlab__ellipsis" title="${escapeHtml(seenIn)}">${escapeHtml(seenIn)}</span>`
-              : ""
-          }
-          ${comment ? `<span class="ctlab__row-line issue-row-meta-text ctlab__clamp">${escapeHtml(truncate(comment, 320))}</span>` : ""}
+          <span class="issue-row-title-grid__meta issue-row-meta-text mono-small ctlab__row-meta">${meta}</span>
+          ${comment ? `<span class="ctlab__row-line ctlab__row-comment ctlab__clamp">${escapeHtml(truncate(comment, 320))}</span>` : ""}
           ${
             evidence
               ? `<span class="ctlab__row-line ctlab__row-evidence">
@@ -285,6 +284,36 @@ function renderAvisRow({
       </div>
     </div>
   `;
+}
+
+/**
+ * La deuxième ligne d'un avis : ce qu'on en sait, dans un ordre fixe.
+ *
+ * « Où en est-on » et « Avis » montrent les mêmes avis ; ils composaient
+ * pourtant leur ligne chacun de son côté, avec des mots et un ordre à eux. Ils
+ * la tiennent désormais d'ici : un seul endroit à corriger, et deux vues qui ne
+ * peuvent plus diverger.
+ *
+ * Le document où l'avis a été vu ferme la ligne. C'est l'information la plus
+ * longue — un rapport porte un nom, une version, une date — et la placer
+ * ailleurs qu'en fin de phrase repoussait tout le reste.
+ *
+ * L'appréciation, elle, se lit comme sur la frise : en toutes lettres, à la
+ * couleur de ce qu'elle implique. Écrite « S (Suspendu) » au fil du texte, elle
+ * se confondait avec le reste de la ligne.
+ */
+function avisRowMeta({ reference, code, label, page, raisedAt, ageMonths, notes = [], seenIn }) {
+  const parts = [
+    escapeHtml(reference ? `N° ${reference}` : "sans n°"),
+    code ? renderOpinion(code, label) : null,
+    page ? escapeHtml(`page ${page}`) : null,
+    raisedAt ? escapeHtml(`soulevé le ${formatDate(raisedAt)}`) : null,
+    ageMonths === null || ageMonths === undefined ? null : escapeHtml(`${ageMonths} mois`),
+    ...notes.filter(Boolean).map((note) => escapeHtml(note)),
+    seenIn ? escapeHtml(seenIn) : null
+  ].filter(Boolean);
+
+  return parts.join(' <span class="ctlab__row-sep" aria-hidden="true">·</span> ');
 }
 
 /**
@@ -726,8 +755,17 @@ const STYLE = `
 .ctlab__opinion--neutral,
 .ctlab__opinion--unknown { color: var(--ctlab-muted); }
 
-/* L'observation est le fond du dossier : elle se lit, elle ne se devine pas. */
-.ctlab__observation { color: var(--ctlab-text); }
+/* L'observation est le fond du dossier : elle se lit, elle ne se devine pas —
+   dans la frise comme dans la liste, où elle passait en gris de métadonnée. */
+.ctlab__observation,
+.ctlab__row-comment { color: var(--ctlab-text); }
+
+/* La deuxième ligne d'un avis : ce qu'on en sait, ponctué de points médians.
+   Elle se replie plutôt que de pousser la ligne hors du cadre. */
+.ctlab__row-meta { display: block; overflow-wrap: anywhere; }
+.ctlab__row-sep { opacity: .5; margin: 0 2px; }
+/* L'appréciation y garde la forme qu'elle a sur la frise. */
+.ctlab__row-meta .ctlab__opinion { margin-right: 0; vertical-align: 0; }
 
 .ctlab__tag--danger { --subject-label-border: var(--ctlab-danger); --subject-label-fg: var(--ctlab-danger); --subject-label-bg: rgba(248, 81, 73, .12); }
 
@@ -955,7 +993,10 @@ const STYLE = `
 .ctlab__drop {
   border: 1px dashed var(--ctlab-line);
   border-radius: var(--radius, 6px);
-  padding: 24px 16px;
+  /* La mention sur la lecture locale des PDF a quitté ce cadre ; sa hauteur
+     reste, parce qu'une zone de dépôt se vise, et qu'une cible qui rétrécit
+     se rate. */
+  padding: 24px 16px 48px;
   text-align: center;
   margin-bottom: 16px;
 }
@@ -966,7 +1007,6 @@ const STYLE = `
 .ctlab__drop-title { display: block; font-size: 16px; color: var(--ctlab-text); }
 .ctlab__drop-lead { color: var(--ctlab-muted); margin: 6px auto 0; max-width: 60ch; }
 .ctlab__drop-actions { margin-top: 12px; }
-.ctlab__drop-note { margin: 12px auto 0; max-width: 70ch; font-size: 12px; }
 .ctlab__progress {
   height: 6px;
   background: var(--bg-input, rgb(21, 27, 35));
@@ -1125,10 +1165,6 @@ function renderDropZone(state) {
         <button type="button" class="gh-btn gh-btn--sm" data-ctlab-pick>
           ${empty ? "Choisir des fichiers…" : "Ajouter des fichiers…"}
         </button>
-      </div>
-      <div class="ctlab__hint ctlab__drop-note">
-        Les PDF sont lus <b>dans ce navigateur</b> : rien n'est envoyé, rien n'est enregistré,
-        aucun sujet Mdall n'est créé ni modifié. Fermer l'onglet efface tout.
       </div>
     </div>
   `;
@@ -1331,7 +1367,6 @@ function renderStatusView(state) {
       const months = summary.age_days === null ? null : Math.round(summary.age_days / 30);
       const info = context.get(summary.reference) ?? {};
       const code = info.code ?? summary.opinion_raw ?? ABSTENTION_CODE;
-      const opinion = info.label && info.label !== code ? `${code} (${info.label})` : code;
       const lifecycle = avisLifecycle(code, info.label, summary.status, reopened.has(summary.reference));
 
       return renderAvisRow({
@@ -1341,20 +1376,14 @@ function renderStatusView(state) {
         title: firstText(info.title, "(ligne sans libellé lu)"),
         tag: lifecycle.label,
         tagStatus: lifecycle.tone,
-        meta: [
-          `N° ${summary.reference}`,
-          opinion,
-          `soulevé le ${formatDate(summary.raised_at)}`,
-          months === null ? null : `${months} mois`,
-          // Ce que le suivi ajoute au cycle de vie : pourquoi il est fermé,
-          // ou que personne n'en a plus rien dit.
+        raisedAt: summary.raised_at,
+        ageMonths: months,
+        // Ce que le suivi ajoute au cycle de vie : pourquoi il est fermé, ou
+        // que personne n'en a plus rien dit.
+        notes: [
           summary.status === "NO_NEWS" ? STATUS_LABELS.NO_NEWS : null,
           RESOLUTION_LABELS[summary.resolution_reason] ?? null
-        ]
-          .filter(Boolean)
-          .join(" · "),
-        // Les noms de fichiers du bureau de contrôle dépassent souvent cent
-        // caractères : les mêler aux métadonnées écrasait tout le reste.
+        ],
         seenIn: `vu dans ${documentLabel(summary.last_seen_document_id)}`,
         comment: info.comment,
         evidence: summary.evidence?.sentence ?? "",
@@ -1964,7 +1993,6 @@ function renderAvisTable(state) {
     .map((avis) => {
       const code = avis.value?.opinion_raw ?? avis.opinion_raw ?? ABSTENTION_CODE;
       const reference = avis.value?.external_reference_raw ?? null;
-      const opinion = avis.opinion_label && avis.opinion_label !== code ? `${code} (${avis.opinion_label})` : code;
 
       // Un avis numéroté a un état suivi ; les autres tiennent le leur de leur
       // appréciation. Dans les deux cas la ligne est celle de « Où en est-on » :
@@ -1983,17 +2011,11 @@ function renderAvisTable(state) {
         title: firstText(avis.title_raw, avis.description_raw, "(ligne sans libellé lu)"),
         tag: lifecycle.label,
         tagStatus: lifecycle.tone,
-        meta: [
-          reference ? `N° ${reference}` : "sans n°",
-          opinion,
-          avis.provenance?.page ? `page ${avis.provenance.page}` : null,
-          status && trackedAt.get(reference) ? `soulevé le ${formatDate(trackedAt.get(reference))}` : null,
-          // « Sans nouvelles » n'est pas un état du cycle de vie — l'avis est
-          // ouvert — mais c'est une information : personne n'en a rien dit.
-          status === "NO_NEWS" ? STATUS_LABELS.NO_NEWS : null
-        ]
-          .filter(Boolean)
-          .join(" · "),
+        page: avis.provenance?.page ?? null,
+        raisedAt: status ? trackedAt.get(reference) ?? null : null,
+        // « Sans nouvelles » n'est pas un état du cycle de vie — l'avis est
+        // ouvert — mais c'est une information : personne n'en a rien dit.
+        notes: [status === "NO_NEWS" ? STATUS_LABELS.NO_NEWS : null],
         seenIn: `vu dans ${documentLabel(avis.provenance?.source_id)}`,
         comment:
           firstText(avis.title_raw) && firstText(avis.description_raw) !== firstText(avis.title_raw)
