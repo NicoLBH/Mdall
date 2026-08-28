@@ -25,6 +25,7 @@ import { extractPagesFromFile } from "../../../services/pdf-extraction.js";
 import { RECOGNITION } from "../../../services/document-recognition.js";
 import { recognize } from "../../../services/document-recognizers.js";
 import { IDENTITY, findRelated } from "../../../services/document-identity.js";
+import { corpusFingerprint } from "../../../services/ct-analysis-store.js";
 import { buildCaseExport, buildFullExport, collectAvis, runCtLab } from "../../../services/ct-lab-engine.js";
 import {
   DEFAULT_LEXICON_TEXT,
@@ -75,6 +76,59 @@ function setAsideReason(report) {
     return `Même contenu que « ${report.related.filename} » : c'est le même document, sous un autre nom.`;
   }
   return report?.recognition?.reason ?? "";
+}
+
+/**
+ * Ce que le projet garde d'une ouverture à l'autre.
+ *
+ * Les avis sont conservés, pas les documents relus : la géométrie extraite
+ * pèse vingt fois plus que les PDF dont elle sort, et elle périme au moindre
+ * progrès du moteur. L'écran dit donc ce qu'on sait — combien d'avis, à quelle
+ * date, lus par quel vocabulaire — et ce qu'il reste à faire pour le mettre à
+ * jour : redéposer les documents.
+ *
+ * Il dit aussi, après coup, si l'analyse a bien été conservée. Laisser croire
+ * qu'elle l'a été alors que la base n'a pas répondu serait pire que de ne rien
+ * dire.
+ */
+function renderMemory(state) {
+  if (state.saved?.status === "saved") {
+    const { saved, marked } = state.saved;
+    return `
+      <div class="ctlab__set-aside ctlab__set-aside--ok">
+        <b>Suivi enregistré pour ce projet</b>
+        <ul><li>${saved} avis conservé(s)${marked > 0 ? `, ${marked} marqué(s) absent(s) du lot — aucun n'est supprimé` : ""}.</li></ul>
+      </div>
+    `;
+  }
+
+  if (state.saved?.status === "failed") {
+    return `
+      <div class="ctlab__set-aside">
+        <b>Analyse non conservée</b>
+        <ul><li>Le suivi n'a pas pu être enregistré. Ce qui s'affiche reste juste, mais sera perdu en fermant l'onglet.</li></ul>
+      </div>
+    `;
+  }
+
+  const run = state.memory?.run;
+  if (!run || state.result) return "";
+
+  const packs = Object.values(run.packs_used ?? {});
+  const vocabulaire = packs.length > 0 ? `${packs[0].pack_id} v${packs[0].pack_version}` : null;
+
+  return `
+    <div class="ctlab__set-aside ctlab__set-aside--info">
+      <b>Ce projet a déjà un suivi enregistré</b>
+      <ul>
+        <li>
+          ${run.tracked_avis_count} avis suivis, sur ${run.document_count} document(s),
+          au ${escapeHtml(formatDate(run.computed_at))}${vocabulaire ? ` — lu par ${escapeHtml(vocabulaire)}` : ""}.
+          Redéposez les documents pour le remettre à jour : tout est recalculé, jamais complété.
+        </li>
+      </ul>
+    </div>
+  `;
 }
 
 /**
@@ -1109,6 +1163,7 @@ const STYLE = `
   padding-left: 10px;
 }
 .ctlab__set-aside--info { border-left-color: var(--ctlab-info); }
+.ctlab__set-aside--ok { border-left-color: var(--ctlab-ok); }
 .ctlab__set-aside b { color: var(--ctlab-text); font-weight: 600; }
 .ctlab__set-aside ul { margin: 4px 0 0; padding-left: 16px; }
 .ctlab__set-aside-name { color: var(--ctlab-text); }
@@ -1269,6 +1324,7 @@ function renderDropZone(state) {
       </div>
       ${renderSetAside(setAside)}
       ${renderReissues(state.reports.filter((report) => !report.error && isReissue(report)))}
+      ${renderMemory(state)}
       <div class="ctlab__drop-actions">
         <button type="button" class="gh-btn gh-btn--sm" data-ctlab-pick>
           ${empty ? "Choisir des fichiers…" : "Ajouter des fichiers…"}
@@ -3293,10 +3349,36 @@ export function renderCtContinuityLab(root) {
     avisFilter: { code: "", documentId: "", numberedOnly: false },
     patternText: DEFAULT_PATTERN_TEXT,
     lexiconText: DEFAULT_LEXICON_TEXT,
-    patternErrors: []
+    patternErrors: [],
+    /** Le suivi déjà enregistré pour ce projet, s'il y en a un. */
+    memory: null,
+    /** Ce qu'est devenue la dernière analyse : conservée, ou seulement affichée. */
+    saved: null
   };
 
   let nextDocumentNumber = 1;
+
+  // Ce que le projet garde d'une ouverture à l'autre. On le lit sans bloquer :
+  // l'atelier a toujours su travailler sur des fichiers déposés à la main, et
+  // la persistance ajoute une mémoire sans conditionner l'outil.
+  // L'import est différé : ce service passe par le SDK Supabase, chargé depuis
+  // le réseau, que l'exécution des tests hors navigateur ne saurait résoudre.
+  const persistence = () => import("../../../services/ct-analysis-supabase.js");
+
+  (async () => {
+    try {
+      const { getCurrentProjectId, loadCtAnalysis } = await persistence();
+      const projectId = await getCurrentProjectId();
+      if (!projectId) return;
+      const memory = await loadCtAnalysis(projectId);
+      if (!memory?.run) return;
+      state.memory = { projectId, ...memory };
+      refresh();
+    } catch {
+      // Pas de mémoire joignable : l'atelier fonctionne comme il l'a toujours
+      // fait, sur les fichiers qu'on lui donne.
+    }
+  })();
 
   const input = document.createElement("input");
   input.type = "file";
@@ -3477,6 +3559,50 @@ export function renderCtContinuityLab(root) {
     refresh();
   };
 
+  /**
+   * Enregistre l'analyse, sans jamais la remettre en cause.
+   *
+   * L'atelier reste utilisable hors de tout projet — sur des fichiers déposés
+   * à la main, comme il l'a toujours été. Quand la base ne répond pas,
+   * l'analyse s'affiche quand même, et l'écran dit qu'elle n'a pas été
+   * conservée plutôt que de laisser croire qu'elle l'a été.
+   */
+  const persistResult = async (reports) => {
+    // Ne pas avoir de projet et ne pas réussir à enregistrer sont deux choses
+    // différentes. Annoncer « analyse non conservée » à qui travaille sur des
+    // fichiers isolés serait un faux reproche : il n'y avait rien à conserver.
+    let api = null;
+    let projectId = null;
+    try {
+      api = await persistence();
+      projectId = state.memory?.projectId ?? (await api.getCurrentProjectId());
+    } catch {
+      return { status: "no-project" };
+    }
+    if (!projectId) return { status: "no-project" };
+
+    try {
+      const { loadCtAnalysis, saveCtAnalysis } = api;
+      const fingerprint = await corpusFingerprint(reports);
+      // Les documents ont été déposés à la main, pas repris du stockage : ils
+      // n'ont pas d'identifiant en base, et les liens vers eux restent vides.
+      // Ils se rempliront quand les livrables entreront par l'onglet Documents.
+      const outcome = await saveCtAnalysis({
+        projectId,
+        result: state.result,
+        corpusFingerprint: fingerprint,
+        documentCount: reports.length
+      });
+
+      if (!outcome) return { status: "failed" };
+
+      state.memory = { projectId, ...((await loadCtAnalysis(projectId)) ?? {}) };
+      return { status: "saved", ...outcome };
+    } catch {
+      return { status: "failed" };
+    }
+  };
+
   const resetAll = () => {
     state.reports = [];
     state.result = null;
@@ -3577,6 +3703,16 @@ export function renderCtContinuityLab(root) {
     } catch (error) {
       state.result = null;
       state.error = error.message;
+    }
+
+    // Conserver ce qui vient d'être calculé, quand le projet est connu. Les
+    // avis sont écrits par leur identité — projet et numéro —, ceux qui ne
+    // ressortent plus du lot sont marqués absents, et aucun n'est supprimé.
+    state.saved = null;
+    if (state.result) {
+      pushStage("Enregistrement du suivi");
+      refresh();
+      state.saved = await persistResult(reports);
     }
     state.running = false;
     state.stages = [];
