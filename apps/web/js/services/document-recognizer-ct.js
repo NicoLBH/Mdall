@@ -19,6 +19,7 @@
  */
 
 import { CONFIDENCE } from "./document-recognition.js";
+import { MARKER } from "./project-identity.js";
 
 /**
  * Les émetteurs que nous savons nommer.
@@ -80,6 +81,14 @@ export function createCtReportRecognizer({ readDocumentMeta, discoverLegend }) {
         confidence,
         declaredReference: meta.chrono_reference,
         issuedAt: meta.issued_at,
+        // Ce que le document dit de l'affaire dont il relève. Ces marqueurs ne
+        // rattachent rien à eux seuls : ils seront confrontés à la mémoire du
+        // projet, et c'est un humain qui tranchera. Un livrable qui n'en porte
+        // aucun n'est pas suspect pour autant.
+        markers: [
+          meta.chrono_affaire ? { type: MARKER.CHRONO_AFFAIRE, value: meta.chrono_affaire } : null,
+          meta.affaire_reference ? { type: MARKER.AFFAIRE, value: meta.affaire_reference } : null
+        ].filter(Boolean),
         evidence: author ? findEvidence(author.pattern, { text, pages }) : null,
         // La légende est ce que le moteur de lecture exige : sans elle, aucun
         // avis ne peut être reconnu. Son absence n'est pas un défaut — une

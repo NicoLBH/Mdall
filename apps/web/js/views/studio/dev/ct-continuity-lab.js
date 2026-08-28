@@ -34,6 +34,14 @@ import { recognize } from "../../../services/document-recognizers.js";
 import { IDENTITY, findRelated } from "../../../services/document-identity.js";
 import { resolveDepositFolder } from "../../../services/document-filing.js";
 import { relateToKnown, toDocumentColumns } from "../../../services/document-intake.js";
+import {
+  ATTACHMENT,
+  assessAttachment,
+  declaredMarkers,
+  findEchoes,
+  markersToRemember,
+  selfMarkers
+} from "../../../services/project-identity.js";
 import { corpusEntries, corpusFingerprint, diffCorpus } from "../../../services/ct-analysis-store.js";
 import { buildCaseExport, buildFullExport, collectAvis, runCtLab } from "../../../services/ct-lab-engine.js";
 import {
@@ -71,7 +79,12 @@ function isSetAside(report) {
   if (status === RECOGNITION.UNRECOGNIZED || status === RECOGNITION.NO_TEXT_LAYER) return true;
   // Un doublon compterait deux fois dans la chronologie et la complétude, et
   // fabriquerait des transitions qui n'ont pas eu lieu.
-  return report?.related?.verdict === IDENTITY.DUPLICATE;
+  if (report?.related?.verdict === IDENTITY.DUPLICATE) return true;
+  // Un livrable d'une affaire que ce projet ne connaît pas. Il n'est pas
+  // refusé — un bouton le rattache, et la réponse est conservée —, il est mis
+  // de côté le temps qu'on demande. Seul `FOREIGN` écarte : un document dont on
+  // doute simplement reste dans le lot, car douter n'est pas savoir.
+  return report?.attachment?.verdict === ATTACHMENT.FOREIGN;
 }
 
 /** Vrai si ce document déclare la référence d'un autre, avec un autre contenu. */
@@ -84,7 +97,115 @@ function setAsideReason(report) {
   if (report?.related?.verdict === IDENTITY.DUPLICATE) {
     return `Même contenu que « ${report.related.filename} » : c'est le même document, sous un autre nom.`;
   }
+  if (report?.attachment?.verdict === ATTACHMENT.FOREIGN) return report.attachment.reason;
   return report?.recognition?.reason ?? "";
+}
+
+/**
+ * Les affaires que ce lot met en jeu, et ce qu'il faut demander à leur sujet.
+ *
+ * Les documents sont groupés par affaire plutôt que listés un par un : on ne
+ * pose pas dix-sept fois la même question. Un groupe se confirme d'un clic, et
+ * la réponse vaut pour tous ses livrables — présents et à venir.
+ */
+export function attachmentGroups(reports) {
+  const groups = new Map();
+
+  for (const report of reports) {
+    const attachment = report?.attachment;
+    if (!attachment || attachment.verdict === ATTACHMENT.BELONGS) continue;
+
+    const markers = attachment.declared ?? [];
+    // Un document qui ne déclare aucune affaire n'ouvre pas de question : il n'y
+    // a rien à confirmer, et rien à retenir de sa confirmation.
+    if (markers.length === 0) continue;
+
+    const key = markers.map((marker) => `${marker.type} ${marker.value}`).join(" | ");
+    const group = groups.get(key) ?? {
+      key,
+      markers,
+      label: markers[0].label,
+      verdict: attachment.verdict,
+      reason: attachment.reason,
+      reports: []
+    };
+    // Le verdict du groupe est le plus sévère de ses documents : si l'un d'eux
+    // est écarté, la question porte aussi sur les autres.
+    if (attachment.verdict === ATTACHMENT.FOREIGN) {
+      group.verdict = ATTACHMENT.FOREIGN;
+      group.reason = attachment.reason;
+    }
+    group.reports.push(report);
+    groups.set(key, group);
+  }
+
+  return [...groups.values()];
+}
+
+/**
+ * Le rattachement du lot au projet affiché, et la question qui va avec.
+ *
+ * C'est le seul endroit de l'atelier où l'on demande quelque chose à
+ * l'utilisateur, et c'est délibéré : rattacher un document à un projet est une
+ * affirmation sur le monde, qu'aucune lecture de PDF ne peut faire seule. Deux
+ * tranches d'un même chantier portent des affaires différentes ; deux chantiers
+ * d'une même commune partagent une ville. Aucune règle ne tranche ça — un
+ * humain, oui, et une seule fois.
+ *
+ * La réponse est conservée. C'est ce qui fait que la mémoire du projet
+ * s'étoffe : la deuxième montée d'escalier n'est demandée qu'au premier de ses
+ * livrables, et jamais plus.
+ */
+function renderAttachment(state) {
+  const groups = attachmentGroups(state.reports);
+  if (groups.length === 0) return "";
+
+  const memoire = state.identity?.known ?? [];
+  const echec = state.attachmentError
+    ? `<div class="ctlab__set-aside"><b>Rattachement non conservé</b><ul><li>${escapeHtml(
+        state.attachmentError
+      )}</li></ul></div>`
+    : "";
+
+  return echec + groups
+    .map((group) => {
+      const ecarte = group.verdict === ATTACHMENT.FOREIGN;
+      const combien = group.reports.length;
+
+      return `
+        <div class="ctlab__set-aside${ecarte ? "" : " ctlab__set-aside--info"}">
+          <b>${
+            ecarte
+              ? `${combien} livrable(s) d'une autre affaire`
+              : memoire.length === 0
+                ? `Rattacher ce lot au projet`
+                : `${combien} livrable(s) à rattacher`
+          }</b>
+          <ul>
+            <li>${escapeHtml(group.reason)}</li>
+            <li>
+              ${group.reports
+                .slice(0, 3)
+                .map((report) => `<span class="ctlab__set-aside-name">${escapeHtml(report.filename ?? report.sourceId)}</span>`)
+                .join(", ")}${combien > 3 ? ` et ${combien - 3} autre(s)` : ""}.
+            </li>
+            ${ecarte
+              ? `<li>Ces documents sont écartés de l'analyse tant que la question n'est pas tranchée. Aucun n'est supprimé.</li>`
+              : ""}
+          </ul>
+          <div class="ctlab__drop-actions">
+            <button type="button" class="gh-btn gh-btn--sm" data-ctlab-attach="${escapeHtml(group.key)}">
+              ${
+                memoire.length === 0
+                  ? `Oui, l'affaire ${escapeHtml(group.label)} est celle de ce projet`
+                  : `Oui, rattacher l'affaire ${escapeHtml(group.label)} à ce projet`
+              }
+            </button>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
 }
 
 /**
@@ -1460,9 +1581,20 @@ function renderDropZone(state) {
   // déroulé du travail qui occupe la place.
   if (state.loading || state.running) return "";
 
-  const setAside = state.reports.filter((report) => !report.error && isSetAside(report));
+  // Les documents écartés faute de rattachement ont leur propre bloc, qui pose
+  // la question et porte le bouton. Les répéter ici les dirait deux fois, dont
+  // une sans le moyen d'y répondre.
+  const unattached = state.reports.filter(
+    (report) => !report.error && report.attachment?.verdict === ATTACHMENT.FOREIGN
+  );
+  const setAside = state.reports.filter(
+    (report) =>
+      !report.error && isSetAside(report) && report.attachment?.verdict !== ATTACHMENT.FOREIGN
+  );
   const loaded = state.reports.filter((report) => !report.error && !isSetAside(report)).length;
-  const failed = state.reports.length - loaded - setAside.length;
+  // Les documents non rattachés sont comptés à part : les laisser tomber dans
+  // ce reste les ferait passer pour des fichiers illisibles.
+  const failed = state.reports.length - loaded - setAside.length - unattached.length;
 
   // Deux états, et l'écran doit dire lequel : sans documents, on invite à en
   // déposer ; avec des documents, on dit combien et ce qu'il reste à faire.
@@ -1491,6 +1623,7 @@ function renderDropZone(state) {
       </div>
       ${renderSetAside(setAside)}
       ${renderReissues(state.reports.filter((report) => !report.error && isReissue(report)))}
+      ${renderAttachment(state)}
       ${renderUnreachable(state)}
       ${renderMemory(state)}
       <div class="ctlab__drop-actions">
@@ -3530,7 +3663,14 @@ export function renderCtContinuityLab(root) {
     /** Ce que le dernier dépôt a rangé dans Documents. */
     filed: null,
     /** Les livrables enregistrés que le stockage n'a pas rendus. */
-    unreachable: null
+    unreachable: null,
+    /**
+     * Ce qui identifie ce projet : ce qu'il sait de lui-même (`self`, cherché
+     * dans les documents) et ce que des humains y ont rattaché (`known`).
+     */
+    identity: { known: [], self: selfMarkers(store.projectForm ?? {}) },
+    /** Ce qui a empêché de conserver un rattachement, s'il y a lieu. */
+    attachmentError: null
   };
 
   let nextDocumentNumber = 1;
@@ -3543,6 +3683,7 @@ export function renderCtContinuityLab(root) {
   const persistence = () => import("../../../services/ct-analysis-supabase.js");
   const deposit = () => import("../../../services/document-deposit.js");
   const documentFolders = () => import("../../../services/project-supabase-sync.js");
+  const projectIdentity = () => import("../../../services/project-identity-supabase.js");
 
   /**
    * Relit les livrables que le projet contient, et dit s'ils sont encore ceux
@@ -3552,6 +3693,51 @@ export function renderCtContinuityLab(root) {
    * sont en base, posées au dépôt. `matchesRun` vaut `null` quand il n'y a rien
    * à comparer — ne pas savoir n'est pas répondre « non ».
    */
+  /**
+   * Ce qui identifie ce projet, des deux côtés.
+   *
+   * `self` est ce que Mdall sait de lui — son nom, son adresse, sa ville —,
+   * qu'on ira chercher **dans** les documents. Il n'y a rien à extraire pour
+   * cela, donc rien à écrire pour un nouvel émetteur : c'est une recherche. Et
+   * il se renforce tout seul, puisque chaque champ rempli dans la fiche du
+   * projet devient une preuve de plus.
+   *
+   * `known` est ce que des humains ont rattaché à ce projet — les affaires
+   * confirmées. Vide au premier jour, il s'étoffe à chaque réponse.
+   */
+  const refreshIdentity = async (projectId) => {
+    const self = selfMarkers(store.projectForm ?? {});
+    try {
+      const { loadProjectMarkers } = await projectIdentity();
+      state.identity = { known: await loadProjectMarkers(projectId), self };
+    } catch {
+      // Sans mémoire joignable, on ne contredit personne : mieux vaut tout
+      // laisser passer qu'écarter des livrables légitimes sur une panne.
+      state.identity = { known: [], self };
+    }
+  };
+
+  /**
+   * Confronte un document au projet affiché.
+   *
+   * Isolée parce qu'elle sert deux fois : à l'entrée d'un fichier, et de
+   * nouveau après chaque confirmation — c'est ce second appel qui fait rentrer
+   * dans le lot les documents qu'on venait de rattacher.
+   */
+  const assessReport = (report) => {
+    const declared = declaredMarkers(report.recognition);
+    const text = (report.pages ?? []).map((page) => page.text ?? "").join("\n");
+
+    return {
+      ...assessAttachment({
+        declared,
+        echoes: findEchoes(text, state.identity.self),
+        known: state.identity.known
+      }),
+      declared
+    };
+  };
+
   const refreshStoredDocuments = async (projectId) => {
     if (!projectId) return;
     try {
@@ -3584,6 +3770,7 @@ export function renderCtContinuityLab(root) {
       if (!projectId) return;
 
       state.memory = { projectId, ...((await loadCtAnalysis(projectId)) ?? {}) };
+      await refreshIdentity(projectId);
       await refreshStoredDocuments(projectId);
 
       if (!state.memory.run && !state.stored) return;
@@ -3772,6 +3959,11 @@ export function renderCtContinuityLab(root) {
           // et un décalage d'indice rattacherait un avis au mauvais document.
           documentId: documentIds.get(file) ?? null
         });
+
+        // À quel projet ce document appartient-il ? La question se pose au
+        // moment où il entre, pendant qu'on a son texte sous la main.
+        const entered = state.reports[state.reports.length - 1];
+        entered.attachment = assessReport(entered);
       } catch (error) {
         state.reports.push({ sourceId, filename: file.name, sizeBytes: file.size, pageCount: 0, pages: [], error: error.message });
       }
@@ -3983,6 +4175,57 @@ export function renderCtContinuityLab(root) {
    * analyse amputée d'un rapport sans le dire vaut moins qu'une analyse qui
    * n'a pas eu lieu.
    */
+  /**
+   * L'humain répond : oui, cette affaire est celle de ce projet.
+   *
+   * Trois choses en découlent, et la troisième est le but de tout l'édifice.
+   *
+   * Les marqueurs de l'affaire sont **versés à la mémoire du projet**, où ils
+   * restent. Les documents du lot sont **réévalués**, ce qui fait rentrer dans
+   * l'analyse ceux qu'on venait d'écarter. Et surtout, la question ne sera
+   * **plus jamais posée** pour cette affaire : les livrables suivants de la
+   * même montée d'escalier passeront sans qu'on redemande.
+   *
+   * Rien n'est écrit si la base ne répond pas, et l'écran le dit. Laisser
+   * croire qu'une réponse a été retenue alors qu'elle est perdue ferait
+   * reposer la même question à chaque ouverture, sans qu'on comprenne pourquoi.
+   */
+  const confirmAttachment = async (key) => {
+    const group = attachmentGroups(state.reports).find((entry) => entry.key === key);
+    if (!group) return;
+
+    const projectId = state.memory?.projectId ?? null;
+    if (!projectId) {
+      state.attachmentError = "Aucun projet n'est ouvert : ce rattachement ne peut pas être conservé.";
+      refresh();
+      return;
+    }
+
+    try {
+      const { rememberProjectMarkers } = await projectIdentity();
+      const retenus = markersToRemember(group.markers, state.identity.known);
+      const written = await rememberProjectMarkers(projectId, retenus);
+      if (written === null) throw new Error("non conservé");
+    } catch {
+      state.attachmentError =
+        "Le rattachement n'a pas pu être enregistré. Les documents restent écartés, " +
+        "et la question sera reposée.";
+      refresh();
+      return;
+    }
+
+    state.attachmentError = null;
+    await refreshIdentity(projectId);
+    // Tout le lot est réévalué, pas seulement le groupe confirmé : la nouvelle
+    // affaire peut en rattacher d'autres, et rien ne justifie de le savoir pour
+    // les uns et pas pour les autres.
+    for (const report of state.reports) {
+      if (report.error) continue;
+      report.attachment = assessReport(report);
+    }
+    refresh();
+  };
+
   const resumeFromStorage = async () => {
     const documents = state.stored?.documents ?? [];
     // `state.running` ne couvre que l'analyse : pendant le rapatriement, le
@@ -4052,6 +4295,7 @@ export function renderCtContinuityLab(root) {
     state.reports = [];
     state.result = null;
     state.unreachable = null;
+    state.attachmentError = null;
     state.selectedCell = null;
     state.selectedReference = null;
     state.error = null;
@@ -4249,7 +4493,8 @@ export function renderCtContinuityLab(root) {
     if (handleDatePickerClick(event)) return;
 
     const target = event.target.closest(
-      "[data-ctlab-pick], [data-ctlab-resume], [data-ctlab-remove], [data-ctlab-cell], [data-ctlab-trace], [data-ctlab-back], " +
+      "[data-ctlab-pick], [data-ctlab-resume], [data-ctlab-attach], [data-ctlab-remove], [data-ctlab-cell], " +
+        "[data-ctlab-trace], [data-ctlab-back], " +
         "[data-ctlab-open-pdf], [data-ctlab-pdf-close], " +
         "[data-ctlab-as-of], " +
         "[data-pagination-entity='ctlab-avis'], " +
@@ -4277,6 +4522,12 @@ export function renderCtContinuityLab(root) {
     if (target.dataset.ctlabResume !== undefined) {
       captureEditors();
       await resumeFromStorage();
+      return;
+    }
+
+    if (target.dataset.ctlabAttach !== undefined) {
+      captureEditors();
+      await confirmAttachment(target.dataset.ctlabAttach);
       return;
     }
 

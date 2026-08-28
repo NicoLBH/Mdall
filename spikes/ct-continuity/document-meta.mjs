@@ -26,6 +26,7 @@ function toIsoDate(day, month, year) {
 
 /**
  * @returns {{issued_at: string|null, issued_at_source: string, chrono_reference: string|null,
+ *            chrono_affaire: string|null, affaire_reference: string|null,
  *            document_type: string|null, document_type_label: string|null,
  *            sheet_number: number|null, version: number|null}}
  */
@@ -37,6 +38,7 @@ export function readDocumentMeta(source, { pack = DEFAULT_PACK } = {}) {
   const fallback = emission ? null : ANY_DATE.exec(head);
 
   const chrono = pack.chrono.exec(text);
+  const affaire = pack.affaireNumber ? pack.affaireNumber.exec(head) : null;
   const sheet = pack.sheetNumber.exec(head);
   const version = pack.documentVersion.exec(head);
   // Le type se lit dans le titre, pas dans le corps : une fiche qui mentionne
@@ -54,6 +56,13 @@ export function readDocumentMeta(source, { pack = DEFAULT_PACK } = {}) {
     // et l'écran doit pouvoir le dire.
     issued_at_source: emission ? "declared" : fallback ? "first_date_found" : "none",
     chrono_reference: chrono ? chrono[1] : null,
+    // L'affaire, sous ses deux formes. Elles ne se déduisent pas l'une de
+    // l'autre — le segment de la chrono est court, le numéro déclaré est long —
+    // et c'est ce qui rattachera un livrable à un projet, sous confirmation
+    // d'un humain. Aucune des deux n'est requise : un marqueur absent ne fait
+    // jamais rejeter un document.
+    chrono_affaire: chrono ? (chrono[1].split("/")[pack.chronoAffairePart ?? 1] ?? null) : null,
+    affaire_reference: affaire ? affaire[1] : null,
     document_type: type?.id ?? null,
     document_type_label: type?.label ?? null,
     // Un type inconnu n'est pas présumé récapitulatif : on ne fait pas d'un
