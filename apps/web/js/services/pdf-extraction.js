@@ -21,6 +21,10 @@
  * échoue avec un message explicite plutôt qu'une erreur d'import opaque.
  */
 
+
+import { sha256Hex } from "../utils/sha256.js";
+import { contentFingerprint } from "./document-identity.js";
+
 const VENDOR_BASE = "../../vendor/unpdf";
 
 let unpdfPromise = null;
@@ -199,12 +203,6 @@ export async function extractPositionedPages(bytes, { pdfjs = null } = {}) {
 }
 
 /** Empreinte du texte extrait : sert à repérer un document chargé deux fois. */
-async function sha256Hex(text) {
-  if (!globalThis.crypto?.subtle) return null;
-  const digest = await globalThis.crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-
 /** Lit un File du navigateur et en extrait les pages. */
 export async function extractPagesFromFile(file, options = {}) {
   const buffer = await file.arrayBuffer();
@@ -231,6 +229,10 @@ export async function extractPagesFromFile(file, options = {}) {
     filename: file.name,
     sizeBytes: file.size,
     lastModified: file.lastModified ?? null,
-    contentHash: await sha256Hex(extracted.pages.map((page) => page.text).join("\n"))
+    contentHash: await sha256Hex(extracted.pages.map((page) => page.text).join("\n")),
+    // L'empreinte d'identité, elle, ignore les blancs : deux exports du même
+    // rapport n'ont pas les mêmes retours à la ligne, et ce n'est pas une
+    // raison d'en faire deux documents.
+    fingerprint: await contentFingerprint(extracted.pages.map((page) => page.text).join("\n"))
   };
 }

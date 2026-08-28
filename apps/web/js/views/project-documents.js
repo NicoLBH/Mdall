@@ -1324,6 +1324,12 @@ function describeRecognition(document = {}) {
   const phase = `${document.phaseCode || ""}${document.phaseLabel ? ` - ${document.phaseLabel}` : ""}`;
   const fallback = document.note || "Document prêt pour l'analyse";
 
+  // Un doublon ou une réédition passent avant tout le reste : c'est ce qu'il
+  // faut savoir de ce document, et savoir DE QUI il double ou réédite. Le dire
+  // sans nommer l'autre laisserait le lecteur chercher lequel.
+  const twin = describeTwin(document);
+  if (twin) return { known: false, main: twin, meta: phase, title: twin };
+
   if (!detection?.status) return { known: false, main: fallback, meta: phase, title: fallback };
 
   const known = detection.status === "RECOGNIZED" || detection.status === "RECOGNIZED_WITHOUT_CONTENT";
@@ -1336,6 +1342,30 @@ function describeRecognition(document = {}) {
   ].filter(Boolean);
 
   return { known, main, meta: parts.join(" · "), title: detection.reason || main };
+}
+
+/**
+ * Le document dont celui-ci est le double, ou la réédition — nommé.
+ *
+ * « Doublon » tout court oblige à chercher de quoi. Le nom de l'autre fichier
+ * est la moitié de l'information, et c'est celle qui permet d'agir.
+ */
+function describeTwin(document = {}) {
+  const identity = document.identity ?? null;
+  if (!identity) return "";
+
+  const nameOf = (id) => {
+    const other = getProjectDocumentById(id);
+    return other?.name || other?.fileName || "un autre document";
+  };
+
+  if (identity.duplicateOf) {
+    return `Doublon de « ${nameOf(identity.duplicateOf)} » — même contenu, sous un autre nom.`;
+  }
+  if (identity.reissueOf) {
+    return `Même référence que « ${nameOf(identity.reissueOf)} », contenu différent : réédition à vérifier.`;
+  }
+  return "";
 }
 
 function getReportTitle() {
