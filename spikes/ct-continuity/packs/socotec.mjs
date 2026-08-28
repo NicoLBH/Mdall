@@ -65,6 +65,24 @@ export const SOCOTEC = {
   /** `CT/13860/0923/0222` — organisme / affaire / MMAA / séquence. */
   chrono: /\b([A-Z]{1,4}\/\d{3,6}\/\d{4}\/\d{3,5})\b/,
 
+  /**
+   * Le rang du numéro d'affaire dans la référence chrono, segments séparés par
+   * `/`. C'est ce segment qui rattache un livrable à une affaire, et donc — à
+   * confirmation d'un humain — à un projet.
+   */
+  chronoAffairePart: 1,
+
+  /**
+   * `N° d'affaire : 230113860000087` — le numéro d'affaire déclaré en toutes
+   * lettres, quand l'en-tête le porte.
+   *
+   * Il est plus long que le segment de la chrono et ne s'y réduit pas ; les
+   * deux se conservent séparément plutôt que d'en déduire l'un de l'autre. Son
+   * absence n'est pas un défaut : beaucoup de livrables ne portent que la
+   * chrono, et un marqueur absent ne fait jamais rejeter un document.
+   */
+  affaireNumber: /n[°ºo]\s*(?:d['’]\s*)?affaire\s*:?\s*(\d{6,20})\b/i,
+
   emissionDate: /date\s+d[’']\s*émission\s*:?\s*(\d{1,2})\/(\d{1,2})\/(\d{4})/i,
 
   /** `FICHE N° : 2` — numéro de fiche propre à l'affaire. */

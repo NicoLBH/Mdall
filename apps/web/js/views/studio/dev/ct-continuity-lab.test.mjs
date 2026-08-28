@@ -13,6 +13,7 @@ import * as analytics from "../../../../../../spikes/ct-continuity/analytics.mjs
 import { runCtLab } from "../../../services/ct-lab-engine.js";
 import {
   TABS,
+  attachmentGroups,
   avisLifecycle,
   firstText,
   lastSeenWording,
@@ -443,4 +444,52 @@ test("une ligne avec appréciation la montre avec son observation", () => {
   assert.ok(html.includes("SUSPENDU"));
   assert.ok(html.includes("Les circuits terminaux devront être protégés."));
   assert.ok(!html.includes("SANS APPRÉCIATION"));
+});
+
+test("la question du rattachement se pose par affaire, pas par document", () => {
+  // Dix-sept livrables d'une même affaire, c'est une question, pas dix-sept.
+  const lot = [
+    { sourceId: "doc-1", attachment: { verdict: "FOREIGN", reason: "Affaire 99999…", declared: [{ type: "chrono_affaire", value: "99999", label: "99999" }] } },
+    { sourceId: "doc-2", attachment: { verdict: "FOREIGN", reason: "Affaire 99999…", declared: [{ type: "chrono_affaire", value: "99999", label: "99999" }] } },
+    { sourceId: "doc-3", attachment: { verdict: "UNCERTAIN", reason: "Affaire 13861…", declared: [{ type: "chrono_affaire", value: "13861", label: "13861" }] } }
+  ];
+
+  const groups = attachmentGroups(lot);
+
+  assert.equal(groups.length, 2);
+  assert.deepEqual(groups.map((group) => group.reports.length), [2, 1]);
+});
+
+test("un document rattaché n'ouvre aucune question", () => {
+  const groups = attachmentGroups([
+    { sourceId: "doc-1", attachment: { verdict: "BELONGS", declared: [{ type: "chrono_affaire", value: "13860", label: "13860" }] } }
+  ]);
+
+  assert.deepEqual(groups, []);
+});
+
+test("un document qui ne déclare aucune affaire n'ouvre aucune question", () => {
+  // Il n'y a rien à confirmer, et rien à retenir de sa confirmation : lui poser
+  // la question ne ferait que réclamer un clic sans effet.
+  const groups = attachmentGroups([
+    { sourceId: "doc-1", attachment: { verdict: "UNCERTAIN", reason: "…", declared: [] } },
+    { sourceId: "doc-2", attachment: null },
+    { sourceId: "doc-3", error: "illisible" }
+  ]);
+
+  assert.deepEqual(groups, []);
+});
+
+test("un groupe prend le verdict le plus sévère de ses documents", () => {
+  // Si l'un des livrables d'une affaire est écarté, la question porte sur toute
+  // l'affaire : accepter les autres en silence laisserait un lot incohérent.
+  const marqueurs = [{ type: "chrono_affaire", value: "99999", label: "99999" }];
+  const groups = attachmentGroups([
+    { sourceId: "doc-1", attachment: { verdict: "UNCERTAIN", reason: "doute", declared: marqueurs } },
+    { sourceId: "doc-2", attachment: { verdict: "FOREIGN", reason: "autre affaire", declared: marqueurs } }
+  ]);
+
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].verdict, "FOREIGN");
+  assert.equal(groups[0].reason, "autre affaire");
 });

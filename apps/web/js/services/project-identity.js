@@ -1,0 +1,242 @@
+/**
+ * À quel projet appartient ce document ?
+ *
+ * Jusqu'ici, personne ne posait la question. Un RICT du projet B déposé dans le
+ * projet A était lu, analysé et conservé sans un mot, ses avis mêlés aux vrais.
+ *
+ * La tentation était de comparer un numéro d'affaire et de rejeter ce qui ne
+ * correspond pas. C'eût été faux, et d'une façon coûteuse : « projet A, montée
+ * d'escalier B » et « projet A, montée d'escalier C » peuvent porter deux
+ * affaires distinctes tout en étant le même chantier. Rejeter en silence des
+ * livrables légitimes est un dégât pire que celui qu'on répare.
+ *
+ * D'où trois principes, qui expliquent toute la forme de ce module.
+ *
+ * **L'identité d'un projet n'est pas un champ, c'est une mémoire.** Elle est
+ * faite de marqueurs — des numéros d'affaire, un nom d'opération — qui
+ * s'accumulent. Plus le projet avance, plus elle discrimine.
+ *
+ * **Elle se nourrit de deux sources opposées.** Ce que le document *déclare* de
+ * lui-même, comparé à ce que le projet a retenu ; et ce que le projet sait de
+ * lui-même — son nom, sa ville, son adresse — *cherché dans le document*. La
+ * seconde ne demande de connaître aucun format : c'est une recherche, pas une
+ * extraction. Elle s'enrichit toute seule à mesure que la fiche du projet se
+ * remplit.
+ *
+ * **Rien n'est jamais rejeté sans un humain.** Le verdict ne ferme pas une
+ * porte, il ouvre une question. Et la réponse est conservée : confirmer un
+ * document, c'est verser ses marqueurs à la mémoire du projet, de sorte que la
+ * question ne soit plus posée pour les suivants. C'est ainsi que l'escalier C
+ * n'est demandé qu'une fois.
+ */
+
+/** Ce qu'un document ou un projet peut porter comme marque d'identité. */
+export const MARKER = {
+  /** Le segment d'affaire de la référence chrono — court, presque toujours là. */
+  CHRONO_AFFAIRE: "chrono_affaire",
+  /** Le numéro d'affaire déclaré en toutes lettres — long, plus rare. */
+  AFFAIRE: "affaire",
+  /** Le nom du projet, tel que Mdall le connaît. */
+  PROJECT_NAME: "project_name",
+  /** L'adresse du chantier. */
+  ADDRESS: "address",
+  CITY: "city",
+  POSTAL_CODE: "postal_code"
+};
+
+/**
+ * Les marqueurs qu'un document déclare, et qui peuvent le contredire.
+ *
+ * Ce sont les seuls dont un désaccord peut faire suspecter un document. Un nom
+ * de ville qui diffère ne prouve rien — un chantier déborde sur la commune
+ * voisine —, alors qu'une autre affaire, quand le projet en connaît déjà,
+ * mérite qu'on demande.
+ */
+const DECLARED = new Set([MARKER.CHRONO_AFFAIRE, MARKER.AFFAIRE]);
+
+/**
+ * Ce que le projet sait de lui-même, et qu'on peut chercher dans un document.
+ *
+ * Le poids n'est pas décoratif. Voir le **nom du projet** ou son **adresse**
+ * imprimés dans un rapport prouve à peu près le rattachement. Voir la ville ou
+ * le code postal ne prouve rien du tout : deux chantiers d'une même commune les
+ * partagent. Confondre les deux ferait accepter le rapport du voisin.
+ *
+ * La longueur minimale n'est pas une coquetterie non plus : une valeur trop
+ * courte se retrouve par hasard dans n'importe quel rapport, et une preuve qui
+ * se trouve partout n'est pas une preuve.
+ */
+const SELF = [
+  { type: MARKER.PROJECT_NAME, field: "projectName", strong: true, minLength: 6 },
+  { type: MARKER.ADDRESS, field: "address", strong: true, minLength: 8 },
+  { type: MARKER.CITY, field: "city", strong: false, minLength: 3 },
+  { type: MARKER.POSTAL_CODE, field: "postalCode", strong: false, minLength: 5 }
+];
+
+export const ATTACHMENT = {
+  /** Une preuve positive : le document est de ce projet. */
+  BELONGS: "BELONGS",
+  /** Une affaire que le projet ne connaît pas, et rien qui rattache. */
+  FOREIGN: "FOREIGN",
+  /** Rien à comparer, ou des indices trop faibles pour trancher. */
+  UNCERTAIN: "UNCERTAIN"
+};
+
+/**
+ * La forme sous laquelle un marqueur se compare et se conserve.
+ *
+ * Accents, casse et espaces multiples disparaissent : « Montée de l'Escalier »
+ * et « MONTEE DE L'ESCALIER » sont la même chose. La valeur d'origine, elle,
+ * est conservée à côté — c'est elle qu'on montrera dans la phrase.
+ */
+export function normalizeMarkerValue(value) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("fr-FR")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function marker(type, label) {
+  const value = normalizeMarkerValue(label);
+  return value ? { type, value, label: String(label).trim() } : null;
+}
+
+/**
+ * Les marqueurs qu'un document déclare de lui-même.
+ *
+ * Ils viennent de la reconnaissance, donc du pack de l'émetteur : c'est là que
+ * vit la connaissance du format. Ce module n'en lit aucun lui-même, et c'est ce
+ * qui lui permettra de servir un compte rendu de chantier sans changer.
+ */
+export function declaredMarkers(recognition) {
+  return (recognition?.markers ?? [])
+    .filter((entry) => DECLARED.has(entry?.type))
+    .map((entry) => marker(entry.type, entry.value))
+    .filter(Boolean);
+}
+
+/** Ce que le projet sait de lui-même, sous forme de marqueurs cherchables. */
+export function selfMarkers(project) {
+  return SELF.map(({ type, field, strong, minLength }) => {
+    const raw = String(project?.[field] ?? "").trim();
+    if (normalizeMarkerValue(raw).length < minLength) return null;
+    const entry = marker(type, raw);
+    return entry ? { ...entry, strong } : null;
+  }).filter(Boolean);
+}
+
+/**
+ * Ceux des marqueurs du projet qui figurent littéralement dans le document.
+ *
+ * Une recherche, pas une extraction : aucun format n'est supposé, aucune règle
+ * n'est à écrire pour un nouvel émetteur. C'est aussi ce qui fait que la
+ * méthode se renforce toute seule — chaque champ rempli dans la fiche du projet
+ * devient une preuve de plus à chercher.
+ */
+export function findEchoes(text, markers = []) {
+  // Rien à chercher : on évite de normaliser un rapport entier pour rien. Un
+  // projet dont la fiche est vide passe ici dix-sept fois par lot.
+  if (markers.length === 0) return [];
+
+  const haystack = normalizeMarkerValue(text);
+  if (!haystack) return [];
+  return markers.filter((entry) => haystack.includes(entry.value));
+}
+
+/**
+ * Le document appartient-il à ce projet ?
+ *
+ * L'ordre des règles est le fond du sujet, et il penche délibérément du côté de
+ * l'acceptation.
+ *
+ *  1. **Une preuve positive suffit.** Une affaire que le projet connaît déjà,
+ *     ou son nom imprimé dans le document : c'est ce projet, on ne demande
+ *     rien. C'est ce qui fait passer « montée d'escalier C » sans histoire dès
+ *     lors que le nom de l'opération y figure.
+ *  2. **Un désaccord seul ne suffit pas à rejeter.** Il faut une affaire
+ *     inconnue *et* aucune preuve positive. Et si la ville concorde, on ne
+ *     tranche pas : on demande.
+ *  3. **Ne rien savoir n'est pas un reproche.** Un projet dont la mémoire est
+ *     vide — les premiers documents — ne peut contredire personne.
+ *
+ * @param {{declared: object[], echoes: object[], known: object[]}} evidence
+ * @returns {{verdict: string, matched: object[], conflicting: object[], reason: string}}
+ */
+export function assessAttachment({ declared = [], echoes = [], known = [] } = {}) {
+  const knownByType = new Map();
+  for (const entry of known) {
+    if (!knownByType.has(entry.type)) knownByType.set(entry.type, new Set());
+    knownByType.get(entry.type).add(entry.value);
+  }
+
+  const matched = declared.filter((entry) => knownByType.get(entry.type)?.has(entry.value));
+  const conflicting = declared.filter(
+    (entry) => knownByType.has(entry.type) && !knownByType.get(entry.type).has(entry.value)
+  );
+  const strongEchoes = echoes.filter((entry) => entry.strong);
+
+  if (matched.length > 0) {
+    return {
+      verdict: ATTACHMENT.BELONGS,
+      matched,
+      conflicting,
+      reason: `Affaire ${matched[0].label}, déjà rattachée à ce projet.`
+    };
+  }
+
+  if (strongEchoes.length > 0) {
+    return {
+      verdict: ATTACHMENT.BELONGS,
+      matched: strongEchoes,
+      conflicting,
+      reason: `Ce document cite « ${strongEchoes[0].label} ».`
+    };
+  }
+
+  if (conflicting.length > 0) {
+    // La ville concorde : trop pour rejeter, trop peu pour accepter. Deux
+    // chantiers d'une même commune la partagent — et une tranche nouvelle du
+    // même chantier aussi.
+    if (echoes.length > 0) {
+      return {
+        verdict: ATTACHMENT.UNCERTAIN,
+        matched: [],
+        conflicting,
+        reason:
+          `Affaire ${conflicting[0].label}, que ce projet ne connaît pas — ` +
+          `mais le document cite « ${echoes[0].label} ».`
+      };
+    }
+    return {
+      verdict: ATTACHMENT.FOREIGN,
+      matched: [],
+      conflicting,
+      reason: `Affaire ${conflicting[0].label}, que ce projet ne connaît pas.`
+    };
+  }
+
+  return {
+    verdict: ATTACHMENT.UNCERTAIN,
+    matched: [],
+    conflicting: [],
+    reason:
+      declared.length > 0
+        ? `Affaire ${declared[0].label}. Ce projet n'a encore aucune affaire enregistrée.`
+        : "Ce document ne déclare aucune affaire, et ne cite rien de ce projet."
+  };
+}
+
+/**
+ * Ce qu'il faut retenir quand un humain confirme qu'un document est du projet.
+ *
+ * Seuls les marqueurs nouveaux sont rendus : réécrire ce qu'on sait déjà
+ * n'apprend rien. C'est ce versement qui fait que la question ne sera plus
+ * posée — l'affaire de la montée d'escalier C, confirmée une fois, rattache
+ * ensuite tous ses livrables sans qu'on redemande.
+ */
+export function markersToRemember(declared = [], known = []) {
+  const seen = new Set(known.map((entry) => `${entry.type} ${entry.value}`));
+  return declared.filter((entry) => !seen.has(`${entry.type} ${entry.value}`));
+}

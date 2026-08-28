@@ -131,3 +131,26 @@ test("seuls les livrables qui reprennent tout font point de contrôle", () => {
   assert.equal(type("RVRAT"), false);
   assert.equal(type("FICHE DE CORRESPONDANCE"), false);
 });
+
+test("l'affaire se lit sous ses deux formes, et l'absence de l'une n'efface pas l'autre", () => {
+  const avecLesDeux = readDocumentMeta({
+    content_available: true,
+    content: "RAPPORT D'ÉTAPE\nN° d'affaire : 230113860000087\nCT/13860/0923/0222"
+  });
+
+  assert.equal(avecLesDeux.chrono_affaire, "13860", "le segment court, tiré de la chrono");
+  assert.equal(avecLesDeux.affaire_reference, "230113860000087", "le numéro déclaré, plus long");
+
+  // Beaucoup de livrables ne portent que la chrono. Un marqueur absent ne doit
+  // jamais faire rejeter un document : il vaut `null`, pas une valeur inventée.
+  const chronoSeule = readDocumentMeta({
+    content_available: true,
+    content: "RAPPORT D'ÉTAPE\nCT/13860/0923/0222"
+  });
+  assert.equal(chronoSeule.chrono_affaire, "13860");
+  assert.equal(chronoSeule.affaire_reference, null);
+
+  const rien = readDocumentMeta({ content_available: true, content: "NOTE" });
+  assert.equal(rien.chrono_affaire, null);
+  assert.equal(rien.affaire_reference, null);
+});
