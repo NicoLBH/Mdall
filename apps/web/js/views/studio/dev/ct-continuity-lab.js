@@ -34,7 +34,7 @@ import { recognize } from "../../../services/document-recognizers.js";
 import { IDENTITY, findRelated } from "../../../services/document-identity.js";
 import { resolveDepositFolder } from "../../../services/document-filing.js";
 import { relateToKnown, toDocumentColumns } from "../../../services/document-intake.js";
-import { corpusFingerprint } from "../../../services/ct-analysis-store.js";
+import { corpusEntries, corpusFingerprint, diffCorpus } from "../../../services/ct-analysis-store.js";
 import { buildCaseExport, buildFullExport, collectAvis, runCtLab } from "../../../services/ct-lab-engine.js";
 import {
   DEFAULT_LEXICON_TEXT,
@@ -174,11 +174,7 @@ function renderMemory(state) {
 
   const packs = Object.values(run?.packs_used ?? {});
   const vocabulaire = packs.length > 0 ? `${packs[0].pack_id} v${packs[0].pack_version}` : null;
-
-  // Le lot enregistré et les livrables du projet peuvent avoir divergé : un
-  // document déposé depuis l'onglet Documents, un livrable retiré. Les
-  // empreintes de contenu le disent sans qu'on ait à rouvrir un seul PDF.
-  const diverge = Boolean(run && state.stored && state.stored.matchesRun === false);
+  const change = run ? corpusChange(state.stored) : null;
 
   const lignes = [
     run
@@ -188,27 +184,108 @@ function renderMemory(state) {
          </li>`
       : "",
     stored.length > 0
-      ? `<li>
-           ${stored.length} livrable(s) du bureau de contrôle enregistré(s) dans ce projet${
-             diverge ? " — le lot a changé depuis la dernière analyse" : ""
-           }.
-         </li>`
-      : `<li>Aucun livrable n'est enregistré dans ce projet : déposez-les pour mettre le suivi à jour.</li>`
+      ? `<li>${stored.length} livrable(s) du bureau de contrôle enregistré(s) dans ce projet.</li>`
+      : `<li>Aucun livrable n'est enregistré dans ce projet : déposez-les pour mettre le suivi à jour.</li>`,
+    ...(change?.lines ?? [])
   ].filter(Boolean);
 
   return `
-    <div class="ctlab__set-aside ctlab__set-aside--info">
-      <b>${stored.length > 0 && !run ? "Des livrables attendent d'être analysés" : "Ce projet a déjà un suivi enregistré"}</b>
+    <div class="ctlab__set-aside${change?.stale ? "" : " ctlab__set-aside--info"}">
+      <b>${
+        change?.stale
+          ? "L'analyse enregistrée n'est plus à jour"
+          : stored.length > 0 && !run
+            ? "Des livrables attendent d'être analysés"
+            : "Ce projet a déjà un suivi enregistré"
+      }</b>
       <ul>${lignes.join("")}</ul>
       ${stored.length > 0
         ? `<div class="ctlab__drop-actions">
              <button type="button" class="gh-btn gh-btn--sm gh-btn--primary" data-ctlab-resume>
-               Reprendre les ${stored.length} livrable(s) enregistré(s)
+               ${
+                 change?.stale
+                   ? "Mettre à jour l'analyse"
+                   : `Reprendre les ${stored.length} livrable(s) enregistré(s)`
+               }
              </button>
            </div>`
         : ""}
     </div>
   `;
+}
+
+/** Trois noms, puis un compte : une liste de dix-sept fichiers n'est plus une phrase. */
+function nameSome(entries, limit = 3) {
+  const names = entries.map((entry) => entry?.name).filter(Boolean);
+  if (names.length === 0) return "";
+
+  const shown = names.slice(0, limit).map((name) => escapeHtml(name)).join(", ");
+  const rest = names.length - limit;
+  return rest > 0 ? `${shown} et ${rest} autre(s)` : shown;
+}
+
+/**
+ * Ce qui a bougé dans le projet depuis la dernière analyse, dit nommément.
+ *
+ * « Le lot a changé » laissait à l'utilisateur le travail de retrouver lequel
+ * des dix-sept documents était arrivé depuis. Maintenant que l'exécution garde
+ * la liste de ce qu'elle a lu, on peut le nommer.
+ *
+ * Deux mouvements comptent, et pour des raisons différentes. Un livrable
+ * **ajouté** peut lever un avis, en rappeler un autre, déplacer une date : il
+ * rend l'analyse périmée. Un livrable **retiré** est plus sournois — les avis
+ * qu'il portait restent affichés, et ce qui manque au dossier devient faux sans
+ * que rien ne l'annonce.
+ *
+ * Une exécution enregistrée avant que la liste ne soit conservée ne permet que
+ * de constater l'écart. On le dit tel quel : « le lot a changé, cette exécution
+ * ne gardait pas le détail ». Se taire laisserait croire qu'il n'y a rien de
+ * nouveau, ce qui est le seul message franchement faux des trois.
+ */
+function corpusChange(stored) {
+  const diff = stored?.diff ?? null;
+
+  if (diff?.known) {
+    const lines = [];
+    // Le nom peut manquer — une exécution ancienne n'en gardait pas. La phrase
+    // se termine alors sur le compte, plutôt que sur un « : » suivi de rien.
+    const added = nameSome(diff.added);
+    const removed = nameSome(diff.removed);
+
+    if (diff.added.length > 0) {
+      lines.push(`
+        <li>
+          <b>${diff.added.length} nouveau(x) livrable(s)</b> ajouté(s) dans Documents
+          depuis la dernière analyse${added ? ` : ${added}` : ""}.
+        </li>
+      `);
+    }
+    if (diff.removed.length > 0) {
+      lines.push(`
+        <li>
+          ${diff.removed.length} livrable(s) analysé(s) ne sont plus dans le projet${
+            removed ? ` : ${removed}` : ""
+          }.
+        </li>
+      `);
+    }
+    return { stale: lines.length > 0, lines };
+  }
+
+  // Pas de liste conservée : l'empreinte dit qu'il y a un écart, sans dire lequel.
+  if (stored?.matchesRun === false) {
+    return {
+      stale: true,
+      lines: [`
+        <li>
+          Le lot a changé depuis la dernière analyse. Celle-ci ne gardait pas le
+          détail de ce qu'elle avait lu : la mettre à jour le dira.
+        </li>
+      `]
+    };
+  }
+
+  return { stale: false, lines: [] };
 }
 
 /**
@@ -3487,7 +3564,10 @@ export function renderCtContinuityLab(root) {
             documents,
             matchesRun: run?.corpus_fingerprint
               ? (await corpusFingerprint(documents)) === run.corpus_fingerprint
-              : null
+              : null,
+            // Ce qui est arrivé, ce qui a disparu — nommément quand l'exécution
+            // conservée en gardait la liste.
+            diff: diffCorpus(run, documents)
           }
         : null;
     } catch {
@@ -3741,8 +3821,9 @@ export function renderCtContinuityLab(root) {
       return null;
     }
 
-    const { currentUserId, fetchDocumentIdentities, insertDocumentRow, uploadDocumentToStorage } = documents;
-    const { createDocumentFolder, listDocumentFolderChildren } = folders;
+    const { currentUserId, fetchDocumentIdentities, insertDocumentRow, uploadDocumentToStorage, listDocumentsOfKind } =
+      documents;
+    const { createDocumentFolder, listDocumentFolders } = folders;
 
     const known = await fetchDocumentIdentities(projectId).catch(() => []);
     const createdBy = await currentUserId().catch(() => null);
@@ -3776,7 +3857,11 @@ export function renderCtContinuityLab(root) {
             await resolveDepositFolder({
               projectId,
               kind,
-              listFolders: listDocumentFolderChildren,
+              // Le dossier se reconnaît à ce qu'il contient, pas à son nom :
+              // « BC » ou « RICT et Fiches » désignent le même dossier dès lors
+              // qu'ils abritent déjà des livrables du bureau de contrôle.
+              listDocumentsOfKind,
+              listFolders: listDocumentFolders,
               createFolder: createDocumentFolder
             })
           );
@@ -3862,6 +3947,10 @@ export function renderCtContinuityLab(root) {
         result: state.result,
         documentIds,
         corpusFingerprint: fingerprint,
+        // Ce que l'empreinte ne dira pas : lesquels. C'est cette liste qui
+        // permettra, à la prochaine ouverture, de nommer le livrable arrivé
+        // depuis plutôt que d'annoncer « le lot a changé ».
+        corpusDocuments: corpusEntries(reports),
         documentCount: reports.length
       });
 

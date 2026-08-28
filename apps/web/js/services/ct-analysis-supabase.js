@@ -23,7 +23,7 @@ const AVIS_COLUMNS =
   "pack_id,pack_version,absent_from_corpus,updated_at";
 
 const RUN_COLUMNS =
-  "id,corpus_fingerprint,document_count,avis_count,tracked_avis_count," +
+  "id,corpus_fingerprint,corpus_documents,document_count,avis_count,tracked_avis_count," +
   "guard_violation_count,packs_used,engine_version,computed_at";
 
 async function request(path, { method = "GET", body = null, headers = {}, params = {} } = {}) {
@@ -93,7 +93,14 @@ export async function loadCtAnalysis(projectId) {
  *   n'a pas répondu : l'analyse reste affichée, elle n'est simplement pas
  *   conservée, et l'écran le dit.
  */
-export async function saveCtAnalysis({ projectId, result, documentIds = {}, corpusFingerprint, documentCount } = {}) {
+export async function saveCtAnalysis({
+  projectId,
+  result,
+  documentIds = {},
+  corpusFingerprint,
+  corpusDocuments = null,
+  documentCount
+} = {}) {
   if (!projectId || !result) return null;
 
   try {
@@ -128,7 +135,7 @@ export async function saveCtAnalysis({ projectId, result, documentIds = {}, corp
     await request("ct_analysis_runs", {
       method: "POST",
       headers: { Prefer: "return=minimal" },
-      body: toRunRow(result, { projectId, corpusFingerprint, documentCount })
+      body: toRunRow(result, { projectId, corpusFingerprint, corpusDocuments, documentCount })
     });
 
     return { saved: upserts.length, marked: missing.length };

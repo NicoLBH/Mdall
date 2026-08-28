@@ -48,6 +48,69 @@ export async function corpusFingerprint(documents = []) {
 }
 
 /**
+ * Ce qu'on retient d'un document dans la liste du lot.
+ *
+ * Deux formes de documents arrivent ici et doivent produire la même entrée :
+ * ceux que l'atelier vient de lire, et les lignes `documents` relues du projet.
+ * Le nom n'y est que pour pouvoir écrire la phrase — un document retiré du
+ * projet n'a plus de ligne où aller le lire.
+ */
+function corpusEntry(document) {
+  return {
+    document_id: document?.documentId ?? document?.document_id ?? document?.id ?? null,
+    fingerprint: String(document?.fingerprint ?? document?.content_fingerprint ?? "") || null,
+    name: document?.original_filename ?? document?.filename ?? null
+  };
+}
+
+/**
+ * La liste de ce qui a été lu, conservée avec l'exécution.
+ *
+ * Elle est triée par empreinte, comme `corpusFingerprint` : ni l'ordre de dépôt
+ * ni les noms de fichiers n'entrent dans l'identité d'un lot.
+ *
+ * Un document sans empreinte lisible en est absent. Il n'entre pas non plus
+ * dans l'empreinte du lot, et il n'a pas pu être analysé : le faire figurer ici
+ * le montrerait « nouveau » à chaque ouverture, indéfiniment.
+ */
+export function corpusEntries(documents = []) {
+  return documents
+    .map(corpusEntry)
+    .filter((entry) => entry.fingerprint)
+    .sort((left, right) => left.fingerprint.localeCompare(right.fingerprint));
+}
+
+/**
+ * Ce qui a changé entre le lot analysé et les documents que le projet contient.
+ *
+ * La comparaison porte sur les **empreintes de contenu**, jamais sur les
+ * identifiants ni les noms : un même rapport redéposé sous un autre nom n'est
+ * pas un nouveau document, et c'est précisément le genre de faux positif qui
+ * ferait relancer une analyse pour rien.
+ *
+ * `known` vaut `false` pour une exécution enregistrée avant que la liste ne
+ * soit conservée. On sait alors que le lot a changé — l'empreinte le dit —,
+ * sans pouvoir nommer quoi. Le dire ainsi vaut mieux que de laisser croire
+ * qu'il n'y a rien de nouveau.
+ *
+ * @returns {{known: boolean, added: object[], removed: object[]}}
+ */
+export function diffCorpus(run, documents = []) {
+  const before = Array.isArray(run?.corpus_documents) ? run.corpus_documents : null;
+  if (!before) return { known: false, added: [], removed: [] };
+
+  const seenBefore = new Set(before.map((entry) => entry?.fingerprint).filter(Boolean));
+  const now = corpusEntries(documents);
+  const seenNow = new Set(now.map((entry) => entry.fingerprint));
+
+  return {
+    known: true,
+    added: now.filter((entry) => !seenBefore.has(entry.fingerprint)),
+    removed: before.filter((entry) => entry?.fingerprint && !seenNow.has(entry.fingerprint))
+  };
+}
+
+/**
  * Traduit l'état des avis calculé par le moteur en lignes à conserver.
  *
  * Seuls les avis numérotés sont retenus. C'est déjà la doctrine du suivi : un
@@ -118,12 +181,18 @@ export function reconcileAvis(known = [], computed = []) {
  * Sans elle, deux lectures d'un même dossier ne se distinguent pas, et l'on ne
  * peut pas dire si un écart vient des documents ou d'une correction du moteur.
  */
-export function toRunRow(result, { projectId, corpusFingerprint: fingerprint, documentCount } = {}) {
+export function toRunRow(
+  result,
+  { projectId, corpusFingerprint: fingerprint, documentCount, corpusDocuments = null } = {}
+) {
   const indicators = result?.indicators ?? {};
 
   return {
     project_id: projectId,
     corpus_fingerprint: fingerprint ?? null,
+    // Ce que l'empreinte ne peut pas dire : lesquels. Sans cette liste, l'écran
+    // ne sait annoncer qu'« le lot a changé ».
+    corpus_documents: corpusDocuments,
     document_count: documentCount ?? 0,
     avis_count: (result?.predictions ?? []).length,
     tracked_avis_count: (result?.avisStatus ?? []).length,
