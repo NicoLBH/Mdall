@@ -133,11 +133,11 @@ test("le registre ne connaît aucune nature de document par lui-même", () => {
  * n'échoue pas, elle écrit à côté et se découvre des semaines plus tard.
  */
 test("un verdict se traduit en colonnes, une absence de verdict en rien", async () => {
-  const { toDocumentColumns } = await import("./document-recognizers.js");
+  const { toDocumentColumns } = await import("./document-intake.js");
 
   assert.deepEqual(toDocumentColumns(null), {}, "une reconnaissance non faite n'est pas une reconnaissance négative");
 
-  const columns = toDocumentColumns(recognizeDocument(RICT, { recognizers: [CT] }));
+  const columns = toDocumentColumns({ recognition: recognizeDocument(RICT, { recognizers: [CT] }) });
 
   assert.equal(columns.detection_status, RECOGNITION.RECOGNIZED);
   assert.equal(columns.detected_kind, "ct_report");

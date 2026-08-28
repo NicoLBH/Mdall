@@ -363,6 +363,33 @@ async function fetchAnalysisRunProjectId(runId) {
   return rows?.[0]?.project_id || null;
 }
 
+/**
+ * Les documents déjà connus du projet, réduits à ce qui fait leur identité.
+ *
+ * Le nom de fichier n'y figure que pour pouvoir nommer l'autre document dans
+ * la phrase qui expliquera l'écart : « même contenu que… ». Ce qui compare,
+ * c'est l'empreinte et la référence déclarée.
+ */
+async function fetchDocumentIdentities(projectId) {
+  if (!projectId) return [];
+
+  const url = new URL(`${SUPABASE_URL}/rest/v1/documents`);
+  url.searchParams.set("select", "id,filename,original_filename,content_fingerprint,declared_reference");
+  url.searchParams.set("project_id", `eq.${projectId}`);
+  url.searchParams.set("deleted_at", "is.null");
+
+  const res = await fetch(url.toString(), {
+    method: "GET",
+    headers: await getSupabaseAuthHeaders({ Accept: "application/json" }),
+    cache: "no-store"
+  });
+
+  // Ne pas savoir ce qui existe déjà n'empêche pas de déposer : le document
+  // entre sans lien, plutôt que de ne pas entrer du tout.
+  if (!res.ok) return [];
+  return (await res.json()) ?? [];
+}
+
 async function fetchSubjectsByProject(projectId) {
   if (!projectId) return [];
 
@@ -850,12 +877,14 @@ export async function runAnalysis(options = {}) {
       setSystemStatus("running", "En cours d’analyse", "Upload du document");
       const storageInfo = await uploadFileToStorage(inputs.pdfFile, backendProjectId, runId);
 
-      // Reconnaître ce qu'est le document au moment où il entre, pendant qu'on
-      // a le fichier sous la main. La reconnaissance enrichit le dépôt, elle ne
-      // le conditionne pas : un PDF qu'on ne sait pas lire se dépose quand même.
+      // Examiner le document au moment où il entre, pendant qu'on a le fichier
+      // sous la main : ce que c'est, son empreinte, et s'il est déjà là.
+      // L'examen enrichit le dépôt, il ne le conditionne pas — un PDF qu'on ne
+      // sait pas lire se dépose quand même.
       setSystemStatus("running", "En cours d’analyse", "Reconnaissance du document");
-      const { recognizeFile, toDocumentColumns } = await import("./document-recognizers.js");
-      const recognition = await recognizeFile(inputs.pdfFile);
+      const { inspectFile, relateToKnown, toDocumentColumns } = await import("./document-intake.js");
+      const inspection = await inspectFile(inputs.pdfFile);
+      const related = relateToKnown(inspection, await fetchDocumentIdentities(backendProjectId));
 
       setSystemStatus("running", "En cours d’analyse", "Création du document");
       const currentUser = await getCurrentUser();
@@ -871,7 +900,7 @@ export async function runAnalysis(options = {}) {
         file_size_bytes: inputs.pdfFile.size || null,
         upload_status: "uploaded",
         document_kind: "source_pdf",
-        ...toDocumentColumns(recognition)
+        ...toDocumentColumns(inspection, related)
       }, "id,project_id,storage_bucket,storage_path");
       setSystemStatus("running", "En cours d’analyse", "Création du run");
       await restInsert("analysis_runs", {

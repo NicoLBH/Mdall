@@ -24,6 +24,7 @@ import { escapeHtml } from "../../../utils/escape-html.js";
 import { extractPagesFromFile } from "../../../services/pdf-extraction.js";
 import { RECOGNITION } from "../../../services/document-recognition.js";
 import { recognize } from "../../../services/document-recognizers.js";
+import { IDENTITY, findRelated } from "../../../services/document-identity.js";
 import { buildCaseExport, buildFullExport, collectAvis, runCtLab } from "../../../services/ct-lab-engine.js";
 import {
   DEFAULT_LEXICON_TEXT,
@@ -57,7 +58,23 @@ import {
  */
 function isSetAside(report) {
   const status = report?.recognition?.status;
-  return status === RECOGNITION.UNRECOGNIZED || status === RECOGNITION.NO_TEXT_LAYER;
+  if (status === RECOGNITION.UNRECOGNIZED || status === RECOGNITION.NO_TEXT_LAYER) return true;
+  // Un doublon compterait deux fois dans la chronologie et la complétude, et
+  // fabriquerait des transitions qui n'ont pas eu lieu.
+  return report?.related?.verdict === IDENTITY.DUPLICATE;
+}
+
+/** Vrai si ce document déclare la référence d'un autre, avec un autre contenu. */
+function isReissue(report) {
+  return report?.related?.verdict === IDENTITY.REISSUE;
+}
+
+/** Pourquoi ce document a été mis de côté, en une phrase qui nomme l'autre. */
+function setAsideReason(report) {
+  if (report?.related?.verdict === IDENTITY.DUPLICATE) {
+    return `Même contenu que « ${report.related.filename} » : c'est le même document, sous un autre nom.`;
+  }
+  return report?.recognition?.reason ?? "";
 }
 
 /**
@@ -70,15 +87,45 @@ function isSetAside(report) {
 function renderSetAside(reports) {
   if (reports.length === 0) return "";
 
+  return renderDocumentNotice({
+    title: `${reports.length} document${reports.length > 1 ? "s" : ""} écarté${reports.length > 1 ? "s" : ""} de l'analyse`,
+    reports,
+    reason: setAsideReason
+  });
+}
+
+/**
+ * Les rééditions possibles, signalées sans être tranchées.
+ *
+ * Deux documents qui déclarent la même référence avec des contenus différents
+ * sont probablement une version et sa correction. Conclure au doublon
+ * effacerait la correction ; conclure à deux documents distincts en compterait
+ * un de trop. Aucune des deux erreurs ne vaut mieux que la question, et c'est
+ * l'utilisateur qui a le dossier en tête.
+ */
+function renderReissues(reports) {
+  if (reports.length === 0) return "";
+
+  return renderDocumentNotice({
+    title: `${reports.length} réédition${reports.length > 1 ? "s" : ""} possible${reports.length > 1 ? "s" : ""} — à vérifier`,
+    reports,
+    reason: (report) =>
+      `Même référence que « ${report.related.filename} » (${report.related.document.reference}), ` +
+      `mais un contenu différent. Les deux sont conservés.`,
+    modifier: "ctlab__set-aside--info"
+  });
+}
+
+function renderDocumentNotice({ title, reports, reason, modifier = "" }) {
   return `
-    <div class="ctlab__set-aside">
-      <b>${reports.length} document${reports.length > 1 ? "s" : ""} écarté${reports.length > 1 ? "s" : ""} de l'analyse</b>
+    <div class="ctlab__set-aside ${modifier}">
+      <b>${escapeHtml(title)}</b>
       <ul>
         ${reports
           .map(
             (report) =>
               `<li><span class="ctlab__set-aside-name">${escapeHtml(report.filename ?? report.sourceId)}</span>
-                 — ${escapeHtml(report.recognition?.reason ?? "")}</li>`
+                 — ${escapeHtml(reason(report))}</li>`
           )
           .join("")}
       </ul>
@@ -1061,6 +1108,7 @@ const STYLE = `
   border-left: 2px solid var(--ctlab-warn);
   padding-left: 10px;
 }
+.ctlab__set-aside--info { border-left-color: var(--ctlab-info); }
 .ctlab__set-aside b { color: var(--ctlab-text); font-weight: 600; }
 .ctlab__set-aside ul { margin: 4px 0 0; padding-left: 16px; }
 .ctlab__set-aside-name { color: var(--ctlab-text); }
@@ -1220,6 +1268,7 @@ function renderDropZone(state) {
         }
       </div>
       ${renderSetAside(setAside)}
+      ${renderReissues(state.reports.filter((report) => !report.error && isReissue(report)))}
       <div class="ctlab__drop-actions">
         <button type="button" class="gh-btn gh-btn--sm" data-ctlab-pick>
           ${empty ? "Choisir des fichiers…" : "Ajouter des fichiers…"}
@@ -3338,7 +3387,7 @@ export function renderCtContinuityLab(root) {
     refresh();
 
     let added = 0;
-    let skipped = 0;
+    let duplicated = 0;
 
     for (const file of files) {
       state.loading.current = file.name;
@@ -3348,44 +3397,49 @@ export function renderCtContinuityLab(root) {
       refresh();
       await yieldToBrowser();
 
-      // Un même fichier redéposé n'est pas rechargé : le lot s'enrichit, il ne
-      // se duplique pas.
-      const already = state.reports.some(
-        (report) => report.filename === file.name && report.sizeBytes === file.size
-      );
+      const sourceId = `doc-${nextDocumentNumber}`;
+      nextDocumentNumber += 1;
 
-      if (already) {
-        skipped += 1;
-      } else {
-        const sourceId = `doc-${nextDocumentNumber}`;
-        nextDocumentNumber += 1;
-        try {
-          const extracted = await extractPagesFromFile(file);
-          // Un PDF étranger glissé dans le lot ne produisait aucun avis, sans
-          // qu'on sache si le document était muet ou l'outil impuissant. On le
-          // reconnaît avant de l'analyser, et on dit ce qu'on en a compris.
-          const recognition = await recognize({
-            pages: extracted.pages,
-            filename: file.name,
-            mimeType: file.type || "application/pdf"
-          }).catch(() => null);
-          // Le `File` est conservé, pas ses octets : le navigateur tient la
-          // poignée pour rien, alors que garder cent vingt PDF en mémoire
-          // coûterait des centaines de mégaoctets. Il est relu à la demande,
-          // uniquement quand on ouvre la page citée.
-          state.reports.push({ ...extracted, sourceId, file, recognition });
-        } catch (error) {
-          state.reports.push({ sourceId, filename: file.name, sizeBytes: file.size, pageCount: 0, pages: [], error: error.message });
-        }
-        added += 1;
+      try {
+        const extracted = await extractPagesFromFile(file);
+        // Un PDF étranger glissé dans le lot ne produisait aucun avis, sans
+        // qu'on sache si le document était muet ou l'outil impuissant. On le
+        // reconnaît avant de l'analyser, et on dit ce qu'on en a compris.
+        const recognition = await recognize({
+          pages: extracted.pages,
+          filename: file.name,
+          mimeType: file.type || "application/pdf"
+        }).catch(() => null);
+
+        // L'identité d'un document ne tient pas à son nom de fichier. Le lot
+        // se dédoublonnait sur le nom et la taille : le même rapport déposé
+        // sous deux noms entrait deux fois, et faussait tout ce qui suit.
+        const identity = {
+          fingerprint: extracted.fingerprint ?? null,
+          reference: recognition?.declaredReference ?? null
+        };
+        const match = findRelated(identity, state.reports);
+        const related = match
+          ? { ...match, sourceId: match.document.sourceId, filename: match.document.filename }
+          : null;
+        if (related?.verdict === IDENTITY.DUPLICATE) duplicated += 1;
+
+        // Le `File` est conservé, pas ses octets : le navigateur tient la
+        // poignée pour rien, alors que garder cent vingt PDF en mémoire
+        // coûterait des centaines de mégaoctets. Il est relu à la demande,
+        // uniquement quand on ouvre la page citée.
+        state.reports.push({ ...extracted, ...identity, sourceId, file, recognition, related });
+      } catch (error) {
+        state.reports.push({ sourceId, filename: file.name, sizeBytes: file.size, pageCount: 0, pages: [], error: error.message });
       }
+      added += 1;
 
       state.loading.done += 1;
       refresh();
     }
 
     state.stages[state.stages.length - 1].detail =
-      `${added} ajouté(s)${skipped > 0 ? `, ${skipped} déjà présent(s)` : ""}`;
+      `${added} ajouté(s)${duplicated > 0 ? `, ${duplicated} doublon(s)` : ""}`;
     state.loading = null;
     refresh();
   };
