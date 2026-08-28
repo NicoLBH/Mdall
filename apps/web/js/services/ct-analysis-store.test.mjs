@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 
 import {
   ENGINE_VERSION,
+  corpusEntries,
   corpusFingerprint,
+  diffCorpus,
   isRunCurrent,
   reconcileAvis,
   toAvisRows,
@@ -143,4 +145,82 @@ test("l'état conservé cesse de valoir dès que le lot, le moteur ou le pack ch
   // Rien de conservé, ou aucun lot : il n'y a rien à réutiliser.
   assert.equal(isRunCurrent(null, inchange), false);
   assert.equal(isRunCurrent(run, { corpusFingerprint: null }), false);
+});
+
+test("la liste du lot se lit aussi bien d'un document relu que d'un document analysé", () => {
+  // Deux formes, une seule entrée : ce que l'atelier vient de lire, et la ligne
+  // `documents` que le projet a gardée.
+  const analyse = corpusEntries([{ documentId: "u-1", fingerprint: "aaa", filename: "RICT.pdf" }]);
+  const relu = corpusEntries([{ id: "u-1", content_fingerprint: "aaa", original_filename: "RICT.pdf" }]);
+
+  assert.deepEqual(analyse, relu);
+  assert.deepEqual(analyse, [{ document_id: "u-1", fingerprint: "aaa", name: "RICT.pdf" }]);
+});
+
+test("un document sans empreinte n'entre pas dans la liste du lot", () => {
+  // Il n'entre pas non plus dans l'empreinte du lot, et n'a pas pu être
+  // analysé : l'y faire figurer le montrerait « nouveau » indéfiniment.
+  assert.deepEqual(corpusEntries([{ id: "u-1", content_fingerprint: null }]), []);
+});
+
+test("la liste du lot ne dépend pas de l'ordre de dépôt", () => {
+  const ordre = corpusEntries([{ fingerprint: "bbb" }, { fingerprint: "aaa" }]);
+  assert.deepEqual(ordre.map((entry) => entry.fingerprint), ["aaa", "bbb"]);
+});
+
+test("l'écart nomme ce qui est arrivé et ce qui a disparu", () => {
+  const run = {
+    corpus_documents: [
+      { document_id: "u-1", fingerprint: "aaa", name: "RICT.pdf" },
+      { document_id: "u-2", fingerprint: "bbb", name: "Fiche 2.pdf" }
+    ]
+  };
+  const projet = [
+    { id: "u-1", content_fingerprint: "aaa", original_filename: "RICT.pdf" },
+    { id: "u-3", content_fingerprint: "ccc", original_filename: "RVRAT.pdf" }
+  ];
+
+  const ecart = diffCorpus(run, projet);
+
+  assert.equal(ecart.known, true);
+  assert.deepEqual(ecart.added.map((entry) => entry.name), ["RVRAT.pdf"]);
+  assert.deepEqual(ecart.removed.map((entry) => entry.name), ["Fiche 2.pdf"]);
+});
+
+test("un rapport redéposé sous un autre nom n'est pas un nouveau document", () => {
+  // Le faux positif qui ferait relancer une analyse pour rien : la comparaison
+  // porte sur le contenu, jamais sur le nom ni sur l'identifiant.
+  const run = { corpus_documents: [{ document_id: "u-1", fingerprint: "aaa", name: "RICT.pdf" }] };
+  const projet = [{ id: "u-9", content_fingerprint: "aaa", original_filename: "RICT v4 (copie).pdf" }];
+
+  const ecart = diffCorpus(run, projet);
+
+  assert.deepEqual(ecart.added, []);
+  assert.deepEqual(ecart.removed, []);
+});
+
+test("une exécution d'avant la liste avoue ne pas savoir nommer l'écart", () => {
+  // Le dire vaut mieux que de laisser croire qu'il n'y a rien de nouveau.
+  const ecart = diffCorpus({ corpus_fingerprint: "abc" }, [{ content_fingerprint: "zzz" }]);
+
+  assert.equal(ecart.known, false);
+  assert.deepEqual(ecart.added, []);
+  assert.deepEqual(ecart.removed, []);
+  assert.deepEqual(diffCorpus(null, []).known, false);
+});
+
+test("une exécution consigne la liste de ce qu'elle a lu", () => {
+  const run = toRunRow(RESULT, {
+    projectId: "p-1",
+    corpusFingerprint: "abc",
+    documentCount: 1,
+    corpusDocuments: corpusEntries([{ documentId: "u-15", fingerprint: "aaa", filename: "RICT.pdf" }])
+  });
+
+  assert.deepEqual(run.corpus_documents, [{ document_id: "u-15", fingerprint: "aaa", name: "RICT.pdf" }]);
+  assert.equal(
+    toRunRow(RESULT, { projectId: "p-1" }).corpus_documents,
+    null,
+    "sans liste, on n'en invente pas une"
+  );
 });

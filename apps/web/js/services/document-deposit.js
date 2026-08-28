@@ -136,6 +136,21 @@ export async function listProjectDocuments(projectId, { kind = null } = {}) {
 }
 
 /**
+ * Où se trouvent, dans l'arborescence, les documents d'une famille.
+ *
+ * C'est ce qui permet de reconnaître le dossier d'une famille sans regarder son
+ * nom : la famille a été établie en lisant le PDF, et le dossier hérite de
+ * l'identité de ce qu'il contient.
+ *
+ * Les doublons sont comptés comme les autres : un doublon rangé quelque part
+ * dit tout autant où l'utilisateur range cette famille.
+ */
+export async function listDocumentsOfKind(projectId, kind) {
+  if (!kind) return [];
+  return selectDocuments(projectId, "id,folder_id,created_at", { detected_kind: `eq.${kind}` });
+}
+
+/**
  * Rapatrie un document depuis le stockage, sous la forme d'un `File`.
  *
  * C'est ce qui permet de reprendre une analyse sans redemander les PDF : ils
