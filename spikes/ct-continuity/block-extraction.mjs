@@ -19,6 +19,7 @@
  * document (voir `legend.mjs`).
  */
 
+import { DEFAULT_PACK, packById } from "./packs/index.mjs";
 import { normalizeReferenceKey, normalizeWhitespace, stripDiacritics } from "../lib/normalize.mjs";
 import { discoverLegend, legendToLexicon } from "./legend.mjs";
 
@@ -80,7 +81,7 @@ export function detectBoilerplate(pages, { minPages = 3, minRatio = 0.3, protect
  * produiraient sinon de faux (« ÉLÉMENTS D » se termine par un D qui n'est pas
  * un avis mais le début de « D´ÉQUIPEMENT » coupé en fin de ligne).
  */
-const TABLE_HEADER = /dispositions du projet.*avis|avis\s*\*/i;
+
 
 /** `PE6§1`, `PE33 à`, `GN5` : une référence d'article du règlement, pas un avis. */
 const ARTICLE_REFERENCE = /^[A-Z]{1,4}\d*(?:§\d+)?(?:\s+à)?$/u;
@@ -110,13 +111,16 @@ function looksLikeHeading(line) {
  * Le libellé du document prime sur la lettre : c'est la légende qui fait foi,
  * pas une liste de codes que nous aurions décidée.
  */
-const ACTION_LABELS = /suspendu|defavorable|non\s*conforme/i;
-const ACTION_CODES = new Set(["S", "D", "NC"]);
+export function requiresAction(occurrence, { pack = null } = {}) {
+  const { opinion_raw, opinion_label } = occurrence ?? {};
+  // Comparer deux occurrences venues de deux organismes n'a de sens que si
+  // chacune est jugée dans son propre vocabulaire. L'occurrence porte le pack
+  // qui l'a lue : c'est elle qui le dit, pas l'appelant qui le devine.
+  const resolved = pack ?? packById(occurrence?.pack_id) ?? DEFAULT_PACK;
 
-export function requiresAction({ opinion_raw, opinion_label }) {
   const label = stripDiacritics(String(opinion_label ?? ""));
-  if (label !== "") return ACTION_LABELS.test(label);
-  return ACTION_CODES.has(String(opinion_raw ?? "").toUpperCase());
+  if (label !== "") return resolved.actionLabels.test(label);
+  return resolved.actionCodes.includes(String(opinion_raw ?? "").toUpperCase());
 }
 
 function buildCodeMatchers(codes) {
@@ -199,7 +203,7 @@ export function splitTitle(titleLines) {
  * @param {{source_id: string, pages?: {page: number, text: string}[], content?: string, content_available: boolean}} source
  * @returns {{occurrences: object[], legend: object[], skipped: number}}
  */
-export function extractAvisBlocks(source, { legend = null } = {}) {
+export function extractAvisBlocks(source, { legend = null, pack = DEFAULT_PACK } = {}) {
   if (!source.content_available) return { occurrences: [], legend: [], skipped: 0 };
 
   const pages = Array.isArray(source.pages) && source.pages.length > 0
@@ -286,7 +290,7 @@ export function extractAvisBlocks(source, { legend = null } = {}) {
   const documentText = pages.map((page) => page.text).join("\n");
   // Si le document ne déclare aucun en-tête de tableau, on le lit en entier
   // plutôt que de ne rien produire — mais on le signale.
-  const hasTableHeaders = documentText.split(/\r?\n/).some((line) => TABLE_HEADER.test(line));
+  const hasTableHeaders = documentText.split(/\r?\n/).some((line) => pack.flatTableHeader.test(line));
   let insideTable = !hasTableHeaders;
 
   for (const page of pages) {
@@ -297,7 +301,7 @@ export function extractAvisBlocks(source, { legend = null } = {}) {
       const contiguousExcerpt = previousRawLine === "" ? line : `${previousRawLine} ${line}`;
       previousRawLine = line;
 
-      if (hasTableHeaders && TABLE_HEADER.test(line)) {
+      if (hasTableHeaders && pack.flatTableHeader.test(line)) {
         insideTable = true;
         skipped += 1;
         continue;
@@ -373,7 +377,7 @@ export function extractAvisBlocks(source, { legend = null } = {}) {
         current.commentLines.push(...tail);
         tail = [];
 
-        if (requiresAction(current)) {
+        if (requiresAction(current, { pack })) {
           current.external_reference_raw = reference;
           current.external_reference_normalized = normalizeReferenceKey(reference);
           current.identity_source = IDENTITY_SOURCE.NUMBER_COLUMN;

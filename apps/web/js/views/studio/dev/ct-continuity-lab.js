@@ -2289,6 +2289,38 @@ function renderResults(state) {
 
 
 /**
+ * Le vocabulaire qui a servi à lire, et dans quelle version.
+ *
+ * Le moteur sait lire un tableau ; il ne sait pas comment tel bureau de
+ * contrôle intitule ses colonnes ni comment il nomme ses livrables. C'est ce
+ * que dit un pack. L'afficher n'est pas un détail d'implémentation : le jour où
+ * deux exécutions divergent, c'est la première question à se poser — le
+ * document a-t-il changé, ou le vocabulaire ?
+ */
+function renderPacksUsed(packsUsed = {}) {
+  const entries = Object.values(packsUsed ?? {});
+  if (entries.length === 0) return "";
+
+  const byPack = new Map();
+  for (const entry of entries) {
+    const key = `${entry.pack_id} v${entry.pack_version}`;
+    byPack.set(key, (byPack.get(key) ?? 0) + 1);
+  }
+
+  return `
+    <p class="ctlab__hint ctlab__packs">
+      Vocabulaire de lecture :
+      ${[...byPack]
+        .map(
+          ([label, count]) =>
+            `<b>${escapeHtml(label)}</b> <span class="issue-row-meta-text">(${count} document${count > 1 ? "s" : ""})</span>`
+        )
+        .join(" · ")}
+    </p>
+  `;
+}
+
+/**
  * Les indicateurs de pilotage.
  *
  * Ce que chacun vient y chercher :
@@ -3069,6 +3101,7 @@ function renderDetails(state) {
       <p class="ctlab__hint">
         Chaque chiffre se vérifie contre les PDF chargés, sans qu'on ait à croire l'outil sur parole.
       </p>
+      ${renderPacksUsed(state.result.packsUsed)}
       ${renderIndicators(state.result.indicators)}
     </div>
     <div class="ctlab__section">

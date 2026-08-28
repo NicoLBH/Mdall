@@ -21,6 +21,7 @@ import {
 } from "./extraction.mjs";
 import { assessCompleteness } from "./completeness.mjs";
 import { orderChronologically } from "./document-meta.mjs";
+import { packStamp, selectPack } from "./packs/index.mjs";
 import { discoverLegend, mergeLegends } from "./legend.mjs";
 import { extractAvisFromLayout } from "./layout.mjs";
 import { findGlobalClearances, findLiftingStatements, indexStatements } from "./lifting.mjs";
@@ -96,6 +97,11 @@ function toBlockPrediction(occurrence, index) {
     opinion_normalized: occurrence.opinion_normalized,
     opinion_confidence: occurrence.opinion_confidence,
     identity_source: occurrence.identity_source,
+    // Quel vocabulaire a lu cet avis, et dans quelle version. Face à un écart
+    // entre deux exécutions, c'est ce qui dit si la cause est le document ou
+    // une correction du pack.
+    pack_id: occurrence.pack_id ?? null,
+    pack_version: occurrence.pack_version ?? null,
     occurrence_count_in_document: occurrence.occurrence_count_in_document ?? 1,
     extraction_state: occurrence.extraction_state
   };
@@ -272,6 +278,8 @@ export const ctContinuityPipeline = {
     const orphanReferences = [];
     /** Documents lus par la géométrie du tableau plutôt que ligne à ligne. */
     const layoutSources = [];
+    /** Quel pack a lu quel document, et dans quelle version. */
+    const packsUsed = {};
 
     // Vocabulaire du lot : une pièce qui ne rappelle pas la légende de son
     // organisme peut s'appuyer sur celle de ses voisines.
@@ -297,9 +305,19 @@ export const ctContinuityPipeline = {
         continue;
       }
 
+      // Le pack dit le vocabulaire de l'émetteur : ses en-têtes de colonnes,
+      // les noms de ses livrables, le format de sa référence, ses phrases de
+      // levée. Il se choisit sur ce que le document imprime de lui-même, et
+      // chaque avis consignera lequel l'a lu — sans quoi, face à un écart
+      // entre deux exécutions, on ne saurait jamais s'il vient du document ou
+      // d'une correction de la veille.
+      const pack = selectPack(source.content);
+      packsUsed[source.source_id] = packStamp(pack);
+
       if (strategy === STRATEGY.BLOCKS) {
         const { occurrences: blockOccurrences, legend, legendSource, orphanReferences: orphans } = extractAvisBlocks(source, {
-          legend: batchLegend
+          legend: batchLegend,
+          pack
         });
 
         // Quand le PDF a livré ses coordonnées, on lit le tableau par sa
@@ -308,7 +326,7 @@ export const ctContinuityPipeline = {
         // RICT réel, cette lecture trouve 230 avis contre 218, deux fois plus
         // de numéros, et aucun intitulé vide. Sans coordonnées — un PDF scanné,
         // un format inattendu — la lecture par lignes reprend la main.
-        const layout = extractAvisFromLayout(source, { legend: { codes: legend } });
+        const layout = extractAvisFromLayout(source, { legend: { codes: legend }, pack });
         const occurrences = layout ? layout.occurrences : blockOccurrences;
         if (layout) layoutSources.push(source.source_id);
         for (const orphan of orphans ?? []) {
@@ -321,7 +339,9 @@ export const ctContinuityPipeline = {
         // continuité, les autres permettent de retrouver par intitulé un avis
         // qui a perdu son numéro en repassant favorable.
         documents.push({ source, occurrences });
-        occurrences.forEach((occurrence, index) => predictions.push(toBlockPrediction(occurrence, index)));
+        occurrences.forEach((occurrence, index) =>
+          predictions.push(toBlockPrediction({ ...occurrence, ...packStamp(pack) }, index))
+        );
         continue;
       }
 
@@ -340,9 +360,13 @@ export const ctContinuityPipeline = {
     // Déclarations explicites de levée : la preuve que le cadrage exige avant
     // de considérer qu'un avis a été suivi d'effet.
     await report("lifting");
-    const liftingStatements = sources.flatMap((source) => findLiftingStatements(source));
+    const liftingStatements = sources.flatMap((source) =>
+      findLiftingStatements(source, { pack: selectPack(source.content) })
+    );
     // Un rapport final peut clore l'ensemble du dossier d'une seule phrase.
-    const globalClearances = sources.flatMap((source) => findGlobalClearances(source));
+    const globalClearances = sources.flatMap((source) =>
+      findGlobalClearances(source, { pack: selectPack(source.content) })
+    );
     const liftingIndex = indexStatements(liftingStatements);
 
     for (const statement of liftingStatements) {
@@ -426,6 +450,7 @@ export const ctContinuityPipeline = {
       global_clearances: globalClearances,
       orphan_references: orphanReferences,
       layout_sources: layoutSources,
+      packs_used: packsUsed,
       experimental_suggestions: [
         ...buildExperimentalSuggestions(continuityItems),
         ...liftingStatements.map((statement) => ({

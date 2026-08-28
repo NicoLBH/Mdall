@@ -14,48 +14,7 @@
  */
 
 import { normalizeReferenceKey, normalizeWhitespace } from "../lib/normalize.mjs";
-
-/**
- * Formulations reconnues. Volontairement étroites : une phrase qui parle de
- * levée sans désigner de numéro ne prouve rien d'exploitable.
- */
-/**
- * `\b` est défini sur [A-Za-z0-9_] : après « levé », la frontière de mot
- * n'existe pas, puisque « é » n'est pas un caractère de mot au sens de
- * JavaScript. Il faut donc une fin de mot qui connaisse les lettres accentuées.
- */
-const END_OF_WORD = "(?!\\p{L})";
-
-const PATTERNS = [
-  new RegExp(`\\bl['’]avis\\s*(?:n[°o]\\s*)?(?<references>\\d{1,4})\\s+est\\s+lev[ée]e?${END_OF_WORD}`, "giu"),
-  new RegExp(`\\bles\\s+avis\\s*(?:n[°os]*\\s*)?(?<references>\\d{1,4}(?:\\s*(?:,|et)\\s*\\d{1,4})+)\\s+sont\\s+lev[ée]e?s?${END_OF_WORD}`, "giu"),
-  new RegExp(`\\bavis\\s*n[°o]\\s*(?<references>\\d{1,4})\\s+lev[ée]e?${END_OF_WORD}`, "giu")
-];
-
-/**
- * Le rapport final clôt la mission par une phrase, et une seule, qui vaut pour
- * tout le dossier :
- *
- *   « À notre connaissance, l'ensemble des avis que nous avons émis dans le
- *     cadre de notre mission au cours de l'opération ont été suivis d'effet. »
- *
- * C'est la clôture la plus forte du corpus : datée, signée, opposable. Sans
- * elle, un chantier dont les avis ont tous été traités ressort « sans
- * nouvelles » de bout en bout, ce qui est le contraire de la vérité.
- *
- * Le titre de la section qui la précède dit l'inverse — « AVIS QUI […] N'ONT
- * PAS ETE SUIVIS D'EFFETS » — et se trouve à deux mots de la formulation
- * recherchée. D'où la garde explicite sur la négation : c'est exactement le
- * genre de voisinage où un motif trop large affirme le contraire du document.
- */
-const GLOBAL_CLEARANCE = new RegExp(
-  "(?<subject>l['’]ensemble\\s+des\\s+avis|tous\\s+les\\s+avis)" +
-    "[^.]{0,220}?" +
-    "\\bont\\s+(?:tous\\s+)?[ée]t[ée]\\s+suivis?\\s+d['’]effets?",
-  "iu"
-);
-
-const NEGATION = /n['’]ont\s+pas/i;
+import { DEFAULT_PACK } from "./packs/index.mjs";
 
 /**
  * Un titre de section n'a pas de point final : remonter jusqu'au point
@@ -93,7 +52,7 @@ function expandToSentence(text, start, end) {
  * @returns {{sentence: string, source_document_id: string, source_page: number|null,
  *            scope: "ALL_AVIS"}[]}
  */
-export function findGlobalClearances(source) {
+export function findGlobalClearances(source, { pack = DEFAULT_PACK } = {}) {
   if (!source?.content_available) return [];
 
   const pages = Array.isArray(source.pages) && source.pages.length > 0
@@ -106,13 +65,13 @@ export function findGlobalClearances(source) {
     // La phrase court sur plusieurs lignes une fois le PDF aplati : on
     // raisonne sur la page recomposée, pas ligne à ligne.
     const flattened = normalizeWhitespace(page.text.replace(/\r?\n/g, " "));
-    const match = GLOBAL_CLEARANCE.exec(flattened);
+    const match = pack.globalClearance.exec(flattened);
     if (!match) continue;
 
     // La négation se teste sur le fragment reconnu, jamais sur la page : le
     // titre de section voisin en contient une, et il n'a rien à voir avec la
     // phrase de clôture qui le suit.
-    if (NEGATION.test(match[0])) continue;
+    if (pack.clearanceNegation.test(match[0])) continue;
 
     clearances.push({
       // On rend la phrase entière, ponctuation comprise : c'est elle qu'on
@@ -132,7 +91,7 @@ export function findGlobalClearances(source) {
  * @returns {{reference_raw: string, reference_normalized: string, sentence: string,
  *            source_document_id: string, source_page: number|null}[]}
  */
-export function findLiftingStatements(source) {
+export function findLiftingStatements(source, { pack = DEFAULT_PACK } = {}) {
   if (!source?.content_available) return [];
 
   const pages = Array.isArray(source.pages) && source.pages.length > 0
@@ -147,7 +106,7 @@ export function findLiftingStatements(source) {
       const line = normalizeWhitespace(rawLine);
       if (line === "") continue;
 
-      for (const pattern of PATTERNS) {
+      for (const pattern of pack.liftingPatterns) {
         pattern.lastIndex = 0;
         for (const match of line.matchAll(pattern)) {
           for (const reference of match.groups.references.split(/\s*(?:,|et)\s*/)) {

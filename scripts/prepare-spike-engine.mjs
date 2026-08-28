@@ -29,6 +29,8 @@ const BROWSER_SAFE_MODULES = [
   "lib/report.mjs",
   "lib/run-record.mjs",
   "ct-continuity/document-meta.mjs",
+  "ct-continuity/packs/index.mjs",
+  "ct-continuity/packs/socotec.mjs",
   "ct-continuity/completeness.mjs",
   "ct-continuity/status.mjs",
   "ct-continuity/analytics.mjs",
