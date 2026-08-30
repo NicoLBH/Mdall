@@ -202,6 +202,40 @@ export async function listPropositionItems(propositionId) {
 }
 
 /**
+ * Les décisions que le projet a assumées.
+ *
+ * Ce sont elles qui font mémoire, et rien d'autre. Le filtre est double, et les
+ * deux moitiés comptent :
+ *
+ *  - seules les décisions **fusionnées** entrent. Une réponse donnée dans une
+ *    proposition encore ouverte est une intention, pas un engagement ;
+ *  - la proposition qu'on lit est **exclue** d'elle-même. Se confronter à ses
+ *    propres réponses de tout à l'heure ferait un conflit à chaque clic.
+ *
+ * @returns {Promise<object[]>} vide si la base n'a pas répondu — l'écran le dit
+ *   plutôt que d'annoncer une absence de contradiction qu'il n'a pas vérifiée.
+ */
+export async function listProjectDecisions(projectId, { exceptPropositionId = null } = {}) {
+  if (!projectId) return [];
+
+  try {
+    return (
+      (await request("proposition_items", {
+        params: {
+          select: "item_type,item_key,payload,status,reason,decided_at,proposition_id,propositions!inner(status)",
+          project_id: `eq.${projectId}`,
+          "propositions.status": `eq.${PROPOSITION.MERGED}`,
+          ...(exceptPropositionId ? { proposition_id: `neq.${exceptPropositionId}` } : {}),
+          order: "decided_at.desc"
+        }
+      })) ?? []
+    );
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Enregistre les décisions d'un humain sur des affirmations.
  *
  * En lot, parce que trancher un bloc entier d'un clic est le geste normal :
@@ -291,6 +325,45 @@ export async function mergeProposition({ proposition, acceptedDocumentIds = [], 
     });
 
     return { merged: true, accepted: acceptedDocumentIds.length, refused: refusedDocumentIds.length };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Renonce à une proposition.
+ *
+ * Ses documents ne sont pas supprimés — rien ne l'est jamais ici — mais marqués
+ * refusés : ils restent visibles, grisés, dans l'onglet Documents. Un document
+ * déposé est un fait ; ce qui se décide, c'est son entrée dans le corpus.
+ *
+ * Même ordre que la fusion : les documents d'abord, l'état ensuite. Une
+ * proposition marquée close dont les documents seraient restés « en attente »
+ * les laisserait suspendus à un jugement que personne ne rendrait plus.
+ *
+ * @returns {Promise<{closed: boolean, refused: number}|null>}
+ */
+export async function closeProposition({ proposition, documentIds = [] } = {}) {
+  if (!proposition?.id) return null;
+
+  try {
+    if (documentIds.length > 0) {
+      await request("documents", {
+        method: "PATCH",
+        params: { id: `in.(${documentIds.join(",")})` },
+        headers: { Prefer: "return=minimal" },
+        body: { corpus_state: "refused" }
+      });
+    }
+
+    await request("propositions", {
+      method: "PATCH",
+      params: { id: `eq.${proposition.id}`, status: `eq.${PROPOSITION.OPEN}` },
+      headers: { Prefer: "return=minimal" },
+      body: { status: PROPOSITION.CLOSED }
+    });
+
+    return { closed: true, refused: documentIds.length };
   } catch {
     return null;
   }
