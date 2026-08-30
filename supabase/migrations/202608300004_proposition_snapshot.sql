@@ -1,0 +1,31 @@
+-- L'état d'une proposition au moment où elle cesse d'être une question.
+--
+-- La doctrine du système n'a jamais été « tout se recalcule ». Elle est : ce
+-- qui est dérivé se recalcule tant qu'il sert à décider ; ce qui a été décidé
+-- se conserve.
+--
+-- Une proposition ouverte est une question — on veut savoir ce qui arriverait
+-- si on la fusionnait maintenant, donc on relit tout, avec le moteur du jour.
+-- Une proposition fusionnée ou abandonnée est le procès-verbal d'une décision,
+-- et la recalculer afficherait la lecture d'aujourd'hui sous l'étiquette d'une
+-- décision d'hier. Une correction du vocabulaire, six mois plus tard,
+-- réécrirait silencieusement ce que quelqu'un a signé.
+--
+-- L'essentiel du gel n'est pas ici : il est dans `proposition_items`, où sont
+-- désormais écrites, au moment de la fermeture, TOUTES les affirmations — y
+-- compris celles que personne n'a touchées, et que la fusion a acceptées par
+-- le silence. Sans cela, le procès-verbal ne garderait que les trois écarts et
+-- perdrait les quatorze accords, ce qui est le contraire de ce qui s'est passé.
+--
+-- Cette colonne ne garde que ce qu'aucune affirmation ne porte : combien d'avis
+-- restaient en l'état, quels livrables le stockage n'avait pas rendus, quel
+-- moteur et quel vocabulaire avaient lu. C'est un résumé, pas une seconde base
+-- de données : tout ce qui se déduit des affirmations conservées n'y est pas
+-- recopié, sous peine d'avoir un jour deux versions du même compte.
+--
+-- Additive, comme les précédentes. Les propositions closes avant ce jour
+-- gardent une valeur nulle, et l'écran le dit plutôt que de faire passer une
+-- trace partielle pour un état complet.
+
+alter table public.propositions
+  add column if not exists snapshot jsonb;

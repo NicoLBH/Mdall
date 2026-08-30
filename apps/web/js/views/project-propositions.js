@@ -21,6 +21,12 @@ import { bindOverlayChromeCompact, renderOverlayChromeHead } from "./ui/overlay-
 import { renderSharedDetailsTitleWrap } from "./ui/detail-header.js";
 import { ITEM, PROPOSITION, describeMerge } from "../services/proposition-state.js";
 import {
+  buildSnapshot,
+  describeSnapshotGap,
+  freezeDecisions,
+  itemsFromDecisions
+} from "../services/proposition-freeze.js";
+import {
   describeBlocking,
   describeConflict,
   findMemoryConflicts,
@@ -303,18 +309,28 @@ function renderReviewHead(proposition) {
  */
 function renderReviewItem(item, body) {
   const refuse = item.status === ITEM.REFUSED;
+  const gele = view.review?.frozen === true;
   const cle = `${item.itemType}|${item.itemKey}`;
 
   return `
     <li class="review-item${refuse ? " is-refused" : ""}">
-      <label class="review-item__check">
-        <input type="checkbox" data-review-item="${escapeHtml(cle)}" ${refuse ? "" : "checked"}>
-      </label>
+      <span class="review-item__check">
+        ${
+          gele
+            ? // Une case à cocher sur un procès-verbal inviterait à changer ce
+              // qui a été décidé. On montre la décision, on ne la propose pas.
+              `<span class="review-item__mark review-item__mark--${refuse ? "refused" : "accepted"}"
+                     title="${refuse ? "Refusé" : "Accepté"}" aria-label="${refuse ? "Refusé" : "Accepté"}">
+                 ${svgIcon(refuse ? "x" : "check", { className: "octicon" })}
+               </span>`
+            : `<input type="checkbox" data-review-item="${escapeHtml(cle)}" ${refuse ? "" : "checked"}>`
+        }
+      </span>
       <div class="review-item__body">
         ${body}
         ${refuse ? `<span class="review-item__status">Refusé</span>` : ""}
         ${
-          refuse
+          refuse && !gele
             ? `<input
                  type="text"
                  class="gh-input review-item__reason"
@@ -322,7 +338,9 @@ function renderReviewItem(item, body) {
                  value="${escapeHtml(item.reason ?? "")}"
                  placeholder="Pourquoi l'écarter ? (facultatif)"
                >`
-            : ""
+            : refuse && item.reason
+              ? `<span class="review-item__reason-text">${escapeHtml(item.reason)}</span>`
+              : ""
         }
       </div>
     </li>
@@ -500,7 +518,7 @@ function renderReviewBlock(type, titre, items, renderer, vide) {
         <div class="review-block__head${ecartes > 0 ? " is-partial" : ""}">
           <label class="review-item__check">
             ${
-              items.length > 0
+              items.length > 0 && view.review?.frozen !== true
                 ? `<input
                      type="checkbox"
                      data-review-block="${escapeHtml(type)}"
@@ -541,6 +559,63 @@ function closedNote(proposition) {
     : "Cette proposition a été abandonnée. Ses documents restent au projet, marqués refusés.";
 }
 
+/**
+ * Le bandeau d'un procès-verbal.
+ *
+ * Il dit deux choses, et la seconde est la plus importante : à quelle date cet
+ * état a été arrêté, et que **rien ici ne se recalcule**. Sans elle, un lecteur
+ * qui trouverait l'écran figé pourrait croire à un cache, et cliquer partout
+ * pour le rafraîchir.
+ */
+function renderFrozenNote(proposition, review) {
+  if (review.gap) {
+    return `
+      <div class="propositions-empty propositions-empty--warn">
+        <b>État partiellement conservé</b>
+        <p>${escapeHtml(review.gap)}</p>
+      </div>
+    `;
+  }
+
+  const quand = proposition.snapshot?.frozenAt ?? proposition.merged_at ?? null;
+  const lu = [proposition.snapshot?.engine, ...(proposition.snapshot?.packs ?? [])].filter(Boolean).join(" · ");
+
+  return `
+    <div class="review-frozen">
+      <span class="review-frozen__mark">${svgIcon("history", { className: "octicon" })}</span>
+      <p class="review-frozen__text">
+        État de la proposition ${
+          proposition.status === PROPOSITION.MERGED ? "au moment de sa fusion" : "au moment de son abandon"
+        }${quand ? `, le ${escapeHtml(formatDate(quand))}` : ""}.
+        Cet écran ne se recalcule pas : il montre ce qui a été décidé${
+          lu ? `, tel que ${escapeHtml(lu)} l'avait lu` : ""
+        }.
+      </p>
+    </div>
+  `;
+}
+
+/** Ce qu'une proposition close a fait, au passé. */
+function describeFrozen(items = []) {
+  const refuses = items.filter((entry) => entry.status === ITEM.REFUSED).length;
+  const acceptes = items.length - refuses;
+
+  if (items.length === 0) return "Aucune affirmation n'a été conservée pour cette proposition.";
+
+  return refuses > 0
+    ? `${acceptes} affirmation${acceptes > 1 ? "s" : ""} acceptée${acceptes > 1 ? "s" : ""}, ` +
+        `${refuses} refusée${refuses > 1 ? "s" : ""}.`
+    : `${acceptes} affirmation${acceptes > 1 ? "s" : ""} acceptée${acceptes > 1 ? "s" : ""}.`;
+}
+
+/** Trois noms, puis un compte : une liste de dix-sept fichiers n'est plus une phrase. */
+function nameSome(rows = [], limit = 3) {
+  const noms = rows.map((row) => row?.original_filename ?? row?.filename ?? "").filter(Boolean);
+  if (noms.length === 0) return "Les fichiers concernés n'ont pas été retenus.";
+
+  return `${noms.slice(0, limit).join(", ")}${noms.length > limit ? ` et ${noms.length - limit} autre(s)` : ""}.`;
+}
+
 function renderReview(root) {
   const proposition = view.open;
   const review = view.review;
@@ -569,6 +644,7 @@ function renderReview(root) {
   const items = review.items ?? [];
   const parType = (type) => items.filter((entry) => entry.itemType === type);
   const fusionnee = proposition.status !== PROPOSITION.OPEN;
+  const gele = review.frozen === true;
   // Le seul endroit du système où le silence ne vaut pas acceptation.
   const blocage = describeBlocking(review.conflicts ?? []);
 
@@ -585,11 +661,18 @@ function renderReview(root) {
         ? `<p class="review-description">${escapeHtml(proposition.description)}</p>`
         : ""
     }
+    ${gele ? renderFrozenNote(proposition, review) : ""}
     ${
       review.unreachable.length > 0
         ? `<div class="propositions-empty propositions-empty--warn">
              <b>${review.unreachable.length} livrable(s) n'ont pas pu être rapatriés</b>
-             <p>Ce qui manque au dossier et les avis sans nouvelles sont à lire avec cette réserve.</p>
+             <p>
+               ${
+                 gele
+                   ? escapeHtml(nameSome(review.unreachable))
+                   : "Ce qui manque au dossier et les avis sans nouvelles sont à lire avec cette réserve."
+               }
+             </p>
            </div>`
         : ""
     }
@@ -614,13 +697,15 @@ function renderReview(root) {
       "Avis",
       parType(ITEM_TYPE.AVIS),
       renderAvisItem,
-      review.result
+      Number.isFinite(review.diff?.unchanged)
         ? `Aucun avis ne change. ${review.diff.unchanged} avis restent en l'état.`
-        : "Aucun livrable exploitable : il n'y a pas d'avis à en tirer."
+        : gele
+          ? "Aucun avis ne changeait, ou l'état conservé ne le dit pas."
+          : "Aucun livrable exploitable : il n'y a pas d'avis à en tirer."
     )}
     <footer class="review-merge">
       <p class="review-merge__summary">
-        ${escapeHtml(describeMerge(items))}
+        ${escapeHtml(gele ? describeFrozen(items) : describeMerge(items))}
         ${blocage ? `<span class="review-merge__blocked">${escapeHtml(blocage)}</span>` : ""}
       </p>
       ${
@@ -788,17 +873,30 @@ async function merge(root) {
   renderContent(root);
 
   try {
-    const [{ mergeProposition }, { rememberProjectMarkers }, { markersToRemember }] = await Promise.all([
+    const [propositions, { rememberProjectMarkers }, { markersToRemember }] = await Promise.all([
       import("../services/propositions-supabase.js"),
       import("../services/project-identity-supabase.js"),
       import("../services/project-identity.js")
     ]);
 
+    // Geler avant de fermer. Une proposition marquée fusionnée dont l'état
+    // n'aurait pas été écrit serait précisément le procès-verbal manquant
+    // qu'on cherche à ne plus produire — et rien ne permettrait de le
+    // reconstituer après coup.
+    const gele = await freeze(propositions, proposition);
+    if (!gele) {
+      view.review.merging = false;
+      view.review.notice = "L'état de la proposition n'a pas pu être conservé. Rien n'a été fusionné.";
+      renderContent(root);
+      return;
+    }
+
     const documents = items.filter((entry) => entry.itemType === ITEM_TYPE.DOCUMENT);
-    const applique = await mergeProposition({
+    const applique = await propositions.mergeProposition({
       proposition,
       acceptedDocumentIds: documents.filter((entry) => entry.status !== ITEM.REFUSED).map((entry) => entry.itemKey),
-      refusedDocumentIds: documents.filter((entry) => entry.status === ITEM.REFUSED).map((entry) => entry.itemKey)
+      refusedDocumentIds: documents.filter((entry) => entry.status === ITEM.REFUSED).map((entry) => entry.itemKey),
+      snapshot: gele
     });
 
     if (!applique) {
@@ -820,7 +918,22 @@ async function merge(root) {
     }
 
     view.review.merging = false;
-    view.open = { ...proposition, status: PROPOSITION.MERGED, merged_at: new Date().toISOString() };
+    // L'écran devient le procès-verbal sans attendre un rechargement : les
+    // cases disparaissent, l'état affiché est celui qu'on vient d'arrêter.
+    view.review.frozen = true;
+    view.open = {
+      ...proposition,
+      status: PROPOSITION.MERGED,
+      merged_at: new Date().toISOString(),
+      snapshot: gele
+    };
+
+    // La liste dit la même chose que l'écran. Sans cela, revenir en arrière
+    // montrerait la proposition encore ouverte, et la rouvrir la ferait
+    // ré-analyser — précisément ce qu'une proposition close ne doit plus subir.
+    const ligne = (view.propositions ?? []).find((entry) => entry.id === proposition.id);
+    if (ligne) Object.assign(ligne, view.open);
+    store.projectPropositionsView = { openCount: getOpenPropositionCount() };
 
     await recomputeAfterMerge(root, proposition);
   } catch {
@@ -829,6 +942,41 @@ async function merge(root) {
   }
 
   renderContent(root);
+}
+
+/**
+ * Écrit l'état de la proposition avant qu'elle ne se ferme.
+ *
+ * Deux choses partent, et la première est la moins évidente : **toutes** les
+ * affirmations, y compris celles que personne n'a touchées. Ailleurs dans la
+ * revue, ne rien dire vaut acceptation ; cette acceptation tacite n'existait
+ * jusqu'ici nulle part en base. Sans elle, le procès-verbal garderait les trois
+ * écarts et perdrait les quatorze accords — le contraire de ce qui s'est passé.
+ *
+ * La seconde est le résumé de ce qu'aucune affirmation ne porte : les avis
+ * restés en l'état, les livrables que le stockage n'avait pas rendus, le moteur
+ * qui a lu.
+ *
+ * @returns {Promise<object|null>} le résumé à écrire, ou `null` si les
+ *   affirmations n'ont pas pu être conservées — on ne ferme alors rien.
+ */
+async function freeze(propositions, proposition) {
+  const review = view.review ?? {};
+  const items = review.items ?? [];
+
+  const ok = await propositions.decidePropositionItems({
+    propositionId: proposition.id,
+    projectId: proposition.project_id,
+    decisions: freezeDecisions(items)
+  });
+  if (!ok) return null;
+
+  return buildSnapshot({
+    items,
+    diff: review.diff ?? {},
+    unreachable: review.unreachable ?? [],
+    result: review.result ?? null
+  });
 }
 
 /**
@@ -860,12 +1008,25 @@ async function abandon(root) {
   renderContent(root);
 
   try {
-    const { closeProposition } = await import("../services/propositions-supabase.js");
+    const propositions = await import("../services/propositions-supabase.js");
     const documents = (view.review.items ?? []).filter((entry) => entry.itemType === ITEM_TYPE.DOCUMENT);
 
-    const ferme = await closeProposition({
+    // Une proposition abandonnée est un procès-verbal comme une autre : ce
+    // qu'elle proposait mérite d'être lisible dans six mois, ne serait-ce que
+    // pour savoir ce qu'on avait renoncé à faire entrer.
+    const gele = await freeze(propositions, proposition);
+    if (!gele) {
+      view.review.merging = false;
+      view.review.abandoning = false;
+      view.review.notice = "L'état de la proposition n'a pas pu être conservé. Elle reste ouverte.";
+      renderContent(root);
+      return;
+    }
+
+    const ferme = await propositions.closeProposition({
       proposition,
-      documentIds: documents.map((entry) => entry.itemKey)
+      documentIds: documents.map((entry) => entry.itemKey),
+      snapshot: gele
     });
 
     if (!ferme) {
@@ -878,11 +1039,12 @@ async function abandon(root) {
 
     view.review.merging = false;
     view.review.abandoning = false;
-    view.open = { ...proposition, status: PROPOSITION.CLOSED };
+    view.review.frozen = true;
+    view.open = { ...proposition, status: PROPOSITION.CLOSED, snapshot: gele };
 
     // La liste et le compteur de l'onglet disent la même chose que l'écran.
     const ligne = (view.propositions ?? []).find((entry) => entry.id === proposition.id);
-    if (ligne) ligne.status = PROPOSITION.CLOSED;
+    if (ligne) Object.assign(ligne, { status: PROPOSITION.CLOSED, snapshot: gele });
     store.projectPropositionsView = { openCount: getOpenPropositionCount() };
   } catch {
     view.review.merging = false;
@@ -957,6 +1119,55 @@ function setPropositionsHeader() {
 }
 
 /**
+ * Ouvre une proposition close : on lit ce qu'elle fut.
+ *
+ * Aucune analyse, aucun PDF rapatrié, aucun appel au moteur. Ce qui s'affiche
+ * vient de ce qui a été écrit au moment de la fermeture — les affirmations et
+ * leurs décisions, plus le résumé de ce qu'aucune d'elles ne portait.
+ *
+ * C'est le pendant exact de la règle qui gouverne une proposition ouverte : là
+ * on recalcule tout parce qu'il faut décider, ici on ne recalcule rien parce
+ * qu'il a été décidé. La même doctrine, appliquée aux deux moments.
+ */
+async function openFrozen(root, proposition) {
+  try {
+    const { listPropositionItems } = await import("../services/propositions-supabase.js");
+    const stored = await listPropositionItems(proposition.id);
+
+    if (!view.open || view.open.id !== proposition.id) return;
+
+    const snapshot = proposition.snapshot ?? null;
+    view.review = {
+      running: false,
+      frozen: true,
+      step: "",
+      merging: false,
+      error: null,
+      // Les noms des livrables que le stockage n'avait pas rendus ce jour-là :
+      // l'analyse portait sur moins de documents, et cela se lit encore.
+      unreachable: (snapshot?.unreachable ?? []).map((name) => ({ original_filename: name })),
+      diff: { unchanged: snapshot?.unchangedAvis ?? null },
+      result: null,
+      notice: null,
+      gap: describeSnapshotGap(proposition, stored.length),
+      items: itemsFromDecisions(stored)
+    };
+  } catch {
+    if (!view.open || view.open.id !== proposition.id) return;
+    view.review = {
+      running: false,
+      frozen: true,
+      items: [],
+      unreachable: [],
+      diff: { unchanged: null },
+      error: "L'état conservé de cette proposition n'a pas pu être lu."
+    };
+  }
+
+  if (root.isConnected) renderContent(root);
+}
+
+/**
  * Ouvre une proposition et lance son analyse.
  *
  * L'analyse démarre seule, comme une CI : on ouvre, elle tourne, le diff
@@ -978,6 +1189,13 @@ async function openProposition(root, propositionId) {
     onCompactLabelClick: () => backToList(root)
   });
   renderContent(root);
+
+  // Une proposition close n'est plus une question : c'est le procès-verbal
+  // d'une décision. On le lit, on ne le rejoue pas.
+  if (proposition.status !== PROPOSITION.OPEN) {
+    await openFrozen(root, proposition);
+    return;
+  }
 
   try {
     const [{ analyzeProposition }, propositions, { loadCtAnalysis }, { loadProjectMarkers }] = await Promise.all([
