@@ -15669,6 +15669,91 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   border-radius:var(--radius);
   background:var(--panel2);
 }
+/* ── Le journal des actions, et le détail d'une exécution ────────
+   Le journal a grossi parce que les actions racontent l'histoire du projet. Un
+   tableau ne peut pas tout porter sans devenir illisible : une ligne par acte,
+   et une page par acte. */
+
+.workflow-runs__title--link{
+  appearance:none;
+  background:none;
+  border:0;
+  padding:0;
+  font:inherit;
+  color:var(--text);
+  text-align:left;
+  cursor:pointer;
+}
+.workflow-runs__title--link:hover,
+.workflow-runs__title--link:focus-visible{ color:var(--blueLink); text-decoration:underline; }
+
+.run-detail{ display:flex; flex-direction:column; gap:16px; }
+
+.run-detail__head{ display:flex; flex-direction:column; gap:8px; align-items:flex-start; }
+.run-detail__title-row{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.run-detail__title{ margin:0; font-size:22px; font-weight:600; color:var(--text); }
+.run-detail__lead{ margin:0; color:var(--muted); font-size:13px; }
+
+.run-section{
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  background:var(--panel2);
+  overflow:hidden;
+}
+.run-section__title{
+  margin:0;
+  padding:10px 16px;
+  background:var(--panel);
+  border-bottom:1px solid var(--border);
+  font-size:14px;
+  font-weight:600;
+  color:var(--text);
+}
+.run-section__count{
+  display:inline-block;
+  margin-left:4px;
+  padding:0 7px;
+  border-radius:999px;
+  background:var(--panel2);
+  border:1px solid var(--border);
+  color:var(--muted);
+  font-size:11px;
+  font-variant-numeric:tabular-nums;
+}
+.run-section__empty{ margin:0; padding:12px 16px; color:var(--muted); font-size:13px; font-style:italic; }
+
+.run-rows{ display:flex; flex-direction:column; }
+.run-row{
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:16px;
+  padding:9px 16px;
+  border-bottom:1px solid var(--border2);
+  font-size:13px;
+}
+.run-row:last-child{ border-bottom:0; }
+.run-row__label{ color:var(--muted); }
+.run-row__value{ color:var(--text); text-align:right; }
+
+.run-annotation{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  padding:12px 16px;
+  border-bottom:1px solid var(--border2);
+  font-size:13px;
+}
+.run-annotation:last-child{ border-bottom:0; }
+.run-annotation span{ color:var(--muted); font-size:12px; }
+.run-annotation--warn{ border-left:3px solid #d29922; }
+.run-annotation--warn b{ color:#d29922; }
+.run-annotation--error{ border-left:3px solid var(--fgColor-danger); }
+.run-annotation--error b{ color:var(--fgColor-danger); }
+
+.run-files{ margin:0; padding:8px 16px 12px 32px; color:var(--muted); font-size:13px; }
+.run-files li{ padding:2px 0; }
+
 /* ── Les quatre onglets d'une proposition ────────────────────────
    Quatre questions, pas un rangement : pourquoi (Conversation), quoi et quand
    (Dépôts), ce qu'en dit la machine (Analyse), ce qu'on décide (Ce qui change).
