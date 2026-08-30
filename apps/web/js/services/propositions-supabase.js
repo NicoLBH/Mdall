@@ -202,6 +202,40 @@ export async function listPropositionItems(propositionId) {
 }
 
 /**
+ * Les décisions que le projet a assumées.
+ *
+ * Ce sont elles qui font mémoire, et rien d'autre. Le filtre est double, et les
+ * deux moitiés comptent :
+ *
+ *  - seules les décisions **fusionnées** entrent. Une réponse donnée dans une
+ *    proposition encore ouverte est une intention, pas un engagement ;
+ *  - la proposition qu'on lit est **exclue** d'elle-même. Se confronter à ses
+ *    propres réponses de tout à l'heure ferait un conflit à chaque clic.
+ *
+ * @returns {Promise<object[]>} vide si la base n'a pas répondu — l'écran le dit
+ *   plutôt que d'annoncer une absence de contradiction qu'il n'a pas vérifiée.
+ */
+export async function listProjectDecisions(projectId, { exceptPropositionId = null } = {}) {
+  if (!projectId) return [];
+
+  try {
+    return (
+      (await request("proposition_items", {
+        params: {
+          select: "item_type,item_key,payload,status,reason,decided_at,proposition_id,propositions!inner(status)",
+          project_id: `eq.${projectId}`,
+          "propositions.status": `eq.${PROPOSITION.MERGED}`,
+          ...(exceptPropositionId ? { proposition_id: `neq.${exceptPropositionId}` } : {}),
+          order: "decided_at.desc"
+        }
+      })) ?? []
+    );
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Enregistre les décisions d'un humain sur des affirmations.
  *
  * En lot, parce que trancher un bloc entier d'un clic est le geste normal :

@@ -15669,7 +15669,67 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   border-radius:var(--radius);
   background:var(--panel2);
 }
+/* ── La contradiction avec la mémoire ────────────────────────────
+   Le seul endroit de la revue où le silence ne vaut pas acceptation : tant
+   qu'une contradiction n'est pas tranchée, la fusion attend. Le bloc est donc
+   en tête, et se voit. */
+
+.review-panel--conflict{ border-color:#d29922; }
+.review-block__state.is-blocking{ color:#d29922; font-weight:600; }
+
+.conflict__doctrine{
+  margin:0;
+  padding:10px 16px;
+  background:rgba(210,153,34,.08);
+  border-bottom:1px solid var(--border2);
+  color:var(--muted);
+  font-size:12px;
+  font-style:italic;
+}
+
+.conflict-list{ margin:0; padding:0; list-style:none; }
+
+.conflict{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  padding:12px 16px;
+  background:var(--panel2);
+  border-bottom:1px solid var(--border2);
+}
+.conflict:last-child{ border-bottom:0; }
+.conflict.is-settled{ opacity:.72; }
+
+.conflict__head{ display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+.conflict__title{ color:var(--text); font-size:14px; font-weight:600; }
+.conflict__date{ color:var(--muted); font-size:12px; }
+
+/* Les deux versions côte à côte : c'est la confrontation qui informe, pas le
+   fait qu'il y ait un problème quelque part. */
+.conflict__sides{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+}
+@media (max-width: 700px){
+  .conflict__sides{ grid-template-columns:1fr; }
+}
+
+.conflict__side{
+  margin:0;
+  padding:8px 10px;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  font-size:13px;
+}
+.conflict__side--memory{ color:var(--muted); background:var(--panel); }
+.conflict__side--now{ color:var(--text); border-color:#d29922; }
+
+.conflict__actions{ display:flex; gap:8px; flex-wrap:wrap; }
+.conflict__settled{ margin:0; color:var(--fgColor-done); font-size:12px; }
+
 .review-merge__summary{ margin:0; color:var(--muted); font-size:13px; }
+.review-merge__blocked{ display:block; margin-top:4px; color:#d29922; font-weight:600; }
 .review-merge__actions{ display:flex; align-items:center; gap:8px; }
 .review-merge__done{ margin:0; color:var(--fgColor-done); font-size:13px; }
 

@@ -21,6 +21,12 @@ import { bindOverlayChromeCompact, renderOverlayChromeHead } from "./ui/overlay-
 import { renderSharedDetailsTitleWrap } from "./ui/detail-header.js";
 import { ITEM, PROPOSITION, describeMerge } from "../services/proposition-state.js";
 import {
+  describeBlocking,
+  describeConflict,
+  findMemoryConflicts,
+  unresolvedConflicts
+} from "../services/memory-conflict.js";
+import {
   ITEM_TYPE,
   applyDecisions,
   attachmentItems,
@@ -377,6 +383,92 @@ function renderAvisItem(item) {
 }
 
 /**
+ * Une contradiction avec la mémoire du projet.
+ *
+ * Elle ne se coche pas : elle se tranche. Deux boutons qui nomment leur
+ * conséquence — garder ce qui avait été décidé, ou assumer ce que l'analyse
+ * dit maintenant — parce qu'une case cochée d'un geste distrait ne vaut pas
+ * décision quand elle défait une décision antérieure.
+ *
+ * Les deux versions sont montrées côte à côte, datées. Sans la date, « vous
+ * aviez retenu » n'est qu'une affirmation de plus.
+ */
+function renderConflict(conflict) {
+  const dit = describeConflict(conflict);
+  const tranche = conflict.item.status !== ITEM.PROPOSED;
+  const cle = `${conflict.item.itemType}|${conflict.item.itemKey}`;
+
+  return `
+    <li class="conflict${tranche ? " is-settled" : ""}">
+      <div class="conflict__head">
+        <span class="conflict__title">${escapeHtml(dit.title)}</span>
+        ${
+          conflict.decidedAt
+            ? `<span class="conflict__date">décidé le ${escapeHtml(formatDate(conflict.decidedAt))}</span>`
+            : ""
+        }
+      </div>
+      <div class="conflict__sides">
+        <p class="conflict__side conflict__side--memory">${escapeHtml(dit.memory)}</p>
+        <p class="conflict__side conflict__side--now">${escapeHtml(dit.now)}</p>
+      </div>
+      ${
+        tranche
+          ? `<p class="conflict__settled">${escapeHtml(
+              conflict.item.status === ITEM.REFUSED ? dit.keep : dit.take
+            )} — vous pouvez fusionner.</p>`
+          : `<div class="conflict__actions">
+               <button type="button" class="gh-btn gh-btn--sm" data-conflict-keep="${escapeHtml(cle)}">${escapeHtml(
+                 dit.keep
+               )}</button>
+               <button type="button" class="gh-btn gh-btn--sm gh-btn--primary" data-conflict-take="${escapeHtml(
+                 cle
+               )}">${escapeHtml(dit.take)}</button>
+             </div>`
+      }
+    </li>
+  `;
+}
+
+/**
+ * Le bloc des contradictions, en tête de la revue.
+ *
+ * Il est premier parce qu'il bloque : lire dix-sept avis pour découvrir en bas
+ * de page qu'on ne peut pas fusionner serait faire perdre son temps à celui qui
+ * lit. Quand il n'y a rien, il ne s'affiche pas — un bloc vide se dit quand son
+ * absence est une information, et ici l'absence de contradiction se lit déjà
+ * dans le fait qu'on peut fusionner.
+ */
+function renderConflicts(conflicts = []) {
+  if (conflicts.length === 0) return "";
+
+  const restants = unresolvedConflicts(conflicts).length;
+
+  return `
+    <section class="review-block">
+      <div class="review-panel review-panel--conflict">
+        <div class="review-block__head">
+          <div class="review-block__headbody">
+            <h3 class="review-block__title">
+              Contradictions avec la mémoire du projet
+              <span class="review-block__count">${conflicts.length}</span>
+            </h3>
+            <span class="review-block__state${restants > 0 ? " is-blocking" : ""}">
+              ${restants > 0 ? `${restants} à trancher` : "toutes tranchées"}
+            </span>
+          </div>
+        </div>
+        <p class="conflict__doctrine">
+          On a le droit de faire évoluer le projet même si cela contredit une décision passée.
+          Ce qu'on ne peut plus faire, c'est le faire sans le savoir.
+        </p>
+        <ul class="conflict-list">${conflicts.map(renderConflict).join("")}</ul>
+      </div>
+    </section>
+  `;
+}
+
+/**
  * Un bloc de la revue, avec sa case de tête.
  *
  * La case de tête est **dans la même colonne** que celles des lignes, parce
@@ -477,6 +569,8 @@ function renderReview(root) {
   const items = review.items ?? [];
   const parType = (type) => items.filter((entry) => entry.itemType === type);
   const fusionnee = proposition.status !== PROPOSITION.OPEN;
+  // Le seul endroit du système où le silence ne vaut pas acceptation.
+  const blocage = describeBlocking(review.conflicts ?? []);
 
   const avertissement = review.notice
     ? `<div class="propositions-empty propositions-empty--warn"><b>Réponse non conservée</b><p>${escapeHtml(
@@ -500,6 +594,7 @@ function renderReview(root) {
         : ""
     }
     ${avertissement}
+    ${renderConflicts(review.conflicts ?? [])}
     ${renderReviewBlock(
       ITEM_TYPE.DOCUMENT,
       "Documents",
@@ -524,7 +619,10 @@ function renderReview(root) {
         : "Aucun livrable exploitable : il n'y a pas d'avis à en tirer."
     )}
     <footer class="review-merge">
-      <p class="review-merge__summary">${escapeHtml(describeMerge(items))}</p>
+      <p class="review-merge__summary">
+        ${escapeHtml(describeMerge(items))}
+        ${blocage ? `<span class="review-merge__blocked">${escapeHtml(blocage)}</span>` : ""}
+      </p>
       ${
         fusionnee
           ? `<p class="review-merge__done">${escapeHtml(closedNote(proposition))}</p>`
@@ -535,7 +633,7 @@ function renderReview(root) {
                  review.abandoning ? "Confirmer l'abandon" : "Abandonner"
                }</button>
                <button type="button" class="gh-btn gh-btn--primary" data-review-merge ${
-                 review.merging ? "disabled" : ""
+                 review.merging || blocage ? "disabled" : ""
                }>${review.merging ? "Fusion en cours…" : "Fusionner la proposition"}</button>
              </div>`
       }
@@ -584,6 +682,22 @@ function bindReview(root) {
     champ.addEventListener("change", () => {
       const item = findItem(champ.getAttribute("data-review-reason"));
       if (item) decide(root, [item], ITEM.REFUSED, champ.value);
+    });
+  }
+
+  // Trancher une contradiction, c'est décider de l'affirmation elle-même :
+  // garder ce qui avait été décidé, c'est refuser ce que l'analyse propose.
+  for (const bouton of root.querySelectorAll("[data-conflict-keep]")) {
+    bouton.addEventListener("click", () => {
+      const item = findItem(bouton.getAttribute("data-conflict-keep"));
+      if (item) decide(root, [item], ITEM.REFUSED);
+    });
+  }
+
+  for (const bouton of root.querySelectorAll("[data-conflict-take]")) {
+    bouton.addEventListener("click", () => {
+      const item = findItem(bouton.getAttribute("data-conflict-take"));
+      if (item) decide(root, [item], ITEM.ACCEPTED);
     });
   }
 
@@ -664,6 +778,10 @@ async function merge(root) {
   const proposition = view.open;
   const items = view.review?.items ?? [];
   if (!proposition || proposition.status !== PROPOSITION.OPEN || view.review.merging) return;
+
+  // Le bouton est déjà désactivé ; la règle est répétée ici parce qu'elle n'a
+  // pas à dépendre de l'état d'un bouton pour tenir.
+  if (unresolvedConflicts(view.review.conflicts ?? []).length > 0) return;
 
   view.review.merging = true;
   view.review.notice = null;
@@ -870,10 +988,12 @@ async function openProposition(root, propositionId) {
     ]);
 
     const projectId = proposition.project_id;
-    const [memoire, marqueurs, decisions] = await Promise.all([
+    const [memoire, marqueurs, decisions, assumees] = await Promise.all([
       loadCtAnalysis(projectId),
       loadProjectMarkers(projectId),
-      propositions.listPropositionItems(proposition.id)
+      propositions.listPropositionItems(proposition.id),
+      // Ce que le projet a déjà assumé, et que l'analyse pourrait contredire.
+      propositions.listProjectDecisions(projectId, { exceptPropositionId: proposition.id })
     ]);
 
     const analyse = await analyzeProposition({
@@ -909,6 +1029,11 @@ async function openProposition(root, propositionId) {
         decisions
       )
     };
+
+    // Les conflits portent les mêmes objets que les blocs — pas des copies : ce
+    // qu'on tranche dans l'un se voit dans l'autre, et la fusion se débloque
+    // sans qu'on ait à recalculer quoi que ce soit.
+    view.review.conflicts = findMemoryConflicts(view.review.items, assumees);
   } catch (error) {
     if (!view.open || view.open.id !== proposition.id) return;
     view.review = {
