@@ -127,10 +127,13 @@ export async function fetchDocumentIdentities(projectId) {
  * plus et fausserait la complétude du lot. Le document dont ils sont le doublon
  * est là, lui.
  */
-export async function listProjectDocuments(projectId, { kind = null } = {}) {
-  return selectDocuments(projectId, READABLE_COLUMNS, {
+export async function listProjectDocuments(projectId, { kind = null, corpusState = null } = {}) {
+  return selectDocuments(projectId, `${READABLE_COLUMNS},corpus_state,proposition_id`, {
     duplicate_of_document_id: "is.null",
     ...(kind ? { detected_kind: `eq.${kind}` } : {}),
+    // Le corpus d'une analyse est une requête : c'est ici qu'on choisit
+    // lesquels des documents du projet en font partie.
+    ...(corpusState ? { corpus_state: `eq.${corpusState}` } : {}),
     order: "created_at.asc"
   });
 }

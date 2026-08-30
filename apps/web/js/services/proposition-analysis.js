@@ -1,0 +1,176 @@
+/**
+ * Ce qu'une proposition changerait au projet.
+ *
+ * C'est la CI de la pull request : elle tourne toute seule à l'ouverture, sans
+ * qu'on appuie sur rien, et elle dit s'il faut fusionner.
+ *
+ * **Le corpus d'une analyse est une requête, pas une copie.** L'analyse porte
+ * sur les documents acceptés du projet, plus ceux de la proposition qu'on
+ * regarde — deux requêtes, aucune duplication, et c'est tout ce qui remplace la
+ * branche. Rien n'est écrit : lire une proposition ne change pas le projet.
+ *
+ * L'analyse est refaite à chaque ouverture, et c'est délibéré. Ce qu'elle
+ * produit est dérivé ; le conserver reviendrait à garder une photographie qui
+ * périme au premier progrès du moteur. Ce qui se conserve, ce sont les
+ * **réponses** — et elles vivent ailleurs.
+ */
+
+import { runCtLab } from "./ct-lab-engine.js";
+import { extractPagesFromFile } from "./pdf-extraction.js";
+import { recognize } from "./document-recognizers.js";
+import { assessAttachment, batchConsensus, declaredMarkers, findEchoes, selfMarkers } from "./project-identity.js";
+import { diffAvis } from "./proposition-review.js";
+
+/** La famille de documents que le suivi des avis sait exploiter. */
+const CT_REPORT_KIND = "ct_report";
+
+/**
+ * Rapatrie et relit un document du stockage.
+ *
+ * Un document qu'on ne peut pas rapatrier n'est pas silencieusement écarté : il
+ * revient avec son erreur, et l'écran le nomme. Une analyse amputée d'un rapport
+ * sans le dire vaut moins qu'une analyse qui n'a pas eu lieu.
+ */
+async function readDocument(row, downloadDocumentFile, sourceId) {
+  const file = await downloadDocumentFile(row);
+  const extracted = await extractPagesFromFile(file);
+  const recognition = await recognize({
+    pages: extracted.pages,
+    filename: file.name,
+    mimeType: file.type || "application/pdf"
+  }).catch(() => null);
+
+  return { ...extracted, sourceId, file, recognition, documentId: row.id };
+}
+
+/**
+ * Analyse une proposition, et rend ce qu'elle changerait.
+ *
+ * @param {{projectId: string, proposition: object, project: object,
+ *          knownAvis: object[], knownMarkers: object[],
+ *          onProgress?: (step: {label: string, done: number, total: number}) => void}} options
+ * @returns {Promise<{result: object|null, reports: object[], unreachable: object[],
+ *                    attachments: object[], diff: object, error: string|null}>}
+ */
+export async function analyzeProposition({
+  projectId,
+  proposition,
+  project = {},
+  knownAvis = [],
+  knownMarkers = [],
+  onProgress = null
+} = {}) {
+  const vide = { result: null, reports: [], unreachable: [], attachments: [], diff: { added: [], changed: [], unchanged: 0 } };
+  if (!projectId || !proposition?.id) return { ...vide, error: "Aucune proposition à analyser." };
+
+  const { downloadDocumentFile, listProjectDocuments } = await import("./document-deposit.js");
+  const { listPropositionDocuments } = await import("./propositions-supabase.js");
+
+  // Les deux moitiés du corpus. Rien n'est copié : ce sont deux lectures.
+  const [acceptes, soumis] = await Promise.all([
+    listProjectDocuments(projectId, { kind: CT_REPORT_KIND, corpusState: "accepted" }),
+    listPropositionDocuments(proposition.id)
+  ]);
+
+  const soumisExploitables = soumis.filter((row) => row.detected_kind === CT_REPORT_KIND);
+  const corpus = [...acceptes, ...soumisExploitables];
+
+  if (corpus.length === 0) {
+    return { ...vide, error: null };
+  }
+
+  const reports = [];
+  const unreachable = [];
+  let lus = 0;
+
+  for (const row of corpus) {
+    const nom = row.original_filename ?? row.filename ?? "document";
+    onProgress?.({ label: nom, done: lus, total: corpus.length });
+
+    try {
+      reports.push(await readDocument(row, downloadDocumentFile, `doc-${reports.length + 1}`));
+    } catch {
+      unreachable.push(row);
+    }
+    lus += 1;
+  }
+
+  onProgress?.({ label: "Lecture des avis", done: corpus.length, total: corpus.length });
+
+  // Le rattachement, exactement comme à l'atelier : les mêmes fonctions, les
+  // mêmes phrases. Un même doute n'a pas à s'énoncer de deux façons.
+  const self = selfMarkers(project);
+  const consensus = batchConsensus(reports.map((report) => declaredMarkers(report.recognition)));
+  const attachments = reports.map((report) => {
+    const declared = declaredMarkers(report.recognition);
+    const text = (report.pages ?? []).map((page) => page.text ?? "").join("\n");
+    return {
+      ...assessAttachment({ declared, echoes: findEchoes(text, self), known: knownMarkers, consensus }),
+      declared,
+      documentId: report.documentId,
+      name: report.file?.name ?? ""
+    };
+  });
+
+  let result = null;
+  let error = null;
+  try {
+    result = await runCtLab(reports, {});
+  } catch (cause) {
+    error = String(cause?.message || cause || "L'analyse n'a pas abouti.");
+  }
+
+  return {
+    result,
+    reports,
+    unreachable,
+    attachments: groupAttachments(attachments),
+    diff: result ? diffAvis(knownAvis, avisWithTitles(result)) : vide.diff,
+    error
+  };
+}
+
+/**
+ * Les avis calculés, chacun avec l'intitulé que le moteur lui a trouvé.
+ *
+ * `avisStatus` porte l'état, `predictions` porte l'intitulé : les rapprocher ici
+ * évite que chaque écran ait à refaire la jointure, et à la refaire autrement.
+ */
+function avisWithTitles(result) {
+  const titres = new Map(
+    (result?.predictions ?? [])
+      .filter((prediction) => prediction.kind === "extraction" && prediction.value?.external_reference_normalized)
+      .map((prediction) => [prediction.value.external_reference_normalized, prediction])
+  );
+
+  return (result?.avisStatus ?? []).map((avis) => ({
+    ...avis,
+    title: titres.get(avis.reference)?.title_raw ?? null,
+    opinion_label: titres.get(avis.reference)?.opinion_label ?? null
+  }));
+}
+
+/**
+ * Les rattachements groupés par affaire.
+ *
+ * On ne pose pas dix-sept fois la même question. Le verdict d'un groupe est le
+ * plus sévère de ses documents : si l'un est écarté, la question porte sur tous.
+ */
+function groupAttachments(assessments = []) {
+  const groups = new Map();
+
+  for (const entry of assessments) {
+    if ((entry.declared ?? []).length === 0) continue;
+    const key = entry.declared.map((marker) => `${marker.type}:${marker.value}`).join("|");
+
+    const group = groups.get(key) ?? { ...entry, documents: [] };
+    if (entry.verdict === "FOREIGN") {
+      group.verdict = entry.verdict;
+      group.reason = entry.reason;
+    }
+    group.documents.push({ id: entry.documentId, name: entry.name });
+    groups.set(key, group);
+  }
+
+  return [...groups.values()];
+}

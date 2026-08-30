@@ -93,6 +93,12 @@ export const SOCOTEC = {
   /**
    * Les livrables, reconnus sur les premières lignes du document.
    *
+   * `labelPlural` est là parce que le français ne se pluralise pas
+   * mécaniquement : « Rapport initial » donne « Rapports initiaux », et un « s »
+   * ajouté au premier mot produirait « Rapports initial ». C'est le pack qui
+   * sait comment cet émetteur nomme ses livrables — au singulier comme au
+   * pluriel —, et personne d'autre n'a à le deviner.
+   *
    * `recapitulative` distingue deux natures, et cette distinction décide de
    * tout le suivi : un récapitulatif reprend l'état complet des avis à sa date,
    * si bien qu'un avis qui n'y figure plus a vraiment disparu ; une fiche
@@ -102,53 +108,63 @@ export const SOCOTEC = {
     {
       id: "rapport_etape",
       label: "Rapport d'étape",
+      labelPlural: "Rapports d'étape",
       recapitulative: true,
       pattern: /rapport\s+d['’]?\s*etape|rapport\s+d['’]?\s*étape/i
     },
     {
       id: "rapport_prealable_aps",
       label: "Rapport préalable / APS",
+      labelPlural: "Rapports préalables / APS",
       recapitulative: true,
       pattern: /rapport\s+pr[ée]alable[^\n]{0,12}\bAPS\b/i
     },
     {
       id: "rapport_prealable",
       label: "Rapport préalable / APD",
+      labelPlural: "Rapports préalables / APD",
       recapitulative: true,
       pattern: /rapport\s+pr[ée]alable/i
     },
     {
       id: "rapport_initial",
       label: "Rapport initial (RICT)",
+      labelPlural: "Rapports initiaux (RICT)",
       recapitulative: true,
       pattern: /rapport\s+initial|\bRICT\b/i
     },
-    { id: "rapport_final", label: "Rapport final", recapitulative: true, pattern: /rapport\s+final|\bRFCT\b/i },
+    { id: "rapport_final", label: "Rapport final",
+      labelPlural: "Rapports finaux", recapitulative: true, pattern: /rapport\s+final|\bRFCT\b/i },
     {
       id: "rvrat",
       label: "Rapport de vérification après travaux (RVRAT)",
+      labelPlural: "Rapports de vérification après travaux (RVRAT)",
       recapitulative: false,
       pattern: /\bRVRAT\b|v[ée]rifications?\s+r[ée]glementaires?\s+apr[èe]s\s+travaux/i
     },
     {
       id: "fiche_avis_travaux",
       label: "Fiche avis travaux",
+      labelPlural: "Fiches avis travaux",
       recapitulative: false,
       pattern: /avis\s+en\s+phase\s+de\s+r[ée]alisation/i
     },
     {
       id: "fiche_examen_document",
       label: "Fiche examen de document",
+      labelPlural: "Fiches examen de document",
       recapitulative: false,
       pattern: /avis\s+suite\s+a\s+examen\s+de\s+documents?/i
     },
     {
       id: "fiche_correspondance",
       label: "Fiche de correspondance",
+      labelPlural: "Fiches de correspondance",
       recapitulative: false,
       pattern: /fiche\s+de\s+correspondance/i
     },
-    { id: "attestation", label: "Attestation", recapitulative: false, pattern: /attestation/i }
+    { id: "attestation", label: "Attestation",
+      labelPlural: "Attestations", recapitulative: false, pattern: /attestation/i }
   ],
 
   /** « L'avis 171 est levé. » — la levée déclarée, avis par avis. */

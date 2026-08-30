@@ -15,6 +15,7 @@ import { renderUploadProgressBar } from "./ui/upload-progress.js";
 import { svgIcon } from "../ui/icons.js";
 import { renderDataTableShell, renderDataTableHead, renderDataTableEmptyState } from "./ui/data-table-shell.js";
 import { escapeHtml } from "../utils/escape-html.js";
+import { proposeTitle } from "../services/proposition-title.js";
 import { shouldAutoRunAnalysisAfterUpload } from "../services/project-automation.js";
 import {
   getCurrentAnalysisRunMeta,
@@ -77,6 +78,8 @@ const docsViewState = {
    */
   depositMode: null,
   depositModeTouched: false,
+  /** Vrai dès que l'utilisateur a écrit le titre lui-même : on n'y touche plus. */
+  titleTouched: false,
   /** L'examen des fichiers choisis, réutilisé au dépôt pour ne pas les relire. */
   inspection: { running: false, exploitable: 0, byFile: null },
   /** Les propositions ouvertes du projet, pour pouvoir y ajouter le lot. */
@@ -2021,6 +2024,7 @@ function resetUploadState() {
   docsViewState.selectedFiles = [];
   docsViewState.depositMode = null;
   docsViewState.depositModeTouched = false;
+  docsViewState.titleTouched = false;
   docsViewState.inspection = { running: false, exploitable: 0, byFile: null };
   docsViewState.openPropositions = [];
   docsViewState.isUploading = false;
@@ -2137,13 +2141,11 @@ function addSelectedFiles(root, fileList) {
     docsViewState.selectedFiles.push(file);
   }
 
-  // Le titre reprend le premier fichier, comme GitHub propose « Add files via
-  // upload » : une proposition, pas une contrainte.
-  if (!docsViewState.title && docsViewState.selectedFiles.length > 0) {
-    docsViewState.title =
-      docsViewState.selectedFiles.length === 1
-        ? docsViewState.selectedFiles[0].name.replace(/\.[^.]+$/, "")
-        : `Ajout de ${docsViewState.selectedFiles.length} documents`;
+  // Un titre proposé, jamais imposé. Le nom du premier fichier ne disait rien
+  // de ce qu'on dépose ; celui-ci se précisera dès que l'examen aura nommé les
+  // documents.
+  if (!docsViewState.titleTouched) {
+    docsViewState.title = proposeTitle([], { fallbackCount: docsViewState.selectedFiles.length });
   }
 
   renderProjectDocuments(root);
@@ -2221,6 +2223,12 @@ async function inspectSelection(root) {
     if (!docsViewState.depositModeTouched) {
       docsViewState.depositMode = exploitable > 0 ? "proposition" : "direct";
     }
+    // Maintenant qu'on sait ce que sont les documents, le titre peut le dire :
+    // « 3 rapports d'étape et 2 fiches avis travaux — SOCOTEC » plutôt qu'un
+    // nom de fichier. Il reste modifiable, et on n'y touche plus si on l'a écrit.
+    if (!docsViewState.titleTouched) {
+      docsViewState.title = proposeTitle(files.map((file) => byFile.get(file) ?? null).filter(Boolean));
+    }
   } catch {
     // Ne pas savoir ce que sont les fichiers n'empêche pas de les déposer : on
     // retombe sur le dépôt direct, et l'utilisateur garde le choix.
@@ -2260,7 +2268,7 @@ function renderDepositMode() {
     .map((proposition) =>
       choix(
         proposition.id,
-        "git-pull-request",
+        "git-compare",
         `Ajouter à « ${escapeHtml(proposition.title)} »`,
         "Une proposition ouverte, comme on pousse un commit sur une pull request."
       )
@@ -2272,7 +2280,7 @@ function renderDepositMode() {
       ${choix("direct", "git-commit", "Déposer directement dans le projet", "Les documents entrent aussitôt dans le corpus.")}
       ${choix(
         "proposition",
-        "git-pull-request",
+        "git-compare",
         "Ouvrir une proposition pour ces documents",
         "Ils attendront d'être relus avant d'entrer dans le corpus."
       )}
@@ -2923,6 +2931,7 @@ function bindDocumentsView(root) {
   if (titleInput) {
     titleInput.addEventListener("input", (event) => {
       docsViewState.title = event.target.value;
+      docsViewState.titleTouched = true;
     });
   }
 
