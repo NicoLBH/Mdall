@@ -15676,6 +15676,66 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   border-radius:var(--radius);
   background:var(--panel2);
 }
+/* ── La conversation d'une proposition ───────────────────────────
+   Les composants sont ceux des sujets ; ce qui suit ne fait qu'habiller ce que
+   la proposition a de propre : sa fin, encadrée, et le fait qu'on puisse encore
+   parler après elle. */
+
+.review-comment__actions{ display:flex; gap:8px; }
+.review-comment__action{
+  appearance:none;
+  background:none;
+  border:0;
+  padding:0;
+  font:inherit;
+  font-size:12px;
+  color:var(--muted);
+  cursor:pointer;
+}
+.review-comment__action:hover{ color:var(--blueLink); text-decoration:underline; }
+.review-comment__action--danger:hover{ color:var(--fgColor-danger); }
+.review-comment__removed{ margin:0; color:var(--muted); font-style:italic; }
+.review-comment--removed .gh-comment-box{ opacity:.7; }
+.review-comment__notice{ color:#d29922; font-size:12px; }
+
+.tl-activity__avatar{ display:inline-flex; align-items:center; }
+.tl-activity__avatar img{ width:20px; height:20px; border-radius:50%; }
+.tl-activity__icon--merged{ color:var(--fgColor-done); }
+.tl-activity__icon--closed{ color:var(--muted); }
+
+/* La fin d'une proposition se voit : fusionner est l'aboutissement de tout ce
+   qui précède, pas une ligne d'activité de plus. Le violet est celui de la
+   pastille « fusionnée » — la couleur dit la même chose partout. */
+.outcome-card{
+  display:flex;
+  align-items:flex-start;
+  gap:12px;
+  margin:4px 0 0;
+  padding:14px 16px;
+  border:1px solid var(--fgColor-done);
+  border-radius:var(--radius);
+  background:rgba(171,125,248,.08);
+}
+.outcome-card--closed{
+  border-color:var(--border);
+  background:var(--panel);
+}
+.outcome-card__icon{ color:var(--fgColor-done); line-height:0; padding-top:2px; }
+.outcome-card--closed .outcome-card__icon{ color:var(--muted); }
+.outcome-card__text{ display:flex; flex-direction:column; gap:3px; font-size:14px; }
+.outcome-card__text span{ color:var(--muted); font-size:13px; }
+
+/* Le trait qui ferme la proposition. Plus épais que les séparateurs du fil :
+   ce qui suit n'appartient plus à son histoire, on y ajoute. */
+.review-end{
+  height:3px;
+  margin:20px 0 16px;
+  border-radius:2px;
+  background:var(--border);
+}
+
+.comment-composer--proposition{ margin:0; }
+
 /* ── Le journal des actions, et le détail d'une exécution ────────
    Le journal a grossi parce que les actions racontent l'histoire du projet. Un
    tableau ne peut pas tout porter sans devenir illisible : une ligne par acte,

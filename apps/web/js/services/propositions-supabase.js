@@ -393,6 +393,51 @@ export async function closeProposition({ proposition, documentIds = [], snapshot
 }
 
 /**
+ * Les auteurs derrière les identifiants : leur nom et leur visage.
+ *
+ * La discussion d'une proposition doit ressembler à celle d'un sujet, avatars
+ * compris. Ce sont les mêmes personnes, dans le même projet : leur donner deux
+ * apparences selon l'écran ferait douter qu'il s'agisse des mêmes.
+ *
+ * @returns {Promise<Map<string, {name: string, avatarUrl: string}>>}
+ */
+export async function loadAuthors(userIds = []) {
+  const ids = [...new Set(userIds.map((id) => String(id ?? "")).filter(Boolean))];
+  if (ids.length === 0) return new Map();
+
+  try {
+    const [rows, { resolveAvatarUrl }] = await Promise.all([
+      request("user_public_profiles", {
+        params: {
+          select: "user_id,first_name,last_name,public_email,avatar_storage_path",
+          user_id: `in.(${ids.join(",")})`
+        }
+      }),
+      import("./avatar-url.js")
+    ]);
+
+    const auteurs = new Map();
+    for (const row of rows ?? []) {
+      auteurs.set(String(row.user_id), {
+        name:
+          [row.first_name, row.last_name].filter(Boolean).join(" ").trim() ||
+          row.public_email ||
+          "Un collaborateur",
+        // Un avatar illisible ne vaut pas une erreur : l'écran retombe sur
+        // l'initiale, qui a toujours fonctionné.
+        avatarUrl: await resolveAvatarUrl({
+          avatarStoragePath: row.avatar_storage_path ?? "",
+          fallback: ""
+        }).catch(() => "")
+      });
+    }
+    return auteurs;
+  } catch {
+    return new Map();
+  }
+}
+
+/**
  * Les noms derrière les identifiants.
  *
  * Une conversation qui dirait « 8f3c-… a fusionné cette proposition » ne
