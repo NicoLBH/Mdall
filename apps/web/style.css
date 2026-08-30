@@ -4850,14 +4850,21 @@ body.route--project #propositionsDetailsTitle.details-head--compact{
   backdrop-filter:blur(8px);
 }
 
-body.route--project.project-shell-compact.project-subject-details-top-compact #globalHeaderHost{
+/* La barre compacte d'un détail prend la place de l'en-tête global, elle ne
+   passe pas devant : `#app` est en `position:relative; z-index:2`, ce qui crée
+   un contexte d'empilement — aucun `z-index` posé à l'intérieur ne peut monter
+   au-dessus d'un élément qui lui est extérieur. Le sujet l'avait résolu ainsi
+   depuis le début ; la proposition posait un `z-index` qui ne pouvait pas
+   gagner, et sa barre se dessinait derrière l'en-tête, invisible. */
+body.route--project.project-shell-compact.project-subject-details-top-compact #globalHeaderHost,
+body.route--project.project-shell-compact.project-proposition-details-top-compact #globalHeaderHost{
   opacity:0;
   visibility:hidden;
   pointer-events:none;
 }
 
 body.route--project.project-shell-compact.project-subject-details-top-compact #situationsDetailsTitle.details-head--compact,
-body.route--project.project-shell-compact #propositionsDetailsTitle.details-head--compact{
+body.route--project.project-shell-compact.project-proposition-details-top-compact #propositionsDetailsTitle.details-head--compact{
   top:0;
   z-index:calc(var(--z-header) + 1);
 }

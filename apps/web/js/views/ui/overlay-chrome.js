@@ -119,23 +119,50 @@ const COMPACT_SYNCS = new WeakMap();
 /**
  * Compacte un en-tête quand son contenu défile.
  *
+ * Deux sources, et c'est délibéré. Le défilement de `scrollEl` d'abord, qui est
+ * le cas normal. Mais **quel élément défile n'est pas une évidence** dans cette
+ * application : `#app` est un conteneur à ascenseur propre, que la route projet
+ * neutralise pour rendre la main au document, et d'autres écrans déclarent
+ * encore leur propre source. Un en-tête qui ne saurait écouter qu'un seul de
+ * ces éléments se tait dès que ce n'est pas le bon — sans rien signaler, ce qui
+ * est le pire des cas : le code paraît juste et l'écran ne bouge pas.
+ *
+ * D'où `alsoCompactWhen` : une condition supplémentaire, que l'appelant fournit
+ * quand une autre partie de l'application sait déjà, elle, que la page est
+ * défilée. La coque du projet le sait — c'est ce qui compacte sa barre — et il
+ * n'y a aucune raison qu'un en-tête à l'intérieur d'elle recalcule moins bien
+ * qu'elle.
+ *
  * @param {Element|Document} scrollEl ce qui défile — `document`, sa racine, ou
  *   un conteneur qui a son propre ascenseur
  * @param {Element} chromeEl l'élément qui porte `overlay-chrome--compact`, et
  *   dans lequel on cherche les en-têtes à basculer
  * @param {string} key un nom par écran : deux écrans peuvent écouter le même
  *   défilement sans se remplacer l'un l'autre
+ * @param {{onCompactChange?: (scrolled: boolean) => void,
+ *          alsoCompactWhen?: () => boolean}} options
+ * @returns {(() => void)|undefined} la synchronisation, pour la rappeler quand
+ *   une autre source apprend que l'état a changé
  */
 export function bindOverlayChromeCompact(scrollEl, chromeEl, key = "default", options = {}) {
-  if (!scrollEl || !chromeEl) return;
+  if (!scrollEl || !chromeEl) return undefined;
 
-  const { onCompactChange = null } = options || {};
+  const { onCompactChange = null, alsoCompactWhen = null } = options || {};
   const isDocumentLike = scrollEl === document || scrollEl === document.documentElement || scrollEl === document.body;
   const eventTarget = isDocumentLike ? window : scrollEl;
   const stateTarget = isDocumentLike ? (document.scrollingElement || document.documentElement || document.body) : scrollEl;
+  const name = String(key);
 
   const sync = () => {
-    const scrolled = (stateTarget?.scrollTop || 0) > 8;
+    // Un en-tête qui n'est plus dans la page ne se compacte pas : sa
+    // synchronisation s'efface, plutôt que de tourner à vide jusqu'à la fin de
+    // la session.
+    if (chromeEl.isConnected === false) {
+      COMPACT_SYNCS.get(eventTarget)?.delete(name);
+      return;
+    }
+
+    const scrolled = (stateTarget?.scrollTop || 0) > 8 || alsoCompactWhen?.() === true;
     chromeEl.classList.toggle("overlay-chrome--compact", scrolled);
 
     getOverlayCompactHeads(chromeEl).forEach((head) => {
@@ -159,7 +186,7 @@ export function bindOverlayChromeCompact(scrollEl, chromeEl, key = "default", op
     eventTarget.addEventListener(
       "scroll",
       () => {
-        for (const run of syncs.values()) run();
+        for (const run of [...syncs.values()]) run();
       },
       { passive: true }
     );
@@ -167,8 +194,10 @@ export function bindOverlayChromeCompact(scrollEl, chromeEl, key = "default", op
 
   // Le rendu suivant remplace la synchronisation de cet écran, il ne s'ajoute
   // pas à elle : sans quoi chaque rendu laisserait un écouteur de plus.
-  syncs.set(String(key), sync);
+  syncs.set(name, sync);
 
   sync();
   setTimeout(sync, 0);
+
+  return sync;
 }

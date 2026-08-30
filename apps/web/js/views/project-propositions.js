@@ -16,7 +16,11 @@
 import { escapeHtml } from "../utils/escape-html.js";
 import { store } from "../store.js";
 import { svgIcon } from "../ui/icons.js";
-import { clearProjectActiveScrollSource, setProjectViewHeader } from "./project-shell-chrome.js";
+import {
+  PROJECT_SHELL_COMPACT_CHANGE_EVENT,
+  clearProjectActiveScrollSource,
+  setProjectViewHeader
+} from "./project-shell-chrome.js";
 import { bindOverlayChromeCompact, renderOverlayChromeHead } from "./ui/overlay-chrome.js";
 import { bindLightTabs, renderLightTabs } from "./ui/light-tabs.js";
 import {
@@ -1059,19 +1063,57 @@ function renderReview(root) {
   `;
 }
 
+/**
+ * Le compactage de l'en-tête au défilement.
+ *
+ * Deux sources, parce qu'une seule s'est révélée insuffisante. L'écouteur de
+ * défilement d'abord — le mécanisme des sujets, repris tel quel. Et l'état que
+ * **la coque du projet** calcule déjà : c'est elle qui compacte sa propre barre,
+ * elle sait donc quel élément défile, y compris quand ce n'est pas le document.
+ * L'en-tête d'une proposition n'a aucune raison de le savoir moins bien qu'elle.
+ *
+ * L'abonnement se remplace à chaque rendu : sans quoi chaque affichage
+ * laisserait un écouteur de plus sur `window`.
+ */
+let compactSubscription = null;
+
+/** L'en-tête global s'efface quand la barre compacte prend sa place. */
+function setTopCompact(on) {
+  document.body.classList.toggle("project-proposition-details-top-compact", !!on);
+}
+
+function bindReviewCompact(root) {
+  const sync = bindOverlayChromeCompact(
+    document.documentElement,
+    root.querySelector("[data-review-chrome]"),
+    "propositions",
+    {
+      alsoCompactWhen: () => document.body.classList.contains("project-shell-compact"),
+      // La barre compacte prend la place de l'en-tête global — elle ne passe pas
+      // devant. `#app` est un contexte d'empilement : un `z-index` posé à
+      // l'intérieur ne peut pas monter au-dessus d'un élément extérieur, et la
+      // barre se dessinait derrière l'en-tête, donc invisible. Les sujets
+      // masquent l'en-tête par cette même bascule depuis le début.
+      onCompactChange: (scrolled) => setTopCompact(scrolled)
+    }
+  );
+
+  if (compactSubscription) {
+    window.removeEventListener(PROJECT_SHELL_COMPACT_CHANGE_EVENT, compactSubscription);
+    compactSubscription = null;
+  }
+  if (!sync) return;
+
+  compactSubscription = () => sync();
+  window.addEventListener(PROJECT_SHELL_COMPACT_CHANGE_EVENT, compactSubscription);
+}
+
 /** Le retour à la liste, les cases, les raisons, et la fusion. */
 function bindReview(root) {
   // Le même mécanisme que pour un sujet : la page défile, la coque prend
   // `overlay-chrome--compact`, l'en-tête prend `details-head--compact`, et le
   // CSS partagé échange les deux titres.
-  // `document.documentElement` et non `document` : la fonction s'en sert pour
-  // marquer qu'elle a déjà posé son écouteur, et un `Document` ne porte pas
-  // d'attribut — on rebrancherait un écouteur à chaque rendu.
-  bindOverlayChromeCompact(
-    document.documentElement,
-    root.querySelector("[data-review-chrome]"),
-    "propositions"
-  );
+  bindReviewCompact(root);
 
   root.querySelector("[data-review-back]")?.addEventListener("click", () => backToList(root));
 
@@ -1140,6 +1182,8 @@ function findItem(cle) {
 function backToList(root) {
   view.open = null;
   view.review = null;
+  // Sans quoi l'en-tête global resterait masqué sur la liste, et ailleurs.
+  setTopCompact(false);
   setPropositionsHeader();
   renderContent(root);
 }
@@ -1638,6 +1682,7 @@ export function renderProjectPropositions(root) {
   if (!root) return;
   root.className = "project-shell__content";
   clearProjectActiveScrollSource();
+  setTopCompact(false);
 
   setPropositionsHeader();
 
