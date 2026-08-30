@@ -154,3 +154,14 @@ test("l'affaire se lit sous ses deux formes, et l'absence de l'une n'efface pas 
   assert.equal(rien.chrono_affaire, null);
   assert.equal(rien.affaire_reference, null);
 });
+
+test("le numéro d'affaire se lit où qu'il soit dans le document", () => {
+  // Une fiche d'examen le porte au bas de la centième ligne, un rapport à la
+  // onzième. Ne lire que l'en-tête faisait qu'un livrable entier ne déclarait
+  // rien — et un document qui ne déclare rien ne peut être contredit.
+  const loin = ["AVIS SUITE A EXAMEN DE DOCUMENTS", ...Array(120).fill("Observation sans intérêt."), "N° d\u2019affaire : 190812440000048"];
+
+  const meta = readDocumentMeta({ content_available: true, content: loin.join("\n") });
+
+  assert.equal(meta.affaire_reference, "190812440000048");
+});

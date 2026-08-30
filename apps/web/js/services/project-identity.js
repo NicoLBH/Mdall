@@ -146,6 +146,47 @@ export function findEchoes(text, markers = []) {
 }
 
 /**
+ * Ce que le lot lui-même déclare, à la majorité.
+ *
+ * La confrontation à la mémoire du projet ne sert à rien tant que cette mémoire
+ * est vide — c'est-à-dire au premier lot, précisément là où un intrus a le plus
+ * de chances de se glisser. Or un lot où huit livrables portent une affaire et
+ * un seul en porte une autre se contredit **tout seul**, sans qu'on ait rien à
+ * consulter.
+ *
+ * La majorité doit être stricte. À égalité — quatre contre quatre —, on ne
+ * désigne personne : rien ne dit qui est l'intrus, et accuser au hasard vaudrait
+ * moins que se taire. L'écran dira simplement que le lot mêle deux affaires.
+ *
+ * @param {object[][]} declaredPerDocument les marqueurs déclarés, document par document
+ * @returns {Map<string, {value: string, label: string, count: number}>}
+ */
+export function batchConsensus(declaredPerDocument = []) {
+  const tallies = new Map();
+
+  for (const declared of declaredPerDocument) {
+    for (const entry of declared ?? []) {
+      if (!tallies.has(entry.type)) tallies.set(entry.type, new Map());
+      const byValue = tallies.get(entry.type);
+      const seen = byValue.get(entry.value) ?? { value: entry.value, label: entry.label, count: 0 };
+      seen.count += 1;
+      byValue.set(entry.value, seen);
+    }
+  }
+
+  const consensus = new Map();
+  for (const [type, byValue] of tallies) {
+    const ranked = [...byValue.values()].sort((left, right) => right.count - left.count);
+    // Un seul candidat n'est pas un désaccord, et une égalité n'est pas une
+    // majorité : ni l'un ni l'autre ne permet de désigner un intrus.
+    if (ranked.length < 2 || ranked[0].count === ranked[1].count) continue;
+    consensus.set(type, ranked[0]);
+  }
+
+  return consensus;
+}
+
+/**
  * Le document appartient-il à ce projet ?
  *
  * L'ordre des règles est le fond du sujet, et il penche délibérément du côté de
@@ -158,13 +199,18 @@ export function findEchoes(text, markers = []) {
  *  2. **Un désaccord seul ne suffit pas à rejeter.** Il faut une affaire
  *     inconnue *et* aucune preuve positive. Et si la ville concorde, on ne
  *     tranche pas : on demande.
- *  3. **Ne rien savoir n'est pas un reproche.** Un projet dont la mémoire est
- *     vide — les premiers documents — ne peut contredire personne.
+ *  3. **À défaut de mémoire, le lot se contredit tout seul.** Un livrable dont
+ *     l'affaire n'est pas celle de la majorité du lot est signalé, même sur un
+ *     projet qui n'a encore rien enregistré. C'est le seul filet qui fonctionne
+ *     au premier dépôt — là où un intrus a le plus de chances de se glisser.
+ *  4. **Ne rien savoir n'est pas un reproche.** Un document seul, sur un projet
+ *     sans mémoire, ne contredit personne.
  *
- * @param {{declared: object[], echoes: object[], known: object[]}} evidence
+ * @param {{declared: object[], echoes: object[], known: object[],
+ *          consensus: Map<string, object>}} evidence
  * @returns {{verdict: string, matched: object[], conflicting: object[], reason: string}}
  */
-export function assessAttachment({ declared = [], echoes = [], known = [] } = {}) {
+export function assessAttachment({ declared = [], echoes = [], known = [], consensus = new Map() } = {}) {
   const knownByType = new Map();
   for (const entry of known) {
     if (!knownByType.has(entry.type)) knownByType.set(entry.type, new Set());
@@ -215,6 +261,30 @@ export function assessAttachment({ declared = [], echoes = [], known = [] } = {}
       conflicting,
       reason: `Affaire ${conflicting[0].label}, que ce projet ne connaît pas.`
     };
+  }
+
+  // La mémoire n'a rien dit — elle est vide, ou ne connaît pas ce type de
+  // marqueur. Le lot, lui, peut se contredire tout seul.
+  const dissenting = declared
+    .map((entry) => ({ entry, majority: consensus.get(entry.type) }))
+    .find(({ entry, majority }) => majority && majority.value !== entry.value);
+
+  if (dissenting) {
+    const { entry, majority } = dissenting;
+    const raison =
+      `Affaire ${entry.label}, alors que ${majority.count} autre(s) livrable(s) du lot ` +
+      `portent l'affaire ${majority.label}.`;
+
+    // Le même ménagement qu'avec la mémoire : un écho, même faible, suspend le
+    // jugement au lieu de le rendre.
+    return echoes.length > 0
+      ? {
+          verdict: ATTACHMENT.UNCERTAIN,
+          matched: [],
+          conflicting: [entry],
+          reason: `${raison} Mais il cite « ${echoes[0].label} ».`
+        }
+      : { verdict: ATTACHMENT.FOREIGN, matched: [], conflicting: [entry], reason: raison };
   }
 
   return {

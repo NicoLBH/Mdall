@@ -5,6 +5,7 @@ import {
   ATTACHMENT,
   MARKER,
   assessAttachment,
+  batchConsensus,
   declaredMarkers,
   findEchoes,
   markersToRemember,
@@ -182,4 +183,90 @@ test("une fois l'escalier C confirmé, ses livrables passent sans qu'on redemand
     assessAttachment({ declared: declaredMarkers({ markers: [affaire("99999")] }), known: memoire }).verdict,
     ATTACHMENT.FOREIGN
   );
+});
+
+/** Le lot tel qu'il arrive : les marqueurs déclarés, document par document. */
+const lot = (...affaires) => affaires.map((value) => declaredMarkers({ markers: [affaire(value)] }));
+
+test("un lot où huit livrables s'accordent et un seul détonne désigne le solitaire", () => {
+  // Le cas réel : huit livrables du Reposoir (affaire 13860) et une fiche de
+  // l'Altima (affaire 12440), déposés ensemble sur un projet neuf.
+  const consensus = batchConsensus(lot("13860", "13860", "13860", "13860", "13860", "13860", "13860", "13860", "12440"));
+
+  assert.equal(consensus.get(MARKER.CHRONO_AFFAIRE).value, "13860");
+  assert.equal(consensus.get(MARKER.CHRONO_AFFAIRE).count, 8);
+});
+
+test("l'intrus déjà dans le lot est signalé même sans aucune mémoire", () => {
+  // C'est le seul filet qui fonctionne au premier dépôt — là où un intrus a le
+  // plus de chances de se glisser, puisqu'il n'y a rien à quoi le comparer.
+  const consensus = batchConsensus(lot("13860", "13860", "13860", "13860", "12440"));
+
+  const intrus = assessAttachment({
+    declared: declaredMarkers({ markers: [affaire("12440")] }),
+    known: [],
+    consensus
+  });
+
+  assert.equal(intrus.verdict, ATTACHMENT.FOREIGN);
+  assert.match(intrus.reason, /12440/);
+  assert.match(intrus.reason, /4 autre\(s\) livrable\(s\)/);
+  assert.match(intrus.reason, /13860/);
+});
+
+test("la majorité du lot ne condamne pas ceux qui la composent", () => {
+  const consensus = batchConsensus(lot("13860", "13860", "13860", "13860", "12440"));
+
+  const legitime = assessAttachment({
+    declared: declaredMarkers({ markers: [affaire("13860")] }),
+    known: [],
+    consensus
+  });
+
+  assert.equal(legitime.verdict, ATTACHMENT.UNCERTAIN, "rien à leur reprocher, et rien à confirmer d'eux");
+});
+
+test("à égalité, le lot n'accuse personne", () => {
+  // Quatre contre quatre : rien ne dit qui est l'intrus, et accuser au hasard
+  // vaudrait moins que se taire.
+  const consensus = batchConsensus(lot("13860", "13860", "12440", "12440"));
+
+  assert.equal(consensus.size, 0);
+  assert.equal(
+    assessAttachment({ declared: declaredMarkers({ markers: [affaire("12440")] }), known: [], consensus }).verdict,
+    ATTACHMENT.UNCERTAIN
+  );
+});
+
+test("un lot homogène ne se contredit pas", () => {
+  assert.equal(batchConsensus(lot("13860", "13860", "13860")).size, 0);
+  assert.equal(batchConsensus(lot("13860")).size, 0, "un document seul ne fait pas majorité contre lui-même");
+  assert.equal(batchConsensus([]).size, 0);
+});
+
+test("la mémoire du projet l'emporte sur la majorité du lot", () => {
+  // Une réponse humaine conservée vaut mieux qu'un décompte : si l'affaire a
+  // été rattachée, le livrable passe, fût-il seul de son espèce dans le lot.
+  const consensus = batchConsensus(lot("13860", "13860", "13860", "12440"));
+
+  const bilan = assessAttachment({
+    declared: declaredMarkers({ markers: [affaire("12440")] }),
+    known: [{ type: MARKER.CHRONO_AFFAIRE, value: "12440" }],
+    consensus
+  });
+
+  assert.equal(bilan.verdict, ATTACHMENT.BELONGS);
+});
+
+test("un écho suspend aussi le jugement du lot", () => {
+  const consensus = batchConsensus(lot("13860", "13860", "13860", "12440"));
+
+  const bilan = assessAttachment({
+    declared: declaredMarkers({ markers: [affaire("12440")] }),
+    echoes: findEchoes("CHANTIER À ANNECY", selfMarkers(PROJET)),
+    known: [],
+    consensus
+  });
+
+  assert.equal(bilan.verdict, ATTACHMENT.UNCERTAIN);
 });
