@@ -60,12 +60,16 @@ const DEFAULT_AUTOMATION_CATALOG = {
     defaultEnabled: true,
     order: 5
   },
+  // Décochée par défaut, et le nom dit désormais laquelle des deux analyses
+  // elle déclenche. Elle ne conditionne plus le dépôt : un document déposé est
+  // écrit en base que cette case soit cochée ou non — ce n'était pas le cas
+  // avant, et l'écran annonçait pourtant « le dépôt a été enregistré ».
   autoAnalysisAfterUpload: {
     key: "autoAnalysisAfterUpload",
-    label: "Déclencher une analyse automatique après le dépôt d'un document",
+    label: "Déclencher l'analyse IA des sujets après le dépôt d'un document",
     implemented: true,
     available: true,
-    defaultEnabled: true,
+    defaultEnabled: false,
     order: 10
   },
   autoComparePreviousVersion: {
