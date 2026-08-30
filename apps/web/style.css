@@ -15669,6 +15669,85 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   border-radius:var(--radius);
   background:var(--panel2);
 }
+/* ── Les quatre onglets d'une proposition ────────────────────────
+   Quatre questions, pas un rangement : pourquoi (Conversation), quoi et quand
+   (Dépôts), ce qu'en dit la machine (Analyse), ce qu'on décide (Ce qui change).
+   Le bouton de fusion vit au bout de la conversation, comme sur GitHub : on ne
+   fusionne pas au milieu d'un tableau. */
+
+.review-tabs{ margin-top:4px; }
+.review-tabpanel{ display:flex; flex-direction:column; gap:12px; }
+
+.review-thread{ margin:0; }
+.review-empty-note{ margin:0; color:var(--muted); font-size:13px; font-style:italic; }
+
+.tl-activity__date{ color:var(--muted); }
+.tl-activity__detail{ display:block; color:var(--muted); font-size:12px; }
+
+/* Le pavé de fusion énonce ses conditions avant le bouton : ce qui bloque doit
+   se lire sans cliquer pour découvrir que ça ne marche pas. */
+.merge-box{
+  display:flex;
+  flex-direction:column;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  background:var(--panel2);
+  overflow:hidden;
+}
+.merge-box__row{
+  display:flex;
+  align-items:flex-start;
+  gap:10px;
+  padding:12px 16px;
+  border-bottom:1px solid var(--border2);
+  font-size:14px;
+}
+.merge-box__row:last-of-type{ border-bottom:0; }
+.merge-box__icon{ line-height:0; padding-top:2px; }
+.merge-box__row--ok .merge-box__icon{ color:var(--fgColor-open); }
+.merge-box__row--warn .merge-box__icon{ color:#d29922; }
+.merge-box__row--warn b{ color:#d29922; }
+.merge-box__row--neutral .merge-box__icon,
+.merge-box__row--done .merge-box__icon{ color:var(--muted); }
+.merge-box__note{ display:block; color:var(--muted); font-size:12px; margin-top:2px; }
+.merge-box__actions{
+  display:flex;
+  justify-content:flex-end;
+  gap:8px;
+  padding:12px 16px;
+  border-top:1px solid var(--border);
+  background:var(--panel);
+}
+
+/* Les dépôts : un geste, pas dix-sept lignes. */
+.deposit__head{
+  display:flex;
+  align-items:flex-start;
+  gap:10px;
+  padding:10px 16px;
+  background:var(--panel);
+  border-bottom:1px solid var(--border);
+  font-size:14px;
+}
+.deposit__icon{ color:var(--muted); line-height:0; padding-top:2px; }
+.deposit__date{ color:var(--muted); }
+.review-item--plain .review-item__check{ color:var(--muted); }
+
+/* L'analyse : des faits alignés, lisibles d'un coup d'œil. */
+.analysis-rows{ display:flex; flex-direction:column; }
+.analysis-row{
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:16px;
+  padding:9px 16px;
+  border-bottom:1px solid var(--border2);
+  font-size:13px;
+}
+.analysis-row:last-child{ border-bottom:0; }
+.analysis-row__label{ color:var(--muted); }
+.analysis-row__value{ color:var(--text); text-align:right; }
+
 /* ── Le procès-verbal d'une proposition close ────────────────────
    Une proposition close ne se recalcule pas : elle montre ce qui a été décidé.
    L'écran doit le dire, sinon un lecteur qui le trouve figé le croit en panne

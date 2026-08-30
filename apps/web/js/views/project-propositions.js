@@ -18,6 +18,13 @@ import { store } from "../store.js";
 import { svgIcon } from "../ui/icons.js";
 import { clearProjectActiveScrollSource, setProjectViewHeader } from "./project-shell-chrome.js";
 import { bindOverlayChromeCompact, renderOverlayChromeHead } from "./ui/overlay-chrome.js";
+import { bindLightTabs, renderLightTabs } from "./ui/light-tabs.js";
+import {
+  renderMessageThread,
+  renderMessageThreadActivity,
+  renderMessageThreadComment
+} from "./ui/message-thread.js";
+import { STORY, buildStory } from "../services/proposition-story.js";
 import { renderSharedDetailsTitleWrap } from "./ui/detail-header.js";
 import { ITEM, PROPOSITION, describeMerge } from "../services/proposition-state.js";
 import {
@@ -53,7 +60,9 @@ const view = {
   /** La proposition ouverte, quand on en lit une. `null` sur la liste. */
   open: null,
   /** Où en est l'analyse de la proposition ouverte. */
-  review: null
+  review: null,
+  /** L'onglet ouvert dans le détail d'une proposition. */
+  tab: "conversation"
 };
 
 /** Le nombre d'ouvertes, pour la pastille de l'onglet. */
@@ -616,67 +625,354 @@ function nameSome(rows = [], limit = 3) {
   return `${noms.slice(0, limit).join(", ")}${noms.length > limit ? ` et ${noms.length - limit} autre(s)` : ""}.`;
 }
 
-function renderReview(root) {
-  const proposition = view.open;
-  const review = view.review;
-  const entete = renderReviewHead(proposition);
+/**
+ * Les documents regroupés par geste de dépôt.
+ *
+ * Même règle que l'histoire : ce qui est arrivé dans la même minute, de la même
+ * main, est un seul geste. Dix-sept lignes en base, un envoi.
+ */
+function groupDeposits(documents = [], names = new Map()) {
+  const groupes = new Map();
 
-  if (!review || review.running) {
-    return `
-      ${entete}
-      <div class="propositions-empty">
-        <b>Analyse en cours…</b>
-        <p>${escapeHtml(review?.step ?? "Lecture des livrables du projet et de ceux de cette proposition.")}</p>
-      </div>
-    `;
+  for (const document of documents) {
+    const cle = `${document.created_by ?? ""}|${String(document.created_at ?? "").slice(0, 16)}`;
+    const groupe = groupes.get(cle) ?? {
+      at: document.created_at ?? null,
+      who: names.get(String(document.created_by ?? "")) || "Un collaborateur",
+      documents: []
+    };
+    groupe.documents.push(document);
+    groupes.set(cle, groupe);
   }
 
-  if (review.error) {
-    return `
-      ${entete}
-      <div class="propositions-empty">
-        <b>L'analyse n'a pas abouti</b>
-        <p>${escapeHtml(review.error)}</p>
-      </div>
-    `;
-  }
+  return [...groupes.values()].sort((gauche, droite) => new Date(gauche.at ?? 0) - new Date(droite.at ?? 0));
+}
 
+/* ────────────────────────────────────────────────────────────────────────────
+ * Les quatre questions d'une proposition
+ *
+ * GitHub découpe une pull request en quatre onglets, et ce n'est pas un
+ * rangement : ce sont quatre questions différentes, qui n'ont pas les mêmes
+ * lecteurs ni le même âge. Ici :
+ *
+ *  - **Conversation** — pourquoi, par qui, et que décide-t-on ? C'est là que
+ *    vit le bouton de fusion, comme sur GitHub : on ne fusionne pas au milieu
+ *    d'un tableau, on fusionne au bout d'une discussion.
+ *  - **Dépôts** — qu'est-ce qui est entré, quand, déposé par qui ? (les commits)
+ *  - **Analyse** — qu'en dit la machine ? (les checks) Ce que l'analyse a lu,
+ *    ce qu'elle en tire, et ce qu'elle n'a pas pu lire.
+ *  - **Ce qui change** — qu'accepte-t-on, une affirmation à la fois ? (le diff)
+ *
+ * La valeur de ce découpage se voit surtout **six mois plus tard** : on revient
+ * presque toujours pour la Conversation — qui a décidé, quand, sur quelle
+ * base — et presque jamais pour la liste des fichiers. Mélanger les quatre
+ * obligerait à relire un diff de dix-sept lignes pour retrouver une phrase.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+const REVIEW_TABS = [
+  { id: "conversation", label: "Conversation", iconName: "comment-discussion" },
+  { id: "deposits", label: "Dépôts", iconName: "git-commit" },
+  { id: "analysis", label: "Analyse", iconName: "pulse" },
+  { id: "changes", label: "Ce qui change", iconName: "file-directory" }
+];
+
+function reviewTabs(review) {
   const items = review.items ?? [];
-  const parType = (type) => items.filter((entry) => entry.itemType === type);
-  const fusionnee = proposition.status !== PROPOSITION.OPEN;
-  const gele = review.frozen === true;
-  // Le seul endroit du système où le silence ne vaut pas acceptation.
-  const blocage = describeBlocking(review.conflicts ?? []);
+  const compte = {
+    deposits: (review.deposits ?? []).length,
+    changes: items.length
+  };
 
-  const avertissement = review.notice
-    ? `<div class="propositions-empty propositions-empty--warn"><b>Réponse non conservée</b><p>${escapeHtml(
-        review.notice
-      )}</p></div>`
-    : "";
+  return REVIEW_TABS.map((tab) => ({
+    ...tab,
+    label: compte[tab.id] > 0 ? `${tab.label} ${compte[tab.id]}` : tab.label
+  }));
+}
+
+/**
+ * La conversation : la description comme premier message, puis les actes.
+ *
+ * GitHub présente la description d'une pull request comme le premier message
+ * d'un fil, et c'est un choix de fond : ce texte n'est pas un champ de
+ * formulaire, c'est **quelqu'un qui dit pourquoi**. Le jour où plusieurs
+ * personnes proposeront des changements sur le même projet, c'est cette forme —
+ * un auteur, une date, un propos — qui permettra de s'y retrouver.
+ *
+ * Les composants sont ceux des sujets (`renderMessageThread*`) : une discussion
+ * de proposition et une discussion de sujet sont la même chose, et deux rendus
+ * différents divergeraient au premier ajustement.
+ */
+function renderConversation(proposition, review) {
+  const histoire = review.story ?? [];
+  const auteur = histoire[0]?.who ?? "Un collaborateur";
+
+  const description = proposition.description
+    ? `<p>${escapeHtml(proposition.description)}</p>`
+    : `<p class="review-empty-note">Aucune description n'a été donnée. La proposition parle alors d'elle-même : ce qu'elle dépose et ce qu'on en décide.</p>`;
+
+  const messages = renderMessageThreadComment({
+    idx: 0,
+    author: auteur,
+    tsHtml: `<span class="gh-comment-ts">a ouvert cette proposition le ${escapeHtml(
+      formatDate(proposition.created_at)
+    )}</span>`,
+    bodyHtml: description,
+    avatarInitial: (auteur[0] ?? "?").toUpperCase(),
+    avatarType: "human"
+  });
+
+  const actes = histoire
+    .filter((event) => event.kind !== STORY.OPENED)
+    .map((event, index) =>
+      renderMessageThreadActivity({
+        idx: index + 1,
+        iconHtml: `<span class="tl-activity__icon">${svgIcon(STORY_ICON[event.kind] ?? "git-commit", {
+          className: "octicon"
+        })}</span>`,
+        textHtml: `<b>${escapeHtml(event.who)}</b> ${escapeHtml(event.text)}${
+          event.at ? ` <span class="tl-activity__date">le ${escapeHtml(formatDate(event.at))}</span>` : ""
+        }${event.detail ? `<span class="tl-activity__detail">${escapeHtml(event.detail)}</span>` : ""}`
+      })
+    )
+    .join("");
 
   return `
-    ${entete}
-    ${
-      proposition.description
-        ? `<p class="review-description">${escapeHtml(proposition.description)}</p>`
-        : ""
+    ${renderMessageThread({ itemsHtml: `${messages}${actes}`, className: "review-thread" })}
+    ${renderMergeBox(proposition, review)}
+  `;
+}
+
+/** L'icône de chaque acte : la même famille que partout ailleurs. */
+const STORY_ICON = {
+  [STORY.OPENED]: "git-pull-request",
+  [STORY.DEPOSIT]: "git-commit",
+  [STORY.DECISION]: "check",
+  [STORY.MERGED]: "git-compare",
+  [STORY.CLOSED]: "skip"
+};
+
+/**
+ * Le pavé de fusion, au bout de la conversation.
+ *
+ * Il énonce ses conditions **avant** le bouton, comme GitHub énonce l'état de
+ * ses checks : ce qui bloque doit se lire sans avoir à cliquer pour découvrir
+ * que ça ne marche pas.
+ */
+function renderMergeBox(proposition, review) {
+  const items = review.items ?? [];
+  const gele = review.frozen === true;
+  const blocage = describeBlocking(review.conflicts ?? []);
+
+  if (proposition.status !== PROPOSITION.OPEN) {
+    return `
+      <section class="merge-box merge-box--done">
+        <div class="merge-box__row merge-box__row--done">
+          <span class="merge-box__icon">${svgIcon(
+            proposition.status === PROPOSITION.MERGED ? "git-compare" : "skip",
+            { className: "octicon" }
+          )}</span>
+          <div>
+            <b>${escapeHtml(closedNote(proposition))}</b>
+            <span class="merge-box__note">${escapeHtml(describeFrozen(items))}</span>
+          </div>
+        </div>
+      </section>
+    `;
+  }
+
+  const lignes = [
+    {
+      tone: review.error ? "warn" : "ok",
+      icon: review.error ? "alert" : "check-circle-fill",
+      text: review.error ? "L'analyse n'a pas abouti" : "L'analyse a abouti",
+      note: review.error ? review.error : describeAnalysis(review)
+    },
+    {
+      tone: blocage ? "warn" : "ok",
+      icon: blocage ? "alert" : "check-circle-fill",
+      text: blocage ? "La mémoire du projet est contredite" : "Rien ne contredit la mémoire du projet",
+      note: blocage || "Aucune décision passée n'est remise en cause par ce lot."
+    },
+    {
+      tone: "neutral",
+      icon: "checklist",
+      text: describeMerge(items),
+      note: gele ? "" : "Ce qui n'a pas été tranché sera accepté."
     }
-    ${gele ? renderFrozenNote(proposition, review) : ""}
+  ];
+
+  return `
+    <section class="merge-box">
+      ${lignes
+        .map(
+          (ligne) => `
+            <div class="merge-box__row merge-box__row--${ligne.tone}">
+              <span class="merge-box__icon">${svgIcon(ligne.icon, { className: "octicon" })}</span>
+              <div>
+                <b>${escapeHtml(ligne.text)}</b>
+                ${ligne.note ? `<span class="merge-box__note">${escapeHtml(ligne.note)}</span>` : ""}
+              </div>
+            </div>
+          `
+        )
+        .join("")}
+      <div class="merge-box__actions">
+        <button type="button" class="gh-btn gh-btn--danger" data-review-abandon ${
+          review.merging ? "disabled" : ""
+        }>${review.abandoning ? "Confirmer l'abandon" : "Abandonner"}</button>
+        <button type="button" class="gh-btn gh-btn--primary" data-review-merge ${
+          review.merging || blocage ? "disabled" : ""
+        }>${review.merging ? "Fusion en cours…" : "Fusionner la proposition"}</button>
+      </div>
+    </section>
+  `;
+}
+
+/** Ce que l'analyse a produit, en une phrase. */
+function describeAnalysis(review) {
+  const items = review.items ?? [];
+  const avis = items.filter((entry) => entry.itemType === ITEM_TYPE.AVIS).length;
+  const documents = items.filter((entry) => entry.itemType === ITEM_TYPE.DOCUMENT).length;
+  const inchanges = Number.isFinite(review.diff?.unchanged) ? `, ${review.diff.unchanged} inchangé(s)` : "";
+
+  return `${documents} livrable(s) soumis, ${avis} avis en mouvement${inchanges}.`;
+}
+
+/**
+ * Les dépôts : ce qui est entré, quand, et par qui.
+ *
+ * L'équivalent des commits d'une pull request. Une proposition peut en
+ * accumuler plusieurs — c'est ce qui la distingue d'un dépôt isolé — et les
+ * montrer par geste plutôt que par fichier rend visible la façon dont un
+ * dossier s'est constitué : un envoi de dix-sept livrables, puis un rapport
+ * oublié trois jours plus tard.
+ */
+function renderDeposits(review) {
+  const depots = review.deposits ?? [];
+  if (depots.length === 0) {
+    return `<div class="propositions-empty"><b>Aucun dépôt</b><p>Cette proposition n'apporte aucun document.</p></div>`;
+  }
+
+  return depots
+    .map(
+      (depot) => `
+        <section class="review-block">
+          <div class="review-panel">
+            <div class="deposit__head">
+              <span class="deposit__icon">${svgIcon("git-commit", { className: "octicon" })}</span>
+              <div>
+                <b>${escapeHtml(depot.who)}</b> a déposé ${depot.documents.length} livrable(s)
+                <span class="deposit__date">le ${escapeHtml(formatDate(depot.at))}</span>
+              </div>
+            </div>
+            <ul class="review-list">
+              ${depot.documents
+                .map(
+                  (document) => `
+                    <li class="review-item review-item--plain">
+                      <span class="review-item__check">${svgIcon("file-pdf", { className: "octicon" })}</span>
+                      <div class="review-item__body">
+                        <span class="review-item__title">${escapeHtml(
+                          document.original_filename ?? document.filename ?? "Document"
+                        )}</span>
+                        <span class="review-item__meta">
+                          ${escapeHtml(document.detected_kind_label ?? "Nature inconnue")}
+                          ${document.detected_author ? ` · ${escapeHtml(document.detected_author)}` : ""}
+                          ${document.issued_at ? ` · émis le ${escapeHtml(formatDate(document.issued_at))}` : ""}
+                        </span>
+                      </div>
+                    </li>
+                  `
+                )
+                .join("")}
+            </ul>
+          </div>
+        </section>
+      `
+    )
+    .join("");
+}
+
+/**
+ * L'analyse : ce que la machine affirme, et ce qu'elle n'a pas pu lire.
+ *
+ * L'équivalent des checks. Elle se relit surtout dans un cas : quand un chiffre
+ * du suivi surprend, six mois plus tard, et qu'on veut savoir quel moteur et
+ * quel vocabulaire l'avaient produit.
+ */
+function renderAnalysis(proposition, review) {
+  const gele = review.frozen === true;
+  const snapshot = proposition.snapshot ?? null;
+  const items = review.items ?? [];
+  const avis = items.filter((entry) => entry.itemType === ITEM_TYPE.AVIS);
+
+  const lignes = [
+    ["Livrables soumis", `${items.filter((entry) => entry.itemType === ITEM_TYPE.DOCUMENT).length}`],
+    ["Avis en mouvement", `${avis.length}`],
+    [
+      "Avis inchangés",
+      Number.isFinite(review.diff?.unchanged) ? `${review.diff.unchanged}` : "non conservé"
+    ],
+    ["Affaires à trancher", `${items.filter((entry) => entry.itemType === ITEM_TYPE.ATTACHMENT).length}`],
+    [
+      "Livrables non rapatriés",
+      review.unreachable.length > 0 ? nameSome(review.unreachable.map((row) => row?.original_filename)) : "aucun"
+    ],
+    [
+      "Lu par",
+      gele
+        ? [snapshot?.engine, ...(snapshot?.packs ?? [])].filter(Boolean).join(" · ") || "non conservé"
+        : [review.result?.engineVersion, ...Object.values(review.result?.packsUsed ?? {}).map((pack) => `${pack.pack_id} v${pack.pack_version}`)]
+            .filter(Boolean)
+            .join(" · ") || "—"
+    ]
+  ];
+
+  return `
+    <section class="review-block">
+      <div class="review-panel">
+        <div class="review-block__head">
+          <div class="review-block__headbody">
+            <h3 class="review-block__title">${escapeHtml(
+              gele ? "Ce que l'analyse avait lu" : "Ce que l'analyse a lu"
+            )}</h3>
+            <span class="review-block__state${review.error ? " is-blocking" : ""}">
+              ${escapeHtml(review.error ? "n'a pas abouti" : "a abouti")}
+            </span>
+          </div>
+        </div>
+        <div class="analysis-rows">
+          ${lignes
+            .map(
+              ([label, valeur]) => `
+                <div class="analysis-row">
+                  <span class="analysis-row__label">${escapeHtml(label)}</span>
+                  <span class="analysis-row__value">${escapeHtml(valeur)}</span>
+                </div>
+              `
+            )
+            .join("")}
+        </div>
+      </div>
+    </section>
     ${
-      review.unreachable.length > 0
-        ? `<div class="propositions-empty propositions-empty--warn">
-             <b>${review.unreachable.length} livrable(s) n'ont pas pu être rapatriés</b>
-             <p>
-               ${
-                 gele
-                   ? escapeHtml(nameSome(review.unreachable))
-                   : "Ce qui manque au dossier et les avis sans nouvelles sont à lire avec cette réserve."
-               }
-             </p>
-           </div>`
-        : ""
+      gele
+        ? ""
+        : `<p class="review-empty-note">
+             L'analyse est refaite à chaque ouverture tant que la proposition est ouverte : c'est ce qui
+             garantit qu'on décide sur l'état d'aujourd'hui. Une fois close, elle ne bouge plus.
+           </p>`
     }
-    ${avertissement}
+  `;
+}
+
+/** Ce qui change : les contradictions d'abord, puis les affirmations. */
+function renderChanges(review) {
+  const items = review.items ?? [];
+  const parType = (type) => items.filter((entry) => entry.itemType === type);
+  const gele = review.frozen === true;
+
+  return `
     ${renderConflicts(review.conflicts ?? [])}
     ${renderReviewBlock(
       ITEM_TYPE.DOCUMENT,
@@ -703,26 +999,63 @@ function renderReview(root) {
           ? "Aucun avis ne changeait, ou l'état conservé ne le dit pas."
           : "Aucun livrable exploitable : il n'y a pas d'avis à en tirer."
     )}
-    <footer class="review-merge">
-      <p class="review-merge__summary">
-        ${escapeHtml(gele ? describeFrozen(items) : describeMerge(items))}
-        ${blocage ? `<span class="review-merge__blocked">${escapeHtml(blocage)}</span>` : ""}
-      </p>
-      ${
-        fusionnee
-          ? `<p class="review-merge__done">${escapeHtml(closedNote(proposition))}</p>`
-          : `<div class="review-merge__actions">
-               <button type="button" class="gh-btn gh-btn--danger" data-review-abandon ${
-                 review.merging ? "disabled" : ""
-               }>${
-                 review.abandoning ? "Confirmer l'abandon" : "Abandonner"
-               }</button>
-               <button type="button" class="gh-btn gh-btn--primary" data-review-merge ${
-                 review.merging || blocage ? "disabled" : ""
-               }>${review.merging ? "Fusion en cours…" : "Fusionner la proposition"}</button>
-             </div>`
-      }
-    </footer>
+  `;
+}
+
+function renderReview(root) {
+  const proposition = view.open;
+  const review = view.review;
+  const entete = renderReviewHead(proposition);
+
+  if (!review || review.running) {
+    return `
+      ${entete}
+      <div class="propositions-empty">
+        <b>Analyse en cours…</b>
+        <p>${escapeHtml(review?.step ?? "Lecture des livrables du projet et de ceux de cette proposition.")}</p>
+      </div>
+    `;
+  }
+
+  if (review.error && (review.items ?? []).length === 0) {
+    return `
+      ${entete}
+      <div class="propositions-empty">
+        <b>L'analyse n'a pas abouti</b>
+        <p>${escapeHtml(review.error)}</p>
+      </div>
+    `;
+  }
+
+  const gele = review.frozen === true;
+  const onglet = REVIEW_TABS.some((tab) => tab.id === view.tab) ? view.tab : "conversation";
+
+  const avertissement = review.notice
+    ? `<div class="propositions-empty propositions-empty--warn"><b>Réponse non conservée</b><p>${escapeHtml(
+        review.notice
+      )}</p></div>`
+    : "";
+
+  const panneau =
+    onglet === "deposits"
+      ? renderDeposits(review)
+      : onglet === "analysis"
+        ? renderAnalysis(proposition, review)
+        : onglet === "changes"
+          ? renderChanges(review)
+          : renderConversation(proposition, review);
+
+  return `
+    ${entete}
+    ${gele ? renderFrozenNote(proposition, review) : ""}
+    ${avertissement}
+    ${renderLightTabs({
+      tabs: reviewTabs(review),
+      activeTabId: onglet,
+      className: "review-tabs",
+      ariaLabel: "Sections de la proposition"
+    })}
+    <div class="review-tabpanel">${panneau}</div>
   `;
 }
 
@@ -741,6 +1074,14 @@ function bindReview(root) {
   );
 
   root.querySelector("[data-review-back]")?.addEventListener("click", () => backToList(root));
+
+  // Changer d'onglet ne relance rien : les quatre panneaux lisent le même état.
+  bindLightTabs(root, {
+    onChange(tabId) {
+      view.tab = tabId;
+      renderContent(root);
+    }
+  });
 
   // Une case de tête à moitié cochée ne s'écrit pas en HTML : c'est une
   // propriété, pas un attribut.
@@ -1131,10 +1472,23 @@ function setPropositionsHeader() {
  */
 async function openFrozen(root, proposition) {
   try {
-    const { listPropositionItems } = await import("../services/propositions-supabase.js");
-    const stored = await listPropositionItems(proposition.id);
+    const propositions = await import("../services/propositions-supabase.js");
+    const [stored, documents] = await Promise.all([
+      propositions.listPropositionItems(proposition.id),
+      // Les documents restent lisibles : ils disent qui a déposé quoi, et quand.
+      // Ce sont des faits, ils ne se recalculent pas.
+      propositions.listPropositionDocuments(proposition.id)
+    ]);
 
     if (!view.open || view.open.id !== proposition.id) return;
+
+    const names = await propositions.loadAuthorNames([
+      proposition.created_by,
+      proposition.merged_by,
+      proposition.closed_by,
+      ...documents.map((row) => row.created_by),
+      ...stored.map((row) => row.decided_by)
+    ]);
 
     const snapshot = proposition.snapshot ?? null;
     view.review = {
@@ -1150,6 +1504,8 @@ async function openFrozen(root, proposition) {
       result: null,
       notice: null,
       gap: describeSnapshotGap(proposition, stored.length),
+      deposits: groupDeposits(documents, names),
+      story: buildStory({ proposition, documents, decisions: stored, names }),
       items: itemsFromDecisions(stored)
     };
   } catch {
@@ -1179,6 +1535,8 @@ async function openProposition(root, propositionId) {
   if (!proposition) return;
 
   view.open = proposition;
+  // On entre par la conversation : c'est là qu'on comprend de quoi il s'agit.
+  view.tab = "conversation";
   view.review = { running: true, step: "", items: [], unreachable: [], diff: { unchanged: 0 }, error: null };
 
   // La barre compacte nomme la proposition : c'est elle qu'on lit, pas l'onglet.
@@ -1233,6 +1591,14 @@ async function openProposition(root, propositionId) {
 
     const documents = await propositions.listPropositionDocuments(proposition.id);
 
+    const names = await propositions.loadAuthorNames([
+      proposition.created_by,
+      proposition.merged_by,
+      proposition.closed_by,
+      ...documents.map((row) => row.created_by),
+      ...decisions.map((row) => row.decided_by)
+    ]);
+
     view.review = {
       running: false,
       step: "",
@@ -1242,6 +1608,8 @@ async function openProposition(root, propositionId) {
       diff: analyse.diff,
       result: analyse.result,
       notice: null,
+      deposits: groupDeposits(documents, names),
+      story: buildStory({ proposition, documents, decisions, names }),
       items: applyDecisions(
         [...documentItems(documents), ...attachmentItems(analyse.attachments), ...avisItems(analyse.diff)],
         decisions
