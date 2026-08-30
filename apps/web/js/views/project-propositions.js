@@ -23,8 +23,8 @@ import {
   applyDecisions,
   attachmentItems,
   avisItems,
-  documentItems,
-  summarizeReview
+  describeAvisChange,
+  documentItems
 } from "../services/proposition-review.js";
 
 /** Ce que l'écran tient entre deux rendus. */
@@ -206,36 +206,83 @@ function renderContent(root) {
  * au dépôt, les rattachements évalués par `project-identity.js`, les avis
  * produits par le moteur du suivi. La revue ne fabrique aucun savoir — elle
  * donne un lieu à ce qu'on savait déjà et que personne ne voyait.
+ *
+ * L'UI est celle d'une case à cocher, pas de deux boutons par ligne. Dix-sept
+ * avis à accepter un par un, ce n'est pas une revue, c'est une corvée : cochée
+ * vaut accepté, décochée vaut refusé, et l'en-tête de chaque bloc bascule tout
+ * d'un geste.
  * ──────────────────────────────────────────────────────────────────────────── */
 
-/** Le libellé d'un verdict de rattachement, en français. */
-function attachmentTone(verdict) {
-  return verdict === "FOREIGN" ? "danger" : "warn";
-}
+/** L'état d'une proposition, tel qu'on le montre : un mot et une couleur. */
+const PROPOSITION_BADGE = {
+  [PROPOSITION.OPEN]: { label: "Ouverte", icon: "git-pull-request", tone: "open" },
+  [PROPOSITION.MERGED]: { label: "Fusionnée", icon: "check-circle-fill", tone: "merged" },
+  [PROPOSITION.CLOSED]: { label: "Fermée", icon: "stop-alert", tone: "closed" }
+};
 
-function renderReviewItem(item, body) {
-  const refuse = item.status === ITEM.REFUSED;
-  const accepte = item.status === ITEM.ACCEPTED;
+/**
+ * L'en-tête d'une proposition, à la manière d'une pull request.
+ *
+ * Il est écrit ici plutôt que confié à `setProjectViewHeader` pour une raison
+ * précise : ce composant échappe le HTML de son titre, et ne peut donc pas
+ * porter la pastille d'état. Le rétrécissement au défilement, lui, est bien
+ * mutualisé — il suit la classe `project-shell-compact` que la coque pose déjà
+ * sur le `body`, et tout se passe en CSS.
+ */
+function renderReviewHead(proposition) {
+  const badge = PROPOSITION_BADGE[proposition.status] ?? PROPOSITION_BADGE[PROPOSITION.OPEN];
 
   return `
-    <li class="review-item${refuse ? " is-refused" : ""}${accepte ? " is-accepted" : ""}">
-      <div class="review-item__body">${body}</div>
-      <div class="review-item__decision">
+    <header class="review-head">
+      <button type="button" class="gh-btn gh-btn--sm review-head__back" data-review-back>← Toutes les propositions</button>
+      <h2 class="review-head__title">
+        ${escapeHtml(proposition.title)}
+        <span class="review-head__number">#${Number(proposition.number) || "?"}</span>
+      </h2>
+      <div class="review-head__status">
+        <span class="review-badge review-badge--${badge.tone}">
+          ${svgIcon(badge.icon, { className: "octicon" })}
+          <span>${badge.label}</span>
+        </span>
+        <span class="review-head__meta">
+          ouverte le ${escapeHtml(formatDate(proposition.created_at))}
+          ${proposition.merged_at ? `· fusionnée le ${escapeHtml(formatDate(proposition.merged_at))}` : ""}
+        </span>
+      </div>
+      ${proposition.description ? `<p class="review-head__description">${escapeHtml(proposition.description)}</p>` : ""}
+    </header>
+  `;
+}
+
+/**
+ * Une affirmation : une case, ce qu'elle dit, et sa raison si on l'a refusée.
+ *
+ * Cochée vaut accepté. C'est la règle posée avec la fusion — un item qu'on
+ * laisse tel quel est un item auquel on ne s'oppose pas — et la case la rend
+ * lisible d'un coup d'œil au lieu de la cacher dans une phrase.
+ */
+function renderReviewItem(item, body) {
+  const refuse = item.status === ITEM.REFUSED;
+  const cle = `${item.itemType}|${item.itemKey}`;
+
+  return `
+    <li class="review-item${refuse ? " is-refused" : ""}">
+      <label class="review-item__check">
+        <input type="checkbox" data-review-item="${escapeHtml(cle)}" ${refuse ? "" : "checked"}>
+      </label>
+      <div class="review-item__body">
+        ${body}
         ${
           refuse
-            ? `<span class="review-item__verdict review-item__verdict--refused">Refusé — ${escapeHtml(item.reason ?? "")}</span>`
-            : accepte
-              ? `<span class="review-item__verdict review-item__verdict--accepted">Accepté</span>`
-              : ""
+            ? `<input
+                 type="text"
+                 class="gh-input review-item__reason"
+                 data-review-reason="${escapeHtml(cle)}"
+                 value="${escapeHtml(item.reason ?? "")}"
+                 placeholder="Pourquoi l'écarter ? (facultatif)"
+               >`
+            : ""
         }
-        <div class="review-item__actions">
-          <button type="button" class="gh-btn gh-btn--sm" data-review-accept="${escapeHtml(item.itemType)}|${escapeHtml(item.itemKey)}">
-            ${accepte ? "Accepté" : "Accepter"}
-          </button>
-          <button type="button" class="gh-btn gh-btn--sm gh-btn--danger" data-review-refuse="${escapeHtml(item.itemType)}|${escapeHtml(item.itemKey)}">
-            ${refuse ? "Refusé" : "Refuser"}
-          </button>
-        </div>
       </div>
     </li>
   `;
@@ -254,7 +301,7 @@ function renderDocumentItem(item) {
         ${duplicateOf ? " · doublon d'un document déjà présent" : ""}
         ${reissueOf ? " · réédition d'un document déjà présent" : ""}
       </span>
-      ${reason && !kindLabel ? `<span class="review-item__reason">${escapeHtml(reason)}</span>` : ""}
+      ${reason && !kindLabel ? `<span class="review-item__reason-text">${escapeHtml(reason)}</span>` : ""}
     `
   );
 }
@@ -264,7 +311,9 @@ function renderAttachmentItem(item) {
   return renderReviewItem(
     item,
     `
-      <span class="review-item__title review-item__title--${attachmentTone(verdict)}">Affaire ${escapeHtml(label)}</span>
+      <span class="review-item__title review-item__title--${verdict === "FOREIGN" ? "danger" : "warn"}">
+        Affaire ${escapeHtml(label)}
+      </span>
       <span class="review-item__meta">${escapeHtml(reason ?? "")}</span>
       <span class="review-item__meta">
         ${documents
@@ -277,32 +326,54 @@ function renderAttachmentItem(item) {
 }
 
 function renderAvisItem(item) {
-  const { change, reference, title, status, previousStatus, opinion } = item.payload;
+  const { reference, title, change } = item.payload;
+  const mouvement = describeAvisChange(item.payload);
+
   return renderReviewItem(
     item,
     `
       <span class="review-item__title">
-        <span class="review-item__badge review-item__badge--${change}">${change === "added" ? "Nouvel avis" : "Change d'état"}</span>
+        <span class="review-item__badge review-item__badge--${change}">${escapeHtml(mouvement.label)}</span>
         n° ${escapeHtml(reference)}${title ? ` — ${escapeHtml(title)}` : ""}
       </span>
-      <span class="review-item__meta">
-        ${previousStatus ? `${escapeHtml(previousStatus)} → ` : ""}${escapeHtml(status ?? "")}
-        ${opinion ? ` · avis ${escapeHtml(opinion)}` : ""}
-      </span>
+      <span class="review-item__meta">${escapeHtml(mouvement.detail)}</span>
     `
   );
 }
 
 /**
- * Un bloc de la revue.
+ * Un bloc de la revue, avec sa case de tête.
+ *
+ * La case de tête vaut pour tout le bloc : elle est cochée quand tout l'est,
+ * indéterminée quand une partie seulement l'est. C'est ce qui permet d'écarter
+ * dix-sept avis d'un geste — ou de les accepter, ce qui est le cas courant.
  *
  * Un bloc vide se dit, il ne se cache pas : savoir qu'aucun avis ne change est
  * une information, pas une absence d'information.
  */
-function renderReviewBlock(titre, items, renderer, vide) {
+function renderReviewBlock(type, titre, items, renderer, vide) {
+  const acceptes = items.filter((entry) => entry.status !== ITEM.REFUSED).length;
+  const tous = items.length > 0 && acceptes === items.length;
+  const aucun = acceptes === 0;
+
   return `
     <section class="review-block">
-      <h3 class="review-block__title">${escapeHtml(titre)} <span class="review-block__count">${items.length}</span></h3>
+      <div class="review-block__head">
+        ${
+          items.length > 0
+            ? `<label class="review-block__all">
+                 <input
+                   type="checkbox"
+                   data-review-block="${escapeHtml(type)}"
+                   ${tous ? "checked" : ""}
+                   ${!tous && !aucun ? 'data-indeterminate="1"' : ""}
+                 >
+                 <span>Tout accepter</span>
+               </label>`
+            : ""
+        }
+        <h3 class="review-block__title">${escapeHtml(titre)} <span class="review-block__count">${items.length}</span></h3>
+      </div>
       ${
         items.length === 0
           ? `<p class="review-block__empty">${escapeHtml(vide)}</p>`
@@ -315,17 +386,7 @@ function renderReviewBlock(titre, items, renderer, vide) {
 function renderReview(root) {
   const proposition = view.open;
   const review = view.review;
-
-  const entete = `
-    <header class="review-head">
-      <button type="button" class="gh-btn gh-btn--sm" data-review-back>← Toutes les propositions</button>
-      <h2 class="review-head__title">
-        ${escapeHtml(proposition.title)}
-        <span class="review-head__number">#${Number(proposition.number) || "?"}</span>
-      </h2>
-      ${proposition.description ? `<p class="review-head__description">${escapeHtml(proposition.description)}</p>` : ""}
-    </header>
-  `;
+  const entete = renderReviewHead(proposition);
 
   if (!review || review.running) {
     return `
@@ -348,13 +409,14 @@ function renderReview(root) {
   }
 
   const items = review.items ?? [];
-  const bilan = summarizeReview(items);
+  const parType = (type) => items.filter((entry) => entry.itemType === type);
+  const fusionnee = proposition.status !== PROPOSITION.OPEN;
+
   const avertissement = review.notice
     ? `<div class="propositions-empty propositions-empty--warn"><b>Réponse non conservée</b><p>${escapeHtml(
         review.notice
       )}</p></div>`
     : "";
-  const parType = (type) => items.filter((entry) => entry.itemType === type);
 
   return `
     ${entete}
@@ -367,20 +429,22 @@ function renderReview(root) {
         : ""
     }
     ${avertissement}
-    <p class="review-summary">${escapeHtml(describeMerge(items))}</p>
     ${renderReviewBlock(
+      ITEM_TYPE.DOCUMENT,
       "Documents",
       parType(ITEM_TYPE.DOCUMENT),
       renderDocumentItem,
       "Cette proposition n'apporte aucun document."
     )}
     ${renderReviewBlock(
+      ITEM_TYPE.ATTACHMENT,
       "Rattachements",
       parType(ITEM_TYPE.ATTACHMENT),
       renderAttachmentItem,
       "Toutes les affaires du lot sont déjà rattachées à ce projet : rien à trancher."
     )}
     ${renderReviewBlock(
+      ITEM_TYPE.AVIS,
       "Avis",
       parType(ITEM_TYPE.AVIS),
       renderAvisItem,
@@ -388,72 +452,91 @@ function renderReview(root) {
         ? `Aucun avis ne change. ${review.diff.unchanged} avis restent en l'état.`
         : "Aucun livrable exploitable : il n'y a pas d'avis à en tirer."
     )}
-    <p class="review-note">
-      ${bilan.undecided > 0
-        ? `${bilan.undecided} affirmation${bilan.undecided > 1 ? "s" : ""} sans réponse. La fusion viendra à l'étape suivante.`
-        : "Tout a été tranché. La fusion viendra à l'étape suivante."}
-    </p>
+    <footer class="review-merge">
+      <p class="review-merge__summary">${escapeHtml(describeMerge(items))}</p>
+      ${
+        fusionnee
+          ? `<p class="review-merge__done">Cette proposition a été fusionnée : elle ne peut plus l'être une seconde fois.</p>`
+          : `<button type="button" class="gh-btn gh-btn--validate" data-review-merge ${
+              review.merging ? "disabled" : ""
+            }>${review.merging ? "Fusion en cours…" : "Fusionner la proposition"}</button>`
+      }
+    </footer>
   `;
 }
 
-/** Le retour à la liste, et les deux réponses possibles sur chaque affirmation. */
+/** Le retour à la liste, les cases, les raisons, et la fusion. */
 function bindReview(root) {
-  root.querySelector("[data-review-back]")?.addEventListener("click", () => {
-    view.open = null;
-    view.review = null;
-    setPropositionsHeader();
-    renderContent(root);
-  });
+  root.querySelector("[data-review-back]")?.addEventListener("click", () => backToList(root));
 
-  for (const button of root.querySelectorAll("[data-review-accept]")) {
-    button.addEventListener("click", () => decide(root, button.getAttribute("data-review-accept"), ITEM.ACCEPTED));
+  // Une case de tête à moitié cochée ne s'écrit pas en HTML : c'est une
+  // propriété, pas un attribut.
+  for (const box of root.querySelectorAll('[data-indeterminate="1"]')) box.indeterminate = true;
+
+  for (const box of root.querySelectorAll("[data-review-item]")) {
+    box.addEventListener("change", () => {
+      const item = findItem(box.getAttribute("data-review-item"));
+      if (item) decide(root, [item], box.checked ? ITEM.ACCEPTED : ITEM.REFUSED);
+    });
   }
 
-  for (const button of root.querySelectorAll("[data-review-refuse]")) {
-    button.addEventListener("click", () => decide(root, button.getAttribute("data-review-refuse"), ITEM.REFUSED));
+  for (const box of root.querySelectorAll("[data-review-block]")) {
+    box.addEventListener("change", () => {
+      const type = box.getAttribute("data-review-block");
+      const items = (view.review?.items ?? []).filter((entry) => entry.itemType === type);
+      decide(root, items, box.checked ? ITEM.ACCEPTED : ITEM.REFUSED);
+    });
   }
+
+  for (const champ of root.querySelectorAll("[data-review-reason]")) {
+    // À la sortie du champ, pas à chaque frappe : écrire une lettre à la fois
+    // ferait une requête par caractère.
+    champ.addEventListener("change", () => {
+      const item = findItem(champ.getAttribute("data-review-reason"));
+      if (item) decide(root, [item], ITEM.REFUSED, champ.value);
+    });
+  }
+
+  root.querySelector("[data-review-merge]")?.addEventListener("click", () => merge(root));
+}
+
+function findItem(cle) {
+  const [itemType, ...reste] = String(cle ?? "").split("|");
+  const itemKey = reste.join("|");
+  return (view.review?.items ?? []).find((entry) => entry.itemType === itemType && entry.itemKey === itemKey) ?? null;
+}
+
+function backToList(root) {
+  view.open = null;
+  view.review = null;
+  setPropositionsHeader();
+  renderContent(root);
 }
 
 /**
- * L'humain tranche une affirmation.
+ * L'humain tranche, seul ou en bloc.
  *
- * Un refus exige une raison, et l'écran la demande plutôt que d'accepter un
- * refus muet : c'est elle qui permettra plus tard de contester la décision
- * plutôt que de la subir.
- *
- * Rien n'est affiché comme tranché si la base n'a pas répondu. Laisser croire
+ * Rien n'est affiché comme tranché si la base n'a pas répondu : laisser croire
  * qu'une réponse a été retenue alors qu'elle est perdue ferait reposer la même
  * question au prochain rechargement, sans qu'on comprenne pourquoi.
  */
-async function decide(root, cle, status) {
-  const [itemType, ...reste] = String(cle ?? "").split("|");
-  const itemKey = reste.join("|");
-  const item = (view.review?.items ?? []).find((entry) => entry.itemType === itemType && entry.itemKey === itemKey);
-  if (!item) return;
+async function decide(root, items, status, reason = null) {
+  if (items.length === 0) return;
 
-  let reason = item.reason ?? null;
-  if (status === ITEM.REFUSED) {
-    const saisie = window.prompt("Pourquoi refuser cette affirmation ?", reason ?? "");
-    if (saisie === null) return;
-    if (!saisie.trim()) {
-      view.review.error = null;
-      view.review.notice = "Un refus sans raison ne peut pas être enregistré : c'est elle qui permet de le contester.";
-      renderContent(root);
-      return;
-    }
-    reason = saisie.trim();
-  } else {
-    reason = null;
-  }
+  const decisions = items.map((item) => ({
+    item,
+    status,
+    // Une raison ne se conserve que sur un refus : la garder sur une acceptation
+    // laisserait traîner le motif d'un refus qu'on vient d'annuler.
+    reason: status === ITEM.REFUSED ? (reason ?? item.reason ?? null) : null
+  }));
 
   try {
-    const { decidePropositionItem } = await import("../services/propositions-supabase.js");
-    const ok = await decidePropositionItem({
+    const { decidePropositionItems } = await import("../services/propositions-supabase.js");
+    const ok = await decidePropositionItems({
       propositionId: view.open.id,
       projectId: view.open.project_id,
-      item,
-      status,
-      reason
+      decisions
     });
 
     if (!ok) {
@@ -467,13 +550,137 @@ async function decide(root, cle, status) {
     return;
   }
 
-  item.status = status;
-  item.reason = reason;
+  for (const decision of decisions) {
+    decision.item.status = decision.status;
+    decision.item.reason = decision.reason;
+  }
   view.review.notice = null;
   renderContent(root);
 }
 
-/** L'en-tête de la liste — celui qui se compacte au défilement comme les autres. */
+/**
+ * Applique la proposition au corpus.
+ *
+ * Fusionner n'enregistre pas un état : cela enregistre des réponses. Les
+ * documents acceptés entrent, les refusés sont marqués — jamais supprimés —, les
+ * rattachements tranchés rejoignent la mémoire du projet avec leur signe, et le
+ * suivi des avis est réécrit par un recalcul complet.
+ *
+ * Le suivi est réécrit **après** l'entrée des documents, jamais avant : il doit
+ * refléter le corpus tel qu'il est devenu, pas tel qu'il était.
+ */
+async function merge(root) {
+  const proposition = view.open;
+  const items = view.review?.items ?? [];
+  if (!proposition || proposition.status !== PROPOSITION.OPEN || view.review.merging) return;
+
+  view.review.merging = true;
+  view.review.notice = null;
+  renderContent(root);
+
+  try {
+    const [{ mergeProposition }, { rememberProjectMarkers }, { markersToRemember }] = await Promise.all([
+      import("../services/propositions-supabase.js"),
+      import("../services/project-identity-supabase.js"),
+      import("../services/project-identity.js")
+    ]);
+
+    const documents = items.filter((entry) => entry.itemType === ITEM_TYPE.DOCUMENT);
+    const applique = await mergeProposition({
+      proposition,
+      acceptedDocumentIds: documents.filter((entry) => entry.status !== ITEM.REFUSED).map((entry) => entry.itemKey),
+      refusedDocumentIds: documents.filter((entry) => entry.status === ITEM.REFUSED).map((entry) => entry.itemKey)
+    });
+
+    if (!applique) {
+      view.review.merging = false;
+      view.review.notice = "La fusion n'a pas abouti. La proposition reste ouverte : rien n'a été perdu.";
+      renderContent(root);
+      return;
+    }
+
+    // Les rattachements tranchés deviennent la mémoire du projet, avec leur
+    // signe : accepté rattache l'affaire, refusé l'écarte pour de bon.
+    const rattachements = items.filter((entry) => entry.itemType === ITEM_TYPE.ATTACHMENT);
+    for (const entry of rattachements) {
+      const rejected = entry.status === ITEM.REFUSED;
+      await rememberProjectMarkers(
+        proposition.project_id,
+        markersToRemember(entry.payload.markers ?? [], [], { rejected })
+      );
+    }
+
+    view.review.merging = false;
+    view.open = { ...proposition, status: PROPOSITION.MERGED, merged_at: new Date().toISOString() };
+
+    await recomputeAfterMerge(root, proposition);
+  } catch {
+    view.review.merging = false;
+    view.review.notice = "La fusion n'a pas abouti. La proposition reste ouverte : rien n'a été perdu.";
+  }
+
+  renderContent(root);
+}
+
+/**
+ * Réécrit le suivi des avis après une fusion.
+ *
+ * Recalcul complet, jamais incrémental : c'est la doctrine posée avec la
+ * persistance. Un document plus ancien arrivé en retard réécrit la chronologie,
+ * et invalider finement une chaîne ordonnée produirait des anomalies
+ * irreproductibles.
+ *
+ * Un échec ici ne défait pas la fusion : les documents sont entrés, ce qui est
+ * le fait ; le suivi se rattrapera à la prochaine analyse, et l'écran le dit.
+ */
+async function recomputeAfterMerge(root, proposition) {
+  try {
+    const [{ analyzeProposition }, { saveCtAnalysis }, store_, { loadProjectMarkers }] = await Promise.all([
+      import("../services/proposition-analysis.js"),
+      import("../services/ct-analysis-supabase.js"),
+      import("../services/ct-analysis-store.js"),
+      import("../services/project-identity-supabase.js")
+    ]);
+
+    view.review.step = "Mise à jour du suivi des avis";
+    renderContent(root);
+
+    const analyse = await analyzeProposition({
+      projectId: proposition.project_id,
+      // Ses documents sont désormais dans le corpus accepté : il n'y a plus rien
+      // à y ajouter, et l'analyse porte donc sur le projet tel qu'il est devenu.
+      proposition,
+      project: store.projectForm ?? {},
+      knownAvis: [],
+      knownMarkers: await loadProjectMarkers(proposition.project_id)
+    });
+
+    if (!analyse.result) return;
+
+    const documentIds = Object.fromEntries(
+      analyse.reports.filter((report) => report.documentId).map((report) => [report.sourceId, report.documentId])
+    );
+
+    await saveCtAnalysis({
+      projectId: proposition.project_id,
+      result: analyse.result,
+      documentIds,
+      // L'exécution porte sa cause : c'est par elle qu'on remonte, depuis
+      // l'onglet Actions, du chiffre du suivi à la décision qui l'a produit.
+      propositionId: proposition.id,
+      triggerSource: "proposition",
+      corpusFingerprint: await store_.corpusFingerprint(analyse.reports),
+      corpusDocuments: store_.corpusEntries(analyse.reports),
+      documentCount: analyse.reports.length
+    });
+  } catch {
+    view.review.notice =
+      "Les documents sont entrés, mais le suivi des avis n'a pas pu être réécrit. " +
+      "Il le sera à la prochaine analyse.";
+  }
+}
+
+/** L'en-tête de la liste. */
 function setPropositionsHeader() {
   setProjectViewHeader({ contextLabel: "Propositions", variant: "propositions" });
 }
@@ -492,36 +699,28 @@ async function openProposition(root, propositionId) {
   view.open = proposition;
   view.review = { running: true, step: "", items: [], unreachable: [], diff: { unchanged: 0 }, error: null };
 
-  // Le même en-tête que partout, avec son titre qui rétrécit au défilement.
+  // La barre compacte nomme la proposition : c'est elle qu'on lit, pas l'onglet.
   setProjectViewHeader({
     contextLabel: "Propositions",
     variant: "propositions",
-    title: proposition.title,
-    subtitle: `#${Number(proposition.number) || "?"}`,
     compactLabel: `#${Number(proposition.number) || "?"} ${proposition.title}`,
-    onCompactLabelClick: () => {
-      view.open = null;
-      view.review = null;
-      setPropositionsHeader();
-      renderContent(root);
-    }
+    onCompactLabelClick: () => backToList(root)
   });
   renderContent(root);
 
   try {
-    const [{ analyzeProposition }, { listPropositionItems }, { loadCtAnalysis }, { loadProjectMarkers }] =
-      await Promise.all([
-        import("../services/proposition-analysis.js"),
-        import("../services/propositions-supabase.js"),
-        import("../services/ct-analysis-supabase.js"),
-        import("../services/project-identity-supabase.js")
-      ]);
+    const [{ analyzeProposition }, propositions, { loadCtAnalysis }, { loadProjectMarkers }] = await Promise.all([
+      import("../services/proposition-analysis.js"),
+      import("../services/propositions-supabase.js"),
+      import("../services/ct-analysis-supabase.js"),
+      import("../services/project-identity-supabase.js")
+    ]);
 
     const projectId = proposition.project_id;
     const [memoire, marqueurs, decisions] = await Promise.all([
       loadCtAnalysis(projectId),
       loadProjectMarkers(projectId),
-      listPropositionItems(proposition.id)
+      propositions.listPropositionItems(proposition.id)
     ]);
 
     const analyse = await analyzeProposition({
@@ -541,23 +740,19 @@ async function openProposition(root, propositionId) {
     // calculer ne décrirait plus ce que l'utilisateur a sous les yeux.
     if (!view.open || view.open.id !== proposition.id) return;
 
-    const { listPropositionDocuments } = await import("../services/propositions-supabase.js");
-    const documents = await listPropositionDocuments(proposition.id);
+    const documents = await propositions.listPropositionDocuments(proposition.id);
 
     view.review = {
       running: false,
       step: "",
+      merging: false,
       error: analyse.error,
       unreachable: analyse.unreachable,
       diff: analyse.diff,
       result: analyse.result,
       notice: null,
       items: applyDecisions(
-        [
-          ...documentItems(documents),
-          ...attachmentItems(analyse.attachments),
-          ...avisItems(analyse.diff)
-        ],
+        [...documentItems(documents), ...attachmentItems(analyse.attachments), ...avisItems(analyse.diff)],
         decisions
       )
     };

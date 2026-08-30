@@ -24,7 +24,7 @@ const AVIS_COLUMNS =
 
 const RUN_COLUMNS =
   "id,corpus_fingerprint,corpus_documents,document_count,avis_count,tracked_avis_count," +
-  "guard_violation_count,packs_used,engine_version,computed_at";
+  "guard_violation_count,packs_used,engine_version,computed_at,proposition_id,trigger_source";
 
 async function request(path, { method = "GET", body = null, headers = {}, params = {} } = {}) {
   const url = new URL(`${SUPABASE_URL}/rest/v1/${path}`);
@@ -99,7 +99,9 @@ export async function saveCtAnalysis({
   documentIds = {},
   corpusFingerprint,
   corpusDocuments = null,
-  documentCount
+  documentCount,
+  propositionId = null,
+  triggerSource = null
 } = {}) {
   if (!projectId || !result) return null;
 
@@ -135,7 +137,14 @@ export async function saveCtAnalysis({
     await request("ct_analysis_runs", {
       method: "POST",
       headers: { Prefer: "return=minimal" },
-      body: toRunRow(result, { projectId, corpusFingerprint, corpusDocuments, documentCount })
+      body: toRunRow(result, {
+        projectId,
+        corpusFingerprint,
+        corpusDocuments,
+        documentCount,
+        propositionId,
+        triggerSource
+      })
     });
 
     return { saved: upserts.length, marked: missing.length };

@@ -5,6 +5,7 @@ import { ITEM } from "./proposition-state.js";
 import {
   ITEM_TYPE,
   applyDecisions,
+  describeAvisChange,
   attachmentItems,
   avisItems,
   diffAvis,
@@ -138,4 +139,55 @@ test("le compte par nature sert les intitulés, et dit ce qui reste à trancher"
   const bilan = summarizeReview(items);
 
   assert.deepEqual(bilan, { documents: 2, attachments: 0, avis: 1, refused: 1, undecided: 2 });
+});
+
+test("« OPEN → OPEN » n'existe plus : on nomme ce qui a changé", () => {
+  // Le statut n'avait pas bougé, c'est l'appréciation qui avait changé. Nommer
+  // un changement, c'est nommer CE QUI a changé — sans quoi le lecteur cherche
+  // une différence là où il n'y en a pas.
+  const appreciation = describeAvisChange({
+    change: "changed",
+    status: "OPEN",
+    previousStatus: "OPEN",
+    opinion: "F",
+    previousOpinion: "S"
+  });
+
+  assert.equal(appreciation.label, "Appréciation modifiée");
+  assert.equal(appreciation.detail, "avis S → F");
+  assert.doesNotMatch(appreciation.detail, /OPEN/);
+});
+
+test("un changement de statut se dit en français", () => {
+  const statut = describeAvisChange({
+    change: "changed",
+    status: "RESOLVED",
+    previousStatus: "OPEN",
+    opinion: "F",
+    previousOpinion: "F"
+  });
+
+  assert.equal(statut.label, "Change d'état");
+  assert.equal(statut.detail, "Ouvert → Levé");
+});
+
+test("quand les deux bougent, les deux se disent", () => {
+  const deux = describeAvisChange({
+    change: "changed",
+    status: "RESOLVED",
+    previousStatus: "NO_NEWS",
+    opinion: "F",
+    previousOpinion: "S"
+  });
+
+  assert.equal(deux.label, "Change d'état");
+  assert.equal(deux.detail, "Sans nouvelles → Levé · avis S → F");
+});
+
+test("un nouvel avis annonce son état, pas une transition", () => {
+  const neuf = describeAvisChange({ change: "added", status: "OPEN", opinion: "S" });
+
+  assert.equal(neuf.label, "Nouvel avis");
+  assert.equal(neuf.detail, "Ouvert · avis S");
+  assert.doesNotMatch(neuf.detail, /→/);
 });

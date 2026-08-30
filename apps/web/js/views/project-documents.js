@@ -1307,16 +1307,21 @@ function renderRepoDocumentRow(doc) {
   const isPdf = isPdfDocument(decoratedDoc);
   const isPreviewablePdf = canPreviewPdf(decoratedDoc);
   const recognition = describeRecognition(decoratedDoc);
+  // Un document refusé lors d'une revue reste là, grisé, avec le mot qui le
+  // dit. Le faire disparaître recréerait le mensonge qu'on a corrigé : un
+  // fichier qui existe en base et n'apparaît nulle part.
+  const refuse = decoratedDoc.corpusState === "refused";
 
   return `
     <div
-      class="documents-repo__row documents-repo__row--file${isPdf ? " documents-repo__row--pdf" : ""}${isPreviewablePdf ? " is-clickable" : ""}"
+      class="documents-repo__row documents-repo__row--file${isPdf ? " documents-repo__row--pdf" : ""}${isPreviewablePdf ? " is-clickable" : ""}${refuse ? " documents-repo__row--refused" : ""}"
       data-document-id="${escapeHtml(decoratedDoc.id || "")}"
       ${isPreviewablePdf ? 'role="button" tabindex="0" aria-label="Ouvrir l’aperçu du PDF"' : ""}
     >
       <div class="documents-repo__cell documents-repo__cell--name">
         <span class="documents-repo__icon documents-repo__icon--document">${getDocumentIconSvg()}</span>
         <button type="button" class="documents-repo__name documents-repo__name-trigger js-document-title-trigger" data-document-id="${escapeHtml(decoratedDoc.id || "")}">${escapeHtml(decoratedDoc.name)}</button>
+        ${refuse ? `<span class="documents-repo__refused">refusé</span>` : ""}
       </div>
       <div class="documents-repo__cell documents-repo__cell--message">
         <div class="documents-repo__message-main${recognition.known ? " documents-repo__message-main--known" : ""}" title="${escapeHtml(recognition.title)}">${escapeHtml(recognition.main)}</div>
