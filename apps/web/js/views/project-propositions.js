@@ -31,6 +31,14 @@ import {
 import { renderCommentComposer } from "./ui/comment-composer.js";
 import { getAuthorIdentity } from "./ui/author-identity.js";
 import { renderMarkdownToHtml } from "../utils/markdown-renderer.js";
+import {
+  REF,
+  applyRefSuggestion,
+  formatRef,
+  linkifyRefsInHtml,
+  resolveRefTriggerContext,
+  searchRefSuggestions
+} from "../utils/entity-refs.js";
 import { STORY, buildStory } from "../services/proposition-story.js";
 import { renderSharedDetailsTitleWrap } from "./ui/detail-header.js";
 import { ITEM, PROPOSITION, describeMerge } from "../services/proposition-state.js";
@@ -80,7 +88,11 @@ const view = {
   editPreview: false,
   /** Ce qu'on écrira en fusionnant. */
   mergeTitle: "",
-  mergeNote: ""
+  mergeNote: "",
+  /** De quoi citer dans ce projet : ses sujets et ses propositions. */
+  refs: [],
+  /** Le menu de citation ouvert sous le champ, s'il y en a un. */
+  refMenu: null
 };
 
 /** Le nombre d'ouvertes, pour la pastille de l'onglet. */
@@ -704,12 +716,27 @@ function isMine(event) {
   return Boolean(event.authorId) && event.authorId === String(store.user?.id ?? "");
 }
 
+/**
+ * Un texte écrit par quelqu'un : du Markdown, puis ses citations.
+ *
+ * Un projet a deux familles de choses numérotées qui se répondent — les sujets
+ * et les propositions —, et elles se citent constamment : « le RICT de #P4
+ * confirme ce qu'on disait dans #12 ». Sans renvoi, cette phrase oblige son
+ * lecteur à retrouver les deux à la main, et il ne le fait pas.
+ */
+function humanTextHtml(markdown) {
+  return linkifyRefsInHtml(renderMarkdownToHtml(markdown ?? "", { preserveMessageLineBreaks: true }), {
+    resolveRef: ({ kind, number }) =>
+      (view.refs ?? []).find((entry) => entry.kind === kind && entry.number === number) ?? null
+  });
+}
+
 /** Le corps d'un message : du Markdown, comme dans un sujet. */
 function commentBodyHtml(event) {
   if (event.deleted) {
     return `<p class="review-comment__removed">Ce message a été retiré.</p>`;
   }
-  return renderMarkdownToHtml(event.body ?? "", { preserveMessageLineBreaks: true });
+  return humanTextHtml(event.body);
 }
 
 /**
@@ -749,7 +776,7 @@ function renderConversationComment(event, index) {
         tabWriteAction: "proposition-edit-tab-write",
         tabPreviewAction: "proposition-edit-tab-preview",
         composerClassName: "comment-composer--proposition-edit",
-        previewHtml: renderMarkdownToHtml(view.editDraft ?? "", { preserveMessageLineBreaks: true }),
+        previewHtml: humanTextHtml(view.editDraft ?? ""),
         actionsHtml: `
           <button type="button" class="gh-btn gh-btn--sm" data-comment-edit-cancel>Annuler</button>
           <button type="button" class="gh-btn gh-btn--sm gh-btn--primary" data-comment-edit-save="${escapeHtml(
@@ -862,7 +889,7 @@ function renderConversationComposer(proposition, review) {
     composerClassName: "comment-composer--proposition",
     tabWriteAction: "proposition-tab-write",
     tabPreviewAction: "proposition-tab-preview",
-    previewHtml: renderMarkdownToHtml(view.draft ?? "", { preserveMessageLineBreaks: true }),
+    previewHtml: humanTextHtml(view.draft ?? ""),
     hintHtml: review.commentNotice
       ? `<span class="review-comment__notice">${escapeHtml(review.commentNotice)}</span>`
       : "",
@@ -892,6 +919,52 @@ function renderConversationComposer(proposition, review) {
 }
 
 /**
+ * Le menu des citations, sous le champ.
+ *
+ * Il s'ouvre au `#` et propose les deux familles : les sujets, qui gardent leur
+ * dièse nu, et les propositions, qui prennent un `P`. Personne n'a à retenir
+ * cette lettre — c'est le menu qui écrit le jeton.
+ *
+ * Il est posé sous le champ plutôt qu'au curseur. La version flottante des
+ * sujets suppose une mesure de la position du curseur dans un `textarea`, qui
+ * est un morceau de machinerie à part entière ; sous le champ, la liste est
+ * lisible, prévisible, et ne se place jamais hors de l'écran.
+ */
+function renderRefMenu() {
+  const menu = view.refMenu;
+  if (!menu?.open) return "";
+
+  const suggestions = menu.suggestions ?? [];
+
+  return `
+    <div class="ref-menu" data-ref-menu>
+      ${
+        suggestions.length === 0
+          ? `<div class="ref-menu__empty">Aucun sujet ni proposition ne correspond.</div>`
+          : suggestions
+              .map(
+                (entry, index) => `
+                  <button
+                    type="button"
+                    class="ref-menu__item${index === (menu.activeIndex ?? 0) ? " is-active" : ""}"
+                    data-ref-pick="${escapeHtml(`${entry.kind}:${entry.number}`)}"
+                  >
+                    <span class="ref-menu__icon">${svgIcon(
+                      entry.kind === REF.PROPOSITION ? "git-pull-request" : "issue-opened",
+                      { className: "octicon" }
+                    )}</span>
+                    <span class="ref-menu__title">${escapeHtml(entry.title || "Sans titre")}</span>
+                    <span class="ref-menu__number">${escapeHtml(formatRef(entry.kind, entry.number))}</span>
+                  </button>
+                `
+              )
+              .join("")
+      }
+    </div>
+  `;
+}
+
+/**
  * La conversation : la description comme premier message, puis les actes.
  *
  * GitHub présente la description d'une pull request comme le premier message
@@ -910,7 +983,7 @@ function renderConversation(proposition, review) {
   const identite = identityOf(ouverture ?? {});
 
   const description = proposition.description
-    ? renderMarkdownToHtml(proposition.description, { preserveMessageLineBreaks: true })
+    ? humanTextHtml(proposition.description)
     : `<p class="review-empty-note">Aucune description n'a été donnée. La proposition parle alors d'elle-même : ce qu'elle dépose et ce qu'on en décide.</p>`;
 
   const premier = renderMessageThreadComment({
@@ -941,6 +1014,7 @@ function renderConversation(proposition, review) {
     ${proposition.status === PROPOSITION.OPEN ? renderMergeBox(proposition, review) : ""}
     <div class="review-end" role="separator" aria-label="Fin de la proposition"></div>
     ${renderConversationComposer(proposition, review)}
+    ${renderRefMenu()}
   `;
 }
 
@@ -1419,6 +1493,7 @@ function bindReview(root) {
   }
 
   bindConversation(root);
+  bindRefLinks(root);
 
   // Le premier clic ouvre le formulaire ; c'est « Confirmer » qui fusionne.
   root.querySelector("[data-review-merge]")?.addEventListener("click", () => {
@@ -1455,7 +1530,24 @@ function bindConversation(root) {
   if (draft) {
     draft.addEventListener("input", (event) => {
       view.draft = event.target.value;
+      syncRefMenu(root, event.target);
     });
+    // Le curseur seul peut entrer ou sortir d'un `#` déjà écrit : la frappe
+    // n'est pas le seul geste qui change ce qu'on est en train de citer.
+    draft.addEventListener("click", () => syncRefMenu(root, draft));
+    draft.addEventListener("keyup", (event) => {
+      if (event.key === "Escape") {
+        closeRefMenu(root);
+        return;
+      }
+      if (event.key.startsWith("Arrow") || event.key === "Home" || event.key === "End") {
+        syncRefMenu(root, draft);
+      }
+    });
+  }
+
+  for (const bouton of root.querySelectorAll("[data-ref-pick]")) {
+    bouton.addEventListener("click", () => pickRef(root, bouton.getAttribute("data-ref-pick")));
   }
 
   for (const champ of root.querySelectorAll("[data-comment-edit-draft]")) {
@@ -1507,6 +1599,107 @@ function bindConversation(root) {
   for (const bouton of root.querySelectorAll("[data-comment-remove]")) {
     bouton.addEventListener("click", () => removeComment(root, bouton.getAttribute("data-comment-remove")));
   }
+}
+
+/**
+ * Les citations mènent quelque part.
+ *
+ * Une proposition citée s'ouvre ici même — c'est le même écran. Un sujet cité
+ * change d'onglet : le fil d'une proposition n'est pas le lieu où lire un sujet,
+ * et l'y déplier ferait deux écrans dans un seul.
+ */
+function bindRefLinks(root) {
+  for (const lien of root.querySelectorAll(".md-proposition-link[data-proposition-id]")) {
+    lien.addEventListener("click", (event) => {
+      event.preventDefault();
+      openProposition(root, lien.dataset.propositionId);
+    });
+  }
+
+  for (const lien of root.querySelectorAll(".md-subject-link[data-subject-id]")) {
+    lien.addEventListener("click", (event) => {
+      event.preventDefault();
+      const id = lien.dataset.subjectId;
+      if (!id) return;
+      // On passe par la route du projet : c'est elle qui sait monter l'onglet
+      // Sujets et sa coque, ce qu'un lien ne peut pas faire tout seul. Le lien
+      // ouvre l'onglet, pas encore le sujet précis : le déplier depuis ici
+      // demanderait d'atteindre la mécanique de sélection des sujets, et un
+      // demi-mécanisme vaut moins qu'un geste qui fait ce qu'il annonce.
+      const projectId = String(store.currentProjectId || "");
+      if (!projectId || !id) return;
+      window.location.hash = `#project/${encodeURIComponent(projectId)}/sujets`;
+    });
+  }
+}
+
+/**
+ * Ouvre, met à jour ou referme le menu des citations.
+ *
+ * Le menu ne se rouvre pas tout seul après un choix : on vient de citer, la
+ * suite de la phrase n'a pas à être interrompue par une liste.
+ */
+function syncRefMenu(root, textarea) {
+  const contexte = resolveRefTriggerContext(textarea.value ?? "", textarea.selectionStart ?? 0);
+  if (!contexte) {
+    if (view.refMenu?.open) closeRefMenu(root);
+    return;
+  }
+
+  const suggestions = searchRefSuggestions(view.refs ?? [], contexte.query, 8);
+  const avant = view.refMenu;
+  view.refMenu = { open: true, ...contexte, suggestions, activeIndex: 0 };
+
+  // Ne redessiner que si la liste a changé : autrement le champ perdrait le
+  // focus à chaque touche.
+  const memeListe =
+    avant?.open &&
+    avant.suggestions?.length === suggestions.length &&
+    avant.suggestions.every((entry, index) => entry.id === suggestions[index].id);
+  if (!memeListe) renderMenuOnly(root);
+}
+
+function closeRefMenu(root) {
+  if (!view.refMenu?.open) return;
+  view.refMenu = null;
+  renderMenuOnly(root);
+}
+
+/**
+ * Redessine le seul menu.
+ *
+ * Rejouer tout l'écran remplacerait le champ et ferait sauter le curseur au
+ * milieu d'une phrase : c'est le genre de détail qui rend un éditeur pénible.
+ */
+function renderMenuOnly(root) {
+  const hote = root.querySelector("[data-ref-menu]");
+  const html = renderRefMenu();
+
+  if (hote) {
+    hote.outerHTML = html || "";
+  } else if (html) {
+    root.querySelector(".comment-composer--proposition")?.insertAdjacentHTML("afterend", html);
+  }
+
+  for (const bouton of root.querySelectorAll("[data-ref-pick]")) {
+    bouton.addEventListener("click", () => pickRef(root, bouton.getAttribute("data-ref-pick")));
+  }
+}
+
+/** Écrit la citation choisie à la place du `#` en cours. */
+function pickRef(root, cle) {
+  const [kind, numero] = String(cle ?? "").split(":");
+  const suggestion = { kind, number: Number(numero) };
+  const textarea = root.querySelector("[data-comment-draft]");
+  if (!textarea || !view.refMenu?.open) return;
+
+  const resultat = applyRefSuggestion(textarea.value ?? "", view.refMenu, suggestion);
+  view.draft = resultat.nextText;
+  textarea.value = resultat.nextText;
+  textarea.setSelectionRange(resultat.nextCursorIndex, resultat.nextCursorIndex);
+  textarea.focus();
+
+  closeRefMenu(root);
 }
 
 /** Relit les messages et refait l'histoire, sans relancer l'analyse. */
@@ -2183,6 +2376,11 @@ export function renderProjectPropositions(root) {
       const projectId = await resolveCurrentBackendProjectId().catch(() => "");
       const rows = projectId ? await listPropositions(projectId) : [];
 
+      // De quoi citer, chargé une fois pour l'onglet : les sujets comme les
+      // propositions, sans dépendre de ce qu'un autre écran aurait laissé.
+      const { listProjectRefs } = await import("../services/propositions-supabase.js");
+      view.refs = projectId ? await listProjectRefs(projectId) : [];
+
       view.unreachable = rows === null;
       view.propositions = rows ?? [];
       // Le compteur de l'onglet ne s'invente pas : il vaut ce qu'on vient de lire.
@@ -2194,5 +2392,16 @@ export function renderProjectPropositions(root) {
 
     view.loading = false;
     if (root.isConnected) renderContent(root);
+
+    // Une proposition citée depuis un sujet s'ouvre en arrivant : cliquer un
+    // lien qui se contenterait d'afficher la liste ferait chercher à la main ce
+    // qu'on venait de désigner.
+    const attendue = String(store.pendingPropositionId || "");
+    if (attendue) {
+      store.pendingPropositionId = "";
+      if (root.isConnected && (view.propositions ?? []).some((entry) => entry.id === attendue)) {
+        openProposition(root, attendue);
+      }
+    }
   })();
 }
