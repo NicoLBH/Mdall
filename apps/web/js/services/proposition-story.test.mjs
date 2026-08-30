@@ -132,3 +132,57 @@ test("trois noms, puis un compte", () => {
   assert.equal(nameSome(["a", "b"]), "a, b");
   assert.equal(nameSome([]), "");
 });
+
+test("les messages prennent leur place dans l'ordre du temps, entre les actes", () => {
+  // Une objection se lit à côté de ce qu'elle vise, pas dans une autre colonne.
+  const documents = [{ original_filename: "a.pdf", created_at: "2026-08-22T09:00:00Z", created_by: "u-nico" }];
+  const comments = [
+    { id: "c-1", author_id: "u-ana", body: "Il manque le RICT de la tranche 2.", created_at: "2026-08-21T08:00:00Z" },
+    { id: "c-2", author_id: "u-nico", body: "Je le dépose.", created_at: "2026-08-23T08:00:00Z" }
+  ];
+
+  const histoire = buildStory({ proposition: OUVERTE, documents, comments, names: NAMES });
+
+  assert.deepEqual(histoire.map((event) => event.kind), [
+    STORY.OPENED,
+    STORY.COMMENT,
+    STORY.DEPOSIT,
+    STORY.COMMENT
+  ]);
+  assert.equal(histoire[1].who, "Ana Ferreira");
+  assert.equal(histoire[1].body, "Il manque le RICT de la tranche 2.");
+});
+
+test("un message retiré garde sa place et perd son texte", () => {
+  // Le faire disparaître laisserait un trou dans une conversation où quelqu'un
+  // a répondu à ce qui n'y serait plus.
+  const [message] = buildStory({
+    proposition: OUVERTE,
+    comments: [
+      {
+        id: "c-1",
+        author_id: "u-ana",
+        body: "à oublier",
+        created_at: "2026-08-21T08:00:00Z",
+        deleted_at: "2026-08-21T09:00:00Z"
+      }
+    ],
+    names: NAMES
+  }).filter((event) => event.kind === STORY.COMMENT);
+
+  assert.equal(message.deleted, true);
+  assert.equal(message.body, "");
+});
+
+test("un auteur porte son visage quand on le connaît", () => {
+  // La discussion d'une proposition doit ressembler à celle d'un sujet : ce sont
+  // les mêmes personnes, dans le même projet.
+  const avecVisages = new Map([["u-ana", { name: "Ana Ferreira", avatarUrl: "https://exemple/ana.png" }]]);
+  const [message] = buildStory({
+    proposition: { ...OUVERTE, created_by: "u-ana" },
+    names: avecVisages
+  });
+
+  assert.equal(message.who, "Ana Ferreira");
+  assert.equal(message.avatarUrl, "https://exemple/ana.png");
+});

@@ -27,12 +27,28 @@ export const STORY = {
   OPENED: "opened",
   DEPOSIT: "deposit",
   DECISION: "decision",
+  /** Quelqu'un a écrit quelque chose. */
+  COMMENT: "comment",
   MERGED: "merged",
   CLOSED: "closed"
 };
 
+/**
+ * Le nom d'un auteur.
+ *
+ * La table peut porter une simple chaîne (le nom) ou un auteur complet (nom et
+ * avatar) : les deux formes se lisent ici, de sorte qu'ajouter les visages n'ait
+ * pas obligé à changer chaque appel.
+ */
 function nameOf(id, names) {
-  return names?.get?.(String(id ?? "")) || "Un collaborateur";
+  const entree = names?.get?.(String(id ?? ""));
+  if (!entree) return "Un collaborateur";
+  return (typeof entree === "string" ? entree : entree.name) || "Un collaborateur";
+}
+
+function avatarOf(id, names) {
+  const entree = names?.get?.(String(id ?? ""));
+  return typeof entree === "string" ? "" : (entree?.avatarUrl ?? "");
 }
 
 /** La minute d'un horodatage : l'unité d'un geste humain. */
@@ -63,7 +79,13 @@ function belongsToClosing(at, closedAt) {
  *          names?: Map<string,string>}} source
  * @returns {object[]} des événements `{kind, at, who, text, detail}`
  */
-export function buildStory({ proposition, documents = [], decisions = [], names = new Map() } = {}) {
+export function buildStory({
+  proposition,
+  documents = [],
+  decisions = [],
+  comments = [],
+  names = new Map()
+} = {}) {
   if (!proposition) return [];
 
   const closedAt = proposition.merged_at ?? proposition.closed_at ?? null;
@@ -73,9 +95,31 @@ export function buildStory({ proposition, documents = [], decisions = [], names 
     kind: STORY.OPENED,
     at: proposition.created_at ?? null,
     who: nameOf(proposition.created_by, names),
+    avatarUrl: avatarOf(proposition.created_by, names),
+    authorId: String(proposition.created_by ?? ""),
     text: "a ouvert cette proposition",
     detail: ""
   });
+
+  // Les messages prennent leur place dans l'ordre du temps, entre les actes.
+  // Les séparer — la discussion d'un côté, les faits de l'autre — perdrait ce
+  // qui fait la valeur d'un fil : une objection se lit à côté de ce qu'elle
+  // vise, pas dans une autre colonne.
+  for (const comment of comments) {
+    events.push({
+      kind: STORY.COMMENT,
+      at: comment.created_at ?? null,
+      who: nameOf(comment.author_id, names),
+      avatarUrl: avatarOf(comment.author_id, names),
+      authorId: String(comment.author_id ?? ""),
+      commentId: String(comment.id ?? ""),
+      body: comment.deleted_at ? "" : String(comment.body ?? ""),
+      editedAt: comment.edited_at ?? null,
+      deleted: Boolean(comment.deleted_at),
+      text: "a commenté",
+      detail: ""
+    });
+  }
 
   // Les dépôts, par geste. Une proposition peut en accumuler plusieurs : c'est
   // la raison d'être des propositions plutôt que des dépôts isolés.
@@ -92,6 +136,7 @@ export function buildStory({ proposition, documents = [], decisions = [], names 
       kind: STORY.DEPOSIT,
       at: groupe.at,
       who: nameOf(groupe.who, names),
+      avatarUrl: avatarOf(groupe.who, names),
       text: `a déposé ${accord(groupe.names.length, "livrable", "livrables")}`,
       detail: nameSome(groupe.names)
     });
@@ -117,6 +162,7 @@ export function buildStory({ proposition, documents = [], decisions = [], names 
       kind: STORY.DECISION,
       at: geste.at,
       who: nameOf(geste.who, names),
+      avatarUrl: avatarOf(geste.who, names),
       text: `a tranché : ${morceaux.join(", ")}`,
       detail: ""
     });
@@ -127,6 +173,7 @@ export function buildStory({ proposition, documents = [], decisions = [], names 
       kind: STORY.MERGED,
       at: proposition.merged_at ?? null,
       who: nameOf(proposition.merged_by, names),
+      avatarUrl: avatarOf(proposition.merged_by, names),
       text: "a fusionné la proposition",
       detail: describeOutcome(proposition.snapshot)
     });
@@ -137,6 +184,7 @@ export function buildStory({ proposition, documents = [], decisions = [], names 
       kind: STORY.CLOSED,
       at: proposition.closed_at ?? null,
       who: nameOf(proposition.closed_by, names),
+      avatarUrl: avatarOf(proposition.closed_by, names),
       text: "a abandonné la proposition",
       detail: "Ses documents restent au projet, marqués refusés."
     });

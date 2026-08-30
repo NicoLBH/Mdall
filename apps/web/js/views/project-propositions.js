@@ -28,6 +28,9 @@ import {
   renderMessageThreadActivity,
   renderMessageThreadComment
 } from "./ui/message-thread.js";
+import { renderCommentComposer } from "./ui/comment-composer.js";
+import { getAuthorIdentity } from "./ui/author-identity.js";
+import { renderMarkdownToHtml } from "../utils/markdown-renderer.js";
 import { STORY, buildStory } from "../services/proposition-story.js";
 import { renderSharedDetailsTitleWrap } from "./ui/detail-header.js";
 import { ITEM, PROPOSITION, describeMerge } from "../services/proposition-state.js";
@@ -66,7 +69,14 @@ const view = {
   /** Où en est l'analyse de la proposition ouverte. */
   review: null,
   /** L'onglet ouvert dans le détail d'une proposition. */
-  tab: "conversation"
+  tab: "conversation",
+  /** Le message en cours d'écriture, et son aperçu. */
+  draft: "",
+  preview: false,
+  /** Le message en cours de modification, s'il y en a un. */
+  editing: null,
+  editDraft: "",
+  editPreview: false
 };
 
 /** Le nombre d'ouvertes, pour la pastille de l'onglet. */
@@ -560,19 +570,6 @@ function renderReviewBlock(type, titre, items, renderer, vide) {
 }
 
 /**
- * Ce qu'on dit d'une proposition qui ne se fusionnera plus.
- *
- * Fusionnée et abandonnée ne sont pas la même fin, et les confondre sous un
- * même « close » ferait perdre la seule chose qui les distingue : dans un cas
- * les documents sont entrés, dans l'autre non.
- */
-function closedNote(proposition) {
-  return proposition.status === PROPOSITION.MERGED
-    ? "Cette proposition a été fusionnée : elle ne peut plus l'être une seconde fois."
-    : "Cette proposition a été abandonnée. Ses documents restent au projet, marqués refusés.";
-}
-
-/**
  * Le bandeau d'un procès-verbal.
  *
  * Il dit deux choses, et la seconde est la plus importante : à quelle date cet
@@ -606,19 +603,6 @@ function renderFrozenNote(proposition, review) {
       </p>
     </div>
   `;
-}
-
-/** Ce qu'une proposition close a fait, au passé. */
-function describeFrozen(items = []) {
-  const refuses = items.filter((entry) => entry.status === ITEM.REFUSED).length;
-  const acceptes = items.length - refuses;
-
-  if (items.length === 0) return "Aucune affirmation n'a été conservée pour cette proposition.";
-
-  return refuses > 0
-    ? `${acceptes} affirmation${acceptes > 1 ? "s" : ""} acceptée${acceptes > 1 ? "s" : ""}, ` +
-        `${refuses} refusée${refuses > 1 ? "s" : ""}.`
-    : `${acceptes} affirmation${acceptes > 1 ? "s" : ""} acceptée${acceptes > 1 ? "s" : ""}.`;
 }
 
 /** Trois noms, puis un compte : une liste de dix-sept fichiers n'est plus une phrase. */
@@ -694,55 +678,242 @@ function reviewTabs(review) {
 }
 
 /**
+ * Le visage et le nom d'un acteur, comme dans la discussion d'un sujet.
+ *
+ * Ce sont les mêmes personnes, dans le même projet : leur donner deux
+ * apparences selon l'écran ferait douter qu'il s'agisse des mêmes.
+ */
+function identityOf(event) {
+  const moi = event.authorId && event.authorId === String(store.user?.id ?? "");
+
+  return getAuthorIdentity({
+    author: event.who,
+    avatarUrl: event.avatarUrl || "",
+    currentUserAvatar: moi ? store.user?.avatar || "" : "",
+    agent: moi ? "human" : "",
+    humanAvatarHtml: svgIcon("avatar-human", { width: 20, height: 20 }),
+    fallbackName: "Un collaborateur"
+  });
+}
+
+function isMine(event) {
+  return Boolean(event.authorId) && event.authorId === String(store.user?.id ?? "");
+}
+
+/** Le corps d'un message : du Markdown, comme dans un sujet. */
+function commentBodyHtml(event) {
+  if (event.deleted) {
+    return `<p class="review-comment__removed">Ce message a été retiré.</p>`;
+  }
+  return renderMarkdownToHtml(event.body ?? "", { preserveMessageLineBreaks: true });
+}
+
+/**
+ * Un message du fil, avec ce qu'on peut en faire.
+ *
+ * On ne modifie et on ne retire que ses propres messages. Retirer ne supprime
+ * rien : le texte reste en base, l'écran cesse de le montrer. Un message retiré
+ * peut être la seule trace d'une objection, et c'est aussi ce à quoi d'autres
+ * ont répondu.
+ */
+function renderConversationComment(event, index) {
+  const identite = identityOf(event);
+  const enEdition = view.editing === event.commentId;
+
+  const actions =
+    isMine(event) && !event.deleted && !enEdition
+      ? `<div class="review-comment__actions">
+           <button type="button" class="review-comment__action" data-comment-edit="${escapeHtml(
+             event.commentId
+           )}">Modifier</button>
+           <button type="button" class="review-comment__action review-comment__action--danger" data-comment-remove="${escapeHtml(
+             event.commentId
+           )}">Retirer</button>
+         </div>`
+      : "";
+
+  const corps = enEdition
+    ? renderCommentComposer({
+        hideAvatar: true,
+        hideTitle: true,
+        previewMode: view.editPreview === true,
+        textareaId: `propositionCommentEdit-${event.commentId}`,
+        previewId: `propositionCommentEditPreview-${event.commentId}`,
+        textareaValue: view.editDraft ?? "",
+        textareaAttributes: { "data-comment-edit-draft": event.commentId },
+        placeholder: "Modifier le message…",
+        tabWriteAction: "proposition-edit-tab-write",
+        tabPreviewAction: "proposition-edit-tab-preview",
+        composerClassName: "comment-composer--proposition-edit",
+        previewHtml: renderMarkdownToHtml(view.editDraft ?? "", { preserveMessageLineBreaks: true }),
+        actionsHtml: `
+          <button type="button" class="gh-btn gh-btn--sm" data-comment-edit-cancel>Annuler</button>
+          <button type="button" class="gh-btn gh-btn--sm gh-btn--primary" data-comment-edit-save="${escapeHtml(
+            event.commentId
+          )}">Enregistrer</button>
+        `
+      })
+    : commentBodyHtml(event);
+
+  return renderMessageThreadComment({
+    idx: index,
+    author: identite.displayName,
+    tsHtml: `<span class="gh-comment-ts">a commenté${
+      event.at ? ` le ${escapeHtml(formatDate(event.at))}` : ""
+    }${event.editedAt ? ` · modifié le ${escapeHtml(formatDate(event.editedAt))}` : ""}</span>`,
+    bodyHtml: corps,
+    avatarHtml: identite.avatarHtml,
+    avatarType: identite.avatarType,
+    avatarInitial: identite.avatarInitial,
+    headerRightHtml: actions,
+    className: event.deleted ? "review-comment--removed" : ""
+  });
+}
+
+/**
+ * La fin d'une proposition, encadrée.
+ *
+ * Une ligne d'activité de plus ne dirait pas ce qui s'est passé : fusionner est
+ * l'aboutissement de tout ce qui précède, et cela se voit. Le violet est celui
+ * des propositions fusionnées, déjà employé par leur pastille — la couleur dit
+ * la même chose partout.
+ */
+function renderOutcomeCard(event) {
+  const fusionnee = event.kind === STORY.MERGED;
+
+  return `
+    <div class="thread-item message-thread__item" data-thread-kind="outcome">
+      <div class="thread-wrapper">
+        <div class="outcome-card outcome-card--${fusionnee ? "merged" : "closed"}">
+          <span class="outcome-card__icon">${svgIcon(fusionnee ? "git-compare" : "skip", {
+            className: "octicon",
+            width: 20,
+            height: 20
+          })}</span>
+          <div class="outcome-card__text">
+            <b>${escapeHtml(
+              fusionnee ? "Proposition fusionnée et close" : "Proposition abandonnée et close"
+            )}</b>
+            <span>${escapeHtml(
+              fusionnee
+                ? `${event.detail || "Ses affirmations sont entrées au projet."} Elle ne peut plus être fusionnée une seconde fois, et son état est conservé tel quel.`
+                : "Ses documents restent au projet, marqués refusés. Ce qu'elle proposait reste lisible."
+            )}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+/** Une ligne d'activité : un acte qui n'est pas une parole. */
+function renderConversationActivity(event, index) {
+  const identite = identityOf(event);
+
+  return renderMessageThreadActivity({
+    idx: index,
+    iconHtml: `<span class="tl-activity__icon tl-activity__icon--${event.kind}">${svgIcon(
+      STORY_ICON[event.kind] ?? "git-commit",
+      { className: "octicon" }
+    )}</span>`,
+    authorIconHtml: identite.avatarHtml
+      ? `<span class="tl-activity__avatar">${identite.avatarHtml}</span>`
+      : "",
+    textHtml: `<b>${escapeHtml(event.who)}</b> ${escapeHtml(event.text)}${
+      event.at ? ` <span class="tl-activity__date">le ${escapeHtml(formatDate(event.at))}</span>` : ""
+    }${event.detail ? `<span class="tl-activity__detail">${escapeHtml(event.detail)}</span>` : ""}`
+  });
+}
+
+/**
+ * Le champ pour écrire.
+ *
+ * Il reste après la fusion, et c'est délibéré : la décision est figée, la
+ * conversation ne l'est pas. C'est souvent après coup qu'on comprend ce qui
+ * s'est joué, et le dire là où cela s'est joué vaut mieux que de le dire
+ * ailleurs.
+ */
+function renderConversationComposer(review) {
+  const moi = getAuthorIdentity({
+    author: "vous",
+    agent: "human",
+    currentUserAvatar: store.user?.avatar || "",
+    humanAvatarHtml: svgIcon("avatar-human", { width: 20, height: 20 }),
+    fallbackName: "vous"
+  });
+
+  return renderCommentComposer({
+    title: "Ajouter un commentaire",
+    avatarHtml: moi.avatarHtml,
+    previewMode: view.preview === true,
+    textareaId: "propositionCommentBox",
+    previewId: "propositionCommentPreview",
+    textareaValue: view.draft ?? "",
+    textareaAttributes: { "data-comment-draft": "1" },
+    placeholder: "Laisser un commentaire — ce qui se dit ici se relit dans six mois.",
+    composerClassName: "comment-composer--proposition",
+    tabWriteAction: "proposition-tab-write",
+    tabPreviewAction: "proposition-tab-preview",
+    previewHtml: renderMarkdownToHtml(view.draft ?? "", { preserveMessageLineBreaks: true }),
+    hintHtml: review.commentNotice
+      ? `<span class="review-comment__notice">${escapeHtml(review.commentNotice)}</span>`
+      : "",
+    actionsHtml: `<button type="button" class="gh-btn gh-btn--primary" data-comment-post ${
+      review.posting ? "disabled" : ""
+    }>${review.posting ? "Envoi…" : "Commenter"}</button>`
+  });
+}
+
+/**
  * La conversation : la description comme premier message, puis les actes.
  *
  * GitHub présente la description d'une pull request comme le premier message
  * d'un fil, et c'est un choix de fond : ce texte n'est pas un champ de
- * formulaire, c'est **quelqu'un qui dit pourquoi**. Le jour où plusieurs
- * personnes proposeront des changements sur le même projet, c'est cette forme —
- * un auteur, une date, un propos — qui permettra de s'y retrouver.
+ * formulaire, c'est **quelqu'un qui dit pourquoi**. Les messages des autres s'y
+ * mêlent dans l'ordre du temps, entre les actes qu'ils commentent.
  *
- * Les composants sont ceux des sujets (`renderMessageThread*`) : une discussion
- * de proposition et une discussion de sujet sont la même chose, et deux rendus
- * différents divergeraient au premier ajustement.
+ * Les composants sont ceux des sujets (`renderMessageThread*`,
+ * `renderCommentComposer`) : une discussion de proposition et une discussion de
+ * sujet sont la même chose, et deux rendus différents divergeraient au premier
+ * ajustement.
  */
 function renderConversation(proposition, review) {
   const histoire = review.story ?? [];
-  const auteur = histoire[0]?.who ?? "Un collaborateur";
+  const ouverture = histoire.find((event) => event.kind === STORY.OPENED);
+  const identite = identityOf(ouverture ?? {});
 
   const description = proposition.description
-    ? `<p>${escapeHtml(proposition.description)}</p>`
+    ? renderMarkdownToHtml(proposition.description, { preserveMessageLineBreaks: true })
     : `<p class="review-empty-note">Aucune description n'a été donnée. La proposition parle alors d'elle-même : ce qu'elle dépose et ce qu'on en décide.</p>`;
 
-  const messages = renderMessageThreadComment({
+  const premier = renderMessageThreadComment({
     idx: 0,
-    author: auteur,
+    author: identite.displayName,
     tsHtml: `<span class="gh-comment-ts">a ouvert cette proposition le ${escapeHtml(
       formatDate(proposition.created_at)
     )}</span>`,
     bodyHtml: description,
-    avatarInitial: (auteur[0] ?? "?").toUpperCase(),
-    avatarType: "human"
+    avatarHtml: identite.avatarHtml,
+    avatarType: identite.avatarType,
+    avatarInitial: identite.avatarInitial
   });
 
-  const actes = histoire
+  const suite = histoire
     .filter((event) => event.kind !== STORY.OPENED)
-    .map((event, index) =>
-      renderMessageThreadActivity({
-        idx: index + 1,
-        iconHtml: `<span class="tl-activity__icon">${svgIcon(STORY_ICON[event.kind] ?? "git-commit", {
-          className: "octicon"
-        })}</span>`,
-        textHtml: `<b>${escapeHtml(event.who)}</b> ${escapeHtml(event.text)}${
-          event.at ? ` <span class="tl-activity__date">le ${escapeHtml(formatDate(event.at))}</span>` : ""
-        }${event.detail ? `<span class="tl-activity__detail">${escapeHtml(event.detail)}</span>` : ""}`
-      })
-    )
+    .map((event, index) => {
+      if (event.kind === STORY.COMMENT) return renderConversationComment(event, index + 1);
+      if (event.kind === STORY.MERGED || event.kind === STORY.CLOSED) {
+        return `${renderConversationActivity(event, index + 1)}${renderOutcomeCard(event)}`;
+      }
+      return renderConversationActivity(event, index + 1);
+    })
     .join("");
 
   return `
-    ${renderMessageThread({ itemsHtml: `${messages}${actes}`, className: "review-thread" })}
-    ${renderMergeBox(proposition, review)}
+    ${renderMessageThread({ itemsHtml: `${premier}${suite}`, className: "review-thread" })}
+    ${proposition.status === PROPOSITION.OPEN ? renderMergeBox(proposition, review) : ""}
+    <div class="review-end" role="separator" aria-label="Fin de la proposition"></div>
+    ${renderConversationComposer(review)}
   `;
 }
 
@@ -766,23 +937,6 @@ function renderMergeBox(proposition, review) {
   const items = review.items ?? [];
   const gele = review.frozen === true;
   const blocage = describeBlocking(review.conflicts ?? []);
-
-  if (proposition.status !== PROPOSITION.OPEN) {
-    return `
-      <section class="merge-box merge-box--done">
-        <div class="merge-box__row merge-box__row--done">
-          <span class="merge-box__icon">${svgIcon(
-            proposition.status === PROPOSITION.MERGED ? "git-compare" : "skip",
-            { className: "octicon" }
-          )}</span>
-          <div>
-            <b>${escapeHtml(closedNote(proposition))}</b>
-            <span class="merge-box__note">${escapeHtml(describeFrozen(items))}</span>
-          </div>
-        </div>
-      </section>
-    `;
-  }
 
   const lignes = [
     {
@@ -1169,8 +1323,186 @@ function bindReview(root) {
     });
   }
 
+  bindConversation(root);
+
   root.querySelector("[data-review-merge]")?.addEventListener("click", () => merge(root));
   root.querySelector("[data-review-abandon]")?.addEventListener("click", () => abandon(root));
+}
+
+/**
+ * Écrire, relire, envoyer, modifier, retirer.
+ *
+ * La frappe ne redessine rien : le texte se conserve dans l'état de l'écran, et
+ * l'écran ne se rejoue qu'aux moments qui le méritent — bascule d'onglet, envoi,
+ * annulation. Redessiner à chaque touche ferait sauter le curseur.
+ */
+function bindConversation(root) {
+  const draft = root.querySelector("[data-comment-draft]");
+  if (draft) {
+    draft.addEventListener("input", (event) => {
+      view.draft = event.target.value;
+    });
+  }
+
+  for (const champ of root.querySelectorAll("[data-comment-edit-draft]")) {
+    champ.addEventListener("input", (event) => {
+      view.editDraft = event.target.value;
+    });
+  }
+
+  root.querySelector('[data-action="proposition-tab-preview"]')?.addEventListener("click", () => {
+    view.preview = true;
+    renderContent(root);
+  });
+  root.querySelector('[data-action="proposition-tab-write"]')?.addEventListener("click", () => {
+    view.preview = false;
+    renderContent(root);
+  });
+  root.querySelector('[data-action="proposition-edit-tab-preview"]')?.addEventListener("click", () => {
+    view.editPreview = true;
+    renderContent(root);
+  });
+  root.querySelector('[data-action="proposition-edit-tab-write"]')?.addEventListener("click", () => {
+    view.editPreview = false;
+    renderContent(root);
+  });
+
+  root.querySelector("[data-comment-post]")?.addEventListener("click", () => postComment(root));
+
+  for (const bouton of root.querySelectorAll("[data-comment-edit]")) {
+    bouton.addEventListener("click", () => {
+      const id = bouton.getAttribute("data-comment-edit");
+      const message = (view.review?.story ?? []).find((event) => event.commentId === id);
+      view.editing = id;
+      view.editDraft = message?.body ?? "";
+      view.editPreview = false;
+      renderContent(root);
+    });
+  }
+
+  root.querySelector("[data-comment-edit-cancel]")?.addEventListener("click", () => {
+    view.editing = null;
+    view.editDraft = "";
+    renderContent(root);
+  });
+
+  root.querySelector("[data-comment-edit-save]")?.addEventListener("click", (event) => {
+    saveComment(root, event.currentTarget.getAttribute("data-comment-edit-save"));
+  });
+
+  for (const bouton of root.querySelectorAll("[data-comment-remove]")) {
+    bouton.addEventListener("click", () => removeComment(root, bouton.getAttribute("data-comment-remove")));
+  }
+}
+
+/** Relit les messages et refait l'histoire, sans relancer l'analyse. */
+async function refreshComments(root) {
+  const proposition = view.open;
+  if (!proposition || !view.review) return;
+
+  const [{ listPropositionComments }, propositions] = await Promise.all([
+    import("../services/proposition-comments.js"),
+    import("../services/propositions-supabase.js")
+  ]);
+
+  const comments = await listPropositionComments(proposition.id);
+  const names = await propositions.loadAuthors([
+    proposition.created_by,
+    proposition.merged_by,
+    proposition.closed_by,
+    ...comments.map((row) => row.author_id),
+    ...(view.review.authorIds ?? [])
+  ]);
+
+  view.review.comments = comments;
+  view.review.authors = names;
+  view.review.story = buildStory({
+    proposition,
+    documents: view.review.documentRows ?? [],
+    decisions: view.review.decisionRows ?? [],
+    comments,
+    names
+  });
+
+  if (root.isConnected) renderContent(root);
+}
+
+async function postComment(root) {
+  const proposition = view.open;
+  const texte = String(view.draft ?? "").trim();
+  if (!proposition || !texte || view.review.posting) return;
+
+  view.review.posting = true;
+  view.review.commentNotice = null;
+  renderContent(root);
+
+  try {
+    const { addPropositionComment } = await import("../services/proposition-comments.js");
+    const ecrit = await addPropositionComment({
+      propositionId: proposition.id,
+      projectId: proposition.project_id,
+      body: texte
+    });
+
+    view.review.posting = false;
+    if (!ecrit) {
+      // Ne pas effacer le texte : il n'est nulle part ailleurs, et le perdre
+      // pour une base injoignable serait la pire façon de l'apprendre.
+      view.review.commentNotice = "Le message n'a pas pu être envoyé. Il est toujours là.";
+      renderContent(root);
+      return;
+    }
+
+    view.draft = "";
+    view.preview = false;
+    await refreshComments(root);
+  } catch {
+    view.review.posting = false;
+    view.review.commentNotice = "Le message n'a pas pu être envoyé. Il est toujours là.";
+    renderContent(root);
+  }
+}
+
+async function saveComment(root, commentId) {
+  const texte = String(view.editDraft ?? "").trim();
+  if (!commentId || !texte) return;
+
+  try {
+    const { editPropositionComment } = await import("../services/proposition-comments.js");
+    const ecrit = await editPropositionComment({ commentId, body: texte });
+    if (!ecrit) {
+      view.review.commentNotice = "La modification n'a pas pu être enregistrée.";
+      renderContent(root);
+      return;
+    }
+
+    view.editing = null;
+    view.editDraft = "";
+    await refreshComments(root);
+  } catch {
+    view.review.commentNotice = "La modification n'a pas pu être enregistrée.";
+    renderContent(root);
+  }
+}
+
+async function removeComment(root, commentId) {
+  if (!commentId) return;
+
+  try {
+    const { removePropositionComment } = await import("../services/proposition-comments.js");
+    // Retirer n'efface pas : le texte reste en base, l'écran cesse de le
+    // montrer. Un message retiré est aussi ce à quoi d'autres ont répondu.
+    const ok = await removePropositionComment(commentId);
+    if (!ok) {
+      view.review.commentNotice = "Le message n'a pas pu être retiré.";
+      renderContent(root);
+      return;
+    }
+    await refreshComments(root);
+  } catch {
+    view.review.commentNotice = "Le message n'a pas pu être retiré.";
+    renderContent(root);
+  }
 }
 
 function findItem(cle) {
@@ -1526,12 +1858,16 @@ async function openFrozen(root, proposition) {
 
     if (!view.open || view.open.id !== proposition.id) return;
 
-    const names = await propositions.loadAuthorNames([
+    const { listPropositionComments } = await import("../services/proposition-comments.js");
+    const comments = await listPropositionComments(proposition.id);
+
+    const names = await propositions.loadAuthors([
       proposition.created_by,
       proposition.merged_by,
       proposition.closed_by,
       ...documents.map((row) => row.created_by),
-      ...stored.map((row) => row.decided_by)
+      ...stored.map((row) => row.decided_by),
+      ...comments.map((row) => row.author_id)
     ]);
 
     const snapshot = proposition.snapshot ?? null;
@@ -1549,7 +1885,15 @@ async function openFrozen(root, proposition) {
       notice: null,
       gap: describeSnapshotGap(proposition, stored.length),
       deposits: groupDeposits(documents, names),
-      story: buildStory({ proposition, documents, decisions: stored, names }),
+      documentRows: documents,
+      decisionRows: stored,
+      comments,
+      authors: names,
+      posting: false,
+      commentNotice: null,
+      // La décision est figée, la conversation ne l'est pas : on commente une
+      // proposition close comme une autre.
+      story: buildStory({ proposition, documents, decisions: stored, comments, names }),
       items: itemsFromDecisions(stored)
     };
   } catch {
@@ -1581,6 +1925,10 @@ async function openProposition(root, propositionId) {
   view.open = proposition;
   // On entre par la conversation : c'est là qu'on comprend de quoi il s'agit.
   view.tab = "conversation";
+  view.draft = "";
+  view.preview = false;
+  view.editing = null;
+  view.editDraft = "";
   view.review = { running: true, step: "", items: [], unreachable: [], diff: { unchanged: 0 }, error: null };
 
   // La barre compacte nomme la proposition : c'est elle qu'on lit, pas l'onglet.
@@ -1635,12 +1983,16 @@ async function openProposition(root, propositionId) {
 
     const documents = await propositions.listPropositionDocuments(proposition.id);
 
-    const names = await propositions.loadAuthorNames([
+    const { listPropositionComments } = await import("../services/proposition-comments.js");
+    const comments = await listPropositionComments(proposition.id);
+
+    const names = await propositions.loadAuthors([
       proposition.created_by,
       proposition.merged_by,
       proposition.closed_by,
       ...documents.map((row) => row.created_by),
-      ...decisions.map((row) => row.decided_by)
+      ...decisions.map((row) => row.decided_by),
+      ...comments.map((row) => row.author_id)
     ]);
 
     view.review = {
@@ -1653,7 +2005,15 @@ async function openProposition(root, propositionId) {
       result: analyse.result,
       notice: null,
       deposits: groupDeposits(documents, names),
-      story: buildStory({ proposition, documents, decisions, names }),
+      // Conservés pour pouvoir refaire l'histoire après un message, sans
+      // relancer l'analyse : écrire une phrase ne relit pas cent vingt PDF.
+      documentRows: documents,
+      decisionRows: decisions,
+      comments,
+      authors: names,
+      posting: false,
+      commentNotice: null,
+      story: buildStory({ proposition, documents, decisions, comments, names }),
       items: applyDecisions(
         [...documentItems(documents), ...attachmentItems(analyse.attachments), ...avisItems(analyse.diff)],
         decisions
