@@ -5,6 +5,7 @@ import { ITEM } from "./proposition-state.js";
 import { ITEM_TYPE } from "./proposition-review.js";
 import {
   buildSnapshot,
+  defaultMergeMessage,
   describeSnapshotGap,
   freezeDecisions,
   itemsFromDecisions
@@ -87,4 +88,29 @@ test("une proposition close avant le gel le dit, plutôt que de faire semblant",
   assert.match(describeSnapshotGap({ status: "merged" }, 3), /décisions explicites/);
   assert.match(describeSnapshotGap({ status: "merged" }, 0), /n'a pas été retenu/);
   assert.equal(describeSnapshotGap({ snapshot: { itemCount: 3 } }, 3), "");
+});
+
+test("la fusion propose son message plutôt que de laisser un champ vide", () => {
+  // Un champ vide obtient une ligne bâclée ; un champ pré-rempli obtient soit un
+  // accord — et la phrase est juste —, soit une correction, qui vaut mieux
+  // qu'une invention.
+  const message = defaultMergeMessage({
+    proposition: { number: 3, title: "Rapports d'étape SOCOTEC" },
+    items: [
+      { itemType: "document", status: ITEM.ACCEPTED },
+      { itemType: "document", status: ITEM.ACCEPTED },
+      { itemType: "avis", status: ITEM.REFUSED },
+      { itemType: "avis", status: ITEM.PROPOSED }
+    ]
+  });
+
+  assert.equal(message.title, "Fusion de la proposition #3 — Rapports d'étape SOCOTEC");
+  assert.equal(message.note, "3 affirmations acceptées, 1 refusée, 2 livrables entrent au corpus.");
+});
+
+test("sans rien à fusionner, la note ne raconte rien", () => {
+  const message = defaultMergeMessage({ proposition: { number: 1, title: "Vide" }, items: [] });
+
+  assert.equal(message.title, "Fusion de la proposition #1 — Vide");
+  assert.equal(message.note, "");
 });

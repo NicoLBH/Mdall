@@ -175,6 +175,11 @@ export function buildStory({
       who: nameOf(proposition.merged_by, names),
       avatarUrl: avatarOf(proposition.merged_by, names),
       text: "a fusionné la proposition",
+      // Ce que l'auteur a écrit en signant passe avant le résumé que la machine
+      // sait faire : c'est la seule phrase du lot que personne d'autre ne
+      // pouvait écrire.
+      title: String(proposition.merge_title ?? "").trim(),
+      note: String(proposition.merge_note ?? "").trim(),
       detail: describeOutcome(proposition.snapshot)
     });
   }

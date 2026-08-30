@@ -121,3 +121,44 @@ export function describeSnapshotGap(proposition, storedCount = 0) {
         "Ce qu'elle contenait n'a pas été retenu, et le recalculer donnerait la lecture " +
         "d'aujourd'hui, pas la sienne.";
 }
+
+/**
+ * Le message que la fusion propose d'écrire.
+ *
+ * Git demande un message au moment du commit, et ce n'est pas une formalité :
+ * c'est le seul endroit où l'auteur dit **ce qu'il fait**, au moment précis où
+ * il le fait. Le proposer pré-rempli plutôt que vide est délibéré : un champ
+ * vide obtient une ligne bâclée, un champ pré-rempli obtient soit un accord —
+ * et la phrase par défaut est juste —, soit une correction, qui vaut mieux
+ * qu'une invention.
+ *
+ * Le titre nomme la proposition ; la note dit ce que la fusion fera vraiment,
+ * en chiffres. Rien qui ne se lise déjà ailleurs à l'écran : c'est ce qui
+ * permet de la relire sans avoir à la vérifier.
+ *
+ * @returns {{title: string, note: string}}
+ */
+export function defaultMergeMessage({ proposition, items = [] } = {}) {
+  const numero = Number(proposition?.number) || null;
+  const titre = String(proposition?.title ?? "").trim();
+
+  const refuses = items.filter((item) => item.status === ITEM.REFUSED).length;
+  const acceptes = items.length - refuses;
+  const documents = items.filter(
+    (item) => item.itemType === "document" && item.status !== ITEM.REFUSED
+  ).length;
+
+  const morceaux = [];
+  if (items.length > 0) {
+    morceaux.push(`${acceptes} affirmation${acceptes > 1 ? "s" : ""} acceptée${acceptes > 1 ? "s" : ""}`);
+    if (refuses > 0) morceaux.push(`${refuses} refusée${refuses > 1 ? "s" : ""}`);
+  }
+  if (documents > 0) {
+    morceaux.push(`${documents} livrable${documents > 1 ? "s" : ""} entre${documents > 1 ? "nt" : ""} au corpus`);
+  }
+
+  return {
+    title: `Fusion de la proposition${numero ? ` #${numero}` : ""}${titre ? ` — ${titre}` : ""}`,
+    note: morceaux.length > 0 ? `${morceaux.join(", ")}.` : ""
+  };
+}
