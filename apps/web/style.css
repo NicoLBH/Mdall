@@ -15669,6 +15669,37 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   border-radius:var(--radius);
   background:var(--panel2);
 }
+/* ── Le procès-verbal d'une proposition close ────────────────────
+   Une proposition close ne se recalcule pas : elle montre ce qui a été décidé.
+   L'écran doit le dire, sinon un lecteur qui le trouve figé le croit en panne
+   et cherche à le rafraîchir. */
+
+.review-frozen{
+  display:flex;
+  align-items:flex-start;
+  gap:10px;
+  padding:10px 14px;
+  border:1px solid var(--border);
+  border-left:3px solid var(--fgColor-muted, #8b949e);
+  border-radius:var(--radius);
+  background:var(--panel);
+}
+.review-frozen__mark{ color:var(--muted); line-height:0; padding-top:2px; }
+.review-frozen__text{ margin:0; color:var(--muted); font-size:13px; }
+
+/* Une case à cocher inviterait à changer ce qui a été décidé : on montre la
+   décision, on ne la propose pas. */
+.review-item__mark{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:15px;
+  height:15px;
+  line-height:0;
+}
+.review-item__mark--accepted{ color:var(--fgColor-open); }
+.review-item__mark--refused{ color:var(--fgColor-danger); }
+
 /* ── La contradiction avec la mémoire ────────────────────────────
    Le seul endroit de la revue où le silence ne vaut pas acceptation : tant
    qu'une contradiction n'est pas tranchée, la fusion attend. Le bloc est donc

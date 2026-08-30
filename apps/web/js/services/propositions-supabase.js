@@ -19,7 +19,7 @@ import { PROPOSITION } from "./proposition-state.js";
 const SUPABASE_URL = getSupabaseUrl();
 
 const COLUMNS =
-  "id,number,project_id,title,description,status,created_by,created_at,updated_at,merged_at,merged_by";
+  "id,number,project_id,title,description,status,created_by,created_at,updated_at,merged_at,merged_by,snapshot";
 
 async function request(path, { method = "GET", body = null, headers = {}, params = {} } = {}) {
   const url = new URL(`${SUPABASE_URL}/rest/v1/${path}`);
@@ -192,7 +192,10 @@ export async function listPropositionItems(propositionId) {
       (await request("proposition_items", {
         params: {
           select: "id,item_type,item_key,payload,status,reason,decided_by,decided_at",
-          proposition_id: `eq.${propositionId}`
+          proposition_id: `eq.${propositionId}`,
+          // Un ordre stable : sur un procès-verbal, deux lectures d'affilée ne
+          // doivent pas présenter les mêmes lignes dans deux ordres différents.
+          order: "item_type.asc,item_key.asc"
         }
       })) ?? []
     );
@@ -294,7 +297,12 @@ export async function decidePropositionItems({ propositionId, projectId, decisio
  *
  * @returns {Promise<{merged: boolean, accepted: number, refused: number}|null>}
  */
-export async function mergeProposition({ proposition, acceptedDocumentIds = [], refusedDocumentIds = [] } = {}) {
+export async function mergeProposition({
+  proposition,
+  acceptedDocumentIds = [],
+  refusedDocumentIds = [],
+  snapshot = null
+} = {}) {
   if (!proposition?.id) return null;
 
   try {
@@ -321,7 +329,14 @@ export async function mergeProposition({ proposition, acceptedDocumentIds = [], 
       method: "PATCH",
       params: { id: `eq.${proposition.id}`, status: `eq.${PROPOSITION.OPEN}` },
       headers: { Prefer: "return=minimal" },
-      body: { status: PROPOSITION.MERGED, merged_at: new Date().toISOString(), merged_by: mergedBy }
+      body: {
+        status: PROPOSITION.MERGED,
+        merged_at: new Date().toISOString(),
+        merged_by: mergedBy,
+        // Le résumé part avec l'état : une proposition close sans son état
+        // conservé est exactement ce qu'on cherche à ne plus produire.
+        ...(snapshot ? { snapshot } : {})
+      }
     });
 
     return { merged: true, accepted: acceptedDocumentIds.length, refused: refusedDocumentIds.length };
@@ -343,7 +358,7 @@ export async function mergeProposition({ proposition, acceptedDocumentIds = [], 
  *
  * @returns {Promise<{closed: boolean, refused: number}|null>}
  */
-export async function closeProposition({ proposition, documentIds = [] } = {}) {
+export async function closeProposition({ proposition, documentIds = [], snapshot = null } = {}) {
   if (!proposition?.id) return null;
 
   try {
@@ -360,7 +375,7 @@ export async function closeProposition({ proposition, documentIds = [] } = {}) {
       method: "PATCH",
       params: { id: `eq.${proposition.id}`, status: `eq.${PROPOSITION.OPEN}` },
       headers: { Prefer: "return=minimal" },
-      body: { status: PROPOSITION.CLOSED }
+      body: { status: PROPOSITION.CLOSED, ...(snapshot ? { snapshot } : {}) }
     });
 
     return { closed: true, refused: documentIds.length };
