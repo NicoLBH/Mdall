@@ -19,7 +19,8 @@ import { PROPOSITION } from "./proposition-state.js";
 const SUPABASE_URL = getSupabaseUrl();
 
 const COLUMNS =
-  "id,number,project_id,title,description,status,created_by,created_at,updated_at,merged_at,merged_by,snapshot";
+  "id,number,project_id,title,description,status,created_by,created_at,updated_at," +
+  "merged_at,merged_by,closed_at,closed_by,snapshot";
 
 async function request(path, { method = "GET", body = null, headers = {}, params = {} } = {}) {
   const url = new URL(`${SUPABASE_URL}/rest/v1/${path}`);
@@ -166,7 +167,7 @@ export async function listPropositionDocuments(propositionId) {
           select:
             "id,filename,original_filename,mime_type,corpus_state,detected_kind,detected_kind_label," +
             "detected_author,detection_status,detection_reason,content_fingerprint,declared_reference," +
-            "duplicate_of_document_id,reissue_of_document_id,issued_at,created_at",
+            "duplicate_of_document_id,reissue_of_document_id,issued_at,created_at,created_by",
           proposition_id: `eq.${propositionId}`,
           deleted_at: "is.null",
           order: "created_at.asc"
@@ -371,15 +372,58 @@ export async function closeProposition({ proposition, documentIds = [], snapshot
       });
     }
 
+    const closedBy = (await getCurrentUser())?.id ?? null;
     await request("propositions", {
       method: "PATCH",
       params: { id: `eq.${proposition.id}`, status: `eq.${PROPOSITION.OPEN}` },
       headers: { Prefer: "return=minimal" },
-      body: { status: PROPOSITION.CLOSED, ...(snapshot ? { snapshot } : {}) }
+      body: {
+        status: PROPOSITION.CLOSED,
+        // Renoncer est une décision : elle se signe comme les autres.
+        closed_at: new Date().toISOString(),
+        closed_by: closedBy,
+        ...(snapshot ? { snapshot } : {})
+      }
     });
 
     return { closed: true, refused: documentIds.length };
   } catch {
     return null;
+  }
+}
+
+/**
+ * Les noms derrière les identifiants.
+ *
+ * Une conversation qui dirait « 8f3c-… a fusionné cette proposition » ne
+ * raconterait rien. C'est pourtant tout l'intérêt de la relire dans six mois :
+ * savoir qui a décidé, pas seulement ce qui a été décidé.
+ *
+ * Rendre une table vide quand la base ne répond pas est délibéré : l'écran
+ * écrira « un collaborateur », ce qui est vrai, plutôt qu'un identifiant, qui
+ * n'apprend rien.
+ *
+ * @returns {Promise<Map<string, string>>} identifiant → nom lisible
+ */
+export async function loadAuthorNames(userIds = []) {
+  const ids = [...new Set(userIds.map((id) => String(id ?? "")).filter(Boolean))];
+  if (ids.length === 0) return new Map();
+
+  try {
+    const rows = await request("user_public_profiles", {
+      params: {
+        select: "user_id,first_name,last_name,public_email",
+        user_id: `in.(${ids.join(",")})`
+      }
+    });
+
+    return new Map(
+      (rows ?? []).map((row) => [
+        row.user_id,
+        [row.first_name, row.last_name].filter(Boolean).join(" ").trim() || row.public_email || "Un collaborateur"
+      ])
+    );
+  } catch {
+    return new Map();
   }
 }

@@ -102,6 +102,30 @@ function getOverlayCompactHeads(chromeEl) {
   return heads;
 }
 
+/**
+ * Les synchronisations en cours, par élément qui défile.
+ *
+ * Un seul écouteur est posé par cible, et il appelle **les fonctions du moment**
+ * plutôt qu'une fermeture capturée le premier jour. C'est tout le correctif :
+ * chaque rendu remplace l'en-tête dans le DOM, et un écouteur qui garderait la
+ * référence du premier basculerait les classes sur un élément détaché — les
+ * classes changent, l'écran ne bouge pas.
+ *
+ * La table est faible : quand l'élément qui défile disparaît, ses
+ * synchronisations disparaissent avec lui.
+ */
+const COMPACT_SYNCS = new WeakMap();
+
+/**
+ * Compacte un en-tête quand son contenu défile.
+ *
+ * @param {Element|Document} scrollEl ce qui défile — `document`, sa racine, ou
+ *   un conteneur qui a son propre ascenseur
+ * @param {Element} chromeEl l'élément qui porte `overlay-chrome--compact`, et
+ *   dans lequel on cherche les en-têtes à basculer
+ * @param {string} key un nom par écran : deux écrans peuvent écouter le même
+ *   défilement sans se remplacer l'un l'autre
+ */
 export function bindOverlayChromeCompact(scrollEl, chromeEl, key = "default", options = {}) {
   if (!scrollEl || !chromeEl) return;
 
@@ -109,9 +133,7 @@ export function bindOverlayChromeCompact(scrollEl, chromeEl, key = "default", op
   const isDocumentLike = scrollEl === document || scrollEl === document.documentElement || scrollEl === document.body;
   const eventTarget = isDocumentLike ? window : scrollEl;
   const stateTarget = isDocumentLike ? (document.scrollingElement || document.documentElement || document.body) : scrollEl;
-  const attr = `data-overlay-chrome-bound-${String(key)
-    .replace(/[^a-zA-Z0-9_-]/g, "")
-    .toLowerCase()}`;
+
   const sync = () => {
     const scrolled = (stateTarget?.scrollTop || 0) > 8;
     chromeEl.classList.toggle("overlay-chrome--compact", scrolled);
@@ -124,15 +146,28 @@ export function bindOverlayChromeCompact(scrollEl, chromeEl, key = "default", op
     onCompactChange?.(scrolled);
   };
 
+  // Conservé : plusieurs écrans appellent cette poignée pour se resynchroniser
+  // après avoir restauré une position de défilement.
   scrollEl.__syncCondensedTitle = sync;
 
-  if (scrollEl.getAttribute?.(attr) === "1") {
-    sync();
-    return;
+  let syncs = COMPACT_SYNCS.get(eventTarget);
+  if (!syncs) {
+    syncs = new Map();
+    COMPACT_SYNCS.set(eventTarget, syncs);
+    // Un seul écouteur, pour toujours. Il lit la table à chaque défilement, et
+    // travaille donc sur les en-têtes réellement affichés.
+    eventTarget.addEventListener(
+      "scroll",
+      () => {
+        for (const run of syncs.values()) run();
+      },
+      { passive: true }
+    );
   }
 
-  scrollEl.setAttribute?.(attr, "1");
-  eventTarget.addEventListener("scroll", sync, { passive: true });
+  // Le rendu suivant remplace la synchronisation de cet écran, il ne s'ajoute
+  // pas à elle : sans quoi chaque rendu laisserait un écouteur de plus.
+  syncs.set(String(key), sync);
 
   sync();
   setTimeout(sync, 0);

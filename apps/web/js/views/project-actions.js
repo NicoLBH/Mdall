@@ -272,63 +272,6 @@ function renderRunPipelineSteps(entry) {
 }
 
 
-/**
- * Ce qu'une analyse du suivi a lu, et ce qu'elle en a tiré.
- *
- * C'est le détail qu'on vient chercher quand un chiffre du suivi surprend :
- * combien de livrables ont été relus, combien d'avis en sortent, et si le
- * moteur a rencontré une garde en défaut. Une ligne qui dirait seulement
- * « analyse réussie » ne se vérifierait pas.
- *
- * Les gardes sont nommées même à zéro. « Aucune violation de garde » est une
- * information ; l'absence de ligne n'en est pas une.
- */
-function renderRunCorpusDetail(entry) {
-  const corpus = entry?.details?.corpus;
-  if (!corpus || typeof corpus !== "object") return "";
-
-  const lignes = [
-    corpus.proposition ? ["Proposition", corpus.proposition] : null,
-    ["Livrables relus", `${corpus.documentCount || 0}`],
-    ["Avis suivis", `${corpus.trackedAvisCount || 0}${corpus.avisCount ? ` sur ${corpus.avisCount} relevés` : ""}`],
-    [
-      "Gardes",
-      corpus.guardViolationCount > 0
-        ? `${corpus.guardViolationCount} violation(s)`
-        : "aucune violation"
-    ],
-    corpus.engineVersion || corpus.packs?.length
-      ? ["Lu par", [corpus.engineVersion, ...(corpus.packs ?? [])].filter(Boolean).join(" · ")]
-      : null,
-    corpus.documents?.length
-      ? [
-          "Documents",
-          `${corpus.documents.slice(0, 3).join(", ")}${
-            corpus.documents.length > 3 ? ` et ${corpus.documents.length - 3} autre(s)` : ""
-          }`
-        ]
-      : null
-  ].filter(Boolean);
-
-  return `
-    <div class="workflow-runs__meta" style="margin-top:8px;">
-      <div style="font-weight:600; margin-bottom:6px; color: var(--fgColor-muted, #656d76);">Ce que l'analyse a lu</div>
-      <div style="display:grid; gap:4px;">
-        ${lignes
-          .map(
-            ([label, value]) => `
-              <div style="display:flex; flex-wrap:wrap; gap:8px;">
-                <span style="min-width:132px; font-weight:600;">${escapeHtml(label)}</span>
-                <span style="color: var(--fgColor-muted, #656d76);">${escapeHtml(value)}</span>
-              </div>
-            `
-          )
-          .join("")}
-      </div>
-    </div>
-  `;
-}
-
 function getRunHistoryIconSvg() {
   return svgIcon("history", {
     className: "octicon octicon-history",
@@ -368,11 +311,11 @@ function renderRunRows(entries) {
         <div class="workflow-runs__cell workflow-runs__cell--action">
           <div class="workflow-runs__title-row">
             ${getRunStateIcon(entry)}
-            <span class="workflow-runs__title">${escapeHtml(entry.name || "Run")}</span>
+            <button type="button" class="workflow-runs__title workflow-runs__title--link" data-run-open="${escapeHtml(
+              entry.id || ""
+            )}">${escapeHtml(entry.name || "Run")}</button>
           </div>
           ${actionMeta}
-          ${renderRunPipelineSteps(entry)}
-          ${renderRunCorpusDetail(entry)}
         </div>
 
         <div class="workflow-runs__cell">
@@ -443,11 +386,143 @@ function renderRunsTable() {
   return `${tableHtml}${renderPaginationControls(pagination, { entity: "actions" })}`;
 }
 
+/**
+ * Le détail d'une exécution.
+ *
+ * Le journal a grossi parce que les actions racontent l'histoire du projet :
+ * qui a fait quoi, quand, et ce que la machine en a tiré. Un tableau ne peut pas
+ * porter tout cela sans devenir illisible — d'où deux niveaux, comme sur les
+ * pages d'exécution de GitHub : une ligne par acte, et une page par acte.
+ *
+ * La page dit trois choses, dans cet ordre : **ce que c'était** (l'action, son
+ * état, sa cause), **ce qu'elle a lu**, et **ce qu'il faut en retenir** — les
+ * annotations, c'est-à-dire ce qui n'allait pas. Une exécution sans annotation
+ * le dit aussi : « aucune » est une information, une section vide n'en est pas
+ * une.
+ */
+function renderRunDetail(entry) {
+  const meta = getRunStatusMeta(entry);
+  const corpus = entry?.details?.corpus ?? null;
+
+  const identite = [
+    ["Déclencheur", getTriggerLabel(entry)],
+    ["Lancée le", formatDateTime(entry.startedAt)],
+    ["Terminée le", entry.endedAt ? formatDateTime(entry.endedAt) : "—"],
+    ["Durée", formatDuration(entry.durationMs)],
+    ["Objet", entry.documentName || "—"]
+  ];
+
+  const lecture = corpus
+    ? [
+        corpus.proposition ? ["Proposition", corpus.proposition] : null,
+        ["Livrables relus", `${corpus.documentCount || 0}`],
+        [
+          "Avis suivis",
+          `${corpus.trackedAvisCount || 0}${corpus.avisCount ? ` sur ${corpus.avisCount} relevés` : ""}`
+        ],
+        corpus.engineVersion || corpus.packs?.length
+          ? ["Lu par", [corpus.engineVersion, ...(corpus.packs ?? [])].filter(Boolean).join(" · ")]
+          : null
+      ].filter(Boolean)
+    : [];
+
+  const annotations = [];
+  if (corpus?.guardViolationCount > 0) {
+    annotations.push({
+      tone: "warn",
+      text: `${corpus.guardViolationCount} violation(s) de garde`,
+      note: "Le moteur a signalé des lectures qu'il ne sait pas garantir. Le détail se retrouve dans l'atelier."
+    });
+  }
+  if (entry.summary && String(entry.outcomeStatus || "").toLowerCase() === "error") {
+    annotations.push({ tone: "error", text: entry.summary, note: "" });
+  }
+
+  const documents = corpus?.documents ?? [];
+
+  return `
+    <section class="run-detail">
+      <div class="run-detail__head">
+        <button type="button" class="gh-btn gh-btn--sm" data-run-back>← Journal des actions</button>
+        <div class="run-detail__title-row">
+          ${getRunStateIcon(entry)}
+          <h2 class="run-detail__title">${escapeHtml(entry.name || "Run")}</h2>
+          <span class="${meta.className}">${escapeHtml(meta.label)}</span>
+        </div>
+        <p class="run-detail__lead">${escapeHtml(entry.summary || getTriggerLabel(entry))}</p>
+      </div>
+
+      ${renderRunSection("L'exécution", identite)}
+      ${lecture.length > 0 ? renderRunSection("Ce que l'analyse a lu", lecture) : ""}
+      ${renderRunPipelineSteps(entry)}
+
+      <section class="run-section">
+        <h3 class="run-section__title">Annotations</h3>
+        ${
+          annotations.length === 0
+            ? `<p class="run-section__empty">Aucune. L'exécution n'a rien signalé qu'il faille relire.</p>`
+            : annotations
+                .map(
+                  (annotation) => `
+                    <div class="run-annotation run-annotation--${annotation.tone}">
+                      <b>${escapeHtml(annotation.text)}</b>
+                      ${annotation.note ? `<span>${escapeHtml(annotation.note)}</span>` : ""}
+                    </div>
+                  `
+                )
+                .join("")
+        }
+      </section>
+
+      ${
+        documents.length > 0
+          ? `<section class="run-section">
+               <h3 class="run-section__title">Livrables lus <span class="run-section__count">${documents.length}</span></h3>
+               <ul class="run-files">
+                 ${documents.map((name) => `<li>${escapeHtml(name)}</li>`).join("")}
+               </ul>
+             </section>`
+          : ""
+      }
+    </section>
+  `;
+}
+
+function renderRunSection(titre, lignes = []) {
+  if (lignes.length === 0) return "";
+
+  return `
+    <section class="run-section">
+      <h3 class="run-section__title">${escapeHtml(titre)}</h3>
+      <div class="run-rows">
+        ${lignes
+          .map(
+            ([label, valeur]) => `
+              <div class="run-row">
+                <span class="run-row__label">${escapeHtml(label)}</span>
+                <span class="run-row__value">${escapeHtml(String(valeur ?? "—"))}</span>
+              </div>
+            `
+          )
+          .join("")}
+      </div>
+    </section>
+  `;
+}
+
+function getOpenRun() {
+  const openId = String(store.projectActionsView?.openRunId || "");
+  if (!openId) return null;
+  return getRunLogEntries().find((entry) => String(entry.id) === openId) ?? null;
+}
+
 function renderProjectActionsContent(root) {
+  const open = getOpenRun();
+
   root.innerHTML = `
     <section class="project-simple-page project-simple-page--settings">
       <div class="settings-content settings-content--project-page" style="max-width:1216px;margin:0 auto;padding:24px 32px 40px;">
-        ${renderRunsTable()}
+        ${open ? renderRunDetail(open) : renderRunsTable()}
       </div>
     </section>
   `;
@@ -457,6 +532,12 @@ export function renderProjectActions(root) {
   root.className = "project-shell__content";
   clearProjectActiveScrollSource();
 
+  // Entrer dans l'onglet, c'est ouvrir le journal — jamais retomber sur
+  // l'exécution qu'on lisait la dernière fois.
+  if (store.projectActionsView && typeof store.projectActionsView === "object") {
+    store.projectActionsView.openRunId = "";
+  }
+
   setProjectViewHeader({
     contextLabel: "Actions",
     variant: "actions"
@@ -464,6 +545,25 @@ export function renderProjectActions(root) {
 
   renderProjectActionsContent(root);
   root.onclick = (event) => {
+    if (!store.projectActionsView || typeof store.projectActionsView !== "object") store.projectActionsView = {};
+
+    // Ouvrir une exécution, et en revenir. Le journal reste où il était : on
+    // reprend sa lecture là où on l'avait laissée, page comprise.
+    const opener = event.target?.closest?.("[data-run-open]");
+    if (opener) {
+      event.preventDefault();
+      store.projectActionsView.openRunId = opener.getAttribute("data-run-open") || "";
+      renderProjectActionsContent(root);
+      return;
+    }
+
+    if (event.target?.closest?.("[data-run-back]")) {
+      event.preventDefault();
+      store.projectActionsView.openRunId = "";
+      renderProjectActionsContent(root);
+      return;
+    }
+
     const trigger = event.target?.closest?.('[data-pagination-entity="actions"][data-pagination-page]');
     if (!trigger) return;
     event.preventDefault();
