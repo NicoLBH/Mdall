@@ -477,3 +477,57 @@ export async function loadAuthorNames(userIds = []) {
     return new Map();
   }
 }
+
+/**
+ * De quoi citer, dans un projet : ses sujets et ses propositions.
+ *
+ * La requête est délibérément maigre — un identifiant, un numéro, un titre, un
+ * état — et **elle ne dépend d'aucun autre écran**. Se servir de ce que l'onglet
+ * Sujets a laissé dans la mémoire de la page ferait un menu qui ne connaît les
+ * sujets qu'après les avoir visités : exactement le genre de « ça marche si l'on
+ * passe d'abord par ailleurs » qu'on vient de corriger deux fois.
+ *
+ * @returns {Promise<object[]>} des entrées `{kind, id, number, title, status}`
+ */
+export async function listProjectRefs(projectId) {
+  if (!projectId) return [];
+
+  try {
+    const [sujets, propositions] = await Promise.all([
+      request("subjects", {
+        params: {
+          select: "id,subject_number,title,status",
+          project_id: `eq.${projectId}`,
+          subject_number: "not.is.null",
+          order: "subject_number.asc"
+        }
+      }).catch(() => []),
+      request("propositions", {
+        params: {
+          select: "id,number,title,status",
+          project_id: `eq.${projectId}`,
+          order: "number.asc"
+        }
+      }).catch(() => [])
+    ]);
+
+    return [
+      ...(sujets ?? []).map((row) => ({
+        kind: "subject",
+        id: row.id,
+        number: Number(row.subject_number) || 0,
+        title: row.title ?? "",
+        status: row.status ?? "open"
+      })),
+      ...(propositions ?? []).map((row) => ({
+        kind: "proposition",
+        id: row.id,
+        number: Number(row.number) || 0,
+        title: row.title ?? "",
+        status: row.status ?? "open"
+      }))
+    ].filter((entry) => entry.number > 0);
+  } catch {
+    return [];
+  }
+}

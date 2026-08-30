@@ -3470,6 +3470,22 @@ export function createProjectSubjectsEvents(config) {
       };
     });
 
+    // Une proposition citée depuis un sujet mène à l'onglet Propositions : c'est
+    // là qu'elle se lit, avec sa conversation et ses affirmations.
+    root.querySelectorAll(".md-proposition-link[data-proposition-id]").forEach((link) => {
+      link.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const projectId = String(store.currentProjectId || "");
+        const propositionId = String(link.dataset.propositionId || "").trim();
+        if (!projectId || !propositionId) return;
+        // La proposition visée attend dans l'état partagé : la route ne porte
+        // que l'onglet, et l'écran d'arrivée sait quoi ouvrir en arrivant.
+        store.pendingPropositionId = propositionId;
+        window.location.hash = `#project/${encodeURIComponent(projectId)}/propositions`;
+      });
+    });
+
     root.querySelectorAll(".md-subject-link[data-subject-id]").forEach((link) => {
       link.addEventListener("click", (event) => {
         event.preventDefault();

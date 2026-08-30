@@ -15676,6 +15676,44 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   border-radius:var(--radius);
   background:var(--panel2);
 }
+/* ── Citer un sujet ou une proposition ───────────────────────────
+   Deux familles de choses numérotées qui se répondent. Le menu s'ouvre sous le
+   champ : lisible, prévisible, et jamais hors de l'écran. */
+
+.md-proposition-link{ color:var(--fgColor-done); text-decoration:none; font-weight:600; }
+.md-proposition-link:hover{ text-decoration:underline; }
+
+.ref-menu{
+  display:flex;
+  flex-direction:column;
+  margin-top:-4px;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  background:var(--panel2);
+  overflow:hidden;
+}
+.ref-menu__empty{ padding:10px 14px; color:var(--muted); font-size:13px; font-style:italic; }
+.ref-menu__item{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:8px 14px;
+  border:0;
+  border-bottom:1px solid var(--border2);
+  background:none;
+  color:var(--text);
+  font:inherit;
+  font-size:13px;
+  text-align:left;
+  cursor:pointer;
+}
+.ref-menu__item:last-child{ border-bottom:0; }
+.ref-menu__item:hover,
+.ref-menu__item.is-active{ background:var(--panel); }
+.ref-menu__icon{ color:var(--muted); line-height:0; }
+.ref-menu__title{ flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ref-menu__number{ color:var(--muted); font-variant-numeric:tabular-nums; }
+
 /* ── La conversation d'une proposition ───────────────────────────
    Les composants sont ceux des sujets ; ce qui suit ne fait qu'habiller ce que
    la proposition a de propre : sa fin, encadrée, et le fait qu'on puisse encore

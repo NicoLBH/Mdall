@@ -89,7 +89,7 @@ import {
 } from "./ui/status-badges.js";
 import { escapeHtml } from "../utils/escape-html.js";
 import { renderMarkdownToHtml } from "../utils/markdown-renderer.js";
-import { linkifySubjectRefsInHtml } from "../utils/subject-links.js";
+import { REF, linkifyRefsInHtml } from "../utils/entity-refs.js";
 import { getSubjectRefByNumber } from "../utils/subject-ref-index.js";
 import { renderSelectMenuSection } from "./ui/select-menu.js";
 import {
@@ -743,12 +743,45 @@ function rerenderSubjectsPanelsWhenConnected(root, remainingAttempts = 12) {
 ========================================================= */
 
 
+/**
+ * Les propositions du projet, pour pouvoir les citer depuis un sujet.
+ *
+ * Chargées une fois par projet, à l'entrée dans l'onglet. Les sujets, eux,
+ * viennent de l'index déjà construit pour eux : deux sources, parce que les
+ * deux familles vivent à deux endroits, mais un seul jeu de règles pour les
+ * citer — celui de `entity-refs.js`.
+ */
+let propositionRefs = { projectId: "", entries: [] };
+
+function ensurePropositionRefsLoaded() {
+  const projectId = String(store.currentProjectId || "");
+  if (!projectId || propositionRefs.projectId === projectId) return;
+
+  propositionRefs = { projectId, entries: [] };
+  import("../services/propositions-supabase.js")
+    .then(({ listProjectRefs }) => listProjectRefs(projectId))
+    .then((entries) => {
+      const propositions = (entries ?? []).filter((entry) => entry.kind === REF.PROPOSITION);
+      if (propositions.length === 0) return;
+      propositionRefs = { projectId, entries: propositions };
+      // Les citations écrites avant l'arrivée de la liste deviennent des liens :
+      // sans ce second passage, elles resteraient du texte jusqu'au prochain
+      // geste de l'utilisateur, sans qu'il comprenne pourquoi.
+      if (subjectsCurrentRoot) rerenderSubjectsPanelsWhenConnected(subjectsCurrentRoot);
+    })
+    .catch(() => {});
+}
+
 function mdToHtml(text, options = {}) {
   return renderMarkdownToHtml(text || "", {
     preserveMessageLineBreaks: !!options.preserveMessageLineBreaks,
-    postProcessHtml: (html) => linkifySubjectRefsInHtml(html, {
-      resolveSubjectByNumber: (number) => getSubjectRefByNumber(store.projectSubjectsView, number)
-    })
+    postProcessHtml: (html) =>
+      linkifyRefsInHtml(html, {
+        resolveRef: ({ kind, number }) =>
+          kind === REF.PROPOSITION
+            ? propositionRefs.entries.find((entry) => entry.number === number) ?? null
+            : getSubjectRefByNumber(store.projectSubjectsView, number)
+      })
   });
 }
 
@@ -1133,6 +1166,7 @@ if (typeof window !== "undefined") {
 
 export function renderProjectSubjects(root) {
   ensureSubjectsCollaboratorsLoaded();
+  ensurePropositionRefsLoaded();
   clearProjectActiveScrollSource();
   const subjectsViewState = ensureViewUiState();
   projectSubjectDrilldown.ensureDrilldownDom();

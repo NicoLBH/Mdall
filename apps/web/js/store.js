@@ -97,6 +97,14 @@ export const store = {
   projects: [],
   currentProject: null,
   currentProjectId: null,
+  /**
+   * La proposition qu'un lien vient de désigner depuis un autre onglet.
+   *
+   * La route ne porte que l'onglet ; l'écran d'arrivée lit ceci, l'ouvre, et
+   * l'efface. Sans cela, cliquer une citation afficherait la liste et laisserait
+   * chercher à la main ce qu'on venait de désigner.
+   */
+  pendingPropositionId: "",
 
   ui: {
     runId: "",
