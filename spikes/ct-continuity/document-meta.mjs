@@ -38,7 +38,12 @@ export function readDocumentMeta(source, { pack = DEFAULT_PACK } = {}) {
   const fallback = emission ? null : ANY_DATE.exec(head);
 
   const chrono = pack.chrono.exec(text);
-  const affaire = pack.affaireNumber ? pack.affaireNumber.exec(head) : null;
+  // Cherché dans tout le document, pas seulement dans l'en-tête : une fiche
+  // d'examen porte son numéro d'affaire au bas de la centième ligne, quand un
+  // rapport l'imprime à la onzième. Le chercher dans les soixante premières
+  // faisait qu'un livrable entier ne déclarait rien — et un document qui ne
+  // déclare rien ne peut être contredit par personne.
+  const affaire = pack.affaireNumber ? pack.affaireNumber.exec(text) : null;
   const sheet = pack.sheetNumber.exec(head);
   const version = pack.documentVersion.exec(head);
   // Le type se lit dans le titre, pas dans le corps : une fiche qui mentionne

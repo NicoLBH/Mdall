@@ -37,6 +37,7 @@ import { relateToKnown, toDocumentColumns } from "../../../services/document-int
 import {
   ATTACHMENT,
   assessAttachment,
+  batchConsensus,
   declaredMarkers,
   findEchoes,
   markersToRemember,
@@ -3724,7 +3725,7 @@ export function renderCtContinuityLab(root) {
    * nouveau après chaque confirmation — c'est ce second appel qui fait rentrer
    * dans le lot les documents qu'on venait de rattacher.
    */
-  const assessReport = (report) => {
+  const assessReport = (report, consensus) => {
     const declared = declaredMarkers(report.recognition);
     const text = (report.pages ?? []).map((page) => page.text ?? "").join("\n");
 
@@ -3732,10 +3733,29 @@ export function renderCtContinuityLab(root) {
       ...assessAttachment({
         declared,
         echoes: findEchoes(text, state.identity.self),
-        known: state.identity.known
+        known: state.identity.known,
+        consensus
       }),
       declared
     };
+  };
+
+  /**
+   * Réévalue tout le lot.
+   *
+   * Le rattachement n'est pas une propriété d'un document seul : un livrable
+   * isolé ne se contredit pas, c'est le lot qui le contredit. Ajouter un
+   * fichier peut donc changer le verdict de ceux qui étaient déjà là — le
+   * neuvième document est celui qui révèle que le neuvième détonne —, et une
+   * confirmation en rattache d'un coup plusieurs.
+   *
+   * D'où une réévaluation d'ensemble à chaque changement, plutôt qu'un verdict
+   * posé une fois pour toutes à l'entrée du fichier.
+   */
+  const reassessAll = () => {
+    const lisibles = state.reports.filter((report) => !report.error);
+    const consensus = batchConsensus(lisibles.map((report) => declaredMarkers(report.recognition)));
+    for (const report of lisibles) report.attachment = assessReport(report, consensus);
   };
 
   const refreshStoredDocuments = async (projectId) => {
@@ -3960,10 +3980,6 @@ export function renderCtContinuityLab(root) {
           documentId: documentIds.get(file) ?? null
         });
 
-        // À quel projet ce document appartient-il ? La question se pose au
-        // moment où il entre, pendant qu'on a son texte sous la main.
-        const entered = state.reports[state.reports.length - 1];
-        entered.attachment = assessReport(entered);
       } catch (error) {
         state.reports.push({ sourceId, filename: file.name, sizeBytes: file.size, pageCount: 0, pages: [], error: error.message });
       }
@@ -3972,6 +3988,11 @@ export function renderCtContinuityLab(root) {
       state.loading.done += 1;
       refresh();
     }
+
+    // Le lot est complet : il peut maintenant se juger lui-même. Évaluer chaque
+    // fichier à son entrée aurait comparé les premiers à un lot qui n'existait
+    // pas encore.
+    reassessAll();
 
     state.stages[state.stages.length - 1].detail =
       `${added} ajouté(s)${duplicated > 0 ? `, ${duplicated} doublon(s)` : ""}`;
@@ -4219,10 +4240,7 @@ export function renderCtContinuityLab(root) {
     // Tout le lot est réévalué, pas seulement le groupe confirmé : la nouvelle
     // affaire peut en rattacher d'autres, et rien ne justifie de le savoir pour
     // les uns et pas pour les autres.
-    for (const report of state.reports) {
-      if (report.error) continue;
-      report.attachment = assessReport(report);
-    }
+    reassessAll();
     refresh();
   };
 

@@ -5,7 +5,7 @@ import { discoverLegend } from "../../../../spikes/ct-continuity/legend.mjs";
 import { readDocumentMeta } from "../../../../spikes/ct-continuity/document-meta.mjs";
 
 import { CONFIDENCE, RECOGNITION, isExploitable, recognizeDocument } from "./document-recognition.js";
-import { declaredMarkers } from "./project-identity.js";
+import { ATTACHMENT, assessAttachment, batchConsensus, declaredMarkers } from "./project-identity.js";
 import { createCtReportRecognizer } from "./document-recognizer-ct.js";
 
 const CT = createCtReportRecognizer({ readDocumentMeta, discoverLegend });
@@ -193,4 +193,51 @@ test("un document que personne ne reconnaît ne déclare aucun marqueur", () => 
   assert.equal(verdict.status, RECOGNITION.UNRECOGNIZED);
   assert.deepEqual(verdict.markers, []);
   assert.deepEqual(declaredMarkers(verdict), []);
+});
+
+test("un intrus déjà dans le lot est démasqué, corpus réel à l'appui", () => {
+  // Reproduction du cas signalé : quatre livrables du Reposoir (affaire
+  // 230113860000087) et une fiche de l'Altima (affaire 190812440000048),
+  // déposés ensemble sur un projet qui n'a encore aucune mémoire.
+  //
+  // Deux défauts se conjuguaient. La fiche ne porte aucune référence chrono, et
+  // son numéro d'affaire est imprimé à la centième ligne — hors de l'en-tête,
+  // seul endroit qu'on lisait. Elle ne déclarait donc rien, et un document qui
+  // ne déclare rien ne peut être contredit par personne. Elle passait.
+  const reposoir = (n) =>
+    rapport([
+      "RAPPORT INITIAL DE CONTROLE TECHNIQUE",
+      "CONTROLE TECHNIQUE",
+      "N° d’affaire : 230113860000087",
+      `Référence du chrono: CT/13860/082${n}/0139`,
+      "Date d’émission : 27/08/2024",
+      LEGEND,
+      "SOCOTEC Construction - S.A.S."
+    ]);
+
+  const altima = rapport([
+    "AVIS SUITE A EXAMEN DE DOCUMENTS",
+    "FICHE N° : 27",
+    "Date d’émission : 01/09/2022",
+    ...Array(100).fill("Observation sans intérêt pour l’identité du chantier."),
+    "N° d’affaire : 190812440000048",
+    LEGEND,
+    "SOCOTEC Construction - S.A.S."
+  ]);
+
+  const lot = [reposoir(1), reposoir(2), reposoir(3), reposoir(4), altima].map((source) =>
+    recognizeDocument(source, { recognizers: [CT] })
+  );
+
+  // L'intrus est bien reconnu comme livrable de bureau de contrôle : ce n'est
+  // pas la reconnaissance qui doit l'écarter, c'est le rattachement.
+  assert.equal(lot[4].status, RECOGNITION.RECOGNIZED);
+
+  const consensus = batchConsensus(lot.map(declaredMarkers));
+  const verdicts = lot.map((verdict) =>
+    assessAttachment({ declared: declaredMarkers(verdict), known: [], consensus }).verdict
+  );
+
+  assert.deepEqual(verdicts.slice(0, 4), Array(4).fill(ATTACHMENT.UNCERTAIN), "les quatre du Reposoir passent");
+  assert.equal(verdicts[4], ATTACHMENT.FOREIGN, "la fiche de l’Altima est démasquée");
 });
