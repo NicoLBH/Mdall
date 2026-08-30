@@ -272,6 +272,63 @@ function renderRunPipelineSteps(entry) {
 }
 
 
+/**
+ * Ce qu'une analyse du suivi a lu, et ce qu'elle en a tiré.
+ *
+ * C'est le détail qu'on vient chercher quand un chiffre du suivi surprend :
+ * combien de livrables ont été relus, combien d'avis en sortent, et si le
+ * moteur a rencontré une garde en défaut. Une ligne qui dirait seulement
+ * « analyse réussie » ne se vérifierait pas.
+ *
+ * Les gardes sont nommées même à zéro. « Aucune violation de garde » est une
+ * information ; l'absence de ligne n'en est pas une.
+ */
+function renderRunCorpusDetail(entry) {
+  const corpus = entry?.details?.corpus;
+  if (!corpus || typeof corpus !== "object") return "";
+
+  const lignes = [
+    corpus.proposition ? ["Proposition", corpus.proposition] : null,
+    ["Livrables relus", `${corpus.documentCount || 0}`],
+    ["Avis suivis", `${corpus.trackedAvisCount || 0}${corpus.avisCount ? ` sur ${corpus.avisCount} relevés` : ""}`],
+    [
+      "Gardes",
+      corpus.guardViolationCount > 0
+        ? `${corpus.guardViolationCount} violation(s)`
+        : "aucune violation"
+    ],
+    corpus.engineVersion || corpus.packs?.length
+      ? ["Lu par", [corpus.engineVersion, ...(corpus.packs ?? [])].filter(Boolean).join(" · ")]
+      : null,
+    corpus.documents?.length
+      ? [
+          "Documents",
+          `${corpus.documents.slice(0, 3).join(", ")}${
+            corpus.documents.length > 3 ? ` et ${corpus.documents.length - 3} autre(s)` : ""
+          }`
+        ]
+      : null
+  ].filter(Boolean);
+
+  return `
+    <div class="workflow-runs__meta" style="margin-top:8px;">
+      <div style="font-weight:600; margin-bottom:6px; color: var(--fgColor-muted, #656d76);">Ce que l'analyse a lu</div>
+      <div style="display:grid; gap:4px;">
+        ${lignes
+          .map(
+            ([label, value]) => `
+              <div style="display:flex; flex-wrap:wrap; gap:8px;">
+                <span style="min-width:132px; font-weight:600;">${escapeHtml(label)}</span>
+                <span style="color: var(--fgColor-muted, #656d76);">${escapeHtml(value)}</span>
+              </div>
+            `
+          )
+          .join("")}
+      </div>
+    </div>
+  `;
+}
+
 function getRunHistoryIconSvg() {
   return svgIcon("history", {
     className: "octicon octicon-history",
@@ -315,6 +372,7 @@ function renderRunRows(entries) {
           </div>
           ${actionMeta}
           ${renderRunPipelineSteps(entry)}
+          ${renderRunCorpusDetail(entry)}
         </div>
 
         <div class="workflow-runs__cell">
