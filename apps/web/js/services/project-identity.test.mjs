@@ -270,3 +270,57 @@ test("un écho suspend aussi le jugement du lot", () => {
 
   assert.equal(bilan.verdict, ATTACHMENT.UNCERTAIN);
 });
+
+test("une affaire écartée par un humain le reste, sans qu'on redemande", () => {
+  // La promesse faite au « oui » vaut pour le « non » : refuser un rapport une
+  // fois, c'est ne plus jamais avoir à le refuser.
+  const memoire = [{ type: MARKER.CHRONO_AFFAIRE, value: "12440", rejected: true }];
+
+  const bilan = assessAttachment({ declared: declaredMarkers({ markers: [affaire("12440")] }), known: memoire });
+
+  assert.equal(bilan.verdict, ATTACHMENT.FOREIGN);
+  assert.match(bilan.reason, /écartée de ce projet/);
+});
+
+test("un refus l'emporte sur un écho, et même sur le nom du projet", () => {
+  // Celui qui a ouvert le PDF et répondu en sait plus que n'importe quelle
+  // règle. Lui redemander parce qu'un nom concorde serait lui faire refaire son
+  // travail — et le rapport d'un chantier voisin peut fort bien citer le nôtre.
+  const texte = "RICT — RESIDENCE LES TERRASSES DU LAC — mitoyen du lot voisin";
+
+  const bilan = assessAttachment({
+    declared: declaredMarkers({ markers: [affaire("12440")] }),
+    echoes: findEchoes(texte, selfMarkers(PROJET)),
+    known: [{ type: MARKER.CHRONO_AFFAIRE, value: "12440", rejected: true }]
+  });
+
+  assert.equal(bilan.verdict, ATTACHMENT.FOREIGN);
+});
+
+test("une affaire écartée ne compte pas non plus comme une affaire connue", () => {
+  // Sans quoi elle rendrait « étrangers » les livrables des autres affaires du
+  // projet, en leur opposant un désaccord avec une valeur qu'on a justement
+  // refusé de rattacher.
+  const bilan = assessAttachment({
+    declared: declaredMarkers({ markers: [affaire("13860")] }),
+    known: [{ type: MARKER.CHRONO_AFFAIRE, value: "12440", rejected: true }]
+  });
+
+  assert.equal(bilan.verdict, ATTACHMENT.UNCERTAIN);
+  assert.deepEqual(bilan.conflicting, []);
+});
+
+test("se raviser produit bien une écriture, dans les deux sens", () => {
+  const declared = declaredMarkers({ markers: [affaire("12440")] });
+
+  // Rattachée hier, écartée aujourd'hui : la réponse change, donc il y a à écrire.
+  const rattachee = [{ type: MARKER.CHRONO_AFFAIRE, value: "12440", rejected: false }];
+  assert.deepEqual(markersToRemember(declared, rattachee, { rejected: true }).map((m) => m.rejected), [true]);
+
+  // Et l'inverse.
+  const ecartee = [{ type: MARKER.CHRONO_AFFAIRE, value: "12440", rejected: true }];
+  assert.deepEqual(markersToRemember(declared, ecartee, { rejected: false }).map((m) => m.rejected), [false]);
+
+  // Répéter la même réponse n'apprend rien et ne réécrit rien.
+  assert.deepEqual(markersToRemember(declared, ecartee, { rejected: true }), []);
+});
