@@ -17,6 +17,8 @@ import { escapeHtml } from "../utils/escape-html.js";
 import { store } from "../store.js";
 import { svgIcon } from "../ui/icons.js";
 import { clearProjectActiveScrollSource, setProjectViewHeader } from "./project-shell-chrome.js";
+import { bindOverlayChromeCompact, renderOverlayChromeHead } from "./ui/overlay-chrome.js";
+import { renderSharedDetailsTitleWrap } from "./ui/detail-header.js";
 import { ITEM, PROPOSITION, describeMerge } from "../services/proposition-state.js";
 import {
   ITEM_TYPE,
@@ -160,9 +162,14 @@ function renderContent(root) {
       : all.filter((entry) => entry.status !== PROPOSITION.OPEN);
 
   if (view.open) {
+    // La coque d'un détail, celle des sujets : c'est elle que
+    // `bindOverlayChromeCompact` marque au défilement, et c'est sa classe qui
+    // fait basculer le titre étendu vers le titre compact, en CSS.
     root.innerHTML = `
       <section class="project-simple-page project-simple-page--propositions">
-        <div class="propositions-shell">${renderReview(root)}</div>
+        <div class="propositions-shell overlay-chrome overlay-chrome--proposition" data-review-chrome>
+          ${renderReview(root)}
+        </div>
       </section>
     `;
     bindReview(root);
@@ -213,45 +220,72 @@ function renderContent(root) {
  * d'un geste.
  * ──────────────────────────────────────────────────────────────────────────── */
 
-/** L'état d'une proposition, tel qu'on le montre : un mot et une couleur. */
-const PROPOSITION_BADGE = {
-  [PROPOSITION.OPEN]: { label: "Ouverte", icon: "git-pull-request", tone: "open" },
-  [PROPOSITION.MERGED]: { label: "Fusionnée", icon: "check-circle-fill", tone: "merged" },
-  [PROPOSITION.CLOSED]: { label: "Fermée", icon: "stop-alert", tone: "closed" }
+/**
+ * L'état d'une proposition, tel qu'on le montre.
+ *
+ * Les classes sont celles des sujets — `gh-state`, `gh-state--open`,
+ * `gh-state--closed`, `gh-state--rejected` — et pas des nôtres. Une pastille
+ * verte, violette ou grise veut déjà dire quelque chose dans cette
+ * application ; en redéfinir une deuxième famille pour dire la même chose ne
+ * ferait que promettre une différence qui n'existe pas.
+ */
+const PROPOSITION_STATE = {
+  [PROPOSITION.OPEN]: { label: "Ouverte", icon: "git-pull-request", className: "gh-state--open" },
+  [PROPOSITION.MERGED]: { label: "Fusionnée", icon: "git-compare", className: "gh-state--closed" },
+  [PROPOSITION.CLOSED]: { label: "Fermée", icon: "skip", className: "gh-state--rejected" }
 };
 
+function statePill(proposition) {
+  const state = PROPOSITION_STATE[proposition?.status] ?? PROPOSITION_STATE[PROPOSITION.OPEN];
+  return `<span class="gh-state ${state.className}"><span class="gh-state-dot" aria-hidden="true">${svgIcon(
+    state.icon,
+    { style: "color: #fff" }
+  )}</span>${state.label}</span>`;
+}
+
+function propositionMetaHtml(proposition) {
+  const ouverture = `ouverte le ${escapeHtml(formatDate(proposition.created_at))}`;
+  const fusion = proposition.merged_at ? ` · fusionnée le ${escapeHtml(formatDate(proposition.merged_at))}` : "";
+  return `<span class="details-title-meta">${ouverture}${fusion}</span>`;
+}
+
 /**
- * L'en-tête d'une proposition, à la manière d'une pull request.
+ * L'en-tête d'une proposition — le même que celui d'un sujet.
  *
- * Il est écrit ici plutôt que confié à `setProjectViewHeader` pour une raison
- * précise : ce composant échappe le HTML de son titre, et ne peut donc pas
- * porter la pastille d'état. Le rétrécissement au défilement, lui, est bien
- * mutualisé — il suit la classe `project-shell-compact` que la coque pose déjà
- * sur le `body`, et tout se passe en CSS.
+ * Rien n'est réinventé ici : `renderSharedDetailsTitleWrap` produit les deux
+ * titres — l'étendu et le compact —, `renderOverlayChromeHead` produit la
+ * barre, et `bindOverlayChromeCompact` bascule les classes au défilement. Une
+ * proposition et un sujet sont deux choses qu'on lit de la même façon ; leur
+ * donner deux en-têtes différents obligerait à corriger deux fois chaque
+ * défaut, et à les voir diverger entre-temps.
+ *
+ * Ce que la proposition met dans ces cases lui est propre : son numéro à la
+ * place de la référence, sa pastille d'état à la place de celle du sujet.
  */
 function renderReviewHead(proposition) {
-  const badge = PROPOSITION_BADGE[proposition.status] ?? PROPOSITION_BADGE[PROPOSITION.OPEN];
+  const titleWrapHtml = renderSharedDetailsTitleWrap(proposition, {
+    emptyText: "Aucune proposition",
+    buildTitleTextHtml: (entry) => `<span class="details-title-text">${escapeHtml(entry.title)}</span>`,
+    buildIdHtml: (entry) => `#${Number(entry.number) || "?"}`,
+    buildExpandedBottomHtml: (entry) => `${statePill(entry)}${propositionMetaHtml(entry)}`,
+    buildCompactConfig: (entry, { titleTextHtml, idHtml }) => ({
+      variant: "grid",
+      wrapClass: "details-title--compact-grid",
+      leftHtml: statePill(entry),
+      topHtml: titleTextHtml,
+      bottomHtml: propositionMetaHtml(entry),
+      idHtml
+    })
+  });
 
-  return `
-    <header class="review-head">
-      <button type="button" class="gh-btn gh-btn--sm review-head__back" data-review-back>← Toutes les propositions</button>
-      <h2 class="review-head__title">
-        ${escapeHtml(proposition.title)}
-        <span class="review-head__number">#${Number(proposition.number) || "?"}</span>
-      </h2>
-      <div class="review-head__status">
-        <span class="review-badge review-badge--${badge.tone}">
-          ${svgIcon(badge.icon, { className: "octicon" })}
-          <span>${badge.label}</span>
-        </span>
-        <span class="review-head__meta">
-          ouverte le ${escapeHtml(formatDate(proposition.created_at))}
-          ${proposition.merged_at ? `· fusionnée le ${escapeHtml(formatDate(proposition.merged_at))}` : ""}
-        </span>
-      </div>
-      ${proposition.description ? `<p class="review-head__description">${escapeHtml(proposition.description)}</p>` : ""}
-    </header>
-  `;
+  return renderOverlayChromeHead({
+    headId: "propositionsDetailsTitle",
+    titleHtml: titleWrapHtml,
+    headClassName: "review-head",
+    actionsHtml:
+      `<button type="button" class="gh-btn gh-btn--sm" data-review-back>` +
+      `Toutes les propositions</button>`
+  });
 }
 
 /**
@@ -272,6 +306,7 @@ function renderReviewItem(item, body) {
       </label>
       <div class="review-item__body">
         ${body}
+        ${refuse ? `<span class="review-item__status">Refusé</span>` : ""}
         ${
           refuse
             ? `<input
@@ -344,43 +379,74 @@ function renderAvisItem(item) {
 /**
  * Un bloc de la revue, avec sa case de tête.
  *
- * La case de tête vaut pour tout le bloc : elle est cochée quand tout l'est,
- * indéterminée quand une partie seulement l'est. C'est ce qui permet d'écarter
- * dix-sept avis d'un geste — ou de les accepter, ce qui est le cas courant.
+ * La case de tête est **dans la même colonne** que celles des lignes, parce
+ * qu'elle fait la même chose : elle coche tout, puis on décoche ce qu'on
+ * écarte. Décalée, elle aurait l'air de commander autre chose.
+ *
+ * Elle est cochée quand tout l'est, indéterminée quand une partie seulement
+ * l'est — mais un trait dans une case est un signal faible, et à dix-sept
+ * lignes on ne le voit pas. Le compte l'écrit donc en toutes lettres : « 3
+ * écartés sur 17 ». Ce qui n'est pas accepté doit se lire sans compter.
  *
  * Un bloc vide se dit, il ne se cache pas : savoir qu'aucun avis ne change est
  * une information, pas une absence d'information.
  */
 function renderReviewBlock(type, titre, items, renderer, vide) {
-  const acceptes = items.filter((entry) => entry.status !== ITEM.REFUSED).length;
-  const tous = items.length > 0 && acceptes === items.length;
-  const aucun = acceptes === 0;
+  const ecartes = items.filter((entry) => entry.status === ITEM.REFUSED).length;
+  const tous = items.length > 0 && ecartes === 0;
+  const aucun = items.length > 0 && ecartes === items.length;
+
+  const etat = aucun
+    ? `Tout est écarté`
+    : ecartes > 0
+      ? `${ecartes} écarté${ecartes > 1 ? "s" : ""} sur ${items.length}`
+      : `Tout est accepté`;
 
   return `
     <section class="review-block">
-      <div class="review-block__head">
+      <div class="review-panel">
+        <div class="review-block__head${ecartes > 0 ? " is-partial" : ""}">
+          <label class="review-item__check">
+            ${
+              items.length > 0
+                ? `<input
+                     type="checkbox"
+                     data-review-block="${escapeHtml(type)}"
+                     ${tous ? "checked" : ""}
+                     ${!tous && !aucun ? 'data-indeterminate="1"' : ""}
+                     aria-label="Tout accepter"
+                   >`
+                : ""
+            }
+          </label>
+          <div class="review-block__headbody">
+            <h3 class="review-block__title">
+              ${escapeHtml(titre)} <span class="review-block__count">${items.length}</span>
+            </h3>
+            ${items.length > 0 ? `<span class="review-block__state">${escapeHtml(etat)}</span>` : ""}
+          </div>
+        </div>
         ${
-          items.length > 0
-            ? `<label class="review-block__all">
-                 <input
-                   type="checkbox"
-                   data-review-block="${escapeHtml(type)}"
-                   ${tous ? "checked" : ""}
-                   ${!tous && !aucun ? 'data-indeterminate="1"' : ""}
-                 >
-                 <span>Tout accepter</span>
-               </label>`
-            : ""
+          items.length === 0
+            ? `<p class="review-block__empty">${escapeHtml(vide)}</p>`
+            : `<ul class="review-list">${items.map(renderer).join("")}</ul>`
         }
-        <h3 class="review-block__title">${escapeHtml(titre)} <span class="review-block__count">${items.length}</span></h3>
       </div>
-      ${
-        items.length === 0
-          ? `<p class="review-block__empty">${escapeHtml(vide)}</p>`
-          : `<ul class="review-list">${items.map(renderer).join("")}</ul>`
-      }
     </section>
   `;
+}
+
+/**
+ * Ce qu'on dit d'une proposition qui ne se fusionnera plus.
+ *
+ * Fusionnée et abandonnée ne sont pas la même fin, et les confondre sous un
+ * même « close » ferait perdre la seule chose qui les distingue : dans un cas
+ * les documents sont entrés, dans l'autre non.
+ */
+function closedNote(proposition) {
+  return proposition.status === PROPOSITION.MERGED
+    ? "Cette proposition a été fusionnée : elle ne peut plus l'être une seconde fois."
+    : "Cette proposition a été abandonnée. Ses documents restent au projet, marqués refusés.";
 }
 
 function renderReview(root) {
@@ -421,6 +487,11 @@ function renderReview(root) {
   return `
     ${entete}
     ${
+      proposition.description
+        ? `<p class="review-description">${escapeHtml(proposition.description)}</p>`
+        : ""
+    }
+    ${
       review.unreachable.length > 0
         ? `<div class="propositions-empty propositions-empty--warn">
              <b>${review.unreachable.length} livrable(s) n'ont pas pu être rapatriés</b>
@@ -456,10 +527,17 @@ function renderReview(root) {
       <p class="review-merge__summary">${escapeHtml(describeMerge(items))}</p>
       ${
         fusionnee
-          ? `<p class="review-merge__done">Cette proposition a été fusionnée : elle ne peut plus l'être une seconde fois.</p>`
-          : `<button type="button" class="gh-btn gh-btn--validate" data-review-merge ${
-              review.merging ? "disabled" : ""
-            }>${review.merging ? "Fusion en cours…" : "Fusionner la proposition"}</button>`
+          ? `<p class="review-merge__done">${escapeHtml(closedNote(proposition))}</p>`
+          : `<div class="review-merge__actions">
+               <button type="button" class="gh-btn gh-btn--danger" data-review-abandon ${
+                 review.merging ? "disabled" : ""
+               }>${
+                 review.abandoning ? "Confirmer l'abandon" : "Abandonner"
+               }</button>
+               <button type="button" class="gh-btn gh-btn--primary" data-review-merge ${
+                 review.merging ? "disabled" : ""
+               }>${review.merging ? "Fusion en cours…" : "Fusionner la proposition"}</button>
+             </div>`
       }
     </footer>
   `;
@@ -467,6 +545,18 @@ function renderReview(root) {
 
 /** Le retour à la liste, les cases, les raisons, et la fusion. */
 function bindReview(root) {
+  // Le même mécanisme que pour un sujet : la page défile, la coque prend
+  // `overlay-chrome--compact`, l'en-tête prend `details-head--compact`, et le
+  // CSS partagé échange les deux titres.
+  // `document.documentElement` et non `document` : la fonction s'en sert pour
+  // marquer qu'elle a déjà posé son écouteur, et un `Document` ne porte pas
+  // d'attribut — on rebrancherait un écouteur à chaque rendu.
+  bindOverlayChromeCompact(
+    document.documentElement,
+    root.querySelector("[data-review-chrome]"),
+    "propositions"
+  );
+
   root.querySelector("[data-review-back]")?.addEventListener("click", () => backToList(root));
 
   // Une case de tête à moitié cochée ne s'écrit pas en HTML : c'est une
@@ -498,6 +588,7 @@ function bindReview(root) {
   }
 
   root.querySelector("[data-review-merge]")?.addEventListener("click", () => merge(root));
+  root.querySelector("[data-review-abandon]")?.addEventListener("click", () => abandon(root));
 }
 
 function findItem(cle) {
@@ -617,6 +708,68 @@ async function merge(root) {
   } catch {
     view.review.merging = false;
     view.review.notice = "La fusion n'a pas abouti. La proposition reste ouverte : rien n'a été perdu.";
+  }
+
+  renderContent(root);
+}
+
+/**
+ * Renonce à une proposition.
+ *
+ * Abandonner n'est pas fusionner un lot vide : les documents ne sont pas
+ * entrés, ils sont marqués refusés, et l'onglet Documents les montre grisés.
+ * C'est la sortie qui manquait — sans elle, une proposition ouverte par erreur
+ * restait ouverte pour toujours, et la liste des propositions ouvertes cessait
+ * peu à peu de vouloir dire quelque chose.
+ *
+ * Deux clics, parce qu'un abandon ne se répare pas : une proposition close ne
+ * se rouvre pas, on en ouvre une autre. Le second clic est le même bouton, qui
+ * dit alors ce qu'il va faire — un `confirm()` du navigateur poserait la
+ * question ailleurs que là où on l'a posée.
+ */
+async function abandon(root) {
+  const proposition = view.open;
+  if (!proposition || proposition.status !== PROPOSITION.OPEN || view.review.merging) return;
+
+  if (!view.review.abandoning) {
+    view.review.abandoning = true;
+    renderContent(root);
+    return;
+  }
+
+  view.review.merging = true;
+  view.review.notice = null;
+  renderContent(root);
+
+  try {
+    const { closeProposition } = await import("../services/propositions-supabase.js");
+    const documents = (view.review.items ?? []).filter((entry) => entry.itemType === ITEM_TYPE.DOCUMENT);
+
+    const ferme = await closeProposition({
+      proposition,
+      documentIds: documents.map((entry) => entry.itemKey)
+    });
+
+    if (!ferme) {
+      view.review.merging = false;
+      view.review.abandoning = false;
+      view.review.notice = "L'abandon n'a pas abouti. La proposition reste ouverte : rien n'a été perdu.";
+      renderContent(root);
+      return;
+    }
+
+    view.review.merging = false;
+    view.review.abandoning = false;
+    view.open = { ...proposition, status: PROPOSITION.CLOSED };
+
+    // La liste et le compteur de l'onglet disent la même chose que l'écran.
+    const ligne = (view.propositions ?? []).find((entry) => entry.id === proposition.id);
+    if (ligne) ligne.status = PROPOSITION.CLOSED;
+    store.projectPropositionsView = { openCount: getOpenPropositionCount() };
+  } catch {
+    view.review.merging = false;
+    view.review.abandoning = false;
+    view.review.notice = "L'abandon n'a pas abouti. La proposition reste ouverte : rien n'a été perdu.";
   }
 
   renderContent(root);

@@ -295,3 +295,42 @@ export async function mergeProposition({ proposition, acceptedDocumentIds = [], 
     return null;
   }
 }
+
+/**
+ * Renonce à une proposition.
+ *
+ * Ses documents ne sont pas supprimés — rien ne l'est jamais ici — mais marqués
+ * refusés : ils restent visibles, grisés, dans l'onglet Documents. Un document
+ * déposé est un fait ; ce qui se décide, c'est son entrée dans le corpus.
+ *
+ * Même ordre que la fusion : les documents d'abord, l'état ensuite. Une
+ * proposition marquée close dont les documents seraient restés « en attente »
+ * les laisserait suspendus à un jugement que personne ne rendrait plus.
+ *
+ * @returns {Promise<{closed: boolean, refused: number}|null>}
+ */
+export async function closeProposition({ proposition, documentIds = [] } = {}) {
+  if (!proposition?.id) return null;
+
+  try {
+    if (documentIds.length > 0) {
+      await request("documents", {
+        method: "PATCH",
+        params: { id: `in.(${documentIds.join(",")})` },
+        headers: { Prefer: "return=minimal" },
+        body: { corpus_state: "refused" }
+      });
+    }
+
+    await request("propositions", {
+      method: "PATCH",
+      params: { id: `eq.${proposition.id}`, status: `eq.${PROPOSITION.OPEN}` },
+      headers: { Prefer: "return=minimal" },
+      body: { status: PROPOSITION.CLOSED }
+    });
+
+    return { closed: true, refused: documentIds.length };
+  } catch {
+    return null;
+  }
+}
