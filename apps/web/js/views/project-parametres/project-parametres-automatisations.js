@@ -15,7 +15,8 @@ import {
 function getAutomationItemDescription(item) {
   const descriptions = {
     autoProjectBaseDataEnrichment: "Lance automatiquement l’enrichissement des données Géorisques après modification de la localisation projet.",
-    autoAnalysisAfterUpload: "Lance automatiquement l’analyse spécialisée après dépôt réussi d’un document.",
+    autoAnalysisAfterUpload:
+      "Lance l’analyse IA qui extrait des sujets d’un PDF, une fois le document déposé. Le dépôt a lieu dans tous les cas ; cette analyse ne traite qu’un document à la fois.",
     autoComparePreviousVersion: "Prévu pour comparer automatiquement une version déposée à la précédente.",
     autoDetectInconsistencies: "Prévu pour signaler automatiquement des incohérences inter-documents ou intra-document.",
     autoGenerateReport: "Prévu pour générer automatiquement un rapport ou une synthèse d’analyse.",

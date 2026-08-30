@@ -23,7 +23,7 @@ import {
 } from "../services/analysis-runner.js";
 import { addProjectDocument, decorateDocumentWithPhase, getEnabledProjectPhasesCatalog, getProjectDocumentById, getProjectDocumentPreviewUrl, getProjectDocuments, resolveDocumentRefs, setActiveProjectDocument } from "../services/project-documents-store.js";
 import { getDocumentStatsMap } from "../services/project-document-selectors.js";
-import { listDocumentDirectory, listDocumentFolders, createDocumentFolder, renameDocumentFolder, moveDocumentFile, syncProjectDocumentsFromSupabase } from "../services/project-supabase-sync.js";
+import { listDocumentDirectory, listDocumentFolders, createDocumentFolder, renameDocumentFolder, moveDocumentFile, resolveCurrentBackendProjectId, syncProjectDocumentsFromSupabase } from "../services/project-supabase-sync.js";
 import { getEffectiveSituationStatus, getEffectiveSujetStatus } from "./project-situations.js";
 import { buildSupabaseAuthHeaders, getSupabaseAnonKey, getSupabaseUrl } from "../../assets/js/auth.js";
 
@@ -63,12 +63,13 @@ function logPdfPreviewDebug(label, payload = {}) {
 
 const docsViewState = {
   mode: "list", // "list" | "upload" | "report-preview" | "pdf-preview"
-  file: null,
+  // Les fichiers choisis pour le prochain dépôt. `files`, plus bas, désigne tout
+  // autre chose — le contenu du répertoire affiché —, d'où ce nom-ci.
+  selectedFiles: [],
   title: "",
   description: "",
   isUploading: false,
-  uploadProgress: 0,
-  uploadTimer: null,
+  uploadProgress: null,
   selectedPhase: store.projectForm?.currentPhase || store.projectForm?.phase || "APS",
   reportNumber: 1,
   activity: {
@@ -116,7 +117,11 @@ function getFolderOpenIconSvg() {
 }
 
 async function loadCurrentDirectory({ forceFolderId } = {}) {
-  const projectId = String(store.currentProject?.backendProjectId || store.currentProject?.id || store.currentProjectId || "").trim();
+  // La même résolution que le dépôt. Elle lisait auparavant `store.currentProject`
+  // et retombait sur l'identifiant du projet de l'écran : le répertoire pouvait
+  // alors être interrogé sur un projet différent de celui où les documents
+  // venaient d'être écrits, et paraître vide sans que rien ne l'explique.
+  const projectId = String((await resolveCurrentBackendProjectId().catch(() => "")) || "").trim();
   const folderId = forceFolderId === undefined ? docsViewState.currentFolderId : (forceFolderId || null);
   console.info("[documents-view] load-directory.start", { projectId, folderId });
   const directory = await listDocumentDirectory(projectId, folderId);
@@ -1874,44 +1879,52 @@ function renderMoveFileModal() {
 }
 
 function renderUploadProgress() {
-  if (!docsViewState.file) return "";
+  const files = docsViewState.selectedFiles;
+  if (files.length === 0) return "";
 
   if (docsViewState.isUploading) {
+    const { done = 0, total = files.length, name = "" } = docsViewState.uploadProgress || {};
     return `
       <div class="documents-upload-progress">
         <div class="documents-upload-progress__file">
           <span class="documents-upload-progress__icon">${getLargeDocumentIconSvg()}</span>
-          <span class="documents-upload-progress__name">${escapeHtml(docsViewState.file.name)}</span>
+          <span class="documents-upload-progress__name">${escapeHtml(name || "Dépôt en cours")}</span>
         </div>
         <div class="documents-upload-progress__meta">
-          Chargement du fichier... ${docsViewState.uploadProgress}%
+          Dépôt ${done}/${total}…
         </div>
-        ${renderUploadProgressBar({ progressPercent: docsViewState.uploadProgress })}
+        ${renderUploadProgressBar({ progressPercent: total ? Math.round((done / total) * 100) : 0 })}
       </div>
     `;
   }
 
-  return `
-    <div class="documents-uploaded-file">
-      <div class="documents-uploaded-file__left">
-        <span class="documents-uploaded-file__icon">${getLargeDocumentIconSvg()}</span>
-        <span class="documents-uploaded-file__name">${escapeHtml(docsViewState.file.name)}</span>
-      </div>
-      <button
-        type="button"
-        class="documents-uploaded-file__remove"
-        id="documentsRemoveFileBtn"
-        aria-label="Retirer le fichier"
-        title="Retirer le fichier"
-      >
-        ${getRemoveIconSvg()}
-      </button>
-    </div>
-  `;
+  // Un fichier par ligne, chacun retirable : sur un lot de dix-sept, se tromper
+  // d'un fichier ne doit pas obliger à tout recommencer.
+  return files
+    .map(
+      (file, index) => `
+        <div class="documents-uploaded-file">
+          <div class="documents-uploaded-file__left">
+            <span class="documents-uploaded-file__icon">${getLargeDocumentIconSvg()}</span>
+            <span class="documents-uploaded-file__name">${escapeHtml(file.name)}</span>
+          </div>
+          <button
+            type="button"
+            class="documents-uploaded-file__remove"
+            data-documents-remove-file="${index}"
+            aria-label="Retirer ${escapeHtml(file.name)}"
+            title="Retirer le fichier"
+          >
+            ${getRemoveIconSvg()}
+          </button>
+        </div>
+      `
+    )
+    .join("");
 }
 
 function canSubmitUpload() {
-  return !!docsViewState.file && !docsViewState.isUploading;
+  return docsViewState.selectedFiles.length > 0 && !docsViewState.isUploading;
 }
 
 function renderUploadView() {
@@ -1925,7 +1938,7 @@ function renderUploadView() {
         ${renderDocumentsActivityBanner()}
           <div class="documents-upload-layout">
             <section class="documents-dropzone ${isBusy}" id="documentsDropzone">
-              <input id="documentsFileInput" type="file" hidden accept=".pdf,.doc,.docx,.xls,.xlsx,.dwg,.zip,image/*">
+              <input id="documentsFileInput" type="file" multiple hidden accept=".pdf,.doc,.docx,.xls,.xlsx,.dwg,.zip,image/*">
               <div class="documents-dropzone__inner">
                 <div class="documents-dropzone__icon">
                   ${getLargeDocumentIconSvg()}
@@ -1933,7 +1946,7 @@ function renderUploadView() {
                 <h3>Glissez vos fichiers ici pour les ajouter au projet</h3>
                 <p>
                   Ou
-                  <button type="button" class="documents-dropzone__link" id="documentsChooseBtn" ${isDisabled}>choisissez votre fichier</button>
+                  <button type="button" class="documents-dropzone__link" id="documentsChooseBtn" ${isDisabled}>choisissez vos fichiers</button>
                 </p>
               </div>
             </section>
@@ -1950,7 +1963,11 @@ function renderUploadView() {
               </div>
 
               <section class="documents-commit-card">
-                <div class="documents-commit-card__title">Déposer le document</div>
+                <div class="documents-commit-card__title">${
+                  docsViewState.selectedFiles.length > 1
+                    ? `Déposer ${docsViewState.selectedFiles.length} documents`
+                    : "Déposer le document"
+                }</div>
 
                 <div class="documents-form-field">
                   ${renderGhInput({
@@ -1983,18 +2000,10 @@ function renderUploadView() {
   `;
 }
 
-function stopUploadSimulation() {
-  if (docsViewState.uploadTimer) {
-    clearInterval(docsViewState.uploadTimer);
-    docsViewState.uploadTimer = null;
-  }
-}
-
 function resetUploadState() {
-  stopUploadSimulation();
-  docsViewState.file = null;
+  docsViewState.selectedFiles = [];
   docsViewState.isUploading = false;
-  docsViewState.uploadProgress = 0;
+  docsViewState.uploadProgress = null;
   docsViewState.title = "";
   docsViewState.description = "";
 
@@ -2002,27 +2011,6 @@ function resetUploadState() {
   if (fileInput) {
     fileInput.value = "";
   }
-}
-
-function simulateUpload(root, file) {
-  stopUploadSimulation();
-  docsViewState.file = file;
-  docsViewState.isUploading = true;
-  docsViewState.uploadProgress = 0;
-  renderProjectDocuments(root);
-
-  docsViewState.uploadTimer = setInterval(() => {
-    const increment = docsViewState.uploadProgress < 70 ? 9 : 4;
-    docsViewState.uploadProgress = Math.min(100, docsViewState.uploadProgress + increment);
-
-    if (docsViewState.uploadProgress >= 100) {
-      stopUploadSimulation();
-      docsViewState.isUploading = false;
-      docsViewState.uploadProgress = 100;
-    }
-
-    renderProjectDocuments(root);
-  }, 120);
 }
 
 function closeUploadView(root) {
@@ -2109,95 +2097,205 @@ function closePdfPreview(root) {
   renderProjectDocuments(root);
 }
 
-function renderFromSelectedFile(root, file) {
-  if (!file) return;
-  if (!docsViewState.title) {
-    docsViewState.title = file.name.replace(/\.[^.]+$/, "");
+/**
+ * Ajoute des fichiers à la sélection en cours.
+ *
+ * Ils s'ajoutent au lieu de se remplacer : on peut choisir cinq fichiers, puis
+ * en glisser trois autres. Un même fichier choisi deux fois n'entre qu'une fois
+ * — c'est le geste le plus courant quand on hésite.
+ */
+function addSelectedFiles(root, fileList) {
+  const incoming = [...(fileList ?? [])];
+  if (incoming.length === 0) return;
+
+  const known = new Set(docsViewState.selectedFiles.map((file) => `${file.name}|${file.size}`));
+  for (const file of incoming) {
+    const key = `${file.name}|${file.size}`;
+    if (known.has(key)) continue;
+    known.add(key);
+    docsViewState.selectedFiles.push(file);
   }
-  simulateUpload(root, file);
+
+  // Le titre reprend le premier fichier, comme GitHub propose « Add files via
+  // upload » : une proposition, pas une contrainte.
+  if (!docsViewState.title && docsViewState.selectedFiles.length > 0) {
+    docsViewState.title =
+      docsViewState.selectedFiles.length === 1
+        ? docsViewState.selectedFiles[0].name.replace(/\.[^.]+$/, "")
+        : `Ajout de ${docsViewState.selectedFiles.length} documents`;
+  }
+
+  renderProjectDocuments(root);
 }
 
-function buildRepoDocumentFromState() {
+/**
+ * La ligne locale d'un document qui vient d'être déposé.
+ *
+ * Le répertoire affiché est relu depuis la base ; ce store-ci sert aux autres
+ * écrans, qui n'ont pas de raison d'ignorer un document jusqu'au prochain
+ * rechargement.
+ */
+function buildRepoDocumentFor(file, documentId) {
   const title = docsViewState.title.trim();
   const description = docsViewState.description.trim();
-  const baseNote = title || description || "Document prêt pour l'analyse";
   const enabledPhases = getEnabledProjectPhasesCatalog();
   const currentPhase = enabledPhases.find((item) => item.code === docsViewState.selectedPhase) || null;
-  const fileName = docsViewState.file?.name || "Document";
-  const mimeType = String(docsViewState.file?.type || "").trim();
-  const extension = getFileExtension(fileName);
-  const previewUrl = "";
+  const fileName = file?.name || "Document";
+  const mimeType = String(file?.type || "").trim();
 
   return {
+    id: documentId || undefined,
     name: fileName,
-    title: title || fileName || "Document",
-    note: baseNote,
+    title: docsViewState.selectedFiles.length === 1 ? title || fileName : fileName,
+    note: description || title || "Document prêt pour l'analyse",
     updatedAt: "À l'instant",
     phaseCode: currentPhase?.code || docsViewState.selectedPhase || "APS",
     phaseLabel: currentPhase?.label || "",
     fileName,
     mimeType,
-    extension,
-    previewUrl,
-    localFile: mimeType === "application/pdf" ? docsViewState.file : null
+    extension: getFileExtension(fileName),
+    previewUrl: "",
+    localFile: mimeType === "application/pdf" ? file : null
   };
 }
 
-function triggerAutoAnalysisAfterDirectUpload(root, document = null) {
-  const documentName = document?.name || "";
-  const currentFolderId = docsViewState.currentFolderId || null;
-  if (!shouldAutoRunAnalysisAfterUpload()) {
-    setDocumentsActivity({
-      tone: "info",
-      title: "Document déposé",
-      message: "Le dépôt a été enregistré. L’analyse automatique n’est pas activée pour ce projet."
+/**
+ * Dépose les fichiers choisis, pour de bon.
+ *
+ * C'est le geste qui manquait. Jusqu'ici, `commitDirectDocument` n'écrivait que
+ * dans le store local et confiait le véritable téléversement à l'analyse : si
+ * l'analyse automatique était désactivée, l'écran annonçait « le dépôt a été
+ * enregistré » alors que rien n'était parti. Le fichier disparaissait au
+ * rechargement, et personne ne pouvait le savoir.
+ *
+ * Déposer et analyser sont désormais deux actes distincts. Le dépôt a lieu quoi
+ * qu'il arrive ; l'analyse, si elle a lieu, vient après et ne le conditionne
+ * plus.
+ */
+async function commitDeposit(root) {
+  const files = [...docsViewState.selectedFiles];
+  if (files.length === 0 || docsViewState.isUploading) return;
+
+  docsViewState.isUploading = true;
+  docsViewState.uploadProgress = { done: 0, total: files.length, name: files[0]?.name ?? "" };
+  renderProjectDocuments(root);
+
+  let results = [];
+  try {
+    const [{ ensureBackendProject }, { depositBatch, summarizeDeposit, ENTRY }] = await Promise.all([
+      import("../services/backend-project.js"),
+      import("../services/document-batch.js")
+    ]);
+
+    const projectId = await ensureBackendProject();
+    results = await depositBatch(files, {
+      projectId,
+      folderId: docsViewState.currentFolderId || null,
+      onProgress: (progress) => {
+        docsViewState.uploadProgress = progress;
+        renderProjectDocuments(root);
+      }
     });
-    return;
+
+    const summary = summarizeDeposit(results);
+
+    // Les autres écrans n'ont pas à ignorer un document jusqu'au prochain
+    // rechargement : le store local reçoit ceux qui sont réellement entrés.
+    for (const result of results) {
+      if (result.entry === ENTRY.DEPOSITED) addProjectDocument(buildRepoDocumentFor(result.file, result.documentId));
+    }
+
+    // Nommer ce qui n'est pas entré, un par un. Un fichier écarté en silence est
+    // un fichier que l'utilisateur croit avoir déposé.
+    const ecartes = results
+      .filter((result) => result.entry !== ENTRY.DEPOSITED)
+      .map((result) => `${result.file?.name ?? "Document"} — ${result.reason ?? ""}`.trim());
+
+    docsViewState.isUploading = false;
+    docsViewState.uploadProgress = null;
+    resetUploadState();
+    docsViewState.mode = "list";
+
+    await loadCurrentDirectory().catch(() => {});
+
+    setDocumentsActivity({
+      tone: summary.tone,
+      title: summary.deposited > 0 ? "Documents déposés" : "Dépôt sans effet",
+      message: ecartes.length > 0 ? `${summary.message} ${ecartes.join(" · ")}` : summary.message
+    });
+    // `setDocumentsActivity` ne fait que poser l'état : sans ce rendu, le bandeau
+    // resterait celui du dépôt précédent.
+    renderProjectDocuments(root);
+
+    triggerAnalysisAfterDeposit(root, results);
+  } catch (error) {
+    docsViewState.isUploading = false;
+    docsViewState.uploadProgress = null;
+    renderProjectDocuments(root);
+    setDocumentsActivity({
+      tone: "error",
+      title: "Dépôt impossible",
+      message: String(error?.message || error || "Le dépôt n'a pas abouti.")
+    });
+    renderProjectDocuments(root);
   }
+}
+
+/**
+ * L'analyse par IA, si le projet l'a demandée — et seulement après le dépôt.
+ *
+ * Elle ne conditionne plus rien : le document est déjà en base quand on arrive
+ * ici. Ce chemin est celui de l'ancienne pipeline, qui produit des sujets à
+ * partir d'un PDF ; il sera remplacé par l'analyse d'une proposition. En
+ * attendant, il reste joignable pour qui s'en sert, à ceci près qu'il ne traite
+ * qu'un document à la fois — et l'écran le dit plutôt que de le taire.
+ */
+function triggerAnalysisAfterDeposit(root, results = []) {
+  if (!shouldAutoRunAnalysisAfterUpload()) return;
+
+  const deposited = results.filter((result) => result.documentId && /\.pdf$/i.test(result.file?.name ?? ""));
+  if (deposited.length === 0) return;
 
   if (isAnalysisRunning()) {
     const currentRun = getCurrentAnalysisRunMeta();
     setDocumentsActivity({
       tone: "warning",
-      title: "Document déposé",
-      message: `Le dépôt a été enregistré, mais l’analyse automatique n’a pas été relancée car un traitement est déjà en cours${currentRun.runId ? ` (${currentRun.runId})` : ""}.`
+      title: "Documents déposés",
+      message: `Le dépôt a abouti, mais l'analyse n'a pas été lancée : un traitement est déjà en cours${
+        currentRun.runId ? ` (${currentRun.runId})` : ""
+      }.`
     });
+    renderProjectDocuments(root);
     return;
   }
 
+  const premier = deposited[0];
+  store.projectForm.pdfFile = premier.file;
+
   setDocumentsActivity({
-    tone: "success",
-    title: "Document déposé",
-    message: "Le dépôt a été enregistré et l’analyse automatique a été lancée."
+    tone: "info",
+    title: "Documents déposés",
+    message:
+      deposited.length > 1
+        ? `Analyse lancée sur « ${premier.file.name} ». Elle ne traite qu'un document à la fois.`
+        : `Analyse lancée sur « ${premier.file.name} ».`
   });
 
   runAnalysis({
     triggerType: "document-upload",
     triggerLabel: "Dépôt de document",
-    documentName,
-    currentFolderId,
-    documentIds: document?.id ? [document.id] : [],
-    summary: "Analyse déclenchée automatiquement après dépôt réussi d’un document."
+    documentName: premier.file.name,
+    currentFolderId: docsViewState.currentFolderId || null,
+    documentIds: [premier.documentId],
+    summary: "Analyse déclenchée après dépôt d'un document."
   });
 
   renderProjectDocuments(root);
 }
 
-function commitDirectDocument(root) {
-  if (!docsViewState.file) return;
-
-  const documentFile = docsViewState.file;
-  const repoDocument = addProjectDocument(buildRepoDocumentFromState());
-
-  store.projectForm.pdfFile = documentFile;
-
-  closeUploadView(root);
-  triggerAutoAnalysisAfterDirectUpload(root, repoDocument);
-}
-
 function handleSubmit(root) {
   if (!canSubmitUpload()) return;
-  commitDirectDocument(root);
+  commitDeposit(root);
   loadCurrentDirectory()
     .then(() => {
       renderProjectDocumentsContent(root);
@@ -2523,8 +2621,9 @@ function bindDocumentsView(root) {
 
   if (fileInput) {
     fileInput.addEventListener("change", (event) => {
-      const file = event.target.files?.[0] || null;
-      renderFromSelectedFile(root, file);
+      // La liste doit être recopiée avant que le champ ne soit vidé : `files`
+      // pointe sur le même objet, et `value = ""` le vide aussi.
+      addSelectedFiles(root, event.target.files);
     });
   }
 
@@ -2547,18 +2646,16 @@ function bindDocumentsView(root) {
 
     dropzone.addEventListener("drop", (event) => {
       if (docsViewState.isUploading) return;
-      const file = event.dataTransfer?.files?.[0] || null;
-      renderFromSelectedFile(root, file);
+      addSelectedFiles(root, event.dataTransfer?.files);
     });
   }
 
-  const removeFileBtn = document.getElementById("documentsRemoveFileBtn");
-  if (removeFileBtn) {
-    removeFileBtn.addEventListener("click", () => {
-      stopUploadSimulation();
-      docsViewState.file = null;
-      docsViewState.isUploading = false;
-      docsViewState.uploadProgress = 0;
+  for (const button of document.querySelectorAll("[data-documents-remove-file]")) {
+    button.addEventListener("click", () => {
+      if (docsViewState.isUploading) return;
+      const index = Number(button.getAttribute("data-documents-remove-file"));
+      if (!Number.isInteger(index)) return;
+      docsViewState.selectedFiles.splice(index, 1);
       renderProjectDocuments(root);
     });
   }

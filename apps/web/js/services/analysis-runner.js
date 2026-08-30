@@ -14,10 +14,10 @@ import {
   insertDocumentRow,
   uploadDocumentToStorage
 } from "./document-deposit.js";
+import { ensureBackendProject, mappedBackendProjectId } from "./backend-project.js";
 
 const SUPABASE_URL = getSupabaseUrl();
 const SUPABASE_ANON_KEY = getSupabaseAnonKey();
-const FRONT_PROJECT_MAP_STORAGE_KEY = "mdall.supabaseProjectMap.v1";
 
 const FETCH_TIMEOUT_MS = 60_000;
 
@@ -185,28 +185,6 @@ async function getSupabaseAuthHeaders(extra = {}) {
   return buildSupabaseAuthHeaders(extra);
 }
 
-function getFrontendProjectKey() {
-  return String(store.currentProjectId || store.currentProject?.id || "default").trim() || "default";
-}
-
-function readFrontendProjectMap() {
-  try {
-    const raw = localStorage.getItem(FRONT_PROJECT_MAP_STORAGE_KEY);
-    const parsed = raw ? JSON.parse(raw) : {};
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-function writeFrontendProjectMap(map) {
-  try {
-    localStorage.setItem(FRONT_PROJECT_MAP_STORAGE_KEY, JSON.stringify(map || {}));
-  } catch {
-    // no-op
-  }
-}
-
 async function restInsert(table, payload, select = "*") {
   const url = new URL(`${SUPABASE_URL}/rest/v1/${table}`);
   if (select) url.searchParams.set("select", select);
@@ -227,42 +205,6 @@ async function restInsert(table, payload, select = "*") {
 
   const rows = await res.json();
   return Array.isArray(rows) ? (rows[0] || null) : rows;
-}
-
-async function ensureBackendProject() {
-  const currentUser = await getCurrentUser();
-  if (!currentUser?.id) {
-    throw new Error("Utilisateur authentifié introuvable pour la création du projet.");
-  }
-  const frontendProjectKey = getFrontendProjectKey();
-  const map = readFrontendProjectMap();
-  if (map[frontendProjectKey]) {
-    return map[frontendProjectKey];
-  }
-
-  const projectName = String(
-    store.currentProject?.name || store.projectForm?.projectName || frontendProjectKey
-  ).trim() || frontendProjectKey;
-
-  const description = [
-    `Front project key: ${frontendProjectKey}`,
-    store.projectForm?.city ? `Ville: ${store.projectForm.city}` : "",
-    store.projectForm?.currentPhase ? `Phase: ${store.projectForm.currentPhase}` : ""
-  ].filter(Boolean).join(" · ");
-
-  const row = await restInsert("projects", {
-    name: projectName,
-    description,
-    owner_id: currentUser.id
-  }, "id,name");
-
-  if (!row?.id) {
-    throw new Error("projects insert succeeded without id");
-  }
-
-  map[frontendProjectKey] = row.id;
-  writeFrontendProjectMap(map);
-  return row.id;
 }
 
 async function invokeRunAnalysis(runId) {
@@ -898,12 +840,6 @@ export async function runAnalysis(options = {}) {
   return promise;
 }
 
-function getMappedBackendProjectId() {
-  const frontendProjectKey = getFrontendProjectKey();
-  const map = readFrontendProjectMap();
-  return map[frontendProjectKey] || "";
-}
-
 export async function loadExistingSubjectsForCurrentProject(options = {}) {
   const force = !!options.force;
   const currentProjectScopeId = String(store.currentProjectId || "").trim() || null;
@@ -912,7 +848,7 @@ export async function loadExistingSubjectsForCurrentProject(options = {}) {
     return existing;
   }
 
-  const backendProjectId = getMappedBackendProjectId();
+  const backendProjectId = mappedBackendProjectId();
   if (!backendProjectId) {
     store.situationsView.data = [];
     store.situationsView.projectScopeId = String(store.currentProjectId || "").trim() || null;
