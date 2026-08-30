@@ -20,7 +20,7 @@ const SUPABASE_URL = getSupabaseUrl();
 
 const COLUMNS =
   "id,number,project_id,title,description,status,created_by,created_at,updated_at," +
-  "merged_at,merged_by,closed_at,closed_by,snapshot";
+  "merged_at,merged_by,merge_title,merge_note,closed_at,closed_by,snapshot";
 
 async function request(path, { method = "GET", body = null, headers = {}, params = {} } = {}) {
   const url = new URL(`${SUPABASE_URL}/rest/v1/${path}`);
@@ -302,7 +302,9 @@ export async function mergeProposition({
   proposition,
   acceptedDocumentIds = [],
   refusedDocumentIds = [],
-  snapshot = null
+  snapshot = null,
+  mergeTitle = "",
+  mergeNote = ""
 } = {}) {
   if (!proposition?.id) return null;
 
@@ -334,6 +336,9 @@ export async function mergeProposition({
         status: PROPOSITION.MERGED,
         merged_at: new Date().toISOString(),
         merged_by: mergedBy,
+        // Ce que quelqu'un a écrit en signant, au moment où il signait.
+        ...(mergeTitle ? { merge_title: mergeTitle } : {}),
+        ...(mergeNote ? { merge_note: mergeNote } : {}),
         // Le résumé part avec l'état : une proposition close sans son état
         // conservé est exactement ce qu'on cherche à ne plus produire.
         ...(snapshot ? { snapshot } : {})

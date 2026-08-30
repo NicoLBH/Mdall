@@ -36,6 +36,7 @@ import { renderSharedDetailsTitleWrap } from "./ui/detail-header.js";
 import { ITEM, PROPOSITION, describeMerge } from "../services/proposition-state.js";
 import {
   buildSnapshot,
+  defaultMergeMessage,
   describeSnapshotGap,
   freezeDecisions,
   itemsFromDecisions
@@ -76,7 +77,10 @@ const view = {
   /** Le message en cours de modification, s'il y en a un. */
   editing: null,
   editDraft: "",
-  editPreview: false
+  editPreview: false,
+  /** Ce qu'on écrira en fusionnant. */
+  mergeTitle: "",
+  mergeNote: ""
 };
 
 /** Le nombre d'ouvertes, pour la pastille de l'onglet. */
@@ -792,8 +796,9 @@ function renderOutcomeCard(event) {
           })}</span>
           <div class="outcome-card__text">
             <b>${escapeHtml(
-              fusionnee ? "Proposition fusionnée et close" : "Proposition abandonnée et close"
+              event.title || (fusionnee ? "Proposition fusionnée et close" : "Proposition abandonnée et close")
             )}</b>
+            ${event.note ? `<span class="outcome-card__note">${escapeHtml(event.note)}</span>` : ""}
             <span>${escapeHtml(
               fusionnee
                 ? `${event.detail || "Ses affirmations sont entrées au projet."} Elle ne peut plus être fusionnée une seconde fois, et son état est conservé tel quel.`
@@ -833,7 +838,10 @@ function renderConversationActivity(event, index) {
  * s'est joué, et le dire là où cela s'est joué vaut mieux que de le dire
  * ailleurs.
  */
-function renderConversationComposer(review) {
+function renderConversationComposer(proposition, review) {
+  const aEcrire = String(view.draft ?? "").trim().length > 0;
+  const peutFermer = proposition.status === PROPOSITION.OPEN;
+
   const moi = getAuthorIdentity({
     author: "vous",
     agent: "human",
@@ -858,9 +866,28 @@ function renderConversationComposer(review) {
     hintHtml: review.commentNotice
       ? `<span class="review-comment__notice">${escapeHtml(review.commentNotice)}</span>`
       : "",
-    actionsHtml: `<button type="button" class="gh-btn gh-btn--primary" data-comment-post ${
-      review.posting ? "disabled" : ""
-    }>${review.posting ? "Envoi…" : "Commenter"}</button>`
+    // Fermer sans fusionner se fait ici, à côté de « Commenter », et non dans
+    // le pavé de fusion : ce n'est pas une variante de la fusion, c'est le
+    // contraire. Avec un texte en cours, le bouton propose de le publier en
+    // partant — un abandon sans un mot est le genre de silence qu'on regrette.
+    actionsHtml: `
+      ${
+        peutFermer
+          ? `<button type="button" class="gh-btn gh-btn--danger" data-review-abandon ${
+              review.merging ? "disabled" : ""
+            }>${
+              review.abandoning
+                ? "Confirmer l'abandon"
+                : aEcrire
+                  ? "Fermer avec ce commentaire"
+                  : "Fermer la proposition"
+            }</button>`
+          : ""
+      }
+      <button type="button" class="gh-btn gh-btn--primary" data-comment-post ${
+        review.posting || !aEcrire ? "disabled" : ""
+      }>${review.posting ? "Envoi…" : "Commenter"}</button>
+    `
   });
 }
 
@@ -913,7 +940,7 @@ function renderConversation(proposition, review) {
     ${renderMessageThread({ itemsHtml: `${premier}${suite}`, className: "review-thread" })}
     ${proposition.status === PROPOSITION.OPEN ? renderMergeBox(proposition, review) : ""}
     <div class="review-end" role="separator" aria-label="Fin de la proposition"></div>
-    ${renderConversationComposer(review)}
+    ${renderConversationComposer(proposition, review)}
   `;
 }
 
@@ -930,15 +957,21 @@ const STORY_ICON = {
  * Le pavé de fusion, au bout de la conversation.
  *
  * Il énonce ses conditions **avant** le bouton, comme GitHub énonce l'état de
- * ses checks : ce qui bloque doit se lire sans avoir à cliquer pour découvrir
- * que ça ne marche pas.
+ * ses checks : ce qui bloque doit se lire sans cliquer pour découvrir que ça ne
+ * marche pas. Vert quand tout est prêt, ambre quand quelque chose retient —
+ * la couleur se lit avant la phrase.
+ *
+ * Et fusionner se fait en deux temps. Le premier clic ouvre un formulaire, pas
+ * une fusion : on écrit ce qu'on fait, puis on confirme. Git demande un message
+ * au moment du commit pour cette raison exacte — c'est le seul instant où
+ * l'auteur peut dire pourquoi, et l'instant où il s'en souvient encore.
  */
 function renderMergeBox(proposition, review) {
   const items = review.items ?? [];
-  const gele = review.frozen === true;
   const blocage = describeBlocking(review.conflicts ?? []);
+  const empeche = Boolean(blocage) || Boolean(review.error);
 
-  const lignes = [
+  const conditions = [
     {
       tone: review.error ? "warn" : "ok",
       icon: review.error ? "alert" : "check-circle-fill",
@@ -950,43 +983,105 @@ function renderMergeBox(proposition, review) {
       icon: blocage ? "alert" : "check-circle-fill",
       text: blocage ? "La mémoire du projet est contredite" : "Rien ne contredit la mémoire du projet",
       note: blocage || "Aucune décision passée n'est remise en cause par ce lot."
-    },
-    {
-      tone: "neutral",
-      icon: "checklist",
-      text: describeMerge(items),
-      note: gele ? "" : "Ce qui n'a pas été tranché sera accepté."
     }
   ];
 
   return `
-    <section class="merge-box">
-      ${lignes
-        .map(
-          (ligne) => `
-            <div class="merge-box__row merge-box__row--${ligne.tone}">
-              <span class="merge-box__icon">${svgIcon(ligne.icon, { className: "octicon" })}</span>
-              <div>
-                <b>${escapeHtml(ligne.text)}</b>
-                ${ligne.note ? `<span class="merge-box__note">${escapeHtml(ligne.note)}</span>` : ""}
+    <section class="merge-area">
+      <div class="merge-note">
+        <span class="merge-note__icon">${svgIcon("pulse", { className: "octicon" })}</span>
+        <div>
+          <b>Le suivi des avis sera réécrit</b>
+          <span class="merge-box__note">
+            La fusion fait entrer les documents acceptés au corpus, puis relit tout le dossier.
+            Rien n'est calculé à moitié.
+          </span>
+        </div>
+      </div>
+
+      <div class="merge-box merge-box--${empeche ? "blocked" : "ready"}">
+        ${conditions
+          .map(
+            (ligne) => `
+              <div class="merge-box__row merge-box__row--${ligne.tone}">
+                <span class="merge-box__icon">${svgIcon(ligne.icon, { className: "octicon" })}</span>
+                <div>
+                  <b>${escapeHtml(ligne.text)}</b>
+                  ${ligne.note ? `<span class="merge-box__note">${escapeHtml(ligne.note)}</span>` : ""}
+                </div>
               </div>
-            </div>
-          `
-        )
-        .join("")}
-      <div class="merge-box__actions">
-        <button type="button" class="gh-btn gh-btn--danger" data-review-abandon ${
-          review.merging ? "disabled" : ""
-        }>${review.abandoning ? "Confirmer l'abandon" : "Abandonner"}</button>
-        <button type="button" class="gh-btn gh-btn--primary" data-review-merge ${
-          review.merging || blocage ? "disabled" : ""
-        }>${review.merging ? "Fusion en cours…" : "Fusionner la proposition"}</button>
+            `
+          )
+          .join("")}
+        ${review.confirming ? renderMergeForm(proposition, review) : renderMergeAction(review, empeche)}
       </div>
     </section>
   `;
 }
 
-/** Ce que l'analyse a produit, en une phrase. */
+/** Le premier temps : un bouton, et ce qu'il fera. */
+function renderMergeAction(review, empeche) {
+  return `
+    <div class="merge-box__actions">
+      <button type="button" class="gh-btn gh-btn--primary" data-review-merge ${
+        review.merging || empeche ? "disabled" : ""
+      }>Fusionner la proposition</button>
+      <span class="merge-box__hint">
+        ${escapeHtml(
+          empeche
+            ? "Tranchez ce qui est en attente pour pouvoir fusionner."
+            : "Vous écrirez le message de la fusion avant qu'elle ne s'applique."
+        )}
+      </span>
+    </div>
+  `;
+}
+
+/**
+ * Le second temps : ce qu'on écrit en fusionnant.
+ *
+ * Les champs sont pré-remplis, jamais vides. Un champ vide obtient une ligne
+ * bâclée ; un champ pré-rempli obtient soit un accord — et la phrase par défaut
+ * est juste —, soit une correction, qui vaut mieux qu'une invention.
+ *
+ * La signature est annoncée avant le clic : fusionner engage quelqu'un, et
+ * savoir qui doit se lire au moment où on le devient.
+ */
+function renderMergeForm(proposition, review) {
+  return `
+    <div class="merge-form">
+      <label class="merge-form__label" for="propositionMergeTitle">Message de la fusion</label>
+      <input
+        type="text"
+        id="propositionMergeTitle"
+        class="gh-input merge-form__input"
+        data-merge-title
+        value="${escapeHtml(view.mergeTitle ?? "")}"
+      >
+
+      <label class="merge-form__label" for="propositionMergeNote">Description</label>
+      <textarea
+        id="propositionMergeNote"
+        class="textarea merge-form__textarea"
+        data-merge-note
+        rows="4"
+      >${escapeHtml(view.mergeNote ?? "")}</textarea>
+
+      <p class="merge-form__signature">
+        Cette fusion sera signée par ${escapeHtml(store.user?.name || store.user?.email || "vous")}.
+      </p>
+
+      <div class="merge-form__actions">
+        <button type="button" class="gh-btn gh-btn--primary" data-merge-confirm ${
+          review.merging ? "disabled" : ""
+        }>${review.merging ? "Fusion en cours…" : "Confirmer la fusion"}</button>
+        <button type="button" class="gh-btn" data-merge-cancel ${review.merging ? "disabled" : ""}>Annuler</button>
+      </div>
+    </div>
+  `;
+}
+
+/** Ce que l'analyse a produit, en une phrase. *//** Ce que l'analyse a produit, en une phrase. */
 function describeAnalysis(review) {
   const items = review.items ?? [];
   const avis = items.filter((entry) => entry.itemType === ITEM_TYPE.AVIS).length;
@@ -1325,7 +1420,26 @@ function bindReview(root) {
 
   bindConversation(root);
 
-  root.querySelector("[data-review-merge]")?.addEventListener("click", () => merge(root));
+  // Le premier clic ouvre le formulaire ; c'est « Confirmer » qui fusionne.
+  root.querySelector("[data-review-merge]")?.addEventListener("click", () => {
+    const { title, note } = defaultMergeMessage({ proposition: view.open, items: view.review?.items ?? [] });
+    view.mergeTitle = title;
+    view.mergeNote = note;
+    view.review.confirming = true;
+    renderContent(root);
+  });
+
+  root.querySelector("[data-merge-cancel]")?.addEventListener("click", () => {
+    view.review.confirming = false;
+    renderContent(root);
+  });
+
+  const titre = root.querySelector("[data-merge-title]");
+  if (titre) titre.addEventListener("input", (event) => { view.mergeTitle = event.target.value; });
+  const note = root.querySelector("[data-merge-note]");
+  if (note) note.addEventListener("input", (event) => { view.mergeNote = event.target.value; });
+
+  root.querySelector("[data-merge-confirm]")?.addEventListener("click", () => merge(root));
   root.querySelector("[data-review-abandon]")?.addEventListener("click", () => abandon(root));
 }
 
@@ -1427,14 +1541,14 @@ async function refreshComments(root) {
   if (root.isConnected) renderContent(root);
 }
 
-async function postComment(root) {
+async function postComment(root, { keepGoing = false } = {}) {
   const proposition = view.open;
   const texte = String(view.draft ?? "").trim();
   if (!proposition || !texte || view.review.posting) return;
 
   view.review.posting = true;
   view.review.commentNotice = null;
-  renderContent(root);
+  if (!keepGoing) renderContent(root);
 
   try {
     const { addPropositionComment } = await import("../services/proposition-comments.js");
@@ -1455,7 +1569,7 @@ async function postComment(root) {
 
     view.draft = "";
     view.preview = false;
-    await refreshComments(root);
+    if (!keepGoing) await refreshComments(root);
   } catch {
     view.review.posting = false;
     view.review.commentNotice = "Le message n'a pas pu être envoyé. Il est toujours là.";
@@ -1613,7 +1727,10 @@ async function merge(root) {
       proposition,
       acceptedDocumentIds: documents.filter((entry) => entry.status !== ITEM.REFUSED).map((entry) => entry.itemKey),
       refusedDocumentIds: documents.filter((entry) => entry.status === ITEM.REFUSED).map((entry) => entry.itemKey),
-      snapshot: gele
+      snapshot: gele,
+      // Ce que quelqu'un a écrit en signant. Il ne se réécrit pas ensuite.
+      mergeTitle: String(view.mergeTitle ?? "").trim(),
+      mergeNote: String(view.mergeNote ?? "").trim()
     });
 
     if (!applique) {
@@ -1635,6 +1752,7 @@ async function merge(root) {
     }
 
     view.review.merging = false;
+    view.review.confirming = false;
     // L'écran devient le procès-verbal sans attendre un rechargement : les
     // cases disparaissent, l'état affiché est celui qu'on vient d'arrêter.
     view.review.frozen = true;
@@ -1642,6 +1760,8 @@ async function merge(root) {
       ...proposition,
       status: PROPOSITION.MERGED,
       merged_at: new Date().toISOString(),
+      merge_title: String(view.mergeTitle ?? "").trim(),
+      merge_note: String(view.mergeNote ?? "").trim(),
       snapshot: gele
     };
 
@@ -1719,6 +1839,10 @@ async function abandon(root) {
     renderContent(root);
     return;
   }
+
+  // Le mot qu'on a commencé à écrire part avec l'abandon : un renoncement sans
+  // un mot est le genre de silence qu'on regrette six mois plus tard.
+  if (String(view.draft ?? "").trim()) await postComment(root, { keepGoing: true });
 
   view.review.merging = true;
   view.review.notice = null;

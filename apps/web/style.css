@@ -15789,6 +15789,51 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 }
 .run-section__empty{ margin:0; padding:12px 16px; color:var(--muted); font-size:13px; font-style:italic; }
 
+/* Le chemin d'une exécution : des boîtes reliées, comme un graphe de jobs. Les
+   traits sont droits et le tout se replie en colonne quand la place manque —
+   une courbe savante qui déborde ne dit rien de plus qu'un trait qui tient. */
+.run-graph{
+  display:flex;
+  align-items:stretch;
+  flex-wrap:wrap;
+  gap:0;
+  padding:16px;
+}
+
+.run-graph__node{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  min-width:150px;
+  padding:10px 14px;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  background:var(--panel);
+}
+.run-graph__node--ok{ border-color:rgba(63,185,80,.45); }
+.run-graph__node--warn{ border-color:rgba(210,153,34,.5); }
+.run-graph__node--error{ border-color:rgba(248,81,73,.5); }
+
+.run-graph__icon{ color:var(--muted); line-height:0; }
+.run-graph__node--ok .run-graph__icon{ color:var(--fgColor-open); }
+.run-graph__node--warn .run-graph__icon{ color:#d29922; }
+.run-graph__node--error .run-graph__icon{ color:var(--fgColor-danger); }
+
+.run-graph__label{ color:var(--text); font-size:13px; font-weight:600; }
+.run-graph__detail{ color:var(--muted); font-size:12px; }
+
+.run-graph__link{
+  align-self:center;
+  width:24px;
+  height:2px;
+  background:var(--border);
+}
+
+@media (max-width: 760px){
+  .run-graph{ flex-direction:column; align-items:flex-start; }
+  .run-graph__link{ width:2px; height:16px; margin-left:24px; }
+}
+
 .run-rows{ display:flex; flex-direction:column; }
 .run-row{
   display:flex;
@@ -15837,7 +15882,55 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .tl-activity__detail{ display:block; color:var(--muted); font-size:12px; }
 
 /* Le pavé de fusion énonce ses conditions avant le bouton : ce qui bloque doit
-   se lire sans cliquer pour découvrir que ça ne marche pas. */
+   se lire sans cliquer pour découvrir que ça ne marche pas. La couleur du cadre
+   se lit avant la phrase — vert quand tout est prêt, ambre quand ça retient. */
+.merge-area{ display:flex; flex-direction:column; gap:10px; }
+
+.merge-note{
+  display:flex;
+  align-items:flex-start;
+  gap:10px;
+  padding:12px 16px;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  background:var(--panel);
+  font-size:14px;
+}
+.merge-note__icon{ color:var(--muted); line-height:0; padding-top:2px; }
+
+.merge-box--ready{ border-color:rgba(63,185,80,.45); }
+.merge-box--blocked{ border-color:rgba(210,153,34,.45); }
+
+.merge-box__hint{ color:var(--muted); font-size:12px; }
+
+/* Le second temps : on écrit ce qu'on fait, puis on confirme. */
+.merge-form{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  padding:14px 16px;
+  border-top:1px solid var(--border);
+  background:var(--panel);
+}
+.merge-form__label{ color:var(--text); font-size:13px; font-weight:600; margin-top:4px; }
+.merge-form__input{ width:100%; }
+.merge-form__textarea{
+  width:100%;
+  min-height:88px;
+  padding:8px 10px;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  background:var(--bg);
+  color:var(--text);
+  font:inherit;
+  font-size:13px;
+  resize:vertical;
+}
+.merge-form__signature{ margin:6px 0 2px; color:var(--muted); font-size:12px; }
+.merge-form__actions{ display:flex; gap:8px; }
+
+.outcome-card__note{ color:var(--text) !important; }
+
 .merge-box{
   display:flex;
   flex-direction:column;
@@ -15864,8 +15957,8 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .merge-box__note{ display:block; color:var(--muted); font-size:12px; margin-top:2px; }
 .merge-box__actions{
   display:flex;
-  justify-content:flex-end;
-  gap:8px;
+  align-items:center;
+  gap:12px;
   padding:12px 16px;
   border-top:1px solid var(--border);
   background:var(--panel);
