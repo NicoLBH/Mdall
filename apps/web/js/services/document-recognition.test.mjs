@@ -5,6 +5,7 @@ import { discoverLegend } from "../../../../spikes/ct-continuity/legend.mjs";
 import { readDocumentMeta } from "../../../../spikes/ct-continuity/document-meta.mjs";
 
 import { CONFIDENCE, RECOGNITION, isExploitable, recognizeDocument } from "./document-recognition.js";
+import { declaredMarkers } from "./project-identity.js";
 import { createCtReportRecognizer } from "./document-recognizer-ct.js";
 
 const CT = createCtReportRecognizer({ readDocumentMeta, discoverLegend });
@@ -166,4 +167,30 @@ test("un verdict se traduit en colonnes, une absence de verdict en rien", async 
     "detector_version",
     "issued_at"
   ]);
+});
+
+test("les marqueurs d'appartenance traversent le registre jusqu'à l'appelant", () => {
+  // Le registre recompose son verdict champ par champ. Un champ ajouté chez un
+  // reconnaisseur et oublié ici disparaît en silence : le document paraît ne
+  // rien déclarer, et l'écran ne pose jamais la question du rattachement.
+  // C'est arrivé, et c'est ce que ce test empêche de refaire.
+  const verdict = recognizeDocument(RICT, { recognizers: [CT] });
+
+  assert.deepEqual(verdict.markers, [{ type: "chrono_affaire", value: "13860" }]);
+  // Et ce que le registre transporte doit être exactement ce que la mémoire du
+  // projet sait confronter : les deux bouts de la chaîne, dans un seul test.
+  assert.deepEqual(
+    declaredMarkers(verdict).map((marker) => marker.value),
+    ["13860"]
+  );
+});
+
+test("un document que personne ne reconnaît ne déclare aucun marqueur", () => {
+  // Le défaut par défaut compte autant : `undefined` ferait planter la
+  // confrontation, `[]` la laisse simplement ne rien conclure.
+  const verdict = recognizeDocument(rapport(["FACTURE", "Total TTC"]), { recognizers: [CT] });
+
+  assert.equal(verdict.status, RECOGNITION.UNRECOGNIZED);
+  assert.deepEqual(verdict.markers, []);
+  assert.deepEqual(declaredMarkers(verdict), []);
 });

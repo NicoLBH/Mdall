@@ -109,6 +109,7 @@ export function recognizeDocument(document = {}, { recognizers = [] } = {}) {
     evidence: best.evidence ?? null,
     declaredReference: best.declaredReference ?? null,
     issuedAt: best.issuedAt ?? null,
+    markers: best.markers ?? [],
     recognizer: best.recognizer.id,
     recognizerVersion: best.recognizer.version ?? null
   });
@@ -128,6 +129,10 @@ function verdict(fields) {
     evidence: null,
     declaredReference: null,
     issuedAt: null,
+    // Ce que le document dit de son appartenance — un numéro d'affaire, demain
+    // un nom d'opération. Le registre ne les interprète pas : il les transporte,
+    // et c'est `project-identity.js` qui les confronte à la mémoire du projet.
+    markers: [],
     recognizer: null,
     recognizerVersion: null,
     ...fields
