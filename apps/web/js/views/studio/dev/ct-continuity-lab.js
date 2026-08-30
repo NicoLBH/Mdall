@@ -1,16 +1,22 @@
 /**
  * Suivi des avis du Bureau de Contrôle — Atelier › Développements.
  *
- * On dépose les livrables d'un bureau de contrôle — cent vingt sur un gros
- * chantier, dans n'importe quel ordre — et la page restitue leur chronologie,
- * l'état de chaque avis, et ce qui manque au dossier.
+ * La page lit les livrables du bureau de contrôle **déjà entrés au corpus du
+ * projet** — cent vingt sur un gros chantier, dans n'importe quel ordre — et
+ * restitue leur chronologie, l'état de chaque avis, et ce qui manque au
+ * dossier.
  *
- * Les PDF sont lus dans le navigateur, puis **déposés dans le projet comme des
- * documents ordinaires** — dans un dossier de l'onglet Documents, avec les
- * mêmes colonnes que n'importe quel autre fichier. Ce qui distingue un livrable
- * de bureau de contrôle, c'est ce qu'on en tire, pas la façon dont il entre.
- * C'est aussi ce qui permet de reprendre une analyse sans redemander les
- * fichiers : ils sont déjà là.
+ * **Une seule porte.** On ne dépose plus rien ici, et l'on n'y tranche plus
+ * rien. Les documents entrent par l'onglet Documents, une proposition les
+ * soumet, quelqu'un l'accepte ; alors seulement ils sont au corpus, et cet
+ * écran les lit. Deux portes signifiaient deux façons de faire entrer un
+ * document, deux endroits où poser la question du rattachement, et deux
+ * versions de ce qu'est le corpus d'un projet — la seconde toujours en train
+ * de contredire la première.
+ *
+ * Ce que la page perd en autonomie, elle le rend en vérité : ce qu'elle affiche
+ * est ce que le projet contient, et rien d'autre. Un lot de fichiers isolés ne
+ * s'analyse plus ici ; il se dépose, comme le reste.
  *
  * Ce que cette page ne fait pas, et ne doit jamais faire :
  *  - aucun sujet Mdall n'est créé, fermé ou rouvert ;
@@ -32,15 +38,12 @@ import { extractPagesFromFile } from "../../../services/pdf-extraction.js";
 import { RECOGNITION } from "../../../services/document-recognition.js";
 import { recognize } from "../../../services/document-recognizers.js";
 import { IDENTITY, findRelated } from "../../../services/document-identity.js";
-import { resolveDepositFolder } from "../../../services/document-filing.js";
-import { relateToKnown, toDocumentColumns } from "../../../services/document-intake.js";
 import {
   ATTACHMENT,
   assessAttachment,
   batchConsensus,
   declaredMarkers,
   findEchoes,
-  markersToRemember,
   selfMarkers
 } from "../../../services/project-identity.js";
 import { corpusEntries, corpusFingerprint, diffCorpus } from "../../../services/ct-analysis-store.js";
@@ -144,44 +147,29 @@ export function attachmentGroups(reports) {
 }
 
 /**
- * Le rattachement du lot au projet affiché, et la question qui va avec.
+ * Les livrables du corpus dont l'affaire n'est pas celle du projet.
  *
- * C'est le seul endroit de l'atelier où l'on demande quelque chose à
- * l'utilisateur, et c'est délibéré : rattacher un document à un projet est une
- * affirmation sur le monde, qu'aucune lecture de PDF ne peut faire seule. Deux
- * tranches d'un même chantier portent des affaires différentes ; deux chantiers
- * d'une même commune partagent une ville. Aucune règle ne tranche ça — un
- * humain, oui, et une seule fois.
+ * Rattacher un document à un projet est une affirmation sur le monde qu'aucune
+ * lecture de PDF ne peut faire seule : deux tranches d'un même chantier portent
+ * des affaires différentes, deux chantiers d'une même commune partagent une
+ * ville. Aucune règle ne tranche cela — un humain, oui, et une seule fois.
  *
- * La réponse est conservée. C'est ce qui fait que la mémoire du projet
- * s'étoffe : la deuxième montée d'escalier n'est demandée qu'au premier de ses
- * livrables, et jamais plus.
+ * Mais ce n'est plus ici qu'il le fait. La question se pose dans la revue d'une
+ * proposition, avec les autres, et sa réponse y est conservée. L'atelier se
+ * contente de dire ce qu'il écarte et pourquoi : un document silencieusement
+ * absent d'une analyse est le genre de trou qui se lit comme un fait.
  */
 function renderAttachment(state) {
-  const groups = attachmentGroups(state.reports);
+  const groups = attachmentGroups(state.reports).filter((group) => group.verdict === ATTACHMENT.FOREIGN);
   if (groups.length === 0) return "";
 
-  const memoire = state.identity?.known ?? [];
-  const echec = state.attachmentError
-    ? `<div class="ctlab__set-aside"><b>Rattachement non conservé</b><ul><li>${escapeHtml(
-        state.attachmentError
-      )}</li></ul></div>`
-    : "";
-
-  return echec + groups
+  return groups
     .map((group) => {
-      const ecarte = group.verdict === ATTACHMENT.FOREIGN;
       const combien = group.reports.length;
 
       return `
-        <div class="ctlab__set-aside${ecarte ? "" : " ctlab__set-aside--info"}">
-          <b>${
-            ecarte
-              ? `${combien} livrable(s) d'une autre affaire`
-              : memoire.length === 0
-                ? `Rattacher ce lot au projet`
-                : `${combien} livrable(s) à rattacher`
-          }</b>
+        <div class="ctlab__set-aside">
+          <b>${combien} livrable(s) d'une autre affaire</b>
           <ul>
             <li>${escapeHtml(group.reason)}</li>
             <li>
@@ -190,25 +178,12 @@ function renderAttachment(state) {
                 .map((report) => `<span class="ctlab__set-aside-name">${escapeHtml(report.filename ?? report.sourceId)}</span>`)
                 .join(", ")}${combien > 3 ? ` et ${combien - 3} autre(s)` : ""}.
             </li>
-            ${ecarte
-              ? `<li>Ces documents sont écartés de l'analyse tant que la question n'est pas tranchée. Aucun n'est supprimé.</li>`
-              : ""}
+            <li>Ces documents sont écartés de l'analyse. Aucun n'est supprimé.</li>
             <li class="ctlab__set-aside-hint">
-              Votre réponse est conservée : la question ne sera plus posée pour cette affaire.
+              Le rattachement de l'affaire ${escapeHtml(group.label)} se tranche dans une proposition,
+              onglet Propositions du projet.
             </li>
           </ul>
-          <div class="ctlab__drop-actions ctlab__drop-actions--pair">
-            <button type="button" class="gh-btn gh-btn--sm" data-ctlab-attach="${escapeHtml(group.key)}">
-              ${
-                memoire.length === 0
-                  ? `Oui, l'affaire ${escapeHtml(group.label)} est celle de ce projet`
-                  : `Oui, rattacher l'affaire ${escapeHtml(group.label)} à ce projet`
-              }
-            </button>
-            <button type="button" class="gh-btn gh-btn--sm gh-btn--danger" data-ctlab-detach="${escapeHtml(group.key)}">
-              Non, écarter ${combien > 1 ? "ces livrables" : "ce livrable"}
-            </button>
-          </div>
         </div>
       `;
     })
@@ -265,21 +240,12 @@ function renderUnreachable(state) {
 function renderMemory(state) {
   if (state.saved?.status === "saved") {
     const { saved, marked } = state.saved;
-    const filed = state.filed;
     return `
       <div class="ctlab__set-aside ctlab__set-aside--ok">
         <b>Suivi enregistré pour ce projet</b>
         <ul>
           <li>${saved} avis conservé(s)${marked > 0 ? `, ${marked} marqué(s) absent(s) du lot — aucun n'est supprimé` : ""}.</li>
-          ${filed?.deposited > 0
-            ? `<li>
-                 ${filed.deposited} document(s) déposé(s) dans Documents${filed.folder ? ` › ${escapeHtml(filed.folder)}` : ""}${
-                   filed.reused > 0 ? `, ${filed.reused} déjà présent(s)` : ""
-                 }.
-               </li>`
-            : filed?.reused > 0
-              ? `<li>${filed.reused} document(s) déjà présent(s) dans Documents : aucun n'a été redéposé.</li>`
-              : ""}
+          <li>Aucun document n'a été déposé : ils étaient déjà au corpus, c'est de là qu'ils viennent.</li>
         </ul>
       </div>
     `;
@@ -313,7 +279,10 @@ function renderMemory(state) {
       : "",
     stored.length > 0
       ? `<li>${stored.length} livrable(s) du bureau de contrôle enregistré(s) dans ce projet.</li>`
-      : `<li>Aucun livrable n'est enregistré dans ce projet : déposez-les pour mettre le suivi à jour.</li>`,
+      : `<li>
+           Aucun livrable du bureau de contrôle n'est encore au corpus de ce projet.
+           Déposez-les dans l'onglet Documents, puis acceptez la proposition qui les porte.
+         </li>`,
     ...(change?.lines ?? [])
   ].filter(Boolean);
 
@@ -1430,25 +1399,22 @@ const STYLE = `
   padding: 3px 6px;
   font: inherit;
 }
+/* Ce n'était plus une zone de dépôt : le trait pointillé et la hauteur de cible
+   promettaient un geste qui n'existe plus. C'est un panneau qui dit ce que
+   l'atelier a sous la main, et d'où cela vient. */
 .ctlab__drop {
-  border: 1px dashed var(--ctlab-line);
+  border: 1px solid var(--ctlab-line);
   border-radius: var(--radius, 6px);
-  /* La mention sur la lecture locale des PDF a quitté ce cadre ; sa hauteur
-     reste, parce qu'une zone de dépôt se vise, et qu'une cible qui rétrécit
-     se rate. */
-  padding: 24px 16px 48px;
+  padding: 16px;
   text-align: center;
   margin-bottom: 16px;
 }
-.ctlab__drop.is-over { border-color: var(--ctlab-info); background: rgba(88, 166, 255, .06); }
 .ctlab__drop--loaded { border-style: solid; }
 .ctlab__drop-icon { display: block; color: var(--ctlab-muted); margin-bottom: 8px; }
 .ctlab__drop--loaded .ctlab__drop-icon { color: var(--ctlab-ok); }
 .ctlab__drop-title { display: block; font-size: 16px; color: var(--ctlab-text); }
 .ctlab__drop-lead { color: var(--ctlab-muted); margin: 6px auto 0; max-width: 60ch; }
 .ctlab__drop-actions { margin-top: 12px; }
-/* Deux réponses opposées : côte à côte, pour qu'aucune ne paraisse la seule. */
-.ctlab__drop-actions--pair { display: flex; gap: 8px; flex-wrap: wrap; }
 .ctlab__set-aside-hint { color: var(--ctlab-muted); font-style: italic; }
 /* Ce qui a été écarté, et pourquoi. Discret, mais jamais tu. */
 .ctlab__set-aside {
@@ -1586,14 +1552,22 @@ function renderProgressBar(done, total) {
   return `<div class="ctlab__progress"><span style="width:${percent}%"></span></div>`;
 }
 
-function renderDropZone(state) {
+/**
+ * Ce que l'atelier a sous la main, et d'où cela vient.
+ *
+ * La zone de dépôt a disparu, et c'est le point de l'étape : **une seule
+ * porte**. Les documents entrent par l'onglet Documents, une proposition les
+ * soumet, quelqu'un l'accepte. Ici, on lit le corpus — on ne l'alimente pas.
+ *
+ * L'écran doit donc dire d'où viennent les documents qu'il montre, sans quoi
+ * l'absence de bouton passerait pour une panne. C'est la seule chose que cette
+ * zone ajoute maintenant : une phrase, et le chemin à suivre.
+ */
+function renderCorpus(state) {
   // Pendant un chargement ou une analyse, la zone s'efface : c'est le
   // déroulé du travail qui occupe la place.
   if (state.loading || state.running) return "";
 
-  // Les documents écartés faute de rattachement ont leur propre bloc, qui pose
-  // la question et porte le bouton. Les répéter ici les dirait deux fois, dont
-  // une sans le moyen d'y répondre.
   const unattached = state.reports.filter(
     (report) => !report.error && report.attachment?.verdict === ATTACHMENT.FOREIGN
   );
@@ -1602,33 +1576,26 @@ function renderDropZone(state) {
       !report.error && isSetAside(report) && report.attachment?.verdict !== ATTACHMENT.FOREIGN
   );
   const loaded = state.reports.filter((report) => !report.error && !isSetAside(report)).length;
-  // Les documents non rattachés sont comptés à part : les laisser tomber dans
-  // ce reste les ferait passer pour des fichiers illisibles.
   const failed = state.reports.length - loaded - setAside.length - unattached.length;
 
-  // Deux états, et l'écran doit dire lequel : sans documents, on invite à en
-  // déposer ; avec des documents, on dit combien et ce qu'il reste à faire.
-  // Auparavant le texte sous la zone restait « Déposer des documents, puis
-  // lancer l'analyse » alors que le bouton annonçait « Analyser 17 documents ».
   const empty = loaded === 0;
 
   return `
-    <div class="ctlab__drop ${empty ? "" : "ctlab__drop--loaded"}" data-ctlab-drop>
+    <div class="ctlab__drop ctlab__drop--corpus${empty ? "" : " ctlab__drop--loaded"}">
       <span class="ctlab__drop-icon" aria-hidden="true">
         ${svgIcon(empty ? "file-pdf" : "file-directory", { className: "octicon", width: 24, height: 24 })}
       </span>
       <b class="ctlab__drop-title">
         ${
           empty
-            ? "Aucun document chargé"
-            : `${loaded} document${loaded > 1 ? "s" : ""} chargé${loaded > 1 ? "s" : ""}`
+            ? "Aucun livrable lu"
+            : `${loaded} livrable${loaded > 1 ? "s" : ""} lu${loaded > 1 ? "s" : ""} du corpus`
         }
       </b>
       <div class="ctlab__drop-lead">
-        ${
-          empty
-            ? "Déposez ici les livrables du bureau de contrôle — autant de fichiers que nécessaire, dans n'importe quel ordre."
-            : `Vous pouvez en ajouter d'autres, ou lancer l'analyse.${failed > 0 ? ` ${failed} fichier(s) illisible(s).` : ""}`
+        Les livrables entrent par l'onglet <b>Documents</b> ; une proposition les soumet, et c'est
+        son acceptation qui les fait entrer au corpus. Cet écran les lit, il ne les dépose pas.${
+          failed > 0 ? ` ${failed} fichier(s) illisible(s).` : ""
         }
       </div>
       ${renderSetAside(setAside)}
@@ -1636,11 +1603,6 @@ function renderDropZone(state) {
       ${renderAttachment(state)}
       ${renderUnreachable(state)}
       ${renderMemory(state)}
-      <div class="ctlab__drop-actions">
-        <button type="button" class="gh-btn gh-btn--sm" data-ctlab-pick>
-          ${empty ? "Choisir des fichiers…" : "Ajouter des fichiers…"}
-        </button>
-      </div>
     </div>
   `;
 }
@@ -3610,7 +3572,7 @@ function render(root, state) {
         ${renderHeader(state)}
         <div class="settings-card__body studio-tool-card__body">
           ${renderTimeTravelBanner(state)}
-          ${renderDropZone(state)}
+          ${renderCorpus(state)}
           ${renderProgress(state)}
           ${state.result ? renderLightTabs({ tabs, activeTabId: state.activeTab, ariaLabel: "Sections du suivi" }) : ""}
           <div data-ctlab-results>${renderResults(state)}</div>
@@ -3678,9 +3640,7 @@ export function renderCtContinuityLab(root) {
      * Ce qui identifie ce projet : ce qu'il sait de lui-même (`self`, cherché
      * dans les documents) et ce que des humains y ont rattaché (`known`).
      */
-    identity: { known: [], self: selfMarkers(store.projectForm ?? {}) },
-    /** Ce qui a empêché de conserver un rattachement, s'il y a lieu. */
-    attachmentError: null
+    identity: { known: [], self: selfMarkers(store.projectForm ?? {}) }
   };
 
   let nextDocumentNumber = 1;
@@ -3692,7 +3652,6 @@ export function renderCtContinuityLab(root) {
   // le réseau, que l'exécution des tests hors navigateur ne saurait résoudre.
   const persistence = () => import("../../../services/ct-analysis-supabase.js");
   const deposit = () => import("../../../services/document-deposit.js");
-  const documentFolders = () => import("../../../services/project-supabase-sync.js");
   const projectIdentity = () => import("../../../services/project-identity-supabase.js");
 
   /**
@@ -3771,7 +3730,13 @@ export function renderCtContinuityLab(root) {
     if (!projectId) return;
     try {
       const { listProjectDocuments } = await deposit();
-      const documents = await listProjectDocuments(projectId, { kind: CT_REPORT_KIND });
+      // Le corpus accepté, et lui seul : un document en attente de jugement dans
+      // une proposition ouverte ne fait pas encore partie du projet, et le lire
+      // ici reviendrait à le faire entrer sans que personne l'ait accepté.
+      const documents = await listProjectDocuments(projectId, {
+        kind: CT_REPORT_KIND,
+        corpusState: "accepted"
+      });
       const run = state.memory?.run ?? null;
 
       state.stored = documents.length > 0
@@ -3810,13 +3775,6 @@ export function renderCtContinuityLab(root) {
     }
   })();
 
-  const input = document.createElement("input");
-  input.type = "file";
-  input.accept = "application/pdf,.pdf";
-  input.multiple = true;
-  input.style.display = "none";
-  root.appendChild(input);
-
   const captureEditors = () => {
     const patterns = root.querySelector("[data-ctlab-patterns]");
     const lexicon = root.querySelector("[data-ctlab-lexicon]");
@@ -3826,7 +3784,6 @@ export function renderCtContinuityLab(root) {
 
   const refresh = () => {
     render(root, state);
-    root.appendChild(input);
     if (state.selectedCell) {
       const holder = root.querySelector("[data-ctlab-detail]");
       if (holder) holder.innerHTML = renderDetail(state.selectedCell);
@@ -4010,133 +3967,18 @@ export function renderCtContinuityLab(root) {
   };
 
   /**
-   * Dépose dans le projet les livrables qui viennent d'être analysés.
-   *
-   * Ils entrent **comme des documents ordinaires** : même stockage, même table,
-   * mêmes colonnes de reconnaissance et d'identité que n'importe quel fichier
-   * déposé depuis l'onglet Documents. Rien ici ne leur est propre, sinon le
-   * dossier où ils atterrissent — et ce dossier se déduit de la famille
-   * reconnue, pas d'une exception écrite pour le contrôle technique.
-   *
-   * Trois précautions, qui tiennent en trois refus :
-   *
-   *  - un document dont le contenu est déjà dans le projet n'est **pas**
-   *    redéposé : on récupère l'identifiant de celui qui y est. Déposer le même
-   *    rapport à chaque analyse remplirait l'onglet Documents de copies ;
-   *  - un échec sur un fichier n'arrête pas les autres, et n'annule pas
-   *    l'analyse : le suivi vaut d'être conservé même si un dépôt a échoué ;
-   *  - rien n'est déposé pour un lot travaillé hors projet. L'atelier a
-   *    toujours su fonctionner sur des fichiers isolés, et doit le rester.
-   *
-   * @returns {Promise<{deposited: number, reused: number, folder: string|null}|null>}
-   */
-  const fileReports = async (reports, projectId) => {
-    if (!projectId || reports.length === 0) return null;
-
-    // Les deux modules restent distincts : les fondre en un seul objet ferait
-    // qu'un jour, un export homonyme en masquerait un autre sans bruit.
-    let documents = null;
-    let folders = null;
-    try {
-      [documents, folders] = await Promise.all([deposit(), documentFolders()]);
-    } catch {
-      return null;
-    }
-
-    const { currentUserId, fetchDocumentIdentities, insertDocumentRow, uploadDocumentToStorage, listDocumentsOfKind } =
-      documents;
-    const { createDocumentFolder, listDocumentFolders } = folders;
-
-    const known = await fetchDocumentIdentities(projectId).catch(() => []);
-    const createdBy = await currentUserId().catch(() => null);
-    // Un lot, un emplacement : deux dépôts du même fichier ne s'écrasent pas.
-    const scope = `ctlab-${Date.now().toString(36)}`;
-    const foldersByKind = new Map();
-    let deposited = 0;
-    let reused = 0;
-    let folderName = null;
-
-    for (const report of reports) {
-      // Déjà rapatrié du stockage : il est en base, il n'a rien à y refaire.
-      if (report.documentId) {
-        reused += 1;
-        continue;
-      }
-
-      // Le même contenu est déjà dans le projet, sous quelque nom que ce soit.
-      const related = relateToKnown(report, known);
-      if (related?.verdict === IDENTITY.DUPLICATE) {
-        report.documentId = related.document.id;
-        reused += 1;
-        continue;
-      }
-
-      try {
-        const kind = report.recognition?.kind ?? null;
-        if (!foldersByKind.has(kind)) {
-          foldersByKind.set(
-            kind,
-            await resolveDepositFolder({
-              projectId,
-              kind,
-              // Le dossier se reconnaît à ce qu'il contient, pas à son nom :
-              // « BC » ou « RICT et Fiches » désignent le même dossier dès lors
-              // qu'ils abritent déjà des livrables du bureau de contrôle.
-              listDocumentsOfKind,
-              listFolders: listDocumentFolders,
-              createFolder: createDocumentFolder
-            })
-          );
-        }
-        const folder = foldersByKind.get(kind);
-        if (folder?.name) folderName = folder.name;
-
-        const storage = await uploadDocumentToStorage(report.file, { projectId, scope });
-        const row = await insertDocumentRow({
-          project_id: projectId,
-          folder_id: folder?.id ?? null,
-          created_by: createdBy,
-          filename: report.file.name,
-          original_filename: report.file.name,
-          mime_type: report.file.type || "application/pdf",
-          storage_bucket: storage.storage_bucket,
-          storage_path: storage.storage_path,
-          file_size_bytes: report.file.size || null,
-          upload_status: "uploaded",
-          document_kind: "source_pdf",
-          // Ce qu'on a appris du document en le lisant, écrit par le même
-          // traducteur que pour n'importe quel dépôt.
-          ...toDocumentColumns(report, related)
-        }, "id,content_fingerprint,declared_reference,original_filename");
-
-        if (row?.id) {
-          report.documentId = row.id;
-          // Le document suivant doit pouvoir se comparer à celui-ci : deux
-          // copies du même rapport dans un même lot n'entrent qu'une fois.
-          known.push(row);
-          deposited += 1;
-        }
-      } catch {
-        // Ce fichier n'est pas entré. Les autres continuent, et l'avis qu'il
-        // portait restera simplement sans lien vers son document.
-      }
-    }
-
-    return { deposited, reused, folder: folderName };
-  };
-
-  /**
    * Enregistre l'analyse, sans jamais la remettre en cause.
    *
-   * L'atelier reste utilisable hors de tout projet — sur des fichiers déposés
-   * à la main, comme il l'a toujours été. Quand la base ne répond pas,
-   * l'analyse s'affiche quand même, et l'écran dit qu'elle n'a pas été
-   * conservée plutôt que de laisser croire qu'elle l'a été.
+   * Plus rien n'est déposé ici : les livrables analysés viennent du corpus, ils
+   * ont déjà leur ligne et leur identifiant. Ce qui s'écrit, c'est le suivi, et
+   * lui seul. Quand la base ne répond pas, l'analyse s'affiche quand même, et
+   * l'écran dit qu'elle n'a pas été conservée plutôt que de laisser croire
+   * qu'elle l'a été.
    */
   const persistResult = async (reports) => {
     // Ne pas avoir de projet et ne pas réussir à enregistrer sont deux choses
-    // différentes. Annoncer « analyse non conservée » à qui travaille sur des
-    // fichiers isolés serait un faux reproche : il n'y avait rien à conserver.
+    // différentes : sans projet ouvert, il n'y avait rien à conserver, et
+    // annoncer « analyse non conservée » serait un faux reproche.
     let api = null;
     let projectId = null;
     try {
@@ -4146,11 +3988,6 @@ export function renderCtContinuityLab(root) {
       return { status: "no-project" };
     }
     if (!projectId) return { status: "no-project" };
-
-    // Déposer d'abord, enregistrer ensuite : c'est le dépôt qui donne aux avis
-    // l'identifiant du livrable qui les porte. L'inverse laisserait les liens
-    // vides jusqu'à la prochaine analyse.
-    state.filed = await fileReports(reports, projectId);
 
     try {
       const { loadCtAnalysis, saveCtAnalysis } = api;
@@ -4173,7 +4010,9 @@ export function renderCtContinuityLab(root) {
         // permettra, à la prochaine ouverture, de nommer le livrable arrivé
         // depuis plutôt que d'annoncer « le lot a changé ».
         corpusDocuments: corpusEntries(reports),
-        documentCount: reports.length
+        documentCount: reports.length,
+        // Aucune proposition derrière celle-ci : c'est une main qui l'a lancée.
+        triggerSource: "atelier"
       });
 
       if (!outcome) return { status: "failed" };
@@ -4205,59 +4044,6 @@ export function renderCtContinuityLab(root) {
    * analyse amputée d'un rapport sans le dire vaut moins qu'une analyse qui
    * n'a pas eu lieu.
    */
-  /**
-   * L'humain répond : cette affaire est celle de ce projet, ou elle ne l'est pas.
-   *
-   * Les deux réponses suivent le même chemin, et c'est voulu. « Non » est une
-   * information, souvent la plus sûre — celui qui vient d'ouvrir le PDF sait
-   * mieux que n'importe quelle règle —, et la conserver tient pour le refus la
-   * promesse qu'on avait faite à l'acceptation : ne plus jamais redemander.
-   *
-   * Trois choses en découlent, et la troisième est le but de tout l'édifice.
-   *
-   * Les marqueurs de l'affaire sont **versés à la mémoire du projet**, avec le
-   * signe de la réponse. Les documents du lot sont **réévalués**, ce qui fait
-   * rentrer dans l'analyse ceux qu'on venait d'accepter, et écarte pour de bon
-   * ceux qu'on vient de refuser. Et surtout, la question ne sera **plus jamais
-   * posée** pour cette affaire.
-   *
-   * Rien n'est écrit si la base ne répond pas, et l'écran le dit. Laisser
-   * croire qu'une réponse a été retenue alors qu'elle est perdue ferait
-   * reposer la même question à chaque ouverture, sans qu'on comprenne pourquoi.
-   */
-  const answerAttachment = async (key, { rejected }) => {
-    const group = attachmentGroups(state.reports).find((entry) => entry.key === key);
-    if (!group) return;
-
-    const projectId = state.memory?.projectId ?? null;
-    if (!projectId) {
-      state.attachmentError = "Aucun projet n'est ouvert : cette réponse ne peut pas être conservée.";
-      refresh();
-      return;
-    }
-
-    try {
-      const { rememberProjectMarkers } = await projectIdentity();
-      const retenus = markersToRemember(group.markers, state.identity.known, { rejected });
-      const written = await rememberProjectMarkers(projectId, retenus);
-      if (written === null) throw new Error("non conservé");
-    } catch {
-      state.attachmentError =
-        "La réponse n'a pas pu être enregistrée. Les documents restent en l'état, " +
-        "et la question sera reposée.";
-      refresh();
-      return;
-    }
-
-    state.attachmentError = null;
-    await refreshIdentity(projectId);
-    // Tout le lot est réévalué, pas seulement le groupe confirmé : la nouvelle
-    // affaire peut en rattacher d'autres, et rien ne justifie de le savoir pour
-    // les uns et pas pour les autres.
-    reassessAll();
-    refresh();
-  };
-
   const resumeFromStorage = async () => {
     const documents = state.stored?.documents ?? [];
     // `state.running` ne couvre que l'analyse : pendant le rapatriement, le
@@ -4327,7 +4113,6 @@ export function renderCtContinuityLab(root) {
     state.reports = [];
     state.result = null;
     state.unreachable = null;
-    state.attachmentError = null;
     state.selectedCell = null;
     state.selectedReference = null;
     state.error = null;
@@ -4441,32 +4226,6 @@ export function renderCtContinuityLab(root) {
     refresh();
   };
 
-  input.addEventListener("change", async () => {
-    // La liste doit être recopiée avant de vider le champ : `input.value = ""`
-    // vide la FileList elle-même, et `files` pointe sur le même objet.
-    const files = [...(input.files ?? [])];
-    input.value = "";
-    if (files.length > 0) await addFiles(files);
-  });
-
-  root.addEventListener("dragover", (event) => {
-    if (!event.target.closest("[data-ctlab-drop]")) return;
-    event.preventDefault();
-    event.target.closest("[data-ctlab-drop]").classList.add("is-over");
-  });
-
-  root.addEventListener("dragleave", (event) => {
-    event.target.closest("[data-ctlab-drop]")?.classList.remove("is-over");
-  });
-
-  root.addEventListener("drop", async (event) => {
-    const zone = event.target.closest("[data-ctlab-drop]");
-    if (!zone) return;
-    event.preventDefault();
-    zone.classList.remove("is-over");
-    if (event.dataTransfer?.files) await addFiles(event.dataTransfer.files);
-  });
-
   root.addEventListener("change", (event) => {
     const target = event.target;
     if (target.dataset?.ctlabFilterCode !== undefined) state.avisFilter.code = target.value;
@@ -4525,7 +4284,7 @@ export function renderCtContinuityLab(root) {
     if (handleDatePickerClick(event)) return;
 
     const target = event.target.closest(
-      "[data-ctlab-pick], [data-ctlab-resume], [data-ctlab-attach], [data-ctlab-detach], " +
+      "[data-ctlab-resume], " +
         "[data-ctlab-remove], [data-ctlab-cell], " +
         "[data-ctlab-trace], [data-ctlab-back], " +
         "[data-ctlab-open-pdf], [data-ctlab-pdf-close], " +
@@ -4547,26 +4306,9 @@ export function renderCtContinuityLab(root) {
       return;
     }
 
-    if (target.dataset.ctlabPick !== undefined) {
-      input.click();
-      return;
-    }
-
     if (target.dataset.ctlabResume !== undefined) {
       captureEditors();
       await resumeFromStorage();
-      return;
-    }
-
-    if (target.dataset.ctlabAttach !== undefined) {
-      captureEditors();
-      await answerAttachment(target.dataset.ctlabAttach, { rejected: false });
-      return;
-    }
-
-    if (target.dataset.ctlabDetach !== undefined) {
-      captureEditors();
-      await answerAttachment(target.dataset.ctlabDetach, { rejected: true });
       return;
     }
 

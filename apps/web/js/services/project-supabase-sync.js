@@ -888,7 +888,25 @@ function mapCtRunRowToLogEntry(row = {}) {
     // faux, et l'écran sait afficher un tiret.
     durationMs: null,
     summary: `${Number(row.tracked_avis_count) || 0} avis suivis`,
-    details: null,
+    // Ce que l'exécution a lu et ce qu'elle en a tiré : le détail qu'on vient
+    // chercher quand un chiffre du suivi surprend. Sans lui, la ligne dit
+    // qu'une analyse a eu lieu, jamais sur quoi.
+    details: {
+      corpus: {
+        proposition: proposition ? `${numero}${titre ? ` — ${titre}` : ""}`.trim() : null,
+        documentCount,
+        avisCount: Number(row.avis_count) || 0,
+        trackedAvisCount: Number(row.tracked_avis_count) || 0,
+        guardViolationCount: Number(row.guard_violation_count) || 0,
+        engineVersion: safeString(row.engine_version || ""),
+        packs: Object.values(row.packs_used ?? {})
+          .map((pack) => (pack?.pack_id ? `${pack.pack_id} v${pack.pack_version ?? "?"}` : ""))
+          .filter(Boolean),
+        documents: (Array.isArray(row.corpus_documents) ? row.corpus_documents : [])
+          .map((entry) => safeString(entry?.name || ""))
+          .filter(Boolean)
+      }
+    },
     createdAt: computedAt,
     updatedAt: computedAt
   };
@@ -1190,7 +1208,8 @@ export async function syncProjectActionsFromSupabase(options = {}) {
   const ctParams = new URLSearchParams();
   ctParams.set(
     "select",
-    "id,computed_at,document_count,tracked_avis_count,trigger_source,proposition_id,propositions(number,title)"
+    "id,computed_at,document_count,avis_count,tracked_avis_count,guard_violation_count," +
+      "packs_used,engine_version,corpus_documents,trigger_source,proposition_id,propositions(number,title)"
   );
   ctParams.set("project_id", `eq.${backendProjectId}`);
   ctParams.set("order", "computed_at.desc");
