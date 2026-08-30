@@ -193,14 +193,20 @@ function renderAttachment(state) {
             ${ecarte
               ? `<li>Ces documents sont écartés de l'analyse tant que la question n'est pas tranchée. Aucun n'est supprimé.</li>`
               : ""}
+            <li class="ctlab__set-aside-hint">
+              Votre réponse est conservée : la question ne sera plus posée pour cette affaire.
+            </li>
           </ul>
-          <div class="ctlab__drop-actions">
+          <div class="ctlab__drop-actions ctlab__drop-actions--pair">
             <button type="button" class="gh-btn gh-btn--sm" data-ctlab-attach="${escapeHtml(group.key)}">
               ${
                 memoire.length === 0
                   ? `Oui, l'affaire ${escapeHtml(group.label)} est celle de ce projet`
                   : `Oui, rattacher l'affaire ${escapeHtml(group.label)} à ce projet`
               }
+            </button>
+            <button type="button" class="gh-btn gh-btn--sm gh-btn--danger" data-ctlab-detach="${escapeHtml(group.key)}">
+              Non, écarter ${combien > 1 ? "ces livrables" : "ce livrable"}
             </button>
           </div>
         </div>
@@ -1441,6 +1447,9 @@ const STYLE = `
 .ctlab__drop-title { display: block; font-size: 16px; color: var(--ctlab-text); }
 .ctlab__drop-lead { color: var(--ctlab-muted); margin: 6px auto 0; max-width: 60ch; }
 .ctlab__drop-actions { margin-top: 12px; }
+/* Deux réponses opposées : côte à côte, pour qu'aucune ne paraisse la seule. */
+.ctlab__drop-actions--pair { display: flex; gap: 8px; flex-wrap: wrap; }
+.ctlab__set-aside-hint { color: var(--ctlab-muted); font-style: italic; }
 /* Ce qui a été écarté, et pourquoi. Discret, mais jamais tu. */
 .ctlab__set-aside {
   margin: 14px auto 0;
@@ -4197,39 +4206,44 @@ export function renderCtContinuityLab(root) {
    * n'a pas eu lieu.
    */
   /**
-   * L'humain répond : oui, cette affaire est celle de ce projet.
+   * L'humain répond : cette affaire est celle de ce projet, ou elle ne l'est pas.
+   *
+   * Les deux réponses suivent le même chemin, et c'est voulu. « Non » est une
+   * information, souvent la plus sûre — celui qui vient d'ouvrir le PDF sait
+   * mieux que n'importe quelle règle —, et la conserver tient pour le refus la
+   * promesse qu'on avait faite à l'acceptation : ne plus jamais redemander.
    *
    * Trois choses en découlent, et la troisième est le but de tout l'édifice.
    *
-   * Les marqueurs de l'affaire sont **versés à la mémoire du projet**, où ils
-   * restent. Les documents du lot sont **réévalués**, ce qui fait rentrer dans
-   * l'analyse ceux qu'on venait d'écarter. Et surtout, la question ne sera
-   * **plus jamais posée** pour cette affaire : les livrables suivants de la
-   * même montée d'escalier passeront sans qu'on redemande.
+   * Les marqueurs de l'affaire sont **versés à la mémoire du projet**, avec le
+   * signe de la réponse. Les documents du lot sont **réévalués**, ce qui fait
+   * rentrer dans l'analyse ceux qu'on venait d'accepter, et écarte pour de bon
+   * ceux qu'on vient de refuser. Et surtout, la question ne sera **plus jamais
+   * posée** pour cette affaire.
    *
    * Rien n'est écrit si la base ne répond pas, et l'écran le dit. Laisser
    * croire qu'une réponse a été retenue alors qu'elle est perdue ferait
    * reposer la même question à chaque ouverture, sans qu'on comprenne pourquoi.
    */
-  const confirmAttachment = async (key) => {
+  const answerAttachment = async (key, { rejected }) => {
     const group = attachmentGroups(state.reports).find((entry) => entry.key === key);
     if (!group) return;
 
     const projectId = state.memory?.projectId ?? null;
     if (!projectId) {
-      state.attachmentError = "Aucun projet n'est ouvert : ce rattachement ne peut pas être conservé.";
+      state.attachmentError = "Aucun projet n'est ouvert : cette réponse ne peut pas être conservée.";
       refresh();
       return;
     }
 
     try {
       const { rememberProjectMarkers } = await projectIdentity();
-      const retenus = markersToRemember(group.markers, state.identity.known);
+      const retenus = markersToRemember(group.markers, state.identity.known, { rejected });
       const written = await rememberProjectMarkers(projectId, retenus);
       if (written === null) throw new Error("non conservé");
     } catch {
       state.attachmentError =
-        "Le rattachement n'a pas pu être enregistré. Les documents restent écartés, " +
+        "La réponse n'a pas pu être enregistrée. Les documents restent en l'état, " +
         "et la question sera reposée.";
       refresh();
       return;
@@ -4511,7 +4525,8 @@ export function renderCtContinuityLab(root) {
     if (handleDatePickerClick(event)) return;
 
     const target = event.target.closest(
-      "[data-ctlab-pick], [data-ctlab-resume], [data-ctlab-attach], [data-ctlab-remove], [data-ctlab-cell], " +
+      "[data-ctlab-pick], [data-ctlab-resume], [data-ctlab-attach], [data-ctlab-detach], " +
+        "[data-ctlab-remove], [data-ctlab-cell], " +
         "[data-ctlab-trace], [data-ctlab-back], " +
         "[data-ctlab-open-pdf], [data-ctlab-pdf-close], " +
         "[data-ctlab-as-of], " +
@@ -4545,7 +4560,13 @@ export function renderCtContinuityLab(root) {
 
     if (target.dataset.ctlabAttach !== undefined) {
       captureEditors();
-      await confirmAttachment(target.dataset.ctlabAttach);
+      await answerAttachment(target.dataset.ctlabAttach, { rejected: false });
+      return;
+    }
+
+    if (target.dataset.ctlabDetach !== undefined) {
+      captureEditors();
+      await answerAttachment(target.dataset.ctlabDetach, { rejected: true });
       return;
     }
 

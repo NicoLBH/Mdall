@@ -28,6 +28,13 @@
  * document, c'est verser ses marqueurs à la mémoire du projet, de sorte que la
  * question ne soit plus posée pour les suivants. C'est ainsi que l'escalier C
  * n'est demandé qu'une fois.
+ *
+ * **Les deux réponses se conservent.** « Non » est une information, et souvent
+ * la plus sûre : celui qui vient d'ouvrir le PDF sait mieux que n'importe quelle
+ * règle que ce rapport n'est pas de ce chantier. Un marqueur rejeté est donc le
+ * même marqueur, avec le signe inverse — et il tranche avant tout le reste, y
+ * compris avant un écho, sans quoi un nom de commune suffirait à faire refaire
+ * son travail à celui qui a déjà répondu.
  */
 
 /** Ce qu'un document ou un projet peut porter comme marque d'identité. */
@@ -211,8 +218,28 @@ export function batchConsensus(declaredPerDocument = []) {
  * @returns {{verdict: string, matched: object[], conflicting: object[], reason: string}}
  */
 export function assessAttachment({ declared = [], echoes = [], known = [], consensus = new Map() } = {}) {
+  // Un « non » déjà donné tranche avant tout le reste, y compris avant un écho.
+  // Celui qui a ouvert le PDF et répondu que ce rapport n'était pas de ce
+  // chantier en sait plus que n'importe quelle règle : lui redemander parce
+  // qu'un nom de commune concorde serait lui faire refaire son travail.
+  const refused = new Set(
+    known.filter((entry) => entry.rejected).map((entry) => `${entry.type} ${entry.value}`)
+  );
+  const rejected = declared.find((entry) => refused.has(`${entry.type} ${entry.value}`));
+  if (rejected) {
+    return {
+      verdict: ATTACHMENT.FOREIGN,
+      matched: [],
+      conflicting: [rejected],
+      reason: `Affaire ${rejected.label}, écartée de ce projet.`
+    };
+  }
+
   const knownByType = new Map();
   for (const entry of known) {
+    // Un marqueur rejeté ne rattache rien et ne contredit rien : il a déjà tout
+    // dit plus haut. Le laisser ici ferait passer son affaire pour « connue ».
+    if (entry.rejected) continue;
     if (!knownByType.has(entry.type)) knownByType.set(entry.type, new Set());
     knownByType.get(entry.type).add(entry.value);
   }
@@ -306,7 +333,12 @@ export function assessAttachment({ declared = [], echoes = [], known = [], conse
  * posée — l'affaire de la montée d'escalier C, confirmée une fois, rattache
  * ensuite tous ses livrables sans qu'on redemande.
  */
-export function markersToRemember(declared = [], known = []) {
-  const seen = new Set(known.map((entry) => `${entry.type} ${entry.value}`));
-  return declared.filter((entry) => !seen.has(`${entry.type} ${entry.value}`));
+export function markersToRemember(declared = [], known = [], { rejected = false } = {}) {
+  // La comparaison porte sur le signe autant que sur la valeur : une affaire
+  // qu'on avait écartée et qu'on rattache aujourd'hui n'est pas « déjà connue »,
+  // c'est une réponse qui change. Sans cela, se raviser serait sans effet.
+  const seen = new Set(known.map((entry) => `${entry.type} ${entry.value} ${entry.rejected === true}`));
+  return declared
+    .filter((entry) => !seen.has(`${entry.type} ${entry.value} ${rejected}`))
+    .map((entry) => ({ ...entry, rejected }));
 }

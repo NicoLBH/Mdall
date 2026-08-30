@@ -16,7 +16,7 @@ import { buildSupabaseAuthHeaders, getCurrentUser, getSupabaseUrl } from "../../
 
 const SUPABASE_URL = getSupabaseUrl();
 
-const COLUMNS = "id,marker_type,marker_value,marker_label,document_count,confirmed_by,created_at";
+const COLUMNS = "id,marker_type,marker_value,marker_label,document_count,rejected,confirmed_by,created_at";
 
 /**
  * Les marqueurs déjà confirmés pour ce projet.
@@ -45,7 +45,9 @@ export async function loadProjectMarkers(projectId) {
       type: row.marker_type,
       value: row.marker_value,
       label: row.marker_label ?? row.marker_value,
-      documentCount: row.document_count ?? 1
+      documentCount: row.document_count ?? 1,
+      // Le signe de la réponse. Une affaire écartée est aussi une chose sue.
+      rejected: row.rejected === true
     }));
   } catch {
     return [];
@@ -55,11 +57,17 @@ export async function loadProjectMarkers(projectId) {
 /**
  * Verse à la mémoire du projet ce qu'un humain vient de confirmer.
  *
+ * Vaut pour les deux réponses : rattacher une affaire, ou l'écarter. C'est le
+ * champ `rejected` qui porte le signe, et l'unicité porte sur le couple
+ * projet/valeur — de sorte qu'une affaire ne puisse pas être à la fois
+ * rattachée et écartée, et que se raviser mette à jour la ligne au lieu d'en
+ * ajouter une contradictoire.
+ *
  * L'écriture se fait par l'identité naturelle du marqueur — projet, type,
- * valeur —, de sorte que confirmer deux fois la même affaire ne crée pas deux
- * lignes. Aucune suppression : un marqueur confirmé reste, même si le document
- * qui l'a apporté est retiré du projet. Ce qui a été affirmé une fois n'a pas à
- * être redemandé.
+ * valeur —, de sorte que répondre deux fois la même chose ne crée pas deux
+ * lignes. Aucune suppression : un marqueur reste, même si le document qui l'a
+ * apporté est retiré du projet. Ce qui a été affirmé une fois n'a pas à être
+ * redemandé.
  *
  * @returns {Promise<number|null>} le nombre de marqueurs versés, ou `null` si
  *   la base n'a pas répondu — l'écran le dit alors, plutôt que de laisser
@@ -86,6 +94,7 @@ export async function rememberProjectMarkers(projectId, markers = []) {
           marker_value: marker.value,
           marker_label: marker.label ?? marker.value,
           document_count: marker.documentCount ?? 1,
+          rejected: marker.rejected === true,
           confirmed_by: confirmedBy
         }))
       )
