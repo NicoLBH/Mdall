@@ -1040,9 +1040,13 @@ export async function listDocumentDirectory(projectId = "", folderId = null) {
     const folders = allFolders.filter((folder) => safeString(folder.parent_folder_id || "") === safeString(normalizedFolderId || ""));
 
     const fileParams = new URLSearchParams();
-    fileParams.set("select", "id,project_id,folder_id,filename,original_filename,mime_type,storage_bucket,storage_path,document_kind,upload_status,created_at,updated_at,deleted_at,detection_status,detection_reason,detected_kind,detected_kind_label,detected_author,detection_confidence,content_fingerprint,duplicate_of_document_id,reissue_of_document_id");
+    fileParams.set("select", "id,project_id,folder_id,filename,original_filename,mime_type,storage_bucket,storage_path,document_kind,upload_status,created_at,updated_at,deleted_at,detection_status,detection_reason,detected_kind,detected_kind_label,detected_author,detection_confidence,content_fingerprint,duplicate_of_document_id,reissue_of_document_id,corpus_state,proposition_id");
     fileParams.set("project_id", `eq.${backendProjectId}`);
     fileParams.set("deleted_at", "is.null");
+    // Un document soumis à une proposition n'est pas encore dans le corpus : le
+    // montrer ici comme un document ordinaire ferait croire qu'il est entré,
+    // alors qu'il attend d'être jugé. Il se lit depuis sa proposition.
+    fileParams.set("corpus_state", "neq.proposed");
     if (normalizedFolderId) {
       fileParams.set("folder_id", `eq.${normalizedFolderId}`);
     } else {

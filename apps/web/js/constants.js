@@ -3,6 +3,7 @@ import { svgIcon } from "./ui/icons.js";
 export const PROJECT_TAB_IDS = {
   DOCUMENTS: "documents",
   SUBJECTS: "sujets",
+  PROPOSITIONS: "propositions",
   ACTIONS: "actions",
   STUDIO: "atelier",
   SITUATIONS: "situations",
@@ -52,6 +53,12 @@ export const PROJECT_TABS = [
     label: "Sujets",
     icon: svgIcon("issue-opened", { className: "octicon octicon-file" }),
     countKey: "openSujets"
+  },
+  {
+    id: PROJECT_TAB_IDS.PROPOSITIONS,
+    label: "Propositions",
+    icon: svgIcon("git-pull-request", { className: "octicon octicon-git-pull-request" }),
+    countKey: "openPropositions"
   },
   {
     id: PROJECT_TAB_IDS.STUDIO,

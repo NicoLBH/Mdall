@@ -66,6 +66,21 @@ const docsViewState = {
   // Les fichiers choisis pour le prochain dépôt. `files`, plus bas, désigne tout
   // autre chose — le contenu du répertoire affiché —, d'où ce nom-ci.
   selectedFiles: [],
+  /**
+   * Ce qu'on fera du lot : « direct » pour l'écrire tel quel dans le projet,
+   * « proposition » pour le soumettre à jugement, ou l'identifiant d'une
+   * proposition ouverte à laquelle l'ajouter.
+   *
+   * `null` tant que l'examen des fichiers n'a pas suggéré de défaut. On ne
+   * déplace jamais ce choix sous la main de l'utilisateur : `depositModeTouched`
+   * le fige dès qu'il y a touché.
+   */
+  depositMode: null,
+  depositModeTouched: false,
+  /** L'examen des fichiers choisis, réutilisé au dépôt pour ne pas les relire. */
+  inspection: { running: false, exploitable: 0, byFile: null },
+  /** Les propositions ouvertes du projet, pour pouvoir y ajouter le lot. */
+  openPropositions: [],
   title: "",
   description: "",
   isUploading: false,
@@ -1985,6 +2000,8 @@ function renderUploadView() {
                     placeholder="Décrivez brièvement le contenu, le contexte ou les points d'attention."
                   >${escapeHtml(docsViewState.description)}</textarea>
                 </div>
+
+                ${renderDepositMode()}
               </section>
 
               <section class="documents-commit-card documents-commit-card-actions">
@@ -2002,6 +2019,10 @@ function renderUploadView() {
 
 function resetUploadState() {
   docsViewState.selectedFiles = [];
+  docsViewState.depositMode = null;
+  docsViewState.depositModeTouched = false;
+  docsViewState.inspection = { running: false, exploitable: 0, byFile: null };
+  docsViewState.openPropositions = [];
   docsViewState.isUploading = false;
   docsViewState.uploadProgress = null;
   docsViewState.title = "";
@@ -2126,6 +2147,147 @@ function addSelectedFiles(root, fileList) {
   }
 
   renderProjectDocuments(root);
+  inspectSelection(root);
+  loadOpenPropositions(root);
+}
+
+/**
+ * Les propositions ouvertes du projet, pour pouvoir y ajouter ce lot.
+ *
+ * Lues une fois par sélection : elles ne changent pas pendant qu'on choisit des
+ * fichiers, et les relire à chaque rendu ferait une requête par frappe au clavier.
+ */
+async function loadOpenPropositions(root) {
+  if (docsViewState.openPropositions.length > 0) return;
+
+  try {
+    const { listPropositions } = await import("../services/propositions-supabase.js");
+    const projectId = await resolveCurrentBackendProjectId().catch(() => "");
+    if (!projectId) return;
+
+    const ouvertes = (await listPropositions(projectId, { status: "open" })) ?? [];
+    if (ouvertes.length === 0) return;
+
+    docsViewState.openPropositions = ouvertes;
+    if (root?.isConnected) renderProjectDocuments(root);
+  } catch {
+    // Sans propositions joignables, les deux choix ordinaires suffisent.
+  }
+}
+
+/**
+ * Examine les fichiers choisis, en arrière-plan.
+ *
+ * Il s'agit de savoir si le lot contient au moins un livrable exploitable — un
+ * document dont Mdall saura tirer quelque chose —, car c'est ce qui décide du
+ * choix proposé par défaut : soumettre à jugement plutôt que déposer tel quel.
+ *
+ * L'examen ne bloque pas la sélection : les fichiers s'affichent aussitôt, et le
+ * défaut se pose quand la lecture aboutit. Faire attendre plusieurs secondes
+ * devant une liste vide pour un bouton radio serait payer très cher un détail.
+ *
+ * Et il ne bouge rien si l'utilisateur a déjà choisi : un contrôle qui se
+ * déplace sous la main est pire qu'un mauvais défaut.
+ */
+async function inspectSelection(root) {
+  const files = [...docsViewState.selectedFiles];
+  if (files.length === 0) return;
+
+  docsViewState.inspection = { running: true, exploitable: 0, byFile: new Map() };
+  renderProjectDocuments(root);
+
+  try {
+    const [{ inspectFile }, { isExploitable }] = await Promise.all([
+      import("../services/document-intake.js"),
+      import("../services/document-recognition.js")
+    ]);
+
+    const byFile = new Map();
+    let exploitable = 0;
+    for (const file of files) {
+      const inspection = await inspectFile(file);
+      byFile.set(file, inspection);
+      if (inspection?.recognition && isExploitable(inspection.recognition)) exploitable += 1;
+    }
+
+    // La sélection a pu changer pendant la lecture : ce qu'on vient d'examiner
+    // ne décrirait alors plus ce que l'utilisateur a sous les yeux.
+    const inchangee =
+      docsViewState.selectedFiles.length === files.length &&
+      docsViewState.selectedFiles.every((file, index) => file === files[index]);
+    if (!inchangee) return;
+
+    docsViewState.inspection = { running: false, exploitable, byFile };
+    if (!docsViewState.depositModeTouched) {
+      docsViewState.depositMode = exploitable > 0 ? "proposition" : "direct";
+    }
+  } catch {
+    // Ne pas savoir ce que sont les fichiers n'empêche pas de les déposer : on
+    // retombe sur le dépôt direct, et l'utilisateur garde le choix.
+    docsViewState.inspection = { running: false, exploitable: 0, byFile: null };
+    if (!docsViewState.depositModeTouched) docsViewState.depositMode = "direct";
+  }
+
+  if (root?.isConnected) renderProjectDocuments(root);
+}
+
+/**
+ * Les deux choix du dépôt, à la manière de GitHub.
+ *
+ * Le troisième n'apparaît que lorsqu'une proposition est ouverte : proposer
+ * d'ajouter à quelque chose qui n'existe pas serait offrir une porte sur un mur.
+ */
+function renderDepositMode() {
+  if (docsViewState.selectedFiles.length === 0) return "";
+
+  const mode = docsViewState.depositMode ?? "direct";
+  const { running, exploitable } = docsViewState.inspection;
+
+  const choix = (value, icon, label, hint) => `
+    <label class="documents-deposit-mode${mode === value ? " is-selected" : ""}">
+      <input type="radio" name="documents-deposit-mode" value="${escapeHtml(value)}" ${
+        mode === value ? "checked" : ""
+      }>
+      <span class="documents-deposit-mode__icon">${svgIcon(icon, { className: "octicon" })}</span>
+      <span class="documents-deposit-mode__body">
+        <span class="documents-deposit-mode__label">${label}</span>
+        ${hint ? `<span class="documents-deposit-mode__hint">${hint}</span>` : ""}
+      </span>
+    </label>
+  `;
+
+  const ouvertes = docsViewState.openPropositions
+    .map((proposition) =>
+      choix(
+        proposition.id,
+        "git-pull-request",
+        `Ajouter à « ${escapeHtml(proposition.title)} »`,
+        "Une proposition ouverte, comme on pousse un commit sur une pull request."
+      )
+    )
+    .join("");
+
+  return `
+    <div class="documents-deposit-modes">
+      ${choix("direct", "git-commit", "Déposer directement dans le projet", "Les documents entrent aussitôt dans le corpus.")}
+      ${choix(
+        "proposition",
+        "git-pull-request",
+        "Ouvrir une proposition pour ces documents",
+        "Ils attendront d'être relus avant d'entrer dans le corpus."
+      )}
+      ${ouvertes}
+      ${
+        running
+          ? `<p class="documents-deposit-modes__note">Lecture des documents…</p>`
+          : exploitable > 0
+            ? `<p class="documents-deposit-modes__note">${exploitable} document${
+                exploitable > 1 ? "s" : ""
+              } dont Mdall saura tirer quelque chose : une proposition est proposée par défaut.</p>`
+            : ""
+      }
+    </div>
+  `;
 }
 
 /**
@@ -2191,6 +2353,9 @@ async function commitDeposit(root) {
     results = await depositBatch(files, {
       projectId,
       folderId: docsViewState.currentFolderId || null,
+      // L'examen fait à la sélection est réutilisé : relire dix-sept PDF une
+      // seconde fois pour écrire les mêmes colonnes serait du temps volé.
+      inspections: docsViewState.inspection.byFile,
       onProgress: (progress) => {
         docsViewState.uploadProgress = progress;
         renderProjectDocuments(root);
@@ -2199,10 +2364,24 @@ async function commitDeposit(root) {
 
     const summary = summarizeDeposit(results);
 
+    // Seuls les documents réellement écrits rejoignent une proposition. Y
+    // rattacher un doublon ferait basculer en attente un document DÉJÀ dans le
+    // corpus : on le retirerait du projet en croyant en ajouter un.
+    const entres = results.filter((result) => result.entry === ENTRY.DEPOSITED);
+
+    // Le dépôt a eu lieu quoi qu'il arrive ; ce qui suit ne fait que dire ce
+    // qu'on en fait. Une proposition qui échoue laisse donc des documents
+    // déposés, et l'écran doit le dire plutôt que de laisser croire à une perte.
+    const proposition = await submitToProposition(
+      projectId,
+      entres.map((result) => result.documentId)
+    );
+
     // Les autres écrans n'ont pas à ignorer un document jusqu'au prochain
-    // rechargement : le store local reçoit ceux qui sont réellement entrés.
-    for (const result of results) {
-      if (result.entry === ENTRY.DEPOSITED) addProjectDocument(buildRepoDocumentFor(result.file, result.documentId));
+    // rechargement — mais un document soumis à une proposition n'est pas encore
+    // dans le corpus, et le faire figurer ici le montrerait comme s'il l'était.
+    if (!proposition || proposition.failed) {
+      for (const result of entres) addProjectDocument(buildRepoDocumentFor(result.file, result.documentId));
     }
 
     // Nommer ce qui n'est pas entré, un par un. Un fichier écarté en silence est
@@ -2218,16 +2397,19 @@ async function commitDeposit(root) {
 
     await loadCurrentDirectory().catch(() => {});
 
+    const suite = proposition?.message ? ` ${proposition.message}` : "";
     setDocumentsActivity({
-      tone: summary.tone,
+      tone: proposition?.failed ? "warning" : summary.tone,
       title: summary.deposited > 0 ? "Documents déposés" : "Dépôt sans effet",
-      message: ecartes.length > 0 ? `${summary.message} ${ecartes.join(" · ")}` : summary.message
+      message: `${ecartes.length > 0 ? `${summary.message} ${ecartes.join(" · ")}` : summary.message}${suite}`
     });
     // `setDocumentsActivity` ne fait que poser l'état : sans ce rendu, le bandeau
     // resterait celui du dépôt précédent.
     renderProjectDocuments(root);
 
-    triggerAnalysisAfterDeposit(root, results);
+    // L'analyse par IA ne concerne que le dépôt direct : une proposition sera
+    // analysée à sa lecture, par le moteur du suivi, et non par cette pipeline-ci.
+    if (!proposition) triggerAnalysisAfterDeposit(root, results);
   } catch (error) {
     docsViewState.isUploading = false;
     docsViewState.uploadProgress = null;
@@ -2238,6 +2420,74 @@ async function commitDeposit(root) {
       message: String(error?.message || error || "Le dépôt n'a pas abouti.")
     });
     renderProjectDocuments(root);
+  }
+}
+
+/** Le nombre de propositions ouvertes, relu après en avoir créé une. */
+async function refreshOpenPropositionCount(projectId) {
+  try {
+    const { listPropositions } = await import("../services/propositions-supabase.js");
+    const ouvertes = await listPropositions(projectId, { status: "open" });
+    if (ouvertes !== null) store.projectPropositionsView = { openCount: ouvertes.length };
+  } catch {
+    // Un compteur qu'on n'a pas su relire reste tel quel : mieux vaut une
+    // pastille en retard qu'une pastille inventée.
+  }
+}
+
+/**
+ * Soumet à une proposition les documents qui viennent d'être déposés.
+ *
+ * Trois issues, selon ce que l'utilisateur a choisi : rien (dépôt direct), une
+ * proposition nouvelle, ou une proposition ouverte à laquelle on ajoute — comme
+ * on pousse un commit sur une pull request.
+ *
+ * Ce qui compte ici, c'est ce qui ne se produit pas : **un échec ne perd rien.**
+ * Les documents sont déjà en base quand on arrive, et le pire cas laisse un
+ * dépôt ordinaire au lieu d'une proposition. L'écran le dit ; il ne prétend
+ * jamais qu'une proposition a été ouverte quand elle ne l'a pas été.
+ *
+ * @returns {Promise<{message: string, failed: boolean}|null>} `null` pour un
+ *   dépôt direct — il n'y a alors rien à raconter de plus.
+ */
+async function submitToProposition(projectId, documentIds = []) {
+  const mode = docsViewState.depositMode ?? "direct";
+  if (mode === "direct" || documentIds.length === 0) return null;
+
+  try {
+    const { attachDocuments, createProposition } = await import("../services/propositions-supabase.js");
+
+    const proposition =
+      mode === "proposition"
+        ? await createProposition({
+            projectId,
+            title: docsViewState.title.trim() || `Ajout de ${documentIds.length} documents`,
+            description: docsViewState.description
+          })
+        : docsViewState.openPropositions.find((entry) => entry.id === mode) ?? null;
+
+    if (!proposition?.id) {
+      return { failed: true, message: "La proposition n'a pas pu être ouverte : les documents restent déposés." };
+    }
+
+    const attached = await attachDocuments(proposition.id, documentIds);
+    if (attached === null) {
+      return {
+        failed: true,
+        message: "La proposition a été ouverte, mais les documents n'ont pas pu lui être rattachés."
+      };
+    }
+
+    // La pastille de l'onglet doit refléter ce qui vient d'être créé, sans
+    // attendre qu'on aille voir : un compteur en retard vaut un compteur faux.
+    await refreshOpenPropositionCount(projectId);
+
+    return {
+      failed: false,
+      message: `Ils attendent d'être relus dans « ${proposition.title} ».`
+    };
+  } catch {
+    return { failed: true, message: "La proposition n'a pas pu être ouverte : les documents restent déposés." };
   }
 }
 
@@ -2656,6 +2906,15 @@ function bindDocumentsView(root) {
       const index = Number(button.getAttribute("data-documents-remove-file"));
       if (!Number.isInteger(index)) return;
       docsViewState.selectedFiles.splice(index, 1);
+      renderProjectDocuments(root);
+    });
+  }
+
+  for (const radio of document.querySelectorAll('input[name="documents-deposit-mode"]')) {
+    radio.addEventListener("change", () => {
+      docsViewState.depositMode = radio.value;
+      // Dès qu'on y a touché, l'examen ne déplacera plus le choix.
+      docsViewState.depositModeTouched = true;
       renderProjectDocuments(root);
     });
   }

@@ -15379,3 +15379,118 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   list-style:none;
   font-size:14px;
 }
+
+/* ── Propositions ─────────────────────────────────────────────────────────
+   Un changement du corpus soumis à jugement. L'écran reprend la liste de pull
+   requests, parce que le geste est le même et déjà connu. */
+
+.propositions-shell{
+  max-width:1012px;
+  margin:0 auto;
+  padding:16px;
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+
+.propositions-filters{
+  display:flex;
+  gap:16px;
+  padding:12px 16px;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  background:var(--panel2);
+}
+
+.propositions-filter{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  background:none;
+  border:0;
+  padding:0;
+  cursor:pointer;
+  color:var(--muted);
+  font:inherit;
+  font-size:14px;
+}
+.propositions-filter.is-active{ color:var(--text); font-weight:600; }
+.propositions-filter:hover{ color:var(--text); }
+.propositions-filter:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; border-radius:2px; }
+
+.propositions-list{
+  margin:0;
+  padding:0;
+  list-style:none;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  overflow:hidden;
+}
+
+.propositions-row{
+  display:grid;
+  grid-template-columns:24px 1fr;
+  gap:8px;
+  padding:12px 16px;
+  background:var(--panel2);
+  border-bottom:1px solid var(--border2);
+}
+.propositions-row:last-child{ border-bottom:0; }
+
+.propositions-row__icon{ color:var(--fgColor-open); padding-top:2px; }
+.propositions-row__icon--merged{ color:var(--fgColor-done); }
+.propositions-row__icon--closed{ color:var(--fgColor-danger); }
+
+.propositions-row__body{ display:flex; flex-direction:column; gap:2px; min-width:0; }
+.propositions-row__title{ color:var(--text); font-weight:600; }
+.propositions-row__meta{ color:var(--muted); font-size:12px; }
+
+.propositions-empty{
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  background:var(--panel2);
+  padding:32px 24px;
+  text-align:center;
+  color:var(--muted);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:8px;
+}
+.propositions-empty b{ color:var(--text); font-size:16px; }
+.propositions-empty p{ margin:0; max-width:52ch; font-size:13px; }
+
+/* ── Le choix du dépôt ────────────────────────────────────────────────────
+   Deux réponses opposées, côte à côte, pour qu'aucune ne paraisse la seule. */
+
+.documents-deposit-modes{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  margin-top:4px;
+}
+
+.documents-deposit-mode{
+  display:grid;
+  grid-template-columns:16px 16px 1fr;
+  align-items:start;
+  gap:8px;
+  padding:8px 10px;
+  border-radius:var(--radius);
+  cursor:pointer;
+}
+.documents-deposit-mode:hover{ background:var(--headbgtight); }
+.documents-deposit-mode input{ margin:2px 0 0; accent-color:var(--accent); cursor:pointer; }
+.documents-deposit-mode input:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+.documents-deposit-mode__icon{ color:var(--muted); padding-top:1px; }
+.documents-deposit-mode.is-selected .documents-deposit-mode__icon{ color:var(--accent); }
+.documents-deposit-mode__body{ display:flex; flex-direction:column; gap:1px; }
+.documents-deposit-mode__label{ color:var(--text); font-size:14px; }
+.documents-deposit-mode__hint{ color:var(--muted); font-size:12px; }
+
+.documents-deposit-modes__note{
+  margin:4px 0 0 10px;
+  color:var(--muted);
+  font-size:12px;
+  font-style:italic;
+}

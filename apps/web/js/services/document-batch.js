@@ -123,12 +123,19 @@ export function summarizeDeposit(results = []) {
  *  - l'examen enrichit le dépôt, il ne le conditionne pas — un PDF que pdf.js
  *    refuse d'ouvrir entre quand même, sans qu'on prétende savoir ce qu'il est.
  *
+ * `inspections` permet de réutiliser un examen déjà fait — l'écran de dépôt en
+ * fait un pour décider quoi proposer par défaut, et relire dix-sept PDF une
+ * seconde fois pour écrire les mêmes colonnes serait du temps pris à l'utilisateur.
+ *
  * @param {File[]} files
- * @param {{projectId: string, folderId: string|null,
+ * @param {{projectId: string, folderId: string|null, inspections?: Map<File, object>,
  *          onProgress?: (progress: {done: number, total: number, name: string}) => void}} options
  * @returns {Promise<object[]>} un résultat par fichier, dans l'ordre du lot
  */
-export async function depositBatch(files = [], { projectId, folderId = null, onProgress = null } = {}) {
+export async function depositBatch(
+  files = [],
+  { projectId, folderId = null, inspections = null, onProgress = null } = {}
+) {
   const { accepted, rejected } = planBatch(files);
   const results = [...rejected];
   if (accepted.length === 0 || !projectId) return results;
@@ -145,7 +152,7 @@ export async function depositBatch(files = [], { projectId, folderId = null, onP
     onProgress?.({ done, total: accepted.length, name: file.name });
 
     try {
-      const inspection = await inspectFile(file);
+      const inspection = inspections?.get(file) ?? (await inspectFile(file));
       const related = relateToKnown(inspection, known);
 
       if (related?.verdict === IDENTITY.DUPLICATE) {

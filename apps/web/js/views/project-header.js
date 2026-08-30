@@ -127,15 +127,18 @@ function getProjectTabCounters() {
       }
     }
 
-    return { openSujets, totalSujets };
+    return { openSujets, totalSujets, openPropositions: store.projectPropositionsView?.openCount };
   }
 
-  return getCurrentProjectSubjectCounters();
+  return { ...getCurrentProjectSubjectCounters(), openPropositions: store.projectPropositionsView?.openCount };
 }
 
 function renderTabCount(tab, counters) {
   if (!tab.countKey) return "";
-  const value = Number(counters?.[tab.countKey] || 0);
+  // Un compte qu'on ignore encore ne s'affiche pas. Montrer « 0 » avant d'avoir
+  // regardé serait affirmer qu'il n'y a rien, ce qu'on ne sait pas.
+  if (counters?.[tab.countKey] === undefined || counters?.[tab.countKey] === null) return "";
+  const value = Number(counters[tab.countKey] || 0);
   return renderCountBadge(value, {
     className: "project-tabs__counter",
     ariaLabel: `${value} élément(s)`
