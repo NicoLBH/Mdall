@@ -3,6 +3,7 @@ import { setProjectViewHeader, clearProjectActiveScrollSource, debugProjectScrol
 import { getRunLogEntries, getRunMetrics } from "../services/project-automation.js";
 import { syncProjectActionsFromSupabase } from "../services/project-supabase-sync.js";
 import { svgIcon } from "../ui/icons.js";
+import { buildRunGraph } from "../services/run-workflow.js";
 import { store } from "../store.js";
 import {
   renderDataTableEmptyState,
@@ -452,6 +453,7 @@ function renderRunDetail(entry) {
         <p class="run-detail__lead">${escapeHtml(entry.summary || getTriggerLabel(entry))}</p>
       </div>
 
+      ${renderRunGraph(entry)}
       ${renderRunSection("L'exécution", identite)}
       ${lecture.length > 0 ? renderRunSection("Ce que l'analyse a lu", lecture) : ""}
       ${renderRunPipelineSteps(entry)}
@@ -484,6 +486,42 @@ function renderRunDetail(entry) {
              </section>`
           : ""
       }
+    </section>
+  `;
+}
+
+/**
+ * Le chemin d'une exécution, en boîtes reliées.
+ *
+ * Un enchaînement se comprend d'un coup d'œil là où une liste de chiffres
+ * demande de le reconstruire : une décision cause une analyse, l'analyse lit un
+ * corpus, le corpus produit des avis, les avis deviennent le suivi.
+ *
+ * Chaque boîte porte un chiffre réellement écrit en base. Les étapes dont nous
+ * ne savons rien n'apparaissent pas — un dessin complet mais inventé serait
+ * exactement ce qu'un journal ne doit pas faire.
+ */
+function renderRunGraph(entry) {
+  const nodes = buildRunGraph(entry);
+  if (nodes.length === 0) return "";
+
+  return `
+    <section class="run-section">
+      <h3 class="run-section__title">Le chemin de cette exécution</h3>
+      <div class="run-graph">
+        ${nodes
+          .map(
+            (node, index) => `
+              ${index > 0 ? `<span class="run-graph__link" aria-hidden="true"></span>` : ""}
+              <div class="run-graph__node run-graph__node--${escapeHtml(node.tone)}">
+                <span class="run-graph__icon">${svgIcon(node.icon, { className: "octicon" })}</span>
+                <span class="run-graph__label">${escapeHtml(node.label)}</span>
+                <span class="run-graph__detail">${escapeHtml(node.detail)}</span>
+              </div>
+            `
+          )
+          .join("")}
+      </div>
     </section>
   `;
 }
