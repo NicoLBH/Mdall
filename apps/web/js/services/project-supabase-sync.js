@@ -769,6 +769,10 @@ function mapDocumentRowToViewModel(row = {}) {
     storageBucket: safeString(row.storage_bucket),
     storagePath: safeString(row.storage_path),
     uploadStatus: safeString(row.upload_status),
+    // Où en est ce document vis-à-vis du corpus. Un document refusé reste
+    // visible, grisé : un fichier qui existe en base et n'apparaît nulle part
+    // est le mensonge qu'on a déjà corrigé une fois.
+    corpusState: safeString(row.corpus_state) || "accepted",
     documentKind,
     // Ce que Mdall a reconnu du document : sa nature, son émetteur, et la
     // raison quand il n'a pas su. Générique par construction — demain un
@@ -836,6 +840,57 @@ function mapRunRowToLogEntry(row = {}) {
     details: null,
     createdAt: row.created_at || startedAt,
     updatedAt: row.updated_at || endedAt || startedAt
+  };
+}
+
+/**
+ * Une analyse du suivi des avis, telle qu'elle s'affiche dans les Actions.
+ *
+ * C'est l'exécution du nouveau parcours : elle ne porte pas sur un document
+ * mais sur un lot, et elle a une cause — la proposition dont la fusion l'a
+ * déclenchée. La nommer est tout l'intérêt de la ligne : sans elle,
+ * deux lectures d'un même dossier se ressemblent sans qu'on sache ce qui les
+ * sépare.
+ *
+ * Une exécution sans proposition est un lancement depuis l'atelier. On ne lui
+ * invente pas de cause : on dit ce qu'on sait.
+ */
+function mapCtRunRowToLogEntry(row = {}) {
+  const computedAt = row.computed_at || row.created_at || new Date().toISOString();
+  const proposition = Array.isArray(row.propositions) ? row.propositions[0] : row.propositions;
+  const numero = proposition?.number != null ? `#${proposition.number}` : "";
+  const titre = safeString(proposition?.title || "");
+
+  const triggerType = safeString(row.trigger_source || (proposition ? "proposition" : "manual"));
+  const triggerLabel = proposition
+    ? `Proposition ${numero}${titre ? ` — ${titre}` : ""}`.trim()
+    : "Lancement manuel";
+
+  const documentCount = Number(row.document_count) || 0;
+  const documentName = `${documentCount} livrable${documentCount > 1 ? "s" : ""}`;
+
+  return {
+    id: safeString(row.id),
+    name: "Analyse du suivi des avis",
+    kind: "analysis",
+    agentKey: "ct-continuity",
+    lifecycleStatus: "completed",
+    outcomeStatus: "success",
+    status: "completed",
+    triggerType,
+    triggerLabel,
+    trigger: { type: triggerType, label: triggerLabel },
+    documentName,
+    subject: { documentName },
+    startedAt: computedAt,
+    endedAt: computedAt,
+    // Le temps de calcul n'est pas conservé : le prétendre à zéro serait
+    // faux, et l'écran sait afficher un tiret.
+    durationMs: null,
+    summary: `${Number(row.tracked_avis_count) || 0} avis suivis`,
+    details: null,
+    createdAt: computedAt,
+    updatedAt: computedAt
   };
 }
 
@@ -1132,8 +1187,26 @@ export async function syncProjectActionsFromSupabase(options = {}) {
   params.set("project_id", `eq.${backendProjectId}`);
   params.set("order", "created_at.desc");
 
-  const rows = await restFetch("analysis_runs", params);
-  const nextItems = (Array.isArray(rows) ? rows : []).map(mapRunRowToLogEntry);
+  const ctParams = new URLSearchParams();
+  ctParams.set(
+    "select",
+    "id,computed_at,document_count,tracked_avis_count,trigger_source,proposition_id,propositions(number,title)"
+  );
+  ctParams.set("project_id", `eq.${backendProjectId}`);
+  ctParams.set("order", "computed_at.desc");
+
+  // Deux pipelines, un seul journal. Ne pas savoir lire l'un n'autorise pas
+  // à taire l'autre : une base à jour rendra les deux, une base en retard
+  // rendra celui qu'elle connaît plutôt qu'une page vide.
+  const [rows, ctRows] = await Promise.all([
+    restFetch("analysis_runs", params).catch(() => []),
+    restFetch("ct_analysis_runs", ctParams).catch(() => [])
+  ]);
+
+  const nextItems = [
+    ...(Array.isArray(rows) ? rows : []).map(mapRunRowToLogEntry),
+    ...(Array.isArray(ctRows) ? ctRows : []).map(mapCtRunRowToLogEntry)
+  ].sort((left, right) => new Date(right.startedAt).getTime() - new Date(left.startedAt).getTime());
 
   store.projectAutomation.runLog = nextItems;
   projectBucket.backendProjectId = backendProjectId;

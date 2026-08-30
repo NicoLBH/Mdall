@@ -224,3 +224,20 @@ test("une exécution consigne la liste de ce qu'elle a lu", () => {
     "sans liste, on n'en invente pas une"
   );
 });
+
+test("une exécution porte la proposition qui l'a causée", () => {
+  // Deux fusions différentes peuvent aboutir au même corpus : l'empreinte ne
+  // les distinguera jamais. Sans cette colonne, on ne peut pas remonter d'un
+  // chiffre du suivi à la décision qui l'a produit.
+  const run = toRunRow(RESULT, { projectId: "p-1", propositionId: "prop-7" });
+
+  assert.equal(run.proposition_id, "prop-7");
+  assert.equal(run.trigger_source, "proposition");
+});
+
+test("une exécution lancée à la main ne s'invente pas une cause", () => {
+  const run = toRunRow(RESULT, { projectId: "p-1" });
+
+  assert.equal(run.proposition_id, null);
+  assert.equal(run.trigger_source, "manual");
+});

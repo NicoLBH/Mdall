@@ -202,41 +202,96 @@ export async function listPropositionItems(propositionId) {
 }
 
 /**
- * Enregistre la décision d'un humain sur une affirmation.
+ * Enregistre les décisions d'un humain sur des affirmations.
  *
- * L'écriture se fait par l'identité naturelle de l'affirmation — la proposition,
- * son type, sa clé —, de sorte que se raviser mette à jour la ligne au lieu d'en
- * ajouter une contradictoire.
+ * En lot, parce que trancher un bloc entier d'un clic est le geste normal :
+ * dix-sept requêtes pour dix-sept avis feraient attendre pour rien, et
+ * laisseraient l'écran à moitié à jour si l'une échouait en chemin.
+ *
+ * L'écriture se fait par l'identité naturelle de chaque affirmation — la
+ * proposition, son type, sa clé —, de sorte que se raviser mette à jour la ligne
+ * au lieu d'en ajouter une contradictoire.
  *
  * @returns {Promise<boolean>} faux si la base n'a pas répondu : l'écran le dit
- *   plutôt que de laisser croire à une réponse retenue qui serait perdue au
+ *   plutôt que de laisser croire à des réponses retenues qui seraient perdues au
  *   prochain rechargement.
  */
-export async function decidePropositionItem({ propositionId, projectId, item, status, reason = null } = {}) {
-  if (!propositionId || !projectId || !item) return false;
+export async function decidePropositionItems({ propositionId, projectId, decisions = [] } = {}) {
+  if (!propositionId || !projectId || decisions.length === 0) return true;
 
   try {
     const decidedBy = (await getCurrentUser())?.id ?? null;
+    const decidedAt = new Date().toISOString();
+
     await request("proposition_items", {
       method: "POST",
       params: { on_conflict: "proposition_id,item_type,item_key" },
       headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
-      body: [
-        {
-          proposition_id: propositionId,
-          project_id: projectId,
-          item_type: item.itemType,
-          item_key: item.itemKey,
-          payload: item.payload ?? null,
-          status,
-          reason,
-          decided_by: decidedBy,
-          decided_at: new Date().toISOString()
-        }
-      ]
+      body: decisions.map(({ item, status, reason = null }) => ({
+        proposition_id: propositionId,
+        project_id: projectId,
+        item_type: item.itemType,
+        item_key: item.itemKey,
+        payload: item.payload ?? null,
+        status,
+        reason,
+        decided_by: decidedBy,
+        decided_at: decidedAt
+      }))
     });
     return true;
   } catch {
     return false;
+  }
+}
+
+/**
+ * Applique une proposition au corpus.
+ *
+ * Fusionner n'enregistre pas un état : cela enregistre des **réponses**. Les
+ * documents acceptés entrent, les refusés sont marqués — jamais supprimés, et
+ * visibles dans l'onglet Documents, car un fichier qui existe en base et
+ * n'apparaît nulle part est le mensonge qu'on a déjà corrigé une fois.
+ *
+ * L'ordre compte : la proposition ne passe en « fusionnée » qu'en dernier. Si
+ * quelque chose échoue avant, elle reste ouverte et l'on peut recommencer —
+ * alors qu'une proposition marquée fusionnée dont les documents ne seraient pas
+ * entrés laisserait un projet incohérent sans moyen d'y revenir.
+ *
+ * @returns {Promise<{merged: boolean, accepted: number, refused: number}|null>}
+ */
+export async function mergeProposition({ proposition, acceptedDocumentIds = [], refusedDocumentIds = [] } = {}) {
+  if (!proposition?.id) return null;
+
+  try {
+    if (acceptedDocumentIds.length > 0) {
+      await request("documents", {
+        method: "PATCH",
+        params: { id: `in.(${acceptedDocumentIds.join(",")})` },
+        headers: { Prefer: "return=minimal" },
+        body: { corpus_state: "accepted" }
+      });
+    }
+
+    if (refusedDocumentIds.length > 0) {
+      await request("documents", {
+        method: "PATCH",
+        params: { id: `in.(${refusedDocumentIds.join(",")})` },
+        headers: { Prefer: "return=minimal" },
+        body: { corpus_state: "refused" }
+      });
+    }
+
+    const mergedBy = (await getCurrentUser())?.id ?? null;
+    await request("propositions", {
+      method: "PATCH",
+      params: { id: `eq.${proposition.id}`, status: `eq.${PROPOSITION.OPEN}` },
+      headers: { Prefer: "return=minimal" },
+      body: { status: PROPOSITION.MERGED, merged_at: new Date().toISOString(), merged_by: mergedBy }
+    });
+
+    return { merged: true, accepted: acceptedDocumentIds.length, refused: refusedDocumentIds.length };
+  } catch {
+    return null;
   }
 }

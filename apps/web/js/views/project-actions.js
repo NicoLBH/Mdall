@@ -156,6 +156,12 @@ function getTriggerLabel(entry) {
     return "Déclenchement automatique";
   }
 
+  // Une exécution causée par une fusion porte normalement le numéro de la
+  // proposition ; sans lui, dire d'où elle vient reste plus utile que « — ».
+  if (entry.triggerType === "proposition") {
+    return "Fusion d'une proposition";
+  }
+
   return "—";
 }
 

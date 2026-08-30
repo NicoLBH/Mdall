@@ -15507,28 +15507,68 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 }
 
 /* ── La revue d'une proposition ───────────────────────────────────────────
-   Trois blocs d'affirmations, chacune acceptable ou refusable. Un bloc vide se
-   dit : savoir qu'aucun avis ne change est une information. */
+   Un en-tête à la manière d'une pull request, et trois blocs d'affirmations
+   qu'on accepte d'une case cochée. Dix-sept boutons « Accepter » n'étaient pas
+   une revue, c'était une corvée. */
 
-.review-head{ display:flex; flex-direction:column; gap:6px; padding:4px 0 8px; }
-.review-head__title{ margin:0; font-size:22px; color:var(--text); font-weight:600; }
-.review-head__number{ color:var(--muted); font-weight:400; font-variant-numeric:tabular-nums; }
-.review-head__description{ margin:0; color:var(--muted); font-size:14px; max-width:70ch; }
-.review-head [data-review-back]{ align-self:flex-start; }
-
-.review-summary{
-  margin:0;
-  padding:10px 16px;
-  border:1px solid var(--border);
-  border-radius:var(--radius);
-  background:var(--panel2);
-  color:var(--muted);
-  font-size:13px;
+.review-head{
+  position:sticky;
+  top:0;
+  z-index:3;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  padding:12px 0 14px;
+  background:var(--bg);
+  border-bottom:1px solid var(--border);
+  transition:padding .16s ease;
 }
+.review-head__back{ align-self:flex-start; }
+.review-head__title{
+  margin:0;
+  font-size:26px;
+  line-height:1.2;
+  color:var(--text);
+  font-weight:600;
+  transition:font-size .16s ease;
+}
+.review-head__number{ color:var(--muted); font-weight:400; font-variant-numeric:tabular-nums; }
+.review-head__status{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.review-head__meta{ color:var(--muted); font-size:12px; }
+.review-head__description{ margin:0; color:var(--muted); font-size:14px; max-width:70ch; }
+
+/* Le rétrécissement au défilement suit la classe que la coque pose déjà sur le
+   `body` : rien de neuf à écouter, tout se passe ici. */
+body.project-shell-compact .review-head{ padding:8px 0 10px; }
+body.project-shell-compact .review-head__title{ font-size:18px; }
+body.project-shell-compact .review-head__back,
+body.project-shell-compact .review-head__description{ display:none; }
+
+.review-badge{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  border:1px solid;
+  border-radius:999px;
+  padding:2px 12px;
+  font-size:12px;
+  font-weight:600;
+}
+.review-badge--open{ color:var(--fgColor-open); border-color:var(--fgColor-open); }
+.review-badge--merged{ color:var(--fgColor-done); border-color:var(--fgColor-done); }
+.review-badge--closed{ color:var(--fgColor-danger); border-color:var(--fgColor-danger); }
 
 .review-block{ display:flex; flex-direction:column; gap:8px; }
+.review-block__head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  margin-top:8px;
+  flex-wrap:wrap-reverse;
+}
 .review-block__title{
-  margin:8px 0 0;
+  margin:0;
   font-size:14px;
   color:var(--text);
   display:flex;
@@ -15544,6 +15584,17 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   padding:0 8px;
   font-size:12px;
 }
+.review-block__all{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  color:var(--muted);
+  font-size:12px;
+  cursor:pointer;
+  order:2;
+}
+.review-block__all input{ accent-color:var(--accent); cursor:pointer; }
+.review-block__all input:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
 .review-block__empty{ margin:0; color:var(--muted); font-size:13px; font-style:italic; }
 
 .review-list{
@@ -15556,24 +15607,28 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 }
 
 .review-item{
-  display:flex;
-  align-items:flex-start;
-  justify-content:space-between;
-  gap:16px;
-  flex-wrap:wrap;
-  padding:12px 16px;
+  display:grid;
+  grid-template-columns:22px 1fr;
+  gap:10px;
+  padding:10px 16px;
   background:var(--panel2);
   border-bottom:1px solid var(--border2);
 }
 .review-item:last-child{ border-bottom:0; }
-.review-item.is-refused{ opacity:.72; }
+.review-item.is-refused{ opacity:.6; }
+.review-item.is-refused .review-item__title{ text-decoration:line-through; }
 
-.review-item__body{ display:flex; flex-direction:column; gap:3px; min-width:260px; flex:1 1 320px; }
+.review-item__check{ display:flex; align-items:flex-start; padding-top:2px; }
+.review-item__check input{ width:15px; height:15px; accent-color:var(--accent); cursor:pointer; }
+.review-item__check input:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+
+.review-item__body{ display:flex; flex-direction:column; gap:3px; min-width:0; }
 .review-item__title{ color:var(--text); font-size:14px; }
 .review-item__title--danger{ color:var(--fgColor-danger); }
 .review-item__title--warn{ color:#d29922; }
 .review-item__meta{ color:var(--muted); font-size:12px; }
-.review-item__reason{ color:var(--muted); font-size:12px; font-style:italic; }
+.review-item__reason-text{ color:var(--muted); font-size:12px; font-style:italic; }
+.review-item__reason{ margin-top:4px; max-width:52ch; font-size:12px; }
 
 .review-item__badge{
   display:inline-block;
@@ -15588,12 +15643,35 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .review-item__badge--added{ color:var(--fgColor-open); border-color:var(--fgColor-open); }
 .review-item__badge--changed{ color:#d29922; border-color:#d29922; }
 
-.review-item__decision{ display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
-.review-item__actions{ display:flex; gap:6px; }
-.review-item__verdict{ font-size:12px; color:var(--muted); max-width:38ch; text-align:right; }
-.review-item__verdict--accepted{ color:var(--fgColor-open); }
-.review-item__verdict--refused{ color:var(--fgColor-danger); }
-
-.review-note{ margin:8px 0 0; color:var(--muted); font-size:12px; font-style:italic; }
+.review-merge{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  flex-wrap:wrap;
+  margin-top:8px;
+  padding:14px 16px;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  background:var(--panel2);
+}
+.review-merge__summary{ margin:0; color:var(--muted); font-size:13px; }
+.review-merge__done{ margin:0; color:var(--fgColor-done); font-size:13px; }
 
 .propositions-empty--warn{ border-color:#d29922; }
+
+/* Un document écarté lors d'une revue reste visible, grisé, avec le mot qui le
+   dit : le faire disparaître recréerait le mensonge d'un fichier en base
+   qu'aucun écran ne montre. */
+.documents-repo__row--refused{ opacity:.55; }
+.documents-repo__row--refused .documents-repo__name{ text-decoration:line-through; }
+.documents-repo__refused{
+  margin-left:8px;
+  border:1px solid var(--fgColor-danger);
+  border-radius:999px;
+  padding:0 8px;
+  font-size:11px;
+  color:var(--fgColor-danger);
+  text-transform:uppercase;
+  letter-spacing:.04em;
+}

@@ -17,6 +17,23 @@
 
 import { ITEM } from "./proposition-state.js";
 
+/**
+ * Les statuts d'un avis, en français.
+ *
+ * Le moteur travaille avec `OPEN`, `RESOLVED`, `NO_NEWS` — c'est son affaire.
+ * Les montrer tels quels à l'écran ferait lire à l'utilisateur les entrailles du
+ * calcul, et « NO_NEWS → NO_NEWS » ne veut rien dire pour personne.
+ */
+export const STATUS_LABELS = {
+  OPEN: "Ouvert",
+  RESOLVED: "Levé",
+  NO_NEWS: "Sans nouvelles"
+};
+
+function statusLabel(status) {
+  return STATUS_LABELS[String(status ?? "")] ?? String(status ?? "");
+}
+
 /** Les natures d'affirmation qu'une proposition peut porter. */
 export const ITEM_TYPE = {
   /** Un document entre dans le corpus. */
@@ -105,6 +122,7 @@ export function avisItems(diff = {}) {
       status: avis.status ?? null,
       previousStatus: avis.previousStatus ?? null,
       opinion: avis.opinion_raw ?? null,
+      previousOpinion: avis.previousOpinion ?? null,
       evidence: avis.evidence ?? null
     })
   );
@@ -146,10 +164,49 @@ export function diffAvis(known = [], computed = []) {
       unchanged += 1;
       continue;
     }
-    changed.push({ ...avis, previousStatus: precedent.status ?? null });
+    changed.push({
+      ...avis,
+      previousStatus: precedent.status ?? null,
+      previousOpinion: precedent.opinion_raw ?? null
+    });
   }
 
   return { added, changed, unchanged };
+}
+
+/**
+ * Ce qui a changé pour un avis, dit en français.
+ *
+ * L'écran affichait « OPEN → OPEN », ce qui est un non-sens : le statut n'avait
+ * pas bougé, c'est l'appréciation du bureau de contrôle qui avait changé. Nommer
+ * un changement, c'est nommer **ce qui** a changé — sans quoi le lecteur cherche
+ * une différence là où il n'y en a pas, et cesse de faire confiance à l'écran.
+ *
+ * @returns {{label: string, detail: string}} l'étiquette du mouvement, et sa phrase
+ */
+export function describeAvisChange(payload = {}) {
+  const { change, status, previousStatus, opinion, previousOpinion } = payload;
+
+  if (change === "added") {
+    return {
+      label: "Nouvel avis",
+      detail: [statusLabel(status), opinion ? `avis ${opinion}` : ""].filter(Boolean).join(" · ")
+    };
+  }
+
+  const statutBouge = String(previousStatus ?? "") !== String(status ?? "");
+  const avisBouge = String(previousOpinion ?? "") !== String(opinion ?? "");
+
+  const morceaux = [];
+  if (statutBouge) morceaux.push(`${statusLabel(previousStatus)} → ${statusLabel(status)}`);
+  if (avisBouge) morceaux.push(`avis ${previousOpinion || "—"} → ${opinion || "—"}`);
+
+  return {
+    // Deux mouvements de nature différente, donc deux étiquettes : changer de
+    // statut et changer d'appréciation n'appellent pas la même lecture.
+    label: statutBouge ? "Change d'état" : "Appréciation modifiée",
+    detail: morceaux.join(" · ") || statusLabel(status)
+  };
 }
 
 /**

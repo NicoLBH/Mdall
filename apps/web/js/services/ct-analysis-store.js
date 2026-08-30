@@ -180,16 +180,31 @@ export function reconcileAvis(known = [], computed = []) {
  *
  * Sans elle, deux lectures d'un même dossier ne se distinguent pas, et l'on ne
  * peut pas dire si un écart vient des documents ou d'une correction du moteur.
+ *
+ * Elle porte aussi **ce qui l'a causée** : la proposition dont la fusion l'a
+ * déclenchée, ou rien quand c'est une main qui a lancé l'atelier. C'est par là
+ * qu'on remonte d'un chiffre du suivi à la décision qui l'a produit.
  */
 export function toRunRow(
   result,
-  { projectId, corpusFingerprint: fingerprint, documentCount, corpusDocuments = null } = {}
+  {
+    projectId,
+    corpusFingerprint: fingerprint,
+    documentCount,
+    corpusDocuments = null,
+    propositionId = null,
+    triggerSource = null
+  } = {}
 ) {
   const indicators = result?.indicators ?? {};
 
   return {
     project_id: projectId,
     corpus_fingerprint: fingerprint ?? null,
+    // Ce qui a causé l'exécution. Deux fusions différentes peuvent aboutir au
+    // même corpus : l'empreinte ne distinguera jamais ce que cette colonne dit.
+    proposition_id: propositionId,
+    trigger_source: triggerSource ?? (propositionId ? "proposition" : "manual"),
     // Ce que l'empreinte ne peut pas dire : lesquels. Sans cette liste, l'écran
     // ne sait annoncer qu'« le lot a changé ».
     corpus_documents: corpusDocuments,
