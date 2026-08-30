@@ -28,6 +28,7 @@ function toIsoDate(day, month, year) {
  * @returns {{issued_at: string|null, issued_at_source: string, chrono_reference: string|null,
  *            chrono_affaire: string|null, affaire_reference: string|null,
  *            document_type: string|null, document_type_label: string|null,
+ *            document_type_label_plural: string|null,
  *            sheet_number: number|null, version: number|null}}
  */
 export function readDocumentMeta(source, { pack = DEFAULT_PACK } = {}) {
@@ -70,6 +71,9 @@ export function readDocumentMeta(source, { pack = DEFAULT_PACK } = {}) {
     affaire_reference: affaire ? affaire[1] : null,
     document_type: type?.id ?? null,
     document_type_label: type?.label ?? null,
+    // Le pluriel vient du pack : le français ne se pluralise pas mécaniquement,
+    // et c'est l'émetteur qui sait comment il nomme ses livrables.
+    document_type_label_plural: type?.labelPlural ?? type?.label ?? null,
     // Un type inconnu n'est pas présumé récapitulatif : on ne fait pas d'un
     // document qu'on n'a pas su lire un point de contrôle.
     recapitulative: type?.recapitulative === true,

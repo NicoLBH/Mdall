@@ -20,6 +20,7 @@
 
 import { CONFIDENCE } from "./document-recognition.js";
 import { MARKER } from "./project-identity.js";
+import { lowerFirst } from "../utils/lower-first.js";
 
 /**
  * Les émetteurs que nous savons nommer.
@@ -72,10 +73,12 @@ export function createCtReportRecognizer({ readDocumentMeta, discoverLegend }) {
       if (!confidence) return null;
 
       const kindLabel = meta.document_type_label ?? FAMILY_LABEL;
+      const kindLabelPlural = meta.document_type_label_plural ?? `${FAMILY_LABEL}s`;
 
       return {
         kind: FAMILY,
         kindLabel,
+        kindLabelPlural,
         author: author?.id ?? null,
         authorLabel: author?.label ?? null,
         confidence,
@@ -102,11 +105,4 @@ export function createCtReportRecognizer({ readDocumentMeta, discoverLegend }) {
       };
     }
   };
-}
-
-/** « Rapport RICT » devient « rapport RICT » au fil d'une phrase ; un sigle non. */
-function lowerFirst(value) {
-  const text = String(value ?? "");
-  if (text === "" || /^\p{Lu}\p{Lu}/u.test(text)) return text;
-  return `${text.charAt(0).toLocaleLowerCase("fr")}${text.slice(1)}`;
 }

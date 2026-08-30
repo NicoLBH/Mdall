@@ -19,7 +19,7 @@ import { PROPOSITION } from "./proposition-state.js";
 const SUPABASE_URL = getSupabaseUrl();
 
 const COLUMNS =
-  "id,project_id,title,description,status,created_by,created_at,updated_at,merged_at,merged_by";
+  "id,number,project_id,title,description,status,created_by,created_at,updated_at,merged_at,merged_by";
 
 async function request(path, { method = "GET", body = null, headers = {}, params = {} } = {}) {
   const url = new URL(`${SUPABASE_URL}/rest/v1/${path}`);
@@ -175,5 +175,68 @@ export async function listPropositionDocuments(propositionId) {
     );
   } catch {
     return [];
+  }
+}
+
+/**
+ * Les décisions déjà prises sur une proposition.
+ *
+ * Elles seules se conservent. Ce que l'analyse produit se recalcule à chaque
+ * ouverture ; ce qu'un humain a répondu, jamais.
+ */
+export async function listPropositionItems(propositionId) {
+  if (!propositionId) return [];
+
+  try {
+    return (
+      (await request("proposition_items", {
+        params: {
+          select: "id,item_type,item_key,payload,status,reason,decided_by,decided_at",
+          proposition_id: `eq.${propositionId}`
+        }
+      })) ?? []
+    );
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Enregistre la décision d'un humain sur une affirmation.
+ *
+ * L'écriture se fait par l'identité naturelle de l'affirmation — la proposition,
+ * son type, sa clé —, de sorte que se raviser mette à jour la ligne au lieu d'en
+ * ajouter une contradictoire.
+ *
+ * @returns {Promise<boolean>} faux si la base n'a pas répondu : l'écran le dit
+ *   plutôt que de laisser croire à une réponse retenue qui serait perdue au
+ *   prochain rechargement.
+ */
+export async function decidePropositionItem({ propositionId, projectId, item, status, reason = null } = {}) {
+  if (!propositionId || !projectId || !item) return false;
+
+  try {
+    const decidedBy = (await getCurrentUser())?.id ?? null;
+    await request("proposition_items", {
+      method: "POST",
+      params: { on_conflict: "proposition_id,item_type,item_key" },
+      headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+      body: [
+        {
+          proposition_id: propositionId,
+          project_id: projectId,
+          item_type: item.itemType,
+          item_key: item.itemKey,
+          payload: item.payload ?? null,
+          status,
+          reason,
+          decided_by: decidedBy,
+          decided_at: new Date().toISOString()
+        }
+      ]
+    });
+    return true;
+  } catch {
+    return false;
   }
 }

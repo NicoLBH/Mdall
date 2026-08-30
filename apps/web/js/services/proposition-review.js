@@ -1,0 +1,190 @@
+/**
+ * Ce qu'une proposition soumet au jugement.
+ *
+ * Rien ici n'est calculé pour la première fois. Les documents ont été reconnus
+ * au dépôt, les doublons repérés, les rattachements évalués par
+ * `project-identity.js`, les avis produits par le moteur du suivi. **La revue ne
+ * fabrique aucun savoir — elle donne un lieu à ce qu'on savait déjà et que
+ * personne ne voyait.**
+ *
+ * Ce module transforme ces trois lectures en une liste d'affirmations qu'un
+ * humain peut accepter ou refuser une par une. Chacune porte une clé stable,
+ * `itemKey`, et c'est le point le plus important du fichier : c'est par elle
+ * qu'une décision se retrouvera plus tard, quand un recalcul la contredira. Une
+ * clé qui dépendrait de l'ordre d'un lot ou d'un horodatage rendrait toute
+ * confrontation future impossible.
+ */
+
+import { ITEM } from "./proposition-state.js";
+
+/** Les natures d'affirmation qu'une proposition peut porter. */
+export const ITEM_TYPE = {
+  /** Un document entre dans le corpus. */
+  DOCUMENT: "document",
+  /** Une affaire est rattachée au projet, ou en est écartée. */
+  ATTACHMENT: "attachment",
+  /** Un avis apparaît, change d'état, ou est levé. */
+  AVIS: "avis"
+};
+
+function item(type, key, payload) {
+  return { itemType: type, itemKey: String(key), payload, status: ITEM.PROPOSED, reason: null };
+}
+
+/**
+ * Un document soumis, et ce que la reconnaissance en a compris.
+ *
+ * La clé est l'identifiant du document : il ne bouge pas, et c'est le seul
+ * élément dont on soit certain qu'il désigne toujours la même chose.
+ */
+export function documentItems(documents = []) {
+  return documents.map((document) =>
+    item(ITEM_TYPE.DOCUMENT, document.id, {
+      name: document.original_filename ?? document.filename ?? "Document",
+      kindLabel: document.detected_kind_label ?? null,
+      author: document.detected_author ?? null,
+      issuedAt: document.issued_at ?? null,
+      reason: document.detection_reason ?? null,
+      duplicateOf: document.duplicate_of_document_id ?? null,
+      reissueOf: document.reissue_of_document_id ?? null
+    })
+  );
+}
+
+/**
+ * Les affaires que le lot met en jeu, et ce qu'il faut en décider.
+ *
+ * La clé est la valeur normalisée du marqueur — l'affaire elle-même. C'est ce
+ * qui fait qu'accepter « l'affaire 13861 » aujourd'hui vaudra encore dans six
+ * mois, pour des documents qu'on n'a pas encore reçus.
+ *
+ * Les rattachements déjà certains n'ouvrent pas d'affirmation : ne rien
+ * demander est la meilleure façon de ne pas lasser celui qui répond.
+ */
+export function attachmentItems(assessments = []) {
+  return assessments
+    .filter((entry) => entry.verdict !== "BELONGS" && (entry.declared ?? []).length > 0)
+    .map((entry) =>
+      item(ITEM_TYPE.ATTACHMENT, entry.declared.map((marker) => `${marker.type}:${marker.value}`).join("|"), {
+        label: entry.declared[0].label,
+        markers: entry.declared,
+        verdict: entry.verdict,
+        reason: entry.reason,
+        documents: entry.documents ?? []
+      })
+    );
+}
+
+/**
+ * Ce que la proposition changerait aux avis.
+ *
+ * On compare ce que le moteur affirme avec les documents de la proposition à ce
+ * que le projet avait retenu sans eux. Trois mouvements, et seuls les deux
+ * premiers ouvrent une question : un avis inchangé n'appelle aucune décision.
+ *
+ * La clé est le numéro que le bureau de contrôle a lui-même attribué. C'est
+ * l'identité métier de l'avis, et la seule qui survive à un recalcul complet.
+ */
+export function avisItems(diff = {}) {
+  const nouveaux = (diff.added ?? []).map((avis) =>
+    item(ITEM_TYPE.AVIS, avis.reference, {
+      change: "added",
+      reference: avis.reference,
+      title: avis.title ?? null,
+      status: avis.status ?? null,
+      opinion: avis.opinion_raw ?? null,
+      evidence: avis.evidence ?? null
+    })
+  );
+
+  const changes = (diff.changed ?? []).map((avis) =>
+    item(ITEM_TYPE.AVIS, avis.reference, {
+      change: "changed",
+      reference: avis.reference,
+      title: avis.title ?? null,
+      status: avis.status ?? null,
+      previousStatus: avis.previousStatus ?? null,
+      opinion: avis.opinion_raw ?? null,
+      evidence: avis.evidence ?? null
+    })
+  );
+
+  return [...nouveaux, ...changes];
+}
+
+/**
+ * Ce que les documents de la proposition changeraient aux avis du projet.
+ *
+ * `known` est l'état conservé — ce que le projet retient aujourd'hui.
+ * `computed` est ce que le moteur affirme en y ajoutant les documents soumis.
+ *
+ * La comparaison porte sur le **statut** et sur l'**appréciation**, pas sur le
+ * reste : un intitulé reformulé d'un rapport à l'autre est une chose que les
+ * documents font tout le temps, et en faire une question ferait crouler la revue
+ * sous des changements qui n'en sont pas.
+ */
+export function diffAvis(known = [], computed = []) {
+  const avant = new Map(known.map((row) => [String(row.external_reference), row]));
+
+  const added = [];
+  const changed = [];
+  let unchanged = 0;
+
+  for (const avis of computed) {
+    const reference = String(avis.reference ?? "");
+    const precedent = avant.get(reference);
+
+    if (!precedent) {
+      added.push(avis);
+      continue;
+    }
+
+    const memeStatut = String(precedent.status ?? "") === String(avis.status ?? "");
+    const memeAvis = String(precedent.opinion_raw ?? "") === String(avis.opinion_raw ?? "");
+
+    if (memeStatut && memeAvis) {
+      unchanged += 1;
+      continue;
+    }
+    changed.push({ ...avis, previousStatus: precedent.status ?? null });
+  }
+
+  return { added, changed, unchanged };
+}
+
+/**
+ * Rend aux affirmations les décisions déjà prises.
+ *
+ * L'analyse est refaite à chaque ouverture — c'est la doctrine : rien n'est
+ * conservé de ce qui se recalcule. Mais les **réponses**, elles, se conservent,
+ * et les perdre à chaque rechargement rendrait la revue impraticable dès la
+ * dixième affirmation.
+ */
+export function applyDecisions(items = [], stored = []) {
+  const decisions = new Map(stored.map((row) => [`${row.item_type}|${row.item_key}`, row]));
+
+  return items.map((entry) => {
+    const decision = decisions.get(`${entry.itemType}|${entry.itemKey}`);
+    if (!decision) return entry;
+    return { ...entry, status: decision.status, reason: decision.reason ?? null };
+  });
+}
+
+/**
+ * Ce qu'il y a à lire, par nature.
+ *
+ * Les nombres servent les intitulés des trois blocs, et rien d'autre : un bloc
+ * vide se dit, il ne se cache pas — savoir qu'aucun avis ne change est une
+ * information, pas une absence d'information.
+ */
+export function summarizeReview(items = []) {
+  const parType = (type) => items.filter((entry) => entry.itemType === type);
+
+  return {
+    documents: parType(ITEM_TYPE.DOCUMENT).length,
+    attachments: parType(ITEM_TYPE.ATTACHMENT).length,
+    avis: parType(ITEM_TYPE.AVIS).length,
+    refused: items.filter((entry) => entry.status === ITEM.REFUSED).length,
+    undecided: items.filter((entry) => entry.status === ITEM.PROPOSED).length
+  };
+}
