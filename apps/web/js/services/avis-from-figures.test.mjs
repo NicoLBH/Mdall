@@ -142,3 +142,42 @@ test("une ligne dont la lettre change est un vrai changement", () => {
   assert.equal(diff.changed.length, 1);
   assert.equal(diff.changed[0].previousOpinion, "F");
 });
+
+test("une ligne déjà lue dans le tableau ne se compte pas deux fois", () => {
+  // La même fiche est lue de deux façons — ses lignes par le tableau, ses
+  // photos par la découpe. C'est la photo qui prime, parce qu'elle est plus
+  // fine : trois photos sur une même rubrique font trois avis, là où le tableau
+  // n'en voit qu'un.
+  const enTableau = [
+    { key: "section:4.1.1", title: "Fondations superficielles", page: 2, status: "REPORTED", opinion_raw: "F" }
+  ];
+  const photos = avisFromFigures([
+    figure({ id: "a", page: 2, rubric: "Fondations superficielles", sha256: "1111111111112222" }),
+    figure({ id: "b", page: 2, rubric: "Fondations superficielles", sha256: "3333333333334444" })
+  ]);
+
+  const complet = mergeAvis(enTableau, photos);
+
+  assert.equal(complet.length, 2, "deux photos font deux avis, et la ligne du tableau s'efface");
+  assert.ok(complet.every((entry) => entry.key.startsWith("fiche:")));
+});
+
+test("une ligne du tableau sans photo reste", () => {
+  const enTableau = [
+    { key: "section:4.1.1", title: "Vent", page: 7, status: "REPORTED", opinion_raw: "F" },
+    { key: "section:4.1.2", title: "Neige", page: 7, status: "REPORTED", opinion_raw: "F" }
+  ];
+  const photos = avisFromFigures([figure({ page: 7, rubric: "Vent" })]);
+
+  const complet = mergeAvis(enTableau, photos);
+
+  assert.equal(complet.length, 2);
+  assert.ok(complet.some((entry) => entry.key === "section:4.1.2"), "la ligne sans photo n'a pas bougé");
+});
+
+test("une photo d'une autre page n'efface pas une ligne du tableau", () => {
+  const enTableau = [{ key: "section:4.1.1", title: "Vent", page: 7, status: "REPORTED", opinion_raw: "F" }];
+  const photos = avisFromFigures([figure({ page: 9, rubric: "Vent" })]);
+
+  assert.equal(mergeAvis(enTableau, photos).length, 2);
+});

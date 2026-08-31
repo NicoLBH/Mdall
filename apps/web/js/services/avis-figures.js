@@ -107,9 +107,30 @@ export function isFigureRect(rect = null, options = {}) {
   );
 }
 
-/** Les en-têtes du tableau d'une fiche d'avis, et ce qu'ils désignent. */
+/**
+ * Les en-têtes du tableau d'un rapport de contrôle, et ce qu'ils désignent.
+ *
+ * La première colonne ne porte pas le même nom selon le document : une fiche
+ * d'avis travaux dit « Éléments examinés », un rapport préalable / APD dit
+ * « Dispositions du projet ». C'est le même tableau, avec le même sens — et
+ * n'en reconnaître qu'un seul revenait à ne rien lire de l'autre : le rapport
+ * APD entrait au corpus en n'y déposant que les cinq lignes qui portaient un
+ * numéro imprimé, sur plusieurs dizaines.
+ */
 const COLUMN_HEADERS = [
-  { id: "elements", pattern: /elements? examines?/ },
+  /**
+   * La colonne des articles réglementaires, quand le rapport en a une.
+   *
+   * Les rapports sur la sécurité en ajoutent une à gauche — « GN5 », « PE6§1 ».
+   * Ne pas la reconnaître ne la faisait pas disparaître : elle était avalée par
+   * la colonne des dispositions, et l'intitulé d'une ligne devenait « PE6§1 des
+   * murs séparatifs » au lieu de « Isolement par rapport à des tiers contigus ».
+   *
+   * Son en-tête tient sur trois lignes — « Articles / du / règlement » —, d'où
+   * les deux graphies reconnues.
+   */
+  { id: "articles", pattern: /^articles?$|^r[eè]glement$/ },
+  { id: "elements", pattern: /elements? examines?|dispositions? du projet/ },
   { id: "avis", pattern: /^avis\*?$/ },
   { id: "observations", pattern: /observations? et commentaires?/ },
   { id: "numero", pattern: /^n\s*°?$/ }
@@ -145,13 +166,23 @@ export function readTableColumns(items = []) {
   const bornes = [...trouves.entries()].sort((gauche, droite) => gauche[1].left - droite[1].left);
   const colonnes = {};
 
+  // **La frontière entre deux colonnes est à mi-chemin de leurs en-têtes.**
+  // On la posait juste à gauche de l'en-tête suivant, ce qui suppose que le
+  // contenu tient sous son titre. Il n'y tient pas : les dispositions d'un
+  // rapport sont indentées **à gauche** de « Dispositions du projet », de
+  // quarante à soixante points selon leur profondeur. Le milieu laisse à chaque
+  // colonne la place que sa mise en page lui prend réellement, et il sépare
+  // « GN5 » de « 6.1.1.1 Établissements assujettis » là où la règle précédente
+  // les confondait.
+  const milieu = (gauche, droite) => (gauche.left + droite.left) / 2;
+
   bornes.forEach(([id, borne], rang) => {
+    const precedente = bornes[rang - 1]?.[1];
     const suivante = bornes[rang + 1]?.[1];
+
     colonnes[id] = {
-      // La colonne va de son en-tête au suivant : c'est ce que le tableau dit,
-      // et l'en-tête est plus étroit que la colonne qu'il coiffe.
-      left: rang === 0 ? Math.min(borne.left, 0) : borne.left - 8,
-      right: suivante ? suivante.left - 8 : Number.POSITIVE_INFINITY
+      left: precedente ? milieu(precedente, borne) : Math.min(borne.left, 0),
+      right: suivante ? milieu(borne, suivante) : Number.POSITIVE_INFINITY
     };
   });
 

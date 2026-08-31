@@ -133,9 +133,33 @@ export function avisFromFigures(figures = []) {
  */
 export function mergeAvis(computed = [], fromFigures = []) {
   const moteur = Array.isArray(computed) ? computed : [];
+  const photos = Array.isArray(fromFigures) ? fromFigures : [];
+
   const connus = new Set(moteur.map((avis) => texte(avis?.key) || texte(avis?.reference)).filter(Boolean));
+  const ajoutees = photos.filter((avis) => !connus.has(texte(avis.key)));
 
-  const ajoutees = (Array.isArray(fromFigures) ? fromFigures : []).filter((avis) => !connus.has(texte(avis.key)));
+  // **Une ligne déjà lue dans le tableau ne se compte pas deux fois.** La même
+  // fiche est lue de deux façons — ses lignes par le tableau, ses photos par la
+  // découpe — et sans cela un avis existait en double, une fois par lecture.
+  //
+  // C'est la **photo qui prime**, parce qu'elle est plus fine : trois photos
+  // sur une même rubrique font trois avis, là où le tableau n'en voit qu'un.
+  // C'est la règle qui a été posée — deux photos différentes sur le même
+  // intitulé et le même verdict sont deux avis.
+  const couvertes = new Set(ajoutees.map(ligneCle).filter(Boolean));
 
-  return [...moteur, ...ajoutees];
+  return [...moteur.filter((avis) => !couvertes.has(ligneCle(avis))), ...ajoutees];
+}
+
+/**
+ * Ce qui désigne une **ligne de tableau**, quelle que soit la façon dont on l'a
+ * lue : sa page et son intitulé.
+ *
+ * Ni le numéro — la plupart n'en ont pas —, ni l'empreinte de la photo — le
+ * tableau ne la connaît pas. Deux lectures d'une même ligne s'y retrouvent.
+ */
+function ligneCle(avis = {}) {
+  const page = Number(avis?.page) || 0;
+  const titre = texte(avis?.title).toLowerCase().replace(/\s+/g, " ");
+  return page && titre ? `${page}|${titre}` : "";
 }
