@@ -135,19 +135,29 @@ export async function saveCtAnalysis({
       });
     }
 
-    await request("ct_analysis_runs", {
-      method: "POST",
-      headers: { Prefer: "return=minimal" },
-      body: toRunRow(result, {
-        projectId,
-        corpusFingerprint,
-        corpusDocuments,
-        documentCount,
-        propositionId,
-        triggerSource,
-        steps
-      })
+    const ligne = toRunRow(result, {
+      projectId,
+      corpusFingerprint,
+      corpusDocuments,
+      documentCount,
+      propositionId,
+      triggerSource,
+      steps
     });
+
+    const ecrireLaCourse = (body) =>
+      request("ct_analysis_runs", { method: "POST", headers: { Prefer: "return=minimal" }, body });
+
+    try {
+      await ecrireLaCourse(ligne);
+    } catch {
+      // Les durées sont un détail de l'exécution, pas l'exécution. Si la base
+      // refuse cette colonne, on écrit la course sans elles : le journal garde
+      // ce qui s'est passé, et le graphe dira que les durées n'ont pas été
+      // enregistrées. Tout perdre pour un chronomètre serait absurde.
+      const { steps: _durees, ...sansDurees } = ligne;
+      await ecrireLaCourse(sansDurees);
+    }
 
     return { saved: upserts.length, marked: missing.length };
   } catch {

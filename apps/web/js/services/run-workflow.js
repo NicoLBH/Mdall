@@ -76,6 +76,29 @@ export function formatStepDuration(ms) {
  * @param {object} entry une ligne du journal des actions
  * @returns {object[]} de zéro à six nœuds — jamais un nœud sans donnée
  */
+/**
+ * Avec quoi les livrables ont été lus.
+ *
+ * Le moteur, puis les packs de reconnaissance. **Chacun nommé une seule fois** :
+ * les packs sont relevés par livrable, si bien que dix fiches SOCOTEC écrivaient
+ * « socotec v1 · socotec v1 · … » dix fois — dans le graphe, dans le détail
+ * d'une exécution, et dans l'analyse d'une proposition. Ce que cette ligne doit
+ * dire, c'est **avec quoi** on a lu, pas combien de fois on s'en est servi.
+ *
+ * Écrit une fois, appelé aux trois endroits : trois recopies de la même
+ * jointure, c'est trois occasions de corriger deux fois et d'oublier la
+ * troisième — ce qui vient d'arriver.
+ *
+ * @returns {string} « ct-lab v3 · socotec v1 », ou `""` s'il n'y a rien à dire
+ */
+export function describeReadingStack(engineVersion, packs = []) {
+  const morceaux = [engineVersion, ...(Array.isArray(packs) ? packs : [])]
+    .map((valeur) => String(valeur ?? "").trim())
+    .filter(Boolean);
+
+  return [...new Set(morceaux)].join(" · ");
+}
+
 export function buildRunGraph(entry = {}) {
   const corpus = entry?.details?.corpus ?? null;
 
@@ -102,10 +125,7 @@ export function buildRunGraph(entry = {}) {
     })
   );
 
-  // Les packs sont relevés par livrable : dix fiches SOCOTEC écrivaient « socotec
-  // v1 · socotec v1 · … » dix fois. Ce que la boîte doit dire, c'est **avec quoi**
-  // on a lu, pas combien de fois on s'en est servi.
-  const lu = [...new Set([corpus.engineVersion, ...(corpus.packs ?? [])].filter(Boolean))].join(" · ");
+  const lu = describeReadingStack(corpus.engineVersion, corpus.packs);
   if (lu) {
     nodes.push(node("lecture", "Lecture", lu, { tone: NODE.NEUTRAL, icon: "book" }));
   }
