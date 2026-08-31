@@ -487,7 +487,14 @@ export async function loadAuthorNames(userIds = []) {
  * sujets qu'après les avoir visités : exactement le genre de « ça marche si l'on
  * passe d'abord par ailleurs » qu'on vient de corriger deux fois.
  *
- * @returns {Promise<object[]>} des entrées `{kind, id, number, title, status}`
+ * `projectId` est l'identifiant **de la base**, pas celui de la route. Les deux
+ * existent, ils ne se ressemblent pas, et confondre les deux ne rend pas une
+ * liste vide : cela rend une erreur — d'où le soin apporté à ne pas la taire.
+ *
+ * @returns {Promise<object[]|null>} des entrées `{kind, id, number, title,
+ *   status}`, `[]` quand il n'y a rien, et **`null` quand on n'a pas pu
+ *   demander**. Ne pas savoir n'autorise pas à prétendre qu'il n'y a rien :
+ *   c'est en confondant les deux qu'un menu s'est tu pendant deux versions.
  */
 export async function listProjectRefs(projectId) {
   if (!projectId) return [];
@@ -501,14 +508,14 @@ export async function listProjectRefs(projectId) {
           subject_number: "not.is.null",
           order: "subject_number.asc"
         }
-      }).catch(() => []),
+      }),
       request("propositions", {
         params: {
           select: "id,number,title,status",
           project_id: `eq.${projectId}`,
           order: "number.asc"
         }
-      }).catch(() => [])
+      })
     ]);
 
     return [
@@ -528,6 +535,6 @@ export async function listProjectRefs(projectId) {
       }))
     ].filter((entry) => entry.number > 0);
   } catch {
-    return [];
+    return null;
   }
 }
