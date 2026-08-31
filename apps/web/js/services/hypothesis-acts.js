@@ -6,12 +6,22 @@
  * des bureaux de contrôle se cachent des validations d'hypothèses — le modèle
  * les ignorait, et c'est ce que ce fichier répare.
  *
- * L'exemple qui a fait naître ce module :
+ * L'exemple qui a fait naître ce module portait sur une zone de neige. Il était
+ * faux, et c'est instructif : **une zone de neige n'est pas une hypothèse**,
+ * c'est une contrainte, tranchée par un texte et non par un essai. Un module
+ * d'actes n'avait rien à y faire. Le bon exemple est celui-ci :
  *
- *   1. le BET émet « zone de neige : A1 » dans sa note de calcul ;
- *   2. le BC émet un avis D — « A1 alors que le projet est en zone E » ;
- *   3. la note indice 2 émet « zone E » ;
+ *   1. le BET émet « portance du sol : 0,2 MPa », faute d'étude géotechnique ;
+ *   2. le BC émet un avis D — aucun essai ne justifie cette valeur ;
+ *   3. l'étude G2 mesure 0,18 MPa ;
  *   4. le BC émet un avis F.
+ *
+ * **Limite connue, et elle est de fond.** L'étape 3 n'est pas une validation :
+ * c'est une mesure, et une mesure ne rassure pas sur une hypothèse — elle la
+ * remplace par un constat. Ce module ne connaît aujourd'hui que des avis de
+ * personnes, si bien qu'un essai y entre déguisé en `VALIDATED`. Cinq personnes
+ * d'accord ne rendent pas un sol plus porteur : tant que la distinction n'est
+ * pas faite, le compteur de corroboration donne du poids à ce qui n'en a pas.
  *
  * **Le constat reste un constat.** L'avis D ne devient pas une hypothèse : il
  * porte un **acte** sur une hypothèse, et c'est l'acte qu'on enregistre. L'avis
@@ -40,6 +50,8 @@
  * peuvent recopier l'erreur du premier. Le nombre se dit, il ne se transforme
  * pas.
  */
+
+import { classifyAssertion, isContestable, natureLabel, settledByLabel } from "./assertion-taxonomy.js";
 
 /** Ce qu'on peut faire à une hypothèse. */
 export const ACT = {
@@ -239,6 +251,24 @@ export function planAct({
   if (!cible) return { ok: false, reason: "Aucune hypothèse." };
   if (![ACT.EMITTED, ACT.VALIDATED, ACT.CONTESTED].includes(quoi)) {
     return { ok: false, reason: "Un acte est une émission, une validation ou une contestation." };
+  }
+
+  // Se prononcer n'a de sens que sur une hypothèse. Sur une contrainte, un avis
+  // ne change rien — cinq personnes d'accord ne déplacent pas une zone de neige
+  // — et sur un constat il arrive trop tard : ce qui a été vu a été vu. L'écran
+  // ne propose déjà ces boutons que sur les hypothèses ; la règle est répétée
+  // ici parce qu'un appel ne passe pas toujours par l'écran, et qu'une règle qui
+  // ne tient qu'à l'affichage n'en est pas une.
+  const { nature } = classifyAssertion(assertion);
+  if (!isContestable(nature)) {
+    const quoiCest = nature ? natureLabel(nature).toLowerCase() : "affirmation non classée";
+    const tranche = settledByLabel(nature);
+    return {
+      ok: false,
+      reason: tranche
+        ? `On ne se prononce pas sur une ${quoiCest} : elle est tranchée par ${tranche}.`
+        : `On ne se prononce pas sur une ${quoiCest}.`
+    };
   }
 
   // Une valeur avancée n'a de sens que dans une contestation : la porter sur une

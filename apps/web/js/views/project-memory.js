@@ -47,6 +47,12 @@ import {
   summarizeReader
 } from "../services/memory-readers.js";
 import {
+  ECART,
+  describeEcart,
+  findNonConformities,
+  summarizeEcarts
+} from "../services/memory-nonconformity.js";
+import {
   DOMAINS,
   NATURE,
   NATURES,
@@ -565,6 +571,48 @@ export function renderMemoryDetail(assertions, cible = {}) {
  * Chaque lecture porte le compte de ce qu'elle montre : passer d'un onglet à
  * l'autre sans savoir combien on va trouver oblige à cliquer pour l'apprendre.
  */
+/**
+ * Les écarts que la mémoire porte, en tête de liste.
+ *
+ * Séparé des lectures parce qu'il ne se lit pas comme elles : une lecture dit
+ * ce que le projet sait, celui-ci dit ce qui ne s'accorde pas. Le mêler à la
+ * liste ferait passer un désaccord pour une connaissance de plus.
+ *
+ * Les non-conformités sont annoncées d'abord et nommées comme telles : elles
+ * n'appellent pas un arbitrage mais une correction, et les noyer dans un total
+ * ferait perdre la seule information qui commande une action.
+ */
+export function renderEcarts(assertions = view.assertions) {
+  const ecarts = findNonConformities(assertions);
+  if (ecarts.length === 0) return "";
+
+  const resume = summarizeEcarts(ecarts);
+  const tete = resume.nonConformities
+    ? `${resume.nonConformities} non-conformité${resume.nonConformities > 1 ? "s" : ""}`
+    : `${resume.total} écart${resume.total > 1 ? "s" : ""}`;
+
+  const cartes = ecarts
+    .map((ecart) => {
+      const dit = describeEcart(ecart);
+      const grave = ecart.type === ECART.NON_CONFORMITE;
+      return `
+        <li class="memory-ecart${grave ? " memory-ecart--grave" : ""}">
+          <span class="memory-ecart__label">${escapeHtml(dit.label)}</span>
+          <p class="memory-ecart__sentence">${escapeHtml(dit.sentence)}</p>
+          <p class="memory-ecart__ask">${escapeHtml(dit.ask)}</p>
+        </li>
+      `;
+    })
+    .join("");
+
+  return `
+    <section class="memory-ecarts" aria-label="Écarts">
+      <h5 class="memory-ecarts__title">${escapeHtml(tete)}</h5>
+      <ul class="memory-ecarts__list">${cartes}</ul>
+    </section>
+  `;
+}
+
 function renderReaderTabs() {
   const onglet = (lecture) => {
     const combien = readerRows(view.assertions ?? [], lecture).length;
@@ -593,7 +641,8 @@ function renderReaderTabs() {
  * Le formulaire d'une hypothèse.
  *
  * **Le sujet et la valeur sont deux champs, et c'est le point.** Une hypothèse
- * s'identifie par son sujet — « zone de neige » — et porte une valeur — « A2 ».
+ * s'identifie par son sujet — « portance du sol » — et porte une valeur —
+ * « 0,2 MPa ».
  * Les mêler dans un seul champ donnerait deux hypothèses en vigueur le jour où
  * la valeur change, alors qu'il n'y en a qu'une, qui a changé.
  *
@@ -612,19 +661,24 @@ function renderHypothesisForm() {
   return `
     <form class="memory-declare" data-memory-declare-form>
       <p class="memory-declare__lead">
-        Une hypothèse est ce sur quoi le projet bâtit : elle n'a qu'une valeur à la fois, et changer
-        cette valeur rend suspect ce qui en découle. Le sujet reste, la valeur bouge.
+        Une hypothèse est ce qu'une mesure viendra trancher, et qui n'a pas encore été mesuré :
+        on la retient parce que le travail ne peut pas attendre l'essai. Elle n'a qu'une valeur à
+        la fois, et en changer rend suspect ce qui en découle. Le sujet reste, la valeur bouge.
+      </p>
+      <p class="memory-declare__lead">
+        Une zone de neige, de vent ou sismique n'en est pas une : aucune mesure ne la tranche, un
+        texte la fixe. Ce sont des contraintes.
       </p>
       <div class="memory-declare__row">
         <label class="memory-declare__field">
           <span>Sujet</span>
           <input class="gh-input" data-memory-draft="subject" value="${escapeHtml(view.draft.subject)}"
-            placeholder="zone de neige" autocomplete="off">
+            placeholder="portance du sol" autocomplete="off">
         </label>
         <label class="memory-declare__field">
           <span>Valeur</span>
           <input class="gh-input" data-memory-draft="value" value="${escapeHtml(view.draft.value)}"
-            placeholder="A2" autocomplete="off">
+            placeholder="0,2 MPa" autocomplete="off">
         </label>
         <label class="memory-declare__field">
           <span>Domaine</span>
@@ -667,6 +721,9 @@ export function renderMemoryHead(resume, { busy = false } = {}) {
           <button type="button" class="gh-btn gh-btn--primary" data-memory-declare ${busy ? "disabled" : ""}>
             ${svgIcon("plus", { className: "octicon" })} Déclarer une hypothèse
           </button>
+          <button type="button" class="gh-btn" data-memory-site ${busy ? "disabled" : ""}>
+            ${svgIcon("climate-tools", { className: "octicon" })} Verser les contraintes du site
+          </button>
           <button type="button" class="gh-btn" data-memory-backfill ${busy ? "disabled" : ""}>
             ${svgIcon("history", { className: "octicon" })} Verser les propositions fusionnées
           </button>
@@ -676,7 +733,9 @@ export function renderMemoryHead(resume, { busy = false } = {}) {
         Ce que le projet tient pour vrai, avec la date à laquelle il l'a tranché et la proposition
         qui l'a versé. Ce qui se dérive d'un document — avis, rattachements, entrées au corpus —
         entre par la fusion d'une proposition. Une hypothèse, personne ne l'extrait encore : elle se
-        déclare, et elle est datée et signée comme le reste.
+        déclare, et elle est datée et signée comme le reste. Les contraintes du site — zones de
+        neige, de vent, de sismicité, profondeur hors gel — se déduisent de l'adresse : personne
+        n'a à les retenir, elles se versent.
       </p>
     </header>
   `;
@@ -1179,6 +1238,8 @@ function renderContent(root) {
 
         ${renderReaderTabs()}
 
+        ${renderEcarts(view.assertions)}
+
         ${renderHypothesisForm()}
 
         ${view.notice ? `<div class="propositions-empty propositions-empty--warn"><p>${escapeHtml(view.notice)}</p></div>` : ""}
@@ -1385,6 +1446,7 @@ function bind(root) {
 
   root.querySelector("[data-memory-export]")?.addEventListener("click", () => copyContext(root));
   root.querySelector("[data-memory-backfill]")?.addEventListener("click", () => backfill(root));
+  root.querySelector("[data-memory-site]")?.addEventListener("click", () => versSiteConstraints(root));
 
   bindPagination(root);
 
@@ -1481,6 +1543,67 @@ async function backfill(root) {
         : "Rien à rattraper : la mémoire portait déjà tout ce que les propositions fusionnées ont décidé.";
   } catch {
     view.notice = "Le rattrapage n'a pas abouti. La mémoire reste ce qu'elle était.";
+  }
+
+  view.busy = false;
+  renderContent(root);
+}
+
+/**
+ * Verse les contraintes que le site impose.
+ *
+ * Rien n'est calculé ici : les zones ont été établies par les outils de
+ * l'Atelier, et ce geste ne fait que les faire entrer en mémoire. Il ne demande
+ * donc pas de trancher — une contrainte ne se retient pas, elle s'impose — mais
+ * il reste un geste humain, daté et signé comme le reste.
+ *
+ * Le message dit ce qui porte une réserve, parce que c'est la seule chose que
+ * le lecteur ait à faire ensuite : vérifier une entrée, pas juger une règle.
+ */
+async function versSiteConstraints(root) {
+  if (view.busy) return;
+  view.busy = true;
+  view.notice = "Lecture des contraintes du site…";
+  renderContent(root);
+
+  try {
+    const [site, memoire] = await Promise.all([
+      import("../services/derived-constraints-supabase.js"),
+      import("../services/project-memory-supabase.js")
+    ]);
+
+    const candidats = await site.siteConstraintCandidates(view.projectId);
+
+    if (candidats.length === 0) {
+      // Ne pas savoir n'autorise pas à prétendre qu'il n'y a rien : on dit d'où
+      // ces contraintes viendraient, plutôt que « aucune contrainte ».
+      view.notice =
+        "Aucune contrainte du site n'est encore calculée. Elles viennent des outils de l'Atelier — " +
+        "zones climatiques, sismicité — et il faut les avoir lancés une fois.";
+    } else {
+      const resultat = await site.rememberSiteConstraints({
+        projectId: view.projectId,
+        candidates: candidats,
+        declaredBy: store.user?.id ?? null
+      });
+
+      if (!resultat) {
+        view.notice = "Le versement n'a pas abouti. La mémoire reste ce qu'elle était.";
+      } else {
+        const reserves = candidats.filter((candidat) => candidat.reserves.length > 0).length;
+        const suite = reserves
+          ? ` ${reserves} porte(nt) une réserve sur ses entrées : c'est l'adresse qu'on vérifie, pas la règle.`
+          : "";
+        view.notice = resultat.written
+          ? `${resultat.written} contrainte(s) versée(s).${
+              resultat.superseded ? ` ${resultat.superseded} valeur(s) corrigée(s).` : ""
+            }${resultat.flagged ? ` ${resultat.flagged} affirmation(s) à revérifier.` : ""}${suite}`
+          : `Rien de nouveau : la mémoire porte déjà ces ${candidats.length} contrainte(s).${suite}`;
+        view.assertions = await memoire.listProjectAssertions(view.projectId);
+      }
+    }
+  } catch {
+    view.notice = "Le versement n'a pas abouti. La mémoire reste ce qu'elle était.";
   }
 
   view.busy = false;

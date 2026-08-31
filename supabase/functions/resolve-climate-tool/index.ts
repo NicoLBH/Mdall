@@ -99,7 +99,12 @@ Deno.serve(async (req: Request) => {
         fact_value: contextFact.fact_value,
         source_type: "studio_tool",
         source_ref: toolKey,
-        confidence: 1
+        // La confiance ne se stocke pas. Elle se déduit des réserves portées par
+        // `fact_value`, et une copie stockée finirait par diverger de celles-ci —
+        // c'est déjà arrivé ailleurs dans ce projet. Elle valait `1` en dur ici,
+        // y compris quand la ligne au-dessus venait de calculer un avertissement.
+        // Voir `apps/web/js/services/derived-constraints.js`, qui la recalcule.
+        confidence: null
       }, { onConflict: "project_id,fact_key,source_type,source_ref" });
 
     if (contextUpsertError) throw new Error(`Failed to upsert project_context_facts: ${contextUpsertError.message}`);
@@ -388,10 +393,60 @@ function buildInputSignature(input: unknown) {
   );
 }
 
+/**
+ * Les réserves d'un calcul, en codes que le client sait dire en français.
+ *
+ * Elles étaient calculées puis jetées : `result.warning` nommait un canton qui a
+ * changé depuis 2014, ou une fourchette de H0 dont une valeur a été retenue, et
+ * le fait de contexte s'écrivait quand même avec une confiance de 1. Le doute ne
+ * porte jamais sur le règlement — il porte sur ce qu'on lui a donné à manger, et
+ * c'est cela qu'on conserve.
+ *
+ * Les codes sont ceux de `RESERVE` dans
+ * `apps/web/js/services/derived-constraints.js` ; un code inconnu y est ignoré
+ * plutôt que recopié à l'écran.
+ */
+function reservesOf(toolKey: ToolKey, result: any): string[] {
+  const reserves: string[] = [];
+  if (!result?.warning) return reserves;
+  if (toolKey === "frost") reserves.push("h0-fourchette");
+  else reserves.push("canton-2014");
+  return reserves;
+}
+
+/**
+ * Ce que le fait de contexte conserve : la valeur, **les entrées du calcul**, et
+ * les réserves. Sans les entrées, on ne peut plus, six mois plus tard, savoir sur
+ * quoi la règle a été calculée — et une contrainte dont on ignore l'origine ne se
+ * corrige pas, elle se subit.
+ */
 function mapToolResultToContextFact(toolKey: ToolKey, result: any) {
-  if (toolKey === "snow") return { fact_key: "snow_zone", fact_value: { zone: result.snow_zone, department_code: result.department_code } };
-  if (toolKey === "wind") return { fact_key: "wind_zone", fact_value: { zone: result.wind_zone, department_code: result.department_code } };
-  return { fact_key: "frost_depth", fact_value: { frost_depth_m: result.frost_depth_m, h0_selected_m: result.h0_selected_m, altitude: result.altitude } };
+  const reserves = reservesOf(toolKey, result);
+  const inputs = {
+    department_code: result.department_code ?? null,
+    canton_code_2014: result.canton_code_2014 ?? null,
+    canton_name_2014: result.canton_name_2014 ?? null,
+    canton_name_current: result.canton_name_current ?? null,
+    altitude: result.altitude ?? null,
+    warning: result.warning ?? null
+  };
+
+  if (toolKey === "snow") {
+    return { fact_key: "snow_zone", fact_value: { zone: result.snow_zone, department_code: result.department_code, inputs, reserves } };
+  }
+  if (toolKey === "wind") {
+    return { fact_key: "wind_zone", fact_value: { zone: result.wind_zone, department_code: result.department_code, inputs, reserves } };
+  }
+  return {
+    fact_key: "frost_depth",
+    fact_value: {
+      frost_depth_m: result.frost_depth_m,
+      h0_selected_m: result.h0_selected_m,
+      altitude: result.altitude,
+      inputs,
+      reserves
+    }
+  };
 }
 
 function json(payload: unknown, status = 200) {

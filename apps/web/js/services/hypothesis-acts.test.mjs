@@ -13,7 +13,14 @@ import {
   stateOf
 } from "./hypothesis-acts.js";
 
-const hypothese = { id: "h1", project_id: "p", kind: "hypothesis", nature: "hypothese", statement: "Zone de neige : A1" };
+// Une vraie hypothèse : un essai la trancherait, et il n'a pas eu lieu. La
+// zone de neige qui servait ici auparavant n'en était pas une — rien ne la
+// mesure, un texte la fixe.
+const hypothese = { id: "h1", project_id: "p", kind: "hypothesis", nature: "hypothese", statement: "Portance du sol : 0,2 MPa" };
+
+const contrainte = { id: "c1", project_id: "p", kind: "constraint", nature: "contrainte", statement: "Zone de neige : A2" };
+
+const constat = { id: "a1", project_id: "p", kind: "avis", nature: "constat", statement: "Fissure en pied de voile" };
 
 const acte = (verdict, at, patch = {}) => ({
   assertion_id: "h1",
@@ -129,6 +136,32 @@ test("un verdict inconnu est refusé, et le refus est nommé", () => {
 
 test("un acte sans hypothèse est refusé", () => {
   assert.equal(planAct({ verdict: ACT.VALIDATED }).ok, false);
+});
+
+test("on ne se prononce pas sur une contrainte", () => {
+  // Cinq personnes d'accord ne déplacent pas une zone de neige, et cinq en
+  // désaccord ne l'annulent pas. Ce qu'on peut faire à une contrainte fausse
+  // est d'un autre ordre : la corriger.
+  const plan = planAct({ assertion: contrainte, verdict: ACT.CONTESTED, proposedValue: "A1" });
+
+  assert.equal(plan.ok, false);
+  assert.match(plan.reason, /contrainte/i);
+  assert.match(plan.reason, /tiers/i, "le refus dit ce qui la tranche, pas seulement qu'il refuse");
+});
+
+test("on ne conteste pas un constat : on en fait un autre, plus tard", () => {
+  const plan = planAct({ assertion: constat, verdict: ACT.VALIDATED });
+
+  assert.equal(plan.ok, false);
+  assert.match(plan.reason, /constat/i);
+});
+
+test("une affirmation non classée ne se juge pas", () => {
+  // Ne pas savoir ce que c'est n'autorise pas à s'y prononcer.
+  const plan = planAct({ assertion: { id: "x", kind: "inconnu" }, verdict: ACT.VALIDATED });
+
+  assert.equal(plan.ok, false);
+  assert.match(plan.reason, /non class/i);
 });
 
 /* ── La répétition n'est pas une validation ──────────────────────────────── */

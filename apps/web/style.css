@@ -16483,6 +16483,19 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
    entière. */
 .memory-readers__lead{ margin:0; max-width:80ch; color:var(--muted); font-size:13px; }
 
+/* Les écarts. Ils ne se lisent pas comme une connaissance de plus : ils
+   s'annoncent avant la liste, et la non-conformité se distingue du différend —
+   l'une se corrige, l'autre se tranche. */
+.memory-ecarts{ display:flex; flex-direction:column; gap:8px; margin:0 0 4px; }
+.memory-ecarts__title{ margin:0; font-size:13px; font-weight:600; color:var(--fg); }
+.memory-ecarts__list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
+.memory-ecart{ border:1px solid var(--border); border-left-width:3px; border-radius:6px; padding:10px 12px; background:var(--card); }
+.memory-ecart--grave{ border-left-color:var(--danger); }
+.memory-ecart__label{ display:inline-block; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
+.memory-ecart--grave .memory-ecart__label{ color:var(--danger); }
+.memory-ecart__sentence{ margin:4px 0 0; font-size:13px; color:var(--fg); }
+.memory-ecart__ask{ margin:2px 0 0; max-width:80ch; font-size:12px; color:var(--muted); }
+
 /* Le regroupement par domaine : ce qui rend une liste de soixante-dix lignes
    lisible. « Sans domaine » vient en dernier et se compte comme les autres. */
 .memory-group{ margin-bottom:16px; }

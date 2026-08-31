@@ -188,8 +188,8 @@ export function assertionsFromProposition({ proposition = {}, items = [], decide
  * revérifier : la règle protège ce qui se **dérive**, elle n'a jamais voulu
  * dire qu'un projet ne peut pas énoncer ses propres hypothèses.
  *
- * **La clé métier est le sujet, pas la valeur.** « zone de neige » et non
- * « zone de neige A2 » : c'est ce qui fait qu'une nouvelle valeur **remplace**
+ * **La clé métier est le sujet, pas la valeur.** « portance du sol » et non
+ * « portance du sol 0,2 MPa » : c'est ce qui fait qu'une nouvelle valeur **remplace**
  * l'ancienne au lieu de coexister avec elle, et c'est tout le mécanisme de
  * l'étape E. Une clé qui porterait la valeur donnerait deux hypothèses vraies
  * en même temps.
@@ -209,8 +209,10 @@ export function declaredHypothesis({
   const valeur = texte(value);
 
   if (!projet) return { ok: false, reason: "Aucun projet." };
-  if (!sujet) return { ok: false, reason: "Une hypothèse a besoin d'un sujet : « zone de neige », « portance du sol »." };
-  if (!valeur) return { ok: false, reason: "Une hypothèse a besoin d'une valeur : c'est ce qui la rend vérifiable." };
+  if (!sujet) return { ok: false, reason: "Une hypothèse a besoin d'un sujet : « portance du sol », « niveau de la nappe »." };
+  // Sans valeur, il n'y a rien qu'une mesure puisse confirmer ou démentir — et
+  // c'est la mesure qui fait l'hypothèse.
+  if (!valeur) return { ok: false, reason: "Une hypothèse a besoin d'une valeur : c'est ce qu'une mesure viendra confirmer ou démentir." };
 
   const quand = texte(at) || new Date().toISOString();
 
@@ -241,7 +243,7 @@ export function declaredHypothesis({
 /**
  * La clé d'un sujet d'hypothèse.
  *
- * Sans accent ni casse : « Zone de neige » et « zone de neige » désignent la
+ * Sans accent ni casse : « Portance du sol » et « portance du sol » désignent la
  * même chose, et deux clés pour un même sujet donneraient deux hypothèses en
  * vigueur — exactement ce que « une seule valeur à la fois » interdit.
  */
