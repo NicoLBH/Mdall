@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { requireUser } from "../_shared/require-user.ts";
 
 type ExchangeRequest = {
   subject_id?: string;
@@ -72,6 +73,11 @@ serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { status: 200, headers: corsHeaders });
   }
+
+  // Qui appelle ? Le portail ne le vérifie pas — il rejetterait le préflight du
+  // navigateur, qui arrive sans autorisation. La porte est donc ici, après lui.
+  const garde = await requireUser(req, corsHeaders);
+  if ("response" in garde) return garde.response;
 
   if (req.method !== "POST") {
     return json({ error: "Method not allowed" }, 405);

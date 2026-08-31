@@ -2147,6 +2147,28 @@ async function merge(root) {
       snapshot: gele
     };
 
+    // Ce que la proposition fait entrer devient la mémoire du projet : des
+    // affirmations datées, signées, tracées jusqu'à la proposition qui les a
+    // portées — y compris celles qu'on a écartées. Un refus est une
+    // information, et souvent la plus sûre.
+    //
+    // L'échec ne défait pas la fusion : les documents sont entrés, le suivi
+    // sera réécrit, et la mémoire se rattrape depuis l'onglet Mémoire. Le taire
+    // serait pire — on croirait la mémoire à jour.
+    try {
+      const memoire = await import("../services/project-memory-supabase.js");
+      const verse = await memoire.rememberProposition({ proposition: view.open, items });
+      if (!verse) {
+        view.review.notice =
+          "Les documents sont entrés, mais la mémoire du projet n'a pas pu être mise à jour. " +
+          "Elle se rattrape depuis l'onglet Mémoire.";
+      }
+    } catch {
+      view.review.notice =
+        "Les documents sont entrés, mais la mémoire du projet n'a pas pu être mise à jour. " +
+        "Elle se rattrape depuis l'onglet Mémoire.";
+    }
+
     // L'histoire se refait maintenant : sans cela, le fil resterait celui d'une
     // proposition ouverte — sans acte de fusion, sans carte de fin — jusqu'au
     // prochain rechargement, et un message écrit dans la foulée se retrouverait

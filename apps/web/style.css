@@ -15850,9 +15850,12 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   content:"";
   position:absolute;
   left:72px;
-  top:-40px;
+  top:-60px;
   bottom:0;
   width:2px;
+  /* Derrière le trait épais et les messages : la ligne les rejoint, elle ne
+     leur passe pas dessus. */
+  z-index:-1;
   background:rgba(48,54,61,.9);
 }
 
@@ -15936,7 +15939,7 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
    Les étapes restent sur une ligne et débordent si besoin — plier un
    enchaînement en colonnes lui fait perdre sa direction, qui est ce qu'il a de
    plus lisible. Le fond sombre le détache du reste de la page. */
-.run-section--graph{ background:var(--bgAssistPanel); min-height:200px; max-height:600px; }
+.run-section--graph{ background:var(--bgAssistPanel); }
 
 .run-section__head--graph{
   display:flex;
@@ -15975,10 +15978,12 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   padding:20px 16px 24px;
   background:var(--bgAssistPanel);
   overflow-x:auto;
-  /* La section est bornée en hauteur : ce qui dépasse défile ici plutôt que de
-     déborder sur ce qui suit. Un graphe zoomé reste entier, il se parcourt. */
+  /* La hauteur est tenue ici, là où le défilement vit déjà : ce qui dépasse se
+     parcourt au lieu de déborder sur ce qui suit. Un graphe zoomé reste
+     entier. */
   overflow-y:auto;
-  max-height:inherit;
+  min-height:200px;
+  max-height:600px;
 }
 
 .run-graph__canvas{
@@ -16267,12 +16272,90 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
    « Commenter » sont deux réponses au même message, pas deux zones de l'écran. */
 .comment-composer--proposition .actions-row__right > :nth-child(2){ margin-left:0; }
 
+/* ── La mémoire du projet ────────────────────────────────────────
+   Une liste d'affirmations, pas une liste de sujets : un fait daté se lit en
+   une ligne, et c'est ce qu'on vient y chercher. */
+.project-simple-page--memory .propositions-shell{ gap:16px; }
+
+.memory-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:16px;
+  flex-wrap:wrap;
+}
+.memory-head__title{ margin:0 0 4px; font-size:16px; }
+.memory-head__lead{ margin:0; max-width:60ch; color:var(--muted); font-size:13px; }
+.memory-head__actions{ display:flex; gap:8px; flex-wrap:wrap; }
+.memory-head__actions .gh-btn{ display:inline-flex; align-items:center; gap:6px; }
+
+.memory-counts{
+  display:flex;
+  gap:20px;
+  flex-wrap:wrap;
+  padding:12px 16px;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  background:var(--panel2);
+  font-size:13px;
+  color:var(--muted);
+}
+.memory-counts__item b{ color:var(--text); }
+
+.memory-filters{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+.memory-filters__search{ flex:1 1 280px; min-width:220px; }
+.memory-filters__select{ flex:0 0 auto; width:auto; min-width:180px; }
+.memory-filters__toggle{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  color:var(--muted);
+  font-size:13px;
+  cursor:pointer;
+}
+
+.memory-list{
+  margin:0;
+  padding:0;
+  list-style:none;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  overflow:hidden;
+}
+.memory-row{
+  display:grid;
+  grid-template-columns:20px 1fr;
+  gap:10px;
+  padding:12px 16px;
+  background:var(--panel2);
+  border-bottom:1px solid var(--border2);
+}
+.memory-row:last-child{ border-bottom:0; }
+/* Ce qui ne vaut plus se lit encore, mais se lit comme du passé. */
+.memory-row--superseded{ opacity:.6; }
+.memory-row__mark{ line-height:0; padding-top:2px; }
+.memory-row__mark--assumed{ color:var(--fgColor-open); }
+.memory-row__mark--rejected{ color:var(--fgColor-danger); }
+.memory-row__body{ display:flex; flex-direction:column; gap:2px; min-width:0; }
+.memory-row__head{ display:flex; gap:8px; align-items:baseline; flex-wrap:wrap; }
+.memory-row__key{
+  padding:1px 6px;
+  border:1px solid var(--border);
+  border-radius:10px;
+  color:var(--muted);
+  font-size:12px;
+}
+.memory-row__statement{ color:var(--text); font-weight:600; font-size:14px; }
+.memory-row__detail{ color:var(--muted); font-size:13px; }
+.memory-row__meta{ color:var(--muted); font-size:12px; }
+.memory-row__superseded{ font-style:italic; }
+
 /* La note de dépôt : ce que la machine a compris du lot, signé comme tel. La
    provenance est écrite sous le texte — une note qui ne dirait pas d'où elle
    vient serait lue comme la parole de quelqu'un. */
 .deposit-note__source{
   margin:10px 0 0;
-  padding-top:8px;
+  padding:8px 12px;
   border-top:1px solid var(--border2);
   color:var(--muted);
   font-size:12px;
