@@ -304,6 +304,42 @@ export function renderMemoryDetail(assertions, cible = {}) {
 }
 
 /**
+ * L'en-tête de l'écran.
+ *
+ * Il reprend celui d'un utilitaire de l'Atelier — « Suivi des avis du Bureau de
+ * Contrôle » : le titre à gauche, les actions à droite, un filet dessous, puis
+ * la phrase qui dit à quoi sert l'écran. C'est le même geste — consulter un
+ * outil du projet —, il se présente donc de la même façon, et avec les mêmes
+ * classes : deux en-têtes dessinés séparément divergent au premier changement.
+ *
+ * Exporté pour qu'une page d'aperçu monte cet en-tête-ci, et non une copie de
+ * son HTML qui vieillirait à part.
+ */
+export function renderMemoryHead(resume, { busy = false } = {}) {
+  return `
+    <header class="memory-head settings-card__head">
+      <span class="settings-card__head-title">
+        <h4>La mémoire du projet</h4>
+        <div class="memory-head__actions">
+          ${renderExportButton(resume, busy)}
+          <button type="button" class="gh-btn" data-memory-export ${
+            resume.total === 0 || busy ? "disabled" : ""
+          }>${svgIcon("copy", { className: "octicon" })} Copier le dossier de contexte</button>
+          <button type="button" class="gh-btn" data-memory-backfill ${busy ? "disabled" : ""}>
+            ${svgIcon("history", { className: "octicon" })} Verser les propositions fusionnées
+          </button>
+        </div>
+      </span>
+      <p class="memory-head__lead">
+        Ce que le projet tient pour vrai, avec la date à laquelle il l'a tranché et la proposition
+        qui l'a versé. Les affirmations entrent par la fusion d'une proposition — elles ne s'écrivent
+        pas à la main.
+      </p>
+    </header>
+  `;
+}
+
+/**
  * Le bouton d'export, sur la ligne du titre.
  *
  * Le même qu'en tête d'une proposition, et volontairement : les deux fichiers
@@ -314,14 +350,14 @@ export function renderMemoryDetail(assertions, cible = {}) {
  * prose dans le presse-papier pour la coller dans une conversation. Ici on
  * écrit un fichier structuré, qu'on ouvre dans un tableur ou qu'on relit.
  */
-function renderExportButton(resume) {
+function renderExportButton(resume, busy = false) {
   return renderGhActionButton({
     id: "memoryExport",
     label: "Exporter",
     icon: svgIcon("download", { className: "octicon" }),
-    size: "sm",
+    size: "md",
     mainActionMode: "first-item",
-    disabled: resume.total === 0 || view.busy,
+    disabled: resume.total === 0 || busy,
     items: [
       { action: "export:json", label: "Exporter en JSON" },
       { action: "export:csv", label: "Exporter en CSV" }
@@ -419,25 +455,7 @@ function renderContent(root) {
   root.innerHTML = `
     <section class="project-simple-page project-simple-page--memory">
       <div class="propositions-shell">
-        <header class="memory-head">
-          <div>
-            <h2 class="memory-head__title">La mémoire du projet</h2>
-            <p class="memory-head__lead">
-              Ce que le projet tient pour vrai, avec la date à laquelle il l'a tranché et la proposition
-              qui l'a versé. Les affirmations entrent par la fusion d'une proposition — elles ne s'écrivent
-              pas à la main.
-            </p>
-          </div>
-          <div class="memory-head__actions">
-            ${renderExportButton(resume)}
-            <button type="button" class="gh-btn gh-btn--sm" data-memory-export ${
-              resume.total === 0 || view.busy ? "disabled" : ""
-            }>${svgIcon("copy", { className: "octicon" })} Copier le dossier de contexte</button>
-            <button type="button" class="gh-btn gh-btn--sm" data-memory-backfill ${view.busy ? "disabled" : ""}>
-              ${svgIcon("history", { className: "octicon" })} Verser les propositions fusionnées
-            </button>
-          </div>
-        </header>
+        ${renderMemoryHead(resume, { busy: view.busy })}
 
         ${view.notice ? `<div class="propositions-empty propositions-empty--warn"><p>${escapeHtml(view.notice)}</p></div>` : ""}
 

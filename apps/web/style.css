@@ -15911,7 +15911,20 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 
 .run-detail__head{ display:flex; flex-direction:column; gap:8px; align-items:flex-start; }
 .run-detail__title-row{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-.run-detail__title{ margin:0; font-size:22px; font-weight:600; color:var(--text); }
+/* Le titre d'une analyse se lit comme celui d'un sujet ou d'une proposition :
+   c'est la même chose qu'on ouvre — un détail, dans la même coque. Deux tailles
+   pour un même geste faisaient hésiter sur l'endroit où l'on se trouve. */
+.run-detail__title{ margin:0; font-size:32px; font-weight:400; line-height:43px; color:#fff; }
+
+/* Le journal des actions tient la largeur des sujets : c'est le même tableau,
+   dans la même coque. Il se dimensionnait sur son contenu — 610px au milieu de
+   1376 — parce que la coque centre ses enfants sans les étirer. */
+.actions-shell{
+  width:100%;
+  /* Aucune marge latérale : les sujets n'en ont pas, et 32px de chaque côté
+     décalaient les deux tableaux de 32px l'un par rapport à l'autre. */
+  padding:24px 0 40px;
+}
 .run-detail__lead{ margin:0; color:var(--muted); font-size:13px; }
 
 .run-section{
@@ -16389,16 +16402,14 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
    une ligne, et c'est ce qu'on vient y chercher. */
 .project-simple-page--memory .propositions-shell{ gap:16px; }
 
-.memory-head{
-  display:flex;
-  align-items:flex-start;
-  justify-content:space-between;
-  gap:16px;
-  flex-wrap:wrap;
-}
-.memory-head__title{ margin:0 0 4px; font-size:16px; }
-.memory-head__lead{ margin:0; max-width:60ch; color:var(--muted); font-size:13px; }
-.memory-head__actions{ display:flex; gap:8px; flex-wrap:wrap; }
+/* L'en-tête reprend celui d'un utilitaire de l'Atelier — « Suivi des avis du
+   Bureau de Contrôle » : titre à gauche, actions à droite, un filet dessous,
+   puis la phrase qui dit à quoi sert l'écran. C'est le même geste, il se
+   présente donc de la même façon : `settings-card__head-title` porte le filet
+   et l'alignement, on n'en réécrit pas une seconde version qui divergerait. */
+.memory-head{ display:flex; flex-direction:column; }
+.memory-head__lead{ margin:0; max-width:80ch; color:var(--muted); font-size:13px; }
+.memory-head__actions{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .memory-head__actions .gh-btn{ display:inline-flex; align-items:center; gap:6px; }
 
 .memory-counts{
@@ -16718,7 +16729,10 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   display:flex;
   flex-direction:column;
   width:min(1100px, 100%);
-  max-height:100%;
+  /* Une hauteur, pas seulement un plafond : le panneau se dimensionnait sur son
+     contenu, et tant que la page n'était pas dessinée il n'était qu'une barre
+     de titre au-dessus d'une bande vide. */
+  height:min(1000px, 100%);
   background:var(--panel);
   border:1px solid var(--border);
   border-radius:12px;
@@ -16755,4 +16769,6 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   padding:16px;
   background:var(--bg);
 }
-.review-pdf__canvas{ display:flex; justify-content:center; }
+.review-pdf__canvas{ display:flex; justify-content:center; min-height:100%; }
+/* Le canevas d'une page garde ses proportions dans la largeur qu'on lui laisse. */
+.review-pdf__canvas .documents-pdf-viewer__page{ max-width:100%; }

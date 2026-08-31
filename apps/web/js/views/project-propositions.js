@@ -408,7 +408,7 @@ function renderReviewHead(proposition) {
 function renderItemFigures(item) {
   if (item.itemType !== ITEM_TYPE.AVIS) return "";
 
-  const figures = figuresOfAvis(item.itemKey);
+  const figures = figuresOfAvis(item);
   if (figures.length === 0) return "";
 
   return `<div class="review-figures">${figures.map(renderFigure).join("")}</div>`;
@@ -1710,17 +1710,38 @@ async function drawPdfPage(root) {
 
     if (view.viewer !== lecteur) return;
 
-    // Le nombre de pages ne se sait qu'après la première lecture : la barre
-    // l'attendait, elle peut maintenant le dire.
-    if (lecteur.pageCount !== pageCount) {
-      lecteur.pageCount = pageCount;
-      renderContent(root);
-    }
+    // Le nombre de pages ne se sait qu'après la première lecture. **La barre se
+    // met à jour sur place** : redessiner l'écran effaçait le canevas qu'on
+    // venait de peindre, et `drawn` empêchait de le repeindre. On voyait donc
+    // « Page 1 sur 4 » au-dessus d'un panneau vide.
+    lecteur.pageCount = pageCount;
+    syncViewerNav(root);
   } catch (error) {
     if (view.viewer !== lecteur) return;
     lecteur.error = String(error?.message || "Ce livrable n'a pas pu être affiché.");
     renderContent(root);
   }
+}
+
+/**
+ * Met la barre du lecteur à jour, sans toucher au canevas.
+ *
+ * Tout ce qui change à cet instant tient en trois éléments : le compteur et
+ * l'état des deux flèches. Passer par un rendu complet pour cela détruirait la
+ * page dessinée — c'est exactement le défaut qu'on corrige.
+ */
+function syncViewerNav(root) {
+  const lecteur = view.viewer;
+  if (!lecteur) return;
+
+  const compteur = root.querySelector(".review-pdf__count");
+  if (compteur) compteur.textContent = lecteur.pageCount > 0 ? `Page ${lecteur.page} sur ${lecteur.pageCount}` : "";
+
+  const precedent = root.querySelector("[data-review-pdf-prev]");
+  if (precedent) precedent.disabled = !lecteur.pageCount || lecteur.page <= 1;
+
+  const suivant = root.querySelector("[data-review-pdf-next]");
+  if (suivant) suivant.disabled = !lecteur.pageCount || lecteur.page >= lecteur.pageCount;
 }
 
 /** Feuillette, sans retélécharger : les octets sont déjà là. */
@@ -1733,7 +1754,8 @@ function turnPdfPage(root, pas) {
 
   lecteur.page = cible;
   lecteur.drawn = false;
-  renderContent(root);
+  syncViewerNav(root);
+  drawPdfPage(root);
 }
 
 /**
@@ -2890,10 +2912,18 @@ async function describeFigure(root, bouton) {
  * favorable n'en a pas : ses photos se lisent sous leur document, dans les
  * dépôts, et pas sous un avis auquel rien ne les rattache.
  */
-function figuresOfAvis(reference) {
-  const cle = String(reference ?? "").trim();
+function figuresOfAvis(item = {}) {
+  const toutes = view.review?.figures ?? [];
+
+  // Un avis relevé sur une ligne de fiche **est** une figure : il porte son
+  // identifiant. Le chercher par numéro n'aurait rien donné — ces lignes-là
+  // n'en ont pas, et c'est le cas ordinaire.
+  const figureId = String(item?.payload?.figureId ?? "").trim();
+  if (figureId) return toutes.filter((figure) => String(figure.id) === figureId);
+
+  const cle = String(item?.itemKey ?? "").trim();
   if (!cle) return [];
-  return (view.review?.figures ?? []).filter((figure) => String(figure.avis_reference ?? "").trim() === cle);
+  return toutes.filter((figure) => String(figure.avis_reference ?? "").trim() === cle);
 }
 
 /** Les figures d'un livrable, dans l'ordre où le rapport les montre. */
@@ -3367,6 +3397,17 @@ async function openFrozen(root, proposition) {
       story: buildStory({ proposition, documents, decisions: stored, comments, names }),
       items: itemsFromDecisions(stored)
     };
+
+    // Les photos ne se recalculent pas : elles ont été découpées, hachées et
+    // écrites en base au moment de l'analyse. Une proposition close les perdait
+    // parce que personne ne les relisait — pas parce qu'elles n'existaient
+    // plus. Ce qui a été établi se conserve, et se remontre.
+    const { listFiguresForDocuments } = await import("../services/avis-figures-supabase.js");
+    const figures = await listFiguresForDocuments(documents.map((row) => row.id));
+    if (!view.open || view.open.id !== proposition.id) return;
+    // `null` : la lecture a échoué. On s'abstient plutôt que d'afficher un
+    // rapport sans ses photos comme s'il n'en avait jamais eu.
+    view.review.figures = figures ?? [];
 
     // Une proposition close ne réécrit plus sa note : on lit la dernière, telle
     // qu'elle était au moment où l'on a tranché.
