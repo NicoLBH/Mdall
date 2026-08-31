@@ -1,0 +1,192 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+
+import {
+  MEMORY,
+  assertionsFromProposition,
+  buildContextExport,
+  currentAssertions,
+  planSupersessions,
+  searchAssertions,
+  summarizeMemory
+} from "./project-memory.js";
+
+const PROPOSITION = {
+  id: "p-1",
+  project_id: "proj-1",
+  number: 4,
+  merged_at: "2026-08-30T10:00:00Z",
+  merged_by: "u-1"
+};
+
+const ITEMS = [
+  {
+    itemType: "avis",
+    itemKey: "A12",
+    status: "proposed",
+    payload: { reference: "A12", title: "Étanchéité", status: "RESOLVED", previousStatus: "OPEN", opinion: "levé" }
+  },
+  {
+    itemType: "avis",
+    itemKey: "A41",
+    status: "refused",
+    reason: "le rapport ne concerne pas ce lot",
+    payload: { reference: "A41", title: "Ventilation", status: "OPEN" }
+  }
+];
+
+test("le silence verse comme assumé", () => {
+  // C'est la règle de la revue : ce qu'on laisse tel quel est ce à quoi on ne
+  // s'oppose pas. Le laisser « proposé » conserverait une question à laquelle on
+  // a répondu en fusionnant.
+  const lignes = assertionsFromProposition({ proposition: PROPOSITION, items: ITEMS });
+
+  assert.equal(lignes[0].status, MEMORY.ASSUMED);
+  assert.equal(lignes[1].status, MEMORY.REJECTED);
+});
+
+test("une affirmation écartée est versée elle aussi", () => {
+  // Un refus est une information, et souvent la plus sûre : celui qui a ouvert
+  // le PDF sait mieux que le moteur que ce rapport n'est pas de ce chantier.
+  const lignes = assertionsFromProposition({ proposition: PROPOSITION, items: ITEMS });
+  const ecartee = lignes.find((entry) => entry.subject_key === "A41");
+
+  assert.equal(ecartee.status, MEMORY.REJECTED);
+  assert.equal(ecartee.detail, "le rapport ne concerne pas ce lot", "la raison du refus survit");
+});
+
+test("chaque affirmation porte sa source et sa signature", () => {
+  // Une mémoire sans provenance est une rumeur.
+  const [premiere] = assertionsFromProposition({ proposition: PROPOSITION, items: ITEMS });
+
+  assert.equal(premiere.proposition_id, "p-1");
+  assert.equal(premiere.proposition_number, 4);
+  assert.equal(premiere.decided_by, "u-1");
+  assert.equal(premiere.decided_at, "2026-08-30T10:00:00Z", "la date est celle de la fusion, pas celle de l'écriture");
+});
+
+test("la phrase est écrite au moment où l'on tranche", () => {
+  const [premiere] = assertionsFromProposition({ proposition: PROPOSITION, items: ITEMS });
+
+  assert.equal(premiere.statement, "Avis A12 — Étanchéité");
+  assert.match(premiere.detail, /levé/);
+  assert.match(premiere.detail, /OPEN → RESOLVED/);
+});
+
+test("sans projet, rien n'est versé", () => {
+  assert.deepEqual(assertionsFromProposition({ proposition: { id: "p-1" }, items: ITEMS }), []);
+});
+
+test("une affirmation nouvelle remplace celle qui portait la même clé", () => {
+  // Un avis levé remplace le même avis émis. Sans cela, la mémoire devient un
+  // tas de contradictions qui se valent.
+  const existantes = [
+    { id: "a-1", kind: "avis", subject_key: "A12", proposition_id: "p-0", superseded_by: null },
+    { id: "a-2", kind: "avis", subject_key: "A99", proposition_id: "p-0", superseded_by: null }
+  ];
+  const nouvelles = assertionsFromProposition({ proposition: PROPOSITION, items: ITEMS });
+
+  const plan = planSupersessions(existantes, nouvelles);
+
+  assert.deepEqual(plan.map((entry) => entry.id), ["a-1"]);
+});
+
+test("une affirmation déjà remplacée ne l'est pas deux fois", () => {
+  const existantes = [{ id: "a-1", kind: "avis", subject_key: "A12", proposition_id: "p-0", superseded_by: "a-9" }];
+  const nouvelles = assertionsFromProposition({ proposition: PROPOSITION, items: ITEMS });
+
+  assert.deepEqual(planSupersessions(existantes, nouvelles), []);
+});
+
+test("une proposition ne se remplace pas elle-même", () => {
+  // Rejouer un versement ne doit pas transformer une affirmation en son propre
+  // antécédent : le rattrapage des propositions déjà fusionnées se rejoue.
+  const existantes = [{ id: "a-1", kind: "avis", subject_key: "A12", proposition_id: "p-1", superseded_by: null }];
+  const nouvelles = assertionsFromProposition({ proposition: PROPOSITION, items: ITEMS });
+
+  assert.deepEqual(planSupersessions(existantes, nouvelles), []);
+});
+
+test("l'état courant est ce qui n'a pas été remplacé", () => {
+  const memoire = [
+    { id: "a-1", kind: "avis", subject_key: "A12", status: MEMORY.ASSUMED, superseded_by: "a-2" },
+    { id: "a-2", kind: "avis", subject_key: "A12", status: MEMORY.ASSUMED, superseded_by: null },
+    { id: "a-3", kind: "avis", subject_key: "A41", status: MEMORY.REJECTED, superseded_by: null }
+  ];
+
+  assert.deepEqual(currentAssertions(memoire).map((entry) => entry.id), ["a-2", "a-3"]);
+  assert.deepEqual(summarizeMemory(memoire), {
+    total: 3,
+    current: 2,
+    assumed: 1,
+    rejected: 1,
+    superseded: 1
+  });
+});
+
+test("la recherche porte sur ce qui se retient", () => {
+  const memoire = [
+    { kind: "avis", subject_key: "A12", statement: "Avis A12 — Étanchéité", detail: "levé", status: MEMORY.ASSUMED },
+    { kind: "avis", subject_key: "A41", statement: "Avis A41 — Ventilation", detail: "", status: MEMORY.REJECTED },
+    { kind: "document", subject_key: "d-1", statement: "Document au corpus : RICT.pdf", status: MEMORY.ASSUMED }
+  ];
+
+  assert.deepEqual(searchAssertions(memoire, { query: "etancheite" }).map((e) => e.subject_key), ["A12"]);
+  assert.deepEqual(searchAssertions(memoire, { kind: "document" }).map((e) => e.subject_key), ["d-1"]);
+  assert.deepEqual(searchAssertions(memoire, { status: MEMORY.REJECTED }).map((e) => e.subject_key), ["A41"]);
+  assert.equal(searchAssertions(memoire, {}).length, 3);
+});
+
+test("ce qui a été remplacé ne se cherche que si on le demande", () => {
+  const memoire = [{ kind: "avis", subject_key: "A12", statement: "Avis A12", superseded_by: "a-9" }];
+
+  assert.equal(searchAssertions(memoire, {}).length, 0);
+  assert.equal(searchAssertions(memoire, { includeSuperseded: true }).length, 1);
+});
+
+test("le dossier de contexte est déterministe", () => {
+  // Même mémoire, même texte, à l'octet près : c'est ce qui permet de mettre un
+  // préfixe en cache au lieu de le refacturer à chaque question.
+  const memoire = [
+    { kind: "avis", subject_key: "A41", statement: "Avis A41", status: MEMORY.ASSUMED, decided_at: "2026-08-30T10:00:00Z", proposition_number: 4 },
+    { kind: "avis", subject_key: "A12", statement: "Avis A12", status: MEMORY.ASSUMED, decided_at: "2026-08-30T10:00:00Z", proposition_number: 4 }
+  ];
+
+  const premier = buildContextExport({ project: { name: "Aurora" }, assertions: memoire });
+  const second = buildContextExport({ project: { name: "Aurora" }, assertions: [...memoire].reverse() });
+
+  assert.equal(premier, second);
+  assert.ok(premier.indexOf("A12") < premier.indexOf("A41"), "l'ordre est celui des clés, pas celui de la base");
+});
+
+test("le dossier dit ce qui a été remplacé, il ne le cache pas", () => {
+  // Le taire ferait répondre comme si un CCTP périmé valait encore.
+  const memoire = [
+    { kind: "avis", subject_key: "A12", statement: "Avis A12", status: MEMORY.ASSUMED, decided_at: "2026-07-01T10:00:00Z", superseded_by: "a-2", superseded_at: "2026-08-30T10:00:00Z" },
+    { kind: "avis", subject_key: "A12", statement: "Avis A12", status: MEMORY.ASSUMED, decided_at: "2026-08-30T10:00:00Z" }
+  ];
+
+  const dossier = buildContextExport({ project: { name: "Aurora" }, assertions: memoire });
+
+  assert.match(dossier, /## Ce qui vaut aujourd'hui/);
+  assert.match(dossier, /## Ce qui a été remplacé/);
+  assert.match(dossier, /remplacée le 2026-08-30/);
+});
+
+test("une mémoire vide se dit vide", () => {
+  // Zéro affirmation est une information ; une page blanche n'en est pas une.
+  const dossier = buildContextExport({ project: { name: "Aurora" }, assertions: [] });
+
+  assert.match(dossier, /Rien n'a encore été versé à la mémoire/);
+});
+
+test("chaque ligne porte sa date, son état et sa proposition", () => {
+  const dossier = buildContextExport({
+    project: { name: "Aurora" },
+    assertions: [
+      { kind: "avis", subject_key: "A12", statement: "Avis A12 — Étanchéité", detail: "levé", status: MEMORY.ASSUMED, decided_at: "2026-08-30T10:00:00Z", proposition_number: 4 }
+    ]
+  });
+
+  assert.match(dossier, /\*\*A12\*\* · Avis A12 — Étanchéité — levé · assumée le 2026-08-30 · proposition #P4/);
+});

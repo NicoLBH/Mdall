@@ -8,6 +8,7 @@ import { store } from "../store.js";
 import { renderProjectDocuments } from "./project-documents.js";
 import { renderProjectSubjects } from "./project-subjects.js";
 import { renderProjectPropositions } from "./project-propositions.js";
+import { renderProjectMemory } from "./project-memory.js";
 import { renderProjectActions } from "./project-actions.js";
 import { renderProjectStudio } from "./project-studio.js";
 import { renderProjectSituations } from "./project-situations.js";
@@ -82,6 +83,10 @@ export function renderProjectLayout(root, projectId, tab) {
 
     case PROJECT_TAB_IDS.PROPOSITIONS:
       renderProjectPropositions(content);
+      break;
+
+    case PROJECT_TAB_IDS.MEMOIRE:
+      renderProjectMemory(content);
       break;
 
     case PROJECT_TAB_IDS.STUDIO:

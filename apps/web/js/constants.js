@@ -4,6 +4,7 @@ export const PROJECT_TAB_IDS = {
   DOCUMENTS: "documents",
   SUBJECTS: "sujets",
   PROPOSITIONS: "propositions",
+  MEMOIRE: "memoire",
   ACTIONS: "actions",
   STUDIO: "atelier",
   SITUATIONS: "situations",
@@ -59,6 +60,11 @@ export const PROJECT_TABS = [
     label: "Propositions",
     icon: svgIcon("git-pull-request", { className: "octicon octicon-git-pull-request" }),
     countKey: "openPropositions"
+  },
+  {
+    id: PROJECT_TAB_IDS.MEMOIRE,
+    label: "Mémoire",
+    icon: svgIcon("history", { className: "octicon octicon-history" })
   },
   {
     id: PROJECT_TAB_IDS.STUDIO,
