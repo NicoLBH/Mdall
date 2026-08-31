@@ -364,42 +364,61 @@ function renderReviewHead(proposition) {
 function renderItemFigures(item) {
   if (item.itemType !== ITEM_TYPE.AVIS) return "";
 
-  const figures = view.review?.figures?.get(String(item.itemKey)) ?? [];
+  const figures = figuresOfAvis(item.itemKey);
   if (figures.length === 0) return "";
 
+  return `<div class="review-figures">${figures.map(renderFigure).join("")}</div>`;
+}
+
+/**
+ * Une figure : sa vignette, la ligne du tableau qui la porte, et ce qu'elle
+ * montre.
+ *
+ * La ligne est écrite sous l'image — rubrique, avis, numéro **quand il
+ * existe** — parce que c'est elle qui donne son sens à la photo. Une image sans
+ * la ligne qui la porte ne se rattache à rien, et un numéro emprunté à une
+ * autre ligne fabriquerait un avis qui n'existe pas.
+ */
+function renderFigure(figure) {
+  const ligne = [
+    String(figure.rubric ?? "").trim(),
+    String(figure.avis_letter ?? "").trim() ? `avis ${String(figure.avis_letter).trim()}` : "",
+    String(figure.avis_reference ?? "").trim() ? `n° ${String(figure.avis_reference).trim()}` : "",
+    `page ${figure.page}`
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
   return `
-    <div class="review-figures">
-      ${figures
-        .map(
-          (figure) => `
-            <figure class="review-figure-card">
-              <button
-                type="button"
-                class="review-figure"
-                data-figure-open="${escapeHtml(figure.id)}"
-                title="${escapeHtml(`Page ${figure.page} du rapport`)}"
-              >
-                <img class="review-figure__img" alt="Figure de la page ${escapeHtml(String(figure.page))}"
-                     data-figure-src="${escapeHtml(figure.id)}">
-                <span class="review-figure__page">p. ${escapeHtml(String(figure.page))}</span>
-              </button>
-              ${
-                figure.caption
-                  ? `<figcaption class="review-figure__caption">
-                       ${escapeHtml(figure.caption)}
-                       <span class="review-figure__derived">Lecture automatique${
-                         figure.caption_model ? ` (${escapeHtml(figure.caption_model)})` : ""
-                       } — ce que dit le rapport reste son texte.</span>
-                     </figcaption>`
-                  : `<button type="button" class="review-figure__ask" data-figure-describe="${escapeHtml(
-                      figure.id
-                    )}">Que montre cette image ?</button>`
-              }
-            </figure>
-          `
-        )
-        .join("")}
-    </div>
+    <figure class="review-figure-card">
+      <button
+        type="button"
+        class="review-figure"
+        data-figure-open="${escapeHtml(figure.id)}"
+        title="${escapeHtml(ligne)}"
+      >
+        <img class="review-figure__img" alt="${escapeHtml(ligne)}" data-figure-src="${escapeHtml(figure.id)}">
+        <span class="review-figure__page">p. ${escapeHtml(String(figure.page))}</span>
+      </button>
+      <figcaption class="review-figure__caption">
+        <span class="review-figure__row">${escapeHtml(ligne)}</span>
+        ${
+          String(figure.observation ?? "").trim()
+            ? `<span class="review-figure__observation">${escapeHtml(figure.observation)}</span>`
+            : ""
+        }
+        ${
+          figure.caption
+            ? `<span class="review-figure__read">${escapeHtml(figure.caption)}</span>
+               <span class="review-figure__derived">Lecture automatique${
+                 figure.caption_model ? ` (${escapeHtml(figure.caption_model)})` : ""
+               } — ce que dit le rapport reste son texte.</span>`
+            : `<button type="button" class="review-figure__ask" data-figure-describe="${escapeHtml(
+                figure.id
+              )}">Que montre cette image ?</button>`
+        }
+      </figcaption>
+    </figure>
   `;
 }
 
@@ -1438,7 +1457,7 @@ function describeAnalysis(review) {
 const figureUrls = new Map();
 
 function hydrateFigures(root) {
-  const toutes = [...(view.review?.figures?.values() ?? [])].flat();
+  const toutes = view.review?.figures ?? [];
   if (toutes.length === 0) return;
 
   const parId = new Map(toutes.map((figure) => [String(figure.id), figure]));
@@ -1485,6 +1504,21 @@ function hydrateFigures(root) {
 function nameOfAuthor(entree) {
   if (!entree) return "Un collaborateur";
   return (typeof entree === "string" ? entree : entree.name) || "Un collaborateur";
+}
+
+/**
+ * Ce qu'un livrable montre.
+ *
+ * Une fiche d'avis travaux ne fait souvent que montrer : une rubrique, une
+ * lettre d'avis, une photo, et rien d'autre. Ses figures se lisent donc sous
+ * leur document — c'est le seul endroit où elles se rattachent à coup sûr,
+ * puisque la plupart des lignes ne portent aucun numéro d'avis.
+ */
+function renderDocumentFigures(document) {
+  const figures = figuresOfDocument(document?.id);
+  if (figures.length === 0) return "";
+
+  return `<div class="review-figures review-figures--deposit">${figures.map(renderFigure).join("")}</div>`;
 }
 
 /**
@@ -1580,6 +1614,7 @@ function renderDeposits(review) {
                             )}">Lire le document</button>`
                           : ""
                       }
+                      ${renderDocumentFigures(document)}
                     </li>
                   `
                 )
@@ -2421,17 +2456,18 @@ async function merge(root) {
 /**
  * Les figures des rapports déposés.
  *
- * Un rapport de bureau de contrôle montre autant qu'il écrit : la photo dit
- * l'ampleur d'une fissure que sa phrase ne dit pas. On découpe donc, sous le
- * texte de chaque avis, la bande qui porte de l'encre.
+ * Un rapport de bureau de contrôle montre autant qu'il écrit — et une fiche
+ * d'avis travaux ne fait souvent que montrer : une rubrique, une lettre, une
+ * photo. On lit donc les images là où le document les pose, et la ligne du
+ * tableau à laquelle elles appartiennent.
  *
  * Trois bornes, et elles ne sont pas des détails.
  *
- * **Seuls les documents de la proposition sont découpés.** Le corpus accepté en
- * compte cent vingt ; les relire tous à chaque ouverture rendrait l'écran
- * inutilisable pour un gain nul — les avis qui bougent viennent du lot déposé.
+ * **Seuls les documents de la proposition sont lus.** Le corpus accepté en
+ * compte cent vingt ; les rouvrir tous à chaque affichage rendrait l'écran
+ * inutilisable pour un gain nul.
  *
- * **Un document n'est découpé qu'une fois.** Ses figures sont en base ; les
+ * **Un document n'est lu qu'une fois.** Ses figures sont en base ; les
  * retrouver coûte une requête, les refaire coûte un rendu par page.
  *
  * **Ne pas savoir fait s'abstenir.** Si la lecture des figures existantes
@@ -2442,57 +2478,40 @@ async function ensureAvisFigures(root, proposition, analyse, documents = []) {
   if (!view.review || view.open?.id !== proposition.id) return;
 
   const nôtres = new Set((documents ?? []).map((row) => String(row.id)));
-  const parSource = new Map((analyse.reports ?? []).map((report) => [String(report.sourceId), report]));
-
-  // Ce qu'on cherche : pour chaque avis lu dans un document déposé, la page et
-  // la phrase qui le portent. Sans la phrase, aucune bande ne peut être située.
-  const cibles = new Map();
-  for (const prediction of analyse.result?.predictions ?? []) {
-    if (prediction?.kind !== "extraction") continue;
-
-    const report = parSource.get(String(prediction.provenance?.source_id ?? ""));
-    if (!report || !nôtres.has(String(report.documentId))) continue;
-
-    const reference = String(prediction.value?.external_reference_normalized ?? "").trim();
-    const page = Number(prediction.provenance?.page);
-    const sentence = String(prediction.provenance?.excerpt ?? "").trim();
-    if (!reference || !Number.isInteger(page) || !sentence) continue;
-
-    const cle = String(report.documentId);
-    const liste = cibles.get(cle) ?? { report, avis: [] };
-    liste.avis.push({ reference, page, sentence });
-    cibles.set(cle, liste);
-  }
-
-  if (cibles.size === 0) return;
+  const rapports = (analyse.reports ?? []).filter((report) => nôtres.has(String(report.documentId)));
+  if (rapports.length === 0) return;
 
   const figures = await import("../services/avis-figures-supabase.js");
-  const existantes = await figures.listFiguresForDocuments([...cibles.keys()]);
+  const existantes = await figures.listFiguresForDocuments(rapports.map((report) => report.documentId));
   if (existantes === null) return;
 
   const dejaLus = new Set(existantes.map((row) => String(row.document_id)));
   const nouvelles = [];
 
-  for (const [documentId, { report, avis }] of cibles) {
-    if (dejaLus.has(documentId)) continue;
+  for (const report of rapports) {
+    if (dejaLus.has(String(report.documentId))) continue;
 
     try {
       const { captureFigures } = await import("../services/avis-figure-capture.js");
-      const trouvees = await captureFigures({ file: report.file, pages: report.pages, avis });
+      const trouvees = await captureFigures({ file: report.file, pages: report.pages });
 
       for (const figure of trouvees) {
-        const ecrite = await figures.saveFigure({ projectId: proposition.project_id, documentId, figure });
+        const ecrite = await figures.saveFigure({
+          projectId: proposition.project_id,
+          documentId: report.documentId,
+          figure
+        });
         if (ecrite) nouvelles.push(ecrite);
       }
     } catch {
-      // Une découpe ratée ne compromet ni l'analyse ni la revue : l'avis se lit
-      // sans sa figure, et la prochaine ouverture réessaiera.
+      // Une lecture ratée ne compromet ni l'analyse ni la revue : le document se
+      // lit sans ses figures, et la prochaine ouverture réessaiera.
     }
   }
 
   if (!view.review || view.open?.id !== proposition.id) return;
 
-  view.review.figures = groupFigures([...existantes, ...nouvelles]);
+  view.review.figures = [...existantes, ...nouvelles];
   if (root.isConnected) renderContent(root);
 }
 
@@ -2512,8 +2531,14 @@ async function describeFigure(root, bouton) {
   bouton.disabled = true;
   bouton.textContent = "Lecture…";
 
+  const figure = (view.review?.figures ?? []).find((entree) => String(entree.id) === id);
   const { describeFigure: demander } = await import("../services/avis-figures-supabase.js");
-  const reponse = await demander({ figureId: id });
+  // Le contexte est la ligne du tableau : c'est ce dont le modèle a besoin pour
+  // dire ce que l'image ajoute, plutôt que de la décrire dans le vide.
+  const reponse = await demander({
+    figureId: id,
+    sentence: [figure?.rubric, figure?.observation].filter(Boolean).join(" — ")
+  });
 
   if (!reponse?.caption) {
     bouton.disabled = false;
@@ -2522,29 +2547,33 @@ async function describeFigure(root, bouton) {
     return;
   }
 
-  for (const [reference, figures] of view.review?.figures ?? new Map()) {
-    view.review.figures.set(
-      reference,
-      figures.map((figure) =>
-        String(figure.id) === id
-          ? { ...figure, caption: reponse.caption, caption_model: reponse.model }
-          : figure
-      )
-    );
-  }
+  view.review.figures = (view.review.figures ?? []).map((entree) =>
+    String(entree.id) === id ? { ...entree, caption: reponse.caption, caption_model: reponse.model } : entree
+  );
 
   if (root.isConnected) renderContent(root);
 }
 
-/** Les figures rangées par avis : c'est sous l'avis qu'elles se lisent. */
-function groupFigures(rows = []) {
-  const parAvis = new Map();
-  for (const row of rows) {
-    const cle = String(row?.avis_reference ?? "").trim();
-    if (!cle) continue;
-    parAvis.set(cle, [...(parAvis.get(cle) ?? []), row]);
-  }
-  return parAvis;
+/**
+ * Les figures d'un avis numéroté.
+ *
+ * Elles ne s'y rangent que si la ligne du tableau portait ce numéro. Une ligne
+ * favorable n'en a pas : ses photos se lisent sous leur document, dans les
+ * dépôts, et pas sous un avis auquel rien ne les rattache.
+ */
+function figuresOfAvis(reference) {
+  const cle = String(reference ?? "").trim();
+  if (!cle) return [];
+  return (view.review?.figures ?? []).filter((figure) => String(figure.avis_reference ?? "").trim() === cle);
+}
+
+/** Les figures d'un livrable, dans l'ordre où le rapport les montre. */
+function figuresOfDocument(documentId) {
+  const cle = String(documentId ?? "");
+  if (!cle) return [];
+  return (view.review?.figures ?? [])
+    .filter((figure) => String(figure.document_id) === cle)
+    .sort((gauche, droite) => Number(gauche.page) - Number(droite.page));
 }
 
 /**

@@ -16,8 +16,9 @@ import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.j
 const SUPABASE_URL = getSupabaseUrl();
 const BUCKET = "documents";
 const COLUMNS =
-  "id,project_id,document_id,page,bbox,avis_reference,storage_bucket,storage_path," +
-  "sha256,width,height,ink_ratio,caption,caption_model,caption_generated_at,created_at";
+  "id,project_id,document_id,page,bbox,avis_reference,rubric,avis_letter,observation," +
+  "storage_bucket,storage_path,sha256,width,height,ink_ratio," +
+  "caption,caption_model,caption_generated_at,created_at";
 
 function encodeStoragePath(path) {
   return String(path ?? "")
@@ -103,7 +104,12 @@ export async function saveFigure({ projectId, documentId, figure } = {}) {
           document_id: documentId,
           page: figure.page,
           bbox: figure.bbox ?? null,
-          avis_reference: String(figure.reference ?? ""),
+          // Une ligne favorable n'a pas de numéro : `null` le dit, une chaîne
+          // vide le cacherait, et un numéro pris ailleurs serait un faux.
+          avis_reference: String(figure.number ?? "").trim() || null,
+          rubric: String(figure.rubric ?? "").trim() || null,
+          avis_letter: String(figure.letter ?? "").trim() || null,
+          observation: String(figure.observation ?? "").trim() || null,
           storage_bucket: BUCKET,
           storage_path: path,
           sha256: figure.sha256,

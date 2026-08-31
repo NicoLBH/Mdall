@@ -16308,6 +16308,13 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
    vérifier ne vaut pas mieux qu'une affirmation. */
 .review-figures{ display:flex; gap:12px; flex-wrap:wrap; margin-top:8px; }
 .review-figure-card{ margin:0; display:flex; flex-direction:column; gap:4px; max-width:260px; }
+/* Les figures d'un livrable, dans les dépôts : c'est le seul endroit où elles
+   se rattachent à coup sûr, puisque la plupart des lignes d'une fiche d'avis
+   ne portent aucun numéro. */
+.review-figures--deposit{ margin:10px 0 4px; }
+.review-figure__row{ display:block; color:var(--text); font-weight:600; }
+.review-figure__observation{ display:block; color:var(--muted); }
+.review-figure__read{ display:block; margin-top:4px; color:var(--text); }
 /* La légende est dérivée : elle le dit sous elle. Prise pour la parole du
    bureau de contrôle, elle serait un faux. */
 .review-figure__caption{ color:var(--text); font-size:12px; line-height:1.45; }
@@ -16326,7 +16333,10 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .review-figure__ask:disabled{ color:var(--muted); cursor:default; text-decoration:none; }
 .review-figure{
   position:relative;
-  display:block;
+  /* La vignette prend la taille de l'image, pas celle de la carte : un bouton
+     étiré laisserait une bande noire à côté de la photo. */
+  display:inline-block;
+  align-self:flex-start;
   padding:0;
   border:1px solid var(--border);
   border-radius:var(--radius);
