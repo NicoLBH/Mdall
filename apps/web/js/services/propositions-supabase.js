@@ -165,7 +165,8 @@ export async function listPropositionDocuments(propositionId) {
       (await request("documents", {
         params: {
           select:
-            "id,filename,original_filename,mime_type,corpus_state,detected_kind,detected_kind_label," +
+            "id,filename,original_filename,mime_type,storage_bucket,storage_path," +
+            "corpus_state,detected_kind,detected_kind_label," +
             "detected_author,detection_status,detection_reason,content_fingerprint,declared_reference," +
             "duplicate_of_document_id,reissue_of_document_id,issued_at,created_at,created_by",
           proposition_id: `eq.${propositionId}`,
