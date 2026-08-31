@@ -676,8 +676,8 @@ function groupDeposits(documents = [], names = new Map()) {
 const REVIEW_TABS = [
   { id: "conversation", label: "Conversation", iconName: "comment-discussion" },
   { id: "deposits", label: "Dépôts", iconName: "git-commit" },
-  { id: "analysis", label: "Analyse", iconName: "pulse" },
-  { id: "changes", label: "Ce qui change", iconName: "file-directory" }
+  { id: "analysis", label: "Analyse", iconName: "report" },
+  { id: "changes", label: "Ce qui change", iconName: "file-diff" }
 ];
 
 function reviewTabs(review) {
@@ -844,7 +844,9 @@ function renderConversationActivity(event, index) {
 
   return renderMessageThreadActivity({
     idx: index,
-    iconHtml: `<span class="tl-activity__icon tl-activity__icon--${event.kind}">${svgIcon(
+    // La même pastille que dans un sujet : un disque, un contour de la couleur du
+    // fond, qui pose l'icône sur la ligne du fil sans la couper.
+    iconHtml: `<span class="tl-ico-wrap tl-ico-${escapeHtml(event.kind)}">${svgIcon(
       STORY_ICON[event.kind] ?? "git-commit",
       { className: "octicon" }
     )}</span>`,
@@ -1010,7 +1012,9 @@ function renderConversation(proposition, review) {
     .join("");
 
   return `
-    ${renderMessageThread({ itemsHtml: `${premier}${suite}`, className: "review-thread" })}
+    <div class="review-thread-host">
+      ${renderMessageThread({ itemsHtml: `${premier}${suite}`, className: "review-thread" })}
+    </div>
     ${proposition.status === PROPOSITION.OPEN ? renderMergeBox(proposition, review) : ""}
     <div class="review-end" role="separator" aria-label="Fin de la proposition"></div>
     ${renderConversationComposer(proposition, review)}
@@ -2128,6 +2132,11 @@ async function recomputeAfterMerge(root, proposition) {
       analyse.reports.filter((report) => report.documentId).map((report) => [report.sourceId, report.documentId])
     );
 
+    // L'écriture est la seule phase que l'analyse ne peut pas mesurer
+    // elle-même : c'est ici qu'elle a lieu, c'est donc ici qu'on la chronomètre.
+    const debutEcriture = Date.now();
+    const ecrire = (steps) => [...steps, { id: "suivi", label: "Suivi écrit", ms: Date.now() - debutEcriture }];
+
     await saveCtAnalysis({
       projectId: proposition.project_id,
       result: analyse.result,
@@ -2138,7 +2147,8 @@ async function recomputeAfterMerge(root, proposition) {
       triggerSource: "proposition",
       corpusFingerprint: await store_.corpusFingerprint(analyse.reports),
       corpusDocuments: store_.corpusEntries(analyse.reports),
-      documentCount: analyse.reports.length
+      documentCount: analyse.reports.length,
+      steps: ecrire(analyse.steps ?? [])
     });
   } catch {
     view.review.notice =

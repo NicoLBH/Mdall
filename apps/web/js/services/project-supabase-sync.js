@@ -904,7 +904,15 @@ function mapCtRunRowToLogEntry(row = {}) {
           .filter(Boolean),
         documents: (Array.isArray(row.corpus_documents) ? row.corpus_documents : [])
           .map((entry) => safeString(entry?.name || ""))
-          .filter(Boolean)
+          .filter(Boolean),
+        // Ce que chaque phase a pris, quand l'exécution l'a mesuré.
+        steps: (Array.isArray(row.steps) ? row.steps : [])
+          .map((step) => ({
+            id: safeString(step?.id || ""),
+            label: safeString(step?.label || ""),
+            ms: Number(step?.ms) || 0
+          }))
+          .filter((step) => step.id)
       }
     },
     createdAt: computedAt,
@@ -1209,7 +1217,7 @@ export async function syncProjectActionsFromSupabase(options = {}) {
   ctParams.set(
     "select",
     "id,computed_at,document_count,avis_count,tracked_avis_count,guard_violation_count," +
-      "packs_used,engine_version,corpus_documents,trigger_source,proposition_id,propositions(number,title)"
+      "packs_used,engine_version,corpus_documents,steps,trigger_source,proposition_id,propositions(number,title)"
   );
   ctParams.set("project_id", `eq.${backendProjectId}`);
   ctParams.set("order", "computed_at.desc");

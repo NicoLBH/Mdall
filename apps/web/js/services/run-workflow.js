@@ -15,8 +15,10 @@
  * donc un chiffre réellement écrit en base, et une étape dont nous ne savons
  * rien n'apparaît pas.
  *
- * Le jour où l'on voudra les durées par étape, il faudra les mesurer et les
- * conserver. Ce module sera prêt à les lire ; il ne les devinera pas.
+ * Les durées, elles, sont **mesurées** : l'analyse chronomètre ses propres
+ * phases et les conserve. Une phase qui n'a pas été chronométrée n'affiche pas
+ * de durée — elle n'en reçoit pas une plausible. C'est la même règle que pour
+ * les nœuds, appliquée aux chiffres.
  */
 
 /** Ce qu'une boîte peut dire de son état. */
@@ -32,7 +34,40 @@ export const NODE = {
 };
 
 function node(id, label, detail, { tone = NODE.NEUTRAL, icon = "dot-fill-pending", link = null } = {}) {
-  return { id, label, detail, tone, icon, link };
+  return { id, label, detail, tone, icon, link, duration: null };
+}
+
+/**
+ * La durée d'une phase, telle qu'elle a été mesurée.
+ *
+ * Rien n'est estimé ni réparti : une phase que l'exécution n'a pas chronométrée
+ * n'a pas de durée, et le nœud s'affiche sans. Un chiffre plausible serait pire
+ * qu'une absence, parce qu'on s'y fierait.
+ */
+function attachDurations(nodes, steps = []) {
+  const mesures = new Map((steps ?? []).filter((step) => step?.id).map((step) => [step.id, Number(step.ms) || 0]));
+
+  return nodes.map((entry) =>
+    mesures.has(entry.id) ? { ...entry, duration: mesures.get(entry.id) } : entry
+  );
+}
+
+/** Une durée en toutes lettres, courte. */
+export function formatStepDuration(ms) {
+  // `null` n'est pas zéro : une phase non mesurée n'a pas duré « 0 ms », elle
+  // n'a pas de durée du tout, et la confusion se lirait comme une performance.
+  if (ms === null || ms === undefined || ms === "") return "";
+
+  const valeur = Number(ms);
+  if (!Number.isFinite(valeur) || valeur < 0) return "";
+  if (valeur < 1000) return `${valeur} ms`;
+
+  const secondes = valeur / 1000;
+  if (secondes < 60) return secondes < 10 ? `${secondes.toFixed(1)} s` : `${Math.round(secondes)} s`;
+
+  const minutes = Math.floor(secondes / 60);
+  const reste = Math.round(secondes % 60);
+  return reste > 0 ? `${minutes} min ${reste}s` : `${minutes} min`;
 }
 
 /**
@@ -95,7 +130,7 @@ export function buildRunGraph(entry = {}) {
     })
   );
 
-  return nodes;
+  return attachDurations(nodes, corpus.steps);
 }
 
 /**

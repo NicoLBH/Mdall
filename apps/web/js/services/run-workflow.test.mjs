@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { NODE, buildRunGraph } from "./run-workflow.js";
+import { NODE, buildRunGraph, formatStepDuration } from "./run-workflow.js";
 
 const EXECUTION = {
   id: "run-1",
@@ -81,4 +81,34 @@ test("l'ancien pipeline dit le peu qu'il sait, sans le compléter", () => {
 
 test("sans exécution, il n'y a rien à dessiner", () => {
   assert.deepEqual(buildRunGraph({}), []);
+});
+
+test("une phase mesurée porte sa durée, les autres n'en inventent pas", () => {
+  // Un chiffre plausible serait pire qu'une absence : on s'y fierait.
+  const chemin = buildRunGraph({
+    ...EXECUTION,
+    details: {
+      corpus: {
+        ...EXECUTION.details.corpus,
+        steps: [
+          { id: "lecture", label: "Lecture", ms: 4200 },
+          { id: "avis", label: "Avis relevés", ms: 310 }
+        ]
+      }
+    }
+  });
+
+  const parId = Object.fromEntries(chemin.map((entry) => [entry.id, entry]));
+  assert.equal(parId.lecture.duration, 4200);
+  assert.equal(parId.avis.duration, 310);
+  assert.equal(parId.corpus.duration, null, "non mesurée : pas de durée");
+  assert.equal(parId.gardes.duration, null);
+});
+
+test("une durée se dit court", () => {
+  assert.equal(formatStepDuration(320), "320 ms");
+  assert.equal(formatStepDuration(4200), "4.2 s");
+  assert.equal(formatStepDuration(45000), "45 s");
+  assert.equal(formatStepDuration(90000), "1 min 30s");
+  assert.equal(formatStepDuration(null), "");
 });
