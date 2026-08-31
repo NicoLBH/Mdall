@@ -103,26 +103,40 @@ export async function saveNote({
  * du fournisseur. Un client qui enverrait son propre texte ferait de cette
  * fonction un relais ouvert vers un modèle payant.
  *
- * @returns {Promise<{markdown: string, model: string}|null>}
+ * **L'échec dit lequel.** « La note n'a pas pu être écrite » a envoyé quelqu'un
+ * lire la console du navigateur pour découvrir qu'une fonction n'était pas
+ * déployée ; c'est une réponse que l'écran pouvait donner. Un échec sans cause
+ * n'est pas plus honnête qu'un texte inventé — il est seulement moins utile.
+ *
+ * @returns {Promise<{markdown: string, model: string}|{error: string}>}
  */
 export async function requestDepositNote({ propositionId, facts } = {}) {
-  if (!propositionId || !facts) return null;
+  if (!propositionId || !facts) return { error: "empty" };
 
+  let response = null;
   try {
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/generate-deposit-note`, {
+    response = await fetch(`${SUPABASE_URL}/functions/v1/generate-deposit-note`, {
       method: "POST",
       headers: await buildSupabaseAuthHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ proposition_id: propositionId, facts })
     });
-
-    if (!response.ok) return null;
-
-    const payload = await response.json().catch(() => null);
-    const markdown = String(payload?.markdown ?? "").trim();
-    if (!markdown) return null;
-
-    return { markdown, model: String(payload?.model ?? "") };
   } catch {
-    return null;
+    // Le navigateur n'a pas obtenu de réponse : fonction absente, hors ligne,
+    // ou préflight refusé. De l'intérieur, les trois se ressemblent.
+    return { error: "unreachable" };
   }
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    const code = String(payload?.code ?? "");
+    if (response.status === 503 || code === "LLM_NOT_CONFIGURED") return { error: "unconfigured" };
+    if (response.status === 404) return { error: "unreachable" };
+    return { error: "refused" };
+  }
+
+  const payload = await response.json().catch(() => null);
+  const markdown = String(payload?.markdown ?? "").trim();
+  if (!markdown) return { error: "empty" };
+
+  return { markdown, model: String(payload?.model ?? "") };
 }

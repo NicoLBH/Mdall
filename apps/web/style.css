@@ -15850,8 +15850,8 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   content:"";
   position:absolute;
   left:72px;
-  top:-12px;
-  bottom:-16px;
+  top:-40px;
+  bottom:0;
   width:2px;
   background:rgba(48,54,61,.9);
 }
@@ -15877,7 +15877,7 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   background:rgba(48,54,61,.9);
 }
 
-.comment-composer--proposition{ margin:0; }
+.comment-composer--proposition{ margin:0; padding-bottom:200px; }
 
 /* ── Le journal des actions, et le détail d'une exécution ────────
    Le journal a grossi parce que les actions racontent l'histoire du projet. Un
@@ -15936,7 +15936,7 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
    Les étapes restent sur une ligne et débordent si besoin — plier un
    enchaînement en colonnes lui fait perdre sa direction, qui est ce qu'il a de
    plus lisible. Le fond sombre le détache du reste de la page. */
-.run-section--graph{ background:var(--bgAssistPanel); }
+.run-section--graph{ background:var(--bgAssistPanel); min-height:200px; max-height:600px; }
 
 .run-section__head--graph{
   display:flex;
@@ -15975,7 +15975,10 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   padding:20px 16px 24px;
   background:var(--bgAssistPanel);
   overflow-x:auto;
-  overflow-y:hidden;
+  /* La section est bornée en hauteur : ce qui dépasse défile ici plutôt que de
+     déborder sur ce qui suit. Un graphe zoomé reste entier, il se parcourt. */
+  overflow-y:auto;
+  max-height:inherit;
 }
 
 .run-graph__canvas{
@@ -15995,9 +15998,9 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   flex:0 0 auto;
   min-width:168px;
   padding:12px 14px;
-  border:1px solid var(--border);
+  border:1px solid rgb(61,68,77);
   border-radius:10px;
-  background:var(--panel);
+  background-color:rgb(21,27,35);
   box-shadow:0 1px 0 rgba(1,4,9,.5);
 }
 .run-graph__node--ok{ border-color:rgba(63,185,80,.5); }
