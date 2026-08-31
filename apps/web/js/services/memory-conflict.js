@@ -208,6 +208,6 @@ export function describeBlocking(conflicts = []) {
   if (restants === 0) return "";
 
   return restants === 1
-    ? "Une contradiction avec la mémoire du projet doit être tranchée avant de fusionner."
-    : `${restants} contradictions avec la mémoire du projet doivent être tranchées avant de fusionner.`;
+    ? "Une contradiction avec la mémoire du projet doit être arbitrée avant de fusionner."
+    : `${restants} contradictions avec la mémoire du projet doivent être arbitrées avant de fusionner.`;
 }

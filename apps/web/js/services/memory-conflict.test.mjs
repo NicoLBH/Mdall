@@ -89,7 +89,7 @@ test("une contradiction non tranchée bloque, tranchée elle laisse passer", () 
   const conflits = findMemoryConflicts([item], [decision("234", ITEM.ACCEPTED, { status: "RESOLVED", opinion: "F" })]);
 
   assert.equal(unresolvedConflicts(conflits).length, 1);
-  assert.match(describeBlocking(conflits), /doit être tranchée/);
+  assert.match(describeBlocking(conflits), /doit être arbitrée/);
 
   item.status = ITEM.ACCEPTED;
   assert.equal(unresolvedConflicts(conflits).length, 0);

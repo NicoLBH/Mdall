@@ -515,14 +515,14 @@ function renderConflicts(conflicts = []) {
   return `
     <section class="review-block">
       <div class="review-panel review-panel--conflict">
-        <div class="review-block__head">
+        <div class="review-block__head review-block__head--plain">
           <div class="review-block__headbody">
             <h3 class="review-block__title">
               Contradictions avec la mémoire du projet
               <span class="review-block__count">${conflicts.length}</span>
             </h3>
             <span class="review-block__state${restants > 0 ? " is-blocking" : ""}">
-              ${restants > 0 ? `${restants} à trancher` : "toutes tranchées"}
+              ${restants > 0 ? `${restants} à arbitrer` : "toutes arbitrées"}
             </span>
           </div>
         </div>
@@ -1253,12 +1253,17 @@ function renderMergeAction(review, empeche, blocage = "") {
       <span class="merge-box__hint">
         ${escapeHtml(
           empeche
-            ? "Tranchez ce qui est en attente pour pouvoir fusionner."
+            ? "Arbitrez ce qui est en attente pour pouvoir fusionner."
             : "Vous écrirez le message de la fusion avant qu'elle ne s'applique."
         )}
         ${
           blocage
             ? `<button type="button" class="merge-box__link" data-review-goto-changes>Régler les conflits</button>`
+            : ""
+        }
+        ${
+          review.error
+            ? `<button type="button" class="merge-box__link" data-review-retry>Relancer l'analyse</button>`
             : ""
         }
       </span>
@@ -1305,6 +1310,51 @@ function renderMergeForm(proposition, review) {
           review.merging ? "disabled" : ""
         }>${review.merging ? "Fusion en cours…" : "Confirmer la fusion"}</button>
         <button type="button" class="gh-btn" data-merge-cancel ${review.merging ? "disabled" : ""}>Annuler</button>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Quand l'analyse échoue, dire quoi faire.
+ *
+ * « L'analyse n'a pas abouti » informe et abandonne : celui qui le lit n'a
+ * aucun geste à faire, et il n'en fait aucun. Une panne dont on ne peut rien
+ * faire est pire qu'une panne, parce qu'elle donne l'impression que le produit
+ * s'est arrêté là.
+ *
+ * Trois choses manquaient : la cause telle que le système la connaît, ce qu'on
+ * peut vérifier soi-même, et un bouton pour recommencer. Rien n'est perdu
+ * pendant ce temps — les documents sont déposés, la proposition existe, et
+ * relancer ne relit que des fichiers.
+ */
+function renderAnalysisFailure(review) {
+  const illisibles = review.unreachable ?? [];
+
+  return `
+    <div class="propositions-empty propositions-empty--warn analysis-failure">
+      <b>L'analyse n'a pas abouti</b>
+      <p class="analysis-failure__cause">${escapeHtml(review.error || "La cause n'a pas été rapportée.")}</p>
+
+      ${
+        illisibles.length > 0
+          ? `<p>Le stockage n'a pas rendu ${escapeHtml(
+              illisibles.length > 1 ? "ces livrables" : "ce livrable"
+            )} : ${escapeHtml(nameSome(illisibles))} L'analyse a porté sur le reste.</p>`
+          : ""
+      }
+
+      <p>Rien n'est perdu : les documents sont déposés, la proposition existe, et ce qui suit
+      ne relit que des fichiers.</p>
+
+      <ul class="analysis-failure__steps">
+        <li><b>Relancez</b> — une lecture interrompue (réseau, fichier en cours d'écriture) aboutit souvent au second essai.</li>
+        <li><b>Vérifiez les livrables</b> — un PDF vide, protégé par mot de passe ou entièrement scanné sans texte ne se lit pas. Ouvrez-les depuis l'onglet Dépôts.</li>
+        <li><b>Si cela recommence</b> — l'onglet Actions garde le détail de chaque exécution : c'est là que se lit ce qui a échoué, et à quelle étape.</li>
+      </ul>
+
+      <div class="analysis-failure__actions">
+        <button type="button" class="gh-btn gh-btn--primary" data-review-retry>Relancer l'analyse</button>
       </div>
     </div>
   `;
@@ -1398,7 +1448,7 @@ function renderAnalysis(proposition, review) {
     ["Affaires à trancher", `${items.filter((entry) => entry.itemType === ITEM_TYPE.ATTACHMENT).length}`],
     [
       "Livrables non rapatriés",
-      review.unreachable.length > 0 ? nameSome(review.unreachable.map((row) => row?.original_filename)) : "aucun"
+      review.unreachable.length > 0 ? nameSome(review.unreachable) : "aucun"
     ],
     [
       "Lu par",
@@ -1413,7 +1463,7 @@ function renderAnalysis(proposition, review) {
   return `
     <section class="review-block">
       <div class="review-panel">
-        <div class="review-block__head">
+        <div class="review-block__head review-block__head--plain">
           <div class="review-block__headbody">
             <h3 class="review-block__title">${escapeHtml(
               gele ? "Ce que l'analyse avait lu" : "Ce que l'analyse a lu"
@@ -1500,13 +1550,7 @@ function renderReview(root) {
   }
 
   if (review.error && (review.items ?? []).length === 0) {
-    return `
-      ${entete}
-      <div class="propositions-empty">
-        <b>L'analyse n'a pas abouti</b>
-        <p>${escapeHtml(review.error)}</p>
-      </div>
-    `;
+    return `${entete}${renderAnalysisFailure(review)}`;
   }
 
   const gele = review.frozen === true;
@@ -1593,6 +1637,16 @@ function bindReview(root) {
   // CSS partagé échange les deux titres.
   bindReviewCompact(root);
 
+
+  // Relancer, c'est refaire ce que l'ouverture fait : rien d'autre n'a besoin
+  // d'exister, et une seconde façon de lancer l'analyse divergerait de la
+  // première au premier changement.
+  for (const bouton of root.querySelectorAll("[data-review-retry]")) {
+    bouton.addEventListener("click", () => {
+      const id = view.open?.id;
+      if (id) openProposition(root, id);
+    });
+  }
 
   // Changer d'onglet ne relance rien : les quatre panneaux lisent le même état.
   bindLightTabs(root, {

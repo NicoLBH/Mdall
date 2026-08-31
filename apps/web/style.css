@@ -15623,6 +15623,13 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   background:var(--panel);
   border-bottom:1px solid var(--border);
 }
+
+/* Un en-tête sans case à cocher n'a pas de colonne pour elle : la garder
+   creuserait une gouttière que rien ne remplit. */
+.review-block__head--plain{
+  display:block;
+  padding:20px 16px;
+}
 .review-block__head.is-partial{ border-left:2px solid #d29922; }
 
 .review-block__headbody{
@@ -16136,7 +16143,7 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .review-thread .tl-ico-merged{ background:var(--fgColor-done); color:#fff; }
 .review-thread .tl-ico-closed{ background:var(--panel2); color:var(--muted); }
 .review-thread .tl-ico-wrap .ui-icon{ width:16px; height:16px; }
-.review-empty-note{ margin:0; color:var(--muted); font-size:13px; font-style:italic; }
+.review-empty-note{ margin:0; padding:8px 12px; color:var(--muted); font-size:13px; font-style:italic; }
 
 .tl-activity__date{ color:var(--muted); }
 .tl-activity__detail{ display:block; color:var(--muted); font-size:12px; }
@@ -16271,6 +16278,30 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
    second à l'opposé du premier — utile ailleurs, faux ici : « Fermer » et
    « Commenter » sont deux réponses au même message, pas deux zones de l'écran. */
 .comment-composer--proposition .actions-row__right > :nth-child(2){ margin-left:0; }
+
+/* Une analyse qui échoue laisse quelque chose à faire : la cause, ce qu'on peut
+   vérifier soi-même, et un bouton pour recommencer. */
+.analysis-failure{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  align-items:flex-start;
+  /* Le vide d'une liste se centre ; une marche à suivre se lit à gauche. */
+  text-align:left;
+}
+.analysis-failure p, .analysis-failure ul{ text-align:left; width:100%; }
+.analysis-failure__cause{
+  margin:0;
+  padding:8px 12px;
+  border-left:2px solid #d29922;
+  background:rgba(210,153,34,.08);
+  color:var(--text);
+  font-size:13px;
+}
+.analysis-failure__steps{ margin:0; padding-left:18px; color:var(--muted); font-size:13px; }
+.analysis-failure__steps li{ margin:4px 0; }
+.analysis-failure__steps b{ color:var(--text); }
+.analysis-failure__actions{ margin-top:4px; }
 
 /* ── La mémoire du projet ────────────────────────────────────────
    Une liste d'affirmations, pas une liste de sujets : un fait daté se lit en
