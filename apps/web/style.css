@@ -16321,7 +16321,13 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 /* Les figures d'un livrable, dans les dépôts : c'est le seul endroit où elles
    se rattachent à coup sûr, puisque la plupart des lignes d'une fiche d'avis
    ne portent aucun numéro. */
+/* Les vignettes se suivent sur une ligne et passent à la suivante quand elle est
+   pleine. Elles vivaient dans la colonne de 22px réservée à l'icône de la ligne
+   — quatrième enfant d'une grille à deux colonnes, elles retombaient dessous —
+   et s'affichaient donc l'une sous l'autre, larges comme une case à cocher.
+   Elles appartiennent au corps du livrable : c'est de lui qu'elles parlent. */
 .review-figures--deposit{ margin:10px 0 4px; }
+.review-item__body > .review-figures--deposit{ width:100%; }
 .review-figure__row{ display:block; color:var(--text); font-weight:600; }
 .review-figure__observation{ display:block; color:var(--muted); }
 .review-figure__read{ display:block; margin-top:4px; color:var(--text); }
@@ -16542,27 +16548,26 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .review-close-btn__icon{ color:var(--fgColor-danger); line-height:0; }
 
 /* Les dépôts : un geste, pas dix-sept lignes. */
-/* « Sur la foi de quoi ? » se répond en ouvrant le document. Le lien attend le
-   survol : présent quand on le cherche, absent quand on lit la liste. */
+/* « Sur la foi de quoi ? » se répond en ouvrant le document. Le lien prolonge la
+   ligne qui décrit le livrable — sa nature, son auteur, sa date — plutôt que
+   d'occuper une colonne à lui : c'est la même phrase. Il attend le survol :
+   présent quand on le cherche, absent quand on lit la liste. */
 .deposit-item{ position:relative; }
+/* Le point médian appartient au lien : affiché seul, il laisserait une
+   ponctuation orpheline au bout du sous-titre. */
+.deposit-item__link{ opacity:0; transition:opacity .12s ease; }
+.deposit-item:hover .deposit-item__link,
+.deposit-item__link:focus-within{ opacity:1; }
 .deposit-item__open{
-  position:absolute;
-  right:16px;
-  top:50%;
-  transform:translateY(-50%);
   padding:0;
   border:0;
   background:none;
   color:var(--accent);
   font:inherit;
-  font-size:12px;
+  font-size:inherit;
   text-decoration:underline;
   cursor:pointer;
-  opacity:0;
-  transition:opacity .12s ease;
 }
-.deposit-item:hover .deposit-item__open,
-.deposit-item__open:focus-visible{ opacity:1; }
 .deposit-item__open:hover{ color:#79c0ff; }
 .deposit-item__open:disabled{ color:var(--muted); cursor:default; text-decoration:none; }
 .deposit__head{
@@ -16693,3 +16698,61 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   text-transform:uppercase;
   letter-spacing:.04em;
 }
+
+
+/* ── Le lecteur d'un livrable ────────────────────────────────────────────────
+   Visualiser n'est pas télécharger : l'écran ouvrait le PDF dans un onglet du
+   navigateur, ce qui l'enregistrait selon les postes. Le lecteur est celui
+   d'Atelier — mêmes classes de page, même rendu que l'onglet Documents. */
+.review-pdf{
+  position:fixed;
+  inset:0;
+  z-index:60;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:24px;
+  background:rgba(1, 4, 9, .78);
+}
+.review-pdf__panel{
+  display:flex;
+  flex-direction:column;
+  width:min(1100px, 100%);
+  max-height:100%;
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:12px;
+  overflow:hidden;
+}
+.review-pdf__head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  padding:10px 12px 10px 16px;
+  background:var(--panel2);
+  border-bottom:1px solid var(--border);
+}
+.review-pdf__title{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  min-width:0;
+  font-weight:600;
+}
+/* Le nom d'un livrable dépasse souvent la barre : il se coupe plutôt que de
+   pousser la navigation hors de l'écran. */
+.review-pdf__title span{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.review-pdf__nav{ display:flex; align-items:center; gap:8px; flex:0 0 auto; }
+/* Une seule flèche, retournée pour l'autre sens : deux icônes différentes se
+   liraient comme deux gestes différents. */
+.review-pdf__nav [data-review-pdf-next] .octicon{ transform:rotate(180deg); }
+.review-pdf__count{ color:var(--muted); font-size:12px; white-space:nowrap; }
+.review-pdf__body{
+  flex:1 1 auto;
+  min-height:0;
+  overflow:auto;
+  padding:16px;
+  background:var(--bg);
+}
+.review-pdf__canvas{ display:flex; justify-content:center; }

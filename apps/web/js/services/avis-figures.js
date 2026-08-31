@@ -275,10 +275,25 @@ export function describeRowOf(items = [], rect = null, columns = null, { previou
   const sommet = titre[titre.length - 1] ?? auDessus[0];
   const plafond = sommet ? sommet.y + (sommet.height || 0) + 2 : haut + 4;
 
+  // **La ligne va de sa rubrique à la suivante**, et non de la photo à sa
+  // rubrique. C'est la correction la plus lourde de ce fichier : la fenêtre ne
+  // regardait qu'au-dessus de l'image, alors que sur ces fiches l'évaluation
+  // est imprimée **sous** la photo. Elle ne pouvait donc jamais l'atteindre —
+  // et quand elle en attrapait une, c'était celle de la ligne d'au-dessus.
+  // Une évaluation prise à la ligne voisine est un faux, pas une approximation.
+  const basDuTitre = titre[0]?.y ?? haut;
+  const suivante = lignes
+    .filter((item) => dansColonne(item, columns.elements))
+    .filter((item) => !columns.headerY || item.y < columns.headerY - 2)
+    .filter((item) => item.y < basDuTitre - 2)
+    .sort((gauche, droite) => droite.y - gauche.y)[0];
+
+  const plancher = suivante ? suivante.y + (suivante.height || 0) + 2 : Number.NEGATIVE_INFINITY;
+
   const aHauteur = (colonne) =>
     lignes
       .filter((item) => dansColonne(item, colonne))
-      .filter((item) => item.y >= bas - 4 && item.y <= plafond)
+      .filter((item) => item.y >= plancher && item.y <= plafond)
       .sort((gauche, droite) => droite.y - gauche.y);
 
   const surLaLigne = aHauteur(columns.avis).map((item) => String(item.text ?? "").trim())

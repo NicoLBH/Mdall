@@ -85,6 +85,34 @@ export function affirmationOf(item = {}) {
  * @returns {object[]} un conflit par affirmation contredite, dans l'ordre des
  *   affirmations — l'écran n'a pas à réordonner ce qu'il montre.
  */
+/**
+ * Cette lecture affirme-t-elle quelque chose ?
+ *
+ * `NO_NEWS` n'est pas un état de l'avis : c'est l'aveu qu'aucun document du lot
+ * n'en parle. Le comparer à un état antérieur revenait à opposer un silence à
+ * une parole, et l'écran demandait d'arbitrer entre les deux — vingt fois sur
+ * un lot de deux fiches, sans qu'un seul document ait rien dit de nouveau.
+ *
+ * Un rapport d'étape ne rappelle que les avis qui bougent ; un avis absent
+ * bascule donc en `NO_NEWS` d'un lot à l'autre et redevient `OPEN` au suivant,
+ * au gré du corpus lu. **Ces bascules ne sont pas des contradictions** : ce sont
+ * deux lectures du même silence.
+ *
+ * Un silence ne se tranche pas. Il ne contredit rien, et rien ne le contredit.
+ */
+/** Le nom d'un avis : son numéro quand il en a un, sa rubrique sinon. */
+function avisTitle(payload = {}, item = {}) {
+  const numero = String(payload.reference ?? "").trim();
+  if (numero) return `Avis n° ${numero}`;
+  const titre = String(payload.title ?? "").trim();
+  return titre ? `Avis — ${titre}` : `Avis ${String(item.itemKey ?? "")}`;
+}
+
+function affirmeQuelqueChose(itemType, payload = {}) {
+  if (itemType !== ITEM_TYPE.AVIS) return true;
+  return String(payload?.status ?? "") !== "NO_NEWS";
+}
+
 export function findMemoryConflicts(items = [], decisions = []) {
   const memoire = new Map(decisions.map((row) => [`${row.item_type}|${row.item_key}`, row]));
 
@@ -92,6 +120,11 @@ export function findMemoryConflicts(items = [], decisions = []) {
   for (const item of items) {
     const passe = memoire.get(`${item.itemType}|${item.itemKey}`);
     if (!passe) continue;
+
+    // Ni la lecture d'aujourd'hui ni la décision d'hier ne peuvent porter un
+    // conflit si l'une des deux ne dit rien.
+    if (!affirmeQuelqueChose(item.itemType, item.payload)) continue;
+    if (!affirmeQuelqueChose(passe.item_type, passe.payload)) continue;
 
     const maintenant = affirmationOf(item);
     const avant = affirmationOf({ itemType: passe.item_type, payload: passe.payload ?? {} });
@@ -158,7 +191,7 @@ export function describeConflict(conflict = {}) {
 
     if (kind === CONFLICT.REFUSED_REAFFIRMED) {
       return {
-        title: `Avis n° ${payload.reference ?? item.itemKey}`,
+        title: avisTitle(payload, item),
         memory: `Vous aviez écarté cette lecture : ${avant}`,
         now: `L'analyse l'affirme à nouveau : ${apres}`,
         keep: "Je maintiens mon refus",
@@ -167,7 +200,7 @@ export function describeConflict(conflict = {}) {
     }
 
     return {
-      title: `Avis n° ${payload.reference ?? item.itemKey}`,
+      title: avisTitle(payload, item),
       memory: `Vous aviez retenu : ${avant}`,
       now: `L'analyse dit maintenant : ${apres}`,
       keep: "Je garde ce qui était retenu",
