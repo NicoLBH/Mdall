@@ -1,51 +1,50 @@
 /**
  * Les figures d'un rapport : ce que le texte ne dit pas.
  *
- * Un rapport de bureau de contrôle montre autant qu'il écrit. « Fissuration en
- * pied de voile » ne dit ni l'ampleur, ni l'emplacement, ni qu'aucun repère de
- * mesure n'a été posé à côté — la photo, elle, le dit. Jusqu'ici cette moitié
- * de l'information restait dans le PDF, et personne ne la voyait en relisant
- * un avis six mois plus tard.
+ * Un rapport de bureau de contrôle montre autant qu'il écrit. Une fiche d'avis
+ * travaux, elle, ne fait souvent que **montrer** : une rubrique — « Principe
+ * d'étanchéité » —, un avis « F », et une photo. Pas de phrase, pas de numéro.
+ * Toute l'information est dans l'image et dans la ligne du tableau qui la
+ * porte.
  *
- * **Comment on trouve une figure sans savoir où elle est.** Nous ne lisons pas
- * les objets image du PDF : ils sont posés par des transformations empilées
- * qu'il faudrait rejouer, et un schéma vectoriel n'est pas un objet image du
- * tout. On procède autrement, et plus simplement : le texte d'un avis a une
- * position ; ce qui suit, jusqu'au bloc de texte suivant, est une **bande**.
- * Si cette bande est assez grande, et si elle porte de l'encre, c'est une
- * figure.
+ * **La première version cherchait la bande sous le texte d'un avis.** Elle
+ * supposait deux choses fausses sur ces fiches : qu'un avis porte un numéro, et
+ * qu'il porte une phrase. Sur un rapport réel, elle n'a rien trouvé.
  *
- * **La vérification par les pixels est ce qui rend la méthode honnête.** Une
- * bande calculée peut être vide — deux paragraphes espacés en produisent une.
- * On ne conclut donc jamais sur la géométrie seule : on regarde la page rendue,
- * et une bande blanche n'est pas une figure. Sans ce contrôle, l'écran
- * afficherait des rectangles blancs sous des avis, et il faudrait deux minutes
- * à quelqu'un pour cesser de faire confiance à l'écran entier.
+ * **On lit donc les images là où elles sont posées.** Le PDF les place par une
+ * matrice ; la suivre donne le rectangle exact, sans supposer ni marge ni
+ * colonne. Ce qui reste à faire est de dire **à quelle ligne du tableau** une
+ * image appartient — et le document le dit lui-même : ses en-têtes de colonnes
+ * (« Éléments examinés », « Avis* », « Observations et commentaires », « N° »)
+ * donnent les abscisses, et la position de l'image donne la ligne.
  *
- * Ce module est pur : il calcule des rectangles et compte des pixels. Le rendu
- * de la page, la découpe et l'envoi vivent ailleurs.
+ * Rien n'y est supposé : les colonnes sont lues, la rubrique est le texte au-
+ * dessus de l'image dans sa colonne, l'avis est la lettre à sa hauteur, le
+ * numéro est ce qui figure dans la colonne « N° » — **et il est souvent
+ * absent**, parce qu'une ligne favorable n'en porte pas. Lui en inventer un
+ * serait exactement le défaut qu'on vient de corriger.
+ *
+ * Ce module est pur : des matrices, des rectangles et des comparaisons. Le
+ * rendu, la découpe et l'envoi vivent ailleurs.
  *
  * Les coordonnées sont celles du PDF — origine en bas à gauche, `y` vers le
- * haut. La conversion vers l'écran appartient à qui dessine.
+ * haut.
  */
 
-/** Ce qu'il faut pour qu'une bande mérite d'être regardée. */
+/** Ce qui distingue une figure d'un logo ou d'un filet. */
 export const FIGURE = {
-  /** En points PDF. Une bande plus courte est un interligne, pas une image. */
-  MIN_HEIGHT: 60,
-  /** Une colonne étroite reste possible ; un filet de trois points, non. */
+  /** En points PDF. Un bandeau d'en-tête fait 461 × 52 : la hauteur le trie. */
+  MIN_HEIGHT: 80,
   MIN_WIDTH: 80,
-  /** L'air qu'on laisse autour, pour ne pas couper une légende au ras. */
-  MARGIN: 4,
   /**
    * La part de pixels non blancs à partir de laquelle on parle d'encre.
    *
-   * Une page scannée n'est jamais parfaitement blanche : le seuil ne peut pas
-   * être zéro. Une photo, elle, en couvre plusieurs pour cent.
+   * Une image posée peut être un cadre blanc ou un séparateur : la mesure des
+   * pixels reste le dernier mot, après la géométrie.
    */
   MIN_INK_RATIO: 0.015,
-  /** Au-delà, ce n'est plus une figure : c'est une page de garde ou un fond. */
-  MAX_INK_RATIO: 0.98
+  /** L'air qu'on laisse autour d'une découpe. */
+  MARGIN: 4
 };
 
 function normalize(value) {
@@ -57,142 +56,173 @@ function normalize(value) {
     .toLowerCase();
 }
 
-function boxOf(items = []) {
-  if (items.length === 0) return null;
-
-  return items.reduce(
-    (box, item) => ({
-      left: Math.min(box.left, item.x),
-      right: Math.max(box.right, item.x + (item.width || 0)),
-      bottom: Math.min(box.bottom, item.y),
-      top: Math.max(box.top, item.y + (item.height || 0))
-    }),
-    {
-      left: items[0].x,
-      right: items[0].x + (items[0].width || 0),
-      bottom: items[0].y,
-      top: items[0].y + (items[0].height || 0)
-    }
-  );
+/**
+ * Deux matrices, l'une puis l'autre.
+ *
+ * Le PDF pose ses images par une matrice courante qu'il empile et dépile. La
+ * suivre est tout ce qu'il faut pour savoir où une image se trouve — et c'est
+ * exact, là où mesurer une bande de page était une supposition.
+ */
+export function multiplyMatrices(a = [1, 0, 0, 1, 0, 0], b = [1, 0, 0, 1, 0, 0]) {
+  return [
+    a[0] * b[0] + a[1] * b[2],
+    a[0] * b[1] + a[1] * b[3],
+    a[2] * b[0] + a[3] * b[2],
+    a[2] * b[1] + a[3] * b[3],
+    a[4] * b[0] + a[5] * b[2] + b[4],
+    a[4] * b[1] + a[5] * b[3] + b[5]
+  ];
 }
 
 /**
- * Où se trouve, sur la page, le texte d'un avis.
+ * Le rectangle qu'occupe une image posée par cette matrice.
  *
- * On cherche les fragments qui portent une part de l'extrait cité. Un PDF
- * découpe ses lignes comme il veut : chercher la phrase entière ne trouverait
- * presque jamais rien, chercher un mot trop court trouverait partout. On prend
- * donc les mots longs de l'extrait, et on retient les fragments qui en portent
- * au moins un.
- *
- * **Rien trouvé rend `null`.** Placer la bande « au jugé » produirait une
- * figure qui n'illustre pas ce qu'elle prétend illustrer.
+ * Une image est dessinée dans le carré unité, que la matrice étire et déplace.
+ * Les échelles négatives — une image retournée — donnent des dimensions
+ * négatives : on prend la valeur absolue, et l'origine se recale d'autant.
  */
-export function locateTextBlock(items = [], needle = "") {
-  const mots = normalize(needle)
-    .split(" ")
-    .filter((mot) => mot.length >= 5);
-  if (mots.length === 0) return null;
-
-  const touches = (Array.isArray(items) ? items : []).filter((item) => {
-    const texte = normalize(item?.text);
-    return texte && mots.some((mot) => texte.includes(mot));
-  });
-
-  return boxOf(touches);
-}
-
-/**
- * Le paragraphe entier, à partir de la ligne trouvée.
- *
- * Un avis tient rarement sur une ligne : « Fissuration en pied de voile
- * constatée / lors de la visite du 12 août ». La recherche par mots longs n'en
- * attrape qu'une, et la bande commencerait alors **au-dessus** de la seconde —
- * la figure emporterait une phrase et l'afficherait comme si elle en faisait
- * partie.
- *
- * On descend donc de ligne en ligne tant qu'elles se suivent : même colonne, et
- * pas plus d'un interligne d'écart. C'est la définition d'un paragraphe, et
- * elle se mesure au lieu de se supposer.
- */
-export function expandBlockToParagraph(items = [], block = null, { lineGap = 6, leftTolerance = 24 } = {}) {
-  if (!block) return null;
-
-  const lignes = (Array.isArray(items) ? items : []).filter((item) => item && Number.isFinite(item.y));
-  let courant = { ...block };
-  let absorbe = true;
-
-  while (absorbe) {
-    absorbe = false;
-    for (const item of lignes) {
-      const haut = item.y + (item.height || 0);
-      const dessous = haut <= courant.bottom + 0.5;
-      const proche = courant.bottom - haut <= lineGap;
-      const alignee = Math.abs(item.x - courant.left) <= leftTolerance;
-      if (!dessous || !proche || !alignee) continue;
-      if (item.y >= courant.bottom) continue;
-
-      courant = {
-        left: Math.min(courant.left, item.x),
-        right: Math.max(courant.right, item.x + (item.width || 0)),
-        bottom: item.y,
-        top: courant.top
-      };
-      absorbe = true;
-    }
-  }
-
-  return courant;
-}
-
-/**
- * La bande qui suit un bloc de texte, jusqu'au suivant.
- *
- * Elle s'arrête au premier fragment de texte rencontré en descendant : une
- * bande qui l'engloberait afficherait des phrases comme si elles faisaient
- * partie de l'image.
- *
- * @returns {{x: number, y: number, width: number, height: number}|null} en
- *   coordonnées PDF, `y` étant le bas du rectangle
- */
-export function figureZoneBelow(items = [], block = null, page = {}, options = {}) {
-  if (!block) return null;
-
-  const marge = Number(options.margin ?? FIGURE.MARGIN);
-  const minHeight = Number(options.minHeight ?? FIGURE.MIN_HEIGHT);
-  const minWidth = Number(options.minWidth ?? FIGURE.MIN_WIDTH);
-  const bas = Number(page.marginBottom ?? 0);
-
-  const hauts = (Array.isArray(items) ? items : [])
-    .filter((item) => item && item.y + (item.height || 0) <= block.bottom - marge)
-    .map((item) => item.y + (item.height || 0));
-
-  const plafond = block.bottom - marge;
-  const plancher = hauts.length > 0 ? Math.max(...hauts) + marge : bas;
-
-  const hauteur = plafond - plancher;
-  const largeur = Math.max(block.right - block.left, Number(page.textWidth ?? 0));
-  if (hauteur < minHeight || largeur < minWidth) return null;
+export function rectFromImageMatrix(ctm = [1, 0, 0, 1, 0, 0]) {
+  const largeur = Math.abs(ctm[0]) || Math.abs(ctm[1]);
+  const hauteur = Math.abs(ctm[3]) || Math.abs(ctm[2]);
 
   return {
-    x: Math.max(0, Math.min(block.left, Number(page.textLeft ?? block.left))),
-    y: plancher,
+    x: ctm[0] < 0 ? ctm[4] - largeur : ctm[4],
+    y: ctm[3] < 0 ? ctm[5] - hauteur : ctm[5],
     width: largeur,
     height: hauteur
   };
 }
 
 /**
- * La colonne de texte d'une page, mesurée sur ses fragments.
+ * Cette image est-elle une figure, ou l'habillage de la page ?
  *
- * Une figure est presque toujours plus large que la phrase qui la cite : caler
- * la découpe sur cette phrase couperait l'image. On prend donc la largeur de ce
- * que la page écrit — mesurée, pas supposée.
+ * Un logo fait 57 × 55, un bandeau d'en-tête 461 × 52 : la hauteur les trie
+ * tous les deux, sans avoir à connaître ni l'un ni l'autre.
  */
-export function pageTextBounds(items = []) {
-  const box = boxOf((Array.isArray(items) ? items : []).filter((item) => item && Number.isFinite(item.x)));
-  if (!box) return null;
-  return { left: box.left, right: box.right, width: box.right - box.left };
+export function isFigureRect(rect = null, options = {}) {
+  if (!rect) return false;
+  return (
+    rect.width >= Number(options.minWidth ?? FIGURE.MIN_WIDTH) &&
+    rect.height >= Number(options.minHeight ?? FIGURE.MIN_HEIGHT)
+  );
+}
+
+/** Les en-têtes du tableau d'une fiche d'avis, et ce qu'ils désignent. */
+const COLUMN_HEADERS = [
+  { id: "elements", pattern: /elements? examines?/ },
+  { id: "avis", pattern: /^avis\*?$/ },
+  { id: "observations", pattern: /observations? et commentaires?/ },
+  { id: "numero", pattern: /^n\s*°?$/ }
+];
+
+/**
+ * Les colonnes du tableau, telles que le document les déclare.
+ *
+ * On ne suppose aucune abscisse : la fiche écrit ses en-têtes, et ils donnent
+ * les colonnes. Une fiche mise en page autrement — ou un document qui n'est pas
+ * une fiche — ne rend rien, et le lecteur s'abstient plutôt que de deviner.
+ *
+ * @returns {{elements?: object, avis?: object, observations?: object,
+ *   numero?: object, headerY: number}|null}
+ */
+export function readTableColumns(items = []) {
+  const trouves = new Map();
+
+  for (const item of Array.isArray(items) ? items : []) {
+    const texte = normalize(item?.text);
+    if (!texte) continue;
+
+    for (const colonne of COLUMN_HEADERS) {
+      if (trouves.has(colonne.id) || !colonne.pattern.test(texte)) continue;
+      trouves.set(colonne.id, { left: item.x, right: item.x + (item.width || 0), y: item.y });
+    }
+  }
+
+  // Sans « Éléments examinés » ni « Avis », ce n'est pas une fiche d'avis : on
+  // ne lit pas des colonnes dans un document qui n'en a pas.
+  if (!trouves.has("elements") || !trouves.has("avis")) return null;
+
+  const bornes = [...trouves.entries()].sort((gauche, droite) => gauche[1].left - droite[1].left);
+  const colonnes = {};
+
+  bornes.forEach(([id, borne], rang) => {
+    const suivante = bornes[rang + 1]?.[1];
+    colonnes[id] = {
+      // La colonne va de son en-tête au suivant : c'est ce que le tableau dit,
+      // et l'en-tête est plus étroit que la colonne qu'il coiffe.
+      left: rang === 0 ? Math.min(borne.left, 0) : borne.left - 8,
+      right: suivante ? suivante.left - 8 : Number.POSITIVE_INFINITY
+    };
+  });
+
+  return { ...colonnes, headerY: Math.max(...bornes.map(([, borne]) => borne.y)) };
+}
+
+function dansColonne(item, colonne) {
+  if (!colonne) return false;
+  const centre = item.x + (item.width || 0) / 2;
+  return centre >= colonne.left && centre <= colonne.right;
+}
+
+/**
+ * La ligne du tableau à laquelle appartient une image.
+ *
+ * Trois lectures, et la troisième est la plus importante :
+ *
+ *  - **la rubrique** est le texte le plus proche au-dessus de l'image, dans sa
+ *    colonne : « Principe d'étanchéité » ;
+ *  - **l'avis** est la lettre à la hauteur de l'image, dans la colonne « Avis »
+ *    — elle y est centrée verticalement sur la ligne ;
+ *  - **le numéro** est ce que porte la colonne « N° » à la même hauteur, et il
+ *    est **souvent absent**. Une ligne favorable n'en a pas. En chercher un
+ *    ailleurs — sur une autre ligne, sur une autre page — fabriquerait un avis
+ *    qui n'existe pas, ce qui est précisément le défaut qu'on corrige.
+ *
+ * @returns {{rubric: string, letter: string, number: string, observation: string}}
+ */
+export function describeRowOf(items = [], rect = null, columns = null) {
+  const vide = { rubric: "", letter: "", number: "", observation: "" };
+  if (!rect || !columns) return vide;
+
+  const lignes = Array.isArray(items) ? items : [];
+  const haut = rect.y + rect.height;
+  const bas = rect.y;
+
+  const auDessus = lignes
+    .filter((item) => dansColonne(item, columns.elements))
+    .filter((item) => item.y >= haut - 2)
+    .filter((item) => !columns.headerY || item.y < columns.headerY - 2)
+    .sort((gauche, droite) => gauche.y - droite.y);
+
+  // La ligne commence à sa rubrique, pas au haut de l'image : les observations
+  // sont écrites en face du titre, plus haut que la photo. Fenêtrer sur la
+  // seule image en perdrait la première phrase.
+  const plafond = auDessus[0] ? auDessus[0].y + (auDessus[0].height || 0) + 2 : haut + 4;
+
+  const aHauteur = (colonne) =>
+    lignes
+      .filter((item) => dansColonne(item, colonne))
+      .filter((item) => item.y >= bas - 4 && item.y <= plafond)
+      .sort((gauche, droite) => droite.y - gauche.y);
+
+  const lettre = aHauteur(columns.avis).map((item) => String(item.text ?? "").trim())
+    .find((texte) => /^[A-Z]$/.test(texte)) ?? "";
+
+  const numero = aHauteur(columns.numero).map((item) => String(item.text ?? "").trim())
+    .find((texte) => /^[0-9][0-9A-Za-z.\-/]*$/.test(texte)) ?? "";
+
+  return {
+    rubric: String(auDessus[0]?.text ?? "").trim(),
+    letter: lettre,
+    number: numero,
+    // De haut en bas, c'est-à-dire par `y` décroissant : le PDF compte ses
+    // ordonnées depuis le bas de la page, et lire dans l'autre sens rendrait la
+    // phrase à l'envers.
+    observation: aHauteur(columns.observations)
+      .map((item) => String(item.text ?? "").trim())
+      .filter(Boolean)
+      .join(" ")
+  };
 }
 
 /**
@@ -286,17 +316,23 @@ export function inkRatio(image = {}, { tolerance = 12, step = 4 } = {}) {
 }
 
 /**
- * Cette bande porte-t-elle une figure ?
+ * Cette image porte-t-elle quelque chose ?
  *
- * C'est ici que la géométrie cesse de suffire. Une bande blanche est un blanc :
- * l'afficher comme une figure ferait douter de tout le reste de l'écran.
+ * C'est ici que la géométrie cesse de suffire : une image posée peut être un
+ * cadre blanc ou un séparateur, et l'afficher comme une figure ferait douter du
+ * reste de l'écran.
+ *
+ * **Il n'y a pas de plafond.** Une première version en avait un — « au-delà,
+ * c'est un aplat » — et il écartait quatre photographies sur cinq d'un rapport
+ * réel : une photo couvre à peu près tous ses pixels, c'est ce qu'est une
+ * photo. Le plafond avait un sens quand on découpait une bande de page au
+ * jugé ; il n'en a plus depuis qu'on ne retient que des images posées.
  */
 export function isFigure(ratio, options = {}) {
   const min = Number(options.minInkRatio ?? FIGURE.MIN_INK_RATIO);
-  const max = Number(options.maxInkRatio ?? FIGURE.MAX_INK_RATIO);
   const valeur = Number(ratio);
   if (!Number.isFinite(valeur)) return false;
-  return valeur >= min && valeur <= max;
+  return valeur >= min;
 }
 
 /**
