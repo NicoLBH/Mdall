@@ -36,6 +36,7 @@ import {
   summarizeMemory
 } from "../services/project-memory.js";
 import { normalizePaginationState, paginateItems, renderPaginationControls } from "./ui/pagination.js";
+import { bindGhActionButtons, renderGhActionButton } from "./ui/gh-split-button.js";
 
 const view = {
   loading: true,
@@ -302,6 +303,72 @@ export function renderMemoryDetail(assertions, cible = {}) {
   `;
 }
 
+/**
+ * Le bouton d'export, sur la ligne du titre.
+ *
+ * Le même qu'en tête d'une proposition, et volontairement : les deux fichiers
+ * se comparent, et deux boutons dessinés différemment feraient croire à deux
+ * exports de natures différentes.
+ *
+ * Il reste distinct de « Copier le dossier de contexte », qui met la mémoire en
+ * prose dans le presse-papier pour la coller dans une conversation. Ici on
+ * écrit un fichier structuré, qu'on ouvre dans un tableur ou qu'on relit.
+ */
+function renderExportButton(resume) {
+  return renderGhActionButton({
+    id: "memoryExport",
+    label: "Exporter",
+    icon: svgIcon("download", { className: "octicon" }),
+    size: "sm",
+    mainActionMode: "first-item",
+    disabled: resume.total === 0 || view.busy,
+    items: [
+      { action: "export:json", label: "Exporter en JSON" },
+      { action: "export:csv", label: "Exporter en CSV" }
+    ]
+  });
+}
+
+/** L'export de la mémoire : ce que la liste tient, écrit dans un fichier. */
+function bindExportButton(root) {
+  bindGhActionButtons();
+
+  const action = root.querySelector('[data-action-id="memoryExport"]');
+  if (!action) return;
+
+  action.addEventListener("ghaction:action", async (event) => {
+    const quoi = String(event.detail?.action || "");
+    if (!quoi.startsWith("export:")) return;
+
+    const [{ buildMemoryExport, memoryExportCsv, memoryExportFilename }, telechargement] = await Promise.all([
+      import("../services/project-memory-export.js"),
+      import("../utils/download-file.js")
+    ]);
+
+    // Tout est exporté, pas seulement la page affichée ni le filtre en cours :
+    // un export partiel se comparerait mal, et rien à l'écran ne dirait qu'il
+    // l'était.
+    const exporte = buildMemoryExport({
+      project: { id: view.projectId, ...(store.projectForm ?? {}) },
+      assertions: view.assertions,
+      generatedAt: new Date().toISOString()
+    });
+
+    if (quoi === "export:csv") {
+      telechargement.downloadCsvFile({
+        filename: memoryExportFilename(exporte, "csv"),
+        text: memoryExportCsv(exporte)
+      });
+      return;
+    }
+
+    telechargement.downloadJsonFile({
+      filename: memoryExportFilename(exporte, "json"),
+      data: exporte
+    });
+  });
+}
+
 function renderContent(root) {
   if (view.loading) {
     root.innerHTML = `
@@ -362,6 +429,7 @@ function renderContent(root) {
             </p>
           </div>
           <div class="memory-head__actions">
+            ${renderExportButton(resume)}
             <button type="button" class="gh-btn gh-btn--sm" data-memory-export ${
               resume.total === 0 || view.busy ? "disabled" : ""
             }>${svgIcon("copy", { className: "octicon" })} Copier le dossier de contexte</button>
@@ -384,6 +452,8 @@ function renderContent(root) {
 }
 
 function bind(root) {
+  bindExportButton(root);
+
   const recherche = root.querySelector("[data-memory-search]");
   if (recherche) {
     recherche.addEventListener("input", (event) => {

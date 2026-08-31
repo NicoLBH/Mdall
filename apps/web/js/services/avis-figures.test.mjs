@@ -8,6 +8,7 @@ import {
   isFigure,
   isFigureRect,
   multiplyMatrices,
+  orphanLetterOf,
   readTableColumns,
   rectFromImageMatrix,
   toCanvasRect,
@@ -115,7 +116,8 @@ test("sans colonnes, on ne décrit aucune ligne", () => {
     rubric: "",
     letter: "",
     number: "",
-    observation: ""
+    observation: "",
+    letterCarriedOver: false
   });
 });
 
@@ -203,4 +205,108 @@ test("une cellule d'avis vide reste vide", () => {
 
   const seconde = describeRowOf(items, { x: 37, y: 366, width: 231, height: 174 }, readTableColumns(items));
   assert.equal(seconde.letter, "F");
+});
+
+/* ── Une ligne coupée entre deux pages ────────────────────────────────────
+   Relevé sur un rapport réel : la page 1 se termine par un « F » seul, sous
+   son dernier intitulé ; l'intitulé de cette ligne-là, son observation et sa
+   photo sont en page 2. On lisait « avis non indiqué » pour une ligne qui
+   portait bien un F. */
+
+const PAGE_UN = [
+  { text: "Éléments examinés", x: 106, y: 772, width: 95, height: 10 },
+  { text: "Avis*", x: 274, y: 772, width: 25, height: 10 },
+  { text: "Observations et commentaires", x: 334, y: 772, width: 149, height: 10 },
+  { text: "N°", x: 534, y: 772, width: 11, height: 10 },
+
+  { text: "Principe d'étanchéité", x: 37, y: 700, width: 94, height: 10 },
+  { text: "F", x: 281, y: 640, width: 6, height: 10 },
+
+  // La lettre restée seule : sous le dernier intitulé de la page.
+  { text: "F", x: 281, y: 62, width: 6, height: 10 }
+];
+
+const PAGE_DEUX = [
+  { text: "Éléments examinés", x: 106, y: 772, width: 95, height: 10 },
+  { text: "Avis*", x: 274, y: 772, width: 25, height: 10 },
+  { text: "Observations et commentaires", x: 334, y: 772, width: 149, height: 10 },
+  { text: "N°", x: 534, y: 772, width: 11, height: 10 },
+
+  { text: "Étaiement des planchers", x: 37, y: 756, width: 110, height: 10 }
+];
+
+const PHOTO_PAGE_DEUX = { x: 37, y: 574, width: 231, height: 174 };
+
+test("une lettre restée sous le dernier intitulé d'une page est orpheline", () => {
+  assert.equal(orphanLetterOf(PAGE_UN, readTableColumns(PAGE_UN)), "F");
+});
+
+test("une page qui se termine proprement n'a pas de lettre orpheline", () => {
+  assert.equal(orphanLetterOf(ITEMS, readTableColumns(ITEMS)), "");
+});
+
+test("une page sans colonnes lisibles n'a rien d'orphelin à donner", () => {
+  assert.equal(orphanLetterOf(PAGE_UN, null), "");
+});
+
+test("la ligne coupée récupère l'évaluation restée en bas de la page d'avant", () => {
+  const ligne = describeRowOf(PAGE_DEUX, PHOTO_PAGE_DEUX, readTableColumns(PAGE_DEUX), {
+    previous: { items: PAGE_UN, columns: readTableColumns(PAGE_UN) }
+  });
+
+  assert.equal(ligne.rubric, "Étaiement des planchers");
+  assert.equal(ligne.letter, "F");
+  assert.equal(ligne.letterCarriedOver, true, "l'écran doit pouvoir dire d'où vient cette lettre");
+});
+
+test("sans page précédente, la ligne coupée reste sans évaluation plutôt que d'en inventer une", () => {
+  const ligne = describeRowOf(PAGE_DEUX, PHOTO_PAGE_DEUX, readTableColumns(PAGE_DEUX));
+
+  assert.equal(ligne.letter, "");
+  assert.equal(ligne.letterCarriedOver, false);
+});
+
+test("une ligne de milieu de page n'emprunte rien : elle n'ouvre pas sa page", () => {
+  // La photo basse a une ligne d'avis au-dessus d'elle sur sa propre page : ce
+  // n'est pas une ligne coupée, et lui donner la lettre d'une autre page serait
+  // un faux.
+  const ligne = describeRowOf([...ITEMS], PHOTO_BASSE, readTableColumns(ITEMS), {
+    previous: { items: PAGE_UN, columns: readTableColumns(PAGE_UN) }
+  });
+
+  assert.equal(ligne.letter, "D", "la ligne lit sa propre lettre");
+  assert.equal(ligne.letterCarriedOver, false);
+});
+
+test("une ligne qui porte sa propre lettre ne va pas en chercher une ailleurs", () => {
+  const ligne = describeRowOf(ITEMS, PHOTO_HAUTE, readTableColumns(ITEMS), {
+    previous: { items: PAGE_UN, columns: readTableColumns(PAGE_UN) }
+  });
+
+  assert.equal(ligne.letter, "F");
+  assert.equal(ligne.letterCarriedOver, false);
+});
+
+test("une page qui ne porte qu'une lettre, sans aucun intitulé, la rend orpheline", () => {
+  const page = [
+    { text: "Éléments examinés", x: 106, y: 772, width: 95, height: 10 },
+    { text: "Avis*", x: 274, y: 772, width: 25, height: 10 },
+    { text: "S", x: 281, y: 300, width: 6, height: 10 }
+  ];
+
+  assert.equal(orphanLetterOf(page, readTableColumns(page)), "S");
+});
+
+test("un intitulé sur deux lignes ne compte que pour une ligne du tableau", () => {
+  // Sans quoi l'appariement croirait deux lignes pour un seul avis, et
+  // déclarerait orpheline une lettre qui ne l'est pas.
+  const page = [
+    { text: "Éléments examinés", x: 106, y: 772, width: 95, height: 10 },
+    { text: "Avis*", x: 274, y: 772, width: 25, height: 10 },
+    { text: "Étanchéité de toiture - élément", x: 37, y: 700, width: 140, height: 10 },
+    { text: "porteur / béton", x: 37, y: 688, width: 70, height: 10 },
+    { text: "F", x: 281, y: 620, width: 6, height: 10 }
+  ];
+
+  assert.equal(orphanLetterOf(page, readTableColumns(page)), "");
 });
