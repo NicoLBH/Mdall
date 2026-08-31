@@ -28,11 +28,14 @@ import { clearProjectActiveScrollSource, setProjectViewHeader } from "./project-
 import { PROJECT_TAB_RESELECTED_EVENT } from "./project-header.js";
 import {
   MEMORY,
+  assertionHistory,
   buildContextExport,
+  describeAssertionFacts,
   kindLabel,
   searchAssertions,
   summarizeMemory
 } from "../services/project-memory.js";
+import { normalizePaginationState, paginateItems, renderPaginationControls } from "./ui/pagination.js";
 
 const view = {
   loading: true,
@@ -44,7 +47,10 @@ const view = {
   status: "",
   includeSuperseded: false,
   notice: "",
-  busy: false
+  busy: false,
+  /** L'affirmation dont on lit l'histoire : `{kind, subjectKey}` ou `null`. */
+  open: null,
+  page: 1
 };
 
 let mountedRoot = null;
@@ -62,6 +68,19 @@ function nameOf(userId) {
 }
 
 /** Les compteurs : des comptes, jamais des estimations. */
+/** Ce qu'une page porte. Au-delà, on ne lit plus, on fait défiler. */
+const PAGE_SIZE = 25;
+
+const KIND_ICON = {
+  avis: "checklist",
+  attachment: "cross-reference",
+  document: "file"
+};
+
+function kindIcon(kind) {
+  return KIND_ICON[String(kind ?? "")] ?? "dot-fill-pending";
+}
+
 function renderCounts(resume) {
   const cellule = (valeur, mot) => `<span class="memory-counts__item"><b>${valeur}</b> ${escapeHtml(mot)}</span>`;
 
@@ -110,8 +129,14 @@ function renderFilters() {
 /**
  * Une affirmation, avec de quoi en répondre.
  *
- * La provenance n'est pas un ornement : une mémoire sans provenance est une
- * rumeur. La proposition qui l'a versée se cite comme partout ailleurs — `#P4`.
+ * Trois choses se lisent sans cliquer : **de quoi il s'agit** (l'icône de la
+ * nature et le titre), **ce que le projet en fait** (une pastille nommée —
+ * « Assumée », « Écartée » —, parce qu'une coche verte demande d'être devinée),
+ * et **d'où cela vient** (la date, la personne, la proposition citée `#P4`).
+ *
+ * Le titre est un lien : ce qu'une ligne ne peut pas porter — l'extrait qui la
+ * fonde, les états successifs, la suite des décisions — se lit derrière lui.
+ * Une mémoire réduite à des titres ne se vérifie pas.
  */
 function renderAssertion(assertion) {
   const remplacee = Boolean(assertion.superseded_by);
@@ -119,17 +144,24 @@ function renderAssertion(assertion) {
 
   return `
     <li class="memory-row${remplacee ? " memory-row--superseded" : ""}">
-      <span class="memory-row__mark memory-row__mark--${ecartee ? "rejected" : "assumed"}">
-        ${svgIcon(ecartee ? "x-circle-fill" : "check-circle-fill", { className: "octicon" })}
+      <span class="memory-row__mark" title="${escapeHtml(kindLabel(assertion.kind))}">
+        ${svgIcon(kindIcon(assertion.kind), { className: "octicon" })}
       </span>
       <div class="memory-row__body">
         <div class="memory-row__head">
-          <span class="memory-row__key">${escapeHtml(assertion.subject_key)}</span>
-          <span class="memory-row__statement">${escapeHtml(assertion.statement)}</span>
+          <a
+            href="#"
+            class="memory-row__statement"
+            data-memory-open="${escapeHtml(`${assertion.kind}|${assertion.subject_key}`)}"
+          >${escapeHtml(assertion.statement)}</a>
+          <span class="memory-pill memory-pill--${ecartee ? "rejected" : "assumed"}">
+            ${svgIcon(ecartee ? "x-circle-fill" : "check-circle-fill", { className: "octicon" })}
+            ${escapeHtml(ecartee ? "Écartée" : "Assumée")}
+          </span>
         </div>
         ${assertion.detail ? `<span class="memory-row__detail">${escapeHtml(assertion.detail)}</span>` : ""}
         <span class="memory-row__meta">
-          ${escapeHtml(kindLabel(assertion.kind))}
+          ${escapeHtml(kindLabel(assertion.kind))} ${escapeHtml(assertion.subject_key)}
           · ${escapeHtml(ecartee ? "écartée" : "assumée")} le ${escapeHtml(formatDate(assertion.decided_at))}
           par ${escapeHtml(nameOf(assertion.decided_by))}
           ${assertion.proposition_number ? `· <a href="#" class="md-proposition-link" data-memory-proposition="${escapeHtml(assertion.proposition_id ?? "")}">#P${Number(assertion.proposition_number)}</a>` : ""}
@@ -148,7 +180,7 @@ function renderAssertion(assertion) {
  * une page d'essai qui recopierait son HTML finirait par mentir sur ce qu'elle
  * montre.
  */
-export function renderMemoryList(lignes) {
+export function renderMemoryList(lignes, page = 1) {
   if (lignes.length === 0) {
     return `
       <div class="propositions-empty">
@@ -158,10 +190,117 @@ export function renderMemoryList(lignes) {
     `;
   }
 
-  return `<ul class="memory-list">${lignes.map(renderAssertion).join("")}</ul>`;
+  // Une mémoire grossit à chaque fusion ; une page, non. Cinq cents lignes
+  // d'un coup ne se lisent pas — et le navigateur les peine.
+  const pagination = paginateItems(lignes, { pageSize: PAGE_SIZE, currentPage: page });
+
+  return `
+    <div class="memory-results">
+      <ul class="memory-list">${pagination.items.map(renderAssertion).join("")}</ul>
+      ${renderPaginationControls(pagination, { entity: "memory" })}
+    </div>
+  `;
 }
 
 const renderList = renderMemoryList;
+
+/**
+ * Le détail d'une affirmation : son histoire, et ce sur quoi elle s'appuie.
+ *
+ * C'est ici que la mémoire cesse d'être une liste. « A12 » a été émis, puis
+ * levé, puis rouvert : trois affirmations d'une même chose, et c'est la suite
+ * qu'on vient lire. Chaque étape porte sa date, sa proposition et ce qui la
+ * fonde — l'extrait du rapport, l'état d'avant, l'état d'après.
+ *
+ * Ce qui vaut aujourd'hui est en tête, en clair. Le reste est du passé, et se
+ * lit comme tel.
+ *
+ * Exportée comme la liste : sans session, l'onglet est inatteignable, et une
+ * page d'essai qui recopierait son HTML finirait par mentir sur ce qu'elle
+ * montre.
+ */
+export function renderMemoryDetail(assertions, cible = {}) {
+  const suite = assertionHistory(assertions, cible);
+  if (suite.length === 0) {
+    return `
+      <div class="propositions-empty">
+        <b>Cette affirmation n'est plus dans la mémoire</b>
+        <p>Elle a peut-être été filtrée, ou la mémoire a été relue depuis.</p>
+      </div>
+    `;
+  }
+
+  const courante = suite.find((entry) => !entry.superseded_by) ?? suite[suite.length - 1];
+  const ecartee = courante.status === MEMORY.REJECTED;
+  const faits = describeAssertionFacts(courante);
+
+  const etape = (assertion, rang) => {
+    const propres = describeAssertionFacts(assertion);
+    const perimee = Boolean(assertion.superseded_by);
+
+    return `
+      <li class="memory-step${perimee ? " memory-step--past" : ""}">
+        <span class="memory-step__mark">${svgIcon(
+          assertion.status === MEMORY.REJECTED ? "x-circle-fill" : "check-circle-fill",
+          { className: "octicon" }
+        )}</span>
+        <div class="memory-step__body">
+          <b>${escapeHtml(assertion.statement)}</b>
+          <span class="memory-step__meta">
+            ${escapeHtml(assertion.status === MEMORY.REJECTED ? "écartée" : "assumée")}
+            le ${escapeHtml(formatDate(assertion.decided_at))} par ${escapeHtml(nameOf(assertion.decided_by))}
+            ${assertion.proposition_number ? `· <a href="#" class="md-proposition-link" data-memory-proposition="${escapeHtml(assertion.proposition_id ?? "")}">#P${Number(assertion.proposition_number)}</a>` : ""}
+            ${perimee ? `· remplacée le ${escapeHtml(formatDate(assertion.superseded_at))}` : "· en vigueur"}
+          </span>
+          ${
+            propres.length > 0
+              ? `<dl class="memory-facts">${propres
+                  .map(
+                    ([label, valeur]) =>
+                      `<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(valeur)}</dd>`
+                  )
+                  .join("")}</dl>`
+              : ""
+          }
+        </div>
+      </li>
+    `;
+  };
+
+  return `
+    <section class="memory-detail">
+      <header class="memory-detail__head">
+        <span class="memory-detail__mark">${svgIcon(kindIcon(courante.kind), { className: "octicon" })}</span>
+        <div>
+          <h2 class="memory-detail__title">${escapeHtml(courante.statement)}</h2>
+          <p class="memory-detail__lead">
+            ${escapeHtml(kindLabel(courante.kind))} ${escapeHtml(courante.subject_key)} ·
+            ${escapeHtml(suite.length > 1 ? `${suite.length} états successifs` : "un seul état")} ·
+            ${escapeHtml(ecartee ? "écartée aujourd'hui" : "assumée aujourd'hui")}
+          </p>
+        </div>
+        <span class="memory-pill memory-pill--${ecartee ? "rejected" : "assumed"}">
+          ${svgIcon(ecartee ? "x-circle-fill" : "check-circle-fill", { className: "octicon" })}
+          ${escapeHtml(ecartee ? "Écartée" : "Assumée")}
+        </span>
+      </header>
+
+      ${
+        faits.length > 0
+          ? `<div class="memory-detail__facts"><h3 class="memory-detail__section">Ce sur quoi elle s'appuie</h3>
+              <dl class="memory-facts">${faits
+                .map(([label, valeur]) => `<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(valeur)}</dd>`)
+                .join("")}</dl></div>`
+          : ""
+      }
+
+      <h3 class="memory-detail__section">Son histoire</h3>
+      <ol class="memory-steps">${suite.map(etape).join("")}</ol>
+
+      <p class="memory-detail__back">Re-cliquez l'onglet « Mémoire » pour revenir à la liste.</p>
+    </section>
+  `;
+}
 
 function renderContent(root) {
   if (view.loading) {
@@ -189,6 +328,16 @@ function renderContent(root) {
         </div>
       </section>
     `;
+    return;
+  }
+
+  if (view.open) {
+    root.innerHTML = `
+      <section class="project-simple-page project-simple-page--memory">
+        <div class="propositions-shell">${renderMemoryDetail(view.assertions, view.open)}</div>
+      </section>
+    `;
+    bind(root);
     return;
   }
 
@@ -226,7 +375,7 @@ function renderContent(root) {
 
         ${renderCounts(resume)}
         ${renderFilters()}
-        ${renderList(lignes)}
+        ${renderList(lignes, view.page)}
       </div>
     </section>
   `;
@@ -241,34 +390,53 @@ function bind(root) {
       view.query = event.target.value;
       // On redessine la liste seule : redessiner la page ferait perdre le
       // curseur à chaque touche.
-      const hote = root.querySelector(".memory-list, .propositions-empty:not(.propositions-empty--warn)");
+      // Chercher ramène à la première page : rester en page 4 d'un résultat qui
+      // en compte deux montrerait un vide qu'on prendrait pour une absence.
+      view.page = 1;
+      const hote = root.querySelector(".memory-results, .propositions-empty:not(.propositions-empty--warn)");
       const lignes = searchAssertions(view.assertions ?? [], {
         query: view.query,
         kind: view.kind,
         status: view.status,
         includeSuperseded: view.includeSuperseded
       });
-      if (hote) hote.outerHTML = renderList(lignes);
+      if (hote) hote.outerHTML = renderList(lignes, view.page);
+      bindPagination(root);
     });
   }
 
   root.querySelector("[data-memory-kind]")?.addEventListener("change", (event) => {
     view.kind = event.target.value;
+    view.page = 1;
     renderContent(root);
   });
 
   root.querySelector("[data-memory-status]")?.addEventListener("change", (event) => {
     view.status = event.target.value;
+    view.page = 1;
     renderContent(root);
   });
 
   root.querySelector("[data-memory-superseded]")?.addEventListener("change", (event) => {
     view.includeSuperseded = event.target.checked;
+    view.page = 1;
     renderContent(root);
   });
 
   root.querySelector("[data-memory-export]")?.addEventListener("click", () => copyContext(root));
   root.querySelector("[data-memory-backfill]")?.addEventListener("click", () => backfill(root));
+
+  bindPagination(root);
+
+  for (const lien of root.querySelectorAll("[data-memory-open]")) {
+    lien.addEventListener("click", (event) => {
+      event.preventDefault();
+      const [kind, subjectKey] = String(lien.getAttribute("data-memory-open") || "").split("|");
+      if (!kind || !subjectKey) return;
+      view.open = { kind, subjectKey };
+      renderContent(root);
+    });
+  }
 
   for (const lien of root.querySelectorAll("[data-memory-proposition]")) {
     lien.addEventListener("click", (event) => {
@@ -276,6 +444,17 @@ function bind(root) {
       store.pendingPropositionId = lien.getAttribute("data-memory-proposition") || "";
       const projet = String(location.hash || "").split("/")[1] || "";
       location.hash = `#project/${projet}/propositions`;
+    });
+  }
+}
+
+/** Les pages. Le même mécanisme que le journal des actions, aux mêmes classes. */
+function bindPagination(root) {
+  for (const bouton of root.querySelectorAll('[data-pagination-entity="memory"][data-pagination-page]')) {
+    bouton.addEventListener("click", (event) => {
+      event.preventDefault();
+      view.page = Math.max(1, Number.parseInt(bouton.getAttribute("data-pagination-page") || "1", 10) || 1);
+      renderContent(root);
     });
   }
 }
@@ -377,6 +556,8 @@ function bindTabReset() {
     view.status = "";
     view.includeSuperseded = false;
     view.notice = "";
+    view.open = null;
+    view.page = 1;
     renderContent(mountedRoot);
   });
 }
@@ -392,6 +573,8 @@ export function renderProjectMemory(root) {
 
   view.loading = true;
   view.notice = "";
+  view.open = null;
+  view.page = 1;
   renderContent(root);
 
   (async () => {
