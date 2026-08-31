@@ -755,23 +755,62 @@ function rerenderSubjectsPanelsWhenConnected(root, remainingAttempts = 12) {
  */
 let propositionRefs = { projectId: "", entries: [] };
 
-function ensurePropositionRefsLoaded() {
-  const projectId = String(store.currentProjectId || "");
-  if (!projectId || propositionRefs.projectId === projectId) return;
+let propositionRefsLoading = false;
 
-  propositionRefs = { projectId, entries: [] };
-  import("../services/propositions-supabase.js")
-    .then(({ listProjectRefs }) => listProjectRefs(projectId))
-    .then((entries) => {
-      const propositions = (entries ?? []).filter((entry) => entry.kind === REF.PROPOSITION);
-      if (propositions.length === 0) return;
-      propositionRefs = { projectId, entries: propositions };
+/**
+ * Charge les propositions citables du projet ouvert.
+ *
+ * **Deux identifiants, et il faut le bon.** La route porte celui du frontal —
+ * `aurora-campus` — tandis que la base classe tout par un UUID. Passer le
+ * premier à une requête qui filtre le second ne rend pas une liste vide : il
+ * rend une erreur, que le service transforme en liste vide, ce qui a
+ * exactement l'apparence d'un projet sans proposition. C'est ainsi que le menu
+ * `#` proposait les sujets et jamais les propositions, sans rien signaler.
+ *
+ * Deux règles en découlent :
+ *
+ *  - on résout l'identifiant de base avant de demander quoi que ce soit ;
+ *  - **on ne marque chargé que ce qui a répondu**. Marquer avant l'appel, comme
+ *    je l'avais fait, transforme le moindre échec en état définitif : plus
+ *    aucune tentative, et rien pour le dire.
+ */
+function ensurePropositionRefsLoaded() {
+  const routeId = String(store.currentProjectId || "");
+  if (!routeId || propositionRefsLoading || propositionRefs.projectId === routeId) return;
+
+  propositionRefsLoading = true;
+  (async () => {
+    try {
+      const [{ resolveCurrentBackendProjectId }, { listProjectRefs }] = await Promise.all([
+        import("../services/project-supabase-sync.js"),
+        import("../services/propositions-supabase.js")
+      ]);
+
+      const backendProjectId = await resolveCurrentBackendProjectId();
+      if (!backendProjectId) return;
+
+      const entries = await listProjectRefs(backendProjectId);
+      // `null` veut dire « on n'a pas pu demander », et non « il n'y en a
+      // pas » : on laisse alors le projet non chargé, pour réessayer.
+      if (!entries) return;
+
+      propositionRefs = {
+        projectId: routeId,
+        entries: entries.filter((entry) => entry.kind === REF.PROPOSITION)
+      };
+
       // Les citations écrites avant l'arrivée de la liste deviennent des liens :
       // sans ce second passage, elles resteraient du texte jusqu'au prochain
       // geste de l'utilisateur, sans qu'il comprenne pourquoi.
-      if (subjectsCurrentRoot) rerenderSubjectsPanelsWhenConnected(subjectsCurrentRoot);
-    })
-    .catch(() => {});
+      if (propositionRefs.entries.length > 0 && subjectsCurrentRoot) {
+        rerenderSubjectsPanelsWhenConnected(subjectsCurrentRoot);
+      }
+    } catch {
+      // Rien n'est marqué chargé : la prochaine ouverture de l'onglet réessaiera.
+    } finally {
+      propositionRefsLoading = false;
+    }
+  })();
 }
 
 function mdToHtml(text, options = {}) {

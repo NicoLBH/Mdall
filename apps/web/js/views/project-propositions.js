@@ -2379,7 +2379,9 @@ export function renderProjectPropositions(root) {
       // De quoi citer, chargé une fois pour l'onglet : les sujets comme les
       // propositions, sans dépendre de ce qu'un autre écran aurait laissé.
       const { listProjectRefs } = await import("../services/propositions-supabase.js");
-      view.refs = projectId ? await listProjectRefs(projectId) : [];
+      // `null` dit qu'on n'a pas pu demander. Ici, garder ce qu'on avait vaut
+      // mieux que de repartir de rien : une citation déjà écrite reste un lien.
+      view.refs = (projectId ? await listProjectRefs(projectId) : []) ?? view.refs ?? [];
 
       view.unreachable = rows === null;
       view.propositions = rows ?? [];
