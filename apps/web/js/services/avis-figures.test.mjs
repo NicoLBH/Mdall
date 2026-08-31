@@ -310,3 +310,48 @@ test("un intitulé sur deux lignes ne compte que pour une ligne du tableau", () 
 
   assert.equal(orphanLetterOf(page, readTableColumns(page)), "");
 });
+
+/* ── La ligne va de sa rubrique à la suivante ─────────────────────────────
+   Relevé sur la fiche 13860/0922/0068, page 2 : trois rubriques à y=759, 548
+   et 337, trois évaluations à y=451, 240 et 125. L'évaluation est donc imprimée
+   **sous** la photo de sa ligne. La fenêtre de lecture n'allait que de la photo
+   à sa rubrique : elle ne pouvait jamais l'atteindre, et quand elle en
+   attrapait une, c'était celle de la ligne du dessus. */
+
+const PAGE_REELLE = [
+  { text: "Éléments examinés", x: 106, y: 772, width: 95, height: 10 },
+  { text: "Avis*", x: 274, y: 772, width: 25, height: 10 },
+  { text: "Observations et commentaires", x: 334, y: 772, width: 149, height: 10 },
+  { text: "N°", x: 534, y: 772, width: 11, height: 10 },
+
+  { text: "Structure béton armé ou précontraint", x: 37, y: 759, width: 167, height: 10 },
+  { text: "F", x: 281, y: 451, width: 6, height: 10 },
+  { text: "Couverture", x: 37, y: 337, width: 60, height: 10 },
+  { text: "D", x: 281, y: 125, width: 7, height: 10 }
+];
+
+test("l'évaluation imprimée sous la photo est bien celle de sa ligne", () => {
+  const colonnes = readTableColumns(PAGE_REELLE);
+  // La photo de la première ligne, entre sa rubrique et la suivante.
+  const ligne = describeRowOf(PAGE_REELLE, { x: 37, y: 480, width: 231, height: 260 }, colonnes);
+
+  assert.equal(ligne.rubric, "Structure béton armé ou précontraint");
+  assert.equal(ligne.letter, "F");
+});
+
+test("une ligne ne prend pas l'évaluation de sa voisine", () => {
+  const colonnes = readTableColumns(PAGE_REELLE);
+  const seconde = describeRowOf(PAGE_REELLE, { x: 37, y: 160, width: 231, height: 160 }, colonnes);
+
+  assert.equal(seconde.rubric, "Couverture");
+  assert.equal(seconde.letter, "D", "le F de la ligne du dessus n'a rien à faire ici");
+});
+
+test("une ligne sans évaluation dans sa bande n'en emprunte pas à la ligne voisine", () => {
+  const page = PAGE_REELLE.filter((item) => !(item.text === "F" && item.y === 451));
+  const colonnes = readTableColumns(page);
+  const ligne = describeRowOf(page, { x: 37, y: 480, width: 231, height: 260 }, colonnes);
+
+  assert.equal(ligne.rubric, "Structure béton armé ou précontraint");
+  assert.equal(ligne.letter, "", "mieux vaut une évaluation absente qu'une évaluation fausse");
+});

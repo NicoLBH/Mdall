@@ -27,8 +27,28 @@ import { ITEM } from "./proposition-state.js";
 export const STATUS_LABELS = {
   OPEN: "Ouvert",
   RESOLVED: "Levé",
-  NO_NEWS: "Sans nouvelles"
+  NO_NEWS: "Sans nouvelles",
+  /**
+   * Relevé sur une fiche, sans que sa légende ait été lue.
+   *
+   * Ni ouvert ni levé : le rapport constate cette ligne, avec cette lettre.
+   * Traduire « F » en « levé » serait décider à la place du bureau de contrôle.
+   */
+  REPORTED: "Constaté"
 };
+
+/**
+ * L'identité d'un avis : ce par quoi on le retrouvera.
+ *
+ * Le numéro que le bureau de contrôle attribue, quand il est imprimé. Mais la
+ * plupart des lignes d'une fiche n'en portent pas, et les avis qu'on en tire
+ * s'identifient autrement — par ce que le document montre. `key` porte alors
+ * cette identité-là, et le numéro reste ce qu'il est : une information
+ * complémentaire, pas un levier de certitude.
+ */
+export function avisKey(avis = {}) {
+  return String(avis.key ?? avis.reference ?? "").trim();
+}
 
 function statusLabel(status) {
   return STATUS_LABELS[String(status ?? "")] ?? String(status ?? "");
@@ -103,27 +123,35 @@ export function attachmentItems(assessments = []) {
  * l'identité métier de l'avis, et la seule qui survive à un recalcul complet.
  */
 export function avisItems(diff = {}) {
+  // La provenance voyage avec l'affirmation : un avis relevé sur une fiche se
+  // vérifie en ouvrant sa page, et une décision qu'on ne peut pas remonter à
+  // son document ne se conteste plus.
+  const provenance = (avis) => ({
+    reference: avis.reference ?? null,
+    title: avis.title ?? null,
+    evidence: avis.evidence ?? null,
+    sourceId: avis.sourceId ?? null,
+    page: avis.page ?? null,
+    figureId: avis.figureId ?? null
+  });
+
   const nouveaux = (diff.added ?? []).map((avis) =>
-    item(ITEM_TYPE.AVIS, avis.reference, {
+    item(ITEM_TYPE.AVIS, avisKey(avis), {
       change: "added",
-      reference: avis.reference,
-      title: avis.title ?? null,
+      ...provenance(avis),
       status: avis.status ?? null,
-      opinion: avis.opinion_raw ?? null,
-      evidence: avis.evidence ?? null
+      opinion: avis.opinion_raw ?? null
     })
   );
 
   const changes = (diff.changed ?? []).map((avis) =>
-    item(ITEM_TYPE.AVIS, avis.reference, {
+    item(ITEM_TYPE.AVIS, avisKey(avis), {
       change: "changed",
-      reference: avis.reference,
-      title: avis.title ?? null,
+      ...provenance(avis),
       status: avis.status ?? null,
       previousStatus: avis.previousStatus ?? null,
       opinion: avis.opinion_raw ?? null,
-      previousOpinion: avis.previousOpinion ?? null,
-      evidence: avis.evidence ?? null
+      previousOpinion: avis.previousOpinion ?? null
     })
   );
 
@@ -149,6 +177,26 @@ function estSilence(precedent, avis) {
 }
 
 /**
+ * L'appréciation a-t-elle bougé ?
+ *
+ * **Une appréciation absente n'est pas une appréciation changée.** C'est le
+ * défaut qui rendait la revue inutilisable : sur un lot de deux fiches, le
+ * moteur ne relisait aucune lettre, et les soixante-et-onze avis que le projet
+ * connaissait passaient tous en « avis S → — ». Soixante-et-onze questions,
+ * dont pas une ne portait sur un fait : ne pas savoir avait été écrit comme
+ * savoir qu'il n'y a rien.
+ *
+ * On ne compare donc que ce qui est connu des deux côtés. Le mouvement inverse
+ * — une appréciation qui apparaît là où il n'y en avait pas — reste un
+ * changement : c'est une information gagnée, pas perdue.
+ */
+export function appreciationMoved(previousOpinion, opinion) {
+  const apres = String(opinion ?? "").trim();
+  if (apres === "") return false;
+  return apres !== String(previousOpinion ?? "").trim();
+}
+
+/**
  * Ce que les documents de la proposition changeraient aux avis du projet.
  *
  * `known` est l'état conservé — ce que le projet retient aujourd'hui.
@@ -171,8 +219,7 @@ export function diffAvis(known = [], computed = []) {
   let unchanged = 0;
 
   for (const avis of computed) {
-    const reference = String(avis.reference ?? "");
-    const precedent = avant.get(reference);
+    const precedent = avant.get(avisKey(avis));
 
     if (!precedent) {
       added.push(avis);
@@ -185,14 +232,23 @@ export function diffAvis(known = [], computed = []) {
     }
 
     const memeStatut = String(precedent.status ?? "") === String(avis.status ?? "");
-    const memeAvis = String(precedent.opinion_raw ?? "") === String(avis.opinion_raw ?? "");
+    const bouge = appreciationMoved(precedent.opinion_raw, avis.opinion_raw);
 
-    if (memeStatut && memeAvis) {
+    if (memeStatut && !bouge) {
       unchanged += 1;
       continue;
     }
+
+    // Le lot ne dit rien de l'appréciation, mais l'avis en avait une : elle se
+    // conserve. La perdre à chaque lot vidait la mémoire du projet de ce
+    // qu'elle avait mis des mois à retenir — trois cents affirmations versées,
+    // deux cent vingt-neuf déjà remplacées, pour un seul fait nouveau.
+    const conserve = !bouge && String(avis.opinion_raw ?? "").trim() === "";
+
     changed.push({
       ...avis,
+      opinion_raw: conserve ? (precedent.opinion_raw ?? null) : avis.opinion_raw ?? null,
+      opinionCarriedOver: conserve && Boolean(precedent.opinion_raw),
       previousStatus: precedent.status ?? null,
       previousOpinion: precedent.opinion_raw ?? null
     });
@@ -222,7 +278,7 @@ export function describeAvisChange(payload = {}) {
   }
 
   const statutBouge = String(previousStatus ?? "") !== String(status ?? "");
-  const avisBouge = String(previousOpinion ?? "") !== String(opinion ?? "");
+  const avisBouge = appreciationMoved(previousOpinion, opinion);
 
   const morceaux = [];
   if (statutBouge) morceaux.push(`${statusLabel(previousStatus)} → ${statusLabel(status)}`);

@@ -147,3 +147,64 @@ test("un refus d'affaire réaffirmé se dit avec le motif d'alors", () => {
   assert.match(dit.memory, /c'est l'affaire du voisin/);
   assert.equal(dit.keep, "Je maintiens : ce n'est pas ce projet");
 });
+
+/* ── Un silence ne contredit rien ─────────────────────────────────────────
+   Relevé sur un lot réel : vingt contradictions à arbitrer, toutes des
+   bascules `OPEN` ↔ `NO_NEWS`, sans qu'un document du lot ait rien dit de
+   ces avis. Un rapport d'étape ne rappelle que ce qui bouge : l'avis absent
+   bascule d'un lot à l'autre au gré du corpus lu. */
+
+const avisSilence = (key, status, opinion = null, itemStatus = ITEM.PROPOSED) => ({
+  itemType: ITEM_TYPE.AVIS,
+  itemKey: key,
+  status: itemStatus,
+  payload: { reference: key, status, opinion }
+});
+
+const decisionSur = (key, status, opinion = null, itemStatus = ITEM.ACCEPTED) => ({
+  item_type: ITEM_TYPE.AVIS,
+  item_key: key,
+  status: itemStatus,
+  decided_at: "2026-03-01T00:00:00.000Z",
+  payload: { reference: key, status, opinion }
+});
+
+test("un avis dont le lot ne parle pas ne contredit pas ce qui était assumé", () => {
+  const conflits = findMemoryConflicts([avisSilence("166", "NO_NEWS")], [decisionSur("166", "OPEN")]);
+  assert.deepEqual(conflits, [], "NO_NEWS est un silence, pas un état");
+});
+
+test("un avis assumé sans nouvelles n'est pas contredit par une lecture qui le rouvre", () => {
+  const conflits = findMemoryConflicts([avisSilence("166", "OPEN")], [decisionSur("166", "NO_NEWS")]);
+  assert.deepEqual(conflits, [], "on n'oppose pas une parole à un silence");
+});
+
+test("un refus n'est pas réaffirmé par un silence", () => {
+  const conflits = findMemoryConflicts(
+    [avisSilence("166", "NO_NEWS")],
+    [decisionSur("166", "OPEN", null, ITEM.REFUSED)]
+  );
+  assert.deepEqual(conflits, [], "rien n'est réaffirmé quand rien n'est dit");
+});
+
+test("une vraie contradiction reste une contradiction", () => {
+  const conflits = findMemoryConflicts([avisSilence("166", "RESOLVED")], [decisionSur("166", "OPEN")]);
+  assert.equal(conflits.length, 1);
+  assert.equal(conflits[0].item.itemKey, "166");
+});
+
+test("un refus réaffirmé par une lecture qui dit quelque chose reste posé", () => {
+  const conflits = findMemoryConflicts(
+    [avisSilence("166", "OPEN")],
+    [decisionSur("166", "OPEN", null, ITEM.REFUSED)]
+  );
+  assert.equal(conflits.length, 1);
+});
+
+test("le silence ne dispense que les avis : un document reste comparé", () => {
+  const conflits = findMemoryConflicts(
+    [{ itemType: ITEM_TYPE.DOCUMENT, itemKey: "doc-1", status: ITEM.PROPOSED, payload: { name: "a.pdf" } }],
+    [{ item_type: ITEM_TYPE.DOCUMENT, item_key: "doc-1", status: ITEM.REFUSED, payload: { name: "a.pdf" }, decided_at: null }]
+  );
+  assert.equal(conflits.length, 1);
+});

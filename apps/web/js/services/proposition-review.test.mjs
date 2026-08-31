@@ -5,9 +5,10 @@ import { ITEM } from "./proposition-state.js";
 import {
   ITEM_TYPE,
   applyDecisions,
-  describeAvisChange,
+  appreciationMoved,
   attachmentItems,
   avisItems,
+  describeAvisChange,
   diffAvis,
   documentItems,
   summarizeReview
@@ -231,4 +232,83 @@ test("un avis qui apparaît reste un avis qui apparaît", () => {
 
   assert.equal(diff.added.length, 1, "on ne l'a jamais vu : c'est une apparition, pas un silence");
   assert.equal(diff.silent.length, 0);
+});
+
+/* ── Une appréciation absente n'est pas une appréciation changée ──────────
+   Relevé sur un lot réel de deux fiches d'avis travaux : le moteur n'y lisait
+   aucune lettre, et les soixante-et-onze avis que le projet connaissait
+   passaient tous en « avis S → — ». Soixante-et-onze questions, dont pas une
+   ne portait sur un fait. */
+
+test("un avis dont la nouvelle lecture ne rend aucune appréciation est inchangé", () => {
+  const diff = diffAvis(
+    [{ external_reference: "166", status: "OPEN", opinion_raw: "S" }],
+    [{ reference: "166", status: "OPEN", opinion_raw: null }]
+  );
+
+  assert.equal(diff.changed.length, 0, "ne pas savoir n'est pas savoir qu'il n'y a rien");
+  assert.equal(diff.unchanged, 1);
+});
+
+test("une appréciation qui apparaît là où il n'y en avait pas est un changement", () => {
+  const diff = diffAvis(
+    [{ external_reference: "166", status: "OPEN", opinion_raw: null }],
+    [{ reference: "166", status: "OPEN", opinion_raw: "S" }]
+  );
+
+  assert.equal(diff.changed.length, 1, "une information gagnée se lit");
+});
+
+test("deux appréciations connues qui diffèrent restent un changement", () => {
+  const diff = diffAvis(
+    [{ external_reference: "166", status: "OPEN", opinion_raw: "S" }],
+    [{ reference: "166", status: "OPEN", opinion_raw: "D" }]
+  );
+
+  assert.equal(diff.changed.length, 1);
+  assert.equal(diff.changed[0].previousOpinion, "S");
+});
+
+test("un statut qui bouge reste un changement, même sans appréciation lue", () => {
+  const diff = diffAvis(
+    [{ external_reference: "166", status: "OPEN", opinion_raw: "S" }],
+    [{ reference: "166", status: "RESOLVED", opinion_raw: null }]
+  );
+
+  assert.equal(diff.changed.length, 1);
+  assert.equal(diff.changed[0].previousStatus, "OPEN");
+});
+
+test("l'appréciation connue se conserve quand le lot n'en dit rien", () => {
+  // Sans quoi chaque lot reversait trois cents affirmations pour en perdre
+  // l'appréciation : la mémoire du projet se vidait de ce qu'elle savait.
+  const diff = diffAvis(
+    [{ external_reference: "166", status: "OPEN", opinion_raw: "S" }],
+    [{ reference: "166", status: "RESOLVED", opinion_raw: null }]
+  );
+
+  assert.equal(diff.changed[0].opinion_raw, "S");
+  assert.equal(diff.changed[0].opinionCarriedOver, true);
+});
+
+test("l'écran ne dit plus « avis S → — »", () => {
+  const { label, detail } = describeAvisChange({
+    change: "changed",
+    status: "OPEN",
+    previousStatus: "OPEN",
+    opinion: null,
+    previousOpinion: "S"
+  });
+
+  assert.equal(label, "Appréciation modifiée", "l'étiquette reste celle du mouvement demandé");
+  assert.ok(!detail.includes("→ —"), `un tiret n'est pas une appréciation : ${detail}`);
+});
+
+test("appreciationMoved ne compare que ce qui est connu des deux côtés", () => {
+  assert.equal(appreciationMoved("S", null), false);
+  assert.equal(appreciationMoved("S", ""), false);
+  assert.equal(appreciationMoved("S", "  "), false);
+  assert.equal(appreciationMoved(null, "S"), true);
+  assert.equal(appreciationMoved("S", "D"), true);
+  assert.equal(appreciationMoved("S", "S"), false);
 });

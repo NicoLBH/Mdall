@@ -70,7 +70,13 @@ function statementOf(item = {}) {
 
   if (item.itemType === ITEM_TYPE.AVIS) {
     const titre = texte(payload.title);
-    return titre ? `Avis ${texte(payload.reference)} — ${titre}` : `Avis ${texte(payload.reference)}`;
+    const numero = texte(payload.reference);
+
+    // Un avis sans numéro se nomme par sa rubrique. « Avis  — Fondations
+    // superficielles » laissait un trou là où la plupart des fiches n'ont
+    // simplement rien imprimé, et « Avis fiche:ab12cd34 » ne désigne rien.
+    if (!numero) return titre ? `Avis — ${titre}` : `Avis relevé sur une fiche`;
+    return titre ? `Avis ${numero} — ${titre}` : `Avis ${numero}`;
   }
 
   if (item.itemType === ITEM_TYPE.ATTACHMENT) {

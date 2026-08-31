@@ -60,7 +60,17 @@ export async function analyzeProposition({
   knownMarkers = [],
   onProgress = null
 } = {}) {
-  const vide = { result: null, reports: [], unreachable: [], attachments: [], diff: { added: [], changed: [], silent: [], unchanged: 0 } };
+  // `computedAvis: null` et non `[]` : quand l'analyse n'a pas tourné, on ne
+  // sait pas quels avis les documents portent — ce n'est pas qu'ils n'en
+  // portent aucun.
+  const vide = {
+    result: null,
+    reports: [],
+    unreachable: [],
+    computedAvis: null,
+    attachments: [],
+    diff: { added: [], changed: [], silent: [], unchanged: 0 }
+  };
   if (!projectId || !proposition?.id) return { ...vide, error: "Aucune proposition à analyser." };
 
   // Le chronomètre. Il mesure ce que l'utilisateur attend — réseau et lecture
@@ -138,12 +148,19 @@ export async function analyzeProposition({
     error = String(cause?.message || cause || "L'analyse n'a pas abouti.");
   }
 
+  // Les avis calculés sont conservés, pas seulement leur comparaison : les
+  // lignes des fiches d'avis se lisent après (leur découpe coûte un rendu de
+  // page), et les ajouter demande de refaire le diff sur la liste entière —
+  // pas sur ce qu'on aurait pu en reconstituer.
+  const computedAvis = result ? avisWithTitles(result) : null;
+
   return {
     result,
     reports,
     unreachable,
+    computedAvis,
     attachments: groupAttachments(attachments),
-    diff: result ? diffAvis(knownAvis, avisWithTitles(result)) : vide.diff,
+    diff: computedAvis ? diffAvis(knownAvis, computedAvis) : vide.diff,
     // Ce que chaque phase a réellement pris. L'appelant y ajoutera l'écriture,
     // qu'il est le seul à pouvoir mesurer.
     steps,

@@ -65,8 +65,10 @@ import {
   attachmentItems,
   avisItems,
   describeAvisChange,
+  diffAvis,
   documentItems
 } from "../services/proposition-review.js";
+import { avisFromFigures, mergeAvis } from "../services/avis-from-figures.js";
 
 /** Ce que l'écran tient entre deux rendus. */
 const view = {
@@ -96,7 +98,15 @@ const view = {
   /** De quoi citer dans ce projet : ses sujets et ses propositions. */
   refs: [],
   /** Le menu de citation ouvert sous le champ, s'il y en a un. */
-  refMenu: null
+  refMenu: null,
+  /**
+   * Le livrable qu'on lit, s'il y en a un.
+   *
+   * `{documentId, name, page, pageCount, bytes, loading, error, drawn}`. Les
+   * octets sont gardés le temps de la lecture : feuilleter un rapport de
+   * quarante pages ne doit pas le retélécharger quarante fois.
+   */
+  viewer: null
 };
 
 /** Le nombre d'ouvertes, pour la pastille de l'onglet. */
@@ -233,6 +243,7 @@ function renderContent(root) {
         <div class="propositions-shell overlay-chrome overlay-chrome--proposition" data-review-chrome>
           ${renderReview(root)}
         </div>
+        ${renderPdfViewer()}
       </section>
     `;
     bindReview(root);
@@ -543,15 +554,27 @@ function renderAttachmentItem(item) {
 }
 
 function renderAvisItem(item) {
-  const { reference, title, change } = item.payload;
+  const { reference, title, change, page } = item.payload;
   const mouvement = describeAvisChange(item.payload);
+
+  // Un avis sans numéro se nomme par sa rubrique : « n° fiche:ab12cd34 » ne
+  // désigne rien pour personne. La plupart des lignes d'une fiche d'avis
+  // travaux n'ont pas de numéro — c'est le cas ordinaire, pas l'exception.
+  const numero = String(reference ?? "").trim();
+  const nom = numero
+    ? `n° ${escapeHtml(numero)}${title ? ` — ${escapeHtml(title)}` : ""}`
+    : escapeHtml(title || "Ligne sans intitulé");
+
+  // Sans numéro, la page est ce qui permet d'aller voir : elle remplace la
+  // référence comme point d'entrée dans le document.
+  const situe = !numero && page ? `<span class="review-item__where">page ${escapeHtml(String(page))}</span>` : "";
 
   return renderReviewItem(
     item,
     `
       <span class="review-item__title">
         <span class="review-item__badge review-item__badge--${change}">${escapeHtml(mouvement.label)}</span>
-        n° ${escapeHtml(reference)}${title ? ` — ${escapeHtml(title)}` : ""}
+        ${nom}${situe}
       </span>
       <span class="review-item__meta">${escapeHtml(mouvement.detail)}</span>
     `
@@ -1552,50 +1575,165 @@ function nameOfAuthor(entree) {
  * leur document — c'est le seul endroit où elles se rattachent à coup sûr,
  * puisque la plupart des lignes ne portent aucun numéro d'avis.
  */
-function renderDocumentFigures(document) {
-  const figures = figuresOfDocument(document?.id);
+function renderDocumentFigures(document, toutes) {
+  const figures = figuresOfDocument(document?.id, toutes);
   if (figures.length === 0) return "";
 
   return `<div class="review-figures review-figures--deposit">${figures.map(renderFigure).join("")}</div>`;
 }
 
 /**
- * Ouvre un livrable déposé.
+ * Ouvre un livrable dans le visualiseur de l'application.
  *
- * Le stockage demande une autorisation : on ne peut pas pointer un lien vers
- * lui. Le fichier est donc rapatrié, puis affiché — et l'onglet est ouvert
- * **avant** le téléchargement, sinon le navigateur le prend pour une fenêtre
- * surgissante et le bloque.
+ * **Visualiser n'est pas télécharger.** L'écran ouvrait le PDF dans un onglet
+ * du navigateur, ce qui, selon le poste, l'enregistrait dans les
+ * téléchargements : on demandait à vérifier une ligne, on repartait avec une
+ * copie du document sur son disque. Ce sont deux gestes différents, et c'est le
+ * premier qu'on voulait.
  *
- * Un échec le dit sur le bouton : un onglet blanc laisserait croire à un
- * document vide.
+ * Le lecteur est celui d'Atelier — mêmes classes, même rendu que l'onglet
+ * Documents. Les octets viennent du stockage, qui demande une autorisation :
+ * un lien direct ne fonctionnerait pas.
  */
 async function openDeposit(root, bouton) {
   const id = bouton.getAttribute("data-deposit-open") || "";
   const ligne = (view.review?.documentRows ?? []).find((row) => String(row.id) === id);
   if (!ligne || bouton.disabled) return;
 
-  const onglet = window.open("", "_blank");
-  const libelle = bouton.textContent;
-  bouton.disabled = true;
-  bouton.textContent = "Ouverture…";
+  view.viewer = {
+    documentId: id,
+    name: ligne.original_filename ?? ligne.filename ?? "Document",
+    page: 1,
+    pageCount: 0,
+    bytes: null,
+    loading: true,
+    error: null,
+    drawn: false
+  };
+  renderContent(root);
 
   try {
     const { downloadDocumentFile } = await import("../services/document-deposit.js");
     const fichier = await downloadDocumentFile(ligne);
-    const url = URL.createObjectURL(fichier);
+    const octets = await fichier.arrayBuffer();
 
-    if (onglet) onglet.location = url;
-    // Le navigateur a besoin du lien le temps d'ouvrir le document ; le
-    // révoquer tout de suite rendrait une page blanche.
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
-    bouton.textContent = libelle;
+    // On a pu refermer le lecteur, ou en ouvrir un autre, pendant le
+    // rapatriement : ce qui arrive ne décrirait plus ce qu'on regarde.
+    if (view.viewer?.documentId !== id) return;
+
+    view.viewer.bytes = octets;
+    view.viewer.loading = false;
   } catch {
-    onglet?.close();
-    bouton.textContent = "Lecture impossible";
-  } finally {
-    bouton.disabled = false;
+    if (view.viewer?.documentId !== id) return;
+    view.viewer.loading = false;
+    view.viewer.error = "Ce livrable n'a pas pu être lu depuis le stockage.";
   }
+
+  if (root.isConnected) renderContent(root);
+}
+
+/** Ferme le lecteur, sans rien changer à la proposition. */
+function closeViewer(root) {
+  if (!view.viewer) return;
+  view.viewer = null;
+  renderContent(root);
+}
+
+/**
+ * Le lecteur, page par page.
+ *
+ * Une page à la fois : un rapport de suivi de chantier en porte quarante, et
+ * les dessiner toutes pour en lire une coûterait plusieurs secondes et autant
+ * de mémoire. La barre dit toujours où l'on est — « page 3 sur 40 » — parce
+ * qu'un lecteur sans repère ne permet pas de citer ce qu'on a vu.
+ */
+export function renderPdfViewer(etat = view.viewer) {
+  const lecteur = etat;
+  if (!lecteur) return "";
+
+  const corps = lecteur.error
+    ? `<div class="propositions-empty propositions-empty--warn"><b>Lecture impossible</b><p>${escapeHtml(
+        lecteur.error
+      )}</p></div>`
+    : `<div class="review-pdf__canvas" data-review-pdf-canvas aria-busy="${lecteur.bytes ? "false" : "true"}">${
+        lecteur.loading ? `<div class="propositions-empty"><b>Ouverture du livrable…</b></div>` : ""
+      }</div>`;
+
+  const pages = lecteur.pageCount > 0 ? `Page ${lecteur.page} sur ${lecteur.pageCount}` : "";
+
+  return `
+    <div class="review-pdf" role="dialog" aria-modal="true" aria-label="${escapeHtml(lecteur.name)}">
+      <div class="review-pdf__panel">
+        <header class="review-pdf__head">
+          <div class="review-pdf__title">
+            ${svgIcon("file-pdf", { className: "octicon" })}
+            <span>${escapeHtml(lecteur.name)}</span>
+          </div>
+          <div class="review-pdf__nav">
+            <button type="button" class="gh-btn gh-btn--sm" data-review-pdf-prev ${
+              lecteur.page <= 1 || !lecteur.pageCount ? "disabled" : ""
+            } aria-label="Page précédente">${svgIcon("arrow-left", { className: "octicon" })}</button>
+            <span class="review-pdf__count mono">${escapeHtml(pages)}</span>
+            <button type="button" class="gh-btn gh-btn--sm" data-review-pdf-next ${
+              !lecteur.pageCount || lecteur.page >= lecteur.pageCount ? "disabled" : ""
+            } aria-label="Page suivante">${svgIcon("arrow-left", { className: "octicon" })}</button>
+            <button type="button" class="icon-btn icon-btn--sm" data-review-pdf-close aria-label="Fermer le lecteur">✕</button>
+          </div>
+        </header>
+        <div class="review-pdf__body">${corps}</div>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Dessine la page courante.
+ *
+ * `drawn` évite de redessiner à chaque rendu de l'écran : un commentaire écrit
+ * pendant qu'on lit un rapport ne doit pas relancer le rendu de sa page.
+ */
+async function drawPdfPage(root) {
+  const lecteur = view.viewer;
+  const hote = root.querySelector("[data-review-pdf-canvas]");
+  if (!lecteur?.bytes || !hote || lecteur.drawn) return;
+
+  lecteur.drawn = true;
+
+  try {
+    const { renderPdfPage } = await import("../services/ct-lab-pdf-view.js");
+    const largeur = Math.max(320, (hote.clientWidth || 900) - 8);
+    const { pageCount } = await renderPdfPage(hote, {
+      bytes: lecteur.bytes,
+      page: lecteur.page,
+      width: largeur
+    });
+
+    if (view.viewer !== lecteur) return;
+
+    // Le nombre de pages ne se sait qu'après la première lecture : la barre
+    // l'attendait, elle peut maintenant le dire.
+    if (lecteur.pageCount !== pageCount) {
+      lecteur.pageCount = pageCount;
+      renderContent(root);
+    }
+  } catch (error) {
+    if (view.viewer !== lecteur) return;
+    lecteur.error = String(error?.message || "Ce livrable n'a pas pu être affiché.");
+    renderContent(root);
+  }
+}
+
+/** Feuillette, sans retélécharger : les octets sont déjà là. */
+function turnPdfPage(root, pas) {
+  const lecteur = view.viewer;
+  if (!lecteur?.pageCount) return;
+
+  const cible = Math.min(Math.max(1, lecteur.page + pas), lecteur.pageCount);
+  if (cible === lecteur.page) return;
+
+  lecteur.page = cible;
+  lecteur.drawn = false;
+  renderContent(root);
 }
 
 /**
@@ -1607,7 +1745,7 @@ async function openDeposit(root, bouton) {
  * dossier s'est constitué : un envoi de dix-sept livrables, puis un rapport
  * oublié trois jours plus tard.
  */
-function renderDeposits(review) {
+export function renderDeposits(review) {
   const depots = review.deposits ?? [];
   if (depots.length === 0) {
     return `<div class="propositions-empty"><b>Aucun dépôt</b><p>Cette proposition n'apporte aucun document.</p></div>`;
@@ -1639,20 +1777,23 @@ function renderDeposits(review) {
                           ${escapeHtml(document.detected_kind_label ?? "Nature inconnue")}
                           ${document.detected_author ? ` · ${escapeHtml(document.detected_author)}` : ""}
                           ${document.issued_at ? ` · émis le ${escapeHtml(formatDate(document.issued_at))}` : ""}
+                          ${
+                            // « Sur la foi de quoi ? » se répond en ouvrant le
+                            // document. Le lien vit dans la ligne qui le
+                            // décrit — sa nature, son auteur, sa date — et non
+                            // dans une colonne à lui : c'est la même phrase
+                            // qu'on prolonge. Il attend le survol : présent
+                            // quand on le cherche, absent quand on lit la
+                            // liste.
+                            document.storage_path
+                              ? `<span class="deposit-item__link"> · <button type="button" class="deposit-item__open" data-deposit-open="${escapeHtml(
+                                  document.id ?? ""
+                                )}" title="Visualiser le PDF">Visualiser le PDF</button></span>`
+                              : ""
+                          }
                         </span>
+                        ${renderDocumentFigures(document, review.figures)}
                       </div>
-                      ${
-                        // « Sur la foi de quoi ? » se répond en ouvrant le
-                        // document, pas en faisant confiance à sa ligne. Le lien
-                        // n'apparaît qu'au survol : il est là quand on le
-                        // cherche, absent quand on lit la liste.
-                        document.storage_path
-                          ? `<button type="button" class="deposit-item__open" data-deposit-open="${escapeHtml(
-                              document.id ?? ""
-                            )}">Lire le document</button>`
-                          : ""
-                      }
-                      ${renderDocumentFigures(document)}
                     </li>
                   `
                 )
@@ -1980,6 +2121,43 @@ function bindExportButton(root) {
   });
 }
 
+/**
+ * Échap ferme le lecteur, où qu'on ait le curseur.
+ *
+ * Écouté une seule fois, sur le document : un abonnement par rendu en
+ * laisserait un de plus à chaque frappe dans le champ de commentaire.
+ */
+let viewerEscapeBound = false;
+
+function bindViewerEscape() {
+  if (viewerEscapeBound) return;
+  viewerEscapeBound = true;
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || !view.viewer || !mountedRoot?.isConnected) return;
+    closeViewer(mountedRoot);
+  });
+}
+
+/** Le lecteur : feuilleter, fermer, et dessiner la page demandée. */
+function bindPdfViewer(root) {
+  if (!view.viewer) return;
+
+  bindViewerEscape();
+
+  root.querySelector("[data-review-pdf-close]")?.addEventListener("click", () => closeViewer(root));
+  root.querySelector("[data-review-pdf-prev]")?.addEventListener("click", () => turnPdfPage(root, -1));
+  root.querySelector("[data-review-pdf-next]")?.addEventListener("click", () => turnPdfPage(root, 1));
+
+  // Fermer d'un clic hors du panneau et de la touche Échap : ce sont les deux
+  // gestes qu'on tente sans réfléchir devant une lecture ouverte.
+  root.querySelector(".review-pdf")?.addEventListener("click", (event) => {
+    if (event.target === event.currentTarget) closeViewer(root);
+  });
+
+  drawPdfPage(root);
+}
+
 /** Le retour à la liste, les cases, les raisons, et la fusion. */
 function bindReview(root) {
   // Le même mécanisme que pour un sujet : la page défile, la coque prend
@@ -1988,6 +2166,7 @@ function bindReview(root) {
   bindReviewCompact(root);
 
   bindExportButton(root);
+  bindPdfViewer(root);
 
   hydrateFigures(root);
 
@@ -2418,6 +2597,7 @@ function findItem(cle) {
 function backToList(root) {
   view.open = null;
   view.review = null;
+  view.viewer = null;
   // Sans quoi l'en-tête global resterait masqué sur la liste, et ailleurs.
   setTopCompact(false);
   setPropositionsHeader();
@@ -2717,12 +2897,82 @@ function figuresOfAvis(reference) {
 }
 
 /** Les figures d'un livrable, dans l'ordre où le rapport les montre. */
-function figuresOfDocument(documentId) {
+function figuresOfDocument(documentId, toutes = view.review?.figures) {
   const cle = String(documentId ?? "");
   if (!cle) return [];
-  return (view.review?.figures ?? [])
+  return (toutes ?? [])
     .filter((figure) => String(figure.document_id) === cle)
     .sort((gauche, droite) => Number(gauche.page) - Number(droite.page));
+}
+
+/**
+ * Ce que le projet tient déjà pour vrai des avis.
+ *
+ * Deux sources, et il faut les deux. La **mémoire du suivi** porte les avis que
+ * le moteur a relevés au fil des rapports. Les **décisions fusionnées** portent
+ * ce que des propositions précédentes ont fait entrer — dont les lignes de
+ * fiches, que le moteur ne sait pas relire et qui ne reviendraient donc jamais
+ * par la première source.
+ *
+ * Sans cette seconde source, chaque ouverture reproposerait les mêmes lignes
+ * comme nouvelles : on aurait remplacé soixante-douze fausses questions par
+ * autant de doublons.
+ */
+function knownAvisFor(knownAvis = [], decisions = []) {
+  const connus = new Map(
+    (knownAvis ?? []).map((avis) => [String(avis.external_reference ?? ""), avis]).filter(([cle]) => cle)
+  );
+
+  for (const decision of decisions ?? []) {
+    if (decision.item_type !== ITEM_TYPE.AVIS) continue;
+    const cle = String(decision.item_key ?? "");
+    // La mémoire du suivi prime : elle est recalculée sur les documents, là où
+    // une décision est un instantané de ce qu'on avait sous les yeux.
+    if (!cle || connus.has(cle)) continue;
+
+    connus.set(cle, {
+      external_reference: cle,
+      status: decision.payload?.status ?? null,
+      opinion_raw: decision.payload?.opinion ?? null
+    });
+  }
+
+  return [...connus.values()];
+}
+
+/**
+ * Fait entrer les lignes des fiches dans ce qui change.
+ *
+ * Une fiche d'avis sur travaux ne porte pas de phrases : le moteur n'y trouvait
+ * rien, et le document entrait au corpus sans rien y déposer. Ses lignes sont
+ * pourtant lues — c'est ce que fait la découpe des figures. Il ne reste qu'à
+ * les nommer, et à refaire la comparaison sur la liste entière.
+ */
+function mergeFigureAvis(root, { knownAvis = [], decisions = [], assumees = [], documents = [], analyse = null } = {}) {
+  if (!view.review || view.review.frozen) return;
+
+  const lignes = avisFromFigures(view.review.figures ?? []);
+  if (lignes.length === 0) return;
+
+  const complet = mergeAvis(analyse?.computedAvis ?? [], lignes);
+  const connus = knownAvisFor(knownAvis, decisions);
+
+  view.review.diff = diffAvis(connus, complet);
+  view.review.items = applyDecisions(
+    [
+      ...documentItems(documents),
+      ...attachmentItems(analyse?.attachments ?? []),
+      ...avisItems(view.review.diff)
+    ],
+    decisions
+  );
+  view.review.conflicts = findMemoryConflicts(view.review.items, assumees);
+
+  // La note de dépôt s'appuie sur ce diff-là : lui laisser l'ancien lui ferait
+  // décrire un lot dont les fiches n'auraient rien apporté.
+  if (view.review.noteMatter) view.review.noteMatter.diff = view.review.diff;
+
+  if (root.isConnected) renderContent(root);
 }
 
 /**
@@ -3269,6 +3519,11 @@ async function openProposition(root, propositionId) {
     // Les figures viennent en dernier : elles enrichissent la lecture, elles ne
     // conditionnent aucune décision, et un rendu de page coûte cher.
     await ensureAvisFigures(root, proposition, analyse, documents);
+
+    // Les lignes des fiches deviennent des avis. Elles arrivent après le
+    // diff parce que leur découpe coûte un rendu de page ; le diff se refait
+    // donc ici, sur la liste complète.
+    mergeFigureAvis(root, { knownAvis: memoire?.avis ?? [], decisions, assumees, documents, analyse });
   } catch (error) {
     if (!view.open || view.open.id !== proposition.id) return;
     view.review = {
