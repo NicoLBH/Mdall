@@ -6,10 +6,18 @@
  * qu'il y a d'autre dans le lot.
  *
  * Un bon titre est celui qu'on écrirait soi-même sur une pull request : il dit
- * **ce qu'on apporte**, pas d'où ça vient. Trois informations suffisent, et il
- * n'en faut pas une de plus — combien, de quelle nature, de qui :
+ * **ce qu'on apporte**, pas d'où ça vient. Combien, de quelle nature, de qui —
+ * et **quand**, qui est la seule chose qui distingue les unes des autres vingt
+ * propositions faites de livrables SOCOTEC :
  *
- *   « 3 rapports d'étape et 2 fiches avis travaux — SOCOTEC »
+ *   « Fiche avis travaux SOCOTEC du 8 septembre 2022 »
+ *   « 3 rapports d'étape SOCOTEC, de mars à juin 2024 »
+ *   « 3 rapports d'étape et 2 fiches avis travaux — SOCOTEC, avril 2022 »
+ *
+ * La date d'émission est celle du document, pas celle du dépôt : deux lots
+ * déposés le même après-midi peuvent porter des rapports séparés de deux ans,
+ * et c'est cet écart-là qu'on cherche dans une liste. À défaut de date, le
+ * numéro que le document déclare fait le même office.
  *
  * Aucun appel à un modèle de langage. Tout est déjà là : la reconnaissance a
  * nommé chaque document, et le pack de l'émetteur sait comment ses livrables se
@@ -38,6 +46,69 @@ function countBy(values) {
 function nature(recognition, count) {
   const label = count > 1 ? recognition.kindLabelPlural ?? recognition.kindLabel : recognition.kindLabel;
   return String(label ?? "").trim();
+}
+
+/**
+ * Les mois, en toutes lettres.
+ *
+ * Écrits ici plutôt que déduits d'une locale : un titre conservé en base ne doit
+ * pas changer de langue selon le navigateur de celui qui l'a écrit.
+ */
+const MOIS = [
+  "janvier", "février", "mars", "avril", "mai", "juin",
+  "juillet", "août", "septembre", "octobre", "novembre", "décembre"
+];
+
+/** Une date d'émission, réduite à ce qu'on en lit : année, mois, jour. */
+function jalon(value) {
+  const brut = String(value ?? "").trim();
+  if (!brut) return null;
+
+  const date = new Date(brut);
+  if (Number.isNaN(date.getTime())) return null;
+
+  return {
+    annee: date.getUTCFullYear(),
+    mois: date.getUTCMonth(),
+    jour: date.getUTCDate(),
+    ordre: date.getTime()
+  };
+}
+
+/**
+ * Ce que les dates d'émission d'un lot disent, en une incise.
+ *
+ * Trois cas, et ils se lisent différemment :
+ *
+ *  - **une seule date** : « du 8 septembre 2022 » — le repère le plus précis ;
+ *  - **un seul mois** : « de juin 2024 » — inutile d'énumérer trois jours ;
+ *  - **une période** : « de mars à juin 2024 », « d'octobre 2023 à mars 2024 ».
+ *
+ * Un lot dont une partie des documents n'est pas datée n'en dit rien de faux :
+ * l'incise décrit ce qui est daté, et les autres se comptent déjà ailleurs.
+ */
+export function describePeriod(values = []) {
+  const jalons = (Array.isArray(values) ? values : []).map(jalon).filter(Boolean);
+  if (jalons.length === 0) return "";
+
+  const tri = [...jalons].sort((gauche, droite) => gauche.ordre - droite.ordre);
+  const premier = tri[0];
+  const dernier = tri[tri.length - 1];
+
+  const memeJour = premier.ordre === dernier.ordre;
+  if (memeJour) return `du ${premier.jour} ${MOIS[premier.mois]} ${premier.annee}`;
+
+  const memeMois = premier.annee === dernier.annee && premier.mois === dernier.mois;
+  if (memeMois) return `de ${MOIS[premier.mois]} ${premier.annee}`;
+
+  const memeAnnee = premier.annee === dernier.annee;
+  const debut = memeAnnee ? MOIS[premier.mois] : `${MOIS[premier.mois]} ${premier.annee}`;
+  const fin = `${MOIS[dernier.mois]} ${dernier.annee}`;
+
+  // « d'octobre » et non « de octobre » : l'élision se lit, et son absence
+  // s'entend.
+  const article = /^[aeiouâéêèîôû]/i.test(debut) ? "d'" : "de ";
+  return `${article}${debut} à ${fin}`;
 }
 
 /**
@@ -89,5 +160,23 @@ export function proposeTitle(inspections = [], { fallbackCount = 0 } = {}) {
   const ignores = total - reconnus.length;
   const appoint = ignores > 0 ? `, et ${ignores} autre${ignores > 1 ? "s" : ""} document${ignores > 1 ? "s" : ""}` : "";
 
-  return `${enumeration}${signature}${appoint}`;
+  // **Le repère temporel, qui est ce qui distingue une proposition d'une autre.**
+  // Vingt dépôts de livrables SOCOTEC portaient vingt fois le même titre ; on ne
+  // pouvait les reconnaître qu'en les ouvrant.
+  const periode = describePeriod(reconnus.map((entry) => entry.recognition.issuedAt));
+
+  // À défaut de date, le numéro que le document déclare — mais un seul, et
+  // seulement s'il n'y en a qu'un : deux numéros dans un titre ne repèrent plus
+  // rien.
+  const references = countBy(reconnus.map((entry) => entry.recognition.declaredReference).filter(Boolean));
+  const numero = !periode && references.length === 1 ? `n° ${references[0][0]}` : "";
+
+  const repere = periode || numero;
+  if (!repere) return `${enumeration}${signature}${appoint}`;
+
+  // Avec un émetteur nommé, le repère le suit sur la même incise : « — SOCOTEC,
+  // du 8 septembre 2022 ». Sans émetteur, il ouvre la sienne.
+  return signature
+    ? `${enumeration}${signature}, ${repere}${appoint}`
+    : `${enumeration}, ${repere}${appoint}`;
 }

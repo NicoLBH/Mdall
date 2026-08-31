@@ -628,7 +628,7 @@ function renderProjectActionsContent(root) {
 
   root.innerHTML = `
     <section class="project-simple-page project-simple-page--settings">
-      <div class="settings-content settings-content--project-page" style="max-width:1216px;margin:0 auto;padding:24px 32px 40px;">
+      <div class="settings-content project-page-shell actions-shell">
         ${open ? renderRunDetail(open) : renderRunsTable()}
       </div>
     </section>

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { proposeTitle } from "./proposition-title.js";
+import { describePeriod, proposeTitle } from "./proposition-title.js";
 
 /** Un fichier examiné, réduit à ce que le titre regarde. */
 const doc = (kindLabel, kindLabelPlural, authorLabel = "SOCOTEC") => ({
@@ -69,4 +69,113 @@ test("une reconnaissance sans pluriel retombe sur le singulier plutôt que d'inv
   const sansPluriel = { recognition: { kindLabel: "Note de synthèse", authorLabel: "SOCOTEC" } };
 
   assert.equal(proposeTitle([sansPluriel, sansPluriel]), "2 note de synthèse — SOCOTEC");
+});
+
+/* ── Ce qui distingue vingt dépôts SOCOTEC les uns des autres ─────────────
+   Le titre disait « 1 fiche avis travaux — SOCOTEC », vingt fois. On ne
+   pouvait reconnaître une proposition qu'en l'ouvrant. La date d'émission est
+   celle du document, pas celle du dépôt : deux lots déposés le même
+   après-midi peuvent porter des rapports séparés de deux ans. */
+
+const date = (kindLabel, kindLabelPlural, issuedAt, extra = {}) => ({
+  recognition: { kindLabel, kindLabelPlural, authorLabel: "SOCOTEC", issuedAt, ...extra }
+});
+
+test("un document daté porte sa date dans le titre", () => {
+  assert.equal(
+    proposeTitle([date("Fiche avis travaux", "Fiches avis travaux", "2022-09-08")]),
+    "1 fiche avis travaux — SOCOTEC, du 8 septembre 2022"
+  );
+});
+
+test("plusieurs documents du même jour se disent au jour", () => {
+  const lot = [
+    date("Fiche avis travaux", "Fiches avis travaux", "2022-09-08"),
+    date("Fiche avis travaux", "Fiches avis travaux", "2022-09-08")
+  ];
+
+  assert.equal(proposeTitle(lot), "2 fiches avis travaux — SOCOTEC, du 8 septembre 2022");
+});
+
+test("plusieurs dates d'un même mois se disent au mois", () => {
+  const lot = [
+    date("Rapport d'étape", "Rapports d'étape", "2024-06-03"),
+    date("Rapport d'étape", "Rapports d'étape", "2024-06-21")
+  ];
+
+  assert.equal(proposeTitle(lot), "2 rapports d'étape — SOCOTEC, de juin 2024");
+});
+
+test("une période s'annonce comme une période", () => {
+  const lot = [
+    date("Rapport d'étape", "Rapports d'étape", "2024-03-04"),
+    date("Rapport d'étape", "Rapports d'étape", "2024-06-21")
+  ];
+
+  assert.equal(proposeTitle(lot), "2 rapports d'étape — SOCOTEC, de mars à juin 2024");
+});
+
+test("une période à cheval sur deux années nomme les deux", () => {
+  const lot = [
+    date("Rapport d'étape", "Rapports d'étape", "2023-10-04"),
+    date("Rapport d'étape", "Rapports d'étape", "2024-03-21")
+  ];
+
+  assert.equal(proposeTitle(lot), "2 rapports d'étape — SOCOTEC, d'octobre 2023 à mars 2024");
+});
+
+test("l'élision se lit : « d'octobre », jamais « de octobre »", () => {
+  assert.equal(describePeriod(["2023-10-04", "2024-03-21"]), "d'octobre 2023 à mars 2024");
+  assert.equal(describePeriod(["2023-03-04", "2024-06-21"]), "de mars 2023 à juin 2024");
+});
+
+test("sans date, le numéro déclaré repère le lot", () => {
+  const lot = [
+    {
+      recognition: {
+        kindLabel: "Fiche avis travaux",
+        kindLabelPlural: "Fiches avis travaux",
+        authorLabel: "SOCOTEC",
+        declaredReference: "13860/0922/0069"
+      }
+    }
+  ];
+
+  assert.equal(proposeTitle(lot), "1 fiche avis travaux — SOCOTEC, n° 13860/0922/0069");
+});
+
+test("deux numéros différents ne repèrent plus rien : on n'en nomme aucun", () => {
+  const avecNumero = (reference) => ({
+    recognition: {
+      kindLabel: "Fiche avis travaux",
+      kindLabelPlural: "Fiches avis travaux",
+      authorLabel: "SOCOTEC",
+      declaredReference: reference
+    }
+  });
+
+  assert.equal(proposeTitle([avecNumero("A"), avecNumero("B")]), "2 fiches avis travaux — SOCOTEC");
+});
+
+test("une date invalide n'invente pas de repère", () => {
+  assert.equal(describePeriod(["pas une date"]), "");
+  assert.equal(describePeriod([null, ""]), "");
+});
+
+test("sans émetteur nommé, le repère ouvre sa propre incise", () => {
+  const lot = [
+    { recognition: { kindLabel: "Rapport d'étape", kindLabelPlural: "Rapports d'étape", authorLabel: "SOCOTEC", issuedAt: "2024-06-03" } },
+    { recognition: { kindLabel: "Rapport d'étape", kindLabelPlural: "Rapports d'étape", authorLabel: "APAVE", issuedAt: "2024-06-03" } }
+  ];
+
+  assert.equal(proposeTitle(lot), "2 rapports d'étape, du 3 juin 2024");
+});
+
+test("les documents non reconnus restent comptés après le repère", () => {
+  const lot = [
+    date("Rapport d'étape", "Rapports d'étape", "2024-06-03"),
+    { recognition: null }
+  ];
+
+  assert.equal(proposeTitle(lot), "1 rapport d'étape — SOCOTEC, du 3 juin 2024, et 1 autre document");
 });

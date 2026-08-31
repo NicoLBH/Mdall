@@ -112,3 +112,22 @@ test("une durée se dit court", () => {
   assert.equal(formatStepDuration(90000), "1 min 30s");
   assert.equal(formatStepDuration(null), "");
 });
+
+test("la boîte « Lecture » ne répète pas un pack par livrable", () => {
+  // Relevé sur une exécution réelle : dix fiches SOCOTEC donnaient
+  // « socotec v1 · socotec v1 · … ». La boîte dit avec quoi on a lu, pas
+  // combien de fois on s'en est servi.
+  const nodes = buildRunGraph({
+    details: {
+      corpus: {
+        documentCount: 10,
+        engineVersion: "ct-lab v3",
+        packs: ["socotec v1", "socotec v1", "socotec v1", "apave v2"],
+        trackedAvisCount: 4
+      }
+    }
+  });
+
+  const lecture = nodes.find((entry) => entry.id === "lecture");
+  assert.equal(lecture.detail, "ct-lab v3 · socotec v1 · apave v2");
+});

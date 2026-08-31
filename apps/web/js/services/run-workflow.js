@@ -102,7 +102,10 @@ export function buildRunGraph(entry = {}) {
     })
   );
 
-  const lu = [corpus.engineVersion, ...(corpus.packs ?? [])].filter(Boolean).join(" · ");
+  // Les packs sont relevés par livrable : dix fiches SOCOTEC écrivaient « socotec
+  // v1 · socotec v1 · … » dix fois. Ce que la boîte doit dire, c'est **avec quoi**
+  // on a lu, pas combien de fois on s'en est servi.
+  const lu = [...new Set([corpus.engineVersion, ...(corpus.packs ?? [])].filter(Boolean))].join(" · ");
   if (lu) {
     nodes.push(node("lecture", "Lecture", lu, { tone: NODE.NEUTRAL, icon: "book" }));
   }
