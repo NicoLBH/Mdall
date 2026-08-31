@@ -114,6 +114,127 @@ export function locateExcerpt(items, excerpt) {
  * @param {number} options.width largeur cible en pixels
  * @returns {Promise<{pageCount: number, highlighted: boolean}>}
  */
+/**
+ * Un document entier, page après page.
+ *
+ * `renderPdfPage` montre **une** page — celle où se trouve une citation, ce
+ * pour quoi elle a été écrite. Lire un rapport n'est pas la même chose :
+ * on le parcourt, on revient en arrière, on compare deux pages. Feuilleter
+ * bouton par bouton n'est pas lire.
+ *
+ * Deux précautions, et elles vont ensemble :
+ *
+ *  - **la place de chaque page est connue d'avance.** On demande à pdf.js les
+ *    dimensions des pages sans les dessiner, et on pose des cadres à la bonne
+ *    taille. Le document a donc sa hauteur réelle dès le premier instant : la
+ *    barre de défilement ne bouge pas sous la main pendant que le rendu
+ *    avance.
+ *  - **on ne dessine que ce qui approche de l'écran.** Quarante pages peintes
+ *    d'un coup, c'est quarante canevas en mémoire pour deux qu'on regarde. Un
+ *    observateur les fait apparaître à mesure, et le document reste ouvert
+ *    tant que le lecteur l'est — le refermer obligerait à relire le fichier à
+ *    chaque page.
+ *
+ * @returns {Promise<{pageCount: number, dispose: () => void}>} `dispose` rend
+ *   le document et l'observateur : à appeler en fermant le lecteur.
+ */
+export async function renderPdfDocument(container, { bytes, width = 900, margin = "1200px" } = {}) {
+  const pdfjs = await loadPdfJs();
+  const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+
+  const loadingTask = pdfjs.getDocument({ data, disableWorker: true, useSystemFonts: true });
+  const document_ = await loadingTask.promise;
+  const pageCount = Number(document_.numPages || 0);
+
+  container.replaceChildren();
+
+  const dessinees = new Set();
+
+  const dessiner = async (pageNode) => {
+    const numero = Number(pageNode.dataset.pdfPage);
+    if (!numero || dessinees.has(numero)) return;
+    dessinees.add(numero);
+
+    try {
+      const page = await document_.getPage(numero);
+      const base = page.getViewport({ scale: 1 });
+      const scale = Math.max(0.2, width / Math.max(base.width, 1));
+      const viewport = page.getViewport({ scale });
+
+      const canvas = document.createElement("canvas");
+      canvas.className = "documents-pdf-viewer__canvas";
+      const context = canvas.getContext("2d", { alpha: false });
+      if (!context) return;
+
+      // Au-delà de deux, le gain ne se voit pas et la mémoire double.
+      const outputScale = Math.min(2, window.devicePixelRatio > 1 ? window.devicePixelRatio : 1);
+      canvas.width = Math.max(1, Math.floor(viewport.width * outputScale));
+      canvas.height = Math.max(1, Math.floor(viewport.height * outputScale));
+      canvas.style.width = `${Math.floor(viewport.width)}px`;
+      canvas.style.height = `${Math.floor(viewport.height)}px`;
+
+      await page.render({
+        canvasContext: context,
+        viewport,
+        transform: outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : null
+      }).promise;
+
+      // La page a pu être retirée pendant le rendu — le lecteur s'est refermé.
+      if (!pageNode.isConnected) return;
+      pageNode.replaceChildren(canvas);
+    } catch {
+      // Une page illisible n'emporte pas le document : son cadre reste, vide,
+      // et les autres se lisent.
+      dessinees.delete(numero);
+    }
+  };
+
+  const observer =
+    typeof IntersectionObserver === "function"
+      ? new IntersectionObserver(
+          (entries) => {
+            for (const entry of entries) {
+              if (!entry.isIntersecting) continue;
+              observer.unobserve(entry.target);
+              dessiner(entry.target);
+            }
+          },
+          { root: container.closest(".review-pdf__body") ?? null, rootMargin: margin }
+        )
+      : null;
+
+  for (let numero = 1; numero <= pageCount; numero += 1) {
+    const page = await document_.getPage(numero);
+    const base = page.getViewport({ scale: 1 });
+    const scale = Math.max(0.2, width / Math.max(base.width, 1));
+    const viewport = page.getViewport({ scale });
+
+    const pageNode = document.createElement("div");
+    pageNode.className = "documents-pdf-viewer__page";
+    pageNode.dataset.pdfPage = String(numero);
+    // Le cadre porte la taille réelle avant d'être peint : sans elle, la barre
+    // de défilement s'allongerait sous la main à mesure du rendu.
+    pageNode.style.width = `${Math.ceil(viewport.width)}px`;
+    pageNode.style.height = `${Math.ceil(viewport.height)}px`;
+
+    container.appendChild(pageNode);
+    if (observer) observer.observe(pageNode);
+    else dessiner(pageNode);
+  }
+
+  return {
+    pageCount,
+    dispose() {
+      observer?.disconnect();
+      try {
+        loadingTask.destroy?.() ?? document_.destroy?.();
+      } catch {
+        // sans conséquence : le lecteur se ferme de toute façon
+      }
+    }
+  };
+}
+
 export async function renderPdfPage(container, { bytes, page = 1, excerpt = "", width = 900 } = {}) {
   const pdfjs = await loadPdfJs();
   const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);

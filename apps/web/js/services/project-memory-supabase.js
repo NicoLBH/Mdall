@@ -203,6 +203,49 @@ export async function rememberProposition({ proposition, items = [] } = {}) {
 }
 
 /**
+ * Verse une hypothèse déclarée par quelqu'un.
+ *
+ * Le même chemin qu'une fusion, en plus court : on écrit, on remplace la
+ * précédente valeur du même sujet, on lève les drapeaux de ce qui reposait
+ * dessus. **C'est ici que l'étape E devient vérifiable** — sans un moyen de
+ * poser une hypothèse puis d'en changer, rien de ce mécanisme ne peut être
+ * essayé sur un vrai projet.
+ *
+ * L'ordre est celui de la fusion, et pour la même raison : on écrit d'abord, on
+ * périme ensuite. Si l'écriture échoue, rien n'a été invalidé.
+ *
+ * @returns {Promise<{written: object, superseded: number, flagged: number}|null>}
+ */
+export async function rememberHypothesis(row) {
+  if (!row?.project_id || !row?.subject_key) return null;
+
+  const existantes = await listProjectAssertions(row.project_id);
+  const ecrites = await writeAssertions([row]);
+  if (!ecrites || ecrites.length === 0) return null;
+
+  const nouvelle = ecrites[0];
+  const quand = row.decided_at || new Date().toISOString();
+
+  // La valeur précédente du même sujet cesse de valoir. `planSupersessions`
+  // ignore ce qui vient de la même proposition ; une hypothèse déclarée n'en a
+  // pas, on compare donc sur la clé et sur l'identifiant.
+  const anciennes = (existantes ?? []).filter(
+    (entry) =>
+      entry.kind === row.kind &&
+      entry.subject_key === row.subject_key &&
+      !entry.superseded_by &&
+      entry.id !== nouvelle.id
+  );
+
+  const liens = anciennes.map((entry) => ({ oldId: entry.id, newId: nouvelle.id, at: quand }));
+  if (liens.length > 0) await markSuperseded(liens);
+
+  const flagged = await markDependentsOf({ projectId: row.project_id, superseded: anciennes, at: quand });
+
+  return { written: nouvelle, superseded: liens.length, flagged };
+}
+
+/**
  * Lève les drapeaux qu'un remplacement d'hypothèse rend nécessaires.
  *
  * Isolé de `rememberProposition` parce qu'il échoue séparément : ne pas savoir
