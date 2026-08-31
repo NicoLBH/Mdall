@@ -16645,9 +16645,18 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .memory-pill--rejected{ color:var(--fgColor-danger); border-color:rgba(248,81,73,.4); }
 .memory-row__body{ display:flex; flex-direction:column; gap:2px; min-width:0; }
 .memory-row__head{ display:flex; gap:10px; align-items:baseline; justify-content:space-between; }
-/* Un titre qui mène quelque part se comporte comme partout ailleurs. */
+/* Un titre qui mène quelque part se comporte comme partout ailleurs — mais
+   c'est un bouton, pas une ancre : ouvrir une affirmation n'est pas une
+   navigation, et une ancre vers « # » emmenait à l'accueil dès que son geste
+   n'était pas branché. */
 .memory-row__statement{
+  padding:0;
+  border:0;
+  background:none;
+  text-align:left;
+  cursor:pointer;
   color:var(--text);
+  font-family:inherit;
   font-weight:600;
   font-size:14px;
   text-decoration:none;
@@ -16804,6 +16813,55 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 
 .review-panel--conflict{ border-color:#d29922; }
 .review-block__state.is-blocking{ color:#d29922; font-weight:600; }
+
+/* Une contradiction se tranche sur des sources, pas sur des étiquettes : deux
+   colonnes, l'avant à gauche, l'après à droite, chacune avec son extrait, sa
+   provenance et son bouton. Le bouton dit la même chose des deux côtés —
+   retenir celle-ci — parce que c'est ce que fait l'humain. */
+.conflict__sides{
+  display:grid;
+  grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));
+  gap:12px;
+}
+.conflict__side{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  align-items:flex-start;
+  padding:12px 14px;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  background:var(--panel2);
+}
+.conflict__heading{
+  color:var(--muted);
+  font-size:11px;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+}
+.conflict__statement{ color:var(--text); font-weight:600; font-size:14px; }
+/* L'extrait est la matière de la décision : il se lit comme une citation. */
+.conflict__excerpt{
+  margin:0;
+  padding:6px 0 6px 10px;
+  border-left:2px solid var(--border);
+  color:var(--text);
+  font-size:13px;
+  line-height:1.5;
+}
+.conflict__excerpt--none{ border-left-style:dashed; color:var(--muted); font-style:italic; }
+.conflict__source{ color:var(--muted); font-size:12px; }
+.conflict__open{
+  padding:0;
+  border:0;
+  background:none;
+  color:var(--accent);
+  font:inherit;
+  font-size:12px;
+  text-decoration:underline;
+  cursor:pointer;
+}
+.conflict__choose{ margin-top:2px; }
 
 .conflict__doctrine{
   margin:0;

@@ -247,11 +247,12 @@ function renderAssertion(assertion) {
       </span>
       <div class="memory-row__body">
         <div class="memory-row__head">
-          <a
-            href="#"
+          <button
+            type="button"
             class="memory-row__statement"
-            data-memory-open="${escapeHtml(`${assertion.kind}|${assertion.subject_key}`)}"
-          >${escapeHtml(assertion.statement)}</a>
+            data-memory-kind="${escapeHtml(assertion.kind ?? "")}"
+            data-memory-open="${escapeHtml(assertion.subject_key ?? "")}"
+          >${escapeHtml(assertion.statement)}</button>
           <span class="memory-pill memory-pill--${ecartee ? "rejected" : "assumed"}">
             ${svgIcon(ecartee ? "x-circle-fill" : "check-circle-fill", { className: "octicon" })}
             ${escapeHtml(ecartee ? "Écartée" : "Assumée")}
@@ -1024,6 +1025,30 @@ async function declareDependsOn(root, bouton) {
   renderContent(root);
 }
 
+/**
+ * Ce que l'écran montre, tous filtres appliqués.
+ *
+ * **Un seul endroit décide.** La recherche redessinait la liste avec ses
+ * propres critères, en oubliant la nature, le domaine et « à revérifier » :
+ * taper une lettre faisait réapparaître ce qu'on venait d'écarter. Deux
+ * endroits qui filtrent finissent toujours par filtrer différemment.
+ */
+function lignesVisibles() {
+  const filtrees = filterByTaxonomy(
+    searchAssertions(view.assertions ?? [], {
+      query: view.query,
+      kind: view.kind,
+      status: view.status,
+      includeSuperseded: view.includeSuperseded
+    }),
+    { nature: view.nature, domain: view.domain }
+  );
+
+  // « À revérifier » se coche par-dessus les autres filtres : c'est une urgence,
+  // pas une catégorie.
+  return view.pending ? pendingReviews(filtrees) : filtrees;
+}
+
 function renderContent(root) {
   if (view.loading) {
     root.innerHTML = `
@@ -1068,19 +1093,7 @@ function renderContent(root) {
   // l'histoire : « 40 sans domaine » doit dire quarante affirmations à classer,
   // pas quarante états successifs de quatre d'entre elles.
   const vocabulaire = summarizeTaxonomy(currentAssertions(view.assertions));
-  const filtrees = filterByTaxonomy(
-    searchAssertions(view.assertions, {
-      query: view.query,
-      kind: view.kind,
-      status: view.status,
-      includeSuperseded: view.includeSuperseded
-    }),
-    { nature: view.nature, domain: view.domain }
-  );
-
-  // « À revérifier » se coche par-dessus les autres filtres : c'est une urgence,
-  // pas une catégorie.
-  const lignes = view.pending ? pendingReviews(filtrees) : filtrees;
+  const lignes = lignesVisibles();
   const enAttente = pendingReviews(currentAssertions(view.assertions)).length;
 
   root.innerHTML = `
@@ -1102,7 +1115,51 @@ function renderContent(root) {
   bind(root);
 }
 
+/**
+ * Les gestes portés par les lignes de la liste, branchés **une seule fois**.
+ *
+ * La recherche redessine la liste seule — pour ne pas perdre le curseur à
+ * chaque touche — et les lignes reconstruites n'étaient plus branchées. Le
+ * titre était une ancre vers « # » : cliquer une affirmation après avoir tapé
+ * un mot ne l'ouvrait pas, cela vidait le hash, et le routeur emmenait à
+ * l'accueil.
+ *
+ * La délégation traite toute la classe : elle écoute la racine, qui ne change
+ * pas, plutôt que des lignes qui se refont. Et le titre est devenu un bouton :
+ * ouvrir une affirmation n'est pas une navigation, et rien ne doit se produire
+ * si le geste n'a pas été compris.
+ */
+let listeDelegateeSur = null;
+
+function bindListDelegation(root) {
+  if (listeDelegateeSur === root) return;
+  listeDelegateeSur = root;
+
+  root.addEventListener("click", (event) => {
+    const titre = event.target.closest?.("[data-memory-open]");
+    if (titre) {
+      const kind = titre.getAttribute("data-memory-kind") || "";
+      // La clé métier est lue telle quelle : celle d'un rattachement porte des
+      // « | », et la découper les perdait.
+      const subjectKey = titre.getAttribute("data-memory-open") || "";
+      if (!kind || !subjectKey) return;
+      view.open = { kind, subjectKey };
+      renderContent(root);
+      return;
+    }
+
+    const proposition = event.target.closest?.("[data-memory-proposition]");
+    if (proposition) {
+      event.preventDefault();
+      store.pendingPropositionId = proposition.getAttribute("data-memory-proposition") || "";
+      const projet = String(location.hash || "").split("/")[1] || "";
+      location.hash = `#project/${projet}/propositions`;
+    }
+  });
+}
+
 function bind(root) {
+  bindListDelegation(root);
   bindExportButton(root);
 
   const recherche = root.querySelector("[data-memory-search]");
@@ -1115,13 +1172,9 @@ function bind(root) {
       // en compte deux montrerait un vide qu'on prendrait pour une absence.
       view.page = 1;
       const hote = root.querySelector(".memory-results, .propositions-empty:not(.propositions-empty--warn)");
-      const lignes = searchAssertions(view.assertions ?? [], {
-        query: view.query,
-        kind: view.kind,
-        status: view.status,
-        includeSuperseded: view.includeSuperseded
-      });
-      if (hote) hote.outerHTML = renderList(lignes, view.page);
+      // Les mêmes filtres que l'écran entier, sinon taper une lettre ferait
+      // réapparaître ce que la nature ou le domaine venaient d'écarter.
+      if (hote) hote.outerHTML = renderList(lignesVisibles(), view.page);
       bindPagination(root);
     });
   }
@@ -1245,24 +1298,7 @@ function bind(root) {
 
   bindPagination(root);
 
-  for (const lien of root.querySelectorAll("[data-memory-open]")) {
-    lien.addEventListener("click", (event) => {
-      event.preventDefault();
-      const [kind, subjectKey] = String(lien.getAttribute("data-memory-open") || "").split("|");
-      if (!kind || !subjectKey) return;
-      view.open = { kind, subjectKey };
-      renderContent(root);
-    });
-  }
 
-  for (const lien of root.querySelectorAll("[data-memory-proposition]")) {
-    lien.addEventListener("click", (event) => {
-      event.preventDefault();
-      store.pendingPropositionId = lien.getAttribute("data-memory-proposition") || "";
-      const projet = String(location.hash || "").split("/")[1] || "";
-      location.hash = `#project/${projet}/propositions`;
-    });
-  }
 }
 
 /** Les pages. Le même mécanisme que le journal des actions, aux mêmes classes. */

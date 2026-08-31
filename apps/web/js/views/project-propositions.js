@@ -592,6 +592,63 @@ function renderAvisItem(item) {
  * Les deux versions sont montrées côte à côte, datées. Sans la date, « vous
  * aviez retenu » n'est qu'une affirmation de plus.
  */
+/**
+ * Un côté d'une contradiction : ce qu'il affirme, et sur quoi.
+ *
+ * **L'extrait est la raison d'être de ce panneau.** On demandait d'arbitrer
+ * entre deux étiquettes — « Ouvert · avis S » contre « Levé » — sans montrer
+ * d'où elles sortent. Personne ne peut trancher là-dessus ; celui qui tranche
+ * quand même ne décide pas, il devine.
+ *
+ * Ce qui manque **se dit** : « aucun extrait conservé pour cette lecture » est
+ * une information, un blanc se lirait comme l'absence de preuve. Et le lien
+ * vers la page n'apparaît que si le document est à portée — promettre une
+ * page qu'on ne sait pas ouvrir serait pire que de ne rien promettre.
+ *
+ * Le bouton est le même des deux côtés, et il dit la même chose : retenir
+ * celle-ci. C'est ce que fait l'humain — il garde l'une ou l'autre lecture, il
+ * n'« assume » rien.
+ */
+function renderConflictSide(cote = {}, { action = "take", cle = "", tranche = false } = {}) {
+  const document_ = cote.documentId
+    ? (view.review?.documentRows ?? []).find((row) => String(row.id) === String(cote.documentId))
+    : null;
+
+  const provenance = [
+    document_ ? escapeHtml(document_.original_filename ?? document_.filename ?? "document") : "",
+    cote.page ? `page ${escapeHtml(String(cote.page))}` : ""
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  return `
+    <div class="conflict__side conflict__side--${action === "keep" ? "memory" : "now"}">
+      <span class="conflict__heading">${escapeHtml(cote.heading ?? "")}</span>
+      <span class="conflict__statement">${escapeHtml(cote.statement ?? "")}</span>
+      ${
+        cote.excerpt
+          ? `<blockquote class="conflict__excerpt">${escapeHtml(cote.excerpt)}</blockquote>`
+          : `<p class="conflict__excerpt conflict__excerpt--none">Aucun extrait conservé pour cette lecture.</p>`
+      }
+      ${provenance ? `<span class="conflict__source">${provenance}</span>` : ""}
+      ${
+        document_?.storage_path
+          ? `<button type="button" class="conflict__open" data-deposit-open="${escapeHtml(
+              document_.id ?? ""
+            )}"${cote.page ? ` data-deposit-page="${escapeHtml(String(cote.page))}"` : ""}>Voir dans le document</button>`
+          : ""
+      }
+      ${
+        tranche
+          ? ""
+          : `<button type="button" class="gh-btn gh-btn--sm conflict__choose" data-conflict-${action}="${escapeHtml(
+              cle
+            )}">Retenir cette lecture</button>`
+      }
+    </div>
+  `;
+}
+
 function renderConflict(conflict) {
   const dit = describeConflict(conflict);
   const tranche = conflict.item.status !== ITEM.PROPOSED;
@@ -608,22 +665,15 @@ function renderConflict(conflict) {
         }
       </div>
       <div class="conflict__sides">
-        <p class="conflict__side conflict__side--memory">${escapeHtml(dit.memory)}</p>
-        <p class="conflict__side conflict__side--now">${escapeHtml(dit.now)}</p>
+        ${renderConflictSide(dit.before, { action: "keep", cle, tranche })}
+        ${renderConflictSide(dit.after, { action: "take", cle, tranche })}
       </div>
       ${
         tranche
           ? `<p class="conflict__settled">${escapeHtml(
               conflict.item.status === ITEM.REFUSED ? dit.keep : dit.take
             )} — vous pouvez fusionner.</p>`
-          : `<div class="conflict__actions">
-               <button type="button" class="gh-btn gh-btn--sm" data-conflict-keep="${escapeHtml(cle)}">${escapeHtml(
-                 dit.keep
-               )}</button>
-               <button type="button" class="gh-btn gh-btn--sm gh-btn--primary" data-conflict-take="${escapeHtml(
-                 cle
-               )}">${escapeHtml(dit.take)}</button>
-             </div>`
+          : ""
       }
     </li>
   `;
@@ -638,7 +688,7 @@ function renderConflict(conflict) {
  * absence est une information, et ici l'absence de contradiction se lit déjà
  * dans le fait qu'on peut fusionner.
  */
-function renderConflicts(conflicts = []) {
+export function renderConflicts(conflicts = []) {
   if (conflicts.length === 0) return "";
 
   const restants = unresolvedConflicts(conflicts).length;
@@ -1603,6 +1653,10 @@ async function openDeposit(root, bouton) {
   releaseViewer();
   view.viewer = {
     documentId: id,
+    // La page qu'on est venu voir, quand le geste en désigne une : ouvrir un
+    // rapport de douze pages sur la première quand on cherche la septième
+    // laisse le travail à faire.
+    gotoPage: Number(bouton.getAttribute("data-deposit-page")) || null,
     name: ligne.original_filename ?? ligne.filename ?? "Document",
     page: 1,
     pageCount: 0,
@@ -1721,6 +1775,12 @@ async function drawPdfPage() {
     lecteur.dispose = dispose;
     lecteur.pageCount = pageCount;
     syncViewerNav();
+
+    // La page citée, amenée sous les yeux. Son cadre existe déjà — il porte sa
+    // taille avant d'être peint —, donc le défilement est juste dès maintenant.
+    if (lecteur.gotoPage > 1) {
+      hote.querySelector(`[data-pdf-page="${lecteur.gotoPage}"]`)?.scrollIntoView({ block: "start" });
+    }
   } catch (error) {
     if (view.viewer !== lecteur) return;
     lecteur.error = String(error?.message || "Ce livrable n'a pas pu être affiché.");

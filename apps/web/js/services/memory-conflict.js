@@ -171,14 +171,54 @@ export function unresolvedConflicts(conflicts = []) {
 }
 
 /**
- * Ce qu'un conflit dit, et ce que les deux réponses feraient.
+ * Ce qu'un conflit oppose, et de quoi le trancher.
  *
- * Les deux boutons nomment leur conséquence, pas leur mécanisme : « je
- * maintiens » et « j'assume » sont des positions, « accepter » et « refuser »
- * seraient des cases à cocher de plus.
+ * **Le système détecte une contradiction ; l'humain retient l'une ou l'autre
+ * lecture.** Les deux boutons disaient « Je garde ce qui était retenu » et
+ * « J'assume le changement » — des postures, pas des choix : on ne sait pas ce
+ * qu'on garde, et « assumer » laisse entendre qu'on prend un risque alors qu'on
+ * choisit une lecture. Chaque côté porte donc désormais son propre bouton, et
+ * il dit la même chose des deux côtés : retenir **celle-ci**.
  *
- * @returns {{title: string, memory: string, now: string, keep: string, take: string}}
+ * **Et surtout : chaque côté porte son extrait.** Sans la phrase du rapport
+ * d'où sort l'affirmation, on demandait d'arbitrer entre deux étiquettes —
+ * « Ouvert · avis S » contre « Levé » — sans montrer sur quoi elles reposent.
+ * Personne ne peut trancher là-dessus, et celui qui tranche quand même ne
+ * décide pas : il devine. Ce qui manque se dit, plutôt que de laisser un blanc
+ * qu'on prendrait pour l'absence de preuve.
+ *
+ * `keep` et `take` restent, pour la phrase qui rappelle ce qui a été tranché.
+ *
+ * @returns {{title: string, before: object, after: object, keep: string, take: string}}
  */
+
+/**
+ * L'extrait d'une lecture, tel qu'il a été conservé.
+ *
+ * Le moteur le range tantôt en chaîne, tantôt en `{text, page}` : les deux se
+ * lisent ici, plutôt que dans chaque écran.
+ */
+function excerptOf(payload = {}) {
+  const brut = payload?.evidence;
+  const texte = typeof brut === "string" ? brut : brut?.text;
+  return String(texte ?? "").trim() || null;
+}
+
+/** D'où vient une lecture : son document, et la page où on peut la vérifier. */
+function sourceOf(payload = {}) {
+  const evidence = typeof payload?.evidence === "object" ? payload.evidence : null;
+  const page = Number(payload?.page ?? evidence?.page);
+
+  return {
+    documentId: String(payload?.sourceId ?? evidence?.sourceId ?? "").trim() || null,
+    page: Number.isFinite(page) && page > 0 ? page : null
+  };
+}
+
+function side(heading, statement, payload) {
+  return { heading, statement, excerpt: excerptOf(payload), ...sourceOf(payload) };
+}
+
 export function describeConflict(conflict = {}) {
   const { kind, item = {}, beforePayload = {} } = conflict;
   const payload = item.payload ?? {};
@@ -192,41 +232,62 @@ export function describeConflict(conflict = {}) {
     if (kind === CONFLICT.REFUSED_REAFFIRMED) {
       return {
         title: avisTitle(payload, item),
-        memory: `Vous aviez écarté cette lecture : ${avant}`,
-        now: `L'analyse l'affirme à nouveau : ${apres}`,
-        keep: "Je maintiens mon refus",
-        take: "Je l'accepte finalement"
+        before: side("Ce que vous aviez écarté", avant, beforePayload),
+        after: side("Ce que ce lot réaffirme", apres, payload),
+        keep: "le refus a été maintenu",
+        take: "la lecture de ce lot a été retenue"
       };
     }
 
     return {
       title: avisTitle(payload, item),
-      memory: `Vous aviez retenu : ${avant}`,
-      now: `L'analyse dit maintenant : ${apres}`,
-      keep: "Je garde ce qui était retenu",
-      take: "J'assume le changement"
+      before: side("Ce que le projet retient", avant, beforePayload),
+      after: side("Ce que ce lot affirme", apres, payload),
+      keep: "la lecture précédente a été retenue",
+      take: "la lecture de ce lot a été retenue"
     };
   }
 
   if (item.itemType === ITEM_TYPE.ATTACHMENT) {
+    const ecarte = kind === CONFLICT.REFUSED_REAFFIRMED;
+
     return {
       title: `Affaire ${payload.label ?? item.itemKey}`,
-      memory:
-        kind === CONFLICT.REFUSED_REAFFIRMED
-          ? `Vous aviez écarté cette affaire du projet${conflict.reason ? ` : ${conflict.reason}` : ""}`
-          : `Vous aviez rattaché cette affaire au projet`,
-      now: payload.reason ?? "L'analyse la remet en cause.",
-      keep: kind === CONFLICT.REFUSED_REAFFIRMED ? "Je maintiens : ce n'est pas ce projet" : "Je garde le rattachement",
-      take: kind === CONFLICT.REFUSED_REAFFIRMED ? "Je la rattache finalement" : "J'assume le changement"
+      before: {
+        heading: ecarte ? "Ce que vous aviez écarté" : "Ce que le projet retient",
+        statement: ecarte
+          ? `Cette affaire n'est pas celle du projet${conflict.reason ? ` : ${conflict.reason}` : ""}`
+          : "Cette affaire est rattachée au projet",
+        excerpt: excerptOf(beforePayload),
+        ...sourceOf(beforePayload)
+      },
+      after: {
+        heading: ecarte ? "Ce que ce lot réaffirme" : "Ce que ce lot affirme",
+        statement: payload.reason ?? "L'analyse la remet en cause.",
+        excerpt: excerptOf(payload),
+        ...sourceOf(payload)
+      },
+      keep: ecarte ? "le refus a été maintenu" : "le rattachement a été conservé",
+      take: ecarte ? "l'affaire a finalement été rattachée" : "la lecture de ce lot a été retenue"
     };
   }
 
   return {
     title: payload.name ?? String(item.itemKey ?? ""),
-    memory: `Vous aviez écarté ce document${conflict.reason ? ` : ${conflict.reason}` : ""}`,
-    now: "Il est proposé à nouveau.",
-    keep: "Je maintiens mon refus",
-    take: "Je l'accepte finalement"
+    before: {
+      heading: "Ce que vous aviez écarté",
+      statement: `Ce document avait été écarté${conflict.reason ? ` : ${conflict.reason}` : ""}`,
+      excerpt: excerptOf(beforePayload),
+      ...sourceOf(beforePayload)
+    },
+    after: {
+      heading: "Ce que ce lot propose",
+      statement: "Il est proposé à nouveau.",
+      excerpt: excerptOf(payload),
+      ...sourceOf(payload)
+    },
+    keep: "le refus a été maintenu",
+    take: "le document a finalement été accepté"
   };
 }
 

@@ -154,12 +154,39 @@ export function corroboration(assertionId, acts = []) {
     if (source) sources.add(source);
   }
 
+  // **Combien de personnes**, et non combien de fois. La vérité n'est jamais
+  // absolue : trois personnes qui valident et une qui conteste, ce n'est pas la
+  // même chose qu'une personne qui valide trois fois — et le compte des actes
+  // seul confondait les deux.
+  const valideurs = new Set();
+  const contestataires = new Set();
+  for (const acte of histoire) {
+    const qui = texte(acte.declared_by);
+    if (!qui) continue;
+    if (texte(acte.verdict) === ACT.VALIDATED) valideurs.add(qui);
+    if (texte(acte.verdict) === ACT.CONTESTED) contestataires.add(qui);
+  }
+
   return {
     validations: histoire.filter((acte) => texte(acte.verdict) === ACT.VALIDATED).length,
     contestations: histoire.filter((acte) => texte(acte.verdict) === ACT.CONTESTED).length,
+    // Une même personne qui se ravise ne compte que dans le camp où elle a
+    // fini : son dernier acte fait foi, comme pour l'état.
+    validators: [...valideurs].filter((qui) => dernierAvis(qui, histoire) === ACT.VALIDATED).length,
+    contesters: [...contestataires].filter((qui) => dernierAvis(qui, histoire) === ACT.CONTESTED).length,
     sources: sources.size,
     acts: histoire.length
   };
+}
+
+/** Ce que cette personne dit **aujourd'hui** de l'hypothèse. */
+function dernierAvis(qui, histoire) {
+  const siens = histoire.filter(
+    (acte) =>
+      texte(acte.declared_by) === qui &&
+      (texte(acte.verdict) === ACT.VALIDATED || texte(acte.verdict) === ACT.CONTESTED)
+  );
+  return texte(siens[siens.length - 1]?.verdict);
 }
 
 /**
@@ -170,20 +197,26 @@ export function corroboration(assertionId, acts = []) {
  * exactement ce que la phrase doit laisser entendre.
  */
 export function describeCorroboration(compte = {}) {
-  const validations = Number(compte.validations) || 0;
-  const contestations = Number(compte.contestations) || 0;
+  const valideurs = Number(compte.validators) || 0;
+  const contestataires = Number(compte.contesters) || 0;
   const sources = Number(compte.sources) || 0;
 
+  // **Des personnes, pas des actes.** « 3 personnes la valident » se comprend ;
+  // « validée 3 fois » ne dit pas si c'est trois avis ou trois clics du même.
+  const gens = (nombre, verbe) => `${nombre} personne${nombre > 1 ? "s" : ""} ${verbe}`;
+
   const morceaux = [];
-  if (validations > 0) morceaux.push(`validée ${validations} fois`);
-  if (contestations > 0) morceaux.push(`contestée ${contestations} fois`);
+  if (valideurs > 0) morceaux.push(gens(valideurs, valideurs > 1 ? "la valident" : "la valide"));
+  if (contestataires > 0) {
+    morceaux.push(gens(contestataires, contestataires > 1 ? "la contestent" : "la conteste"));
+  }
 
   if (morceaux.length === 0) {
     return sources > 1 ? `reprise par ${sources} sources, jamais validée` : "jamais validée";
   }
 
-  if (sources > 1) morceaux.push(`par ${sources} sources`);
-  return morceaux.join(", ");
+  if (sources > 1) morceaux.push(`reprise par ${sources} sources`);
+  return morceaux.join(" · ");
 }
 
 /**

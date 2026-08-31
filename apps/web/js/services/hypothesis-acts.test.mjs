@@ -162,15 +162,41 @@ test("une hypothèse sans le moindre acte ne prétend rien", () => {
   assert.equal(describeCorroboration(corroboration("h1", [])), "jamais validée");
 });
 
-test("validations et contestations se disent ensemble", () => {
+test("on compte des personnes, pas des actes", () => {
+  // « validée 3 fois » ne dit pas si c'est trois avis ou trois clics du même.
+  // La vérité n'est jamais absolue : ce qui compte est combien de gens la
+  // tiennent, et combien la contestent.
   const suite = [
     acte(ACT.VALIDATED, "2026-08-01T00:00:00Z", { declared_by: "u-1" }),
-    acte(ACT.CONTESTED, "2026-08-02T00:00:00Z", { declared_by: "u-2" })
+    acte(ACT.VALIDATED, "2026-08-02T00:00:00Z", { declared_by: "u-2" }),
+    acte(ACT.CONTESTED, "2026-08-03T00:00:00Z", { declared_by: "u-3" })
   ];
 
-  const phrase = describeCorroboration(corroboration("h1", suite));
-  assert.match(phrase, /validée 1 fois/);
-  assert.match(phrase, /contestée 1 fois/);
+  const compte = corroboration("h1", suite);
+  assert.equal(compte.validators, 2);
+  assert.equal(compte.contesters, 1);
+
+  const phrase = describeCorroboration(compte);
+  assert.match(phrase, /2 personnes la valident/);
+  assert.match(phrase, /1 personne la conteste/);
+});
+
+test("une personne qui se ravise ne compte que dans le camp où elle a fini", () => {
+  const suite = [
+    acte(ACT.VALIDATED, "2026-08-01T00:00:00Z", { declared_by: "u-1" }),
+    acte(ACT.CONTESTED, "2026-08-05T00:00:00Z", { declared_by: "u-1" })
+  ];
+
+  const compte = corroboration("h1", suite);
+  assert.equal(compte.validators, 0, "elle ne valide plus");
+  assert.equal(compte.contesters, 1);
+});
+
+test("un acte sans auteur ne fait voter personne", () => {
+  const compte = corroboration("h1", [acte(ACT.VALIDATED, "2026-08-01T00:00:00Z")]);
+
+  assert.equal(compte.validations, 1, "l'acte existe");
+  assert.equal(compte.validators, 0, "mais il ne compte pas comme une voix");
 });
 
 /* ── On marque dès la contestation ───────────────────────────────────────── */
