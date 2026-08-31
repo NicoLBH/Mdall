@@ -644,7 +644,10 @@ function groupDeposits(documents = [], names = new Map()) {
     const cle = `${document.created_by ?? ""}|${String(document.created_at ?? "").slice(0, 16)}`;
     const groupe = groupes.get(cle) ?? {
       at: document.created_at ?? null,
-      who: names.get(String(document.created_by ?? "")) || "Un collaborateur",
+      // La table des auteurs porte un nom **et** un visage depuis qu'on affiche
+      // les avatars : prendre l'entrée telle quelle écrivait « [object Object]
+      // a déposé 17 livrables ».
+      who: nameOfAuthor(names.get(String(document.created_by ?? ""))),
       documents: []
     };
     groupe.documents.push(document);
@@ -1370,6 +1373,51 @@ function describeAnalysis(review) {
   return `${documents} livrable(s) soumis, ${avis} avis en mouvement${inchanges}.`;
 }
 
+/** Le nom d'un auteur, quelle que soit la forme sous laquelle il est rangé. */
+function nameOfAuthor(entree) {
+  if (!entree) return "Un collaborateur";
+  return (typeof entree === "string" ? entree : entree.name) || "Un collaborateur";
+}
+
+/**
+ * Ouvre un livrable déposé.
+ *
+ * Le stockage demande une autorisation : on ne peut pas pointer un lien vers
+ * lui. Le fichier est donc rapatrié, puis affiché — et l'onglet est ouvert
+ * **avant** le téléchargement, sinon le navigateur le prend pour une fenêtre
+ * surgissante et le bloque.
+ *
+ * Un échec le dit sur le bouton : un onglet blanc laisserait croire à un
+ * document vide.
+ */
+async function openDeposit(root, bouton) {
+  const id = bouton.getAttribute("data-deposit-open") || "";
+  const ligne = (view.review?.documentRows ?? []).find((row) => String(row.id) === id);
+  if (!ligne || bouton.disabled) return;
+
+  const onglet = window.open("", "_blank");
+  const libelle = bouton.textContent;
+  bouton.disabled = true;
+  bouton.textContent = "Ouverture…";
+
+  try {
+    const { downloadDocumentFile } = await import("../services/document-deposit.js");
+    const fichier = await downloadDocumentFile(ligne);
+    const url = URL.createObjectURL(fichier);
+
+    if (onglet) onglet.location = url;
+    // Le navigateur a besoin du lien le temps d'ouvrir le document ; le
+    // révoquer tout de suite rendrait une page blanche.
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    bouton.textContent = libelle;
+  } catch {
+    onglet?.close();
+    bouton.textContent = "Lecture impossible";
+  } finally {
+    bouton.disabled = false;
+  }
+}
+
 /**
  * Les dépôts : ce qui est entré, quand, et par qui.
  *
@@ -1401,7 +1449,7 @@ function renderDeposits(review) {
               ${depot.documents
                 .map(
                   (document) => `
-                    <li class="review-item review-item--plain">
+                    <li class="review-item review-item--plain deposit-item">
                       <span class="review-item__check">${svgIcon("file-pdf", { className: "octicon" })}</span>
                       <div class="review-item__body">
                         <span class="review-item__title">${escapeHtml(
@@ -1413,6 +1461,17 @@ function renderDeposits(review) {
                           ${document.issued_at ? ` · émis le ${escapeHtml(formatDate(document.issued_at))}` : ""}
                         </span>
                       </div>
+                      ${
+                        // « Sur la foi de quoi ? » se répond en ouvrant le
+                        // document, pas en faisant confiance à sa ligne. Le lien
+                        // n'apparaît qu'au survol : il est là quand on le
+                        // cherche, absent quand on lit la liste.
+                        document.storage_path
+                          ? `<button type="button" class="deposit-item__open" data-deposit-open="${escapeHtml(
+                              document.id ?? ""
+                            )}">Lire le document</button>`
+                          : ""
+                      }
                     </li>
                   `
                 )
@@ -1637,6 +1696,10 @@ function bindReview(root) {
   // CSS partagé échange les deux titres.
   bindReviewCompact(root);
 
+
+  for (const bouton of root.querySelectorAll("[data-deposit-open]")) {
+    bouton.addEventListener("click", () => openDeposit(root, bouton));
+  }
 
   // Relancer, c'est refaire ce que l'ouverture fait : rien d'autre n'a besoin
   // d'exister, et une seconde façon de lancer l'analyse divergerait de la

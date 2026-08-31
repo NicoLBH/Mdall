@@ -15619,7 +15619,7 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   grid-template-columns:22px 1fr;
   gap:10px;
   align-items:start;
-  padding:10px 16px;
+  padding:20px 16px;
   background:var(--panel);
   border-bottom:1px solid var(--border);
 }
@@ -16467,6 +16467,29 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .review-close-btn__icon{ color:var(--fgColor-danger); line-height:0; }
 
 /* Les dépôts : un geste, pas dix-sept lignes. */
+/* « Sur la foi de quoi ? » se répond en ouvrant le document. Le lien attend le
+   survol : présent quand on le cherche, absent quand on lit la liste. */
+.deposit-item{ position:relative; }
+.deposit-item__open{
+  position:absolute;
+  right:16px;
+  top:50%;
+  transform:translateY(-50%);
+  padding:0;
+  border:0;
+  background:none;
+  color:var(--accent);
+  font:inherit;
+  font-size:12px;
+  text-decoration:underline;
+  cursor:pointer;
+  opacity:0;
+  transition:opacity .12s ease;
+}
+.deposit-item:hover .deposit-item__open,
+.deposit-item__open:focus-visible{ opacity:1; }
+.deposit-item__open:hover{ color:#79c0ff; }
+.deposit-item__open:disabled{ color:var(--muted); cursor:default; text-decoration:none; }
 .deposit__head{
   display:flex;
   align-items:flex-start;
