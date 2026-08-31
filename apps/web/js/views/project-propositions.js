@@ -40,6 +40,7 @@ import {
   searchRefSuggestions
 } from "../utils/entity-refs.js";
 import { STORY, buildStory } from "../services/proposition-story.js";
+import { composerActions } from "../services/proposition-composer.js";
 import { renderSharedDetailsTitleWrap } from "./ui/detail-header.js";
 import { ITEM, PROPOSITION, describeMerge } from "../services/proposition-state.js";
 import {
@@ -855,7 +856,11 @@ function renderConversationActivity(event, index) {
  * ailleurs.
  */
 function renderConversationComposer(proposition, review) {
-  const aEcrire = String(view.draft ?? "").trim().length > 0;
+  const actions = composerActions({
+    draft: view.draft,
+    posting: review.posting,
+    abandoning: review.abandoning
+  });
   const peutFermer = proposition.status === PROPOSITION.OPEN;
 
   const moi = getAuthorIdentity({
@@ -892,19 +897,15 @@ function renderConversationComposer(proposition, review) {
     actionsHtml: `
       ${
         peutFermer
-          ? `<button type="button" class="gh-btn" data-review-abandon ${
+          ? `<button type="button" class="gh-btn review-close-btn" data-review-abandon ${
               review.merging ? "disabled" : ""
-            }>${
-              review.abandoning
-                ? "Confirmer l'abandon"
-                : aEcrire
-                  ? "Fermer avec ce commentaire"
-                  : "Fermer la proposition"
-            }</button>`
+            }>${svgIcon("git-pull-request-closed", {
+              className: "octicon review-close-btn__icon"
+            })}<span data-review-abandon-label>${escapeHtml(actions.closeLabel)}</span></button>`
           : ""
       }
       <button type="button" class="gh-btn gh-btn--primary" data-comment-post ${
-        review.posting || !aEcrire ? "disabled" : ""
+        actions.canPost ? "" : "disabled"
       }>${review.posting ? "Envoi…" : "Commenter"}</button>
     `
   });
@@ -998,17 +999,17 @@ function renderConversation(proposition, review) {
     })
     .join("");
 
-  // La carte de fin passe **sous** le trait : ce qui vient après le trait
-  // n'appartient plus à l'histoire de la proposition, et le sort d'une
-  // proposition close est justement ce qui la referme.
+  // Le trait épais ferme la discussion. Ce qui vient après ne la raconte plus :
+  // c'est ce qu'on peut encore en faire — fusionner tant qu'elle est ouverte,
+  // ou le procès-verbal de ce qui a été décidé quand elle ne l'est plus.
   const fin = histoire.find((event) => event.kind === STORY.MERGED || event.kind === STORY.CLOSED);
 
   return `
     <div class="review-thread-host">
       ${renderMessageThread({ itemsHtml: `${premier}${suite}`, className: "review-thread" })}
     </div>
+    <div class="review-end" role="separator" aria-label="Fin de la discussion"></div>
     ${proposition.status === PROPOSITION.OPEN ? renderMergeBox(proposition, review) : ""}
-    <div class="review-end" role="separator" aria-label="Fin de la proposition"></div>
     ${fin ? renderOutcomeCard(fin) : ""}
     ${renderConversationComposer(proposition, review)}
     ${renderRefMenu()}
@@ -1045,13 +1046,15 @@ function renderMergeBox(proposition, review) {
   const conditions = [
     {
       tone: review.error ? "warn" : "ok",
-      icon: review.error ? "alert" : "check-circle-fill",
+      // Le disque porte déjà la couleur : l'icône n'a plus qu'à être un signe.
+      // `check-circle-fill` dessinerait un second cercle dans le premier.
+      icon: review.error ? "alert" : "check",
       text: review.error ? "L'analyse n'a pas abouti" : "L'analyse a abouti",
       note: review.error ? review.error : describeAnalysis(review)
     },
     {
       tone: blocage ? "warn" : "ok",
-      icon: blocage ? "alert" : "check-circle-fill",
+      icon: blocage ? "alert" : "check",
       text: blocage ? "La mémoire du projet est contredite" : "Rien ne contredit la mémoire du projet",
       note: blocage || "Aucune décision passée n'est remise en cause par ce lot."
     }
@@ -1059,7 +1062,9 @@ function renderMergeBox(proposition, review) {
 
   return `
     <section class="merge-area">
-      <div class="merge-box merge-box--${empeche ? "blocked" : "ready"}">
+      <div class="merge-box merge-box--${empeche ? "blocked" : "ready"}${
+        review.confirming ? " merge-box--confirming" : ""
+      }">
         <span class="merge-box__avatar">${svgIcon("git-compare", {
           className: "octicon",
           width: 20,
@@ -1067,32 +1072,41 @@ function renderMergeBox(proposition, review) {
         })}</span>
 
         <div class="merge-box__panel">
-          <div class="merge-box__body">
-            <div class="merge-box__row merge-box__row--lead">
-              <span class="merge-box__icon merge-box__icon--plain">${svgIcon("pulse", { className: "octicon" })}</span>
-              <div>
-                <b>Le suivi des avis sera réécrit</b>
-                <span class="merge-box__note">
-                  La fusion fait entrer les documents acceptés au corpus, puis relit tout le dossier.
-                  Rien n'est calculé à moitié.
-                </span>
+          ${
+            // Au moment de signer, les conditions s'effacent : elles ont servi à
+            // décider, et ce qui reste à faire est d'écrire. Les garder sous le
+            // formulaire ferait relire un état déjà admis.
+            review.confirming
+              ? ""
+              : `
+            <div class="merge-box__body">
+              <div class="merge-box__row merge-box__row--lead">
+                <span class="merge-box__icon merge-box__icon--plain">${svgIcon("pulse", { className: "octicon" })}</span>
+                <div>
+                  <b>Le suivi des avis sera réécrit</b>
+                  <span class="merge-box__note">
+                    La fusion fait entrer les documents acceptés au corpus, puis relit tout le dossier.
+                    Rien n'est calculé à moitié.
+                  </span>
+                </div>
               </div>
-            </div>
 
-            ${conditions
-              .map(
-                (ligne) => `
-                  <div class="merge-box__row merge-box__row--${ligne.tone}">
-                    <span class="merge-box__icon">${svgIcon(ligne.icon, { className: "octicon" })}</span>
-                    <div>
-                      <b>${escapeHtml(ligne.text)}</b>
-                      ${ligne.note ? `<span class="merge-box__note">${escapeHtml(ligne.note)}</span>` : ""}
+              ${conditions
+                .map(
+                  (ligne) => `
+                    <div class="merge-box__row merge-box__row--${ligne.tone}">
+                      <span class="merge-box__icon">${svgIcon(ligne.icon, { className: "octicon" })}</span>
+                      <div>
+                        <b>${escapeHtml(ligne.text)}</b>
+                        ${ligne.note ? `<span class="merge-box__note">${escapeHtml(ligne.note)}</span>` : ""}
+                      </div>
                     </div>
-                  </div>
-                `
-              )
-              .join("")}
-          </div>
+                  `
+                )
+                .join("")}
+            </div>
+          `
+          }
 
           ${review.confirming ? renderMergeForm(proposition, review) : renderMergeAction(review, empeche, blocage)}
         </div>
@@ -1550,6 +1564,7 @@ function bindConversation(root) {
   if (draft) {
     draft.addEventListener("input", (event) => {
       view.draft = event.target.value;
+      syncComposerActions(root);
       syncRefMenu(root, event.target);
     });
     // Le curseur seul peut entrer ou sortir d'un `#` déjà écrit : la frappe
@@ -1665,6 +1680,27 @@ function bindRefLinks(root) {
  * Le menu ne se rouvre pas tout seul après un choix : on vient de citer, la
  * suite de la phrase n'a pas à être interrompue par une liste.
  */
+/**
+ * Les boutons suivent ce qui est écrit, sans redessiner.
+ *
+ * Redessiner à chaque touche ferait perdre le curseur ; ne rien faire faisait
+ * pire — le bouton « Commenter » naissait désactivé et le restait, si bien
+ * qu'un message écrit ne pouvait pas partir et que rien ne le disait.
+ */
+function syncComposerActions(root) {
+  const actions = composerActions({
+    draft: view.draft,
+    posting: view.review?.posting,
+    abandoning: view.review?.abandoning
+  });
+
+  const envoyer = root.querySelector("[data-comment-post]");
+  if (envoyer) envoyer.disabled = !actions.canPost;
+
+  const fermer = root.querySelector("[data-review-abandon-label]");
+  if (fermer) fermer.textContent = actions.closeLabel;
+}
+
 function syncRefMenu(root, textarea) {
   const contexte = resolveRefTriggerContext(textarea.value ?? "", textarea.selectionStart ?? 0);
   if (!contexte) {
@@ -1978,11 +2014,20 @@ async function merge(root) {
     view.open = {
       ...proposition,
       status: PROPOSITION.MERGED,
-      merged_at: new Date().toISOString(),
+      // La date et l'auteur sont ceux que la base a reçus, pas ceux que l'écran
+      // reconstituerait de son côté.
+      merged_at: applique.mergedAt ?? new Date().toISOString(),
+      merged_by: applique.mergedBy ?? null,
       merge_title: String(view.mergeTitle ?? "").trim(),
       merge_note: String(view.mergeNote ?? "").trim(),
       snapshot: gele
     };
+
+    // L'histoire se refait maintenant : sans cela, le fil resterait celui d'une
+    // proposition ouverte — sans acte de fusion, sans carte de fin — jusqu'au
+    // prochain rechargement, et un message écrit dans la foulée se retrouverait
+    // avant une fusion déjà faite.
+    await restoryAfterClosing(propositions);
 
     // La liste dit la même chose que l'écran. Sans cela, revenir en arrière
     // montrerait la proposition encore ouverte, et la rouvrir la ferait
@@ -1998,6 +2043,45 @@ async function merge(root) {
   }
 
   renderContent(root);
+}
+
+/**
+ * Refait l'histoire une fois la proposition fermée.
+ *
+ * Fermer ajoute un acte — fusionnée, ou abandonnée — et cet acte a un auteur et
+ * une date. Sans cette relecture, l'écran garderait le fil d'une proposition
+ * ouverte jusqu'au prochain rechargement : pas d'acte de fusion, pas de carte de
+ * fin, et un message écrit dans la foulée se rangerait avant une fusion déjà
+ * faite. Rien n'est relu en base que les noms des signataires.
+ */
+async function restoryAfterClosing(propositions) {
+  if (!view.open || !view.review) return;
+
+  const documents = view.review.documentRows ?? [];
+  const decisions = view.review.decisionRows ?? [];
+  const comments = view.review.comments ?? [];
+
+  try {
+    view.review.authors = await propositions.loadAuthors([
+      view.open.created_by,
+      view.open.merged_by,
+      view.open.closed_by,
+      ...documents.map((row) => row.created_by),
+      ...decisions.map((row) => row.decided_by),
+      ...comments.map((row) => row.author_id)
+    ]);
+  } catch {
+    // Un nom manquant se dit « un collaborateur » : ce n'est pas une raison
+    // pour ne pas raconter la fusion.
+  }
+
+  view.review.story = buildStory({
+    proposition: view.open,
+    documents,
+    decisions,
+    comments,
+    names: view.review.authors ?? new Map()
+  });
 }
 
 /**
@@ -2100,7 +2184,14 @@ async function abandon(root) {
     view.review.merging = false;
     view.review.abandoning = false;
     view.review.frozen = true;
-    view.open = { ...proposition, status: PROPOSITION.CLOSED, snapshot: gele };
+    view.open = {
+      ...proposition,
+      status: PROPOSITION.CLOSED,
+      closed_at: ferme.closedAt ?? new Date().toISOString(),
+      closed_by: ferme.closedBy ?? null,
+      snapshot: gele
+    };
+    await restoryAfterClosing(propositions);
 
     // La liste et le compteur de l'onglet disent la même chose que l'écran.
     const ligne = (view.propositions ?? []).find((entry) => entry.id === proposition.id);

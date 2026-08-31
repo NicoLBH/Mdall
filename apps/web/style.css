@@ -16045,7 +16045,7 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 /* Le premier message ouvre le fil : le décaler du haut le détacherait des
    onglets, alors qu'il en est la suite immédiate. La ligne descend d'autant. */
 .review-thread .message-thread__item:first-child{ padding-top:0; }
-.review-thread .message-thread__item:first-child::before{ top:2px; }
+.review-thread .message-thread__item:first-child::before{ top:22px; }
 .review-thread .message-thread__item:last-child::before{ bottom:auto; height:30px; }
 
 /* Les pastilles d'activité : un disque gris, sauf la fusion, qui prend le
@@ -16135,7 +16135,7 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   gap:12px;
   padding:12px 16px;
   border-top:1px solid var(--border);
-  background:var(--panel);
+  background:var(--btn-bg);
 }
 .merge-box__hint{ color:var(--muted); font-size:12px; }
 
@@ -16160,8 +16160,14 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   gap:6px;
   padding:14px 16px;
   border-top:1px solid var(--border);
-  background:var(--panel);
+  background:var(--btn-bg);
 }
+
+/* Au moment de signer, les conditions s'effacent : elles ont servi à décider,
+   et ce qui reste à faire est d'écrire. Le cadre redevient neutre — le vert
+   annonçait « prêt à fusionner », il n'a plus rien à annoncer. */
+.merge-box--confirming .merge-box__panel{ border-color:var(--border); }
+.merge-box--confirming .merge-form{ border-top:0; }
 .merge-form__label{ color:var(--text); font-size:13px; font-weight:600; margin-top:4px; }
 .merge-form__input{ width:100%; }
 .merge-form__textarea{
@@ -16178,6 +16184,12 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 }
 .merge-form__signature{ margin:6px 0 2px; color:var(--muted); font-size:12px; }
 .merge-form__actions{ display:flex; gap:8px; }
+
+/* Fermer une proposition ne détruit rien — les documents restent au projet,
+   l'histoire reste lisible : le bouton garde donc le gris d'« Annuler ». Seul
+   son signe est rouge, parce que c'est bien une fin. */
+.review-close-btn{ display:inline-flex; align-items:center; gap:6px; }
+.review-close-btn__icon{ color:var(--fgColor-danger); line-height:0; }
 
 /* Les dépôts : un geste, pas dix-sept lignes. */
 .deposit__head{
