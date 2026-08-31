@@ -17,10 +17,19 @@ import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.j
 import { assertionsFromProposition, planSupersessions } from "./project-memory.js";
 
 const SUPABASE_URL = getSupabaseUrl();
-const COLUMNS =
+// Les colonnes du fond, puis celles du vocabulaire — ajoutées après coup.
+// Une base où la migration n'est pas encore passée rejetterait **toute** la
+// requête pour deux colonnes optionnelles, et l'écran dirait « la mémoire n'a
+// pas pu être lue » alors qu'elle est intacte. On sait maintenant que cette
+// façon de perdre un écran entier existe : on ne la reproduit pas.
+const BASE_COLUMNS =
   "id,project_id,kind,subject_key,statement,detail,status,payload," +
   "proposition_id,proposition_number,source_document_id,decided_by,decided_at," +
   "supersedes,superseded_by,superseded_at,created_at";
+
+const TAXONOMY_COLUMNS = "nature,domain";
+
+const COLUMNS = `${BASE_COLUMNS},${TAXONOMY_COLUMNS}`;
 
 async function request(path, { method = "GET", body = null, headers = {}, params = {} } = {}) {
   const url = new URL(`${SUPABASE_URL}/rest/v1/${path}`);
@@ -50,14 +59,22 @@ async function request(path, { method = "GET", body = null, headers = {}, params
 export async function listProjectAssertions(projectId) {
   if (!projectId) return null;
 
+  const lire = (colonnes) =>
+    request("project_assertions", {
+      params: { select: colonnes, project_id: `eq.${projectId}`, order: "decided_at.desc,subject_key.asc" }
+    });
+
   try {
-    return (
-      (await request("project_assertions", {
-        params: { select: COLUMNS, project_id: `eq.${projectId}`, order: "decided_at.desc,subject_key.asc" }
-      })) ?? []
-    );
+    return (await lire(COLUMNS)) ?? [];
   } catch {
-    return null;
+    try {
+      // Sans le vocabulaire plutôt que sans la mémoire. La nature se déduit de
+      // la provenance à la lecture, le domaine restera « non classé » : l'écran
+      // reste juste, il en dit seulement moins.
+      return (await lire(BASE_COLUMNS)) ?? [];
+    } catch {
+      return null;
+    }
   }
 }
 
@@ -74,17 +91,25 @@ export async function writeAssertions(rows = []) {
   const lignes = Array.isArray(rows) ? rows.filter((row) => row?.project_id && row?.subject_key) : [];
   if (lignes.length === 0) return [];
 
+  const ecrire = (body, colonnes) =>
+    request("project_assertions", {
+      method: "POST",
+      params: { select: colonnes, on_conflict: "proposition_id,kind,subject_key" },
+      headers: { Prefer: "return=representation,resolution=ignore-duplicates" },
+      body
+    });
+
   try {
-    return (
-      (await request("project_assertions", {
-        method: "POST",
-        params: { select: COLUMNS, on_conflict: "proposition_id,kind,subject_key" },
-        headers: { Prefer: "return=representation,resolution=ignore-duplicates" },
-        body: lignes
-      })) ?? []
-    );
+    return (await ecrire(lignes, COLUMNS)) ?? [];
   } catch {
-    return null;
+    try {
+      // Verser l'affirmation sans son vocabulaire vaut mieux que ne pas la
+      // verser : ce qu'elle dit est ce qui compte, et la nature se redéduira.
+      const sansVocabulaire = lignes.map(({ nature: _n, domain: _d, ...reste }) => reste);
+      return (await ecrire(sansVocabulaire, BASE_COLUMNS)) ?? [];
+    } catch {
+      return null;
+    }
   }
 }
 

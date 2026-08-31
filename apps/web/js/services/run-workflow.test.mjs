@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { NODE, buildRunGraph, formatStepDuration } from "./run-workflow.js";
+import { NODE, buildRunGraph, describeReadingStack, formatStepDuration } from "./run-workflow.js";
 
 const EXECUTION = {
   id: "run-1",
@@ -130,4 +130,23 @@ test("la boîte « Lecture » ne répète pas un pack par livrable", () => {
 
   const lecture = nodes.find((entry) => entry.id === "lecture");
   assert.equal(lecture.detail, "ct-lab v3 · socotec v1 · apave v2");
+});
+
+test("« Lu par » nomme chaque pack une seule fois, où qu'on le lise", () => {
+  // Les packs sont relevés par livrable. La même jointure était recopiée à
+  // trois endroits — le graphe, le détail d'une exécution, l'analyse d'une
+  // proposition — et deux d'entre eux répétaient « socotec v1 ».
+  assert.equal(
+    describeReadingStack("ct-lab v3", ["socotec v1", "socotec v1", "apave v2", "socotec v1"]),
+    "ct-lab v3 · socotec v1 · apave v2"
+  );
+});
+
+test("sans moteur ni pack, « Lu par » ne dit rien plutôt que de dire du vide", () => {
+  assert.equal(describeReadingStack(null, []), "");
+  assert.equal(describeReadingStack("", ["  ", null]), "");
+});
+
+test("un moteur seul se dit seul", () => {
+  assert.equal(describeReadingStack("ct-lab v3"), "ct-lab v3");
 });

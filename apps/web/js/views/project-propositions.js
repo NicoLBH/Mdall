@@ -69,6 +69,7 @@ import {
   documentItems
 } from "../services/proposition-review.js";
 import { avisFromFigures, mergeAvis } from "../services/avis-from-figures.js";
+import { describeReadingStack } from "../services/run-workflow.js";
 
 /** Ce que l'écran tient entre deux rendus. */
 const view = {
@@ -243,7 +244,6 @@ function renderContent(root) {
         <div class="propositions-shell overlay-chrome overlay-chrome--proposition" data-review-chrome>
           ${renderReview(root)}
         </div>
-        ${renderPdfViewer()}
       </section>
     `;
     bindReview(root);
@@ -1610,7 +1610,7 @@ async function openDeposit(root, bouton) {
     error: null,
     drawn: false
   };
-  renderContent(root);
+  showPdfViewer(root);
 
   try {
     const { downloadDocumentFile } = await import("../services/document-deposit.js");
@@ -1629,14 +1629,16 @@ async function openDeposit(root, bouton) {
     view.viewer.error = "Ce livrable n'a pas pu être lu depuis le stockage.";
   }
 
-  if (root.isConnected) renderContent(root);
+  showPdfViewer(root);
 }
 
 /** Ferme le lecteur, sans rien changer à la proposition. */
-function closeViewer(root) {
+function closeViewer() {
   if (!view.viewer) return;
   view.viewer = null;
-  renderContent(root);
+  // L'onglet n'a pas bougé : le redessiner ferait clignoter une liste qu'on
+  // n'a pas touchée, et coûterait le rechargement de toutes ses vignettes.
+  removePdfViewerHost();
 }
 
 /**
@@ -1692,9 +1694,9 @@ export function renderPdfViewer(etat = view.viewer) {
  * `drawn` évite de redessiner à chaque rendu de l'écran : un commentaire écrit
  * pendant qu'on lit un rapport ne doit pas relancer le rendu de sa page.
  */
-async function drawPdfPage(root) {
+async function drawPdfPage() {
   const lecteur = view.viewer;
-  const hote = root.querySelector("[data-review-pdf-canvas]");
+  const hote = viewerHost?.querySelector("[data-review-pdf-canvas]");
   if (!lecteur?.bytes || !hote || lecteur.drawn) return;
 
   lecteur.drawn = true;
@@ -1715,11 +1717,11 @@ async function drawPdfPage(root) {
     // venait de peindre, et `drawn` empêchait de le repeindre. On voyait donc
     // « Page 1 sur 4 » au-dessus d'un panneau vide.
     lecteur.pageCount = pageCount;
-    syncViewerNav(root);
+    syncViewerNav();
   } catch (error) {
     if (view.viewer !== lecteur) return;
     lecteur.error = String(error?.message || "Ce livrable n'a pas pu être affiché.");
-    renderContent(root);
+    if (viewerHost) viewerHost.innerHTML = renderPdfViewer();
   }
 }
 
@@ -1730,17 +1732,17 @@ async function drawPdfPage(root) {
  * l'état des deux flèches. Passer par un rendu complet pour cela détruirait la
  * page dessinée — c'est exactement le défaut qu'on corrige.
  */
-function syncViewerNav(root) {
+function syncViewerNav() {
   const lecteur = view.viewer;
-  if (!lecteur) return;
+  if (!lecteur || !viewerHost) return;
 
-  const compteur = root.querySelector(".review-pdf__count");
+  const compteur = viewerHost.querySelector(".review-pdf__count");
   if (compteur) compteur.textContent = lecteur.pageCount > 0 ? `Page ${lecteur.page} sur ${lecteur.pageCount}` : "";
 
-  const precedent = root.querySelector("[data-review-pdf-prev]");
+  const precedent = viewerHost.querySelector("[data-review-pdf-prev]");
   if (precedent) precedent.disabled = !lecteur.pageCount || lecteur.page <= 1;
 
-  const suivant = root.querySelector("[data-review-pdf-next]");
+  const suivant = viewerHost.querySelector("[data-review-pdf-next]");
   if (suivant) suivant.disabled = !lecteur.pageCount || lecteur.page >= lecteur.pageCount;
 }
 
@@ -1754,8 +1756,8 @@ function turnPdfPage(root, pas) {
 
   lecteur.page = cible;
   lecteur.drawn = false;
-  syncViewerNav(root);
-  drawPdfPage(root);
+  syncViewerNav();
+  drawPdfPage();
 }
 
 /**
@@ -1856,10 +1858,11 @@ function renderAnalysis(proposition, review) {
     [
       "Lu par",
       gele
-        ? [snapshot?.engine, ...(snapshot?.packs ?? [])].filter(Boolean).join(" · ") || "non conservé"
-        : [review.result?.engineVersion, ...Object.values(review.result?.packsUsed ?? {}).map((pack) => `${pack.pack_id} v${pack.pack_version}`)]
-            .filter(Boolean)
-            .join(" · ") || "—"
+        ? describeReadingStack(snapshot?.engine, snapshot?.packs) || "non conservé"
+        : describeReadingStack(
+            review.result?.engineVersion,
+            Object.values(review.result?.packsUsed ?? {}).map((pack) => `${pack.pack_id} v${pack.pack_version}`)
+          ) || "—"
     ]
   ];
 
@@ -2157,27 +2160,72 @@ function bindViewerEscape() {
 
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape" || !view.viewer || !mountedRoot?.isConnected) return;
-    closeViewer(mountedRoot);
+    closeViewer();
   });
 }
 
-/** Le lecteur : feuilleter, fermer, et dessiner la page demandée. */
-function bindPdfViewer(root) {
-  if (!view.viewer) return;
+/**
+ * L'hôte du lecteur, **à la racine du document**.
+ *
+ * `#app` est un contexte d'empilement, et il commence sous le bandeau de
+ * l'application : un panneau posé à l'intérieur passe forcément **derrière**
+ * l'en-tête, quel que soit son `z-index` — un `z-index` ne franchit pas la
+ * frontière d'un contexte. On voyait donc la barre du lecteur coupée par le
+ * bandeau. La descendre de 90px l'aurait dégagée en amputant d'autant la
+ * hauteur de lecture : ce n'est pas la position qu'il fallait corriger, c'est
+ * l'endroit où le panneau est accroché.
+ *
+ * C'est le geste que l'application fait déjà pour ses autres panneaux flottants.
+ */
+let viewerHost = null;
+
+function pdfViewerHost() {
+  if (viewerHost?.isConnected) return viewerHost;
+
+  viewerHost = document.createElement("div");
+  viewerHost.className = "review-pdf-host";
+  document.body.appendChild(viewerHost);
+  return viewerHost;
+}
+
+function removePdfViewerHost() {
+  viewerHost?.remove();
+  viewerHost = null;
+}
+
+/**
+ * Monte le lecteur, ou le remonte quand son état a changé.
+ *
+ * Appelé aux seuls moments où le lecteur change — on l'ouvre, ses octets
+ * arrivent, sa lecture échoue — et **jamais depuis le rendu de l'onglet**. Le
+ * panneau vit hors de la coque du projet ; le redessiner à chaque rendu de
+ * l'écran effacerait la page qu'on est en train de lire dès qu'un commentaire
+ * est écrit à côté. Feuilleter, lui, ne remonte rien : il repeint la page.
+ */
+function showPdfViewer(root) {
+  if (!view.viewer) {
+    removePdfViewerHost();
+    return;
+  }
 
   bindViewerEscape();
 
-  root.querySelector("[data-review-pdf-close]")?.addEventListener("click", () => closeViewer(root));
-  root.querySelector("[data-review-pdf-prev]")?.addEventListener("click", () => turnPdfPage(root, -1));
-  root.querySelector("[data-review-pdf-next]")?.addEventListener("click", () => turnPdfPage(root, 1));
+  const hote = pdfViewerHost();
+  hote.innerHTML = renderPdfViewer();
+
+  hote.querySelector("[data-review-pdf-close]")?.addEventListener("click", () => closeViewer());
+  hote.querySelector("[data-review-pdf-prev]")?.addEventListener("click", () => turnPdfPage(root, -1));
+  hote.querySelector("[data-review-pdf-next]")?.addEventListener("click", () => turnPdfPage(root, 1));
 
   // Fermer d'un clic hors du panneau et de la touche Échap : ce sont les deux
   // gestes qu'on tente sans réfléchir devant une lecture ouverte.
-  root.querySelector(".review-pdf")?.addEventListener("click", (event) => {
-    if (event.target === event.currentTarget) closeViewer(root);
+  hote.querySelector(".review-pdf")?.addEventListener("click", (event) => {
+    if (event.target === event.currentTarget) closeViewer();
   });
 
-  drawPdfPage(root);
+  // Le panneau est neuf : la page qu'il portait n'y est plus.
+  view.viewer.drawn = false;
+  drawPdfPage();
 }
 
 /** Le retour à la liste, les cases, les raisons, et la fusion. */
@@ -2188,7 +2236,6 @@ function bindReview(root) {
   bindReviewCompact(root);
 
   bindExportButton(root);
-  bindPdfViewer(root);
 
   hydrateFigures(root);
 
@@ -2620,6 +2667,7 @@ function backToList(root) {
   view.open = null;
   view.review = null;
   view.viewer = null;
+  removePdfViewerHost();
   // Sans quoi l'en-tête global resterait masqué sur la liste, et ailleurs.
   setTopCompact(false);
   setPropositionsHeader();
@@ -3446,6 +3494,9 @@ async function openProposition(root, propositionId) {
   view.preview = false;
   view.editing = null;
   view.editDraft = "";
+  // Un livrable ouvert appartient à la proposition qu'on quitte.
+  view.viewer = null;
+  removePdfViewerHost();
   view.review = { running: true, step: "", items: [], unreachable: [], diff: { unchanged: 0 }, error: null };
 
   // La barre compacte nomme la proposition : c'est elle qu'on lit, pas l'onglet.

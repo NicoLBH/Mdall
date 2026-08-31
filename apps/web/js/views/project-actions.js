@@ -3,7 +3,7 @@ import { setProjectViewHeader, clearProjectActiveScrollSource, debugProjectScrol
 import { getRunLogEntries, getRunMetrics } from "../services/project-automation.js";
 import { syncProjectActionsFromSupabase } from "../services/project-supabase-sync.js";
 import { svgIcon } from "../ui/icons.js";
-import { buildRunGraph, formatStepDuration } from "../services/run-workflow.js";
+import { buildRunGraph, describeReadingStack, formatStepDuration } from "../services/run-workflow.js";
 import { store } from "../store.js";
 import { PROJECT_TAB_RESELECTED_EVENT } from "./project-header.js";
 import {
@@ -427,7 +427,7 @@ function renderRunDetail(entry) {
           `${corpus.trackedAvisCount || 0}${corpus.avisCount ? ` sur ${corpus.avisCount} relevés` : ""}`
         ],
         corpus.engineVersion || corpus.packs?.length
-          ? ["Lu par", [corpus.engineVersion, ...(corpus.packs ?? [])].filter(Boolean).join(" · ")]
+          ? ["Lu par", describeReadingStack(corpus.engineVersion, corpus.packs)]
           : null
       ].filter(Boolean)
     : [];
@@ -527,6 +527,13 @@ function renderRunGraph(entry) {
         </div>
       </div>
 
+      ${
+        // Aucune phase mesurée : on le dit. Un graphe muet laisserait croire que
+        // tout a été instantané, ou que l'affichage est cassé.
+        nodes.length > 0 && nodes.every((node) => node.duration === null)
+          ? `<p class="run-graph__unmeasured">Les durées de cette exécution n'ont pas été enregistrées.</p>`
+          : ""
+      }
       <div class="run-graph" data-run-graph-viewport>
         <div class="run-graph__canvas" data-run-graph-canvas>
           ${nodes

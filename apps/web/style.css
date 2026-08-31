@@ -16016,6 +16016,11 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   transition:transform .12s ease;
 }
 
+/* Les liaisons et les cartes partagent leur trait : c'est un même dessin, et
+   deux gris voisins mais différents se lisent comme une erreur d'alignement.
+   La valeur est posée une fois ici, sur le graphe. */
+.run-graph{ --run-graph-line:rgb(61,68,77); }
+
 .run-graph__node{
   display:flex;
   flex-direction:column;
@@ -16023,7 +16028,7 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   flex:0 0 auto;
   min-width:168px;
   padding:12px 14px;
-  border:1px solid rgb(61,68,77);
+  border:1px solid var(--run-graph-line);
   border-radius:10px;
   background-color:rgb(21,27,35);
   box-shadow:0 1px 0 rgba(1,4,9,.5);
@@ -16058,7 +16063,7 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   align-self:center;
   width:28px;
   height:1px;
-  background:var(--border);
+  background:var(--run-graph-line);
 }
 .run-graph__link::after{
   content:"";
@@ -16067,9 +16072,18 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   top:50%;
   width:5px;
   height:5px;
-  border-top:1px solid var(--border);
-  border-right:1px solid var(--border);
+  border-top:1px solid var(--run-graph-line);
+  border-right:1px solid var(--run-graph-line);
   transform:translate(0, -50%) rotate(45deg);
+}
+
+/* Une exécution sans mesure le dit. Un graphe muet laisse croire que les phases
+   ont été instantanées, ou que l'écran a cessé de fonctionner — deux lectures
+   fausses, là où l'information est simplement « non enregistrée ». */
+.run-graph__unmeasured{
+  margin:8px 0 0;
+  color:var(--muted);
+  font-size:12px;
 }
 
 /* Plein écran : le graphe prend la page, sans emporter le reste du détail. */
@@ -16412,6 +16426,38 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .memory-head__actions{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .memory-head__actions .gh-btn{ display:inline-flex; align-items:center; gap:6px; }
 
+/* Les étiquettes de vocabulaire, sur la ligne d'une affirmation. « Sans
+   domaine » se lit comme les autres : une mémoire dont on ne voit pas les trous
+   se croit complète. */
+.memory-tag{
+  display:inline-flex;
+  align-items:center;
+  margin-right:6px;
+  padding:0 6px;
+  border:1px solid var(--border);
+  border-radius:999px;
+  font-size:11px;
+  line-height:18px;
+  color:var(--muted);
+}
+.memory-tag--nature{ color:var(--text); }
+.memory-tag--domain{ color:var(--text); }
+.memory-tag--unknown{ border-style:dashed; }
+
+/* Le compteur des non classés s'ouvre : un nombre qu'on ne peut pas atteindre
+   ne fait que culpabiliser. */
+.memory-counts__item--unclassified{
+  padding:0;
+  border:0;
+  background:none;
+  color:inherit;
+  font:inherit;
+  cursor:pointer;
+  text-decoration:underline dotted;
+  text-underline-offset:3px;
+}
+.memory-counts__item--unclassified:hover{ color:var(--accent); }
+
 .memory-counts{
   display:flex;
   gap:20px;
@@ -16715,10 +16761,14 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
    Visualiser n'est pas télécharger : l'écran ouvrait le PDF dans un onglet du
    navigateur, ce qui l'enregistrait selon les postes. Le lecteur est celui
    d'Atelier — mêmes classes de page, même rendu que l'onglet Documents. */
+/* L'hôte vit à la racine du document, hors de `#app`. C'est ce qui compte : un
+   `z-index` ne franchit pas la frontière d'un contexte d'empilement, et `#app`
+   en est un — le panneau passait donc sous le bandeau quoi qu'on lui donne. */
+.review-pdf-host{ position:relative; z-index:1000; }
 .review-pdf{
   position:fixed;
   inset:0;
-  z-index:60;
+  z-index:1000;
   display:flex;
   align-items:center;
   justify-content:center;

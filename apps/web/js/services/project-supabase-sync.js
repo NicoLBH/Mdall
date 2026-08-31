@@ -1213,21 +1213,34 @@ export async function syncProjectActionsFromSupabase(options = {}) {
   params.set("project_id", `eq.${backendProjectId}`);
   params.set("order", "created_at.desc");
 
-  const ctParams = new URLSearchParams();
-  ctParams.set(
-    "select",
+  // Les colonnes du journal, et celles qu'on peut perdre sans perdre le journal.
+  // `steps` porte les durées : une base où la migration n'est pas passée fait
+  // rejeter **toute la requête**, et l'écran n'affiche alors plus aucune
+  // exécution — un détail optionnel emportait le tout.
+  const CT_RUN_COLUMNS =
     "id,computed_at,document_count,avis_count,tracked_avis_count,guard_violation_count," +
-      "packs_used,engine_version,corpus_documents,steps,trigger_source,proposition_id,propositions(number,title)"
-  );
-  ctParams.set("project_id", `eq.${backendProjectId}`);
-  ctParams.set("order", "computed_at.desc");
+    "packs_used,engine_version,corpus_documents,trigger_source,proposition_id,propositions(number,title)";
+
+  const ctParamsFor = (colonnes) => {
+    const params_ = new URLSearchParams();
+    params_.set("select", colonnes);
+    params_.set("project_id", `eq.${backendProjectId}`);
+    params_.set("order", "computed_at.desc");
+    return params_;
+  };
+
+  const ctParams = ctParamsFor(`${CT_RUN_COLUMNS},steps`);
 
   // Deux pipelines, un seul journal. Ne pas savoir lire l'un n'autorise pas
   // à taire l'autre : une base à jour rendra les deux, une base en retard
   // rendra celui qu'elle connaît plutôt qu'une page vide.
   const [rows, ctRows] = await Promise.all([
     restFetch("analysis_runs", params).catch(() => []),
-    restFetch("ct_analysis_runs", ctParams).catch(() => [])
+    restFetch("ct_analysis_runs", ctParams).catch(() =>
+      // Sans les durées plutôt que sans le journal : perdre l'histoire des
+      // exécutions parce qu'une colonne manque serait le pire des deux.
+      restFetch("ct_analysis_runs", ctParamsFor(CT_RUN_COLUMNS)).catch(() => [])
+    )
   ]);
 
   const nextItems = [

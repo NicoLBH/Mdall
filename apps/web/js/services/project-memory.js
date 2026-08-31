@@ -30,6 +30,7 @@
  */
 
 import { ITEM } from "./proposition-state.js";
+import { classifyAssertion } from "./assertion-taxonomy.js";
 import { ITEM_TYPE } from "./proposition-review.js";
 
 /** Ce que le projet fait d'une affirmation. */
@@ -129,6 +130,15 @@ export function assertionsFromProposition({ proposition = {}, items = [], decide
     .map((item) => {
       const status = item.status === ITEM.REFUSED ? MEMORY.REJECTED : MEMORY.ASSUMED;
 
+      // Le vocabulaire, quand on le sait. La nature se déduit de la provenance
+      // — un avis est un constat, un document relève de l'intendance — et le
+      // domaine ne vient que de ce que la revue portait : rien n'est deviné.
+      const { nature, domain } = classifyAssertion({
+        kind: item.itemType,
+        nature: item.payload?.nature,
+        domain: item.payload?.domain
+      });
+
       return {
         project_id: proposition.project_id,
         kind: item.itemType,
@@ -136,6 +146,8 @@ export function assertionsFromProposition({ proposition = {}, items = [], decide
         statement: statementOf(item),
         detail: detailOf(item, status) || null,
         status,
+        nature,
+        domain,
         payload: item.payload ?? null,
         proposition_id: proposition.id,
         proposition_number: Number(proposition.number) || null,

@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
+import { ITEM } from "./proposition-state.js";
+
 import {
   MEMORY,
   assertionHistory,
@@ -237,4 +239,52 @@ test("ce qui manque n'apparaît pas, plutôt que d'apparaître vide", () => {
   const faits = describeAssertionFacts({ kind: "document", subject_key: "d-1", payload: { name: "RICT.pdf" } });
 
   assert.deepEqual(faits, [["Fichier", "RICT.pdf"]]);
+});
+
+/* ── Le vocabulaire arrive avec l'affirmation ────────────────────────────── */
+
+test("une affirmation versée porte sa nature, déduite de sa provenance", () => {
+  const lignes = assertionsFromProposition({
+    proposition: { id: "p-1", project_id: "x", number: 4, merged_at: "2026-03-01T00:00:00.000Z" },
+    items: [
+      { itemType: "avis", itemKey: "166", status: ITEM.ACCEPTED, payload: { reference: "166", title: "Réserve" } },
+      { itemType: "document", itemKey: "doc-1", status: ITEM.ACCEPTED, payload: { name: "a.pdf" } }
+    ]
+  });
+
+  assert.equal(lignes.find((row) => row.kind === "avis").nature, "constat");
+  assert.equal(lignes.find((row) => row.kind === "document").nature, "intendance");
+});
+
+test("aucun domaine n'est inventé au versement", () => {
+  const lignes = assertionsFromProposition({
+    proposition: { id: "p-1", project_id: "x", number: 4, merged_at: "2026-03-01T00:00:00.000Z" },
+    items: [
+      {
+        itemType: "avis",
+        itemKey: "39",
+        status: ITEM.ACCEPTED,
+        payload: { reference: "39", title: "SECURITE CONTRE L'INCENDIE:" }
+      }
+    ]
+  });
+
+  assert.equal(lignes[0].domain, null, "un domaine deviné est pire qu'un domaine absent");
+});
+
+test("un domaine porté par la revue est versé tel quel", () => {
+  const lignes = assertionsFromProposition({
+    proposition: { id: "p-1", project_id: "x", number: 4, merged_at: "2026-03-01T00:00:00.000Z" },
+    items: [
+      {
+        itemType: "avis",
+        itemKey: "12",
+        status: ITEM.ACCEPTED,
+        payload: { reference: "12", domain: "structure", nature: "hypothese" }
+      }
+    ]
+  });
+
+  assert.equal(lignes[0].domain, "structure");
+  assert.equal(lignes[0].nature, "hypothese", "ce qui est su prime sur ce qui se déduit");
 });
