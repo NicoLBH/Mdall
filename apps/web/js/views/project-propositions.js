@@ -59,6 +59,7 @@ import {
 } from "../services/memory-conflict.js";
 import {
   ITEM_TYPE,
+  STATUS_LABELS,
   applyDecisions,
   attachmentItems,
   avisItems,
@@ -382,7 +383,9 @@ function renderItemFigures(item) {
 function renderFigure(figure) {
   const ligne = [
     String(figure.rubric ?? "").trim(),
-    String(figure.avis_letter ?? "").trim() ? `avis ${String(figure.avis_letter).trim()}` : "",
+    // Une case d'avis vide se dit : sur un rapport réel, certaines lignes n'en
+    // portent aucun. La taire laisserait croire à un oubli de lecture.
+    String(figure.avis_letter ?? "").trim() ? `avis ${String(figure.avis_letter).trim()}` : "avis non indiqué",
     String(figure.avis_reference ?? "").trim() ? `n° ${String(figure.avis_reference).trim()}` : "",
     `page ${figure.page}`
   ]
@@ -1442,8 +1445,11 @@ function describeAnalysis(review) {
   const avis = items.filter((entry) => entry.itemType === ITEM_TYPE.AVIS).length;
   const documents = items.filter((entry) => entry.itemType === ITEM_TYPE.DOCUMENT).length;
   const inchanges = Number.isFinite(review.diff?.unchanged) ? `, ${review.diff.unchanged} inchangé(s)` : "";
+  const silences = (review.diff?.silent ?? []).length;
 
-  return `${documents} livrable(s) soumis, ${avis} avis en mouvement${inchanges}.`;
+  return `${documents} livrable(s) soumis, ${avis} avis en mouvement${inchanges}${
+    silences > 0 ? `, ${silences} non repris` : ""
+  }.`;
 }
 
 /**
@@ -1733,6 +1739,68 @@ function renderChanges(review) {
           ? "Aucun avis ne changeait, ou l'état conservé ne le dit pas."
           : "Aucun livrable exploitable : il n'y a pas d'avis à en tirer."
     )}
+    ${renderSilentAvis(review)}
+  `;
+}
+
+/**
+ * Ce que le lot ne reprend pas.
+ *
+ * Un rapport de visite ne rappelle pas tout ce qui existe : il porte ce qui a
+ * été créé ou modifié depuis le précédent. Les avis qu'il ne cite pas n'ont pas
+ * bougé — et les compter comme des mouvements demandait de confirmer
+ * soixante-douze fois ce que personne n'avait dit.
+ *
+ * Le silence reste écrit, parce qu'il fait partie de ce qu'on a vu ce jour-là.
+ * Il n'est simplement pas une décision à prendre : aucune case, aucun bouton.
+ */
+function renderSilentAvis(review) {
+  const silencieux = review.diff?.silent ?? [];
+  if (silencieux.length === 0) return "";
+
+  return `
+    <section class="review-block">
+      <div class="review-panel">
+        <div class="review-block__head review-block__head--plain">
+          <div class="review-block__headbody">
+            <h3 class="review-block__title">
+              Non repris par ce lot
+              <span class="review-block__count">${silencieux.length}</span>
+            </h3>
+            <span class="review-block__state">rien à décider</span>
+          </div>
+        </div>
+        <p class="review-silent__note">
+          Aucun document de cette proposition ne parle de ces avis. Un rapport ne rappelle pas tout
+          ce qui existe : ils restent dans l'état où le dernier document les a laissés.
+        </p>
+        <ul class="review-list">
+          ${silencieux
+            .slice(0, 12)
+            .map(
+              (avis) => `
+                <li class="review-item review-item--plain">
+                  <span class="review-item__check">${svgIcon("dot-fill-pending", { className: "octicon" })}</span>
+                  <div class="review-item__body">
+                    <span class="review-item__title">${escapeHtml(
+                      `Avis ${avis.reference}${avis.title ? ` — ${avis.title}` : ""}`
+                    )}</span>
+                    <span class="review-item__meta">${escapeHtml(
+                      `reste ${STATUS_LABELS[avis.previousStatus] ?? avis.previousStatus ?? "en l'état"}`
+                    )}</span>
+                  </div>
+                </li>
+              `
+            )
+            .join("")}
+        </ul>
+        ${
+          silencieux.length > 12
+            ? `<p class="review-silent__note">et ${silencieux.length - 12} autre(s).</p>`
+            : ""
+        }
+      </div>
+    </section>
   `;
 }
 

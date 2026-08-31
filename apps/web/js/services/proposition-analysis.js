@@ -60,7 +60,7 @@ export async function analyzeProposition({
   knownMarkers = [],
   onProgress = null
 } = {}) {
-  const vide = { result: null, reports: [], unreachable: [], attachments: [], diff: { added: [], changed: [], unchanged: 0 } };
+  const vide = { result: null, reports: [], unreachable: [], attachments: [], diff: { added: [], changed: [], silent: [], unchanged: 0 } };
   if (!projectId || !proposition?.id) return { ...vide, error: "Aucune proposition à analyser." };
 
   // Le chronomètre. Il mesure ce que l'utilisateur attend — réseau et lecture

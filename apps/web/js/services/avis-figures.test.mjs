@@ -168,3 +168,39 @@ test("le PDF compte ses y depuis le bas, un canevas depuis le haut", () => {
   assert.deepEqual(rect, { x: 120, y: (842 - 400 - 200) * 2, width: 960, height: 400 });
   assert.equal(toCanvasRect(null, { pageHeight: 842 }), null);
 });
+
+test("un intitulé qui passe à la ligne reste un intitulé", () => {
+  // « Etanchéité de toiture - élément porteur / béton » : ne prendre que la
+  // ligne la plus proche de l'image rendait la rubrique « béton », ce qui ne
+  // désigne rien.
+  const items = [
+    { text: "Éléments examinés", x: 98, y: 773, width: 111, height: 10 },
+    { text: "Avis*", x: 274, y: 773, width: 29, height: 10 },
+    { text: "N°", x: 533, y: 773, width: 14, height: 10 },
+    { text: "Etanchéité de toiture - élément porteur", x: 37, y: 759, width: 201, height: 10 },
+    { text: "béton", x: 37, y: 747, width: 30, height: 10 }
+  ];
+
+  const ligne = describeRowOf(items, { x: 37, y: 565, width: 231, height: 174 }, readTableColumns(items));
+
+  assert.equal(ligne.rubric, "Etanchéité de toiture - élément porteur béton");
+});
+
+test("une cellule d'avis vide reste vide", () => {
+  // Sur un rapport réel, la première ligne d'une page n'en portait aucun : le
+  // document lui-même laisse la case blanche. Lui prêter la lettre de la ligne
+  // voisine inventerait un avis.
+  const items = [
+    { text: "Éléments examinés", x: 98, y: 773, width: 111, height: 10 },
+    { text: "Avis*", x: 274, y: 773, width: 29, height: 10 },
+    { text: "Structure béton armé ou précontraint", x: 37, y: 759, width: 192, height: 10 },
+    { text: "Structure béton armé ou précontraint", x: 37, y: 548, width: 192, height: 10 },
+    { text: "F", x: 282, y: 451, width: 6, height: 10 }
+  ];
+
+  const premiere = describeRowOf(items, { x: 37, y: 577, width: 231, height: 174 }, readTableColumns(items));
+  assert.equal(premiere.letter, "", "la case est blanche sur le rapport : elle le reste ici");
+
+  const seconde = describeRowOf(items, { x: 37, y: 366, width: 231, height: 174 }, readTableColumns(items));
+  assert.equal(seconde.letter, "F");
+});

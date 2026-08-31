@@ -191,3 +191,44 @@ test("un nouvel avis annonce son état, pas une transition", () => {
   assert.equal(neuf.detail, "Ouvert · avis S");
   assert.doesNotMatch(neuf.detail, /→/);
 });
+
+test("un avis que le lot ne reprend pas n'est pas un mouvement", () => {
+  // Un rapport de visite ne rappelle pas tout ce qui existe : il porte ce qui a
+  // été créé ou modifié depuis le précédent. Compter les autres comme des
+  // mouvements demandait de confirmer soixante-douze fois ce que personne
+  // n'avait dit.
+  const diff = diffAvis(
+    [
+      { external_reference: "166", status: "OPEN", opinion_raw: "à lever" },
+      { external_reference: "167", status: "RESOLVED", opinion_raw: "levé" }
+    ],
+    [
+      { reference: "166", status: "NO_NEWS", opinion_raw: "à lever" },
+      { reference: "167", status: "RESOLVED", opinion_raw: "levé" }
+    ]
+  );
+
+  assert.equal(diff.changed.length, 0, "passer sans nouvelles n'est pas un changement");
+  assert.equal(diff.silent.length, 1);
+  assert.equal(diff.silent[0].reference, "166");
+  assert.equal(diff.silent[0].previousStatus, "OPEN", "il reste dans l'état où le dernier document l'a laissé");
+  assert.equal(diff.unchanged, 1);
+});
+
+test("un avis déjà sans nouvelles qui bouge reste un mouvement", () => {
+  // Le silence n'excuse pas tout : si le lot en reparle, c'est un fait.
+  const diff = diffAvis(
+    [{ external_reference: "166", status: "NO_NEWS", opinion_raw: "à lever" }],
+    [{ reference: "166", status: "RESOLVED", opinion_raw: "levé" }]
+  );
+
+  assert.equal(diff.silent.length, 0);
+  assert.equal(diff.changed.length, 1);
+});
+
+test("un avis qui apparaît reste un avis qui apparaît", () => {
+  const diff = diffAvis([], [{ reference: "200", status: "NO_NEWS" }]);
+
+  assert.equal(diff.added.length, 1, "on ne l'a jamais vu : c'est une apparition, pas un silence");
+  assert.equal(diff.silent.length, 0);
+});
