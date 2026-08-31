@@ -16444,6 +16444,69 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .memory-tag--domain{ color:var(--text); }
 .memory-tag--unknown{ border-style:dashed; }
 
+/* ── L'hypothèse et ce qu'elle entraîne ──────────────────────────────────────
+   Le bandeau d'une affirmation devenue suspecte. Il porte le geste qui la lève :
+   constater un problème sans pouvoir y répondre n'aide personne. */
+.memory-review{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-wrap:wrap;
+  margin:6px 0;
+  padding:8px 12px;
+  border:1px solid rgba(210,153,34,.55);
+  border-radius:var(--radius);
+  background:rgba(210,153,34,.08);
+}
+.memory-review__mark{ color:#d29922; line-height:0; flex:0 0 auto; }
+.memory-review__text{ flex:1 1 240px; min-width:0; color:var(--text); font-size:13px; }
+
+/* Ce qui repose sur une hypothèse, sous elle. En attente, c'est un bouton :
+   le compteur mène à ce qu'il compte. */
+.memory-row__dependents{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  margin-top:4px;
+  padding:0;
+  border:0;
+  background:none;
+  color:var(--muted);
+  font:inherit;
+  font-size:12px;
+}
+.memory-row__dependents--pending{ color:#d29922; cursor:pointer; }
+.memory-row__dependents--pending:hover{ text-decoration:underline; }
+
+.memory-counts__item--pending{
+  padding:0;
+  border:0;
+  background:none;
+  color:#d29922;
+  font:inherit;
+  cursor:pointer;
+  text-decoration:underline dotted;
+  text-underline-offset:3px;
+}
+
+/* Les deux sens du graphe, dans le détail d'une affirmation. */
+.memory-depends{
+  margin:16px 0 0;
+  padding:12px 14px;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  background:var(--panel2);
+}
+.memory-depends h4{ margin:0 0 4px; font-size:13px; }
+.memory-depends__block{ margin-bottom:12px; }
+.memory-depends__block ul{ margin:0; padding-left:18px; color:var(--muted); font-size:13px; }
+.memory-depends__empty{ margin:0; color:var(--muted); font-size:13px; }
+.memory-depends__form{ margin-top:12px; }
+.memory-depends__form label{ display:block; margin-bottom:6px; color:var(--muted); font-size:12px; }
+.memory-depends__row{ display:flex; gap:8px; flex-wrap:wrap; }
+.memory-depends__row .gh-input{ flex:1 1 320px; min-width:0; }
+.memory-depends--unknown{ border-style:dashed; }
+
 /* Le compteur des non classés s'ouvre : un nombre qu'on ne peut pas atteindre
    ne fait que culpabiliser. */
 .memory-counts__item--unclassified{
