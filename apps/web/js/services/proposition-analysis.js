@@ -20,6 +20,9 @@ import { extractPagesFromFile } from "./pdf-extraction.js";
 import { recognize } from "./document-recognizers.js";
 import { assessAttachment, batchConsensus, declaredMarkers, findEchoes, selfMarkers } from "./project-identity.js";
 import { diffAvis } from "./proposition-review.js";
+import { mergeAvis } from "./avis-from-figures.js";
+import { avisFromReports } from "./avis-from-tables.js";
+import { readTableColumns } from "./avis-figures.js";
 
 /** La famille de documents que le suivi des avis sait exploiter. */
 const CT_REPORT_KIND = "ct_report";
@@ -152,7 +155,18 @@ export async function analyzeProposition({
   // lignes des fiches d'avis se lisent après (leur découpe coûte un rendu de
   // page), et les ajouter demande de refaire le diff sur la liste entière —
   // pas sur ce qu'on aurait pu en reconstituer.
-  const computedAvis = result ? avisWithTitles(result) : null;
+  // Les rapports sur la conception — préalable, APS, APD, RICT — n'écrivent pas
+  // leurs avis en phrases : ils dressent un tableau. Le moteur, qui lit des
+  // lignes de texte, n'y reconnaissait que celles portant un numéro imprimé :
+  // cinq sur soixante-huit dans un rapport APD réel. Le reste entrait au corpus
+  // sans y déposer quoi que ce soit.
+  //
+  // La lecture du tableau ne relit rien : elle travaille sur le texte positionné
+  // que l'extraction a déjà rendu, et elle ne coûte donc pas une seconde lecture
+  // des PDF. La lecture du moteur prime quand les deux voient la même ligne :
+  // elle porte l'état, là où le tableau ne porte qu'un constat.
+  const enTableau = avisFromReports(reports, readTableColumns);
+  const computedAvis = result ? mergeAvis(avisWithTitles(result), enTableau) : enTableau.length > 0 ? enTableau : null;
 
   return {
     result,
