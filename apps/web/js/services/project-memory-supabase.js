@@ -242,6 +242,23 @@ export async function rememberHypothesis(row) {
 
   const flagged = await markDependentsOf({ projectId: row.project_id, superseded: anciennes, at: quand });
 
+  // Poser une hypothèse est un acte : c'est son émission. L'écrire ici donne à
+  // son histoire un premier point, et évite qu'une hypothèse validée plus tard
+  // paraisse sortie de nulle part.
+  try {
+    const { ACT } = await import("./hypothesis-acts.js");
+    const { recordAct } = await import("./hypothesis-acts-supabase.js");
+    await recordAct({
+      project_id: row.project_id,
+      assertion_id: nouvelle.id,
+      verdict: ACT.EMITTED,
+      declared_by: row.decided_by ?? null,
+      created_at: quand
+    });
+  } catch {
+    // L'hypothèse est versée : lui manquer son premier acte ne la retire pas.
+  }
+
   return { written: nouvelle, superseded: liens.length, flagged };
 }
 

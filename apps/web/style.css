@@ -16458,6 +16458,52 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .memory-declare__field span{ color:var(--muted); font-size:12px; }
 .memory-declare__actions{ display:flex; gap:8px; justify-content:flex-end; margin-top:12px; }
 
+/* L'état d'une hypothèse : candidate, validée, contestée. Le mot compte — une
+   valeur que personne n'a confirmée n'est pas une valeur acquise, et l'écran ne
+   doit pas la montrer comme telle. */
+.hypothesis-state{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+  margin:4px 0;
+  font-size:12px;
+  color:var(--muted);
+}
+.hypothesis-pill{
+  display:inline-flex;
+  align-items:center;
+  padding:0 8px;
+  border:1px solid var(--border);
+  border-radius:999px;
+  line-height:18px;
+  font-weight:600;
+}
+.hypothesis-pill--candidate{ color:var(--muted); border-style:dashed; }
+.hypothesis-pill--validated{ color:var(--fgColor-open); border-color:rgba(63,185,80,.5); }
+.hypothesis-pill--contested{ color:#d29922; border-color:rgba(210,153,34,.55); }
+/* Ce que la contestation avance vit sur l'acte, pas en mémoire : le doute se lit
+   au lieu d'être arbitré. */
+.hypothesis-state__proposed{ color:#d29922; }
+
+/* Les actes d'une hypothèse : son histoire, et les deux gestes qu'on y pose. */
+.memory-acts{
+  margin:16px 0 0;
+  padding:12px 14px;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  background:var(--panel2);
+}
+.memory-acts--unknown{ border-style:dashed; }
+.memory-acts--unknown p{ margin:0; color:var(--muted); font-size:13px; }
+.memory-acts__list{ margin:0 0 12px; padding-left:18px; color:var(--muted); font-size:13px; }
+.memory-acts__item{ margin-bottom:4px; }
+.memory-acts__item b{ color:var(--text); }
+.memory-acts__note{ display:block; color:var(--muted); font-style:italic; }
+.memory-acts__empty{ margin:0 0 12px; color:var(--muted); font-size:13px; }
+.memory-acts__actions{ display:flex; gap:8px; flex-wrap:wrap; }
+.memory-acts__form{ display:flex; flex-direction:column; gap:10px; }
+
 /* ── L'hypothèse et ce qu'elle entraîne ──────────────────────────────────────
    Le bandeau d'une affirmation devenue suspecte. Il porte le geste qui la lève :
    constater un problème sans pouvoir y répondre n'aide personne. */
