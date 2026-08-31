@@ -747,6 +747,26 @@ function noteTextHtml(markdown) {
 }
 
 /**
+ * Pourquoi la note manque.
+ *
+ * « La note n'a pas pu être écrite » a envoyé quelqu'un lire la console du
+ * navigateur pour découvrir qu'une fonction n'était pas déployée. L'écran
+ * savait quoi dire ; il ne le disait pas. Un échec sans cause n'est pas plus
+ * honnête qu'un texte inventé, il est seulement moins utile.
+ */
+function describeNoteFailure(code) {
+  const fin = "Les documents et l'analyse, eux, sont là.";
+
+  if (code === "unreachable") {
+    return `La note n'a pas pu être écrite : le service de rédaction n'a pas répondu. ${fin}`;
+  }
+  if (code === "unconfigured") {
+    return `La note n'a pas pu être écrite : le service de rédaction n'est pas configuré. ${fin}`;
+  }
+  return `La note n'a pas pu être écrite. ${fin}`;
+}
+
+/**
  * La note de dépôt, en tête du fil.
  *
  * Une pull request porte un texte écrit par celui qui l'ouvre : il sait ce
@@ -773,7 +793,7 @@ function renderDepositNote(review) {
        )}</p>`
     : etat === "writing"
       ? `<p class="review-empty-note">Mdall lit le lot et rédige sa note…</p>`
-      : `<p class="review-comment__notice">La note n'a pas pu être écrite. Les documents et l'analyse, eux, sont là.</p>`;
+      : `<p class="review-comment__notice">${escapeHtml(describeNoteFailure(review.noteError))}</p>`;
 
   // Une note ratée se redemande : c'est un appel qui a échoué, pas un état du
   // dossier. Une note écrite pendant qu'une autre s'écrit ne se redemande pas.
@@ -2193,8 +2213,9 @@ async function ensureDepositNote(root, proposition, matiere = {}) {
 
   if (!view.review || view.open?.id !== proposition.id) return;
 
-  if (!ecrite) {
+  if (!ecrite?.markdown) {
     view.review.noteState = "failed";
+    view.review.noteError = ecrite?.error ?? "refused";
     if (root.isConnected) renderContent(root);
     return;
   }
@@ -2219,6 +2240,7 @@ async function ensureDepositNote(root, proposition, matiere = {}) {
     fingerprint: empreinte
   };
   view.review.noteState = "idle";
+  view.review.noteError = null;
   if (root.isConnected) renderContent(root);
 }
 
