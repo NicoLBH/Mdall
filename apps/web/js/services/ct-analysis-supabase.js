@@ -24,7 +24,7 @@ const AVIS_COLUMNS =
 
 const RUN_COLUMNS =
   "id,corpus_fingerprint,corpus_documents,document_count,avis_count,tracked_avis_count," +
-  "guard_violation_count,packs_used,engine_version,computed_at,proposition_id,trigger_source";
+  "guard_violation_count,packs_used,engine_version,computed_at,proposition_id,trigger_source,steps";
 
 async function request(path, { method = "GET", body = null, headers = {}, params = {} } = {}) {
   const url = new URL(`${SUPABASE_URL}/rest/v1/${path}`);
@@ -101,7 +101,8 @@ export async function saveCtAnalysis({
   corpusDocuments = null,
   documentCount,
   propositionId = null,
-  triggerSource = null
+  triggerSource = null,
+  steps = null
 } = {}) {
   if (!projectId || !result) return null;
 
@@ -143,7 +144,8 @@ export async function saveCtAnalysis({
         corpusDocuments,
         documentCount,
         propositionId,
-        triggerSource
+        triggerSource,
+        steps
       })
     });
 

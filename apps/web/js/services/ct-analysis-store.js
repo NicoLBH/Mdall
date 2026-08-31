@@ -193,7 +193,8 @@ export function toRunRow(
     documentCount,
     corpusDocuments = null,
     propositionId = null,
-    triggerSource = null
+    triggerSource = null,
+    steps = null
   } = {}
 ) {
   const indicators = result?.indicators ?? {};
@@ -213,6 +214,10 @@ export function toRunRow(
     tracked_avis_count: (result?.avisStatus ?? []).length,
     guard_violation_count: (indicators.guardViolations ?? []).length,
     packs_used: result?.packsUsed ?? {},
+    // Ce que chaque phase a réellement pris, mesuré par l'exécution elle-même.
+    // Une phase non mesurée n'y figure pas : le graphe l'affichera sans durée
+    // plutôt qu'avec une durée fausse.
+    steps: Array.isArray(steps) && steps.length > 0 ? steps : null,
     engine_version: ENGINE_VERSION,
     computed_at: new Date().toISOString()
   };

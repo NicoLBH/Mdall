@@ -3,7 +3,7 @@ import { setProjectViewHeader, clearProjectActiveScrollSource, debugProjectScrol
 import { getRunLogEntries, getRunMetrics } from "../services/project-automation.js";
 import { syncProjectActionsFromSupabase } from "../services/project-supabase-sync.js";
 import { svgIcon } from "../ui/icons.js";
-import { buildRunGraph } from "../services/run-workflow.js";
+import { buildRunGraph, formatStepDuration } from "../services/run-workflow.js";
 import { store } from "../store.js";
 import {
   renderDataTableEmptyState,
@@ -21,9 +21,16 @@ function getRunSuccessIconSvg() {
   });
 }
 
+/**
+ * L'échec : un disque rouge barré d'une croix.
+ *
+ * L'octogone d'alerte disait « attention » ; ici il s'agit de dire « cela n'a
+ * pas abouti ». Comme la colonne « Statut » disparaît, cette icône porte seule
+ * l'information : elle doit se lire sans hésitation.
+ */
 function getRunAlertIconSvg() {
-  return svgIcon("stop-alert", {
-    className: "octicon octicon-stop",
+  return svgIcon("x-circle-fill", {
+    className: "octicon octicon-x-circle-fill",
     width: 16,
     height: 16,
     style: "margin-top:2px"
@@ -295,17 +302,21 @@ function renderRunCountInline() {
   `;
 }
 
+/**
+ * Une ligne du journal : l'acte, sa cause, sa date et sa durée.
+ *
+ * Trois colonnes plutôt que cinq. Le déclencheur descend sous le titre, en gris,
+ * parce que c'est un complément et non une donnée qu'on compare de ligne en
+ * ligne. Et la colonne « Statut » disparaît : son icône est déjà en tête de la
+ * ligne — un état dit deux fois n'est pas dit deux fois mieux, il occupe deux
+ * fois la place.
+ */
 function renderRunRows(entries) {
   return entries.map((entry) => {
-    const actionMeta = entry.documentName
-      ? `<div class="workflow-runs__meta mono">${escapeHtml(entry.documentName)}</div>`
-      : (entry.summary
-          ? `<div class="workflow-runs__meta">${escapeHtml(entry.summary)}</div>`
-          : "");
-
-    const triggerMeta = entry.triggerType
-      ? `<div class="workflow-runs__meta">${escapeHtml(entry.triggerType)}</div>`
+    const objet = entry.documentName
+      ? `<span class="workflow-runs__object">${escapeHtml(entry.documentName)}</span>`
       : "";
+    const cause = `<span class="workflow-runs__trigger">${escapeHtml(getTriggerLabel(entry))}</span>`;
 
     return `
       <div class="workflow-runs__row">
@@ -316,24 +327,20 @@ function renderRunRows(entries) {
               entry.id || ""
             )}">${escapeHtml(entry.name || "Run")}</button>
           </div>
-          ${actionMeta}
+          <div class="workflow-runs__meta workflow-runs__subline">
+            ${objet}${objet && cause ? `<span class="workflow-runs__dot">·</span>` : ""}${cause}
+          </div>
         </div>
 
-        <div class="workflow-runs__cell">
-          <div class="workflow-runs__text">${escapeHtml(getTriggerLabel(entry))}</div>
-          ${triggerMeta}
-        </div>
-
-        <div class="workflow-runs__cell workflow-runs__cell--muted">
-          ${escapeHtml(formatDateTime(entry.startedAt))}
-        </div>
-
-        <div class="workflow-runs__cell workflow-runs__cell--muted">
-          ${escapeHtml(formatDuration(entry.durationMs))}
-        </div>
-
-        <div class="workflow-runs__cell workflow-runs__cell--status">
-          ${renderRunStatus(entry)}
+        <div class="workflow-runs__cell workflow-runs__cell--when">
+          <span class="workflow-runs__when-line">
+            <span class="workflow-runs__when-icon">${svgIcon("calendar", { className: "octicon" })}</span>
+            ${escapeHtml(formatDateTime(entry.startedAt))}
+          </span>
+          <span class="workflow-runs__when-line">
+            <span class="workflow-runs__when-icon">${svgIcon("stopwatch", { className: "octicon" })}</span>
+            ${escapeHtml(formatDuration(entry.durationMs))}
+          </span>
         </div>
       </div>
     `;
@@ -364,17 +371,14 @@ function renderRunsTable() {
 
   const tableHtml = renderDataTableShell({
     className: "workflow-runs-table data-table-shell--document-scroll",
-    gridTemplate: "minmax(280px,1.6fr) 220px 170px 120px 120px",
+    gridTemplate: "minmax(320px,2fr) 220px",
     headHtml: renderDataTableHead({
       columns: [
         {
           html: `<span class="workflow-runs__head-label">Action</span>${renderRunCountInline()}`,
           className: "workflow-runs__head-col workflow-runs__head-col--action"
         },
-        "Déclencheur",
-        "Date",
-        "Durée",
-        "Statut"
+        "Quand"
       ]
     }),
     bodyHtml: renderRunRows(paged.items),
@@ -497,33 +501,98 @@ function renderRunDetail(entry) {
  * demande de le reconstruire : une décision cause une analyse, l'analyse lit un
  * corpus, le corpus produit des avis, les avis deviennent le suivi.
  *
- * Chaque boîte porte un chiffre réellement écrit en base. Les étapes dont nous
- * ne savons rien n'apparaissent pas — un dessin complet mais inventé serait
- * exactement ce qu'un journal ne doit pas faire.
+ * Chaque boîte porte un chiffre réellement écrit en base, et sa durée quand
+ * l'exécution l'a mesurée. Les étapes restent **sur une ligne** et débordent si
+ * besoin : plier un enchaînement en colonnes lui fait perdre ce qu'il a de plus
+ * lisible, sa direction. Le déroulé horizontal, lui, se fait à la souris.
  */
 function renderRunGraph(entry) {
   const nodes = buildRunGraph(entry);
   if (nodes.length === 0) return "";
 
   return `
-    <section class="run-section">
-      <h3 class="run-section__title">Le chemin de cette exécution</h3>
-      <div class="run-graph">
-        ${nodes
-          .map(
-            (node, index) => `
-              ${index > 0 ? `<span class="run-graph__link" aria-hidden="true"></span>` : ""}
-              <div class="run-graph__node run-graph__node--${escapeHtml(node.tone)}">
-                <span class="run-graph__icon">${svgIcon(node.icon, { className: "octicon" })}</span>
-                <span class="run-graph__label">${escapeHtml(node.label)}</span>
-                <span class="run-graph__detail">${escapeHtml(node.detail)}</span>
-              </div>
-            `
-          )
-          .join("")}
+    <section class="run-section run-section--graph" data-run-graph-section>
+      <div class="run-section__head run-section__head--graph">
+        <h3 class="run-section__title run-section__title--graph">Le chemin de cette exécution</h3>
+        <div class="run-graph__tools" data-run-graph-tools hidden>
+          <button type="button" class="run-graph__tool" data-graph-zoom="out" aria-label="Réduire">
+            ${svgIcon("minus", { className: "octicon" })}
+          </button>
+          <button type="button" class="run-graph__tool" data-graph-zoom="in" aria-label="Agrandir">
+            ${svgIcon("plus", { className: "octicon" })}
+          </button>
+          <button type="button" class="run-graph__tool" data-graph-full aria-label="Plein écran">
+            ${svgIcon("screen-full", { className: "octicon" })}
+          </button>
+        </div>
+      </div>
+
+      <div class="run-graph" data-run-graph-viewport>
+        <div class="run-graph__canvas" data-run-graph-canvas>
+          ${nodes
+            .map(
+              (node, index) => `
+                ${index > 0 ? `<span class="run-graph__link" aria-hidden="true"></span>` : ""}
+                <div class="run-graph__node run-graph__node--${escapeHtml(node.tone)}">
+                  <span class="run-graph__head">
+                    <span class="run-graph__icon">${svgIcon(node.icon, { className: "octicon" })}</span>
+                    <span class="run-graph__label">${escapeHtml(node.label)}</span>
+                  </span>
+                  <span class="run-graph__detail">${escapeHtml(node.detail)}</span>
+                  ${
+                    node.duration === null
+                      ? ""
+                      : `<span class="run-graph__duration">${escapeHtml(formatStepDuration(node.duration))}</span>`
+                  }
+                </div>
+              `
+            )
+            .join("")}
+        </div>
       </div>
     </section>
   `;
+}
+
+/**
+ * Les commandes du graphe, quand il déborde.
+ *
+ * Elles n'apparaissent que si elles servent : un bouton de zoom sur un dessin
+ * qui tient déjà tout entier n'est qu'un bouton de plus à ignorer.
+ */
+function bindRunGraph(root) {
+  const section = root.querySelector("[data-run-graph-section]");
+  const viewport = root.querySelector("[data-run-graph-viewport]");
+  const canvas = root.querySelector("[data-run-graph-canvas]");
+  const tools = root.querySelector("[data-run-graph-tools]");
+  if (!section || !viewport || !canvas || !tools) return;
+
+  let zoom = 1;
+
+  const sync = () => {
+    canvas.style.setProperty("--run-graph-zoom", String(zoom));
+    // `scrollWidth > clientWidth` dit exactement ce qu'on veut savoir : le
+    // dessin ne tient pas, donc les commandes ont une utilité.
+    tools.hidden = viewport.scrollWidth <= viewport.clientWidth + 1 && zoom === 1;
+  };
+
+  for (const bouton of tools.querySelectorAll("[data-graph-zoom]")) {
+    bouton.addEventListener("click", () => {
+      const pas = bouton.getAttribute("data-graph-zoom") === "in" ? 0.15 : -0.15;
+      zoom = Math.min(1.6, Math.max(0.5, Math.round((zoom + pas) * 100) / 100));
+      sync();
+    });
+  }
+
+  tools.querySelector("[data-graph-full]")?.addEventListener("click", () => {
+    section.classList.toggle("run-section--fullscreen");
+    sync();
+  });
+
+  sync();
+  // Le débordement dépend de la largeur disponible : ce qui tenait à l'ouverture
+  // peut ne plus tenir après un redimensionnement.
+  window.addEventListener("resize", sync, { passive: true });
 }
 
 function renderRunSection(titre, lignes = []) {
@@ -564,6 +633,8 @@ function renderProjectActionsContent(root) {
       </div>
     </section>
   `;
+
+  if (open) bindRunGraph(root);
 }
 
 export function renderProjectActions(root) {

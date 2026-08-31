@@ -7476,8 +7476,32 @@ body.documents-local-chrome-compact .documents-shell--pdf-preview .documents-rep
 }
 
 .workflow-runs__state-icon--alert{
-  color:var(--danger);
+  color:var(--fgColor-danger);
 }
+
+/* La ligne du journal : le titre, puis en gris ce qu'il porte et ce qui l'a
+   causé. La date et la durée s'alignent sur leurs icônes, l'une sous l'autre. */
+.workflow-runs__subline{
+  display:flex;
+  align-items:baseline;
+  gap:6px;
+  flex-wrap:wrap;
+  margin-top:2px;
+  padding-left:24px;
+  color:var(--muted);
+  font-size:12px;
+}
+.workflow-runs__dot{ opacity:.6; }
+
+.workflow-runs__cell--when{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  color:var(--muted);
+  font-size:12px;
+}
+.workflow-runs__when-line{ display:flex; align-items:center; gap:6px; }
+.workflow-runs__when-icon{ line-height:0; opacity:.8; }
 
 .workflow-runs__state-icon--proposal{
   color:var(--fgColor-open);
@@ -15738,8 +15762,6 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 
 .tl-activity__avatar{ display:inline-flex; align-items:center; }
 .tl-activity__avatar img{ width:20px; height:20px; border-radius:50%; }
-.tl-activity__icon--merged{ color:var(--fgColor-done); }
-.tl-activity__icon--closed{ color:var(--muted); }
 
 /* La fin d'une proposition se voit : fusionner est l'aboutissement de tout ce
    qui précède, pas une ligne d'activité de plus. Le violet est celui de la
@@ -15827,31 +15849,79 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 }
 .run-section__empty{ margin:0; padding:12px 16px; color:var(--muted); font-size:13px; font-style:italic; }
 
-/* Le chemin d'une exécution : des boîtes reliées, comme un graphe de jobs. Les
-   traits sont droits et le tout se replie en colonne quand la place manque —
-   une courbe savante qui déborde ne dit rien de plus qu'un trait qui tient. */
-.run-graph{
+/* Le chemin d'une exécution : des boîtes reliées, comme un graphe de jobs.
+   Les étapes restent sur une ligne et débordent si besoin — plier un
+   enchaînement en colonnes lui fait perdre sa direction, qui est ce qu'il a de
+   plus lisible. Le fond sombre le détache du reste de la page. */
+.run-section--graph{ background:var(--bgAssistPanel); }
+
+.run-section__head--graph{
   display:flex;
-  align-items:stretch;
-  flex-wrap:wrap;
-  gap:0;
-  padding:16px;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:10px 16px;
+  background:var(--bgAssistPanel);
+}
+.run-section__title--graph{
+  margin:0;
+  padding:0;
+  background:none;
+  border:0;
+  font-size:14px;
+  font-weight:600;
+}
+
+.run-graph__tools{ display:flex; gap:4px; }
+.run-graph__tool{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:28px;
+  height:28px;
+  padding:0;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  background:var(--panel);
+  color:var(--muted);
+  cursor:pointer;
+}
+.run-graph__tool:hover{ color:var(--text); border-color:var(--muted); }
+
+.run-graph{
+  padding:20px 16px 24px;
+  background:var(--bgAssistPanel);
+  overflow-x:auto;
+  overflow-y:hidden;
+}
+
+.run-graph__canvas{
+  display:flex;
+  align-items:center;
+  width:max-content;
+  min-width:100%;
+  transform:scale(var(--run-graph-zoom, 1));
+  transform-origin:left center;
+  transition:transform .12s ease;
 }
 
 .run-graph__node{
   display:flex;
   flex-direction:column;
-  gap:2px;
-  min-width:150px;
-  padding:10px 14px;
+  gap:4px;
+  flex:0 0 auto;
+  min-width:168px;
+  padding:12px 14px;
   border:1px solid var(--border);
-  border-radius:var(--radius);
+  border-radius:10px;
   background:var(--panel);
+  box-shadow:0 1px 0 rgba(1,4,9,.5);
 }
-.run-graph__node--ok{ border-color:rgba(63,185,80,.45); }
-.run-graph__node--warn{ border-color:rgba(210,153,34,.5); }
-.run-graph__node--error{ border-color:rgba(248,81,73,.5); }
+.run-graph__node--ok{ border-color:rgba(63,185,80,.5); }
+.run-graph__node--warn{ border-color:rgba(210,153,34,.55); }
+.run-graph__node--error{ border-color:rgba(248,81,73,.55); }
 
+.run-graph__head{ display:flex; align-items:center; gap:8px; }
 .run-graph__icon{ color:var(--muted); line-height:0; }
 .run-graph__node--ok .run-graph__icon{ color:var(--fgColor-open); }
 .run-graph__node--warn .run-graph__icon{ color:#d29922; }
@@ -15859,18 +15929,48 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 
 .run-graph__label{ color:var(--text); font-size:13px; font-weight:600; }
 .run-graph__detail{ color:var(--muted); font-size:12px; }
+.run-graph__duration{
+  align-self:flex-start;
+  padding:0 6px;
+  border-radius:999px;
+  background:var(--panel2);
+  color:var(--muted);
+  font-size:11px;
+  font-variant-numeric:tabular-nums;
+}
 
+/* La liaison : un trait fin qui part d'une boîte et s'arrête à la suivante,
+   avec une pointe. Assez discret pour ne pas concurrencer les boîtes. */
 .run-graph__link{
+  position:relative;
+  flex:0 0 auto;
   align-self:center;
-  width:24px;
-  height:2px;
+  width:28px;
+  height:1px;
   background:var(--border);
 }
-
-@media (max-width: 760px){
-  .run-graph{ flex-direction:column; align-items:flex-start; }
-  .run-graph__link{ width:2px; height:16px; margin-left:24px; }
+.run-graph__link::after{
+  content:"";
+  position:absolute;
+  right:0;
+  top:50%;
+  width:5px;
+  height:5px;
+  border-top:1px solid var(--border);
+  border-right:1px solid var(--border);
+  transform:translate(0, -50%) rotate(45deg);
 }
+
+/* Plein écran : le graphe prend la page, sans emporter le reste du détail. */
+.run-section--fullscreen{
+  position:fixed;
+  inset:var(--app-top) 0 0 0;
+  z-index:calc(var(--z-header) + 2);
+  margin:0;
+  border-radius:0;
+  overflow:auto;
+}
+.run-section--fullscreen .run-graph{ height:calc(100% - 50px); }
 
 .run-rows{ display:flex; flex-direction:column; }
 .run-row{
@@ -15913,7 +16013,24 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .review-tabs{ margin-top:4px; }
 .review-tabpanel{ display:flex; flex-direction:column; gap:12px; }
 
+/* Le fil reprend la géométrie de la discussion d'un sujet : l'hôte porte
+   l'encoche, les éléments « flush » la reprennent en négatif, et le bord gauche
+   de l'avatar tombe alors sur celui des onglets. Refaire ces calculs ici les
+   ferait diverger au premier ajustement. */
+.review-thread-host{ padding-left:var(--discussion-content-inset); }
 .review-thread{ margin:0; }
+
+/* La ligne du fil ne monte pas au-dessus du premier avatar et ne descend pas
+   sous le dernier acte : dépasser en haut décale tout, jusqu'au trait de fin. */
+.review-thread .message-thread__item:first-child::before{ top:22px; }
+.review-thread .message-thread__item:last-child::before{ bottom:auto; height:30px; }
+
+/* Les pastilles d'activité : un disque gris, sauf la fusion, qui prend le
+   violet des propositions fusionnées et son icône en blanc. */
+.review-thread .tl-ico-wrap{ background:var(--panel2); color:var(--muted); }
+.review-thread .tl-ico-merged{ background:var(--fgColor-done); color:#fff; }
+.review-thread .tl-ico-closed{ background:var(--panel2); color:var(--muted); }
+.review-thread .tl-ico-wrap .ui-icon{ width:16px; height:16px; }
 .review-empty-note{ margin:0; color:var(--muted); font-size:13px; font-style:italic; }
 
 .tl-activity__date{ color:var(--muted); }

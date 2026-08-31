@@ -63,14 +63,30 @@ export async function analyzeProposition({
   const vide = { result: null, reports: [], unreachable: [], attachments: [], diff: { added: [], changed: [], unchanged: 0 } };
   if (!projectId || !proposition?.id) return { ...vide, error: "Aucune proposition à analyser." };
 
+  // Le chronomètre. Il mesure ce que l'utilisateur attend — réseau et lecture
+  // des PDF compris —, parce que c'est la question qu'on se pose en regardant
+  // un graphe d'exécution. Rien n'est estimé : une phase non mesurée n'apparaît
+  // pas, plutôt que d'apparaître fausse.
+  const steps = [];
+  const chrono = async (id, label, travail) => {
+    const debut = Date.now();
+    try {
+      return await travail();
+    } finally {
+      steps.push({ id, label, ms: Date.now() - debut });
+    }
+  };
+
   const { downloadDocumentFile, listProjectDocuments } = await import("./document-deposit.js");
   const { listPropositionDocuments } = await import("./propositions-supabase.js");
 
   // Les deux moitiés du corpus. Rien n'est copié : ce sont deux lectures.
-  const [acceptes, soumis] = await Promise.all([
-    listProjectDocuments(projectId, { kind: CT_REPORT_KIND, corpusState: "accepted" }),
-    listPropositionDocuments(proposition.id)
-  ]);
+  const [acceptes, soumis] = await chrono("corpus", "Corpus relu", () =>
+    Promise.all([
+      listProjectDocuments(projectId, { kind: CT_REPORT_KIND, corpusState: "accepted" }),
+      listPropositionDocuments(proposition.id)
+    ])
+  );
 
   const soumisExploitables = soumis.filter((row) => row.detected_kind === CT_REPORT_KIND);
   const corpus = [...acceptes, ...soumisExploitables];
@@ -83,17 +99,19 @@ export async function analyzeProposition({
   const unreachable = [];
   let lus = 0;
 
-  for (const row of corpus) {
-    const nom = row.original_filename ?? row.filename ?? "document";
-    onProgress?.({ label: nom, done: lus, total: corpus.length });
+  await chrono("lecture", "Lecture", async () => {
+    for (const row of corpus) {
+      const nom = row.original_filename ?? row.filename ?? "document";
+      onProgress?.({ label: nom, done: lus, total: corpus.length });
 
-    try {
-      reports.push(await readDocument(row, downloadDocumentFile, `doc-${reports.length + 1}`));
-    } catch {
-      unreachable.push(row);
+      try {
+        reports.push(await readDocument(row, downloadDocumentFile, `doc-${reports.length + 1}`));
+      } catch {
+        unreachable.push(row);
+      }
+      lus += 1;
     }
-    lus += 1;
-  }
+  });
 
   onProgress?.({ label: "Lecture des avis", done: corpus.length, total: corpus.length });
 
@@ -115,7 +133,7 @@ export async function analyzeProposition({
   let result = null;
   let error = null;
   try {
-    result = await runCtLab(reports, {});
+    result = await chrono("avis", "Avis relevés", () => runCtLab(reports, {}));
   } catch (cause) {
     error = String(cause?.message || cause || "L'analyse n'a pas abouti.");
   }
@@ -126,6 +144,9 @@ export async function analyzeProposition({
     unreachable,
     attachments: groupAttachments(attachments),
     diff: result ? diffAvis(knownAvis, avisWithTitles(result)) : vide.diff,
+    // Ce que chaque phase a réellement pris. L'appelant y ajoutera l'écriture,
+    // qu'il est le seul à pouvoir mesurer.
+    steps,
     error
   };
 }
