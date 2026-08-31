@@ -27,9 +27,13 @@ const BASE_COLUMNS =
   "proposition_id,proposition_number,source_document_id,decided_by,decided_at," +
   "supersedes,superseded_by,superseded_at,created_at";
 
+// Le vocabulaire, puis le drapeau de revérification : deux vagues de colonnes
+// ajoutées après coup, et chacune peut manquer sur une base en retard. On
+// dégrade par paliers plutôt que de tout perdre.
 const TAXONOMY_COLUMNS = "nature,domain";
+const REVIEW_COLUMNS = "needs_review_since,reviewed_at,reviewed_by";
 
-const COLUMNS = `${BASE_COLUMNS},${TAXONOMY_COLUMNS}`;
+const COLUMNS = `${BASE_COLUMNS},${TAXONOMY_COLUMNS},${REVIEW_COLUMNS}`;
 
 async function request(path, { method = "GET", body = null, headers = {}, params = {} } = {}) {
   const url = new URL(`${SUPABASE_URL}/rest/v1/${path}`);
@@ -64,18 +68,17 @@ export async function listProjectAssertions(projectId) {
       params: { select: colonnes, project_id: `eq.${projectId}`, order: "decided_at.desc,subject_key.asc" }
     });
 
-  try {
-    return (await lire(COLUMNS)) ?? [];
-  } catch {
+  // Du plus complet au plus sûr. Chaque palier perd une chose et garde le
+  // reste : sans le drapeau, puis sans le vocabulaire, puis rien — et « rien »
+  // veut dire « je n'ai pas pu lire », pas « la mémoire est vide ».
+  for (const colonnes of [COLUMNS, `${BASE_COLUMNS},${TAXONOMY_COLUMNS}`, BASE_COLUMNS]) {
     try {
-      // Sans le vocabulaire plutôt que sans la mémoire. La nature se déduit de
-      // la provenance à la lecture, le domaine restera « non classé » : l'écran
-      // reste juste, il en dit seulement moins.
-      return (await lire(BASE_COLUMNS)) ?? [];
+      return (await lire(colonnes)) ?? [];
     } catch {
-      return null;
+      // On essaie le palier suivant.
     }
   }
+  return null;
 }
 
 /**
@@ -186,5 +189,42 @@ export async function rememberProposition({ proposition, items = [] } = {}) {
   }));
 
   await markSuperseded(liens);
-  return { written: ecrites.length, superseded: liens.length };
+
+  // Ce qu'une hypothèse remplacée entraîne. Seules les hypothèses entraînent :
+  // un constat qui évolue ne rend rien d'autre suspect, et marquer à chaque
+  // mouvement rendrait le signal inutilisable.
+  const suspectes = await markDependentsOf({
+    projectId: proposition.project_id,
+    superseded: plan.map((entry) => (existantes ?? []).find((row) => row.id === entry.id)).filter(Boolean),
+    at: quand
+  });
+
+  return { written: ecrites.length, superseded: liens.length, flagged: suspectes };
+}
+
+/**
+ * Lève les drapeaux qu'un remplacement d'hypothèse rend nécessaires.
+ *
+ * Isolé de `rememberProposition` parce qu'il échoue séparément : ne pas savoir
+ * marquer ce qui devient suspect ne doit pas défaire une fusion qui, elle, a
+ * eu lieu. Le pire cas est une mémoire à jour dont les drapeaux manquent — pas
+ * une mémoire à moitié écrite.
+ */
+async function markDependentsOf({ projectId, superseded = [], at = "" } = {}) {
+  if (superseded.length === 0) return 0;
+
+  try {
+    const { planReviewFlags } = await import("./assertion-dependencies.js");
+    const { listAssertionDependencies, markNeedsReview } = await import("./assertion-dependencies-supabase.js");
+
+    const liens = await listAssertionDependencies(projectId);
+    // `null` : on n'a pas pu lire le graphe. Ne rien marquer est le seul choix
+    // honnête — marquer sur un graphe vide dirait « rien ne dépend de cette
+    // hypothèse », ce qui est une affirmation qu'on n'est pas en mesure de faire.
+    if (!liens) return 0;
+
+    return await markNeedsReview(planReviewFlags(superseded, liens, at));
+  } catch {
+    return 0;
+  }
 }

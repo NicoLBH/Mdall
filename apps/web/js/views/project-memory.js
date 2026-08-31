@@ -39,6 +39,7 @@ import {
 import { normalizePaginationState, paginateItems, renderPaginationControls } from "./ui/pagination.js";
 import {
   DOMAINS,
+  NATURE,
   NATURES,
   UNCLASSIFIED_LABEL,
   classifyAssertion,
@@ -47,6 +48,14 @@ import {
   natureLabel,
   summarizeTaxonomy
 } from "../services/assertion-taxonomy.js";
+import {
+  dependenciesOf,
+  dependentsOf,
+  describeDependents,
+  describeReviewFlag,
+  needsReview,
+  pendingReviews
+} from "../services/assertion-dependencies.js";
 import { bindGhActionButtons, renderGhActionButton } from "./ui/gh-split-button.js";
 
 const view = {
@@ -60,6 +69,10 @@ const view = {
   /** La nature et le domaine voulus. `"none"` demande ce qui n'est pas classé. */
   nature: "",
   domain: "",
+  /** `null` : le graphe des dépendances n'a pas pu être lu. `[]` : il est vide. */
+  dependencies: null,
+  /** Vrai quand on ne montre que ce qui attend une revérification. */
+  pending: false,
   includeSuperseded: false,
   notice: "",
   busy: false,
@@ -67,6 +80,19 @@ const view = {
   open: null,
   page: 1
 };
+
+/**
+ * Prête un état à l'écran, pour une page d'aperçu.
+ *
+ * Le rendu d'une ligne lit le graphe des dépendances et la mémoire entière —
+ * il ne peut pas s'en passer sans mentir sur ce qu'il montre. Une page d'essai
+ * qui recopierait son HTML finirait par diverger ; celle-ci monte le vrai
+ * rendu, avec un état qu'on lui donne.
+ */
+export function __setMemoryStateForPreview({ assertions = null, dependencies = null } = {}) {
+  view.assertions = assertions;
+  view.dependencies = dependencies;
+}
 
 let mountedRoot = null;
 let tabResetBound = false;
@@ -96,7 +122,7 @@ function kindIcon(kind) {
   return KIND_ICON[String(kind ?? "")] ?? "dot-fill-pending";
 }
 
-function renderCounts(resume, vocabulaire) {
+function renderCounts(resume, vocabulaire, enAttente = 0) {
   const cellule = (valeur, mot, className = "") =>
     `<span class="memory-counts__item${className}"><b>${valeur}</b> ${escapeHtml(mot)}</span>`;
 
@@ -106,6 +132,15 @@ function renderCounts(resume, vocabulaire) {
       ${cellule(resume.assumed, "assumée(s)")}
       ${cellule(resume.rejected, "écartée(s)")}
       ${cellule(resume.superseded, "remplacée(s)")}
+      ${
+        // Ce qui attend une revérification passe devant : c'est la seule ligne
+        // de ce bandeau qui appelle un geste aujourd'hui.
+        enAttente > 0
+          ? `<button type="button" class="memory-counts__item memory-counts__item--pending" data-memory-pending>
+               <b>${enAttente}</b> à revérifier
+             </button>`
+          : ""
+      }
       ${
         // **Ce qui n'est pas classé se compte au premier rang, pas en note de
         // bas de page.** C'est la seule façon qu'une lecture filtrée par domaine
@@ -197,7 +232,9 @@ function renderAssertion(assertion) {
             ${escapeHtml(ecartee ? "Écartée" : "Assumée")}
           </span>
         </div>
+        ${renderReviewBanner(assertion)}
         ${assertion.detail ? `<span class="memory-row__detail">${escapeHtml(assertion.detail)}</span>` : ""}
+        ${renderDependentsCount(assertion)}
         <span class="memory-row__meta">
           ${renderTaxonomy(assertion)}
           ${escapeHtml(kindLabel(assertion.kind))} ${escapeHtml(assertion.subject_key)}
@@ -208,6 +245,62 @@ function renderAssertion(assertion) {
         </span>
       </div>
     </li>
+  `;
+}
+
+/**
+ * Le bandeau d'une affirmation devenue suspecte.
+ *
+ * Il nomme l'hypothèse et la date : « à revérifier » sans dire pourquoi ni
+ * depuis quand est une inquiétude, pas une information. Et il porte le geste
+ * qui la lève — sans quoi on constaterait un problème sans pouvoir y répondre.
+ */
+function renderReviewBanner(assertion) {
+  if (!needsReview(assertion)) return "";
+
+  const hypothese = (view.assertions ?? []).find(
+    (entry) => entry.id === dependenciesOf(assertion.id, view.dependencies ?? [])[0]
+  );
+
+  return `
+    <div class="memory-review">
+      <span class="memory-review__mark">${svgIcon("alert", { className: "octicon" })}</span>
+      <span class="memory-review__text">${escapeHtml(describeReviewFlag(assertion, hypothese))}</span>
+      <button type="button" class="gh-btn gh-btn--sm" data-memory-reviewed="${escapeHtml(assertion.id ?? "")}" ${
+        view.busy ? "disabled" : ""
+      }>Marquer revérifiée</button>
+    </div>
+  `;
+}
+
+/**
+ * Ce qu'une hypothèse entraîne, sous elle.
+ *
+ * Le compte porte sur ce qui **attend encore** une revérification : une fois
+ * revérifiées, ces affirmations ne demandent plus rien, et le répéter ferait un
+ * compteur qu'on apprend à ignorer.
+ */
+function renderDependentsCount(assertion) {
+  if (classifyAssertion(assertion).nature !== NATURE.HYPOTHESE) return "";
+
+  const dependants = dependentsOf(assertion.id, view.dependencies ?? []);
+  if (dependants.length === 0) return "";
+
+  const enAttente = (view.assertions ?? []).filter(
+    (entry) => dependants.includes(entry.id) && needsReview(entry)
+  );
+
+  const phrase = describeDependents(enAttente.length);
+  if (!phrase) {
+    return `<span class="memory-row__dependents">${escapeHtml(
+      `${dependants.length} affirmation${dependants.length > 1 ? "s" : ""} en dépend${dependants.length > 1 ? "ent" : ""}`
+    )}</span>`;
+  }
+
+  return `
+    <button type="button" class="memory-row__dependents memory-row__dependents--pending" data-memory-pending>
+      ${svgIcon("alert", { className: "octicon" })} ${escapeHtml(phrase)}
+    </button>
   `;
 }
 
@@ -352,6 +445,8 @@ export function renderMemoryDetail(assertions, cible = {}) {
           : ""
       }
 
+      ${renderDependencyPanel(courante)}
+
       <h3 class="memory-detail__section">Son histoire</h3>
       <ol class="memory-steps">${suite.map(etape).join("")}</ol>
 
@@ -462,6 +557,165 @@ function bindExportButton(root) {
   });
 }
 
+/**
+ * Sur quoi cette affirmation repose, et ce qui repose sur elle.
+ *
+ * Les deux sens, parce qu'on vient y chercher deux questions différentes. Sur
+ * une hypothèse : « qu'est-ce que je casse si je la change ? ». Sur une note de
+ * calcul : « sur quoi ai-je bâti ça ? ».
+ *
+ * Le champ de déclaration n'accepte que des hypothèses, et il le dit. C'est le
+ * geste manuel du plan — celui qui existe **à défaut** que la proposition le
+ * dise elle-même.
+ */
+function renderDependencyPanel(courante) {
+  const liens = view.dependencies;
+  if (liens === null) {
+    return `
+      <div class="memory-depends memory-depends--unknown">
+        <p>Les dépendances n'ont pas pu être lues. Ce n'est pas qu'il n'y en a aucune.</p>
+      </div>
+    `;
+  }
+
+  const lignes = currentAssertions(view.assertions ?? []);
+  const nomDe = (id) => lignes.find((entry) => entry.id === id)?.statement ?? "une affirmation retirée";
+
+  const socles = dependenciesOf(courante.id, liens);
+  const dependants = dependentsOf(courante.id, liens);
+
+  // Une affirmation ne repose que sur une hypothèse : proposer autre chose dans
+  // la liste ferait offrir un geste qui sera refusé.
+  const hypotheses = lignes.filter(
+    (entry) => entry.id !== courante.id && classifyAssertion(entry).nature === NATURE.HYPOTHESE
+  );
+
+  const liste = (titre, ids) =>
+    ids.length === 0
+      ? ""
+      : `<div class="memory-depends__block">
+           <h4>${escapeHtml(titre)}</h4>
+           <ul>${ids.map((id) => `<li>${escapeHtml(nomDe(id))}</li>`).join("")}</ul>
+         </div>`;
+
+  return `
+    <div class="memory-depends">
+      <h3 class="memory-detail__section">Ce qui la relie</h3>
+      ${liste("Elle repose sur", socles)}
+      ${liste("Reposent sur elle", dependants)}
+      ${
+        socles.length === 0 && dependants.length === 0
+          ? `<p class="memory-depends__empty">Aucun lien déclaré. Une affirmation sans lien ne dit rien de faux — elle n'entraîne simplement rien.</p>`
+          : ""
+      }
+      ${
+        hypotheses.length === 0
+          ? `<p class="memory-depends__empty">Aucune hypothèse dans la mémoire de ce projet : il n'y a rien sur quoi reposer.</p>`
+          : `<div class="memory-depends__form">
+               <label for="memoryDependsChoice">Déclarer qu'elle repose sur une hypothèse</label>
+               <div class="memory-depends__row">
+                 <select class="gh-input" id="memoryDependsChoice" data-memory-depends-choice>
+                   ${hypotheses
+                     .map(
+                       (entry) =>
+                         `<option value="${escapeHtml(entry.id)}">${escapeHtml(entry.statement)}</option>`
+                     )
+                     .join("")}
+                 </select>
+                 <button type="button" class="gh-btn" data-memory-depends="${escapeHtml(courante.id ?? "")}" ${
+                   view.busy ? "disabled" : ""
+                 }>Déclarer</button>
+               </div>
+             </div>`
+      }
+    </div>
+  `;
+}
+
+/**
+ * Marque une affirmation revérifiée.
+ *
+ * La date de suspicion **reste** : on doit pouvoir lire « suspectée le 12,
+ * revérifiée le 14 ». Revérifier lève un drapeau, ça ne réécrit pas l'histoire.
+ */
+async function markAsReviewed(root, assertionId) {
+  if (!assertionId || view.busy) return;
+
+  view.busy = true;
+  view.notice = "";
+  renderContent(root);
+
+  const quand = new Date().toISOString();
+  const { markReviewed } = await import("../services/assertion-dependencies-supabase.js");
+  const pris = await markReviewed({ assertionId, reviewedBy: store.user?.id ?? null, at: quand });
+
+  view.busy = false;
+
+  if (!pris) {
+    view.notice = "La revérification n'a pas pu être enregistrée. L'affirmation reste signalée.";
+    renderContent(root);
+    return;
+  }
+
+  // On met à jour ce qu'on a sous la main plutôt que de tout relire : la base a
+  // pris, l'écran doit le montrer, et relire trois cents lignes pour une date
+  // ferait clignoter la page.
+  view.assertions = (view.assertions ?? []).map((entry) =>
+    entry.id === assertionId ? { ...entry, reviewed_at: quand, reviewed_by: store.user?.id ?? null } : entry
+  );
+  renderContent(root);
+}
+
+/**
+ * Déclare qu'une affirmation repose sur une hypothèse.
+ *
+ * C'est le geste manuel, celui qui existe **à défaut** : quand une proposition
+ * ne dit pas d'elle-même sur quoi elle s'appuie, quelqu'un qui le sait peut
+ * l'écrire. Sans lui, le graphe ne se remplirait que le jour où les documents
+ * citeront leurs hypothèses, c'est-à-dire jamais tout à fait.
+ */
+async function declareDependsOn(root, bouton) {
+  const cibleId = bouton.getAttribute("data-memory-depends") || "";
+  const hote = bouton.closest(".memory-depends");
+  const choix = hote?.querySelector("[data-memory-depends-choice]");
+  const hypotheseId = choix?.value || "";
+
+  if (!cibleId || !hypotheseId || view.busy) return;
+
+  const lignes = view.assertions ?? [];
+  const { planDependency } = await import("../services/assertion-dependencies.js");
+  const plan = planDependency({
+    assertion: lignes.find((entry) => entry.id === cibleId) ?? null,
+    dependsOn: lignes.find((entry) => entry.id === hypotheseId) ?? null,
+    existing: view.dependencies ?? [],
+    declaredBy: store.user?.id ?? null
+  });
+
+  if (!plan.ok) {
+    view.notice = plan.reason;
+    renderContent(root);
+    return;
+  }
+
+  view.busy = true;
+  renderContent(root);
+
+  const { declareDependency } = await import("../services/assertion-dependencies-supabase.js");
+  const ecrit = await declareDependency(plan.link);
+
+  view.busy = false;
+
+  if (!ecrit) {
+    view.notice = "Le lien n'a pas pu être enregistré.";
+    renderContent(root);
+    return;
+  }
+
+  view.dependencies = [...(view.dependencies ?? []), ecrit];
+  view.notice = "";
+  renderContent(root);
+}
+
 function renderContent(root) {
   if (view.loading) {
     root.innerHTML = `
@@ -506,7 +760,7 @@ function renderContent(root) {
   // l'histoire : « 40 sans domaine » doit dire quarante affirmations à classer,
   // pas quarante états successifs de quatre d'entre elles.
   const vocabulaire = summarizeTaxonomy(currentAssertions(view.assertions));
-  const lignes = filterByTaxonomy(
+  const filtrees = filterByTaxonomy(
     searchAssertions(view.assertions, {
       query: view.query,
       kind: view.kind,
@@ -516,6 +770,11 @@ function renderContent(root) {
     { nature: view.nature, domain: view.domain }
   );
 
+  // « À revérifier » se coche par-dessus les autres filtres : c'est une urgence,
+  // pas une catégorie.
+  const lignes = view.pending ? pendingReviews(filtrees) : filtrees;
+  const enAttente = pendingReviews(currentAssertions(view.assertions)).length;
+
   root.innerHTML = `
     <section class="project-simple-page project-simple-page--memory">
       <div class="propositions-shell">
@@ -523,7 +782,7 @@ function renderContent(root) {
 
         ${view.notice ? `<div class="propositions-empty propositions-empty--warn"><p>${escapeHtml(view.notice)}</p></div>` : ""}
 
-        ${renderCounts(resume, vocabulaire)}
+        ${renderCounts(resume, vocabulaire, enAttente)}
         ${renderFilters()}
         ${renderList(lignes, view.page)}
       </div>
@@ -594,6 +853,22 @@ function bind(root) {
     view.page = 1;
     renderContent(root);
   });
+
+  for (const bouton of root.querySelectorAll("[data-memory-pending]")) {
+    bouton.addEventListener("click", () => {
+      view.pending = !view.pending;
+      view.page = 1;
+      renderContent(root);
+    });
+  }
+
+  for (const bouton of root.querySelectorAll("[data-memory-reviewed]")) {
+    bouton.addEventListener("click", () => markAsReviewed(root, bouton.getAttribute("data-memory-reviewed")));
+  }
+
+  for (const bouton of root.querySelectorAll("[data-memory-depends]")) {
+    bouton.addEventListener("click", () => declareDependsOn(root, bouton));
+  }
 
   root.querySelector("[data-memory-export]")?.addEventListener("click", () => copyContext(root));
   root.querySelector("[data-memory-backfill]")?.addEventListener("click", () => backfill(root));
@@ -760,8 +1035,15 @@ export function renderProjectMemory(root) {
       // l'autre rend une liste vide sans erreur, ce qui est la pire des pannes.
       view.projectId = (await resolveCurrentBackendProjectId().catch(() => "")) || "";
       view.assertions = view.projectId ? await memoire.listProjectAssertions(view.projectId) : null;
+
+      // Le graphe des dépendances se lit avec la mémoire : sans lui, une
+      // affirmation suspecte s'afficherait sans dire de quelle hypothèse elle
+      // dépend, et une hypothèse sans son compteur.
+      const { listAssertionDependencies } = await import("../services/assertion-dependencies-supabase.js");
+      view.dependencies = view.projectId ? await listAssertionDependencies(view.projectId) : null;
     } catch {
       view.assertions = null;
+      view.dependencies = null;
     }
 
     view.loading = false;
