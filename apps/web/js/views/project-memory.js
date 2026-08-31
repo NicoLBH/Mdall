@@ -56,6 +56,15 @@ import {
   needsReview,
   pendingReviews
 } from "../services/assertion-dependencies.js";
+import {
+  ACT,
+  actsOf,
+  corroboration,
+  describeCorroboration,
+  stateLabel,
+  stateOf,
+  verdictLabel
+} from "../services/hypothesis-acts.js";
 import { bindGhActionButtons, renderGhActionButton } from "./ui/gh-split-button.js";
 
 const view = {
@@ -71,6 +80,11 @@ const view = {
   domain: "",
   /** `null` : le graphe des dépendances n'a pas pu être lu. `[]` : il est vide. */
   dependencies: null,
+  /** Les actes portés sur les hypothèses. `null` : lecture impossible. */
+  acts: null,
+  /** Le formulaire de contestation ouvert, s'il y en a un. */
+  contesting: null,
+  contestDraft: { value: "", note: "" },
   /** Vrai quand on ne montre que ce qui attend une revérification. */
   pending: false,
   /** Le formulaire d'hypothèse, quand il est ouvert. */
@@ -92,9 +106,15 @@ const view = {
  * qui recopierait son HTML finirait par diverger ; celle-ci monte le vrai
  * rendu, avec un état qu'on lui donne.
  */
-export function __setMemoryStateForPreview({ assertions = null, dependencies = null, declaring = false } = {}) {
+export function __setMemoryStateForPreview({
+  assertions = null,
+  dependencies = null,
+  acts = null,
+  declaring = false
+} = {}) {
   view.assertions = assertions;
   view.dependencies = dependencies;
+  view.acts = acts;
   view.declaring = declaring;
 }
 
@@ -237,6 +257,7 @@ function renderAssertion(assertion) {
             ${escapeHtml(ecartee ? "Écartée" : "Assumée")}
           </span>
         </div>
+        ${renderHypothesisState(assertion)}
         ${renderReviewBanner(assertion)}
         ${assertion.detail ? `<span class="memory-row__detail">${escapeHtml(assertion.detail)}</span>` : ""}
         ${renderDependentsCount(assertion)}
@@ -250,6 +271,38 @@ function renderAssertion(assertion) {
         </span>
       </div>
     </li>
+  `;
+}
+
+/**
+ * L'état d'une hypothèse, sur sa ligne.
+ *
+ * **Candidate, validée ou contestée** — et le mot compte : une valeur que
+ * personne n'a confirmée n'est pas une valeur acquise, et l'écran ne doit pas
+ * la montrer comme telle. La corroboration l'accompagne sans la promouvoir :
+ * « reprise par 3 sources, jamais validée » est une phrase honnête.
+ *
+ * Une contestation dit ce qu'elle avance, quand elle avance quelque chose :
+ * c'est le doute, nommé plutôt qu'arbitré.
+ */
+function renderHypothesisState(assertion) {
+  if (classifyAssertion(assertion).nature !== NATURE.HYPOTHESE) return "";
+  if (view.acts === null) return "";
+
+  const etat = stateOf(assertion.id, view.acts);
+  const compte = describeCorroboration(corroboration(assertion.id, view.acts));
+
+  const avance = etat.proposedValue
+    ? `<span class="hypothesis-state__proposed">avance « ${escapeHtml(etat.proposedValue)} »</span>`
+    : "";
+
+  return `
+    <span class="hypothesis-state">
+      <span class="hypothesis-pill hypothesis-pill--${escapeHtml(etat.state)}">${escapeHtml(stateLabel(etat.state))}</span>
+      ${etat.since ? `<span class="hypothesis-state__since">depuis le ${escapeHtml(formatDate(etat.since))}</span>` : ""}
+      ${avance}
+      <span class="hypothesis-state__count">${escapeHtml(compte)}</span>
+    </span>
   `;
 }
 
@@ -450,6 +503,7 @@ export function renderMemoryDetail(assertions, cible = {}) {
           : ""
       }
 
+      ${renderActsPanel(courante)}
       ${renderDependencyPanel(courante)}
 
       <h3 class="memory-detail__section">Son histoire</h3>
@@ -620,6 +674,64 @@ function bindExportButton(root) {
 }
 
 /**
+ * Enregistre un acte porté sur une hypothèse.
+ *
+ * Une contestation marque aussitôt ce qui repose dessus — **sans attendre le
+ * remplacement**. Attendre l'indice 2 de la note de calcul, c'est laisser
+ * passer des semaines pendant lesquelles quelqu'un bâtit sur une valeur qu'on
+ * sait déjà douteuse.
+ */
+async function recordHypothesisAct(root, { assertionId, verdict, proposedValue = "", note = "" } = {}) {
+  if (!assertionId || view.busy) return;
+
+  const [{ planAct }, { recordAct }] = await Promise.all([
+    import("../services/hypothesis-acts.js"),
+    import("../services/hypothesis-acts-supabase.js")
+  ]);
+
+  const plan = planAct({
+    assertion: (view.assertions ?? []).find((entry) => entry.id === assertionId) ?? null,
+    verdict,
+    proposedValue,
+    note,
+    declaredBy: store.user?.id ?? null
+  });
+
+  if (!plan.ok) {
+    view.notice = plan.reason;
+    renderContent(root);
+    return;
+  }
+
+  view.busy = true;
+  view.notice = "";
+  renderContent(root);
+
+  const resultat = await recordAct(plan.act);
+  view.busy = false;
+
+  if (!resultat) {
+    view.notice = "L'acte n'a pas pu être enregistré. L'hypothèse reste dans l'état où elle était.";
+    renderContent(root);
+    return;
+  }
+
+  view.acts = [...(view.acts ?? []), resultat.act];
+  view.contesting = null;
+  view.contestDraft = { value: "", note: "" };
+
+  // Une contestation a pu lever des drapeaux ailleurs : on relit la mémoire
+  // plutôt que d'afficher un écran qui n'est plus celui de la base.
+  if (resultat.flagged > 0) {
+    const memoire = await import("../services/project-memory-supabase.js");
+    view.assertions = await memoire.listProjectAssertions(view.projectId);
+    view.notice = `Contestation enregistrée. ${resultat.flagged} affirmation(s) qui reposent dessus sont à revérifier.`;
+  }
+
+  renderContent(root);
+}
+
+/**
  * Verse une hypothèse déclarée à la main.
  *
  * Le refus est nommé, jamais silencieux : un formulaire qui ne fait rien sans
@@ -674,6 +786,83 @@ async function declareHypothesis(root) {
       ? "Hypothèse versée. Elle remplace la valeur précédente du même sujet."
       : "Hypothèse versée.";
   renderContent(root);
+}
+
+/**
+ * Ce que les gens ont fait à cette hypothèse.
+ *
+ * Son histoire d'actes, et les deux gestes qu'on peut poser. **Tout le monde
+ * peut valider comme tout le monde peut contester** : aucune qualification
+ * n'est vérifiée, l'acte porte qui l'a posé et quand, et c'est au lecteur de
+ * juger ce que vaut la signature.
+ *
+ * La contestation demande ce qu'elle avance — « le projet est en zone E » —,
+ * facultativement : on peut contester sans savoir par quoi remplacer. Ce
+ * qu'elle avance n'entre pas en mémoire ; il reste sur l'acte, et le doute se
+ * lit au lieu d'être tranché par la machine.
+ */
+function renderActsPanel(courante) {
+  if (classifyAssertion(courante).nature !== NATURE.HYPOTHESE) return "";
+
+  if (view.acts === null) {
+    return `
+      <div class="memory-acts memory-acts--unknown">
+        <h3 class="memory-detail__section">Ce qu'on en a dit</h3>
+        <p>Les actes n'ont pas pu être lus. Ce n'est pas qu'il n'y en a aucun.</p>
+      </div>
+    `;
+  }
+
+  const histoire = actsOf(courante.id, view.acts);
+  const enContestation = view.contesting === courante.id;
+
+  const ligne = (acte) => `
+    <li class="memory-acts__item">
+      <b>${escapeHtml(verdictLabel(acte.verdict))}</b>
+      le ${escapeHtml(formatDate(acte.created_at))} par ${escapeHtml(nameOf(acte.declared_by))}
+      ${acte.proposed_value ? ` · avance « ${escapeHtml(acte.proposed_value)} »` : ""}
+      ${acte.note ? `<span class="memory-acts__note">${escapeHtml(acte.note)}</span>` : ""}
+    </li>
+  `;
+
+  return `
+    <div class="memory-acts">
+      <h3 class="memory-detail__section">Ce qu'on en a dit</h3>
+      ${
+        histoire.length > 0
+          ? `<ol class="memory-acts__list">${histoire.map(ligne).join("")}</ol>`
+          : `<p class="memory-acts__empty">Personne ne s'est encore prononcé. Elle est candidate — posée, pas confirmée.</p>`
+      }
+
+      ${
+        enContestation
+          ? `<form class="memory-acts__form" data-memory-contest-form="${escapeHtml(courante.id ?? "")}">
+               <label class="memory-declare__field">
+                 <span>Ce que vous avancez (facultatif)</span>
+                 <input class="gh-input" data-memory-contest="value" value="${escapeHtml(view.contestDraft.value)}"
+                   placeholder="E" autocomplete="off">
+               </label>
+               <label class="memory-declare__field">
+                 <span>Pourquoi</span>
+                 <input class="gh-input" data-memory-contest="note" value="${escapeHtml(view.contestDraft.note)}"
+                   placeholder="le projet se situe en zone E" autocomplete="off">
+               </label>
+               <div class="memory-declare__actions">
+                 <button type="button" class="gh-btn" data-memory-contest-cancel>Annuler</button>
+                 <button type="submit" class="gh-btn" ${view.busy ? "disabled" : ""}>Contester</button>
+               </div>
+             </form>`
+          : `<div class="memory-acts__actions">
+               <button type="button" class="gh-btn" data-memory-validate="${escapeHtml(courante.id ?? "")}" ${
+                 view.busy ? "disabled" : ""
+               }>Je la valide</button>
+               <button type="button" class="gh-btn" data-memory-contest-open="${escapeHtml(courante.id ?? "")}" ${
+                 view.busy ? "disabled" : ""
+               }>Je la conteste</button>
+             </div>`
+      }
+    </div>
+  `;
 }
 
 /**
@@ -991,6 +1180,38 @@ function bind(root) {
     bouton.addEventListener("click", () => declareDependsOn(root, bouton));
   }
 
+  root.querySelector("[data-memory-validate]")?.addEventListener("click", (event) => {
+    recordHypothesisAct(root, { assertionId: event.currentTarget.getAttribute("data-memory-validate"), verdict: ACT.VALIDATED });
+  });
+
+  root.querySelector("[data-memory-contest-open]")?.addEventListener("click", (event) => {
+    view.contesting = event.currentTarget.getAttribute("data-memory-contest-open");
+    view.contestDraft = { value: "", note: "" };
+    renderContent(root);
+  });
+
+  root.querySelector("[data-memory-contest-cancel]")?.addEventListener("click", () => {
+    view.contesting = null;
+    renderContent(root);
+  });
+
+  for (const champ of root.querySelectorAll("[data-memory-contest]")) {
+    const cle = champ.getAttribute("data-memory-contest");
+    champ.addEventListener("input", (event) => {
+      view.contestDraft = { ...view.contestDraft, [cle]: event.target.value };
+    });
+  }
+
+  root.querySelector("[data-memory-contest-form]")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    recordHypothesisAct(root, {
+      assertionId: event.currentTarget.getAttribute("data-memory-contest-form"),
+      verdict: ACT.CONTESTED,
+      proposedValue: view.contestDraft.value,
+      note: view.contestDraft.note
+    });
+  });
+
   root.querySelector("[data-memory-declare]")?.addEventListener("click", () => {
     view.declaring = !view.declaring;
     view.notice = "";
@@ -1190,9 +1411,15 @@ export function renderProjectMemory(root) {
       // dépend, et une hypothèse sans son compteur.
       const { listAssertionDependencies } = await import("../services/assertion-dependencies-supabase.js");
       view.dependencies = view.projectId ? await listAssertionDependencies(view.projectId) : null;
+
+      // Les actes disent l'état d'une hypothèse : sans eux, toutes paraîtraient
+      // candidates, y compris celles que le bureau de contrôle a validées.
+      const { listHypothesisActs } = await import("../services/hypothesis-acts-supabase.js");
+      view.acts = view.projectId ? await listHypothesisActs(view.projectId) : null;
     } catch {
       view.assertions = null;
       view.dependencies = null;
+      view.acts = null;
     }
 
     view.loading = false;

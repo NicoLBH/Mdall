@@ -30,7 +30,7 @@
  */
 
 import { ITEM } from "./proposition-state.js";
-import { DECLARED_KIND, NATURE, classifyAssertion, normalizeDomain } from "./assertion-taxonomy.js";
+import { DECLARED_KIND, NATURE, classifyAssertion, domainLabel, normalizeDomain } from "./assertion-taxonomy.js";
 import { ITEM_TYPE } from "./proposition-review.js";
 
 /** Ce que le projet fait d'une affirmation. */
@@ -465,6 +465,12 @@ export function describeAssertionFacts(assertion = {}) {
     ajouter("Appréciation précédente", payload.previousOpinion);
     ajouter("Mouvement", payload.change === "added" ? "apparu" : payload.change === "changed" ? "modifié" : "");
     ajouter("Extrait", typeof payload.evidence === "string" ? payload.evidence : payload.evidence?.text);
+  } else if (assertion.kind === DECLARED_KIND) {
+    // Une hypothèse s'appuie sur son sujet et sa valeur, pas sur un fichier :
+    // la branche par défaut lui faisait afficher « Fichier zone-de-neige ».
+    ajouter("Sujet", payload.subject || assertion.subject_key);
+    ajouter("Valeur", payload.value);
+    ajouter("Domaine", domainLabel(assertion.domain));
   } else if (assertion.kind === ITEM_TYPE.ATTACHMENT) {
     ajouter("Affaire", payload.label || assertion.subject_key);
     ajouter("Verdict", payload.verdict);

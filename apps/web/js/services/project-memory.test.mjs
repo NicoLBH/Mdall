@@ -339,3 +339,19 @@ test("un domaine inconnu n'est pas rapproché du plus proche", () => {
   const plan = declaredHypothesis({ projectId: "p", subject: "Zone", value: "A2", domain: "neige" });
   assert.equal(plan.row.domain, null);
 });
+
+test("une hypothèse s'appuie sur son sujet et sa valeur, pas sur un fichier", () => {
+  const faits = Object.fromEntries(
+    describeAssertionFacts({
+      kind: "hypothesis",
+      subject_key: "zone-de-neige",
+      domain: "structure",
+      payload: { subject: "Zone de neige", value: "A2" }
+    })
+  );
+
+  assert.equal(faits["Sujet"], "Zone de neige");
+  assert.equal(faits["Valeur"], "A2");
+  assert.equal(faits["Domaine"], "Structure");
+  assert.equal(faits["Fichier"], undefined);
+});
