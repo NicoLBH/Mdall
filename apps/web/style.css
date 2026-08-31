@@ -2996,6 +2996,34 @@ body.is-resizing{
 .md-render blockquote{margin:0 0 10px;padding:6px 10px;border-left:3px solid var(--border2);color:var(--muted);}
 .md-render code{background:rgba(110,118,129,.2);border-radius:4px;padding:1px 4px;font-size:12px;}
 .md-render h1,.md-render h3,.md-render h4,.md-render h5,.md-render h6{margin:0 0 10px;font-size:14px;}
+
+/* Un tableau dans un texte rendu. Il déborde plutôt que de se comprimer : une
+   colonne écrasée à trois caractères ne se lit plus, et un tableau illisible
+   vaut moins qu'une liste. */
+.md-table-scroll{ margin:0 0 10px; overflow-x:auto; }
+.md-table{
+  border-collapse:collapse;
+  width:100%;
+  font-size:13px;
+}
+.md-table th,
+.md-table td{
+  padding:6px 10px;
+  border:1px solid var(--border);
+  text-align:left;
+  vertical-align:top;
+}
+.md-table th{ background:var(--panel2); font-weight:600; }
+.md-table tbody tr:nth-child(even) td{ background:rgba(110,118,129,.06); }
+
+/* Une image citée : elle ne dépasse jamais son texte. */
+.md-image{
+  max-width:100%;
+  height:auto;
+  margin:4px 0;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+}
 .md-render h2{
   margin:0 0 16px;
   padding-bottom:6px;
@@ -16235,6 +16263,19 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
    second à l'opposé du premier — utile ailleurs, faux ici : « Fermer » et
    « Commenter » sont deux réponses au même message, pas deux zones de l'écran. */
 .comment-composer--proposition .actions-row__right > :nth-child(2){ margin-left:0; }
+
+/* La note de dépôt : ce que la machine a compris du lot, signé comme tel. La
+   provenance est écrite sous le texte — une note qui ne dirait pas d'où elle
+   vient serait lue comme la parole de quelqu'un. */
+.deposit-note__source{
+  margin:10px 0 0;
+  padding-top:8px;
+  border-top:1px solid var(--border2);
+  color:var(--muted);
+  font-size:12px;
+  font-style:italic;
+}
+.deposit-note__retry{ margin-top:10px; }
 
 /* Fermer une proposition ne détruit rien — les documents restent au projet,
    l'histoire reste lisible : le bouton garde donc le gris d'« Annuler ». Seul
