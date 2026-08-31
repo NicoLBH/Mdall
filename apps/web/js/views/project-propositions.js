@@ -351,6 +351,59 @@ function renderReviewHead(proposition) {
 }
 
 /**
+ * Les figures d'un avis, sous ce qu'il dit.
+ *
+ * Le rapport montrait déjà ce que sa phrase ne disait pas ; l'écran le montre à
+ * son tour. La vignette porte sa provenance en info-bulle — le document et la
+ * page — et s'ouvre en grand : une image qu'on ne peut pas vérifier ne vaut pas
+ * mieux qu'une affirmation.
+ *
+ * Les pixels ne sont pas dans le HTML : le stockage demande une autorisation,
+ * donc la source arrive après, une fois l'écran dessiné.
+ */
+function renderItemFigures(item) {
+  if (item.itemType !== ITEM_TYPE.AVIS) return "";
+
+  const figures = view.review?.figures?.get(String(item.itemKey)) ?? [];
+  if (figures.length === 0) return "";
+
+  return `
+    <div class="review-figures">
+      ${figures
+        .map(
+          (figure) => `
+            <figure class="review-figure-card">
+              <button
+                type="button"
+                class="review-figure"
+                data-figure-open="${escapeHtml(figure.id)}"
+                title="${escapeHtml(`Page ${figure.page} du rapport`)}"
+              >
+                <img class="review-figure__img" alt="Figure de la page ${escapeHtml(String(figure.page))}"
+                     data-figure-src="${escapeHtml(figure.id)}">
+                <span class="review-figure__page">p. ${escapeHtml(String(figure.page))}</span>
+              </button>
+              ${
+                figure.caption
+                  ? `<figcaption class="review-figure__caption">
+                       ${escapeHtml(figure.caption)}
+                       <span class="review-figure__derived">Lecture automatique${
+                         figure.caption_model ? ` (${escapeHtml(figure.caption_model)})` : ""
+                       } — ce que dit le rapport reste son texte.</span>
+                     </figcaption>`
+                  : `<button type="button" class="review-figure__ask" data-figure-describe="${escapeHtml(
+                      figure.id
+                    )}">Que montre cette image ?</button>`
+              }
+            </figure>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+/**
  * Une affirmation : une case, ce qu'elle dit, et sa raison si on l'a refusée.
  *
  * Cochée vaut accepté. C'est la règle posée avec la fusion — un item qu'on
@@ -378,6 +431,7 @@ function renderReviewItem(item, body) {
       </span>
       <div class="review-item__body">
         ${body}
+        ${renderItemFigures(item)}
         ${refuse ? `<span class="review-item__status">Refusé</span>` : ""}
         ${
           refuse && !gele
@@ -1373,6 +1427,60 @@ function describeAnalysis(review) {
   return `${documents} livrable(s) soumis, ${avis} avis en mouvement${inchanges}.`;
 }
 
+/**
+ * Va chercher les pixels des figures dessinées.
+ *
+ * Le stockage demande une autorisation : une balise `img` ne peut pas pointer
+ * vers lui. On rapatrie donc chaque figure une fois, on garde le lien objet le
+ * temps de la session, et on l'oublie avec l'écran — révoquer trop tôt
+ * laisserait des cadres vides à la première réouverture d'onglet.
+ */
+const figureUrls = new Map();
+
+function hydrateFigures(root) {
+  const toutes = [...(view.review?.figures?.values() ?? [])].flat();
+  if (toutes.length === 0) return;
+
+  const parId = new Map(toutes.map((figure) => [String(figure.id), figure]));
+
+  for (const image of root.querySelectorAll("[data-figure-src]")) {
+    const id = image.getAttribute("data-figure-src") || "";
+    const connue = figureUrls.get(id);
+    if (connue) {
+      image.src = connue;
+      continue;
+    }
+
+    const figure = parId.get(id);
+    if (!figure) continue;
+
+    import("../services/avis-figures-supabase.js")
+      .then(({ loadFigureUrl }) => loadFigureUrl(figure))
+      .then((url) => {
+        if (!url) return;
+        figureUrls.set(id, url);
+        // L'écran a pu changer entre-temps : on ne pose la source que si
+        // l'image est encore là.
+        if (image.isConnected) image.src = url;
+      })
+      .catch(() => {
+        // Une figure illisible laisse sa vignette vide plutôt que de faire
+        // échouer la revue.
+      });
+  }
+
+  for (const bouton of root.querySelectorAll("[data-figure-describe]")) {
+    bouton.addEventListener("click", () => describeFigure(root, bouton));
+  }
+
+  for (const bouton of root.querySelectorAll("[data-figure-open]")) {
+    bouton.addEventListener("click", () => {
+      const url = figureUrls.get(bouton.getAttribute("data-figure-open") || "");
+      if (url) window.open(url, "_blank");
+    });
+  }
+}
+
 /** Le nom d'un auteur, quelle que soit la forme sous laquelle il est rangé. */
 function nameOfAuthor(entree) {
   if (!entree) return "Un collaborateur";
@@ -1696,6 +1804,8 @@ function bindReview(root) {
   // CSS partagé échange les deux titres.
   bindReviewCompact(root);
 
+
+  hydrateFigures(root);
 
   for (const bouton of root.querySelectorAll("[data-deposit-open]")) {
     bouton.addEventListener("click", () => openDeposit(root, bouton));
@@ -2309,6 +2419,135 @@ async function merge(root) {
 }
 
 /**
+ * Les figures des rapports déposés.
+ *
+ * Un rapport de bureau de contrôle montre autant qu'il écrit : la photo dit
+ * l'ampleur d'une fissure que sa phrase ne dit pas. On découpe donc, sous le
+ * texte de chaque avis, la bande qui porte de l'encre.
+ *
+ * Trois bornes, et elles ne sont pas des détails.
+ *
+ * **Seuls les documents de la proposition sont découpés.** Le corpus accepté en
+ * compte cent vingt ; les relire tous à chaque ouverture rendrait l'écran
+ * inutilisable pour un gain nul — les avis qui bougent viennent du lot déposé.
+ *
+ * **Un document n'est découpé qu'une fois.** Ses figures sont en base ; les
+ * retrouver coûte une requête, les refaire coûte un rendu par page.
+ *
+ * **Ne pas savoir fait s'abstenir.** Si la lecture des figures existantes
+ * échoue, on ne découpe rien : mieux vaut ne rien ajouter que d'ajouter deux
+ * fois ce qu'on croyait absent.
+ */
+async function ensureAvisFigures(root, proposition, analyse, documents = []) {
+  if (!view.review || view.open?.id !== proposition.id) return;
+
+  const nôtres = new Set((documents ?? []).map((row) => String(row.id)));
+  const parSource = new Map((analyse.reports ?? []).map((report) => [String(report.sourceId), report]));
+
+  // Ce qu'on cherche : pour chaque avis lu dans un document déposé, la page et
+  // la phrase qui le portent. Sans la phrase, aucune bande ne peut être située.
+  const cibles = new Map();
+  for (const prediction of analyse.result?.predictions ?? []) {
+    if (prediction?.kind !== "extraction") continue;
+
+    const report = parSource.get(String(prediction.provenance?.source_id ?? ""));
+    if (!report || !nôtres.has(String(report.documentId))) continue;
+
+    const reference = String(prediction.value?.external_reference_normalized ?? "").trim();
+    const page = Number(prediction.provenance?.page);
+    const sentence = String(prediction.provenance?.excerpt ?? "").trim();
+    if (!reference || !Number.isInteger(page) || !sentence) continue;
+
+    const cle = String(report.documentId);
+    const liste = cibles.get(cle) ?? { report, avis: [] };
+    liste.avis.push({ reference, page, sentence });
+    cibles.set(cle, liste);
+  }
+
+  if (cibles.size === 0) return;
+
+  const figures = await import("../services/avis-figures-supabase.js");
+  const existantes = await figures.listFiguresForDocuments([...cibles.keys()]);
+  if (existantes === null) return;
+
+  const dejaLus = new Set(existantes.map((row) => String(row.document_id)));
+  const nouvelles = [];
+
+  for (const [documentId, { report, avis }] of cibles) {
+    if (dejaLus.has(documentId)) continue;
+
+    try {
+      const { captureFigures } = await import("../services/avis-figure-capture.js");
+      const trouvees = await captureFigures({ file: report.file, pages: report.pages, avis });
+
+      for (const figure of trouvees) {
+        const ecrite = await figures.saveFigure({ projectId: proposition.project_id, documentId, figure });
+        if (ecrite) nouvelles.push(ecrite);
+      }
+    } catch {
+      // Une découpe ratée ne compromet ni l'analyse ni la revue : l'avis se lit
+      // sans sa figure, et la prochaine ouverture réessaiera.
+    }
+  }
+
+  if (!view.review || view.open?.id !== proposition.id) return;
+
+  view.review.figures = groupFigures([...existantes, ...nouvelles]);
+  if (root.isConnected) renderContent(root);
+}
+
+/**
+ * Demande ce que montre une figure.
+ *
+ * À la main, une figure à la fois : un rapport peut en porter trente, et les
+ * décrire toutes d'office coûterait trente appels pour une lecture que personne
+ * n'a demandée. La légende est **dérivée** — l'écran le dit sous elle, parce
+ * qu'une lecture automatique prise pour la parole du bureau de contrôle serait
+ * un faux.
+ */
+async function describeFigure(root, bouton) {
+  const id = bouton.getAttribute("data-figure-describe") || "";
+  if (!id || bouton.disabled) return;
+
+  bouton.disabled = true;
+  bouton.textContent = "Lecture…";
+
+  const { describeFigure: demander } = await import("../services/avis-figures-supabase.js");
+  const reponse = await demander({ figureId: id });
+
+  if (!reponse?.caption) {
+    bouton.disabled = false;
+    bouton.textContent =
+      reponse?.error === "unconfigured" ? "Lecture non configurée" : "La lecture n'a pas abouti";
+    return;
+  }
+
+  for (const [reference, figures] of view.review?.figures ?? new Map()) {
+    view.review.figures.set(
+      reference,
+      figures.map((figure) =>
+        String(figure.id) === id
+          ? { ...figure, caption: reponse.caption, caption_model: reponse.model }
+          : figure
+      )
+    );
+  }
+
+  if (root.isConnected) renderContent(root);
+}
+
+/** Les figures rangées par avis : c'est sous l'avis qu'elles se lisent. */
+function groupFigures(rows = []) {
+  const parAvis = new Map();
+  for (const row of rows) {
+    const cle = String(row?.avis_reference ?? "").trim();
+    if (!cle) continue;
+    parAvis.set(cle, [...(parAvis.get(cle) ?? []), row]);
+  }
+  return parAvis;
+}
+
+/**
  * Écrit la note de dépôt, quand il y a lieu.
  *
  * Deux règles, et ce sont celles de tout le reste du projet.
@@ -2848,6 +3087,10 @@ async function openProposition(root, propositionId) {
       attachments: analyse.attachments
     };
     await ensureDepositNote(root, proposition, view.review.noteMatter);
+
+    // Les figures viennent en dernier : elles enrichissent la lecture, elles ne
+    // conditionnent aucune décision, et un rendu de page coûte cher.
+    await ensureAvisFigures(root, proposition, analyse, documents);
   } catch (error) {
     if (!view.open || view.open.id !== proposition.id) return;
     view.review = {
