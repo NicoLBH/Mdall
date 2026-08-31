@@ -15805,13 +15805,48 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .outcome-card__panel span{ color:var(--muted); font-size:13px; }
 .outcome-card__note{ color:var(--text) !important; }
 
-/* Le trait qui ferme la proposition. Plus épais que les séparateurs du fil :
-   ce qui suit n'appartient plus à son histoire, on y ajoute. */
+/* Le trait qui sépare les deux moments d'une proposition : ce qui s'est dit
+   avant qu'elle ne soit tranchée, et ce qui se dit depuis. Plus épais que les
+   séparateurs du fil, parce qu'il sépare plus que des messages.
+
+   La ligne du fil le traverse quand même : ce qui se dit après la fusion reste
+   la même conversation, et une ligne coupée nette ferait deux pages. */
 .review-end{
-  height:3px;
-  margin:20px 0 16px;
+  position:relative;
+  height:4px;
+  margin:0 0 16px;
   border-radius:2px;
   background:var(--border);
+}
+.review-end::before{
+  content:"";
+  position:absolute;
+  left:72px;
+  top:-12px;
+  bottom:-16px;
+  width:2px;
+  background:rgba(48,54,61,.9);
+}
+
+/* Et le fil d'après se ferme par le sien, à la largeur des messages : ce qui
+   suit — le procès-verbal — n'est plus de la conversation. */
+.review-since-end{
+  position:relative;
+  height:2px;
+  /* À la largeur des messages, et détaché du dernier d'entre eux : collé, il se
+     confondrait avec la bordure de sa boîte et ne fermerait plus rien. */
+  margin:14px 52px 0 0;
+  border-radius:1px;
+  background:var(--border);
+}
+.review-since-end::before{
+  content:"";
+  position:absolute;
+  left:20px;
+  top:-14px;
+  height:14px;
+  width:2px;
+  background:rgba(48,54,61,.9);
 }
 
 .comment-composer--proposition{ margin:0; }
@@ -16044,7 +16079,7 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
    sous le dernier acte : dépasser en haut décale tout, jusqu'au trait de fin. */
 /* Le premier message ouvre le fil : le décaler du haut le détacherait des
    onglets, alors qu'il en est la suite immédiate. */
-.review-thread--before .message-thread__item:first-child{ padding-top:0; }
+.review-thread .message-thread__item:first-child{ padding-top:0; }
 .review-thread .message-thread__item:first-child::before{ top:22px; }
 
 /* Ce qui se dit après la fusion repart sous le trait, avec sa propre ligne.
@@ -16052,6 +16087,11 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
    suite des autres ferait croire le contraire, et c'est tout le rôle du trait
    épais que de l'en séparer. */
 .review-thread-host--after{ margin-top:-4px; }
+
+/* Un fil suivi de quelque chose garde sa ligne jusqu'au bout : le raccourci de
+   trente pixels sert à ne pas laisser pendre un trait sous le dernier message,
+   pas à couper ce qui continue. */
+.review-thread--continues .message-thread__item:last-child::before{ bottom:0; height:auto; }
 .review-thread .message-thread__item:last-child::before{ bottom:auto; height:30px; }
 
 /* Les pastilles d'activité : un disque gris, sauf la fusion, qui prend le

@@ -5,6 +5,7 @@ import { syncProjectActionsFromSupabase } from "../services/project-supabase-syn
 import { svgIcon } from "../ui/icons.js";
 import { buildRunGraph, formatStepDuration } from "../services/run-workflow.js";
 import { store } from "../store.js";
+import { PROJECT_TAB_RESELECTED_EVENT } from "./project-header.js";
 import {
   renderDataTableEmptyState,
   renderDataTableHead,
@@ -448,7 +449,6 @@ function renderRunDetail(entry) {
   return `
     <section class="run-detail">
       <div class="run-detail__head">
-        <button type="button" class="gh-btn gh-btn--sm" data-run-back>← Journal des actions</button>
         <div class="run-detail__title-row">
           ${getRunStateIcon(entry)}
           <h2 class="run-detail__title">${escapeHtml(entry.name || "Run")}</h2>
@@ -637,9 +637,39 @@ function renderProjectActionsContent(root) {
   if (open) bindRunGraph(root);
 }
 
+/**
+ * Re-cliquer l'onglet « Actions » revient au journal.
+ *
+ * Le même geste que pour les sujets et les propositions : l'onglet ramène chez
+ * lui, et c'est pour cela qu'il n'y a plus de bouton de retour dans le détail.
+ * Le lien de l'onglet actif ne change pas l'adresse, donc aucun `hashchange`
+ * n'a lieu : cet événement est le seul signal disponible.
+ *
+ * L'écran est reconstruit à chaque navigation ; l'écouteur lit donc l'écran
+ * monté, jamais celui qu'il avait sous la main le jour où il a été posé.
+ */
+let tabResetBound = false;
+let mountedRoot = null;
+
+function bindTabReset() {
+  if (tabResetBound) return;
+  tabResetBound = true;
+
+  window.addEventListener(PROJECT_TAB_RESELECTED_EVENT, (event) => {
+    if (String(event?.detail?.tabId || "") !== "actions") return;
+    if (!mountedRoot?.isConnected) return;
+    if (!store.projectActionsView?.openRunId) return;
+
+    store.projectActionsView.openRunId = "";
+    renderProjectActionsContent(mountedRoot);
+  });
+}
+
 export function renderProjectActions(root) {
   root.className = "project-shell__content";
   clearProjectActiveScrollSource();
+  mountedRoot = root;
+  bindTabReset();
 
   // Entrer dans l'onglet, c'est ouvrir le journal — jamais retomber sur
   // l'exécution qu'on lisait la dernière fois.
@@ -662,13 +692,6 @@ export function renderProjectActions(root) {
     if (opener) {
       event.preventDefault();
       store.projectActionsView.openRunId = opener.getAttribute("data-run-open") || "";
-      renderProjectActionsContent(root);
-      return;
-    }
-
-    if (event.target?.closest?.("[data-run-back]")) {
-      event.preventDefault();
-      store.projectActionsView.openRunId = "";
       renderProjectActionsContent(root);
       return;
     }
