@@ -673,6 +673,9 @@ export function renderMemoryHead(resume, { busy = false } = {}) {
           <button type="button" class="gh-btn gh-btn--primary" data-memory-declare ${busy ? "disabled" : ""}>
             ${svgIcon("plus", { className: "octicon" })} Déclarer une hypothèse
           </button>
+          <button type="button" class="gh-btn" data-memory-site ${busy ? "disabled" : ""}>
+            ${svgIcon("climate-tools", { className: "octicon" })} Verser les contraintes du site
+          </button>
           <button type="button" class="gh-btn" data-memory-backfill ${busy ? "disabled" : ""}>
             ${svgIcon("history", { className: "octicon" })} Verser les propositions fusionnées
           </button>
@@ -682,7 +685,9 @@ export function renderMemoryHead(resume, { busy = false } = {}) {
         Ce que le projet tient pour vrai, avec la date à laquelle il l'a tranché et la proposition
         qui l'a versé. Ce qui se dérive d'un document — avis, rattachements, entrées au corpus —
         entre par la fusion d'une proposition. Une hypothèse, personne ne l'extrait encore : elle se
-        déclare, et elle est datée et signée comme le reste.
+        déclare, et elle est datée et signée comme le reste. Les contraintes du site — zones de
+        neige, de vent, de sismicité, profondeur hors gel — se déduisent de l'adresse : personne
+        n'a à les retenir, elles se versent.
       </p>
     </header>
   `;
@@ -1391,6 +1396,7 @@ function bind(root) {
 
   root.querySelector("[data-memory-export]")?.addEventListener("click", () => copyContext(root));
   root.querySelector("[data-memory-backfill]")?.addEventListener("click", () => backfill(root));
+  root.querySelector("[data-memory-site]")?.addEventListener("click", () => versSiteConstraints(root));
 
   bindPagination(root);
 
@@ -1487,6 +1493,67 @@ async function backfill(root) {
         : "Rien à rattraper : la mémoire portait déjà tout ce que les propositions fusionnées ont décidé.";
   } catch {
     view.notice = "Le rattrapage n'a pas abouti. La mémoire reste ce qu'elle était.";
+  }
+
+  view.busy = false;
+  renderContent(root);
+}
+
+/**
+ * Verse les contraintes que le site impose.
+ *
+ * Rien n'est calculé ici : les zones ont été établies par les outils de
+ * l'Atelier, et ce geste ne fait que les faire entrer en mémoire. Il ne demande
+ * donc pas de trancher — une contrainte ne se retient pas, elle s'impose — mais
+ * il reste un geste humain, daté et signé comme le reste.
+ *
+ * Le message dit ce qui porte une réserve, parce que c'est la seule chose que
+ * le lecteur ait à faire ensuite : vérifier une entrée, pas juger une règle.
+ */
+async function versSiteConstraints(root) {
+  if (view.busy) return;
+  view.busy = true;
+  view.notice = "Lecture des contraintes du site…";
+  renderContent(root);
+
+  try {
+    const [site, memoire] = await Promise.all([
+      import("../services/derived-constraints-supabase.js"),
+      import("../services/project-memory-supabase.js")
+    ]);
+
+    const candidats = await site.siteConstraintCandidates(view.projectId);
+
+    if (candidats.length === 0) {
+      // Ne pas savoir n'autorise pas à prétendre qu'il n'y a rien : on dit d'où
+      // ces contraintes viendraient, plutôt que « aucune contrainte ».
+      view.notice =
+        "Aucune contrainte du site n'est encore calculée. Elles viennent des outils de l'Atelier — " +
+        "zones climatiques, sismicité — et il faut les avoir lancés une fois.";
+    } else {
+      const resultat = await site.rememberSiteConstraints({
+        projectId: view.projectId,
+        candidates: candidats,
+        declaredBy: store.user?.id ?? null
+      });
+
+      if (!resultat) {
+        view.notice = "Le versement n'a pas abouti. La mémoire reste ce qu'elle était.";
+      } else {
+        const reserves = candidats.filter((candidat) => candidat.reserves.length > 0).length;
+        const suite = reserves
+          ? ` ${reserves} porte(nt) une réserve sur ses entrées : c'est l'adresse qu'on vérifie, pas la règle.`
+          : "";
+        view.notice = resultat.written
+          ? `${resultat.written} contrainte(s) versée(s).${
+              resultat.superseded ? ` ${resultat.superseded} valeur(s) corrigée(s).` : ""
+            }${resultat.flagged ? ` ${resultat.flagged} affirmation(s) à revérifier.` : ""}${suite}`
+          : `Rien de nouveau : la mémoire porte déjà ces ${candidats.length} contrainte(s).${suite}`;
+        view.assertions = await memoire.listProjectAssertions(view.projectId);
+      }
+    }
+  } catch {
+    view.notice = "Le versement n'a pas abouti. La mémoire reste ce qu'elle était.";
   }
 
   view.busy = false;
