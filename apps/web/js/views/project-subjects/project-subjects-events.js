@@ -10,10 +10,13 @@ import {
   searchEmojiSuggestions
 } from "../../utils/emoji-autocomplete.js";
 import {
-  applySubjectRefSuggestion,
-  resolveSubjectRefTriggerContext
-} from "../../utils/subject-links.js";
-import { searchSubjectRefs } from "../../utils/subject-ref-index.js";
+  REF,
+  applyRefSuggestion,
+  formatRef,
+  resolveRefTriggerContext,
+  searchRefSuggestions
+} from "../../utils/entity-refs.js";
+import { getAllSubjectRefEntries } from "../../utils/subject-ref-index.js";
 import { computeTextareaCaretRect } from "../../utils/textarea-caret-position.js";
 import { autosizeTextarea } from "../../utils/textarea-autosize.js";
 import { renderSubjectAttachmentTile, renderSubjectAttachmentsPreviewList } from "./project-subjects-attachments-ui.js";
@@ -1807,19 +1810,33 @@ export function createProjectSubjectsEvents(config) {
       });
     };
 
+    /** L'icône d'une proposition dit son état, comme celle d'un sujet dit le sien. */
+    const resolvePropositionStatusIcon = (status) => {
+      const etat = String(status || "open").toLowerCase();
+      if (etat === "merged") {
+        return svgIcon("git-compare", { className: "octicon", style: "color: var(--fgColor-done)" });
+      }
+      if (etat === "closed") {
+        return svgIcon("skip", { className: "octicon", style: "color: rgb(145, 152, 161)" });
+      }
+      return svgIcon("git-pull-request", { className: "octicon", style: "color: var(--fgColor-open)" });
+    };
+
     const renderSubjectRefPopupHtml = () => {
       const subjectRefState = getSubjectRefState();
       if (!subjectRefState?.open) return "";
       const suggestions = Array.isArray(subjectRefState.suggestions) ? subjectRefState.suggestions : [];
       return `
-        <div class="subject-mention-popup subject-ref-popup" data-autocomplete-popup="subject-ref" data-composer-key="${escapeHtml(String(subjectRefState.composerKey || ""))}" role="listbox" aria-label="Suggestions de sujet">
+        <div class="subject-mention-popup subject-ref-popup" data-autocomplete-popup="subject-ref" data-composer-key="${escapeHtml(String(subjectRefState.composerKey || ""))}" role="listbox" aria-label="Suggestions de sujet ou de proposition">
           ${suggestions.length
     ? suggestions.map((suggestion, index) => {
       const isActive = Number(subjectRefState.activeIndex || 0) === index;
-      const subjectId = String(suggestion?.subjectId || "").trim();
-      const subjectNumber = Number(suggestion?.subjectNumber || 0);
+      const kind = suggestion?.kind === REF.PROPOSITION ? REF.PROPOSITION : REF.SUBJECT;
+      const number = Number(suggestion?.number ?? suggestion?.subjectNumber ?? 0);
       const status = String(suggestion?.status || "open");
-      const iconHtml = resolveSubjectStatusIcon(status);
+      const iconHtml = kind === REF.PROPOSITION
+        ? resolvePropositionStatusIcon(status)
+        : resolveSubjectStatusIcon(status);
       return `
               <button
                 class="subject-mention-popup__item subject-ref-popup__item ${isActive ? "is-active" : ""}"
@@ -1828,18 +1845,19 @@ export function createProjectSubjectsEvents(config) {
                 aria-selected="${isActive ? "true" : "false"}"
                 data-action="subject-ref-pick"
                 data-composer-key="${escapeHtml(String(subjectRefState.composerKey || ""))}"
-                data-subject-id="${escapeHtml(subjectId)}"
-                data-subject-number="${escapeHtml(String(subjectNumber || ""))}"
+                data-ref-kind="${escapeHtml(kind)}"
+                data-ref-number="${escapeHtml(String(number || ""))}"
+                data-subject-id="${escapeHtml(String(suggestion?.subjectId || suggestion?.id || ""))}"
               >
                 <span class="subject-ref-popup__line">
                   <span class="subject-ref-popup__status" aria-hidden="true">${iconHtml}</span>
                   <span class="subject-ref-popup__title">${escapeHtml(String(suggestion?.title || ""))}</span>
-                  <span class="subject-ref-popup__number">#${escapeHtml(String(subjectNumber || ""))}</span>
+                  <span class="subject-ref-popup__number">${escapeHtml(formatRef(kind, number))}</span>
                 </span>
               </button>
             `;
     }).join("")
-    : `<div class="subject-mention-popup__empty">Aucun sujet trouvé</div>`}
+    : `<div class="subject-mention-popup__empty">Aucun sujet ni proposition trouvé</div>`}
         </div>
       `;
     };
@@ -2328,11 +2346,22 @@ export function createProjectSubjectsEvents(config) {
       });
     };
 
+    /**
+     * Ce qu'on peut citer : les sujets et les propositions du projet.
+     *
+     * **Les deux familles, et tous leurs états.** Un sujet clos et une
+     * proposition fusionnée sont précisément ce qu'on cite le plus souvent :
+     * « comme décidé dans #P4 », « c'est le sujet #12, réglé en juin ». Ne
+     * proposer que ce qui est ouvert obligerait à retrouver le numéro à la main
+     * pour tout ce qui appartient au passé — c'est-à-dire pour l'essentiel de ce
+     * qu'on cite. L'état s'affiche à côté ; il informe, il ne filtre pas.
+     */
     const listSubjectRefSuggestions = (query = "") => {
       const projectSubjectsView = store.projectSubjectsView && typeof store.projectSubjectsView === "object"
         ? store.projectSubjectsView
         : {};
-      return searchSubjectRefs(projectSubjectsView, query, 8, {
+
+      const sujets = getAllSubjectRefEntries(projectSubjectsView, {
         statusResolver: (subject) => {
           const canonicalSujet = typeof getNestedSujet === "function"
             ? (getNestedSujet(subject?.id) || subject)
@@ -2342,13 +2371,20 @@ export function createProjectSubjectsEvents(config) {
           }
           return String(canonicalSujet?.status || subject?.status || "open");
         }
-      });
+      }).map((entry) => ({ ...entry, kind: REF.SUBJECT, number: entry.subjectNumber }));
+
+      const propositions = (config.getPropositionRefs?.() ?? []).map((entry) => ({
+        ...entry,
+        kind: REF.PROPOSITION
+      }));
+
+      return searchRefSuggestions([...sujets, ...propositions], query, 8);
     };
 
     const syncSubjectRefPopupForTextarea = (textarea, composerKey) => {
       if (!textarea) return;
       const subjectRefState = getSubjectRefState();
-      const context = resolveSubjectRefTriggerContext(textarea.value || "", textarea.selectionStart || 0);
+      const context = resolveRefTriggerContext(textarea.value || "", textarea.selectionStart || 0);
       if (!context) {
         if (subjectRefState.open && String(subjectRefState.composerKey || "") === composerKey) {
           closeSubjectRefPopup({ rerender: false });
@@ -2377,7 +2413,7 @@ export function createProjectSubjectsEvents(config) {
       if (!textarea) return false;
       const source = String(textarea.value || "");
       const cursor = Math.max(0, Math.min(Number(textarea.selectionStart || 0), source.length));
-      if (resolveSubjectRefTriggerContext(source, cursor)) return false;
+      if (resolveRefTriggerContext(source, cursor)) return false;
       const previousChar = source[cursor - 1] || "";
       const insertion = /[A-Za-z0-9_]/.test(previousChar) ? " #" : "#";
       const nextText = `${source.slice(0, cursor)}${insertion}${source.slice(cursor)}`;
@@ -2401,7 +2437,10 @@ export function createProjectSubjectsEvents(config) {
       };
       const cursorBefore = Number(textarea.selectionStart || 0);
       const lengthBefore = String(textarea.value || "").length;
-      const result = applySubjectRefSuggestion(textarea.value || "", context, suggestion);
+      const result = applyRefSuggestion(textarea.value || "", context, {
+        kind: suggestion?.kind ?? REF.SUBJECT,
+        number: Number(suggestion?.number ?? suggestion?.subjectNumber ?? 0)
+      });
       textarea.value = String(result.nextText || "");
       const { mode, messageId = "" } = splitComposerKey(composerKey);
       if (mode === "main") {
@@ -2651,7 +2690,7 @@ export function createProjectSubjectsEvents(config) {
           closeEmojiPopup({ rerender: false });
           return;
         }
-        const subjectRefContext = resolveSubjectRefTriggerContext(commentTextarea.value || "", commentTextarea.selectionStart || 0);
+        const subjectRefContext = resolveRefTriggerContext(commentTextarea.value || "", commentTextarea.selectionStart || 0);
         if (subjectRefContext) {
           if (getMentionState().open) closeMentionPopup({ rerender: false });
           syncSubjectRefPopupForTextarea(commentTextarea, "main");
@@ -4459,7 +4498,7 @@ export function createProjectSubjectsEvents(config) {
         closeEmojiPopup({ rerender: false });
         return;
       }
-      const subjectRefContext = resolveSubjectRefTriggerContext(textarea.value || "", textarea.selectionStart || 0);
+      const subjectRefContext = resolveRefTriggerContext(textarea.value || "", textarea.selectionStart || 0);
       if (subjectRefContext) {
         const mentionState = getMentionState();
         if (mentionState.open && String(mentionState.composerKey || "") === composerKey) {
@@ -5562,15 +5601,16 @@ export function createProjectSubjectsEvents(config) {
           });
           return;
         }
-        const subjectRefBtn = target.closest("[data-action='subject-ref-pick'][data-subject-id][data-subject-number]");
+        const subjectRefBtn = target.closest("[data-action='subject-ref-pick'][data-ref-number]");
         if (!(subjectRefBtn instanceof HTMLElement)) return;
         logAutocompleteEvent("click pick", {
           action: "subject-ref-pick",
           composerKey: String(subjectRefBtn.dataset.composerKey || "main")
         });
         pickSubjectRefSuggestion({
-          subjectId: String(subjectRefBtn.dataset.subjectId || "").trim(),
-          subjectNumber: Number(subjectRefBtn.dataset.subjectNumber || 0)
+          kind: String(subjectRefBtn.dataset.refKind || REF.SUBJECT),
+          number: Number(subjectRefBtn.dataset.refNumber || 0),
+          subjectId: String(subjectRefBtn.dataset.subjectId || "").trim()
         }, String(subjectRefBtn.dataset.composerKey || "main"));
       });
       autocompleteLayer.layer.dataset.subjectAutocompleteBound = "true";
