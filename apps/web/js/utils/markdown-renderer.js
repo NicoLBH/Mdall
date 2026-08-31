@@ -14,6 +14,21 @@ function sanitizeLinkHref(rawHref = "") {
   return "";
 }
 
+/**
+ * La source d'une image.
+ *
+ * On n'accepte que ce qui vient d'ailleurs par HTTP ou du site lui-même. Pas de
+ * `data:` : une image en ligne peut porter du SVG, donc du script, et une note
+ * rédigée par une machine est précisément le genre de texte dont on ne veut pas
+ * qu'il puisse exécuter quoi que ce soit.
+ */
+function sanitizeImageSrc(rawSrc = "") {
+  const value = String(rawSrc || "").trim();
+  if (!value) return "";
+  if (/^(https?:\/\/|\/)/i.test(value)) return value;
+  return "";
+}
+
 function tokenizeInlineCode(source = "") {
   const tokens = [];
   const tokenized = String(source || "").replace(/`([^`\n]+)`/g, (_, code) => {
@@ -68,6 +83,15 @@ function renderInlineMarkdown(source = "", options = {}) {
   safe = safe.replace(/\*([^*\n]+)\*/g, "<em>$1</em>");
   safe = safe.replace(/\+\+([^+\n]+)\+\+/g, "<u>$1</u>");
 
+  // Les images passent avant les liens : `![x](y)` est un lien précédé d'un
+  // point d'exclamation, et l'ordre inverse rendrait « ! » suivi d'un lien.
+  safe = safe.replace(/!\[([^\]\n]*)\]\(([^)\s]+)(?:\s+&quot;([^&\n]*)&quot;)?\)/g, (match, alt, srcRaw, title) => {
+    const src = sanitizeImageSrc(srcRaw);
+    if (!src) return `${alt || "image"} (image non autorisée)`;
+    const titre = title ? ` title="${title}"` : "";
+    return `<img class="md-image" src="${escapeHtml(src)}" alt="${alt || ""}"${titre} loading="lazy">`;
+  });
+
   safe = safe.replace(/\[([^\]\n]+)\]\(([^)\n]+)\)/g, (match, label, hrefRaw) => {
     const href = sanitizeLinkHref(hrefRaw);
     if (!href) return `${label} (lien non autorisé)`;
@@ -99,6 +123,78 @@ function flushList(state, html) {
   state.items = [];
 }
 
+/**
+ * Un tableau, quand le texte en dessine un.
+ *
+ * Un « avant / après » se lit en tableau et se perd en phrases : c'est
+ * exactement ce qu'une note de dépôt a à dire, et ce que la moitié des
+ * documents de chantier disent déjà sous cette forme.
+ *
+ * On lit la syntaxe usuelle : une ligne d'en-têtes, une ligne de tirets qui
+ * porte l'alignement, puis les lignes de données. Sans la ligne de tirets, ce
+ * n'est pas un tableau — une phrase qui contient une barre verticale reste une
+ * phrase.
+ */
+const TABLE_SEPARATOR_PATTERN = /^\s*\|?\s*:?-{1,}:?\s*(\|\s*:?-{1,}:?\s*)*\|?\s*$/;
+
+function splitTableRow(line = "") {
+  const brut = String(line || "").trim().replace(/^\|/, "").replace(/\|$/, "");
+  // Une barre échappée appartient au texte de la cellule.
+  return brut.split(/(?<!\\)\|/).map((cell) => cell.replace(/\\\|/g, "|").trim());
+}
+
+function readTableAlignments(line = "") {
+  return splitTableRow(line).map((cell) => {
+    const gauche = cell.startsWith(":");
+    const droite = cell.endsWith(":");
+    if (gauche && droite) return "center";
+    if (droite) return "right";
+    return "";
+  });
+}
+
+function detectTable(lines = [], index = 0) {
+  const entete = String(lines[index] ?? "");
+  const separateur = String(lines[index + 1] ?? "");
+  if (!entete.includes("|") || !TABLE_SEPARATOR_PATTERN.test(separateur)) return null;
+
+  const colonnes = splitTableRow(entete);
+  const alignements = readTableAlignments(separateur);
+  if (colonnes.length === 0 || alignements.length !== colonnes.length) return null;
+
+  const corps = [];
+  let dernier = index + 1;
+  for (let rang = index + 2; rang < lines.length; rang += 1) {
+    const ligne = String(lines[rang] ?? "");
+    if (!ligne.trim() || !ligne.includes("|")) break;
+    corps.push(splitTableRow(ligne));
+    dernier = rang;
+  }
+
+  return { header: colonnes, alignments: alignements, rows: corps, lastIndex: dernier };
+}
+
+function renderTable(table, options = {}) {
+  const style = (rang) => (table.alignments[rang] ? ` style="text-align:${table.alignments[rang]}"` : "");
+
+  const entete = table.header
+    .map((cell, rang) => `<th${style(rang)}>${renderInlineMarkdown(cell, options)}</th>`)
+    .join("");
+
+  const corps = table.rows
+    .map((row) => {
+      // Une ligne plus courte que l'en-tête ne décale pas les suivantes : on
+      // complète, on ne devine pas ce qui manquait.
+      const cells = Array.from({ length: table.header.length }, (_, rang) => row[rang] ?? "");
+      return `<tr>${cells
+        .map((cell, rang) => `<td${style(rang)}>${renderInlineMarkdown(cell, options)}</td>`)
+        .join("")}</tr>`;
+    })
+    .join("");
+
+  return `<div class="md-table-scroll"><table class="md-table"><thead><tr>${entete}</tr></thead><tbody>${corps}</tbody></table></div>`;
+}
+
 function detectSingleLineMathBlock(line = "") {
   const trimmed = String(line || "").trim();
   let match = trimmed.match(/^\$\$(.+)\$\$$/);
@@ -119,7 +215,13 @@ export function renderMarkdownToHtml(markdown = "", options = {}) {
   let mathBlockState = null;
 
   const lines = source.split("\n");
-  lines.forEach((rawLine) => {
+  // Un tableau tient sur plusieurs lignes : celles qu'il a prises ne repassent
+  // pas dans la boucle.
+  let consumedUntil = -1;
+
+  lines.forEach((rawLine, index) => {
+    if (index <= consumedUntil) return;
+
     const line = String(rawLine || "");
     const trimmed = line.trim();
 
@@ -154,6 +256,15 @@ export function renderMarkdownToHtml(markdown = "", options = {}) {
         delimiter: trimmed,
         lines: []
       };
+      return;
+    }
+
+    const table = trimmed.includes("|") ? detectTable(lines, index) : null;
+    if (table) {
+      flushParagraph(paragraphLines, html, options);
+      flushList(listState, html);
+      html.push(renderTable(table, options));
+      consumedUntil = table.lastIndex;
       return;
     }
 

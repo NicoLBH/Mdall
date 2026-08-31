@@ -16,6 +16,7 @@
 import { escapeHtml } from "../utils/escape-html.js";
 import { store } from "../store.js";
 import { svgIcon } from "../ui/icons.js";
+import { PROJECT_TAB_RESELECTED_EVENT } from "./project-header.js";
 import {
   PROJECT_SHELL_COMPACT_CHANGE_EVENT,
   clearProjectActiveScrollSource,
@@ -126,7 +127,7 @@ function renderFilters(counts) {
       data-propositions-filter="${id}"
       aria-pressed="${view.filter === id ? "true" : "false"}"
     >
-      ${svgIcon(id === PROPOSITION.OPEN ? "git-pull-request" : "check-circle-fill", { className: "octicon" })}
+      ${svgIcon(id === PROPOSITION.OPEN ? "git-pull-request" : "check", { className: "octicon" })}
       <span>${count} ${label}</span>
     </button>
   `;
@@ -183,7 +184,15 @@ function renderRow(proposition) {
   return `
     <li class="propositions-row">
       <span class="propositions-row__icon propositions-row__icon--${proposition.status}">
-        ${svgIcon(merged ? "check-circle-fill" : closed ? "stop-alert" : "git-compare", { className: "octicon" })}
+        ${
+          // L'icône de la fusion, pas une coche dans un disque : c'est le même
+          // signe que partout ailleurs — la pastille de l'en-tête, l'acte du
+          // fil, la carte de fin. Une proposition ouverte prend celui d'une
+          // demande ouverte : deux états ne peuvent pas porter le même dessin.
+          svgIcon(merged ? "git-compare" : closed ? "stop-alert" : "git-pull-request", {
+            className: "octicon"
+          })
+        }
       </span>
       <span class="propositions-row__body">
         <a
@@ -330,13 +339,14 @@ function renderReviewHead(proposition) {
     })
   });
 
+  // Aucun bouton de retour : re-cliquer l'onglet « Propositions » ramène à la
+  // liste, comme l'onglet « Sujets » ramène à la sienne. Un bouton de plus dans
+  // l'en-tête ferait apprendre deux gestes pour un seul chemin — et c'est celui
+  // qu'on connaît déjà, parce qu'il est le même dans toute l'application.
   return renderOverlayChromeHead({
     headId: "propositionsDetailsTitle",
     titleHtml: titleWrapHtml,
-    headClassName: "review-head",
-    actionsHtml:
-      `<button type="button" class="gh-btn gh-btn--sm" data-review-back>` +
-      `Toutes les propositions</button>`
+    headClassName: "review-head"
   });
 }
 
@@ -723,6 +733,69 @@ function humanTextHtml(markdown) {
   });
 }
 
+/**
+ * Le texte d'une note : du Markdown, sans les retours à la ligne des messages.
+ *
+ * Une note porte des titres et des tableaux ; conserver les lignes vides d'un
+ * message y ajouterait des sauts au milieu d'une structure.
+ */
+function noteTextHtml(markdown) {
+  return linkifyRefsInHtml(renderMarkdownToHtml(markdown ?? ""), {
+    resolveRef: ({ kind, number }) =>
+      (view.refs ?? []).find((entry) => entry.kind === kind && entry.number === number) ?? null
+  });
+}
+
+/**
+ * La note de dépôt, en tête du fil.
+ *
+ * Une pull request porte un texte écrit par celui qui l'ouvre : il sait ce
+ * qu'il a changé, il vient de l'écrire. Celui qui dépose dix-sept PDF ne sait
+ * pas ce qu'ils contiennent — c'est la machine qui les a lus. Le corps du
+ * message revient donc à la machine, et il est signé comme tel : un message de
+ * Mdall, à sa place dans le fil, juste après celui qui a ouvert.
+ *
+ * Elle se place là plutôt qu'à sa date : une note décrit un lot, et sa place
+ * est là où le lot entre. Sa date, elle, est dite — c'est ce qui permet de
+ * savoir qu'elle a été réécrite après un second dépôt.
+ */
+function renderDepositNote(review) {
+  const etat = review.noteState ?? "idle";
+  const note = review.note ?? null;
+  if (!note && etat === "idle") return "";
+
+  const identite = getAuthorIdentity({ author: "system", agent: "system" });
+
+  const corps = note
+    ? `${noteTextHtml(note.markdown)}
+       <p class="deposit-note__source">${escapeHtml(
+         `Rédigée à partir des faits relevés par l'analyse${note.model ? ` (${note.model})` : ""}. Elle ne dit rien qui n'ait été calculé.`
+       )}</p>`
+    : etat === "writing"
+      ? `<p class="review-empty-note">Mdall lit le lot et rédige sa note…</p>`
+      : `<p class="review-comment__notice">La note n'a pas pu être écrite. Les documents et l'analyse, eux, sont là.</p>`;
+
+  // Une note ratée se redemande : c'est un appel qui a échoué, pas un état du
+  // dossier. Une note écrite pendant qu'une autre s'écrit ne se redemande pas.
+  const reprise =
+    etat === "failed"
+      ? `<div class="deposit-note__retry"><button type="button" class="gh-btn gh-btn--sm" data-note-retry>Réessayer</button></div>`
+      : "";
+
+  return renderMessageThreadComment({
+    idx: 0,
+    author: identite.displayName,
+    tsHtml: `<span class="gh-comment-ts">${escapeHtml(
+      note?.created_at ? `a rédigé la note de dépôt le ${formatDate(note.created_at)}` : "rédige la note de dépôt"
+    )}</span>`,
+    bodyHtml: `${corps}${reprise}`,
+    avatarHtml: identite.avatarHtml,
+    avatarType: identite.avatarType,
+    avatarInitial: identite.avatarInitial,
+    className: "review-deposit-note"
+  });
+}
+
 /** Le corps d'un message : du Markdown, comme dans un sujet. */
 function commentBodyHtml(event) {
   if (event.deleted) {
@@ -1008,6 +1081,7 @@ function renderConversation(proposition, review) {
       })
       .join("");
 
+  const note = renderDepositNote(review);
   const suite = raconter(avant.filter((event) => event.kind !== STORY.OPENED), 1);
   const depuis = raconter(apres, avant.length);
 
@@ -1018,8 +1092,10 @@ function renderConversation(proposition, review) {
   return `
     <div class="review-thread-host">
       ${renderMessageThread({
-        itemsHtml: `${premier}${suite}`,
-        className: "review-thread review-thread--before"
+        itemsHtml: `${premier}${note}${suite}`,
+        // Quand un second fil suit, la ligne du premier ne s'arrête plus à son
+        // dernier acte : elle traverse le trait et rejoint ce qui se dit depuis.
+        className: `review-thread review-thread--before${depuis ? " review-thread--continues" : ""}`
       })}
     </div>
     <div class="review-end" role="separator" aria-label="Fin de la discussion"></div>
@@ -1029,8 +1105,9 @@ function renderConversation(proposition, review) {
         ? `<div class="review-thread-host review-thread-host--after">
             ${renderMessageThread({
               itemsHtml: depuis,
-              className: "review-thread review-thread--after"
+              className: "review-thread review-thread--after review-thread--continues"
             })}
+            <div class="review-since-end" role="separator" aria-label="Fin des messages depuis la fusion"></div>
           </div>`
         : ""
     }
@@ -1496,7 +1573,6 @@ function bindReview(root) {
   // CSS partagé échange les deux titres.
   bindReviewCompact(root);
 
-  root.querySelector("[data-review-back]")?.addEventListener("click", () => backToList(root));
 
   // Changer d'onglet ne relance rien : les quatre panneaux lisent le même état.
   bindLightTabs(root, {
@@ -1637,6 +1713,10 @@ function bindConversation(root) {
     view.tab = "changes";
     renderContent(root);
   });
+
+  // Une note ratée se redemande : c'est un appel qui a échoué, pas un état du
+  // dossier. On repart des mêmes faits, ceux que l'analyse a déjà établis.
+  root.querySelector("[data-note-retry]")?.addEventListener("click", () => retryDepositNote(root));
 
   root.querySelector("[data-comment-post]")?.addEventListener("click", () => postComment(root));
 
@@ -2070,6 +2150,105 @@ async function merge(root) {
 }
 
 /**
+ * Écrit la note de dépôt, quand il y a lieu.
+ *
+ * Deux règles, et ce sont celles de tout le reste du projet.
+ *
+ * **Ce qui est dérivé se recalcule tant que ça sert à décider.** Une note
+ * décrit un lot ; tant que le lot bouge — un dépôt de plus, un rapport oublié
+ * trois jours après — elle est réécrite. Son empreinte dit sur quoi elle
+ * portait : tant que l'empreinte ne bouge pas, on ne redemande rien, parce
+ * qu'une note coûte un appel et que la relire ne change rien.
+ *
+ * **Ce qui a été décidé se conserve.** Une proposition close ne réécrit plus :
+ * on lit la dernière note écrite, telle quelle. C'est le même geste que pour
+ * les affirmations et le suivi.
+ *
+ * Et une note qui n'a pas pu être écrite ne s'invente pas : l'écran dit qu'elle
+ * manque. Un texte creux ferait croire que le lot ne dit rien.
+ */
+async function ensureDepositNote(root, proposition, matiere = {}) {
+  if (!view.review || view.open?.id !== proposition.id) return;
+
+  const [{ buildDepositFacts, depositFingerprint }, notes] = await Promise.all([
+    import("../services/deposit-note.js"),
+    import("../services/deposit-note-supabase.js")
+  ]);
+
+  const empreinte = depositFingerprint(matiere.documents ?? []);
+  const existante = await loadNoteInto(root, proposition, notes);
+
+  const ouverte = proposition.status === PROPOSITION.OPEN;
+  const aJour = existante && String(existante.fingerprint || "") === empreinte;
+  if (!ouverte || aJour) return;
+  // Un lot vide n'a rien à raconter : payer un appel pour l'écrire serait payer
+  // pour une phrase creuse.
+  if ((matiere.documents ?? []).length === 0) return;
+
+  view.review.noteState = "writing";
+  if (root.isConnected) renderContent(root);
+
+  const facts = buildDepositFacts({ proposition, ...matiere });
+  const ecrite = await notes.requestDepositNote({ propositionId: proposition.id, facts });
+
+  if (!view.review || view.open?.id !== proposition.id) return;
+
+  if (!ecrite) {
+    view.review.noteState = "failed";
+    if (root.isConnected) renderContent(root);
+    return;
+  }
+
+  const ligne = await notes.saveNote({
+    propositionId: proposition.id,
+    projectId: proposition.project_id,
+    markdown: ecrite.markdown,
+    facts,
+    fingerprint: empreinte,
+    model: ecrite.model
+  });
+
+  if (!view.review || view.open?.id !== proposition.id) return;
+
+  // La base a pu refuser l'écriture ; le texte, lui, existe. On l'affiche —
+  // il sera réécrit au prochain passage, ce qui est le pire qui puisse arriver.
+  view.review.note = ligne ?? {
+    markdown: ecrite.markdown,
+    model: ecrite.model,
+    created_at: new Date().toISOString(),
+    fingerprint: empreinte
+  };
+  view.review.noteState = "idle";
+  if (root.isConnected) renderContent(root);
+}
+
+/**
+ * Redemande la note, sans relancer l'analyse.
+ *
+ * Écrire une phrase ne relit pas cent vingt PDF : les faits sont conservés
+ * depuis la première rédaction, et c'est d'eux qu'on repart.
+ */
+async function retryDepositNote(root) {
+  const proposition = view.open;
+  if (!proposition || !view.review || view.review.noteState === "writing") return;
+
+  await ensureDepositNote(root, proposition, view.review.noteMatter ?? { documents: view.review.documentRows ?? [] });
+}
+
+/** La note en vigueur, posée dans l'écran. */
+async function loadNoteInto(root, proposition, notes) {
+  const existante = await notes.loadLatestNote(proposition.id);
+  if (!view.review || view.open?.id !== proposition.id) return existante;
+
+  if (existante) {
+    view.review.note = existante;
+    view.review.noteState = "idle";
+    if (root.isConnected) renderContent(root);
+  }
+  return existante;
+}
+
+/**
  * Refait l'histoire une fois la proposition fermée.
  *
  * Fermer ajoute un acte — fusionnée, ou abandonnée — et cet acte a un auteur et
@@ -2360,6 +2539,11 @@ async function openFrozen(root, proposition) {
       story: buildStory({ proposition, documents, decisions: stored, comments, names }),
       items: itemsFromDecisions(stored)
     };
+
+    // Une proposition close ne réécrit plus sa note : on lit la dernière, telle
+    // qu'elle était au moment où l'on a tranché.
+    const notes = await import("../services/deposit-note-supabase.js");
+    await loadNoteInto(root, proposition, notes);
   } catch {
     if (!view.open || view.open.id !== proposition.id) return;
     view.review = {
@@ -2488,6 +2672,21 @@ async function openProposition(root, propositionId) {
     // qu'on tranche dans l'un se voit dans l'autre, et la fusion se débloque
     // sans qu'on ait à recalculer quoi que ce soit.
     view.review.conflicts = findMemoryConflicts(view.review.items, assumees);
+
+    // La note vient après tout le reste : elle se rédige au-dessus de faits
+    // établis, et elle n'a pas à retarder l'affichage de ce qui les établit.
+    // La matière est conservée pour qu'une reprise n'ait pas à relire cent
+    // vingt PDF pour réécrire une page.
+    view.review.noteMatter = {
+      documents,
+      reports: analyse.reports,
+      knownAvis: memoire?.avis ?? [],
+      diff: analyse.diff,
+      conflicts: view.review.conflicts,
+      unreachable: analyse.unreachable,
+      attachments: analyse.attachments
+    };
+    await ensureDepositNote(root, proposition, view.review.noteMatter);
   } catch (error) {
     if (!view.open || view.open.id !== proposition.id) return;
     view.review = {
@@ -2502,9 +2701,45 @@ async function openProposition(root, propositionId) {
   if (root.isConnected) renderContent(root);
 }
 
+/**
+ * Re-cliquer l'onglet « Propositions » revient à la liste.
+ *
+ * C'est le geste des sujets, et le même dans toute l'application : l'onglet
+ * ramène chez lui. Deux chemins pour un seul retour — un bouton ici, un onglet
+ * là — se traduisent surtout par un utilisateur qui cherche.
+ *
+ * Le lien de l'onglet actif ne change pas l'adresse (le `hashchange` n'a pas
+ * lieu), d'où cet événement : c'est le seul signal qu'on reçoit.
+ */
+let tabResetBound = false;
+// L'écran est reconstruit à chaque navigation : un écouteur qui garderait le
+// premier `root` parlerait à un élément détaché, et le retour ne marcherait
+// qu'une fois. On lui donne donc l'écran monté, pas celui d'alors.
+let mountedRoot = null;
+
+function bindTabReset() {
+  if (tabResetBound) return;
+  tabResetBound = true;
+
+  window.addEventListener(PROJECT_TAB_RESELECTED_EVENT, (event) => {
+    const onglet = String(event?.detail?.tabId || "");
+    if (onglet !== "propositions") return;
+    if (!view.open || !mountedRoot?.isConnected) return;
+    backToList(mountedRoot);
+  });
+}
+
 export function renderProjectPropositions(root) {
   if (!root) return;
   root.className = "project-shell__content";
+
+  // Entrer dans l'onglet, c'est ouvrir la liste — jamais retomber sur la
+  // proposition qu'on lisait la dernière fois. L'état du module survit à la
+  // navigation ; l'écran ne doit pas en hériter.
+  view.open = null;
+  view.review = null;
+  mountedRoot = root;
+  bindTabReset();
   clearProjectActiveScrollSource();
   setTopCompact(false);
 

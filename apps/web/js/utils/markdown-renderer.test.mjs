@@ -81,3 +81,75 @@ test('renderer laisse postProcessHtml traiter les références sujet', () => {
   });
   assert.match(html, /md-subject-link/);
 });
+
+test("un tableau se lit en tableau", () => {
+  // Un « avant / après » se lit en tableau et se perd en phrases : c'est
+  // exactement ce qu'une note de dépôt a à dire.
+  const html = renderMarkdownToHtml([
+    "| Avis | Avant | Après |",
+    "| --- | --- | ---: |",
+    "| A12 | émis | levé |",
+    "| A13 | levé | émis |"
+  ].join("\n"));
+
+  assert.match(html, /<table class="md-table">/);
+  assert.match(html, /<th>Avis<\/th>/);
+  assert.match(html, /<td style="text-align:right">levé<\/td>/);
+  assert.equal((html.match(/<tr>/g) || []).length, 3, "un en-tête et deux lignes");
+});
+
+test("une phrase avec une barre verticale reste une phrase", () => {
+  // Sans la ligne de tirets, ce n'est pas un tableau : deviner en ferait un de
+  // la moitié des lignes de commande citées dans une discussion.
+  const html = renderMarkdownToHtml("le lot A | le lot B");
+
+  assert.doesNotMatch(html, /<table/);
+  assert.match(html, /<p>le lot A \| le lot B<\/p>/);
+});
+
+test("une ligne incomplète ne décale pas le tableau", () => {
+  const html = renderMarkdownToHtml([
+    "| A | B | C |",
+    "| --- | --- | --- |",
+    "| 1 | 2 |"
+  ].join("\n"));
+
+  assert.equal((html.match(/<td/g) || []).length, 3, "la cellule manquante est vide, pas absente");
+});
+
+test("le texte qui suit un tableau redevient du texte", () => {
+  const html = renderMarkdownToHtml([
+    "| A |",
+    "| --- |",
+    "| 1 |",
+    "",
+    "Et la suite."
+  ].join("\n"));
+
+  assert.match(html, /<\/table><\/div><p>Et la suite\.<\/p>/);
+});
+
+test("une image devient une image", () => {
+  // Une photo de rapport porte souvent ce que le texte ne dit pas.
+  const html = renderMarkdownToHtml('![Fissure en pied de voile](https://exemple.test/f.png "RICT p. 12")');
+
+  assert.match(html, /<img class="md-image" src="https:\/\/exemple\.test\/f\.png"/);
+  assert.match(html, /alt="Fissure en pied de voile"/);
+  assert.match(html, /title="RICT p\. 12"/);
+});
+
+test("une image en ligne ne s'exécute pas", () => {
+  // `data:` peut porter du SVG, donc du script. Une note écrite par une machine
+  // est précisément le texte dont on ne veut pas qu'il exécute quoi que ce soit.
+  const html = renderMarkdownToHtml("![x](data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=)");
+
+  assert.doesNotMatch(html, /<img/);
+  assert.match(html, /image non autorisée/);
+});
+
+test("un lien reste un lien à côté d'une image", () => {
+  const html = renderMarkdownToHtml("![vue](/a.png) et [le rapport](https://exemple.test/r.pdf)");
+
+  assert.match(html, /<img class="md-image" src="\/a\.png"/);
+  assert.match(html, /<a href="https:\/\/exemple\.test\/r\.pdf"/);
+});

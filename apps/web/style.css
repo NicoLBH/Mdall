@@ -2996,6 +2996,34 @@ body.is-resizing{
 .md-render blockquote{margin:0 0 10px;padding:6px 10px;border-left:3px solid var(--border2);color:var(--muted);}
 .md-render code{background:rgba(110,118,129,.2);border-radius:4px;padding:1px 4px;font-size:12px;}
 .md-render h1,.md-render h3,.md-render h4,.md-render h5,.md-render h6{margin:0 0 10px;font-size:14px;}
+
+/* Un tableau dans un texte rendu. Il déborde plutôt que de se comprimer : une
+   colonne écrasée à trois caractères ne se lit plus, et un tableau illisible
+   vaut moins qu'une liste. */
+.md-table-scroll{ margin:0 0 10px; overflow-x:auto; }
+.md-table{
+  border-collapse:collapse;
+  width:100%;
+  font-size:13px;
+}
+.md-table th,
+.md-table td{
+  padding:6px 10px;
+  border:1px solid var(--border);
+  text-align:left;
+  vertical-align:top;
+}
+.md-table th{ background:var(--panel2); font-weight:600; }
+.md-table tbody tr:nth-child(even) td{ background:rgba(110,118,129,.06); }
+
+/* Une image citée : elle ne dépasse jamais son texte. */
+.md-image{
+  max-width:100%;
+  height:auto;
+  margin:4px 0;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+}
 .md-render h2{
   margin:0 0 16px;
   padding-bottom:6px;
@@ -15805,13 +15833,48 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .outcome-card__panel span{ color:var(--muted); font-size:13px; }
 .outcome-card__note{ color:var(--text) !important; }
 
-/* Le trait qui ferme la proposition. Plus épais que les séparateurs du fil :
-   ce qui suit n'appartient plus à son histoire, on y ajoute. */
+/* Le trait qui sépare les deux moments d'une proposition : ce qui s'est dit
+   avant qu'elle ne soit tranchée, et ce qui se dit depuis. Plus épais que les
+   séparateurs du fil, parce qu'il sépare plus que des messages.
+
+   La ligne du fil le traverse quand même : ce qui se dit après la fusion reste
+   la même conversation, et une ligne coupée nette ferait deux pages. */
 .review-end{
-  height:3px;
-  margin:20px 0 16px;
+  position:relative;
+  height:4px;
+  margin:0 0 16px;
   border-radius:2px;
   background:var(--border);
+}
+.review-end::before{
+  content:"";
+  position:absolute;
+  left:72px;
+  top:-12px;
+  bottom:-16px;
+  width:2px;
+  background:rgba(48,54,61,.9);
+}
+
+/* Et le fil d'après se ferme par le sien, à la largeur des messages : ce qui
+   suit — le procès-verbal — n'est plus de la conversation. */
+.review-since-end{
+  position:relative;
+  height:2px;
+  /* À la largeur des messages, et détaché du dernier d'entre eux : collé, il se
+     confondrait avec la bordure de sa boîte et ne fermerait plus rien. */
+  margin:14px 52px 0 0;
+  border-radius:1px;
+  background:var(--border);
+}
+.review-since-end::before{
+  content:"";
+  position:absolute;
+  left:20px;
+  top:-14px;
+  height:14px;
+  width:2px;
+  background:rgba(48,54,61,.9);
 }
 
 .comment-composer--proposition{ margin:0; }
@@ -16044,7 +16107,7 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
    sous le dernier acte : dépasser en haut décale tout, jusqu'au trait de fin. */
 /* Le premier message ouvre le fil : le décaler du haut le détacherait des
    onglets, alors qu'il en est la suite immédiate. */
-.review-thread--before .message-thread__item:first-child{ padding-top:0; }
+.review-thread .message-thread__item:first-child{ padding-top:0; }
 .review-thread .message-thread__item:first-child::before{ top:22px; }
 
 /* Ce qui se dit après la fusion repart sous le trait, avec sa propre ligne.
@@ -16052,6 +16115,11 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
    suite des autres ferait croire le contraire, et c'est tout le rôle du trait
    épais que de l'en séparer. */
 .review-thread-host--after{ margin-top:-4px; }
+
+/* Un fil suivi de quelque chose garde sa ligne jusqu'au bout : le raccourci de
+   trente pixels sert à ne pas laisser pendre un trait sous le dernier message,
+   pas à couper ce qui continue. */
+.review-thread--continues .message-thread__item:last-child::before{ bottom:0; height:auto; }
 .review-thread .message-thread__item:last-child::before{ bottom:auto; height:30px; }
 
 /* Les pastilles d'activité : un disque gris, sauf la fusion, qui prend le
@@ -16195,6 +16263,19 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
    second à l'opposé du premier — utile ailleurs, faux ici : « Fermer » et
    « Commenter » sont deux réponses au même message, pas deux zones de l'écran. */
 .comment-composer--proposition .actions-row__right > :nth-child(2){ margin-left:0; }
+
+/* La note de dépôt : ce que la machine a compris du lot, signé comme tel. La
+   provenance est écrite sous le texte — une note qui ne dirait pas d'où elle
+   vient serait lue comme la parole de quelqu'un. */
+.deposit-note__source{
+  margin:10px 0 0;
+  padding-top:8px;
+  border-top:1px solid var(--border2);
+  color:var(--muted);
+  font-size:12px;
+  font-style:italic;
+}
+.deposit-note__retry{ margin-top:10px; }
 
 /* Fermer une proposition ne détruit rien — les documents restent au projet,
    l'histoire reste lisible : le bouton garde donc le gris d'« Annuler ». Seul
