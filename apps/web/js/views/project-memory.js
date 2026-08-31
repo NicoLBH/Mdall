@@ -47,6 +47,12 @@ import {
   summarizeReader
 } from "../services/memory-readers.js";
 import {
+  ECART,
+  describeEcart,
+  findNonConformities,
+  summarizeEcarts
+} from "../services/memory-nonconformity.js";
+import {
   DOMAINS,
   NATURE,
   NATURES,
@@ -565,6 +571,48 @@ export function renderMemoryDetail(assertions, cible = {}) {
  * Chaque lecture porte le compte de ce qu'elle montre : passer d'un onglet à
  * l'autre sans savoir combien on va trouver oblige à cliquer pour l'apprendre.
  */
+/**
+ * Les écarts que la mémoire porte, en tête de liste.
+ *
+ * Séparé des lectures parce qu'il ne se lit pas comme elles : une lecture dit
+ * ce que le projet sait, celui-ci dit ce qui ne s'accorde pas. Le mêler à la
+ * liste ferait passer un désaccord pour une connaissance de plus.
+ *
+ * Les non-conformités sont annoncées d'abord et nommées comme telles : elles
+ * n'appellent pas un arbitrage mais une correction, et les noyer dans un total
+ * ferait perdre la seule information qui commande une action.
+ */
+export function renderEcarts(assertions = view.assertions) {
+  const ecarts = findNonConformities(assertions);
+  if (ecarts.length === 0) return "";
+
+  const resume = summarizeEcarts(ecarts);
+  const tete = resume.nonConformities
+    ? `${resume.nonConformities} non-conformité${resume.nonConformities > 1 ? "s" : ""}`
+    : `${resume.total} écart${resume.total > 1 ? "s" : ""}`;
+
+  const cartes = ecarts
+    .map((ecart) => {
+      const dit = describeEcart(ecart);
+      const grave = ecart.type === ECART.NON_CONFORMITE;
+      return `
+        <li class="memory-ecart${grave ? " memory-ecart--grave" : ""}">
+          <span class="memory-ecart__label">${escapeHtml(dit.label)}</span>
+          <p class="memory-ecart__sentence">${escapeHtml(dit.sentence)}</p>
+          <p class="memory-ecart__ask">${escapeHtml(dit.ask)}</p>
+        </li>
+      `;
+    })
+    .join("");
+
+  return `
+    <section class="memory-ecarts" aria-label="Écarts">
+      <h5 class="memory-ecarts__title">${escapeHtml(tete)}</h5>
+      <ul class="memory-ecarts__list">${cartes}</ul>
+    </section>
+  `;
+}
+
 function renderReaderTabs() {
   const onglet = (lecture) => {
     const combien = readerRows(view.assertions ?? [], lecture).length;
@@ -1189,6 +1237,8 @@ function renderContent(root) {
         ${renderMemoryHead(resume, { busy: view.busy })}
 
         ${renderReaderTabs()}
+
+        ${renderEcarts(view.assertions)}
 
         ${renderHypothesisForm()}
 
