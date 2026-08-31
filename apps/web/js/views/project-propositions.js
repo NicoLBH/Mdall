@@ -594,29 +594,20 @@ function renderReviewBlock(type, titre, items, renderer, vide) {
  * pour le rafraîchir.
  */
 function renderFrozenNote(proposition, review) {
-  if (review.gap) {
-    return `
-      <div class="propositions-empty propositions-empty--warn">
-        <b>État partiellement conservé</b>
-        <p>${escapeHtml(review.gap)}</p>
-      </div>
-    `;
-  }
-
-  const quand = proposition.snapshot?.frozenAt ?? proposition.merged_at ?? null;
-  const lu = [proposition.snapshot?.engine, ...(proposition.snapshot?.packs ?? [])].filter(Boolean).join(" · ");
+  // Une proposition close le dit assez : sa pastille, sa carte de fin, ses
+  // cases devenues des marques. Un bandeau de plus au-dessus de tout cela
+  // répétait ce que l'écran montrait déjà, et occupait la place du premier
+  // message.
+  //
+  // Ce qui reste est ce que l'écran ne peut pas montrer autrement : qu'il
+  // manque une partie de l'état. Le taire ferait passer une trace partielle
+  // pour un procès-verbal complet.
+  if (!review.gap) return "";
 
   return `
-    <div class="review-frozen">
-      <span class="review-frozen__mark">${svgIcon("history", { className: "octicon" })}</span>
-      <p class="review-frozen__text">
-        État de la proposition ${
-          proposition.status === PROPOSITION.MERGED ? "au moment de sa fusion" : "au moment de son abandon"
-        }${quand ? `, le ${escapeHtml(formatDate(quand))}` : ""}.
-        Cet écran ne se recalcule pas : il montre ce qui a été décidé${
-          lu ? `, tel que ${escapeHtml(lu)} l'avait lu` : ""
-        }.
-      </p>
+    <div class="propositions-empty propositions-empty--warn">
+      <b>État partiellement conservé</b>
+      <p>${escapeHtml(review.gap)}</p>
     </div>
   `;
 }
@@ -813,28 +804,24 @@ function renderOutcomeCard(event) {
   const fusionnee = event.kind === STORY.MERGED;
 
   return `
-    <div class="thread-item message-thread__item" data-thread-kind="outcome">
-      <div class="thread-wrapper">
-        <div class="outcome-card outcome-card--${fusionnee ? "merged" : "closed"}">
-          <span class="outcome-card__icon">${svgIcon(fusionnee ? "git-compare" : "skip", {
-            className: "octicon",
-            width: 20,
-            height: 20
-          })}</span>
-          <div class="outcome-card__text">
-            <b>${escapeHtml(
-              event.title || (fusionnee ? "Proposition fusionnée et close" : "Proposition abandonnée et close")
-            )}</b>
-            ${event.note ? `<span class="outcome-card__note">${escapeHtml(event.note)}</span>` : ""}
-            <span>${escapeHtml(
-              fusionnee
-                ? `${event.detail || "Ses affirmations sont entrées au projet."} Elle ne peut plus être fusionnée une seconde fois, et son état est conservé tel quel.`
-                : "Ses documents restent au projet, marqués refusés. Ce qu'elle proposait reste lisible."
-            )}</span>
-          </div>
-        </div>
+    <section class="outcome-card outcome-card--${fusionnee ? "merged" : "closed"}">
+      <span class="outcome-card__mark">${svgIcon(fusionnee ? "git-compare" : "skip", {
+        className: "octicon",
+        width: 20,
+        height: 20
+      })}</span>
+      <div class="outcome-card__panel">
+        <b>${escapeHtml(
+          event.title || (fusionnee ? "Proposition fusionnée et close" : "Proposition abandonnée et close")
+        )}</b>
+        ${event.note ? `<span class="outcome-card__note">${escapeHtml(event.note)}</span>` : ""}
+        <span>${escapeHtml(
+          fusionnee
+            ? `${event.detail || "Ses affirmations sont entrées au projet."} Elle ne peut plus être fusionnée une seconde fois, et son état est conservé tel quel.`
+            : "Ses documents restent au projet, marqués refusés. Ce qu'elle proposait reste lisible."
+        )}</span>
       </div>
-    </div>
+    </section>
   `;
 }
 
@@ -899,10 +886,13 @@ function renderConversationComposer(proposition, review) {
     // le pavé de fusion : ce n'est pas une variante de la fusion, c'est le
     // contraire. Avec un texte en cours, le bouton propose de le publier en
     // partant — un abandon sans un mot est le genre de silence qu'on regrette.
+    // Il porte le gris d'« Annuler », pas le rouge d'une destruction : fermer
+    // une proposition n'efface rien — ses documents restent au projet et son
+    // histoire reste lisible. Le rouge promettrait une perte qui n'a pas lieu.
     actionsHtml: `
       ${
         peutFermer
-          ? `<button type="button" class="gh-btn gh-btn--danger" data-review-abandon ${
+          ? `<button type="button" class="gh-btn" data-review-abandon ${
               review.merging ? "disabled" : ""
             }>${
               review.abandoning
@@ -1004,12 +994,14 @@ function renderConversation(proposition, review) {
     .filter((event) => event.kind !== STORY.OPENED)
     .map((event, index) => {
       if (event.kind === STORY.COMMENT) return renderConversationComment(event, index + 1);
-      if (event.kind === STORY.MERGED || event.kind === STORY.CLOSED) {
-        return `${renderConversationActivity(event, index + 1)}${renderOutcomeCard(event)}`;
-      }
       return renderConversationActivity(event, index + 1);
     })
     .join("");
+
+  // La carte de fin passe **sous** le trait : ce qui vient après le trait
+  // n'appartient plus à l'histoire de la proposition, et le sort d'une
+  // proposition close est justement ce qui la referme.
+  const fin = histoire.find((event) => event.kind === STORY.MERGED || event.kind === STORY.CLOSED);
 
   return `
     <div class="review-thread-host">
@@ -1017,6 +1009,7 @@ function renderConversation(proposition, review) {
     </div>
     ${proposition.status === PROPOSITION.OPEN ? renderMergeBox(proposition, review) : ""}
     <div class="review-end" role="separator" aria-label="Fin de la proposition"></div>
+    ${fin ? renderOutcomeCard(fin) : ""}
     ${renderConversationComposer(proposition, review)}
     ${renderRefMenu()}
   `;
@@ -1066,39 +1059,57 @@ function renderMergeBox(proposition, review) {
 
   return `
     <section class="merge-area">
-      <div class="merge-note">
-        <span class="merge-note__icon">${svgIcon("pulse", { className: "octicon" })}</span>
-        <div>
-          <b>Le suivi des avis sera réécrit</b>
-          <span class="merge-box__note">
-            La fusion fait entrer les documents acceptés au corpus, puis relit tout le dossier.
-            Rien n'est calculé à moitié.
-          </span>
-        </div>
-      </div>
-
       <div class="merge-box merge-box--${empeche ? "blocked" : "ready"}">
-        ${conditions
-          .map(
-            (ligne) => `
-              <div class="merge-box__row merge-box__row--${ligne.tone}">
-                <span class="merge-box__icon">${svgIcon(ligne.icon, { className: "octicon" })}</span>
-                <div>
-                  <b>${escapeHtml(ligne.text)}</b>
-                  ${ligne.note ? `<span class="merge-box__note">${escapeHtml(ligne.note)}</span>` : ""}
-                </div>
+        <span class="merge-box__avatar">${svgIcon("git-compare", {
+          className: "octicon",
+          width: 20,
+          height: 20
+        })}</span>
+
+        <div class="merge-box__panel">
+          <div class="merge-box__body">
+            <div class="merge-box__row merge-box__row--lead">
+              <span class="merge-box__icon merge-box__icon--plain">${svgIcon("pulse", { className: "octicon" })}</span>
+              <div>
+                <b>Le suivi des avis sera réécrit</b>
+                <span class="merge-box__note">
+                  La fusion fait entrer les documents acceptés au corpus, puis relit tout le dossier.
+                  Rien n'est calculé à moitié.
+                </span>
               </div>
-            `
-          )
-          .join("")}
-        ${review.confirming ? renderMergeForm(proposition, review) : renderMergeAction(review, empeche)}
+            </div>
+
+            ${conditions
+              .map(
+                (ligne) => `
+                  <div class="merge-box__row merge-box__row--${ligne.tone}">
+                    <span class="merge-box__icon">${svgIcon(ligne.icon, { className: "octicon" })}</span>
+                    <div>
+                      <b>${escapeHtml(ligne.text)}</b>
+                      ${ligne.note ? `<span class="merge-box__note">${escapeHtml(ligne.note)}</span>` : ""}
+                    </div>
+                  </div>
+                `
+              )
+              .join("")}
+          </div>
+
+          ${review.confirming ? renderMergeForm(proposition, review) : renderMergeAction(review, empeche, blocage)}
+        </div>
       </div>
     </section>
   `;
 }
 
-/** Le premier temps : un bouton, et ce qu'il fera. */
-function renderMergeAction(review, empeche) {
+/**
+ * Le premier temps : un bouton, et ce qu'il fera.
+ *
+ * Quand la mémoire du projet est contredite, dire « tranchez ce qui est en
+ * attente » sans dire où ferait chercher : le lien y mène directement, dans
+ * l'onglet où les arbitrages se prennent. Un blocage qu'on ne sait pas lever
+ * n'est qu'un mur.
+ */
+function renderMergeAction(review, empeche, blocage = "") {
   return `
     <div class="merge-box__actions">
       <button type="button" class="gh-btn gh-btn--primary" data-review-merge ${
@@ -1110,6 +1121,11 @@ function renderMergeAction(review, empeche) {
             ? "Tranchez ce qui est en attente pour pouvoir fusionner."
             : "Vous écrirez le message de la fusion avant qu'elle ne s'applique."
         )}
+        ${
+          blocage
+            ? `<button type="button" class="merge-box__link" data-review-goto-changes>Régler les conflits</button>`
+            : ""
+        }
       </span>
     </div>
   `;
@@ -1159,7 +1175,7 @@ function renderMergeForm(proposition, review) {
   `;
 }
 
-/** Ce que l'analyse a produit, en une phrase. *//** Ce que l'analyse a produit, en une phrase. */
+/** Ce que l'analyse a produit, en une phrase. */
 function describeAnalysis(review) {
   const items = review.items ?? [];
   const avis = items.filter((entry) => entry.itemType === ITEM_TYPE.AVIS).length;
@@ -1574,6 +1590,12 @@ function bindConversation(root) {
   });
   root.querySelector('[data-action="proposition-edit-tab-write"]')?.addEventListener("click", () => {
     view.editPreview = false;
+    renderContent(root);
+  });
+
+  // « Régler les conflits » ne fusionne rien : il emmène là où l'on trancherait.
+  root.querySelector("[data-review-goto-changes]")?.addEventListener("click", () => {
+    view.tab = "changes";
     renderContent(root);
   });
 

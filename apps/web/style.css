@@ -15764,26 +15764,46 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .tl-activity__avatar img{ width:20px; height:20px; border-radius:50%; }
 
 /* La fin d'une proposition se voit : fusionner est l'aboutissement de tout ce
-   qui précède, pas une ligne d'activité de plus. Le violet est celui de la
-   pastille « fusionnée » — la couleur dit la même chose partout. */
+   qui précède, pas une ligne d'activité de plus. Elle passe **sous** le trait
+   de fin — ce qui vient après le trait ne fait plus partie de l'histoire, et
+   le sort d'une proposition est justement ce qui la referme. Le violet est
+   celui de la pastille « fusionnée » : la couleur dit la même chose partout. */
 .outcome-card{
   display:flex;
   align-items:flex-start;
   gap:12px;
-  margin:4px 0 0;
-  padding:14px 16px;
+  margin:0 0 12px;
+}
+.outcome-card__mark{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  flex:0 0 auto;
+  width:40px;
+  height:40px;
+  border-radius:6px;
+  background:var(--fgColor-done);
+  color:#fff;
+  line-height:0;
+}
+.outcome-card--closed .outcome-card__mark{ background:var(--panel2); color:var(--muted); }
+.outcome-card__panel{
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+  flex:1 1 auto;
+  min-width:0;
+  padding:12px 16px;
   border:1px solid var(--fgColor-done);
   border-radius:var(--radius);
-  background:rgba(171,125,248,.08);
+  /* Le fond de la page, pas un pavé de couleur : c'est un message de plus dans
+     la conversation, et seul son cadre dit lequel. */
+  background:var(--bg);
+  font-size:14px;
 }
-.outcome-card--closed{
-  border-color:var(--border);
-  background:var(--panel);
-}
-.outcome-card__icon{ color:var(--fgColor-done); line-height:0; padding-top:2px; }
-.outcome-card--closed .outcome-card__icon{ color:var(--muted); }
-.outcome-card__text{ display:flex; flex-direction:column; gap:3px; font-size:14px; }
-.outcome-card__text span{ color:var(--muted); font-size:13px; }
+.outcome-card--closed .outcome-card__panel{ border-color:var(--border); }
+.outcome-card__panel span{ color:var(--muted); font-size:13px; }
+.outcome-card__note{ color:var(--text) !important; }
 
 /* Le trait qui ferme la proposition. Plus épais que les séparateurs du fil :
    ce qui suit n'appartient plus à son histoire, on y ajoute. */
@@ -16022,7 +16042,10 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 
 /* La ligne du fil ne monte pas au-dessus du premier avatar et ne descend pas
    sous le dernier acte : dépasser en haut décale tout, jusqu'au trait de fin. */
-.review-thread .message-thread__item:first-child::before{ top:22px; }
+/* Le premier message ouvre le fil : le décaler du haut le détacherait des
+   onglets, alors qu'il en est la suite immédiate. La ligne descend d'autant. */
+.review-thread .message-thread__item:first-child{ padding-top:0; }
+.review-thread .message-thread__item:first-child::before{ top:2px; }
 .review-thread .message-thread__item:last-child::before{ bottom:auto; height:30px; }
 
 /* Les pastilles d'activité : un disque gris, sauf la fusion, qui prend le
@@ -16037,26 +16060,98 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .tl-activity__detail{ display:block; color:var(--muted); font-size:12px; }
 
 /* Le pavé de fusion énonce ses conditions avant le bouton : ce qui bloque doit
-   se lire sans cliquer pour découvrir que ça ne marche pas. La couleur du cadre
-   se lit avant la phrase — vert quand tout est prêt, ambre quand ça retient. */
+   se lire sans cliquer pour découvrir que ça ne marche pas. Il a la forme d'un
+   message — un avatar carré, un cadre —, parce qu'il appartient à la
+   conversation : fusionner est ce qu'elle a à décider, pas un outil posé à
+   côté d'elle. */
 .merge-area{ display:flex; flex-direction:column; gap:10px; }
 
-.merge-note{
+.merge-box{
+  display:flex;
+  align-items:flex-start;
+  gap:12px;
+}
+.merge-box__avatar{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  flex:0 0 auto;
+  width:40px;
+  height:40px;
+  border-radius:6px;
+  background:var(--fgColor-open);
+  color:#fff;
+  line-height:0;
+}
+.merge-box__panel{
+  display:flex;
+  flex-direction:column;
+  flex:1 1 auto;
+  min-width:0;
+  border:1px solid var(--fgColor-open);
+  border-radius:var(--radius);
+  /* Le fond de la page : seule la ligne d'action garde le gris, parce qu'elle
+     est ce sur quoi on clique. Un pavé entièrement gris ferait un bloc d'outil
+     là où il faut un message. */
+  background:var(--bg);
+  overflow:hidden;
+}
+.merge-box__body{ display:flex; flex-direction:column; }
+.merge-box__row{
   display:flex;
   align-items:flex-start;
   gap:10px;
   padding:12px 16px;
-  border:1px solid var(--border);
-  border-radius:var(--radius);
-  background:var(--panel);
+  border-bottom:1px solid var(--border2);
   font-size:14px;
 }
-.merge-note__icon{ color:var(--muted); line-height:0; padding-top:2px; }
+.merge-box__row:last-child{ border-bottom:0; }
 
-.merge-box--ready{ border-color:rgba(63,185,80,.45); }
-.merge-box--blocked{ border-color:rgba(210,153,34,.45); }
+/* Les conditions portent une pastille, comme les actes du fil : verte quand
+   c'est réglé, ambre quand ça retient. Régler un conflit fait passer l'alerte
+   au check vert, et c'est ce changement qu'on cherche des yeux. */
+.merge-box__icon{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  flex:0 0 auto;
+  width:22px;
+  height:22px;
+  border-radius:50%;
+  background:var(--panel2);
+  color:var(--muted);
+  line-height:0;
+}
+.merge-box__icon .ui-icon{ width:14px; height:14px; }
+.merge-box__row--ok .merge-box__icon{ background:var(--fgColor-open); color:#fff; }
+.merge-box__row--warn .merge-box__icon{ background:#d29922; color:#fff; }
+.merge-box__row--warn b{ color:#d29922; }
+.merge-box__icon--plain{ background:transparent; color:var(--muted); }
+.merge-box__note{ display:block; color:var(--muted); font-size:12px; margin-top:2px; }
 
+.merge-box__actions{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:12px 16px;
+  border-top:1px solid var(--border);
+  background:var(--panel);
+}
 .merge-box__hint{ color:var(--muted); font-size:12px; }
+
+/* « Régler les conflits » : un blocage qu'on ne sait pas lever n'est qu'un mur.
+   Le lien mène à l'onglet où les arbitrages se prennent. */
+.merge-box__link{
+  padding:0;
+  border:0;
+  background:none;
+  color:var(--accent);
+  font:inherit;
+  font-size:12px;
+  text-decoration:underline;
+  cursor:pointer;
+}
+.merge-box__link:hover{ color:#79c0ff; }
 
 /* Le second temps : on écrit ce qu'on fait, puis on confirme. */
 .merge-form{
@@ -16083,41 +16178,6 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 }
 .merge-form__signature{ margin:6px 0 2px; color:var(--muted); font-size:12px; }
 .merge-form__actions{ display:flex; gap:8px; }
-
-.outcome-card__note{ color:var(--text) !important; }
-
-.merge-box{
-  display:flex;
-  flex-direction:column;
-  border:1px solid var(--border);
-  border-radius:var(--radius);
-  background:var(--panel2);
-  overflow:hidden;
-}
-.merge-box__row{
-  display:flex;
-  align-items:flex-start;
-  gap:10px;
-  padding:12px 16px;
-  border-bottom:1px solid var(--border2);
-  font-size:14px;
-}
-.merge-box__row:last-of-type{ border-bottom:0; }
-.merge-box__icon{ line-height:0; padding-top:2px; }
-.merge-box__row--ok .merge-box__icon{ color:var(--fgColor-open); }
-.merge-box__row--warn .merge-box__icon{ color:#d29922; }
-.merge-box__row--warn b{ color:#d29922; }
-.merge-box__row--neutral .merge-box__icon,
-.merge-box__row--done .merge-box__icon{ color:var(--muted); }
-.merge-box__note{ display:block; color:var(--muted); font-size:12px; margin-top:2px; }
-.merge-box__actions{
-  display:flex;
-  align-items:center;
-  gap:12px;
-  padding:12px 16px;
-  border-top:1px solid var(--border);
-  background:var(--panel);
-}
 
 /* Les dépôts : un geste, pas dix-sept lignes. */
 .deposit__head{
@@ -16150,21 +16210,9 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 
 /* ── Le procès-verbal d'une proposition close ────────────────────
    Une proposition close ne se recalcule pas : elle montre ce qui a été décidé.
-   L'écran doit le dire, sinon un lecteur qui le trouve figé le croit en panne
-   et cherche à le rafraîchir. */
-
-.review-frozen{
-  display:flex;
-  align-items:flex-start;
-  gap:10px;
-  padding:10px 14px;
-  border:1px solid var(--border);
-  border-left:3px solid var(--fgColor-muted, #8b949e);
-  border-radius:var(--radius);
-  background:var(--panel);
-}
-.review-frozen__mark{ color:var(--muted); line-height:0; padding-top:2px; }
-.review-frozen__text{ margin:0; color:var(--muted); font-size:13px; }
+   Elle le dit sans bandeau : sa pastille, sa carte de fin et ses cases devenues
+   des marques suffisent. Un encadré de plus répéterait ce que l'écran montre
+   déjà, et une évidence répétée finit par ne plus se lire. */
 
 /* Une case à cocher inviterait à changer ce qui a été décidé : on montre la
    décision, on ne la propose pas. */
