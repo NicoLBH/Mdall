@@ -16444,6 +16444,68 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .memory-tag--domain{ color:var(--text); }
 .memory-tag--unknown{ border-style:dashed; }
 
+/* ── Les trois lectures de la mémoire ────────────────────────────────────────
+   Ce ne sont pas trois écrans : ce sont trois filtres sur la même table. Chacun
+   porte le compte de ce qu'il montre — passer d'un onglet à l'autre sans savoir
+   combien on va trouver oblige à cliquer pour l'apprendre. */
+.memory-readers{ display:flex; flex-direction:column; gap:8px; }
+.memory-readers__tabs{
+  display:flex;
+  gap:4px;
+  flex-wrap:wrap;
+  padding-bottom:6px;
+  border-bottom:1px solid var(--border);
+}
+.memory-readers__tab{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:6px 12px;
+  border:1px solid transparent;
+  border-radius:var(--radius);
+  background:none;
+  color:var(--muted);
+  font:inherit;
+  font-size:13px;
+  cursor:pointer;
+}
+.memory-readers__tab:hover{ color:var(--text); background:var(--panel2); }
+.memory-readers__tab.is-active{ color:var(--text); font-weight:600; background:var(--panel2); border-color:var(--border); }
+.memory-readers__count{
+  padding:0 6px;
+  border-radius:999px;
+  background:var(--border);
+  color:var(--text);
+  font-size:11px;
+  font-variant-numeric:tabular-nums;
+}
+/* Une liste filtrée qui ne dit pas ce qu'elle filtre se prend pour la liste
+   entière. */
+.memory-readers__lead{ margin:0; max-width:80ch; color:var(--muted); font-size:13px; }
+
+/* Le regroupement par domaine : ce qui rend une liste de soixante-dix lignes
+   lisible. « Sans domaine » vient en dernier et se compte comme les autres. */
+.memory-group{ margin-bottom:16px; }
+.memory-group__title{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin:0 0 6px;
+  color:var(--muted);
+  font-size:11px;
+  font-weight:600;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+}
+.memory-group__count{
+  padding:0 6px;
+  border-radius:999px;
+  background:var(--panel2);
+  color:var(--text);
+  font-size:11px;
+  letter-spacing:0;
+}
+
 /* Déclarer une hypothèse : le sujet et la valeur sont deux champs, parce que le
    sujet reste et que la valeur bouge. */
 .memory-declare{
