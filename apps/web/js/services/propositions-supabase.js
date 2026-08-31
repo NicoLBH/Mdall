@@ -328,13 +328,14 @@ export async function mergeProposition({
     }
 
     const mergedBy = (await getCurrentUser())?.id ?? null;
+    const mergedAt = new Date().toISOString();
     await request("propositions", {
       method: "PATCH",
       params: { id: `eq.${proposition.id}`, status: `eq.${PROPOSITION.OPEN}` },
       headers: { Prefer: "return=minimal" },
       body: {
         status: PROPOSITION.MERGED,
-        merged_at: new Date().toISOString(),
+        merged_at: mergedAt,
         merged_by: mergedBy,
         // Ce que quelqu'un a écrit en signant, au moment où il signait.
         ...(mergeTitle ? { merge_title: mergeTitle } : {}),
@@ -345,7 +346,16 @@ export async function mergeProposition({
       }
     });
 
-    return { merged: true, accepted: acceptedDocumentIds.length, refused: refusedDocumentIds.length };
+    // La signature repart avec la réponse : l'écran raconte la fusion tout de
+    // suite, et il la raconte avec ce qui a réellement été écrit — pas avec une
+    // date et un auteur reconstitués de son côté.
+    return {
+      merged: true,
+      accepted: acceptedDocumentIds.length,
+      refused: refusedDocumentIds.length,
+      mergedAt,
+      mergedBy
+    };
   } catch {
     return null;
   }
@@ -378,6 +388,7 @@ export async function closeProposition({ proposition, documentIds = [], snapshot
     }
 
     const closedBy = (await getCurrentUser())?.id ?? null;
+    const closedAt = new Date().toISOString();
     await request("propositions", {
       method: "PATCH",
       params: { id: `eq.${proposition.id}`, status: `eq.${PROPOSITION.OPEN}` },
@@ -385,13 +396,13 @@ export async function closeProposition({ proposition, documentIds = [], snapshot
       body: {
         status: PROPOSITION.CLOSED,
         // Renoncer est une décision : elle se signe comme les autres.
-        closed_at: new Date().toISOString(),
+        closed_at: closedAt,
         closed_by: closedBy,
         ...(snapshot ? { snapshot } : {})
       }
     });
 
-    return { closed: true, refused: documentIds.length };
+    return { closed: true, refused: documentIds.length, closedAt, closedBy };
   } catch {
     return null;
   }
