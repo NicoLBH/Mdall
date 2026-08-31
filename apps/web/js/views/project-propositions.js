@@ -991,25 +991,49 @@ function renderConversation(proposition, review) {
     avatarInitial: identite.avatarInitial
   });
 
-  const suite = histoire
-    .filter((event) => event.kind !== STORY.OPENED)
-    .map((event, index) => {
-      if (event.kind === STORY.COMMENT) return renderConversationComment(event, index + 1);
-      return renderConversationActivity(event, index + 1);
-    })
-    .join("");
+  // Le trait épais sépare deux moments, pas deux zones d'écran : ce qui s'est
+  // dit **avant** que la proposition ne soit tranchée, et ce qui se dit après.
+  // Un message écrit après la fusion ne pesait pas dans la décision — le lire à
+  // la suite des autres ferait croire le contraire. Le fil repart donc à zéro
+  // sous le trait, avec sa propre ligne verticale.
+  const rangFin = histoire.findIndex((event) => event.kind === STORY.MERGED || event.kind === STORY.CLOSED);
+  const avant = rangFin >= 0 ? histoire.slice(0, rangFin + 1) : histoire;
+  const apres = rangFin >= 0 ? histoire.slice(rangFin + 1) : [];
 
-  // Le trait épais ferme la discussion. Ce qui vient après ne la raconte plus :
-  // c'est ce qu'on peut encore en faire — fusionner tant qu'elle est ouverte,
-  // ou le procès-verbal de ce qui a été décidé quand elle ne l'est plus.
-  const fin = histoire.find((event) => event.kind === STORY.MERGED || event.kind === STORY.CLOSED);
+  const raconter = (events, depart) =>
+    events
+      .map((event, index) => {
+        if (event.kind === STORY.COMMENT) return renderConversationComment(event, depart + index);
+        return renderConversationActivity(event, depart + index);
+      })
+      .join("");
+
+  const suite = raconter(avant.filter((event) => event.kind !== STORY.OPENED), 1);
+  const depuis = raconter(apres, avant.length);
+
+  // La carte de fin clôt la page, après tout ce qui s'est dit — y compris ce
+  // qui s'est dit depuis. C'est le procès-verbal : il se lit en dernier.
+  const fin = rangFin >= 0 ? histoire[rangFin] : null;
 
   return `
     <div class="review-thread-host">
-      ${renderMessageThread({ itemsHtml: `${premier}${suite}`, className: "review-thread" })}
+      ${renderMessageThread({
+        itemsHtml: `${premier}${suite}`,
+        className: "review-thread review-thread--before"
+      })}
     </div>
     <div class="review-end" role="separator" aria-label="Fin de la discussion"></div>
     ${proposition.status === PROPOSITION.OPEN ? renderMergeBox(proposition, review) : ""}
+    ${
+      depuis
+        ? `<div class="review-thread-host review-thread-host--after">
+            ${renderMessageThread({
+              itemsHtml: depuis,
+              className: "review-thread review-thread--after"
+            })}
+          </div>`
+        : ""
+    }
     ${fin ? renderOutcomeCard(fin) : ""}
     ${renderConversationComposer(proposition, review)}
     ${renderRefMenu()}
