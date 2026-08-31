@@ -131,21 +131,43 @@ export function avisItems(diff = {}) {
 }
 
 /**
+ * Un avis qu'aucun document du lot ne reprend.
+ *
+ * Un rapport de visite ne rappelle pas tout ce qui existe : il porte ce qui a
+ * été créé ou modifié depuis le précédent. Un avis qui n'y figure pas n'est
+ * donc **pas sans nouvelles** — il est simplement inchangé, et le compter comme
+ * un mouvement demandait de confirmer soixante-douze fois ce que personne
+ * n'avait dit.
+ *
+ * L'absence reste une information, et elle se lit dans l'histoire de l'avis
+ * (« n'apparaît pas dans ce rapport »). Elle n'est pas une décision à prendre.
+ */
+function estSilence(precedent, avis) {
+  const avant = String(precedent?.status ?? "");
+  const apres = String(avis?.status ?? "");
+  return apres === "NO_NEWS" && avant !== "NO_NEWS";
+}
+
+/**
  * Ce que les documents de la proposition changeraient aux avis du projet.
  *
  * `known` est l'état conservé — ce que le projet retient aujourd'hui.
  * `computed` est ce que le moteur affirme en y ajoutant les documents soumis.
  *
- * La comparaison porte sur le **statut** et sur l'**appréciation**, pas sur le
- * reste : un intitulé reformulé d'un rapport à l'autre est une chose que les
- * documents font tout le temps, et en faire une question ferait crouler la revue
- * sous des changements qui n'en sont pas.
+ * Quatre issues, et la quatrième est celle qui manquait :
+ *
+ *  - **apparu** : le lot le fait entrer ;
+ *  - **modifié** : le lot en dit autre chose ;
+ *  - **inchangé** : le lot le reprend à l'identique ;
+ *  - **non repris** : aucun document du lot n'en parle. Ce n'est pas un
+ *    mouvement — c'est un silence, et un silence ne se tranche pas.
  */
 export function diffAvis(known = [], computed = []) {
   const avant = new Map(known.map((row) => [String(row.external_reference), row]));
 
   const added = [];
   const changed = [];
+  const silent = [];
   let unchanged = 0;
 
   for (const avis of computed) {
@@ -154,6 +176,11 @@ export function diffAvis(known = [], computed = []) {
 
     if (!precedent) {
       added.push(avis);
+      continue;
+    }
+
+    if (estSilence(precedent, avis)) {
+      silent.push({ ...avis, previousStatus: precedent.status ?? null });
       continue;
     }
 
@@ -171,7 +198,7 @@ export function diffAvis(known = [], computed = []) {
     });
   }
 
-  return { added, changed, unchanged };
+  return { added, changed, silent, unchanged };
 }
 
 /**

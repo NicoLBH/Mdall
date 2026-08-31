@@ -161,7 +161,11 @@ export function buildDepositFacts({
       changed: modifies.items,
       changedOmitted: modifies.omitted,
       changedTotal: compte(diff.changed),
-      unchanged: Number.isFinite(diff.unchanged) ? diff.unchanged : null
+      unchanged: Number.isFinite(diff.unchanged) ? diff.unchanged : null,
+      // Un rapport de visite ne rappelle pas tout ce qui existe : ce qu'il ne
+      // reprend pas n'a pas bougé. Le compter comme un mouvement ferait écrire
+      // à la note que soixante avis « passent sans nouvelles ».
+      notMentioned: Array.isArray(diff.silent) ? diff.silent.length : null
     },
     after: {
       // Ce que le suivi portera si tout est accepté. C'est une somme, pas une

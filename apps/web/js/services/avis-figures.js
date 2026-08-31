@@ -194,10 +194,22 @@ export function describeRowOf(items = [], rect = null, columns = null) {
     .filter((item) => !columns.headerY || item.y < columns.headerY - 2)
     .sort((gauche, droite) => gauche.y - droite.y);
 
+  // Un intitulé long passe à la ligne : « Etanchéité de toiture - élément
+  // porteur / béton ». Ne prendre que la ligne la plus proche de l'image
+  // rendait la rubrique « béton », ce qui ne désigne rien.
+  const titre = [];
+  let precedent = null;
+  for (const item of auDessus) {
+    if (precedent && item.y - precedent.y > (precedent.height || 10) * 1.6) break;
+    titre.push(item);
+    precedent = item;
+  }
+
   // La ligne commence à sa rubrique, pas au haut de l'image : les observations
   // sont écrites en face du titre, plus haut que la photo. Fenêtrer sur la
   // seule image en perdrait la première phrase.
-  const plafond = auDessus[0] ? auDessus[0].y + (auDessus[0].height || 0) + 2 : haut + 4;
+  const sommet = titre[titre.length - 1] ?? auDessus[0];
+  const plafond = sommet ? sommet.y + (sommet.height || 0) + 2 : haut + 4;
 
   const aHauteur = (colonne) =>
     lignes
@@ -212,7 +224,12 @@ export function describeRowOf(items = [], rect = null, columns = null) {
     .find((texte) => /^[0-9][0-9A-Za-z.\-/]*$/.test(texte)) ?? "";
 
   return {
-    rubric: String(auDessus[0]?.text ?? "").trim(),
+    rubric: titre
+      .slice()
+      .reverse()
+      .map((item) => String(item.text ?? "").trim())
+      .filter(Boolean)
+      .join(" "),
     letter: lettre,
     number: numero,
     // De haut en bas, c'est-à-dire par `y` décroissant : le PDF compte ses

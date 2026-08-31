@@ -16303,6 +16303,16 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .analysis-failure__steps b{ color:var(--text); }
 .analysis-failure__actions{ margin-top:4px; }
 
+/* Ce qu'un lot ne reprend pas : écrit, mais sans case ni bouton. Un silence ne
+   se tranche pas. */
+.review-silent__note{
+  margin:0;
+  padding:12px 16px;
+  color:var(--muted);
+  font-size:13px;
+  border-bottom:1px solid var(--border2);
+}
+
 /* Les figures d'un avis : ce que le rapport montrait et que sa phrase ne disait
    pas. Vignettes en ligne, ouvrables en grand — une image qu'on ne peut pas
    vérifier ne vaut pas mieux qu'une affirmation. */

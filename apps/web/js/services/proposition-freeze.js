@@ -75,6 +75,9 @@ export function buildSnapshot({ items = [], diff = {}, unreachable = [], result 
     // Ce que la revue disait des avis qui ne bougeaient pas. Zéro et « inconnu »
     // ne sont pas la même chose : `null` se dira, il ne s'affichera pas en 0.
     unchangedAvis: Number.isFinite(diff.unchanged) ? diff.unchanged : null,
+    // Les avis qu'aucun document du lot ne reprenait. Ce n'était pas un
+    // mouvement, mais c'était l'état du dossier ce jour-là.
+    silentAvis: Array.isArray(diff.silent) ? diff.silent.length : null,
     unreachable: unreachable.map((row) => row?.original_filename ?? row?.filename ?? "").filter(Boolean),
     engine: result?.engineVersion ?? null,
     packs: Object.values(result?.packsUsed ?? {})
