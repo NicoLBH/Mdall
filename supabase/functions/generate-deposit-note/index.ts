@@ -16,6 +16,7 @@
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { requireUser } from "../_shared/require-user.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -90,6 +91,12 @@ function extractText(payload: any): string {
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: corsHeaders });
   if (req.method !== "POST") return jsonResponse({ error: "Method not allowed" }, 405);
+
+  // Qui appelle ? Le portail ne le vérifie pas — il rejetterait le préflight du
+  // navigateur, qui arrive sans autorisation. La porte est donc ici, après lui.
+  // Sans elle, qui connaît l'URL déclenche un appel payant.
+  const garde = await requireUser(req, corsHeaders);
+  if ("response" in garde) return garde.response;
 
   if (!openAiApiKey) {
     // Dire que la note n'a pas pu être écrite vaut mieux que d'en écrire une

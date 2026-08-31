@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
+import { requireUser } from "../_shared/require-user.ts";
 import { extractText, getDocumentProxy } from 'npm:unpdf'
 
 const corsHeaders = {
@@ -18,6 +19,11 @@ Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { status: 200, headers: corsHeaders })
   }
+
+  // Qui appelle ? Le portail ne le vérifie pas — il rejetterait le préflight du
+  // navigateur, qui arrive sans autorisation. La porte est donc ici, après lui.
+  const garde = await requireUser(req, corsHeaders);
+  if ("response" in garde) return garde.response;
 
   let runId: string | null = null
 

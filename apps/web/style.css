@@ -15850,9 +15850,12 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   content:"";
   position:absolute;
   left:72px;
-  top:-40px;
+  top:-60px;
   bottom:0;
   width:2px;
+  /* Derrière le trait épais et les messages : la ligne les rejoint, elle ne
+     leur passe pas dessus. */
+  z-index:-1;
   background:rgba(48,54,61,.9);
 }
 
@@ -15936,7 +15939,7 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
    Les étapes restent sur une ligne et débordent si besoin — plier un
    enchaînement en colonnes lui fait perdre sa direction, qui est ce qu'il a de
    plus lisible. Le fond sombre le détache du reste de la page. */
-.run-section--graph{ background:var(--bgAssistPanel); min-height:200px; max-height:600px; }
+.run-section--graph{ background:var(--bgAssistPanel); }
 
 .run-section__head--graph{
   display:flex;
@@ -15975,10 +15978,12 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   padding:20px 16px 24px;
   background:var(--bgAssistPanel);
   overflow-x:auto;
-  /* La section est bornée en hauteur : ce qui dépasse défile ici plutôt que de
-     déborder sur ce qui suit. Un graphe zoomé reste entier, il se parcourt. */
+  /* La hauteur est tenue ici, là où le défilement vit déjà : ce qui dépasse se
+     parcourt au lieu de déborder sur ce qui suit. Un graphe zoomé reste
+     entier. */
   overflow-y:auto;
-  max-height:inherit;
+  min-height:200px;
+  max-height:600px;
 }
 
 .run-graph__canvas{
@@ -16272,7 +16277,7 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
    vient serait lue comme la parole de quelqu'un. */
 .deposit-note__source{
   margin:10px 0 0;
-  padding-top:8px;
+  padding:8px 12px;
   border-top:1px solid var(--border2);
   color:var(--muted);
   font-size:12px;

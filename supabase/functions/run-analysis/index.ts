@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { requireUser } from "../_shared/require-user.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -20,6 +21,11 @@ Deno.serve(async (req: Request) => {
       headers: jsonHeaders
     });
   }
+
+  // Qui appelle ? Le portail ne le vérifie pas — il rejetterait le préflight du
+  // navigateur, qui arrive sans autorisation. La porte est donc ici, après lui.
+  const garde = await requireUser(req, jsonHeaders);
+  if ("response" in garde) return garde.response;
 
   let runId: string | null = null;
 
