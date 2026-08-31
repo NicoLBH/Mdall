@@ -16426,6 +16426,38 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .memory-head__actions{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .memory-head__actions .gh-btn{ display:inline-flex; align-items:center; gap:6px; }
 
+/* Les étiquettes de vocabulaire, sur la ligne d'une affirmation. « Sans
+   domaine » se lit comme les autres : une mémoire dont on ne voit pas les trous
+   se croit complète. */
+.memory-tag{
+  display:inline-flex;
+  align-items:center;
+  margin-right:6px;
+  padding:0 6px;
+  border:1px solid var(--border);
+  border-radius:999px;
+  font-size:11px;
+  line-height:18px;
+  color:var(--muted);
+}
+.memory-tag--nature{ color:var(--text); }
+.memory-tag--domain{ color:var(--text); }
+.memory-tag--unknown{ border-style:dashed; }
+
+/* Le compteur des non classés s'ouvre : un nombre qu'on ne peut pas atteindre
+   ne fait que culpabiliser. */
+.memory-counts__item--unclassified{
+  padding:0;
+  border:0;
+  background:none;
+  color:inherit;
+  font:inherit;
+  cursor:pointer;
+  text-decoration:underline dotted;
+  text-underline-offset:3px;
+}
+.memory-counts__item--unclassified:hover{ color:var(--accent); }
+
 .memory-counts{
   display:flex;
   gap:20px;

@@ -29,6 +29,7 @@ import { PROJECT_TAB_RESELECTED_EVENT } from "./project-header.js";
 import {
   MEMORY,
   assertionHistory,
+  currentAssertions,
   buildContextExport,
   describeAssertionFacts,
   kindLabel,
@@ -36,6 +37,16 @@ import {
   summarizeMemory
 } from "../services/project-memory.js";
 import { normalizePaginationState, paginateItems, renderPaginationControls } from "./ui/pagination.js";
+import {
+  DOMAINS,
+  NATURES,
+  UNCLASSIFIED_LABEL,
+  classifyAssertion,
+  domainLabel,
+  filterByTaxonomy,
+  natureLabel,
+  summarizeTaxonomy
+} from "../services/assertion-taxonomy.js";
 import { bindGhActionButtons, renderGhActionButton } from "./ui/gh-split-button.js";
 
 const view = {
@@ -46,6 +57,9 @@ const view = {
   query: "",
   kind: "",
   status: "",
+  /** La nature et le domaine voulus. `"none"` demande ce qui n'est pas classé. */
+  nature: "",
+  domain: "",
   includeSuperseded: false,
   notice: "",
   busy: false,
@@ -82,8 +96,9 @@ function kindIcon(kind) {
   return KIND_ICON[String(kind ?? "")] ?? "dot-fill-pending";
 }
 
-function renderCounts(resume) {
-  const cellule = (valeur, mot) => `<span class="memory-counts__item"><b>${valeur}</b> ${escapeHtml(mot)}</span>`;
+function renderCounts(resume, vocabulaire) {
+  const cellule = (valeur, mot, className = "") =>
+    `<span class="memory-counts__item${className}"><b>${valeur}</b> ${escapeHtml(mot)}</span>`;
 
   return `
     <div class="memory-counts">
@@ -91,6 +106,18 @@ function renderCounts(resume) {
       ${cellule(resume.assumed, "assumée(s)")}
       ${cellule(resume.rejected, "écartée(s)")}
       ${cellule(resume.superseded, "remplacée(s)")}
+      ${
+        // **Ce qui n'est pas classé se compte au premier rang, pas en note de
+        // bas de page.** C'est la seule façon qu'une lecture filtrée par domaine
+        // ne se prenne pas pour une lecture complète : « tout l'incendie » aurait
+        // l'air exhaustif alors que trois cents affirmations ne sont classées
+        // nulle part. Le compteur est cliquable — on va voir ce qui manque.
+        vocabulaire.unclassifiedDomain > 0
+          ? `<button type="button" class="memory-counts__item memory-counts__item--unclassified" data-memory-unclassified>
+               <b>${vocabulaire.unclassifiedDomain}</b> sans domaine
+             </button>`
+          : cellule(0, "sans domaine")
+      }
     </div>
   `;
 }
@@ -108,11 +135,21 @@ function renderFilters() {
         value="${escapeHtml(view.query)}"
         data-memory-search
       >
-      <select class="gh-input memory-filters__select" data-memory-kind aria-label="Nature">
-        ${option("", "Toutes natures", view.kind)}
+      <select class="gh-input memory-filters__select" data-memory-kind aria-label="Provenance">
+        ${option("", "Toutes provenances", view.kind)}
         ${option("avis", "Avis", view.kind)}
         ${option("attachment", "Rattachements", view.kind)}
         ${option("document", "Documents", view.kind)}
+      </select>
+      <select class="gh-input memory-filters__select" data-memory-nature aria-label="Nature">
+        ${option("", "Toutes natures", view.nature)}
+        ${NATURES.map((nature) => option(nature, natureLabel(nature), view.nature)).join("")}
+        ${option("none", `${UNCLASSIFIED_LABEL}e`, view.nature)}
+      </select>
+      <select class="gh-input memory-filters__select" data-memory-domain aria-label="Domaine">
+        ${option("", "Tous domaines", view.domain)}
+        ${DOMAINS.map((domaine) => option(domaine, domainLabel(domaine), view.domain)).join("")}
+        ${option("none", UNCLASSIFIED_LABEL, view.domain)}
       </select>
       <select class="gh-input memory-filters__select" data-memory-status aria-label="État">
         ${option("", "Assumées et écartées", view.status)}
@@ -162,6 +199,7 @@ function renderAssertion(assertion) {
         </div>
         ${assertion.detail ? `<span class="memory-row__detail">${escapeHtml(assertion.detail)}</span>` : ""}
         <span class="memory-row__meta">
+          ${renderTaxonomy(assertion)}
           ${escapeHtml(kindLabel(assertion.kind))} ${escapeHtml(assertion.subject_key)}
           · ${escapeHtml(ecartee ? "écartée" : "assumée")} le ${escapeHtml(formatDate(assertion.decided_at))}
           par ${escapeHtml(nameOf(assertion.decided_by))}
@@ -170,6 +208,25 @@ function renderAssertion(assertion) {
         </span>
       </div>
     </li>
+  `;
+}
+
+/**
+ * Le vocabulaire d'une affirmation, sur sa ligne.
+ *
+ * Deux étiquettes, et la seconde compte autant quand elle est vide : « non
+ * classé » se lit, il ne se cache pas. Une mémoire dont on ne voit pas les
+ * trous se croit complète.
+ */
+function renderTaxonomy(assertion) {
+  const { nature, domain } = classifyAssertion(assertion);
+
+  const etiquette = (texte, modificateur) =>
+    `<span class="memory-tag memory-tag--${modificateur}">${escapeHtml(texte)}</span>`;
+
+  return `
+    ${nature ? etiquette(natureLabel(nature), "nature") : etiquette(UNCLASSIFIED_LABEL, "unknown")}
+    ${domain ? etiquette(domainLabel(domain), "domain") : etiquette("Sans domaine", "unknown")}
   `;
 }
 
@@ -445,12 +502,19 @@ function renderContent(root) {
   }
 
   const resume = summarizeMemory(view.assertions);
-  const lignes = searchAssertions(view.assertions, {
-    query: view.query,
-    kind: view.kind,
-    status: view.status,
-    includeSuperseded: view.includeSuperseded
-  });
+  // Le vocabulaire se compte sur **ce qui vaut aujourd'hui**, pas sur toute
+  // l'histoire : « 40 sans domaine » doit dire quarante affirmations à classer,
+  // pas quarante états successifs de quatre d'entre elles.
+  const vocabulaire = summarizeTaxonomy(currentAssertions(view.assertions));
+  const lignes = filterByTaxonomy(
+    searchAssertions(view.assertions, {
+      query: view.query,
+      kind: view.kind,
+      status: view.status,
+      includeSuperseded: view.includeSuperseded
+    }),
+    { nature: view.nature, domain: view.domain }
+  );
 
   root.innerHTML = `
     <section class="project-simple-page project-simple-page--memory">
@@ -459,7 +523,7 @@ function renderContent(root) {
 
         ${view.notice ? `<div class="propositions-empty propositions-empty--warn"><p>${escapeHtml(view.notice)}</p></div>` : ""}
 
-        ${renderCounts(resume)}
+        ${renderCounts(resume, vocabulaire)}
         ${renderFilters()}
         ${renderList(lignes, view.page)}
       </div>
@@ -505,8 +569,28 @@ function bind(root) {
     renderContent(root);
   });
 
+  root.querySelector("[data-memory-nature]")?.addEventListener("change", (event) => {
+    view.nature = event.target.value;
+    view.page = 1;
+    renderContent(root);
+  });
+
+  root.querySelector("[data-memory-domain]")?.addEventListener("change", (event) => {
+    view.domain = event.target.value;
+    view.page = 1;
+    renderContent(root);
+  });
+
   root.querySelector("[data-memory-superseded]")?.addEventListener("change", (event) => {
     view.includeSuperseded = event.target.checked;
+    view.page = 1;
+    renderContent(root);
+  });
+
+  // Le compteur des non classés mène à ce qu'il compte : un nombre qu'on ne
+  // peut pas ouvrir ne fait que culpabiliser.
+  root.querySelector("[data-memory-unclassified]")?.addEventListener("click", () => {
+    view.domain = "none";
     view.page = 1;
     renderContent(root);
   });

@@ -14,6 +14,7 @@
  */
 
 import { MEMORY, currentAssertions, describeAssertionFacts, kindLabel, summarizeMemory } from "./project-memory.js";
+import { classifyAssertion, domainLabel, natureLabel, summarizeTaxonomy } from "./assertion-taxonomy.js";
 import { toCsv } from "../utils/csv.js";
 
 export const MEMORY_EXPORT_FORMAT = "mdall.memoire/1";
@@ -39,10 +40,25 @@ function ordonner(assertions) {
 }
 
 function assertionLigne(assertion) {
+  const { nature, domain, natureDerived } = classifyAssertion(assertion ?? {});
+
   return {
     id: texte(assertion?.id) || null,
+    // `nature` désignait la provenance depuis le début de cet export : elle
+    // garde son nom pour ne pas casser les fichiers déjà produits, et le
+    // vocabulaire arrive sous le sien.
     nature: texte(assertion?.kind) || null,
     natureLabel: kindLabel(assertion?.kind),
+    vocabulaire: {
+      nature,
+      natureLabel: nature ? natureLabel(nature) : null,
+      // Déduite de la provenance, ou écrite par une extraction qui la savait :
+      // un export qui ne le dirait pas ferait passer une déduction pour une
+      // affirmation du projet.
+      natureDeduite: natureDerived,
+      domaine: domain,
+      domaineLabel: domain ? domainLabel(domain) : null
+    },
     cle: texte(assertion?.subject_key) || null,
     enonce: texte(assertion?.statement) || null,
     detail: texte(assertion?.detail) || null,
@@ -87,6 +103,10 @@ export function buildMemoryExport({ project = {}, assertions = null, generatedAt
       message: lues === null ? "La mémoire n'a pas pu être lue." : null
     },
     resume: lues ? summarizeMemory(lues) : null,
+    // Le vocabulaire de ce qui vaut aujourd'hui, avec ce qui n'est pas classé :
+    // c'est ce qu'on compare d'un export à l'autre pour voir le classement
+    // avancer.
+    vocabulaire: ordonnees ? summarizeTaxonomy(currentAssertions(ordonnees)) : null,
     affirmations: ordonnees ? ordonnees.map(assertionLigne) : null,
     // L'état courant, isolé : c'est ce qu'on compare à une proposition.
     enVigueur: ordonnees ? currentAssertions(ordonnees).map(assertionLigne) : null
@@ -94,7 +114,9 @@ export function buildMemoryExport({ project = {}, assertions = null, generatedAt
 }
 
 const CSV_COLUMNS = [
-  { key: "nature", label: "Nature" },
+  { key: "nature", label: "Provenance" },
+  { key: "vocabulaire", label: "Nature" },
+  { key: "domaine", label: "Domaine" },
   { key: "cle", label: "Clé" },
   { key: "enonce", label: "Affirmation" },
   { key: "statut", label: "Statut" },
@@ -112,6 +134,10 @@ export function memoryExportRows(exported = null) {
 
   const rows = exported.affirmations.map((assertion) => ({
     nature: assertion.natureLabel ?? "",
+    vocabulaire: assertion.vocabulaire?.natureLabel ?? "non classée",
+    // « non classé » s'écrit, il ne se laisse pas vide : une cellule vide se
+    // lit comme une donnée manquante dans le fichier, pas comme un fait.
+    domaine: assertion.vocabulaire?.domaineLabel ?? "non classé",
     cle: assertion.cle ?? "",
     enonce: assertion.enonce ?? "",
     statut: assertion.statutLabel ?? "",

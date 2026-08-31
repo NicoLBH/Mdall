@@ -114,7 +114,9 @@ test("le CSV d'une mémoire illisible est vide plutôt que faux", () => {
 });
 
 test("le CSV porte son en-tête", () => {
-  assert.ok(memoryExportCsv(buildMemoryExport({ assertions: ASSERTIONS })).includes("Nature;Clé;Affirmation"));
+  assert.ok(
+    memoryExportCsv(buildMemoryExport({ assertions: ASSERTIONS })).includes("Provenance;Nature;Domaine;Clé;Affirmation")
+  );
 });
 
 test("le nom du fichier porte le projet et le jour", () => {
@@ -128,4 +130,27 @@ test("le nom du fichier porte le projet et le jour", () => {
 
 test("l'export se sérialise en JSON", () => {
   assert.doesNotThrow(() => JSON.stringify(buildMemoryExport({ assertions: ASSERTIONS })));
+});
+
+test("l'export porte le vocabulaire, et dit quand la nature est déduite", () => {
+  const exporte = buildMemoryExport({ assertions: ASSERTIONS });
+  const avis = exporte.affirmations.find((entry) => entry.id === "a-2");
+
+  assert.equal(avis.vocabulaire.nature, "constat", "un avis est un constat");
+  assert.equal(avis.vocabulaire.natureDeduite, true, "déduite de la provenance, et l'export le dit");
+  assert.equal(avis.vocabulaire.domaine, null, "aucun domaine n'a été inventé");
+});
+
+test("l'export compte ce qui n'est pas classé", () => {
+  const exporte = buildMemoryExport({ assertions: ASSERTIONS });
+
+  assert.equal(exporte.vocabulaire.unclassifiedDomain, 2, "les deux affirmations en vigueur sont sans domaine");
+  assert.equal(exporte.vocabulaire.unclassifiedNature, 0, "leur nature, elle, se déduit");
+});
+
+test("le CSV écrit « non classé » plutôt qu'une cellule vide", () => {
+  const { rows } = memoryExportRows(buildMemoryExport({ assertions: ASSERTIONS }));
+
+  assert.ok(rows.every((row) => row.domaine === "non classé"));
+  assert.deepEqual([...new Set(rows.map((row) => row.vocabulaire))].sort(), ["Constat", "Intendance"]);
 });
