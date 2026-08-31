@@ -17,7 +17,20 @@ const hypothese = (id, patch = {}) => ({
   project_id: "projet-1",
   kind: "avis",
   nature: "hypothese",
-  subject_key: "zone-neige",
+  subject_key: "portance-du-sol",
+  statement: "Portance du sol : 0,2 MPa",
+  ...patch
+});
+
+// La zone de neige servait ici d'hypothèse. Elle n'en est pas une : aucune
+// mesure ne la tranche, un texte la fixe. Elle reste l'exemple le plus parlant,
+// mais du bon côté — celui des contraintes.
+const contrainte = (id, patch = {}) => ({
+  id,
+  project_id: "projet-1",
+  kind: "constraint",
+  nature: "contrainte",
+  subject_key: "zone-de-neige",
   statement: "Zone de neige : A2",
   ...patch
 });
@@ -75,7 +88,7 @@ test("une date illisible ne lève pas de drapeau au hasard", () => {
   assert.equal(needsReview(constat("a", { needs_review_since: "bientôt" })), false);
 });
 
-/* ── Seules les hypothèses entraînent ────────────────────────────────────── */
+/* ── Seul ce sur quoi on calcule entraîne ────────────────────────────────── */
 
 test("une hypothèse remplacée rend suspect ce qui repose dessus", () => {
   const marques = planReviewFlags([hypothese("h1")], [lien("n1", "h1")], "2026-08-12T00:00:00.000Z");
@@ -83,7 +96,17 @@ test("une hypothèse remplacée rend suspect ce qui repose dessus", () => {
   assert.equal(marques.length, 1);
   assert.equal(marques[0].assertionId, "n1");
   assert.equal(marques[0].since, "2026-08-12T00:00:00.000Z");
-  assert.equal(marques[0].hypothesisId, "h1");
+  assert.equal(marques[0].sourceId, "h1");
+});
+
+test("une contrainte corrigée rend suspect ce qui repose dessus", () => {
+  // Réviser une hypothèse est normal ; corriger une contrainte veut dire qu'on
+  // a calculé faux. Ne rien signaler serait le pire des deux silences.
+  const marques = planReviewFlags([contrainte("c-neige")], [lien("note", "c-neige")], "2026-08-12T00:00:00.000Z");
+
+  assert.equal(marques.length, 1);
+  assert.equal(marques[0].assertionId, "note");
+  assert.equal(marques[0].sourceId, "c-neige");
 });
 
 test("un constat remplacé n'entraîne rien", () => {
@@ -134,13 +157,22 @@ test("une affirmation ne peut pas reposer sur elle-même", () => {
   assert.match(plan.reason, /elle-même/);
 });
 
-test("on ne repose que sur une hypothèse", () => {
+test("on ne repose pas sur un constat", () => {
   // Dire qu'une note repose sur un avis de chantier serait un abus de langage
   // qui rendrait le signal illisible le jour où cet avis change.
   const plan = planDependency({ assertion: constat("n1"), dependsOn: constat("c1") });
 
   assert.equal(plan.ok, false);
-  assert.match(plan.reason, /hypothèse/);
+  assert.match(plan.reason, /hypothèse|contrainte/);
+});
+
+test("on repose sur une contrainte comme sur une hypothèse", () => {
+  // Une note de calcul repose bel et bien sur la zone de neige. C'est même le
+  // cas le plus fréquent — et il était refusé.
+  const plan = planDependency({ assertion: constat("note"), dependsOn: contrainte("c-neige") });
+
+  assert.equal(plan.ok, true);
+  assert.equal(plan.link.depends_on_assertion_id, "c-neige");
 });
 
 test("un lien déjà déclaré ne se redéclare pas", () => {
@@ -171,7 +203,7 @@ test("un lien recevable porte son projet et son auteur", () => {
 
 /* ── Ce que l'écran dit ──────────────────────────────────────────────────── */
 
-test("le bandeau nomme l'hypothèse et la date", () => {
+test("le bandeau nomme la valeur d'entrée et la date", () => {
   // « À revérifier » sans dire pourquoi ni depuis quand est une inquiétude,
   // pas une information.
   const phrase = describeReviewFlag(
@@ -180,7 +212,21 @@ test("le bandeau nomme l'hypothèse et la date", () => {
   );
 
   assert.match(phrase, /12 août 2026/);
-  assert.match(phrase, /Zone de neige : A2/);
+  assert.match(phrase, /Portance du sol : 0,2 MPa/);
+  assert.match(phrase, /hypothèse/);
+});
+
+test("le bandeau dit si c'est une contrainte qui a bougé", () => {
+  // Une hypothèse révisée est le cours normal des choses ; une contrainte
+  // corrigée veut dire qu'on a calculé faux. Le lecteur doit pouvoir les
+  // traiter avec une urgence différente.
+  const phrase = describeReviewFlag(
+    constat("note", { needs_review_since: "2026-08-12T00:00:00.000Z" }),
+    contrainte("c-neige")
+  );
+
+  assert.match(phrase, /contrainte/);
+  assert.doesNotMatch(phrase, /hypothèse/);
 });
 
 test("sans hypothèse connue, le bandeau dit au moins depuis quand", () => {

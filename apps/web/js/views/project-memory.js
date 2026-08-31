@@ -593,7 +593,8 @@ function renderReaderTabs() {
  * Le formulaire d'une hypothèse.
  *
  * **Le sujet et la valeur sont deux champs, et c'est le point.** Une hypothèse
- * s'identifie par son sujet — « zone de neige » — et porte une valeur — « A2 ».
+ * s'identifie par son sujet — « portance du sol » — et porte une valeur —
+ * « 0,2 MPa ».
  * Les mêler dans un seul champ donnerait deux hypothèses en vigueur le jour où
  * la valeur change, alors qu'il n'y en a qu'une, qui a changé.
  *
@@ -612,19 +613,24 @@ function renderHypothesisForm() {
   return `
     <form class="memory-declare" data-memory-declare-form>
       <p class="memory-declare__lead">
-        Une hypothèse est ce sur quoi le projet bâtit : elle n'a qu'une valeur à la fois, et changer
-        cette valeur rend suspect ce qui en découle. Le sujet reste, la valeur bouge.
+        Une hypothèse est ce qu'une mesure viendra trancher, et qui n'a pas encore été mesuré :
+        on la retient parce que le travail ne peut pas attendre l'essai. Elle n'a qu'une valeur à
+        la fois, et en changer rend suspect ce qui en découle. Le sujet reste, la valeur bouge.
+      </p>
+      <p class="memory-declare__lead">
+        Une zone de neige, de vent ou sismique n'en est pas une : aucune mesure ne la tranche, un
+        texte la fixe. Ce sont des contraintes.
       </p>
       <div class="memory-declare__row">
         <label class="memory-declare__field">
           <span>Sujet</span>
           <input class="gh-input" data-memory-draft="subject" value="${escapeHtml(view.draft.subject)}"
-            placeholder="zone de neige" autocomplete="off">
+            placeholder="portance du sol" autocomplete="off">
         </label>
         <label class="memory-declare__field">
           <span>Valeur</span>
           <input class="gh-input" data-memory-draft="value" value="${escapeHtml(view.draft.value)}"
-            placeholder="A2" autocomplete="off">
+            placeholder="0,2 MPa" autocomplete="off">
         </label>
         <label class="memory-declare__field">
           <span>Domaine</span>

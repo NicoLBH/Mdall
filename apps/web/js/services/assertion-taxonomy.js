@@ -9,15 +9,31 @@
  *
  * Deux axes, et ils ne servent pas à la même chose.
  *
- * **La nature** dit comment l'affirmation se conduit dans le temps. C'est elle
- * qui décidera, à l'étape suivante, qu'une hypothèse remplacée rend suspect
- * tout ce qui en découle — un constat, lui, se lève sans rien entraîner.
+ * ## La nature : ce qui trancherait l'affirmation
  *
- * **Le domaine** dit de quoi elle parle. Il vient du métier, pas de nous :
- * structure, incendie, acoustique, thermique, accessibilité, sol, urbanisme,
- * environnement. Ces huit-là sont stables depuis trente ans et communs à tous
- * les intervenants d'une opération — c'est ce qui en fait une hiérarchie
- * utilisable plutôt qu'un rangement personnel.
+ * La question n'est pas « de quoi parle-t-elle ? » — c'est le domaine. C'est
+ * **« qu'est-ce qui la trancherait ? »**, et chaque nature a sa réponse, une
+ * seule. Ce discriminant est écrit ici en données, dans `SETTLED_BY` : une
+ * définition qu'on ne peut pas interroger finit par ne plus être appliquée.
+ *
+ * - **Contrainte** — tranchée par un tiers. Un règlement, une norme, un arrêté,
+ *   le marché. On ne la choisit pas et on ne la négocie pas. Sa valeur est
+ *   *déterminée*, jamais retenue, et le fait qu'elle se déduise de la commune
+ *   n'en fait pas une supposition : **la déduction fait partie de sa
+ *   définition**. La zone de neige d'une ville n'est pas une estimation de
+ *   cette ville, c'est une propriété de cette ville.
+ * - **Hypothèse** — tranchée par une mesure qui n'a pas encore eu lieu.
+ *   Vérifiable, plausible, tenue pour vraie parce que le travail ne peut pas
+ *   attendre le résultat du sondage.
+ * - **Constat** — tranché par l'observation, déjà faite. Daté, situé, signé.
+ * - **Intendance** — rien ne la tranche : elle n'affirme rien sur l'ouvrage.
+ *
+ * ## Le domaine : de quoi elle parle
+ *
+ * Il vient du métier, pas de nous : structure, incendie, acoustique, thermique,
+ * accessibilité, sol, urbanisme, environnement. Ces huit-là sont stables depuis
+ * trente ans et communs à tous les intervenants d'une opération — c'est ce qui
+ * en fait une hiérarchie utilisable plutôt qu'un rangement personnel.
  *
  * **Une règle gouverne tout ce fichier, et elle est plus importante que le
  * reste : un domaine deviné est pire qu'un domaine absent.** Rien ici ne
@@ -34,26 +50,108 @@
 
 import { ITEM_TYPE } from "./proposition-review.js";
 
-/** Comment une affirmation se comporte dans le temps. */
+/**
+ * Ce qui tranche une affirmation. C'est le discriminant des natures.
+ *
+ * Écrit en données parce que c'est la définition elle-même, et qu'une
+ * définition qui ne vit que dans un commentaire se contredit tôt ou tard —
+ * ce fichier en portait la preuve : il donnait « zone de neige » comme exemple
+ * d'hypothèse alors qu'aucune mesure ne tranche une zone de neige.
+ */
+export const SETTLED_BY = {
+  /** Un règlement, une norme, un arrêté, le marché. Personne ici n'y peut rien. */
+  TIERS: "tiers",
+  /** Un essai, un sondage, un relevé — qui n'a pas encore eu lieu. */
+  MESURE: "mesure",
+  /** Une observation, déjà faite, par quelqu'un, à une date. */
+  OBSERVATION: "observation"
+};
+
+/**
+ * Comment une affirmation se comporte dans le temps.
+ *
+ * Chaque nature est définie par ce qui la trancherait, et **le sujet n'y fait
+ * rien** : « zone de neige » et « portance du sol » se ressemblent, l'une est
+ * fixée par un texte et l'autre par un essai — elles n'ont donc rien en commun.
+ */
 export const NATURE = {
-  /** Un avis, une remarque de CR, un désordre : daté, ponctuel. Se lève ou s'aggrave. */
+  /**
+   * Ce qui a été observé, à une date, par quelqu'un, sur le réel — le chantier,
+   * un ouvrage, ou un document.
+   *
+   * Tranché par l'**observation**, et elle a déjà eu lieu. Un constat ne
+   * devient jamais faux : il reste vrai à sa date. Il se lève quand le désordre
+   * est traité, il s'aggrave, il reste — il ne se révise pas.
+   *
+   * → un avis de bureau de contrôle, une réserve, un désordre, un relevé.
+   */
   CONSTAT: "constat",
   /**
-   * Zone de neige, portance du sol, classement incendie.
+   * Une proposition qu'une **mesure** trancherait, et qui n'a pas encore été
+   * faite. Plausible, retenue faute de mieux, parce que le travail ne peut pas
+   * attendre le résultat.
    *
-   * **Une seule valeur à la fois** : ce qui en découle devient faux quand elle
-   * change. C'est la nature qui donne à Mdall ce qu'aucun autre outil ne fait.
+   * Le test tient en une question : *quelle mesure la trancherait ?* Si on ne
+   * peut nommer ni l'essai, ni le sondage, ni le relevé, ce n'est pas une
+   * hypothèse. Ce seul critère écarte les zones climatiques : aucune mesure ne
+   * tranche une zone de neige, c'est un texte qui la fixe.
+   *
+   * Elle est révisable **sans que personne soit en faute** — c'est ce qui la
+   * sépare définitivement de la contrainte. Et **une seule valeur à la fois** :
+   * ce qui en découle devient suspect quand elle change.
+   *
+   * Une hypothèse vérifiée ne disparaît pas : la mesure la remplace par un
+   * constat. Elles sont faites pour être consommées.
+   *
+   * → portance du sol avant le G2, nature du mur mitoyen, niveau de la nappe,
+   *   capacité du plancher existant.
    */
   HYPOTHESE: "hypothese",
   /**
-   * Un article du PLU, une règle PMR, une clause de notice.
+   * Ce qui s'impose au projet, tranché par un **tiers**.
    *
-   * Permanente, datée par un tiers. Elle se **vérifie** — elle ne se lève pas :
-   * on ne « lève » pas une règle d'accessibilité, on démontre qu'on la respecte.
+   * On ne la choisit pas, on ne la négocie pas : on la respecte ou on est en
+   * faute. Le test : *si je ne suis pas d'accord, ai-je un recours ?* Non →
+   * contrainte.
+   *
+   * Elle ne se conteste pas et ne se lève pas. Elle se **corrige** si la valeur
+   * retenue est fausse — et se tromper sur une contrainte est une erreur, pas
+   * une révision : une hypothèse fausse a une histoire (on croyait, puis on a
+   * mesuré), une contrainte fausse n'en a pas, elle n'aurait jamais dû être
+   * écrite ainsi. Les deux ressemblent à un changement de valeur ; elles ne
+   * veulent pas dire la même chose.
+   *
+   * → zones neige, vent et sismique, classement incendie, article du PLU, règle
+   *   d'accessibilité, clause de marché.
    */
   CONTRAINTE: "contrainte",
-  /** Un document au corpus, une affaire rattachée : ce que le projet a rangé. */
+  /**
+   * Un document au corpus, une affaire rattachée : ce que le projet a rangé.
+   *
+   * **Ce n'est pas une connaissance, et probablement pas une nature.** Une
+   * intendance n'affirme rien sur l'ouvrage : c'est la matière première dont
+   * les trois autres s'extraient — si on applique tout ce que contiennent les
+   * documents du projet, on obtient l'ouvrage construit.
+   *
+   * Le mot est mauvais et on le sait. Il est gardé tel quel le temps de trancher
+   * une question antérieure : ces lignes ont-elles leur place dans la mémoire du
+   * projet, ou dans le corpus ? Renommer avant de répondre reviendrait à graver
+   * un choix qu'on n'a pas fait. Rien ne se construit sur cette nature d'ici là.
+   */
   INTENDANCE: "intendance"
+};
+
+/**
+ * Ce qui tranche chaque nature. La table de `SETTLED_BY`, par nature.
+ *
+ * L'intendance n'y figure pas : rien ne la tranche, parce qu'elle n'affirme
+ * rien. Une absence ici se lit « cette nature n'est pas une connaissance ».
+ */
+const NATURE_SETTLED_BY = {
+  [NATURE.CONSTAT]: SETTLED_BY.OBSERVATION,
+  [NATURE.HYPOTHESE]: SETTLED_BY.MESURE,
+  [NATURE.CONTRAINTE]: SETTLED_BY.TIERS,
+  [NATURE.INTENDANCE]: null
 };
 
 /** De quoi une affirmation parle. Huit domaines, et ils viennent du métier. */
@@ -151,6 +249,67 @@ export function natureLabel(nature) {
 
 export function domainLabel(domain) {
   return DOMAIN_LABELS[normalizeDomain(domain)] ?? UNCLASSIFIED_LABEL;
+}
+
+/**
+ * Ce qui trancherait une affirmation de cette nature, ou `null`.
+ *
+ * `null` a deux causes qu'il ne faut pas confondre, et l'appelant doit les
+ * distinguer : une nature inconnue, et l'intendance — qui est connue et que
+ * rien ne tranche, parce qu'elle n'affirme rien.
+ */
+export function settledBy(nature) {
+  const connue = normalizeNature(nature);
+  return connue ? NATURE_SETTLED_BY[connue] ?? null : null;
+}
+
+const SETTLED_BY_LABELS = {
+  [SETTLED_BY.TIERS]: "un tiers — règlement, norme, marché",
+  [SETTLED_BY.MESURE]: "une mesure qui n'a pas encore eu lieu",
+  [SETTLED_BY.OBSERVATION]: "une observation, déjà faite"
+};
+
+/** Ce qui tranche, dit en français. Pour l'écran, et pour les messages d'erreur. */
+export function settledByLabel(nature) {
+  return SETTLED_BY_LABELS[settledBy(nature)] ?? "";
+}
+
+/**
+ * Une affirmation sur laquelle on peut se prononcer — valider, contester.
+ *
+ * **Les hypothèses seulement.** Se prononcer suppose qu'un avis puisse changer
+ * quelque chose : sur une contrainte, il ne change rien — cinq personnes
+ * d'accord ne déplacent pas une zone de neige, et cinq personnes en désaccord
+ * ne l'annulent pas. Sur un constat non plus : on ne conteste pas ce qui a été
+ * vu, on constate autre chose, plus tard.
+ *
+ * Ce que l'on peut faire à une contrainte fausse est d'un autre ordre : la
+ * **corriger**. Confondre les deux gestes ferait croire à un différend là où il
+ * n'y a qu'une erreur.
+ */
+export function isContestable(nature) {
+  return normalizeNature(nature) === NATURE.HYPOTHESE;
+}
+
+/**
+ * Une affirmation sur laquelle le projet **calcule**.
+ *
+ * Les hypothèses et les contraintes : ce sont les valeurs d'entrée. Quand
+ * l'une d'elles change, ce qui a été dimensionné dessus devient suspect.
+ *
+ * Longtemps seules les hypothèses entraînaient quelque chose, parce qu'on
+ * croyait la zone de neige hypothétique. La corriger est même plus urgent
+ * qu'une révision d'hypothèse : réviser une hypothèse est normal, corriger une
+ * contrainte veut dire qu'on a calculé faux.
+ *
+ * Un constat n'entraîne rien : une réserve levée, un avis qui change de lettre
+ * ne rendent rien d'autre douteux — ils se suffisent. Si tout mouvement
+ * propageait un drapeau, la moitié du projet serait « à revérifier » au premier
+ * lot de rapports, et un écran qui signale tout ne signale plus rien.
+ */
+export function isFoundational(nature) {
+  const connue = normalizeNature(nature);
+  return connue === NATURE.HYPOTHESE || connue === NATURE.CONTRAINTE;
 }
 
 /**

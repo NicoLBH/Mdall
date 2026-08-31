@@ -9,9 +9,13 @@
  *
  * Quatre décisions le tiennent, et chacune répond à une façon de se tromper.
  *
- * **Seules les hypothèses entraînent quelque chose.** Un constat qui évolue —
- * une réserve levée, un avis qui change de lettre — ne rend rien d'autre
- * suspect : il se suffit. Une contrainte non plus. Si tout mouvement propageait
+ * **Seul ce sur quoi on calcule entraîne quelque chose** : les hypothèses et
+ * les contraintes. Ce module a d'abord réservé cela aux hypothèses, parce qu'il
+ * croyait la zone de neige hypothétique — elle ne l'est pas, c'est une
+ * contrainte, et la corriger est plus grave encore qu'une révision : réviser
+ * une hypothèse est normal, corriger une contrainte veut dire qu'on a calculé
+ * faux. Un constat qui évolue — une réserve levée, un avis qui change de lettre
+ * — ne rend rien d'autre suspect : il se suffit. Si tout mouvement propageait
  * un drapeau, la moitié du projet serait « à revérifier » au premier lot de
  * rapports, et un écran qui signale tout ne signale plus rien.
  *
@@ -32,7 +36,7 @@
  * inutilisable, et personne ne saurait par quel bout le reprendre.
  */
 
-import { NATURE, classifyAssertion } from "./assertion-taxonomy.js";
+import { NATURE, classifyAssertion, isFoundational } from "./assertion-taxonomy.js";
 
 function texte(value) {
   return String(value ?? "").trim();
@@ -66,19 +70,20 @@ export function needsReview(assertion = {}) {
  * @param {object[]} superseded les affirmations qui viennent d'être remplacées
  * @param {object[]} dependencies les liens du projet, tels que la base les rend
  * @param {string} at l'instant du remplacement
- * @returns {{assertionId: string, since: string, hypothesisId: string}[]} un
+ * @returns {{assertionId: string, since: string, sourceId: string}[]} un
  *   marquage par affirmation à revérifier, sans doublon
  */
 export function planReviewFlags(superseded = [], dependencies = [], at = "") {
   const quand = texte(at) || new Date().toISOString();
 
-  // Seules les hypothèses entraînent. Le reste se remplace sans rien salir.
-  const hypotheses = (Array.isArray(superseded) ? superseded : []).filter(
-    (assertion) => classifyAssertion(assertion ?? {}).nature === NATURE.HYPOTHESE
+  // Seul ce sur quoi on calcule entraîne : une hypothèse révisée, une contrainte
+  // corrigée. Le reste se remplace sans rien salir.
+  const socles = (Array.isArray(superseded) ? superseded : []).filter(
+    (assertion) => isFoundational(classifyAssertion(assertion ?? {}).nature)
   );
-  if (hypotheses.length === 0) return [];
+  if (socles.length === 0) return [];
 
-  const remplacees = new Set(hypotheses.map((assertion) => texte(assertion.id)).filter(Boolean));
+  const remplacees = new Set(socles.map((assertion) => texte(assertion.id)).filter(Boolean));
 
   const marques = new Map();
   for (const lien of Array.isArray(dependencies) ? dependencies : []) {
@@ -86,9 +91,9 @@ export function planReviewFlags(superseded = [], dependencies = [], at = "") {
     const cible = texte(lien?.assertion_id);
     if (!source || !cible || !remplacees.has(source)) continue;
 
-    // Une affirmation qui repose sur deux hypothèses remplacées le même jour ne
-    // se marque qu'une fois : un drapeau est un drapeau.
-    if (!marques.has(cible)) marques.set(cible, { assertionId: cible, since: quand, hypothesisId: source });
+    // Une affirmation qui repose sur deux valeurs remplacées le même jour ne se
+    // marque qu'une fois : un drapeau est un drapeau.
+    if (!marques.has(cible)) marques.set(cible, { assertionId: cible, since: quand, sourceId: source });
   }
 
   return [...marques.values()];
@@ -142,10 +147,11 @@ export function planDependency({ assertion = null, dependsOn = null, existing = 
   if (!cible || !source) return { ok: false, reason: "Il manque l'une des deux affirmations." };
   if (cible === source) return { ok: false, reason: "Une affirmation ne peut pas reposer sur elle-même." };
 
-  if (classifyAssertion(dependsOn).nature !== NATURE.HYPOTHESE) {
+  const socle = classifyAssertion(dependsOn).nature;
+  if (!isFoundational(socle)) {
     return {
       ok: false,
-      reason: "On ne peut reposer que sur une hypothèse : c'est la seule nature dont le changement rend le reste suspect."
+      reason: "On ne repose que sur une hypothèse ou une contrainte : ce sont les valeurs d'entrée, les seules dont le changement rend le reste suspect."
     };
   }
 
@@ -166,26 +172,32 @@ export function planDependency({ assertion = null, dependsOn = null, existing = 
 /**
  * Ce que le bandeau d'une affirmation suspecte dit.
  *
- * Il nomme **l'hypothèse** et **la date**, parce que « à revérifier » sans
- * dire pourquoi ni depuis quand est une inquiétude, pas une information.
+ * Il nomme **la valeur d'entrée**, **sa nature** et **la date**, parce que « à
+ * revérifier » sans dire pourquoi ni depuis quand est une inquiétude, pas une
+ * information. La nature n'est pas un détail de vocabulaire : une hypothèse
+ * révisée est le cours normal des choses, une contrainte corrigée veut dire
+ * qu'on a calculé faux — le lecteur ne les traite pas avec la même urgence.
  *
  * @returns {string} la phrase, ou `""` si rien n'est à signaler
  */
-export function describeReviewFlag(assertion = {}, hypothesis = null) {
+export function describeReviewFlag(assertion = {}, source = null) {
   if (!needsReview(assertion)) return "";
 
   const quand = instant(assertion.needs_review_since);
   const jour = quand === null ? "" : new Date(quand).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
 
-  const nom = texte(hypothesis?.statement);
-  const morceaux = ["Repose sur une hypothèse qui a changé"];
+  const nature = classifyAssertion(source ?? {}).nature;
+  const quoi = nature === NATURE.CONTRAINTE ? "une contrainte qui a changé" : "une hypothèse qui a changé";
+
+  const nom = texte(source?.statement);
+  const morceaux = [`Repose sur ${quoi}`];
   if (jour) morceaux.push(`le ${jour}`);
 
   return nom ? `${morceaux.join(" ")} : ${nom}.` : `${morceaux.join(" ")}.`;
 }
 
 /**
- * Ce qu'une hypothèse entraîne, dit en français.
+ * Ce qu'une valeur d'entrée entraîne, dit en français.
  *
  * Le compte porte sur les affirmations **encore à revérifier**, pas sur toutes
  * celles qui reposent dessus : une fois revérifiées, elles ne demandent plus
