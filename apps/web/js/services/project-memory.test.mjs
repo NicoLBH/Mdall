@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 
 import {
   MEMORY,
+  assertionHistory,
   assertionsFromProposition,
+  describeAssertionFacts,
   buildContextExport,
   currentAssertions,
   planSupersessions,
@@ -189,4 +191,50 @@ test("chaque ligne porte sa date, son état et sa proposition", () => {
   });
 
   assert.match(dossier, /\*\*A12\*\* · Avis A12 — Étanchéité — levé · assumée le 2026-08-30 · proposition #P4/);
+});
+
+test("l'histoire d'une même chose se lit du plus ancien au plus récent", () => {
+  // « Depuis quand ? » est la question qu'on pose à une mémoire ; y répondre
+  // demande la suite, pas la dernière ligne.
+  const memoire = [
+    { kind: "avis", subject_key: "A12", decided_at: "2026-08-30T10:00:00Z", statement: "levé" },
+    { kind: "avis", subject_key: "A12", decided_at: "2026-07-01T10:00:00Z", statement: "émis" },
+    { kind: "avis", subject_key: "A41", decided_at: "2026-07-01T10:00:00Z", statement: "autre" }
+  ];
+
+  const suite = assertionHistory(memoire, { kind: "avis", subjectKey: "A12" });
+
+  assert.deepEqual(suite.map((entry) => entry.statement), ["émis", "levé"]);
+});
+
+test("un avis dit sur quoi il s'appuie", () => {
+  const faits = describeAssertionFacts({
+    kind: "avis",
+    subject_key: "A12",
+    payload: {
+      reference: "A12",
+      title: "Étanchéité",
+      status: "RESOLVED",
+      previousStatus: "OPEN",
+      opinion: "levé au vu du rapport corrigé",
+      change: "changed",
+      evidence: "RICT p. 14"
+    }
+  });
+
+  assert.deepEqual(faits, [
+    ["Référence", "A12"],
+    ["Intitulé", "Étanchéité"],
+    ["État", "Levé"],
+    ["État précédent", "Ouvert"],
+    ["Appréciation", "levé au vu du rapport corrigé"],
+    ["Mouvement", "modifié"],
+    ["Extrait", "RICT p. 14"]
+  ]);
+});
+
+test("ce qui manque n'apparaît pas, plutôt que d'apparaître vide", () => {
+  const faits = describeAssertionFacts({ kind: "document", subject_key: "d-1", payload: { name: "RICT.pdf" } });
+
+  assert.deepEqual(faits, [["Fichier", "RICT.pdf"]]);
 });

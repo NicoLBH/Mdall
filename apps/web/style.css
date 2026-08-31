@@ -16364,22 +16364,88 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .memory-row:last-child{ border-bottom:0; }
 /* Ce qui ne vaut plus se lit encore, mais se lit comme du passé. */
 .memory-row--superseded{ opacity:.6; }
-.memory-row__mark{ line-height:0; padding-top:2px; }
-.memory-row__mark--assumed{ color:var(--fgColor-open); }
-.memory-row__mark--rejected{ color:var(--fgColor-danger); }
-.memory-row__body{ display:flex; flex-direction:column; gap:2px; min-width:0; }
-.memory-row__head{ display:flex; gap:8px; align-items:baseline; flex-wrap:wrap; }
-.memory-row__key{
-  padding:1px 6px;
+.memory-row__mark{ line-height:0; padding-top:3px; color:var(--muted); }
+
+/* L'état se nomme. Une coche verte demande d'être devinée, et deux personnes la
+   devinent différemment. */
+.memory-pill{
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  flex:0 0 auto;
+  padding:1px 8px;
   border:1px solid var(--border);
-  border-radius:10px;
-  color:var(--muted);
+  border-radius:999px;
   font-size:12px;
+  white-space:nowrap;
 }
-.memory-row__statement{ color:var(--text); font-weight:600; font-size:14px; }
+.memory-pill .ui-icon{ width:12px; height:12px; }
+.memory-pill--assumed{ color:var(--fgColor-open); border-color:rgba(63,185,80,.4); }
+.memory-pill--rejected{ color:var(--fgColor-danger); border-color:rgba(248,81,73,.4); }
+.memory-row__body{ display:flex; flex-direction:column; gap:2px; min-width:0; }
+.memory-row__head{ display:flex; gap:10px; align-items:baseline; justify-content:space-between; }
+/* Un titre qui mène quelque part se comporte comme partout ailleurs. */
+.memory-row__statement{
+  color:var(--text);
+  font-weight:600;
+  font-size:14px;
+  text-decoration:none;
+  min-width:0;
+}
+.memory-row__statement:hover{ color:var(--accent); text-decoration:underline; }
 .memory-row__detail{ color:var(--muted); font-size:13px; }
 .memory-row__meta{ color:var(--muted); font-size:12px; }
 .memory-row__superseded{ font-style:italic; }
+
+/* Le détail d'une affirmation : son histoire, et ce sur quoi elle s'appuie.
+   C'est ici que la mémoire cesse d'être une liste. */
+.memory-detail{ display:flex; flex-direction:column; gap:16px; }
+.memory-detail__head{
+  display:flex;
+  align-items:flex-start;
+  gap:12px;
+  padding:16px;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  background:var(--panel2);
+}
+.memory-detail__head > div{ flex:1 1 auto; min-width:0; }
+.memory-detail__mark{ line-height:0; padding-top:4px; color:var(--muted); }
+.memory-detail__title{ margin:0 0 4px; font-size:16px; }
+.memory-detail__lead{ margin:0; color:var(--muted); font-size:13px; }
+.memory-detail__section{ margin:0; font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+.memory-detail__facts{ display:flex; flex-direction:column; gap:8px; }
+.memory-detail__back{ margin:0; color:var(--muted); font-size:12px; font-style:italic; }
+
+.memory-facts{
+  display:grid;
+  grid-template-columns:minmax(140px, 200px) 1fr;
+  gap:4px 16px;
+  margin:0;
+  font-size:13px;
+}
+.memory-facts dt{ color:var(--muted); }
+.memory-facts dd{ margin:0; color:var(--text); }
+
+.memory-steps{ margin:0; padding:0; list-style:none; display:flex; flex-direction:column; }
+.memory-step{
+  display:grid;
+  grid-template-columns:20px 1fr;
+  gap:10px;
+  padding:12px 0 12px 4px;
+  border-left:2px solid var(--border2);
+  margin-left:9px;
+  padding-left:16px;
+  position:relative;
+}
+.memory-step:last-child{ border-left-color:transparent; }
+/* Ce qui ne vaut plus se lit encore, mais se lit comme du passé. */
+.memory-step--past{ opacity:.65; }
+.memory-step__mark{ position:absolute; left:-11px; top:14px; line-height:0; background:var(--bg); }
+.memory-step:not(.memory-step--past) .memory-step__mark{ color:var(--fgColor-open); }
+.memory-step--past .memory-step__mark{ color:var(--muted); }
+.memory-step__body{ grid-column:2; display:flex; flex-direction:column; gap:4px; min-width:0; }
+.memory-step__meta{ color:var(--muted); font-size:12px; }
 
 /* La note de dépôt : ce que la machine a compris du lot, signé comme tel. La
    provenance est écrite sous le texte — une note qui ne dirait pas d'où elle

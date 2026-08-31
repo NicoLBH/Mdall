@@ -305,3 +305,84 @@ export function buildContextExport({ project = {}, assertions = [], generatedAt 
 
   return `${entete}\n${corps}${passe}\n`;
 }
+
+/**
+ * L'histoire d'une même chose, du plus ancien au plus récent.
+ *
+ * Une affirmation ne vit pas seule : `A12` a été émis, puis levé, puis rouvert.
+ * Ce sont trois affirmations d'une même chose, et c'est cette suite qu'on vient
+ * lire quand on se demande « depuis quand ? ». La montrer, c'est la différence
+ * entre une mémoire et une liste.
+ */
+export function assertionHistory(assertions = [], { kind = "", subjectKey = "" } = {}) {
+  const cle = `${kind}|${subjectKey}`;
+
+  return (Array.isArray(assertions) ? assertions : [])
+    .filter((entry) => `${entry?.kind}|${entry?.subject_key}` === cle)
+    .sort((gauche, droite) => {
+      const a = new Date(texte(gauche.decided_at)).getTime();
+      const b = new Date(texte(droite.decided_at)).getTime();
+      if (Number.isNaN(a) || Number.isNaN(b) || a === b) {
+        return texte(gauche.created_at).localeCompare(texte(droite.created_at));
+      }
+      return a - b;
+    });
+}
+
+const STATUS_LABELS = {
+  OPEN: "Ouvert",
+  RESOLVED: "Levé",
+  NO_NEWS: "Sans nouvelles"
+};
+
+function lisible(value) {
+  const brut = texte(value);
+  return STATUS_LABELS[brut] ?? brut;
+}
+
+/**
+ * Ce qu'une affirmation porte, en clair.
+ *
+ * La ligne d'une liste dit ce dont il s'agit ; le détail dit **sur quoi elle
+ * s'appuie**. Sans lui, une mémoire se réduit à des titres, et un titre ne se
+ * vérifie pas. Rien n'est inventé ici : ce qui manque n'apparaît pas, plutôt
+ * que d'apparaître vide.
+ *
+ * @returns {[string, string][]} des couples étiquette / valeur, dans l'ordre où
+ *   on les lit
+ */
+export function describeAssertionFacts(assertion = {}) {
+  const payload = assertion.payload ?? {};
+  const couples = [];
+  const ajouter = (label, valeur) => {
+    const propre = texte(valeur);
+    if (propre) couples.push([label, propre]);
+  };
+
+  if (assertion.kind === ITEM_TYPE.AVIS) {
+    ajouter("Référence", payload.reference || assertion.subject_key);
+    ajouter("Intitulé", payload.title);
+    ajouter("État", lisible(payload.status));
+    ajouter("État précédent", lisible(payload.previousStatus));
+    ajouter("Appréciation", payload.opinion);
+    ajouter("Appréciation précédente", payload.previousOpinion);
+    ajouter("Mouvement", payload.change === "added" ? "apparu" : payload.change === "changed" ? "modifié" : "");
+    ajouter("Extrait", typeof payload.evidence === "string" ? payload.evidence : payload.evidence?.text);
+  } else if (assertion.kind === ITEM_TYPE.ATTACHMENT) {
+    ajouter("Affaire", payload.label || assertion.subject_key);
+    ajouter("Verdict", payload.verdict);
+    ajouter("Raison", payload.reason);
+    ajouter(
+      "Marqueurs",
+      (payload.markers ?? []).map((marker) => `${texte(marker.label) || texte(marker.type)} ${texte(marker.value)}`.trim()).join(", ")
+    );
+  } else {
+    ajouter("Fichier", payload.name || assertion.subject_key);
+    ajouter("Type reconnu", payload.kindLabel);
+    ajouter("Auteur", payload.author);
+    ajouter("Émis le", payload.issuedAt);
+    ajouter("Raison de la reconnaissance", payload.reason);
+  }
+
+  return couples;
+}
