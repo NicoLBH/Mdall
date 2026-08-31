@@ -165,6 +165,65 @@ function dansColonne(item, colonne) {
 }
 
 /**
+ * Une lettre restée seule au bas d'une page.
+ *
+ * Une ligne de tableau peut se couper entre deux pages : la mise en page laisse
+ * l'évaluation en bas de la page précédente et emporte l'intitulé, l'observation
+ * et la photo sur la suivante. On lisait alors « avis non indiqué » pour une
+ * ligne qui portait bien un F — un défaut de rendu du PDF devenu une absence
+ * dans Mdall.
+ *
+ * On ne reconnaît pas ce cas à une hauteur : la lettre est centrée sur sa ligne,
+ * donc **toujours** plus bas que l'intitulé qui l'ouvre, y compris pour la
+ * dernière ligne d'une page normale. On le reconnaît à un **compte** : chaque
+ * intitulé ouvre une ligne, chaque ligne porte au plus une évaluation. On les
+ * apparie donc de haut en bas ; s'il reste une lettre sans intitulé pour elle,
+ * c'est que son intitulé est sur la page suivante.
+ *
+ * Ce compte est ce qui rend l'emprunt sûr. Deviner à la position aurait donné
+ * une lettre à chaque dernière ligne de page — et un avis inventé est pire
+ * qu'un avis absent.
+ *
+ * @returns {string} la lettre orpheline, ou `""` si la page se termine
+ *   proprement
+ */
+export function orphanLetterOf(items = [], columns = null) {
+  if (!columns?.avis || !columns?.elements) return "";
+
+  const lignes = Array.isArray(items) ? items : [];
+  const sousEntete = (item) => !columns.headerY || item.y < columns.headerY - 2;
+
+  // Un intitulé long passe à la ligne : deux fragments contigus ne comptent que
+  // pour un intitulé, sans quoi on croirait une ligne de plus et l'appariement
+  // serait faux.
+  const intitules = [];
+  let precedent = null;
+  for (const item of lignes
+    .filter((entry) => dansColonne(entry, columns.elements))
+    .filter(sousEntete)
+    .sort((gauche, droite) => droite.y - gauche.y)) {
+    if (!precedent || precedent.y - item.y > (precedent.height || 10) * 1.6) intitules.push(item);
+    precedent = item;
+  }
+
+  const lettres = lignes
+    .filter((item) => dansColonne(item, columns.avis))
+    .filter(sousEntete)
+    .filter((item) => /^[A-Z]{1,2}$/.test(String(item.text ?? "").trim()))
+    .sort((gauche, droite) => droite.y - gauche.y);
+
+  // De haut en bas : chaque intitulé prend la première lettre sous lui. Ce qui
+  // reste ensuite n'a plus d'intitulé sur cette page.
+  const restantes = [...lettres];
+  for (const intitule of intitules) {
+    const rang = restantes.findIndex((lettre) => lettre.y < intitule.y);
+    if (rang >= 0) restantes.splice(rang, 1);
+  }
+
+  return String(restantes[restantes.length - 1]?.text ?? "").trim();
+}
+
+/**
  * La ligne du tableau à laquelle appartient une image.
  *
  * Trois lectures, et la troisième est la plus importante :
@@ -178,10 +237,15 @@ function dansColonne(item, colonne) {
  *    ailleurs — sur une autre ligne, sur une autre page — fabriquerait un avis
  *    qui n'existe pas, ce qui est précisément le défaut qu'on corrige.
  *
- * @returns {{rubric: string, letter: string, number: string, observation: string}}
+ * `previous` est la page d'avant, quand la ligne y a laissé son évaluation :
+ * c'est le seul emprunt autorisé à une autre page, et il est encadré par
+ * `orphanLetterOf`.
+ *
+ * @returns {{rubric: string, letter: string, number: string, observation: string,
+ *   letterCarriedOver: boolean}}
  */
-export function describeRowOf(items = [], rect = null, columns = null) {
-  const vide = { rubric: "", letter: "", number: "", observation: "" };
+export function describeRowOf(items = [], rect = null, columns = null, { previous = null } = {}) {
+  const vide = { rubric: "", letter: "", number: "", observation: "", letterCarriedOver: false };
   if (!rect || !columns) return vide;
 
   const lignes = Array.isArray(items) ? items : [];
@@ -217,8 +281,23 @@ export function describeRowOf(items = [], rect = null, columns = null) {
       .filter((item) => item.y >= bas - 4 && item.y <= plafond)
       .sort((gauche, droite) => droite.y - gauche.y);
 
-  const lettre = aHauteur(columns.avis).map((item) => String(item.text ?? "").trim())
+  const surLaLigne = aHauteur(columns.avis).map((item) => String(item.text ?? "").trim())
     .find((texte) => /^[A-Z]$/.test(texte)) ?? "";
+
+  // La ligne n'emprunte à la page précédente que si elle ouvre la sienne :
+  // au-dessus d'elle il n'y a plus que l'en-tête. Une ligne de milieu de page
+  // sans lettre n'en a pas, et lui en donner une serait un faux.
+  const premiereDeLaPage =
+    !lignes
+      .filter((item) => dansColonne(item, columns.avis))
+      .filter((item) => !columns.headerY || item.y < columns.headerY - 2)
+      .some((item) => item.y > plafond);
+
+  const empruntee = !surLaLigne && premiereDeLaPage
+    ? orphanLetterOf(previous?.items ?? [], previous?.columns ?? null)
+    : "";
+
+  const lettre = surLaLigne || empruntee;
 
   const numero = aHauteur(columns.numero).map((item) => String(item.text ?? "").trim())
     .find((texte) => /^[0-9][0-9A-Za-z.\-/]*$/.test(texte)) ?? "";
@@ -231,6 +310,10 @@ export function describeRowOf(items = [], rect = null, columns = null) {
       .filter(Boolean)
       .join(" "),
     letter: lettre,
+    // D'où vient cette lettre : la ligne l'a-t-elle portée, ou la page d'avant
+    // l'a-t-elle gardée ? Une lecture qu'on ne peut pas situer ne se vérifie
+    // pas.
+    letterCarriedOver: Boolean(empruntee) && lettre === empruntee,
     number: numero,
     // De haut en bas, c'est-à-dire par `y` décroissant : le PDF compte ses
     // ordonnées depuis le bas de la page, et lire dans l'autre sens rendrait la

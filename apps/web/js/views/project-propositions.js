@@ -23,6 +23,7 @@ import {
   setProjectViewHeader
 } from "./project-shell-chrome.js";
 import { bindOverlayChromeCompact, renderOverlayChromeHead } from "./ui/overlay-chrome.js";
+import { bindGhActionButtons, renderGhActionButton } from "./ui/gh-split-button.js";
 import { bindLightTabs, renderLightTabs } from "./ui/light-tabs.js";
 import {
   renderMessageThread,
@@ -312,6 +313,32 @@ function propositionMetaHtml(proposition) {
 }
 
 /**
+ * Le bouton d'export, dans l'en-tête.
+ *
+ * Gris, à droite du titre : ce n'est pas une action de décision, c'est une
+ * sortie. Le vert est réservé à ce qui engage — commenter, fusionner.
+ *
+ * Deux formats parce qu'ils ne servent pas la même chose. Le **JSON** conserve
+ * la structure : c'est celui qu'on joint à un rapport de défaut, et celui qui
+ * permet de dire « voilà exactement ce que le système a retenu ». Le **CSV** se
+ * lit dans un tableur : c'est celui qu'on trie, qu'on filtre, et qu'on compare
+ * à l'export de la mémoire du projet.
+ */
+function renderExportButton() {
+  return renderGhActionButton({
+    id: "propositionExport",
+    label: "Exporter",
+    icon: svgIcon("download", { className: "octicon" }),
+    size: "sm",
+    mainActionMode: "first-item",
+    items: [
+      { action: "export:json", label: "Exporter en JSON" },
+      { action: "export:csv", label: "Exporter en CSV" }
+    ]
+  });
+}
+
+/**
  * L'en-tête d'une proposition — le même que celui d'un sujet.
  *
  * Rien n'est réinventé ici : `renderSharedDetailsTitleWrap` produit les deux
@@ -344,10 +371,15 @@ function renderReviewHead(proposition) {
   // liste, comme l'onglet « Sujets » ramène à la sienne. Un bouton de plus dans
   // l'en-tête ferait apprendre deux gestes pour un seul chemin — et c'est celui
   // qu'on connaît déjà, parce qu'il est le même dans toute l'application.
+  //
+  // L'export, lui, a sa place ici : il porte sur la proposition entière, pas
+  // sur l'onglet ouvert. Un bouton par onglet exporterait quatre morceaux de ce
+  // qui n'a de sens qu'entier.
   return renderOverlayChromeHead({
     headId: "propositionsDetailsTitle",
     titleHtml: titleWrapHtml,
-    headClassName: "review-head"
+    headClassName: "review-head",
+    actionsHtml: renderExportButton()
   });
 }
 
@@ -1900,6 +1932,54 @@ function bindReviewCompact(root) {
   window.addEventListener(PROJECT_SHELL_COMPACT_CHANGE_EVENT, compactSubscription);
 }
 
+/**
+ * L'export : ce que l'écran tient, écrit dans un fichier.
+ *
+ * Rien n'est relu ni recalculé — on écrit `view.open` et `view.review` tels
+ * qu'ils sont. C'est la seule façon qu'un export serve à vérifier l'écran :
+ * s'il repassait par la base, il pourrait dire autre chose que ce qu'on voit,
+ * et ne prouverait plus rien.
+ */
+function bindExportButton(root) {
+  bindGhActionButtons();
+
+  const action = root.querySelector('[data-action-id="propositionExport"]');
+  if (!action) return;
+
+  action.addEventListener("ghaction:action", async (event) => {
+    const quoi = String(event.detail?.action || "");
+    if (!quoi.startsWith("export:")) return;
+    if (!view.open) return;
+
+    const [{ buildPropositionExport, propositionExportCsv, propositionExportFilename }, telechargement] =
+      await Promise.all([
+        import("../services/proposition-export.js"),
+        import("../utils/download-file.js")
+      ]);
+
+    const exporte = buildPropositionExport({
+      proposition: view.open,
+      review: view.review,
+      project: store.projectForm ?? {},
+      generatedAt: new Date().toISOString()
+    });
+    if (!exporte) return;
+
+    if (quoi === "export:csv") {
+      telechargement.downloadCsvFile({
+        filename: propositionExportFilename(exporte, "csv"),
+        text: propositionExportCsv(exporte)
+      });
+      return;
+    }
+
+    telechargement.downloadJsonFile({
+      filename: propositionExportFilename(exporte, "json"),
+      data: exporte
+    });
+  });
+}
+
 /** Le retour à la liste, les cases, les raisons, et la fusion. */
 function bindReview(root) {
   // Le même mécanisme que pour un sujet : la page défile, la coque prend
@@ -1907,6 +1987,7 @@ function bindReview(root) {
   // CSS partagé échange les deux titres.
   bindReviewCompact(root);
 
+  bindExportButton(root);
 
   hydrateFigures(root);
 

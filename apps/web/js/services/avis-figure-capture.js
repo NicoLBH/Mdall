@@ -124,12 +124,21 @@ export async function captureFigures({ file, pages = [], limit = 12 } = {}) {
     for (let numero = 1; numero <= Number(pdf.numPages || 0); numero += 1) {
       if (figures.length >= limit) break;
 
+      const items = itemsParPage.get(numero) ?? [];
+      const colonnes = readTableColumns(items);
+
       const page = await pdf.getPage(numero);
       const rects = (await imageRects(page, pdfjs)).filter((rect) => isFigureRect(rect));
       if (rects.length === 0) continue;
 
-      const items = itemsParPage.get(numero) ?? [];
-      const colonnes = readTableColumns(items);
+      // La page d'avant, pour le cas où une ligne s'y est coupée : la mise en
+      // page peut y avoir laissé l'évaluation d'une ligne dont l'intitulé et la
+      // photo sont ici. Elle se lit toujours, même quand cette page-là ne
+      // portait aucune figure.
+      const precedente =
+        numero > 1
+          ? { items: itemsParPage.get(numero - 1) ?? [], columns: readTableColumns(itemsParPage.get(numero - 1) ?? []) }
+          : null;
 
       const viewport = page.getViewport({ scale: SCALE });
       const pageCanvas = canvasOf(viewport.width, viewport.height);
@@ -183,7 +192,7 @@ export async function captureFigures({ file, pages = [], limit = 12 } = {}) {
           width: utile.width,
           height: utile.height,
           inkRatio: Math.round(ratio * 1000) / 1000,
-          ...describeRowOf(items, rect, colonnes)
+          ...describeRowOf(items, rect, colonnes, { previous: precedente })
         });
       }
     }
