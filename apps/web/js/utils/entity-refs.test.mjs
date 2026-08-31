@@ -39,11 +39,18 @@ test("un dièse collé à un mot n'ouvre pas de citation", () => {
   assert.ok(resolveRefTriggerContext("voir #12", 8));
 });
 
-test("un dièse suivi d'un mot n'ouvre rien non plus", () => {
-  // « #tranche » n'est pas une référence, et ouvrir un menu dessus le ferait
-  // clignoter pour rien.
-  assert.equal(resolveRefTriggerContext("#tranche", 8), null);
-  assert.ok(resolveRefTriggerContext("#p", 2), "une lettre de famille, elle, cherche");
+test("un dièse suivi de lettres cherche par titre", () => {
+  // C'est même le cas le plus fréquent : on connaît rarement le numéro par
+  // cœur. La distinction entre « la famille P » et « un titre en p » se fait à
+  // la recherche, pas au déclencheur.
+  assert.equal(resolveRefTriggerContext("#toiture", 8)?.query, "toiture");
+  assert.ok(resolveRefTriggerContext("#p", 2));
+  assert.equal(resolveRefTriggerContext("# toiture", 9), null, "un espace referme la recherche");
+});
+
+test("des mots cherchent les titres même quand ils commencent par p", () => {
+  // « #parking » ne veut pas dire « les propositions » : c'est un titre.
+  assert.deepEqual(searchRefSuggestions(ENTRIES, "parking").map((entry) => entry.id), ["s-13"]);
 });
 
 test("la lettre P suffit à ne plus vouloir que des propositions", () => {

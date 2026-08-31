@@ -468,6 +468,8 @@ const projectSubjectsEvents = createProjectSubjectsEvents({
   listCollaboratorsForMentions: (...args) => subjectMessagesService.listCollaboratorsForMentions(...args),
   getOrCreateMdallPerson: (...args) => subjectMessagesService.getOrCreateMdallPerson(...args),
   ensureProjectCollaboratorsLoaded: (...args) => ensureSubjectsCollaboratorsLoaded(...args),
+  /** Les propositions citables : le menu `#` connaît les deux familles. */
+  getPropositionRefs: () => propositionRefs.entries,
   uploadAttachmentFile: (...args) => subjectMessagesService.uploadAttachmentFile(...args),
   removeTemporaryAttachment: (...args) => subjectMessagesService.removeTemporaryAttachment(...args),
   getNestedSujet: (...args) => getNestedSujet(...args),

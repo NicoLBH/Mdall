@@ -80,10 +80,11 @@ export function resolveRefTriggerContext(text = "", cursorIndex = 0) {
   const token = before.slice(triggerStart + 1);
   if (/[\s\r\n\t]/.test(token)) return null;
   if (token.includes("#")) return null;
-  // Ce qui suit le dièse doit pouvoir devenir une référence. « #tranche » n'en
-  // est pas une, et ouvrir un menu dessus le ferait clignoter pour rien.
-  if (token && !/^p?\d*$/i.test(token)) return null;
 
+  // Les lettres sont acceptées : on cherche aussi par titre, et c'est même le
+  // cas le plus fréquent quand on ne connaît pas le numéro par cœur. La
+  // distinction entre « la famille P » et « un titre qui commence par p » se
+  // fait à la recherche, pas ici.
   return { triggerStart, triggerEnd: caret, query: token };
 }
 
