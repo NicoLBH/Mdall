@@ -105,7 +105,7 @@ test("la phrase du blocage accorde son nombre", () => {
   assert.match(describeBlocking(deux), /^2 contradictions/);
 });
 
-test("les deux réponses nomment ce qu'on garde et ce qu'on prend, en français", () => {
+test("les deux côtés disent ce qu'ils affirment, en français", () => {
   const [conflit] = findMemoryConflicts(
     [avisItem("234", { status: "OPEN", opinion: "S" })],
     [decision("234", ITEM.ACCEPTED, { status: "RESOLVED", opinion: "F" })]
@@ -113,11 +113,58 @@ test("les deux réponses nomment ce qu'on garde et ce qu'on prend, en français"
   const dit = describeConflict(conflit);
 
   assert.equal(dit.title, "Avis n° 234");
-  assert.equal(dit.memory, "Vous aviez retenu : Levé · avis F");
-  assert.equal(dit.now, "L'analyse dit maintenant : Ouvert · avis S");
-  assert.doesNotMatch(`${dit.memory} ${dit.now}`, /OPEN|RESOLVED/);
-  assert.equal(dit.keep, "Je garde ce qui était retenu");
-  assert.equal(dit.take, "J'assume le changement");
+  assert.equal(dit.before.heading, "Ce que le projet retient");
+  assert.equal(dit.before.statement, "Levé · avis F");
+  assert.equal(dit.after.heading, "Ce que ce lot affirme");
+  assert.equal(dit.after.statement, "Ouvert · avis S");
+  assert.doesNotMatch(`${dit.before.statement} ${dit.after.statement}`, /OPEN|RESOLVED/);
+});
+
+test("chaque côté porte son extrait et sa provenance", () => {
+  // Sans la phrase du rapport d'où sort l'affirmation, on demandait d'arbitrer
+  // entre deux étiquettes sans montrer sur quoi elles reposent.
+  const [conflit] = findMemoryConflicts(
+    [
+      avisItem("234", {
+        status: "OPEN",
+        opinion: "S",
+        evidence: "Merci de confirmer que les cheminements font bien 1,40 m",
+        sourceId: "doc-neuf",
+        page: 11
+      })
+    ],
+    [
+      decision("234", ITEM.ACCEPTED, {
+        status: "RESOLVED",
+        opinion: "F",
+        evidence: { text: "Cheminements conformes", page: 7, sourceId: "doc-ancien" }
+      })
+    ]
+  );
+
+  const dit = describeConflict(conflit);
+
+  assert.equal(dit.after.excerpt, "Merci de confirmer que les cheminements font bien 1,40 m");
+  assert.equal(dit.after.documentId, "doc-neuf");
+  assert.equal(dit.after.page, 11);
+
+  assert.equal(dit.before.excerpt, "Cheminements conformes", "l'extrait se lit sous ses deux formes");
+  assert.equal(dit.before.page, 7);
+  assert.equal(dit.before.documentId, "doc-ancien");
+});
+
+test("un extrait absent vaut `null`, jamais une chaîne vide", () => {
+  // L'écran doit pouvoir dire « aucun extrait conservé » : un blanc se lirait
+  // comme l'absence de preuve.
+  const [conflit] = findMemoryConflicts(
+    [avisItem("234", { status: "OPEN", opinion: "S" })],
+    [decision("234", ITEM.ACCEPTED, { status: "RESOLVED", opinion: "F" })]
+  );
+  const dit = describeConflict(conflit);
+
+  assert.equal(dit.before.excerpt, null);
+  assert.equal(dit.after.excerpt, null);
+  assert.equal(dit.after.page, null);
 });
 
 test("un refus d'affaire réaffirmé se dit avec le motif d'alors", () => {
@@ -144,8 +191,8 @@ test("un refus d'affaire réaffirmé se dit avec le motif d'alors", () => {
 
   assert.equal(conflits.length, 1);
   const dit = describeConflict(conflits[0]);
-  assert.match(dit.memory, /c'est l'affaire du voisin/);
-  assert.equal(dit.keep, "Je maintiens : ce n'est pas ce projet");
+  assert.match(dit.before.statement, /c'est l'affaire du voisin/);
+  assert.equal(dit.before.heading, "Ce que vous aviez écarté");
 });
 
 /* ── Un silence ne contredit rien ─────────────────────────────────────────
