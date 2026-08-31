@@ -75,7 +75,20 @@ test("la phrase est écrite au moment où l'on tranche", () => {
 
   assert.equal(premiere.statement, "Avis A12 — Étanchéité");
   assert.match(premiere.detail, /levé/);
-  assert.match(premiere.detail, /OPEN → RESOLVED/);
+  // L'état se dit en français : « état : REPORTED » ne veut rien dire pour
+  // personne, et depuis qu'un rapport en dépose soixante-huit, on ne lisait
+  // plus que le vocabulaire du moteur.
+  assert.match(premiere.detail, /Ouvert → Levé/);
+  assert.doesNotMatch(premiere.detail, /OPEN|RESOLVED/);
+});
+
+test("un état constaté se dit « Constaté »", () => {
+  const [ligne] = assertionsFromProposition({
+    proposition: PROPOSITION,
+    items: [{ itemType: "avis", itemKey: "4.1.1", status: ITEM.ACCEPTED, payload: { status: "REPORTED", opinion: "F" } }]
+  });
+
+  assert.equal(ligne.detail, "F · état : Constaté");
 });
 
 test("sans projet, rien n'est versé", () => {

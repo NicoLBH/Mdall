@@ -31,7 +31,10 @@
 
 import { ITEM } from "./proposition-state.js";
 import { DECLARED_KIND, NATURE, classifyAssertion, domainLabel, normalizeDomain } from "./assertion-taxonomy.js";
-import { ITEM_TYPE } from "./proposition-review.js";
+// `STATUS_LABELS` était recopié ici, et la copie a divergé : « Constaté » y
+// manquait, si bien que la mémoire écrivait « état : REPORTED ». Une seconde
+// copie finit toujours par diverger — on lit celle du module qui la définit.
+import { ITEM_TYPE, STATUS_LABELS } from "./proposition-review.js";
 
 /** Ce que le projet fait d'une affirmation. */
 export const MEMORY = {
@@ -88,6 +91,11 @@ function statementOf(item = {}) {
   return `Document au corpus : ${texte(payload.name) || texte(item.itemKey)}`;
 }
 
+function lisible(value) {
+  const brut = texte(value);
+  return STATUS_LABELS[brut] ?? brut;
+}
+
 /** La précision qui accompagne la phrase : appréciation, verdict, ou raison du refus. */
 function detailOf(item = {}, status = MEMORY.ASSUMED) {
   const payload = item.payload ?? {};
@@ -95,11 +103,15 @@ function detailOf(item = {}, status = MEMORY.ASSUMED) {
   if (status === MEMORY.REJECTED && texte(item.reason)) return texte(item.reason);
 
   if (item.itemType === ITEM_TYPE.AVIS) {
+    // L'état se dit en français, jamais dans le vocabulaire du moteur : la
+    // mémoire écrivait « état : REPORTED », ce qui ne veut rien dire pour
+    // personne — et depuis qu'un rapport en dépose soixante-huit, on ne lisait
+    // plus que cela.
     const morceaux = [texte(payload.opinion)].filter(Boolean);
     if (texte(payload.previousStatus) && texte(payload.previousStatus) !== texte(payload.status)) {
-      morceaux.push(`état : ${texte(payload.previousStatus)} → ${texte(payload.status)}`);
+      morceaux.push(`état : ${lisible(payload.previousStatus)} → ${lisible(payload.status)}`);
     } else if (texte(payload.status)) {
-      morceaux.push(`état : ${texte(payload.status)}`);
+      morceaux.push(`état : ${lisible(payload.status)}`);
     }
     return morceaux.join(" · ");
   }
@@ -426,16 +438,6 @@ export function assertionHistory(assertions = [], { kind = "", subjectKey = "" }
     });
 }
 
-const STATUS_LABELS = {
-  OPEN: "Ouvert",
-  RESOLVED: "Levé",
-  NO_NEWS: "Sans nouvelles"
-};
-
-function lisible(value) {
-  const brut = texte(value);
-  return STATUS_LABELS[brut] ?? brut;
-}
 
 /**
  * Ce qu'une affirmation porte, en clair.

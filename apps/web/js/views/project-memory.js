@@ -38,6 +38,15 @@ import {
 } from "../services/project-memory.js";
 import { normalizePaginationState, paginateItems, renderPaginationControls } from "./ui/pagination.js";
 import {
+  READER,
+  describeEmptyReader,
+  groupByDomain,
+  readerLabel,
+  readerLead,
+  readerRows,
+  summarizeReader
+} from "../services/memory-readers.js";
+import {
   DOMAINS,
   NATURE,
   NATURES,
@@ -87,6 +96,8 @@ const view = {
   contestDraft: { value: "", note: "" },
   /** Vrai quand on ne montre que ce qui attend une revérification. */
   pending: false,
+  /** La lecture ouverte : tout, hypothèses, contraintes, constats en cours. */
+  reader: READER.ALL,
   /** Le formulaire d'hypothèse, quand il est ouvert. */
   declaring: false,
   draft: { subject: "", value: "", domain: "" },
@@ -110,12 +121,14 @@ export function __setMemoryStateForPreview({
   assertions = null,
   dependencies = null,
   acts = null,
-  declaring = false
+  declaring = false,
+  reader = READER.ALL
 } = {}) {
   view.assertions = assertions;
   view.dependencies = dependencies;
   view.acts = acts;
   view.declaring = declaring;
+  view.reader = reader;
 }
 
 let mountedRoot = null;
@@ -390,12 +403,16 @@ function renderTaxonomy(assertion) {
  * une page d'essai qui recopierait son HTML finirait par mentir sur ce qu'elle
  * montre.
  */
-export function renderMemoryList(lignes, page = 1) {
+export function renderMemoryList(lignes, page = 1, { grouped = false, reader = READER.ALL } = {}) {
   if (lignes.length === 0) {
     return `
       <div class="propositions-empty">
-        <b>Rien ne correspond</b>
-        <p>Aucune affirmation ne répond à cette recherche. Ce qui a été remplacé est masqué par défaut.</p>
+        <b>${escapeHtml(grouped ? readerLabel(reader) : "Rien ne correspond")}</b>
+        <p>${escapeHtml(
+          grouped
+            ? describeEmptyReader(reader)
+            : "Aucune affirmation ne répond à cette recherche. Ce qui a été remplacé est masqué par défaut."
+        )}</p>
       </div>
     `;
   }
@@ -404,15 +421,37 @@ export function renderMemoryList(lignes, page = 1) {
   // d'un coup ne se lisent pas — et le navigateur les peine.
   const pagination = paginateItems(lignes, { pageSize: PAGE_SIZE, currentPage: page });
 
+  // **Le regroupement se fait sur la page affichée, pas sur toute la liste** :
+  // grouper d'abord et paginer ensuite couperait un domaine au milieu sans
+  // qu'on sache qu'il continue.
+  const corps = grouped
+    ? groupByDomain(pagination.items)
+        .map(
+          (groupe) => `
+            <section class="memory-group">
+              <h3 class="memory-group__title">
+                ${escapeHtml(groupe.label)}
+                <span class="memory-group__count">${groupe.rows.length}</span>
+              </h3>
+              <ul class="memory-list">${groupe.rows.map(renderAssertion).join("")}</ul>
+            </section>
+          `
+        )
+        .join("")
+    : `<ul class="memory-list">${pagination.items.map(renderAssertion).join("")}</ul>`;
+
   return `
     <div class="memory-results">
-      <ul class="memory-list">${pagination.items.map(renderAssertion).join("")}</ul>
+      ${corps}
       ${renderPaginationControls(pagination, { entity: "memory" })}
     </div>
   `;
 }
 
-const renderList = renderMemoryList;
+/** La liste telle que cet écran la veut : groupée dès qu'on lit par lecture. */
+function renderList(lignes, page = 1) {
+  return renderMemoryList(lignes, page, { grouped: view.reader !== READER.ALL, reader: view.reader });
+}
 
 /**
  * Le détail d'une affirmation : son histoire, et ce sur quoi elle s'appuie.
@@ -516,6 +555,41 @@ export function renderMemoryDetail(assertions, cible = {}) {
 }
 
 /**
+ * Les trois lectures, et la liste entière.
+ *
+ * Ce ne sont **pas** trois écrans : ce sont trois filtres sur la même table.
+ * Un utilitaire qui rassemblerait « toutes les hypothèses » en tenant ses
+ * propres données donnerait deux mémoires, et personne ne saurait laquelle fait
+ * foi le jour où elles divergent.
+ *
+ * Chaque lecture porte le compte de ce qu'elle montre : passer d'un onglet à
+ * l'autre sans savoir combien on va trouver oblige à cliquer pour l'apprendre.
+ */
+function renderReaderTabs() {
+  const onglet = (lecture) => {
+    const combien = readerRows(view.assertions ?? [], lecture).length;
+    const actif = view.reader === lecture;
+
+    return `
+      <button type="button" class="memory-readers__tab${actif ? " is-active" : ""}"
+        data-memory-reader="${escapeHtml(lecture)}" ${actif ? 'aria-current="page"' : ""}>
+        ${escapeHtml(readerLabel(lecture))}
+        <span class="memory-readers__count">${combien}</span>
+      </button>
+    `;
+  };
+
+  return `
+    <div class="memory-readers">
+      <div class="memory-readers__tabs">
+        ${[READER.ALL, READER.HYPOTHESES, READER.CONSTRAINTS, READER.FINDINGS].map(onglet).join("")}
+      </div>
+      <p class="memory-readers__lead">${escapeHtml(readerLead(view.reader))}</p>
+    </div>
+  `;
+}
+
+/**
  * Le formulaire d'une hypothèse.
  *
  * **Le sujet et la valeur sont deux champs, et c'est le point.** Une hypothèse
@@ -526,7 +600,7 @@ export function renderMemoryDetail(assertions, cible = {}) {
  * Le domaine est facultatif et par défaut vide : on ne devine pas, ici non plus.
  */
 export function renderMemoryFormForPreview() {
-  return renderHypothesisForm();
+  return renderReaderTabs();
 }
 
 function renderHypothesisForm() {
@@ -1034,8 +1108,10 @@ async function declareDependsOn(root, bouton) {
  * endroits qui filtrent finissent toujours par filtrer différemment.
  */
 function lignesVisibles() {
+  // La lecture choisie s'applique d'abord : c'est elle qui décide de quoi on
+  // parle, les autres filtres ne font que restreindre à l'intérieur.
   const filtrees = filterByTaxonomy(
-    searchAssertions(view.assertions ?? [], {
+    searchAssertions(readerRows(view.assertions ?? [], view.reader), {
       query: view.query,
       kind: view.kind,
       status: view.status,
@@ -1100,6 +1176,8 @@ function renderContent(root) {
     <section class="project-simple-page project-simple-page--memory">
       <div class="propositions-shell">
         ${renderMemoryHead(resume, { busy: view.busy })}
+
+        ${renderReaderTabs()}
 
         ${renderHypothesisForm()}
 
@@ -1264,6 +1342,18 @@ function bind(root) {
       note: view.contestDraft.note
     });
   });
+
+  for (const bouton of root.querySelectorAll("[data-memory-reader]")) {
+    bouton.addEventListener("click", () => {
+      view.reader = bouton.getAttribute("data-memory-reader") || READER.ALL;
+      view.page = 1;
+      // Changer de lecture ne garde pas les filtres de la précédente : on ne
+      // cherche pas la même chose, et un filtre invisible ferait croire à une
+      // liste vide.
+      view.pending = false;
+      renderContent(root);
+    });
+  }
 
   root.querySelector("[data-memory-declare]")?.addEventListener("click", () => {
     view.declaring = !view.declaring;
