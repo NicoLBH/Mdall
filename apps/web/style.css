@@ -16444,6 +16444,20 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .memory-tag--domain{ color:var(--text); }
 .memory-tag--unknown{ border-style:dashed; }
 
+/* Déclarer une hypothèse : le sujet et la valeur sont deux champs, parce que le
+   sujet reste et que la valeur bouge. */
+.memory-declare{
+  padding:14px 16px;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  background:var(--panel2);
+}
+.memory-declare__lead{ margin:0 0 12px; max-width:80ch; color:var(--muted); font-size:13px; }
+.memory-declare__row{ display:flex; gap:12px; flex-wrap:wrap; }
+.memory-declare__field{ display:flex; flex-direction:column; gap:4px; flex:1 1 200px; min-width:0; }
+.memory-declare__field span{ color:var(--muted); font-size:12px; }
+.memory-declare__actions{ display:flex; gap:8px; justify-content:flex-end; margin-top:12px; }
+
 /* ── L'hypothèse et ce qu'elle entraîne ──────────────────────────────────────
    Le bandeau d'une affirmation devenue suspecte. Il porte le geste qui la lève :
    constater un problème sans pouvoir y répondre n'aide personne. */
@@ -16882,6 +16896,20 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   padding:16px;
   background:var(--bg);
 }
-.review-pdf__canvas{ display:flex; justify-content:center; min-height:100%; }
-/* Le canevas d'une page garde ses proportions dans la largeur qu'on lui laisse. */
-.review-pdf__canvas .documents-pdf-viewer__page{ max-width:100%; }
+/* Les pages se suivent, comme dans un lecteur : c'est ainsi qu'on parcourt un
+   rapport — on revient en arrière, on compare deux pages. Feuilleter bouton par
+   bouton n'est pas lire. */
+.review-pdf__canvas{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:16px;
+  min-height:100%;
+}
+.review-pdf__canvas .documents-pdf-viewer__page{
+  max-width:100%;
+  /* Le cadre porte sa taille avant d'être peint : un fond clair évite le trou
+     noir sur les pages qui n'ont pas encore approché de l'écran. */
+  background:#ffffff;
+  box-shadow:0 1px 3px rgba(1,4,9,.6);
+}

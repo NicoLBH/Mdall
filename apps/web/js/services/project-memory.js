@@ -30,7 +30,7 @@
  */
 
 import { ITEM } from "./proposition-state.js";
-import { classifyAssertion } from "./assertion-taxonomy.js";
+import { DECLARED_KIND, NATURE, classifyAssertion, normalizeDomain } from "./assertion-taxonomy.js";
 import { ITEM_TYPE } from "./proposition-review.js";
 
 /** Ce que le projet fait d'une affirmation. */
@@ -47,7 +47,8 @@ export const MEMORY_KIND = ITEM_TYPE;
 const KIND_LABELS = {
   [ITEM_TYPE.AVIS]: "Avis",
   [ITEM_TYPE.ATTACHMENT]: "Rattachement",
-  [ITEM_TYPE.DOCUMENT]: "Document"
+  [ITEM_TYPE.DOCUMENT]: "Document",
+  [DECLARED_KIND]: "Hypothèse"
 };
 
 /** Le nom d'une nature, en français. */
@@ -161,6 +162,84 @@ export function assertionsFromProposition({ proposition = {}, items = [], decide
         ? gauche.subject_key.localeCompare(droite.subject_key, "fr", { numeric: true })
         : gauche.kind.localeCompare(droite.kind)
     );
+}
+
+/**
+ * Une hypothèse posée par quelqu'un, prête à être versée.
+ *
+ * **Pourquoi ce chemin existe.** Les autres affirmations sont dérivées : un
+ * avis vient du moteur, un document de la reconnaissance. Une hypothèse, non —
+ * elle est dans la note de calcul, dans un mail, dans la tête de l'ingénieur.
+ * Tant qu'une extraction ne la propose pas, elle n'entre que si quelqu'un
+ * l'écrit. Refuser ce geste au nom de « les affirmations ne s'écrivent pas à la
+ * main » reviendrait à n'avoir jamais aucune hypothèse, donc jamais rien à
+ * revérifier : la règle protège ce qui se **dérive**, elle n'a jamais voulu
+ * dire qu'un projet ne peut pas énoncer ses propres hypothèses.
+ *
+ * **La clé métier est le sujet, pas la valeur.** « zone de neige » et non
+ * « zone de neige A2 » : c'est ce qui fait qu'une nouvelle valeur **remplace**
+ * l'ancienne au lieu de coexister avec elle, et c'est tout le mécanisme de
+ * l'étape E. Une clé qui porterait la valeur donnerait deux hypothèses vraies
+ * en même temps.
+ *
+ * @returns {{ok: true, row: object}|{ok: false, reason: string}}
+ */
+export function declaredHypothesis({
+  projectId = "",
+  subject = "",
+  value = "",
+  domain = null,
+  declaredBy = null,
+  at = ""
+} = {}) {
+  const projet = texte(projectId);
+  const sujet = texte(subject);
+  const valeur = texte(value);
+
+  if (!projet) return { ok: false, reason: "Aucun projet." };
+  if (!sujet) return { ok: false, reason: "Une hypothèse a besoin d'un sujet : « zone de neige », « portance du sol »." };
+  if (!valeur) return { ok: false, reason: "Une hypothèse a besoin d'une valeur : c'est ce qui la rend vérifiable." };
+
+  const quand = texte(at) || new Date().toISOString();
+
+  return {
+    ok: true,
+    row: {
+      project_id: projet,
+      kind: DECLARED_KIND,
+      // La clé est le sujet seul : la valeur change, le sujet reste, et c'est
+      // ainsi qu'une valeur nouvelle périme la précédente.
+      subject_key: normalizeSubjectKey(sujet),
+      statement: `${sujet} : ${valeur}`,
+      detail: null,
+      status: MEMORY.ASSUMED,
+      nature: NATURE.HYPOTHESE,
+      domain: normalizeDomain(domain),
+      payload: { subject: sujet, value: valeur, declared: true },
+      // Aucune proposition : c'est un geste humain, et l'écran le dira.
+      proposition_id: null,
+      proposition_number: null,
+      source_document_id: null,
+      decided_by: declaredBy ?? null,
+      decided_at: quand
+    }
+  };
+}
+
+/**
+ * La clé d'un sujet d'hypothèse.
+ *
+ * Sans accent ni casse : « Zone de neige » et « zone de neige » désignent la
+ * même chose, et deux clés pour un même sujet donneraient deux hypothèses en
+ * vigueur — exactement ce que « une seule valeur à la fois » interdit.
+ */
+export function normalizeSubjectKey(subject) {
+  return texte(subject)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
 }
 
 /**

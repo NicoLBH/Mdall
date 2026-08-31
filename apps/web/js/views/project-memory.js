@@ -73,6 +73,9 @@ const view = {
   dependencies: null,
   /** Vrai quand on ne montre que ce qui attend une revérification. */
   pending: false,
+  /** Le formulaire d'hypothèse, quand il est ouvert. */
+  declaring: false,
+  draft: { subject: "", value: "", domain: "" },
   includeSuperseded: false,
   notice: "",
   busy: false,
@@ -89,9 +92,10 @@ const view = {
  * qui recopierait son HTML finirait par diverger ; celle-ci monte le vrai
  * rendu, avec un état qu'on lui donne.
  */
-export function __setMemoryStateForPreview({ assertions = null, dependencies = null } = {}) {
+export function __setMemoryStateForPreview({ assertions = null, dependencies = null, declaring = false } = {}) {
   view.assertions = assertions;
   view.dependencies = dependencies;
+  view.declaring = declaring;
 }
 
 let mountedRoot = null;
@@ -115,7 +119,8 @@ const PAGE_SIZE = 25;
 const KIND_ICON = {
   avis: "checklist",
   attachment: "cross-reference",
-  document: "file"
+  document: "file",
+  hypothesis: "pin"
 };
 
 function kindIcon(kind) {
@@ -456,6 +461,59 @@ export function renderMemoryDetail(assertions, cible = {}) {
 }
 
 /**
+ * Le formulaire d'une hypothèse.
+ *
+ * **Le sujet et la valeur sont deux champs, et c'est le point.** Une hypothèse
+ * s'identifie par son sujet — « zone de neige » — et porte une valeur — « A2 ».
+ * Les mêler dans un seul champ donnerait deux hypothèses en vigueur le jour où
+ * la valeur change, alors qu'il n'y en a qu'une, qui a changé.
+ *
+ * Le domaine est facultatif et par défaut vide : on ne devine pas, ici non plus.
+ */
+export function renderMemoryFormForPreview() {
+  return renderHypothesisForm();
+}
+
+function renderHypothesisForm() {
+  if (!view.declaring) return "";
+
+  const option = (valeur, label) =>
+    `<option value="${escapeHtml(valeur)}"${valeur === view.draft.domain ? " selected" : ""}>${escapeHtml(label)}</option>`;
+
+  return `
+    <form class="memory-declare" data-memory-declare-form>
+      <p class="memory-declare__lead">
+        Une hypothèse est ce sur quoi le projet bâtit : elle n'a qu'une valeur à la fois, et changer
+        cette valeur rend suspect ce qui en découle. Le sujet reste, la valeur bouge.
+      </p>
+      <div class="memory-declare__row">
+        <label class="memory-declare__field">
+          <span>Sujet</span>
+          <input class="gh-input" data-memory-draft="subject" value="${escapeHtml(view.draft.subject)}"
+            placeholder="zone de neige" autocomplete="off">
+        </label>
+        <label class="memory-declare__field">
+          <span>Valeur</span>
+          <input class="gh-input" data-memory-draft="value" value="${escapeHtml(view.draft.value)}"
+            placeholder="A2" autocomplete="off">
+        </label>
+        <label class="memory-declare__field">
+          <span>Domaine</span>
+          <select class="gh-input" data-memory-draft="domain">
+            ${option("", "Non classé")}
+            ${DOMAINS.map((domaine) => option(domaine, domainLabel(domaine))).join("")}
+          </select>
+        </label>
+      </div>
+      <div class="memory-declare__actions">
+        <button type="button" class="gh-btn" data-memory-declare-cancel>Annuler</button>
+        <button type="submit" class="gh-btn gh-btn--primary" ${view.busy ? "disabled" : ""}>Déclarer</button>
+      </div>
+    </form>
+  `;
+}
+
+/**
  * L'en-tête de l'écran.
  *
  * Il reprend celui d'un utilitaire de l'Atelier — « Suivi des avis du Bureau de
@@ -477,6 +535,9 @@ export function renderMemoryHead(resume, { busy = false } = {}) {
           <button type="button" class="gh-btn" data-memory-export ${
             resume.total === 0 || busy ? "disabled" : ""
           }>${svgIcon("copy", { className: "octicon" })} Copier le dossier de contexte</button>
+          <button type="button" class="gh-btn gh-btn--primary" data-memory-declare ${busy ? "disabled" : ""}>
+            ${svgIcon("plus", { className: "octicon" })} Déclarer une hypothèse
+          </button>
           <button type="button" class="gh-btn" data-memory-backfill ${busy ? "disabled" : ""}>
             ${svgIcon("history", { className: "octicon" })} Verser les propositions fusionnées
           </button>
@@ -484,8 +545,9 @@ export function renderMemoryHead(resume, { busy = false } = {}) {
       </span>
       <p class="memory-head__lead">
         Ce que le projet tient pour vrai, avec la date à laquelle il l'a tranché et la proposition
-        qui l'a versé. Les affirmations entrent par la fusion d'une proposition — elles ne s'écrivent
-        pas à la main.
+        qui l'a versé. Ce qui se dérive d'un document — avis, rattachements, entrées au corpus —
+        entre par la fusion d'une proposition. Une hypothèse, personne ne l'extrait encore : elle se
+        déclare, et elle est datée et signée comme le reste.
       </p>
     </header>
   `;
@@ -555,6 +617,63 @@ function bindExportButton(root) {
       data: exporte
     });
   });
+}
+
+/**
+ * Verse une hypothèse déclarée à la main.
+ *
+ * Le refus est nommé, jamais silencieux : un formulaire qui ne fait rien sans
+ * dire pourquoi apprend à ne plus s'en servir.
+ */
+async function declareHypothesis(root) {
+  if (view.busy) return;
+
+  const [{ declaredHypothesis }, { rememberHypothesis }] = await Promise.all([
+    import("../services/project-memory.js"),
+    import("../services/project-memory-supabase.js")
+  ]);
+
+  const plan = declaredHypothesis({
+    projectId: view.projectId,
+    subject: view.draft.subject,
+    value: view.draft.value,
+    domain: view.draft.domain,
+    declaredBy: store.user?.id ?? null
+  });
+
+  if (!plan.ok) {
+    view.notice = plan.reason;
+    renderContent(root);
+    return;
+  }
+
+  view.busy = true;
+  view.notice = "";
+  renderContent(root);
+
+  const resultat = await rememberHypothesis(plan.row);
+  view.busy = false;
+
+  if (!resultat) {
+    view.notice = "L'hypothèse n'a pas pu être versée. Rien n'a changé dans la mémoire.";
+    renderContent(root);
+    return;
+  }
+
+  // On relit : le versement a pu périmer une valeur précédente et lever des
+  // drapeaux ailleurs. Recopier la seule ligne écrite montrerait une mémoire
+  // qui n'est plus celle de la base.
+  const memoire = await import("../services/project-memory-supabase.js");
+  view.assertions = await memoire.listProjectAssertions(view.projectId);
+
+  view.declaring = false;
+  view.draft = { subject: "", value: "", domain: "" };
+  view.notice = resultat.flagged
+    ? `Hypothèse versée. ${resultat.flagged} affirmation(s) qui en dépendent sont à revérifier.`
+    : resultat.superseded
+      ? "Hypothèse versée. Elle remplace la valeur précédente du même sujet."
+      : "Hypothèse versée.";
+  renderContent(root);
 }
 
 /**
@@ -780,6 +899,8 @@ function renderContent(root) {
       <div class="propositions-shell">
         ${renderMemoryHead(resume, { busy: view.busy })}
 
+        ${renderHypothesisForm()}
+
         ${view.notice ? `<div class="propositions-empty propositions-empty--warn"><p>${escapeHtml(view.notice)}</p></div>` : ""}
 
         ${renderCounts(resume, vocabulaire, enAttente)}
@@ -869,6 +990,34 @@ function bind(root) {
   for (const bouton of root.querySelectorAll("[data-memory-depends]")) {
     bouton.addEventListener("click", () => declareDependsOn(root, bouton));
   }
+
+  root.querySelector("[data-memory-declare]")?.addEventListener("click", () => {
+    view.declaring = !view.declaring;
+    view.notice = "";
+    renderContent(root);
+  });
+
+  root.querySelector("[data-memory-declare-cancel]")?.addEventListener("click", () => {
+    view.declaring = false;
+    view.draft = { subject: "", value: "", domain: "" };
+    renderContent(root);
+  });
+
+  // Le brouillon se garde à la frappe : un rendu de l'écran ne doit pas effacer
+  // ce qu'on est en train d'écrire.
+  for (const champ of root.querySelectorAll("[data-memory-draft]")) {
+    champ.addEventListener("input", (event) => {
+      view.draft = { ...view.draft, [champ.getAttribute("data-memory-draft")]: event.target.value };
+    });
+    champ.addEventListener("change", (event) => {
+      view.draft = { ...view.draft, [champ.getAttribute("data-memory-draft")]: event.target.value };
+    });
+  }
+
+  root.querySelector("[data-memory-declare-form]")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    declareHypothesis(root);
+  });
 
   root.querySelector("[data-memory-export]")?.addEventListener("click", () => copyContext(root));
   root.querySelector("[data-memory-backfill]")?.addEventListener("click", () => backfill(root));

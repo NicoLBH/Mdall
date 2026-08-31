@@ -86,6 +86,23 @@ const DOMAIN_LABELS = {
   [DOMAIN.ENVIRONNEMENT]: "Environnement"
 };
 
+/**
+ * La provenance d'une hypothèse déclarée par quelqu'un.
+ *
+ * Les autres provenances sont dérivées : un avis vient du moteur, un document
+ * de la reconnaissance, un rattachement de l'identité. **Une hypothèse, non.**
+ * Personne ne l'extrait aujourd'hui — elle est dans la note de calcul, dans la
+ * tête de l'ingénieur, dans un mail — et tant qu'une extraction ne la propose
+ * pas, elle n'entre que si quelqu'un l'écrit.
+ *
+ * Ce n'est pas une seconde mémoire : c'est la même table, avec une provenance
+ * qui dit « un humain l'a posée », datée et signée comme le reste. La règle
+ * « l'Atelier propose, la Mémoire enregistre » vise ce qui se **dérive** : elle
+ * n'a jamais voulu dire qu'un projet ne peut pas énoncer ses propres
+ * hypothèses.
+ */
+export const DECLARED_KIND = "hypothesis";
+
 /** Ce qu'on écrit quand on ne sait pas. Une seule formulation, partout. */
 export const UNCLASSIFIED_LABEL = "Non classé";
 
@@ -148,6 +165,7 @@ export function domainLabel(domain) {
  */
 export function natureFromKind(kind) {
   const brut = texte(kind);
+  if (brut === DECLARED_KIND) return NATURE.HYPOTHESE;
   if (brut === ITEM_TYPE.AVIS) return NATURE.CONSTAT;
   if (brut === ITEM_TYPE.DOCUMENT || brut === ITEM_TYPE.ATTACHMENT) return NATURE.INTENDANCE;
   return null;

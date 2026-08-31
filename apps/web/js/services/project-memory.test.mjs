@@ -7,9 +7,10 @@ import {
   MEMORY,
   assertionHistory,
   assertionsFromProposition,
-  describeAssertionFacts,
   buildContextExport,
   currentAssertions,
+  declaredHypothesis,
+  describeAssertionFacts,
   planSupersessions,
   searchAssertions,
   summarizeMemory
@@ -287,4 +288,54 @@ test("un domaine porté par la revue est versé tel quel", () => {
 
   assert.equal(lignes[0].domain, "structure");
   assert.equal(lignes[0].nature, "hypothese", "ce qui est su prime sur ce qui se déduit");
+});
+
+/* ── Une hypothèse posée à la main ───────────────────────────────────────── */
+
+test("une hypothèse déclarée porte son sujet comme clé, pas sa valeur", () => {
+  // C'est ce qui fait qu'une nouvelle valeur remplace l'ancienne au lieu de
+  // coexister avec elle. Une clé qui porterait la valeur donnerait deux
+  // hypothèses vraies en même temps.
+  const plan = declaredHypothesis({ projectId: "p", subject: "Zone de neige", value: "A2" });
+
+  assert.equal(plan.ok, true);
+  assert.equal(plan.row.subject_key, "zone-de-neige");
+  assert.equal(plan.row.statement, "Zone de neige : A2");
+});
+
+test("deux graphies d'un même sujet donnent la même clé", () => {
+  // Deux clés pour un même sujet donneraient deux hypothèses en vigueur, ce que
+  // « une seule valeur à la fois » interdit.
+  const premiere = declaredHypothesis({ projectId: "p", subject: "Zone de neige", value: "A2" });
+  const seconde = declaredHypothesis({ projectId: "p", subject: "zone de NEIGE", value: "E" });
+
+  assert.equal(premiere.row.subject_key, seconde.row.subject_key);
+});
+
+test("une hypothèse déclarée est de nature hypothèse, sans qu'on ait à le dire", () => {
+  const plan = declaredHypothesis({ projectId: "p", subject: "Portance du sol", value: "0,2 MPa" });
+
+  assert.equal(plan.row.nature, "hypothese");
+  assert.equal(plan.row.kind, "hypothesis");
+  assert.equal(plan.row.proposition_id, null, "un geste humain, pas une proposition");
+});
+
+test("un sujet ou une valeur manquants sont refusés, et le refus est nommé", () => {
+  assert.equal(declaredHypothesis({ projectId: "p", value: "A2" }).ok, false);
+  assert.match(declaredHypothesis({ projectId: "p", value: "A2" }).reason, /sujet/);
+  assert.match(declaredHypothesis({ projectId: "p", subject: "Zone" }).reason, /valeur/);
+  assert.equal(declaredHypothesis({ subject: "Zone", value: "A2" }).ok, false);
+});
+
+test("le domaine reste nul quand il n'est pas choisi", () => {
+  const plan = declaredHypothesis({ projectId: "p", subject: "Zone de neige", value: "A2" });
+  assert.equal(plan.row.domain, null);
+
+  const classee = declaredHypothesis({ projectId: "p", subject: "Zone de neige", value: "A2", domain: "structure" });
+  assert.equal(classee.row.domain, "structure");
+});
+
+test("un domaine inconnu n'est pas rapproché du plus proche", () => {
+  const plan = declaredHypothesis({ projectId: "p", subject: "Zone", value: "A2", domain: "neige" });
+  assert.equal(plan.row.domain, null);
 });

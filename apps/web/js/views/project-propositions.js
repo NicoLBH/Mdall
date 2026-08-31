@@ -1600,6 +1600,7 @@ async function openDeposit(root, bouton) {
   const ligne = (view.review?.documentRows ?? []).find((row) => String(row.id) === id);
   if (!ligne || bouton.disabled) return;
 
+  releaseViewer();
   view.viewer = {
     documentId: id,
     name: ligne.original_filename ?? ligne.filename ?? "Document",
@@ -1635,6 +1636,12 @@ async function openDeposit(root, bouton) {
 /** Ferme le lecteur, sans rien changer à la proposition. */
 function closeViewer() {
   if (!view.viewer) return;
+  // Le document pdf.js reste ouvert tant qu'on lit ; on le rend en partant.
+  try {
+    view.viewer.dispose?.();
+  } catch {
+    // sans conséquence : le lecteur disparaît de toute façon
+  }
   view.viewer = null;
   // L'onglet n'a pas bougé : le redessiner ferait clignoter une liste qu'on
   // n'a pas touchée, et coûterait le rechargement de toutes ses vignettes.
@@ -1661,7 +1668,9 @@ export function renderPdfViewer(etat = view.viewer) {
         lecteur.loading ? `<div class="propositions-empty"><b>Ouverture du livrable…</b></div>` : ""
       }</div>`;
 
-  const pages = lecteur.pageCount > 0 ? `Page ${lecteur.page} sur ${lecteur.pageCount}` : "";
+  // Le document se parcourt, il ne se feuillette plus bouton par bouton : la
+  // barre dit sa longueur, le défilement fait le reste.
+  const pages = lecteur.pageCount > 0 ? `${lecteur.pageCount} page${lecteur.pageCount > 1 ? "s" : ""}` : "";
 
   return `
     <div class="review-pdf" role="dialog" aria-modal="true" aria-label="${escapeHtml(lecteur.name)}">
@@ -1672,13 +1681,7 @@ export function renderPdfViewer(etat = view.viewer) {
             <span>${escapeHtml(lecteur.name)}</span>
           </div>
           <div class="review-pdf__nav">
-            <button type="button" class="gh-btn gh-btn--sm" data-review-pdf-prev ${
-              lecteur.page <= 1 || !lecteur.pageCount ? "disabled" : ""
-            } aria-label="Page précédente">${svgIcon("arrow-left", { className: "octicon" })}</button>
             <span class="review-pdf__count mono">${escapeHtml(pages)}</span>
-            <button type="button" class="gh-btn gh-btn--sm" data-review-pdf-next ${
-              !lecteur.pageCount || lecteur.page >= lecteur.pageCount ? "disabled" : ""
-            } aria-label="Page suivante">${svgIcon("arrow-left", { className: "octicon" })}</button>
             <button type="button" class="icon-btn icon-btn--sm" data-review-pdf-close aria-label="Fermer le lecteur">✕</button>
           </div>
         </header>
@@ -1702,20 +1705,20 @@ async function drawPdfPage() {
   lecteur.drawn = true;
 
   try {
-    const { renderPdfPage } = await import("../services/ct-lab-pdf-view.js");
+    const { renderPdfDocument } = await import("../services/ct-lab-pdf-view.js");
     const largeur = Math.max(320, (hote.clientWidth || 900) - 8);
-    const { pageCount } = await renderPdfPage(hote, {
-      bytes: lecteur.bytes,
-      page: lecteur.page,
-      width: largeur
-    });
+    const { pageCount, dispose } = await renderPdfDocument(hote, { bytes: lecteur.bytes, width: largeur });
 
-    if (view.viewer !== lecteur) return;
+    // Le lecteur a pu se refermer pendant l'ouverture du document : ce qu'on
+    // vient de préparer ne décrirait plus ce qu'on regarde.
+    if (view.viewer !== lecteur) {
+      dispose();
+      return;
+    }
 
-    // Le nombre de pages ne se sait qu'après la première lecture. **La barre se
-    // met à jour sur place** : redessiner l'écran effaçait le canevas qu'on
-    // venait de peindre, et `drawn` empêchait de le repeindre. On voyait donc
-    // « Page 1 sur 4 » au-dessus d'un panneau vide.
+    // Le document reste ouvert tant que le lecteur l'est : le refermer
+    // obligerait à relire le fichier à chaque page qui approche de l'écran.
+    lecteur.dispose = dispose;
     lecteur.pageCount = pageCount;
     syncViewerNav();
   } catch (error) {
@@ -1737,27 +1740,10 @@ function syncViewerNav() {
   if (!lecteur || !viewerHost) return;
 
   const compteur = viewerHost.querySelector(".review-pdf__count");
-  if (compteur) compteur.textContent = lecteur.pageCount > 0 ? `Page ${lecteur.page} sur ${lecteur.pageCount}` : "";
-
-  const precedent = viewerHost.querySelector("[data-review-pdf-prev]");
-  if (precedent) precedent.disabled = !lecteur.pageCount || lecteur.page <= 1;
-
-  const suivant = viewerHost.querySelector("[data-review-pdf-next]");
-  if (suivant) suivant.disabled = !lecteur.pageCount || lecteur.page >= lecteur.pageCount;
-}
-
-/** Feuillette, sans retélécharger : les octets sont déjà là. */
-function turnPdfPage(root, pas) {
-  const lecteur = view.viewer;
-  if (!lecteur?.pageCount) return;
-
-  const cible = Math.min(Math.max(1, lecteur.page + pas), lecteur.pageCount);
-  if (cible === lecteur.page) return;
-
-  lecteur.page = cible;
-  lecteur.drawn = false;
-  syncViewerNav();
-  drawPdfPage();
+  if (compteur) {
+    compteur.textContent =
+      lecteur.pageCount > 0 ? `${lecteur.pageCount} page${lecteur.pageCount > 1 ? "s" : ""}` : "";
+  }
 }
 
 /**
@@ -2193,6 +2179,15 @@ function removePdfViewerHost() {
   viewerHost = null;
 }
 
+/** Le lecteur qu'on remplace rend d'abord le document qu'il tenait. */
+function releaseViewer() {
+  try {
+    view.viewer?.dispose?.();
+  } catch {
+    // sans conséquence
+  }
+}
+
 /**
  * Monte le lecteur, ou le remonte quand son état a changé.
  *
@@ -2214,8 +2209,6 @@ function showPdfViewer(root) {
   hote.innerHTML = renderPdfViewer();
 
   hote.querySelector("[data-review-pdf-close]")?.addEventListener("click", () => closeViewer());
-  hote.querySelector("[data-review-pdf-prev]")?.addEventListener("click", () => turnPdfPage(root, -1));
-  hote.querySelector("[data-review-pdf-next]")?.addEventListener("click", () => turnPdfPage(root, 1));
 
   // Fermer d'un clic hors du panneau et de la touche Échap : ce sont les deux
   // gestes qu'on tente sans réfléchir devant une lecture ouverte.
@@ -2666,6 +2659,7 @@ function findItem(cle) {
 function backToList(root) {
   view.open = null;
   view.review = null;
+  releaseViewer();
   view.viewer = null;
   removePdfViewerHost();
   // Sans quoi l'en-tête global resterait masqué sur la liste, et ailleurs.
@@ -3495,6 +3489,7 @@ async function openProposition(root, propositionId) {
   view.editing = null;
   view.editDraft = "";
   // Un livrable ouvert appartient à la proposition qu'on quitte.
+  releaseViewer();
   view.viewer = null;
   removePdfViewerHost();
   view.review = { running: true, step: "", items: [], unreachable: [], diff: { unchanged: 0 }, error: null };
