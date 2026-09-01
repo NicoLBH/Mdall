@@ -265,6 +265,7 @@ export function declaredBaseDatum({
   value = "",
   domain = null,
   zone = "",
+  zones = [],
   declaredBy = null,
   at = ""
 } = {}) {
@@ -277,24 +278,32 @@ export function declaredBaseDatum({
   if (!valeur) return { ok: false, reason: "Une donnée de base a besoin d'une valeur : c'est elle qui servira d'entrée aux déductions." };
 
   const quand = texte(at) || new Date().toISOString();
-  const portee = normalizeZoneKey(zone);
+
+  // Une information peut valoir pour plusieurs parties de l'ouvrage sans valoir
+  // partout. La liste vide veut dire « partout » — c'est une portée, pas une
+  // ignorance.
+  const portees = [...new Set([...(Array.isArray(zones) ? zones : []), zone].map(normalizeZoneKey).filter(Boolean))].sort();
 
   return {
     ok: true,
     row: {
       project_id: projet,
       kind: BASE_DATUM_KIND,
-      // La clé porte le sujet **et** la zone : le même sujet peut valoir
+      // La clé porte le sujet **et** ses zones : le même sujet peut valoir
       // différemment selon la partie de l'ouvrage — le rez-de-chaussée est un
       // ERP, les étages du logement — et une clé sans zone ferait périmer l'un
-      // par l'autre alors que les deux sont vrais.
-      subject_key: portee ? `${normalizeSubjectKey(sujet)}@${portee}` : normalizeSubjectKey(sujet),
+      // par l'autre alors que les deux sont vrais. Les zones sont triées : le
+      // même découpage écrit dans un autre ordre reste le même découpage.
+      subject_key: portees.length ? `${normalizeSubjectKey(sujet)}@${portees.join("+")}` : normalizeSubjectKey(sujet),
       statement: `${sujet} : ${valeur}`,
       detail: null,
       status: MEMORY.ASSUMED,
       nature: NATURE.DONNEE_BASE,
       domain: normalizeDomain(domain),
-      zone: portee || null,
+      // `zone` reste écrite pour une base qui n'a pas encore la colonne
+      // `zones` : elle y porte la première, et la lecture les réunit.
+      zone: portees[0] ?? null,
+      zones: portees.length ? portees : null,
       payload: { subject: sujet, value: valeur, declared: true },
       proposition_id: null,
       proposition_number: null,
@@ -351,6 +360,7 @@ export function declaredZone({
       nature: NATURE.DONNEE_BASE,
       domain: null,
       zone: null,
+      zones: null,
       payload: { subject: nom, value: texteDefinition, zoneDefinition: true, zoneKey: cle, declared: true },
       proposition_id: null,
       proposition_number: null,

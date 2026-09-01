@@ -26,13 +26,31 @@
 import { store } from "../../store.js";
 import { escapeHtml } from "../../utils/escape-html.js";
 import { svgIcon } from "../../ui/icons.js";
-import { definedZones } from "../../services/project-zones.js";
+import { definedZones, normalizeZoneKey } from "../../services/project-zones.js";
 import { resolveCurrentBackendProjectId } from "../../services/project-supabase-sync.js";
 import {
   ecarteDefinitionDeZone,
   versDefinitionDeZone
 } from "../../services/base-data-supabase.js";
 import { renderSectionCard, rerenderProjectParametres } from "./project-parametres-core.js";
+
+/**
+ * Des exemples qui tournent, pour apprendre le découpage plutôt que le deviner.
+ *
+ * Le premier réflexe est de nommer « Zone A » et de s'arrêter là. Ces exemples
+ * montrent qu'un découpage utile nomme **un endroit** et **son usage** — c'est
+ * l'usage qui commande les règles, et deux étages de familles différentes ne
+ * suivent pas les mêmes.
+ *
+ * Ils changent à chaque zone ajoutée : un exemple figé finit par être recopié
+ * tel quel.
+ */
+const EXEMPLES = [
+  { label: "Bâtiment A / Rdc", definition: "ERP type M, 5ème catégorie" },
+  { label: "Bâtiment A / Étages", definition: "Habitation 2ème famille" },
+  { label: "Ensemble / Sous-sol", definition: "Parc de stationnement couvert" },
+  { label: "Bâtiment B / Étages", definition: "Habitation 3ème famille B" }
+];
 
 const state = {
   loading: false,
@@ -41,8 +59,15 @@ const state = {
   assertions: null,
   brouillon: { label: "", definition: "" },
   edite: "",
-  busy: false
+  busy: false,
+  /** L'exemple montré. Il avance d'un cran à chaque zone ajoutée. */
+  exemple: 0
 };
+
+/** L'exemple du moment, sans jamais sortir de la liste. */
+function exempleCourant() {
+  return EXEMPLES[state.exemple % EXEMPLES.length];
+}
 
 function texte(value) {
   return String(value ?? "").trim();
@@ -78,9 +103,9 @@ function renderZone(zone) {
       <li class="settings-list__row" data-decoupage-row="${escapeHtml(zone.key)}">
         <div class="settings-inline-form">
           <input class="gh-input" data-decoupage-edit="label" value="${escapeHtml(state.brouillon.label)}"
-            placeholder="Zone A" autocomplete="off">
+            placeholder="${escapeHtml(exempleCourant().label)}" autocomplete="off">
           <input class="gh-input" data-decoupage-edit="definition" value="${escapeHtml(state.brouillon.definition)}"
-            placeholder="RDC — ERP type M, 5e catégorie" autocomplete="off">
+            placeholder="${escapeHtml(exempleCourant().definition)}" autocomplete="off">
           <button type="button" class="gh-btn gh-btn--primary" data-decoupage-save="${escapeHtml(zone.key)}"
             ${state.busy ? "disabled" : ""}>Enregistrer</button>
           <button type="button" class="gh-btn" data-decoupage-cancel>Annuler</button>
@@ -125,9 +150,9 @@ function renderCorps() {
     ${liste}
     <div class="settings-inline-form" data-decoupage-add>
       <input class="gh-input" data-decoupage-draft="label" value="${escapeHtml(state.edite ? "" : state.brouillon.label)}"
-        placeholder="Zone A" autocomplete="off" ${state.edite ? "disabled" : ""}>
+        placeholder="${escapeHtml(exempleCourant().label)}" autocomplete="off" ${state.edite ? "disabled" : ""}>
       <input class="gh-input" data-decoupage-draft="definition" value="${escapeHtml(state.edite ? "" : state.brouillon.definition)}"
-        placeholder="RDC — ERP type M, 5e catégorie" autocomplete="off" ${state.edite ? "disabled" : ""}>
+        placeholder="${escapeHtml(exempleCourant().definition)}" autocomplete="off" ${state.edite ? "disabled" : ""}>
       <button type="button" class="gh-btn gh-btn--primary" data-decoupage-create
         ${state.busy || state.edite ? "disabled" : ""}>
         ${svgIcon("plus", { className: "octicon" })} Ajouter
@@ -162,6 +187,7 @@ async function agir(action) {
     if (!resultat.versee && resultat.raison && resultat.raison !== "inchangée") {
       state.notice = `Rien n'a été enregistré : ${resultat.raison}.`;
     }
+    if (resultat.versee) state.exemple += 1;
     state.assertions = null;
   } catch (error) {
     state.notice = error instanceof Error ? error.message : String(error);
@@ -187,11 +213,25 @@ function bindDecoupageParametresSection(root) {
   }
 
   root.querySelector("[data-decoupage-create]")?.addEventListener("click", () => {
-    if (!texte(state.brouillon.label)) {
-      state.notice = "Une zone a besoin d'un nom : « Zone A », « Rez-de-chaussée ».";
+    const nom = texte(state.brouillon.label);
+    if (!nom) {
+      state.notice = `Une zone a besoin d'un nom : « ${exempleCourant().label} », par exemple.`;
       rerenderProjectParametres();
       return;
     }
+
+    // Le nom fait la clé d'une zone. Réutiliser un nom existant remplacerait la
+    // zone précédente en silence — c'est un découpage qu'on perd sans s'en
+    // apercevoir. On refuse et on dit où modifier.
+    const deja = definedZones(state.assertions ?? []).find(
+      (zone) => normalizeZoneKey(zone.label) === normalizeZoneKey(nom)
+    );
+    if (deja) {
+      state.notice = `« ${deja.label} » existe déjà. Modifiez-la plutôt que de la redéfinir : deux zones de même nom n'en font qu'une.`;
+      rerenderProjectParametres();
+      return;
+    }
+
     void agir((projectId) =>
       versDefinitionDeZone({
         projectId,
