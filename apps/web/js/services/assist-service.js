@@ -77,7 +77,10 @@ export async function sendAssistMessage(message) {
   // projet n'est même assemblé tant qu'on n'a pas de quoi signer l'envoi.
   const headers = assistHeaders(await resolveAccessToken());
 
-  const context = buildAssistContext();
+  // La mémoire se lit ici, à chaque envoi : une mémoire lue une fois puis
+  // gardée en cache répondrait avec la valeur d'avant la correction qu'on vient
+  // justement de verser.
+  const context = await buildAssistContext();
   const payload = {
     channel: "project_copilot",
     user_message: content,

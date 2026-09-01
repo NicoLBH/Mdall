@@ -9,7 +9,8 @@
  *
  * Il s'installe ici, dans l'Atelier, à l'intérieur d'un projet. Ce n'est pas un
  * repli : c'est un ancrage. Un copilote de projet hérite d'un périmètre, d'un
- * découpage en zones et de la mémoire du projet.
+ * découpage en zones et — depuis `memory-briefing.js` — de la mémoire du
+ * projet, hiérarchisée par ce qui fonde quoi. Il ne devine plus : il lit.
  *
  * ## Ce que l'écran promet, et ce qu'il ne promet pas encore
  *
@@ -193,8 +194,8 @@ function renderAccueil() {
       <span class="copilote-empty__mark" aria-hidden="true">${svgIcon("copilot", { width: 32, height: 32 })}</span>
       <p class="copilote-empty__title">Le copilote de ce projet</p>
       <p class="copilote-empty__sub">
-        Il travaille dans le périmètre de ce projet. Demandez-lui une synthèse, l'aide sur un sujet
-        technique, ou la préparation d'un sujet à verser.
+        Il lit la mémoire de ce projet — données de base, contraintes, hypothèses, constats —
+        avant de répondre. Ce qui n'y figure pas, il le dira plutôt que de l'inventer.
       </p>
     </div>
   `;

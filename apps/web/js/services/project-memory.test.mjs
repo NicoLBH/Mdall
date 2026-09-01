@@ -258,6 +258,50 @@ test("ce qui manque n'apparaît pas, plutôt que d'apparaître vide", () => {
   assert.deepEqual(faits, [["Fichier", "RICT.pdf"]]);
 });
 
+test("une donnée de base dit son sujet et sa valeur, pas un fichier", () => {
+  // Elle tombait dans la branche par défaut, qui annonçait « Fichier :
+  // Bâtiment A / Usage » — un fichier qui n'a jamais existé.
+  const faits = describeAssertionFacts({
+    kind: "base-datum",
+    subject_key: "usage-du-niveau@batiment-a",
+    domain: "incendie",
+    payload: { subject: "Usage du niveau", value: "ERP catégorie 4", declared: true }
+  });
+
+  assert.deepEqual(faits, [
+    ["Sujet", "Usage du niveau"],
+    ["Valeur", "ERP catégorie 4"],
+    ["Domaine", "Incendie"]
+  ]);
+});
+
+test("une contrainte déduite cite son utilitaire et sa version, pas un fichier", () => {
+  // C'est la ligne dont la provenance doit se lire sans ouvrir le payload :
+  // sans elle, une valeur qui change ne dit pas si c'est le site qui a bougé
+  // ou notre façon de le lire.
+  const faits = describeAssertionFacts({
+    kind: "site-constraint",
+    subject_key: "zone-de-neige",
+    payload: {
+      subject: "Zone de neige",
+      value: "A2",
+      source: "Eurocode 1 — annexe nationale",
+      utilitaire: "deduction_zone_neige_commune_V1",
+      sourceRef: "commune 31000",
+      computedAt: "2026-02-02T00:00:00.000Z"
+    }
+  });
+
+  assert.deepEqual(faits, [
+    ["Sujet", "Zone de neige"],
+    ["Valeur", "A2"],
+    ["Source", "Eurocode 1 — annexe nationale"],
+    ["Utilitaire", "deduction_zone_neige_commune_V1"],
+    ["Référence de la source", "commune 31000"],
+    ["Calculée le", "2026-02-02T00:00:00.000Z"]
+  ]);
+});
+
 /* ── Le vocabulaire arrive avec l'affirmation ────────────────────────────── */
 
 test("une affirmation versée porte sa nature, déduite de sa provenance", () => {
