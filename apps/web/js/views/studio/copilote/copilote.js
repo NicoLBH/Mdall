@@ -98,6 +98,9 @@ function ensureState() {
       draft: "",
       lastError: "",
       creditsOpen: false,
+      // De quoi interrompre l'appel en cours. Un bouton d'arrêt qui n'arrête
+      // rien serait pire que pas de bouton du tout.
+      abort: null,
       conversationId: courante.id,
       messages: [],
       conversations: loadConversations(cleUtilisateur(), cleProjet()),
@@ -179,19 +182,75 @@ export function copiloteConversationId() {
   return ensureState().conversationId;
 }
 
-function renderMessage(msg) {
+/**
+ * Un message.
+ *
+ * **Celui de l'utilisateur ne porte plus son nom.** « Vous », dans une
+ * conversation privée à deux, ne désignait personne d'autre que la seule
+ * personne présente — et la date en tête d'un message qu'on vient d'écrire
+ * n'apprend rien. L'une et l'autre reviennent au survol, en bas du message,
+ * pour les fois où l'on relit un fil d'il y a trois semaines.
+ *
+ * **Celui du copilote porte sa marque**, à gauche, comme partout ailleurs dans
+ * l'application : c'est ce qui distingue d'un coup d'œil ce qu'on a demandé de
+ * ce qui a été répondu, sans avoir à lire.
+ */
+function renderMessage(msg, index) {
   const role = msg.role === "user" ? "user" : "assistant";
-  const auteur = role === "user" ? "Vous" : "Copilote";
   const quand = msg.ts ? new Date(msg.ts).toLocaleString("fr-FR") : "";
 
+  if (role === "user") {
+    return `
+      <article class="copilote-msg copilote-msg--user">
+        <div class="copilote-msg__body">${mdToHtml(msg.content || "")}</div>
+        ${quand ? `<div class="copilote-msg__stamp mono">${escapeHtml(quand)}</div>` : ""}
+      </article>
+    `;
+  }
+
   return `
-    <article class="copilote-msg copilote-msg--${role}">
-      <div class="copilote-msg__meta">
-        <span class="copilote-msg__author">${escapeHtml(auteur)}</span>
-        <span class="copilote-msg__time mono">${escapeHtml(quand)}</span>
+    <article class="copilote-msg copilote-msg--assistant" data-message-index="${index}">
+      <span class="copilote-msg__mark" aria-hidden="true">${svgIcon("copilot", { width: 32, height: 32 })}</span>
+      <div class="copilote-msg__main">
+        <div class="copilote-msg__meta">
+          <span class="copilote-msg__author">Copilote</span>
+          <span class="copilote-msg__time mono">${escapeHtml(quand)}</span>
+        </div>
+        <div class="copilote-msg__body">${mdToHtml(msg.content || "")}</div>
+        <div class="copilote-msg__actions">
+          <button type="button" class="copilote-msg__action" data-copy-message="${index}"
+            aria-label="Copier la réponse" title="Copier">${svgIcon("copy")}</button>
+          <button type="button" class="copilote-msg__action" data-tokens-message="${index}"
+            aria-haspopup="dialog" aria-expanded="false"
+            aria-label="Jetons consommés" title="Jetons consommés">${svgIcon("meter")}</button>
+        </div>
+        ${renderJetons(msg, index)}
       </div>
-      <div class="copilote-msg__body">${mdToHtml(msg.content || "")}</div>
     </article>
+  `;
+}
+
+/**
+ * Le compteur de jetons d'un message.
+ *
+ * **Il n'affiche aucun chiffre.** La fonction serveur ne renvoie pas encore le
+ * décompte du modèle, et inventer deux nombres plausibles serait pire qu'un
+ * panneau vide : on lit un compteur pour décider d'un usage, et une décision
+ * prise sur un nombre fabriqué est une décision fausse. Le panneau dit ce qu'il
+ * montrera, et qu'il ne le montre pas encore.
+ */
+function renderJetons(msg, index) {
+  if (!msg.tokensOpen) return "";
+
+  const chiffre = (valeur) => (Number.isFinite(valeur) ? String(valeur) : "—");
+
+  return `
+    <div class="copilote-tokens" role="dialog" aria-label="Jetons consommés" data-tokens-panel="${index}">
+      <p class="copilote-tokens__title">Jetons de ce message</p>
+      <div class="copilote-tokens__row"><span>Entrée</span><span class="mono">${chiffre(msg.tokensIn)}</span></div>
+      <div class="copilote-tokens__row"><span>Sortie</span><span class="mono">${chiffre(msg.tokensOut)}</span></div>
+      <p class="copilote-tokens__note">Le décompte n'est pas encore remonté du modèle.</p>
+    </div>
   `;
 }
 
@@ -215,10 +274,46 @@ function renderAccueil() {
   `;
 }
 
+/**
+ * L'attente.
+ *
+ * Elle occupe la place d'un message à venir, à l'endroit exact où la réponse
+ * apparaîtra. Un indicateur posé ailleurs — dans un coin, sur le bouton —
+ * laisserait croire que le fil est fini et que rien ne vient.
+ */
+function renderAttente() {
+  return `
+    <article class="copilote-msg copilote-msg--assistant copilote-msg--pending" aria-live="polite">
+      <span class="copilote-msg__mark" aria-hidden="true">${svgIcon("copilot", { width: 32, height: 32 })}</span>
+      <div class="copilote-msg__main">
+        <div class="copilote-msg__meta">
+          <span class="copilote-msg__author">Copilote</span>
+        </div>
+        <div class="copilote-pending">
+          <span class="copilote-spinner" aria-hidden="true">${svgIcon("attachment-upload-spinner")}</span>
+          <span>Le copilote lit la mémoire du projet…</span>
+        </div>
+      </div>
+    </article>
+  `;
+}
+
 function renderCorps(etat) {
   const messages = Array.isArray(etat.messages) ? etat.messages : [];
-  if (messages.length === 0) return renderAccueil();
-  return `<div class="copilote-thread" id="copiloteThread">${messages.map(renderMessage).join("")}</div>`;
+  if (messages.length === 0 && !etat.isSending) return renderAccueil();
+
+  return `
+    <div class="copilote-thread-wrap">
+      <div class="copilote-thread" id="copiloteThread">
+        ${messages.map((msg, index) => renderMessage(msg, index)).join("")}
+        ${etat.isSending ? renderAttente() : ""}
+      </div>
+      <button type="button" class="copilote-scroll" id="copiloteScroll" hidden
+        aria-label="Aller au dernier message" title="Aller au dernier message">
+        ${svgIcon("arrow-up", { className: "copilote-scroll__icon" })}
+      </button>
+    </div>
+  `;
 }
 
 /**
@@ -285,8 +380,15 @@ function render(root) {
 
               <span class="copilote-compose__divider" role="separator" aria-orientation="vertical"></span>
 
-              <button type="button" class="copilote-send" id="copiloteSend" aria-label="Envoyer"
-                ${etat.isSending ? "disabled" : ""}>${svgIcon("paper-airplane")}</button>
+              ${
+                etat.isSending
+                  ? `<button type="button" class="copilote-stop" id="copiloteStop"
+                       aria-label="Arrêter la réponse" title="Arrêter">
+                       <span class="copilote-stop__square" aria-hidden="true"></span>
+                     </button>`
+                  : `<button type="button" class="copilote-send" id="copiloteSend" aria-label="Envoyer"
+                       title="Envoyer">${svgIcon("paper-airplane")}</button>`
+              }
             </div>
 
             ${renderCredits(etat)}
@@ -327,20 +429,86 @@ async function envoyer(root) {
   archiver(etat);
   render(root);
 
+  const controle = new AbortController();
+  etat.abort = controle;
+
   try {
-    const { reply } = await sendAssistMessage(contenu);
+    const { reply } = await sendAssistMessage(contenu, { signal: controle.signal });
     etat.messages.push({ role: "assistant", content: reply || "Réponse vide.", ts: new Date().toISOString() });
   } catch (error) {
+    // Une interruption n'est pas une panne : c'est une décision de
+    // l'utilisateur, et l'afficher en rouge comme une erreur lui reprocherait
+    // d'avoir cliqué sur le bouton qu'on lui a mis sous la main.
+    if (error?.name === "AbortError") etat.lastError = "";
     // L'erreur se dit à part, pas dans le fil : une panne de réseau n'est pas
     // une réponse du copilote, et la ranger parmi ses messages ferait croire
     // qu'il a répondu cela.
-    etat.lastError = error?.message || "Le copilote n'a pas répondu.";
+    else etat.lastError = error?.message || "Le copilote n'a pas répondu.";
   } finally {
     etat.isSending = false;
+    etat.abort = null;
     archiver(etat);
     render(root);
     root.querySelector("#copiloteInput")?.focus();
   }
+}
+
+/**
+ * Copier une réponse.
+ *
+ * C'est le **markdown d'origine** qui part au presse-papiers, pas le texte
+ * rendu : on colle une réponse dans un compte rendu ou un mail, et y retrouver
+ * ses titres et ses listes vaut mieux qu'un pavé aplati.
+ *
+ * Le retour est visible et bref. Une copie silencieuse laisse recliquer trois
+ * fois, sans savoir si elle a eu lieu.
+ */
+async function copier(root, index) {
+  const etat = ensureState();
+  const contenu = etat.messages[index]?.content || "";
+  if (!contenu) return;
+
+  const bouton = root.querySelector(`[data-copy-message="${index}"]`);
+
+  try {
+    await navigator.clipboard.writeText(contenu);
+    bouton?.classList.add("is-done");
+    window.setTimeout(() => bouton?.classList.remove("is-done"), 1200);
+  } catch {
+    // Un presse-papiers refusé (page non sécurisée, permission) ne casse rien :
+    // le texte reste sélectionnable à la main.
+    bouton?.classList.add("is-failed");
+    window.setTimeout(() => bouton?.classList.remove("is-failed"), 1200);
+  }
+}
+
+/**
+ * Le bouton de retour au dernier message.
+ *
+ * Il ne se montre que lorsqu'il sert — quand on a remonté le fil de plus d'une
+ * hauteur d'écran. Un bouton toujours présent finit par recouvrir une réponse
+ * qu'on est en train de lire, pour ne rien proposer d'utile.
+ */
+function brancherDefilement(root) {
+  const fil = root.querySelector("#copiloteThread");
+  const bouton = root.querySelector("#copiloteScroll");
+  if (!fil || !bouton) return;
+
+  const SEUIL = 80;
+  const ajuster = () => {
+    const reste = fil.scrollHeight - fil.scrollTop - fil.clientHeight;
+    bouton.hidden = reste < SEUIL;
+  };
+
+  fil.addEventListener("scroll", ajuster);
+  bouton.addEventListener("click", () => fil.scrollTo({ top: fil.scrollHeight, behavior: "smooth" }));
+  ajuster();
+}
+
+/** Renoncer à la réponse en cours. La question posée, elle, reste dans le fil. */
+function interrompre(root) {
+  const etat = ensureState();
+  etat.abort?.abort();
 }
 
 /** Le champ prend la hauteur de ce qu'on y écrit, sans dépasser sa limite. */
@@ -372,6 +540,36 @@ function bind(root) {
   });
 
   root.querySelector("#copiloteSend")?.addEventListener("click", () => void envoyer(root));
+  root.querySelector("#copiloteStop")?.addEventListener("click", () => interrompre(root));
+
+  for (const bouton of root.querySelectorAll("[data-copy-message]")) {
+    bouton.addEventListener("click", () => void copier(root, Number(bouton.dataset.copyMessage)));
+  }
+
+  for (const bouton of root.querySelectorAll("[data-tokens-message]")) {
+    bouton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const index = Number(bouton.dataset.tokensMessage);
+      const ouvert = etat.messages[index]?.tokensOpen;
+      // Un seul panneau ouvert à la fois : deux compteurs côte à côte
+      // n'apprennent rien de plus et se recouvrent.
+      etat.messages.forEach((msg) => { msg.tokensOpen = false; });
+      if (etat.messages[index]) etat.messages[index].tokensOpen = !ouvert;
+      render(root);
+    });
+  }
+
+  if (etat.messages.some((msg) => msg.tokensOpen)) {
+    const fermer = (event) => {
+      if (event.target.closest?.(".copilote-tokens, [data-tokens-message]")) return;
+      document.removeEventListener("click", fermer);
+      etat.messages.forEach((msg) => { msg.tokensOpen = false; });
+      render(root);
+    };
+    document.addEventListener("click", fermer);
+  }
+
+  brancherDefilement(root);
 
   root.querySelector("#copiloteCredits")?.addEventListener("click", (event) => {
     event.stopPropagation();

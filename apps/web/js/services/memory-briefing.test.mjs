@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { BRIEFING_MAX_CURRENT, BRIEFING_NATURES, buildMemoryBriefing } from "./memory-briefing.js";
+import { BRIEFING_CHAR_BUDGET, BRIEFING_DROP_ORDER, BRIEFING_NATURES, buildMemoryBriefing } from "./memory-briefing.js";
 
 const PROJET = { name: "Aurora Campus" };
 
@@ -266,26 +266,6 @@ test("une mémoire sans passé n'a pas de section « remplacé » vide", () => {
   assert.doesNotMatch(brief.texte, /Ce qui a été remplacé/);
 });
 
-test("au-delà du plafond, les plus anciennes sont écartées — et comptées", () => {
-  // Les taire silencieusement ferait croire à un passé plus court qu'il n'est.
-  const anciennes = Array.from({ length: 6 }, (_, index) =>
-    hypothese({
-      id: `v${index}`,
-      subject_key: `valeur-${index}`,
-      superseded_by: "h1",
-      superseded_at: "2026-02-03T00:00:00.000Z"
-    })
-  );
-
-  const brief = buildMemoryBriefing({
-    project: PROJET,
-    assertions: [hypothese(), ...anciennes],
-    maxSuperseded: 2
-  });
-
-  assert.match(brief.texte, /4 ligne\(s\) remplacée\(s\) plus ancienne\(s\) ne figurent pas ici/);
-});
-
 /* ── Le mode d'emploi ────────────────────────────────────────────────────── */
 
 test("le texte explique ce que les mots veulent dire, avant de les employer", () => {
@@ -375,47 +355,86 @@ test("une mémoire qui s'accorde n'a pas de section de désaccords", () => {
   assert.doesNotMatch(brief.texte, /Ce qui ne s'accorde pas/);
 });
 
-test("une mémoire trop longue est coupée — et le texte l'annonce", () => {
-  // Une coupe silencieuse ferait affirmer une absence qui n'existe pas.
-  const beaucoup = Array.from({ length: 12 }, (_, index) =>
-    contrainte({ id: `c${index}`, subject_key: `contrainte-${String(index).padStart(2, "0")}` })
+test("une mémoire ordinaire n'est pas coupée du tout", () => {
+  // Le budget est calé sur ce que le modèle peut lire : trois cents
+  // affirmations pèsent un sixième de ce qu'il accepte.
+  const beaucoup = Array.from({ length: 300 }, (_, index) =>
+    contrainte({ id: `c${index}`, subject_key: `contrainte-${String(index).padStart(3, "0")}` })
   );
 
-  const brief = buildMemoryBriefing({ project: PROJET, assertions: beaucoup, maxCurrent: 5 });
+  const brief = buildMemoryBriefing({ project: PROJET, assertions: beaucoup });
 
-  assert.match(brief.texte, /7 affirmation\(s\) en vigueur ne figurent pas ci-dessous/);
+  assert.doesNotMatch(brief.texte, /trop longue pour tenir ici/);
+  assert.deepEqual(brief.resume.manque, { remplacees: 0, intendance: 0, constats: 0, socle: 0 });
+  assert.ok(brief.texte.length < BRIEFING_CHAR_BUDGET);
+  assert.match(brief.texte, /contrainte-299/);
+});
+
+test("quand il faut renoncer, on lâche le passé avant le présent", () => {
+  const socle = Array.from({ length: 4 }, (_, index) =>
+    contrainte({ id: `c${index}`, subject_key: `contrainte-${index}`, decided_at: `2026-02-0${index + 1}T00:00:00.000Z` })
+  );
+  const passe = Array.from({ length: 20 }, (_, index) =>
+    contrainte({ id: `v${index}`, subject_key: `ancienne-${index}`, superseded_by: "c0", superseded_at: "2026-03-01T00:00:00.000Z" })
+  );
+
+  const brief = buildMemoryBriefing({ project: PROJET, assertions: [...socle, ...passe], charBudget: 3600 });
+
+  assert.ok(brief.resume.manque.remplacees > 0, "le passé part d'abord");
+  assert.equal(brief.resume.manque.socle, 0, "ce sur quoi le projet calcule reste");
+  assert.match(brief.texte, /contrainte-3/);
+});
+
+test("l'ordre du renoncement suit ce qui fonde quoi, à l'envers", () => {
+  assert.deepEqual(BRIEFING_DROP_ORDER, ["remplacees", "intendance", "constats", "socle"]);
+});
+
+test("un constat part avant une contrainte, jamais l'inverse", () => {
+  const constats = Array.from({ length: 30 }, (_, index) =>
+    constat({ id: `a${index}`, subject_key: `A${String(index).padStart(2, "0")}`, decided_at: `2026-01-${String((index % 28) + 1).padStart(2, "0")}T00:00:00.000Z` })
+  );
+  const regles = [contrainte({ id: "c1", subject_key: "zone-de-neige" })];
+
+  const brief = buildMemoryBriefing({ project: PROJET, assertions: [...constats, ...regles], charBudget: 3400 });
+
+  assert.ok(brief.resume.manque.constats > 0);
+  assert.equal(brief.resume.manque.socle, 0);
+  assert.match(brief.texte, /zone-de-neige/);
+});
+
+test("ce qui manque est dit par catégorie, pas par un total muet", () => {
+  // « 12 constats absents » se lit et se corrige ; « 12 lignes absentes » ne dit
+  // pas si c'est une contrainte qui manque ou un avis levé l'an dernier.
+  const constats = Array.from({ length: 30 }, (_, index) =>
+    constat({ id: `a${index}`, subject_key: `A${String(index).padStart(2, "0")}` })
+  );
+
+  const brief = buildMemoryBriefing({ project: PROJET, assertions: constats, charBudget: 3400 });
+
+  assert.match(brief.texte, /N'y figurent pas : \d+ constat\(s\)/);
   assert.match(brief.texte, /Ne conclus donc jamais qu'une chose est absente/);
-  assert.equal(brief.resume.ecartees, 7);
 });
 
 test("le compte annoncé reste celui de la mémoire entière, pas celui de la part reçue", () => {
-  const beaucoup = Array.from({ length: 12 }, (_, index) =>
-    contrainte({ id: `c${index}`, subject_key: `contrainte-${String(index).padStart(2, "0")}` })
+  const constats = Array.from({ length: 30 }, (_, index) =>
+    constat({ id: `a${index}`, subject_key: `A${String(index).padStart(2, "0")}` })
   );
 
-  const brief = buildMemoryBriefing({ project: PROJET, assertions: beaucoup, maxCurrent: 5 });
+  const brief = buildMemoryBriefing({ project: PROJET, assertions: constats, charBudget: 3400 });
   const parNature = Object.fromEntries(brief.resume.parNature.map((entree) => [entree.nature, entree.count]));
 
-  assert.match(brief.texte, /12 affirmation\(s\) en vigueur/);
-  assert.equal(parNature.contrainte, 12);
+  assert.match(brief.texte, /30 affirmation\(s\) en vigueur/);
+  assert.equal(parNature.constat, 30);
 });
 
-test("une mémoire qui tient en entier n'annonce aucune coupe", () => {
-  const brief = buildMemoryBriefing({ project: PROJET, assertions: [contrainte(), hypothese()] });
-
-  assert.doesNotMatch(brief.texte, /ne figurent pas ci-dessous/);
-  assert.equal(brief.resume.ecartees, 0);
-  assert.equal(BRIEFING_MAX_CURRENT, 400);
-});
-
-test("la coupe est déterministe : elle garde toujours les mêmes lignes", () => {
-  const beaucoup = Array.from({ length: 12 }, (_, index) =>
-    contrainte({ id: `c${index}`, subject_key: `contrainte-${String(index).padStart(2, "0")}` })
+test("la coupe est déterministe : deux fois la même mémoire, deux fois le même texte", () => {
+  const constats = Array.from({ length: 30 }, (_, index) =>
+    constat({ id: `a${index}`, subject_key: `A${String(index).padStart(2, "0")}` })
   );
-  const melange = [...beaucoup].reverse();
+  const melange = [...constats].reverse();
 
   assert.equal(
-    buildMemoryBriefing({ project: PROJET, assertions: beaucoup, maxCurrent: 5, generatedAt: "2026-09-01" }).texte,
-    buildMemoryBriefing({ project: PROJET, assertions: melange, maxCurrent: 5, generatedAt: "2026-09-01" }).texte
+    buildMemoryBriefing({ project: PROJET, assertions: constats, charBudget: 3400, generatedAt: "2026-09-01" }).texte,
+    buildMemoryBriefing({ project: PROJET, assertions: melange, charBudget: 3400, generatedAt: "2026-09-01" }).texte
   );
 });

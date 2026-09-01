@@ -16439,12 +16439,34 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 /* Le fil : les messages, et rien de la mise en scène de l'ancienne
    surimpression — pas de cadre autour d'une réponse qui fait déjà toute la
    largeur. */
-.copilote-thread{ flex:1 1 auto; overflow:auto; padding:0; max-height:52vh; }
+.copilote-thread-wrap{ position:relative; flex:1 1 auto; min-height:0; }
+.copilote-thread{ height:100%; overflow:auto; padding:0; max-height:52vh; }
 .copilote-msg{ padding:12px 0; margin-bottom:4px; }
+
+/* Le message de l'utilisateur ne porte plus son nom : dans une conversation
+   privée à deux, « Vous » ne désigne personne d'autre. La date revient au
+   survol, en bas du message. */
 .copilote-msg--user{
+  position:relative;
   width:60%; margin-left:auto; padding:12px;
   border-radius:12px; background:rgba(240,246,252,.03);
 }
+.copilote-msg__stamp{
+  margin-top:8px; color:var(--muted); font-size:11px;
+  opacity:0; transition:opacity .12s ease;
+}
+.copilote-msg--user:hover .copilote-msg__stamp,
+.copilote-msg--user:focus-within .copilote-msg__stamp{ opacity:1; }
+
+/* La réponse porte la marque du copilote, à gauche : c'est ce qui distingue
+   d'un coup d'œil ce qu'on a demandé de ce qui a été répondu. */
+.copilote-msg--assistant{ display:flex; align-items:flex-start; gap:12px; }
+.copilote-msg__mark{
+  display:inline-flex; flex:0 0 32px; margin-top:2px; color:var(--muted);
+}
+.copilote-msg__mark svg{ width:32px; height:32px; }
+.copilote-msg__main{ position:relative; min-width:0; flex:1 1 auto; }
+
 .copilote-msg__meta{
   display:flex; align-items:center; gap:8px;
   margin-bottom:6px; color:var(--muted); font-size:12px;
@@ -16452,6 +16474,56 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .copilote-msg__author{ color:var(--text); font-weight:600; }
 .copilote-msg__body{ font-size:14px; line-height:20px; }
 .copilote-msg__body code{ padding:1px 4px; border-radius:6px; background:rgba(240,246,252,.08); }
+
+/* Les commandes d'une réponse : copier, compter. Discrètes tant qu'on lit. */
+.copilote-msg__actions{ display:flex; align-items:center; gap:2px; margin-top:8px; }
+.copilote-msg__action{
+  display:inline-flex; align-items:center; justify-content:center;
+  width:28px; height:28px;
+  border:0; border-radius:6px; background:transparent; color:var(--muted);
+  cursor:pointer; opacity:.55; transition:opacity .12s ease;
+}
+.copilote-msg--assistant:hover .copilote-msg__action,
+.copilote-msg__action:focus-visible{ opacity:1; }
+.copilote-msg__action:hover{ background:var(--panel2); color:var(--text); }
+.copilote-msg__action.is-done{ opacity:1; color:var(--success); }
+.copilote-msg__action.is-failed{ opacity:1; color:var(--danger); }
+
+.copilote-tokens{
+  position:absolute; left:0; bottom:40px; z-index:2;
+  width:240px; padding:12px;
+  border:1px solid var(--border); border-radius:12px; background:var(--bgAssistPanel);
+  box-shadow:0 8px 24px rgba(1,4,9,.6);
+}
+.copilote-tokens__title{ margin:0 0 8px; color:var(--text); font-size:13px; font-weight:600; }
+.copilote-tokens__row{
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  color:var(--muted); font-size:12px; line-height:20px;
+}
+.copilote-tokens__row span:last-child{ color:var(--text); }
+.copilote-tokens__note{ margin:8px 0 0; color:var(--muted); font-size:11px; line-height:15px; }
+
+/* L'attente prend la place du message à venir : un indicateur posé ailleurs
+   laisserait croire que le fil est fini et que rien ne vient. */
+.copilote-pending{ display:flex; align-items:center; gap:8px; color:var(--muted); font-size:13px; }
+.copilote-spinner{ display:inline-flex; animation:copilote-tourne 1s linear infinite; }
+@keyframes copilote-tourne{ to{ transform:rotate(360deg); } }
+@media (prefers-reduced-motion: reduce){
+  .copilote-spinner{ animation-duration:3s; }
+}
+
+/* Le retour au dernier message, seulement quand il sert : un bouton toujours
+   présent finit par recouvrir la réponse qu'on est en train de lire. */
+.copilote-scroll{
+  position:absolute; left:50%; bottom:8px; transform:translateX(-50%);
+  display:inline-flex; align-items:center; justify-content:center;
+  width:32px; height:32px;
+  border:1px solid var(--border); border-radius:999px;
+  background:var(--panel2); color:var(--text);
+  box-shadow:0 4px 12px rgba(1,4,9,.5); cursor:pointer;
+}
+.copilote-scroll:hover{ background:var(--panel); }
+.copilote-scroll__icon{ transform:rotate(180deg); }
 
 .copilote-composer{ display:flex; flex-direction:column; gap:10px; }
 
@@ -16493,12 +16565,23 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .copilote-send:hover{ background:var(--panel2); color:var(--text); }
 .copilote-send:disabled{ opacity:.45; cursor:default; background:transparent; color:var(--muted); }
 
+/* Pendant la réponse, l'envoi cède la place à l'arrêt : garder un bouton
+   d'envoi grisé laisserait croire qu'il n'y a rien à faire qu'attendre. */
+.copilote-stop{
+  display:inline-flex; align-items:center; justify-content:center;
+  width:28px; height:28px;
+  border:0; border-radius:6px; cursor:pointer;
+  background:rgba(248,81,73,.16); color:var(--danger);
+}
+.copilote-stop:hover{ background:rgba(248,81,73,.26); }
+.copilote-stop__square{ width:10px; height:10px; border-radius:2px; background:var(--danger); }
+
 /* Le panneau des crédits : au-dessus du composeur, accroché à droite comme le
    bouton qui l'ouvre. */
 .copilote-credits{
   position:absolute; right:10px; bottom:48px; z-index:2;
   width:300px; padding:14px;
-  border:1px solid var(--border); border-radius:12px; background:var(--panel);
+  border:1px solid var(--border); border-radius:12px; background:var(--bgAssistPanel);
   box-shadow:0 8px 24px rgba(1,4,9,.6);
 }
 .copilote-credits__head{ display:flex; align-items:center; gap:6px; margin-bottom:10px; }

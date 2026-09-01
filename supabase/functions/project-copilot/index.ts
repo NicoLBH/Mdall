@@ -52,11 +52,36 @@ const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 const openAiApiKey = Deno.env.get("OPENAI_API_KEY")!;
 
 const MODEL = "gpt-4.1-mini";
-const MAX_QUESTION_CHARS = 4000;
-const MAX_MEMORY_CHARS = 60000;
-const MAX_HISTORY_MESSAGES = 12;
-const MAX_HISTORY_MESSAGE_CHARS = 2000;
-const MAX_SCREEN_CHARS = 6000;
+
+/**
+ * Les limites, et d'où elles viennent.
+ *
+ * La première version en portait six, toutes choisies à vue de nez — 60 000
+ * caractères de mémoire, douze messages d'historique — et elles coupaient bien
+ * avant que le modèle ne s'en plaigne. Le contexte arrivait tronqué sans que
+ * personne l'ait décidé.
+ *
+ * Elles se dérivent maintenant d'une seule grandeur : la fenêtre du modèle.
+ * `gpt-4.1-mini` accepte de l'ordre du million de jetons ; le français coûte
+ * environ 3,5 caractères par jeton. On s'en tient à une fraction prudente —
+ * assez pour qu'une mémoire de projet entière (quelque 75 000 caractères pour
+ * trois cents affirmations) passe sans être touchée.
+ *
+ * Ce qui reste ici n'est donc plus une politique de coupe, c'est un garde-fou
+ * contre une charge aberrante. Et quand il joue, il **se dit** : le modèle est
+ * averti dans ses consignes qu'il lit un texte amputé.
+ */
+const CHARS_PAR_JETON = 3.5;
+const BUDGET_JETONS = 200_000;
+const BUDGET_CHARS = Math.floor(BUDGET_JETONS * CHARS_PAR_JETON);
+
+const MAX_QUESTION_CHARS = 16_000;
+const MAX_MEMORY_CHARS = 500_000;
+const MAX_HISTORY_MESSAGES = 40;
+const MAX_HISTORY_MESSAGE_CHARS = 20_000;
+const MAX_SCREEN_CHARS = 20_000;
+
+const MARQUE_TRONQUE = "[…tronqué faute de place]";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -77,7 +102,7 @@ function texte(value: unknown) {
 }
 
 function truncate(value: string, max: number) {
-  return value.length <= max ? value : `${value.slice(0, max)}\n\n[…tronqué]`;
+  return value.length <= max ? value : `${value.slice(0, max)}\n\n${MARQUE_TRONQUE}`;
 }
 
 /**
@@ -87,7 +112,7 @@ function truncate(value: string, max: number) {
  * assistant de projet nuit : en comblant un vide. Une mémoire qui ne dit rien
  * sur un point est une information — pas une invitation à improviser.
  */
-function systemPrompt(memoryWasRead: boolean) {
+function systemPrompt(memoryWasRead: boolean, tronque: boolean) {
   const regles = [
     "Tu es le copilote d'un projet de construction dans l'application Mdall.",
     "Tu réponds en français, en markdown, de façon brève et utile.",
@@ -109,6 +134,16 @@ function systemPrompt(memoryWasRead: boolean) {
     regles.push(
       "",
       "ATTENTION : la mémoire de ce projet n'a pas pu être lue pour cette question. Tu ne sais donc rien de ce que ce projet tient pour vrai. Dis-le, et n'affirme ni ne nie aucune valeur du projet."
+    );
+  }
+
+  if (tronque) {
+    // Sans cette phrase, le modèle lirait « […tronqué faute de place] » comme
+    // une curiosité du texte et conclurait à une absence là où il n'y a qu'une
+    // coupe. Une troncature muette est un mensonge sur ce que le projet sait.
+    regles.push(
+      "",
+      `ATTENTION : le texte reçu porte la marque « ${MARQUE_TRONQUE} ». Il est incomplet. Ne conclus jamais qu'une chose est absente de ce projet : dis que tu n'as reçu qu'une partie de sa mémoire.`
     );
   }
 
@@ -207,6 +242,12 @@ serve(async (req) => {
     .filter(Boolean)
     .join("\n\n---\n\n");
 
+  // Le dernier garde-fou : si l'ensemble dépasse encore le budget, on coupe —
+  // et le modèle en est averti dans ses consignes. Une coupe qu'on ne signale
+  // pas vaut une mémoire qu'on invente.
+  const corps = truncate(input, BUDGET_CHARS);
+  const tronque = corps.includes(MARQUE_TRONQUE);
+
   // On compte, on ne recopie pas : un journal qui contiendrait les questions de
   // chacun serait la fuite même qu'on refuse.
   console.log("project-copilot:request", {
@@ -215,7 +256,8 @@ serve(async (req) => {
     memory_was_read: memoryWasRead,
     memory_chars: memoire.length,
     history_messages: history.length,
-    input_chars: input.length
+    input_chars: corps.length,
+    tronque
   });
 
   try {
@@ -227,8 +269,8 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         model: MODEL,
-        instructions: systemPrompt(memoryWasRead),
-        input
+        instructions: systemPrompt(memoryWasRead, tronque),
+        input: corps
       })
     });
 
