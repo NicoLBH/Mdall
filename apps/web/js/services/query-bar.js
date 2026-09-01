@@ -31,6 +31,8 @@
  * @property {{value: string, label: string}[]} values les valeurs admises
  */
 
+import { escapeHtml } from "../utils/escape-html.js";
+
 function texte(value) {
   return String(value ?? "").trim();
 }
@@ -211,4 +213,58 @@ export function suggestAt(query = "", fields = [], caret = 0) {
     }));
 
   return items.length ? { kind: "value", token: jeton, start: debut, end: fin, items } : null;
+}
+
+
+/**
+ * La requête découpée en morceaux, pour la peindre derrière le champ.
+ *
+ * Un champ de saisie ne sait pas colorer une partie de son contenu. On dessine
+ * donc **la même requête**, au même endroit, avec la même police, derrière un
+ * champ dont le texte est transparent : les jetons reconnus s'y détachent, le
+ * reste garde l'aspect du texte ordinaire. Le curseur, la sélection et la
+ * frappe restent ceux d'un vrai champ — c'est ce que fait GitHub, et c'est la
+ * seule façon d'avoir les deux.
+ *
+ * Les espaces sont conservés tels quels : le calque doit tomber au pixel près
+ * sur le texte qu'il double, sinon il se décale à la première frappe.
+ *
+ * @returns {{text: string, isFilter: boolean}[]}
+ */
+export function queryPieces(query = "", fields = []) {
+  const brut = String(query ?? "");
+  if (!brut) return [];
+
+  const morceaux = [];
+  for (const part of brut.split(/(\s+)/)) {
+    if (!part) continue;
+    if (/^\s+$/.test(part)) {
+      morceaux.push({ text: part, isFilter: false });
+      continue;
+    }
+
+    const coupure = part.indexOf(":");
+    const champ = coupure > 0 ? champPour(fields, part.slice(0, coupure)) : null;
+    const valeur = champ ? valeurPour(champ, part.slice(coupure + 1)) : null;
+    morceaux.push({ text: part, isFilter: Boolean(champ && valeur) });
+  }
+
+  return morceaux;
+}
+
+/**
+ * Le calque à poser derrière le champ.
+ *
+ * Rendu ici plutôt que dans l'écran : c'est la même règle que l'analyse, et
+ * deux endroits qui décident de ce qui est un filtre finiraient par ne plus
+ * être d'accord.
+ */
+export function renderQueryMirror(query = "", fields = [], { tokenClass = "query-token" } = {}) {
+  return queryPieces(query, fields)
+    .map((piece) =>
+      piece.isFilter
+        ? `<span class="${escapeHtml(tokenClass)}">${escapeHtml(piece.text)}</span>`
+        : escapeHtml(piece.text)
+    )
+    .join("");
 }

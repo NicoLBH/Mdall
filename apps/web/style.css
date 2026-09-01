@@ -267,6 +267,24 @@ body.route--project.project-shell-compact.project-discussions-detail-scrolled .g
 
 .gh-input{width:100%;padding:7px 10px;border-radius:var(--radius);border:1px solid var(--border);background:var(--bg-input);outline:none;font-size:13px;font-family: var(--font);font-weight:500;color:rgb(240, 246, 252);}
 .gh-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(88,166,255,.15);}
+
+/* Le meme contour, pour un champ **compose** — une saisie et un bouton dans un
+   meme cadre. Le cadre porte alors le focus, puisque le champ qu'il entoure n'a
+   plus de bordure a lui. Sans cela ces champs-la echappent au comportement
+   commun, et une application ou certains champs reagissent et d'autres non
+   parait mal finie. */
+.gh-field-focus:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px rgba(88,166,255,.15);}
+
+/* Le filet de securite : un champ qui n'a herite d'aucune classe garde tout de
+   meme le contour de la maison. Les cases a cocher et les boutons radio sont
+   exclus — leur focus est celui du systeme, et l'encadrer les deforme. */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus-visible,
+textarea:focus-visible,
+select:focus-visible{
+  border-color:var(--accent);
+  box-shadow:0 0 0 3px rgba(88,166,255,.15);
+  outline:none;
+}
 .gh-input--sm{padding:5px 8px;font-size:12px;height:100%;background:var(--btn-bg);color:var(--text);border:none;}
 .gh-input--search{border-top-right-radius: 0px;border-bottom-right-radius: 0px;border:none;border-right:solid 1px var(--border);background:var(--bg);}
 
@@ -4411,7 +4429,12 @@ body.drilldown-open .drilldown__inner,
   padding:0 16px;
   background:var(--headbg);
   border-bottom:1px solid var(--border);
-  z-index:auto;
+  /* Au-dessus du rail latéral, qui est `fixed` et viendrait sinon recouvrir le
+     trait de l'onglet actif — celui-ci déborde d'un pixel sous la barre. Le rail
+     peut alors se poser au ras du bord : là où il n'y a pas d'orange, son trait
+     vertical occupe ce pixel ; là où il y en a, l'orange l'emporte. Le pixel
+     appartient donc toujours à quelqu'un. */
+  z-index:1;
 }
 .project-tabs a{
   display:inline-flex;
@@ -16544,12 +16567,29 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
    La gouttière est une **bordure transparente**, pas un décalage négatif :
    `background-clip` arrête le fond après elle, et le trait s'y loge sans jamais
    sortir de l'entrée — donc sans rien à rogner ni à faire défiler. */
-.project-rail__item{
+/* La spécificité compte ici : le composant partagé pose son fond avec le
+   raccourci `background` sur `.side-nav-layout__item.is-active` (0,2,0), ce qui
+   **réinitialise `background-clip`**. Une règle à une seule classe se faisait
+   donc écraser en silence, et le fond repassait sous la gouttière. */
+.project-rail .side-nav-layout__item{
   border-left:var(--project-rail-gutter, 10px) solid transparent;
   background-clip:padding-box;
 }
-.project-rail__item.is-active{ background:rgba(110,118,129,.14); font-weight:500; }
-.project-rail__item.is-active::before{
+.project-rail .side-nav-layout__item:hover,
+.project-rail .side-nav-layout__item.is-active,
+.project-rail .side-nav-layout__item[data-side-nav-active="true"]{
+  background-clip:padding-box;
+}
+.project-rail .side-nav-layout__item.is-active,
+.project-rail .side-nav-layout__item[data-side-nav-active="true"]{
+  /* `background-color`, pas `background` : le raccourci réinitialise
+     `background-clip`, et le fond repassait sous la gouttière transparente —
+     le trait bleu se retrouvait collé au fond, ce qu'il ne doit jamais être. */
+  background-color:rgba(110,118,129,.14);
+  font-weight:500;
+}
+.project-rail .side-nav-layout__item.is-active::before,
+.project-rail .side-nav-layout__item[data-side-nav-active="true"]::before{
   content:""; position:absolute;
   left:calc(-1 * var(--project-rail-gutter, 10px)); top:50%; transform:translateY(-50%);
   width:4px; height:24px;
@@ -16566,12 +16606,19 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 }
 .project-rail__collapse:hover{ color:var(--text); }
 
-/* Replié : **seul le texte disparaît**. Les retraits, la gouttière du trait bleu
-   et la place de l'icône sont identiques à l'état déplié — recentrer les icônes
-   ferait sauter tout le rail à chaque repli. */
+/* Replié : **seul le texte disparaît**. La gouttière, le trait bleu et la place
+   de l'icône ne bougent pas d'un pixel — recentrer les icônes ferait sauter tout
+   le rail à chaque repli.
+
+   Les retraits de droite sont ajustés pour que le fond de l'entrée active soit
+   **centré sur l'icône** : 12 px de part et d'autre, et non 12 à gauche pour 10
+   à droite. Un fond décentré d'un pixel se voit sur une colonne d'icônes. */
 .project-rail.is-collapsed .side-nav-layout__label,
 .project-rail.is-collapsed .project-rail__item::after{ display:none; }
 .project-rail.is-collapsed .side-nav-layout__icon{ margin-right:0; }
+.project-rail.is-collapsed{ padding-right:6px; }
+.project-rail.is-collapsed .side-nav-layout__item,
+.project-rail.is-collapsed .project-rail__collapse{ padding-right:12px; }
 
 /* La poignée déborde sur le contenu pour être saisissable sans viser le trait. */
 .project-rail .side-resizer__handle{
@@ -16835,11 +16882,33 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   position:relative; display:flex; align-items:stretch;
   border:1px solid var(--border); border-radius:var(--radius); overflow:hidden;
 }
-.memory-search__input{
-  flex:1 1 auto; min-width:0; border:0; border-radius:0;
-  background:var(--bg); box-shadow:none;
+.memory-search__field{ position:relative; flex:1 1 auto; min-width:0; display:flex; }
+
+/* Le calque des jetons double le texte du champ, exactement au même endroit :
+   meme police, meme retrait, memes espaces. Le champ ecrit par-dessus en
+   transparent — le curseur, la selection et la frappe restent ceux d'un vrai
+   champ, ce qu'aucun `contenteditable` ne rend aussi bien. */
+.memory-search__mirror{
+  position:absolute; inset:0; padding:7px 10px; overflow:hidden;
+  white-space:pre; pointer-events:none;
+  font:inherit; font-size:13px; font-weight:500; color:rgb(240, 246, 252);
+  line-height:normal;
 }
+.memory-search__input{
+  position:relative; flex:1 1 auto; min-width:0; border:0; border-radius:0;
+  background:transparent; box-shadow:none;
+  color:transparent; caret-color:rgb(240, 246, 252);
+}
+.memory-search__input::selection{ background:rgba(56,139,253,.45); color:transparent; }
 .memory-search__input:focus{ outline:none; box-shadow:none; }
+
+/* Un filtre reconnu se detache : bleu sur bleu, comme sur GitHub. L'oeil repere
+   d'un coup ce qui restreint la liste, sans relire la ligne mot a mot. */
+.query-token{
+  color:var(--fgColor-accent, #4493f8);
+  background:rgba(56,139,253,.15);
+  border-radius:4px;
+}
 .memory-search__input::-webkit-search-cancel-button{ display:none; }
 .memory-search__icon{
   display:inline-flex; align-items:center; padding:0 10px;
