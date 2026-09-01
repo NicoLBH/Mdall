@@ -16483,6 +16483,59 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
    entière. */
 .memory-readers__lead{ margin:0; max-width:80ch; color:var(--muted); font-size:13px; }
 
+/* ── La sidebar de la Mémoire ──────────────────────────────────────────────
+   Cinq lectures d'une même table, en colonne. Le filet sépare deux ordres de
+   choses : au-dessus ce que le projet sait, en dessous ce qu'il est. Replié, il
+   ne reste que les icônes — le compte disparaît avec le libellé, car un nombre
+   sans son sujet ne veut rien dire. */
+.memory-layout{ display:grid; grid-template-columns:232px minmax(0,1fr); gap:20px; align-items:start; }
+.memory-layout.is-collapsed{ grid-template-columns:52px minmax(0,1fr); }
+.memory-layout__content{ display:flex; flex-direction:column; gap:12px; min-width:0; }
+
+.memory-nav{
+  position:sticky; top:0; display:flex; flex-direction:column; gap:4px;
+  padding:4px 8px 4px 0; border-right:1px solid var(--border); min-height:220px;
+}
+.memory-nav__scroll{ display:flex; flex-direction:column; flex:1 1 auto; }
+.memory-nav__group{ display:flex; flex-direction:column; gap:2px; }
+
+/* Le compte se pose à droite, comme un décompte et non comme une étiquette. */
+.memory-nav__item{ align-items:center; }
+.memory-nav__item::after{
+  content:attr(data-memory-count); margin-left:auto; color:var(--muted);
+  font-size:12px; font-variant-numeric:tabular-nums;
+}
+.memory-nav__item.is-active{ background:rgba(110,118,129,.14); font-weight:500; }
+.memory-nav__item.is-active::before{
+  content:""; position:absolute; left:-8px; width:4px; height:24px;
+  background:var(--borderColor-accent-emphasis); border-radius:var(--radius);
+}
+
+.memory-nav__collapse{
+  display:flex; align-items:center; gap:8px; width:100%; min-height:30px;
+  padding:6px 10px 6px 12px; margin-top:8px; border:0; border-radius:6px;
+  background:transparent; color:var(--muted); font:inherit; font-size:13px; cursor:pointer;
+}
+.memory-nav__collapse:hover{ background:var(--panel2); color:var(--text); }
+
+/* Replié : les icônes seules, centrées. Le libellé et le compte se taisent. */
+.memory-nav.is-collapsed{ padding-right:4px; }
+.memory-nav.is-collapsed .side-nav-layout__label,
+.memory-nav.is-collapsed .memory-nav__item::after{ display:none; }
+.memory-nav.is-collapsed .side-nav-layout__item,
+.memory-nav.is-collapsed .memory-nav__collapse{ justify-content:center; padding-left:10px; padding-right:10px; }
+.memory-nav.is-collapsed .side-nav-layout__separator{ margin-left:-4px; margin-right:-4px; }
+
+@media (max-width: 900px){
+  .memory-layout, .memory-layout.is-collapsed{ grid-template-columns:minmax(0,1fr); }
+  .memory-nav{ position:static; flex-direction:row; align-items:center; flex-wrap:wrap;
+    border-right:0; border-bottom:1px solid var(--border); min-height:0; padding:0 0 8px; }
+  .memory-nav__scroll{ flex-direction:row; flex-wrap:wrap; gap:4px; }
+  .memory-nav__group{ flex-direction:row; }
+  .memory-nav .side-nav-layout__separator{ display:none; }
+  .memory-nav__collapse{ display:none; }
+}
+
 /* Les écarts. Ils ne se lisent pas comme une connaissance de plus : ils
    s'annoncent avant la liste, et la non-conformité se distingue du différend —
    l'une se corrige, l'autre se tranche. */

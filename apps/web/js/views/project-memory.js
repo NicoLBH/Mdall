@@ -24,6 +24,7 @@
 import { escapeHtml } from "../utils/escape-html.js";
 import { store } from "../store.js";
 import { svgIcon } from "../ui/icons.js";
+import { renderSideNavGroup, renderSideNavItem, renderSideNavSeparator } from "./ui/side-nav-layout.js";
 import { clearProjectActiveScrollSource, setProjectViewHeader } from "./project-shell-chrome.js";
 import { PROJECT_TAB_RESELECTED_EVENT } from "./project-header.js";
 import {
@@ -82,6 +83,18 @@ import {
 } from "../services/hypothesis-acts.js";
 import { bindGhActionButtons, renderGhActionButton } from "./ui/gh-split-button.js";
 
+/** Où se retient le repli du panneau. Un réglage, pas un état de navigation. */
+const NAV_COLLAPSED_KEY = "mdall.memoryNavCollapsed.v1";
+
+/** Le repli tel qu'on l'a laissé. Déplié par défaut : on ne cache rien d'office. */
+function repliRetenu() {
+  try {
+    return window.localStorage.getItem(NAV_COLLAPSED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 const view = {
   loading: true,
   /** `null` : la lecture a échoué. `[]` : le projet n'a rien versé. */
@@ -106,6 +119,7 @@ const view = {
   reader: READER.ALL,
   /** Le formulaire d'hypothèse, quand il est ouvert. */
   declaring: false,
+  navCollapsed: repliRetenu(),
   draft: { subject: "", value: "", domain: "" },
   includeSuperseded: false,
   notice: "",
@@ -613,28 +627,82 @@ export function renderEcarts(assertions = view.assertions) {
   `;
 }
 
-function renderReaderTabs() {
-  const onglet = (lecture) => {
+/**
+ * Les lectures, en colonne à gauche.
+ *
+ * Ce ne sont **pas** cinq écrans : ce sont cinq filtres sur la même table. Un
+ * écran qui tiendrait ses propres données donnerait deux mémoires, et personne
+ * ne saurait laquelle fait foi le jour où elles divergent.
+ *
+ * Le filet sépare deux ordres de choses. Au-dessus, ce que le projet **sait** —
+ * ce qu'il a constaté, supposé, ce qu'on lui impose. En dessous, ce qu'il
+ * **est** : les données de base, d'où partent toutes les déductions. Mettre les
+ * deux dans la même liste ferait passer une entrée de calcul pour une
+ * connaissance de plus.
+ *
+ * Chaque lecture porte le compte de ce qu'elle montre : passer d'une lecture à
+ * l'autre sans savoir combien on va trouver oblige à cliquer pour l'apprendre.
+ * Replié, il ne reste que les icônes — le compte disparaît avec le libellé, car
+ * un nombre sans son sujet ne veut rien dire.
+ */
+function renderMemoryNav() {
+  const replie = view.navCollapsed === true;
+
+  const entree = (lecture) => {
     const combien = readerRows(view.assertions ?? [], lecture).length;
     const actif = view.reader === lecture;
+    const libelle = readerLabel(lecture);
 
-    return `
-      <button type="button" class="memory-readers__tab${actif ? " is-active" : ""}"
-        data-memory-reader="${escapeHtml(lecture)}" ${actif ? 'aria-current="page"' : ""}>
-        ${escapeHtml(readerLabel(lecture))}
-        <span class="memory-readers__count">${combien}</span>
-      </button>
-    `;
+    return renderSideNavItem({
+      label: libelle,
+      iconHtml: svgIcon(READER_ICONS[lecture] ?? "dot-fill-pending", { className: "octicon" }),
+      isActive: actif,
+      className: "memory-nav__item",
+      dataAttributes: {
+        "data-memory-reader": lecture,
+        // Replié, le libellé n'est plus lisible : l'infobulle native le redonne,
+        // et l'étiquette accessible avec lui.
+        "data-tooltip": replie ? `${libelle} (${combien})` : "",
+        "data-memory-count": String(combien)
+      }
+    });
   };
 
   return `
-    <div class="memory-readers">
-      <div class="memory-readers__tabs">
-        ${[READER.ALL, READER.HYPOTHESES, READER.CONSTRAINTS, READER.FINDINGS].map(onglet).join("")}
+    <nav class="memory-nav${replie ? " is-collapsed" : ""}" aria-label="Lectures de la mémoire">
+      <div class="memory-nav__scroll">
+        ${renderSideNavGroup({
+          className: "memory-nav__group",
+          items: [READER.ALL, READER.HYPOTHESES, READER.CONSTRAINTS, READER.FINDINGS].map(entree)
+        })}
+        ${renderSideNavSeparator()}
+        ${renderSideNavGroup({
+          className: "memory-nav__group",
+          items: [entree(READER.BASE_DATA)]
+        })}
       </div>
-      <p class="memory-readers__lead">${escapeHtml(readerLead(view.reader))}</p>
-    </div>
+      <button type="button" class="memory-nav__collapse" data-memory-nav-collapse
+        aria-expanded="${replie ? "false" : "true"}"
+        title="${replie ? "Déplier le panneau" : "Replier le panneau"}">
+        ${svgIcon(replie ? "sidebar-expand" : "sidebar-collapse", { className: "octicon" })}
+        <span class="side-nav-layout__label">Replier</span>
+      </button>
+    </nav>
   `;
+}
+
+/** L'icône de chaque lecture. Une lecture sans icône se cherche, repliée. */
+const READER_ICONS = {
+  [READER.ALL]: "book",
+  [READER.HYPOTHESES]: "issue-opened",
+  [READER.CONSTRAINTS]: "shield",
+  [READER.FINDINGS]: "alert",
+  [READER.BASE_DATA]: "north-star"
+};
+
+/** La phrase de la lecture en cours, au-dessus de la liste. */
+function renderReaderLead() {
+  return `<p class="memory-readers__lead">${escapeHtml(readerLead(view.reader))}</p>`;
 }
 
 /**
@@ -649,7 +717,20 @@ function renderReaderTabs() {
  * Le domaine est facultatif et par défaut vide : on ne devine pas, ici non plus.
  */
 export function renderMemoryFormForPreview() {
-  return renderReaderTabs();
+  return renderMemoryNav();
+}
+
+/**
+ * La sidebar montée sur une mémoire donnée, pour une page d'aperçu.
+ *
+ * Exportée pour qu'un aperçu monte **cette** navigation-ci, et non une copie de
+ * son HTML qui vieillirait à part.
+ */
+export function renderMemoryForPreview(assertions = [], { reader = READER.ALL, collapsed = false } = {}) {
+  view.assertions = assertions;
+  view.reader = reader;
+  view.navCollapsed = collapsed;
+  return `<div class="memory-layout${collapsed ? " is-collapsed" : ""}">${renderMemoryNav()}<div class="memory-layout__content">${renderReaderLead()}</div></div>`;
 }
 
 function renderHypothesisForm() {
@@ -1236,17 +1317,23 @@ function renderContent(root) {
       <div class="propositions-shell">
         ${renderMemoryHead(resume, { busy: view.busy })}
 
-        ${renderReaderTabs()}
+        <div class="memory-layout${view.navCollapsed ? " is-collapsed" : ""}">
+          ${renderMemoryNav()}
 
-        ${renderEcarts(view.assertions)}
+          <div class="memory-layout__content">
+            ${renderReaderLead()}
 
-        ${renderHypothesisForm()}
+            ${renderEcarts(view.assertions)}
 
-        ${view.notice ? `<div class="propositions-empty propositions-empty--warn"><p>${escapeHtml(view.notice)}</p></div>` : ""}
+            ${renderHypothesisForm()}
 
-        ${renderCounts(resume, vocabulaire, enAttente)}
-        ${renderFilters()}
-        ${renderList(lignes, view.page)}
+            ${view.notice ? `<div class="propositions-empty propositions-empty--warn"><p>${escapeHtml(view.notice)}</p></div>` : ""}
+
+            ${renderCounts(resume, vocabulaire, enAttente)}
+            ${renderFilters()}
+            ${renderList(lignes, view.page)}
+          </div>
+        </div>
       </div>
     </section>
   `;
@@ -1415,6 +1502,19 @@ function bind(root) {
       renderContent(root);
     });
   }
+
+  root.querySelector("[data-memory-nav-collapse]")?.addEventListener("click", () => {
+    view.navCollapsed = !view.navCollapsed;
+    // Le repli est un réglage, pas un état de navigation : le perdre à chaque
+    // visite obligerait à le refaire, et un réglage qu'on refait sans cesse
+    // devient une gêne plutôt qu'un choix.
+    try {
+      window.localStorage.setItem(NAV_COLLAPSED_KEY, view.navCollapsed ? "1" : "0");
+    } catch {
+      // Un navigateur qui refuse le stockage garde simplement l'écran déplié.
+    }
+    renderContent(root);
+  });
 
   root.querySelector("[data-memory-declare]")?.addEventListener("click", () => {
     view.declaring = !view.declaring;
@@ -1641,6 +1741,7 @@ export function renderProjectMemory(root) {
   view.notice = "";
   view.open = null;
   view.page = 1;
+  view.navCollapsed = repliRetenu();
   renderContent(root);
 
   (async () => {
