@@ -60,6 +60,8 @@ const state = {
   brouillon: { label: "", definition: "" },
   edite: "",
   busy: false,
+  /** Garder le formulaire ouvert pour la zone suivante. */
+  encore: true,
   /** L'exemple montré. Il avance d'un cran à chaque zone ajoutée. */
   exemple: 0
 };
@@ -95,40 +97,90 @@ async function lireZones({ force = false } = {}) {
   }
 }
 
+/**
+ * Une zone dans le tableau.
+ *
+ * Le nom et sa définition sont l'un sous l'autre dans la même colonne : ce sont
+ * deux faces d'une même chose, et les mettre en deux colonnes ferait chercher
+ * la définition à côté du nom plutôt qu'avec lui.
+ */
 function renderZone(zone) {
   const enEdition = state.edite === zone.key;
 
   if (enEdition) {
     return `
-      <li class="settings-list__row" data-decoupage-row="${escapeHtml(zone.key)}">
-        <div class="settings-inline-form">
-          <input class="gh-input" data-decoupage-edit="label" value="${escapeHtml(state.brouillon.label)}"
-            placeholder="${escapeHtml(exempleCourant().label)}" autocomplete="off">
-          <input class="gh-input" data-decoupage-edit="definition" value="${escapeHtml(state.brouillon.definition)}"
-            placeholder="${escapeHtml(exempleCourant().definition)}" autocomplete="off">
-          <button type="button" class="gh-btn gh-btn--primary" data-decoupage-save="${escapeHtml(zone.key)}"
-            ${state.busy ? "disabled" : ""}>Enregistrer</button>
-          <button type="button" class="gh-btn" data-decoupage-cancel>Annuler</button>
-        </div>
-      </li>
+      <tr data-decoupage-row="${escapeHtml(zone.key)}">
+        <td colspan="2">
+          <div class="decoupage-form__row">
+            <input class="gh-input decoupage-form__input" data-decoupage-edit="label"
+              value="${escapeHtml(state.brouillon.label)}" placeholder="${escapeHtml(exempleCourant().label)}" autocomplete="off">
+            <input class="gh-input decoupage-form__input" data-decoupage-edit="definition"
+              value="${escapeHtml(state.brouillon.definition)}" placeholder="${escapeHtml(exempleCourant().definition)}" autocomplete="off">
+          </div>
+          <div class="subject-create-footer">
+            <div class="subject-create-footer__left"></div>
+            <div class="subject-create-footer__right">
+              <button type="button" class="gh-btn" data-decoupage-cancel>Annuler</button>
+              <button type="button" class="gh-btn gh-btn--primary" data-decoupage-save="${escapeHtml(zone.key)}"
+                ${state.busy ? "disabled" : ""}>Enregistrer</button>
+            </div>
+          </div>
+        </td>
+      </tr>
     `;
   }
 
   return `
-    <li class="settings-list__row" data-decoupage-row="${escapeHtml(zone.key)}">
-      <div>
+    <tr data-decoupage-row="${escapeHtml(zone.key)}">
+      <td class="decoupage-table__zone">
         <b>${escapeHtml(zone.label)}</b>
-        <p class="gh-text-muted">${escapeHtml(zone.definition || "Aucune définition écrite : personne n'a dit ce que cette zone recouvre.")}</p>
-      </div>
-      <div class="settings-list__actions">
+        <span>${escapeHtml(zone.definition || "Aucune définition écrite : personne n'a dit ce que cette zone recouvre.")}</span>
+      </td>
+      <td class="decoupage-table__actions">
         <button type="button" class="gh-btn" data-decoupage-open="${escapeHtml(zone.key)}" ${state.busy ? "disabled" : ""}>
           ${svgIcon("pencil", { className: "octicon" })} Modifier
         </button>
         <button type="button" class="gh-btn" data-decoupage-remove="${escapeHtml(zone.key)}" ${state.busy ? "disabled" : ""}>
           ${svgIcon("x", { className: "octicon" })} Retirer
         </button>
+      </td>
+    </tr>
+  `;
+}
+
+/**
+ * Le formulaire d'ajout : les deux champs sur une ligne, puis le pied.
+ *
+ * Le pied est celui de la création d'un sujet — « En ajouter d'autres » à
+ * gauche, Annuler et Ajouter à droite. Deux formulaires d'ajout dessinés
+ * différemment demanderaient d'apprendre deux fois le même geste.
+ */
+function renderFormulaire() {
+  const bloque = state.busy || Boolean(state.edite);
+
+  return `
+    <div class="decoupage-form">
+      <div class="decoupage-form__row">
+        <input class="gh-input decoupage-form__input" data-decoupage-draft="label"
+          value="${escapeHtml(state.edite ? "" : state.brouillon.label)}"
+          placeholder="${escapeHtml(exempleCourant().label)}" autocomplete="off" ${bloque ? "disabled" : ""}>
+        <input class="gh-input decoupage-form__input" data-decoupage-draft="definition"
+          value="${escapeHtml(state.edite ? "" : state.brouillon.definition)}"
+          placeholder="${escapeHtml(exempleCourant().definition)}" autocomplete="off" ${bloque ? "disabled" : ""}>
       </div>
-    </li>
+      <div class="subject-create-footer">
+        <div class="subject-create-footer__left">
+          <label class="subject-create-checkbox">
+            <input type="checkbox" data-decoupage-more ${state.encore ? "checked" : ""}>
+            <span>En ajouter d'autres</span>
+          </label>
+        </div>
+        <div class="subject-create-footer__right">
+          <button type="button" class="gh-btn" data-decoupage-reset ${bloque ? "disabled" : ""}>Annuler</button>
+          <button type="button" class="gh-btn gh-btn--primary" data-decoupage-create ${bloque ? "disabled" : ""}>Ajouter</button>
+        </div>
+      </div>
+    </div>
   `;
 }
 
@@ -138,26 +190,17 @@ function renderCorps() {
 
   const zones = definedZones(state.assertions ?? []);
 
-  const liste = zones.length
-    ? `<ul class="settings-list">${zones.map(renderZone).join("")}</ul>`
+  const tableau = zones.length
+    ? `<table class="decoupage-table"><tbody>${zones.map(renderZone).join("")}</tbody></table>`
     : `<p class="gh-text-muted">
-         Aucune zone. Tout ce que porte la mémoire vaut alors pour l'ouvrage entier — ce qui est la
-         bonne réponse tant qu'aucune partie ne se distingue.
+         Aucune zone. Tout ce que porte la mémoire vaut alors pour l'ensemble du projet — ce qui est
+         la bonne réponse tant qu'aucune partie ne se distingue.
        </p>`;
 
   return `
     ${state.notice ? `<div class="settings-inline-notice">${escapeHtml(state.notice)}</div>` : ""}
-    ${liste}
-    <div class="settings-inline-form" data-decoupage-add>
-      <input class="gh-input" data-decoupage-draft="label" value="${escapeHtml(state.edite ? "" : state.brouillon.label)}"
-        placeholder="${escapeHtml(exempleCourant().label)}" autocomplete="off" ${state.edite ? "disabled" : ""}>
-      <input class="gh-input" data-decoupage-draft="definition" value="${escapeHtml(state.edite ? "" : state.brouillon.definition)}"
-        placeholder="${escapeHtml(exempleCourant().definition)}" autocomplete="off" ${state.edite ? "disabled" : ""}>
-      <button type="button" class="gh-btn gh-btn--primary" data-decoupage-create
-        ${state.busy || state.edite ? "disabled" : ""}>
-        ${svgIcon("plus", { className: "octicon" })} Ajouter
-      </button>
-    </div>
+    ${renderFormulaire()}
+    ${tableau}
   `;
 }
 
@@ -251,6 +294,16 @@ function bindDecoupageParametresSection(root) {
       rerenderProjectParametres();
     });
   }
+
+  root.querySelector("[data-decoupage-more]")?.addEventListener("change", (event) => {
+    state.encore = event.target.checked;
+  });
+
+  root.querySelector("[data-decoupage-reset]")?.addEventListener("click", () => {
+    state.brouillon = { label: "", definition: "" };
+    state.notice = "";
+    rerenderProjectParametres();
+  });
 
   root.querySelector("[data-decoupage-cancel]")?.addEventListener("click", () => {
     state.edite = "";

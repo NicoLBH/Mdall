@@ -25,7 +25,20 @@ import { escapeHtml } from "../utils/escape-html.js";
 import { store } from "../store.js";
 import { svgIcon } from "../ui/icons.js";
 import { renderSideNavGroup, renderSideNavItem, renderSideNavSeparator } from "./ui/side-nav-layout.js";
-import { bindSideResizer, renderSideResizer } from "./ui/side-resizer.js";
+import {
+  ZONE_TOUT_LOUVRAGE_LABEL,
+  definedZones,
+  describeZonesOf,
+  zonesOf
+} from "../services/project-zones.js";
+import {
+  RAIL_MAX,
+  RAIL_MIN,
+  bindRailResizer,
+  followRailScroll,
+  railWidth,
+  renderProjectRail
+} from "./ui/project-rail.js";
 import { clearProjectActiveScrollSource, setProjectViewHeader } from "./project-shell-chrome.js";
 import { PROJECT_TAB_RESELECTED_EVENT } from "./project-header.js";
 import {
@@ -76,7 +89,7 @@ import {
   stateOf,
   verdictLabel
 } from "../services/hypothesis-acts.js";
-import { bindGhActionButtons, renderGhActionButton } from "./ui/gh-split-button.js";
+import { bindGhActionButtons, bindGhSelectMenus, renderGhActionButton, renderGhSelectMenu } from "./ui/gh-split-button.js";
 
 /** Où se retient le repli du panneau. Un réglage, pas un état de navigation. */
 const NAV_COLLAPSED_KEY = "mdall.memoryNavCollapsed.v1";
@@ -84,14 +97,10 @@ const NAV_COLLAPSED_KEY = "mdall.memoryNavCollapsed.v1";
 /** Et sa largeur, qui est un réglage du même ordre. */
 const NAV_WIDTH_KEY = "mdall.memoryNavWidth.v1";
 
-/** Les bornes du rail : assez large pour « Constats en cours », pas au point de manger la page. */
-const NAV_MIN = 200;
-const NAV_MAX = 420;
-
 function largeurRetenue() {
   try {
     const brut = Number(window.localStorage.getItem(NAV_WIDTH_KEY));
-    return Number.isFinite(brut) && brut > 0 ? Math.max(NAV_MIN, Math.min(NAV_MAX, brut)) : 248;
+    return Number.isFinite(brut) && brut > 0 ? Math.max(RAIL_MIN, Math.min(RAIL_MAX, brut)) : 248;
   } catch {
     return 248;
   }
@@ -132,7 +141,7 @@ const view = {
   declaring: false,
   navCollapsed: repliRetenu(),
   navWidth: largeurRetenue(),
-  draft: { subject: "", value: "", domain: "" },
+  draft: { subject: "", value: "", domain: "", zones: [] },
   includeSuperseded: false,
   notice: "",
   busy: false,
@@ -261,20 +270,26 @@ function renderSearch() {
  * en fait une chose à cliquer, alors qu'on ne le remarque que lorsqu'on cherche
  * à réduire la liste. Ils se signalent au survol, pas au repos.
  *
+ * **Ce sont les menus de la maison, pas des `<select>` natifs.** Un `<select>`
+ * fait dessiner sa liste par le système : sur fond sombre, les options
+ * sortaient blanc sur blanc, illisibles, et aucune feuille de style ne peut les
+ * atteindre. `renderGhSelectMenu` dessine la sienne — celle des autres écrans,
+ * qui suit le thème.
+ *
  * Ce qui a été remplacé est à gauche, seul de son espèce : c'est le seul
  * réglage qui **ajoute** des lignes au lieu d'en retirer, et le mêler aux
  * autres ferait croire l'inverse.
  */
 function renderTableHead() {
-  const option = (valeur, label, actuel) =>
-    `<option value="${escapeHtml(valeur)}"${valeur === actuel ? " selected" : ""}>${escapeHtml(label)}</option>`;
-
-  const filtre = (attribut, etiquette, options, actif) => `
-    <span class="memory-filter${actif ? " is-active" : ""}">
-      <select class="memory-filter__select" ${attribut} aria-label="${escapeHtml(etiquette)}">${options}</select>
-      ${svgIcon("chevron-down", { className: "octicon memory-filter__caret" })}
-    </span>
-  `;
+  const menu = (id, options, valeur) =>
+    renderGhSelectMenu({
+      id,
+      value: valeur,
+      options,
+      size: "sm",
+      fieldClassName: "memory-filter",
+      buttonClassName: "memory-filter__button"
+    });
 
   return `
     <div class="memory-table__head">
@@ -283,27 +298,27 @@ function renderTableHead() {
         <span>Montrer ce qui a été remplacé</span>
       </label>
       <div class="memory-table__filters">
-        ${filtre("data-memory-kind", "Provenance", `
-          ${option("", "Provenance", view.kind)}
-          ${option("avis", "Avis", view.kind)}
-          ${option("attachment", "Rattachements", view.kind)}
-          ${option("document", "Documents", view.kind)}
-        `, Boolean(view.kind))}
-        ${filtre("data-memory-nature", "Nature", `
-          ${option("", "Nature", view.nature)}
-          ${NATURES.map((nature) => option(nature, natureLabel(nature), view.nature)).join("")}
-          ${option("none", `${UNCLASSIFIED_LABEL}e`, view.nature)}
-        `, Boolean(view.nature))}
-        ${filtre("data-memory-domain", "Domaine", `
-          ${option("", "Domaine", view.domain)}
-          ${DOMAINS.map((domaine) => option(domaine, domainLabel(domaine), view.domain)).join("")}
-          ${option("none", UNCLASSIFIED_LABEL, view.domain)}
-        `, Boolean(view.domain))}
-        ${filtre("data-memory-status", "État", `
-          ${option("", "État", view.status)}
-          ${option(MEMORY.ASSUMED, "Assumées", view.status)}
-          ${option(MEMORY.REJECTED, "Écartées", view.status)}
-        `, Boolean(view.status))}
+        ${menu("memoryKind", [
+          { value: "", label: "Provenance" },
+          { value: "avis", label: "Avis" },
+          { value: "attachment", label: "Rattachements" },
+          { value: "document", label: "Documents" }
+        ], view.kind)}
+        ${menu("memoryNature", [
+          { value: "", label: "Nature" },
+          ...NATURES.map((nature) => ({ value: nature, label: natureLabel(nature) })),
+          { value: "none", label: `${UNCLASSIFIED_LABEL}e` }
+        ], view.nature)}
+        ${menu("memoryDomain", [
+          { value: "", label: "Domaine" },
+          ...DOMAINS.map((domaine) => ({ value: domaine, label: domainLabel(domaine) })),
+          { value: "none", label: UNCLASSIFIED_LABEL }
+        ], view.domain)}
+        ${menu("memoryStatus", [
+          { value: "", label: "État" },
+          { value: MEMORY.ASSUMED, label: "Assumées" },
+          { value: MEMORY.REJECTED, label: "Écartées" }
+        ], view.status)}
       </div>
     </div>
   `;
@@ -461,9 +476,15 @@ function renderTaxonomy(assertion) {
   const etiquette = (texte, modificateur) =>
     `<span class="memory-tag memory-tag--${modificateur}">${escapeHtml(texte)}</span>`;
 
+  // La zone est toujours dite, même quand il n'y en a pas : « Ensemble — toutes
+  // zones » est une portée, pas un vide. Ne rien écrire laisserait croire qu'on
+  // a oublié de rattacher l'affirmation.
+  const portee = describeZonesOf(assertion, view.assertions ?? []);
+
   return `
     ${nature ? etiquette(natureLabel(nature), "nature") : etiquette(UNCLASSIFIED_LABEL, "unknown")}
     ${domain ? etiquette(domainLabel(domain), "domain") : etiquette("Sans domaine", "unknown")}
+    ${etiquette(portee, zonesOf(assertion).length ? "zone" : "unknown")}
   `;
 }
 
@@ -667,7 +688,7 @@ function renderMemoryNav() {
       label: libelle,
       iconHtml: svgIcon(READER_ICONS[lecture] ?? "dot-fill-pending", { className: "octicon" }),
       isActive: actif,
-      className: "memory-nav__item",
+      className: "project-rail__item",
       dataAttributes: {
         "data-memory-reader": lecture,
         // Replié, le libellé n'est plus lisible : l'infobulle native le redonne,
@@ -678,121 +699,37 @@ function renderMemoryNav() {
     });
   };
 
-  return `
-    <nav class="memory-nav${replie ? " is-collapsed" : ""}" aria-label="Lectures de la mémoire">
-      <div class="memory-nav__scroll">
-        ${renderSideNavGroup({
-          className: "memory-nav__group",
-          items: [READER.ALL, READER.HYPOTHESES, READER.CONSTRAINTS, READER.FINDINGS].map(entree)
-        })}
-        ${renderSideNavSeparator()}
-        ${renderSideNavGroup({
-          className: "memory-nav__group",
-          items: [entree(READER.BASE_DATA)]
-        })}
-      </div>
-      ${replie ? "" : renderSideResizer({ id: "memoryNavResizer" })}
-      <button type="button" class="memory-nav__collapse" data-memory-nav-collapse
-        aria-expanded="${replie ? "false" : "true"}"
-        title="${replie ? "Déplier le panneau" : "Replier le panneau"}">
-        ${svgIcon(replie ? "sidebar-expand" : "sidebar-collapse", { className: "octicon" })}
-        <span class="side-nav-layout__label">Replier</span>
-      </button>
-    </nav>
-  `;
+  return renderProjectRail({
+    id: "memoryRail",
+    label: "Lectures de la mémoire",
+    collapsed: replie,
+    navHtml: `
+      ${renderSideNavGroup({
+        className: "project-rail__group",
+        items: [READER.ALL, READER.HYPOTHESES, READER.CONSTRAINTS, READER.FINDINGS].map(entree)
+      })}
+      ${renderSideNavSeparator()}
+      ${renderSideNavGroup({ className: "project-rail__group", items: [entree(READER.BASE_DATA)] })}
+    `
+  });
 }
 
 /**
- * Cale le haut du rail sous ce qui le précède, au fil du défilement.
+ * La poignée de largeur, et le calage du haut au fil du défilement.
  *
- * Les onglets du projet défilent avec la page ; l'en-tête global, non. Le rail
- * doit donc descendre sous les onglets quand la page est en haut, puis remonter
- * se caler sous l'en-tête quand ils sont sortis — sans jamais passer dessous.
- *
- * Le CSS seul ne sait pas faire : il ignore où s'arrête un élément qui défile.
- * On mesure, et on écrit la valeur dans une variable — le placement reste au
- * CSS, seule la mesure vient d'ici.
+ * Les deux viennent du composant partagé : le rail de l'Atelier fait le même
+ * geste, et deux copies de ce calage divergeraient au premier changement.
  */
-function suivreDefilement(root) {
-  const rail = root.querySelector(".memory-nav");
-  if (!rail) return;
-
-  const hautDeLApplication = () => {
-    const brut = getComputedStyle(document.body).getPropertyValue("--app-top").trim();
-    const mesure = Number.parseFloat(brut);
-    return Number.isFinite(mesure) ? mesure : 52;
-  };
-
-  const caler = () => {
-    const plancher = hautDeLApplication();
-    const onglets = document.querySelector(".project-view-header");
-    const bas = onglets ? onglets.getBoundingClientRect().top : plancher;
-    rail.style.setProperty("--memory-nav-top", `${Math.max(plancher, Math.round(bas))}px`);
-  };
-
-  caler();
-
-  // Une seule mesure par image : mesurer à chaque événement de défilement ferait
-  // recalculer la mise en page des dizaines de fois par seconde pour une valeur
-  // qui ne change qu'une fois par image.
-  let prevu = false;
-  const auDefilement = () => {
-    if (prevu) return;
-    prevu = true;
-    window.requestAnimationFrame(() => {
-      prevu = false;
-      caler();
-    });
-  };
-
-  window.addEventListener("scroll", auDefilement, { passive: true });
-  window.addEventListener("resize", auDefilement, { passive: true });
-
-  // Le rail est refait à chaque rendu : sans cela, chaque rendu ajouterait deux
-  // écouteurs de plus sur la fenêtre, et ils survivraient à l'écran.
-  if (railDetacher) railDetacher();
-  railDetacher = () => {
-    window.removeEventListener("scroll", auDefilement);
-    window.removeEventListener("resize", auDefilement);
-    railDetacher = null;
-  };
-}
-
-/** De quoi retirer les écouteurs du rail précédent. */
-let railDetacher = null;
-
-/** Et ceux de la poignée, pour la même raison. */
-let poigneeDetacher = null;
-
-/**
- * La poignée qui règle la largeur du rail.
- *
- * La largeur s'applique pendant le glissé — redimensionner sans voir revient à
- * viser en aveugle — et n'est écrite qu'au relâchement : retenir un réglage à
- * chaque pixel ferait cent écritures pour un seul geste.
- */
-function brancherPoignee(root) {
+function brancherRail(root) {
   if (poigneeDetacher) poigneeDetacher();
-  poigneeDetacher = null;
+  if (railDetacher) railDetacher();
 
-  const poignee = root.querySelector("#memoryNavResizer");
-  if (!poignee) return;
-
-  // Une seule écriture, sur la page : le rail et la marge du contenu lisent la
-  // même variable. En écrire deux les laisserait se désaccorder pendant le
-  // glissé — le contenu passait alors sous le rail.
-  const page = root.querySelector(".project-simple-page--memory");
-
-  poigneeDetacher = bindSideResizer({
-    handle: poignee,
-    guide: root.querySelector("#memoryNavResizerGuide"),
-    min: NAV_MIN,
-    max: NAV_MAX,
+  railDetacher = followRailScroll(root.querySelector(".project-rail"));
+  poigneeDetacher = bindRailResizer({
+    root,
+    id: "memoryRail",
+    pageSelector: ".project-simple-page--memory",
     getWidth: () => view.navWidth,
-    onResize: (largeur) => {
-      view.navWidth = largeur;
-      page?.style.setProperty("--memory-nav-width", `${largeur}px`);
-    },
     onEnd: (largeur) => {
       view.navWidth = largeur;
       try {
@@ -804,12 +741,16 @@ function brancherPoignee(root) {
   });
 }
 
+/** De quoi retirer les écouteurs du rail précédent, et ceux de la poignée. */
+let railDetacher = null;
+let poigneeDetacher = null;
+
 /** L'icône de chaque lecture. Une lecture sans icône se cherche, repliée. */
 const READER_ICONS = {
   [READER.ALL]: "book",
   [READER.HYPOTHESES]: "issue-opened",
   [READER.CONSTRAINTS]: "shield",
-  [READER.FINDINGS]: "alert",
+  [READER.FINDINGS]: "tools",
   [READER.BASE_DATA]: "north-star"
 };
 
@@ -843,7 +784,51 @@ export function renderMemoryForPreview(assertions = [], { reader = READER.ALL, c
   view.assertions = assertions;
   view.reader = reader;
   view.navCollapsed = collapsed;
-  return `<div class="memory-layout${collapsed ? " memory-layout--collapsed" : ""}">${renderMemoryNav()}<div class="memory-layout__content">${renderReaderLead()}</div></div>`;
+  return `<div class="project-rail-layout${collapsed ? " project-rail-layout--collapsed" : ""}">${renderMemoryNav()}<div class="project-rail-layout__content">${renderReaderLead()}</div></div>`;
+}
+
+/**
+ * À quelle partie de l'ouvrage l'affirmation s'applique.
+ *
+ * **« Ensemble — toutes zones » est coché par défaut**, parce que c'est le cas
+ * ordinaire : une information vaut pour le projet entier tant que personne n'a
+ * dit le contraire. Cocher une zone particulière le décoche ; tout décocher le
+ * remet. On ne peut donc jamais se retrouver sans portée — et il n'y a pas de
+ * différence entre « aucune zone » et « toutes », qui est justement la source
+ * de confusion qu'on veut éviter.
+ *
+ * Si aucune zone n'est définie, on ne montre pas une case seule qui ne se
+ * décoche pas : on dit où les définir.
+ */
+function renderZonePicker() {
+  const zones = definedZones(view.assertions ?? []);
+  const choisies = new Set(view.draft.zones ?? []);
+
+  if (zones.length === 0) {
+    return `
+      <p class="memory-declare__hint">
+        Cette affirmation vaudra pour l'ensemble du projet. Pour la rattacher à une partie,
+        définissez d'abord un découpage dans Paramètres › Découpage du projet.
+      </p>
+    `;
+  }
+
+  const case_ = (cle, libelle, cochee) => `
+    <label class="memory-zones__choice${cochee ? " is-checked" : ""}">
+      <input type="checkbox" data-memory-zone="${escapeHtml(cle)}" ${cochee ? "checked" : ""}>
+      <span>${escapeHtml(libelle)}</span>
+    </label>
+  `;
+
+  return `
+    <div class="memory-zones">
+      <span class="memory-zones__label">Zones</span>
+      <div class="memory-zones__choices">
+        ${case_("", ZONE_TOUT_LOUVRAGE_LABEL, choisies.size === 0)}
+        ${zones.map((zone) => case_(zone.key, zone.label, choisies.has(zone.key))).join("")}
+      </div>
+    </div>
+  `;
 }
 
 function renderHypothesisForm() {
@@ -882,6 +867,7 @@ function renderHypothesisForm() {
           </select>
         </label>
       </div>
+      ${renderZonePicker()}
       <div class="memory-declare__actions">
         <button type="button" class="gh-btn" data-memory-declare-cancel>Annuler</button>
         <button type="submit" class="gh-btn gh-btn--primary" ${view.busy ? "disabled" : ""}>Déclarer</button>
@@ -1120,6 +1106,7 @@ async function declareHypothesis(root) {
     subject: view.draft.subject,
     value: view.draft.value,
     domain: view.draft.domain,
+    zones: view.draft.zones ?? [],
     declaredBy: store.user?.id ?? null
   });
 
@@ -1149,7 +1136,7 @@ async function declareHypothesis(root) {
   view.assertions = await memoire.listProjectAssertions(view.projectId);
 
   view.declaring = false;
-  view.draft = { subject: "", value: "", domain: "" };
+  view.draft = { subject: "", value: "", domain: "", zones: [] };
   view.notice = resultat.flagged
     ? `Hypothèse versée. ${resultat.flagged} affirmation(s) qui en dépendent sont à revérifier.`
     : resultat.superseded
@@ -1424,7 +1411,7 @@ function renderContent(root) {
   if (view.loading) {
     root.innerHTML = `
       <section class="project-simple-page project-simple-page--memory"
-      style="--memory-nav-width:${view.navCollapsed ? 52 : Math.max(NAV_MIN, Math.min(NAV_MAX, view.navWidth))}px">
+      style="--project-rail-width:${railWidth(view.navWidth, view.navCollapsed)}px">
         <div class="propositions-shell">
           <div class="propositions-empty"><b>Lecture de la mémoire…</b></div>
         </div>
@@ -1439,7 +1426,7 @@ function renderContent(root) {
   if (view.assertions === null) {
     root.innerHTML = `
       <section class="project-simple-page project-simple-page--memory"
-      style="--memory-nav-width:${view.navCollapsed ? 52 : Math.max(NAV_MIN, Math.min(NAV_MAX, view.navWidth))}px">
+      style="--project-rail-width:${railWidth(view.navWidth, view.navCollapsed)}px">
         <div class="propositions-shell">
           <div class="propositions-empty propositions-empty--warn">
             <b>La mémoire n'a pas pu être lue</b>
@@ -1454,7 +1441,7 @@ function renderContent(root) {
   if (view.open) {
     root.innerHTML = `
       <section class="project-simple-page project-simple-page--memory"
-      style="--memory-nav-width:${view.navCollapsed ? 52 : Math.max(NAV_MIN, Math.min(NAV_MAX, view.navWidth))}px">
+      style="--project-rail-width:${railWidth(view.navWidth, view.navCollapsed)}px">
         <div class="propositions-shell">${renderMemoryDetail(view.assertions, view.open)}</div>
       </section>
     `;
@@ -1472,14 +1459,14 @@ function renderContent(root) {
 
   root.innerHTML = `
     <section class="project-simple-page project-simple-page--memory"
-      style="--memory-nav-width:${view.navCollapsed ? 52 : Math.max(NAV_MIN, Math.min(NAV_MAX, view.navWidth))}px">
+      style="--project-rail-width:${railWidth(view.navWidth, view.navCollapsed)}px">
       <div class="propositions-shell">
         ${renderMemoryHead(resume, { busy: view.busy })}
 
-        <div class="memory-layout${view.navCollapsed ? " memory-layout--collapsed" : ""}">
+        <div class="project-rail-layout${view.navCollapsed ? " project-rail-layout--collapsed" : ""}">
           ${renderMemoryNav()}
 
-          <div class="memory-layout__content">
+          <div class="project-rail-layout__content">
             ${renderReaderLead()}
 
             ${renderHypothesisForm()}
@@ -1499,7 +1486,6 @@ function renderContent(root) {
   `;
 
   bind(root);
-  suivreDefilement(root);
 }
 
 /**
@@ -1566,29 +1552,9 @@ function bind(root) {
     });
   }
 
-  root.querySelector("[data-memory-kind]")?.addEventListener("change", (event) => {
-    view.kind = event.target.value;
-    view.page = 1;
-    renderContent(root);
-  });
 
-  root.querySelector("[data-memory-status]")?.addEventListener("change", (event) => {
-    view.status = event.target.value;
-    view.page = 1;
-    renderContent(root);
-  });
 
-  root.querySelector("[data-memory-nature]")?.addEventListener("change", (event) => {
-    view.nature = event.target.value;
-    view.page = 1;
-    renderContent(root);
-  });
 
-  root.querySelector("[data-memory-domain]")?.addEventListener("change", (event) => {
-    view.domain = event.target.value;
-    view.page = 1;
-    renderContent(root);
-  });
 
   root.querySelector("[data-memory-superseded]")?.addEventListener("change", (event) => {
     view.includeSuperseded = event.target.checked;
@@ -1664,9 +1630,9 @@ function bind(root) {
     });
   }
 
-  brancherPoignee(root);
+  brancherRail(root);
 
-  root.querySelector("[data-memory-nav-collapse]")?.addEventListener("click", () => {
+  root.querySelector("[data-project-rail-collapse]")?.addEventListener("click", () => {
     view.navCollapsed = !view.navCollapsed;
     // Le repli est un réglage, pas un état de navigation : le perdre à chaque
     // visite obligerait à le refaire, et un réglage qu'on refait sans cesse
@@ -1687,7 +1653,7 @@ function bind(root) {
 
   root.querySelector("[data-memory-declare-cancel]")?.addEventListener("click", () => {
     view.declaring = false;
-    view.draft = { subject: "", value: "", domain: "" };
+    view.draft = { subject: "", value: "", domain: "", zones: [] };
     renderContent(root);
   });
 
@@ -1702,12 +1668,47 @@ function bind(root) {
     });
   }
 
+  for (const case_ of root.querySelectorAll("[data-memory-zone]")) {
+    case_.addEventListener("change", (event) => {
+      const cle = case_.getAttribute("data-memory-zone");
+      const choisies = new Set(view.draft.zones ?? []);
+
+      // « Ensemble » n'est pas une zone : c'est l'absence de zone. Le cocher
+      // vide la sélection, et le décocher seul ne mènerait nulle part — on le
+      // laisse coché plutôt que d'accepter un état sans portée.
+      if (!cle) {
+        view.draft = { ...view.draft, zones: [] };
+      } else if (event.target.checked) {
+        choisies.add(cle);
+        view.draft = { ...view.draft, zones: [...choisies] };
+      } else {
+        choisies.delete(cle);
+        view.draft = { ...view.draft, zones: [...choisies] };
+      }
+      renderContent(root);
+    });
+  }
+
   root.querySelector("[data-memory-declare-form]")?.addEventListener("submit", (event) => {
     event.preventDefault();
     declareHypothesis(root);
   });
 
   bindVerserButton(root);
+
+  // Les filtres passent par les menus de la maison : un seul rappel les sert
+  // tous, et l'identifiant dit lequel a bougé.
+  bindGhSelectMenus(root, {
+    onChange: (id, value) => {
+      const champ = { memoryKind: "kind", memoryNature: "nature", memoryDomain: "domain", memoryStatus: "status" }[id];
+      if (!champ) return;
+      view[champ] = value;
+      // Filtrer ramène à la première page : rester en page 4 d'un résultat qui
+      // en compte deux montrerait un vide qu'on prendrait pour une absence.
+      view.page = 1;
+      renderContent(root);
+    }
+  });
 
   bindPagination(root);
 

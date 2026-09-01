@@ -49,7 +49,7 @@ const READER_LABELS = {
   [READER.ALL]: "Tout",
   [READER.HYPOTHESES]: "Hypothèses",
   [READER.CONSTRAINTS]: "Contraintes",
-  [READER.FINDINGS]: "Constats en cours",
+  [READER.FINDINGS]: "Constats",
   [READER.BASE_DATA]: "Données de base"
 };
 
