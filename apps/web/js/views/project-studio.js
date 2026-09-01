@@ -13,7 +13,7 @@ import {
   railWidth,
   renderProjectRail
 } from "./ui/project-rail.js";
-import { renderStudioGeneral } from "./studio/studio-general.js";
+import { renderCopilote } from "./studio/copilote/copilote.js";
 import { renderSolidityClimate } from "./studio/solidity/solidity-climate.js";
 import { renderSolidityGeorisks } from "./studio/solidity/solidity-georisks.js";
 import { renderSolidityArkolia } from "./studio/socotec/socotec-enr-pv-hangard-neuf.js";
@@ -27,7 +27,7 @@ function renderStudioNav() {
       items: [
         renderNavListItem({
           label: "Copilote",
-          dataAttributes: { "data-side-nav-target": "studio-general" },
+          dataAttributes: { "data-side-nav-target": "studio-copilote" },
           iconHtml: svgIcon("copilot", { className: "octicon octicon-copilot" }),
           isActive: true
         })
@@ -127,8 +127,8 @@ function getRouterHtml() {
             })}
             <div class="project-rail-layout__content settings-content settings-content--parametres project-studio-router__content">
               
-              <section class="project-studio-router__panel is-active" data-side-nav-panel="studio-general">
-                <div id="projectStudioGeneralPanel"></div>
+              <section class="project-studio-router__panel is-active" data-side-nav-panel="studio-copilote">
+                <div id="projectStudioCopilotePanel"></div>
               </section>
               <section class="project-studio-router__panel" data-side-nav-panel="solidity-climate">
                 <div id="projectStudioSolidityClimatePanel"></div>
@@ -171,7 +171,7 @@ export function renderProjectStudio(root) {
   root.innerHTML = getRouterHtml();
   brancherRail(root);
 
-  const generalRoot = root.querySelector("#projectStudioGeneralPanel");
+  const copiloteRoot = root.querySelector("#projectStudioCopilotePanel");
   const solidityClimateRoot = root.querySelector("#projectStudioSolidityClimatePanel");
   const solidityGeorisksRoot = root.querySelector("#projectStudioSolidityGeorisksPanel");
   const solidityArkoliaRoot = root.querySelector("#projectStudioSolidityArkoliaPanel");
@@ -179,7 +179,7 @@ export function renderProjectStudio(root) {
   const ctContinuityLabRoot = root.querySelector("#projectStudioCtContinuityLabPanel");
   const conflitsRoot = root.querySelector("#projectStudioConflitsPanel");
 
-  if (generalRoot) renderStudioGeneral(generalRoot);
+  if (copiloteRoot) renderCopilote(copiloteRoot);
   if (solidityClimateRoot) renderSolidityClimate(solidityClimateRoot, { force: true });
   if (solidityGeorisksRoot) renderSolidityGeorisks(solidityGeorisksRoot);
   if (solidityArkoliaRoot) renderSolidityArkolia(solidityArkoliaRoot);
@@ -190,7 +190,7 @@ export function renderProjectStudio(root) {
   const getScrollSource = () => root.querySelector("#projectStudioRouterScroll");
 
   bindSideNavPanels(root, {
-    defaultTarget: "studio-general",
+    defaultTarget: "studio-copilote",
     scrollContainer: getScrollSource()
   });
 
@@ -200,6 +200,10 @@ export function renderProjectStudio(root) {
 
       const targetId = String(button.dataset.sideNavTarget || "").trim();
       if (targetId === "solidity-climate" && solidityClimateRoot) renderSolidityClimate(solidityClimateRoot, { force: true });
+      // Le copilote se redessine à chaque venue : la conversation a pu avancer
+      // dans un autre onglet, et un fil figé donnerait l'impression d'avoir
+      // perdu l'échange.
+      if (targetId === "studio-copilote" && copiloteRoot) renderCopilote(copiloteRoot);
       // Les conflits se relisent à chaque venue : la mémoire a pu bouger dans
       // un autre onglet, et un écran d'arbitrage qui montre un état périmé est
       // pire qu'un écran vide.

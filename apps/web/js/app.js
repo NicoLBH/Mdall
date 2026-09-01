@@ -1,6 +1,5 @@
 import { initRouter, rerenderRoute } from "./router.js";
 import { store } from "./store.js";
-import { mountAssistOverlay, bindGlobalAssistLauncher } from "./views/assist-overlay.js";
 import { renderGlobalShell } from "./views/global-shell.js";
 import { runAnalysis, resetAnalysisUi } from "./services/analysis-runner.js";
 import { ensureProjectAutomationDefaults } from "./services/project-automation.js";
@@ -71,8 +70,6 @@ async function bootstrap() {
   renderGlobalShell();
   window.addEventListener("hashchange", renderGlobalShell);
 
-  mountAssistOverlay();
-  bindGlobalAssistLauncher();
   initRouter();
 
   if (!location.hash) {

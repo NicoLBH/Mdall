@@ -16532,8 +16532,16 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
    qui reste, et retrouve donc sa largeur habituelle. */
 .project-simple-page--memory,
 .project-simple-page--studio{ margin-left:var(--project-rail-width, 232px); }
+/* La coque de l'Atelier est un élément flex : sans largeur, elle se dimensionne
+   sur son contenu, et un panneau vide la réduisait à trois cents pixels. On la
+   fait tenir la colonne — sur cette page seulement, les Paramètres ayant leur
+   propre mise en page. */
+.project-simple-page--studio .settings-shell--parametres{ width:100%; }
 .project-rail-layout{ display:block; }
-.project-rail-layout__content{ display:flex; flex-direction:column; gap:12px; min-width:0; }
+/* `width:100%` n'est pas superflu : sans lui le contenu se dimensionne sur ce
+   qu'il porte, et l'Atelier — dont les panneaux sont vides tant qu'on n'a pas
+   choisi d'outil — se retrouvait dans une colonne de trois cents pixels. */
+.project-rail-layout__content{ display:flex; flex-direction:column; gap:12px; width:100%; min-width:0; }
 
 /* La liste défile si elle déborde ; le bouton de repli reste en bas, quoi qu'il
    arrive — c'est un réglage du rail, pas le dernier de ses éléments. */
@@ -16577,6 +16585,41 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 }
 .memory-depends__choice:hover{ background:var(--panel2); }
 .memory-depends__choice.is-checked{ border-color:var(--borderColor-accent-emphasis); color:var(--text); }
+
+/* Le Copilote du projet.
+
+   Vide, la saisie est au centre : c'est la seule chose à faire, et la poser en
+   bas d'un écran blanc obligerait à la chercher. Dès qu'un échange existe, le
+   fil prend la place et la saisie descend — on lit d'abord, on répond ensuite. */
+/* Une colonne lisible plutôt que toute la largeur : une conversation qui
+   s'étale sur mille pixels se relit mal. */
+.copilote{ display:flex; flex-direction:column; gap:16px; min-height:60vh; width:100%; max-width:860px; margin:0 auto; }
+.copilote--empty{ justify-content:center; align-items:center; }
+.copilote--empty .copilote-compose{ width:100%; max-width:760px; }
+
+.copilote-empty{ text-align:center; max-width:560px; }
+.copilote-empty__mark{ display:inline-flex; color:var(--muted); }
+.copilote-empty__title{ margin:10px 0 4px; color:var(--text); font-size:16px; font-weight:600; }
+.copilote-empty__sub{ margin:0; color:var(--muted); font-size:13px; line-height:19px; }
+
+.copilote-thread{ flex:1 1 auto; padding:0; max-height:52vh; }
+
+/* La saisie et ses commandes dans un même cadre : le cadre porte le focus,
+   comme partout ailleurs. */
+.copilote-compose{
+  display:flex; flex-direction:column; gap:8px;
+  padding:10px 12px; border:1px solid var(--border); border-radius:12px;
+  background:var(--bg);
+}
+.copilote-input{
+  width:100%; min-height:64px; resize:vertical;
+  border:0; background:transparent; outline:none;
+  color:var(--text); font:inherit; font-size:14px; line-height:20px;
+}
+.copilote-input:focus{ outline:none; box-shadow:none; }
+.copilote-compose__actions{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.copilote-compose__left{ display:flex; align-items:center; gap:6px; }
+.copilote-error{ margin:0; color:var(--danger); font-size:13px; }
 
 /* La liste de navigation : le `li` porte le repère, le contenu porte le fond.
 
