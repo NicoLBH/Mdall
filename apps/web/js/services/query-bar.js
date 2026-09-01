@@ -28,7 +28,12 @@
  * @typedef {object} QueryField
  * @property {string} key le mot avant les deux-points, tel qu'on le tape
  * @property {string} label son nom pour l'écran
- * @property {{value: string, label: string}[]} values les valeurs admises
+ * @property {{value: string, label: string, token?: string}[]} values les valeurs
+ *   admises. `token` est ce qui s'écrit dans la barre — accentué, lisible — quand
+ *   il diffère de la valeur interne.
+ * @property {boolean} [multiple] plusieurs valeurs peuvent coexister. Par défaut
+ *   non : reposer deux fois le même champ **remplace**, parce qu'une affirmation
+ *   n'a qu'une nature et qu'offrir d'en cocher deux promet un résultat vide.
  */
 
 import { escapeHtml } from "../utils/escape-html.js";
@@ -56,12 +61,33 @@ function champPour(fields, mot) {
   return (fields ?? []).find((champ) => pli(champ.key) === cherche || pli(champ.label) === cherche) ?? null;
 }
 
-/** La valeur admise qui répond à ce mot, ou `null`. Même règle. */
+/**
+ * La valeur admise qui répond à ce mot, ou `null`.
+ *
+ * On accepte la valeur interne, le jeton écrit et le libellé — tous **repliés** :
+ * « Hypothèse », « hypothèse » et « hypothese » désignent la même chose, parce
+ * qu'on tape rarement les accents dans une barre de recherche et jamais deux
+ * fois la même casse.
+ */
 function valeurPour(champ, mot) {
   const cherche = pli(mot);
   return (champ?.values ?? []).find(
-    (valeur) => pli(valeur.value) === cherche || pli(valeur.label) === cherche
+    (valeur) =>
+      pli(valeur.value) === cherche ||
+      pli(valeur.label) === cherche ||
+      pli(jetonDe(valeur)) === cherche
   ) ?? null;
+}
+
+/**
+ * Ce qui s'écrit dans la barre pour cette valeur.
+ *
+ * Accentué et en toutes lettres : la barre se lit autant qu'elle s'écrit, et
+ * `nature:donnée-de-base` se comprend là où `nature:donnee-de-base` fait code.
+ * La valeur interne, elle, ne bouge pas.
+ */
+function jetonDe(valeur) {
+  return texte(valeur?.token) || texte(valeur?.value);
 }
 
 /**
@@ -110,7 +136,10 @@ export function parseQuery(query = "", fields = []) {
 export function formatQuery({ filters = {}, text = "" } = {}, fields = []) {
   const jetons = (fields ?? [])
     .filter((champ) => texte(filters[champ.key]))
-    .map((champ) => `${champ.key}:${texte(filters[champ.key])}`);
+    .map((champ) => {
+      const valeur = valeurPour(champ, filters[champ.key]);
+      return `${champ.key}:${valeur ? jetonDe(valeur) : texte(filters[champ.key])}`;
+    });
 
   return [...jetons, texte(text)].filter(Boolean).join(" ");
 }
@@ -205,11 +234,21 @@ export function suggestAt(query = "", fields = [], caret = 0) {
 
   const cherche = pli(jeton.slice(coupure + 1));
   const items = (champ.values ?? [])
-    .filter((valeur) => !cherche || pli(valeur.label).includes(cherche) || pli(valeur.value).startsWith(cherche))
+    .filter(
+      (valeur) =>
+        !cherche ||
+        pli(valeur.label).includes(cherche) ||
+        pli(jetonDe(valeur)).startsWith(cherche) ||
+        pli(valeur.value).startsWith(cherche)
+    )
     .map((valeur) => ({
-      insert: `${champ.key}:${valeur.value} `,
+      insert: `${champ.key}:${jetonDe(valeur)} `,
       label: valeur.label,
-      hint: champ.label
+      hint: champ.label,
+      // Un champ à choix simple **remplace** sa valeur précédente : proposer
+      // « nature:contrainte » à côté de « nature:hypothèse » promettrait un
+      // résultat que la mémoire ne peut pas donner.
+      replacesField: champ.multiple !== true ? champ.key : ""
     }));
 
   return items.length ? { kind: "value", token: jeton, start: debut, end: fin, items } : null;
@@ -286,4 +325,44 @@ export function renderQueryMirror(query = "", fields = [], { tokenClass = "query
       );
     })
     .join("");
+}
+
+
+/**
+ * La requête débarrassée des autres jetons d'un champ à choix simple.
+ *
+ * Appelée après une complétion : on vient d'insérer `nature:contrainte`, il faut
+ * retirer le `nature:hypothèse` qui traînait ailleurs dans la ligne. Sans cela
+ * la barre montrerait deux valeurs pour un champ qui n'en admet qu'une, et le
+ * résultat serait vide sans que rien ne l'explique.
+ *
+ * @param {number} garde position d'un jeton à conserver
+ */
+export function dropOtherTokens(query = "", fields = [], key = "", garde = -1) {
+  const champ = champPour(fields, key);
+  if (!champ || champ.multiple === true) return String(query ?? "");
+
+  const brut = String(query ?? "");
+  const morceaux = [];
+  let curseur = 0;
+
+  for (const part of brut.split(/(\s+)/)) {
+    if (!part) continue;
+    const debut = curseur;
+    curseur += part.length;
+
+    if (/^\s+$/.test(part)) {
+      morceaux.push(part);
+      continue;
+    }
+
+    const coupure = part.indexOf(":");
+    const sien = coupure > 0 && champPour(fields, part.slice(0, coupure)) === champ;
+    const aGarder = debut <= garde && garde <= debut + part.length;
+    if (sien && !aGarder) continue;
+
+    morceaux.push(part);
+  }
+
+  return morceaux.join("").replace(/\s{2,}/g, " ").trim();
 }
