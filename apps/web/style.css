@@ -4197,175 +4197,9 @@ body.drilldown-open .drilldown__inner,
 
 
 
-/* ===== Private assistant overlay (GitHub-like, full-screen slide-in) ===== */
-.assist-panel{
-  width:90vw;
-  max-width:720px;
-  min-width:360px;
-  height:100vh;
-  background:var(--bgAssistPanel);
-  border-right:1px solid rgba(240,246,252,.12);
-  border-top-right-radius:12px;
-  border-bottom-right-radius:12px;
-  box-shadow:10px 0 28px rgba(0,0,0,.45);
-  transform:translateX(-100%);
-  transition:transform .22s ease;
-  display:flex;
-  flex-direction:column;
-}
-
-.assist-overlay.is-open .assist-panel{
-  transform:translateX(0);
-}
-
-.assist-panel__head{
-  padding:14px 16px;
-}
-.assist-head__left{ display:flex; align-items:center; gap:12px; min-width:0; }
-.assist-head__logo{ width:34px; height:34px;}
-.assist-head__title{ min-width:0; }
-.assist-head__name{ font-size:16px; font-weight:700; line-height:20px; }
-.assist-head__sub{ font-size:12px; color: var(--muted); line-height:16px; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width: 72vw; }
-
-.assist-close{
-  width:34px; height:34px;
-  border-radius:8px;
-  border:1px solid rgba(240,246,252,.16);
-  background:transparent;
-  color: var(--text);
-  cursor:pointer;
-}
-.assist-close:hover{ background: rgba(240,246,252,.10); }
-
-.assist-panel__body{
-  flex:1;
-  display:flex;
-  flex-direction:column;
-  min-height:0;
-}
-.assist-thread{
-  flex:1;
-  overflow:auto;
-  padding:16px 18px;
-  background: transparent;
-}
-.assist-empty{
-  border:1px dashed rgba(240,246,252,.16);
-  border-radius:12px;
-  padding:16px;
-  color: var(--muted);
-}
-.assist-empty__title{ font-weight:700; color: var(--text); margin-bottom:6px; }
-.assist-empty__sub{ font-size:13px; line-height:18px; }
-
-.assist-msg{
-  padding:12px 12px;
-  border:1px solid rgba(240,246,252,.12);
-  border-radius:12px;
-  margin-bottom:12px;
-  position:relative;
-}
-.assist-msg::before{
-  content:"";
-  position:absolute;
-  left:-10px;
-  top:0; bottom:0;
-  width:2px;
-  background: rgba(240,246,252,.08);
-  border-radius:2px;
-  display:none;
-}
-.assist-msg--assistant{border:none;}
-.assist-msg--user{ background: rgba(240,246,252,.03);margin-left:auto; width:60%}
-
-.assist-msg__meta{
-  display:flex; align-items:center; gap:8px;
-  font-size:12px;
-  color: var(--muted);
-  margin-bottom:6px;
-}
-.assist-msg__who{ color: var(--text); font-weight:700; }
-.assist-msg__pending{ margin-left:auto; color: var(--muted); }
-.assist-msg__body{ font-size:14px; line-height:20px; }
-.assist-msg__body p{ margin: 6px 0; }
-.assist-msg__body ul{ margin:6px 0 6px 18px; }
-.assist-msg__body code{ background: rgba(240,246,252,.08); padding:1px 4px; border-radius:6px; }
-
-.assist-compose{
-  padding:12px 18px 16px 18px;
-  background: transparent;
-}
-.assist-input{
-  width:100%;
-  resize:vertical;
-  min-height:72px;
-  background: transparent;
-  border:1px solid rgba(240,246,252,.12);
-  border-radius:12px;
-  color: var(--text);
-  padding:10px 12px;
-  outline:none;
-}
-.assist-input:focus{ border-color: rgba(56,139,253,.55); box-shadow: 0 0 0 3px rgba(56,139,253,.18); }
-.assist-overlay--help .assist-input:focus{ border-color: rgba(46,160,67,.65); box-shadow: 0 0 0 3px rgba(46,160,67,.18); }
-.helpMode:focus{border-color:#2da44e, outline:none;box-shadow:0 0 0 3px rgba(45,164,78, 0.3)}
-.assist-compose__actions{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:12px;
-  margin-top:10px;
-}
-
-/* Assistant send button (ChatGPT-like) */
-.assist-send{
-  width:38px;
-  height:38px;
-  border-radius:999px;
-  border:none;
-  background: rgb(31, 111, 235);
-  color:#fff;
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  cursor:pointer;
-}
-.assist-send:hover{ filter: brightness(1.05); }
-.assist-send:active{ filter: brightness(0.95); }
-
-
-
-/* Assistant explicit authorization (danger) */
-
-
-
-
-
-/* ===== Help mode (furtif) ===== */
-.assist-help-toggle{
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  height:34px;
-  padding:0 12px;
-  border-radius:999px;
-  border:1px solid rgba(46,160,67,.35);
-  background: rgba(46,160,67,.08);
-  color: rgba(240,246,252,.92);
-  font-weight:700;
-  cursor:pointer;
-}
-.assist-help-toggle:hover{ background: rgba(46,160,67,.12); }
-.assist-help-toggle.is-on{
-  border-color: rgba(46,160,67,.65);
-  background: rgba(46,160,67,.18);
-}
-
-.assist-msg--help{
-  border-color: rgba(46,160,67,.35);
-  background: rgba(46,160,67,.06);
-}
-.assist-msg--help.assist-msg--assistant{ border:1px solid rgba(46,160,67,.28); }
+/* La surimpression de l'assistant a été déposée avec son calque : son habillage
+   n'avait plus de DOM à habiller. Ce que le Copilote reprend est plus bas, sous
+   son propre nom — `assist-` désignait un écran qui n'existe plus. */
 
 .gh-btn--help-mode{
   display:inline-flex;
@@ -10230,7 +10064,6 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
       background: rgb(21, 27, 35) !important;
     }
 
-    .assist-overlay.hidden,
     .drilldown.hidden{
       display:none !important;
     }
@@ -16595,30 +16428,72 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
    s'étale sur mille pixels se relit mal. */
 .copilote{ display:flex; flex-direction:column; gap:16px; min-height:60vh; width:100%; max-width:860px; margin:0 auto; }
 .copilote--empty{ justify-content:center; align-items:center; }
-.copilote--empty .copilote-compose{ width:100%; max-width:760px; }
+.copilote--empty .copilote-composer{ width:100%; max-width:760px; }
 
 .copilote-empty{ text-align:center; max-width:560px; }
 .copilote-empty__mark{ display:inline-flex; color:var(--muted); }
 .copilote-empty__title{ margin:10px 0 4px; color:var(--text); font-size:16px; font-weight:600; }
 .copilote-empty__sub{ margin:0; color:var(--muted); font-size:13px; line-height:19px; }
 
-.copilote-thread{ flex:1 1 auto; padding:0; max-height:52vh; }
+/* Le fil : les messages, et rien de la mise en scène de l'ancienne
+   surimpression — pas de cadre autour d'une réponse qui fait déjà toute la
+   largeur. */
+.copilote-thread{ flex:1 1 auto; overflow:auto; padding:0; max-height:52vh; }
+.copilote-msg{ padding:12px 0; margin-bottom:4px; }
+.copilote-msg--user{
+  width:60%; margin-left:auto; padding:12px;
+  border-radius:12px; background:rgba(240,246,252,.03);
+}
+.copilote-msg__meta{
+  display:flex; align-items:center; gap:8px;
+  margin-bottom:6px; color:var(--muted); font-size:12px;
+}
+.copilote-msg__author{ color:var(--text); font-weight:600; }
+.copilote-msg__body{ font-size:14px; line-height:20px; }
+.copilote-msg__body code{ padding:1px 4px; border-radius:6px; background:rgba(240,246,252,.08); }
 
-/* La saisie et ses commandes dans un même cadre : le cadre porte le focus,
+.copilote-composer{ display:flex; flex-direction:column; gap:10px; }
+
+/* La saisie porte son bouton d'envoi en bas à droite, dans le cadre : le geste
+   part du texte et finit à deux centimètres de lui. Le cadre porte le focus,
    comme partout ailleurs. */
 .copilote-compose{
-  display:flex; flex-direction:column; gap:8px;
-  padding:10px 12px; border:1px solid var(--border); border-radius:12px;
+  position:relative;
+  padding:10px 12px 48px; border:1px solid var(--border); border-radius:12px;
   background:var(--bg);
 }
+/* Pas de poignée de redimensionnement : elle tombait juste au-dessus du bouton
+   d'envoi, où elle ressemblait à un défaut d'affichage. Le champ grandit tout
+   seul avec ce qu'on écrit, jusqu'à une limite au-delà de laquelle il défile. */
 .copilote-input{
-  width:100%; min-height:64px; resize:vertical;
+  width:100%; min-height:64px; max-height:40vh; resize:none; overflow-y:auto;
   border:0; background:transparent; outline:none;
   color:var(--text); font:inherit; font-size:14px; line-height:20px;
 }
 .copilote-input:focus{ outline:none; box-shadow:none; }
-.copilote-compose__actions{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
-.copilote-compose__left{ display:flex; align-items:center; gap:6px; }
+.copilote-send{
+  position:absolute; right:10px; bottom:10px;
+  display:inline-flex; align-items:center; justify-content:center;
+  width:32px; height:32px;
+  border:0; border-radius:999px; background:var(--borderColor-accent-emphasis); color:#fff;
+  cursor:pointer;
+}
+.copilote-send:hover{ filter:brightness(1.06); }
+.copilote-send:disabled{ opacity:.45; cursor:default; filter:none; }
+
+/* Ce que le copilote saura faire. Éteints, et qui le montrent : un bouton gris
+   qui ne s'enfonce pas ne promet rien qu'il ne tienne. */
+.copilote-actions{ display:flex; flex-wrap:wrap; gap:8px; }
+.copilote-action{
+  display:inline-flex; align-items:center; gap:6px;
+  min-height:30px; padding:0 12px;
+  border:1px solid var(--border); border-radius:12px; background:transparent;
+  color:var(--text); font:inherit; font-size:13px; cursor:pointer;
+}
+.copilote-action:hover{ background:var(--panel2); }
+.copilote-action .ui-icon{ color:var(--muted); flex:0 0 16px; }
+.copilote-action:disabled{ color:var(--muted); cursor:default; background:transparent; }
+
 .copilote-error{ margin:0; color:var(--danger); font-size:13px; }
 
 /* La liste de navigation : le `li` porte le repère, le contenu porte le fond.
@@ -16657,6 +16532,41 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .nav-list__content:hover .nav-list__visual{ color:var(--text); }
 .nav-list__label{ min-width:0; flex:1 1 auto; }
 .nav-list__trailing{ color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums; }
+/* Un intitulé de discussion peut être long : il se coupe plutôt que d'élargir
+   le rail — c'est l'utilisateur qui décide de sa largeur, pas son historique. */
+.nav-list__label{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+/* L'action posée à côté d'une entrée — « nouvelle discussion ». Elle ne se
+   montre qu'au survol du rail ou quand elle a le focus : une icône permanente
+   sur une seule entrée déséquilibre la colonne. */
+.nav-list__action{
+  position:absolute; right:4px; top:50%; transform:translateY(-50%);
+  display:inline-flex;
+}
+.nav-list__action-btn{
+  display:inline-flex; align-items:center; justify-content:center;
+  width:26px; height:26px;
+  border:0; border-radius:6px; background:transparent; color:var(--muted);
+  cursor:pointer; opacity:0;
+}
+.nav-list__item:hover .nav-list__action-btn,
+.nav-list__action-btn:focus-visible{ opacity:1; }
+.nav-list__action-btn:hover{ background:var(--panel2); color:var(--text); }
+/* La place de l'action est réservée dans le contenu : sans cela l'intitulé
+   passerait dessous au survol. */
+.nav-list__item:has(.nav-list__action) .nav-list__content{ padding-right:34px; }
+
+/* L'historique du copilote : des fils, pas des utilitaires. Le décalage et
+   l'absence d'icône disent qu'ils dépendent de l'entrée du dessus. */
+.nav-list__list--sub{ margin-top:2px; }
+.nav-list__item--sub .nav-list__content{
+  min-height:28px; padding-left:34px; color:var(--muted); font-size:12px;
+}
+.nav-list__item--sub[data-active="true"] .nav-list__content{ color:var(--text); }
+/* Replié, le rail n'a pas de place pour des intitulés seuls : l'historique
+   disparaît avec eux plutôt que de laisser une colonne de lignes vides. */
+.project-rail.is-collapsed .nav-list__list--sub,
+.project-rail.is-collapsed .nav-list__action{ display:none; }
 
 /* Pas de filet au-dessus : le bouton est déjà en bas, et un trait de plus dans
    un rail qui en porte déjà un ne sépare rien. */

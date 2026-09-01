@@ -1,4 +1,25 @@
+/**
+ * Ce que le copilote reçoit avec la question.
+ *
+ * Deux choses, et il faut les distinguer :
+ *
+ * **L'état de l'écran** — l'onglet, les filtres, la sélection. C'est utile pour
+ * répondre à « et celui-là ? » sans faire répéter, et c'est tout : cela dit ce
+ * qu'on regarde, jamais ce qui est vrai.
+ *
+ * **La mémoire du projet** — ce que le projet tient pour vrai, hiérarchisé par
+ * ce qui fonde quoi. C'est la seule des deux sur laquelle une réponse peut
+ * s'appuyer, et sa mise en forme est dans `memory-briefing.js`.
+ *
+ * La lecture de la mémoire est faite ici, et non reprise d'un écran : l'onglet
+ * Mémoire garde la sienne dans son module, et s'en servir ferait dépendre les
+ * réponses du copilote du fait qu'on soit passé par cet écran d'abord. Un
+ * copilote qui en sait plus quand on a visité le bon onglet est un copilote
+ * qu'on ne peut pas juger.
+ */
+
 import { store } from "../store.js";
+import { buildMemoryBriefing } from "./memory-briefing.js";
 
 function parseHash() {
   const hash = String(location.hash || "").replace(/^#/, "").trim();
@@ -250,12 +271,58 @@ function buildSystemContext() {
   };
 }
 
-export function buildAssistContext() {
+/**
+ * La mémoire du projet, lue maintenant.
+ *
+ * Tout ce qui échoue rend `null` plutôt qu'un tableau vide : la distinction
+ * remonte jusqu'au texte envoyé au modèle, où « je n'ai pas pu lire » et « il
+ * n'y a rien » ne s'écrivent pas de la même façon.
+ *
+ * Les dépendances et les actes sont accessoires : sans eux la mémoire se lit
+ * encore, elle dit seulement moins — de quoi une valeur dépend, où en est une
+ * hypothèse. Leur échec ne fait donc pas échouer la lecture.
+ */
+async function readProjectMemory() {
+  const [{ resolveCurrentBackendProjectId }, memoire] = await Promise.all([
+    import("./project-supabase-sync.js"),
+    import("./project-memory-supabase.js")
+  ]);
+
+  // L'identifiant de route n'est pas celui de la base : les lire l'un pour
+  // l'autre rend une liste vide sans erreur, ce qui ferait répondre « ce projet
+  // n'a rien en mémoire » avec aplomb.
+  const projectId = (await resolveCurrentBackendProjectId().catch(() => "")) || "";
+  if (!projectId) return { assertions: null, dependencies: [], acts: [] };
+
+  const assertions = await memoire.listProjectAssertions(projectId).catch(() => null);
+  if (!Array.isArray(assertions)) return { assertions: null, dependencies: [], acts: [] };
+
+  const [dependencies, acts] = await Promise.all([
+    import("./assertion-dependencies-supabase.js")
+      .then((module) => module.listAssertionDependencies(projectId))
+      .catch(() => []),
+    import("./hypothesis-acts-supabase.js")
+      .then((module) => module.listHypothesisActs(projectId))
+      .catch(() => [])
+  ]);
+
+  return { assertions, dependencies: dependencies ?? [], acts: acts ?? [] };
+}
+
+export async function buildAssistContext() {
   const parts = parseHash();
   const scope = inferScope(parts);
   const tab = inferTab(parts);
   const selection = buildSelectionContext();
   const summary = summarizeSituations();
+
+  const lue = await readProjectMemory().catch(() => ({ assertions: null, dependencies: [], acts: [] }));
+  const memoire = buildMemoryBriefing({
+    project: { name: store.currentProject?.name || store.projectForm?.projectName || "" },
+    assertions: lue.assertions,
+    dependencies: lue.dependencies,
+    acts: lue.acts
+  });
 
   return {
     app: {
@@ -268,7 +335,16 @@ export function buildAssistContext() {
       name: store.user?.name || "demo"
     },
     project: {
-      current_project_id: store.currentProjectId || null
+      current_project_id: store.currentProjectId || null,
+      name: store.currentProject?.name || store.projectForm?.projectName || ""
+    },
+    // La mémoire, en clair. Un modèle lit un texte daté et rangé mieux qu'un
+    // arbre JSON, et ce texte est celui qu'on peut relire pour comprendre une
+    // réponse — ce qui n'est pas rien le jour où l'on en conteste une.
+    memoire: {
+      lue: memoire.lue,
+      texte: memoire.texte,
+      resume: memoire.resume
     },
     system: buildSystemContext(),
     project_form: buildProjectFormContext(),
@@ -296,7 +372,6 @@ export function buildAssistContext() {
       selection
     },
     assistant: {
-      mode: store.ui?.assistant?.mode || "auto",
       conversation_length: safeArray(store.ui?.assistant?.messages).length
     },
     global_navigation: {

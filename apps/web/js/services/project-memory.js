@@ -32,6 +32,7 @@
 import { ITEM } from "./proposition-state.js";
 import { BASE_DATUM_KIND, DECLARED_KIND, NATURE, classifyAssertion, domainLabel, normalizeDomain } from "./assertion-taxonomy.js";
 import { normalizeZoneKey } from "./project-zones.js";
+import { DERIVED_CONSTRAINT_KIND } from "./derived-constraints.js";
 // `STATUS_LABELS` était recopié ici, et la copie a divergé : « Constaté » y
 // manquait, si bien que la mémoire écrivait « état : REPORTED ». Une seconde
 // copie finit toujours par diverger — on lit celle du module qui la définit.
@@ -615,12 +616,28 @@ export function describeAssertionFacts(assertion = {}) {
     ajouter("Appréciation précédente", payload.previousOpinion);
     ajouter("Mouvement", payload.change === "added" ? "apparu" : payload.change === "changed" ? "modifié" : "");
     ajouter("Extrait", typeof payload.evidence === "string" ? payload.evidence : payload.evidence?.text);
-  } else if (assertion.kind === DECLARED_KIND) {
+  } else if (assertion.kind === DECLARED_KIND || assertion.kind === BASE_DATUM_KIND) {
     // Une hypothèse s'appuie sur son sujet et sa valeur, pas sur un fichier :
     // la branche par défaut lui faisait afficher « Fichier zone-de-neige ».
+    // Une donnée de base porte exactement les mêmes faits, et elle tombait dans
+    // la même branche par défaut — « Fichier : Bâtiment A / Usage » désignait un
+    // fichier qui n'a jamais existé.
     ajouter("Sujet", payload.subject || assertion.subject_key);
     ajouter("Valeur", payload.value);
     ajouter("Domaine", domainLabel(assertion.domain));
+  } else if (assertion.kind === DERIVED_CONSTRAINT_KIND) {
+    // Une contrainte déduite tombait elle aussi dans la branche par défaut, et
+    // annonçait « Fichier : zone-de-neige ». Or c'est justement celle dont la
+    // provenance doit se lire sans ouvrir le payload : quel utilitaire l'a
+    // déduite, dans quelle version, d'après quelle source. Sans cela, une valeur
+    // qui change ne dit pas si c'est le site qui a bougé ou notre façon de le
+    // lire.
+    ajouter("Sujet", payload.subject || assertion.subject_key);
+    ajouter("Valeur", payload.value);
+    ajouter("Source", payload.source);
+    ajouter("Utilitaire", payload.utilitaire);
+    ajouter("Référence de la source", payload.sourceRef);
+    ajouter("Calculée le", payload.computedAt);
   } else if (assertion.kind === ITEM_TYPE.ATTACHMENT) {
     ajouter("Affaire", payload.label || assertion.subject_key);
     ajouter("Verdict", payload.verdict);
