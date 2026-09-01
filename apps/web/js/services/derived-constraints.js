@@ -26,6 +26,18 @@
  * copie d'une valeur finit toujours par diverger de la première. La mémoire de
  * ce projet en a déjà fait les frais avec une table de libellés recopiée.
  *
+ * ## Chaque contrainte cite l'utilitaire qui l'a déduite, et sa version
+ *
+ * Une règle déduite n'est vraie que selon la méthode qui l'a déduite. Le jour où
+ * la méthode change — un zonage révisé, une lecture d'API corrigée — la valeur
+ * change sans que rien du projet n'ait bougé. Sans la version inscrite sur la
+ * contrainte, on ne saurait pas laquelle des deux situations on regarde : le
+ * site a changé, ou notre façon de le lire.
+ *
+ * Ce module ne connaît plus aucune règle métier : il parcourt le catalogue des
+ * utilitaires. Ajouter une déduction, c'est ajouter un fichier et une ligne au
+ * catalogue — rien ici ne bouge.
+ *
  * ## Ce que Géorisques ne produit pas
  *
  * Géorisques répond **par commune**, ou dans un rayon d'un kilomètre autour du
@@ -35,46 +47,14 @@
  * volontairement et nommément : ils appellent une vérification, pas une règle.
  */
 
-import { DOMAIN, NATURE } from "./assertion-taxonomy.js";
+import { NATURE } from "./assertion-taxonomy.js";
+import { deductionsDeContrainte, describeProvenance, referenceOf } from "../utilitaires/catalogue.js";
+import { RESERVE, RESERVES, phraseDeReserve, reserveMetEnDoute } from "../utilitaires/reserves.js";
+
+export { RESERVE, RESERVES };
 
 /** La provenance d'une contrainte déduite du site. Ni un avis, ni une déclaration. */
 export const DERIVED_CONSTRAINT_KIND = "site-constraint";
-
-/**
- * Ce qui peut clocher dans les **entrées** d'une déduction.
- *
- * Aucune ne met en doute la règle. Toutes disent : « voilà ce dont je ne suis
- * pas sûr d'avoir nourri le calcul. »
- */
-export const RESERVE = {
-  /**
-   * Le découpage cantonal a changé depuis 2014, et c'est celui de 2014 qui fait
-   * règle. Le calcul a pu retomber sur le mauvais canton.
-   */
-  CANTON_2014: "canton-2014",
-  /** Plusieurs valeurs H0 coexistent dans le département : une a été choisie. */
-  H0_FOURCHETTE: "h0-fourchette",
-  /**
-   * Au-delà de 900 m, l'Annexe Nationale demande une étude spécifique. La valeur
-   * rendue n'est pas fausse — elle ne suffit pas, et c'est un autre défaut.
-   */
-  ALTITUDE_HORS_TABLE: "altitude-hors-table",
-  /** Le calcul avait besoin d'une altitude et n'en a pas eu. */
-  ALTITUDE_ABSENTE: "altitude-absente",
-  /**
-   * Le fait ne dit pas sur quoi il a été calculé. Il a été écrit avant qu'on
-   * conserve les entrées : on ne peut ni le confirmer ni le suspecter.
-   */
-  ENTREES_INCONNUES: "entrees-inconnues"
-};
-
-const RESERVE_PHRASES = {
-  [RESERVE.CANTON_2014]: "le canton a changé depuis 2014, et c'est celui de 2014 qui fait règle",
-  [RESERVE.H0_FOURCHETTE]: "plusieurs valeurs H0 existent dans ce département, une a été retenue",
-  [RESERVE.ALTITUDE_HORS_TABLE]: "au-delà de 900 m, l'Annexe Nationale demande une étude spécifique",
-  [RESERVE.ALTITUDE_ABSENTE]: "l'altitude du site n'est pas connue",
-  [RESERVE.ENTREES_INCONNUES]: "ce calcul ne dit pas sur quoi il a été fait"
-};
 
 /** L'état des entrées d'une déduction. C'est de cela que parle la confiance. */
 export const INPUTS = {
@@ -93,82 +73,33 @@ const CONFIDENCE = {
   [INPUTS.INCONNUES]: null
 };
 
-/**
- * Les faits de contexte qui décrivent une règle du site, et ce qu'ils énoncent.
- *
- * Tout fait absent de cette table n'est pas une contrainte — Géorisques en
- * premier lieu. L'omission est la décision.
- */
-const CONSTRAINT_FACTS = {
-  snow_zone: { subject: "Zone de neige", domain: DOMAIN.STRUCTURE, read: (v) => texte(v?.zone) },
-  wind_zone: { subject: "Zone de vent", domain: DOMAIN.STRUCTURE, read: (v) => texte(v?.zone) },
-  seismic_zone: { subject: "Zone de sismicité", domain: DOMAIN.STRUCTURE, read: (v) => texte(v?.value) },
-  frost_depth: {
-    subject: "Profondeur hors gel",
-    // Une cote de fondation : c'est le sol qui la commande, pas la structure.
-    domain: DOMAIN.SOL,
-    // `Number(null)` vaut zéro : lire la profondeur sans écarter l'absence
-    // d'abord ferait entrer « Profondeur hors gel : 0,00 m » — une cote de
-    // fondation au niveau du sol, énoncée comme une règle.
-    read: (v) => {
-      const brut = v?.frost_depth_m;
-      if (brut === null || brut === undefined || texte(brut) === "") return "";
-      const metres = nombre(brut);
-      return metres === null ? "" : `${metres.toFixed(2)} m`;
-    }
-  }
-};
-
-/** L'ordre de lecture : celui du métier, pas celui de la table. */
-const FACT_ORDER = ["snow_zone", "wind_zone", "seismic_zone", "frost_depth"];
-
 function texte(value) {
   return String(value ?? "").trim();
-}
-
-function nombre(value) {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : null;
 }
 
 /**
  * La clé métier d'une contrainte du site.
  *
- * C'est la clé du fait, pas son libellé : deux versions du même fait doivent se
- * remplacer, et un libellé qu'on retouche en ferait deux contraintes en vigueur.
+ * Elle porte la donnée lue — `site:snow_zone` — et **jamais la version de
+ * l'utilitaire**. C'est ce qui fait qu'une `V2` périme ce que la `V1` avait
+ * versé au lieu de coexister avec : deux clés donneraient deux règles en vigueur
+ * pour un même sujet, ce qui est précisément l'écart qu'on veut éviter de
+ * fabriquer soi-même.
  */
 export function constraintSubjectKey(factKey) {
   return `site:${texte(factKey).toLowerCase()}`;
 }
 
 /**
- * Les réserves d'un fait, dans un ordre stable.
+ * L'état des entrées, déduit des seules réserves qui **doutent**.
  *
- * Deux sources : celles que le producteur a nommées, et celles qui se lisent des
- * entrées conservées. Un fait qui ne conserve ni l'une ni l'autre est déclaré
- * inconnu plutôt que sûr.
+ * Une réserve qui situe la portée — « la valeur vaut pour la commune entière » —
+ * s'affiche sans peser : c'est la portée réglementaire du zonage sismique, et la
+ * compter comme un doute ferait baisser la confiance d'une valeur dont personne
+ * ne doute.
  */
-export function reservesOf(fact = {}) {
-  const valeur = fact?.fact_value ?? {};
-  const nommees = Array.isArray(valeur.reserves) ? valeur.reserves.map(texte).filter(Boolean) : [];
-  const entrees = valeur.inputs && typeof valeur.inputs === "object" ? valeur.inputs : null;
-
-  if (!entrees && nommees.length === 0) return [RESERVE.ENTREES_INCONNUES];
-
-  const trouvees = new Set(nommees.filter((code) => Object.values(RESERVE).includes(code)));
-
-  const altitude = nombre(entrees?.altitude);
-  if (altitude !== null && altitude > 900) trouvees.add(RESERVE.ALTITUDE_HORS_TABLE);
-  if (entrees && texte(fact.fact_key) === "frost_depth" && altitude === null) {
-    trouvees.add(RESERVE.ALTITUDE_ABSENTE);
-  }
-
-  return [...trouvees].sort();
-}
-
-/** L'état des entrées, déduit des réserves. */
 export function inputsStateOf(reserves = []) {
-  const liste = Array.isArray(reserves) ? reserves : [];
+  const liste = (Array.isArray(reserves) ? reserves : []).filter(reserveMetEnDoute);
   if (liste.includes(RESERVE.ENTREES_INCONNUES)) return INPUTS.INCONNUES;
   return liste.length === 0 ? INPUTS.SURES : INPUTS.A_VERIFIER;
 }
@@ -190,7 +121,7 @@ export function confidenceOf(reserves = []) {
  * Prétendre à la certitude est ce qu'on est en train de corriger.
  */
 export function describeReserves(reserves = []) {
-  const liste = (Array.isArray(reserves) ? reserves : []).map((code) => RESERVE_PHRASES[code]).filter(Boolean);
+  const liste = (Array.isArray(reserves) ? reserves : []).map(phraseDeReserve).filter(Boolean);
   if (liste.length === 0) return "Aucune réserve sur les entrées de ce calcul.";
   const tete = liste.length > 1 ? "Réserves sur les entrées" : "Réserve sur l'entrée";
   return `${tete} : ${liste.join(" ; ")}.`;
@@ -199,49 +130,58 @@ export function describeReserves(reserves = []) {
 /**
  * Les contraintes que ces faits de contexte énoncent.
  *
- * Rien n'est inventé : un fait sans valeur lisible ne produit pas de contrainte
- * vide, il n'en produit aucune. Un fait qui n'est pas dans la table n'en produit
- * pas non plus — Géorisques répond par commune, et une commune n'est pas une
- * parcelle.
+ * Le catalogue commande : pour chaque déduction connue, on cherche le fait
+ * qu'elle lit et on lui demande ce qu'elle en tire. Une déduction qui s'abstient
+ * ne produit rien — pas une contrainte vide.
+ *
+ * Un fait qu'aucune déduction ne réclame ne produit rien non plus : c'est ainsi
+ * que Géorisques reste dehors, par omission dans le catalogue plutôt que par une
+ * liste noire qu'il faudrait tenir à jour.
  *
  * @returns {{factKey: string, subject: string, subjectKey: string, value: string,
  *   statement: string, domain: string, reserves: string[], inputsState: string,
- *   confidence: number|null, sourceRef: string|null, computedAt: string|null}[]}
+ *   confidence: number|null, utilitaire: string, source: string,
+ *   provenance: string, sourceRef: string|null, computedAt: string|null}[]}
  */
 export function constraintsFromContextFacts(facts = []) {
   const lignes = Array.isArray(facts) ? facts : [];
-  const parCle = new Map();
+  const candidats = [];
 
-  for (const fait of lignes) {
-    const cle = texte(fait?.fact_key);
-    const modele = CONSTRAINT_FACTS[cle];
-    if (!modele) continue;
-
-    const valeur = modele.read(fait?.fact_value ?? {});
-    if (!valeur) continue;
-
+  for (const outil of deductionsDeContrainte()) {
     // Le fait le plus récent l'emporte : deux producteurs pour une même règle ne
     // font pas deux règles.
-    const precedent = parCle.get(cle);
-    if (precedent && texte(precedent.computedAt) >= texte(fait?.updated_at)) continue;
+    const fait = lignes
+      .filter((entry) => texte(entry?.fact_key) === outil.cleDonnee)
+      .sort((gauche, droite) => texte(droite?.updated_at).localeCompare(texte(gauche?.updated_at)))[0];
+    if (!fait) continue;
 
-    const reserves = reservesOf(fait);
-    parCle.set(cle, {
-      factKey: cle,
-      subject: modele.subject,
-      subjectKey: constraintSubjectKey(cle),
-      value: valeur,
-      statement: `${modele.subject} : ${valeur}`,
-      domain: modele.domain,
+    const rendu = outil.deduire(fait);
+    if (!rendu || !texte(rendu.valeur)) continue;
+
+    const reserves = (Array.isArray(rendu.reserves) ? rendu.reserves : []).filter((code) =>
+      RESERVES.includes(code)
+    );
+
+    candidats.push({
+      factKey: outil.cleDonnee,
+      subject: outil.sujet,
+      subjectKey: constraintSubjectKey(outil.cleDonnee),
+      value: texte(rendu.valeur),
+      statement: `${outil.sujet} : ${texte(rendu.valeur)}`,
+      domain: outil.domaine ?? null,
       reserves,
       inputsState: inputsStateOf(reserves),
       confidence: confidenceOf(reserves),
+      utilitaire: referenceOf(outil),
+      source: texte(outil.source),
+      provenance: describeProvenance(outil),
+      inputs: rendu.entrees ?? null,
       sourceRef: texte(fait?.source_ref) || null,
       computedAt: texte(fait?.updated_at) || null
     });
   }
 
-  return FACT_ORDER.map((cle) => parCle.get(cle)).filter(Boolean);
+  return candidats;
 }
 
 /**
@@ -265,7 +205,11 @@ export function plannedConstraintRows({ projectId = "", candidates = [], declare
       kind: DERIVED_CONSTRAINT_KIND,
       subject_key: candidat.subjectKey,
       statement: candidat.statement,
-      detail: describeReserves(candidat.reserves),
+      // Le détail se lit sous l'énoncé, sans ouvrir le payload : la provenance
+      // d'abord — c'est elle qu'on va vérifier — puis ce dont on se réserve.
+      detail: [candidat.provenance, describeReserves(candidat.reserves)]
+        .filter(Boolean)
+        .join(" — "),
       status: "assumed",
       nature: NATURE.CONTRAINTE,
       domain: candidat.domain ?? null,
@@ -276,6 +220,12 @@ export function plannedConstraintRows({ projectId = "", candidates = [], declare
         derived: true,
         reserves: candidat.reserves,
         inputsState: candidat.inputsState,
+        // Qui a déduit, dans quelle version, d'après quelle source. Sans cela,
+        // une valeur qui change ne dit pas si c'est le site qui a bougé ou notre
+        // façon de le lire.
+        utilitaire: candidat.utilitaire,
+        source: candidat.source,
+        inputs: candidat.inputs ?? null,
         sourceRef: candidat.sourceRef,
         computedAt: candidat.computedAt
       },

@@ -2,16 +2,15 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { DOMAIN, NATURE } from "./assertion-taxonomy.js";
+import { RESERVE } from "../utilitaires/reserves.js";
 import {
   DERIVED_CONSTRAINT_KIND,
   INPUTS,
-  RESERVE,
   confidenceOf,
   constraintsFromContextFacts,
   describeReserves,
   inputsStateOf,
-  plannedConstraintRows,
-  reservesOf
+  plannedConstraintRows
 } from "./derived-constraints.js";
 
 const fait = (factKey, factValue, patch = {}) => ({
@@ -65,14 +64,17 @@ test("la profondeur hors gel relève du sol, pas de la structure", () => {
   assert.match(gel.statement, /0,81 m|0\.81 m/);
 });
 
-test("les contraintes sortent dans l'ordre du métier, pas dans celui de la table", () => {
+test("les contraintes sortent dans l'ordre du catalogue, pas dans celui des faits", () => {
+  // L'ordre du catalogue est celui du métier — climat, sol, sismique. Rendre les
+  // contraintes dans l'ordre où les faits ont été écrits ferait dépendre
+  // l'écran de l'ordre dans lequel on a lancé les outils.
   const rendu = constraintsFromContextFacts([
     fait("frost_depth", { frost_depth_m: 0.8, inputs: {} }),
-    fait("seismic_zone", { value: "Zone 4" }, { source_type: "georisques" }),
+    fait("seismic_zone", { value: "4 - Moyenne" }, { source_type: "georisques" }),
     neige()
   ]);
 
-  assert.deepEqual(rendu.map((c) => c.factKey), ["snow_zone", "seismic_zone", "frost_depth"]);
+  assert.deepEqual(rendu.map((c) => c.factKey), ["snow_zone", "frost_depth", "seismic_zone"]);
 });
 
 /* ── Ce que Géorisques ne produit pas ────────────────────────────────────── */
@@ -195,6 +197,45 @@ test("rien ne se verse sans projet", () => {
   assert.deepEqual(plannedConstraintRows({ candidates: constraintsFromContextFacts([neige()]) }), []);
 });
 
-test("reservesOf ne suppose rien d'un fait vide", () => {
-  assert.deepEqual(reservesOf({}), [RESERVE.ENTREES_INCONNUES]);
+test("la provenance se lit sous l'énoncé, sans ouvrir le payload", () => {
+  // C'est la source qu'on va vérifier, et la version qui dit comment on l'a lue.
+  const [ligne] = plannedConstraintRows({
+    projectId: "p1",
+    candidates: constraintsFromContextFacts([neige()])
+  });
+
+  assert.match(ligne.detail, /NF EN 1991-1-3/);
+  assert.match(ligne.detail, /deduction_zone_neige_commune_V1/);
+  assert.equal(ligne.payload.utilitaire, "deduction_zone_neige_commune_V1");
+});
+
+test("la clé ne porte pas la version : une V2 périme ce que la V1 a versé", () => {
+  // Une clé versionnée donnerait deux règles en vigueur pour un même sujet —
+  // exactement l'écart qu'on veut éviter de fabriquer soi-même.
+  const [contrainte] = constraintsFromContextFacts([neige()]);
+
+  assert.equal(contrainte.subjectKey, "site:snow_zone");
+  assert.doesNotMatch(contrainte.subjectKey, /V\d/);
+});
+
+test("une portée réglementaire s'affiche sans faire baisser la confiance", () => {
+  // Le zonage sismique est communal par le décret : le dire n'est pas douter.
+  const [sismique] = constraintsFromContextFacts([
+    fait("seismic_zone", { value: "4 - Moyenne" }, { source_type: "georisques" })
+  ]);
+
+  assert.deepEqual(sismique.reserves, [RESERVE.PORTEE_COMMUNALE]);
+  assert.equal(sismique.confidence, 1);
+  assert.equal(sismique.inputsState, INPUTS.SURES);
+  assert.match(describeReserves(sismique.reserves), /commune entière/);
+});
+
+test("l'argile entre comme contrainte du sol, lue au point du projet", () => {
+  const [argile] = constraintsFromContextFacts([
+    fait("argiles", { niveau: "Moyen", latitude: 45.9, longitude: 6.1 }, { source_type: "georisques" })
+  ]);
+
+  assert.equal(argile.statement, "Retrait-gonflement des argiles : Moyen");
+  assert.equal(argile.domain, DOMAIN.SOL);
+  assert.match(argile.provenance, /Géorisques/);
 });
