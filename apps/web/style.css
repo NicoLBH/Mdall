@@ -273,7 +273,7 @@ body.route--project.project-shell-compact.project-discussions-detail-scrolled .g
    plus de bordure a lui. Sans cela ces champs-la echappent au comportement
    commun, et une application ou certains champs reagissent et d'autres non
    parait mal finie. */
-.gh-field-focus:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px rgba(88,166,255,.15);}
+.gh-field-focus:focus-within{border:solid 2px var(--accent);}
 
 /* Le filet de securite : un champ qui n'a herite d'aucune classe garde tout de
    meme le contour de la maison. Les cases a cocher et les boutons radio sont
@@ -16520,11 +16520,9 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .project-rail{
   --nav-list-gutter:10px;
   position:fixed; left:0; top:var(--project-rail-top, var(--app-top)); bottom:0;
-  /* Sous les onglets : le trait orange de l'onglet actif perdait la moitié de
-     son épaisseur, recouvert par le rail. */
   width:var(--project-rail-width, 232px); z-index:0;
   display:flex; flex-direction:column; gap:4px;
-  padding:12px 8px 12px 12px;
+  padding:12px 8px;
   /* Pas de fond : le contenu est décalé de la largeur du rail, rien ne passe
      dessous. Un rail opaque n'aurait servi qu'à recouvrir le trait de l'onglet
      actif — le problème qu'on a mis trois versions à contourner. */
@@ -16563,6 +16561,7 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
    que dans le tableau, et **toutes présentes**, y compris vides. Un trait
    discontinu dit « cette case est vide » — c'est une information, souvent celle
    qu'il faut aller combler. */
+.memory-detail{ padding-bottom:200px; }
 .memory-detail__tags{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin:0 0 4px; }
 .memory-detail__tags-label{ color:var(--muted); font-size:11px; }
 .memory-detail__tags .memory-tag{ margin-right:2px; }
@@ -16619,12 +16618,14 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 /* Pas de filet au-dessus : le bouton est déjà en bas, et un trait de plus dans
    un rail qui en porte déjà un ne sépare rien. */
 .project-rail__collapse{
-  display:flex; align-items:center; gap:8px; width:100%; min-height:32px;
-  padding:6px 12px 6px 22px; margin-top:8px; flex:0 0 auto;
+  display:flex; align-items:center; gap:8px; min-height:32px;
+  width:calc(100% - var(--nav-list-gutter, 10px));
+  margin:8px 0 0 var(--nav-list-gutter, 10px); padding:6px 12px; flex:0 0 auto;
   border:0; border-radius:6px; background:transparent; color:var(--muted);
   font:inherit; font-size:13px; cursor:pointer;
 }
-.project-rail__collapse:hover{ color:var(--text); }
+.project-rail__collapse:hover{ background:var(--panel2); color:var(--text); }
+.project-rail__collapse .octicon{ flex:0 0 16px; }
 
 /* Replié : **seul le texte disparaît**. La gouttière, le trait bleu et la place
    de l'icône ne bougent pas d'un pixel — recentrer les icônes ferait sauter tout
@@ -16638,8 +16639,9 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .project-rail.is-collapsed .nav-list__group-label{ display:none; }
 /* Le fond se réduit à l'icône, exactement où elle était : 12 px de part et
    d'autre, arrondi compris. Rien ne se déplace, seul le texte s'efface. */
-.project-rail.is-collapsed .nav-list__content{ width:fit-content; }
-.project-rail.is-collapsed .project-rail__collapse{ justify-content:center; padding-right:12px; }
+.project-rail.is-collapsed .nav-list__content,
+.project-rail.is-collapsed .project-rail__collapse{ width:fit-content; }
+.project-rail.is-collapsed .project-rail__collapse .side-nav-layout__label{ display:none; }
 
 /* La poignée déborde sur le contenu pour être saisissable sans viser le trait. */
 .project-rail .side-resizer__handle{

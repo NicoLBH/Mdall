@@ -26,10 +26,10 @@ export const RAIL_MAX = 420;
  * replier ne fait que masquer le texte. Un rail replié qui recentre ses icônes
  * donne l'impression que tout saute.
  *
- *   12 (rail) + 10 (gouttière du trait) + 12 (retrait) + 16 (icône)
- *   + 10 (retrait) + 8 (rail) = 68
+ *   8 (rail) + 10 (gouttière du trait) + 12 (retrait) + 16 (icône)
+ *   + 12 (retrait) + 8 (rail) = 66
  */
-export const RAIL_COLLAPSED = 68;
+export const RAIL_COLLAPSED = 66;
 
 /** Une largeur ramenée dans ses bornes. */
 export function railWidth(largeur, replie = false) {

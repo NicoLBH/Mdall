@@ -1,5 +1,5 @@
 import { svgIcon } from "../ui/icons.js";
-import { registerProjectPrimaryScrollSource } from "./project-shell-chrome.js";
+import { registerProjectPrimaryScrollSource, setProjectViewHeader } from "./project-shell-chrome.js";
 import { bindSideNavPanels } from "./ui/side-nav-layout.js";
 import {
   renderNavList,
@@ -26,9 +26,9 @@ function renderStudioNav() {
     renderNavListGroup({
       items: [
         renderNavListItem({
-          label: "Bienvenue",
+          label: "Copilote",
           dataAttributes: { "data-side-nav-target": "studio-general" },
-          iconHtml: svgIcon("home", { className: "octicon octicon-home" }),
+          iconHtml: svgIcon("copilot", { className: "octicon octicon-copilot" }),
           isActive: true
         })
       ]
@@ -162,6 +162,10 @@ let studioPoigneeDetacher = null;
 
 export function renderProjectStudio(root) {
   if (!root) return;
+
+  // Pas de barre de contexte : elle n'affichait qu'« ATELIER » au-dessus d'un
+  // écran qui le dit déjà, et ses seize pixels décalaient le haut du rail.
+  setProjectViewHeader({ contextLabel: "Atelier", variant: "studio", hideBar: true });
 
   lireReglages();
   root.innerHTML = getRouterHtml();

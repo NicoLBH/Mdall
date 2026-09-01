@@ -37,7 +37,14 @@ import {
   zoneLabel,
   zonesOf
 } from "../services/project-zones.js";
-import { onlyFilters, parseQuery, renderQueryMirror, suggestAt, withFilter } from "../services/query-bar.js";
+import {
+  dropOtherTokens,
+  onlyFilters,
+  parseQuery,
+  renderQueryMirror,
+  suggestAt,
+  withFilter
+} from "../services/query-bar.js";
 import {
   RAIL_MAX,
   RAIL_MIN,
@@ -107,23 +114,34 @@ import { bindGhActionButtons, bindGhSelectMenus, renderGhActionButton, renderGhS
  * même endroit, et cet endroit est le champ de saisie — on lit ce qu'on
  * cherche, on le corrige au clavier, on le copie.
  */
+/**
+ * Ce qui s'écrit dans la barre pour un libellé.
+ *
+ * Les accents sont gardés — `nature:donnée-de-base` se lit, là où
+ * `nature:donnee-de-base` fait code — mais la frappe reste tolérante : la barre
+ * accepte l'un comme l'autre, quelle que soit la casse.
+ */
+function jeton(label) {
+  return String(label ?? "").trim().toLowerCase().replace(/\s+/g, "-");
+}
+
 const MEMORY_FIELDS = [
   { key: "nature", label: "Nature", values: [
-    ...NATURES.map((nature) => ({ value: nature, label: natureLabel(nature) })),
-    { value: "none", label: UNCLASSIFIED_LABEL }
+    ...NATURES.map((nature) => ({ value: nature, token: jeton(natureLabel(nature)), label: natureLabel(nature) })),
+    { value: "none", token: jeton(UNCLASSIFIED_LABEL), label: UNCLASSIFIED_LABEL }
   ] },
   { key: "domaine", label: "Domaine", values: [
-    ...DOMAINS.map((domaine) => ({ value: domaine, label: domainLabel(domaine) })),
-    { value: "none", label: UNCLASSIFIED_LABEL }
+    ...DOMAINS.map((domaine) => ({ value: domaine, token: jeton(domainLabel(domaine)), label: domainLabel(domaine) })),
+    { value: "none", token: jeton(UNCLASSIFIED_LABEL), label: UNCLASSIFIED_LABEL }
   ] },
   { key: "provenance", label: "Provenance", values: [
     { value: "avis", label: "Avis" },
-    { value: "attachment", label: "Rattachements" },
-    { value: "document", label: "Documents" }
+    { value: "attachment", token: "rattachements", label: "Rattachements" },
+    { value: "document", token: "documents", label: "Documents" }
   ] },
   { key: "etat", label: "État", values: [
-    { value: "assumees", label: "Assumées" },
-    { value: "ecartees", label: "Écartées" }
+    { value: "assumees", token: "assumées", label: "Assumées" },
+    { value: "ecartees", token: "écartées", label: "Écartées" }
   ] },
   { key: "ouverts", label: "Constats", values: [{ value: "oui", label: "En cours" }] },
   { key: "remplacees", label: "Remplacées", values: [{ value: "oui", label: "Montrées" }] }
@@ -671,7 +689,10 @@ function renderDetailTags(assertion, ecartee) {
       <span class="memory-detail__tags-label">Zones</span>
       ${
         portees.length === 0
-          ? pastille(ZONE_TOUT_LOUVRAGE_LABEL, false)
+          ? // Discontinu comme dans le tableau : « Ensemble — toutes zones » est la
+            // valeur par défaut, et une valeur par défaut se signale partout de la
+            // même façon — sinon on croit que l'un des deux écrans en sait plus.
+            pastille(ZONE_TOUT_LOUVRAGE_LABEL, true)
           : portees.map((cle) => pastille(zoneLabel(cle, view.assertions ?? []), false)).join("")
       }
     </div>
@@ -2207,9 +2228,19 @@ function appliquerSuggestion(root, rang) {
 
   const avant = champ.value.slice(0, propose.start);
   const apres = champ.value.slice(propose.end);
-  const curseur = avant.length + item.insert.length;
+  let curseur = avant.length + item.insert.length;
+  let requete = `${avant}${item.insert}${apres}`;
 
-  champ.value = `${avant}${item.insert}${apres}`;
+  // Un champ à choix simple ne garde qu'une valeur : celle qu'on vient de
+  // poser. Laisser la précédente montrerait deux natures pour une affirmation
+  // qui n'en a qu'une, et la liste serait vide sans que rien ne l'explique.
+  if (item.replacesField) {
+    const nettoyee = dropOtherTokens(requete, MEMORY_FIELDS, item.replacesField, curseur - 1);
+    curseur = Math.max(0, curseur - (requete.length - nettoyee.length));
+    requete = nettoyee;
+  }
+
+  champ.value = requete;
   view.query = champ.value;
   view.page = 1;
   champ.setSelectionRange(curseur, curseur);
@@ -2238,11 +2269,13 @@ function syncLecture(root) {
   const titre = root.querySelector(".memory-head h4");
   if (titre) titre.textContent = titreDeLaLecture();
 
+  // La sélection vit sur le `li`, pas sur le contenu : c'est lui qui porte le
+  // trait bleu. Continuer d'écrire sur le bouton laissait le rail figé sur la
+  // lecture précédente — vider le champ ne ramenait donc pas sur « Tout ».
   for (const entree of root.querySelectorAll("[data-memory-reader]")) {
     const sienne = entree.getAttribute("data-memory-reader") === lecture;
-    entree.classList.toggle("is-active", sienne);
-    entree.setAttribute("data-side-nav-active", sienne ? "true" : "false");
     entree.setAttribute("aria-current", sienne ? "page" : "false");
+    entree.closest(".nav-list__item")?.setAttribute("data-active", sienne ? "true" : "false");
   }
 }
 
