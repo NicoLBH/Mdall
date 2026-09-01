@@ -16423,8 +16423,13 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
    puis la phrase qui dit à quoi sert l'écran. C'est le même geste, il se
    présente donc de la même façon : `settings-card__head-title` porte le filet
    et l'alignement, on n'en réécrit pas une seconde version qui divergerait. */
-.memory-head{ display:flex; flex-direction:column; }
-.memory-head__lead{ margin:0; max-width:80ch; color:var(--muted); font-size:13px; }
+.memory-head{
+  display:flex; flex-direction:column;
+  /* Pas de filet sous le titre : le titre, la barre de recherche et le tableau
+     sont une seule en-tête, et un trait au milieu la coupe en deux écrans. */
+  border-bottom:0; padding-bottom:0;
+}
+.memory-head .settings-card__head-title{ border-bottom:0; }
 .memory-head__actions{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .memory-head__actions .gh-btn{ display:inline-flex; align-items:center; gap:6px; }
 
@@ -16495,6 +16500,7 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
    est écrit par la vue à chaque défilement : le CSS seul ne sait pas où s'arrête
    un élément qui défile. */
 .project-rail{
+  --project-rail-gutter:10px;
   position:fixed; left:0; top:var(--project-rail-top, var(--app-top)); bottom:0;
   /* Sous les onglets : le trait orange de l'onglet actif perdait la moitié de
      son épaisseur, recouvert par le rail. */
@@ -16512,13 +16518,19 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 
 /* La liste défile si elle déborde ; le bouton de repli reste en bas, quoi qu'il
    arrive — c'est un réglage du rail, pas le dernier de ses éléments. */
-/* `overflow-y` rognait la barre bleue, posée à gauche en débord. Le débord est
-   supprimé — la barre est à l'intérieur — et le défilement peut rester. */
+/* `overflow-x:visible` avec `overflow-y:auto` se calcule en `auto` : c'est ce qui
+   ramenait une barre de défilement horizontale. On coupe franchement — et rien
+   ne déborde plus à gauche, la gouttière du trait bleu étant une bordure
+   transparente de l'entrée, non un décalage négatif. */
 .project-rail__scroll{
   display:flex; flex-direction:column; flex:1 1 auto; min-height:0;
   overflow-y:auto; overflow-x:hidden;
 }
 .project-rail__group{ display:flex; flex-direction:column; gap:2px; }
+/* Le séparateur partagé déborde de 8 px de chaque côté pour aller au bord d'un
+   panneau ; dans un rail qui coupe son débordement, ce débord se transforme en
+   défilement horizontal. Il s'arrête donc aux bords. */
+.project-rail .side-nav-layout__separator{ margin-left:0; margin-right:0; }
 
 /* Le compte se pose à droite, comme un décompte et non comme une étiquette. */
 .project-rail__item{ align-items:center; }
@@ -16527,15 +16539,22 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   font-size:12px; font-variant-numeric:tabular-nums;
 }
 /* Le trait bleu est à gauche du fond, pas contre lui : collés, ils forment un
-   seul bloc et le trait cesse de se lire comme un repère. */
-.project-rail__item{ margin-left:10px; width:calc(100% - 10px); }
+   seul bloc et le trait cesse de se lire comme un repère.
+
+   La gouttière est une **bordure transparente**, pas un décalage négatif :
+   `background-clip` arrête le fond après elle, et le trait s'y loge sans jamais
+   sortir de l'entrée — donc sans rien à rogner ni à faire défiler. */
+.project-rail__item{
+  border-left:var(--project-rail-gutter, 10px) solid transparent;
+  background-clip:padding-box;
+}
 .project-rail__item.is-active{ background:rgba(110,118,129,.14); font-weight:500; }
 .project-rail__item.is-active::before{
-  content:""; position:absolute; left:-10px; top:50%; transform:translateY(-50%);
+  content:""; position:absolute;
+  left:calc(-1 * var(--project-rail-gutter, 10px)); top:50%; transform:translateY(-50%);
   width:4px; height:24px;
   background:var(--borderColor-accent-emphasis); border-radius:var(--radius);
 }
-.project-rail__scroll{ overflow-x:visible; }
 
 /* Pas de filet au-dessus : le bouton est déjà en bas, et un trait de plus dans
    un rail qui en porte déjà un ne sépare rien. */
@@ -16547,14 +16566,12 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 }
 .project-rail__collapse:hover{ color:var(--text); }
 
-/* Replié : les icônes seules, centrées. Le libellé et le compte se taisent. */
-.project-rail.is-collapsed{ padding-left:8px; padding-right:8px; }
+/* Replié : **seul le texte disparaît**. Les retraits, la gouttière du trait bleu
+   et la place de l'icône sont identiques à l'état déplié — recentrer les icônes
+   ferait sauter tout le rail à chaque repli. */
 .project-rail.is-collapsed .side-nav-layout__label,
 .project-rail.is-collapsed .project-rail__item::after{ display:none; }
-.project-rail.is-collapsed .side-nav-layout__item,
-.project-rail.is-collapsed .project-rail__collapse{ justify-content:center; padding-left:8px; padding-right:8px; }
-.project-rail.is-collapsed .project-rail__item{ margin-left:6px; width:calc(100% - 6px); }
-.project-rail.is-collapsed .project-rail__item.is-active::before{ left:-6px; }
+.project-rail.is-collapsed .side-nav-layout__icon{ margin-right:0; }
 
 /* La poignée déborde sur le contenu pour être saisissable sans viser le trait. */
 .project-rail .side-resizer__handle{
@@ -16844,13 +16861,16 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   display:inline-flex; align-items:center; gap:6px;
   color:var(--muted); font-size:12px; cursor:pointer;
 }
-.memory-table__filters{ margin-left:auto; display:flex; align-items:center; gap:4px; flex-wrap:wrap; }
+.memory-table__filters{ margin-left:auto; display:flex; align-items:center; gap:2px; flex-wrap:nowrap; }
 
 /* Un filtre n'est pas une action : l'encadrer comme un bouton en ferait une
    chose à cliquer. Il se signale au survol, pas au repos. Le menu déroulant,
    lui, est celui de la maison — un `<select>` natif fait dessiner sa liste par
    le système, et sur fond sombre elle sortait blanc sur blanc. */
-.memory-filter{ display:inline-flex; }
+/* Une seule ligne : les quatre filtres se serrent plutôt que de s'empiler. Le
+   libellé ne se coupe pas — un filtre à demi lisible ne se lit pas du tout. */
+.memory-filter{ display:inline-flex; flex:0 0 auto; width:auto; }
+.memory-filter .gh-action__label{ white-space:nowrap; }
 .memory-filter .gh-action__main,
 .memory-filter .gh-action__toggle{
   border:0; background:transparent; box-shadow:none;
@@ -16862,7 +16882,7 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .memory-filter .gh-action.is-open .gh-action__main{ color:var(--text); }
 /* Le libellé et le chevron sont une seule cible : couper un filtre en deux
    boutons demanderait de viser, pour une liste qui s'ouvre de toute façon. */
-.memory-filter .gh-action__main{ padding-right:2px; }
+.memory-filter .gh-action__main{ padding-right:2px; cursor:pointer; }
 .memory-filter .gh-action__toggle{ padding-left:2px; }
 
 .memory-list{

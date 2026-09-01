@@ -17,8 +17,19 @@ import { bindSideResizer, renderSideResizer } from "./side-resizer.js";
 /** Les bornes d'un rail : assez large pour un libellé, pas au point de manger la page. */
 export const RAIL_MIN = 200;
 export const RAIL_MAX = 420;
-/** Replié, il ne reste que les icônes. */
-export const RAIL_COLLAPSED = 52;
+/**
+ * Replié, il ne reste que les icônes — **exactement où elles étaient**.
+ *
+ * La largeur repliée n'est pas un chiffre choisi : c'est la somme des retraits
+ * qui précèdent l'icône, plus l'icône, plus le retrait qui la suit. Le trait
+ * bleu et les icônes ne bougent donc pas d'un pixel entre les deux états, et
+ * replier ne fait que masquer le texte. Un rail replié qui recentre ses icônes
+ * donne l'impression que tout saute.
+ *
+ *   12 (rail) + 10 (gouttière du trait) + 12 (retrait) + 16 (icône)
+ *   + 10 (retrait) + 8 (rail) = 68
+ */
+export const RAIL_COLLAPSED = 68;
 
 /** Une largeur ramenée dans ses bornes. */
 export function railWidth(largeur, replie = false) {
@@ -62,6 +73,27 @@ export function renderProjectRail({ id = "projectRail", navHtml = "", collapsed 
  * @returns {() => void} de quoi débrancher : sans cela chaque rendu ajouterait
  *   deux écouteurs de plus sur la fenêtre, et ils survivraient à l'écran.
  */
+/**
+ * De combien le trait de l'onglet actif déborde sous la barre d'onglets.
+ *
+ * Ce n'était pas un problème d'ordre d'empilement, contrairement à ce qu'on a
+ * d'abord cru : le trait est un `::after` posé à `bottom: calc(50% - 24px)` puis
+ * remonté de la moitié de sa hauteur, si bien qu'il dépasse d'environ un pixel
+ * **sous** la barre. Le rail, calé exactement sur ce bord, en mangeait la
+ * moitié — et aucun `z-index` n'y change rien puisque les deux se disputent la
+ * même ligne de pixels.
+ *
+ * On mesure donc le débord plutôt que de l'inventer : la hauteur du trait est
+ * lisible, il est centré sur le bord, il en dépasse de la moitié. Le jour où
+ * cette règle change, la mesure suit.
+ */
+function debordDuTrait() {
+  const actif = document.querySelector(".project-tabs a.active");
+  if (!actif) return 0;
+  const hauteur = Number.parseFloat(getComputedStyle(actif, "::after").height);
+  return Number.isFinite(hauteur) ? Math.ceil(hauteur / 2) : 0;
+}
+
 export function followRailScroll(rail) {
   if (!rail) return () => {};
 
@@ -72,9 +104,12 @@ export function followRailScroll(rail) {
   };
 
   const caler = () => {
-    const bas = document.querySelector(".project-view-header")?.getBoundingClientRect().top;
-    const sol = plancher();
-    rail.style.setProperty("--project-rail-top", `${Math.max(sol, Math.round(Number.isFinite(bas) ? bas : sol))}px`);
+    const onglets = document.querySelector(".project-tabs");
+    const bas = onglets ? onglets.getBoundingClientRect().bottom : plancher();
+    rail.style.setProperty(
+      "--project-rail-top",
+      `${Math.max(plancher(), Math.round(bas + debordDuTrait()))}px`
+    );
   };
 
   caler();

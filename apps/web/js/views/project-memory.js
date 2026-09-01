@@ -31,6 +31,7 @@ import {
   describeZonesOf,
   zonesOf
 } from "../services/project-zones.js";
+import { formatQuery, onlyFilters, parseQuery, withFilter } from "../services/query-bar.js";
 import {
   RAIL_MAX,
   RAIL_MIN,
@@ -91,6 +92,73 @@ import {
 } from "../services/hypothesis-acts.js";
 import { bindGhActionButtons, bindGhSelectMenus, renderGhActionButton, renderGhSelectMenu } from "./ui/gh-split-button.js";
 
+/**
+ * Les champs interrogeables de la mémoire.
+ *
+ * Ils sont écrits dans la barre de recherche, comme sur GitHub :
+ * `nature:hypothese domaine:structure neige`. Les filtres et les mots vivent au
+ * même endroit, et cet endroit est le champ de saisie — on lit ce qu'on
+ * cherche, on le corrige au clavier, on le copie.
+ */
+const MEMORY_FIELDS = [
+  { key: "nature", label: "Nature", values: [
+    ...NATURES.map((nature) => ({ value: nature, label: natureLabel(nature) })),
+    { value: "none", label: UNCLASSIFIED_LABEL }
+  ] },
+  { key: "domaine", label: "Domaine", values: [
+    ...DOMAINS.map((domaine) => ({ value: domaine, label: domainLabel(domaine) })),
+    { value: "none", label: UNCLASSIFIED_LABEL }
+  ] },
+  { key: "provenance", label: "Provenance", values: [
+    { value: "avis", label: "Avis" },
+    { value: "attachment", label: "Rattachements" },
+    { value: "document", label: "Documents" }
+  ] },
+  { key: "etat", label: "État", values: [
+    { value: "assumees", label: "Assumées" },
+    { value: "ecartees", label: "Écartées" }
+  ] },
+  { key: "ouverts", label: "Constats", values: [{ value: "oui", label: "En cours" }] },
+  { key: "remplacees", label: "Remplacées", values: [{ value: "oui", label: "Montrées" }] }
+];
+
+const ETAT_VERS_STATUT = { assumees: MEMORY.ASSUMED, ecartees: MEMORY.REJECTED };
+
+/**
+ * Ce que chaque lecture du rail veut dire, en filtres.
+ *
+ * Une lecture n'est pas un écran : c'est une requête toute faite. Le rail écrit
+ * ces filtres dans la barre, et la barre reste modifiable — c'est ce qui permet
+ * de partir d'« Hypothèses » puis d'ajouter « domaine:structure ».
+ */
+const READER_FILTERS = {
+  [READER.ALL]: {},
+  [READER.HYPOTHESES]: { nature: NATURE.HYPOTHESE },
+  [READER.CONSTRAINTS]: { nature: NATURE.CONTRAINTE },
+  [READER.FINDINGS]: { nature: NATURE.CONSTAT, ouverts: "oui" },
+  [READER.BASE_DATA]: { nature: NATURE.DONNEE_BASE }
+};
+
+/**
+ * La lecture que cette requête représente, ou « Tout ».
+ *
+ * **Elle se déduit, elle ne se retient pas.** Ajouter un filtre à la main fait
+ * donc rebasculer le rail sur « Tout » sans que personne ait à y penser, et le
+ * filtrage en cours reste intact — c'est exactement ce que fait GitHub quand on
+ * complète une recherche partie d'un raccourci.
+ */
+function lectureDe(query) {
+  const { filters } = parseQuery(query, MEMORY_FIELDS);
+  const cles = Object.keys(filters).sort();
+
+  for (const [lecture, attendus] of Object.entries(READER_FILTERS)) {
+    const voulues = Object.keys(attendus).sort();
+    if (voulues.length !== cles.length) continue;
+    if (voulues.every((cle) => filters[cle] === attendus[cle])) return lecture;
+  }
+  return READER.ALL;
+}
+
 /** Où se retient le repli du panneau. Un réglage, pas un état de navigation. */
 const NAV_COLLAPSED_KEY = "mdall.memoryNavCollapsed.v1";
 
@@ -121,11 +189,7 @@ const view = {
   assertions: null,
   projectId: "",
   query: "",
-  kind: "",
-  status: "",
   /** La nature et le domaine voulus. `"none"` demande ce qui n'est pas classé. */
-  nature: "",
-  domain: "",
   /** `null` : le graphe des dépendances n'a pas pu être lu. `[]` : il est vide. */
   dependencies: null,
   /** Les actes portés sur les hypothèses. `null` : lecture impossible. */
@@ -142,7 +206,6 @@ const view = {
   navCollapsed: repliRetenu(),
   navWidth: largeurRetenue(),
   draft: { subject: "", value: "", domain: "", zones: [] },
-  includeSuperseded: false,
   notice: "",
   busy: false,
   /** L'affirmation dont on lit l'histoire : `{kind, subjectKey}` ou `null`. */
@@ -169,7 +232,7 @@ export function __setMemoryStateForPreview({
   view.dependencies = dependencies;
   view.acts = acts;
   view.declaring = declaring;
-  view.reader = reader;
+  view.query = onlyFilters(view.query, MEMORY_FIELDS, READER_FILTERS[reader] ?? {});
 }
 
 let mountedRoot = null;
@@ -281,6 +344,8 @@ function renderSearch() {
  * autres ferait croire l'inverse.
  */
 function renderTableHead() {
+  const { filters: filtres } = parseQuery(view.query, MEMORY_FIELDS);
+
   const menu = (id, options, valeur) =>
     renderGhSelectMenu({
       id,
@@ -294,7 +359,7 @@ function renderTableHead() {
   return `
     <div class="memory-table__head">
       <label class="memory-table__toggle">
-        <input type="checkbox" data-memory-superseded ${view.includeSuperseded ? "checked" : ""}>
+        <input type="checkbox" data-memory-superseded ${filtres.remplacees === "oui" ? "checked" : ""}>
         <span>Montrer ce qui a été remplacé</span>
       </label>
       <div class="memory-table__filters">
@@ -303,22 +368,22 @@ function renderTableHead() {
           { value: "avis", label: "Avis" },
           { value: "attachment", label: "Rattachements" },
           { value: "document", label: "Documents" }
-        ], view.kind)}
+        ], filtres.provenance ?? "")}
         ${menu("memoryNature", [
           { value: "", label: "Nature" },
           ...NATURES.map((nature) => ({ value: nature, label: natureLabel(nature) })),
           { value: "none", label: `${UNCLASSIFIED_LABEL}e` }
-        ], view.nature)}
+        ], filtres.nature ?? "")}
         ${menu("memoryDomain", [
           { value: "", label: "Domaine" },
           ...DOMAINS.map((domaine) => ({ value: domaine, label: domainLabel(domaine) })),
           { value: "none", label: UNCLASSIFIED_LABEL }
-        ], view.domain)}
+        ], filtres.domaine ?? "")}
         ${menu("memoryStatus", [
           { value: "", label: "État" },
-          { value: MEMORY.ASSUMED, label: "Assumées" },
-          { value: MEMORY.REJECTED, label: "Écartées" }
-        ], view.status)}
+          { value: "assumees", label: "Assumées" },
+          { value: "ecartees", label: "Écartées" }
+        ], filtres.etat ?? "")}
       </div>
     </div>
   `;
@@ -543,7 +608,7 @@ export function renderMemoryList(lignes, page = 1, { grouped = false, reader = R
 
 /** La liste telle que cet écran la veut : groupée dès qu'on lit par lecture. */
 function renderList(lignes, page = 1) {
-  return renderMemoryList(lignes, page, { grouped: view.reader !== READER.ALL, reader: view.reader });
+  return renderMemoryList(lignes, page, { grouped: lectureDe(view.query) !== READER.ALL, reader: lectureDe(view.query) });
 }
 
 /**
@@ -681,7 +746,7 @@ function renderMemoryNav() {
 
   const entree = (lecture) => {
     const combien = readerRows(view.assertions ?? [], lecture).length;
-    const actif = view.reader === lecture;
+    const actif = lectureDe(view.query) === lecture;
     const libelle = readerLabel(lecture);
 
     return renderSideNavItem({
@@ -756,7 +821,7 @@ const READER_ICONS = {
 
 /** La phrase de la lecture en cours, au-dessus de la liste. */
 function renderReaderLead() {
-  return `<p class="memory-readers__lead">${escapeHtml(readerLead(view.reader))}</p>`;
+  return `<p class="memory-readers__lead">${escapeHtml(readerLead(lectureDe(view.query)))}</p>`;
 }
 
 /**
@@ -782,7 +847,7 @@ export function renderMemoryFormForPreview() {
  */
 export function renderMemoryForPreview(assertions = [], { reader = READER.ALL, collapsed = false } = {}) {
   view.assertions = assertions;
-  view.reader = reader;
+  view.query = onlyFilters(view.query, MEMORY_FIELDS, READER_FILTERS[reader] ?? {});
   view.navCollapsed = collapsed;
   return `<div class="project-rail-layout${collapsed ? " project-rail-layout--collapsed" : ""}">${renderMemoryNav()}<div class="project-rail-layout__content">${renderReaderLead()}</div></div>`;
 }
@@ -888,11 +953,29 @@ function renderHypothesisForm() {
  * Exporté pour qu'une page d'aperçu monte cet en-tête-ci, et non une copie de
  * son HTML qui vieillirait à part.
  */
+/**
+ * Le titre de l'écran, d'après la lecture en cours.
+ *
+ * Un écran filtré qui garde le titre du tout se prend pour le tout : « La
+ * mémoire du projet » au-dessus de quatre contraintes est faux. Le titre dit
+ * donc ce qu'on regarde, et il change quand la lecture change.
+ */
+function titreDeLaLecture() {
+  const titres = {
+    [READER.ALL]: "Toute la mémoire du projet",
+    [READER.HYPOTHESES]: "Hypothèses du projet",
+    [READER.CONSTRAINTS]: "Contraintes du projet",
+    [READER.FINDINGS]: "Constats du projet",
+    [READER.BASE_DATA]: "Données de base du projet"
+  };
+  return titres[lectureDe(view.query)] ?? titres[READER.ALL];
+}
+
 export function renderMemoryHead(resume, { busy = false } = {}) {
   return `
     <header class="memory-head settings-card__head">
       <span class="settings-card__head-title">
-        <h4>La mémoire du projet</h4>
+        <h4>${escapeHtml(titreDeLaLecture())}</h4>
         <div class="memory-head__actions">
           ${renderExportButton(resume, busy)}
           ${renderVerserButton(busy)}
@@ -901,14 +984,6 @@ export function renderMemoryHead(resume, { busy = false } = {}) {
           </button>
         </div>
       </span>
-      <p class="memory-head__lead">
-        Ce que le projet tient pour vrai, avec la date à laquelle il l'a tranché et la proposition
-        qui l'a versé. Ce qui se dérive d'un document — avis, rattachements, entrées au corpus —
-        entre par la fusion d'une proposition. Une hypothèse, personne ne l'extrait encore : elle se
-        déclare, et elle est datée et signée comme le reste. Les contraintes du site — zones de
-        neige, de vent, de sismicité, profondeur hors gel — se déduisent de l'adresse : personne
-        n'a à les retenir, elles se versent.
-      </p>
     </header>
   `;
 }
@@ -1390,16 +1465,22 @@ async function declareDependsOn(root, bouton) {
  * endroits qui filtrent finissent toujours par filtrer différemment.
  */
 function lignesVisibles() {
-  // La lecture choisie s'applique d'abord : c'est elle qui décide de quoi on
-  // parle, les autres filtres ne font que restreindre à l'intérieur.
+  const { filters, text } = parseQuery(view.query, MEMORY_FIELDS);
+
+  // Les constats en cours ne se disent pas par une nature : c'est un constat
+  // qu'aucune levée n'a fermé. Ce filtre-là s'applique donc à part.
+  const departFin = filters.ouverts === "oui"
+    ? readerRows(view.assertions ?? [], READER.FINDINGS)
+    : (view.assertions ?? []);
+
   const filtrees = filterByTaxonomy(
-    searchAssertions(readerRows(view.assertions ?? [], view.reader), {
-      query: view.query,
-      kind: view.kind,
-      status: view.status,
-      includeSuperseded: view.includeSuperseded
+    searchAssertions(departFin, {
+      query: text,
+      kind: filters.provenance ?? "",
+      status: ETAT_VERS_STATUT[filters.etat] ?? "",
+      includeSuperseded: filters.remplacees === "oui"
     }),
-    { nature: view.nature, domain: view.domain }
+    { nature: filters.nature ?? "", domain: filters.domaine ?? "" }
   );
 
   // « À revérifier » se coche par-dessus les autres filtres : c'est une urgence,
@@ -1467,8 +1548,6 @@ function renderContent(root) {
           ${renderMemoryNav()}
 
           <div class="project-rail-layout__content">
-            ${renderReaderLead()}
-
             ${renderHypothesisForm()}
 
             ${view.notice ? `<div class="propositions-empty propositions-empty--warn"><p>${escapeHtml(view.notice)}</p></div>` : ""}
@@ -1549,6 +1628,7 @@ function bind(root) {
       // réapparaître ce que la nature ou le domaine venaient d'écarter.
       if (hote) hote.outerHTML = renderList(lignesVisibles(), view.page);
       bindPagination(root);
+      syncLecture(root);
     });
   }
 
@@ -1557,7 +1637,7 @@ function bind(root) {
 
 
   root.querySelector("[data-memory-superseded]")?.addEventListener("change", (event) => {
-    view.includeSuperseded = event.target.checked;
+    view.query = withFilter(view.query, MEMORY_FIELDS, "remplacees", event.target.checked ? "oui" : "");
     view.page = 1;
     renderContent(root);
   });
@@ -1565,7 +1645,7 @@ function bind(root) {
   // Le compteur des non classés mène à ce qu'il compte : un nombre qu'on ne
   // peut pas ouvrir ne fait que culpabiliser.
   root.querySelector("[data-memory-unclassified]")?.addEventListener("click", () => {
-    view.domain = "none";
+    view.query = withFilter(view.query, MEMORY_FIELDS, "domaine", "none");
     view.page = 1;
     renderContent(root);
   });
@@ -1620,7 +1700,8 @@ function bind(root) {
 
   for (const bouton of root.querySelectorAll("[data-memory-reader]")) {
     bouton.addEventListener("click", () => {
-      view.reader = bouton.getAttribute("data-memory-reader") || READER.ALL;
+      const lecture = bouton.getAttribute("data-memory-reader") || READER.ALL;
+      view.query = onlyFilters(view.query, MEMORY_FIELDS, READER_FILTERS[lecture] ?? {});
       view.page = 1;
       // Changer de lecture ne garde pas les filtres de la précédente : on ne
       // cherche pas la même chose, et un filtre invisible ferait croire à une
@@ -1696,13 +1777,33 @@ function bind(root) {
 
   bindVerserButton(root);
 
+  // Le libellé ouvre le menu, comme le chevron : couper un filtre en deux
+  // cibles demanderait de viser le chevron pour une liste qui s'ouvre de toute
+  // façon. Le composant réserve le bouton principal à une action ; ici il n'y
+  // en a pas d'autre que « montre-moi les choix ».
+  for (const principal of root.querySelectorAll(".memory-filter .gh-action__main")) {
+    principal.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      principal.closest(".gh-action")?.querySelector("[data-action-toggle]")?.click();
+    });
+  }
+
   // Les filtres passent par les menus de la maison : un seul rappel les sert
   // tous, et l'identifiant dit lequel a bougé.
   bindGhSelectMenus(root, {
     onChange: (id, value) => {
-      const champ = { memoryKind: "kind", memoryNature: "nature", memoryDomain: "domain", memoryStatus: "status" }[id];
+      const champ = {
+        memoryKind: "provenance",
+        memoryNature: "nature",
+        memoryDomain: "domaine",
+        memoryStatus: "etat"
+      }[id];
       if (!champ) return;
-      view[champ] = value;
+      // Le menu écrit dans la barre : c'est elle qui fait foi, et le rail s'en
+      // déduit — poser un filtre à la main rebascule donc sur « Tout » sans que
+      // personne ait à y penser.
+      view.query = withFilter(view.query, MEMORY_FIELDS, champ, value);
       // Filtrer ramène à la première page : rester en page 4 d'un résultat qui
       // en compte deux montrerait un vide qu'on prendrait pour une absence.
       view.page = 1;
@@ -1872,6 +1973,29 @@ async function versSiteConstraints(root) {
   renderContent(root);
 }
 
+/**
+ * Remet le titre et le rail d'accord avec la requête, sans redessiner la page.
+ *
+ * Taper dans la barre ne redessine que la liste — un rendu complet ferait
+ * perdre le curseur à chaque touche. Mais la lecture se **déduit** de la
+ * requête : ajouter « domaine:sol » à une lecture des contraintes n'est plus
+ * une lecture des contraintes, et le rail doit le montrer sur-le-champ. On met
+ * donc à jour les deux endroits qui en dépendent, en place.
+ */
+function syncLecture(root) {
+  const lecture = lectureDe(view.query);
+
+  const titre = root.querySelector(".memory-head h4");
+  if (titre) titre.textContent = titreDeLaLecture();
+
+  for (const entree of root.querySelectorAll("[data-memory-reader]")) {
+    const sienne = entree.getAttribute("data-memory-reader") === lecture;
+    entree.classList.toggle("is-active", sienne);
+    entree.setAttribute("data-side-nav-active", sienne ? "true" : "false");
+    entree.setAttribute("aria-current", sienne ? "page" : "false");
+  }
+}
+
 function bindTabReset() {
   if (tabResetBound) return;
   tabResetBound = true;
@@ -1880,9 +2004,6 @@ function bindTabReset() {
     if (String(event?.detail?.tabId || "") !== "memoire") return;
     if (!mountedRoot?.isConnected) return;
     view.query = "";
-    view.kind = "";
-    view.status = "";
-    view.includeSuperseded = false;
     view.notice = "";
     view.open = null;
     view.page = 1;
