@@ -7,6 +7,18 @@
  * « usage : habitation » sur le même projet — alors qu'ils sont tous les deux
  * vrais, chacun chez lui.
  *
+ * ## Une information peut valoir pour plusieurs zones
+ *
+ * Un usage, une contrainte acoustique, une hypothèse de sol valent souvent pour
+ * deux parties sans valoir partout : « Bâtiment A / Rdc » et « Bâtiment B /
+ * Rdc », mais pas les étages. Une zone unique obligeait à choisir, ou à verser
+ * deux fois la même information — et deux lignes pour un même fait font deux
+ * histoires à tenir.
+ *
+ * La colonne `zones` porte la liste ; `zone`, plus ancienne, est lue comme sa
+ * première entrée. Les deux se lisent, une seule s'écrit : une valeur qu'on
+ * écrit à deux endroits finit par diverger.
+ *
  * ## Tout l'ouvrage est une zone, et c'est celle par défaut
  *
  * Ne pas préciser de zone ne veut pas dire « on ne sait pas où » : ça veut dire
@@ -55,9 +67,27 @@ export function normalizeZoneKey(zone) {
     .replace(/^-|-$/g, "");
 }
 
-/** La zone d'une affirmation, normalisée. Vide = tout l'ouvrage. */
+/**
+ * Les zones d'une affirmation, normalisées et sans doublon.
+ *
+ * Un tableau vide veut dire **partout** : c'est la portée générale, pas une
+ * ignorance. `zone`, la colonne d'avant, est lue comme une zone parmi les
+ * autres — de sorte qu'une base non encore migrée continue de dire vrai.
+ */
+export function zonesOf(assertion = {}) {
+  const liste = Array.isArray(assertion?.zones) ? assertion.zones : [];
+  const toutes = [...liste, assertion?.zone].map(normalizeZoneKey).filter(Boolean);
+  return [...new Set(toutes)];
+}
+
+/**
+ * La première zone d'une affirmation, ou `""` pour « partout ».
+ *
+ * Gardée pour ce qui n'affiche qu'une zone. Filtrer avec elle serait faux : une
+ * information qui vaut pour deux zones disparaîtrait de la seconde.
+ */
 export function zoneOf(assertion = {}) {
-  return normalizeZoneKey(assertion?.zone);
+  return zonesOf(assertion)[0] ?? "";
 }
 
 /**
@@ -106,7 +136,8 @@ export function zoneChoices(assertions = []) {
  * Ce qui s'applique à une zone.
  *
  * Une affirmation sans zone vaut partout : elle apparaît dans **toutes** les
- * lectures de zone, et non dans aucune. La zone de neige ne connaît pas les
+ * lectures de zone, et non dans aucune. Une affirmation qui en porte plusieurs
+ * apparaît dans chacune des siennes. La zone de neige ne connaît pas les
  * étages, et la retirer de la lecture du rez-de-chaussée donnerait un corpus
  * incomplet sans que rien ne le signale.
  *
@@ -119,8 +150,10 @@ export function filterByZone(assertions = [], zone = ZONE_TOUT_LOUVRAGE) {
   if (!voulue) return lignes;
 
   return lignes.filter((assertion) => {
-    const portee = zoneOf(assertion);
-    return portee === "" || portee === voulue;
+    const portees = zonesOf(assertion);
+    // Aucune zone veut dire partout : l'affirmation entre dans toutes les
+    // lectures. Une seule des zones portées suffit à l'y faire entrer.
+    return portees.length === 0 || portees.includes(voulue);
   });
 }
 

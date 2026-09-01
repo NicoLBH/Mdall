@@ -35,7 +35,7 @@ const REVIEW_COLUMNS = "needs_review_since,reviewed_at,reviewed_by";
 // La zone : troisième vague. Une base en retard perdrait la portée des
 // affirmations, pas les affirmations elles-mêmes — et sans zone tout vaut pour
 // l'ouvrage entier, ce qui est la lecture d'avant.
-const ZONE_COLUMNS = "zone";
+const ZONE_COLUMNS = "zone,zones";
 
 const COLUMNS = `${BASE_COLUMNS},${TAXONOMY_COLUMNS},${REVIEW_COLUMNS},${ZONE_COLUMNS}`;
 
@@ -77,6 +77,7 @@ export async function listProjectAssertions(projectId) {
   // veut dire « je n'ai pas pu lire », pas « la mémoire est vide ».
   for (const colonnes of [
     COLUMNS,
+    `${BASE_COLUMNS},${TAXONOMY_COLUMNS},${REVIEW_COLUMNS},zone`,
     `${BASE_COLUMNS},${TAXONOMY_COLUMNS},${REVIEW_COLUMNS}`,
     `${BASE_COLUMNS},${TAXONOMY_COLUMNS}`,
     BASE_COLUMNS

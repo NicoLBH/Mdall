@@ -382,6 +382,25 @@ test("une donnée de base porte la nature qui se propage", () => {
   assert.equal(isFoundational(plan.row.nature), true, "la reclasser doit rendre l'aval suspect");
 });
 
+test("une donnée de base peut porter plusieurs zones", () => {
+  // « Bâtiment A / Rdc » et « Bâtiment B / Rdc », mais pas les étages : devoir
+  // choisir obligerait à verser deux fois le même fait.
+  const plan = declaredBaseDatum({
+    projectId: "p", subject: "Usage", value: "ERP type M", zones: ["Zone B", "Zone A"]
+  });
+
+  assert.deepEqual(plan.row.zones, ["zone-a", "zone-b"], "triées : le même découpage dans un autre ordre reste le même");
+  assert.equal(plan.row.subject_key, "usage@zone-a+zone-b");
+  assert.equal(plan.row.zone, "zone-a", "l'ancienne colonne garde la première, pour une base non migrée");
+});
+
+test("aucune zone veut dire partout, et la clé n'en porte aucune", () => {
+  const plan = declaredBaseDatum({ projectId: "p", subject: "Altitude", value: "450 m" });
+
+  assert.equal(plan.row.zones, null);
+  assert.equal(plan.row.subject_key, "altitude");
+});
+
 test("le même sujet vaut différemment selon la zone", () => {
   // Le rez-de-chaussée est un ERP, les étages du logement : les deux sont vrais,
   // et une clé sans zone ferait périmer l'un par l'autre.

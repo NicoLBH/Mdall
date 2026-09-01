@@ -8,7 +8,8 @@ import {
   filterByZone,
   normalizeZoneKey,
   zoneChoices,
-  zoneLabel
+  zoneLabel,
+  zonesOf
 } from "./project-zones.js";
 
 const definition = (label, valeur, patch = {}) => ({
@@ -95,4 +96,40 @@ test("une zone définie rend sa définition", () => {
 
   assert.equal(zoneLabel("zone-a", memoire), "Zone A");
   assert.match(describeZone("zone-a", memoire), /ERP type M/);
+});
+
+/* ── Une information peut valoir pour plusieurs zones ────────────────────── */
+
+test("une information portant deux zones apparaît dans chacune", () => {
+  // Un usage ou une contrainte acoustique vaut souvent pour deux parties sans
+  // valoir partout. Devoir choisir obligerait à verser deux fois le même fait.
+  const memoire = [ligne("deux", null, { zones: ["zone-a", "zone-b"] }), ligne("autre", null, { zones: ["zone-c"] })];
+
+  assert.deepEqual(filterByZone(memoire, "zone-a").map((e) => e.id), ["deux"]);
+  assert.deepEqual(filterByZone(memoire, "zone-b").map((e) => e.id), ["deux"]);
+  assert.deepEqual(filterByZone(memoire, "zone-c").map((e) => e.id), ["autre"]);
+});
+
+test("une liste de zones vide vaut partout, comme l'absence de zone", () => {
+  const memoire = [ligne("vide", null, { zones: [] }), ligne("nulle")];
+
+  assert.equal(filterByZone(memoire, "zone-a").length, 2);
+});
+
+test("l'ancienne colonne zone est lue comme une zone parmi les autres", () => {
+  // Une base non encore migrée doit continuer de dire vrai.
+  const memoire = [ligne("ancienne", "Zone A")];
+
+  assert.deepEqual(zonesOf(memoire[0]), ["zone-a"]);
+  assert.deepEqual(filterByZone(memoire, "zone-a").map((e) => e.id), ["ancienne"]);
+  assert.deepEqual(filterByZone(memoire, "zone-b").map((e) => e.id), []);
+});
+
+test("les deux colonnes se réunissent sans doublon", () => {
+  assert.deepEqual(zonesOf({ zone: "Zone A", zones: ["zone-a", "zone-b"] }), ["zone-a", "zone-b"]);
+});
+
+test("zonesOf ne suppose rien d'une affirmation sans zone", () => {
+  assert.deepEqual(zonesOf({}), []);
+  assert.deepEqual(zonesOf(), []);
 });
