@@ -9,6 +9,8 @@ const PROJECT_CONTEXT_FACT_KEYS = new Set([
   "wind_zone",
   "frost_depth",
   "natural_risks",
+  // L'aléa retrait-gonflement, lu au point du projet par l'outil Risques.
+  "argiles",
   "technological_risks",
   "floors_count",
   "fire_regulation",

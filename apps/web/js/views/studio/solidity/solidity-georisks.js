@@ -3,6 +3,8 @@ import { fetchGeorisquesForCommune } from "../../../services/georisques-service.
 import { escapeHtml } from "../../../utils/escape-html.js";
 import { registerProjectPrimaryScrollSource } from "../../project-shell-chrome.js";
 import { persistCurrentProjectState, readPersistedCurrentProjectState } from "../../../services/project-state-storage.js";
+import { contextFactsFromGeorisques } from "../../../services/georisques-context-facts.js";
+import { upsertProjectContextFact } from "../../../services/project-context-facts-service.js";
 import { shouldAutoRunProjectBaseDataEnrichment } from "../../../services/project-automation.js";
 
 const georisksUiState = {
@@ -359,6 +361,7 @@ async function loadGeorisques({ force = false } = {}) {
     };
     georisksUiState.lastRequestKey = requestKey;
     persistCurrentProjectState();
+    await conserverDonneesDeBase(result);
     return store.projectForm.georisques;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -368,6 +371,42 @@ async function loadGeorisques({ force = false } = {}) {
   } finally {
     georisksUiState.isLoading = false;
     rerender();
+  }
+}
+
+/**
+ * Conserve ce que cette consultation établit, et rien de plus.
+ *
+ * L'interrogation affichait quinze tableaux et n'en gardait aucun : à la
+ * fermeture de l'onglet, la consultation n'avait laissé aucune trace, et rien
+ * ne pouvait s'en déduire. Deux jeux sont conservés — le zonage sismique et
+ * l'argile —, les treize autres restent à l'écran sans devenir des données du
+ * projet.
+ *
+ * Un échec d'écriture ne défait pas la consultation, qui, elle, a eu lieu : les
+ * tableaux restent affichés, et le versement se retentera.
+ */
+async function conserverDonneesDeBase(result) {
+  const faits = contextFactsFromGeorisques(result);
+  if (faits.length === 0) return;
+
+  for (const fait of faits) {
+    try {
+      await upsertProjectContextFact({
+        factKey: fait.factKey,
+        factValue: fait.factValue,
+        sourceType: fait.sourceType,
+        sourceRef: fait.sourceRef,
+        // La confiance ne se stocke pas : elle se recalcule des réserves au
+        // moment de déduire. Une copie stockée finirait par diverger.
+        confidence: null
+      });
+    } catch (error) {
+      console.warn("[georisques] donnée de base non conservée", {
+        factKey: fait.factKey,
+        message: error instanceof Error ? error.message : String(error)
+      });
+    }
   }
 }
 

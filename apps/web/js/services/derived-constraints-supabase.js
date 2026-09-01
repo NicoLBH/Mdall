@@ -51,6 +51,12 @@ export async function rememberSiteConstraints({ projectId, candidates = [], decl
   // Une contrainte inchangée ne se réécrit pas. Reverser la même valeur ferait
   // une histoire de corrections là où il ne s'est rien passé, et le premier
   // effet serait de marquer à revérifier des notes que rien n'a touchées.
+  //
+  // **Y compris quand l'utilitaire a changé de version.** Si la `V2` confirme ce
+  // que la `V1` avait déduit, rien de ce que le projet a calculé n'est faux :
+  // marquer l'aval à revérifier serait une fausse alerte. La ligne garde donc la
+  // provenance `V1`, ce qui est vrai — c'est bien la `V1` qui l'a produite. La
+  // prochaine valeur qui change portera la version qui l'aura trouvée.
   const enVigueur = new Map(
     existantes
       .filter((entry) => !entry.superseded_by)
