@@ -31,7 +31,7 @@ import {
   describeZonesOf,
   zonesOf
 } from "../services/project-zones.js";
-import { formatQuery, onlyFilters, parseQuery, withFilter } from "../services/query-bar.js";
+import { onlyFilters, parseQuery, renderQueryMirror, withFilter } from "../services/query-bar.js";
 import {
   RAIL_MAX,
   RAIL_MIN,
@@ -308,7 +308,9 @@ function renderCounts(resume, vocabulaire, enAttente = 0) {
  */
 function renderSearch() {
   return `
-    <div class="memory-search">
+    <div class="memory-search gh-field-focus">
+      <div class="memory-search__field">
+        <div class="memory-search__mirror" aria-hidden="true">${renderQueryMirror(view.query, MEMORY_FIELDS)}</div>
       <input
         type="search"
         class="gh-input memory-search__input"
@@ -317,6 +319,7 @@ function renderSearch() {
         aria-label="Chercher dans la mémoire"
         data-memory-search
       >
+      </div>
       <span class="memory-search__icon" aria-hidden="true">${svgIcon("search", { className: "octicon" })}</span>
     </div>
   `;
@@ -1616,6 +1619,7 @@ function bind(root) {
 
   const recherche = root.querySelector("[data-memory-search]");
   if (recherche) {
+    recherche.addEventListener("scroll", () => syncMiroir(root), { passive: true });
     recherche.addEventListener("input", (event) => {
       view.query = event.target.value;
       // On redessine la liste seule : redessiner la page ferait perdre le
@@ -1629,6 +1633,7 @@ function bind(root) {
       if (hote) hote.outerHTML = renderList(lignesVisibles(), view.page);
       bindPagination(root);
       syncLecture(root);
+      syncMiroir(root);
     });
   }
 
@@ -1982,6 +1987,23 @@ async function versSiteConstraints(root) {
  * une lecture des contraintes, et le rail doit le montrer sur-le-champ. On met
  * donc à jour les deux endroits qui en dépendent, en place.
  */
+/**
+ * Repeint le calque des jetons, et le fait défiler avec le champ.
+ *
+ * Le calque double le texte du champ pixel pour pixel ; s'il ne suit pas le
+ * défilement horizontal, il se décale dès que la requête dépasse la largeur
+ * visible — et le décalage se voit immédiatement, puisque les deux textes se
+ * superposent.
+ */
+function syncMiroir(root) {
+  const champ = root.querySelector("[data-memory-search]");
+  const miroir = root.querySelector(".memory-search__mirror");
+  if (!champ || !miroir) return;
+
+  miroir.innerHTML = renderQueryMirror(view.query, MEMORY_FIELDS);
+  miroir.scrollLeft = champ.scrollLeft;
+}
+
 function syncLecture(root) {
   const lecture = lectureDe(view.query);
 
@@ -2003,7 +2025,9 @@ function bindTabReset() {
   window.addEventListener(PROJECT_TAB_RESELECTED_EVENT, (event) => {
     if (String(event?.detail?.tabId || "") !== "memoire") return;
     if (!mountedRoot?.isConnected) return;
-    view.query = "";
+    // La recherche en cours **survit** : revenir au tableau après avoir ouvert
+    // une ligne est le geste normal, et refaire son filtrage à chaque
+    // aller-retour décourage de s'en servir. Seul le détail ouvert se ferme.
     view.notice = "";
     view.open = null;
     view.page = 1;

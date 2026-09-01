@@ -73,27 +73,6 @@ export function renderProjectRail({ id = "projectRail", navHtml = "", collapsed 
  * @returns {() => void} de quoi débrancher : sans cela chaque rendu ajouterait
  *   deux écouteurs de plus sur la fenêtre, et ils survivraient à l'écran.
  */
-/**
- * De combien le trait de l'onglet actif déborde sous la barre d'onglets.
- *
- * Ce n'était pas un problème d'ordre d'empilement, contrairement à ce qu'on a
- * d'abord cru : le trait est un `::after` posé à `bottom: calc(50% - 24px)` puis
- * remonté de la moitié de sa hauteur, si bien qu'il dépasse d'environ un pixel
- * **sous** la barre. Le rail, calé exactement sur ce bord, en mangeait la
- * moitié — et aucun `z-index` n'y change rien puisque les deux se disputent la
- * même ligne de pixels.
- *
- * On mesure donc le débord plutôt que de l'inventer : la hauteur du trait est
- * lisible, il est centré sur le bord, il en dépasse de la moitié. Le jour où
- * cette règle change, la mesure suit.
- */
-function debordDuTrait() {
-  const actif = document.querySelector(".project-tabs a.active");
-  if (!actif) return 0;
-  const hauteur = Number.parseFloat(getComputedStyle(actif, "::after").height);
-  return Number.isFinite(hauteur) ? Math.ceil(hauteur / 2) : 0;
-}
-
 export function followRailScroll(rail) {
   if (!rail) return () => {};
 
@@ -106,10 +85,7 @@ export function followRailScroll(rail) {
   const caler = () => {
     const onglets = document.querySelector(".project-tabs");
     const bas = onglets ? onglets.getBoundingClientRect().bottom : plancher();
-    rail.style.setProperty(
-      "--project-rail-top",
-      `${Math.max(plancher(), Math.round(bas + debordDuTrait()))}px`
-    );
+    rail.style.setProperty("--project-rail-top", `${Math.max(plancher(), Math.round(bas))}px`);
   };
 
   caler();
