@@ -1,4 +1,5 @@
 import { svgIcon } from "../ui/icons.js";
+import { escapeHtml } from "../utils/escape-html.js";
 import { registerProjectPrimaryScrollSource, setProjectViewHeader } from "./project-shell-chrome.js";
 import { bindSideNavPanels } from "./ui/side-nav-layout.js";
 import {
@@ -16,11 +17,17 @@ import {
 import {
   copiloteConversationId,
   copiloteConversations,
+  forgetConversationLocally,
   openConversation,
+  renameConversationLocally,
   renderCopilote,
   startNewConversation
 } from "./studio/copilote/copilote.js";
 import { conversationTitle } from "../services/copilote-conversations.js";
+import {
+  deleteConversation,
+  renameConversation
+} from "../services/copilote-conversations-supabase.js";
 import { renderSolidityClimate } from "./studio/solidity/solidity-climate.js";
 import { renderSolidityGeorisks } from "./studio/solidity/solidity-georisks.js";
 import { renderSolidityArkolia } from "./studio/socotec/socotec-enr-pv-hangard-neuf.js";
@@ -53,7 +60,24 @@ function renderCopiloteHistorique() {
         // Pas de `data-side-nav-target` : rouvrir un fil se traite à part, sinon
         // le panneau se redessinerait deux fois — une fois par le routeur, une
         // fois par nous — et la seconde effacerait la discussion chargée.
-        dataAttributes: { "data-copilote-conversation": conversation.id }
+        dataAttributes: { "data-copilote-conversation": conversation.id },
+        actionHtml: `
+          <button type="button" class="nav-list__action-btn" data-copilote-menu="${escapeHtml(conversation.id)}"
+            aria-haspopup="menu" aria-expanded="false"
+            aria-label="Actions sur cette discussion" title="Actions">
+            ${svgIcon("kebab-horizontal")}
+          </button>
+          <div class="copilote-fil-menu" role="menu" data-copilote-menu-for="${escapeHtml(conversation.id)}" hidden>
+            <button type="button" class="copilote-fil-menu__item" role="menuitem"
+              data-copilote-rename="${escapeHtml(conversation.id)}">
+              ${svgIcon("pencil")}<span>Renommer</span>
+            </button>
+            <button type="button" class="copilote-fil-menu__item is-danger" role="menuitem"
+              data-copilote-delete="${escapeHtml(conversation.id)}">
+              ${svgIcon("trash")}<span>Effacer</span>
+            </button>
+          </div>
+        `
       });
     })
   });
@@ -280,6 +304,12 @@ export function renderProjectStudio(root) {
  * désignent plus rien.
  */
 function marquerActif(root, targetId) {
+  // Le Copilote a sa propre mise en page : une seule barre de défilement, celle
+  // du fil, et la saisie posée en bas. La classe le dit à la feuille de style
+  // plutôt qu'un sélecteur qui devinerait le panneau actif.
+  root.querySelector(".project-simple-page--studio")
+    ?.classList.toggle("project-simple-page--copilote", targetId === "studio-copilote");
+
   const filCourant = copiloteConversationId();
   const historique = copiloteConversations().some((conversation) => conversation.id === filCourant);
 
@@ -326,26 +356,114 @@ function brancherCopilote(root, copiloteRoot, getScrollSource) {
     marquerActif(root, "studio-copilote");
   };
 
-  rail.addEventListener("click", (event) => {
+  const fermerMenus = () => {
+    for (const menu of rail.querySelectorAll("[data-copilote-menu-for]")) menu.hidden = true;
+    for (const bouton of rail.querySelectorAll("[data-copilote-menu]")) bouton.setAttribute("aria-expanded", "false");
+  };
+
+  rail.addEventListener("click", async (event) => {
     if (event.target.closest("[data-copilote-new]")) {
+      fermerMenus();
       startNewConversation();
       venir();
       return;
     }
 
+    const kebab = event.target.closest("[data-copilote-menu]");
+    if (kebab) {
+      // Le menu ne doit pas ouvrir la discussion au passage : on l'ouvre pour
+      // la renommer ou l'effacer, pas pour la lire.
+      event.stopPropagation();
+      const id = kebab.dataset.copiloteMenu;
+      const menu = rail.querySelector(`[data-copilote-menu-for="${CSS.escape(id)}"]`);
+      const ouvert = menu && !menu.hidden;
+      fermerMenus();
+      if (menu && !ouvert) {
+        menu.hidden = false;
+        kebab.setAttribute("aria-expanded", "true");
+      }
+      return;
+    }
+
+    const renommer = event.target.closest("[data-copilote-rename]");
+    if (renommer) {
+      event.stopPropagation();
+      fermerMenus();
+      await renommerFil(root, renommer.dataset.copiloteRename, copiloteRoot);
+      return;
+    }
+
+    const effacer = event.target.closest("[data-copilote-delete]");
+    if (effacer) {
+      event.stopPropagation();
+      fermerMenus();
+      await effacerFil(root, effacer.dataset.copiloteDelete, copiloteRoot);
+      return;
+    }
+
+    fermerMenus();
+
     const fil = event.target.closest("[data-copilote-conversation]");
     if (fil && openConversation(fil.dataset.copiloteConversation)) venir();
   });
 
+  document.addEventListener("click", (event) => {
+    if (!event.target.closest?.(".project-rail")) fermerMenus();
+  });
+
   // L'historique se redessine seul, sans toucher au reste du rail : redessiner
   // l'Atelier entier à chaque message replierait les réglages en cours.
-  const surConversations = () => {
+  const rafraichir = () => {
     const liste = root.querySelector("#studioCopiloteHistorique");
     if (!liste?.isConnected) return;
-
     liste.outerHTML = renderCopiloteHistorique();
     marquerActif(root, "studio-copilote");
   };
+
+  /**
+   * Renommer.
+   *
+   * Le nom part en base avant d'apparaître à l'écran : l'ordre inverse
+   * montrerait un nom que rien ne conserve, et il disparaîtrait au
+   * rechargement sans que personne comprenne pourquoi.
+   */
+  async function renommerFil(hote, id, panneau) {
+    const actuel = copiloteConversations().find((entree) => entree.id === id);
+    const propose = window.prompt("Renommer cette discussion", conversationTitle(actuel) || "");
+    if (propose === null) return;
+
+    try {
+      const nom = await renameConversation(id, propose);
+      renameConversationLocally(id, nom);
+      rafraichir();
+    } catch (error) {
+      window.alert(`Le nouveau nom n'a pas pu être enregistré. ${error?.message || ""}`.trim());
+    }
+  }
+
+  /**
+   * Effacer.
+   *
+   * On demande confirmation parce que c'est sans retour : la discussion et ses
+   * messages partent de la base, et rien n'en garde de copie — c'est ce qu'on
+   * promet à quelqu'un qui efface une conversation privée.
+   */
+  async function effacerFil(hote, id, panneau) {
+    const actuel = copiloteConversations().find((entree) => entree.id === id);
+    const nom = conversationTitle(actuel);
+    if (!window.confirm(`Effacer « ${nom} » ? La discussion et ses messages seront supprimés, sans retour.`)) return;
+
+    try {
+      await deleteConversation(id);
+      forgetConversationLocally(id);
+      rafraichir();
+      if (panneau) renderCopilote(panneau);
+    } catch (error) {
+      window.alert(`La discussion n'a pas pu être effacée. ${error?.message || ""}`.trim());
+    }
+  }
+
+  const surConversations = () => rafraichir();
 
   document.addEventListener("copilote:conversations", surConversations);
   studioCopiloteDetacher = () => document.removeEventListener("copilote:conversations", surConversations);

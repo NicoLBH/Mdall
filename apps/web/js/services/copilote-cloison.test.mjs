@@ -11,6 +11,18 @@
  * un commentaire ne s'oppose à rien. Ce fichier lit le code source et casse la
  * construction quand une porte s'ouvre. Il n'empêche pas d'ouvrir cette
  * porte — il empêche de l'ouvrir **sans le voir**.
+ *
+ * ## Ce qui a changé quand les discussions sont passées en base
+ *
+ * La garantie ne repose plus sur l'absence d'écriture. Elle repose sur trois
+ * choses, et ce fichier les vérifie une par une :
+ *
+ *  1. **une seule porte** — un seul module parle à la base, et il ne touche que
+ *     les deux tables du copilote ;
+ *  2. **propriétaire seul** — la migration active RLS sur les deux tables et
+ *     n'accorde rien à la clé anonyme ;
+ *  3. **rien ailleurs** — aucun écran partagé, aucune fonction serveur, aucun
+ *     autre module ne lit ces discussions.
  */
 
 import test from "node:test";
@@ -53,15 +65,65 @@ function cheminRelatif(chemin) {
   return chemin.slice(RACINE.length + 1).split("\\").join("/");
 }
 
-test("le module des conversations n'a aucun moyen de les faire sortir", () => {
-  // Il n'importe rien : ni réseau, ni Supabase, ni store. Ce qui n'a pas de
-  // porte n'a pas besoin d'être surveillé.
-  const source = lire(join(SERVICES, "copilote-conversations.js"));
+/** Le code sans ses commentaires : une prose qui parle de la base n'est pas une porte. */
+function code(source) {
+  return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+}
+
+test("le module des règles n'a aucun moyen de faire sortir une discussion", () => {
+  // Il n'importe rien : ni réseau, ni Supabase, ni store. Les allers-retours
+  // avec la base sont ailleurs, dans un module qu'on surveille à part.
+  const source = code(lire(join(SERVICES, "copilote-conversations.js")));
 
   assert.doesNotMatch(source, /^\s*import\s/m, "aucun import");
   assert.doesNotMatch(source, /\bfetch\s*\(/, "aucun appel réseau");
-  assert.doesNotMatch(source, /supabase/i, "aucune référence à la base");
+  assert.doesNotMatch(source, /supabase/i, "aucun accès à la base");
   assert.doesNotMatch(source, /functions\/v1/, "aucun appel de fonction distante");
+});
+
+test("une seule porte parle à la base, et seulement aux deux tables du copilote", () => {
+  const source = code(lire(join(SERVICES, "copilote-conversations-supabase.js")));
+  const tables = [...source.matchAll(/\.from\("([^"]+)"\)/g)].map((trouve) => trouve[1]);
+
+  assert.ok(tables.length > 0, "ce module parle bien à la base");
+  assert.deepEqual(
+    [...new Set(tables)].sort(),
+    ["copilot_conversations", "copilot_messages"],
+    "aucune autre table n'est touchée par la porte des conversations"
+  );
+});
+
+test("aucun autre module de l'application ne touche aux tables du copilote", () => {
+  for (const chemin of [...fichiersJs(join(WEB, "js")), ...fichiersJs(join(WEB, "assets", "js"))]) {
+    if (chemin.endsWith("copilote-conversations-supabase.js") || chemin.endsWith(".test.mjs")) continue;
+    assert.doesNotMatch(
+      code(lire(chemin)),
+      /copilot_conversations|copilot_messages/,
+      `${cheminRelatif(chemin)} touche aux tables des discussions : cela doit passer par la porte unique`
+    );
+  }
+});
+
+test("les deux tables sont fermées à tout le monde sauf à leur propriétaire", () => {
+  // C'est désormais la seule chose qui se tient entre une conversation privée
+  // et le reste de l'équipe : les autres tables de Mdall sont ouvertes à tout
+  // le projet, celles-ci ne doivent surtout pas l'être.
+  const migration = lire(join(RACINE, "supabase", "migrations", "202609100001_copilot_conversations.sql"));
+
+  for (const table of ["copilot_conversations", "copilot_messages"]) {
+    assert.match(migration, new RegExp(`alter table public\\.${table} enable row level security`), `RLS actif sur ${table}`);
+  }
+
+  // Deux sens : `using` empêche de lire celles des autres, `with check`
+  // empêche de leur en fabriquer. Sans le second, on ne verrait rien mais on
+  // pourrait écrire chez eux.
+  assert.equal((migration.match(/using \(\s*owner_id = auth\.uid\(\)/g) || []).length, 2);
+  assert.equal((migration.match(/with check \(\s*owner_id = auth\.uid\(\)/g) || []).length, 2);
+
+  // La clé anonyme ne désigne personne : aucune politique ne doit la nommer.
+  const politiques = migration.slice(migration.indexOf("create policy"));
+  assert.doesNotMatch(politiques, /\bto\s+anon\b/, "rien n'est accordé à la clé anonyme");
+  assert.doesNotMatch(politiques, /using \(true\)/, "aucune politique ouverte");
 });
 
 test("seuls les lecteurs déclarés importent les conversations", () => {
@@ -102,8 +164,9 @@ test("aucun écran partagé ne lit les conversations", () => {
 });
 
 test("la fonction serveur du copilote n'écrit nulle part", () => {
-  // Ce qui n'est jamais écrit ne peut pas fuir par une politique RLS mal posée,
-  // ni ressortir dans un export de projet.
+  // Le navigateur écrit sous sa propre identité, dans des tables dont la
+  // politique est propriétaire seul. La fonction, elle, n'écrit rien : une
+  // écriture faite là passerait par un client de service, donc hors RLS.
   const source = lire(join(RACINE, "supabase", "functions", "project-copilot", "index.ts"));
 
   assert.doesNotMatch(source, /\.insert\s*\(/, "aucun insert");

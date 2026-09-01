@@ -23,25 +23,31 @@
  * Mémoire enregistre — une seule porte. » Créer un sujet voudra dire le
  * **préparer**, et laisser quelqu'un le verser.
  *
- * ## L'état de la conversation ne vit pas ici
+ * ## Où vit la conversation
  *
- * Il reste dans `store.ui.assistant`, comme avant : c'est ce qui permet de
- * changer d'onglet et de retrouver l'échange en cours. Une conversation qu'un
- * changement d'écran efface n'est pas une conversation. Les discussions
- * passées, elles, sont dans `copilote-conversations.js`.
+ * À l'écran, dans `store.ui.assistant` : c'est ce qui permet de changer
+ * d'onglet et de retrouver l'échange en cours. **En base**, dans
+ * `copilot_conversations` / `copilot_messages`, avec une politique de sécurité
+ * propriétaire seul : une discussion se retrouve d'un poste à l'autre, et
+ * personne d'autre que son auteur ne peut la lire.
+ *
+ * L'écriture est optimiste : le message paraît à l'écran, puis part en base. Si
+ * l'écriture échoue, l'écran le dit — une sauvegarde silencieusement perdue est
+ * pire qu'une sauvegarde refusée, parce qu'on en découvre l'absence le
+ * lendemain.
  */
 
 import { store } from "../../../store.js";
 import { escapeHtml } from "../../../utils/escape-html.js";
 import { svgIcon } from "../../../ui/icons.js";
 import { sendAssistMessage } from "../../../services/copilote-service.js";
+import { conversationTitle, findConversation } from "../../../services/copilote-conversations.js";
 import {
-  findConversation,
-  loadConversations,
-  newConversation,
-  rememberConversation,
-  saveConversations
-} from "../../../services/copilote-conversations.js";
+  appendMessage,
+  createConversation,
+  listConversations
+} from "../../../services/copilote-conversations-supabase.js";
+import { resolveCurrentBackendProjectId } from "../../../services/project-supabase-sync.js";
 import { registerProjectPrimaryScrollSource } from "../../project-shell-chrome.js";
 
 /**
@@ -92,69 +98,119 @@ function ensureState() {
   if (!store.ui) store.ui = {};
 
   if (!store.ui.assistant) {
-    const courante = newConversation();
     store.ui.assistant = {
       isSending: false,
       draft: "",
       lastError: "",
       creditsOpen: false,
+      menuOpen: false,
       // De quoi interrompre l'appel en cours. Un bouton d'arrêt qui n'arrête
       // rien serait pire que pas de bouton du tout.
       abort: null,
-      conversationId: courante.id,
+      // Nul tant qu'aucune question n'a été posée : une discussion vide n'a
+      // rien à conserver, et le rail se remplirait de lignes sans titre.
+      conversationId: null,
       messages: [],
-      conversations: loadConversations(cleUtilisateur(), cleProjet()),
+      conversations: [],
+      chargement: false,
       projectKey: cleProjet(),
       userKey: cleUtilisateur()
     };
   }
 
-  // Changer de projet **ou de compte** repart de zéro. Le premier cas éviterait
-  // une confusion ; le second éviterait une fuite, et c'est autre chose : les
-  // questions d'un intervenant ne se montrent pas au suivant.
+  // Changer de projet **ou de compte** repart de zéro. Le premier éviterait une
+  // confusion ; le second éviterait une fuite, et c'est autre chose : les
+  // questions d'un intervenant ne se montrent pas au suivant. La base le
+  // refuserait de toute façon — on ne le lui demande pas.
   if (store.ui.assistant.projectKey !== cleProjet() || store.ui.assistant.userKey !== cleUtilisateur()) {
-    const courante = newConversation();
     store.ui.assistant.projectKey = cleProjet();
     store.ui.assistant.userKey = cleUtilisateur();
-    store.ui.assistant.conversations = loadConversations(cleUtilisateur(), cleProjet());
-    store.ui.assistant.conversationId = courante.id;
+    store.ui.assistant.conversations = [];
+    store.ui.assistant.conversationId = null;
     store.ui.assistant.messages = [];
     store.ui.assistant.draft = "";
     store.ui.assistant.lastError = "";
+    store.ui.assistant.chargement = false;
   }
 
   return store.ui.assistant;
 }
 
-/** Ce que l'échange en cours vaut, sous la forme qu'on archive. */
-function conversationCourante(etat) {
-  const connue = findConversation(etat.conversations, etat.conversationId);
-  const quand = new Date().toISOString();
-
-  return {
-    id: etat.conversationId,
-    startedAt: connue?.startedAt || etat.messages[0]?.ts || quand,
-    updatedAt: quand,
-    messages: etat.messages
-  };
+/** L'identifiant du projet en base — celui auquel les discussions se rattachent. */
+async function projetEnBase() {
+  return (await resolveCurrentBackendProjectId().catch(() => "")) || "";
 }
 
-/** L'archivage : une seule écriture, à chaque fois que le fil bouge. */
-function archiver(etat) {
-  etat.conversations = rememberConversation(etat.conversations, conversationCourante(etat));
-  saveConversations(etat.userKey, etat.projectKey, etat.conversations);
+/**
+ * Relire les discussions depuis la base.
+ *
+ * Une seule fois par venue sur l'écran : le rail affiche ce qu'on a, et une
+ * relecture à chaque rendu ferait clignoter la liste pendant qu'on écrit.
+ */
+async function chargerConversations(root) {
+  const etat = ensureState();
+  if (etat.chargement) return;
+  etat.chargement = true;
+
+  try {
+    const projet = await projetEnBase();
+    etat.conversations = projet ? await listConversations(projet) : [];
+  } catch (error) {
+    // Une lecture qui échoue n'efface rien : on garde ce qu'on avait, et on le
+    // dit. Afficher une liste vide ferait croire qu'il n'y a jamais rien eu.
+    etat.lastError = `Les discussions passées n'ont pas pu être relues. ${error?.message || ""}`.trim();
+  }
+
+  document.dispatchEvent(new CustomEvent("copilote:conversations"));
+  if (root?.isConnected) render(root);
+}
+
+/**
+ * Écrire un message en base, et tenir la liste locale à jour.
+ *
+ * La discussion se crée au premier message, pas au clic sur « nouvelle
+ * discussion » : une ligne sans question n'a rien à conserver.
+ */
+async function enregistrer(etat, message) {
+  try {
+    if (!etat.conversationId) {
+      const projet = await projetEnBase();
+      if (!projet) throw new Error("Ce projet n'est pas encore relié à la base.");
+      const creee = await createConversation(projet);
+      etat.conversationId = creee.id;
+      etat.conversations = [creee, ...etat.conversations];
+    }
+
+    const ecrit = await appendMessage(etat.conversationId, message);
+    // L'identifiant et la date viennent de la base : garder ceux du navigateur
+    // ferait diverger l'écran de ce qui est enregistré.
+    Object.assign(message, ecrit);
+
+    const conversation = findConversation(etat.conversations, etat.conversationId);
+    if (conversation) {
+      conversation.messages = etat.messages.map((entree) => ({ ...entree }));
+      conversation.updatedAt = new Date().toISOString();
+      etat.conversations = [
+        conversation,
+        ...etat.conversations.filter((entree) => entree.id !== conversation.id)
+      ];
+    }
+  } catch (error) {
+    etat.lastError = `La discussion n'a pas pu être enregistrée. ${error?.message || ""}`.trim();
+  }
+
   document.dispatchEvent(new CustomEvent("copilote:conversations"));
 }
 
-/** Ouvrir une discussion neuve. L'ancienne reste, elle a déjà été archivée. */
+/** Ouvrir une discussion neuve. L'ancienne est déjà en base, elle y reste. */
 export function startNewConversation() {
   const etat = ensureState();
-  const courante = newConversation();
 
-  etat.conversationId = courante.id;
+  etat.conversationId = null;
   etat.messages = [];
   etat.draft = "";
   etat.lastError = "";
+  etat.menuOpen = false;
 
   document.dispatchEvent(new CustomEvent("copilote:conversations"));
 }
@@ -172,6 +228,22 @@ export function openConversation(id) {
   return true;
 }
 
+/** Retirer une discussion de la liste affichée, après son effacement en base. */
+export function forgetConversationLocally(id) {
+  const etat = ensureState();
+  etat.conversations = etat.conversations.filter((entree) => entree.id !== id);
+  if (etat.conversationId === id) {
+    etat.conversationId = null;
+    etat.messages = [];
+  }
+}
+
+/** Renommer une discussion dans la liste affichée, après son écriture en base. */
+export function renameConversationLocally(id, title) {
+  const conversation = findConversation(ensureState().conversations, id);
+  if (conversation) conversation.title = title;
+}
+
 /** Les discussions du projet, la plus récente en tête. */
 export function copiloteConversations() {
   return ensureState().conversations;
@@ -185,15 +257,18 @@ export function copiloteConversationId() {
 /**
  * Un message.
  *
- * **Celui de l'utilisateur ne porte plus son nom.** « Vous », dans une
- * conversation privée à deux, ne désignait personne d'autre que la seule
- * personne présente — et la date en tête d'un message qu'on vient d'écrire
- * n'apprend rien. L'une et l'autre reviennent au survol, en bas du message,
- * pour les fois où l'on relit un fil d'il y a trois semaines.
+ * **Aucun des deux ne porte de nom.** « Vous », dans une conversation privée à
+ * deux, ne désigne personne d'autre ; et « Copilote » redit ce que sa marque
+ * montre déjà. Deux étiquettes pour deux interlocuteurs qu'on ne peut pas
+ * confondre.
  *
- * **Celui du copilote porte sa marque**, à gauche, comme partout ailleurs dans
- * l'application : c'est ce qui distingue d'un coup d'œil ce qu'on a demandé de
- * ce qui a été répondu, sans avoir à lire.
+ * **La date est en bas à droite, et au survol seulement.** Sur un message qu'on
+ * vient d'écrire elle n'apprend rien ; sur un fil qu'on relit trois semaines
+ * plus tard elle est la seule chose qui situe. La montrer toujours revient à
+ * payer tout le temps pour un besoin rare.
+ *
+ * Côté copilote, elle partage sa ligne avec les commandes : copier, compter.
+ * Une ligne de plus sous chaque réponse aurait espacé le fil sans rien dire.
  */
 function renderMessage(msg, index) {
   const role = msg.role === "user" ? "user" : "assistant";
@@ -212,17 +287,16 @@ function renderMessage(msg, index) {
     <article class="copilote-msg copilote-msg--assistant" data-message-index="${index}">
       <span class="copilote-msg__mark" aria-hidden="true">${svgIcon("copilot", { width: 32, height: 32 })}</span>
       <div class="copilote-msg__main">
-        <div class="copilote-msg__meta">
-          <span class="copilote-msg__author">Copilote</span>
-          <span class="copilote-msg__time mono">${escapeHtml(quand)}</span>
-        </div>
         <div class="copilote-msg__body">${mdToHtml(msg.content || "")}</div>
-        <div class="copilote-msg__actions">
-          <button type="button" class="copilote-msg__action" data-copy-message="${index}"
-            aria-label="Copier la réponse" title="Copier">${svgIcon("copy")}</button>
-          <button type="button" class="copilote-msg__action" data-tokens-message="${index}"
-            aria-haspopup="dialog" aria-expanded="false"
-            aria-label="Jetons consommés" title="Jetons consommés">${svgIcon("meter")}</button>
+        <div class="copilote-msg__footer">
+          <div class="copilote-msg__actions">
+            <button type="button" class="copilote-msg__action" data-copy-message="${index}"
+              aria-label="Copier la réponse" title="Copier">${svgIcon("copy")}</button>
+            <button type="button" class="copilote-msg__action" data-tokens-message="${index}"
+              aria-haspopup="dialog" aria-expanded="${msg.tokensOpen ? "true" : "false"}"
+              aria-label="Jetons consommés" title="Jetons consommés">${svgIcon("meter")}</button>
+          </div>
+          ${quand ? `<span class="copilote-msg__stamp mono">${escapeHtml(quand)}</span>` : ""}
         </div>
         ${renderJetons(msg, index)}
       </div>
@@ -233,11 +307,12 @@ function renderMessage(msg, index) {
 /**
  * Le compteur de jetons d'un message.
  *
- * **Il n'affiche aucun chiffre.** La fonction serveur ne renvoie pas encore le
- * décompte du modèle, et inventer deux nombres plausibles serait pire qu'un
- * panneau vide : on lit un compteur pour décider d'un usage, et une décision
- * prise sur un nombre fabriqué est une décision fausse. Le panneau dit ce qu'il
- * montrera, et qu'il ne le montre pas encore.
+ * Le décompte vient du modèle, par la fonction : `usage.input_tokens` et
+ * `usage.output_tokens`, tels quels. Rien n'est estimé ici — un compteur
+ * approché est un compteur faux, et on lit un compteur pour décider.
+ *
+ * Un tiret quand le chiffre manque, jamais un zéro : « 0 jeton » est une
+ * affirmation, « — » est un aveu.
  */
 function renderJetons(msg, index) {
   if (!msg.tokensOpen) return "";
@@ -249,7 +324,11 @@ function renderJetons(msg, index) {
       <p class="copilote-tokens__title">Jetons de ce message</p>
       <div class="copilote-tokens__row"><span>Entrée</span><span class="mono">${chiffre(msg.tokensIn)}</span></div>
       <div class="copilote-tokens__row"><span>Sortie</span><span class="mono">${chiffre(msg.tokensOut)}</span></div>
-      <p class="copilote-tokens__note">Le décompte n'est pas encore remonté du modèle.</p>
+      ${
+        Number.isFinite(msg.tokensIn) || Number.isFinite(msg.tokensOut)
+          ? ""
+          : `<p class="copilote-tokens__note">Le modèle n'a pas remonté son décompte pour ce message.</p>`
+      }
     </div>
   `;
 }
@@ -263,7 +342,7 @@ function renderJetons(msg, index) {
  */
 function renderAccueil() {
   return `
-    <div class="copilote-empty">
+    <div class="copilote-empty" id="copiloteAccueil">
       <span class="copilote-empty__mark" aria-hidden="true">${svgIcon("copilot", { width: 32, height: 32 })}</span>
       <p class="copilote-empty__title">Le copilote de ce projet</p>
       <p class="copilote-empty__sub">
@@ -305,8 +384,10 @@ function renderCorps(etat) {
   return `
     <div class="copilote-thread-wrap">
       <div class="copilote-thread" id="copiloteThread">
-        ${messages.map((msg, index) => renderMessage(msg, index)).join("")}
-        ${etat.isSending ? renderAttente() : ""}
+        <div class="copilote-thread__inner">
+          ${messages.map((msg, index) => renderMessage(msg, index)).join("")}
+          ${etat.isSending ? renderAttente() : ""}
+        </div>
       </div>
       <button type="button" class="copilote-scroll" id="copiloteScroll" hidden
         aria-label="Aller au dernier message" title="Aller au dernier message">
@@ -344,72 +425,138 @@ function renderCredits(etat) {
   `;
 }
 
-function renderActions() {
-  return ACTIONS_A_VENIR.map((action) => `
-    <button type="button" class="copilote-action" data-copilote-action="${escapeHtml(action.id)}" disabled
-      title="Bientôt : ${escapeHtml(action.label.toLowerCase())}">
-      ${svgIcon(action.icon)}
-      <span>${escapeHtml(action.label)}</span>
-    </button>
-  `).join("");
+/**
+ * Ce que le copilote saura faire.
+ *
+ * **Sur l'écran d'accueil, les trois boutons s'étalent** : c'est là qu'ils
+ * servent, en disant d'emblée ce qui vient. **Dès la première question, ils se
+ * replient dans un menu** — la conversation prend la place, et trois boutons
+ * éteints entre le fil et la saisie n'y ajoutent rien, ils l'éloignent.
+ */
+function renderActions(etat) {
+  const vide = (etat.messages ?? []).length === 0 && !etat.isSending;
+
+  if (vide) {
+    return `
+      <div class="copilote-actions" role="group" aria-label="Ce que le copilote saura faire">
+        ${ACTIONS_A_VENIR.map((action) => `
+          <button type="button" class="copilote-action" data-copilote-action="${escapeHtml(action.id)}" disabled
+            title="Bientôt : ${escapeHtml(action.label.toLowerCase())}">
+            ${svgIcon(action.icon)}
+            <span>${escapeHtml(action.label)}</span>
+          </button>
+        `).join("")}
+      </div>
+    `;
+  }
+
+  return `
+    <div class="copilote-compose__menu">
+      <button type="button" class="copilote-tool" id="copiloteMenu"
+        aria-haspopup="menu" aria-expanded="${etat.menuOpen ? "true" : "false"}"
+        aria-label="Ce que le copilote saura faire" title="Ce que le copilote saura faire">
+        ${svgIcon("comment-outline")}
+      </button>
+      ${
+        etat.menuOpen
+          ? `<div class="copilote-menu" role="menu">
+              ${ACTIONS_A_VENIR.map((action) => `
+                <button type="button" class="copilote-menu__item" role="menuitem"
+                  data-copilote-action="${escapeHtml(action.id)}" disabled>
+                  ${svgIcon(action.icon)}
+                  <span>${escapeHtml(action.label)}</span>
+                </button>
+              `).join("")}
+              <p class="copilote-menu__note">Ces trois-là ne cliquent pas encore.</p>
+            </div>`
+          : ""
+      }
+    </div>
+  `;
 }
 
+/**
+ * L'écran.
+ *
+ * Une seule barre de défilement, et c'est celle du fil : la page ne bouge plus,
+ * la saisie reste en bas. Deux ascenseurs pour une conversation obligeaient à
+ * choisir lequel pousser, et le bouton « aller en bas » ne savait plus lequel
+ * regarder.
+ *
+ * Le fil occupe toute la largeur — sa barre est donc au bord de l'écran, là où
+ * on la cherche — et la colonne de lecture est ramenée au centre à l'intérieur.
+ */
 function render(root) {
   const etat = ensureState();
-  const vide = (etat.messages ?? []).length === 0;
+  const vide = (etat.messages ?? []).length === 0 && !etat.isSending;
 
   root.innerHTML = `
-    <section class="settings-section is-active">
+    <section class="settings-section is-active copilote-section">
       <div class="copilote${vide ? " copilote--empty" : ""}">
         ${renderCorps(etat)}
 
         <div class="copilote-composer">
-          <div class="copilote-compose gh-field-focus">
-            <textarea
-              id="copiloteInput"
-              class="copilote-input"
-              rows="3"
-              ${etat.isSending ? "disabled" : ""}
-              placeholder="Posez une question sur ce projet…"
-            >${escapeHtml(etat.draft || "")}</textarea>
+          <div class="copilote-composer__inner">
+            <div class="copilote-compose gh-field-focus">
+              <textarea
+                id="copiloteInput"
+                class="copilote-input"
+                rows="3"
+                ${etat.isSending ? "disabled" : ""}
+                placeholder="Posez une question sur ce projet…"
+              >${escapeHtml(etat.draft || "")}</textarea>
 
-            <div class="copilote-compose__tools">
-              <button type="button" class="copilote-tool" id="copiloteCredits"
-                aria-haspopup="dialog" aria-expanded="false" aria-label="Crédits inclus"
-                title="Crédits inclus">${svgIcon("meter")}</button>
+              <div class="copilote-compose__bar">
+                <div class="copilote-compose__left">${vide ? "" : renderActions(etat)}</div>
 
-              <span class="copilote-compose__divider" role="separator" aria-orientation="vertical"></span>
+                <div class="copilote-compose__tools">
+                  <button type="button" class="copilote-tool" id="copiloteCredits"
+                    aria-haspopup="dialog" aria-expanded="${etat.creditsOpen ? "true" : "false"}"
+                    aria-label="Crédits inclus" title="Crédits inclus">${svgIcon("meter")}</button>
 
-              ${
-                etat.isSending
-                  ? `<button type="button" class="copilote-stop" id="copiloteStop"
-                       aria-label="Arrêter la réponse" title="Arrêter">
-                       <span class="copilote-stop__square" aria-hidden="true"></span>
-                     </button>`
-                  : `<button type="button" class="copilote-send" id="copiloteSend" aria-label="Envoyer"
-                       title="Envoyer">${svgIcon("paper-airplane")}</button>`
-              }
+                  <span class="copilote-compose__divider" role="separator" aria-orientation="vertical"></span>
+
+                  ${
+                    etat.isSending
+                      ? `<button type="button" class="copilote-stop" id="copiloteStop"
+                           aria-label="Arrêter la réponse" title="Arrêter">
+                           <span class="copilote-stop__square" aria-hidden="true"></span>
+                         </button>`
+                      : `<button type="button" class="copilote-send" id="copiloteSend" aria-label="Envoyer"
+                           title="Envoyer">${svgIcon("paper-airplane")}</button>`
+                  }
+                </div>
+              </div>
+
+              ${renderCredits(etat)}
             </div>
 
-            ${renderCredits(etat)}
-          </div>
+            ${vide ? renderActions(etat) : ""}
 
-          <div class="copilote-actions" role="group" aria-label="Ce que le copilote saura faire">
-            ${renderActions()}
+            ${
+              etat.lastError
+                ? `<p class="copilote-error">${escapeHtml(etat.lastError)}</p>`
+                : ""
+            }
           </div>
         </div>
-
-        ${
-          etat.lastError
-            ? `<p class="copilote-error">${escapeHtml(etat.lastError)}</p>`
-            : ""
-        }
       </div>
     </section>
   `;
 
   const fil = root.querySelector("#copiloteThread");
-  if (fil) fil.scrollTop = fil.scrollHeight;
+  if (fil) {
+    // Deux fois, et la seconde n'est pas superflue : au moment où l'on vient
+    // d'écrire le HTML, la hauteur du contenu n'est pas encore celle qu'elle
+    // sera une fois les polices posées. On se retrouvait à quelques centaines
+    // de pixels du bas, et le bouton « aller en bas » s'affichait alors qu'on
+    // venait de recevoir la réponse.
+    fil.scrollTop = fil.scrollHeight;
+    window.requestAnimationFrame(() => {
+      fil.scrollTop = fil.scrollHeight;
+      fil.dispatchEvent(new Event("scroll"));
+    });
+  }
 
   bind(root);
 }
@@ -420,21 +567,35 @@ async function envoyer(root) {
   const contenu = String(champ?.value || "").trim();
   if (!contenu || etat.isSending) return;
 
+  const question = { role: "user", content: contenu, ts: new Date().toISOString() };
+
   etat.draft = "";
-  etat.messages.push({ role: "user", content: contenu, ts: new Date().toISOString() });
+  etat.messages.push(question);
   etat.isSending = true;
   etat.lastError = "";
-  // La question est archivée avant la réponse : si le réseau tombe, ce qui a
-  // été demandé ne disparaît pas de l'historique pour autant.
-  archiver(etat);
+  etat.menuOpen = false;
   render(root);
+
+  // La question est enregistrée avant la réponse : si le réseau tombe ensuite,
+  // ce qui a été demandé ne disparaît pas de l'historique pour autant.
+  await enregistrer(etat, question);
 
   const controle = new AbortController();
   etat.abort = controle;
 
   try {
-    const { reply } = await sendAssistMessage(contenu, { signal: controle.signal });
-    etat.messages.push({ role: "assistant", content: reply || "Réponse vide.", ts: new Date().toISOString() });
+    const { reply, usage } = await sendAssistMessage(contenu, { signal: controle.signal });
+    const reponse = {
+      role: "assistant",
+      content: reply || "Réponse vide.",
+      ts: new Date().toISOString(),
+      // Le décompte vient du modèle. Nul quand il ne le dit pas : un zéro
+      // serait un chiffre, et on ne fabrique pas les chiffres d'un compteur.
+      tokensIn: Number.isFinite(usage?.inputTokens) ? usage.inputTokens : null,
+      tokensOut: Number.isFinite(usage?.outputTokens) ? usage.outputTokens : null
+    };
+    etat.messages.push(reponse);
+    await enregistrer(etat, reponse);
   } catch (error) {
     // Une interruption n'est pas une panne : c'est une décision de
     // l'utilisateur, et l'afficher en rouge comme une erreur lui reprocherait
@@ -447,7 +608,6 @@ async function envoyer(root) {
   } finally {
     etat.isSending = false;
     etat.abort = null;
-    archiver(etat);
     render(root);
     root.querySelector("#copiloteInput")?.focus();
   }
@@ -502,7 +662,14 @@ function brancherDefilement(root) {
 
   fil.addEventListener("scroll", ajuster);
   bouton.addEventListener("click", () => fil.scrollTo({ top: fil.scrollHeight, behavior: "smooth" }));
+
+  // Mesuré tout de suite **et** après la mise en page : au moment où l'on
+  // vient d'écrire le HTML, la hauteur visible vaut encore zéro, et le reste à
+  // faire défiler paraît énorme — le bouton s'affichait alors qu'on était déjà
+  // en bas.
   ajuster();
+  window.requestAnimationFrame(ajuster);
+  if (typeof ResizeObserver === "function") new ResizeObserver(ajuster).observe(fil);
 }
 
 /** Renoncer à la réponse en cours. La question posée, elle, reste dans le fil. */
@@ -574,8 +741,26 @@ function bind(root) {
   root.querySelector("#copiloteCredits")?.addEventListener("click", (event) => {
     event.stopPropagation();
     etat.creditsOpen = !etat.creditsOpen;
+    etat.menuOpen = false;
     render(root);
   });
+
+  root.querySelector("#copiloteMenu")?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    etat.menuOpen = !etat.menuOpen;
+    etat.creditsOpen = false;
+    render(root);
+  });
+
+  if (etat.menuOpen) {
+    const fermer = (event) => {
+      if (event.target.closest?.(".copilote-menu, #copiloteMenu")) return;
+      document.removeEventListener("click", fermer);
+      etat.menuOpen = false;
+      render(root);
+    };
+    document.addEventListener("click", fermer);
+  }
 
   // Un clic ailleurs referme : un panneau qui ne se ferme que par son propre
   // bouton finit par rester ouvert sous ce qu'on veut lire.
@@ -590,10 +775,48 @@ function bind(root) {
   }
 }
 
-export function renderCopilote(root) {
+/**
+ * Caler l'écran sur la hauteur qui reste.
+ *
+ * `height: 100%` ne servait à rien : aucun ancêtre n'a de hauteur fixée, et un
+ * pourcentage qui n'a rien à quoi se rapporter est ignoré. Toute la colonne
+ * grandissait donc avec le fil, et c'est le document qui défilait — d'où les
+ * deux ascenseurs, et un bouton « aller en bas » qui regardait le mauvais.
+ *
+ * On mesure donc ce qui reste sous le bandeau, et on l'écrit. Mesurer plutôt
+ * que soustraire une constante : la hauteur du bandeau change avec la largeur
+ * de l'écran, et une valeur écrite en dur y aurait survécu jusqu'au premier
+ * redimensionnement.
+ */
+function caler(root) {
+  const page = root.closest(".project-simple-page--studio");
+  if (!page) return;
+
+  const haut = page.getBoundingClientRect().top;
+  page.style.setProperty("--copilote-hauteur", `${Math.max(320, Math.round(window.innerHeight - haut))}px`);
+}
+
+let calage = null;
+
+export function renderCopilote(root, { reload = false } = {}) {
   if (!root) return;
+
+  const etat = ensureState();
   render(root);
-  registerProjectPrimaryScrollSource(
-    root.closest("#projectStudioRouterScroll") || document.getElementById("projectStudioRouterScroll")
-  );
+
+  caler(root);
+  if (calage) window.removeEventListener("resize", calage);
+  calage = () => caler(root);
+  window.addEventListener("resize", calage);
+
+  // Le fil est le seul ascenseur de l'écran : la coque ne défile plus. Le lui
+  // désigner comme source de défilement ferait chercher au bandeau un
+  // mouvement qui n'a plus lieu.
+  registerProjectPrimaryScrollSource(null);
+
+  // Les discussions se relisent à la première venue, et sur demande. Une
+  // relecture à chaque rendu ferait clignoter le rail pendant qu'on écrit.
+  if (reload || (etat.conversations.length === 0 && !etat.chargement)) {
+    void chargerConversations(root);
+  }
 }

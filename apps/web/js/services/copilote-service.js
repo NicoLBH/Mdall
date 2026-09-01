@@ -85,6 +85,24 @@ function parseAssistantReply(data) {
   return "";
 }
 
+/**
+ * Le décompte de jetons, tel que le modèle l'a rendu.
+ *
+ * Rien n'est estimé à partir de la longueur du texte : une estimation
+ * ressemblerait à une mesure, et on lit un compteur pour décider. Absent quand
+ * le modèle ne l'a pas dit.
+ */
+function parseUsage(data) {
+  const nombre = (valeur) => (typeof valeur === "number" && Number.isFinite(valeur) ? valeur : null);
+  const usage = data?.usage ?? null;
+
+  return {
+    inputTokens: nombre(usage?.input_tokens),
+    outputTokens: nombre(usage?.output_tokens),
+    totalTokens: nombre(usage?.total_tokens)
+  };
+}
+
 export async function sendAssistMessage(message, { signal = null } = {}) {
   const content = normalizeMessage(message);
   if (!content) {
@@ -145,5 +163,5 @@ export async function sendAssistMessage(message, { signal = null } = {}) {
     throw new Error("Le copilote a répondu, mais sans contenu.");
   }
 
-  return { raw: data, reply, context };
+  return { raw: data, reply, context, usage: parseUsage(data) };
 }

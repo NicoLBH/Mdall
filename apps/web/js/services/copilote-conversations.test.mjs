@@ -6,7 +6,6 @@ import {
   CONVERSATIONS_LEGACY_PREFIX,
   CONVERSATIONS_MAX,
   conversationKeysIn,
-  conversationsKey,
   TITRE_VIDE,
   conversationTitle,
   findConversation,
@@ -156,34 +155,15 @@ test("un rôle inconnu relu depuis le stockage devient une réponse, jamais une 
   assert.equal(parseConversations(brut)[0].messages[0].role, "assistant");
 });
 
-/* ── La cloison : à qui appartiennent ces discussions ────────────────────── */
+/* ── Ce qui reste dans le navigateur ─────────────────────────────────────── */
 
-test("la clé de stockage porte l'utilisateur autant que le projet", () => {
-  // Sans l'utilisateur, le compte suivant sur le même navigateur relirait les
-  // questions du précédent. Un poste partagé sur un chantier est la règle.
-  const alice = conversationsKey("u-alice", "p-1");
-  const bob = conversationsKey("u-bob", "p-1");
-
-  assert.notEqual(alice, bob);
-  assert.ok(alice.startsWith(`${CONVERSATIONS_KEY_PREFIX}.`));
-  assert.match(alice, /u-alice/);
-});
-
-test("le même utilisateur ne mélange pas deux chantiers", () => {
-  assert.notEqual(conversationsKey("u-alice", "p-1"), conversationsKey("u-alice", "p-2"));
-});
-
-test("sans utilisateur connu, on écrit dans un compartiment, pas dans un fourre-tout", () => {
-  const anonyme = conversationsKey("", "p-1");
-
-  assert.match(anonyme, /anonyme/);
-  assert.notEqual(anonyme, conversationsKey("u-alice", "p-1"));
-});
-
-test("la purge emporte toutes les discussions, de tous les comptes, l'ancienne forme comprise", () => {
+test("la purge emporte toutes les discussions locales, les deux formes comprises", () => {
+  // Les discussions vivent en base désormais ; ce qui traîne encore dans les
+  // navigateurs qui les ont écrites doit finir par disparaître d'un endroit
+  // qu'aucune politique de sécurité ne couvre.
   const cles = [
-    conversationsKey("u-alice", "p-1"),
-    conversationsKey("u-bob", "p-2"),
+    `${CONVERSATIONS_KEY_PREFIX}.u-alice.p-1`,
+    `${CONVERSATIONS_KEY_PREFIX}.u-bob.p-2`,
     `${CONVERSATIONS_LEGACY_PREFIX}.p-1`,
     "mdall.studioRailWidth.v1",
     "mdall.supabaseProjectMap.v1",
@@ -191,19 +171,29 @@ test("la purge emporte toutes les discussions, de tous les comptes, l'ancienne f
   ];
 
   assert.deepEqual(conversationKeysIn(cles), [
-    conversationsKey("u-alice", "p-1"),
-    conversationsKey("u-bob", "p-2"),
+    `${CONVERSATIONS_KEY_PREFIX}.u-alice.p-1`,
+    `${CONVERSATIONS_KEY_PREFIX}.u-bob.p-2`,
     `${CONVERSATIONS_LEGACY_PREFIX}.p-1`
   ]);
 });
 
 test("la purge ne touche pas aux réglages du rail ni à la session", () => {
-  // Effacer trop déconnecterait l'utilisateur ou perdrait ses réglages : la
-  // cloison protège les conversations, elle ne fait pas le ménage ailleurs.
+  // Effacer trop déconnecterait l'utilisateur ou perdrait ses réglages.
   assert.deepEqual(conversationKeysIn(["mdall.studioRailCollapsed.v1", "sb-olgx-auth-token"]), []);
 });
 
-test("les entrées de l'ancienne forme ne sont pas relues : on ne sait pas à qui elles sont", () => {
-  assert.notEqual(CONVERSATIONS_KEY_PREFIX, CONVERSATIONS_LEGACY_PREFIX);
-  assert.ok(!conversationsKey("u-alice", "p-1").startsWith(`${CONVERSATIONS_LEGACY_PREFIX}.`));
+/* ── Le nom d'une discussion ─────────────────────────────────────────────── */
+
+test("un nom donné l'emporte sur la première question", () => {
+  // Renommer est une décision, et une décision se conserve.
+  const conversation = avecMessages("c1", [{ role: "user", content: "Quelle est la zone de neige ?" }]);
+
+  assert.equal(conversationTitle({ ...conversation, title: "Neige — bâtiment A" }), "Neige — bâtiment A");
+});
+
+test("un nom effacé rend à la discussion son titre naturel", () => {
+  const conversation = avecMessages("c1", [{ role: "user", content: "Quelle est la zone de neige ?" }]);
+
+  assert.equal(conversationTitle({ ...conversation, title: "" }), "Quelle est la zone de neige ?");
+  assert.equal(conversationTitle({ ...conversation, title: null }), "Quelle est la zone de neige ?");
 });
