@@ -1,11 +1,12 @@
 import { svgIcon } from "../ui/icons.js";
 import { registerProjectPrimaryScrollSource } from "./project-shell-chrome.js";
+import { bindSideNavPanels } from "./ui/side-nav-layout.js";
 import {
-  renderSideNavGroup,
-  renderSideNavItem,
-  renderSideNavSeparator,
-  bindSideNavPanels
-} from "./ui/side-nav-layout.js";
+  renderNavList,
+  renderNavListDivider,
+  renderNavListGroup,
+  renderNavListItem
+} from "./ui/nav-list.js";
 import {
   bindRailResizer,
   followRailScroll,
@@ -22,81 +23,74 @@ import { renderResolutionConflits } from "./studio/conflits/resolution-conflits.
 
 function renderStudioNav() {
   return [
-    renderSideNavGroup({
-      className: "settings-nav__group settings-nav__group--project",
+    renderNavListGroup({
       items: [
-        renderSideNavItem({
+        renderNavListItem({
           label: "Bienvenue",
-          targetId: "studio-general",
+          dataAttributes: { "data-side-nav-target": "studio-general" },
           iconHtml: svgIcon("home", { className: "octicon octicon-home" }),
-          isActive: true,
-          isPrimary: true
+          isActive: true
         })
       ]
     }),
-    renderSideNavSeparator(),
-    renderSideNavGroup({
-      className: "settings-nav__group settings-nav__group--project",
-      sectionLabel: "Solidité",
+    renderNavListDivider(),
+    renderNavListGroup({
+      label: "Solidité",
       items: [
-        renderSideNavItem({
+        renderNavListItem({
           label: "Neige, Vent & Gel",
-          targetId: "solidity-climate",
+          dataAttributes: { "data-side-nav-target": "solidity-climate" },
           iconHtml: svgIcon("climate-tools", { className: "octicon octicon-gear" })
         }),
-        renderSideNavItem({
+        renderNavListItem({
           label: "Risques Naturels & Technologiques",
-          targetId: "solidity-georisks",
+          dataAttributes: { "data-side-nav-target": "solidity-georisks" },
           iconHtml: svgIcon("shield", { className: "octicon octicon-shield" })
         }),
       ]
     }),
-    renderSideNavSeparator(),
-    renderSideNavGroup({
-      className: "settings-nav__group settings-nav__group--project",
-      sectionLabel: "Mémoire",
+    renderNavListDivider(),
+    renderNavListGroup({
+      label: "Mémoire",
       items: [
-        renderSideNavItem({
+        renderNavListItem({
           label: "Résoudre les conflits",
-          targetId: "conflits-resolution",
+          dataAttributes: { "data-side-nav-target": "conflits-resolution" },
           iconHtml: svgIcon("bug", { className: "octicon octicon-bug" })
         })
       ]
     }),
-    renderSideNavSeparator(),
-    renderSideNavGroup({
-      className: "settings-nav__group settings-nav__group--project",
-      sectionLabel: "Parasismique",
+    renderNavListDivider(),
+    renderNavListGroup({
+      label: "Parasismique",
       items: [
-        renderSideNavItem({
+        renderNavListItem({
           label: "Spectre",
-          targetId: "seismic-general",
+          dataAttributes: { "data-side-nav-target": "seismic-general" },
           iconHtml: svgIcon("pulse", { className: "octicon octicon-pulse" })
         })
       ]
     }),
-    renderSideNavSeparator(),
-    renderSideNavGroup({
-      className: "settings-nav__group settings-nav__group--project",
-      sectionLabel: "Socotec",
+    renderNavListDivider(),
+    renderNavListGroup({
+      label: "Socotec",
       items: [
-        renderSideNavItem({
+        renderNavListItem({
           label: "ENR - PV hangar neuf",
-          targetId: "solidity-arkolia",
+          dataAttributes: { "data-side-nav-target": "solidity-arkolia" },
           iconHtml: svgIcon("eye", { className: "octicon octicon-eye" })
         })
       ]
     }),
-    renderSideNavSeparator(),
-    renderSideNavGroup({
-      className: "settings-nav__group settings-nav__group--project",
-      sectionLabel: "Développements",
+    renderNavListDivider(),
+    renderNavListGroup({
+      label: "Développements",
       items: [
-        renderSideNavItem({
+        renderNavListItem({
           label: "Suivi des avis BC",
-          targetId: "dev-ct-continuity-lab",
+          dataAttributes: { "data-side-nav-target": "dev-ct-continuity-lab" },
           iconHtml: svgIcon("history", { className: "octicon octicon-history" }),
-          tag: "spike"
+          trailing: "spike"
         })
       ]
     })
@@ -129,7 +123,7 @@ function getRouterHtml() {
               id: "studioRail",
               label: "Utilitaires de l'Atelier",
               collapsed: railState.collapsed,
-              navHtml: renderStudioNav()
+              navHtml: renderNavList({ label: "Utilitaires de l'Atelier", html: renderStudioNav() })
             })}
             <div class="project-rail-layout__content settings-content settings-content--parametres project-studio-router__content">
               

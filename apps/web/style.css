@@ -4429,12 +4429,7 @@ body.drilldown-open .drilldown__inner,
   padding:0 16px;
   background:var(--headbg);
   border-bottom:1px solid var(--border);
-  /* Au-dessus du rail latéral, qui est `fixed` et viendrait sinon recouvrir le
-     trait de l'onglet actif — celui-ci déborde d'un pixel sous la barre. Le rail
-     peut alors se poser au ras du bord : là où il n'y a pas d'orange, son trait
-     vertical occupe ce pixel ; là où il y en a, l'orange l'emporte. Le pixel
-     appartient donc toujours à quelqu'un. */
-  z-index:1;
+  z-index:auto;
 }
 .project-tabs a{
   display:inline-flex;
@@ -16523,14 +16518,17 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
    est écrit par la vue à chaque défilement : le CSS seul ne sait pas où s'arrête
    un élément qui défile. */
 .project-rail{
-  --project-rail-gutter:10px;
+  --nav-list-gutter:10px;
   position:fixed; left:0; top:var(--project-rail-top, var(--app-top)); bottom:0;
   /* Sous les onglets : le trait orange de l'onglet actif perdait la moitié de
      son épaisseur, recouvert par le rail. */
   width:var(--project-rail-width, 232px); z-index:0;
   display:flex; flex-direction:column; gap:4px;
   padding:12px 8px 12px 12px;
-  border-right:1px solid var(--border); background:var(--bg);
+  /* Pas de fond : le contenu est décalé de la largeur du rail, rien ne passe
+     dessous. Un rail opaque n'aurait servi qu'à recouvrir le trait de l'onglet
+     actif — le problème qu'on a mis trois versions à contourner. */
+  border-right:1px solid var(--border);
 }
 /* Le contenu s'écarte du rail au lieu de passer dessous. Il se recentre dans ce
    qui reste, et retrouve donc sa largeur habituelle. */
@@ -16561,46 +16559,68 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   content:attr(data-memory-count); margin-left:auto; color:var(--muted);
   font-size:12px; font-variant-numeric:tabular-nums;
 }
-/* Le trait bleu est à gauche du fond, pas contre lui : collés, ils forment un
-   seul bloc et le trait cesse de se lire comme un repère.
+/* Les caractéristiques d'une affirmation, dans son détail : les mêmes pastilles
+   que dans le tableau, et **toutes présentes**, y compris vides. Un trait
+   discontinu dit « cette case est vide » — c'est une information, souvent celle
+   qu'il faut aller combler. */
+.memory-detail__tags{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin:0 0 4px; }
+.memory-detail__tags-label{ color:var(--muted); font-size:11px; }
+.memory-detail__tags .memory-tag{ margin-right:2px; }
 
-   La gouttière est une **bordure transparente**, pas un décalage négatif :
-   `background-clip` arrête le fond après elle, et le trait s'y loge sans jamais
-   sortir de l'entrée — donc sans rien à rogner ni à faire défiler. */
-/* La spécificité compte ici : le composant partagé pose son fond avec le
-   raccourci `background` sur `.side-nav-layout__item.is-active` (0,2,0), ce qui
-   **réinitialise `background-clip`**. Une règle à une seule classe se faisait
-   donc écraser en silence, et le fond repassait sous la gouttière. */
-.project-rail .side-nav-layout__item{
-  border-left:var(--project-rail-gutter, 10px) solid transparent;
-  background-clip:padding-box;
+/* Les dépendances : un sens, et plusieurs socles à la fois. */
+.memory-depends__hint{ margin:0 0 6px; color:var(--muted); font-size:12px; max-width:80ch; }
+.memory-depends__label{ margin:0 0 2px; color:var(--text); font-size:13px; font-weight:600; }
+.memory-depends__choices{ display:flex; flex-direction:column; gap:4px; margin:6px 0 10px; max-height:220px; overflow-y:auto; }
+.memory-depends__choice{
+  display:flex; align-items:center; gap:8px; padding:5px 8px;
+  border:1px solid transparent; border-radius:6px;
+  color:var(--muted); font-size:13px; cursor:pointer;
 }
-.project-rail .side-nav-layout__item:hover,
-.project-rail .side-nav-layout__item.is-active,
-.project-rail .side-nav-layout__item[data-side-nav-active="true"]{
-  background-clip:padding-box;
+.memory-depends__choice:hover{ background:var(--panel2); }
+.memory-depends__choice.is-checked{ border-color:var(--borderColor-accent-emphasis); color:var(--text); }
+
+/* La liste de navigation : le `li` porte le repère, le contenu porte le fond.
+
+   C'est cette séparation qui permet d'arrondir le fond sans coller au trait, et
+   de réduire le fond à l'icône au repli sans que le trait ni l'icône bougent —
+   ce qu'une pile de `<button>` ne savait pas faire. */
+.nav-list{ display:flex; flex-direction:column; gap:2px; }
+.nav-list__list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:2px; }
+.nav-list__group-label{
+  margin:10px 0 4px; padding:0 var(--nav-list-gutter, 10px);
+  color:var(--muted); font-size:12px; font-weight:600;
 }
-.project-rail .side-nav-layout__item.is-active,
-.project-rail .side-nav-layout__item[data-side-nav-active="true"]{
-  /* `background-color`, pas `background` : le raccourci réinitialise
-     `background-clip`, et le fond repassait sous la gouttière transparente —
-     le trait bleu se retrouvait collé au fond, ce qu'il ne doit jamais être. */
-  background-color:rgba(110,118,129,.14);
-  font-weight:500;
-}
-.project-rail .side-nav-layout__item.is-active::before,
-.project-rail .side-nav-layout__item[data-side-nav-active="true"]::before{
-  content:""; position:absolute;
-  left:calc(-1 * var(--project-rail-gutter, 10px)); top:50%; transform:translateY(-50%);
+.nav-list__divider{ height:1px; margin:8px 0; background:var(--border); }
+
+.nav-list__item{ position:relative; padding-left:var(--nav-list-gutter, 10px); }
+.nav-list__item[data-active="true"]::before{
+  content:""; position:absolute; left:0; top:50%; transform:translateY(-50%);
   width:4px; height:24px;
   background:var(--borderColor-accent-emphasis); border-radius:var(--radius);
 }
 
+.nav-list__content{
+  display:flex; align-items:center; gap:8px; width:100%;
+  min-height:32px; padding:6px 12px;
+  border:0; border-radius:6px; background:transparent;
+  color:var(--text); font:inherit; font-size:13px; text-align:left;
+  text-decoration:none; cursor:pointer;
+}
+.nav-list__content:hover{ background:var(--panel2); }
+.nav-list__item[data-active="true"] .nav-list__content{ background:rgba(110,118,129,.14); font-weight:500; }
+
+.nav-list__visual{ display:inline-flex; align-items:center; flex:0 0 16px; color:var(--muted); }
+.nav-list__visual svg{ fill:currentColor; }
+.nav-list__item[data-active="true"] .nav-list__visual,
+.nav-list__content:hover .nav-list__visual{ color:var(--text); }
+.nav-list__label{ min-width:0; flex:1 1 auto; }
+.nav-list__trailing{ color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums; }
+
 /* Pas de filet au-dessus : le bouton est déjà en bas, et un trait de plus dans
    un rail qui en porte déjà un ne sépare rien. */
 .project-rail__collapse{
-  display:flex; align-items:center; gap:8px; width:100%; min-height:30px;
-  padding:6px 10px 6px 12px; margin-top:8px; flex:0 0 auto;
+  display:flex; align-items:center; gap:8px; width:100%; min-height:32px;
+  padding:6px 12px 6px 22px; margin-top:8px; flex:0 0 auto;
   border:0; border-radius:6px; background:transparent; color:var(--muted);
   font:inherit; font-size:13px; cursor:pointer;
 }
@@ -16613,12 +16633,13 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
    Les retraits de droite sont ajustés pour que le fond de l'entrée active soit
    **centré sur l'icône** : 12 px de part et d'autre, et non 12 à gauche pour 10
    à droite. Un fond décentré d'un pixel se voit sur une colonne d'icônes. */
-.project-rail.is-collapsed .side-nav-layout__label,
-.project-rail.is-collapsed .project-rail__item::after{ display:none; }
-.project-rail.is-collapsed .side-nav-layout__icon{ margin-right:0; }
-.project-rail.is-collapsed{ padding-right:6px; }
-.project-rail.is-collapsed .side-nav-layout__item,
-.project-rail.is-collapsed .project-rail__collapse{ padding-right:12px; }
+.project-rail.is-collapsed .nav-list__label,
+.project-rail.is-collapsed .nav-list__trailing,
+.project-rail.is-collapsed .nav-list__group-label{ display:none; }
+/* Le fond se réduit à l'icône, exactement où elle était : 12 px de part et
+   d'autre, arrondi compris. Rien ne se déplace, seul le texte s'efface. */
+.project-rail.is-collapsed .nav-list__content{ width:fit-content; }
+.project-rail.is-collapsed .project-rail__collapse{ justify-content:center; padding-right:12px; }
 
 /* La poignée déborde sur le contenu pour être saisissable sans viser le trait. */
 .project-rail .side-resizer__handle{
@@ -16904,11 +16925,34 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 
 /* Un filtre reconnu se detache : bleu sur bleu, comme sur GitHub. L'oeil repere
    d'un coup ce qui restreint la liste, sans relire la ligne mot a mot. */
-.query-token{
+/* Seule la **valeur** se colore : « nature: » nomme le champ, la valeur dit ce
+   qu'on cherche. Peindre les deux ferait un pâté bleu où l'oeil ne distingue
+   plus l'essentiel de son etiquette. */
+.query-token__key{ color:rgb(240, 246, 252); }
+.query-token__value{
   color:var(--fgColor-accent, #4493f8);
   background:rgba(56,139,253,.15);
   border-radius:4px;
 }
+
+/* La complétion : ce qu'on peut écrire, à l'endroit où l'on écrit. Une barre à
+   jetons ne s'apprend pas dans une documentation, elle s'apprend en tapant. */
+.memory-search__suggestions{
+  position:absolute; left:0; right:0; top:calc(100% + 4px); z-index:30;
+  max-height:280px; overflow-y:auto;
+  border:1px solid var(--border); border-radius:var(--radius);
+  background:var(--panel); box-shadow:0 8px 24px rgba(1,4,9,.6);
+  padding:4px;
+}
+.memory-search__suggestion{
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  width:100%; padding:6px 10px; border:0; border-radius:6px;
+  background:transparent; color:var(--text); font:inherit; font-size:13px;
+  text-align:left; cursor:pointer;
+}
+.memory-search__suggestion:hover,
+.memory-search__suggestion.is-active{ background:rgba(56,139,253,.15); }
+.memory-search__suggestion-hint{ color:var(--muted); font-size:12px; }
 .memory-search__input::-webkit-search-cancel-button{ display:none; }
 .memory-search__icon{
   display:inline-flex; align-items:center; padding:0 10px;
