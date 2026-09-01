@@ -15,6 +15,11 @@
  * C'est aussi ce que le lecteur d'écran attend : une navigation annonce le
  * nombre d'entrées et la position courante, ce qu'une pile de boutons ne dit
  * pas.
+ *
+ * Une entrée peut porter une **action** à côté d'elle — « nouvelle discussion »
+ * sur le Copilote, par exemple. Elle se pose dans le `li`, à côté du contenu,
+ * jamais dedans : un bouton dans un bouton n'est pas du HTML valide, et le
+ * navigateur en fait ce qu'il veut.
  */
 
 import { escapeHtml } from "../../utils/escape-html.js";
@@ -34,7 +39,9 @@ export function renderNavListItem({
   href = "",
   as = "button",
   className = "",
-  dataAttributes = {}
+  dataAttributes = {},
+  actionHtml = "",
+  title = ""
 } = {}) {
   const balise = as === "a" ? "a" : "button";
   const attrs = [];
@@ -51,6 +58,11 @@ export function renderNavListItem({
   // ici » à qui n'a pas les couleurs sous les yeux.
   attrs.push(`aria-current="${isActive ? "page" : "false"}"`);
 
+  // `title` reste facultatif : il ne sert que là où le libellé peut être
+  // tronqué — un intitulé complet répété en infobulle n'apporte rien et se lit
+  // deux fois aux lecteurs d'écran.
+  if (title) attrs.push(`title="${escapeHtml(title)}"`);
+
   return `
     <li class="nav-list__item ${className}" data-active="${isActive ? "true" : "false"}">
       <${balise} class="nav-list__content" ${attrs.join(" ")}>
@@ -58,15 +70,27 @@ export function renderNavListItem({
         <span class="nav-list__label">${escapeHtml(label)}</span>
         ${trailing ? `<span class="nav-list__trailing">${escapeHtml(trailing)}</span>` : ""}
       </${balise}>
+      ${actionHtml ? `<span class="nav-list__action">${actionHtml}</span>` : ""}
     </li>
   `;
 }
 
-/** Un groupe d'entrées, avec son intitulé s'il en a un. */
-export function renderNavListGroup({ label = "", items = [] } = {}) {
+/**
+ * Un groupe d'entrées, avec son intitulé s'il en a un.
+ *
+ * `id` sert aux groupes qui changent seuls — l'historique des discussions
+ * s'allonge à chaque question. Redessiner la liste entière à ce moment-là
+ * refermerait le rail sur sa position de départ.
+ */
+export function renderNavListGroup({ label = "", items = [], id = "", className = "" } = {}) {
+  const attrs = [
+    `class="${`nav-list__list ${className}`.trim()}"`,
+    id ? `id="${escapeHtml(id)}"` : ""
+  ].filter(Boolean).join(" ");
+
   return `
     ${label ? `<h3 class="nav-list__group-label">${escapeHtml(label)}</h3>` : ""}
-    <ul class="nav-list__list">${items.join("")}</ul>
+    <ul ${attrs}>${items.join("")}</ul>
   `;
 }
 

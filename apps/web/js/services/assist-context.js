@@ -296,7 +296,6 @@ export function buildAssistContext() {
       selection
     },
     assistant: {
-      mode: store.ui?.assistant?.mode || "auto",
       conversation_length: safeArray(store.ui?.assistant?.messages).length
     },
     global_navigation: {

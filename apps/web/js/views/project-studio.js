@@ -13,13 +13,51 @@ import {
   railWidth,
   renderProjectRail
 } from "./ui/project-rail.js";
-import { renderCopilote } from "./studio/copilote/copilote.js";
+import {
+  copiloteConversationId,
+  copiloteConversations,
+  openConversation,
+  renderCopilote,
+  startNewConversation
+} from "./studio/copilote/copilote.js";
+import { conversationTitle } from "../services/copilote-conversations.js";
 import { renderSolidityClimate } from "./studio/solidity/solidity-climate.js";
 import { renderSolidityGeorisks } from "./studio/solidity/solidity-georisks.js";
 import { renderSolidityArkolia } from "./studio/socotec/socotec-enr-pv-hangard-neuf.js";
 import { renderSeismicGeneral } from "./studio/seismic/seismic-general.js";
 import { renderCtContinuityLab } from "./studio/dev/ct-continuity-lab.js";
 import { renderResolutionConflits } from "./studio/conflits/resolution-conflits.js";
+
+/**
+ * L'historique des discussions, sous l'entrée Copilote.
+ *
+ * Il est plat et sans intitulé de groupe : ce ne sont pas des utilitaires de
+ * plus, ce sont les fils d'un seul. Le décalage à gauche le dit mieux qu'un
+ * titre, qui ferait croire à une rubrique.
+ */
+function renderCopiloteHistorique() {
+  const courante = copiloteConversationId();
+
+  return renderNavListGroup({
+    id: "studioCopiloteHistorique",
+    className: "nav-list__list--sub",
+    items: copiloteConversations().map((conversation) => {
+      const titre = conversationTitle(conversation);
+      return renderNavListItem({
+        label: titre,
+        // L'intitulé est tronqué par le rail : l'infobulle rend la question
+        // entière, sans quoi deux discussions voisines se ressemblent.
+        title: titre,
+        className: "nav-list__item--sub",
+        isActive: conversation.id === courante,
+        // Pas de `data-side-nav-target` : rouvrir un fil se traite à part, sinon
+        // le panneau se redessinerait deux fois — une fois par le routeur, une
+        // fois par nous — et la seconde effacerait la discussion chargée.
+        dataAttributes: { "data-copilote-conversation": conversation.id }
+      });
+    })
+  });
+}
 
 function renderStudioNav() {
   return [
@@ -29,10 +67,19 @@ function renderStudioNav() {
           label: "Copilote",
           dataAttributes: { "data-side-nav-target": "studio-copilote" },
           iconHtml: svgIcon("copilot", { className: "octicon octicon-copilot" }),
-          isActive: true
+          isActive: true,
+          // L'action est à côté de l'entrée, pas dedans : ouvrir une discussion
+          // neuve n'est pas se rendre quelque part.
+          actionHtml: `
+            <button type="button" class="nav-list__action-btn" data-copilote-new
+              aria-label="Nouvelle discussion" title="Nouvelle discussion">
+              ${svgIcon("new-chat")}
+            </button>
+          `
         })
       ]
     }),
+    renderCopiloteHistorique(),
     renderNavListDivider(),
     renderNavListGroup({
       label: "Solidité",
@@ -159,6 +206,7 @@ function getRouterHtml() {
 
 let studioRailDetacher = null;
 let studioPoigneeDetacher = null;
+let studioCopiloteDetacher = null;
 
 export function renderProjectStudio(root) {
   if (!root) return;
@@ -208,10 +256,99 @@ export function renderProjectStudio(root) {
       // un autre onglet, et un écran d'arbitrage qui montre un état périmé est
       // pire qu'un écran vide.
       if (targetId === "conflits-resolution" && conflitsRoot) renderResolutionConflits(conflitsRoot, { force: true });
+
+      marquerActif(root, targetId);
     });
   });
 
+  brancherCopilote(root, copiloteRoot, getScrollSource);
+  marquerActif(root, "studio-copilote");
+
   registerProjectPrimaryScrollSource(getScrollSource());
+}
+
+/**
+ * Le repère de l'entrée courante.
+ *
+ * Le routeur de panneaux pose `is-active` sur le bouton ; la liste de
+ * navigation, elle, porte le trait bleu sur le `li`. Les deux ne se parlaient
+ * pas : le trait restait sur Copilote quel que soit l'utilitaire ouvert. Il se
+ * pose ici, au même endroit que dans la Mémoire.
+ *
+ * L'entrée Copilote s'efface au profit de la discussion ouverte dès que
+ * celle-ci figure dans l'historique : deux traits bleus pour un seul écran ne
+ * désignent plus rien.
+ */
+function marquerActif(root, targetId) {
+  const filCourant = copiloteConversationId();
+  const historique = copiloteConversations().some((conversation) => conversation.id === filCourant);
+
+  for (const item of root.querySelectorAll(".project-rail .nav-list__item")) {
+    const fil = item.querySelector("[data-copilote-conversation]")?.dataset.copiloteConversation || "";
+    const cible = item.querySelector("[data-side-nav-target]")?.dataset.sideNavTarget || "";
+
+    const actif = fil
+      ? targetId === "studio-copilote" && fil === filCourant
+      : cible === targetId && !(cible === "studio-copilote" && historique);
+
+    item.setAttribute("data-active", actif ? "true" : "false");
+  }
+}
+
+/** Afficher un panneau sans passer par un clic : rouvrir un fil en a besoin. */
+function afficherPanneau(root, targetId) {
+  for (const panneau of root.querySelectorAll("[data-side-nav-panel]")) {
+    panneau.classList.toggle("is-active", panneau.dataset.sideNavPanel === targetId);
+  }
+}
+
+/**
+ * Les discussions dans le rail : en ouvrir une neuve, en rouvrir une passée.
+ *
+ * La délégation est nécessaire, pas décorative : l'historique se réécrit à
+ * chaque message, et des écouteurs posés sur les entrées disparaîtraient avec
+ * elles — la deuxième discussion serait morte au clic.
+ */
+function brancherCopilote(root, copiloteRoot, getScrollSource) {
+  // L'écouteur d'avant se retire : l'Atelier se redessine à chaque repli du
+  // rail, et des écouteurs empilés redessineraient l'historique autant de fois
+  // qu'on a replié.
+  if (studioCopiloteDetacher) studioCopiloteDetacher();
+  studioCopiloteDetacher = null;
+
+  const rail = root.querySelector(".project-rail");
+  if (!rail || !copiloteRoot) return;
+
+  const venir = () => {
+    registerProjectPrimaryScrollSource(getScrollSource());
+    afficherPanneau(root, "studio-copilote");
+    renderCopilote(copiloteRoot);
+    marquerActif(root, "studio-copilote");
+  };
+
+  rail.addEventListener("click", (event) => {
+    if (event.target.closest("[data-copilote-new]")) {
+      startNewConversation();
+      venir();
+      return;
+    }
+
+    const fil = event.target.closest("[data-copilote-conversation]");
+    if (fil && openConversation(fil.dataset.copiloteConversation)) venir();
+  });
+
+  // L'historique se redessine seul, sans toucher au reste du rail : redessiner
+  // l'Atelier entier à chaque message replierait les réglages en cours.
+  const surConversations = () => {
+    const liste = root.querySelector("#studioCopiloteHistorique");
+    if (!liste?.isConnected) return;
+
+    liste.outerHTML = renderCopiloteHistorique();
+    marquerActif(root, "studio-copilote");
+  };
+
+  document.addEventListener("copilote:conversations", surConversations);
+  studioCopiloteDetacher = () => document.removeEventListener("copilote:conversations", surConversations);
 }
 
 /**
