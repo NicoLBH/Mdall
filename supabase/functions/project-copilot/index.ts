@@ -1,0 +1,257 @@
+/**
+ * Le copilote d'un projet, côté serveur.
+ *
+ * Il remplace un webhook n8n public vers lequel le navigateur postait. Ce
+ * webhook posait deux problèmes qu'aucun code servi au navigateur ne pouvait
+ * résoudre : n'importe qui connaissant l'URL pouvait déclencher un appel payant,
+ * et rien ne vérifiait que le demandeur avait le droit de lire le projet dont il
+ * envoyait la mémoire. La porte est ici, sur notre propre infrastructure, à
+ * côté des autres fonctions de Mdall.
+ *
+ * ## Ce qui est vérifié, dans cet ordre
+ *
+ *  1. **Qui appelle** — un jeton porteur qui désigne un utilisateur réel
+ *     (`requireUser`). La clé anonyme du projet est elle-même un jeton signé :
+ *     une simple vérification de présence la laisserait passer.
+ *  2. **Ce qu'il a le droit de lire** — le projet est relu avec **le jeton de
+ *     l'appelant**, donc à travers RLS. S'il ne peut pas lire la ligne, il n'a
+ *     rien à demander sur ce projet, et l'appel s'arrête avant de coûter.
+ *
+ * L'ordre compte : on ne dépense rien avant d'avoir répondu aux deux questions.
+ *
+ * ## Rien n'est écrit. C'est le garde-fou, pas un oubli.
+ *
+ * Une conversation avec le copilote est **privée**, et « privée » ne peut pas
+ * être une intention : ce doit être une propriété de la construction. Cette
+ * fonction n'a donc aucune table, aucun `insert`, aucun client de service. Ce
+ * qui n'est jamais écrit ne peut pas fuir par une politique RLS mal posée, ni
+ * apparaître dans un fil de sujet, ni être exporté avec le projet.
+ *
+ * Les journaux suivent la même règle : on y compte des caractères, on n'y
+ * recopie ni la question ni la réponse. Un journal partagé par l'équipe qui
+ * contiendrait les questions de chacun serait exactement la fuite qu'on refuse.
+ *
+ * La contrepartie est réelle et assumée : rien ne se retrouve d'un poste à
+ * l'autre. Le prix d'une conversation qui ne fuit pas.
+ */
+
+import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
+import { createClient } from "npm:@supabase/supabase-js@2";
+import { requireUser } from "../_shared/require-user.ts";
+
+type CopilotRequest = {
+  project_id?: string;
+  question?: string;
+  history?: Array<{ role?: string; content?: string }>;
+  memory?: { lue?: boolean; texte?: string };
+  screen?: unknown;
+};
+
+const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+const openAiApiKey = Deno.env.get("OPENAI_API_KEY")!;
+
+const MODEL = "gpt-4.1-mini";
+const MAX_QUESTION_CHARS = 4000;
+const MAX_MEMORY_CHARS = 60000;
+const MAX_HISTORY_MESSAGES = 12;
+const MAX_HISTORY_MESSAGE_CHARS = 2000;
+const MAX_SCREEN_CHARS = 6000;
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, Authorization, x-client-info, apikey, content-type, Content-Type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Max-Age": "86400",
+  "Vary": "Origin"
+};
+
+const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
+
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), { status, headers: jsonHeaders });
+}
+
+function texte(value: unknown) {
+  return String(value ?? "").trim();
+}
+
+function truncate(value: string, max: number) {
+  return value.length <= max ? value : `${value.slice(0, max)}\n\n[…tronqué]`;
+}
+
+/**
+ * Les consignes du copilote.
+ *
+ * Elles disent d'abord ce qu'il ne doit pas faire, parce que c'est là qu'un
+ * assistant de projet nuit : en comblant un vide. Une mémoire qui ne dit rien
+ * sur un point est une information — pas une invitation à improviser.
+ */
+function systemPrompt(memoryWasRead: boolean) {
+  const regles = [
+    "Tu es le copilote d'un projet de construction dans l'application Mdall.",
+    "Tu réponds en français, en markdown, de façon brève et utile.",
+    "",
+    "La mémoire du projet t'est fournie ci-dessous. C'est la seule source sur laquelle tu peux t'appuyer pour dire ce que ce projet tient pour vrai.",
+    "",
+    "Règles, dans cet ordre :",
+    "- Ce qui n'est pas dans la mémoire n'est pas connu de ce projet. Dis-le, ne le devine pas. Une valeur inventée sur un chantier coûte plus cher qu'une absence de réponse.",
+    "- Cite ce sur quoi tu t'appuies : la clé de l'affirmation, sa date, et l'utilitaire qui l'a déduite quand il est indiqué.",
+    "- Distingue les natures. Une hypothèse se conteste ; une contrainte fausse ne se conteste pas, elle se corrige — et cela veut dire qu'on a calculé faux.",
+    "- Si une affirmation est marquée « à revérifier », dis-le avant de t'en servir.",
+    "- Ce qui figure sous « Ce qui a été remplacé » ne vaut plus. Ne réponds jamais à partir de ces lignes sans préciser qu'elles sont périmées.",
+    "- Tu ne crées rien et tu ne modifies rien : tu peux préparer un texte, quelqu'un le versera.",
+    "",
+    "Tes connaissances générales du bâtiment servent à expliquer et à raisonner, jamais à fournir une valeur que ce projet n'a pas tranchée."
+  ];
+
+  if (!memoryWasRead) {
+    regles.push(
+      "",
+      "ATTENTION : la mémoire de ce projet n'a pas pu être lue pour cette question. Tu ne sais donc rien de ce que ce projet tient pour vrai. Dis-le, et n'affirme ni ne nie aucune valeur du projet."
+    );
+  }
+
+  return regles.join("\n");
+}
+
+function extractOpenAiText(payload: unknown): string {
+  const data = payload as Record<string, unknown>;
+  if (typeof data?.output_text === "string" && data.output_text.trim()) return data.output_text;
+
+  const output = Array.isArray(data?.output) ? data.output : [];
+  const morceaux: string[] = [];
+  for (const item of output) {
+    const contenus = Array.isArray((item as Record<string, unknown>)?.content)
+      ? (item as Record<string, unknown>).content as unknown[]
+      : [];
+    for (const contenu of contenus) {
+      const text = (contenu as Record<string, unknown>)?.text;
+      if (typeof text === "string") morceaux.push(text);
+    }
+  }
+  return morceaux.join("").trim();
+}
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { status: 200, headers: corsHeaders });
+  }
+
+  if (req.method !== "POST") {
+    return json({ error: "Method not allowed" }, 405);
+  }
+
+  // 1. Qui appelle. Le portail ne peut pas le faire à notre place : il
+  // rejetterait le préflight, qui arrive sans autorisation par construction.
+  const garde = await requireUser(req, corsHeaders);
+  if ("response" in garde) return garde.response;
+
+  let payload: CopilotRequest;
+  try {
+    payload = await req.json();
+  } catch {
+    return json({ error: "Invalid JSON body" }, 400);
+  }
+
+  const projectId = texte(payload.project_id);
+  const question = texte(payload.question);
+
+  if (!projectId) return json({ error: "project_id est requis." }, 400);
+  if (!question) return json({ error: "La question est vide." }, 400);
+
+  const authHeader = req.headers.get("Authorization") ?? req.headers.get("authorization") ?? "";
+
+  // 2. Ce qu'il a le droit de lire. La relecture se fait avec **son** jeton :
+  // c'est RLS qui répond, pas nous. Un client de service ici rendrait la
+  // vérification décorative.
+  const authClient = createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { Authorization: authHeader } }
+  });
+
+  const { data: projet, error: projetError } = await authClient
+    .from("projects")
+    .select("id,name")
+    .eq("id", projectId)
+    .maybeSingle();
+
+  if (projetError) return json({ error: "Forbidden", details: projetError.message }, 403);
+  if (!projet?.id) return json({ error: "Forbidden" }, 403);
+
+  if (!openAiApiKey) {
+    return json({ error: "Le copilote n'est pas configuré (clé du modèle absente)." }, 503);
+  }
+
+  const memoryWasRead = payload.memory?.lue === true;
+  const memoire = truncate(texte(payload.memory?.texte), MAX_MEMORY_CHARS);
+
+  const history = (Array.isArray(payload.history) ? payload.history : [])
+    .slice(-MAX_HISTORY_MESSAGES)
+    .map((message) => ({
+      role: message?.role === "user" ? "user" : "assistant",
+      content: truncate(texte(message?.content), MAX_HISTORY_MESSAGE_CHARS)
+    }))
+    .filter((message) => message.content);
+
+  const ecran = truncate(JSON.stringify(payload.screen ?? null), MAX_SCREEN_CHARS);
+
+  const input = [
+    `# Projet\n\n${texte(projet.name) || "sans nom"}`,
+    memoire || "# Mémoire du projet\n\n(aucune mémoire transmise)",
+    `# Ce que l'utilisateur regarde\n\nCeci dit ce qui est affiché, jamais ce qui est vrai. N'en tire aucune affirmation sur le projet.\n\n\`\`\`json\n${ecran}\n\`\`\``,
+    history.length
+      ? `# La conversation jusqu'ici\n\n${history.map((message) => `**${message.role === "user" ? "Utilisateur" : "Toi"}** : ${message.content}`).join("\n\n")}`
+      : "",
+    `# La question\n\n${truncate(question, MAX_QUESTION_CHARS)}`
+  ]
+    .filter(Boolean)
+    .join("\n\n---\n\n");
+
+  // On compte, on ne recopie pas : un journal qui contiendrait les questions de
+  // chacun serait la fuite même qu'on refuse.
+  console.log("project-copilot:request", {
+    model: MODEL,
+    project_id: projectId,
+    memory_was_read: memoryWasRead,
+    memory_chars: memoire.length,
+    history_messages: history.length,
+    input_chars: input.length
+  });
+
+  try {
+    const reponse = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${openAiApiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        instructions: systemPrompt(memoryWasRead),
+        input
+      })
+    });
+
+    if (!reponse.ok) {
+      const details = await reponse.text().catch(() => "");
+      console.error("project-copilot:model-error", { status: reponse.status, details_chars: details.length });
+      return json({ error: `Le modèle a refusé la demande (${reponse.status}).` }, 502);
+    }
+
+    const brut = await reponse.json();
+    const reply = extractOpenAiText(brut).trim();
+
+    if (!reply) {
+      return json({ error: "Le modèle a répondu, mais sans contenu." }, 502);
+    }
+
+    console.log("project-copilot:reply", { project_id: projectId, reply_chars: reply.length });
+
+    // Rien n'est enregistré : ni la question, ni la réponse, ni le fait qu'elles
+    // aient existé au-delà de ce compteur.
+    return json({ reply_markdown: reply });
+  } catch (error) {
+    console.error("project-copilot:failed", { message: error instanceof Error ? error.message : "unknown" });
+    return json({ error: "Le copilote est momentanément indisponible." }, 502);
+  }
+});

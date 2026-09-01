@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { BRIEFING_NATURES, buildMemoryBriefing } from "./memory-briefing.js";
+import { BRIEFING_MAX_CURRENT, BRIEFING_NATURES, buildMemoryBriefing } from "./memory-briefing.js";
 
 const PROJET = { name: "Aurora Campus" };
 
@@ -313,4 +313,109 @@ test("le résumé compte par nature, et le non classé n'est pas un reste caché
   assert.equal(parNature.contrainte, 1);
   assert.equal(parNature.hypothese, 1);
   assert.equal(brief.resume.nonClasse, 1);
+});
+
+/* ── Le découpage, les désaccords, et la coupe ───────────────────────────── */
+
+function zone(label, definition) {
+  return {
+    id: `z-${label}`,
+    kind: "base-datum",
+    nature: "donnee-de-base",
+    subject_key: `zone:${label}`,
+    statement: label,
+    status: "assumed",
+    decided_at: "2026-01-01T00:00:00.000Z",
+    payload: { zoneDefinition: true, subject: label, value: definition }
+  };
+}
+
+test("le découpage en zones voyage avec la mémoire, définitions comprises", () => {
+  // Sans lui, « zones : Bâtiment A » est une étiquette que rien n'explique.
+  const brief = buildMemoryBriefing({
+    project: PROJET,
+    assertions: [zone("Bâtiment A", "Le corps principal, du RDC au R+3."), contrainte({ zones: ["batiment-a"] })]
+  });
+
+  assert.match(brief.texte, /## Le découpage du projet/);
+  assert.match(brief.texte, /\*\*Bâtiment A\*\* — Le corps principal/);
+  assert.ok(brief.texte.indexOf("## Le découpage du projet") < brief.texte.indexOf("## Contrainte"));
+});
+
+test("une zone sans définition le dit, plutôt que de laisser deviner", () => {
+  const brief = buildMemoryBriefing({ project: PROJET, assertions: [zone("Zone B", "")] });
+
+  assert.match(brief.texte, /aucune définition écrite/);
+});
+
+test("un projet sans zones n'a pas de section de découpage vide", () => {
+  const brief = buildMemoryBriefing({ project: PROJET, assertions: [contrainte()] });
+
+  assert.doesNotMatch(brief.texte, /## Le découpage du projet/);
+});
+
+test("deux valeurs pour une même chose sont montrées, pas départagées", () => {
+  // Un copilote qui répondrait « A2 » alors que la mémoire en tient deux ferait
+  // disparaître le désaccord au lieu de le montrer.
+  const brief = buildMemoryBriefing({
+    project: PROJET,
+    assertions: [
+      hypothese({ id: "v1", subject_key: "zone-de-neige", statement: "Zone de neige : A2", payload: { subject: "Zone de neige", value: "A2" } }),
+      hypothese({ id: "v2", subject_key: "zone-de-neige-bis", statement: "Zone de neige : E", payload: { subject: "Zone de neige", value: "E" } })
+    ]
+  });
+
+  assert.match(brief.texte, /## Ce qui ne s'accorde pas/);
+  assert.match(brief.texte, /Ne choisis pas à leur place/);
+});
+
+test("une mémoire qui s'accorde n'a pas de section de désaccords", () => {
+  const brief = buildMemoryBriefing({ project: PROJET, assertions: [contrainte(), hypothese()] });
+
+  assert.doesNotMatch(brief.texte, /Ce qui ne s'accorde pas/);
+});
+
+test("une mémoire trop longue est coupée — et le texte l'annonce", () => {
+  // Une coupe silencieuse ferait affirmer une absence qui n'existe pas.
+  const beaucoup = Array.from({ length: 12 }, (_, index) =>
+    contrainte({ id: `c${index}`, subject_key: `contrainte-${String(index).padStart(2, "0")}` })
+  );
+
+  const brief = buildMemoryBriefing({ project: PROJET, assertions: beaucoup, maxCurrent: 5 });
+
+  assert.match(brief.texte, /7 affirmation\(s\) en vigueur ne figurent pas ci-dessous/);
+  assert.match(brief.texte, /Ne conclus donc jamais qu'une chose est absente/);
+  assert.equal(brief.resume.ecartees, 7);
+});
+
+test("le compte annoncé reste celui de la mémoire entière, pas celui de la part reçue", () => {
+  const beaucoup = Array.from({ length: 12 }, (_, index) =>
+    contrainte({ id: `c${index}`, subject_key: `contrainte-${String(index).padStart(2, "0")}` })
+  );
+
+  const brief = buildMemoryBriefing({ project: PROJET, assertions: beaucoup, maxCurrent: 5 });
+  const parNature = Object.fromEntries(brief.resume.parNature.map((entree) => [entree.nature, entree.count]));
+
+  assert.match(brief.texte, /12 affirmation\(s\) en vigueur/);
+  assert.equal(parNature.contrainte, 12);
+});
+
+test("une mémoire qui tient en entier n'annonce aucune coupe", () => {
+  const brief = buildMemoryBriefing({ project: PROJET, assertions: [contrainte(), hypothese()] });
+
+  assert.doesNotMatch(brief.texte, /ne figurent pas ci-dessous/);
+  assert.equal(brief.resume.ecartees, 0);
+  assert.equal(BRIEFING_MAX_CURRENT, 400);
+});
+
+test("la coupe est déterministe : elle garde toujours les mêmes lignes", () => {
+  const beaucoup = Array.from({ length: 12 }, (_, index) =>
+    contrainte({ id: `c${index}`, subject_key: `contrainte-${String(index).padStart(2, "0")}` })
+  );
+  const melange = [...beaucoup].reverse();
+
+  assert.equal(
+    buildMemoryBriefing({ project: PROJET, assertions: beaucoup, maxCurrent: 5, generatedAt: "2026-09-01" }).texte,
+    buildMemoryBriefing({ project: PROJET, assertions: melange, maxCurrent: 5, generatedAt: "2026-09-01" }).texte
+  );
 });

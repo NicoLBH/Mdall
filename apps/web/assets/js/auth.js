@@ -1,4 +1,5 @@
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
+import { purgeConversations } from '../../js/services/copilote-conversations.js'
 
 const SUPABASE_URL = String(
   window.MDALL_CONFIG?.supabaseUrl ||
@@ -68,6 +69,11 @@ export async function signIn(email, password) {
 }
 
 export async function signOut() {
+  // Les discussions avec le copilote partent avec la session, et **avant**
+  // elle : elles sont privées, et laisser derrière soi ses questions pour le
+  // compte suivant sur le même poste serait exactement la fuite qu'on refuse.
+  // L'ordre compte — si la déconnexion échoue, elles ont déjà disparu.
+  purgeConversations()
   return await supabase.auth.signOut()
 }
 

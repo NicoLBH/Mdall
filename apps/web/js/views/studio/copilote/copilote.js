@@ -34,7 +34,7 @@
 import { store } from "../../../store.js";
 import { escapeHtml } from "../../../utils/escape-html.js";
 import { svgIcon } from "../../../ui/icons.js";
-import { sendAssistMessage } from "../../../services/assist-service.js";
+import { sendAssistMessage } from "../../../services/copilote-service.js";
 import {
   findConversation,
   loadConversations,
@@ -77,6 +77,17 @@ function cleProjet() {
   return String(store.currentProjectId || "");
 }
 
+/**
+ * Qui parle.
+ *
+ * La clé de stockage le porte : deux comptes sur le même navigateur ne doivent
+ * pas se relire l'un l'autre, et un poste partagé sur un chantier est la règle
+ * plutôt que l'exception.
+ */
+function cleUtilisateur() {
+  return String(store.user?.id || "");
+}
+
 function ensureState() {
   if (!store.ui) store.ui = {};
 
@@ -86,20 +97,23 @@ function ensureState() {
       isSending: false,
       draft: "",
       lastError: "",
+      creditsOpen: false,
       conversationId: courante.id,
       messages: [],
-      conversations: loadConversations(cleProjet()),
-      projectKey: cleProjet()
+      conversations: loadConversations(cleUtilisateur(), cleProjet()),
+      projectKey: cleProjet(),
+      userKey: cleUtilisateur()
     };
   }
 
-  // Changer de projet ne doit pas montrer les discussions du précédent : la
-  // confusion serait invisible et les réponses, relues hors de leur chantier,
-  // fausses.
-  if (store.ui.assistant.projectKey !== cleProjet()) {
+  // Changer de projet **ou de compte** repart de zéro. Le premier cas éviterait
+  // une confusion ; le second éviterait une fuite, et c'est autre chose : les
+  // questions d'un intervenant ne se montrent pas au suivant.
+  if (store.ui.assistant.projectKey !== cleProjet() || store.ui.assistant.userKey !== cleUtilisateur()) {
     const courante = newConversation();
     store.ui.assistant.projectKey = cleProjet();
-    store.ui.assistant.conversations = loadConversations(cleProjet());
+    store.ui.assistant.userKey = cleUtilisateur();
+    store.ui.assistant.conversations = loadConversations(cleUtilisateur(), cleProjet());
     store.ui.assistant.conversationId = courante.id;
     store.ui.assistant.messages = [];
     store.ui.assistant.draft = "";
@@ -125,7 +139,7 @@ function conversationCourante(etat) {
 /** L'archivage : une seule écriture, à chaque fois que le fil bouge. */
 function archiver(etat) {
   etat.conversations = rememberConversation(etat.conversations, conversationCourante(etat));
-  saveConversations(etat.projectKey, etat.conversations);
+  saveConversations(etat.userKey, etat.projectKey, etat.conversations);
   document.dispatchEvent(new CustomEvent("copilote:conversations"));
 }
 
@@ -207,6 +221,34 @@ function renderCorps(etat) {
   return `<div class="copilote-thread" id="copiloteThread">${messages.map(renderMessage).join("")}</div>`;
 }
 
+/**
+ * Le panneau des crédits.
+ *
+ * **Il n'est rempli par rien.** Les chiffres qu'il affiche sont figés dans ce
+ * fichier, et le panneau le dit : promettre un compteur qu'aucune source
+ * n'alimente serait pire qu'un écran vide — on prendrait une décision d'usage
+ * sur un nombre inventé. Il est là pour que la place soit prise et que la forme
+ * soit décidée ; le brancher viendra quand il y aura un compteur à brancher.
+ */
+function renderCredits(etat) {
+  if (!etat.creditsOpen) return "";
+
+  return `
+    <div class="copilote-credits" role="dialog" aria-label="Crédits inclus">
+      <div class="copilote-credits__head">
+        <span class="copilote-credits__title">Crédits inclus</span>
+        <span class="copilote-credits__hint" aria-hidden="true">${svgIcon("alert", { width: 14, height: 14 })}</span>
+      </div>
+      <div class="copilote-credits__row">
+        <span>Renouvellement le 1er du mois</span>
+        <span class="copilote-credits__count mono">— / —</span>
+      </div>
+      <div class="copilote-credits__bar" aria-hidden="true"><span style="width:0%"></span></div>
+      <p class="copilote-credits__note">Aucun compteur n'alimente encore ce panneau : il montre la place, pas une consommation.</p>
+    </div>
+  `;
+}
+
 function renderActions() {
   return ACTIONS_A_VENIR.map((action) => `
     <button type="button" class="copilote-action" data-copilote-action="${escapeHtml(action.id)}" disabled
@@ -236,8 +278,18 @@ function render(root) {
               placeholder="Posez une question sur ce projet…"
             >${escapeHtml(etat.draft || "")}</textarea>
 
-            <button type="button" class="copilote-send" id="copiloteSend" aria-label="Envoyer"
-              ${etat.isSending ? "disabled" : ""}>${svgIcon("paper-airplane")}</button>
+            <div class="copilote-compose__tools">
+              <button type="button" class="copilote-tool" id="copiloteCredits"
+                aria-haspopup="dialog" aria-expanded="false" aria-label="Crédits inclus"
+                title="Crédits inclus">${svgIcon("meter")}</button>
+
+              <span class="copilote-compose__divider" role="separator" aria-orientation="vertical"></span>
+
+              <button type="button" class="copilote-send" id="copiloteSend" aria-label="Envoyer"
+                ${etat.isSending ? "disabled" : ""}>${svgIcon("paper-airplane")}</button>
+            </div>
+
+            ${renderCredits(etat)}
           </div>
 
           <div class="copilote-actions" role="group" aria-label="Ce que le copilote saura faire">
@@ -320,6 +372,24 @@ function bind(root) {
   });
 
   root.querySelector("#copiloteSend")?.addEventListener("click", () => void envoyer(root));
+
+  root.querySelector("#copiloteCredits")?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    etat.creditsOpen = !etat.creditsOpen;
+    render(root);
+  });
+
+  // Un clic ailleurs referme : un panneau qui ne se ferme que par son propre
+  // bouton finit par rester ouvert sous ce qu'on veut lire.
+  if (etat.creditsOpen) {
+    const fermer = (event) => {
+      if (event.target.closest?.(".copilote-credits, #copiloteCredits")) return;
+      document.removeEventListener("click", fermer);
+      etat.creditsOpen = false;
+      render(root);
+    };
+    document.addEventListener("click", fermer);
+  }
 }
 
 export function renderCopilote(root) {
