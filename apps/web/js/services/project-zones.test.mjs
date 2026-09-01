@@ -20,7 +20,7 @@ const definition = (label, valeur, patch = {}) => ({
   ...patch
 });
 
-const ligne = (id, zone = null, patch = {}) => ({ id, nature: "contrainte", zone, ...patch });
+const ligne = (id, zone = null, patch = {}) => ({ id, nature: "contrainte", zones: zone ? [zone] : null, ...patch });
 
 /* ── Sans zone veut dire partout, pas « on ne sait pas » ─────────────────── */
 
@@ -116,17 +116,16 @@ test("une liste de zones vide vaut partout, comme l'absence de zone", () => {
   assert.equal(filterByZone(memoire, "zone-a").length, 2);
 });
 
-test("l'ancienne colonne zone est lue comme une zone parmi les autres", () => {
-  // Une base non encore migrée doit continuer de dire vrai.
-  const memoire = [ligne("ancienne", "Zone A")];
-
-  assert.deepEqual(zonesOf(memoire[0]), ["zone-a"]);
-  assert.deepEqual(filterByZone(memoire, "zone-a").map((e) => e.id), ["ancienne"]);
-  assert.deepEqual(filterByZone(memoire, "zone-b").map((e) => e.id), []);
+test("une seule colonne fait foi : l'ancienne est ignorée", () => {
+  // Deux champs pour une même chose finissent par diverger. `zone` a vécu le
+  // temps d'une version ; les lignes qui ne portaient qu'elle valent désormais
+  // pour l'ensemble.
+  assert.deepEqual(zonesOf({ zone: "Zone A" }), []);
+  assert.deepEqual(zonesOf({ zone: "Zone A", zones: ["zone-b"] }), ["zone-b"]);
 });
 
-test("les deux colonnes se réunissent sans doublon", () => {
-  assert.deepEqual(zonesOf({ zone: "Zone A", zones: ["zone-a", "zone-b"] }), ["zone-a", "zone-b"]);
+test("les doublons d'une même zone n'en font qu'une", () => {
+  assert.deepEqual(zonesOf({ zones: ["Zone A", "zone-a", "zone a"] }), ["zone-a"]);
 });
 
 test("zonesOf ne suppose rien d'une affirmation sans zone", () => {

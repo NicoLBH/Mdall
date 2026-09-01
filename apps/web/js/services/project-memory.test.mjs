@@ -391,7 +391,6 @@ test("une donnée de base peut porter plusieurs zones", () => {
 
   assert.deepEqual(plan.row.zones, ["zone-a", "zone-b"], "triées : le même découpage dans un autre ordre reste le même");
   assert.equal(plan.row.subject_key, "usage@zone-a+zone-b");
-  assert.equal(plan.row.zone, "zone-a", "l'ancienne colonne garde la première, pour une base non migrée");
 });
 
 test("aucune zone veut dire partout, et la clé n'en porte aucune", () => {
@@ -408,14 +407,24 @@ test("le même sujet vaut différemment selon la zone", () => {
   const etages = declaredBaseDatum({ projectId: "p", subject: "Usage", value: "Habitation", zone: "Zone B" });
 
   assert.notEqual(rdc.row.subject_key, etages.row.subject_key);
-  assert.equal(rdc.row.zone, "zone-a");
+  assert.deepEqual(rdc.row.zones, ["zone-a"]);
 });
 
-test("une donnée de base sans zone vaut pour l'ouvrage entier", () => {
+test("une donnée de base sans zone vaut pour l'ensemble", () => {
   const plan = declaredBaseDatum({ projectId: "p", subject: "Altitude", value: "450 m" });
 
-  assert.equal(plan.row.zone, null);
+  assert.equal(plan.row.zones, null, "aucune zone : c'est l'ensemble, et non un oubli");
   assert.equal(plan.row.subject_key, "altitude");
+});
+
+test("une hypothèse peut ne valoir que pour une partie de l'ouvrage", () => {
+  // La portance du sol sous le bâtiment A n'est pas celle sous le bâtiment B.
+  const plan = declaredHypothesis({
+    projectId: "p", subject: "Portance du sol", value: "0,2 MPa", zones: ["Zone B", "Zone A"]
+  });
+
+  assert.deepEqual(plan.row.zones, ["zone-a", "zone-b"]);
+  assert.equal(declaredHypothesis({ projectId: "p", subject: "X", value: "1" }).row.zones, null);
 });
 
 test("une donnée de base a besoin d'une valeur : c'est elle qui sert d'entrée", () => {
@@ -445,7 +454,7 @@ test("une définition de zone ne porte pas la zone qu'elle décrit", () => {
   // de celle où on la cherche.
   const plan = declaredZone({ projectId: "p", label: "Zone A", definition: "RDC" });
 
-  assert.equal(plan.row.zone, null);
+  assert.equal(plan.row.zones, null);
 });
 
 test("une zone sans nom est refusée, et le refus donne un exemple", () => {

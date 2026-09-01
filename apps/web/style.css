@@ -16491,70 +16491,78 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
    partager la ligne avec la navigation.
 
    Le haut du rail suit le défilement — les onglets du projet défilent, eux — et
-   se cale sous l'en-tête global sans jamais passer dessous. `--memory-nav-top`
+   se cale sous l'en-tête global sans jamais passer dessous. `--project-rail-top`
    est écrit par la vue à chaque défilement : le CSS seul ne sait pas où s'arrête
    un élément qui défile. */
-.memory-nav{
-  position:fixed; left:0; top:var(--memory-nav-top, var(--app-top)); bottom:0;
-  width:var(--memory-nav-width, 232px); z-index:3;
+.project-rail{
+  position:fixed; left:0; top:var(--project-rail-top, var(--app-top)); bottom:0;
+  /* Sous les onglets : le trait orange de l'onglet actif perdait la moitié de
+     son épaisseur, recouvert par le rail. */
+  width:var(--project-rail-width, 232px); z-index:0;
   display:flex; flex-direction:column; gap:4px;
   padding:12px 8px 12px 12px;
   border-right:1px solid var(--border); background:var(--bg);
 }
 /* Le contenu s'écarte du rail au lieu de passer dessous. Il se recentre dans ce
    qui reste, et retrouve donc sa largeur habituelle. */
-.project-simple-page--memory{ margin-left:var(--memory-nav-width, 232px); }
-.memory-layout{ display:block; }
-.memory-layout__content{ display:flex; flex-direction:column; gap:12px; min-width:0; }
+.project-simple-page--memory,
+.project-simple-page--studio{ margin-left:var(--project-rail-width, 232px); }
+.project-rail-layout{ display:block; }
+.project-rail-layout__content{ display:flex; flex-direction:column; gap:12px; min-width:0; }
 
 /* La liste défile si elle déborde ; le bouton de repli reste en bas, quoi qu'il
    arrive — c'est un réglage du rail, pas le dernier de ses éléments. */
 /* `overflow-y` rognait la barre bleue, posée à gauche en débord. Le débord est
    supprimé — la barre est à l'intérieur — et le défilement peut rester. */
-.memory-nav__scroll{
+.project-rail__scroll{
   display:flex; flex-direction:column; flex:1 1 auto; min-height:0;
   overflow-y:auto; overflow-x:hidden;
 }
-.memory-nav__group{ display:flex; flex-direction:column; gap:2px; }
+.project-rail__group{ display:flex; flex-direction:column; gap:2px; }
 
 /* Le compte se pose à droite, comme un décompte et non comme une étiquette. */
-.memory-nav__item{ align-items:center; }
-.memory-nav__item::after{
+.project-rail__item{ align-items:center; }
+.project-rail__item::after{
   content:attr(data-memory-count); margin-left:auto; color:var(--muted);
   font-size:12px; font-variant-numeric:tabular-nums;
 }
-.memory-nav__item.is-active{ background:rgba(110,118,129,.14); font-weight:500; }
-.memory-nav__item.is-active::before{
-  content:""; position:absolute; left:0; top:50%; transform:translateY(-50%);
+/* Le trait bleu est à gauche du fond, pas contre lui : collés, ils forment un
+   seul bloc et le trait cesse de se lire comme un repère. */
+.project-rail__item{ margin-left:10px; width:calc(100% - 10px); }
+.project-rail__item.is-active{ background:rgba(110,118,129,.14); font-weight:500; }
+.project-rail__item.is-active::before{
+  content:""; position:absolute; left:-10px; top:50%; transform:translateY(-50%);
   width:4px; height:24px;
   background:var(--borderColor-accent-emphasis); border-radius:var(--radius);
 }
+.project-rail__scroll{ overflow-x:visible; }
 
 /* Pas de filet au-dessus : le bouton est déjà en bas, et un trait de plus dans
    un rail qui en porte déjà un ne sépare rien. */
-.memory-nav__collapse{
+.project-rail__collapse{
   display:flex; align-items:center; gap:8px; width:100%; min-height:30px;
   padding:6px 10px 6px 12px; margin-top:8px; flex:0 0 auto;
   border:0; border-radius:6px; background:transparent; color:var(--muted);
   font:inherit; font-size:13px; cursor:pointer;
 }
-.memory-nav__collapse:hover{ color:var(--text); }
+.project-rail__collapse:hover{ color:var(--text); }
 
 /* Replié : les icônes seules, centrées. Le libellé et le compte se taisent. */
-.memory-nav.is-collapsed{ padding-left:8px; padding-right:8px; }
-.memory-nav.is-collapsed .side-nav-layout__label,
-.memory-nav.is-collapsed .memory-nav__item::after{ display:none; }
-.memory-nav.is-collapsed .side-nav-layout__item,
-.memory-nav.is-collapsed .memory-nav__collapse{ justify-content:center; padding-left:8px; padding-right:8px; }
-.memory-nav.is-collapsed .memory-nav__item.is-active::before{ left:0; }
+.project-rail.is-collapsed{ padding-left:8px; padding-right:8px; }
+.project-rail.is-collapsed .side-nav-layout__label,
+.project-rail.is-collapsed .project-rail__item::after{ display:none; }
+.project-rail.is-collapsed .side-nav-layout__item,
+.project-rail.is-collapsed .project-rail__collapse{ justify-content:center; padding-left:8px; padding-right:8px; }
+.project-rail.is-collapsed .project-rail__item{ margin-left:6px; width:calc(100% - 6px); }
+.project-rail.is-collapsed .project-rail__item.is-active::before{ left:-6px; }
 
 /* La poignée déborde sur le contenu pour être saisissable sans viser le trait. */
-.memory-nav .side-resizer__handle{
+.project-rail .side-resizer__handle{
   position:absolute; top:0; right:-4px; width:9px; height:100%;
   cursor:col-resize; z-index:1;
 }
-.memory-nav .side-resizer__guide{
-  position:fixed; top:var(--memory-nav-top, var(--app-top)); bottom:0; width:2px;
+.project-rail .side-resizer__guide{
+  position:fixed; top:var(--project-rail-top, var(--app-top)); bottom:0; width:2px;
   background:var(--borderColor-accent-emphasis); display:none; pointer-events:none; z-index:4;
 }
 
@@ -16563,15 +16571,16 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
    le rail redevient une barre horizontale dans le flux, et le repli n'a plus
    d'objet : replier une barre qui tient sur une ligne ne gagne rien. */
 @media (max-width: 900px){
-  .memory-nav{
+  .project-rail{
     position:static; width:auto; flex-direction:row; align-items:center; flex-wrap:wrap;
     border-right:0; border-bottom:1px solid var(--border); padding:0 0 8px;
   }
-  .project-simple-page--memory{ margin-left:0; }
-  .memory-nav__scroll{ flex-direction:row; flex-wrap:wrap; gap:4px; overflow:visible; }
-  .memory-nav__group{ flex-direction:row; }
-  .memory-nav .side-nav-layout__separator{ display:none; }
-  .memory-nav__collapse{ display:none; }
+  .project-simple-page--memory,
+  .project-simple-page--studio{ margin-left:0; }
+  .project-rail__scroll{ flex-direction:row; flex-wrap:wrap; gap:4px; overflow:visible; }
+  .project-rail__group{ flex-direction:row; }
+  .project-rail .side-nav-layout__separator{ display:none; }
+  .project-rail__collapse{ display:none; }
 }
 }
 
@@ -16759,20 +16768,66 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   padding:12px 16px;
   border:1px solid var(--border);
   border-radius:var(--radius);
-  background:var(--panel2);
+  /* Le fond de l'application : ce sont des chiffres sur la page, pas une carte
+     posée dessus. */
+  background:var(--bg);
   font-size:13px;
   color:var(--muted);
 }
 .memory-counts__item b{ color:var(--text); }
 
+/* Le découpage du projet : les deux champs sur une ligne, au fond de
+   l'application, puis le pied de la création d'un sujet — deux formulaires
+   d'ajout dessinés différemment demanderaient d'apprendre deux fois le même
+   geste. */
+.decoupage-form{ display:flex; flex-direction:column; gap:10px; margin-bottom:16px; }
+.decoupage-form__row{ display:flex; gap:8px; flex-wrap:wrap; }
+.decoupage-form__input{ flex:1 1 220px; min-width:0; background:var(--bg); }
+
+/* Le nom et sa définition sont l'un sous l'autre : deux faces d'une même chose,
+   et les séparer en colonnes ferait chercher l'une à côté de l'autre. */
+.decoupage-table{ width:100%; border-collapse:collapse; border:1px solid var(--border); border-radius:var(--radius); }
+.decoupage-table td{ padding:10px 14px; border-bottom:1px solid var(--border2); vertical-align:middle; }
+.decoupage-table tr:last-child td{ border-bottom:0; }
+.decoupage-table__zone{ display:table-cell; }
+.decoupage-table__zone b{ display:block; color:var(--text); font-size:13px; }
+.decoupage-table__zone span{ display:block; margin-top:2px; color:var(--muted); font-size:12px; }
+.decoupage-table__actions{ width:1%; white-space:nowrap; text-align:right; }
+.decoupage-table__actions .gh-btn + .gh-btn{ margin-left:6px; }
+
+/* Le choix des zones : « Ensemble — toutes zones » d'abord, puis le découpage.
+   Une case cochée se distingue au fond, pas à la couleur du texte — un libellé
+   qui change de teinte se lit comme un lien. */
+.memory-zones{ display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin-top:10px; }
+.memory-zones__label{ color:var(--muted); font-size:12px; }
+.memory-zones__choices{ display:flex; gap:6px; flex-wrap:wrap; }
+.memory-zones__choice{
+  display:inline-flex; align-items:center; gap:6px;
+  padding:3px 10px; border:1px solid var(--border); border-radius:999px;
+  background:var(--bg); color:var(--muted); font-size:12px; cursor:pointer;
+}
+.memory-zones__choice.is-checked{ background:var(--panel2); color:var(--text); border-color:var(--borderColor-accent-emphasis); }
+.memory-declare__hint{ margin:10px 0 0; max-width:80ch; color:var(--muted); font-size:12px; }
+
 /* La recherche : pleine largeur, l'icône à droite pour ne pas manger la place
    du texte au moment où on le tape. */
-.memory-search{ position:relative; display:block; }
-.memory-search__input{ width:100%; padding-right:34px; }
+/* La saisie et la loupe sont deux zones distinctes : la saisie prend le fond de
+   l'application, et un filet la sépare de l'icône — sans quoi on ne sait pas où
+   finit ce qu'on tape. */
+.memory-search{
+  position:relative; display:flex; align-items:stretch;
+  border:1px solid var(--border); border-radius:var(--radius); overflow:hidden;
+}
+.memory-search__input{
+  flex:1 1 auto; min-width:0; border:0; border-radius:0;
+  background:var(--bg); box-shadow:none;
+}
+.memory-search__input:focus{ outline:none; box-shadow:none; }
 .memory-search__input::-webkit-search-cancel-button{ display:none; }
 .memory-search__icon{
-  position:absolute; right:10px; top:50%; transform:translateY(-50%);
-  display:inline-flex; color:var(--muted); pointer-events:none; line-height:0;
+  display:inline-flex; align-items:center; padding:0 10px;
+  border-left:1px solid var(--border); background:var(--panel2);
+  color:var(--muted); pointer-events:none; line-height:0;
 }
 .memory-search__icon svg{ fill:currentColor; }
 
@@ -16792,21 +16847,23 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .memory-table__filters{ margin-left:auto; display:flex; align-items:center; gap:4px; flex-wrap:wrap; }
 
 /* Un filtre n'est pas une action : l'encadrer comme un bouton en ferait une
-   chose à cliquer. Il se signale au survol, pas au repos. */
-.memory-filter{ position:relative; display:inline-flex; align-items:center; }
-.memory-filter__select{
-  appearance:none; -webkit-appearance:none;
-  padding:4px 20px 4px 8px; border:0; border-radius:6px; background:transparent;
-  color:var(--muted); font:inherit; font-size:12px; font-weight:600; cursor:pointer;
+   chose à cliquer. Il se signale au survol, pas au repos. Le menu déroulant,
+   lui, est celui de la maison — un `<select>` natif fait dessiner sa liste par
+   le système, et sur fond sombre elle sortait blanc sur blanc. */
+.memory-filter{ display:inline-flex; }
+.memory-filter .gh-action__main,
+.memory-filter .gh-action__toggle{
+  border:0; background:transparent; box-shadow:none;
+  color:var(--muted); font-size:12px; font-weight:600;
 }
-.memory-filter:hover .memory-filter__select,
-.memory-filter.is-active .memory-filter__select{ color:var(--text); }
-.memory-filter:hover{ background:rgba(110,118,129,.14); border-radius:6px; }
-.memory-filter__caret{
-  position:absolute; right:6px; top:50%; transform:translateY(-50%);
-  pointer-events:none; color:var(--muted);
-}
-.memory-filter__caret svg, .memory-filter__caret{ fill:currentColor; width:12px; height:12px; }
+.memory-filter .gh-action{ border-radius:6px; }
+.memory-filter .gh-action:hover{ background:rgba(110,118,129,.14); }
+.memory-filter .gh-action:hover .gh-action__main,
+.memory-filter .gh-action.is-open .gh-action__main{ color:var(--text); }
+/* Le libellé et le chevron sont une seule cible : couper un filtre en deux
+   boutons demanderait de viser, pour une liste qui s'ouvre de toute façon. */
+.memory-filter .gh-action__main{ padding-right:2px; }
+.memory-filter .gh-action__toggle{ padding-left:2px; }
 
 .memory-list{
   margin:0;

@@ -1,12 +1,17 @@
 import { svgIcon } from "../ui/icons.js";
 import { registerProjectPrimaryScrollSource } from "./project-shell-chrome.js";
 import {
-  renderSideNavLayout,
   renderSideNavGroup,
   renderSideNavItem,
   renderSideNavSeparator,
   bindSideNavPanels
 } from "./ui/side-nav-layout.js";
+import {
+  bindRailResizer,
+  followRailScroll,
+  railWidth,
+  renderProjectRail
+} from "./ui/project-rail.js";
 import { renderStudioGeneral } from "./studio/studio-general.js";
 import { renderSolidityClimate } from "./studio/solidity/solidity-climate.js";
 import { renderSolidityGeorisks } from "./studio/solidity/solidity-georisks.js";
@@ -54,7 +59,7 @@ function renderStudioNav() {
         renderSideNavItem({
           label: "Résoudre les conflits",
           targetId: "conflits-resolution",
-          iconHtml: svgIcon("git-compare", { className: "octicon octicon-git-compare" })
+          iconHtml: svgIcon("bug", { className: "octicon octicon-bug" })
         })
       ]
     }),
@@ -98,17 +103,36 @@ function renderStudioNav() {
   ].join("");
 }
 
+/** Où se retiennent le repli et la largeur du rail. Des réglages, pas un état. */
+const RAIL_COLLAPSED_KEY = "mdall.studioRailCollapsed.v1";
+const RAIL_WIDTH_KEY = "mdall.studioRailWidth.v1";
+
+const railState = { collapsed: false, width: 248 };
+
+function lireReglages() {
+  try {
+    railState.collapsed = window.localStorage.getItem(RAIL_COLLAPSED_KEY) === "1";
+    railState.width = railWidth(Number(window.localStorage.getItem(RAIL_WIDTH_KEY)) || 248);
+  } catch {
+    // Un navigateur qui refuse le stockage garde le rail déplié.
+  }
+}
+
 function getRouterHtml() {
   return `
-    <section class="project-simple-page project-simple-page--settings project-simple-page--studio">
+    <section class="project-simple-page project-simple-page--settings project-simple-page--studio"
+      style="--project-rail-width:${railWidth(railState.width, railState.collapsed)}px">
       <div class="project-simple-scroll project-simple-scroll--parametres" id="projectStudioRouterScroll">
         <div class="settings-shell settings-shell--parametres">
-          ${renderSideNavLayout({
-            className: "settings-layout settings-layout--parametres project-studio-router",
-            navClassName: "settings-nav settings-nav--parametres",
-            contentClassName: "settings-content settings-content--parametres project-studio-router__content",
-            navHtml: renderStudioNav(),
-            contentHtml: `
+          <div class="project-rail-layout${railState.collapsed ? " project-rail-layout--collapsed" : ""}">
+            ${renderProjectRail({
+              id: "studioRail",
+              label: "Utilitaires de l'Atelier",
+              collapsed: railState.collapsed,
+              navHtml: renderStudioNav()
+            })}
+            <div class="project-rail-layout__content settings-content settings-content--parametres project-studio-router__content">
+              
               <section class="project-studio-router__panel is-active" data-side-nav-panel="studio-general">
                 <div id="projectStudioGeneralPanel"></div>
               </section>
@@ -130,18 +154,24 @@ function getRouterHtml() {
               <section class="project-studio-router__panel" data-side-nav-panel="dev-ct-continuity-lab">
                 <div id="projectStudioCtContinuityLabPanel"></div>
               </section>
-            `
-          })}
+            
+            </div>
+          </div>
         </div>
       </div>
     </section>
   `;
 }
 
+let studioRailDetacher = null;
+let studioPoigneeDetacher = null;
+
 export function renderProjectStudio(root) {
   if (!root) return;
 
+  lireReglages();
   root.innerHTML = getRouterHtml();
+  brancherRail(root);
 
   const generalRoot = root.querySelector("#projectStudioGeneralPanel");
   const solidityClimateRoot = root.querySelector("#projectStudioSolidityClimatePanel");
@@ -180,4 +210,42 @@ export function renderProjectStudio(root) {
   });
 
   registerProjectPrimaryScrollSource(getScrollSource());
+}
+
+/**
+ * Le rail : son calage, sa poignée, son repli.
+ *
+ * Le même composant que la Mémoire — l'Atelier s'étoffe, et il lui faut la même
+ * place. Redessiner l'écran entier au repli serait excessif : seul le rail et
+ * la marge du contenu changent, et la variable les porte tous les deux.
+ */
+function brancherRail(root) {
+  if (studioRailDetacher) studioRailDetacher();
+  if (studioPoigneeDetacher) studioPoigneeDetacher();
+
+  studioRailDetacher = followRailScroll(root.querySelector(".project-rail"));
+  studioPoigneeDetacher = bindRailResizer({
+    root,
+    id: "studioRail",
+    pageSelector: ".project-simple-page--studio",
+    getWidth: () => railState.width,
+    onEnd: (largeur) => {
+      railState.width = largeur;
+      try {
+        window.localStorage.setItem(RAIL_WIDTH_KEY, String(largeur));
+      } catch {
+        // Sans stockage, la largeur revient à sa valeur par défaut.
+      }
+    }
+  });
+
+  root.querySelector("[data-project-rail-collapse]")?.addEventListener("click", () => {
+    railState.collapsed = !railState.collapsed;
+    try {
+      window.localStorage.setItem(RAIL_COLLAPSED_KEY, railState.collapsed ? "1" : "0");
+    } catch {
+      // Le repli ne se retiendra pas, l'écran fonctionne quand même.
+    }
+    renderProjectStudio(root);
+  });
 }

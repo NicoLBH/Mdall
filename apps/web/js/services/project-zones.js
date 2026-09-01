@@ -15,9 +15,12 @@
  * deux fois la même information — et deux lignes pour un même fait font deux
  * histoires à tenir.
  *
- * La colonne `zones` porte la liste ; `zone`, plus ancienne, est lue comme sa
- * première entrée. Les deux se lisent, une seule s'écrit : une valeur qu'on
- * écrit à deux endroits finit par diverger.
+ * **Une seule colonne : `zones`.** Il y en avait deux le temps d'une version —
+ * `zone`, la simple, et `zones`, la liste — pour ne pas rompre une base en
+ * retard. Deux champs pour une même chose est précisément ce qu'on reproche
+ * ailleurs : la simple est abandonnée, et les lignes qui ne portaient qu'elle
+ * valent désormais pour l'ensemble. C'est peu de données, et une colonne de
+ * moins à faire concorder.
  *
  * ## Tout l'ouvrage est une zone, et c'est celle par défaut
  *
@@ -45,7 +48,7 @@
 export const ZONE_TOUT_LOUVRAGE = "";
 
 /** Le libellé de la zone générale. Une seule formulation, partout. */
-export const ZONE_TOUT_LOUVRAGE_LABEL = "Tout l'ouvrage";
+export const ZONE_TOUT_LOUVRAGE_LABEL = "Ensemble — toutes zones";
 
 function texte(value) {
   return String(value ?? "").trim();
@@ -70,14 +73,12 @@ export function normalizeZoneKey(zone) {
 /**
  * Les zones d'une affirmation, normalisées et sans doublon.
  *
- * Un tableau vide veut dire **partout** : c'est la portée générale, pas une
- * ignorance. `zone`, la colonne d'avant, est lue comme une zone parmi les
- * autres — de sorte qu'une base non encore migrée continue de dire vrai.
+ * Un tableau vide veut dire **l'ensemble** : c'est la portée générale, pas une
+ * ignorance.
  */
 export function zonesOf(assertion = {}) {
   const liste = Array.isArray(assertion?.zones) ? assertion.zones : [];
-  const toutes = [...liste, assertion?.zone].map(normalizeZoneKey).filter(Boolean);
-  return [...new Set(toutes)];
+  return [...new Set(liste.map(normalizeZoneKey).filter(Boolean))];
 }
 
 /**
@@ -178,4 +179,17 @@ export function describeZone(zone, assertions = []) {
   const connue = definedZones(assertions).find((entry) => entry.key === cle);
   if (!connue) return "Cette zone n'a pas de définition : personne n'a écrit ce qu'elle recouvre.";
   return connue.definition || connue.label;
+}
+
+/**
+ * Ce qu'une affirmation porte comme zones, dit en français.
+ *
+ * **Toujours quelque chose.** Une affirmation sans zone n'affiche pas le vide :
+ * elle affiche « Ensemble — toutes zones », qui est sa portée réelle. Ne rien
+ * écrire laisserait croire qu'on a oublié de la rattacher.
+ */
+export function describeZonesOf(assertion = {}, assertions = []) {
+  const portees = zonesOf(assertion);
+  if (portees.length === 0) return ZONE_TOUT_LOUVRAGE_LABEL;
+  return portees.map((cle) => zoneLabel(cle, assertions)).join(", ");
 }

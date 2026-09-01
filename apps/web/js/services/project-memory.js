@@ -197,11 +197,24 @@ export function assertionsFromProposition({ proposition = {}, items = [], decide
  *
  * @returns {{ok: true, row: object}|{ok: false, reason: string}}
  */
+/**
+ * Les zones d'une affirmation, normalisées, triées et sans doublon.
+ *
+ * Triées parce que le même découpage écrit dans un autre ordre reste le même
+ * découpage : sans cela, « A+B » et « B+A » feraient deux clés métier pour un
+ * seul fait. `null` quand il n'y en a aucune — c'est « l'ensemble ».
+ */
+function porteesDe(zones) {
+  const liste = [...new Set((Array.isArray(zones) ? zones : []).map(normalizeZoneKey).filter(Boolean))].sort();
+  return liste.length ? liste : null;
+}
+
 export function declaredHypothesis({
   projectId = "",
   subject = "",
   value = "",
   domain = null,
+  zones = [],
   declaredBy = null,
   at = ""
 } = {}) {
@@ -230,6 +243,10 @@ export function declaredHypothesis({
       status: MEMORY.ASSUMED,
       nature: NATURE.HYPOTHESE,
       domain: normalizeDomain(domain),
+      // Une hypothèse peut ne valoir que pour une partie de l'ouvrage : la
+      // portance du sol sous le bâtiment A n'est pas celle sous le bâtiment B.
+      // Vide veut dire l'ensemble.
+      zones: porteesDe(zones),
       payload: { subject: sujet, value: valeur, declared: true },
       // Aucune proposition : c'est un geste humain, et l'écran le dira.
       proposition_id: null,
@@ -280,9 +297,9 @@ export function declaredBaseDatum({
   const quand = texte(at) || new Date().toISOString();
 
   // Une information peut valoir pour plusieurs parties de l'ouvrage sans valoir
-  // partout. La liste vide veut dire « partout » — c'est une portée, pas une
+  // partout. La liste vide veut dire « l'ensemble » — c'est une portée, pas une
   // ignorance.
-  const portees = [...new Set([...(Array.isArray(zones) ? zones : []), zone].map(normalizeZoneKey).filter(Boolean))].sort();
+  const portees = porteesDe([...(Array.isArray(zones) ? zones : []), zone]) ?? [];
 
   return {
     ok: true,
@@ -300,9 +317,6 @@ export function declaredBaseDatum({
       status: MEMORY.ASSUMED,
       nature: NATURE.DONNEE_BASE,
       domain: normalizeDomain(domain),
-      // `zone` reste écrite pour une base qui n'a pas encore la colonne
-      // `zones` : elle y porte la première, et la lecture les réunit.
-      zone: portees[0] ?? null,
       zones: portees.length ? portees : null,
       payload: { subject: sujet, value: valeur, declared: true },
       proposition_id: null,
@@ -359,7 +373,8 @@ export function declaredZone({
       status: MEMORY.ASSUMED,
       nature: NATURE.DONNEE_BASE,
       domain: null,
-      zone: null,
+      // Une définition de zone ne porte pas de zone : elle vaut pour l'ensemble,
+      // sans quoi elle disparaîtrait de toute lecture autre que la sienne.
       zones: null,
       payload: { subject: nom, value: texteDefinition, zoneDefinition: true, zoneKey: cle, declared: true },
       proposition_id: null,
