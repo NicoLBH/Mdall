@@ -24,14 +24,20 @@
 import { escapeHtml } from "../utils/escape-html.js";
 import { store } from "../store.js";
 import { svgIcon } from "../ui/icons.js";
-import { renderSideNavGroup, renderSideNavItem, renderSideNavSeparator } from "./ui/side-nav-layout.js";
+import {
+  renderNavList,
+  renderNavListDivider,
+  renderNavListGroup,
+  renderNavListItem
+} from "./ui/nav-list.js";
 import {
   ZONE_TOUT_LOUVRAGE_LABEL,
   definedZones,
   describeZonesOf,
+  zoneLabel,
   zonesOf
 } from "../services/project-zones.js";
-import { onlyFilters, parseQuery, renderQueryMirror, withFilter } from "../services/query-bar.js";
+import { onlyFilters, parseQuery, renderQueryMirror, suggestAt, withFilter } from "../services/query-bar.js";
 import {
   RAIL_MAX,
   RAIL_MIN,
@@ -68,6 +74,7 @@ import {
   NATURES,
   UNCLASSIFIED_LABEL,
   classifyAssertion,
+  isFoundational,
   domainLabel,
   filterByTaxonomy,
   natureLabel,
@@ -204,6 +211,10 @@ const view = {
   /** Le formulaire d'hypothèse, quand il est ouvert. */
   declaring: false,
   navCollapsed: repliRetenu(),
+  /** La proposition retenue dans la liste de complétion. */
+  suggestion: -1,
+  /** Les socles cochés, en attente de déclaration. */
+  dependsDraft: [],
   navWidth: largeurRetenue(),
   draft: { subject: "", value: "", domain: "", zones: [] },
   notice: "",
@@ -321,6 +332,8 @@ function renderSearch() {
       >
       </div>
       <span class="memory-search__icon" aria-hidden="true">${svgIcon("search", { className: "octicon" })}</span>
+      <div class="memory-search__suggestions" data-memory-suggestions hidden role="listbox"
+        aria-label="Compléter la recherche"></div>
     </div>
   `;
 }
@@ -629,6 +642,42 @@ function renderList(lignes, page = 1) {
  * page d'essai qui recopierait son HTML finirait par mentir sur ce qu'elle
  * montre.
  */
+/**
+ * Les caractéristiques d'une affirmation, toujours toutes affichées.
+ *
+ * **Y compris celles qui manquent.** Un écran qui n'affiche que ce qu'il sait
+ * laisse croire que le reste n'existe pas ; le trait discontinu dit « cette
+ * case est vide », ce qui est une information — et souvent celle qu'il faut
+ * aller combler. C'est la même forme que dans le tableau : on retrouve d'un
+ * écran à l'autre les mêmes pastilles, aux mêmes couleurs.
+ */
+function renderDetailTags(assertion, ecartee) {
+  const { nature, domain } = classifyAssertion(assertion);
+  const portees = zonesOf(assertion);
+
+  const pastille = (valeur, vide) =>
+    `<span class="memory-tag${vide ? " memory-tag--unknown" : " memory-tag--nature"}">${escapeHtml(valeur)}</span>`;
+
+  return `
+    <div class="memory-detail__tags">
+      <span class="memory-detail__tags-label">Provenance</span>
+      ${pastille(kindLabel(assertion.kind) || "Inconnue", !assertion.kind)}
+      <span class="memory-detail__tags-label">Nature</span>
+      ${pastille(nature ? natureLabel(nature) : UNCLASSIFIED_LABEL, !nature)}
+      <span class="memory-detail__tags-label">Domaine</span>
+      ${pastille(domain ? domainLabel(domain) : "Sans domaine", !domain)}
+      <span class="memory-detail__tags-label">État</span>
+      ${pastille(ecartee ? "Écartée" : "Assumée", false)}
+      <span class="memory-detail__tags-label">Zones</span>
+      ${
+        portees.length === 0
+          ? pastille(ZONE_TOUT_LOUVRAGE_LABEL, false)
+          : portees.map((cle) => pastille(zoneLabel(cle, view.assertions ?? []), false)).join("")
+      }
+    </div>
+  `;
+}
+
 export function renderMemoryDetail(assertions, cible = {}) {
   const suite = assertionHistory(assertions, cible);
   if (suite.length === 0) {
@@ -695,9 +744,11 @@ export function renderMemoryDetail(assertions, cible = {}) {
         </span>
       </header>
 
+      ${renderDetailTags(courante, ecartee)}
+
       ${
         faits.length > 0
-          ? `<div class="memory-detail__facts"><h3 class="memory-detail__section">Ce sur quoi elle s'appuie</h3>
+          ? `<div class="memory-detail__facts"><h3 class="memory-detail__section">Ce qui l'établit</h3>
               <dl class="memory-facts">${faits
                 .map(([label, valeur]) => `<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(valeur)}</dd>`)
                 .join("")}</dl></div>`
@@ -752,17 +803,16 @@ function renderMemoryNav() {
     const actif = lectureDe(view.query) === lecture;
     const libelle = readerLabel(lecture);
 
-    return renderSideNavItem({
+    return renderNavListItem({
       label: libelle,
       iconHtml: svgIcon(READER_ICONS[lecture] ?? "dot-fill-pending", { className: "octicon" }),
+      trailing: String(combien),
       isActive: actif,
-      className: "project-rail__item",
       dataAttributes: {
         "data-memory-reader": lecture,
         // Replié, le libellé n'est plus lisible : l'infobulle native le redonne,
-        // et l'étiquette accessible avec lui.
-        "data-tooltip": replie ? `${libelle} (${combien})` : "",
-        "data-memory-count": String(combien)
+        // et le compte avec lui.
+        "data-tooltip": replie ? `${libelle} (${combien})` : ""
       }
     });
   };
@@ -771,14 +821,16 @@ function renderMemoryNav() {
     id: "memoryRail",
     label: "Lectures de la mémoire",
     collapsed: replie,
-    navHtml: `
-      ${renderSideNavGroup({
-        className: "project-rail__group",
-        items: [READER.ALL, READER.HYPOTHESES, READER.CONSTRAINTS, READER.FINDINGS].map(entree)
-      })}
-      ${renderSideNavSeparator()}
-      ${renderSideNavGroup({ className: "project-rail__group", items: [entree(READER.BASE_DATA)] })}
-    `
+    navHtml: renderNavList({
+      label: "Lectures de la mémoire",
+      html: `
+        ${renderNavListGroup({
+          items: [READER.ALL, READER.HYPOTHESES, READER.CONSTRAINTS, READER.FINDINGS].map(entree)
+        })}
+        ${renderNavListDivider()}
+        ${renderNavListGroup({ items: [entree(READER.BASE_DATA)] })}
+      `
+    })
   });
 }
 
@@ -1327,48 +1379,70 @@ function renderDependencyPanel(courante) {
   const socles = dependenciesOf(courante.id, liens);
   const dependants = dependentsOf(courante.id, liens);
 
-  // Une affirmation ne repose que sur une hypothèse : proposer autre chose dans
-  // la liste ferait offrir un geste qui sera refusé.
-  const hypotheses = lignes.filter(
-    (entry) => entry.id !== courante.id && classifyAssertion(entry).nature === NATURE.HYPOTHESE
+  // On repose sur ce que le projet a **posé** : une hypothèse, une contrainte,
+  // une donnée de base. Un constat ne se choisit pas comme socle — il rapporte
+  // ce qui a été vu, il ne fonde rien.
+  const candidats = lignes.filter(
+    (entry) => entry.id !== courante.id && isFoundational(classifyAssertion(entry).nature) && !socles.includes(entry.id)
   );
 
-  const liste = (titre, ids) =>
+  const liste = (titre, aide, ids) =>
     ids.length === 0
       ? ""
       : `<div class="memory-depends__block">
            <h4>${escapeHtml(titre)}</h4>
+           <p class="memory-depends__hint">${escapeHtml(aide)}</p>
            <ul>${ids.map((id) => `<li>${escapeHtml(nomDe(id))}</li>`).join("")}</ul>
          </div>`;
 
+  const choisies = new Set(view.dependsDraft ?? []);
+
   return `
     <div class="memory-depends">
-      <h3 class="memory-detail__section">Ce qui la relie</h3>
-      ${liste("Elle repose sur", socles)}
-      ${liste("Reposent sur elle", dependants)}
+      <h3 class="memory-detail__section">Ce dont elle dépend</h3>
+      ${liste(
+        "Elle dépend de",
+        "Si l'une de ces valeurs change, cette affirmation devient à revérifier.",
+        socles
+      )}
+      ${liste(
+        "En dépendent",
+        "Ces affirmations deviendront à revérifier si celle-ci change.",
+        dependants
+      )}
       ${
         socles.length === 0 && dependants.length === 0
-          ? `<p class="memory-depends__empty">Aucun lien déclaré. Une affirmation sans lien ne dit rien de faux — elle n'entraîne simplement rien.</p>`
+          ? `<p class="memory-depends__empty">Aucune dépendance déclarée. Une affirmation sans dépendance ne dit rien de faux — elle n'entraîne simplement rien, et rien ne l'entraîne.</p>`
           : ""
       }
       ${
-        hypotheses.length === 0
-          ? `<p class="memory-depends__empty">Aucune hypothèse dans la mémoire de ce projet : il n'y a rien sur quoi reposer.</p>`
+        candidats.length === 0
+          ? `<p class="memory-depends__empty">Rien sur quoi reposer : il n'y a dans cette mémoire ni hypothèse, ni contrainte, ni donnée de base qui ne soit déjà déclarée.</p>`
           : `<div class="memory-depends__form">
-               <label for="memoryDependsChoice">Déclarer qu'elle repose sur une hypothèse</label>
-               <div class="memory-depends__row">
-                 <select class="gh-input" id="memoryDependsChoice" data-memory-depends-choice>
-                   ${hypotheses
-                     .map(
-                       (entry) =>
-                         `<option value="${escapeHtml(entry.id)}">${escapeHtml(entry.statement)}</option>`
-                     )
-                     .join("")}
-                 </select>
-                 <button type="button" class="gh-btn" data-memory-depends="${escapeHtml(courante.id ?? "")}" ${
-                   view.busy ? "disabled" : ""
-                 }>Déclarer</button>
+               <p class="memory-depends__label">Déclarer ce dont elle dépend</p>
+               <p class="memory-depends__hint">
+                 Plusieurs à la fois : une note de calcul repose souvent sur une zone climatique
+                 <em>et</em> sur une portance de sol.
+               </p>
+               <div class="memory-depends__choices">
+                 ${candidats
+                   .map(
+                     (entry) => `
+                       <label class="memory-depends__choice${choisies.has(entry.id) ? " is-checked" : ""}">
+                         <input type="checkbox" data-memory-depends-pick="${escapeHtml(entry.id)}"
+                           ${choisies.has(entry.id) ? "checked" : ""}>
+                         <span class="memory-tag memory-tag--nature">${escapeHtml(
+                           natureLabel(classifyAssertion(entry).nature)
+                         )}</span>
+                         <span>${escapeHtml(entry.statement)}</span>
+                       </label>
+                     `
+                   )
+                   .join("")}
                </div>
+               <button type="button" class="gh-btn" data-memory-depends="${escapeHtml(courante.id ?? "")}" ${
+                 view.busy || choisies.size === 0 ? "disabled" : ""
+               }>Déclarer ${choisies.size > 1 ? `les ${choisies.size} dépendances` : "la dépendance"}</button>
              </div>`
       }
     </div>
@@ -1419,43 +1493,66 @@ async function markAsReviewed(root, assertionId) {
  */
 async function declareDependsOn(root, bouton) {
   const cibleId = bouton.getAttribute("data-memory-depends") || "";
-  const hote = bouton.closest(".memory-depends");
-  const choix = hote?.querySelector("[data-memory-depends-choice]");
-  const hypotheseId = choix?.value || "";
+  const choisies = [...new Set(view.dependsDraft ?? [])].filter(Boolean);
 
-  if (!cibleId || !hypotheseId || view.busy) return;
+  if (!cibleId || choisies.length === 0 || view.busy) return;
 
   const lignes = view.assertions ?? [];
-  const { planDependency } = await import("../services/assertion-dependencies.js");
-  const plan = planDependency({
-    assertion: lignes.find((entry) => entry.id === cibleId) ?? null,
-    dependsOn: lignes.find((entry) => entry.id === hypotheseId) ?? null,
-    existing: view.dependencies ?? [],
-    declaredBy: store.user?.id ?? null
-  });
+  const cible = lignes.find((entry) => entry.id === cibleId) ?? null;
 
-  if (!plan.ok) {
-    view.notice = plan.reason;
-    renderContent(root);
-    return;
+  const { planDependency } = await import("../services/assertion-dependencies.js");
+
+  // On planifie tout avant d'écrire quoi que ce soit : un lot à moitié écrit
+  // laisserait l'écran dire une chose et la base une autre.
+  const plans = [];
+  const existing = [...(view.dependencies ?? [])];
+  for (const socleId of choisies) {
+    const plan = planDependency({
+      assertion: cible,
+      dependsOn: lignes.find((entry) => entry.id === socleId) ?? null,
+      existing,
+      declaredBy: store.user?.id ?? null
+    });
+    if (!plan.ok) {
+      view.notice = plan.reason;
+      renderContent(root);
+      return;
+    }
+    plans.push(plan.link);
+    existing.push(plan.link);
   }
 
   view.busy = true;
   renderContent(root);
 
   const { declareDependency } = await import("../services/assertion-dependencies-supabase.js");
-  const ecrit = await declareDependency(plan.link);
+  let ecrits = 0;
+  for (const lien of plans) {
+    if (await declareDependency(lien)) ecrits += 1;
+  }
 
   view.busy = false;
+  view.dependsDraft = [];
 
-  if (!ecrit) {
-    view.notice = "Le lien n'a pas pu être enregistré.";
+  if (ecrits === 0) {
+    view.notice = "Aucun lien n'a pu être enregistré.";
     renderContent(root);
     return;
   }
 
-  view.dependencies = [...(view.dependencies ?? []), ecrit];
-  view.notice = "";
+  view.notice = ecrits < plans.length
+    ? `${ecrits} lien(s) sur ${plans.length} enregistré(s).`
+    : "";
+
+  // On relit les liens plutôt que de les deviner : c'est la base qui dit ce
+  // qu'elle a accepté.
+  try {
+    const { listAssertionDependencies } = await import("../services/assertion-dependencies-supabase.js");
+    view.dependencies = (await listAssertionDependencies(view.projectId)) ?? view.dependencies;
+  } catch {
+    // Le lien est écrit ; ne pas savoir le relire n'annule pas l'écriture.
+  }
+
   renderContent(root);
 }
 
@@ -1620,6 +1717,48 @@ function bind(root) {
   const recherche = root.querySelector("[data-memory-search]");
   if (recherche) {
     recherche.addEventListener("scroll", () => syncMiroir(root), { passive: true });
+    recherche.addEventListener("focus", () => syncSuggestions(root));
+    recherche.addEventListener("click", () => syncSuggestions(root));
+    // Le flou est différé : cliquer une proposition passe par un flou, et fermer
+    // la liste avant le clic la rendrait inatteignable à la souris.
+    recherche.addEventListener("blur", () => window.setTimeout(() => syncSuggestions(root), 120));
+
+    recherche.addEventListener("keydown", (event) => {
+      const hote = root.querySelector("[data-memory-suggestions]");
+      if (!hote || hote.hidden) return;
+      const combien = hote.querySelectorAll("[data-memory-suggestion]").length;
+      if (combien === 0) return;
+
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        const pas = event.key === "ArrowDown" ? 1 : -1;
+        view.suggestion = (view.suggestion + pas + combien) % combien;
+        syncSuggestions(root);
+        return;
+      }
+
+      // Entrée et Tabulation complètent ; Échap referme sans rien changer.
+      if (event.key === "Enter" || event.key === "Tab") {
+        event.preventDefault();
+        appliquerSuggestion(root, view.suggestion);
+        return;
+      }
+
+      if (event.key === "Escape") {
+        event.preventDefault();
+        view.suggestion = -1;
+        hote.hidden = true;
+      }
+    });
+
+    root.querySelector("[data-memory-suggestions]")?.addEventListener("mousedown", (event) => {
+      const bouton = event.target.closest("[data-memory-suggestion]");
+      if (!bouton) return;
+      // `mousedown` plutôt que `click` : le clic arriverait après le flou du
+      // champ, donc après la fermeture de la liste.
+      event.preventDefault();
+      appliquerSuggestion(root, Number(bouton.getAttribute("data-memory-suggestion")));
+    });
     recherche.addEventListener("input", (event) => {
       view.query = event.target.value;
       // On redessine la liste seule : redessiner la page ferait perdre le
@@ -1634,6 +1773,7 @@ function bind(root) {
       bindPagination(root);
       syncLecture(root);
       syncMiroir(root);
+      syncSuggestions(root);
     });
   }
 
@@ -1665,6 +1805,17 @@ function bind(root) {
 
   for (const bouton of root.querySelectorAll("[data-memory-reviewed]")) {
     bouton.addEventListener("click", () => markAsReviewed(root, bouton.getAttribute("data-memory-reviewed")));
+  }
+
+  for (const case_ of root.querySelectorAll("[data-memory-depends-pick]")) {
+    case_.addEventListener("change", () => {
+      const id = case_.getAttribute("data-memory-depends-pick");
+      const choisies = new Set(view.dependsDraft ?? []);
+      if (case_.checked) choisies.add(id);
+      else choisies.delete(id);
+      view.dependsDraft = [...choisies];
+      renderContent(root);
+    });
   }
 
   for (const bouton of root.querySelectorAll("[data-memory-depends]")) {
@@ -1995,6 +2146,83 @@ async function versSiteConstraints(root) {
  * visible — et le décalage se voit immédiatement, puisque les deux textes se
  * superposent.
  */
+/**
+ * La complétion : ce qu'on peut écrire, à l'endroit où l'on écrit.
+ *
+ * Une barre à jetons ne s'apprend pas dans une documentation — elle s'apprend en
+ * tapant. Proposer les champs dès la première lettre, puis leurs valeurs une
+ * fois le champ nommé, évite d'avoir à retenir un vocabulaire.
+ *
+ * **Elle ne s'ouvre que là où elle sert** : sur un mot de champ ou sur une
+ * valeur. Ailleurs on écrit du texte libre, et une liste qui s'ouvre à chaque
+ * mot gêne la frappe au lieu de l'aider.
+ */
+function syncSuggestions(root) {
+  const champ = root.querySelector("[data-memory-search]");
+  const hote = root.querySelector("[data-memory-suggestions]");
+  if (!champ || !hote) return;
+
+  const propose = document.activeElement === champ
+    ? suggestAt(champ.value, MEMORY_FIELDS, champ.selectionStart ?? champ.value.length)
+    : null;
+
+  if (!propose) {
+    hote.hidden = true;
+    hote.innerHTML = "";
+    view.suggestion = -1;
+    return;
+  }
+
+  // Le premier est retenu d'office : la touche Entrée doit faire quelque chose
+  // d'utile sans qu'on ait à descendre dans la liste.
+  if (view.suggestion < 0 || view.suggestion >= propose.items.length) view.suggestion = 0;
+
+  hote.innerHTML = propose.items
+    .map(
+      (item, rang) => `
+        <button type="button" class="memory-search__suggestion${rang === view.suggestion ? " is-active" : ""}"
+          role="option" aria-selected="${rang === view.suggestion ? "true" : "false"}" data-memory-suggestion="${rang}">
+          <span class="memory-search__suggestion-label">${escapeHtml(item.label)}</span>
+          <span class="memory-search__suggestion-hint">${escapeHtml(item.hint)}</span>
+        </button>
+      `
+    )
+    .join("");
+  hote.hidden = false;
+}
+
+/**
+ * Applique une proposition à la place du mot en cours.
+ *
+ * On remplace **le mot du curseur**, pas toute la requête : compléter au milieu
+ * d'une recherche déjà écrite ne doit pas effacer le reste.
+ */
+function appliquerSuggestion(root, rang) {
+  const champ = root.querySelector("[data-memory-search]");
+  if (!champ) return;
+
+  const propose = suggestAt(champ.value, MEMORY_FIELDS, champ.selectionStart ?? champ.value.length);
+  const item = propose?.items?.[rang];
+  if (!item) return;
+
+  const avant = champ.value.slice(0, propose.start);
+  const apres = champ.value.slice(propose.end);
+  const curseur = avant.length + item.insert.length;
+
+  champ.value = `${avant}${item.insert}${apres}`;
+  view.query = champ.value;
+  view.page = 1;
+  champ.setSelectionRange(curseur, curseur);
+  view.suggestion = -1;
+
+  const hote = root.querySelector(".memory-results, .propositions-empty:not(.propositions-empty--warn)");
+  if (hote) hote.outerHTML = renderList(lignesVisibles(), view.page);
+  bindPagination(root);
+  syncLecture(root);
+  syncMiroir(root);
+  syncSuggestions(root);
+}
+
 function syncMiroir(root) {
   const champ = root.querySelector("[data-memory-search]");
   const miroir = root.querySelector(".memory-search__mirror");

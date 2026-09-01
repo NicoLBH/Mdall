@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 
 import {
   describeFilters,
+  queryPieces,
+  renderQueryMirror,
   filterValue,
   formatQuery,
   onlyFilters,
@@ -138,4 +140,34 @@ test("la complétion porte sur le mot du curseur, pas sur toute la requête", ()
 
 test("une requête vide propose tous les champs", () => {
   assert.deepEqual(suggestAt("", CHAMPS, 0).items.map((i) => i.insert), ["nature:", "domaine:"]);
+});
+
+/* ── Le calque : seule la valeur se colore ───────────────────────────────── */
+
+test("un filtre se découpe en étiquette et en valeur", () => {
+  // Peindre « nature: » et « hypothese » de la même couleur ferait un pâté bleu
+  // où l'œil ne distingue plus l'essentiel de son étiquette.
+  const [jeton] = queryPieces("nature:hypothese", CHAMPS);
+
+  assert.equal(jeton.isFilter, true);
+  assert.equal(jeton.key, "nature:");
+  assert.equal(jeton.value, "hypothese");
+});
+
+test("les espaces sont conservés tels quels", () => {
+  // Le calque doit tomber au pixel près sur le texte qu'il double.
+  assert.deepEqual(queryPieces("a  b", CHAMPS).map((p) => p.text), ["a", "  ", "b"]);
+});
+
+test("le calque n'habille que ce qui est reconnu", () => {
+  const rendu = renderQueryMirror("nature:hypothese nature:zoiseau neige", CHAMPS);
+
+  assert.match(rendu, /query-token__key">nature:</);
+  assert.match(rendu, /query-token__value">hypothese</);
+  assert.ok(rendu.includes("nature:zoiseau"), "le jeton non reconnu reste du texte");
+  assert.doesNotMatch(rendu, /query-token__value">zoiseau</);
+});
+
+test("le calque échappe ce qu'on lui donne", () => {
+  assert.match(renderQueryMirror("<script>", CHAMPS), /&lt;script&gt;/);
 });

@@ -229,7 +229,11 @@ export function suggestAt(query = "", fields = [], caret = 0) {
  * Les espaces sont conservés tels quels : le calque doit tomber au pixel près
  * sur le texte qu'il double, sinon il se décale à la première frappe.
  *
- * @returns {{text: string, isFilter: boolean}[]}
+ * **Seule la valeur se colore.** « nature: » nomme le champ, et c'est la valeur
+ * qui dit ce qu'on cherche : peindre les deux ferait un pâté bleu où l'œil ne
+ * distingue plus l'essentiel de son étiquette.
+ *
+ * @returns {{text: string, isFilter: boolean, key?: string, value?: string}[]}
  */
 export function queryPieces(query = "", fields = []) {
   const brut = String(query ?? "");
@@ -246,7 +250,18 @@ export function queryPieces(query = "", fields = []) {
     const coupure = part.indexOf(":");
     const champ = coupure > 0 ? champPour(fields, part.slice(0, coupure)) : null;
     const valeur = champ ? valeurPour(champ, part.slice(coupure + 1)) : null;
-    morceaux.push({ text: part, isFilter: Boolean(champ && valeur) });
+
+    if (champ && valeur) {
+      morceaux.push({
+        text: part,
+        isFilter: true,
+        key: part.slice(0, coupure + 1),
+        value: part.slice(coupure + 1)
+      });
+      continue;
+    }
+
+    morceaux.push({ text: part, isFilter: false });
   }
 
   return morceaux;
@@ -260,11 +275,15 @@ export function queryPieces(query = "", fields = []) {
  * être d'accord.
  */
 export function renderQueryMirror(query = "", fields = [], { tokenClass = "query-token" } = {}) {
+  const classe = escapeHtml(tokenClass);
+
   return queryPieces(query, fields)
-    .map((piece) =>
-      piece.isFilter
-        ? `<span class="${escapeHtml(tokenClass)}">${escapeHtml(piece.text)}</span>`
-        : escapeHtml(piece.text)
-    )
+    .map((piece) => {
+      if (!piece.isFilter) return escapeHtml(piece.text);
+      return (
+        `<span class="${classe}__key">${escapeHtml(piece.key)}</span>` +
+        `<span class="${classe}__value">${escapeHtml(piece.value)}</span>`
+      );
+    })
     .join("");
 }
