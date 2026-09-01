@@ -48,12 +48,6 @@ import {
   summarizeReader
 } from "../services/memory-readers.js";
 import {
-  ECART,
-  describeEcart,
-  findNonConformities,
-  summarizeEcarts
-} from "../services/memory-nonconformity.js";
-import {
   DOMAINS,
   NATURE,
   NATURES,
@@ -586,48 +580,6 @@ export function renderMemoryDetail(assertions, cible = {}) {
  * l'autre sans savoir combien on va trouver oblige à cliquer pour l'apprendre.
  */
 /**
- * Les écarts que la mémoire porte, en tête de liste.
- *
- * Séparé des lectures parce qu'il ne se lit pas comme elles : une lecture dit
- * ce que le projet sait, celui-ci dit ce qui ne s'accorde pas. Le mêler à la
- * liste ferait passer un désaccord pour une connaissance de plus.
- *
- * Les non-conformités sont annoncées d'abord et nommées comme telles : elles
- * n'appellent pas un arbitrage mais une correction, et les noyer dans un total
- * ferait perdre la seule information qui commande une action.
- */
-export function renderEcarts(assertions = view.assertions) {
-  const ecarts = findNonConformities(assertions);
-  if (ecarts.length === 0) return "";
-
-  const resume = summarizeEcarts(ecarts);
-  const tete = resume.nonConformities
-    ? `${resume.nonConformities} non-conformité${resume.nonConformities > 1 ? "s" : ""}`
-    : `${resume.total} écart${resume.total > 1 ? "s" : ""}`;
-
-  const cartes = ecarts
-    .map((ecart) => {
-      const dit = describeEcart(ecart);
-      const grave = ecart.type === ECART.NON_CONFORMITE;
-      return `
-        <li class="memory-ecart${grave ? " memory-ecart--grave" : ""}">
-          <span class="memory-ecart__label">${escapeHtml(dit.label)}</span>
-          <p class="memory-ecart__sentence">${escapeHtml(dit.sentence)}</p>
-          <p class="memory-ecart__ask">${escapeHtml(dit.ask)}</p>
-        </li>
-      `;
-    })
-    .join("");
-
-  return `
-    <section class="memory-ecarts" aria-label="Écarts">
-      <h5 class="memory-ecarts__title">${escapeHtml(tete)}</h5>
-      <ul class="memory-ecarts__list">${cartes}</ul>
-    </section>
-  `;
-}
-
-/**
  * Les lectures, en colonne à gauche.
  *
  * Ce ne sont **pas** cinq écrans : ce sont cinq filtres sur la même table. Un
@@ -691,6 +643,65 @@ function renderMemoryNav() {
   `;
 }
 
+/**
+ * Cale le haut du rail sous ce qui le précède, au fil du défilement.
+ *
+ * Les onglets du projet défilent avec la page ; l'en-tête global, non. Le rail
+ * doit donc descendre sous les onglets quand la page est en haut, puis remonter
+ * se caler sous l'en-tête quand ils sont sortis — sans jamais passer dessous.
+ *
+ * Le CSS seul ne sait pas faire : il ignore où s'arrête un élément qui défile.
+ * On mesure, et on écrit la valeur dans une variable — le placement reste au
+ * CSS, seule la mesure vient d'ici.
+ */
+function suivreDefilement(root) {
+  const rail = root.querySelector(".memory-nav");
+  if (!rail) return;
+
+  const hautDeLApplication = () => {
+    const brut = getComputedStyle(document.body).getPropertyValue("--app-top").trim();
+    const mesure = Number.parseFloat(brut);
+    return Number.isFinite(mesure) ? mesure : 52;
+  };
+
+  const caler = () => {
+    const plancher = hautDeLApplication();
+    const onglets = document.querySelector(".project-view-header");
+    const bas = onglets ? onglets.getBoundingClientRect().top : plancher;
+    rail.style.setProperty("--memory-nav-top", `${Math.max(plancher, Math.round(bas))}px`);
+  };
+
+  caler();
+
+  // Une seule mesure par image : mesurer à chaque événement de défilement ferait
+  // recalculer la mise en page des dizaines de fois par seconde pour une valeur
+  // qui ne change qu'une fois par image.
+  let prevu = false;
+  const auDefilement = () => {
+    if (prevu) return;
+    prevu = true;
+    window.requestAnimationFrame(() => {
+      prevu = false;
+      caler();
+    });
+  };
+
+  window.addEventListener("scroll", auDefilement, { passive: true });
+  window.addEventListener("resize", auDefilement, { passive: true });
+
+  // Le rail est refait à chaque rendu : sans cela, chaque rendu ajouterait deux
+  // écouteurs de plus sur la fenêtre, et ils survivraient à l'écran.
+  if (railDetacher) railDetacher();
+  railDetacher = () => {
+    window.removeEventListener("scroll", auDefilement);
+    window.removeEventListener("resize", auDefilement);
+    railDetacher = null;
+  };
+}
+
+/** De quoi retirer les écouteurs du rail précédent. */
+let railDetacher = null;
+
 /** L'icône de chaque lecture. Une lecture sans icône se cherche, repliée. */
 const READER_ICONS = {
   [READER.ALL]: "book",
@@ -730,7 +741,7 @@ export function renderMemoryForPreview(assertions = [], { reader = READER.ALL, c
   view.assertions = assertions;
   view.reader = reader;
   view.navCollapsed = collapsed;
-  return `<div class="memory-layout${collapsed ? " is-collapsed" : ""}">${renderMemoryNav()}<div class="memory-layout__content">${renderReaderLead()}</div></div>`;
+  return `<div class="memory-layout${collapsed ? " memory-layout--collapsed" : ""}">${renderMemoryNav()}<div class="memory-layout__content">${renderReaderLead()}</div></div>`;
 }
 
 function renderHypothesisForm() {
@@ -796,17 +807,9 @@ export function renderMemoryHead(resume, { busy = false } = {}) {
         <h4>La mémoire du projet</h4>
         <div class="memory-head__actions">
           ${renderExportButton(resume, busy)}
-          <button type="button" class="gh-btn" data-memory-export ${
-            resume.total === 0 || busy ? "disabled" : ""
-          }>${svgIcon("copy", { className: "octicon" })} Copier le dossier de contexte</button>
+          ${renderVerserButton(busy)}
           <button type="button" class="gh-btn gh-btn--primary" data-memory-declare ${busy ? "disabled" : ""}>
             ${svgIcon("plus", { className: "octicon" })} Déclarer une hypothèse
-          </button>
-          <button type="button" class="gh-btn" data-memory-site ${busy ? "disabled" : ""}>
-            ${svgIcon("climate-tools", { className: "octicon" })} Verser les contraintes du site
-          </button>
-          <button type="button" class="gh-btn" data-memory-backfill ${busy ? "disabled" : ""}>
-            ${svgIcon("history", { className: "octicon" })} Verser les propositions fusionnées
           </button>
         </div>
       </span>
@@ -843,8 +846,51 @@ function renderExportButton(resume, busy = false) {
     disabled: resume.total === 0 || busy,
     items: [
       { action: "export:json", label: "Exporter en JSON" },
-      { action: "export:csv", label: "Exporter en CSV" }
+      { action: "export:csv", label: "Exporter en CSV" },
+      // Copier le dossier de contexte est un export lui aussi : un fichier
+      // qu'on relit d'un côté, une prose qu'on colle de l'autre, mais le même
+      // geste — sortir la mémoire. Deux boutons pour un geste font une barre
+      // qu'on lit deux fois.
+      { action: "export:contexte", label: "Copier le dossier de contexte" }
     ]
+  });
+}
+
+/**
+ * Les versements, sous un seul bouton.
+ *
+ * Deux gestes de même nature — faire entrer en mémoire ce qui est déjà établi
+ * ailleurs — et donc un seul bouton. Ils restent gris : ils n'écrivent que ce
+ * qui a déjà été décidé, contrairement à la déclaration, qui est un acte.
+ */
+function renderVerserButton(busy = false) {
+  return renderGhActionButton({
+    id: "memoryVerser",
+    label: "Verser",
+    icon: svgIcon("plus-circle", { className: "octicon" }),
+    size: "md",
+    disabled: busy,
+    items: [
+      { action: "verser:site", label: "Verser les contraintes du site" },
+      { action: "verser:propositions", label: "Verser les propositions fusionnées" }
+    ]
+  });
+}
+
+/**
+ * Les deux versements, derrière un seul bouton.
+ *
+ * Séparé de l'export parce qu'ils ne vont pas dans le même sens : l'un sort la
+ * mémoire, l'autre y fait entrer.
+ */
+function bindVerserButton(root) {
+  const action = root.querySelector('[data-action-id="memoryVerser"]');
+  if (!action) return;
+
+  action.addEventListener("ghaction:action", (event) => {
+    const quoi = String(event.detail?.action || "");
+    if (quoi === "verser:site") void versSiteConstraints(root);
+    if (quoi === "verser:propositions") void backfill(root);
   });
 }
 
@@ -858,6 +904,13 @@ function bindExportButton(root) {
   action.addEventListener("ghaction:action", async (event) => {
     const quoi = String(event.detail?.action || "");
     if (!quoi.startsWith("export:")) return;
+
+    // La copie du dossier de contexte partage le bouton sans partager le
+    // chemin : elle ne produit pas de fichier, elle remplit le presse-papier.
+    if (quoi === "export:contexte") {
+      await copyContext(root);
+      return;
+    }
 
     const [{ buildMemoryExport, memoryExportCsv, memoryExportFilename }, telechargement] = await Promise.all([
       import("../services/project-memory-export.js"),
@@ -1317,13 +1370,11 @@ function renderContent(root) {
       <div class="propositions-shell">
         ${renderMemoryHead(resume, { busy: view.busy })}
 
-        <div class="memory-layout${view.navCollapsed ? " is-collapsed" : ""}">
+        <div class="memory-layout${view.navCollapsed ? " memory-layout--collapsed" : ""}">
           ${renderMemoryNav()}
 
           <div class="memory-layout__content">
             ${renderReaderLead()}
-
-            ${renderEcarts(view.assertions)}
 
             ${renderHypothesisForm()}
 
@@ -1339,6 +1390,7 @@ function renderContent(root) {
   `;
 
   bind(root);
+  suivreDefilement(root);
 }
 
 /**
@@ -1544,9 +1596,7 @@ function bind(root) {
     declareHypothesis(root);
   });
 
-  root.querySelector("[data-memory-export]")?.addEventListener("click", () => copyContext(root));
-  root.querySelector("[data-memory-backfill]")?.addEventListener("click", () => backfill(root));
-  root.querySelector("[data-memory-site]")?.addEventListener("click", () => versSiteConstraints(root));
+  bindVerserButton(root);
 
   bindPagination(root);
 

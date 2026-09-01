@@ -13,6 +13,7 @@ import { renderSolidityGeorisks } from "./studio/solidity/solidity-georisks.js";
 import { renderSolidityArkolia } from "./studio/socotec/socotec-enr-pv-hangard-neuf.js";
 import { renderSeismicGeneral } from "./studio/seismic/seismic-general.js";
 import { renderCtContinuityLab } from "./studio/dev/ct-continuity-lab.js";
+import { renderResolutionConflits } from "./studio/conflits/resolution-conflits.js";
 
 function renderStudioNav() {
   return [
@@ -43,6 +44,18 @@ function renderStudioNav() {
           targetId: "solidity-georisks",
           iconHtml: svgIcon("shield", { className: "octicon octicon-shield" })
         }),
+      ]
+    }),
+    renderSideNavSeparator(),
+    renderSideNavGroup({
+      className: "settings-nav__group settings-nav__group--project",
+      sectionLabel: "Mémoire",
+      items: [
+        renderSideNavItem({
+          label: "Résoudre les conflits",
+          targetId: "conflits-resolution",
+          iconHtml: svgIcon("git-compare", { className: "octicon octicon-git-compare" })
+        })
       ]
     }),
     renderSideNavSeparator(),
@@ -108,6 +121,9 @@ function getRouterHtml() {
               <section class="project-studio-router__panel" data-side-nav-panel="solidity-arkolia">
                 <div id="projectStudioSolidityArkoliaPanel"></div>
               </section>
+              <section class="project-studio-router__panel" data-side-nav-panel="conflits-resolution">
+                <div id="projectStudioConflitsPanel"></div>
+              </section>
               <section class="project-studio-router__panel" data-side-nav-panel="seismic-general">
                 <div id="projectStudioSeismicGeneralPanel"></div>
               </section>
@@ -133,6 +149,7 @@ export function renderProjectStudio(root) {
   const solidityArkoliaRoot = root.querySelector("#projectStudioSolidityArkoliaPanel");
   const seismicGeneralRoot = root.querySelector("#projectStudioSeismicGeneralPanel");
   const ctContinuityLabRoot = root.querySelector("#projectStudioCtContinuityLabPanel");
+  const conflitsRoot = root.querySelector("#projectStudioConflitsPanel");
 
   if (generalRoot) renderStudioGeneral(generalRoot);
   if (solidityClimateRoot) renderSolidityClimate(solidityClimateRoot, { force: true });
@@ -140,6 +157,7 @@ export function renderProjectStudio(root) {
   if (solidityArkoliaRoot) renderSolidityArkolia(solidityArkoliaRoot);
   if (seismicGeneralRoot) renderSeismicGeneral(seismicGeneralRoot);
   if (ctContinuityLabRoot) renderCtContinuityLab(ctContinuityLabRoot);
+  if (conflitsRoot) renderResolutionConflits(conflitsRoot);
 
   const getScrollSource = () => root.querySelector("#projectStudioRouterScroll");
 
@@ -154,6 +172,10 @@ export function renderProjectStudio(root) {
 
       const targetId = String(button.dataset.sideNavTarget || "").trim();
       if (targetId === "solidity-climate" && solidityClimateRoot) renderSolidityClimate(solidityClimateRoot, { force: true });
+      // Les conflits se relisent à chaque venue : la mémoire a pu bouger dans
+      // un autre onglet, et un écran d'arbitrage qui montre un état périmé est
+      // pire qu'un écran vide.
+      if (targetId === "conflits-resolution" && conflitsRoot) renderResolutionConflits(conflitsRoot, { force: true });
     });
   });
 

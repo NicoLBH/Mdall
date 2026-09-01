@@ -16484,19 +16484,30 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .memory-readers__lead{ margin:0; max-width:80ch; color:var(--muted); font-size:13px; }
 
 /* ── La sidebar de la Mémoire ──────────────────────────────────────────────
-   Cinq lectures d'une même table, en colonne. Le filet sépare deux ordres de
-   choses : au-dessus ce que le projet sait, en dessous ce qu'il est. Replié, il
-   ne reste que les icônes — le compte disparaît avec le libellé, car un nombre
-   sans son sujet ne veut rien dire. */
-.memory-layout{ display:grid; grid-template-columns:232px minmax(0,1fr); gap:20px; align-items:start; }
-.memory-layout.is-collapsed{ grid-template-columns:52px minmax(0,1fr); }
+   Un rail fixé au bord gauche de l'écran, sur toute sa hauteur, avec le bouton
+   de repli calé en bas. Le contenu reprend sa largeur normale : il n'a plus à
+   partager la ligne avec la navigation.
+
+   Le haut du rail suit le défilement — les onglets du projet défilent, eux — et
+   se cale sous l'en-tête global sans jamais passer dessous. `--memory-nav-top`
+   est écrit par la vue à chaque défilement : le CSS seul ne sait pas où s'arrête
+   un élément qui défile. */
+.memory-nav{
+  position:fixed; left:0; top:var(--memory-nav-top, var(--app-top)); bottom:0;
+  width:var(--memory-nav-width, 232px); z-index:3;
+  display:flex; flex-direction:column; gap:4px;
+  padding:12px 8px 12px 12px;
+  border-right:1px solid var(--border); background:var(--bg);
+}
+/* Le contenu s'écarte du rail au lieu de passer dessous. Il se recentre dans ce
+   qui reste, et retrouve donc sa largeur habituelle. */
+.project-simple-page--memory{ margin-left:var(--memory-nav-width, 232px); }
+.memory-layout{ display:block; }
 .memory-layout__content{ display:flex; flex-direction:column; gap:12px; min-width:0; }
 
-.memory-nav{
-  position:sticky; top:0; display:flex; flex-direction:column; gap:4px;
-  padding:4px 8px 4px 0; border-right:1px solid var(--border); min-height:220px;
-}
-.memory-nav__scroll{ display:flex; flex-direction:column; flex:1 1 auto; }
+/* La liste défile si elle déborde ; le bouton de repli reste en bas, quoi qu'il
+   arrive — c'est un réglage du rail, pas le dernier de ses éléments. */
+.memory-nav__scroll{ display:flex; flex-direction:column; flex:1 1 auto; min-height:0; overflow-y:auto; }
 .memory-nav__group{ display:flex; flex-direction:column; gap:2px; }
 
 /* Le compte se pose à droite, comme un décompte et non comme une étiquette. */
@@ -16513,27 +16524,37 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 
 .memory-nav__collapse{
   display:flex; align-items:center; gap:8px; width:100%; min-height:30px;
-  padding:6px 10px 6px 12px; margin-top:8px; border:0; border-radius:6px;
-  background:transparent; color:var(--muted); font:inherit; font-size:13px; cursor:pointer;
+  padding:6px 10px 6px 12px; margin-top:8px; flex:0 0 auto;
+  border:0; border-top:1px solid var(--border); border-radius:0;
+  padding-top:12px; background:transparent; color:var(--muted);
+  font:inherit; font-size:13px; cursor:pointer;
 }
-.memory-nav__collapse:hover{ background:var(--panel2); color:var(--text); }
+.memory-nav__collapse:hover{ color:var(--text); }
 
 /* Replié : les icônes seules, centrées. Le libellé et le compte se taisent. */
-.memory-nav.is-collapsed{ padding-right:4px; }
+.memory-layout--collapsed{ --memory-nav-width:52px; }
+.memory-nav.is-collapsed{ padding-left:8px; padding-right:8px; }
 .memory-nav.is-collapsed .side-nav-layout__label,
 .memory-nav.is-collapsed .memory-nav__item::after{ display:none; }
 .memory-nav.is-collapsed .side-nav-layout__item,
-.memory-nav.is-collapsed .memory-nav__collapse{ justify-content:center; padding-left:10px; padding-right:10px; }
-.memory-nav.is-collapsed .side-nav-layout__separator{ margin-left:-4px; margin-right:-4px; }
+.memory-nav.is-collapsed .memory-nav__collapse{ justify-content:center; padding-left:8px; padding-right:8px; }
+.memory-nav.is-collapsed .memory-nav__item.is-active::before{ left:-4px; }
 
+/* Sous 1400 px le rail mangerait la marge du contenu : il reste fixé, et le
+   contenu s'écarte d'autant — c'est déjà ce que fait `margin-left`. Sous 900,
+   le rail redevient une barre horizontale dans le flux, et le repli n'a plus
+   d'objet : replier une barre qui tient sur une ligne ne gagne rien. */
 @media (max-width: 900px){
-  .memory-layout, .memory-layout.is-collapsed{ grid-template-columns:minmax(0,1fr); }
-  .memory-nav{ position:static; flex-direction:row; align-items:center; flex-wrap:wrap;
-    border-right:0; border-bottom:1px solid var(--border); min-height:0; padding:0 0 8px; }
-  .memory-nav__scroll{ flex-direction:row; flex-wrap:wrap; gap:4px; }
+  .memory-nav{
+    position:static; width:auto; flex-direction:row; align-items:center; flex-wrap:wrap;
+    border-right:0; border-bottom:1px solid var(--border); padding:0 0 8px;
+  }
+  .project-simple-page--memory{ margin-left:0; }
+  .memory-nav__scroll{ flex-direction:row; flex-wrap:wrap; gap:4px; overflow:visible; }
   .memory-nav__group{ flex-direction:row; }
   .memory-nav .side-nav-layout__separator{ display:none; }
   .memory-nav__collapse{ display:none; }
+}
 }
 
 /* Les écarts. Ils ne se lisent pas comme une connaissance de plus : ils
