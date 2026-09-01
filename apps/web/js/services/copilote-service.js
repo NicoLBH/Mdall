@@ -40,12 +40,22 @@ function normalizeMessage(message) {
   return String(message || "").trim();
 }
 
+/**
+ * Combien d'échanges repartent avec la question.
+ *
+ * Douze au départ, sans raison mesurée — et une conversation un peu longue
+ * perdait son début : le copilote redemandait ce qu'on venait de lui dire. La
+ * fonction en accepte quarante, et c'est elle qui tient la limite réelle contre
+ * la fenêtre du modèle. Ici on s'aligne, on ne raccourcit pas une deuxième fois.
+ */
+const HISTORIQUE_MAX = 40;
+
 function historyForPayload() {
   const all = Array.isArray(store.ui?.assistant?.messages)
     ? store.ui.assistant.messages
     : [];
 
-  return all.slice(-12).map((msg) => ({
+  return all.slice(-HISTORIQUE_MAX).map((msg) => ({
     role: msg.role,
     content: msg.content
   }));
@@ -75,7 +85,7 @@ function parseAssistantReply(data) {
   return "";
 }
 
-export async function sendAssistMessage(message) {
+export async function sendAssistMessage(message, { signal = null } = {}) {
   const content = normalizeMessage(message);
   if (!content) {
     throw new Error("Message vide.");
@@ -105,6 +115,10 @@ export async function sendAssistMessage(message) {
     method: "POST",
     headers,
     cache: "no-store",
+    // Renoncer à une réponse doit couper l'appel, pas seulement cesser de
+    // l'attendre : un bouton d'arrêt qui laisse la requête vivre sa vie ment
+    // sur ce qu'il fait, et la réponse arriverait dans le fil suivant.
+    signal,
     body: JSON.stringify({
       project_id: projectId,
       question: content,

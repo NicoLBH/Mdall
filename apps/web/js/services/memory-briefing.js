@@ -74,24 +74,43 @@ export const BRIEFING_NATURES = [
 ];
 
 /**
- * Combien de lignes remplacées on emporte.
+ * Ce que la mémoire a le droit d'occuper, en caractères.
  *
- * Une mémoire ancienne peut en compter des centaines, et un contexte qui gonfle
- * sans fin finit par chasser la question elle-même. Ce qui dépasse n'est pas
- * caché : le nombre exact est écrit.
+ * ## Pourquoi un budget, et pourquoi celui-là
+ *
+ * La première version portait deux plafonds — 400 lignes en vigueur, 40
+ * remplacées — choisis à vue de nez et jamais mesurés. C'était doublement
+ * mauvais : trop bas, ils coupaient une mémoire que le modèle aurait avalée
+ * sans peine ; et comptés en lignes, ils ignoraient que deux lignes ne coûtent
+ * pas la même chose.
+ *
+ * Le budget se dit donc en caractères, et il se dérive de la seule contrainte
+ * réelle — la fenêtre du modèle. `gpt-4.1-mini` en accepte environ un million
+ * de jetons ; le français consomme à peu près 3,5 caractères par jeton. Même
+ * en s'en tenant à une fraction très prudente de cette fenêtre, une mémoire de
+ * projet entière tient : trois cents affirmations pèsent quelque
+ * 75 000 caractères, soit un sixième de ce budget.
+ *
+ * Autrement dit : **en pratique, plus rien n'est coupé.** Le budget reste parce
+ * qu'une limite tacite est une limite qu'on découvre le jour où elle fait mal —
+ * mais il est désormais calé sur ce que le destinataire peut lire, et non sur
+ * un chiffre rond.
  */
-export const BRIEFING_MAX_SUPERSEDED = 40;
+export const BRIEFING_CHAR_BUDGET = 450_000;
 
 /**
- * Combien de lignes en vigueur on emporte.
+ * L'ordre dans lequel on renonce, quand il faut renoncer.
  *
- * Il faut bien une limite : un contexte plus grand que la fenêtre du modèle se
- * fait couper par le serveur, au milieu d'une phrase, sans que personne le
- * sache. Mieux vaut couper ici, proprement, **et le dire** — un copilote qui
- * répond à partir d'une mémoire amputée sans savoir qu'elle l'est affirmerait
- * une absence qui n'existe pas.
+ * Il suit ce qui fonde quoi, à l'envers : on lâche d'abord ce qui ne sert plus
+ * à décider, en dernier ce sur quoi le projet calcule. Un ordre inverse — ou
+ * pire, une coupe par date sans égard à la nature — ferait disparaître une
+ * contrainte réglementaire pour garder un avis de chantier levé l'an dernier.
+ *
+ * Chaque catégorie abandonnée est **comptée et annoncée**. Une coupe silencieuse
+ * ferait affirmer une absence qui n'existe pas, et c'est exactement le mensonge
+ * que ce fichier existe pour empêcher.
  */
-export const BRIEFING_MAX_CURRENT = 400;
+export const BRIEFING_DROP_ORDER = ["remplacees", "intendance", "constats", "socle"];
 
 function texte(valeur) {
   return String(valeur ?? "").trim();
@@ -102,6 +121,48 @@ function dateFr(valeur) {
   if (!brut) return "sans date";
   const date = new Date(brut);
   return Number.isNaN(date.getTime()) ? brut : date.toLocaleDateString("fr-FR");
+}
+
+/** Le tri par date, du plus récent au plus ancien. Sert à choisir quoi garder. */
+function ordonnerParDate(liste) {
+  return [...liste].sort((gauche, droite) => {
+    const date = texte(droite.decided_at).localeCompare(texte(gauche.decided_at));
+    if (date !== 0) return date;
+    // Deux dates identiques : la clé départage, sinon la coupe changerait d'une
+    // lecture à l'autre pour la même mémoire.
+    return texte(gauche.subject_key).localeCompare(texte(droite.subject_key), "fr", { numeric: true });
+  });
+}
+
+/**
+ * L'en-tête : combien la mémoire compte, et ce qui n'a pas tenu.
+ *
+ * Ce qui manque est dit **par catégorie**, pas par un total : « 12 constats
+ * absents » se lit et se corrige ; « 12 lignes absentes » ne dit pas si c'est
+ * une contrainte qui manque ou un avis levé.
+ */
+function entete({ nom, quand, toutesCourantes, anciennes, manque }) {
+  const absents = [
+    manque.socle ? `${manque.socle} affirmation(s) sur lesquelles le projet calcule` : "",
+    manque.constats ? `${manque.constats} constat(s)` : "",
+    manque.intendance ? `${manque.intendance} ligne(s) d'intendance` : "",
+    manque.remplacees ? `${manque.remplacees} ligne(s) remplacée(s)` : ""
+  ].filter(Boolean);
+
+  return [
+    `# Mémoire du projet — ${nom}`,
+    "",
+    `Établie le ${dateFr(quand)}. ${toutesCourantes.length} affirmation(s) en vigueur, ${anciennes.length} remplacée(s).`,
+    "",
+    toutesCourantes.length === 0
+      ? "**Rien n'a encore été versé à la mémoire de ce projet.** La lecture a bien eu lieu : c'est un vide constaté, pas une lecture manquée."
+      : "Chaque ligne est une chose que ce projet tient pour vraie, avec la date à laquelle il l'a tranchée et ce sur quoi elle s'appuie.",
+    absents.length
+      ? `\n**Cette mémoire est trop longue pour tenir ici. N'y figurent pas : ${absents.join(", ")}.** Ne conclus donc jamais qu'une chose est absente de ce projet — dis que tu n'as reçu qu'une partie de sa mémoire.`
+      : ""
+  ]
+    .filter((bloc) => bloc !== "")
+    .join("\n");
 }
 
 /** Le tri à l'intérieur d'un domaine : par clé, puis par date. Déterministe. */
@@ -295,8 +356,7 @@ export function buildMemoryBriefing({
   dependencies = [],
   acts = [],
   generatedAt = "",
-  maxSuperseded = BRIEFING_MAX_SUPERSEDED,
-  maxCurrent = BRIEFING_MAX_CURRENT
+  charBudget = BRIEFING_CHAR_BUDGET
 } = {}) {
   const nom = texte(project?.name) || "projet sans nom";
   const quand = texte(generatedAt) || new Date().toISOString();
@@ -317,78 +377,129 @@ export function buildMemoryBriefing({
   }
 
   const toutesCourantes = currentAssertions(assertions);
-  // Le tri avant la coupe : couper dans un ordre d'arrivée ferait disparaître
-  // des lignes différentes d'une lecture à l'autre.
-  const courantes = ordonner(toutesCourantes).slice(0, Math.max(0, maxCurrent));
-  const ecartees = toutesCourantes.length - courantes.length;
   const anciennes = assertions.filter((entree) => entree?.superseded_by);
   const parId = new Map(assertions.map((entree) => [texte(entree?.id), entree]));
   const contexte = { acts, dependencies, parId, toutes: assertions };
 
   const parNature = new Map(BRIEFING_NATURES.map((nature) => [nature, []]));
   const sansNature = [];
-  for (const assertion of courantes) {
+  for (const assertion of toutesCourantes) {
     const { nature } = classifyAssertion(assertion);
     if (nature && parNature.has(nature)) parNature.get(nature).push(assertion);
     else sansNature.push(assertion);
   }
 
-  const blocs = BRIEFING_NATURES.map((nature) => bloc(nature, parNature.get(nature), contexte)).filter(Boolean);
+  // Les parts, dans l'ordre où on renoncerait à elles. Le socle est indivisible
+  // ici : données de base, contraintes, hypothèses et non classé partent
+  // ensemble, parce que c'est sur eux que le projet calcule.
+  const parts = {
+    remplacees: ordonner(anciennes),
+    intendance: parNature.get(NATURE.INTENDANCE),
+    constats: parNature.get(NATURE.CONSTAT),
+    socle: [
+      ...parNature.get(NATURE.DONNEE_BASE),
+      ...parNature.get(NATURE.CONTRAINTE),
+      ...parNature.get(NATURE.HYPOTHESE),
+      ...sansNature
+    ]
+  };
 
-  // Le non classé a son bloc, et il n'est pas discret : il dit ce qu'une
-  // lecture par nature ne montrerait pas.
-  if (sansNature.length) {
-    blocs.push(`## ${UNCLASSIFIED_LABEL}\n\n${ordonner(sansNature).map((assertion) => ligne(assertion, contexte)).join("\n")}`);
+  const composer = (garde) => {
+    const gardees = (cle) => {
+      const total = parts[cle].length;
+      const combien = Math.max(0, Math.min(total, garde[cle]));
+      // On garde les plus récentes : ce qui vient d'être tranché est ce dont on
+      // parle. Le tri d'affichage, lui, reste celui de la hiérarchie.
+      return new Set(ordonnerParDate(parts[cle]).slice(0, combien).map((entree) => texte(entree.id)));
+    };
+
+    const retenues = {
+      remplacees: gardees("remplacees"),
+      intendance: gardees("intendance"),
+      constats: gardees("constats"),
+      socle: gardees("socle")
+    };
+
+    const retenue = (assertion, cle) => retenues[cle].has(texte(assertion.id));
+
+    const blocs = BRIEFING_NATURES.map((nature) => {
+      const cle = nature === NATURE.INTENDANCE ? "intendance" : nature === NATURE.CONSTAT ? "constats" : "socle";
+      return bloc(nature, parNature.get(nature).filter((assertion) => retenue(assertion, cle)), contexte);
+    }).filter(Boolean);
+
+    const restantSansNature = sansNature.filter((assertion) => retenue(assertion, "socle"));
+    if (restantSansNature.length) {
+      blocs.push(`## ${UNCLASSIFIED_LABEL}\n\n${ordonner(restantSansNature).map((assertion) => ligne(assertion, contexte)).join("\n")}`);
+    }
+
+    const passeGardees = parts.remplacees.filter((assertion) => retenue(assertion, "remplacees"));
+    const passe = passeGardees.length
+      ? [
+          "## Ce qui a été remplacé",
+          "",
+          "Cela ne vaut plus, mais cela a valu. N'y réponds pas comme si c'était en vigueur.",
+          "",
+          ...passeGardees.map((assertion) => `${ligne(assertion, contexte)} · remplacée le ${dateFr(assertion.superseded_at)}`)
+        ].join("\n")
+      : "";
+
+    const manque = Object.fromEntries(
+      BRIEFING_DROP_ORDER.map((cle) => [cle, parts[cle].length - retenues[cle].size])
+    );
+
+    return {
+      manque,
+      texte: [
+        entete({ nom, quand, toutesCourantes, anciennes, manque }),
+        commentLire(),
+        decoupage(assertions),
+        desaccords(assertions),
+        ...blocs,
+        passe
+      ]
+        .filter(Boolean)
+        .join("\n\n") + "\n"
+    };
+  };
+
+  // Tout, d'abord. C'est le cas normal : le budget est calé sur ce que le
+  // modèle peut lire, et une mémoire de projet entière tient très largement.
+  let garde = {
+    remplacees: parts.remplacees.length,
+    intendance: parts.intendance.length,
+    constats: parts.constats.length,
+    socle: parts.socle.length
+  };
+  let rendu = composer(garde);
+
+  // S'il faut renoncer, on renonce dans l'ordre déclaré, et par moitiés : une
+  // réduction ligne à ligne recomposerait le texte des centaines de fois pour
+  // le même résultat.
+  for (const cle of BRIEFING_DROP_ORDER) {
+    while (rendu.texte.length > charBudget && garde[cle] > 0) {
+      garde = { ...garde, [cle]: Math.floor(garde[cle] / 2) };
+      rendu = composer(garde);
+    }
+    if (rendu.texte.length <= charBudget) break;
   }
-
-  const gardees = ordonner(anciennes).slice(0, Math.max(0, maxSuperseded));
-  const passe = anciennes.length
-    ? [
-        "## Ce qui a été remplacé",
-        "",
-        "Cela ne vaut plus, mais cela a valu. N'y réponds pas comme si c'était en vigueur.",
-        "",
-        ...gardees.map((assertion) => `${ligne(assertion, contexte)} · remplacée le ${dateFr(assertion.superseded_at)}`),
-        ...(anciennes.length > gardees.length
-          ? ["", `_${anciennes.length - gardees.length} ligne(s) remplacée(s) plus ancienne(s) ne figurent pas ici._`]
-          : [])
-      ].join("\n")
-    : "";
-
-  const entete = [
-    `# Mémoire du projet — ${nom}`,
-    "",
-    `Établie le ${dateFr(quand)}. ${toutesCourantes.length} affirmation(s) en vigueur, ${anciennes.length} remplacée(s).`,
-    "",
-    toutesCourantes.length === 0
-      ? "**Rien n'a encore été versé à la mémoire de ce projet.** La lecture a bien eu lieu : c'est un vide constaté, pas une lecture manquée."
-      : "Chaque ligne est une chose que ce projet tient pour vraie, avec la date à laquelle il l'a tranchée et ce sur quoi elle s'appuie.",
-    ecartees > 0
-      ? `\n**Cette mémoire est trop longue pour tenir ici : ${ecartees} affirmation(s) en vigueur ne figurent pas ci-dessous.** Ne conclus donc jamais qu'une chose est absente de ce projet — dis que tu n'as reçu qu'une partie de sa mémoire.`
-      : ""
-  ]
-    .filter((bloc) => bloc !== "")
-    .join("\n");
 
   return {
     lue: true,
     // Le résumé compte la mémoire **entière**, pas la part qui a tenu dans le
     // texte : un compteur aligné sur la coupe ferait croire à une mémoire plus
-    // courte qu'elle n'est, ce qui est le mensonge qu'on passe ce fichier à
-    // éviter. `ecartees` dit l'écart entre les deux.
+    // courte qu'elle n'est. `manque` dit l'écart entre les deux.
     resume: {
       ...summarizeMemory(assertions),
       parNature: BRIEFING_NATURES.map((nature) => ({
         nature,
         label: natureLabel(nature),
-        count: toutesCourantes.filter((assertion) => classifyAssertion(assertion).nature === nature).length
+        count: parNature.get(nature).length
       })),
-      nonClasse: toutesCourantes.filter((assertion) => !classifyAssertion(assertion).nature).length,
+      nonClasse: sansNature.length,
       aRevoir: toutesCourantes.filter(needsReview).length,
-      ecartees
+      manque: rendu.manque,
+      ecartees: rendu.manque.socle + rendu.manque.constats + rendu.manque.intendance
     },
-    texte: [entete, commentLire(), decoupage(assertions), desaccords(assertions), ...blocs, passe]
-      .filter(Boolean)
-      .join("\n\n") + "\n"
+    texte: rendu.texte
   };
 }
