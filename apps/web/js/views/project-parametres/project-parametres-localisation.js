@@ -20,6 +20,8 @@ import {
 import { persistCurrentProjectState } from "../../services/project-state-storage.js";
 import { saveProjectLocationToSupabase, loadProjectLocationFromSupabase } from "../../services/project-location-supabase.js";
 import { upsertProjectContextFact } from "../../services/project-context-facts-service.js";
+import { versDonneeDeBase } from "../../services/base-data-supabase.js";
+import { resolveCurrentBackendProjectId } from "../../services/project-supabase-sync.js";
 import { svgIcon } from "../../ui/icons.js";
 import { fetchGoogleMapsPlaceEmbedUrl } from "../../services/google-maps-embed-service.js";
 import {
@@ -30,6 +32,42 @@ import {
   getParametresUiState
 } from "./project-parametres-core.js";
 import { renderProjectLocationMapCard } from "../shared/project-location-map-card.js";
+
+/**
+ * Verse l'adresse du projet dans la mémoire, comme donnée de base.
+ *
+ * L'adresse est ce dont tout le reste se déduit : les zones climatiques, la
+ * sismicité, l'argile. Elle a donc sa place dans la mémoire, pas seulement dans
+ * un formulaire — et il faut pouvoir relire quelle adresse valait quand un
+ * calcul a été fait, qui l'a renseignée, et quand elle a changé.
+ *
+ * Rien n'est versé si elle n'a pas bougé : réenregistrer l'écran ne doit pas
+ * ajouter une ligne d'histoire identique à la précédente. Et un échec ne défait
+ * pas l'enregistrement, qui, lui, a eu lieu.
+ */
+async function conserverAdresseEnMemoire() {
+  const morceaux = [
+    String(store.projectForm.address || "").trim(),
+    [String(store.projectForm.postalCode || "").trim(), String(store.projectForm.city || "").trim()]
+      .filter(Boolean)
+      .join(" ")
+  ].filter(Boolean);
+
+  if (morceaux.length === 0) return;
+
+  try {
+    await versDonneeDeBase({
+      projectId: await resolveCurrentBackendProjectId(),
+      subject: "Adresse du projet",
+      value: morceaux.join(", "),
+      declaredBy: store.user?.id ?? null
+    });
+  } catch (error) {
+    console.warn("[project-location] adresse non versée en mémoire", {
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+}
 
 function ensureLocalisationUiState() {
   const parametresUiState = getParametresUiState();
@@ -1002,6 +1040,7 @@ async function refreshLocationDerivedData({ runEnrichment = false, triggerType =
       altitude: savedProject?.altitude ?? store.projectForm.altitude
     });
     store.projectForm.codeInsee = String(savedProject?.code_insee || codeInsee || "").trim();
+    await conserverAdresseEnMemoire();
     store.projectForm.locationSavedSnapshot = {
       address: String(store.projectForm.address || "").trim(),
       city: String(store.projectForm.city || "").trim(),
