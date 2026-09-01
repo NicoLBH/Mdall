@@ -25,6 +25,7 @@ import { escapeHtml } from "../utils/escape-html.js";
 import { store } from "../store.js";
 import { svgIcon } from "../ui/icons.js";
 import { renderSideNavGroup, renderSideNavItem, renderSideNavSeparator } from "./ui/side-nav-layout.js";
+import { bindSideResizer, renderSideResizer } from "./ui/side-resizer.js";
 import { clearProjectActiveScrollSource, setProjectViewHeader } from "./project-shell-chrome.js";
 import { PROJECT_TAB_RESELECTED_EVENT } from "./project-header.js";
 import {
@@ -80,6 +81,22 @@ import { bindGhActionButtons, renderGhActionButton } from "./ui/gh-split-button.
 /** Où se retient le repli du panneau. Un réglage, pas un état de navigation. */
 const NAV_COLLAPSED_KEY = "mdall.memoryNavCollapsed.v1";
 
+/** Et sa largeur, qui est un réglage du même ordre. */
+const NAV_WIDTH_KEY = "mdall.memoryNavWidth.v1";
+
+/** Les bornes du rail : assez large pour « Constats en cours », pas au point de manger la page. */
+const NAV_MIN = 200;
+const NAV_MAX = 420;
+
+function largeurRetenue() {
+  try {
+    const brut = Number(window.localStorage.getItem(NAV_WIDTH_KEY));
+    return Number.isFinite(brut) && brut > 0 ? Math.max(NAV_MIN, Math.min(NAV_MAX, brut)) : 248;
+  } catch {
+    return 248;
+  }
+}
+
 /** Le repli tel qu'on l'a laissé. Déplié par défaut : on ne cache rien d'office. */
 function repliRetenu() {
   try {
@@ -114,6 +131,7 @@ const view = {
   /** Le formulaire d'hypothèse, quand il est ouvert. */
   declaring: false,
   navCollapsed: repliRetenu(),
+  navWidth: largeurRetenue(),
   draft: { subject: "", value: "", domain: "" },
   includeSuperseded: false,
   notice: "",
@@ -209,44 +227,84 @@ function renderCounts(resume, vocabulaire, enAttente = 0) {
   `;
 }
 
-function renderFilters() {
+/**
+ * La recherche, sur toute la largeur du tableau.
+ *
+ * Elle précède les filtres parce que c'est par elle qu'on commence : on cherche
+ * un numéro d'avis ou un mot, et on affine ensuite. L'icône est à droite, en
+ * gris : à gauche elle mangerait la place du texte au moment où on le tape.
+ */
+function renderSearch() {
+  return `
+    <div class="memory-search">
+      <input
+        type="search"
+        class="gh-input memory-search__input"
+        placeholder="Chercher dans la mémoire — un numéro d'avis, un mot du titre…"
+        value="${escapeHtml(view.query)}"
+        aria-label="Chercher dans la mémoire"
+        data-memory-search
+      >
+      <span class="memory-search__icon" aria-hidden="true">${svgIcon("search", { className: "octicon" })}</span>
+    </div>
+  `;
+}
+
+/**
+ * Les filtres, dans l'en-tête du tableau.
+ *
+ * Ils appartiennent au tableau qu'ils restreignent : posés au-dessus, ils
+ * flottaient sans dire sur quoi ils portaient. Dans l'en-tête, la question ne
+ * se pose plus.
+ *
+ * **Sans bordure.** Un filtre n'est pas une action : l'encadrer comme un bouton
+ * en fait une chose à cliquer, alors qu'on ne le remarque que lorsqu'on cherche
+ * à réduire la liste. Ils se signalent au survol, pas au repos.
+ *
+ * Ce qui a été remplacé est à gauche, seul de son espèce : c'est le seul
+ * réglage qui **ajoute** des lignes au lieu d'en retirer, et le mêler aux
+ * autres ferait croire l'inverse.
+ */
+function renderTableHead() {
   const option = (valeur, label, actuel) =>
     `<option value="${escapeHtml(valeur)}"${valeur === actuel ? " selected" : ""}>${escapeHtml(label)}</option>`;
 
+  const filtre = (attribut, etiquette, options, actif) => `
+    <span class="memory-filter${actif ? " is-active" : ""}">
+      <select class="memory-filter__select" ${attribut} aria-label="${escapeHtml(etiquette)}">${options}</select>
+      ${svgIcon("chevron-down", { className: "octicon memory-filter__caret" })}
+    </span>
+  `;
+
   return `
-    <div class="memory-filters">
-      <input
-        type="search"
-        class="gh-input memory-filters__search"
-        placeholder="Chercher dans la mémoire — un numéro d'avis, un mot du titre…"
-        value="${escapeHtml(view.query)}"
-        data-memory-search
-      >
-      <select class="gh-input memory-filters__select" data-memory-kind aria-label="Provenance">
-        ${option("", "Toutes provenances", view.kind)}
-        ${option("avis", "Avis", view.kind)}
-        ${option("attachment", "Rattachements", view.kind)}
-        ${option("document", "Documents", view.kind)}
-      </select>
-      <select class="gh-input memory-filters__select" data-memory-nature aria-label="Nature">
-        ${option("", "Toutes natures", view.nature)}
-        ${NATURES.map((nature) => option(nature, natureLabel(nature), view.nature)).join("")}
-        ${option("none", `${UNCLASSIFIED_LABEL}e`, view.nature)}
-      </select>
-      <select class="gh-input memory-filters__select" data-memory-domain aria-label="Domaine">
-        ${option("", "Tous domaines", view.domain)}
-        ${DOMAINS.map((domaine) => option(domaine, domainLabel(domaine), view.domain)).join("")}
-        ${option("none", UNCLASSIFIED_LABEL, view.domain)}
-      </select>
-      <select class="gh-input memory-filters__select" data-memory-status aria-label="État">
-        ${option("", "Assumées et écartées", view.status)}
-        ${option(MEMORY.ASSUMED, "Assumées", view.status)}
-        ${option(MEMORY.REJECTED, "Écartées", view.status)}
-      </select>
-      <label class="memory-filters__toggle">
+    <div class="memory-table__head">
+      <label class="memory-table__toggle">
         <input type="checkbox" data-memory-superseded ${view.includeSuperseded ? "checked" : ""}>
         <span>Montrer ce qui a été remplacé</span>
       </label>
+      <div class="memory-table__filters">
+        ${filtre("data-memory-kind", "Provenance", `
+          ${option("", "Provenance", view.kind)}
+          ${option("avis", "Avis", view.kind)}
+          ${option("attachment", "Rattachements", view.kind)}
+          ${option("document", "Documents", view.kind)}
+        `, Boolean(view.kind))}
+        ${filtre("data-memory-nature", "Nature", `
+          ${option("", "Nature", view.nature)}
+          ${NATURES.map((nature) => option(nature, natureLabel(nature), view.nature)).join("")}
+          ${option("none", `${UNCLASSIFIED_LABEL}e`, view.nature)}
+        `, Boolean(view.nature))}
+        ${filtre("data-memory-domain", "Domaine", `
+          ${option("", "Domaine", view.domain)}
+          ${DOMAINS.map((domaine) => option(domaine, domainLabel(domaine), view.domain)).join("")}
+          ${option("none", UNCLASSIFIED_LABEL, view.domain)}
+        `, Boolean(view.domain))}
+        ${filtre("data-memory-status", "État", `
+          ${option("", "État", view.status)}
+          ${option(MEMORY.ASSUMED, "Assumées", view.status)}
+          ${option(MEMORY.REJECTED, "Écartées", view.status)}
+        `, Boolean(view.status))}
+      </div>
     </div>
   `;
 }
@@ -633,6 +691,7 @@ function renderMemoryNav() {
           items: [entree(READER.BASE_DATA)]
         })}
       </div>
+      ${replie ? "" : renderSideResizer({ id: "memoryNavResizer" })}
       <button type="button" class="memory-nav__collapse" data-memory-nav-collapse
         aria-expanded="${replie ? "false" : "true"}"
         title="${replie ? "Déplier le panneau" : "Replier le panneau"}">
@@ -701,6 +760,49 @@ function suivreDefilement(root) {
 
 /** De quoi retirer les écouteurs du rail précédent. */
 let railDetacher = null;
+
+/** Et ceux de la poignée, pour la même raison. */
+let poigneeDetacher = null;
+
+/**
+ * La poignée qui règle la largeur du rail.
+ *
+ * La largeur s'applique pendant le glissé — redimensionner sans voir revient à
+ * viser en aveugle — et n'est écrite qu'au relâchement : retenir un réglage à
+ * chaque pixel ferait cent écritures pour un seul geste.
+ */
+function brancherPoignee(root) {
+  if (poigneeDetacher) poigneeDetacher();
+  poigneeDetacher = null;
+
+  const poignee = root.querySelector("#memoryNavResizer");
+  if (!poignee) return;
+
+  // Une seule écriture, sur la page : le rail et la marge du contenu lisent la
+  // même variable. En écrire deux les laisserait se désaccorder pendant le
+  // glissé — le contenu passait alors sous le rail.
+  const page = root.querySelector(".project-simple-page--memory");
+
+  poigneeDetacher = bindSideResizer({
+    handle: poignee,
+    guide: root.querySelector("#memoryNavResizerGuide"),
+    min: NAV_MIN,
+    max: NAV_MAX,
+    getWidth: () => view.navWidth,
+    onResize: (largeur) => {
+      view.navWidth = largeur;
+      page?.style.setProperty("--memory-nav-width", `${largeur}px`);
+    },
+    onEnd: (largeur) => {
+      view.navWidth = largeur;
+      try {
+        window.localStorage.setItem(NAV_WIDTH_KEY, String(largeur));
+      } catch {
+        // Un navigateur qui refuse le stockage garde la largeur par défaut.
+      }
+    }
+  });
+}
 
 /** L'icône de chaque lecture. Une lecture sans icône se cherche, repliée. */
 const READER_ICONS = {
@@ -1321,7 +1423,8 @@ function lignesVisibles() {
 function renderContent(root) {
   if (view.loading) {
     root.innerHTML = `
-      <section class="project-simple-page project-simple-page--memory">
+      <section class="project-simple-page project-simple-page--memory"
+      style="--memory-nav-width:${view.navCollapsed ? 52 : Math.max(NAV_MIN, Math.min(NAV_MAX, view.navWidth))}px">
         <div class="propositions-shell">
           <div class="propositions-empty"><b>Lecture de la mémoire…</b></div>
         </div>
@@ -1335,7 +1438,8 @@ function renderContent(root) {
   // une soirée.
   if (view.assertions === null) {
     root.innerHTML = `
-      <section class="project-simple-page project-simple-page--memory">
+      <section class="project-simple-page project-simple-page--memory"
+      style="--memory-nav-width:${view.navCollapsed ? 52 : Math.max(NAV_MIN, Math.min(NAV_MAX, view.navWidth))}px">
         <div class="propositions-shell">
           <div class="propositions-empty propositions-empty--warn">
             <b>La mémoire n'a pas pu être lue</b>
@@ -1349,7 +1453,8 @@ function renderContent(root) {
 
   if (view.open) {
     root.innerHTML = `
-      <section class="project-simple-page project-simple-page--memory">
+      <section class="project-simple-page project-simple-page--memory"
+      style="--memory-nav-width:${view.navCollapsed ? 52 : Math.max(NAV_MIN, Math.min(NAV_MAX, view.navWidth))}px">
         <div class="propositions-shell">${renderMemoryDetail(view.assertions, view.open)}</div>
       </section>
     `;
@@ -1366,7 +1471,8 @@ function renderContent(root) {
   const enAttente = pendingReviews(currentAssertions(view.assertions)).length;
 
   root.innerHTML = `
-    <section class="project-simple-page project-simple-page--memory">
+    <section class="project-simple-page project-simple-page--memory"
+      style="--memory-nav-width:${view.navCollapsed ? 52 : Math.max(NAV_MIN, Math.min(NAV_MAX, view.navWidth))}px">
       <div class="propositions-shell">
         ${renderMemoryHead(resume, { busy: view.busy })}
 
@@ -1381,8 +1487,11 @@ function renderContent(root) {
             ${view.notice ? `<div class="propositions-empty propositions-empty--warn"><p>${escapeHtml(view.notice)}</p></div>` : ""}
 
             ${renderCounts(resume, vocabulaire, enAttente)}
-            ${renderFilters()}
-            ${renderList(lignes, view.page)}
+            ${renderSearch()}
+            <div class="memory-table">
+              ${renderTableHead()}
+              ${renderList(lignes, view.page)}
+            </div>
           </div>
         </div>
       </div>
@@ -1554,6 +1663,8 @@ function bind(root) {
       renderContent(root);
     });
   }
+
+  brancherPoignee(root);
 
   root.querySelector("[data-memory-nav-collapse]")?.addEventListener("click", () => {
     view.navCollapsed = !view.navCollapsed;
@@ -1785,13 +1896,14 @@ export function renderProjectMemory(root) {
   mountedRoot = root;
   bindTabReset();
 
-  setProjectViewHeader({ contextLabel: "Mémoire", variant: "memory" });
+  setProjectViewHeader({ contextLabel: "Mémoire", variant: "memory", hideBar: true });
 
   view.loading = true;
   view.notice = "";
   view.open = null;
   view.page = 1;
   view.navCollapsed = repliRetenu();
+  view.navWidth = largeurRetenue();
   renderContent(root);
 
   (async () => {

@@ -15496,7 +15496,9 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   grid-template-columns:24px 1fr;
   gap:8px;
   padding:12px 16px;
-  background:var(--panel2);
+  /* Le fond de la page : les lignes ne sont pas des cartes posées dessus, elles
+     sont le tableau. C'est le cadre qui les tient, pas leur couleur. */
+  background:var(--bg);
   border-bottom:1px solid var(--border2);
 }
 .propositions-row:last-child{ border-bottom:0; }
@@ -16507,7 +16509,12 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 
 /* La liste défile si elle déborde ; le bouton de repli reste en bas, quoi qu'il
    arrive — c'est un réglage du rail, pas le dernier de ses éléments. */
-.memory-nav__scroll{ display:flex; flex-direction:column; flex:1 1 auto; min-height:0; overflow-y:auto; }
+/* `overflow-y` rognait la barre bleue, posée à gauche en débord. Le débord est
+   supprimé — la barre est à l'intérieur — et le défilement peut rester. */
+.memory-nav__scroll{
+  display:flex; flex-direction:column; flex:1 1 auto; min-height:0;
+  overflow-y:auto; overflow-x:hidden;
+}
 .memory-nav__group{ display:flex; flex-direction:column; gap:2px; }
 
 /* Le compte se pose à droite, comme un décompte et non comme une étiquette. */
@@ -16518,27 +16525,38 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 }
 .memory-nav__item.is-active{ background:rgba(110,118,129,.14); font-weight:500; }
 .memory-nav__item.is-active::before{
-  content:""; position:absolute; left:-8px; width:4px; height:24px;
+  content:""; position:absolute; left:0; top:50%; transform:translateY(-50%);
+  width:4px; height:24px;
   background:var(--borderColor-accent-emphasis); border-radius:var(--radius);
 }
 
+/* Pas de filet au-dessus : le bouton est déjà en bas, et un trait de plus dans
+   un rail qui en porte déjà un ne sépare rien. */
 .memory-nav__collapse{
   display:flex; align-items:center; gap:8px; width:100%; min-height:30px;
   padding:6px 10px 6px 12px; margin-top:8px; flex:0 0 auto;
-  border:0; border-top:1px solid var(--border); border-radius:0;
-  padding-top:12px; background:transparent; color:var(--muted);
+  border:0; border-radius:6px; background:transparent; color:var(--muted);
   font:inherit; font-size:13px; cursor:pointer;
 }
 .memory-nav__collapse:hover{ color:var(--text); }
 
 /* Replié : les icônes seules, centrées. Le libellé et le compte se taisent. */
-.memory-layout--collapsed{ --memory-nav-width:52px; }
 .memory-nav.is-collapsed{ padding-left:8px; padding-right:8px; }
 .memory-nav.is-collapsed .side-nav-layout__label,
 .memory-nav.is-collapsed .memory-nav__item::after{ display:none; }
 .memory-nav.is-collapsed .side-nav-layout__item,
 .memory-nav.is-collapsed .memory-nav__collapse{ justify-content:center; padding-left:8px; padding-right:8px; }
-.memory-nav.is-collapsed .memory-nav__item.is-active::before{ left:-4px; }
+.memory-nav.is-collapsed .memory-nav__item.is-active::before{ left:0; }
+
+/* La poignée déborde sur le contenu pour être saisissable sans viser le trait. */
+.memory-nav .side-resizer__handle{
+  position:absolute; top:0; right:-4px; width:9px; height:100%;
+  cursor:col-resize; z-index:1;
+}
+.memory-nav .side-resizer__guide{
+  position:fixed; top:var(--memory-nav-top, var(--app-top)); bottom:0; width:2px;
+  background:var(--borderColor-accent-emphasis); display:none; pointer-events:none; z-index:4;
+}
 
 /* Sous 1400 px le rail mangerait la marge du contenu : il reste fixé, et le
    contenu s'écarte d'autant — c'est déjà ce que fait `margin-left`. Sous 900,
@@ -16572,12 +16590,17 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 
 /* Le regroupement par domaine : ce qui rend une liste de soixante-dix lignes
    lisible. « Sans domaine » vient en dernier et se compte comme les autres. */
-.memory-group{ margin-bottom:16px; }
+/* Un groupe est une bande du tableau, pas un titre posé au-dessus : il se lit
+   comme une séparation entre des lignes, du même trait qu'elles. */
+.memory-group{ margin:0; }
 .memory-group__title{
   display:flex;
   align-items:center;
   gap:8px;
-  margin:0 0 6px;
+  margin:0;
+  padding:6px 16px;
+  background:var(--panel2);
+  border-bottom:1px solid var(--border2);
   color:var(--muted);
   font-size:11px;
   font-weight:600;
@@ -16585,12 +16608,11 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   text-transform:uppercase;
 }
 .memory-group__count{
-  padding:0 6px;
-  border-radius:999px;
-  background:var(--panel2);
-  color:var(--text);
+  color:var(--muted);
   font-size:11px;
+  font-weight:400;
   letter-spacing:0;
+  font-variant-numeric:tabular-nums;
 }
 
 /* Déclarer une hypothèse : le sujet et la valeur sont deux champs, parce que le
@@ -16743,32 +16765,62 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 }
 .memory-counts__item b{ color:var(--text); }
 
-.memory-filters{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
-.memory-filters__search{ flex:1 1 280px; min-width:220px; }
-.memory-filters__select{ flex:0 0 auto; width:auto; min-width:180px; }
-.memory-filters__toggle{
-  display:inline-flex;
-  align-items:center;
-  gap:6px;
-  color:var(--muted);
-  font-size:13px;
-  cursor:pointer;
+/* La recherche : pleine largeur, l'icône à droite pour ne pas manger la place
+   du texte au moment où on le tape. */
+.memory-search{ position:relative; display:block; }
+.memory-search__input{ width:100%; padding-right:34px; }
+.memory-search__input::-webkit-search-cancel-button{ display:none; }
+.memory-search__icon{
+  position:absolute; right:10px; top:50%; transform:translateY(-50%);
+  display:inline-flex; color:var(--muted); pointer-events:none; line-height:0;
 }
+.memory-search__icon svg{ fill:currentColor; }
+
+/* Le tableau : un cadre, un en-tête qui porte les filtres, des lignes au fond
+   de la page. */
+.memory-table{
+  border:1px solid var(--border); border-radius:var(--radius); overflow:hidden;
+}
+.memory-table__head{
+  display:flex; align-items:center; gap:16px;
+  padding:8px 16px; background:var(--panel2); border-bottom:1px solid var(--border);
+}
+.memory-table__toggle{
+  display:inline-flex; align-items:center; gap:6px;
+  color:var(--muted); font-size:12px; cursor:pointer;
+}
+.memory-table__filters{ margin-left:auto; display:flex; align-items:center; gap:4px; flex-wrap:wrap; }
+
+/* Un filtre n'est pas une action : l'encadrer comme un bouton en ferait une
+   chose à cliquer. Il se signale au survol, pas au repos. */
+.memory-filter{ position:relative; display:inline-flex; align-items:center; }
+.memory-filter__select{
+  appearance:none; -webkit-appearance:none;
+  padding:4px 20px 4px 8px; border:0; border-radius:6px; background:transparent;
+  color:var(--muted); font:inherit; font-size:12px; font-weight:600; cursor:pointer;
+}
+.memory-filter:hover .memory-filter__select,
+.memory-filter.is-active .memory-filter__select{ color:var(--text); }
+.memory-filter:hover{ background:rgba(110,118,129,.14); border-radius:6px; }
+.memory-filter__caret{
+  position:absolute; right:6px; top:50%; transform:translateY(-50%);
+  pointer-events:none; color:var(--muted);
+}
+.memory-filter__caret svg, .memory-filter__caret{ fill:currentColor; width:12px; height:12px; }
 
 .memory-list{
   margin:0;
   padding:0;
   list-style:none;
-  border:1px solid var(--border);
-  border-radius:var(--radius);
-  overflow:hidden;
 }
 .memory-row{
   display:grid;
   grid-template-columns:20px 1fr;
   gap:10px;
   padding:12px 16px;
-  background:var(--panel2);
+  /* Le fond de la page : les lignes ne sont pas des cartes posées dessus, elles
+     sont le tableau. C'est le cadre qui les tient, pas leur couleur. */
+  background:var(--bg);
   border-bottom:1px solid var(--border2);
 }
 .memory-row:last-child{ border-bottom:0; }
@@ -17029,7 +17081,9 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   flex-direction:column;
   gap:8px;
   padding:12px 16px;
-  background:var(--panel2);
+  /* Le fond de la page : les lignes ne sont pas des cartes posées dessus, elles
+     sont le tableau. C'est le cadre qui les tient, pas leur couleur. */
+  background:var(--bg);
   border-bottom:1px solid var(--border2);
 }
 .conflict:last-child{ border-bottom:0; }

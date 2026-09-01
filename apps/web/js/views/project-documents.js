@@ -1,5 +1,6 @@
 import { store } from "../store.js";
 import { setProjectViewHeader, clearProjectActiveScrollSource, debugProjectScrollPolicy, resetProjectShellCompactState, bindProjectDocumentChromeCompact } from "./project-shell-chrome.js";
+import { bindSideResizer } from "./ui/side-resizer.js";
 import {
   bindGhActionButtons,
   initGhActionButton,
@@ -2642,34 +2643,24 @@ function bindDocumentsView(root) {
       renderProjectDocumentsContent(root);
     });
   });
-  const resizeHandle = document.getElementById("documentsTreeResizeHandle");
-  if (resizeHandle) {
-    resizeHandle.addEventListener("pointerdown", (event) => {
-      event.preventDefault();
-      const startX = event.clientX;
-      const startWidth = Number(docsViewState.treeWidth || 280);
+  // Le même glisser-déposer que le rail de la Mémoire : un seul composant, une
+  // seule façon de se tromper. Le code vivait ici en double, à deux endroits de
+  // ce fichier.
+  bindSideResizer({
+    handle: document.getElementById("documentsTreeResizeHandle"),
+    guide: document.getElementById("documentsTreeResizeGuide"),
+    getWidth: () => Number(docsViewState.treeWidth || 280),
+    onResize: (largeur) => {
       docsViewState.treeResizeActive = true;
-      const guide = document.getElementById("documentsTreeResizeGuide");
-      const onMove = (moveEvent) => {
-        const next = Math.max(220, Math.min(520, startWidth + (moveEvent.clientX - startX)));
-        docsViewState.treeWidth = next;
-        const shell = document.getElementById("projectDocumentScroll");
-        if (shell) shell.style.setProperty("--documents-tree-width", `${next}px`);
-        if (guide) {
-          guide.style.display = "block";
-          guide.style.left = `${next}px`;
-        }
-      };
-      const onUp = () => {
-        docsViewState.treeResizeActive = false;
-        window.removeEventListener("pointermove", onMove);
-        window.removeEventListener("pointerup", onUp);
-        renderProjectDocumentsContent(root);
-      };
-      window.addEventListener("pointermove", onMove);
-      window.addEventListener("pointerup", onUp);
-    });
-  }
+      docsViewState.treeWidth = largeur;
+      document.getElementById("projectDocumentScroll")?.style.setProperty("--documents-tree-width", `${largeur}px`);
+    },
+    onEnd: (largeur) => {
+      docsViewState.treeResizeActive = false;
+      docsViewState.treeWidth = largeur;
+      renderProjectDocumentsContent(root);
+    }
+  });
   const addFolderBtn = document.getElementById("documentsAddFolderBtn");
   if (addFolderBtn) {
     addFolderBtn.addEventListener("click", async () => {
@@ -3054,31 +3045,21 @@ export function renderProjectDocuments(root) {
       renderProjectDocumentsContent(root);
     });
   });
-  const resizeHandle = document.getElementById("documentsTreeResizeHandle");
-  if (resizeHandle) {
-    resizeHandle.addEventListener("pointerdown", (event) => {
-      event.preventDefault();
-      const startX = event.clientX;
-      const startWidth = Number(docsViewState.treeWidth || 280);
+  // Le même glisser-déposer que le rail de la Mémoire : un seul composant, une
+  // seule façon de se tromper. Le code vivait ici en double, à deux endroits de
+  // ce fichier.
+  bindSideResizer({
+    handle: document.getElementById("documentsTreeResizeHandle"),
+    guide: document.getElementById("documentsTreeResizeGuide"),
+    getWidth: () => Number(docsViewState.treeWidth || 280),
+    onResize: (largeur) => {
       docsViewState.treeResizeActive = true;
-      const guide = document.getElementById("documentsTreeResizeGuide");
-      const onMove = (moveEvent) => {
-        const next = Math.max(220, Math.min(520, startWidth + (moveEvent.clientX - startX)));
-        docsViewState.treeWidth = next;
-        const shell = document.getElementById("projectDocumentScroll");
-        if (shell) shell.style.setProperty("--documents-tree-width", `${next}px`);
-        if (guide) {
-          guide.style.display = "block";
-          guide.style.left = `${next}px`;
-        }
-      };
-      const onUp = () => {
-        docsViewState.treeResizeActive = false;
-        window.removeEventListener("pointermove", onMove);
-        window.removeEventListener("pointerup", onUp);
-        renderProjectDocumentsContent(root);
-      };
-      window.addEventListener("pointermove", onMove);
-      window.addEventListener("pointerup", onUp);
-    });
-  }
+      docsViewState.treeWidth = largeur;
+      document.getElementById("projectDocumentScroll")?.style.setProperty("--documents-tree-width", `${largeur}px`);
+    },
+    onEnd: (largeur) => {
+      docsViewState.treeResizeActive = false;
+      docsViewState.treeWidth = largeur;
+      renderProjectDocumentsContent(root);
+    }
+  });
