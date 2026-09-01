@@ -29,19 +29,28 @@
 import { DOMAINS, NATURE, classifyAssertion, domainLabel } from "./assertion-taxonomy.js";
 import { MEMORY, currentAssertions } from "./project-memory.js";
 
-/** Les trois lectures, et la liste entière. */
+/**
+ * Les lectures de la mémoire, et la liste entière.
+ *
+ * `BASE_DATA` est à part, et l'écran le montre par un filet : les trois autres
+ * disent ce que le projet **sait**, celle-ci dit ce qu'il **est**. C'est de
+ * cette dernière que partent les déductions, et c'est là qu'un humain vient
+ * vérifier ce sur quoi tout le reste a été calculé.
+ */
 export const READER = {
   ALL: "all",
   HYPOTHESES: "hypotheses",
   CONSTRAINTS: "constraints",
-  FINDINGS: "findings"
+  FINDINGS: "findings",
+  BASE_DATA: "base-data"
 };
 
 const READER_LABELS = {
   [READER.ALL]: "Tout",
   [READER.HYPOTHESES]: "Hypothèses",
   [READER.CONSTRAINTS]: "Contraintes",
-  [READER.FINDINGS]: "Constats en cours"
+  [READER.FINDINGS]: "Constats en cours",
+  [READER.BASE_DATA]: "Données de base"
 };
 
 /**
@@ -57,7 +66,9 @@ const READER_LEADS = {
   [READER.CONSTRAINTS]:
     "Ce que le projet doit respecter — un article du PLU, une règle d'accessibilité, une clause de notice. Une contrainte ne se lève pas : elle se vérifie.",
   [READER.FINDINGS]:
-    "Ce qui reste ouvert : les avis et remarques que rien n'est encore venu lever."
+    "Ce qui reste ouvert : les avis et remarques que rien n'est encore venu lever.",
+  [READER.BASE_DATA]:
+    "Ce que le projet est, et d'où part tout ce qu'on en déduit. En changer une rend suspect ce qui a été calculé dessus — c'est ici qu'on vient vérifier avant de bâtir."
 };
 
 export function readerLabel(reader) {
@@ -117,6 +128,12 @@ export function readerRows(assertions = [], reader = READER.ALL) {
   }
 
   if (reader === READER.FINDINGS) return currentAssertions(lignes).filter(isOpenFinding);
+
+  if (reader === READER.BASE_DATA) {
+    return currentAssertions(lignes).filter(
+      (assertion) => classifyAssertion(assertion).nature === NATURE.DONNEE_BASE
+    );
+  }
 
   return lignes;
 }
@@ -192,6 +209,9 @@ export function describeEmptyReader(reader) {
   }
   if (reader === READER.FINDINGS) {
     return "Aucun constat n'est ouvert. Tout ce que le projet a relevé a été levé ou écarté.";
+  }
+  if (reader === READER.BASE_DATA) {
+    return "Aucune donnée de base n'est posée. Tout ce qui se déduit du site — zones climatiques, sismicité, argiles — part de là : sans elles, rien ne se déduit.";
   }
   return "La mémoire de ce projet est vide.";
 }

@@ -32,8 +32,12 @@ const BASE_COLUMNS =
 // dégrade par paliers plutôt que de tout perdre.
 const TAXONOMY_COLUMNS = "nature,domain";
 const REVIEW_COLUMNS = "needs_review_since,reviewed_at,reviewed_by";
+// La zone : troisième vague. Une base en retard perdrait la portée des
+// affirmations, pas les affirmations elles-mêmes — et sans zone tout vaut pour
+// l'ouvrage entier, ce qui est la lecture d'avant.
+const ZONE_COLUMNS = "zone";
 
-const COLUMNS = `${BASE_COLUMNS},${TAXONOMY_COLUMNS},${REVIEW_COLUMNS}`;
+const COLUMNS = `${BASE_COLUMNS},${TAXONOMY_COLUMNS},${REVIEW_COLUMNS},${ZONE_COLUMNS}`;
 
 async function request(path, { method = "GET", body = null, headers = {}, params = {} } = {}) {
   const url = new URL(`${SUPABASE_URL}/rest/v1/${path}`);
@@ -71,7 +75,12 @@ export async function listProjectAssertions(projectId) {
   // Du plus complet au plus sûr. Chaque palier perd une chose et garde le
   // reste : sans le drapeau, puis sans le vocabulaire, puis rien — et « rien »
   // veut dire « je n'ai pas pu lire », pas « la mémoire est vide ».
-  for (const colonnes of [COLUMNS, `${BASE_COLUMNS},${TAXONOMY_COLUMNS}`, BASE_COLUMNS]) {
+  for (const colonnes of [
+    COLUMNS,
+    `${BASE_COLUMNS},${TAXONOMY_COLUMNS},${REVIEW_COLUMNS}`,
+    `${BASE_COLUMNS},${TAXONOMY_COLUMNS}`,
+    BASE_COLUMNS
+  ]) {
     try {
       return (await lire(colonnes)) ?? [];
     } catch {
@@ -258,6 +267,58 @@ export async function rememberHypothesis(row) {
   } catch {
     // L'hypothèse est versée : lui manquer son premier acte ne la retire pas.
   }
+
+  return { written: nouvelle, superseded: liens.length, flagged };
+}
+
+/**
+ * Verse une donnée de base, ou la définition d'une zone.
+ *
+ * Le même chemin qu'une hypothèse déclarée, à une chose près : **aucun acte
+ * n'est posé**. On ne se prononce pas sur ce que le projet est — on le corrige.
+ * `planAct` le refuse, et ce chemin n'essaie pas.
+ *
+ * Le remplacement, lui, compte double. Reclasser une voirie riveraine n'est pas
+ * une révision d'hypothèse : c'est une entrée en amont de tout, et ce qui a été
+ * calculé dessus devient suspect d'un coup. C'est exactement ce que fait
+ * `markDependentsOf`, et c'est pour cela que les données de base sont
+ * `isFoundational`.
+ *
+ * @returns {Promise<{written: object, superseded: number, flagged: number}|null>}
+ */
+export async function rememberBaseDatum(row) {
+  return remplacerSurSaCle(row);
+}
+
+/**
+ * Écrire une affirmation déclarée, périmer la précédente de même clé, marquer
+ * l'aval.
+ *
+ * L'ordre est celui de la fusion, et pour la même raison : on écrit d'abord, on
+ * périme ensuite. Si l'écriture échoue, rien n'a été invalidé.
+ */
+async function remplacerSurSaCle(row) {
+  if (!row?.project_id || !row?.subject_key) return null;
+
+  const existantes = await listProjectAssertions(row.project_id);
+  const ecrites = await writeAssertions([row]);
+  if (!ecrites || ecrites.length === 0) return null;
+
+  const nouvelle = ecrites[0];
+  const quand = row.decided_at || new Date().toISOString();
+
+  const anciennes = (existantes ?? []).filter(
+    (entry) =>
+      entry.kind === row.kind &&
+      entry.subject_key === row.subject_key &&
+      !entry.superseded_by &&
+      entry.id !== nouvelle.id
+  );
+
+  const liens = anciennes.map((entry) => ({ oldId: entry.id, newId: nouvelle.id, at: quand }));
+  if (liens.length > 0) await markSuperseded(liens);
+
+  const flagged = await markDependentsOf({ projectId: row.project_id, superseded: anciennes, at: quand });
 
   return { written: nouvelle, superseded: liens.length, flagged };
 }
