@@ -16426,11 +16426,38 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
    fil prend la place et la saisie descend — on lit d'abord, on répond ensuite. */
 /* Une colonne lisible plutôt que toute la largeur : une conversation qui
    s'étale sur mille pixels se relit mal. */
-.copilote{ display:flex; flex-direction:column; gap:16px; min-height:60vh; width:100%; max-width:860px; margin:0 auto; }
-.copilote--empty{ justify-content:center; align-items:center; }
-.copilote--empty .copilote-composer{ width:100%; max-width:760px; }
+/* Le Copilote a sa propre mise en page : **une seule** barre de défilement,
+   celle du fil, et la saisie posée en bas.
 
-.copilote-empty{ text-align:center; max-width:560px; }
+   Deux ascenseurs — celui de la page et celui du fil — obligeaient à choisir
+   lequel pousser, et le bouton « aller en bas » ne savait plus lequel regarder :
+   il restait affiché alors qu'on était déjà arrivé. La coque cesse donc de
+   défiler sur cet écran, et le fil prend toute la hauteur restante. */
+/* La hauteur est mesurée puis écrite par le script : `height:100%` ne se
+   rapportait à rien — aucun ancêtre n'a de hauteur fixée — et toute la colonne
+   grandissait avec le fil, si bien que c'est le document qui défilait. */
+.project-simple-page--copilote{ height:var(--copilote-hauteur, 70vh); min-height:0; }
+.project-simple-page--copilote .project-simple-scroll--parametres{
+  overflow:hidden; padding:0; min-height:0; height:100%;
+}
+.project-simple-page--copilote .settings-shell--parametres,
+.project-simple-page--copilote .project-rail-layout,
+.project-simple-page--copilote .project-rail-layout__content,
+.project-simple-page--copilote .project-studio-router__panel.is-active,
+.project-simple-page--copilote #projectStudioCopilotePanel,
+.project-simple-page--copilote .copilote-section{
+  display:flex; flex-direction:column;
+  height:100%; min-height:0; max-width:none; gap:0;
+}
+
+/* Le fil occupe toute la largeur — sa barre est donc au bord de l'écran, là où
+   on la cherche — et la colonne de lecture est ramenée au centre à
+   l'intérieur. */
+.copilote{ display:flex; flex-direction:column; height:100%; min-height:0; width:100%; }
+.copilote--empty{ justify-content:center; }
+.copilote--empty .copilote-empty{ margin:auto; }
+
+.copilote-empty{ text-align:center; max-width:560px; padding:0 24px; }
 .copilote-empty__mark{ display:inline-flex; color:var(--muted); }
 .copilote-empty__mark svg{ width:64px; height:64px; }
 .copilote-empty__title{ margin:10px 0 4px; color:var(--text); font-size:16px; font-weight:600; }
@@ -16440,7 +16467,8 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
    surimpression — pas de cadre autour d'une réponse qui fait déjà toute la
    largeur. */
 .copilote-thread-wrap{ position:relative; flex:1 1 auto; min-height:0; }
-.copilote-thread{ height:100%; overflow:auto; padding:0; max-height:52vh; }
+.copilote-thread{ height:100%; overflow-y:auto; overflow-x:hidden; }
+.copilote-thread__inner{ width:100%; max-width:860px; margin:0 auto; padding:24px 24px 8px; }
 .copilote-msg{ padding:12px 0; margin-bottom:4px; }
 
 /* Le message de l'utilisateur ne porte plus son nom : dans une conversation
@@ -16451,12 +16479,26 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   width:60%; margin-left:auto; padding:12px;
   border-radius:12px; background:rgba(240,246,252,.03);
 }
+/* La date en bas à droite, et au survol seulement : sur un message qu'on vient
+   d'écrire elle n'apprend rien ; sur un fil relu trois semaines plus tard elle
+   est la seule chose qui situe. */
 .copilote-msg__stamp{
-  margin-top:8px; color:var(--muted); font-size:11px;
+  display:block; margin-top:8px; text-align:right;
+  color:var(--muted); font-size:11px;
   opacity:0; transition:opacity .12s ease;
 }
 .copilote-msg--user:hover .copilote-msg__stamp,
-.copilote-msg--user:focus-within .copilote-msg__stamp{ opacity:1; }
+.copilote-msg--user:focus-within .copilote-msg__stamp,
+.copilote-msg--assistant:hover .copilote-msg__stamp,
+.copilote-msg--assistant:focus-within .copilote-msg__stamp{ opacity:1; }
+
+/* Côté copilote, elle partage sa ligne avec les commandes : une ligne de plus
+   sous chaque réponse aurait espacé le fil sans rien dire. */
+.copilote-msg__footer{
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  margin-top:8px;
+}
+.copilote-msg__footer .copilote-msg__stamp{ margin-top:0; }
 
 /* La réponse porte la marque du copilote, à gauche : c'est ce qui distingue
    d'un coup d'œil ce qu'on a demandé de ce qui a été répondu. */
@@ -16476,7 +16518,7 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .copilote-msg__body code{ padding:1px 4px; border-radius:6px; background:rgba(240,246,252,.08); }
 
 /* Les commandes d'une réponse : copier, compter. Discrètes tant qu'on lit. */
-.copilote-msg__actions{ display:flex; align-items:center; gap:2px; margin-top:8px; }
+.copilote-msg__actions{ display:flex; align-items:center; gap:2px; }
 .copilote-msg__action{
   display:inline-flex; align-items:center; justify-content:center;
   width:28px; height:28px;
@@ -16525,16 +16567,31 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .copilote-scroll:hover{ background:var(--panel); }
 .copilote-scroll__icon{ transform:rotate(180deg); }
 
-.copilote-composer{ display:flex; flex-direction:column; gap:10px; }
+/* La saisie ne défile pas avec le fil : elle reste en bas, sur toute la
+   largeur, sa colonne ramenée au centre comme le fil. */
+.copilote-composer{ flex:0 0 auto; padding:8px 24px 16px; }
+.copilote-composer__inner{
+  display:flex; flex-direction:column; gap:10px;
+  width:100%; max-width:860px; margin:0 auto;
+}
 
 /* La saisie porte son bouton d'envoi en bas à droite, dans le cadre : le geste
    part du texte et finit à deux centimètres de lui. Le cadre porte le focus,
    comme partout ailleurs. */
 .copilote-compose{
   position:relative;
-  padding:10px 12px 48px; border:1px solid var(--border); border-radius:12px;
+  padding:10px 12px; border:1px solid var(--border); border-radius:12px;
   background:var(--bg);
 }
+/* Les commandes sur une ligne : le menu à gauche, les crédits et l'envoi à
+   droite. Elles étaient en surimpression du champ, ce qui obligeait à lui
+   réserver quarante-huit pixels de vide en bas. */
+.copilote-compose__bar{
+  display:flex; align-items:center; justify-content:space-between; gap:8px;
+  margin-top:6px; min-height:28px;
+}
+.copilote-compose__left{ display:flex; align-items:center; gap:6px; }
+.copilote-compose__menu{ position:relative; }
 /* Pas de poignée de redimensionnement : elle tombait juste au-dessus du bouton
    d'envoi, où elle ressemblait à un défaut d'affichage. Le champ grandit tout
    seul avec ce qu'on écrit, jusqu'à une limite au-delà de laquelle il défile. */
@@ -16547,10 +16604,7 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 /* Les commandes du composeur, en bas à droite du cadre : les crédits, un filet,
    l'envoi. Le rond bleu est parti — le tracé seul suffit à désigner l'envoi, et
    une pastille de couleur dans un cadre déjà bordé faisait un bouton de trop. */
-.copilote-compose__tools{
-  position:absolute; right:10px; bottom:10px;
-  display:flex; align-items:center; gap:8px;
-}
+.copilote-compose__tools{ display:flex; align-items:center; gap:8px; }
 .copilote-compose__divider{
   width:1px; height:20px; background:var(--border); flex:0 0 1px;
 }
@@ -16611,6 +16665,45 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .copilote-action .ui-icon{ color:var(--muted); flex:0 0 16px; }
 .copilote-action:disabled{ color:var(--muted); cursor:default; background:transparent; }
 
+/* Le menu qui reprend les trois boutons une fois la conversation commencée. */
+.copilote-menu{
+  position:absolute; left:0; bottom:36px; z-index:3;
+  min-width:220px; padding:6px;
+  border:1px solid var(--border); border-radius:12px; background:var(--bgAssistPanel);
+  box-shadow:0 8px 24px rgba(1,4,9,.6);
+}
+.copilote-menu__item{
+  display:flex; align-items:center; gap:8px; width:100%;
+  min-height:32px; padding:0 8px;
+  border:0; border-radius:6px; background:transparent;
+  color:var(--text); font:inherit; font-size:13px; text-align:left; cursor:pointer;
+}
+.copilote-menu__item:hover:not(:disabled){ background:var(--panel2); }
+.copilote-menu__item:disabled{ color:var(--muted); cursor:default; }
+.copilote-menu__item .ui-icon{ flex:0 0 16px; color:var(--muted); }
+.copilote-menu__note{ margin:6px 8px 2px; color:var(--muted); font-size:11px; line-height:15px; }
+
+/* Le menu d'une discussion dans le rail : renommer, effacer. */
+.copilote-fil-menu{
+  position:absolute; right:0; top:calc(100% + 2px); z-index:5;
+  min-width:180px; padding:6px;
+  border:1px solid var(--border); border-radius:12px; background:var(--bgAssistPanel);
+  box-shadow:0 8px 24px rgba(1,4,9,.6);
+}
+.copilote-fil-menu[hidden]{ display:none; }
+.copilote-fil-menu__item{
+  display:flex; align-items:center; gap:8px; width:100%;
+  min-height:32px; padding:0 8px;
+  border:0; border-radius:6px; background:transparent;
+  color:var(--text); font:inherit; font-size:13px; text-align:left; cursor:pointer;
+}
+.copilote-fil-menu__item:hover{ background:var(--panel2); }
+.copilote-fil-menu__item .ui-icon{ flex:0 0 16px; color:var(--muted); }
+/* L'effacement est sans retour : sa couleur le dit avant le clic. */
+.copilote-fil-menu__item.is-danger,
+.copilote-fil-menu__item.is-danger .ui-icon{ color:rgb(248, 81, 73); }
+.copilote-fil-menu__item.is-danger:hover{ background:rgba(248,81,73,.12); }
+
 .copilote-error{ margin:0; color:var(--danger); font-size:13px; }
 
 /* La liste de navigation : le `li` porte le repère, le contenu porte le fond.
@@ -16667,6 +16760,8 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   cursor:pointer; opacity:0;
 }
 .nav-list__item:hover .nav-list__action-btn,
+.nav-list__item:focus-within .nav-list__action-btn,
+.nav-list__action-btn[aria-expanded="true"],
 .nav-list__action-btn:focus-visible{ opacity:1; }
 .nav-list__action-btn:hover{ background:var(--panel2); color:var(--text); }
 /* La place de l'action est réservée dans le contenu : sans cela l'intitulé
@@ -16677,7 +16772,7 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
    l'absence d'icône disent qu'ils dépendent de l'entrée du dessus. */
 .nav-list__list--sub{ margin-top:2px; }
 .nav-list__item--sub .nav-list__content{
-  min-height:28px; padding-left:34px; color:var(--muted); font-size:12px;
+  min-height:28px; padding-left:34px; padding-right:34px; color:var(--muted); font-size:12px;
 }
 .nav-list__item--sub[data-active="true"] .nav-list__content{ color:var(--text); }
 /* Replié, le rail n'a pas de place pour des intitulés seuls : l'historique

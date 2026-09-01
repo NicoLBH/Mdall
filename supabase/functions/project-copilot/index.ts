@@ -150,6 +150,24 @@ function systemPrompt(memoryWasRead: boolean, tronque: boolean) {
   return regles.join("\n");
 }
 
+/**
+ * Ce que le modèle dit avoir consommé.
+ *
+ * Repris tel quel, jamais estimé : un compteur approché est un compteur faux, et
+ * on lit un compteur pour décider d'un usage. Quand le champ manque, on rend
+ * `null` — « 0 jeton » serait une affirmation, l'absence est un aveu.
+ */
+function extractUsage(payload: unknown) {
+  const usage = (payload as Record<string, unknown>)?.usage as Record<string, unknown> | undefined;
+  const nombre = (valeur: unknown) => (typeof valeur === "number" && Number.isFinite(valeur) ? valeur : null);
+
+  return {
+    input_tokens: nombre(usage?.input_tokens ?? usage?.prompt_tokens),
+    output_tokens: nombre(usage?.output_tokens ?? usage?.completion_tokens),
+    total_tokens: nombre(usage?.total_tokens)
+  };
+}
+
 function extractOpenAiText(payload: unknown): string {
   const data = payload as Record<string, unknown>;
   if (typeof data?.output_text === "string" && data.output_text.trim()) return data.output_text;
@@ -282,16 +300,23 @@ serve(async (req) => {
 
     const brut = await reponse.json();
     const reply = extractOpenAiText(brut).trim();
+    const usage = extractUsage(brut);
 
     if (!reply) {
       return json({ error: "Le modèle a répondu, mais sans contenu." }, 502);
     }
 
-    console.log("project-copilot:reply", { project_id: projectId, reply_chars: reply.length });
+    console.log("project-copilot:reply", {
+      project_id: projectId,
+      reply_chars: reply.length,
+      input_tokens: usage.input_tokens,
+      output_tokens: usage.output_tokens
+    });
 
-    // Rien n'est enregistré : ni la question, ni la réponse, ni le fait qu'elles
-    // aient existé au-delà de ce compteur.
-    return json({ reply_markdown: reply });
+    // Rien n'est enregistré ici : ni la question, ni la réponse. Ce que le
+    // navigateur en garde, il l'écrit sous sa propre identité, dans des tables
+    // dont la politique est propriétaire seul.
+    return json({ reply_markdown: reply, usage });
   } catch (error) {
     console.error("project-copilot:failed", { message: error instanceof Error ? error.message : "unknown" });
     return json({ error: "Le copilote est momentanément indisponible." }, 502);
