@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { ITEM } from "./proposition-state.js";
+import { NATURE, isContestable, isFoundational } from "./assertion-taxonomy.js";
 
 import {
   MEMORY,
@@ -9,7 +10,9 @@ import {
   assertionsFromProposition,
   buildContextExport,
   currentAssertions,
+  declaredBaseDatum,
   declaredHypothesis,
+  declaredZone,
   describeAssertionFacts,
   planSupersessions,
   searchAssertions,
@@ -367,4 +370,68 @@ test("une hypothèse s'appuie sur son sujet et sa valeur, pas sur un fichier", (
   assert.equal(faits["Valeur"], "A2");
   assert.equal(faits["Domaine"], "Structure");
   assert.equal(faits["Fichier"], undefined);
+});
+
+/* ── Les données de base : ce que le projet est ──────────────────────────── */
+
+test("une donnée de base porte la nature qui se propage", () => {
+  const plan = declaredBaseDatum({ projectId: "p", subject: "Voirie riveraine", value: "Catégorie 3" });
+
+  assert.equal(plan.ok, true);
+  assert.equal(plan.row.nature, NATURE.DONNEE_BASE);
+  assert.equal(isFoundational(plan.row.nature), true, "la reclasser doit rendre l'aval suspect");
+});
+
+test("le même sujet vaut différemment selon la zone", () => {
+  // Le rez-de-chaussée est un ERP, les étages du logement : les deux sont vrais,
+  // et une clé sans zone ferait périmer l'un par l'autre.
+  const rdc = declaredBaseDatum({ projectId: "p", subject: "Usage", value: "ERP type M", zone: "Zone A" });
+  const etages = declaredBaseDatum({ projectId: "p", subject: "Usage", value: "Habitation", zone: "Zone B" });
+
+  assert.notEqual(rdc.row.subject_key, etages.row.subject_key);
+  assert.equal(rdc.row.zone, "zone-a");
+});
+
+test("une donnée de base sans zone vaut pour l'ouvrage entier", () => {
+  const plan = declaredBaseDatum({ projectId: "p", subject: "Altitude", value: "450 m" });
+
+  assert.equal(plan.row.zone, null);
+  assert.equal(plan.row.subject_key, "altitude");
+});
+
+test("une donnée de base a besoin d'une valeur : c'est elle qui sert d'entrée", () => {
+  assert.equal(declaredBaseDatum({ projectId: "p", subject: "Usage" }).ok, false);
+  assert.equal(declaredBaseDatum({ projectId: "p", value: "ERP" }).ok, false);
+  assert.equal(declaredBaseDatum({ subject: "Usage", value: "ERP" }).ok, false);
+});
+
+test("une donnée de base ne se conteste pas : elle se corrige", () => {
+  // Personne d'extérieur ne tranche ce que le projet est.
+  assert.equal(isContestable(NATURE.DONNEE_BASE), false);
+});
+
+/* ── La définition d'une zone ────────────────────────────────────────────── */
+
+test("une zone se définit par un geste explicite", () => {
+  const plan = declaredZone({ projectId: "p", label: "Zone A", definition: "RDC — ERP type M" });
+
+  assert.equal(plan.ok, true);
+  assert.equal(plan.row.payload.zoneDefinition, true);
+  assert.equal(plan.row.payload.zoneKey, "zone-a");
+  assert.equal(plan.row.nature, NATURE.DONNEE_BASE);
+});
+
+test("une définition de zone ne porte pas la zone qu'elle décrit", () => {
+  // Sinon elle disparaîtrait de toute lecture autre que la sienne — y compris
+  // de celle où on la cherche.
+  const plan = declaredZone({ projectId: "p", label: "Zone A", definition: "RDC" });
+
+  assert.equal(plan.row.zone, null);
+});
+
+test("une zone sans nom est refusée, et le refus donne un exemple", () => {
+  const plan = declaredZone({ projectId: "p", definition: "RDC" });
+
+  assert.equal(plan.ok, false);
+  assert.match(plan.reason, /Zone A|Rez-de-chauss/);
 });

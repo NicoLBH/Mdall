@@ -64,7 +64,16 @@ export const SETTLED_BY = {
   /** Un essai, un sondage, un relevé — qui n'a pas encore eu lieu. */
   MESURE: "mesure",
   /** Une observation, déjà faite, par quelqu'un, à une date. */
-  OBSERVATION: "observation"
+  OBSERVATION: "observation",
+  /**
+   * Le projet lui-même : son programme, sa situation, ce qu'il a décidé d'être.
+   *
+   * Personne d'autre ne peut le trancher. Le maître d'ouvrage dit où est
+   * l'opération et ce qu'on y fait ; ce n'est ni une mesure, ni une observation,
+   * ni une règle imposée du dehors — c'est la définition que le projet donne de
+   * lui-même, et c'est de là que part tout le reste.
+   */
+  PROJET: "projet"
 };
 
 /**
@@ -126,6 +135,25 @@ export const NATURE = {
    */
   CONTRAINTE: "contrainte",
   /**
+   * Ce que le projet est, et qui sert d'entrée à tout ce qu'on en déduit.
+   *
+   * Tranchée par **le projet lui-même**. L'adresse, la commune, l'altitude, la
+   * catégorie d'un ouvrage, l'usage d'un niveau, le classement de la voirie
+   * riveraine : personne d'extérieur ne les décide, et aucune mesure ne les
+   * établit — le projet les pose, et quelqu'un doit pouvoir les relire.
+   *
+   * **Elles se versionnent, et leur changement se propage.** C'est là qu'est la
+   * valeur de tout ceci : reclasser une voirie riveraine en phase exécution
+   * change l'isolement acoustique de façade, donc le calcul acoustique, donc les
+   * menuiseries, donc les entrées d'air, donc l'isolant intérieur. Personne ne
+   * tient cette chaîne de tête ; c'est le rôle des dépendances.
+   *
+   * Ce n'est pas une contrainte : une contrainte s'impose du dehors et le projet
+   * la subit. Une donnée de base, le projet la choisit ou la constate de
+   * lui-même — et peut la corriger sans que personne n'ait rien imposé.
+   */
+  DONNEE_BASE: "donnee-de-base",
+  /**
    * Un document au corpus, une affaire rattachée : ce que le projet a rangé.
    *
    * **Ce n'est pas une connaissance, et probablement pas une nature.** Une
@@ -151,6 +179,7 @@ const NATURE_SETTLED_BY = {
   [NATURE.CONSTAT]: SETTLED_BY.OBSERVATION,
   [NATURE.HYPOTHESE]: SETTLED_BY.MESURE,
   [NATURE.CONTRAINTE]: SETTLED_BY.TIERS,
+  [NATURE.DONNEE_BASE]: SETTLED_BY.PROJET,
   [NATURE.INTENDANCE]: null
 };
 
@@ -170,6 +199,7 @@ const NATURE_LABELS = {
   [NATURE.CONSTAT]: "Constat",
   [NATURE.HYPOTHESE]: "Hypothèse",
   [NATURE.CONTRAINTE]: "Contrainte",
+  [NATURE.DONNEE_BASE]: "Donnée de base",
   [NATURE.INTENDANCE]: "Intendance"
 };
 
@@ -201,6 +231,17 @@ const DOMAIN_LABELS = {
  */
 export const DECLARED_KIND = "hypothesis";
 
+/**
+ * La provenance d'une donnée de base posée par le projet.
+ *
+ * Distincte de l'hypothèse déclarée, et pas par goût du rangement : elles ne se
+ * remplacent pas de la même façon. Une hypothèse a une valeur à la fois pour
+ * tout le projet ; une donnée de base peut valoir différemment selon la partie
+ * de l'ouvrage — le rez-de-chaussée est un ERP, les étages du logement — et sa
+ * clé porte donc la zone. Un `kind` commun ferait périmer l'un par l'autre.
+ */
+export const BASE_DATUM_KIND = "base-datum";
+
 /** Ce qu'on écrit quand on ne sait pas. Une seule formulation, partout. */
 export const UNCLASSIFIED_LABEL = "Non classé";
 
@@ -209,7 +250,13 @@ function texte(value) {
 }
 
 /** Les natures connues, dans l'ordre où on les lit. */
-export const NATURES = [NATURE.CONSTAT, NATURE.HYPOTHESE, NATURE.CONTRAINTE, NATURE.INTENDANCE];
+export const NATURES = [
+  NATURE.DONNEE_BASE,
+  NATURE.CONSTAT,
+  NATURE.HYPOTHESE,
+  NATURE.CONTRAINTE,
+  NATURE.INTENDANCE
+];
 
 /** Les domaines connus, dans l'ordre du métier — du gros œuvre aux abords. */
 export const DOMAINS = [
@@ -266,7 +313,8 @@ export function settledBy(nature) {
 const SETTLED_BY_LABELS = {
   [SETTLED_BY.TIERS]: "un tiers — règlement, norme, marché",
   [SETTLED_BY.MESURE]: "une mesure qui n'a pas encore eu lieu",
-  [SETTLED_BY.OBSERVATION]: "une observation, déjà faite"
+  [SETTLED_BY.OBSERVATION]: "une observation, déjà faite",
+  [SETTLED_BY.PROJET]: "le projet lui-même — son programme, sa situation"
 };
 
 /** Ce qui tranche, dit en français. Pour l'écran, et pour les messages d'erreur. */
@@ -294,8 +342,14 @@ export function isContestable(nature) {
 /**
  * Une affirmation sur laquelle le projet **calcule**.
  *
- * Les hypothèses et les contraintes : ce sont les valeurs d'entrée. Quand
- * l'une d'elles change, ce qui a été dimensionné dessus devient suspect.
+ * Les données de base, les hypothèses et les contraintes : ce sont les valeurs
+ * d'entrée. Quand l'une d'elles change, ce qui a été dimensionné dessus devient
+ * suspect.
+ *
+ * Les données de base en premier, parce qu'elles sont en amont de tout : une
+ * voirie riveraine reclassée en phase exécution change l'isolement de façade,
+ * donc le calcul acoustique, donc les menuiseries, donc les entrées d'air. C'est
+ * cette chaîne que personne ne tient de tête.
  *
  * Longtemps seules les hypothèses entraînaient quelque chose, parce qu'on
  * croyait la zone de neige hypothétique. La corriger est même plus urgent
@@ -309,7 +363,7 @@ export function isContestable(nature) {
  */
 export function isFoundational(nature) {
   const connue = normalizeNature(nature);
-  return connue === NATURE.HYPOTHESE || connue === NATURE.CONTRAINTE;
+  return connue === NATURE.HYPOTHESE || connue === NATURE.CONTRAINTE || connue === NATURE.DONNEE_BASE;
 }
 
 /**
@@ -325,6 +379,7 @@ export function isFoundational(nature) {
 export function natureFromKind(kind) {
   const brut = texte(kind);
   if (brut === DECLARED_KIND) return NATURE.HYPOTHESE;
+  if (brut === BASE_DATUM_KIND) return NATURE.DONNEE_BASE;
   if (brut === ITEM_TYPE.AVIS) return NATURE.CONSTAT;
   if (brut === ITEM_TYPE.DOCUMENT || brut === ITEM_TYPE.ATTACHMENT) return NATURE.INTENDANCE;
   return null;

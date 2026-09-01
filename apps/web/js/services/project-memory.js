@@ -30,7 +30,8 @@
  */
 
 import { ITEM } from "./proposition-state.js";
-import { DECLARED_KIND, NATURE, classifyAssertion, domainLabel, normalizeDomain } from "./assertion-taxonomy.js";
+import { BASE_DATUM_KIND, DECLARED_KIND, NATURE, classifyAssertion, domainLabel, normalizeDomain } from "./assertion-taxonomy.js";
+import { normalizeZoneKey } from "./project-zones.js";
 // `STATUS_LABELS` était recopié ici, et la copie a divergé : « Constaté » y
 // manquait, si bien que la mémoire écrivait « état : REPORTED ». Une seconde
 // copie finit toujours par diverger — on lit celle du module qui la définit.
@@ -231,6 +232,126 @@ export function declaredHypothesis({
       domain: normalizeDomain(domain),
       payload: { subject: sujet, value: valeur, declared: true },
       // Aucune proposition : c'est un geste humain, et l'écran le dira.
+      proposition_id: null,
+      proposition_number: null,
+      source_document_id: null,
+      decided_by: declaredBy ?? null,
+      decided_at: quand
+    }
+  };
+}
+
+/**
+ * Une donnée de base, posée par le projet.
+ *
+ * L'adresse, la commune, l'altitude, l'usage d'un niveau, le classement de la
+ * voirie riveraine : ce que le projet est, et d'où part tout ce qu'on en déduit.
+ * Personne d'extérieur ne les tranche et aucune mesure ne les établit — c'est
+ * pourquoi elles s'écrivent, comme une hypothèse, et sont datées et signées.
+ *
+ * **Elles se propagent.** Reclasser une voirie riveraine change l'isolement de
+ * façade, donc le calcul acoustique, donc les menuiseries. `isFoundational` les
+ * range avec les hypothèses et les contraintes : leur remplacement rend suspect
+ * ce qui repose dessus, et c'est là qu'est la valeur de tout ceci.
+ *
+ * La zone dit à quelle partie de l'ouvrage la donnée s'applique. Vide, elle vaut
+ * partout — ce n'est pas une ignorance, c'est une portée générale.
+ *
+ * @returns {{ok: true, row: object}|{ok: false, reason: string}}
+ */
+export function declaredBaseDatum({
+  projectId = "",
+  subject = "",
+  value = "",
+  domain = null,
+  zone = "",
+  declaredBy = null,
+  at = ""
+} = {}) {
+  const projet = texte(projectId);
+  const sujet = texte(subject);
+  const valeur = texte(value);
+
+  if (!projet) return { ok: false, reason: "Aucun projet." };
+  if (!sujet) return { ok: false, reason: "Une donnée de base a besoin d'un sujet : « usage du niveau », « voirie riveraine »." };
+  if (!valeur) return { ok: false, reason: "Une donnée de base a besoin d'une valeur : c'est elle qui servira d'entrée aux déductions." };
+
+  const quand = texte(at) || new Date().toISOString();
+  const portee = normalizeZoneKey(zone);
+
+  return {
+    ok: true,
+    row: {
+      project_id: projet,
+      kind: BASE_DATUM_KIND,
+      // La clé porte le sujet **et** la zone : le même sujet peut valoir
+      // différemment selon la partie de l'ouvrage — le rez-de-chaussée est un
+      // ERP, les étages du logement — et une clé sans zone ferait périmer l'un
+      // par l'autre alors que les deux sont vrais.
+      subject_key: portee ? `${normalizeSubjectKey(sujet)}@${portee}` : normalizeSubjectKey(sujet),
+      statement: `${sujet} : ${valeur}`,
+      detail: null,
+      status: MEMORY.ASSUMED,
+      nature: NATURE.DONNEE_BASE,
+      domain: normalizeDomain(domain),
+      zone: portee || null,
+      payload: { subject: sujet, value: valeur, declared: true },
+      proposition_id: null,
+      proposition_number: null,
+      source_document_id: null,
+      decided_by: declaredBy ?? null,
+      decided_at: quand
+    }
+  };
+}
+
+/**
+ * La définition d'une zone.
+ *
+ * Une zone existe parce que quelqu'un a écrit ce qu'elle recouvre — « Zone A :
+ * RDC, ERP type M ». C'est une donnée de base comme une autre : le projet la
+ * pose, et elle peut changer. Elle porte `zoneDefinition` dans son `payload`,
+ * qui est la seule façon pour l'écran de la reconnaître : deviner une zone à
+ * partir d'un libellé fabriquerait des zones que personne n'a voulues.
+ *
+ * Elle ne porte pas de zone elle-même : une définition vaut pour l'ouvrage, pas
+ * pour la partie qu'elle décrit — sans quoi elle disparaîtrait de toute lecture
+ * autre que la sienne, y compris de celle où on la cherche.
+ *
+ * @returns {{ok: true, row: object}|{ok: false, reason: string}}
+ */
+export function declaredZone({
+  projectId = "",
+  label = "",
+  definition = "",
+  declaredBy = null,
+  at = ""
+} = {}) {
+  const projet = texte(projectId);
+  const nom = texte(label);
+
+  if (!projet) return { ok: false, reason: "Aucun projet." };
+  if (!nom) return { ok: false, reason: "Une zone a besoin d'un nom : « Zone A », « Rez-de-chaussée »." };
+
+  const cle = normalizeZoneKey(nom);
+  if (!cle) return { ok: false, reason: "Ce nom de zone ne donne aucune clé lisible." };
+
+  const quand = texte(at) || new Date().toISOString();
+  const texteDefinition = texte(definition);
+
+  return {
+    ok: true,
+    row: {
+      project_id: projet,
+      kind: BASE_DATUM_KIND,
+      subject_key: `zone:${cle}`,
+      statement: texteDefinition ? `${nom} : ${texteDefinition}` : nom,
+      detail: null,
+      status: MEMORY.ASSUMED,
+      nature: NATURE.DONNEE_BASE,
+      domain: null,
+      zone: null,
+      payload: { subject: nom, value: texteDefinition, zoneDefinition: true, zoneKey: cle, declared: true },
       proposition_id: null,
       proposition_number: null,
       source_document_id: null,
