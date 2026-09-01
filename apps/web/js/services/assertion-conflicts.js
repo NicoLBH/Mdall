@@ -1,38 +1,47 @@
 /**
- * Quand deux affirmations parlent du même sujet et ne disent pas la même chose.
+ * Quand deux informations de la mémoire ne s'accordent pas.
  *
- * Le système savait déjà repérer une contradiction et demander à l'humain de
- * trancher : « je garde ce qui était retenu » ou « j'assume le changement ».
- * Sur deux constats, c'est le bon geste. Sur une contrainte, c'est faux.
+ * Mdall ne prononce pas de conformité — ce n'est pas son métier, et ce
+ * vocabulaire-là appartient au contrôle technique. Mdall **détecte que deux
+ * informations se contredisent**, les met côte à côte, et laisse quelqu'un
+ * décider. La machine repère ; l'humain tranche.
  *
- *   la règle dit  : zone de neige A2  — déduite de la commune, non négociable
- *   la note dit   : zone de neige A1  — observé dans un document, daté
+ * La nuance n'est pas de politesse. Dire « non-conformité » revient à avoir déjà
+ * jugé qui a tort, et donc à décider à la place de celui qui sait. Dire
+ * « conflit » énonce ce qu'on a vu — deux valeurs pour une même chose — sans
+ * rien conclure.
  *
- * On ne garde pas A1. Il n'y a pas de différend : il y a une **non-conformité**,
- * et c'est le métier même du bureau de contrôle. Le verbe n'est pas « trancher »,
- * c'est « corriger » — et ce qui est à corriger n'est pas la règle.
+ *   la règle du site donne  : zone de neige E
+ *   le projet retient       : zone de neige A2
  *
- * ## Trois écarts, trois gestes
+ * Trois formes de conflit, qui ne se résolvent pas de la même façon :
  *
- * - **Non-conformité** — une contrainte contre ce que le projet retient. Le
- *   projet se corrige, ou l'entrée de la règle est fausse et c'est elle qu'on
- *   reprend. Jamais un arbitrage entre deux opinions.
- * - **Contradiction** — deux affirmations de même rang qui divergent. Là,
- *   l'humain tranche : c'est le geste que le système connaissait déjà.
- * - **Deux règles** — deux contraintes pour un même sujet. L'une est fausse,
- *   et il n'y a rien à arbitrer : un texte ne se négocie pas contre un autre.
+ * - **Une règle et une valeur retenue.** L'une des deux est à reprendre : soit
+ *   ce que le projet retient, soit l'entrée qui a servi à déduire la règle.
+ * - **Deux valeurs de même rang.** Rien ne les départage tout seul.
+ * - **Deux règles.** Un texte ne se négocie pas contre un autre : l'une des deux
+ *   vient d'une origine qu'il faut reprendre.
+ *
+ * Dans les trois cas la phrase décrit, elle ne commande pas.
+ *
+ * ## Ce module détecte, il n'affiche pas
+ *
+ * Il est lu par l'utilitaire « Résoudre les conflits » de l'Atelier. La Mémoire
+ * ne s'en sert plus : elle sert à **voir** ce que le projet tient pour vrai, et
+ * mêler à cette lecture ce qui ne s'accorde pas ferait passer un désaccord pour
+ * une connaissance de plus. Exploiter la mémoire est le travail de l'Atelier.
  *
  * ## Ce qui n'est jamais deviné
  *
  * Deux affirmations ne parlent du même sujet que si **elles le nomment**, dans
  * leur `payload`. Rien n'est extrait d'un énoncé : rapprocher « Avis 166 — voile
  * béton » d'une zone de neige parce que deux mots se ressemblent produirait des
- * non-conformités imaginaires, et une seule suffirait à faire perdre confiance
- * à l'écran entier.
+ * conflits imaginaires, et un seul suffirait à faire perdre confiance à l'écran
+ * entier.
  *
  * **Limite, et elle est de taille.** Aujourd'hui seules les contraintes du site
- * et les hypothèses déclarées nomment leur sujet. Ce que le projet retient dans
- * une note de calcul — le vrai gisement de non-conformités — n'entre pas encore :
+ * et les affirmations déclarées nomment leur sujet. Ce que le projet retient
+ * dans une note de calcul — le vrai gisement de conflits — n'entre pas encore :
  * il faudrait qu'une extraction le propose. Ce module est prêt pour ce jour-là ;
  * d'ici là il ne voit que ce qui est nommé, et il ne prétend pas voir plus.
  */
@@ -40,20 +49,20 @@
 import { NATURE, classifyAssertion } from "./assertion-taxonomy.js";
 import { MEMORY, currentAssertions } from "./project-memory.js";
 
-/** Les trois façons dont deux affirmations peuvent ne pas s'accorder. */
-export const ECART = {
-  /** Une contrainte contre ce que le projet retient. On corrige. */
-  NON_CONFORMITE: "non-conformite",
-  /** Deux affirmations de même rang. L'humain tranche. */
-  CONTRADICTION: "contradiction",
-  /** Deux contraintes pour un même sujet. L'une est fausse. */
-  REGLE_DOUBLE: "regle-double"
+/** Les trois façons dont deux informations peuvent ne pas s'accorder. */
+export const CONFLIT = {
+  /** Une règle du site et ce que le projet retient. */
+  REGLE_ET_VALEUR: "regle-et-valeur",
+  /** Deux informations de même rang. */
+  DEUX_VALEURS: "deux-valeurs",
+  /** Deux règles pour un même sujet. */
+  DEUX_REGLES: "deux-regles"
 };
 
-const ECART_LABELS = {
-  [ECART.NON_CONFORMITE]: "Non-conformité",
-  [ECART.CONTRADICTION]: "Contradiction",
-  [ECART.REGLE_DOUBLE]: "Deux règles pour un sujet"
+const CONFLIT_LABELS = {
+  [CONFLIT.REGLE_ET_VALEUR]: "Une règle et une valeur retenue",
+  [CONFLIT.DEUX_VALEURS]: "Deux valeurs pour un sujet",
+  [CONFLIT.DEUX_REGLES]: "Deux règles pour un sujet"
 };
 
 function texte(value) {
@@ -103,7 +112,7 @@ export function namedSubjectOf(assertion = {}) {
  * @returns {{type: string, subject: string, rule: object|null, held: object|null,
  *   others: object[], ruleValue: string|null, heldValue: string|null}[]}
  */
-export function findNonConformities(assertions = []) {
+export function findConflicts(assertions = []) {
   const courantes = currentAssertions(Array.isArray(assertions) ? assertions : []).filter(
     (entry) => entry?.status !== MEMORY.REJECTED
   );
@@ -116,7 +125,7 @@ export function findNonConformities(assertions = []) {
     parSujet.get(sujet.key).lignes.push({ assertion, sujet, nature: classifyAssertion(assertion).nature });
   }
 
-  const ecarts = [];
+  const conflits = [];
 
   for (const { label, lignes } of parSujet.values()) {
     const regles = lignes.filter((ligne) => ligne.nature === NATURE.CONTRAINTE);
@@ -125,8 +134,8 @@ export function findNonConformities(assertions = []) {
     if (regles.length > 1) {
       const divergentes = regles.filter((ligne) => !memeValeur(ligne.sujet.value, regles[0].sujet.value));
       if (divergentes.length > 0) {
-        ecarts.push({
-          type: ECART.REGLE_DOUBLE,
+        conflits.push({
+          type: CONFLIT.DEUX_REGLES,
           subject: label,
           rule: regles[0].assertion,
           held: divergentes[0].assertion,
@@ -141,8 +150,8 @@ export function findNonConformities(assertions = []) {
     if (regles.length === 1) {
       for (const tenue of tenues) {
         if (memeValeur(tenue.sujet.value, regles[0].sujet.value)) continue;
-        ecarts.push({
-          type: ECART.NON_CONFORMITE,
+        conflits.push({
+          type: CONFLIT.REGLE_ET_VALEUR,
           subject: label,
           rule: regles[0].assertion,
           held: tenue.assertion,
@@ -158,8 +167,8 @@ export function findNonConformities(assertions = []) {
     // n'est en faute tant qu'aucun texte ne tranche.
     const divergentes = tenues.filter((ligne) => !memeValeur(ligne.sujet.value, tenues[0]?.sujet.value));
     if (divergentes.length > 0) {
-      ecarts.push({
-        type: ECART.CONTRADICTION,
+      conflits.push({
+        type: CONFLIT.DEUX_VALEURS,
         subject: label,
         rule: null,
         held: tenues[0].assertion,
@@ -170,12 +179,12 @@ export function findNonConformities(assertions = []) {
     }
   }
 
-  return ecarts;
+  return conflits;
 }
 
 /** Le nom d'un écart, en français. */
-export function ecartLabel(type) {
-  return ECART_LABELS[texte(type)] ?? "";
+export function conflictLabel(type) {
+  return CONFLIT_LABELS[texte(type)] ?? "";
 }
 
 /**
@@ -186,47 +195,46 @@ export function ecartLabel(type) {
  *
  * @returns {{label: string, sentence: string, ask: string}}
  */
-export function describeEcart(ecart = {}) {
-  const sujet = texte(ecart.subject) || "ce sujet";
-  const regle = texte(ecart.ruleValue);
-  const tenue = texte(ecart.heldValue);
+export function describeConflict(conflit = {}) {
+  const sujet = texte(conflit.subject) || "ce sujet";
+  const regle = texte(conflit.ruleValue);
+  const tenue = texte(conflit.heldValue);
 
-  if (ecart.type === ECART.NON_CONFORMITE) {
+  if (conflit.type === CONFLIT.REGLE_ET_VALEUR) {
     return {
-      label: ecartLabel(ECART.NON_CONFORMITE),
+      label: conflictLabel(CONFLIT.REGLE_ET_VALEUR),
       sentence: `${sujet} : la règle du site donne ${regle}, le projet retient ${tenue}.`,
-      ask: "Ce n'est pas un différend : soit le projet se corrige, soit l'adresse qui a servi à déduire la règle est fausse."
+      ask: "L'une des deux est à reprendre : ce que le projet retient, ou l'entrée qui a servi à déduire la règle."
     };
   }
 
-  if (ecart.type === ECART.REGLE_DOUBLE) {
+  if (conflit.type === CONFLIT.DEUX_REGLES) {
     return {
-      label: ecartLabel(ECART.REGLE_DOUBLE),
+      label: conflictLabel(CONFLIT.DEUX_REGLES),
       sentence: `${sujet} : deux règles coexistent, ${regle} et ${tenue}.`,
-      ask: "Un texte ne se négocie pas contre un autre : l'une des deux est fausse, et il faut reprendre son origine."
+      ask: "Un texte ne se négocie pas contre un autre : l'une des deux vient d'une origine qu'il faut reprendre."
     };
   }
 
   return {
-    label: ecartLabel(ECART.CONTRADICTION),
-    sentence: `${sujet} : deux valeurs coexistent, et aucune règle ne tranche.`,
-    ask: "Personne n'est en faute tant qu'aucun texte ne tranche : c'est à quelqu'un de décider laquelle vaut."
+    label: conflictLabel(CONFLIT.DEUX_VALEURS),
+    sentence: `${sujet} : deux valeurs coexistent, et aucune règle ne les départage.`,
+    ask: "Rien ne les départage tout seul : c'est à quelqu'un de décider laquelle vaut."
   };
 }
 
 /**
- * Le résumé des écarts, pour un bandeau.
+ * Le résumé des conflits, par forme.
  *
- * Les non-conformités se comptent à part parce qu'elles ne se traitent pas
- * comme le reste : les noyer dans un total ferait perdre la seule information
- * qui commande une action immédiate.
+ * Chaque forme se compte à part parce qu'elles ne se résolvent pas de la même
+ * façon : un total unique ferait croire à une seule pile à traiter.
  */
-export function summarizeEcarts(ecarts = []) {
-  const liste = Array.isArray(ecarts) ? ecarts : [];
+export function summarizeConflicts(conflits = []) {
+  const liste = Array.isArray(conflits) ? conflits : [];
   return {
     total: liste.length,
-    nonConformities: liste.filter((ecart) => ecart.type === ECART.NON_CONFORMITE).length,
-    contradictions: liste.filter((ecart) => ecart.type === ECART.CONTRADICTION).length,
-    doubleRules: liste.filter((ecart) => ecart.type === ECART.REGLE_DOUBLE).length
+    ruleAgainstValue: liste.filter((entry) => entry.type === CONFLIT.REGLE_ET_VALEUR).length,
+    twoValues: liste.filter((entry) => entry.type === CONFLIT.DEUX_VALEURS).length,
+    twoRules: liste.filter((entry) => entry.type === CONFLIT.DEUX_REGLES).length
   };
 }

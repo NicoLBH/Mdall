@@ -17,6 +17,7 @@ import { getLocalisationProjectParametresTab } from "./project-parametres/projec
 import { getPhasesProjectParametresTab } from "./project-parametres/project-parametres-phases.js";
 import { getLotsProjectParametresTab } from "./project-parametres/project-parametres-lots.js";
 import { getCollaborateursProjectParametresTab } from "./project-parametres/project-parametres-collaborateurs.js";
+import { getDecoupageProjectParametresTab } from "./project-parametres/project-parametres-decoupage.js";
 import { getAgentsProjectParametresTab } from "./project-parametres/project-parametres-agents.js";
 import { getAutomatisationsProjectParametresTab } from "./project-parametres/project-parametres-automatisations.js";
 
@@ -26,6 +27,7 @@ const activeProjectParametresTabs = [
   getPhasesProjectParametresTab(),
   getLotsProjectParametresTab(),
   getCollaborateursProjectParametresTab(),
+  getDecoupageProjectParametresTab(),
   getAgentsProjectParametresTab(),
   getAutomatisationsProjectParametresTab()
 ];
@@ -36,11 +38,11 @@ const parametresNavGroups = [
   },
   {
     sectionLabel: "Données de base projet",
-    items: activeProjectParametresTabs.slice(1, 6)
+    items: activeProjectParametresTabs.slice(1, 7)
   },
   {
     sectionLabel: "Paramètres opérationnels",
-    items: [activeProjectParametresTabs[6]]
+    items: [activeProjectParametresTabs[7]]
   }
 ];
 
