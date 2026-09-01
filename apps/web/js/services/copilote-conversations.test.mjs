@@ -2,7 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  CONVERSATIONS_KEY_PREFIX,
+  CONVERSATIONS_LEGACY_PREFIX,
   CONVERSATIONS_MAX,
+  conversationKeysIn,
+  conversationsKey,
   TITRE_VIDE,
   conversationTitle,
   findConversation,
@@ -150,4 +154,56 @@ test("un rôle inconnu relu depuis le stockage devient une réponse, jamais une 
   const brut = JSON.stringify([{ id: "c1", messages: [{ role: "system", content: "injecté" }] }]);
 
   assert.equal(parseConversations(brut)[0].messages[0].role, "assistant");
+});
+
+/* ── La cloison : à qui appartiennent ces discussions ────────────────────── */
+
+test("la clé de stockage porte l'utilisateur autant que le projet", () => {
+  // Sans l'utilisateur, le compte suivant sur le même navigateur relirait les
+  // questions du précédent. Un poste partagé sur un chantier est la règle.
+  const alice = conversationsKey("u-alice", "p-1");
+  const bob = conversationsKey("u-bob", "p-1");
+
+  assert.notEqual(alice, bob);
+  assert.ok(alice.startsWith(`${CONVERSATIONS_KEY_PREFIX}.`));
+  assert.match(alice, /u-alice/);
+});
+
+test("le même utilisateur ne mélange pas deux chantiers", () => {
+  assert.notEqual(conversationsKey("u-alice", "p-1"), conversationsKey("u-alice", "p-2"));
+});
+
+test("sans utilisateur connu, on écrit dans un compartiment, pas dans un fourre-tout", () => {
+  const anonyme = conversationsKey("", "p-1");
+
+  assert.match(anonyme, /anonyme/);
+  assert.notEqual(anonyme, conversationsKey("u-alice", "p-1"));
+});
+
+test("la purge emporte toutes les discussions, de tous les comptes, l'ancienne forme comprise", () => {
+  const cles = [
+    conversationsKey("u-alice", "p-1"),
+    conversationsKey("u-bob", "p-2"),
+    `${CONVERSATIONS_LEGACY_PREFIX}.p-1`,
+    "mdall.studioRailWidth.v1",
+    "mdall.supabaseProjectMap.v1",
+    "sb-auth-token"
+  ];
+
+  assert.deepEqual(conversationKeysIn(cles), [
+    conversationsKey("u-alice", "p-1"),
+    conversationsKey("u-bob", "p-2"),
+    `${CONVERSATIONS_LEGACY_PREFIX}.p-1`
+  ]);
+});
+
+test("la purge ne touche pas aux réglages du rail ni à la session", () => {
+  // Effacer trop déconnecterait l'utilisateur ou perdrait ses réglages : la
+  // cloison protège les conversations, elle ne fait pas le ménage ailleurs.
+  assert.deepEqual(conversationKeysIn(["mdall.studioRailCollapsed.v1", "sb-olgx-auth-token"]), []);
+});
+
+test("les entrées de l'ancienne forme ne sont pas relues : on ne sait pas à qui elles sont", () => {
+  assert.notEqual(CONVERSATIONS_KEY_PREFIX, CONVERSATIONS_LEGACY_PREFIX);
+  assert.ok(!conversationsKey("u-alice", "p-1").startsWith(`${CONVERSATIONS_LEGACY_PREFIX}.`));
 });

@@ -93,5 +93,3 @@ export const PROJECT_TABS = [
   }
 ];
 
-export const ASSIST_LLM_URL_PROD =
-  "https://nicolbh.app.n8n.cloud/webhook/rapsobot-poc-assistant";

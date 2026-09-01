@@ -61,7 +61,8 @@ import {
 } from "./assertion-taxonomy.js";
 import { dependenciesOf, needsReview } from "./assertion-dependencies.js";
 import { HYPOTHESIS_STATE, stateLabel, stateOf } from "./hypothesis-acts.js";
-import { describeZonesOf, zonesOf } from "./project-zones.js";
+import { definedZones, describeZonesOf, zonesOf } from "./project-zones.js";
+import { describeConflict, findConflicts } from "./assertion-conflicts.js";
 
 /** L'ordre de lecture : ce qui fonde d'abord, ce qui en découle ensuite. */
 export const BRIEFING_NATURES = [
@@ -80,6 +81,17 @@ export const BRIEFING_NATURES = [
  * caché : le nombre exact est écrit.
  */
 export const BRIEFING_MAX_SUPERSEDED = 40;
+
+/**
+ * Combien de lignes en vigueur on emporte.
+ *
+ * Il faut bien une limite : un contexte plus grand que la fenêtre du modèle se
+ * fait couper par le serveur, au milieu d'une phrase, sans que personne le
+ * sache. Mieux vaut couper ici, proprement, **et le dire** — un copilote qui
+ * répond à partir d'une mémoire amputée sans savoir qu'elle l'est affirmerait
+ * une absence qui n'existe pas.
+ */
+export const BRIEFING_MAX_CURRENT = 400;
 
 function texte(valeur) {
   return String(valeur ?? "").trim();
@@ -218,6 +230,60 @@ function commentLire() {
 }
 
 /**
+ * Le découpage en zones, avec ce que chaque zone recouvre.
+ *
+ * Sans lui, « zones : Bâtiment A » est une étiquette que rien n'explique : le
+ * copilote ne peut ni dire ce qu'elle couvre, ni répondre à « et pour les
+ * étages ? ». Les définitions sont dans la mémoire — il suffisait de les
+ * emporter.
+ */
+function decoupage(assertions) {
+  const zones = definedZones(assertions);
+  if (zones.length === 0) return "";
+
+  const lignes = zones.map((zone) =>
+    `- **${zone.label}** — ${zone.definition || "aucune définition écrite : personne n'a dit ce que cette zone recouvre."}`
+  );
+
+  return [
+    "## Le découpage du projet",
+    "",
+    "Une affirmation portant une zone ne vaut que pour elle. Ce qui n'en porte aucune vaut pour l'ouvrage entier.",
+    "",
+    ...lignes
+  ].join("\n");
+}
+
+/**
+ * Ce qui ne s'accorde pas.
+ *
+ * Deux valeurs pour une même chose, sans que personne ait tranché. Un copilote
+ * qui répondrait « la zone de neige est A2 » alors que la mémoire en tient deux
+ * serait plus nuisible qu'un copilote muet : il ferait disparaître le
+ * désaccord au lieu de le montrer.
+ *
+ * Le vocabulaire est celui de `assertion-conflicts.js` : on décrit ce qu'on a
+ * vu, on ne juge pas qui a tort. « La machine repère ; l'humain tranche. »
+ */
+function desaccords(assertions) {
+  const conflits = findConflicts(assertions);
+  if (conflits.length === 0) return "";
+
+  const lignes = conflits.map((conflit) => {
+    const dit = describeConflict(conflit);
+    return `- **${dit.label}** — ${dit.sentence} ${dit.ask}`;
+  });
+
+  return [
+    "## Ce qui ne s'accorde pas",
+    "",
+    "Sur ces sujets, la mémoire tient plusieurs valeurs et personne n'a tranché. Ne choisis pas à leur place : montre le désaccord, et dis ce qu'il faudrait reprendre.",
+    "",
+    ...lignes
+  ].join("\n");
+}
+
+/**
  * Le texte que le copilote reçoit, et de quoi le résumer.
  *
  * `assertions === null` veut dire « la lecture a échoué », et c'est différent
@@ -229,7 +295,8 @@ export function buildMemoryBriefing({
   dependencies = [],
   acts = [],
   generatedAt = "",
-  maxSuperseded = BRIEFING_MAX_SUPERSEDED
+  maxSuperseded = BRIEFING_MAX_SUPERSEDED,
+  maxCurrent = BRIEFING_MAX_CURRENT
 } = {}) {
   const nom = texte(project?.name) || "projet sans nom";
   const quand = texte(generatedAt) || new Date().toISOString();
@@ -249,7 +316,11 @@ export function buildMemoryBriefing({
     };
   }
 
-  const courantes = currentAssertions(assertions);
+  const toutesCourantes = currentAssertions(assertions);
+  // Le tri avant la coupe : couper dans un ordre d'arrivée ferait disparaître
+  // des lignes différentes d'une lecture à l'autre.
+  const courantes = ordonner(toutesCourantes).slice(0, Math.max(0, maxCurrent));
+  const ecartees = toutesCourantes.length - courantes.length;
   const anciennes = assertions.filter((entree) => entree?.superseded_by);
   const parId = new Map(assertions.map((entree) => [texte(entree?.id), entree]));
   const contexte = { acts, dependencies, parId, toutes: assertions };
@@ -287,25 +358,37 @@ export function buildMemoryBriefing({
   const entete = [
     `# Mémoire du projet — ${nom}`,
     "",
-    `Établie le ${dateFr(quand)}. ${courantes.length} affirmation(s) en vigueur, ${anciennes.length} remplacée(s).`,
+    `Établie le ${dateFr(quand)}. ${toutesCourantes.length} affirmation(s) en vigueur, ${anciennes.length} remplacée(s).`,
     "",
-    courantes.length === 0
+    toutesCourantes.length === 0
       ? "**Rien n'a encore été versé à la mémoire de ce projet.** La lecture a bien eu lieu : c'est un vide constaté, pas une lecture manquée."
-      : "Chaque ligne est une chose que ce projet tient pour vraie, avec la date à laquelle il l'a tranchée et ce sur quoi elle s'appuie."
-  ].join("\n");
+      : "Chaque ligne est une chose que ce projet tient pour vraie, avec la date à laquelle il l'a tranchée et ce sur quoi elle s'appuie.",
+    ecartees > 0
+      ? `\n**Cette mémoire est trop longue pour tenir ici : ${ecartees} affirmation(s) en vigueur ne figurent pas ci-dessous.** Ne conclus donc jamais qu'une chose est absente de ce projet — dis que tu n'as reçu qu'une partie de sa mémoire.`
+      : ""
+  ]
+    .filter((bloc) => bloc !== "")
+    .join("\n");
 
   return {
     lue: true,
+    // Le résumé compte la mémoire **entière**, pas la part qui a tenu dans le
+    // texte : un compteur aligné sur la coupe ferait croire à une mémoire plus
+    // courte qu'elle n'est, ce qui est le mensonge qu'on passe ce fichier à
+    // éviter. `ecartees` dit l'écart entre les deux.
     resume: {
       ...summarizeMemory(assertions),
       parNature: BRIEFING_NATURES.map((nature) => ({
         nature,
         label: natureLabel(nature),
-        count: parNature.get(nature).length
+        count: toutesCourantes.filter((assertion) => classifyAssertion(assertion).nature === nature).length
       })),
-      nonClasse: sansNature.length,
-      aRevoir: courantes.filter(needsReview).length
+      nonClasse: toutesCourantes.filter((assertion) => !classifyAssertion(assertion).nature).length,
+      aRevoir: toutesCourantes.filter(needsReview).length,
+      ecartees
     },
-    texte: [entete, commentLire(), ...blocs, passe].filter(Boolean).join("\n\n") + "\n"
+    texte: [entete, commentLire(), decoupage(assertions), desaccords(assertions), ...blocs, passe]
+      .filter(Boolean)
+      .join("\n\n") + "\n"
   };
 }

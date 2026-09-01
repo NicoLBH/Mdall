@@ -16432,6 +16432,7 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 
 .copilote-empty{ text-align:center; max-width:560px; }
 .copilote-empty__mark{ display:inline-flex; color:var(--muted); }
+.copilote-empty__mark svg{ width:64px; height:64px; }
 .copilote-empty__title{ margin:10px 0 4px; color:var(--text); font-size:16px; font-weight:600; }
 .copilote-empty__sub{ margin:0; color:var(--muted); font-size:13px; line-height:19px; }
 
@@ -16471,15 +16472,48 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   color:var(--text); font:inherit; font-size:14px; line-height:20px;
 }
 .copilote-input:focus{ outline:none; box-shadow:none; }
-.copilote-send{
+/* Les commandes du composeur, en bas à droite du cadre : les crédits, un filet,
+   l'envoi. Le rond bleu est parti — le tracé seul suffit à désigner l'envoi, et
+   une pastille de couleur dans un cadre déjà bordé faisait un bouton de trop. */
+.copilote-compose__tools{
   position:absolute; right:10px; bottom:10px;
+  display:flex; align-items:center; gap:8px;
+}
+.copilote-compose__divider{
+  width:1px; height:20px; background:var(--border); flex:0 0 1px;
+}
+.copilote-tool,
+.copilote-send{
   display:inline-flex; align-items:center; justify-content:center;
-  width:32px; height:32px;
-  border:0; border-radius:999px; background:var(--borderColor-accent-emphasis); color:#fff;
+  width:28px; height:28px;
+  border:0; border-radius:6px; background:transparent; color:var(--muted);
   cursor:pointer;
 }
-.copilote-send:hover{ filter:brightness(1.06); }
-.copilote-send:disabled{ opacity:.45; cursor:default; filter:none; }
+.copilote-tool:hover,
+.copilote-send:hover{ background:var(--panel2); color:var(--text); }
+.copilote-send:disabled{ opacity:.45; cursor:default; background:transparent; color:var(--muted); }
+
+/* Le panneau des crédits : au-dessus du composeur, accroché à droite comme le
+   bouton qui l'ouvre. */
+.copilote-credits{
+  position:absolute; right:10px; bottom:48px; z-index:2;
+  width:300px; padding:14px;
+  border:1px solid var(--border); border-radius:12px; background:var(--panel);
+  box-shadow:0 8px 24px rgba(1,4,9,.6);
+}
+.copilote-credits__head{ display:flex; align-items:center; gap:6px; margin-bottom:10px; }
+.copilote-credits__title{ color:var(--text); font-size:14px; font-weight:600; }
+.copilote-credits__hint{ display:inline-flex; color:var(--muted); }
+.copilote-credits__row{
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  color:var(--muted); font-size:12px;
+}
+.copilote-credits__count{ color:var(--text); font-weight:600; }
+.copilote-credits__bar{
+  margin-top:10px; height:6px; border-radius:999px; background:var(--panel2); overflow:hidden;
+}
+.copilote-credits__bar span{ display:block; height:100%; background:var(--borderColor-accent-emphasis); }
+.copilote-credits__note{ margin:10px 0 0; color:var(--muted); font-size:11px; line-height:15px; }
 
 /* Ce que le copilote saura faire. Éteints, et qui le montrent : un bouton gris
    qui ne s'enfonce pas ne promet rien qu'il ne tienne. */
