@@ -17818,3 +17818,38 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .fondations-resultats.est-perime .fondations-bloc,
 .fondations-resultats.est-perime .fondations-resultats__bilan,
 .fondations-resultats.est-perime .fondations-verdict{ opacity:.45; }
+
+/* ------------------------------------------------------------------ *
+ * Le schéma de la fondation
+ *
+ * Deux vues à la même échelle, écrite sous le dessin : un schéma qui étire
+ * pour remplir son cadre ment sur ce qu'il montre.
+ * ------------------------------------------------------------------ */
+.fondations-schema__vues{ display:flex; flex-wrap:wrap; gap:12px; }
+.fondations-schema__vue{ margin:0; flex:1 1 260px; min-width:0; }
+.fondations-schema__vue figcaption{
+  font-size:11px; color:var(--muted); text-transform:uppercase;
+  letter-spacing:.04em; margin-bottom:2px;
+}
+.fondations-schema__vue svg{ width:100%; height:auto; display:block; }
+.fondations-schema__echelle{ margin:6px 0 0; font-size:11px; color:var(--muted); }
+.fondations-schema__vide{ margin:0; font-size:12px; color:var(--muted); }
+.fondations-schema__alertes{
+  margin:8px 0 0; padding:8px 10px 8px 26px;
+  border:1px solid var(--attention, #d29922); border-radius:6px;
+  color:var(--attention, #d29922); font-size:12px;
+}
+
+.fondations-schema__terres{ opacity:.5; }
+.fondations-schema__hachure{ stroke:var(--muted); stroke-width:.6; opacity:.55; }
+.fondations-schema__terrain{ stroke:var(--fg); stroke-width:1.2; }
+.fondations-schema__beton{ fill:rgba(139,148,158,.22); stroke:var(--fg); stroke-width:1.2; }
+.fondations-schema__fut-plan{ fill:rgba(139,148,158,.35); stroke:var(--fg); stroke-width:1; stroke-dasharray:3 2; }
+.fondations-schema__butee{ fill:rgba(88,166,255,.28); stroke:#58a6ff; stroke-width:1; }
+.fondations-schema__comprime{ fill:rgba(63,185,80,.25); stroke:#3fb950; stroke-width:1.2; }
+.fondations-schema__effort{ stroke:var(--danger, #f85149); stroke-width:1.6; }
+.fondations-schema__pointe{ fill:var(--danger, #f85149); }
+.fondations-schema__point{ fill:var(--danger, #f85149); }
+.fondations-schema__axe{ stroke:var(--muted); stroke-width:.7; stroke-dasharray:4 3; }
+.fondations-schema__cote{ stroke:var(--muted); stroke-width:.8; }
+.fondations-schema__texte{ fill:var(--muted); font-size:9.5px; }

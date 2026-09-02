@@ -674,7 +674,14 @@ export function calculerStabiliteExterne(entrees = {}) {
     // Les moments affichés sont ceux qui restent après ce que la butée a repris.
     Vd: ct.V, Mdx: ct.FK - ct.FM, Mdy: ct.FL - ct.FN,
     sigmaRef, sigmaLim, id: ct.HI,
-    sigmaRefLim: ct.HI * sigmaLim
+    sigmaRefLim: ct.HI * sigmaLim,
+    // Les excentrements de la résultante, signés par les moments qui les
+    // créent. Ils ne servent pas au calcul — ils permettent de **dessiner** la
+    // surface d'appui réelle, au lieu d'en donner seulement le pourcentage.
+    excentrements: ct.V > 0
+      ? { ex: (Math.sign(ct.My) || 1) * (ct.FL - ct.FN) / ct.V,
+          ey: (Math.sign(ct.Mx) || 1) * (ct.FK - ct.FM) / ct.V }
+      : null
   };
 
   // --- Surfaces comprimées (AO33:AL43)
