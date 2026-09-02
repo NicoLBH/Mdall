@@ -43,7 +43,7 @@
 
 import { store } from "../store.js";
 import { buildAssistContext } from "./copilote-context.js";
-import { declarationsPourModele, executerOutil, sansFigure } from "./copilote-outils.js";
+import { declarationsPourModele, executerOutil, outilParId, sansFigure } from "./copilote-outils.js";
 import { conversationTitle } from "./copilote-conversations.js";
 import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
 import { resolveCurrentBackendProjectId } from "./project-supabase-sync.js";
@@ -153,7 +153,13 @@ function parseUsage(data) {
  */
 export const TOURS_OUTILS_MAX = 3;
 
-export async function sendAssistMessage(message, { signal = null, toolExchanges = [], onToolRun = null } = {}) {
+export async function sendAssistMessage(message, {
+  signal = null,
+  toolExchanges = [],
+  onToolRun = null,
+  onEtape = null,
+  confirmees = []
+} = {}) {
   const content = normalizeMessage(message);
   if (!content) {
     throw new Error("Message vide.");
@@ -180,6 +186,7 @@ export async function sendAssistMessage(message, { signal = null, toolExchanges 
   const context = await buildAssistContext();
 
   const assertions = context.memoire?.assertions ?? [];
+  etape(onEtape, "Lecture de la mémoire du projet…");
   const echanges = [...toolExchanges];
   const executions = [];
   let usage = { inputTokens: null, outputTokens: null, totalTokens: null };
@@ -234,11 +241,21 @@ export async function sendAssistMessage(message, { signal = null, toolExchanges 
       );
     }
 
+    const nommes = appels.map((appel) => nomLisible(appel?.name)).join(", ");
+    etape(onEtape, `Lancement du calcul — ${nommes}…`);
+    // Une image rendue avant de calculer : sans cela le message s'écrirait et
+    // serait remplacé dans le même battement, et personne ne le verrait jamais.
+    await souffler();
+
     for (const appel of appels) {
       const resultat = executerOutil({
         id: appel?.name,
         entrees: safeJsonParse(appel?.arguments) ?? {},
-        assertions
+        assertions,
+        // La question sert de justificatif : une valeur qui remplace celle de la
+        // mémoire doit avoir été dite par quelqu'un.
+        question: content,
+        confirmees
       });
 
       executions.push(resultat);
@@ -254,9 +271,48 @@ export async function sendAssistMessage(message, { signal = null, toolExchanges 
         output: JSON.stringify(sansFigure(resultat))
       });
     }
+
+    // Le message qui reste à l'écran pendant le second appel au modèle : il
+    // nomme ce qui a tourné. « Analyse en cours » tout seul ne dit pas de quoi.
+    const aboutis = executions.filter((execution) => execution?.statut === "fait");
+    etape(onEtape, aboutis.length
+      ? `Résultats de ${aboutis.map((execution) => execution.titre).join(", ")} récupérés, analyse en cours…`
+      : "L'utilitaire demande une précision — préparation de la question…");
   }
 
   throw new Error("Le copilote n'a pas conclu.");
+}
+
+/**
+ * Dire où l'on en est.
+ *
+ * Un aller-retour avec un utilitaire prend plusieurs secondes, et pendant ce
+ * temps l'écran ne montrait qu'un rond qui tourne. « Le copilote réfléchit »
+ * pendant huit secondes ressemble à une panne ; « lancement du calcul »,
+ * « résultats récupérés » ressemble à du travail — et c'en est.
+ */
+function etape(rappel, texte) {
+  if (typeof rappel === "function") rappel(texte);
+}
+
+/** Rendre la main au navigateur, le temps d'une image. */
+function souffler() {
+  return new Promise((suite) => {
+    if (typeof window?.requestAnimationFrame === "function") window.requestAnimationFrame(() => suite());
+    else setTimeout(suite, 0);
+  });
+}
+
+/**
+ * Le nom d'un utilitaire, tel qu'on le dit à quelqu'un.
+ *
+ * `spectre_elastique_ec8` est un identifiant ; « Spectre de réponse élastique
+ * (EC8) » est ce qu'on lit. On passe par le catalogue plutôt que d'embellir
+ * l'identifiant : un outil dont le titre change ne doit pas garder l'ancien
+ * dans les messages d'attente.
+ */
+function nomLisible(id) {
+  return outilParId(id)?.titre || String(id || "un utilitaire");
 }
 
 /** Le décompte cumulé des tours. Un champ absent le reste : on ne compte pas du vide. */

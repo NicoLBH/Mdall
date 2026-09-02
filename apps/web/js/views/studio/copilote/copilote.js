@@ -106,6 +106,10 @@ function ensureState() {
       lastError: "",
       creditsOpen: false,
       menuOpen: false,
+      // Où en est le copilote, en une phrase. « Il réfléchit » pendant huit
+      // secondes ressemble à une panne ; dire ce qui se passe ressemble à du
+      // travail — et c'en est.
+      etape: "",
       // De quoi interrompre l'appel en cours. Un bouton d'arrêt qui n'arrête
       // rien serait pire que pas de bouton du tout.
       abort: null,
@@ -326,7 +330,7 @@ function renderMessage(msg, index) {
  * vérifie. C'est la différence entre un assistant et un outil de travail.
  */
 function renderExecution(execution) {
-  if (execution?.statut === "manquant") return "";
+  if (execution?.statut === "manquant" || execution?.statut === "aConfirmer") return "";
 
   if (execution?.statut !== "fait") {
     return `
@@ -430,7 +434,7 @@ function renderExecution(execution) {
  * l'objet même d'une question en « et si ».
  */
 function renderFormulaire(execution, index) {
-  if (execution?.statut !== "manquant") return "";
+  if (execution?.statut !== "manquant" && execution?.statut !== "aConfirmer") return "";
 
   // Une seule valeur manque, et elle a des choix : des pastilles valent mieux
   // qu'un formulaire. On répond d'un clic au lieu de viser une liste
@@ -489,6 +493,14 @@ function renderPastilles(execution, champ, index) {
     <div class="copilote-pastilles" data-pastilles="${index}" data-outil="${escapeHtml(execution.outil)}"
       data-champ="${escapeHtml(champ.cle)}">
       <p class="copilote-pastilles__question">${escapeHtml(champ.libelle)} ?</p>
+      ${
+        execution.proposeParLeModele?.[champ.cle]
+          ? `<p class="copilote-pastilles__garde">
+              Le copilote allait retenir <span class="mono">${escapeHtml(execution.proposeParLeModele[champ.cle])}</span>,
+              que personne n'a dit. Le calcul attend votre réponse.
+            </p>`
+          : ""
+      }
       <div class="copilote-pastilles__choix">
         ${champ.valeurs.map((valeur) => `
           <button type="button" class="copilote-pastille" data-valeur="${escapeHtml(valeur)}">${escapeHtml(valeur)}</button>
@@ -562,7 +574,7 @@ function renderAccueil() {
  * apparaîtra. Un indicateur posé ailleurs — dans un coin, sur le bouton —
  * laisserait croire que le fil est fini et que rien ne vient.
  */
-function renderAttente() {
+function renderAttente(etape) {
   return `
     <article class="copilote-msg copilote-msg--assistant copilote-msg--pending" aria-live="polite">
       <span class="copilote-msg__mark" aria-hidden="true">${svgIcon("copilot", { width: 32, height: 32 })}</span>
@@ -572,7 +584,7 @@ function renderAttente() {
         </div>
         <div class="copilote-pending">
           <span class="copilote-spinner" aria-hidden="true">${svgIcon("attachment-upload-spinner")}</span>
-          <span>Le copilote lit la mémoire du projet…</span>
+          <span>${escapeHtml(etape || "Le copilote réfléchit…")}</span>
         </div>
       </div>
     </article>
@@ -588,7 +600,7 @@ function renderCorps(etat) {
       <div class="copilote-thread" id="copiloteThread">
         <div class="copilote-thread__inner">
           ${messages.map((msg, index) => renderMessage(msg, index)).join("")}
-          ${etat.isSending ? renderAttente() : ""}
+          ${etat.isSending ? renderAttente(etat.etape) : ""}
         </div>
       </div>
       <button type="button" class="copilote-scroll" id="copiloteScroll" hidden
@@ -705,7 +717,7 @@ function render(root) {
                 class="copilote-input"
                 rows="3"
                 ${etat.isSending ? "disabled" : ""}
-                placeholder="Posez une question sur ce projet…"
+                placeholder="${etat.isSending ? "Le copilote réfléchit…" : "Posez une question sur ce projet…"}"
               >${escapeHtml(etat.draft || "")}</textarea>
 
               <div class="copilote-compose__bar">
@@ -786,7 +798,16 @@ async function envoyer(root) {
   etat.abort = controle;
 
   try {
-    const { reply, usage, executions, context } = await sendAssistMessage(contenu, { signal: controle.signal });
+    const { reply, usage, executions, context } = await sendAssistMessage(contenu, {
+      signal: controle.signal,
+      // Redessiner seulement l'attente : réécrire le fil entier à chaque étape
+      // ferait sauter la position de lecture toutes les deux secondes.
+      onEtape: (dit) => {
+        etat.etape = dit;
+        const ligne = root.querySelector(".copilote-pending span:last-child");
+        if (ligne) ligne.textContent = dit;
+      }
+    });
 
     // La mémoire lue pour cette question sert aussi au formulaire qui suivra :
     // la relire au moment du calcul risquerait de calculer sur un état que la
@@ -818,6 +839,7 @@ async function envoyer(root) {
   } finally {
     etat.isSending = false;
     etat.abort = null;
+    etat.etape = "";
     render(root);
     root.querySelector("#copiloteInput")?.focus();
   }
@@ -916,7 +938,8 @@ async function repondreParPastille(root, groupe, valeur) {
 
   const execution = etat.messages
     .flatMap((message) => message.executions ?? [])
-    .find((entree) => entree?.statut === "manquant" && entree.outil === groupe.dataset.outil);
+    .find((entree) => (entree?.statut === "manquant" || entree?.statut === "aConfirmer")
+      && entree.outil === groupe.dataset.outil);
 
   await lancerCalcul(root, outil, { ...(execution?.connues ?? {}), [champ]: valeur });
 }
@@ -946,13 +969,21 @@ async function lancerCalcul(root, outil, saisies) {
   if (etat.isSending) return;
 
   const assertions = etat.assertionsConnues ?? [];
-  const resultat = executerOutil({ id: outil.id, entrees: saisies, assertions });
+  // Ce qui vient de l'écran est **confirmé par définition** : quelqu'un vient de
+  // le cliquer ou de le saisir. Le garde-fou contre les valeurs inventées n'a
+  // plus lieu de s'y opposer — il vise ce que le modèle décide seul.
+  const resultat = executerOutil({
+    id: outil.id,
+    entrees: saisies,
+    assertions,
+    confirmees: Object.keys(saisies)
+  });
 
   // Toujours manquant : quelque chose n'a pas été fourni, ou l'a été hors des
   // choix. On remplace la demande par la nouvelle, sans repartir vers le
   // modèle — le déranger pour lui dire qu'il manque encore une valeur ne sert
   // personne.
-  if (resultat.statut === "manquant") {
+  if (resultat.statut === "manquant" || resultat.statut === "aConfirmer") {
     const dernier = etat.messages[etat.messages.length - 1];
     if (dernier) dernier.executions = [resultat];
     render(root);
@@ -964,7 +995,9 @@ async function lancerCalcul(root, outil, saisies) {
   // saurait plus lequel vient d'aboutir.
   for (const message of etat.messages) {
     if (Array.isArray(message.executions)) {
-      message.executions = message.executions.filter((execution) => execution?.statut !== "manquant");
+      message.executions = message.executions.filter(
+        (execution) => execution?.statut !== "manquant" && execution?.statut !== "aConfirmer"
+      );
     }
   }
 
@@ -986,6 +1019,12 @@ async function lancerCalcul(root, outil, saisies) {
   try {
     const { reply, usage, executions } = await sendAssistMessage(question.content, {
       signal: controle.signal,
+      confirmees: Object.keys(saisies),
+      onEtape: (dit) => {
+        etat.etape = dit;
+        const ligne = root.querySelector(".copilote-pending span:last-child");
+        if (ligne) ligne.textContent = dit;
+      },
       // Le calcul est déjà fait : on le donne au modèle comme s'il l'avait
       // demandé, avec un identifiant d'appel à nous. C'est ce qui lui permet
       // de reprendre le fil sans redemander.
@@ -1013,6 +1052,7 @@ async function lancerCalcul(root, outil, saisies) {
   } finally {
     etat.isSending = false;
     etat.abort = null;
+    etat.etape = "";
     render(root);
   }
 }
