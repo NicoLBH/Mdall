@@ -16,6 +16,7 @@
 import { escapeHtml } from "../utils/escape-html.js";
 import { store } from "../store.js";
 import { svgIcon } from "../ui/icons.js";
+import { journal as journalDExecution } from "../services/run-journal.js";
 import { PROJECT_TAB_RESELECTED_EVENT } from "./project-header.js";
 import {
   PROJECT_SHELL_COMPACT_CHANGE_EVENT,
@@ -3409,9 +3410,19 @@ async function recomputeAfterMerge(root, proposition) {
     );
 
     // L'écriture est la seule phase que l'analyse ne peut pas mesurer
-    // elle-même : c'est ici qu'elle a lieu, c'est donc ici qu'on la chronomètre.
+    // elle-même : c'est ici qu'elle a lieu, c'est donc ici qu'on la chronomètre
+    // et qu'on tient son journal.
     const debutEcriture = Date.now();
-    const ecrire = (steps) => [...steps, { id: "suivi", label: "Suivi écrit", ms: Date.now() - debutEcriture }];
+    const carnet = journalDExecution();
+    carnet.dire(`${(analyse.result?.avisStatus ?? []).length} avis écrits au suivi`);
+    carnet.dire(`${analyse.reports.length} livrable(s) rattachés à l'exécution`);
+    if ((analyse.unreachable ?? []).length > 0) {
+      carnet.avertir(`${analyse.unreachable.length} livrable(s) n'ont pas été rapatriés : le suivi est écrit sans eux`);
+    }
+    const ecrire = (steps) => [
+      ...steps,
+      { id: "suivi", label: "Suivi écrit", ms: Date.now() - debutEcriture, statut: "ok", lignes: carnet.lignes() }
+    ];
 
     await saveCtAnalysis({
       projectId: proposition.project_id,

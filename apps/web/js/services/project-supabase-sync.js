@@ -905,12 +905,18 @@ function mapCtRunRowToLogEntry(row = {}) {
         documents: (Array.isArray(row.corpus_documents) ? row.corpus_documents : [])
           .map((entry) => safeString(entry?.name || ""))
           .filter(Boolean),
-        // Ce que chaque phase a pris, quand l'exécution l'a mesuré.
+        // Ce que chaque phase a pris, et ce qui s'y est passé. Le journal
+        // traverse tel quel : le raboter ici reviendrait à conserver un détail
+        // en base pour ne jamais l'afficher.
         steps: (Array.isArray(row.steps) ? row.steps : [])
           .map((step) => ({
             id: safeString(step?.id || ""),
             label: safeString(step?.label || ""),
-            ms: Number(step?.ms) || 0
+            // `null` n'est pas zéro : une étape conservée pour son journal n'a
+            // pas duré « 0 ms », elle n'a pas été chronométrée.
+            ms: step?.ms === null || step?.ms === undefined || step?.ms === "" ? null : Number(step.ms) || 0,
+            statut: safeString(step?.statut || "ok"),
+            lignes: Array.isArray(step?.lignes) ? step.lignes : null
           }))
           .filter((step) => step.id)
       }

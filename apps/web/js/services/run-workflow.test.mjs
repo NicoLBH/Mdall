@@ -150,3 +150,18 @@ test("sans moteur ni pack, « Lu par » ne dit rien plutôt que de dire du vide"
 test("un moteur seul se dit seul", () => {
   assert.equal(describeReadingStack("ct-lab v3"), "ct-lab v3");
 });
+
+test("une étape conservée pour son journal n'affiche pas « 0 ms »", () => {
+  // Elle n'a pas été chronométrée : lui prêter une durée nulle la ferait
+  // passer pour instantanée, ce qui est une affirmation, pas une absence.
+  const graphe = buildRunGraph({
+    details: { corpus: { documentCount: 2, trackedAvisCount: 3, guardViolationCount: 0,
+      steps: [
+        { id: "corpus", label: "Corpus relu", ms: 120 },
+        { id: "gardes", label: "Gardes", ms: null, lignes: [{ texte: "aucune violation" }] }
+      ] } }
+  });
+  const parId = Object.fromEntries(graphe.map((n) => [n.id, n]));
+  assert.equal(parId.corpus.duration, 120);
+  assert.equal(parId.gardes.duration, null);
+});

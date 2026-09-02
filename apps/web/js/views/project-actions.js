@@ -4,6 +4,9 @@ import { getRunLogEntries, getRunMetrics } from "../services/project-automation.
 import { syncProjectActionsFromSupabase } from "../services/project-supabase-sync.js";
 import { svgIcon } from "../ui/icons.js";
 import { buildRunGraph, describeReadingStack, formatStepDuration } from "../services/run-workflow.js";
+import {
+  STATUT, etapeDe, etapesConsultables, numeroter, resumerEtape
+} from "../services/run-journal.js";
 import { store } from "../store.js";
 import { PROJECT_TAB_RESELECTED_EVENT } from "./project-header.js";
 import {
@@ -509,6 +512,7 @@ function renderRunDetail(entry) {
 function renderRunGraph(entry) {
   const nodes = buildRunGraph(entry);
   if (nodes.length === 0) return "";
+  const consultables = etapesConsultables(entry);
 
   return `
     <section class="run-section run-section--graph" data-run-graph-section>
@@ -543,7 +547,16 @@ function renderRunGraph(entry) {
                 <div class="run-graph__node run-graph__node--${escapeHtml(node.tone)}">
                   <span class="run-graph__head">
                     <span class="run-graph__icon">${svgIcon(node.icon, { className: "octicon" })}</span>
-                    <span class="run-graph__label">${escapeHtml(node.label)}</span>
+                    ${
+                      // Cliquable seulement si l'étape a tenu un journal.
+                      // Rendre cliquable un titre qui n'ouvre rien, ce serait
+                      // promettre un détail qu'on n'a pas.
+                      consultables.has(node.id)
+                        ? `<button type="button" class="run-graph__label run-graph__label--lien"
+                             data-run-step="${escapeHtml(node.id)}">${escapeHtml(node.label)}</button>`
+                        : `<span class="run-graph__label"
+                             title="Aucun détail n'a été enregistré pour cette étape.">${escapeHtml(node.label)}</span>`
+                    }
                   </span>
                   <span class="run-graph__detail">${escapeHtml(node.detail)}</span>
                   ${
@@ -624,6 +637,147 @@ function renderRunSection(titre, lignes = []) {
   `;
 }
 
+/**
+ * Le détail d'une étape, ligne à ligne.
+ *
+ * Troisième niveau du journal : une ligne par acte, une page par exécution, et
+ * ici une page par **étape**. C'est le niveau auquel on répond à « qu'est-ce
+ * qui a été fait, dans quel ordre, et où ça s'est arrêté ».
+ *
+ * La mise en forme est celle d'un journal d'exécution — gouttière de numéros à
+ * gauche, texte à chasse fixe, groupes repliés derrière un chevron — parce que
+ * c'est la forme que les gens savent déjà lire, et parce qu'elle rend le
+ * repérage possible : on cite un numéro de ligne.
+ *
+ * Les numéros ne sont pas recalculés à l'affichage. Un groupe replié laisse un
+ * trou dans la suite visible, et ce trou est l'information : il dit combien de
+ * lignes se cachent là sans les montrer.
+ */
+function renderStepDetail(entry, etape) {
+  const lignes = numeroter(etape.lignes ?? []);
+  const resume = resumerEtape(etape);
+  const meta = etatDeLEtape(etape.statut);
+
+  return `
+    <section class="run-detail run-detail--step">
+      <div class="run-detail__head">
+        <div class="run-detail__title-row">
+          <button type="button" class="run-step__retour" data-run-step-back>
+            ${svgIcon("arrow-left", { className: "octicon" })} ${escapeHtml(entry.name || "Exécution")}
+          </button>
+        </div>
+        <div class="run-detail__title-row">
+          <span class="${meta.icone}">${svgIcon(meta.symbole, { className: "octicon" })}</span>
+          <h2 class="run-detail__title">${escapeHtml(etape.label || etape.id)}</h2>
+          ${etape.ms === null ? "" : `<span class="run-step__duree">${escapeHtml(formatStepDuration(etape.ms))}</span>`}
+        </div>
+        <p class="run-detail__lead">
+          ${escapeHtml(meta.phrase)}
+          ${resume.total} ligne${resume.total > 1 ? "s" : ""} enregistrée${resume.total > 1 ? "s" : ""}${
+            decrireLesEcarts(resume)
+          }.
+        </p>
+      </div>
+
+      <div class="run-log" data-run-log>
+        ${lignes.map(renderLogLine).join("")}
+      </div>
+    </section>
+  `;
+}
+
+/** « dont 2 à relire et 1 en échec », ou rien du tout. */
+function decrireLesEcarts({ avertissements, echecs }) {
+  const morceaux = [];
+  if (avertissements > 0) morceaux.push(`${avertissements} à relire`);
+  if (echecs > 0) morceaux.push(`${echecs} en échec`);
+  return morceaux.length ? `, dont ${morceaux.join(" et ")}` : "";
+}
+
+/** Une ligne du journal : un fait, ou un groupe qu'on déplie. */
+function renderLogLine(ligne) {
+  if (!ligne.groupe) {
+    return `
+      <div class="run-log__line run-log__line--${escapeHtml(ligne.niveau)}">
+        <span class="run-log__num">${ligne.numero}</span>
+        <span class="run-log__text">${escapeHtml(ligne.texte)}</span>
+      </div>
+    `;
+  }
+
+  const caches = ligne.lignes.length;
+  // Un groupe qui a échoué s'ouvre tout seul. Replier ce qui a cassé, c'est
+  // reproduire le défaut qu'on corrige : il faudrait chercher où ça s'est
+  // arrêté au lieu de le voir. Son en-tête porte aussi la couleur de son état,
+  // sans quoi un échec se cacherait derrière un chevron gris.
+  const ouvert = ligne.statut === STATUT.ECHEC;
+  return `
+    <div class="run-log__group" data-run-log-group>
+      <button type="button" class="run-log__line run-log__line--group run-log__line--${escapeHtml(ligne.statut)}"
+              data-run-log-toggle aria-expanded="${ouvert ? "true" : "false"}">
+        <span class="run-log__num">${ligne.numero}</span>
+        <span class="run-log__caret">${svgIcon("chevron-right", { className: "octicon" })}</span>
+        <span class="run-log__text">${escapeHtml(ligne.groupe)}</span>
+        <span class="run-log__count">${caches} ligne${caches > 1 ? "s" : ""}</span>
+      </button>
+      <div class="run-log__children"${ouvert ? "" : " hidden"}>
+        ${ligne.lignes
+          .map(
+            (enfant) => `
+              <div class="run-log__line run-log__line--child run-log__line--${escapeHtml(enfant.niveau)}">
+                <span class="run-log__num">${enfant.numero}</span>
+                <span class="run-log__text">${escapeHtml(enfant.texte)}</span>
+              </div>
+            `
+          )
+          .join("")}
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Ce que le statut d'une étape de journal vaut, en mots et en signes.
+ *
+ * À ne pas confondre avec `getStepStatusMeta`, qui décrit les étapes de
+ * l'enrichissement Géorisques : ce ne sont pas les mêmes étapes, et elles
+ * n'ont ni les mêmes états ni la même façon de se rendre.
+ */
+function etatDeLEtape(statut) {
+  if (statut === STATUT.ECHEC) {
+    return {
+      symbole: "x-circle-fill",
+      icone: "run-step__etat run-step__etat--echec",
+      phrase: "L'exécution s'est arrêtée ici."
+    };
+  }
+  if (statut === STATUT.NON_ATTEINTE) {
+    return {
+      symbole: "dot-fill-pending",
+      icone: "run-step__etat run-step__etat--attente",
+      phrase: "Cette étape n'a pas été atteinte : une précédente s'est arrêtée."
+    };
+  }
+  return {
+    symbole: "check-circle-fill",
+    icone: "run-step__etat run-step__etat--ok",
+    phrase: "Cette étape est allée au bout."
+  };
+}
+
+/** Les groupes se déplient et se replient, comme un journal d'exécution. */
+function bindRunLog(root) {
+  for (const bouton of root.querySelectorAll("[data-run-log-toggle]")) {
+    bouton.addEventListener("click", () => {
+      const enfants = bouton.parentElement?.querySelector(".run-log__children");
+      if (!enfants) return;
+      const ouvert = bouton.getAttribute("aria-expanded") === "true";
+      bouton.setAttribute("aria-expanded", ouvert ? "false" : "true");
+      enfants.hidden = ouvert;
+    });
+  }
+}
+
 function getOpenRun() {
   const openId = String(store.projectActionsView?.openRunId || "");
   if (!openId) return null;
@@ -632,16 +786,20 @@ function getOpenRun() {
 
 function renderProjectActionsContent(root) {
   const open = getOpenRun();
+  // Trois niveaux, et le plus profond n'existe que si le précédent existe : une
+  // étape ouverte sans son exécution serait une page orpheline.
+  const etape = open ? etapeDe(open, store.projectActionsView?.openStepId) : null;
 
   root.innerHTML = `
     <section class="project-simple-page project-simple-page--settings">
       <div class="settings-content project-page-shell actions-shell">
-        ${open ? renderRunDetail(open) : renderRunsTable()}
+        ${etape ? renderStepDetail(open, etape) : open ? renderRunDetail(open) : renderRunsTable()}
       </div>
     </section>
   `;
 
-  if (open) bindRunGraph(root);
+  if (etape) bindRunLog(root);
+  else if (open) bindRunGraph(root);
 }
 
 /**
@@ -668,6 +826,7 @@ function bindTabReset() {
     if (!store.projectActionsView?.openRunId) return;
 
     store.projectActionsView.openRunId = "";
+    store.projectActionsView.openStepId = "";
     renderProjectActionsContent(mountedRoot);
   });
 }
@@ -682,6 +841,7 @@ export function renderProjectActions(root) {
   // l'exécution qu'on lisait la dernière fois.
   if (store.projectActionsView && typeof store.projectActionsView === "object") {
     store.projectActionsView.openRunId = "";
+    store.projectActionsView.openStepId = "";
   }
 
   setProjectViewHeader({
@@ -699,6 +859,22 @@ export function renderProjectActions(root) {
     if (opener) {
       event.preventDefault();
       store.projectActionsView.openRunId = opener.getAttribute("data-run-open") || "";
+      store.projectActionsView.openStepId = "";
+      renderProjectActionsContent(root);
+      return;
+    }
+
+    // Ouvrir une étape depuis le graphe, et en revenir.
+    const etapeOuverte = event.target?.closest?.("[data-run-step]");
+    if (etapeOuverte) {
+      event.preventDefault();
+      store.projectActionsView.openStepId = etapeOuverte.getAttribute("data-run-step") || "";
+      renderProjectActionsContent(root);
+      return;
+    }
+    if (event.target?.closest?.("[data-run-step-back]")) {
+      event.preventDefault();
+      store.projectActionsView.openStepId = "";
       renderProjectActionsContent(root);
       return;
     }
