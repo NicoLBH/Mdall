@@ -50,7 +50,7 @@
  * machine désigne le fautif.
  */
 
-import { getSeismicSizingValues } from "./seismic-spectrum.js";
+import { buildElasticResponseSpectrumTable, getSeismicSizingValues } from "./seismic-spectrum.js";
 import { currentAssertions } from "./project-memory.js";
 
 function texte(valeur) {
@@ -137,6 +137,39 @@ export const OUTILS = [
       { cle: "TD", libelle: "Période TD", unite: "s", decimales: 2 },
       { cle: "eta", libelle: "Correction d'amortissement η", unite: "", decimales: 3 }
     ],
+
+    /**
+     * La courbe, quand l'outil en dessine une.
+     *
+     * Les points sortent du **même calcul** que ceux de l'écran Parasismique —
+     * `buildElasticResponseSpectrumTable`. Un graphique tracé à part finirait
+     * par montrer autre chose que l'écran, et personne ne saurait lequel croire.
+     *
+     * Elle ne rend que des données : c'est l'écran qui trace. Un module de
+     * calcul qui fabriquerait du HTML ne serait plus vérifiable par un test.
+     */
+    figure(entrees = {}) {
+      const lignes = buildElasticResponseSpectrumTable({
+        zoneSismique: texte(entrees.zoneSismique),
+        importanceCategory: texte(entrees.importanceCategory),
+        soilClass: texte(entrees.soilClass),
+        dampingRatio: nombre(entrees.dampingRatio) ?? 5
+      });
+
+      const points = (Array.isArray(lignes) ? lignes : [])
+        .filter((ligne) => Number.isFinite(ligne?.T) && Number.isFinite(ligne?.Se))
+        .map((ligne) => ({ x: ligne.T, y: ligne.Se }));
+
+      if (points.length < 2) return null;
+
+      return {
+        titre: "Spectre de réponse élastique Se(T)",
+        xLabel: "Période T (s)",
+        yLabel: "Se(T) (m/s²)",
+        xDomain: [0, 4],
+        points
+      };
+    },
 
     executer(entrees = {}) {
       const valeurs = getSeismicSizingValues({
@@ -408,8 +441,25 @@ export function executerOutil({ id = "", entrees = {}, assertions = [] } = {}) {
     venuesDeLaMemoire,
     valeurs: resultat.valeurs,
     unites: Object.fromEntries((outil.sorties ?? []).map((sortie) => [sortie.cle, sortie.unite || ""])),
-    ecarts: comparerALaMemoire(outil, resultat.valeurs, assertions)
+    ecarts: comparerALaMemoire(outil, resultat.valeurs, assertions),
+    // La courbe est pour l'écran, pas pour le modèle : `sansFigure` l'enlève
+    // avant l'envoi. Quarante points de spectre n'apprennent rien à un modèle
+    // qui a déjà TB, TC, TD — ils ne feraient que gonfler le contexte.
+    figure: typeof outil.figure === "function" ? outil.figure(fournies) : null
   };
+}
+
+/**
+ * Le résultat, allégé de ce qui ne sert qu'à l'écran.
+ *
+ * Un modèle lit « TB = 0,06 s » ; il ne tire rien de quarante couples de
+ * coordonnées, sinon le risque de les recopier. La courbe reste donc à
+ * l'écran, et le contexte reste lisible.
+ */
+export function sansFigure(resultat) {
+  if (!resultat || typeof resultat !== "object") return resultat;
+  const { figure, ...reste } = resultat;
+  return figure ? { ...reste, figure_disponible: true } : reste;
 }
 
 /** Les entrées vides ne comptent pas : elles écraseraient la mémoire par du vide. */

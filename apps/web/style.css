@@ -16476,14 +16476,21 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
    survol, en bas du message. */
 .copilote-msg--user{
   position:relative;
-  width:60%; margin-left:auto; padding:12px;
-  border-radius:12px; background:rgba(240,246,252,.03);
+  width:60%; margin-left:auto; padding:0;
+  background:transparent;
+}
+/* Le fond est sur la bulle, l'horodatage est **dessous**. À l'intérieur, il
+   réservait sa place même invisible, et ce vide se lisait comme un remplissage
+   bas mal réglé ; dehors, il n'occupe rien tant qu'on ne le demande pas, et
+   l'espace qu'il prend au survol aère le fil. */
+.copilote-msg__bulle{
+  padding:12px; border-radius:12px; background:rgba(240,246,252,.03);
 }
 /* La date en bas à droite, et au survol seulement : sur un message qu'on vient
    d'écrire elle n'apprend rien ; sur un fil relu trois semaines plus tard elle
    est la seule chose qui situe. */
 .copilote-msg__stamp{
-  display:block; margin-top:8px; text-align:right;
+  display:block; margin-top:6px; text-align:right;
   color:var(--muted); font-size:11px;
   opacity:0; transition:opacity .12s ease;
 }
@@ -16565,7 +16572,7 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
      translucide, si bien que le texte du fil se lisait au travers du bouton
      dès qu'on passait dessus. Un bouton qui laisse voir ce qu'il recouvre ne
      se distingue plus de ce qu'il recouvre. */
-  background:var(--bgAssistPanel); color:var(--text);
+  background:rgb(38, 44, 54); color:var(--text);
   box-shadow:0 4px 12px rgba(1,4,9,.5); cursor:pointer;
 }
 /* `display:inline-flex` ci-dessus est une règle d'auteur : elle l'emporte sur
@@ -16770,6 +16777,33 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .copilote-champ__saisie:focus{ outline:none; border-color:var(--borderColor-accent-emphasis); }
 .copilote-champ__aide{ color:var(--muted); font-size:11px; line-height:15px; }
 .copilote-formulaire__envoi{ margin-top:12px; }
+
+/* La courbe de l'utilitaire, dans sa trace. Elle sort du même calcul que
+   celle de l'écran Parasismique : deux tracés séparés finiraient par montrer
+   autre chose l'un que l'autre, et personne ne saurait lequel croire. */
+.copilote-outil__figure{ margin-top:12px; }
+.copilote-outil__figure .svg-line-chart{ max-width:100%; }
+
+/* Les réponses possibles, à cliquer. Elles viennent de la déclaration de
+   l'utilitaire — ce sont les valeurs que le calcul sait traiter, ni plus ni
+   moins. */
+.copilote-pastilles{
+  margin:12px 0 0; padding:12px;
+  border:1px solid var(--border); border-radius:12px; background:var(--bgAssistPanel);
+}
+.copilote-pastilles__question{ margin:0 0 10px; color:var(--text); font-size:13px; font-weight:600; }
+.copilote-pastilles__choix{ display:flex; flex-wrap:wrap; gap:8px; }
+.copilote-pastille{
+  min-height:32px; padding:0 16px;
+  border:1px solid var(--border); border-radius:999px; background:transparent;
+  color:var(--text); font:inherit; font-size:13px; cursor:pointer;
+}
+.copilote-pastille:hover{ background:var(--panel2); border-color:var(--text); }
+.copilote-pastilles__aide{ margin:10px 0 0; color:var(--muted); font-size:11px; line-height:15px; }
+/* Le champ libre reste : ne laisser que les pastilles obligerait à choisir même
+   quand la bonne réponse est « aucune des quatre, et voici pourquoi ». */
+.copilote-pastilles__libre{ display:flex; gap:8px; margin-top:12px; }
+.copilote-pastilles__libre .copilote-champ__saisie{ flex:1 1 auto; min-width:0; }
 
 .copilote-error{ margin:0; color:var(--danger); font-size:13px; }
 

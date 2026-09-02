@@ -41,7 +41,7 @@ import { store } from "../../../store.js";
 import { escapeHtml } from "../../../utils/escape-html.js";
 import { svgIcon } from "../../../ui/icons.js";
 import { sendAssistMessage } from "../../../services/copilote-service.js";
-import { executerOutil, outilParId } from "../../../services/copilote-outils.js";
+import { executerOutil, outilParId, sansFigure } from "../../../services/copilote-outils.js";
 import { conversationTitle, findConversation } from "../../../services/copilote-conversations.js";
 import {
   appendMessage,
@@ -50,6 +50,7 @@ import {
 } from "../../../services/copilote-conversations-supabase.js";
 import { resolveCurrentBackendProjectId } from "../../../services/project-supabase-sync.js";
 import { registerProjectPrimaryScrollSource } from "../../project-shell-chrome.js";
+import { getNiceChartTicks, renderSvgLineChart } from "../../../utils/svg-line-chart.js";
 
 /**
  * Ce que le copilote saura faire, et ne sait pas encore.
@@ -279,9 +280,15 @@ function renderMessage(msg, index) {
   const quand = msg.ts ? new Date(msg.ts).toLocaleString("fr-FR") : "";
 
   if (role === "user") {
+    // L'horodatage est **sous** la bulle, pas dedans : à l'intérieur, il
+    // réservait sa place même invisible, et ce vide se lisait comme un
+    // remplissage bas mal réglé. Dehors, il n'occupe rien tant qu'on ne le
+    // demande pas, et l'espace qu'il prend au survol aère le fil.
     return `
       <article class="copilote-msg copilote-msg--user">
-        <div class="copilote-msg__body">${mdToHtml(msg.content || "")}</div>
+        <div class="copilote-msg__bulle">
+          <div class="copilote-msg__body">${mdToHtml(msg.content || "")}</div>
+        </div>
         ${quand ? `<div class="copilote-msg__stamp mono">${escapeHtml(quand)}</div>` : ""}
       </article>
     `;
@@ -357,6 +364,29 @@ function renderExecution(execution) {
     </li>
   `).join("");
 
+  const figure = execution.figure?.points?.length
+    ? `<div class="copilote-outil__figure">
+         <p class="copilote-outil__legende">${escapeHtml(execution.figure.titre || "Courbe")}</p>
+         ${renderSvgLineChart({
+           ariaDescription: execution.figure.titre || "Courbe de l'utilitaire",
+           width: 520,
+           height: 220,
+           xLabel: execution.figure.xLabel || "",
+           yLabel: execution.figure.yLabel || "",
+           xDomain: execution.figure.xDomain || [0, 4],
+           yDomain: [0, (getNiceChartTicks(
+             execution.figure.points.reduce((haut, point) => Math.max(haut, point.y), 0), 4
+           ).at(-1)) || 1],
+           xTicks: [0, 1, 2, 3, 4],
+           yTicks: getNiceChartTicks(execution.figure.points.reduce((haut, point) => Math.max(haut, point.y), 0), 4),
+           xGrid: { skipFirst: true, lineStyle: "dashed" },
+           yGrid: { skipFirst: true, lineStyle: "solid" },
+           interactive: false,
+           series: [{ label: "", points: execution.figure.points, stroke: true, fill: false, pointsVisible: false }]
+         })}
+       </div>`
+    : "";
+
   return `
     <div class="copilote-outil">
       <p class="copilote-outil__titre">
@@ -374,6 +404,7 @@ function renderExecution(execution) {
           <ul class="copilote-outil__liste">${sorties}</ul>
         </div>
       </div>
+      ${figure}
       ${
         ecarts
           ? `<div class="copilote-outil__ecarts">
@@ -400,6 +431,12 @@ function renderExecution(execution) {
  */
 function renderFormulaire(execution, index) {
   if (execution?.statut !== "manquant") return "";
+
+  // Une seule valeur manque, et elle a des choix : des pastilles valent mieux
+  // qu'un formulaire. On répond d'un clic au lieu de viser une liste
+  // déroulante puis un bouton — et la question posée reste lisible en dessous.
+  const seul = (execution.champs ?? []).length === 1 ? execution.champs[0] : null;
+  if (seul?.valeurs?.length) return renderPastilles(execution, seul, index);
 
   const champs = (execution.champs ?? []).map((champ) => {
     const valeur = execution.connues?.[champ.cle] ?? "";
@@ -431,6 +468,39 @@ function renderFormulaire(execution, index) {
       <div class="copilote-formulaire__champs">${champs}</div>
       <button type="submit" class="copilote-action copilote-formulaire__envoi">Calculer</button>
     </form>
+  `;
+}
+
+/**
+ * Les réponses possibles, à cliquer.
+ *
+ * Les pastilles viennent de la **déclaration de l'utilitaire**, comme le
+ * formulaire : ce sont les valeurs que le calcul sait traiter, ni plus ni
+ * moins. Un jeu de propositions rédigé par le modèle offrirait des réponses
+ * qu'il ne saurait pas exploiter.
+ *
+ * Le champ libre reste, et il ne sert pas qu'à saisir une valeur hors liste :
+ * on y apporte une précision, on y change d'avis, on y explique. Ne laisser que
+ * les pastilles obligerait à choisir même quand la bonne réponse est « aucune
+ * des quatre, et voici pourquoi ».
+ */
+function renderPastilles(execution, champ, index) {
+  return `
+    <div class="copilote-pastilles" data-pastilles="${index}" data-outil="${escapeHtml(execution.outil)}"
+      data-champ="${escapeHtml(champ.cle)}">
+      <p class="copilote-pastilles__question">${escapeHtml(champ.libelle)} ?</p>
+      <div class="copilote-pastilles__choix">
+        ${champ.valeurs.map((valeur) => `
+          <button type="button" class="copilote-pastille" data-valeur="${escapeHtml(valeur)}">${escapeHtml(valeur)}</button>
+        `).join("")}
+      </div>
+      ${champ.aide ? `<p class="copilote-pastilles__aide">${escapeHtml(champ.aide)}</p>` : ""}
+      <form class="copilote-pastilles__libre" data-pastilles-libre>
+        <input type="text" class="copilote-champ__saisie" name="libre"
+          placeholder="Saisissez votre propre réponse ou apportez des précisions">
+        <button type="submit" class="copilote-action">Envoyer</button>
+      </form>
+    </div>
   `;
 }
 
@@ -830,43 +900,68 @@ function brancherDefilement(root) {
 }
 
 /**
- * L'utilisateur a rempli ce qui manquait : on calcule, puis on fait raconter.
+ * Une pastille cliquée : c'est une valeur, et elle part au calcul.
+ *
+ * Pas au modèle d'abord — il n'aurait rien à en faire de plus que ce qu'on
+ * sait déjà : quel outil, quel champ, quelle valeur. Le faire passer par lui
+ * ajouterait un aller-retour et une chance de se tromper d'outil.
+ */
+async function repondreParPastille(root, groupe, valeur) {
+  const etat = ensureState();
+  if (etat.isSending) return;
+
+  const outil = outilParId(String(groupe.dataset.outil || "").replace(/_V\d+$/, ""));
+  const champ = String(groupe.dataset.champ || "");
+  if (!outil || !champ) return;
+
+  const execution = etat.messages
+    .flatMap((message) => message.executions ?? [])
+    .find((entree) => entree?.statut === "manquant" && entree.outil === groupe.dataset.outil);
+
+  await lancerCalcul(root, outil, { ...(execution?.connues ?? {}), [champ]: valeur });
+}
+
+/** Une précision libre : une question de plus, rien d'autre. */
+async function envoyerTexte(root, texte) {
+  const champ = root.querySelector("#copiloteInput");
+  if (!champ) return;
+  champ.value = texte;
+  await envoyer(root);
+}
+
+/**
+ * Ce qui manquait a été fourni : on calcule, puis on fait raconter.
  *
  * **Le calcul a lieu ici, avant de reparler au modèle.** L'ordre inverse — lui
  * renvoyer les valeurs et le laisser rappeler l'utilitaire — marcherait la
  * plupart du temps et raterait le reste : rien ne garantit qu'il rappelle le
- * bon outil avec exactement ce qui a été saisi. Ce que l'utilisateur a écrit
- * entre dans le calcul tel quel.
+ * bon outil avec exactement ce qui a été saisi.
+ *
+ * Une seule fonction pour le formulaire et pour les pastilles : ce sont deux
+ * façons de donner la même chose, et deux chemins auraient fini par ne plus
+ * traiter le résultat de la même manière.
  */
-async function remplirEtCalculer(root, formulaire) {
+async function lancerCalcul(root, outil, saisies) {
   const etat = ensureState();
   if (etat.isSending) return;
-
-  const outil = outilParId(String(formulaire.dataset.outil || "").replace(/_V\d+$/, ""));
-  if (!outil) return;
-
-  const saisies = {};
-  for (const champ of formulaire.querySelectorAll("[name]")) {
-    saisies[champ.name] = champ.value;
-  }
 
   const assertions = etat.assertionsConnues ?? [];
   const resultat = executerOutil({ id: outil.id, entrees: saisies, assertions });
 
-  // Toujours manquant : quelque chose n'a pas été rempli, ou l'a été hors des
-  // choix. On remplace le formulaire par le nouveau, sans repartir vers le
+  // Toujours manquant : quelque chose n'a pas été fourni, ou l'a été hors des
+  // choix. On remplace la demande par la nouvelle, sans repartir vers le
   // modèle — le déranger pour lui dire qu'il manque encore une valeur ne sert
   // personne.
-  const dernier = etat.messages[etat.messages.length - 1];
   if (resultat.statut === "manquant") {
+    const dernier = etat.messages[etat.messages.length - 1];
     if (dernier) dernier.executions = [resultat];
     render(root);
     return;
   }
 
-  // Le formulaire a été rempli : il n'a plus lieu d'être. Le laisser sous
+  // La demande a été satisfaite : elle n'a plus lieu d'être. La laisser sous
   // l'ancienne réponse donnerait deux formulaires pour un seul calcul, et on ne
-  // saurait plus lequel est celui qui vient d'aboutir.
+  // saurait plus lequel vient d'aboutir.
   for (const message of etat.messages) {
     if (Array.isArray(message.executions)) {
       message.executions = message.executions.filter((execution) => execution?.statut !== "manquant");
@@ -875,7 +970,7 @@ async function remplirEtCalculer(root, formulaire) {
 
   const question = {
     role: "user",
-    content: `J'ai rempli les valeurs demandées pour « ${outil.titre} ».`,
+    content: `J'ai fourni les valeurs demandées pour « ${outil.titre} ».`,
     ts: new Date().toISOString()
   };
 
@@ -899,7 +994,7 @@ async function remplirEtCalculer(root, formulaire) {
           call_id: `formulaire-${Date.now()}`,
           name: outil.id,
           arguments: JSON.stringify(saisies),
-          output: JSON.stringify(resultat)
+          output: JSON.stringify(sansFigure(resultat))
         }
       ]
     });
@@ -920,6 +1015,19 @@ async function remplirEtCalculer(root, formulaire) {
     etat.abort = null;
     render(root);
   }
+}
+
+/** Le formulaire rempli : ses champs deviennent les entrées du calcul. */
+async function remplirEtCalculer(root, formulaire) {
+  const outil = outilParId(String(formulaire.dataset.outil || "").replace(/_V\d+$/, ""));
+  if (!outil) return;
+
+  const saisies = {};
+  for (const champ of formulaire.querySelectorAll("[name]")) {
+    saisies[champ.name] = champ.value;
+  }
+
+  await lancerCalcul(root, outil, saisies);
 }
 
 /** Renoncer à la réponse en cours. La question posée, elle, reste dans le fil. */
@@ -990,6 +1098,25 @@ function bind(root) {
     formulaire.addEventListener("submit", (event) => {
       event.preventDefault();
       void remplirEtCalculer(root, formulaire);
+    });
+  }
+
+  for (const groupe of root.querySelectorAll("[data-pastilles]")) {
+    for (const pastille of groupe.querySelectorAll("[data-valeur]")) {
+      pastille.addEventListener("click", () => {
+        void repondreParPastille(root, groupe, pastille.dataset.valeur);
+      });
+    }
+
+    groupe.querySelector("[data-pastilles-libre]")?.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const saisie = event.target.querySelector("[name=libre]");
+      const texte = String(saisie?.value || "").trim();
+      if (!texte) return;
+      // Le champ libre n'est pas une valeur : c'est une phrase. Elle repart
+      // comme une question ordinaire, et le modèle en fait ce qu'il veut —
+      // rappeler l'utilitaire, ou répondre autrement.
+      void envoyerTexte(root, texte);
     });
   }
 
