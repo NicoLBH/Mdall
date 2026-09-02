@@ -23,6 +23,9 @@ import {
 } from "../../../services/fondations-declaration.js";
 import { calculerFondation } from "../../../services/fondations-service.js";
 import { dessinerSchema } from "./fondations-schema.js";
+import { rappelsDeLaMemoire, preremplir, alertesDeLaMemoire } from "../../../services/fondations-memoire.js";
+import { listProjectAssertions } from "../../../services/project-memory-supabase.js";
+import { resolveCurrentBackendProjectId } from "../../../services/project-supabase-sync.js";
 
 const etat = {
   entrees: entreesParDefaut(),
@@ -33,8 +36,38 @@ const etat = {
   empreinteDuResultat: "",
   calculEnCours: false,
   erreur: "",
-  invalides: []
+  invalides: [],
+  // Ce que le projet sait déjà, et quels champs en viennent.
+  rappels: {},
+  venuesDeLaMemoire: {}
 };
+
+/**
+ * Ce que le projet sait, versé dans le formulaire vierge.
+ *
+ * La lecture est tentée une fois, à l'ouverture. Elle ne bloque rien : un écran
+ * qui refuserait de s'afficher parce que la mémoire n'a pas répondu serait pire
+ * que le même écran sans pré-remplissage.
+ */
+async function lireLaMemoire(root) {
+  try {
+    const projectId = await resolveCurrentBackendProjectId();
+    if (!projectId) return;
+    const assertions = await listProjectAssertions(projectId);
+    if (!Array.isArray(assertions)) return;
+
+    etat.rappels = rappelsDeLaMemoire(assertions);
+    // On ne pré-remplit que ce qui n'a pas encore été touché : revenir sur
+    // l'écran ne doit pas défaire une variante en cours.
+    const listes = Object.fromEntries(CHOIX.map((choix) => [choix.cle, choix.valeurs]));
+    const { valeurs, venuesDeLaMemoire } = preremplir(etat.entrees, etat.rappels, listes);
+    etat.entrees = valeurs;
+    etat.venuesDeLaMemoire = venuesDeLaMemoire;
+    if (root?.isConnected) dessiner(root);
+  } catch (erreur) {
+    console.warn("[fondations] mémoire du projet illisible", erreur);
+  }
+}
 
 /** Ce qui, dans la saisie, change le résultat. Tout, donc. */
 function empreinte(entrees) {
@@ -58,6 +91,7 @@ export function renderSolidityFondations(root, { force = false } = {}) {
 
   dessiner(root);
   brancher(root);
+  void lireLaMemoire(root);
   registerProjectPrimaryScrollSource(root.closest("#projectStudioRouterScroll") || document.getElementById("projectStudioRouterScroll"));
 }
 
@@ -81,6 +115,7 @@ function brancher(root) {
     // aux deux endroits où ça compte.
     marquerPerime(root);
     rafraichirSchema(root);
+    rafraichirAlertes(root);
   });
 
   root.addEventListener("change", (evenement) => {
@@ -168,6 +203,7 @@ function dessiner(root) {
           ${dessinerInvalides()}
           <div class="fondations-grille">
             <div class="fondations-colonne">
+              ${dessinerRappels()}
               ${dessinerChoix()}
               <fieldset class="fondations-zone">
                 <legend>Schéma</legend>
@@ -210,7 +246,7 @@ function dessinerChoix() {
         ${CHOIX.map((choix) => `
           <label class="fondations-champ${estPertinent(choix, etat.entrees) ? "" : " est-hors-sujet"}"
                  ${estPertinent(choix, etat.entrees) ? "" : `title="Ne sert qu'au règlement EC8-5 Annexe F."`}>
-            <span class="fondations-champ__libelle">${escapeHtml(choix.libelle)}</span>
+            <span class="fondations-champ__libelle">${escapeHtml(choix.libelle)}${marqueMemoire(choix.cle)}</span>
             <select class="fondations-champ__saisie" data-fondation-choix="${escapeHtml(choix.cle)}">
               ${choix.valeurs.map((valeur) => `
                 <option value="${escapeHtml(valeur)}"${String(etat.entrees[choix.cle]) === valeur ? " selected" : ""}>${escapeHtml(valeur)}</option>
@@ -219,6 +255,53 @@ function dessinerChoix() {
           </label>
         `).join("")}
       </div>
+    </fieldset>
+  `;
+}
+
+/**
+ * La marque d'une valeur venue de la mémoire du projet.
+ *
+ * Une astérisque, et l'infobulle dit l'énoncé et la date où il a été tranché.
+ * Sans elle, une valeur pré-remplie ne se distingue pas d'une valeur saisie, et
+ * l'on ne sait plus laquelle on a décidée.
+ */
+function marqueMemoire(cle) {
+  const rappel = etat.venuesDeLaMemoire?.[cle];
+  if (!rappel) return "";
+  const date = rappel.trancheeLe ? ` (tranché le ${new Date(rappel.trancheeLe).toLocaleDateString("fr-FR")})` : "";
+  const titre = `Valeur reprise de la mémoire du projet : ${rappel.enonce || rappel.libelle}${date}. Vous pouvez la modifier pour essayer une variante.`;
+  return `<abbr class="fondations-memoire" title="${escapeHtml(titre)}" aria-label="${escapeHtml(titre)}">*</abbr>`;
+}
+
+/**
+ * Ce que le projet rappelle, et ce qu'il reproche à cette géométrie.
+ *
+ * Le rappel est affiché même quand il ne remplit aucun champ : la profondeur
+ * hors gel n'entre dans aucun calcul de cet écran, mais elle décide de la
+ * validité de l'assise, et personne ne devrait avoir à s'en souvenir.
+ */
+function dessinerRappels() {
+  const rappels = Object.values(etat.rappels ?? {});
+  if (rappels.length === 0) return "";
+  const alertes = alertesDeLaMemoire(etat.entrees, etat.rappels);
+
+  return `
+    <fieldset class="fondations-zone">
+      <legend>Ce que le projet sait déjà</legend>
+      <ul class="fondations-rappels">
+        ${rappels.map((rappel) => `
+          <li>
+            <span class="fondations-rappels__libelle">${escapeHtml(rappel.libelle)}</span>
+            <strong>${escapeHtml(rappel.valeur)}${rappel.unite ? ` ${escapeHtml(rappel.unite)}` : ""}</strong>
+            ${rappel.champ ? `<em>repris dans la saisie</em>` : ""}
+          </li>
+        `).join("")}
+      </ul>
+      ${alertes.length ? `
+        <ul class="fondations-schema__alertes">
+          ${alertes.map((alerte) => `<li>${escapeHtml(alerte.texte)}</li>`).join("")}
+        </ul>` : ""}
     </fieldset>
   `;
 }
@@ -370,6 +453,18 @@ function rafraichirSchema(root) {
   const hote = root.querySelector("[data-fondations-schema]");
   if (!hote) return;
   hote.innerHTML = dessinerSchema(etat.entrees, resultatPerime() ? null : etat.resultat);
+}
+
+/** Les reproches de la mémoire, remis à jour sans tout redessiner. */
+function rafraichirAlertes(root) {
+  const zone = root.querySelector(".fondations-rappels")?.closest(".fondations-zone");
+  if (!zone) return;
+  const alertes = alertesDeLaMemoire(etat.entrees, etat.rappels);
+  const existante = zone.querySelector(".fondations-schema__alertes");
+  if (alertes.length === 0) { existante?.remove(); return; }
+  const html = alertes.map((alerte) => `<li>${escapeHtml(alerte.texte)}</li>`).join("");
+  if (existante) { existante.innerHTML = html; return; }
+  zone.insertAdjacentHTML("beforeend", `<ul class="fondations-schema__alertes">${html}</ul>`);
 }
 
 /** La mention « périmé », posée sans tout redessiner. */

@@ -18010,3 +18010,13 @@ strong.est-verifie{ color:#3fb950; }
   display:block; margin-top:6px;
   font-size:11px; font-style:normal; color:var(--muted);
 }
+/* L'astérisque d'une valeur venue de la mémoire : bleue, discrète, et son
+   infobulle dit d'où elle sort et quand elle a été tranchée. */
+.fondations-memoire{
+  color:#58a6ff; text-decoration:none; border:0;
+  margin-left:3px; font-weight:700; cursor:help;
+}
+.fondations-rappels{ margin:0; padding:0; list-style:none; display:grid; gap:4px; }
+.fondations-rappels li{ display:flex; align-items:baseline; gap:8px; font-size:12px; }
+.fondations-rappels__libelle{ color:var(--muted); }
+.fondations-rappels em{ color:var(--muted); font-style:normal; opacity:.75; font-size:11px; }
