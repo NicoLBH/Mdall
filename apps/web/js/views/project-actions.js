@@ -622,6 +622,15 @@ function renderRunGraph(entry) {
           ? `<p class="run-graph__unmeasured">Les durées de cette exécution n'ont pas été enregistrées.</p>`
           : ""
       }
+      ${
+        // Et quand aucune étape n'a de journal, on le dit **aussi**. Sans cette
+        // ligne, on cherche où cliquer : rien ne distingue « il n'y a rien à
+        // ouvrir » de « l'écran est cassé », et l'infobulle ne se lit qu'au
+        // survol d'un titre qu'on n'a aucune raison de survoler.
+        consultables.size === 0
+          ? `<p class="run-graph__unmeasured">Aucune étape de cette exécution n'a enregistré de journal : il n'y a rien à ouvrir. Les exécutions plus récentes en tiennent un.</p>`
+          : ""
+      }
       <div class="run-graph" data-run-graph-viewport>
         <div class="run-graph__canvas" data-run-graph-canvas>
           ${nodes

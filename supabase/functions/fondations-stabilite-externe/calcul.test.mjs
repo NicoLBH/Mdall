@@ -21,22 +21,29 @@
  *
  * Mais ces valeurs ne valent que pour **une** situation : celle que le classeur
  * porte — EC - NF P94-261, répartition Meyerhoff, sol drainé, ni séisme ni
- * charge accidentelle. Les autres branches — Fascicule 62, DTU 13.12,
- * répartition constante, sol non drainé, combinaisons sismiques — sont
- * transcrites et elles tournent, et les tests ci-dessous vérifient qu'elles ne
- * divergent pas ; **elles ne sont pas comparées au classeur**, faute de pouvoir
- * le recalculer ici (LibreOffice s'y bloque : neuf minutes écoulées pour une
- * seconde de calcul).
+ * charge accidentelle.
  *
- * Le chemin pour combler ce trou est court et ne demande rien d'exotique :
- * enregistrer le classeur avec ces entrées-là — son tableur met alors ses
- * résultats en cache — et le relire. La comparaison prend quelques secondes.
+ * ## Le second étalon : une note de calcul réelle
+ *
+ * Cinq massifs d'une affaire livrée, avec leurs entrées et leurs sorties
+ * imprimées, ferment la lacune la plus grosse : la **répartition constante**,
+ * dont le polygone de décompression se résout par une cubique. Voir
+ * `note-reelle.js` pour ce qu'ils couvrent.
+ *
+ * ## Ce qui reste sans étalon
+ *
+ * Le Fascicule 62, le DTU 13.12, le sol non drainé et les combinaisons
+ * sismiques ou accidentelles sont transcrits et ils tournent ; les tests
+ * ci-dessous vérifient qu'ils ne divergent pas, mais aucune source ne les
+ * confirme encore. Le chemin pour les fermer est le même : une note de calcul,
+ * ou un classeur enregistré avec ces réglages.
  */
 
 import test from "node:test";
 import assert from "node:assert/strict";
 import { calculerStabiliteExterne, DEFAUTS, REGLEMENTS } from "./calcul.js";
 import { COMBINAISONS } from "./combinaisons.js";
+import { MASSIFS_NOTE_REELLE } from "./note-reelle.js";
 
 /** Le cas de référence : celui que le classeur porte tel qu'il nous est venu. */
 const REFERENCE = {
@@ -260,4 +267,59 @@ test("les cases BF61:BQ72 valent un Gmin unitaire et rien d'autre", async () => 
       assert.equal(table[`${col}${ligne}`], 0, `${col}${ligne} devrait être nul`);
     }
   }
+});
+
+
+/**
+ * Les cinq massifs d'une note de calcul réelle.
+ *
+ * Un test par massif plutôt qu'une boucle : quand l'un casse, on veut lire
+ * lequel dans le nom du test, pas le déduire d'un message d'assertion.
+ */
+for (const massif of MASSIFS_NOTE_REELLE) {
+  test(`note réelle — ${massif.nom} : les vingt-deux grandeurs concordent`, () => {
+    const r = calculerStabiliteExterne(massif.entrees);
+    const a = massif.attendu;
+
+    // La note est imprimée à la décimale près : la tolérance est celle de
+    // l'arrondi d'impression, pas une marge de confort.
+    const impression = (obtenu, attendu) => proche(obtenu, attendu, Math.max(0.06 / Math.max(Math.abs(attendu), 1), 5e-4));
+
+    assert.equal(r.glissement.combinaison, a.glissement);
+    impression(r.glissement.HEd, a.HEd);
+    impression(r.glissement.Rhd1, a.Rhd1);
+    impression(r.glissement.Rhd2, a.Rhd2);
+    impression(r.glissement.Rpd, a.Rpd);
+    impression(r.glissement.HRd, a.HRd);
+
+    assert.equal(r.basculement.combinaison, a.basculement);
+    assert.equal(r.basculement.sens, a.sens);
+    impression(r.basculement.MEd, a.MEd);
+    impression(r.basculement.Mst0, a.Mst0);
+    impression(r.basculement.Mstb, a.Mstb);
+    impression(r.basculement.MRd, a.MRd);
+
+    assert.equal(r.contrainte.combinaison, a.contrainte);
+    impression(r.contrainte.Vd, a.Vd);
+    impression(r.contrainte.Mdx, a.Mdx);
+    impression(r.contrainte.Mdy, a.Mdy);
+    impression(r.contrainte.sigmaRef, a.sref);
+    impression(r.contrainte.sigmaLim, a.sLIM);
+    impression(r.contrainte.id, a.id);
+
+    impression(r.surfaces.eluEla.obtenue, a.sc[0]);
+    impression(r.surfaces.elsRares.obtenue, a.sc[1]);
+    impression(r.surfaces.elsQp.obtenue, a.sc[2]);
+  });
+}
+
+test("la note réelle couvre les branches que le classeur ne montrait pas", () => {
+  const sens = new Set(MASSIFS_NOTE_REELLE.map((m) => m.attendu.sens));
+  assert.ok(sens.size >= 3, "au moins trois sens de basculement différents");
+  assert.ok(MASSIFS_NOTE_REELLE.some((m) => m.entrees.sectionLx !== m.entrees.sectionLy),
+    "au moins une semelle rectangulaire");
+  assert.ok(MASSIFS_NOTE_REELLE.some((m) => m.attendu.sc[0] === 0),
+    "au moins une semelle entièrement décomprimée à l'ELU");
+  assert.ok(MASSIFS_NOTE_REELLE.every((m) => m.entrees.repartition === "Constante"),
+    "les cinq sont en répartition constante : c'est ce qu'ils étalonnent");
 });

@@ -59,6 +59,7 @@ import { bindGhActionButtons, renderGhActionButton } from "../../ui/gh-split-but
 import { renderLightTabs } from "../../ui/light-tabs.js";
 import { paginateItems, renderPaginationControls } from "../../ui/pagination.js";
 import { svgIcon } from "../../../ui/icons.js";
+import { journal as journalDExecution, STATUT } from "../../../services/run-journal.js";
 import { getNiceChartTicks, renderSvgLineChart } from "../../../utils/svg-line-chart.js";
 import {
   formatSharedDateInputValue,
@@ -78,6 +79,22 @@ import {
  * Une reconnaissance qui n'a pas abouti n'écarte rien non plus : on ne
  * sanctionne pas un document sur notre propre ignorance.
  */
+/** Le nom sous lequel un livrable se reconnaît à l'écran. */
+function nomDuRapport(report = {}) {
+  return String(report.file?.name ?? report.name ?? report.sourceId ?? "livrable").trim() || "livrable";
+}
+
+/** Pourquoi un livrable a été mis de côté. Jamais « écarté » tout court. */
+function motifDEcart(report = {}) {
+  if (report.error) return String(report.error);
+  const statut = report?.recognition?.status;
+  if (statut === RECOGNITION.UNRECOGNIZED) return "aucun type reconnu";
+  if (statut === RECOGNITION.NO_TEXT_LAYER) return "pas de couche de texte : rien à lire";
+  if (report?.related?.verdict === IDENTITY.DUPLICATE) return "doublon d'un autre livrable du lot";
+  if (report?.attachment?.verdict === ATTACHMENT.FOREIGN) return "rattaché à une autre affaire";
+  return "mis de côté";
+}
+
 function isSetAside(report) {
   const status = report?.recognition?.status;
   if (status === RECOGNITION.UNRECOGNIZED || status === RECOGNITION.NO_TEXT_LAYER) return true;
@@ -3975,7 +3992,7 @@ export function renderCtContinuityLab(root) {
    * l'écran dit qu'elle n'a pas été conservée plutôt que de laisser croire
    * qu'elle l'a été.
    */
-  const persistResult = async (reports) => {
+  const persistResult = async (reports, steps = null) => {
     // Ne pas avoir de projet et ne pas réussir à enregistrer sont deux choses
     // différentes : sans projet ouvert, il n'y avait rien à conserver, et
     // annoncer « analyse non conservée » serait un faux reproche.
@@ -4012,7 +4029,12 @@ export function renderCtContinuityLab(root) {
         corpusDocuments: corpusEntries(reports),
         documentCount: reports.length,
         // Aucune proposition derrière celle-ci : c'est une main qui l'a lancée.
-        triggerSource: "atelier"
+        triggerSource: "atelier",
+        // Ce que chaque phase a pris, et ce qui s'y est passé. Sans elles,
+        // l'exécution s'affichait dans les Actions sans durée et sans rien
+        // d'ouvrable : on annonçait une analyse et on demandait qu'on nous
+        // croie sur parole.
+        steps
       });
 
       if (!outcome) return { status: "failed" };
@@ -4199,6 +4221,37 @@ export function renderCtContinuityLab(root) {
       await yieldToBrowser();
     };
 
+    // Le journal de l'exécution, tenu comme celui d'une analyse de proposition.
+    // Deux étapes portent une durée — ce sont les seules qui se passent ici ;
+    // les deux autres décrivent un état, et n'en portent pas plutôt que d'en
+    // porter une fausse.
+    const steps = [];
+    const ecartes = state.reports.filter((report) => report.error || isSetAside(report));
+
+    const carnetCorpus = journalDExecution();
+    carnetCorpus.dire(`${state.reports.length} livrable(s) ouverts dans l'Atelier`);
+    for (const report of ecartes) {
+      carnetCorpus.avertir(`${nomDuRapport(report)} : écarté — ${motifDEcart(report)}`);
+    }
+    carnetCorpus.dire(`corpus retenu : ${reports.length} livrable(s)`);
+    steps.push({ id: "corpus", label: "Corpus relu", ms: null, statut: STATUT.OK, lignes: carnetCorpus.lignes() });
+
+    const carnetLecture = journalDExecution();
+    carnetLecture.dire("Les livrables ont été lus à leur dépôt : cette étape décrit ce que le lot contient, elle ne relit rien.");
+    for (const report of reports) {
+      carnetLecture.groupe(nomDuRapport(report), (detail) => {
+        detail.dire(`${(report.pages ?? []).length} page(s)`);
+        const reconnu = report.recognition?.kind || report.recognition?.type || report.recognition?.status;
+        detail.dire(reconnu ? `reconnu : ${reconnu}` : "aucune reconnaissance : lu comme texte brut");
+        const vides = (report.pages ?? []).filter((page) => !String(page?.text ?? "").trim()).length;
+        if (vides > 0) detail.avertir(`${vides} page(s) sans texte extractible`);
+      });
+    }
+    steps.push({ id: "lecture", label: "Lecture", ms: null, statut: STATUT.OK, lignes: carnetLecture.lignes() });
+
+    const debutAvis = Date.now();
+    const carnetAvis = journalDExecution();
+    let statutAvis = STATUT.OK;
     try {
       state.result = await runCtLab(reports, {
         onProgress,
@@ -4207,9 +4260,29 @@ export function renderCtContinuityLab(root) {
           chronology: state.timeTravel && state.asOf ? { asOf: state.asOf } : {}
         }
       });
+      carnetAvis.dire(`${(state.result?.predictions ?? []).length} avis relevés dans le corpus`);
+      carnetAvis.dire(`${(state.result?.avisStatus ?? []).length} avis portés au suivi`);
+      const packs = Object.values(state.result?.packsUsed ?? {})
+        .map((pack) => (pack?.pack_id ? `${pack.pack_id} v${pack.pack_version ?? "?"}` : ""))
+        .filter(Boolean);
+      carnetAvis.dire(packs.length ? `vocabulaire appliqué : ${packs.join(" · ")}` : "aucun vocabulaire de projet appliqué");
+      if (state.timeTravel && state.asOf) carnetAvis.dire(`chronologie arrêtée au ${state.asOf}`);
     } catch (error) {
       state.result = null;
       state.error = error.message;
+      statutAvis = STATUT.ECHEC;
+      carnetAvis.echouer(error.message);
+    }
+    steps.push({ id: "avis", label: "Avis relevés", ms: Date.now() - debutAvis, statut: statutAvis, lignes: carnetAvis.lignes() });
+
+    if (state.result) {
+      const carnetGardes = journalDExecution();
+      const violations = state.result?.indicators?.guardViolations ?? [];
+      if (violations.length === 0) carnetGardes.dire("Aucune violation : le moteur garantit toutes les lectures qu'il a faites.");
+      else for (const violation of violations) {
+        carnetGardes.avertir(String(violation?.message || violation?.rule || violation?.id || violation));
+      }
+      steps.push({ id: "gardes", label: "Gardes", ms: null, statut: STATUT.OK, lignes: carnetGardes.lignes() });
     }
 
     // Conserver ce qui vient d'être calculé, quand le projet est connu. Les
@@ -4219,7 +4292,15 @@ export function renderCtContinuityLab(root) {
     if (state.result) {
       pushStage("Enregistrement du suivi");
       refresh();
-      state.saved = await persistResult(reports);
+      // L'écriture ne peut pas se chronométrer : ce journal part **avec** elle,
+      // donc il est clos avant qu'elle commence. Plutôt que d'inscrire une
+      // durée qui mesurerait autre chose, l'étape n'en porte pas et le dit.
+      const carnetSuivi = journalDExecution();
+      carnetSuivi.dire(`${(state.result?.avisStatus ?? []).length} avis à écrire au suivi`);
+      carnetSuivi.dire(`${reports.length} livrable(s) rattachés à l'exécution`);
+      carnetSuivi.dire("L'écriture n'est pas chronométrée : ce journal part avec elle, donc il se ferme avant qu'elle commence.");
+      steps.push({ id: "suivi", label: "Suivi écrit", ms: null, statut: STATUT.OK, lignes: carnetSuivi.lignes() });
+      state.saved = await persistResult(reports, steps);
     }
     state.running = false;
     state.stages = [];
