@@ -113,9 +113,13 @@ export function alertesDeLaMemoire(entrees, rappels) {
   const assise = Math.abs(arase) + hauteur;
 
   if (assise + 1e-9 < horsGel) {
+    // Les nombres se lisent comme partout ailleurs dans l'écran : une virgule
+    // décimale au milieu d'un texte français, pas un point.
+    const ecrire = (valeur, decimales) =>
+      valeur.toLocaleString("fr-FR", { minimumFractionDigits: decimales, maximumFractionDigits: decimales });
     alertes.push({
       cle: "horsGel",
-      texte: `L'assise est à ${assise.toFixed(2)} m sous le niveau fini, au-dessus de la profondeur hors gel du projet (${horsGel.toFixed(3)} m). Le sol gèlerait sous la semelle.`,
+      texte: `L'assise est à ${ecrire(assise, 2)} m sous le niveau fini, au-dessus de la profondeur hors gel du projet (${ecrire(horsGel, 3)} m). Le sol gèlerait sous la semelle.`,
       rappel: rappels.profondeurHorsGel
     });
   }

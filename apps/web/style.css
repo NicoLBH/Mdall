@@ -17706,6 +17706,10 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 @media (max-width:1100px){
   .fondations-grille{ grid-template-columns:minmax(0,1fr); }
 }
+/* Une règle d'auteur l'emporte sur `[hidden]{display:none}` du navigateur : sans
+   cette ligne, `hidden` ne cache rien et le formulaire reste sous le tableau.
+   C'est le même piège que pour le bouton de défilement du copilote. */
+.fondations-grille[hidden]{ display:none !important; }
 .fondations-colonne{ display:flex; flex-direction:column; gap:12px; min-width:0; }
 
 .fondations-zone{
@@ -18020,3 +18024,70 @@ strong.est-verifie{ color:#3fb950; }
 .fondations-rappels li{ display:flex; align-items:baseline; gap:8px; font-size:12px; }
 .fondations-rappels__libelle{ color:var(--muted); }
 .fondations-rappels em{ color:var(--muted); font-style:normal; opacity:.75; font-size:11px; }
+
+/* ------------------------------------------------------------------ *
+ * L'étude de fondations : le tableau de synthèse
+ * ------------------------------------------------------------------ */
+.fondations-etude{ margin-bottom:16px; }
+.fondations-etude__tete{
+  display:flex; align-items:flex-start; justify-content:space-between;
+  gap:16px; flex-wrap:wrap; margin-bottom:10px;
+}
+.fondations-etude__tete h4{ margin:0 0 2px; font-size:14px; }
+.fondations-etude__note{ margin:0; font-size:12px; color:var(--muted); max-width:70ch; }
+.fondations-etude__vide{ margin:0; font-size:13px; color:var(--muted); }
+
+.fondations-etude__table{ font-size:12px; }
+.fondations-etude__table td,
+.fondations-etude__table tfoot th{ text-align:right; white-space:nowrap; }
+.fondations-etude__table thead th:not(:first-child){ text-align:right; }
+.fondations-etude__table tbody th[scope="row"]{ text-align:left; font-weight:400; }
+.fondations-etude__table tfoot tr{
+  border-top:1px solid var(--border);
+  font-weight:600;
+}
+.fondations-etude__table tfoot th[scope="row"]{ text-align:left; }
+.fondations-etude__ligne:hover{ background:rgba(110,118,129,.12); }
+.fondations-etude__ligne.est-ouverte{ background:rgba(88,166,255,.12); }
+.fondations-etude__lien{
+  background:none; border:0; padding:0; font:inherit; color:inherit;
+  cursor:pointer; text-align:left;
+}
+.fondations-etude__lien:hover{ color:#58a6ff; text-decoration:underline; }
+.fondations-etude__retirer{
+  background:none; border:0; padding:2px; color:var(--muted); cursor:pointer;
+}
+.fondations-etude__retirer:hover{ color:var(--danger, #f85149); }
+.fondations-etude__erreur{ color:var(--attention, #d29922); cursor:help; }
+.fondations-etude__inconnues{ color:var(--muted); margin-left:8px; font-weight:400; }
+.fondations-etude__table td.est-depasse{ color:var(--danger, #f85149); }
+.fondations-etude__table td.est-verifie{ color:#3fb950; }
+.fondations-etude__table td .fondations-signe{ vertical-align:text-bottom; margin-right:4px; }
+
+/* La barre d'une semelle ouverte : d'où l'on vient, ce qu'elle est, où aller. */
+.fondations-semelle-barre{
+  display:flex; align-items:flex-end; gap:14px; flex-wrap:wrap;
+  padding:10px 0 12px; margin-bottom:4px;
+  border-bottom:1px solid var(--border);
+}
+.fondations-semelle-barre__retour{
+  display:inline-flex; align-items:center; gap:6px;
+  background:none; border:0; padding:0 0 6px;
+  color:var(--muted); font:inherit; cursor:pointer;
+}
+.fondations-semelle-barre__retour:hover{ color:#58a6ff; text-decoration:underline; }
+.fondations-semelle-barre__nom{ display:flex; flex-direction:column; gap:4px; flex:1 1 220px; max-width:340px; }
+.fondations-semelle-barre__nombre{ display:flex; flex-direction:column; gap:4px; width:130px; }
+.fondations-semelle-barre__volume{ color:var(--muted); font-size:12px; padding-bottom:6px; }
+.fondations-semelle-barre__pas{
+  display:inline-flex; align-items:center; gap:8px;
+  margin-left:auto; padding-bottom:4px;
+  color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums;
+}
+.fondations-semelle-barre__pas button{
+  width:26px; height:26px; border:1px solid var(--border); border-radius:6px;
+  background:var(--bg); color:var(--fg); cursor:pointer; font-size:15px; line-height:1;
+}
+.fondations-semelle-barre__pas button:hover:not(:disabled){ border-color:#58a6ff; color:#58a6ff; }
+.fondations-semelle-barre__pas button:disabled{ opacity:.35; cursor:default; }
+.fondations-etude__table tfoot td span + span{ margin-left:10px; }

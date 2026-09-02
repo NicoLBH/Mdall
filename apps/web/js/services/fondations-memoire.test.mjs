@@ -77,7 +77,9 @@ test("une assise au-dessus de la profondeur hors gel est signalée", () => {
   const rappels = rappelsDeLaMemoire(MEMOIRE);
   const alertes = alertesDeLaMemoire({ araseSuperieure: -0.1, hauteurLz: 0.4 }, rappels);
   assert.equal(alertes.length, 1);
-  assert.match(alertes[0].texte, /0,575|0\.575/);
+  // Une virgule décimale, comme partout ailleurs dans l'écran.
+  assert.match(alertes[0].texte, /0,575/);
+  assert.doesNotMatch(alertes[0].texte, /0\.575/);
   assert.match(alertes[0].texte, /gèlerait/);
 });
 

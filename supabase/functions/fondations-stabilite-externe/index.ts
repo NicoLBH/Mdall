@@ -26,6 +26,16 @@ const corsHeaders = {
 };
 const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
 
+/**
+ * Combien de semelles au plus dans un même appel.
+ *
+ * Chacune parcourt 388 combinaisons : le plafond n'est pas une politesse, c'est
+ * ce qui empêche une requête d'occuper la fonction pendant que les autres
+ * attendent. Vingt-sept massifs — le plus gros lot qu'on ait vu — passent en un
+ * seul appel.
+ */
+const SEMELLES_MAX = 60;
+
 function json(corps: unknown, status = 200) {
   return new Response(JSON.stringify(corps), { status, headers: jsonHeaders });
 }
@@ -47,6 +57,27 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    // Deux formes de requête, une seule fonction. Un projet compte une
+    // vingtaine de semelles ; les calculer une par une ferait vingt allers et
+    // retours pour afficher un tableau, et le tableau apparaîtrait par morceaux.
+    const lot = (entrees as { semelles?: unknown[] })?.semelles;
+    if (Array.isArray(lot)) {
+      if (lot.length > SEMELLES_MAX) {
+        return json({ error: `Au plus ${SEMELLES_MAX} semelles par appel.` }, 400);
+      }
+      // Une semelle qui refuse de se calculer ne fait pas échouer les autres :
+      // le tableau doit pouvoir montrer dix-neuf résultats et une erreur, plutôt
+      // que rien du tout.
+      const resultats = lot.map((semelle) => {
+        try {
+          return { resultat: calculerStabiliteExterne((semelle as Record<string, unknown>) ?? {}) };
+        } catch (erreur) {
+          return { error: erreur instanceof Error ? erreur.message : String(erreur) };
+        }
+      });
+      return json({ resultats });
+    }
+
     const resultat = calculerStabiliteExterne((entrees as Record<string, unknown>) ?? {});
     return json({ resultat });
   } catch (erreur) {
