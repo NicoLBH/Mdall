@@ -43,7 +43,8 @@
 
 import { store } from "../store.js";
 import { buildAssistContext } from "./copilote-context.js";
-import { declarationsPourModele, executerOutil } from "./copilote-outils.js";
+import { declarationsPourModele, executerOutil, sansFigure } from "./copilote-outils.js";
+import { conversationTitle } from "./copilote-conversations.js";
 import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
 import { resolveCurrentBackendProjectId } from "./project-supabase-sync.js";
 
@@ -72,6 +73,33 @@ function historyForPayload() {
     role: msg.role,
     content: msg.content
   }));
+}
+
+/**
+ * Les autres discussions du projet — leurs **titres seulement**.
+ *
+ * On y a réfléchi et on s'y tient : le contenu des autres conversations ne
+ * part pas. Ce qu'un copilote a répondu la semaine dernière n'a **pas été
+ * tranché** — personne ne l'a décidé, rien ne s'y appuie. Le verser dans le
+ * contexte ferait remonter une exploration au rang de vérité du projet, et
+ * c'est exactement la confusion que la mémoire hiérarchisée sert à éviter.
+ *
+ * Les titres, eux, ne coûtent presque rien et rendent un vrai service : le
+ * copilote peut dire « vous avez déjà ouvert une discussion là-dessus » plutôt
+ * que de refaire le chemin. Renvoyer vers une discussion n'est pas la citer.
+ */
+function autresDiscussionsPourPayload() {
+  const etat = store.ui?.assistant;
+  const conversations = Array.isArray(etat?.conversations) ? etat.conversations : [];
+
+  return conversations
+    .filter((conversation) => conversation?.id && conversation.id !== etat?.conversationId)
+    .slice(0, 20)
+    .map((conversation) => ({
+      titre: conversationTitle(conversation),
+      le: conversation.updatedAt || conversation.startedAt || "",
+      messages: (conversation.messages ?? []).length
+    }));
 }
 
 function safeJsonParse(text) {
@@ -169,6 +197,7 @@ export async function sendAssistMessage(message, { signal = null, toolExchanges 
         project_id: projectId,
         question: content,
         history: historyForPayload(),
+        other_conversations: autresDiscussionsPourPayload(),
         memory: { lue: context.memoire?.lue === true, texte: context.memoire?.texte || "" },
         // L'écran part à part de la mémoire, et sous son propre nom : les mêler
         // ferait passer un filtre pour une vérité du projet.
@@ -219,7 +248,10 @@ export async function sendAssistMessage(message, { signal = null, toolExchanges 
         call_id: appel?.call_id,
         name: appel?.name,
         arguments: appel?.arguments,
-        output: JSON.stringify(resultat)
+        // La courbe reste à l'écran : quarante couples de coordonnées
+        // n'apprennent rien à un modèle qui a déjà les périodes, et il
+        // pourrait se croire tenu de les recopier.
+        output: JSON.stringify(sansFigure(resultat))
       });
     }
   }

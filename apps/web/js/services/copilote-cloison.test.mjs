@@ -57,6 +57,7 @@ function fichiersJs(dossier, acc = []) {
  */
 const LECTEURS_AUTORISES = new Map([
   ["apps/web/assets/js/auth.js", "efface tout à la déconnexion"],
+  ["apps/web/js/services/copilote-service.js", "envoie les titres des autres discussions, jamais leur contenu"],
   ["apps/web/js/views/project-studio.js", "affiche les titres dans le rail"],
   ["apps/web/js/views/studio/copilote/copilote.js", "l'écran du copilote lui-même"]
 ]);
@@ -198,6 +199,21 @@ test("la fonction serveur exige un utilisateur, puis un droit de lecture sur le 
   assert.ok(garde > 0, "un jeton porteur est exigé");
   assert.ok(droit > garde, "le droit de lire le projet se vérifie après l'identité");
   assert.ok(depense > droit, "rien n'est dépensé avant que les deux questions soient tranchées");
+});
+
+test("seuls les titres des autres discussions partent au modèle, jamais leur contenu", () => {
+  // Ce qu'un copilote a répondu ailleurs n'a pas été tranché. Le verser dans le
+  // contexte ferait remonter une exploration au rang de vérité du projet — la
+  // confusion même que la mémoire hiérarchisée sert à éviter.
+  const source = lire(join(SERVICES, "copilote-service.js"));
+  const fonction = source.slice(
+    source.indexOf("function autresDiscussionsPourPayload"),
+    source.indexOf("function safeJsonParse")
+  );
+
+  assert.ok(fonction.includes("conversationTitle("), "le titre, oui");
+  assert.doesNotMatch(code(fonction), /\.content\b/, "le contenu des messages, non");
+  assert.match(code(fonction), /messages: \(conversation\.messages \?\? \[\]\)\.length/, "leur nombre, pas leur texte");
 });
 
 test("plus rien ne pointe vers le webhook n8n", () => {

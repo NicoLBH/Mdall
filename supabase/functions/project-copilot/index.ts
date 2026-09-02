@@ -82,6 +82,7 @@ type CopilotRequest = {
   history?: Array<{ role?: string; content?: string }>;
   memory?: { lue?: boolean; texte?: string };
   screen?: unknown;
+  other_conversations?: Array<{ titre?: string; le?: string; messages?: number }>;
   tools?: ToolDeclaration[];
   tool_exchanges?: ToolExchange[];
 };
@@ -173,11 +174,14 @@ function systemPrompt(memoryWasRead: boolean, tronque: boolean) {
     "- Dès qu'une question demande une valeur qu'un utilitaire sait calculer, appelle-le. Ne calcule jamais toi-même, même si le calcul te paraît simple : un nombre plausible se relit sans qu'on le voie.",
     "- Reprends ses résultats **tels quels**, sans les arrondir, les convertir ni les corriger.",
     "- Cite l'utilitaire et sa version dans ta réponse : c'est ce qui la rend vérifiable.",
-    "- S'il manque des entrées, l'utilitaire te le dit et l'écran demandera les valeurs à l'utilisateur. Annonce ce qui manque et arrête-toi là ; n'invente aucune valeur d'entrée pour pouvoir calculer quand même.",
+    "- **N'invente jamais une valeur d'entrée.** Si l'utilisateur demande un changement sans dire la nouvelle valeur — « et si on changeait la classe de sol ? » —, appelle quand même l'utilitaire en **omettant** cette entrée. Il te dira ce qui manque et l'écran la demandera. Choisir une valeur à sa place, même vraisemblable, produit une réponse fausse qui a l'air juste : c'est le pire service qu'on puisse rendre sur un chantier.",
+    "- Quand il manque une valeur, dis-le en une phrase et arrête-toi. N'énumère pas les choix possibles : l'écran les affiche déjà, tirés de la déclaration de l'utilitaire.",
     "- Un résultat d'utilitaire n'entre pas dans la mémoire du projet. C'est une exploration ; quelqu'un décidera.",
     "- Quand un résultat contredit ce que le projet tient pour vrai, l'utilitaire te donne l'écart. Montre-le, sans désigner de fautif : dis ce qui est calculé, ce qui est retenu, et ce qu'il faudrait reprendre.",
     "",
-    "Tes connaissances générales du bâtiment servent à expliquer et à raisonner, jamais à fournir une valeur que ce projet n'a pas tranchée."
+    "Tes connaissances générales du bâtiment servent à expliquer et à raisonner, jamais à fournir une valeur que ce projet n'a pas tranchée.",
+    "",
+    "Assume tes limites. Ne cherche pas à répondre à tout prix : « je ne sais pas », « la mémoire ne le dit pas », « il me faut cette valeur » sont des réponses professionnelles. Une réponse fabriquée pour ne pas rester sans réponse coûte la confiance de tous ceux qui liront les suivantes."
   ];
 
   if (!memoryWasRead) {
@@ -321,12 +325,23 @@ serve(async (req) => {
 
   const ecran = truncate(JSON.stringify(payload.screen ?? null), MAX_SCREEN_CHARS);
 
+  const autres = (Array.isArray(payload.other_conversations) ? payload.other_conversations : [])
+    .slice(0, 20)
+    .map((entree) => ({ titre: texte(entree?.titre).slice(0, 120), le: texte(entree?.le) }))
+    .filter((entree) => entree.titre);
+
   const contexte = [
     `# Projet\n\n${texte(projet.name) || "sans nom"}`,
     memoire || "# Mémoire du projet\n\n(aucune mémoire transmise)",
     `# Ce que l'utilisateur regarde\n\nCeci dit ce qui est affiché, jamais ce qui est vrai. N'en tire aucune affirmation sur le projet.\n\n\`\`\`json\n${ecran}\n\`\`\``,
     history.length
       ? `# La conversation jusqu'ici\n\n${history.map((message) => `**${message.role === "user" ? "Utilisateur" : "Toi"}** : ${message.content}`).join("\n\n")}`
+      : "",
+    autres.length
+      ? `# Les autres discussions de cette personne sur ce projet\n\n`
+        + "Leurs **titres seulement** : leur contenu ne t'est pas transmis, et pour une raison — ce qui s'y est dit n'a pas été tranché. "
+        + "Tu peux y renvoyer (« vous avez déjà ouvert une discussion là-dessus »), jamais en citer le contenu ni supposer ce qui s'y trouve.\n\n"
+        + autres.map((entree) => `- ${entree.titre}${entree.le ? ` (${entree.le.slice(0, 10)})` : ""}`).join("\n")
       : "",
     `# La question\n\n${truncate(question, MAX_QUESTION_CHARS)}`
   ]
