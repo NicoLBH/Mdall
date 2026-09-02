@@ -7,6 +7,7 @@ import { buildRunGraph, describeReadingStack, formatStepDuration } from "../serv
 import {
   STATUT, etapeDe, etapesConsultables, numeroter, resumerEtape
 } from "../services/run-journal.js";
+import { ONGLETS, partitionnerActions, ongletValide, decrireVisibilite } from "../services/run-partition.js";
 import { store } from "../store.js";
 import { PROJECT_TAB_RESELECTED_EVENT } from "./project-header.js";
 import {
@@ -95,6 +96,12 @@ function formatDateTime(value) {
 }
 
 function formatDuration(value) {
+  // `null` n'est pas zéro. Sans ce test, `Number(null)` vaut 0 et une exécution
+  // dont la durée n'a jamais été enregistrée s'affiche « 0 ms » — instantanée.
+  // C'est la même règle qu'ailleurs : une durée non mesurée n'est pas une durée
+  // nulle, elle est absente, et l'écran a un tiret pour le dire.
+  if (value === null || value === undefined || value === "") return "—";
+
   const ms = Number(value);
 
   if (!Number.isFinite(ms)) return "—";
@@ -166,6 +173,10 @@ function getTriggerLabel(entry) {
 
   if (entry.triggerType === "automatic") {
     return "Déclenchement automatique";
+  }
+
+  if (entry.triggerType === "atelier") {
+    return "Lancée depuis l'Atelier";
   }
 
   // Une exécution causée par une fusion porte normalement le numéro de la
@@ -293,9 +304,15 @@ function getRunHistoryIconSvg() {
   });
 }
 
-function renderRunCountInline() {
-  const metrics = getRunMetrics();
-  const totalRuns = Number(metrics.totalRuns || 0);
+/**
+ * Le compte, en tête de la colonne « Action ».
+ *
+ * Il décrit ce qui est en dessous, pas tout le journal : depuis que les
+ * exécutions se rangent en deux piles, un total unique compterait des lignes
+ * que la vue courante ne montre pas.
+ */
+function renderRunCountInline(total) {
+  const totalRuns = Number(total ?? getRunMetrics().totalRuns ?? 0);
 
   return `
     <span class="workflow-runs__head-count" title="${escapeHtml(`${totalRuns} run${totalRuns > 1 ? "s" : ""} journalisé${totalRuns > 1 ? "s" : ""}`)}">
@@ -321,18 +338,26 @@ function renderRunRows(entries) {
       ? `<span class="workflow-runs__object">${escapeHtml(entry.documentName)}</span>`
       : "";
     const cause = `<span class="workflow-runs__trigger">${escapeHtml(getTriggerLabel(entry))}</span>`;
+    // Une exécution d'Atelier antérieure au cloisonnement est encore lue par
+    // tout le monde. L'absence de marque ne le dit pas — seule une mention le
+    // dit, et il faut qu'elle soit dite.
+    const visibilite = decrireVisibilite(entry);
+    const mention = visibilite?.note
+      ? `<span class="workflow-runs__dot">·</span><span class="workflow-runs__mention">${escapeHtml(visibilite.note)}</span>`
+      : "";
 
     return `
       <div class="workflow-runs__row">
         <div class="workflow-runs__cell workflow-runs__cell--action">
           <div class="workflow-runs__title-row">
             ${getRunStateIcon(entry)}
+            ${renderMarqueAtelier(entry)}
             <button type="button" class="workflow-runs__title workflow-runs__title--link" data-run-open="${escapeHtml(
               entry.id || ""
             )}">${escapeHtml(entry.name || "Run")}</button>
           </div>
           <div class="workflow-runs__meta workflow-runs__subline">
-            ${objet}${objet && cause ? `<span class="workflow-runs__dot">·</span>` : ""}${cause}
+            ${objet}${objet && cause ? `<span class="workflow-runs__dot">·</span>` : ""}${cause}${mention}
           </div>
         </div>
 
@@ -351,8 +376,60 @@ function renderRunRows(entries) {
   }).join("");
 }
 
+/**
+ * La marque d'une exécution d'Atelier.
+ *
+ * Pas un cadenas : un cadenas dit « secret », et ce n'est pas de cela qu'il
+ * s'agit. Une exécution d'Atelier n'est pas cachée, elle est **personnelle** —
+ * un essai en cours, qui n'a pas à devenir un acte du projet parce qu'on l'a
+ * lancé. La marque est donc celle de l'Atelier lui-même : elle dit d'où la
+ * ligne vient, et l'onglet au-dessus a déjà dit ce qui en découle.
+ *
+ * Elle ne s'affiche que lorsque la confidentialité est réelle. Une exécution
+ * d'Atelier antérieure au cloisonnement reste lue par tout le monde : elle
+ * porte alors une mention, pas la marque.
+ */
+function renderMarqueAtelier(entry) {
+  const visibilite = decrireVisibilite(entry);
+  if (!visibilite?.marque) return "";
+  return `
+    <span class="workflow-runs__atelier" title="${escapeHtml(visibilite.titre)}"
+          aria-label="${escapeHtml(visibilite.titre)}">
+      ${svgIcon("cpu", { className: "octicon" })}
+    </span>
+  `;
+}
+
+/**
+ * Les deux vues du journal, et ce qu'elles changent pour le lecteur.
+ *
+ * L'explication est sous les onglets et non dans une infobulle : la question
+ * « qui voit ça ? » se pose avant de cliquer, pas après avoir survolé.
+ */
+function renderOngletsActions(piles, actif) {
+  const explication = ONGLETS.find((onglet) => onglet.cle === actif)?.explication ?? "";
+  return `
+    <div class="actions-onglets">
+      <div class="actions-onglets__rangee" role="tablist">
+        ${ONGLETS.map((onglet) => `
+          <button type="button" role="tab"
+                  class="actions-onglet${onglet.cle === actif ? " est-actif" : ""}"
+                  aria-selected="${onglet.cle === actif ? "true" : "false"}"
+                  data-actions-onglet="${escapeHtml(onglet.cle)}">
+            ${escapeHtml(onglet.libelle)}
+            <span class="actions-onglet__compte">${(piles[onglet.cle] ?? []).length}</span>
+          </button>
+        `).join("")}
+      </div>
+      <p class="actions-onglets__explication">${escapeHtml(explication)}</p>
+    </div>
+  `;
+}
+
 function renderRunsTable() {
-  const entries = getRunLogEntries();
+  const piles = partitionnerActions(getRunLogEntries());
+  const actif = ongletValide(store.projectActionsView?.onglet);
+  const entries = piles[actif] ?? [];
   if (!store.projectActionsView || typeof store.projectActionsView !== "object") {
     store.projectActionsView = { pagination: { mode: "client", pageSize: 25, currentPage: 1 } };
   }
@@ -373,13 +450,23 @@ function renderRunsTable() {
   };
   const paged = paginateItems(entries, pagination);
 
+  const vide = actif === "atelier"
+    ? {
+        title: "Aucun essai dans l'Atelier",
+        description: "Ce que vous lancerez depuis l'Atelier viendra ici, et n'ira pas plus loin."
+      }
+    : {
+        title: "Aucune action exécutée",
+        description: "Lance une analyse ou un enrichissement manuel pour alimenter le journal d’exécution."
+      };
+
   const tableHtml = renderDataTableShell({
     className: "workflow-runs-table data-table-shell--document-scroll",
     gridTemplate: "minmax(320px,2fr) 220px",
     headHtml: renderDataTableHead({
       columns: [
         {
-          html: `<span class="workflow-runs__head-label">Action</span>${renderRunCountInline()}`,
+          html: `<span class="workflow-runs__head-label">Action</span>${renderRunCountInline(entries.length)}`,
           className: "workflow-runs__head-col workflow-runs__head-col--action"
         },
         "Quand"
@@ -387,12 +474,9 @@ function renderRunsTable() {
     }),
     bodyHtml: renderRunRows(paged.items),
     state: paged.items.length ? "ready" : "empty",
-    emptyHtml: renderDataTableEmptyState({
-      title: "Aucune action exécutée",
-      description: "Lance une analyse ou un enrichissement manuel pour alimenter le journal d’exécution."
-    })
+    emptyHtml: renderDataTableEmptyState(vide)
   });
-  return `${tableHtml}${renderPaginationControls(pagination, { entity: "actions" })}`;
+  return `${renderOngletsActions(piles, actif)}${tableHtml}${renderPaginationControls(pagination, { entity: "actions" })}`;
 }
 
 /**
@@ -875,6 +959,19 @@ export function renderProjectActions(root) {
     if (event.target?.closest?.("[data-run-step-back]")) {
       event.preventDefault();
       store.projectActionsView.openStepId = "";
+      renderProjectActionsContent(root);
+      return;
+    }
+
+    // Changer d'onglet remet à la première page : la pagination portait sur
+    // l'autre pile, et sa page 3 n'existe peut-être pas ici.
+    const onglet = event.target?.closest?.("[data-actions-onglet]");
+    if (onglet) {
+      event.preventDefault();
+      store.projectActionsView.onglet = onglet.getAttribute("data-actions-onglet") || "";
+      if (store.projectActionsView.pagination && typeof store.projectActionsView.pagination === "object") {
+        store.projectActionsView.pagination.currentPage = 1;
+      }
       renderProjectActionsContent(root);
       return;
     }

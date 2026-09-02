@@ -17937,3 +17937,35 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .run-log__count{ color:var(--muted); opacity:.7; margin-left:auto; padding-left:12px; }
 .run-log__children[hidden]{ display:none; }
 .run-log__line--child .run-log__text{ padding-left:18px; }
+
+/* ------------------------------------------------------------------ *
+ * Actions : ce qui est partagé, et ce qui reste à l'Atelier
+ *
+ * L'explication est sous les onglets et non en infobulle : « qui voit ça ? »
+ * se demande avant de cliquer, pas après avoir survolé.
+ * ------------------------------------------------------------------ */
+.actions-onglets{ margin:0 0 12px; }
+.actions-onglets__rangee{ display:flex; gap:4px; border-bottom:1px solid var(--border); }
+.actions-onglet{
+  display:inline-flex; align-items:center; gap:7px;
+  padding:7px 12px;
+  background:none; border:0; border-bottom:2px solid transparent;
+  color:var(--muted); font:inherit; font-size:13px; cursor:pointer;
+  margin-bottom:-1px;
+}
+.actions-onglet:hover{ color:var(--fg); }
+.actions-onglet.est-actif{ color:var(--fg); font-weight:600; border-bottom-color:#f78166; }
+.actions-onglet__compte{
+  padding:0 7px; border-radius:999px;
+  background:rgba(110,118,129,.25);
+  font-size:11px; font-weight:600; font-variant-numeric:tabular-nums;
+}
+.actions-onglets__explication{ margin:8px 0 0; font-size:12px; color:var(--muted); }
+
+/* La marque de l'Atelier : elle dit d'où la ligne vient. Pas un cadenas —
+   une exécution d'Atelier n'est pas secrète, elle est personnelle. */
+.workflow-runs__atelier{ display:inline-flex; color:var(--muted); opacity:.85; }
+.workflow-runs__mention{ color:var(--attention, #d29922); }
+/* Le compte est en bout de la colonne « Action » : sans marge, il vient
+   toucher l'en-tête « Quand » et les deux se lisent comme un seul mot. */
+.workflow-runs__head-count{ margin-right:16px; }
