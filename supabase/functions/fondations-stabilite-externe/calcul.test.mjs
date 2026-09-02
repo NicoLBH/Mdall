@@ -194,3 +194,48 @@ test("un excentrement qui décomprime la semelle réduit la surface, sans plante
   assert.ok(r.surfaces.elsRares.obtenue >= 0 && r.surfaces.elsRares.obtenue <= 100);
   assert.ok(Number.isFinite(r.contrainte.ratio));
 });
+
+/**
+ * La table de pondération, case à case.
+ *
+ * Ces cinquante valeurs sont celles que le classeur porte en cache pour le cas
+ * qu'il embarque. Elles se comparent sans le recalculer, et c'est ce contrôle-là
+ * qui attraperait une cascade de `IF` transcrite de travers — une erreur qui,
+ * autrement, ne se verrait que par un ratio légèrement décalé.
+ */
+const PONDERATION_ATTENDUE = {
+  AS48: 1, AS55: 1, AS62: 1, AS70: 1,
+  AU48: 1, AU55: 1.35, AU62: 1, AU70: 1,
+  AW48: 0, AW49: 0, AW50: 0, AW51: 0, AW52: 0, AW55: 0, AW56: 0, AW57: 0,
+  AW58: 0, AW59: 0, AW62: 0, AW64: 0, AW70: 0, AW71: 0,
+  AY49: 0.6, AY51: 1, AY52: 0.6, AY55: 0, AY56: 0, AY58: 1.5,
+  AY59: 0.8999999999999999, AY62: 0, AY63: 0, AY64: 0, AY65: 0, AY66: 0,
+  AY67: 0.3, AY72: 0.2,
+  BA48: 0, BA49: 0, BA50: 1, BA51: 0.5, BA52: 1, BA56: 0, BA57: 1.5,
+  BA58: 0.75, BA59: 1.5, BA63: 0, BA65: 0, BA66: 0, BA67: 0.3, BA71: 0.2
+};
+
+test("la table de pondération tombe case par case sur celle du classeur", async () => {
+  const { tablePonderation, coefficientsReglementaires, DEFAUTS: D } = await import("./calcul.js");
+  const e = { ...D, ...REFERENCE };
+  // Les cas présents dans le jeu de référence : neige et vent, ni exploitation,
+  // ni séisme, ni accidentelle.
+  const presence = { q: false, sn: true, w: true, seisme: false, fa: false };
+  const table = tablePonderation(e, presence, coefficientsReglementaires(e));
+
+  for (const [cellule, attendu] of Object.entries(PONDERATION_ATTENDUE)) {
+    proche(table[cellule], attendu, 1e-12);
+  }
+});
+
+test("les cases BF61:BQ72 valent un Gmin unitaire et rien d'autre", async () => {
+  const { tablePonderation, coefficientsReglementaires, DEFAUTS: D } = await import("./calcul.js");
+  const e = { ...D, ...REFERENCE };
+  const table = tablePonderation(e, { q: true, sn: true, w: true, seisme: true, fa: true }, coefficientsReglementaires(e));
+  for (let ligne = 61; ligne <= 72; ligne += 1) {
+    assert.equal(table[`BF${ligne}`], 1);
+    for (const col of ["BG", "BH", "BI", "BJ", "BK", "BL", "BM", "BN", "BO", "BP", "BQ"]) {
+      assert.equal(table[`${col}${ligne}`], 0, `${col}${ligne} devrait être nul`);
+    }
+  }
+});

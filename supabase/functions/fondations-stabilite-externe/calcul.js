@@ -124,7 +124,7 @@ export const DEFAUTS = {
  * `AI25 = BC13`, c'est-à-dire « le règlement retenu est-il l'EC - NF P94-261 ».
  * L'EC8-5 annexe F ne le déclenche pas : c'est voulu par le classeur.
  */
-function coefficientsReglementaires(e) {
+export function coefficientsReglementaires(e) {
   return {
     AU34: 1, AV34: e.gminElu, AW34: 1, AY34: 1, AZ34: 1.8,
     AU35: 1, AV35: 1.35, AW35: 1, AY35: 0.9, AZ35: 1.75,
@@ -148,6 +148,9 @@ function coefficientsReglementaires(e) {
 /**
  * La table de pondération (AS48:BB77 et BF61:BQ72).
  *
+ * Exportée pour être comparée case à case aux valeurs que le classeur porte en
+ * cache : c'est le contrôle le plus serré qu'on puisse faire sans le recalculer.
+ *
  * C'est elle qui décide, combinaison par combinaison, du coefficient de chaque
  * cas. Deux choses la font varier : le règlement, et **la présence effective**
  * d'un cas de charge — un vent nul ne pondère rien, et le classeur le teste par
@@ -157,7 +160,7 @@ function coefficientsReglementaires(e) {
  * neige (`SUMSQ(H21:X21)`) et non celle du vent. Le classeur fait ainsi ; on le
  * suit, sans quoi les deux outils ne rendraient plus la même chose.
  */
-function tablePonderation(e, presence, k) {
+export function tablePonderation(e, presence, k) {
   const ec = e.reglement === "EC - NF P94-261";
   const a20 = { "Exploitation": "Q", "Archives / stockage": "Qa", "Température": "T" }[e.typeExploitation] || "T";
   const { q, sn, w, seisme, fa } = presence;
