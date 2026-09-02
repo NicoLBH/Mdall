@@ -1,0 +1,187 @@
+/**
+ * Ce que le calcul de fondation demande : les zones de saisie, déclarées une fois.
+ *
+ * Une seule déclaration, deux usages : elle **dessine** les zones de saisie de
+ * l'écran, et elle **valide** ce qu'on y a tapé avant l'envoi. Écrire les champs
+ * deux fois — une fois en HTML, une fois en contrôle — serait la garantie qu'un
+ * jour l'un accepte ce que l'autre refuse.
+ *
+ * Rien ici ne calcule et rien ne parle au réseau : c'est de la description, et
+ * c'est ce qui permet de la relire dans un test sans monter un navigateur.
+ */
+
+/** Les douze cas de charge, et le nom sous lequel le métier les appelle. */
+export const CAS_DE_CHARGE = [
+  { cle: "G", libelle: "G", nature: "Permanente" },
+  { cle: "Q", libelle: "Q", nature: "Exploitation" },
+  { cle: "Sn", libelle: "Sn", nature: "Neige" },
+  { cle: "W1", libelle: "W1", nature: "Vent cas 1" },
+  { cle: "W2", libelle: "W2", nature: "Vent cas 2" },
+  { cle: "W3", libelle: "W3", nature: "Vent cas 3" },
+  { cle: "W4", libelle: "W4", nature: "Vent cas 4" },
+  { cle: "Sx", libelle: "Sx", nature: "Séisme X" },
+  { cle: "Sy", libelle: "Sy", nature: "Séisme Y" },
+  { cle: "Sz", libelle: "Sz", nature: "Séisme Z" },
+  { cle: "Fa", libelle: "Fa", nature: "Accidentelle" }
+];
+
+/** Les cinq composantes d'un cas, au point où il est appliqué. */
+export const COMPOSANTES = [
+  { cle: "V", libelle: "V" },
+  { cle: "Hx", libelle: "Hx" },
+  { cle: "Hy", libelle: "Hy" },
+  { cle: "Mx", libelle: "Mx" },
+  { cle: "My", libelle: "My" }
+];
+
+/**
+ * Les zones de saisie, groupées comme le métier les lit.
+ *
+ * `defaut` n'est pas une valeur devinée pour le projet : c'est la valeur que
+ * porte l'outil de calcul dont celui-ci est repris. Elle est là pour qu'un
+ * écran vide soit calculable, pas pour tenir lieu de donnée du projet — et
+ * l'écran le dit.
+ */
+export const ZONES = [
+  {
+    cle: "geometrie",
+    titre: "Géométrie",
+    champs: [
+      { cle: "araseSuperieure", libelle: "Arase supérieure", unite: "m", defaut: -0.1,
+        aide: "Cote du dessus du massif par rapport au niveau extérieur fini. Négative si le massif est enterré." },
+      { cle: "hauteurLz", libelle: "Hauteur Lz", unite: "m", defaut: 1, min: 0 },
+      { cle: "sectionLx", libelle: "Section Lx", unite: "m", defaut: 1.2, min: 0 },
+      { cle: "sectionLy", libelle: "Section Ly", unite: "m", defaut: 1.2, min: 0 },
+      { cle: "hauteurFut", libelle: "Hauteur du fût", unite: "m", defaut: 0, min: 0 },
+      { cle: "futA", libelle: "Fût a", unite: "m", defaut: 0, min: 0 },
+      { cle: "futB", libelle: "Fût b", unite: "m", defaut: 0, min: 0 },
+      { cle: "excentrementChargeX", libelle: "Excentrement charge/fût x", unite: "m", defaut: 0 },
+      { cle: "excentrementChargeY", libelle: "Excentrement charge/fût y", unite: "m", defaut: 0 },
+      { cle: "excentrementFutX", libelle: "Excentrement fût/semelle x", unite: "m", defaut: 0 },
+      { cle: "excentrementFutY", libelle: "Excentrement fût/semelle y", unite: "m", defaut: 0 }
+    ]
+  },
+  {
+    cle: "sol",
+    titre: "Sol et matériaux",
+    champs: [
+      { cle: "poidsVolumiqueSol", libelle: "Poids volumique du sol gR", unite: "force/m3", defaut: 2000, min: 0 },
+      { cle: "contrainteLimite", libelle: "Contrainte limite sELS", unite: "contrainte", defaut: 1, min: 0 },
+      { cle: "angleFrottement", libelle: "Angle de frottement jS", unite: "°", defaut: 30, min: 0, max: 60 },
+      { cle: "cohesionNonDrainee", libelle: "Cohésion non drainée cu,k", unite: "force/m2", defaut: 30, min: 0 },
+      { cle: "densiteSemelle", libelle: "Poids volumique du béton (semelle)", unite: "force/m3", defaut: 2500, min: 0 },
+      { cle: "densiteFut", libelle: "Poids volumique du béton (fût)", unite: "force/m3", defaut: 2500, min: 0 }
+    ]
+  },
+  {
+    cle: "butee",
+    titre: "Butée mobilisée",
+    champs: [
+      { cle: "buteeMobilisee", libelle: "Part mobilisée K'/Kp", unite: "%", defaut: 60, min: 0, max: 100,
+        aide: "À zéro, aucune butée n'est comptée : ni effort ni moment stabilisant." },
+      { cle: "angleButee", libelle: "Angle de frottement jB", unite: "°", defaut: 30, min: 0, max: 60 },
+      { cle: "poidsVolumiqueButee", libelle: "Poids volumique gB", unite: "force/m3", defaut: 2000, min: 0 },
+      { cle: "buteeZi", libelle: "Cote haute zi", unite: "m", defaut: -0.1 },
+      { cle: "buteeZf", libelle: "Cote basse zf", unite: "m", defaut: -1.1 }
+    ]
+  },
+  {
+    cle: "lest",
+    titre: "Lest",
+    champs: [
+      { cle: "lestMin", libelle: "Lest minimal", unite: "force", defaut: 0 },
+      { cle: "lestMax", libelle: "Lest maximal", unite: "force", defaut: 0 }
+    ]
+  }
+];
+
+/** Les choix fermés : rien n'y est libre, et rien n'y est deviné. */
+export const CHOIX = [
+  { cle: "reglement", libelle: "Règlement", defaut: "EC - NF P94-261",
+    valeurs: ["Fascicule 62", "DTU 13.12", "EC - NF P94-261", "EC8-5 Annexe F"] },
+  { cle: "repartition", libelle: "Répartition des contraintes", defaut: "Meyerhoff",
+    valeurs: ["Meyerhoff", "Constante"] },
+  { cle: "drainage", libelle: "Drainage", defaut: "Sol drainé",
+    valeurs: ["Sol drainé", "Sol non drainé"] },
+  { cle: "inclinaison", libelle: "Coefficient d'inclinaison", defaut: "Sans objet",
+    valeurs: ["Sans objet", "Sol cohérent", "Sol frottant"] },
+  { cle: "typeExploitation", libelle: "Nature de la charge d'exploitation", defaut: "Exploitation",
+    valeurs: ["Exploitation", "Archives / stockage", "Température"] },
+  { cle: "unites", libelle: "Unités", defaut: "{ daN ; daNm }",
+    valeurs: ["{ T ; Tm }", "{ kN ; kNm }", "{ daN ; daNm }"] }
+];
+
+/**
+ * L'unité d'un champ, dans le système que l'écran a choisi.
+ *
+ * Écrire « unité de force » sur un formulaire, c'est demander au lecteur de
+ * faire la conversion de tête — donc l'inviter à se tromper. Les unités
+ * géométriques (`m`, `°`, `%`) ne dépendent de rien et sont écrites telles
+ * quelles ; les autres se déduisent du système retenu.
+ */
+export function uniteAffichee(champ, unites) {
+  const force = { "{ T ; Tm }": "T", "{ kN ; kNm }": "kN", "{ daN ; daNm }": "daN" }[unites] || "";
+  const contrainte = unites === "{ kN ; kNm }" ? "MPa" : "bar";
+  if (champ.unite === "force") return force;
+  if (champ.unite === "force/m3") return force ? `${force}/m³` : "";
+  if (champ.unite === "force/m2") return force ? `${force}/m²` : "";
+  if (champ.unite === "contrainte") return contrainte;
+  return champ.unite || "";
+}
+
+/** Tous les champs numériques, à plat — l'ordre des zones est conservé. */
+export function champsNumeriques() {
+  return ZONES.flatMap((zone) => zone.champs);
+}
+
+/** Les valeurs de départ de l'écran : celles de l'outil, et rien d'autre. */
+export function entreesParDefaut() {
+  const entrees = {};
+  for (const champ of champsNumeriques()) entrees[champ.cle] = champ.defaut;
+  for (const choix of CHOIX) entrees[choix.cle] = choix.defaut;
+  entrees.charges = Object.fromEntries(CAS_DE_CHARGE.map((cas) => [cas.cle,
+    Object.fromEntries(COMPOSANTES.map((c) => [c.cle, 0]))]));
+  return entrees;
+}
+
+function nombre(valeur) {
+  if (valeur === "" || valeur === null || valeur === undefined) return null;
+  const n = Number.parseFloat(String(valeur).replace(",", "."));
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Ce qui manque ou ne tient pas debout, avant d'aller déranger le serveur.
+ *
+ * On ne corrige rien au passage : une valeur illisible reste illisible, et
+ * l'écran le dit à l'endroit où elle a été tapée.
+ */
+export function entreesInvalides(entrees = {}) {
+  const problemes = [];
+  for (const champ of champsNumeriques()) {
+    const n = nombre(entrees[champ.cle]);
+    if (n === null) { problemes.push({ cle: champ.cle, raison: `${champ.libelle} : valeur illisible.` }); continue; }
+    if (champ.min !== undefined && n < champ.min) problemes.push({ cle: champ.cle, raison: `${champ.libelle} : ne peut pas être inférieur à ${champ.min}.` });
+    if (champ.max !== undefined && n > champ.max) problemes.push({ cle: champ.cle, raison: `${champ.libelle} : ne peut pas dépasser ${champ.max}.` });
+  }
+  if (nombre(entrees.sectionLx) !== null && nombre(entrees.sectionLx) <= 0) problemes.push({ cle: "sectionLx", raison: "La semelle doit avoir une largeur." });
+  if (nombre(entrees.sectionLy) !== null && nombre(entrees.sectionLy) <= 0) problemes.push({ cle: "sectionLy", raison: "La semelle doit avoir une longueur." });
+
+  for (const choix of CHOIX) {
+    if (!choix.valeurs.includes(String(entrees[choix.cle] ?? ""))) {
+      problemes.push({ cle: choix.cle, raison: `${choix.libelle} : choix inconnu.` });
+    }
+  }
+  if (entrees.reglement === "EC8-5 Annexe F") {
+    problemes.push({ cle: "reglement", raison: "EC8-5 Annexe F : la capacité portante sismique n'est pas encore portée par cet utilitaire." });
+  }
+
+  for (const cas of CAS_DE_CHARGE) {
+    for (const comp of COMPOSANTES) {
+      const brut = entrees.charges?.[cas.cle]?.[comp.cle];
+      if (brut === "" || brut === null || brut === undefined) continue;
+      if (nombre(brut) === null) problemes.push({ cle: `charge-${cas.cle}-${comp.cle}`, raison: `${cas.libelle} / ${comp.libelle} : valeur illisible.` });
+    }
+  }
+  return problemes;
+}
