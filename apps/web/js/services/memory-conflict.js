@@ -195,33 +195,87 @@ export function unresolvedConflicts(conflicts = []) {
 /**
  * L'extrait d'une lecture, tel qu'il a été conservé.
  *
- * Le moteur le range tantôt en chaîne, tantôt en `{text, page}` : les deux se
- * lisent ici, plutôt que dans chaque écran.
+ * ## Pourquoi cette fonction lit cinq noms différents
+ *
+ * Ce n'est pas de la tolérance décorative : l'extrait arrive sous quatre formes
+ * selon d'où il vient, et n'en lire qu'une revenait à n'en lire aucune.
+ *
+ * - une **chaîne**, quand il vient d'un tableau ou d'une fiche d'avis ;
+ * - `{ excerpt, source_id, page }` — la provenance d'une lecture du moteur ;
+ * - `{ sentence, source_document_id, source_page }` — une levée déclarée ;
+ * - `{ text, page }` — la forme qu'attendait la première version.
+ *
+ * On lisait `.text` et rien d'autre. Aucune des trois premières ne le porte :
+ * le panneau d'arbitrage annonçait donc « aucun extrait conservé » y compris
+ * quand l'extrait était là, sous un autre nom, et l'on tranchait à l'aveugle.
  */
 function excerptOf(payload = {}) {
   const brut = payload?.evidence;
-  const texte = typeof brut === "string" ? brut : brut?.text;
+  if (typeof brut === "string") return brut.trim() || null;
+  const texte = brut?.excerpt ?? brut?.sentence ?? brut?.text;
   return String(texte ?? "").trim() || null;
 }
 
-/** D'où vient une lecture : son document, et la page où on peut la vérifier. */
+/**
+ * D'où vient une lecture : son document, et la page où on peut la vérifier.
+ *
+ * Mêmes quatre formes, mêmes noms à reconnaître. Sans cela le lien « Voir dans
+ * le document » ne s'affichait jamais — on montrait un extrait sans dire d'où
+ * il sortait, ce qui n'est qu'une affirmation de plus.
+ */
 function sourceOf(payload = {}) {
-  const evidence = typeof payload?.evidence === "object" ? payload.evidence : null;
-  const page = Number(payload?.page ?? evidence?.page);
+  const evidence = typeof payload?.evidence === "object" && payload.evidence ? payload.evidence : null;
+  const page = Number(payload?.page ?? evidence?.page ?? evidence?.source_page);
+  const document_ = payload?.sourceId ?? evidence?.sourceId ?? evidence?.source_id ?? evidence?.source_document_id;
 
   return {
-    documentId: String(payload?.sourceId ?? evidence?.sourceId ?? "").trim() || null,
+    documentId: String(document_ ?? "").trim() || null,
     page: Number.isFinite(page) && page > 0 ? page : null
   };
 }
 
-function side(heading, statement, payload) {
-  return { heading, statement, excerpt: excerptOf(payload), ...sourceOf(payload) };
+/**
+ * Un côté de la contradiction, complété par le suivi des avis si besoin.
+ *
+ * La lecture retenue par le projet est figée en base au moment où elle a été
+ * décidée. Celles décidées avant que l'extrait ne soit conservé n'en portent
+ * donc pas, et corriger le producteur ne les répare pas rétroactivement.
+ *
+ * Le suivi des avis, lui, garde l'extrait pour chaque référence. On l'emprunte
+ * — et on le **dit**, parce que ce n'est pas la même source : c'est ce que le
+ * document porte, retrouvé après coup, pas ce qui a été inscrit le jour de la
+ * décision.
+ */
+function side(heading, statement, payload, secours = null) {
+  const direct = excerptOf(payload);
+  if (direct) return { heading, statement, excerpt: direct, ...sourceOf(payload) };
+
+  const repli = secours ? excerptOf(secours) : null;
+  if (!repli) return { heading, statement, excerpt: null, ...sourceOf(payload) };
+
+  return {
+    heading, statement, excerpt: repli, retrouve: true,
+    ...sourceOf({ ...sourceOf(payload), ...secours, evidence: secours.evidence })
+  };
 }
 
-export function describeConflict(conflict = {}) {
+/**
+ * L'avis du suivi qui porte la même référence, quand on l'a.
+ *
+ * `memoire` accepte une `Map` comme un objet : les appelants n'ont pas à
+ * s'accorder sur une forme pour que le secours joue.
+ */
+function avisDuSuivi(memoire, reference) {
+  const cle = String(reference ?? "").trim();
+  if (!cle || !memoire) return null;
+  if (typeof memoire.get === "function") return memoire.get(cle) ?? null;
+  return memoire[cle] ?? null;
+}
+
+export function describeConflict(conflict = {}, { memoire = null } = {}) {
   const { kind, item = {}, beforePayload = {} } = conflict;
   const payload = item.payload ?? {};
+  const secours = avisDuSuivi(memoire, payload.reference ?? beforePayload.reference ?? item.itemKey);
 
   if (item.itemType === ITEM_TYPE.AVIS) {
     const avant = `${statusLabel(beforePayload.status)}${
@@ -232,8 +286,8 @@ export function describeConflict(conflict = {}) {
     if (kind === CONFLICT.REFUSED_REAFFIRMED) {
       return {
         title: avisTitle(payload, item),
-        before: side("Ce que vous aviez écarté", avant, beforePayload),
-        after: side("Ce que ce lot réaffirme", apres, payload),
+        before: side("Ce que vous aviez écarté", avant, beforePayload, secours),
+        after: side("Ce que ce lot réaffirme", apres, payload, secours),
         keep: "le refus a été maintenu",
         take: "la lecture de ce lot a été retenue"
       };
@@ -241,8 +295,8 @@ export function describeConflict(conflict = {}) {
 
     return {
       title: avisTitle(payload, item),
-      before: side("Ce que le projet retient", avant, beforePayload),
-      after: side("Ce que ce lot affirme", apres, payload),
+      before: side("Ce que le projet retient", avant, beforePayload, secours),
+      after: side("Ce que ce lot affirme", apres, payload, secours),
       keep: "la lecture précédente a été retenue",
       take: "la lecture de ce lot a été retenue"
     };

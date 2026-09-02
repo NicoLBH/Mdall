@@ -1212,6 +1212,32 @@ export async function moveDocumentFile(projectId = "", fileId = "", targetFolder
   }
 }
 
+/**
+ * Les colonnes de `ct_analysis_runs` arrivées après la création de la table,
+ * dans leur ordre d'arrivée.
+ *
+ * Elles sont ici, exportées, parce que c'est par elles que le journal a cassé :
+ * `owner_id` avait été rangé avec les colonnes obligatoires, et une base où sa
+ * migration n'était pas passée ne rendait plus **aucune** exécution — PostgREST
+ * rejette toute la requête pour une seule colonne inconnue.
+ */
+export const COLONNES_RECENTES_DES_COURSES = ["steps", "owner_id"];
+
+/**
+ * Les listes de colonnes à essayer, de la plus complète à la plus sûre.
+ *
+ * On abandonne la dernière colonne arrivée en premier : c'est celle dont la
+ * migration a le plus de chances de manquer. La dernière tentative ne demande
+ * que le socle, et elle doit toujours passer.
+ */
+export function essaisDeColonnes(socle, recentes = []) {
+  const essais = [];
+  for (let gardees = recentes.length; gardees >= 0; gardees -= 1) {
+    essais.push([socle, ...recentes.slice(0, gardees)].join(","));
+  }
+  return essais;
+}
+
 export async function syncProjectActionsFromSupabase(options = {}) {
   const force = Boolean(options.force);
   const frontendProjectId = getFrontendProjectKey();
@@ -1236,13 +1262,18 @@ export async function syncProjectActionsFromSupabase(options = {}) {
   params.set("project_id", `eq.${backendProjectId}`);
   params.set("order", "created_at.desc");
 
-  // Les colonnes du journal, et celles qu'on peut perdre sans perdre le journal.
-  // `steps` porte les durées : une base où la migration n'est pas passée fait
-  // rejeter **toute la requête**, et l'écran n'affiche alors plus aucune
-  // exécution — un détail optionnel emportait le tout.
-  const CT_RUN_COLUMNS =
+  // Le socle du journal : les colonnes présentes depuis la création de la
+  // table. Sans elles il n'y a rien à afficher.
+  const CT_RUN_SOCLE =
     "id,computed_at,document_count,avis_count,tracked_avis_count,guard_violation_count," +
-    "packs_used,engine_version,corpus_documents,trigger_source,proposition_id,owner_id,propositions(number,title)";
+    "packs_used,engine_version,corpus_documents,trigger_source,proposition_id,propositions(number,title)";
+
+  // Ce qui est venu après, migration par migration. PostgREST rejette **toute**
+  // la requête si une seule colonne demandée n'existe pas : une colonne ajoutée
+  // récemment mais pas encore migrée faisait donc disparaître l'intégralité du
+  // journal, et non le seul détail qu'elle porte. On les redemande donc une par
+  // une en les abandonnant dans l'ordre inverse de leur arrivée.
+  const CT_RUN_RECENTES = COLONNES_RECENTES_DES_COURSES;
 
   const ctParamsFor = (colonnes) => {
     const params_ = new URLSearchParams();
@@ -1252,18 +1283,32 @@ export async function syncProjectActionsFromSupabase(options = {}) {
     return params_;
   };
 
-  const ctParams = ctParamsFor(`${CT_RUN_COLUMNS},steps`);
+  /**
+   * Les exécutions, avec autant de colonnes récentes que la base en connaît.
+   *
+   * On abandonne la dernière arrivée d'abord : c'est la plus susceptible de
+   * manquer. Perdre l'histoire des exécutions parce qu'une colonne manque
+   * serait le pire des deux échecs possibles.
+   */
+  const lireLesCourses = async () => {
+    for (const colonnes of essaisDeColonnes(CT_RUN_SOCLE, CT_RUN_RECENTES)) {
+      try {
+        return await restFetch("ct_analysis_runs", ctParamsFor(colonnes));
+      } catch (erreur) {
+        if (colonnes === CT_RUN_SOCLE) {
+          console.warn("[actions] ct_analysis_runs illisible", erreur);
+          return [];
+        }
+      }
+    }
+    return [];
+  };
 
   // Deux pipelines, un seul journal. Ne pas savoir lire l'un n'autorise pas
-  // à taire l'autre : une base à jour rendra les deux, une base en retard
-  // rendra celui qu'elle connaît plutôt qu'une page vide.
+  // à taire l'autre.
   const [rows, ctRows] = await Promise.all([
     restFetch("analysis_runs", params).catch(() => []),
-    restFetch("ct_analysis_runs", ctParams).catch(() =>
-      // Sans les durées plutôt que sans le journal : perdre l'histoire des
-      // exécutions parce qu'une colonne manque serait le pire des deux.
-      restFetch("ct_analysis_runs", ctParamsFor(CT_RUN_COLUMNS)).catch(() => [])
-    )
+    lireLesCourses()
   ]);
 
   const nextItems = [

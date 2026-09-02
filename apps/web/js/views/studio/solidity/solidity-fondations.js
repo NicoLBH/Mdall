@@ -16,6 +16,7 @@
 import { escapeHtml } from "../../../utils/escape-html.js";
 import { registerProjectPrimaryScrollSource } from "../../project-shell-chrome.js";
 import { renderGhActionButton } from "../../ui/gh-split-button.js";
+import { svgIcon } from "../../../ui/icons.js";
 import {
   ZONES, CHOIX, CAS_DE_CHARGE, COMPOSANTES, NAPPES, BARRES,
   entreesParDefaut, entreesInvalides, uniteAffichee, estPertinent
@@ -167,6 +168,7 @@ function dessiner(root) {
           ${dessinerInvalides()}
           <div class="fondations-grille">
             <div class="fondations-colonne">
+              ${dessinerChoix()}
               <fieldset class="fondations-zone">
                 <legend>Schéma</legend>
                 <p class="fondations-zone__note">
@@ -176,7 +178,6 @@ function dessiner(root) {
                 </p>
                 <div data-fondations-schema>${dessinerSchema(etat.entrees, resultatPerime() ? null : etat.resultat)}</div>
               </fieldset>
-              ${dessinerChoix()}
               ${ZONES.map(dessinerZone).join("")}
               ${dessinerCharges()}
               ${dessinerFerraillage()}
@@ -243,6 +244,10 @@ function dessinerZone(zone) {
 }
 
 function dessinerCharges() {
+  const unites = String(etat.entrees.unites || "");
+  const uniteEffort = { "{ T ; Tm }": "T", "{ kN ; kNm }": "kN", "{ daN ; daNm }": "daN" }[unites] || "";
+  const uniteMoment = { "{ T ; Tm }": "Tm", "{ kN ; kNm }": "kNm", "{ daN ; daNm }": "daNm" }[unites] || "";
+  const uniteDe = (composante) => (composante.cle.startsWith("M") ? uniteMoment : uniteEffort);
   return `
     <fieldset class="fondations-zone">
       <legend>Charges appliquées</legend>
@@ -256,7 +261,9 @@ function dessinerCharges() {
             <tr>
               <th scope="col">Cas</th>
               <th scope="col">Type</th>
-              ${COMPOSANTES.map((c) => `<th scope="col">${escapeHtml(c.libelle)}</th>`).join("")}
+              ${COMPOSANTES.map((c) => `
+                <th scope="col">${escapeHtml(c.libelle)}<em class="fondations-charges__unite">${escapeHtml(uniteDe(c))}</em></th>
+              `).join("")}
             </tr>
           </thead>
           <tbody>
@@ -378,6 +385,22 @@ function ratioDepasse(ratio) {
   return Number.isFinite(n) && (n > 1 || n < 0);
 }
 
+/**
+ * Le signe d'un verdict, à côté de son chiffre.
+ *
+ * La couleur seule ne suffit pas : un daltonien lit le même gris des deux
+ * côtés, et une capture d'écran en noir et blanc aussi. Le signe porte
+ * l'information, la couleur la renforce.
+ */
+function signeDuVerdict(ratio) {
+  if (!Number.isFinite(Number(ratio))) return "";
+  const passe = !ratioDepasse(ratio);
+  return `<span class="fondations-signe fondations-signe--${passe ? "ok" : "ko"}"
+    aria-label="${passe ? "vérifié" : "non vérifié"}" title="${passe ? "Vérifié" : "Non vérifié"}">
+    ${svgIcon(passe ? "check-circle-fill" : "x-circle-fill", { className: "octicon" })}
+  </span>`;
+}
+
 /** Le ferraillage : ce qui est posé, ce qu'il faut, et l'écart. */
 function dessinerInterne(r) {
   const interne = r.interne;
@@ -400,14 +423,22 @@ function dessinerInterne(r) {
     <section class="fondations-bloc">
       <header class="fondations-bloc__tete">
         <h5>Ferraillage de la semelle</h5>
-        <span class="fondations-bloc__ratio${ratioDepasse(interne.ratio) ? " est-depasse" : ""}">${escapeHtml(ratioLisible(interne.ratio))}</span>
+        <span class="fondations-bloc__ratio${ratioDepasse(interne.ratio) ? " est-depasse" : " est-verifie"}">
+          ${signeDuVerdict(interne.ratio)}${escapeHtml(ratioLisible(interne.ratio))}
+        </span>
       </header>
       <div class="fondations-charges-defilement">
         <table class="fondations-charges fondations-nappes">
           <thead>
             <tr>
-              <th scope="col">Nappe</th><th scope="col">Posé</th><th scope="col">es</th>
-              <th scope="col">As</th><th scope="col">As,min</th><th scope="col">Ratio</th>
+              <th scope="col">Nappe</th>
+              <th scope="col">Posé</th>
+              <th scope="col">es<em class="fondations-charges__unite">m</em></th>
+              <th scope="col">As<em class="fondations-charges__unite">cm²</em></th>
+              <th scope="col">As,min<em class="fondations-charges__unite">cm²</em></th>
+              <th scope="col" title="Section exigée rapportée à la section posée. Au-delà de 1, l'acier posé ne suffit pas.">
+                Ratio<em class="fondations-charges__unite">As,min / As</em>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -415,12 +446,14 @@ function dessinerInterne(r) {
               <tr>
                 <th scope="row">${escapeHtml(nappe.cle)}</th>
                 <td>${nappe.nombre > 0 ? escapeHtml(`${nappe.nombre} ${nappe.barre}`) : "—"}</td>
-                <td>${nappe.espacement === null ? "—" : escapeHtml(`${nombreLisible(nappe.espacement, 2)} m`)}</td>
-                <td>${nappe.fournie === null ? "—" : escapeHtml(`${nombreLisible(nappe.fournie, 1)} cm²`)}</td>
+                <td>${nappe.espacement === null ? "—" : escapeHtml(nombreLisible(nappe.espacement, 2))}</td>
+                <td>${nappe.fournie === null ? "—" : escapeHtml(nombreLisible(nappe.fournie, 1))}</td>
                 <td>${nappe.requise === null ? "—"
                   : nappe.requise === Infinity ? "section insuffisante"
-                    : escapeHtml(`${nombreLisible(nappe.requise, 2)} cm²`)}</td>
-                <td class="${ratioDepasse(nappe.ratio) ? "est-depasse" : ""}">${nappe.ratio === null ? "—" : escapeHtml(ratioLisible(nappe.ratio))}</td>
+                    : escapeHtml(nombreLisible(nappe.requise, 2))}</td>
+                <td class="${nappe.ratio === null ? "" : ratioDepasse(nappe.ratio) ? "est-depasse" : "est-verifie"}">
+                  ${nappe.ratio === null ? "—" : `${signeDuVerdict(nappe.ratio)}${escapeHtml(ratioLisible(nappe.ratio))}`}
+                </td>
               </tr>
             `).join("")}
           </tbody>
@@ -451,7 +484,9 @@ function dessinerResultats() {
     <section class="fondations-bloc">
       <header class="fondations-bloc__tete">
         <h5>${escapeHtml(titre)}</h5>
-        <span class="fondations-bloc__ratio${ratioDepasse(ratio) ? " est-depasse" : ""}">${escapeHtml(ratioLisible(ratio))}</span>
+        <span class="fondations-bloc__ratio${ratioDepasse(ratio) ? " est-depasse" : " est-verifie"}">
+          ${signeDuVerdict(ratio)}${escapeHtml(ratioLisible(ratio))}
+        </span>
       </header>
       <p class="fondations-bloc__combinaison">${escapeHtml(combinaison || "—")}</p>
       <dl class="fondations-bloc__valeurs">
@@ -478,7 +513,7 @@ function dessinerResultats() {
         qui est à l'écran. Relancez le calcul.
       </p>
       <p class="fondations-resultats__bilan">
-        Ratio déterminant <strong>${escapeHtml(ratioLisible(r.bilan?.ratio))}</strong>
+        Ratio déterminant <strong class="${ratioDepasse(r.bilan?.ratio) ? "est-depasse" : "est-verifie"}">${escapeHtml(ratioLisible(r.bilan?.ratio))}</strong>
         sur ${escapeHtml(String(r.combinaisonsExaminees ?? "—"))} combinaisons examinées.
         Un ratio supérieur à 1 signifie que la sollicitation dépasse la résistance.
       </p>
@@ -530,7 +565,9 @@ function dessinerResultats() {
       <section class="fondations-bloc">
         <header class="fondations-bloc__tete">
           <h5>Surfaces comprimées</h5>
-          <span class="fondations-bloc__ratio${ratioDepasse(r.surfaces?.ratio) ? " est-depasse" : ""}">${escapeHtml(ratioLisible(r.surfaces?.ratio))}</span>
+          <span class="fondations-bloc__ratio${ratioDepasse(r.surfaces?.ratio) ? " est-depasse" : " est-verifie"}">
+          ${signeDuVerdict(r.surfaces?.ratio)}${escapeHtml(ratioLisible(r.surfaces?.ratio))}
+        </span>
         </header>
         <dl class="fondations-bloc__valeurs">
           ${surface("ELU / ELA", r.surfaces?.eluEla || {})}
