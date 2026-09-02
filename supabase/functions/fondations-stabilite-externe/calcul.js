@@ -39,6 +39,19 @@ export const INCLINAISONS = ["Sans objet", "Sol cohérent", "Sol frottant"];
 export const DRAINAGES = ["Sol drainé", "Sol non drainé"];
 export const UNITES = ["{ T ; Tm }", "{ kN ; kNm }", "{ daN ; daNm }"];
 
+/** Les diamètres de barres du catalogue, et leur section en cm². */
+export const BARRES = [6, 8, 10, 12, 14, 16, 20, 25, 32, 40].map((diametre) => ({
+  nom: `HA${diametre}`, diametre, section: Math.PI / 4 * (diametre / 10) ** 2
+}));
+
+/** Les quatre nappes d'armatures de la semelle, dans l'ordre de la note. */
+export const NAPPES = [
+  { cle: "AIX", libelle: "Nappe inférieure axe X", face: "inferieure", axe: "X" },
+  { cle: "AIY", libelle: "Nappe inférieure axe Y", face: "inferieure", axe: "Y" },
+  { cle: "ASX", libelle: "Nappe supérieure axe X", face: "superieure", axe: "X" },
+  { cle: "ASY", libelle: "Nappe supérieure axe Y", face: "superieure", axe: "Y" }
+];
+
 /** Les douze cas de charge, dans l'ordre où les combinaisons les citent. */
 export const CAS = ["Gmax", "Gmin", "Q", "Sn", "W1", "W2", "W3", "W4", "Sx", "Sy", "Sz", "Fa"];
 
@@ -113,7 +126,23 @@ export const DEFAUTS = {
   secuGlissementElu: 1,    // AU23
   secuGlissementEla: 1,    // AU24
   secuRenversementElu: 1,  // AU25
-  secuRenversementEla: 1   // AU26
+  secuRenversementEla: 1,  // AU26
+
+  // Béton armé (AI9:AL12). Ce qui sert à la stabilité interne.
+  enrobageSemelle: 5,      // AI10 [cm]
+  enrobageFut: 5,          // AL10 [cm]
+  resistanceBeton: 25,     // AI11 — fc [MPa]
+  limiteAcier: 500,        // AL11 — fe [MPa]
+  armaturesMinimales: "NON", // AU20 — impose-t-on la section minimale d'un tirant ?
+  fissuration: "Sans objet", // AI12 — ce que la fissuration admise plafonne au service
+
+  /**
+   * Le ferraillage proposé, nappe par nappe : `{ AIX: { nombre, barre } }`.
+   *
+   * C'est une **proposition de l'ingénieur**, pas un résultat : l'utilitaire
+   * dit ce qu'elle vaut face à ce que le calcul exige, il ne la choisit pas.
+   */
+  ferraillage: {}
 };
 
 /**
@@ -426,6 +455,19 @@ function borner(valeur, plafond = 1000) {
 
 const DIVISEUR_UNITE = { "{ T ; Tm }": 10, "{ kN ; kNm }": 1e3, "{ daN ; daNm }": 1e4 };
 
+/** BE128 : combien d'unités de force valent un kN dans le système retenu. */
+const FACTEUR_UNITE = { "{ T ; Tm }": 1, "{ kN ; kNm }": 10, "{ daN ; daNm }": 1000 };
+
+/** La section d'une barre, par son nom. `HA10` fait 0,785 cm². */
+function sectionBarre(nom) {
+  return BARRES.find((barre) => barre.nom === String(nom ?? "").trim())?.section ?? 0;
+}
+
+/** Le diamètre d'une barre, en millimètres. */
+function diametreBarre(nom) {
+  return BARRES.find((barre) => barre.nom === String(nom ?? "").trim())?.diametre ?? 0;
+}
+
 /**
  * Le calcul complet.
  *
@@ -448,6 +490,7 @@ export function calculerStabiliteExterne(entrees = {}) {
     "lestMin", "lestMax", "densiteSemelle", "densiteFut", "poidsVolumiqueSol", "contrainteLimite",
     "angleFrottement", "buteeMobilisee", "angleButee", "poidsVolumiqueButee", "buteeZi", "buteeZf",
     "gminElu", "wElu", "newmark", "deSurB", "cohesionNonDrainee",
+    "enrobageSemelle", "enrobageFut", "resistanceBeton", "limiteAcier",
     "secuGlissementElu", "secuGlissementEla", "secuRenversementElu", "secuRenversementEla"]) {
     e[cle] = nombre(e[cle], DEFAUTS[cle]);
   }
@@ -486,6 +529,82 @@ export function calculerStabiliteExterne(entrees = {}) {
     : e.reglement === "DTU 13.12" ? 0.5
       : e.reglement === "Fascicule 62" ? Math.tan(Math.PI * e.angleFrottement / 180) / 1.2
         : Math.tan(Math.PI * e.angleFrottement / 180) / 1.1 ** 2;
+
+  // Le béton armé de la semelle (AS154:BB160, AW127:AX137). Ces grandeurs ne
+  // dépendent d'aucune combinaison : elles se calculent une fois.
+  const ferraillage = Object.fromEntries(NAPPES.map((nappe) => {
+    const propose = e.ferraillage?.[nappe.cle] ?? {};
+    return [nappe.cle, { nombre: Math.max(0, Math.trunc(nombre(propose.nombre, 0))), barre: texte(propose.barre) }];
+  }));
+  const facteurUnite = FACTEUR_UNITE[e.unites];
+  const h = e.hauteurLz;                                                  // AT155
+  const enrobage = e.enrobageSemelle / 100;
+  const lit = (a, b) => {
+    const da = diametreBarre(ferraillage[a].barre), db = diametreBarre(ferraillage[b].barre);
+    if (!da && !db) return h - 0.08;                                      // le repli du classeur
+    return h - enrobage - max(da + db / 2, da / 2 + db) / 1000;
+  };
+  const dInf = lit("AIX", "AIY");                                         // AT156
+  const dSup = lit("ASX", "ASY");                                         // AT157
+  const poidsSemelle = h * e.densiteSemelle * 10 / facteurUnite;          // AW155
+  const poidsTerres = -min(0, e.araseSuperieure) * e.poidsVolumiqueSol * 10 / facteurUnite; // AW156
+  const fbu = ec ? e.resistanceBeton / 1.5 : 0.85 * e.resistanceBeton / 1.5; // AX133 — ELU
+  const fba = ec ? e.resistanceBeton / 1.2 : 0.85 * e.resistanceBeton / 1.15; // AX132 — accidentel
+  const ftj = 0.6 + 0.06 * e.resistanceBeton;                             // AX130
+
+  /**
+   * Les trois contraintes d'acier, selon la famille de combinaison.
+   *
+   * Elles ne sont pas une nuance : à l'ELU l'acier est minoré par 1,15, à
+   * l'accidentel il ne l'est pas, et au service c'est la fissuration admise qui
+   * plafonne. Prendre la même partout se verrait de 13 % sur une nappe.
+   */
+  const sigmaBael = e.fissuration === "Peu Préjudiciable" ? e.limiteAcier
+    : e.fissuration === "Préjudiciable"
+      ? min(2 * e.limiteAcier / 3, max(e.limiteAcier / 2, 110 * Math.sqrt(1.6 * ftj)))
+      : 0.8 * min(2 * e.limiteAcier / 3, max(e.limiteAcier / 2, 110 * Math.sqrt(1.6 * ftj))); // BA131
+  const WK = { "Sans objet": 0.4, "wk ≤ 0,3mm": 0.3, "wk ≤ 0,2mm": 0.2 };
+  const sigmaEc2 = e.limiteAcier > 0 && WK[e.fissuration] !== undefined
+    ? 1000 * WK[e.fissuration] : 0.8 * e.limiteAcier;                     // BA132
+  const sigmaU = e.limiteAcier / 1.15;                                    // BA130 — ELU
+  const sigmaA = e.limiteAcier;                                           // BA129 — accidentel
+  const sigmaS = ec ? sigmaEc2 : sigmaBael;                               // BA133 — service
+  const equivalence = ec ? 200000 / (22000 * ((e.resistanceBeton + 8) / 10) ** 0.3 / 3) : 15; // AX138
+  const futX = (e.hauteurFut * e.futA * e.futB === 0) ? 0 : e.futA;       // AT146, annulé sans fût
+  const futY = (e.hauteurFut * e.futA * e.futB === 0) ? 0 : e.futB;       // AU146
+  const echelleContrainte = e.unites === "{ kN ; kNm }" ? 1000 : 100;
+
+  /**
+   * Le bras de levier d'une nappe à l'état-limite ultime ou accidentel.
+   *
+   * La racine devient négative quand le moment dépasse ce que la section peut
+   * reprendre : le classeur rend alors une erreur de cellule. On rend `null`,
+   * et la nappe portera « section insuffisante » plutôt qu'un nombre.
+   */
+  const brasDeLevier = (moment, largeur, d, fc) => {
+    const sous = 1 - 2 * moment / largeur / d ** 2 / fc / 1000;
+    if (!(sous >= 0)) return null;
+    return d * (1 - 0.4 * 1.25 * (1 - Math.sqrt(sous)));
+  };
+
+  /**
+   * Le bras de levier au service : `d − y/3`, section fissurée.
+   *
+   * Il ne dépend pas du moment mais de l'acier **déjà posé** — c'est une
+   * vérification de ce qui existe, pas un dimensionnement. Une nappe vide n'a
+   * pas d'axe neutre : le classeur lui donne 10⁻⁹ cm² pour que la racine tienne,
+   * et on fait de même plutôt que de diviser par zéro.
+   */
+  const brasDeLevierService = (nappe, largeur, d) => {
+    const propose = ferraillage[nappe];
+    const as = max(1e-5, propose.nombre * sectionBarre(propose.barre)) / 1e4;
+    const y = 2 * equivalence * as / largeur * (Math.sqrt(1 + 2 * largeur * d / equivalence / as) - 1);
+    return d - y / 3;
+  };
+  const brasService = {
+    AIX: brasDeLevierService("AIX", L11, dInf), AIY: brasDeLevierService("AIY", I11, dInf),
+    ASX: brasDeLevierService("ASX", L11, dSup), ASY: brasDeLevierService("ASY", I11, dSup)
+  };
 
   const ordre = CAS.map((nom) => lignes[nom]);
   const resultats = [];
@@ -604,8 +723,51 @@ export function calculerStabiliteExterne(entrees = {}) {
     const EU = I11 / 6 - FO, EV398 = L11 / 6 - FP;
     const EWqp = min(EU, EV398) < 0 ? Sc : 100;
 
+    // Stabilité interne : la section d'acier que cette combinaison exige, pour
+    // chacune des quatre nappes de la semelle (colonnes IR à JC).
+    const contraintePourAciers = echelleContrainte * (meyerhoff ? FB : FE);
+    const poidsPropre = (c[0] + c[1]) * (poidsSemelle + poidsTerres);
+    const charge = contraintePourAciers - poidsPropre;
+
+    const momentInfX = L11 * charge * (FO < I11 / 4
+      ? (I11 / 2 - 0.35 * futX) ** 2 / 2
+      : (I11 - 2 * FO) * (FO - 0.35 * futX));                              // IR
+    const momentInfY = I11 * charge * (FP < L11 / 4
+      ? (L11 / 2 - 0.35 * futY) ** 2 / 2
+      : (L11 - 2 * FP) * (FP - 0.35 * futY));                              // IU
+    // IX ne porte le facteur de largeur qu'à la ligne 22 ; les 375 autres en
+    // sont dépourvues. C'est une recopie manquée du classeur, pas une règle —
+    // mais la suivre est la seule façon de rendre ce qu'il rend.
+    const momentSupX = (ligne === 22 ? L11 : 1)
+      * (FO < I11 / 6 ? 0 : poidsPropre * (I11 / 2 - 0.35 * e.futA) ** 2 / 2); // IX
+    const momentSupY = I11 * (FP < L11 / 6 ? 0 : poidsPropre * (L11 / 2 - 0.35 * e.futB) ** 2 / 2); // JA
+
+    // Chaque famille a ses coefficients : béton minoré ou non, acier minoré ou
+    // plafonné par la fissuration.
+    const service = ligne >= 320;
+    const accidentel = ligne >= 100 && ligne < 320;
+    const fcFamille = accidentel ? fba : fbu;
+    const sigmaFamille = service ? sigmaS : accidentel ? sigmaA : sigmaU;
+
+    const acier = (moment, largeur, d, nappe) => {
+      const bras = service ? brasService[nappe] : brasDeLevier(moment, largeur, d, fcFamille);
+      return bras === null || bras === 0 ? null : moment / bras * 10 / sigmaFamille;
+    };
+    const aciers = {
+      AIX: acier(momentInfX, L11, dInf, "AIX"),                            // IT
+      AIY: acier(momentInfY, I11, dInf, "AIY"),                            // IW
+      ASX: acier(momentSupX, L11, dSup, "ASX"),                            // IZ
+      // JB calcule son bras de levier sur `IX` là où l'on attendrait `JA` :
+      // c'est ce que le classeur écrit, et le suivre est la seule façon de
+      // rendre ce qu'il rend.
+      ASY: (() => {
+        const bras = service ? brasService.ASY : brasDeLevier(momentSupX, I11, dSup, fcFamille);
+        return bras === null || bras === 0 ? null : momentSupY / bras * 10 / sigmaFamille;
+      })()
+    };
+
     resultats.push({ ligne, famille, c, V, Hx, Hy, Mx, My,
-      FK, FM, FL, FN, EWqp,
+      FK, FM, FL, FN, EWqp, aciers, FO, FP,
       DW, DX, DY, DZ, EA, EC, ED,
       EE, EG, EH, EI, EJ, EL, EM, EN, EO, EQ, ER, ES, ET, EV, EW, EX,
       EZ, FB, FE, FC, FF, HI, libelle: libelleCombinaison(famille, c, ordre) });
@@ -704,13 +866,83 @@ export function calculerStabiliteExterne(entrees = {}) {
     ratio: (AL36 * AL39 * AL42 === 0) ? 10 : max(AL37 / AL36, AL40 / AL39, AL43 / AL42)
   };
 
-  const ratio = max(glissement.ratio, basculement.ratio, contrainte.ratio, surfaces.ratio);
+  const ratioExterne = max(glissement.ratio, basculement.ratio, contrainte.ratio, surfaces.ratio);
+
+  // --- Stabilité interne : le ferraillage de la semelle (A60:AB72)
+  //
+  // Le classeur ne calcule les sections requises que si la stabilité externe
+  // passe, et il a raison : sur une semelle qui glisse ou qui bascule, la
+  // question du ferraillage ne se pose pas encore. Elles valent alors « — ».
+  const externeVerifiee = ratioExterne <= 1;
+
+  const coefficientHauteur = max(0.65, 1 - 0.35 * (max(h, 0.3) - 0.3) / 0.5); // AZ156
+  const fctEff = e.resistanceBeton > 50
+    ? 2.12 * Math.log(1 + (e.resistanceBeton + 8) / 10)
+    : 0.3 * e.resistanceBeton ** (2 / 3);                                 // AX129
+  const sectionMinimale = (cote) => {
+    if (e.armaturesMinimales !== "OUI") return 0;                         // AZ159, BA159
+    const act = cote * h / 2 * 1e4;
+    return ec ? 0.4 * coefficientHauteur * fctEff * act / e.limiteAcier : 0.5 * ftj * act / e.limiteAcier;
+  };
+  const maxFO = stabilite.reduce((m2, r) => max(m2, r.FO), -Infinity);
+  const maxFP = stabilite.reduce((m2, r) => max(m2, r.FP), -Infinity);
+  const minimales = {
+    AIX: sectionMinimale(L11), AIY: sectionMinimale(I11),
+    // La nappe supérieure n'a de minimum que si la semelle décolle : sans
+    // soulèvement, elle ne travaille pas.
+    ASX: maxFO < I11 / 6 ? 0 : sectionMinimale(L11),                      // AZ160
+    ASY: maxFP < L11 / 6 ? 0 : sectionMinimale(I11)                       // BA160
+  };
+  const largeurEspacement = { AIX: L11, AIY: I11, ASX: L11, ASY: I11 };
+
+  const nappes = NAPPES.map((nappe) => {
+    const propose = ferraillage[nappe.cle];
+    const declare = propose.nombre > 0 && Boolean(propose.barre);
+    const fournie = declare ? max(1e-5, propose.nombre * sectionBarre(propose.barre)) : null;
+
+    const exigees = stabilite.map((r) => r.aciers[nappe.cle]);
+    const insuffisante = exigees.some((valeur) => valeur === null);
+    const requise = !externeVerifiee || !declare ? null
+      : insuffisante ? Infinity
+        : max(minimales[nappe.cle], ...exigees);
+
+    const espacement = propose.nombre > 1
+      ? Math.round((largeurEspacement[nappe.cle] - 2 * enrobage) / (propose.nombre - 1) * 100) / 100
+      : null;
+
+    return {
+      ...nappe,
+      nombre: propose.nombre,
+      barre: propose.barre,
+      espacement,
+      fournie,
+      requise,
+      ratio: !externeVerifiee ? 10 : (fournie === null || fournie < 0.01 || requise === null) ? null : requise / fournie
+    };
+  });
+
+  const ratiosInternes = nappes.map((n) => n.ratio).filter((r) => r !== null);
+  const interne = {
+    // Tant que l'externe ne passe pas, l'interne ne se prononce pas : le
+    // classeur pose 10, et 10 se lit « pas vérifié du tout ».
+    ratio: ratiosInternes.length ? max(...ratiosInternes) : null,
+    verifiee: ratiosInternes.length ? max(...ratiosInternes) <= 1 : null,
+    nappes,
+    // Ce que cet utilitaire ne calcule pas, et le dit là où on le chercherait.
+    horsPortee: ["Armatures de fût", "Armature de surface", "Poinçonnement"],
+    // Les sections exigées combinaison par combinaison. Elles ne s'affichent
+    // pas — c'est leur maximum qui décide —, mais elles rendent le calcul
+    // vérifiable ligne à ligne contre la source.
+    parCombinaison: stabilite.map((r) => ({ ligne: r.ligne, famille: r.famille, aciers: r.aciers }))
+  };
+
+  const ratio = ratioExterne;
   const uniteEffort = { "{ T ; Tm }": "T", "{ kN ; kNm }": "kN", "{ daN ; daNm }": "daN" }[e.unites];
   const uniteMoment = { "{ T ; Tm }": "Tm", "{ kN ; kNm }": "kNm", "{ daN ; daNm }": "daNm" }[e.unites];
 
   return {
     bilan: { ratio, verifie: ratio <= 1 },
-    glissement, basculement, contrainte, surfaces,
+    glissement, basculement, contrainte, surfaces, interne,
     poidsPropre, butee: bu,
     unites: { effort: uniteEffort, moment: uniteMoment, contrainte: e.unites === "{ kN ; kNm }" ? "MPa" : "bar" },
     combinaisonsExaminees: stabilite.length

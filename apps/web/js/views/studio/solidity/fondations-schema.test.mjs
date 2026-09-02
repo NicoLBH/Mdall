@@ -97,12 +97,16 @@ test("sans excentrements rendus, rien n'est dessiné plutôt qu'une surface supp
   assert.equal(zoneComprimee({ contrainte: {} }, { sectionLx: 1.2, sectionLy: 1.2 }), null);
 });
 
-test("le tracé rend deux vues, et le dit quand il n'a rien à tracer", () => {
-  const svg = dessinerSchema(SEMELLE_SEULE);
-  assert.equal((svg.match(/<svg/g) || []).length, 2);
+test("le tracé rend trois vues, et le dit quand il n'a rien à tracer", () => {
+  const svg = dessinerSchema({ ...SEMELLE_SEULE, sectionLx: 1.2, sectionLy: 1.8 });
+  assert.equal((svg.match(/<svg/g) || []).length, 3);
   assert.match(svg, /Coupe suivant l'axe X/);
+  // Deux coupes plutôt qu'un interrupteur : sans quoi Ly ne se voit qu'après
+  // un clic qu'on ne pense pas à faire, et on ne compare plus rien.
+  assert.match(svg, /Coupe suivant l'axe Y/);
   assert.match(svg, /Vue en plan/);
   assert.match(svg, /Lx = 1,20 m/);
+  assert.match(svg, /Ly = 1,80 m/);
 
   const rien = dessinerSchema({ sectionLx: 0, sectionLy: 0, hauteurLz: 0 });
   assert.match(rien, /demande une semelle/);

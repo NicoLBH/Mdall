@@ -25,6 +25,17 @@ export const CAS_DE_CHARGE = [
   { cle: "Fa", libelle: "Fa", nature: "Accidentelle" }
 ];
 
+/** Les quatre nappes d'armatures de la semelle, dans l'ordre de la note. */
+export const NAPPES = [
+  { cle: "AIX", libelle: "Nappe inférieure axe X", defautBarre: "HA10" },
+  { cle: "AIY", libelle: "Nappe inférieure axe Y", defautBarre: "HA10" },
+  { cle: "ASX", libelle: "Nappe supérieure axe X", defautBarre: "HA8" },
+  { cle: "ASY", libelle: "Nappe supérieure axe Y", defautBarre: "HA8" }
+];
+
+/** Les diamètres de barres du catalogue. */
+export const BARRES = [6, 8, 10, 12, 14, 16, 20, 25, 32, 40].map((d) => `HA${d}`);
+
 /** Les cinq composantes d'un cas, au point où il est appliqué. */
 export const COMPOSANTES = [
   { cle: "V", libelle: "V" },
@@ -86,6 +97,16 @@ export const ZONES = [
     ]
   },
   {
+    cle: "beton",
+    titre: "Béton armé",
+    champs: [
+      { cle: "enrobageSemelle", libelle: "Enrobage de la semelle", unite: "cm", defaut: 5, min: 0 },
+      { cle: "enrobageFut", libelle: "Enrobage du fût", unite: "cm", defaut: 5, min: 0 },
+      { cle: "resistanceBeton", libelle: "Résistance du béton fc", unite: "MPa", defaut: 25, min: 0 },
+      { cle: "limiteAcier", libelle: "Limite d'élasticité de l'acier fe", unite: "MPa", defaut: 500, min: 0 }
+    ]
+  },
+  {
     cle: "lest",
     titre: "Lest",
     champs: [
@@ -108,7 +129,11 @@ export const CHOIX = [
   { cle: "typeExploitation", libelle: "Nature de la charge d'exploitation", defaut: "Exploitation",
     valeurs: ["Exploitation", "Archives / stockage", "Température"] },
   { cle: "unites", libelle: "Unités", defaut: "{ daN ; daNm }",
-    valeurs: ["{ T ; Tm }", "{ kN ; kNm }", "{ daN ; daNm }"] }
+    valeurs: ["{ T ; Tm }", "{ kN ; kNm }", "{ daN ; daNm }"] },
+  { cle: "fissuration", libelle: "Fissuration admise", defaut: "Sans objet",
+    valeurs: ["Sans objet", "wk ≤ 0,3mm", "wk ≤ 0,2mm"] },
+  { cle: "armaturesMinimales", libelle: "Imposer la section minimale de tirant", defaut: "NON",
+    valeurs: ["NON", "OUI"] }
 ];
 
 /**
@@ -141,6 +166,11 @@ export function entreesParDefaut() {
   for (const choix of CHOIX) entrees[choix.cle] = choix.defaut;
   entrees.charges = Object.fromEntries(CAS_DE_CHARGE.map((cas) => [cas.cle,
     Object.fromEntries(COMPOSANTES.map((c) => [c.cle, 0]))]));
+  // Aucune nappe n'est proposée d'office : le ferraillage est une décision de
+  // l'ingénieur, pas une valeur par défaut. L'utilitaire dit ce qu'elle vaut,
+  // il ne la choisit pas.
+  entrees.ferraillage = Object.fromEntries(NAPPES.map((nappe) => [nappe.cle,
+    { nombre: 0, barre: nappe.defautBarre }]));
   return entrees;
 }
 
@@ -174,6 +204,17 @@ export function entreesInvalides(entrees = {}) {
   }
   if (entrees.reglement === "EC8-5 Annexe F") {
     problemes.push({ cle: "reglement", raison: "EC8-5 Annexe F : la capacité portante sismique n'est pas encore portée par cet utilitaire." });
+  }
+
+  for (const nappe of NAPPES) {
+    const propose = entrees.ferraillage?.[nappe.cle] ?? {};
+    const n = nombre(propose.nombre);
+    if (propose.nombre !== "" && propose.nombre !== undefined && (n === null || n < 0 || !Number.isInteger(n))) {
+      problemes.push({ cle: `nappe-${nappe.cle}`, raison: `${nappe.libelle} : le nombre de barres doit être un entier positif.` });
+    }
+    if (propose.barre && !BARRES.includes(String(propose.barre))) {
+      problemes.push({ cle: `nappe-${nappe.cle}`, raison: `${nappe.libelle} : diamètre de barre inconnu.` });
+    }
   }
 
   for (const cas of CAS_DE_CHARGE) {

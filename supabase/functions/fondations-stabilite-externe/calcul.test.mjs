@@ -41,7 +41,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { calculerStabiliteExterne, DEFAUTS, REGLEMENTS } from "./calcul.js";
+import { calculerStabiliteExterne, DEFAUTS, REGLEMENTS, NAPPES } from "./calcul.js";
 import { COMBINAISONS } from "./combinaisons.js";
 import { MASSIFS_NOTE_REELLE } from "./note-reelle.js";
 
@@ -322,4 +322,76 @@ test("la note réelle couvre les branches que le classeur ne montrait pas", () =
     "au moins une semelle entièrement décomprimée à l'ELU");
   assert.ok(MASSIFS_NOTE_REELLE.every((m) => m.entrees.repartition === "Constante"),
     "les cinq sont en répartition constante : c'est ce qu'ils étalonnent");
+});
+
+
+/* ------------------------------------------------------------------ *
+ * Stabilité interne : le ferraillage de la semelle
+ * ------------------------------------------------------------------ */
+
+/** Le ferraillage que le classeur porte, pour comparer ses colonnes IT à JC. */
+const FERRAILLAGE_CLASSEUR = {
+  AIX: { nombre: 2, barre: "HA14" }, AIY: { nombre: 6, barre: "HA12" },
+  ASX: { nombre: 0, barre: "HA8" }, ASY: { nombre: 0, barre: "HA8" }
+};
+
+test("les trois familles de combinaison n'ont pas les mêmes coefficients de matériau", () => {
+  // C'est le piège de cette partie : à l'ELU l'acier est minoré par 1,15, à
+  // l'accidentel il ne l'est pas, au service c'est la fissuration qui plafonne
+  // et le bras de levier vient de la section fissurée. Prendre les mêmes
+  // partout se voit de 13 % sur une nappe — et ne se voit pas sur le maximum,
+  // d'où ces relevés ligne à ligne.
+  const r = calculerStabiliteExterne({ ...REFERENCE, enrobageSemelle: 5, ferraillage: FERRAILLAGE_CLASSEUR });
+  const parLigne = Object.fromEntries(r.interne.parCombinaison.map((l) => [l.ligne, l.aciers]));
+
+  proche(parLigne[22].AIX, 0.17513262206090457);   // IT22  — ELU
+  proche(parLigne[22].AIY, 0.17513262206090457);   // IW22
+  proche(parLigne[100].AIX, 0.15228300012056534);  // IT100 — accidentel
+  proche(parLigne[320].AIX, 0.20354358272199286);  // IT320 — service
+  proche(parLigne[320].AIY, 0.21008528398450235);  // IW320
+});
+
+test("la nappe supérieure suit le classeur, recopie manquée comprise", () => {
+  // `IX` ne porte son facteur de largeur qu'à la ligne 22, et `JB` calcule son
+  // bras de levier sur `IX` au lieu de `JA`. Ce sont des irrégularités de la
+  // source ; les corriger rendrait autre chose qu'elle.
+  const r = calculerStabiliteExterne({ ...REFERENCE, enrobageSemelle: 5, ferraillage: FERRAILLAGE_CLASSEUR });
+  const parLigne = Object.fromEntries(r.interne.parCombinaison.map((l) => [l.ligne, l.aciers]));
+  proche(parLigne[27].ASX, 0.11918490433093114);   // IZ27
+  proche(parLigne[27].ASY, 0.14302188519711737);   // JC27
+  assert.notEqual(parLigne[27].ASX, parLigne[27].ASY);
+});
+
+test("les sections requises sont les maximums du classeur", () => {
+  const r = calculerStabiliteExterne({ ...REFERENCE, enrobageSemelle: 5, ferraillage: FERRAILLAGE_CLASSEUR });
+  const maximums = Object.fromEntries(NAPPES.map((nappe) => [nappe.cle,
+    Math.max(...r.interne.parCombinaison.map((l) => l.aciers[nappe.cle] ?? 0))]));
+  proche(maximums.AIX, 0.5413358889020726);
+  proche(maximums.AIY, 0.5413358889020726);
+  proche(maximums.ASX, 0.11918490433093114);
+  proche(maximums.ASY, 0.14302188519711737);
+});
+
+test("tant que la stabilité externe ne passe pas, le ferraillage ne se prononce pas", () => {
+  // C'est la règle du classeur, et elle est juste : sur une semelle qui glisse,
+  // la question du ferraillage ne se pose pas encore.
+  const r = calculerStabiliteExterne({ ...REFERENCE, enrobageSemelle: 5, ferraillage: FERRAILLAGE_CLASSEUR });
+  assert.equal(r.bilan.verifie, false);
+  for (const nappe of r.interne.nappes) assert.equal(nappe.requise, null);
+});
+
+test("une nappe non déclarée n'a ni section fournie ni exigence", () => {
+  const r = calculerStabiliteExterne({ ...MASSIFS_NOTE_REELLE[0].entrees, enrobageSemelle: 10,
+    ferraillage: { AIX: { nombre: 5, barre: "HA10" } } });
+  const par = Object.fromEntries(r.interne.nappes.map((n) => [n.cle, n]));
+  assert.ok(par.AIX.fournie > 0);
+  assert.equal(par.AIY.fournie, null);
+  assert.equal(par.AIY.requise, null);
+  assert.equal(par.AIY.ratio, null);
+});
+
+test("ce que la stabilité interne ne couvre pas est nommé, pas passé sous silence", () => {
+  const r = calculerStabiliteExterne({});
+  assert.ok(r.interne.horsPortee.includes("Armatures de fût"));
+  assert.ok(r.interne.horsPortee.includes("Poinçonnement"));
 });
