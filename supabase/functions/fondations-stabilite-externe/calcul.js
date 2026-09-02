@@ -386,8 +386,11 @@ function surfaceComprimeeConstante(FO, FP, FQ, FR, FJ, I11, L11) {
   if (d === 0) {
     racine = p * q > 0 ? 3 * q / p - GM / 3 / GL : -3 * q / 2 / p - GM / 3 / GL;  // GT
   } else if (d > 0) {
-    const cbrt = (x) => Math.cbrt(x);
-    racine = cbrt((-q + Math.sqrt(d)) / 2) + cbrt((-q - Math.sqrt(d)) / 2) - GM / 3 / GL; // GY
+    // Le classeur écrit `x^(1/3)`, qu'Excel refuse sur un négatif : la cellule
+    // devient #NUM! et la ligne est perdue. `Math.cbrt` rend la racine réelle,
+    // qui est la bonne. C'est le seul endroit où l'on est volontairement plus
+    // juste que la source, et c'est parce qu'elle n'y répond pas du tout.
+    racine = Math.cbrt((-q + Math.sqrt(d)) / 2) + Math.cbrt((-q - Math.sqrt(d)) / 2) - GM / 3 / GL; // GY
   } else {
     const r = 2 * Math.sqrt(-p / 3);
     const theta = Math.acos(-q / 2 * Math.sqrt(27 / -(p ** 3)));
@@ -402,6 +405,20 @@ function surfaceComprimeeConstante(FO, FP, FQ, FR, FJ, I11, L11) {
   const aire = largeur * L11 + (I11 - largeur) * (L11 + hauteur) / 2;
   const pourcentage = aire * 100 / I11 / L11;
   return pourcentage < 0 ? 0 : pourcentage;
+}
+
+/**
+ * La saturation du classeur, tenue même quand la division dégénère.
+ *
+ * `MIN(1000, …)` suffit tant que la division a un sens ; un effort vertical nul
+ * sous un coefficient d'inclinaison rend `0/0`, qu'Excel signale par une erreur
+ * de cellule et que JavaScript propagerait en `NaN` dans tous les minimums qui
+ * suivent — une seule ligne empoisonnerait les 376 autres. On sature plutôt,
+ * comme le fait le reste de la colonne.
+ */
+function borner(valeur, plafond = 1000) {
+  if (!Number.isFinite(valeur)) return plafond;
+  return min(plafond, valeur);
 }
 
 const DIVISEUR_UNITE = { "{ T ; Tm }": 10, "{ kN ; kNm }": 1e3, "{ daN ; daNm }": 1e4 };
@@ -574,8 +591,8 @@ export function calculerStabiliteExterne(entrees = {}) {
     // sans quoi une combinaison de service et une combinaison ultime ne se
     // compareraient pas : c'est ce qui fait de EZ un ratio et non une pression.
     const HJ = (ligne >= 320 && e.reglement !== "DTU 13.12") ? 1.5 : 1;
-    const FA = min(1000, FB / HH / HI * HJ);
-    const FD = min(1000, FE / HH / HI * HJ);
+    const FA = borner(FB / HH / HI * HJ);
+    const FD = borner(FE / HH / HI * HJ);
     const EZ = meyerhoff ? FA : FD;
 
     // Bloc ELS Quasi-permanent (lignes 398 à 409) : le classeur n'y garde que
@@ -649,7 +666,7 @@ export function calculerStabiliteExterne(entrees = {}) {
   const gamma = ct.famille === "ELU" ? k.AV82 : ct.famille === "ELA" ? k.AW82 : k.AU82;
   const sigmaLim = e.contrainteLimite * gamma;
   const contrainte = {
-    ratio: sigmaRef === Infinity ? 10 : sigmaRef / (ct.HI * sigmaLim),
+    ratio: (sigmaRef === Infinity || !(ct.HI * sigmaLim)) ? 10 : sigmaRef / (ct.HI * sigmaLim),
     combinaison: ct.libelle,
     // Les moments affichés sont ceux qui restent après ce que la butée a repris.
     Vd: ct.V, Mdx: ct.FK - ct.FM, Mdy: ct.FL - ct.FN,

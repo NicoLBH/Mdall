@@ -172,3 +172,25 @@ test("les défauts sont ceux de l'outil d'origine, pas des valeurs de projet", (
   assert.equal(DEFAUTS.contrainteLimite, 1);
   assert.deepEqual(DEFAUTS.charges, {});
 });
+
+test("une inclinaison sur un effort vertical nul sature au lieu d'empoisonner les 376 lignes", () => {
+  // Un seul `NaN` traverserait tous les minimums qui suivent ; le classeur, lui,
+  // signale une erreur de cellule. On sature, et le reste du calcul tient.
+  const r = calculerStabiliteExterne({
+    ...REFERENCE, inclinaison: "Sol frottant",
+    charges: { ...REFERENCE.charges, G: { V: 0 } }
+  });
+  assert.ok(Number.isFinite(r.contrainte.ratio), "le ratio de contrainte reste un nombre");
+  assert.ok(Number.isFinite(r.glissement.ratio), "le glissement n'est pas contaminé");
+  assert.ok(Number.isFinite(r.bilan.ratio), "le bilan reste lisible");
+});
+
+test("un excentrement qui décomprime la semelle réduit la surface, sans planter", () => {
+  const r = calculerStabiliteExterne({
+    ...REFERENCE, repartition: "Constante", buteeMobilisee: 0,
+    charges: { G: { V: 3000, Mx: 900, My: 1500 }, W2: { V: -900, Hx: 320, Mx: -600 } }
+  });
+  assert.ok(Number.isFinite(r.surfaces.elsRares.obtenue));
+  assert.ok(r.surfaces.elsRares.obtenue >= 0 && r.surfaces.elsRares.obtenue <= 100);
+  assert.ok(Number.isFinite(r.contrainte.ratio));
+});
