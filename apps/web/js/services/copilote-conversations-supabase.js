@@ -105,7 +105,13 @@ export async function createConversation(projectId) {
     .single();
 
   if (error) throw new Error(error.message);
-  return versConversation(data, []);
+
+  // Une insertion qui ne rend aucune ligne laisserait un identifiant vide, et
+  // le message suivant échouerait sur « aucune discussion » — un symptôme qui
+  // ne nomme pas sa cause. On s'arrête ici, en la nommant.
+  const creee = versConversation(data, []);
+  if (!creee.id) throw new Error("La discussion n'a pas pu être créée en base.");
+  return creee;
 }
 
 /** Ajouter un message, et marquer la discussion comme touchée. */

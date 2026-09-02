@@ -41,6 +41,7 @@ import { store } from "../../../store.js";
 import { escapeHtml } from "../../../utils/escape-html.js";
 import { svgIcon } from "../../../ui/icons.js";
 import { sendAssistMessage } from "../../../services/copilote-service.js";
+import { executerOutil, outilParId } from "../../../services/copilote-outils.js";
 import { conversationTitle, findConversation } from "../../../services/copilote-conversations.js";
 import {
   appendMessage,
@@ -113,6 +114,9 @@ function ensureState() {
       messages: [],
       conversations: [],
       chargement: false,
+      // Ce que la mémoire disait au dernier envoi. Les utilitaires s'en servent
+      // pour pré-remplir leurs entrées et comparer leurs résultats.
+      assertionsConnues: [],
       projectKey: cleProjet(),
       userKey: cleUtilisateur()
     };
@@ -287,7 +291,9 @@ function renderMessage(msg, index) {
     <article class="copilote-msg copilote-msg--assistant" data-message-index="${index}">
       <span class="copilote-msg__mark" aria-hidden="true">${svgIcon("copilot", { width: 32, height: 32 })}</span>
       <div class="copilote-msg__main">
+        ${(msg.executions ?? []).map((execution) => renderExecution(execution)).join("")}
         <div class="copilote-msg__body">${mdToHtml(msg.content || "")}</div>
+        ${(msg.executions ?? []).map((execution) => renderFormulaire(execution, index)).join("")}
         <div class="copilote-msg__footer">
           <div class="copilote-msg__actions">
             <button type="button" class="copilote-msg__action" data-copy-message="${index}"
@@ -305,6 +311,130 @@ function renderMessage(msg, index) {
 }
 
 /**
+ * Ce qu'un utilitaire a calculé, montré tel quel.
+ *
+ * **La trace est aussi importante que la réponse.** Une phrase du copilote qui
+ * annonce « TB = 0,10 s » demande qu'on le croie ; la même phrase accompagnée
+ * de l'utilitaire, de sa version, de ses entrées et de leur provenance se
+ * vérifie. C'est la différence entre un assistant et un outil de travail.
+ */
+function renderExecution(execution) {
+  if (execution?.statut === "manquant") return "";
+
+  if (execution?.statut !== "fait") {
+    return `
+      <div class="copilote-outil copilote-outil--refus">
+        <p class="copilote-outil__titre">${escapeHtml(execution?.titre || "Utilitaire")}</p>
+        <p class="copilote-outil__note">${escapeHtml(execution?.message || "L'utilitaire n'a pas conclu.")}</p>
+      </div>
+    `;
+  }
+
+  const entrees = Object.entries(execution.entrees ?? {}).map(([cle, valeur]) => {
+    const venue = execution.venuesDeLaMemoire?.[cle];
+    return `
+      <li>
+        <span class="copilote-outil__cle">${escapeHtml(cle)}</span>
+        <span class="mono">${escapeHtml(String(valeur))}</span>
+        ${venue ? `<span class="copilote-outil__source">mémoire du projet</span>` : ""}
+      </li>
+    `;
+  }).join("");
+
+  const sorties = Object.entries(execution.valeurs ?? {}).map(([cle, valeur]) => `
+    <li>
+      <span class="copilote-outil__cle">${escapeHtml(cle)}</span>
+      <span class="mono">${escapeHtml(String(valeur))} ${escapeHtml(execution.unites?.[cle] || "")}</span>
+    </li>
+  `).join("");
+
+  const ecarts = (execution.ecarts ?? []).map((ecart) => `
+    <li>
+      ${escapeHtml(ecart.sujet)} : le projet retient
+      <span class="mono">${escapeHtml(String(ecart.valeurTenue))} ${escapeHtml(ecart.unite)}</span>,
+      le calcul donne
+      <span class="mono">${escapeHtml(String(ecart.valeurCalculee))} ${escapeHtml(ecart.unite)}</span>.
+    </li>
+  `).join("");
+
+  return `
+    <div class="copilote-outil">
+      <p class="copilote-outil__titre">
+        ${svgIcon("cpu")}
+        ${escapeHtml(execution.titre)}
+        <span class="copilote-outil__version mono">${escapeHtml(execution.outil)}</span>
+      </p>
+      <div class="copilote-outil__colonnes">
+        <div>
+          <p class="copilote-outil__legende">Entrées</p>
+          <ul class="copilote-outil__liste">${entrees}</ul>
+        </div>
+        <div>
+          <p class="copilote-outil__legende">Résultats</p>
+          <ul class="copilote-outil__liste">${sorties}</ul>
+        </div>
+      </div>
+      ${
+        ecarts
+          ? `<div class="copilote-outil__ecarts">
+              <p class="copilote-outil__legende">Ce qui ne s'accorde pas avec la mémoire</p>
+              <ul class="copilote-outil__liste">${ecarts}</ul>
+            </div>`
+          : ""
+      }
+      <p class="copilote-outil__note">
+        Calculé par ${escapeHtml(execution.source || "l'utilitaire")}. Ce résultat n'entre pas dans la mémoire du projet.
+      </p>
+    </div>
+  `;
+}
+
+/**
+ * Le formulaire d'un utilitaire à qui il manque des entrées.
+ *
+ * **Il est construit depuis la déclaration de l'utilitaire, jamais depuis les
+ * mots du modèle.** Un formulaire dicté par le modèle inventerait des champs
+ * que le calcul n'attend pas, et l'utilisateur remplirait consciencieusement du
+ * vide. Ce que la mémoire savait déjà est prérempli et reste modifiable : c'est
+ * l'objet même d'une question en « et si ».
+ */
+function renderFormulaire(execution, index) {
+  if (execution?.statut !== "manquant") return "";
+
+  const champs = (execution.champs ?? []).map((champ) => {
+    const valeur = execution.connues?.[champ.cle] ?? "";
+
+    const saisie = champ.valeurs
+      ? `<select class="copilote-champ__saisie" name="${escapeHtml(champ.cle)}">
+           <option value="">—</option>
+           ${champ.valeurs.map((choix) => `
+             <option value="${escapeHtml(choix)}" ${String(valeur) === String(choix) ? "selected" : ""}>${escapeHtml(choix)}</option>
+           `).join("")}
+         </select>`
+      : `<input class="copilote-champ__saisie" type="${champ.type === "nombre" ? "number" : "text"}"
+           name="${escapeHtml(champ.cle)}" value="${escapeHtml(String(valeur))}" step="any">`;
+
+    return `
+      <label class="copilote-champ">
+        <span class="copilote-champ__libelle">
+          ${escapeHtml(champ.libelle)}${champ.unite ? ` <span class="copilote-champ__unite">(${escapeHtml(champ.unite)})</span>` : ""}
+        </span>
+        ${saisie}
+        ${champ.aide ? `<span class="copilote-champ__aide">${escapeHtml(champ.aide)}</span>` : ""}
+      </label>
+    `;
+  }).join("");
+
+  return `
+    <form class="copilote-formulaire" data-formulaire="${index}" data-outil="${escapeHtml(execution.outil)}">
+      <p class="copilote-formulaire__titre">${escapeHtml(execution.titre)} — il manque des valeurs</p>
+      <div class="copilote-formulaire__champs">${champs}</div>
+      <button type="submit" class="copilote-action copilote-formulaire__envoi">Calculer</button>
+    </form>
+  `;
+}
+
+/**
  * Le compteur de jetons d'un message.
  *
  * Le décompte vient du modèle, par la fonction : `usage.input_tokens` et
@@ -317,7 +447,9 @@ function renderMessage(msg, index) {
 function renderJetons(msg, index) {
   if (!msg.tokensOpen) return "";
 
-  const chiffre = (valeur) => (Number.isFinite(valeur) ? String(valeur) : "—");
+  // L'unité se dit, même sur un tableau de deux lignes : « 11493 » seul se lit
+  // aussi bien comme des jetons que comme des caractères ou des centimes.
+  const chiffre = (valeur) => (Number.isFinite(valeur) ? `${valeur} tokens` : "—");
 
   return `
     <div class="copilote-tokens" role="dialog" aria-label="Jetons consommés" data-tokens-panel="${index}">
@@ -584,11 +716,19 @@ async function envoyer(root) {
   etat.abort = controle;
 
   try {
-    const { reply, usage } = await sendAssistMessage(contenu, { signal: controle.signal });
+    const { reply, usage, executions, context } = await sendAssistMessage(contenu, { signal: controle.signal });
+
+    // La mémoire lue pour cette question sert aussi au formulaire qui suivra :
+    // la relire au moment du calcul risquerait de calculer sur un état que la
+    // réponse affichée ne connaît pas.
+    etat.assertionsConnues = context?.memoire?.assertions ?? [];
     const reponse = {
       role: "assistant",
       content: reply || "Réponse vide.",
       ts: new Date().toISOString(),
+      // Ce que les utilitaires ont calculé, gardé avec la réponse : une réponse
+      // sans sa trace demande qu'on la croie sur parole.
+      executions: Array.isArray(executions) ? executions : [],
       // Le décompte vient du modèle. Nul quand il ne le dit pas : un zéro
       // serait un chiffre, et on ne fabrique pas les chiffres d'un compteur.
       tokensIn: Number.isFinite(usage?.inputTokens) ? usage.inputTokens : null,
@@ -663,13 +803,123 @@ function brancherDefilement(root) {
   fil.addEventListener("scroll", ajuster);
   bouton.addEventListener("click", () => fil.scrollTo({ top: fil.scrollHeight, behavior: "smooth" }));
 
-  // Mesuré tout de suite **et** après la mise en page : au moment où l'on
-  // vient d'écrire le HTML, la hauteur visible vaut encore zéro, et le reste à
-  // faire défiler paraît énorme — le bouton s'affichait alors qu'on était déjà
-  // en bas.
+  // Trois moments, parce qu'une seule mesure ne suffit jamais :
+  //
+  //  - **tout de suite**, pour le cas ordinaire ;
+  //  - **après la mise en page**, car au moment où l'on vient d'écrire le HTML
+  //    la hauteur visible vaut encore zéro et le reste à faire défiler paraît
+  //    énorme — le bouton s'affichait alors qu'on était déjà en bas ;
+  //  - **quand le contenu grandit**, ce qu'aucun événement de défilement ne
+  //    signale : une police qui finit de se poser rallonge le fil sans que
+  //    personne ne défile.
+  //
+  // Le contenu est observé autant que le cadre : observer le seul cadre
+  // manquait précisément le cas où c'est le texte qui s'allonge.
   ajuster();
   window.requestAnimationFrame(ajuster);
-  if (typeof ResizeObserver === "function") new ResizeObserver(ajuster).observe(fil);
+
+  if (typeof ResizeObserver === "function") {
+    const observateur = new ResizeObserver(ajuster);
+    observateur.observe(fil);
+    const contenu = fil.querySelector(".copilote-thread__inner");
+    if (contenu) observateur.observe(contenu);
+  }
+
+  // Les polices arrivent après le premier rendu et changent la hauteur du fil.
+  document.fonts?.ready?.then(ajuster).catch(() => {});
+}
+
+/**
+ * L'utilisateur a rempli ce qui manquait : on calcule, puis on fait raconter.
+ *
+ * **Le calcul a lieu ici, avant de reparler au modèle.** L'ordre inverse — lui
+ * renvoyer les valeurs et le laisser rappeler l'utilitaire — marcherait la
+ * plupart du temps et raterait le reste : rien ne garantit qu'il rappelle le
+ * bon outil avec exactement ce qui a été saisi. Ce que l'utilisateur a écrit
+ * entre dans le calcul tel quel.
+ */
+async function remplirEtCalculer(root, formulaire) {
+  const etat = ensureState();
+  if (etat.isSending) return;
+
+  const outil = outilParId(String(formulaire.dataset.outil || "").replace(/_V\d+$/, ""));
+  if (!outil) return;
+
+  const saisies = {};
+  for (const champ of formulaire.querySelectorAll("[name]")) {
+    saisies[champ.name] = champ.value;
+  }
+
+  const assertions = etat.assertionsConnues ?? [];
+  const resultat = executerOutil({ id: outil.id, entrees: saisies, assertions });
+
+  // Toujours manquant : quelque chose n'a pas été rempli, ou l'a été hors des
+  // choix. On remplace le formulaire par le nouveau, sans repartir vers le
+  // modèle — le déranger pour lui dire qu'il manque encore une valeur ne sert
+  // personne.
+  const dernier = etat.messages[etat.messages.length - 1];
+  if (resultat.statut === "manquant") {
+    if (dernier) dernier.executions = [resultat];
+    render(root);
+    return;
+  }
+
+  // Le formulaire a été rempli : il n'a plus lieu d'être. Le laisser sous
+  // l'ancienne réponse donnerait deux formulaires pour un seul calcul, et on ne
+  // saurait plus lequel est celui qui vient d'aboutir.
+  for (const message of etat.messages) {
+    if (Array.isArray(message.executions)) {
+      message.executions = message.executions.filter((execution) => execution?.statut !== "manquant");
+    }
+  }
+
+  const question = {
+    role: "user",
+    content: `J'ai rempli les valeurs demandées pour « ${outil.titre} ».`,
+    ts: new Date().toISOString()
+  };
+
+  etat.messages.push(question);
+  etat.isSending = true;
+  etat.lastError = "";
+  render(root);
+  await enregistrer(etat, question);
+
+  const controle = new AbortController();
+  etat.abort = controle;
+
+  try {
+    const { reply, usage, executions } = await sendAssistMessage(question.content, {
+      signal: controle.signal,
+      // Le calcul est déjà fait : on le donne au modèle comme s'il l'avait
+      // demandé, avec un identifiant d'appel à nous. C'est ce qui lui permet
+      // de reprendre le fil sans redemander.
+      toolExchanges: [
+        {
+          call_id: `formulaire-${Date.now()}`,
+          name: outil.id,
+          arguments: JSON.stringify(saisies),
+          output: JSON.stringify(resultat)
+        }
+      ]
+    });
+
+    etat.messages.push({
+      role: "assistant",
+      content: reply || "Réponse vide.",
+      ts: new Date().toISOString(),
+      executions: [resultat, ...(Array.isArray(executions) ? executions : [])],
+      tokensIn: Number.isFinite(usage?.inputTokens) ? usage.inputTokens : null,
+      tokensOut: Number.isFinite(usage?.outputTokens) ? usage.outputTokens : null
+    });
+    await enregistrer(etat, etat.messages[etat.messages.length - 1]);
+  } catch (error) {
+    if (error?.name !== "AbortError") etat.lastError = error?.message || "Le copilote n'a pas répondu.";
+  } finally {
+    etat.isSending = false;
+    etat.abort = null;
+    render(root);
+  }
 }
 
 /** Renoncer à la réponse en cours. La question posée, elle, reste dans le fil. */
@@ -734,6 +984,13 @@ function bind(root) {
       render(root);
     };
     document.addEventListener("click", fermer);
+  }
+
+  for (const formulaire of root.querySelectorAll("[data-formulaire]")) {
+    formulaire.addEventListener("submit", (event) => {
+      event.preventDefault();
+      void remplirEtCalculer(root, formulaire);
+    });
   }
 
   brancherDefilement(root);

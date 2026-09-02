@@ -344,7 +344,13 @@ export async function buildAssistContext() {
     memoire: {
       lue: memoire.lue,
       texte: memoire.texte,
-      resume: memoire.resume
+      resume: memoire.resume,
+      // Les lignes brutes, pour les utilitaires : ce sont elles qui pré-remplissent
+      // leurs entrées et qui servent à comparer un résultat à ce que le projet
+      // tient pour vrai. **Elles ne partent pas au modèle** — le texte
+      // hiérarchisé ci-dessus le fait déjà, et les envoyer deux fois doublerait
+      // le contexte pour n'y rien ajouter.
+      assertions: lue.assertions ?? []
     },
     system: buildSystemContext(),
     project_form: buildProjectFormContext(),
