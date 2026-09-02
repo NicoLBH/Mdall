@@ -92,6 +92,27 @@ function nombre(valeur) {
 }
 
 /**
+ * Le nombre qu'une phrase de la mémoire porte.
+ *
+ * La mémoire écrit « 0,99 m », pas « 0.99 » : un `Number()` dessus rend `NaN`,
+ * et le pré-remplissage se taisait. On y prend le premier nombre écrit, virgule
+ * décimale comprise.
+ */
+function nombreEcrit(brut) {
+  const trouve = String(brut).replace(",", ".").match(/-?\d+(?:\.\d+)?/)?.[0];
+  return trouve === undefined ? null : trouve;
+}
+
+/**
+ * Les clés de mémoire d'une entrée ou d'une sortie, toujours sous forme de liste.
+ */
+function clesDeMemoire(champ) {
+  const declarees = champ?.depuisMemoire;
+  if (!declarees) return [];
+  return (Array.isArray(declarees) ? declarees : [declarees]).map(texte).filter(Boolean);
+}
+
+/**
  * Le catalogue des outils appelables.
  *
  * Chacun déclare **ce qu'il tranche**, ses entrées et ses sorties. La
@@ -99,9 +120,17 @@ function nombre(valeur) {
  * elle construit le formulaire à l'écran, et elle vérifie les entrées avant le
  * calcul. Trois descriptions séparées auraient divergé au premier ajout.
  *
- * `depuisMemoire` nomme la clé sous laquelle la mémoire du projet porte déjà
- * cette valeur. C'est ce qui évite de demander à quelqu'un ce que son propre
- * projet a déjà tranché.
+ * `depuisMemoire` nomme la ou les clés sous lesquelles la mémoire du projet
+ * porte déjà cette valeur. C'est ce qui évite de demander à quelqu'un ce que son
+ * propre projet a déjà tranché. Plusieurs clés parce qu'un même fait s'écrit
+ * sous plusieurs noms selon qui l'a établi : l'utilitaire de Géorisques déclare
+ * « Zone de sismicité », une saisie à la main écrira « Zone sismique », et la
+ * clé se dérive du libellé. N'en attendre qu'une, c'est ne rien trouver.
+ *
+ * `lireMemoire` en extrait le jeton attendu : la mémoire parle en phrases
+ * — « 4 — Moyenne », « Catégorie d'importance III » — et une liste déroulante
+ * attend « 4 » et « III ». Sans elle, le pré-remplissage posait une valeur que
+ * la liste ne propose pas, donc ne pré-remplissait rien, sans le dire.
  */
 export const OUTILS = [
   {
@@ -122,7 +151,8 @@ export const OUTILS = [
         type: "nombre",
         unite: "m",
         requis: true,
-        depuisMemoire: "h0-hors-gel",
+        depuisMemoire: ["h0-hors-gel", "h0"],
+        lireMemoire: nombreEcrit,
         aide: "Valeur départementale. Quand le département en offre plusieurs, c'est une décision, pas une déduction."
       },
       {
@@ -131,7 +161,8 @@ export const OUTILS = [
         type: "nombre",
         unite: "m",
         requis: true,
-        depuisMemoire: "altitude",
+        depuisMemoire: ["altitude", "altitude-du-site"],
+        lireMemoire: nombreEcrit,
         aide: "Altitude du terrain naturel, en mètres."
       }
     ],
@@ -180,7 +211,8 @@ export const OUTILS = [
         type: "choix",
         valeurs: ["1", "2", "3", "4", "5"],
         requis: true,
-        depuisMemoire: "zone-sismique",
+        depuisMemoire: ["zone-de-sismicite", "zone-sismique", "sismicite"],
+        lireMemoire: (brut) => String(brut).match(/[1-5]/)?.[0] ?? null,
         aide: "1 très faible à 5 forte, au sens du zonage réglementaire français."
       },
       {
@@ -189,7 +221,8 @@ export const OUTILS = [
         type: "choix",
         valeurs: ["I", "II", "III", "IV"],
         requis: true,
-        depuisMemoire: "categorie-importance",
+        depuisMemoire: ["categorie-d-importance", "categorie-importance", "importance"],
+        lireMemoire: (brut) => String(brut).toUpperCase().match(/(?<!\p{L})(IV|III|II|I)(?!\p{L})/u)?.[1] ?? null,
         aide: "I à IV au sens de l'arrêté du 22 octobre 2010."
       },
       {
@@ -198,7 +231,8 @@ export const OUTILS = [
         type: "choix",
         valeurs: ["A", "B", "C", "D", "E"],
         requis: true,
-        depuisMemoire: "classe-de-sol",
+        depuisMemoire: ["classe-de-sol", "type-de-sol", "categorie-de-sol", "sol-ec8"],
+        lireMemoire: (brut) => String(brut).toUpperCase().match(/(?<!\p{L})([A-E])(?!\p{L})/u)?.[1] ?? null,
         aide: "Classe de sol EC8, généralement issue de l'étude géotechnique."
       },
       {
@@ -371,7 +405,9 @@ export function prefillDepuisMemoire(outil, assertions = []) {
   const parCle = new Map();
 
   for (const assertion of courantes) {
-    const cle = texte(assertion?.subject_key);
+    // `sujet@portee` : la portée range l'affirmation, elle ne change pas le
+    // sujet dont elle parle.
+    const cle = texte(assertion?.subject_key).split("@")[0];
     if (cle && !parCle.has(cle)) parCle.set(cle, assertion);
   }
 
@@ -379,14 +415,30 @@ export function prefillDepuisMemoire(outil, assertions = []) {
   const provenance = {};
 
   for (const entree of outil?.entrees ?? []) {
-    if (!entree.depuisMemoire) continue;
-    const assertion = parCle.get(entree.depuisMemoire);
-    const valeur = texte(assertion?.payload?.value);
+    const cles = clesDeMemoire(entree);
+    if (!cles.length) continue;
+
+    const cleTrouvee = cles.find((cle) => parCle.has(cle));
+    if (!cleTrouvee) continue;
+    const assertion = parCle.get(cleTrouvee);
+
+    // L'énoncé sert de repli : une affirmation déclarée à la main peut porter
+    // sa valeur dans la phrase plutôt que dans le payload.
+    const brut = texte(assertion?.payload?.value) || texte(assertion?.statement);
+    if (!brut) continue;
+
+    const valeur = texte(entree.lireMemoire ? entree.lireMemoire(brut) : brut);
     if (!valeur) continue;
+    // Une valeur que la liste ne propose pas ne s'impose pas : elle rendrait le
+    // formulaire invalide sans qu'on comprenne d'où ça vient.
+    if (Array.isArray(entree.valeurs) && !entree.valeurs.includes(valeur)) continue;
 
     rempli[entree.cle] = valeur;
     provenance[entree.cle] = {
-      cle: entree.depuisMemoire,
+      cle: cleTrouvee,
+      // Ce que la mémoire dit mot pour mot : « 4 » tout seul ne dit pas d'où
+      // il sort.
+      brut,
       enonce: texte(assertion?.statement),
       trancheeLe: texte(assertion?.decided_at)
     };
@@ -485,12 +537,14 @@ export function comparerALaMemoire(outil, valeurs = {}, assertions = []) {
   const ecarts = [];
 
   for (const sortie of outil?.sorties ?? []) {
-    if (!sortie.depuisMemoire) continue;
+    const cles = clesDeMemoire(sortie);
+    if (!cles.length) continue;
 
-    const assertion = courantes.find((entree) => texte(entree?.subject_key) === sortie.depuisMemoire);
+    const assertion = courantes.find((entree) => cles.includes(texte(entree?.subject_key).split("@")[0]));
     if (!assertion) continue;
 
-    const tenue = nombre(assertion?.payload?.value);
+    // « 0,99 m » est un nombre écrit en français, pas une absence de nombre.
+    const tenue = nombre(nombreEcrit(texte(assertion?.payload?.value) || texte(assertion?.statement)));
     const calculee = nombre(valeurs?.[sortie.cle]);
     if (tenue === null || calculee === null) continue;
 
@@ -501,7 +555,7 @@ export function comparerALaMemoire(outil, valeurs = {}, assertions = []) {
 
     ecarts.push({
       sujet: sortie.libelle,
-      cleMemoire: sortie.depuisMemoire,
+      cleMemoire: texte(assertion?.subject_key).split("@")[0],
       valeurTenue: tenue,
       valeurCalculee: calculee,
       unite: sortie.unite || "",

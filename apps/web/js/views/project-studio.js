@@ -174,6 +174,17 @@ function renderStudioNav() {
   ].join("");
 }
 
+/**
+ * L'écran de l'Atelier qu'on regarde.
+ *
+ * Il vit au niveau du module, comme le repli du rail, parce que l'Atelier se
+ * redessine entièrement à chaque repli : replier le rail depuis « Fondations —
+ * calcul » renvoyait sur le Copilote, c'est-à-dire qu'un geste de mise en page
+ * changeait d'écran. Le panneau courant se retient donc au même endroit que la
+ * largeur du rail, et il est repris au redessin.
+ */
+let panneauCourant = "studio-copilote";
+
 /** Où se retiennent le repli et la largeur du rail. Des réglages, pas un état. */
 const RAIL_COLLAPSED_KEY = "mdall.studioRailCollapsed.v1";
 const RAIL_WIDTH_KEY = "mdall.studioRailWidth.v1";
@@ -272,8 +283,14 @@ export function renderProjectStudio(root) {
 
   const getScrollSource = () => root.querySelector("#projectStudioRouterScroll");
 
+  // Le panneau retenu, s'il existe encore : un utilitaire retiré d'une version
+  // à l'autre ne doit pas rendre l'Atelier vide au redessin.
+  if (!root.querySelector(`[data-side-nav-panel="${CSS.escape(panneauCourant)}"]`)) {
+    panneauCourant = "studio-copilote";
+  }
+
   bindSideNavPanels(root, {
-    defaultTarget: "studio-copilote",
+    defaultTarget: panneauCourant,
     scrollContainer: getScrollSource()
   });
 
@@ -292,12 +309,13 @@ export function renderProjectStudio(root) {
       // pire qu'un écran vide.
       if (targetId === "conflits-resolution" && conflitsRoot) renderResolutionConflits(conflitsRoot, { force: true });
 
+      panneauCourant = targetId || panneauCourant;
       marquerActif(root, targetId);
     });
   });
 
   brancherCopilote(root, copiloteRoot, getScrollSource);
-  marquerActif(root, "studio-copilote");
+  marquerActif(root, panneauCourant);
 
   registerProjectPrimaryScrollSource(getScrollSource());
 }
@@ -338,8 +356,17 @@ function marquerActif(root, targetId) {
 
 /** Afficher un panneau sans passer par un clic : rouvrir un fil en a besoin. */
 function afficherPanneau(root, targetId) {
+  panneauCourant = targetId || panneauCourant;
   for (const panneau of root.querySelectorAll("[data-side-nav-panel]")) {
     panneau.classList.toggle("is-active", panneau.dataset.sideNavPanel === targetId);
+  }
+  // Le routeur pose `is-active` sur le bouton du panneau : sans ça, le rail
+  // désignerait encore l'écran d'où l'on vient.
+  for (const bouton of root.querySelectorAll("[data-side-nav-target]")) {
+    const actif = bouton.dataset.sideNavTarget === targetId;
+    bouton.classList.toggle("is-active", actif);
+    bouton.setAttribute("data-side-nav-active", actif ? "true" : "false");
+    bouton.setAttribute("aria-current", actif ? "page" : "false");
   }
 }
 
@@ -428,7 +455,9 @@ function brancherCopilote(root, copiloteRoot, getScrollSource) {
     const liste = root.querySelector("#studioCopiloteHistorique");
     if (!liste?.isConnected) return;
     liste.outerHTML = renderCopiloteHistorique();
-    marquerActif(root, "studio-copilote");
+    // Le panneau courant, pas le Copilote : un message qui arrive pendant qu'on
+    // est sur un utilitaire ne doit pas déplacer le repère du rail.
+    marquerActif(root, panneauCourant);
   };
 
   /**

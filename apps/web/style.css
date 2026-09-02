@@ -18091,3 +18091,47 @@ strong.est-verifie{ color:#3fb950; }
 .fondations-semelle-barre__pas button:hover:not(:disabled){ border-color:#58a6ff; color:#58a6ff; }
 .fondations-semelle-barre__pas button:disabled{ opacity:.35; cursor:default; }
 .fondations-etude__table tfoot td span + span{ margin-left:10px; }
+
+/* ------------------------------------------------------------------ *
+ * Le ferraillage, quatrième vue
+ *
+ * La vue en plan réduite laissait un quart de ligne vide. Le ferraillage y
+ * tient, et il y répond à la question que le tableau des nappes ne peut pas
+ * poser : où sont ces barres-là.
+ * ------------------------------------------------------------------ */
+.fondations-schema__barre-long{ stroke:#f0883e; stroke-linecap:round; }
+.fondations-schema__barre-bout{ fill:#f0883e; stroke:#f0883e; stroke-width:.6; }
+.fondations-schema__nappe-absente{ stroke:var(--muted); stroke-width:1; stroke-dasharray:3 4; opacity:.55; }
+
+/* Une nappe non survolée s'efface sans disparaître : effacer tout le reste
+   ferait perdre le repère qui donne son sens à celle qu'on regarde. */
+.fondations-schema__nappe{ opacity:.55; transition:opacity .12s ease; }
+.fondations-schema__nappe.est-absente{ opacity:.4; }
+.fondations-schema__nappe.est-survolee{ opacity:1; }
+.fondations-schema__nappe.est-survolee .fondations-schema__barre-long,
+.fondations-schema__nappe.est-survolee .fondations-schema__barre-bout{
+  stroke:#ffa657; fill:#ffa657;
+}
+.fondations-schema__nappe.est-survolee .fondations-schema__barre-bout{ stroke-width:1.4; }
+.fondations-schema__nappe.est-survolee .fondations-schema__nappe-absente{
+  stroke:var(--attention, #d29922); opacity:1;
+}
+/* Sans survol, aucune nappe n'est éteinte : le dessin se lit d'abord entier. */
+.fondations-schema__vue--ferraillage svg:not(:has(.est-survolee)) .fondations-schema__nappe{ opacity:1; }
+/* La nappe désignée se nomme sous le dessin, en texte de page : dans le SVG,
+   réduit à la largeur d'une colonne, elle n'était plus lisible. */
+.fondations-schema__nappe-mise{
+  margin:4px 0 0; font-size:11px; color:var(--muted); min-height:1.2em;
+}
+.fondations-schema__nappe-mise.est-designee{ color:#f0883e; font-weight:600; }
+
+/* La ligne survolée dans le tableau et la nappe allumée dans le dessin : la
+   même mise en avant des deux côtés, sans quoi on ne fait pas le lien. */
+.fondations-charges tr[data-nappe]{ cursor:default; }
+.fondations-charges tr[data-nappe].est-survolee{ background:rgba(240,136,62,.12); }
+.fondations-charges tr[data-nappe].est-survolee > th{ box-shadow:inset 2px 0 0 #f0883e; }
+.fondations-charges tr[data-nappe]:focus-visible{ outline:2px solid #f0883e; outline-offset:-2px; }
+
+/* Les reproches de la mémoire en tête des résultats : un verdict « vérifié »
+   sur une semelle posée au-dessus du hors gel est un verdict qui trompe. */
+.fondations-alertes--resultats{ margin:0 0 12px; }

@@ -58,6 +58,55 @@ export function designationDe(semelle = {}, rang = 0) {
 }
 
 /**
+ * L'empreinte d'une saisie : ce qui, changé, périme son résultat.
+ *
+ * Tout entre dedans, et c'est voulu. Il n'existe pas dans ce calcul de champ
+ * décoratif : le poids volumique du sol pèse sur la butée, l'enrobage sur le
+ * bras de levier des aciers. Chercher à distinguer ce qui compte de ce qui ne
+ * compte pas reviendrait à réécrire le moteur ici, en moins fiable.
+ */
+export function empreinteDe(entrees = {}) {
+  return JSON.stringify(entrees);
+}
+
+/**
+ * Les entrées d'une semelle, lues comme le formulaire les lira.
+ *
+ * Une semelle enregistrée avant l'ajout d'un champ n'en porte pas la clé ; le
+ * formulaire, lui, la complétera par le défaut. Comparer les deux sans les
+ * mettre sur le même pied ferait périmer tous les résultats à chaque nouveau
+ * champ, sans qu'aucune cote n'ait bougé.
+ */
+export function entreesDe(semelle = null, defauts = {}) {
+  return { ...defauts, ...(semelle?.entrees ?? {}) };
+}
+
+/**
+ * Les résultats qui décrivent encore leur semelle.
+ *
+ * ## Pourquoi sceller plutôt que se fier au rang
+ *
+ * Un résultat rangé au rang 2 se lit comme le résultat de la semelle 2. Il peut
+ * n'être que le résultat qu'elle avait avant d'être modifiée — ou, si elle a été
+ * créée par recopie, celui de son modèle. C'est le défaut qui a été observé :
+ * une semelle en défaut affichée verte, avec le ratio de sa voisine, et le
+ * détail de la voisine à l'ouverture. Rien dans la donnée ne permettait de s'en
+ * apercevoir.
+ *
+ * Chaque résultat porte donc l'empreinte des entrées qui l'ont produit, et l'on
+ * ne rend que ceux dont l'empreinte tient encore. Les autres deviennent `null` :
+ * le tableau affiche « — » et recalcule. Une case vide se comprend ; un vert qui
+ * ment ne se rattrape pas.
+ */
+export function resultatsScelles(semelles = [], resultats = [], defauts = {}) {
+  return (Array.isArray(semelles) ? semelles : []).map((semelle, rang) => {
+    const garde = resultats?.[rang];
+    if (!garde) return null;
+    return garde.empreinte === empreinteDe(entreesDe(semelle, defauts)) ? garde : null;
+  });
+}
+
+/**
  * Le tableau de synthèse : une ligne par type, et les totaux.
  *
  * Le verdict de chaque ligne vient du calcul, jamais d'un cache : une ligne

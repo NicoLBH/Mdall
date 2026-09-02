@@ -22,7 +22,10 @@ import {
   entreesParDefaut, entreesInvalides, uniteAffichee, estPertinent
 } from "../../../services/fondations-declaration.js";
 import { calculerFondation, calculerLesSemelles } from "../../../services/fondations-service.js";
-import { synthese, volumeDe, designationDe, voisine, semelleNeuve } from "../../../services/fondations-etude.js";
+import {
+  synthese, volumeDe, designationDe, voisine, semelleNeuve,
+  empreinteDe, entreesDe, resultatsScelles
+} from "../../../services/fondations-etude.js";
 import {
   listerSemelles, creerSemelle, enregistrerSemelle, supprimerSemelle
 } from "../../../services/fondations-etude-supabase.js";
@@ -30,6 +33,7 @@ import { dessinerSchema } from "./fondations-schema.js";
 import { rappelsDeLaMemoire, preremplir, alertesDeLaMemoire } from "../../../services/fondations-memoire.js";
 import { listProjectAssertions } from "../../../services/project-memory-supabase.js";
 import { resolveCurrentBackendProjectId } from "../../../services/project-supabase-sync.js";
+import { store } from "../../../store.js";
 
 const etat = {
   entrees: entreesParDefaut(),
@@ -64,8 +68,73 @@ const etat = {
    */
   libre: false,
   syntheseEnCours: false,
-  resultats: []
+  /**
+   * Les résultats du tableau, un par semelle, chacun portant **l'empreinte des
+   * entrées qui l'ont produit**. Sans cette empreinte, un résultat rangé au
+   * rang 2 se lit comme le résultat de la semelle 2 alors qu'il peut être celui
+   * qu'elle avait avant d'être modifiée — c'est exactement le défaut rapporté :
+   * une semelle en défaut affichée verte, avec le chiffre de sa voisine.
+   */
+  resultats: [],
+  /** La nappe dont on survole la ligne, mise en avant dans le schéma. */
+  nappeSurvolee: null
 };
+
+/** Les valeurs que chaque liste déroulante propose, par champ. */
+function listesDeChoix() {
+  return Object.fromEntries(CHOIX.map((choix) => [choix.cle, choix.valeurs]));
+}
+
+/** Les entrées d'une semelle qu'on n'a pas encore touchée : défauts, plus mémoire. */
+function entreesNeuves() {
+  return preremplir(entreesParDefaut(), etat.rappels, listesDeChoix()).valeurs;
+}
+
+/**
+ * Quels champs à l'écran portent encore ce que le projet tient.
+ *
+ * Recalculé à chaque semelle ouverte, et non une fois pour toutes à
+ * l'ouverture de l'écran. Une marque posée au montage mentirait deux fois :
+ * absente sur une semelle ajoutée ensuite — c'est ce qui a été observé —, et
+ * présente sur un champ qu'on vient justement de changer pour essayer une
+ * variante.
+ */
+function marquerVenuesDeLaMemoire() {
+  const venues = {};
+  for (const rappel of Object.values(etat.rappels ?? {})) {
+    if (!rappel.champ) continue;
+    if (String(etat.entrees[rappel.champ] ?? "") === String(rappel.valeur)) venues[rappel.champ] = rappel;
+  }
+  etat.venuesDeLaMemoire = venues;
+}
+
+/**
+ * Tout oublier : on a changé de projet.
+ *
+ * L'état de cet écran vit au niveau du module, pas du DOM — c'est ce qui permet
+ * de revenir dessus sans reperdre onze lignes de charges. Le revers est qu'il
+ * survit aussi à un changement de projet, et les cotes d'un projet reparaissent
+ * alors dans le suivant. Elles s'y liraient comme des valeurs saisies.
+ */
+function oublierLeProjet() {
+  etat.entrees = entreesParDefaut();
+  etat.resultat = null;
+  etat.empreinteDuResultat = "";
+  etat.erreur = "";
+  etat.invalides = [];
+  etat.rappels = {};
+  etat.venuesDeLaMemoire = {};
+  etat.semelles = [];
+  etat.resultats = [];
+  etat.ouverte = null;
+  etat.etudeChargee = false;
+  etat.etudeErreur = "";
+  etat.libre = false;
+  etat.calculEnCours = false;
+  etat.syntheseEnCours = false;
+  etat.nappeSurvolee = null;
+  projetCourant = "";
+}
 
 /**
  * Ce que le projet sait, versé dans le formulaire vierge.
@@ -82,12 +151,12 @@ async function lireLaMemoire(root) {
     if (!Array.isArray(assertions)) return;
 
     etat.rappels = rappelsDeLaMemoire(assertions);
-    // On ne pré-remplit que ce qui n'a pas encore été touché : revenir sur
-    // l'écran ne doit pas défaire une variante en cours.
-    const listes = Object.fromEntries(CHOIX.map((choix) => [choix.cle, choix.valeurs]));
-    const { valeurs, venuesDeLaMemoire } = preremplir(etat.entrees, etat.rappels, listes);
-    etat.entrees = valeurs;
-    etat.venuesDeLaMemoire = venuesDeLaMemoire;
+    // On ne pré-remplit que le formulaire vierge : une semelle ouverte porte des
+    // valeurs enregistrées, et la mémoire n'a pas à reprendre la main dessus.
+    if (etat.ouverte === null) {
+      etat.entrees = preremplir(etat.entrees, etat.rappels, listesDeChoix()).valeurs;
+    }
+    marquerVenuesDeLaMemoire();
     if (root?.isConnected) dessiner(root);
   } catch (erreur) {
     console.warn("[fondations] mémoire du projet illisible", erreur);
@@ -96,7 +165,7 @@ async function lireLaMemoire(root) {
 
 /** Ce qui, dans la saisie, change le résultat. Tout, donc. */
 function empreinte(entrees) {
-  return JSON.stringify(entrees);
+  return empreinteDe(entrees);
 }
 
 function resultatPerime() {
@@ -111,11 +180,24 @@ function resultatPerime() {
  */
 export function renderSolidityFondations(root, { force = false } = {}) {
   if (!root) return;
-  if (!force && root.dataset.fondationsMonte === "true") return;
+
+  // Le changement de projet se lit ici, avant le premier tracé : le lire dans
+  // la réponse asynchrone de la base laisserait paraître, le temps d'un aller-
+  // retour, les cotes du projet précédent — assez pour les croire saisies.
+  const projet = clefDuProjetAffiche();
+  const aChangeDeProjet = projet !== projetAffiche;
+  if (aChangeDeProjet) { projetAffiche = projet; oublierLeProjet(); }
+
+  if (!force && !aChangeDeProjet && root.dataset.fondationsMonte === "true") return;
   root.dataset.fondationsMonte = "true";
 
   dessiner(root);
-  brancher(root);
+  // Une seule fois par nœud : rebrancher sur un `force` doublerait chaque
+  // écouteur, donc chaque enregistrement en base.
+  if (root.dataset.fondationsBranche !== "true") {
+    root.dataset.fondationsBranche = "true";
+    brancher(root);
+  }
   void lireLaMemoire(root);
   void chargerLEtude(root);
   registerProjectPrimaryScrollSource(root.closest("#projectStudioRouterScroll") || document.getElementById("projectStudioRouterScroll"));
@@ -131,6 +213,22 @@ export function renderSolidityFondations(root, { force = false } = {}) {
  * ------------------------------------------------------------------ */
 
 let projetCourant = "";
+/** Le projet **du navigateur** pour lequel l'écran est dessiné, tel qu'il change. */
+let projetAffiche = "";
+
+function clefDuProjetAffiche() {
+  return String(store.currentProjectId || store.currentProject?.id || "");
+}
+
+/** L'empreinte des entrées d'une semelle enregistrée, lue comme le formulaire la lira. */
+function empreinteDeLaSemelle(semelle) {
+  return empreinteDe(entreesDe(semelle, entreesParDefaut()));
+}
+
+/** Les résultats du tableau, réduits à ceux qui décrivent encore leur semelle. */
+function resultatsAJour() {
+  return resultatsScelles(etat.semelles, etat.resultats, entreesParDefaut());
+}
 
 async function chargerLEtude(root) {
   try {
@@ -173,7 +271,13 @@ async function recalculerLaSynthese(root) {
   etat.syntheseEnCours = true;
   if (root?.isConnected) dessiner(root);
   try {
-    etat.resultats = await calculerLesSemelles(etat.semelles);
+    const rendus = await calculerLesSemelles(etat.semelles);
+    // Chaque résultat est scellé sur les entrées qui l'ont produit. C'est ce
+    // scellé, et lui seul, qui autorise ensuite à l'afficher.
+    etat.resultats = etat.semelles.map((semelle, rang) => {
+      const rendu = rendus[rang];
+      return rendu ? { ...rendu, empreinte: empreinteDeLaSemelle(semelle) } : null;
+    });
   } catch (erreur) {
     etat.resultats = [];
     etat.etudeErreur = erreur instanceof Error ? erreur.message : String(erreur);
@@ -192,19 +296,35 @@ function semelleOuverte() {
 /**
  * Ouvrir une semelle, c'est charger ses entrées dans le formulaire.
  *
- * Le résultat affiché est celui que la synthèse vient de calculer : le
- * recalculer à l'ouverture ferait attendre pour rien.
+ * Le résultat affiché est celui que la synthèse a calculé **pour ces
+ * entrées-là**. On compare les empreintes plutôt que de faire confiance au
+ * rang : c'est le rang qui trompait — une semelle ajoutée par recopie d'une
+ * autre gardait le résultat de son modèle, et l'ouvrir marquait ce résultat
+ * comme frais. Le calcul disait alors « vérifié » d'une semelle qui ne l'est
+ * pas, ce qui est le seul mensonge qu'un utilitaire de ce genre ne puisse pas
+ * se permettre.
  */
 function ouvrirSemelle(root, rang) {
   const semelle = etat.semelles[rang];
   if (!semelle) return;
   etat.ouverte = rang;
-  etat.entrees = { ...entreesParDefaut(), ...structuredClone(semelle.entrees ?? {}) };
-  etat.resultat = etat.resultats?.[rang]?.resultat ?? null;
-  etat.empreinteDuResultat = etat.resultat ? empreinte(etat.entrees) : "";
-  etat.erreur = etat.resultats?.[rang]?.error ?? "";
+  etat.entrees = structuredClone(entreesDe(semelle, entreesParDefaut()));
+
+  const garde = etat.resultats?.[rang];
+  const scelle = garde && garde.empreinte === empreinte(etat.entrees) ? garde : null;
+  etat.resultat = scelle?.resultat ?? null;
+  etat.empreinteDuResultat = scelle ? scelle.empreinte : "";
+  etat.erreur = scelle?.error ?? "";
   etat.invalides = [];
+  etat.nappeSurvolee = null;
+  marquerVenuesDeLaMemoire();
   dessiner(root);
+  // Rien de scellé : la semelle n'a jamais été calculée, ou l'a été pour
+  // d'autres cotes. On la recalcule, plutôt que de laisser un panneau de
+  // résultats vide sans dire pourquoi — sauf si la saisie ne le permet pas :
+  // ouvrir une semelle ne doit pas accueillir par un pavé de reproches qu'on
+  // n'a pas demandés.
+  if (!scelle && !etat.calculEnCours && entreesInvalides(etat.entrees).length === 0) void calculer(root);
 }
 
 function fermerLaSemelle(root) {
@@ -212,7 +332,12 @@ function fermerLaSemelle(root) {
   etat.resultat = null;
   etat.empreinteDuResultat = "";
   etat.erreur = "";
+  etat.nappeSurvolee = null;
   dessiner(root);
+  // Le tableau ne montre que des résultats scellés : si l'un manque — parce
+  // qu'on vient de modifier des cotes —, on le recalcule tout de suite plutôt
+  // que d'afficher un tiret que rien ne viendrait remplir.
+  if (!resultatsAJour().every(Boolean)) void recalculerLaSynthese(root);
 }
 
 /** Ce qui est à l'écran, écrit dans la semelle ouverte. */
@@ -232,13 +357,16 @@ async function enregistrerLaSemelleOuverte(root, changements = {}) {
 
 async function ajouterUneSemelle(root) {
   const modele = semelleOuverte() ?? etat.semelles.at(-1) ?? null;
-  const neuve = semelleNeuve(modele, entreesParDefaut());
+  // Sans modèle à recopier, la semelle neuve part de ce que le projet sait
+  // déjà : zone sismique, catégorie d'importance, classe de sol.
+  const neuve = semelleNeuve(modele, entreesNeuves());
   try {
     const creee = await creerSemelle(projetCourant, { ...neuve, rang: etat.semelles.length });
     etat.semelles.push(creee);
     etat.resultats.push(null);
+    // L'ouverture calcule la semelle neuve et scelle son résultat : refaire tout
+    // le lot ici ferait deux fois le même aller-retour.
     ouvrirSemelle(root, etat.semelles.length - 1);
-    await recalculerLaSynthese(root);
   } catch (erreur) {
     etat.etudeErreur = erreur instanceof Error ? erreur.message : String(erreur);
     dessiner(root);
@@ -319,8 +447,43 @@ function brancher(root) {
     // Un changement de règlement change ce qui est calculable : on redessine
     // pour que l'avertissement paraisse tout de suite, pas au clic suivant.
     etat.invalides = entreesInvalides(etat.entrees);
+    // S'écarter de ce que le projet tient fait tomber l'astérisque : c'est tout
+    // ce qu'elle sert à dire.
+    marquerVenuesDeLaMemoire();
     dessiner(root);
   });
+
+  /**
+   * Survoler une nappe la situe dans le schéma.
+   *
+   * « AIX, ratio 1,42 » ne dit pas où sont ces barres. Le tableau et le dessin
+   * parlent des mêmes quatre nappes : les relier d'un mouvement de souris coûte
+   * moins qu'une légende, et se lit sans avoir à l'apprendre. Le focus fait la
+   * même chose au clavier — un dessin qui ne répond qu'à la souris n'existe pas
+   * pour qui n'en a pas.
+   */
+  const designer = (cle) => {
+    if (etat.nappeSurvolee === cle) return;
+    etat.nappeSurvolee = cle;
+    rafraichirSchema(root);
+    for (const ligne of root.querySelectorAll("[data-nappe]")) {
+      ligne.classList.toggle("est-survolee", ligne.dataset.nappe === cle);
+    }
+  };
+  for (const entrant of ["pointerover", "focusin"]) {
+    root.addEventListener(entrant, (evenement) => {
+      const ligne = evenement.target.closest?.("[data-nappe]");
+      if (ligne) designer(ligne.dataset.nappe);
+    });
+  }
+  for (const sortant of ["pointerout", "focusout"]) {
+    root.addEventListener(sortant, (evenement) => {
+      const ligne = evenement.target.closest?.("[data-nappe]");
+      // Le pointeur qui passe d'une cellule à l'autre de la même ligne sort et
+      // rentre : sans ce test, le dessin clignoterait.
+      if (ligne && !ligne.contains(evenement.relatedTarget)) designer(null);
+    });
+  }
 
   root.addEventListener("click", async (evenement) => {
     const ouvrir = evenement.target.closest("[data-semelle-ouvrir]");
@@ -353,11 +516,16 @@ function brancher(root) {
       return;
     }
     if (evenement.target.closest('[data-action-id="fondationsReinitialiser"]')) {
-      etat.entrees = entreesParDefaut();
+      etat.entrees = entreesNeuves();
       etat.resultat = null;
       etat.empreinteDuResultat = "";
       etat.erreur = "";
       etat.invalides = [];
+      etat.nappeSurvolee = null;
+      marquerVenuesDeLaMemoire();
+      // Le résultat d'avant ne décrit plus rien : il sort du tableau aussi.
+      if (etat.ouverte !== null) etat.resultats[etat.ouverte] = null;
+      void enregistrerLaSemelleOuverte(root);
       dessiner(root);
     }
   });
@@ -375,18 +543,50 @@ async function calculer(root) {
     return;
   }
 
+  // Ce qui part au calcul, retenu **avant** l'aller-retour : la saisie peut
+  // changer pendant, et sceller le résultat sur les entrées d'après le
+  // rattacherait à une géométrie qui ne l'a pas produit. C'est la même
+  // confusion que celle du tableau, à l'échelle d'une seule semelle.
+  const entreesEnvoyees = structuredClone(etat.entrees);
+  const marque = empreinte(entreesEnvoyees);
+  const rang = etat.ouverte;
+
+  let resultat = null;
+  let erreurDite = "";
   try {
-    etat.resultat = await calculerFondation(etat.entrees);
-    etat.empreinteDuResultat = empreinte(etat.entrees);
+    resultat = await calculerFondation(entreesEnvoyees);
   } catch (erreur) {
-    etat.resultat = null;
-    etat.empreinteDuResultat = "";
-    etat.erreur = erreur instanceof Error ? erreur.message : String(erreur);
+    erreurDite = erreur instanceof Error ? erreur.message : String(erreur);
     etat.invalides = erreur?.invalides || [];
-  } finally {
-    etat.calculEnCours = false;
-    dessiner(root);
   }
+
+  sceller(rang, marque, resultat, erreurDite);
+
+  // Si l'on a changé de semelle entre-temps, le résultat est rangé pour la
+  // sienne et rien ne s'affiche : ce qui est à l'écran n'est plus ce calcul-là.
+  if (rang === etat.ouverte) {
+    etat.resultat = resultat;
+    etat.empreinteDuResultat = resultat ? marque : "";
+    etat.erreur = erreurDite;
+  }
+  etat.calculEnCours = false;
+  dessiner(root);
+}
+
+/**
+ * Le résultat d'une semelle, rangé dans le tableau sous l'empreinte qui le tient.
+ *
+ * Sans cela, recalculer une semelle ne changeait rien au tableau : il gardait
+ * ce que la synthèse avait trouvé, c'est-à-dire l'état d'avant. On y range
+ * aussi les échecs : « non calculée » est un verdict, pas un trou.
+ */
+function sceller(rang, marque, resultat, erreurDite) {
+  if (rang === null || rang === undefined) return;
+  etat.resultats[rang] = resultat
+    ? { resultat, empreinte: marque }
+    : erreurDite
+      ? { error: erreurDite, empreinte: marque }
+      : null;
 }
 
 /**
@@ -397,7 +597,7 @@ async function calculer(root) {
  * ligne, et l'on passe de l'une à l'autre sans repasser par ici.
  */
 function dessinerSynthese() {
-  const table = synthese(etat.semelles, etat.resultats);
+  const table = synthese(etat.semelles, resultatsAJour());
 
   return `
     <section class="fondations-etude">
@@ -566,7 +766,7 @@ function dessiner(root) {
                   le calcul fait, et seulement en répartition Meyerhoff — en répartition
                   constante, elle est un polygone que le calcul ne rend pas.
                 </p>
-                <div data-fondations-schema>${dessinerSchema(etat.entrees, resultatPerime() ? null : etat.resultat)}</div>
+                <div data-fondations-schema>${dessinerSchema(etat.entrees, resultatPerime() ? null : etat.resultat, { nappe: etat.nappeSurvolee })}</div>
               </fieldset>
               ${ZONES.map(dessinerZone).join("")}
               ${dessinerCharges()}
@@ -638,7 +838,6 @@ function marqueMemoire(cle) {
 function dessinerRappels() {
   const rappels = Object.values(etat.rappels ?? {});
   if (rappels.length === 0) return "";
-  const alertes = alertesDeLaMemoire(etat.entrees, etat.rappels);
 
   return `
     <fieldset class="fondations-zone">
@@ -652,10 +851,7 @@ function dessinerRappels() {
           </li>
         `).join("")}
       </ul>
-      ${alertes.length ? `
-        <ul class="fondations-schema__alertes">
-          ${alertes.map((alerte) => `<li>${escapeHtml(alerte.texte)}</li>`).join("")}
-        </ul>` : ""}
+      ${dessinerAlertes("fondations-alertes--memoire")}
     </fieldset>
   `;
 }
@@ -747,7 +943,8 @@ function dessinerFerraillage() {
           </thead>
           <tbody>
             ${NAPPES.map((nappe) => `
-              <tr>
+              <tr data-nappe="${escapeHtml(nappe.cle)}"
+                  class="${etat.nappeSurvolee === nappe.cle ? "est-survolee" : ""}">
                 <th scope="row" class="fondations-charges__nature">${escapeHtml(nappe.libelle)}</th>
                 <td>
                   <input class="fondations-champ__saisie fondations-champ__saisie--serre" type="text" inputmode="numeric"
@@ -806,19 +1003,43 @@ function ratioLisible(ratio) {
 function rafraichirSchema(root) {
   const hote = root.querySelector("[data-fondations-schema]");
   if (!hote) return;
-  hote.innerHTML = dessinerSchema(etat.entrees, resultatPerime() ? null : etat.resultat);
+  hote.innerHTML = dessinerSchema(etat.entrees, resultatPerime() ? null : etat.resultat, { nappe: etat.nappeSurvolee });
+}
+
+/**
+ * Ce que la mémoire du projet reproche à la géométrie, écrit là où on regarde.
+ *
+ * Deux endroits, et c'est voulu : sous « Ce que le projet sait déjà », à côté
+ * de la valeur qui la déclenche, et **en tête des résultats**, parce qu'un
+ * verdict « vérifié » sur une semelle posée au-dessus du hors gel est un
+ * verdict qui trompe. Aucun des calculs de cet écran ne voit le gel : s'il
+ * n'est pas dit ici, il n'est dit nulle part.
+ */
+function dessinerAlertes(classe) {
+  const alertes = alertesDeLaMemoire(etat.entrees, etat.rappels);
+  if (alertes.length === 0) return "";
+  return `<ul class="fondations-schema__alertes ${classe}" data-fondations-alertes="${escapeHtml(classe)}">
+    ${alertes.map((alerte) => `<li>${escapeHtml(alerte.texte)}</li>`).join("")}
+  </ul>`;
 }
 
 /** Les reproches de la mémoire, remis à jour sans tout redessiner. */
 function rafraichirAlertes(root) {
-  const zone = root.querySelector(".fondations-rappels")?.closest(".fondations-zone");
-  if (!zone) return;
   const alertes = alertesDeLaMemoire(etat.entrees, etat.rappels);
-  const existante = zone.querySelector(".fondations-schema__alertes");
-  if (alertes.length === 0) { existante?.remove(); return; }
   const html = alertes.map((alerte) => `<li>${escapeHtml(alerte.texte)}</li>`).join("");
-  if (existante) { existante.innerHTML = html; return; }
-  zone.insertAdjacentHTML("beforeend", `<ul class="fondations-schema__alertes">${html}</ul>`);
+
+  for (const [classe, hote] of [
+    ["fondations-alertes--memoire", root.querySelector(".fondations-rappels")?.closest(".fondations-zone")],
+    ["fondations-alertes--resultats", root.querySelector(".fondations-resultats")]
+  ]) {
+    if (!hote) continue;
+    const existante = hote.querySelector(`[data-fondations-alertes="${classe}"]`);
+    if (alertes.length === 0) { existante?.remove(); continue; }
+    if (existante) { existante.innerHTML = html; continue; }
+    const liste = `<ul class="fondations-schema__alertes ${classe}" data-fondations-alertes="${classe}">${html}</ul>`;
+    if (classe === "fondations-alertes--resultats") hote.querySelector(".fondations-resultats__tete")?.insertAdjacentHTML("afterend", liste);
+    else hote.insertAdjacentHTML("beforeend", liste);
+  }
 }
 
 /** La mention « périmé », posée sans tout redessiner. */
@@ -892,7 +1113,8 @@ function dessinerInterne(r) {
           </thead>
           <tbody>
             ${interne.nappes.map((nappe) => `
-              <tr>
+              <tr data-nappe="${escapeHtml(nappe.cle)}" tabindex="0"
+                  class="${etat.nappeSurvolee === nappe.cle ? "est-survolee" : ""}">
                 <th scope="row">${escapeHtml(nappe.cle)}</th>
                 <td>${nappe.nombre > 0 ? escapeHtml(`${nappe.nombre} ${nappe.barre}`) : "—"}</td>
                 <td>${nappe.espacement === null ? "—" : escapeHtml(nombreLisible(nappe.espacement, 2))}</td>
@@ -917,6 +1139,7 @@ function dessinerResultats() {
     return `
       <article class="fondations-resultats fondations-resultats--vide">
         <h4>Résultats</h4>
+        ${dessinerAlertes("fondations-alertes--resultats")}
         <p class="gh-text-muted">Aucun calcul lancé. Rien n'est affiché tant que rien n'a été calculé.</p>
       </article>
     `;
@@ -957,6 +1180,7 @@ function dessinerResultats() {
         <h4>Résultats</h4>
         ${verdict}
       </header>
+      ${dessinerAlertes("fondations-alertes--resultats")}
       <p class="fondations-resultats__perime">
         La saisie a changé depuis ce calcul : ces chiffres ne décrivent plus ce
         qui est à l'écran. Relancez le calcul.

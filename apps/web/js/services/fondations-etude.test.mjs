@@ -4,7 +4,10 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { volumeDe, designationDe, synthese, voisine, semelleNeuve } from "./fondations-etude.js";
+import {
+  volumeDe, designationDe, synthese, voisine, semelleNeuve,
+  empreinteDe, entreesDe, resultatsScelles
+} from "./fondations-etude.js";
 
 const COURANTS_SUD = { sectionLx: 1.3, sectionLy: 1.3, hauteurLz: 0.8 };
 
@@ -107,4 +110,76 @@ test("une semelle neuve reprend le contexte de la précédente, pas son identit�
 test("sans modèle, la semelle neuve part des valeurs par défaut", () => {
   const neuve = semelleNeuve(null, { sectionLx: 1.2, sectionLy: 1.2 });
   assert.equal(neuve.entrees.sectionLx, 1.2);
+});
+
+/* ── Le scellé : un résultat n'est celui de sa semelle que s'il en vient ──── */
+
+const DEFAUTS = { sectionLx: 1, sectionLy: 1, hauteurLz: 0.5, unites: "{ kN ; kNm }" };
+const scelle = (semelle, ratio) => ({
+  resultat: { bilan: { ratio, verifie: ratio <= 1 } },
+  empreinte: empreinteDe(entreesDe(semelle, DEFAUTS))
+});
+
+test("une semelle modifiée après son calcul perd son résultat plutôt que de le garder", () => {
+  const semelle = { id: "a", nombre: 1, entrees: { sectionLx: 2 } };
+  const garde = scelle(semelle, 0.4);
+
+  assert.deepEqual(resultatsScelles([semelle], [garde], DEFAUTS), [garde]);
+
+  // On élargit la semelle : le résultat d'avant ne décrit plus rien.
+  semelle.entrees = { sectionLx: 3 };
+  assert.deepEqual(resultatsScelles([semelle], [garde], DEFAUTS), [null]);
+});
+
+test("le défaut rapporté : une semelle recopiée n'hérite pas du verdict de son modèle", () => {
+  // Deux semelles, la seconde créée par recopie de la première puis modifiée.
+  // Le lot avait été calculé avant la modification : le rang 1 porte encore le
+  // résultat du modèle, qui passe. La seconde, elle, ne passe pas.
+  const premiere = { id: "a", nombre: 1, entrees: { sectionLx: 2, hauteurLz: 0.8 } };
+  const seconde = { id: "b", nombre: 1, entrees: { sectionLx: 2, hauteurLz: 0.8 } };
+  const resultats = [scelle(premiere, 0.4), scelle(seconde, 0.4)];
+
+  seconde.entrees = { sectionLx: 0.8, hauteurLz: 0.3 };
+
+  const table = synthese([premiere, seconde], resultatsScelles([premiere, seconde], resultats, DEFAUTS));
+  assert.equal(table.lignes[0].ratio, 0.4);
+  // Surtout pas 0,4 : ce serait le chiffre de la voisine sur une autre géométrie.
+  assert.equal(table.lignes[1].ratio, null);
+  assert.equal(table.lignes[1].verifiee, null);
+  assert.equal(table.totaux.verifiees, 1);
+  assert.equal(table.totaux.inconnues, 1);
+});
+
+test("un échec de calcul est scellé comme un succès : il vaut pour ces entrées-là", () => {
+  const semelle = { id: "a", nombre: 1, entrees: { sectionLx: 2 } };
+  const echec = { error: "Le calcul a échoué.", empreinte: empreinteDe(entreesDe(semelle, DEFAUTS)) };
+  assert.deepEqual(resultatsScelles([semelle], [echec], DEFAUTS), [echec]);
+
+  semelle.entrees = { sectionLx: 2.5 };
+  assert.deepEqual(resultatsScelles([semelle], [echec], DEFAUTS), [null]);
+});
+
+test("un résultat sans empreinte ne s'affiche pas : rien ne le rattache à une saisie", () => {
+  const semelle = { id: "a", nombre: 1, entrees: { sectionLx: 2 } };
+  assert.deepEqual(resultatsScelles([semelle], [{ resultat: { bilan: { ratio: 0.2 } } }], DEFAUTS), [null]);
+  assert.deepEqual(resultatsScelles([semelle], [null], DEFAUTS), [null]);
+  assert.deepEqual(resultatsScelles([semelle], [], DEFAUTS), [null]);
+});
+
+test("un champ ajouté depuis l'enregistrement ne périme pas les résultats", () => {
+  // La semelle a été enregistrée sans `enrobageSemelle` ; le formulaire le
+  // complétera par son défaut. Comparer sans les mettre sur le même pied
+  // ferait tout recalculer à chaque nouveau champ, sans qu'une cote ait bougé.
+  const semelle = { id: "a", nombre: 1, entrees: { sectionLx: 2 } };
+  const garde = scelle(semelle, 0.4);
+  const avecNouveauChamp = { ...DEFAUTS, enrobageSemelle: 5 };
+  assert.deepEqual(resultatsScelles([semelle], [garde], DEFAUTS), [garde]);
+  // Le défaut change la lecture : c'est bien un calcul à refaire, et le dire
+  // vaut mieux que de garder un chiffre obtenu sans ce champ.
+  assert.deepEqual(resultatsScelles([semelle], [garde], avecNouveauChamp), [null]);
+});
+
+test("les entrées d'une semelle se lisent par-dessus les défauts, jamais l'inverse", () => {
+  assert.deepEqual(entreesDe({ entrees: { sectionLx: 3 } }, DEFAUTS), { ...DEFAUTS, sectionLx: 3 });
+  assert.deepEqual(entreesDe(null, DEFAUTS), DEFAUTS);
 });

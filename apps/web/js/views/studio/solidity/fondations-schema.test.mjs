@@ -8,7 +8,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { modeleSchema, zoneComprimee, dessinerSchema } from "./fondations-schema.js";
+import { modeleSchema, zoneComprimee, dessinerSchema, modeleFerraillage } from "./fondations-schema.js";
 
 const SEMELLE_SEULE = { araseSuperieure: -0.1, hauteurLz: 1, sectionLx: 1.2, sectionLy: 1.2 };
 
@@ -97,9 +97,10 @@ test("sans excentrements rendus, rien n'est dessiné plutôt qu'une surface supp
   assert.equal(zoneComprimee({ contrainte: {} }, { sectionLx: 1.2, sectionLy: 1.2 }), null);
 });
 
-test("le tracé rend trois vues, et le dit quand il n'a rien à tracer", () => {
+test("le tracé rend quatre vues, et le dit quand il n'a rien à tracer", () => {
   const svg = dessinerSchema({ ...SEMELLE_SEULE, sectionLx: 1.2, sectionLy: 1.8 });
-  assert.equal((svg.match(/<svg/g) || []).length, 3);
+  assert.equal((svg.match(/<svg/g) || []).length, 4);
+  assert.match(svg, /Ferraillage — coupe suivant X/);
   assert.match(svg, /Coupe suivant l'axe X/);
   // Deux coupes plutôt qu'un interrupteur : sans quoi Ly ne se voit qu'après
   // un clic qu'on ne pense pas à faire, et on ne compare plus rien.
@@ -116,4 +117,68 @@ test("le tracé rend trois vues, et le dit quand il n'a rien à tracer", () => {
 test("l'échelle est commune aux deux vues, et elle est écrite", () => {
   const svg = dessinerSchema({ ...SEMELLE_SEULE, sectionLx: 4, sectionLy: 1 });
   assert.match(svg, /1 m ≈ \d+ px/);
+});
+
+/* ── Le ferraillage ──────────────────────────────────────────────────────── */
+
+const FERRAILLEE = {
+  sectionLx: 2, sectionLy: 1.5, hauteurLz: 0.6, araseSuperieure: -0.5, enrobageSemelle: 5,
+  ferraillage: {
+    AIX: { nombre: 6, barre: "HA12" },
+    AIY: { nombre: 8, barre: "HA10" },
+    ASX: { nombre: 0, barre: "HA8" },
+    ASY: { nombre: 4, barre: "HA8" }
+  }
+};
+
+test("chaque nappe se pose à sa face, derrière son enrobage", () => {
+  const mf = modeleFerraillage(FERRAILLEE);
+  const par = Object.fromEntries(mf.nappes.map((n) => [n.cle, n]));
+
+  // Les inférieures se comptent depuis le dessus : elles sont vers le bas.
+  assert.ok(par.AIX.profondeur > 0.5 && par.AIX.profondeur < 0.6);
+  // Les supérieures sont à l'enrobage sous l'arase.
+  assert.ok(par.ASY.profondeur > 0 && par.ASY.profondeur < 0.1);
+  // La nappe X touche le coffrage, la nappe Y se pose dessus : plus à l'intérieur.
+  assert.ok(par.AIY.profondeur < par.AIX.profondeur);
+});
+
+test("les barres se répartissent sur la portée qui les concerne", () => {
+  const par = Object.fromEntries(modeleFerraillage(FERRAILLEE).nappes.map((n) => [n.cle, n]));
+  // Six barres suivant X se répartissent sur Ly (1,50 m) moins deux enrobages.
+  assert.equal(par.AIX.abscisses.length, 6);
+  assert.equal(Number(par.AIX.abscisses.at(-1).toFixed(3)), 0.7);
+  assert.equal(Number(par.AIX.espacement.toFixed(3)), 0.28);
+  // Huit barres suivant Y se répartissent sur Lx (2,00 m).
+  assert.equal(Number(par.AIY.abscisses.at(-1).toFixed(3)), 0.95);
+});
+
+test("une barre seule se pose au milieu, pas au bord", () => {
+  const mf = modeleFerraillage({ ...FERRAILLEE, ferraillage: { AIX: { nombre: 1, barre: "HA12" } } });
+  assert.deepEqual(mf.nappes.find((n) => n.cle === "AIX").abscisses, [0]);
+});
+
+test("une nappe sans barre reste dessinée : « aucune » est une information", () => {
+  const svg = dessinerSchema(FERRAILLEE);
+  assert.match(svg, /data-schema-nappe="ASX"/);
+  assert.match(svg, /fondations-schema__nappe-absente/);
+  assert.match(svg, /aucune barre posée/);
+});
+
+test("la nappe survolée est la seule marquée, et elle se nomme", () => {
+  const svg = dessinerSchema(FERRAILLEE, null, { nappe: "AIY" });
+  assert.equal((svg.match(/est-survolee/g) || []).length, 1);
+  assert.match(svg, /Nappe inférieure axe Y — 8 HA10/);
+
+  // Sans survol, le dessin invite plutôt que de désigner une nappe au hasard.
+  assert.doesNotMatch(dessinerSchema(FERRAILLEE), /est-survolee/);
+  assert.match(dessinerSchema(FERRAILLEE), /Survolez une nappe/);
+});
+
+test("les barres suivant X se voient en long, celles suivant Y en bout", () => {
+  const svg = dessinerSchema(FERRAILLEE);
+  // Huit barres AIY en bout, plus quatre ASY : douze cercles.
+  assert.equal((svg.match(/fondations-schema__barre-bout/g) || []).length, 12);
+  // AIX en long : un seul trait, quel que soit son nombre de barres.
+  assert.equal((svg.match(/fondations-schema__barre-long/g) || []).length, 1);
 });
