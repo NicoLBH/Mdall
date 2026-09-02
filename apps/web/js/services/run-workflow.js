@@ -45,7 +45,13 @@ function node(id, label, detail, { tone = NODE.NEUTRAL, icon = "dot-fill-pending
  * qu'une absence, parce qu'on s'y fierait.
  */
 function attachDurations(nodes, steps = []) {
-  const mesures = new Map((steps ?? []).filter((step) => step?.id).map((step) => [step.id, Number(step.ms) || 0]));
+  // Une étape peut être conservée pour son journal sans avoir été
+  // chronométrée : lui attribuer « 0 ms » la ferait passer pour instantanée.
+  const mesures = new Map(
+    (steps ?? [])
+      .filter((step) => step?.id && step.ms !== null && step.ms !== undefined && step.ms !== "" && Number.isFinite(Number(step.ms)))
+      .map((step) => [step.id, Number(step.ms)])
+  );
 
   return nodes.map((entry) =>
     mesures.has(entry.id) ? { ...entry, duration: mesures.get(entry.id) } : entry

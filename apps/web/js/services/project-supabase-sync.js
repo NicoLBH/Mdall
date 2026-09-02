@@ -829,6 +829,10 @@ function mapRunRowToLogEntry(row = {}) {
       type: triggerType,
       label: triggerLabel
     },
+    // L'ancien parcours ne passe pas par l'Atelier : une analyse de document
+    // est un acte du projet, et elle se lit par tous.
+    origine: "projet",
+    privee: false,
     documentName,
     subject: {
       documentName
@@ -864,10 +868,21 @@ function mapCtRunRowToLogEntry(row = {}) {
   const triggerType = safeString(row.trigger_source || (proposition ? "proposition" : "manual"));
   const triggerLabel = proposition
     ? `Proposition ${numero}${titre ? ` — ${titre}` : ""}`.trim()
-    : "Lancement manuel";
+    : triggerType === "atelier"
+      ? "Lancée depuis l'Atelier"
+      : "Lancement manuel";
 
   const documentCount = Number(row.document_count) || 0;
   const documentName = `${documentCount} livrable${documentCount > 1 ? "s" : ""}`;
+
+  // D'où vient l'exécution, et qui a le droit de la voir. Ce sont deux faits
+  // distincts, et les confondre ferait mentir l'écran : une exécution d'Atelier
+  // écrite avant le cloisonnement vient bien de l'Atelier, mais tout le monde
+  // la voit encore. Il n'y a rien à deviner ici — la base a déjà écarté les
+  // exécutions d'Atelier des autres, donc celle qui arrive avec un
+  // propriétaire est forcément la nôtre.
+  const origine = triggerType === "atelier" ? "atelier" : "projet";
+  const privee = origine === "atelier" && Boolean(safeString(row.owner_id));
 
   return {
     id: safeString(row.id),
@@ -880,6 +895,8 @@ function mapCtRunRowToLogEntry(row = {}) {
     triggerType,
     triggerLabel,
     trigger: { type: triggerType, label: triggerLabel },
+    origine,
+    privee,
     documentName,
     subject: { documentName },
     startedAt: computedAt,
@@ -905,12 +922,18 @@ function mapCtRunRowToLogEntry(row = {}) {
         documents: (Array.isArray(row.corpus_documents) ? row.corpus_documents : [])
           .map((entry) => safeString(entry?.name || ""))
           .filter(Boolean),
-        // Ce que chaque phase a pris, quand l'exécution l'a mesuré.
+        // Ce que chaque phase a pris, et ce qui s'y est passé. Le journal
+        // traverse tel quel : le raboter ici reviendrait à conserver un détail
+        // en base pour ne jamais l'afficher.
         steps: (Array.isArray(row.steps) ? row.steps : [])
           .map((step) => ({
             id: safeString(step?.id || ""),
             label: safeString(step?.label || ""),
-            ms: Number(step?.ms) || 0
+            // `null` n'est pas zéro : une étape conservée pour son journal n'a
+            // pas duré « 0 ms », elle n'a pas été chronométrée.
+            ms: step?.ms === null || step?.ms === undefined || step?.ms === "" ? null : Number(step.ms) || 0,
+            statut: safeString(step?.statut || "ok"),
+            lignes: Array.isArray(step?.lignes) ? step.lignes : null
           }))
           .filter((step) => step.id)
       }
@@ -1219,7 +1242,7 @@ export async function syncProjectActionsFromSupabase(options = {}) {
   // exécution — un détail optionnel emportait le tout.
   const CT_RUN_COLUMNS =
     "id,computed_at,document_count,avis_count,tracked_avis_count,guard_violation_count," +
-    "packs_used,engine_version,corpus_documents,trigger_source,proposition_id,propositions(number,title)";
+    "packs_used,engine_version,corpus_documents,trigger_source,proposition_id,owner_id,propositions(number,title)";
 
   const ctParamsFor = (colonnes) => {
     const params_ = new URLSearchParams();

@@ -21,6 +21,7 @@ import {
   entreesParDefaut, entreesInvalides, uniteAffichee
 } from "../../../services/fondations-declaration.js";
 import { calculerFondation } from "../../../services/fondations-service.js";
+import { dessinerSchema } from "./fondations-schema.js";
 
 const etat = {
   entrees: entreesParDefaut(),
@@ -71,9 +72,11 @@ function brancher(root) {
       etat.entrees.charges[cas][composante] = charge.value;
     } else return;
 
-    // On ne redessine pas — le curseur serait perdu au milieu d'un nombre. Seule
-    // la mention « périmé » apparaît, à l'endroit où elle compte.
+    // On ne redessine pas la page — le curseur serait perdu au milieu d'un
+    // nombre. Seuls le schéma et la mention « périmé » se remettent à jour,
+    // aux deux endroits où ça compte.
     marquerPerime(root);
+    rafraichirSchema(root);
   });
 
   root.addEventListener("change", (evenement) => {
@@ -154,6 +157,15 @@ function dessiner(root) {
           ${dessinerInvalides()}
           <div class="fondations-grille">
             <div class="fondations-colonne">
+              <fieldset class="fondations-zone">
+                <legend>Schéma</legend>
+                <p class="fondations-zone__note">
+                  Le schéma suit la saisie. La surface d'appui n'apparaît qu'une fois
+                  le calcul fait, et seulement en répartition Meyerhoff — en répartition
+                  constante, elle est un polygone que le calcul ne rend pas.
+                </p>
+                <div data-fondations-schema>${dessinerSchema(etat.entrees, resultatPerime() ? null : etat.resultat)}</div>
+              </fieldset>
               ${dessinerChoix()}
               ${ZONES.map(dessinerZone).join("")}
               ${dessinerCharges()}
@@ -278,6 +290,19 @@ function ratioLisible(ratio) {
   if (n >= 10) return "≥ 10";
   if (n < 0) return `${nombreLisible(n, 3)} (soulèvement)`;
   return nombreLisible(n, 3);
+}
+
+/**
+ * Le schéma, redessiné à la frappe.
+ *
+ * C'est là tout son intérêt : une cote absurde — un fût plus large que sa
+ * semelle, une tête de fût hors du sol — se voit avant de lancer le calcul, et
+ * non dans un résultat qu'il faudrait ensuite interpréter.
+ */
+function rafraichirSchema(root) {
+  const hote = root.querySelector("[data-fondations-schema]");
+  if (!hote) return;
+  hote.innerHTML = dessinerSchema(etat.entrees, resultatPerime() ? null : etat.resultat);
 }
 
 /** La mention « périmé », posée sans tout redessiner. */

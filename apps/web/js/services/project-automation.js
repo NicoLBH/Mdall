@@ -383,6 +383,13 @@ function normalizeRunLogEntry(entry = {}) {
   const triggerType = entry.triggerType || entry.trigger?.type || "manual";
   const triggerLabel = entry.triggerLabel || entry.trigger?.label || "";
   const documentName = entry.documentName || entry.subject?.documentName || "";
+  // D'où l'exécution vient, et qui a le droit de la voir. `origine` se déduit
+  // du déclencheur quand elle n'est pas donnée ; `privee` ne se déduit de rien
+  // — elle vaut ce que la base a répondu, et faux par défaut. Supposer qu'une
+  // exécution est privée sans le savoir serait la promesse la plus dangereuse
+  // que cet écran puisse faire.
+  const origine = entry.origine || (triggerType === "atelier" ? "atelier" : "projet");
+  const privee = entry.privee === true;
   const createdAt = coerceTimestamp(entry.createdAt, startedAt);
   const updatedAt = coerceTimestamp(entry.updatedAt, endedAt ?? startedAt);
 
@@ -401,6 +408,8 @@ function normalizeRunLogEntry(entry = {}) {
       type: triggerType,
       label: triggerLabel
     },
+    origine,
+    privee,
     documentName,
     subject: {
       documentName

@@ -17818,3 +17818,154 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .fondations-resultats.est-perime .fondations-bloc,
 .fondations-resultats.est-perime .fondations-resultats__bilan,
 .fondations-resultats.est-perime .fondations-verdict{ opacity:.45; }
+
+/* ------------------------------------------------------------------ *
+ * Le schéma de la fondation
+ *
+ * Deux vues à la même échelle, écrite sous le dessin : un schéma qui étire
+ * pour remplir son cadre ment sur ce qu'il montre.
+ * ------------------------------------------------------------------ */
+.fondations-schema__vues{ display:flex; flex-wrap:wrap; gap:12px; }
+.fondations-schema__vue{ margin:0; flex:1 1 260px; min-width:0; }
+.fondations-schema__vue figcaption{
+  font-size:11px; color:var(--muted); text-transform:uppercase;
+  letter-spacing:.04em; margin-bottom:2px;
+}
+.fondations-schema__vue svg{ width:100%; height:auto; display:block; }
+.fondations-schema__echelle{ margin:6px 0 0; font-size:11px; color:var(--muted); }
+.fondations-schema__vide{ margin:0; font-size:12px; color:var(--muted); }
+.fondations-schema__alertes{
+  margin:8px 0 0; padding:8px 10px 8px 26px;
+  border:1px solid var(--attention, #d29922); border-radius:6px;
+  color:var(--attention, #d29922); font-size:12px;
+}
+
+.fondations-schema__terres{ opacity:.5; }
+.fondations-schema__hachure{ stroke:var(--muted); stroke-width:.6; opacity:.55; }
+.fondations-schema__terrain{ stroke:var(--fg); stroke-width:1.2; }
+.fondations-schema__beton{ fill:rgba(139,148,158,.22); stroke:var(--fg); stroke-width:1.2; }
+.fondations-schema__fut-plan{ fill:rgba(139,148,158,.35); stroke:var(--fg); stroke-width:1; stroke-dasharray:3 2; }
+.fondations-schema__butee{ fill:rgba(88,166,255,.28); stroke:#58a6ff; stroke-width:1; }
+.fondations-schema__comprime{ fill:rgba(63,185,80,.25); stroke:#3fb950; stroke-width:1.2; }
+.fondations-schema__effort{ stroke:var(--danger, #f85149); stroke-width:1.6; }
+.fondations-schema__pointe{ fill:var(--danger, #f85149); }
+.fondations-schema__point{ fill:var(--danger, #f85149); }
+.fondations-schema__axe{ stroke:var(--muted); stroke-width:.7; stroke-dasharray:4 3; }
+.fondations-schema__cote{ stroke:var(--muted); stroke-width:.8; }
+.fondations-schema__texte{ fill:var(--muted); font-size:9.5px; }
+
+/* ------------------------------------------------------------------ *
+ * Le journal d'une étape d'exécution
+ *
+ * La forme d'un journal de build : gouttière de numéros à gauche, texte à
+ * chasse fixe, groupes repliés derrière un chevron. Ce n'est pas une imitation
+ * gratuite — c'est la forme que les gens savent déjà lire, et la seule qui
+ * permette de dire « regarde la ligne 14 ».
+ * ------------------------------------------------------------------ */
+
+/* Un titre d'étape qui ouvre quelque chose se comporte comme un lien. Celui
+   qui n'ouvre rien reste du texte : le survol ne promet rien. */
+.run-graph__label--lien{
+  background:none;
+  border:0;
+  padding:0;
+  font:inherit;
+  color:inherit;
+  cursor:pointer;
+  text-align:left;
+}
+.run-graph__label--lien:hover,
+.run-graph__label--lien:focus-visible{ color:#58a6ff; text-decoration:underline; }
+
+.run-step__retour{
+  display:inline-flex; align-items:center; gap:6px;
+  background:none; border:0; padding:0;
+  color:var(--muted); font:inherit; cursor:pointer;
+}
+.run-step__retour:hover{ color:#58a6ff; text-decoration:underline; }
+.run-step__duree{ color:var(--muted); font-variant-numeric:tabular-nums; }
+.run-step__etat{ display:inline-flex; }
+.run-step__etat--ok{ color:#3fb950; }
+.run-step__etat--echec{ color:var(--danger, #f85149); }
+.run-step__etat--attente{ color:var(--muted); }
+
+.run-log{
+  margin-top:12px;
+  border:1px solid var(--border);
+  border-radius:6px;
+  background:var(--bg);
+  overflow:auto;
+  font-family:ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size:12px;
+  line-height:1.65;
+  padding:8px 0;
+}
+.run-log__line{
+  display:flex;
+  align-items:flex-start;
+  gap:10px;
+  width:100%;
+  padding:0 12px 0 0;
+  background:none;
+  border:0;
+  color:var(--fg);
+  font:inherit;
+  text-align:left;
+}
+/* La gouttière ne se sélectionne pas : copier un journal doit rendre le texte,
+   pas le texte entrelardé de numéros. */
+.run-log__num{
+  flex:0 0 46px;
+  text-align:right;
+  color:var(--muted);
+  opacity:.65;
+  user-select:none;
+  font-variant-numeric:tabular-nums;
+}
+.run-log__text{ flex:1 1 auto; min-width:0; white-space:pre-wrap; word-break:break-word; }
+.run-log__line--avertissement .run-log__text{ color:var(--attention, #d29922); }
+.run-log__line--echec .run-log__text{ color:var(--danger, #f85149); }
+.run-log__line:hover{ background:rgba(110,118,129,.12); }
+
+.run-log__line--group{ cursor:pointer; align-items:center; }
+/* L'état du groupe se lit sur son en-tête : sinon un échec se cache derrière
+   un chevron gris, et l'on cherche où ça s'est arrêté. */
+.run-log__line--group.run-log__line--avertissement .run-log__text{ color:var(--attention, #d29922); }
+.run-log__line--group.run-log__line--echec .run-log__text{ color:var(--danger, #f85149); }
+.run-log__caret{ display:inline-flex; color:var(--muted); transition:transform .12s ease; }
+.run-log__line--group[aria-expanded="true"] .run-log__caret{ transform:rotate(90deg); }
+.run-log__count{ color:var(--muted); opacity:.7; margin-left:auto; padding-left:12px; }
+.run-log__children[hidden]{ display:none; }
+.run-log__line--child .run-log__text{ padding-left:18px; }
+
+/* ------------------------------------------------------------------ *
+ * Actions : ce qui est partagé, et ce qui reste à l'Atelier
+ *
+ * L'explication est sous les onglets et non en infobulle : « qui voit ça ? »
+ * se demande avant de cliquer, pas après avoir survolé.
+ * ------------------------------------------------------------------ */
+.actions-onglets{ margin:0 0 12px; }
+.actions-onglets__rangee{ display:flex; gap:4px; border-bottom:1px solid var(--border); }
+.actions-onglet{
+  display:inline-flex; align-items:center; gap:7px;
+  padding:7px 12px;
+  background:none; border:0; border-bottom:2px solid transparent;
+  color:var(--muted); font:inherit; font-size:13px; cursor:pointer;
+  margin-bottom:-1px;
+}
+.actions-onglet:hover{ color:var(--fg); }
+.actions-onglet.est-actif{ color:var(--fg); font-weight:600; border-bottom-color:#f78166; }
+.actions-onglet__compte{
+  padding:0 7px; border-radius:999px;
+  background:rgba(110,118,129,.25);
+  font-size:11px; font-weight:600; font-variant-numeric:tabular-nums;
+}
+.actions-onglets__explication{ margin:8px 0 0; font-size:12px; color:var(--muted); }
+
+/* La marque de l'Atelier : elle dit d'où la ligne vient. Pas un cadenas —
+   une exécution d'Atelier n'est pas secrète, elle est personnelle. */
+.workflow-runs__atelier{ display:inline-flex; color:var(--muted); opacity:.85; }
+.workflow-runs__mention{ color:var(--attention, #d29922); }
+/* Le compte est en bout de la colonne « Action » : sans marge, il vient
+   toucher l'en-tête « Quand » et les deux se lisent comme un seul mot. */
+.workflow-runs__head-count{ margin-right:16px; }
