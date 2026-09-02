@@ -260,10 +260,18 @@ function nomDuLivrable(row = {}) {
 }
 
 /**
- * Les avis calculés, chacun avec l'intitulé que le moteur lui a trouvé.
+ * Les avis calculés, chacun avec l'intitulé et l'extrait que le moteur a lus.
  *
- * `avisStatus` porte l'état, `predictions` porte l'intitulé : les rapprocher ici
+ * `avisStatus` porte l'état, `predictions` porte l'intitulé **et la provenance**
+ * — c'est-à-dire la phrase du PDF, son document et sa page. Les rapprocher ici
  * évite que chaque écran ait à refaire la jointure, et à la refaire autrement.
+ *
+ * L'extrait a longtemps été perdu ici. Le moteur ne renseigne l'`evidence` d'un
+ * avis que lorsqu'il le **résout** ; un avis resté ouvert sortait sans extrait,
+ * et c'est précisément sur les avis ouverts que portent les contradictions. On
+ * arbitrait donc entre deux étiquettes sans voir ce qui les fondait. La
+ * provenance de la lecture, elle, existe pour tous : c'est elle qu'on reporte
+ * quand l'avis n'apporte pas la sienne.
  */
 function avisWithTitles(result) {
   const titres = new Map(
@@ -272,11 +280,20 @@ function avisWithTitles(result) {
       .map((prediction) => [prediction.value.external_reference_normalized, prediction])
   );
 
-  return (result?.avisStatus ?? []).map((avis) => ({
-    ...avis,
-    title: titres.get(avis.reference)?.title_raw ?? null,
-    opinion_label: titres.get(avis.reference)?.opinion_label ?? null
-  }));
+  return (result?.avisStatus ?? []).map((avis) => {
+    const lecture = titres.get(avis.reference);
+    const provenance = lecture?.provenance ?? {};
+    return {
+      ...avis,
+      title: lecture?.title_raw ?? null,
+      opinion_label: lecture?.opinion_label ?? null,
+      // On ne remplace jamais ce que le moteur a conservé : on complète ce
+      // qu'il a laissé vide.
+      evidence: avis.evidence ?? provenance.excerpt ?? null,
+      sourceId: avis.sourceId ?? provenance.source_id ?? avis.last_seen_document_id ?? null,
+      page: avis.page ?? provenance.page ?? null
+    };
+  });
 }
 
 /**

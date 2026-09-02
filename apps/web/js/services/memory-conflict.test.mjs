@@ -255,3 +255,78 @@ test("le silence ne dispense que les avis : un document reste comparé", () => {
   );
   assert.equal(conflits.length, 1);
 });
+
+/* ------------------------------------------------------------------ *
+ * L'extrait : ce qui fondait le panneau d'arbitrage, et qui manquait
+ * ------------------------------------------------------------------ */
+
+/** Un conflit d'avis minimal, dont on ne fait varier que les extraits. */
+function conflitDAvis(beforePayload, payload) {
+  return {
+    kind: "memory-contradicted",
+    item: { itemType: "avis", itemKey: "171", status: "proposed", payload: { reference: "171", ...payload } },
+    beforePayload: { reference: "171", ...beforePayload }
+  };
+}
+
+test("l'extrait se lit sous les quatre noms que le moteur lui donne", () => {
+  // On ne lisait que `.text`, que personne ne produit : le panneau annonçait
+  // « aucun extrait » alors que l'extrait était là, sous un autre nom.
+  const formes = [
+    ["chaîne", "La note de calcul manque."],
+    ["provenance", { excerpt: "La note de calcul manque.", source_id: "d-1", page: 4 }],
+    ["levée déclarée", { sentence: "La note de calcul manque.", source_document_id: "d-1", source_page: 4 }],
+    ["forme historique", { text: "La note de calcul manque.", page: 4 }]
+  ];
+  for (const [nom, evidence] of formes) {
+    const dit = describeConflict(conflitDAvis({}, { status: "open", evidence }));
+    assert.equal(dit.after.excerpt, "La note de calcul manque.", `forme ${nom}`);
+  }
+});
+
+test("la provenance se lit sous ses trois noms de document et deux noms de page", () => {
+  const parProvenance = describeConflict(conflitDAvis({}, {
+    status: "open", evidence: { excerpt: "x", source_id: "d-7", page: 12 }
+  }));
+  assert.equal(parProvenance.after.documentId, "d-7");
+  assert.equal(parProvenance.after.page, 12);
+
+  const parLevee = describeConflict(conflitDAvis({}, {
+    status: "open", evidence: { sentence: "x", source_document_id: "d-9", source_page: 3 }
+  }));
+  assert.equal(parLevee.after.documentId, "d-9");
+  assert.equal(parLevee.after.page, 3);
+});
+
+test("une décision figée sans extrait l'emprunte au suivi des avis, et le dit", () => {
+  // Corriger le producteur ne répare pas les décisions déjà prises : elles sont
+  // en base, sans extrait. Le suivi des avis, lui, l'a gardé.
+  const memoire = new Map([["171", { external_reference: "171", evidence: { excerpt: "Ce que le rapport dit." } }]]);
+  const dit = describeConflict(conflitDAvis({ status: "open" }, { status: "resolved" }), { memoire });
+
+  assert.equal(dit.before.excerpt, "Ce que le rapport dit.");
+  assert.equal(dit.before.retrouve, true, "l'emprunt se signale : ce n'est pas la source d'origine");
+});
+
+test("un extrait présent n'est jamais remplacé par celui du suivi", () => {
+  const memoire = new Map([["171", { external_reference: "171", evidence: "autre chose" }]]);
+  const dit = describeConflict(
+    conflitDAvis({ status: "open", evidence: "ce qui avait été inscrit" }, { status: "resolved" }),
+    { memoire }
+  );
+  assert.equal(dit.before.excerpt, "ce qui avait été inscrit");
+  assert.equal(dit.before.retrouve, undefined);
+});
+
+test("sans extrait nulle part, on ne prétend pas en avoir un", () => {
+  const dit = describeConflict(conflitDAvis({ status: "open" }, { status: "resolved" }), { memoire: new Map() });
+  assert.equal(dit.before.excerpt, null);
+  assert.equal(dit.after.excerpt, null);
+});
+
+test("le suivi accepte une Map comme un objet : les appelants n'ont pas à s'accorder", () => {
+  const attendu = "Ce que le rapport dit.";
+  const objet = { 171: { evidence: attendu } };
+  const dit = describeConflict(conflitDAvis({ status: "open" }, { status: "resolved" }), { memoire: objet });
+  assert.equal(dit.before.excerpt, attendu);
+});

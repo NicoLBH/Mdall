@@ -628,8 +628,12 @@ function renderConflictSide(cote = {}, { action = "take", cle = "", tranche = fa
       <span class="conflict__statement">${escapeHtml(cote.statement ?? "")}</span>
       ${
         cote.excerpt
-          ? `<blockquote class="conflict__excerpt">${escapeHtml(cote.excerpt)}</blockquote>`
-          : `<p class="conflict__excerpt conflict__excerpt--none">Aucun extrait conservé pour cette lecture.</p>`
+          ? `<blockquote class="conflict__excerpt">${escapeHtml(cote.excerpt)}${
+              cote.retrouve
+                ? `<span class="conflict__retrouve" title="Cette décision n'avait pas gardé d'extrait ; celui-ci vient du suivi des avis, pour la même référence.">retrouvé dans le suivi des avis</span>`
+                : ""
+            }</blockquote>`
+          : `<p class="conflict__excerpt conflict__excerpt--none">Aucun extrait conservé pour cette lecture, et le suivi des avis n'en a pas non plus.</p>`
       }
       ${provenance ? `<span class="conflict__source">${provenance}</span>` : ""}
       ${
@@ -651,7 +655,10 @@ function renderConflictSide(cote = {}, { action = "take", cle = "", tranche = fa
 }
 
 function renderConflict(conflict) {
-  const dit = describeConflict(conflict);
+  // Le suivi des avis sert de secours quand la décision figée en base n'a pas
+  // gardé d'extrait : arbitrer sans voir ce que dit le document, ce n'est pas
+  // décider, c'est deviner.
+  const dit = describeConflict(conflict, { memoire: view.review?.suiviDesAvis ?? null });
   const tranche = conflict.item.status !== ITEM.PROPOSED;
   const cle = `${conflict.item.itemType}|${conflict.item.itemKey}`;
 
@@ -3645,6 +3652,13 @@ async function openProposition(root, propositionId) {
       // relancer l'analyse : écrire une phrase ne relit pas cent vingt PDF.
       documentRows: documents,
       decisionRows: decisions,
+      // Le suivi des avis, indexé par référence : c'est lui qui redonne un
+      // extrait aux décisions figées avant qu'on ne les conserve.
+      suiviDesAvis: new Map(
+        (memoire?.avis ?? [])
+          .map((avis) => [String(avis.external_reference ?? "").trim(), avis])
+          .filter(([cle]) => cle)
+      ),
       comments,
       authors: names,
       posting: false,

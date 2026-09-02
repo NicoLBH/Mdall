@@ -17706,6 +17706,10 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 @media (max-width:1100px){
   .fondations-grille{ grid-template-columns:minmax(0,1fr); }
 }
+/* Une règle d'auteur l'emporte sur `[hidden]{display:none}` du navigateur : sans
+   cette ligne, `hidden` ne cache rien et le formulaire reste sous le tableau.
+   C'est le même piège que pour le bouton de défilement du copilote. */
+.fondations-grille[hidden]{ display:none !important; }
 .fondations-colonne{ display:flex; flex-direction:column; gap:12px; min-width:0; }
 
 .fondations-zone{
@@ -17793,8 +17797,27 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .fondations-bloc{ border-top:1px solid var(--border); padding-top:10px; }
 .fondations-bloc__tete{ display:flex; align-items:baseline; justify-content:space-between; gap:12px; }
 .fondations-bloc__tete h5{ margin:0; font-size:13px; }
-.fondations-bloc__ratio{ font-variant-numeric:tabular-nums; font-weight:600; }
-.fondations-bloc__ratio.est-depasse{ color:var(--danger, #f85149); }
+.fondations-bloc__ratio{
+  display:inline-flex; align-items:center; gap:6px;
+  font-variant-numeric:tabular-nums; font-weight:600;
+}
+.fondations-bloc__ratio.est-depasse,
+strong.est-depasse{ color:var(--danger, #f85149); }
+.fondations-bloc__ratio.est-verifie,
+strong.est-verifie{ color:#3fb950; }
+
+/* Le signe porte le verdict, la couleur le renforce : la couleur seule se perd
+   sur un écran daltonien et dans une capture en noir et blanc. */
+.fondations-signe{ display:inline-flex; }
+.fondations-signe--ok{ color:#3fb950; }
+.fondations-signe--ko{ color:var(--danger, #f85149); }
+
+/* Les unités vivent dans l'en-tête, pas dans chaque cellule : répétées cinquante
+   fois elles cessent d'informer et empêchent de comparer les colonnes. */
+.fondations-charges__unite{
+  display:block; font-style:normal; font-weight:400;
+  font-size:10px; opacity:.7;
+}
 .fondations-bloc__combinaison{ margin:2px 0 8px; font-size:12px; color:var(--muted); }
 .fondations-bloc__valeurs{ margin:0; display:grid; gap:2px 12px; }
 .fondations-bloc__valeurs > div{ display:flex; justify-content:space-between; gap:12px; font-size:12px; }
@@ -17826,7 +17849,10 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
  * pour remplir son cadre ment sur ce qu'il montre.
  * ------------------------------------------------------------------ */
 .fondations-schema__vues{ display:flex; flex-wrap:wrap; gap:12px; }
-.fondations-schema__vue{ margin:0; flex:1 1 260px; min-width:0; }
+/* La vue ne s'étire pas pour remplir la ligne : à pleine largeur, le plan
+   mangeait la moitié de l'écran et le schéma cessait d'être un repère pour
+   devenir le sujet. */
+.fondations-schema__vue{ margin:0; flex:0 1 300px; max-width:340px; min-width:0; }
 .fondations-schema__vue figcaption{
   font-size:11px; color:var(--muted); text-transform:uppercase;
   letter-spacing:.04em; margin-bottom:2px;
@@ -17971,8 +17997,97 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .workflow-runs__head-count{ margin-right:16px; }
 .fondations-nappes th[scope="row"]{ font-family:ui-monospace, SFMono-Regular, Menlo, monospace; }
 .fondations-nappes td{ text-align:right; white-space:nowrap; }
+.fondations-nappes th[scope="col"]{ text-align:right; }
+.fondations-nappes th[scope="col"]:first-child{ text-align:left; }
 .fondations-nappes td.est-depasse{ color:var(--danger, #f85149); font-weight:600; }
+.fondations-nappes td.est-verifie{ color:#3fb950; font-weight:600; }
+.fondations-nappes td .fondations-signe{ vertical-align:text-bottom; margin-right:4px; }
+/* L'en-tête des charges se lit à droite, comme ses valeurs. */
+.fondations-charges thead th:not(:first-child):not(:nth-child(2)){ text-align:right; }
 /* Un champ qui ne sert pas au règlement retenu est grisé, jamais retiré :
    le retirer ferait disparaître une saisie déjà faite, et rouvrir l'écran ne
    dirait plus pourquoi elle a disparu. */
 .fondations-champ.est-hors-sujet{ opacity:.45; }
+/* L'extrait emprunté au suivi des avis se signale : ce n'est pas la source qui
+   a été inscrite le jour de la décision, et le lecteur doit le savoir. */
+.conflict__retrouve{
+  display:block; margin-top:6px;
+  font-size:11px; font-style:normal; color:var(--muted);
+}
+/* L'astérisque d'une valeur venue de la mémoire : bleue, discrète, et son
+   infobulle dit d'où elle sort et quand elle a été tranchée. */
+.fondations-memoire{
+  color:#58a6ff; text-decoration:none; border:0;
+  margin-left:3px; font-weight:700; cursor:help;
+}
+.fondations-rappels{ margin:0; padding:0; list-style:none; display:grid; gap:4px; }
+.fondations-rappels li{ display:flex; align-items:baseline; gap:8px; font-size:12px; }
+.fondations-rappels__libelle{ color:var(--muted); }
+.fondations-rappels em{ color:var(--muted); font-style:normal; opacity:.75; font-size:11px; }
+
+/* ------------------------------------------------------------------ *
+ * L'étude de fondations : le tableau de synthèse
+ * ------------------------------------------------------------------ */
+.fondations-etude{ margin-bottom:16px; }
+.fondations-etude__tete{
+  display:flex; align-items:flex-start; justify-content:space-between;
+  gap:16px; flex-wrap:wrap; margin-bottom:10px;
+}
+.fondations-etude__tete h4{ margin:0 0 2px; font-size:14px; }
+.fondations-etude__note{ margin:0; font-size:12px; color:var(--muted); max-width:70ch; }
+.fondations-etude__vide{ margin:0; font-size:13px; color:var(--muted); }
+
+.fondations-etude__table{ font-size:12px; }
+.fondations-etude__table td,
+.fondations-etude__table tfoot th{ text-align:right; white-space:nowrap; }
+.fondations-etude__table thead th:not(:first-child){ text-align:right; }
+.fondations-etude__table tbody th[scope="row"]{ text-align:left; font-weight:400; }
+.fondations-etude__table tfoot tr{
+  border-top:1px solid var(--border);
+  font-weight:600;
+}
+.fondations-etude__table tfoot th[scope="row"]{ text-align:left; }
+.fondations-etude__ligne:hover{ background:rgba(110,118,129,.12); }
+.fondations-etude__ligne.est-ouverte{ background:rgba(88,166,255,.12); }
+.fondations-etude__lien{
+  background:none; border:0; padding:0; font:inherit; color:inherit;
+  cursor:pointer; text-align:left;
+}
+.fondations-etude__lien:hover{ color:#58a6ff; text-decoration:underline; }
+.fondations-etude__retirer{
+  background:none; border:0; padding:2px; color:var(--muted); cursor:pointer;
+}
+.fondations-etude__retirer:hover{ color:var(--danger, #f85149); }
+.fondations-etude__erreur{ color:var(--attention, #d29922); cursor:help; }
+.fondations-etude__inconnues{ color:var(--muted); margin-left:8px; font-weight:400; }
+.fondations-etude__table td.est-depasse{ color:var(--danger, #f85149); }
+.fondations-etude__table td.est-verifie{ color:#3fb950; }
+.fondations-etude__table td .fondations-signe{ vertical-align:text-bottom; margin-right:4px; }
+
+/* La barre d'une semelle ouverte : d'où l'on vient, ce qu'elle est, où aller. */
+.fondations-semelle-barre{
+  display:flex; align-items:flex-end; gap:14px; flex-wrap:wrap;
+  padding:10px 0 12px; margin-bottom:4px;
+  border-bottom:1px solid var(--border);
+}
+.fondations-semelle-barre__retour{
+  display:inline-flex; align-items:center; gap:6px;
+  background:none; border:0; padding:0 0 6px;
+  color:var(--muted); font:inherit; cursor:pointer;
+}
+.fondations-semelle-barre__retour:hover{ color:#58a6ff; text-decoration:underline; }
+.fondations-semelle-barre__nom{ display:flex; flex-direction:column; gap:4px; flex:1 1 220px; max-width:340px; }
+.fondations-semelle-barre__nombre{ display:flex; flex-direction:column; gap:4px; width:130px; }
+.fondations-semelle-barre__volume{ color:var(--muted); font-size:12px; padding-bottom:6px; }
+.fondations-semelle-barre__pas{
+  display:inline-flex; align-items:center; gap:8px;
+  margin-left:auto; padding-bottom:4px;
+  color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums;
+}
+.fondations-semelle-barre__pas button{
+  width:26px; height:26px; border:1px solid var(--border); border-radius:6px;
+  background:var(--bg); color:var(--fg); cursor:pointer; font-size:15px; line-height:1;
+}
+.fondations-semelle-barre__pas button:hover:not(:disabled){ border-color:#58a6ff; color:#58a6ff; }
+.fondations-semelle-barre__pas button:disabled{ opacity:.35; cursor:default; }
+.fondations-etude__table tfoot td span + span{ margin-left:10px; }

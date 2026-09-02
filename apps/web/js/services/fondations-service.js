@@ -21,6 +21,46 @@ function nombre(valeur) {
   return Number.isFinite(n) ? n : null;
 }
 
+/** Les entrées d'une semelle, normalisées pour le serveur. */
+function corpsDe(entrees) {
+  const corps = { ...entrees };
+  for (const champ of champsNumeriques()) corps[champ.cle] = nombre(entrees[champ.cle]);
+  corps.charges = Object.fromEntries(CAS_DE_CHARGE.map((cas) => [cas.cle,
+    Object.fromEntries(COMPOSANTES.map((c) => [c.cle, nombre(entrees.charges?.[cas.cle]?.[c.cle]) ?? 0]))]));
+  corps.ferraillage = Object.fromEntries(NAPPES.map((nappe) => [nappe.cle, {
+    nombre: nombre(entrees.ferraillage?.[nappe.cle]?.nombre) ?? 0,
+    barre: String(entrees.ferraillage?.[nappe.cle]?.barre ?? "")
+  }]));
+  return corps;
+}
+
+/**
+ * Toutes les semelles d'une étude, en un seul appel.
+ *
+ * Un projet en compte une vingtaine : les calculer une par une ferait vingt
+ * allers-retours pour afficher un tableau, et le tableau apparaîtrait par
+ * morceaux. Une semelle qui refuse de se calculer ne fait pas échouer les
+ * autres — le tableau doit pouvoir montrer dix-neuf résultats et une erreur.
+ */
+export async function calculerLesSemelles(semelles = [], { signal } = {}) {
+  if (semelles.length === 0) return [];
+
+  const reponse = await fetch(URL_FONCTION, {
+    method: "POST",
+    headers: { ...(await buildSupabaseAuthHeaders()), "Content-Type": "application/json" },
+    body: JSON.stringify({ semelles: semelles.map((semelle) => corpsDe(semelle.entrees ?? {})) }),
+    signal
+  });
+
+  const texte_ = await reponse.text().catch(() => "");
+  let charge = null;
+  try { charge = texte_ ? JSON.parse(texte_) : null; } catch { charge = null; }
+
+  if (!reponse.ok) throw new Error(charge?.error || `Le calcul a échoué (HTTP ${reponse.status}).`);
+  if (!Array.isArray(charge?.resultats)) throw new Error("Le serveur n'a rien renvoyé à afficher.");
+  return charge.resultats;
+}
+
 /** Le calcul, tel qu'il est fait : ailleurs, et sous notre identité. */
 export async function calculerFondation(entrees, { signal } = {}) {
   const invalides = entreesInvalides(entrees);
@@ -30,14 +70,7 @@ export async function calculerFondation(entrees, { signal } = {}) {
     throw erreur;
   }
 
-  const corps = { ...entrees };
-  for (const champ of champsNumeriques()) corps[champ.cle] = nombre(entrees[champ.cle]);
-  corps.charges = Object.fromEntries(CAS_DE_CHARGE.map((cas) => [cas.cle,
-    Object.fromEntries(COMPOSANTES.map((c) => [c.cle, nombre(entrees.charges?.[cas.cle]?.[c.cle]) ?? 0]))]));
-  corps.ferraillage = Object.fromEntries(NAPPES.map((nappe) => [nappe.cle, {
-    nombre: nombre(entrees.ferraillage?.[nappe.cle]?.nombre) ?? 0,
-    barre: String(entrees.ferraillage?.[nappe.cle]?.barre ?? "")
-  }]));
+  const corps = corpsDe(entrees);
 
   const reponse = await fetch(URL_FONCTION, {
     method: "POST",
