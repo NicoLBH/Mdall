@@ -2,13 +2,35 @@
  * Ce que le classeur rend, figé.
  *
  * Ces valeurs n'ont pas été calculées de tête ni recopiées d'un manuel : elles
- * sortent de `CALMAS__Fondations.xlsx` recalculé par LibreOffice sur les mêmes
- * entrées. Le classeur est l'étalon ; ces tests sont là pour qu'on s'aperçoive
- * le jour où le moteur s'en écarte, y compris dans une décimale lointaine.
+ * sont celles que `CALMAS__Fondations.xlsx` porte **en cache**, c'est-à-dire
+ * celles que son propre tableur a calculées. L'étalon n'est pas une seconde
+ * lecture du classeur : c'est le classeur lui-même.
  *
  * Une divergence ici ne se rattrape pas en ajustant la valeur attendue : elle
  * se cherche dans le classeur, à la case près — les commentaires de `calcul.js`
  * donnent les références.
+ *
+ * ## Ce qui est étalonné, et ce qui ne l'est pas
+ *
+ * Sont comparés, au dernier chiffre :
+ *
+ * - les seize grandeurs de sortie de la stabilité externe (R33, R41, R49, AK5,
+ *   O36:O40, O45:O48, O52:O58, AO33, AO35, AO38, AO41) ;
+ * - le poids propre et la butée (AV90, AW90, AX90, BM80, BN80, BM81, BN81) ;
+ * - les cinquante cases de la table de pondération.
+ *
+ * Mais ces valeurs ne valent que pour **une** situation : celle que le classeur
+ * porte — EC - NF P94-261, répartition Meyerhoff, sol drainé, ni séisme ni
+ * charge accidentelle. Les autres branches — Fascicule 62, DTU 13.12,
+ * répartition constante, sol non drainé, combinaisons sismiques — sont
+ * transcrites et elles tournent, et les tests ci-dessous vérifient qu'elles ne
+ * divergent pas ; **elles ne sont pas comparées au classeur**, faute de pouvoir
+ * le recalculer ici (LibreOffice s'y bloque : neuf minutes écoulées pour une
+ * seconde de calcul).
+ *
+ * Le chemin pour combler ce trou est court et ne demande rien d'exotique :
+ * enregistrer le classeur avec ces entrées-là — son tableur met alors ses
+ * résultats en cache — et le relire. La comparaison prend quelques secondes.
  */
 
 import test from "node:test";
