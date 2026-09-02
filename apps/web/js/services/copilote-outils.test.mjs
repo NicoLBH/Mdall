@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 
 import {
   OUTILS,
+  substitutionsNonJustifiees,
+  valeurCiteePar,
   comparerALaMemoire,
   declarationsPourModele,
   entreesManquantes,
@@ -75,7 +77,7 @@ test("la déclaration au modèle se dérive du même endroit que le formulaire",
 });
 
 test("les choix fermés voyagent avec la déclaration", () => {
-  const declaration = declarationsPourModele()[0];
+  const declaration = declarationsPourModele().find((entree) => entree.name === "spectre_elastique_ec8");
 
   assert.deepEqual(declaration.parameters.properties.importanceCategory.enum, ["I", "II", "III", "IV"]);
   assert.equal(declaration.parameters.properties.dampingRatio.type, "number");
@@ -99,12 +101,14 @@ test("une valeur remplacée ne pré-remplit rien", () => {
   assert.deepEqual(prefillDepuisMemoire(SPECTRE, memoire).valeurs, {});
 });
 
-test("ce que le modèle propose l'emporte sur la mémoire", () => {
-  // C'est tout l'objet d'un « et si on passait en catégorie IV ? ».
+test("ce que le modèle propose l'emporte sur la mémoire — quand quelqu'un l'a dit", () => {
+  // C'est tout l'objet d'un « et si on passait en catégorie IV ? ». La valeur
+  // figure dans la question : elle est justifiée.
   const resultat = executerOutil({
     id: "spectre_elastique_ec8",
     entrees: { importanceCategory: "IV" },
-    assertions: MEMOIRE
+    assertions: MEMOIRE,
+    question: "et si on passait la catégorie d'importance de II à IV ?"
   });
 
   assert.equal(resultat.entrees.importanceCategory, "IV");
@@ -164,7 +168,8 @@ test("changer la catégorie d'importance change l'accélération, et rien d'autr
   const apres = executerOutil({
     id: "spectre_elastique_ec8",
     entrees: { importanceCategory: "IV" },
-    assertions: MEMOIRE
+    assertions: MEMOIRE,
+    confirmees: ["importanceCategory"]
   }).valeurs;
 
   assert.ok(apres.ag > avant.ag, "le coefficient d'importance monte");
@@ -222,4 +227,138 @@ test("deux valeurs identiques ne font pas un écart, même en arithmétique bina
   const outil = { sorties: [{ cle: "S", libelle: "S", depuisMemoire: "parametre-s" }] };
 
   assert.deepEqual(comparerALaMemoire(outil, { S: 0.1 + 0.2 }, [donnee("parametre-s", "0.3")]), []);
+});
+
+/* ── Ce qui n'a pas été dit ne se devine pas ─────────────────────────────── */
+
+test("une valeur d'une lettre ne se reconnaît pas dans n'importe quel mot", () => {
+  // « A » dans « change la classe de sol » ferait passer le garde-fou pour
+  // exactement ce qu'il surveille.
+  assert.equal(valeurCiteePar("quelles conséquences si on change la classe de sol ?", "A"), false);
+  assert.equal(valeurCiteePar("passer le sol en A", "A"), true);
+  assert.equal(valeurCiteePar("et si le sol devient D ?", "D"), true);
+});
+
+test("une valeur de plus de deux caractères se reconnaît sans la casse", () => {
+  // « Bâtiment A » et « batiment a » désignent la même chose : exiger la casse
+  // ferait redemander une valeur que l'utilisateur vient d'écrire.
+  assert.equal(valeurCiteePar("passer en batiment a", "Batiment A"), true);
+  assert.equal(valeurCiteePar("passer sur le lot GROS-OEUVRE", "gros-oeuvre"), true);
+  // Mais elle reste un mot entier : « III » ne se lit pas dans « II ».
+  assert.equal(valeurCiteePar("catégorie II", "III"), false);
+});
+
+test("le modèle qui invente une valeur ne calcule pas : il demande", () => {
+  // Le cas réel : « quelles conséquences si on change la classe de sol ? »
+  // répondu par « si elle passe de B à A… ». Personne n'avait dit A.
+  const resultat = executerOutil({
+    id: "spectre_elastique_ec8",
+    entrees: { soilClass: "A" },
+    assertions: MEMOIRE,
+    question: "quelles conséquences si on change la classe de sol ?"
+  });
+
+  assert.equal(resultat.statut, "aConfirmer");
+  assert.deepEqual(resultat.champs.map((champ) => champ.cle), ["soilClass"]);
+  assert.equal(resultat.proposeParLeModele.soilClass, "A");
+  // La mémoire reste affichée : c'est elle qui vaut tant que personne n'a
+  // tranché autrement.
+  assert.equal(resultat.connues.soilClass, "C");
+});
+
+test("une valeur confirmée à l'écran passe sans discussion", () => {
+  const resultat = executerOutil({
+    id: "spectre_elastique_ec8",
+    entrees: { soilClass: "A" },
+    assertions: MEMOIRE,
+    confirmees: ["soilClass"]
+  });
+
+  assert.equal(resultat.statut, "fait");
+  assert.equal(resultat.entrees.soilClass, "A");
+});
+
+test("une entrée que la mémoire ignore n'est pas une substitution", () => {
+  // Le garde-fou vise ce qui **remplace** ce que le projet a tranché. Sans rien
+  // en mémoire, une valeur fournie est un renseignement, pas une invention.
+  const substituees = substitutionsNonJustifiees(SPECTRE, {
+    entrees: { soilClass: "A" },
+    depuisMemoire: {},
+    question: "calcule le spectre"
+  });
+
+  assert.deepEqual(substituees, []);
+});
+
+test("reprendre la valeur de la mémoire n'est pas une substitution", () => {
+  const substituees = substitutionsNonJustifiees(SPECTRE, {
+    entrees: { soilClass: "C" },
+    depuisMemoire: { soilClass: "C" },
+    question: "calcule le spectre"
+  });
+
+  assert.deepEqual(substituees, []);
+});
+
+/* ── Le second utilitaire, et l'orchestration ────────────────────────────── */
+
+const GEL = outilParId("profondeur_hors_gel");
+
+const SITE = [
+  donnee("h0-hors-gel", "0.5"),
+  donnee("altitude", "450"),
+  donnee("profondeur-hors-gel", "0.575")
+];
+
+test("la profondeur hors gel applique la formule du DTU, pas une autre", () => {
+  const resultat = executerOutil({ id: "profondeur_hors_gel", assertions: SITE });
+
+  // H = 0,5 + (450 − 150) / 4000 = 0,575
+  assert.equal(resultat.statut, "fait");
+  assert.equal(resultat.valeurs.H, 0.575);
+  assert.equal(resultat.valeurs.correctionAltitude, 0.075);
+  assert.match(resultat.source, /13\.1/);
+});
+
+test("une altitude absente ne devient pas zéro : le calcul refuse", () => {
+  // `Number(null)` vaut zéro, et une cote calculée à 150 m par défaut n'est
+  // vraie nulle part en particulier. Le même défaut a déjà coûté une
+  // « Profondeur hors gel : 0,00 m » dans les déductions.
+  assert.equal(GEL.executer({ h0: 0.5 }).ok, false);
+  assert.equal(GEL.executer({ h0: 0.5, altitude: null }).ok, false);
+  assert.equal(GEL.executer({ h0: 0.5, altitude: "" }).ok, false);
+});
+
+test("une altitude citée dans la question change la cote, et le conflit se voit", () => {
+  const resultat = executerOutil({
+    id: "profondeur_hors_gel",
+    entrees: { altitude: "900" },
+    assertions: SITE,
+    question: "et si le projet montait à 900 m ?"
+  });
+
+  assert.equal(resultat.statut, "fait");
+  assert.equal(resultat.valeurs.H, 0.688);
+  assert.equal(resultat.ecarts.length, 1);
+  assert.equal(resultat.ecarts[0].valeurTenue, 0.575);
+  assert.equal(resultat.ecarts[0].valeurCalculee, 0.688);
+});
+
+test("les deux utilitaires sont proposés au modèle, chacun avec son périmètre", () => {
+  // C'est là-dessus que porte l'aiguillage : deux descriptions qui disent ce
+  // que l'outil tranche **et** ce qu'il ne tranche pas.
+  const noms = declarationsPourModele().map((entree) => entree.name);
+
+  assert.deepEqual(noms.sort(), ["profondeur_hors_gel", "spectre_elastique_ec8"]);
+  assert.match(GEL.aQuoiCaSert, /ne dimensionne pas la fondation/i);
+  assert.match(SPECTRE.aQuoiCaSert, /ne dimensionne aucun élément/i);
+});
+
+test("les deux utilitaires lisent l'altitude et le sol dans des clés distinctes", () => {
+  // Deux outils qui liraient la même clé pour deux choses différentes
+  // finiraient par se pré-remplir l'un avec la valeur de l'autre.
+  const clesGel = GEL.entrees.map((entree) => entree.depuisMemoire).filter(Boolean);
+  const clesSpectre = SPECTRE.entrees.map((entree) => entree.depuisMemoire).filter(Boolean);
+
+  assert.deepEqual(clesGel.filter((cle) => clesSpectre.includes(cle)), []);
 });

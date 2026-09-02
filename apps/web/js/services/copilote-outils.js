@@ -27,6 +27,25 @@
  * demande au modèle quel outil appeler, rend la demande au navigateur, qui
  * exécute et lui renvoie le résultat.
  *
+ * ## Ce qui n'a pas été dit ne se devine pas
+ *
+ * Une consigne dans le prompt ne suffit pas : à « quelles conséquences si on
+ * change la classe de sol ? », le modèle a répondu « si elle passe de B à A… ».
+ * Personne n'avait dit A. La réponse était fausse **tout en ayant l'air
+ * juste** — un chantier ne la relit pas.
+ *
+ * Le garde-fou est donc dans le code, pas dans la consigne. Une entrée que le
+ * modèle fournit **différente de ce que la mémoire porte** est une
+ * substitution, et une substitution n'est acceptée que si elle est justifiée :
+ *
+ *   - la valeur figure dans les mots de l'utilisateur — « passer en catégorie
+ *     **IV** » ; ou
+ *   - quelqu'un l'a confirmée à l'écran, en cliquant une pastille.
+ *
+ * Sinon l'outil ne calcule pas : il demande. Le doute penche du côté de la
+ * question, jamais du calcul — se tromper en demandant coûte un clic, se
+ * tromper en calculant coûte une reprise de fondations.
+ *
  * ## Ce qui manque ne s'invente pas
  *
  * Un outil dont une entrée requise manque **ne s'exécute pas**. Il rend la
@@ -76,6 +95,62 @@ function nombre(valeur) {
  * projet a déjà tranché.
  */
 export const OUTILS = [
+  {
+    id: "profondeur_hors_gel",
+    version: "V1",
+    titre: "Profondeur hors gel des fondations",
+    aQuoiCaSert:
+      "Calcule la cote hors gel minimale des fondations selon le NF DTU 13.1 : H = H0 + (altitude − 150) / 4000, "
+      + "où H0 est la valeur départementale retenue et l'altitude celle du site. "
+      + "À appeler dès qu'une question porte sur la profondeur des fondations vis-à-vis du gel, "
+      + "ou sur l'effet d'un changement d'altitude ou de valeur H0. "
+      + "Ne dimensionne pas la fondation elle-même et ne dit rien de la portance.",
+    source: "NF DTU 13.1",
+    entrees: [
+      {
+        cle: "h0",
+        libelle: "H0 retenu pour le département",
+        type: "nombre",
+        unite: "m",
+        requis: true,
+        depuisMemoire: "h0-hors-gel",
+        aide: "Valeur départementale. Quand le département en offre plusieurs, c'est une décision, pas une déduction."
+      },
+      {
+        cle: "altitude",
+        libelle: "Altitude du site",
+        type: "nombre",
+        unite: "m",
+        requis: true,
+        depuisMemoire: "altitude",
+        aide: "Altitude du terrain naturel, en mètres."
+      }
+    ],
+    sorties: [
+      { cle: "H", libelle: "Profondeur hors gel H", unite: "m", decimales: 3, depuisMemoire: "profondeur-hors-gel" },
+      { cle: "correctionAltitude", libelle: "Correction d'altitude", unite: "m", decimales: 3 }
+    ],
+
+    executer(entrees = {}) {
+      const h0 = nombre(entrees.h0);
+      const altitude = nombre(entrees.altitude);
+
+      // `Number(null)` vaut zéro : lire l'altitude sans écarter l'absence
+      // d'abord ferait entrer une cote calculée à 150 m par défaut, ce qui
+      // n'est vrai nulle part en particulier. Le même défaut a déjà coûté une
+      // « Profondeur hors gel : 0,00 m » dans les déductions.
+      if (h0 === null || altitude === null) {
+        return { ok: false, raison: "H0 et l'altitude sont tous deux nécessaires : sans eux, la formule ne dit rien." };
+      }
+
+      const correction = (altitude - 150) / 4000;
+
+      return {
+        ok: true,
+        valeurs: arrondir(this, { H: h0 + correction, correctionAltitude: correction })
+      };
+    }
+  },
   {
     id: "spectre_elastique_ec8",
     version: "V1",
@@ -312,6 +387,53 @@ export function prefillDepuisMemoire(outil, assertions = []) {
 }
 
 /**
+ * Cette valeur figure-t-elle dans ce que l'utilisateur a écrit ?
+ *
+ * Une recherche par mot entier, et sensible à la casse pour les valeurs d'une
+ * ou deux lettres : « A » ne doit pas se reconnaître dans « a » ni dans
+ * « sol », sinon le garde-fou laisserait passer précisément ce qu'il surveille.
+ * Les valeurs plus longues se cherchent sans la casse — « batiment a » et
+ * « Bâtiment A » désignent la même chose.
+ */
+export function valeurCiteePar(question, valeur) {
+  const cherchee = texte(valeur);
+  const source = texte(question);
+  if (!cherchee || !source) return false;
+
+  const echappee = cherchee.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const drapeaux = cherchee.length <= 2 ? "" : "i";
+
+  // `\b` ne borne pas les accents ni les symboles : on borne à la main sur ce
+  // qui n'est ni lettre ni chiffre.
+  return new RegExp(`(^|[^\\p{L}\\p{N}])${echappee}($|[^\\p{L}\\p{N}])`, `u${drapeaux}`).test(source);
+}
+
+/**
+ * Les substitutions que rien ne justifie.
+ *
+ * Une entrée que le modèle donne différente de la mémoire, sans que
+ * l'utilisateur l'ait écrite ni confirmée. C'est le cas de « change la classe
+ * de sol » suivi d'un « A » venu de nulle part.
+ */
+export function substitutionsNonJustifiees(outil, { entrees = {}, depuisMemoire = {}, question = "", confirmees = [] } = {}) {
+  const validees = new Set(Array.isArray(confirmees) ? confirmees : []);
+
+  return (outil?.entrees ?? []).filter((entree) => {
+    const proposee = texte(entrees?.[entree.cle]);
+    if (!proposee) return false;
+    if (validees.has(entree.cle)) return false;
+
+    const connue = texte(depuisMemoire?.[entree.cle]);
+    // Rien en mémoire : ce n'est pas une substitution, c'est un renseignement.
+    // Le contrôle porte sur ce qui **remplace** ce que le projet a tranché.
+    if (!connue) return false;
+    if (connue === proposee) return false;
+
+    return !valeurCiteePar(question, proposee);
+  });
+}
+
+/**
  * Les entrées requises qui manquent encore.
  *
  * Une valeur hors des choix déclarés compte comme manquante : accepter « 2b »
@@ -394,7 +516,7 @@ export function comparerALaMemoire(outil, valeurs = {}, assertions = []) {
  * Les confondre reviendrait à faire dire au modèle « je n'ai pas pu calculer »
  * dans trois situations qui n'appellent pas la même suite.
  */
-export function executerOutil({ id = "", entrees = {}, assertions = [] } = {}) {
+export function executerOutil({ id = "", entrees = {}, assertions = [], question = "", confirmees = [] } = {}) {
   const outil = outilParId(id);
   if (!outil) {
     return { statut: "inconnu", id: texte(id), message: `Aucun utilitaire ne porte le nom « ${texte(id)} ».` };
@@ -408,6 +530,31 @@ export function executerOutil({ id = "", entrees = {}, assertions = [] } = {}) {
   const venuesDeLaMemoire = Object.fromEntries(
     Object.entries(provenance).filter(([cle]) => texte(entrees?.[cle]) === "")
   );
+
+  // Avant de regarder ce qui manque : ce qui a été **remplacé sans raison**.
+  // Une valeur inventée n'a pas l'air de manquer, et c'est bien le problème.
+  const substituees = substitutionsNonJustifiees(outil, {
+    entrees,
+    depuisMemoire,
+    question,
+    confirmees
+  });
+
+  if (substituees.length > 0) {
+    return {
+      statut: "aConfirmer",
+      outil: referenceOutil(outil),
+      titre: outil.titre,
+      // La mémoire, pas la proposition du modèle : c'est elle qui doit rester
+      // affichée tant que personne n'a tranché autrement.
+      connues: avecDefauts(outil, { ...depuisMemoire }),
+      proposeParLeModele: Object.fromEntries(substituees.map((entree) => [entree.cle, texte(entrees[entree.cle])])),
+      champs: substituees.map((entree) => ({ ...entree })),
+      message:
+        "Le calcul n'a pas eu lieu : une valeur a été remplacée sans que personne l'ait dite. "
+        + "Il faut la demander avant de calculer."
+    };
+  }
 
   const manquantes = entreesManquantes(outil, fournies);
   if (manquantes.length > 0) {
