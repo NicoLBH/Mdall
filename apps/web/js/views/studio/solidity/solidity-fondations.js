@@ -18,7 +18,7 @@ import { registerProjectPrimaryScrollSource } from "../../project-shell-chrome.j
 import { renderGhActionButton } from "../../ui/gh-split-button.js";
 import {
   ZONES, CHOIX, CAS_DE_CHARGE, COMPOSANTES, NAPPES, BARRES,
-  entreesParDefaut, entreesInvalides, uniteAffichee
+  entreesParDefaut, entreesInvalides, uniteAffichee, estPertinent
 } from "../../../services/fondations-declaration.js";
 import { calculerFondation } from "../../../services/fondations-service.js";
 import { dessinerSchema } from "./fondations-schema.js";
@@ -207,7 +207,8 @@ function dessinerChoix() {
       <legend>Hypothèses réglementaires</legend>
       <div class="fondations-champs">
         ${CHOIX.map((choix) => `
-          <label class="fondations-champ">
+          <label class="fondations-champ${estPertinent(choix, etat.entrees) ? "" : " est-hors-sujet"}"
+                 ${estPertinent(choix, etat.entrees) ? "" : `title="Ne sert qu'au règlement EC8-5 Annexe F."`}>
             <span class="fondations-champ__libelle">${escapeHtml(choix.libelle)}</span>
             <select class="fondations-champ__saisie" data-fondation-choix="${escapeHtml(choix.cle)}">
               ${choix.valeurs.map((valeur) => `
@@ -223,6 +224,7 @@ function dessinerChoix() {
 
 function dessinerZone(zone) {
   const unites = String(etat.entrees.unites || "");
+  if (!estPertinent(zone, etat.entrees)) return "";
   return `
     <fieldset class="fondations-zone">
       <legend>${escapeHtml(zone.titre)}</legend>
@@ -440,9 +442,10 @@ function dessinerResultats() {
 
   const r = etat.resultat;
   const u = r.unites || {};
+  const selon = r.bilan?.selon === "annexe F" ? "Capacité portante sismique" : "Stabilité externe";
   const verdict = r.bilan?.verifie
-    ? `<span class="fondations-verdict fondations-verdict--ok">Stabilité externe vérifiée</span>`
-    : `<span class="fondations-verdict fondations-verdict--ko">Stabilité externe non vérifiée</span>`;
+    ? `<span class="fondations-verdict fondations-verdict--ok">${escapeHtml(selon)} vérifiée</span>`
+    : `<span class="fondations-verdict fondations-verdict--ko">${escapeHtml(selon)} non vérifiée</span>`;
 
   const bloc = (titre, ratio, combinaison, lignes) => `
     <section class="fondations-bloc">
@@ -479,6 +482,24 @@ function dessinerResultats() {
         sur ${escapeHtml(String(r.combinaisonsExaminees ?? "—"))} combinaisons examinées.
         Un ratio supérieur à 1 signifie que la sollicitation dépasse la résistance.
       </p>
+
+      ${r.annexeF ? bloc("Capacité portante sismique — EN 1998-5 annexe F", r.annexeF.ratio, r.annexeF.combinaison, [
+        ["Direction déterminante", `suivant ${r.annexeF.direction}`, ""],
+        ["ag — accélération de calcul", nombreLisible(r.annexeF.parametres.ag, 3), "m/s²"],
+        ["S — paramètre de sol", nombreLisible(r.annexeF.parametres.S, 2), ""],
+        ["gRd — coefficient de modèle", nombreLisible(r.annexeF.parametres.gammaRd, 2), ""],
+        ["N — effort normal réduit", nombreLisible(r.annexeF.directions.find((d) => d.direction === r.annexeF.direction)?.N, 4), ""],
+        ["V — effort tranchant réduit", nombreLisible(r.annexeF.directions.find((d) => d.direction === r.annexeF.direction)?.V, 4), ""],
+        ["M — moment réduit", nombreLisible(r.annexeF.directions.find((d) => d.direction === r.annexeF.direction)?.M, 4), ""]
+      ]) : ""}
+      ${r.annexeF ? `<p class="fondations-resultats__portee">
+        Sous ce règlement, l'annexe F <strong>remplace</strong> les trois vérifications
+        ci-dessous : elle tient le triplet (N, V, M) à l'intérieur d'une surface limite,
+        au lieu de juger séparément le glissement, le basculement et la contrainte.
+        Celles-ci restent affichées pour information.
+        L'outil d'origine arrondit ce ratio à l'unité dans sa case de bilan
+        (${escapeHtml(String(r.annexeF.arrondiDeLaSource))}) ; le nombre est donné ici tel quel.
+      </p>` : ""}
 
       ${bloc("Glissement", r.glissement?.ratio, r.glissement?.combinaison, [
         ["HEd — effort horizontal total", nombreLisible(r.glissement?.HEd, 1), u.effort],
@@ -521,11 +542,11 @@ function dessinerResultats() {
       ${dessinerInterne(r)}
 
       <p class="fondations-resultats__portee">
-        Cet écran porte la <strong>stabilité externe</strong> et le
-        <strong>ferraillage de la semelle</strong>. Ne sont pas calculés :
-        ${escapeHtml((r.interne?.horsPortee ?? []).join(", ").toLowerCase())},
-        ni la capacité portante sismique de l'annexe F de l'EC8-5. Ils ne sont
-        donc pas vérifiés par ce résultat.
+        Cet écran porte la <strong>stabilité externe</strong>, le
+        <strong>ferraillage de la semelle</strong> et la <strong>capacité portante
+        sismique</strong> de l'annexe F. Ne sont pas calculés :
+        ${escapeHtml((r.interne?.horsPortee ?? []).join(", ").toLowerCase())}.
+        Ils ne sont donc pas vérifiés par ce résultat.
       </p>
     </article>
   `;

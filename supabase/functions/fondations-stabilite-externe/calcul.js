@@ -30,6 +30,14 @@
  */
 
 import { COMBINAISONS } from "./combinaisons.js";
+import { verifierAnnexeF, CATEGORIES_SOL, NATURES_CISAILLEMENT, GAMMA_RD } from "./annexe-f.js";
+
+export { CATEGORIES_SOL, NATURES_CISAILLEMENT };
+/** Les sous-catégories de sol de l'annexe F, dans l'ordre du classeur. */
+export const SOUS_CATEGORIES_SOL = Object.keys(GAMMA_RD);
+export const ZONES_SISMIQUES = ["2", "3", "4", "5"];
+export const CATEGORIES_IMPORTANCE = ["II", "III", "IV"];
+export const TYPES_SOL_EC8 = ["A", "B", "C", "D", "E"];
 
 /** Les quatre règlements que la liste déroulante du classeur propose. */
 export const REGLEMENTS = ["Fascicule 62", "DTU 13.12", "EC - NF P94-261", "EC8-5 Annexe F"];
@@ -135,6 +143,16 @@ export const DEFAUTS = {
   limiteAcier: 500,        // AL11 — fe [MPa]
   armaturesMinimales: "NON", // AU20 — impose-t-on la section minimale d'un tirant ?
   fissuration: "Sans objet", // AI12 — ce que la fissuration admise plafonne au service
+
+  // Capacité portante sismique (A75:AF103 et l'onglet EC8-F). Ces entrées ne
+  // servent qu'au règlement « EC8-5 Annexe F ».
+  zoneSismique: "2",                     // O79
+  categorieImportance: "II",             // O80
+  typeSolEc8: "B",                       // O81
+  categorieSol: "Sol frottant",          // K82
+  sousCategorieSol: "Sable dense",       // K83
+  natureCisaillement: "Cisaillement non drainé", // E84
+  resistanceCisaillement: 50,            // O84 [kPa]
 
   /**
    * Le ferraillage proposé, nappe par nappe : `{ AIX: { nombre, barre } }`.
@@ -478,9 +496,6 @@ function diametreBarre(nom) {
  */
 export function calculerStabiliteExterne(entrees = {}) {
   const e = { ...DEFAUTS, ...entrees };
-  if (e.reglement === "EC8-5 Annexe F") {
-    throw new Error("EC8-5 Annexe F : la capacité portante sismique n'est pas portée par cet utilitaire.");
-  }
   if (!REGLEMENTS.includes(e.reglement)) throw new Error(`Règlement inconnu : ${e.reglement}`);
   if (!REPARTITIONS.includes(e.repartition)) throw new Error(`Répartition inconnue : ${e.repartition}`);
   if (!UNITES.includes(e.unites)) throw new Error(`Unités inconnues : ${e.unites}`);
@@ -490,7 +505,7 @@ export function calculerStabiliteExterne(entrees = {}) {
     "lestMin", "lestMax", "densiteSemelle", "densiteFut", "poidsVolumiqueSol", "contrainteLimite",
     "angleFrottement", "buteeMobilisee", "angleButee", "poidsVolumiqueButee", "buteeZi", "buteeZf",
     "gminElu", "wElu", "newmark", "deSurB", "cohesionNonDrainee",
-    "enrobageSemelle", "enrobageFut", "resistanceBeton", "limiteAcier",
+    "enrobageSemelle", "enrobageFut", "resistanceBeton", "limiteAcier", "resistanceCisaillement",
     "secuGlissementElu", "secuGlissementEla", "secuRenversementElu", "secuRenversementEla"]) {
     e[cle] = nombre(e[cle], DEFAUTS[cle]);
   }
@@ -936,13 +951,25 @@ export function calculerStabiliteExterne(entrees = {}) {
     parCombinaison: stabilite.map((r) => ({ ligne: r.ligne, famille: r.famille, aciers: r.aciers }))
   };
 
-  const ratio = ratioExterne;
+  /**
+   * L'annexe F remplace le bilan, elle ne s'y ajoute.
+   *
+   * Sous ce règlement, on ne vérifie plus séparément le glissement, le
+   * basculement et la contrainte : on vérifie que le triplet (N, V, M) reste à
+   * l'intérieur d'une surface limite. Le classeur bascule de bilan pour la même
+   * raison, et c'est ce basculement qu'on reproduit.
+   */
+  const annexeF = e.reglement === "EC8-5 Annexe F"
+    ? verifierAnnexeF(e, bloc(100, 319))
+    : null;
+
+  const ratio = annexeF ? annexeF.ratio : ratioExterne;
   const uniteEffort = { "{ T ; Tm }": "T", "{ kN ; kNm }": "kN", "{ daN ; daNm }": "daN" }[e.unites];
   const uniteMoment = { "{ T ; Tm }": "Tm", "{ kN ; kNm }": "kNm", "{ daN ; daNm }": "daNm" }[e.unites];
 
   return {
-    bilan: { ratio, verifie: ratio <= 1 },
-    glissement, basculement, contrainte, surfaces, interne,
+    bilan: { ratio, verifie: ratio <= 1, selon: annexeF ? "annexe F" : "stabilité externe" },
+    glissement, basculement, contrainte, surfaces, interne, annexeF,
     poidsPropre, butee: bu,
     unites: { effort: uniteEffort, moment: uniteMoment, contrainte: e.unites === "{ kN ; kNm }" ? "MPa" : "bar" },
     combinaisonsExaminees: stabilite.length

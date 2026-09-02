@@ -166,9 +166,92 @@ test("changer de règlement change le résultat, sans jamais faire échouer le c
   assert.notEqual(f62.glissement.ratio, ec.glissement.ratio);
 });
 
-test("l'annexe F de l'EC8-5 est refusée, pas approximée", () => {
-  assert.throws(() => calculerStabiliteExterne({ ...REFERENCE, reglement: "EC8-5 Annexe F" }), /EC8-5/);
-  assert.ok(REGLEMENTS.includes("EC8-5 Annexe F"), "elle reste dans la liste : c'est un manque déclaré, pas un oubli");
+/* ------------------------------------------------------------------ *
+ * Capacité portante sismique — EN 1998-5 annexe F
+ *
+ * Le classeur porte ses résultats en cache pour le jeu d'entrées qu'il embarque
+ * (zone 2, catégorie III, sol B, sol frottant, sable dense, cu = 50 kPa) :
+ * c'est contre eux que la transcription est jugée.
+ * ------------------------------------------------------------------ */
+
+const SISMIQUE = {
+  ...REFERENCE, reglement: "EC8-5 Annexe F",
+  zoneSismique: "2", categorieImportance: "III", typeSolEc8: "B",
+  categorieSol: "Sol frottant", sousCategorieSol: "Sable dense",
+  natureCisaillement: "Cisaillement non drainé", resistanceCisaillement: 50
+};
+
+test("annexe F : le critère tombe sur la valeur du classeur", () => {
+  const r = calculerStabiliteExterne(SISMIQUE);
+  proche(r.annexeF.ratio, 0.017451759222387585);   // EC8-F!K54
+  proche(r.annexeF.directions[1].critere, 0);      // EC8-F!N54
+  assert.equal(r.annexeF.direction, "X");
+});
+
+test("annexe F : les paramètres sismiques et géotechniques concordent", () => {
+  const p = calculerStabiliteExterne(SISMIQUE).annexeF.parametres;
+  proche(p.agr, 0.7);                              // P15
+  proche(p.gammaI, 1.2);                           // P16
+  proche(p.S, 1.35);                               // P17
+  proche(p.ag, 0.84);                              // F55
+  proche(p.av, 0.5670000000000001);                // F56
+  proche(p.Nq, 18.401122218708668);                // F57
+  proche(p.Ngamma, 20.093085194346052);            // F58
+  proche(p.cohesion, 35.714285714285715);          // F51
+  proche(p.gammaRd, 1);                            // E31
+});
+
+test("annexe F : les efforts réduits concordent", () => {
+  const x = calculerStabiliteExterne(SISMIQUE).annexeF.directions[0];
+  proche(x.N, 0.023891316288399814);               // K51
+  proche(x.V, 0.0001693041697946548);              // K52
+  proche(x.M, 0.00014108680816221235);             // K53
+});
+
+test("annexe F : elle remplace le bilan externe, elle ne s'y ajoute pas", () => {
+  const sismique = calculerStabiliteExterne(SISMIQUE);
+  const externe = calculerStabiliteExterne(REFERENCE);
+  assert.equal(sismique.bilan.selon, "annexe F");
+  assert.equal(externe.bilan.selon, "stabilité externe");
+
+  // Les trois vérifications externes restent calculées — l'écran les affiche —
+  // mais ce n'est plus l'une d'elles qui décide.
+  assert.ok(Number.isFinite(sismique.glissement.ratio));
+  assert.ok(Number.isFinite(sismique.basculement.ratio));
+  assert.equal(sismique.bilan.ratio, sismique.annexeF.ratio);
+  assert.notEqual(sismique.bilan.ratio,
+    Math.max(sismique.glissement.ratio, sismique.basculement.ratio, sismique.contrainte.ratio));
+
+  // Et le règlement change aussi les pondérations : `AI25 = BC13` ne teste que
+  // l'EC - NF P94-261, donc l'annexe F retombe sur le jeu BAEL / Fascicule 62.
+  assert.notEqual(sismique.glissement.ratio, externe.glissement.ratio);
+});
+
+test("annexe F : le ratio est rendu brut, l'arrondi de la source est à part", () => {
+  // Le classeur arrondit ce ratio à l'unité dans sa case de bilan, ce qui ferait
+  // passer 1,4 pour « vérifié ». On rend le nombre, et on dit ce qu'il devient
+  // chez lui.
+  const r = calculerStabiliteExterne(SISMIQUE).annexeF;
+  assert.equal(r.arrondiDeLaSource, 0);
+  assert.notEqual(r.ratio, r.arrondiDeLaSource);
+});
+
+test("annexe F : une zone ou une catégorie hors tables est refusée, pas extrapolée", () => {
+  assert.throws(() => calculerStabiliteExterne({ ...SISMIQUE, zoneSismique: "1" }), /zones sismiques 2 à 5/);
+  assert.throws(() => calculerStabiliteExterne({ ...SISMIQUE, categorieImportance: "I" }), /catégories d'importance II à IV/);
+  assert.throws(() => calculerStabiliteExterne({ ...SISMIQUE, typeSolEc8: "F" }), /type de sol inconnu/);
+  assert.throws(() => calculerStabiliteExterne({ ...SISMIQUE, categorieSol: "Sol mou" }), /catégorie de sol inconnue/);
+  assert.throws(() => calculerStabiliteExterne({ ...SISMIQUE, sousCategorieSol: "Vase" }), /sous-catégorie de sol inconnue/);
+  assert.ok(REGLEMENTS.includes("EC8-5 Annexe F"));
+});
+
+test("annexe F : un sol cohérent emprunte l'autre colonne du tableau F1", () => {
+  const frottant = calculerStabiliteExterne(SISMIQUE);
+  const coherent = calculerStabiliteExterne({ ...SISMIQUE, categorieSol: "Sol cohérent",
+    sousCategorieSol: "Argile non sensible" });
+  assert.notEqual(coherent.annexeF.ratio, frottant.annexeF.ratio);
+  // Nmax vient alors de la cohésion, pas de Ngamma.
+  proche(coherent.annexeF.parametres.cohesion, 35.714285714285715);
 });
 
 test("un règlement, une répartition ou des unités inconnus sont refusés", () => {

@@ -107,6 +107,15 @@ export const ZONES = [
     ]
   },
   {
+    cle: "sismique",
+    titre: "Capacité portante sismique (annexe F)",
+    seulementSi: { reglement: "EC8-5 Annexe F" },
+    champs: [
+      { cle: "resistanceCisaillement", libelle: "Résistance au cisaillement", unite: "kPa", defaut: 50, min: 0,
+        aide: "cu si le cisaillement est non drainé, tcy,u s'il est cyclique." }
+    ]
+  },
+  {
     cle: "lest",
     titre: "Lest",
     champs: [
@@ -133,8 +142,38 @@ export const CHOIX = [
   { cle: "fissuration", libelle: "Fissuration admise", defaut: "Sans objet",
     valeurs: ["Sans objet", "wk ≤ 0,3mm", "wk ≤ 0,2mm"] },
   { cle: "armaturesMinimales", libelle: "Imposer la section minimale de tirant", defaut: "NON",
-    valeurs: ["NON", "OUI"] }
+    valeurs: ["NON", "OUI"] },
+
+  // Ce qui ne sert qu'à l'annexe F. Les champs restent visibles sous les autres
+  // règlements : les masquer ferait disparaître une saisie déjà faite, et
+  // rouvrir l'écran ne dirait plus pourquoi elle a disparu.
+  { cle: "zoneSismique", libelle: "Zone sismique", defaut: "2", valeurs: ["2", "3", "4", "5"],
+    seulementSi: { reglement: "EC8-5 Annexe F" } },
+  { cle: "categorieImportance", libelle: "Catégorie d'importance", defaut: "II", valeurs: ["II", "III", "IV"],
+    seulementSi: { reglement: "EC8-5 Annexe F" } },
+  { cle: "typeSolEc8", libelle: "Type de sol (EC8)", defaut: "B", valeurs: ["A", "B", "C", "D", "E"],
+    seulementSi: { reglement: "EC8-5 Annexe F" } },
+  { cle: "categorieSol", libelle: "Catégorie de sol", defaut: "Sol frottant",
+    valeurs: ["Sol cohérent", "Sol frottant"], seulementSi: { reglement: "EC8-5 Annexe F" } },
+  { cle: "sousCategorieSol", libelle: "Sous-catégorie de sol", defaut: "Sable dense",
+    valeurs: ["Sable dense", "Sable lâche sec", "Sable lâche saturé", "Argile non sensible", "Argile sensible"],
+    seulementSi: { reglement: "EC8-5 Annexe F" } },
+  { cle: "natureCisaillement", libelle: "Nature du cisaillement", defaut: "Cisaillement non drainé",
+    valeurs: ["Cisaillement non drainé", "Cisaillement cyclique"], seulementSi: { reglement: "EC8-5 Annexe F" } }
 ];
+
+/**
+ * Ce qu'il faut montrer, selon le règlement retenu.
+ *
+ * Un champ conditionnel est **grisé, pas retiré** : le retirer ferait
+ * disparaître une saisie qu'on a faite, et rouvrir l'écran ne dirait plus
+ * pourquoi elle a disparu.
+ */
+export function estPertinent(element, entrees = {}) {
+  const condition = element?.seulementSi;
+  if (!condition) return true;
+  return Object.entries(condition).every(([cle, valeur]) => String(entrees[cle]) === valeur);
+}
 
 /**
  * L'unité d'un champ, dans le système que l'écran a choisi.
@@ -202,9 +241,7 @@ export function entreesInvalides(entrees = {}) {
       problemes.push({ cle: choix.cle, raison: `${choix.libelle} : choix inconnu.` });
     }
   }
-  if (entrees.reglement === "EC8-5 Annexe F") {
-    problemes.push({ cle: "reglement", raison: "EC8-5 Annexe F : la capacité portante sismique n'est pas encore portée par cet utilitaire." });
-  }
+
 
   for (const nappe of NAPPES) {
     const propose = entrees.ferraillage?.[nappe.cle] ?? {};
