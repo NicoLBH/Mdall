@@ -278,16 +278,40 @@ test("une valeur confirmée à l'écran passe sans discussion", () => {
   assert.equal(resultat.entrees.soilClass, "A");
 });
 
-test("une entrée que la mémoire ignore n'est pas une substitution", () => {
-  // Le garde-fou vise ce qui **remplace** ce que le projet a tranché. Sans rien
-  // en mémoire, une valeur fournie est un renseignement, pas une invention.
+test("une valeur inventée passe aussi mal quand la mémoire ne sait rien", () => {
+  // La première version ne surveillait que les **remplacements**. Elle laissait
+  // donc passer le cas le plus dangereux : le projet ne sait rien, il n'y a
+  // rien à remplacer, et une valeur inventée entre sans rencontrer personne.
+  // C'est exactement là qu'un garde-fou sert.
   const substituees = substitutionsNonJustifiees(SPECTRE, {
     entrees: { soilClass: "A" },
     depuisMemoire: {},
     question: "calcule le spectre"
   });
 
-  assert.deepEqual(substituees, []);
+  assert.deepEqual(substituees.map((champ) => champ.cle), ["soilClass"]);
+});
+
+test("mémoire vide et valeurs venues de nulle part : rien n'est calculé", () => {
+  const resultat = executerOutil({
+    id: "spectre_elastique_ec8",
+    entrees: { zoneSismique: "4", importanceCategory: "II", soilClass: "A" },
+    question: "calcule le spectre"
+  });
+
+  assert.equal(resultat.statut, "aConfirmer");
+  assert.deepEqual(Object.keys(resultat.proposeParLeModele).sort(), ["importanceCategory", "soilClass", "zoneSismique"]);
+});
+
+test("une valeur écrite par l'utilisateur passe, même sans rien en mémoire", () => {
+  const resultat = executerOutil({
+    id: "profondeur_hors_gel",
+    entrees: { h0: "0.5", altitude: "450" },
+    question: "profondeur hors gel avec H0 = 0.5 et une altitude de 450 m ?"
+  });
+
+  assert.equal(resultat.statut, "fait");
+  assert.equal(resultat.valeurs.H, 0.575);
 });
 
 test("reprendre la valeur de la mémoire n'est pas une substitution", () => {

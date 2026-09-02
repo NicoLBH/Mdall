@@ -30,6 +30,7 @@ import {
 } from "../services/copilote-conversations-supabase.js";
 import { renderSolidityClimate } from "./studio/solidity/solidity-climate.js";
 import { renderSolidityGeorisks } from "./studio/solidity/solidity-georisks.js";
+import { renderSolidityFondations } from "./studio/solidity/solidity-fondations.js";
 import { renderSolidityArkolia } from "./studio/socotec/socotec-enr-pv-hangard-neuf.js";
 import { renderSeismicGeneral } from "./studio/seismic/seismic-general.js";
 import { renderCtContinuityLab } from "./studio/dev/ct-continuity-lab.js";
@@ -117,6 +118,11 @@ function renderStudioNav() {
           label: "Risques Naturels & Technologiques",
           dataAttributes: { "data-side-nav-target": "solidity-georisks" },
           iconHtml: svgIcon("shield", { className: "octicon octicon-shield" })
+        }),
+        renderNavListItem({
+          label: "Fondations - calcul",
+          dataAttributes: { "data-side-nav-target": "solidity-fondations" },
+          iconHtml: svgIcon("gear", { className: "octicon octicon-gear" })
         }),
       ]
     }),
@@ -207,6 +213,9 @@ function getRouterHtml() {
               <section class="project-studio-router__panel" data-side-nav-panel="solidity-georisks">
                 <div id="projectStudioSolidityGeorisksPanel"></div>
               </section>
+              <section class="project-studio-router__panel" data-side-nav-panel="solidity-fondations">
+                <div id="projectStudioSolidityFondationsPanel"></div>
+              </section>
               <section class="project-studio-router__panel" data-side-nav-panel="solidity-arkolia">
                 <div id="projectStudioSolidityArkoliaPanel"></div>
               </section>
@@ -246,6 +255,7 @@ export function renderProjectStudio(root) {
   const copiloteRoot = root.querySelector("#projectStudioCopilotePanel");
   const solidityClimateRoot = root.querySelector("#projectStudioSolidityClimatePanel");
   const solidityGeorisksRoot = root.querySelector("#projectStudioSolidityGeorisksPanel");
+  const solidityFondationsRoot = root.querySelector("#projectStudioSolidityFondationsPanel");
   const solidityArkoliaRoot = root.querySelector("#projectStudioSolidityArkoliaPanel");
   const seismicGeneralRoot = root.querySelector("#projectStudioSeismicGeneralPanel");
   const ctContinuityLabRoot = root.querySelector("#projectStudioCtContinuityLabPanel");
@@ -254,6 +264,7 @@ export function renderProjectStudio(root) {
   if (copiloteRoot) renderCopilote(copiloteRoot);
   if (solidityClimateRoot) renderSolidityClimate(solidityClimateRoot, { force: true });
   if (solidityGeorisksRoot) renderSolidityGeorisks(solidityGeorisksRoot);
+  if (solidityFondationsRoot) renderSolidityFondations(solidityFondationsRoot);
   if (solidityArkoliaRoot) renderSolidityArkolia(solidityArkoliaRoot);
   if (seismicGeneralRoot) renderSeismicGeneral(seismicGeneralRoot);
   if (ctContinuityLabRoot) renderCtContinuityLab(ctContinuityLabRoot);

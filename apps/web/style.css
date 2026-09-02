@@ -17688,3 +17688,133 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   background:#ffffff;
   box-shadow:0 1px 3px rgba(1,4,9,.6);
 }
+
+/* ------------------------------------------------------------------ *
+ * Atelier > Solidité > Fondations — calcul
+ *
+ * Deux colonnes : la saisie à gauche, ce que le serveur a répondu à droite.
+ * Elles se replient l'une sous l'autre quand la place manque — un tableau de
+ * charges à cinq colonnes n'a rien à gagner à être écrasé.
+ * ------------------------------------------------------------------ */
+.fondations-grille{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  gap:16px;
+  align-items:start;
+  margin-top:12px;
+}
+@media (max-width:1100px){
+  .fondations-grille{ grid-template-columns:minmax(0,1fr); }
+}
+.fondations-colonne{ display:flex; flex-direction:column; gap:12px; min-width:0; }
+
+.fondations-zone{
+  border:1px solid var(--border);
+  border-radius:6px;
+  padding:12px 14px 14px;
+  margin:0;
+  background:var(--bgSecondary, var(--bg));
+}
+.fondations-zone > legend{
+  padding:0 6px;
+  font-size:12px;
+  font-weight:600;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+  color:var(--muted);
+}
+.fondations-zone__note{ margin:0 0 10px; color:var(--muted); font-size:12px; }
+
+.fondations-champs{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
+  gap:10px 12px;
+}
+.fondations-champ{ display:flex; flex-direction:column; gap:4px; min-width:0; }
+.fondations-champ__libelle{ font-size:12px; color:var(--muted); }
+.fondations-champ__libelle em{ font-style:normal; opacity:.75; }
+.fondations-champ__saisie{
+  width:100%;
+  box-sizing:border-box;
+  padding:5px 8px;
+  border:1px solid var(--border);
+  border-radius:6px;
+  background:var(--bg);
+  color:var(--fg);
+  font-size:13px;
+}
+.fondations-champ__saisie:focus{ outline:2px solid var(--accent, #2f81f7); outline-offset:-1px; }
+.fondations-champ__saisie--serre{ padding:4px 6px; text-align:right; }
+
+/* Le tableau des charges déborde plutôt que de rétrécir : onze lignes de cinq
+   valeurs restent lisibles, ou ne le sont plus du tout. */
+.fondations-charges-defilement{ overflow-x:auto; }
+.fondations-charges{ width:100%; border-collapse:collapse; font-size:12px; }
+.fondations-charges th,
+.fondations-charges td{ padding:3px 4px; text-align:left; }
+.fondations-charges thead th{
+  color:var(--muted);
+  font-weight:600;
+  border-bottom:1px solid var(--border);
+  padding-bottom:6px;
+}
+.fondations-charges tbody th{ font-weight:600; white-space:nowrap; }
+.fondations-charges__nature{ color:var(--muted); white-space:nowrap; padding-right:8px; }
+.fondations-charges td input{ min-width:74px; }
+
+.fondations-erreur{ color:var(--danger, #f85149); margin:8px 0 0; }
+.fondations-invalides{
+  border:1px solid var(--danger, #f85149);
+  border-radius:6px;
+  padding:10px 14px;
+  margin-top:10px;
+}
+.fondations-invalides p{ margin:0 0 6px; }
+.fondations-invalides ul{ margin:0; padding-left:18px; }
+
+.fondations-resultats{
+  border:1px solid var(--border);
+  border-radius:6px;
+  padding:14px;
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+.fondations-resultats--vide{ color:var(--muted); }
+.fondations-resultats h4{ margin:0; font-size:14px; }
+.fondations-resultats__tete{ display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+.fondations-resultats__bilan{ margin:0; font-size:13px; color:var(--muted); }
+.fondations-resultats__portee{ margin:0; font-size:12px; color:var(--muted); }
+
+.fondations-verdict{ font-size:12px; font-weight:600; padding:2px 10px; border-radius:999px; }
+.fondations-verdict--ok{ color:#3fb950; border:1px solid #3fb950; }
+.fondations-verdict--ko{ color:var(--danger, #f85149); border:1px solid var(--danger, #f85149); }
+
+.fondations-bloc{ border-top:1px solid var(--border); padding-top:10px; }
+.fondations-bloc__tete{ display:flex; align-items:baseline; justify-content:space-between; gap:12px; }
+.fondations-bloc__tete h5{ margin:0; font-size:13px; }
+.fondations-bloc__ratio{ font-variant-numeric:tabular-nums; font-weight:600; }
+.fondations-bloc__ratio.est-depasse{ color:var(--danger, #f85149); }
+.fondations-bloc__combinaison{ margin:2px 0 8px; font-size:12px; color:var(--muted); }
+.fondations-bloc__valeurs{ margin:0; display:grid; gap:2px 12px; }
+.fondations-bloc__valeurs > div{ display:flex; justify-content:space-between; gap:12px; font-size:12px; }
+.fondations-bloc__valeurs dt{ color:var(--muted); }
+.fondations-bloc__valeurs dd{ margin:0; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.fondations-bloc__valeurs dd em{ font-style:normal; color:var(--muted); }
+
+/* Un résultat périmé reste lisible mais cesse de se donner pour vrai : le
+   masquer ferait perdre la comparaison avant/après, le laisser tel quel le
+   ferait passer pour le calcul de la saisie en cours. */
+.fondations-resultats__perime{
+  display:none;
+  margin:0;
+  padding:8px 10px;
+  border:1px solid var(--attention, #d29922);
+  border-radius:6px;
+  color:var(--attention, #d29922);
+  font-size:12px;
+}
+.fondations-resultats.est-perime .fondations-resultats__perime{ display:block; }
+.fondations-resultats.est-perime .fondations-bloc,
+.fondations-resultats.est-perime .fondations-resultats__bilan,
+.fondations-resultats.est-perime .fondations-verdict{ opacity:.45; }
