@@ -93,6 +93,38 @@ test("la mémoire pré-remplit ce que le projet a déjà tranché", () => {
   assert.equal(provenance.zoneSismique.enonce, "zone-sismique : 4");
 });
 
+test("la mémoire parle en phrases, les listes déroulantes attendent des jetons", () => {
+  // Ce que les utilitaires écrivent vraiment, et sous les clés qu'ils dérivent
+  // de leurs libellés. Attendre « zone-sismique » et « 4 » ne trouvait rien.
+  const reelle = [
+    donnee("zone-de-sismicite", "4 — Moyenne"),
+    donnee("categorie-d-importance", "Catégorie d'importance III"),
+    donnee("classe-de-sol", "Classe de sol B")
+  ];
+  const { valeurs, provenance } = prefillDepuisMemoire(SPECTRE, reelle);
+
+  assert.deepEqual(valeurs, { zoneSismique: "4", importanceCategory: "III", soilClass: "B" });
+  assert.equal(provenance.zoneSismique.cle, "zone-de-sismicite");
+  assert.equal(provenance.zoneSismique.brut, "4 — Moyenne");
+});
+
+test("une clé portée sur une zone du projet parle du même sujet", () => {
+  const porte = [donnee("classe-de-sol@batiment-a", "Classe de sol D")];
+  assert.equal(prefillDepuisMemoire(SPECTRE, porte).valeurs.soilClass, "D");
+});
+
+test("une phrase où le jeton attendu ne figure pas ne pré-remplit rien", () => {
+  // Mieux vaut un champ vide qu'une valeur inventée : le « D » de « à
+  // déterminer » n'est pas une classe de sol.
+  assert.deepEqual(prefillDepuisMemoire(SPECTRE, [donnee("classe-de-sol", "à déterminer")]).valeurs, {});
+});
+
+test("l'altitude et H0 se lisent aussi dans une phrase", () => {
+  const gel = outilParId("profondeur_hors_gel");
+  const memoire = [donnee("h0-hors-gel", "0,50 m"), donnee("altitude", "450 m NGF")];
+  assert.deepEqual(prefillDepuisMemoire(gel, memoire).valeurs, { h0: "0.50", altitude: "450" });
+});
+
 test("une valeur remplacée ne pré-remplit rien", () => {
   // Calculer sur un état que le projet a quitté rendrait un résultat juste
   // pour un projet qui n'existe plus.
@@ -381,8 +413,8 @@ test("les deux utilitaires sont proposés au modèle, chacun avec son périmètr
 test("les deux utilitaires lisent l'altitude et le sol dans des clés distinctes", () => {
   // Deux outils qui liraient la même clé pour deux choses différentes
   // finiraient par se pré-remplir l'un avec la valeur de l'autre.
-  const clesGel = GEL.entrees.map((entree) => entree.depuisMemoire).filter(Boolean);
-  const clesSpectre = SPECTRE.entrees.map((entree) => entree.depuisMemoire).filter(Boolean);
+  const clesGel = GEL.entrees.flatMap((entree) => entree.depuisMemoire ?? []);
+  const clesSpectre = SPECTRE.entrees.flatMap((entree) => entree.depuisMemoire ?? []);
 
   assert.deepEqual(clesGel.filter((cle) => clesSpectre.includes(cle)), []);
 });

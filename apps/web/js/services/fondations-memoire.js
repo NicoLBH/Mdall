@@ -20,19 +20,65 @@
  * s'écarte du projet.
  */
 
-/** Ce qu'on va chercher dans la mémoire, et où ça atterrit dans le formulaire. */
+/**
+ * Ce qu'on va chercher dans la mémoire, et où ça atterrit dans le formulaire.
+ *
+ * ## Pourquoi plusieurs clés par rappel
+ *
+ * Un même fait s'écrit sous plusieurs noms selon qui l'a établi : l'utilitaire
+ * de Géorisques déclare « Zone de sismicité », une saisie à la main écrira
+ * « Zone sismique », et la clé se dérive du libellé. N'en attendre qu'une, c'est
+ * ne rien trouver la plupart du temps — ce qui est exactement ce qui se passait.
+ *
+ * Les clés portées sur une zone du projet s'écrivent `sujet@portee` : on
+ * compare donc sur la partie qui précède l'arobase.
+ *
+ * ## Pourquoi une lecture par rappel
+ *
+ * La mémoire parle en phrases — « 4 — Moyenne », « 0,99 m », « Catégorie
+ * d'importance II » — et le formulaire attend des jetons. Reprendre la phrase
+ * telle quelle remplissait la liste déroulante avec une valeur qu'elle ne
+ * propose pas, donc ne remplissait rien du tout, sans le dire.
+ */
 export const RAPPELS = [
   {
     cle: "profondeurHorsGel",
-    sujet: "profondeur-hors-gel",
+    sujets: ["profondeur-hors-gel", "hors-gel", "profondeur-minimale-hors-gel"],
     libelle: "Profondeur hors gel",
     unite: "m",
     // Elle ne remplit aucun champ : elle sert à contrôler l'assise.
-    champ: null
+    champ: null,
+    lire: (brut) => {
+      const n = Number.parseFloat(String(brut).replace(",", ".").match(/-?\d+(?:\.\d+)?/)?.[0] ?? "");
+      return Number.isFinite(n) ? String(n) : null;
+    }
   },
-  { cle: "zoneSismique", sujet: "zone-sismique", libelle: "Zone sismique", champ: "zoneSismique" },
-  { cle: "categorieImportance", sujet: "categorie-importance", libelle: "Catégorie d'importance", champ: "categorieImportance" },
-  { cle: "typeSolEc8", sujet: "classe-de-sol", libelle: "Classe de sol", champ: "typeSolEc8" }
+  {
+    cle: "zoneSismique",
+    sujets: ["zone-de-sismicite", "zone-sismique", "sismicite"],
+    libelle: "Zone sismique",
+    champ: "zoneSismique",
+    // « 4 — Moyenne » : c'est le chiffre qui compte.
+    lire: (brut) => String(brut).match(/[1-5]/)?.[0] ?? null
+  },
+  {
+    cle: "categorieImportance",
+    sujets: ["categorie-d-importance", "categorie-importance", "importance"],
+    libelle: "Catégorie d'importance",
+    champ: "categorieImportance",
+    // « Catégorie d'importance III » : c'est le chiffre romain isolé.
+    lire: (brut) => String(brut).toUpperCase().match(/(?<!\p{L})(IV|III|II|I)(?!\p{L})/u)?.[1] ?? null
+  },
+  {
+    cle: "typeSolEc8",
+    sujets: ["classe-de-sol", "type-de-sol", "categorie-de-sol", "sol-ec8"],
+    libelle: "Classe de sol",
+    champ: "typeSolEc8",
+    // « Classe de sol B » : une lettre isolée, majuscule, de A à E. Isolée au
+    // sens des lettres accentuées comprises : sans ça, le « D » de
+    // « à déterminer » passait pour une classe de sol.
+    lire: (brut) => String(brut).toUpperCase().match(/(?<!\p{L})([A-E])(?!\p{L})/u)?.[1] ?? null
+  }
 ];
 
 function texte(valeur) {
@@ -54,18 +100,29 @@ function nombre(valeur) {
 export function rappelsDeLaMemoire(assertions = []) {
   const parSujet = new Map();
   for (const assertion of Array.isArray(assertions) ? assertions : []) {
-    const sujet = texte(assertion?.subject_key);
+    // `sujet@portee` : la portée range l'affirmation, elle ne change pas le
+    // sujet dont elle parle.
+    const sujet = texte(assertion?.subject_key).split("@")[0];
     if (sujet && !parSujet.has(sujet)) parSujet.set(sujet, assertion);
   }
 
   const trouves = {};
   for (const rappel of RAPPELS) {
-    const assertion = parSujet.get(rappel.sujet);
-    const valeur = texte(assertion?.payload?.value);
+    const assertion = rappel.sujets.map((sujet) => parSujet.get(sujet)).find(Boolean);
+    // L'énoncé sert de repli : une affirmation déclarée à la main peut porter
+    // sa valeur dans la phrase plutôt que dans le payload.
+    const brut = texte(assertion?.payload?.value) || texte(assertion?.statement);
+    if (!brut) continue;
+
+    const valeur = rappel.lire ? rappel.lire(brut) : brut;
     if (!valeur) continue;
+
     trouves[rappel.cle] = {
       ...rappel,
       valeur,
+      // Ce que la mémoire dit mot pour mot : l'infobulle le montre, parce que
+      // « 4 » tout seul ne dit pas d'où il sort.
+      brut,
       enonce: texte(assertion?.statement),
       trancheeLe: texte(assertion?.decided_at)
     };

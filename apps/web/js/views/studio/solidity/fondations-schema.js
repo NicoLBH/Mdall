@@ -149,6 +149,87 @@ export function zoneComprimee(resultat, entrees = {}) {
   };
 }
 
+/**
+ * Les nappes, telles qu'elles se posent dans la semelle.
+ *
+ * ## Pourquoi un modèle et pas seulement un dessin
+ *
+ * Les quatre nappes sont saisies en nombre de barres et en diamètre, jamais en
+ * position. Or c'est la position qui se regarde : une nappe supérieure qu'on
+ * croit posée et qui n'a aucune barre ne se distingue d'une nappe posée que si
+ * on la voit — ou plutôt si on voit qu'elle n'est pas là.
+ *
+ * ## Ce que le dessin ne prétend pas savoir
+ *
+ * Le classeur ne dit pas laquelle des deux nappes d'une face est la plus
+ * extérieure : son bras de levier `AT156 = h − enrobage − max(da + db/2,
+ * da/2 + db)` est symétrique en X et Y, donc il traite les deux ordres de la
+ * même façon. Le dessin en choisit un — X au contact du coffrage — et le
+ * légende comme un choix de représentation, pas comme un résultat.
+ *
+ * Les barres sont réparties régulièrement entre les enrobages latéraux. C'est
+ * la disposition usuelle et c'est celle que suppose l'espacement `es` rendu par
+ * le calcul ; ce n'est pas une prescription de ferraillage.
+ */
+export function modeleFerraillage(entrees = {}) {
+  const Lx = nombre(entrees.sectionLx);
+  const Ly = nombre(entrees.sectionLy);
+  const h = nombre(entrees.hauteurLz);
+  const enrobage = nombre(entrees.enrobageSemelle, 5) / 100;
+
+  const nappes = NAPPES_DESSINEES.map((nappe) => {
+    const pose = entrees.ferraillage?.[nappe.cle] ?? {};
+    const barres = Math.max(0, Math.trunc(nombre(pose.nombre, 0)));
+    const diametre = diametreBarre(pose.barre) / 1000;
+    // La nappe la plus extérieure touche l'enrobage ; l'autre se pose dessus.
+    const recul = enrobage + (nappe.rang === 0 ? diametre / 2 : diametre * 3 / 2);
+    const profondeur = nappe.face === "inferieure" ? h - recul : recul;
+    // Les barres suivant X portent suivant X : elles se répartissent sur Ly, et
+    // se voient en long dans une coupe suivant X. Les barres suivant Y font
+    // l'inverse. C'est ce croisement qui rend le dessin lisible.
+    const largeurRepartie = nappe.axe === "X" ? Ly : Lx;
+    const portee = nappe.axe === "X" ? Lx : Ly;
+    return {
+      ...nappe,
+      nombre: barres,
+      barre: String(pose.barre ?? ""),
+      diametre,
+      profondeur,
+      portee: Math.max(0, portee - 2 * enrobage),
+      abscisses: abscissesDesBarres(barres, largeurRepartie, enrobage),
+      espacement: barres > 1 ? (largeurRepartie - 2 * enrobage) / (barres - 1) : null
+    };
+  });
+
+  return { hauteur: h, enrobage, largeurs: { Lx, Ly }, nappes };
+}
+
+const NAPPES_DESSINEES = [
+  { cle: "AIX", libelle: "Nappe inférieure axe X", face: "inferieure", axe: "X", rang: 0 },
+  { cle: "AIY", libelle: "Nappe inférieure axe Y", face: "inferieure", axe: "Y", rang: 1 },
+  { cle: "ASX", libelle: "Nappe supérieure axe X", face: "superieure", axe: "X", rang: 0 },
+  { cle: "ASY", libelle: "Nappe supérieure axe Y", face: "superieure", axe: "Y", rang: 1 }
+];
+
+/** Le diamètre d'une barre du catalogue, en millimètres. « HA12 » vaut 12. */
+function diametreBarre(barre) {
+  return nombre(String(barre ?? "").replace(/[^0-9.]/g, ""), 0);
+}
+
+/**
+ * Où tombent les barres d'une nappe, du centre de la semelle.
+ *
+ * Une barre unique se pose au milieu — pas au bord : c'est ce que fait
+ * n'importe quel ferrailleur, et le contraire donnerait un dessin absurde.
+ */
+function abscissesDesBarres(nombreDeBarres, largeur, enrobage) {
+  if (nombreDeBarres <= 0) return [];
+  const utile = Math.max(0, largeur - 2 * enrobage);
+  if (nombreDeBarres === 1) return [0];
+  const pas = utile / (nombreDeBarres - 1);
+  return Array.from({ length: nombreDeBarres }, (_, i) => -utile / 2 + i * pas);
+}
+
 export { CAS_DE_CHARGE_DESSINES };
 
 /* ------------------------------------------------------------------ *
@@ -215,8 +296,15 @@ function echelleCommune(m) {
   );
 }
 
-/** Le schéma complet, en SVG. Rend une chaîne vide si rien n'est dessinable. */
-export function dessinerSchema(entrees = {}, resultat = null) {
+/**
+ * Le schéma complet, en SVG. Rend une chaîne vide si rien n'est dessinable.
+ *
+ * `nappe` nomme la nappe mise en avant — celle dont on survole la ligne dans le
+ * tableau des résultats. C'est tout l'objet du quatrième dessin : « AIX, ratio
+ * 1,42 » ne dit pas où sont ces barres, et une nappe qu'on ne situe pas est une
+ * ligne de tableau de plus.
+ */
+export function dessinerSchema(entrees = {}, resultat = null, { nappe = null } = {}) {
   const m = modeleSchema(entrees);
   if (m.semelle.largeur <= 0 || m.semelle.profondeur <= 0 || m.semelle.hauteur <= 0) {
     return `<p class="fondations-schema__vide">Le schéma demande une semelle : une largeur, une longueur et une hauteur.</p>`;
@@ -231,10 +319,13 @@ export function dessinerSchema(entrees = {}, resultat = null) {
         ${coupe(m, k, "X")}
         ${coupe(m, k, "Y")}
         ${plan(m, k, zone)}
+        ${ferraillageTrace(modeleFerraillage(entrees), nappe)}
       </div>
       <p class="fondations-schema__echelle">
         Vues à l'échelle, 1 m ≈ ${cote(k, 0)} px.
         ${m.futExiste ? "Les charges s'appliquent en tête de fût." : "Les charges s'appliquent sur l'arase de la semelle."}
+        Dans la coupe de ferraillage, les positions sont à l'échelle ; les sections de
+        barres sont grossies pour rester visibles.
       </p>
       ${m.alertes.length ? `
         <ul class="fondations-schema__alertes">
@@ -397,6 +488,98 @@ function plan(m, k, zone) {
           ${zone.rectangle ? `surface d'appui ${cote(zone.pourcentage, 1)} %` : "semelle entièrement décomprimée"}
         </text>` : ""}
       </svg>
+    </figure>
+  `;
+}
+
+/**
+ * Le ferraillage, en coupe suivant X.
+ *
+ * ## Pourquoi une quatrième vue et pas une vue de plus dans le tableau
+ *
+ * Le tableau des nappes dit ce qu'il faut et ce qui est posé ; il ne dit pas
+ * *où*. Survoler « nappe supérieure axe Y » et voir s'allumer quatre points en
+ * haut de la semelle règle en un coup d'œil la question qu'on se pose vraiment :
+ * est-ce bien de ces barres-là qu'on parle.
+ *
+ * ## Ce qui est à l'échelle et ce qui ne l'est pas
+ *
+ * Les positions le sont — hauteur de semelle, enrobage, espacement. Les
+ * sections de barres, non : un HA12 dessiné à l'échelle ferait un point et demi
+ * de large, donc rien. Elles sont tracées à une taille lisible, et la légende le
+ * dit plutôt que de laisser le croire.
+ *
+ * Les barres suivant X se voient en long dans cette coupe — un trait ; celles
+ * suivant Y se voient en bout — des points. C'est ce croisement qui distingue
+ * les quatre nappes sans avoir à les nommer.
+ */
+function ferraillageTrace(mf, survolee) {
+  const Lx = mf.largeurs.Lx;
+  if (!(Lx > 0 && mf.hauteur > 0)) return "";
+
+  // Une échelle isotrope, comme les autres vues : c'est un détail d'exécution,
+  // pas un diagramme, et une hauteur étirée pour remplir le cadre ferait lire
+  // un enrobage de vingt centimètres.
+  const k = Math.min(LARGEUR_UTILE / Lx, (HAUTEUR_VUE - 2 * MARGE) / mf.hauteur);
+  const x = (abscisse) => CENTRE + abscisse * k;
+  const haut = MARGE;
+  const y = (profondeur) => haut + profondeur * k;
+  const bas = y(mf.hauteur);
+
+  const posees = mf.nappes.filter((nappe) => nappe.nombre > 0);
+  const mise = mf.nappes.find((nappe) => nappe.cle === survolee) ?? null;
+
+  const trace = (nappe) => {
+    const classes = ["fondations-schema__nappe"];
+    if (survolee === nappe.cle) classes.push("est-survolee");
+    if (nappe.nombre === 0) classes.push("est-absente");
+    const rayon = Math.max(2.5, nappe.diametre * k / 2);
+    const dessin = nappe.nombre === 0
+      // Une nappe sans barre se montre en pointillé : « aucune barre posée » est
+      // une information, et un vide ne la porte pas.
+      ? `<line x1="${x(-nappe.portee / 2)}" y1="${y(nappe.profondeur)}" x2="${x(nappe.portee / 2)}"
+               y2="${y(nappe.profondeur)}" class="fondations-schema__nappe-absente"></line>`
+      : nappe.axe === "X"
+        ? `<line x1="${x(-nappe.portee / 2)}" y1="${y(nappe.profondeur)}" x2="${x(nappe.portee / 2)}"
+                 y2="${y(nappe.profondeur)}" class="fondations-schema__barre-long"
+                 stroke-width="${Math.max(2, nappe.diametre * k)}"></line>`
+        : nappe.abscisses.map((a) =>
+            `<circle cx="${x(a)}" cy="${y(nappe.profondeur)}" r="${rayon}" class="fondations-schema__barre-bout"></circle>`
+          ).join("");
+    const legende = nappe.nombre === 0
+      ? "aucune barre posée"
+      : `${nappe.nombre} ${nappe.barre}${nappe.espacement ? ` — e = ${cote(nappe.espacement * 100, 0)} cm` : ""}`;
+    return `<g class="${classes.join(" ")}" data-schema-nappe="${escapper(nappe.cle)}">
+      <title>${escapper(`${nappe.libelle} : ${legende}`)}</title>
+      ${dessin}
+    </g>`;
+  };
+
+  return `
+    <figure class="fondations-schema__vue fondations-schema__vue--ferraillage">
+      <figcaption>Ferraillage — coupe suivant X</figcaption>
+      <svg viewBox="0 0 ${LARGEUR_VUE} ${Math.max(150, bas + 30)}" role="img"
+           aria-label="Coupe du ferraillage de la semelle suivant l'axe X">
+        <rect x="${x(-Lx / 2)}" y="${haut}" width="${Lx * k}" height="${mf.hauteur * k}"
+              class="fondations-schema__beton"></rect>
+        ${mf.nappes.map(trace).join("")}
+
+        <line x1="${x(Lx / 2) + 10}" y1="${haut}" x2="${x(Lx / 2) + 10}" y2="${bas}"
+              class="fondations-schema__cote"></line>
+        <text x="${x(Lx / 2) + 14}" y="${(haut + bas) / 2}" class="fondations-schema__texte">
+          Lz = ${cote(mf.hauteur)} m
+        </text>
+        <text x="${x(-Lx / 2)}" y="${bas + 16}" class="fondations-schema__texte">
+          enrobage ${cote(mf.enrobage * 100, 0)} cm
+        </text>
+      </svg>
+      <p class="fondations-schema__nappe-mise${mise ? " est-designee" : ""}">
+        ${mise
+          ? escapper(`${mise.libelle} — ${mise.nombre > 0 ? `${mise.nombre} ${mise.barre}` : "aucune barre posée"}`)
+          : posees.length === 0
+            ? "Aucune nappe posée : renseignez un nombre de barres."
+            : "Survolez une nappe, dans la saisie ou dans les résultats, pour la situer."}
+      </p>
     </figure>
   `;
 }

@@ -12,12 +12,14 @@ const dire = (sujet, valeur, extra = {}) => ({
   statement: `${sujet} : ${valeur}`, decided_at: "2026-01-15T00:00:00.000Z", ...extra
 });
 
+// Les clés telles que la mémoire les écrit vraiment — dérivées des libellés des
+// utilitaires — et les valeurs telles qu'ils les enregistrent : des phrases.
 const MEMOIRE = [
-  dire("profondeur-hors-gel", "0.575"),
-  dire("zone-sismique", "4"),
-  dire("categorie-importance", "III"),
-  dire("classe-de-sol", "B"),
-  dire("altitude", "450")
+  dire("profondeur-hors-gel", "0,575 m"),
+  dire("zone-de-sismicite", "4 — Moyenne"),
+  dire("categorie-d-importance", "Catégorie d'importance III"),
+  dire("classe-de-sol", "Classe de sol B"),
+  dire("altitude", "450 m")
 ];
 
 test("on ne retient de la mémoire que ce qui entre dans ce calcul", () => {
@@ -28,21 +30,64 @@ test("on ne retient de la mémoire que ce qui entre dans ce calcul", () => {
   assert.equal(trouves.altitude, undefined);
 });
 
-test("chaque rappel porte son énoncé et sa date : sans eux, ce n'est qu'une valeur de plus", () => {
+test("la mémoire parle en phrases, le formulaire attend des jetons", () => {
   const trouves = rappelsDeLaMemoire(MEMOIRE);
   assert.equal(trouves.zoneSismique.valeur, "4");
-  assert.match(trouves.zoneSismique.enonce, /zone-sismique/);
+  assert.equal(trouves.categorieImportance.valeur, "III");
+  assert.equal(trouves.typeSolEc8.valeur, "B");
+  assert.equal(trouves.profondeurHorsGel.valeur, "0.575");
+});
+
+test("chaque rappel garde la phrase d'origine : « 4 » tout seul ne dit pas d'où il sort", () => {
+  const trouves = rappelsDeLaMemoire(MEMOIRE);
+  assert.equal(trouves.zoneSismique.brut, "4 — Moyenne");
+  assert.match(trouves.zoneSismique.enonce, /zone-de-sismicite/);
   assert.equal(trouves.zoneSismique.trancheeLe, "2026-01-15T00:00:00.000Z");
+});
+
+test("un même fait s'écrit sous plusieurs noms selon qui l'a établi", () => {
+  // « Zone sismique » saisie à la main, « Zone de sismicité » par l'utilitaire :
+  // n'en attendre qu'une, c'est ne rien trouver la plupart du temps.
+  for (const sujet of ["zone-de-sismicite", "zone-sismique", "sismicite"]) {
+    assert.equal(rappelsDeLaMemoire([dire(sujet, "3")]).zoneSismique?.valeur, "3", sujet);
+  }
+  for (const sujet of ["categorie-d-importance", "categorie-importance", "importance"]) {
+    assert.equal(rappelsDeLaMemoire([dire(sujet, "II")]).categorieImportance?.valeur, "II", sujet);
+  }
+  for (const sujet of ["classe-de-sol", "type-de-sol", "categorie-de-sol", "sol-ec8"]) {
+    assert.equal(rappelsDeLaMemoire([dire(sujet, "C")]).typeSolEc8?.valeur, "C", sujet);
+  }
+  for (const sujet of ["profondeur-hors-gel", "hors-gel", "profondeur-minimale-hors-gel"]) {
+    assert.equal(rappelsDeLaMemoire([dire(sujet, "0,80 m")]).profondeurHorsGel?.valeur, "0.8", sujet);
+  }
+});
+
+test("une clé portée sur une zone du projet parle du même sujet", () => {
+  // `sujet@portee` : la portée range l'affirmation, elle ne change pas son sujet.
+  const trouves = rappelsDeLaMemoire([dire("profondeur-hors-gel@lot-2", "0,99 m")]);
+  assert.equal(trouves.profondeurHorsGel.valeur, "0.99");
+});
+
+test("l'énoncé sert de repli quand le payload ne porte pas la valeur", () => {
+  const trouves = rappelsDeLaMemoire([
+    { subject_key: "zone-de-sismicite", payload: {}, statement: "Zone de sismicité 4 (moyenne)" }
+  ]);
+  assert.equal(trouves.zoneSismique.valeur, "4");
 });
 
 test("une mémoire vide ne rend rien plutôt que des valeurs par défaut", () => {
   assert.deepEqual(rappelsDeLaMemoire([]), {});
   assert.deepEqual(rappelsDeLaMemoire(null), {});
-  assert.deepEqual(rappelsDeLaMemoire([{ subject_key: "zone-sismique", payload: {} }]), {});
+  assert.deepEqual(rappelsDeLaMemoire([{ subject_key: "zone-de-sismicite", payload: {} }]), {});
+});
+
+test("une phrase où le jeton attendu ne figure pas ne rend rien", () => {
+  // Mieux vaut ne rien pré-remplir qu'inventer un chiffre.
+  assert.deepEqual(rappelsDeLaMemoire([dire("classe-de-sol", "à déterminer")]), {});
 });
 
 test("la première affirmation courante d'un sujet l'emporte", () => {
-  const trouves = rappelsDeLaMemoire([dire("zone-sismique", "4"), dire("zone-sismique", "3")]);
+  const trouves = rappelsDeLaMemoire([dire("zone-de-sismicite", "4"), dire("zone-de-sismicite", "3")]);
   assert.equal(trouves.zoneSismique.valeur, "4");
 });
 
@@ -67,7 +112,7 @@ test("la profondeur hors gel ne remplit aucun champ : elle en contrôle un", () 
 
 test("une valeur que la liste ne propose pas ne s'impose pas", () => {
   // Elle rendrait le formulaire invalide sans qu'on comprenne d'où ça vient.
-  const rappels = rappelsDeLaMemoire([dire("zone-sismique", "1"), dire("classe-de-sol", "Z")]);
+  const rappels = rappelsDeLaMemoire([dire("zone-de-sismicite", "1"), dire("classe-de-sol", "Z")]);
   const { valeurs, venuesDeLaMemoire } = preremplir({ zoneSismique: "2" }, rappels, LISTES);
   assert.equal(valeurs.zoneSismique, "2");
   assert.deepEqual(venuesDeLaMemoire, {});
@@ -83,6 +128,13 @@ test("une assise au-dessus de la profondeur hors gel est signalée", () => {
   assert.match(alertes[0].texte, /gèlerait/);
 });
 
+test("le cas rapporté : H = 0,99 m et un massif de 0,60 m alertent", () => {
+  const rappels = rappelsDeLaMemoire([dire("profondeur-hors-gel", "0,99 m")]);
+  const alertes = alertesDeLaMemoire({ araseSuperieure: -0.1, hauteurLz: 0.6 }, rappels);
+  assert.equal(alertes.length, 1);
+  assert.match(alertes[0].texte, /0,990/);
+});
+
 test("une assise assez profonde ne déclenche rien", () => {
   const rappels = rappelsDeLaMemoire(MEMOIRE);
   assert.deepEqual(alertesDeLaMemoire({ araseSuperieure: -0.1, hauteurLz: 0.8 }, rappels), []);
@@ -95,9 +147,10 @@ test("sans profondeur hors gel en mémoire, on ne reproche rien", () => {
   assert.deepEqual(alertesDeLaMemoire({ araseSuperieure: -0.1, hauteurLz: 0.1 }, {}), []);
 });
 
-test("chaque rappel déclaré vise un sujet de la mémoire", () => {
+test("chaque rappel déclaré vise au moins un sujet de la mémoire", () => {
   for (const rappel of RAPPELS) {
-    assert.ok(rappel.sujet, `${rappel.cle} doit nommer son sujet`);
+    assert.ok(rappel.sujets?.length, `${rappel.cle} doit nommer ses sujets`);
     assert.ok(rappel.libelle, `${rappel.cle} doit se lire`);
+    assert.equal(typeof rappel.lire, "function", `${rappel.cle} doit savoir lire une phrase`);
   }
 });
