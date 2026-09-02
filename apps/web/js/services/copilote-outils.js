@@ -34,17 +34,26 @@
  * Personne n'avait dit A. La réponse était fausse **tout en ayant l'air
  * juste** — un chantier ne la relit pas.
  *
- * Le garde-fou est donc dans le code, pas dans la consigne. Une entrée que le
- * modèle fournit **différente de ce que la mémoire porte** est une
- * substitution, et une substitution n'est acceptée que si elle est justifiée :
+ * Le garde-fou est donc dans le code, pas dans la consigne. **Toute** valeur
+ * d'entrée que le modèle fournit doit venir de quelque part, et il n'y a que
+ * trois provenances légitimes :
  *
- *   - la valeur figure dans les mots de l'utilisateur — « passer en catégorie
- *     **IV** » ; ou
+ *   - la mémoire du projet la porte déjà ;
+ *   - elle figure dans les mots de l'utilisateur — « passer en catégorie **IV** » ;
  *   - quelqu'un l'a confirmée à l'écran, en cliquant une pastille.
  *
- * Sinon l'outil ne calcule pas : il demande. Le doute penche du côté de la
- * question, jamais du calcul — se tromper en demandant coûte un clic, se
- * tromper en calculant coûte une reprise de fondations.
+ * En dehors de ces trois-là, le modèle l'a fabriquée, et l'outil ne calcule
+ * pas : il demande.
+ *
+ * **La première version ne surveillait que les remplacements** — une valeur
+ * différente de celle de la mémoire. Elle laissait donc passer le cas le plus
+ * dangereux : celui où le projet ne sait rien, où il n'y a donc rien à
+ * remplacer, et où une valeur inventée entre sans rencontrer personne. C'est
+ * exactement là qu'un garde-fou sert.
+ *
+ * Le doute penche du côté de la question, jamais du calcul — se tromper en
+ * demandant coûte un clic, se tromper en calculant coûte une reprise de
+ * fondations.
  *
  * ## Ce qui manque ne s'invente pas
  *
@@ -421,15 +430,14 @@ export function substitutionsNonJustifiees(outil, { entrees = {}, depuisMemoire 
   return (outil?.entrees ?? []).filter((entree) => {
     const proposee = texte(entrees?.[entree.cle]);
     if (!proposee) return false;
-    if (validees.has(entree.cle)) return false;
 
-    const connue = texte(depuisMemoire?.[entree.cle]);
-    // Rien en mémoire : ce n'est pas une substitution, c'est un renseignement.
-    // Le contrôle porte sur ce qui **remplace** ce que le projet a tranché.
-    if (!connue) return false;
-    if (connue === proposee) return false;
+    // Trois façons légitimes pour une valeur d'arriver là. En dehors d'elles,
+    // le modèle l'a fabriquée.
+    if (validees.has(entree.cle)) return false;                       // quelqu'un l'a cliquée
+    if (texte(depuisMemoire?.[entree.cle]) === proposee) return false; // le projet la porte
+    if (valeurCiteePar(question, proposee)) return false;             // quelqu'un l'a écrite
 
-    return !valeurCiteePar(question, proposee);
+    return true;
   });
 }
 
