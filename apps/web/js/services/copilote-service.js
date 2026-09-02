@@ -22,6 +22,18 @@
  * l'écran — séparés, et étiquetés comme tels : le second dit ce qu'on regarde,
  * jamais ce qui est vrai.
  *
+ * ## L'aller-retour des utilitaires
+ *
+ * Le modèle ne calcule pas : il **choisit** un utilitaire et rassemble ses
+ * entrées. La fonction lui décrit les outils, il en demande un, la fonction
+ * rend la demande ici, et c'est **ce fichier qui exécute** — le calcul reste
+ * dans le JavaScript de l'application, celui-là même qu'affichent les écrans de
+ * l'Atelier. Le résultat repart, et le modèle raconte.
+ *
+ * La boucle est bornée. Un modèle qui redemanderait indéfiniment le même outil
+ * ne le ferait pas exprès, mais il le ferait, et une conversation qui ne rend
+ * jamais la main coûte à chaque tour.
+ *
  * ## Ce qui ne revient jamais
  *
  * Rien n'est enregistré, ni ici ni côté serveur. Une conversation avec le
@@ -31,6 +43,7 @@
 
 import { store } from "../store.js";
 import { buildAssistContext } from "./copilote-context.js";
+import { declarationsPourModele, executerOutil } from "./copilote-outils.js";
 import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
 import { resolveCurrentBackendProjectId } from "./project-supabase-sync.js";
 
@@ -103,7 +116,16 @@ function parseUsage(data) {
   };
 }
 
-export async function sendAssistMessage(message, { signal = null } = {}) {
+/**
+ * Combien d'allers-retours d'outils on accepte pour une question.
+ *
+ * Trois suffisent à enchaîner un calcul, sa comparaison et sa reprise avec
+ * d'autres entrées. Au-delà, c'est que le modèle tourne en rond — et un tour de
+ * plus coûte un appel de plus sans rien apporter.
+ */
+export const TOURS_OUTILS_MAX = 3;
+
+export async function sendAssistMessage(message, { signal = null, toolExchanges = [], onToolRun = null } = {}) {
   const content = normalizeMessage(message);
   if (!content) {
     throw new Error("Message vide.");
@@ -129,39 +151,92 @@ export async function sendAssistMessage(message, { signal = null } = {}) {
   // valeur d'avant la correction qu'on vient justement de verser.
   const context = await buildAssistContext();
 
-  const response = await fetch(COPILOTE_FN_URL, {
-    method: "POST",
-    headers,
-    cache: "no-store",
-    // Renoncer à une réponse doit couper l'appel, pas seulement cesser de
-    // l'attendre : un bouton d'arrêt qui laisse la requête vivre sa vie ment
-    // sur ce qu'il fait, et la réponse arriverait dans le fil suivant.
-    signal,
-    body: JSON.stringify({
-      project_id: projectId,
-      question: content,
-      history: historyForPayload(),
-      memory: { lue: context.memoire?.lue === true, texte: context.memoire?.texte || "" },
-      // L'écran part à part de la mémoire, et sous son propre nom : les mêler
-      // ferait passer un filtre pour une vérité du projet.
-      screen: { app: context.app, subjects: context.subjects, project_form: context.project_form }
-    })
-  });
+  const assertions = context.memoire?.assertions ?? [];
+  const echanges = [...toolExchanges];
+  const executions = [];
+  let usage = { inputTokens: null, outputTokens: null, totalTokens: null };
 
-  const text = await response.text().catch(() => "");
-  const data = text ? safeJsonParse(text) : null;
+  for (let tour = 0; tour <= TOURS_OUTILS_MAX; tour += 1) {
+    const response = await fetch(COPILOTE_FN_URL, {
+      method: "POST",
+      headers,
+      cache: "no-store",
+      // Renoncer à une réponse doit couper l'appel, pas seulement cesser de
+      // l'attendre : un bouton d'arrêt qui laisse la requête vivre sa vie ment
+      // sur ce qu'il fait, et la réponse arriverait dans le fil suivant.
+      signal,
+      body: JSON.stringify({
+        project_id: projectId,
+        question: content,
+        history: historyForPayload(),
+        memory: { lue: context.memoire?.lue === true, texte: context.memoire?.texte || "" },
+        // L'écran part à part de la mémoire, et sous son propre nom : les mêler
+        // ferait passer un filtre pour une vérité du projet.
+        screen: { app: context.app, subjects: context.subjects, project_form: context.project_form },
+        tools: declarationsPourModele(),
+        tool_exchanges: echanges
+      })
+    });
 
-  if (!response.ok) {
-    const detail = typeof data?.error === "string" && data.error.trim()
-      ? data.error.trim()
-      : text || `HTTP ${response.status}`;
-    throw new Error(`Le copilote n'a pas répondu. ${detail}`.trim());
+    const text = await response.text().catch(() => "");
+    const data = text ? safeJsonParse(text) : null;
+
+    if (!response.ok) {
+      const detail = typeof data?.error === "string" && data.error.trim()
+        ? data.error.trim()
+        : text || `HTTP ${response.status}`;
+      throw new Error(`Le copilote n'a pas répondu. ${detail}`.trim());
+    }
+
+    // Le décompte s'additionne sur tous les tours : n'afficher que le dernier
+    // ferait passer une question à trois appels pour une question bon marché.
+    usage = additionnerUsage(usage, parseUsage(data));
+
+    const appels = Array.isArray(data?.tool_calls) ? data.tool_calls : [];
+    if (appels.length === 0) {
+      const reply = parseAssistantReply(data);
+      if (!reply) throw new Error("Le copilote a répondu, mais sans contenu.");
+      return { raw: data, reply, context, usage, executions };
+    }
+
+    if (tour === TOURS_OUTILS_MAX) {
+      throw new Error(
+        `Le copilote a demandé des utilitaires plus de ${TOURS_OUTILS_MAX} fois de suite sans conclure. La demande a été arrêtée.`
+      );
+    }
+
+    for (const appel of appels) {
+      const resultat = executerOutil({
+        id: appel?.name,
+        entrees: safeJsonParse(appel?.arguments) ?? {},
+        assertions
+      });
+
+      executions.push(resultat);
+      if (typeof onToolRun === "function") onToolRun(resultat);
+
+      echanges.push({
+        call_id: appel?.call_id,
+        name: appel?.name,
+        arguments: appel?.arguments,
+        output: JSON.stringify(resultat)
+      });
+    }
   }
 
-  const reply = parseAssistantReply(data);
-  if (!reply) {
-    throw new Error("Le copilote a répondu, mais sans contenu.");
-  }
+  throw new Error("Le copilote n'a pas conclu.");
+}
 
-  return { raw: data, reply, context, usage: parseUsage(data) };
+/** Le décompte cumulé des tours. Un champ absent le reste : on ne compte pas du vide. */
+function additionnerUsage(gauche, droite) {
+  const somme = (a, b) => {
+    if (!Number.isFinite(a) && !Number.isFinite(b)) return null;
+    return (Number.isFinite(a) ? a : 0) + (Number.isFinite(b) ? b : 0);
+  };
+
+  return {
+    inputTokens: somme(gauche.inputTokens, droite.inputTokens),
+    outputTokens: somme(gauche.outputTokens, droite.outputTokens),
+    totalTokens: somme(gauche.totalTokens, droite.totalTokens)
+  };
 }

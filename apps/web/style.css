@@ -16561,10 +16561,26 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   display:inline-flex; align-items:center; justify-content:center;
   width:32px; height:32px;
   border:1px solid var(--border); border-radius:999px;
-  background:var(--panel2); color:var(--text);
+  /* Opaque, et il le reste au survol : le fond venait de `--panel2`, qui est
+     translucide, si bien que le texte du fil se lisait au travers du bouton
+     dès qu'on passait dessus. Un bouton qui laisse voir ce qu'il recouvre ne
+     se distingue plus de ce qu'il recouvre. */
+  background:var(--bgAssistPanel); color:var(--text);
   box-shadow:0 4px 12px rgba(1,4,9,.5); cursor:pointer;
 }
-.copilote-scroll:hover{ background:var(--panel); }
+/* `display:inline-flex` ci-dessus est une règle d'auteur : elle l'emporte sur
+   le `[hidden]{display:none}` de la feuille du navigateur, qui est une règle
+   d'agent. Le bouton restait donc **affiché alors que `hidden` était bien
+   posé** — le calcul était juste depuis le début, c'est le masquage qui ne
+   prenait pas. Il faut le redire nous-mêmes. */
+.copilote-scroll[hidden]{ display:none; }
+
+/* Le contraste du survol se fait donc sur la bordure et l'ombre, pas sur le
+   fond, qui ne bouge pas. */
+.copilote-scroll:hover{
+  border-color:var(--text);
+  box-shadow:0 6px 18px rgba(1,4,9,.7);
+}
 .copilote-scroll__icon{ transform:rotate(180deg); }
 
 /* La saisie ne défile pas avec le fil : elle reste en bas, sur toute la
@@ -16703,6 +16719,57 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .copilote-fil-menu__item.is-danger,
 .copilote-fil-menu__item.is-danger .ui-icon{ color:rgb(248, 81, 73); }
 .copilote-fil-menu__item.is-danger:hover{ background:rgba(248,81,73,.12); }
+
+/* La trace d'un utilitaire : ses entrées, ses résultats, ses écarts.
+   Elle est au-dessus de la réponse et non repliée : une phrase du copilote qui
+   annonce une valeur demande qu'on le croie ; la même valeur accompagnée de
+   l'utilitaire, de sa version et de ses entrées se vérifie. */
+.copilote-outil{
+  margin:0 0 12px; padding:12px;
+  border:1px solid var(--border); border-radius:12px; background:var(--bgAssistPanel);
+  font-size:12px;
+}
+.copilote-outil__titre{
+  display:flex; align-items:center; gap:8px; margin:0 0 10px;
+  color:var(--text); font-size:13px; font-weight:600;
+}
+.copilote-outil__titre .ui-icon{ color:var(--muted); flex:0 0 16px; }
+.copilote-outil__version{ margin-left:auto; color:var(--muted); font-weight:400; font-size:11px; }
+.copilote-outil__colonnes{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+@media (max-width: 700px){ .copilote-outil__colonnes{ grid-template-columns:1fr; } }
+.copilote-outil__legende{ margin:0 0 4px; color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.04em; }
+.copilote-outil__liste{ margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:2px; }
+.copilote-outil__liste li{ display:flex; align-items:baseline; gap:8px; color:var(--text); }
+.copilote-outil__cle{ color:var(--muted); min-width:0; }
+.copilote-outil__source{ color:var(--muted); font-size:11px; font-style:italic; }
+/* L'écart se montre, il n'accuse pas : la couleur alerte, le texte décrit. */
+.copilote-outil__ecarts{
+  margin-top:12px; padding-top:10px; border-top:1px solid var(--border);
+}
+.copilote-outil__ecarts .copilote-outil__liste li{ display:list-item; color:var(--text); }
+.copilote-outil__ecarts .copilote-outil__legende{ color:var(--danger); }
+.copilote-outil__note{ margin:10px 0 0; color:var(--muted); font-size:11px; line-height:15px; }
+.copilote-outil--refus{ border-color:rgba(248,81,73,.35); }
+
+/* Le formulaire d'un utilitaire à qui il manque des entrées. Construit depuis
+   la déclaration de l'utilitaire, jamais depuis les mots du modèle. */
+.copilote-formulaire{
+  margin:12px 0 0; padding:12px;
+  border:1px solid var(--border); border-radius:12px; background:var(--bgAssistPanel);
+}
+.copilote-formulaire__titre{ margin:0 0 10px; color:var(--text); font-size:13px; font-weight:600; }
+.copilote-formulaire__champs{ display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px; }
+.copilote-champ{ display:flex; flex-direction:column; gap:4px; }
+.copilote-champ__libelle{ color:var(--text); font-size:12px; }
+.copilote-champ__unite{ color:var(--muted); }
+.copilote-champ__saisie{
+  min-height:32px; padding:0 8px;
+  border:1px solid var(--border); border-radius:6px; background:var(--bg);
+  color:var(--text); font:inherit; font-size:13px;
+}
+.copilote-champ__saisie:focus{ outline:none; border-color:var(--borderColor-accent-emphasis); }
+.copilote-champ__aide{ color:var(--muted); font-size:11px; line-height:15px; }
+.copilote-formulaire__envoi{ margin-top:12px; }
 
 .copilote-error{ margin:0; color:var(--danger); font-size:13px; }
 

@@ -33,11 +33,48 @@
  *
  * La contrepartie est réelle et assumée : rien ne se retrouve d'un poste à
  * l'autre. Le prix d'une conversation qui ne fuit pas.
+ *
+ * ## L'orchestration des utilitaires
+ *
+ * Un modèle de langage ne calcule pas : il rédige un calcul plausible. Les
+ * utilitaires de l'Atelier, eux, calculent. Cette fonction fait donc
+ * l'aiguilleur, et rien de plus :
+ *
+ *   elle décrit les outils au modèle, qui **choisit** lequel appeler ;
+ *   elle rend la demande au navigateur, qui **exécute** ;
+ *   elle repasse le résultat au modèle, qui **raconte**.
+ *
+ * **Le calcul n'a pas lieu ici.** Les utilitaires sont du JavaScript de
+ * l'application, testés et affichés par les écrans de l'Atelier ; les porter
+ * dans cette fonction en ferait une seconde implémentation, et « une valeur
+ * écrite à deux endroits finit par diverger ». Le prix est un aller-retour de
+ * plus par outil appelé ; il est bien inférieur à celui de deux spectres qui
+ * ne s'accordent pas.
+ *
+ * L'échange est donc **sans mémoire d'un tour à l'autre** : le navigateur
+ * renvoie les appels et leurs résultats, et la fonction reconstitue la suite.
+ * Un état gardé côté serveur serait un état de plus à faire vivre, pour une
+ * conversation qui appartient déjà au navigateur.
  */
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { requireUser } from "../_shared/require-user.ts";
+
+type ToolDeclaration = {
+  type?: string;
+  name?: string;
+  description?: string;
+  parameters?: unknown;
+};
+
+/** Un appel déjà passé, et ce que le navigateur en a rapporté. */
+type ToolExchange = {
+  call_id?: string;
+  name?: string;
+  arguments?: string;
+  output?: string;
+};
 
 type CopilotRequest = {
   project_id?: string;
@@ -45,6 +82,8 @@ type CopilotRequest = {
   history?: Array<{ role?: string; content?: string }>;
   memory?: { lue?: boolean; texte?: string };
   screen?: unknown;
+  tools?: ToolDeclaration[];
+  tool_exchanges?: ToolExchange[];
 };
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -80,6 +119,9 @@ const MAX_MEMORY_CHARS = 500_000;
 const MAX_HISTORY_MESSAGES = 40;
 const MAX_HISTORY_MESSAGE_CHARS = 20_000;
 const MAX_SCREEN_CHARS = 20_000;
+const MAX_TOOLS = 40;
+const MAX_TOOL_EXCHANGES = 12;
+const MAX_TOOL_OUTPUT_CHARS = 20_000;
 
 const MARQUE_TRONQUE = "[…tronqué faute de place]";
 
@@ -127,6 +169,14 @@ function systemPrompt(memoryWasRead: boolean, tronque: boolean) {
     "- Ce qui figure sous « Ce qui a été remplacé » ne vaut plus. Ne réponds jamais à partir de ces lignes sans préciser qu'elles sont périmées.",
     "- Tu ne crées rien et tu ne modifies rien : tu peux préparer un texte, quelqu'un le versera.",
     "",
+    "Les utilitaires de l'Atelier te sont accessibles comme fonctions. Ils calculent, toi non :",
+    "- Dès qu'une question demande une valeur qu'un utilitaire sait calculer, appelle-le. Ne calcule jamais toi-même, même si le calcul te paraît simple : un nombre plausible se relit sans qu'on le voie.",
+    "- Reprends ses résultats **tels quels**, sans les arrondir, les convertir ni les corriger.",
+    "- Cite l'utilitaire et sa version dans ta réponse : c'est ce qui la rend vérifiable.",
+    "- S'il manque des entrées, l'utilitaire te le dit et l'écran demandera les valeurs à l'utilisateur. Annonce ce qui manque et arrête-toi là ; n'invente aucune valeur d'entrée pour pouvoir calculer quand même.",
+    "- Un résultat d'utilitaire n'entre pas dans la mémoire du projet. C'est une exploration ; quelqu'un décidera.",
+    "- Quand un résultat contredit ce que le projet tient pour vrai, l'utilitaire te donne l'écart. Montre-le, sans désigner de fautif : dis ce qui est calculé, ce qui est retenu, et ce qu'il faudrait reprendre.",
+    "",
     "Tes connaissances générales du bâtiment servent à expliquer et à raisonner, jamais à fournir une valeur que ce projet n'a pas tranchée."
   ];
 
@@ -166,6 +216,29 @@ function extractUsage(payload: unknown) {
     output_tokens: nombre(usage?.output_tokens ?? usage?.completion_tokens),
     total_tokens: nombre(usage?.total_tokens)
   };
+}
+
+/**
+ * Les appels d'utilitaires que le modèle a décidés.
+ *
+ * Ils sont rendus au navigateur tels quels — `call_id` compris, qui est ce qui
+ * permettra d'apparier le résultat à sa demande au tour suivant. Les renuméroter
+ * ou les renommer casserait l'appariement, et le modèle lirait un résultat comme
+ * la réponse à une autre question.
+ */
+function extractToolCalls(payload: unknown) {
+  const output = Array.isArray((payload as Record<string, unknown>)?.output)
+    ? (payload as Record<string, unknown>).output as Record<string, unknown>[]
+    : [];
+
+  return output
+    .filter((item) => item?.type === "function_call")
+    .map((item) => ({
+      call_id: texte(item.call_id),
+      name: texte(item.name),
+      arguments: texte(item.arguments) || "{}"
+    }))
+    .filter((appel) => appel.call_id && appel.name);
 }
 
 function extractOpenAiText(payload: unknown): string {
@@ -248,7 +321,7 @@ serve(async (req) => {
 
   const ecran = truncate(JSON.stringify(payload.screen ?? null), MAX_SCREEN_CHARS);
 
-  const input = [
+  const contexte = [
     `# Projet\n\n${texte(projet.name) || "sans nom"}`,
     memoire || "# Mémoire du projet\n\n(aucune mémoire transmise)",
     `# Ce que l'utilisateur regarde\n\nCeci dit ce qui est affiché, jamais ce qui est vrai. N'en tire aucune affirmation sur le projet.\n\n\`\`\`json\n${ecran}\n\`\`\``,
@@ -263,8 +336,41 @@ serve(async (req) => {
   // Le dernier garde-fou : si l'ensemble dépasse encore le budget, on coupe —
   // et le modèle en est averti dans ses consignes. Une coupe qu'on ne signale
   // pas vaut une mémoire qu'on invente.
-  const corps = truncate(input, BUDGET_CHARS);
+  const corps = truncate(contexte, BUDGET_CHARS);
   const tronque = corps.includes(MARQUE_TRONQUE);
+
+  const outils = (Array.isArray(payload.tools) ? payload.tools : [])
+    .slice(0, MAX_TOOLS)
+    .filter((outil) => texte(outil?.name) && outil?.parameters);
+
+  /**
+   * La suite de l'échange, reconstituée depuis ce que le navigateur renvoie.
+   *
+   * Les deux items vont par paire et dans cet ordre : l'appel que le modèle a
+   * décidé, puis ce que l'utilitaire a répondu. Rendre le second sans le
+   * premier ferait lire au modèle un résultat qu'il n'a pas demandé.
+   */
+  const echanges = (Array.isArray(payload.tool_exchanges) ? payload.tool_exchanges : [])
+    .slice(-MAX_TOOL_EXCHANGES)
+    .filter((echange) => texte(echange?.call_id) && texte(echange?.name));
+
+  const input: unknown[] = [
+    { role: "user", content: [{ type: "input_text", text: corps }] }
+  ];
+
+  for (const echange of echanges) {
+    input.push({
+      type: "function_call",
+      call_id: texte(echange.call_id),
+      name: texte(echange.name),
+      arguments: texte(echange.arguments) || "{}"
+    });
+    input.push({
+      type: "function_call_output",
+      call_id: texte(echange.call_id),
+      output: truncate(texte(echange.output) || "{}", MAX_TOOL_OUTPUT_CHARS)
+    });
+  }
 
   // On compte, on ne recopie pas : un journal qui contiendrait les questions de
   // chacun serait la fuite même qu'on refuse.
@@ -275,6 +381,8 @@ serve(async (req) => {
     memory_chars: memoire.length,
     history_messages: history.length,
     input_chars: corps.length,
+    tools: outils.length,
+    tool_exchanges: echanges.length,
     tronque
   });
 
@@ -288,7 +396,8 @@ serve(async (req) => {
       body: JSON.stringify({
         model: MODEL,
         instructions: systemPrompt(memoryWasRead, tronque),
-        input: corps
+        input,
+        ...(outils.length ? { tools: outils } : {})
       })
     });
 
@@ -301,6 +410,24 @@ serve(async (req) => {
     const brut = await reponse.json();
     const reply = extractOpenAiText(brut).trim();
     const usage = extractUsage(brut);
+    const appels = extractToolCalls(brut);
+
+    // Le modèle demande un ou plusieurs utilitaires : on rend la main au
+    // navigateur, qui seul sait les exécuter. La réponse viendra au tour
+    // suivant, quand il aura rapporté les résultats.
+    if (appels.length > 0) {
+      console.log("project-copilot:tool-calls", {
+        project_id: projectId,
+        outils: appels.map((appel) => appel.name),
+        input_tokens: usage.input_tokens,
+        output_tokens: usage.output_tokens
+      });
+
+      // Le texte éventuel qui accompagne l'appel est rendu aussi : le modèle
+      // annonce parfois ce qu'il s'apprête à faire, et le taire donnerait un
+      // écran muet pendant l'exécution.
+      return json({ tool_calls: appels, reply_markdown: reply || null, usage });
+    }
 
     if (!reply) {
       return json({ error: "Le modèle a répondu, mais sans contenu." }, 502);
