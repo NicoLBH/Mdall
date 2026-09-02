@@ -17801,3 +17801,20 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .fondations-bloc__valeurs dt{ color:var(--muted); }
 .fondations-bloc__valeurs dd{ margin:0; font-variant-numeric:tabular-nums; white-space:nowrap; }
 .fondations-bloc__valeurs dd em{ font-style:normal; color:var(--muted); }
+
+/* Un résultat périmé reste lisible mais cesse de se donner pour vrai : le
+   masquer ferait perdre la comparaison avant/après, le laisser tel quel le
+   ferait passer pour le calcul de la saisie en cours. */
+.fondations-resultats__perime{
+  display:none;
+  margin:0;
+  padding:8px 10px;
+  border:1px solid var(--attention, #d29922);
+  border-radius:6px;
+  color:var(--attention, #d29922);
+  font-size:12px;
+}
+.fondations-resultats.est-perime .fondations-resultats__perime{ display:block; }
+.fondations-resultats.est-perime .fondations-bloc,
+.fondations-resultats.est-perime .fondations-resultats__bilan,
+.fondations-resultats.est-perime .fondations-verdict{ opacity:.45; }

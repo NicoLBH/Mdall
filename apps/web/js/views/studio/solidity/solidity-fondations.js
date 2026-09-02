@@ -25,11 +25,30 @@ import { calculerFondation } from "../../../services/fondations-service.js";
 const etat = {
   entrees: entreesParDefaut(),
   resultat: null,
+  // L'empreinte des entrées qui ont produit `resultat`. Sans elle, l'écran
+  // continuerait d'afficher des chiffres justes pour une saisie qui n'est plus
+  // celle-là — et un résultat périmé se lit exactement comme un résultat frais.
+  empreinteDuResultat: "",
   calculEnCours: false,
   erreur: "",
   invalides: []
 };
 
+/** Ce qui, dans la saisie, change le résultat. Tout, donc. */
+function empreinte(entrees) {
+  return JSON.stringify(entrees);
+}
+
+function resultatPerime() {
+  return Boolean(etat.resultat) && empreinte(etat.entrees) !== etat.empreinteDuResultat;
+}
+
+/**
+ * L'écran ne se redessine pas quand on y revient — contrairement au Copilote,
+ * dont la conversation a pu avancer ailleurs. Ici, tout ce qui est à l'écran a
+ * été tapé à la main : le redessiner à chaque venue effacerait onze lignes de
+ * charges pour ne rien montrer de nouveau.
+ */
 export function renderSolidityFondations(root, { force = false } = {}) {
   if (!root) return;
   if (!force && root.dataset.fondationsMonte === "true") return;
@@ -45,12 +64,16 @@ function brancher(root) {
   // curseur, et l'écran n'a rien de nouveau à dire tant qu'on tape.
   root.addEventListener("input", (evenement) => {
     const champ = evenement.target.closest("[data-fondation-champ]");
-    if (champ) { etat.entrees[champ.dataset.fondationChamp] = champ.value; return; }
-    const charge = evenement.target.closest("[data-fondation-charge]");
-    if (charge) {
+    const charge = champ ? null : evenement.target.closest("[data-fondation-charge]");
+    if (champ) etat.entrees[champ.dataset.fondationChamp] = champ.value;
+    else if (charge) {
       const [cas, composante] = charge.dataset.fondationCharge.split(".");
       etat.entrees.charges[cas][composante] = charge.value;
-    }
+    } else return;
+
+    // On ne redessine pas — le curseur serait perdu au milieu d'un nombre. Seule
+    // la mention « périmé » apparaît, à l'endroit où elle compte.
+    marquerPerime(root);
   });
 
   root.addEventListener("change", (evenement) => {
@@ -71,6 +94,7 @@ function brancher(root) {
     if (evenement.target.closest('[data-action-id="fondationsReinitialiser"]')) {
       etat.entrees = entreesParDefaut();
       etat.resultat = null;
+      etat.empreinteDuResultat = "";
       etat.erreur = "";
       etat.invalides = [];
       dessiner(root);
@@ -92,8 +116,10 @@ async function calculer(root) {
 
   try {
     etat.resultat = await calculerFondation(etat.entrees);
+    etat.empreinteDuResultat = empreinte(etat.entrees);
   } catch (erreur) {
     etat.resultat = null;
+    etat.empreinteDuResultat = "";
     etat.erreur = erreur instanceof Error ? erreur.message : String(erreur);
     etat.invalides = erreur?.invalides || [];
   } finally {
@@ -254,6 +280,13 @@ function ratioLisible(ratio) {
   return nombreLisible(n, 3);
 }
 
+/** La mention « périmé », posée sans tout redessiner. */
+function marquerPerime(root) {
+  const resultats = root.querySelector(".fondations-resultats");
+  if (!resultats) return;
+  resultats.classList.toggle("est-perime", resultatPerime());
+}
+
 /** Un ratio est dépassé s'il excède 1 — ou s'il est négatif, cf. ci-dessus. */
 function ratioDepasse(ratio) {
   const n = Number(ratio);
@@ -297,11 +330,15 @@ function dessinerResultats() {
   `;
 
   return `
-    <article class="fondations-resultats">
+    <article class="fondations-resultats${resultatPerime() ? " est-perime" : ""}">
       <header class="fondations-resultats__tete">
         <h4>Résultats</h4>
         ${verdict}
       </header>
+      <p class="fondations-resultats__perime">
+        La saisie a changé depuis ce calcul : ces chiffres ne décrivent plus ce
+        qui est à l'écran. Relancez le calcul.
+      </p>
       <p class="fondations-resultats__bilan">
         Ratio déterminant <strong>${escapeHtml(ratioLisible(r.bilan?.ratio))}</strong>
         sur ${escapeHtml(String(r.combinaisonsExaminees ?? "—"))} combinaisons examinées.
