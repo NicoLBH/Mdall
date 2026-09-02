@@ -25,6 +25,17 @@ export const CAS_DE_CHARGE = [
   { cle: "Fa", libelle: "Fa", nature: "Accidentelle" }
 ];
 
+/** Les quatre nappes d'armatures de la semelle, dans l'ordre de la note. */
+export const NAPPES = [
+  { cle: "AIX", libelle: "Nappe inférieure axe X", defautBarre: "HA10" },
+  { cle: "AIY", libelle: "Nappe inférieure axe Y", defautBarre: "HA10" },
+  { cle: "ASX", libelle: "Nappe supérieure axe X", defautBarre: "HA8" },
+  { cle: "ASY", libelle: "Nappe supérieure axe Y", defautBarre: "HA8" }
+];
+
+/** Les diamètres de barres du catalogue. */
+export const BARRES = [6, 8, 10, 12, 14, 16, 20, 25, 32, 40].map((d) => `HA${d}`);
+
 /** Les cinq composantes d'un cas, au point où il est appliqué. */
 export const COMPOSANTES = [
   { cle: "V", libelle: "V" },
@@ -86,6 +97,25 @@ export const ZONES = [
     ]
   },
   {
+    cle: "beton",
+    titre: "Béton armé",
+    champs: [
+      { cle: "enrobageSemelle", libelle: "Enrobage de la semelle", unite: "cm", defaut: 5, min: 0 },
+      { cle: "enrobageFut", libelle: "Enrobage du fût", unite: "cm", defaut: 5, min: 0 },
+      { cle: "resistanceBeton", libelle: "Résistance du béton fc", unite: "MPa", defaut: 25, min: 0 },
+      { cle: "limiteAcier", libelle: "Limite d'élasticité de l'acier fe", unite: "MPa", defaut: 500, min: 0 }
+    ]
+  },
+  {
+    cle: "sismique",
+    titre: "Capacité portante sismique (annexe F)",
+    seulementSi: { reglement: "EC8-5 Annexe F" },
+    champs: [
+      { cle: "resistanceCisaillement", libelle: "Résistance au cisaillement", unite: "kPa", defaut: 50, min: 0,
+        aide: "cu si le cisaillement est non drainé, tcy,u s'il est cyclique." }
+    ]
+  },
+  {
     cle: "lest",
     titre: "Lest",
     champs: [
@@ -108,8 +138,42 @@ export const CHOIX = [
   { cle: "typeExploitation", libelle: "Nature de la charge d'exploitation", defaut: "Exploitation",
     valeurs: ["Exploitation", "Archives / stockage", "Température"] },
   { cle: "unites", libelle: "Unités", defaut: "{ daN ; daNm }",
-    valeurs: ["{ T ; Tm }", "{ kN ; kNm }", "{ daN ; daNm }"] }
+    valeurs: ["{ T ; Tm }", "{ kN ; kNm }", "{ daN ; daNm }"] },
+  { cle: "fissuration", libelle: "Fissuration admise", defaut: "Sans objet",
+    valeurs: ["Sans objet", "wk ≤ 0,3mm", "wk ≤ 0,2mm"] },
+  { cle: "armaturesMinimales", libelle: "Imposer la section minimale de tirant", defaut: "NON",
+    valeurs: ["NON", "OUI"] },
+
+  // Ce qui ne sert qu'à l'annexe F. Les champs restent visibles sous les autres
+  // règlements : les masquer ferait disparaître une saisie déjà faite, et
+  // rouvrir l'écran ne dirait plus pourquoi elle a disparu.
+  { cle: "zoneSismique", libelle: "Zone sismique", defaut: "2", valeurs: ["2", "3", "4", "5"],
+    seulementSi: { reglement: "EC8-5 Annexe F" } },
+  { cle: "categorieImportance", libelle: "Catégorie d'importance", defaut: "II", valeurs: ["II", "III", "IV"],
+    seulementSi: { reglement: "EC8-5 Annexe F" } },
+  { cle: "typeSolEc8", libelle: "Type de sol (EC8)", defaut: "B", valeurs: ["A", "B", "C", "D", "E"],
+    seulementSi: { reglement: "EC8-5 Annexe F" } },
+  { cle: "categorieSol", libelle: "Catégorie de sol", defaut: "Sol frottant",
+    valeurs: ["Sol cohérent", "Sol frottant"], seulementSi: { reglement: "EC8-5 Annexe F" } },
+  { cle: "sousCategorieSol", libelle: "Sous-catégorie de sol", defaut: "Sable dense",
+    valeurs: ["Sable dense", "Sable lâche sec", "Sable lâche saturé", "Argile non sensible", "Argile sensible"],
+    seulementSi: { reglement: "EC8-5 Annexe F" } },
+  { cle: "natureCisaillement", libelle: "Nature du cisaillement", defaut: "Cisaillement non drainé",
+    valeurs: ["Cisaillement non drainé", "Cisaillement cyclique"], seulementSi: { reglement: "EC8-5 Annexe F" } }
 ];
+
+/**
+ * Ce qu'il faut montrer, selon le règlement retenu.
+ *
+ * Un champ conditionnel est **grisé, pas retiré** : le retirer ferait
+ * disparaître une saisie qu'on a faite, et rouvrir l'écran ne dirait plus
+ * pourquoi elle a disparu.
+ */
+export function estPertinent(element, entrees = {}) {
+  const condition = element?.seulementSi;
+  if (!condition) return true;
+  return Object.entries(condition).every(([cle, valeur]) => String(entrees[cle]) === valeur);
+}
 
 /**
  * L'unité d'un champ, dans le système que l'écran a choisi.
@@ -141,6 +205,11 @@ export function entreesParDefaut() {
   for (const choix of CHOIX) entrees[choix.cle] = choix.defaut;
   entrees.charges = Object.fromEntries(CAS_DE_CHARGE.map((cas) => [cas.cle,
     Object.fromEntries(COMPOSANTES.map((c) => [c.cle, 0]))]));
+  // Aucune nappe n'est proposée d'office : le ferraillage est une décision de
+  // l'ingénieur, pas une valeur par défaut. L'utilitaire dit ce qu'elle vaut,
+  // il ne la choisit pas.
+  entrees.ferraillage = Object.fromEntries(NAPPES.map((nappe) => [nappe.cle,
+    { nombre: 0, barre: nappe.defautBarre }]));
   return entrees;
 }
 
@@ -172,8 +241,17 @@ export function entreesInvalides(entrees = {}) {
       problemes.push({ cle: choix.cle, raison: `${choix.libelle} : choix inconnu.` });
     }
   }
-  if (entrees.reglement === "EC8-5 Annexe F") {
-    problemes.push({ cle: "reglement", raison: "EC8-5 Annexe F : la capacité portante sismique n'est pas encore portée par cet utilitaire." });
+
+
+  for (const nappe of NAPPES) {
+    const propose = entrees.ferraillage?.[nappe.cle] ?? {};
+    const n = nombre(propose.nombre);
+    if (propose.nombre !== "" && propose.nombre !== undefined && (n === null || n < 0 || !Number.isInteger(n))) {
+      problemes.push({ cle: `nappe-${nappe.cle}`, raison: `${nappe.libelle} : le nombre de barres doit être un entier positif.` });
+    }
+    if (propose.barre && !BARRES.includes(String(propose.barre))) {
+      problemes.push({ cle: `nappe-${nappe.cle}`, raison: `${nappe.libelle} : diamètre de barre inconnu.` });
+    }
   }
 
   for (const cas of CAS_DE_CHARGE) {

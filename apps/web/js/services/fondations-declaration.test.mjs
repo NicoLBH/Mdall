@@ -10,7 +10,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   ZONES, CHOIX, CAS_DE_CHARGE, COMPOSANTES,
-  champsNumeriques, entreesParDefaut, entreesInvalides, uniteAffichee
+  champsNumeriques, entreesParDefaut, entreesInvalides, uniteAffichee, estPertinent
 } from "./fondations-declaration.js";
 import { DEFAUTS, REGLEMENTS, REPARTITIONS, UNITES, CAS, COMPOSANTES as COMPOSANTES_MOTEUR }
   from "../../../../supabase/functions/fondations-stabilite-externe/calcul.js";
@@ -66,10 +66,24 @@ test("une semelle sans côté est arrêtée avant d'atteindre le serveur", () =>
   assert.ok(problemes.some((p) => p.cle === "sectionLy"));
 });
 
-test("l'annexe F de l'EC8-5 est proposée mais refusée, en le disant", () => {
-  const problemes = entreesInvalides({ ...entreesParDefaut(), reglement: "EC8-5 Annexe F" });
-  assert.equal(problemes.length, 1);
-  assert.match(problemes[0].raison, /pas encore portée/);
+test("l'annexe F de l'EC8-5 est calculable, et ses champs deviennent pertinents", () => {
+  const entrees = { ...entreesParDefaut(), reglement: "EC8-5 Annexe F" };
+  assert.deepEqual(entreesInvalides(entrees), []);
+
+  const zone = CHOIX.find((c) => c.cle === "zoneSismique");
+  assert.equal(estPertinent(zone, entreesParDefaut()), false);
+  assert.equal(estPertinent(zone, entrees), true);
+  // Ce qui n'est pas conditionnel l'est toujours.
+  assert.equal(estPertinent(CHOIX.find((c) => c.cle === "reglement"), entrees), true);
+});
+
+test("les zones et catégories que l'annexe F ne couvre pas ne sont pas proposées", () => {
+  // Zone 1 et catégorie I ne figurent pas dans les tables de l'EC8 : les offrir
+  // ferait échouer le calcul après coup, au lieu de le dire tout de suite.
+  const zone = CHOIX.find((c) => c.cle === "zoneSismique");
+  assert.deepEqual(zone.valeurs, ["2", "3", "4", "5"]);
+  const categorie = CHOIX.find((c) => c.cle === "categorieImportance");
+  assert.deepEqual(categorie.valeurs, ["II", "III", "IV"]);
 });
 
 test("une charge illisible est nommée par son cas et sa composante", () => {

@@ -8,7 +8,7 @@
 
 import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
 import {
-  CAS_DE_CHARGE, COMPOSANTES, champsNumeriques, entreesInvalides
+  CAS_DE_CHARGE, COMPOSANTES, NAPPES, champsNumeriques, entreesInvalides
 } from "./fondations-declaration.js";
 
 export * from "./fondations-declaration.js";
@@ -34,6 +34,10 @@ export async function calculerFondation(entrees, { signal } = {}) {
   for (const champ of champsNumeriques()) corps[champ.cle] = nombre(entrees[champ.cle]);
   corps.charges = Object.fromEntries(CAS_DE_CHARGE.map((cas) => [cas.cle,
     Object.fromEntries(COMPOSANTES.map((c) => [c.cle, nombre(entrees.charges?.[cas.cle]?.[c.cle]) ?? 0]))]));
+  corps.ferraillage = Object.fromEntries(NAPPES.map((nappe) => [nappe.cle, {
+    nombre: nombre(entrees.ferraillage?.[nappe.cle]?.nombre) ?? 0,
+    barre: String(entrees.ferraillage?.[nappe.cle]?.barre ?? "")
+  }]));
 
   const reponse = await fetch(URL_FONCTION, {
     method: "POST",

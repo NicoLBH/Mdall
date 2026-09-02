@@ -21,22 +21,29 @@
  *
  * Mais ces valeurs ne valent que pour **une** situation : celle que le classeur
  * porte — EC - NF P94-261, répartition Meyerhoff, sol drainé, ni séisme ni
- * charge accidentelle. Les autres branches — Fascicule 62, DTU 13.12,
- * répartition constante, sol non drainé, combinaisons sismiques — sont
- * transcrites et elles tournent, et les tests ci-dessous vérifient qu'elles ne
- * divergent pas ; **elles ne sont pas comparées au classeur**, faute de pouvoir
- * le recalculer ici (LibreOffice s'y bloque : neuf minutes écoulées pour une
- * seconde de calcul).
+ * charge accidentelle.
  *
- * Le chemin pour combler ce trou est court et ne demande rien d'exotique :
- * enregistrer le classeur avec ces entrées-là — son tableur met alors ses
- * résultats en cache — et le relire. La comparaison prend quelques secondes.
+ * ## Le second étalon : une note de calcul réelle
+ *
+ * Cinq massifs d'une affaire livrée, avec leurs entrées et leurs sorties
+ * imprimées, ferment la lacune la plus grosse : la **répartition constante**,
+ * dont le polygone de décompression se résout par une cubique. Voir
+ * `note-reelle.js` pour ce qu'ils couvrent.
+ *
+ * ## Ce qui reste sans étalon
+ *
+ * Le Fascicule 62, le DTU 13.12, le sol non drainé et les combinaisons
+ * sismiques ou accidentelles sont transcrits et ils tournent ; les tests
+ * ci-dessous vérifient qu'ils ne divergent pas, mais aucune source ne les
+ * confirme encore. Le chemin pour les fermer est le même : une note de calcul,
+ * ou un classeur enregistré avec ces réglages.
  */
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { calculerStabiliteExterne, DEFAUTS, REGLEMENTS } from "./calcul.js";
+import { calculerStabiliteExterne, DEFAUTS, REGLEMENTS, NAPPES } from "./calcul.js";
 import { COMBINAISONS } from "./combinaisons.js";
+import { MASSIFS_NOTE_REELLE } from "./note-reelle.js";
 
 /** Le cas de référence : celui que le classeur porte tel qu'il nous est venu. */
 const REFERENCE = {
@@ -159,9 +166,92 @@ test("changer de règlement change le résultat, sans jamais faire échouer le c
   assert.notEqual(f62.glissement.ratio, ec.glissement.ratio);
 });
 
-test("l'annexe F de l'EC8-5 est refusée, pas approximée", () => {
-  assert.throws(() => calculerStabiliteExterne({ ...REFERENCE, reglement: "EC8-5 Annexe F" }), /EC8-5/);
-  assert.ok(REGLEMENTS.includes("EC8-5 Annexe F"), "elle reste dans la liste : c'est un manque déclaré, pas un oubli");
+/* ------------------------------------------------------------------ *
+ * Capacité portante sismique — EN 1998-5 annexe F
+ *
+ * Le classeur porte ses résultats en cache pour le jeu d'entrées qu'il embarque
+ * (zone 2, catégorie III, sol B, sol frottant, sable dense, cu = 50 kPa) :
+ * c'est contre eux que la transcription est jugée.
+ * ------------------------------------------------------------------ */
+
+const SISMIQUE = {
+  ...REFERENCE, reglement: "EC8-5 Annexe F",
+  zoneSismique: "2", categorieImportance: "III", typeSolEc8: "B",
+  categorieSol: "Sol frottant", sousCategorieSol: "Sable dense",
+  natureCisaillement: "Cisaillement non drainé", resistanceCisaillement: 50
+};
+
+test("annexe F : le critère tombe sur la valeur du classeur", () => {
+  const r = calculerStabiliteExterne(SISMIQUE);
+  proche(r.annexeF.ratio, 0.017451759222387585);   // EC8-F!K54
+  proche(r.annexeF.directions[1].critere, 0);      // EC8-F!N54
+  assert.equal(r.annexeF.direction, "X");
+});
+
+test("annexe F : les paramètres sismiques et géotechniques concordent", () => {
+  const p = calculerStabiliteExterne(SISMIQUE).annexeF.parametres;
+  proche(p.agr, 0.7);                              // P15
+  proche(p.gammaI, 1.2);                           // P16
+  proche(p.S, 1.35);                               // P17
+  proche(p.ag, 0.84);                              // F55
+  proche(p.av, 0.5670000000000001);                // F56
+  proche(p.Nq, 18.401122218708668);                // F57
+  proche(p.Ngamma, 20.093085194346052);            // F58
+  proche(p.cohesion, 35.714285714285715);          // F51
+  proche(p.gammaRd, 1);                            // E31
+});
+
+test("annexe F : les efforts réduits concordent", () => {
+  const x = calculerStabiliteExterne(SISMIQUE).annexeF.directions[0];
+  proche(x.N, 0.023891316288399814);               // K51
+  proche(x.V, 0.0001693041697946548);              // K52
+  proche(x.M, 0.00014108680816221235);             // K53
+});
+
+test("annexe F : elle remplace le bilan externe, elle ne s'y ajoute pas", () => {
+  const sismique = calculerStabiliteExterne(SISMIQUE);
+  const externe = calculerStabiliteExterne(REFERENCE);
+  assert.equal(sismique.bilan.selon, "annexe F");
+  assert.equal(externe.bilan.selon, "stabilité externe");
+
+  // Les trois vérifications externes restent calculées — l'écran les affiche —
+  // mais ce n'est plus l'une d'elles qui décide.
+  assert.ok(Number.isFinite(sismique.glissement.ratio));
+  assert.ok(Number.isFinite(sismique.basculement.ratio));
+  assert.equal(sismique.bilan.ratio, sismique.annexeF.ratio);
+  assert.notEqual(sismique.bilan.ratio,
+    Math.max(sismique.glissement.ratio, sismique.basculement.ratio, sismique.contrainte.ratio));
+
+  // Et le règlement change aussi les pondérations : `AI25 = BC13` ne teste que
+  // l'EC - NF P94-261, donc l'annexe F retombe sur le jeu BAEL / Fascicule 62.
+  assert.notEqual(sismique.glissement.ratio, externe.glissement.ratio);
+});
+
+test("annexe F : le ratio est rendu brut, l'arrondi de la source est à part", () => {
+  // Le classeur arrondit ce ratio à l'unité dans sa case de bilan, ce qui ferait
+  // passer 1,4 pour « vérifié ». On rend le nombre, et on dit ce qu'il devient
+  // chez lui.
+  const r = calculerStabiliteExterne(SISMIQUE).annexeF;
+  assert.equal(r.arrondiDeLaSource, 0);
+  assert.notEqual(r.ratio, r.arrondiDeLaSource);
+});
+
+test("annexe F : une zone ou une catégorie hors tables est refusée, pas extrapolée", () => {
+  assert.throws(() => calculerStabiliteExterne({ ...SISMIQUE, zoneSismique: "1" }), /zones sismiques 2 à 5/);
+  assert.throws(() => calculerStabiliteExterne({ ...SISMIQUE, categorieImportance: "I" }), /catégories d'importance II à IV/);
+  assert.throws(() => calculerStabiliteExterne({ ...SISMIQUE, typeSolEc8: "F" }), /type de sol inconnu/);
+  assert.throws(() => calculerStabiliteExterne({ ...SISMIQUE, categorieSol: "Sol mou" }), /catégorie de sol inconnue/);
+  assert.throws(() => calculerStabiliteExterne({ ...SISMIQUE, sousCategorieSol: "Vase" }), /sous-catégorie de sol inconnue/);
+  assert.ok(REGLEMENTS.includes("EC8-5 Annexe F"));
+});
+
+test("annexe F : un sol cohérent emprunte l'autre colonne du tableau F1", () => {
+  const frottant = calculerStabiliteExterne(SISMIQUE);
+  const coherent = calculerStabiliteExterne({ ...SISMIQUE, categorieSol: "Sol cohérent",
+    sousCategorieSol: "Argile non sensible" });
+  assert.notEqual(coherent.annexeF.ratio, frottant.annexeF.ratio);
+  // Nmax vient alors de la cohésion, pas de Ngamma.
+  proche(coherent.annexeF.parametres.cohesion, 35.714285714285715);
 });
 
 test("un règlement, une répartition ou des unités inconnus sont refusés", () => {
@@ -260,4 +350,131 @@ test("les cases BF61:BQ72 valent un Gmin unitaire et rien d'autre", async () => 
       assert.equal(table[`${col}${ligne}`], 0, `${col}${ligne} devrait être nul`);
     }
   }
+});
+
+
+/**
+ * Les cinq massifs d'une note de calcul réelle.
+ *
+ * Un test par massif plutôt qu'une boucle : quand l'un casse, on veut lire
+ * lequel dans le nom du test, pas le déduire d'un message d'assertion.
+ */
+for (const massif of MASSIFS_NOTE_REELLE) {
+  test(`note réelle — ${massif.nom} : les vingt-deux grandeurs concordent`, () => {
+    const r = calculerStabiliteExterne(massif.entrees);
+    const a = massif.attendu;
+
+    // La note est imprimée à la décimale près : la tolérance est celle de
+    // l'arrondi d'impression, pas une marge de confort.
+    const impression = (obtenu, attendu) => proche(obtenu, attendu, Math.max(0.06 / Math.max(Math.abs(attendu), 1), 5e-4));
+
+    assert.equal(r.glissement.combinaison, a.glissement);
+    impression(r.glissement.HEd, a.HEd);
+    impression(r.glissement.Rhd1, a.Rhd1);
+    impression(r.glissement.Rhd2, a.Rhd2);
+    impression(r.glissement.Rpd, a.Rpd);
+    impression(r.glissement.HRd, a.HRd);
+
+    assert.equal(r.basculement.combinaison, a.basculement);
+    assert.equal(r.basculement.sens, a.sens);
+    impression(r.basculement.MEd, a.MEd);
+    impression(r.basculement.Mst0, a.Mst0);
+    impression(r.basculement.Mstb, a.Mstb);
+    impression(r.basculement.MRd, a.MRd);
+
+    assert.equal(r.contrainte.combinaison, a.contrainte);
+    impression(r.contrainte.Vd, a.Vd);
+    impression(r.contrainte.Mdx, a.Mdx);
+    impression(r.contrainte.Mdy, a.Mdy);
+    impression(r.contrainte.sigmaRef, a.sref);
+    impression(r.contrainte.sigmaLim, a.sLIM);
+    impression(r.contrainte.id, a.id);
+
+    impression(r.surfaces.eluEla.obtenue, a.sc[0]);
+    impression(r.surfaces.elsRares.obtenue, a.sc[1]);
+    impression(r.surfaces.elsQp.obtenue, a.sc[2]);
+  });
+}
+
+test("la note réelle couvre les branches que le classeur ne montrait pas", () => {
+  const sens = new Set(MASSIFS_NOTE_REELLE.map((m) => m.attendu.sens));
+  assert.ok(sens.size >= 3, "au moins trois sens de basculement différents");
+  assert.ok(MASSIFS_NOTE_REELLE.some((m) => m.entrees.sectionLx !== m.entrees.sectionLy),
+    "au moins une semelle rectangulaire");
+  assert.ok(MASSIFS_NOTE_REELLE.some((m) => m.attendu.sc[0] === 0),
+    "au moins une semelle entièrement décomprimée à l'ELU");
+  assert.ok(MASSIFS_NOTE_REELLE.every((m) => m.entrees.repartition === "Constante"),
+    "les cinq sont en répartition constante : c'est ce qu'ils étalonnent");
+});
+
+
+/* ------------------------------------------------------------------ *
+ * Stabilité interne : le ferraillage de la semelle
+ * ------------------------------------------------------------------ */
+
+/** Le ferraillage que le classeur porte, pour comparer ses colonnes IT à JC. */
+const FERRAILLAGE_CLASSEUR = {
+  AIX: { nombre: 2, barre: "HA14" }, AIY: { nombre: 6, barre: "HA12" },
+  ASX: { nombre: 0, barre: "HA8" }, ASY: { nombre: 0, barre: "HA8" }
+};
+
+test("les trois familles de combinaison n'ont pas les mêmes coefficients de matériau", () => {
+  // C'est le piège de cette partie : à l'ELU l'acier est minoré par 1,15, à
+  // l'accidentel il ne l'est pas, au service c'est la fissuration qui plafonne
+  // et le bras de levier vient de la section fissurée. Prendre les mêmes
+  // partout se voit de 13 % sur une nappe — et ne se voit pas sur le maximum,
+  // d'où ces relevés ligne à ligne.
+  const r = calculerStabiliteExterne({ ...REFERENCE, enrobageSemelle: 5, ferraillage: FERRAILLAGE_CLASSEUR });
+  const parLigne = Object.fromEntries(r.interne.parCombinaison.map((l) => [l.ligne, l.aciers]));
+
+  proche(parLigne[22].AIX, 0.17513262206090457);   // IT22  — ELU
+  proche(parLigne[22].AIY, 0.17513262206090457);   // IW22
+  proche(parLigne[100].AIX, 0.15228300012056534);  // IT100 — accidentel
+  proche(parLigne[320].AIX, 0.20354358272199286);  // IT320 — service
+  proche(parLigne[320].AIY, 0.21008528398450235);  // IW320
+});
+
+test("la nappe supérieure suit le classeur, recopie manquée comprise", () => {
+  // `IX` ne porte son facteur de largeur qu'à la ligne 22, et `JB` calcule son
+  // bras de levier sur `IX` au lieu de `JA`. Ce sont des irrégularités de la
+  // source ; les corriger rendrait autre chose qu'elle.
+  const r = calculerStabiliteExterne({ ...REFERENCE, enrobageSemelle: 5, ferraillage: FERRAILLAGE_CLASSEUR });
+  const parLigne = Object.fromEntries(r.interne.parCombinaison.map((l) => [l.ligne, l.aciers]));
+  proche(parLigne[27].ASX, 0.11918490433093114);   // IZ27
+  proche(parLigne[27].ASY, 0.14302188519711737);   // JC27
+  assert.notEqual(parLigne[27].ASX, parLigne[27].ASY);
+});
+
+test("les sections requises sont les maximums du classeur", () => {
+  const r = calculerStabiliteExterne({ ...REFERENCE, enrobageSemelle: 5, ferraillage: FERRAILLAGE_CLASSEUR });
+  const maximums = Object.fromEntries(NAPPES.map((nappe) => [nappe.cle,
+    Math.max(...r.interne.parCombinaison.map((l) => l.aciers[nappe.cle] ?? 0))]));
+  proche(maximums.AIX, 0.5413358889020726);
+  proche(maximums.AIY, 0.5413358889020726);
+  proche(maximums.ASX, 0.11918490433093114);
+  proche(maximums.ASY, 0.14302188519711737);
+});
+
+test("tant que la stabilité externe ne passe pas, le ferraillage ne se prononce pas", () => {
+  // C'est la règle du classeur, et elle est juste : sur une semelle qui glisse,
+  // la question du ferraillage ne se pose pas encore.
+  const r = calculerStabiliteExterne({ ...REFERENCE, enrobageSemelle: 5, ferraillage: FERRAILLAGE_CLASSEUR });
+  assert.equal(r.bilan.verifie, false);
+  for (const nappe of r.interne.nappes) assert.equal(nappe.requise, null);
+});
+
+test("une nappe non déclarée n'a ni section fournie ni exigence", () => {
+  const r = calculerStabiliteExterne({ ...MASSIFS_NOTE_REELLE[0].entrees, enrobageSemelle: 10,
+    ferraillage: { AIX: { nombre: 5, barre: "HA10" } } });
+  const par = Object.fromEntries(r.interne.nappes.map((n) => [n.cle, n]));
+  assert.ok(par.AIX.fournie > 0);
+  assert.equal(par.AIY.fournie, null);
+  assert.equal(par.AIY.requise, null);
+  assert.equal(par.AIY.ratio, null);
+});
+
+test("ce que la stabilité interne ne couvre pas est nommé, pas passé sous silence", () => {
+  const r = calculerStabiliteExterne({});
+  assert.ok(r.interne.horsPortee.includes("Armatures de fût"));
+  assert.ok(r.interne.horsPortee.includes("Poinçonnement"));
 });

@@ -3409,19 +3409,21 @@ async function recomputeAfterMerge(root, proposition) {
       analyse.reports.filter((report) => report.documentId).map((report) => [report.sourceId, report.documentId])
     );
 
-    // L'écriture est la seule phase que l'analyse ne peut pas mesurer
-    // elle-même : c'est ici qu'elle a lieu, c'est donc ici qu'on la chronomètre
-    // et qu'on tient son journal.
-    const debutEcriture = Date.now();
+    // L'écriture ne peut pas se chronométrer : le journal part **avec** elle,
+    // donc il est clos avant qu'elle commence. Ce qui était mesuré ici, c'était
+    // sa préparation — l'empreinte du lot, le rattachement des livrables. Une
+    // durée qui mesure autre chose que son intitulé est pire qu'une absence :
+    // l'étape n'en porte donc pas, et son journal dit pourquoi.
     const carnet = journalDExecution();
-    carnet.dire(`${(analyse.result?.avisStatus ?? []).length} avis écrits au suivi`);
+    carnet.dire(`${(analyse.result?.avisStatus ?? []).length} avis à écrire au suivi`);
     carnet.dire(`${analyse.reports.length} livrable(s) rattachés à l'exécution`);
     if ((analyse.unreachable ?? []).length > 0) {
       carnet.avertir(`${analyse.unreachable.length} livrable(s) n'ont pas été rapatriés : le suivi est écrit sans eux`);
     }
+    carnet.dire("L'écriture n'est pas chronométrée : ce journal part avec elle, donc il se ferme avant qu'elle commence.");
     const ecrire = (steps) => [
       ...steps,
-      { id: "suivi", label: "Suivi écrit", ms: Date.now() - debutEcriture, statut: "ok", lignes: carnet.lignes() }
+      { id: "suivi", label: "Suivi écrit", ms: null, statut: "ok", lignes: carnet.lignes() }
     ];
 
     await saveCtAnalysis({

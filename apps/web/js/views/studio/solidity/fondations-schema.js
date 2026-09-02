@@ -168,7 +168,7 @@ const HAUTEUR_VUE = 240;
 const LARGEUR_UTILE = LARGEUR_VUE - MARGE - MARGE_DROITE;
 const CENTRE = MARGE + LARGEUR_UTILE / 2;
 
-function echapper(valeur) {
+function escapper(valeur) {
   return String(valeur ?? "").replace(/[&<>"']/g, (c) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
   }[c]));
@@ -228,7 +228,8 @@ export function dessinerSchema(entrees = {}, resultat = null) {
   return `
     <div class="fondations-schema">
       <div class="fondations-schema__vues">
-        ${coupe(m, k)}
+        ${coupe(m, k, "X")}
+        ${coupe(m, k, "Y")}
         ${plan(m, k, zone)}
       </div>
       <p class="fondations-schema__echelle">
@@ -237,14 +238,36 @@ export function dessinerSchema(entrees = {}, resultat = null) {
       </p>
       ${m.alertes.length ? `
         <ul class="fondations-schema__alertes">
-          ${m.alertes.map((a) => `<li>${echapper(a)}</li>`).join("")}
+          ${m.alertes.map((a) => `<li>${escapper(a)}</li>`).join("")}
         </ul>` : ""}
     </div>
   `;
 }
 
-/** La coupe suivant l'axe X : ce qui est enterré, et jusqu'où. */
-function coupe(m, k) {
+/**
+ * Une coupe : ce qui est enterré, et jusqu'où.
+ *
+ * Deux coupes plutôt qu'un interrupteur entre elles. Un interrupteur cache la
+ * moitié de la géométrie derrière un clic qu'on ne pense pas à faire, et il
+ * empêche de comparer Lx à Ly d'un coup d'œil — or c'est précisément ce qu'on
+ * regarde quand une semelle n'est pas carrée.
+ *
+ * `axe` vaut « X » ou « Y ». Tout ce qui en dépend — la largeur de la semelle
+ * et du fût, les excentrements, la face où s'exerce la butée — se choisit ici,
+ * une fois, plutôt que d'écrire deux fois le même dessin.
+ */
+function coupe(m, k, axe) {
+  const suivantX = axe === "X";
+  const largeurSemelle = suivantX ? m.semelle.largeur : m.semelle.profondeur;
+  const coteSemelle = suivantX ? m.cotes.I11 : m.cotes.L11;
+  const nomCote = suivantX ? "Lx" : "Ly";
+  const largeurFut = m.fut ? (suivantX ? m.fut.largeur : m.fut.profondeur) : 0;
+  const centreFut = m.fut ? (suivantX ? m.fut.cx : m.fut.cy) : 0;
+  const abscisseCharge = suivantX ? m.pointCharge.x : m.pointCharge.y;
+  return coupeTracee(m, k, { axe, largeurSemelle, coteSemelle, nomCote, largeurFut, centreFut, abscisseCharge });
+}
+
+function coupeTracee(m, k, { axe, largeurSemelle, coteSemelle, nomCote, largeurFut, centreFut, abscisseCharge }) {
   const cx = CENTRE;
   // La vue se cale sur le point le plus haut — le terrain d'ordinaire, la tête
   // du fût quand une saisie la fait sortir du sol.
@@ -253,41 +276,43 @@ function coupe(m, k) {
   const x = (abscisse) => cx + abscisse * k;
 
   const semelle = {
-    x: x(-m.semelle.largeur / 2), y: z(m.niveaux.arase),
-    l: m.semelle.largeur * k, h: m.semelle.hauteur * k
+    x: x(-largeurSemelle / 2), y: z(m.niveaux.arase),
+    l: largeurSemelle * k, h: m.semelle.hauteur * k
   };
   const fut = m.fut ? {
-    x: x(m.fut.cx - m.fut.largeur / 2), y: z(m.fut.haut),
-    l: m.fut.largeur * k, h: m.fut.hauteur * k
+    x: x(centreFut - largeurFut / 2), y: z(m.fut.haut),
+    l: largeurFut * k, h: m.fut.hauteur * k
   } : null;
 
   const basVue = z(m.niveaux.assise) + 18;
-  const xCharge = x(m.pointCharge.x);
+  const xCharge = x(abscisseCharge);
   const zCharge = z(m.pointCharge.z);
+  const motif = `fondations-terres-${axe}`;
+  const pointe = `fondations-fleche-${axe}`;
 
   return `
     <figure class="fondations-schema__vue">
-      <figcaption>Coupe suivant l'axe X</figcaption>
+      <figcaption>Coupe suivant l'axe ${escapper(axe)}</figcaption>
       <svg viewBox="0 0 ${LARGEUR_VUE} ${Math.max(HAUTEUR_VUE, basVue + 26)}" role="img"
-           aria-label="Coupe de la fondation suivant l'axe X">
+           aria-label="Coupe de la fondation suivant l'axe ${escapper(axe)}">
         <defs>
-          <pattern id="fondations-terres" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <pattern id="${motif}" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
             <line x1="0" y1="0" x2="0" y2="7" class="fondations-schema__hachure"></line>
           </pattern>
-          <marker id="fondations-fleche" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
+          <marker id="${pointe}" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
             <path d="M0,0 L8,4 L0,8 z" class="fondations-schema__pointe"></path>
           </marker>
         </defs>
 
         <rect x="6" y="${z(0)}" width="${LARGEUR_VUE - 12}" height="${Math.max(0, basVue - z(0))}"
-              fill="url(#fondations-terres)" class="fondations-schema__terres"></rect>
+              fill="url(#${motif})" class="fondations-schema__terres"></rect>
         <line x1="6" y1="${z(0)}" x2="${LARGEUR_VUE - 6}" y2="${z(0)}" class="fondations-schema__terrain"></line>
         <text x="10" y="${z(0) - 5}" class="fondations-schema__texte">Niveau extérieur fini</text>
 
         ${m.butee ? `
-          <rect x="${x(-m.semelle.largeur / 2) - 12}" y="${z(m.butee.haut)}" width="12"
+          <rect x="${x(-largeurSemelle / 2) - 12}" y="${z(m.butee.haut)}" width="12"
                 height="${Math.max(0, (m.butee.haut - m.butee.bas) * k)}" class="fondations-schema__butee"></rect>
-          <text x="${x(-m.semelle.largeur / 2) - 12}" y="${z(m.butee.haut) - 4}"
+          <text x="${x(-largeurSemelle / 2) - 12}" y="${z(m.butee.haut) - 4}"
                 class="fondations-schema__texte">butée</text>` : ""}
 
         <rect x="${semelle.x}" y="${semelle.y}" width="${semelle.l}" height="${semelle.h}"
@@ -295,13 +320,13 @@ function coupe(m, k) {
         ${fut ? `<rect x="${fut.x}" y="${fut.y}" width="${fut.l}" height="${fut.h}" class="fondations-schema__beton"></rect>` : ""}
 
         <line x1="${xCharge}" y1="${zCharge - 30}" x2="${xCharge}" y2="${zCharge - 3}"
-              class="fondations-schema__effort" marker-end="url(#fondations-fleche)"></line>
+              class="fondations-schema__effort" marker-end="url(#${pointe})"></line>
         <text x="${xCharge + 5}" y="${zCharge - 22}" class="fondations-schema__texte">V, H, M</text>
 
         <line x1="${semelle.x}" y1="${basVue}" x2="${semelle.x + semelle.l}" y2="${basVue}"
               class="fondations-schema__cote"></line>
         <text x="${cx}" y="${basVue + 13}" text-anchor="middle" class="fondations-schema__texte">
-          Lx = ${cote(m.cotes.I11)} m
+          ${escapper(nomCote)} = ${cote(coteSemelle)} m
         </text>
 
         <line x1="${semelle.x + semelle.l + 10}" y1="${semelle.y}" x2="${semelle.x + semelle.l + 10}"

@@ -17969,3 +17969,10 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 /* Le compte est en bout de la colonne « Action » : sans marge, il vient
    toucher l'en-tête « Quand » et les deux se lisent comme un seul mot. */
 .workflow-runs__head-count{ margin-right:16px; }
+.fondations-nappes th[scope="row"]{ font-family:ui-monospace, SFMono-Regular, Menlo, monospace; }
+.fondations-nappes td{ text-align:right; white-space:nowrap; }
+.fondations-nappes td.est-depasse{ color:var(--danger, #f85149); font-weight:600; }
+/* Un champ qui ne sert pas au règlement retenu est grisé, jamais retiré :
+   le retirer ferait disparaître une saisie déjà faite, et rouvrir l'écran ne
+   dirait plus pourquoi elle a disparu. */
+.fondations-champ.est-hors-sujet{ opacity:.45; }

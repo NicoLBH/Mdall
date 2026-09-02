@@ -17,8 +17,8 @@ import { escapeHtml } from "../../../utils/escape-html.js";
 import { registerProjectPrimaryScrollSource } from "../../project-shell-chrome.js";
 import { renderGhActionButton } from "../../ui/gh-split-button.js";
 import {
-  ZONES, CHOIX, CAS_DE_CHARGE, COMPOSANTES,
-  entreesParDefaut, entreesInvalides, uniteAffichee
+  ZONES, CHOIX, CAS_DE_CHARGE, COMPOSANTES, NAPPES, BARRES,
+  entreesParDefaut, entreesInvalides, uniteAffichee, estPertinent
 } from "../../../services/fondations-declaration.js";
 import { calculerFondation } from "../../../services/fondations-service.js";
 import { dessinerSchema } from "./fondations-schema.js";
@@ -66,10 +66,13 @@ function brancher(root) {
   root.addEventListener("input", (evenement) => {
     const champ = evenement.target.closest("[data-fondation-champ]");
     const charge = champ ? null : evenement.target.closest("[data-fondation-charge]");
+    const nappe = champ || charge ? null : evenement.target.closest("[data-fondation-nappe]");
     if (champ) etat.entrees[champ.dataset.fondationChamp] = champ.value;
     else if (charge) {
       const [cas, composante] = charge.dataset.fondationCharge.split(".");
       etat.entrees.charges[cas][composante] = charge.value;
+    } else if (nappe) {
+      etat.entrees.ferraillage[nappe.dataset.fondationNappe].nombre = nappe.value;
     } else return;
 
     // On ne redessine pas la page — le curseur serait perdu au milieu d'un
@@ -80,6 +83,13 @@ function brancher(root) {
   });
 
   root.addEventListener("change", (evenement) => {
+    const barre = evenement.target.closest("[data-fondation-barre]");
+    if (barre) {
+      etat.entrees.ferraillage[barre.dataset.fondationBarre].barre = barre.value;
+      etat.invalides = entreesInvalides(etat.entrees);
+      dessiner(root);
+      return;
+    }
     const choix = evenement.target.closest("[data-fondation-choix]");
     if (!choix) return;
     etat.entrees[choix.dataset.fondationChoix] = choix.value;
@@ -149,8 +159,8 @@ function dessiner(root) {
         </div>
         <div class="settings-card__body studio-tool-card__body">
           <p class="gh-text-muted">
-            Stabilité externe d'une fondation superficielle : glissement, basculement,
-            contrainte de référence et surfaces comprimées, sur 376 combinaisons d'actions.
+            Fondation superficielle : glissement, basculement, contrainte de référence,
+            surfaces comprimées et ferraillage de la semelle, sur 376 combinaisons d'actions.
             Le calcul est fait par le serveur, jamais par ce navigateur.
           </p>
           ${etat.erreur ? `<p class="fondations-erreur">${escapeHtml(etat.erreur)}</p>` : ""}
@@ -169,6 +179,7 @@ function dessiner(root) {
               ${dessinerChoix()}
               ${ZONES.map(dessinerZone).join("")}
               ${dessinerCharges()}
+              ${dessinerFerraillage()}
             </div>
             <div class="fondations-colonne">
               ${dessinerResultats()}
@@ -196,7 +207,8 @@ function dessinerChoix() {
       <legend>Hypothèses réglementaires</legend>
       <div class="fondations-champs">
         ${CHOIX.map((choix) => `
-          <label class="fondations-champ">
+          <label class="fondations-champ${estPertinent(choix, etat.entrees) ? "" : " est-hors-sujet"}"
+                 ${estPertinent(choix, etat.entrees) ? "" : `title="Ne sert qu'au règlement EC8-5 Annexe F."`}>
             <span class="fondations-champ__libelle">${escapeHtml(choix.libelle)}</span>
             <select class="fondations-champ__saisie" data-fondation-choix="${escapeHtml(choix.cle)}">
               ${choix.valeurs.map((valeur) => `
@@ -212,6 +224,7 @@ function dessinerChoix() {
 
 function dessinerZone(zone) {
   const unites = String(etat.entrees.unites || "");
+  if (!estPertinent(zone, etat.entrees)) return "";
   return `
     <fieldset class="fondations-zone">
       <legend>${escapeHtml(zone.titre)}</legend>
@@ -259,6 +272,53 @@ function dessinerCharges() {
                       value="${escapeHtml(String(etat.entrees.charges?.[cas.cle]?.[comp.cle] ?? ""))}">
                   </td>
                 `).join("")}
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </div>
+    </fieldset>
+  `;
+}
+
+/**
+ * Le ferraillage proposé.
+ *
+ * C'est une saisie, pas un résultat : l'utilitaire ne choisit pas les barres,
+ * il dit ce que la proposition vaut face à ce que le calcul exige. Une nappe
+ * laissée à zéro n'est pas une nappe nulle — c'est une nappe qu'on ne pose pas,
+ * et rien ne sera exigé d'elle.
+ */
+function dessinerFerraillage() {
+  return `
+    <fieldset class="fondations-zone">
+      <legend>Ferraillage de la semelle</legend>
+      <p class="fondations-zone__note">
+        Ce que vous proposez de poser. Le calcul dira ce qu'il faut, il ne le choisit pas.
+      </p>
+      <div class="fondations-charges-defilement">
+        <table class="fondations-charges">
+          <thead>
+            <tr><th scope="col">Nappe</th><th scope="col">Nombre</th><th scope="col">Diamètre</th></tr>
+          </thead>
+          <tbody>
+            ${NAPPES.map((nappe) => `
+              <tr>
+                <th scope="row" class="fondations-charges__nature">${escapeHtml(nappe.libelle)}</th>
+                <td>
+                  <input class="fondations-champ__saisie fondations-champ__saisie--serre" type="text" inputmode="numeric"
+                    aria-label="${escapeHtml(`${nappe.libelle} — nombre de barres`)}"
+                    data-fondation-nappe="${escapeHtml(nappe.cle)}"
+                    value="${escapeHtml(String(etat.entrees.ferraillage?.[nappe.cle]?.nombre ?? ""))}">
+                </td>
+                <td>
+                  <select class="fondations-champ__saisie" data-fondation-barre="${escapeHtml(nappe.cle)}"
+                          aria-label="${escapeHtml(`${nappe.libelle} — diamètre`)}">
+                    ${BARRES.map((barre) => `
+                      <option value="${escapeHtml(barre)}"${String(etat.entrees.ferraillage?.[nappe.cle]?.barre) === barre ? " selected" : ""}>${escapeHtml(barre)}</option>
+                    `).join("")}
+                  </select>
+                </td>
               </tr>
             `).join("")}
           </tbody>
@@ -318,6 +378,58 @@ function ratioDepasse(ratio) {
   return Number.isFinite(n) && (n > 1 || n < 0);
 }
 
+/** Le ferraillage : ce qui est posé, ce qu'il faut, et l'écart. */
+function dessinerInterne(r) {
+  const interne = r.interne;
+  if (!interne) return "";
+
+  if (interne.ratio === null) {
+    return `
+      <section class="fondations-bloc">
+        <header class="fondations-bloc__tete"><h5>Ferraillage de la semelle</h5></header>
+        <p class="fondations-bloc__combinaison">
+          ${r.bilan?.verifie
+            ? "Aucune nappe n'est proposée : renseignez un nombre de barres pour que le calcul se prononce."
+            : "La stabilité externe n'est pas vérifiée : sur une semelle qui glisse ou qui bascule, la question du ferraillage ne se pose pas encore."}
+        </p>
+      </section>
+    `;
+  }
+
+  return `
+    <section class="fondations-bloc">
+      <header class="fondations-bloc__tete">
+        <h5>Ferraillage de la semelle</h5>
+        <span class="fondations-bloc__ratio${ratioDepasse(interne.ratio) ? " est-depasse" : ""}">${escapeHtml(ratioLisible(interne.ratio))}</span>
+      </header>
+      <div class="fondations-charges-defilement">
+        <table class="fondations-charges fondations-nappes">
+          <thead>
+            <tr>
+              <th scope="col">Nappe</th><th scope="col">Posé</th><th scope="col">es</th>
+              <th scope="col">As</th><th scope="col">As,min</th><th scope="col">Ratio</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${interne.nappes.map((nappe) => `
+              <tr>
+                <th scope="row">${escapeHtml(nappe.cle)}</th>
+                <td>${nappe.nombre > 0 ? escapeHtml(`${nappe.nombre} ${nappe.barre}`) : "—"}</td>
+                <td>${nappe.espacement === null ? "—" : escapeHtml(`${nombreLisible(nappe.espacement, 2)} m`)}</td>
+                <td>${nappe.fournie === null ? "—" : escapeHtml(`${nombreLisible(nappe.fournie, 1)} cm²`)}</td>
+                <td>${nappe.requise === null ? "—"
+                  : nappe.requise === Infinity ? "section insuffisante"
+                    : escapeHtml(`${nombreLisible(nappe.requise, 2)} cm²`)}</td>
+                <td class="${ratioDepasse(nappe.ratio) ? "est-depasse" : ""}">${nappe.ratio === null ? "—" : escapeHtml(ratioLisible(nappe.ratio))}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
 function dessinerResultats() {
   if (!etat.resultat) {
     return `
@@ -330,9 +442,10 @@ function dessinerResultats() {
 
   const r = etat.resultat;
   const u = r.unites || {};
+  const selon = r.bilan?.selon === "annexe F" ? "Capacité portante sismique" : "Stabilité externe";
   const verdict = r.bilan?.verifie
-    ? `<span class="fondations-verdict fondations-verdict--ok">Stabilité externe vérifiée</span>`
-    : `<span class="fondations-verdict fondations-verdict--ko">Stabilité externe non vérifiée</span>`;
+    ? `<span class="fondations-verdict fondations-verdict--ok">${escapeHtml(selon)} vérifiée</span>`
+    : `<span class="fondations-verdict fondations-verdict--ko">${escapeHtml(selon)} non vérifiée</span>`;
 
   const bloc = (titre, ratio, combinaison, lignes) => `
     <section class="fondations-bloc">
@@ -369,6 +482,24 @@ function dessinerResultats() {
         sur ${escapeHtml(String(r.combinaisonsExaminees ?? "—"))} combinaisons examinées.
         Un ratio supérieur à 1 signifie que la sollicitation dépasse la résistance.
       </p>
+
+      ${r.annexeF ? bloc("Capacité portante sismique — EN 1998-5 annexe F", r.annexeF.ratio, r.annexeF.combinaison, [
+        ["Direction déterminante", `suivant ${r.annexeF.direction}`, ""],
+        ["ag — accélération de calcul", nombreLisible(r.annexeF.parametres.ag, 3), "m/s²"],
+        ["S — paramètre de sol", nombreLisible(r.annexeF.parametres.S, 2), ""],
+        ["gRd — coefficient de modèle", nombreLisible(r.annexeF.parametres.gammaRd, 2), ""],
+        ["N — effort normal réduit", nombreLisible(r.annexeF.directions.find((d) => d.direction === r.annexeF.direction)?.N, 4), ""],
+        ["V — effort tranchant réduit", nombreLisible(r.annexeF.directions.find((d) => d.direction === r.annexeF.direction)?.V, 4), ""],
+        ["M — moment réduit", nombreLisible(r.annexeF.directions.find((d) => d.direction === r.annexeF.direction)?.M, 4), ""]
+      ]) : ""}
+      ${r.annexeF ? `<p class="fondations-resultats__portee">
+        Sous ce règlement, l'annexe F <strong>remplace</strong> les trois vérifications
+        ci-dessous : elle tient le triplet (N, V, M) à l'intérieur d'une surface limite,
+        au lieu de juger séparément le glissement, le basculement et la contrainte.
+        Celles-ci restent affichées pour information.
+        L'outil d'origine arrondit ce ratio à l'unité dans sa case de bilan
+        (${escapeHtml(String(r.annexeF.arrondiDeLaSource))}) ; le nombre est donné ici tel quel.
+      </p>` : ""}
 
       ${bloc("Glissement", r.glissement?.ratio, r.glissement?.combinaison, [
         ["HEd — effort horizontal total", nombreLisible(r.glissement?.HEd, 1), u.effort],
@@ -408,10 +539,14 @@ function dessinerResultats() {
         </dl>
       </section>
 
+      ${dessinerInterne(r)}
+
       <p class="fondations-resultats__portee">
-        Cet écran porte la <strong>stabilité externe</strong>. La stabilité interne
-        (ferraillage) et la capacité portante sismique de l'annexe F de l'EC8-5
-        ne sont pas calculées ici, et ne sont donc pas vérifiées par ce résultat.
+        Cet écran porte la <strong>stabilité externe</strong>, le
+        <strong>ferraillage de la semelle</strong> et la <strong>capacité portante
+        sismique</strong> de l'annexe F. Ne sont pas calculés :
+        ${escapeHtml((r.interne?.horsPortee ?? []).join(", ").toLowerCase())}.
+        Ils ne sont donc pas vérifiés par ce résultat.
       </p>
     </article>
   `;
