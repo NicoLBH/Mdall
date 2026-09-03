@@ -807,3 +807,247 @@ test("l'alinéa de l'article 3 ne vise que les bâtiments déclassés", () => {
   assert.equal(consulter(sansDeclassement).faits.colonnesSechesDeclassement, "sans objet");
   assert.match(consulter(sansDeclassement).faits.colonneSeche, /exigée/);
 });
+
+/* ── Titre VI : parcs de stationnement couverts ──────────────────────────── */
+
+/** Un parc annexe ordinaire : dans le champ, et rien d'autre de décidé. */
+const PARC = { parcDeStationnement: true, surfaceParc: 2000 };
+const parc = (extra = {}) => consulter({ ...PARC, ...extra });
+
+test("le titre VI ne s'applique qu'entre 100 m² et 6 000 m²", () => {
+  assert.equal(parc({ surfaceParc: 2000 }).faits.parcDansLeChamp, "dans le champ");
+  // Les deux bornes sont exclusives dans des sens opposés : « plus de 100 m² et
+  // 6 000 m² au plus ».
+  assert.match(parc({ surfaceParc: 100 }).faits.parcDansLeChamp, /au plus 100 m²/);
+  assert.equal(parc({ surfaceParc: 101 }).faits.parcDansLeChamp, "dans le champ");
+  assert.equal(parc({ surfaceParc: 6000 }).faits.parcDansLeChamp, "dans le champ");
+  assert.match(parc({ surfaceParc: 6001 }).faits.parcDansLeChamp, /plus de 6 000 m²/);
+});
+
+test("sans parc déclaré, tout le titre VI se tait — et ne pose aucune question", () => {
+  const sansParc = consulter({ parcDeStationnement: false });
+  assert.equal(sansParc.faits.parcDansLeChamp, "sans objet");
+  assert.equal(sansParc.faits.stabiliteParc, "sans objet");
+  assert.equal(sansParc.faits.boxesDansLeParcVerdict, "sans objet");
+  // La question des boxes ne se pose pas non plus : elle n'a de sens qu'une fois
+  // le parc reconnu.
+  assert.equal(sansParc.questions.some((q) => q.cle === "boxesDansLeParc"), false);
+});
+
+test("le parc a sa propre racine : il se juge sans savoir la famille du bâtiment", () => {
+  // C'est la nouveauté structurelle du titre VI. Une colonne entière de modules
+  // conclut alors que le classement, lui, n'a pas encore de quoi se prononcer.
+  const vue = parc({ niveauxParcAuDessus: 0, niveauxParcAuDessous: 1 });
+  assert.equal(vue.faits.classement, undefined);
+  assert.equal(vue.faits.stabiliteParc, "SF 1 h — planchers séparatifs CF 1 h");
+  assert.equal(vue.faits.accesVehiculesLourds, "interdit au-delà de 3,5 t");
+  assert.match(vue.faits.reactionAuFeuParc, /^M0/);
+});
+
+test("la stabilité au feu du parc se lit en trois tranches, article 81", () => {
+  // La première parle d'un rez-de-chaussée éventuellement surmonté d'un étage ;
+  // les suivantes de niveaux « au-dessus **ou** au-dessous » — c'est le plus
+  // grand des deux comptes qui commande, et non leur somme.
+  assert.equal(parc({ niveauxParcAuDessus: 1, niveauxParcAuDessous: 0 }).faits.stabiliteParc, "SF 1/2 h");
+  assert.equal(parc({ niveauxParcAuDessus: 0, niveauxParcAuDessous: 2 }).faits.stabiliteParc,
+    "SF 1 h — planchers séparatifs CF 1 h");
+  assert.equal(parc({ niveauxParcAuDessus: 2, niveauxParcAuDessous: 2 }).faits.stabiliteParc,
+    "SF 1 h — planchers séparatifs CF 1 h");
+  // Au-delà de deux niveaux, c'est la hauteur du plancher bas du dernier niveau
+  // qui tranche, et l'article s'arrête à 28 m.
+  const profond = { niveauxParcAuDessus: 0, niveauxParcAuDessous: 4 };
+  assert.equal(parc({ ...profond, hauteurPlancherBasDernierNiveauParc: 12 }).faits.stabiliteParc,
+    "SF 1 h 30 — planchers séparatifs CF 1 h 30");
+  assert.match(parc({ ...profond, hauteurPlancherBasDernierNiveauParc: 30 }).faits.stabiliteParc,
+    /au-delà de la portée de l'article 81/);
+});
+
+test("l'isolement d'un parc contigu est la seule liaison avec le classement", () => {
+  const contigu = { ...PARC, parcContiguAImmeuble: true };
+  const troisB = consulter({ ...troisiemeB(), ...contigu });
+  assert.equal(troisB.faits.classement, "3e famille B");
+  assert.equal(troisB.faits.isolementParcContigu, "CF 2 h");
+  const deuxieme = consulter({ ...COLLECTIF, etagesSurRdc: 3,
+    hauteurPlancherBasLogementLePlusHaut: 9, hauteurPlancherBasNiveauLePlusHaut: 9, ...contigu });
+  assert.equal(deuxieme.faits.classement, "2e famille");
+  assert.equal(deuxieme.faits.isolementParcContigu, "CF 1 h");
+  // Le plancher bas est expressément exclu, et « contigu » inclut le parc situé
+  // en dessous de l'immeuble.
+  const module = troisB.modules.find((m) => m.id === "isolement-parc-contigu");
+  assert.match(module.mention, /plancher bas est expressément exclu/);
+  assert.match(module.mention, /situé en dessous/);
+});
+
+test("un parc non contigu ne s'isole qu'en deçà de 8 m", () => {
+  assert.match(parc({ parcContiguAImmeuble: false, distanceParcAImmeubleHabite: 5 }).faits.isolementParcContigu,
+    /murs extérieurs PF 1 h dans la zone de 8 m/);
+  assert.match(parc({ parcContiguAImmeuble: false, distanceParcAImmeubleHabite: 8 }).faits.isolementParcContigu,
+    /aucun isolement exigé/);
+});
+
+test("une communication vers le bâtiment appelle un sas — et trois interdictions", () => {
+  assert.equal(parc({ communicationParcImmeuble: false }).faits.sasCommunicationParc, "sans objet");
+  const avecSas = parc({ communicationParcImmeuble: true });
+  assert.equal(avecSas.faits.sasCommunicationParc, "sas de 3 m² minimum, deux portes PF 1/2 h");
+  // Ce sont les interdictions qui servent en réunion, plus que l'exigence
+  // elle-même : elles ne se lisent pas dans l'article, seulement dans la
+  // réponse ministérielle de 1988.
+  const mention = avecSas.modules.find((m) => m.id === "sas-communication-parc").mention;
+  assert.match(mention, /ne dessert jamais à la fois le parc et le\s+volume des caves/);
+  assert.match(mention, /ne débouche pas dans la cage d'escalier commune/);
+});
+
+test("le recoupement en compartiments ne vise que le dessous du niveau de référence", () => {
+  assert.match(parc({ niveauxParcAuDessous: 0 }).faits.recoupementParc, /sans objet/);
+  const sousSol = { niveauxParcAuDessous: 2 };
+  assert.match(parc({ ...sousSol, superficieCompartimentParc: 2999 }).faits.recoupementParc, /compartiments conformes/);
+  // 3 000 m² pile est déjà trop : le texte dit « inférieurs à 3 000 m² ».
+  assert.match(parc({ ...sousSol, superficieCompartimentParc: 3000 }).faits.recoupementParc, /recoupement exigé/);
+  assert.match(parc({ ...sousSol, superficieCompartimentParc: 3000 }).modules
+    .find((m) => m.id === "recoupement-parc").mention, /pare-flammes de degré 1\/2 heure à fermeture automatique/);
+});
+
+test("un box du parc ne compte pas plus de deux emplacements", () => {
+  assert.equal(parc({ boxesDansLeParc: false }).faits.boxesDansLeParcVerdict, "sans objet");
+  assert.match(parc({ boxesDansLeParc: true, emplacementsParBox: 2 }).faits.boxesDansLeParcVerdict, /conformes/);
+  assert.match(parc({ boxesDansLeParc: true, emplacementsParBox: 3 }).faits.boxesDansLeParcVerdict, /non conformes/);
+  // Et pas de cave ni de rangement fermé en fond de box.
+  assert.match(parc({ boxesDansLeParc: true, emplacementsParBox: 2 }).modules
+    .find((m) => m.id === "boxes-dans-le-parc").mention, /caves ou des espaces de rangement fermés en fond de\s+box/);
+});
+
+test("la couverture dominée par des façades vitrées est PF 1 h sur 8 m", () => {
+  assert.match(parc({ couvertureParcDomineeParFacadesVitrees: true }).faits.couvertureParc,
+    /PF 1 h sur 8 m/);
+  assert.match(parc({ couvertureParcDomineeParFacadesVitrees: false }).faits.couvertureParc,
+    /aucune exigence par cet article/);
+});
+
+test("l'article 86 ne connaît que trois cas de revêtement de couverture", () => {
+  assert.equal(parc({ revetementCouvertureParcClasse: "M0" }).faits.revetementCouvertureParc,
+    "admis sans restriction");
+  assert.equal(parc({ revetementCouvertureParcClasse: "M3", supportCouvertureParcContinu: true })
+    .faits.revetementCouvertureParc, "admis sans restriction");
+  // Un M3 sur un support quelconque suit la règle des M4 : plus de 8 m.
+  const m3PosePartout = { revetementCouvertureParcClasse: "M3", supportCouvertureParcContinu: false };
+  assert.match(parc({ ...m3PosePartout, distanceCouvertureParcAuBatimentVoisin: 10 }).faits.revetementCouvertureParc,
+    /admis — plus de 8 m/);
+  assert.match(parc({ ...m3PosePartout, distanceCouvertureParcAuBatimentVoisin: 8 }).faits.revetementCouvertureParc,
+    /non admis/);
+  assert.match(parc({ revetementCouvertureParcClasse: "M4", distanceCouvertureParcAuBatimentVoisin: 6 })
+    .faits.revetementCouvertureParc, /non admis/);
+});
+
+test("la distance vers une issue tombe de 40 m à 25 m sans choix entre plusieurs", () => {
+  assert.match(parc({ plusieursIssuesAuChoix: true, distanceAParcourirVersIssueParc: 40 }).faits.distanceIssuesParc,
+    /admissible — 40 m au plus/);
+  assert.match(parc({ plusieursIssuesAuChoix: true, distanceAParcourirVersIssueParc: 41 }).faits.distanceIssuesParc,
+    /dépassée/);
+  // Un seul escalier, ou une partie formant cul-de-sac : 25 m.
+  assert.match(parc({ plusieursIssuesAuChoix: false, distanceAParcourirVersIssueParc: 30 }).faits.distanceIssuesParc,
+    /dépassée — 25 m au plus admis/);
+  assert.match(parc({ plusieursIssuesAuChoix: false, distanceAParcourirVersIssueParc: 25 }).faits.distanceIssuesParc,
+    /admissible — 25 m au plus/);
+});
+
+test("les cloisons d'escalier du parc : 1/2 heure au seul rez-de-chaussée surmonté d'un étage", () => {
+  assert.match(parc({ niveauxParcAuDessus: 1, niveauxParcAuDessous: 0 }).faits.escaliersParc, /CF 1\/2 h/);
+  assert.match(parc({ niveauxParcAuDessus: 0, niveauxParcAuDessous: 1 }).faits.escaliersParc, /CF 1 h/);
+  // Et l'escalier du sous-sol n'aboutit jamais dans celui des niveaux hauts.
+  assert.match(parc({ niveauxParcAuDessus: 0, niveauxParcAuDessous: 1 }).modules
+    .find((m) => m.id === "escaliers-parc").mention, /ne doivent pas\s+aboutir dans ceux desservant les niveaux situés au-dessus/);
+});
+
+test("l'escalier qui aboutit dans l'immeuble appelle un sas, sinon une porte PF 1/2 h", () => {
+  assert.match(parc({ escaliersParcAboutissentDansImmeuble: true }).faits.protectionEscaliersParc,
+    /sas à chaque niveau/);
+  assert.match(parc({ escaliersParcAboutissentDansImmeuble: false }).faits.protectionEscaliersParc,
+    /portes PF 1\/2 h/);
+});
+
+test("sous le niveau de référence, la ventilation naturelle ne tient pas sans larges ouvertures", () => {
+  const enterre = { niveauxParcAuDessous: 2, ventilationParcRetenue: "naturelle" };
+  assert.match(parc({ ...enterre, largesOuverturesDeuxFacesOpposees: false }).faits.ventilationParc,
+    /non conforme — ventilation mécanique exigée/);
+  // Le cas particulier qu'on oublie : de larges ouvertures à l'air libre sur
+  // deux faces opposées, à chaque niveau.
+  assert.match(parc({ ...enterre, largesOuverturesDeuxFacesOpposees: true }).faits.ventilationParc,
+    /6 dm² par véhicule/);
+  // Un seul niveau enterré : la mécanique ne s'impose pas.
+  assert.match(parc({ niveauxParcAuDessous: 1, ventilationParcRetenue: "naturelle",
+    largesOuverturesDeuxFacesOpposees: false }).faits.ventilationParc, /6 dm² par véhicule/);
+  assert.match(parc({ ventilationParcRetenue: "mecanique" }).faits.ventilationParc, /600 m³\/h par voiture/);
+  // Le désenfumage n'est pas une seconde installation : c'est celle-là.
+  assert.match(parc({ ventilationParcRetenue: "naturelle", niveauxParcAuDessous: 0 }).modules
+    .find((m) => m.id === "ventilation-parc").mention, /il n'y a pas deux installations/);
+});
+
+test("la détection de l'article 95 ne compte pas les niveaux comme la caisse de sable de l'article 96", () => {
+  // C'est la subtilité du titre VI, et le ministère a refusé d'en donner une
+  // règle générale en 1987 : « à partir du 3ème niveau » exclut le niveau de
+  // référence, « à chaque niveau une caisse de 100 litres » l'inclut.
+  const quatreNiveaux = { niveauxParcAuDessous: 4, extinctionAutomatiqueInstallee: false };
+  assert.match(parc(quatreNiveaux).faits.detectionParc, /à partir du 3ᵉ niveau/);
+  assert.match(parc({ niveauxParcAuDessous: 6 }).faits.detectionParc, /à tous les niveaux/);
+  assert.match(parc({ niveauxParcAuDessous: 3 }).faits.detectionParc, /non exigée/);
+  // L'extinction automatique lève l'exigence du premier tiret.
+  assert.match(parc({ niveauxParcAuDessous: 4, extinctionAutomatiqueInstallee: true }).faits.detectionParc,
+    /non exigée — extinction automatique installée/);
+  assert.match(parc(quatreNiveaux).modules.find((m) => m.id === "detection-parc").mention,
+    /ne compte pas le niveau de référence/);
+  // Les moyens de lutte, eux, ne dépendent d'aucun compte : une caisse par
+  // niveau, niveau de référence compris.
+  assert.match(parc().faits.moyensDeLutteParc, /1 caisse de sable par niveau/);
+  assert.match(parc().modules.find((m) => m.id === "moyens-de-lutte-parc").mention,
+    /« niveau » \*\*inclut\*\* le niveau de référence/);
+});
+
+test("l'alarme aux usagers : plus de quatre niveaux au-dessus, ou plus de deux au-dessous", () => {
+  assert.equal(parc({ niveauxParcAuDessus: 5, niveauxParcAuDessous: 0 }).faits.alarmeUsagersParc, "exigé");
+  assert.equal(parc({ niveauxParcAuDessus: 0, niveauxParcAuDessous: 3 }).faits.alarmeUsagersParc, "exigé");
+  assert.equal(parc({ niveauxParcAuDessus: 4, niveauxParcAuDessous: 2 }).faits.alarmeUsagersParc, "non exigé");
+});
+
+test("les colonnes sèches du parc s'alimentent à 100 m, celles du bâtiment à 60 m", () => {
+  assert.match(parc({ niveauxParcAuDessus: 5, niveauxParcAuDessous: 0 }).faits.colonneSecheParc, /exigées/);
+  assert.match(parc({ niveauxParcAuDessus: 0, niveauxParcAuDessous: 4 }).faits.colonneSecheParc, /exigées/);
+  assert.equal(parc({ niveauxParcAuDessus: 4, niveauxParcAuDessous: 3 }).faits.colonneSecheParc, "non exigées");
+  // Deux chiffres voisins pour la même prise d'eau, dans deux articles
+  // différents : c'est exactement le genre d'écart qu'on relit deux fois.
+  assert.match(parc({ niveauxParcAuDessous: 4 }).modules.find((m) => m.id === "colonne-seche-parc").mention,
+    /100 m ici, contre\s+60 m à l'article 98/);
+});
+
+test("détection et extinction automatique se répondent d'un article à l'autre", () => {
+  // L'article 96, 3°) dispense du réseau d'extinction le parc équipé de
+  // détection à partir du troisième niveau — et l'article 95, 1°) dispense de
+  // détection celui qui a l'extinction. Les deux se lisent ensemble.
+  assert.match(parc({ niveauxParcAuDessous: 4, extinctionAutomatiqueInstallee: false })
+    .faits.extinctionAutomatiqueParc, /non exigée — détection automatique installée/);
+  assert.match(parc({ niveauxParcAuDessous: 4, extinctionAutomatiqueInstallee: true })
+    .faits.extinctionAutomatiqueParc, /exigée à partir du 3ᵉ niveau/);
+  assert.match(parc({ niveauxParcAuDessous: 6 }).faits.extinctionAutomatiqueParc, /à partir du 6ᵉ niveau/);
+  assert.equal(parc({ niveauxParcAuDessous: 3 }).faits.extinctionAutomatiqueParc, "non exigée");
+});
+
+test("le copilote peut demander une exigence du parc, et on lui dit ce qui manque", () => {
+  const rendu = demander("recoupementParc", { ...PARC, niveauxParcAuDessous: 2, superficieCompartimentParc: 4000 });
+  assert.equal(rendu.ok, true);
+  assert.match(rendu.valeur, /recoupement exigé/);
+  assert.equal(rendu.pourquoi.article, "84");
+  assert.equal(rendu.pourquoi.paragraphe, "1°)");
+  // Le chemin passe par le champ d'application, pas par le classement.
+  assert.deepEqual(rendu.chemin.map((e) => e.id), ["champ-parc", "recoupement-parc"]);
+  // Sans rien savoir du parc, on ne rend pas une valeur : on nomme la question.
+  const muet = demander("recoupementParc", {});
+  assert.equal(muet.ok, false);
+  assert.equal(muet.manque.some((q) => q.cle === "parcDeStationnement"), true);
+});
+
+test("le dépouillement du titre VI ne descend pas dans le navigateur", () => {
+  // Même garde que pour le reste du corpus : la table des règles reste au
+  // serveur, et un parc n'y fait pas exception.
+  const serialise = JSON.stringify(parc({ niveauxParcAuDessous: 4, superficieCompartimentParc: 4000 }));
+  assert.equal(serialise.includes('"regles"'), false);
+  assert.equal(serialise.includes('"si"'), false);
+});

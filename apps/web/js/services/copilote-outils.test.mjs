@@ -409,12 +409,37 @@ test("chaque utilitaire est proposé au modèle avec son périmètre, et ses bor
   assert.deepEqual(noms.sort(), ["incendie_habitation", "profondeur_hors_gel", "spectre_elastique_ec8"]);
   assert.match(GEL.aQuoiCaSert, /ne dimensionne pas la fondation/i);
   assert.match(SPECTRE.aQuoiCaSert, /ne dimensionne aucun élément/i);
-  assert.match(outilParId("incendie_habitation").aQuoiCaSert, /ne traite ni les parcs de stationnement/i);
+  assert.match(outilParId("incendie_habitation").aQuoiCaSert, /ne traite ni les parcs de plus de 6 000 m²/i);
+});
+
+test("une question de parc n'exige pas qu'on décrive le bâtiment", () => {
+  // Le titre VI se juge sur le parc lui-même : sa surface, ses niveaux, sa
+  // contiguïté. Réclamer le nombre d'étages du bâtiment avant de dire à quel
+  // degré le parc doit être stable, ce serait refuser de répondre à une
+  // question qui a pourtant tout ce qu'il faut.
+  const incendie = outilParId("incendie_habitation");
+  const duParc = { exigence: "stabiliteParc", parcDeStationnement: "oui", surfaceParc: 2000,
+    niveauxParcAuDessus: 1, niveauxParcAuDessous: 2 };
+  assert.deepEqual(entreesManquantes(incendie, duParc).map((e) => e.cle), []);
+  // Pour tout le reste, décrire le bâtiment reste le préalable : c'est le
+  // classement qui commande, et il ne se devine pas.
+  assert.deepEqual(entreesManquantes(incendie, { exigence: "planchersCoupeFeu" }).map((e) => e.cle),
+    ["logementsSuperposes", "etagesSurRdc", "hauteurPlancherBasLogementLePlusHaut",
+     "duplexOuTriplexAuDernierEtage"]);
+  // La liste des exigences que l'outil propose au modèle porte bien celles du
+  // titre VI : sans elles, il ne saurait pas qu'il peut les demander.
+  const exigence = incendie.entrees.find((e) => e.cle === "exigence");
+  for (const produit of ["stabiliteParc", "recoupementParc", "detectionParc", "colonneSecheParc"]) {
+    assert.equal(exigence.valeurs.includes(produit), true, produit);
+  }
 });
 
 test("le référentiel incendie annonce ce qu'il ne traite pas, nommément", () => {
   const incendie = outilParId("incendie_habitation");
-  for (const hors of [/parcs de stationnement/i, /établissements recevant du public/i,
+  // Depuis que le titre VI est couvert, la borne des parcs n'est plus « pas de
+  // parcs » mais « pas au-delà de 6 000 m² » : la borne a bougé, elle n'a pas
+  // disparu, et c'est elle qu'on vérifie.
+  for (const hors of [/parcs de plus de 6 000 m²/i, /établissements recevant du public/i,
                       /immeubles de grande hauteur/i, /articles 77 à 96/]) {
     assert.match(incendie.aQuoiCaSert, hors);
   }

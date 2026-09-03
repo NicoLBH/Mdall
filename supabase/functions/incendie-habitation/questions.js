@@ -695,6 +695,172 @@ export const QUESTIONS = [
     libelle: "Des conduits ou gaines sont-ils aménagés dans le bâtiment ?",
     type: "booleen",
     article: "45"
+  },
+  /* ── Titre VI : parcs de stationnement couverts ───────────────────────── */
+  {
+    cle: "parcDeStationnement",
+    libelle: "Le bâtiment comporte-t-il un parc de stationnement couvert annexe ?",
+    type: "booleen", article: "78",
+    aide: "« Un emplacement couvert, annexe d'un ou de plusieurs bâtiments d'habitation, qui permet le "
+      + "remisage, en dehors de la voie publique, des véhicules automobiles et de leurs remorques à "
+      + "l'exclusion de toute autre activité. » Un parc ouvert sur ses côtés, indépendant et annexe, y "
+      + "répond aussi (commission du règlement de construction, 25 juin 1997)."
+  },
+  {
+    cle: "surfaceParc",
+    libelle: "Surface du parc de stationnement",
+    type: "nombre", unite: "m²", article: "77", paragraphe: "premier alinéa",
+    aide: "Le titre VI ne s'applique qu'au-dessus de 100 m² et jusqu'à 6 000 m² inclus. Au-dessous, aucune "
+      + "prescription supplémentaire n'est imposée du fait de la présence de véhicules ; au-dessus, le parc "
+      + "relève d'une autre réglementation."
+  },
+  {
+    cle: "niveauxParcAuDessus",
+    libelle: "Nombre de niveaux du parc au-dessus du niveau de référence",
+    type: "nombre", unite: "niveaux", article: "81",
+    aide: "Sans compter le niveau de référence lui-même : un parc à simple rez-de-chaussée en compte zéro. "
+      + "Ce compte commande la stabilité au feu (article 81), les façades (article 83), l'alarme aux usagers "
+      + "(article 95, 3°) et les colonnes sèches (article 96, 2°)."
+  },
+  {
+    cle: "niveauxParcAuDessous",
+    libelle: "Nombre de niveaux du parc au-dessous du niveau de référence",
+    type: "nombre", unite: "niveaux", article: "81",
+    aide: "Sans compter le niveau de référence. Attention : le mot « niveau » ne se compte pas partout de la "
+      + "même façon dans le titre VI — à l'article 95, 1°, « à partir du 3ᵉ niveau » exclut le niveau de "
+      + "référence, alors qu'à l'article 96, 1°, deuxième tiret, « à chaque niveau une caisse de 100 litres » "
+      + "l'inclut (ministère de l'Équipement, 14 avril 1987). C'est ici le compte des niveaux du parc "
+      + "eux-mêmes, celui des articles 81, 84, 87, 89, 95 et 96."
+  },
+  {
+    cle: "hauteurPlancherBasDernierNiveauParc",
+    libelle: "Hauteur du plancher bas du dernier niveau du parc, par rapport au niveau de référence",
+    type: "nombre", unite: "m", article: "81", paragraphe: "troisième tiret",
+    aide: "Au-dessus **ou** au-dessous : c'est l'écart, pas l'altitude signée. L'article 81 s'arrête à 28 m ; "
+      + "au-delà, le parc relève d'une autre réglementation."
+  },
+  {
+    cle: "parcContiguAImmeuble",
+    libelle: "Le parc est-il contigu à un immeuble d'habitation ?",
+    type: "booleen", article: "82", paragraphe: "1°)",
+    aide: "« Contigu » inclut le parc situé en dessous de l'immeuble (ministère de l'Équipement, "
+      + "14 avril 1987). Sinon, c'est le 2°) qui s'applique, et il regarde la distance."
+  },
+  {
+    cle: "distanceParcAImmeubleHabite",
+    libelle: "Distance du parc à l'immeuble habité ou occupé le plus proche",
+    type: "nombre", unite: "m", article: "82", paragraphe: "2°)",
+    aide: "En dessous de 8 m, les murs ou parois verticales extérieurs du parc compris dans cette zone "
+      + "doivent être pare-flammes de degré 1 heure."
+  },
+  {
+    cle: "communicationParcImmeuble",
+    libelle: "Une communication est-elle aménagée entre le parc et le bâtiment ?",
+    type: "booleen", article: "82", paragraphe: "1°), deuxième alinéa",
+    aide: "Toute communication dans les murs ou parois séparant le parc du bâtiment appelle un sas. Un même "
+      + "sas ne dessert jamais à la fois le parc et le volume des caves, et ne débouche pas dans la cage "
+      + "d'escalier commune aux logements des niveaux inférieurs (ministère de l'Équipement, 1er juillet 1988)."
+  },
+  {
+    cle: "superficieCompartimentParc",
+    libelle: "Superficie du plus grand compartiment d'un niveau situé au-dessous du niveau de référence",
+    type: "nombre", unite: "m²", article: "84", paragraphe: "1°)",
+    aide: "Le recoupement n'est exigé qu'au-dessous du niveau de référence, en compartiments strictement "
+      + "inférieurs à 3 000 m². Si le niveau n'est pas recoupé, c'est sa superficie entière qu'on porte ici."
+  },
+  {
+    cle: "boxesDansLeParc",
+    libelle: "Des boxes sont-ils établis dans le parc ?",
+    type: "booleen", article: "84", paragraphe: "2°)"
+  },
+  {
+    cle: "emplacementsParBox",
+    libelle: "Nombre d'emplacements de stationnement par box",
+    type: "nombre", unite: "emplacements", article: "84", paragraphe: "2°)",
+    aide: "Deux au plus. Le cloisonnement doit être réalisé par des parois pleines maçonnées, et il n'est pas "
+      + "admis de prévoir des caves ou des espaces de rangement fermés en fond de box (ministère chargé du "
+      + "logement, 23 novembre 2007)."
+  },
+  {
+    cle: "couvertureParcDomineeParFacadesVitrees",
+    libelle: "La couverture du parc est-elle dominée par les façades vitrées ou ouvertes d'immeubles "
+      + "habités ou occupés ?",
+    type: "booleen", article: "85",
+    aide: "La règle ne concerne pas les rampes à l'aplomb des baies : rien n'y étant stocké, le risque de "
+      + "transmission est quasi nul (ministère de l'Équipement, 23 décembre 1986)."
+  },
+  {
+    cle: "revetementCouvertureParcClasse",
+    libelle: "Classement de réaction au feu du revêtement de couverture du parc",
+    type: "choix",
+    valeurs: [
+      { valeur: "M0", libelle: "M0" },
+      { valeur: "M3", libelle: "M3" },
+      { valeur: "M4", libelle: "M4" }
+    ],
+    article: "86",
+    aide: "L'article 86 ne distingue que ces trois cas : M0 sans restriction ; M3 sans restriction s'il est "
+      + "établi sur un support continu ; M4 — et M3 sur un autre support — à plus de 8 m du bâtiment voisin."
+  },
+  {
+    cle: "supportCouvertureParcContinu",
+    libelle: "Le revêtement est-il établi sur un support continu en matériau incombustible, en panneaux de "
+      + "bois ou d'agglomérés de fibres de bois ?",
+    type: "booleen", article: "86", paragraphe: "a",
+    aide: "C'est ce support qui affranchit un revêtement M3. Sur un support quelconque, il suit la règle des M4."
+  },
+  {
+    cle: "distanceCouvertureParcAuBatimentVoisin",
+    libelle: "Distance de la couverture du parc au bâtiment voisin",
+    type: "nombre", unite: "m", article: "86", paragraphe: "b",
+    aide: "Plus de 8 m pour un revêtement M4, ou M3 sur un support ne répondant pas à la définition du a)."
+  },
+  {
+    cle: "plusieursIssuesAuChoix",
+    libelle: "Les usagers ont-ils le choix entre plusieurs issues ou escaliers ?",
+    type: "booleen", article: "87", paragraphe: "premier alinéa",
+    aide: "Répondre non s'il n'y a qu'un escalier, ou si l'on se trouve dans une partie du parc formant "
+      + "cul-de-sac : le seuil tombe alors de 40 m à 25 m."
+  },
+  {
+    cle: "distanceAParcourirVersIssueParc",
+    libelle: "Distance à parcourir, au niveau le plus défavorable, pour atteindre une issue ou un escalier",
+    type: "nombre", unite: "m", article: "87", paragraphe: "premier alinéa",
+    aide: "40 m au plus si les usagers ont le choix entre plusieurs, 25 m au plus sinon."
+  },
+  {
+    cle: "escaliersParcAboutissentDansImmeuble",
+    libelle: "Les escaliers du parc aboutissent-ils dans les circulations de l'immeuble d'habitation ?",
+    type: "booleen", article: "87", paragraphe: "septième alinéa",
+    aide: "Si oui, ils sont protégés à chaque niveau par des sas réalisés dans les conditions de l'article 82 ; "
+      + "sinon, par des portes pare-flammes de degré 1/2 heure."
+  },
+  {
+    cle: "largesOuverturesDeuxFacesOpposees",
+    libelle: "Le parc comporte-t-il, à chaque niveau, de larges ouvertures à l'air libre sur deux faces "
+      + "opposées ?",
+    type: "booleen", article: "89", paragraphe: "quatrième alinéa",
+    aide: "C'est le cas particulier qui dispense de la ventilation mécanique dans les niveaux situés "
+      + "au-dessous du niveau de référence."
+  },
+  {
+    cle: "ventilationParcRetenue",
+    libelle: "Quelle ventilation est retenue pour le parc ?",
+    type: "choix",
+    valeurs: [
+      { valeur: "naturelle", libelle: "Naturelle" },
+      { valeur: "mecanique", libelle: "Mécanique" }
+    ],
+    article: "89",
+    aide: "« En cas d'incendie, le désenfumage du parc est assuré par les systèmes de ventilation visés au "
+      + "présent article » : il n'y a pas deux installations, il y en a une."
+  },
+  {
+    cle: "extinctionAutomatiqueInstallee",
+    libelle: "Le parc est-il équipé d'un système d'extinction automatique à partir du 3ᵉ niveau ?",
+    type: "booleen", article: "95", paragraphe: "1°), premier tiret",
+    aide: "Sa présence lève l'exigence de détection automatique du premier tiret — et réciproquement, la "
+      + "détection dispense du réseau d'extinction de l'article 96, 3°). Les deux articles se répondent."
   }
 ];
 
