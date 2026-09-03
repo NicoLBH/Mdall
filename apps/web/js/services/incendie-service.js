@@ -106,3 +106,19 @@ export async function inspecterIncendie(id, reponses = {}, options = {}) {
   }
   return rendu;
 }
+
+/**
+ * La notice descriptive de sécurité, rédigée pour ce cas-là.
+ *
+ * Les phrases sont dérivées : elles se refont à chaque ouverture, à partir des
+ * réponses. Ce qu'on envoie en plus, ce sont les `complements` — la matière, le
+ * procédé, le dispositif — et l'en-tête administratif, qui, eux, se conservent.
+ */
+export async function ecrireLaNoticeIncendie(reponses = {}, complements = {}, entete = {}, options = {}) {
+  const charge = await appeler({ notice: true, reponses, complements, entete }, options);
+  const rendu = charge.notice ?? charge;
+  if (!rendu || !Array.isArray(rendu.sections)) {
+    throw new Error("Le référentiel a répondu, mais pas ce qui était attendu.");
+  }
+  return rendu;
+}

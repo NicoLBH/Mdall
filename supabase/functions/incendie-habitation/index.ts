@@ -35,7 +35,7 @@
  */
 
 import { requireUser } from "../_shared/require-user.ts";
-import { consulter, demander, expliquer, lireArticle, VERSION } from "./corpus.js";
+import { consulter, demander, expliquer, lireArticle, ecrireLaNotice, VERSION } from "./corpus.js";
 import { peutInspecter } from "./inspection.js";
 
 const corsHeaders = {
@@ -73,8 +73,9 @@ Deno.serve(async (req: Request) => {
     return json({ error: "Corps de requête illisible." }, 400);
   }
 
-  const { reponses, produit, article, inspection } = (corps ?? {}) as {
+  const { reponses, produit, article, inspection, notice, complements, entete } = (corps ?? {}) as {
     reponses?: Record<string, unknown>; produit?: string; article?: string; inspection?: string;
+    notice?: boolean; complements?: Record<string, unknown>; entete?: Record<string, string>;
   };
   const donnees = reponses && typeof reponses === "object" ? reponses : {};
   if (Object.keys(donnees).length > REPONSES_MAX) {
@@ -97,6 +98,13 @@ Deno.serve(async (req: Request) => {
       // faisait croire à une panne et privait tout le monde de la carte.
       const avecRegles = peutInspecter(qui.user, Deno.env.get("INCENDIE_INSPECTEURS"));
       return json({ version: VERSION, inspection: expliquer(inspection, donnees, { avecRegles }) });
+    }
+    if (notice === true) {
+      // La notice est dérivée comme le reste : elle se rédige ici, à partir des
+      // réponses, et ce que l'utilisateur y ajoute lui arrive en `complements`.
+      return json({ version: VERSION, notice: ecrireLaNotice(donnees,
+        complements && typeof complements === "object" ? complements : {},
+        entete && typeof entete === "object" ? entete : {}) });
     }
     if (typeof produit === "string" && produit) {
       return json({ version: VERSION, reponse: demander(produit, donnees) });

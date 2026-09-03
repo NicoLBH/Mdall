@@ -18,7 +18,13 @@ test("l'article 6 porte la figure de ses planchers, avec la table des degrés", 
   }
   // Et les deux exceptions, que la table seule ne dit pas.
   assert.match(figure.svg, /NON accessible/);
-  assert.match(figure.svg, /prolongées jusqu'à la couverture/);
+  assert.match(figure.svg, /jusqu'à la couverture/);
+  // La disposition du fascicule : le dessin à gauche, la bande à droite. C'est
+  // ce qui permet de lire « ce plancher-là » puis « pour cette famille-ci »
+  // d'un seul mouvement de l'œil.
+  const xDuDessin = Number(figure.svg.match(/class="fig-piece"[^>]*\/>/) ? figure.svg.match(/<rect x="(\d+)"[^>]*class="fig-piece"/)?.[1] ?? 0 : 0);
+  const xDeLaBande = Number(figure.svg.match(/<rect x="(\d+)" y="16"[^>]*class="fig-cadre"/)?.[1] ?? 0);
+  assert.ok(xDeLaBande > xDuDessin, `bande à ${xDeLaBande}, dessin à ${xDuDessin}`);
 });
 
 test("l'article premier porte sa figure, et elle dit d'où elle vient", () => {
