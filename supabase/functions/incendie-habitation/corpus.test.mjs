@@ -210,11 +210,11 @@ const PREMIERE = { logementsSuperposes: false, implantation: "isolee", etagesSur
 test("en première famille, l'article 6 ne vise que le plancher haut du sous-sol", () => {
   // C'est le type même de la phrase qui cache une condition : « 1/4 heure pour
   // le plancher haut du sous-sol ». Sans sous-sol, l'article n'exige rien.
-  const avec = demander("planchersCoupeFeu", { ...PREMIERE, sousSol: true });
+  const avec = demander("planchersCoupeFeu", { ...PREMIERE, niveauxEnSousSol: 1 });
   assert.equal(avec.valeur, "CF 1/4 h");
   assert.match(avec.mention, /seul plancher haut du sous-sol/);
 
-  const sans = demander("planchersCoupeFeu", { ...PREMIERE, sousSol: false });
+  const sans = demander("planchersCoupeFeu", { ...PREMIERE, niveauxEnSousSol: 0 });
   assert.equal(sans.valeur, null);
   assert.match(sans.sansObjet, /n'exige aucun degré/);
   assert.equal(sans.pourquoi.article, "6");
@@ -296,7 +296,7 @@ test("les parois séparatives ne concernent que les individuelles accolées", ()
 test("la consultation ne livre que la branche empruntée, jamais la table des règles", () => {
   // C'est le point de tout l'exercice : on peut défendre le résultat sans
   // publier le dépouillement du texte.
-  const vue = consulter({ ...PREMIERE, sousSol: true });
+  const vue = consulter({ ...PREMIERE, niveauxEnSousSol: 1 });
   const serialisee = JSON.stringify(vue);
   assert.ok(!serialisee.includes('"regles"'), "les règles ne doivent pas descendre au navigateur");
   assert.ok(!serialisee.includes('"si"'), "les conditions ne doivent pas descendre au navigateur");
@@ -318,8 +318,10 @@ test("les questions arrivent par vagues, la racine d'abord", () => {
   // Un questionnaire qui commence par la couverture avant de savoir de quelle
   // famille on parle donne l'impression de ne mener nulle part.
   const debut = consulter({});
-  // La toute première est celle du module racine — la nature de l'habitation.
-  assert.equal(debut.questions[0].cle, "logementsSuperposes");
+  // Les toutes premières sont celles des modules racines : la nature de
+  // l'habitation, et ce qui décide de la hauteur retenue.
+  assert.ok(["logementsSuperposes", "duplexOuTriplexAuDernierEtage"].includes(debut.questions[0].cle),
+    debut.questions[0].cle);
   const posees = debut.questions.map((q) => q.cle);
   // Rien de ce qui suppose le classement n'est demandé dans la première vague :
   // demander la classe du système de façade avant de savoir de quelle famille
@@ -352,13 +354,13 @@ test("la portée est rendue avec chaque réponse, pas rangée dans une documenta
 });
 
 test("le chemin vers un module remonte tous ses amonts conclus", () => {
-  const reponses = { ...PREMIERE, sousSol: true };
+  const reponses = { ...PREMIERE, niveauxEnSousSol: 1 };
   const vue = consulter(reponses);
   const chemin = cheminVers("planchers", vue).map((e) => e.id);
   // Les amonts d'abord, le module demandé en dernier : c'est l'ordre dans
   // lequel un humain refait le raisonnement.
-  assert.deepEqual(chemin, ["champ-application", "nature-habitation", "duplex-niveau-bas",
-    "etages-retenus", "classement", "famille", "planchers"]);
+  assert.deepEqual(chemin, ["hauteur-logement-le-plus-haut", "champ-application", "nature-habitation",
+    "duplex-niveau-bas", "etages-retenus", "classement", "famille", "sous-sol", "planchers"]);
   assert.ok(cheminVers("planchers", vue).every((e) => e.article));
 });
 
@@ -1098,4 +1100,80 @@ test("l'inspection est la seule porte par laquelle les règles sortent", () => {
   assert.equal(serialise.includes('"si"'), false);
   // Tandis que l'inspection, demandée explicitement, les rend.
   assert.ok(expliquer("planchers", {}).regles.length > 0);
+});
+
+/* ── L'ordre des questions ───────────────────────────────────────────────── */
+
+/** Six bâtiments complets, un par famille — de quoi juger ce qui est demandé. */
+const CAS_COMPLETS = {
+  "1re famille": { logementsSuperposes: false, implantation: "isolee", etagesSurRdc: 1,
+    ...SANS_DUPLEX, hauteurPlancherBasLogementLePlusHaut: 5, hauteurPlancherBasNiveauLePlusHaut: 5 },
+  "2e famille": { ...COLLECTIF, etagesSurRdc: 3,
+    hauteurPlancherBasLogementLePlusHaut: 7.5, hauteurPlancherBasNiveauLePlusHaut: 7.5 },
+  "3e famille A": { ...COLLECTIF, etagesSurRdc: 6, hauteurPlancherBasLogementLePlusHaut: 20,
+    hauteurPlancherBasNiveauLePlusHaut: 20, distancePortePaliereEscalier: 8,
+    accesEscaliersAtteintsParVoieEchelles: true, voieAccesDecrite: true, voieLargeur: 4,
+    voieForcePortante: 130, voieRayonInterieur: 11, voieHauteurLibre: 3.5, voiePente: 8,
+    voieLongueur: 12, voieResistancePoinconnement: 100, voieRaccordeeAUneVoieEngins: "surVoiePublique" },
+  "3e famille B": troisiemeB(),
+  "4e famille": { ...COLLECTIF, etagesSurRdc: 12,
+    hauteurPlancherBasLogementLePlusHaut: 40, hauteurPlancherBasNiveauLePlusHaut: 40 }
+};
+
+test("aucune question posée n'est sans effet, quelle que soit la réponse", () => {
+  // C'est le garde-fou de l'ordonnancement. On demandait « comment la
+  // circulation est-elle désenfumée ? » à quelqu'un décrivant une deuxième
+  // famille — où les circulations ne se désenfument pas : la question n'était
+  // pas seulement prématurée, elle n'avait aucun effet visible. Une question
+  // sans effet se répond au hasard, et l'on cesse de croire aux suivantes.
+  //
+  // La vérification est mécanique : pour chaque question posée dont les
+  // réponses s'énumèrent, l'une au moins doit faire conclure autre chose que
+  // « sans objet » au module qui la demande.
+  const inutiles = [];
+  for (const [nom, cas] of Object.entries({ "au départ": {}, ...CAS_COMPLETS })) {
+    for (const question of consulter(cas).questions) {
+      const valeurs = question.type === "booleen" ? [true, false]
+        : question.type === "choix" ? (question.valeurs ?? []).map((v) => v.valeur) : null;
+      if (!valeurs) continue;
+      const utile = valeurs.some((valeur) => {
+        const module = consulter({ ...cas, [question.cle]: valeur }).modules.find((m) => m.id === question.pour);
+        return !module || module.statut !== "conclu" || (module.valeur !== null && !module.sansObjet);
+      });
+      if (!utile) inutiles.push(`${nom} : ${question.cle} → ${question.pour}`);
+    }
+  }
+  assert.deepEqual(inutiles, []);
+});
+
+test("la deuxième famille ne se voit demander ni désenfumage ni circulation protégée", () => {
+  // Le cas rapporté, nommément. En deuxième famille, aucune circulation
+  // horizontale protégée n'est exigée : il n'y a rien à désenfumer.
+  const posees = consulter(CAS_COMPLETS["2e famille"]).questions.map((q) => q.cle);
+  assert.equal(posees.includes("modeDesenfumageRetenu"), false);
+  assert.equal(posees.includes("typeCirculationRetenue"), false);
+  assert.match(consulter(CAS_COMPLETS["2e famille"]).faits.extractionMecanique, /sans objet/);
+  // Et la troisième famille B, elle, se les voit demander : le garde-fou ne
+  // doit pas faire taire ce qui compte.
+  const troisB = consulter(CAS_COMPLETS["3e famille B"]).questions.map((q) => q.cle);
+  assert.ok(troisB.includes("modeDesenfumageRetenu"));
+  assert.ok(troisB.includes("typeCirculationRetenue"));
+});
+
+test("sans logement-foyer, on ne demande pas de quel type il est", () => {
+  const posees = consulter({ ...CAS_COMPLETS["2e famille"], logementFoyer: false }).questions.map((q) => q.cle);
+  assert.equal(posees.includes("typeLogementFoyer"), false);
+  // Et la question ne se pose pas non plus avant qu'on ait dit s'il y en a un.
+  assert.equal(consulter({}).questions.map((q) => q.cle).includes("typeLogementFoyer"), false);
+});
+
+test("une question ne se pose jamais avant celle dont elle dépend", () => {
+  // Le graphe donne l'ordre : un module dont un amont n'a pas conclu se tait.
+  const vue = consulter({});
+  const produits = new Set(vue.graphe.noeuds.map((n) => n.produit));
+  for (const question of vue.questions) {
+    const module = vue.modules.find((m) => m.id === question.pour);
+    assert.deepEqual(module.manque.filter((cle) => produits.has(cle)), [],
+      `${question.pour} demande ${question.cle} alors qu'un amont n'a pas conclu`);
+  }
 });

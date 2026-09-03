@@ -27,6 +27,16 @@
 
 const ARR = "arrêté du 31 janvier 1986 modifié";
 const reglement = (article, paragraphe, citation) => ({ nature: "reglement", texte: ARR, article, paragraphe, citation });
+/**
+ * Ce que l'article veut dire, quand ce n'est pas ce qu'il dit.
+ *
+ * Certaines règles ne citent pas : elles lisent. La portée d'un chapitre n'est
+ * pas écrite dans chacun de ses articles — elle se lit de l'ensemble. Le dire
+ * est plus honnête que de fabriquer une citation qui ne résisterait pas à
+ * l'ouverture du texte.
+ */
+const lecture = (article, paragraphe, enonce) => ({ nature: "lecture", texte: ARR, article, paragraphe, citation: enonce });
+
 const questionReponse = (article, origine, citation) => ({ nature: "commentaire", texte: origine, article, paragraphe: "question/réponse", citation });
 
 /* ================================================================== *
@@ -322,7 +332,7 @@ export const communicationSousSol = {
   source: { article: "24" },
   regles: [
     {
-      si: { sousSol: false },
+      si: { sousSol: "sans sous-sol" },
       alors: { valeur: "sans objet", sansObjet: "Le bâtiment ne comporte pas de sous-sol." },
       source: reglement("24", "premier alinéa", "Dans les habitations collectives des 2ème, 3ème et 4ème familles, les escaliers mettant en communication les sous-sols et le reste du bâtiment doivent comporter au moins un bloc-porte coupe-feu de degré 1/2 heure…")
     },
@@ -358,6 +368,22 @@ export const desenfumageCageEscalier = {
   produit: "desenfumageCageEscalier",
   source: { article: "25" },
   regles: [
+    // La portée d'abord, l'exception ensuite. L'exemption de l'escalier
+    // extérieur ouvrait la liste : il fallait donc dire quel escalier on
+    // retenait avant de savoir si l'article s'appliquait — et la question était
+    // posée en quatrième famille, où il ne s'applique pas.
+    {
+      si: { classement: ["1re famille", "3e famille B", "4e famille"] },
+      alors: { valeur: "sans objet",
+        sansObjet: "L'article 25 ne vise que les habitations collectives de la deuxième famille et celles de la troisième famille A. Les troisième famille B et quatrième famille relèvent de l'article 29." },
+      source: reglement("25", "premier alinéa", "Dans les habitations collectives de la 2ème famille et dans les habitations de la 3ème famille A, les dispositions suivantes doivent être appliquées : […]")
+    },
+    {
+      si: { natureHabitation: "individuelle" },
+      alors: { valeur: "sans objet",
+        sansObjet: "L'article 25 ne vise que les habitations collectives de la deuxième famille et celles de la troisième famille A." },
+      source: reglement("25", "premier alinéa", "Dans les habitations collectives de la 2ème famille et dans les habitations de la 3ème famille A, les dispositions suivantes doivent être appliquées : […]")
+    },
     {
       si: { typeEscalierRetenu: "exterieur" },
       alors: { valeur: "sans objet",
@@ -392,6 +418,15 @@ export const escalierAirLibre = {
   produit: "escalierAirLibreConforme",
   source: { article: "28" },
   regles: [
+    // Ce module ne pose ses questions qu'une fois la portée établie : sans ce
+    // garde-fou, on demandait la solution retenue avant de savoir si le texte
+    // en exigeait une.
+    {
+      si: { typeEscalierExige: "aucun escalier protégé exigé", escaliersAEncloisonner: "non exigé par cet alinéa" },
+      alors: { valeur: "sans objet",
+        sansObjet: "Aucun escalier protégé n'est exigé, et l'alinéa de l'article 3 sur l'encloisonnement en deuxième famille ne joue pas : le type d'escalier retenu ne se juge pas." },
+      source: lecture("26", "portée du chapitre", "Les articles 27 à 29 bis décrivent les formes que peut prendre l'escalier protégé exigé par l'article 26. Là où l'article 26 n'en exige aucun — et où l'article 3 n'impose pas non plus l'encloisonnement en deuxième famille, dont il exempte les escaliers extérieurs de l'article 29 bis — ils n'ont pas d'objet.")
+    },
     {
       si: { typeEscalierRetenu: { differentDe: "airLibre" } },
       alors: { valeur: "sans objet", sansObjet: "L'escalier prévu n'est pas un escalier à l'air libre." },
@@ -419,6 +454,15 @@ export const escalierAbriFumees = {
   produit: "escalierAbriFumees",
   source: { article: "29" },
   regles: [
+    // Ce module ne pose ses questions qu'une fois la portée établie : sans ce
+    // garde-fou, on demandait la solution retenue avant de savoir si le texte
+    // en exigeait une.
+    {
+      si: { typeEscalierExige: "aucun escalier protégé exigé", escaliersAEncloisonner: "non exigé par cet alinéa" },
+      alors: { valeur: "sans objet",
+        sansObjet: "Aucun escalier protégé n'est exigé, et l'alinéa de l'article 3 sur l'encloisonnement en deuxième famille ne joue pas : le type d'escalier retenu ne se juge pas." },
+      source: lecture("26", "portée du chapitre", "Les articles 27 à 29 bis décrivent les formes que peut prendre l'escalier protégé exigé par l'article 26. Là où l'article 26 n'en exige aucun — et où l'article 3 n'impose pas non plus l'encloisonnement en deuxième famille, dont il exempte les escaliers extérieurs de l'article 29 bis — ils n'ont pas d'objet.")
+    },
     {
       si: { typeEscalierRetenu: { differentDe: "abriFumees" } },
       alors: { valeur: "sans objet", sansObjet: "L'escalier prévu n'est pas un escalier à l'abri des fumées." },
@@ -455,6 +499,15 @@ export const escalierExterieur = {
   produit: "escalierExterieurConforme",
   source: { article: "29 bis" },
   regles: [
+    // Ce module ne pose ses questions qu'une fois la portée établie : sans ce
+    // garde-fou, on demandait la solution retenue avant de savoir si le texte
+    // en exigeait une.
+    {
+      si: { typeEscalierExige: "aucun escalier protégé exigé", escaliersAEncloisonner: "non exigé par cet alinéa" },
+      alors: { valeur: "sans objet",
+        sansObjet: "Aucun escalier protégé n'est exigé, et l'alinéa de l'article 3 sur l'encloisonnement en deuxième famille ne joue pas : le type d'escalier retenu ne se juge pas." },
+      source: lecture("26", "portée du chapitre", "Les articles 27 à 29 bis décrivent les formes que peut prendre l'escalier protégé exigé par l'article 26. Là où l'article 26 n'en exige aucun — et où l'article 3 n'impose pas non plus l'encloisonnement en deuxième famille, dont il exempte les escaliers extérieurs de l'article 29 bis — ils n'ont pas d'objet.")
+    },
     {
       si: { typeEscalierRetenu: { differentDe: "exterieur" } },
       alors: { valeur: "sans objet", sansObjet: "L'escalier prévu n'est pas un escalier extérieur." },
@@ -536,6 +589,14 @@ export const circulationAirLibre = {
   produit: "circulationAirLibreConforme",
   source: { article: "30" },
   regles: [
+    // Ce module ne pose ses questions qu'une fois la portée établie : sans ce
+    // garde-fou, on demandait la solution retenue avant de savoir si le texte
+    // en exigeait une.
+    {
+      si: { circulationProtegeeExigee: "non exigée" },
+      alors: { valeur: "sans objet", sansObjet: "Aucune circulation horizontale protégée n'est exigée : la forme retenue ne se juge pas." },
+      source: lecture("30", "portée du chapitre", "Les articles 30 à 38 décrivent les circulations horizontales protégées. Là où les articles 30 et 31 n'en exigent aucune, ils n'ont pas d'objet.")
+    },
     {
       si: { typeCirculationRetenue: { differentDe: "airLibre" } },
       alors: { valeur: "sans objet", sansObjet: "La circulation prévue n'est pas à l'air libre." },
@@ -618,6 +679,14 @@ export const distanceCirculation = {
   produit: "distanceCirculationVerdict",
   source: { article: "30 et 31" },
   regles: [
+    // Ce module ne pose ses questions qu'une fois la portée établie : sans ce
+    // garde-fou, on demandait la solution retenue avant de savoir si le texte
+    // en exigeait une.
+    {
+      si: { circulationProtegeeExigee: "non exigée" },
+      alors: { valeur: "sans objet", sansObjet: "Aucune circulation horizontale protégée n'est exigée." },
+      source: lecture("30 et 31", "portée du chapitre", "Les articles 30 à 38 décrivent les circulations horizontales protégées. Là où les articles 30 et 31 n'en exigent aucune, ils n'ont pas d'objet.")
+    },
     {
       si: { typeCirculationRetenue: "airLibre", classement: ["3e famille B", "4e famille"], distancePortePaliereEscalier: { auPlus: 25 } },
       alors: { valeur: "admissible — 25 m au plus" },
@@ -655,6 +724,14 @@ export const revetementsCirculation = {
   produit: "revetementsCirculation",
   source: { article: "32" },
   regles: [
+    // Ce module ne pose ses questions qu'une fois la portée établie : sans ce
+    // garde-fou, on demandait la solution retenue avant de savoir si le texte
+    // en exigeait une.
+    {
+      si: { circulationProtegeeExigee: "non exigée" },
+      alors: { valeur: "sans objet", sansObjet: "Aucune circulation horizontale protégée n'est exigée." },
+      source: lecture("32", "portée du chapitre", "Les articles 30 à 38 décrivent les circulations horizontales protégées. Là où les articles 30 et 31 n'en exigent aucune, ils n'ont pas d'objet.")
+    },
     {
       si: { typeCirculationRetenue: "airLibre" },
       alors: { valeur: "M2 ou bois — parois verticales et plafonds",
@@ -682,6 +759,14 @@ export const conduitsDesenfumage = {
   produit: "conduitsDesenfumageResistance",
   source: { article: "34" },
   regles: [
+    // Ce module ne pose ses questions qu'une fois la portée établie : sans ce
+    // garde-fou, on demandait la solution retenue avant de savoir si le texte
+    // en exigeait une.
+    {
+      si: { circulationProtegeeExigee: "non exigée" },
+      alors: { valeur: "sans objet", sansObjet: "Aucune circulation horizontale protégée n'est exigée : il n'y a rien à désenfumer." },
+      source: lecture("33", "portée du chapitre", "Le désenfumage des articles 33 à 38 est celui des circulations horizontales protégées. Là où aucune n'est exigée, il n'a pas d'objet.")
+    },
     {
       si: { typeCirculationRetenue: { differentDe: "abriFumees" } },
       alors: { valeur: "sans objet", sansObjet: "Le désenfumage des articles 33 à 38 ne vise que les circulations horizontales à l'abri des fumées." },
@@ -721,6 +806,14 @@ export const bouchesDesenfumage = {
   produit: "bouchesDesenfumage",
   source: { article: "35" },
   regles: [
+    // Ce module ne pose ses questions qu'une fois la portée établie : sans ce
+    // garde-fou, on demandait la solution retenue avant de savoir si le texte
+    // en exigeait une.
+    {
+      si: { circulationProtegeeExigee: "non exigée" },
+      alors: { valeur: "sans objet", sansObjet: "Aucune circulation horizontale protégée n'est exigée : il n'y a rien à désenfumer." },
+      source: lecture("35", "portée du chapitre", "Le désenfumage des articles 33 à 38 est celui des circulations horizontales protégées. Là où aucune n'est exigée, il n'a pas d'objet.")
+    },
     {
       si: { typeCirculationRetenue: { differentDe: "abriFumees" } },
       alors: { valeur: "sans objet", sansObjet: "L'article 35 ne vise que les circulations horizontales à l'abri des fumées." },
@@ -757,6 +850,14 @@ export const commandeDesenfumage = {
   produit: "commandeDesenfumage",
   source: { article: "36" },
   regles: [
+    // Ce module ne pose ses questions qu'une fois la portée établie : sans ce
+    // garde-fou, on demandait la solution retenue avant de savoir si le texte
+    // en exigeait une.
+    {
+      si: { circulationProtegeeExigee: "non exigée" },
+      alors: { valeur: "sans objet", sansObjet: "Aucune circulation horizontale protégée n'est exigée : il n'y a rien à désenfumer." },
+      source: lecture("36", "portée du chapitre", "Le désenfumage des articles 33 à 38 est celui des circulations horizontales protégées. Là où aucune n'est exigée, il n'a pas d'objet.")
+    },
     {
       si: { typeCirculationRetenue: { differentDe: "abriFumees" } },
       alors: { valeur: "sans objet", sansObjet: "L'article 36 ne vise que les circulations horizontales à l'abri des fumées." },
@@ -782,6 +883,14 @@ export const extractionMecanique = {
   produit: "extractionMecanique",
   source: { article: "37" },
   regles: [
+    // Ce module ne pose ses questions qu'une fois la portée établie : sans ce
+    // garde-fou, on demandait la solution retenue avant de savoir si le texte
+    // en exigeait une.
+    {
+      si: { circulationProtegeeExigee: "non exigée" },
+      alors: { valeur: "sans objet", sansObjet: "Aucune circulation horizontale protégée n'est exigée : il n'y a rien à désenfumer." },
+      source: lecture("37", "portée du chapitre", "Le désenfumage des articles 33 à 38 est celui des circulations horizontales protégées. Là où aucune n'est exigée, il n'a pas d'objet.")
+    },
     {
       si: { modeDesenfumageRetenu: { differentDe: "extractionMecanique" } },
       alors: { valeur: "sans objet", sansObjet: "Le désenfumage retenu n'est pas mécanique." },

@@ -90,6 +90,12 @@ test("chaque question renvoie à un article qui existe", () => {
   // rien pour trancher — c'est-à-dire exactement là où on ne veut pas le mettre.
   const sansArticle = QUESTIONS.filter((q) => !articleDe(q.article)).map((q) => `${q.cle} → ${q.article}`);
   assert.deepEqual(sansArticle, []);
+  // Et le second article, quand une question en nomme un : « les planchers
+  // répondent-ils aux caractéristiques de l'article 6 ? » sort du 5°) de
+  // l'article 3, mais c'est l'article 6 qu'il faut lire pour y répondre.
+  const secondIntrouvable = QUESTIONS.filter((q) => q.articleAussi && !articleDe(q.articleAussi))
+    .map((q) => `${q.cle} → ${q.articleAussi}`);
+  assert.deepEqual(secondIntrouvable, []);
 });
 
 test("le texte porté est celui de l'arrêté, pas l'appareil du fascicule", () => {

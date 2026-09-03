@@ -18492,3 +18492,32 @@ strong.est-verifie{ color:#3fb950; }
    guillemets, et se distingue à l'œil de ce qui est écrit dans le texte. */
 .incendie-source.est-lecture{ border-left-style:dashed; }
 .incendie-source.est-lecture .incendie-source__citation{ font-style:normal; opacity:.9; }
+
+/* La vue en plan : ce que la coupe ne peut pas montrer — la distance de la
+   porte palière la plus éloignée à l'escalier, la forme de la cage, celle de la
+   circulation, la voie le long de la façade. */
+.plan-enveloppe{ fill:none; stroke:currentColor; stroke-opacity:.5; stroke-width:1.6; }
+.plan-circulation{ fill:rgba(88,166,255,.10); stroke:#58a6ff; stroke-opacity:.5; stroke-width:1.2; }
+.plan-circulation.est-protegee{ fill:rgba(63,185,80,.14); stroke:#3fb950; }
+.plan-circulation.est-air-libre{ fill:rgba(88,166,255,.16); stroke-dasharray:5 4; }
+.plan-cage{ fill:rgba(240,136,62,.14); stroke:#f0883e; stroke-width:1.6; }
+.plan-cage.est-encloisonnee{ stroke-width:3; }
+.plan-cage.est-exterieure{ stroke-dasharray:5 4; }
+.plan-marche{ stroke:#f0883e; stroke-opacity:.55; stroke-width:1; }
+.plan-logement{ fill:rgba(110,118,129,.10); stroke:currentColor; stroke-opacity:.35; stroke-width:1.1; }
+.plan-porte{ stroke:#f0883e; stroke-width:2.4; }
+.plan-etiquette{ font:600 11px var(--font-sans, system-ui); text-anchor:middle; fill:#f0883e; }
+.plan-note{ font:10.5px var(--font-sans, system-ui); fill:currentColor; fill-opacity:.65; }
+.plan-cote-texte{ font:11px var(--font-sans, system-ui); text-anchor:middle; fill:#58a6ff; }
+.plan-logement.est-la-plus-eloignee{ fill:rgba(88,166,255,.16); stroke:#58a6ff; stroke-opacity:.7; }
+.fig-valeur{ font:600 13px var(--font-sans, system-ui); text-anchor:middle; fill:currentColor; }
+.fig-piece{ fill:rgba(110,118,129,.08); stroke:currentColor; stroke-opacity:.35; stroke-width:1.2; }
+.fig-cloison{ stroke:currentColor; stroke-opacity:.3; stroke-width:1.1; }
+.fig-plancher{ stroke:currentColor; stroke-opacity:.9; stroke-width:3.2; }
+.fig-terrain{ stroke:currentColor; stroke-opacity:.5; stroke-width:1.4; stroke-dasharray:3 3; }
+.incendie-batiment__vues{ display:flex; gap:4px; margin-bottom:8px; }
+.incendie-batiment__vue{
+  background:none; border:1px solid var(--border2, #30363d); border-radius:6px; padding:3px 10px;
+  color:var(--muted); font-size:11.5px; cursor:pointer;
+}
+.incendie-batiment__vue.est-actif{ color:#f0883e; border-color:#f0883e; }

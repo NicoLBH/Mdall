@@ -91,13 +91,12 @@ Deno.serve(async (req: Request) => {
       return json({ version: VERSION, article: lireArticle(article) });
     }
     if (typeof inspection === "string" && inspection) {
-      if (!peutInspecter(qui.user, Deno.env.get("INCENDIE_INSPECTEURS"))) {
-        return json({
-          error: "Le dépouillement ne s'ouvre que pour les comptes inscrits dans « INCENDIE_INSPECTEURS ». "
-            + "C'est volontaire : la table des règles est le travail, et elle ne se partage pas avec un projet."
-        }, 403);
-      }
-      return json({ version: VERSION, inspection: expliquer(inspection, donnees) });
+      // Le détail d'un module se montre à tout le monde : la question à
+      // laquelle il répond, ce dont il dépend, ce qui dépend de lui, l'article.
+      // Seule la table des conditions attend la clé — refuser le panneau entier
+      // faisait croire à une panne et privait tout le monde de la carte.
+      const avecRegles = peutInspecter(qui.user, Deno.env.get("INCENDIE_INSPECTEURS"));
+      return json({ version: VERSION, inspection: expliquer(inspection, donnees, { avecRegles }) });
     }
     if (typeof produit === "string" && produit) {
       return json({ version: VERSION, reponse: demander(produit, donnees) });

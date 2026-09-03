@@ -545,12 +545,18 @@ export const OUTILS = [
       const poser = (cle, valeur) => { if (valeur !== undefined && valeur !== null && valeur !== "") reponses[cle] = valeur; };
       poser("logementsSuperposes", oui(entrees.logementsSuperposes));
       poser("structuresIndependantes", oui(entrees.structuresIndependantes));
-      poser("sousSol", oui(entrees.sousSol));
+      // Le référentiel compte les niveaux enterrés plutôt que de cocher un
+      // sous-sol : c'est le même sous-sol que celui du parc, et le compter deux
+      // fois en faisait deux. Le modèle, lui, continue de répondre par oui ou
+      // par non — c'est ici que l'un devient l'autre.
+      const sousSol = oui(entrees.sousSol);
+      poser("niveauxEnSousSol", sousSol === undefined ? undefined : (sousSol ? 1 : 0));
       poser("implantation", texte(entrees.implantation) || undefined);
       poser("etagesSurRdc", nombre(entrees.etagesSurRdc));
-      poser("hauteurPlancherBasLogementLePlusHaut", nombre(entrees.hauteurPlancherBasLogementLePlusHaut));
-      // Sans duplex en partie haute, les deux hauteurs se confondent : le
-      // reprendre ici évite de faire répéter la même cote au modèle.
+      // La hauteur du logement le plus haut ne se distingue de celle du niveau
+      // le plus haut qu'en présence d'un duplex de dernier étage : c'est là, et
+      // là seulement, que le référentiel la demande.
+      poser("hauteurPlancherBasLogementLePlusHautSiDuplex", nombre(entrees.hauteurPlancherBasLogementLePlusHaut));
       poser("hauteurPlancherBasNiveauLePlusHaut",
         nombre(entrees.hauteurPlancherBasNiveauLePlusHaut) ?? nombre(entrees.hauteurPlancherBasLogementLePlusHaut));
       // Un duplex de dernier étage change le compte des niveaux : ne rien en

@@ -502,7 +502,77 @@ export const implantationAccesEscaliers = {
   ]
 };
 
+/**
+ * La hauteur du plancher bas du logement le plus haut.
+ *
+ * ## Pourquoi elle se déduit plutôt que de se redemander
+ *
+ * L'arrêté mesure deux choses : la troisième famille au plancher bas du
+ * **logement** le plus haut (28 m), la quatrième — depuis 2019 — au plancher
+ * bas du **niveau** le plus haut (50 m). Les deux ne diffèrent que dans un cas,
+ * et l'arrêté le nomme lui-même au 5°) : quand le logement le plus haut est un
+ * duplex ou un triplex, son plancher bas est un niveau plus bas.
+ *
+ * On demandait les deux cotes, à plusieurs questions d'écart, et l'on obtenait
+ * deux fois la même réponse — avec le risque qu'elles divergent par simple
+ * fatigue. Une valeur écrite à deux endroits finit par diverger.
+ */
+export const hauteurLogementLePlusHaut = {
+  id: "hauteur-logement-le-plus-haut",
+  titre: "Hauteur du plancher bas du logement le plus haut",
+  repond: "À quelle hauteur se trouve le plancher bas du logement le plus haut ?",
+  produit: "hauteurPlancherBasLogementLePlusHaut",
+  source: { article: "3", paragraphe: "3°) et 5°)" },
+  regles: [
+    {
+      si: { duplexOuTriplexAuDernierEtage: false },
+      alors: { valeur: { fait: "hauteurPlancherBasNiveauLePlusHaut" },
+        mention: "Sans duplex ni triplex en partie haute, le logement le plus haut occupe le niveau le plus "
+          + "haut : les deux cotes se confondent, et il n'y a pas lieu de les demander deux fois." },
+      source: lecture("3", "3°) et 5°)", "Le plancher bas du logement le plus haut ne se distingue du plancher "
+        + "bas du niveau le plus haut que lorsque le logement le plus haut occupe plusieurs niveaux.")
+    },
+    {
+      si: { duplexOuTriplexAuDernierEtage: true },
+      alors: { valeur: { fait: "hauteurPlancherBasLogementLePlusHautSiDuplex" },
+        mention: "Le logement le plus haut occupe plusieurs niveaux : son plancher bas est plus bas que celui "
+          + "du niveau le plus haut, et c'est lui que mesure la troisième famille." },
+      source: reglement("3", "5°)", "Pour le classement des bâtiments des trois premières familles, seul le niveau bas des duplex ou des triplex des logements situés à l'étage le plus élevé est pris en compte […]")
+    }
+  ]
+};
+
+/**
+ * Le sous-sol, compté plutôt que coché.
+ *
+ * Le parc de stationnement se compte en niveaux au-dessous du niveau de
+ * référence ; le sous-sol se cochait. On répondait donc deux fois à ce qui est
+ * le même sous-sol, et le schéma empilait un sous-sol au-dessus d'un parc qui
+ * en était un. Un seul compte, et le parc en occupe une partie.
+ */
+export const sousSolDuBatiment = {
+  id: "sous-sol",
+  titre: "Sous-sol du bâtiment",
+  repond: "Le bâtiment comporte-t-il un sous-sol ?",
+  produit: "sousSol",
+  source: { article: "6" },
+  regles: [
+    {
+      si: { niveauxEnSousSol: { auMoins: 1 } },
+      alors: { valeur: "avec sous-sol",
+        mention: "Les niveaux occupés par un parc de stationnement en font partie : c'est le même sous-sol." },
+      source: lecture("6", "premier tiret", "L'article 6 vise le plancher haut du sous-sol : il suffit qu'il en existe un.")
+    },
+    {
+      si: { niveauxEnSousSol: { auPlus: 0 } },
+      alors: { valeur: "sans sous-sol" },
+      source: lecture("6", "premier tiret", "Sans niveau au-dessous du niveau de référence, il n'y a pas de plancher haut de sous-sol.")
+    }
+  ]
+};
+
 export const MODULES_CLASSEMENT = [
+  hauteurLogementLePlusHaut, sousSolDuBatiment,
   natureHabitation, duplexNiveauBas, etagesRetenus, quadruplex,
   champApplication, voieEngins, voieEchelles,
   classement, famille, declassement3B, colonnesSechesDeclassement, escaliersEncloisonnes2e,

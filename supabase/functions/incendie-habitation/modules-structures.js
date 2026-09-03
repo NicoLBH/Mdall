@@ -95,13 +95,13 @@ export const planchers = {
       // La phrase de la première famille ne dit pas « les planchers » : elle dit
       // « 1/4 heure pour le plancher haut du sous-sol ». Sans sous-sol, l'article
       // n'exige rien — et c'est une conclusion, pas une lacune.
-      si: { famille: "1", sousSol: false },
+      si: { famille: "1", sousSol: "sans sous-sol" },
       alors: { valeur: null,
         sansObjet: "En première famille, l'article 6 ne vise que le plancher haut du sous-sol. Le bâtiment n'en comporte pas : cet article n'exige aucun degré." },
       source: reglement("6", "premier alinéa, premier tiret", "habitations de la première famille : 1/4 heure pour le plancher haut du sous-sol ;")
     },
     {
-      si: { famille: "1", sousSol: true },
+      si: { famille: "1", sousSol: "avec sous-sol" },
       alors: { valeur: "CF 1/4 h",
         mention: "Exigé du seul plancher haut du sous-sol. Les autres planchers ne sont pas visés par cet article en première famille." },
       source: reglement("6", "premier alinéa, premier tiret", "habitations de la première famille : 1/4 heure pour le plancher haut du sous-sol ;")

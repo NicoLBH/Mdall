@@ -19,6 +19,14 @@
  * bonne part du travail. L'écran affiche ce qu'il faut répondre maintenant ;
  * le reste reste au serveur.
  *
+ * ## Une question peut viser deux articles
+ *
+ * Elle sort d'un article — celui dont la règle a besoin d'elle — et en nomme
+ * parfois un autre : « les planchers répondent-ils aux caractéristiques de
+ * l'article 6 ? » est une condition du 5°) de l'article 3. `articleAussi` porte
+ * le second, et l'écran ouvre les deux. Ouvrir l'article 3 sous une question
+ * qui nomme l'article 6 est exactement ce qui fait douter de tout le reste.
+ *
  * ## L'énoncé porte la règle
  *
  * « Nombre d'étages sur rez-de-chaussée » ne suffit pas : le texte compte les
@@ -99,7 +107,10 @@ export const QUESTIONS = [
       + "de l'article 6 ?",
     type: "booleen",
     article: "3",
-    paragraphe: "5°)"
+    paragraphe: "5°)",
+    // La question sort du 5°) de l'article 3, mais c'est l'article 6 qu'il faut
+    // lire pour y répondre : ouvrir l'un sans l'autre était déroutant.
+    articleAussi: "6"
   },
   {
     cle: "quadruplexOuPlus",
@@ -113,16 +124,16 @@ export const QUESTIONS = [
 
   /* ── Les hauteurs : deux mesures, et elles ne sont pas la même ─────────── */
   {
-    cle: "hauteurPlancherBasLogementLePlusHaut",
-    libelle: "Hauteur du plancher bas du logement le plus haut, au-dessus du sol utilement "
-      + "accessible aux engins de secours",
+    cle: "hauteurPlancherBasLogementLePlusHautSiDuplex",
+    libelle: "Hauteur du plancher bas du logement le plus haut, au-dessus du même sol",
     type: "nombre",
     unite: "m",
     article: "3",
-    paragraphe: "3°)",
-    aide: "C'est la mesure du champ d'application (article 1er, 50 m) et de la troisième famille "
-      + "(28 m). Le sol de référence n'est pas le terrain naturel : c'est celui qui est utilement "
-      + "accessible aux engins des services de secours."
+    paragraphe: "3°) et 5°)",
+    aide: "Le logement le plus haut est un duplex ou un triplex : son plancher bas n'est pas celui "
+      + "du niveau le plus haut, il est un niveau plus bas. C'est le seul cas où les deux hauteurs "
+      + "diffèrent, et c'est pour cela seulement que cette question est posée — la troisième famille "
+      + "se mesure au logement (28 m), la quatrième au niveau (50 m)."
   },
   {
     cle: "hauteurPlancherBasNiveauLePlusHaut",
@@ -251,12 +262,14 @@ export const QUESTIONS = [
 
   /* ── Ce que la structure et l'enveloppe demandent ──────────────────────── */
   {
-    cle: "sousSol",
-    libelle: "Le bâtiment comporte-t-il un sous-sol ?",
-    type: "booleen",
+    cle: "niveauxEnSousSol",
+    libelle: "Combien de niveaux le bâtiment compte-t-il au-dessous du niveau de référence ?",
+    type: "nombre", unite: "niveaux",
     article: "6",
-    aide: "En première famille, l'article 6 n'exige un degré coupe-feu que pour le plancher haut "
-      + "du sous-sol. Sans sous-sol, l'exigence de l'article 6 est sans objet."
+    aide: "**Tous** les niveaux enterrés, y compris ceux qu'occupe le parc de stationnement : "
+      + "c'est le même sous-sol, et le compter deux fois donnait deux sous-sols empilés sur le "
+      + "schéma. Zéro s'il n'y en a pas. En première famille, l'article 6 n'exige un degré "
+      + "coupe-feu que pour le plancher haut du sous-sol."
   },
   {
     cle: "planchersSurVideSanitaireNonAccessible",
