@@ -18521,3 +18521,82 @@ strong.est-verifie{ color:#3fb950; }
   color:var(--muted); font-size:11.5px; cursor:pointer;
 }
 .incendie-batiment__vue.est-actif{ color:#f0883e; border-color:#f0883e; }
+/* La planche du fascicule : le bandeau de titre, le libellé d'une ligne, et ce
+   que la coupe ajoute au dessin. */
+.fig-bandeau{ fill:currentColor; fill-opacity:.10; stroke:none; }
+.fig-titre{ font:600 15px var(--font-sans, system-ui); text-anchor:middle; fill:currentColor; letter-spacing:.06em; }
+.fig-sous-titre{ font:600 13px var(--font-sans, system-ui); text-anchor:middle; fill:currentColor; fill-opacity:.85; }
+.fig-libelle-ligne{ font:12px var(--font-sans, system-ui); fill:currentColor; fill-opacity:.85; }
+.fig-toit{ fill:none; stroke:currentColor; stroke-opacity:.6; stroke-width:1.6; }
+.fig-vide{ fill:currentColor; fill-opacity:.06; stroke:currentColor; stroke-opacity:.3; stroke-width:1.1; }
+.fig-halo{ fill:var(--bg2, #161b22); }
+
+/* ── La notice descriptive de sécurité ───────────────────────────────────
+   À gauche ce qui partira en mairie, à droite ce que le référentiel ne peut
+   pas savoir. En dessous de 1000 px les deux s'empilent : une notice lue dans
+   une colonne de 300 px ne se relit pas. */
+.notice{ display:grid; gap:12px; }
+.notice__barre{ display:flex; gap:10px; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; }
+.notice__copier{
+  display:inline-flex; align-items:center; gap:6px; background:none; border:1px solid var(--border2, #30363d);
+  border-radius:6px; padding:5px 12px; color:var(--muted); font-size:12px; cursor:pointer; flex:none;
+}
+.notice__copier:hover{ color:#f0883e; border-color:#f0883e; }
+.notice__copier.est-copiee{ color:#3fb950; border-color:#3fb950; }
+.notice__colonnes{ display:grid; grid-template-columns:minmax(0,1.2fr) minmax(300px,1fr); gap:16px; align-items:start; }
+@media (max-width: 1000px){ .notice__colonnes{ grid-template-columns:1fr; } }
+
+.notice-texte{
+  border:1px solid var(--border2, #30363d); border-radius:8px; padding:18px 22px;
+  background:var(--bg2, rgba(110,118,129,.05)); font-size:13px; line-height:1.7;
+}
+.notice-texte__tete{ text-align:center; border-bottom:1px solid var(--border2, #30363d); padding-bottom:10px; margin-bottom:14px; }
+.notice-texte__tete h4{ margin:0; font-size:15px; letter-spacing:.04em; text-transform:uppercase; }
+.notice-texte__tete p{ margin:4px 0 0; font-size:12px; color:var(--muted); }
+.notice-entete{ display:grid; grid-template-columns:auto 1fr; gap:2px 14px; margin:0 0 16px; font-size:12.5px; }
+.notice-entete dt{ color:var(--muted); }
+.notice-entete dd{ margin:0; white-space:pre-line; }
+.notice-section{ margin-bottom:16px; }
+.notice-section h5{ margin:0 0 6px; font-size:13px; text-transform:uppercase; letter-spacing:.03em; }
+.notice-sous-section{ margin:10px 0 0 14px; }
+.notice-sous-section h6{ margin:0 0 4px; font-size:12.5px; color:var(--muted); }
+.notice-paragraphe{ margin:0 0 6px; }
+
+.notice__complements{ display:grid; gap:12px; position:sticky; top:8px; }
+.notice-champs{ display:grid; gap:12px; }
+.notice-champs__mot{
+  display:flex; gap:8px; align-items:flex-start; margin:0; padding:10px 12px; border-radius:8px;
+  border:1px dashed var(--border2, #30363d); color:var(--muted); font-size:12px; line-height:1.55;
+}
+.notice-champ{ border:1px solid var(--border2, #30363d); border-radius:8px; padding:10px 12px; }
+.notice-champ h6{ margin:0 0 4px; font-size:12px; }
+.notice-champ__extrait{ margin:0 0 8px; font-size:11.5px; color:var(--muted); line-height:1.5; font-style:italic; }
+.notice-champ__options{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; }
+.notice-option{
+  display:inline-flex; align-items:center; gap:6px; background:none; border:1px solid var(--border2, #30363d);
+  border-radius:14px; padding:3px 10px; color:inherit; font-size:12px; cursor:pointer;
+}
+.notice-option:hover{ border-color:#f0883e; }
+.notice-option.est-coche{ border-color:#f0883e; background:rgba(240,136,62,.12); }
+.notice-option__marque{
+  width:11px; height:11px; border-radius:3px; border:1.5px solid var(--border2, #30363d); flex:none;
+}
+.notice-option.est-coche .notice-option__marque{ background:#f0883e; border-color:#f0883e; }
+.notice-option em{ font-size:10px; color:var(--muted); font-style:normal; }
+.notice-champ__texte{
+  width:100%; background:var(--bg, transparent); color:inherit; border:1px solid var(--border2, #30363d);
+  border-radius:6px; padding:6px 8px; font:inherit; font-size:12px; resize:vertical;
+}
+.notice-champ__apercu{ margin-top:6px; font-size:12px; color:var(--muted); }
+
+.notice-entete-saisie{ border:1px solid var(--border2, #30363d); border-radius:8px; padding:8px 12px; flex:1 1 340px; }
+.notice-entete-saisie summary{ cursor:pointer; font-size:12px; color:var(--muted); }
+.notice-entete-saisie__champ{ display:grid; gap:3px; margin-top:8px; font-size:12px; }
+.notice-entete-saisie__champ span{ color:var(--muted); }
+.notice-entete-saisie__champ span em{
+  font-style:normal; font-size:10px; color:#3fb950; border:1px solid #3fb950; border-radius:9px; padding:0 5px; margin-left:6px;
+}
+.notice-entete-saisie__champ textarea{
+  background:var(--bg, transparent); color:inherit; border:1px solid var(--border2, #30363d);
+  border-radius:6px; padding:5px 8px; font:inherit; font-size:12px; resize:vertical;
+}

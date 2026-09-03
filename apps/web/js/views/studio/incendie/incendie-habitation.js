@@ -29,7 +29,13 @@ import { escapeHtml } from "../../../utils/escape-html.js";
 import { registerProjectPrimaryScrollSource } from "../../project-shell-chrome.js";
 import { renderGhActionButton } from "../../ui/gh-split-button.js";
 import { svgIcon } from "../../../ui/icons.js";
-import { consulterIncendie, lireArticleIncendie, inspecterIncendie } from "../../../services/incendie-service.js";
+import {
+  consulterIncendie, lireArticleIncendie, inspecterIncendie, ecrireLaNoticeIncendie
+} from "../../../services/incendie-service.js";
+import {
+  lireLaNotice, enregistrerLaNotice, lireLesChoix, retenirLeChoix
+} from "../../../services/incendie-notice-supabase.js";
+import { dessinerLaNotice, paragraphesDe, departementDe } from "./notice-ecran.js";
 import { renderMarkdownToHtml } from "../../../utils/markdown-renderer.js";
 import {
   dessinerGrapheLiaisons, brancherGrapheLiaisons, tracerLesLiens as tracerLesLiensDuGraphe, appliquerZoom as appliquerZoomAuGraphe
@@ -129,6 +135,13 @@ function oublierLeProjet() {
   etat.articleOuvert = false;
   etat.inspection = null;
   etat.vueDuBatiment = "coupe";
+  etat.notice = null;
+  etat.complements = {};
+  etat.entete = {};
+  etat.bibliotheque = {};
+  etat.noticeChargee = false;
+  etat.noticeErreur = "";
+  etat.venuesDeLaMemoire = {};
   // Les articles, eux, restent : le texte de l'arrêté ne dépend pas du projet.
 }
 
@@ -207,6 +220,27 @@ function brancher(root) {
   // Une réponse relance le raisonnement : c'est lui qui décide de la question
   // suivante, et il n'y a pas de bouton « valider » parce qu'il n'y a pas de page.
   root.addEventListener("change", (evenement) => {
+    const saisie = evenement.target.closest("[data-notice-saisie]");
+    if (saisie) {
+      const cle = saisie.dataset.noticeSaisie;
+      const paragraphe = paragraphesDe(etat.notice).find((p) => p.cle === cle);
+      if (paragraphe?.champ) {
+        etat.complements[cle] = { ...(etat.complements[cle] ?? {}), [paragraphe.champ.cle]: saisie.value.trim() };
+        // Une réponse tapée à la main entre dans la bibliothèque du seul fait
+        // qu'on l'a retenue : c'est ainsi qu'elle se construit, et non par une
+        // liste écrite à l'avance.
+        void retenirLeChoix(paragraphe.champ.rubrique, saisie.value.trim(), departementDe(etat.entete.adresse));
+        void rediger(root, { enregistrer: true });
+      }
+      return;
+    }
+    const entete = evenement.target.closest("[data-notice-entete]");
+    if (entete) {
+      etat.entete = { ...etat.entete, [entete.dataset.noticeEntete]: entete.value.trim() };
+      void rediger(root, { enregistrer: true });
+      return;
+    }
+
     const champ = evenement.target.closest("[data-incendie-question]");
     if (!champ) return;
     const cle = champ.dataset.incendieQuestion;
@@ -234,6 +268,7 @@ function brancher(root) {
     if (onglet) {
       etat.onglet = onglet.dataset.incendieOnglet;
       dessiner(root);
+      if (etat.onglet === "notice") void rediger(root);
       return;
     }
     const oublier = evenement.target.closest("[data-incendie-oublier]");
@@ -265,6 +300,13 @@ function brancher(root) {
       dessiner(root);
       return;
     }
+    const option = evenement.target.closest("[data-notice-option]");
+    if (option) {
+      void choisir(root, option.dataset.noticeOption, option.dataset.noticeValeur);
+      return;
+    }
+    if (evenement.target.closest("[data-notice-copier]")) { void copierLaNotice(root); return; }
+
     const vueBatiment = evenement.target.closest("[data-incendie-vue-batiment]");
     if (vueBatiment) {
       etat.vueDuBatiment = vueBatiment.dataset.incendieVueBatiment;
@@ -359,6 +401,119 @@ async function inspecter_(root, id) {
   rafraichirLeDetail(root);
 }
 
+/**
+ * La notice, rédigée puis affichée.
+ *
+ * Les phrases se refont à chaque fois : ce qui est dérivé se recalcule. Ce qui
+ * se conserve — la matière, le procédé, l'en-tête — voyage dans `complements`
+ * et revient de la base à la première ouverture.
+ */
+async function rediger(root, { enregistrer = false } = {}) {
+  if (!etat.noticeChargee) {
+    etat.noticeChargee = true;
+    const projet = clefDuProjetAffiche();
+    const gardee = await lireLaNotice(projet);
+    if (gardee) {
+      etat.complements = gardee.complements;
+      // L'en-tête part de ce que le projet sait déjà : redemander une adresse
+      // que la mémoire porte, c'est inviter à la retaper de mémoire, donc faux.
+      etat.entete = { ...depuisLaMemoire(), ...gardee.entete };
+    }
+  }
+
+  try {
+    etat.notice = await ecrireLaNoticeIncendie(etat.reponses, etat.complements, etat.entete);
+    etat.noticeErreur = "";
+    // La bibliothèque se relit avec la notice : les rubriques dépendent des
+    // phrases écrites, et les phrases dépendent des réponses.
+    etat.bibliotheque = await lireLesChoix(etat.notice.rubriques ?? [], departementDe(etat.entete.adresse));
+  } catch (erreur) {
+    etat.noticeErreur = erreur instanceof Error ? erreur.message : String(erreur);
+  }
+
+  if (enregistrer) await enregistrerLaNotice(clefDuProjetAffiche(), { complements: etat.complements, entete: etat.entete });
+  if (root?.isConnected && etat.onglet === "notice") dessiner(root);
+}
+
+/**
+ * Ce que la mémoire du projet sait de l'en-tête.
+ *
+ * Le nom et l'adresse sont là ; les intervenants, pas encore. On prend ce qui
+ * existe et on laisse le reste vide plutôt que d'inventer un libellé qui aurait
+ * l'air d'une réponse.
+ */
+function depuisLaMemoire() {
+  const projet = store.currentProject ?? {};
+  etat.venuesDeLaMemoire = {};
+  const trouve = {};
+  const poser = (cle, valeur) => {
+    const texte = String(valeur ?? "").trim();
+    if (!texte) return;
+    trouve[cle] = texte;
+    etat.venuesDeLaMemoire[cle] = true;
+  };
+  poser("denomination", projet.name || projet.title);
+  poser("adresse", projet.address);
+  return trouve;
+}
+
+/**
+ * Retenir une proposition — et la retenir aussi dans la bibliothèque.
+ *
+ * Ce qui en sort est pesé : le libellé, et le département. Ni le projet, ni le
+ * compte. Un second clic sur la même case l'enlève : une case qu'on ne peut pas
+ * décocher est un piège.
+ */
+async function choisir(root, cle, libelle) {
+  const paragraphe = paragraphesDe(etat.notice).find((p) => p.cle === cle);
+  if (!paragraphe?.champ) return;
+  const champ = paragraphe.champ;
+  const actuelle = etat.complements[cle]?.[champ.cle] ?? "";
+
+  let valeur;
+  if (champ.multiple) {
+    const retenues = String(actuelle).split(" et ").map((v) => v.trim()).filter(Boolean);
+    valeur = retenues.includes(libelle)
+      ? retenues.filter((v) => v !== libelle).join(" et ")
+      : [...retenues, libelle].join(" et ");
+  } else {
+    valeur = actuelle === libelle ? "" : libelle;
+  }
+
+  etat.complements[cle] = { ...(etat.complements[cle] ?? {}), [champ.cle]: valeur };
+  if (valeur) await retenirLeChoix(champ.rubrique, libelle, departementDe(etat.entete.adresse));
+  await rediger(root, { enregistrer: true });
+}
+
+/**
+ * La notice dans le presse-papier, en texte.
+ *
+ * Ce qui part dans Word doit se relire tel quel : des titres numérotés et des
+ * paragraphes. Le markdown n'y survivrait pas au collage.
+ */
+async function copierLaNotice(root) {
+  const texte = etat.notice?.texte;
+  if (!texte) return;
+  try {
+    await navigator.clipboard.writeText(texte);
+    etat.noticeCopiee = true;
+  } catch {
+    etat.noticeCopiee = false;
+  }
+  const bouton = root.querySelector("[data-notice-copier]");
+  if (bouton) {
+    bouton.classList.add("est-copiee");
+    bouton.setAttribute("aria-live", "polite");
+    const ancien = bouton.textContent;
+    bouton.textContent = etat.noticeCopiee ? " Copiée" : " La copie a échoué";
+    setTimeout(() => {
+      if (!bouton.isConnected) return;
+      bouton.classList.remove("est-copiee");
+      bouton.textContent = ancien;
+    }, 1800);
+  }
+}
+
 /** Le panneau de détail seul : redessiner le schéma entier perdrait le zoom. */
 function rafraichirLeDetail(root) {
   const hote = root?.querySelector("[data-graphe-detail]");
@@ -412,7 +567,8 @@ function dessiner(root) {
           ${vue?.avancement ? dessinerAvancement(vue.avancement) : ""}
 
           <div class="incendie-onglets" role="tablist">
-            ${[["questionnaire", "Questionnaire"], ["resultats", "Résultats"], ["schema", "Schéma décisionnel"], ["portee", "Portée"]]
+            ${[["questionnaire", "Questionnaire"], ["resultats", "Résultats"], ["schema", "Schéma décisionnel"],
+               ["notice", "Notice de sécurité"], ["portee", "Portée"]]
               .map(([cle, libelle]) => `
                 <button type="button" role="tab" class="incendie-onglet${etat.onglet === cle ? " est-actif" : ""}"
                         aria-selected="${etat.onglet === cle}" data-incendie-onglet="${cle}">${escapeHtml(libelle)}</button>
@@ -423,6 +579,10 @@ function dessiner(root) {
           ${vue && etat.onglet === "questionnaire" ? dessinerQuestionnaire(vue) : ""}
           ${vue && etat.onglet === "resultats" ? dessinerResultats(vue) : ""}
           ${vue && etat.onglet === "schema" ? dessinerSchema(vue) : ""}
+          ${vue && etat.onglet === "notice" ? dessinerLaNotice({
+            notice: etat.notice, complements: etat.complements, bibliotheque: etat.bibliotheque,
+            departement: departementDe(etat.entete.adresse), venuesDeLaMemoire: etat.venuesDeLaMemoire,
+            enCours: etat.enCours, erreur: etat.noticeErreur }) : ""}
           ${vue && etat.onglet === "portee" ? dessinerPortee(vue) : ""}
         </div>
       </div>

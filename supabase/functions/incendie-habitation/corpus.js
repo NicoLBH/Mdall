@@ -33,6 +33,7 @@ import { QUESTIONS, questionDe } from "./questions.js";
 import { articleDe, ARTICLES_PORTES } from "./articles.js";
 import { figuresDe } from "./figures.js";
 import { expliquerModule } from "./inspection.js";
+import { redigerLaNotice, noticeEnTexte, CHAMPS_ENTETE } from "./notice.js";
 
 export const CORPUS = [
   ...MODULES_CLASSEMENT,
@@ -293,6 +294,27 @@ export function expliquer(id, reponses = {}, { avecRegles = true } = {}) {
       amont: vue.graphe.liens.filter((l) => l.vers === module.id),
       aval: vue.graphe.liens.filter((l) => l.de === module.id)
     }
+  };
+}
+
+/**
+ * La notice descriptive de sécurité, rédigée pour ce cas-là.
+ *
+ * Elle est **dérivée** : chaque phrase se refait à partir des réponses, et se
+ * refait juste même si le référentiel progresse d'ici là. Ce qui se conserve,
+ * c'est ce que l'utilisateur y a ajouté — la matière, le procédé, l'en-tête —
+ * et cela arrive d'ailleurs, en `complements`.
+ */
+export function ecrireLaNotice(reponses = {}, complements = {}, entete = {}) {
+  const vue = consulter(reponses);
+  const notice = redigerLaNotice(vue, complements);
+  return {
+    ok: true,
+    version: VERSION,
+    ...notice,
+    entete: CHAMPS_ENTETE.map(([cle, libelle]) => ({ cle, libelle, valeur: entete[cle] ?? "" })),
+    texte: noticeEnTexte(notice, entete),
+    portee: PORTEE
   };
 }
 
