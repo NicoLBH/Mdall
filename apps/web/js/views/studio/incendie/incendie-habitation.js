@@ -39,7 +39,41 @@ const etat = {
   erreur: "",
   onglet: "questionnaire",
   /** Le module dont on regarde le détail dans le schéma. */
-  survole: null
+  survole: null,
+
+  /**
+   * Le parcours : les questions dans l'ordre où elles se sont présentées.
+   *
+   * Il n'est pas la liste des questions restantes — celle-là change à chaque
+   * réponse. C'est un chemin, et on peut y revenir en arrière : sans quoi une
+   * réponse donnée trop vite se paie par un « Recommencer », c'est-à-dire par
+   * tout reprendre.
+   */
+  parcours: [],
+  position: 0,
+  /**
+   * Vrai quand c'est la personne qui s'est déplacée, pas le questionnaire.
+   *
+   * Sans ce drapeau, revenir sur une question laissée sans réponse serait
+   * aussitôt annulé : la consultation suivante ramènerait sur « la première
+   * question qui attend », c'est-à-dire ailleurs, et le retour en arrière
+   * n'existerait pas.
+   */
+  deplacementManuel: false,
+
+  /** Le schéma : son grossissement, et s'il occupe la page. */
+  zoom: 1,
+  pleinEcran: false,
+
+  /**
+   * Les questions telles que le serveur les a décrites, retenues au passage.
+   *
+   * Une question répondue disparaît de la vague suivante — c'est normal, elle
+   * n'a plus à être posée. Mais revenir dessus suppose de savoir encore son
+   * libellé et ses réponses possibles, et les redemander au serveur pour
+   * afficher une case à cocher serait un aller-retour pour rien.
+   */
+  questionsVues: {}
 };
 
 let projetAffiche = "";
@@ -63,6 +97,11 @@ function oublierLeProjet() {
   etat.erreur = "";
   etat.onglet = "questionnaire";
   etat.survole = null;
+  etat.parcours = [];
+  etat.position = 0;
+  etat.questionsVues = {};
+  etat.zoom = 1;
+  etat.pleinEcran = false;
 }
 
 export function renderIncendieHabitation(root, { force = false } = {}) {
@@ -79,6 +118,9 @@ export function renderIncendieHabitation(root, { force = false } = {}) {
   if (root.dataset.incendieBranche !== "true") {
     root.dataset.incendieBranche = "true";
     brancher(root);
+    // Ce qui tenait à l'ouverture peut ne plus tenir après un redimensionnement,
+    // et les traits partiraient alors du vide.
+    window.addEventListener("resize", () => { if (root.isConnected) tracerLesLiens(root); }, { passive: true });
   }
   if (!etat.vue) void consulter(root);
   registerProjectPrimaryScrollSource(root.closest("#projectStudioRouterScroll") || document.getElementById("projectStudioRouterScroll"));
@@ -90,12 +132,47 @@ async function consulter(root) {
   dessiner(root);
   try {
     etat.vue = await consulterIncendie(etat.reponses);
+    tenirLeParcours();
   } catch (erreur) {
     etat.erreur = erreur instanceof Error ? erreur.message : String(erreur);
   } finally {
     etat.enCours = false;
     if (root?.isConnected) dessiner(root);
   }
+}
+
+/**
+ * Le parcours, tenu à jour après chaque consultation.
+ *
+ * On y ajoute les questions de la vague nouvelle, on en retire celles qui ne
+ * sont plus demandées et auxquelles personne n'a répondu — une question qui a
+ * cessé d'avoir un sens ne doit pas rester sur le chemin —, et l'on garde
+ * toujours celles qui portent une réponse : c'est par elles qu'on revient en
+ * arrière.
+ */
+function tenirLeParcours() {
+  const demandees = (etat.vue?.questions ?? []).map((q) => q.cle);
+  const repondues = Object.keys(etat.reponses);
+  etat.parcours = etat.parcours.filter((cle) => repondues.includes(cle) || demandees.includes(cle));
+  for (const cle of demandees) if (!etat.parcours.includes(cle)) etat.parcours.push(cle);
+  if (etat.deplacementManuel) {
+    etat.position = Math.min(Math.max(0, etat.position), Math.max(0, etat.parcours.length - 1));
+    return;
+  }
+  // Après une réponse, on se pose sur la première question qui attend encore.
+  const premiereEnAttente = etat.parcours.findIndex((cle) => !(cle in etat.reponses));
+  etat.position = premiereEnAttente === -1 ? Math.max(0, etat.parcours.length - 1) : premiereEnAttente;
+}
+
+/** La question qu'on regarde, avec tout ce que le serveur en a dit. */
+function questionCourante() {
+  const cle = etat.parcours[etat.position];
+  if (!cle) return null;
+  const vive = (etat.vue?.questions ?? []).find((q) => q.cle === cle);
+  // Une question déjà répondue ne figure plus dans la vague : on garde la
+  // dernière description reçue pour pouvoir y revenir sans la reperdre.
+  if (vive) { etat.questionsVues[cle] = vive; return vive; }
+  return etat.questionsVues[cle] ?? null;
 }
 
 function brancher(root) {
@@ -108,6 +185,19 @@ function brancher(root) {
     const brut = champ.value;
     if (brut === "" || brut === null) delete etat.reponses[cle];
     else etat.reponses[cle] = brut === "oui" ? true : brut === "non" ? false : brut;
+    etat.deplacementManuel = false;
+    void consulter(root);
+  });
+
+  // Les cases à cocher répondent au clic, pas au « change » d'un champ quitté :
+  // une réponse cochée doit faire avancer tout de suite, sans second geste.
+  root.addEventListener("click", (evenement) => {
+    const choix = evenement.target.closest("[data-incendie-choix]");
+    if (!choix) return;
+    const cle = choix.dataset.incendieChoix;
+    const brut = choix.dataset.incendieValeur;
+    etat.reponses[cle] = brut === "oui" ? true : brut === "non" ? false : brut;
+    etat.deplacementManuel = false;
     void consulter(root);
   });
 
@@ -121,14 +211,51 @@ function brancher(root) {
     const oublier = evenement.target.closest("[data-incendie-oublier]");
     if (oublier) {
       delete etat.reponses[oublier.dataset.incendieOublier];
+      etat.deplacementManuel = false;
       void consulter(root);
+      return;
+    }
+    const pas = evenement.target.closest("[data-incendie-pas]");
+    if (pas) {
+      etat.position = Math.min(Math.max(0, etat.position + Number(pas.dataset.incendiePas)), etat.parcours.length - 1);
+      etat.deplacementManuel = true;
+      dessiner(root);
+      return;
+    }
+    const aller = evenement.target.closest("[data-incendie-aller]");
+    if (aller) {
+      const rang = etat.parcours.indexOf(aller.dataset.incendieAller);
+      if (rang >= 0) { etat.position = rang; etat.deplacementManuel = true; etat.onglet = "questionnaire"; dessiner(root); }
+      return;
+    }
+    const zoom = evenement.target.closest("[data-incendie-zoom]");
+    if (zoom) {
+      const delta = zoom.dataset.incendieZoom === "in" ? 0.15 : -0.15;
+      etat.zoom = Math.min(2, Math.max(0.4, Math.round((etat.zoom + delta) * 100) / 100));
+      appliquerZoom(root);
+      return;
+    }
+    if (evenement.target.closest("[data-incendie-plein-ecran]")) {
+      etat.pleinEcran = !etat.pleinEcran;
+      dessiner(root);
       return;
     }
     if (evenement.target.closest('[data-action-id="incendieRecommencer"]')) {
       etat.reponses = {};
       etat.survole = null;
+      etat.parcours = [];
+      etat.position = 0;
+      etat.deplacementManuel = false;
       void consulter(root);
     }
+  });
+
+  // Un plein écran dont on ne sort qu'en retrouvant un bouton parmi cinquante
+  // boîtes est un piège : la touche d'échappement en sort toujours.
+  document.addEventListener("keydown", (evenement) => {
+    if (evenement.key !== "Escape" || !etat.pleinEcran || !root.isConnected) return;
+    etat.pleinEcran = false;
+    dessiner(root);
   });
 
   // Désigner un module du schéma montre sa conclusion et sa phrase : le graphe
@@ -149,6 +276,9 @@ function designer(root, id) {
   for (const noeud of root.querySelectorAll("[data-incendie-module]")) {
     noeud.classList.toggle("est-survole", noeud.dataset.incendieModule === id);
   }
+  // Sur trente-cinq liaisons, mettre en avant celles du module désigné est ce
+  // qui permet de suivre la sienne.
+  tracerLesLiens(root);
 }
 
 /* ------------------------------------------------------------------ *
@@ -198,6 +328,10 @@ function dessiner(root) {
       </div>
     </section>
   `;
+
+  // Les traits du schéma ne peuvent se poser qu'une fois les boîtes mesurées :
+  // leur départ dépend de la hauteur réelle de chacune, donc du rendu.
+  if (etat.onglet === "schema") requestAnimationFrame(() => { if (root.isConnected) tracerLesLiens(root); });
 }
 
 function dessinerAvancement(a) {
@@ -220,61 +354,141 @@ function dessinerAvancement(a) {
  * Chacune dit à quel module elle sert et de quel article elle sort : une
  * question dont on ne voit pas à quoi elle mène se répond au hasard.
  */
+/**
+ * Le questionnaire : une question à la fois, et le chemin pour y revenir.
+ *
+ * ## Pourquoi une seule
+ *
+ * Une vague de onze questions à l'écran se lit comme un formulaire, et un
+ * formulaire se remplit en diagonale. Une question seule, avec ses réponses en
+ * ligne et ce à quoi elle sert, se lit vraiment — et c'est là tout l'intérêt :
+ * chacune de ces réponses décide d'un article.
+ *
+ * ## Pourquoi des cases plutôt qu'une liste déroulante
+ *
+ * Une liste déroulante cache ses réponses derrière un clic, et l'on ne sait
+ * pas, avant de l'ouvrir, si le choix est binaire ou s'il compte cinq entrées.
+ * En ligne, on voit d'un coup ce qui est en jeu, et l'on répond d'un geste.
+ *
+ * ## Pourquoi « ‹ » et « › »
+ *
+ * Parce qu'on se trompe. Sans retour en arrière, une réponse donnée trop vite
+ * se paie par un « Recommencer », c'est-à-dire par tout reprendre — et personne
+ * ne recommence : on garde la réponse fausse.
+ */
 function dessinerQuestionnaire(vue) {
-  const repondues = Object.entries(etat.reponses);
+  const question = questionCourante();
+  const repondues = etat.parcours.filter((cle) => cle in etat.reponses);
 
-  return `
-    ${vue.questions.length === 0 ? `
+  if (!question) {
+    return `
       <p class="incendie-fini">
         ${svgIcon("check-circle-fill", { className: "octicon" })}
         Plus rien à demander : le référentiel a conclu tout ce qu'il pouvait conclure.
         Les résultats sont dans l'onglet voisin.
-      </p>` : `
-      <div class="incendie-questions">
-        ${vue.questions.map(dessinerQuestion).join("")}
-      </div>`}
+      </p>
+      ${dessinerRepondues(repondues)}
+    `;
+  }
 
-    ${repondues.length ? `
-      <details class="incendie-repondues">
-        <summary>${repondues.length} réponse${repondues.length > 1 ? "s" : ""} donnée${repondues.length > 1 ? "s" : ""}</summary>
-        <ul>
-          ${repondues.map(([cle, valeur]) => `
-            <li>
-              <span>${escapeHtml(cle)}</span>
-              <strong>${escapeHtml(lisible(valeur))}</strong>
-              <button type="button" class="incendie-oublier" data-incendie-oublier="${escapeHtml(cle)}"
-                      title="Revenir sur cette réponse" aria-label="Revenir sur cette réponse">${svgIcon("x", { className: "octicon" })}</button>
-            </li>
-          `).join("")}
-        </ul>
-      </details>` : ""}
+  const reste = etat.parcours.filter((cle) => !(cle in etat.reponses)).length;
+
+  return `
+    <div class="incendie-parcours">
+      <button type="button" class="incendie-pas" data-incendie-pas="-1"
+              ${etat.position === 0 ? "disabled" : ""} aria-label="Question précédente" title="Question précédente">‹</button>
+      <span class="incendie-parcours__rang">
+        Question ${etat.position + 1} / ${etat.parcours.length}
+        ${reste > 0 ? `<em>— ${reste} sans réponse</em>` : `<em>— toutes répondues</em>`}
+      </span>
+      <button type="button" class="incendie-pas" data-incendie-pas="1"
+              ${etat.position >= etat.parcours.length - 1 ? "disabled" : ""} aria-label="Question suivante" title="Question suivante">›</button>
+    </div>
+
+    ${dessinerQuestion(question)}
+    ${vue.questions.length === 0 && reste === 0 ? `
+      <p class="incendie-fini">
+        ${svgIcon("check-circle-fill", { className: "octicon" })}
+        Plus rien à demander : le référentiel a conclu tout ce qu'il pouvait conclure.
+      </p>` : ""}
+    ${dessinerRepondues(repondues)}
   `;
 }
 
+/**
+ * Les réponses déjà données, et le chemin pour revenir sur chacune.
+ *
+ * C'est le second retour en arrière, celui qui ne suppose pas de recompter les
+ * « ‹ » : on clique sur la réponse qu'on veut reprendre.
+ */
+function dessinerRepondues(repondues) {
+  if (repondues.length === 0) return "";
+  return `
+    <details class="incendie-repondues" open>
+      <summary>${repondues.length} réponse${repondues.length > 1 ? "s" : ""} donnée${repondues.length > 1 ? "s" : ""} — cliquez pour revenir dessus</summary>
+      <ul>
+        ${repondues.map((cle) => {
+          const question = etat.questionsVues[cle];
+          const courante = etat.parcours[etat.position] === cle;
+          return `
+            <li${courante ? ' class="est-courante"' : ""}>
+              <button type="button" class="incendie-revenir" data-incendie-aller="${escapeHtml(cle)}">
+                <span>${escapeHtml(question?.libelle ?? cle)}</span>
+                <strong>${escapeHtml(lisible(etat.reponses[cle], question))}</strong>
+              </button>
+              <button type="button" class="incendie-oublier" data-incendie-oublier="${escapeHtml(cle)}"
+                      title="Effacer cette réponse" aria-label="Effacer cette réponse">${svgIcon("x", { className: "octicon" })}</button>
+            </li>
+          `;
+        }).join("")}
+      </ul>
+    </details>
+  `;
+}
+
+/**
+ * Une question, ses réponses en ligne, et ce à quoi elle sert.
+ *
+ * Les nombres gardent un champ de saisie : proposer des cases pour une hauteur
+ * en mètres supposerait de deviner les valeurs, et l'on devinerait mal.
+ */
 function dessinerQuestion(question) {
-  const id = `incendie-${question.cle}`;
-  const saisie = question.type === "booleen"
-    ? `<select class="fondations-champ__saisie" id="${id}" data-incendie-question="${escapeHtml(question.cle)}">
-         <option value="">—</option><option value="oui">Oui</option><option value="non">Non</option>
-       </select>`
-    : question.type === "choix"
-      ? `<select class="fondations-champ__saisie" id="${id}" data-incendie-question="${escapeHtml(question.cle)}">
-           <option value="">—</option>
-           ${(question.valeurs ?? []).map((v) => `<option value="${escapeHtml(v.valeur)}">${escapeHtml(v.libelle)}</option>`).join("")}
-         </select>`
-      : `<input class="fondations-champ__saisie" type="text" inputmode="decimal" id="${id}"
-                data-incendie-question="${escapeHtml(question.cle)}"
-                placeholder="${escapeHtml(question.unite ?? "")}">`;
+  const donnee = etat.reponses[question.cle];
+  const choix = question.type === "booleen"
+    ? [{ valeur: "oui", libelle: "Oui" }, { valeur: "non", libelle: "Non" }]
+    : question.type === "choix" ? (question.valeurs ?? []) : null;
+
+  const coche = (valeur) => {
+    if (donnee === undefined) return false;
+    if (question.type === "booleen") return (valeur === "oui") === (donnee === true);
+    return String(donnee) === String(valeur);
+  };
 
   return `
     <div class="incendie-question">
-      <label class="incendie-question__libelle" for="${id}">
+      <p class="incendie-question__libelle">
         ${escapeHtml(question.libelle)}${question.unite ? ` <em>[${escapeHtml(question.unite)}]</em>` : ""}
-      </label>
-      ${saisie}
+      </p>
+      ${choix ? `
+        <div class="incendie-choix" role="radiogroup" aria-label="${escapeHtml(question.libelle)}">
+          ${choix.map((v) => `
+            <button type="button" role="radio" aria-checked="${coche(v.valeur)}"
+                    class="incendie-choix__option${coche(v.valeur) ? " est-coche" : ""}"
+                    data-incendie-choix="${escapeHtml(question.cle)}"
+                    data-incendie-valeur="${escapeHtml(v.valeur)}">
+              <span class="incendie-choix__marque" aria-hidden="true"></span>
+              ${escapeHtml(v.libelle)}
+            </button>
+          `).join("")}
+        </div>` : `
+        <input class="fondations-champ__saisie incendie-question__nombre" type="text" inputmode="decimal"
+               data-incendie-question="${escapeHtml(question.cle)}"
+               value="${escapeHtml(donnee === undefined ? "" : String(donnee))}"
+               placeholder="${escapeHtml(question.unite ?? "")}"
+               aria-label="${escapeHtml(question.libelle)}">`}
       <p class="incendie-question__pour">
         ${svgIcon("issue-tracked-by", { className: "octicon" })}
-        Sert à : ${escapeHtml(question.pourTitre)} — ${escapeHtml(referenceLisible(question))}
+        Sert à : ${escapeHtml(question.pourTitre ?? "—")} — ${escapeHtml(referenceLisible(question))}
       </p>
       ${question.aide ? `<p class="incendie-question__aide">${escapeHtml(question.aide)}</p>` : ""}
     </div>
@@ -364,52 +578,133 @@ function dessinerSource(source) {
 /**
  * Le schéma décisionnel.
  *
- * Les modules sont rangés par profondeur, et chacun dit de qui il dépend. On
- * voit d'un coup d'œil ce que le référentiel sait faire, ce dont dépend chaque
- * exigence, et — c'est le point — combien de questions il faut vraiment poser
- * pour arriver au bout.
+ * ## Les liaisons se tracent, elles ne se racontent pas
+ *
+ * Chaque nœud disait « ← Classement du bâtiment ». C'était exact et illisible :
+ * on relisait un nom au lieu de suivre un trait. Les liaisons sont donc
+ * dessinées, en SVG, après la mise en page — c'est la seule façon de les faire
+ * partir du bord droit d'un nœud pour arriver au bord gauche d'un autre, quelle
+ * que soit la hauteur de chacun.
+ *
+ * ## Zoom et plein écran, dès maintenant
+ *
+ * Vingt-huit modules tiennent déjà mal ; le titre III en ajoute autant, et il
+ * en reste plus de la moitié à porter. Un dessin qui ne se réduit pas devient
+ * inutilisable au moment précis où il commencerait à servir. Les commandes sont
+ * celles du journal des actions — mêmes icônes, même geste : deux graphes qui
+ * se manipulent différemment dans le même produit sont deux choses à apprendre.
  */
 function dessinerSchema(vue) {
   const parId = new Map(vue.modules.map((m) => [m.id, m]));
-  const amonts = new Map();
-  for (const lien of vue.graphe.liens) {
-    if (!amonts.has(lien.vers)) amonts.set(lien.vers, []);
-    amonts.get(lien.vers).push(lien);
-  }
   const colonnes = rangerParProfondeur(vue.graphe);
 
   return `
-    <p class="incendie-schema__legende">
-      ${vue.graphe.noeuds.length} modules, ${vue.graphe.liens.length} liaisons,
-      <strong>${vue.graphe.questionsSource.length} questions à la source</strong> —
-      celles qu'aucun module ne sait déduire, et qu'il faut donc demander.
-      Les colonnes se lisent de gauche à droite : ce qui est à gauche décide de ce qui est à droite.
-    </p>
-    <div class="incendie-schema">
-      ${colonnes.map((colonne, rang) => `
-        <div class="incendie-schema__colonne">
-          <div class="incendie-schema__rang">Niveau ${rang + 1}</div>
-          ${colonne.map((noeud) => {
-            const module = parId.get(noeud.id);
-            const conclu = module?.statut === "conclu";
-            const sansObjet = conclu && (module.valeur === null || module.sansObjet);
-            const entrants = (amonts.get(noeud.id) ?? []).map((l) => parId.get(l.de)?.titre).filter(Boolean);
-            const classes = ["incendie-noeud", conclu ? (sansObjet ? "est-sans-objet" : "est-conclu") : "est-attente"];
-            if (etat.survole === noeud.id) classes.push("est-survole");
-            return `
-              <button type="button" class="${classes.join(" ")}" data-incendie-module="${escapeHtml(noeud.id)}">
-                <span class="incendie-noeud__article">art. ${escapeHtml(noeud.article ?? "?")}</span>
-                <span class="incendie-noeud__titre">${escapeHtml(noeud.titre)}</span>
-                <span class="incendie-noeud__valeur">${escapeHtml(conclu && module.valeur !== null ? String(module.valeur) : conclu ? "sans objet" : "en attente")}</span>
-                ${entrants.length ? `<span class="incendie-noeud__amont">← ${escapeHtml(entrants.join(", "))}</span>` : ""}
-              </button>
-            `;
-          }).join("")}
+    <section class="incendie-schema-bloc${etat.pleinEcran ? " est-plein-ecran" : ""}" data-incendie-schema-bloc>
+      <div class="incendie-schema__tete">
+        <p class="incendie-schema__legende">
+          ${vue.graphe.noeuds.length} modules, ${vue.graphe.liens.length} liaisons,
+          <strong>${vue.graphe.questionsSource.length} questions à la source</strong> —
+          celles qu'aucun module ne sait déduire, et qu'il faut donc demander.
+          Les colonnes se lisent de gauche à droite : ce qui est à gauche décide de ce qui est à droite.
+        </p>
+        <div class="incendie-schema__outils">
+          <button type="button" class="incendie-schema__outil" data-incendie-zoom="out" aria-label="Réduire" title="Réduire">
+            ${svgIcon("minus", { className: "octicon" })}
+          </button>
+          <span class="incendie-schema__zoom" data-incendie-zoom-valeur>${Math.round(etat.zoom * 100)} %</span>
+          <button type="button" class="incendie-schema__outil" data-incendie-zoom="in" aria-label="Agrandir" title="Agrandir">
+            ${svgIcon("plus", { className: "octicon" })}
+          </button>
+          <button type="button" class="incendie-schema__outil" data-incendie-plein-ecran
+                  aria-label="${etat.pleinEcran ? "Quitter le plein écran" : "Plein écran"}"
+                  title="${etat.pleinEcran ? "Quitter le plein écran" : "Plein écran"}">
+            ${svgIcon("screen-full", { className: "octicon" })}
+          </button>
         </div>
-      `).join("")}
-    </div>
-    <div class="incendie-detail" data-incendie-detail>${dessinerDetail()}</div>
+      </div>
+
+      <div class="incendie-schema" data-incendie-schema-vue>
+        <div class="incendie-schema__toile" data-incendie-schema-toile style="--incendie-zoom:${etat.zoom}">
+          <svg class="incendie-schema__liens" data-incendie-schema-liens aria-hidden="true"></svg>
+          ${colonnes.map((colonne, rang) => `
+            <div class="incendie-schema__colonne">
+              <div class="incendie-schema__rang">Niveau ${rang + 1}</div>
+              ${colonne.map((noeud) => {
+                const module = parId.get(noeud.id);
+                const conclu = module?.statut === "conclu";
+                const sansObjet = conclu && (module.valeur === null || module.sansObjet);
+                const classes = ["incendie-noeud", conclu ? (sansObjet ? "est-sans-objet" : "est-conclu") : "est-attente"];
+                if (etat.survole === noeud.id) classes.push("est-survole");
+                return `
+                  <button type="button" class="${classes.join(" ")}" data-incendie-module="${escapeHtml(noeud.id)}">
+                    <span class="incendie-noeud__article">art. ${escapeHtml(noeud.article ?? "?")}</span>
+                    <span class="incendie-noeud__titre">${escapeHtml(noeud.titre)}</span>
+                    <span class="incendie-noeud__valeur">${escapeHtml(conclu && module.valeur !== null ? String(module.valeur) : conclu ? "sans objet" : "en attente")}</span>
+                  </button>
+                `;
+              }).join("")}
+            </div>
+          `).join("")}
+        </div>
+      </div>
+      <div class="incendie-detail" data-incendie-detail>${dessinerDetail()}</div>
+    </section>
   `;
+}
+
+/**
+ * Les traits, tracés une fois la mise en page connue.
+ *
+ * On ne peut pas les écrire dans le HTML : leur départ et leur arrivée
+ * dépendent de la hauteur réelle de chaque boîte, donc du texte qu'elle
+ * contient, donc du navigateur. On les pose donc après coup, et on les repose à
+ * chaque zoom et à chaque redimensionnement.
+ *
+ * Le trait qui touche le module désigné est mis en avant : sur trente-cinq
+ * liaisons, c'est ce qui permet de suivre celle qu'on regarde.
+ */
+function tracerLesLiens(root) {
+  const toile = root.querySelector("[data-incendie-schema-toile]");
+  const svg = root.querySelector("[data-incendie-schema-liens]");
+  if (!toile || !svg || !etat.vue) return;
+
+  const cadre = toile.getBoundingClientRect();
+  const zoom = etat.zoom || 1;
+  const boites = new Map();
+  for (const noeud of toile.querySelectorAll("[data-incendie-module]")) {
+    const r = noeud.getBoundingClientRect();
+    // Les coordonnées sont ramenées dans le repère non grossi de la toile :
+    // le SVG est à l'intérieur, il subit le même agrandissement qu'elle.
+    boites.set(noeud.dataset.incendieModule, {
+      gauche: (r.left - cadre.left) / zoom, droite: (r.right - cadre.left) / zoom,
+      milieu: (r.top + r.height / 2 - cadre.top) / zoom
+    });
+  }
+
+  const chemins = [];
+  for (const lien of etat.vue.graphe.liens) {
+    const de = boites.get(lien.de);
+    const vers = boites.get(lien.vers);
+    if (!de || !vers) continue;
+    const x1 = de.droite, y1 = de.milieu, x2 = vers.gauche, y2 = vers.milieu;
+    const courbe = Math.max(18, (x2 - x1) / 2);
+    const marque = etat.survole && (lien.de === etat.survole || lien.vers === etat.survole);
+    chemins.push(`<path d="M ${x1} ${y1} C ${x1 + courbe} ${y1}, ${x2 - courbe} ${y2}, ${x2} ${y2}"
+      class="incendie-lien${marque ? " est-marque" : ""}"><title>${escapeHtml(lien.fait)}</title></path>`);
+  }
+
+  svg.setAttribute("width", String(toile.scrollWidth / zoom));
+  svg.setAttribute("height", String(toile.scrollHeight / zoom));
+  svg.innerHTML = chemins.join("");
+}
+
+/** Le grossissement, appliqué sans tout redessiner — et les traits refaits avec. */
+function appliquerZoom(root) {
+  const toile = root.querySelector("[data-incendie-schema-toile]");
+  if (toile) toile.style.setProperty("--incendie-zoom", String(etat.zoom));
+  const valeur = root.querySelector("[data-incendie-zoom-valeur]");
+  if (valeur) valeur.textContent = `${Math.round(etat.zoom * 100)} %`;
+  tracerLesLiens(root);
 }
 
 /** Le détail du module désigné : sa conclusion, et la phrase qui l'a décidée. */
@@ -467,10 +762,12 @@ function dessinerPortee(vue) {
   `;
 }
 
-function lisible(valeur) {
+/** Une réponse, dite comme elle a été cochée — pas comme elle est rangée. */
+function lisible(valeur, question = null) {
   if (valeur === true) return "oui";
   if (valeur === false) return "non";
-  return String(valeur);
+  const propose = (question?.valeurs ?? []).find((v) => String(v.valeur) === String(valeur));
+  return propose?.libelle ?? String(valeur);
 }
 
 function referenceLisible(question) {

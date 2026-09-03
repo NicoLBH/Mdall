@@ -337,6 +337,128 @@ export const QUESTIONS = [
     aide: "C'est ce support qui libère les revêtements M1, M2 et M3 de toute restriction. À défaut, "
       + "ils doivent tenir la classe de pénétration exigée des revêtements M4."
   },
+  /* ── Titre III : ce qu'on a choisi de construire ───────────────────────── */
+  {
+    cle: "typeEscalierRetenu",
+    libelle: "Quel escalier le projet prévoit-il ?",
+    type: "choix",
+    valeurs: [
+      { valeur: "airLibre", libelle: "À l'air libre (art. 28)" },
+      { valeur: "abriFumees", libelle: "À l'abri des fumées (art. 29)" },
+      { valeur: "exterieur", libelle: "Extérieur (art. 29 bis)" },
+      { valeur: "encloisonne", libelle: "Encloisonné" },
+      { valeur: "nonProtege", libelle: "Ni encloisonné ni protégé" }
+    ],
+    article: "26",
+    aide: "Le texte n'ouvre que deux formes d'escalier « protégé » : à l'air libre et à l'abri des "
+      + "fumées. Un escalier encloisonné est une séparation physique, sans qualité de résistance au feu "
+      + "requise ; l'escalier extérieur du 29 bis est autre chose encore."
+  },
+  {
+    cle: "hauteurDernierPlancherDesserviParEscalier",
+    libelle: "Hauteur du dernier plancher desservi par l'escalier",
+    type: "nombre", unite: "m", article: "18",
+    aide: "Ce n'est pas la hauteur du plancher bas du logement le plus haut : c'est celle du dernier "
+      + "plancher que l'escalier dessert. En deuxième famille collective, au-delà de 8 m, l'escalier "
+      + "est encloisonné et l'article 18 s'applique ; en deçà, il ne s'applique pas."
+  },
+  {
+    cle: "partiesParoiEscalierNonPareFlammes",
+    libelle: "La paroi de la cage comporte-t-elle des parties, baies ou fenêtres non pare-flammes "
+      + "de degré 1/2 heure ?",
+    type: "booleen", article: "18", paragraphe: "deuxième alinéa",
+    aide: "Ce sont elles, et elles seules, que le texte oblige à éloigner des fenêtres voisines."
+  },
+  {
+    cle: "angleDiedreFacade",
+    libelle: "Angle du dièdre formé par la façade voisine",
+    type: "nombre", unite: "°", article: "18",
+    aide: "Le texte définit les positions par l'angle : au-delà de 135°, la façade est latérale ; "
+      + "entre 90° et 135° bornes incluses, elle est en retour ; en deçà de 90°, elle est en vis-à-vis. "
+      + "Une façade dans le même plan vaut 180°."
+  },
+  {
+    cle: "distanceEscalierAuxBaies",
+    libelle: "Distance de l'emprise de l'escalier extérieur aux baies de la façade",
+    type: "nombre", unite: "m", article: "29 bis",
+    aide: "Mesurée du nu extérieur au nu extérieur de l'emprise volumétrique de l'escalier — paliers "
+      + "et volées compris."
+  },
+  {
+    cle: "partVidesParoiEscalier",
+    libelle: "Part de vides de la paroi de l'escalier donnant sur l'extérieur",
+    type: "nombre", unite: "%", article: "28",
+    aide: "L'escalier « à l'air libre » suppose une paroi ouverte sur au moins la moitié de sa "
+      + "surface, sur toute la longueur."
+  },
+  {
+    cle: "typeCirculationRetenue",
+    libelle: "Quelle circulation horizontale le projet prévoit-il ?",
+    type: "choix",
+    valeurs: [
+      { valeur: "airLibre", libelle: "À l'air libre (art. 30)" },
+      { valeur: "abriFumees", libelle: "À l'abri des fumées (art. 31 à 38)" },
+      { valeur: "aucune", libelle: "Aucune circulation protégée" }
+    ],
+    article: "30",
+    aide: "Les circulations horizontales protégées ne sont imposées qu'en troisième famille B et en "
+      + "quatrième famille, mais elles peuvent exister ailleurs."
+  },
+  {
+    cle: "partVidesParoiCirculation",
+    libelle: "Part de vides de la paroi de la circulation donnant sur l'extérieur",
+    type: "nombre", unite: "%", article: "30",
+    aide: "Sur toute la longueur de la paroi, et au moins égale à la moitié de sa surface totale."
+  },
+  {
+    cle: "allegeBaieVitreeHauteur",
+    libelle: "Hauteur de l'allège des baies vitrées donnant sur la circulation",
+    type: "nombre", unite: "m", article: "30", paragraphe: "deuxième alinéa",
+    aide: "En deçà d'un mètre, c'est l'autre branche du texte qui s'applique : les baies doivent être "
+      + "pare-flammes de degré une demi-heure **et fixes**."
+  },
+  {
+    cle: "modeDesenfumageRetenu",
+    libelle: "Comment la circulation est-elle désenfumée ?",
+    type: "choix",
+    valeurs: [
+      { valeur: "tirageNaturel", libelle: "Tirage naturel" },
+      { valeur: "extractionMecanique", libelle: "Extraction mécanique" }
+    ],
+    article: "33"
+  },
+  {
+    cle: "parcoursCirculationRectiligne",
+    libelle: "Le parcours de la circulation est-il rectiligne ?",
+    type: "booleen", article: "35", paragraphe: "deuxième alinéa",
+    aide: "La distance admise entre deux bouches de nature différente passe de 10 m à 7 m dès que le "
+      + "parcours ne l'est plus."
+  },
+  {
+    cle: "solutionDegagementRetenue",
+    libelle: "Quelle solution de dégagements protégés est retenue ?",
+    type: "choix",
+    valeurs: [
+      { valeur: "1", libelle: "N° 1 — deux escaliers (art. 41)" },
+      { valeur: "2", libelle: "N° 2 — volume séparatif (art. 42)" },
+      { valeur: "3", libelle: "N° 3 — sas et surpression (art. 43)" }
+    ],
+    article: "40",
+    aide: "L'article 40 pose l'objectif — les fumées de la circulation sinistrée ne doivent pas "
+      + "pénétrer dans l'escalier — et dit que le choix entre les trois solutions appartient aux "
+      + "constructeurs du bâtiment."
+  },
+  {
+    cle: "nombreEscaliersProteges",
+    libelle: "Nombre d'escaliers protégés prévus",
+    type: "nombre", unite: "escaliers", article: "41", paragraphe: "a"
+  },
+  {
+    cle: "distanceEntreEscaliers",
+    libelle: "Distance entre les deux escaliers protégés",
+    type: "nombre", unite: "m", article: "41", paragraphe: "a",
+    aide: "La solution n° 1 les veut distants de 10 m au moins."
+  },
   {
     cle: "conduitsOuGainesTraversantDesParois",
     libelle: "Des conduits ou gaines sont-ils aménagés dans le bâtiment ?",

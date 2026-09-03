@@ -18248,3 +18248,101 @@ strong.est-verifie{ color:#3fb950; }
 .incendie-portee h5{ margin:0 0 8px; font-size:13px; display:flex; gap:6px; align-items:center; }
 .incendie-portee ul{ margin:0; padding-left:20px; font-size:12px; line-height:1.7; }
 .incendie-portee__note{ margin:10px 0 0; font-size:12px; color:var(--muted); line-height:1.55; }
+
+/* ------------------------------------------------------------------ *
+ * Incendie : le questionnaire, une question à la fois
+ *
+ * Une vague de onze questions à l'écran se lit comme un formulaire, et un
+ * formulaire se remplit en diagonale. Une question seule, avec ses réponses en
+ * ligne, se lit vraiment.
+ * ------------------------------------------------------------------ */
+.incendie-parcours{
+  display:flex; align-items:center; gap:12px; margin:0 0 14px;
+}
+.incendie-parcours__rang{ font-size:12px; color:var(--muted); }
+.incendie-parcours__rang em{ font-style:normal; opacity:.75; }
+.incendie-pas{
+  appearance:none; cursor:pointer; font:inherit; font-size:16px; line-height:1;
+  width:30px; height:30px; border-radius:6px;
+  border:1px solid var(--border, #30363d); background:none; color:var(--fg);
+}
+.incendie-pas:hover:not(:disabled){ border-color:#f0883e; color:#f0883e; }
+.incendie-pas:disabled{ opacity:.35; cursor:default; }
+
+.incendie-question__libelle{ margin:0 0 10px; font-size:14px; font-weight:600; line-height:1.5; }
+.incendie-question__nombre{ max-width:220px; }
+
+/* Les réponses en ligne : on voit d'un coup ce qui est en jeu. */
+.incendie-choix{ display:flex; flex-wrap:wrap; gap:8px; }
+.incendie-choix__option{
+  appearance:none; cursor:pointer; font:inherit; font-size:13px;
+  display:inline-flex; align-items:center; gap:8px;
+  padding:7px 14px 7px 10px; border-radius:999px;
+  border:1px solid var(--border, #30363d); background:none; color:inherit;
+  transition:border-color .12s ease, background .12s ease;
+}
+.incendie-choix__marque{
+  width:13px; height:13px; border-radius:50%; flex:none;
+  border:1.5px solid var(--muted); position:relative;
+}
+.incendie-choix__option:hover{ border-color:#f0883e; }
+.incendie-choix__option.est-coche{ border-color:#f0883e; background:rgba(240,136,62,.14); font-weight:600; }
+.incendie-choix__option.est-coche .incendie-choix__marque{ border-color:#f0883e; }
+.incendie-choix__option.est-coche .incendie-choix__marque::after{
+  content:""; position:absolute; inset:2.5px; border-radius:50%; background:#f0883e;
+}
+.incendie-choix__option:focus-visible{ outline:2px solid #f0883e; outline-offset:2px; }
+
+/* Le second retour en arrière : on clique sur la réponse qu'on veut reprendre. */
+.incendie-repondues li{ display:flex; gap:6px; align-items:center; }
+.incendie-repondues li.est-courante{ outline:1px dashed #f0883e; outline-offset:3px; border-radius:4px; }
+.incendie-revenir{
+  appearance:none; background:none; border:0; padding:2px 0; cursor:pointer; font:inherit; font-size:12px;
+  color:inherit; text-align:left; display:flex; gap:8px; align-items:baseline; flex:1; min-width:0;
+}
+.incendie-revenir span{ color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.incendie-revenir strong{ color:#f0883e; white-space:nowrap; }
+.incendie-revenir:hover span{ color:var(--fg); }
+
+/* ------------------------------------------------------------------ *
+ * Incendie : le schéma, ses liaisons et son plein écran
+ * ------------------------------------------------------------------ */
+.incendie-schema__tete{
+  display:flex; gap:16px; align-items:flex-start; justify-content:space-between; margin-bottom:12px;
+}
+.incendie-schema__outils{ display:flex; gap:4px; align-items:center; flex:none; }
+.incendie-schema__outil{
+  appearance:none; cursor:pointer; width:28px; height:28px; border-radius:6px;
+  border:1px solid var(--border, #30363d); background:none; color:var(--muted);
+  display:inline-flex; align-items:center; justify-content:center;
+}
+.incendie-schema__outil:hover{ color:#f0883e; border-color:#f0883e; }
+.incendie-schema__zoom{ font-size:11px; color:var(--muted); min-width:42px; text-align:center; }
+
+.incendie-schema{ overflow:auto; padding-bottom:10px; }
+.incendie-schema__toile{
+  display:flex; gap:56px; align-items:flex-start; position:relative;
+  transform:scale(var(--incendie-zoom, 1)); transform-origin:top left;
+  width:max-content; padding:2px;
+}
+/* Les traits passent derrière les boîtes : un trait par-dessus un titre le rend
+   illisible, et c'est le titre qu'on lit. */
+.incendie-schema__liens{ position:absolute; inset:0; pointer-events:none; overflow:visible; z-index:0; }
+.incendie-lien{ fill:none; stroke:var(--border2, #30363d); stroke-width:1.2; }
+.incendie-lien.est-marque{ stroke:#f0883e; stroke-width:2; }
+.incendie-schema__colonne{ position:relative; z-index:1; }
+.incendie-noeud{ width:210px; }
+
+/* Plein écran : le schéma prend la page, sans emporter le reste de l'écran. */
+.incendie-schema-bloc.est-plein-ecran{
+  position:fixed; inset:var(--app-top, 0) 0 0 0; z-index:calc(var(--z-header, 40) + 2);
+  background:var(--bg, #0d1117); padding:16px 20px; overflow:auto; margin:0;
+}
+.incendie-schema-bloc.est-plein-ecran .incendie-schema{ max-height:none; }
+/* La barre reste sous la main : sortir du plein écran ne doit pas supposer de
+   retrouver un bouton parmi cinquante boîtes. La touche d'échappement en sort
+   aussi. */
+.incendie-schema-bloc.est-plein-ecran .incendie-schema__tete{
+  position:sticky; top:0; z-index:2; background:var(--bg, #0d1117);
+  padding:8px 0 10px; margin:0 0 8px;
+}

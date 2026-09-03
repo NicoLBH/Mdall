@@ -319,8 +319,8 @@ test("les questions arrivent par vagues, la racine d'abord", () => {
   // Rien de ce qui suppose le classement n'est demandé dans la première vague :
   // demander la classe du système de façade avant de savoir de quelle famille
   // on parle donne l'impression de remplir un formulaire au hasard.
-  for (const tardive of ["facadePartiesPleinesSystemeClasseE", "sousSol", "implantation",
-                         "etagesSurRdc", "arreteMunicipalDeclassement"]) {
+  for (const tardive of ["facadePartiesPleinesSystemeClasseE", "implantation",
+                         "etagesSurRdc", "arreteMunicipalDeclassement", "solutionDegagementRetenue"]) {
     assert.ok(!posees.includes(tardive), `${tardive} ne devrait pas être demandée d'emblée`);
   }
   // Et l'on ne demande pas d'emblée les cotes d'une chaussée : l'article 4 ne
@@ -383,4 +383,159 @@ test("le sous-graphe d'un module remonte tout ce dont il dépend, et rien d'autr
   }
   // La couverture ne décide rien du degré des planchers.
   assert.ok(!amont.has("couverture"));
+});
+
+/* ── Titre III : dégagements ─────────────────────────────────────────────── */
+
+const COLLECTIF = { logementsSuperposes: true, ...SANS_DUPLEX };
+const troisiemeB = (extra = {}) => ({
+  ...COLLECTIF, etagesSurRdc: 6,
+  hauteurPlancherBasLogementLePlusHaut: 22, hauteurPlancherBasNiveauLePlusHaut: 22,
+  distancePortePaliereEscalier: 14, accesEscaliersAtteintsParVoieEchelles: false, ...extra
+});
+
+test("l'article 26 exige un escalier protégé en 3ᵉ famille B, et deux formes seulement", () => {
+  const cas = troisiemeB();
+  assert.equal(consulter(cas).faits.classement, "3e famille B");
+  assert.equal(consulter(cas).faits.typeEscalierExige, "escalier protégé");
+  // Un escalier encloisonné n'en est pas un : le texte n'ouvre que « à l'air
+  // libre » et « à l'abri des fumées ».
+  assert.equal(consulter({ ...cas, typeEscalierRetenu: "encloisonne" }).faits.conformiteEscalier, "non conforme");
+  assert.equal(consulter({ ...cas, typeEscalierRetenu: "abriFumees" }).faits.conformiteEscalier, "conforme");
+  assert.equal(consulter({ ...cas, typeEscalierRetenu: "airLibre" }).faits.conformiteEscalier, "conforme");
+});
+
+test("en 3ᵉ famille A, aucun escalier protégé n'est exigé — et c'est une conclusion", () => {
+  const cas = { ...COLLECTIF, etagesSurRdc: 6,
+    hauteurPlancherBasLogementLePlusHaut: 20, hauteurPlancherBasNiveauLePlusHaut: 20,
+    distancePortePaliereEscalier: 8, accesEscaliersAtteintsParVoieEchelles: true,
+    voieAccesDecrite: true, voieLargeur: 4, voieForcePortante: 130, voieRayonInterieur: 11,
+    voieHauteurLibre: 3.5, voiePente: 8, voieLongueur: 12, voieResistancePoinconnement: 100,
+    voieRaccordeeAUneVoieEngins: "surVoiePublique" };
+  assert.equal(consulter(cas).faits.classement, "3e famille A");
+  assert.equal(consulter(cas).faits.typeEscalierExige, "aucun escalier protégé exigé");
+  assert.equal(consulter({ ...cas, typeEscalierRetenu: "encloisonne" }).faits.conformiteEscalier, "sans objet");
+});
+
+test("l'article 18 s'efface devant un collectif de 2ᵉ famille sous 8 m — et la Q/R le dit", () => {
+  // Le texte s'adresse à « toutes les habitations collectives », mais un
+  // escalier non encloisonné n'a pas de paroi de cage à qualifier.
+  const bas = { ...COLLECTIF, etagesSurRdc: 3, hauteurPlancherBasLogementLePlusHaut: 7,
+    hauteurPlancherBasNiveauLePlusHaut: 7, hauteurDernierPlancherDesserviParEscalier: 7 };
+  const vue = consulter(bas);
+  assert.equal(vue.faits.paroisEscalierFacade, "non applicable");
+  assert.equal(vue.modules.find((m) => m.id === "parois-escalier-facade").pourquoi.nature, "commentaire");
+
+  const haut = { ...bas, hauteurPlancherBasLogementLePlusHaut: 9,
+    hauteurPlancherBasNiveauLePlusHaut: 9, hauteurDernierPlancherDesserviParEscalier: 9 };
+  assert.equal(consulter(haut).faits.paroisEscalierFacade, "PF 1/2 h");
+});
+
+test("les trois éloignements de l'article 18 tiennent à un angle, bornes comprises", () => {
+  const base = { ...COLLECTIF, etagesSurRdc: 6, hauteurPlancherBasLogementLePlusHaut: 20,
+    hauteurPlancherBasNiveauLePlusHaut: 20, hauteurDernierPlancherDesserviParEscalier: 20,
+    partiesParoiEscalierNonPareFlammes: true };
+  assert.equal(consulter({ ...base, angleDiedreFacade: 180 }).faits.eloignementBaiesEscalier, "2 m au moins");
+  // À 135° exactement, on est en retour : le texte dit « bornes incluses ».
+  assert.equal(consulter({ ...base, angleDiedreFacade: 135 }).faits.eloignementBaiesEscalier, "4 m au moins");
+  assert.equal(consulter({ ...base, angleDiedreFacade: 90 }).faits.eloignementBaiesEscalier, "4 m au moins");
+  assert.equal(consulter({ ...base, angleDiedreFacade: 89 }).faits.eloignementBaiesEscalier, "8 m au moins");
+  // Toute la paroi pare-flammes : aucun éloignement n'est exigé.
+  assert.equal(consulter({ ...base, partiesParoiEscalierNonPareFlammes: false }).faits.eloignementBaiesEscalier, "sans objet");
+});
+
+test("la porte entre escalier et circulation, en 2ᵉ famille, tient aux 8 m", () => {
+  const bas = { ...COLLECTIF, etagesSurRdc: 3, hauteurPlancherBasLogementLePlusHaut: 7, hauteurPlancherBasNiveauLePlusHaut: 7 };
+  assert.equal(consulter(bas).faits.porteEscalierCirculation, "non exigée");
+  const haut = { ...bas, hauteurPlancherBasLogementLePlusHaut: 9, hauteurPlancherBasNiveauLePlusHaut: 9 };
+  assert.equal(consulter(haut).faits.porteEscalierCirculation, "exigée");
+  assert.match(consulter(haut).modules.find((m) => m.id === "porte-escalier-circulation").mention, /séparation physique/);
+});
+
+test("le désenfumage de la cage s'efface devant un escalier extérieur", () => {
+  const cas = { ...COLLECTIF, etagesSurRdc: 3, hauteurPlancherBasLogementLePlusHaut: 9, hauteurPlancherBasNiveauLePlusHaut: 9 };
+  assert.match(consulter({ ...cas, typeEscalierRetenu: "encloisonne" }).faits.desenfumageCageEscalier, /1 m²/);
+  assert.equal(consulter({ ...cas, typeEscalierRetenu: "exterieur" }).faits.desenfumageCageEscalier, "sans objet");
+});
+
+test("en 3ᵉ famille A, l'ouverture est asservie à un détecteur — c'est le « en outre »", () => {
+  const cas = { ...COLLECTIF, etagesSurRdc: 6, hauteurPlancherBasLogementLePlusHaut: 20,
+    hauteurPlancherBasNiveauLePlusHaut: 20, distancePortePaliereEscalier: 8,
+    accesEscaliersAtteintsParVoieEchelles: true, typeEscalierRetenu: "encloisonne",
+    voieAccesDecrite: true, voieLargeur: 4, voieForcePortante: 130, voieRayonInterieur: 11,
+    voieHauteurLibre: 3.5, voiePente: 8, voieLongueur: 12, voieResistancePoinconnement: 100,
+    voieRaccordeeAUneVoieEngins: "surVoiePublique" };
+  assert.match(consulter(cas).faits.desenfumageCageEscalier, /détecteur autonome déclencheur/);
+});
+
+test("une même cote, trois seuils : 10 m, 15 m, 25 m", () => {
+  // La distance porte palière → escalier vaut 10 m à l'article 3 (classement en
+  // 3ᵉ A), 15 m à l'article 31, 25 m à l'article 30. Une seule question.
+  const airLibre = troisiemeB({ typeCirculationRetenue: "airLibre", distancePortePaliereEscalier: 22 });
+  assert.match(consulter(airLibre).faits.distanceCirculationVerdict, /admissible — 25 m/);
+  assert.match(consulter({ ...airLibre, distancePortePaliereEscalier: 27 }).faits.distanceCirculationVerdict, /dépassée/);
+
+  const abri = troisiemeB({ typeCirculationRetenue: "abriFumees", distancePortePaliereEscalier: 14 });
+  assert.match(consulter(abri).faits.distanceCirculationVerdict, /admissible — 15 m/);
+  assert.match(consulter({ ...abri, distancePortePaliereEscalier: 22 }).faits.distanceCirculationVerdict, /dépassée/);
+});
+
+test("l'allège d'un mètre, ou des baies fixes : c'est le « sinon » qui décide", () => {
+  const cas = troisiemeB({ typeCirculationRetenue: "airLibre", partVidesParoiCirculation: 60 });
+  assert.equal(consulter({ ...cas, allegeBaieVitreeHauteur: 1.1 }).faits.allegeBaieVitreeCirculation, "allège CF 1/2 h (EI 30)");
+  // En deçà d'un mètre, l'autre branche s'applique — et elle exige « fixes ».
+  const basse = consulter({ ...cas, allegeBaieVitreeHauteur: 0.8 });
+  assert.match(basse.faits.allegeBaieVitreeCirculation, /fixes/);
+  assert.match(basse.modules.find((m) => m.id === "allege-circulation-air-libre").pourquoi.citation, /et fixes/);
+});
+
+test("les circulations protégées ne sont imposées qu'en 3ᵉ B et en 4ᵉ", () => {
+  assert.equal(consulter(troisiemeB()).faits.circulationProtegeeExigee, "exigée");
+  const deuxieme = { ...COLLECTIF, etagesSurRdc: 3, hauteurPlancherBasLogementLePlusHaut: 9, hauteurPlancherBasNiveauLePlusHaut: 9 };
+  assert.equal(consulter(deuxieme).faits.circulationProtegeeExigee, "non exigée");
+  assert.match(consulter(deuxieme).modules.find((m) => m.id === "circulation-exigee").mention, /séparation physique/);
+});
+
+test("les conduits de désenfumage suivent la famille, mais seulement à l'abri des fumées", () => {
+  const abri = troisiemeB({ typeCirculationRetenue: "abriFumees" });
+  assert.equal(consulter(abri).faits.conduitsDesenfumageResistance, "incombustibles, CF 1/2 h");
+  const quatrieme = { ...COLLECTIF, etagesSurRdc: 12, hauteurPlancherBasLogementLePlusHaut: 40,
+    hauteurPlancherBasNiveauLePlusHaut: 40, typeCirculationRetenue: "abriFumees" };
+  assert.equal(consulter(quatrieme).faits.conduitsDesenfumageResistance, "incombustibles, CF 1 h");
+  const air = troisiemeB({ typeCirculationRetenue: "airLibre" });
+  assert.equal(consulter(air).faits.conduitsDesenfumageResistance, "sans objet");
+});
+
+test("les bouches passent de 10 m à 7 m dès que le parcours n'est plus rectiligne", () => {
+  const abri = troisiemeB({ typeCirculationRetenue: "abriFumees" });
+  assert.match(consulter({ ...abri, parcoursCirculationRectiligne: true }).faits.bouchesDesenfumage, /10 m au plus/);
+  assert.match(consulter({ ...abri, parcoursCirculationRectiligne: false }).faits.bouchesDesenfumage, /7 m au plus/);
+});
+
+test("les trois solutions de la 4ᵉ famille, et ce que chacune exige d'escaliers", () => {
+  const quatrieme = { ...COLLECTIF, etagesSurRdc: 12,
+    hauteurPlancherBasLogementLePlusHaut: 40, hauteurPlancherBasNiveauLePlusHaut: 40 };
+  const sol1 = { ...quatrieme, solutionDegagementRetenue: "1" };
+  assert.match(consulter(sol1).faits.solutionDegagements4e, /solution n° 1/);
+  assert.match(consulter({ ...sol1, nombreEscaliersProteges: 2, distanceEntreEscaliers: 12 }).faits.escaliers4eFamille, /^conforme/);
+  assert.match(consulter({ ...sol1, nombreEscaliersProteges: 2, distanceEntreEscaliers: 7 }).faits.escaliers4eFamille, /10 m au moins/);
+  assert.match(consulter({ ...sol1, nombreEscaliersProteges: 1 }).faits.escaliers4eFamille, /deux escaliers protégés exigés/);
+
+  const sol2 = { ...quatrieme, solutionDegagementRetenue: "2", nombreEscaliersProteges: 1 };
+  assert.match(consulter(sol2).faits.solutionDegagements4e, /volume séparatif/);
+  assert.match(consulter(sol2).modules.find((m) => m.id === "solution-degagements-4e").mention, /n'est pas nécessaire lorsque/);
+  assert.match(consulter(sol2).faits.escaliers4eFamille, /^conforme/);
+
+  const sol3 = { ...quatrieme, solutionDegagementRetenue: "3", nombreEscaliersProteges: 1 };
+  assert.match(consulter(sol3).faits.solutionDegagements4e, /surpression/);
+  assert.match(consulter(sol3).modules.find((m) => m.id === "solution-degagements-4e").mention, /0,8 m³\/s/);
+});
+
+test("l'escalier extérieur reprend les trois distances, mesurées autrement", () => {
+  const cas = { ...COLLECTIF, etagesSurRdc: 3, hauteurPlancherBasLogementLePlusHaut: 9,
+    hauteurPlancherBasNiveauLePlusHaut: 9, typeEscalierRetenu: "exterieur" };
+  assert.equal(consulter({ ...cas, angleDiedreFacade: 180, distanceEscalierAuxBaies: 2.5 }).faits.escalierExterieurConforme, "conforme");
+  assert.equal(consulter({ ...cas, angleDiedreFacade: 180, distanceEscalierAuxBaies: 1.5 }).faits.escalierExterieurConforme, "non conforme");
+  assert.equal(consulter({ ...cas, angleDiedreFacade: 60, distanceEscalierAuxBaies: 5 }).faits.escalierExterieurConforme, "non conforme");
+  assert.equal(consulter({ ...cas, angleDiedreFacade: 60, distanceEscalierAuxBaies: 9 }).faits.escalierExterieurConforme, "conforme");
 });
