@@ -415,7 +415,7 @@ test("chaque utilitaire est proposé au modèle avec son périmètre, et ses bor
 test("le référentiel incendie annonce ce qu'il ne traite pas, nommément", () => {
   const incendie = outilParId("incendie_habitation");
   for (const hors of [/parcs de stationnement/i, /établissements recevant du public/i,
-                      /immeubles de grande hauteur/i, /articles 44 à 99/]) {
+                      /immeubles de grande hauteur/i, /articles 65 à 99/]) {
     assert.match(incendie.aQuoiCaSert, hors);
   }
   // Et il ne calcule rien sur place : son raisonnement vit au serveur.
