@@ -409,13 +409,13 @@ test("chaque utilitaire est proposé au modèle avec son périmètre, et ses bor
   assert.deepEqual(noms.sort(), ["incendie_habitation", "profondeur_hors_gel", "spectre_elastique_ec8"]);
   assert.match(GEL.aQuoiCaSert, /ne dimensionne pas la fondation/i);
   assert.match(SPECTRE.aQuoiCaSert, /ne dimensionne aucun élément/i);
-  assert.match(outilParId("incendie_habitation").aQuoiCaSert, /ne traite ni les dégagements/i);
+  assert.match(outilParId("incendie_habitation").aQuoiCaSert, /ne traite ni les parcs de stationnement/i);
 });
 
 test("le référentiel incendie annonce ce qu'il ne traite pas, nommément", () => {
   const incendie = outilParId("incendie_habitation");
   for (const hors of [/parcs de stationnement/i, /établissements recevant du public/i,
-                      /immeubles de grande hauteur/i, /articles 17 à 43/]) {
+                      /immeubles de grande hauteur/i, /articles 44 à 99/]) {
     assert.match(incendie.aQuoiCaSert, hors);
   }
   // Et il ne calcule rien sur place : son raisonnement vit au serveur.
