@@ -334,12 +334,13 @@ export const OUTILS = [
       + "celliers, parements de façade, couverture, conduits et gaines, ainsi que les dégagements — "
       + "escaliers, parois de cage, désenfumage, circulations horizontales protégées et dégagements "
       + "protégés des articles 17 à 43, et les conduits et gaines des articles 44 à 64 — gaines gaz, "
-      + "colonnes montantes électriques, conduits de ventilation et vide-ordures. "
+      + "colonnes montantes électriques, conduits de ventilation et vide-ordures, les logements-foyers "
+      + "des articles 65 à 76, et les dispositions diverses des articles 97 à 99 — ascenseurs, colonnes "
+      + "sèches, circulation des piétons. "
       + "À appeler dès qu'une question porte sur la sécurité incendie d'un bâtiment d'habitation : "
       + "« en quelle famille ce bâtiment est-il classé ? », « quel est le degré coupe-feu des planchers "
       + "à respecter ? », « quelle stabilité au feu pour les porteurs ? ». "
-      + "Ne traite ni les parcs de stationnement, ni le chauffage, l'électricité, les ascenseurs et "
-      + "les moyens de secours (articles 65 à 99), "
+      + "Ne traite ni les parcs de stationnement (articles 77 à 96), ni les bâtiments existants, "
       + "ni les établissements recevant du public, ni les immeubles de grande hauteur.",
     source: "arrêté du 31 janvier 1986 modifié, complété des commentaires SOCOTEC",
     entrees: [
@@ -367,7 +368,13 @@ export const OUTILS = [
           "conduitEntreNiveaux", "trappesDeGaine", "traverseeDeParoi",
           "gaineGazAccessibilite", "paroisGaineGaz", "traverseeGazParcStationnement",
           "colonneMontanteElectricite", "conduitsVentilation", "solutionVentilation",
-          "localVentilateurInverse", "videOrduresConduit", "localReceptacleOrdures"
+          "localVentilateurInverse", "videOrduresConduit", "localReceptacleOrdures",
+          // Titre V — logements-foyers, et titre VII — dispositions diverses
+          "regimeLogementFoyer", "escaliersLogementFoyer", "hallLogementFoyer",
+          "alarmeLogementFoyer", "enceinteUniteDeVie", "degagementsUniteDeVie",
+          "escaliersServicesCollectifs", "niveauMaximalFoyerPersonnesAgees",
+          "paroisCageAscenseur", "sasAscenseurSousSol", "appelPrioritairePompiers",
+          "colonneSeche", "circulationPietons"
         ],
         requis: true,
         aide: "Ce que l'on cherche. « classement » rend la famille elle-même ; les autres rendent "
