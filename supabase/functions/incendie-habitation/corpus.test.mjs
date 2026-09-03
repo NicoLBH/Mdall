@@ -9,7 +9,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { CORPUS, consulter, demander, QUESTIONS, grapheDu, faitsDemandes, cheminVers, sousGrapheDe } from "./corpus.js";
+import { CORPUS, consulter, demander, lireArticle, expliquer, QUESTIONS, grapheDu, faitsDemandes, cheminVers, sousGrapheDe } from "./corpus.js";
 import { ordonner } from "./moteur.js";
 
 /** Le minimum pour qu'un bâtiment sorte du champ d'application sans être un IGH. */
@@ -45,8 +45,13 @@ test("chaque règle cite son article et la phrase qui décide", () => {
       assert.ok(regle.source, `${module.id} : une règle sans source`);
       assert.ok(regle.source.article, `${module.id} : une règle sans article`);
       assert.ok(regle.source.citation?.length > 20, `${module.id} : une citation trop courte pour être vérifiable`);
-      assert.ok(["reglement", "commentaire"].includes(regle.source.nature),
-        `${module.id} : la nature de la source doit dire si l'on est sur du texte ou sur de la doctrine`);
+      // Trois natures, et la distinction compte : « reglement » cite l'arrêté
+      // mot pour mot — un test le vérifie contre le texte —, « lecture » dit ce
+      // que l'article veut dire quand il n'y a pas de phrase à citer, et
+      // « commentaire » rapporte une doctrine. Les confondre ferait passer une
+      // interprétation pour la loi.
+      assert.ok(["reglement", "lecture", "commentaire"].includes(regle.source.nature),
+        `${module.id} : la nature de la source doit dire si l'on est sur du texte, sur une lecture ou sur de la doctrine`);
     }
   }
 });
@@ -1050,4 +1055,47 @@ test("le dépouillement du titre VI ne descend pas dans le navigateur", () => {
   const serialise = JSON.stringify(parc({ niveauxParcAuDessous: 4, superficieCompartimentParc: 4000 }));
   assert.equal(serialise.includes('"regles"'), false);
   assert.equal(serialise.includes('"si"'), false);
+});
+
+/* ── Le texte de l'arrêté, ouvert sous la question ───────────────────────── */
+
+test("l'arrêté s'ouvre à l'article demandé, texte et commentaire séparés", () => {
+  const article = lireArticle("6");
+  assert.equal(article.ok, true);
+  assert.equal(article.numero, "6");
+  assert.match(article.texte, /Les planchers/);
+  assert.match(article.texte, /vide sanitaire non accessible/);
+  // Le commentaire est à part : on ne défend pas de la même façon un article et
+  // une doctrine, et les mélanger ferait citer une lecture comme si c'était la loi.
+  assert.ok(!article.texte.includes("Commentaire SOCOTEC"));
+});
+
+test("l'article premier porte son schéma, redessiné en traits", () => {
+  const article = lireArticle("1er");
+  assert.equal(article.figures.length, 1);
+  assert.match(article.figures[0].svg, /^<svg /);
+});
+
+test("un article hors du texte porté se refuse plutôt que de rendre du vide", () => {
+  assert.equal(lireArticle("512").ok, false);
+  assert.equal(lireArticle("").ok, false);
+});
+
+test("le texte de l'arrêté ne descend pas avec les vagues de questions", () => {
+  // Deux cent cinquante kilo-octets à chaque réponse, pour un panneau qu'on
+  // n'ouvre pas à chaque question : l'écran va le chercher quand il l'ouvre.
+  const vue = consulter({});
+  const charge = JSON.stringify(vue);
+  assert.ok(charge.length < 150000, `la consultation pèse ${Math.round(charge.length / 1024)} Ko`);
+  for (const question of vue.questions) assert.equal(question.documentation, undefined);
+});
+
+test("l'inspection est la seule porte par laquelle les règles sortent", () => {
+  // Et elle est fermée à clé dans la fonction : ici, on vérifie seulement que
+  // la consultation ordinaire, elle, n'en laisse rien passer.
+  const serialise = JSON.stringify(consulter({ logementsSuperposes: true, etagesSurRdc: 3 }));
+  assert.equal(serialise.includes('"regles"'), false);
+  assert.equal(serialise.includes('"si"'), false);
+  // Tandis que l'inspection, demandée explicitement, les rend.
+  assert.ok(expliquer("planchers", {}).regles.length > 0);
 });

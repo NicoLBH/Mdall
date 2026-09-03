@@ -30,6 +30,9 @@ import { MODULES_CONDUITS } from "./modules-conduits.js";
 import { MODULES_FOYERS } from "./modules-foyers.js";
 import { MODULES_PARCS } from "./modules-parcs.js";
 import { QUESTIONS, questionDe } from "./questions.js";
+import { articleDe, ARTICLES_PORTES } from "./articles.js";
+import { figuresDe } from "./figures.js";
+import { expliquerModule } from "./inspection.js";
 
 export const CORPUS = [
   ...MODULES_CLASSEMENT,
@@ -72,6 +75,30 @@ export const PORTEE = {
 /* ------------------------------------------------------------------ *
  * La consultation
  * ------------------------------------------------------------------ */
+
+/**
+ * Ce qu'il faut pour répondre à une question, en plus de la question.
+ *
+ * L'énoncé seul suppose qu'on sache déjà ce que l'arrêté entend par « parois
+ * verticales de l'enveloppe du logement » ou par « niveau de référence ». Celui
+ * qui répond ne le sait pas, et il répondra quand même : c'est ainsi qu'on
+ * obtient un classement faux sans que rien ne le signale. L'article entier
+ * lève l'ambiguïté parce qu'il porte son contexte, le commentaire dit l'usage,
+ * et le schéma montre d'un coup ce qu'une phrase met dix lignes à dire.
+ *
+ * Ce n'est pas le dépouillement : c'est le texte public, et il ne dit pas
+ * comment on s'en sert.
+ */
+function documentation(article) {
+  const trouve = articleDe(article);
+  if (!trouve) return null;
+  return {
+    numero: trouve.numero,
+    texte: trouve.texte,
+    commentaire: trouve.commentaire ?? null,
+    figures: figuresDe(trouve.numero)
+  };
+}
 
 /** La part d'une source qu'on accepte de montrer : l'article, et la phrase citée. */
 function sourceMontrable(source) {
@@ -130,6 +157,10 @@ export function consulter(reponses = {}) {
     for (const cle of module.manque) {
       if (aDemander.some((q) => q.cle === cle)) continue;
       const question = questionDe(cle);
+      // La question porte le numéro de son article, pas son texte : l'écran va
+      // le chercher quand on l'ouvre. Joindre l'arrêté à chaque vague ferait
+      // voyager cent trente kilo-octets à chaque réponse, pour un panneau que
+      // l'on n'ouvre pas à chaque question.
       if (question) aDemander.push({ ...question, pour: module.id, pourTitre: module.titre });
     }
   }
@@ -148,7 +179,9 @@ export function consulter(reponses = {}) {
       questionsPosees: Object.keys(reponses).filter((c) => questionDe(c)).length,
       questionsSourceEnTout: grapheDu(CORPUS).questionsSource.length
     },
-    portee: PORTEE
+    portee: PORTEE,
+    // Ce que l'écran peut ouvrir sous une question : le texte lui-même.
+    texteDeReference: { articles: ARTICLES_PORTES, source: "arrêté du 31 janvier 1986 modifié, fascicule SOCOTEC" }
   };
 }
 
@@ -199,6 +232,42 @@ export function demander(produit, reponses = {}) {
   };
 }
 
+/**
+ * Le texte d'un article, pour l'écran qui veut l'ouvrir.
+ *
+ * Rien de plus que ce que porte le fascicule : le texte, le commentaire, les
+ * schémas. Aucune règle n'y passe.
+ */
+export function lireArticle(numero) {
+  const doc = documentation(numero);
+  return doc ? { ok: true, ...doc } : { ok: false, raison: `L'article « ${numero} » n'est pas porté par cette version.` };
+}
+
+/**
+ * Le dépouillement d'un module — le mode de vérification.
+ *
+ * C'est la seule porte par laquelle la table des conditions sort du serveur, et
+ * elle est fermée à clé ailleurs : la fonction ne l'ouvre que pour les comptes
+ * inscrits dans le secret. Ici, on se contente de mettre en forme.
+ */
+export function expliquer(id, reponses = {}) {
+  const module = CORPUS.find((m) => m.id === id || m.produit === id);
+  if (!module) return { ok: false, raison: `Ce référentiel ne porte pas « ${id} ».` };
+  const vue = consulter(reponses);
+  return {
+    ok: true,
+    version: VERSION,
+    ...expliquerModule(module, vue, questionDe),
+    documentation: documentation(module.source?.article),
+    // Ce qui entre dans ce module, et ce qui en sort : les liaisons, vues du
+    // module plutôt que du graphe entier.
+    liaisons: {
+      amont: vue.graphe.liens.filter((l) => l.vers === module.id),
+      aval: vue.graphe.liens.filter((l) => l.de === module.id)
+    }
+  };
+}
+
 /** Ce module et tout ce dont il dépend, de proche en proche. */
 export function sousGrapheDe(id, graphe) {
   const produitPar = new Map(graphe.noeuds.map((n) => [n.produit, n.id]));
@@ -241,4 +310,4 @@ export function cheminVers(id, vue) {
   return chemin;
 }
 
-export { QUESTIONS, questionDe, faitsDemandes, grapheDu };
+export { QUESTIONS, questionDe, faitsDemandes, grapheDu, articleDe, figuresDe };

@@ -579,7 +579,7 @@ export const conduitsParc = {
           + "vapeur à plus de 0,5 bar ou d'eau surchauffée à plus de 110 °C sont interdits, sauf en gaine "
           + "incombustible coupe-feu 2 heures ouverte sur l'extérieur. Les conduits de gaz combustible relèvent de "
           + "l'article 56, 2°." },
-      source: reglement("88", "quatrième alinéa", "Les conduits de ventilation du parc et leur enveloppe éventuelle, quel que soit leur mode de fixation, doivent dans la traversée du parc être réalisés en matériaux incombustibles et être coupe-feu de degré 1/2 heure ainsi que leurs trappes et portes de visites, sauf dans le niveau desservi, et coupe-feu de degré 2 heures s'ils traversent d'autres locaux.")
+      source: reglement("88", "quatrième alinéa", "Les conduits de ventilation du parc et leur enveloppe éventuelle, quel que soit leur mode de fixation, doivent dans la traversée du parc être réalisés en matériaux incombustibles et être coupe-feu de degré 1/2 heure […] ainsi que leurs trappes et portes de visites, sauf dans le niveau desservi, et coupe-feu de degré 2 heures s'ils traversent d'autres locaux.")
     }
   ]
 };
@@ -810,7 +810,7 @@ export const moyensDeLutteParc = {
         mention: "Extincteurs portatifs, alternativement de type 13 A ou 21 B, ou polyvalents 13 A 21 B. Une caisse de "
           + "100 litres de sable meuble munie d'un seau à fond rond, placée près de la rampe de circulation, à chaque "
           + "niveau — et ici « niveau » **inclut** le niveau de référence (ministère de l'Équipement, 14 avril 1987)." },
-      source: reglement("96", "1°)", "des extincteurs portatifs répartis à raison de 1 appareil pour 15 véhicules. Ces extincteurs doivent être soit alternativement des types 13 A ou 21 B, soit polyvalents du type 13 A 21 B ; à chaque niveau une caisse de 100 litres de sable meuble munie d'un seau à fond rond et placée près de la rampe de circulation.")
+      source: reglement("96", "1°)", "des extincteurs portatifs répartis à raison de 1 appareil pour 15 véhicules. Ces extincteurs doivent être soit alternativement des types 13 A ou 21 B, soit polyvalents du type 13 A 21 B […] ; à chaque niveau une caisse de 100 litres de sable meuble munie d'un seau à fond rond et placée près de la rampe de circulation.")
     },
     {
       si: { parcDeStationnement: { renseigne: true } },
@@ -840,7 +840,7 @@ export const colonneSecheParc = {
     {
       si: { niveauxParcAuDessous: { auMoins: 4 } },
       alors: { valeur: "exigées — colonnes sèches de 65 mm", mention: MENTION_ART96_2() },
-      source: reglement("96", "2°)", "…ou plus de trois niveaux au-dessous : des colonnes sèches de 65 mm disposées dans les cages d'escalier ou dans les sas.")
+      source: reglement("96", "2°)", "…ou plus de trois niveaux au-dessous […] : des colonnes sèches de 65 mm disposées dans les cages d'escalier ou dans les sas.")
     },
     {
       si: { parcDansLeChamp: "dans le champ" },

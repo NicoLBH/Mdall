@@ -14,6 +14,19 @@
  * la phrase qui l'ont décidé, ce qu'il reste à demander, et la carte du graphe.
  * Elle ne rend jamais la table des règles ni les branches non prises.
  *
+ * ## Sauf pour vérifier, et sous serrure
+ *
+ * Une règle mal lue produit un résultat qui a l'air d'un résultat. Le
+ * dépouillement doit donc pouvoir être relu **en face de l'article**, et pas
+ * seulement dans le code. C'est le mode inspection : il rend les règles d'un
+ * module, dans leur ordre, et rien d'autre du corpus.
+ *
+ * Il ne s'ouvre que pour les comptes inscrits dans le secret
+ * `INCENDIE_INSPECTEURS` — une liste d'adresses ou d'identifiants séparés par
+ * des virgules. Secret absent ou vide : personne, pas même celui qui a créé le
+ * projet. Un mode de vérification ouvert à tous les collaborateurs serait
+ * exactement ce qu'on refusait de faire.
+ *
  * ## Elle ne garde rien
  *
  * Aucun état entre deux appels, aucune écriture en base, aucune lecture de la
@@ -22,7 +35,8 @@
  */
 
 import { requireUser } from "../_shared/require-user.ts";
-import { consulter, demander, VERSION } from "./corpus.js";
+import { consulter, demander, expliquer, lireArticle, VERSION } from "./corpus.js";
+import { peutInspecter } from "./inspection.js";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -59,16 +73,32 @@ Deno.serve(async (req: Request) => {
     return json({ error: "Corps de requête illisible." }, 400);
   }
 
-  const { reponses, produit } = (corps ?? {}) as { reponses?: Record<string, unknown>; produit?: string };
+  const { reponses, produit, article, inspection } = (corps ?? {}) as {
+    reponses?: Record<string, unknown>; produit?: string; article?: string; inspection?: string;
+  };
   const donnees = reponses && typeof reponses === "object" ? reponses : {};
   if (Object.keys(donnees).length > REPONSES_MAX) {
     return json({ error: `Au plus ${REPONSES_MAX} réponses par appel.` }, 400);
   }
 
   try {
-    // Deux formes d'appel. L'écran veut tout : les questions qui restent, les
+    // Quatre formes d'appel. L'écran veut tout : les questions qui restent, les
     // modules conclus, le graphe. Le copilote veut une chose et une seule — le
-    // degré coupe-feu des planchers — avec de quoi la défendre.
+    // degré coupe-feu des planchers — avec de quoi la défendre. L'écran veut
+    // aussi, à la demande, le texte d'un article pour le mettre sous la
+    // question. Et le vérificateur veut les règles, s'il en a le droit.
+    if (typeof article === "string" && article) {
+      return json({ version: VERSION, article: lireArticle(article) });
+    }
+    if (typeof inspection === "string" && inspection) {
+      if (!peutInspecter(qui.user, Deno.env.get("INCENDIE_INSPECTEURS"))) {
+        return json({
+          error: "Le dépouillement ne s'ouvre que pour les comptes inscrits dans « INCENDIE_INSPECTEURS ». "
+            + "C'est volontaire : la table des règles est le travail, et elle ne se partage pas avec un projet."
+        }, 403);
+      }
+      return json({ version: VERSION, inspection: expliquer(inspection, donnees) });
+    }
     if (typeof produit === "string" && produit) {
       return json({ version: VERSION, reponse: demander(produit, donnees) });
     }

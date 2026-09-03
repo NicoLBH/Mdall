@@ -18217,38 +18217,38 @@ strong.est-verifie{ color:#3fb950; }
 
 /* Le schéma décisionnel : des colonnes de gauche à droite, ce qui décide avant
    ce qui est décidé. Il défile dans son cadre, jamais la page. */
-.incendie-schema__legende{ margin:0 0 12px; font-size:12px; color:var(--muted); line-height:1.55; }
-.incendie-schema{
+.graphe__legende{ margin:0 0 12px; font-size:12px; color:var(--muted); line-height:1.55; }
+.graphe{
   display:flex; gap:14px; overflow-x:auto; padding-bottom:10px; align-items:flex-start;
 }
-.incendie-schema__colonne{ display:grid; gap:8px; min-width:210px; align-content:start; }
-.incendie-schema__rang{
+.graphe__colonne{ display:grid; gap:8px; min-width:210px; align-content:start; }
+.graphe__rang{
   font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted);
 }
-.incendie-noeud{
+.graphe-noeud{
   appearance:none; text-align:left; cursor:pointer; font:inherit;
   border:1px solid var(--border, #30363d); border-radius:8px; padding:8px 10px;
   background:rgba(139,148,158,.06); display:grid; gap:2px; color:inherit;
   border-left-width:3px; transition:border-color .12s ease, background .12s ease;
 }
-.incendie-noeud.est-conclu{ border-left-color:#3fb950; }
-.incendie-noeud.est-sans-objet{ border-left-color:var(--muted); opacity:.7; }
-.incendie-noeud.est-attente{ border-left-color:var(--attention, #d29922); }
-.incendie-noeud.est-survole, .incendie-noeud:hover{ background:rgba(240,136,62,.12); border-color:#f0883e; }
+.graphe-noeud.est-conclu{ border-left-color:#3fb950; }
+.graphe-noeud.est-sansObjet{ border-left-color:var(--muted); opacity:.7; }
+.graphe-noeud.est-attente{ border-left-color:var(--attention, #d29922); }
+.graphe-noeud.est-designe, .graphe-noeud:hover{ background:rgba(240,136,62,.12); border-color:#f0883e; }
 /* Un trait qui mène à une boîte éteinte se suit mal : les boîtes du chemin
    s'allument aussi, à la même intensité que le trait qui y mène. */
-.incendie-noeud.est-en-amont{
-  border-color:color-mix(in srgb, #f0883e calc(var(--incendie-amont, .5) * 100%), var(--border, #30363d));
-  background:rgba(240,136,62,calc(var(--incendie-amont, .5) * .1));
+.graphe-noeud.est-en-amont{
+  border-color:color-mix(in srgb, #f0883e calc(var(--graphe-amont, .5) * 100%), var(--border, #30363d));
+  background:rgba(240,136,62,calc(var(--graphe-amont, .5) * .1));
 }
-.incendie-noeud:focus-visible{ outline:2px solid #f0883e; outline-offset:-2px; }
-.incendie-noeud__article{ font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; }
-.incendie-noeud__titre{ font-size:12px; font-weight:600; }
-.incendie-noeud__valeur{ font-size:12px; color:#f0883e; }
-.incendie-noeud.est-sans-objet .incendie-noeud__valeur,
-.incendie-noeud.est-attente .incendie-noeud__valeur{ color:var(--muted); }
-.incendie-noeud__amont{ font-size:10px; color:var(--muted); line-height:1.4; }
-.incendie-detail{ margin-top:14px; }
+.graphe-noeud:focus-visible{ outline:2px solid #f0883e; outline-offset:-2px; }
+.graphe-noeud__entete{ font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; }
+.graphe-noeud__titre{ font-size:12px; font-weight:600; }
+.graphe-noeud__valeur{ font-size:12px; color:#f0883e; }
+.graphe-noeud.est-sansObjet .graphe-noeud__valeur,
+.graphe-noeud.est-attente .graphe-noeud__valeur{ color:var(--muted); }
+.graphe-noeud__amont{ font-size:10px; color:var(--muted); line-height:1.4; }
+.graphe-detail{ margin-top:14px; }
 
 .incendie-portee{ display:grid; gap:20px; }
 .incendie-portee h5{ margin:0 0 8px; font-size:13px; display:flex; gap:6px; align-items:center; }
@@ -18313,47 +18313,182 @@ strong.est-verifie{ color:#3fb950; }
 /* ------------------------------------------------------------------ *
  * Incendie : le schéma, ses liaisons et son plein écran
  * ------------------------------------------------------------------ */
-.incendie-schema__tete{
+.graphe__tete{
   display:flex; gap:16px; align-items:flex-start; justify-content:space-between; margin-bottom:12px;
 }
-.incendie-schema__outils{ display:flex; gap:4px; align-items:center; flex:none; }
-.incendie-schema__outil{
+.graphe__outils{ display:flex; gap:4px; align-items:center; flex:none; }
+.graphe__outil{
   appearance:none; cursor:pointer; width:28px; height:28px; border-radius:6px;
   border:1px solid var(--border, #30363d); background:none; color:var(--muted);
   display:inline-flex; align-items:center; justify-content:center;
 }
-.incendie-schema__outil:hover{ color:#f0883e; border-color:#f0883e; }
-.incendie-schema__zoom{ font-size:11px; color:var(--muted); min-width:42px; text-align:center; }
+.graphe__outil:hover{ color:#f0883e; border-color:#f0883e; }
+.graphe__zoom{ font-size:11px; color:var(--muted); min-width:42px; text-align:center; }
 
-.incendie-schema{ overflow:auto; padding-bottom:10px; }
-.incendie-schema__toile{
+.graphe{ overflow:auto; padding-bottom:10px; }
+.graphe__toile{
   display:flex; gap:56px; align-items:flex-start; position:relative;
-  transform:scale(var(--incendie-zoom, 1)); transform-origin:top left;
+  transform:scale(var(--graphe-zoom, 1)); transform-origin:top left;
   width:max-content; padding:2px;
 }
 /* Les traits passent derrière les boîtes : un trait par-dessus un titre le rend
    illisible, et c'est le titre qu'on lit. */
-.incendie-schema__liens{ position:absolute; inset:0; pointer-events:none; overflow:visible; z-index:0; }
-.incendie-lien{ fill:none; stroke:var(--border2, #30363d); stroke-width:1.2; }
+.graphe__liens{ position:absolute; inset:0; pointer-events:none; overflow:visible; z-index:0; }
+.graphe-lien{ fill:none; stroke:var(--border2, #30363d); stroke-width:1.2; }
 /* Le chemin amont en entier, l'intensité décroissant avec l'éloignement :
    l'opacité et l'épaisseur sont posées au tracé, module par module. */
-.incendie-lien.est-marque{ stroke:#f0883e; }
+.graphe-lien.est-marque{ stroke:#f0883e; }
 /* Ce que le module désigné alimente reste visible, mais en retrait : on regarde
    d'où vient une conclusion plus souvent que ce qu'elle nourrit. */
-.incendie-lien.est-aval{ stroke:#f0883e; opacity:.35; stroke-width:1.4; stroke-dasharray:4 3; }
-.incendie-schema__colonne{ position:relative; z-index:1; }
-.incendie-noeud{ width:210px; }
+.graphe-lien.est-aval{ stroke:#f0883e; opacity:.35; stroke-width:1.4; stroke-dasharray:4 3; }
+.graphe__colonne{ position:relative; z-index:1; }
+.graphe-noeud{ width:210px; }
 
 /* Plein écran : le schéma prend la page, sans emporter le reste de l'écran. */
-.incendie-schema-bloc.est-plein-ecran{
+.graphe-bloc.est-plein-ecran{
   position:fixed; inset:var(--app-top, 0) 0 0 0; z-index:calc(var(--z-header, 40) + 2);
   background:var(--bg, #0d1117); padding:16px 20px; overflow:auto; margin:0;
 }
-.incendie-schema-bloc.est-plein-ecran .incendie-schema{ max-height:none; }
+.graphe-bloc.est-plein-ecran .graphe{ max-height:none; }
 /* La barre reste sous la main : sortir du plein écran ne doit pas supposer de
    retrouver un bouton parmi cinquante boîtes. La touche d'échappement en sort
    aussi. */
-.incendie-schema-bloc.est-plein-ecran .incendie-schema__tete{
+.graphe-bloc.est-plein-ecran .graphe__tete{
   position:sticky; top:0; z-index:2; background:var(--bg, #0d1117);
   padding:8px 0 10px; margin:0 0 8px;
 }
+
+/* ── Incendie : l'article sous la question, les figures, le bâtiment ──────
+   Le questionnaire et le dessin se tiennent côte à côte tant que la place le
+   permet : c'est la relecture immédiate de ce qu'on vient de répondre qui fait
+   tout l'intérêt du dessin. En dessous de 900 px, ils s'empilent — un dessin
+   écrasé n'apprend plus rien. */
+.incendie-atelier{ display:grid; grid-template-columns:minmax(0,1fr) minmax(300px,420px); gap:16px; align-items:start; }
+@media (max-width: 900px){ .incendie-atelier{ grid-template-columns:1fr; } }
+
+.incendie-question__texte{ margin-top:12px; }
+.incendie-ouvrir-article{
+  display:inline-flex; align-items:center; gap:6px; background:none; border:1px solid var(--border2, #30363d);
+  border-radius:6px; padding:5px 10px; color:var(--muted); font-size:12px; cursor:pointer;
+}
+.incendie-ouvrir-article:hover{ color:#f0883e; border-color:#f0883e; }
+
+.incendie-article{
+  margin-top:10px; border:1px solid var(--border2, #30363d); border-radius:8px; padding:12px 14px;
+  background:var(--bg2, rgba(110,118,129,.06));
+}
+.incendie-article h6{
+  margin:0 0 8px; font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted);
+  display:flex; align-items:center; gap:6px;
+}
+.incendie-article__texte{ font-size:12.5px; line-height:1.65; max-height:340px; overflow:auto; }
+.incendie-article__texte p{ margin:0 0 8px; }
+.incendie-article__texte ul{ margin:0 0 8px; padding-left:18px; }
+.incendie-article__commentaire{
+  margin-top:12px; padding-top:10px; border-top:1px dashed var(--border2, #30363d);
+  font-size:12.5px; line-height:1.6; color:var(--muted);
+}
+
+/* La figure : redessinée en traits, elle prend la couleur de la page. */
+.incendie-figure{ margin:12px 0 0; }
+.incendie-figure__dessin{ background:var(--bg, transparent); border-radius:6px; padding:8px; }
+.incendie-figure svg{ width:100%; height:auto; color:var(--fg, currentColor); }
+.incendie-figure figcaption{ display:grid; gap:3px; margin-top:6px; font-size:11.5px; line-height:1.55; }
+.incendie-figure figcaption strong{ font-size:12px; }
+.incendie-figure figcaption span{ color:var(--muted); }
+.incendie-figure figcaption em{ color:var(--muted); opacity:.75; font-size:11px; }
+
+.fig-cadre{ fill:none; stroke:currentColor; stroke-opacity:.32; stroke-width:1.4; }
+.fig-cadre-trait{ stroke:currentColor; stroke-opacity:.32; stroke-width:1.4; }
+.fig-rail{ stroke:currentColor; stroke-opacity:.72; stroke-width:1.4; }
+.fig-appel{ stroke:currentColor; stroke-opacity:.5; stroke-width:1.4; }
+.fig-rond{ fill:currentColor; }
+.fig-groupe{ font:600 13px var(--font-sans, system-ui); text-anchor:middle; fill:currentColor; }
+.fig-colonne{ font:700 17px var(--font-sans, system-ui); text-anchor:middle; fill:currentColor; }
+.fig-sous-colonne{ font:500 13px var(--font-sans, system-ui); text-anchor:middle; fill:currentColor; }
+.fig-mot{ font:500 11.5px var(--font-sans, system-ui); text-anchor:middle; fill:currentColor; }
+.fig-intitule{ font:500 13px var(--font-sans, system-ui); text-anchor:end; fill:currentColor; }
+.fig-note{ font:12px var(--font-sans, system-ui); fill:currentColor; fill-opacity:.72; }
+
+/* Le bâtiment, redessiné à chaque réponse. */
+.incendie-batiment{
+  border:1px solid var(--border2, #30363d); border-radius:8px; padding:10px 12px;
+  background:var(--bg2, rgba(110,118,129,.05)); position:sticky; top:8px;
+}
+.incendie-batiment.est-vide{ display:grid; place-items:center; min-height:160px; text-align:center; }
+.incendie-batiment__dessin svg{ width:100%; height:auto; color:var(--fg, currentColor); }
+.incendie-batiment__legende{ margin:8px 0 0; font-size:12px; line-height:1.55; }
+.incendie-batiment__avertissement{ margin:4px 0 0; font-size:11px; color:var(--muted); }
+
+.bat-volume{ fill:rgba(88,166,255,.07); stroke:currentColor; stroke-opacity:.55; stroke-width:1.6; }
+.bat-dalle{ stroke:currentColor; stroke-opacity:.5; stroke-width:1.4; }
+.bat-dalle.est-effacee{ stroke-dasharray:4 4; stroke-opacity:.25; }
+.bat-toit{ fill:none; stroke:currentColor; stroke-opacity:.7; stroke-width:1.8; }
+.bat-mur{ stroke:currentColor; stroke-opacity:.5; stroke-width:1.4; }
+.bat-paroi{ stroke:#f0883e; stroke-width:2; }
+.bat-paroi.est-prolongee{ stroke:#3fb950; stroke-width:2.4; }
+.bat-joint{ stroke:currentColor; stroke-opacity:.5; stroke-width:1.4; }
+.bat-joint.est-independant{ stroke:#3fb950; stroke-width:3; }
+.bat-enterre{ fill:rgba(139,148,158,.16); stroke:currentColor; stroke-opacity:.4; stroke-width:1.2; }
+.bat-parc{ fill:rgba(240,136,62,.12); stroke:#f0883e; stroke-opacity:.5; stroke-width:1.2; }
+.bat-parc-note{ font:10px var(--font-sans, system-ui); text-anchor:middle; fill:#f0883e; }
+.bat-sol{ stroke:currentColor; stroke-opacity:.85; stroke-width:2.4; }
+.bat-voie{ fill:rgba(88,166,255,.25); stroke:#58a6ff; stroke-width:1; }
+.bat-etage{ font:600 11px var(--font-sans, system-ui); fill:currentColor; fill-opacity:.8; }
+.bat-note{ font:10.5px var(--font-sans, system-ui); fill:currentColor; fill-opacity:.65; }
+.bat-note-droite{ font:10.5px var(--font-sans, system-ui); text-anchor:end; fill:currentColor; fill-opacity:.65; }
+.bat-cote{ stroke:#58a6ff; stroke-width:1.2; }
+.bat-cote-fleche{ fill:none; stroke:#58a6ff; stroke-width:1.2; }
+.bat-cote-texte{ font:11px var(--font-sans, system-ui); text-anchor:end; fill:#58a6ff; }
+.bat-verdict{ font:600 13px var(--font-sans, system-ui); text-anchor:end; fill:#3fb950; }
+
+/* ── Le détail d'une carte du schéma : liaisons, règles, article ──────────
+   Les règles ne sortent du serveur que pour les comptes qui ont le droit de
+   vérifier : le panneau fermé n'est pas une panne, et se lit comme tel. */
+.incendie-detail__outils{ margin:10px 0; }
+.incendie-inspecter{
+  display:inline-flex; align-items:center; gap:6px; background:none; border:1px solid var(--border2, #30363d);
+  border-radius:6px; padding:5px 10px; color:var(--muted); font-size:12px; cursor:pointer;
+}
+.incendie-inspecter:hover{ color:#f0883e; border-color:#f0883e; }
+.incendie-ferme{
+  display:flex; gap:8px; align-items:flex-start; padding:10px 12px; border-radius:8px;
+  border:1px dashed var(--border2, #30363d); color:var(--muted); font-size:12px; line-height:1.55;
+}
+.incendie-ferme p{ margin:0; }
+.incendie-inspection{ display:grid; gap:14px; margin-top:10px; }
+.incendie-inspection h6{
+  margin:0 0 6px; font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted);
+}
+.incendie-liaisons{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+@media (max-width: 720px){ .incendie-liaisons{ grid-template-columns:1fr; } }
+.incendie-liaisons ul{ list-style:none; margin:0; padding:0; display:grid; gap:3px; }
+.incendie-lien-vers{
+  width:100%; text-align:left; background:none; border:none; padding:3px 6px; border-radius:5px;
+  color:inherit; font-size:12px; cursor:pointer; display:flex; gap:6px; align-items:baseline;
+}
+.incendie-lien-vers:hover{ background:rgba(240,136,62,.12); }
+.incendie-lien-vers code{ font-size:11px; color:#f0883e; }
+
+.incendie-regles ol{ list-style:none; margin:0; padding:0; display:grid; gap:8px; counter-reset:regle; }
+.incendie-regle{
+  border:1px solid var(--border2, #30363d); border-left-width:3px; border-radius:6px; padding:8px 10px;
+  counter-increment:regle; position:relative;
+}
+.incendie-regle::before{
+  content:counter(regle); position:absolute; left:-3px; top:-9px; background:var(--bg, #0d1117);
+  color:var(--muted); font-size:10px; padding:0 4px;
+}
+.incendie-regle.est-retenue{ border-left-color:#3fb950; background:rgba(63,185,80,.07); }
+.incendie-regle__si{ display:flex; flex-wrap:wrap; gap:5px; align-items:center; font-size:12px; }
+.incendie-condition{
+  background:rgba(110,118,129,.16); border-radius:5px; padding:2px 7px; line-height:1.5;
+}
+.incendie-et{ font-size:10.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; }
+.incendie-regle__alors{ display:flex; gap:6px; align-items:baseline; margin-top:6px; font-size:12.5px; flex-wrap:wrap; }
+.incendie-fleche{ color:#f0883e; }
+.incendie-regle__alors em{ color:var(--muted); font-size:12px; }
+/* Une lecture de l'article, et non une citation : elle ne prend pas les
+   guillemets, et se distingue à l'œil de ce qui est écrit dans le texte. */
+.incendie-source.est-lecture{ border-left-style:dashed; }
+.incendie-source.est-lecture .incendie-source__citation{ font-style:normal; opacity:.9; }

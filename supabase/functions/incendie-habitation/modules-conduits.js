@@ -23,6 +23,16 @@
 
 const ARR = "arrêté du 31 janvier 1986 modifié";
 const reglement = (article, paragraphe, citation) => ({ nature: "reglement", texte: ARR, article, paragraphe, citation });
+/**
+ * Ce que l'article veut dire, quand ce n'est pas ce qu'il dit.
+ *
+ * Certaines règles ne citent pas : elles lisent. « Le régime appliqué est celui
+ * du classement, à défaut de décision municipale de déclassement » ne figure
+ * nulle part dans l'article 3 — c'est ce qu'il faut en comprendre, et il n'y a
+ * pas de phrase à mettre entre guillemets. Le dire est plus honnête que de
+ * fabriquer une citation qui ne résisterait pas à l'ouverture du texte.
+ */
+const lecture = (article, paragraphe, enonce) => ({ nature: "lecture", texte: ARR, article, paragraphe, citation: enonce });
 const questionReponse = (article, origine, citation) => ({ nature: "commentaire", texte: origine, article, paragraphe: "question/réponse", citation });
 
 /* ================================================================== *
@@ -233,7 +243,7 @@ export const gaineGazAccessibilite = {
           + "d'au moins 100 cm². Pour un gaz plus lourd que l'air, la prise d'air ne se fait jamais en sous-sol ni en vide "
           + "sanitaire, même ventilés. Une gaine commune avec d'autres conduits est séparée par une paroi pare-flammes "
           + "1/4 d'heure incombustible dès que la conduite montante comporte des assemblages mécaniques." },
-      source: reglement("53", "1°) et 2°)", "Les gaines pour conduites montantes doivent être accessibles et visitables depuis les parties communes de l'immeuble. Le recoupement de la gaine est obligatoire au niveau du plancher haut du sous-sol. […] A chaque traversée de plancher, la gaine doit comporter un passage libre d'au moins 100 cm².")
+      source: reglement("53", "1°) et 2°)", "Les gaines pour conduites montantes doivent être accessibles et visitables depuis les parties communes de l'immeuble. […] Le recoupement de la gaine est obligatoire au niveau du plancher haut du sous-sol. […] A chaque traversée de plancher, la gaine doit comporter un passage libre d'au moins 100 cm².")
     },
     {
       si: { famille: { renseigne: true } },
@@ -273,34 +283,34 @@ export const paroisGaineGaz = {
     {
       si: { classement: "3e famille A", situationGaineGaz: "cageEscalier" },
       alors: { valeur: "parois PF 1/4 h — portes et trappes PF 1/4 h", mention: MENTION_ART54() },
-      source: reglement("54", "tableau, 3ᵉ famille A en cage d'escalier", "3ème famille A : en cage d'escalier, parois PF 1/4 h, portes et trappes de visite PF 1/4 h.")
+      source: lecture("54", "tableau, 3ᵉ famille A en cage d'escalier", "3ème famille A : en cage d'escalier, parois PF 1/4 h, portes et trappes de visite PF 1/4 h.")
     },
     {
       si: { classement: "3e famille A" },
       alors: { valeur: "parois PF 1/4 h — portes et trappes PF 1/4 h", mention: MENTION_ART54() },
-      source: reglement("54", "tableau, 3ᵉ famille A en parties communes autres", "3ème famille A : en parties communes autres, parois PF 1/4 h, portes et trappes de visite PF 1/4 h.")
+      source: lecture("54", "tableau, 3ᵉ famille A en parties communes autres", "3ème famille A : en parties communes autres, parois PF 1/4 h, portes et trappes de visite PF 1/4 h.")
     },
     {
       si: { situationGaineGaz: "cageEscalier", typeEscalierRetenu: "airLibre" },
       alors: { valeur: "admise — prescriptions des gaines en parties communes",
         mention: "L'interdiction du tableau est levée lorsque l'escalier est « à l'air libre » ; ce sont alors les prescriptions applicables aux gaines des autres parties communes qui valent." },
-      source: reglement("54", "tableau, note (2)", "Cette solution est admise si l'escalier est « à l'air libre ». Dans ce cas, les prescriptions applicables sont celles des gaines en parties communes autres.")
+      source: lecture("54", "tableau, note (2)", "Cette solution est admise si l'escalier est « à l'air libre ». Dans ce cas, les prescriptions applicables sont celles des gaines en parties communes autres.")
     },
     {
       si: { situationGaineGaz: "cageEscalier", classement: ["3e famille B", "4e famille"] },
       alors: { valeur: "solution interdite",
         mention: "Sauf si l'escalier est « à l'air libre » : la note (2) du tableau l'admet alors, sous les prescriptions des gaines en parties communes." },
-      source: reglement("54", "tableau, note (2)", "3ème famille B et 4ème famille, en cage d'escalier : solution interdite (2). Cette solution est admise si l'escalier est « à l'air libre ».")
+      source: lecture("54", "tableau, note (2)", "3ème famille B et 4ème famille, en cage d'escalier : solution interdite (2). Cette solution est admise si l'escalier est « à l'air libre ».")
     },
     {
       si: { classement: "3e famille B" },
       alors: { valeur: "parois CF 1/4 h — portes et trappes PF 1/4 h", mention: MENTION_ART54() },
-      source: reglement("54", "tableau, 3ᵉ famille B en parties communes autres", "3ème famille B : en parties communes autres, parois CF 1/4 h, portes et trappes de visite PF 1/4 h.")
+      source: lecture("54", "tableau, 3ᵉ famille B en parties communes autres", "3ème famille B : en parties communes autres, parois CF 1/4 h, portes et trappes de visite PF 1/4 h.")
     },
     {
       si: { famille: "4" },
       alors: { valeur: "parois CF 1/2 h — portes et trappes PF 1/2 h", mention: MENTION_ART54() },
-      source: reglement("54", "tableau, 4ᵉ famille en parties communes autres", "4ème famille : en parties communes autres, parois CF 1/2 h, portes et trappes de visite PF 1/2 h.")
+      source: lecture("54", "tableau, 4ᵉ famille en parties communes autres", "4ème famille : en parties communes autres, parois CF 1/2 h, portes et trappes de visite PF 1/2 h.")
     }
   ]
 };
@@ -455,7 +465,7 @@ export const solutionVentilation = {
         mention: "Pare-flammes 1/4 d'heure en habitations collectives des deuxième et troisième familles, 1/2 heure en "
           + "quatrième famille, actionnés par un dispositif thermique fonctionnant à 70 °C. Les clapets doivent être "
           + "contrôlables et remplaçables." },
-      source: reglement("60", "2°)", "Chaque conduit de raccordement au conduit collectif est muni d'un clapet pare-flammes […] actionné par un dispositif thermique fonctionnant à 70 °C. Ces clapets doivent être contrôlables et remplaçables.")
+      source: reglement("60", "2°)", "Chaque conduit de raccordement à un conduit collectif est muni d'un clapet pare-flammes […] actionné par un dispositif thermique fonctionnant à 70 °C. Ces clapets doivent être contrôlables et remplaçables.")
     },
     {
       si: { solutionVentilationRetenue: ["3", "4", "5"], typeVentilation: "doubleFlux" },

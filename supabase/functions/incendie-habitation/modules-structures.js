@@ -439,8 +439,8 @@ export const couverture = {
       // d'alinéa, qui décide.
       si: { revetementCouvertureClasse: ["M1", "M2", "M3"], supportCouvertureContinuIncombustible: true },
       alors: { valeur: "aucune restriction",
-        mention: "Support continu en matériau incombustible, en panneaux de bois, d'aggloméré de fibres de bois ou matériau reconnu équivalent par le Cecmi." },
-      source: reglement("15", "a", "Les revêtements de couvertures classés en catégorie M1, M2 ou M3 peuvent être utilisés sans restriction s'ils sont établis sur un support continu en matériau incombustible ou en panneaux de bois, d'aggloméré de fibres de bois ou matériau reconnu équivalent par le Cecmi.")
+        mention: "Support continu en matériau incombustible, en panneaux de bois, d'aggloméré de fibres de bois ou matériau reconnu équivalent par le Comité d'étude et de classification des matériaux et éléments de construction par rapport au danger d'incendie (Cecmi)." },
+      source: reglement("15", "a", "Les revêtements de couvertures classés en catégorie M1, M2 ou M3 peuvent être utilisés sans restriction s'ils sont établis sur un support continu en matériau incombustible ou en panneaux de bois, d'aggloméré de fibres de bois ou matériau reconnu équivalent par le Comité d'étude et de classification des matériaux et éléments de construction par rapport au danger d'incendie (Cecmi).")
     },
     {
       si: { famille: "1" },

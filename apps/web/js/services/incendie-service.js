@@ -72,3 +72,43 @@ export async function demanderIncendie(produit, reponses = {}, options = {}) {
   }
   return rendu;
 }
+
+/**
+ * Le texte d'un article, pour l'ouvrir sous la question.
+ *
+ * Il n'est pas joint aux vagues de questions : l'arrêté entier pèse deux cent
+ * cinquante kilo-octets, et le renvoyer à chaque réponse pour un panneau que
+ * l'on n'ouvre pas à chaque fois serait payer cher un confort. On le demande
+ * quand on l'ouvre, et l'écran le garde.
+ */
+export async function lireArticleIncendie(numero, options = {}) {
+  const charge = await appeler({ article: String(numero) }, options);
+  const rendu = charge.article ?? charge;
+  if (!rendu || typeof rendu.ok !== "boolean") {
+    throw new Error("Le référentiel a répondu, mais pas ce qui était attendu.");
+  }
+  return rendu;
+}
+
+/**
+ * Le dépouillement d'un module — les règles codées, dans leur ordre.
+ *
+ * Cette porte est fermée à clé côté serveur : elle ne s'ouvre que pour les
+ * comptes inscrits dans le secret `INCENDIE_INSPECTEURS`. Le refus n'est pas
+ * une panne, c'est la règle du produit — on le dit à l'écran plutôt que de
+ * laisser croire à un incident.
+ */
+export async function inspecterIncendie(id, reponses = {}, options = {}) {
+  try {
+    const charge = await appeler({ inspection: id, reponses }, options);
+    const rendu = charge.inspection ?? charge;
+    if (!rendu || typeof rendu.ok !== "boolean") {
+      throw new Error("Le référentiel a répondu, mais pas ce qui était attendu.");
+    }
+    return rendu;
+  } catch (erreur) {
+    const message = String(erreur?.message ?? erreur);
+    if (/INCENDIE_INSPECTEURS/.test(message)) return { ok: false, ferme: true, raison: message };
+    throw erreur;
+  }
+}
