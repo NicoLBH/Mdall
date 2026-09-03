@@ -671,3 +671,139 @@ test("un module ne peut pas produire le fait qu'il demande — le moteur le refu
   ] }];
   assert.throws(() => ordonner(boucle), /circulaire/);
 });
+
+/* ── Titre V : logements-foyers ──────────────────────────────────────────── */
+
+test("le titre V s'ajoute au classement, il ne le remplace pas", () => {
+  // « s'ajoutent aux prescriptions générales des articles premier à 64 » : le
+  // bâtiment reste classé, et tout ce que les titres II à IV en tirent vaut.
+  const foyer = { ...COLLECTIF, etagesSurRdc: 6, hauteurPlancherBasLogementLePlusHaut: 20,
+    hauteurPlancherBasNiveauLePlusHaut: 20, distancePortePaliereEscalier: 14,
+    accesEscaliersAtteintsParVoieEchelles: false, logementFoyer: true, typeLogementFoyer: "autres" };
+  const vue = consulter(foyer);
+  assert.equal(vue.faits.classement, "3e famille B");
+  assert.equal(vue.faits.planchersCoupeFeu, "CF 1 h");
+  assert.equal(vue.faits.regimeLogementFoyer, "chapitre II");
+});
+
+test("les articles 73 à 76 sont supprimés — et le référentiel le dit au lieu de se taire", () => {
+  // Ils figurent encore dans le fascicule, barrés : un lecteur pressé les
+  // applique. Un silence se lirait comme un oubli.
+  const cas = { ...COLLECTIF, etagesSurRdc: 3, hauteurPlancherBasLogementLePlusHaut: 9,
+    hauteurPlancherBasNiveauLePlusHaut: 9, logementFoyer: true, typeLogementFoyer: "handicapesPhysiques" };
+  const vue = consulter(cas);
+  assert.match(vue.faits.regimeLogementFoyer, /articles 73 à 76 sont supprimés/);
+  const module = vue.modules.find((m) => m.id === "regime-logement-foyer");
+  assert.match(module.mention, /arrêté du 19 juin 2015/);
+  assert.match(module.mention, /type J/);
+  assert.equal(module.pourquoi.article, "73 à 76");
+});
+
+test("le nombre d'escaliers d'un foyer suit les tranches de 200, fractions comprises", () => {
+  const foyer = (occupants) => consulter({ ...COLLECTIF, etagesSurRdc: 6,
+    hauteurPlancherBasLogementLePlusHaut: 20, hauteurPlancherBasNiveauLePlusHaut: 20,
+    logementFoyer: true, nombreOccupantsLogementFoyer: occupants }).faits.escaliersLogementFoyer;
+  assert.equal(foyer(200), "1 escalier au moins");
+  assert.equal(foyer(201), "2 escaliers");
+  assert.equal(foyer(400), "2 escaliers");
+  // « ou fraction de 200 » : 401 en demandent trois, pas deux et demi.
+  assert.equal(foyer(401), "3 escaliers");
+  assert.equal(foyer(750), "4 escaliers");
+});
+
+test("l'exception du hall a deux conditions, et l'une sans l'autre ne libère rien", () => {
+  const base = { ...COLLECTIF, etagesSurRdc: 6, hauteurPlancherBasLogementLePlusHaut: 20,
+    hauteurPlancherBasNiveauLePlusHaut: 20, logementFoyer: true, hallDessertServicesCollectifs: true };
+  const libre = consulter({ ...base, hallOuvertureExterieureDeDeuxMetresCarres: true, distanceDebouchEscalierSortie: 5 });
+  assert.match(libre.faits.hallLogementFoyer, /aucune caractéristique pare-flammes/);
+  // L'ouverture sans la distance : l'exception ne joue pas.
+  assert.equal(consulter({ ...base, hallOuvertureExterieureDeDeuxMetresCarres: true, distanceDebouchEscalierSortie: 9 })
+    .faits.hallLogementFoyer, "parois et blocs-portes PF 1/2 h");
+  // La distance sans l'ouverture : pas davantage.
+  assert.equal(consulter({ ...base, hallOuvertureExterieureDeDeuxMetresCarres: false, distanceDebouchEscalierSortie: 5 })
+    .faits.hallLogementFoyer, "parois et blocs-portes PF 1/2 h");
+});
+
+test("le seuil de dix personnes déplace les dispositifs sonores, il ne les supprime pas", () => {
+  const foyer = (parUnite) => consulter({ ...COLLECTIF, etagesSurRdc: 6,
+    hauteurPlancherBasLogementLePlusHaut: 20, hauteurPlancherBasNiveauLePlusHaut: 20,
+    logementFoyer: true, occupantsParUniteDeVie: parUnite });
+  assert.match(foyer(8).faits.alarmeLogementFoyer, /à chaque niveau/);
+  assert.match(foyer(14).faits.alarmeLogementFoyer, /dans chaque unité de vie/);
+  // Le téléphone et l'alarme sonore restent exigés dans les deux cas.
+  assert.match(foyer(8).modules.find((m) => m.id === "alarme-logement-foyer").mention, /téléphone accessible en permanence/);
+});
+
+test("une 3ᵉ famille A peut basculer sur les dégagements de la 3ᵉ B — deux conditions", () => {
+  const troisA = { ...COLLECTIF, etagesSurRdc: 6, hauteurPlancherBasLogementLePlusHaut: 20,
+    hauteurPlancherBasNiveauLePlusHaut: 20, distancePortePaliereEscalier: 8,
+    accesEscaliersAtteintsParVoieEchelles: true, voieAccesDecrite: true, voieLargeur: 4,
+    voieForcePortante: 130, voieRayonInterieur: 11, voieHauteurLibre: 3.5, voiePente: 8,
+    voieLongueur: 12, voieResistancePoinconnement: 100, voieRaccordeeAUneVoieEngins: "surVoiePublique",
+    logementFoyer: true, typeLogementFoyer: "autres" };
+  assert.equal(consulter(troisA).faits.classement, "3e famille A");
+  assert.match(consulter({ ...troisA, occupantsParUniteDeVie: 12, occupantsParNiveau: 25 }).faits.degagementsUniteDeVie,
+    /3ᵉ famille B/);
+  // Plus de dix par unité mais vingt par niveau au plus : le renvoi ne joue pas.
+  assert.equal(consulter({ ...troisA, occupantsParUniteDeVie: 12, occupantsParNiveau: 18 }).faits.degagementsUniteDeVie,
+    "régime du classement");
+});
+
+test("un foyer pour personnes âgées ne monte pas au-delà du sixième étage", () => {
+  const foyer = (etage) => consulter({ ...COLLECTIF, etagesSurRdc: 8,
+    hauteurPlancherBasLogementLePlusHaut: 25, hauteurPlancherBasNiveauLePlusHaut: 25,
+    logementFoyer: true, typeLogementFoyer: "personnesAgees", etageLePlusHautDuFoyer: etage });
+  assert.match(foyer(5).faits.niveauMaximalFoyerPersonnesAgees, /admis/);
+  assert.match(foyer(7).faits.niveauMaximalFoyerPersonnesAgees, /interdit au-delà du 6/);
+  // Et la doctrine de 1988 étend la limite aux locaux collectifs.
+  assert.match(foyer(5).modules.find((m) => m.id === "niveau-maximal-foyer-personnes-agees").mention, /locaux collectifs/);
+});
+
+/* ── Titre VII : dispositions diverses ───────────────────────────────────── */
+
+test("les parois de cage d'ascenseur suivent le classement, 3ᵉ A comprise", () => {
+  const avecAscenseur = (extra) => consulter({ ...COLLECTIF, ascenseur: true, ...extra });
+  const deuxieme = avecAscenseur({ etagesSurRdc: 3, hauteurPlancherBasLogementLePlusHaut: 9, hauteurPlancherBasNiveauLePlusHaut: 9 });
+  assert.equal(deuxieme.faits.paroisCageAscenseur, "CF 1/2 h");
+  const troisB = consulter({ ...troisiemeB(), ascenseur: true });
+  assert.equal(troisB.faits.paroisCageAscenseur, "CF 1 h");
+  // Sans ascenseur, l'article ne dit rien.
+  assert.equal(consulter(troisiemeB({ ascenseur: false })).faits.paroisCageAscenseur, "sans objet");
+});
+
+test("l'appel prioritaire des pompiers n'est exigé qu'en 4ᵉ famille", () => {
+  const quatrieme = { ...COLLECTIF, etagesSurRdc: 12, hauteurPlancherBasLogementLePlusHaut: 40,
+    hauteurPlancherBasNiveauLePlusHaut: 40, ascenseur: true };
+  assert.match(consulter(quatrieme).faits.appelPrioritairePompiers, /une cabine au moins par batterie/);
+  assert.equal(consulter(troisiemeB({ ascenseur: true })).faits.appelPrioritairePompiers, "non exigé");
+});
+
+test("la colonne sèche : la règle est à l'article 98, pas à l'article 3", () => {
+  // L'alinéa de l'article 3 est écrit dans le paragraphe du déclassement : le
+  // lire comme une règle générale dispenserait de colonne sèche les bâtiments
+  // de sept étages au plus, que l'article 98 vise pourtant.
+  const troisB = troisiemeB({ etagesSurRdc: 5, accesHallsAtteintsParVoieEchelles: false });
+  assert.match(consulter(troisB).faits.colonneSeche, /exigée/);
+  assert.equal(consulter(troisB).modules.find((m) => m.id === "colonne-seche").pourquoi.article, "98");
+  // L'exception de l'article 98 : collectif, sept étages au plus, halls atteints
+  // par la voie-échelles. Les deux conditions ensemble.
+  assert.equal(consulter(troisiemeB({ etagesSurRdc: 5, accesHallsAtteintsParVoieEchelles: true })).faits.colonneSeche,
+    "non obligatoire");
+  assert.match(consulter(troisiemeB({ etagesSurRdc: 9, accesHallsAtteintsParVoieEchelles: true })).faits.colonneSeche,
+    /exigée/);
+  // La quatrième famille l'a toujours.
+  const quatrieme = { ...COLLECTIF, etagesSurRdc: 12, hauteurPlancherBasLogementLePlusHaut: 40,
+    hauteurPlancherBasNiveauLePlusHaut: 40 };
+  assert.match(consulter(quatrieme).faits.colonneSeche, /exigée/);
+});
+
+test("l'alinéa de l'article 3 ne vise que les bâtiments déclassés", () => {
+  const declasse = troisiemeB({ etagesSurRdc: 9, arreteMunicipalDeclassement: true,
+    logementsAtteignablesEchellesOuParcoursSur: true });
+  assert.equal(consulter(declasse).faits.regimeApplique, "3e famille A");
+  assert.equal(consulter(declasse).faits.colonnesSechesDeclassement, "exigées");
+  // Sans déclassement, cet alinéa-là est sans objet — l'article 98 prend le relais.
+  const sansDeclassement = troisiemeB({ etagesSurRdc: 9, arreteMunicipalDeclassement: false });
+  assert.equal(consulter(sansDeclassement).faits.colonnesSechesDeclassement, "sans objet");
+  assert.match(consulter(sansDeclassement).faits.colonneSeche, /exigée/);
+});

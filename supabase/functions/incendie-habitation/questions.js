@@ -596,6 +596,100 @@ export const QUESTIONS = [
     type: "booleen", article: "64", paragraphe: "dernier alinéa",
     aide: "Dans le parc, les parois passent à CF 2 h et le bloc-porte à CF 1 h."
   },
+  /* ── Titre V : logements-foyers ───────────────────────────────────────── */
+  {
+    cle: "logementFoyer",
+    libelle: "Le bâtiment renferme-t-il un logement-foyer ?",
+    type: "booleen", article: "65",
+    aide: "Les mesures des articles 66 à 76 **s'ajoutent** aux prescriptions générales : le classement "
+      + "en famille et tout ce qui en découle restent applicables."
+  },
+  {
+    cle: "typeLogementFoyer",
+    libelle: "Quel type de logement-foyer ?",
+    type: "choix",
+    valeurs: [
+      { valeur: "autres", libelle: "Autres personnes (chapitre II)" },
+      { valeur: "personnesAgees", libelle: "Personnes âgées autonomes (chapitre III)" },
+      { valeur: "handicapesPhysiques", libelle: "Handicapés physiques autonomes" }
+    ],
+    article: "66",
+    aide: "Les articles 73 à 76, qui régissaient les logements-foyers pour handicapés physiques "
+      + "autonomes, ont été supprimés par l'arrêté du 19 juin 2015."
+  },
+  {
+    cle: "nombreOccupantsLogementFoyer",
+    libelle: "Nombre d'occupants que le logement-foyer est destiné à loger",
+    type: "nombre", unite: "occupants", article: "67",
+    aide: "Un escalier jusqu'à 200, deux de 201 à 400, puis un de plus par tranche de 200 entamée — "
+      + "le texte dit « ou fraction de 200 »."
+  },
+  {
+    cle: "occupantsParUniteDeVie",
+    libelle: "Nombre de personnes reçues par unité de vie",
+    type: "nombre", unite: "personnes", article: "69",
+    aide: "Au-delà de dix, les dispositifs sonores se placent dans chaque unité de vie et non plus à "
+      + "chaque niveau. L'unité de vie est l'ensemble des chambres et locaux liés à l'hébergement sur "
+      + "un même niveau."
+  },
+  {
+    cle: "occupantsParNiveau",
+    libelle: "Nombre de personnes par niveau",
+    type: "nombre", unite: "personnes", article: "70", paragraphe: "deuxième alinéa",
+    aide: "En troisième famille A, au-delà de vingt par niveau **et** de dix par unité de vie, les "
+      + "dégagements passent au régime de la troisième famille B."
+  },
+  {
+    cle: "hallDessertServicesCollectifs",
+    libelle: "Au rez-de-chaussée, le hall où aboutit l'escalier dessert-il des services collectifs ?",
+    type: "booleen", article: "68",
+    aide: "Salles de réunion, salles de jeux, restaurants et leurs dégagements au sens de l'article 66."
+  },
+  {
+    cle: "hallOuvertureExterieureDeDeuxMetresCarres",
+    libelle: "Le hall comporte-t-il une ouverture sur l'extérieur d'au moins 2 m², dans le tiers "
+      + "supérieur de sa hauteur ?",
+    type: "booleen", article: "68", paragraphe: "dernier alinéa",
+    aide: "Un haut de porte ou un châssis ouvrant y suffit. C'est la première des deux conditions de "
+      + "l'exception ; l'autre est la distance du débouché de l'escalier à la sortie."
+  },
+  {
+    cle: "distanceDebouchEscalierSortie",
+    libelle: "Distance du débouché de l'escalier à la sortie du bâtiment",
+    type: "nombre", unite: "m", article: "68", paragraphe: "dernier alinéa",
+    aide: "Seconde condition de l'exception : moins de 7 m."
+  },
+  {
+    cle: "servicesCollectifsEnEtage",
+    libelle: "Les services collectifs sont-ils situés dans les étages ?",
+    type: "booleen", article: "71"
+  },
+  {
+    cle: "etageLePlusHautDuFoyer",
+    libelle: "Étage le plus haut affecté au logement-foyer",
+    type: "nombre", unite: "étage", article: "72", paragraphe: "deuxième alinéa",
+    aide: "Un foyer pour personnes âgées autonomes ne peut être installé au-delà du 6ᵉ étage."
+  },
+
+  /* ── Titre VII : dispositions diverses ────────────────────────────────── */
+  {
+    cle: "ascenseur",
+    libelle: "Le bâtiment comporte-t-il un ascenseur ?",
+    type: "booleen", article: "97"
+  },
+  {
+    cle: "ascenseurDessertSousSolParcOuCaves",
+    libelle: "L'ascenseur dessert-il un sous-sol comportant un parc de stationnement ou des caves ?",
+    type: "booleen", article: "97", paragraphe: "cinquième alinéa"
+  },
+  {
+    cle: "accesHallsAtteintsParVoieEchelles",
+    libelle: "Au rez-de-chaussée, les accès aux halls d'entrée sont-ils atteints par la voie-échelles ?",
+    type: "booleen", article: "98", paragraphe: "deuxième alinéa",
+    aide: "Seconde condition de l'exception qui dispense de colonne sèche un collectif de troisième "
+      + "famille B de sept étages au plus. La récapitulation de 1997 ne la mentionne pas : elle est "
+      + "antérieure à la rédaction de 2015."
+  },
   {
     cle: "conduitsOuGainesTraversantDesParois",
     libelle: "Des conduits ou gaines sont-ils aménagés dans le bâtiment ?",

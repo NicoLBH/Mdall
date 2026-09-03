@@ -308,29 +308,40 @@ export const declassement3B = {
   ]
 };
 
-export const colonnesSeches3B = {
-  id: "colonnes-seches-3b",
-  titre: "Colonnes sèches en 3ᵉ famille B",
-  repond: "Des colonnes sèches sont-elles exigées ?",
-  produit: "colonnesSechesExigees",
-  source: { article: "3", paragraphe: "3°), quatrième alinéa" },
+/**
+ * L'obligation de colonnes sèches attachée au déclassement.
+ *
+ * Cet alinéa est écrit **dans le paragraphe du déclassement** : il ne vise que
+ * les bâtiments de troisième famille B soumis, par décision du maire, aux
+ * seules prescriptions de la troisième famille A. Le lire comme une règle
+ * générale de la troisième famille B — ce que faisait la première version de
+ * ce module — reviendrait à dispenser de colonne sèche les bâtiments de sept
+ * étages au plus, alors que l'article 98 les vise. La règle générale est là-bas.
+ */
+export const colonnesSechesDeclassement = {
+  id: "colonnes-seches-declassement",
+  titre: "Colonnes sèches attachées au déclassement",
+  repond: "Le déclassement en 3ᵉ famille A emporte-t-il l'obligation de colonnes sèches ?",
+  produit: "colonnesSechesDeclassement",
+  source: { article: "3", paragraphe: "3°), avant-dernier alinéa" },
   regles: [
     {
-      si: { classement: "3e famille B", etagesSurRdcRetenu: { auMoins: 8 } },
+      si: { regimeApplique: "3e famille A", classement: "3e famille B", etagesSurRdcRetenu: { auMoins: 8 } },
       alors: { valeur: "exigées",
-        mention: "Conformément aux dispositions de l'article 98." },
-      source: reglement("3", "3°), quatrième alinéa", "De plus, les bâtiments comportant plus de sept étages sur rez-de-chaussée doivent être équipés de colonnes sèches conformément aux dispositions de l'article 98.")
+        mention: "Conformément aux dispositions de l'article 98, qui en fixe les caractéristiques." },
+      source: reglement("3", "3°), avant-dernier alinéa", "De plus, les bâtiments comportant plus de sept étages sur rez-de-chaussée doivent être équipés de colonnes sèches conformément aux dispositions de l'article 98.")
     },
     {
-      si: { classement: "3e famille B", etagesSurRdcRetenu: { auPlus: 7 } },
-      alors: { valeur: "non exigées par cet article" },
-      source: reglement("3", "3°), quatrième alinéa", "les bâtiments comportant plus de sept étages sur rez-de-chaussée doivent être équipés de colonnes sèches")
+      si: { regimeApplique: "3e famille A", classement: "3e famille B" },
+      alors: { valeur: "non exigées par cet alinéa",
+        mention: "Sept étages au plus sur rez-de-chaussée : cet alinéa ne les vise pas. L'article 98 reste à consulter." },
+      source: reglement("3", "3°), avant-dernier alinéa", "De plus, les bâtiments comportant plus de sept étages sur rez-de-chaussée doivent être équipés de colonnes sèches conformément aux dispositions de l'article 98.")
     },
     {
       si: { classement: { renseigne: true } },
       alors: { valeur: "sans objet",
-        sansObjet: "Cet alinéa ne vise que la troisième famille B." },
-      source: reglement("3", "3°), quatrième alinéa", "De plus, les bâtiments comportant plus de sept étages sur rez-de-chaussée doivent être équipés de colonnes sèches…")
+        sansObjet: "Cet alinéa ne vise que les bâtiments de troisième famille B déclassés en troisième famille A par décision du maire. L'obligation générale est à l'article 98." },
+      source: reglement("3", "3°), avant-dernier alinéa", "De plus, les bâtiments comportant plus de sept étages sur rez-de-chaussée doivent être équipés de colonnes sèches conformément aux dispositions de l'article 98.")
     }
   ]
 };
@@ -484,6 +495,6 @@ export const implantationAccesEscaliers = {
 export const MODULES_CLASSEMENT = [
   natureHabitation, duplexNiveauBas, etagesRetenus, quadruplex,
   champApplication, voieEngins, voieEchelles,
-  classement, famille, declassement3B, colonnesSeches3B, escaliersEncloisonnes2e,
+  classement, famille, declassement3B, colonnesSechesDeclassement, escaliersEncloisonnes2e,
   implantationAccesEscaliers
 ];
