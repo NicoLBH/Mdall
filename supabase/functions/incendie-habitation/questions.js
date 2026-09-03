@@ -459,6 +459,143 @@ export const QUESTIONS = [
     type: "nombre", unite: "m", article: "41", paragraphe: "a",
     aide: "La solution n° 1 les veut distants de 10 m au moins."
   },
+  /* ── Titre IV : ce qui traverse le bâtiment ───────────────────────────── */
+  {
+    cle: "conduitDansLogementOuCirculationCommune",
+    libelle: "Le conduit est-il situé dans un logement ou dans une circulation horizontale commune ?",
+    type: "booleen", article: "46",
+    aide: "C'est la première des quatre conditions cumulatives qui permettent à un conduit de rester "
+      + "hors d'une gaine. Ailleurs — en cage d'escalier, en local technique — la tolérance ne joue pas."
+  },
+  {
+    cle: "classeReactionConduit",
+    libelle: "Classement de réaction au feu du conduit, calorifugeage compris",
+    type: "choix",
+    valeurs: [
+      { valeur: "incombustible", libelle: "Incombustible" },
+      { valeur: "M1", libelle: "M1" }, { valeur: "M2", libelle: "M2" },
+      { valeur: "M3", libelle: "M3" }, { valeur: "M4", libelle: "M4" }
+    ],
+    article: "46",
+    aide: "Le calorifugeage éventuel compte. Attention : un conduit M1 de plus de 125 mm ne bénéficie "
+      + "d'aucune atténuation par rapport aux conduits M2 à M4 (ministère, 23 décembre 1986)."
+  },
+  {
+    cle: "diametreConduit",
+    libelle: "Diamètre du conduit",
+    type: "nombre", unite: "mm", article: "46",
+    aide: "125 mm est le seuil qui revient partout : au-delà, les tolérances des articles 46, 47 et "
+      + "49 § 5 tombent l'une après l'autre."
+  },
+  {
+    cle: "gaineRecoupeeTousNiveauxA1",
+    libelle: "La gaine est-elle recoupée à tous les niveaux en matériaux incombustibles de classement A1 ?",
+    type: "booleen", article: "48", paragraphe: "troisième alinéa",
+    aide: "Si oui, les trappes et portes de visite tiennent le coupe-feu 1/4 d'heure (EI 15) quelle "
+      + "que soit leur surface : le seuil de 0,25 m² ne joue plus."
+  },
+  {
+    cle: "surfaceTrappeDeGaine",
+    libelle: "Surface de la trappe ou porte de visite",
+    type: "nombre", unite: "m²", article: "48", paragraphe: "deuxième alinéa"
+  },
+  {
+    cle: "paroiTraversee",
+    libelle: "Que sépare la paroi traversée ?",
+    type: "choix",
+    valeurs: [
+      { valeur: "entreLogements", libelle: "Deux logements" },
+      { valeur: "logementVersLocalArticle9", libelle: "Un logement d'un ERP (art. 9) ou d'un sous-sol" },
+      { valeur: "caveOuSousSol", libelle: "Une cave ou un sous-sol traversés" },
+      { valeur: "autre", libelle: "Autre" }
+    ],
+    article: "49",
+    aide: "L'article 49 pose une règle puis quatre exceptions numérotées ; c'est ce que sépare la "
+      + "paroi qui décide laquelle s'applique."
+  },
+  {
+    cle: "conduitIncorporeDansUneGaine",
+    libelle: "Le conduit est-il incorporé dans une gaine ?",
+    type: "booleen", article: "49", paragraphe: "1°) et 2°)"
+  },
+  {
+    cle: "conduiteMontanteDeGaz",
+    libelle: "Le bâtiment comporte-t-il une conduite montante de gaz ?",
+    type: "booleen", article: "50"
+  },
+  {
+    cle: "situationGaineGaz",
+    libelle: "Où la gaine gaz est-elle située ?",
+    type: "choix",
+    valeurs: [
+      { valeur: "cageEscalier", libelle: "En cage d'escalier" },
+      { valeur: "partiesCommunesAutres", libelle: "En parties communes autres" }
+    ],
+    article: "54",
+    aide: "C'est la seconde entrée du tableau de l'article 54. En cage d'escalier, la solution est "
+      + "interdite en 3ᵉ famille B et en 4ᵉ famille — sauf si l'escalier est « à l'air libre »."
+  },
+  {
+    cle: "gazTraversantUnParcDeStationnement",
+    libelle: "L'installation de gaz traverse-t-elle un parc de stationnement couvert annexe ?",
+    type: "booleen", article: "56", paragraphe: "2°)"
+  },
+  {
+    cle: "colonneMontanteElectriqueEnGaine",
+    libelle: "Le bâtiment comporte-t-il une colonne montante « électricité » en gaine ?",
+    type: "booleen", article: "58"
+  },
+  {
+    cle: "typeVentilation",
+    libelle: "Quel système de ventilation mécanique ?",
+    type: "choix",
+    valeurs: [
+      { valeur: "simpleFlux", libelle: "VMC simple flux" },
+      { valeur: "doubleFlux", libelle: "VMC double flux" },
+      { valeur: "vmcInversee", libelle: "VMC inversée" },
+      { valeur: "vmcGaz", libelle: "VMC-gaz" },
+      { valeur: "aucune", libelle: "Aucune ventilation mécanique" }
+    ],
+    article: "60",
+    aide: "Le tableau annexé croise les cinq solutions avec le type d'installation, et il porte des "
+      + "interdictions : la n° 2 est interdite en VMC-gaz, les n° 3 et 5 en VMC inversée."
+  },
+  {
+    cle: "solutionVentilationRetenue",
+    libelle: "Quelle solution de ventilation mécanique est retenue ?",
+    type: "choix",
+    valeurs: [
+      { valeur: "1", libelle: "N° 1 — ventilateur permanent (art. 60 § 1)" },
+      { valeur: "2", libelle: "N° 2 — clapets à 70 °C (art. 60 § 2)" },
+      { valeur: "3", libelle: "N° 3 — 50 Pa sans exutoire (art. 61 § b1)" },
+      { valeur: "4", libelle: "N° 4 — 50 Pa, exutoire par conduit (art. 61 § b2.1)" },
+      { valeur: "5", libelle: "N° 5 — 50 Pa, exutoire sur caisson (art. 61 § b2.2)" }
+    ],
+    article: "60"
+  },
+  {
+    cle: "ventilateurDansUnLocalExterieur",
+    libelle: "Le ventilateur est-il dans un local situé à l'extérieur du bâtiment ?",
+    type: "booleen", article: "62", paragraphe: "a",
+    aide: "À l'extérieur, les exigences sur les parois du local ne sont pas exigées."
+  },
+  {
+    cle: "videOrdures",
+    libelle: "Le bâtiment comporte-t-il un vide-ordures ?",
+    type: "booleen", article: "64"
+  },
+  {
+    cle: "videOrduresDansLesLogements",
+    libelle: "Les vide-ordures sont-ils situés à l'intérieur des logements ?",
+    type: "booleen", article: "64", paragraphe: "quatrième alinéa",
+    aide: "À l'intérieur des logements, les degrés du conduit et du vidoir sont relevés."
+  },
+  {
+    cle: "localOrduresDansLeParcDeStationnement",
+    libelle: "Le local réceptacle des ordures est-il situé dans le parc de stationnement ?",
+    type: "booleen", article: "64", paragraphe: "dernier alinéa",
+    aide: "Dans le parc, les parois passent à CF 2 h et le bloc-porte à CF 1 h."
+  },
   {
     cle: "conduitsOuGainesTraversantDesParois",
     libelle: "Des conduits ou gaines sont-ils aménagés dans le bâtiment ?",

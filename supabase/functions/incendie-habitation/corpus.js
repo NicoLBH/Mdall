@@ -26,9 +26,10 @@ import { raisonner, grapheDu, faitsDemandes } from "./moteur.js";
 import { MODULES_CLASSEMENT } from "./modules-classement.js";
 import { MODULES_STRUCTURES } from "./modules-structures.js";
 import { MODULES_DEGAGEMENTS } from "./modules-degagements.js";
+import { MODULES_CONDUITS } from "./modules-conduits.js";
 import { QUESTIONS, questionDe } from "./questions.js";
 
-export const CORPUS = [...MODULES_CLASSEMENT, ...MODULES_STRUCTURES, ...MODULES_DEGAGEMENTS];
+export const CORPUS = [...MODULES_CLASSEMENT, ...MODULES_STRUCTURES, ...MODULES_DEGAGEMENTS, ...MODULES_CONDUITS];
 
 export const VERSION = "Incendie_Habitation_V1";
 
@@ -45,13 +46,13 @@ export const PORTEE = {
     "Champ d'application et limite IGH (article 1er)",
     "Voies-engins et voies-échelles (article 4)",
     "Structures et enveloppe : éléments porteurs verticaux, planchers, recoupement, parois, celliers, façades, couvertures (articles 5 à 15)",
-    "Conduits et gaines : principe de l'article 45",
+    "Conduits et gaines : prescriptions générales, gaz, ventilation et vide-ordures (articles 44 à 64)",
     "Dégagements — escaliers, circulations horizontales et dégagements protégés (articles 17 à 43)"
   ],
   nonCouvert: [
     "Systèmes de façade des 3ᵉ et 4ᵉ familles (article 13) et isolation intérieure (article 16)",
     "Indice de propagation des couvertures (tableau de l'article 15)",
-    "Conduits, gaines et installations techniques dans le détail (articles 44 à 99)",
+    "Chauffage, électricité, ascenseurs et moyens de secours (articles 65 à 99)",
     "Parcs de stationnement (articles 77 à 99), traités à part",
     "Bâtiments existants (titre VIII) et dispositions diverses (titres IX et X)"
   ]

@@ -18235,6 +18235,12 @@ strong.est-verifie{ color:#3fb950; }
 .incendie-noeud.est-sans-objet{ border-left-color:var(--muted); opacity:.7; }
 .incendie-noeud.est-attente{ border-left-color:var(--attention, #d29922); }
 .incendie-noeud.est-survole, .incendie-noeud:hover{ background:rgba(240,136,62,.12); border-color:#f0883e; }
+/* Un trait qui mène à une boîte éteinte se suit mal : les boîtes du chemin
+   s'allument aussi, à la même intensité que le trait qui y mène. */
+.incendie-noeud.est-en-amont{
+  border-color:color-mix(in srgb, #f0883e calc(var(--incendie-amont, .5) * 100%), var(--border, #30363d));
+  background:rgba(240,136,62,calc(var(--incendie-amont, .5) * .1));
+}
 .incendie-noeud:focus-visible{ outline:2px solid #f0883e; outline-offset:-2px; }
 .incendie-noeud__article{ font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; }
 .incendie-noeud__titre{ font-size:12px; font-weight:600; }
@@ -18329,7 +18335,12 @@ strong.est-verifie{ color:#3fb950; }
    illisible, et c'est le titre qu'on lit. */
 .incendie-schema__liens{ position:absolute; inset:0; pointer-events:none; overflow:visible; z-index:0; }
 .incendie-lien{ fill:none; stroke:var(--border2, #30363d); stroke-width:1.2; }
-.incendie-lien.est-marque{ stroke:#f0883e; stroke-width:2; }
+/* Le chemin amont en entier, l'intensité décroissant avec l'éloignement :
+   l'opacité et l'épaisseur sont posées au tracé, module par module. */
+.incendie-lien.est-marque{ stroke:#f0883e; }
+/* Ce que le module désigné alimente reste visible, mais en retrait : on regarde
+   d'où vient une conclusion plus souvent que ce qu'elle nourrit. */
+.incendie-lien.est-aval{ stroke:#f0883e; opacity:.35; stroke-width:1.4; stroke-dasharray:4 3; }
 .incendie-schema__colonne{ position:relative; z-index:1; }
 .incendie-noeud{ width:210px; }
 

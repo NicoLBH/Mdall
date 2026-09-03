@@ -681,6 +681,7 @@ function tracerLesLiens(root) {
     });
   }
 
+  const amont = cheminAmont(etat.survole);
   const chemins = [];
   for (const lien of etat.vue.graphe.liens) {
     const de = boites.get(lien.de);
@@ -688,14 +689,63 @@ function tracerLesLiens(root) {
     if (!de || !vers) continue;
     const x1 = de.droite, y1 = de.milieu, x2 = vers.gauche, y2 = vers.milieu;
     const courbe = Math.max(18, (x2 - x1) / 2);
-    const marque = etat.survole && (lien.de === etat.survole || lien.vers === etat.survole);
+
+    // Le chemin amont en entier, pas seulement le premier rang : c'est la
+    // chaîne complète qui explique une conclusion, et la voir d'un coup vaut
+    // mieux que de la reconstituer module par module. L'intensité décroît avec
+    // l'éloignement — sans quoi, sur soixante-quatre traits, on ne saurait plus
+    // par où l'on est arrivé.
+    const rang = amont.has(lien.de) && amont.has(lien.vers) ? amont.get(lien.vers) : null;
+    const aval = etat.survole && lien.de === etat.survole;
+    const opacite = rang === null ? null : Math.max(0.28, 1 - rang * 0.22);
+
+    const classe = rang !== null ? "incendie-lien est-marque"
+      : aval ? "incendie-lien est-aval" : "incendie-lien";
+    const style = opacite === null ? "" : ` style="opacity:${opacite};stroke-width:${Math.max(1.1, 2 - rang * 0.25)}"`;
     chemins.push(`<path d="M ${x1} ${y1} C ${x1 + courbe} ${y1}, ${x2 - courbe} ${y2}, ${x2} ${y2}"
-      class="incendie-lien${marque ? " est-marque" : ""}"><title>${escapeHtml(lien.fait)}</title></path>`);
+      class="${classe}"${style}><title>${escapeHtml(lien.fait)}</title></path>`);
+  }
+
+  // Les boîtes du chemin s'allument aussi : un trait qui mène à un module éteint
+  // se suit mal.
+  for (const noeud of toile.querySelectorAll("[data-incendie-module]")) {
+    const rang = amont.get(noeud.dataset.incendieModule);
+    noeud.classList.toggle("est-en-amont", rang !== undefined && rang > 0);
+    noeud.style.removeProperty("--incendie-amont");
+    if (rang !== undefined && rang > 0) noeud.style.setProperty("--incendie-amont", String(Math.max(0.3, 1 - rang * 0.2)));
   }
 
   svg.setAttribute("width", String(toile.scrollWidth / zoom));
   svg.setAttribute("height", String(toile.scrollHeight / zoom));
   svg.innerHTML = chemins.join("");
+}
+
+/**
+ * Le module désigné et tout ce dont il dépend, avec la distance de chacun.
+ *
+ * Le rang sert à l'intensité du trait : zéro pour le module lui-même, un pour
+ * ce qui le décide directement, deux pour ce qui décide de cela, et ainsi de
+ * suite. Sans cette décroissance, la chaîne complète serait aussi voyante que
+ * son premier maillon et l'on ne saurait plus par où l'on est arrivé.
+ */
+function cheminAmont(id) {
+  const rangs = new Map();
+  if (!id || !etat.vue) return rangs;
+  const produitPar = new Map(etat.vue.graphe.noeuds.map((n) => [n.produit, n.id]));
+  const aVoir = [[id, 0]];
+  while (aVoir.length) {
+    const [courant, rang] = aVoir.shift();
+    // Un module atteint par deux chemins garde le plus court : c'est celui qui
+    // décrit le mieux sa proximité avec ce qu'on regarde.
+    if (rangs.has(courant) && rangs.get(courant) <= rang) continue;
+    rangs.set(courant, rang);
+    const noeud = etat.vue.graphe.noeuds.find((n) => n.id === courant);
+    for (const fait of noeud?.demande ?? []) {
+      const parent = produitPar.get(fait);
+      if (parent) aVoir.push([parent, rang + 1]);
+    }
+  }
+  return rangs;
 }
 
 /** Le grossissement, appliqué sans tout redessiner — et les traits refaits avec. */

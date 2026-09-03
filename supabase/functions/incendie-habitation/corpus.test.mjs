@@ -539,3 +539,135 @@ test("l'escalier extérieur reprend les trois distances, mesurées autrement", (
   assert.equal(consulter({ ...cas, angleDiedreFacade: 60, distanceEscalierAuxBaies: 5 }).faits.escalierExterieurConforme, "non conforme");
   assert.equal(consulter({ ...cas, angleDiedreFacade: 60, distanceEscalierAuxBaies: 9 }).faits.escalierExterieurConforme, "conforme");
 });
+
+/* ── Titre IV : conduits et gaines ───────────────────────────────────────── */
+
+const AVEC_CONDUITS = { conduitsOuGainesTraversantDesParois: true };
+
+test("le croisement matériau × diamètre décide du régime d'un conduit", () => {
+  // Un M1 de 100 mm dans un logement peut rester nu ; le même hors logement
+  // passe en coffrage ; au-delà de 125 mm, la gaine s'impose — et le ministère
+  // dit expressément qu'un M1 n'y gagne rien sur un M2 à M4.
+  const base = { ...COLLECTIF, etagesSurRdc: 3, hauteurPlancherBasLogementLePlusHaut: 7,
+    hauteurPlancherBasNiveauLePlusHaut: 7, ...AVEC_CONDUITS };
+
+  const nu = { ...base, conduitDansLogementOuCirculationCommune: true, classeReactionConduit: "M1", diametreConduit: 100 };
+  assert.equal(consulter(nu).faits.conduitEntreNiveaux, "peut rester nu");
+  assert.match(consulter(nu).modules.find((m) => m.id === "conduit-entre-niveaux").mention, /rebouché/);
+
+  const coffre = { ...nu, conduitDansLogementOuCirculationCommune: false };
+  assert.equal(consulter(coffre).faits.conduitEntreNiveaux, "coffrage admis");
+
+  const gros = { ...nu, diametreConduit: 150 };
+  assert.equal(consulter(gros).faits.conduitEntreNiveaux, "gaine CF 1/2 h exigée");
+  assert.match(consulter(gros).modules.find((m) => m.id === "conduit-entre-niveaux").mention,
+    /pas d'atténuation pour les conduits classés M1/);
+});
+
+test("en individuel de 1ʳᵉ ou 2ᵉ famille, le titre IV n'impose rien", () => {
+  const maison = { logementsSuperposes: false, implantation: "isolee", etagesSurRdc: 1,
+    ...DANS_LE_CHAMP, ...SANS_DUPLEX, ...AVEC_CONDUITS };
+  assert.equal(consulter(maison).faits.conduitEntreNiveaux, "aucune prescription");
+  assert.equal(consulter(maison).faits.traverseeDeParoi, "aucune prescription");
+});
+
+test("le recoupement en A1 efface le seuil de 0,25 m² des trappes", () => {
+  const base = { ...COLLECTIF, etagesSurRdc: 6, hauteurPlancherBasLogementLePlusHaut: 20,
+    hauteurPlancherBasNiveauLePlusHaut: 20, ...AVEC_CONDUITS,
+    conduitDansLogementOuCirculationCommune: false, classeReactionConduit: "M3", diametreConduit: 150 };
+  assert.equal(consulter({ ...base, gaineRecoupeeTousNiveauxA1: false, surfaceTrappeDeGaine: 0.2 }).faits.trappesDeGaine, "CF 1/4 h");
+  assert.equal(consulter({ ...base, gaineRecoupeeTousNiveauxA1: false, surfaceTrappeDeGaine: 0.4 }).faits.trappesDeGaine, "CF 1/2 h");
+  // Le « Toutefois » du troisième alinéa vaut une demi-heure.
+  assert.equal(consulter({ ...base, gaineRecoupeeTousNiveauxA1: true, surfaceTrappeDeGaine: 0.4 }).faits.trappesDeGaine, "CF 1/4 h (EI 15)");
+});
+
+test("le 5°) de l'article 49 affranchit les caves et sous-sols — et s'arrête à 125 mm", () => {
+  const base = { ...COLLECTIF, etagesSurRdc: 6, hauteurPlancherBasLogementLePlusHaut: 20,
+    hauteurPlancherBasNiveauLePlusHaut: 20, ...AVEC_CONDUITS, paroiTraversee: "caveOuSousSol" };
+  assert.equal(consulter({ ...base, diametreConduit: 100 }).faits.traverseeDeParoi, "aucune prescription");
+  assert.equal(consulter({ ...base, diametreConduit: 160 }).faits.traverseeDeParoi, "incombustible ou M1 au moins");
+});
+
+test("le tableau de l'article 54 porte une interdiction, pas un degré nul", () => {
+  const troisB = troisiemeB({ conduiteMontanteDeGaz: true, situationGaineGaz: "cageEscalier" });
+  assert.equal(consulter({ ...troisB, typeEscalierRetenu: "abriFumees" }).faits.paroisGaineGaz, "solution interdite");
+  // Et l'interdiction porte sa propre exception, note (2) du tableau.
+  assert.match(consulter({ ...troisB, typeEscalierRetenu: "airLibre" }).faits.paroisGaineGaz, /admise/);
+  // En parties communes autres, un degré, et il diffère de la 3ᵉ A.
+  const enPartiesCommunes = { ...troisB, situationGaineGaz: "partiesCommunesAutres", typeEscalierRetenu: "abriFumees" };
+  assert.equal(consulter(enPartiesCommunes).faits.paroisGaineGaz, "parois CF 1/4 h — portes et trappes PF 1/4 h");
+});
+
+test("la gaine électrique n'a pas de degré propre : c'est une doctrine, et elle est datée", () => {
+  const cas = troisiemeB({ colonneMontanteElectriqueEnGaine: true });
+  const vue = consulter(cas);
+  assert.match(vue.faits.colonneMontanteElectricite, /mêmes caractéristiques que la gaine gaz/);
+  const module = vue.modules.find((m) => m.id === "colonne-montante-electricite");
+  assert.equal(module.pourquoi.nature, "commentaire");
+  assert.match(module.pourquoi.texte, /25 juin 1990/);
+});
+
+test("les conduits de ventilation suivent la famille, et seulement en collectif", () => {
+  const deuxieme = { ...COLLECTIF, etagesSurRdc: 3, hauteurPlancherBasLogementLePlusHaut: 7, hauteurPlancherBasNiveauLePlusHaut: 7 };
+  assert.equal(consulter(deuxieme).faits.conduitsVentilation, "incombustible, CF 1/4 h");
+  assert.equal(consulter(troisiemeB()).faits.conduitsVentilation, "incombustible, CF 1/2 h");
+  const maison = { logementsSuperposes: false, implantation: "isolee", etagesSurRdc: 1, ...DANS_LE_CHAMP, ...SANS_DUPLEX };
+  assert.equal(consulter(maison).faits.conduitsVentilation, "sans objet");
+});
+
+test("une solution de ventilation peut être interdite pour le système retenu", () => {
+  // Un utilitaire qui rendrait le degré du conduit sans dire que la solution
+  // est interdite pour ce système-là rendrait un résultat exact et inutilisable.
+  const base = troisiemeB();
+  assert.match(consulter({ ...base, typeVentilation: "vmcGaz", solutionVentilationRetenue: "2" }).faits.solutionVentilation,
+    /interdite en VMC-gaz/);
+  assert.match(consulter({ ...base, typeVentilation: "doubleFlux", solutionVentilationRetenue: "3" }).faits.solutionVentilation,
+    /interdite en double flux/);
+  assert.match(consulter({ ...base, typeVentilation: "vmcInversee", solutionVentilationRetenue: "5" }).faits.solutionVentilation,
+    /interdite en VMC inversée/);
+  // La n° 4 reste ouverte en VMC inversée : le texte ne l'exclut pas.
+  assert.match(consulter({ ...base, typeVentilation: "vmcInversee", solutionVentilationRetenue: "4" }).faits.solutionVentilation,
+    /admise/);
+  assert.match(consulter({ ...base, typeVentilation: "simpleFlux", solutionVentilationRetenue: "1" }).faits.solutionVentilation,
+    /fonctionnement du ventilateur assuré en permanence/);
+});
+
+test("le local du ventilateur inversé reprend le degré de stabilité du bâtiment", () => {
+  // « coupe-feu de degré identique à celui de la stabilité du bâtiment » : le
+  // module ne recopie pas un chiffre, il reprend le fait produit par l'article 5.
+  const cas = troisiemeB({ typeVentilation: "vmcInversee", ventilateurDansUnLocalExterieur: false });
+  const vue = consulter(cas);
+  assert.equal(vue.faits.porteursVerticauxStabilite, "SF 1 h");
+  assert.equal(vue.faits.localVentilateurInverse, "SF 1 h");
+  assert.match(vue.modules.find((m) => m.id === "local-ventilateur-inverse").mention, /pare-flammes de degré 1\/2 heure/);
+  // À l'extérieur du bâtiment, rien n'est exigé.
+  assert.equal(consulter({ ...cas, ventilateurDansUnLocalExterieur: true }).faits.localVentilateurInverse, "aucune exigence");
+});
+
+test("le vide-ordures : quatre exigences dans un article, sur quatre objets", () => {
+  const troisB = troisiemeB({ videOrdures: true, videOrduresDansLesLogements: false,
+    localOrduresDansLeParcDeStationnement: false });
+  assert.equal(consulter(troisB).faits.videOrduresConduit, "coupe-feu de traversée 30 min — vidoir PF 1/4 h");
+  assert.equal(consulter(troisB).faits.localReceptacleOrdures, "parois CF 1 h — bloc-porte CF 1/2 h");
+  // À l'intérieur des logements, les degrés du conduit sont relevés.
+  assert.equal(consulter({ ...troisB, videOrduresDansLesLogements: true }).faits.videOrduresConduit,
+    "conduit ou gaine CF 1/2 h — vidoir PF 1/2 h");
+  // Dans le parc de stationnement, le local double ses degrés.
+  assert.equal(consulter({ ...troisB, localOrduresDansLeParcDeStationnement: true }).faits.localReceptacleOrdures,
+    "parois CF 2 h — bloc-porte CF 1 h");
+  // En deuxième famille, l'article 64 ne dit rien.
+  const deuxieme = { ...COLLECTIF, etagesSurRdc: 3, hauteurPlancherBasLogementLePlusHaut: 7,
+    hauteurPlancherBasNiveauLePlusHaut: 7, videOrdures: true };
+  assert.match(consulter(deuxieme).modules.find((m) => m.id === "vide-ordures").sansObjet, /troisième et quatrième familles/);
+});
+
+test("un module ne peut pas produire le fait qu'il demande — le moteur le refuse", () => {
+  // C'est ce qui est arrivé en écrivant le titre IV : le module « vide-ordures »
+  // produisait « videOrdures », qui est aussi le nom de sa question. Le graphe
+  // bouclait, et c'est le moteur qui l'a dit plutôt qu'un écran qui aurait
+  // tourné en rond.
+  const boucle = [{ id: "x", titre: "X", produit: "meme", regles: [
+    { si: { meme: true }, alors: { valeur: "oui" }, source: { article: "1", citation: "une citation assez longue" } }
+  ] }];
+  assert.throws(() => ordonner(boucle), /circulaire/);
+});
