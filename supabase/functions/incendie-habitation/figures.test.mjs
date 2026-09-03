@@ -6,6 +6,21 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { FIGURES, figuresDe, COLONNES_FAMILLES } from "./figures.js";
 
+test("l'article 6 porte la figure de ses planchers, avec la table des degrés", () => {
+  // C'est la figure la plus utile du fascicule pour qui répond : l'article
+  // énumère quatre degrés puis deux exceptions, et la phrase des exceptions
+  // arrive après la liste.
+  const [figure] = figuresDe("6");
+  assert.ok(figure);
+  for (const degre of ["1/4 h", "1/2 h", "1 h", "1 h 30"]) assert.ok(figure.svg.includes(degre), degre);
+  for (const cas of ["comble communicant", "entre logements", "vide sanitaire accessible"]) {
+    assert.ok(figure.svg.includes(cas), cas);
+  }
+  // Et les deux exceptions, que la table seule ne dit pas.
+  assert.match(figure.svg, /NON accessible/);
+  assert.match(figure.svg, /prolongées jusqu'à la couverture/);
+});
+
 test("l'article premier porte sa figure, et elle dit d'où elle vient", () => {
   const figures = figuresDe("1er");
   assert.equal(figures.length, 1);

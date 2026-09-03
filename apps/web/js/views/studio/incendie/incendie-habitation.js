@@ -34,7 +34,7 @@ import { renderMarkdownToHtml } from "../../../utils/markdown-renderer.js";
 import {
   dessinerGrapheLiaisons, brancherGrapheLiaisons, tracerLesLiens as tracerLesLiensDuGraphe, appliquerZoom as appliquerZoomAuGraphe
 } from "../../ui/graphe-liaisons.js";
-import { dessinerLeBatiment, resumer } from "./batiment.js";
+import { dessinerLaCoupe, dessinerLePlan, resumer, resumerLePlan } from "./batiment.js";
 import { store } from "../../../store.js";
 
 const etat = {
@@ -128,6 +128,7 @@ function oublierLeProjet() {
   etat.pleinEcran = false;
   etat.articleOuvert = false;
   etat.inspection = null;
+  etat.vueDuBatiment = "coupe";
   // Les articles, eux, restent : le texte de l'arrêté ne dépend pas du projet.
 }
 
@@ -262,7 +263,12 @@ function brancher(root) {
     if (article) {
       etat.articleOuvert = !etat.articleOuvert;
       dessiner(root);
-      if (etat.articleOuvert) void ouvrirLArticle(root, article.dataset.incendieArticle);
+      return;
+    }
+    const vueBatiment = evenement.target.closest("[data-incendie-vue-batiment]");
+    if (vueBatiment) {
+      etat.vueDuBatiment = vueBatiment.dataset.incendieVueBatiment;
+      dessiner(root);
       return;
     }
     const inspecter = evenement.target.closest("[data-incendie-inspecter]");
@@ -296,6 +302,7 @@ function brancher(root) {
   brancherGrapheLiaisons(root, {
     onSurvol: (id) => designer(root, id),
     onDesigner: (id) => { designer(root, id); void inspecter_(root, id); },
+    /* eslint-disable-next-line no-unused-vars */
     onZoom: (sens) => {
       const delta = sens === "in" ? 0.15 : -0.15;
       etat.zoom = Math.min(2, Math.max(0.4, Math.round((etat.zoom + delta) * 100) / 100));
@@ -329,7 +336,7 @@ async function ouvrirLArticle(root, numero) {
   } catch {
     etat.articles[cle] = null;
   }
-  if (root?.isConnected && etat.articleOuvert) dessiner(root);
+  if (root?.isConnected && etat.articleOuvert && etat.onglet === "questionnaire") dessiner(root);
 }
 
 /**
@@ -344,8 +351,7 @@ async function inspecter_(root, id) {
   rafraichirLeDetail(root);
   try {
     const rendu = await inspecterIncendie(id, etat.reponses);
-    if (rendu?.ferme) etat.inspection = { id, etat: "ferme", raison: rendu.raison };
-    else if (rendu?.ok) etat.inspection = { id, etat: "ok", donnees: rendu };
+    if (rendu?.ok) etat.inspection = { id, etat: "ok", donnees: rendu };
     else etat.inspection = { id, etat: "erreur", raison: rendu?.raison ?? "Le référentiel n'a pas répondu." };
   } catch (erreur) {
     etat.inspection = { id, etat: "erreur", raison: erreur instanceof Error ? erreur.message : String(erreur) };
@@ -363,6 +369,10 @@ function designer(root, id) {
   if (etat.survole === id) return;
   etat.survole = id;
   rafraichirLeDetail(root);
+  // Le détail public — la question, les liaisons, l'article — s'ouvre dès qu'on
+  // désigne. Le demander sur un second geste faisait croire, quand on cliquait,
+  // qu'il ne se passait rien.
+  void inspecter_(root, id);
   for (const noeud of root.querySelectorAll("[data-graphe-noeud]")) {
     noeud.classList.toggle("est-designe", noeud.dataset.grapheNoeud === id);
   }
@@ -422,6 +432,15 @@ function dessiner(root) {
   // Les traits du schéma ne peuvent se poser qu'une fois les boîtes mesurées :
   // leur départ dépend de la hauteur réelle de chacune, donc du rendu.
   if (etat.onglet === "schema") requestAnimationFrame(() => { if (root.isConnected) tracerLesLiens(root); });
+
+  // Le panneau de l'arrêté reste ouvert d'une question à l'autre — c'est ce
+  // qu'on veut quand on travaille avec le texte sous les yeux. Encore faut-il
+  // qu'il montre l'article de la question **courante** : il gardait celui de la
+  // précédente, ou affichait « article non porté » pour un article qu'on
+  // n'était simplement pas encore allé chercher.
+  if (etat.articleOuvert && etat.onglet === "questionnaire") {
+    for (const numero of articlesDeLaQuestion(questionCourante())) void ouvrirLArticle(root, numero);
+  }
 }
 
 function dessinerAvancement(a) {
@@ -589,19 +608,39 @@ function dessinerQuestion(question) {
         <button type="button" class="incendie-ouvrir-article" data-incendie-article="${escapeHtml(question.article ?? "")}"
                 aria-expanded="${etat.articleOuvert}">
           ${svgIcon("book", { className: "octicon" })}
-          ${etat.articleOuvert ? "Masquer l'article" : `Lire l'article ${escapeHtml(question.article ?? "")} en entier`}
+          ${etat.articleOuvert ? "Masquer le texte" : `Lire ${escapeHtml(nommerLesArticles(question))} en entier`}
         </button>
-        ${etat.articleOuvert ? dessinerArticleDeLaQuestion(question) : ""}
+        ${etat.articleOuvert ? articlesDeLaQuestion(question).map(dessinerArticleLu).join("") : ""}
       </div>
     </div>
   `;
 }
 
-/** L'article de la question courante : celui qu'on a déjà lu, ou l'attente. */
-function dessinerArticleDeLaQuestion(question) {
-  const article = etat.articles[String(question.article)];
-  if (article === "chargement") return `<p class="gh-text-muted">Ouverture de l'arrêté…</p>`;
-  if (!article) return `<p class="gh-text-muted">Cet article n'est pas porté par cette version.</p>`;
+/**
+ * Les articles qu'une question met en jeu — parfois deux.
+ *
+ * « Les planchers de ces logements répondent-ils aux caractéristiques de
+ * l'article 6 ? » est une condition de l'article 3, 5°) : c'est bien de
+ * l'article 3 qu'elle sort. Mais celui qui répond a besoin de l'article 6, que
+ * la question nomme. Ouvrir l'un sans l'autre était déroutant à juste titre.
+ */
+function articlesDeLaQuestion(question) {
+  if (!question) return [];
+  return [question.article, question.articleAussi].filter(Boolean).map(String);
+}
+
+/** Comment annoncer le bouton : un article, ou deux. */
+function nommerLesArticles(question) {
+  const articles = articlesDeLaQuestion(question);
+  if (articles.length <= 1) return `l'article ${articles[0] ?? ""}`;
+  return `les articles ${articles.join(" et ")}`;
+}
+
+/** Un article déjà lu, ou l'attente de sa lecture. */
+function dessinerArticleLu(numero) {
+  const article = etat.articles[String(numero)];
+  if (article === "chargement" || article === undefined) return `<p class="gh-text-muted">Ouverture de l'article ${escapeHtml(numero)}…</p>`;
+  if (!article) return `<p class="gh-text-muted">L'article ${escapeHtml(numero)} n'est pas porté par cette version.</p>`;
   return dessinerArticle(article);
 }
 
@@ -748,18 +787,38 @@ function dessinerArticle(documentation) {
  * d'erreur ne ferait ce travail : il faudrait savoir d'avance qu'il y a erreur.
  */
 function dessinerBatiment(vue) {
-  const dessin = dessinerLeBatiment(etat.reponses, { classement: vue?.faits?.classement ?? null });
-  if (dessin.vide) {
+  const classement = vue?.faits?.classement ?? null;
+  const coupe = dessinerLaCoupe(etat.reponses, { classement });
+  const plan = dessinerLePlan(etat.reponses);
+  if (coupe.vide && plan.vide) {
     return `
       <aside class="incendie-batiment est-vide">
         <p class="gh-text-muted">Le bâtiment se dessinera ici à mesure des réponses — il montre ce que
         le référentiel a compris, pas le projet.</p>
       </aside>`;
   }
+
+  // La coupe montre ce qui s'empile, le plan ce qui se mesure à plat. Ni l'une
+  // ni l'autre ne se déduit de sa voisine : la distance de la porte palière la
+  // plus éloignée à l'escalier — celle qui sépare la troisième famille A de la
+  // troisième famille B — ne se voit qu'en plan.
+  const vues = [["coupe", "Coupe", coupe], ["plan", "Plan", plan]].filter(([, , d]) => !d.vide);
+  const choisie = vues.find(([cle]) => cle === etat.vueDuBatiment) ?? vues[0];
+  const [, , dessin] = choisie;
+
   return `
     <aside class="incendie-batiment">
+      ${vues.length > 1 ? `
+        <div class="incendie-batiment__vues" role="tablist">
+          ${vues.map(([cle, libelle]) => `
+            <button type="button" role="tab" aria-selected="${choisie[0] === cle}"
+                    class="incendie-batiment__vue${choisie[0] === cle ? " est-actif" : ""}"
+                    data-incendie-vue-batiment="${cle}">${escapeHtml(libelle)}</button>
+          `).join("")}
+        </div>` : ""}
       <div class="incendie-batiment__dessin">${dessin.svg}</div>
-      <p class="incendie-batiment__legende">${escapeHtml(resumer(dessin.batiment, vue?.faits?.classement ?? null))}</p>
+      <p class="incendie-batiment__legende">${escapeHtml(choisie[0] === "plan"
+        ? resumerLePlan(dessin.batiment) : resumer(dessin.batiment, classement))}</p>
       <p class="incendie-batiment__avertissement">Schéma de relecture : ni proportions, ni géométrie réelle.</p>
     </aside>
   `;
@@ -860,11 +919,6 @@ function dessinerDetail() {
   }
   return `
     ${dessinerConclusion(module)}
-    <div class="incendie-detail__outils">
-      <button type="button" class="incendie-inspecter" data-incendie-inspecter="${escapeHtml(module.id)}">
-        ${svgIcon("checklist", { className: "octicon" })} Ouvrir le détail de ce module
-      </button>
-    </div>
     ${dessinerInspection(module)}
   `;
 }
@@ -872,22 +926,22 @@ function dessinerDetail() {
 /** Ce que l'inspection a rapporté : les liaisons, l'article, et les règles. */
 function dessinerInspection(module) {
   const inspection = etat.inspection;
-  if (!inspection || inspection.id !== module.id) return "";
-  if (inspection.etat === "chargement") return `<p class="gh-text-muted">Lecture du dépouillement…</p>`;
-  if (inspection.etat === "ferme") {
-    return `
-      <div class="incendie-ferme">
-        ${svgIcon("shield-lock", { className: "octicon" })}
-        <p>${escapeHtml(inspection.raison)}</p>
-      </div>`;
-  }
+  if (!inspection || inspection.id !== module.id) return `<p class="gh-text-muted">Lecture du détail…</p>`;
+  if (inspection.etat === "chargement") return `<p class="gh-text-muted">Lecture du détail…</p>`;
   if (inspection.etat === "erreur") return `<p class="fondations-erreur">${escapeHtml(inspection.raison)}</p>`;
 
   const d = inspection.donnees;
   return `
     <div class="incendie-inspection">
+      ${d.repond ? `<p class="incendie-inspection__repond">${svgIcon("issue-tracked-by", { className: "octicon" })} ${escapeHtml(d.repond)}</p>` : ""}
       ${dessinerLiaisons(d.liaisons)}
-      ${dessinerRegles(d.regles)}
+      ${d.reglesFermees ? `
+        <div class="incendie-ferme">
+          ${svgIcon("shield-lock", { className: "octicon" })}
+          <p>Les règles codées de ce module ne s'ouvrent que pour les comptes inscrits dans
+          « INCENDIE_INSPECTEURS ». C'est volontaire : la table des conditions est le travail de
+          dépouillement, et elle ne se partage pas avec un projet.</p>
+        </div>` : dessinerRegles(d.regles)}
       ${dessinerArticle(d.documentation)}
     </div>
   `;

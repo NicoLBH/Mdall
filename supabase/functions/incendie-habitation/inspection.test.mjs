@@ -78,3 +78,21 @@ test("l'inspection rend les liaisons du module, pas le graphe entier", () => {
 test("un module inconnu se refuse plutôt que de rendre du vide", () => {
   assert.equal(expliquer("ce-module-n-existe-pas", {}).ok, false);
 });
+
+test("la serrure ne ferme que les règles, pas le détail entier", () => {
+  // Refuser le panneau entier faisait croire à une panne, et privait tout le
+  // monde de ce qui pouvait se montrer : la question à laquelle le module
+  // répond, ce dont il dépend, ce qui dépend de lui, l'article. Seule la table
+  // des conditions est le travail, et elle seule attend la clé.
+  const ferme = expliquer("planchers", {}, { avecRegles: false });
+  assert.equal(ferme.ok, true);
+  assert.equal(ferme.regles, null);
+  assert.equal(ferme.reglesFermees, true);
+  assert.ok(ferme.repond);
+  assert.ok(ferme.liaisons.amont.length > 0);
+  assert.ok(ferme.documentation.texte.length > 100);
+
+  const ouvert = expliquer("planchers", {});
+  assert.equal(ouvert.reglesFermees, false);
+  assert.ok(ouvert.regles.length > 0);
+});

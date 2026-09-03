@@ -538,6 +538,16 @@ export const videOrdures = {
   produit: "videOrduresConduit",
   source: { article: "64" },
   regles: [
+    // La portée d'abord : l'article 64 ne vise que les troisième et quatrième
+    // familles. Demander s'il y a un vide-ordures dans une maison individuelle
+    // n'avait aucun effet visible, et une question sans effet se répond au
+    // hasard.
+    {
+      si: { famille: ["1", "2"] },
+      alors: { valeur: "aucune prescription par cet article",
+        sansObjet: "L'article 64 ne vise que les troisième et quatrième familles." },
+      source: reglement("64", "premier alinéa", "Dans les habitations des 3ème et 4ème familles, les conduits de chute de vide-ordures doivent assurer un coupe-feu de traversée respectivement de degré 30 minutes et 60 minutes.")
+    },
     {
       si: { videOrdures: false },
       alors: { valeur: "sans objet", sansObjet: "Le bâtiment ne comporte pas de vide-ordures." },
@@ -586,6 +596,14 @@ export const localReceptacleOrdures = {
   produit: "localReceptacleOrdures",
   source: { article: "64", paragraphe: "dernier alinéa" },
   regles: [
+    // La portée d'abord, comme au module voisin : l'article 64 ne vise que les
+    // troisième et quatrième familles.
+    {
+      si: { famille: ["1", "2"] },
+      alors: { valeur: "aucune prescription par cet article",
+        sansObjet: "L'article 64 ne vise que les troisième et quatrième familles." },
+      source: reglement("64", "premier alinéa", "Dans les habitations des 3ème et 4ème familles, les conduits de chute de vide-ordures doivent assurer un coupe-feu de traversée respectivement de degré 30 minutes et 60 minutes.")
+    },
     {
       si: { videOrdures: false },
       alors: { valeur: "sans objet", sansObjet: "Le bâtiment ne comporte pas de vide-ordures." },

@@ -119,6 +119,7 @@ function sourceMontrable(source) {
  */
 export function consulter(reponses = {}) {
   const { faits, conclusions } = raisonner(CORPUS, reponses);
+  const graphe = grapheDu(CORPUS);
 
   const modules = conclusions.map((c) => ({
     id: c.module.id,
@@ -144,11 +145,29 @@ export function consulter(reponses = {}) {
   // Ce qu'il reste à demander, par vagues, dans l'ordre où les modules en ont
   // besoin — la racine d'abord.
   //
+  // ## L'ordre ne se décrète pas, il se déduit
+  //
   // Un module dont un amont n'a pas encore conclu ne pose pas ses questions :
   // demander la classe du système de façade avant de savoir de quelle famille
   // on parle donne l'impression de remplir un formulaire au hasard, et c'est
   // ainsi qu'on se fait abandonner en cours de route. La vague suivante
-  // s'ouvrira d'elle-même quand l'amont aura conclu.
+  // s'ouvre d'elle-même quand l'amont a conclu.
+  //
+  // ## Ce qui ne suffisait pas
+  //
+  // Cette règle seule laissait passer les questions des modules qui ne
+  // **déclaraient pas** leur portée. « Comment la circulation est-elle
+  // désenfumée ? » était posée à quelqu'un en train de décrire une deuxième
+  // famille — où les circulations ne se désenfument pas — parce que le module
+  // de l'article 37 ne dépendait de rien : sa première règle ne butait que sur
+  // une question source, alors il la posait.
+  //
+  // La correction n'est pas ici, elle est dans les modules : chacun commence
+  // désormais par constater sa portée — « aucune circulation horizontale
+  // protégée n'est exigée » — et conclut « sans objet » sans rien demander.
+  // L'ordre des questions se déduit alors du graphe, et non de la numérotation
+  // des articles. Un test vérifie qu'aucune question posée ne peut mener, quelle
+  // que soit la réponse, à un « sans objet ».
   const enAttente = new Set(modules.filter((m) => m.statut !== "conclu").map((m) => m.produit));
   const aDemander = [];
   for (const module of modules) {
@@ -171,13 +190,13 @@ export function consulter(reponses = {}) {
     faits,
     modules,
     questions: aDemander,
-    graphe: grapheDu(CORPUS),
+    graphe,
     avancement: {
       modules: modules.length,
       conclus: conclus.length,
       enAttente: modules.length - conclus.length,
       questionsPosees: Object.keys(reponses).filter((c) => questionDe(c)).length,
-      questionsSourceEnTout: grapheDu(CORPUS).questionsSource.length
+      questionsSourceEnTout: graphe.questionsSource.length
     },
     portee: PORTEE,
     // Ce que l'écran peut ouvrir sous une question : le texte lui-même.
@@ -250,14 +269,23 @@ export function lireArticle(numero) {
  * elle est fermée à clé ailleurs : la fonction ne l'ouvre que pour les comptes
  * inscrits dans le secret. Ici, on se contente de mettre en forme.
  */
-export function expliquer(id, reponses = {}) {
+export function expliquer(id, reponses = {}, { avecRegles = true } = {}) {
   const module = CORPUS.find((m) => m.id === id || m.produit === id);
   if (!module) return { ok: false, raison: `Ce référentiel ne porte pas « ${id} ».` };
   const vue = consulter(reponses);
+  const explique = expliquerModule(module, vue, questionDe);
+  // Ce qui se montre à tout le monde et ce qui ne se montre qu'à qui vérifie ne
+  // sont pas le même détail. La question à laquelle le module répond, ce dont il
+  // dépend, ce qui dépend de lui, l'article : tout cela est public — c'est la
+  // carte, et elle sert à comprendre. Seule la **table des conditions** reste
+  // sous clé, parce qu'elle est le travail. Refuser le panneau entier faisait
+  // croire à une panne et privait tout le monde de ce qui pouvait se montrer.
   return {
     ok: true,
     version: VERSION,
-    ...expliquerModule(module, vue, questionDe),
+    ...explique,
+    regles: avecRegles ? explique.regles : null,
+    reglesFermees: !avecRegles,
     documentation: documentation(module.source?.article),
     // Ce qui entre dans ce module, et ce qui en sort : les liaisons, vues du
     // module plutôt que du graphe entier.

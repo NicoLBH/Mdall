@@ -91,24 +91,18 @@ export async function lireArticleIncendie(numero, options = {}) {
 }
 
 /**
- * Le dépouillement d'un module — les règles codées, dans leur ordre.
+ * Le détail d'un module : ce dont il dépend, ce qui dépend de lui, son article
+ * — et, pour qui a le droit de vérifier, les règles codées dans leur ordre.
  *
- * Cette porte est fermée à clé côté serveur : elle ne s'ouvre que pour les
- * comptes inscrits dans le secret `INCENDIE_INSPECTEURS`. Le refus n'est pas
- * une panne, c'est la règle du produit — on le dit à l'écran plutôt que de
- * laisser croire à un incident.
+ * La table des conditions est la seule part qui attende une clé, tenue côté
+ * serveur par le secret `INCENDIE_INSPECTEURS`. Le reste se montre à tout le
+ * monde : c'est la carte, et elle sert à comprendre.
  */
 export async function inspecterIncendie(id, reponses = {}, options = {}) {
-  try {
-    const charge = await appeler({ inspection: id, reponses }, options);
-    const rendu = charge.inspection ?? charge;
-    if (!rendu || typeof rendu.ok !== "boolean") {
-      throw new Error("Le référentiel a répondu, mais pas ce qui était attendu.");
-    }
-    return rendu;
-  } catch (erreur) {
-    const message = String(erreur?.message ?? erreur);
-    if (/INCENDIE_INSPECTEURS/.test(message)) return { ok: false, ferme: true, raison: message };
-    throw erreur;
+  const charge = await appeler({ inspection: id, reponses }, options);
+  const rendu = charge.inspection ?? charge;
+  if (!rendu || typeof rendu.ok !== "boolean") {
+    throw new Error("Le référentiel a répondu, mais pas ce qui était attendu.");
   }
+  return rendu;
 }

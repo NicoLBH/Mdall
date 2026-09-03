@@ -341,6 +341,14 @@ export const niveauMaximalFoyerPersonnesAgees = {
   produit: "niveauMaximalFoyerPersonnesAgees",
   source: { article: "72", paragraphe: "deuxième alinéa" },
   regles: [
+    // Ce module ne pose ses questions qu'une fois la portée établie : sans ce
+    // garde-fou, on demandait la solution retenue avant de savoir si le texte
+    // en exigeait une.
+    {
+      si: { regimeLogementFoyer: "sans objet" },
+      alors: { valeur: "sans objet", sansObjet: "Le bâtiment ne renferme pas de logement-foyer." },
+      source: lecture("65", "portée du titre V", "Le titre V ne vise que les logements-foyers. Sans logement-foyer, aucun de ses articles n'a d'objet.")
+    },
     {
       si: { typeLogementFoyer: { differentDe: "personnesAgees" } },
       alors: { valeur: "sans objet", sansObjet: "Le chapitre III ne vise que les logements-foyers pour personnes âgées autonomes." },
