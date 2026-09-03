@@ -113,6 +113,17 @@ test("désigner une carte resserre sur son chemin décisionnel complet", () => {
   assert.deepEqual([...noeudsVisibles(AVEC_ETATS, { chemin: "b", montrerTout: true })].sort(), ["a", "b", "d"]);
 });
 
+test("le chemin ne ramène pas les cartes qu'on venait d'écarter", () => {
+  // Le chemin de « a » traverse « c », qui est sans objet. Tant que le chemin
+  // se calculait sur le graphe entier, désigner une carte verte faisait
+  // réapparaître des cartes grises — alors qu'on n'avait pas demandé à les voir.
+  assert.deepEqual([...noeudsVisibles(AVEC_ETATS, { chemin: "a" })].sort(), ["a", "b", "d"]);
+  // Et quand on a demandé à tout voir, elles reviennent : c'est le même chemin,
+  // sur un graphe où plus rien n'est écarté.
+  assert.deepEqual([...noeudsVisibles(AVEC_ETATS, { chemin: "a", montrerTout: true })].sort(),
+    ["a", "b", "c", "d"]);
+});
+
 test("l'aval remonte de proche en proche, comme l'amont", () => {
   const aval = cheminAval("a", AVEC_ETATS);
   assert.equal(aval.get("a"), 0);

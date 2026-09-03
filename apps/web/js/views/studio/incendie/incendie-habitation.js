@@ -35,7 +35,10 @@ import {
 import {
   lireLaNotice, enregistrerLaNotice, lireLesChoix, retenirLeChoix
 } from "../../../services/incendie-notice-supabase.js";
-import { dessinerLaNotice, paragraphesDe, departementDe } from "./notice-ecran.js";
+import { dessinerLaNotice, paragraphesDe, departementDe, noticeEnHtml } from "./notice-ecran.js";
+import { brancherChampRedige } from "../../ui/champ-redige.js";
+import { collerLesTitres } from "../../ui/titres-colles.js";
+import { fermerQuandSorti } from "../../ui/fermer-hors-ecran.js";
 import { renderMarkdownToHtml } from "../../../utils/markdown-renderer.js";
 import {
   dessinerGrapheLiaisons, brancherGrapheLiaisons, tracerLesLiens as tracerLesLiensDuGraphe,
@@ -148,6 +151,7 @@ function oublierLeProjet() {
   etat.questionsVues = {};
   etat.zoom = 1;
   etat.pleinEcran = false;
+  figerLeDocument();
   etat.montrerTout = false;
   etat.chemin = null;
   etat.articleOuvert = false;
@@ -160,6 +164,7 @@ function oublierLeProjet() {
   etat.noticeChargee = false;
   etat.noticeErreur = "";
   etat.venuesDeLaMemoire = {};
+  fermerLaPhrase();
   // Les articles, eux, restent : le texte de l'arrêté ne dépend pas du projet.
 }
 
@@ -238,23 +243,28 @@ function questionCourante() {
 }
 
 function brancher(root) {
+  // Le champ rédigé de la notice — titre, cases, éditeur — est un composant :
+  // il ne connaît ni la notice ni la base, il signale des gestes.
+  brancherChampRedige(root, {
+    onOption: (cle, libelle) => { void choisir(root, cle, libelle); },
+    onTexte: (cle, texte) => { void reprendreLaPhrase(root, cle, texte); },
+    onOnglet: (cle, apercu) => { etat.noticeApercu = apercu ? cle : null; dessiner(root); },
+    onRendreLaMain: (cle) => { void reprendreLaPhrase(root, cle, ""); }
+  });
+
+  // Une phrase se prend aussi au clavier : elle porte `role="button"`, et une
+  // chose qui s'annonce comme un bouton doit répondre à la barre d'espace.
+  root.addEventListener("keydown", (evenement) => {
+    if (evenement.key !== "Enter" && evenement.key !== " ") return;
+    const phrase = evenement.target.closest?.("[data-notice-paragraphe]");
+    if (!phrase) return;
+    evenement.preventDefault();
+    ouvrirLaPhrase(root, phrase.dataset.noticeParagraphe);
+  });
+
   // Une réponse relance le raisonnement : c'est lui qui décide de la question
   // suivante, et il n'y a pas de bouton « valider » parce qu'il n'y a pas de page.
   root.addEventListener("change", (evenement) => {
-    const saisie = evenement.target.closest("[data-notice-saisie]");
-    if (saisie) {
-      const cle = saisie.dataset.noticeSaisie;
-      const paragraphe = paragraphesDe(etat.notice).find((p) => p.cle === cle);
-      if (paragraphe?.champ) {
-        etat.complements[cle] = { ...(etat.complements[cle] ?? {}), [paragraphe.champ.cle]: saisie.value.trim() };
-        // Une réponse tapée à la main entre dans la bibliothèque du seul fait
-        // qu'on l'a retenue : c'est ainsi qu'elle se construit, et non par une
-        // liste écrite à l'avance.
-        void retenirLeChoix(paragraphe.champ.rubrique, saisie.value.trim(), departementDe(etat.entete.adresse));
-        void rediger(root, { enregistrer: true });
-      }
-      return;
-    }
     const entete = evenement.target.closest("[data-notice-entete]");
     if (entete) {
       etat.entete = { ...etat.entete, [entete.dataset.noticeEntete]: entete.value.trim() };
@@ -321,11 +331,8 @@ function brancher(root) {
       dessiner(root);
       return;
     }
-    const option = evenement.target.closest("[data-notice-option]");
-    if (option) {
-      void choisir(root, option.dataset.noticeOption, option.dataset.noticeValeur);
-      return;
-    }
+    const phrase = evenement.target.closest("[data-notice-paragraphe]");
+    if (phrase) { ouvrirLaPhrase(root, phrase.dataset.noticeParagraphe); return; }
     if (evenement.target.closest("[data-notice-copier]")) { void copierLaNotice(root); return; }
 
     const vueBatiment = evenement.target.closest("[data-incendie-vue-batiment]");
@@ -357,6 +364,7 @@ function brancher(root) {
   document.addEventListener("keydown", (evenement) => {
     if (evenement.key !== "Escape" || !etat.pleinEcran || !root.isConnected) return;
     etat.pleinEcran = false;
+    figerLeDocument();
     dessiner(root);
   });
 
@@ -378,7 +386,7 @@ function brancher(root) {
       appliquerZoomAuGraphe(root, etat.zoom);
       tracerLesLiens(root);
     },
-    onPleinEcran: () => { etat.pleinEcran = !etat.pleinEcran; dessiner(root); },
+    onPleinEcran: () => { etat.pleinEcran = !etat.pleinEcran; figerLeDocument(); dessiner(root); },
     onToutMontrer: () => void changerLAffichage(root, { montrerTout: !etat.montrerTout }),
     onSortirDuChemin: () => { etat.survole = null; etat.inspection = null; void changerLAffichage(root, { chemin: null }); }
   });
@@ -514,6 +522,106 @@ async function choisir(root, cle, libelle) {
   await rediger(root, { enregistrer: true });
 }
 
+/* ------------------------------------------------------------------ *
+ * La phrase qu'on reprend
+ * ------------------------------------------------------------------ */
+
+/** Le bas de l'en-tête flottant : au-dessus, on ne lit plus. */
+function hautDeLApplication() {
+  if (typeof document === "undefined") return 0;
+  const declare = getComputedStyle(document.documentElement).getPropertyValue("--app-top");
+  return Number.parseFloat(declare) || 0;
+}
+
+/** Ce qui referme l'éditeur quand il sort de l'écran, à oublier ensuite. */
+let surveillanceDeLaPhrase = null;
+/** Le bandeau des titres collés, à débrancher quand on quitte l'onglet. */
+let titresDeLaNotice = null;
+
+/**
+ * Ouvrir — ou refermer — l'éditeur d'une phrase.
+ *
+ * Une seule phrase à la fois : deux éditeurs ouverts dans un document long, ce
+ * sont deux endroits où le curseur peut être, et l'on tape dans le mauvais.
+ */
+function ouvrirLaPhrase(root, cle) {
+  const memePhrase = etat.noticeOuverte === cle;
+  fermerLaPhrase();
+  etat.noticeOuverte = memePhrase ? null : cle;
+  dessiner(root);
+}
+
+/** Refermer, et cesser de surveiller. */
+function fermerLaPhrase() {
+  surveillanceDeLaPhrase?.();
+  surveillanceDeLaPhrase = null;
+  etat.noticeOuverte = null;
+  etat.noticeApercu = null;
+}
+
+/**
+ * Le texte repris, tel qu'il partira en mairie.
+ *
+ * Ce qui est écrit à la main l'emporte sur ce que la trame propose, et se garde
+ * avec les compléments : le serveur relit `texte` et rend la phrase telle
+ * quelle. Une reprise vide rend la main à la phrase proposée — c'est le geste
+ * inverse, et il doit exister, sinon on ne peut plus revenir.
+ */
+async function reprendreLaPhrase(root, cle, texte) {
+  const paragraphe = paragraphesDe(etat.notice).find((p) => p.cle === cle);
+  if (!paragraphe) return;
+  const propre = String(texte ?? "").trim();
+  const complement = { ...(etat.complements[cle] ?? {}) };
+  // Une reprise identique à la proposition n'est pas une reprise : la garder
+  // figerait la phrase, et elle cesserait de suivre les réponses.
+  if (!propre || propre === String(paragraphe.propose ?? "").trim()) delete complement.texte;
+  else complement.texte = propre;
+  etat.complements[cle] = complement;
+  await rediger(root, { enregistrer: true });
+}
+
+/**
+ * Ce qui vit après le tracé de la notice : les titres collés, et la fermeture.
+ *
+ * Les deux sont des composants qui ne savent rien du feu — ils serviront au
+ * CCTP, aux notes sur un plan — et l'écran ne fait ici que les brancher sur ce
+ * qu'il vient de dessiner.
+ */
+function apresLaNotice(root) {
+  titresDeLaNotice?.arreter();
+  titresDeLaNotice = null;
+  surveillanceDeLaPhrase?.();
+  surveillanceDeLaPhrase = null;
+
+  const document_ = root.querySelector("[data-notice-document]");
+  if (!document_) return;
+  titresDeLaNotice = collerLesTitres(document_, {
+    niveau1: ".notice-titre",
+    niveau2: ".notice-sous-titre",
+    // L'en-tête de l'application flotte au-dessus de la page : ce qui passe
+    // dessous n'est plus lu, même si la fenêtre dit le contraire. Le composant
+    // n'a pas à connaître cette hauteur — on la lui donne.
+    hautDeLecture: () => hautDeLApplication(),
+    // La ligne de lecture passe sous le bandeau lui-même : sinon le titre
+    // changerait au moment où il disparaît derrière, c'est-à-dire trop tard.
+    marge: 44
+  });
+
+  if (!etat.noticeOuverte) return;
+  const editeur = root.querySelector("[data-champ-editeur]");
+  if (!editeur) return;
+  // Sans cadre nommé : l'observateur tient déjà compte des panneaux qui
+  // rognent, et lui désigner un conteneur reviendrait à écrire ici la mise en
+  // page de l'application.
+  surveillanceDeLaPhrase = fermerQuandSorti(editeur, {
+    onSortie: () => {
+      if (!root.isConnected || etat.onglet !== "notice") return;
+      fermerLaPhrase();
+      dessiner(root);
+    }
+  });
+}
+
 /**
  * La notice dans le presse-papier, en texte.
  *
@@ -524,10 +632,25 @@ async function copierLaNotice(root) {
   const texte = etat.notice?.texte;
   if (!texte) return;
   try {
-    await navigator.clipboard.writeText(texte);
+    // Le HTML d'abord, pour que Word garde les titres et le gras ; le texte à
+    // côté, pour tout ce qui ne sait pas lire du HTML. Un navigateur sans
+    // `ClipboardItem` retombe simplement sur le texte.
+    if (typeof ClipboardItem === "function" && navigator.clipboard?.write) {
+      await navigator.clipboard.write([new ClipboardItem({
+        "text/html": new Blob([noticeEnHtml(etat.notice)], { type: "text/html" }),
+        "text/plain": new Blob([texte], { type: "text/plain" })
+      })]);
+    } else {
+      await navigator.clipboard.writeText(texte);
+    }
     etat.noticeCopiee = true;
   } catch {
-    etat.noticeCopiee = false;
+    try {
+      await navigator.clipboard.writeText(texte);
+      etat.noticeCopiee = true;
+    } catch {
+      etat.noticeCopiee = false;
+    }
   }
   const bouton = root.querySelector("[data-notice-copier]");
   if (bouton) {
@@ -584,6 +707,21 @@ async function changerLAffichage(root, changements) {
 function rafraichirLeDetail(root) {
   const hote = root?.querySelector("[data-graphe-detail]");
   if (hote) hote.innerHTML = dessinerDetail();
+}
+
+/**
+ * Le plein écran fige la page derrière lui.
+ *
+ * Deux ascenseurs verticaux superposés se disputent la molette : on croit
+ * faire défiler le schéma et c'est la page qui bouge, ou l'inverse. Le plein
+ * écran couvre la page — elle n'a donc plus à défiler.
+ */
+function figerLeDocument() {
+  if (typeof document === "undefined") return;
+  // Sur les deux : selon la page, c'est `html` ou `body` qui porte le
+  // défilement, et n'en figer qu'un laissait la seconde barre de défilement.
+  document.body.classList.toggle("est-fige-par-le-graphe", etat.pleinEcran);
+  document.documentElement.classList.toggle("est-fige-par-le-graphe", etat.pleinEcran);
 }
 
 function designer(root, id) {
@@ -648,6 +786,7 @@ function dessiner(root) {
           ${vue && etat.onglet === "notice" ? dessinerLaNotice({
             notice: etat.notice, complements: etat.complements, bibliotheque: etat.bibliotheque,
             departement: departementDe(etat.entete.adresse), venuesDeLaMemoire: etat.venuesDeLaMemoire,
+            ouvert: etat.noticeOuverte, apercu: etat.noticeApercu,
             enCours: etat.enCours, erreur: etat.noticeErreur }) : ""}
           ${vue && etat.onglet === "portee" ? dessinerPortee(vue) : ""}
         </div>
@@ -658,6 +797,10 @@ function dessiner(root) {
   // Les traits du schéma ne peuvent se poser qu'une fois les boîtes mesurées :
   // leur départ dépend de la hauteur réelle de chacune, donc du rendu.
   if (etat.onglet === "schema") requestAnimationFrame(() => { if (root.isConnected) tracerLesLiens(root); });
+
+  // Les titres collés se mesurent, eux aussi, sur ce qui est déjà en page.
+  if (etat.onglet === "notice") requestAnimationFrame(() => { if (root.isConnected) apresLaNotice(root); });
+  else { titresDeLaNotice?.arreter(); titresDeLaNotice = null; }
 
   // Le panneau de l'arrêté reste ouvert d'une question à l'autre — c'est ce
   // qu'on veut quand on travaille avec le texte sous les yeux. Encore faut-il
@@ -1080,12 +1223,8 @@ function dessinerSchema(vue) {
     peutToutMontrer: etat.peutToutMontrer,
     chemin: etat.chemin,
     rangNomme: "Niveau",
-    legende: `
-      ${vue.graphe.noeuds.length} modules, ${vue.graphe.liens.length} liaisons,
-      <strong>${vue.graphe.questionsSource.length} questions à la source</strong> —
-      celles qu'aucun module ne sait déduire, et qu'il faut donc demander.
-      Les colonnes se lisent de gauche à droite : ce qui est à gauche décide de ce qui est à droite.
-      <em>Cliquez sur une carte pour ouvrir son article et, si vous en avez le droit, ses règles.</em>`,
+    legende: `${vue.graphe.noeuds.length} modules, ${vue.graphe.liens.length} liaisons,
+      <strong>${vue.graphe.questionsSource.length} questions à la source</strong>`,
     detail: dessinerDetail()
   });
 }

@@ -29,20 +29,21 @@
  */
 
 /**
- * Les comptes qui gardent la clé même sans secret déployé.
+ * Les comptes qui gardent la clé sans passer par le secret.
  *
- * Le mode de vérification ne sert à rien s'il faut d'abord poser un secret sur
- * l'instance : on ne vérifie pas le dépouillement une fois, on le vérifie
- * pendant qu'on l'écrit. La liste est donc dans la source, et elle ne contient
- * que les auteurs du référentiel.
+ * La liste est vide, et c'est délibéré : une adresse écrite dans le dépôt y
+ * reste, elle voyage avec chaque copie du code et se retrouve dans l'historique
+ * même après avoir été retirée. Les comptes autorisés vivent donc **dans le
+ * secret** `INCENDIE_INSPECTEURS`, qui se change sans toucher au code et ne
+ * laisse pas de trace.
  *
- * Le secret `INCENDIE_INSPECTEURS` s'y **ajoute** — il ne la remplace pas. Le
- * jour où ces adresses doivent sortir du dépôt, on les déplace dans le secret
- * et l'on vide cette liste : rien d'autre ne change.
+ * Le point d'extension reste, parce qu'il documente où l'on brancherait un
+ * autre porteur de clé — un rôle en base, un jeton d'équipe — le jour où une
+ * liste d'adresses ne suffirait plus.
  */
-export const INSPECTEURS_DU_REFERENTIEL = ["nicolas.lebihan@socotec.com", "nicolas.lebihan@yahoo.fr"];
+export const INSPECTEURS_DU_REFERENTIEL = [];
 
-/** Les comptes autorisés à ouvrir le dépouillement. */
+/** Les comptes autorisés à ouvrir le dépouillement. Secret vide : personne. */
 export function inspecteursAutorises(secret) {
   return [
     ...INSPECTEURS_DU_REFERENTIEL,
