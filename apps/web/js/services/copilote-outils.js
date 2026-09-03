@@ -132,6 +132,33 @@ function clesDeMemoire(champ) {
  * attend « 4 » et « III ». Sans elle, le pré-remplissage posait une valeur que
  * la liste ne propose pas, donc ne pré-remplissait rien, sans le dire.
  */
+
+/**
+ * Les exigences du titre VI, et pourquoi elles se distinguent des autres.
+ *
+ * Tout le reste du référentiel incendie pend au classement : décrire le
+ * bâtiment est le préalable de n'importe quelle réponse. Le parc, lui, se juge
+ * sur ses propres axes — sa surface, ses niveaux au-dessus et au-dessous du
+ * niveau de référence, sa contiguïté. Exiger le nombre d'étages du bâtiment
+ * avant de dire à quel degré le parc doit être stable, ce serait refuser de
+ * répondre à une question qui a pourtant tout ce qu'il faut.
+ *
+ * Le classement reparaît à un seul endroit — l'isolement d'un parc contigu —
+ * et là, c'est le moteur qui réclamera ce qui lui manque, nommément.
+ */
+const EXIGENCES_DU_PARC = [
+  "parcDansLeChamp", "accesVehiculesLourds", "reactionAuFeuParc", "stabiliteParc",
+  "isolementParcContigu", "sasCommunicationParc", "facadesParc", "recoupementParc",
+  "boxesDansLeParcVerdict", "couvertureParc", "revetementCouvertureParc",
+  "distanceIssuesParc", "escaliersParc", "protectionEscaliersParc",
+  "conduitsParc", "ventilationParc", "solsParc", "circulationsParc",
+  "eclairageSecuriteParc", "detectionParc", "alarmeUsagersParc",
+  "moyensDeLutteParc", "colonneSecheParc", "extinctionAutomatiqueParc"
+];
+
+/** Vrai quand la question posée relève du parc, et non du bâtiment. */
+const porteSurLeParc = (entrees = {}) => EXIGENCES_DU_PARC.includes(texte(entrees.exigence));
+
 export const OUTILS = [
   {
     id: "profondeur_hors_gel",
@@ -337,11 +364,17 @@ export const OUTILS = [
       + "colonnes montantes électriques, conduits de ventilation et vide-ordures, les logements-foyers "
       + "des articles 65 à 76, et les dispositions diverses des articles 97 à 99 — ascenseurs, colonnes "
       + "sèches, circulation des piétons. "
+      + "Traite aussi les parcs de stationnement couverts annexes des articles 77 à 96, qui ne se jugent "
+      + "pas sur la famille mais sur leurs propres axes — surface, niveaux au-dessus et au-dessous du "
+      + "niveau de référence, contiguïté : stabilité au feu, isolement et sas, façades, recoupement, "
+      + "boxes, couverture, issues et escaliers, ventilation et désenfumage, détection, alarme, "
+      + "colonnes sèches et extinction automatique. "
       + "À appeler dès qu'une question porte sur la sécurité incendie d'un bâtiment d'habitation : "
       + "« en quelle famille ce bâtiment est-il classé ? », « quel est le degré coupe-feu des planchers "
-      + "à respecter ? », « quelle stabilité au feu pour les porteurs ? ». "
-      + "Ne traite ni les parcs de stationnement (articles 77 à 96), ni les bâtiments existants, "
-      + "ni les établissements recevant du public, ni les immeubles de grande hauteur.",
+      + "à respecter ? », « quelle stabilité au feu pour les porteurs ? », « le parc doit-il être "
+      + "recoupé ? ». "
+      + "Ne traite ni les parcs de plus de 6 000 m², ni les bâtiments existants, ni les établissements "
+      + "recevant du public, ni les immeubles de grande hauteur.",
     source: "arrêté du 31 janvier 1986 modifié, complété des commentaires SOCOTEC",
     entrees: [
       {
@@ -374,7 +407,11 @@ export const OUTILS = [
           "alarmeLogementFoyer", "enceinteUniteDeVie", "degagementsUniteDeVie",
           "escaliersServicesCollectifs", "niveauMaximalFoyerPersonnesAgees",
           "paroisCageAscenseur", "sasAscenseurSousSol", "appelPrioritairePompiers",
-          "colonneSeche", "circulationPietons"
+          "colonneSeche", "circulationPietons",
+          // Titre VI — parcs de stationnement couverts. La même liste sert de
+          // partage à l'exécution : une valeur écrite à deux endroits finit par
+          // diverger.
+          ...EXIGENCES_DU_PARC
         ],
         requis: true,
         aide: "Ce que l'on cherche. « classement » rend la famille elle-même ; les autres rendent "
@@ -383,19 +420,19 @@ export const OUTILS = [
       {
         cle: "logementsSuperposes",
         libelle: "Logements superposés",
-        type: "choix", valeurs: ["oui", "non"], requis: true,
+        type: "choix", valeurs: ["oui", "non"], requis: true, requisSaufSi: porteSurLeParc,
         aide: "Une habitation individuelle, au sens de l'arrêté, est un bâtiment sans logements superposés."
       },
       {
         cle: "etagesSurRdc",
         libelle: "Nombre d'étages sur rez-de-chaussée",
-        type: "nombre", unite: "étages", requis: true,
+        type: "nombre", unite: "étages", requis: true, requisSaufSi: porteSurLeParc,
         aide: "Le rez-de-chaussée n'est pas compté : un R+1 vaut 1."
       },
       {
         cle: "hauteurPlancherBasLogementLePlusHaut",
         libelle: "Hauteur du plancher bas du logement le plus haut",
-        type: "nombre", unite: "m", requis: true,
+        type: "nombre", unite: "m", requis: true, requisSaufSi: porteSurLeParc,
         depuisMemoire: ["hauteur-du-plancher-bas-du-logement-le-plus-haut", "plancher-bas-logement-le-plus-haut"],
         lireMemoire: nombreEcrit,
         aide: "Au-dessus du sol utilement accessible aux engins des services de secours — c'est le "
@@ -425,7 +462,7 @@ export const OUTILS = [
       {
         cle: "duplexOuTriplexAuDernierEtage",
         libelle: "Duplex ou triplex à l'étage le plus élevé",
-        type: "choix", valeurs: ["oui", "non"], requis: true,
+        type: "choix", valeurs: ["oui", "non"], requis: true, requisSaufSi: porteSurLeParc,
         aide: "Le 5°) de l'article 3 ne compte alors que le niveau bas de ces logements. Sans cette "
           + "réponse, le nombre d'étages retenu reste indéterminé et rien ne peut être classé."
       },
@@ -434,6 +471,48 @@ export const OUTILS = [
         libelle: "Le bâtiment comporte un sous-sol",
         type: "choix", valeurs: ["oui", "non"], requis: false,
         aide: "En première famille, l'article 6 ne vise que le plancher haut du sous-sol."
+      },
+      // Le parc ne se juge pas sur la famille : il a ses propres axes. Ces
+      // entrées ne servent qu'aux exigences du titre VI, et restent vides
+      // partout ailleurs.
+      {
+        cle: "parcDeStationnement",
+        libelle: "Le bâtiment comporte un parc de stationnement couvert annexe",
+        type: "choix", valeurs: ["oui", "non"], requis: false,
+        aide: "À renseigner pour toute exigence du titre VI (articles 77 à 96)."
+      },
+      {
+        cle: "surfaceParc",
+        libelle: "Surface du parc de stationnement",
+        type: "nombre", unite: "m²", requis: false,
+        aide: "Le titre VI ne s'applique qu'au-dessus de 100 m² et jusqu'à 6 000 m² inclus."
+      },
+      {
+        cle: "niveauxParcAuDessus",
+        libelle: "Niveaux du parc au-dessus du niveau de référence",
+        type: "nombre", unite: "niveaux", requis: false,
+        aide: "Sans compter le niveau de référence : un parc à simple rez-de-chaussée en compte zéro."
+      },
+      {
+        cle: "niveauxParcAuDessous",
+        libelle: "Niveaux du parc au-dessous du niveau de référence",
+        type: "nombre", unite: "niveaux", requis: false,
+        aide: "Sans compter le niveau de référence. C'est ce compte qui commande le recoupement, la "
+          + "ventilation mécanique, la détection, les colonnes sèches et l'extinction automatique."
+      },
+      {
+        cle: "hauteurPlancherBasDernierNiveauParc",
+        libelle: "Hauteur du plancher bas du dernier niveau du parc",
+        type: "nombre", unite: "m", requis: false,
+        aide: "Par rapport au niveau de référence, au-dessus ou au-dessous : c'est l'écart, pas "
+          + "l'altitude signée. L'article 81 s'arrête à 28 m."
+      },
+      {
+        cle: "parcContiguAImmeuble",
+        libelle: "Le parc est contigu à un immeuble d'habitation",
+        type: "choix", valeurs: ["oui", "non"], requis: false,
+        aide: "« Contigu » inclut le parc situé en dessous de l'immeuble. C'est le seul endroit où le "
+          + "classement commande une exigence du parc : 2 heures en 3ᵉ ou 4ᵉ famille, 1 heure en 2ᵉ."
       }
     ],
     sorties: [
@@ -478,6 +557,12 @@ export const OUTILS = [
       // dire serait supposer qu'il n'y en a pas. On le demande au copilote
       // seulement quand le référentiel bute dessus.
       poser("duplexOuTriplexAuDernierEtage", oui(entrees.duplexOuTriplexAuDernierEtage));
+      poser("parcDeStationnement", oui(entrees.parcDeStationnement));
+      poser("parcContiguAImmeuble", oui(entrees.parcContiguAImmeuble));
+      poser("surfaceParc", nombre(entrees.surfaceParc));
+      poser("niveauxParcAuDessus", nombre(entrees.niveauxParcAuDessus));
+      poser("niveauxParcAuDessous", nombre(entrees.niveauxParcAuDessous));
+      poser("hauteurPlancherBasDernierNiveauParc", nombre(entrees.hauteurPlancherBasDernierNiveauParc));
 
       const { demanderIncendie } = await import("./incendie-service.js");
       const rendu = await demanderIncendie(produit, reponses);
@@ -686,10 +771,21 @@ export function substitutionsNonJustifiees(outil, { entrees = {}, depuisMemoire 
  * Une valeur hors des choix déclarés compte comme manquante : accepter « 2b »
  * pour une zone sismique ferait calculer sur autre chose que ce qui a été
  * demandé, et le résultat aurait l'air d'un résultat.
+ *
+ * ## Une entrée peut être requise pour une partie du travail seulement
+ *
+ * Un outil qui grandit finit par répondre à deux familles de questions qui ne
+ * partent pas du même endroit — le référentiel incendie classe un bâtiment,
+ * mais juge un parc de stationnement sur ses propres axes. Réclamer les étages
+ * du bâtiment avant de dire à quel degré le parc doit être stable, ce serait
+ * refuser de répondre à une question qui a tout ce qu'il faut. `requisSaufSi`
+ * dit quand la question ne porte pas là-dessus. Ce qui manque alors vraiment,
+ * le calcul le dira lui-même, nommément.
  */
 export function entreesManquantes(outil, entrees = {}) {
   return (outil?.entrees ?? []).filter((entree) => {
     if (!entree.requis) return false;
+    if (entree.requisSaufSi?.(entrees)) return false;
 
     const valeur = entrees?.[entree.cle];
     if (valeur === null || valeur === undefined || texte(valeur) === "") return true;

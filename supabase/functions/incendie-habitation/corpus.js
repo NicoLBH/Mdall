@@ -28,9 +28,17 @@ import { MODULES_STRUCTURES } from "./modules-structures.js";
 import { MODULES_DEGAGEMENTS } from "./modules-degagements.js";
 import { MODULES_CONDUITS } from "./modules-conduits.js";
 import { MODULES_FOYERS } from "./modules-foyers.js";
+import { MODULES_PARCS } from "./modules-parcs.js";
 import { QUESTIONS, questionDe } from "./questions.js";
 
-export const CORPUS = [...MODULES_CLASSEMENT, ...MODULES_STRUCTURES, ...MODULES_DEGAGEMENTS, ...MODULES_CONDUITS, ...MODULES_FOYERS];
+export const CORPUS = [
+  ...MODULES_CLASSEMENT,
+  ...MODULES_STRUCTURES,
+  ...MODULES_DEGAGEMENTS,
+  ...MODULES_CONDUITS,
+  ...MODULES_FOYERS,
+  ...MODULES_PARCS
+];
 
 export const VERSION = "Incendie_Habitation_V1";
 
@@ -50,13 +58,13 @@ export const PORTEE = {
     "Conduits et gaines : prescriptions générales, gaz, ventilation et vide-ordures (articles 44 à 64)",
     "Logements-foyers (articles 65 à 76, dont les articles 73 à 76 supprimés en 2015)",
     "Dispositions diverses : ascenseurs, colonnes sèches, circulation des piétons (articles 97 à 99)",
-    "Dégagements — escaliers, circulations horizontales et dégagements protégés (articles 17 à 43)"
+    "Dégagements — escaliers, circulations horizontales et dégagements protégés (articles 17 à 43)",
+    "Parcs de stationnement couverts annexes, de plus de 100 m² et de 6 000 m² au plus (articles 77 à 96)"
   ],
   nonCouvert: [
     "Systèmes de façade des 3ᵉ et 4ᵉ familles (article 13) et isolation intérieure (article 16)",
     "Indice de propagation des couvertures (tableau de l'article 15)",
-
-    "Parcs de stationnement (articles 77 à 96), traités à part",
+    "Parcs de stationnement de plus de 6 000 m², qui relèvent d'une autre réglementation",
     "Bâtiments existants (titre VIII) et dispositions diverses (titres IX et X)"
   ]
 };
