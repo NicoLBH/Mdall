@@ -99,3 +99,21 @@ test("la porte du serveur rend la notice, son texte et son en-tête", () => {
   assert.equal(serialise.includes('"regles"'), false);
   assert.equal(serialise.includes('"si"'), false);
 });
+
+test("plusieurs réponses par défaut : c'est le bâtiment qui l'impose", () => {
+  // Un bâtiment a rarement un seul système de façade — enduit au
+  // rez-de-chaussée, bardage bois du premier au troisième. Contraindre à un
+  // choix unique obligeait à réécrire à la main ce que deux cases disaient.
+  const champs = TRAME.flatMap((s) => [...(s.paragraphes ?? []),
+    ...(s.sousSections ?? []).flatMap((ss) => ss.paragraphes)]).map((p) => p.champ).filter(Boolean);
+  assert.ok(champs.length >= 10);
+  for (const champ of champs) assert.equal(champ.multiple, true, champ.rubrique);
+});
+
+test("deux matières cochées se lisent dans la phrase", () => {
+  const notice = redigerLaNotice(consulter(DEUXIEME),
+    { "facades.parement": { systeme: "enduit sur maçonnerie et bardage bois ventilé" } });
+  const phrase = notice.sections.flatMap((s) => s.sousSections.flatMap((ss) => ss.paragraphes))
+    .find((p) => p.cle === "facades.parement")?.texte;
+  assert.match(phrase, /enduit sur maçonnerie et bardage bois ventilé/);
+});

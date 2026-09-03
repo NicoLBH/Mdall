@@ -27,7 +27,6 @@
  */
 
 import { escapeHtml } from "../../../utils/escape-html.js";
-import { renderMarkdownToHtml } from "../../../utils/markdown-renderer.js";
 import { svgIcon } from "../../../ui/icons.js";
 
 /**
@@ -73,68 +72,76 @@ export function propositionsDe(champ, bibliotheque = {}) {
   ].slice(0, 8);
 }
 
-/** La notice, à gauche : ce qui partira en mairie. */
-function dessinerLeTexte(notice, entete) {
-  const renseignes = (entete ?? []).filter((c) => c.valeur);
+/**
+ * La notice et ses compléments, sur une seule grille.
+ *
+ * ## Pourquoi une grille, et pas deux colonnes qui défilent
+ *
+ * Deux colonnes indépendantes se désynchronisent dès que l'une est plus haute
+ * que l'autre — et elle l'est toujours : un formulaire prend trois fois la
+ * place d'une phrase. On se retrouvait à choisir la nature de la couverture en
+ * lisant, à gauche, le paragraphe des conduits et gaines.
+ *
+ * Une grille où **chaque phrase occupe une ligne** règle le problème une fois
+ * pour toutes : la hauteur d'une ligne est celle de son plus haut occupant, et
+ * la phrase est donc toujours en face de ce qui la complète. Rien à
+ * synchroniser, rien à mesurer — la mise en page le fait.
+ *
+ * Le blanc qui reste sous une phrase courte n'est pas un défaut : c'est ce qui
+ * distingue un document annoté d'un formulaire, et c'est là qu'on lit.
+ */
+function dessinerLeDocument(notice, complements, bibliotheque, departement) {
+  const lignes = [];
+  const ligne = (paragraphe) => {
+    const champ = paragraphe.champ;
+    lignes.push(`
+      <p class="notice-paragraphe${champ ? " est-completable" : ""}"
+         data-notice-paragraphe="${escapeHtml(paragraphe.cle)}">${escapeHtml(paragraphe.texte)}</p>
+      <div class="notice-cellule">${champ ? dessinerChamp(paragraphe, complements, bibliotheque) : ""}</div>
+    `);
+  };
+
+  for (const section of notice.sections ?? []) {
+    lignes.push(`<h5 class="notice-titre">${section.numero}. ${escapeHtml(section.titre)}</h5>`);
+    for (const p of section.paragraphes ?? []) ligne(p);
+    (section.sousSections ?? []).forEach((sous, i) => {
+      lignes.push(`<h6 class="notice-sous-titre">${section.numero}.${i + 1} ${escapeHtml(sous.titre)}</h6>`);
+      for (const p of sous.paragraphes ?? []) ligne(p);
+    });
+  }
+
+  const renseignes = (notice.entete ?? []).filter((c) => c.valeur);
   return `
-    <article class="notice-texte" data-notice-texte>
-      <header class="notice-texte__tete">
+    <div class="notice-document" data-notice-document>
+      <header class="notice-document__tete">
         <h4>Notice descriptive de sécurité</h4>
         <p>Pour les bâtiments d'habitation — arrêté du 31 janvier 1986 modifié</p>
       </header>
       ${renseignes.length ? `
         <dl class="notice-entete">
-          ${renseignes.map((c) => `
-            <dt>${escapeHtml(c.libelle)}</dt>
-            <dd>${escapeHtml(c.valeur)}</dd>
-          `).join("")}
+          ${renseignes.map((c) => `<dt>${escapeHtml(c.libelle)}</dt><dd>${escapeHtml(c.valeur)}</dd>`).join("")}
         </dl>` : ""}
-      ${(notice.sections ?? []).map((section) => `
-        <section class="notice-section">
-          <h5>${section.numero}. ${escapeHtml(section.titre)}</h5>
-          ${(section.paragraphes ?? []).map(dessinerParagraphe).join("")}
-          ${(section.sousSections ?? []).map((sous, i) => `
-            <div class="notice-sous-section">
-              <h6>${section.numero}.${i + 1} ${escapeHtml(sous.titre)}</h6>
-              ${(sous.paragraphes ?? []).map(dessinerParagraphe).join("")}
-            </div>
-          `).join("")}
-        </section>
-      `).join("")}
-    </article>
-  `;
-}
-
-function dessinerParagraphe(paragraphe) {
-  return `<p class="notice-paragraphe" data-notice-paragraphe="${escapeHtml(paragraphe.cle)}">${
-    escapeHtml(paragraphe.texte)}</p>`;
-}
-
-/**
- * Les compléments, à droite : un bloc par phrase qui en attend un.
- *
- * Le bloc porte l'extrait de la phrase concernée, pour qu'on sache ce qu'on
- * complète sans avoir à chercher à gauche.
- */
-function dessinerLesChamps(notice, complements, bibliotheque, departement) {
-  const avecChamp = paragraphesDe(notice).filter((p) => p.champ);
-  if (avecChamp.length === 0) {
-    return `<p class="gh-text-muted">Rien à préciser pour l'instant : répondez au questionnaire, les phrases
-      qui attendent une description apparaîtront ici.</p>`;
-  }
-
-  return `
-    <div class="notice-champs">
-      <p class="notice-champs__mot">
-        ${svgIcon("comment", { className: "octicon" })}
-        L'arrêté exige un degré ; il ne dit pas en quoi c'est fait. Ces précisions-là vous appartiennent.
-        ${departement ? `Les propositions tiennent compte de ce qui se construit dans le département ${escapeHtml(departement)}.` : ""}
-      </p>
-      ${avecChamp.map((paragraphe) => dessinerChamp(paragraphe, complements, bibliotheque)).join("")}
+      ${lignes.length ? `
+        <p class="notice-document__mot">
+          ${svgIcon("comment", { className: "octicon" })}
+          À droite de chaque phrase, ce que l'arrêté ne peut pas savoir : la matière, le procédé, le
+          dispositif. Plusieurs réponses sont possibles — un bâtiment peut avoir un enduit au
+          rez-de-chaussée et un bardage dans les étages.
+          ${departement ? `Les propositions tiennent compte de ce qui se construit dans le département ${escapeHtml(departement)}.` : ""}
+        </p>` : ""}
+      ${lignes.join("")}
     </div>
   `;
 }
 
+/**
+ * Un complément : ses propositions, et de quoi écrire autre chose.
+ *
+ * Les cases se cumulent — un bâtiment a rarement un seul système de façade —
+ * et un second clic retire la sienne : une case qu'on ne peut pas décocher est
+ * un piège. Ce qui est tapé à la main entre dans la bibliothèque du seul fait
+ * qu'on l'a retenu.
+ */
 function dessinerChamp(paragraphe, complements, bibliotheque) {
   const champ = paragraphe.champ;
   const valeur = complements?.[paragraphe.cle]?.[champ.cle] ?? "";
@@ -142,17 +149,18 @@ function dessinerChamp(paragraphe, complements, bibliotheque) {
   const retenues = champ.multiple
     ? String(valeur).split(" et ").map((v) => v.trim()).filter(Boolean)
     : [String(valeur).trim()].filter(Boolean);
+  // Ce qui a été tapé à la main plutôt que coché : on le montre, sinon on ne
+  // sait plus d'où vient la moitié de la phrase.
+  const libres = retenues.filter((v) => !propositions.some((p) => p.libelle === v));
 
   return `
     <section class="notice-champ" data-notice-champ="${escapeHtml(paragraphe.cle)}">
       <h6>${escapeHtml(champ.libelle)}</h6>
-      <p class="notice-champ__extrait">${escapeHtml(paragraphe.texte)}</p>
-      <div class="notice-champ__options" role="${champ.multiple ? "group" : "radiogroup"}"
-           aria-label="${escapeHtml(champ.libelle)}">
+      <div class="notice-champ__options" role="group" aria-label="${escapeHtml(champ.libelle)}">
         ${propositions.map((option) => {
           const coche = retenues.includes(option.libelle);
           return `
-            <button type="button" role="${champ.multiple ? "checkbox" : "radio"}" aria-checked="${coche}"
+            <button type="button" role="checkbox" aria-checked="${coche}"
                     class="notice-option${coche ? " est-coche" : ""}"
                     data-notice-option="${escapeHtml(paragraphe.cle)}"
                     data-notice-valeur="${escapeHtml(option.libelle)}">
@@ -163,12 +171,14 @@ function dessinerChamp(paragraphe, complements, bibliotheque) {
           `;
         }).join("")}
       </div>
-      <div class="notice-champ__saisie">
+      ${libres.length ? `<p class="notice-champ__libres">Ajouté à la main : ${escapeHtml(libres.join(" et "))}</p>` : ""}
+      <details class="notice-champ__autre"${libres.length ? " open" : ""}>
+        <summary>Autre chose</summary>
         <textarea class="notice-champ__texte" rows="2"
                   data-notice-saisie="${escapeHtml(paragraphe.cle)}"
-                  placeholder="… ou décrivez-le vous-même (markdown accepté)">${escapeHtml(valeur)}</textarea>
-        ${valeur ? `<div class="notice-champ__apercu md-body">${renderMarkdownToHtml(valeur)}</div>` : ""}
-      </div>
+                  placeholder="Décrivez-le vous-même — les cases cochées s'y retrouvent, séparées par « et »"
+        >${escapeHtml(valeur)}</textarea>
+      </details>
     </section>
   `;
 }
@@ -204,12 +214,7 @@ export function dessinerLaNotice({ notice, complements, bibliotheque, departemen
           ${svgIcon("copy", { className: "octicon" })} Copier la notice
         </button>
       </div>
-      <div class="notice__colonnes">
-        ${dessinerLeTexte(notice, notice.entete)}
-        <aside class="notice__complements">
-          ${dessinerLesChamps(notice, complements, bibliotheque, departement)}
-        </aside>
-      </div>
+      ${dessinerLeDocument(notice, complements, bibliotheque, departement)}
     </div>
   `;
 }

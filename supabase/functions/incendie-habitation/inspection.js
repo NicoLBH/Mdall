@@ -28,12 +28,26 @@
  * Rien du reste du corpus : on inspecte un module, pas le référentiel.
  */
 
-/** Les comptes autorisés à ouvrir le dépouillement. Vide : personne. */
+/**
+ * Les comptes qui gardent la clé même sans secret déployé.
+ *
+ * Le mode de vérification ne sert à rien s'il faut d'abord poser un secret sur
+ * l'instance : on ne vérifie pas le dépouillement une fois, on le vérifie
+ * pendant qu'on l'écrit. La liste est donc dans la source, et elle ne contient
+ * que les auteurs du référentiel.
+ *
+ * Le secret `INCENDIE_INSPECTEURS` s'y **ajoute** — il ne la remplace pas. Le
+ * jour où ces adresses doivent sortir du dépôt, on les déplace dans le secret
+ * et l'on vide cette liste : rien d'autre ne change.
+ */
+export const INSPECTEURS_DU_REFERENTIEL = ["nicolas.lebihan@socotec.com", "nicolas.lebihan@yahoo.fr"];
+
+/** Les comptes autorisés à ouvrir le dépouillement. */
 export function inspecteursAutorises(secret) {
-  return String(secret ?? "")
-    .split(/[,;\s]+/)
-    .map((v) => v.trim().toLowerCase())
-    .filter(Boolean);
+  return [
+    ...INSPECTEURS_DU_REFERENTIEL,
+    ...String(secret ?? "").split(/[,;\s]+/)
+  ].map((v) => v.trim().toLowerCase()).filter(Boolean);
 }
 
 /**
