@@ -19,6 +19,16 @@
 
 const ARR = "arrêté du 31 janvier 1986 modifié";
 const reglement = (article, paragraphe, citation) => ({ nature: "reglement", texte: ARR, article, paragraphe, citation });
+/**
+ * Ce que l'article veut dire, quand ce n'est pas ce qu'il dit.
+ *
+ * Certaines règles ne citent pas : elles lisent. « Le régime appliqué est celui
+ * du classement, à défaut de décision municipale de déclassement » ne figure
+ * nulle part dans l'article 3 — c'est ce qu'il faut en comprendre, et il n'y a
+ * pas de phrase à mettre entre guillemets. Le dire est plus honnête que de
+ * fabriquer une citation qui ne résisterait pas à l'ouverture du texte.
+ */
+const lecture = (article, paragraphe, enonce) => ({ nature: "lecture", texte: ARR, article, paragraphe, citation: enonce });
 const commentaire = (article, paragraphe, citation, origine) => ({ nature: "commentaire", texte: origine, article, paragraphe, citation });
 
 /* ------------------------------------------------------------------ *
@@ -102,7 +112,7 @@ export const etagesRetenus = {
     {
       si: { duplexNiveauBasSeulRetenu: false },
       alors: { valeur: { fait: "etagesSurRdc" } },
-      source: reglement("3", "1°) à 4°)", "Le classement compte les étages sur rez-de-chaussée du bâtiment.")
+      source: lecture("3", "1°) à 4°)", "Le classement compte les étages sur rez-de-chaussée du bâtiment.")
     }
   ]
 };
@@ -270,10 +280,10 @@ export const famille = {
   produit: "famille",
   source: { article: "3" },
   regles: [
-    { si: { classement: "1re famille" }, alors: { valeur: "1" }, source: reglement("3", "1°)", "1°) Première famille : les habitations que le 1°) de l'article 3 énumère.") },
-    { si: { classement: "2e famille" }, alors: { valeur: "2" }, source: reglement("3", "2°)", "2°) Deuxième famille : les habitations que le 2°) de l'article 3 énumère.") },
-    { si: { classement: ["3e famille A", "3e famille B"] }, alors: { valeur: "3" }, source: reglement("3", "3°)", "3°) Troisième famille : habitations dont le plancher bas du logement le plus haut est situé à 28 m au plus du sol utilement accessible aux engins, A et B confondues.") },
-    { si: { classement: "4e famille" }, alors: { valeur: "4" }, source: reglement("3", "4°)", "4°) Quatrième famille : habitations dont le plancher bas du niveau le plus haut est situé à 50 m au plus au-dessus du sol utilement accessible aux engins.") }
+    { si: { classement: "1re famille" }, alors: { valeur: "1" }, source: lecture("3", "1°)", "1°) Première famille : les habitations que le 1°) de l'article 3 énumère.") },
+    { si: { classement: "2e famille" }, alors: { valeur: "2" }, source: lecture("3", "2°)", "2°) Deuxième famille : les habitations que le 2°) de l'article 3 énumère.") },
+    { si: { classement: ["3e famille A", "3e famille B"] }, alors: { valeur: "3" }, source: reglement("3", "3°)", "3°) Troisième famille : habitations dont le plancher bas du logement le plus haut est situé à 28 m au plus du sol utilement accessible aux engins des services de secours et de lutte contre l'incendie, parmi lesquelles on distingue […]") },
+    { si: { classement: "4e famille" }, alors: { valeur: "4" }, source: reglement("3", "4°)", "4°) Quatrième famille : (arrêté du 7 août 2019) Habitations dont le plancher bas du niveau le plus haut est situé à 50 m au plus au dessus du niveau du sol utilement accessible aux engins des services publics de secours et de lutte contre l'incendie, et qui ne relèvent pas des trois autres familles d'habitation.") }
   ]
 };
 
@@ -303,7 +313,7 @@ export const declassement3B = {
     {
       si: { classement: { renseigne: true } },
       alors: { valeur: { fait: "classement" } },
-      source: reglement("3", null, "Le régime appliqué est celui du classement, à défaut de décision municipale de déclassement.")
+      source: lecture("3", null, "Le régime appliqué est celui du classement, à défaut de décision municipale de déclassement.")
     }
   ]
 };
@@ -487,7 +497,7 @@ export const implantationAccesEscaliers = {
       si: { classement: { renseigne: true } },
       alors: { valeur: "sans objet",
         sansObjet: "Cette condition d'implantation ne vise que la troisième famille B et la quatrième famille. Les première et deuxième familles ne sont soumises à aucune prescription d'accès (question/réponse ministère de l'Équipement, 14 avril 1987)." },
-      source: reglement("3", "3°) et 4°)", "Ces habitations doivent être implantées de telle sorte que les accès aux escaliers soient situés à moins de 50 m d'une voie-engins.")
+      source: reglement("3", "3°) et 4°)", "Ces habitations doivent être implantées de telle sorte que les accès aux escaliers soient situés à moins de 50 m d'une voie ouverte à la circulation répondant aux caractéristiques définies à l'article 4 ci-après (voie-engins).")
     }
   ]
 };

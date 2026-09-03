@@ -29,7 +29,12 @@ import { escapeHtml } from "../../../utils/escape-html.js";
 import { registerProjectPrimaryScrollSource } from "../../project-shell-chrome.js";
 import { renderGhActionButton } from "../../ui/gh-split-button.js";
 import { svgIcon } from "../../../ui/icons.js";
-import { consulterIncendie } from "../../../services/incendie-service.js";
+import { consulterIncendie, lireArticleIncendie, inspecterIncendie } from "../../../services/incendie-service.js";
+import { renderMarkdownToHtml } from "../../../utils/markdown-renderer.js";
+import {
+  dessinerGrapheLiaisons, brancherGrapheLiaisons, tracerLesLiens as tracerLesLiensDuGraphe, appliquerZoom as appliquerZoomAuGraphe
+} from "../../ui/graphe-liaisons.js";
+import { dessinerLeBatiment, resumer } from "./batiment.js";
 import { store } from "../../../store.js";
 
 const etat = {
@@ -73,7 +78,26 @@ const etat = {
    * libellé et ses réponses possibles, et les redemander au serveur pour
    * afficher une case à cocher serait un aller-retour pour rien.
    */
-  questionsVues: {}
+  questionsVues: {},
+
+  /**
+   * Les articles déjà lus, gardés au passage.
+   *
+   * L'arrêté entier pèse deux cent cinquante kilo-octets : il ne descend pas
+   * avec chaque vague de questions, on va chercher celui qu'on ouvre. Le garder
+   * évite de le redemander à chaque aller-retour dans le questionnaire.
+   */
+  articles: {},
+  /** L'article ouvert sous la question courante, s'il l'est. */
+  articleOuvert: false,
+
+  /**
+   * Le dépouillement du module désigné, quand on l'a demandé.
+   *
+   * Il ne s'ouvre que pour les comptes inscrits côté serveur. Un refus n'est
+   * pas une panne : c'est la règle du produit, et l'écran le dit ainsi.
+   */
+  inspection: null
 };
 
 let projetAffiche = "";
@@ -102,6 +126,9 @@ function oublierLeProjet() {
   etat.questionsVues = {};
   etat.zoom = 1;
   etat.pleinEcran = false;
+  etat.articleOuvert = false;
+  etat.inspection = null;
+  // Les articles, eux, restent : le texte de l'arrêté ne dépend pas du projet.
 }
 
 export function renderIncendieHabitation(root, { force = false } = {}) {
@@ -228,16 +255,22 @@ function brancher(root) {
       if (rang >= 0) { etat.position = rang; etat.deplacementManuel = true; etat.onglet = "questionnaire"; dessiner(root); }
       return;
     }
-    const zoom = evenement.target.closest("[data-incendie-zoom]");
-    if (zoom) {
-      const delta = zoom.dataset.incendieZoom === "in" ? 0.15 : -0.15;
-      etat.zoom = Math.min(2, Math.max(0.4, Math.round((etat.zoom + delta) * 100) / 100));
-      appliquerZoom(root);
+    // Ouvrir l'arrêté sous la question : le texte entier, avec son commentaire
+    // et son schéma. Il n'arrive pas avec la vague — on va le chercher, et on
+    // le garde.
+    const article = evenement.target.closest("[data-incendie-article]");
+    if (article) {
+      etat.articleOuvert = !etat.articleOuvert;
+      dessiner(root);
+      if (etat.articleOuvert) void ouvrirLArticle(root, article.dataset.incendieArticle);
       return;
     }
-    if (evenement.target.closest("[data-incendie-plein-ecran]")) {
-      etat.pleinEcran = !etat.pleinEcran;
-      dessiner(root);
+    const inspecter = evenement.target.closest("[data-incendie-inspecter]");
+    if (inspecter) { void inspecter_(root, inspecter.dataset.incendieInspecter); return; }
+    const versModule = evenement.target.closest("[data-incendie-aller-module]");
+    if (versModule?.dataset.incendieAllerModule) {
+      designer(root, versModule.dataset.incendieAllerModule);
+      void inspecter_(root, versModule.dataset.incendieAllerModule);
       return;
     }
     if (evenement.target.closest('[data-action-id="incendieRecommencer"]')) {
@@ -258,23 +291,80 @@ function brancher(root) {
     dessiner(root);
   });
 
-  // Désigner un module du schéma montre sa conclusion et sa phrase : le graphe
-  // seul dit qui dépend de qui, il ne dit pas ce qui a été décidé.
-  for (const entrant of ["pointerover", "focusin"]) {
-    root.addEventListener(entrant, (evenement) => {
-      const noeud = evenement.target.closest?.("[data-incendie-module]");
-      if (noeud) designer(root, noeud.dataset.incendieModule);
-    });
+  // Le graphe a ses propres gestes, et ils vivent dans le composant : survoler
+  // pour parcourir, cliquer pour s'arrêter dessus et ouvrir son détail.
+  brancherGrapheLiaisons(root, {
+    onSurvol: (id) => designer(root, id),
+    onDesigner: (id) => { designer(root, id); void inspecter_(root, id); },
+    onZoom: (sens) => {
+      const delta = sens === "in" ? 0.15 : -0.15;
+      etat.zoom = Math.min(2, Math.max(0.4, Math.round((etat.zoom + delta) * 100) / 100));
+      appliquerZoomAuGraphe(root, etat.zoom);
+      tracerLesLiens(root);
+    },
+    onPleinEcran: () => { etat.pleinEcran = !etat.pleinEcran; dessiner(root); }
+  });
+
+  // Les résultats désignent aussi : une conclusion qu'on lit dans l'onglet
+  // voisin doit pouvoir s'ouvrir sans repasser par le schéma.
+  root.addEventListener("focusin", (evenement) => {
+    const noeud = evenement.target.closest?.("[data-graphe-noeud]");
+    if (noeud) designer(root, noeud.dataset.grapheNoeud);
+  });
+}
+
+/**
+ * L'article demandé, puis affiché.
+ *
+ * On marque l'attente avant de partir : sans cela, deux ouvertures rapprochées
+ * lanceraient deux appels pour le même texte.
+ */
+async function ouvrirLArticle(root, numero) {
+  const cle = String(numero ?? "");
+  if (!cle || etat.articles[cle]) return;
+  etat.articles[cle] = "chargement";
+  try {
+    const rendu = await lireArticleIncendie(cle);
+    etat.articles[cle] = rendu?.ok ? rendu : null;
+  } catch {
+    etat.articles[cle] = null;
   }
+  if (root?.isConnected && etat.articleOuvert) dessiner(root);
+}
+
+/**
+ * Le dépouillement d'un module, demandé au serveur.
+ *
+ * Le refus est une réponse comme une autre : la porte est fermée par défaut, et
+ * l'écran le dit sans faire croire à une panne.
+ */
+async function inspecter_(root, id) {
+  if (!id) return;
+  etat.inspection = { id, etat: "chargement" };
+  rafraichirLeDetail(root);
+  try {
+    const rendu = await inspecterIncendie(id, etat.reponses);
+    if (rendu?.ferme) etat.inspection = { id, etat: "ferme", raison: rendu.raison };
+    else if (rendu?.ok) etat.inspection = { id, etat: "ok", donnees: rendu };
+    else etat.inspection = { id, etat: "erreur", raison: rendu?.raison ?? "Le référentiel n'a pas répondu." };
+  } catch (erreur) {
+    etat.inspection = { id, etat: "erreur", raison: erreur instanceof Error ? erreur.message : String(erreur) };
+  }
+  rafraichirLeDetail(root);
+}
+
+/** Le panneau de détail seul : redessiner le schéma entier perdrait le zoom. */
+function rafraichirLeDetail(root) {
+  const hote = root?.querySelector("[data-graphe-detail]");
+  if (hote) hote.innerHTML = dessinerDetail();
 }
 
 function designer(root, id) {
   if (etat.survole === id) return;
   etat.survole = id;
-  const hote = root.querySelector("[data-incendie-detail]");
-  if (hote) hote.innerHTML = dessinerDetail();
-  for (const noeud of root.querySelectorAll("[data-incendie-module]")) {
-    noeud.classList.toggle("est-survole", noeud.dataset.incendieModule === id);
+  rafraichirLeDetail(root);
+  for (const noeud of root.querySelectorAll("[data-graphe-noeud]")) {
+    noeud.classList.toggle("est-designe", noeud.dataset.grapheNoeud === id);
   }
   // Sur trente-cinq liaisons, mettre en avant celles du module désigné est ce
   // qui permet de suivre la sienne.
@@ -387,6 +477,7 @@ function dessinerQuestionnaire(vue) {
         Plus rien à demander : le référentiel a conclu tout ce qu'il pouvait conclure.
         Les résultats sont dans l'onglet voisin.
       </p>
+      ${dessinerBatiment(vue)}
       ${dessinerRepondues(repondues)}
     `;
   }
@@ -405,7 +496,10 @@ function dessinerQuestionnaire(vue) {
               ${etat.position >= etat.parcours.length - 1 ? "disabled" : ""} aria-label="Question suivante" title="Question suivante">›</button>
     </div>
 
-    ${dessinerQuestion(question)}
+    <div class="incendie-atelier">
+      ${dessinerQuestion(question)}
+      ${dessinerBatiment(vue)}
+    </div>
     ${vue.questions.length === 0 && reste === 0 ? `
       <p class="incendie-fini">
         ${svgIcon("check-circle-fill", { className: "octicon" })}
@@ -491,8 +585,24 @@ function dessinerQuestion(question) {
         Sert à : ${escapeHtml(question.pourTitre ?? "—")} — ${escapeHtml(referenceLisible(question))}
       </p>
       ${question.aide ? `<p class="incendie-question__aide">${escapeHtml(question.aide)}</p>` : ""}
+      <div class="incendie-question__texte">
+        <button type="button" class="incendie-ouvrir-article" data-incendie-article="${escapeHtml(question.article ?? "")}"
+                aria-expanded="${etat.articleOuvert}">
+          ${svgIcon("book", { className: "octicon" })}
+          ${etat.articleOuvert ? "Masquer l'article" : `Lire l'article ${escapeHtml(question.article ?? "")} en entier`}
+        </button>
+        ${etat.articleOuvert ? dessinerArticleDeLaQuestion(question) : ""}
+      </div>
     </div>
   `;
+}
+
+/** L'article de la question courante : celui qu'on a déjà lu, ou l'attente. */
+function dessinerArticleDeLaQuestion(question) {
+  const article = etat.articles[String(question.article)];
+  if (article === "chargement") return `<p class="gh-text-muted">Ouverture de l'arrêté…</p>`;
+  if (!article) return `<p class="gh-text-muted">Cet article n'est pas porté par cette version.</p>`;
+  return dessinerArticle(article);
 }
 
 /**
@@ -563,15 +673,95 @@ function dessinerConclusion(module) {
 function dessinerSource(source) {
   if (!source) return "";
   const doctrine = source.nature === "commentaire";
+  // Une lecture n'est pas une citation : « Le régime appliqué est celui du
+  // classement, à défaut de décision municipale de déclassement » ne figure
+  // nulle part dans l'article 3 — c'est ce qu'il faut en comprendre. La mettre
+  // entre guillemets la ferait citer en réunion comme si c'était la loi ; un
+  // test vérifie d'ailleurs que tout ce qui se donne pour une citation se
+  // retrouve mot pour mot dans le texte.
+  const lecture = source.nature === "lecture";
+  const entete = doctrine ? "Commentaire" : lecture ? "Lecture de l'article" : "Article";
   return `
-    <blockquote class="incendie-source${doctrine ? " est-doctrine" : ""}">
+    <blockquote class="incendie-source${doctrine ? " est-doctrine" : ""}${lecture ? " est-lecture" : ""}">
       <p class="incendie-source__reference">
         ${doctrine ? svgIcon("comment", { className: "octicon" }) : svgIcon("book", { className: "octicon" })}
-        ${escapeHtml(doctrine ? "Commentaire" : "Article")} ${escapeHtml(source.article ?? "?")}${source.paragraphe ? `, ${escapeHtml(source.paragraphe)}` : ""}
-        ${source.texte ? ` — ${escapeHtml(source.texte)}` : ""}
+        ${escapeHtml(entete)} ${escapeHtml(source.article ?? "?")}${source.paragraphe ? `, ${escapeHtml(source.paragraphe)}` : ""}
+        ${source.texte && !lecture ? ` — ${escapeHtml(source.texte)}` : ""}
       </p>
-      ${source.citation ? `<p class="incendie-source__citation">« ${escapeHtml(source.citation)} »</p>` : ""}
+      ${source.citation ? `<p class="incendie-source__citation">${
+        lecture ? escapeHtml(source.citation) : `« ${escapeHtml(source.citation)} »`}</p>` : ""}
     </blockquote>
+  `;
+}
+
+/**
+ * L'article, en entier, avec ce que SOCOTEC en commente et ce que la figure en
+ * montre.
+ *
+ * ## Pourquoi le texte entier sous une question
+ *
+ * L'énoncé d'une question suppose qu'on sache déjà ce que l'arrêté entend par
+ * « parois verticales de l'enveloppe du logement » ou par « niveau de
+ * référence ». Celui qui répond ne le sait pas, et il répondra quand même :
+ * c'est ainsi qu'on obtient un classement faux sans que rien ne le signale.
+ * L'article porte son contexte — l'exception qui suit l'alinéa, la définition
+ * qui le précède —, le commentaire dit l'usage, et l'usage tranche souvent seul.
+ *
+ * ## Pourquoi le commentaire est à part
+ *
+ * Parce qu'on ne défend pas de la même façon un article et une doctrine. Les
+ * mélanger dans un même bloc de texte ferait citer en réunion, comme de la loi,
+ * la lecture d'un bureau de contrôle.
+ */
+function dessinerArticle(documentation) {
+  if (!documentation) return "";
+  return `
+    <div class="incendie-article">
+      <h6>${svgIcon("book", { className: "octicon" })} Article ${escapeHtml(documentation.numero)} — texte intégral</h6>
+      <div class="incendie-article__texte md-body">${renderMarkdownToHtml(documentation.texte)}</div>
+      ${(documentation.figures ?? []).map((figure) => `
+        <figure class="incendie-figure">
+          <div class="incendie-figure__dessin">${figure.svg}</div>
+          <figcaption>
+            <strong>${escapeHtml(figure.titre)}</strong>
+            <span>${escapeHtml(figure.legende)}</span>
+            <em>${escapeHtml(figure.source)}</em>
+          </figcaption>
+        </figure>
+      `).join("")}
+      ${documentation.commentaire ? `
+        <div class="incendie-article__commentaire">
+          <h6>${svgIcon("comment", { className: "octicon" })} Commentaire SOCOTEC</h6>
+          <div class="md-body">${renderMarkdownToHtml(documentation.commentaire)}</div>
+        </div>` : ""}
+    </div>
+  `;
+}
+
+/**
+ * Le bâtiment que les réponses décrivent, redessiné à chaque réponse.
+ *
+ * On demande « nombre d'étages sur rez-de-chaussée » ; quelqu'un qui compte
+ * trois niveaux habitables répond « 3 ». Le dessin montre alors quatre
+ * planchers — R, 1, 2, 3 — et la faute saute aux yeux avant d'avoir contaminé
+ * le classement, puis les planchers, puis tout ce qui en découle. Aucun message
+ * d'erreur ne ferait ce travail : il faudrait savoir d'avance qu'il y a erreur.
+ */
+function dessinerBatiment(vue) {
+  const dessin = dessinerLeBatiment(etat.reponses, { classement: vue?.faits?.classement ?? null });
+  if (dessin.vide) {
+    return `
+      <aside class="incendie-batiment est-vide">
+        <p class="gh-text-muted">Le bâtiment se dessinera ici à mesure des réponses — il montre ce que
+        le référentiel a compris, pas le projet.</p>
+      </aside>`;
+  }
+  return `
+    <aside class="incendie-batiment">
+      <div class="incendie-batiment__dessin">${dessin.svg}</div>
+      <p class="incendie-batiment__legende">${escapeHtml(resumer(dessin.batiment, vue?.faits?.classement ?? null))}</p>
+      <p class="incendie-batiment__avertissement">Schéma de relecture : ni proportions, ni géométrie réelle.</p>
+    </aside>
   `;
 }
 
@@ -596,200 +786,168 @@ function dessinerSource(source) {
  */
 function dessinerSchema(vue) {
   const parId = new Map(vue.modules.map((m) => [m.id, m]));
-  const colonnes = rangerParProfondeur(vue.graphe);
+  return dessinerGrapheLiaisons({
+    graphe: grapheAffichable(vue, parId),
+    selection: etat.survole,
+    zoom: etat.zoom,
+    pleinEcran: etat.pleinEcran,
+    rangNomme: "Niveau",
+    legende: `
+      ${vue.graphe.noeuds.length} modules, ${vue.graphe.liens.length} liaisons,
+      <strong>${vue.graphe.questionsSource.length} questions à la source</strong> —
+      celles qu'aucun module ne sait déduire, et qu'il faut donc demander.
+      Les colonnes se lisent de gauche à droite : ce qui est à gauche décide de ce qui est à droite.
+      <em>Cliquez sur une carte pour ouvrir son article et, si vous en avez le droit, ses règles.</em>`,
+    detail: dessinerDetail()
+  });
+}
 
+/**
+ * Le graphe du référentiel, traduit dans la langue du composant.
+ *
+ * Le composant ne connaît ni article ni famille : il connaît des nœuds qui ont
+ * un en-tête, un titre, une valeur et un état. C'est ici, et seulement ici, que
+ * l'un devient l'autre — ce qui permettra au même dessin de montrer un jour les
+ * liaisons de la Mémoire sans rien savoir du feu.
+ */
+function grapheAffichable(vue, parId) {
+  return {
+    liens: vue.graphe.liens,
+    noeuds: vue.graphe.noeuds.map((noeud) => {
+      const module = parId.get(noeud.id);
+      const conclu = module?.statut === "conclu";
+      const sansObjet = conclu && (module.valeur === null || module.sansObjet);
+      return {
+        id: noeud.id,
+        produit: noeud.produit,
+        demande: noeud.demande,
+        entete: `art. ${noeud.article ?? "?"}`,
+        titre: noeud.titre,
+        valeur: conclu && module.valeur !== null ? String(module.valeur) : conclu ? "sans objet" : "en attente",
+        etat: conclu ? (sansObjet ? "sansObjet" : "conclu") : "attente"
+      };
+    })
+  };
+}
+
+/** Les traits du schéma, reposés par le composant. */
+function tracerLesLiens(root) {
+  if (!etat.vue) return;
+  const parId = new Map(etat.vue.modules.map((m) => [m.id, m]));
+  tracerLesLiensDuGraphe(root, {
+    graphe: grapheAffichable(etat.vue, parId),
+    selection: etat.survole,
+    zoom: etat.zoom
+  });
+}
+
+/**
+ * Le module désigné : ce qu'il a conclu, l'article dont il sort, et — sous
+ * serrure — les règles qui l'ont décidé.
+ *
+ * ## Pourquoi les règles ne sont pas là par défaut
+ *
+ * Tout le dispositif tient sur un point : la table des conditions ne descend
+ * pas dans le navigateur. Elle doit pourtant pouvoir être **relue en face de
+ * l'article**, sinon rien ne garantit que le dépouillement dit ce que le texte
+ * dit. Le serveur ne l'ouvre donc que pour les comptes qu'il connaît, et un
+ * refus s'affiche comme une règle du produit, pas comme une panne.
+ */
+function dessinerDetail() {
+  const module = etat.vue?.modules.find((m) => m.id === etat.survole);
+  if (!module) {
+    return `<p class="gh-text-muted">Survolez une carte pour lire ce qu'elle a conclu ; cliquez dessus pour ouvrir l'article et les liaisons.</p>`;
+  }
   return `
-    <section class="incendie-schema-bloc${etat.pleinEcran ? " est-plein-ecran" : ""}" data-incendie-schema-bloc>
-      <div class="incendie-schema__tete">
-        <p class="incendie-schema__legende">
-          ${vue.graphe.noeuds.length} modules, ${vue.graphe.liens.length} liaisons,
-          <strong>${vue.graphe.questionsSource.length} questions à la source</strong> —
-          celles qu'aucun module ne sait déduire, et qu'il faut donc demander.
-          Les colonnes se lisent de gauche à droite : ce qui est à gauche décide de ce qui est à droite.
-        </p>
-        <div class="incendie-schema__outils">
-          <button type="button" class="incendie-schema__outil" data-incendie-zoom="out" aria-label="Réduire" title="Réduire">
-            ${svgIcon("minus", { className: "octicon" })}
-          </button>
-          <span class="incendie-schema__zoom" data-incendie-zoom-valeur>${Math.round(etat.zoom * 100)} %</span>
-          <button type="button" class="incendie-schema__outil" data-incendie-zoom="in" aria-label="Agrandir" title="Agrandir">
-            ${svgIcon("plus", { className: "octicon" })}
-          </button>
-          <button type="button" class="incendie-schema__outil" data-incendie-plein-ecran
-                  aria-label="${etat.pleinEcran ? "Quitter le plein écran" : "Plein écran"}"
-                  title="${etat.pleinEcran ? "Quitter le plein écran" : "Plein écran"}">
-            ${svgIcon("screen-full", { className: "octicon" })}
-          </button>
-        </div>
-      </div>
+    ${dessinerConclusion(module)}
+    <div class="incendie-detail__outils">
+      <button type="button" class="incendie-inspecter" data-incendie-inspecter="${escapeHtml(module.id)}">
+        ${svgIcon("checklist", { className: "octicon" })} Ouvrir le détail de ce module
+      </button>
+    </div>
+    ${dessinerInspection(module)}
+  `;
+}
 
-      <div class="incendie-schema" data-incendie-schema-vue>
-        <div class="incendie-schema__toile" data-incendie-schema-toile style="--incendie-zoom:${etat.zoom}">
-          <svg class="incendie-schema__liens" data-incendie-schema-liens aria-hidden="true"></svg>
-          ${colonnes.map((colonne, rang) => `
-            <div class="incendie-schema__colonne">
-              <div class="incendie-schema__rang">Niveau ${rang + 1}</div>
-              ${colonne.map((noeud) => {
-                const module = parId.get(noeud.id);
-                const conclu = module?.statut === "conclu";
-                const sansObjet = conclu && (module.valeur === null || module.sansObjet);
-                const classes = ["incendie-noeud", conclu ? (sansObjet ? "est-sans-objet" : "est-conclu") : "est-attente"];
-                if (etat.survole === noeud.id) classes.push("est-survole");
-                return `
-                  <button type="button" class="${classes.join(" ")}" data-incendie-module="${escapeHtml(noeud.id)}">
-                    <span class="incendie-noeud__article">art. ${escapeHtml(noeud.article ?? "?")}</span>
-                    <span class="incendie-noeud__titre">${escapeHtml(noeud.titre)}</span>
-                    <span class="incendie-noeud__valeur">${escapeHtml(conclu && module.valeur !== null ? String(module.valeur) : conclu ? "sans objet" : "en attente")}</span>
-                  </button>
-                `;
-              }).join("")}
-            </div>
-          `).join("")}
-        </div>
-      </div>
-      <div class="incendie-detail" data-incendie-detail>${dessinerDetail()}</div>
-    </section>
+/** Ce que l'inspection a rapporté : les liaisons, l'article, et les règles. */
+function dessinerInspection(module) {
+  const inspection = etat.inspection;
+  if (!inspection || inspection.id !== module.id) return "";
+  if (inspection.etat === "chargement") return `<p class="gh-text-muted">Lecture du dépouillement…</p>`;
+  if (inspection.etat === "ferme") {
+    return `
+      <div class="incendie-ferme">
+        ${svgIcon("shield-lock", { className: "octicon" })}
+        <p>${escapeHtml(inspection.raison)}</p>
+      </div>`;
+  }
+  if (inspection.etat === "erreur") return `<p class="fondations-erreur">${escapeHtml(inspection.raison)}</p>`;
+
+  const d = inspection.donnees;
+  return `
+    <div class="incendie-inspection">
+      ${dessinerLiaisons(d.liaisons)}
+      ${dessinerRegles(d.regles)}
+      ${dessinerArticle(d.documentation)}
+    </div>
+  `;
+}
+
+/** Ce qui entre dans le module, et ce qui en sort. */
+function dessinerLiaisons(liaisons) {
+  if (!liaisons) return "";
+  const ligne = (lien, sens) => {
+    const autre = etat.vue?.graphe.noeuds.find((n) => n.id === (sens === "amont" ? lien.de : lien.vers));
+    return `<li><button type="button" class="incendie-lien-vers" data-incendie-aller-module="${escapeHtml(autre?.id ?? "")}">
+      <code>${escapeHtml(lien.fait)}</code> ${escapeHtml(autre?.titre ?? "")}</button></li>`;
+  };
+  return `
+    <div class="incendie-liaisons">
+      <section>
+        <h6>Ce qui entre (${liaisons.amont.length})</h6>
+        ${liaisons.amont.length ? `<ul>${liaisons.amont.map((l) => ligne(l, "amont")).join("")}</ul>`
+          : `<p class="gh-text-muted">Rien : ce module part des réponses.</p>`}
+      </section>
+      <section>
+        <h6>Ce qui en dépend (${liaisons.aval.length})</h6>
+        ${liaisons.aval.length ? `<ul>${liaisons.aval.map((l) => ligne(l, "aval")).join("")}</ul>`
+          : `<p class="gh-text-muted">Rien : ce module est un aboutissement.</p>`}
+      </section>
+    </div>
   `;
 }
 
 /**
- * Les traits, tracés une fois la mise en page connue.
+ * Les règles, dans leur ordre — et l'ordre est la moitié du sens.
  *
- * On ne peut pas les écrire dans le HTML : leur départ et leur arrivée
- * dépendent de la hauteur réelle de chaque boîte, donc du texte qu'elle
- * contient, donc du navigateur. On les pose donc après coup, et on les repose à
- * chaque zoom et à chaque redimensionnement.
- *
- * Le trait qui touche le module désigné est mis en avant : sur trente-cinq
- * liaisons, c'est ce qui permet de suivre celle qu'on regarde.
+ * La première qui mord l'emporte. Une règle relue hors de son rang se juge
+ * fausse alors qu'elle est simplement précédée d'une autre, et c'est la faute
+ * la plus facile à commettre en relisant un dépouillement.
  */
-function tracerLesLiens(root) {
-  const toile = root.querySelector("[data-incendie-schema-toile]");
-  const svg = root.querySelector("[data-incendie-schema-liens]");
-  if (!toile || !svg || !etat.vue) return;
-
-  const cadre = toile.getBoundingClientRect();
-  const zoom = etat.zoom || 1;
-  const boites = new Map();
-  for (const noeud of toile.querySelectorAll("[data-incendie-module]")) {
-    const r = noeud.getBoundingClientRect();
-    // Les coordonnées sont ramenées dans le repère non grossi de la toile :
-    // le SVG est à l'intérieur, il subit le même agrandissement qu'elle.
-    boites.set(noeud.dataset.incendieModule, {
-      gauche: (r.left - cadre.left) / zoom, droite: (r.right - cadre.left) / zoom,
-      milieu: (r.top + r.height / 2 - cadre.top) / zoom
-    });
-  }
-
-  const amont = cheminAmont(etat.survole);
-  const chemins = [];
-  for (const lien of etat.vue.graphe.liens) {
-    const de = boites.get(lien.de);
-    const vers = boites.get(lien.vers);
-    if (!de || !vers) continue;
-    const x1 = de.droite, y1 = de.milieu, x2 = vers.gauche, y2 = vers.milieu;
-    const courbe = Math.max(18, (x2 - x1) / 2);
-
-    // Le chemin amont en entier, pas seulement le premier rang : c'est la
-    // chaîne complète qui explique une conclusion, et la voir d'un coup vaut
-    // mieux que de la reconstituer module par module. L'intensité décroît avec
-    // l'éloignement — sans quoi, sur soixante-quatre traits, on ne saurait plus
-    // par où l'on est arrivé.
-    const rang = amont.has(lien.de) && amont.has(lien.vers) ? amont.get(lien.vers) : null;
-    const aval = etat.survole && lien.de === etat.survole;
-    const opacite = rang === null ? null : Math.max(0.28, 1 - rang * 0.22);
-
-    const classe = rang !== null ? "incendie-lien est-marque"
-      : aval ? "incendie-lien est-aval" : "incendie-lien";
-    const style = opacite === null ? "" : ` style="opacity:${opacite};stroke-width:${Math.max(1.1, 2 - rang * 0.25)}"`;
-    chemins.push(`<path d="M ${x1} ${y1} C ${x1 + courbe} ${y1}, ${x2 - courbe} ${y2}, ${x2} ${y2}"
-      class="${classe}"${style}><title>${escapeHtml(lien.fait)}</title></path>`);
-  }
-
-  // Les boîtes du chemin s'allument aussi : un trait qui mène à un module éteint
-  // se suit mal.
-  for (const noeud of toile.querySelectorAll("[data-incendie-module]")) {
-    const rang = amont.get(noeud.dataset.incendieModule);
-    noeud.classList.toggle("est-en-amont", rang !== undefined && rang > 0);
-    noeud.style.removeProperty("--incendie-amont");
-    if (rang !== undefined && rang > 0) noeud.style.setProperty("--incendie-amont", String(Math.max(0.3, 1 - rang * 0.2)));
-  }
-
-  svg.setAttribute("width", String(toile.scrollWidth / zoom));
-  svg.setAttribute("height", String(toile.scrollHeight / zoom));
-  svg.innerHTML = chemins.join("");
-}
-
-/**
- * Le module désigné et tout ce dont il dépend, avec la distance de chacun.
- *
- * Le rang sert à l'intensité du trait : zéro pour le module lui-même, un pour
- * ce qui le décide directement, deux pour ce qui décide de cela, et ainsi de
- * suite. Sans cette décroissance, la chaîne complète serait aussi voyante que
- * son premier maillon et l'on ne saurait plus par où l'on est arrivé.
- */
-function cheminAmont(id) {
-  const rangs = new Map();
-  if (!id || !etat.vue) return rangs;
-  const produitPar = new Map(etat.vue.graphe.noeuds.map((n) => [n.produit, n.id]));
-  const aVoir = [[id, 0]];
-  while (aVoir.length) {
-    const [courant, rang] = aVoir.shift();
-    // Un module atteint par deux chemins garde le plus court : c'est celui qui
-    // décrit le mieux sa proximité avec ce qu'on regarde.
-    if (rangs.has(courant) && rangs.get(courant) <= rang) continue;
-    rangs.set(courant, rang);
-    const noeud = etat.vue.graphe.noeuds.find((n) => n.id === courant);
-    for (const fait of noeud?.demande ?? []) {
-      const parent = produitPar.get(fait);
-      if (parent) aVoir.push([parent, rang + 1]);
-    }
-  }
-  return rangs;
-}
-
-/** Le grossissement, appliqué sans tout redessiner — et les traits refaits avec. */
-function appliquerZoom(root) {
-  const toile = root.querySelector("[data-incendie-schema-toile]");
-  if (toile) toile.style.setProperty("--incendie-zoom", String(etat.zoom));
-  const valeur = root.querySelector("[data-incendie-zoom-valeur]");
-  if (valeur) valeur.textContent = `${Math.round(etat.zoom * 100)} %`;
-  tracerLesLiens(root);
-}
-
-/** Le détail du module désigné : sa conclusion, et la phrase qui l'a décidée. */
-function dessinerDetail() {
-  const module = etat.vue?.modules.find((m) => m.id === etat.survole);
-  if (!module) return `<p class="gh-text-muted">Survolez un module pour lire ce qu'il a conclu et la phrase du texte qui a décidé.</p>`;
-  return dessinerConclusion(module);
-}
-
-/**
- * Les modules par profondeur : ceux qui ne dépendent de rien d'abord.
- *
- * Un graphe dessiné dans l'ordre de déclaration ne dit rien ; rangé par
- * profondeur, il montre la seule chose qui compte ici — que presque tout pend
- * au classement, et que le classement pend à une poignée de questions.
- */
-function rangerParProfondeur(graphe) {
-  const produits = new Map(graphe.noeuds.map((n) => [n.produit, n.id]));
-  const profondeur = new Map();
-
-  const calculer = (id, vus = new Set()) => {
-    if (profondeur.has(id)) return profondeur.get(id);
-    if (vus.has(id)) return 0;
-    vus.add(id);
-    const noeud = graphe.noeuds.find((n) => n.id === id);
-    const amonts = (noeud?.demande ?? []).map((f) => produits.get(f)).filter(Boolean);
-    const p = amonts.length === 0 ? 0 : 1 + Math.max(...amonts.map((a) => calculer(a, vus)));
-    profondeur.set(id, p);
-    return p;
-  };
-  for (const noeud of graphe.noeuds) calculer(noeud.id);
-
-  const colonnes = [];
-  for (const noeud of graphe.noeuds) (colonnes[profondeur.get(noeud.id) ?? 0] ??= []).push(noeud);
-  return colonnes.filter(Boolean);
+function dessinerRegles(regles) {
+  if (!Array.isArray(regles) || regles.length === 0) return "";
+  return `
+    <section class="incendie-regles">
+      <h6>${regles.length} règle${regles.length > 1 ? "s" : ""}, dans l'ordre — la première qui mord l'emporte</h6>
+      <ol>
+        ${regles.map((regle) => `
+          <li class="incendie-regle${regle.retenue ? " est-retenue" : ""}">
+            <div class="incendie-regle__si">
+              ${regle.conditions.length
+                ? regle.conditions.map((c) => `<span class="incendie-condition">${escapeHtml(c.libelle)}</span>`).join('<span class="incendie-et">et</span>')
+                : `<span class="incendie-condition">sans condition</span>`}
+            </div>
+            <div class="incendie-regle__alors">
+              <span class="incendie-fleche" aria-hidden="true">→</span>
+              <strong>${escapeHtml(regle.alors.valeur)}</strong>
+              ${regle.alors.sansObjet ? `<em>${escapeHtml(regle.alors.sansObjet)}</em>` : ""}
+            </div>
+            ${dessinerSource(regle.source)}
+          </li>
+        `).join("")}
+      </ol>
+    </section>
+  `;
 }
 
 function dessinerPortee(vue) {

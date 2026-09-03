@@ -21,6 +21,16 @@
 
 const ARR = "arrêté du 31 janvier 1986 modifié";
 const reglement = (article, paragraphe, citation) => ({ nature: "reglement", texte: ARR, article, paragraphe, citation });
+/**
+ * Ce que l'article veut dire, quand ce n'est pas ce qu'il dit.
+ *
+ * Certaines règles ne citent pas : elles lisent. « Le régime appliqué est celui
+ * du classement, à défaut de décision municipale de déclassement » ne figure
+ * nulle part dans l'article 3 — c'est ce qu'il faut en comprendre, et il n'y a
+ * pas de phrase à mettre entre guillemets. Le dire est plus honnête que de
+ * fabriquer une citation qui ne résisterait pas à l'ouverture du texte.
+ */
+const lecture = (article, paragraphe, enonce) => ({ nature: "lecture", texte: ARR, article, paragraphe, citation: enonce });
 const questionReponse = (article, origine, citation) => ({ nature: "commentaire", texte: origine, article, paragraphe: "question/réponse", citation });
 
 /* ================================================================== *
@@ -50,7 +60,7 @@ export const regimeLogementFoyer = {
           + "personnes en situation de handicap relèvent du règlement de sécurité des établissements recevant du "
           + "public, en type J — ou en type U pour ceux dont les occupants n'ont pas leur autonomie et doivent "
           + "être surveillés en permanence (point de vue SOCOTEC)." },
-      source: reglement("73 à 76", "articles supprimés", "Article 73 — article supprimé (arrêté du 19 juin 2015). Les mesures définies au chapitre II du présent titre sont applicables aux logements-foyers pour handicapés physiques pouvant se déplacer même en fauteuil roulant, sans l'aide d'une tierce personne.")
+      source: lecture("73 à 76", "articles supprimés", "Article 73 — article supprimé (arrêté du 19 juin 2015). Les mesures définies au chapitre II du présent titre sont applicables aux logements-foyers pour handicapés physiques pouvant se déplacer même en fauteuil roulant, sans l'aide d'une tierce personne.")
     },
     {
       si: { logementFoyer: true, typeLogementFoyer: "personnesAgees" },
