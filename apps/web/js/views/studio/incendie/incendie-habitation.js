@@ -45,7 +45,7 @@ import {
   appliquerZoom as appliquerZoomAuGraphe, noeudsVisibles
 } from "../../ui/graphe-liaisons.js";
 import { reagencer, marquerLesPartants } from "../../ui/transition-flip.js";
-import { dessinerLaCoupe, dessinerLePlan, resumer, resumerLePlan } from "./batiment.js";
+import { dessinerLaCoupe, plansDisponibles, resumer, resumerLePlan } from "./batiment.js";
 import { store } from "../../../store.js";
 
 const etat = {
@@ -1162,8 +1162,15 @@ function dessinerArticle(documentation) {
 function dessinerBatiment(vue) {
   const classement = vue?.faits?.classement ?? null;
   const coupe = dessinerLaCoupe(etat.reponses, { classement });
-  const plan = dessinerLePlan(etat.reponses);
-  if (coupe.vide && plan.vide) {
+  // Un niveau courant, un rez-de-chaussée et un sous-sol ne posent pas les mêmes
+  // questions : superposer les trois donnait un plan qu'aucun étage réel ne
+  // ressemble. Chacun ne se propose que s'il a quelque chose à montrer.
+  const plans = plansDisponibles(etat.reponses);
+  const vues = [
+    ...(coupe.vide ? [] : [["coupe", "Coupe", coupe]]),
+    ...plans
+  ];
+  if (!vues.length) {
     return `
       <aside class="incendie-batiment est-vide">
         <p class="gh-text-muted">Le bâtiment se dessinera ici à mesure des réponses — il montre ce que
@@ -1171,27 +1178,22 @@ function dessinerBatiment(vue) {
       </aside>`;
   }
 
-  // La coupe montre ce qui s'empile, le plan ce qui se mesure à plat. Ni l'une
-  // ni l'autre ne se déduit de sa voisine : la distance de la porte palière la
-  // plus éloignée à l'escalier — celle qui sépare la troisième famille A de la
-  // troisième famille B — ne se voit qu'en plan.
-  const vues = [["coupe", "Coupe", coupe], ["plan", "Plan", plan]].filter(([, , d]) => !d.vide);
   const choisie = vues.find(([cle]) => cle === etat.vueDuBatiment) ?? vues[0];
-  const [, , dessin] = choisie;
+  const [cle, , dessin] = choisie;
 
   return `
     <aside class="incendie-batiment">
       ${vues.length > 1 ? `
         <div class="incendie-batiment__vues" role="tablist">
-          ${vues.map(([cle, libelle]) => `
-            <button type="button" role="tab" aria-selected="${choisie[0] === cle}"
-                    class="incendie-batiment__vue${choisie[0] === cle ? " est-actif" : ""}"
-                    data-incendie-vue-batiment="${cle}">${escapeHtml(libelle)}</button>
+          ${vues.map(([c, libelle]) => `
+            <button type="button" role="tab" aria-selected="${cle === c}"
+                    class="incendie-batiment__vue${cle === c ? " est-actif" : ""}"
+                    data-incendie-vue-batiment="${c}">${escapeHtml(libelle)}</button>
           `).join("")}
         </div>` : ""}
       <div class="incendie-batiment__dessin">${dessin.svg}</div>
-      <p class="incendie-batiment__legende">${escapeHtml(choisie[0] === "plan"
-        ? resumerLePlan(dessin.batiment) : resumer(dessin.batiment, classement))}</p>
+      <p class="incendie-batiment__legende">${escapeHtml(cle === "coupe"
+        ? resumer(dessin.batiment, classement) : resumerLePlan(dessin.batiment, cle))}</p>
       <p class="incendie-batiment__avertissement">Schéma de relecture : ni proportions, ni géométrie réelle.</p>
     </aside>
   `;

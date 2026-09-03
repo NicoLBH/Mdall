@@ -4,8 +4,8 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { lireLeBatiment, dessinerLaCoupe as dessinerLeBatiment, dessinerLePlan, niveauxDuBatiment,
-  terrainEnPente, hauteurDeNiveau, resumer, resumerLePlan } from "./batiment.js";
+import { lireLeBatiment, dessinerLaCoupe as dessinerLeBatiment, dessinerLePlan, plansDisponibles,
+  niveauxDuBatiment, terrainEnPente, hauteurDeNiveau, resumer, resumerLePlan } from "./batiment.js";
 
 test("le rez-de-chaussée s'étiquette « R » : c'est là toute la leçon", () => {
   // On demande « nombre d'étages sur rez-de-chaussée » ; quelqu'un qui compte
@@ -319,4 +319,113 @@ test("une maison individuelle n'a ni couloir commun ni cage", () => {
   const { svg } = dessinerLeBatiment({ logementsSuperposes: "non", etagesSurRdc: "1" });
   assert.doesNotMatch(svg, /bat-couloir/);
   assert.doesNotMatch(svg, /bat-cage/);
+});
+
+/* ── Le parc voisin, collé à la façade ───────────────────────────────────── */
+
+test("le parc contigu se colle à la façade", () => {
+  // Un écart en faisait un autre parc, isolé par une aire libre — ce n'est pas
+  // de cela que parle l'article 87.
+  const { svg } = dessinerLeBatiment({ ...COLLECTIF, parcDeStationnement: "oui",
+    niveauxParcAuDessus: "1", parcContiguAImmeuble: "oui" });
+  const rects = [...svg.matchAll(/<rect x="([\d.]+)"[^>]*class="bat-parc"/g)].map((m) => Number(m[1]));
+  const mur = [...svg.matchAll(/<rect x="([\d.]+)" y="[\d.]+" width="([\d.]+)"[^>]*class="bat-volume"/g)]
+    .map((m) => Number(m[1]) + Number(m[2]))[0];
+  // Le bloc voisin commence exactement au mur : aucune aire libre entre les deux.
+  assert.ok(rects.includes(mur));
+});
+
+test("un parc non contigu s'écarte, et l'écart porte la distance", () => {
+  const { svg } = dessinerLeBatiment({ ...COLLECTIF, parcDeStationnement: "oui",
+    niveauxParcAuDessus: "1", parcContiguAImmeuble: "non", distanceParcAImmeubleHabite: "6" });
+  const rects = [...svg.matchAll(/<rect x="([\d.]+)"[^>]*class="bat-parc"/g)].map((m) => Number(m[1]));
+  const mur = [...svg.matchAll(/<rect x="([\d.]+)" y="[\d.]+" width="([\d.]+)"[^>]*class="bat-volume"/g)]
+    .map((m) => Number(m[1]) + Number(m[2]))[0];
+  // Aucun bloc ne démarre au mur, et le plus à droite s'en éloigne franchement.
+  assert.ok(rects.every((x) => x !== mur));
+  assert.ok(Math.max(...rects) > mur + 20);
+  assert.match(svg, /6 m/);
+});
+
+/* ── Les trois plans ─────────────────────────────────────────────────────── */
+
+test("chaque plan ne se propose que s'il a quelque chose à montrer", () => {
+  assert.deepEqual(plansDisponibles({}).map(([cle]) => cle), []);
+  assert.deepEqual(plansDisponibles({ typeEscalierRetenu: "encloisonne" }).map(([cle]) => cle), ["etage"]);
+  assert.deepEqual(plansDisponibles({ voieAccesDecrite: "oui" }).map(([cle]) => cle), ["rdc"]);
+  // Un parc sans sous-sol ne fait pas un plan de sous-sol.
+  assert.deepEqual(plansDisponibles({ parcDeStationnement: "oui", surfaceParc: "2000",
+    superficieCompartimentParc: "2500" }).map(([cle]) => cle), []);
+  assert.deepEqual(plansDisponibles({ niveauxEnSousSol: "2", parcDeStationnement: "oui",
+    niveauxParcAuDessous: "2", superficieCompartimentParc: "2500", surfaceParc: "2000" })
+    .map(([cle]) => cle), ["sousSol"]);
+});
+
+test("l'étage porte ce que la coupe ne peut pas montrer", () => {
+  const { svg } = dessinerLePlan({ typeEscalierRetenu: "abriFumees",
+    typeCirculationRetenue: "abriFumees", distancePortePaliereEscalier: "14",
+    distanceEscalierAuxBaies: "3", nombreEscaliersProteges: "2", distanceEntreEscaliers: "12",
+    ascenseur: "oui", coursivesPasserellesOuCirculationsAAirLibre: "oui" }, { niveau: "etage" });
+  assert.match(svg, /Niveau courant/);
+  assert.match(svg, /14 m — porte palière la plus éloignée/);
+  assert.match(svg, /3 m aux baies/);
+  assert.match(svg, /12 m entre escaliers/);
+  assert.equal((svg.match(/class="plan-cage/g) ?? []).length, 2);
+  assert.match(svg, /plan-ascenseur/);
+  assert.match(svg, /plan-coursive/);
+});
+
+test("le rez-de-chaussée porte ce qui se mesure depuis l'extérieur", () => {
+  const { svg } = dessinerLePlan({ voieAccesDecrite: "oui", accesEscaliersAtteintsParVoieEchelles: "oui",
+    distanceDebouchEscalierSortie: "5", distanceLimiteDePropriete: "8", longueurDuBatiment: "42",
+    hallDessertServicesCollectifs: "oui" }, { niveau: "rdc" });
+  assert.match(svg, /Rez-de-chaussée/);
+  assert.match(svg, /hall \+ services/);
+  assert.match(svg, /5 m au débouché/);
+  assert.match(svg, /8 m/);
+  assert.match(svg, /42 m de longueur/);
+  assert.match(svg, /plan-limite/);
+  assert.match(svg, /voie-échelles/);
+});
+
+test("une maison en bande montre ses voisines au rez-de-chaussée", () => {
+  const { svg } = dessinerLePlan({ logementsSuperposes: "non", implantation: "bande",
+    structuresIndependantes: "oui", voieAccesDecrite: "oui" }, { niveau: "rdc" });
+  assert.equal((svg.match(/class="plan-voisin"/g) ?? []).length, 2);
+  assert.match(svg, /bat-joint est-independant/);
+});
+
+test("le sous-sol compte les compartiments et suit le chemin vers l'issue", () => {
+  const sousSol = { niveauxEnSousSol: "2", parcDeStationnement: "oui", niveauxParcAuDessous: "2",
+    surfaceParc: "9000", superficieCompartimentParc: "3000", boxesDansLeParc: "oui",
+    emplacementsParBox: "2", plusieursIssuesAuChoix: "oui", distanceAParcourirVersIssueParc: "30",
+    typeEscalierRetenu: "encloisonne", celliersOuCavesRegroupes: "oui" };
+  const { svg } = dessinerLePlan(sousSol, { niveau: "sousSol" });
+  assert.match(svg, /3 compartiments/);
+  assert.equal((svg.match(/class="plan-compartiment"/g) ?? []).length, 2);
+  assert.match(svg, /box — 2 emplacement/);
+  // Deux issues au choix, donc deux sas et deux escaliers.
+  assert.equal((svg.match(/class="plan-sas"/g) ?? []).length, 2);
+  assert.match(svg, /30 m à parcourir/);
+  assert.match(svg, /bat-celliers/);
+});
+
+test("les larges ouvertures sur deux faces se voient, et écartent la ventilation", () => {
+  const base = { niveauxEnSousSol: "1", parcDeStationnement: "oui", niveauxParcAuDessous: "1",
+    ventilationParcRetenue: "mecanique" };
+  const mecanique = dessinerLePlan(base, { niveau: "sousSol" });
+  assert.match(mecanique.svg, /ventilation mécanique/);
+  const ouvertes = dessinerLePlan({ ...base, largesOuverturesDeuxFacesOpposees: "oui" }, { niveau: "sousSol" });
+  assert.equal((ouvertes.svg.match(/class="plan-ouverture"/g) ?? []).length, 2);
+  assert.doesNotMatch(ouvertes.svg, /ventilation mécanique/);
+});
+
+test("chaque plan se résume dans ses propres termes", () => {
+  const batiment = lireLeBatiment({ typeEscalierRetenu: "encloisonne", voieAccesDecrite: "oui",
+    longueurDuBatiment: "42", niveauxEnSousSol: "2", parcDeStationnement: "oui",
+    niveauxParcAuDessous: "2", superficieCompartimentParc: "3000", plusieursIssuesAuChoix: "oui" });
+  assert.match(resumerLePlan(batiment, "etage"), /^Niveau courant : escalier encloisonné/);
+  assert.match(resumerLePlan(batiment, "rdc"), /^Rez-de-chaussée : .*42 m de longueur/);
+  assert.match(resumerLePlan(batiment, "sousSol"), /^Sous-sol : .*plusieurs issues au choix/);
+  assert.equal(resumerLePlan(lireLeBatiment({}), "sousSol"), "Rien n'a encore été décrit au sous-sol.");
 });
