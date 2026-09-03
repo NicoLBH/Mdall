@@ -96,6 +96,61 @@ export function cheminAmont(id, graphe) {
 }
 
 /**
+ * Ce qui dépend du nœud désigné, de proche en proche.
+ *
+ * L'amont explique une conclusion ; l'aval dit ce qu'elle entraîne. Les deux
+ * ensemble forment le chemin décisionnel complet : c'est ce qu'on veut voir
+ * quand on désigne une carte, et rien d'autre — les cent vingt autres cartes ne
+ * font qu'éloigner celles qui comptent.
+ */
+export function cheminAval(id, graphe) {
+  const rangs = new Map();
+  if (!id || !graphe) return rangs;
+  const parId = new Map(graphe.noeuds.map((n) => [n.id, n]));
+  const aVoir = [[id, 0]];
+  while (aVoir.length) {
+    const [courant, rang] = aVoir.shift();
+    if (rangs.has(courant) && rangs.get(courant) <= rang) continue;
+    rangs.set(courant, rang);
+    const produit = parId.get(courant)?.produit;
+    if (!produit) continue;
+    for (const noeud of graphe.noeuds) {
+      if ((noeud.demande ?? []).includes(produit)) aVoir.push([noeud.id, rang + 1]);
+    }
+  }
+  return rangs;
+}
+
+/** Le chemin décisionnel complet : ce qui décide, et ce qui en dépend. */
+export function cheminComplet(id, graphe) {
+  const complet = new Set(cheminAmont(id, graphe).keys());
+  for (const cle of cheminAval(id, graphe).keys()) complet.add(cle);
+  return complet;
+}
+
+/**
+ * Les nœuds qu'on montre, selon ce qu'on cherche à voir.
+ *
+ * Par défaut, seuls ceux qui **portent une réponse** : un schéma où les deux
+ * tiers des cartes disent « sans objet » se lit mal, et ce n'est pas ce qu'on
+ * vient y chercher. Ceux-là restent accessibles — la carte du référentiel
+ * entier a sa valeur, notamment pour vérifier qu'on n'a rien oublié — mais sur
+ * demande.
+ *
+ * Quand une carte est désignée, on resserre encore : son chemin complet, et lui
+ * seul.
+ */
+export function noeudsVisibles(graphe, { montrerTout = false, chemin = null } = {}) {
+  const tous = graphe?.noeuds ?? [];
+  if (chemin) {
+    const retenus = cheminComplet(chemin, graphe);
+    return new Set(tous.filter((n) => retenus.has(n.id)).map((n) => n.id));
+  }
+  if (montrerTout) return new Set(tous.map((n) => n.id));
+  return new Set(tous.filter((n) => n.etat !== "sansObjet").map((n) => n.id));
+}
+
+/**
  * Le graphe, en HTML.
  *
  * @param {object} options
@@ -109,15 +164,34 @@ export function cheminAmont(id, graphe) {
  */
 export function dessinerGrapheLiaisons({
   graphe, selection = null, zoom = 1, pleinEcran = false,
-  legende = "", rangNomme = "Niveau", detail = ""
+  legende = "", rangNomme = "Niveau", detail = "",
+  montrerTout = false, peutToutMontrer = false, chemin = null
 } = {}) {
-  const colonnes = rangerParProfondeur(graphe);
+  const visibles = noeudsVisibles(graphe, { montrerTout, chemin });
+  const colonnes = rangerParProfondeur(graphe)
+    .map((colonne) => colonne.filter((n) => visibles.has(n.id)))
+    .filter((colonne) => colonne.length);
+  const caches = (graphe?.noeuds?.length ?? 0) - visibles.size;
 
   return `
-    <section class="graphe-bloc${pleinEcran ? " est-plein-ecran" : ""}" data-graphe-bloc>
+    <section class="graphe-bloc${pleinEcran ? " est-plein-ecran" : ""}${detail ? " est-detaille" : ""}" data-graphe-bloc>
       <div class="graphe__tete">
-        <p class="graphe__legende">${legende}</p>
+        <p class="graphe__legende">${legende}${caches > 0 ? `
+          <span class="graphe__caches">${caches} carte${caches > 1 ? "s" : ""} masquée${caches > 1 ? "s" : ""}${
+            chemin ? " — hors du chemin décisionnel" : " — sans objet dans ce cas"}.</span>` : ""}</p>
         <div class="graphe__outils">
+          ${chemin ? `
+            <button type="button" class="graphe__outil est-actif" data-graphe-chemin="sortir"
+                    aria-label="Revoir tout le schéma" title="Revoir tout le schéma">
+              ${svgIcon("x", { className: "octicon" })}
+            </button>` : ""}
+          ${peutToutMontrer ? `
+            <button type="button" class="graphe__outil${montrerTout ? " est-actif" : ""}" data-graphe-tout
+                    aria-pressed="${montrerTout}"
+                    aria-label="${montrerTout ? "Ne montrer que ce qui décide" : "Tout afficher"}"
+                    title="${montrerTout ? "Ne montrer que ce qui décide" : "Tout afficher, y compris ce qui est sans objet"}">
+              ${svgIcon("stack", { className: "octicon" })}
+            </button>` : ""}
           <button type="button" class="graphe__outil" data-graphe-zoom="out" aria-label="Réduire" title="Réduire">
             ${svgIcon("minus", { className: "octicon" })}
           </button>
@@ -133,6 +207,8 @@ export function dessinerGrapheLiaisons({
         </div>
       </div>
 
+      <div class="graphe__scene">
+      <aside class="graphe-detail${detail ? " est-ouvert" : ""}" data-graphe-detail>${detail}</aside>
       <div class="graphe" data-graphe-vue>
         <div class="graphe__toile" data-graphe-toile style="--graphe-zoom:${zoom}">
           <svg class="graphe__liens" data-graphe-liens aria-hidden="true"></svg>
@@ -154,7 +230,7 @@ export function dessinerGrapheLiaisons({
           `).join("")}
         </div>
       </div>
-      <div class="graphe-detail" data-graphe-detail>${detail}</div>
+      </div>
     </section>
   `;
 }
@@ -191,6 +267,8 @@ export function tracerLesLiens(root, { graphe, selection = null, zoom = 1 } = {}
   for (const lien of graphe.liens ?? []) {
     const de = boites.get(lien.de);
     const vers = boites.get(lien.vers);
+    // Un lien dont une extrémité n'est pas affichée ne se trace pas : il
+    // partirait du vide, et l'on croirait à une liaison vers rien.
     if (!de || !vers) continue;
     const x1 = de.droite, y1 = de.milieu, x2 = vers.gauche, y2 = vers.milieu;
     const courbe = Math.max(18, (x2 - x1) / 2);
@@ -234,12 +312,16 @@ export function appliquerZoom(root, zoom) {
  * entière. Survol **et** clic désignent : le survol pour parcourir, le clic
  * pour s'arrêter dessus.
  */
-export function brancherGrapheLiaisons(root, { onDesigner, onZoom, onPleinEcran, onSurvol } = {}) {
+export function brancherGrapheLiaisons(root, {
+  onDesigner, onZoom, onPleinEcran, onSurvol, onToutMontrer, onSortirDuChemin
+} = {}) {
   if (!root) return;
 
   root.addEventListener("click", (evenement) => {
     const noeud = evenement.target.closest("[data-graphe-noeud]");
     if (noeud) { onDesigner?.(noeud.dataset.grapheNoeud); return; }
+    if (evenement.target.closest("[data-graphe-chemin]")) { onSortirDuChemin?.(); return; }
+    if (evenement.target.closest("[data-graphe-tout]")) { onToutMontrer?.(); return; }
     const zoom = evenement.target.closest("[data-graphe-zoom]");
     if (zoom) { onZoom?.(zoom.dataset.grapheZoom); return; }
     if (evenement.target.closest("[data-graphe-plein-ecran]")) onPleinEcran?.();

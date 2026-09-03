@@ -18248,7 +18248,54 @@ strong.est-verifie{ color:#3fb950; }
 .graphe-noeud.est-sansObjet .graphe-noeud__valeur,
 .graphe-noeud.est-attente .graphe-noeud__valeur{ color:var(--muted); }
 .graphe-noeud__amont{ font-size:10px; color:var(--muted); line-height:1.4; }
-.graphe-detail{ margin-top:14px; }
+/* ── La scène : le détail à gauche, la toile à droite ────────────────────
+   Le schéma est long ; lire le détail d'une carte en bas de page, c'est perdre
+   le schéma de vue. Le panneau s'ouvre donc à côté, et les deux tiennent
+   ensemble. En dessous de 900 px il repasse au-dessus : deux colonnes de 200 px
+   ne valent pas mieux qu'une. */
+.graphe__scene{ display:flex; gap:0; align-items:stretch; }
+.graphe-detail{
+  flex:0 0 0; width:0; opacity:0; overflow:hidden; border-right:1px solid transparent;
+  transition:flex-basis .28s cubic-bezier(.22,.61,.36,1), width .28s cubic-bezier(.22,.61,.36,1),
+             opacity .2s ease, padding .28s ease;
+}
+.graphe-detail.est-ouvert{
+  flex:0 0 clamp(300px, 32%, 440px); width:clamp(300px, 32%, 440px); opacity:1;
+  padding:0 14px 0 0; margin-right:14px; border-right-color:var(--border2, #30363d);
+  overflow:auto; max-height:70vh;
+}
+.graphe-detail__tete{
+  display:flex; gap:8px; align-items:flex-start; justify-content:space-between;
+  position:sticky; top:0; background:var(--bg, #0d1117); padding:2px 0 8px; z-index:2;
+}
+.graphe-detail__tete h5{ margin:0; font-size:13px; }
+.graphe-detail__fermer{
+  background:none; border:none; color:var(--muted); cursor:pointer; padding:2px; flex:none; line-height:0;
+}
+.graphe-detail__fermer:hover{ color:#f0883e; }
+@media (max-width: 900px){
+  .graphe__scene{ flex-direction:column; }
+  .graphe-detail.est-ouvert{ flex:none; width:auto; max-height:none; margin:0 0 12px; padding:0 0 12px;
+    border-right:none; border-bottom:1px solid var(--border2, #30363d); }
+}
+
+/* ── Le réagencement, joué plutôt que subi ───────────────────────────────
+   Une carte qui s'en va pâlit et se rétracte à sa place ; les autres glissent
+   ensuite jusqu'à la leur. Les deux temps sont séparés : sans cela, l'œil ne
+   suivrait ni l'un ni l'autre. */
+.graphe-noeud.est-en-sortie{
+  opacity:0; transform:scale(.94); transition:opacity .17s ease, transform .17s ease;
+  pointer-events:none;
+}
+.graphe-noeud.est-en-entree{ opacity:0; transform:scale(.96); }
+.graphe-noeud{ transition:opacity .22s ease, transform .22s ease, background .12s, border-color .12s; }
+@media (prefers-reduced-motion: reduce){
+  .graphe-noeud, .graphe-detail{ transition:none !important; }
+  .graphe-noeud.est-en-sortie, .graphe-noeud.est-en-entree{ transition:none !important; }
+}
+
+.graphe__caches{ display:block; margin-top:4px; color:var(--muted); font-style:italic; }
+.graphe__outil.est-actif{ color:#f0883e; border-color:#f0883e; }
 
 .incendie-portee{ display:grid; gap:20px; }
 .incendie-portee h5{ margin:0 0 8px; font-size:13px; display:flex; gap:6px; align-items:center; }
@@ -18543,51 +18590,55 @@ strong.est-verifie{ color:#3fb950; }
 }
 .notice__copier:hover{ color:#f0883e; border-color:#f0883e; }
 .notice__copier.est-copiee{ color:#3fb950; border-color:#3fb950; }
-.notice__colonnes{ display:grid; grid-template-columns:minmax(0,1.2fr) minmax(300px,1fr); gap:16px; align-items:start; }
-@media (max-width: 1000px){ .notice__colonnes{ grid-template-columns:1fr; } }
-
-.notice-texte{
+/* Une grille, et une seule : chaque phrase occupe une ligne, et sa hauteur est
+   celle de son plus haut occupant. La phrase est donc toujours en face de ce
+   qui la complète — rien à synchroniser, rien à mesurer. */
+.notice-document{
+  display:grid; grid-template-columns:minmax(0,1.15fr) minmax(290px,1fr);
+  gap:6px 22px; align-items:start;
   border:1px solid var(--border2, #30363d); border-radius:8px; padding:18px 22px;
   background:var(--bg2, rgba(110,118,129,.05)); font-size:13px; line-height:1.7;
 }
-.notice-texte__tete{ text-align:center; border-bottom:1px solid var(--border2, #30363d); padding-bottom:10px; margin-bottom:14px; }
-.notice-texte__tete h4{ margin:0; font-size:15px; letter-spacing:.04em; text-transform:uppercase; }
-.notice-texte__tete p{ margin:4px 0 0; font-size:12px; color:var(--muted); }
-.notice-entete{ display:grid; grid-template-columns:auto 1fr; gap:2px 14px; margin:0 0 16px; font-size:12.5px; }
+@media (max-width: 1000px){ .notice-document{ grid-template-columns:1fr; } }
+.notice-document__tete{ grid-column:1/-1; text-align:center; border-bottom:1px solid var(--border2, #30363d);
+  padding-bottom:10px; margin-bottom:10px; }
+.notice-document__tete h4{ margin:0; font-size:15px; letter-spacing:.04em; text-transform:uppercase; }
+.notice-document__tete p{ margin:4px 0 0; font-size:12px; color:var(--muted); }
+.notice-document__mot{
+  grid-column:1/-1; display:flex; gap:8px; align-items:flex-start; margin:0 0 8px; padding:8px 12px;
+  border-radius:8px; border:1px dashed var(--border2, #30363d); color:var(--muted); font-size:12px; line-height:1.55;
+}
+.notice-entete{ grid-column:1/-1; display:grid; grid-template-columns:auto 1fr; gap:2px 14px;
+  margin:0 0 14px; font-size:12.5px; }
 .notice-entete dt{ color:var(--muted); }
 .notice-entete dd{ margin:0; white-space:pre-line; }
-.notice-section{ margin-bottom:16px; }
-.notice-section h5{ margin:0 0 6px; font-size:13px; text-transform:uppercase; letter-spacing:.03em; }
-.notice-sous-section{ margin:10px 0 0 14px; }
-.notice-sous-section h6{ margin:0 0 4px; font-size:12.5px; color:var(--muted); }
-.notice-paragraphe{ margin:0 0 6px; }
+.notice-titre{ grid-column:1/-1; margin:14px 0 4px; font-size:13px; text-transform:uppercase; letter-spacing:.03em; }
+.notice-sous-titre{ grid-column:1/-1; margin:10px 0 2px 14px; font-size:12.5px; color:var(--muted); }
+.notice-paragraphe{ margin:0 0 4px; grid-column:1; }
+/* La phrase qui attend une précision porte un repère discret : sans lui, on ne
+   sait pas laquelle des deux colonnes appelle l'autre. */
+.notice-paragraphe.est-completable{ border-left:2px solid rgba(240,136,62,.35); padding-left:10px; margin-left:-12px; }
+.notice-cellule{ grid-column:2; }
 
-.notice__complements{ display:grid; gap:12px; position:sticky; top:8px; }
-.notice-champs{ display:grid; gap:12px; }
-.notice-champs__mot{
-  display:flex; gap:8px; align-items:flex-start; margin:0; padding:10px 12px; border-radius:8px;
-  border:1px dashed var(--border2, #30363d); color:var(--muted); font-size:12px; line-height:1.55;
-}
-.notice-champ{ border:1px solid var(--border2, #30363d); border-radius:8px; padding:10px 12px; }
-.notice-champ h6{ margin:0 0 4px; font-size:12px; }
-.notice-champ__extrait{ margin:0 0 8px; font-size:11.5px; color:var(--muted); line-height:1.5; font-style:italic; }
-.notice-champ__options{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; }
+.notice-champ{ border:1px solid var(--border2, #30363d); border-radius:8px; padding:8px 10px; margin-bottom:4px; }
+.notice-champ h6{ margin:0 0 6px; font-size:11.5px; color:var(--muted); }
+.notice-champ__options{ display:flex; flex-wrap:wrap; gap:5px; margin-bottom:6px; }
 .notice-option{
   display:inline-flex; align-items:center; gap:6px; background:none; border:1px solid var(--border2, #30363d);
-  border-radius:14px; padding:3px 10px; color:inherit; font-size:12px; cursor:pointer;
+  border-radius:14px; padding:2px 9px; color:inherit; font-size:11.5px; cursor:pointer; line-height:1.5;
 }
 .notice-option:hover{ border-color:#f0883e; }
 .notice-option.est-coche{ border-color:#f0883e; background:rgba(240,136,62,.12); }
 .notice-option__marque{
-  width:11px; height:11px; border-radius:3px; border:1.5px solid var(--border2, #30363d); flex:none;
+  width:10px; height:10px; border-radius:3px; border:1.5px solid var(--border2, #30363d); flex:none;
 }
 .notice-option.est-coche .notice-option__marque{ background:#f0883e; border-color:#f0883e; }
 .notice-option em{ font-size:10px; color:var(--muted); font-style:normal; }
+.notice-champ__libres{ margin:0 0 6px; font-size:11.5px; color:#3fb950; }
 .notice-champ__texte{
   width:100%; background:var(--bg, transparent); color:inherit; border:1px solid var(--border2, #30363d);
-  border-radius:6px; padding:6px 8px; font:inherit; font-size:12px; resize:vertical;
+  border-radius:6px; padding:5px 8px; font:inherit; font-size:11.5px; resize:vertical;
 }
-.notice-champ__apercu{ margin-top:6px; font-size:12px; color:var(--muted); }
 
 .notice-entete-saisie{ border:1px solid var(--border2, #30363d); border-radius:8px; padding:8px 12px; flex:1 1 340px; }
 .notice-entete-saisie summary{ cursor:pointer; font-size:12px; color:var(--muted); }
@@ -18600,3 +18651,16 @@ strong.est-verifie{ color:#3fb950; }
   background:var(--bg, transparent); color:inherit; border:1px solid var(--border2, #30363d);
   border-radius:6px; padding:5px 8px; font:inherit; font-size:12px; resize:vertical;
 }
+/* Le panneau porte déjà le titre de la carte, en tête collante : la conclusion
+   ne le répète pas deux lignes plus bas. */
+.graphe-detail .incendie-conclusion__tete h5{ display:none; }
+.graphe-detail .incendie-conclusion__tete{ justify-content:flex-end; }
+/* Le champ libre reste replié : la ligne de la notice prend alors la hauteur du
+   texte, et non celle d'un formulaire qu'on n'a pas ouvert. Il s'ouvre de
+   lui-même quand il porte déjà quelque chose. */
+.notice-champ__autre summary{ cursor:pointer; font-size:11px; color:var(--muted); list-style:none; }
+.notice-champ__autre summary::-webkit-details-marker{ display:none; }
+.notice-champ__autre summary::before{ content:"+ "; }
+.notice-champ__autre[open] summary::before{ content:"− "; }
+.notice-champ__autre summary:hover{ color:#f0883e; }
+.notice-champ__autre[open] summary{ margin-bottom:5px; }

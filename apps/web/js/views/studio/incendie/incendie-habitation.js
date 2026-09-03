@@ -38,8 +38,10 @@ import {
 import { dessinerLaNotice, paragraphesDe, departementDe } from "./notice-ecran.js";
 import { renderMarkdownToHtml } from "../../../utils/markdown-renderer.js";
 import {
-  dessinerGrapheLiaisons, brancherGrapheLiaisons, tracerLesLiens as tracerLesLiensDuGraphe, appliquerZoom as appliquerZoomAuGraphe
+  dessinerGrapheLiaisons, brancherGrapheLiaisons, tracerLesLiens as tracerLesLiensDuGraphe,
+  appliquerZoom as appliquerZoomAuGraphe, noeudsVisibles
 } from "../../ui/graphe-liaisons.js";
+import { reagencer, marquerLesPartants } from "../../ui/transition-flip.js";
 import { dessinerLaCoupe, dessinerLePlan, resumer, resumerLePlan } from "./batiment.js";
 import { store } from "../../../store.js";
 
@@ -75,6 +77,20 @@ const etat = {
   /** Le schéma : son grossissement, et s'il occupe la page. */
   zoom: 1,
   pleinEcran: false,
+
+  /**
+   * Ce que le schéma montre.
+   *
+   * Par défaut, seulement ce qui porte une réponse : un schéma où les deux
+   * tiers des cartes disent « sans objet » se lit mal, et ce n'est pas ce qu'on
+   * vient y chercher. `montrerTout` rouvre la carte entière — utile pour
+   * vérifier qu'on n'a rien oublié, et réservé à qui a le droit de vérifier.
+   * `chemin` resserre encore : la carte désignée, ce qui la décide, ce qui en
+   * dépend, et rien d'autre.
+   */
+  montrerTout: false,
+  chemin: null,
+  peutToutMontrer: false,
 
   /**
    * Les questions telles que le serveur les a décrites, retenues au passage.
@@ -132,6 +148,8 @@ function oublierLeProjet() {
   etat.questionsVues = {};
   etat.zoom = 1;
   etat.pleinEcran = false;
+  etat.montrerTout = false;
+  etat.chemin = null;
   etat.articleOuvert = false;
   etat.inspection = null;
   etat.vueDuBatiment = "coupe";
@@ -173,6 +191,9 @@ async function consulter(root) {
   dessiner(root);
   try {
     etat.vue = await consulterIncendie(etat.reponses);
+    // Le serveur dit s'il ouvrira le dépouillement : le bouton « tout
+    // afficher » ne doit pas paraître puis disparaître au premier clic.
+    etat.peutToutMontrer = etat.vue?.inspecteur === true;
     tenirLeParcours();
   } catch (erreur) {
     etat.erreur = erreur instanceof Error ? erreur.message : String(erreur);
@@ -343,7 +364,13 @@ function brancher(root) {
   // pour parcourir, cliquer pour s'arrêter dessus et ouvrir son détail.
   brancherGrapheLiaisons(root, {
     onSurvol: (id) => designer(root, id),
-    onDesigner: (id) => { designer(root, id); void inspecter_(root, id); },
+    onDesigner: (id) => {
+      designer(root, id);
+      void inspecter_(root, id);
+      // Désigner une carte, c'est demander à voir son raisonnement : les cent
+      // vingt autres n'y aident pas, elles éloignent celles qui comptent.
+      void changerLAffichage(root, { chemin: id });
+    },
     /* eslint-disable-next-line no-unused-vars */
     onZoom: (sens) => {
       const delta = sens === "in" ? 0.15 : -0.15;
@@ -351,7 +378,9 @@ function brancher(root) {
       appliquerZoomAuGraphe(root, etat.zoom);
       tracerLesLiens(root);
     },
-    onPleinEcran: () => { etat.pleinEcran = !etat.pleinEcran; dessiner(root); }
+    onPleinEcran: () => { etat.pleinEcran = !etat.pleinEcran; dessiner(root); },
+    onToutMontrer: () => void changerLAffichage(root, { montrerTout: !etat.montrerTout }),
+    onSortirDuChemin: () => { etat.survole = null; etat.inspection = null; void changerLAffichage(root, { chemin: null }); }
   });
 
   // Les résultats désignent aussi : une conclusion qu'on lit dans l'onglet
@@ -512,6 +541,43 @@ async function copierLaNotice(root) {
       bouton.textContent = ancien;
     }, 1800);
   }
+}
+
+/**
+ * Changer ce que le schéma montre — et le montrer, plutôt que de le remplacer.
+ *
+ * Un rafraîchissement donnerait un autre schéma : on ne saurait pas ce qui a
+ * disparu ni où est passé ce qu'on regardait, et il faudrait relire. Le même
+ * changement joué — les cartes écartées s'effacent, les autres remontent
+ * combler les trous — se comprend sans relire, parce qu'on a suivi le
+ * mouvement.
+ *
+ * Le procédé est dans `transition-flip.js`, et il ne sait rien du feu : c'est
+ * le même geste qui montrera, dans la Mémoire, une affirmation qui s'écarte et
+ * les autres qui se resserrent.
+ */
+async function changerLAffichage(root, changements) {
+  if (etat.onglet !== "schema" || !etat.vue) {
+    Object.assign(etat, changements);
+    return;
+  }
+  const scene = root.querySelector("[data-graphe-bloc]");
+  if (!scene) { Object.assign(etat, changements); dessiner(root); return; }
+
+  const suivant = { ...etat, ...changements };
+  const parId = new Map(etat.vue.modules.map((m) => [m.id, m]));
+  const graphe = grapheAffichable(etat.vue, parId);
+  const restantes = noeudsVisibles(graphe, { montrerTout: suivant.montrerTout, chemin: suivant.chemin });
+
+  marquerLesPartants(scene, "[data-graphe-noeud]", "data-graphe-noeud", restantes);
+  // On mesure depuis `root`, pas depuis la scène : le redessin remplace la
+  // scène, et un élément détaché ne se mesure plus. `root`, lui, survit.
+  await reagencer(root, {
+    selecteur: "[data-graphe-noeud]",
+    attribut: "data-graphe-noeud",
+    appliquer: () => { Object.assign(etat, changements); dessiner(root); },
+    apres: () => tracerLesLiens(root)
+  });
 }
 
 /** Le panneau de détail seul : redessiner le schéma entier perdrait le zoom. */
@@ -1010,6 +1076,9 @@ function dessinerSchema(vue) {
     selection: etat.survole,
     zoom: etat.zoom,
     pleinEcran: etat.pleinEcran,
+    montrerTout: etat.montrerTout,
+    peutToutMontrer: etat.peutToutMontrer,
+    chemin: etat.chemin,
     rangNomme: "Niveau",
     legende: `
       ${vue.graphe.noeuds.length} modules, ${vue.graphe.liens.length} liaisons,
@@ -1074,12 +1143,19 @@ function tracerLesLiens(root) {
  */
 function dessinerDetail() {
   const module = etat.vue?.modules.find((m) => m.id === etat.survole);
-  if (!module) {
-    return `<p class="gh-text-muted">Survolez une carte pour lire ce qu'elle a conclu ; cliquez dessus pour ouvrir l'article et les liaisons.</p>`;
-  }
+  if (!module) return "";
   return `
-    ${dessinerConclusion(module)}
-    ${dessinerInspection(module)}
+    <header class="graphe-detail__tete">
+      <h5>${escapeHtml(module.titre)}</h5>
+      <button type="button" class="graphe-detail__fermer" data-graphe-chemin="sortir"
+              aria-label="Fermer le détail" title="Fermer le détail et revoir tout le schéma">
+        ${svgIcon("x", { className: "octicon" })}
+      </button>
+    </header>
+    <div class="graphe-detail__corps">
+      ${dessinerConclusion(module)}
+      ${dessinerInspection(module)}
+    </div>
   `;
 }
 

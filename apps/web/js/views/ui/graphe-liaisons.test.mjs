@@ -8,7 +8,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { rangerParProfondeur, cheminAmont } from "./graphe-liaisons.js";
+import { rangerParProfondeur, cheminAmont, cheminAval, cheminComplet, noeudsVisibles } from "./graphe-liaisons.js";
 
 /** a → b → d, et a → c → d : un losange, la forme qui piège les tris. */
 const LOSANGE = {
@@ -80,4 +80,50 @@ test("sans nœud désigné, rien n'est allumé", () => {
 test("un graphe vide ne rend pas de colonne", () => {
   assert.deepEqual(rangerParProfondeur({ noeuds: [], liens: [] }), []);
   assert.deepEqual(rangerParProfondeur(null), []);
+});
+
+/* ── Ce que le graphe montre, et ce qu'il écarte ─────────────────────────── */
+
+const AVEC_ETATS = {
+  noeuds: [
+    { id: "a", produit: "A", demande: [], etat: "conclu" },
+    { id: "b", produit: "B", demande: ["A"], etat: "conclu" },
+    { id: "c", produit: "C", demande: ["A"], etat: "sansObjet" },
+    { id: "d", produit: "D", demande: ["B"], etat: "conclu" },
+    { id: "e", produit: "E", demande: [], etat: "sansObjet" }
+  ],
+  liens: [{ de: "a", vers: "b" }, { de: "a", vers: "c" }, { de: "b", vers: "d" }]
+};
+
+test("par défaut, seules les cartes qui portent une réponse se montrent", () => {
+  // Un schéma où les deux tiers des cartes disent « sans objet » se lit mal, et
+  // ce n'est pas ce qu'on vient y chercher.
+  assert.deepEqual([...noeudsVisibles(AVEC_ETATS)], ["a", "b", "d"]);
+});
+
+test("on peut rouvrir la carte entière — c'est ainsi qu'on vérifie qu'il ne manque rien", () => {
+  assert.deepEqual([...noeudsVisibles(AVEC_ETATS, { montrerTout: true })], ["a", "b", "c", "d", "e"]);
+});
+
+test("désigner une carte resserre sur son chemin décisionnel complet", () => {
+  // L'amont explique la conclusion, l'aval dit ce qu'elle entraîne. Les autres
+  // cartes n'aident pas : elles éloignent celles qui comptent.
+  assert.deepEqual([...noeudsVisibles(AVEC_ETATS, { chemin: "b" })].sort(), ["a", "b", "d"]);
+  // Et le chemin l'emporte sur « tout montrer » : on a demandé à voir celui-là.
+  assert.deepEqual([...noeudsVisibles(AVEC_ETATS, { chemin: "b", montrerTout: true })].sort(), ["a", "b", "d"]);
+});
+
+test("l'aval remonte de proche en proche, comme l'amont", () => {
+  const aval = cheminAval("a", AVEC_ETATS);
+  assert.equal(aval.get("a"), 0);
+  assert.equal(aval.get("b"), 1);
+  assert.equal(aval.get("c"), 1);
+  assert.equal(aval.get("d"), 2);
+  assert.equal(aval.has("e"), false);
+  assert.equal(cheminAval(null, AVEC_ETATS).size, 0);
+});
+
+test("le chemin complet réunit les deux sens", () => {
+  assert.deepEqual([...cheminComplet("b", AVEC_ETATS)].sort(), ["a", "b", "d"]);
+  assert.deepEqual([...cheminComplet("e", AVEC_ETATS)].sort(), ["e"]);
 });

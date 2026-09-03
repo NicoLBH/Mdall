@@ -109,7 +109,9 @@ Deno.serve(async (req: Request) => {
     if (typeof produit === "string" && produit) {
       return json({ version: VERSION, reponse: demander(produit, donnees) });
     }
-    return json(consulter(donnees));
+    // L'écran a besoin de savoir, dès la première réponse, s'il peut proposer
+    // de tout montrer : le bouton ne doit pas apparaître puis disparaître.
+    return json({ ...consulter(donnees), inspecteur: peutInspecter(qui.user, Deno.env.get("INCENDIE_INSPECTEURS")) });
   } catch (erreur) {
     return json({ error: erreur instanceof Error ? erreur.message : String(erreur) }, 400);
   }

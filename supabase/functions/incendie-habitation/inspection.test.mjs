@@ -4,15 +4,27 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { peutInspecter, inspecteursAutorises, lireCondition, expliquerModule } from "./inspection.js";
+import { peutInspecter, inspecteursAutorises, lireCondition, expliquerModule, INSPECTEURS_DU_REFERENTIEL } from "./inspection.js";
 import { CORPUS, consulter, expliquer, questionDe } from "./corpus.js";
 
-test("sans secret, personne n'inspecte — pas même celui qui a créé le projet", () => {
+test("sans secret, personne n'inspecte — sauf les auteurs du référentiel", () => {
   // C'est le point du dispositif : un mode de vérification ouvert à tous les
   // collaborateurs d'un projet serait exactement ce qu'on refusait de faire.
   for (const secret of [undefined, "", "   ", ","]) {
     assert.equal(peutInspecter({ id: "u1", email: "a@b.c" }, secret), false, JSON.stringify(secret));
   }
+  // Les auteurs gardent la clé sans qu'un secret ait à être déployé : on ne
+  // vérifie pas un dépouillement une fois, on le vérifie en l'écrivant.
+  for (const auteur of INSPECTEURS_DU_REFERENTIEL) {
+    assert.equal(peutInspecter({ email: auteur }, undefined), true, auteur);
+  }
+});
+
+test("le secret s'ajoute à la liste des auteurs, il ne la remplace pas", () => {
+  const secret = "collegue@bureau.fr";
+  assert.equal(peutInspecter({ email: "collegue@bureau.fr" }, secret), true);
+  assert.equal(peutInspecter({ email: INSPECTEURS_DU_REFERENTIEL[0] }, secret), true);
+  assert.equal(peutInspecter({ email: "quelqu-un-dautre@ailleurs.fr" }, secret), false);
 });
 
 test("le secret nomme les comptes, par identifiant ou par adresse", () => {
@@ -23,7 +35,8 @@ test("le secret nomme les comptes, par identifiant ou par adresse", () => {
   assert.equal(peutInspecter({ email: "A@B.C" }, secret), true);
   assert.equal(peutInspecter({ email: "autre@b.c" }, secret), false);
   assert.equal(peutInspecter(null, secret), false);
-  assert.deepEqual(inspecteursAutorises("a@b.c;  d@e.f\ng@h.i"), ["a@b.c", "d@e.f", "g@h.i"]);
+  assert.deepEqual(inspecteursAutorises("a@b.c;  d@e.f\ng@h.i").slice(INSPECTEURS_DU_REFERENTIEL.length),
+    ["a@b.c", "d@e.f", "g@h.i"]);
 });
 
 test("une condition se relit à voix haute, sinon autant lire le code", () => {

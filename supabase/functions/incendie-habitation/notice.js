@@ -33,7 +33,15 @@
  * la réponse la plus fréquente. `options` n'est qu'une amorce — la liste vit et
  * se classe à l'usage, on ne construit pas une bibliothèque à l'avance.
  */
-const champ = (cle, libelle, rubrique, options, { multiple = false } = {}) =>
+/**
+ * Plusieurs réponses par défaut, et c'est le bâtiment qui l'impose.
+ *
+ * Un bâtiment a rarement un seul système de façade : enduit au rez-de-chaussée,
+ * bardage bois du premier au troisième. Un seul plancher, non plus : dalle
+ * béton sur le parc, solivage bois dans les étages. Contraindre à un choix
+ * unique obligeait à écrire à la main ce que deux cases disaient déjà.
+ */
+const champ = (cle, libelle, rubrique, options, { multiple = true } = {}) =>
   ({ cle, libelle, rubrique, options, multiple });
 
 const oui = (valeur) => valeur === true || valeur === "oui";
