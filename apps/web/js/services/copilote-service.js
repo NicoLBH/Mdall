@@ -248,7 +248,7 @@ export async function sendAssistMessage(message, {
     await souffler();
 
     for (const appel of appels) {
-      const resultat = executerOutil({
+      const resultat = await executerOutil({
         id: appel?.name,
         entrees: safeJsonParse(appel?.arguments) ?? {},
         assertions,

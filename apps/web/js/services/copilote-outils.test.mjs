@@ -133,10 +133,10 @@ test("une valeur remplacée ne pré-remplit rien", () => {
   assert.deepEqual(prefillDepuisMemoire(SPECTRE, memoire).valeurs, {});
 });
 
-test("ce que le modèle propose l'emporte sur la mémoire — quand quelqu'un l'a dit", () => {
+test("ce que le modèle propose l'emporte sur la mémoire — quand quelqu'un l'a dit", async () => {
   // C'est tout l'objet d'un « et si on passait en catégorie IV ? ». La valeur
   // figure dans la question : elle est justifiée.
-  const resultat = executerOutil({
+  const resultat = await executerOutil({
     id: "spectre_elastique_ec8",
     entrees: { importanceCategory: "IV" },
     assertions: MEMOIRE,
@@ -151,8 +151,8 @@ test("ce que le modèle propose l'emporte sur la mémoire — quand quelqu'un l'
 
 /* ── Ce qui manque ───────────────────────────────────────────────────────── */
 
-test("sans mémoire ni valeurs, l'outil ne calcule pas : il dit ce qu'il attend", () => {
-  const resultat = executerOutil({ id: "spectre_elastique_ec8" });
+test("sans mémoire ni valeurs, l'outil ne calcule pas : il dit ce qu'il attend", async () => {
+  const resultat = await executerOutil({ id: "spectre_elastique_ec8" });
 
   assert.equal(resultat.statut, "manquant");
   assert.deepEqual(resultat.champs.map((champ) => champ.cle).sort(), ["importanceCategory", "soilClass", "zoneSismique"]);
@@ -167,15 +167,15 @@ test("une valeur hors des choix déclarés compte comme manquante", () => {
   assert.deepEqual(manquantes.map((champ) => champ.cle), ["zoneSismique"]);
 });
 
-test("une entrée facultative absente ne bloque rien : son défaut s'applique", () => {
-  const resultat = executerOutil({ id: "spectre_elastique_ec8", assertions: MEMOIRE });
+test("une entrée facultative absente ne bloque rien : son défaut s'applique", async () => {
+  const resultat = await executerOutil({ id: "spectre_elastique_ec8", assertions: MEMOIRE });
 
   assert.equal(resultat.statut, "fait");
   assert.equal(resultat.entrees.dampingRatio, 5);
 });
 
-test("un outil que personne ne connaît se dit inconnu, pas vide", () => {
-  const resultat = executerOutil({ id: "calcul_imaginaire" });
+test("un outil que personne ne connaît se dit inconnu, pas vide", async () => {
+  const resultat = await executerOutil({ id: "calcul_imaginaire" });
 
   assert.equal(resultat.statut, "inconnu");
   assert.match(resultat.message, /calcul_imaginaire/);
@@ -183,8 +183,8 @@ test("un outil que personne ne connaît se dit inconnu, pas vide", () => {
 
 /* ── Le calcul ───────────────────────────────────────────────────────────── */
 
-test("le calcul rend les valeurs de l'utilitaire, avec leur source et leur version", () => {
-  const resultat = executerOutil({ id: "spectre_elastique_ec8", assertions: MEMOIRE });
+test("le calcul rend les valeurs de l'utilitaire, avec leur source et leur version", async () => {
+  const resultat = await executerOutil({ id: "spectre_elastique_ec8", assertions: MEMOIRE });
 
   assert.equal(resultat.statut, "fait");
   assert.equal(resultat.outil, "spectre_elastique_ec8_V1");
@@ -193,16 +193,16 @@ test("le calcul rend les valeurs de l'utilitaire, avec leur source et leur versi
   assert.equal(resultat.unites.TB, "s");
 });
 
-test("changer la catégorie d'importance change l'accélération, et rien d'autre", () => {
+test("changer la catégorie d'importance change l'accélération, et rien d'autre", async () => {
   // C'est la question de l'exemple : ce que le changement déplace, et ce qu'il
   // laisse en place.
-  const avant = executerOutil({ id: "spectre_elastique_ec8", assertions: MEMOIRE }).valeurs;
-  const apres = executerOutil({
+  const avant = (await executerOutil({ id: "spectre_elastique_ec8", assertions: MEMOIRE })).valeurs;
+  const apres = (await executerOutil({
     id: "spectre_elastique_ec8",
     entrees: { importanceCategory: "IV" },
     assertions: MEMOIRE,
     confirmees: ["importanceCategory"]
-  }).valeurs;
+  })).valeurs;
 
   assert.ok(apres.ag > avant.ag, "le coefficient d'importance monte");
   assert.equal(apres.agr, avant.agr, "l'accélération de référence tient à la zone, pas à l'importance");
@@ -280,10 +280,10 @@ test("une valeur de plus de deux caractères se reconnaît sans la casse", () =>
   assert.equal(valeurCiteePar("catégorie II", "III"), false);
 });
 
-test("le modèle qui invente une valeur ne calcule pas : il demande", () => {
+test("le modèle qui invente une valeur ne calcule pas : il demande", async () => {
   // Le cas réel : « quelles conséquences si on change la classe de sol ? »
   // répondu par « si elle passe de B à A… ». Personne n'avait dit A.
-  const resultat = executerOutil({
+  const resultat = await executerOutil({
     id: "spectre_elastique_ec8",
     entrees: { soilClass: "A" },
     assertions: MEMOIRE,
@@ -298,8 +298,8 @@ test("le modèle qui invente une valeur ne calcule pas : il demande", () => {
   assert.equal(resultat.connues.soilClass, "C");
 });
 
-test("une valeur confirmée à l'écran passe sans discussion", () => {
-  const resultat = executerOutil({
+test("une valeur confirmée à l'écran passe sans discussion", async () => {
+  const resultat = await executerOutil({
     id: "spectre_elastique_ec8",
     entrees: { soilClass: "A" },
     assertions: MEMOIRE,
@@ -324,8 +324,8 @@ test("une valeur inventée passe aussi mal quand la mémoire ne sait rien", () =
   assert.deepEqual(substituees.map((champ) => champ.cle), ["soilClass"]);
 });
 
-test("mémoire vide et valeurs venues de nulle part : rien n'est calculé", () => {
-  const resultat = executerOutil({
+test("mémoire vide et valeurs venues de nulle part : rien n'est calculé", async () => {
+  const resultat = await executerOutil({
     id: "spectre_elastique_ec8",
     entrees: { zoneSismique: "4", importanceCategory: "II", soilClass: "A" },
     question: "calcule le spectre"
@@ -335,8 +335,8 @@ test("mémoire vide et valeurs venues de nulle part : rien n'est calculé", () =
   assert.deepEqual(Object.keys(resultat.proposeParLeModele).sort(), ["importanceCategory", "soilClass", "zoneSismique"]);
 });
 
-test("une valeur écrite par l'utilisateur passe, même sans rien en mémoire", () => {
-  const resultat = executerOutil({
+test("une valeur écrite par l'utilisateur passe, même sans rien en mémoire", async () => {
+  const resultat = await executerOutil({
     id: "profondeur_hors_gel",
     entrees: { h0: "0.5", altitude: "450" },
     question: "profondeur hors gel avec H0 = 0.5 et une altitude de 450 m ?"
@@ -366,8 +366,8 @@ const SITE = [
   donnee("profondeur-hors-gel", "0.575")
 ];
 
-test("la profondeur hors gel applique la formule du DTU, pas une autre", () => {
-  const resultat = executerOutil({ id: "profondeur_hors_gel", assertions: SITE });
+test("la profondeur hors gel applique la formule du DTU, pas une autre", async () => {
+  const resultat = await executerOutil({ id: "profondeur_hors_gel", assertions: SITE });
 
   // H = 0,5 + (450 − 150) / 4000 = 0,575
   assert.equal(resultat.statut, "fait");
@@ -385,8 +385,8 @@ test("une altitude absente ne devient pas zéro : le calcul refuse", () => {
   assert.equal(GEL.executer({ h0: 0.5, altitude: "" }).ok, false);
 });
 
-test("une altitude citée dans la question change la cote, et le conflit se voit", () => {
-  const resultat = executerOutil({
+test("une altitude citée dans la question change la cote, et le conflit se voit", async () => {
+  const resultat = await executerOutil({
     id: "profondeur_hors_gel",
     entrees: { altitude: "900" },
     assertions: SITE,
@@ -400,14 +400,26 @@ test("une altitude citée dans la question change la cote, et le conflit se voit
   assert.equal(resultat.ecarts[0].valeurCalculee, 0.688);
 });
 
-test("les deux utilitaires sont proposés au modèle, chacun avec son périmètre", () => {
-  // C'est là-dessus que porte l'aiguillage : deux descriptions qui disent ce
-  // que l'outil tranche **et** ce qu'il ne tranche pas.
+test("chaque utilitaire est proposé au modèle avec son périmètre, et ses bornes", () => {
+  // C'est là-dessus que porte l'aiguillage : des descriptions qui disent ce que
+  // l'outil tranche **et** ce qu'il ne tranche pas. Sans la seconde moitié, le
+  // modèle appelle l'outil le plus proche et rend une réponse hors sujet.
   const noms = declarationsPourModele().map((entree) => entree.name);
 
-  assert.deepEqual(noms.sort(), ["profondeur_hors_gel", "spectre_elastique_ec8"]);
+  assert.deepEqual(noms.sort(), ["incendie_habitation", "profondeur_hors_gel", "spectre_elastique_ec8"]);
   assert.match(GEL.aQuoiCaSert, /ne dimensionne pas la fondation/i);
   assert.match(SPECTRE.aQuoiCaSert, /ne dimensionne aucun élément/i);
+  assert.match(outilParId("incendie_habitation").aQuoiCaSert, /ne traite ni les dégagements/i);
+});
+
+test("le référentiel incendie annonce ce qu'il ne traite pas, nommément", () => {
+  const incendie = outilParId("incendie_habitation");
+  for (const hors of [/parcs de stationnement/i, /établissements recevant du public/i,
+                      /immeubles de grande hauteur/i, /articles 17 à 43/]) {
+    assert.match(incendie.aQuoiCaSert, hors);
+  }
+  // Et il ne calcule rien sur place : son raisonnement vit au serveur.
+  assert.equal(incendie.executer.constructor.name, "AsyncFunction");
 });
 
 test("les deux utilitaires lisent l'altitude et le sol dans des clés distinctes", () => {
@@ -417,4 +429,37 @@ test("les deux utilitaires lisent l'altitude et le sol dans des clés distinctes
   const clesSpectre = SPECTRE.entrees.flatMap((entree) => entree.depuisMemoire ?? []);
 
   assert.deepEqual(clesGel.filter((cle) => clesSpectre.includes(cle)), []);
+});
+
+/* ── Le référentiel incendie ─────────────────────────────────────────────── */
+
+test("une entrée d'aiguillage échappe au garde-fou des valeurs fabriquées", () => {
+  // « exigence: planchersCoupeFeu » dit ce que le modèle est allé chercher, pas
+  // une cote du bâtiment. La réclamer dans la question de l'utilisateur
+  // reviendrait à lui demander de nommer les clés internes de l'utilitaire.
+  const incendie = outilParId("incendie_habitation");
+  const suspectes = substitutionsNonJustifiees(incendie, {
+    entrees: { exigence: "planchersCoupeFeu", etagesSurRdc: 3 },
+    question: "un collectif de 3 étages sur rez-de-chaussée"
+  }).map((entree) => entree.cle);
+  assert.deepEqual(suspectes, []);
+});
+
+test("mais une cote inventée reste bloquée, même dans le référentiel incendie", () => {
+  const incendie = outilParId("incendie_habitation");
+  const suspectes = substitutionsNonJustifiees(incendie, {
+    entrees: { exigence: "planchersCoupeFeu", hauteurPlancherBasLogementLePlusHaut: 22 },
+    question: "quel est le degré coupe-feu des planchers ?"
+  }).map((entree) => entree.cle);
+  assert.deepEqual(suspectes, ["hauteurPlancherBasLogementLePlusHaut"]);
+});
+
+test("l'aiguillage nomme exactement les exigences que le référentiel sait rendre", () => {
+  // Une valeur d'aiguillage que le corpus ne produirait pas ferait répondre
+  // « ce référentiel ne porte pas … » à une question que le modèle croyait posée.
+  const incendie = outilParId("incendie_habitation");
+  const exigences = incendie.entrees.find((entree) => entree.cle === "exigence").valeurs;
+  assert.ok(exigences.includes("planchersCoupeFeu"));
+  assert.ok(exigences.includes("classement"));
+  assert.equal(new Set(exigences).size, exigences.length);
 });

@@ -322,6 +322,163 @@ export const OUTILS = [
         })
       };
     }
+  },
+  {
+    id: "incendie_habitation",
+    version: "V1",
+    titre: "Incendie — Habitation (arrêté du 31 janvier 1986)",
+    aQuoiCaSert:
+      "Classe un bâtiment d'habitation en famille (1re, 2e, 3e A, 3e B, 4e) selon l'article 3 de l'arrêté "
+      + "du 31 janvier 1986 modifié, puis en déduit l'exigence demandée : degré coupe-feu des planchers, "
+      + "stabilité au feu des porteurs verticaux, murs de recoupement, parois, blocs-portes palières, "
+      + "celliers, parements de façade, couverture, conduits et gaines. "
+      + "À appeler dès qu'une question porte sur la sécurité incendie d'un bâtiment d'habitation : "
+      + "« en quelle famille ce bâtiment est-il classé ? », « quel est le degré coupe-feu des planchers "
+      + "à respecter ? », « quelle stabilité au feu pour les porteurs ? ». "
+      + "Ne traite ni les dégagements et escaliers (articles 17 à 43), ni les parcs de stationnement, "
+      + "ni les établissements recevant du public, ni les immeubles de grande hauteur.",
+    source: "arrêté du 31 janvier 1986 modifié, complété des commentaires SOCOTEC",
+    entrees: [
+      {
+        cle: "exigence",
+        libelle: "Exigence recherchée",
+        // Ce n'est pas une donnée du bâtiment : c'est ce que le modèle est allé
+        // chercher. Le garde-fou contre les valeurs fabriquées ne s'y applique pas.
+        aiguillage: true,
+        type: "choix",
+        valeurs: [
+          "classement", "planchersCoupeFeu", "porteursVerticauxStabilite",
+          "murRecoupementCoupeFeu", "paroisEnveloppeCoupeFeu", "paroisSeparativesCoupeFeu",
+          "blocPortePaliereResistance", "celliersParoisCoupeFeu", "parementExterieurClasse",
+          "couvertureClassePenetration", "conduitsExigence", "escaliersAEncloisonner",
+          "colonnesSechesExigees", "voieEnginsConforme", "voieEchellesConforme"
+        ],
+        requis: true,
+        aide: "Ce que l'on cherche. « classement » rend la famille elle-même ; les autres rendent "
+          + "l'exigence qui en découle, avec son article."
+      },
+      {
+        cle: "logementsSuperposes",
+        libelle: "Logements superposés",
+        type: "choix", valeurs: ["oui", "non"], requis: true,
+        aide: "Une habitation individuelle, au sens de l'arrêté, est un bâtiment sans logements superposés."
+      },
+      {
+        cle: "etagesSurRdc",
+        libelle: "Nombre d'étages sur rez-de-chaussée",
+        type: "nombre", unite: "étages", requis: true,
+        aide: "Le rez-de-chaussée n'est pas compté : un R+1 vaut 1."
+      },
+      {
+        cle: "hauteurPlancherBasLogementLePlusHaut",
+        libelle: "Hauteur du plancher bas du logement le plus haut",
+        type: "nombre", unite: "m", requis: true,
+        depuisMemoire: ["hauteur-du-plancher-bas-du-logement-le-plus-haut", "plancher-bas-logement-le-plus-haut"],
+        lireMemoire: nombreEcrit,
+        aide: "Au-dessus du sol utilement accessible aux engins des services de secours — c'est le "
+          + "niveau d'accès des secours, pas le terrain naturel."
+      },
+      {
+        cle: "hauteurPlancherBasNiveauLePlusHaut",
+        libelle: "Hauteur du plancher bas du niveau le plus haut",
+        type: "nombre", unite: "m", requis: false,
+        depuisMemoire: ["hauteur-du-plancher-bas-du-niveau-le-plus-haut", "plancher-bas-niveau-le-plus-haut"],
+        lireMemoire: nombreEcrit,
+        aide: "Depuis l'arrêté du 7 août 2019, la quatrième famille se mesure au niveau le plus haut et "
+          + "non au logement. Sans duplex en partie haute, c'est la même valeur que ci-dessus."
+      },
+      {
+        cle: "implantation",
+        libelle: "Implantation de l'habitation individuelle",
+        type: "choix", valeurs: ["isolee", "jumelee", "bande"], requis: false,
+        aide: "Ne concerne que les habitations individuelles."
+      },
+      {
+        cle: "structuresIndependantes",
+        libelle: "Structures indépendantes de l'habitation contiguë",
+        type: "choix", valeurs: ["oui", "non"], requis: false,
+        aide: "Décisif pour une maison en bande à un étage : c'est ce qui sépare la première famille de la deuxième."
+      },
+      {
+        cle: "duplexOuTriplexAuDernierEtage",
+        libelle: "Duplex ou triplex à l'étage le plus élevé",
+        type: "choix", valeurs: ["oui", "non"], requis: true,
+        aide: "Le 5°) de l'article 3 ne compte alors que le niveau bas de ces logements. Sans cette "
+          + "réponse, le nombre d'étages retenu reste indéterminé et rien ne peut être classé."
+      },
+      {
+        cle: "sousSol",
+        libelle: "Le bâtiment comporte un sous-sol",
+        type: "choix", valeurs: ["oui", "non"], requis: false,
+        aide: "En première famille, l'article 6 ne vise que le plancher haut du sous-sol."
+      }
+    ],
+    sorties: [
+      { cle: "reponse", libelle: "Exigence" },
+      { cle: "classement", libelle: "Classement du bâtiment" },
+      { cle: "article", libelle: "Article" },
+      { cle: "citation", libelle: "Phrase du texte qui décide" }
+    ],
+
+    /**
+     * Le raisonnement n'est pas ici : il tourne dans la fonction
+     * `incendie-habitation`, côté serveur.
+     *
+     * L'import est différé exprès. Le catalogue d'outils est lu par des tests
+     * qui n'ont ni réseau ni session ; un import statique du service ferait
+     * échouer le chargement du module entier pour un utilitaire qu'ils
+     * n'appellent jamais.
+     */
+    async executer(entrees = {}) {
+      const produit = texte(entrees.exigence);
+      if (!produit) return { ok: false, raison: "Il faut dire quelle exigence est recherchée." };
+
+      const oui = (valeur) => {
+        const v = texte(valeur).toLowerCase();
+        if (v === "oui" || v === "true") return true;
+        if (v === "non" || v === "false") return false;
+        return undefined;
+      };
+      const reponses = {};
+      const poser = (cle, valeur) => { if (valeur !== undefined && valeur !== null && valeur !== "") reponses[cle] = valeur; };
+      poser("logementsSuperposes", oui(entrees.logementsSuperposes));
+      poser("structuresIndependantes", oui(entrees.structuresIndependantes));
+      poser("sousSol", oui(entrees.sousSol));
+      poser("implantation", texte(entrees.implantation) || undefined);
+      poser("etagesSurRdc", nombre(entrees.etagesSurRdc));
+      poser("hauteurPlancherBasLogementLePlusHaut", nombre(entrees.hauteurPlancherBasLogementLePlusHaut));
+      // Sans duplex en partie haute, les deux hauteurs se confondent : le
+      // reprendre ici évite de faire répéter la même cote au modèle.
+      poser("hauteurPlancherBasNiveauLePlusHaut",
+        nombre(entrees.hauteurPlancherBasNiveauLePlusHaut) ?? nombre(entrees.hauteurPlancherBasLogementLePlusHaut));
+      // Un duplex de dernier étage change le compte des niveaux : ne rien en
+      // dire serait supposer qu'il n'y en a pas. On le demande au copilote
+      // seulement quand le référentiel bute dessus.
+      poser("duplexOuTriplexAuDernierEtage", oui(entrees.duplexOuTriplexAuDernierEtage));
+
+      const { demanderIncendie } = await import("./incendie-service.js");
+      const rendu = await demanderIncendie(produit, reponses);
+
+      if (!rendu?.ok) {
+        // « Ne pas savoir n'autorise pas à prétendre qu'il n'y a rien » : on rend
+        // ce qui manque, nommément, plutôt qu'une valeur par défaut.
+        const manque = (rendu?.manque ?? []).map((q) => q.libelle).join(" ; ");
+        return { ok: false, raison: manque
+          ? `${rendu.raison} Il faut savoir : ${manque}.`
+          : (rendu?.raison || "Le référentiel n'a pas pu conclure.") };
+      }
+
+      const classement = (rendu.chemin ?? []).find((etape) => etape.id === "classement");
+      return {
+        ok: true,
+        valeurs: {
+          reponse: [rendu.valeur, rendu.sansObjet, rendu.mention].filter(Boolean).join(" — ") || "sans objet",
+          classement: classement?.valeur ?? "",
+          article: rendu.pourquoi?.article ? `article ${rendu.pourquoi.article}${rendu.pourquoi.paragraphe ? `, ${rendu.pourquoi.paragraphe}` : ""}` : "",
+          citation: rendu.pourquoi?.citation ?? ""
+        }
+      };
+    }
   }
 ];
 
@@ -483,6 +640,13 @@ export function substitutionsNonJustifiees(outil, { entrees = {}, depuisMemoire 
     const proposee = texte(entrees?.[entree.cle]);
     if (!proposee) return false;
 
+    // Une entrée d'aiguillage n'est pas une donnée du projet : elle dit
+    // seulement ce que le modèle est allé chercher — « le degré coupe-feu des
+    // planchers » plutôt que « la stabilité des porteurs ». La réclamer dans la
+    // question de l'utilisateur reviendrait à lui demander de nommer les clés
+    // internes de l'utilitaire, et bloquerait tout appel.
+    if (entree.aiguillage) return false;
+
     // Trois façons légitimes pour une valeur d'arriver là. En dehors d'elles,
     // le modèle l'a fabriquée.
     if (validees.has(entree.cle)) return false;                       // quelqu'un l'a cliquée
@@ -578,7 +742,7 @@ export function comparerALaMemoire(outil, valeurs = {}, assertions = []) {
  * Les confondre reviendrait à faire dire au modèle « je n'ai pas pu calculer »
  * dans trois situations qui n'appellent pas la même suite.
  */
-export function executerOutil({ id = "", entrees = {}, assertions = [], question = "", confirmees = [] } = {}) {
+export async function executerOutil({ id = "", entrees = {}, assertions = [], question = "", confirmees = [] } = {}) {
   const outil = outilParId(id);
   if (!outil) {
     return { statut: "inconnu", id: texte(id), message: `Aucun utilitaire ne porte le nom « ${texte(id)} ».` };
@@ -630,7 +794,10 @@ export function executerOutil({ id = "", entrees = {}, assertions = [], question
     };
   }
 
-  const resultat = outil.executer(fournies);
+  // `await` sur un utilitaire qui calcule sur place ne coûte rien ; il permet
+  // à ceux dont le raisonnement vit au serveur — le référentiel incendie — de
+  // se déclarer dans le même catalogue que les autres.
+  const resultat = await outil.executer(fournies);
   if (!resultat?.ok) {
     return {
       statut: "refus",
