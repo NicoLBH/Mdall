@@ -31,17 +31,19 @@
 /**
  * Les comptes qui gardent la clé sans passer par le secret.
  *
- * La liste est vide, et c'est délibéré : une adresse écrite dans le dépôt y
- * reste, elle voyage avec chaque copie du code et se retrouve dans l'historique
- * même après avoir été retirée. Les comptes autorisés vivent donc **dans le
- * secret** `INCENDIE_INSPECTEURS`, qui se change sans toucher au code et ne
- * laisse pas de trace.
+ * Le secret `INCENDIE_INSPECTEURS` reste la bonne porte : il se change sans
+ * toucher au code, et ne laisse pas de trace. Cette liste-ci est la porte de
+ * service — celle qui permet de travailler quand le secret n'est pas encore
+ * posé sur l'environnement.
  *
- * Le point d'extension reste, parce qu'il documente où l'on brancherait un
- * autre porteur de clé — un rôle en base, un jeton d'équipe — le jour où une
- * liste d'adresses ne suffirait plus.
+ * Elle a un coût, et il faut le savoir : une adresse écrite ici voyage avec
+ * chaque copie du dépôt et reste dans l'historique même après avoir été
+ * retirée. On n'y met donc que ce qui doit tenir en attendant, et l'on
+ * retourne au secret dès qu'il est en place.
  */
-export const INSPECTEURS_DU_REFERENTIEL = [];
+export const INSPECTEURS_DU_REFERENTIEL = [
+  "nicolas.lebihan@yahoo.fr"
+];
 
 /** Les comptes autorisés à ouvrir le dépouillement. Secret vide : personne. */
 export function inspecteursAutorises(secret) {

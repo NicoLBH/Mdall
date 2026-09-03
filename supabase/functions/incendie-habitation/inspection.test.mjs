@@ -15,11 +15,20 @@ test("sans secret, personne n'inspecte — pas même celui qui a créé le proje
   }
 });
 
-test("aucune adresse n'est écrite dans le dépôt", () => {
-  // Une adresse dans la source y reste : elle voyage avec chaque copie du code
-  // et demeure dans l'historique même après avoir été retirée. Les comptes
-  // autorisés vivent dans le secret, qui se change sans toucher au code.
-  assert.deepEqual(INSPECTEURS_DU_REFERENTIEL, []);
+test("la liste écrite dans le dépôt reste la porte de service", () => {
+  // Le secret est la bonne porte ; celle-ci sert quand il n'est pas encore posé
+  // sur l'environnement. Elle a un coût — une adresse écrite ici demeure dans
+  // l'historique —, donc on la garde courte, et le test le dit.
+  assert.ok(INSPECTEURS_DU_REFERENTIEL.length <= 2);
+  for (const compte of INSPECTEURS_DU_REFERENTIEL) assert.match(compte, /^[^@\s]+@[^@\s]+$/);
+});
+
+test("la porte de service ouvre même sans secret", () => {
+  const [premier] = INSPECTEURS_DU_REFERENTIEL;
+  if (!premier) return;
+  assert.equal(peutInspecter({ email: premier }, ""), true);
+  assert.equal(peutInspecter({ email: premier.toUpperCase() }, undefined), true);
+  assert.equal(peutInspecter({ email: "quelqu-un-dautre@ailleurs.fr" }, ""), false);
 });
 
 test("le secret nomme seul ceux qui ouvrent le dépouillement", () => {
@@ -36,7 +45,9 @@ test("le secret nomme les comptes, par identifiant ou par adresse", () => {
   assert.equal(peutInspecter({ email: "A@B.C" }, secret), true);
   assert.equal(peutInspecter({ email: "autre@b.c" }, secret), false);
   assert.equal(peutInspecter(null, secret), false);
-  assert.deepEqual(inspecteursAutorises("a@b.c;  d@e.f\ng@h.i"), ["a@b.c", "d@e.f", "g@h.i"]);
+  // Le secret s'ajoute à la porte de service, il ne la remplace pas.
+  assert.deepEqual(inspecteursAutorises("a@b.c;  d@e.f\ng@h.i"),
+    [...INSPECTEURS_DU_REFERENTIEL, "a@b.c", "d@e.f", "g@h.i"]);
 });
 
 test("une condition se relit à voix haute, sinon autant lire le code", () => {

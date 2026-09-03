@@ -936,8 +936,12 @@ function dessinerRepondues(repondues) {
  */
 function dessinerQuestion(question) {
   const donnee = etat.reponses[question.cle];
+  // Une question qui nomme deux lieux ne se répond pas par « oui » : on lit
+  // l'énoncé, on regarde les deux boutons, et l'on ne sait pas lequel dit quoi.
+  // La question peut donc nommer elle-même ses deux réponses.
+  const dits = question.libellesBooleens ?? {};
   const choix = question.type === "booleen"
-    ? [{ valeur: "oui", libelle: "Oui" }, { valeur: "non", libelle: "Non" }]
+    ? [{ valeur: "oui", libelle: dits.oui ?? "Oui" }, { valeur: "non", libelle: dits.non ?? "Non" }]
     : question.type === "choix" ? (question.valeurs ?? []) : null;
 
   const coche = (valeur) => {
