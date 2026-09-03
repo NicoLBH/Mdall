@@ -972,7 +972,7 @@ async function lancerCalcul(root, outil, saisies) {
   // Ce qui vient de l'écran est **confirmé par définition** : quelqu'un vient de
   // le cliquer ou de le saisir. Le garde-fou contre les valeurs inventées n'a
   // plus lieu de s'y opposer — il vise ce que le modèle décide seul.
-  const resultat = executerOutil({
+  const resultat = await executerOutil({
     id: outil.id,
     entrees: saisies,
     assertions,

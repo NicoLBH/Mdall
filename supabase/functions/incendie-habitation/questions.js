@@ -1,0 +1,351 @@
+/**
+ * Les questions source : ce qu'aucun module ne sait déduire.
+ *
+ * ## Pourquoi elles sont déclarées ici et pas dans les modules
+ *
+ * Un fait est une question source quand aucun module ne le produit. Ce n'est
+ * donc pas une propriété qu'on décide, c'est une propriété qu'on **constate**
+ * sur le graphe — et un test le vérifie dans les deux sens : toute question
+ * déclarée ici doit être réellement demandée par un module, et tout fait
+ * demandé par un module sans producteur doit avoir sa question ici. Une
+ * question orpheline reste à l'écran sans servir ; un fait sans question rend
+ * un module définitivement muet.
+ *
+ * ## Pourquoi elles ne descendent pas dans le navigateur
+ *
+ * Elles y descendent — mais une par une, au fur et à mesure que le moteur les
+ * réclame, et jamais la liste entière. Le catalogue complet dirait déjà quels
+ * paramètres comptent et dans quel ordre ils s'enchaînent, c'est-à-dire une
+ * bonne part du travail. L'écran affiche ce qu'il faut répondre maintenant ;
+ * le reste reste au serveur.
+ *
+ * ## L'énoncé porte la règle
+ *
+ * « Nombre d'étages sur rez-de-chaussée » ne suffit pas : le texte compte les
+ * étages d'une certaine façon, et l'aide le dit avec son article. Une question
+ * dont l'énoncé laisse deux lectures possibles produit deux réponses
+ * différentes pour le même bâtiment, et le reste du raisonnement est faux sans
+ * que rien ne le signale.
+ */
+
+export const QUESTIONS = [
+  /* ── Le bâtiment, tel que l'article 3 le regarde ───────────────────────── */
+  {
+    cle: "logementsSuperposes",
+    libelle: "Le bâtiment comporte-t-il des logements superposés ?",
+    type: "booleen",
+    article: "3",
+    paragraphe: "application des 1°) et 2°)",
+    aide: "« Sont considérés comme maisons individuelles au sens du présent arrêté les bâtiments "
+      + "d'habitation ne comportant pas de logements superposés. » C'est le seul critère : ni la "
+      + "surface, ni le mode de propriété, ni le nombre de logements n'entrent en compte."
+  },
+  {
+    cle: "implantation",
+    libelle: "Comment l'habitation est-elle implantée ?",
+    type: "choix",
+    valeurs: [
+      { valeur: "isolee", libelle: "Isolée" },
+      { valeur: "jumelee", libelle: "Jumelée" },
+      { valeur: "bande", libelle: "Groupée en bande" }
+    ],
+    article: "3",
+    paragraphe: "1°) et 2°)",
+    aide: "Ne concerne que les habitations individuelles : le 1°) et le 2°) distinguent l'isolée "
+      + "ou jumelée du groupement en bande, et n'en tirent pas les mêmes conséquences."
+  },
+  {
+    cle: "etagesSurRdc",
+    libelle: "Nombre d'étages sur rez-de-chaussée",
+    type: "nombre",
+    unite: "étages",
+    article: "3",
+    aide: "Le rez-de-chaussée n'est pas compté : une maison de plain-pied vaut 0, un R+1 vaut 1. "
+      + "Le 5°) fait exception pour les duplex et triplex du dernier étage — la question suivante "
+      + "s'en charge, ne retranchez rien vous-même."
+  },
+  {
+    cle: "structuresIndependantes",
+    libelle: "Les structures de chaque habitation concourant à la stabilité du bâtiment sont-elles "
+      + "indépendantes de celles de l'habitation contiguë ?",
+    type: "booleen",
+    article: "3",
+    paragraphe: "1°), dernier alinéa",
+    aide: "C'est ce seul point qui sépare la première famille de la deuxième pour une maison en "
+      + "bande à un étage. Le CSTB précise qu'il s'agit d'une indépendance de fait : sans joint de "
+      + "dilatation nécessaire, si la ruine d'une maison ne met pas en cause la stabilité des voisines."
+  },
+
+  /* ── Duplex et triplex : ce qu'on compte vraiment ──────────────────────── */
+  {
+    cle: "duplexOuTriplexAuDernierEtage",
+    libelle: "Les logements de l'étage le plus élevé sont-ils des duplex ou des triplex ?",
+    type: "booleen",
+    article: "3",
+    paragraphe: "5°)",
+    aide: "Le 5°) ne compte alors que le niveau bas de ces logements pour le classement des trois "
+      + "premières familles, sous trois conditions cumulatives — les questions qui suivent."
+  },
+  {
+    cle: "duplexPiecePrincipaleEtPortePaliereEnBas",
+    libelle: "Ces logements disposent-ils d'une pièce principale et d'une porte palière en partie basse ?",
+    type: "booleen",
+    article: "3",
+    paragraphe: "5°)"
+  },
+  {
+    cle: "duplexPlanchersConformesArticle6",
+    libelle: "Les planchers des différents niveaux de ces logements répondent-ils aux caractéristiques "
+      + "de l'article 6 ?",
+    type: "booleen",
+    article: "3",
+    paragraphe: "5°)"
+  },
+  {
+    cle: "quadruplexOuPlus",
+    libelle: "Le bâtiment comporte-t-il des logements de quatre niveaux ou plus ?",
+    type: "booleen",
+    article: "3",
+    paragraphe: "5°), dernier alinéa",
+    aide: "« Les quadruplex et plus ne sont pas admis dans les bâtiments d'habitation collectifs. » "
+      + "C'est une interdiction, pas un critère de classement."
+  },
+
+  /* ── Les hauteurs : deux mesures, et elles ne sont pas la même ─────────── */
+  {
+    cle: "hauteurPlancherBasLogementLePlusHaut",
+    libelle: "Hauteur du plancher bas du logement le plus haut, au-dessus du sol utilement "
+      + "accessible aux engins de secours",
+    type: "nombre",
+    unite: "m",
+    article: "3",
+    paragraphe: "3°)",
+    aide: "C'est la mesure du champ d'application (article 1er, 50 m) et de la troisième famille "
+      + "(28 m). Le sol de référence n'est pas le terrain naturel : c'est celui qui est utilement "
+      + "accessible aux engins des services de secours."
+  },
+  {
+    cle: "hauteurPlancherBasNiveauLePlusHaut",
+    libelle: "Hauteur du plancher bas du niveau le plus haut, au-dessus du même sol",
+    type: "nombre",
+    unite: "m",
+    article: "3",
+    paragraphe: "4°)",
+    aide: "Depuis l'arrêté du 7 août 2019, la quatrième famille se mesure au plancher bas du "
+      + "**niveau** le plus haut, et non du logement : un duplex de dernier étage dont le niveau "
+      + "haut dépasse 50 m relève désormais de l'IGH. Sans duplex en partie haute, cette hauteur "
+      + "est celle de la question précédente."
+  },
+
+  /* ── Ce qui sépare la 3e famille A de la 3e famille B ──────────────────── */
+  {
+    cle: "distancePortePaliereEscalier",
+    libelle: "Distance entre la porte palière de logement la plus éloignée et l'accès de l'escalier",
+    type: "nombre",
+    unite: "m",
+    article: "3",
+    paragraphe: "3°), troisième famille A",
+    aide: "Mesurée dans les circulations horizontales. Au-delà de 10 m, le bâtiment bascule en "
+      + "troisième famille B."
+  },
+  {
+    cle: "accesEscaliersAtteintsParVoieEchelles",
+    libelle: "Au rez-de-chaussée, les accès aux escaliers sont-ils atteints par la voie-échelles ?",
+    type: "booleen",
+    article: "3",
+    paragraphe: "3°), troisième famille A",
+    aide: "La voie doit en outre répondre aux caractéristiques de l'article 4 : c'est vérifié "
+      + "séparément, et les deux conditions sont exigées ensemble."
+  },
+  {
+    cle: "accesEscaliersMoinsDe50mVoieEngins",
+    libelle: "Les accès aux escaliers sont-ils situés à moins de 50 m d'une voie-engins ?",
+    type: "booleen",
+    article: "3",
+    paragraphe: "3°) troisième famille B et 4°)",
+    aide: "Condition d'implantation exigée en troisième famille B comme en quatrième famille."
+  },
+  {
+    cle: "arreteMunicipalDeclassement",
+    libelle: "Le maire a-t-il décidé que ce bâtiment de 3ᵉ famille B peut être soumis aux seules "
+      + "prescriptions de la 3ᵉ famille A ?",
+    type: "booleen",
+    article: "3",
+    paragraphe: "3°), troisième alinéa",
+    aide: "Possible dans les communes dont les services de secours disposent d'échelles aériennes "
+      + "de hauteur suffisante, et si le bâtiment est dans leur secteur d'intervention. La décision "
+      + "appartient aux autorités locales, jamais à l'utilitaire."
+  },
+  {
+    cle: "logementsAtteignablesEchellesOuParcoursSur",
+    libelle: "Chaque logement peut-il être atteint par les échelles, soit directement, soit par un "
+      + "parcours sûr ?",
+    type: "booleen",
+    article: "3",
+    paragraphe: "3°), troisième alinéa",
+    aide: "Condition du déclassement. L'article 4 § B précise les distances admises et ce qu'est "
+      + "un parcours sûr : balcon filant, passerelle, terrasse."
+  },
+
+  /* ── L'article 4 : ce qui fait qu'une voie en est une ──────────────────── */
+  {
+    cle: "voieAccesDecrite",
+    libelle: "Décrit-on une voie d'accès pour les services de secours ?",
+    type: "booleen",
+    article: "4",
+    aide: "L'article 4 ne définit les voies que « pour l'application de l'article 3 ». Les première "
+      + "et deuxième familles ne sont soumises à aucune prescription d'accès ; la troisième famille A "
+      + "suppose une voie-échelles, la troisième famille B et la quatrième une voie-engins à moins de 50 m."
+  },
+  {
+    cle: "voieLargeur",
+    libelle: "Largeur de la chaussée, bandes de stationnement exclues",
+    type: "nombre", unite: "m", article: "4", paragraphe: "A"
+  },
+  {
+    cle: "voieForcePortante",
+    libelle: "Force portante de la chaussée",
+    type: "nombre", unite: "kN", article: "4", paragraphe: "A",
+    aide: "Calculée pour un véhicule de 130 kN : 40 kN sur l'essieu avant, 90 kN sur l'essieu "
+      + "arrière, distants de 4,50 m."
+  },
+  {
+    cle: "voieRayonInterieur",
+    libelle: "Rayon intérieur minimum des virages",
+    type: "nombre", unite: "m", article: "4", paragraphe: "A"
+  },
+  {
+    cle: "voieHauteurLibre",
+    libelle: "Hauteur libre de passage",
+    type: "nombre", unite: "m", article: "4", paragraphe: "A",
+    aide: "3,30 m pour le véhicule, majorés d'une marge de sécurité de 0,20 m — soit 3,50 m."
+  },
+  {
+    cle: "voiePente",
+    libelle: "Pente de la voie",
+    type: "nombre", unite: "%", article: "4", paragraphe: "A"
+  },
+  {
+    cle: "voieLongueur",
+    libelle: "Longueur de la section de voie",
+    type: "nombre", unite: "m", article: "4", paragraphe: "B",
+    aide: "Ne compte que pour la voie-échelles, dont la longueur minimale est de 10 m."
+  },
+  {
+    cle: "voieResistancePoinconnement",
+    libelle: "Résistance au poinçonnement",
+    type: "nombre", unite: "kN", article: "4", paragraphe: "B",
+    aide: "100 kN sur une surface circulaire de 0,20 m de diamètre. Ne compte que pour la voie-échelles."
+  },
+  {
+    cle: "voieRaccordeeAUneVoieEngins",
+    libelle: "Si la section n'est pas sur la voie publique, est-elle raccordée à une voie-engins ?",
+    type: "choix",
+    valeurs: [
+      { valeur: "surVoiePublique", libelle: "Elle est sur la voie publique" },
+      { valeur: "raccordee", libelle: "Raccordée à une voie-engins" },
+      { valeur: "nonRaccordee", libelle: "Non raccordée" }
+    ],
+    article: "4", paragraphe: "B"
+  },
+
+  /* ── Ce que la structure et l'enveloppe demandent ──────────────────────── */
+  {
+    cle: "sousSol",
+    libelle: "Le bâtiment comporte-t-il un sous-sol ?",
+    type: "booleen",
+    article: "6",
+    aide: "En première famille, l'article 6 n'exige un degré coupe-feu que pour le plancher haut "
+      + "du sous-sol. Sans sous-sol, l'exigence de l'article 6 est sans objet."
+  },
+  {
+    cle: "planchersSurVideSanitaireNonAccessible",
+    libelle: "Le plancher considéré est-il situé au-dessus d'un vide sanitaire non accessible ?",
+    type: "booleen",
+    article: "6",
+    paragraphe: "exclusions"
+  },
+  {
+    cle: "paroisLogementProlongeesJusquACouverture",
+    libelle: "Les parois verticales de l'enveloppe des logements sont-elles prolongées jusqu'à la "
+      + "couverture du bâtiment ?",
+    type: "booleen",
+    article: "6",
+    paragraphe: "exclusions",
+    aide: "Si elles le sont, le plancher haut, le faux plancher ou le plafond du dernier niveau "
+      + "habitable échappent à l'exigence de l'article 6."
+  },
+  {
+    cle: "coursivesPasserellesOuCirculationsAAirLibre",
+    libelle: "Le bâtiment comporte-t-il des coursives, passerelles extérieures ou circulations à "
+      + "l'air libre reliant les logements aux escaliers ?",
+    type: "booleen",
+    article: "6",
+    paragraphe: "avant-dernier alinéa"
+  },
+  {
+    cle: "groupementEnBandeOuGrandeLongueur",
+    libelle: "S'agit-il d'un groupement en bande de maisons individuelles, ou d'un bâtiment de "
+      + "grande longueur ?",
+    type: "booleen",
+    article: "7"
+  },
+  {
+    cle: "longueurDuBatiment",
+    libelle: "Longueur du bâtiment ou du groupement",
+    type: "nombre", unite: "m", article: "7",
+    aide: "Le recoupement est exigé au moins tous les 45 m : en deçà, aucun mur de recoupement "
+      + "n'est imposé par cet article."
+  },
+  {
+    cle: "celliersOuCavesRegroupes",
+    libelle: "Le bâtiment comporte-t-il un ensemble regroupant des celliers ou caves indépendants "
+      + "des logements ?",
+    type: "booleen",
+    article: "10",
+    aide: "Aménagés en étage, en rez-de-chaussée ou en sous-sol. Un cellier individuel attenant au "
+      + "logement n'en est pas un."
+  },
+  {
+    cle: "facadePartiesPleinesSystemeClasseE",
+    libelle: "Les parties pleines de la façade sont-elles revêtues d'un système de façade classé E ?",
+    type: "booleen",
+    article: "12", paragraphe: "A, deuxième alinéa"
+  },
+  {
+    cle: "distanceLimiteDePropriete",
+    libelle: "Distance de la façade à la limite de propriété",
+    type: "nombre", unite: "m", article: "12", paragraphe: "A, deuxième alinéa",
+    aide: "L'exception du deuxième alinéa n'est ouverte qu'au-delà de quatre mètres."
+  },
+  {
+    cle: "revetementCouvertureClasse",
+    libelle: "Classement de réaction au feu du revêtement de couverture",
+    type: "choix",
+    valeurs: [
+      { valeur: "M1", libelle: "M1" }, { valeur: "M2", libelle: "M2" },
+      { valeur: "M3", libelle: "M3" }, { valeur: "M4", libelle: "M4" }
+    ],
+    article: "15"
+  },
+  {
+    cle: "supportCouvertureContinuIncombustible",
+    libelle: "Le revêtement est-il établi sur un support continu en matériau incombustible, en "
+      + "panneaux de bois, d'aggloméré de fibres de bois ou équivalent reconnu par le Cecmi ?",
+    type: "booleen",
+    article: "15", paragraphe: "a",
+    aide: "C'est ce support qui libère les revêtements M1, M2 et M3 de toute restriction. À défaut, "
+      + "ils doivent tenir la classe de pénétration exigée des revêtements M4."
+  },
+  {
+    cle: "conduitsOuGainesTraversantDesParois",
+    libelle: "Des conduits ou gaines sont-ils aménagés dans le bâtiment ?",
+    type: "booleen",
+    article: "45"
+  }
+];
+
+/** Une question, par sa clé. */
+export function questionDe(cle) {
+  return QUESTIONS.find((q) => q.cle === cle) ?? null;
+}
