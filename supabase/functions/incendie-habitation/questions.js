@@ -475,8 +475,16 @@ export const QUESTIONS = [
   /* ── Titre IV : ce qui traverse le bâtiment ───────────────────────────── */
   {
     cle: "conduitDansLogementOuCirculationCommune",
-    libelle: "Le conduit est-il situé dans un logement ou dans une circulation horizontale commune ?",
-    type: "booleen", article: "46",
+    libelle: "Où le conduit passe-t-il ?",
+    // « Oui » et « non » ne veulent rien dire sous une question qui nomme deux
+    // lieux : on lit la question, on regarde les deux boutons, et l'on ne sait
+    // pas lequel dit quoi. Les réponses portent donc les lieux eux-mêmes.
+    type: "booleen",
+    libellesBooleens: {
+      oui: "Dans un logement ou une circulation horizontale commune",
+      non: "Ailleurs — cage d'escalier, local technique, parc…"
+    },
+    article: "46",
     aide: "C'est la première des quatre conditions cumulatives qui permettent à un conduit de rester "
       + "hors d'une gaine. Ailleurs — en cage d'escalier, en local technique — la tolérance ne joue pas."
   },

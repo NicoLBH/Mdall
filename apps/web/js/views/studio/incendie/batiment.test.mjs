@@ -4,7 +4,8 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { lireLeBatiment, dessinerLaCoupe as dessinerLeBatiment, dessinerLePlan, niveauxDuBatiment, resumer, resumerLePlan } from "./batiment.js";
+import { lireLeBatiment, dessinerLaCoupe as dessinerLeBatiment, dessinerLePlan, niveauxDuBatiment,
+  terrainEnPente, hauteurDeNiveau, resumer, resumerLePlan } from "./batiment.js";
 
 test("le rez-de-chaussée s'étiquette « R » : c'est là toute la leçon", () => {
   // On demande « nombre d'étages sur rez-de-chaussée » ; quelqu'un qui compte
@@ -88,11 +89,14 @@ test("le joint entre deux maisons dit s'il sépare les structures", () => {
   assert.match(independantes.svg, /bat-joint est-independant/);
 });
 
-test("un duplex de dernier étage efface la dalle qui ne sépare rien", () => {
-  // Le 5°) de l'article 3 ne compte que le niveau bas de ces logements.
+test("un duplex de dernier étage montre un plancher qui ne traverse pas", () => {
+  // Le 5°) de l'article 3 ne compte que le niveau bas de ces logements. Un
+  // plancher court se comprend d'un coup d'œil ; un trait pointillé sur toute
+  // la largeur se prenait pour une convention de dessin.
   const { svg } = dessinerLeBatiment({ logementsSuperposes: "oui", etagesSurRdc: "4",
     duplexOuTriplexAuDernierEtage: "oui" });
-  assert.match(svg, /bat-dalle est-effacee/);
+  assert.match(svg, /bat-dalle est-partielle/);
+  assert.match(svg, /duplex/);
 });
 
 test("le dessin se plafonne plutôt que de devenir illisible", () => {
@@ -160,4 +164,159 @@ test("deux niveaux de parc enterrés font au moins deux niveaux enterrés", () =
     niveauxEnSousSol: "1", parcDeStationnement: "oui", niveauxParcAuDessous: "2" });
   assert.equal(batiment.enterres, 2);
   assert.match(resumer(batiment), /2 niveaux au-dessous du niveau de référence, dont 2 de parc/);
+});
+
+/* ── Ce que la coupe a appris à montrer ──────────────────────────────────── */
+
+const COLLECTIF = { logementsSuperposes: "oui", etagesSurRdc: "3" };
+
+test("le terrain en pente recoupe le niveau que les deux comptes revendiquent", () => {
+  // « 1 niveau au-dessous du niveau de référence » et « 2 niveaux de parc
+  // au-dessous » ne se contredisent pas : c'est la pente. Ce qui est enterré
+  // côté habitation débouche à l'air libre côté parc.
+  const batiment = lireLeBatiment({ ...COLLECTIF, niveauxEnSousSol: "1",
+    parcDeStationnement: "oui", niveauxParcAuDessous: "2" });
+  assert.equal(terrainEnPente(batiment), true);
+  const niveaux = niveauxDuBatiment(batiment);
+  assert.equal(niveaux.find((n) => n.nom === "−1").destination, "mixte");
+  assert.equal(niveaux.find((n) => n.nom === "−2").destination, "parc");
+});
+
+test("sans désaccord entre les deux comptes, aucune pente n'est inventée", () => {
+  // Trois niveaux déclarés dont deux de parc : rien à recouper, le terrain est
+  // plat, et le dessin ne doit pas suggérer le contraire.
+  const batiment = lireLeBatiment({ ...COLLECTIF, niveauxEnSousSol: "3",
+    parcDeStationnement: "oui", niveauxParcAuDessous: "2" });
+  assert.equal(terrainEnPente(batiment), false);
+  const { svg } = dessinerLeBatiment({ ...COLLECTIF, niveauxEnSousSol: "3",
+    parcDeStationnement: "oui", niveauxParcAuDessous: "2" });
+  assert.doesNotMatch(svg, /terrain en pente/);
+});
+
+test("la pente se dessine, et le niveau recoupé se nomme", () => {
+  const { svg } = dessinerLeBatiment({ ...COLLECTIF, niveauxEnSousSol: "1",
+    parcDeStationnement: "oui", niveauxParcAuDessous: "2" });
+  assert.match(svg, /terrain en pente/);
+  assert.match(svg, /bat-refend/);
+  assert.match(svg, />habitation</);
+});
+
+test("deux cotes de même valeur pointent le même plancher", () => {
+  // Deux « 9 m » tracés à deux hauteurs différentes font douter du dessin
+  // entier, alors qu'ils disent la même chose.
+  const { svg } = dessinerLeBatiment({ ...COLLECTIF,
+    hauteurPlancherBasNiveauLePlusHaut: "9",
+    duplexOuTriplexAuDernierEtage: "oui", hauteurPlancherBasLogementLePlusHautSiDuplex: "9" });
+  assert.equal((svg.match(/class="bat-cote"/g) ?? []).length, 1);
+  // Les libellés s'empilent sous la valeur : trois mots à la suite sortaient du
+  // cadre par la gauche.
+  const quoi = [...svg.matchAll(/class="bat-cote-quoi">([^<]+)</g)].map((m) => m[1]);
+  assert.deepEqual(quoi, ["niveau", "logement"]);
+});
+
+test("deux cotes de valeurs différentes restent deux cotes", () => {
+  const { svg } = dessinerLeBatiment({ ...COLLECTIF,
+    hauteurPlancherBasNiveauLePlusHaut: "9",
+    duplexOuTriplexAuDernierEtage: "oui", hauteurPlancherBasLogementLePlusHautSiDuplex: "6" });
+  assert.equal((svg.match(/class="bat-cote"/g) ?? []).length, 2);
+});
+
+test("la hauteur d'un niveau se déduit, et se dit", () => {
+  // « 9 m sur R+3 » fait trois mètres par niveau ; « 9 m sur R+1 » en fait
+  // quatre et demi, et l'une des deux réponses est à revoir.
+  assert.equal(hauteurDeNiveau(lireLeBatiment({ ...COLLECTIF, hauteurPlancherBasNiveauLePlusHaut: "9" })), 3);
+  assert.equal(hauteurDeNiveau(lireLeBatiment({ logementsSuperposes: "oui", etagesSurRdc: "1",
+    hauteurPlancherBasNiveauLePlusHaut: "9" })), 9);
+  // Sans cote, on ne suppose rien.
+  assert.equal(hauteurDeNiveau(lireLeBatiment(COLLECTIF)), null);
+});
+
+test("les altitudes se lisent niveau par niveau", () => {
+  const { svg } = dessinerLeBatiment({ ...COLLECTIF, hauteurPlancherBasNiveauLePlusHaut: "9" });
+  const lues = [...svg.matchAll(/class="bat-altitude">([^<]+)</g)].map((m) => m[1]);
+  assert.deepEqual(lues, ["+9 m", "+6 m", "+3 m", "±0 m"]);
+  // Le pas se dit une fois, dans la légende du bas : à côté des altitudes, il
+  // heurtait les parois et le comble.
+  assert.match(svg, /3 m par niveau/);
+});
+
+test("l'ascenseur se dessine, et descend quand il dessert le sous-sol", () => {
+  const sans = dessinerLeBatiment({ ...COLLECTIF, niveauxEnSousSol: "2", ascenseur: "non" });
+  assert.doesNotMatch(sans.svg, /bat-gaine-ascenseur/);
+
+  const arrete = dessinerLeBatiment({ ...COLLECTIF, niveauxEnSousSol: "2",
+    ascenseur: "oui", ascenseurDessertSousSolParcOuCaves: "non" });
+  const descendu = dessinerLeBatiment({ ...COLLECTIF, niveauxEnSousSol: "2",
+    ascenseur: "oui", ascenseurDessertSousSolParcOuCaves: "oui" });
+  const gaine = (svg) => Number(svg.match(/<rect[^>]*class="bat-gaine-ascenseur"[^>]*>/)[0]
+    .match(/height="([\d.]+)"/)[1]);
+  assert.ok(gaine(descendu.svg) > gaine(arrete.svg) + 60);
+  assert.match(descendu.svg, /bat-cabine/);
+  assert.match(descendu.svg, /bat-cable/);
+});
+
+test("le gaz est jaune, l'électricité rouge, et la légende les nomme", () => {
+  const { svg } = dessinerLeBatiment({ ...COLLECTIF,
+    conduiteMontanteDeGaz: "oui", colonneMontanteElectriqueEnGaine: "oui" });
+  assert.match(svg, /class="bat-gaz"/);
+  assert.match(svg, /class="bat-elec"/);
+  assert.match(svg, /colonne montante de gaz/);
+  assert.match(svg, /colonne montante électrique/);
+});
+
+test("le gaz qui traverse le parc ressort en terre", () => {
+  const { svg } = dessinerLeBatiment({ ...COLLECTIF, niveauxEnSousSol: "2",
+    parcDeStationnement: "oui", niveauxParcAuDessous: "2",
+    conduiteMontanteDeGaz: "oui", gazTraversantUnParcDeStationnement: "oui" });
+  assert.match(svg, /bat-gaz est-en-terre/);
+  // Et pas de tracé en terre quand le gaz ne traverse rien.
+  const sans = dessinerLeBatiment({ ...COLLECTIF, niveauxEnSousSol: "2",
+    parcDeStationnement: "oui", niveauxParcAuDessous: "2",
+    conduiteMontanteDeGaz: "oui", gazTraversantUnParcDeStationnement: "non" });
+  assert.doesNotMatch(sans.svg, /est-en-terre/);
+});
+
+test("les celliers regroupés prennent un bloc, et l'on voit lequel", () => {
+  const { svg } = dessinerLeBatiment({ ...COLLECTIF, niveauxEnSousSol: "1",
+    celliersOuCavesRegroupes: "oui" });
+  assert.match(svg, /bat-celliers/);
+  assert.match(svg, />celliers</);
+  assert.doesNotMatch(dessinerLeBatiment({ ...COLLECTIF, celliersOuCavesRegroupes: "non" }).svg, /bat-celliers/);
+});
+
+test("plusieurs issues au choix en font dessiner deux, pas une", () => {
+  const base = { ...COLLECTIF, niveauxEnSousSol: "2",
+    parcDeStationnement: "oui", niveauxParcAuDessous: "2", communicationParcImmeuble: "oui" };
+  const une = dessinerLeBatiment({ ...base, plusieursIssuesAuChoix: "non" });
+  const deux = dessinerLeBatiment({ ...base, plusieursIssuesAuChoix: "oui" });
+  assert.equal((une.svg.match(/class="bat-sas-note"/g) ?? []).length, 1);
+  assert.equal((deux.svg.match(/class="bat-sas-note"/g) ?? []).length, 2);
+});
+
+test("le camion dit d'où la hauteur se mesure", () => {
+  const { svg } = dessinerLeBatiment({ ...COLLECTIF, voieAccesDecrite: "oui" });
+  assert.match(svg, /bat-camion/);
+  assert.match(svg, /voie d'accès/);
+  // Sans réponse sur la voie, aucun camion : on n'invente pas un accès.
+  assert.doesNotMatch(dessinerLeBatiment(COLLECTIF).svg, /bat-camion/);
+});
+
+test("le toit à deux versants porte le comble, et les parois le traversent", () => {
+  const { svg } = dessinerLeBatiment({ ...COLLECTIF, paroisLogementProlongeesJusquACouverture: "oui" });
+  assert.match(svg, /class="bat-toit"/);
+  assert.match(svg, />comble</);
+  assert.match(svg, /bat-paroi est-prolongee/);
+});
+
+test("chaque niveau d'habitation montre deux logements et un couloir", () => {
+  const { svg } = dessinerLeBatiment(COLLECTIF);
+  // Quatre niveaux, deux logements chacun.
+  assert.equal((svg.match(/class="bat-logement"/g) ?? []).length, 8);
+  assert.equal((svg.match(/class="bat-couloir"/g) ?? []).length, 4);
+});
+
+test("une maison individuelle n'a ni couloir commun ni cage", () => {
+  const { svg } = dessinerLeBatiment({ logementsSuperposes: "non", etagesSurRdc: "1" });
+  assert.doesNotMatch(svg, /bat-couloir/);
+  assert.doesNotMatch(svg, /bat-cage/);
 });

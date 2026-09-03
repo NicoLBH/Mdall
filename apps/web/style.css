@@ -18400,6 +18400,11 @@ strong.est-verifie{ color:#3fb950; }
   display:flex; flex-direction:column; overflow:hidden;
 }
 .graphe-bloc.est-plein-ecran .graphe__scene{ flex:1; min-height:0; }
+/* Sans panneau de détail, la toile prend toute la largeur : le schéma est ce
+   qu'on est venu voir, et le laisser serré à gauche d'un vide ne sert personne. */
+.graphe__scene > .graphe{ flex:1 1 0; min-width:0; }
+.graphe-bloc.est-plein-ecran:not(.est-detaille) .graphe__toile{ min-width:100%; gap:28px; }
+.graphe-bloc.est-plein-ecran:not(.est-detaille) .graphe__colonne{ flex:1 1 0; }
 .graphe-bloc.est-plein-ecran .graphe{ max-height:none; height:100%; }
 .graphe-bloc.est-plein-ecran .graphe-detail.est-ouvert{ max-height:none; height:100%; }
 
@@ -18419,7 +18424,10 @@ html.est-fige-par-le-graphe, body.est-fige-par-le-graphe{ overflow:hidden; }
    permet : c'est la relecture immédiate de ce qu'on vient de répondre qui fait
    tout l'intérêt du dessin. En dessous de 900 px, ils s'empilent — un dessin
    écrasé n'apprend plus rien. */
-.incendie-atelier{ display:grid; grid-template-columns:minmax(0,1fr) minmax(300px,420px); gap:16px; align-items:start; }
+/* Le dessin prend presque la moitié : à 420 px, un ascenseur, une colonne de
+   gaz et deux logements par niveau ne tenaient plus. C'est lui qu'on relit. */
+.incendie-atelier{ display:grid; grid-template-columns:minmax(0,1fr) minmax(380px,46%); gap:16px; align-items:start; }
+@media (max-width: 1250px){ .incendie-atelier{ grid-template-columns:minmax(0,1fr) minmax(340px,40%); } }
 @media (max-width: 900px){ .incendie-atelier{ grid-template-columns:1fr; } }
 
 .incendie-question__texte{ margin-top:12px; }
@@ -18479,7 +18487,7 @@ html.est-fige-par-le-graphe, body.est-fige-par-le-graphe{ overflow:hidden; }
 .bat-volume{ fill:rgba(88,166,255,.07); stroke:currentColor; stroke-opacity:.55; stroke-width:1.6; }
 .bat-dalle{ stroke:currentColor; stroke-opacity:.5; stroke-width:1.4; }
 .bat-dalle.est-effacee{ stroke-dasharray:4 4; stroke-opacity:.25; }
-.bat-toit{ fill:none; stroke:currentColor; stroke-opacity:.7; stroke-width:1.8; }
+.bat-toit{ fill:rgba(110,118,129,.06); stroke:currentColor; stroke-opacity:.7; stroke-width:1.8; }
 .bat-mur{ stroke:currentColor; stroke-opacity:.5; stroke-width:1.4; }
 .bat-paroi{ stroke:#f0883e; stroke-width:2; }
 .bat-paroi.est-prolongee{ stroke:#3fb950; stroke-width:2.4; }
@@ -18497,6 +18505,55 @@ html.est-fige-par-le-graphe, body.est-fige-par-le-graphe{ overflow:hidden; }
 .bat-cote-fleche{ fill:none; stroke:#58a6ff; stroke-width:1.2; }
 .bat-cote-texte{ font:11px var(--font-sans, system-ui); text-anchor:end; fill:#58a6ff; }
 .bat-verdict{ font:600 13px var(--font-sans, system-ui); text-anchor:end; fill:#3fb950; }
+
+/* Ce que la coupe a appris à montrer. Chaque réponse a son trait : une réponse
+   qui ne change rien au dessin ne se relit pas. */
+.bat-refend{ stroke:#f0883e; stroke-width:1.6; }
+.bat-dalle.est-partielle{ stroke:currentColor; stroke-opacity:.55; stroke-width:2; }
+.bat-logement{ fill:rgba(110,118,129,.10); stroke:currentColor; stroke-opacity:.30; stroke-width:1; }
+.bat-couloir{ fill:rgba(88,166,255,.09); stroke:#58a6ff; stroke-opacity:.35; stroke-width:1; }
+.bat-cage{ fill:rgba(240,136,62,.10); stroke:#f0883e; stroke-opacity:.6; stroke-width:1.2; }
+.bat-cage.est-encloisonnee{ stroke-width:2.4; stroke-opacity:.9; }
+.bat-cage.est-ouverte{ stroke-dasharray:4 3; }
+.bat-volee{ fill:none; stroke:#f0883e; stroke-opacity:.75; stroke-width:1.2; }
+.bat-volee.est-parc{ stroke-opacity:.9; }
+.bat-gaine-ascenseur{ fill:rgba(163,113,247,.10); stroke:#a371f7; stroke-opacity:.7; stroke-width:1.2; }
+.bat-cable{ stroke:#a371f7; stroke-width:1; stroke-opacity:.8; }
+.bat-cabine{ fill:rgba(163,113,247,.30); stroke:#a371f7; stroke-width:1.2; }
+/* Les couleurs des corps d'état : jaune le gaz, rouge l'électricité. Elles ne
+   se choisissent pas — c'est ainsi qu'elles se lisent sur un plan. */
+.bat-gaz{ stroke:#e3b341; stroke-width:2.4; }
+.bat-gaz.est-en-terre{ fill:none; stroke-dasharray:5 3; }
+.bat-elec{ stroke:#f85149; stroke-width:2.4; }
+.bat-vide-ordures{ stroke:#8b949e; stroke-width:2.4; }
+.bat-local-ordures{ fill:rgba(139,148,158,.28); stroke:#8b949e; stroke-width:1; }
+.bat-celliers{ fill:rgba(63,185,80,.16); stroke:#3fb950; stroke-width:1.3; }
+.bat-celliers-note{ font:9.5px var(--font-sans, system-ui); text-anchor:middle; fill:#3fb950; }
+.bat-sas{ fill:rgba(63,185,80,.12); stroke:#3fb950; stroke-width:1.2; }
+.bat-sas-note{ font:9.5px var(--font-sans, system-ui); text-anchor:middle; fill:#3fb950; }
+.bat-coursive{ fill:rgba(88,166,255,.35); stroke:#58a6ff; stroke-width:.8; }
+.bat-couverture-parc{ stroke:#f0883e; stroke-width:2; }
+.bat-domination{ fill:none; stroke:#58a6ff; stroke-width:1.2; stroke-dasharray:4 3; }
+.bat-altitude{ font:10px var(--font-sans, system-ui); fill:#58a6ff; fill-opacity:.85; }
+.bat-cote.est-rappel{ stroke-opacity:.35; stroke-dasharray:3 3; }
+.bat-cote-texte.est-centre{ text-anchor:middle; }
+.bat-cote-quoi{ font:9px var(--font-sans, system-ui); text-anchor:end; fill:#58a6ff; fill-opacity:.7; }
+.bat-parc-note.est-fin{ text-anchor:end; }
+.bat-parc-note.est-sobre{ fill:currentColor; fill-opacity:.6; }
+/* Le camion : il dit d'où la hauteur se mesure. Sans lui, on la compte depuis
+   le point bas du terrain, et la famille change. */
+.bat-camion-caisse{ fill:rgba(248,81,73,.35); stroke:#f85149; stroke-width:1.2; }
+.bat-camion-cabine{ fill:rgba(248,81,73,.55); stroke:#f85149; stroke-width:1.2; }
+.bat-camion-echelle{ stroke:#f85149; stroke-width:1.6; }
+.bat-camion-roue{ fill:currentColor; fill-opacity:.7; }
+.bat-legende-gaz{ fill:#e3b341; }
+.bat-legende-elec{ fill:#f85149; }
+.bat-legende-ordures{ fill:#8b949e; }
+.bat-legende-celliers{ fill:#3fb950; }
+.bat-legende-ascenseur{ fill:#a371f7; }
+.bat-legende-coursives{ fill:#58a6ff; }
+.plan-ascenseur{ fill:rgba(163,113,247,.14); stroke:#a371f7; stroke-width:1.4; }
+.plan-etiquette.est-sobre{ font-size:10px; fill:#a371f7; }
 
 /* ── Le détail d'une carte du schéma : liaisons, règles, article ──────────
    Les règles ne sortent du serveur que pour les comptes qui ont le droit de
@@ -18679,7 +18736,7 @@ html.est-fige-par-le-graphe, body.est-fige-par-le-graphe{ overflow:hidden; }
    défiler sans le faire. Le script lui donne sa ligne et sa largeur. */
 .titres-colles{
   position:fixed; z-index:6; display:none; flex-direction:column; gap:1px;
-  padding:7px 22px; box-sizing:border-box;
+  padding:10px 22px 7px; box-sizing:border-box;
   background:var(--bg, #0d1117); border-bottom:1px solid var(--border2, #30363d);
   pointer-events:none;
 }
