@@ -64,7 +64,12 @@ export const FAITS_DESSINES = [
   "videOrdures", "communicationParcImmeuble", "plusieursIssuesAuChoix",
   "couvertureParcDomineeParFacadesVitrees", "parcContiguAImmeuble", "distanceParcAImmeubleHabite",
   "hauteurDernierPlancherDesserviParEscalier", "coursivesPasserellesOuCirculationsAAirLibre",
-  "hauteurPlancherBasDernierNiveauParc"
+  "hauteurPlancherBasDernierNiveauParc",
+  // Ce que les trois plans lisent en propre.
+  "nombreEscaliersProteges", "distanceEntreEscaliers", "distanceDebouchEscalierSortie",
+  "longueurDuBatiment", "hallDessertServicesCollectifs", "surfaceParc",
+  "superficieCompartimentParc", "boxesDansLeParc", "emplacementsParBox",
+  "distanceAParcourirVersIssueParc", "largesOuverturesDeuxFacesOpposees", "ventilationParcRetenue"
 ];
 
 /**
@@ -125,7 +130,20 @@ export function lireLeBatiment(reponses = {}) {
     circulation: reponses.typeCirculationRetenue ?? null,
     distancePortePaliere: nombre(reponses.distancePortePaliereEscalier),
     distanceBaies: nombre(reponses.distanceEscalierAuxBaies),
-    distanceLimite: nombre(reponses.distanceLimiteDePropriete)
+    distanceLimite: nombre(reponses.distanceLimiteDePropriete),
+    // Ce que seuls les plans savent montrer.
+    nombreEscaliers: nombre(reponses.nombreEscaliersProteges),
+    distanceEntreEscaliers: nombre(reponses.distanceEntreEscaliers),
+    distanceDebouche: nombre(reponses.distanceDebouchEscalierSortie),
+    longueur: nombre(reponses.longueurDuBatiment),
+    hallServices: booleen(reponses.hallDessertServicesCollectifs),
+    surfaceParc: nombre(reponses.surfaceParc),
+    superficieCompartiment: nombre(reponses.superficieCompartimentParc),
+    boxes: booleen(reponses.boxesDansLeParc),
+    emplacementsParBox: nombre(reponses.emplacementsParBox),
+    distanceIssue: nombre(reponses.distanceAParcourirVersIssueParc),
+    largesOuvertures: booleen(reponses.largesOuverturesDeuxFacesOpposees),
+    ventilationParc: reponses.ventilationParcRetenue ?? null
   };
 }
 
@@ -213,6 +231,7 @@ const L = {
   margeHaut: 22,
   margeBas: 46,
   cotes: 104,
+  ecartParc: 48,
   volumeCollectif: 224,
   volumeIndividuel: 122,
   altitudes: 46,
@@ -265,15 +284,22 @@ export function dessinerLaCoupe(reponses = {}, { classement = null } = {}) {
   const avecAltitudes = hauteurDeNiveau(batiment) !== null;
   const avecCamion = batiment.voie !== null;
   const annexe = batiment.parcCouvertureDominee !== null || batiment.parcContigu !== null;
-  const xAltitudes = x0 + largeurBatie + 6;
+  // Le parc voisin se colle à la façade. Le laisser à distance en faisait un
+  // autre parc, isolé par une aire libre — ce n'est pas de cela que parle
+  // l'article 87. Il ne s'écarte que si l'on a répondu qu'il n'est pas contigu,
+  // et l'écart porte alors la distance déclarée.
+  const ecartAnnexe = batiment.parcContigu === false ? L.ecartParc : 0;
+  const xAnnexe = x0 + largeurBatie + ecartAnnexe;
+  const finBati = xAnnexe + (annexe ? L.parcAnnexe : 0);
+  const xAltitudes = finBati + 8;
   const xCamion = xAltitudes + (avecAltitudes ? L.altitudes : 10);
-  const xAnnexe = xCamion + (avecCamion ? L.camion + 12 : 0);
-  const largeur = xAnnexe + (annexe ? L.parcAnnexe : 0) + 14;
+  const largeur = xCamion + (avecCamion ? L.camion : 0) + 14;
   const lignes = lignesDeLegende(batiment, largeur);
   const hauteur = fond + L.margeBas + lignes * L.ligneLegende;
 
   const yDe = (rang) => (rang >= 0 ? sol - (rang + 1) * L.niveau : sol + (-rang - 1) * L.niveau);
-  const cadre = { x0, w, combien, sol, fond, hauts, bas, yDe, largeur, xAltitudes, xCamion, xAnnexe, avecCamion };
+  const cadre = { x0, w, combien, sol, fond, hauts, bas, yDe, largeur,
+    xAltitudes, xCamion, xAnnexe, finBati, avecCamion, annexe };
 
   const t = [];
   t.push(terrain(batiment, cadre));
@@ -309,8 +335,8 @@ export function dessinerLaCoupe(reponses = {}, { classement = null } = {}) {
  * hauteur se mesure, et le montrer évite de croire qu'elle se compte depuis le
  * point bas du terrain.
  */
-function terrain(batiment, { x0, w, combien, sol, fond, largeur, xAnnexe }) {
-  const droite = x0 + combien * w;
+function terrain(batiment, { x0, w, combien, sol, fond, largeur, finBati }) {
+  const droite = finBati;
   const t = [];
   const enPente = terrainEnPente(batiment);
   const chute = enPente ? (batiment.enterresDeclares ?? 1) * L.niveau : 0;
@@ -325,8 +351,7 @@ function terrain(batiment, { x0, w, combien, sol, fond, largeur, xAnnexe }) {
   }
 
   if (batiment.voie === true) {
-    const bout = Math.min(largeur - 14, xAnnexe - 6);
-    t.push(`<rect x="${droite + 6}" y="${sol + 3}" width="${Math.max(10, bout - droite - 6)}" height="8" class="bat-voie"/>`);
+    t.push(`<rect x="${droite + 6}" y="${sol + 3}" width="${Math.max(10, largeur - droite - 20)}" height="8" class="bat-voie"/>`);
   }
   return t.join("\n      ");
 }
@@ -490,7 +515,9 @@ function celliers(batiment, niveaux, x, w, cadre) {
   if (!accueil) return "";
   const y = cadre.yDe(accueil.rang);
   const largeur = w * 0.24;
-  const xC = x + w - largeur - 6;
+  // Sur un niveau recoupé, les celliers vont du côté habitation : les poser
+  // dans la moitié parc leur ferait dire le contraire de ce qu'ils sont.
+  const xC = accueil.destination === "mixte" ? x + 6 : x + w - largeur - 6;
   return `<rect x="${xC}" y="${y + 6}" width="${largeur}" height="${L.niveau - 12}" class="bat-celliers"/>
       <text x="${xC + largeur / 2}" y="${y + L.niveau / 2 + 3}" class="bat-celliers-note">celliers</text>`;
 }
@@ -545,18 +572,22 @@ function parcAnnexe(batiment, cadre) {
   }
   const faite = cadre.sol - Math.max(1, dessus) * L.niveau;
   t.push(`<line x1="${x - 4}" y1="${faite}" x2="${x + w + 4}" y2="${faite}" class="bat-couverture-parc"/>`);
-  t.push(`<text x="${x + w / 2}" y="${faite - 6}" class="bat-parc-note">couverture du parc</text>`);
+  t.push(`<text x="${x + w / 2}" y="${faite - 6}" class="bat-parc-note">couverture</text>`);
   if (batiment.parcCouvertureDominee === true) {
-    // Le débord : la façade du bâtiment domine la couverture, et c'est ce
-    // surplomb que l'article regarde.
-    t.push(`<path d="M ${cadre.x0 + cadre.combien * cadre.w} ${faite} L ${x} ${faite}" class="bat-domination"/>`);
+    // Le surplomb : la façade du bâtiment monte au-dessus de la couverture, et
+    // c'est ce que l'article 87 regarde. Le trait le suit le long du mur commun,
+    // du faîtage jusqu'à la couverture qu'il domine.
+    const mur = cadre.x0 + cadre.combien * cadre.w;
+    const faiteBati = cadre.sol - cadre.hauts * L.niveau;
+    t.push(`<path d="M ${mur} ${faiteBati} L ${mur} ${faite}" class="bat-domination"/>`);
     t.push(`<text x="${x + w / 2}" y="${faite + 14}" class="bat-parc-note">surplombée</text>`);
   }
-  if (batiment.parcContigu === false && batiment.parcDistance !== null) {
+  if (batiment.parcContigu === false) {
     const y = cadre.sol - L.niveau / 2;
     const xA = cadre.x0 + cadre.combien * cadre.w;
     t.push(`<line x1="${xA}" y1="${y}" x2="${x}" y2="${y}" class="bat-cote"/>
-      <text x="${(xA + x) / 2}" y="${y - 6}" class="bat-cote-texte est-centre">${escapeHtml(virgule(batiment.parcDistance))} m</text>`);
+      <text x="${(xA + x) / 2}" y="${y - 6}" class="bat-cote-texte est-centre">${
+        batiment.parcDistance !== null ? `${escapeHtml(virgule(batiment.parcDistance))} m` : "non contigu"}</text>`);
   }
   return t.join("\n      ");
 }
@@ -734,92 +765,393 @@ function legendeDesCouleurs(batiment, cadre) {
 }
 
 /* ------------------------------------------------------------------ *
- * Le plan
+ * Le plan — trois niveaux, trois choses à lire
  * ------------------------------------------------------------------ */
 
 /**
- * Le niveau courant, vu de dessus.
+ * ## Pourquoi trois plans et non un seul
  *
- * Ce que la coupe ne peut pas montrer : la distance de la porte palière la plus
- * éloignée à l'escalier — celle qui sépare la troisième famille A de la
- * troisième famille B —, la forme de l'escalier retenu, celle de la circulation,
- * et la voie le long de la façade. Quatre articles se lisent ici et nulle part
- * ailleurs.
+ * Un niveau courant, un rez-de-chaussée et un sous-sol ne posent pas les mêmes
+ * questions, et un plan unique les mélangeait : la distance de la porte palière
+ * la plus éloignée n'existe qu'en étage, la voie-engins et la limite de
+ * propriété ne se mesurent qu'au rez-de-chaussée, les compartiments et les
+ * issues du parc n'existent qu'au sous-sol. Superposer les trois donnait un
+ * dessin qu'aucun étage réel ne ressemble.
+ *
+ * Chacun ne se propose que s'il a quelque chose à montrer : un bâtiment sans
+ * sous-sol n'a pas d'onglet sous-sol.
  */
-export function dessinerLePlan(reponses = {}) {
-  const batiment = lireLeBatiment(reponses);
-  const utiles = [batiment.escalier, batiment.circulation, batiment.distancePortePaliere,
-    batiment.voie, batiment.voieEchelles].filter((v) => v !== null && v !== undefined);
-  if (utiles.length === 0) return { vide: true, svg: "", batiment };
 
-  const W = 560, H = 300;
-  const x0 = 60, y0 = 46, w = 400, h = 150;
-  const cage = { x: x0 + 26, y: y0 + h / 2 - 26, c: 52 };
+const PL = {
+  largeur: 620,
+  gauche: 60,
+  droite: 60,
+  haut: 58,
+  bas: 74,
+  profondeur: 172,
+  cage: 52,
+  couloir: 30
+};
+
+/** Le cadre commun aux trois plans : l'enveloppe, et où tombe le noyau. */
+function cadrePlan() {
+  const x0 = PL.gauche;
+  const y0 = PL.haut;
+  const w = PL.largeur - PL.gauche - PL.droite;
+  const h = PL.profondeur;
+  return {
+    x0, y0, w, h,
+    hauteur: y0 + h + PL.bas,
+    cage: { x: x0 + 26, y: y0 + h / 2 - PL.cage / 2, c: PL.cage },
+    couloir: { y: y0 + h / 2 - PL.couloir / 2, h: PL.couloir }
+  };
+}
+
+/** Une cote horizontale, flèches aux deux bouts, texte au-dessus. */
+function coteH(x1, x2, y, texte) {
+  return `<line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" class="bat-cote"/>
+      <path d="M ${x1 + 6} ${y - 4} L ${x1} ${y} L ${x1 + 6} ${y + 4}" class="bat-cote-fleche"/>
+      <path d="M ${x2 - 6} ${y - 4} L ${x2} ${y} L ${x2 - 6} ${y + 4}" class="bat-cote-fleche"/>
+      <text x="${(x1 + x2) / 2}" y="${y - 6}" class="plan-cote-texte">${escapeHtml(texte)}</text>`;
+}
+
+/** Une cote verticale. Le texte se pose à droite du trait, à mi-hauteur. */
+function coteV(y1, y2, x, texte) {
+  return `<line x1="${x}" y1="${y1}" x2="${x}" y2="${y2}" class="bat-cote"/>
+      <path d="M ${x - 4} ${y1 + 6} L ${x} ${y1} L ${x + 4} ${y1 + 6}" class="bat-cote-fleche"/>
+      <path d="M ${x - 4} ${y2 - 6} L ${x} ${y2} L ${x + 4} ${y2 - 6}" class="bat-cote-fleche"/>
+      <text x="${x + 6}" y="${(y1 + y2) / 2}" class="plan-cote-texte est-gauche">${escapeHtml(texte)}</text>`;
+}
+
+/** L'escalier vu de dessus : sa cage, ses marches, et ce qu'il est. */
+function cagePlan(batiment, { x, y, c }, etiquette = true) {
+  const t = [`<rect x="${x}" y="${y}" width="${c}" height="${c}"
+    class="plan-cage${batiment.escalier === "encloisonne" ? " est-encloisonnee"
+      : batiment.escalier === "exterieur" ? " est-exterieure" : ""}"/>`];
+  for (let i = 1; i < 5; i += 1) {
+    t.push(`<line x1="${x}" y1="${y + i * c / 5}" x2="${x + c}" y2="${y + i * c / 5}" class="plan-marche"/>`);
+  }
+  if (etiquette) {
+    t.push(`<text x="${x + c / 2}" y="${etiquette === true ? y + c + 14 : etiquette}" class="plan-etiquette">${
+      escapeHtml(nommerEscalier(batiment.escalier))}</text>`);
+  }
+  return t.join("\n      ");
+}
+
+/** L'ascenseur, contre la cage. Sa gaine se lit en plan comme en coupe. */
+function ascenseurPlan(batiment, cage) {
+  if (batiment.ascenseur !== true) return "";
+  return `<rect x="${cage.x}" y="${cage.y - 32}" width="${cage.c}" height="26" class="plan-ascenseur"/>
+      <text x="${cage.x + cage.c / 2}" y="${cage.y - 15}" class="plan-etiquette est-sobre">asc.</text>`;
+}
+
+/** Les gaines techniques, aux couleurs des corps d'état. */
+function gainesPlan(batiment, x, y) {
   const t = [];
+  let decale = 0;
+  const poser = (classe, titre) => {
+    t.push(`<rect x="${x + decale}" y="${y}" width="11" height="11" class="${classe}"/>`);
+    t.push(`<title>${escapeHtml(titre)}</title>`);
+    decale += 15;
+  };
+  if (batiment.gaz === true) poser("plan-gaine-gaz", "colonne montante de gaz");
+  if (batiment.electricite === true) poser("plan-gaine-elec", "colonne montante électrique");
+  if (batiment.videOrdures === true) poser("plan-gaine-ordures", "vide-ordures");
+  return t.join("\n      ");
+}
 
-  // L'enveloppe du niveau, et la circulation qui le traverse.
-  t.push(`<rect x="${x0}" y="${y0}" width="${w}" height="${h}" class="plan-enveloppe"/>`);
-  const couloir = { y: y0 + h / 2 - 13, h: 26 };
-  t.push(`<rect x="${cage.x + cage.c}" y="${couloir.y}" width="${w - cage.c - 26}" height="${couloir.h}"
+/** L'enveloppe du niveau, et ce qu'il faut savoir écrire dessus. */
+function enveloppePlan(cadre, titre) {
+  return `<rect x="${cadre.x0}" y="${cadre.y0}" width="${cadre.w}" height="${cadre.h}" class="plan-enveloppe"/>
+      <text x="${cadre.x0}" y="${cadre.y0 - 32}" class="plan-titre">${escapeHtml(titre)}</text>`;
+}
+
+/**
+ * Le niveau courant : les logements, la circulation, et ce qui s'y mesure.
+ *
+ * La distance de la porte palière la plus éloignée à l'escalier sépare la
+ * troisième famille A de la troisième famille B ; l'éloignement de l'escalier
+ * aux baies décide de l'article 19. Ni l'une ni l'autre ne se voit en coupe.
+ */
+function planEtage(batiment) {
+  const utiles = [batiment.escalier, batiment.circulation, batiment.distancePortePaliere,
+    batiment.distanceBaies, batiment.coursives, batiment.ascenseur, batiment.nombreEscaliers];
+  if (!utiles.some((v) => v !== null && v !== undefined)) return null;
+
+  const c = cadrePlan();
+  const t = [enveloppePlan(c, "Niveau courant")];
+
+  // La circulation traverse le niveau, du noyau jusqu'au bout.
+  t.push(`<rect x="${c.cage.x + c.cage.c}" y="${c.couloir.y}" width="${c.w - c.cage.c - 26}" height="${c.couloir.h}"
     class="plan-circulation${batiment.circulation === "abriFumees" ? " est-protegee"
       : batiment.circulation === "airLibre" ? " est-air-libre" : ""}"/>`);
-  t.push(`<text x="${cage.x + cage.c + 8}" y="${couloir.y - 6}" class="plan-note">${escapeHtml(nommerCirculation(batiment.circulation))}</text>`);
+  t.push(`<text x="${c.cage.x + c.cage.c + 8}" y="${c.couloir.y - 6}" class="plan-note">${escapeHtml(nommerCirculation(batiment.circulation))}</text>`);
 
-  // La cage d'escalier, et la forme retenue.
-  t.push(`<rect x="${cage.x}" y="${cage.y}" width="${cage.c}" height="${cage.c}"
-    class="plan-cage${batiment.escalier === "encloisonne" ? " est-encloisonnee"
-      : batiment.escalier === "exterieur" ? " est-exterieure" : ""}"/>`);
-  for (let i = 1; i < 5; i += 1) {
-    t.push(`<line x1="${cage.x}" y1="${cage.y + i * cage.c / 5}" x2="${cage.x + cage.c}" y2="${cage.y + i * cage.c / 5}" class="plan-marche"/>`);
-  }
-  t.push(`<text x="${cage.x + cage.c / 2}" y="${cage.y + cage.c + 15}" class="plan-etiquette">${escapeHtml(nommerEscalier(batiment.escalier))}</text>`);
-
-  // L'ascenseur, contre la cage : c'est là qu'il se trouve, et sa gaine se lit
-  // en plan comme en coupe.
-  if (batiment.ascenseur === true) {
-    t.push(`<rect x="${cage.x}" y="${cage.y - 34}" width="${cage.c}" height="28" class="plan-ascenseur"/>`);
-    t.push(`<text x="${cage.x + cage.c / 2}" y="${cage.y - 16}" class="plan-etiquette est-sobre">asc.</text>`);
-  }
+  t.push(cagePlan(batiment, c.cage));
+  t.push(ascenseurPlan(batiment, c.cage));
+  t.push(gainesPlan(batiment, c.cage.x + c.cage.c + 8, c.couloir.y + 9));
 
   // Les logements de part et d'autre, et la porte palière la plus éloignée —
   // celle qui décide, en troisième famille, du A ou du B.
   for (let i = 0; i < 4; i += 1) {
-    const x = cage.x + cage.c + 40 + i * 76;
+    const x = c.cage.x + c.cage.c + 40 + i * 76;
     const derniere = i === 3;
     for (const cote of [-1, 1]) {
-      const y = cote < 0 ? couloir.y - 46 : couloir.y + couloir.h;
-      const yPorte = cote < 0 ? couloir.y : couloir.y + couloir.h;
+      const y = cote < 0 ? c.couloir.y - 46 : c.couloir.y + c.couloir.h;
+      const yPorte = cote < 0 ? c.couloir.y : c.couloir.y + c.couloir.h;
       t.push(`<rect x="${x}" y="${y}" width="60" height="46" class="plan-logement${derniere && cote > 0 ? " est-la-plus-eloignee" : ""}"/>`);
       t.push(`<line x1="${x + 20}" y1="${yPorte}" x2="${x + 40}" y2="${yPorte}" class="plan-porte"/>`);
     }
   }
 
-  if (batiment.distancePortePaliere !== null) {
-    const xFin = cage.x + cage.c + 40 + 3 * 76 + 46;
-    const y = y0 + h + 22;
-    t.push(`<line x1="${cage.x + cage.c / 2}" y1="${y}" x2="${xFin}" y2="${y}" class="bat-cote"/>
-      <path d="M ${cage.x + cage.c / 2 + 6} ${y - 4} L ${cage.x + cage.c / 2} ${y} L ${cage.x + cage.c / 2 + 6} ${y + 4}" class="bat-cote-fleche"/>
-      <path d="M ${xFin - 6} ${y - 4} L ${xFin} ${y} L ${xFin - 6} ${y + 4}" class="bat-cote-fleche"/>
-      <text x="${(cage.x + cage.c / 2 + xFin) / 2}" y="${y - 6}" class="plan-cote-texte">
-        ${escapeHtml(virgule(batiment.distancePortePaliere))} m — porte palière la plus éloignée</text>`);
+  // Les coursives à l'air libre longent la façade : elles ne desservent pas
+  // comme un couloir, et l'article 5 en fait dépendre leurs porteurs.
+  if (batiment.coursives === true) {
+    t.push(`<rect x="${c.x0}" y="${c.y0 - 12}" width="${c.w}" height="10" class="plan-coursive"/>`);
+    t.push(`<text x="${c.x0 + c.w}" y="${c.y0 - 16}" class="plan-note est-droite">coursives à l'air libre</text>`);
   }
 
-  // La voie, le long de la façade.
-  if (batiment.voie !== null) {
-    t.push(`<rect x="${x0}" y="${y0 - 26}" width="${w}" height="14" class="bat-voie"/>`);
-    t.push(`<text x="${x0}" y="${y0 - 32}" class="plan-note">${
-      batiment.voieEchelles === true ? "voie-échelles : accès aux escaliers atteints"
-        : batiment.voie ? "voie d'accès déclarée" : "aucune voie décrite"}</text>`);
+  // Le second escalier, quand il y en a deux, et ce qui les sépare.
+  const deuxieme = batiment.nombreEscaliers !== null && batiment.nombreEscaliers >= 2;
+  if (deuxieme) {
+    const cage2 = { x: c.x0 + c.w - 26 - c.cage.c, y: c.cage.y, c: c.cage.c };
+    t.push(cagePlan(batiment, cage2, false));
+    if (batiment.distanceEntreEscaliers !== null) {
+      t.push(coteH(c.cage.x + c.cage.c / 2, cage2.x + cage2.c / 2, c.y0 - 20,
+        `${virgule(batiment.distanceEntreEscaliers)} m entre escaliers`));
+    }
   }
+
+  if (batiment.distancePortePaliere !== null) {
+    const xFin = c.cage.x + c.cage.c + 40 + 3 * 76 + 46;
+    t.push(coteH(c.cage.x + c.cage.c / 2, xFin, c.y0 + c.h + 22,
+      `${virgule(batiment.distancePortePaliere)} m — porte palière la plus éloignée`));
+  }
+  if (batiment.distanceBaies !== null) {
+    t.push(coteV(c.cage.y + c.cage.c, c.y0 + c.h, c.cage.x + c.cage.c / 2,
+      `${virgule(batiment.distanceBaies)} m aux baies`));
+  }
+
+  return { titre: "Niveau courant", svg: t.filter(Boolean).join("\n      "), hauteur: c.hauteur };
+}
+
+/**
+ * Le rez-de-chaussée : ce qui se mesure depuis l'extérieur.
+ *
+ * La voie et son accès, le débouché de l'escalier vers la sortie, la limite de
+ * propriété, la longueur du bâtiment, et les volumes voisins quand l'habitation
+ * est jumelée ou groupée en bande. Rien de tout cela n'a de sens en étage.
+ */
+function planRdc(batiment) {
+  const utiles = [batiment.voie, batiment.voieEchelles, batiment.distanceDebouche,
+    batiment.distanceLimite, batiment.longueur, batiment.implantation, batiment.hallServices];
+  if (!utiles.some((v) => v !== null && v !== undefined)) return null;
+
+  const c = cadrePlan();
+  const t = [enveloppePlan(c, "Rez-de-chaussée")];
+
+  // Le hall, contre le noyau, et sa porte sur l'extérieur.
+  const hall = { x: c.cage.x + c.cage.c, y: c.couloir.y - 14, w: 118, h: c.couloir.h + 28 };
+  t.push(`<rect x="${hall.x}" y="${hall.y}" width="${hall.w}" height="${hall.h}" class="plan-hall"/>`);
+  t.push(`<text x="${hall.x + hall.w / 2}" y="${hall.y + hall.h / 2 + 4}" class="plan-etiquette est-sobre">hall${
+    batiment.hallServices === true ? " + services" : ""}</text>`);
+  const sortie = { x: hall.x + hall.w / 2, y: c.y0 + c.h };
+  t.push(`<line x1="${sortie.x - 16}" y1="${sortie.y}" x2="${sortie.x + 16}" y2="${sortie.y}" class="plan-sortie"/>`);
+  t.push(`<path d="M ${hall.x + hall.w / 2} ${hall.y + hall.h} L ${sortie.x} ${sortie.y}" class="plan-parcours"/>`);
+
+  t.push(cagePlan(batiment, c.cage));
+  t.push(ascenseurPlan(batiment, c.cage));
+
+  // Les logements du rez-de-chaussée, au-delà du hall.
+  for (let i = 0; i < 3; i += 1) {
+    const x = hall.x + hall.w + 14 + i * 76;
+    if (x + 60 > c.x0 + c.w - 8) break;
+    for (const cote of [-1, 1]) {
+      const y = cote < 0 ? c.couloir.y - 46 : c.couloir.y + c.couloir.h;
+      t.push(`<rect x="${x}" y="${y}" width="60" height="46" class="plan-logement"/>`);
+    }
+  }
+
+  // La voie, le long de la façade, et ce qu'elle atteint.
+  if (batiment.voie !== null) {
+    const y = c.y0 + c.h + 30;
+    t.push(`<rect x="${c.x0 - 14}" y="${y}" width="${c.w + 28}" height="14" class="bat-voie"/>`);
+    t.push(`<text x="${c.x0 - 14}" y="${y + 26}" class="plan-note">${
+      batiment.voieEchelles === true ? "voie-échelles — accès aux escaliers atteints"
+        : batiment.voie ? "voie d'accès déclarée" : "aucune voie décrite"}</text>`);
+    if (batiment.distanceDebouche !== null) {
+      t.push(coteV(sortie.y, y, sortie.x, `${virgule(batiment.distanceDebouche)} m au débouché`));
+    }
+  }
+
+  // La limite de propriété : c'est d'elle que se mesure l'isolement.
+  if (batiment.distanceLimite !== null) {
+    const y = c.y0 - 30;
+    t.push(`<line x1="${c.x0 - 20}" y1="${y}" x2="${c.x0 + c.w + 20}" y2="${y}" class="plan-limite"/>`);
+    t.push(`<text x="${c.x0 + c.w + 20}" y="${y - 5}" class="plan-note est-droite">limite de propriété</text>`);
+    t.push(coteV(y, c.y0, c.x0 + 14, `${virgule(batiment.distanceLimite)} m`));
+  }
+
+  // La longueur : au-delà de 45 m, l'article 8 exige un recoupement vertical.
+  if (batiment.longueur !== null) {
+    t.push(coteH(c.x0, c.x0 + c.w, c.y0 + c.h + 76, `${virgule(batiment.longueur)} m de longueur`));
+  }
+
+  // Les volumes voisins : une maison jumelée ou en bande n'est pas seule, et
+  // c'est le joint qui décide de la première ou de la deuxième famille.
+  if (batiment.collectif === false && batiment.implantation && batiment.implantation !== "isolee") {
+    // Une maison en bande a une voisine de chaque côté, une jumelée une seule.
+    // C'est le joint mitoyen qui décide de la première ou de la deuxième
+    // famille, et il ne se voit pas autrement.
+    const cotes = batiment.implantation === "bande" ? [-1, 1] : [1];
+    for (const cote of cotes) {
+      const x = cote < 0 ? c.x0 - 46 : c.x0 + c.w + 6;
+      t.push(`<rect x="${x}" y="${c.y0}" width="40" height="${c.h}" class="plan-voisin"/>`);
+      const mitoyen = cote < 0 ? c.x0 : c.x0 + c.w;
+      t.push(`<line x1="${mitoyen}" y1="${c.y0}" x2="${mitoyen}" y2="${c.y0 + c.h}"
+        class="bat-joint${batiment.structuresIndependantes ? " est-independant" : ""}"/>`);
+    }
+  }
+
+  return { titre: "Rez-de-chaussée", svg: t.filter(Boolean).join("\n      "), hauteur: c.hauteur + 40 };
+}
+
+/**
+ * Le sous-sol : le parc, ses compartiments et ses issues.
+ *
+ * La superficie d'un compartiment et la distance à parcourir vers une issue
+ * décident du titre VI, et rien de tout cela ne se voit en coupe : un parc s'y
+ * réduit à une bande. À plat, on compte les compartiments et l'on suit le
+ * chemin qu'il faut faire pour sortir.
+ */
+function planSousSol(batiment) {
+  const auSousSol = (batiment.enterres ?? 0) > 0;
+  const utiles = [batiment.superficieCompartiment, batiment.boxes, batiment.distanceIssue,
+    batiment.parcPlusieursIssues, batiment.largesOuvertures, batiment.ventilationParc];
+  if (!auSousSol || !utiles.some((v) => v !== null && v !== undefined)) return null;
+
+  const c = cadrePlan();
+  const t = [];
+  // Le fond d'abord, l'enveloppe ensuite : un aplat posé après le trait
+  // recouvrait le mur, et le parc n'avait plus de contour.
+  t.push(`<rect x="${c.x0}" y="${c.y0}" width="${c.w}" height="${c.h}" class="plan-parc"/>`);
+
+  // Les issues d'abord, parce qu'elles réservent leur place : une, ou deux
+  // quand elles sont au choix. Chacune est un sas et un escalier — l'article 89
+  // n'admet pas la porte seule.
+  const deuxIssues = batiment.parcPlusieursIssues === true;
+  const issue = { w: 92, h: 50 };
+  const issues = [];
+  const poser = (x) => {
+    const y = c.couloir.y - 10;
+    t.push(`<rect x="${x}" y="${y}" width="${issue.w}" height="${issue.h}" class="plan-sas"/>`);
+    t.push(cagePlan(batiment, { x: x + 46, y: y + 4, c: 42 }, false));
+    t.push(`<text x="${x + 23}" y="${y + 30}" class="plan-etiquette est-sobre">sas</text>`);
+    issues.push(x + issue.w);
+  };
+  poser(c.x0 + 8);
+  if (deuxIssues) poser(c.x0 + c.w - 8 - issue.w);
+
+  // L'allée et ses emplacements : sans eux, le sous-sol n'est qu'un rectangle
+  // brun, et l'on ne voit pas qu'il s'agit d'un parc.
+  const zone = { x: c.x0 + 8 + issue.w + 10, fin: c.x0 + c.w - 10 - (deuxIssues ? issue.w + 8 : 0) };
+  const large = zone.fin - zone.x;
+  if (large > 60) {
+    t.push(`<rect x="${zone.x}" y="${c.couloir.y}" width="${large}" height="${c.couloir.h}" class="plan-allee"/>`);
+    const combien = Math.max(2, Math.min(10, Math.floor(large / 34)));
+    const pas = large / combien;
+    for (let i = 0; i < combien; i += 1) {
+      const x = zone.x + i * pas;
+      t.push(`<rect x="${x + 2}" y="${c.y0 + 10}" width="${pas - 4}" height="${c.couloir.y - c.y0 - 12}"
+        class="plan-emplacement${batiment.boxes === true ? " est-box" : ""}"/>`);
+      t.push(`<rect x="${x + 2}" y="${c.couloir.y + c.couloir.h + 2}" width="${pas - 4}"
+        height="${c.y0 + c.h - c.couloir.y - c.couloir.h - 12}"
+        class="plan-emplacement${batiment.boxes === true ? " est-box" : ""}"/>`);
+    }
+    if (batiment.boxes === true) {
+      t.push(`<text x="${zone.x}" y="${c.y0 + c.h - 6}" class="plan-note">box${
+        batiment.emplacementsParBox !== null ? ` — ${batiment.emplacementsParBox} emplacement(s)` : ""}</text>`);
+    }
+  }
+
+  // Les compartiments : autant que la surface en demande, plafonnés à quatre —
+  // au-delà, on ne compte plus, on regarde une trame.
+  const compartiments = batiment.surfaceParc !== null && batiment.superficieCompartiment
+    ? Math.max(1, Math.min(4, Math.ceil(batiment.surfaceParc / batiment.superficieCompartiment)))
+    : 1;
+  for (let i = 1; i < compartiments; i += 1) {
+    const x = c.x0 + (i * c.w) / compartiments;
+    t.push(`<line x1="${x}" y1="${c.y0}" x2="${x}" y2="${c.y0 + c.h}" class="plan-compartiment"/>`);
+  }
+  if (batiment.superficieCompartiment !== null) {
+    t.push(`<text x="${c.x0 + 8}" y="${c.y0 - 8}" class="plan-note">${compartiments} compartiment${
+      compartiments > 1 ? "s" : ""} — ${virgule(batiment.superficieCompartiment)} m² au plus</text>`);
+  }
+
+  // Les celliers ou caves regroupés partagent le sous-sol avec le parc, et
+  // l'article 10 les en sépare.
+  if (batiment.celliers === true) {
+    const x = c.x0 + c.w - 94;
+    const y = c.y0 + c.h - 46;
+    t.push(`<rect x="${x}" y="${y}" width="86" height="38" class="bat-celliers"/>`);
+    t.push(`<text x="${x + 43}" y="${y + 24}" class="bat-celliers-note">celliers</text>`);
+  }
+
+  // Les larges ouvertures sur deux faces opposées : c'est ce qui dispense de la
+  // ventilation mécanique.
+  if (batiment.largesOuvertures === true) {
+    for (const x of [c.x0, c.x0 + c.w]) {
+      t.push(`<line x1="${x}" y1="${c.y0 + 24}" x2="${x}" y2="${c.y0 + c.h - 24}" class="plan-ouverture"/>`);
+    }
+  }
+
+  t.push(enveloppePlan(c, "Sous-sol — parc de stationnement"));
+
+  // Le chemin à parcourir : depuis le point le plus défavorable, jusqu'à
+  // l'issue la plus proche.
+  if (batiment.distanceIssue !== null) {
+    t.push(coteH(issues[0], c.x0 + c.w - 14, c.y0 + c.h + 30, `${virgule(batiment.distanceIssue)} m à parcourir`));
+  }
+  const dessous = batiment.largesOuvertures === true ? "larges ouvertures sur deux faces opposées"
+    : batiment.ventilationParc === "mecanique" ? "ventilation mécanique"
+      : batiment.ventilationParc ? `ventilation ${batiment.ventilationParc}` : "";
+  if (dessous) {
+    t.push(`<text x="${c.x0 + c.w / 2}" y="${c.y0 + c.h + 54}" class="plan-note est-centre">${escapeHtml(dessous)}</text>`);
+  }
+
+  return { titre: "Sous-sol", svg: t.filter(Boolean).join("\n      "), hauteur: c.hauteur + 24 };
+}
+
+const PLANS = { etage: planEtage, rdc: planRdc, sousSol: planSousSol };
+
+/**
+ * Un plan, au niveau demandé.
+ *
+ * @param {object} reponses ce qui a été répondu
+ * @param {{niveau?: "etage"|"rdc"|"sousSol"}} options le niveau à dessiner
+ */
+export function dessinerLePlan(reponses = {}, { niveau = "etage" } = {}) {
+  const batiment = lireLeBatiment(reponses);
+  const dessine = (PLANS[niveau] ?? planEtage)(batiment);
+  if (!dessine) return { vide: true, svg: "", batiment };
 
   return {
     vide: false,
     batiment,
-    svg: `<svg viewBox="0 0 ${W} ${H}" role="img" xmlns="http://www.w3.org/2000/svg"
-      aria-label="${escapeHtml(resumerLePlan(batiment))}">
-      ${t.join("\n      ")}
+    niveau,
+    titre: dessine.titre,
+    svg: `<svg viewBox="0 0 ${PL.largeur} ${dessine.hauteur}" role="img" xmlns="http://www.w3.org/2000/svg"
+      aria-label="${escapeHtml(resumerLePlan(batiment, niveau))}">
+      ${dessine.svg}
     </svg>`
   };
+}
+
+/** Les plans qui ont quelque chose à montrer, dans l'ordre où on les lit. */
+export function plansDisponibles(reponses = {}) {
+  return [["etage", "Étage"], ["rdc", "Rez-de-chaussée"], ["sousSol", "Sous-sol"]]
+    .map(([cle, libelle]) => [cle, libelle, dessinerLePlan(reponses, { niveau: cle })])
+    .filter(([, , plan]) => !plan.vide);
 }
 
 const nommerEscalier = (type) => ({
@@ -883,17 +1215,47 @@ export function resumer(batiment, classement = null) {
   return morceaux.length ? `${morceaux.join(", ")}.` : "Rien n'a encore été décrit.";
 }
 
-/** Ce que le plan dit, en une phrase. */
-export function resumerLePlan(batiment) {
+/** Ce que le plan dit, en une phrase — et ce n'est pas la même selon le niveau. */
+export function resumerLePlan(batiment, niveau = "etage") {
   const morceaux = [];
+  if (niveau === "sousSol") {
+    if (batiment.superficieCompartiment !== null) {
+      morceaux.push(`compartiments de ${virgule(batiment.superficieCompartiment)} m² au plus`);
+    }
+    if (batiment.boxes === true) {
+      morceaux.push(`boxes${batiment.emplacementsParBox !== null ? ` de ${batiment.emplacementsParBox} emplacement(s)` : ""}`);
+    }
+    if (batiment.parcPlusieursIssues === true) morceaux.push("plusieurs issues au choix");
+    if (batiment.distanceIssue !== null) morceaux.push(`${virgule(batiment.distanceIssue)} m à parcourir vers une issue`);
+    if (batiment.largesOuvertures === true) morceaux.push("larges ouvertures sur deux faces opposées");
+    if (batiment.celliers === true) morceaux.push("celliers ou caves regroupés");
+    return morceaux.length ? `Sous-sol : ${morceaux.join(", ")}.` : "Rien n'a encore été décrit au sous-sol.";
+  }
+
+  if (niveau === "rdc") {
+    if (batiment.voieEchelles === true) morceaux.push("accès aux escaliers atteints par la voie-échelles");
+    else if (batiment.voie === true) morceaux.push("voie d'accès déclarée");
+    else if (batiment.voie === false) morceaux.push("aucune voie décrite");
+    if (batiment.distanceDebouche !== null) morceaux.push(`${virgule(batiment.distanceDebouche)} m du débouché de l'escalier à la sortie`);
+    if (batiment.distanceLimite !== null) morceaux.push(`${virgule(batiment.distanceLimite)} m de la limite de propriété`);
+    if (batiment.longueur !== null) morceaux.push(`${virgule(batiment.longueur)} m de longueur`);
+    if (batiment.hallServices === true) morceaux.push("hall desservant des services collectifs");
+    return morceaux.length ? `Rez-de-chaussée : ${morceaux.join(", ")}.` : "Rien n'a encore été décrit au rez-de-chaussée.";
+  }
+
   if (batiment.escalier) morceaux.push(nommerEscalier(batiment.escalier));
   if (batiment.circulation) morceaux.push(nommerCirculation(batiment.circulation));
   if (batiment.distancePortePaliere !== null) {
     morceaux.push(`porte palière la plus éloignée à ${virgule(batiment.distancePortePaliere)} m de l'escalier`);
   }
+  if (batiment.distanceBaies !== null) morceaux.push(`escalier à ${virgule(batiment.distanceBaies)} m des baies`);
+  if (batiment.nombreEscaliers !== null && batiment.nombreEscaliers >= 2) {
+    morceaux.push(`${batiment.nombreEscaliers} escaliers protégés`
+      + (batiment.distanceEntreEscaliers !== null ? `, ${virgule(batiment.distanceEntreEscaliers)} m entre eux` : ""));
+  }
   if (batiment.ascenseur === true) morceaux.push("ascenseur contre la cage");
-  if (batiment.voieEchelles === true) morceaux.push("accès aux escaliers atteints par la voie-échelles");
-  return morceaux.length ? `Vue en plan : ${morceaux.join(", ")}.` : "Rien n'a encore été décrit à plat.";
+  if (batiment.coursives === true) morceaux.push("coursives à l'air libre");
+  return morceaux.length ? `Niveau courant : ${morceaux.join(", ")}.` : "Rien n'a encore été décrit à plat.";
 }
 
 /** L'ancienne porte, gardée : la coupe est ce qu'on montre par défaut. */
