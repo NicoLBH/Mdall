@@ -28,6 +28,8 @@
 
 import { escapeHtml } from "../../../utils/escape-html.js";
 import { svgIcon } from "../../../ui/icons.js";
+import { renderMarkdownToHtml } from "../../../utils/markdown-renderer.js";
+import { dessinerChampRedige } from "../../ui/champ-redige.js";
 
 /**
  * Le département, tiré d'une adresse.
@@ -90,14 +92,17 @@ export function propositionsDe(champ, bibliotheque = {}) {
  * Le blanc qui reste sous une phrase courte n'est pas un défaut : c'est ce qui
  * distingue un document annoté d'un formulaire, et c'est là qu'on lit.
  */
-function dessinerLeDocument(notice, complements, bibliotheque, departement) {
+function dessinerLeDocument(notice, complements, bibliotheque, departement, ouvert, apercu) {
   const lignes = [];
   const ligne = (paragraphe) => {
-    const champ = paragraphe.champ;
+    const ouvre = ouvert === paragraphe.cle;
     lignes.push(`
-      <p class="notice-paragraphe${champ ? " est-completable" : ""}"
-         data-notice-paragraphe="${escapeHtml(paragraphe.cle)}">${escapeHtml(paragraphe.texte)}</p>
-      <div class="notice-cellule">${champ ? dessinerChamp(paragraphe, complements, bibliotheque) : ""}</div>
+      <div class="notice-paragraphe${paragraphe.champ ? " est-completable" : ""}${paragraphe.repris ? " est-reprise" : ""}${ouvre ? " est-ouverte" : ""}"
+         role="button" tabindex="0"
+         aria-expanded="${ouvre}"
+         title="Cliquez pour reprendre cette phrase"
+         data-notice-paragraphe="${escapeHtml(paragraphe.cle)}">${renderMarkdownToHtml(paragraphe.texte ?? "")}</div>
+      <div class="notice-cellule">${dessinerLeComplement(paragraphe, complements, bibliotheque, ouvre, apercu === paragraphe.cle)}</div>
     `);
   };
 
@@ -124,9 +129,9 @@ function dessinerLeDocument(notice, complements, bibliotheque, departement) {
       ${lignes.length ? `
         <p class="notice-document__mot">
           ${svgIcon("comment", { className: "octicon" })}
-          À droite de chaque phrase, ce que l'arrêté ne peut pas savoir : la matière, le procédé, le
-          dispositif. Plusieurs réponses sont possibles — un bâtiment peut avoir un enduit au
-          rez-de-chaussée et un bardage dans les étages.
+          Cliquez sur une phrase pour la reprendre : la zone de saisie porte le texte entier, et le
+          markdown s'y met en forme. À droite, ce que l'arrêté ne peut pas savoir — la matière, le
+          procédé, le dispositif. Plusieurs réponses sont possibles.
           ${departement ? `Les propositions tiennent compte de ce qui se construit dans le département ${escapeHtml(departement)}.` : ""}
         </p>` : ""}
       ${lignes.join("")}
@@ -135,52 +140,74 @@ function dessinerLeDocument(notice, complements, bibliotheque, departement) {
 }
 
 /**
- * Un complément : ses propositions, et de quoi écrire autre chose.
+ * Un complément : ses propositions, et le texte entier de la phrase.
  *
  * Les cases se cumulent — un bâtiment a rarement un seul système de façade —
  * et un second clic retire la sienne : une case qu'on ne peut pas décocher est
  * un piège. Ce qui est tapé à la main entre dans la bibliothèque du seul fait
  * qu'on l'a retenu.
+ *
+ * Le rendu n'est pas écrit ici : c'est `champ-redige`, le même trio (titre,
+ * cases, éditeur) qui servira aux notes sur un plan ou sur un document. Ce
+ * fichier ne fait plus que traduire une phrase de notice dans son vocabulaire.
  */
-function dessinerChamp(paragraphe, complements, bibliotheque) {
+function dessinerLeComplement(paragraphe, complements, bibliotheque, ouvert, apercu) {
   const champ = paragraphe.champ;
-  const valeur = complements?.[paragraphe.cle]?.[champ.cle] ?? "";
-  const propositions = propositionsDe(champ, bibliotheque);
-  const retenues = champ.multiple
-    ? String(valeur).split(" et ").map((v) => v.trim()).filter(Boolean)
-    : [String(valeur).trim()].filter(Boolean);
-  // Ce qui a été tapé à la main plutôt que coché : on le montre, sinon on ne
-  // sait plus d'où vient la moitié de la phrase.
-  const libres = retenues.filter((v) => !propositions.some((p) => p.libelle === v));
+  // Une phrase sans champ se reprend quand même : notre aide sert à remplir
+  // vite, elle ne doit pas empêcher de réécrire.
+  if (!champ && !ouvert) return "";
 
-  return `
-    <section class="notice-champ" data-notice-champ="${escapeHtml(paragraphe.cle)}">
-      <h6>${escapeHtml(champ.libelle)}</h6>
-      <div class="notice-champ__options" role="group" aria-label="${escapeHtml(champ.libelle)}">
-        ${propositions.map((option) => {
-          const coche = retenues.includes(option.libelle);
-          return `
-            <button type="button" role="checkbox" aria-checked="${coche}"
-                    class="notice-option${coche ? " est-coche" : ""}"
-                    data-notice-option="${escapeHtml(paragraphe.cle)}"
-                    data-notice-valeur="${escapeHtml(option.libelle)}">
-              <span class="notice-option__marque" aria-hidden="true"></span>
-              ${escapeHtml(option.libelle)}
-              ${option.poids ? `<em title="retenu ${option.poids} fois">${option.poids}</em>` : ""}
-            </button>
-          `;
-        }).join("")}
-      </div>
-      ${libres.length ? `<p class="notice-champ__libres">Ajouté à la main : ${escapeHtml(libres.join(" et "))}</p>` : ""}
-      <details class="notice-champ__autre"${libres.length ? " open" : ""}>
-        <summary>Autre chose</summary>
-        <textarea class="notice-champ__texte" rows="2"
-                  data-notice-saisie="${escapeHtml(paragraphe.cle)}"
-                  placeholder="Décrivez-le vous-même — les cases cochées s'y retrouvent, séparées par « et »"
-        >${escapeHtml(valeur)}</textarea>
-      </details>
-    </section>
-  `;
+  const valeur = champ ? (complements?.[paragraphe.cle]?.[champ.cle] ?? "") : "";
+  const propositions = champ ? propositionsDe(champ, bibliotheque) : [];
+  const retenues = !champ
+    ? []
+    : champ.multiple
+      ? String(valeur).split(" et ").map((v) => v.trim()).filter(Boolean)
+      : [String(valeur).trim()].filter(Boolean);
+
+  return dessinerChampRedige({
+    cle: paragraphe.cle,
+    titre: champ?.libelle ?? "Reprendre la phrase",
+    propositions,
+    retenues,
+    texte: paragraphe.texte ?? "",
+    repris: Boolean(paragraphe.repris),
+    ouvert: Boolean(ouvert),
+    apercu: Boolean(apercu),
+    apercuHtml: renderMarkdownToHtml(paragraphe.texte ?? "")
+  });
+}
+
+/**
+ * La notice en HTML, pour le presse-papier.
+ *
+ * ## Pourquoi deux formats
+ *
+ * Word colle ce qu'on lui donne de plus riche. Un presse-papier qui ne porte
+ * que du texte brut arrive en Courier, sans titre et sans gras, et il faut
+ * remettre en forme une notice de six pages à la main. Avec un `text/html` à
+ * côté, la même notice arrive avec ses titres et ses paragraphes, et l'éditeur
+ * qui ne sait pas lire le HTML retombe sur le texte : personne n'y perd.
+ *
+ * Le markdown des phrases reprises est rendu ici, sinon on collerait des
+ * astérisques dans un document officiel.
+ */
+export function noticeEnHtml(notice) {
+  const morceaux = [];
+  morceaux.push(`<h1>Notice descriptive de s\u00e9curit\u00e9</h1>`);
+  const renseignes = (notice?.entete ?? []).filter((c) => c.valeur);
+  if (renseignes.length) {
+    morceaux.push(`<table>${renseignes.map((c) => `<tr><td><b>${escapeHtml(c.libelle)}</b></td><td>${escapeHtml(c.valeur)}</td></tr>`).join("")}</table>`);
+  }
+  for (const section of notice?.sections ?? []) {
+    morceaux.push(`<h2>${section.numero}. ${escapeHtml(section.titre)}</h2>`);
+    for (const p of section.paragraphes ?? []) morceaux.push(renderMarkdownToHtml(p.texte ?? ""));
+    (section.sousSections ?? []).forEach((sous, i) => {
+      morceaux.push(`<h3>${section.numero}.${i + 1} ${escapeHtml(sous.titre)}</h3>`);
+      for (const p of sous.paragraphes ?? []) morceaux.push(renderMarkdownToHtml(p.texte ?? ""));
+    });
+  }
+  return `<meta charset="utf-8">${morceaux.join("\n")}`;
 }
 
 /** L'en-tête administratif : ce que le projet sait déjà, et ce qu'on complète. */
@@ -202,7 +229,7 @@ function dessinerLEntete(entete, venuesDeLaMemoire) {
 }
 
 /** L'onglet entier. */
-export function dessinerLaNotice({ notice, complements, bibliotheque, departement, venuesDeLaMemoire, enCours, erreur }) {
+export function dessinerLaNotice({ notice, complements, bibliotheque, departement, venuesDeLaMemoire, ouvert, apercu, enCours, erreur }) {
   if (erreur) return `<p class="fondations-erreur">${escapeHtml(erreur)}</p>`;
   if (!notice) return `<p class="gh-text-muted">${enCours ? "Rédaction de la notice…" : "La notice n'a pas pu être rédigée."}</p>`;
 
@@ -214,7 +241,7 @@ export function dessinerLaNotice({ notice, complements, bibliotheque, departemen
           ${svgIcon("copy", { className: "octicon" })} Copier la notice
         </button>
       </div>
-      ${dessinerLeDocument(notice, complements, bibliotheque, departement)}
+      ${dessinerLeDocument(notice, complements, bibliotheque, departement, ouvert, apercu)}
     </div>
   `;
 }

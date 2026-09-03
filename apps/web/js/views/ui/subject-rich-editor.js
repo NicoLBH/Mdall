@@ -4,7 +4,17 @@ export function renderSubjectMarkdownToolbar({
   buttonAction = "composer-format",
   svgIcon,
   extraData = {},
-  handwritingAction = null
+  handwritingAction = null,
+  // Tous les boutons ne servent pas partout : une note sur un plan n'a pas de
+  // sujet à référencer, et une phrase de notice n'a personne à mentionner.
+  // Restreindre la barre vaut mieux que d'offrir un geste qui ne mène nulle part.
+  boutons = null,
+  // La pièce jointe n'a de sens que là où quelque chose sait la recevoir.
+  pieceJointe = true,
+  // La disposition en groupes est celle du composeur de commentaire. Elle se
+  // demande explicitement quand on reprend ce composeur ailleurs, sous un autre
+  // nom d'action.
+  dispositionGroupee = null
 } = {}) {
   const toolbarButtons = [
     { action: "heading", icon: "markdown-heading", label: "Titre (H3)" },
@@ -20,6 +30,10 @@ export function renderSubjectMarkdownToolbar({
     { action: "mention", icon: "markdown-mention", label: "Mention" },
     { action: "subject-ref", icon: "cross-reference", label: "Référence sujet" }
   ];
+
+  const boutonsRetenus = Array.isArray(boutons) && boutons.length
+    ? toolbarButtons.filter((b) => boutons.includes(b.action))
+    : toolbarButtons;
 
   const toDataAttributeName = (key) => String(key || "")
     .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
@@ -63,13 +77,13 @@ export function renderSubjectMarkdownToolbar({
     `;
   };
 
-  const shouldUseComposerLayout = buttonAction === "composer-format"
+  const shouldUseComposerLayout = dispositionGroupee ?? (buttonAction === "composer-format"
     || buttonAction === "thread-reply-format"
     || buttonAction === "thread-edit-format"
     || buttonAction === "description-format"
-    || buttonAction === "create-subject-format";
+    || buttonAction === "create-subject-format");
   if (!shouldUseComposerLayout) {
-    return toolbarButtons.map((button) => renderToolbarButton(button)).join("");
+    return boutonsRetenus.map((button) => renderToolbarButton(button)).join("");
   }
 
   const attachmentAction = buttonAction === "thread-edit-format"
@@ -81,7 +95,7 @@ export function renderSubjectMarkdownToolbar({
       : buttonAction === "create-subject-format"
         ? "create-subject-attachments-pick"
         : "composer-attachments-pick";
-  const attachmentButton = `
+  const attachmentButton = !pieceJointe ? "" : `
     <button
       class="comment-toolbar-btn"
       type="button"
@@ -96,10 +110,10 @@ export function renderSubjectMarkdownToolbar({
 
   const groupOne = ["heading", "bold", "italic", "underline", "quote", "code", "link"];
   const groupTwo = ["ordered-list", "bullet-list", "checklist"];
-  const mentionButton = toolbarButtons.find((button) => button.action === "mention");
-  const subjectRefButton = toolbarButtons.find((button) => button.action === "subject-ref");
+  const mentionButton = boutonsRetenus.find((button) => button.action === "mention");
+  const subjectRefButton = boutonsRetenus.find((button) => button.action === "subject-ref");
   const renderGroup = (actions = []) => actions
-    .map((action) => toolbarButtons.find((button) => button.action === action))
+    .map((action) => boutonsRetenus.find((button) => button.action === action))
     .filter(Boolean)
     .map((button) => renderToolbarButton(button))
     .join("");
@@ -108,7 +122,7 @@ export function renderSubjectMarkdownToolbar({
     <div class="comment-toolbar-layout">
       <div class="comment-toolbar-layout__group">${renderGroup(groupOne)}</div>
       <div class="comment-toolbar-layout__group">${renderGroup(groupTwo)}</div>
-      <div class="comment-toolbar-layout__group">${attachmentButton}${mentionButton ? renderToolbarButton(mentionButton) : ""}${subjectRefButton ? renderToolbarButton(subjectRefButton) : ""}</div>
+      ${attachmentButton || mentionButton || subjectRefButton ? `<div class="comment-toolbar-layout__group">${attachmentButton}${mentionButton ? renderToolbarButton(mentionButton) : ""}${subjectRefButton ? renderToolbarButton(subjectRefButton) : ""}</div>` : ""}
       ${handwritingAction ? `<div class="comment-toolbar-layout__group comment-toolbar-layout__group--push-right">${renderHandwritingButton(handwritingAction)}</div>` : ""}
     </div>
   `;

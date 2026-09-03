@@ -142,12 +142,16 @@ export function cheminComplet(id, graphe) {
  */
 export function noeudsVisibles(graphe, { montrerTout = false, chemin = null } = {}) {
   const tous = graphe?.noeuds ?? [];
-  if (chemin) {
-    const retenus = cheminComplet(chemin, graphe);
-    return new Set(tous.filter((n) => retenus.has(n.id)).map((n) => n.id));
-  }
-  if (montrerTout) return new Set(tous.map((n) => n.id));
-  return new Set(tous.filter((n) => n.etat !== "sansObjet").map((n) => n.id));
+  // Ce qu'on accepte de montrer, avant même de savoir ce qu'on cherche.
+  const retenus = montrerTout ? tous : tous.filter((n) => n.etat !== "sansObjet");
+  if (!chemin) return new Set(retenus.map((n) => n.id));
+
+  // Et le chemin se calcule **sur ce sous-graphe**, pas sur le graphe entier :
+  // sinon, désigner une carte ramenait des cartes grises qu'on venait
+  // justement d'écarter, et le chemin traversait des nœuds invisibles.
+  const visible = { noeuds: retenus, liens: graphe?.liens ?? [] };
+  const dansLeChemin = cheminComplet(chemin, visible);
+  return new Set(retenus.filter((n) => dansLeChemin.has(n.id)).map((n) => n.id));
 }
 
 /**
@@ -171,14 +175,11 @@ export function dessinerGrapheLiaisons({
   const colonnes = rangerParProfondeur(graphe)
     .map((colonne) => colonne.filter((n) => visibles.has(n.id)))
     .filter((colonne) => colonne.length);
-  const caches = (graphe?.noeuds?.length ?? 0) - visibles.size;
 
   return `
     <section class="graphe-bloc${pleinEcran ? " est-plein-ecran" : ""}${detail ? " est-detaille" : ""}" data-graphe-bloc>
       <div class="graphe__tete">
-        <p class="graphe__legende">${legende}${caches > 0 ? `
-          <span class="graphe__caches">${caches} carte${caches > 1 ? "s" : ""} masquée${caches > 1 ? "s" : ""}${
-            chemin ? " — hors du chemin décisionnel" : " — sans objet dans ce cas"}.</span>` : ""}</p>
+        <p class="graphe__legende">${legende}</p>
         <div class="graphe__outils">
           ${chemin ? `
             <button type="button" class="graphe__outil est-actif" data-graphe-chemin="sortir"
@@ -199,7 +200,8 @@ export function dessinerGrapheLiaisons({
           <button type="button" class="graphe__outil" data-graphe-zoom="in" aria-label="Agrandir" title="Agrandir">
             ${svgIcon("plus", { className: "octicon" })}
           </button>
-          <button type="button" class="graphe__outil" data-graphe-plein-ecran
+          <button type="button" class="graphe__outil${pleinEcran ? " est-actif" : ""}" data-graphe-plein-ecran
+                  aria-pressed="${pleinEcran}"
                   aria-label="${pleinEcran ? "Quitter le plein écran" : "Plein écran"}"
                   title="${pleinEcran ? "Quitter le plein écran" : "Plein écran"}">
             ${svgIcon("screen-full", { className: "octicon" })}

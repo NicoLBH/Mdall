@@ -18253,7 +18253,7 @@ strong.est-verifie{ color:#3fb950; }
    le schéma de vue. Le panneau s'ouvre donc à côté, et les deux tiennent
    ensemble. En dessous de 900 px il repasse au-dessus : deux colonnes de 200 px
    ne valent pas mieux qu'une. */
-.graphe__scene{ display:flex; gap:0; align-items:stretch; }
+.graphe__scene{ display:flex; gap:0; align-items:stretch; min-height:0; }
 .graphe-detail{
   flex:0 0 0; width:0; opacity:0; overflow:hidden; border-right:1px solid transparent;
   transition:flex-basis .28s cubic-bezier(.22,.61,.36,1), width .28s cubic-bezier(.22,.61,.36,1),
@@ -18262,7 +18262,7 @@ strong.est-verifie{ color:#3fb950; }
 .graphe-detail.est-ouvert{
   flex:0 0 clamp(300px, 32%, 440px); width:clamp(300px, 32%, 440px); opacity:1;
   padding:0 14px 0 0; margin-right:14px; border-right-color:var(--border2, #30363d);
-  overflow:auto; max-height:70vh;
+  overflow:auto; max-height:min(70vh, 100%);
 }
 .graphe-detail__tete{
   display:flex; gap:8px; align-items:flex-start; justify-content:space-between;
@@ -18394,9 +18394,18 @@ strong.est-verifie{ color:#3fb950; }
 /* Plein écran : le schéma prend la page, sans emporter le reste de l'écran. */
 .graphe-bloc.est-plein-ecran{
   position:fixed; inset:var(--app-top, 0) 0 0 0; z-index:calc(var(--z-header, 40) + 2);
-  background:var(--bg, #0d1117); padding:16px 20px; overflow:auto; margin:0;
+  background:var(--bg, #0d1117); padding:0 20px 16px; margin:0;
+  /* Le bloc ne défile plus lui-même : c'est la toile qui défile, à l'intérieur.
+     Deux ascenseurs superposés se disputent la molette. */
+  display:flex; flex-direction:column; overflow:hidden;
 }
-.graphe-bloc.est-plein-ecran .graphe{ max-height:none; }
+.graphe-bloc.est-plein-ecran .graphe__scene{ flex:1; min-height:0; }
+.graphe-bloc.est-plein-ecran .graphe{ max-height:none; height:100%; }
+.graphe-bloc.est-plein-ecran .graphe-detail.est-ouvert{ max-height:none; height:100%; }
+
+/* La page derrière ne défile pas pendant le plein écran : on croirait faire
+   glisser le schéma et c'est elle qui bougerait. */
+html.est-fige-par-le-graphe, body.est-fige-par-le-graphe{ overflow:hidden; }
 /* La barre reste sous la main : sortir du plein écran ne doit pas supposer de
    retrouver un bouton parmi cinquante boîtes. La touche d'échappement en sort
    aussi. */
@@ -18614,31 +18623,70 @@ strong.est-verifie{ color:#3fb950; }
 .notice-entete dd{ margin:0; white-space:pre-line; }
 .notice-titre{ grid-column:1/-1; margin:14px 0 4px; font-size:13px; text-transform:uppercase; letter-spacing:.03em; }
 .notice-sous-titre{ grid-column:1/-1; margin:10px 0 2px 14px; font-size:12.5px; color:var(--muted); }
-.notice-paragraphe{ margin:0 0 4px; grid-column:1; }
+.notice-paragraphe{ margin:0 0 4px; grid-column:1; cursor:text; border-radius:6px; padding:1px 4px; }
+.notice-paragraphe .md-render p{ margin:0; }
+.notice-paragraphe .md-render > :first-child{ margin-top:0; }
+.notice-paragraphe .md-render > :last-child{ margin-bottom:0; }
+/* La phrase s'ouvre au clic : il faut que cela se voie avant de cliquer, sinon
+   personne ne découvre qu'elle est reprenable. */
+.notice-paragraphe:hover{ background:rgba(240,136,62,.07); }
+.notice-paragraphe:focus-visible{ outline:2px solid #f0883e; outline-offset:1px; }
+.notice-paragraphe.est-ouverte{ background:rgba(240,136,62,.1); }
 /* La phrase qui attend une précision porte un repère discret : sans lui, on ne
    sait pas laquelle des deux colonnes appelle l'autre. */
 .notice-paragraphe.est-completable{ border-left:2px solid rgba(240,136,62,.35); padding-left:10px; margin-left:-12px; }
+/* Une phrase réécrite à la main ne se recalcule plus : on le dit, sinon on
+   croirait qu'elle suit encore les réponses. */
+.notice-paragraphe.est-reprise{ border-left:2px solid #3fb950; }
 .notice-cellule{ grid-column:2; }
 
-.notice-champ{ border:1px solid var(--border2, #30363d); border-radius:8px; padding:8px 10px; margin-bottom:4px; }
-.notice-champ h6{ margin:0 0 6px; font-size:11.5px; color:var(--muted); }
-.notice-champ__options{ display:flex; flex-wrap:wrap; gap:5px; margin-bottom:6px; }
-.notice-option{
+/* ------------------------------------------------------------------ *
+   Le champ rédigé : titre, cases, éditeur. Mutualisé — la notice
+   aujourd'hui, une note sur un plan ou sur un document demain.
+ * ------------------------------------------------------------------ */
+.champ-redige{ border:1px solid var(--border2, #30363d); border-radius:8px; padding:8px 10px; margin-bottom:4px; }
+.champ-redige__tete{ display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
+.champ-redige__tete h6{ margin:0 0 6px; font-size:11.5px; color:var(--muted); }
+.champ-redige__rendre{
+  background:none; border:none; padding:0; cursor:pointer; font:inherit; font-size:10.5px; color:#3fb950;
+}
+.champ-redige__rendre:hover{ text-decoration:underline; }
+.champ-redige__options{ display:flex; flex-wrap:wrap; gap:5px; margin-bottom:6px; }
+.champ-redige__option{
   display:inline-flex; align-items:center; gap:6px; background:none; border:1px solid var(--border2, #30363d);
   border-radius:14px; padding:2px 9px; color:inherit; font-size:11.5px; cursor:pointer; line-height:1.5;
 }
-.notice-option:hover{ border-color:#f0883e; }
-.notice-option.est-coche{ border-color:#f0883e; background:rgba(240,136,62,.12); }
-.notice-option__marque{
+.champ-redige__option:hover{ border-color:#f0883e; }
+.champ-redige__option.est-coche{ border-color:#f0883e; background:rgba(240,136,62,.12); }
+.champ-redige__marque{
   width:10px; height:10px; border-radius:3px; border:1.5px solid var(--border2, #30363d); flex:none;
 }
-.notice-option.est-coche .notice-option__marque{ background:#f0883e; border-color:#f0883e; }
-.notice-option em{ font-size:10px; color:var(--muted); font-style:normal; }
-.notice-champ__libres{ margin:0 0 6px; font-size:11.5px; color:#3fb950; }
-.notice-champ__texte{
-  width:100%; background:var(--bg, transparent); color:inherit; border:1px solid var(--border2, #30363d);
-  border-radius:6px; padding:5px 8px; font:inherit; font-size:11.5px; resize:vertical;
+.champ-redige__option.est-coche .champ-redige__marque{ background:#f0883e; border-color:#f0883e; }
+.champ-redige__option em{ font-size:10px; color:var(--muted); font-style:normal; }
+.champ-redige__libres{ margin:0 0 6px; font-size:11.5px; color:#3fb950; }
+.champ-redige__editeur{ margin-top:6px; }
+/* Le composeur de commentaire, tel quel : c'est le même geste d'écriture
+   partout, et un second éditeur maison finirait par diverger de celui-ci. */
+.champ-redige__composeur{ margin:0; }
+.champ-redige__composeur .comment-composer__textarea{ min-height:96px; font-size:12px; }
+.champ-redige__composeur .comment-composer__box{ margin:0; }
+
+/* ------------------------------------------------------------------ *
+   Les titres collés : ce qui dit, en descendant, où l'on est.
+ * ------------------------------------------------------------------ */
+/* Le bandeau est posé, pas collé : `position: sticky` ne colle qu'à un ancêtre
+   qui défile réellement, et l'application en compte plusieurs qui pourraient
+   défiler sans le faire. Le script lui donne sa ligne et sa largeur. */
+.titres-colles{
+  position:fixed; z-index:6; display:none; flex-direction:column; gap:1px;
+  padding:7px 22px; box-sizing:border-box;
+  background:var(--bg, #0d1117); border-bottom:1px solid var(--border2, #30363d);
+  pointer-events:none;
 }
+.titres-colles.est-visible{ display:flex; }
+.titres-colles__un{ font-size:11.5px; text-transform:uppercase; letter-spacing:.03em; }
+.titres-colles__deux{ font-size:11px; color:var(--muted); }
+.titres-colles__deux:empty{ display:none; }
 
 .notice-entete-saisie{ border:1px solid var(--border2, #30363d); border-radius:8px; padding:8px 12px; flex:1 1 340px; }
 .notice-entete-saisie summary{ cursor:pointer; font-size:12px; color:var(--muted); }
@@ -18655,12 +18703,4 @@ strong.est-verifie{ color:#3fb950; }
    ne le répète pas deux lignes plus bas. */
 .graphe-detail .incendie-conclusion__tete h5{ display:none; }
 .graphe-detail .incendie-conclusion__tete{ justify-content:flex-end; }
-/* Le champ libre reste replié : la ligne de la notice prend alors la hauteur du
-   texte, et non celle d'un formulaire qu'on n'a pas ouvert. Il s'ouvre de
-   lui-même quand il porte déjà quelque chose. */
-.notice-champ__autre summary{ cursor:pointer; font-size:11px; color:var(--muted); list-style:none; }
-.notice-champ__autre summary::-webkit-details-marker{ display:none; }
-.notice-champ__autre summary::before{ content:"+ "; }
-.notice-champ__autre[open] summary::before{ content:"− "; }
-.notice-champ__autre summary:hover{ color:#f0883e; }
-.notice-champ__autre[open] summary{ margin-bottom:5px; }
+

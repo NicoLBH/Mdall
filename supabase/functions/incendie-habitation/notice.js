@@ -571,15 +571,29 @@ export function redigerLaNotice(vue, complements = {}) {
     const manquants = (paragraphe.faits ?? []).filter((cle) => faits[cle] === undefined || faits[cle] === null);
     if (manquants.length) return null;
     const complement = complements[paragraphe.cle] ?? {};
-    let texte;
+    let propose;
     try {
-      texte = paragraphe.phrase(faits, complement);
+      propose = String(paragraphe.phrase(faits, complement) ?? "").trim();
     } catch {
       return null;
     }
+    // ## Le texte proposé, et le texte repris
+    //
+    // Notre aide sert à remplir vite ; elle ne doit pas empêcher de reprendre.
+    // Un cas particulier finit toujours par arriver — une exception locale, une
+    // prescription du SDIS — et une phrase qu'on ne peut pas réécrire oblige à
+    // sortir de l'outil pour finir la notice ailleurs.
+    //
+    // Dès qu'une phrase est reprise à la main, elle l'emporte, et les cases
+    // cessent de la réécrire : elles continueraient sinon d'effacer le travail
+    // de quelqu'un. Elles restent cochables — elles nourrissent la
+    // bibliothèque — et un geste rend la main à la phrase proposée.
+    const repris = String(complement.texte ?? "").trim();
     return {
       cle: paragraphe.cle,
-      texte: String(texte ?? "").trim(),
+      texte: repris || propose,
+      propose,
+      repris: Boolean(repris) && repris !== propose,
       champ: paragraphe.champ ?? null,
       valeurs: Object.fromEntries((paragraphe.faits ?? []).map((cle) => [cle, faits[cle]]))
     };
@@ -616,10 +630,29 @@ export function rubriquesDe() {
 }
 
 /**
+ * Le markdown, réduit à du texte lisible.
+ *
+ * Une phrase reprise à la main peut porter du gras, une liste, un titre. Collée
+ * telle quelle dans Word, elle porterait des astérisques. On les retire, et le
+ * texte se relit — c'est la version de secours ; la mise en forme, elle, voyage
+ * dans la variante HTML du presse-papier.
+ */
+function sansMarquesDeMarkdown(texte) {
+  return String(texte ?? "")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/(^|[^*])\*([^*\n]+)\*/g, "$1$2")
+    .replace(/(^|\W)_([^_\n]+)_/g, "$1$2")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/^\s*>\s?/gm, "")
+    .replace(/\[(.+?)\]\((.+?)\)/g, "$1");
+}
+
+/**
  * La notice en texte, pour le presse-papier.
  *
  * Ce qui part dans Word doit se relire tel quel : des titres numérotés, des
- * paragraphes, rien d'autre. Le markdown n'y survivrait pas au collage.
+ * paragraphes, rien d'autre.
  */
 export function noticeEnTexte(notice, entete = {}) {
   const lignes = ["NOTICE DESCRIPTIVE DE SÉCURITÉ", "Pour les bâtiments d'habitation (arrêté du 31 janvier 1986)", ""];
@@ -630,10 +663,10 @@ export function noticeEnTexte(notice, entete = {}) {
 
   for (const section of notice.sections) {
     lignes.push(`${section.numero}. ${section.titre.toUpperCase()}`);
-    for (const p of section.paragraphes) lignes.push(p.texte);
+    for (const p of section.paragraphes) lignes.push(sansMarquesDeMarkdown(p.texte));
     section.sousSections.forEach((sous, i) => {
       lignes.push("", `${section.numero}.${i + 1} ${sous.titre}`);
-      for (const p of sous.paragraphes) lignes.push(p.texte);
+      for (const p of sous.paragraphes) lignes.push(sansMarquesDeMarkdown(p.texte));
     });
     lignes.push("");
   }
