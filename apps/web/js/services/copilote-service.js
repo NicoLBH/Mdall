@@ -43,7 +43,7 @@
 
 import { store } from "../store.js";
 import { buildAssistContext } from "./copilote-context.js";
-import { declarationsPourModele, executerOutil, outilParId, sansFigure } from "./copilote-outils.js";
+import { executerUtilitaire } from "./utilitaires-service.js";
 import { conversationTitle } from "./copilote-conversations.js";
 import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
 import { resolveCurrentBackendProjectId } from "./project-supabase-sync.js";
@@ -220,7 +220,6 @@ export async function sendAssistMessage(message, {
         // L'écran part à part de la mémoire, et sous son propre nom : les mêler
         // ferait passer un filtre pour une vérité du projet.
         screen: { app: context.app, subjects: context.subjects, project_form: context.project_form },
-        tools: declarationsPourModele(),
         tool_exchanges: echanges
       })
     });
@@ -256,25 +255,23 @@ export async function sendAssistMessage(message, {
       );
     }
 
-    const nommes = appels.map((appel) => nomLisible(appel?.name)).join(", ");
-    etape(onEtape, `Lancement de ${nommes}`);
+    // Le nom lisible vient du résultat, pas d'un catalogue : le navigateur ne
+    // sait plus quels utilitaires existent, et c'est le but.
+    etape(onEtape, `Lancement de ${appels.map((appel) => texteDeNom(appel?.name)).join(", ")}`);
     // Une image rendue avant de calculer : sans cela le message s'écrirait et
     // serait remplacé dans le même battement, et personne ne le verrait jamais.
     await souffler();
 
     for (const appel of appels) {
-      const resultat = await executerOutil({
+      // L'utilitaire s'exécute **au serveur** : le catalogue, les garde-fous et
+      // l'enchaînement y sont, et le navigateur n'en connaît que la réponse.
+      const { resultat, etapes, pourLeModele } = await executerUtilitaire({
         id: appel?.name,
         entrees: safeJsonParse(appel?.arguments) ?? {},
         assertions,
         // La question sert de justificatif : une valeur qui remplace celle de la
         // mémoire doit avoir été dite par quelqu'un.
         question: content,
-        // Ce que l'utilitaire fait pendant qu'il le fait : lire la note,
-        // trouver le hors gel, chercher les cotes. Sans cela, l'écran montre un
-        // rond qui tourne pendant une minute, et l'on ne sait pas si c'est du
-        // travail ou une panne.
-        onEtape,
         confirmees,
         // Ce que la conversation a déjà établi. Le modèle n'invente pas de
         // valeur — c'est la règle —, donc il rappelle l'outil sans arguments ;
@@ -284,8 +281,14 @@ export async function sendAssistMessage(message, {
         // Ce que la conversation porte et qui n'est pas une valeur : une note
         // de calcul déposée est une source, pas une entrée. Elle ne passe donc
         // pas par le garde-fou des substitutions.
-        piecesJointes
+        piecesJointes,
+        signal
       });
+
+      // Ce que l'utilitaire a fait pendant qu'il le faisait — lire la note,
+      // trouver le hors gel, chercher les cotes — revient avec son résultat et
+      // se raconte à l'écran dans l'ordre.
+      for (const dit of etapes) etape(onEtape, dit?.texte, dit?.detail);
 
       executions.push(resultat);
       if (typeof onToolRun === "function") onToolRun(resultat);
@@ -294,10 +297,9 @@ export async function sendAssistMessage(message, {
         call_id: appel?.call_id,
         name: appel?.name,
         arguments: appel?.arguments,
-        // La courbe reste à l'écran : quarante couples de coordonnées
-        // n'apprennent rien à un modèle qui a déjà les périodes, et il
-        // pourrait se croire tenu de les recopier.
-        output: JSON.stringify(sansFigure(resultat))
+        // Allégé par le serveur : la courbe et le détail des massifs restent à
+        // l'écran, ils n'apprennent rien à un modèle qui a déjà les cotes.
+        output: JSON.stringify(pourLeModele)
       });
     }
 
@@ -341,8 +343,8 @@ function souffler() {
  * l'identifiant : un outil dont le titre change ne doit pas garder l'ancien
  * dans les messages d'attente.
  */
-function nomLisible(id) {
-  return outilParId(id)?.titre || String(id || "un utilitaire");
+function texteDeNom(id) {
+  return String(id || "un utilitaire").replace(/_V\d+$/, "").replace(/_/g, " ");
 }
 
 /** Le décompte cumulé des tours. Un champ absent le reste : on ne compte pas du vide. */

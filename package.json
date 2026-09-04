@@ -3,13 +3,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test $(find apps/web/js supabase/functions -name '*.test.mjs' -print)",
+    "test": "node --test $(find apps/web/js supabase/functions scripts -name '*.test.mjs' -print)",
     "test:spikes": "node --test $(find spikes -name '*.test.mjs' -print)",
     "prepare:katex": "node scripts/prepare-katex.mjs",
     "prepare:unpdf": "node scripts/prepare-unpdf.mjs",
     "prepare:spike-engine": "node scripts/prepare-spike-engine.mjs",
+    "prepare:utilitaires": "node scripts/prepare-utilitaires.mjs",
     "build": "npm run build:web",
-    "build:web": "npm run prepare:katex && npm run prepare:unpdf && npm run prepare:spike-engine"
+    "build:web": "npm run prepare:katex && npm run prepare:unpdf && npm run prepare:spike-engine && npm run prepare:utilitaires"
   },
   "dependencies": {
     "katex": "^0.16.9",

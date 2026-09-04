@@ -44,9 +44,7 @@ import { sendAssistMessage } from "../../../services/copilote-service.js";
 import { brancherLaZoneDeDepot, trierLesFichiers } from "../../ui/zone-de-depot.js";
 import { rendreLeMarkdown } from "../../ui/markdown-leger.js";
 import { renderVoileDeDepot } from "../../ui/voile-de-depot.js";
-import {
-  aRetenirDeLaConversation, executerOutil, outilParId, referenceOutil, sansFigure
-} from "../../../services/copilote-outils.js";
+import { aRetenirDuResultat, executerUtilitaire } from "../../../services/utilitaires-service.js";
 import { conversationTitle, findConversation } from "../../../services/copilote-conversations.js";
 import {
   appendMessage,
@@ -163,12 +161,6 @@ function ensureState() {
     store.ui.assistant.lastError = "";
     store.ui.assistant.pieceJointe = null;
     store.ui.assistant.confirmeesValeurs = {};
-    // Ce qui a été lu d'une note appartient au projet où on l'a déposée. Le
-    // garder au changement de projet — ou de compte — le rendrait relisible
-    // ailleurs, et « privé » ne peut pas être une intention.
-    void import("../../../services/note-de-calcul-service.js")
-      .then((module) => module.oublierLesNotesLues())
-      .catch(() => {});
     store.ui.assistant.chargement = false;
   }
 
@@ -1503,9 +1495,9 @@ function render(root) {
 function retenirDeLaConversation(etat, executions = []) {
   for (const execution of executions) {
     if (execution?.statut !== "fait") continue;
-    const outil = outilParId(String(execution.outil ?? "").replace(/_V\d+$/, ""));
-    const garde = aRetenirDeLaConversation(outil, execution.entrees ?? {});
-    Object.assign(etat.confirmeesValeurs, garde);
+    // Le tri appartient à la déclaration des entrées, donc au serveur : il le
+    // met dans le résultat, l'écran s'en souvient.
+    Object.assign(etat.confirmeesValeurs, aRetenirDuResultat(execution));
   }
 }
 
@@ -1537,7 +1529,7 @@ async function joindre(root, fichier, { ecartes = 0 } = {}) {
   }
 
   try {
-    const { lireLeFichier } = await import("../../../services/note-de-calcul-service.js");
+    const { lireLeFichier } = await import("../../../services/piece-jointe.js");
     etat.pieceJointe = await lireLeFichier(fichier);
     etat.lastError = ecartes > 0
       ? `Une seule note à la fois : ${ecartes} autre${ecartes > 1 ? "s" : ""} fichier${
@@ -1741,7 +1733,7 @@ async function repondreParPastille(root, groupe, valeur) {
   const etat = ensureState();
   if (etat.isSending) return;
 
-  const outil = outilParId(String(groupe.dataset.outil || "").replace(/_V\d+$/, ""));
+  const outil = String(groupe.dataset.outil || "");
   const champ = String(groupe.dataset.champ || "");
   if (!outil || !champ) return;
 
@@ -1786,7 +1778,7 @@ async function envoyerTexte(root, texte) {
  * dimensionné, et c'est plus honnête qu'un rangement pris au hasard.
  */
 async function rangerEtRecalculer(root, formulaire) {
-  const outil = outilParId(String(formulaire.dataset.rangement || "").replace(/_V\d+$/, ""));
+  const outil = String(formulaire.dataset.rangement || "");
   if (!outil) return;
 
   const morceaux = [];
@@ -1805,7 +1797,7 @@ async function rangerEtRecalculer(root, formulaire) {
   // cote hors gel ne se redemandent pas parce qu'on a rangé un cas de charge.
   const dernier = [...(etat.messages ?? [])]
     .flatMap((message) => message.executions ?? [])
-    .filter((execution) => execution?.statut === "fait" && execution.outil === referenceOutil(outil))
+    .filter((execution) => execution?.statut === "fait" && execution.outil === outil)
     .at(-1);
 
   const rangements = [...morceaux, ...(String(dernier?.entrees?.rangementDesCas ?? "").split(";"))]
@@ -1863,8 +1855,11 @@ async function lancerCalcul(root, outil, saisies, acquis = {}, { libelles = {}, 
     if (String(valeur ?? "").trim()) etat.confirmeesValeurs[cle] = String(valeur).trim();
   }
 
-  const resultat = await executerOutil({
-    id: outil.id,
+  const { resultat, etapes, pourLeModele } = await executerUtilitaire({
+    // L'écran renvoie la **référence** que le résultat portait —
+    // « fondations_predimensionnement_V1 » —, et le serveur la reconnaît. Il
+    // n'a plus à savoir ce qu'est un identifiant d'utilitaire.
+    id: outil,
     // Ce que le formulaire portait déjà s'ajoute à ce qu'on vient d'y saisir :
     // répondre à une question ne doit pas faire perdre la réponse à la
     // précédente.
@@ -1872,9 +1867,12 @@ async function lancerCalcul(root, outil, saisies, acquis = {}, { libelles = {}, 
     assertions,
     confirmees: [...Object.keys(saisies), ...Object.keys(acquis)],
     acquises: etat.confirmeesValeurs ?? {},
-    piecesJointes: etat.pieceJointe ? [etat.pieceJointe] : [],
-    onEtape: (dit) => noterUneEtape(root, etat, dit)
+    piecesJointes: etat.pieceJointe ? [etat.pieceJointe] : []
   });
+
+  // Les étapes de l'utilitaire reviennent avec son résultat : elles ont eu lieu
+  // au serveur, elles se racontent ici.
+  for (const dit of etapes) noterUneEtape(root, etat, dit);
 
   retenirDeLaConversation(etat, [resultat]);
 
@@ -1914,7 +1912,7 @@ async function lancerCalcul(root, outil, saisies, acquis = {}, { libelles = {}, 
   // voyait. Ce qui a été répondu se lit dans les entrées du résultat, à
   // l'endroit où le calcul a eu lieu — la question et sa réponse restent dans
   // le fil de l'assistant, comme pour tout le reste.
-  const relance = `J'ai fourni les valeurs demandées pour « ${outil.titre} ».`;
+  const relance = `J'ai fourni les valeurs demandées pour « ${resultat.titre || outil} ».`;
 
   // Le résultat entre dans le fil **avant** qu'on aille chercher la phrase qui
   // le raconte. Le calcul a eu lieu : si le modèle ne rappelle pas l'outil, ou
@@ -1951,9 +1949,11 @@ async function lancerCalcul(root, outil, saisies, acquis = {}, { libelles = {}, 
       toolExchanges: [
         {
           call_id: `formulaire-${Date.now()}`,
-          name: outil.id,
+          name: String(outil).replace(/_V\d+$/, ""),
           arguments: JSON.stringify({ ...acquis, ...saisies }),
-          output: JSON.stringify(sansFigure(resultat))
+          // Allégé par le serveur : c'est lui qui sait ce qui compte pour le
+          // modèle, et l'écran ne connaît plus les utilitaires.
+          output: JSON.stringify(pourLeModele)
         }
       ]
     });
@@ -1993,7 +1993,7 @@ async function lancerCalcul(root, outil, saisies, acquis = {}, { libelles = {}, 
 
 /** Le formulaire rempli : ses champs deviennent les entrées du calcul. */
 async function remplirEtCalculer(root, formulaire) {
-  const outil = outilParId(String(formulaire.dataset.outil || "").replace(/_V\d+$/, ""));
+  const outil = String(formulaire.dataset.outil || "");
   if (!outil) return;
   // Le formulaire sait dans quel message il a été posé : c'est ce message-là
   // qui reprend son cours, pas le dernier venu.

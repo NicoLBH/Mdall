@@ -11,9 +11,9 @@ import assert from "node:assert/strict";
 import {
   echelleLarge, echelleFine, hauteurMinimale, essaisPourUnAppui, premiereQuiPasse,
   verificationGouvernante, predimensionner, volumeTotal, motDeLErreur, COTE_MIN, COTE_MAX
-} from "./predimensionnement-fondations.js";
+} from "./predimensionnement.js";
 import { resultatDeLaSemelle } from "./fondations-declaration.js";
-import { ceQueLaContrainteCommande } from "./predimensionnement-fondations.js";
+import { ceQueLaContrainteCommande } from "./predimensionnement.js";
 
 test("l'échelle large monte du minimum au maximum, par crans de 40 cm", () => {
   const cotes = echelleLarge();
