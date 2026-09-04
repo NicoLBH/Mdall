@@ -119,6 +119,10 @@ function ensureState() {
       // second : le compte rendu reprend dans le même message, à sa place dans
       // le fil.
       enCours: null,
+      // Le tour en cours, s'il y en a un. Il possède `isSending`, `etapes` et
+      // `enCours` tant qu'il dure : un tour qui finit après qu'un autre a
+      // commencé ne doit pas remettre à zéro ce qui ne lui appartient plus.
+      tour: null,
       // De quoi interrompre l'appel en cours. Un bouton d'arrêt qui n'arrête
       // rien serait pire que pas de bouton du tout.
       abort: null,
@@ -1123,6 +1127,27 @@ function renderAccueil() {
  * laisserait croire que le fil est fini et que rien ne vient.
  */
 /**
+ * La réponse est arrivée : on la montre, **puis** on l'enregistre.
+ *
+ * L'ordre inverse laissait le rond tourner pendant toute l'écriture en base —
+ * une seconde ou deux pendant lesquelles la réponse était là, lisible, sous un
+ * indicateur qui disait le contraire. Le rond doit dire « j'attends encore
+ * quelque chose » ; ici il n'y a plus rien à attendre pour lire.
+ *
+ * L'enregistrement, lui, n'a pas besoin d'être attendu pour afficher. S'il
+ * échoue, il le dira — et ce sera un message d'erreur, pas un rond qui tourne.
+ */
+function afficherLaReponse(root, etat, jeton) {
+  if (etat.tour !== jeton) return;
+  etat.tour = null;
+  etat.enCours = null;
+  etat.isSending = false;
+  etat.abort = null;
+  etat.etapes = [];
+  render(root);
+}
+
+/**
  * Une étape de plus, et l'écran qui suit.
  *
  * On n'appelle pas `render` : réécrire le fil entier à chaque étape ferait
@@ -1553,6 +1578,14 @@ async function envoyer(root) {
   const controle = new AbortController();
   etat.abort = controle;
 
+  // **Qui possède l'état pendant ce tour.** L'enregistrement en base suit
+  // l'affichage de la réponse ; pendant cette seconde-là l'écran est rendu et
+  // quelqu'un peut déjà répondre à une question. Sans ce jeton, le `finally` du
+  // tour précédent effaçait le journal du tour suivant — et l'on voyait les
+  // étapes disparaître au moment où elles s'écrivaient.
+  const jeton = {};
+  etat.tour = jeton;
+
   try {
     const { reply, usage, executions, context } = await sendAssistMessage(contenu, {
       signal: controle.signal,
@@ -1596,6 +1629,7 @@ async function envoyer(root) {
       tokensOut: Number.isFinite(usage?.outputTokens) ? usage.outputTokens : null
     };
     etat.messages.push(reponse);
+    afficherLaReponse(root, etat, jeton);
     await enregistrer(etat, reponse);
   } catch (error) {
     // Une interruption n'est pas une panne : c'est une décision de
@@ -1607,11 +1641,16 @@ async function envoyer(root) {
     // qu'il a répondu cela.
     else etat.lastError = error?.message || "Le copilote n'a pas répondu.";
   } finally {
-    etat.isSending = false;
-    etat.abort = null;
-    etat.etapes = [];
-    render(root);
-    root.querySelector("#copiloteInput")?.focus();
+    // Le tour a pu être remplacé pendant l'enregistrement : on ne remet à zéro
+    // que ce qu'on possède encore.
+    if (etat.tour === jeton) {
+      etat.tour = null;
+      etat.isSending = false;
+      etat.abort = null;
+      etat.etapes = [];
+      render(root);
+      root.querySelector("#copiloteInput")?.focus();
+    }
   }
 }
 
@@ -1889,6 +1928,9 @@ async function lancerCalcul(root, outil, saisies, acquis = {}, { libelles = {}, 
   // Le message qui se poursuit montre ses étapes en direct, à sa place dans le
   // fil : un bloc d'attente séparé ferait à nouveau deux réponses à l'écran.
   etat.enCours = etat.messages.indexOf(enCours);
+  // Le tour possède l'état jusqu'à ce qu'un autre le prenne : voir `envoyer`.
+  const jeton = {};
+  etat.tour = jeton;
   etat.isSending = true;
   etat.lastError = "";
   render(root);
@@ -1923,6 +1965,8 @@ async function lancerCalcul(root, outil, saisies, acquis = {}, { libelles = {}, 
       .filter((autre) => autre?.outil !== resultat.outil)];
     enCours.tokensIn = Number.isFinite(usage?.inputTokens) ? usage.inputTokens : null;
     enCours.tokensOut = Number.isFinite(usage?.outputTokens) ? usage.outputTokens : null;
+    enCours.etapes = [...etat.etapes];
+    afficherLaReponse(root, etat, jeton);
     await enregistrer(etat, enCours);
   } catch (error) {
     if (error?.name !== "AbortError") etat.lastError = error?.message || "Le copilote n'a pas répondu.";
@@ -1932,14 +1976,18 @@ async function lancerCalcul(root, outil, saisies, acquis = {}, { libelles = {}, 
       || "Le calcul est fait — le tableau ci-dessus en vient. La phrase qui le raconte n'a pas pu être écrite.";
     await enregistrer(etat, enCours).catch(() => {});
   } finally {
-    // Le compte rendu reste sur le message qu'il raconte : c'est lui qui se
-    // replie ensuite sous la réponse.
-    enCours.etapes = [...etat.etapes];
-    etat.enCours = null;
-    etat.isSending = false;
-    etat.abort = null;
-    etat.etapes = [];
-    render(root);
+    // Le tour a pu être remplacé pendant l'enregistrement : on ne remet à zéro
+    // que ce qu'on possède encore, et le compte rendu ne se recopie que si la
+    // réponse n'a pas déjà été affichée — sinon on effacerait ce qu'on garde.
+    if (etat.tour === jeton) {
+      if ((etat.etapes ?? []).length) enCours.etapes = [...etat.etapes];
+      etat.tour = null;
+      etat.enCours = null;
+      etat.isSending = false;
+      etat.abort = null;
+      etat.etapes = [];
+      render(root);
+    }
   }
 }
 
