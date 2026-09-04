@@ -650,6 +650,18 @@ export const OUTILS = [
       const classement = (rendu.chemin ?? []).find((etape) => etape.id === "classement");
       return {
         ok: true,
+        // ## Ce qui repart vers l'Atelier, et pas vers le modèle
+        //
+        // Les réponses telles que le référentiel les a reçues : celles de
+        // l'étude, plus celles que la conversation a apportées. C'est avec elles
+        // que l'écran « Incendie — Habitation » peut reprendre le travail là où
+        // la discussion l'a laissé, sans qu'on ressaisisse quoi que ce soit.
+        //
+        // Elles ne partent pas au modèle : il a déjà la réponse, l'article et
+        // la phrase qui décide. Lui donner en plus quarante réponses
+        // l'inviterait à les recopier — c'est-à-dire à réécrire à la main ce que
+        // le référentiel vient de conclure.
+        pourLAtelier: { reponses, exigence: produit },
         valeurs: {
           reponse: [rendu.valeur, rendu.sansObjet, rendu.mention].filter(Boolean).join(" — ") || "sans objet",
           classement: classement?.valeur ?? "",
@@ -1834,6 +1846,9 @@ export async function executerOutil({
     valeurs: resultat.valeurs,
     unites: Object.fromEntries((outil.sorties ?? []).map((sortie) => [sortie.cle, sortie.unite || ""])),
     ecarts: comparerALaMemoire(outil, resultat.valeurs, assertions),
+    // Ce que l'écran peut reprendre, et que le modèle n'a pas à lire.
+    // `sansFigure` l'enlève, comme la courbe : voir plus bas.
+    ...(resultat.pourLAtelier ? { pourLAtelier: resultat.pourLAtelier } : {}),
     // La courbe est pour l'écran, pas pour le modèle : `sansFigure` l'enlève
     // avant l'envoi. Quarante points de spectre n'apprennent rien à un modèle
     // qui a déjà TB, TC, TD — ils ne feraient que gonfler le contexte.
@@ -1850,7 +1865,10 @@ export async function executerOutil({
  */
 export function sansFigure(resultat) {
   if (!resultat || typeof resultat !== "object") return resultat;
-  const { figure, ...reste } = resultat;
+  // `pourLAtelier` part avec la figure, et pour la même raison : ce sont les
+  // quarante réponses avec lesquelles l'écran peut reprendre le travail, et le
+  // modèle a déjà sa conclusion. Les lui donner l'inviterait à les recopier.
+  const { figure, pourLAtelier, ...reste } = resultat;
   const allege = figure ? { ...reste, figure_disponible: true } : reste;
   return sansLeDetailDesMassifs(allege);
 }

@@ -1,3 +1,15 @@
+## Recette manuelle — Incendie Habitation et Copilote
+
+Les tests automatiques vérifient que les pièces fonctionnent ; ils ne vérifient
+pas qu'elles s'assemblent en quelque chose qu'on a envie d'utiliser. La liste
+des vérifications à faire à la main, dans l'application déployée, est ici :
+[`docs/recette-incendie-copilote.md`](docs/recette-incendie-copilote.md).
+
+Elle couvre les études incendie en base, le pré-remplissage du copilote depuis
+l'étude, « Ouvrir dans l'Atelier », l'affichage pendant que le copilote
+travaille, et ce qui ne doit jamais arriver — une conversation visible par un
+collaborateur, un catalogue d'utilitaires servi au navigateur.
+
 ## CT Continuity Lab (Atelier › Développements)
 
 Banc d'essai manuel du Spike 1 : charger des rapports de contrôle technique à la

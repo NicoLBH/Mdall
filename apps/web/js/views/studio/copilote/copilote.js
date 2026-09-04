@@ -468,14 +468,36 @@ function renderMessage(msg, index, etat = null) {
     `;
   }
 
+  const executions = Array.isArray(msg.executions) ? msg.executions : [];
+  const enAttente = executions.some(estUneDemandeOuverte);
+
+  // Pendant qu'un calcul reprend, la demande à laquelle on vient de répondre
+  // n'a plus rien à faire à l'écran : on lisait « le calcul n'a pas eu lieu, il
+  // manque la contrainte de sol » alors qu'on venait de la donner, et la phrase
+  // s'effaçait deux secondes plus tard. Ce qui a conclu reste, ce qui attendait
+  // laisse la place au journal.
+  const montrees = seDeroule ? executions.filter((execution) => !estUneDemandeOuverte(execution)) : executions;
+
+  // Le journal passe **sous** le résultat dès qu'il y en a un : au-dessus, il
+  // repoussait le tableau plus bas à chaque étape. Tant qu'il n'y a rien à
+  // montrer, il reste en tête — c'est là qu'on le cherche.
+  const journal = seDeroule ? renderAttenteDansLeMessage(etat.etapes) : renderEtapesFaites(msg);
+
   return `
     <article class="copilote-msg copilote-msg--assistant" data-message-index="${index}">
       <span class="copilote-msg__mark" aria-hidden="true">${svgIcon("copilot", { width: 32, height: 32 })}</span>
       <div class="copilote-msg__main">
-        ${seDeroule ? renderAttenteDansLeMessage(etat.etapes) : renderEtapesFaites(msg)}
-        ${(msg.executions ?? []).map((execution) => renderExecution(execution)).join("")}
+        ${montrees.length ? "" : journal}
+        ${montrees.map((execution) => renderExecution(execution)).join("")}
+        ${montrees.length ? journal : ""}
         <div class="copilote-msg__body">${mdToHtml(msg.content || "")}</div>
-        ${(msg.executions ?? []).map((execution) => renderFormulaire(execution, index)).join("")}
+        ${montrees.map((execution) => renderFormulaire(execution, index)).join("")}
+        ${
+          // Copier, compter, dater : les gestes d'une réponse **finie**. Sous
+          // une question du copilote ou pendant qu'il travaille, ils disaient
+          // le contraire de ce qui se passe — et l'on croyait la réponse
+          // arrivée alors qu'elle attendait la nôtre.
+          seDeroule || enAttente ? "" : `
         <div class="copilote-msg__footer">
           <div class="copilote-msg__actions">
             <button type="button" class="copilote-msg__action" data-copy-message="${index}"
@@ -486,10 +508,22 @@ function renderMessage(msg, index, etat = null) {
           </div>
           ${quand ? `<span class="copilote-msg__stamp mono">${escapeHtml(quand)}</span>` : ""}
         </div>
-        ${renderJetons(msg, index)}
+        ${renderJetons(msg, index)}`
+        }
       </div>
     </article>
   `;
+}
+
+/**
+ * Une demande à laquelle personne n'a encore répondu.
+ *
+ * Une demande **répondue** garde sa place dans l'histoire — ce qui a été
+ * demandé et ce qui a été répondu expliquent le résultat. Ce qui suit ne
+ * concerne que celles qui attendent encore.
+ */
+function estUneDemandeOuverte(execution) {
+  return (execution?.statut === "manquant" || execution?.statut === "aConfirmer") && !execution?.repondue;
 }
 
 /** Les sorties qui se lisent en tableau, pas en liste de clés. */
@@ -891,6 +925,7 @@ function renderExecution(execution) {
           Calculé par ${escapeHtml(execution.source || "l'utilitaire")}. Ce résultat n'entre pas dans la mémoire du projet.
         </p>
         ${renderRemise(execution)}
+        ${renderRemiseIncendie(execution)}
       </div>
     </div>
   `;
@@ -928,6 +963,30 @@ function renderRemise(execution) {
       ${svgIcon("gear")}
       <span>Ouvrir dans l'Atelier</span>
       <em>${tenus.length} massif${tenus.length > 1 ? "s" : ""}</em>
+    </button>
+  `;
+}
+
+/**
+ * De quoi porter la réponse incendie dans l'Atelier.
+ *
+ * Le copilote a réuni des réponses pour conclure — celles de l'étude, plus
+ * celles que la discussion a apportées. L'écran « Incendie — Habitation » sait
+ * en faire quelque chose : le questionnaire, la notice, le schéma. Le bouton ne
+ * verse rien ; il **remet**, et c'est devant le questionnaire que quelqu'un
+ * décide.
+ */
+function renderRemiseIncendie(execution) {
+  if (execution?.statut !== "fait") return "";
+  const combien = Object.keys(execution.pourLAtelier?.reponses ?? {}).length;
+  if (!combien) return "";
+
+  return `
+    <button type="button" class="copilote-action copilote-outil__remise"
+      data-remise-incendie="${escapeHtml(execution.outil)}">
+      ${svgIcon("gear")}
+      <span>Ouvrir dans l'Atelier</span>
+      <em>${combien} réponse${combien > 1 ? "s" : ""}</em>
     </button>
   `;
 }
@@ -987,6 +1046,42 @@ async function remettreALAtelier(root, outil) {
   // On va où le travail se fait. Le rail garde la discussion : on revient
   // dessus par où l'on est venu.
   document.querySelector('[data-side-nav-target="solidity-fondations"]')?.click();
+}
+
+/**
+ * Porter les réponses réunies jusqu'à l'Atelier incendie.
+ *
+ * Rien n'est écrit ici : la remise attend dans l'état, et c'est l'écran du
+ * questionnaire qui l'annonce et propose de compléter l'étude — ou d'en ouvrir
+ * une neuve, quand la discussion explorait une autre hypothèse.
+ */
+async function remettreALAtelierIncendie(root, outil) {
+  const etat = ensureState();
+  const execution = (etat.messages ?? [])
+    .flatMap((message) => message.executions ?? [])
+    .filter((candidat) => candidat?.statut === "fait" && candidat.outil === outil)
+    .at(-1);
+  if (!execution) return;
+
+  const { reponsesDeLaRemise, annoncerLaRemiseIncendie } =
+    await import("../../../services/incendie-remise.js");
+  const reponses = reponsesDeLaRemise(execution);
+  if (!reponses) return;
+
+  store.ui.incendie = store.ui.incendie ?? {};
+  store.ui.incendie.remise = {
+    reponses,
+    outil: execution.outil,
+    titre: execution.titre,
+    exigence: execution.pourLAtelier?.exigence || "",
+    // Ce que le copilote a conclu, pour que l'écran puisse le rappeler : on
+    // arrive dans le questionnaire sans savoir ce qu'on venait y faire.
+    conclusion: execution.valeurs?.reponse || "",
+    le: new Date().toISOString()
+  };
+
+  annoncerLaRemiseIncendie();
+  document.querySelector('[data-side-nav-target="incendie-habitation"]')?.click();
 }
 
 /**
@@ -1871,9 +1966,29 @@ async function lancerCalcul(root, outil, saisies, acquis = {}, { libelles = {}, 
   // ce qui se passe.
   const message = messageQuiADemande(etat.messages, rang);
 
+  // **Le tour commence ici, pas après le calcul.** Il commençait après : pendant
+  // les quelques secondes de la recherche, l'écran montrait encore la demande
+  // à laquelle on venait de répondre — « il manque la contrainte de sol »,
+  // alors qu'on venait de la donner —, sans un mot sur ce qui se passait, puis
+  // tout changeait d'un coup. Le déclarer maintenant met le journal à sa place
+  // et retire la question qui n'a plus lieu d'être.
+  const jeton = {};
+  etat.tour = jeton;
+  etat.isSending = true;
+  etat.lastError = "";
+  etat.enCours = message ? etat.messages.indexOf(message) : null;
+
   // Le journal reprend son cours, il ne repart pas de zéro : ce qui a été fait
   // avant la question reste au-dessus de la réponse.
   etat.etapes = [...(message?.etapes ?? [])];
+  render(root);
+
+  // Le bouton d'arrêt vaut aussi pendant le calcul : une recherche de semelles
+  // dure plusieurs secondes, et un arrêt qui n'arrête que la moitié du travail
+  // ment sur ce qu'il fait.
+  const controle = new AbortController();
+  etat.abort = controle;
+
   noterUneEtape(root, etat, {
     texte: "Vous avez répondu",
     detail: Object.entries(saisies)
@@ -1894,25 +2009,48 @@ async function lancerCalcul(root, outil, saisies, acquis = {}, { libelles = {}, 
     if (String(valeur ?? "").trim()) etat.confirmeesValeurs[cle] = String(valeur).trim();
   }
 
-  const { resultat, pourLeModele } = await executerUtilitaire({
-    // L'écran renvoie la **référence** que le résultat portait —
-    // « fondations_predimensionnement_V1 » —, et le serveur la reconnaît. Il
-    // n'a plus à savoir ce qu'est un identifiant d'utilitaire.
-    id: outil,
-    // Ce que le formulaire portait déjà s'ajoute à ce qu'on vient d'y saisir :
-    // répondre à une question ne doit pas faire perdre la réponse à la
-    // précédente.
-    entrees: { ...acquis, ...saisies },
-    assertions,
-    confirmees: [...Object.keys(saisies), ...Object.keys(acquis)],
-    acquises: etat.confirmeesValeurs ?? {},
-    piecesJointes: etat.pieceJointe ? [etat.pieceJointe] : [],
-    // Les étapes de l'utilitaire ont lieu au serveur ; elles se racontent ici
-    // **pendant** qu'elles ont lieu. Les attendre pour les rejouer d'un bloc
-    // ferait apparaître dix lignes en même temps que le tableau qu'elles
-    // expliquent.
-    onEtape: (dit) => noterUneEtape(root, etat, dit)
-  });
+  // L'appel est gardé : le tour est déjà ouvert, et une panne de réseau qui ne
+  // le referme pas laisse le copilote figé — plus de saisie, plus de bouton,
+  // rien à quoi se raccrocher.
+  let resultat;
+  let pourLeModele;
+  try {
+    ({ resultat, pourLeModele } = await executerUtilitaire({
+      // L'écran renvoie la **référence** que le résultat portait —
+      // « fondations_predimensionnement_V1 » —, et le serveur la reconnaît. Il
+      // n'a plus à savoir ce qu'est un identifiant d'utilitaire.
+      id: outil,
+      // Ce que le formulaire portait déjà s'ajoute à ce qu'on vient d'y saisir :
+      // répondre à une question ne doit pas faire perdre la réponse à la
+      // précédente.
+      entrees: { ...acquis, ...saisies },
+      assertions,
+      confirmees: [...Object.keys(saisies), ...Object.keys(acquis)],
+      acquises: etat.confirmeesValeurs ?? {},
+      piecesJointes: etat.pieceJointe ? [etat.pieceJointe] : [],
+      // Les étapes de l'utilitaire ont lieu au serveur ; elles se racontent ici
+      // **pendant** qu'elles ont lieu. Les attendre pour les rejouer d'un bloc
+      // ferait apparaître dix lignes en même temps que le tableau qu'elles
+      // expliquent.
+      onEtape: (dit) => noterUneEtape(root, etat, dit),
+      signal: controle.signal
+    }));
+  } catch (erreur) {
+    if (etat.tour === jeton) {
+      etat.tour = null;
+      etat.isSending = false;
+      etat.enCours = null;
+      etat.abort = null;
+      etat.lastError = erreur?.name === "AbortError"
+        ? "" : (erreur?.message || "L'utilitaire n'a pas répondu.");
+      // Ce qui a été fait avant la panne reste sous le message : le journal est
+      // la seule trace de ce qui a été tenté.
+      if (message) message.etapes = [...etat.etapes];
+      etat.etapes = [];
+      render(root);
+    }
+    return;
+  }
 
   retenirDeLaConversation(etat, [resultat]);
 
@@ -1924,6 +2062,14 @@ async function lancerCalcul(root, outil, saisies, acquis = {}, { libelles = {}, 
     if (message) {
       message.executions = [resultat];
       message.etapes = [...etat.etapes];
+    }
+    // Le tour s'arrête : c'est de nouveau à quelqu'un de répondre, et le
+    // formulaire doit reparaître.
+    if (etat.tour === jeton) {
+      etat.tour = null;
+      etat.isSending = false;
+      etat.enCours = null;
+      etat.abort = null;
     }
     render(root);
     return;
@@ -1965,16 +2111,9 @@ async function lancerCalcul(root, outil, saisies, acquis = {}, { libelles = {}, 
 
   // Le message qui se poursuit montre ses étapes en direct, à sa place dans le
   // fil : un bloc d'attente séparé ferait à nouveau deux réponses à l'écran.
+  // Le tour, lui, dure depuis le début du calcul — il ne se rouvre pas.
   etat.enCours = etat.messages.indexOf(enCours);
-  // Le tour possède l'état jusqu'à ce qu'un autre le prenne : voir `envoyer`.
-  const jeton = {};
-  etat.tour = jeton;
-  etat.isSending = true;
-  etat.lastError = "";
   render(root);
-
-  const controle = new AbortController();
-  etat.abort = controle;
 
   try {
     const { reply, usage, executions } = await sendAssistMessage(relance, {
@@ -2160,6 +2299,10 @@ function bind(root) {
 
   for (const bouton of root.querySelectorAll("[data-remise-outil]")) {
     bouton.addEventListener("click", () => void remettreALAtelier(root, bouton.dataset.remiseOutil));
+  }
+
+  for (const bouton of root.querySelectorAll("[data-remise-incendie]")) {
+    bouton.addEventListener("click", () => void remettreALAtelierIncendie(root, bouton.dataset.remiseIncendie));
   }
 
   root.querySelector("#copiloteSend")?.addEventListener("click", () => void envoyer(root));
