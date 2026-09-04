@@ -42,6 +42,12 @@ jobs:
         run: |
           mkdir -p dist
           cp -R apps/web/. dist/
+          # De quoi savoir, depuis l'écran, quelle version est servie. Sans ce
+          # repère, un défaut corrigé et un défaut persistant se ressemblent :
+          # on refait le test sur l'ancienne page sans le savoir.
+          printf '{"commit":"%s","court":"%s","le":"%s"}\n' \
+            "$GITHUB_SHA" "$(echo "$GITHUB_SHA" | cut -c1-7)" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            > dist/build.json
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4

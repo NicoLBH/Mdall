@@ -42,6 +42,8 @@ import { escapeHtml } from "../../../utils/escape-html.js";
 import { svgIcon } from "../../../ui/icons.js";
 import { sendAssistMessage } from "../../../services/copilote-service.js";
 import { brancherLaZoneDeDepot, trierLesFichiers } from "../../ui/zone-de-depot.js";
+import { rendreLeMarkdown } from "../../ui/markdown-leger.js";
+import { renderVoileDeDepot } from "../../ui/voile-de-depot.js";
 import {
   aRetenirDeLaConversation, executerOutil, outilParId, referenceOutil, sansFigure
 } from "../../../services/copilote-outils.js";
@@ -69,18 +71,15 @@ const ACTIONS_A_VENIR = [
 ];
 
 /**
- * Le peu de Markdown que le modèle nous renvoie.
+ * Le Markdown d'une réponse, rendu par le composant partagé.
  *
- * On échappe **avant** de reconnaître quoi que ce soit : une réponse est du
- * texte venu d'ailleurs, et l'interpréter comme du HTML ouvrirait la porte à
- * n'importe quoi.
+ * Il est partagé parce qu'un modèle répond de la même façon partout : des
+ * titres, des listes, du code, et des tableaux. Cinq expressions régulières
+ * suffisaient pour le gras ; elles rendaient un tableau de huit massifs en
+ * bouillie de barres verticales, précisément là où la réponse compte le plus.
  */
 function mdToHtml(text) {
-  return escapeHtml(text || "")
-    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*(.+?)\*/g, "<em>$1</em>")
-    .replace(/`([^`]+)`/g, "<code>$1</code>")
-    .replace(/\n/g, "<br>");
+  return rendreLeMarkdown(text || "");
 }
 
 /** Sous quelle clé les discussions de ce projet se rangent. */
@@ -298,7 +297,7 @@ export function copiloteConversations() {
  * clique, et nulle part ailleurs. Une conversation avec le copilote reste
  * privée — c'est son propriétaire qui en dispose, personne d'autre.
  */
-export function transcrireLaDiscussion(id) {
+export async function transcrireLaDiscussion(id) {
   const etat = ensureState();
   // La discussion ouverte est celle dont l'état vit : elle porte les calculs
   // qui viennent d'avoir lieu, que la liste du rail ne connaît pas encore.
@@ -307,15 +306,24 @@ export function transcrireLaDiscussion(id) {
     : findConversation(etat.conversations, id)?.messages ?? [];
 
   const entete = findConversation(etat.conversations, id);
+  // La version servie fait partie du rapport : un défaut corrigé et un défaut
+  // persistant se ressemblent parfaitement quand la page testée n'est pas celle
+  // qu'on croit, et cette confusion coûte un aller-retour entier.
+  const { versionLisible } = await import("../../../services/version-du-site.js");
   const lignes = [
     `# ${entete?.title || "Discussion sans titre"}`,
     `Projet : ${cleProjet()} — ${messages.length} message${messages.length > 1 ? "s" : ""}`,
+    `Version servie : ${await versionLisible().catch(() => "inconnue")}`,
     ""
   ];
 
-  for (const message of messages) {
+  for (const [rang, message] of messages.entries()) {
     const quand = message.ts ? new Date(message.ts).toLocaleString("fr-FR") : "";
-    lignes.push(`## ${message.role === "user" ? "Vous" : "Copilote"}${quand ? ` — ${quand}` : ""}`);
+    lignes.push(`## [${rang + 1}] ${message.role === "user" ? "Vous" : "Copilote"}${quand ? ` — ${quand}` : ""}`);
+    if ((message.etapes ?? []).length) {
+      lignes.push(`_${message.etapes.length} étapes :_`,
+        ...message.etapes.map((etape) => `  1. ${etape.texte}${etape.detail ? ` — ${etape.detail}` : ""}`));
+    }
     if (message.note?.nom) lignes.push(`_Note jointe : ${message.note.nom}_`);
     if (texteDe(message.content)) lignes.push("", texteDe(message.content));
 
@@ -1362,9 +1370,7 @@ function render(root) {
   root.innerHTML = `
     <section class="settings-section is-active copilote-section" data-copilote-depot>
       <div class="copilote${vide ? " copilote--empty" : ""}">
-        <div class="copilote-depot__voile" aria-hidden="true">
-          <div class="copilote-depot__mot">${svgIcon("file")} Déposez une note de calcul (PDF)</div>
-        </div>
+        ${renderVoileDeDepot("Déposez une note de calcul (PDF)")}
         ${renderCorps(etat)}
 
         <div class="copilote-composer">
@@ -1707,7 +1713,7 @@ async function repondreParPastille(root, groupe, valeur) {
 
   const dit = (execution?.champs ?? []).find((entree) => entree.cle === champ)?.libelle;
   await lancerCalcul(root, outil, { ...(execution?.connues ?? {}), [champ]: valeur },
-    {}, { libelles: dit ? { [champ]: dit } : {} });
+    {}, { libelles: dit ? { [champ]: dit } : {}, rang: Number.parseInt(groupe.dataset.pastilles, 10) });
 }
 
 /** Une précision libre : une question de plus, rien d'autre. */
@@ -1775,7 +1781,7 @@ async function rangerEtRecalculer(root, formulaire) {
   );
 }
 
-async function lancerCalcul(root, outil, saisies, acquis = {}, { libelles = {} } = {}) {
+async function lancerCalcul(root, outil, saisies, acquis = {}, { libelles = {}, rang = null } = {}) {
   const etat = ensureState();
   if (etat.isSending) return;
 
@@ -1785,8 +1791,15 @@ async function lancerCalcul(root, outil, saisies, acquis = {}, { libelles = {} }
   // message — avec sa marque, son horodatage et ses compteurs — racontait deux
   // réponses là où il n'y a qu'un raisonnement, et la question posée
   // disparaissait entre les deux.
-  const rang = etat.messages.findLastIndex((message) => (message.executions ?? []).length > 0);
-  const message = rang >= 0 ? etat.messages[rang] : null;
+  //
+  // Le rang vient du formulaire lui-même : il porte l'index du message qui l'a
+  // posé. Le déduire — « le dernier message qui a des exécutions » — marchait
+  // dans le cas courant et se trompait dès qu'on répondait à une question plus
+  // haut dans le fil, ce qui est exactement le moment où l'on ne comprend pas
+  // ce qui se passe.
+  const message = Number.isInteger(rang) && etat.messages[rang]
+    ? etat.messages[rang]
+    : etat.messages.findLast((candidat) => (candidat.executions ?? []).length > 0) ?? null;
 
   // Le journal reprend son cours, il ne repart pas de zéro : ce qui a été fait
   // avant la question reste au-dessus de la réponse.
@@ -1934,6 +1947,9 @@ async function lancerCalcul(root, outil, saisies, acquis = {}, { libelles = {} }
 async function remplirEtCalculer(root, formulaire) {
   const outil = outilParId(String(formulaire.dataset.outil || "").replace(/_V\d+$/, ""));
   if (!outil) return;
+  // Le formulaire sait dans quel message il a été posé : c'est ce message-là
+  // qui reprend son cours, pas le dernier venu.
+  const rang = Number.parseInt(formulaire.dataset.formulaire, 10);
 
   const saisies = {};
   const acquis = {};
@@ -1960,7 +1976,7 @@ async function remplirEtCalculer(root, formulaire) {
   }
 
   try {
-    await lancerCalcul(root, outil, saisies, acquis, { libelles });
+    await lancerCalcul(root, outil, saisies, acquis, { libelles, rang });
   } finally {
     // Le formulaire a pu être remplacé par le résultat : on ne rend le bouton
     // que s'il est encore là, c'est-à-dire si le calcul n'a pas abouti.
