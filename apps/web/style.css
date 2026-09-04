@@ -16814,7 +16814,11 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 @media (max-width: 700px){ .copilote-outil__colonnes{ grid-template-columns:1fr; } }
 .copilote-outil__legende{ margin:0 0 4px; color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.04em; }
 .copilote-outil__liste{ margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:2px; }
-.copilote-outil__liste li{ display:flex; align-items:baseline; gap:8px; color:var(--text); }
+.copilote-outil__liste li{ display:flex; align-items:baseline; gap:8px; color:var(--text); flex-wrap:wrap; }
+/* Une valeur longue — un rangement de cas de charge, par exemple — passe à la
+   ligne au lieu de se poser sur sa propre clé. */
+.copilote-outil__liste li > .mono{ min-width:0; overflow-wrap:anywhere; }
+.copilote-outil__liste li > .copilote-outil__cle{ flex:none; }
 
 /* Le tableau des massifs : c'est ce qu'on livre, pas une liste de clés. */
 .copilote-massifs{ margin-top:10px; }
@@ -18986,3 +18990,23 @@ html.est-fige-par-le-graphe, body.est-fige-par-le-graphe{ overflow:hidden; }
 /* Une semelle proposée par un calcul le dit : six mois plus tard, personne ne
    saura sinon si elle a été dimensionnée à la main. */
 .fondations-etude__venue{ display:inline-flex; vertical-align:-2px; margin-right:5px; color:var(--accent); }
+
+/* Ranger un cas de charge que l'utilitaire n'a pas su nommer. La recommandation
+   vient avec sa raison : une case remplie pour ne pas rester vide s'accepte par
+   lassitude, et ranger un effort change les pondérations, donc la semelle. */
+.copilote-rangement{
+  margin:12px 0 0; padding:10px 12px;
+  border:1px solid rgba(240,136,62,.35); border-radius:10px;
+  background:rgba(240,136,62,.05);
+}
+.copilote-rangement__ligne{
+  display:flex; align-items:center; gap:10px; margin:8px 0 0; font-size:12px;
+}
+.copilote-rangement__quoi{ flex:1 1 240px; min-width:0; color:var(--text); }
+.copilote-rangement__ligne select{ flex:0 1 280px; }
+.copilote-rangement__pourquoi{
+  margin:4px 0 10px; color:var(--muted); font-size:11.5px; line-height:1.5;
+}
+.copilote-rangement__pourquoi--muet{ font-style:italic; }
+.copilote-rangement__actions{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:6px; }
+.copilote-rangement__note{ color:var(--muted); font-size:11px; }

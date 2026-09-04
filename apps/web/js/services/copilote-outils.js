@@ -719,7 +719,21 @@ export const OUTILS = [
       { cle: "imposerLy", libelle: "Longueur imposée", type: "nombre", unite: "m",
         aide: "Ne se remplit que si quelqu'un a demandé cette cote." },
       { cle: "imposerLz", libelle: "Hauteur imposée", type: "nombre", unite: "m",
-        aide: "Ne se remplit que si quelqu'un a demandé cette cote." }
+        aide: "Ne se remplit que si quelqu'un a demandé cette cote." },
+      {
+        cle: "rangementDesCas",
+        libelle: "Rangement des cas de charge",
+        type: "texte",
+        // Ce n'est pas une donnée du projet : c'est une décision de lecture que
+        // quelqu'un vient de prendre à l'écran. Le garde-fou des valeurs
+        // fabriquées n'a pas à s'y appliquer.
+        aiguillage: true,
+        aide: "Où ranger les cas que l'utilitaire n'a pas su nommer, sous la forme "
+          + "« intitulé = cas », séparés par des points-virgules. Les cas sont G, Q, Sn, Fa, "
+          + "W1 à W4, Sx, Sy, Sz — ou « aucun » pour laisser l'appui de côté. "
+          + "Ne se remplit que si quelqu'un l'a dit : ranger un effort au hasard change les "
+          + "pondérations, donc la semelle."
+      }
     ],
     sorties: [
       { cle: "appuis", libelle: "Massifs pré-dimensionnés" },
@@ -755,7 +769,7 @@ export const OUTILS = [
       const h0 = nombre(entrees.h0);
       const arase = nombre(entrees.araseSuperieure) ?? -0.1;
 
-      const [{ lireLaNoteDeCalcul }, { chargesPourLUtilitaire, unitesDeLaNote },
+      const [{ lireLaNoteDeCalcul }, { chargesPourLUtilitaire, unitesDeLaNote, lireLeRangement },
         { predimensionner, volumeTotal, ceQueLaContrainteCommande }, { entreesParDefautDans, contrainteDepuisBars },
         { calculerLesSemelles, resultatDeLaSemelle }] = await Promise.all([
         import("./note-de-calcul-service.js"),
@@ -838,8 +852,12 @@ export const OUTILS = [
         buteeZf: arase - 1
       };
 
+      // Ce que quelqu'un a décidé de ranger, s'il l'a fait. Un cas rangé à la
+      // demande n'est plus un cas perdu — et l'appui redevient calculable.
+      const rangement = lireLeRangement(entrees.rangementDesCas);
+
       const appuis = note.appuis.map((appui) => {
-        const { charges, correspondances, perdus } = chargesPourLUtilitaire(appui);
+        const { charges, correspondances, perdus } = chargesPourLUtilitaire(appui, { rangement });
         return {
           nom: appui.nom, quantite: appui.quantite, charges, correspondances,
           // Un appui dont un cas de charge n'entre pas dans le calcul ne se

@@ -243,6 +243,10 @@ export async function sendAssistMessage(message, {
     if (appels.length === 0) {
       const reply = parseAssistantReply(data);
       if (!reply) throw new Error("Le copilote a répondu, mais sans contenu.");
+      // Le compte rendu se ferme sur ce qui l'achève. Sans cette dernière ligne,
+      // le journal se terminait sur « lecture de la mémoire » — l'étape la moins
+      // intéressante, et celle qui laisse croire qu'il s'est arrêté là.
+      etape(onEtape, "Réponse écrite");
       return { raw: data, reply, context, usage, executions };
     }
 

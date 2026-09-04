@@ -43,7 +43,7 @@ import { svgIcon } from "../../../ui/icons.js";
 import { sendAssistMessage } from "../../../services/copilote-service.js";
 import { brancherLaZoneDeDepot, trierLesFichiers } from "../../ui/zone-de-depot.js";
 import {
-  aRetenirDeLaConversation, executerOutil, outilParId, sansFigure
+  aRetenirDeLaConversation, executerOutil, outilParId, referenceOutil, sansFigure
 } from "../../../services/copilote-outils.js";
 import { conversationTitle, findConversation } from "../../../services/copilote-conversations.js";
 import {
@@ -115,6 +115,11 @@ function ensureState() {
       // qu'on y avait trouvé. La liste s'accumule, et elle reste sous la
       // réponse une fois celle-ci écrite.
       etapes: [],
+      // Le rang du message dont la réflexion se poursuit. Une question posée en
+      // cours de route interrompt le raisonnement, elle n'en ouvre pas un
+      // second : le compte rendu reprend dans le même message, à sa place dans
+      // le fil.
+      enCours: null,
       // De quoi interrompre l'appel en cours. Un bouton d'arrêt qui n'arrête
       // rien serait pire que pas de bouton du tout.
       abort: null,
@@ -402,8 +407,9 @@ function renderNoteDuMessage(msg) {
   `;
 }
 
-function renderMessage(msg, index) {
+function renderMessage(msg, index, etat = null) {
   const role = msg.role === "user" ? "user" : "assistant";
+  const seDeroule = etat?.isSending === true && etat?.enCours === index;
   const quand = msg.ts ? new Date(msg.ts).toLocaleString("fr-FR") : "";
 
   if (role === "user") {
@@ -426,7 +432,7 @@ function renderMessage(msg, index) {
     <article class="copilote-msg copilote-msg--assistant" data-message-index="${index}">
       <span class="copilote-msg__mark" aria-hidden="true">${svgIcon("copilot", { width: 32, height: 32 })}</span>
       <div class="copilote-msg__main">
-        ${renderEtapesFaites(msg)}
+        ${seDeroule ? renderAttenteDansLeMessage(etat.etapes) : renderEtapesFaites(msg)}
         ${(msg.executions ?? []).map((execution) => renderExecution(execution)).join("")}
         <div class="copilote-msg__body">${mdToHtml(msg.content || "")}</div>
         ${(msg.executions ?? []).map((execution) => renderFormulaire(execution, index)).join("")}
@@ -500,6 +506,67 @@ function renderMassifs(execution) {
     </div>`;
 }
 
+/** Les cas de l'utilitaire, tels qu'ils se proposent dans une liste. */
+const CAS_A_RANGER = [
+  ["G", "Permanente"], ["Q", "Exploitation"], ["Sn", "Neige"], ["Fa", "Accidentelle"],
+  ["W1", "Vent cas 1"], ["W2", "Vent cas 2"], ["W3", "Vent cas 3"], ["W4", "Vent cas 4"],
+  ["Sx", "Séisme X"], ["Sy", "Séisme Y"], ["Sz", "Séisme Z"]
+];
+
+/**
+ * Ranger soi-même un cas que l'utilitaire n'a pas su nommer.
+ *
+ * ## Pourquoi on le demande plutôt que de le deviner
+ *
+ * Ranger un effort décide des pondérations, donc de la semelle. Une neige
+ * accidentelle prise pour une neige normale est majorée là où elle ne doit pas
+ * l'être, et absente des combinaisons accidentelles où elle doit être. Le
+ * modèle rangerait cela de façon plausible ; plausible n'est pas juste, et
+ * personne ne le verrait.
+ *
+ * ## Ce que l'écran propose, et ce qu'il n'impose pas
+ *
+ * Chaque cas non rangé reçoit une **recommandation avec sa raison** quand une
+ * règle défendable existe, et rien quand il n'y en a pas — une case remplie
+ * pour ne pas rester vide s'accepte par lassitude.
+ *
+ * Et **« laisser de côté » reste possible** : l'appui n'est alors pas
+ * dimensionné, ce qui est une réponse honnête. Personne n'est obligé de trancher
+ * sur une note qu'il n'a pas sous les yeux.
+ */
+function renderRangement(appui, execution) {
+  const perdus = (appui.perdus ?? []).filter((perdu) => perdu?.libelle);
+  if (!perdus.length) return "";
+
+  return `
+    <form class="copilote-rangement" data-rangement="${escapeHtml(execution?.outil || "")}"
+      data-rangement-appui="${escapeHtml(appui.nom || "")}">
+      <p class="copilote-outil__legende">Ranger ces cas pour dimensionner cet appui</p>
+      ${perdus.map((perdu) => `
+        <label class="copilote-rangement__ligne">
+          <span class="copilote-rangement__quoi">${escapeHtml(perdu.libelle)}</span>
+          <select name="${escapeHtml(perdu.libelle)}" class="copilote-champ__saisie">
+            <option value="">— à ranger —</option>
+            ${CAS_A_RANGER.map(([cle, dit]) => `
+              <option value="${cle}" ${perdu.recommande?.cas === cle ? "selected" : ""}>${escapeHtml(dit)} (${cle})${
+                perdu.recommande?.cas === cle ? " — recommandé" : ""}</option>`).join("")}
+            <option value="aucun">Ne pas ranger — laisser cet appui de côté</option>
+          </select>
+        </label>
+        ${perdu.recommande?.pourquoi
+          ? `<p class="copilote-rangement__pourquoi">${escapeHtml(perdu.recommande.pourquoi)}</p>`
+          : `<p class="copilote-rangement__pourquoi copilote-rangement__pourquoi--muet">
+              Aucune recommandation : l'intitulé ne dit pas assez pour proposer un rangement défendable.
+              Lisez la note avant de choisir.</p>`}
+      `).join("")}
+      <div class="copilote-rangement__actions">
+        <button type="submit" class="copilote-action">Ranger et recalculer</button>
+        <span class="copilote-rangement__note">Le calcul reprend avec ce rangement ; rien n'est enregistré.</span>
+      </div>
+    </form>
+  `;
+}
+
 /**
  * Le détail d'un massif : ce sur quoi il a été calculé, et ce que ça a donné.
  *
@@ -564,6 +631,7 @@ function renderDetailMassif(appui, execution) {
             : ""}
         </div>
       </div>
+      ${renderRangement(appui, execution)}
       ${(appui.correspondances ?? []).length ? `
         <p class="copilote-outil__legende">Cas de charge de la note</p>
         <ul class="copilote-outil__liste">
@@ -1114,6 +1182,17 @@ function ligneDEtape(etape) {
  * ce qui a servi —, à ceci près qu'on y lit l'ordre et le temps plutôt que la
  * provenance.
  */
+/**
+ * Les étapes en cours, **dans** le message qui se poursuit.
+ *
+ * C'est la même liste que celle du bloc d'attente, à ceci près qu'elle ne
+ * s'accompagne pas d'une seconde marque de copilote : la réflexion n'a pas
+ * recommencé, elle continue.
+ */
+function renderAttenteDansLeMessage(etapes = []) {
+  return `<ol class="copilote-etapes" id="copiloteEtapes">${lignesDAttente(etapes)}</ol>`;
+}
+
 function renderEtapesFaites(msg) {
   const etapes = Array.isArray(msg?.etapes) ? msg.etapes : [];
   if (!etapes.length) return "";
@@ -1133,8 +1212,8 @@ function renderCorps(etat) {
     <div class="copilote-thread-wrap">
       <div class="copilote-thread" id="copiloteThread">
         <div class="copilote-thread__inner">
-          ${messages.map((msg, index) => renderMessage(msg, index)).join("")}
-          ${etat.isSending ? renderAttente(etat.etapes) : ""}
+          ${messages.map((msg, index) => renderMessage(msg, index, etat)).join("")}
+          ${etat.isSending && etat.enCours === null ? renderAttente(etat.etapes) : ""}
         </div>
       </div>
       <button type="button" class="copilote-scroll" id="copiloteScroll" hidden
@@ -1626,7 +1705,9 @@ async function repondreParPastille(root, groupe, valeur) {
     .find((entree) => (entree?.statut === "manquant" || entree?.statut === "aConfirmer")
       && entree.outil === groupe.dataset.outil);
 
-  await lancerCalcul(root, outil, { ...(execution?.connues ?? {}), [champ]: valeur });
+  const dit = (execution?.champs ?? []).find((entree) => entree.cle === champ)?.libelle;
+  await lancerCalcul(root, outil, { ...(execution?.connues ?? {}), [champ]: valeur },
+    {}, { libelles: dit ? { [champ]: dit } : {} });
 }
 
 /** Une précision libre : une question de plus, rien d'autre. */
@@ -1649,9 +1730,73 @@ async function envoyerTexte(root, texte) {
  * façons de donner la même chose, et deux chemins auraient fini par ne plus
  * traiter le résultat de la même manière.
  */
-async function lancerCalcul(root, outil, saisies, acquis = {}) {
+/**
+ * Ranger les cas qu'on n'a pas su nommer, puis recalculer.
+ *
+ * Le rangement n'est pas une valeur du projet : c'est une décision de lecture,
+ * et elle vaut pour cette note et cette conversation. Elle repart donc avec
+ * l'appel de l'outil, comme une entrée d'aiguillage — pas dans la mémoire.
+ *
+ * « Laisser de côté » est une réponse comme une autre : l'appui n'est pas
+ * dimensionné, et c'est plus honnête qu'un rangement pris au hasard.
+ */
+async function rangerEtRecalculer(root, formulaire) {
+  const outil = outilParId(String(formulaire.dataset.rangement || "").replace(/_V\d+$/, ""));
+  if (!outil) return;
+
+  const morceaux = [];
+  for (const champ of formulaire.querySelectorAll("select[name]")) {
+    if (!champ.value) continue;
+    morceaux.push(`${champ.name} = ${champ.value}`);
+  }
+  if (!morceaux.length) return;
+
+  const bouton = formulaire.querySelector("button[type=submit]");
+  if (bouton?.disabled) return;
+  if (bouton) { bouton.disabled = true; bouton.textContent = "Calcul en cours…"; }
+
+  const etat = ensureState();
+  // Ce qui a déjà servi au calcul repart avec lui : la contrainte de sol et la
+  // cote hors gel ne se redemandent pas parce qu'on a rangé un cas de charge.
+  const dernier = [...(etat.messages ?? [])]
+    .flatMap((message) => message.executions ?? [])
+    .filter((execution) => execution?.statut === "fait" && execution.outil === referenceOutil(outil))
+    .at(-1);
+
+  const rangements = [...morceaux, ...(String(dernier?.entrees?.rangementDesCas ?? "").split(";"))]
+    .map((morceau) => morceau.trim())
+    .filter(Boolean);
+
+  await lancerCalcul(
+    root, outil,
+    { rangementDesCas: [...new Set(rangements)].join(" ; ") },
+    { ...(dernier?.entrees ?? {}) },
+    { libelles: { rangementDesCas: "Rangement des cas de charge" } }
+  );
+}
+
+async function lancerCalcul(root, outil, saisies, acquis = {}, { libelles = {} } = {}) {
   const etat = ensureState();
   if (etat.isSending) return;
+
+  // **La réflexion reprend là où elle s'est interrompue.** Elle n'a pas
+  // recommencé : le copilote a buté sur une valeur qu'il ne pouvait pas
+  // inventer, quelqu'un la lui a donnée, et il continue. Ouvrir un second
+  // message — avec sa marque, son horodatage et ses compteurs — racontait deux
+  // réponses là où il n'y a qu'un raisonnement, et la question posée
+  // disparaissait entre les deux.
+  const rang = etat.messages.findLastIndex((message) => (message.executions ?? []).length > 0);
+  const message = rang >= 0 ? etat.messages[rang] : null;
+
+  // Le journal reprend son cours, il ne repart pas de zéro : ce qui a été fait
+  // avant la question reste au-dessus de la réponse.
+  etat.etapes = [...(message?.etapes ?? [])];
+  noterUneEtape(root, etat, {
+    texte: "Vous avez répondu",
+    detail: Object.entries(saisies)
+      .map(([cle, valeur]) => `${libelles[cle] || cle} : ${valeur}`)
+      .join(" · ") || "sans valeur"
+  });
 
   const assertions = etat.assertionsConnues ?? [];
   // Ce qui vient de l'écran est **confirmé par définition** : quelqu'un vient de
@@ -1675,7 +1820,8 @@ async function lancerCalcul(root, outil, saisies, acquis = {}) {
     assertions,
     confirmees: [...Object.keys(saisies), ...Object.keys(acquis)],
     acquises: etat.confirmeesValeurs ?? {},
-    piecesJointes: etat.pieceJointe ? [etat.pieceJointe] : []
+    piecesJointes: etat.pieceJointe ? [etat.pieceJointe] : [],
+    onEtape: (dit) => noterUneEtape(root, etat, dit)
   });
 
   retenirDeLaConversation(etat, [resultat]);
@@ -1685,8 +1831,10 @@ async function lancerCalcul(root, outil, saisies, acquis = {}) {
   // modèle — le déranger pour lui dire qu'il manque encore une valeur ne sert
   // personne.
   if (resultat.statut === "manquant" || resultat.statut === "aConfirmer") {
-    const dernier = etat.messages[etat.messages.length - 1];
-    if (dernier) dernier.executions = [resultat];
+    if (message) {
+      message.executions = [resultat];
+      message.etapes = [...etat.etapes];
+    }
     render(root);
     return;
   }
@@ -1701,9 +1849,9 @@ async function lancerCalcul(root, outil, saisies, acquis = {}) {
   // question du copilote, puis un tableau, et rien entre les deux. On marque
   // donc la demande comme répondue, avec les réponses ; l'écran la cache, la
   // relecture la garde.
-  for (const message of etat.messages) {
-    if (!Array.isArray(message.executions)) continue;
-    for (const execution of message.executions) {
+  for (const ancien of etat.messages) {
+    if (!Array.isArray(ancien.executions)) continue;
+    for (const execution of ancien.executions) {
       if (execution?.statut !== "manquant" && execution?.statut !== "aConfirmer") continue;
       execution.repondue = { le: new Date().toISOString(), valeurs: { ...saisies } };
     }
@@ -1720,14 +1868,14 @@ async function lancerCalcul(root, outil, saisies, acquis = {}) {
   // le raconte. Le calcul a eu lieu : si le modèle ne rappelle pas l'outil, ou
   // si le réseau tombe, le tableau doit rester à l'écran. Le laisser dépendre
   // d'une réponse rédigée, c'est risquer de perdre un travail déjà fait.
-  const message = {
-    role: "assistant",
-    content: "",
-    ts: new Date().toISOString(),
-    executions: [resultat]
-  };
-  etat.messages.push(message);
+  const enCours = message ?? { role: "assistant", content: "", ts: new Date().toISOString() };
+  if (!message) etat.messages.push(enCours);
+  enCours.executions = [resultat];
+  enCours.etapes = [...etat.etapes];
 
+  // Le message qui se poursuit montre ses étapes en direct, à sa place dans le
+  // fil : un bloc d'attente séparé ferait à nouveau deux réponses à l'écran.
+  etat.enCours = etat.messages.indexOf(enCours);
   etat.isSending = true;
   etat.lastError = "";
   render(root);
@@ -1755,22 +1903,26 @@ async function lancerCalcul(root, outil, saisies, acquis = {}) {
       ]
     });
 
-    message.content = reply || "Réponse vide.";
+    enCours.content = reply || "Réponse vide.";
     // Un modèle qui rappelle l'outil rendrait un second tableau identique : on
     // ne garde que ce qu'il a calculé d'autre.
-    message.executions = [resultat, ...(Array.isArray(executions) ? executions : [])
+    enCours.executions = [resultat, ...(Array.isArray(executions) ? executions : [])
       .filter((autre) => autre?.outil !== resultat.outil)];
-    message.tokensIn = Number.isFinite(usage?.inputTokens) ? usage.inputTokens : null;
-    message.tokensOut = Number.isFinite(usage?.outputTokens) ? usage.outputTokens : null;
-    await enregistrer(etat, message);
+    enCours.tokensIn = Number.isFinite(usage?.inputTokens) ? usage.inputTokens : null;
+    enCours.tokensOut = Number.isFinite(usage?.outputTokens) ? usage.outputTokens : null;
+    await enregistrer(etat, enCours);
   } catch (error) {
     if (error?.name !== "AbortError") etat.lastError = error?.message || "Le copilote n'a pas répondu.";
     // Le calcul, lui, a bien eu lieu : on le dit plutôt que de laisser un
     // message vide sous un tableau que personne n'explique.
-    message.content = message.content
+    enCours.content = enCours.content
       || "Le calcul est fait — le tableau ci-dessus en vient. La phrase qui le raconte n'a pas pu être écrite.";
-    await enregistrer(etat, message).catch(() => {});
+    await enregistrer(etat, enCours).catch(() => {});
   } finally {
+    // Le compte rendu reste sur le message qu'il raconte : c'est lui qui se
+    // replie ensuite sous la réponse.
+    enCours.etapes = [...etat.etapes];
+    etat.enCours = null;
     etat.isSending = false;
     etat.abort = null;
     etat.etapes = [];
@@ -1785,8 +1937,13 @@ async function remplirEtCalculer(root, formulaire) {
 
   const saisies = {};
   const acquis = {};
+  // Ce que l'écran a demandé, dit avec ses mots : « contrainteLimite : 1 » se
+  // relit mal, « Contrainte admissible du sol : 1 » se relit.
+  const libelles = {};
   for (const champ of formulaire.querySelectorAll("[name]")) {
     (champ.hasAttribute("data-connue") ? acquis : saisies)[champ.name] = champ.value;
+    const intitule = champ.closest(".copilote-champ")?.querySelector(".copilote-champ__libelle");
+    if (intitule) libelles[champ.name] = intitule.textContent.trim().replace(/\s+/g, " ");
   }
 
   // Le calcul prend plusieurs secondes — il parcourt 388 combinaisons par
@@ -1803,7 +1960,7 @@ async function remplirEtCalculer(root, formulaire) {
   }
 
   try {
-    await lancerCalcul(root, outil, saisies, acquis);
+    await lancerCalcul(root, outil, saisies, acquis, { libelles });
   } finally {
     // Le formulaire a pu être remplacé par le résultat : on ne rend le bouton
     // que s'il est encore là, c'est-à-dire si le calcul n'a pas abouti.
@@ -1929,6 +2086,13 @@ function bind(root) {
       render(root);
     };
     document.addEventListener("click", fermer);
+  }
+
+  for (const formulaire of root.querySelectorAll("[data-rangement]")) {
+    formulaire.addEventListener("submit", (event) => {
+      event.preventDefault();
+      void rangerEtRecalculer(root, formulaire);
+    });
   }
 
   for (const formulaire of root.querySelectorAll("[data-formulaire]")) {

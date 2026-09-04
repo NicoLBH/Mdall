@@ -131,6 +131,82 @@ export function casUtilitairePour(libelle, ventsDejaPris = 0) {
 }
 
 /**
+ * Ce qu'on **recommanderait** pour un cas qu'aucune règle ne reconnaît.
+ *
+ * ## Recommander n'est pas ranger
+ *
+ * Une recommandation se propose, se discute et se refuse ; un rangement décide
+ * des pondérations, donc de la semelle. Les deux ne se confondent pas : ce qui
+ * est proposé ici n'entre dans aucun calcul tant que quelqu'un ne l'a pas
+ * retenu, et la raison accompagne toujours la proposition — sans elle, on
+ * accepte par lassitude.
+ *
+ * ## On ne recommande que ce qu'on sait défendre
+ *
+ * « Effort normal » est, dans une note de charpente, la part descendante d'un
+ * massif de contreventement : la ranger en permanente est le choix usuel, et il
+ * est prudent — G est majoré à l'ELU et minoré dans les combinaisons de
+ * soulèvement, donc l'erreur, s'il y en a une, ne se fait pas du côté du vide.
+ *
+ * Pour le reste, on se tait. Une recommandation fabriquée pour ne pas laisser la
+ * case vide serait acceptée telle quelle, et ce serait exactement le modèle qui
+ * décide sous un autre nom.
+ */
+export const RECOMMANDATIONS_DE_RANGEMENT = [
+  {
+    motif: /effort\s*normal|charge\s*axiale|compression|^\s*n\s*[\(:]/i,
+    cas: "G",
+    pourquoi: "Un effort normal est le plus souvent la part descendante permanente du massif. "
+      + "Le ranger en permanente est le choix usuel, et il est prudent : G est majoré à l'ELU "
+      + "et minoré au soulèvement. Vérifiez sur la note que ce n'est pas une action variable."
+  },
+  {
+    motif: /s[ée]isme|sismique/i,
+    cas: "Sx",
+    pourquoi: "L'intitulé nomme un séisme sans dire quel axe. Sx est proposé faute de mieux : "
+      + "vérifiez sur la note s'il s'agit de X, de Y ou de Z."
+  }
+];
+
+/**
+ * Ce qu'on recommande pour un intitulé, ou rien.
+ *
+ * @returns {{cas: string, pourquoi: string}|null}
+ */
+export function rangementRecommande(libelle) {
+  const dit = clefDeCas(libelle);
+  if (!dit) return null;
+  for (const regle of RECOMMANDATIONS_DE_RANGEMENT) {
+    if (regle.motif.test(dit)) return { cas: regle.cas, pourquoi: regle.pourquoi };
+  }
+  return null;
+}
+
+/** Le rangement qui dit « ne range pas ce cas ». */
+export const NE_PAS_RANGER = "aucun";
+
+/**
+ * Le rangement décidé, lu depuis ce que porte l'appel de l'outil.
+ *
+ * La forme est « intitulé = cas », un par ligne ou séparés par des
+ * points-virgules : c'est ce qu'un modèle sait écrire et ce qu'un humain sait
+ * relire. L'intitulé est réduit à sa clé — la ponctuation et la casse ne
+ * changent pas de quel cas on parle.
+ */
+export function lireLeRangement(dit = "") {
+  const range = {};
+  for (const morceau of String(dit ?? "").split(/[;\n]/)) {
+    const rang = morceau.indexOf("=");
+    if (rang < 0) continue;
+    const clef = clefDeCas(morceau.slice(0, rang));
+    const cas = texte(morceau.slice(rang + 1));
+    if (!clef || !cas) continue;
+    if (cas === NE_PAS_RANGER || Object.keys(CAS_UTILITAIRE).includes(cas)) range[clef] = cas;
+  }
+  return range;
+}
+
+/**
  * Les charges d'un appui, dans le vocabulaire de l'utilitaire.
  *
  * ## Les axes
@@ -147,7 +223,7 @@ export function casUtilitairePour(libelle, ventsDejaPris = 0) {
  * cinq composantes, et lui rendre `null` ferait entrer un `NaN` qui se
  * propagerait jusqu'au ratio.
  */
-export function chargesPourLUtilitaire(appui = {}) {
+export function chargesPourLUtilitaire(appui = {}, { rangement = {} } = {}) {
   const charges = {};
   const correspondances = [];
   // Un vent déjà rencontré reprend sa case : deux lignes qui portent le même
@@ -158,7 +234,22 @@ export function chargesPourLUtilitaire(appui = {}) {
   for (const ligne of appui.cas ?? []) {
     const nom = clefDeCas(ligne?.libelle);
     const dejaVu = ventsParNom.get(nom);
-    const trouve = dejaVu ?? casUtilitairePour(ligne?.libelle, ventsParNom.size);
+
+    // Ce que quelqu'un a décidé passe avant toute règle : c'est bien pour cela
+    // qu'on le lui a demandé. « Ne pas ranger » est une décision aussi, et elle
+    // laisse l'appui de côté plutôt que de faire entrer un effort au hasard.
+    const decide = rangement?.[nom];
+    if (decide === NE_PAS_RANGER) {
+      correspondances.push({
+        libelle: texte(ligne?.libelle), cas: null, dit: "laissé de côté",
+        porteDesEfforts: porteDesEfforts(ligne), decide: true
+      });
+      continue;
+    }
+
+    const trouve = decide
+      ? { cas: decide, dit: `${CAS_UTILITAIRE[decide] ?? decide} — rangé à la demande`, decide: true }
+      : dejaVu ?? casUtilitairePour(ligne?.libelle, ventsParNom.size);
     if (!trouve) {
       // Un cas qu'on ne sait pas ranger et qui porte des efforts est un trou
       // dans le calcul, pas une ligne de tableau manquante : « Effort normal »
@@ -167,7 +258,10 @@ export function chargesPourLUtilitaire(appui = {}) {
       // l'air d'un résultat — c'est ce qui le rend dangereux.
       correspondances.push({
         libelle: texte(ligne?.libelle), cas: null, dit: "non reconnu",
-        porteDesEfforts: porteDesEfforts(ligne)
+        porteDesEfforts: porteDesEfforts(ligne),
+        // Ce qu'on proposerait, et pourquoi. Une case à remplir sans conseil se
+        // remplit au hasard ; un conseil sans sa raison s'accepte par lassitude.
+        recommande: rangementRecommande(ligne?.libelle)
       });
       continue;
     }
@@ -194,7 +288,10 @@ export function chargesPourLUtilitaire(appui = {}) {
     charges[trouve.cas] = deja
       ? Object.fromEntries(Object.keys(composantes).map((k) => [k, deja[k] + composantes[k]]))
       : composantes;
-    correspondances.push({ libelle: texte(ligne?.libelle), cas: trouve.cas, dit: trouve.dit });
+    correspondances.push({
+      libelle: texte(ligne?.libelle), cas: trouve.cas, dit: trouve.dit,
+      ...(trouve.decide ? { decide: true } : {})
+    });
   }
 
   return { charges, correspondances, perdus: casPerdus(correspondances) };
@@ -218,7 +315,14 @@ function porteDesEfforts(ligne) {
 export function casPerdus(correspondances = []) {
   return correspondances
     .filter((ligne) => ligne?.cas === null && ligne?.porteDesEfforts)
-    .map((ligne) => ({ libelle: ligne.libelle, raison: ligne.deTrop ? "plus de case de vent libre" : "cas non reconnu" }));
+    .map((ligne) => ({
+      libelle: ligne.libelle,
+      raison: ligne.decide
+        ? "laissé de côté à la demande"
+        : ligne.deTrop ? "plus de case de vent libre" : "cas non reconnu",
+      recommande: ligne.recommande ?? null,
+      decide: ligne.decide === true
+    }));
 }
 
 /**
