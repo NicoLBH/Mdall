@@ -16479,6 +16479,17 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   width:60%; margin-left:auto; padding:0;
   background:transparent;
 }
+/* La note jointe se pose **au-dessus** de la bulle, alignée à droite avec elle,
+   sans fond ni cadre : c'est la convention de toutes les interfaces de dialogue
+   d'aujourd'hui, et l'enfermer dans la bulle la faisait lire comme une ligne du
+   message plutôt que comme la pièce qui l'accompagne. */
+.copilote-msg__note{
+  display:flex; align-items:center; justify-content:flex-end; gap:8px;
+  margin:0 2px 6px; color:var(--muted); font-size:12.5px;
+}
+.copilote-msg__note span{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.copilote-msg__note .ui-icon{ flex:none; color:#f85149; opacity:.85; }
+
 /* Le fond est sur la bulle, l'horodatage est **dessous**. À l'intérieur, il
    réservait sa place même invisible, et ce vide se lisait comme un remplissage
    bas mal réglé ; dehors, il n'occupe rien tant qu'on ne le demande pas, et
@@ -16840,6 +16851,18 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   font-size:16px; line-height:1; padding:0 2px;
 }
 .copilote-piece__retirer:hover{ color:#f85149; }
+.copilote-piece .ui-icon{ color:#f85149; opacity:.85; }
+
+/* Une fois la note partie, elle ne tient plus une carte dans la zone de saisie :
+   le trombone allumé dit qu'elle est jointe à la discussion, la croix à côté
+   permet de la retirer. */
+.copilote-tool.est-active{ position:relative; color:var(--accent); }
+.copilote-tool.est-active::after{
+  content:""; position:absolute; right:3px; top:3px;
+  width:5px; height:5px; border-radius:50%; background:var(--accent);
+}
+.copilote-tool--retirer{ font-size:17px; line-height:1; }
+.copilote-tool--retirer:hover{ color:#f85149; }
 
 /* Le dépôt par glisser : le voile ne se montre que pendant le survol, et ne
    prend jamais le pointeur — sinon c'est lui qui recevrait le fichier, pas la

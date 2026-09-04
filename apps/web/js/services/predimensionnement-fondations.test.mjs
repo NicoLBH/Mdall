@@ -10,8 +10,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   echelleLarge, echelleFine, hauteurMinimale, essaisPourUnAppui, premiereQuiPasse,
-  verificationGouvernante, predimensionner, volumeTotal, COTE_MIN, COTE_MAX
+  verificationGouvernante, predimensionner, volumeTotal, motDeLErreur, COTE_MIN, COTE_MAX
 } from "./predimensionnement-fondations.js";
+import { resultatDeLaSemelle } from "./fondations-declaration.js";
 
 test("l'échelle large monte du minimum au maximum, par crans de 40 cm", () => {
   const cotes = echelleLarge();
@@ -163,4 +164,67 @@ test("sans appui, rien à chercher — et rien à demander au serveur", () => {
     assert.deepEqual(sortie.appuis, []);
     assert.equal(fiction.vols.length, 0);
   });
+});
+
+
+/* ── L'enveloppe du serveur ──────────────────────────────────────────────── */
+
+test("le lot rend une enveloppe par semelle, et une seule fonction l'ouvre", () => {
+  // Le serveur répond `{ resultat }` quand le calcul a eu lieu et `{ error }`
+  // quand il a refusé : une semelle qui échoue ne doit pas faire échouer les
+  // dix-neuf autres. L'enveloppe se lisait à deux endroits et de deux façons —
+  // l'écran des fondations l'ouvrait, le pré-dimensionnement la prenait pour le
+  // résultat. Il n'y trouvait donc jamais de bilan.
+  assert.deepEqual(resultatDeLaSemelle({ resultat: { bilan: { verifie: true, ratio: 0.4 } } }),
+    { bilan: { verifie: true, ratio: 0.4 } });
+  // Le refus garde ses mots : « le calcul n'a pas conclu » n'aide personne.
+  assert.deepEqual(resultatDeLaSemelle({ error: "contrainteLimite manquante" }),
+    { erreur: "contrainteLimite manquante" });
+  // Une réponse déjà ouverte reste lisible plutôt que perdue.
+  assert.deepEqual(resultatDeLaSemelle({ bilan: { verifie: false } }), { bilan: { verifie: false } });
+  assert.equal(resultatDeLaSemelle(null), null);
+  assert.equal(resultatDeLaSemelle({ autre: 1 }), null);
+});
+
+test("une enveloppe non ouverte fait échouer tous les appuis — et le dit", async () => {
+  // Le défaut exact, reproduit : la recherche reçoit `{ resultat: … }` au lieu
+  // du résultat. Aucun essai n'a de bilan, donc aucun ne passe, et l'on
+  // annonçait « aucune semelle jusqu'à 4 m ne vérifie cet appui » — une phrase
+  // qui accuse le sol pour une réponse qu'on n'avait pas ouverte.
+  const enveloppe = { resultat: { bilan: { verifie: true, ratio: 0.3 } } };
+  const sortie = await predimensionner(
+    [{ nom: "Appui A", charges: { G: { V: 5, Hx: 0.5 } } }],
+    { base: { araseSuperieure: -0.1 }, horsGel: 0.99, calculer: async (liste) => liste.map(() => enveloppe) }
+  );
+
+  const appui = sortie.appuis[0];
+  assert.equal(appui.tenue, false);
+  assert.match(appui.message, /n'a rendu aucun bilan/);
+  assert.doesNotMatch(appui.message, /ne vérifie cet appui/);
+
+  // Ouverte, la même réponse fait tenir l'appui du premier coup.
+  const ouverte = await predimensionner(
+    [{ nom: "Appui A", charges: { G: { V: 5, Hx: 0.5 } } }],
+    { base: { araseSuperieure: -0.1 }, horsGel: 0.99,
+      calculer: async (liste) => liste.map(() => resultatDeLaSemelle(enveloppe)) }
+  );
+  assert.equal(ouverte.appuis[0].tenue, true);
+});
+
+test("le refus du serveur se rapporte avec ses mots", async () => {
+  const sortie = await predimensionner(
+    [{ nom: "Appui A", charges: { G: { V: 5, Hx: 0.5 } } }],
+    { base: { araseSuperieure: -0.1 }, horsGel: 0.99,
+      calculer: async (liste) => liste.map(() => resultatDeLaSemelle({ error: "contrainteLimite manquante" })) }
+  );
+
+  assert.equal(sortie.appuis[0].tenue, false);
+  assert.match(sortie.appuis[0].message, /contrainteLimite manquante/);
+  assert.equal(sortie.appuis[0].erreur, "contrainteLimite manquante.");
+});
+
+test("faute de mots, on nomme au moins ce qui est revenu", () => {
+  assert.equal(motDeLErreur({ statut: "ok", donnees: [] }), "réponse sans bilan (statut, donnees).");
+  assert.equal(motDeLErreur(null), "réponse vide.");
+  assert.equal(motDeLErreur({ erreur: "sol absent" }), "sol absent.");
 });

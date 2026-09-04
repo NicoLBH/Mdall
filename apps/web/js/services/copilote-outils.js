@@ -753,7 +753,7 @@ export const OUTILS = [
 
       const [{ lireLaNoteDeCalcul }, { chargesPourLUtilitaire, unitesDeLaNote },
         { predimensionner, volumeTotal }, { entreesParDefautDans, contrainteDepuisBars },
-        { calculerLesSemelles }] = await Promise.all([
+        { calculerLesSemelles, resultatDeLaSemelle }] = await Promise.all([
         import("./note-de-calcul-service.js"),
         import("./note-de-calcul.js"),
         import("./predimensionnement-fondations.js"),
@@ -840,13 +840,21 @@ export const OUTILS = [
         sortie = await predimensionner(appuis, {
           base,
           horsGel,
-          calculer: (liste) => calculerLesSemelles(liste.map((e) => ({ entrees: e })))
+          // Le lot rend une enveloppe par semelle : on l'ouvre ici, une fois,
+          // plutôt que de laisser la recherche chercher un bilan là où il n'y
+          // en a jamais.
+          calculer: async (liste) => (await calculerLesSemelles(liste.map((e) => ({ entrees: e }))))
+            .map(resultatDeLaSemelle)
         });
       } catch (erreur) {
         return { ok: false, raison: erreur instanceof Error ? erreur.message : "Le calcul n'a pas abouti." };
       }
 
-      const reprises = await reprendreLesCotesImposees(sortie, impose, calculerLesSemelles, base, horsGel);
+      const reprises = await reprendreLesCotesImposees(
+        sortie, impose,
+        async (liste) => (await calculerLesSemelles(liste)).map(resultatDeLaSemelle),
+        base, horsGel
+      );
 
       return {
         ok: true,
@@ -889,7 +897,7 @@ export const OUTILS = [
  * franchement si elles passent. Ce qui n'est pas visé garde ce que la recherche
  * avait trouvé.
  */
-async function reprendreLesCotesImposees(sortie, impose, calculerLesSemelles, base, horsGel) {
+async function reprendreLesCotesImposees(sortie, impose, calculer, base, horsGel) {
   const quelquesUnes = [impose.Lx, impose.Ly, impose.Lz].some((v) => v !== null);
   if (!quelquesUnes) return sortie.appuis;
 
@@ -904,7 +912,7 @@ async function reprendreLesCotesImposees(sortie, impose, calculerLesSemelles, ba
       hauteurLz: impose.Lz ?? appui.hauteurLz
     }
   }));
-  const resultats = await calculerLesSemelles(entrees);
+  const resultats = await calculer(entrees);
 
   const { verificationGouvernante } = await import("./predimensionnement-fondations.js");
   const parNom = new Map(vises.map((appui, rang) => [appui.nom, { appui, resultat: resultats[rang], entrees: entrees[rang].entrees }]));
@@ -1093,10 +1101,25 @@ export function valeurCiteePar(question, valeur) {
 
   // `\b` ne borne pas les accents ni les symboles : on borne à la main sur ce
   // qui n'est ni lettre ni chiffre.
+  //
+  // **Un nombre ne se borne pas comme un mot.** « qels = 1bar » cite bien 1 :
+  // l'unité colle au chiffre, comme dans « 0,45m » ou « 250m », et personne ne
+  // s'en formalise en écrivant. Exiger une lettre de moins après le nombre
+  // faisait passer pour inventée une valeur que l'utilisateur venait d'écrire
+  // dans sa demande — et l'écran la lui redemandait, ce qui est exactement ce
+  // que ce garde-fou est censé éviter.
+  //
+  // Ce qu'un nombre ne tolère pas, c'est un **chiffre** de part et d'autre :
+  // « 1 » ne se lit ni dans « 12 » ni dans « 1,5 », et « 45 » ne se lit pas
+  // dans « 0,45 ». La borne exclut donc les chiffres et les séparateurs
+  // décimaux qui en portent, mais laisse passer les lettres.
   return [...formes].some((forme) => {
     const echappee = forme.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const drapeaux = forme.length <= 2 ? "" : "i";
-    return new RegExp(`(^|[^\\p{L}\\p{N}])${echappee}($|[^\\p{L}\\p{N}])`, `u${drapeaux}`).test(source);
+    const chiffre = Number.isFinite(Number(String(forme).replace(",", ".")));
+    const avant = chiffre ? "(^|[^\\p{L}\\p{N}.,])" : "(^|[^\\p{L}\\p{N}])";
+    const apres = chiffre ? "($|[.,](?!\\p{N})|[^\\p{N}.,])" : "($|[^\\p{L}\\p{N}])";
+    return new RegExp(`${avant}${echappee}${apres}`, `u${drapeaux}`).test(source);
   });
 }
 
@@ -1447,22 +1470,20 @@ export async function executerOutil({
 
   // Deux sorts pour une valeur fabriquée, et les confondre coûtait cher.
   //
-  // Ce **sans quoi le calcul n'a pas lieu** se demande : la contrainte de sol,
-  // le H0 du département. Le reste — l'altitude que la note porte, l'arase qui
-  // a une valeur par défaut, une cote imposée que personne n'a imposée — s'en
-  // va sans un mot de plus. L'écran le redemandait, et six questions
-  // apparaissaient là où une seule était vraiment posée : on lisait cela comme
-  // « ma note n'est pas arrivée », alors qu'elle attendait, lisible, deux
-  // étapes plus loin.
+  // **Toutes sortent du calcul d'abord.** Écarter n'est pas laisser passer : la
+  // valeur n'entre pas, et ce qui la remplace est ce que le projet dit, ce que
+  // la note porte, ou la valeur par défaut déclarée — trois provenances qui ont
+  // un auteur.
   //
-  // Écarter n'est pas laisser passer : la valeur n'entre pas dans le calcul.
-  // Ce qui la remplace est ce que le projet dit, ce que la note porte, ou la
-  // valeur par défaut déclarée — trois provenances qui ont un auteur.
-  const aDemander = substituees.filter((entree) => entree.requis);
-  const ecartees = substituees.filter((entree) => !entree.requis);
-  const jetees = new Set(ecartees.map((entree) => entree.cle));
+  // C'est **ensuite**, sur ce qui reste, qu'on regarde laquelle manque vraiment.
+  // L'ordre n'est pas un détail : une entrée n'est requise que dans certaines
+  // situations, et H0 ne sert qu'à calculer une cote hors gel que le projet
+  // tenait déjà. Trier sur le drapeau `requis` avant d'avoir lu la mémoire et
+  // l'enchaînement reposait donc une question à laquelle le projet répondait —
+  // et l'on saisissait 0,99 sous deux noms différents.
+  const suspectes = new Set(substituees.map((entree) => entree.cle));
   const proposees = Object.fromEntries(
-    Object.entries(entrees ?? {}).filter(([cle]) => !jetees.has(cle))
+    Object.entries(entrees ?? {}).filter(([cle]) => !suspectes.has(cle))
   );
 
   // Ce que le modèle propose l'emporte sur la mémoire : c'est tout l'objet
@@ -1479,7 +1500,6 @@ export async function executerOutil({
   const venuesDeLaMemoire = Object.fromEntries(
     Object.entries(provenance).filter(([cle]) => texte(proposees?.[cle]) === "")
   );
-  const nomsEcartes = ecartees.map((entree) => entree.libelle);
 
   // Ce qui manque encore et qu'un autre utilitaire sait produire se produit,
   // plutôt que de se demander. C'est le cœur de l'enchaînement : la cote hors
@@ -1489,6 +1509,15 @@ export async function executerOutil({
     fournies: avantChaine, assertions, piecesJointes, dejaVus: new Set([outil.id])
   });
   const fournies = { ...avantChaine, ...obtenues };
+
+  // Ce qu'on demande : ce que le modèle a fabriqué **et** dont le calcul a
+  // encore besoin, une fois la mémoire, l'enchaînement et les valeurs par
+  // défaut passés. Le reste s'écarte sans un mot de plus.
+  const aDemander = substituees.filter(
+    (entree) => entree.requis && !entree.requisSaufSi?.(fournies)
+  );
+  const ecartees = substituees.filter((entree) => !aDemander.includes(entree));
+  const nomsEcartes = ecartees.map((entree) => entree.libelle);
   const provenances = provenancesDesEntrees(outil, {
     fournies, depuisMemoire: venuesDeLaMemoire, dejaEtablies, entrees: proposees, chaine
   });
