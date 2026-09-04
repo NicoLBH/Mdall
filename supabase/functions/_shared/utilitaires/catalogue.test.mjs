@@ -1110,3 +1110,30 @@ test("une valeur inventée se demande encore, mais le champ porte celle de l'ét
   assert.equal(resultat.proposeParLeModele.etagesSurRdc, "12");
   assert.equal(resultat.connues.etagesSurRdc, "3");
 });
+
+
+test("les exigences du copilote et celles du référentiel sont la même liste", async () => {
+  // Ce qu'on peut demander au référentiel est exactement ce qu'il exige. Les
+  // deux listes vivent dans des fonctions différentes et ne peuvent pas
+  // s'importer l'une l'autre : ce test est ce qui les empêche de diverger.
+  //
+  // Le jour où l'une gagne une valeur que l'autre n'a pas, c'est ici que ça se
+  // voit — plutôt que six mois plus tard, sur un degré qu'on ne peut plus
+  // demander ou qui ne se verse plus en mémoire.
+  const { EXIGENCES } = await import("../../incendie-habitation/corpus.js");
+  const outil = outilParId("incendie_habitation");
+  const declarees = outil.entrees.find((entree) => entree.cle === "exigence").valeurs;
+
+  assert.deepEqual([...declarees].sort(), [...EXIGENCES].sort());
+});
+
+test("chaque exigence déclarée correspond à un module du référentiel", async () => {
+  // Une exigence qui ne mène à aucun module est une porte qui n'ouvre sur rien :
+  // le modèle l'appellerait, et le référentiel répondrait « ce référentiel ne
+  // porte pas ça ».
+  const { CORPUS, EXIGENCES } = await import("../../incendie-habitation/corpus.js");
+  const produits = new Set(CORPUS.map((module) => module.produit));
+
+  const orphelines = [...EXIGENCES].filter((exigence) => !produits.has(exigence));
+  assert.deepEqual(orphelines, []);
+});

@@ -1981,6 +1981,17 @@ async function lancerCalcul(root, outil, saisies, acquis = {}, { libelles = {}, 
   // Le journal reprend son cours, il ne repart pas de zéro : ce qui a été fait
   // avant la question reste au-dessus de la réponse.
   etat.etapes = [...(message?.etapes ?? [])];
+
+  // **Le texte du message s'efface aussi.** C'est la question à laquelle on
+  // vient de répondre — « il manque la contrainte admissible du sol » —, et
+  // elle est destinée à être remplacée par la réponse. La laisser à l'écran
+  // pendant les secondes du calcul la fait lire comme une conclusion, deux
+  // lignes sous un journal qui dit qu'on vient de donner la valeur.
+  //
+  // On la garde de côté : si le calcul rend la main sans conclure, c'est encore
+  // elle qui explique ce qu'on attend.
+  const texteDeLaQuestion = message?.content ?? "";
+  if (message) message.content = "";
   render(root);
 
   // Le bouton d'arrêt vaut aussi pendant le calcul : une recherche de semelles
@@ -2041,6 +2052,8 @@ async function lancerCalcul(root, outil, saisies, acquis = {}, { libelles = {}, 
       etat.isSending = false;
       etat.enCours = null;
       etat.abort = null;
+      // Le calcul n'a pas eu lieu : la question reste la question.
+      if (message) message.content = texteDeLaQuestion;
       etat.lastError = erreur?.name === "AbortError"
         ? "" : (erreur?.message || "L'utilitaire n'a pas répondu.");
       // Ce qui a été fait avant la panne reste sous le message : le journal est
@@ -2062,6 +2075,9 @@ async function lancerCalcul(root, outil, saisies, acquis = {}, { libelles = {}, 
     if (message) {
       message.executions = [resultat];
       message.etapes = [...etat.etapes];
+      // Il manque encore quelque chose : la phrase qui le disait reprend sa
+      // place, puisque c'est toujours elle qui explique ce qu'on attend.
+      message.content = texteDeLaQuestion;
     }
     // Le tour s'arrête : c'est de nouveau à quelqu'un de répondre, et le
     // formulaire doit reparaître.

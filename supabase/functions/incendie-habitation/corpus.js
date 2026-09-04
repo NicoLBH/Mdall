@@ -118,6 +118,67 @@ function sourceMontrable(source) {
  *
  * @param {Record<string, unknown>} reponses ce qui a été répondu jusqu'ici
  */
+/**
+ * Ce que le référentiel **exige**, par opposition à ce qu'il reformule.
+ *
+ * ## Pourquoi la distinction existe
+ *
+ * Le raisonnement conclut sur cent quatre points, et tous ne sont pas de la
+ * même espèce. « Le bâtiment comporte un sous-sol » et « Le classement retient
+ * trois étages » sont des **reformulations du cas** : le référentiel les écrit
+ * parce que la suite en dépend, mais elles ne demandent rien à personne. « Les
+ * planchers doivent présenter CF 1/2 h » est une **exigence** : c'est elle
+ * qu'on retient, qu'on porte dans la notice, et qu'on verse en mémoire.
+ *
+ * Verser les deux remplirait la mémoire du projet du raisonnement interne du
+ * référentiel, et les vraies contraintes s'y perdraient.
+ *
+ * ## Pourquoi une liste, et pas une devinette
+ *
+ * On pourrait croire la distinction lisible dans la question — « Quel degré… »
+ * contre « Le bâtiment comporte-t-il… ». Elle ne l'est pas : « Le conduit
+ * doit-il être en gaine ? » est une exigence, et rien dans sa forme ne le dit.
+ * Une classification devinée serait fausse quelque part, et personne ne saurait
+ * où. Elle est donc écrite.
+ *
+ * ## Et elle ne diverge pas de celle du copilote
+ *
+ * C'est la même liste que les `exigence` déclarées par l'utilitaire du
+ * copilote : ce qu'on peut demander au référentiel est exactement ce qu'il
+ * exige. Les deux vivent dans des fonctions différentes et ne peuvent pas
+ * s'importer ; un test les compare, et une valeur ajoutée d'un seul côté casse
+ * la construction plutôt que de se découvrir six mois plus tard.
+ */
+export const EXIGENCES = new Set([
+  "classement", "planchersCoupeFeu", "porteursVerticauxStabilite", "murRecoupementCoupeFeu",
+  "paroisEnveloppeCoupeFeu", "paroisSeparativesCoupeFeu", "blocPortePaliereResistance",
+  "celliersParoisCoupeFeu", "parementExterieurClasse", "couvertureClassePenetration",
+  "conduitsExigence", "escaliersAEncloisonner", "voieEnginsConforme",
+  "voieEchellesConforme", "typeEscalierExige", "paroisEscalierFacade",
+  "eloignementBaiesEscalier", "paroisEscalierHorsFacade", "porteEscalierCirculation",
+  "escalierMateriaux", "revetementsCageEscalier", "communicationSousSol",
+  "desenfumageCageEscalier", "circulationProtegeeExigee", "allegeBaieVitreeCirculation",
+  "distanceCirculationVerdict", "revetementsCirculation", "conduitsDesenfumageResistance",
+  "bouchesDesenfumage", "commandeDesenfumage", "degagementsProteges3B",
+  "solutionDegagements4e", "conduitEntreNiveaux", "trappesDeGaine", "traverseeDeParoi",
+  "gaineGazAccessibilite", "paroisGaineGaz", "traverseeGazParcStationnement",
+  "colonneMontanteElectricite", "conduitsVentilation", "solutionVentilation",
+  "localVentilateurInverse", "videOrduresConduit", "localReceptacleOrdures",
+  "regimeLogementFoyer", "escaliersLogementFoyer", "hallLogementFoyer", "alarmeLogementFoyer",
+  "enceinteUniteDeVie", "degagementsUniteDeVie", "escaliersServicesCollectifs",
+  "niveauMaximalFoyerPersonnesAgees", "paroisCageAscenseur", "sasAscenseurSousSol",
+  "appelPrioritairePompiers", "colonneSeche", "circulationPietons", "parcDansLeChamp",
+  "accesVehiculesLourds", "reactionAuFeuParc", "stabiliteParc", "isolementParcContigu",
+  "sasCommunicationParc", "facadesParc", "recoupementParc", "boxesDansLeParcVerdict",
+  "couvertureParc", "revetementCouvertureParc", "distanceIssuesParc", "escaliersParc",
+  "protectionEscaliersParc", "conduitsParc", "ventilationParc", "solsParc", "circulationsParc",
+  "eclairageSecuriteParc", "detectionParc", "alarmeUsagersParc", "moyensDeLutteParc",
+  "colonneSecheParc", "extinctionAutomatiqueParc",
+  // Sept degrés que le référentiel exige et qu'on ne pouvait pas lui demander :
+  // trouvés en dressant cette liste, ajoutés des deux côtés.
+  "porteursExterieursStabilite", "planchersExterieursResistance", "franchissementRecoupementCoupeFeu", "celliersBlocPorteCoupeFeu", "escalierAbriFumees", "extractionMecanique", "escaliers4eFamille"
+]);
+
 export function consulter(reponses = {}) {
   const { faits, conclusions } = raisonner(CORPUS, reponses);
   const graphe = grapheDu(CORPUS);
@@ -132,6 +193,9 @@ export function consulter(reponses = {}) {
     statut: c.statut,
     valeur: c.valeur,
     mention: c.mention,
+    // Une exigence se retient et se verse ; une reformulation du cas ne
+    // demande rien à personne. Voir `EXIGENCES`.
+    exigence: EXIGENCES.has(c.module.produit),
     sansObjet: c.sansObjet,
     // La branche empruntée, et elle seule. Les autres restent au serveur.
     pourquoi: c.regle ? sourceMontrable(c.regle.source) : null,

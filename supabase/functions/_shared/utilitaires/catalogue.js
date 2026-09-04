@@ -417,7 +417,10 @@ export const OUTILS = [
           "murRecoupementCoupeFeu", "paroisEnveloppeCoupeFeu", "paroisSeparativesCoupeFeu",
           "blocPortePaliereResistance", "celliersParoisCoupeFeu", "parementExterieurClasse",
           "couvertureClassePenetration", "conduitsExigence", "escaliersAEncloisonner",
-          "colonnesSechesExigees", "voieEnginsConforme", "voieEchellesConforme",
+          // « colonnesSechesExigees » figurait ici et ne menait à aucun module :
+          // le modèle pouvait l'appeler et s'entendre répondre que le
+          // référentiel ne la porte pas. C'est « colonneSeche », plus bas.
+          "voieEnginsConforme", "voieEchellesConforme",
           // Titre III — dégagements
           "typeEscalierExige", "paroisEscalierFacade", "eloignementBaiesEscalier",
           "paroisEscalierHorsFacade", "porteEscalierCirculation", "escalierMateriaux",
@@ -436,6 +439,13 @@ export const OUTILS = [
           "escaliersServicesCollectifs", "niveauMaximalFoyerPersonnesAgees",
           "paroisCageAscenseur", "sasAscenseurSousSol", "appelPrioritairePompiers",
           "colonneSeche", "circulationPietons",
+          // Sept degrés que le référentiel exige et que le modèle ne pouvait pas
+          // demander : le trou s'est vu en dressant la liste de ce qui se verse
+          // en mémoire. Le référentiel porte la même liste, et un test les
+          // compare — une valeur ajoutée d'un seul côté casse la construction.
+          "porteursExterieursStabilite", "planchersExterieursResistance",
+          "franchissementRecoupementCoupeFeu", "celliersBlocPorteCoupeFeu",
+          "escalierAbriFumees", "extractionMecanique", "escaliers4eFamille",
           // Titre VI — parcs de stationnement couverts. La même liste sert de
           // partage à l'exécution : une valeur écrite à deux endroits finit par
           // diverger.

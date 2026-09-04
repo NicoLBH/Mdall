@@ -55,6 +55,13 @@ import {
 import {
   REMISE_INCENDIE_ANNONCEE, planDeLaRemiseIncendie, etudeCompletee, nomDeLEtudeVenueDuCopilote
 } from "../../../services/incendie-remise.js";
+import {
+  conclusionsVersables, etatDuVersement, retenuesParDefaut, phraseDuVersement
+} from "../../../services/incendie-versement.js";
+import { declaredConstraint } from "../../../services/project-memory.js";
+import { listProjectAssertions, rememberConstraint } from "../../../services/project-memory-supabase.js";
+import { zoneChoices, ZONE_TOUT_LOUVRAGE } from "../../../services/project-zones.js";
+import { DOMAIN } from "../../../services/assertion-taxonomy.js";
 import { store } from "../../../store.js";
 import { resolveCurrentBackendProjectId } from "../../../services/project-supabase-sync.js";
 
@@ -151,6 +158,20 @@ const etat = {
   changeDepuis: null,
 
   /**
+   * Le versement : ce que la mémoire du projet dit déjà, et ce qu'on retient.
+   *
+   * Rien ne part en mémoire parce qu'on a répondu à une question. Verser est un
+   * geste, et il se fait devant la liste de ce qu'il va écrire.
+   */
+  affirmations: [],
+  affirmationsLues: false,
+  versementLit: false,
+  retenues: null,
+  zoneDuVersement: ZONE_TOUT_LOUVRAGE,
+  versementEnCours: false,
+  versementDit: "",
+
+  /**
    * Le dépouillement du module désigné, quand on l'a demandé.
    *
    * Il ne s'ouvre que pour les comptes inscrits côté serveur. Un refus n'est
@@ -215,6 +236,13 @@ function oublierLeProjet() {
   etat.etudesChargees = false;
   etat.enregistrement = "";
   etat.changeDepuis = null;
+  etat.affirmations = [];
+  etat.affirmationsLues = false;
+  etat.versementLit = false;
+  etat.retenues = null;
+  etat.zoneDuVersement = ZONE_TOUT_LOUVRAGE;
+  etat.versementEnCours = false;
+  etat.versementDit = "";
   projetEnBase = "";
   annulerLEnregistrement();
   fermerLaPhrase();
@@ -622,6 +650,176 @@ async function etudeNeuveDepuisLaRemise(root) {
   });
 }
 
+
+/* ------------------------------------------------------------------ *
+ * Le versement en mémoire
+ * ------------------------------------------------------------------ */
+
+/**
+ * Ce que la mémoire du projet dit déjà.
+ *
+ * Lue une fois à l'ouverture de l'onglet Résultats, et relue après chaque
+ * versement : sans cela l'écran continuerait d'annoncer « nouvelle » une
+ * contrainte qu'on vient d'écrire.
+ */
+async function lireLaMemoire(root) {
+  // Relue **à chaque ouverture de l'onglet**, et pas une fois pour toutes : la
+  // mémoire du projet bouge ailleurs — l'écran Mémoire, un autre utilitaire, un
+  // collègue —, et un panneau qui annonce « nouvelle » une contrainte versée
+  // entre-temps ferait écrire deux fois la même décision.
+  if (!projetEnBase) { etat.affirmationsLues = true; return; }
+  etat.versementLit = !etat.affirmationsLues;
+
+  try {
+    etat.affirmations = await listProjectAssertions(projetEnBase) ?? [];
+  } catch (erreur) {
+    // Ne pas savoir ce que la mémoire dit n'empêche pas de verser : cela
+    // empêche seulement de dire ce qui existe déjà, et l'écran le dira.
+    console.warn("[incendie] mémoire illisible", erreur);
+    etat.affirmations = [];
+  }
+  etat.affirmationsLues = true;
+  etat.versementLit = false;
+  if (root?.isConnected && etat.onglet === "resultats") dessiner(root);
+}
+
+/** Les lignes du versement, à l'état où l'écran les montre. */
+function lignesDuVersement() {
+  return etatDuVersement(conclusionsVersables(etat.vue), etat.affirmations, etat.zoneDuVersement);
+}
+
+/** Ce qui est coché. Nul tant que personne n'a touché : c'est la proposition. */
+function retenuesCourantes(lignes) {
+  return etat.retenues ?? retenuesParDefaut(lignes);
+}
+
+/**
+ * Le panneau de versement.
+ *
+ * Il montre **avant** de cliquer les trois cas : ce que la mémoire ignore, ce
+ * qu'elle porte déjà à l'identique, et ce qu'elle dit autrement. Ce dernier est
+ * le geste le plus lourd de l'écran — corriger une contrainte veut dire qu'on a
+ * calculé faux quelque part — et il ne doit pas se faire sans le voir.
+ */
+function dessinerLeVersement() {
+  const lignes = lignesDuVersement();
+  if (!lignes.length) return "";
+
+  const retenues = retenuesCourantes(lignes);
+  const zones = zoneChoices(etat.affirmations);
+
+  return `
+    <section class="incendie-versement">
+      <header class="incendie-versement__tete">
+        <h5>${svgIcon("stack", { width: 16, height: 16 })} Verser en mémoire</h5>
+        <p class="gh-text-muted">
+          Les conclusions se recalculent tant qu'elles servent à décider. Celles qu'on retient
+          deviennent des <strong>contraintes</strong> du projet : imposées par l'arrêté, elles
+          s'écrivent avec leur article et la phrase qui décide.
+        </p>
+      </header>
+
+      <label class="incendie-versement__portee">
+        <span>Portée</span>
+        <select data-incendie-versement-zone>
+          ${zones.map((choix) => `
+            <option value="${escapeHtml(choix.value)}" ${choix.value === etat.zoneDuVersement ? "selected" : ""}>
+              ${escapeHtml(choix.label)}
+            </option>`).join("")}
+        </select>
+      </label>
+
+      ${etat.versementLit
+        ? `<p class="gh-text-muted">Lecture de ce que la mémoire du projet dit déjà…</p>` : ""}
+
+      <ul class="incendie-versement__liste">
+        ${lignes.map((ligne) => `
+          <li class="est-${escapeHtml(ligne.etat)}">
+            <label>
+              <input type="checkbox" data-incendie-verser="${escapeHtml(ligne.id)}"
+                ${retenues.has(ligne.id) ? "checked" : ""}>
+              <span class="incendie-versement__sujet">${escapeHtml(ligne.sujet)}</span>
+              <strong class="incendie-versement__valeur">${escapeHtml(ligne.valeur)}</strong>
+            </label>
+            <span class="incendie-versement__etat">
+              ${ligne.etat === "absente" ? "nouvelle"
+                : ligne.etat === "identique" ? "déjà en mémoire, à l'identique"
+                : `la mémoire dit « ${escapeHtml(ligne.valeurConnue)} »`}
+            </span>
+            ${ligne.article ? `<span class="incendie-versement__article mono">${escapeHtml(ligne.article)}</span>` : ""}
+          </li>`).join("")}
+      </ul>
+
+      <div class="incendie-versement__pied">
+        <button type="button" class="gh-btn gh-btn--primary" data-incendie-versement-faire
+          ${etat.versementEnCours || etat.versementLit || retenues.size === 0 ? "disabled" : ""}>
+          ${etat.versementEnCours ? "Versement en cours…" : "Verser en mémoire"}
+        </button>
+        <span class="gh-text-muted">${escapeHtml(etat.versementDit || phraseDuVersement(lignes, retenues))}</span>
+      </div>
+    </section>
+  `;
+}
+
+/**
+ * Verser ce qui est retenu.
+ *
+ * Une contrainte à la fois, dans l'ordre : chaque écriture périme la précédente
+ * de même clé et marque ce qui reposait dessus. Un échec au milieu laisse ce qui
+ * est déjà passé — on le dit plutôt que de faire croire que rien n'a été écrit.
+ */
+async function verserEnMemoire(root) {
+  if (etat.versementEnCours || !projetEnBase) return;
+
+  const lignes = lignesDuVersement();
+  const retenues = retenuesCourantes(lignes);
+  const prises = lignes.filter((ligne) => retenues.has(ligne.id));
+  if (!prises.length) return;
+
+  etat.versementEnCours = true;
+  etat.versementDit = "";
+  dessiner(root);
+
+  let ecrites = 0;
+  let refus = "";
+
+  for (const ligne of prises) {
+    const prepare = declaredConstraint({
+      projectId: projetEnBase,
+      subject: ligne.sujet,
+      value: ligne.valeur,
+      // De quoi rouvrir le texte à la bonne ligne devant qui conteste.
+      source: etat.vue?.texteDeReference?.source || "arrêté du 31 janvier 1986 modifié",
+      article: ligne.article,
+      citation: ligne.citation,
+      // L'identifiant du module ne bouge pas quand le libellé est réécrit.
+      reference: ligne.id,
+      domain: DOMAIN.INCENDIE,
+      zone: etat.zoneDuVersement
+    });
+
+    if (!prepare.ok) { refus = prepare.reason; break; }
+
+    try {
+      const rendu = await rememberConstraint(prepare.row);
+      if (!rendu) { refus = "La mémoire n'a pas accepté l'écriture."; break; }
+      ecrites += 1;
+    } catch (erreur) {
+      refus = erreur?.message || "La mémoire n'a pas accepté l'écriture.";
+      break;
+    }
+  }
+
+  etat.versementEnCours = false;
+  etat.retenues = null;
+  etat.versementDit = refus
+    ? `${ecrites} contrainte${ecrites > 1 ? "s" : ""} versée${ecrites > 1 ? "s" : ""} avant l'arrêt. ${refus}`
+    : `${ecrites} contrainte${ecrites > 1 ? "s" : ""} versée${ecrites > 1 ? "s" : ""} dans la mémoire du projet.`;
+
+  await lireLaMemoire(root);
+  if (root?.isConnected) dessiner(root);
+}
+
 /** Renommer : le nom est ce par quoi on reconnaît une hypothèse trois semaines après. */
 async function renommerLEtude(root) {
   const etude = etudeCourante();
@@ -743,6 +941,18 @@ function brancher(root) {
       return;
     }
 
+    const portee = evenement.target.closest("[data-incendie-versement-zone]");
+    if (portee) {
+      etat.zoneDuVersement = portee.value;
+      // La portée change ce que la mémoire dit déjà : ce qu'on avait coché ne
+      // vaut plus, et le laisser cocher ferait verser sur une autre zone que
+      // celle qu'on regarde.
+      etat.retenues = null;
+      etat.versementDit = "";
+      dessiner(root);
+      return;
+    }
+
     const champ = evenement.target.closest("[data-incendie-question]");
     if (!champ) return;
     const cle = champ.dataset.incendieQuestion;
@@ -771,6 +981,33 @@ function brancher(root) {
       etat.onglet = onglet.dataset.incendieOnglet;
       dessiner(root);
       if (etat.onglet === "notice") void rediger(root);
+      // Le versement montre ce que la mémoire dit déjà : encore faut-il l'avoir
+      // lue, et la lire à l'ouverture de l'écran coûterait une requête à qui ne
+      // vient que répondre au questionnaire.
+      if (etat.onglet === "resultats") {
+        // Le compte rendu du dernier versement ne survit pas au retour sur
+        // l'onglet : « 2 contraintes versées » sous une liste qui a changé
+        // depuis raconterait le geste d'avant.
+        etat.versementDit = "";
+        void lireLaMemoire(root);
+      }
+      return;
+    }
+
+    const verser = evenement.target.closest("[data-incendie-verser]");
+    if (verser) {
+      const lignes = lignesDuVersement();
+      const retenues = new Set(retenuesCourantes(lignes));
+      const cle = verser.dataset.incendieVerser;
+      if (retenues.has(cle)) retenues.delete(cle); else retenues.add(cle);
+      etat.retenues = retenues;
+      etat.versementDit = "";
+      dessiner(root);
+      return;
+    }
+
+    if (evenement.target.closest("[data-incendie-versement-faire]")) {
+      void verserEnMemoire(root);
       return;
     }
     const remise = evenement.target.closest("[data-incendie-remise]");
@@ -1278,7 +1515,7 @@ function dessiner(root) {
             ? `${dessinerLaRemiseIncendie()}<div data-incendie-etudes>${
                 dessinerLesEtudes(pourLaBarre())}</div>${dessinerQuestionnaire(vue)}`
             : ""}
-          ${vue && etat.onglet === "resultats" ? dessinerResultats(vue) : ""}
+          ${vue && etat.onglet === "resultats" ? `${dessinerLeVersement()}${dessinerResultats(vue)}` : ""}
           ${vue && etat.onglet === "schema" ? dessinerSchema(vue) : ""}
           ${vue && etat.onglet === "notice" ? dessinerLaNotice({
             notice: etat.notice, complements: etat.complements, bibliotheque: etat.bibliotheque,
