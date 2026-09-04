@@ -358,16 +358,23 @@ function renderMassifs(execution) {
   const appuis = execution?.valeurs?.appuis;
   if (!Array.isArray(appuis) || !appuis.length) return "";
 
-  const lignes = appuis.map((appui) => `
+  const lignes = appuis.map((appui, rang) => `
     <tr class="${appui.tenue ? "" : "est-en-defaut"}">
-      <td>${escapeHtml(appui.nom || "")}${appui.impose ? ` <em>cotes imposées</em>` : ""}</td>
+      <td>
+        <button type="button" class="copilote-massifs__nom" data-massif="${rang}"
+                aria-expanded="${appui.ouvert ? "true" : "false"}">
+          <span class="copilote-massifs__chevron" aria-hidden="true">${appui.ouvert ? "▾" : "▸"}</span>
+          ${escapeHtml(appui.nom || "")}
+        </button>${appui.impose ? ` <em>cotes imposées</em>` : ""}
+      </td>
       <td class="mono">${appui.quantite ?? 1}</td>
       <td class="mono">${appui.tenue
         ? `${nombreLisible(appui.Lx)} × ${nombreLisible(appui.Ly)} × ${nombreLisible(appui.Lz)}` : "—"}</td>
-      <td class="mono">${appui.tenue && appui.ratio !== null ? nombreLisible(appui.ratio, 2) : "—"}</td>
+      <td class="mono">${appui.ratio !== null ? nombreLisible(appui.ratio, 2) : "—"}</td>
       <td>${escapeHtml(appui.tenue ? (appui.gouverne || "") : (appui.message || "ne vérifie pas"))}</td>
       <td class="mono">${appui.tenue && appui.volume !== null ? `${nombreLisible(appui.volume, 2)} m³` : "—"}</td>
-    </tr>`).join("");
+    </tr>
+    ${appui.ouvert ? `<tr class="copilote-massifs__detail"><td colspan="6">${renderDetailMassif(appui, execution)}</td></tr>` : ""}`).join("");
 
   return `
     <div class="copilote-massifs">
@@ -379,6 +386,88 @@ function renderMassifs(execution) {
         </table>
       </div>
     </div>`;
+}
+
+/**
+ * Le détail d'un massif : ce sur quoi il a été calculé, et ce que ça a donné.
+ *
+ * ## Pourquoi il est là, et pas seulement dans l'Atelier
+ *
+ * « Aucune semelle carrée jusqu'à 4 m ne vérifie cet appui » est une réponse
+ * qu'on ne peut ni vérifier ni corriger : on ne sait pas si la note a été mal
+ * lue, si l'unité est fausse, ou si le sol est réellement trop faible. Les
+ * charges retenues et les quatre ratios le disent — un glissement à 12 avec
+ * une contrainte à 0,3 ne raconte pas la même histoire qu'une contrainte à 40.
+ *
+ * ## Ce qu'il n'est pas
+ *
+ * Ce n'est pas l'écran de l'utilitaire, et il ne cherche pas à l'être. Le fil
+ * du copilote est un endroit où l'on **juge**, pas où l'on travaille : on y
+ * regarde assez pour décider s'il faut ouvrir l'Atelier, et c'est tout. Les
+ * entrées s'y modifient une par une, avec leur mise en page et leurs unités ;
+ * les refaire ici serait entretenir deux formulaires pour un seul calcul.
+ */
+function renderDetailMassif(appui, execution) {
+  const unite = uniteDEffort(execution?.valeurs?.unites);
+  const cas = Object.entries(appui.charges ?? {});
+
+  const charges = cas.length
+    ? `<table class="copilote-detail__table">
+         <thead><tr><th>Cas</th><th>V</th><th>Hx</th><th>Hy</th><th>Mx</th><th>My</th></tr></thead>
+         <tbody>${cas.map(([nom, c]) => `
+           <tr>
+             <td>${escapeHtml(nom)}</td>
+             ${["V", "Hx", "Hy", "Mx", "My"].map((k) => `<td class="mono">${nombreLisible(c?.[k], 3)}</td>`).join("")}
+           </tr>`).join("")}</tbody>
+       </table>
+       <p class="copilote-detail__note">Efforts non pondérés, en ${escapeHtml(unite)} — repris de la note, sans conversion.</p>`
+    : `<p class="copilote-detail__note">Aucune charge n'a été retenue pour cet appui.</p>`;
+
+  const ratios = (appui.ratios ?? []).length
+    ? `<ul class="copilote-outil__liste">${appui.ratios.map((r) => `
+        <li class="${r.ratio > 1 ? "est-en-defaut" : ""}">
+          <span class="copilote-outil__cle">${escapeHtml(r.quoi)}</span>
+          <span class="mono">${nombreLisible(r.ratio, 2)}</span>
+          ${r.combinaison ? `<span class="copilote-outil__source">${escapeHtml(r.combinaison)}</span>` : ""}
+        </li>`).join("")}</ul>`
+    : "";
+
+  const surQuoi = appui.tenue
+    ? `Vérifications sur la semelle retenue`
+    : `Vérifications sur le plus grand essai${appui.coteMaxTentee !== null
+      ? ` — ${nombreLisible(appui.coteMaxTentee)} × ${nombreLisible(appui.coteMaxTentee)} m` : ""}`;
+
+  return `
+    <div class="copilote-detail">
+      <div class="copilote-detail__colonnes">
+        <div>
+          <p class="copilote-outil__legende">Charges retenues</p>
+          ${charges}
+        </div>
+        <div>
+          <p class="copilote-outil__legende">${escapeHtml(surQuoi)}</p>
+          ${ratios || `<p class="copilote-detail__note">Le calcul n'a rendu aucun ratio.</p>`}
+          ${appui.ratios?.some((r) => r.ratio > 1)
+            ? `<p class="copilote-detail__note">Un ratio supérieur à 1 refuse la semelle : c'est lui qu'il faut lire avant de conclure que le sol est en cause.</p>`
+            : ""}
+        </div>
+      </div>
+      ${(appui.correspondances ?? []).length ? `
+        <p class="copilote-outil__legende">Cas de charge de la note</p>
+        <ul class="copilote-outil__liste">
+          ${appui.correspondances.map((ligne) => `
+            <li>
+              <span class="copilote-outil__cle">${escapeHtml(ligne.libelle || "")}</span>
+              <span class="mono">${escapeHtml(ligne.cas || "non repris")}</span>
+              <span class="copilote-outil__source">${escapeHtml(ligne.dit || "")}</span>
+            </li>`).join("")}
+        </ul>` : ""}
+    </div>`;
+}
+
+/** L'unité d'effort, telle que le système retenu la nomme. */
+function uniteDEffort(unites) {
+  return { "{ T ; Tm }": "t", "{ kN ; kNm }": "kN", "{ daN ; daNm }": "daN" }[unites] || "";
 }
 
 /**
@@ -538,7 +627,8 @@ function renderFormulaire(execution, index) {
   const seul = (execution.champs ?? []).length === 1 ? execution.champs[0] : null;
   if (seul?.valeurs?.length) return renderPastilles(execution, seul, index);
 
-  const champs = (execution.champs ?? []).map((champ) => {
+  const combien = (execution.champs ?? []).length;
+  const champs = (execution.champs ?? []).map((champ, rang) => {
     const valeur = execution.connues?.[champ.cle] ?? "";
 
     const saisie = champ.valeurs
@@ -554,6 +644,7 @@ function renderFormulaire(execution, index) {
     return `
       <label class="copilote-champ">
         <span class="copilote-champ__libelle">
+          ${combien > 1 ? `<em class="copilote-champ__rang">${rang + 1}/${combien}</em>` : ""}
           ${escapeHtml(champ.libelle)}${champ.unite ? ` <span class="copilote-champ__unite">(${escapeHtml(champ.unite)})</span>` : ""}
         </span>
         ${saisie}
@@ -562,10 +653,24 @@ function renderFormulaire(execution, index) {
     `;
   }).join("");
 
+  // Ce que l'utilitaire sait déjà repart avec le formulaire, en caché. Sans
+  // cela, répondre à une question faisait perdre la valeur donnée à la
+  // précédente, et l'on redemandait ce qui venait d'être dit.
+  const acquis = Object.entries(execution.connues ?? {})
+    .filter(([cle, valeur]) => !(execution.champs ?? []).some((champ) => champ.cle === cle)
+      && String(valeur ?? "").trim() !== "")
+    .map(([cle, valeur]) => `<input type="hidden" data-connue name="${escapeHtml(cle)}" value="${escapeHtml(String(valeur))}">`)
+    .join("");
+
   return `
     <form class="copilote-formulaire" data-formulaire="${index}" data-outil="${escapeHtml(execution.outil)}">
-      <p class="copilote-formulaire__titre">${escapeHtml(execution.titre)} — il manque des valeurs</p>
+      <p class="copilote-formulaire__titre">
+        ${escapeHtml(execution.titre)}
+        <span class="copilote-formulaire__reste">${combien === 1
+          ? "1 valeur à préciser" : `${combien} valeurs à préciser`}</span>
+      </p>
       <div class="copilote-formulaire__champs">${champs}</div>
+      ${acquis}
       <button type="submit" class="copilote-action copilote-formulaire__envoi">Calculer</button>
     </form>
   `;
@@ -1170,7 +1275,7 @@ async function envoyerTexte(root, texte) {
  * façons de donner la même chose, et deux chemins auraient fini par ne plus
  * traiter le résultat de la même manière.
  */
-async function lancerCalcul(root, outil, saisies) {
+async function lancerCalcul(root, outil, saisies, acquis = {}) {
   const etat = ensureState();
   if (etat.isSending) return;
 
@@ -1183,15 +1288,18 @@ async function lancerCalcul(root, outil, saisies) {
   // question suivante — « reprends la file B en 2 × 2 » — porte alors sur la
   // même contrainte de sol sans qu'on la ressaisisse, et une **autre** valeur
   // sous la même clé reste refusée.
-  for (const [cle, valeur] of Object.entries(saisies)) {
+  for (const [cle, valeur] of Object.entries({ ...acquis, ...saisies })) {
     if (String(valeur ?? "").trim()) etat.confirmeesValeurs[cle] = String(valeur).trim();
   }
 
   const resultat = await executerOutil({
     id: outil.id,
-    entrees: saisies,
+    // Ce que le formulaire portait déjà s'ajoute à ce qu'on vient d'y saisir :
+    // répondre à une question ne doit pas faire perdre la réponse à la
+    // précédente.
+    entrees: { ...acquis, ...saisies },
     assertions,
-    confirmees: Object.keys(saisies),
+    confirmees: [...Object.keys(saisies), ...Object.keys(acquis)],
     acquises: etat.confirmeesValeurs ?? {},
     piecesJointes: etat.pieceJointe ? [etat.pieceJointe] : []
   });
@@ -1220,23 +1328,34 @@ async function lancerCalcul(root, outil, saisies) {
     }
   }
 
-  const question = {
-    role: "user",
-    content: `J'ai fourni les valeurs demandées pour « ${outil.titre} ».`,
-    ts: new Date().toISOString()
-  };
+  // Pas de message d'utilisateur ici. « J'ai fourni les valeurs demandées »
+  // n'est pas une phrase que quelqu'un a dite : c'est une couture, et elle se
+  // voyait. Ce qui a été répondu se lit dans les entrées du résultat, à
+  // l'endroit où le calcul a eu lieu — la question et sa réponse restent dans
+  // le fil de l'assistant, comme pour tout le reste.
+  const relance = `J'ai fourni les valeurs demandées pour « ${outil.titre} ».`;
 
-  etat.messages.push(question);
+  // Le résultat entre dans le fil **avant** qu'on aille chercher la phrase qui
+  // le raconte. Le calcul a eu lieu : si le modèle ne rappelle pas l'outil, ou
+  // si le réseau tombe, le tableau doit rester à l'écran. Le laisser dépendre
+  // d'une réponse rédigée, c'est risquer de perdre un travail déjà fait.
+  const message = {
+    role: "assistant",
+    content: "",
+    ts: new Date().toISOString(),
+    executions: [resultat]
+  };
+  etat.messages.push(message);
+
   etat.isSending = true;
   etat.lastError = "";
   render(root);
-  await enregistrer(etat, question);
 
   const controle = new AbortController();
   etat.abort = controle;
 
   try {
-    const { reply, usage, executions } = await sendAssistMessage(question.content, {
+    const { reply, usage, executions } = await sendAssistMessage(relance, {
       signal: controle.signal,
       confirmees: Object.keys(saisies),
       acquises: etat.confirmeesValeurs ?? {},
@@ -1253,23 +1372,27 @@ async function lancerCalcul(root, outil, saisies) {
         {
           call_id: `formulaire-${Date.now()}`,
           name: outil.id,
-          arguments: JSON.stringify(saisies),
+          arguments: JSON.stringify({ ...acquis, ...saisies }),
           output: JSON.stringify(sansFigure(resultat))
         }
       ]
     });
 
-    etat.messages.push({
-      role: "assistant",
-      content: reply || "Réponse vide.",
-      ts: new Date().toISOString(),
-      executions: [resultat, ...(Array.isArray(executions) ? executions : [])],
-      tokensIn: Number.isFinite(usage?.inputTokens) ? usage.inputTokens : null,
-      tokensOut: Number.isFinite(usage?.outputTokens) ? usage.outputTokens : null
-    });
-    await enregistrer(etat, etat.messages[etat.messages.length - 1]);
+    message.content = reply || "Réponse vide.";
+    // Un modèle qui rappelle l'outil rendrait un second tableau identique : on
+    // ne garde que ce qu'il a calculé d'autre.
+    message.executions = [resultat, ...(Array.isArray(executions) ? executions : [])
+      .filter((autre) => autre?.outil !== resultat.outil)];
+    message.tokensIn = Number.isFinite(usage?.inputTokens) ? usage.inputTokens : null;
+    message.tokensOut = Number.isFinite(usage?.outputTokens) ? usage.outputTokens : null;
+    await enregistrer(etat, message);
   } catch (error) {
     if (error?.name !== "AbortError") etat.lastError = error?.message || "Le copilote n'a pas répondu.";
+    // Le calcul, lui, a bien eu lieu : on le dit plutôt que de laisser un
+    // message vide sous un tableau que personne n'explique.
+    message.content = message.content
+      || "Le calcul est fait — le tableau ci-dessus en vient. La phrase qui le raconte n'a pas pu être écrite.";
+    await enregistrer(etat, message).catch(() => {});
   } finally {
     etat.isSending = false;
     etat.abort = null;
@@ -1284,11 +1407,35 @@ async function remplirEtCalculer(root, formulaire) {
   if (!outil) return;
 
   const saisies = {};
+  const acquis = {};
   for (const champ of formulaire.querySelectorAll("[name]")) {
-    saisies[champ.name] = champ.value;
+    (champ.hasAttribute("data-connue") ? acquis : saisies)[champ.name] = champ.value;
   }
 
-  await lancerCalcul(root, outil, saisies);
+  // Le calcul prend plusieurs secondes — il parcourt 388 combinaisons par
+  // essai. Un bouton qui reste identique pendant ce temps fait croire au clic
+  // perdu, et l'on reclique : deux calculs pour une réponse. Le bouton le dit
+  // avant d'attendre, et refuse le second clic.
+  const bouton = formulaire.querySelector("button[type=submit]");
+  if (bouton?.disabled) return;
+  if (bouton) {
+    bouton.disabled = true;
+    bouton.dataset.libelle = bouton.textContent;
+    bouton.textContent = "Calcul en cours…";
+    bouton.classList.add("est-en-cours");
+  }
+
+  try {
+    await lancerCalcul(root, outil, saisies, acquis);
+  } finally {
+    // Le formulaire a pu être remplacé par le résultat : on ne rend le bouton
+    // que s'il est encore là, c'est-à-dire si le calcul n'a pas abouti.
+    if (bouton?.isConnected) {
+      bouton.disabled = false;
+      bouton.textContent = bouton.dataset.libelle || "Calculer";
+      bouton.classList.remove("est-en-cours");
+    }
+  }
 }
 
 /** Renoncer à la réponse en cours. La question posée, elle, reste dans le fil. */
@@ -1324,6 +1471,18 @@ function bind(root) {
       void envoyer(root);
     }
   });
+
+  for (const bouton of root.querySelectorAll("[data-massif]")) {
+    bouton.addEventListener("click", () => {
+      const ligne = bouton.closest("[data-message-index]");
+      const message = ensureState().messages[Number(ligne?.dataset.messageIndex)];
+      const appuis = (message?.executions ?? []).flatMap((e) => e?.valeurs?.appuis ?? []);
+      const appui = appuis[Number(bouton.dataset.massif)];
+      if (!appui) return;
+      appui.ouvert = !appui.ouvert;
+      render(root);
+    });
+  }
 
   root.querySelector("#copiloteJoindre")?.addEventListener("click", () => {
     root.querySelector("#copiloteFichier")?.click();

@@ -16762,6 +16762,40 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 /* Un appui qui ne passe pas ne se signale pas par une couleur seule : la
    colonne dit pourquoi, et la teinte ne fait que le rendre trouvable. */
 .copilote-massifs__table tr.est-en-defaut td{ color:#f85149; }
+/* Le nom d'un massif ouvre son détail : sans lui, « aucune semelle jusqu'à 4 m »
+   est une réponse qu'on ne peut ni vérifier ni corriger. */
+.copilote-massifs__nom{
+  background:none; border:none; padding:0; margin:0; font:inherit; color:inherit;
+  cursor:pointer; display:inline-flex; align-items:baseline; gap:5px; text-align:left;
+}
+.copilote-massifs__nom:hover{ color:#f0883e; }
+.copilote-massifs__chevron{ color:var(--muted); font-size:10px; }
+.copilote-massifs__detail > td{ padding:0 0 10px; }
+.copilote-detail{
+  border:1px solid var(--border2, #30363d); border-radius:8px; padding:10px 12px;
+  background:var(--bg2, rgba(110,118,129,.05));
+}
+.copilote-detail__colonnes{ display:grid; grid-template-columns:minmax(0,1.3fr) minmax(0,1fr); gap:16px; }
+@media (max-width: 780px){ .copilote-detail__colonnes{ grid-template-columns:1fr; } }
+.copilote-detail__table{ width:100%; border-collapse:collapse; font-size:11.5px; }
+.copilote-detail__table th{
+  text-align:left; font-weight:600; color:var(--muted); font-size:10.5px;
+  padding:2px 8px 2px 0; border-bottom:1px solid var(--border2, #30363d);
+}
+.copilote-detail__table td{ padding:3px 8px 3px 0; }
+.copilote-detail__note{ margin:6px 0 0; font-size:11px; color:var(--muted); line-height:1.5; }
+.copilote-outil__liste li.est-en-defaut .mono{ color:#f85149; font-weight:600; }
+
+/* Le compteur des valeurs qui restent : « quand est-ce qu'il va s'arrêter ? »
+   est une question qu'on ne doit pas avoir à se poser. */
+.copilote-formulaire__reste{
+  margin-left:8px; font-size:11px; font-weight:400; color:var(--muted);
+}
+.copilote-champ__rang{
+  font-style:normal; font-size:10px; color:#f0883e; margin-right:5px;
+  border:1px solid rgba(240,136,62,.4); border-radius:8px; padding:0 5px;
+}
+.copilote-formulaire__envoi.est-en-cours{ opacity:.7; cursor:progress; }
 
 .copilote-correspondances{ margin-top:10px; }
 .copilote-correspondances summary{ cursor:pointer; font-size:11.5px; color:var(--muted); }

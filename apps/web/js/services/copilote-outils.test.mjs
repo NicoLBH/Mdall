@@ -12,7 +12,8 @@ import {
   executerOutil,
   outilParId,
   prefillDepuisMemoire,
-  referenceOutil
+  referenceOutil,
+  sansFigure
 } from "./copilote-outils.js";
 
 function donnee(cle, valeur, extra = {}) {
@@ -593,4 +594,71 @@ test("une entrée d'aiguillage ne s'établit jamais", () => {
   });
   assert.equal(garde.exigence, undefined);
   assert.equal(garde.etagesSurRdc, "3");
+});
+
+/* ── Ce qu'une demande de précision ne doit pas perdre ───────────────────── */
+
+test("une valeur écrite dans la question survit à la demande de précision", async () => {
+  // « avec une contrainte de sol à 1 bar » : la valeur est citée, donc
+  // légitime. Ne rendre que la mémoire la faisait disparaître, et le tour
+  // suivant la redemandait — deux questions au lieu d'une, sur une valeur déjà
+  // donnée.
+  const resultat = await executerOutil({
+    id: "profondeur_hors_gel",
+    entrees: { h0: 0.45, altitude: 220 },
+    question: "quelle profondeur hors gel avec H0 = 0,45 m ?"
+  });
+  assert.equal(resultat.statut, "aConfirmer");
+  assert.deepEqual(resultat.champs.map((c) => c.cle), ["altitude"]);
+  // Le H0 cité reste acquis : le formulaire le renverra sans le redemander.
+  assert.equal(resultat.connues.h0, 0.45);
+});
+
+test("ce qui est suspect reste à la valeur de la mémoire, pas à celle du modèle", () => {
+  const outil = outilParId("profondeur_hors_gel");
+  assert.deepEqual(substitutionsNonJustifiees(outil, {
+    entrees: { h0: 0.45, altitude: 220 },
+    question: "quelle profondeur hors gel avec H0 = 0,45 m ?"
+  }).map((e) => e.cle), ["altitude"]);
+});
+
+test("le détail d'un massif reste à l'écran, il ne part pas au modèle", () => {
+  // Les charges cas par cas et les quatre ratios n'apprennent rien à un modèle
+  // qui a déjà les cotes et ce qui gouverne ; ils lui feraient courir le risque
+  // de les recopier, c'est-à-dire de réécrire à la main ce que le calcul rend.
+  const allege = sansFigure({
+    statut: "fait",
+    valeurs: {
+      horsGel: 0.5,
+      appuis: [{
+        nom: "Appui A", tenue: false, ratio: 3.2, gouverne: "glissement",
+        charges: { G: { V: 4.078, Hx: 0.416 } },
+        ratios: [{ quoi: "glissement", ratio: 3.2 }],
+        correspondances: [{ libelle: "CHARGE PERMANENTE", cas: "G" }]
+      }]
+    }
+  });
+  const appui = allege.valeurs.appuis[0];
+  assert.equal(appui.charges, undefined);
+  assert.equal(appui.ratios, undefined);
+  assert.equal(appui.correspondances, undefined);
+  assert.equal(appui.detail_disponible, true);
+  // Ce qui décide reste : les cotes, le ratio, ce qui gouverne.
+  assert.equal(appui.gouverne, "glissement");
+  assert.equal(appui.ratio, 3.2);
+  assert.equal(allege.valeurs.horsGel, 0.5);
+});
+
+test("une valeur écrite à la française est la même valeur", () => {
+  // Personne n'écrit « 0.45 » en français. Ne pas la reconnaître faisait passer
+  // pour inventé ce que l'utilisateur venait de taper, et l'écran le lui
+  // redemandait.
+  assert.equal(valeurCiteePar("avec H0 = 0,45 m", "0.45"), true);
+  assert.equal(valeurCiteePar("une contrainte de sol à 1,5 bar", "1.5"), true);
+  assert.equal(valeurCiteePar("une contrainte de sol à 1 bar", "1"), true);
+  // « 1 » se dit aussi « 1,0 » — et l'utilitaire rend parfois « 1.0 ».
+  assert.equal(valeurCiteePar("une contrainte de sol à 1 bar", "1.0"), true);
+  // Ce qui n'a pas été dit reste non dit.
+  assert.equal(valeurCiteePar("une contrainte de sol à 1 bar", "1.5"), false);
+  assert.equal(valeurCiteePar("R+3", "0.45"), false);
 });

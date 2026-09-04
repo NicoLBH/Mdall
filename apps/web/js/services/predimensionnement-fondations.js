@@ -123,6 +123,33 @@ export function premiereQuiPasse(essais, resultats) {
 }
 
 /**
+ * Le plus grand essai tenté, quand aucun n'a tenu.
+ *
+ * « Aucune semelle jusqu'à 4 m ne vérifie cet appui » est une réponse
+ * invérifiable : on ne sait pas si la note a été mal lue, si les unités sont
+ * fausses, ou si le sol est réellement trop faible. Le plus grand essai porte
+ * les quatre ratios, et ils le disent — un glissement à 12 et une contrainte à
+ * 0,3 ne racontent pas la même histoire qu'une contrainte à 40.
+ */
+export function dernierEssaiTente(essais, resultats) {
+  for (let i = essais.length - 1; i >= 0; i -= 1) {
+    if (resultats[i]) return { ...essais[i], resultat: resultats[i] };
+  }
+  return null;
+}
+
+/** Les quatre vérifications d'un résultat, nommées et chiffrées. */
+export function ratiosDe(resultat) {
+  return [
+    { quoi: "contrainte", ratio: resultat?.contrainte?.ratio ?? null, combinaison: resultat?.contrainte?.combinaison ?? null },
+    { quoi: "glissement", ratio: resultat?.glissement?.ratio ?? null, combinaison: resultat?.glissement?.combinaison ?? null },
+    { quoi: "basculement", ratio: resultat?.basculement?.ratio ?? null, combinaison: resultat?.basculement?.combinaison ?? null },
+    { quoi: "surface comprimée", ratio: resultat?.surfaces?.ratio ?? null, combinaison: null }
+  ].filter((v) => Number.isFinite(v.ratio))
+    .map((v) => ({ ...v, ratio: Math.round(v.ratio * 1000) / 1000 }));
+}
+
+/**
  * Ce qui gouverne une semelle : la vérification dont le ratio est le plus haut.
  *
  * Le dire change ce qu'on fait ensuite. Une semelle que la contrainte gouverne
@@ -219,24 +246,43 @@ export async function predimensionner(appuis = [], { base = {}, horsGel = null, 
     essais: essaisFaits,
     appuis: plan.map((ligne, rang) => {
       const retenu = retenus[rang];
+      const commun = {
+        nom: ligne.appui.nom,
+        quantite: ligne.appui.quantite ?? 1,
+        charges: ligne.appui.charges ?? {},
+        correspondances: ligne.appui.correspondances ?? [],
+        hauteurLz: hauteur
+      };
+
       if (!retenu) {
+        // On rend le plus grand essai tenté avec ses quatre ratios : sans lui,
+        // « aucune semelle jusqu'à 4 m » est une réponse qu'on ne peut ni
+        // vérifier ni corriger.
+        const dernier = dernierEssaiTente(ligne.essais, resultatsLarges.slice(
+          plan.slice(0, rang).reduce((t, l) => t + l.essais.length, 0),
+          plan.slice(0, rang + 1).reduce((t, l) => t + l.essais.length, 0)
+        ));
+        const gouverne = verificationGouvernante(dernier?.resultat);
         return {
-          nom: ligne.appui.nom,
-          quantite: ligne.appui.quantite ?? 1,
+          ...commun,
           tenue: false,
+          coteMaxTentee: dernier?.cote ?? null,
+          ratios: ratiosDe(dernier?.resultat),
+          gouverne: gouverne?.quoi ?? null,
+          ratio: dernier?.resultat?.bilan?.ratio ?? null,
+          entrees: dernier?.entrees ?? null,
           message: `Aucune semelle carrée jusqu'à ${String(COTE_MAX).replace(".", ",")} m ne vérifie cet appui.`
         };
       }
       const gouverne = verificationGouvernante(retenu.resultat);
       return {
-        nom: ligne.appui.nom,
-        quantite: ligne.appui.quantite ?? 1,
+        ...commun,
         tenue: true,
         sectionLx: retenu.cote,
         sectionLy: retenu.cote,
-        hauteurLz: hauteur,
         araseSuperieure: retenu.entrees.araseSuperieure,
         ratio: retenu.resultat?.bilan?.ratio ?? null,
+        ratios: ratiosDe(retenu.resultat),
         gouverne: gouverne?.quoi ?? null,
         combinaison: retenu.resultat?.contrainte?.combinaison ?? null,
         volume: arrondir(retenu.cote * retenu.cote * hauteur, 3),
