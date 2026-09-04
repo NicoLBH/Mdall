@@ -104,12 +104,34 @@ function nombreEcrit(brut) {
 }
 
 /**
+ * Ce sur quoi une affirmation de la mémoire a été calculée.
+ *
+ * « Profondeur hors gel : 0,99 m » n'est pas qu'un nombre : son `payload` garde
+ * les entrées de la déduction, altitude comprise. Aller les y chercher évite de
+ * redemander une altitude que le projet connaît — et évite surtout de lire
+ * 0,99 comme une altitude parce qu'on aurait pris la valeur de l'affirmation
+ * pour n'importe laquelle de ses entrées.
+ */
+function entreeDuFait(champ) {
+  return (_brut, assertion) => {
+    const valeur = assertion?.payload?.inputs?.[champ];
+    return valeur === null || valeur === undefined ? null : nombreEcrit(valeur);
+  };
+}
+
+/**
  * Les clés de mémoire d'une entrée ou d'une sortie, toujours sous forme de liste.
  */
-function clesDeMemoire(champ) {
+function declarationsDeMemoire(champ) {
   const declarees = champ?.depuisMemoire;
   if (!declarees) return [];
-  return (Array.isArray(declarees) ? declarees : [declarees]).map(texte).filter(Boolean);
+  return (Array.isArray(declarees) ? declarees : [declarees])
+    .map((brut) => (typeof brut === "string" ? { cle: texte(brut) } : { ...brut, cle: texte(brut?.cle) }))
+    .filter((declaration) => declaration.cle);
+}
+
+function clesDeMemoire(champ) {
+  return declarationsDeMemoire(champ).map((declaration) => declaration.cle);
 }
 
 /**
@@ -188,7 +210,13 @@ export const OUTILS = [
         type: "nombre",
         unite: "m",
         requis: true,
-        depuisMemoire: ["altitude", "altitude-du-site"],
+        depuisMemoire: [
+          "altitude",
+          "altitude-du-site",
+          // La cote hors gel déjà tranchée garde l'altitude sur laquelle elle a
+          // été calculée : c'est la même, et la redemander serait absurde.
+          { cle: "site:frost_depth", lire: entreeDuFait("altitude") }
+        ],
         lireMemoire: nombreEcrit,
         aide: "Altitude du terrain naturel, en mètres."
       }
@@ -626,11 +654,29 @@ export const OUTILS = [
           + "charpente : sans elle, aucune semelle ne se dimensionne."
       },
       {
+        // Ce dont le dimensionnement a réellement besoin, c'est la cote hors
+        // gel — pas les deux valeurs qui servent à la calculer. Quand le projet
+        // l'a déjà tranchée, il n'y a rien à demander ; sinon elle se déduit,
+        // et l'on ne demande que ce que la déduction n'a pas.
+        cle: "horsGel",
+        libelle: "Profondeur hors gel",
+        type: "nombre",
+        unite: "m",
+        depuisMemoire: ["site:frost_depth", "profondeur-hors-gel"],
+        lireMemoire: nombreEcrit,
+        deduitePar: { outil: "profondeur_hors_gel", sortie: "H" },
+        aide: "Cote minimale sous laquelle la fondation doit descendre, au sens du NF DTU 13.1."
+      },
+      {
         cle: "h0",
         libelle: "H0 retenu pour le département",
         type: "nombre",
         unite: "m",
         requis: true,
+        // La cote hors gel connue rend H0 sans objet : il ne sert qu'à la
+        // calculer. La réclamer quand même, c'est demander la recette à qui
+        // tient déjà le plat.
+        requisSaufSi: (entrees) => nombre(entrees?.horsGel) !== null,
         depuisMemoire: ["h0-hors-gel", "h0"],
         lireMemoire: nombreEcrit,
         aide: "Valeur départementale du NF DTU 13.1. Quand le département en offre plusieurs, c'est une "
@@ -641,7 +687,11 @@ export const OUTILS = [
         libelle: "Altitude du site",
         type: "nombre",
         unite: "m",
-        depuisMemoire: ["altitude", "altitude-du-site"],
+        depuisMemoire: [
+          "altitude",
+          "altitude-du-site",
+          { cle: "site:frost_depth", lire: entreeDuFait("altitude") }
+        ],
         lireMemoire: nombreEcrit,
         aide: "L'utilitaire la lit sur la note — les hypothèses de neige la portent presque toujours. "
           + "Elle ne se saisit que si la note n'en dit rien."
@@ -732,22 +782,34 @@ export const OUTILS = [
           + "va bien : dites l'unité employée." };
       }
 
-      // L'altitude vient de la note quand elle la porte — les hypothèses de
-      // neige la donnent presque toujours. Ce qui a été répondu à l'écran passe
-      // devant : quelqu'un l'a alors décidé.
+      // La cote hors gel peut arriver toute faite : le projet l'a tranchée, ou
+      // l'enchaînement l'a produite avant d'entrer ici. Dans ce cas il n'y a
+      // rien à recalculer — et surtout rien à redemander.
+      let horsGel = nombre(entrees.horsGel);
+      // L'altitude reste dite dans le résultat même quand elle n'a pas servi à
+      // calculer la cote : c'est le site dont on parle, et le tableau doit
+      // pouvoir se relire seul.
       const altitude = nombre(entrees.altitude) ?? note.altitude;
-      if (altitude === null) {
-        return { ok: false, raison:
-          "L'altitude du site n'est ni sur la note ni dans la mémoire du projet, et le hors gel en "
-          + "dépend. Dites l'altitude, et le calcul reprend." };
-      }
 
-      // Le hors gel n'est pas recalculé ici : c'est le même utilitaire que
-      // partout ailleurs, et « une valeur écrite à deux endroits finit par
-      // diverger ».
-      const gel = outilParId("profondeur_hors_gel").executer({ h0, altitude });
-      if (!gel?.ok) return { ok: false, raison: gel?.raison || "La profondeur hors gel n'a pas pu être calculée." };
-      const horsGel = gel.valeurs.H;
+      if (horsGel === null) {
+        // L'altitude vient de la note quand elle la porte — les hypothèses de
+        // neige la donnent presque toujours. Ce qui a été répondu à l'écran passe
+        // devant : quelqu'un l'a alors décidé.
+        if (altitude === null) {
+          return { ok: false, raison:
+            "L'altitude du site n'est ni sur la note ni dans la mémoire du projet, et le hors gel en "
+            + "dépend. Dites l'altitude, et le calcul reprend." };
+        }
+
+        // Le hors gel n'est pas recalculé ici : c'est le même utilitaire que
+        // partout ailleurs, et « une valeur écrite à deux endroits finit par
+        // diverger ». L'enchaînement l'appelle avant nous quand il le peut ;
+        // ici, c'est l'altitude de la note qui le rend possible, et elle n'est
+        // lisible qu'une fois la note ouverte.
+        const gel = outilParId("profondeur_hors_gel").executer({ h0, altitude });
+        if (!gel?.ok) return { ok: false, raison: gel?.raison || "La profondeur hors gel n'a pas pu être calculée." };
+        horsGel = gel.valeurs.H;
+      }
 
       // Les valeurs par défaut sont écrites en daN. Prises telles quelles dans
       // une note en tonnes, elles sont fausses d'un facteur mille : le béton
@@ -960,19 +1022,24 @@ export function prefillDepuisMemoire(outil, assertions = []) {
   const provenance = {};
 
   for (const entree of outil?.entrees ?? []) {
-    const cles = clesDeMemoire(entree);
-    if (!cles.length) continue;
+    const declarations = declarationsDeMemoire(entree);
+    if (!declarations.length) continue;
 
-    const cleTrouvee = cles.find((cle) => parCle.has(cle));
-    if (!cleTrouvee) continue;
+    const trouvee = declarations.find((declaration) => parCle.has(declaration.cle));
+    if (!trouvee) continue;
+    const cleTrouvee = trouvee.cle;
     const assertion = parCle.get(cleTrouvee);
 
     // L'énoncé sert de repli : une affirmation déclarée à la main peut porter
     // sa valeur dans la phrase plutôt que dans le payload.
     const brut = texte(assertion?.payload?.value) || texte(assertion?.statement);
-    if (!brut) continue;
 
-    const valeur = texte(entree.lireMemoire ? entree.lireMemoire(brut) : brut);
+    // Une affirmation ne porte pas que sa valeur : elle porte aussi ce sur quoi
+    // elle a été calculée. « Profondeur hors gel : 0,99 m » sait l'altitude du
+    // site, elle est dans ses entrées. Une lecture déclarée par clé va la
+    // chercher là ; sans elle, on lirait 0,99 comme une altitude.
+    const lire = trouvee.lire || entree.lireMemoire;
+    const valeur = texte(lire ? lire(brut, assertion) : brut);
     if (!valeur) continue;
     // Une valeur que la liste ne propose pas ne s'impose pas : elle rendrait le
     // formulaire invalide sans qu'on comprenne d'où ça vient.
@@ -1080,6 +1147,142 @@ export function substitutionsNonJustifiees(outil, { entrees = {}, depuisMemoire 
 
     return true;
   });
+}
+
+/**
+ * D'où vient chaque entrée du calcul.
+ *
+ * Quatre provenances, et elles ne se valent pas : ce que quelqu'un a dit, ce
+ * que le projet tient pour vrai, ce qu'un autre utilitaire a produit, et la
+ * valeur par défaut déclarée. Un résultat qui ne dit pas laquelle a servi ne se
+ * conteste pas — on ne sait pas quoi corriger.
+ */
+export function provenancesDesEntrees(outil, {
+  fournies = {}, depuisMemoire = {}, dejaEtablies = {}, entrees = {}, chaine = []
+} = {}) {
+  const parChaine = new Map(chaine.map((maillon) => [maillon.pour, maillon]));
+  const rendu = {};
+
+  for (const entree of outil?.entrees ?? []) {
+    const cle = entree.cle;
+    if (texte(fournies?.[cle]) === "") continue;
+
+    if (parChaine.has(cle)) {
+      const maillon = parChaine.get(cle);
+      rendu[cle] = { origine: "utilitaire", detail: maillon.titre, outil: maillon.outil };
+    } else if (texte(entrees?.[cle]) !== "") {
+      rendu[cle] = { origine: "dite", detail: "donnée dans la conversation" };
+    } else if (depuisMemoire?.[cle]) {
+      rendu[cle] = {
+        origine: "memoire",
+        detail: texte(depuisMemoire[cle].enonce) || texte(depuisMemoire[cle].cle),
+        trancheeLe: texte(depuisMemoire[cle].trancheeLe)
+      };
+    } else if (texte(dejaEtablies?.[cle]) !== "") {
+      rendu[cle] = { origine: "dite", detail: "établie plus tôt dans la discussion" };
+    } else if (entree.defaut !== undefined) {
+      rendu[cle] = { origine: "defaut", detail: "valeur par défaut de l'utilitaire" };
+    }
+  }
+
+  return rendu;
+}
+
+/**
+ * Une entrée qui manque, obtenue d'un autre utilitaire.
+ *
+ * ## Pourquoi l'enchaînement est du code, et pas une consigne au modèle
+ *
+ * « Il me manque H0 » → « est-il en mémoire ? » → « non » → « qui sait le
+ * produire ? » → « l'utilitaire gel » → « qu'attend-il ? » → « l'altitude, que
+ * le projet connaît » → « je l'exécute et j'injecte le résultat ». Écrit dans
+ * une consigne, cet enchaînement marcherait souvent, se tromperait parfois de
+ * sortie, et l'on ne saurait pas laquelle des deux fois. Écrit ici, il donne le
+ * même chemin à chaque appel, et le chemin se lit après coup.
+ *
+ * ## La règle qui la gouverne : ne jamais poser une question pour en éviter une
+ *
+ * La déduction n'a lieu que si l'utilitaire qu'elle appelle a **déjà** tout ce
+ * qu'il lui faut — mémoire du projet, valeurs de la conversation, valeurs par
+ * défaut déclarées. S'il lui manque quelque chose, on renonce et l'on demande
+ * l'entrée d'origine : deux questions pour éviter une seule seraient une
+ * mauvaise affaire, et une question sur H0 se comprend mieux qu'une question
+ * sur l'altitude posée pour une raison qu'on ne voit pas.
+ *
+ * Un utilitaire ne s'appelle pas lui-même, ni un qui l'appelle déjà : sans ce
+ * garde, deux outils qui se déduisent l'un l'autre tourneraient jusqu'à la pile.
+ */
+const PROFONDEUR_DE_CHAINE_MAX = 3;
+
+export async function deduireLesEntrees(outil, {
+  fournies = {},
+  assertions = [],
+  piecesJointes = [],
+  dejaVus = new Set(),
+  profondeur = 0
+} = {}) {
+  const obtenues = {};
+  const chaine = [];
+  if (profondeur >= PROFONDEUR_DE_CHAINE_MAX) return { obtenues, chaine };
+
+  for (const entree of outil?.entrees ?? []) {
+    const plan = entree.deduitePar;
+    if (!plan) continue;
+    if (texte(fournies?.[entree.cle]) !== "") continue;
+
+    const sous = outilParId(plan.outil);
+    if (!sous || dejaVus.has(sous.id)) continue;
+
+    // Ce que la conversation sait déjà passe devant la mémoire : c'est le même
+    // ordre que partout ailleurs. Les entrées de même nom se reprennent telles
+    // quelles — `altitude` est `altitude` —, et `plan.entrees` nomme les autres.
+    const { valeurs: memoire } = prefillDepuisMemoire(sous, assertions);
+    const reprises = {};
+    for (const attendue of sous.entrees ?? []) {
+      const source = texte(plan.entrees?.[attendue.cle]) || attendue.cle;
+      if (texte(fournies?.[source]) !== "") reprises[attendue.cle] = fournies[source];
+    }
+
+    const suivants = new Set([...dejaVus, outil.id, sous.id]);
+    let pour = avecDefauts(sous, { ...memoire, ...reprises });
+
+    // L'utilitaire appelé peut lui-même avoir une entrée déductible : c'est
+    // ainsi qu'une chaîne de trois maillons tient sans qu'on l'écrive nulle part.
+    const dessous = await deduireLesEntrees(sous, {
+      fournies: pour, assertions, piecesJointes, dejaVus: suivants, profondeur: profondeur + 1
+    });
+    pour = { ...pour, ...dessous.obtenues };
+
+    // On ne pose pas une question pour en éviter une : si l'utilitaire appelé
+    // manque de quoi que ce soit, on renonce et l'entrée d'origine se demande.
+    if (entreesManquantes(sous, pour).length > 0) continue;
+
+    let rendu;
+    try {
+      rendu = await sous.executer(pour, { piecesJointes });
+    } catch {
+      continue;
+    }
+    if (!rendu?.ok) continue;
+
+    const valeur = rendu.valeurs?.[plan.sortie];
+    if (valeur === null || valeur === undefined || texte(valeur) === "") continue;
+
+    obtenues[entree.cle] = valeur;
+    chaine.push(...dessous.chaine, {
+      pour: entree.cle,
+      libelle: entree.libelle,
+      outil: referenceOutil(sous),
+      titre: sous.titre,
+      source: sous.source,
+      sortie: plan.sortie,
+      valeur,
+      unite: entree.unite || "",
+      entrees: pour
+    });
+  }
+
+  return { obtenues, chaine };
 }
 
 /**
@@ -1272,11 +1475,23 @@ export async function executerOutil({
   // et l'on tournait en rond : le formulaire revenait à chaque échange sur la
   // même note. Une contrainte de sol se donne **une fois pour tous les
   // massifs**, et pour toute la conversation.
-  const fournies = avecDefauts(outil, { ...depuisMemoire, ...dejaEtablies, ...nettoyer(proposees) });
+  const avantChaine = avecDefauts(outil, { ...depuisMemoire, ...dejaEtablies, ...nettoyer(proposees) });
   const venuesDeLaMemoire = Object.fromEntries(
     Object.entries(provenance).filter(([cle]) => texte(proposees?.[cle]) === "")
   );
   const nomsEcartes = ecartees.map((entree) => entree.libelle);
+
+  // Ce qui manque encore et qu'un autre utilitaire sait produire se produit,
+  // plutôt que de se demander. C'est le cœur de l'enchaînement : la cote hors
+  // gel manque, l'utilitaire gel la calcule de l'altitude que le projet
+  // connaît, et personne n'a rien tapé.
+  const { obtenues, chaine } = await deduireLesEntrees(outil, {
+    fournies: avantChaine, assertions, piecesJointes, dejaVus: new Set([outil.id])
+  });
+  const fournies = { ...avantChaine, ...obtenues };
+  const provenances = provenancesDesEntrees(outil, {
+    fournies, depuisMemoire: venuesDeLaMemoire, dejaEtablies, entrees: proposees, chaine
+  });
 
   if (aDemander.length > 0) {
     // Ce qui n'est pas suspect reste acquis. Ne rendre que la mémoire faisait
@@ -1297,6 +1512,8 @@ export async function executerOutil({
       proposeParLeModele: Object.fromEntries(aDemander.map((entree) => [entree.cle, texte(entrees[entree.cle])])),
       champs: aDemander.map((entree) => ({ ...entree })),
       ecartees: nomsEcartes,
+      chaine,
+      provenances,
       message: phraseDesSubstitutions(aDemander, nomsEcartes)
     };
   }
@@ -1310,6 +1527,8 @@ export async function executerOutil({
       connues: fournies,
       champs: manquantes.map((entree) => ({ ...entree })),
       ecartees: nomsEcartes,
+      chaine,
+      provenances,
       message: "Le calcul n'a pas eu lieu : il manque des entrées."
     };
   }
@@ -1328,6 +1547,8 @@ export async function executerOutil({
       titre: outil.titre,
       entrees: fournies,
       ecartees: nomsEcartes,
+      chaine,
+      provenances,
       message: resultat?.raison || "L'utilitaire n'a pas pu conclure."
     };
   }
@@ -1342,6 +1563,10 @@ export async function executerOutil({
     // lieu sans ces valeurs : le dire évite qu'il les repropose au tour
     // suivant, et qu'on croie qu'elles ont servi.
     ecartees: nomsEcartes,
+    // Qui a produit quoi, et à partir de quoi. Un résultat dont on ne sait pas
+    // d'où viennent les entrées ne se conteste pas, il se subit.
+    chaine,
+    provenances,
     venuesDeLaMemoire,
     valeurs: resultat.valeurs,
     unites: Object.fromEntries((outil.sorties ?? []).map((sortie) => [sortie.cle, sortie.unite || ""])),

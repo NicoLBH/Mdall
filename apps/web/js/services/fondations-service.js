@@ -7,6 +7,7 @@
  */
 
 import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
+import { parPaquets } from "./paquets.js";
 import {
   CAS_DE_CHARGE, COMPOSANTES, NAPPES, champsNumeriques, entreesInvalides
 } from "./fondations-declaration.js";
@@ -35,16 +36,46 @@ function corpsDe(entrees) {
 }
 
 /**
- * Toutes les semelles d'une étude, en un seul appel.
+ * Combien de semelles au plus dans un même envoi.
+ *
+ * Le serveur en refuse davantage, et il a raison : chacune parcourt 388
+ * combinaisons, et une requête sans plafond occuperait la fonction pendant que
+ * les autres attendent. Le plafond est donc **la taille d'un envoi, pas la
+ * taille d'un travail** — les confondre faisait refuser un pré-dimensionnement
+ * de sept appuis, parce que la recherche essaie neuf cotes par appui et que
+ * soixante-trois dépassent soixante. On ne demandait pas soixante-trois
+ * massifs : on essayait soixante-trois fois.
+ *
+ * La valeur est celle du serveur. Une valeur écrite à deux endroits finit par
+ * diverger — celle-ci ne peut que rester en deçà, et le commentaire dit
+ * laquelle commande.
+ */
+export const SEMELLES_PAR_ENVOI = 60;
+
+/**
+ * Toutes les semelles d'une étude, en autant d'envois qu'il faut.
  *
  * Un projet en compte une vingtaine : les calculer une par une ferait vingt
  * allers-retours pour afficher un tableau, et le tableau apparaîtrait par
  * morceaux. Une semelle qui refuse de se calculer ne fait pas échouer les
  * autres — le tableau doit pouvoir montrer dix-neuf résultats et une erreur.
+ *
+ * Au-delà de ce qu'un envoi accepte, la liste se découpe et les résultats se
+ * recollent **dans l'ordre demandé** : le rang d'une semelle dans la réponse
+ * est celui de la semelle dans la question, sans quoi les cotes d'un appui
+ * iraient à son voisin sans que rien ne le signale.
+ *
+ * Les paquets partent en même temps. Les envoyer l'un après l'autre ferait
+ * attendre une recherche de sept appuis deux fois plus longtemps pour la même
+ * dépense.
  */
 export async function calculerLesSemelles(semelles = [], { signal } = {}) {
   if (semelles.length === 0) return [];
 
+  return parPaquets(semelles, SEMELLES_PAR_ENVOI, (paquet) => envoyerUnPaquet(paquet, { signal }));
+}
+
+async function envoyerUnPaquet(semelles, { signal } = {}) {
   const reponse = await fetch(URL_FONCTION, {
     method: "POST",
     headers: { ...(await buildSupabaseAuthHeaders()), "Content-Type": "application/json" },
