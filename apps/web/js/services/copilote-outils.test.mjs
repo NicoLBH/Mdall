@@ -406,10 +406,12 @@ test("chaque utilitaire est proposé au modèle avec son périmètre, et ses bor
   // modèle appelle l'outil le plus proche et rend une réponse hors sujet.
   const noms = declarationsPourModele().map((entree) => entree.name);
 
-  assert.deepEqual(noms.sort(), ["incendie_habitation", "profondeur_hors_gel", "spectre_elastique_ec8"]);
+  assert.deepEqual(noms.sort(), ["fondations_predimensionnement", "incendie_habitation",
+    "profondeur_hors_gel", "spectre_elastique_ec8"]);
   assert.match(GEL.aQuoiCaSert, /ne dimensionne pas la fondation/i);
   assert.match(SPECTRE.aQuoiCaSert, /ne dimensionne aucun élément/i);
   assert.match(outilParId("incendie_habitation").aQuoiCaSert, /ne traite ni les parcs de plus de 6 000 m²/i);
+  assert.match(outilParId("fondations_predimensionnement").aQuoiCaSert, /ne ferraille pas la semelle/i);
 });
 
 test("une question de parc n'exige pas qu'on décrive le bâtiment", () => {
@@ -487,4 +489,53 @@ test("l'aiguillage nomme exactement les exigences que le référentiel sait rend
   assert.ok(exigences.includes("planchersCoupeFeu"));
   assert.ok(exigences.includes("classement"));
   assert.equal(new Set(exigences).size, exigences.length);
+});
+
+/* ── Ce que la conversation a déjà fait confirmer ────────────────────────── */
+
+test("une confirmation ne vaut que pour la valeur confirmée", () => {
+  // Sans la valeur, une clé confirmée une fois resterait libre pour toujours,
+  // et le modèle pourrait y glisser 3 bars au tour suivant sans que personne ne
+  // le voie.
+  const outil = outilParId("fondations_predimensionnement");
+  const memes = substitutionsNonJustifiees(outil, {
+    entrees: { contrainteLimite: 1.5, h0: 0.5 },
+    confirmees: ["contrainteLimite=1.5", "h0=0.5"]
+  });
+  assert.deepEqual(memes.map((e) => e.cle), []);
+
+  const autres = substitutionsNonJustifiees(outil, {
+    entrees: { contrainteLimite: 3, h0: 0.5 },
+    confirmees: ["contrainteLimite=1.5", "h0=0.5"]
+  });
+  assert.deepEqual(autres.map((e) => e.cle), ["contrainteLimite"]);
+});
+
+test("une clé nue reste ce qu'on vient de cliquer", () => {
+  // Le formulaire rend la valeur qu'il a saisie : il n'y a rien à comparer.
+  const outil = outilParId("fondations_predimensionnement");
+  assert.deepEqual(substitutionsNonJustifiees(outil, {
+    entrees: { contrainteLimite: 2.2 }, confirmees: ["contrainteLimite"]
+  }).map((e) => e.cle), []);
+});
+
+test("le nom d'un appui n'est pas une valeur du projet", () => {
+  // Le réclamer dans la question reviendrait à demander de recopier une ligne
+  // du tableau que l'outil vient d'écrire.
+  const outil = outilParId("fondations_predimensionnement");
+  assert.deepEqual(substitutionsNonJustifiees(outil, {
+    entrees: { imposerPour: "Portique courant — file B" }, question: "reprends la file B"
+  }).map((e) => e.cle), []);
+  // Les cotes, elles, restent gardées : ce sont des valeurs.
+  assert.deepEqual(substitutionsNonJustifiees(outil, {
+    entrees: { imposerLx: 2 }, question: "reprends la file B"
+  }).map((e) => e.cle), ["imposerLx"]);
+});
+
+test("le pré-dimensionnement demande le sol et le hors gel, et rien d'autre", () => {
+  // La note porte les charges ; elle ne porte jamais la contrainte admissible
+  // du sol ni la valeur départementale du hors gel. Ce sont deux décisions.
+  const outil = outilParId("fondations_predimensionnement");
+  assert.deepEqual(entreesManquantes(outil, {}).map((e) => e.cle), ["contrainteLimite", "h0"]);
+  assert.deepEqual(entreesManquantes(outil, { contrainteLimite: 1.5, h0: 0.5 }).map((e) => e.cle), []);
 });

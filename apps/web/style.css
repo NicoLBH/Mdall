@@ -16747,6 +16747,42 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .copilote-outil__legende{ margin:0 0 4px; color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.04em; }
 .copilote-outil__liste{ margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:2px; }
 .copilote-outil__liste li{ display:flex; align-items:baseline; gap:8px; color:var(--text); }
+
+/* Le tableau des massifs : c'est ce qu'on livre, pas une liste de clés. */
+.copilote-massifs{ margin-top:10px; }
+.copilote-massifs__cadre{ overflow-x:auto; }
+.copilote-massifs__table{ width:100%; border-collapse:collapse; font-size:12px; }
+.copilote-massifs__table th{
+  text-align:left; font-weight:600; color:var(--muted); font-size:11px;
+  text-transform:uppercase; letter-spacing:.03em; padding:4px 10px 4px 0;
+  border-bottom:1px solid var(--border2, #30363d); white-space:nowrap;
+}
+.copilote-massifs__table td{ padding:5px 10px 5px 0; border-bottom:1px solid rgba(110,118,129,.15); vertical-align:top; }
+.copilote-massifs__table td em{ font-style:normal; font-size:10.5px; color:#f0883e; }
+/* Un appui qui ne passe pas ne se signale pas par une couleur seule : la
+   colonne dit pourquoi, et la teinte ne fait que le rendre trouvable. */
+.copilote-massifs__table tr.est-en-defaut td{ color:#f85149; }
+
+.copilote-correspondances{ margin-top:10px; }
+.copilote-correspondances summary{ cursor:pointer; font-size:11.5px; color:var(--muted); }
+.copilote-correspondances summary:hover{ color:#f0883e; }
+.copilote-correspondances .copilote-outil__liste{ margin-top:6px; }
+
+/* La note jointe, au-dessus de la saisie : elle change le sens de ce qu'on
+   s'apprête à taper, donc elle se voit avant. */
+.copilote-piece{
+  display:flex; align-items:center; gap:8px; margin:0 0 6px; padding:5px 10px;
+  border:1px solid var(--border2, #30363d); border-radius:8px;
+  background:var(--bg2, rgba(110,118,129,.06)); font-size:12px;
+}
+.copilote-piece svg{ flex:none; opacity:.7; }
+.copilote-piece__nom{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.copilote-piece__poids{ color:var(--muted); font-size:11px; flex:none; }
+.copilote-piece__retirer{
+  flex:none; background:none; border:none; color:var(--muted); cursor:pointer;
+  font-size:16px; line-height:1; padding:0 2px;
+}
+.copilote-piece__retirer:hover{ color:#f85149; }
 .copilote-outil__cle{ color:var(--muted); min-width:0; }
 .copilote-outil__source{ color:var(--muted); font-size:11px; font-style:italic; }
 /* L'écart se montre, il n'accuse pas : la couleur alerte, le texte décrit. */

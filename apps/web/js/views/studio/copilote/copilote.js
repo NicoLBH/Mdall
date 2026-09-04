@@ -122,6 +122,15 @@ function ensureState() {
       // Ce que la mémoire disait au dernier envoi. Les utilitaires s'en servent
       // pour pré-remplir leurs entrées et comparer leurs résultats.
       assertionsConnues: [],
+      // La note de calcul déposée, en mémoire vive et nulle part ailleurs. Elle
+      // n'est ni stockée ni enregistrée avec la conversation : une note
+      // déposée pour un essai n'est pas une pièce du projet.
+      pieceJointe: null,
+      // Ce que la conversation a déjà fait confirmer, valeur comprise. Sans
+      // cette mémoire, chaque nouvelle question redemanderait la contrainte de
+      // sol qu'on vient de saisir ; avec la valeur, une autre valeur sous la
+      // même clé reste refusée.
+      confirmeesValeurs: {},
       projectKey: cleProjet(),
       userKey: cleUtilisateur()
     };
@@ -139,6 +148,8 @@ function ensureState() {
     store.ui.assistant.messages = [];
     store.ui.assistant.draft = "";
     store.ui.assistant.lastError = "";
+    store.ui.assistant.pieceJointe = null;
+    store.ui.assistant.confirmeesValeurs = {};
     store.ui.assistant.chargement = false;
   }
 
@@ -321,6 +332,76 @@ function renderMessage(msg, index) {
   `;
 }
 
+/** Les sorties qui se lisent en tableau, pas en liste de clés. */
+const TABLEAUX_DE_SORTIE = ["appuis", "correspondances"];
+
+/**
+ * Les massifs pré-dimensionnés, en tableau.
+ *
+ * C'est ce qu'on livre : un massif par appui, ses cotes, ce qui le gouverne et
+ * son volume. Une liste « appuis : [object Object] » ne dirait rien, et un
+ * paragraphe rédigé par le modèle demanderait qu'on le croie sur parole.
+ *
+ * Le ratio est montré parce qu'il dit la marge : à 0,98 la semelle passe et ne
+ * supporte aucune reprise, à 0,55 on peut discuter la cote avec le maçon.
+ */
+function renderMassifs(execution) {
+  const appuis = execution?.valeurs?.appuis;
+  if (!Array.isArray(appuis) || !appuis.length) return "";
+
+  const lignes = appuis.map((appui) => `
+    <tr class="${appui.tenue ? "" : "est-en-defaut"}">
+      <td>${escapeHtml(appui.nom || "")}${appui.impose ? ` <em>cotes imposées</em>` : ""}</td>
+      <td class="mono">${appui.quantite ?? 1}</td>
+      <td class="mono">${appui.tenue
+        ? `${nombreLisible(appui.Lx)} × ${nombreLisible(appui.Ly)} × ${nombreLisible(appui.Lz)}` : "—"}</td>
+      <td class="mono">${appui.tenue && appui.ratio !== null ? nombreLisible(appui.ratio, 2) : "—"}</td>
+      <td>${escapeHtml(appui.tenue ? (appui.gouverne || "") : (appui.message || "ne vérifie pas"))}</td>
+      <td class="mono">${appui.tenue && appui.volume !== null ? `${nombreLisible(appui.volume, 2)} m³` : "—"}</td>
+    </tr>`).join("");
+
+  return `
+    <div class="copilote-massifs">
+      <p class="copilote-outil__legende">Massifs pré-dimensionnés</p>
+      <div class="copilote-massifs__cadre">
+        <table class="copilote-massifs__table">
+          <thead><tr><th>Appui</th><th>Nb</th><th>Lx × Ly × Lz</th><th>Ratio</th><th>Gouverné par</th><th>Volume</th></tr></thead>
+          <tbody>${lignes}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+/**
+ * Comment les cas de charge de la note ont été rangés.
+ *
+ * Un cas mal rangé — une neige accidentelle prise pour une neige normale —
+ * produit un résultat plausible et faux. L'ingénieur qui relit doit pouvoir le
+ * voir sans lire le code, et dire « non, chez nous ce vent-là va ailleurs ».
+ */
+function renderCorrespondances(execution) {
+  const lignes = execution?.valeurs?.correspondances;
+  if (!Array.isArray(lignes) || !lignes.length) return "";
+  return `
+    <details class="copilote-correspondances">
+      <summary>Comment les cas de charge ont été rangés</summary>
+      <ul class="copilote-outil__liste">
+        ${lignes.map((ligne) => `
+          <li>
+            <span class="copilote-outil__cle">${escapeHtml(ligne.libelle || "")}</span>
+            <span class="mono">${escapeHtml(ligne.cas || "non repris")}</span>
+            <span class="copilote-outil__source">${escapeHtml(ligne.dit || "")}</span>
+          </li>`).join("")}
+      </ul>
+    </details>`;
+}
+
+/** Un nombre, à la française, sans décimales inutiles. */
+function nombreLisible(valeur, decimales = 2) {
+  if (!Number.isFinite(valeur)) return "—";
+  return String(Number(valeur.toFixed(decimales))).replace(".", ",");
+}
+
 /**
  * Ce qu'un utilitaire a calculé, montré tel quel.
  *
@@ -352,12 +433,16 @@ function renderExecution(execution) {
     `;
   }).join("");
 
-  const sorties = Object.entries(execution.valeurs ?? {}).map(([cle, valeur]) => `
-    <li>
-      <span class="copilote-outil__cle">${escapeHtml(cle)}</span>
-      <span class="mono">${escapeHtml(String(valeur))} ${escapeHtml(execution.unites?.[cle] || "")}</span>
-    </li>
-  `).join("");
+  const sorties = Object.entries(execution.valeurs ?? {})
+    // Ce qui se lit en tableau ne se lit pas en liste : `appuis` et
+    // `correspondances` ont leur propre rendu, juste dessous.
+    .filter(([cle]) => !TABLEAUX_DE_SORTIE.includes(cle))
+    .map(([cle, valeur]) => `
+      <li>
+        <span class="copilote-outil__cle">${escapeHtml(cle)}</span>
+        <span class="mono">${escapeHtml(String(valeur))} ${escapeHtml(execution.unites?.[cle] || "")}</span>
+      </li>
+    `).join("");
 
   const ecarts = (execution.ecarts ?? []).map((ecart) => `
     <li>
@@ -409,6 +494,8 @@ function renderExecution(execution) {
         </div>
       </div>
       ${figure}
+      ${renderMassifs(execution)}
+      ${renderCorrespondances(execution)}
       ${
         ecarts
           ? `<div class="copilote-outil__ecarts">
@@ -700,6 +787,29 @@ function renderActions(etat) {
  * Le fil occupe toute la largeur — sa barre est donc au bord de l'écran, là où
  * on la cherche — et la colonne de lecture est ramenée au centre à l'intérieur.
  */
+/**
+ * La note de calcul déposée, telle qu'on la voit.
+ *
+ * Elle se voit **avant** le champ de saisie, parce qu'elle change le sens de ce
+ * qu'on va taper : « fais-moi un pré-dimensionnement » ne veut pas dire la même
+ * chose avec et sans note jointe. Et elle se retire d'un clic — une pièce
+ * jointe qu'on ne peut pas enlever accompagne toutes les questions suivantes
+ * sans qu'on l'ait voulu.
+ */
+function renderPieceJointe(etat) {
+  const piece = etat.pieceJointe;
+  if (!piece) return "";
+  const ko = Math.max(1, Math.round((piece.taille ?? 0) / 1024));
+  return `
+    <div class="copilote-piece">
+      ${svgIcon("file")}
+      <span class="copilote-piece__nom">${escapeHtml(piece.nom)}</span>
+      <span class="copilote-piece__poids">${ko} ko</span>
+      <button type="button" class="copilote-piece__retirer" id="copiloteRetirerPiece"
+              aria-label="Retirer la note jointe" title="Retirer">×</button>
+    </div>`;
+}
+
 function render(root) {
   const etat = ensureState();
   const vide = (etat.messages ?? []).length === 0 && !etat.isSending;
@@ -712,6 +822,7 @@ function render(root) {
         <div class="copilote-composer">
           <div class="copilote-composer__inner">
             <div class="copilote-compose gh-field-focus">
+              ${renderPieceJointe(etat)}
               <textarea
                 id="copiloteInput"
                 class="copilote-input"
@@ -724,6 +835,12 @@ function render(root) {
                 <div class="copilote-compose__left">${vide ? "" : renderActions(etat)}</div>
 
                 <div class="copilote-compose__tools">
+                  <button type="button" class="copilote-tool" id="copiloteJoindre"
+                    ${etat.isSending ? "disabled" : ""}
+                    aria-label="Joindre une note de calcul (PDF)" title="Joindre une note de calcul (PDF)"
+                    >${svgIcon("paperclip")}</button>
+                  <input type="file" id="copiloteFichier" accept="application/pdf" hidden>
+
                   <button type="button" class="copilote-tool" id="copiloteCredits"
                     aria-haspopup="dialog" aria-expanded="${etat.creditsOpen ? "true" : "false"}"
                     aria-label="Crédits inclus" title="Crédits inclus">${svgIcon("meter")}</button>
@@ -775,6 +892,44 @@ function render(root) {
   bind(root);
 }
 
+/**
+ * Joindre une note de calcul.
+ *
+ * Elle est lue dans le navigateur et gardée en mémoire vive : rien ne part
+ * ailleurs tant qu'une question n'est pas posée, et rien n'est stocké nulle
+ * part. Le plafond n'est pas une politesse — au-delà, la lecture côté serveur
+ * refuserait le fichier, et mieux vaut le dire ici, à l'endroit du geste.
+ */
+const PIECE_MAX_OCTETS = 6 * 1024 * 1024;
+
+async function joindre(root, fichier) {
+  const etat = ensureState();
+  const champ = root.querySelector("#copiloteFichier");
+  if (champ) champ.value = "";
+  if (!fichier) return;
+
+  if (fichier.type !== "application/pdf") {
+    etat.lastError = "Seuls les PDF se lisent pour le moment.";
+    render(root);
+    return;
+  }
+  if (fichier.size > PIECE_MAX_OCTETS) {
+    etat.lastError = "Ce fichier dépasse 6 Mo : la lecture le refuserait.";
+    render(root);
+    return;
+  }
+
+  try {
+    const { lireLeFichier } = await import("../../../services/note-de-calcul-service.js");
+    etat.pieceJointe = await lireLeFichier(fichier);
+    etat.lastError = "";
+  } catch (erreur) {
+    etat.pieceJointe = null;
+    etat.lastError = erreur instanceof Error ? erreur.message : "Le fichier n'a pas pu être lu.";
+  }
+  render(root);
+}
+
 async function envoyer(root) {
   const etat = ensureState();
   const champ = root.querySelector("#copiloteInput");
@@ -800,6 +955,15 @@ async function envoyer(root) {
   try {
     const { reply, usage, executions, context } = await sendAssistMessage(contenu, {
       signal: controle.signal,
+      // Ce que la conversation porte et qui n'est pas une valeur : la note de
+      // calcul déposée. Elle reste jointe tant qu'on ne la retire pas — on
+      // pose souvent deux questions sur la même note.
+      piecesJointes: etat.pieceJointe ? [etat.pieceJointe] : [],
+      // Ce qui a déjà été confirmé dans cette conversation, avec sa valeur :
+      // redemander la contrainte de sol à chaque question la ferait retaper
+      // quatre fois, et une clé libérée sans sa valeur laisserait passer autre
+      // chose.
+      confirmees: Object.entries(etat.confirmeesValeurs ?? {}).map(([cle, valeur]) => `${cle}=${valeur}`),
       // Redessiner seulement l'attente : réécrire le fil entier à chaque étape
       // ferait sauter la position de lecture toutes les deux secondes.
       onEtape: (dit) => {
@@ -972,11 +1136,21 @@ async function lancerCalcul(root, outil, saisies) {
   // Ce qui vient de l'écran est **confirmé par définition** : quelqu'un vient de
   // le cliquer ou de le saisir. Le garde-fou contre les valeurs inventées n'a
   // plus lieu de s'y opposer — il vise ce que le modèle décide seul.
+  //
+  // On s'en souvient pour la suite de la conversation, avec la valeur : la
+  // question suivante — « reprends la file B en 2 × 2 » — porte alors sur la
+  // même contrainte de sol sans qu'on la ressaisisse, et une **autre** valeur
+  // sous la même clé reste refusée.
+  for (const [cle, valeur] of Object.entries(saisies)) {
+    if (String(valeur ?? "").trim()) etat.confirmeesValeurs[cle] = String(valeur).trim();
+  }
+
   const resultat = await executerOutil({
     id: outil.id,
     entrees: saisies,
     assertions,
-    confirmees: Object.keys(saisies)
+    confirmees: Object.keys(saisies),
+    piecesJointes: etat.pieceJointe ? [etat.pieceJointe] : []
   });
 
   // Toujours manquant : quelque chose n'a pas été fourni, ou l'a été hors des
@@ -1020,6 +1194,7 @@ async function lancerCalcul(root, outil, saisies) {
     const { reply, usage, executions } = await sendAssistMessage(question.content, {
       signal: controle.signal,
       confirmees: Object.keys(saisies),
+      piecesJointes: etat.pieceJointe ? [etat.pieceJointe] : [],
       onEtape: (dit) => {
         etat.etape = dit;
         const ligne = root.querySelector(".copilote-pending span:last-child");
@@ -1102,6 +1277,17 @@ function bind(root) {
       event.preventDefault();
       void envoyer(root);
     }
+  });
+
+  root.querySelector("#copiloteJoindre")?.addEventListener("click", () => {
+    root.querySelector("#copiloteFichier")?.click();
+  });
+  root.querySelector("#copiloteFichier")?.addEventListener("change", (event) => {
+    void joindre(root, event.target.files?.[0] ?? null);
+  });
+  root.querySelector("#copiloteRetirerPiece")?.addEventListener("click", () => {
+    ensureState().pieceJointe = null;
+    render(root);
   });
 
   root.querySelector("#copiloteSend")?.addEventListener("click", () => void envoyer(root));
