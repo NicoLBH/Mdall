@@ -158,7 +158,8 @@ export async function sendAssistMessage(message, {
   toolExchanges = [],
   onToolRun = null,
   onEtape = null,
-  confirmees = []
+  confirmees = [],
+  piecesJointes = []
 } = {}) {
   const content = normalizeMessage(message);
   if (!content) {
@@ -202,7 +203,12 @@ export async function sendAssistMessage(message, {
       signal,
       body: JSON.stringify({
         project_id: projectId,
-        question: content,
+        question: piecesJointes.length
+          ? `${content}\n\n[Une note de calcul est jointe à cette conversation : ${
+            piecesJointes.map((p) => p?.nom).filter(Boolean).join(", ")}. `
+            + "L'utilitaire de pré-dimensionnement des fondations sait la lire ; toi non, "
+            + "et tu n'as pas à en connaître le contenu.]"
+          : content,
         history: historyForPayload(),
         other_conversations: autresDiscussionsPourPayload(),
         memory: { lue: context.memoire?.lue === true, texte: context.memoire?.texte || "" },
@@ -255,7 +261,11 @@ export async function sendAssistMessage(message, {
         // La question sert de justificatif : une valeur qui remplace celle de la
         // mémoire doit avoir été dite par quelqu'un.
         question: content,
-        confirmees
+        confirmees,
+        // Ce que la conversation porte et qui n'est pas une valeur : une note
+        // de calcul déposée est une source, pas une entrée. Elle ne passe donc
+        // pas par le garde-fou des substitutions.
+        piecesJointes
       });
 
       executions.push(resultat);

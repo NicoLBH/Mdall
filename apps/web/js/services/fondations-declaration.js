@@ -198,6 +198,55 @@ export function champsNumeriques() {
   return ZONES.flatMap((zone) => zone.champs);
 }
 
+/**
+ * Ce que vaut un daN dans chaque système.
+ *
+ * Les valeurs par défaut sont écrites en daN, parce que c'est le système que
+ * l'écran propose. Prises telles quelles dans un autre système, elles sont
+ * fausses d'un facteur mille : un béton à 2 500 T/m³ pèse plus que la semelle
+ * qu'il remplit, et **aucune fondation ne passe jamais** — sans que rien ne
+ * dise pourquoi, parce que le calcul, lui, est juste.
+ */
+export const FACTEUR_DEPUIS_DAN = {
+  "{ daN ; daNm }": 1,
+  "{ kN ; kNm }": 0.01,
+  "{ T ; Tm }": 0.001
+};
+
+/** Les unités qui suivent le système retenu — les autres sont absolues. */
+const UNITES_DE_FORCE = ["force", "force/m2", "force/m3"];
+
+/**
+ * Une contrainte exprimée en bars, dans le système retenu.
+ *
+ * Le bar est ce qu'un rapport de sol écrit, et ce qu'un ingénieur dit. Seul le
+ * système kN travaille en MPa, et dix bars y font un mégapascal.
+ */
+export function contrainteDepuisBars(bars, unites) {
+  if (!Number.isFinite(bars)) return null;
+  return unites === "{ kN ; kNm }" ? bars / 10 : bars;
+}
+
+/**
+ * Les valeurs de départ, exprimées dans le système demandé.
+ *
+ * Seules les grandeurs de force suivent le système : une résistance de béton
+ * reste en MPa, un enrobage en centimètres, un angle en degrés.
+ */
+export function entreesParDefautDans(unites) {
+  const facteur = FACTEUR_DEPUIS_DAN[unites];
+  const entrees = entreesParDefaut();
+  if (!facteur || facteur === 1) return { ...entrees, unites: unites || entrees.unites };
+
+  for (const champ of champsNumeriques()) {
+    if (!UNITES_DE_FORCE.includes(champ.unite)) continue;
+    const valeur = Number(entrees[champ.cle]);
+    if (Number.isFinite(valeur)) entrees[champ.cle] = Number((valeur * facteur).toPrecision(12));
+  }
+  entrees.unites = unites;
+  return entrees;
+}
+
 /** Les valeurs de départ de l'écran : celles de l'outil, et rien d'autre. */
 export function entreesParDefaut() {
   const entrees = {};

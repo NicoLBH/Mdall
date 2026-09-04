@@ -593,8 +593,268 @@ export const OUTILS = [
         }
       };
     }
+  },
+  {
+    id: "fondations_predimensionnement",
+    version: "V1",
+    titre: "Pré-dimensionnement des fondations d'après une note de calcul",
+    aQuoiCaSert:
+      "Lit une note de calcul de charpente déposée en pièce jointe, en extrait les descentes de charges "
+      + "non pondérées appui par appui, calcule la profondeur hors gel, puis cherche pour chaque appui "
+      + "la plus petite semelle carrée qui vérifie glissement, basculement, contrainte et surface "
+      + "comprimée, sans jamais remonter au-dessus du hors gel. Rend un tableau : un massif par appui, "
+      + "ses cotes, ce qui le gouverne et son volume de béton. "
+      + "À appeler dès qu'une note de calcul est jointe et qu'on demande un pré-dimensionnement, un "
+      + "dimensionnement ou un avant-métré des fondations. "
+      + "Ne ferraille pas la semelle, ne traite pas les fondations profondes, et ne remplace pas une "
+      + "note de calcul de béton armé : il donne les cotes par lesquelles on commence.",
+    source: "utilitaire « Fondations — calcul » et NF DTU 13.1",
+    entrees: [
+      {
+        cle: "contrainteLimite",
+        libelle: "Contrainte admissible du sol",
+        type: "nombre",
+        unite: "bar",
+        requis: true,
+        depuisMemoire: ["contrainte-admissible-du-sol", "contrainte-sol", "contrainte-limite"],
+        lireMemoire: nombreEcrit,
+        aide: "À l'ELS, en bars. C'est une donnée du rapport de sol, jamais une hypothèse de la note de "
+          + "charpente : sans elle, aucune semelle ne se dimensionne."
+      },
+      {
+        cle: "h0",
+        libelle: "H0 retenu pour le département",
+        type: "nombre",
+        unite: "m",
+        requis: true,
+        depuisMemoire: ["h0-hors-gel", "h0"],
+        lireMemoire: nombreEcrit,
+        aide: "Valeur départementale du NF DTU 13.1. Quand le département en offre plusieurs, c'est une "
+          + "décision, pas une déduction."
+      },
+      {
+        cle: "altitude",
+        libelle: "Altitude du site",
+        type: "nombre",
+        unite: "m",
+        depuisMemoire: ["altitude", "altitude-du-site"],
+        lireMemoire: nombreEcrit,
+        aide: "Lue sur la note quand elle la donne — les hypothèses de neige la portent presque toujours."
+      },
+      {
+        cle: "araseSuperieure",
+        libelle: "Arase supérieure du massif",
+        type: "nombre",
+        unite: "m",
+        defaut: -0.1,
+        aide: "Cote du dessus du massif par rapport au niveau extérieur fini. Négative s'il est enterré."
+      },
+      {
+        cle: "imposerPour",
+        libelle: "Appui dont on impose les cotes",
+        type: "texte",
+        // Ce n'est pas une donnée du projet : c'est ce que l'utilisateur vient
+        // de désigner. Le garde-fou contre les valeurs fabriquées ne s'y
+        // applique pas — il refuserait un nom d'appui lu dans le tableau.
+        aiguillage: true,
+        aide: "Le nom exact de l'appui, tel qu'il figure dans le tableau. Vide pour imposer à tous."
+      },
+      { cle: "imposerLx", libelle: "Largeur imposée", type: "nombre", unite: "m",
+        aide: "Ne se remplit que si quelqu'un a demandé cette cote." },
+      { cle: "imposerLy", libelle: "Longueur imposée", type: "nombre", unite: "m",
+        aide: "Ne se remplit que si quelqu'un a demandé cette cote." },
+      { cle: "imposerLz", libelle: "Hauteur imposée", type: "nombre", unite: "m",
+        aide: "Ne se remplit que si quelqu'un a demandé cette cote." }
+    ],
+    sorties: [
+      { cle: "appuis", libelle: "Massifs pré-dimensionnés" },
+      { cle: "horsGel", libelle: "Profondeur hors gel", unite: "m", decimales: 3 },
+      { cle: "volumeTotal", libelle: "Volume de béton", unite: "m³", decimales: 2 }
+    ],
+
+    /**
+     * L'orchestration, écrite ici et non laissée au modèle.
+     *
+     * Le modèle choisit d'appeler cet outil ; tout ce qui suit est du code. Il
+     * ne décide ni de l'ordre des étapes, ni de la correspondance des cas de
+     * charge, ni des cotes essayées — trois choses qu'un modèle rendrait
+     * plausibles et qu'un chantier paierait.
+     *
+     * L'extraction, elle, est bien un appel au modèle : deux notes de calcul ne
+     * se ressemblent pas, et recopier des nombres d'un tableau est exactement ce
+     * qu'il sait faire sans rien décider.
+     */
+    async executer(entrees = {}, contexte = {}) {
+      const piece = (contexte.piecesJointes ?? []).find((p) => p?.mediaType === "application/pdf" && p?.donnees);
+      if (!piece) {
+        return { ok: false, raison:
+          "Aucune note de calcul n'est jointe. Déposez le PDF de la note dans la conversation, "
+          + "puis redemandez le pré-dimensionnement." };
+      }
+
+      const contrainte = nombre(entrees.contrainteLimite);
+      const h0 = nombre(entrees.h0);
+      const arase = nombre(entrees.araseSuperieure) ?? -0.1;
+
+      const [{ lireLaNoteDeCalcul }, { chargesPourLUtilitaire, unitesDeLaNote },
+        { predimensionner, volumeTotal }, { entreesParDefautDans, contrainteDepuisBars },
+        { calculerLesSemelles }] = await Promise.all([
+        import("./note-de-calcul-service.js"),
+        import("./note-de-calcul.js"),
+        import("./predimensionnement-fondations.js"),
+        import("./fondations-declaration.js"),
+        import("./fondations-service.js")
+      ]);
+
+      let note;
+      try {
+        note = await lireLaNoteDeCalcul(piece);
+      } catch (erreur) {
+        return { ok: false, raison: erreur instanceof Error ? erreur.message : "La note n'a pas pu être lue." };
+      }
+
+      if (!note.appuis.length) {
+        return { ok: false, raison:
+          "Aucune descente de charges n'a été trouvée dans ce document. Une note de calcul de charpente "
+          + "en donne un tableau par portique ; sans lui, il n'y a rien à dimensionner." };
+      }
+
+      const unites = unitesDeLaNote(note);
+      if (!unites) {
+        return { ok: false, raison:
+          "L'unité des descentes de charges n'a pas pu être lue sur la note. Une note en tonnes prise "
+          + "pour des daN donnerait des semelles mille fois trop petites, et le calcul dirait que tout "
+          + "va bien : dites l'unité employée." };
+      }
+
+      // L'altitude vient de la note quand elle la porte — les hypothèses de
+      // neige la donnent presque toujours. Ce qui a été répondu à l'écran passe
+      // devant : quelqu'un l'a alors décidé.
+      const altitude = nombre(entrees.altitude) ?? note.altitude;
+      if (altitude === null) {
+        return { ok: false, raison:
+          "L'altitude du site n'est ni sur la note ni dans la mémoire du projet, et le hors gel en "
+          + "dépend. Dites l'altitude, et le calcul reprend." };
+      }
+
+      // Le hors gel n'est pas recalculé ici : c'est le même utilitaire que
+      // partout ailleurs, et « une valeur écrite à deux endroits finit par
+      // diverger ».
+      const gel = outilParId("profondeur_hors_gel").executer({ h0, altitude });
+      if (!gel?.ok) return { ok: false, raison: gel?.raison || "La profondeur hors gel n'a pas pu être calculée." };
+      const horsGel = gel.valeurs.H;
+
+      // Les valeurs par défaut sont écrites en daN. Prises telles quelles dans
+      // une note en tonnes, elles sont fausses d'un facteur mille : le béton
+      // pèserait 2 500 T/m³ et aucune semelle ne passerait — sans que rien ne
+      // dise pourquoi, parce que le calcul, lui, resterait juste.
+      const base = {
+        ...entreesParDefautDans(unites),
+        contrainteLimite: contrainteDepuisBars(contrainte, unites),
+        araseSuperieure: arase,
+        // La butée se mobilise sur la hauteur enterrée réelle : la laisser aux
+        // cotes par défaut compterait un appui de terre qui n'existe pas.
+        buteeZi: arase,
+        buteeZf: arase - 1
+      };
+
+      const appuis = note.appuis.map((appui) => {
+        const { charges, correspondances } = chargesPourLUtilitaire(appui);
+        return { nom: appui.nom, quantite: appui.quantite, charges, correspondances, commentaire: appui.commentaire };
+      });
+
+      const impose = {
+        pour: texte(entrees.imposerPour),
+        Lx: nombre(entrees.imposerLx), Ly: nombre(entrees.imposerLy), Lz: nombre(entrees.imposerLz)
+      };
+
+      let sortie;
+      try {
+        sortie = await predimensionner(appuis, {
+          base,
+          horsGel,
+          calculer: (liste) => calculerLesSemelles(liste.map((e) => ({ entrees: e })))
+        });
+      } catch (erreur) {
+        return { ok: false, raison: erreur instanceof Error ? erreur.message : "Le calcul n'a pas abouti." };
+      }
+
+      const reprises = await reprendreLesCotesImposees(sortie, impose, calculerLesSemelles, base, horsGel);
+
+      return {
+        ok: true,
+        valeurs: {
+          appuis: reprises.map((appui) => ({
+            nom: appui.nom, quantite: appui.quantite, tenue: appui.tenue,
+            Lx: appui.sectionLx ?? null, Ly: appui.sectionLy ?? null, Lz: appui.hauteurLz ?? null,
+            ratio: Number.isFinite(appui.ratio) ? Number(appui.ratio.toFixed(3)) : null,
+            gouverne: appui.gouverne ?? null,
+            combinaison: appui.combinaison ?? null, volume: appui.volume ?? null,
+            impose: appui.impose === true, message: appui.message ?? null
+          })),
+          horsGel,
+          volumeTotal: volumeTotal(reprises),
+          unites,
+          affaire: note.affaire,
+          altitude,
+          correspondances: appuis[0]?.correspondances ?? []
+        }
+      };
+    }
   }
 ];
+
+/**
+ * Les cotes qu'on impose après coup, et ce qu'elles deviennent.
+ *
+ * Le pré-dimensionnement propose ; l'ingénieur dispose. Un module de coffrage,
+ * une contrainte de chantier, une semelle qu'on veut aligner sur sa voisine :
+ * on rejoue alors la vérification sur les cotes demandées, et l'on dit
+ * franchement si elles passent. Ce qui n'est pas visé garde ce que la recherche
+ * avait trouvé.
+ */
+async function reprendreLesCotesImposees(sortie, impose, calculerLesSemelles, base, horsGel) {
+  const quelquesUnes = [impose.Lx, impose.Ly, impose.Lz].some((v) => v !== null);
+  if (!quelquesUnes) return sortie.appuis;
+
+  const vises = sortie.appuis.filter((appui) => !impose.pour || appui.nom === impose.pour);
+  if (!vises.length) return sortie.appuis;
+
+  const entrees = vises.map((appui) => ({
+    entrees: {
+      ...(appui.entrees ?? base),
+      sectionLx: impose.Lx ?? appui.sectionLx,
+      sectionLy: impose.Ly ?? appui.sectionLy,
+      hauteurLz: impose.Lz ?? appui.hauteurLz
+    }
+  }));
+  const resultats = await calculerLesSemelles(entrees);
+
+  const { verificationGouvernante } = await import("./predimensionnement-fondations.js");
+  const parNom = new Map(vises.map((appui, rang) => [appui.nom, { appui, resultat: resultats[rang], entrees: entrees[rang].entrees }]));
+
+  return sortie.appuis.map((appui) => {
+    const repris = parNom.get(appui.nom);
+    if (!repris) return appui;
+    const gouverne = verificationGouvernante(repris.resultat);
+    return {
+      ...appui,
+      impose: true,
+      tenue: repris.resultat?.bilan?.verifie === true,
+      sectionLx: repris.entrees.sectionLx,
+      sectionLy: repris.entrees.sectionLy,
+      hauteurLz: repris.entrees.hauteurLz,
+      ratio: repris.resultat?.bilan?.ratio ?? null,
+      gouverne: gouverne?.quoi ?? null,
+      combinaison: repris.resultat?.contrainte?.combinaison ?? null,
+      volume: Math.round(repris.entrees.sectionLx * repris.entrees.sectionLy * repris.entrees.hauteurLz * 1000) / 1000,
+      message: repris.resultat?.bilan?.verifie === true ? null
+        : `Les cotes imposées ne vérifient pas cet appui${
+          horsGel !== null && repris.entrees.hauteurLz + base.araseSuperieure < horsGel
+            ? " et remontent au-dessus du hors gel" : ""}.`
+    };
+  });
+}
 
 /**
  * Les valeurs, à la précision que la sortie déclare.
@@ -748,7 +1008,24 @@ export function valeurCiteePar(question, valeur) {
  * de sol » suivi d'un « A » venu de nulle part.
  */
 export function substitutionsNonJustifiees(outil, { entrees = {}, depuisMemoire = {}, question = "", confirmees = [] } = {}) {
-  const validees = new Set(Array.isArray(confirmees) ? confirmees : []);
+  // Deux façons de confirmer, et elles ne valent pas la même chose.
+  //
+  // « contrainteLimite » seul est ce qu'on vient de cliquer : la valeur sort du
+  // formulaire, il n'y a rien à comparer. « contrainteLimite=1.5 » est ce que
+  // la conversation a déjà établi : la confirmation ne vaut alors **que pour
+  // cette valeur-là**. Sans cette distinction, une valeur confirmée une fois
+  // rendrait la clé libre pour toujours, et le modèle pourrait y glisser 3 bars
+  // au tour suivant sans que personne ne le voie.
+  const validees = new Set();
+  const valideesPourUneValeur = new Map();
+  for (const brut of Array.isArray(confirmees) ? confirmees : []) {
+    const dit = texte(brut);
+    const rang = dit.indexOf("=");
+    if (rang < 0) { validees.add(dit); continue; }
+    const cle = dit.slice(0, rang);
+    if (!valideesPourUneValeur.has(cle)) valideesPourUneValeur.set(cle, new Set());
+    valideesPourUneValeur.get(cle).add(dit.slice(rang + 1));
+  }
 
   return (outil?.entrees ?? []).filter((entree) => {
     const proposee = texte(entrees?.[entree.cle]);
@@ -764,6 +1041,7 @@ export function substitutionsNonJustifiees(outil, { entrees = {}, depuisMemoire 
     // Trois façons légitimes pour une valeur d'arriver là. En dehors d'elles,
     // le modèle l'a fabriquée.
     if (validees.has(entree.cle)) return false;                       // quelqu'un l'a cliquée
+    if (valideesPourUneValeur.get(entree.cle)?.has(proposee)) return false; // et c'est bien celle-là
     if (texte(depuisMemoire?.[entree.cle]) === proposee) return false; // le projet la porte
     if (valeurCiteePar(question, proposee)) return false;             // quelqu'un l'a écrite
 
@@ -867,7 +1145,9 @@ export function comparerALaMemoire(outil, valeurs = {}, assertions = []) {
  * Les confondre reviendrait à faire dire au modèle « je n'ai pas pu calculer »
  * dans trois situations qui n'appellent pas la même suite.
  */
-export async function executerOutil({ id = "", entrees = {}, assertions = [], question = "", confirmees = [] } = {}) {
+export async function executerOutil({
+  id = "", entrees = {}, assertions = [], question = "", confirmees = [], piecesJointes = []
+} = {}) {
   const outil = outilParId(id);
   if (!outil) {
     return { statut: "inconnu", id: texte(id), message: `Aucun utilitaire ne porte le nom « ${texte(id)} ».` };
@@ -922,7 +1202,10 @@ export async function executerOutil({ id = "", entrees = {}, assertions = [], qu
   // `await` sur un utilitaire qui calcule sur place ne coûte rien ; il permet
   // à ceux dont le raisonnement vit au serveur — le référentiel incendie — de
   // se déclarer dans le même catalogue que les autres.
-  const resultat = await outil.executer(fournies);
+  // Ce que la conversation porte et qui n'est pas une entrée : une note de
+  // calcul déposée n'est pas une valeur, c'est une source. Elle ne passe donc
+  // pas par le garde-fou des substitutions — il n'y a rien à y substituer.
+  const resultat = await outil.executer(fournies, { piecesJointes });
   if (!resultat?.ok) {
     return {
       statut: "refus",
