@@ -1080,6 +1080,30 @@ export function entreesManquantes(outil, entrees = {}) {
   });
 }
 
+/**
+ * Ce qu'une conversation garde d'un tour à l'autre, une fois le calcul fait.
+ *
+ * La contrainte admissible du sol et la valeur départementale du hors gel sont
+ * des **décisions** : on les prend une fois, elles valent pour tous les massifs
+ * et pour toute la discussion. Les redemander à chaque question ferait retaper
+ * quatre fois la même chose.
+ *
+ * Ce qui n'est ni requis ni tiré de la mémoire ne se garde pas — une cote
+ * imposée à un massif ne doit pas se réimposer à la question suivante — et une
+ * entrée d'aiguillage encore moins : elle dit ce que le modèle cherchait, pas
+ * ce que le projet vaut.
+ */
+export function aRetenirDeLaConversation(outil, entrees = {}) {
+  const garde = {};
+  for (const entree of outil?.entrees ?? []) {
+    if (entree.aiguillage) continue;
+    if (!entree.requis && !entree.depuisMemoire?.length) continue;
+    const valeur = texte(entrees?.[entree.cle]);
+    if (valeur) garde[entree.cle] = valeur;
+  }
+  return garde;
+}
+
 /** Les valeurs par défaut déclarées, pour ce qui n'a pas été fourni. */
 function avecDefauts(outil, entrees = {}) {
   const complet = { ...entrees };
@@ -1146,7 +1170,8 @@ export function comparerALaMemoire(outil, valeurs = {}, assertions = []) {
  * dans trois situations qui n'appellent pas la même suite.
  */
 export async function executerOutil({
-  id = "", entrees = {}, assertions = [], question = "", confirmees = [], piecesJointes = []
+  id = "", entrees = {}, assertions = [], question = "", confirmees = [], piecesJointes = [],
+  acquises = {}
 } = {}) {
   const outil = outilParId(id);
   if (!outil) {
@@ -1157,7 +1182,15 @@ export async function executerOutil({
   // Ce que le modèle propose l'emporte sur la mémoire : c'est tout l'objet
   // d'une question comme « et si on passait en catégorie IV ? ». La provenance
   // n'est gardée que pour ce qui vient réellement de la mémoire.
-  const fournies = avecDefauts(outil, { ...depuisMemoire, ...nettoyer(entrees) });
+  //
+  // Entre les deux, **ce que la conversation a déjà établi**. Sans cette
+  // couche, le modèle rappelait l'outil sans arguments au tour suivant — il
+  // n'invente pas, c'est la règle —, l'outil redemandait la contrainte de sol,
+  // et l'on tournait en rond : le formulaire revenait à chaque échange sur la
+  // même note. Une contrainte de sol se donne **une fois pour tous les
+  // massifs**, et pour toute la conversation.
+  const dejaEtablies = nettoyer(acquises);
+  const fournies = avecDefauts(outil, { ...depuisMemoire, ...dejaEtablies, ...nettoyer(entrees) });
   const venuesDeLaMemoire = Object.fromEntries(
     Object.entries(provenance).filter(([cle]) => texte(entrees?.[cle]) === "")
   );

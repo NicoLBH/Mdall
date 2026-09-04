@@ -159,7 +159,8 @@ export async function sendAssistMessage(message, {
   onToolRun = null,
   onEtape = null,
   confirmees = [],
-  piecesJointes = []
+  piecesJointes = [],
+  acquises = {}
 } = {}) {
   const content = normalizeMessage(message);
   if (!content) {
@@ -262,6 +263,11 @@ export async function sendAssistMessage(message, {
         // mémoire doit avoir été dite par quelqu'un.
         question: content,
         confirmees,
+        // Ce que la conversation a déjà établi. Le modèle n'invente pas de
+        // valeur — c'est la règle —, donc il rappelle l'outil sans arguments ;
+        // sans cette couche, l'outil redemandait la contrainte de sol à chaque
+        // tour et le formulaire revenait en boucle.
+        acquises,
         // Ce que la conversation porte et qui n'est pas une valeur : une note
         // de calcul déposée est une source, pas une entrée. Elle ne passe donc
         // pas par le garde-fou des substitutions.

@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  aRetenirDeLaConversation,
   OUTILS,
   substitutionsNonJustifiees,
   valeurCiteePar,
@@ -538,4 +539,58 @@ test("le pré-dimensionnement demande le sol et le hors gel, et rien d'autre", (
   const outil = outilParId("fondations_predimensionnement");
   assert.deepEqual(entreesManquantes(outil, {}).map((e) => e.cle), ["contrainteLimite", "h0"]);
   assert.deepEqual(entreesManquantes(outil, { contrainteLimite: 1.5, h0: 0.5 }).map((e) => e.cle), []);
+});
+
+/* ── Ce que la conversation établit une fois pour toutes ─────────────────── */
+
+test("une valeur déjà établie pré-remplit l'outil au tour suivant", async () => {
+  // Le modèle n'invente jamais de valeur — c'est la règle — donc il rappelle
+  // l'outil sans arguments. Sans cette couche, l'outil redemandait la
+  // contrainte de sol à chaque question sur la même note, et le formulaire
+  // revenait en boucle.
+  const sans = await executerOutil({ id: "profondeur_hors_gel", entrees: {} });
+  assert.equal(sans.statut, "manquant");
+
+  const avec = await executerOutil({
+    id: "profondeur_hors_gel",
+    entrees: {},
+    acquises: { h0: "0.5", altitude: "241" }
+  });
+  assert.equal(avec.statut, "fait");
+  assert.equal(avec.valeurs.H, 0.523);
+});
+
+test("ce que le modèle propose l'emporte sur ce qui était établi", async () => {
+  // « Et si l'altitude était de 800 m ? » doit recalculer, pas répéter.
+  const repris = await executerOutil({
+    id: "profondeur_hors_gel",
+    entrees: { altitude: 800 },
+    acquises: { h0: "0.5", altitude: "241" },
+    question: "et à 800 m d'altitude ?"
+  });
+  assert.equal(repris.statut, "fait");
+  assert.equal(repris.entrees.altitude, 800);
+});
+
+test("la conversation ne retient que les décisions, pas les gestes", () => {
+  // La contrainte de sol vaut pour tous les massifs et pour toute la
+  // discussion ; une cote imposée à un massif ne doit pas se réimposer à la
+  // question suivante.
+  const outil = outilParId("fondations_predimensionnement");
+  const garde = aRetenirDeLaConversation(outil, {
+    contrainteLimite: 1.5, h0: 0.5, altitude: 241,
+    imposerPour: "Portique courant — file B", imposerLx: 2, imposerLy: 2
+  });
+  assert.deepEqual(garde, { contrainteLimite: "1.5", h0: "0.5", altitude: "241" });
+});
+
+test("une entrée d'aiguillage ne s'établit jamais", () => {
+  // Elle dit ce que le modèle est allé chercher, pas ce que le projet vaut :
+  // la garder ferait répondre la question précédente à la suivante.
+  const incendie = outilParId("incendie_habitation");
+  const garde = aRetenirDeLaConversation(incendie, {
+    exigence: "planchersCoupeFeu", etagesSurRdc: 3
+  });
+  assert.equal(garde.exigence, undefined);
+  assert.equal(garde.etagesSurRdc, "3");
 });
