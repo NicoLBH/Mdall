@@ -790,7 +790,16 @@ export const OUTILS = [
             ratio: Number.isFinite(appui.ratio) ? Number(appui.ratio.toFixed(3)) : null,
             gouverne: appui.gouverne ?? null,
             combinaison: appui.combinaison ?? null, volume: appui.volume ?? null,
-            impose: appui.impose === true, message: appui.message ?? null
+            impose: appui.impose === true, message: appui.message ?? null,
+            // Le détail voyage avec le résultat : « aucune semelle jusqu'à 4 m »
+            // sans les charges retenues ni les quatre ratios est une réponse
+            // qu'on ne peut ni vérifier ni corriger. On ne saurait pas si la
+            // note a été mal lue, si l'unité est fausse, ou si le sol est
+            // réellement trop faible.
+            coteMaxTentee: appui.coteMaxTentee ?? null,
+            ratios: appui.ratios ?? [],
+            charges: appui.charges ?? {},
+            correspondances: appui.correspondances ?? []
           })),
           horsGel,
           volumeTotal: volumeTotal(reprises),
@@ -992,12 +1001,31 @@ export function valeurCiteePar(question, valeur) {
   const source = texte(question);
   if (!cherchee || !source) return false;
 
-  const echappee = cherchee.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const drapeaux = cherchee.length <= 2 ? "" : "i";
+  // Personne n'écrit « 0.45 » en français. Une valeur reçue avec un point et
+  // écrite avec une virgule est la **même valeur** : ne pas la reconnaître
+  // faisait passer pour inventé ce que l'utilisateur venait de taper, et
+  // l'écran le lui redemandait.
+  const formes = new Set([cherchee]);
+  if (cherchee.includes(".")) formes.add(cherchee.replace(".", ","));
+  if (cherchee.includes(",")) formes.add(cherchee.replace(",", "."));
+  // « 0,45 » se dit aussi « ,45 » sans son zéro, et « 2 » peut s'écrire « 2,0 ».
+  const nombreLu = Number(cherchee.replace(",", "."));
+  if (Number.isFinite(nombreLu)) {
+    for (const decimales of [0, 1, 2, 3]) {
+      const rendu = nombreLu.toFixed(decimales);
+      if (Number(rendu) !== nombreLu) continue;
+      formes.add(rendu);
+      formes.add(rendu.replace(".", ","));
+    }
+  }
 
   // `\b` ne borne pas les accents ni les symboles : on borne à la main sur ce
   // qui n'est ni lettre ni chiffre.
-  return new RegExp(`(^|[^\\p{L}\\p{N}])${echappee}($|[^\\p{L}\\p{N}])`, `u${drapeaux}`).test(source);
+  return [...formes].some((forme) => {
+    const echappee = forme.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const drapeaux = forme.length <= 2 ? "" : "i";
+    return new RegExp(`(^|[^\\p{L}\\p{N}])${echappee}($|[^\\p{L}\\p{N}])`, `u${drapeaux}`).test(source);
+  });
 }
 
 /**
@@ -1205,13 +1233,21 @@ export async function executerOutil({
   });
 
   if (substituees.length > 0) {
+    // Ce qui n'est pas suspect reste acquis. Ne rendre que la mémoire faisait
+    // disparaître la valeur que l'utilisateur venait d'écrire dans sa question
+    // — « avec une contrainte de sol à 1 bar » — et le tour suivant la
+    // redemandait : deux questions au lieu d'une, sur une valeur déjà donnée.
+    const suspectes = new Set(substituees.map((entree) => entree.cle));
+    const legitimes = Object.fromEntries(
+      Object.entries(fournies).filter(([cle]) => !suspectes.has(cle))
+    );
     return {
       statut: "aConfirmer",
       outil: referenceOutil(outil),
       titre: outil.titre,
-      // La mémoire, pas la proposition du modèle : c'est elle qui doit rester
-      // affichée tant que personne n'a tranché autrement.
-      connues: avecDefauts(outil, { ...depuisMemoire }),
+      // Pour ce qui est suspect : la mémoire, pas la proposition du modèle.
+      // C'est elle qui doit rester affichée tant que personne n'a tranché.
+      connues: avecDefauts(outil, { ...legitimes, ...depuisMemoire }),
       proposeParLeModele: Object.fromEntries(substituees.map((entree) => [entree.cle, texte(entrees[entree.cle])])),
       champs: substituees.map((entree) => ({ ...entree })),
       message:
@@ -1276,7 +1312,35 @@ export async function executerOutil({
 export function sansFigure(resultat) {
   if (!resultat || typeof resultat !== "object") return resultat;
   const { figure, ...reste } = resultat;
-  return figure ? { ...reste, figure_disponible: true } : reste;
+  const allege = figure ? { ...reste, figure_disponible: true } : reste;
+  return sansLeDetailDesMassifs(allege);
+}
+
+/**
+ * Le détail d'un massif reste à l'écran, il ne part pas au modèle.
+ *
+ * Les charges retenues cas par cas et les quatre ratios de chaque appui font
+ * quelques milliers de caractères, et ils n'apprennent rien à un modèle qui a
+ * déjà les cotes, le ratio déterminant et ce qui gouverne. Ils lui feraient en
+ * revanche courir le risque de les recopier dans sa réponse — c'est-à-dire de
+ * réécrire à la main ce que le calcul vient de rendre.
+ *
+ * Ce qui est retiré ne disparaît pas : c'est l'écran qui le montre, sous le
+ * tableau, et c'est là qu'on va le lire quand un massif ne passe pas.
+ */
+function sansLeDetailDesMassifs(resultat) {
+  const appuis = resultat?.valeurs?.appuis;
+  if (!Array.isArray(appuis)) return resultat;
+  return {
+    ...resultat,
+    valeurs: {
+      ...resultat.valeurs,
+      appuis: appuis.map(({ charges, correspondances, ratios, ...garde }) => ({
+        ...garde,
+        detail_disponible: true
+      }))
+    }
+  };
 }
 
 /** Les entrées vides ne comptent pas : elles écraseraient la mémoire par du vide. */
