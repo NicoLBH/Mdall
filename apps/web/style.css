@@ -16914,18 +16914,21 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
    prend jamais le pointeur — sinon c'est lui qui recevrait le fichier, pas la
    zone qui l'écoute. */
 .copilote-section{ position:relative; }
-.copilote-depot__voile{
+/* Le voile d'une zone de dépôt. Le cadre est **gris**, comme partout ailleurs :
+   il l'était en orange ici et en bleu à côté, pour la même action, et une
+   couleur d'accent sur un cadre de dépôt promet quelque chose de particulier
+   alors qu'il n'y a rien de particulier. Les couleurs vives restent sur les
+   trois cartes, où elles distinguent des types de pièces au lieu d'alerter. */
+.depot-voile{
   position:absolute; inset:0; z-index:5; display:none; place-items:center;
-  background:rgba(13,17,23,.72); border:2px dashed #f0883e; border-radius:12px;
+  background:rgba(13,17,23,.82); border:2px dashed var(--border); border-radius:12px;
   pointer-events:none;
 }
-.copilote-section.est-survole .copilote-depot__voile{ display:grid; }
-.copilote-depot__mot{
-  display:flex; align-items:center; gap:10px; padding:12px 20px;
-  border-radius:10px; background:var(--bg2, rgba(110,118,129,.12));
-  color:#f0883e; font-size:14px; font-weight:600;
-}
-.copilote-depot__mot svg{ width:18px; height:18px; }
+.est-survole > .depot-voile,
+.est-survole .depot-voile{ display:grid; }
+.depot-voile__contenu{ display:flex; flex-direction:column; align-items:center; gap:14px; }
+.depot-voile__cartes{ width:226px; height:103px; max-width:60%; }
+.depot-voile__mot{ margin:0; color:var(--text); font-size:15px; font-weight:600; }
 .copilote-outil__cle{ color:var(--muted); min-width:0; }
 .copilote-outil__source{ color:var(--muted); font-size:11px; font-style:italic; }
 /* L'écart se montre, il n'accuse pas : la couleur alerte, le texte décrit. */
@@ -19010,3 +19013,30 @@ html.est-fige-par-le-graphe, body.est-fige-par-le-graphe{ overflow:hidden; }
 .copilote-rangement__pourquoi--muet{ font-style:italic; }
 .copilote-rangement__actions{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:6px; }
 .copilote-rangement__note{ color:var(--muted); font-size:11px; }
+
+/* Les tableaux qu'un modèle écrit dans sa réponse : de vraies colonnes, un
+   en-tête qui se distingue, et le style du reste de l'application. Rendus en
+   texte, ils demandaient à l'ingénieur de faire le travail de l'écran. */
+.md-tableau__cadre{ overflow-x:auto; margin:10px 0; }
+.md-tableau{ width:100%; border-collapse:collapse; font-size:12.5px; }
+.md-tableau th{
+  text-align:left; padding:7px 10px; white-space:nowrap;
+  background:var(--panel2); color:var(--muted);
+  font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.03em;
+  border-bottom:1px solid var(--border);
+}
+.md-tableau td{ padding:7px 10px; border-bottom:1px solid var(--border2); color:var(--text); }
+.md-tableau tbody tr:last-child td{ border-bottom:0; }
+.md-tableau tbody tr:hover{ background:rgba(110,118,129,.08); }
+
+.md-titre{ margin:14px 0 6px; font-size:13.5px; font-weight:600; color:var(--text); }
+.md-titre:first-child{ margin-top:0; }
+.md-liste{ margin:6px 0; padding-left:20px; }
+.md-liste li{ margin:2px 0; }
+.md-code{
+  margin:10px 0; padding:10px 12px; overflow-x:auto;
+  border:1px solid var(--border); border-radius:8px; background:var(--panel2);
+  font-size:12px; line-height:1.5;
+}
+.copilote-msg__body > p:first-child{ margin-top:0; }
+.copilote-msg__body > p:last-child{ margin-bottom:0; }

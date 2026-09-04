@@ -521,7 +521,7 @@ function brancherCopilote(root, copiloteRoot, getScrollSource) {
    * pas la partager.
    */
   async function copierLeFil(id) {
-    const texte = transcrireLaDiscussion(id);
+    const texte = await transcrireLaDiscussion(id);
     if (!texte) {
       window.alert("Cette discussion n'a rien à copier.");
       return;
