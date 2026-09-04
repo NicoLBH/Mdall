@@ -25,6 +25,7 @@
  */
 
 import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
+import { resolveCurrentBackendProjectId } from "./project-supabase-sync.js";
 import { lireLeFlux } from "./flux-ndjson.js";
 
 const URL_FONCTION = `${getSupabaseUrl()}/functions/v1/executer-utilitaire`;
@@ -70,7 +71,15 @@ export async function executerUtilitaire({
     }),
     cache: "no-store",
     signal,
-    body: JSON.stringify({ id, entrees, assertions, question, confirmees, piecesJointes, acquises })
+    body: JSON.stringify({
+      id, entrees, assertions, question, confirmees, piecesJointes, acquises,
+      // De quel chantier on parle. Le serveur s'en sert pour reprendre ce que
+      // l'Atelier a déjà recueilli — l'étude incendie du projet, par exemple —
+      // et il la lit sous notre identité, pas sous la sienne. Ce fichier
+      // n'apprend pas pour autant quelle entrée vient de quelle réponse : la
+      // correspondance est de l'orchestration, et elle reste au serveur.
+      projet: await resolveCurrentBackendProjectId().catch(() => "") || ""
+    })
   });
 
   // Ce qui a échoué avant que le flux ne commence — le portail, un corps

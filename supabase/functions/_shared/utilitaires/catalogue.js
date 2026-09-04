@@ -449,12 +449,14 @@ export const OUTILS = [
         cle: "logementsSuperposes",
         libelle: "Logements superposés",
         type: "choix", valeurs: ["oui", "non"], requis: true, requisSaufSi: porteSurLeParc,
+        depuisLEtude: "logementsSuperposes", lireLEtude: ouiNonDeLEtude,
         aide: "Une habitation individuelle, au sens de l'arrêté, est un bâtiment sans logements superposés."
       },
       {
         cle: "etagesSurRdc",
         libelle: "Nombre d'étages sur rez-de-chaussée",
         type: "nombre", unite: "étages", requis: true, requisSaufSi: porteSurLeParc,
+        depuisLEtude: "etagesSurRdc",
         aide: "Le rez-de-chaussée n'est pas compté : un R+1 vaut 1."
       },
       {
@@ -463,6 +465,7 @@ export const OUTILS = [
         type: "nombre", unite: "m", requis: true, requisSaufSi: porteSurLeParc,
         depuisMemoire: ["hauteur-du-plancher-bas-du-logement-le-plus-haut", "plancher-bas-logement-le-plus-haut"],
         lireMemoire: nombreEcrit,
+        depuisLEtude: ["hauteurPlancherBasLogementLePlusHautSiDuplex", "hauteurPlancherBasNiveauLePlusHaut"],
         aide: "Au-dessus du sol utilement accessible aux engins des services de secours — c'est le "
           + "niveau d'accès des secours, pas le terrain naturel."
       },
@@ -472,6 +475,7 @@ export const OUTILS = [
         type: "nombre", unite: "m", requis: false,
         depuisMemoire: ["hauteur-du-plancher-bas-du-niveau-le-plus-haut", "plancher-bas-niveau-le-plus-haut"],
         lireMemoire: nombreEcrit,
+        depuisLEtude: "hauteurPlancherBasNiveauLePlusHaut",
         aide: "Depuis l'arrêté du 7 août 2019, la quatrième famille se mesure au niveau le plus haut et "
           + "non au logement. Sans duplex en partie haute, c'est la même valeur que ci-dessus."
       },
@@ -479,18 +483,21 @@ export const OUTILS = [
         cle: "implantation",
         libelle: "Implantation de l'habitation individuelle",
         type: "choix", valeurs: ["isolee", "jumelee", "bande"], requis: false,
+        depuisLEtude: "implantation",
         aide: "Ne concerne que les habitations individuelles."
       },
       {
         cle: "structuresIndependantes",
         libelle: "Structures indépendantes de l'habitation contiguë",
         type: "choix", valeurs: ["oui", "non"], requis: false,
+        depuisLEtude: "structuresIndependantes", lireLEtude: ouiNonDeLEtude,
         aide: "Décisif pour une maison en bande à un étage : c'est ce qui sépare la première famille de la deuxième."
       },
       {
         cle: "duplexOuTriplexAuDernierEtage",
         libelle: "Duplex ou triplex à l'étage le plus élevé",
         type: "choix", valeurs: ["oui", "non"], requis: true, requisSaufSi: porteSurLeParc,
+        depuisLEtude: "duplexOuTriplexAuDernierEtage", lireLEtude: ouiNonDeLEtude,
         aide: "Le 5°) de l'article 3 ne compte alors que le niveau bas de ces logements. Sans cette "
           + "réponse, le nombre d'étages retenu reste indéterminé et rien ne peut être classé."
       },
@@ -498,6 +505,10 @@ export const OUTILS = [
         cle: "sousSol",
         libelle: "Le bâtiment comporte un sous-sol",
         type: "choix", valeurs: ["oui", "non"], requis: false,
+        // Le référentiel compte les niveaux enterrés ; l'utilitaire coche un
+        // sous-sol. Un compte nul est une réponse : « non », pas « rien ».
+        depuisLEtude: "niveauxEnSousSol",
+        lireLEtude: (valeur) => (nombre(valeur) === null ? "" : (nombre(valeur) > 0 ? "oui" : "non")),
         aide: "En première famille, l'article 6 ne vise que le plancher haut du sous-sol."
       },
       // Le parc ne se juge pas sur la famille : il a ses propres axes. Ces
@@ -507,24 +518,28 @@ export const OUTILS = [
         cle: "parcDeStationnement",
         libelle: "Le bâtiment comporte un parc de stationnement couvert annexe",
         type: "choix", valeurs: ["oui", "non"], requis: false,
+        depuisLEtude: "parcDeStationnement", lireLEtude: ouiNonDeLEtude,
         aide: "À renseigner pour toute exigence du titre VI (articles 77 à 96)."
       },
       {
         cle: "surfaceParc",
         libelle: "Surface du parc de stationnement",
         type: "nombre", unite: "m²", requis: false,
+        depuisLEtude: "surfaceParc",
         aide: "Le titre VI ne s'applique qu'au-dessus de 100 m² et jusqu'à 6 000 m² inclus."
       },
       {
         cle: "niveauxParcAuDessus",
         libelle: "Niveaux du parc au-dessus du niveau de référence",
         type: "nombre", unite: "niveaux", requis: false,
+        depuisLEtude: "niveauxParcAuDessus",
         aide: "Sans compter le niveau de référence : un parc à simple rez-de-chaussée en compte zéro."
       },
       {
         cle: "niveauxParcAuDessous",
         libelle: "Niveaux du parc au-dessous du niveau de référence",
         type: "nombre", unite: "niveaux", requis: false,
+        depuisLEtude: "niveauxParcAuDessous",
         aide: "Sans compter le niveau de référence. C'est ce compte qui commande le recoupement, la "
           + "ventilation mécanique, la détection, les colonnes sèches et l'extinction automatique."
       },
@@ -532,6 +547,7 @@ export const OUTILS = [
         cle: "hauteurPlancherBasDernierNiveauParc",
         libelle: "Hauteur du plancher bas du dernier niveau du parc",
         type: "nombre", unite: "m", requis: false,
+        depuisLEtude: "hauteurPlancherBasDernierNiveauParc",
         aide: "Par rapport au niveau de référence, au-dessus ou au-dessous : c'est l'écart, pas "
           + "l'altitude signée. L'article 81 s'arrête à 28 m."
       },
@@ -539,6 +555,7 @@ export const OUTILS = [
         cle: "parcContiguAImmeuble",
         libelle: "Le parc est contigu à un immeuble d'habitation",
         type: "choix", valeurs: ["oui", "non"], requis: false,
+        depuisLEtude: "parcContiguAImmeuble", lireLEtude: ouiNonDeLEtude,
         aide: "« Contigu » inclut le parc situé en dessous de l'immeuble. C'est le seul endroit où le "
           + "classement commande une exigence du parc : 2 heures en 3ᵉ ou 4ᵉ famille, 1 heure en 2ᵉ."
       }
@@ -547,7 +564,11 @@ export const OUTILS = [
       { cle: "reponse", libelle: "Exigence" },
       { cle: "classement", libelle: "Classement du bâtiment" },
       { cle: "article", libelle: "Article" },
-      { cle: "citation", libelle: "Phrase du texte qui décide" }
+      { cle: "citation", libelle: "Phrase du texte qui décide" },
+      // Sur quoi la réponse s'est appuyée. Un projet peut porter deux
+      // hypothèses de classement : dire laquelle a servi permet de s'apercevoir
+      // qu'on raisonne sur celle qu'on croyait abandonnée.
+      { cle: "etude", libelle: "Étude du projet reprise" }
     ],
 
     /**
@@ -559,7 +580,7 @@ export const OUTILS = [
      * échouer le chargement du module entier pour un utilitaire qu'ils
      * n'appellent jamais.
      */
-    async executer(entrees = {}) {
+    async executer(entrees = {}, contexte = {}) {
       const produit = texte(entrees.exigence);
       if (!produit) return { ok: false, raison: "Il faut dire quelle exigence est recherchée." };
 
@@ -569,7 +590,20 @@ export const OUTILS = [
         if (v === "non" || v === "false") return false;
         return undefined;
       };
-      const reponses = {};
+      // ## L'étude du projet sert de fond
+      //
+      // L'écran « Incendie — Habitation » a recueilli quarante réponses pour ce
+      // bâtiment — jusqu'au type d'escalier retenu et au mode de désenfumage.
+      // Le copilote repartait de rien et redemandait le nombre d'étages qu'on
+      // venait de saisir dans l'onglet voisin. Retaper n'est pas seulement
+      // pénible : la seconde saisie diverge de la première, et l'on obtient
+      // deux vérités pour un même bâtiment.
+      //
+      // Ce que porte l'appel **passe devant** : une question qui suppose une
+      // autre hypothèse — « et si c'était une 2e famille ? » — doit pouvoir
+      // contredire l'étude, sans quoi on ne pourrait plus rien explorer.
+      const etude = contexte.etudeIncendie ?? null;
+      const reponses = { ...(etude?.reponses && typeof etude.reponses === "object" ? etude.reponses : {}) };
       const poser = (cle, valeur) => { if (valeur !== undefined && valeur !== null && valeur !== "") reponses[cle] = valeur; };
       poser("logementsSuperposes", oui(entrees.logementsSuperposes));
       poser("structuresIndependantes", oui(entrees.structuresIndependantes));
@@ -620,7 +654,8 @@ export const OUTILS = [
           reponse: [rendu.valeur, rendu.sansObjet, rendu.mention].filter(Boolean).join(" — ") || "sans objet",
           classement: classement?.valeur ?? "",
           article: rendu.pourquoi?.article ? `article ${rendu.pourquoi.article}${rendu.pourquoi.paragraphe ? `, ${rendu.pourquoi.paragraphe}` : ""}` : "",
-          citation: rendu.pourquoi?.citation ?? ""
+          citation: rendu.pourquoi?.citation ?? "",
+          etude: etude ? `${etude.titre || "étude sans nom"} — ${Object.keys(etude.reponses ?? {}).length} réponses reprises` : ""
         }
       };
     }
@@ -1090,6 +1125,76 @@ export function declarationsPourModele() {
  * Seules les affirmations **en vigueur** comptent : pré-remplir avec une valeur
  * remplacée ferait calculer sur un état que le projet a quitté.
  */
+/**
+ * Une réponse de l'étude, dite comme l'utilitaire l'attend.
+ *
+ * L'écran enregistre `true` / `false` — c'est ce qu'une case cochée vaut. Les
+ * entrées d'utilitaire, elles, se lisent « oui » / « non » parce qu'elles
+ * s'affichent. La conversion se fait ici, une fois, plutôt que dans douze
+ * déclarations.
+ */
+function ouiNonDeLEtude(valeur) {
+  if (valeur === true) return "oui";
+  if (valeur === false) return "non";
+  const dit = texte(valeur).toLowerCase();
+  if (dit === "oui" || dit === "true") return "oui";
+  if (dit === "non" || dit === "false") return "non";
+  return "";
+}
+
+/**
+ * Ce que l'étude du projet remplit d'elle-même.
+ *
+ * Même principe que la mémoire, autre source : une entrée déclare la question
+ * de l'étude dont elle tient sa valeur, et l'on ne demande pas ce qui a déjà
+ * été répondu ailleurs pour le même bâtiment.
+ *
+ * ## Ce n'est pas la mémoire, et c'est voulu
+ *
+ * Une réponse d'étude n'a pas été **tranchée** : personne ne l'a versée à la
+ * mémoire du projet, rien ne s'y appuie encore. Elle a pourtant un auteur et
+ * une date — quelqu'un l'a saisie pour ce bâtiment —, ce qui suffit à en faire
+ * une provenance légitime au regard du garde-fou : elle n'est pas inventée.
+ * Elle passe donc **après** la mémoire, qui tranche, et après ce que la
+ * conversation a dit.
+ */
+export function prefillDepuisLEtude(outil, etude = null) {
+  const reponses = etude?.reponses;
+  if (!reponses || typeof reponses !== "object") return { valeurs: {}, provenance: {} };
+
+  const rempli = {};
+  const provenance = {};
+
+  for (const entree of outil?.entrees ?? []) {
+    const declarees = [].concat(entree.depuisLEtude ?? []).filter(Boolean);
+    if (!declarees.length) continue;
+
+    // `false` est une réponse — « pas de sous-sol » en est une. Seul l'absent
+    // ne compte pas.
+    const trouvee = declarees.find((cle) => {
+      const valeur = reponses[cle];
+      return valeur !== undefined && valeur !== null && valeur !== "";
+    });
+    if (!trouvee) continue;
+
+    const lire = entree.lireLEtude;
+    const valeur = texte(lire ? lire(reponses[trouvee], reponses) : reponses[trouvee]);
+    if (!valeur) continue;
+    // Une valeur que la liste ne propose pas ne s'impose pas : elle rendrait le
+    // formulaire invalide sans qu'on comprenne d'où ça vient.
+    if (Array.isArray(entree.valeurs) && !entree.valeurs.includes(valeur)) continue;
+
+    rempli[entree.cle] = valeur;
+    provenance[entree.cle] = {
+      cle: trouvee,
+      brut: texte(reponses[trouvee]),
+      etude: texte(etude?.titre) || "étude sans nom"
+    };
+  }
+
+  return { valeurs: rempli, provenance };
+}
+
 export function prefillDepuisMemoire(outil, assertions = []) {
   const courantes = currentAssertions(Array.isArray(assertions) ? assertions : []);
   const parCle = new Map();
@@ -1256,7 +1361,7 @@ export function substitutionsNonJustifiees(outil, { entrees = {}, depuisMemoire 
  * conteste pas — on ne sait pas quoi corriger.
  */
 export function provenancesDesEntrees(outil, {
-  fournies = {}, depuisMemoire = {}, dejaEtablies = {}, entrees = {}, chaine = []
+  fournies = {}, depuisMemoire = {}, depuisLEtude = {}, dejaEtablies = {}, entrees = {}, chaine = []
 } = {}) {
   const parChaine = new Map(chaine.map((maillon) => [maillon.pour, maillon]));
   const rendu = {};
@@ -1275,6 +1380,11 @@ export function provenancesDesEntrees(outil, {
         origine: "memoire",
         detail: texte(depuisMemoire[cle].enonce) || texte(depuisMemoire[cle].cle),
         trancheeLe: texte(depuisMemoire[cle].trancheeLe)
+      };
+    } else if (depuisLEtude?.[cle]) {
+      rendu[cle] = {
+        origine: "etude",
+        detail: `étude « ${depuisLEtude[cle].etude} » du projet`
       };
     } else if (texte(dejaEtablies?.[cle]) !== "") {
       rendu[cle] = { origine: "dite", detail: "établie plus tôt dans la discussion" };
@@ -1541,7 +1651,7 @@ export function comparerALaMemoire(outil, valeurs = {}, assertions = []) {
  */
 export async function executerOutil({
   id = "", entrees = {}, assertions = [], question = "", confirmees = [], piecesJointes = [],
-  acquises = {}, onEtape = null, cleDuModele = "", autorisation = ""
+  acquises = {}, onEtape = null, cleDuModele = "", autorisation = "", etudeIncendie = null
 } = {}) {
   const outil = outilParId(id);
   if (!outil) {
@@ -1549,6 +1659,11 @@ export async function executerOutil({
   }
 
   const { valeurs: depuisMemoire, provenance } = prefillDepuisMemoire(outil, assertions);
+  // Ce que l'Atelier a déjà recueilli pour ce bâtiment. Le copilote redemandait
+  // le nombre d'étages qu'on venait de saisir dans l'onglet voisin ; la seconde
+  // saisie divergeait de la première, et l'on obtenait deux vérités.
+  const { valeurs: venantDeLEtude, provenance: provenanceEtude } =
+    prefillDepuisLEtude(outil, etudeIncendie);
   const dejaEtablies = nettoyer(acquises);
 
   // Avant de regarder ce qui manque : ce qui a été **remplacé sans raison**.
@@ -1588,10 +1703,26 @@ export async function executerOutil({
   // et l'on tournait en rond : le formulaire revenait à chaque échange sur la
   // même note. Une contrainte de sol se donne **une fois pour tous les
   // massifs**, et pour toute la conversation.
-  const avantChaine = avecDefauts(outil, { ...depuisMemoire, ...dejaEtablies, ...nettoyer(proposees) });
+  //
+  // L'étude du projet passe **en dessous** de la mémoire : la mémoire tranche,
+  // l'étude explore. Et en dessous de tout ce que la conversation a dit, pour
+  // la même raison qu'au-dessus — « et si c'était une 2e famille ? » doit
+  // pouvoir contredire l'étude, sinon on ne peut plus rien essayer.
+  const avantChaine = avecDefauts(outil,
+    { ...venantDeLEtude, ...depuisMemoire, ...dejaEtablies, ...nettoyer(proposees) });
   const venuesDeLaMemoire = Object.fromEntries(
     Object.entries(provenance).filter(([cle]) => texte(proposees?.[cle]) === "")
   );
+  const venuesDeLEtude = Object.fromEntries(
+    Object.entries(provenanceEtude).filter(([cle]) =>
+      texte(proposees?.[cle]) === "" && !provenance[cle] && texte(dejaEtablies?.[cle]) === "")
+  );
+  if (Object.keys(venuesDeLEtude).length) {
+    dire(onEtape)("Étude du projet reprise",
+      `${etudeIncendie?.titre || "étude sans nom"} — ${Object.keys(venuesDeLEtude).length} entrée${
+        Object.keys(venuesDeLEtude).length > 1 ? "s" : ""} pré-remplie${
+        Object.keys(venuesDeLEtude).length > 1 ? "s" : ""}`);
+  }
 
   // Ce qui manque encore et qu'un autre utilitaire sait produire se produit,
   // plutôt que de se demander. C'est le cœur de l'enchaînement : la cote hors
@@ -1611,7 +1742,8 @@ export async function executerOutil({
   const ecartees = substituees.filter((entree) => !aDemander.includes(entree));
   const nomsEcartes = ecartees.map((entree) => entree.libelle);
   const provenances = provenancesDesEntrees(outil, {
-    fournies, depuisMemoire: venuesDeLaMemoire, dejaEtablies, entrees: proposees, chaine
+    fournies, depuisMemoire: venuesDeLaMemoire, depuisLEtude: venuesDeLEtude,
+    dejaEtablies, entrees: proposees, chaine
   });
 
   if (aDemander.length > 0) {
@@ -1627,9 +1759,14 @@ export async function executerOutil({
       statut: "aConfirmer",
       outil: referenceOutil(outil),
       titre: outil.titre,
-      // Pour ce qui est suspect : la mémoire, pas la proposition du modèle.
-      // C'est elle qui doit rester affichée tant que personne n'a tranché.
-      connues: avecDefauts(outil, { ...legitimes, ...depuisMemoire }),
+      // Pour ce qui est suspect : ce que le projet sait, pas ce que le modèle
+      // propose. C'est cela qui doit rester affiché tant que personne n'a
+      // tranché — l'étude d'abord, la mémoire ensuite, car elle tranche.
+      //
+      // Le champ revenait vide quand seule l'étude portait la réponse : on
+      // retapait le nombre d'étages qu'on venait de saisir dans l'onglet
+      // voisin, ce qui est exactement ce qu'on cherchait à éviter.
+      connues: avecDefauts(outil, { ...legitimes, ...venantDeLEtude, ...depuisMemoire }),
       proposeParLeModele: Object.fromEntries(aDemander.map((entree) => [entree.cle, texte(entrees[entree.cle])])),
       champs: aDemander.map((entree) => ({ ...entree })),
       ecartees: nomsEcartes,
@@ -1661,7 +1798,7 @@ export async function executerOutil({
   // calcul déposée n'est pas une valeur, c'est une source. Elle ne passe donc
   // pas par le garde-fou des substitutions — il n'y a rien à y substituer.
   const resultat = await outil.executer(fournies, {
-    piecesJointes, onEtape: dire(onEtape), cleDuModele, autorisation
+    piecesJointes, onEtape: dire(onEtape), cleDuModele, autorisation, etudeIncendie
   });
   if (!resultat?.ok) {
     return {
