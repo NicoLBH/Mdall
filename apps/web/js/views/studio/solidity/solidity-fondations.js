@@ -22,6 +22,7 @@ import {
   entreesParDefaut, entreesInvalides, uniteAffichee, estPertinent
 } from "../../../services/fondations-declaration.js";
 import { calculerFondation, calculerLesSemelles } from "../../../services/fondations-service.js";
+import { planDeLaRemise, REMISE_ANNONCEE } from "../../../services/fondations-remise.js";
 import {
   synthese, volumeDe, designationDe, voisine, semelleNeuve,
   empreinteDe, entreesDe, resultatsScelles
@@ -43,6 +44,9 @@ const etat = {
   // celle-là — et un résultat périmé se lit exactement comme un résultat frais.
   empreinteDuResultat: "",
   calculEnCours: false,
+  // L'ajout des massifs remis par le copilote est en cours : le bouton se
+  // désarme, sinon deux clics posent deux fois les mêmes semelles.
+  remiseEnCours: false,
   erreur: "",
   invalides: [],
   // Ce que le projet sait déjà, et quels champs en viennent.
@@ -392,6 +396,12 @@ async function retirerUneSemelle(root, rang) {
 }
 
 function brancher(root) {
+  // Une remise arrive après que le panneau a été dessiné : sans cette écoute,
+  // elle n'apparaîtrait qu'au rechargement de la page.
+  window.addEventListener(REMISE_ANNONCEE, () => {
+    if (root.isConnected) dessiner(root);
+  });
+
   // La saisie ne redessine rien : redessiner à chaque frappe ferait perdre le
   // curseur, et l'écran n'a rien de nouveau à dire tant qu'on tape.
   root.addEventListener("input", (evenement) => {
@@ -498,6 +508,17 @@ function brancher(root) {
     }
     if (evenement.target.closest('[data-action-id="fondationsAjouter"]')) {
       await ajouterUneSemelle(root);
+      return;
+    }
+    if (evenement.target.closest("#fondationsRemiseAjouter")) {
+      await ajouterLaRemise(root);
+      return;
+    }
+    if (evenement.target.closest("#fondationsRemiseEcarter")) {
+      // Écarter n'efface pas le calcul : il reste dans la discussion, avec son
+      // bouton. On dit non à l'ajout, pas au résultat.
+      if (store.ui.fondations) store.ui.fondations.remise = null;
+      dessiner(root);
       return;
     }
     if (evenement.target.closest("[data-semelle-retour]")) {
@@ -614,6 +635,7 @@ function dessinerSynthese() {
       </header>
 
       ${etat.etudeErreur ? `<p class="fondations-erreur">${escapeHtml(etat.etudeErreur)}</p>` : ""}
+      ${dessinerLaRemise()}
 
       ${table.lignes.length === 0 ? `
         <p class="fondations-etude__vide">
@@ -641,6 +663,11 @@ function dessinerSynthese() {
                 <tr class="fondations-etude__ligne${etat.ouverte === rang ? " est-ouverte" : ""}">
                   <th scope="row">
                     <button type="button" class="fondations-etude__lien" data-semelle-ouvrir="${rang}">
+                      ${ligne.entrees?.provenance?.par === "copilote"
+                        ? `<span class="fondations-etude__venue" title="${escapeHtml(
+                            `Proposée par le copilote${ligne.entrees.provenance.note ? ` — ${ligne.entrees.provenance.note}` : ""}`)}"
+                            aria-label="Proposée par le copilote">${svgIcon("copilot", { width: 14, height: 14 })}</span>`
+                        : ""}
                       ${escapeHtml(ligne.designation)}
                     </button>
                   </th>
@@ -683,6 +710,115 @@ function dessinerSynthese() {
         </div>`}
     </section>
   `;
+}
+
+/** La remise en attente, s'il y en a une pour ce projet. */
+function remiseEnAttente() {
+  return store.ui?.fondations?.remise ?? null;
+}
+
+/**
+ * Les massifs que le copilote propose, annoncés avant d'être ajoutés.
+ *
+ * Le bandeau dit exactement ce que le clic va faire : combien de lignes
+ * s'ajoutent, à quoi elles s'ajoutent, et lesquelles seront renommées parce que
+ * le nom était pris. Un ajout qui renomme en silence fait douter du tableau
+ * entier la première fois qu'on s'en aperçoit.
+ *
+ * Rien ne remplace rien. Une semelle déjà là est la décision de quelqu'un ;
+ * les massifs remis se posent **à la suite**, et l'on compare.
+ */
+function dessinerLaRemise() {
+  const remise = remiseEnAttente();
+  if (!remise?.semelles?.length) return "";
+
+  const plan = planDeLaRemise(remise.semelles, etat.semelles);
+
+  return `
+    <div class="fondations-remise">
+      <p class="fondations-remise__titre">
+        ${svgIcon("copilot", { width: 16, height: 16 })}
+        ${plan.ajoutees} massif${plan.ajoutees > 1 ? "s" : ""} proposé${plan.ajoutees > 1 ? "s" : ""} par le copilote
+        ${remise.note ? `<span class="fondations-remise__source">${escapeHtml(remise.note)}</span>` : ""}
+      </p>
+      <p class="fondations-remise__note">
+        ${plan.dejaLa > 0
+          ? `Ils s'ajouteront à la suite des ${plan.dejaLa} semelle${plan.dejaLa > 1 ? "s" : ""} de l'étude — rien n'est remplacé.`
+          : "Ils ouvriront l'étude."}
+        ${plan.renommees > 0
+          ? ` ${plan.renommees} nom${plan.renommees > 1 ? "s étaient déjà pris" : " était déjà pris"} : ${
+              escapeHtml(plan.semelles.filter((ligne) => ligne.renommee).map((ligne) => ligne.designation).join(", "))}.`
+          : ""}
+      </p>
+      <ul class="fondations-remise__liste">
+        ${plan.semelles.map((ligne) => `
+          <li>
+            <span class="fondations-remise__nom">${escapeHtml(ligne.designation)}</span>
+            <span class="mono">${escapeHtml(nombreLisible(ligne.entrees.sectionLx, 2))} × ${
+              escapeHtml(nombreLisible(ligne.entrees.sectionLy, 2))} × ${
+              escapeHtml(nombreLisible(ligne.entrees.hauteurLz, 2))} m</span>
+            ${ligne.nombre > 1 ? `<span class="fondations-remise__nombre">× ${ligne.nombre}</span>` : ""}
+          </li>`).join("")}
+      </ul>
+      <div class="fondations-remise__actions">
+        <button type="button" class="gh-btn gh-btn--primary" id="fondationsRemiseAjouter"
+          ${etat.remiseEnCours ? "disabled" : ""}>
+          ${etat.remiseEnCours ? "Ajout en cours…" : `Ajouter au tableau`}
+        </button>
+        <button type="button" class="gh-btn" id="fondationsRemiseEcarter" ${etat.remiseEnCours ? "disabled" : ""}>
+          Écarter
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Ajouter les massifs remis, à la suite.
+ *
+ * Une semelle à la fois, dans l'ordre : la base pose le propriétaire et rend la
+ * ligne écrite, et c'est elle qu'on garde. Un échec au milieu laisse ce qui est
+ * déjà passé — on le dit plutôt que de faire croire que rien n'a été ajouté.
+ */
+async function ajouterLaRemise(root) {
+  const remise = remiseEnAttente();
+  if (!remise?.semelles?.length || etat.remiseEnCours) return;
+
+  etat.remiseEnCours = true;
+  etat.etudeErreur = "";
+  dessiner(root);
+
+  const plan = planDeLaRemise(remise.semelles, etat.semelles);
+  let ajoutees = 0;
+
+  try {
+    for (const ligne of plan.semelles) {
+      const creee = await creerSemelle(projetCourant, {
+        designation: ligne.designation,
+        nombre: ligne.nombre,
+        entrees: ligne.entrees,
+        rang: etat.semelles.length
+      });
+      etat.semelles.push(creee);
+      etat.resultats.push(null);
+      ajoutees += 1;
+    }
+    store.ui.fondations.remise = null;
+  } catch (erreur) {
+    etat.etudeErreur = `${ajoutees} massif${ajoutees > 1 ? "s ajoutés" : " ajouté"} sur ${plan.ajoutees}. `
+      + (erreur instanceof Error ? erreur.message : String(erreur));
+    // Ce qui reste à poser reste remis : on ne perd pas le travail parce que la
+    // base a bronché au milieu.
+    store.ui.fondations.remise = { ...remise, semelles: remise.semelles.slice(ajoutees) };
+  } finally {
+    etat.remiseEnCours = false;
+  }
+
+  dessiner(root);
+  // Les semelles ajoutées se calculent comme les autres : sans cela le tableau
+  // afficherait des cotes sans vérification, ce qui a l'air d'un doute alors
+  // que c'est une absence.
+  await recalculerLaSynthese(root);
 }
 
 /**

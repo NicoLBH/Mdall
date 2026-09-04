@@ -13,6 +13,7 @@ import {
   verificationGouvernante, predimensionner, volumeTotal, motDeLErreur, COTE_MIN, COTE_MAX
 } from "./predimensionnement-fondations.js";
 import { resultatDeLaSemelle } from "./fondations-declaration.js";
+import { ceQueLaContrainteCommande } from "./predimensionnement-fondations.js";
 
 test("l'échelle large monte du minimum au maximum, par crans de 40 cm", () => {
   const cotes = echelleLarge();
@@ -227,4 +228,48 @@ test("faute de mots, on nomme au moins ce qui est revenu", () => {
   assert.equal(motDeLErreur({ statut: "ok", donnees: [] }), "réponse sans bilan (statut, donnees).");
   assert.equal(motDeLErreur(null), "réponse vide.");
   assert.equal(motDeLErreur({ erreur: "sol absent" }), "sol absent.");
+});
+
+
+test("un appui dont un cas de charge est perdu ne se dimensionne pas", async () => {
+  // Le dimensionner quand même rendrait une semelle plausible et fausse : ses
+  // efforts n'entreraient pas dans le calcul, et rien ne le dirait.
+  let essais = 0;
+  const sortie = await predimensionner(
+    [{ nom: "Massif de stabilité", charges: { W1: { V: 3 } },
+       perdus: [{ libelle: "Effort normal", raison: "cas non reconnu" }] }],
+    { base: { araseSuperieure: -0.1 }, horsGel: 0.99,
+      calculer: async (liste) => { essais += liste.length; return liste.map(() => ({ bilan: { verifie: true, ratio: 0.2 } })); } }
+  );
+
+  assert.equal(essais, 0, "aucun essai n'est même tenté");
+  assert.equal(sortie.appuis[0].tenue, false);
+  assert.match(sortie.appuis[0].message, /« Effort normal » \(cas non reconnu\)/);
+  assert.doesNotMatch(sortie.appuis[0].message, /ne vérifie cet appui/);
+});
+
+test("on dit ce qui gouverne quand ce n'est pas le sol", () => {
+  // Le doute légitime : le même tableau à 1, 2 et 5 bars. Il est juste — un
+  // hangar métallique pousse plus qu'il ne pèse, et ses massifs se
+  // dimensionnent sur le glissement, où la contrainte du sol n'entre pas.
+  const dit = ceQueLaContrainteCommande([
+    { tenue: true, gouverne: "contrainte" },
+    { tenue: true, gouverne: "glissement" },
+    { tenue: true, gouverne: "glissement" },
+    { tenue: true, gouverne: "surface comprimée" },
+    { tenue: false, gouverne: null }
+  ]);
+
+  assert.equal(dit.gouvernesParLaContrainte, 1);
+  assert.equal(dit.gouvernesAutrement, 3);
+  assert.deepEqual(dit.par, ["glissement", "surface comprimée"]);
+  assert.match(dit.phrase, /3 massifs sur 4 sont gouvernés par glissement ou surface comprimée/);
+  assert.match(dit.phrase, /la contrainte admissible du sol n'y change rien/);
+});
+
+test("quand le sol gouverne partout, on ne dit rien", () => {
+  // La phrase répond à un doute ; sans le doute, elle n'est que du bruit.
+  assert.equal(ceQueLaContrainteCommande([{ tenue: true, gouverne: "contrainte" }]), null);
+  assert.equal(ceQueLaContrainteCommande([]), null);
+  assert.equal(ceQueLaContrainteCommande([{ tenue: false, gouverne: "glissement" }]), null);
 });

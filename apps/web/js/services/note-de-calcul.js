@@ -160,11 +160,22 @@ export function chargesPourLUtilitaire(appui = {}) {
     const dejaVu = ventsParNom.get(nom);
     const trouve = dejaVu ?? casUtilitairePour(ligne?.libelle, ventsParNom.size);
     if (!trouve) {
-      correspondances.push({ libelle: texte(ligne?.libelle), cas: null, dit: "non reconnu" });
+      // Un cas qu'on ne sait pas ranger et qui porte des efforts est un trou
+      // dans le calcul, pas une ligne de tableau manquante : « Effort normal »
+      // écarté, c'est la charge permanente d'un massif qui disparaît, et le
+      // massif se dimensionne alors sur son seul poids propre. Le résultat a
+      // l'air d'un résultat — c'est ce qui le rend dangereux.
+      correspondances.push({
+        libelle: texte(ligne?.libelle), cas: null, dit: "non reconnu",
+        porteDesEfforts: porteDesEfforts(ligne)
+      });
       continue;
     }
     if (trouve.deTrop) {
-      correspondances.push({ libelle: texte(ligne?.libelle), cas: null, dit: trouve.dit, deTrop: true });
+      correspondances.push({
+        libelle: texte(ligne?.libelle), cas: null, dit: trouve.dit, deTrop: true,
+        porteDesEfforts: porteDesEfforts(ligne)
+      });
       continue;
     }
     if (VENTS.includes(trouve.cas) && !dejaVu) ventsParNom.set(nom, trouve);
@@ -186,7 +197,28 @@ export function chargesPourLUtilitaire(appui = {}) {
     correspondances.push({ libelle: texte(ligne?.libelle), cas: trouve.cas, dit: trouve.dit });
   }
 
-  return { charges, correspondances };
+  return { charges, correspondances, perdus: casPerdus(correspondances) };
+}
+
+/** Cette ligne porte-t-elle un effort non nul ? */
+function porteDesEfforts(ligne) {
+  return ["V", "Hx", "Hy", "Mx", "My"].some((cle) => {
+    const valeur = nombre(ligne?.[cle]);
+    return valeur !== null && Math.abs(valeur) > 0;
+  });
+}
+
+/**
+ * Les cas dont les efforts n'entrent pas dans le calcul.
+ *
+ * On ne compte que ceux qui portent quelque chose : une ligne vide qu'on ne
+ * sait pas nommer ne change rien au résultat, et refuser de calculer pour elle
+ * ferait perdre un appui pour rien.
+ */
+export function casPerdus(correspondances = []) {
+  return correspondances
+    .filter((ligne) => ligne?.cas === null && ligne?.porteDesEfforts)
+    .map((ligne) => ({ libelle: ligne.libelle, raison: ligne.deTrop ? "plus de case de vent libre" : "cas non reconnu" }));
 }
 
 /**

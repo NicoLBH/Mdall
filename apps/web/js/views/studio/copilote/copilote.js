@@ -109,10 +109,12 @@ function ensureState() {
       lastError: "",
       creditsOpen: false,
       menuOpen: false,
-      // Où en est le copilote, en une phrase. « Il réfléchit » pendant huit
-      // secondes ressemble à une panne ; dire ce qui se passe ressemble à du
-      // travail — et c'en est.
-      etape: "",
+      // Où en est le copilote, étape par étape, avec ce que chacune a produit.
+      // Une seule phrase remplacée à chaque tour ne laissait rien voir : on
+      // lisait « analyse en cours » sans savoir si la note avait été lue, ni ce
+      // qu'on y avait trouvé. La liste s'accumule, et elle reste sous la
+      // réponse une fois celle-ci écrite.
+      etapes: [],
       // De quoi interrompre l'appel en cours. Un bouton d'arrêt qui n'arrête
       // rien serait pire que pas de bouton du tout.
       abort: null,
@@ -424,6 +426,7 @@ function renderMessage(msg, index) {
     <article class="copilote-msg copilote-msg--assistant" data-message-index="${index}">
       <span class="copilote-msg__mark" aria-hidden="true">${svgIcon("copilot", { width: 32, height: 32 })}</span>
       <div class="copilote-msg__main">
+        ${renderEtapesFaites(msg)}
         ${(msg.executions ?? []).map((execution) => renderExecution(execution)).join("")}
         <div class="copilote-msg__body">${mdToHtml(msg.content || "")}</div>
         ${(msg.executions ?? []).map((execution) => renderFormulaire(execution, index)).join("")}
@@ -444,7 +447,14 @@ function renderMessage(msg, index) {
 }
 
 /** Les sorties qui se lisent en tableau, pas en liste de clés. */
-const TABLEAUX_DE_SORTIE = ["appuis", "correspondances"];
+/**
+ * Les sorties qui ne sont pas des valeurs.
+ *
+ * Un tableau ou une synthèse a son propre rendu plus bas. Les laisser dans la
+ * liste des résultats donnerait « appuis : [object Object] », qui ne dit rien et
+ * fait douter de tout le reste.
+ */
+const TABLEAUX_DE_SORTIE = ["appuis", "correspondances", "gouvernance"];
 
 /**
  * Les massifs pré-dimensionnés, en tableau.
@@ -762,10 +772,50 @@ function renderExecution(execution) {
             </div>`
           : ""
       }
-      <p class="copilote-outil__note">
-        Calculé par ${escapeHtml(execution.source || "l'utilitaire")}. Ce résultat n'entre pas dans la mémoire du projet.
-      </p>
+      ${renderGouvernance(execution)}
+      <div class="copilote-outil__pied">
+        <p class="copilote-outil__note">
+          Calculé par ${escapeHtml(execution.source || "l'utilitaire")}. Ce résultat n'entre pas dans la mémoire du projet.
+        </p>
+        ${renderRemise(execution)}
+      </div>
     </div>
+  `;
+}
+
+/**
+ * Ce qui gouverne réellement, quand ce n'est pas le sol.
+ *
+ * Un tableau identique à 1, 2 et 5 bars se lit comme un calcul qui ignore ce
+ * qu'on lui donne. Il dit en fait le contraire : la contrainte du sol est bien
+ * prise en compte — elle n'est simplement pas ce qui commande la taille. Le
+ * dire évite un doute légitime, et surtout envoie chercher au bon endroit :
+ * améliorer le sol ne servira à rien, une longrine ou du lest, si.
+ */
+function renderGouvernance(execution) {
+  const dit = execution?.valeurs?.gouvernance;
+  if (!dit?.phrase) return "";
+  return `<p class="copilote-outil__gouvernance">${svgIcon("alert")} ${escapeHtml(dit.phrase)}</p>`;
+}
+
+/**
+ * De quoi porter le calcul dans l'Atelier.
+ *
+ * Le copilote a calculé ; l'Atelier tient l'étude. Le bouton ne verse rien : il
+ * **remet** les massifs, et c'est devant le tableau que quelqu'un décide de les
+ * ajouter. Un pré-dimensionnement est un avis, pas une décision.
+ */
+function renderRemise(execution) {
+  if (execution?.statut !== "fait") return "";
+  const tenus = (execution.valeurs?.appuis ?? []).filter((appui) => appui?.tenue && appui?.entrees);
+  if (!tenus.length) return "";
+
+  return `
+    <button type="button" class="copilote-action copilote-outil__remise" data-remise-outil="${escapeHtml(execution.outil)}">
+      ${svgIcon("gear")}
+      <span>Ouvrir dans l'Atelier</span>
+      <em>${tenus.length} massif${tenus.length > 1 ? "s" : ""}</em>
+    </button>
   `;
 }
 
@@ -786,6 +836,44 @@ function renderEcartees(execution) {
       la note jointe, ou la valeur par défaut : ${escapeHtml(noms.join(", "))}.
     </p>
   `;
+}
+
+/**
+ * Porter les massifs calculés jusqu'à l'Atelier.
+ *
+ * Rien n'est écrit ici : la remise attend dans l'état, et c'est l'écran des
+ * fondations qui l'annonce et propose de l'ajouter. Écrire directement ferait du
+ * copilote un auteur de l'étude, ce qu'il n'est pas — il propose, quelqu'un
+ * décide, et l'on doit pouvoir dire non sans rien défaire.
+ */
+async function remettreALAtelier(root, outil) {
+  const etat = ensureState();
+  const execution = (etat.messages ?? [])
+    .flatMap((message) => message.executions ?? [])
+    .filter((candidat) => candidat?.statut === "fait" && candidat.outil === outil)
+    .at(-1);
+  if (!execution) return;
+
+  const { semellesDeLaRemise, annoncerLaRemise } = await import("../../../services/fondations-remise.js");
+  const semelles = semellesDeLaRemise(execution);
+  if (!semelles.length) return;
+
+  store.ui.fondations = store.ui.fondations ?? {};
+  store.ui.fondations.remise = {
+    semelles,
+    outil: execution.outil,
+    titre: execution.titre,
+    note: execution.valeurs?.affaire || "",
+    le: new Date().toISOString()
+  };
+
+  // Les panneaux de l'Atelier sont dessinés à l'ouverture : sans l'annonce, la
+  // remise n'apparaîtrait qu'au rechargement de la page.
+  annoncerLaRemise();
+
+  // On va où le travail se fait. Le rail garde la discussion : on revient
+  // dessus par où l'on est venu.
+  document.querySelector('[data-side-nav-target="solidity-fondations"]')?.click();
 }
 
 /**
@@ -958,7 +1046,35 @@ function renderAccueil() {
  * apparaîtra. Un indicateur posé ailleurs — dans un coin, sur le bouton —
  * laisserait croire que le fil est fini et que rien ne vient.
  */
-function renderAttente(etape) {
+/**
+ * Une étape de plus, et l'écran qui suit.
+ *
+ * On n'appelle pas `render` : réécrire le fil entier à chaque étape ferait
+ * sauter la position de lecture toutes les deux secondes. On ajoute la ligne à
+ * la liste, et l'on remplace celle qui tourne.
+ */
+function noterUneEtape(root, etat, dit) {
+  const etape = typeof dit === "string" ? { texte: dit, detail: "" } : (dit ?? {});
+  if (!etape.texte) return;
+  etat.etapes = [...(etat.etapes ?? []), etape];
+
+  const liste = root.querySelector("#copiloteEtapes");
+  if (liste) liste.innerHTML = lignesDAttente(etat.etapes);
+}
+
+/** Les étapes franchies, puis celle qui tourne. */
+function lignesDAttente(etapes = []) {
+  const courante = etapes[etapes.length - 1];
+  return etapes.slice(0, -1).map(ligneDEtape).join("") + `
+    <li class="copilote-etape est-en-cours">
+      <span class="copilote-spinner" aria-hidden="true">${svgIcon("attachment-upload-spinner")}</span>
+      <span class="copilote-etape__quoi">${escapeHtml(courante?.texte || "Le copilote réfléchit")}</span>
+      ${courante?.detail ? `<span class="copilote-etape__detail">${escapeHtml(courante.detail)}</span>` : ""}
+    </li>
+  `;
+}
+
+function renderAttente(etapes = []) {
   return `
     <article class="copilote-msg copilote-msg--assistant copilote-msg--pending" aria-live="polite">
       <span class="copilote-msg__mark" aria-hidden="true">${svgIcon("copilot", { width: 32, height: 32 })}</span>
@@ -966,12 +1082,46 @@ function renderAttente(etape) {
         <div class="copilote-msg__meta">
           <span class="copilote-msg__author">Copilote</span>
         </div>
-        <div class="copilote-pending">
-          <span class="copilote-spinner" aria-hidden="true">${svgIcon("attachment-upload-spinner")}</span>
-          <span>${escapeHtml(etape || "Le copilote réfléchit…")}</span>
-        </div>
+        <ol class="copilote-etapes" id="copiloteEtapes">${lignesDAttente(etapes)}</ol>
       </div>
     </article>
+  `;
+}
+
+/**
+ * Une étape franchie.
+ *
+ * Elle porte son **détail** — le nom de la note lue, le nombre d'appuis
+ * trouvés, la cote hors gel retenue —, et c'est lui qui fait la différence
+ * entre un fil d'attente et un compte rendu. « Note lue » rassure ; « Note lue
+ * — 9 appuis · unités { T ; Tm } · altitude 241 m » se vérifie.
+ */
+function ligneDEtape(etape) {
+  return `
+    <li class="copilote-etape est-faite">
+      <span class="copilote-etape__marque" aria-hidden="true">${svgIcon("check-circle-fill", { width: 12, height: 12 })}</span>
+      <span class="copilote-etape__quoi">${escapeHtml(etape?.texte || "")}</span>
+      ${etape?.detail ? `<span class="copilote-etape__detail">${escapeHtml(etape.detail)}</span>` : ""}
+    </li>
+  `;
+}
+
+/**
+ * Ce que le copilote a fait, une fois qu'il l'a fait.
+ *
+ * Les étapes ne disparaissent pas avec le rond qui tourne : elles se replient
+ * sous la réponse. C'est le même besoin que la chaîne des utilitaires — savoir
+ * ce qui a servi —, à ceci près qu'on y lit l'ordre et le temps plutôt que la
+ * provenance.
+ */
+function renderEtapesFaites(msg) {
+  const etapes = Array.isArray(msg?.etapes) ? msg.etapes : [];
+  if (!etapes.length) return "";
+  return `
+    <details class="copilote-etapes-faites">
+      <summary>Ce que le copilote a fait (${etapes.length} étape${etapes.length > 1 ? "s" : ""})</summary>
+      <ol class="copilote-etapes">${etapes.map(ligneDEtape).join("")}</ol>
+    </details>
   `;
 }
 
@@ -984,7 +1134,7 @@ function renderCorps(etat) {
       <div class="copilote-thread" id="copiloteThread">
         <div class="copilote-thread__inner">
           ${messages.map((msg, index) => renderMessage(msg, index)).join("")}
-          ${etat.isSending ? renderAttente(etat.etape) : ""}
+          ${etat.isSending ? renderAttente(etat.etapes) : ""}
         </div>
       </div>
       <button type="button" class="copilote-scroll" id="copiloteScroll" hidden
@@ -1337,11 +1487,7 @@ async function envoyer(root) {
       acquises: etat.confirmeesValeurs ?? {},
       // Redessiner seulement l'attente : réécrire le fil entier à chaque étape
       // ferait sauter la position de lecture toutes les deux secondes.
-      onEtape: (dit) => {
-        etat.etape = dit;
-        const ligne = root.querySelector(".copilote-pending span:last-child");
-        if (ligne) ligne.textContent = dit;
-      }
+      onEtape: (dit) => noterUneEtape(root, etat, dit)
     });
 
     // La mémoire lue pour cette question sert aussi au formulaire qui suivra :
@@ -1356,6 +1502,9 @@ async function envoyer(root) {
       // Ce que les utilitaires ont calculé, gardé avec la réponse : une réponse
       // sans sa trace demande qu'on la croie sur parole.
       executions: Array.isArray(executions) ? executions : [],
+      // Le compte rendu ne disparaît pas avec le rond qui tourne : il se replie
+      // sous la réponse, et l'on peut encore vérifier ce qui a été lu où.
+      etapes: [...(etat.etapes ?? [])],
       // Le décompte vient du modèle. Nul quand il ne le dit pas : un zéro
       // serait un chiffre, et on ne fabrique pas les chiffres d'un compteur.
       tokensIn: Number.isFinite(usage?.inputTokens) ? usage.inputTokens : null,
@@ -1375,7 +1524,7 @@ async function envoyer(root) {
   } finally {
     etat.isSending = false;
     etat.abort = null;
-    etat.etape = "";
+    etat.etapes = [];
     render(root);
     root.querySelector("#copiloteInput")?.focus();
   }
@@ -1592,11 +1741,7 @@ async function lancerCalcul(root, outil, saisies, acquis = {}) {
       confirmees: Object.keys(saisies),
       acquises: etat.confirmeesValeurs ?? {},
       piecesJointes: etat.pieceJointe ? [etat.pieceJointe] : [],
-      onEtape: (dit) => {
-        etat.etape = dit;
-        const ligne = root.querySelector(".copilote-pending span:last-child");
-        if (ligne) ligne.textContent = dit;
-      },
+      onEtape: (dit) => noterUneEtape(root, etat, dit),
       // Le calcul est déjà fait : on le donne au modèle comme s'il l'avait
       // demandé, avec un identifiant d'appel à nous. C'est ce qui lui permet
       // de reprendre le fil sans redemander.
@@ -1628,7 +1773,7 @@ async function lancerCalcul(root, outil, saisies, acquis = {}) {
   } finally {
     etat.isSending = false;
     etat.abort = null;
-    etat.etape = "";
+    etat.etapes = [];
     render(root);
   }
 }
@@ -1751,6 +1896,10 @@ function bind(root) {
     ensureState().pieceJointe = null;
     render(root);
   });
+
+  for (const bouton of root.querySelectorAll("[data-remise-outil]")) {
+    bouton.addEventListener("click", () => void remettreALAtelier(root, bouton.dataset.remiseOutil));
+  }
 
   root.querySelector("#copiloteSend")?.addEventListener("click", () => void envoyer(root));
   root.querySelector("#copiloteStop")?.addEventListener("click", () => interrompre(root));
