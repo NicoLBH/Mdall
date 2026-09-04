@@ -12,7 +12,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   casUtilitairePour, chargesPourLUtilitaire, casPerdus, normaliserLaNote, unitesDeLaNote,
-  SCHEMA_NOTE, CAS_UTILITAIRE
+  rangementRecommande, lireLeRangement, SCHEMA_NOTE, CAS_UTILITAIRE
 } from "./note-de-calcul.js";
 
 test("chaque nature de charge trouve sa case", () => {
@@ -165,7 +165,12 @@ test("un cas qu'on ne sait pas ranger et qui porte des efforts se signale", () =
   });
 
   assert.equal(charges.G, undefined);
-  assert.deepEqual(perdus, [{ libelle: "Effort normal", raison: "cas non reconnu" }]);
+  assert.equal(perdus.length, 1);
+  assert.equal(perdus[0].libelle, "Effort normal");
+  assert.equal(perdus[0].raison, "cas non reconnu");
+  // Et l'on propose quelque chose plutôt que de laisser la case vide.
+  assert.equal(perdus[0].recommande.cas, "G");
+  assert.match(perdus[0].recommande.pourquoi, /part descendante permanente/);
 });
 
 test("une ligne qu'on ne sait pas ranger mais qui ne porte rien ne coûte rien", () => {
@@ -184,13 +189,68 @@ test("un cinquième vent qui n'a plus de case compte comme perdu", () => {
       { libelle: "VENT 5", V: 1, Hx: 1 }
     ]
   });
-  assert.deepEqual(perdus, [{ libelle: "VENT 5", raison: "plus de case de vent libre" }]);
+  assert.equal(perdus.length, 1);
+  assert.equal(perdus[0].libelle, "VENT 5");
+  assert.equal(perdus[0].raison, "plus de case de vent libre");
 });
 
 test("casPerdus ne compte que ce qui porte quelque chose", () => {
-  assert.deepEqual(casPerdus([
+  const perdus = casPerdus([
     { libelle: "A", cas: null, porteDesEfforts: true },
     { libelle: "B", cas: null, porteDesEfforts: false },
     { libelle: "C", cas: "G", porteDesEfforts: true }
-  ]), [{ libelle: "A", raison: "cas non reconnu" }]);
+  ]);
+  assert.deepEqual(perdus.map((ligne) => ligne.libelle), ["A"]);
+  assert.equal(perdus[0].raison, "cas non reconnu");
+});
+
+
+test("on ne recommande que ce qu'on sait défendre", () => {
+  // Une recommandation fabriquée pour ne pas laisser la case vide serait
+  // acceptée telle quelle — et ce serait le modèle qui décide, sous un autre nom.
+  assert.equal(rangementRecommande("Effort normal (Compression)").cas, "G");
+  assert.equal(rangementRecommande("Charge axiale").cas, "G");
+  assert.equal(rangementRecommande("Séisme").cas, "Sx");
+  assert.equal(rangementRecommande("Effort transversal (Diagonal)"), null);
+  assert.equal(rangementRecommande("Poussée des terres"), null);
+  assert.equal(rangementRecommande(""), null);
+  // Et la raison accompagne toujours la proposition.
+  assert.ok(rangementRecommande("Effort normal").pourquoi.length > 60);
+});
+
+test("un rangement décidé passe avant toute règle", () => {
+  // C'est bien pour cela qu'on l'a demandé : la décision de quelqu'un l'emporte.
+  const { charges, perdus, correspondances } = chargesPourLUtilitaire(
+    { cas: [{ libelle: "Effort normal (Compression)", V: 3.5, Hx: 0.2 }] },
+    { rangement: lireLeRangement("effort normal compression = G") }
+  );
+
+  assert.deepEqual(perdus, []);
+  assert.equal(charges.G.V, 3.5);
+  assert.equal(correspondances[0].cas, "G");
+  assert.equal(correspondances[0].decide, true);
+});
+
+test("« ne pas ranger » est une décision, et elle laisse l'appui de côté", () => {
+  // Refuser de ranger n'est pas la même chose que ne pas avoir su : l'appui
+  // reste écarté, mais on sait que quelqu'un l'a voulu.
+  const { charges, perdus } = chargesPourLUtilitaire(
+    { cas: [{ libelle: "Effort normal", V: 3.5 }, { libelle: "CHARGE PERMANENTE", V: 2 }] },
+    { rangement: lireLeRangement("effort normal = aucun") }
+  );
+
+  assert.equal(charges.G.V, 2, "la permanente reconnue reste");
+  assert.equal(perdus.length, 1);
+  assert.equal(perdus[0].raison, "laissé de côté à la demande");
+  assert.equal(perdus[0].decide, true);
+});
+
+test("le rangement se lit dans les deux sens, et refuse ce qui n'existe pas", () => {
+  assert.deepEqual(lireLeRangement("Effort normal (Compression) = G ; Vent latéral = W2"), {
+    "effort normal compression": "G",
+    "vent lateral": "W2"
+  });
+  assert.deepEqual(lireLeRangement("Effort normal = ZZZ"), {}, "un cas inconnu ne range rien");
+  assert.deepEqual(lireLeRangement("n'importe quoi"), {});
+  assert.deepEqual(lireLeRangement(""), {});
 });

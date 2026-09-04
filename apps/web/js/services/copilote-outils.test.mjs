@@ -930,3 +930,29 @@ test("un nombre collé à son unité reste un nombre cité", () => {
   assert.equal(valeurCiteePar("catégorie II", "III"), false);
   assert.equal(valeurCiteePar("classe de sol C", "C"), true);
 });
+
+
+test("un cas rangé à la demande rend l'appui calculable", async () => {
+  // Le rangement n'est pas une donnée du projet : c'est une décision de lecture
+  // qu'on vient de prendre à l'écran. Elle voyage donc avec l'appel de l'outil,
+  // comme un aiguillage — et le garde-fou des valeurs fabriquées ne s'y oppose
+  // pas, sans quoi il faudrait justifier auprès du copilote un choix qu'on
+  // vient de lui donner.
+  const fondations = outilParId("fondations_predimensionnement");
+  const rangement = fondations.entrees.find((entree) => entree.cle === "rangementDesCas");
+
+  assert.ok(rangement, "l'utilitaire déclare où ranger les cas qu'il n'a pas su nommer");
+  assert.equal(rangement.aiguillage, true);
+
+  // Sans note jointe l'utilitaire refuse, mais le rangement a bien traversé le
+  // garde-fou : il figure dans les entrées retenues, pas dans les écartées.
+  const resultat = await executerOutil({
+    id: "fondations_predimensionnement",
+    entrees: { contrainteLimite: 1, horsGel: 0.99, rangementDesCas: "Effort normal = G" },
+    question: "range l'effort normal en permanente, contrainte 1 bar et hors gel 0,99 m"
+  });
+
+  assert.equal(resultat.statut, "refus");
+  assert.equal(resultat.entrees.rangementDesCas, "Effort normal = G");
+  assert.equal(resultat.ecartees.includes("Rangement des cas de charge"), false);
+});

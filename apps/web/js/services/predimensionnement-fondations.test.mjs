@@ -273,3 +273,22 @@ test("quand le sol gouverne partout, on ne dit rien", () => {
   assert.equal(ceQueLaContrainteCommande([]), null);
   assert.equal(ceQueLaContrainteCommande([{ tenue: false, gouverne: "glissement" }]), null);
 });
+
+
+test("un cas rangé à la demande fait rentrer l'appui dans le calcul", async () => {
+  // Avant le rangement, l'appui se refuse ; après, il se dimensionne — et c'est
+  // la même fonction qui décide, sur la seule foi de ce que `perdus` contient.
+  const avant = await predimensionner(
+    [{ nom: "Massif", charges: { W1: { V: 3 } }, perdus: [{ libelle: "Effort normal", raison: "cas non reconnu" }] }],
+    { base: { araseSuperieure: -0.1 }, horsGel: 0.99,
+      calculer: async (liste) => liste.map(() => ({ bilan: { verifie: true, ratio: 0.2 } })) }
+  );
+  assert.equal(avant.appuis[0].tenue, false);
+
+  const apres = await predimensionner(
+    [{ nom: "Massif", charges: { G: { V: 4.2 }, W1: { V: 3 } }, perdus: [] }],
+    { base: { araseSuperieure: -0.1 }, horsGel: 0.99,
+      calculer: async (liste) => liste.map(() => ({ bilan: { verifie: true, ratio: 0.2 } })) }
+  );
+  assert.equal(apres.appuis[0].tenue, true);
+});
