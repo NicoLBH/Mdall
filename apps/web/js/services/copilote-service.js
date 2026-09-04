@@ -208,7 +208,10 @@ export async function sendAssistMessage(message, {
           ? `${content}\n\n[Une note de calcul est jointe à cette conversation : ${
             piecesJointes.map((p) => p?.nom).filter(Boolean).join(", ")}. `
             + "L'utilitaire de pré-dimensionnement des fondations sait la lire ; toi non, "
-            + "et tu n'as pas à en connaître le contenu.]"
+            + "et tu n'as pas à en connaître le contenu. Ne dis donc pas qu'il te manque la "
+            + "descente de charges : appelle l'utilitaire, il l'y trouvera. Et ne propose aucune "
+            + "valeur que la note pourrait porter — l'altitude du site en particulier : la remplir "
+            + "d'un chiffre plausible arrête le calcul au lieu de l'avancer.]"
           : content,
         history: historyForPayload(),
         other_conversations: autresDiscussionsPourPayload(),

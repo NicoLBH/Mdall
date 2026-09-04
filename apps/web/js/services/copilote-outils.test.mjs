@@ -11,6 +11,7 @@ import {
   entreesManquantes,
   executerOutil,
   outilParId,
+  phraseDesSubstitutions,
   prefillDepuisMemoire,
   referenceOutil,
   sansFigure
@@ -661,4 +662,90 @@ test("une valeur écrite à la française est la même valeur", () => {
   // Ce qui n'a pas été dit reste non dit.
   assert.equal(valeurCiteePar("une contrainte de sol à 1 bar", "1.5"), false);
   assert.equal(valeurCiteePar("R+3", "0.45"), false);
+});
+
+
+test("ce que le calcul trouve ailleurs s'écarte, il ne se demande pas", async () => {
+  // Le cas réel, et il coûtait six questions pour une : la note de calcul est
+  // jointe, l'utilisateur a dit « 1 bar », et le modèle remplit consciencieusement
+  // les huit champs déclarés — altitude, arase, trois cotes imposées. Chaque
+  // valeur fabriquée devenait une question, l'écran en posait six, et l'on
+  // comprenait que la note n'était pas arrivée.
+  //
+  // Seul H0 est vraiment en jeu : le département le décide, la note ne le porte
+  // pas. Le reste, le calcul le trouve — l'altitude sur la note, l'arase dans sa
+  // valeur par défaut, les cotes imposées nulle part parce que personne n'a rien
+  // imposé.
+  const resultat = await executerOutil({
+    id: "fondations_predimensionnement",
+    entrees: {
+      contrainteLimite: 1, h0: 0.99, altitude: 980, araseSuperieure: -0.1,
+      imposerLx: 1.2, imposerLy: 1.2, imposerLz: 0.5
+    },
+    question: "fais un dimensionnement des massifs de cette descente de charges, avec une contrainte de sol à 1 bar"
+  });
+
+  assert.equal(resultat.statut, "aConfirmer");
+  assert.deepEqual(resultat.champs.map((champ) => champ.cle), ["h0"]);
+  // Ce qui a été écarté n'entre pas dans le calcul : ni l'altitude inventée,
+  // ni les cotes que personne n'a imposées.
+  assert.equal(resultat.connues.altitude, undefined);
+  assert.equal(resultat.connues.imposerLx, undefined);
+  // L'arase revient par sa valeur déclarée, pas par la proposition du modèle.
+  assert.equal(resultat.connues.araseSuperieure, -0.1);
+  // Et la contrainte citée par l'utilisateur reste acquise.
+  assert.equal(resultat.connues.contrainteLimite, 1);
+  // On le dit, plutôt que de laisser croire que le chiffre du modèle a servi.
+  assert.deepEqual(resultat.ecartees, [
+    "Altitude du site", "Arase supérieure du massif",
+    "Largeur imposée", "Longueur imposée", "Hauteur imposée"
+  ]);
+});
+
+test("écarter n'est pas laisser passer : la valeur inventée n'entre pas", async () => {
+  // Rien ne manque plus — H0 et l'altitude sont dans la question —, donc le
+  // calcul a lieu. Les cotes imposées, elles, n'ont été dites par personne :
+  // elles s'en vont, et l'utilitaire cherche ses cotes lui-même.
+  const resultat = await executerOutil({
+    id: "profondeur_hors_gel",
+    entrees: { h0: "0.5", altitude: "450" },
+    question: "profondeur hors gel avec H0 = 0.5 et une altitude de 450 m ?"
+  });
+
+  assert.equal(resultat.statut, "fait");
+  assert.deepEqual(resultat.ecartees, []);
+});
+
+test("rien à demander, mais des valeurs à écarter : le calcul part quand même", async () => {
+  // H0 et la contrainte sont dans la question : plus rien à demander. Les trois
+  // cotes imposées, elles, n'ont été dites par personne — elles s'en vont, et
+  // l'utilitaire cherche ses cotes lui-même au lieu de reprendre celles que le
+  // modèle avait trouvées plausibles.
+  //
+  // Ici l'utilitaire s'arrête faute de note jointe, et c'est la bonne réponse :
+  // ce qui compte est qu'il ait été appelé, et avec quoi.
+  const resultat = await executerOutil({
+    id: "fondations_predimensionnement",
+    entrees: { contrainteLimite: 1, h0: 0.45, imposerLx: 1.2, imposerLy: 1.2, imposerLz: 0.5 },
+    question: "dimensionne les massifs avec H0 = 0,45 m et une contrainte de sol à 1 bar"
+  });
+
+  assert.equal(resultat.statut, "refus");
+  assert.match(resultat.message, /Aucune note de calcul n'est jointe/);
+  assert.deepEqual(resultat.ecartees, ["Largeur imposée", "Longueur imposée", "Hauteur imposée"]);
+  assert.equal(resultat.entrees.imposerLx, undefined);
+  assert.equal(resultat.entrees.h0, 0.45);
+});
+
+test("la phrase dit les deux choses : ce qu'on demande, ce qu'on écarte", () => {
+  const seule = phraseDesSubstitutions([{ libelle: "H0 retenu pour le département" }], []);
+  assert.match(seule, /H0 retenu pour le département a été proposé/);
+  assert.doesNotMatch(seule, /Écarté/);
+
+  const avec = phraseDesSubstitutions(
+    [{ libelle: "H0 retenu pour le département" }],
+    ["Altitude du site", "Arase supérieure du massif"]
+  );
+  assert.match(avec, /Écarté sans être demandé/);
+  assert.match(avec, /Altitude du site, Arase supérieure du massif/);
 });
