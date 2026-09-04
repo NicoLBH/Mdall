@@ -262,6 +262,13 @@ export async function predimensionner(appuis = [], { base = {}, horsGel = null, 
           plan.slice(0, rang).reduce((t, l) => t + l.essais.length, 0),
           plan.slice(0, rang + 1).reduce((t, l) => t + l.essais.length, 0)
         ));
+        // « Aucune semelle ne vérifie » et « le calcul n'a pas conclu » sont deux
+        // choses, et les écrire pareil coûte cher : la première renvoie à un sol
+        // trop faible et fait chercher une autre solution de fondation ; la
+        // seconde est une panne, et il n'y a rien à chercher du tout. On a
+        // annoncé la première quatre fois pour des essais que le calcul avait
+        // refusés — le sol n'y était pour rien.
+        const panne = dernier && !dernier.resultat?.bilan;
         const gouverne = verificationGouvernante(dernier?.resultat);
         return {
           ...commun,
@@ -271,7 +278,11 @@ export async function predimensionner(appuis = [], { base = {}, horsGel = null, 
           gouverne: gouverne?.quoi ?? null,
           ratio: dernier?.resultat?.bilan?.ratio ?? null,
           entrees: dernier?.entrees ?? null,
-          message: `Aucune semelle carrée jusqu'à ${String(COTE_MAX).replace(".", ",")} m ne vérifie cet appui.`
+          ...(panne ? { erreur: motDeLErreur(dernier.resultat) } : {}),
+          message: panne
+            ? `Le calcul n'a rendu aucun bilan pour cet appui : ${motDeLErreur(dernier.resultat)} `
+              + "Ce n'est pas le sol qui refuse, c'est le calcul qui n'a pas eu lieu."
+            : `Aucune semelle carrée jusqu'à ${String(COTE_MAX).replace(".", ",")} m ne vérifie cet appui.`
         };
       }
       const gouverne = verificationGouvernante(retenu.resultat);
@@ -290,6 +301,22 @@ export async function predimensionner(appuis = [], { base = {}, horsGel = null, 
       };
     })
   };
+}
+
+/**
+ * Ce que le calcul a répondu quand il n'a pas rendu de bilan.
+ *
+ * On rapporte **ses mots**, pas les nôtres : « le calcul a échoué » n'aide
+ * personne, « contrainteLimite manquante » se corrige. Faute de mots, on nomme
+ * au moins ce qui est revenu, pour qu'on sache où regarder.
+ */
+export function motDeLErreur(resultat) {
+  const dit = resultat?.erreur ?? resultat?.error ?? resultat?.message;
+  if (typeof dit === "string" && dit.trim()) return dit.trim().endsWith(".") ? dit.trim() : `${dit.trim()}.`;
+  const cles = resultat && typeof resultat === "object" ? Object.keys(resultat) : [];
+  return cles.length
+    ? `réponse sans bilan (${cles.slice(0, 6).join(", ")}).`
+    : "réponse vide.";
 }
 
 /** Le volume total de béton du tableau — ce qu'on commande. */

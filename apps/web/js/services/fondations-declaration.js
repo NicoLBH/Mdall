@@ -312,3 +312,27 @@ export function entreesInvalides(entrees = {}) {
   }
   return problemes;
 }
+
+/**
+ * La réponse du serveur pour **une** semelle, ouverte.
+ *
+ * Le lot rend une enveloppe par semelle — `{ resultat }` quand le calcul a eu
+ * lieu, `{ error }` quand il a refusé —, parce qu'une semelle qui échoue ne doit
+ * pas faire échouer les dix-neuf autres. Cette enveloppe se lisait à deux
+ * endroits et de deux façons : l'écran des fondations l'ouvrait, le
+ * pré-dimensionnement du copilote la prenait pour le résultat lui-même. Il n'y
+ * trouvait donc jamais de bilan, et concluait — pour chaque appui, à chaque
+ * cote — qu'aucune semelle ne vérifiait. Le sol n'y était pour rien.
+ *
+ * Une seule fonction ouvre l'enveloppe désormais, et c'est celle-ci.
+ */
+export function resultatDeLaSemelle(rendu) {
+  if (!rendu || typeof rendu !== "object") return null;
+  if (rendu.resultat) return rendu.resultat;
+  // Le refus du serveur porte ses mots : les perdre ferait dire « le calcul n'a
+  // pas conclu » là où il disait précisément pourquoi.
+  if (rendu.error) return { erreur: String(rendu.error) };
+  // Une réponse déjà ouverte reste lisible : mieux vaut comprendre les deux
+  // formes que de rendre `null` sur celle qu'on n'attendait pas.
+  return rendu.bilan ? rendu : null;
+}

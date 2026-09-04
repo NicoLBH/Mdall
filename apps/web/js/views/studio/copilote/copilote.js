@@ -341,9 +341,15 @@ function transcrireUneExecution(execution) {
   }
 
   if (execution.ecartees?.length) lignes.push(`- Écartées : ${execution.ecartees.join(", ")}`);
+
   if (execution.valeurs) lignes.push("- Sorties :", `  \`\`\`json`, `  ${JSON.stringify(execution.valeurs)}`, "  \`\`\`");
   if (execution.champs?.length) {
     lignes.push(`- Demandé à l'écran : ${execution.champs.map((champ) => champ.libelle).join(", ")}`);
+  }
+  if (execution.repondue) {
+    const dites = Object.entries(execution.repondue.valeurs ?? {})
+      .map(([cle, valeur]) => `${cle} = ${valeur}`).join(", ");
+    lignes.push(`- Répondu à l'écran : ${dites || "(rien)"}`);
   }
 
   return lignes;
@@ -387,7 +393,10 @@ function renderNoteDuMessage(msg) {
   const note = msg?.note;
   if (!note?.nom) return "";
   return `
-    <span class="copilote-msg__note">${svgIcon("file")} ${escapeHtml(note.nom)}</span>
+    <div class="copilote-msg__note">
+      ${svgIcon("file-pdf", { width: 18, height: 18 })}
+      <span>${escapeHtml(note.nom)}</span>
+    </div>
   `;
 }
 
@@ -402,8 +411,8 @@ function renderMessage(msg, index) {
     // demande pas, et l'espace qu'il prend au survol aère le fil.
     return `
       <article class="copilote-msg copilote-msg--user">
+        ${renderNoteDuMessage(msg)}
         <div class="copilote-msg__bulle">
-          ${renderNoteDuMessage(msg)}
           <div class="copilote-msg__body">${mdToHtml(msg.content || "")}</div>
         </div>
         ${quand ? `<div class="copilote-msg__stamp mono">${escapeHtml(quand)}</div>` : ""}
@@ -790,6 +799,8 @@ function renderEcartees(execution) {
  */
 function renderFormulaire(execution, index) {
   if (execution?.statut !== "manquant" && execution?.statut !== "aConfirmer") return "";
+  // Une demande à laquelle on a répondu reste dans l'histoire, pas à l'écran.
+  if (execution.repondue) return "";
 
   // Une seule valeur manque, et elle a des choix : des pastilles valent mieux
   // qu'un formulaire. On répond d'un clic au lieu de viser une liste
@@ -1082,27 +1093,37 @@ function renderActions(etat) {
  * jointe qu'on ne peut pas enlever accompagne toutes les questions suivantes
  * sans qu'on l'ait voulu.
  */
+/**
+ * La note **en attente d'envoi**, dans le composeur.
+ *
+ * Elle n'y reste que jusqu'au premier envoi. Après, elle se lit au-dessus de la
+ * question où elle est partie, comme partout ailleurs : une carte qui demeure
+ * dans la zone de saisie donne l'impression d'attendre encore d'être envoyée, et
+ * mange la place du texte à écrire.
+ *
+ * Ce qui la remplace ensuite est le trombone lui-même, allumé, avec de quoi la
+ * retirer — c'est un état de la discussion, pas une pièce en partance, et un
+ * état tient dans une icône.
+ */
 function renderPieceJointe(etat) {
   const piece = etat.pieceJointe;
-  if (!piece) return "";
+  if (!piece || noteDejaPartie(etat)) return "";
   const ko = Math.max(1, Math.round((piece.taille ?? 0) / 1024));
 
-  // Une fois la première question posée, la note a servi : elle se lit dans la
-  // bulle où elle est partie. Ce qui reste ici n'est plus une pièce en attente
-  // d'envoi mais un état de la discussion — « la note est toujours jointe » —,
-  // et cela tient sur une ligne.
-  const partie = (etat.messages ?? []).some((message) => message?.note?.nom === piece.nom);
-
   return `
-    <div class="copilote-piece${partie ? " copilote-piece--jointe" : ""}">
-      ${svgIcon("file")}
+    <div class="copilote-piece">
+      ${svgIcon("file-pdf")}
       <span class="copilote-piece__nom">${escapeHtml(piece.nom)}</span>
-      ${partie
-        ? `<span class="copilote-piece__poids">jointe à la discussion</span>`
-        : `<span class="copilote-piece__poids">${ko} ko</span>`}
+      <span class="copilote-piece__poids">${ko} ko</span>
       <button type="button" class="copilote-piece__retirer" id="copiloteRetirerPiece"
               aria-label="Retirer la note jointe" title="Retirer">×</button>
     </div>`;
+}
+
+/** La note a-t-elle déjà voyagé avec une question ? */
+function noteDejaPartie(etat) {
+  const nom = etat?.pieceJointe?.nom;
+  return Boolean(nom) && (etat.messages ?? []).some((message) => message?.note?.nom === nom);
 }
 
 function render(root) {
@@ -1133,10 +1154,27 @@ function render(root) {
                 <div class="copilote-compose__left">${vide ? "" : renderActions(etat)}</div>
 
                 <div class="copilote-compose__tools">
-                  <button type="button" class="copilote-tool" id="copiloteJoindre"
+                  <button type="button" class="copilote-tool${
+                    noteDejaPartie(etat) ? " est-active" : ""}" id="copiloteJoindre"
                     ${etat.isSending ? "disabled" : ""}
-                    aria-label="Joindre une note de calcul (PDF)" title="Joindre une note de calcul (PDF)"
+                    aria-label="${noteDejaPartie(etat)
+                      ? `${escapeHtml(etat.pieceJointe.nom)} est jointe à la discussion — en joindre une autre`
+                      : "Joindre une note de calcul (PDF)"}"
+                    title="${noteDejaPartie(etat)
+                      ? `${escapeHtml(etat.pieceJointe.nom)} est jointe à la discussion — cliquez pour en joindre une autre`
+                      : "Joindre une note de calcul (PDF)"}"
                     >${svgIcon("paperclip")}</button>
+                  ${
+                    // La note reste jointe pour les questions suivantes — « et si
+                    // le sol faisait 2 bars ? » porte sur la même note. Il faut
+                    // donc pouvoir la retirer, mais cela ne vaut pas une carte
+                    // dans la zone de saisie : une croix à côté du trombone suffit.
+                    noteDejaPartie(etat)
+                      ? `<button type="button" class="copilote-tool copilote-tool--retirer" id="copiloteRetirerPiece"
+                          aria-label="Retirer la note jointe à la discussion"
+                          title="Retirer ${escapeHtml(etat.pieceJointe.nom)} de la discussion">×</button>`
+                      : ""
+                  }
                   <input type="file" id="copiloteFichier" accept="application/pdf" hidden>
 
                   <button type="button" class="copilote-tool" id="copiloteCredits"
@@ -1504,14 +1542,21 @@ async function lancerCalcul(root, outil, saisies, acquis = {}) {
     return;
   }
 
-  // La demande a été satisfaite : elle n'a plus lieu d'être. La laisser sous
-  // l'ancienne réponse donnerait deux formulaires pour un seul calcul, et on ne
-  // saurait plus lequel vient d'aboutir.
+  // La demande a été satisfaite : le formulaire n'a plus lieu d'être à l'écran —
+  // le laisser sous l'ancienne réponse donnerait deux formulaires pour un seul
+  // calcul, et on ne saurait plus lequel vient d'aboutir.
+  //
+  // Mais **elle ne s'efface pas de l'histoire**. Ce qui a été demandé et ce qui
+  // a été répondu font partie de ce qui explique le résultat : les supprimer
+  // rendait la discussion incompréhensible une fois relue — on y lisait une
+  // question du copilote, puis un tableau, et rien entre les deux. On marque
+  // donc la demande comme répondue, avec les réponses ; l'écran la cache, la
+  // relecture la garde.
   for (const message of etat.messages) {
-    if (Array.isArray(message.executions)) {
-      message.executions = message.executions.filter(
-        (execution) => execution?.statut !== "manquant" && execution?.statut !== "aConfirmer"
-      );
+    if (!Array.isArray(message.executions)) continue;
+    for (const execution of message.executions) {
+      if (execution?.statut !== "manquant" && execution?.statut !== "aConfirmer") continue;
+      execution.repondue = { le: new Date().toISOString(), valeurs: { ...saisies } };
     }
   }
 

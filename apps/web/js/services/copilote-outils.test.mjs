@@ -865,3 +865,68 @@ test("chaque entrée du calcul dit d'où elle vient", () => {
   assert.equal(rendu.altitude.origine, "memoire");
   assert.equal(rendu.araseSuperieure.origine, "defaut");
 });
+
+
+test("une entrée que le projet rend inutile ne se demande pas, même inventée", async () => {
+  // Le cas réel, et il annulait tout le bénéfice du tour précédent : la mémoire
+  // porte « Profondeur hors gel : 0,99 m », le modèle invente quand même un H0,
+  // et l'écran le demandait — parce qu'on triait les valeurs fabriquées sur le
+  // drapeau `requis` **avant** d'avoir lu la mémoire. On saisissait alors 0,99
+  // sous deux noms, et le copilote passait pour un outil qui n'écoute pas.
+  //
+  // L'ordre compte : on écarte d'abord tout ce qui a été fabriqué, on lit la
+  // mémoire et l'enchaînement, et c'est seulement ensuite qu'on regarde ce qui
+  // manque vraiment.
+  const resultat = await executerOutil({
+    id: "fondations_predimensionnement",
+    entrees: { contrainteLimite: 1, h0: 0.99, altitude: 980 },
+    assertions: [contrainteDuSite("frost_depth", "0.99 m", { code_insee: "31555", altitude: 250 })],
+    question: "fais le dimensionnement des fondations de cette descente de charge, avec qels = 1bar"
+  });
+
+  // Aucune question : l'utilitaire est allé jusqu'à la note, et c'est elle qui
+  // manque.
+  assert.equal(resultat.statut, "refus");
+  assert.match(resultat.message, /Aucune note de calcul n'est jointe/);
+  assert.equal(resultat.entrees.h0, undefined);
+  assert.equal(resultat.entrees.horsGel, "0.99");
+  assert.ok(resultat.ecartees.includes("H0 retenu pour le département"));
+});
+
+test("une entrée requise sans condition se demande toujours", async () => {
+  // Le garde-fou ne se relâche pas : sans cote hors gel connue, H0 reste une
+  // décision que personne n'a prise, et le modèle ne la prend pas à sa place.
+  const resultat = await executerOutil({
+    id: "fondations_predimensionnement",
+    entrees: { contrainteLimite: 1, h0: 0.99 },
+    assertions: [],
+    question: "dimensionne les massifs avec une contrainte de sol à 1 bar"
+  });
+
+  assert.equal(resultat.statut, "aConfirmer");
+  assert.deepEqual(resultat.champs.map((champ) => champ.cle), ["h0"]);
+});
+
+
+test("un nombre collé à son unité reste un nombre cité", () => {
+  // « qels = 1bar » est ce que les gens écrivent. Exiger l'espace faisait
+  // passer pour inventée une valeur que l'utilisateur venait de donner, et
+  // l'écran la lui redemandait — précisément ce que ce garde-fou évite.
+  assert.equal(valeurCiteePar("avec qels = 1bar", "1"), true);
+  assert.equal(valeurCiteePar("une altitude de 250m", "250"), true);
+  assert.equal(valeurCiteePar("H0 = 0,45m", "0.45"), true);
+  assert.equal(valeurCiteePar("contrainte 1.5bar", "1.5"), true);
+
+  // Ce qu'un nombre ne tolère pas, c'est un chiffre de part et d'autre.
+  assert.equal(valeurCiteePar("12 massifs", "1"), false);
+  assert.equal(valeurCiteePar("une contrainte de 1,5 bar", "1"), false);
+  assert.equal(valeurCiteePar("H0 = 0,45 m", "45"), false);
+  assert.equal(valeurCiteePar("R+3", "0.45"), false);
+
+  // Une fin de phrase reste une borne.
+  assert.equal(valeurCiteePar("la contrainte vaut 1.", "1"), true);
+
+  // Et un mot se borne toujours comme un mot : « III » ne se lit pas dans « II ».
+  assert.equal(valeurCiteePar("catégorie II", "III"), false);
+  assert.equal(valeurCiteePar("classe de sol C", "C"), true);
+});
