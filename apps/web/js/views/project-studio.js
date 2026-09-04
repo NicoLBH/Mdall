@@ -21,7 +21,8 @@ import {
   openConversation,
   renameConversationLocally,
   renderCopilote,
-  startNewConversation
+  startNewConversation,
+  transcrireLaDiscussion
 } from "./studio/copilote/copilote.js";
 import { conversationTitle } from "../services/copilote-conversations.js";
 import {
@@ -73,6 +74,12 @@ function renderCopiloteHistorique() {
             <button type="button" class="copilote-fil-menu__item" role="menuitem"
               data-copilote-rename="${escapeHtml(conversation.id)}">
               ${svgIcon("pencil")}<span>Renommer</span>
+            </button>
+            <button type="button" class="copilote-fil-menu__item" role="menuitem"
+              data-copilote-copy="${escapeHtml(conversation.id)}"
+              title="Outil de développement — la discussion entière dans le presse-papiers">
+              ${svgIcon("copy")}<span>Copier la discussion</span>
+              <em class="copilote-fil-menu__temporaire">dev</em>
             </button>
             <button type="button" class="copilote-fil-menu__item is-danger" role="menuitem"
               data-copilote-delete="${escapeHtml(conversation.id)}">
@@ -448,6 +455,14 @@ function brancherCopilote(root, copiloteRoot, getScrollSource) {
       return;
     }
 
+    const copier = event.target.closest("[data-copilote-copy]");
+    if (copier) {
+      event.stopPropagation();
+      fermerMenus();
+      await copierLeFil(copier.dataset.copiloteCopy);
+      return;
+    }
+
     const effacer = event.target.closest("[data-copilote-delete]");
     if (effacer) {
       event.stopPropagation();
@@ -495,6 +510,28 @@ function brancherCopilote(root, copiloteRoot, getScrollSource) {
       rafraichir();
     } catch (error) {
       window.alert(`Le nouveau nom n'a pas pu être enregistré. ${error?.message || ""}`.trim());
+    }
+  }
+
+  /**
+   * Copier la discussion — outil de développement, destiné à disparaître.
+   *
+   * Le texte ne part nulle part : il va dans le presse-papiers de qui clique.
+   * Une conversation avec le copilote est privée, et la copier pour soi n'est
+   * pas la partager.
+   */
+  async function copierLeFil(id) {
+    const texte = transcrireLaDiscussion(id);
+    if (!texte) {
+      window.alert("Cette discussion n'a rien à copier.");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(texte);
+    } catch {
+      // Un presse-papiers refusé n'est pas une raison de perdre le texte :
+      // on l'affiche, il reste sélectionnable.
+      window.prompt("Le presse-papiers a été refusé — copiez le texte ci-dessous.", texte);
     }
   }
 

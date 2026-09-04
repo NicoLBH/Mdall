@@ -278,6 +278,81 @@ export function copiloteConversations() {
   return ensureState().conversations;
 }
 
+/**
+ * Toute une discussion, en texte, pour la coller ailleurs.
+ *
+ * **Ceci est un outil de développement, et il est destiné à disparaître.** Il
+ * existe parce qu'un défaut du copilote se raconte mal : « il m'a redemandé la
+ * contrainte de sol » ne dit ni ce qu'il avait en mémoire, ni ce qu'il a passé
+ * à l'utilitaire, ni ce que l'utilitaire a répondu. La discussion entière, avec
+ * qui a dit quoi et ce qui a été calculé, tient en un collage.
+ *
+ * Il ne partage rien : le texte va dans le presse-papiers de la personne qui
+ * clique, et nulle part ailleurs. Une conversation avec le copilote reste
+ * privée — c'est son propriétaire qui en dispose, personne d'autre.
+ */
+export function transcrireLaDiscussion(id) {
+  const etat = ensureState();
+  // La discussion ouverte est celle dont l'état vit : elle porte les calculs
+  // qui viennent d'avoir lieu, que la liste du rail ne connaît pas encore.
+  const messages = etat.conversationId === id
+    ? etat.messages ?? []
+    : findConversation(etat.conversations, id)?.messages ?? [];
+
+  const entete = findConversation(etat.conversations, id);
+  const lignes = [
+    `# ${entete?.title || "Discussion sans titre"}`,
+    `Projet : ${cleProjet()} — ${messages.length} message${messages.length > 1 ? "s" : ""}`,
+    ""
+  ];
+
+  for (const message of messages) {
+    const quand = message.ts ? new Date(message.ts).toLocaleString("fr-FR") : "";
+    lignes.push(`## ${message.role === "user" ? "Vous" : "Copilote"}${quand ? ` — ${quand}` : ""}`);
+    if (message.note?.nom) lignes.push(`_Note jointe : ${message.note.nom}_`);
+    if (texteDe(message.content)) lignes.push("", texteDe(message.content));
+
+    for (const execution of message.executions ?? []) lignes.push("", ...transcrireUneExecution(execution));
+    lignes.push("");
+  }
+
+  return lignes.join("\n").trim();
+}
+
+/** Ce qu'un utilitaire a reçu, produit, et de qui il l'a tenu. */
+function transcrireUneExecution(execution) {
+  if (!execution) return [];
+  const lignes = [`### Utilitaire — ${execution.titre || execution.outil || "?"} (${execution.statut})`];
+  if (execution.message) lignes.push(execution.message);
+
+  const paire = (objet) => Object.entries(objet ?? {})
+    .map(([cle, valeur]) => `  - ${cle} : ${typeof valeur === "object" ? JSON.stringify(valeur) : valeur}`);
+
+  const entrees = paire(execution.entrees ?? execution.connues);
+  if (entrees.length) lignes.push("- Entrées :", ...entrees);
+
+  const provenances = Object.entries(execution.provenances ?? {})
+    .map(([cle, source]) => `  - ${cle} : ${source?.origine}${source?.detail ? ` (${source.detail})` : ""}`);
+  if (provenances.length) lignes.push("- Provenance des entrées :", ...provenances);
+
+  for (const maillon of execution.chaine ?? []) {
+    lignes.push(`- Enchaînement : ${maillon.libelle} = ${maillon.valeur} ${maillon.unite || ""}`.trimEnd()
+      + ` — produit par ${maillon.titre} (${maillon.outil})`);
+  }
+
+  if (execution.ecartees?.length) lignes.push(`- Écartées : ${execution.ecartees.join(", ")}`);
+  if (execution.valeurs) lignes.push("- Sorties :", `  \`\`\`json`, `  ${JSON.stringify(execution.valeurs)}`, "  \`\`\`");
+  if (execution.champs?.length) {
+    lignes.push(`- Demandé à l'écran : ${execution.champs.map((champ) => champ.libelle).join(", ")}`);
+  }
+
+  return lignes;
+}
+
+function texteDe(valeur) {
+  return String(valeur ?? "").trim();
+}
+
 /** L'identifiant de la discussion affichée — celui que le rail met en avant. */
 export function copiloteConversationId() {
   return ensureState().conversationId;
@@ -299,6 +374,23 @@ export function copiloteConversationId() {
  * Côté copilote, elle partage sa ligne avec les commandes : copier, compter.
  * Une ligne de plus sous chaque réponse aurait espacé le fil sans rien dire.
  */
+/**
+ * La note partie avec un message.
+ *
+ * Elle se voit **là où elle a servi** — dans la bulle de la question —, et non
+ * plus dans la zone de saisie, où elle donnait l'impression d'attendre encore
+ * d'être envoyée. Elle reste jointe à la discussion pour les questions
+ * suivantes ; c'est la ligne discrète au-dessus du composeur qui le dit
+ * désormais, et non plus une carte qui occupe la place du texte à écrire.
+ */
+function renderNoteDuMessage(msg) {
+  const note = msg?.note;
+  if (!note?.nom) return "";
+  return `
+    <span class="copilote-msg__note">${svgIcon("file")} ${escapeHtml(note.nom)}</span>
+  `;
+}
+
 function renderMessage(msg, index) {
   const role = msg.role === "user" ? "user" : "assistant";
   const quand = msg.ts ? new Date(msg.ts).toLocaleString("fr-FR") : "";
@@ -311,6 +403,7 @@ function renderMessage(msg, index) {
     return `
       <article class="copilote-msg copilote-msg--user">
         <div class="copilote-msg__bulle">
+          ${renderNoteDuMessage(msg)}
           <div class="copilote-msg__body">${mdToHtml(msg.content || "")}</div>
         </div>
         ${quand ? `<div class="copilote-msg__stamp mono">${escapeHtml(quand)}</div>` : ""}
@@ -501,6 +594,65 @@ function nombreLisible(valeur, decimales = 2) {
 }
 
 /**
+ * D'où vient une entrée, en trois mots.
+ *
+ * Sans elle, un tableau de valeurs ne dit pas ce qu'il faut corriger quand il
+ * est faux : une valeur venue de la mémoire se corrige dans la mémoire, une
+ * valeur produite par un autre utilitaire se corrige à sa source, et une valeur
+ * dite dans la conversation se redit.
+ */
+const MOTS_DE_PROVENANCE = {
+  memoire: "mémoire du projet",
+  dite: "dite ici",
+  defaut: "valeur par défaut",
+  utilitaire: "calculée par"
+};
+
+function ditLaProvenance(execution, cle) {
+  const source = execution?.provenances?.[cle]
+    ?? (execution?.venuesDeLaMemoire?.[cle] ? { origine: "memoire" } : null);
+  if (!source) return "";
+
+  const mot = MOTS_DE_PROVENANCE[source.origine] || source.origine;
+  const suite = source.origine === "utilitaire" ? ` ${source.detail || ""}` : "";
+  return `<span class="copilote-outil__source" title="${escapeHtml(source.detail || "")}">${
+    escapeHtml(`${mot}${suite}`.trim())}</span>`;
+}
+
+/**
+ * Ce que le calcul a fallu aller chercher ailleurs.
+ *
+ * Un enchaînement invisible est un enchaînement qu'on ne peut pas contester :
+ * il faut lire quel utilitaire a produit quelle valeur, à partir de quoi. C'est
+ * la même exigence que pour un résultat — sauf qu'ici c'est une **entrée** qui
+ * a été calculée, et une entrée fausse ne se voit pas dans le résultat.
+ */
+function renderChaine(execution) {
+  const maillons = Array.isArray(execution?.chaine) ? execution.chaine : [];
+  if (!maillons.length) return "";
+
+  return `
+    <details class="copilote-chaine">
+      <summary>Ce qui a été calculé pour pouvoir calculer (${maillons.length})</summary>
+      <ul class="copilote-outil__liste">
+        ${maillons.map((maillon) => `
+          <li>
+            <span class="copilote-outil__cle">${escapeHtml(maillon.libelle || maillon.pour || "")}</span>
+            <span class="mono">${escapeHtml(String(maillon.valeur))}${
+              maillon.unite ? ` ${escapeHtml(maillon.unite)}` : ""}</span>
+            <span class="copilote-outil__source">${escapeHtml(maillon.titre || "")} — ${
+              escapeHtml(maillon.outil || "")}</span>
+          </li>
+          <li class="copilote-chaine__entrees">
+            <span class="copilote-outil__source">d'après ${
+              escapeHtml(Object.entries(maillon.entrees ?? {})
+                .map(([cle, valeur]) => `${cle} = ${valeur}`).join(", ") || "rien")}</span>
+          </li>`).join("")}
+      </ul>
+    </details>`;
+}
+
+/**
  * Ce qu'un utilitaire a calculé, montré tel quel.
  *
  * **La trace est aussi importante que la réponse.** Une phrase du copilote qui
@@ -516,20 +668,18 @@ function renderExecution(execution) {
       <div class="copilote-outil copilote-outil--refus">
         <p class="copilote-outil__titre">${escapeHtml(execution?.titre || "Utilitaire")}</p>
         <p class="copilote-outil__note">${escapeHtml(execution?.message || "L'utilitaire n'a pas conclu.")}</p>
+        ${renderChaine(execution)}
       </div>
     `;
   }
 
-  const entrees = Object.entries(execution.entrees ?? {}).map(([cle, valeur]) => {
-    const venue = execution.venuesDeLaMemoire?.[cle];
-    return `
+  const entrees = Object.entries(execution.entrees ?? {}).map(([cle, valeur]) => `
       <li>
         <span class="copilote-outil__cle">${escapeHtml(cle)}</span>
         <span class="mono">${escapeHtml(String(valeur))}</span>
-        ${venue ? `<span class="copilote-outil__source">mémoire du projet</span>` : ""}
+        ${ditLaProvenance(execution, cle)}
       </li>
-    `;
-  }).join("");
+    `).join("");
 
   const sorties = Object.entries(execution.valeurs ?? {})
     // Ce qui se lit en tableau ne se lit pas en liste : `appuis` et
@@ -592,6 +742,7 @@ function renderExecution(execution) {
         </div>
       </div>
       ${figure}
+      ${renderChaine(execution)}
       ${renderMassifs(execution)}
       ${renderCorrespondances(execution)}
       ${
@@ -935,11 +1086,20 @@ function renderPieceJointe(etat) {
   const piece = etat.pieceJointe;
   if (!piece) return "";
   const ko = Math.max(1, Math.round((piece.taille ?? 0) / 1024));
+
+  // Une fois la première question posée, la note a servi : elle se lit dans la
+  // bulle où elle est partie. Ce qui reste ici n'est plus une pièce en attente
+  // d'envoi mais un état de la discussion — « la note est toujours jointe » —,
+  // et cela tient sur une ligne.
+  const partie = (etat.messages ?? []).some((message) => message?.note?.nom === piece.nom);
+
   return `
-    <div class="copilote-piece">
+    <div class="copilote-piece${partie ? " copilote-piece--jointe" : ""}">
       ${svgIcon("file")}
       <span class="copilote-piece__nom">${escapeHtml(piece.nom)}</span>
-      <span class="copilote-piece__poids">${ko} ko</span>
+      ${partie
+        ? `<span class="copilote-piece__poids">jointe à la discussion</span>`
+        : `<span class="copilote-piece__poids">${ko} ko</span>`}
       <button type="button" class="copilote-piece__retirer" id="copiloteRetirerPiece"
               aria-label="Retirer la note jointe" title="Retirer">×</button>
     </div>`;
@@ -1099,6 +1259,12 @@ async function envoyer(root) {
   if (!contenu || etat.isSending) return;
 
   const question = { role: "user", content: contenu, ts: new Date().toISOString() };
+  // Ce qui part avec la question se lit dans la question. La note reste jointe
+  // à la discussion — on pose souvent deux questions sur la même —, mais elle
+  // cesse d'occuper la zone où l'on écrit.
+  if (etat.pieceJointe?.nom) {
+    question.note = { nom: etat.pieceJointe.nom, taille: etat.pieceJointe.taille ?? null };
+  }
 
   etat.draft = "";
   etat.messages.push(question);

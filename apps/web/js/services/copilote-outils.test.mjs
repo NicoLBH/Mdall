@@ -10,8 +10,10 @@ import {
   declarationsPourModele,
   entreesManquantes,
   executerOutil,
+  deduireLesEntrees,
   outilParId,
   phraseDesSubstitutions,
+  provenancesDesEntrees,
   prefillDepuisMemoire,
   referenceOutil,
   sansFigure
@@ -748,4 +750,118 @@ test("la phrase dit les deux choses : ce qu'on demande, ce qu'on écarte", () =>
   );
   assert.match(avec, /Écarté sans être demandé/);
   assert.match(avec, /Altitude du site, Arase supérieure du massif/);
+});
+
+
+/* ── L'enchaînement des utilitaires ──────────────────────────────────────── */
+
+/** La contrainte du site telle que la mémoire l'écrit : une valeur, et ses entrées. */
+function contrainteDuSite(cle, valeur, inputs = null) {
+  return {
+    id: `c-${cle}`,
+    kind: "derived-constraint",
+    nature: "contrainte",
+    subject_key: `site:${cle}`,
+    statement: `Profondeur hors gel : ${valeur}`,
+    status: "assumed",
+    decided_at: "2026-08-31T00:00:00.000Z",
+    payload: { subject: "Profondeur hors gel", value: valeur, factKey: cle, derived: true, inputs }
+  };
+}
+
+test("la cote hors gel du projet dispense de redemander H0", async () => {
+  // Le cas réel, et il était insultant : le copilote annonce qu'il lit la
+  // mémoire du projet, la mémoire porte « Profondeur hors gel : 0,99 m », et
+  // l'écran demande quand même le H0 départemental — que personne ne connaît
+  // par cœur, et qui ne sert qu'à recalculer ce que le projet a déjà tranché.
+  const resultat = await executerOutil({
+    id: "fondations_predimensionnement",
+    entrees: { contrainteLimite: 1 },
+    assertions: [contrainteDuSite("frost_depth", "0.99 m", { code_insee: "31555", altitude: 250 })],
+    question: "dimensionne les massifs avec une contrainte de sol à 1 bar"
+  });
+
+  // Plus de question : l'utilitaire est allé jusqu'à la note, et c'est elle qui
+  // manque — pas une valeur qu'on aurait dû taper.
+  assert.equal(resultat.statut, "refus");
+  assert.match(resultat.message, /Aucune note de calcul n'est jointe/);
+  assert.equal(resultat.entrees.horsGel, "0.99");
+  assert.equal(resultat.provenances.horsGel.origine, "memoire");
+});
+
+test("l'altitude se lit dans les entrées de la cote hors gel, pas dans sa valeur", () => {
+  // Le piège : « Profondeur hors gel : 0,99 m » porte l'altitude dans son
+  // payload. Lire la valeur de l'affirmation pour n'importe laquelle de ses
+  // entrées ferait une altitude de 0,99 m — un calcul juste sur une donnée
+  // absurde, ce qui est la pire des deux erreurs.
+  const gel = outilParId("profondeur_hors_gel");
+  const { valeurs } = prefillDepuisMemoire(gel, [
+    contrainteDuSite("frost_depth", "0.99 m", { code_insee: "31555", altitude: 250 })
+  ]);
+
+  assert.equal(valeurs.altitude, "250");
+  assert.equal(valeurs.h0, undefined);
+});
+
+test("ce qui manque et qu'un autre utilitaire sait produire se produit", async () => {
+  // L'enchaînement demandé : « il me manque la cote hors gel » → « qui sait la
+  // produire ? » → « l'utilitaire gel » → « qu'attend-il ? » → « H0 et
+  // l'altitude, que la conversation et la mémoire donnent » → « je l'exécute et
+  // j'injecte ». Personne n'a rien tapé de plus.
+  const fondations = outilParId("fondations_predimensionnement");
+  const { obtenues, chaine } = await deduireLesEntrees(fondations, {
+    fournies: { contrainteLimite: 1, h0: 0.45 },
+    assertions: [contrainteDuSite("frost_depth", "0.9 m", { altitude: 250 })],
+    dejaVus: new Set([fondations.id])
+  });
+
+  assert.equal(obtenues.horsGel, 0.475);
+  assert.equal(chaine.length, 1);
+  assert.equal(chaine[0].pour, "horsGel");
+  assert.equal(chaine[0].outil, "profondeur_hors_gel_V1");
+  // Ce qui a servi à produire la valeur voyage avec elle : sans cela on ne
+  // saurait pas si c'est l'altitude ou le H0 qu'il faut corriger.
+  assert.equal(chaine[0].entrees.altitude, "250");
+  assert.equal(chaine[0].entrees.h0, 0.45);
+});
+
+test("on ne pose pas une question pour en éviter une", async () => {
+  // L'utilitaire gel manque d'altitude : le déduire demanderait une valeur de
+  // plus, et l'on aurait échangé une question contre une autre, moins
+  // compréhensible. On renonce, et c'est la cote hors gel qui se demande.
+  const fondations = outilParId("fondations_predimensionnement");
+  const { obtenues, chaine } = await deduireLesEntrees(fondations, {
+    fournies: { contrainteLimite: 1, h0: 0.45 },
+    assertions: [],
+    dejaVus: new Set([fondations.id])
+  });
+
+  assert.deepEqual(obtenues, {});
+  assert.deepEqual(chaine, []);
+});
+
+test("un utilitaire ne s'appelle pas lui-même", async () => {
+  const fondations = outilParId("fondations_predimensionnement");
+  const { obtenues } = await deduireLesEntrees(fondations, {
+    fournies: { h0: 0.45, altitude: 250 },
+    assertions: [],
+    dejaVus: new Set([fondations.id, "profondeur_hors_gel"])
+  });
+
+  assert.deepEqual(obtenues, {});
+});
+
+test("chaque entrée du calcul dit d'où elle vient", () => {
+  const fondations = outilParId("fondations_predimensionnement");
+  const rendu = provenancesDesEntrees(fondations, {
+    fournies: { contrainteLimite: 1, horsGel: 0.9, araseSuperieure: -0.1, altitude: 250 },
+    depuisMemoire: { altitude: { enonce: "Altitude : 250 m", trancheeLe: "2026-08-31" } },
+    entrees: { contrainteLimite: 1 },
+    chaine: [{ pour: "horsGel", titre: "Profondeur hors gel des fondations", outil: "profondeur_hors_gel_V1" }]
+  });
+
+  assert.equal(rendu.contrainteLimite.origine, "dite");
+  assert.equal(rendu.horsGel.origine, "utilitaire");
+  assert.equal(rendu.altitude.origine, "memoire");
+  assert.equal(rendu.araseSuperieure.origine, "defaut");
 });

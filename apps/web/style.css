@@ -16707,11 +16707,19 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .copilote-menu__note{ margin:6px 8px 2px; color:var(--muted); font-size:11px; line-height:15px; }
 
 /* Le menu d'une discussion dans le rail : renommer, effacer. */
+/* Le menu se pose **au-dessus** du rail, et se lit sur son propre fond.
+   Il était au même noir que la barre, et les intitulés des rubriques suivantes
+   se peignaient par-dessus : on lisait « Renommer » et « Solidité » superposés,
+   et l'on visait un bouton qu'on ne distinguait plus. Deux causes, deux
+   corrections : un rang d'empilement que la ligne porte elle-même — un `z-index`
+   sur le menu seul reste soumis à celui de ses voisins — et une surface plus
+   claire que le rail. */
+.nav-list__item:has(.copilote-fil-menu:not([hidden])){ position:relative; z-index:40; }
 .copilote-fil-menu{
-  position:absolute; right:0; top:calc(100% + 2px); z-index:5;
-  min-width:180px; padding:6px;
-  border:1px solid var(--border); border-radius:12px; background:var(--bgAssistPanel);
-  box-shadow:0 8px 24px rgba(1,4,9,.6);
+  position:absolute; right:0; top:calc(100% + 2px); z-index:40;
+  min-width:212px; padding:6px;
+  border:1px solid var(--border); border-radius:12px; background:var(--panel2);
+  box-shadow:0 12px 32px rgba(1,4,9,.85);
 }
 .copilote-fil-menu[hidden]{ display:none; }
 .copilote-fil-menu__item{
@@ -16720,8 +16728,15 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   border:0; border-radius:6px; background:transparent;
   color:var(--text); font:inherit; font-size:13px; text-align:left; cursor:pointer;
 }
-.copilote-fil-menu__item:hover{ background:var(--panel2); }
+.copilote-fil-menu__item:hover{ background:rgba(255,255,255,.07); }
 .copilote-fil-menu__item .ui-icon{ flex:0 0 16px; color:var(--muted); }
+.copilote-fil-menu__item span{ white-space:nowrap; }
+/* Un outil de développement se signale comme tel : celui-ci partira, et la
+   marque évite qu'on le prenne pour une fonction du produit. */
+.copilote-fil-menu__temporaire{
+  margin-left:auto; padding:0 5px; border:1px solid rgba(240,136,62,.4); border-radius:8px;
+  color:#f0883e; font-style:normal; font-size:10px;
+}
 /* L'effacement est sans retour : sa couleur le dit avant le clic. */
 .copilote-fil-menu__item.is-danger,
 .copilote-fil-menu__item.is-danger .ui-icon{ color:rgb(248, 81, 73); }
@@ -16802,6 +16817,9 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 }
 .copilote-formulaire__envoi.est-en-cours{ opacity:.7; cursor:progress; }
 
+.copilote-chaine{ margin-top:10px; }
+.copilote-chaine summary{ cursor:pointer; font-size:11.5px; color:var(--muted); }
+.copilote-chaine__entrees{ padding-left:12px; }
 .copilote-correspondances{ margin-top:10px; }
 .copilote-correspondances summary{ cursor:pointer; font-size:11.5px; color:var(--muted); }
 .copilote-correspondances summary:hover{ color:#f0883e; }
