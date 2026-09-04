@@ -188,7 +188,8 @@ export async function sendAssistMessage(message, {
   const context = await buildAssistContext();
 
   const assertions = context.memoire?.assertions ?? [];
-  etape(onEtape, "Lecture de la mémoire du projet…");
+  etape(onEtape, "Lecture de la mémoire du projet",
+    assertions.length ? `${assertions.length} affirmation${assertions.length > 1 ? "s" : ""} en vigueur` : "rien en mémoire");
   const echanges = [...toolExchanges];
   const executions = [];
   let usage = { inputTokens: null, outputTokens: null, totalTokens: null };
@@ -252,7 +253,7 @@ export async function sendAssistMessage(message, {
     }
 
     const nommes = appels.map((appel) => nomLisible(appel?.name)).join(", ");
-    etape(onEtape, `Lancement du calcul — ${nommes}…`);
+    etape(onEtape, `Lancement de ${nommes}`);
     // Une image rendue avant de calculer : sans cela le message s'écrirait et
     // serait remplacé dans le même battement, et personne ne le verrait jamais.
     await souffler();
@@ -265,6 +266,11 @@ export async function sendAssistMessage(message, {
         // La question sert de justificatif : une valeur qui remplace celle de la
         // mémoire doit avoir été dite par quelqu'un.
         question: content,
+        // Ce que l'utilitaire fait pendant qu'il le fait : lire la note,
+        // trouver le hors gel, chercher les cotes. Sans cela, l'écran montre un
+        // rond qui tourne pendant une minute, et l'on ne sait pas si c'est du
+        // travail ou une panne.
+        onEtape,
         confirmees,
         // Ce que la conversation a déjà établi. Le modèle n'invente pas de
         // valeur — c'est la règle —, donc il rappelle l'outil sans arguments ;
@@ -294,9 +300,10 @@ export async function sendAssistMessage(message, {
     // Le message qui reste à l'écran pendant le second appel au modèle : il
     // nomme ce qui a tourné. « Analyse en cours » tout seul ne dit pas de quoi.
     const aboutis = executions.filter((execution) => execution?.statut === "fait");
-    etape(onEtape, aboutis.length
-      ? `Résultats de ${aboutis.map((execution) => execution.titre).join(", ")} récupérés, analyse en cours…`
-      : "L'utilitaire demande une précision — préparation de la question…");
+    etape(onEtape, aboutis.length ? "Rédaction de la réponse" : "Préparation de la question",
+      aboutis.length
+        ? `d'après ${aboutis.map((execution) => execution.titre).join(", ")}`
+        : "l'utilitaire demande une précision");
   }
 
   throw new Error("Le copilote n'a pas conclu.");
@@ -310,8 +317,8 @@ export async function sendAssistMessage(message, {
  * pendant huit secondes ressemble à une panne ; « lancement du calcul »,
  * « résultats récupérés » ressemble à du travail — et c'en est.
  */
-function etape(rappel, texte) {
-  if (typeof rappel === "function") rappel(texte);
+function etape(rappel, texte, detail = "") {
+  if (typeof rappel === "function") rappel({ texte, detail });
 }
 
 /** Rendre la main au navigateur, le temps d'une image. */

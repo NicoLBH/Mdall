@@ -191,9 +191,12 @@ export async function predimensionner(appuis = [], { base = {}, horsGel = null, 
 
   // Passe large : tous les appuis en un seul vol. Les envoyer un par un ferait
   // huit allers-retours là où un seul suffit, et l'écran attendrait huit fois.
+  // Un appui dont un cas de charge n'a pas pu être rangé ne s'essaie pas : ses
+  // efforts n'entreraient pas dans le calcul, et la semelle rendue serait
+  // plausible et fausse. On ne fabrique pas d'essai pour lui.
   const plan = appuis.map((appui) => ({
     appui,
-    essais: essaisPourUnAppui(
+    essais: (appui.perdus ?? []).length > 0 ? [] : essaisPourUnAppui(
       { ...base, ...(appui.hypotheses ?? {}), charges: appui.charges ?? {} },
       cotesLarges,
       hauteur
@@ -253,6 +256,25 @@ export async function predimensionner(appuis = [], { base = {}, horsGel = null, 
         correspondances: ligne.appui.correspondances ?? [],
         hauteurLz: hauteur
       };
+
+      if ((ligne.appui.perdus ?? []).length > 0) {
+        // Ce n'est ni le sol ni les cotes : c'est une ligne de la note qu'on
+        // n'a pas su lire. Le dire nommément est ce qui permet de la corriger —
+        // « range "Effort normal" en charge permanente » —, alors qu'un ratio
+        // n'apprendrait rien.
+        const noms = ligne.appui.perdus.map((perdu) => `« ${perdu.libelle} » (${perdu.raison})`);
+        return {
+          ...commun,
+          tenue: false,
+          perdus: ligne.appui.perdus,
+          coteMaxTentee: null,
+          ratios: [],
+          gouverne: null,
+          ratio: null,
+          message: `Cet appui n'a pas été dimensionné : ${noms.join(", ")}. `
+            + "Ses efforts n'entreraient pas dans le calcul, et la semelle rendue serait fausse."
+        };
+      }
 
       if (!retenu) {
         // On rend le plus grand essai tenté avec ses quatre ratios : sans lui,
@@ -323,4 +345,43 @@ export function motDeLErreur(resultat) {
 export function volumeTotal(appuis = []) {
   return arrondir(appuis.reduce((total, appui) => total
     + (appui.tenue ? (appui.volume ?? 0) * (appui.quantite ?? 1) : 0), 0), 3);
+}
+
+/**
+ * Ce que la contrainte du sol commande — et ce qu'elle ne commande pas.
+ *
+ * ## Pourquoi cette phrase existe
+ *
+ * Un hangar de charpente métallique pousse plus qu'il ne pèse : les portiques
+ * rendent des efforts horizontaux de plusieurs tonnes contre des efforts
+ * verticaux de quelques centaines de kilos, parfois négatifs. Les massifs se
+ * dimensionnent alors sur le **glissement** et la **surface comprimée**, deux
+ * vérifications où la contrainte admissible du sol n'entre pas.
+ *
+ * Conséquence : le même tableau sort à 1 bar, à 2 bars et à 5 bars. C'est juste,
+ * et cela se lit comme une panne — on croit que la valeur saisie n'a pas été
+ * prise en compte. La phrase qui suit dit ce qui gouverne réellement, pour que
+ * l'ingénieur sache où chercher : améliorer le sol ne servira à rien ; une
+ * longrine, du lest ou de la butée, si.
+ */
+export function ceQueLaContrainteCommande(appuis = []) {
+  const tenus = appuis.filter((appui) => appui?.tenue);
+  if (!tenus.length) return null;
+
+  const parLaContrainte = tenus.filter((appui) => appui.gouverne === "contrainte");
+  if (parLaContrainte.length === tenus.length) return null;
+
+  const autres = tenus.length - parLaContrainte.length;
+  const quoi = [...new Set(tenus
+    .filter((appui) => appui.gouverne && appui.gouverne !== "contrainte")
+    .map((appui) => appui.gouverne))];
+
+  return {
+    gouvernesParLaContrainte: parLaContrainte.length,
+    gouvernesAutrement: autres,
+    par: quoi,
+    phrase: `${autres} massif${autres > 1 ? "s" : ""} sur ${tenus.length} ${
+      autres > 1 ? "sont gouvernés" : "est gouverné"} par ${quoi.join(" ou ")}`
+      + ` — la contrainte admissible du sol n'y change rien.`
+  };
 }

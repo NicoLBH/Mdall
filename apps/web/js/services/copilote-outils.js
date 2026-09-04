@@ -740,6 +740,10 @@ export const OUTILS = [
      * qu'il sait faire sans rien décider.
      */
     async executer(entrees = {}, contexte = {}) {
+      // L'utilitaire raconte ce qu'il fait à mesure : une minute de rond qui
+      // tourne ressemble à une panne, cinq étapes datées ressemblent à du
+      // travail — et c'en est.
+      const etape = typeof contexte.onEtape === "function" ? contexte.onEtape : () => {};
       const piece = (contexte.piecesJointes ?? []).find((p) => p?.mediaType === "application/pdf" && p?.donnees);
       if (!piece) {
         return { ok: false, raison:
@@ -752,7 +756,7 @@ export const OUTILS = [
       const arase = nombre(entrees.araseSuperieure) ?? -0.1;
 
       const [{ lireLaNoteDeCalcul }, { chargesPourLUtilitaire, unitesDeLaNote },
-        { predimensionner, volumeTotal }, { entreesParDefautDans, contrainteDepuisBars },
+        { predimensionner, volumeTotal, ceQueLaContrainteCommande }, { entreesParDefautDans, contrainteDepuisBars },
         { calculerLesSemelles, resultatDeLaSemelle }] = await Promise.all([
         import("./note-de-calcul-service.js"),
         import("./note-de-calcul.js"),
@@ -761,6 +765,7 @@ export const OUTILS = [
         import("./fondations-service.js")
       ]);
 
+      etape("Lecture de la note de calcul", piece.nom);
       let note;
       try {
         note = await lireLaNoteDeCalcul(piece);
@@ -775,6 +780,11 @@ export const OUTILS = [
       }
 
       const unites = unitesDeLaNote(note);
+      etape("Note lue", [
+        `${note.appuis.length} appui${note.appuis.length > 1 ? "s" : ""}`,
+        unites ? `unités ${unites}` : "",
+        note.altitude !== null && note.altitude !== undefined ? `altitude ${note.altitude} m` : ""
+      ].filter(Boolean).join(" · "));
       if (!unites) {
         return { ok: false, raison:
           "L'unité des descentes de charges n'a pas pu être lue sur la note. Une note en tonnes prise "
@@ -809,6 +819,9 @@ export const OUTILS = [
         const gel = outilParId("profondeur_hors_gel").executer({ h0, altitude });
         if (!gel?.ok) return { ok: false, raison: gel?.raison || "La profondeur hors gel n'a pas pu être calculée." };
         horsGel = gel.valeurs.H;
+        etape("Profondeur hors gel calculée", `${horsGel} m — H0 ${h0} m, altitude ${altitude} m`);
+      } else {
+        etape("Profondeur hors gel connue", `${horsGel} m`);
       }
 
       // Les valeurs par défaut sont écrites en daN. Prises telles quelles dans
@@ -826,14 +839,29 @@ export const OUTILS = [
       };
 
       const appuis = note.appuis.map((appui) => {
-        const { charges, correspondances } = chargesPourLUtilitaire(appui);
-        return { nom: appui.nom, quantite: appui.quantite, charges, correspondances, commentaire: appui.commentaire };
+        const { charges, correspondances, perdus } = chargesPourLUtilitaire(appui);
+        return {
+          nom: appui.nom, quantite: appui.quantite, charges, correspondances,
+          // Un appui dont un cas de charge n'entre pas dans le calcul ne se
+          // dimensionne pas : il se refuse. Le dimensionner quand même rendrait
+          // une semelle plausible et fausse, et personne ne le verrait.
+          perdus, commentaire: appui.commentaire
+        };
       });
 
       const impose = {
         pour: texte(entrees.imposerPour),
         Lx: nombre(entrees.imposerLx), Ly: nombre(entrees.imposerLy), Lz: nombre(entrees.imposerLz)
       };
+
+      const aRanger = appuis.filter((appui) => (appui.perdus ?? []).length > 0);
+      if (aRanger.length) {
+        etape("Cas de charge non rangés", `${aRanger.length} appui${aRanger.length > 1 ? "s" : ""} écarté${
+          aRanger.length > 1 ? "s" : ""} : ${aRanger.map((a) => a.nom).join(", ")}`);
+      }
+      etape("Recherche des semelles",
+        `${appuis.length - aRanger.length} appui${appuis.length - aRanger.length > 1 ? "s" : ""}, `
+        + `contrainte ${contrainte} bar, arase ${arase} m`);
 
       let sortie;
       try {
@@ -849,6 +877,10 @@ export const OUTILS = [
       } catch (erreur) {
         return { ok: false, raison: erreur instanceof Error ? erreur.message : "Le calcul n'a pas abouti." };
       }
+
+      const tenus = sortie.appuis.filter((appui) => appui.tenue).length;
+      etape("Semelles retenues",
+        `${tenus} sur ${sortie.appuis.length} · ${sortie.essais} essais · ${volumeTotal(sortie.appuis)} m³`);
 
       const reprises = await reprendreLesCotesImposees(
         sortie, impose,
@@ -874,9 +906,20 @@ export const OUTILS = [
             coteMaxTentee: appui.coteMaxTentee ?? null,
             ratios: appui.ratios ?? [],
             charges: appui.charges ?? {},
-            correspondances: appui.correspondances ?? []
+            correspondances: appui.correspondances ?? [],
+            // Ce qui a produit ce massif, au complet. C'est ce qui permet de le
+            // porter dans l'Atelier tel quel : une semelle recréée depuis ses
+            // seules cotes perdrait le sol, les unités et les charges, et se
+            // recalculerait autrement. Le modèle ne les voit pas — quarante
+            // champs par appui n'apprennent rien à qui a déjà le tableau.
+            entrees: appui.entrees ?? null,
+            perdus: appui.perdus ?? []
           })),
           horsGel,
+          // Ce qui gouverne réellement. Sans cette phrase, un tableau identique
+          // à 1, 2 et 5 bars se lit comme un calcul qui ignore ce qu'on lui
+          // donne — alors qu'il dit précisément que le sol n'est pas en cause.
+          gouvernance: ceQueLaContrainteCommande(reprises),
           volumeTotal: volumeTotal(reprises),
           unites,
           affaire: note.affaire,
@@ -1212,6 +1255,20 @@ export function provenancesDesEntrees(outil, {
 }
 
 /**
+ * De quoi dire une étape, même quand personne n'écoute.
+ *
+ * Les utilitaires racontent ce qu'ils font — lire la note, trouver le hors gel,
+ * chercher les cotes — et l'écran l'affiche à mesure. Un utilitaire appelé hors
+ * de l'écran ne doit pas avoir à s'en soucier : sans destinataire, dire ne fait
+ * rien.
+ */
+function dire(onEtape) {
+  return (texte_, detail = "") => {
+    if (typeof onEtape === "function") onEtape({ texte: texte_, detail });
+  };
+}
+
+/**
  * Une entrée qui manque, obtenue d'un autre utilitaire.
  *
  * ## Pourquoi l'enchaînement est du code, et pas une consigne au modèle
@@ -1241,6 +1298,7 @@ export async function deduireLesEntrees(outil, {
   fournies = {},
   assertions = [],
   piecesJointes = [],
+  onEtape = null,
   dejaVus = new Set(),
   profondeur = 0
 } = {}) {
@@ -1272,7 +1330,7 @@ export async function deduireLesEntrees(outil, {
     // L'utilitaire appelé peut lui-même avoir une entrée déductible : c'est
     // ainsi qu'une chaîne de trois maillons tient sans qu'on l'écrive nulle part.
     const dessous = await deduireLesEntrees(sous, {
-      fournies: pour, assertions, piecesJointes, dejaVus: suivants, profondeur: profondeur + 1
+      fournies: pour, assertions, piecesJointes, onEtape, dejaVus: suivants, profondeur: profondeur + 1
     });
     pour = { ...pour, ...dessous.obtenues };
 
@@ -1292,6 +1350,8 @@ export async function deduireLesEntrees(outil, {
     if (valeur === null || valeur === undefined || texte(valeur) === "") continue;
 
     obtenues[entree.cle] = valeur;
+    dire(onEtape)(`${entree.libelle} obtenue de ${sous.titre}`,
+      `${valeur} ${entree.unite || ""}`.trim());
     chaine.push(...dessous.chaine, {
       pour: entree.cle,
       libelle: entree.libelle,
@@ -1449,7 +1509,7 @@ export function comparerALaMemoire(outil, valeurs = {}, assertions = []) {
  */
 export async function executerOutil({
   id = "", entrees = {}, assertions = [], question = "", confirmees = [], piecesJointes = [],
-  acquises = {}
+  acquises = {}, onEtape = null
 } = {}) {
   const outil = outilParId(id);
   if (!outil) {
@@ -1506,7 +1566,7 @@ export async function executerOutil({
   // gel manque, l'utilitaire gel la calcule de l'altitude que le projet
   // connaît, et personne n'a rien tapé.
   const { obtenues, chaine } = await deduireLesEntrees(outil, {
-    fournies: avantChaine, assertions, piecesJointes, dejaVus: new Set([outil.id])
+    fournies: avantChaine, assertions, piecesJointes, onEtape, dejaVus: new Set([outil.id])
   });
   const fournies = { ...avantChaine, ...obtenues };
 
@@ -1568,7 +1628,7 @@ export async function executerOutil({
   // Ce que la conversation porte et qui n'est pas une entrée : une note de
   // calcul déposée n'est pas une valeur, c'est une source. Elle ne passe donc
   // pas par le garde-fou des substitutions — il n'y a rien à y substituer.
-  const resultat = await outil.executer(fournies, { piecesJointes });
+  const resultat = await outil.executer(fournies, { piecesJointes, onEtape: dire(onEtape) });
   if (!resultat?.ok) {
     return {
       statut: "refus",
@@ -1640,7 +1700,7 @@ function sansLeDetailDesMassifs(resultat) {
     ...resultat,
     valeurs: {
       ...resultat.valeurs,
-      appuis: appuis.map(({ charges, correspondances, ratios, ...garde }) => ({
+      appuis: appuis.map(({ charges, correspondances, ratios, entrees, ...garde }) => ({
         ...garde,
         detail_disponible: true
       }))

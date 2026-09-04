@@ -11,7 +11,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  casUtilitairePour, chargesPourLUtilitaire, normaliserLaNote, unitesDeLaNote,
+  casUtilitairePour, chargesPourLUtilitaire, casPerdus, normaliserLaNote, unitesDeLaNote,
   SCHEMA_NOTE, CAS_UTILITAIRE
 } from "./note-de-calcul.js";
 
@@ -149,4 +149,48 @@ test("les cas de l'utilitaire sont ceux que la déclaration connaît", () => {
   for (const cas of ["G", "Q", "Sn", "W1", "W2", "W3", "W4", "Sx", "Sy", "Sz", "Fa"]) {
     assert.ok(CAS_UTILITAIRE[cas], `${cas} doit être connu`);
   }
+});
+
+
+test("un cas qu'on ne sait pas ranger et qui porte des efforts se signale", () => {
+  // Le cas réel : un massif de contreventement dont la note donne « Effort
+  // normal ». Aucune règle ne le reconnaît, sa charge disparaît, et le massif
+  // se dimensionne alors sur son seul poids propre. Le résultat a l'air d'un
+  // résultat — c'est ce qui le rend dangereux.
+  const { charges, perdus } = chargesPourLUtilitaire({
+    nom: "Massif de stabilité", cas: [
+      { libelle: "Effort normal", V: 3.5, Hx: 0 },
+      { libelle: "Vent", V: 3.077, Hx: 0 }
+    ]
+  });
+
+  assert.equal(charges.G, undefined);
+  assert.deepEqual(perdus, [{ libelle: "Effort normal", raison: "cas non reconnu" }]);
+});
+
+test("une ligne qu'on ne sait pas ranger mais qui ne porte rien ne coûte rien", () => {
+  // Refuser de calculer pour une ligne vide ferait perdre un appui pour rien.
+  const { perdus } = chargesPourLUtilitaire({
+    cas: [{ libelle: "Ligne de séparation", V: 0, Hx: 0 }, { libelle: "CHARGE PERMANENTE", V: 2, Hx: 1 }]
+  });
+  assert.deepEqual(perdus, []);
+});
+
+test("un cinquième vent qui n'a plus de case compte comme perdu", () => {
+  const { perdus } = chargesPourLUtilitaire({
+    cas: [
+      { libelle: "VENT 1", V: 1, Hx: 1 }, { libelle: "VENT 2", V: 1, Hx: 1 },
+      { libelle: "VENT 3", V: 1, Hx: 1 }, { libelle: "VENT 4", V: 1, Hx: 1 },
+      { libelle: "VENT 5", V: 1, Hx: 1 }
+    ]
+  });
+  assert.deepEqual(perdus, [{ libelle: "VENT 5", raison: "plus de case de vent libre" }]);
+});
+
+test("casPerdus ne compte que ce qui porte quelque chose", () => {
+  assert.deepEqual(casPerdus([
+    { libelle: "A", cas: null, porteDesEfforts: true },
+    { libelle: "B", cas: null, porteDesEfforts: false },
+    { libelle: "C", cas: "G", porteDesEfforts: true }
+  ]), [{ libelle: "A", raison: "cas non reconnu" }]);
 });
