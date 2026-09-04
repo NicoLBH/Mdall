@@ -20,7 +20,7 @@ import { svgIcon } from "../../../ui/icons.js";
 import {
   ZONES, CHOIX, CAS_DE_CHARGE, COMPOSANTES, NAPPES, BARRES,
   entreesParDefaut, entreesInvalides, uniteAffichee, estPertinent
-} from "../../../services/fondations-declaration.js";
+} from "../../../../vendor/utilitaires/fondations-declaration.js";
 import { calculerFondation, calculerLesSemelles } from "../../../services/fondations-service.js";
 import { planDeLaRemise, REMISE_ANNONCEE } from "../../../services/fondations-remise.js";
 import {

@@ -10,9 +10,9 @@ import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.j
 import { parPaquets } from "./paquets.js";
 import {
   CAS_DE_CHARGE, COMPOSANTES, NAPPES, champsNumeriques, entreesInvalides
-} from "./fondations-declaration.js";
+} from "../../vendor/utilitaires/fondations-declaration.js";
 
-export * from "./fondations-declaration.js";
+export * from "../../vendor/utilitaires/fondations-declaration.js";
 
 const URL_FONCTION = `${getSupabaseUrl()}/functions/v1/fondations-stabilite-externe`;
 

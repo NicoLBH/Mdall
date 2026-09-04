@@ -60,6 +60,7 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { requireUser } from "../_shared/require-user.ts";
+import { declarationsPourModele } from "../_shared/utilitaires/catalogue.js";
 
 type ToolDeclaration = {
   type?: string;
@@ -354,7 +355,11 @@ serve(async (req) => {
   const corps = truncate(contexte, BUDGET_CHARS);
   const tronque = corps.includes(MARQUE_TRONQUE);
 
-  const outils = (Array.isArray(payload.tools) ? payload.tools : [])
+  // **Le catalogue vient d'ici, pas du navigateur.** Ce sont les phrases qui
+  // décident quand un utilitaire est appelé : les laisser descendre dans la
+  // page revenait à publier la méthode tout en protégeant l'arithmétique.
+  // Le navigateur ne les envoie plus, et ne les recevrait pas non plus.
+  const outils = declarationsPourModele()
     .slice(0, MAX_TOOLS)
     .filter((outil) => texte(outil?.name) && outil?.parameters);
 

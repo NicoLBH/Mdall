@@ -7,7 +7,7 @@ import {
   getSeismicSizingValues,
   buildElasticResponseSpectrumTable,
   computeElasticResponseValue
-} from "../../../services/seismic-spectrum.js";
+} from "../../../../vendor/utilitaires/seismic-spectrum.js";
 import { renderSvgLineChart, getNiceChartTicks } from "../../../utils/svg-line-chart.js";
 
 let currentSeismicRoot = null;

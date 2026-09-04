@@ -79,7 +79,7 @@
  */
 
 import { buildElasticResponseSpectrumTable, getSeismicSizingValues } from "./seismic-spectrum.js";
-import { currentAssertions } from "./project-memory.js";
+import { currentAssertions } from "./memoire.js";
 
 function texte(valeur) {
   return String(valeur ?? "").trim();
@@ -598,8 +598,11 @@ export const OUTILS = [
       poser("niveauxParcAuDessous", nombre(entrees.niveauxParcAuDessous));
       poser("hauteurPlancherBasDernierNiveauParc", nombre(entrees.hauteurPlancherBasDernierNiveauParc));
 
-      const { demanderIncendie } = await import("./incendie-service.js");
-      const rendu = await demanderIncendie(produit, reponses);
+      // Le référentiel est une fonction voisine : on l'appelle sous l'identité
+      // de qui demande, comme le navigateur le faisait. Ce qui change, c'est
+      // que la question et son aiguillage ne se lisent plus dans la page.
+      const { demanderIncendie } = await import("./moteurs.js");
+      const rendu = await demanderIncendie(produit, reponses, contexte.autorisation);
 
       if (!rendu?.ok) {
         // « Ne pas savoir n'autorise pas à prétendre qu'il n'y a rien » : on rend
@@ -771,18 +774,18 @@ export const OUTILS = [
 
       const [{ lireLaNoteDeCalcul }, { chargesPourLUtilitaire, unitesDeLaNote, lireLeRangement },
         { predimensionner, volumeTotal, ceQueLaContrainteCommande }, { entreesParDefautDans, contrainteDepuisBars },
-        { calculerLesSemelles, resultatDeLaSemelle }] = await Promise.all([
-        import("./note-de-calcul-service.js"),
+        { calculerLesSemelles }] = await Promise.all([
+        import("./lire-la-note.js"),
         import("./note-de-calcul.js"),
-        import("./predimensionnement-fondations.js"),
+        import("./predimensionnement.js"),
         import("./fondations-declaration.js"),
-        import("./fondations-service.js")
+        import("./moteurs.js")
       ]);
 
       etape("Lecture de la note de calcul", piece.nom);
       let note;
       try {
-        note = await lireLaNoteDeCalcul(piece);
+        note = await lireLaNoteDeCalcul(piece, { cle: contexte.cleDuModele });
       } catch (erreur) {
         return { ok: false, raison: erreur instanceof Error ? erreur.message : "La note n'a pas pu être lue." };
       }
@@ -889,8 +892,8 @@ export const OUTILS = [
           // Le lot rend une enveloppe par semelle : on l'ouvre ici, une fois,
           // plutôt que de laisser la recherche chercher un bilan là où il n'y
           // en a jamais.
-          calculer: async (liste) => (await calculerLesSemelles(liste.map((e) => ({ entrees: e }))))
-            .map(resultatDeLaSemelle)
+          calculer: (liste) => calculerLesSemelles(
+            liste.map((entrees) => ({ entrees })), contexte.autorisation)
         });
       } catch (erreur) {
         return { ok: false, raison: erreur instanceof Error ? erreur.message : "Le calcul n'a pas abouti." };
@@ -902,7 +905,7 @@ export const OUTILS = [
 
       const reprises = await reprendreLesCotesImposees(
         sortie, impose,
-        async (liste) => (await calculerLesSemelles(liste)).map(resultatDeLaSemelle),
+        (liste) => calculerLesSemelles(liste, contexte.autorisation),
         base, horsGel
       );
 
@@ -975,7 +978,7 @@ async function reprendreLesCotesImposees(sortie, impose, calculer, base, horsGel
   }));
   const resultats = await calculer(entrees);
 
-  const { verificationGouvernante } = await import("./predimensionnement-fondations.js");
+  const { verificationGouvernante } = await import("./predimensionnement.js");
   const parNom = new Map(vises.map((appui, rang) => [appui.nom, { appui, resultat: resultats[rang], entrees: entrees[rang].entrees }]));
 
   return sortie.appuis.map((appui) => {
@@ -1026,7 +1029,18 @@ function arrondir(outil, valeurs) {
 /** Un outil par son identifiant, ou rien. Rien n'est approché. */
 export function outilParId(id) {
   const cle = texte(id);
-  return OUTILS.find((outil) => outil.id === cle) ?? null;
+  const trouve = OUTILS.find((outil) => outil.id === cle);
+  if (trouve) return trouve;
+
+  // Un résultat porte sa **référence** — « profondeur_hors_gel_V1 » —, et c'est
+  // elle que l'écran renvoie quand on répond à une question. La refuser
+  // rendait « aucun utilitaire ne porte ce nom » au moment précis où l'on
+  // venait de fournir ce qui manquait.
+  //
+  // La version ne se retire qu'à la fin, et seulement si elle correspond : un
+  // outil qui s'appellerait « quelque_chose_V2 » de son vrai nom reste trouvé
+  // par son vrai nom.
+  return OUTILS.find((outil) => referenceOutil(outil) === cle) ?? null;
 }
 
 /** L'identifiant complet : le nom et sa version, comme pour les déductions. */
@@ -1527,7 +1541,7 @@ export function comparerALaMemoire(outil, valeurs = {}, assertions = []) {
  */
 export async function executerOutil({
   id = "", entrees = {}, assertions = [], question = "", confirmees = [], piecesJointes = [],
-  acquises = {}, onEtape = null
+  acquises = {}, onEtape = null, cleDuModele = "", autorisation = ""
 } = {}) {
   const outil = outilParId(id);
   if (!outil) {
@@ -1646,7 +1660,9 @@ export async function executerOutil({
   // Ce que la conversation porte et qui n'est pas une entrée : une note de
   // calcul déposée n'est pas une valeur, c'est une source. Elle ne passe donc
   // pas par le garde-fou des substitutions — il n'y a rien à y substituer.
-  const resultat = await outil.executer(fournies, { piecesJointes, onEtape: dire(onEtape) });
+  const resultat = await outil.executer(fournies, {
+    piecesJointes, onEtape: dire(onEtape), cleDuModele, autorisation
+  });
   if (!resultat?.ok) {
     return {
       statut: "refus",
@@ -1674,6 +1690,9 @@ export async function executerOutil({
     // d'où viennent les entrées ne se conteste pas, il se subit.
     chaine,
     provenances,
+    // Ce que la conversation gardera de ce calcul. Le tri appartient à la
+    // déclaration des entrées, donc au serveur : l'écran ne les connaît plus.
+    aRetenir: aRetenirDeLaConversation(outil, fournies),
     venuesDeLaMemoire,
     valeurs: resultat.valeurs,
     unites: Object.fromEntries((outil.sorties ?? []).map((sortie) => [sortie.cle, sortie.unite || ""])),

@@ -17,7 +17,7 @@ import {
   prefillDepuisMemoire,
   referenceOutil,
   sansFigure
-} from "./copilote-outils.js";
+} from "./catalogue.js";
 
 function donnee(cle, valeur, extra = {}) {
   return {
@@ -47,6 +47,37 @@ test("un outil se retrouve par son identifiant, jamais par approximation", () =>
   assert.equal(outilParId("spectre_elastique_ec8")?.id, "spectre_elastique_ec8");
   assert.equal(outilParId("spectre"), null);
   assert.equal(outilParId(""), null);
+});
+
+test("un outil se retrouve aussi par la référence que porte son résultat", async () => {
+  // L'écran ne connaît plus le catalogue : quand on répond à une question, il
+  // renvoie la référence qu'il avait sous les yeux — « profondeur_hors_gel_V1 ».
+  // La refuser rendait « aucun utilitaire ne porte ce nom » au moment précis où
+  // l'on venait de fournir ce qui manquait.
+  assert.equal(outilParId("profondeur_hors_gel_V1")?.id, "profondeur_hors_gel");
+  assert.equal(outilParId("profondeur_hors_gel_V9"), null, "une version qui n'existe pas n'est pas un outil");
+
+  const resultat = await executerOutil({
+    id: "profondeur_hors_gel_V1",
+    entrees: { h0: "0.45", altitude: "450" },
+    question: "profondeur hors gel avec H0 = 0.45 et une altitude de 450 m ?"
+  });
+  assert.equal(resultat.statut, "fait");
+  assert.equal(resultat.valeurs.H, 0.525);
+});
+
+test("un résultat dit ce que la conversation doit en retenir", async () => {
+  // L'écran ne peut plus faire ce tri : il ne connaît plus les déclarations
+  // d'entrées. C'est donc le résultat qui le porte — sans quoi la contrainte de
+  // sol se redemanderait à chaque question sur la même note.
+  const resultat = await executerOutil({
+    id: "profondeur_hors_gel",
+    entrees: { h0: "0.45", altitude: "450" },
+    question: "hors gel avec H0 = 0.45 et une altitude de 450 m ?"
+  });
+
+  assert.equal(resultat.statut, "fait");
+  assert.deepEqual(resultat.aRetenir, { h0: "0.45", altitude: "450" });
 });
 
 test("la référence d'un outil porte sa version", () => {
