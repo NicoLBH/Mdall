@@ -265,7 +265,7 @@ export async function sendAssistMessage(message, {
     for (const appel of appels) {
       // L'utilitaire s'exécute **au serveur** : le catalogue, les garde-fous et
       // l'enchaînement y sont, et le navigateur n'en connaît que la réponse.
-      const { resultat, etapes, pourLeModele } = await executerUtilitaire({
+      const { resultat, pourLeModele } = await executerUtilitaire({
         id: appel?.name,
         entrees: safeJsonParse(appel?.arguments) ?? {},
         assertions,
@@ -282,13 +282,14 @@ export async function sendAssistMessage(message, {
         // de calcul déposée est une source, pas une entrée. Elle ne passe donc
         // pas par le garde-fou des substitutions.
         piecesJointes,
+        // Ce que l'utilitaire fait pendant qu'il le fait — lire la note,
+        // trouver le hors gel, chercher les cotes — se raconte à l'écran **à
+        // mesure**, et non au retour de l'appel : c'est un travail de plusieurs
+        // secondes, et le montrer d'un bloc à la fin revient à ne pas le
+        // montrer.
+        onEtape: (dit) => etape(onEtape, dit?.texte, dit?.detail),
         signal
       });
-
-      // Ce que l'utilitaire a fait pendant qu'il le faisait — lire la note,
-      // trouver le hors gel, chercher les cotes — revient avec son résultat et
-      // se raconte à l'écran dans l'ordre.
-      for (const dit of etapes) etape(onEtape, dit?.texte, dit?.detail);
 
       executions.push(resultat);
       if (typeof onToolRun === "function") onToolRun(resultat);

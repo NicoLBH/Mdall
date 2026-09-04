@@ -96,55 +96,76 @@ function cleUtilisateur() {
   return String(store.user?.id || "");
 }
 
+/**
+ * Ce que vaut un état de copilote qui n'a encore rien vécu.
+ *
+ * Rendu à neuf à chaque appel : un tableau partagé entre deux états serait un
+ * journal commun à deux conversations.
+ */
+function etatParDefaut() {
+  return {
+    isSending: false,
+    draft: "",
+    lastError: "",
+    creditsOpen: false,
+    menuOpen: false,
+    // Où en est le copilote, étape par étape, avec ce que chacune a produit.
+    // Une seule phrase remplacée à chaque tour ne laissait rien voir : on
+    // lisait « analyse en cours » sans savoir si la note avait été lue, ni ce
+    // qu'on y avait trouvé. La liste s'accumule, et elle reste sous la
+    // réponse une fois celle-ci écrite.
+    etapes: [],
+    // Le rang du message dont la réflexion se poursuit. Une question posée en
+    // cours de route interrompt le raisonnement, elle n'en ouvre pas un
+    // second : le compte rendu reprend dans le même message, à sa place dans
+    // le fil.
+    enCours: null,
+    // Le tour en cours, s'il y en a un. Il possède `isSending`, `etapes` et
+    // `enCours` tant qu'il dure : un tour qui finit après qu'un autre a
+    // commencé ne doit pas remettre à zéro ce qui ne lui appartient plus.
+    tour: null,
+    // De quoi interrompre l'appel en cours. Un bouton d'arrêt qui n'arrête
+    // rien serait pire que pas de bouton du tout.
+    abort: null,
+    // Nul tant qu'aucune question n'a été posée : une discussion vide n'a
+    // rien à conserver, et le rail se remplirait de lignes sans titre.
+    conversationId: null,
+    messages: [],
+    conversations: [],
+    chargement: false,
+    // Ce que la mémoire disait au dernier envoi. Les utilitaires s'en servent
+    // pour pré-remplir leurs entrées et comparer leurs résultats.
+    assertionsConnues: [],
+    // La note de calcul déposée, en mémoire vive et nulle part ailleurs. Elle
+    // n'est ni stockée ni enregistrée avec la conversation : une note
+    // déposée pour un essai n'est pas une pièce du projet.
+    pieceJointe: null,
+    // Ce que la conversation a déjà fait confirmer, valeur comprise. Sans
+    // cette mémoire, chaque nouvelle question redemanderait la contrainte de
+    // sol qu'on vient de saisir ; avec la valeur, une autre valeur sous la
+    // même clé reste refusée.
+    confirmeesValeurs: {},
+    projectKey: cleProjet(),
+    userKey: cleUtilisateur()
+  };
+}
+
 function ensureState() {
   if (!store.ui) store.ui = {};
 
-  if (!store.ui.assistant) {
-    store.ui.assistant = {
-      isSending: false,
-      draft: "",
-      lastError: "",
-      creditsOpen: false,
-      menuOpen: false,
-      // Où en est le copilote, étape par étape, avec ce que chacune a produit.
-      // Une seule phrase remplacée à chaque tour ne laissait rien voir : on
-      // lisait « analyse en cours » sans savoir si la note avait été lue, ni ce
-      // qu'on y avait trouvé. La liste s'accumule, et elle reste sous la
-      // réponse une fois celle-ci écrite.
-      etapes: [],
-      // Le rang du message dont la réflexion se poursuit. Une question posée en
-      // cours de route interrompt le raisonnement, elle n'en ouvre pas un
-      // second : le compte rendu reprend dans le même message, à sa place dans
-      // le fil.
-      enCours: null,
-      // Le tour en cours, s'il y en a un. Il possède `isSending`, `etapes` et
-      // `enCours` tant qu'il dure : un tour qui finit après qu'un autre a
-      // commencé ne doit pas remettre à zéro ce qui ne lui appartient plus.
-      tour: null,
-      // De quoi interrompre l'appel en cours. Un bouton d'arrêt qui n'arrête
-      // rien serait pire que pas de bouton du tout.
-      abort: null,
-      // Nul tant qu'aucune question n'a été posée : une discussion vide n'a
-      // rien à conserver, et le rail se remplirait de lignes sans titre.
-      conversationId: null,
-      messages: [],
-      conversations: [],
-      chargement: false,
-      // Ce que la mémoire disait au dernier envoi. Les utilitaires s'en servent
-      // pour pré-remplir leurs entrées et comparer leurs résultats.
-      assertionsConnues: [],
-      // La note de calcul déposée, en mémoire vive et nulle part ailleurs. Elle
-      // n'est ni stockée ni enregistrée avec la conversation : une note
-      // déposée pour un essai n'est pas une pièce du projet.
-      pieceJointe: null,
-      // Ce que la conversation a déjà fait confirmer, valeur comprise. Sans
-      // cette mémoire, chaque nouvelle question redemanderait la contrainte de
-      // sol qu'on vient de saisir ; avec la valeur, une autre valeur sous la
-      // même clé reste refusée.
-      confirmeesValeurs: {},
-      projectKey: cleProjet(),
-      userKey: cleUtilisateur()
-    };
+  // Le magasin déclare déjà un `ui.assistant` — quatre champs, hérités du
+  // premier assistant. Tester son existence pour décider de le créer revenait
+  // donc à ne jamais le créer : `enCours`, `tour`, `etapes` et le reste
+  // restaient **indéfinis**, et `enCours === null` était faux. Le bloc
+  // d'attente ne s'affichait plus du tout : les étapes s'accumulaient dans un
+  // état que rien ne dessinait, puis apparaissaient d'un coup avec la réponse.
+  //
+  // On complète donc plutôt que de créer, et sans remplacer l'objet : le tour
+  // en cours en garde la référence, et deux objets différents feraient diverger
+  // ce que l'on écrit de ce que l'on dessine.
+  if (!store.ui.assistant) store.ui.assistant = {};
+  for (const [cle, valeur] of Object.entries(etatParDefaut())) {
+    if (!(cle in store.ui.assistant)) store.ui.assistant[cle] = valeur;
   }
 
   // Changer de projet **ou de compte** repart de zéro. Le premier éviterait une
@@ -1855,7 +1876,7 @@ async function lancerCalcul(root, outil, saisies, acquis = {}, { libelles = {}, 
     if (String(valeur ?? "").trim()) etat.confirmeesValeurs[cle] = String(valeur).trim();
   }
 
-  const { resultat, etapes, pourLeModele } = await executerUtilitaire({
+  const { resultat, pourLeModele } = await executerUtilitaire({
     // L'écran renvoie la **référence** que le résultat portait —
     // « fondations_predimensionnement_V1 » —, et le serveur la reconnaît. Il
     // n'a plus à savoir ce qu'est un identifiant d'utilitaire.
@@ -1867,12 +1888,13 @@ async function lancerCalcul(root, outil, saisies, acquis = {}, { libelles = {}, 
     assertions,
     confirmees: [...Object.keys(saisies), ...Object.keys(acquis)],
     acquises: etat.confirmeesValeurs ?? {},
-    piecesJointes: etat.pieceJointe ? [etat.pieceJointe] : []
+    piecesJointes: etat.pieceJointe ? [etat.pieceJointe] : [],
+    // Les étapes de l'utilitaire ont lieu au serveur ; elles se racontent ici
+    // **pendant** qu'elles ont lieu. Les attendre pour les rejouer d'un bloc
+    // ferait apparaître dix lignes en même temps que le tableau qu'elles
+    // expliquent.
+    onEtape: (dit) => noterUneEtape(root, etat, dit)
   });
-
-  // Les étapes de l'utilitaire reviennent avec son résultat : elles ont eu lieu
-  // au serveur, elles se racontent ici.
-  for (const dit of etapes) noterUneEtape(root, etat, dit);
 
   retenirDeLaConversation(etat, [resultat]);
 

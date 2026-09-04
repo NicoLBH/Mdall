@@ -87,46 +87,120 @@ Deno.serve(async (req: Request) => {
     pieces: Array.isArray(charge?.piecesJointes) ? charge.piecesJointes.length : 0
   });
 
-  try {
-    // Les étapes se rassemblent et repartent avec le résultat. Un flux les
-    // montrerait à mesure ; ce serait mieux, et ce n'est pas ce tour-ci — un
-    // aller-retour d'utilitaire dure quelques secondes, pas une minute.
-    const etapes: Array<{ texte: string; detail: string }> = [];
+  const entrees = {
+    id,
+    entrees: charge?.entrees ?? {},
+    assertions: charge?.assertions ?? [],
+    question: String(charge?.question ?? ""),
+    confirmees: charge?.confirmees ?? [],
+    piecesJointes: charge?.piecesJointes ?? [],
+    acquises: charge?.acquises ?? {},
+    // La clé du modèle sert à lire une note de calcul jointe. Elle ne quitte
+    // jamais le serveur — c'était déjà vrai, et c'est ce qui ne change pas.
+    cleDuModele: openAiApiKey,
+    // Les moteurs de calcul sont des fonctions voisines : ils s'appellent
+    // sous **l'identité de qui demande**. L'orchestration n'a pas d'identité
+    // propre et ne doit pas en avoir — un calcul lancé pour quelqu'un se fait
+    // avec ses droits, pas avec les nôtres.
+    autorisation: req.headers.get("Authorization") ?? ""
+  };
 
-    const resultat = await executerOutil({
-      id,
-      entrees: charge?.entrees ?? {},
-      assertions: charge?.assertions ?? [],
-      question: String(charge?.question ?? ""),
-      confirmees: charge?.confirmees ?? [],
-      piecesJointes: charge?.piecesJointes ?? [],
-      acquises: charge?.acquises ?? {},
-      onEtape: (dit: { texte: string; detail: string }) => etapes.push(dit),
-      // La clé du modèle sert à lire une note de calcul jointe. Elle ne quitte
-      // jamais le serveur — c'était déjà vrai, et c'est ce qui ne change pas.
-      cleDuModele: openAiApiKey,
-      // Les moteurs de calcul sont des fonctions voisines : ils s'appellent
-      // sous **l'identité de qui demande**. L'orchestration n'a pas d'identité
-      // propre et ne doit pas en avoir — un calcul lancé pour quelqu'un se fait
-      // avec ses droits, pas avec les nôtres.
-      autorisation: req.headers.get("Authorization") ?? ""
-    });
+  // ------------------------------------------------------------------ //
+  // Deux formes de réponse, et l'appelant choisit.
+  //
+  // Une fonction se déploie en secondes, la page en minutes : pendant cet
+  // écart, l'ancienne page parle à la nouvelle fonction. Une réponse en flux
+  // servie à un navigateur qui attend un objet JSON entier, c'est un
+  // « L'utilitaire a répondu, mais sans résultat » pour tout le monde, le temps
+  // que la publication se termine. Le navigateur dit donc ce qu'il sait lire,
+  // et l'ancien continue d'être servi comme avant.
+  // ------------------------------------------------------------------ //
+  const veutLeFlux = (req.headers.get("Accept") ?? "").includes("ndjson");
 
-    console.log("executer-utilitaire:done", { outil: id, statut: resultat?.statut, etapes: etapes.length });
-
-    return json({
-      resultat,
-      etapes,
-      // Ce que le modèle recevra : allégé des figures et du détail des massifs,
-      // par la même fonction qui le fait depuis le début. Le navigateur ne
-      // l'assemble plus — il ne connaît plus les utilitaires.
-      pourLeModele: sansFigure(resultat)
-    });
-  } catch (erreur) {
-    console.error("executer-utilitaire:failed", {
-      outil: id,
-      message: erreur instanceof Error ? erreur.message : "unknown"
-    });
-    return json({ error: "L'utilitaire n'a pas pu être exécuté." }, 502);
+  if (!veutLeFlux) {
+    try {
+      const etapes: Array<{ texte: string; detail: string }> = [];
+      const resultat = await executerOutil({
+        ...entrees,
+        onEtape: (dit: { texte: string; detail: string }) => etapes.push(dit)
+      });
+      console.log("executer-utilitaire:done", { outil: id, statut: resultat?.statut, etapes: etapes.length });
+      return json({ resultat, etapes, pourLeModele: sansFigure(resultat) });
+    } catch (erreur) {
+      console.error("executer-utilitaire:failed", {
+        outil: id,
+        message: erreur instanceof Error ? erreur.message : "unknown"
+      });
+      return json({ error: "L'utilitaire n'a pas pu être exécuté." }, 502);
+    }
   }
+
+  // ------------------------------------------------------------------ //
+  // La réponse part en flux : une ligne JSON par étape, puis le résultat.
+  //
+  // Elle partait entière, les étapes rassemblées dans un tableau, et l'écran
+  // les rejouait à l'arrivée. Une recherche de semelles dure huit secondes :
+  // treize lignes de travail apparaissaient alors en même temps que leur
+  // conclusion, ce qui ne raconte plus le travail — cela le résume une fois
+  // qu'il n'intéresse plus personne.
+  //
+  // Le prix de ce choix est qu'un échec survenu **après** la première ligne ne
+  // peut plus prendre la forme d'un code HTTP : l'en-tête est parti. Il prend
+  // donc la forme d'une ligne `{erreur}`, et l'appelant la traite comme un
+  // refus. Ce qui échoue avant — le portail, un corps illisible, une demande
+  // trop lourde — répond en JSON ordinaire, avec son code.
+  // ------------------------------------------------------------------ //
+  const encodeur = new TextEncoder();
+  let comptees = 0;
+
+  const flux = new ReadableStream({
+    async start(controle) {
+      const ecrire = (objet: unknown) => {
+        try {
+          controle.enqueue(encodeur.encode(`${JSON.stringify(objet)}\n`));
+        } catch {
+          // Le navigateur a coupé : le calcul finit, mais plus personne ne lit.
+        }
+      };
+
+      try {
+        const resultat = await executerOutil({
+          ...entrees,
+          onEtape: (dit: { texte: string; detail: string }) => { comptees += 1; ecrire({ etape: dit }); }
+        });
+
+        console.log("executer-utilitaire:done", { outil: id, statut: resultat?.statut, etapes: comptees });
+
+        ecrire({
+          fin: {
+            resultat,
+            // Ce que le modèle recevra : allégé des figures et du détail des massifs,
+            // par la même fonction qui le fait depuis le début. Le navigateur ne
+            // l'assemble plus — il ne connaît plus les utilitaires.
+            pourLeModele: sansFigure(resultat)
+          }
+        });
+      } catch (erreur) {
+        console.error("executer-utilitaire:failed", {
+          outil: id,
+          message: erreur instanceof Error ? erreur.message : "unknown"
+        });
+        ecrire({ erreur: "L'utilitaire n'a pas pu être exécuté." });
+      } finally {
+        controle.close();
+      }
+    }
+  });
+
+  return new Response(flux, {
+    status: 200,
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "application/x-ndjson; charset=utf-8",
+      "Cache-Control": "no-store",
+      // Sans cela, un intermédiaire qui tamponne rendrait le flux d'un bloc :
+      // on aurait payé le protocole sans gagner l'affichage.
+      "X-Accel-Buffering": "no"
+    }
+  });
 });
