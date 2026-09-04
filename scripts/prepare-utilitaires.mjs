@@ -50,7 +50,8 @@ const JAMAIS = [
   "predimensionnement.js",
   "lire-la-note.js",
   "moteurs.js",
-  "memoire.js"
+  "memoire.js",
+  "etude-incendie.js"
 ];
 
 async function main() {

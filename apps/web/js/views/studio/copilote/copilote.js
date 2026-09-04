@@ -38,6 +38,7 @@
  */
 
 import { store } from "../../../store.js";
+import { messageQuiADemande } from "./fil.js";
 import { escapeHtml } from "../../../utils/escape-html.js";
 import { svgIcon } from "../../../ui/icons.js";
 import { sendAssistMessage } from "../../../services/copilote-service.js";
@@ -273,6 +274,12 @@ export function openConversation(id) {
   const conversation = findConversation(etat.conversations, id);
   if (!conversation) return false;
 
+  // Rouvrir celle qui est déjà ouverte ne doit rien lui coûter. Les messages
+  // du rail viennent de la base, qui ne conserve que le rôle et le texte : les
+  // recopier par-dessus l'état vif effacerait les tableaux, les formulaires et
+  // le journal des étapes du tour en cours. On ne fait donc que revenir dessus.
+  if (etat.conversationId === conversation.id && (etat.messages ?? []).length) return true;
+
   etat.conversationId = conversation.id;
   etat.messages = conversation.messages.map((message) => ({ ...message }));
   etat.draft = "";
@@ -318,9 +325,8 @@ export async function transcrireLaDiscussion(id) {
   const etat = ensureState();
   // La discussion ouverte est celle dont l'état vit : elle porte les calculs
   // qui viennent d'avoir lieu, que la liste du rail ne connaît pas encore.
-  const messages = etat.conversationId === id
-    ? etat.messages ?? []
-    : findConversation(etat.conversations, id)?.messages ?? [];
+  const vif = etat.conversationId === id;
+  const messages = vif ? etat.messages ?? [] : findConversation(etat.conversations, id)?.messages ?? [];
 
   const entete = findConversation(etat.conversations, id);
   // La version servie fait partie du rapport : un défaut corrigé et un défaut
@@ -331,6 +337,15 @@ export async function transcrireLaDiscussion(id) {
     `# ${entete?.title || "Discussion sans titre"}`,
     `Projet : ${cleProjet()} — ${messages.length} message${messages.length > 1 ? "s" : ""}`,
     `Version servie : ${await versionLisible().catch(() => "inconnue")}`,
+    // D'où sort ce texte, et ce qu'il porte encore.
+    //
+    // Un compte rendu où ne figure aucun calcul se lit de deux façons : ou bien
+    // le copilote n'a rien calculé, ou bien la copie a perdu ce qu'il avait
+    // calculé. Les deux racontent la même chose à l'écran et demandent des
+    // corrections opposées. On dit donc laquelle des deux, plutôt que de faire
+    // deviner.
+    `Source : ${vif ? "état vif de la discussion ouverte" : "liste du rail"}`
+      + ` — ${messages.filter((message) => (message.executions ?? []).length).length} message(s) portant un calcul`,
     ""
   ];
 
@@ -715,6 +730,11 @@ function nombreLisible(valeur, decimales = 2) {
  */
 const MOTS_DE_PROVENANCE = {
   memoire: "mémoire du projet",
+  // Une réponse d'étude n'a pas été tranchée — personne ne l'a versée à la
+  // mémoire, rien ne s'y appuie encore. Elle a pourtant un auteur : quelqu'un
+  // l'a saisie dans l'Atelier pour ce bâtiment. Le mot le dit tel quel, sans la
+  // hausser au rang de vérité du projet.
+  etude: "étude du projet",
   dite: "dite ici",
   defaut: "valeur par défaut",
   utilitaire: "calculée par"
@@ -1849,9 +1869,7 @@ async function lancerCalcul(root, outil, saisies, acquis = {}, { libelles = {}, 
   // dans le cas courant et se trompait dès qu'on répondait à une question plus
   // haut dans le fil, ce qui est exactement le moment où l'on ne comprend pas
   // ce qui se passe.
-  const message = Number.isInteger(rang) && etat.messages[rang]
-    ? etat.messages[rang]
-    : etat.messages.findLast((candidat) => (candidat.executions ?? []).length > 0) ?? null;
+  const message = messageQuiADemande(etat.messages, rang);
 
   // Le journal reprend son cours, il ne repart pas de zéro : ce qui a été fait
   // avant la question reste au-dessus de la réponse.

@@ -15,6 +15,7 @@ import {
   phraseDesSubstitutions,
   provenancesDesEntrees,
   prefillDepuisMemoire,
+  prefillDepuisLEtude,
   referenceOutil,
   sansFigure
 } from "./catalogue.js";
@@ -986,4 +987,126 @@ test("un cas rangé à la demande rend l'appui calculable", async () => {
   assert.equal(resultat.statut, "refus");
   assert.equal(resultat.entrees.rangementDesCas, "Effort normal = G");
   assert.equal(resultat.ecartees.includes("Rangement des cas de charge"), false);
+});
+
+
+/* ------------------------------------------------------------------ *
+ * L'étude du projet pré-remplit ce qu'elle sait
+ * ------------------------------------------------------------------ */
+
+/**
+ * Le référentiel incendie, joué sur place.
+ *
+ * L'utilitaire l'appelle par le réseau — c'est une fonction voisine. Ici on
+ * court-circuite le transport et l'on branche le **vrai** raisonnement : sans
+ * cela on vérifierait que l'on a bien composé un numéro, pas que la réponse
+ * tient.
+ */
+const { demander } = await import("../../incendie-habitation/corpus.js");
+globalThis.Deno = globalThis.Deno ?? { env: { get: () => "" } };
+const vraiFetch = globalThis.fetch;
+globalThis.fetch = async (url, options) => {
+  if (String(url).includes("incendie-habitation")) {
+    const corps = JSON.parse(options?.body ?? "{}");
+    return new Response(JSON.stringify({ reponse: demander(corps.produit, corps.reponses ?? {}) }),
+      { status: 200, headers: { "Content-Type": "application/json" } });
+  }
+  return vraiFetch(url, options);
+};
+
+/** Une étude telle que l'écran l'enregistre : des booléens, pas des « oui ». */
+const ETUDE = {
+  id: "e1",
+  titre: "Bâtiment A — collectif",
+  reponses: {
+    logementsSuperposes: true,
+    etagesSurRdc: 3,
+    duplexOuTriplexAuDernierEtage: false,
+    hauteurPlancherBasNiveauLePlusHaut: 9.4,
+    niveauxEnSousSol: 2,
+    parcDeStationnement: true,
+    surfaceParc: 480,
+    // Une question que l'utilitaire ne déclare pas : elle ne pré-remplit rien,
+    // et elle part quand même au référentiel.
+    typeEscalierRetenu: "encloisonne"
+  }
+};
+
+test("une case cochée dans l'étude devient un « oui » pour l'utilitaire", () => {
+  const outil = outilParId("incendie_habitation");
+  const { valeurs, provenance } = prefillDepuisLEtude(outil, ETUDE);
+
+  assert.equal(valeurs.logementsSuperposes, "oui");
+  assert.equal(valeurs.duplexOuTriplexAuDernierEtage, "non");
+  assert.equal(valeurs.etagesSurRdc, "3");
+  assert.equal(valeurs.hauteurPlancherBasNiveauLePlusHaut, "9.4");
+  assert.equal(provenance.etagesSurRdc.etude, "Bâtiment A — collectif");
+});
+
+test("un compte de niveaux enterrés devient un sous-sol, et zéro veut dire non", () => {
+  const outil = outilParId("incendie_habitation");
+  assert.equal(prefillDepuisLEtude(outil, ETUDE).valeurs.sousSol, "oui");
+  assert.equal(
+    prefillDepuisLEtude(outil, { ...ETUDE, reponses: { niveauxEnSousSol: 0 } }).valeurs.sousSol,
+    "non");
+  // Ne pas savoir n'est pas répondre « non » : sans la question, pas de valeur.
+  assert.equal(prefillDepuisLEtude(outil, { reponses: {} }).valeurs.sousSol, undefined);
+});
+
+test("sans étude, rien n'est pré-rempli — et ce n'est pas une erreur", () => {
+  const outil = outilParId("incendie_habitation");
+  assert.deepEqual(prefillDepuisLEtude(outil, null), { valeurs: {}, provenance: {} });
+  assert.deepEqual(prefillDepuisLEtude(outil, { reponses: "pas un objet" }), { valeurs: {}, provenance: {} });
+});
+
+test("l'étude répond aux questions requises : le formulaire ne s'ouvre plus", async () => {
+  // Sans étude, l'utilitaire réclame ce qui lui manque.
+  const sans = await executerOutil({ id: "incendie_habitation", entrees: { exigence: "classement" } });
+  assert.equal(sans.statut, "manquant");
+  assert.ok(sans.champs.some((champ) => champ.cle === "etagesSurRdc"));
+
+  // Avec elle, il n'a plus rien à demander — et il dit d'où il le tient.
+  const avec = await executerOutil({
+    id: "incendie_habitation", entrees: { exigence: "classement" }, etudeIncendie: ETUDE
+  });
+  assert.notEqual(avec.statut, "manquant");
+  assert.notEqual(avec.statut, "aConfirmer");
+  assert.equal(avec.provenances.etagesSurRdc.origine, "etude");
+  assert.match(avec.provenances.etagesSurRdc.detail, /Bâtiment A/);
+});
+
+test("ce que la conversation dit passe devant l'étude", async () => {
+  // « Et si c'était une 2e famille ? » doit pouvoir contredire l'étude, sinon
+  // on ne peut plus rien explorer.
+  const resultat = await executerOutil({
+    id: "incendie_habitation",
+    entrees: { exigence: "classement", etagesSurRdc: "1" },
+    question: "et avec 1 étage sur rez-de-chaussée ?",
+    confirmees: ["etagesSurRdc"],
+    etudeIncendie: ETUDE
+  });
+
+  assert.equal(resultat.entrees.etagesSurRdc, "1");
+  assert.equal(resultat.provenances.etagesSurRdc.origine, "dite");
+});
+
+test("une valeur inventée se demande encore, mais le champ porte celle de l'étude", async () => {
+  // Le modèle propose douze étages que personne n'a dits, et l'étude en dit
+  // trois. On demande — c'est précisément le cas où il faut demander : une
+  // contradiction entre ce que le modèle avance et ce que le projet sait ne se
+  // tranche pas en silence.
+  //
+  // Mais le champ ne revient pas vide. Il porte la réponse de l'étude, pas la
+  // proposition du modèle : sans cela on retaperait le nombre d'étages qu'on
+  // vient de saisir dans l'onglet voisin.
+  const resultat = await executerOutil({
+    id: "incendie_habitation",
+    entrees: { exigence: "classement", etagesSurRdc: "12" },
+    question: "quel est le classement de ce bâtiment ?",
+    etudeIncendie: ETUDE
+  });
+
+  assert.equal(resultat.statut, "aConfirmer");
+  assert.equal(resultat.proposeParLeModele.etagesSurRdc, "12");
+  assert.equal(resultat.connues.etagesSurRdc, "3");
 });

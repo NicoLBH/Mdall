@@ -32,6 +32,7 @@
 
 import { requireUser } from "../_shared/require-user.ts";
 import { executerOutil, sansFigure } from "../_shared/utilitaires/catalogue.js";
+import { lireLEtudeIncendie } from "../_shared/utilitaires/etude-incendie.js";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -87,6 +88,19 @@ Deno.serve(async (req: Request) => {
     pieces: Array.isArray(charge?.piecesJointes) ? charge.piecesJointes.length : 0
   });
 
+  // Ce que l'Atelier a déjà recueilli pour ce bâtiment.
+  //
+  // La lecture se fait **sous l'identité de qui demande** : la table est
+  // propriétaire seulement, et c'est RLS qui décide. Elle ne jette jamais — un
+  // pré-remplissage est un confort, pas une condition : sans étude, l'utilitaire
+  // demande ce qu'il lui faut, comme avant.
+  //
+  // Le navigateur envoie l'identifiant du projet, et rien d'autre : il
+  // n'apprend pas quelle entrée d'utilitaire tient sa valeur de quelle question
+  // d'étude. Cette correspondance est de l'orchestration, et elle reste ici.
+  const etudeIncendie = await lireLEtudeIncendie(
+    String(charge?.projet ?? ""), req.headers.get("Authorization") ?? "");
+
   const entrees = {
     id,
     entrees: charge?.entrees ?? {},
@@ -102,7 +116,8 @@ Deno.serve(async (req: Request) => {
     // sous **l'identité de qui demande**. L'orchestration n'a pas d'identité
     // propre et ne doit pas en avoir — un calcul lancé pour quelqu'un se fait
     // avec ses droits, pas avec les nôtres.
-    autorisation: req.headers.get("Authorization") ?? ""
+    autorisation: req.headers.get("Authorization") ?? "",
+    etudeIncendie
   };
 
   // ------------------------------------------------------------------ //

@@ -16919,9 +16919,15 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
    couleur d'accent sur un cadre de dépôt promet quelque chose de particulier
    alors qu'il n'y a rien de particulier. Les couleurs vives restent sur les
    trois cartes, où elles distinguent des types de pièces au lieu d'alerter. */
+/* Le fond couvre pour de bon. À 82 % on lisait encore la discussion dessous, et
+   deux textes superposés se disputent le regard au moment précis où l'on n'a
+   pas le temps de lire : le pointeur est en l'air, le fichier attend. Le flou
+   fait le reste du travail — ce qui reste visible ne se lit plus, mais on voit
+   encore où l'on dépose. */
 .depot-voile{
   position:absolute; inset:0; z-index:5; display:none; place-items:center;
-  background:rgba(13,17,23,.82); border:2px dashed var(--border); border-radius:12px;
+  background:rgba(13,17,23,.96); border:2px dashed var(--border); border-radius:12px;
+  backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px);
   pointer-events:none;
 }
 .est-survole > .depot-voile,
