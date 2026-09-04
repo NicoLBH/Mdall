@@ -52,7 +52,11 @@ import {
 import {
   lireLesEtudes, ouvrirUneEtude, enregistrerLEtude, supprimerLEtude
 } from "../../../services/incendie-etude-supabase.js";
+import {
+  REMISE_INCENDIE_ANNONCEE, planDeLaRemiseIncendie, etudeCompletee, nomDeLEtudeVenueDuCopilote
+} from "../../../services/incendie-remise.js";
 import { store } from "../../../store.js";
+import { resolveCurrentBackendProjectId } from "../../../services/project-supabase-sync.js";
 
 const etat = {
   reponses: {},
@@ -157,6 +161,18 @@ const etat = {
 
 let projetAffiche = "";
 
+/**
+ * L'identifiant du projet **en base**.
+ *
+ * Ce n'est pas celui de la route. Ils coïncident souvent, et « souvent » ne
+ * suffit pas : l'utilitaire du copilote va chercher l'étude sous l'identifiant
+ * que `resolveCurrentBackendProjectId` rend, et une étude écrite sous un autre
+ * ne serait jamais retrouvée — le pré-remplissage marcherait chez l'un et pas
+ * chez l'autre, sans rien dire. L'écran des fondations résout déjà ainsi ; on
+ * s'aligne plutôt que d'espérer que les deux clés soient la même.
+ */
+let projetEnBase = "";
+
 function clefDuProjetAffiche() {
   return String(store.currentProjectId || store.currentProject?.id || "");
 }
@@ -199,6 +215,7 @@ function oublierLeProjet() {
   etat.etudesChargees = false;
   etat.enregistrement = "";
   etat.changeDepuis = null;
+  projetEnBase = "";
   annulerLEnregistrement();
   fermerLaPhrase();
   // Les articles, eux, restent : le texte de l'arrêté ne dépend pas du projet.
@@ -262,8 +279,9 @@ async function consulter(root) {
  */
 async function reprendreLesEtudes(root) {
   etat.etudesChargees = true;
-  const projet = clefDuProjetAffiche();
-  if (!projet) return;
+  projetEnBase = String(await resolveCurrentBackendProjectId().catch(() => "") || "");
+  const projet = projetEnBase;
+  if (!projet) { if (root?.isConnected) dessiner(root); return; }
 
   etat.etudes = await lireLesEtudes(projet);
   // Celle qu'on regardait, sinon la dernière touchée. Ouvrir une étude ne
@@ -271,13 +289,13 @@ async function reprendreLesEtudes(root) {
   // récente » et rafraîchirait l'empreinte avant qu'on ait lu l'alerte —, donc
   // la date d'écriture ne dit pas ce qu'on regardait. Le navigateur, lui, le
   // sait, et c'est une préférence de poste, pas une donnée du projet.
-  const derniere = etat.etudes.find((etude) => String(etude.id) === derniereOuverte(projet));
+  const derniere = etat.etudes.find((etude) => String(etude.id) === derniereOuverte());
   const reprise = derniere ?? etudeAOuvrir(etat.etudes);
   // Ne rien écraser : quelqu'un a pu commencer à répondre pendant la lecture,
   // et ses réponses valent mieux que celles d'hier.
   if (reprise && Object.keys(etat.reponses).length === 0) {
     etat.etudeId = String(reprise.id);
-    retenirLOuverte(projet, etat.etudeId);
+    retenirLOuverte(etat.etudeId);
     etat.reponses = { ...reprise.reponses };
     etat.parcours = [];
     etat.position = 0;
@@ -285,7 +303,7 @@ async function reprendreLesEtudes(root) {
     await consulter(root);
     return;
   }
-  if (reprise && !etat.etudeId) { etat.etudeId = String(reprise.id); retenirLOuverte(projet, etat.etudeId); }
+  if (reprise && !etat.etudeId) { etat.etudeId = String(reprise.id); retenirLOuverte(etat.etudeId); }
   if (root?.isConnected) dessiner(root);
 }
 
@@ -298,18 +316,19 @@ async function reprendreLesEtudes(root) {
  */
 const CLE_DERNIERE = "mdall.incendie.etude";
 
-function derniereOuverte(projet) {
+function derniereOuverte() {
   try {
-    return String(window.localStorage.getItem(`${CLE_DERNIERE}.${projet}`) ?? "");
+    return String(window.localStorage.getItem(`${CLE_DERNIERE}.${clefDuProjetAffiche()}`) ?? "");
   } catch {
     return "";
   }
 }
 
-function retenirLOuverte(projet, id) {
+function retenirLOuverte(id) {
   try {
-    if (id) window.localStorage.setItem(`${CLE_DERNIERE}.${projet}`, String(id));
-    else window.localStorage.removeItem(`${CLE_DERNIERE}.${projet}`);
+    const cle = `${CLE_DERNIERE}.${clefDuProjetAffiche()}`;
+    if (id) window.localStorage.setItem(cle, String(id));
+    else window.localStorage.removeItem(cle);
   } catch {
     // Un navigateur qui refuse le stockage local ne doit pas empêcher de
     // travailler : on rouvrira la dernière écrite, ce qui est déjà une réponse.
@@ -352,7 +371,7 @@ function annulerLEnregistrement() {
  */
 function planifierLEnregistrement(root) {
   annulerLEnregistrement();
-  if (!clefDuProjetAffiche() || !lesReponsesOntChange()) return;
+  if (!projetEnBase || !lesReponsesOntChange()) return;
   enregistrementDiffere = setTimeout(() => { void enregistrerMaintenant(root); }, 700);
 }
 
@@ -382,7 +401,7 @@ function memeJeu(gauche = {}, droite = {}) {
 
 async function enregistrerMaintenant(root, { force = false } = {}) {
   annulerLEnregistrement();
-  const projet = clefDuProjetAffiche();
+  const projet = projetEnBase;
   if (!projet) return;
   // Une étude vide n'a rien à conserver : la créer à l'ouverture de l'écran
   // remplirait la liste de lignes que personne n'a demandées.
@@ -403,7 +422,7 @@ async function enregistrerMaintenant(root, { force = false } = {}) {
     }
     etat.etudes = [...etat.etudes, neuve];
     etat.etudeId = String(neuve.id);
-    retenirLOuverte(projet, etat.etudeId);
+    retenirLOuverte(etat.etudeId);
   }
 
   const empreinte = empreinteDesConclusions(etat.vue?.modules ?? []);
@@ -433,7 +452,7 @@ function rafraichirLaBarre(root) {
 function pourLaBarre() {
   return {
     etudes: etat.etudes, courante: etat.etudeId, enregistrement: etat.enregistrement,
-    change: etat.changeDepuis, reliee: Boolean(clefDuProjetAffiche())
+    change: etat.changeDepuis, reliee: Boolean(projetEnBase || !etat.etudesChargees)
   };
 }
 
@@ -447,7 +466,7 @@ async function ouvrirLEtude(root, id) {
   const etude = etat.etudes.find((candidate) => String(candidate.id) === String(id));
   if (!etude) return;
   etat.etudeId = String(etude.id);
-  retenirLOuverte(clefDuProjetAffiche(), etat.etudeId);
+  retenirLOuverte(etat.etudeId);
   etat.reponses = { ...etude.reponses };
   etat.parcours = [];
   etat.position = 0;
@@ -462,26 +481,145 @@ async function ouvrirLEtude(root, id) {
  * C'est le geste qui manquait : « et si c'était une 2e famille ? » se répondait
  * en écrasant l'étude en cours, donc en la perdant.
  */
-async function ouvrirUneEtudeNeuve(root) {
-  const projet = clefDuProjetAffiche();
+async function ouvrirUneEtudeNeuve(root, { titre = "", reponses = null } = {}) {
+  const projet = projetEnBase;
   if (!projet) return;
   await enregistrerMaintenant(root);
 
   const neuve = await ouvrirUneEtude(projet, {
-    titre: titreParDefaut(etat.etudes), rang: rangSuivant(etat.etudes)
+    titre: titre || titreParDefaut(etat.etudes), rang: rangSuivant(etat.etudes)
   });
   if (!neuve) { etat.enregistrement = "Non enregistrée"; dessiner(root); return; }
 
   etat.etudes = [...etat.etudes, neuve];
   etat.etudeId = String(neuve.id);
-  retenirLOuverte(projet, etat.etudeId);
-  etat.reponses = {};
+  retenirLOuverte(etat.etudeId);
+  etat.reponses = reponses ? { ...reponses } : {};
   etat.parcours = [];
   etat.position = 0;
   etat.deplacementManuel = false;
   etat.enregistrement = "";
   etat.changeDepuis = null;
   await consulter(root);
+}
+
+
+/* ------------------------------------------------------------------ *
+ * Ce que le copilote remet
+ * ------------------------------------------------------------------ */
+
+/** La remise qui attend, s'il y en a une. Elle vit en mémoire vive, et nulle part ailleurs. */
+function remiseEnAttente() {
+  const remise = store.ui?.incendie?.remise;
+  return remise?.reponses && Object.keys(remise.reponses).length ? remise : null;
+}
+
+/** Le libellé d'une question, quand on le connaît. Sa clé sinon — jamais rien. */
+function libelleDeQuestion(cle) {
+  return etat.questionsVues[cle]?.libelle || cle;
+}
+
+/** Une réponse, dite comme on la lit. */
+function reponseLisible(valeur) {
+  if (valeur === true) return "oui";
+  if (valeur === false) return "non";
+  return String(valeur ?? "");
+}
+
+/**
+ * La remise, affichée avant d'être acceptée.
+ *
+ * Trois tas, trois sorts, et on les montre : ce que l'étude ignore s'ajoutera,
+ * ce qu'elle dit déjà ne bougera pas, ce qu'elle dit **autrement** ne bougera
+ * pas non plus mais se lit ici. Le copilote n'arbitre pas entre deux réponses
+ * qui ont chacune un auteur ; il montre l'écart, et l'on répond à l'écran si
+ * l'on change d'avis.
+ */
+function dessinerLaRemiseIncendie() {
+  const remise = remiseEnAttente();
+  if (!remise) return "";
+
+  const plan = planDeLaRemiseIncendie(remise.reponses, etat.reponses);
+  const combien = Object.keys(remise.reponses).length;
+
+  return `
+    <div class="incendie-remise">
+      <p class="incendie-remise__titre">
+        ${svgIcon("copilot", { width: 16, height: 16 })}
+        ${combien} réponse${combien > 1 ? "s" : ""} réunie${combien > 1 ? "s" : ""} par le copilote
+      </p>
+      ${remise.conclusion
+        ? `<p class="incendie-remise__conclusion">${escapeHtml(remise.conclusion)}</p>` : ""}
+      <p class="incendie-remise__note">
+        ${plan.combienNeuves > 0
+          ? `<strong>${plan.combienNeuves}</strong> que cette étude ne portait pas s'ajouteront.`
+          : "L'étude porte déjà tout ce que la discussion a réuni."}
+        ${plan.identiques > 0 ? ` ${plan.identiques} disent déjà la même chose.` : ""}
+      </p>
+      ${plan.differentes.length ? `
+        <p class="incendie-remise__note">
+          ${plan.differentes.length} réponse${plan.differentes.length > 1 ? "s diffèrent" : " diffère"} de
+          l'étude et ${plan.differentes.length > 1 ? "ne seront pas remplacées" : "ne sera pas remplacée"} —
+          répondez à l'écran si vous changez d'avis :
+        </p>
+        <ul class="incendie-remise__ecarts">
+          ${plan.differentes.map((ecart) => `
+            <li>
+              <span>${escapeHtml(libelleDeQuestion(ecart.cle))}</span>
+              <span class="mono">étude ${escapeHtml(reponseLisible(ecart.dansLEtude))}</span>
+              <span class="mono">discussion ${escapeHtml(reponseLisible(ecart.dansLaDiscussion))}</span>
+            </li>`).join("")}
+        </ul>` : ""}
+      <div class="incendie-remise__actions">
+        <button type="button" class="gh-btn gh-btn--primary" data-incendie-remise="completer"
+          ${plan.rienAFaire ? "disabled" : ""}>Compléter cette étude</button>
+        <button type="button" class="gh-btn" data-incendie-remise="neuve">Ouvrir une étude neuve</button>
+        <button type="button" class="gh-btn" data-incendie-remise="ecarter">Écarter</button>
+      </div>
+    </div>
+  `;
+}
+
+/** Oublier la remise : elle n'a jamais été qu'en mémoire vive. */
+function ecarterLaRemise(root) {
+  if (store.ui?.incendie) store.ui.incendie.remise = null;
+  dessiner(root);
+}
+
+/**
+ * Compléter l'étude ouverte avec ce que la discussion a réuni.
+ *
+ * Ce que l'étude dit déjà n'est pas touché — « ce qui a été décidé se
+ * conserve ». Seul s'ajoute ce qu'elle ignorait.
+ */
+async function completerAvecLaRemise(root) {
+  const remise = remiseEnAttente();
+  if (!remise) return;
+
+  const plan = planDeLaRemiseIncendie(remise.reponses, etat.reponses);
+  if (plan.rienAFaire) { ecarterLaRemise(root); return; }
+
+  etat.reponses = etudeCompletee(etat.reponses, plan);
+  etat.deplacementManuel = false;
+  if (store.ui?.incendie) store.ui.incendie.remise = null;
+  await consulter(root);
+}
+
+/**
+ * Ouvrir une étude neuve avec tout ce que la discussion a réuni.
+ *
+ * C'est ce qu'on veut quand la conversation explorait une autre hypothèse :
+ * « et si c'était une 2e famille ? » n'est pas une correction de l'étude en
+ * cours, c'est une seconde étude.
+ */
+async function etudeNeuveDepuisLaRemise(root) {
+  const remise = remiseEnAttente();
+  if (!remise) return;
+
+  if (store.ui?.incendie) store.ui.incendie.remise = null;
+  await ouvrirUneEtudeNeuve(root, {
+    titre: nomDeLEtudeVenueDuCopilote(), reponses: remise.reponses
+  });
 }
 
 /** Renommer : le nom est ce par quoi on reconnaît une hypothèse trois semaines après. */
@@ -511,7 +649,7 @@ async function supprimerLEtudeCourante(root) {
   etat.etudes = etat.etudes.filter((candidate) => String(candidate.id) !== String(etat.etudeId));
   const reprise = etudeAOuvrir(etat.etudes);
   etat.etudeId = reprise ? String(reprise.id) : "";
-  retenirLOuverte(clefDuProjetAffiche(), etat.etudeId);
+  retenirLOuverte(etat.etudeId);
   etat.reponses = reprise ? { ...reprise.reponses } : {};
   etat.parcours = [];
   etat.position = 0;
@@ -565,6 +703,17 @@ function questionCourante() {
 }
 
 function brancher(root) {
+  // Une remise arrive après que le panneau a été dessiné : sans cette écoute,
+  // elle n'apparaîtrait qu'au rechargement de la page — c'est-à-dire jamais.
+  window.addEventListener(REMISE_INCENDIE_ANNONCEE, () => {
+    if (root.isConnected) {
+      // On arrive sur le questionnaire : c'est là que la remise se lit, et
+      // c'est là qu'on répond.
+      etat.onglet = "questionnaire";
+      dessiner(root);
+    }
+  });
+
   // Le champ rédigé de la notice — titre, cases, éditeur — est un composant :
   // il ne connaît ni la notice ni la base, il signale des gestes.
   brancherChampRedige(root, {
@@ -624,6 +773,15 @@ function brancher(root) {
       if (etat.onglet === "notice") void rediger(root);
       return;
     }
+    const remise = evenement.target.closest("[data-incendie-remise]");
+    if (remise) {
+      const geste = remise.dataset.incendieRemise;
+      if (geste === "completer") void completerAvecLaRemise(root);
+      else if (geste === "neuve") void etudeNeuveDepuisLaRemise(root);
+      else ecarterLaRemise(root);
+      return;
+    }
+
     const etude = evenement.target.closest("[data-incendie-etude]");
     if (etude) { void ouvrirLEtude(root, etude.dataset.incendieEtude); return; }
     if (evenement.target.closest("[data-incendie-etude-neuve]")) { void ouvrirUneEtudeNeuve(root); return; }
@@ -1117,7 +1275,8 @@ function dessiner(root) {
 
           ${!vue ? `<p class="gh-text-muted">${etat.enCours ? "Lecture du référentiel…" : "Le référentiel n'a pas répondu."}</p>` : ""}
           ${vue && etat.onglet === "questionnaire"
-            ? `<div data-incendie-etudes>${dessinerLesEtudes(pourLaBarre())}</div>${dessinerQuestionnaire(vue)}`
+            ? `${dessinerLaRemiseIncendie()}<div data-incendie-etudes>${
+                dessinerLesEtudes(pourLaBarre())}</div>${dessinerQuestionnaire(vue)}`
             : ""}
           ${vue && etat.onglet === "resultats" ? dessinerResultats(vue) : ""}
           ${vue && etat.onglet === "schema" ? dessinerSchema(vue) : ""}

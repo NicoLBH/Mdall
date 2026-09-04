@@ -18346,6 +18346,26 @@ strong.est-verifie{ color:#3fb950; }
 .incendie-onglet:hover{ color:var(--fg); }
 .incendie-onglet.est-actif{ color:var(--fg); border-bottom-color:#f0883e; font-weight:600; }
 
+/* Ce que le copilote remet au questionnaire. Elle est au-dessus des études
+   parce qu'elle décide de celle qu'on va remplir. */
+.incendie-remise{
+  border:1px solid #f0883e; border-radius:10px; padding:12px 14px; margin:0 0 16px;
+  display:grid; gap:8px; background:rgba(240,136,62,.06);
+}
+.incendie-remise__titre{
+  margin:0; display:flex; align-items:center; gap:7px; font-size:13px; font-weight:600; color:#f0883e;
+}
+.incendie-remise__conclusion{ margin:0; font-size:13px; color:var(--fg); }
+.incendie-remise__note{ margin:0; font-size:12px; color:var(--muted); line-height:1.5; }
+.incendie-remise__ecarts{ margin:0; padding:0; list-style:none; display:grid; gap:4px; font-size:12px; }
+.incendie-remise__ecarts li{
+  display:flex; flex-wrap:wrap; gap:10px; align-items:baseline;
+  padding:5px 8px; border-radius:6px; background:var(--surface, #161b22);
+}
+.incendie-remise__ecarts li span:first-child{ flex:1 1 220px; }
+.incendie-remise__ecarts .mono{ color:var(--muted); font-size:11px; }
+.incendie-remise__actions{ display:flex; flex-wrap:wrap; gap:8px; margin-top:2px; }
+
 /* Les études enregistrées : les hypothèses d'un même projet, côte à côte.
    Elles sont sous le questionnaire et nulle part ailleurs — c'est là qu'on
    répond, donc là qu'on change d'hypothèse. */
