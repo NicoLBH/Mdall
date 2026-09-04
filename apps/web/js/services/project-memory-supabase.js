@@ -298,6 +298,17 @@ export async function rememberBaseDatum(row) {
 }
 
 /**
+ * Écrire une contrainte versée par l'Atelier.
+ *
+ * Même geste qu'une donnée de base : on écrit, on périme la précédente de même
+ * clé, on marque ce qui reposait dessus. Une contrainte fausse veut dire qu'on
+ * a calculé faux — le drapeau n'est pas une politesse.
+ */
+export async function rememberConstraint(row) {
+  return remplacerSurSaCle(row);
+}
+
+/**
  * Écrire une affirmation déclarée, périmer la précédente de même clé, marquer
  * l'aval.
  *

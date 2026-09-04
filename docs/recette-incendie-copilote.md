@@ -125,6 +125,40 @@ Depuis un résultat incendie **conclu** du copilote (§2).
 
 ---
 
+## 3 bis. Verser en mémoire
+
+**Atelier › Incendie › Incendie Habitation › Résultats.**
+
+- [ ] Un panneau **« Verser en mémoire »** s'ouvre au-dessus des conclusions. Il
+      ne propose **que des exigences** — un degré, un classement, une distance
+      maximale. Ni « le bâtiment comporte un sous-sol », ni « le classement
+      retient trois étages » : ce sont des reformulations du cas, elles
+      n'imposent rien à personne.
+- [ ] Chaque ligne dit ce que la mémoire en pense : **nouvelle** (bord vert),
+      **déjà en mémoire à l'identique** (grisée, décochée), ou **la mémoire dit
+      « … »** (bord orange, cochée). La phrase à côté du bouton compte les trois.
+- [ ] **Verser.** Les contraintes retenues arrivent dans **Mémoire**, avec la
+      nature « Contrainte », le domaine « Incendie », et l'article dans le
+      détail. Le panneau se relit : ce qu'on vient de verser passe en « déjà en
+      mémoire, à l'identique ».
+- [ ] **Rouvrir l'onglet Résultats.** La mémoire est **relue** — si quelqu'un a
+      versé autre chose entre-temps, ou modifié une contrainte depuis l'écran
+      Mémoire, la ligne le dit.
+- [ ] **Verser une seconde fois une valeur qui a changé** (répondre autrement à
+      une question dont dépend un degré). La ligne passe en « la mémoire dit
+      … » ; après versement, l'ancienne affirmation est **périmée** dans l'écran
+      Mémoire, pas effacée — et ce qui reposait dessus est marqué à revérifier.
+- [ ] **La portée.** Le menu propose les zones définies dans la mémoire du
+      projet. Verser sur « Bâtiment B » ne périme pas ce qui a été versé sur
+      l'ensemble : ce sont deux affirmations, et les deux sont vraies.
+- [ ] **Une seule porte.** Le copilote **ne verse rien** : son bloc le dit
+      encore (« Ce résultat n'entre pas dans la mémoire du projet »). Pour verser
+      ce qu'il a conclu, on passe par « Ouvrir dans l'Atelier », puis par ce
+      panneau. Vérifier qu'aucun bouton de versement n'apparaît dans la
+      discussion.
+
+---
+
 ## 4. Le référentiel a changé
 
 Ce cas ne se provoque pas à la main : il se présente quand le dépouillement de
@@ -196,8 +230,11 @@ calcul jointe conviennent bien, parce qu'elles durent.
 
 Pour mémoire, et pour ne pas le prendre pour un défaut :
 
-- Le **versement en mémoire** des degrés retenus n'existe pas encore : le bloc
-  de l'utilitaire le dit (« Ce résultat n'entre pas dans la mémoire du projet »).
+- Le versement se fait **depuis l'Atelier seulement** : le copilote propose,
+  l'Atelier verse. Ce n'est pas un manque, c'est la règle — « une seule porte ».
+- Les **verdicts de conformité** (« l'escalier prévu satisfait-il ce que le texte
+  exige ? ») ne se versent pas : ce sont des constats sur le projet, pas des
+  contraintes qui s'imposent à lui. Ils viendront, avec leur nature à eux.
 - L'alerte du §4 dit **qu'**une conclusion a changé, pas **laquelle** : les
   conclusions ne sont pas conservées, seule leur empreinte l'est.
 - Les **images et les PDF** de la notice sont un chantier à part, en attente.

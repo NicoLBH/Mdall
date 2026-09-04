@@ -18346,6 +18346,39 @@ strong.est-verifie{ color:#3fb950; }
 .incendie-onglet:hover{ color:var(--fg); }
 .incendie-onglet.est-actif{ color:var(--fg); border-bottom-color:#f0883e; font-weight:600; }
 
+/* Le versement en mémoire. Il est au-dessus des conclusions parce qu'il porte
+   sur elles, et parce que c'est le geste qu'on vient faire quand on ouvre cet
+   onglet une seconde fois. */
+.incendie-versement{
+  border:1px solid var(--border, #30363d); border-radius:10px; padding:14px;
+  margin:0 0 18px; display:grid; gap:10px;
+}
+.incendie-versement__tete h5{
+  margin:0 0 4px; display:flex; align-items:center; gap:7px; font-size:13px;
+}
+.incendie-versement__tete p{ margin:0; font-size:12px; line-height:1.5; }
+.incendie-versement__portee{ display:flex; align-items:center; gap:8px; font-size:12px; }
+.incendie-versement__portee select{
+  background:var(--surface, #161b22); color:var(--fg); font:inherit; font-size:12px;
+  border:1px solid var(--border, #30363d); border-radius:6px; padding:4px 8px; max-width:320px;
+}
+.incendie-versement__liste{ margin:0; padding:0; list-style:none; display:grid; gap:4px; }
+.incendie-versement__liste li{
+  display:flex; flex-wrap:wrap; align-items:baseline; gap:8px;
+  padding:6px 9px; border-radius:6px; background:var(--surface, #161b22);
+  border-left:3px solid transparent;
+}
+.incendie-versement__liste li.est-absente{ border-left-color:var(--success, #3fb950); }
+.incendie-versement__liste li.est-differente{ border-left-color:#f0883e; }
+.incendie-versement__liste li.est-identique{ opacity:.6; }
+.incendie-versement__liste label{ display:flex; align-items:baseline; gap:8px; flex:1 1 320px; cursor:pointer; }
+.incendie-versement__sujet{ font-size:12px; }
+.incendie-versement__valeur{ font-size:12px; }
+.incendie-versement__etat{ font-size:11px; color:var(--muted); }
+.incendie-versement__liste li.est-differente .incendie-versement__etat{ color:#f0883e; }
+.incendie-versement__article{ font-size:11px; color:var(--muted); }
+.incendie-versement__pied{ display:flex; flex-wrap:wrap; align-items:center; gap:10px; font-size:12px; }
+
 /* Ce que le copilote remet au questionnaire. Elle est au-dessus des études
    parce qu'elle décide de celle qu'on va remplir. */
 .incendie-remise{
