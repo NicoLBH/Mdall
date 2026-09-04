@@ -1,4 +1,5 @@
 import { applyMarkdownComposerAction } from "../../utils/markdown-composer.js";
+import { brancherLaZoneDeDepot } from "../ui/zone-de-depot.js";
 import {
   applyMentionSuggestion,
   extractStructuredMentions,
@@ -2908,26 +2909,11 @@ export function createProjectSubjectsEvents(config) {
         });
       }
 
-      if (attachmentDropzone && attachmentInput) {
-        ["dragenter", "dragover"].forEach((eventName) => {
-          attachmentDropzone.addEventListener(eventName, (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            attachmentDropzone.classList.add("is-dragover");
-          });
-        });
-        ["dragleave", "dragend", "drop"].forEach((eventName) => {
-          attachmentDropzone.addEventListener(eventName, (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            attachmentDropzone.classList.remove("is-dragover");
-          });
-        });
-        attachmentDropzone.addEventListener("drop", async (event) => {
-          const files = Array.from(event?.dataTransfer?.files || []);
-          if (files.length) await addComposerFiles(files);
-        });
-      }
+      // Le même branchement que les documents du projet et le copilote : trois
+      // copies de ces vingt lignes avaient fini par diverger.
+      brancherLaZoneDeDepot(attachmentDropzone, {
+        onFichiers: (fichiers) => { void addComposerFiles(fichiers); }
+      });
 
       if (root.dataset.subjectMentionDocumentBound !== "true") {
         document.addEventListener("click", (event) => {
@@ -5285,24 +5271,7 @@ export function createProjectSubjectsEvents(config) {
       const composerRoot = input.closest(".comment-composer") || root;
       const dropzone = composerRoot?.querySelector(".comment-composer__editor");
       if (!dropzone) return;
-      ["dragenter", "dragover"].forEach((eventName) => {
-        dropzone.addEventListener(eventName, (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          dropzone.classList.add("is-dragover");
-        });
-      });
-      ["dragleave", "dragend", "drop"].forEach((eventName) => {
-        dropzone.addEventListener(eventName, (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          dropzone.classList.remove("is-dragover");
-        });
-      });
-      dropzone.addEventListener("drop", (event) => {
-        const files = Array.from(event?.dataTransfer?.files || []);
-        if (files.length) appendFiles(files);
-      });
+      brancherLaZoneDeDepot(dropzone, { onFichiers: (fichiers) => appendFiles(fichiers) });
     });
     root.querySelectorAll("[data-action='create-subject-attachment-remove']").forEach((btn) => {
       btn.onclick = () => {
@@ -5362,24 +5331,7 @@ export function createProjectSubjectsEvents(config) {
       const editor = textarea.closest(".comment-composer");
       const dropzone = editor?.querySelector(".comment-composer__editor");
       if (!dropzone) return;
-      ["dragenter", "dragover"].forEach((eventName) => {
-        dropzone.addEventListener(eventName, (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          dropzone.classList.add("is-dragover");
-        });
-      });
-      ["dragleave", "dragend", "drop"].forEach((eventName) => {
-        dropzone.addEventListener(eventName, (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          dropzone.classList.remove("is-dragover");
-        });
-      });
-      dropzone.addEventListener("drop", async (event) => {
-        const files = Array.from(event?.dataTransfer?.files || []);
-        if (files.length) await addDescriptionFiles(files);
-      });
+      brancherLaZoneDeDepot(dropzone, { onFichiers: (fichiers) => { void addDescriptionFiles(fichiers); } });
     });
     root.querySelectorAll("[data-action='thread-reply-attachments-pick'][data-message-id]").forEach((btn) => {
       btn.onclick = () => {
@@ -5418,48 +5370,14 @@ export function createProjectSubjectsEvents(config) {
       if (!messageId) return;
       const dropzone = editor.querySelector(".comment-composer__editor");
       if (!dropzone) return;
-      ["dragenter", "dragover"].forEach((eventName) => {
-        dropzone.addEventListener(eventName, (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          dropzone.classList.add("is-dragover");
-        });
-      });
-      ["dragleave", "dragend", "drop"].forEach((eventName) => {
-        dropzone.addEventListener(eventName, (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          dropzone.classList.remove("is-dragover");
-        });
-      });
-      dropzone.addEventListener("drop", async (event) => {
-        const files = Array.from(event?.dataTransfer?.files || []);
-        if (files.length) await addInlineReplyFiles(messageId, files);
-      });
+      brancherLaZoneDeDepot(dropzone, { onFichiers: (fichiers) => { void addInlineReplyFiles(messageId, fichiers); } });
     });
     root.querySelectorAll("[data-inline-edit-editor]").forEach((editor) => {
       const messageId = String(editor.dataset.inlineEditEditor || "").trim();
       if (!messageId) return;
       const dropzone = editor.querySelector(".comment-composer__editor");
       if (!dropzone) return;
-      ["dragenter", "dragover"].forEach((eventName) => {
-        dropzone.addEventListener(eventName, (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          dropzone.classList.add("is-dragover");
-        });
-      });
-      ["dragleave", "dragend", "drop"].forEach((eventName) => {
-        dropzone.addEventListener(eventName, (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          dropzone.classList.remove("is-dragover");
-        });
-      });
-      dropzone.addEventListener("drop", async (event) => {
-        const files = Array.from(event?.dataTransfer?.files || []);
-        if (files.length) await addInlineEditFiles(messageId, files);
-      });
+      brancherLaZoneDeDepot(dropzone, { onFichiers: (fichiers) => { void addInlineEditFiles(messageId, fichiers); } });
     });
     root.querySelectorAll("[data-action='thread-reply-cancel'][data-message-id]").forEach((btn) => {
       btn.onclick = () => {

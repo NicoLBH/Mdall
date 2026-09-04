@@ -41,7 +41,10 @@ import { store } from "../../../store.js";
 import { escapeHtml } from "../../../utils/escape-html.js";
 import { svgIcon } from "../../../ui/icons.js";
 import { sendAssistMessage } from "../../../services/copilote-service.js";
-import { executerOutil, outilParId, sansFigure } from "../../../services/copilote-outils.js";
+import { brancherLaZoneDeDepot, trierLesFichiers } from "../../ui/zone-de-depot.js";
+import {
+  aRetenirDeLaConversation, executerOutil, outilParId, sansFigure
+} from "../../../services/copilote-outils.js";
 import { conversationTitle, findConversation } from "../../../services/copilote-conversations.js";
 import {
   appendMessage,
@@ -150,6 +153,12 @@ function ensureState() {
     store.ui.assistant.lastError = "";
     store.ui.assistant.pieceJointe = null;
     store.ui.assistant.confirmeesValeurs = {};
+    // Ce qui a été lu d'une note appartient au projet où on l'a déposée. Le
+    // garder au changement de projet — ou de compte — le rendrait relisible
+    // ailleurs, et « privé » ne peut pas être une intention.
+    void import("../../../services/note-de-calcul-service.js")
+      .then((module) => module.oublierLesNotesLues())
+      .catch(() => {});
     store.ui.assistant.chargement = false;
   }
 
@@ -815,8 +824,11 @@ function render(root) {
   const vide = (etat.messages ?? []).length === 0 && !etat.isSending;
 
   root.innerHTML = `
-    <section class="settings-section is-active copilote-section">
+    <section class="settings-section is-active copilote-section" data-copilote-depot>
       <div class="copilote${vide ? " copilote--empty" : ""}">
+        <div class="copilote-depot__voile" aria-hidden="true">
+          <div class="copilote-depot__mot">${svgIcon("file")} Déposez une note de calcul (PDF)</div>
+        </div>
         ${renderCorps(etat)}
 
         <div class="copilote-composer">
@@ -893,6 +905,27 @@ function render(root) {
 }
 
 /**
+ * Ce que la conversation retient d'un calcul qui a abouti.
+ *
+ * La contrainte admissible du sol et la valeur départementale du hors gel sont
+ * des décisions : on les prend **une fois**, elles valent pour tous les massifs
+ * et pour toute la discussion. Sans cette mémoire, le modèle — qui n'invente
+ * jamais de valeur, c'est la règle — rappelait l'outil sans arguments à la
+ * question suivante, et le formulaire revenait en boucle sur la même note.
+ *
+ * On retient la valeur, pas seulement la clé : c'est elle qui autorise, et une
+ * autre valeur sous le même nom reste refusée.
+ */
+function retenirDeLaConversation(etat, executions = []) {
+  for (const execution of executions) {
+    if (execution?.statut !== "fait") continue;
+    const outil = outilParId(String(execution.outil ?? "").replace(/_V\d+$/, ""));
+    const garde = aRetenirDeLaConversation(outil, execution.entrees ?? {});
+    Object.assign(etat.confirmeesValeurs, garde);
+  }
+}
+
+/**
  * Joindre une note de calcul.
  *
  * Elle est lue dans le navigateur et gardée en mémoire vive : rien ne part
@@ -902,7 +935,7 @@ function render(root) {
  */
 const PIECE_MAX_OCTETS = 6 * 1024 * 1024;
 
-async function joindre(root, fichier) {
+async function joindre(root, fichier, { ecartes = 0 } = {}) {
   const etat = ensureState();
   const champ = root.querySelector("#copiloteFichier");
   if (champ) champ.value = "";
@@ -922,7 +955,10 @@ async function joindre(root, fichier) {
   try {
     const { lireLeFichier } = await import("../../../services/note-de-calcul-service.js");
     etat.pieceJointe = await lireLeFichier(fichier);
-    etat.lastError = "";
+    etat.lastError = ecartes > 0
+      ? `Une seule note à la fois : ${ecartes} autre${ecartes > 1 ? "s" : ""} fichier${
+        ecartes > 1 ? "s ont" : " a"} été laissé${ecartes > 1 ? "s" : ""} de côté.`
+      : "";
   } catch (erreur) {
     etat.pieceJointe = null;
     etat.lastError = erreur instanceof Error ? erreur.message : "Le fichier n'a pas pu être lu.";
@@ -964,6 +1000,11 @@ async function envoyer(root) {
       // quatre fois, et une clé libérée sans sa valeur laisserait passer autre
       // chose.
       confirmees: Object.entries(etat.confirmeesValeurs ?? {}).map(([cle, valeur]) => `${cle}=${valeur}`),
+      // Et ce que la conversation a déjà établi **pré-remplit** l'outil. Le
+      // modèle n'invente pas de valeur : il rappelle donc l'outil sans
+      // arguments, et sans cette couche le formulaire redemandait la contrainte
+      // de sol à chaque question sur la même note.
+      acquises: etat.confirmeesValeurs ?? {},
       // Redessiner seulement l'attente : réécrire le fil entier à chaque étape
       // ferait sauter la position de lecture toutes les deux secondes.
       onEtape: (dit) => {
@@ -977,6 +1018,7 @@ async function envoyer(root) {
     // la relire au moment du calcul risquerait de calculer sur un état que la
     // réponse affichée ne connaît pas.
     etat.assertionsConnues = context?.memoire?.assertions ?? [];
+    retenirDeLaConversation(etat, executions);
     const reponse = {
       role: "assistant",
       content: reply || "Réponse vide.",
@@ -1150,8 +1192,11 @@ async function lancerCalcul(root, outil, saisies) {
     entrees: saisies,
     assertions,
     confirmees: Object.keys(saisies),
+    acquises: etat.confirmeesValeurs ?? {},
     piecesJointes: etat.pieceJointe ? [etat.pieceJointe] : []
   });
+
+  retenirDeLaConversation(etat, [resultat]);
 
   // Toujours manquant : quelque chose n'a pas été fourni, ou l'a été hors des
   // choix. On remplace la demande par la nouvelle, sans repartir vers le
@@ -1194,6 +1239,7 @@ async function lancerCalcul(root, outil, saisies) {
     const { reply, usage, executions } = await sendAssistMessage(question.content, {
       signal: controle.signal,
       confirmees: Object.keys(saisies),
+      acquises: etat.confirmeesValeurs ?? {},
       piecesJointes: etat.pieceJointe ? [etat.pieceJointe] : [],
       onEtape: (dit) => {
         etat.etape = dit;
@@ -1281,6 +1327,31 @@ function bind(root) {
 
   root.querySelector("#copiloteJoindre")?.addEventListener("click", () => {
     root.querySelector("#copiloteFichier")?.click();
+  });
+
+  // Toute la discussion accepte le dépôt, pas seulement le trombone : on
+  // arrive avec un PDF sous le pointeur, on ne cherche pas où viser. Le
+  // branchement est celui des documents et des sujets — trois copies de ces
+  // vingt lignes avaient fini par ne plus dire tout à fait la même chose.
+  brancherLaZoneDeDepot(root.querySelector("[data-copilote-depot]"), {
+    classe: "est-survole",
+    actif: () => !ensureState().isSending,
+    onFichiers: (fichiers) => {
+      const { retenus, ecartes } = trierLesFichiers(fichiers, (f) => f.type === "application/pdf");
+      const etatCourant = ensureState();
+      if (!retenus.length) {
+        // Un fichier écarté sans un mot laisse croire que le dépôt n'a pas
+        // fonctionné, et l'on recommence.
+        etatCourant.lastError = ecartes.length
+          ? "Seuls les PDF se lisent pour le moment."
+          : "";
+        render(root);
+        return;
+      }
+      // Une seule note à la fois : deux notes déposées, on ne saurait plus
+      // laquelle l'outil a lue.
+      void joindre(root, retenus[0], { ecartes: retenus.length - 1 + ecartes.length });
+    }
   });
   root.querySelector("#copiloteFichier")?.addEventListener("change", (event) => {
     void joindre(root, event.target.files?.[0] ?? null);

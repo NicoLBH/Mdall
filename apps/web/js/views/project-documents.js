@@ -1,4 +1,5 @@
 import { store } from "../store.js";
+import { brancherLaZoneDeDepot } from "./ui/zone-de-depot.js";
 import { setProjectViewHeader, clearProjectActiveScrollSource, debugProjectScrollPolicy, resetProjectShellCompactState, bindProjectDocumentChromeCompact } from "./project-shell-chrome.js";
 import { bindSideResizer } from "./ui/side-resizer.js";
 import {
@@ -2881,28 +2882,13 @@ function bindDocumentsView(root) {
     });
   }
 
-  if (dropzone && fileInput) {
-    ["dragenter", "dragover"].forEach((eventName) => {
-      dropzone.addEventListener(eventName, (event) => {
-        event.preventDefault();
-        if (!docsViewState.isUploading) {
-          dropzone.classList.add("is-dragover");
-        }
-      });
-    });
-
-    ["dragleave", "drop"].forEach((eventName) => {
-      dropzone.addEventListener(eventName, (event) => {
-        event.preventDefault();
-        dropzone.classList.remove("is-dragover");
-      });
-    });
-
-    dropzone.addEventListener("drop", (event) => {
-      if (docsViewState.isUploading) return;
-      addSelectedFiles(root, event.dataTransfer?.files);
-    });
-  }
+  // Le même branchement que le copilote et le composeur d'un sujet : ces vingt
+  // lignes existaient en trois exemplaires, et ne disaient déjà plus tout à
+  // fait la même chose — l'une éteignait le cadre au survol d'un enfant.
+  brancherLaZoneDeDepot(dropzone, {
+    actif: () => !docsViewState.isUploading,
+    onFichiers: (fichiers) => addSelectedFiles(root, fichiers)
+  });
 
   for (const button of document.querySelectorAll("[data-documents-remove-file]")) {
     button.addEventListener("click", () => {

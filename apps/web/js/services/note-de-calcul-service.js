@@ -16,6 +16,21 @@ import { CONSIGNE_EXTRACTION, SCHEMA_NOTE, normaliserLaNote } from "./note-de-ca
 const URL_FONCTION = `${getSupabaseUrl()}/functions/v1/extraire-note-de-calcul`;
 
 /**
+ * Ce qu'on a déjà lu, gardé le temps de la page.
+ *
+ * Une même note est relue à chaque question qu'on lui pose — « et si le sol
+ * faisait 2 bars ? », « reprends la file B en 2 × 2 ». La relire, c'est
+ * renvoyer le PDF au modèle et payer la lecture une seconde fois pour obtenir
+ * les mêmes nombres. La clé est le contenu du fichier : deux notes différentes
+ * ne se confondent pas, et la même note redéposée se retrouve.
+ *
+ * Rien n'est écrit nulle part : c'est une variable de module, perdue au
+ * rechargement de la page, comme le reste de la conversation.
+ */
+const dejaLues = new Map();
+const LUES_MAX = 4;
+
+/**
  * Le fichier en base64, sans son en-tête de données.
  *
  * `FileReader` rend « data:application/pdf;base64,… » ; ce qui part est ce qui
@@ -48,8 +63,11 @@ export function lireLeFichier(fichier) {
  * @param {{nom:string, mediaType:string, donnees:string}} fichier le PDF en base64
  * @returns {Promise<object>} la note normalisée
  */
-export async function lireLaNoteDeCalcul(fichier, { signal } = {}) {
+export async function lireLaNoteDeCalcul(fichier, { signal, relire = false } = {}) {
   if (!fichier?.donnees) throw new Error("Aucun fichier à lire.");
+
+  const clef = `${fichier.nom}|${fichier.donnees.length}|${fichier.donnees.slice(0, 64)}|${fichier.donnees.slice(-64)}`;
+  if (!relire && dejaLues.has(clef)) return dejaLues.get(clef);
 
   const reponse = await fetch(URL_FONCTION, {
     method: "POST",
@@ -65,5 +83,15 @@ export async function lireLaNoteDeCalcul(fichier, { signal } = {}) {
   if (!reponse.ok) throw new Error(charge?.error || `La lecture a échoué (HTTP ${reponse.status}).`);
   if (!charge?.note) throw new Error("La note a été lue, mais rien n'en est revenu.");
 
-  return normaliserLaNote(charge.note);
+  const note = normaliserLaNote(charge.note);
+  // Une poignée de notes suffit : au-delà, on garde en mémoire des documents
+  // dont plus personne ne parle.
+  if (dejaLues.size >= LUES_MAX) dejaLues.delete(dejaLues.keys().next().value);
+  dejaLues.set(clef, note);
+  return note;
+}
+
+/** Oublier ce qui a été lu — au changement de projet, ou pour relire. */
+export function oublierLesNotesLues() {
+  dejaLues.clear();
 }

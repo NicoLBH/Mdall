@@ -16783,6 +16783,23 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   font-size:16px; line-height:1; padding:0 2px;
 }
 .copilote-piece__retirer:hover{ color:#f85149; }
+
+/* Le dépôt par glisser : le voile ne se montre que pendant le survol, et ne
+   prend jamais le pointeur — sinon c'est lui qui recevrait le fichier, pas la
+   zone qui l'écoute. */
+.copilote-section{ position:relative; }
+.copilote-depot__voile{
+  position:absolute; inset:0; z-index:5; display:none; place-items:center;
+  background:rgba(13,17,23,.72); border:2px dashed #f0883e; border-radius:12px;
+  pointer-events:none;
+}
+.copilote-section.est-survole .copilote-depot__voile{ display:grid; }
+.copilote-depot__mot{
+  display:flex; align-items:center; gap:10px; padding:12px 20px;
+  border-radius:10px; background:var(--bg2, rgba(110,118,129,.12));
+  color:#f0883e; font-size:14px; font-weight:600;
+}
+.copilote-depot__mot svg{ width:18px; height:18px; }
 .copilote-outil__cle{ color:var(--muted); min-width:0; }
 .copilote-outil__source{ color:var(--muted); font-size:11px; font-style:italic; }
 /* L'écart se montre, il n'accuse pas : la couleur alerte, le texte décrit. */
