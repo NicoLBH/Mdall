@@ -605,7 +605,11 @@ export const OUTILS = [
       + "comprimée, sans jamais remonter au-dessus du hors gel. Rend un tableau : un massif par appui, "
       + "ses cotes, ce qui le gouverne et son volume de béton. "
       + "À appeler dès qu'une note de calcul est jointe et qu'on demande un pré-dimensionnement, un "
-      + "dimensionnement ou un avant-métré des fondations. "
+      + "dimensionnement ou un avant-métré des fondations. Appelle-le sans attendre : il lit la note "
+      + "lui-même, et ce qu'elle contient ne te manque pas. "
+      + "Ne remplis que ce que quelqu'un a dit. L'altitude du site se lit sur la note, l'arase a une "
+      + "valeur par défaut, et les cotes imposées ne se remplissent que si on a demandé cette cote-là : "
+      + "proposer un chiffre pour l'une d'elles ne fait pas avancer le calcul, cela l'arrête. "
       + "Ne ferraille pas la semelle, ne traite pas les fondations profondes, et ne remplace pas une "
       + "note de calcul de béton armé : il donne les cotes par lesquelles on commence.",
     source: "utilitaire « Fondations — calcul » et NF DTU 13.1",
@@ -639,7 +643,8 @@ export const OUTILS = [
         unite: "m",
         depuisMemoire: ["altitude", "altitude-du-site"],
         lireMemoire: nombreEcrit,
-        aide: "Lue sur la note quand elle la donne — les hypothèses de neige la portent presque toujours."
+        aide: "L'utilitaire la lit sur la note — les hypothèses de neige la portent presque toujours. "
+          + "Elle ne se saisit que si la note n'en dit rien."
       },
       {
         cle: "araseSuperieure",
@@ -1078,6 +1083,25 @@ export function substitutionsNonJustifiees(outil, { entrees = {}, depuisMemoire 
 }
 
 /**
+ * Ce qu'on dit quand une valeur a été fabriquée.
+ *
+ * Deux phrases, parce qu'il s'est passé deux choses : on demande ce sans quoi
+ * le calcul n'a pas lieu, et l'on annonce ce qu'on a écarté sans le demander.
+ * Taire le second laisserait croire que le modèle avait raison sur l'altitude
+ * du site ; en faire une question ferait six questions pour une décision.
+ */
+export function phraseDesSubstitutions(aDemander = [], ecartees = []) {
+  const noms = aDemander.map((entree) => entree.libelle).filter(Boolean);
+  const demande = noms.length === 1
+    ? `Le calcul n'a pas eu lieu : ${noms[0]} a été proposé sans que personne l'ait dit. Il faut le demander avant de calculer.`
+    : `Le calcul n'a pas eu lieu : ${noms.length} valeurs ont été proposées sans que personne les ait dites. Il faut les demander avant de calculer.`;
+
+  if (!ecartees.length) return demande;
+
+  return `${demande} Écarté sans être demandé, parce que le calcul le trouve ailleurs — dans la mémoire du projet, dans la note jointe, ou dans la valeur par défaut : ${ecartees.join(", ")}.`;
+}
+
+/**
  * Les entrées requises qui manquent encore.
  *
  * Une valeur hors des choix déclarés compte comme manquante : accepter « 2b »
@@ -1207,21 +1231,7 @@ export async function executerOutil({
   }
 
   const { valeurs: depuisMemoire, provenance } = prefillDepuisMemoire(outil, assertions);
-  // Ce que le modèle propose l'emporte sur la mémoire : c'est tout l'objet
-  // d'une question comme « et si on passait en catégorie IV ? ». La provenance
-  // n'est gardée que pour ce qui vient réellement de la mémoire.
-  //
-  // Entre les deux, **ce que la conversation a déjà établi**. Sans cette
-  // couche, le modèle rappelait l'outil sans arguments au tour suivant — il
-  // n'invente pas, c'est la règle —, l'outil redemandait la contrainte de sol,
-  // et l'on tournait en rond : le formulaire revenait à chaque échange sur la
-  // même note. Une contrainte de sol se donne **une fois pour tous les
-  // massifs**, et pour toute la conversation.
   const dejaEtablies = nettoyer(acquises);
-  const fournies = avecDefauts(outil, { ...depuisMemoire, ...dejaEtablies, ...nettoyer(entrees) });
-  const venuesDeLaMemoire = Object.fromEntries(
-    Object.entries(provenance).filter(([cle]) => texte(entrees?.[cle]) === "")
-  );
 
   // Avant de regarder ce qui manque : ce qui a été **remplacé sans raison**.
   // Une valeur inventée n'a pas l'air de manquer, et c'est bien le problème.
@@ -1232,12 +1242,48 @@ export async function executerOutil({
     confirmees
   });
 
-  if (substituees.length > 0) {
+  // Deux sorts pour une valeur fabriquée, et les confondre coûtait cher.
+  //
+  // Ce **sans quoi le calcul n'a pas lieu** se demande : la contrainte de sol,
+  // le H0 du département. Le reste — l'altitude que la note porte, l'arase qui
+  // a une valeur par défaut, une cote imposée que personne n'a imposée — s'en
+  // va sans un mot de plus. L'écran le redemandait, et six questions
+  // apparaissaient là où une seule était vraiment posée : on lisait cela comme
+  // « ma note n'est pas arrivée », alors qu'elle attendait, lisible, deux
+  // étapes plus loin.
+  //
+  // Écarter n'est pas laisser passer : la valeur n'entre pas dans le calcul.
+  // Ce qui la remplace est ce que le projet dit, ce que la note porte, ou la
+  // valeur par défaut déclarée — trois provenances qui ont un auteur.
+  const aDemander = substituees.filter((entree) => entree.requis);
+  const ecartees = substituees.filter((entree) => !entree.requis);
+  const jetees = new Set(ecartees.map((entree) => entree.cle));
+  const proposees = Object.fromEntries(
+    Object.entries(entrees ?? {}).filter(([cle]) => !jetees.has(cle))
+  );
+
+  // Ce que le modèle propose l'emporte sur la mémoire : c'est tout l'objet
+  // d'une question comme « et si on passait en catégorie IV ? ». La provenance
+  // n'est gardée que pour ce qui vient réellement de la mémoire.
+  //
+  // Entre les deux, **ce que la conversation a déjà établi**. Sans cette
+  // couche, le modèle rappelait l'outil sans arguments au tour suivant — il
+  // n'invente pas, c'est la règle —, l'outil redemandait la contrainte de sol,
+  // et l'on tournait en rond : le formulaire revenait à chaque échange sur la
+  // même note. Une contrainte de sol se donne **une fois pour tous les
+  // massifs**, et pour toute la conversation.
+  const fournies = avecDefauts(outil, { ...depuisMemoire, ...dejaEtablies, ...nettoyer(proposees) });
+  const venuesDeLaMemoire = Object.fromEntries(
+    Object.entries(provenance).filter(([cle]) => texte(proposees?.[cle]) === "")
+  );
+  const nomsEcartes = ecartees.map((entree) => entree.libelle);
+
+  if (aDemander.length > 0) {
     // Ce qui n'est pas suspect reste acquis. Ne rendre que la mémoire faisait
     // disparaître la valeur que l'utilisateur venait d'écrire dans sa question
     // — « avec une contrainte de sol à 1 bar » — et le tour suivant la
     // redemandait : deux questions au lieu d'une, sur une valeur déjà donnée.
-    const suspectes = new Set(substituees.map((entree) => entree.cle));
+    const suspectes = new Set(aDemander.map((entree) => entree.cle));
     const legitimes = Object.fromEntries(
       Object.entries(fournies).filter(([cle]) => !suspectes.has(cle))
     );
@@ -1248,11 +1294,10 @@ export async function executerOutil({
       // Pour ce qui est suspect : la mémoire, pas la proposition du modèle.
       // C'est elle qui doit rester affichée tant que personne n'a tranché.
       connues: avecDefauts(outil, { ...legitimes, ...depuisMemoire }),
-      proposeParLeModele: Object.fromEntries(substituees.map((entree) => [entree.cle, texte(entrees[entree.cle])])),
-      champs: substituees.map((entree) => ({ ...entree })),
-      message:
-        "Le calcul n'a pas eu lieu : une valeur a été remplacée sans que personne l'ait dite. "
-        + "Il faut la demander avant de calculer."
+      proposeParLeModele: Object.fromEntries(aDemander.map((entree) => [entree.cle, texte(entrees[entree.cle])])),
+      champs: aDemander.map((entree) => ({ ...entree })),
+      ecartees: nomsEcartes,
+      message: phraseDesSubstitutions(aDemander, nomsEcartes)
     };
   }
 
@@ -1264,6 +1309,7 @@ export async function executerOutil({
       titre: outil.titre,
       connues: fournies,
       champs: manquantes.map((entree) => ({ ...entree })),
+      ecartees: nomsEcartes,
       message: "Le calcul n'a pas eu lieu : il manque des entrées."
     };
   }
@@ -1281,6 +1327,7 @@ export async function executerOutil({
       outil: referenceOutil(outil),
       titre: outil.titre,
       entrees: fournies,
+      ecartees: nomsEcartes,
       message: resultat?.raison || "L'utilitaire n'a pas pu conclure."
     };
   }
@@ -1291,6 +1338,10 @@ export async function executerOutil({
     titre: outil.titre,
     source: outil.source,
     entrees: fournies,
+    // Ce que le modèle avait proposé et qu'on n'a pas retenu. Le calcul a eu
+    // lieu sans ces valeurs : le dire évite qu'il les repropose au tour
+    // suivant, et qu'on croie qu'elles ont servi.
+    ecartees: nomsEcartes,
     venuesDeLaMemoire,
     valeurs: resultat.valeurs,
     unites: Object.fromEntries((outil.sorties ?? []).map((sortie) => [sortie.cle, sortie.unite || ""])),

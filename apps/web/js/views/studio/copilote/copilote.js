@@ -610,6 +610,25 @@ function renderExecution(execution) {
 }
 
 /**
+ * Ce que le copilote avait proposé, et qu'on n'a pas retenu.
+ *
+ * Le dire tient en une ligne, et cette ligne évite un malentendu coûteux :
+ * l'utilitaire lit l'altitude sur la note jointe, mais le modèle en avait
+ * proposé une autre. La question n'était pas de choisir entre les deux — elle
+ * était de ne pas laisser croire que la note n'était pas arrivée.
+ */
+function renderEcartees(execution) {
+  const noms = Array.isArray(execution?.ecartees) ? execution.ecartees.filter(Boolean) : [];
+  if (!noms.length) return "";
+  return `
+    <p class="copilote-formulaire__ecartees">
+      Écarté sans vous le demander, parce que le calcul le trouve ailleurs — la mémoire du projet,
+      la note jointe, ou la valeur par défaut : ${escapeHtml(noms.join(", "))}.
+    </p>
+  `;
+}
+
+/**
  * Le formulaire d'un utilitaire à qui il manque des entrées.
  *
  * **Il est construit depuis la déclaration de l'utilitaire, jamais depuis les
@@ -670,6 +689,7 @@ function renderFormulaire(execution, index) {
           ? "1 valeur à préciser" : `${combien} valeurs à préciser`}</span>
       </p>
       <div class="copilote-formulaire__champs">${champs}</div>
+      ${renderEcartees(execution)}
       ${acquis}
       <button type="submit" class="copilote-action copilote-formulaire__envoi">Calculer</button>
     </form>
@@ -708,6 +728,7 @@ function renderPastilles(execution, champ, index) {
         `).join("")}
       </div>
       ${champ.aide ? `<p class="copilote-pastilles__aide">${escapeHtml(champ.aide)}</p>` : ""}
+      ${renderEcartees(execution)}
       <form class="copilote-pastilles__libre" data-pastilles-libre>
         <input type="text" class="copilote-champ__saisie" name="libre"
           placeholder="Saisissez votre propre réponse ou apportez des précisions">
