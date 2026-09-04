@@ -18340,6 +18340,37 @@ strong.est-verifie{ color:#3fb950; }
 .incendie-onglet:hover{ color:var(--fg); }
 .incendie-onglet.est-actif{ color:var(--fg); border-bottom-color:#f0883e; font-weight:600; }
 
+/* Les études enregistrées : les hypothèses d'un même projet, côte à côte.
+   Elles sont sous le questionnaire et nulle part ailleurs — c'est là qu'on
+   répond, donc là qu'on change d'hypothèse. */
+.incendie-etudes{ display:grid; gap:8px; margin:0 0 16px; }
+.incendie-etudes__liste{ display:flex; flex-wrap:wrap; gap:6px; align-items:stretch; }
+.incendie-etude{
+  appearance:none; cursor:pointer; text-align:left; font:inherit;
+  display:grid; gap:2px; padding:7px 11px; border-radius:8px;
+  border:1px solid var(--border, #30363d); background:var(--surface, #161b22); color:var(--fg);
+  max-width:260px;
+}
+.incendie-etude:hover{ border-color:#f0883e; }
+.incendie-etude.est-active{ border-color:#f0883e; box-shadow:inset 0 0 0 1px #f0883e; }
+.incendie-etude__nom{ font-size:12px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.incendie-etude__compte{ font-size:11px; color:var(--muted); }
+.incendie-etude--neuve{ display:flex; gap:6px; align-items:center; color:var(--muted); border-style:dashed; }
+.incendie-etude--neuve:hover{ color:var(--fg); }
+.incendie-etudes__barre{ display:flex; gap:10px; align-items:center; font-size:11px; }
+.incendie-etude__geste{
+  appearance:none; background:none; border:0; padding:0; font:inherit; font-size:11px;
+  color:var(--muted); cursor:pointer; text-decoration:underline;
+}
+.incendie-etude__geste:hover{ color:var(--fg); }
+.incendie-etude__geste--danger:hover{ color:var(--danger, #f85149); }
+.incendie-etudes__etat{ margin-left:auto; color:var(--muted); font-size:11px; }
+.incendie-etudes__alerte{
+  margin:0; padding:9px 12px; border-radius:8px; font-size:12px; line-height:1.5;
+  border:1px solid #f0883e; color:#f0883e;
+}
+.incendie-etudes--hors-base p{ margin:0; font-size:12px; }
+
 /* Une question par bloc, avec ce à quoi elle sert : une question dont on ne
    voit pas où elle mène se répond au hasard. */
 .incendie-questions{ display:grid; gap:14px; }

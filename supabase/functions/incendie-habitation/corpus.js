@@ -186,11 +186,24 @@ export function consulter(reponses = {}) {
   }
 
   const conclus = modules.filter((m) => m.statut === "conclu");
+
+  // Ce à quoi il a **déjà** été répondu, décrit comme le reste.
+  //
+  // Une question répondue disparaît de la vague — elle n'a plus à être posée —
+  // et l'écran gardait sa description au passage. Cela suffisait tant que le
+  // questionnaire vivait dans la page ; une étude reprise en base arrive avec
+  // ses réponses et sans rien pour les nommer, et l'on ne voyait plus qu'une
+  // liste de clés sur lesquelles on ne pouvait plus revenir.
+  const repondues = Object.keys(reponses)
+    .map((cle) => questionDe(cle))
+    .filter(Boolean);
+
   return {
     version: VERSION,
     faits,
     modules,
     questions: aDemander,
+    questionsRepondues: repondues,
     graphe,
     avancement: {
       modules: modules.length,

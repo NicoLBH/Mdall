@@ -46,6 +46,12 @@ import {
 } from "../../ui/graphe-liaisons.js";
 import { reagencer, marquerLesPartants } from "../../ui/transition-flip.js";
 import { dessinerLaCoupe, plansDisponibles, resumer, resumerLePlan } from "./batiment.js";
+import {
+  dessinerLesEtudes, empreinteDesConclusions, ceQuiAChange, titreParDefaut, rangSuivant, etudeAOuvrir
+} from "./etudes.js";
+import {
+  lireLesEtudes, ouvrirUneEtude, enregistrerLEtude, supprimerLEtude
+} from "../../../services/incendie-etude-supabase.js";
 import { store } from "../../../store.js";
 
 const etat = {
@@ -117,6 +123,30 @@ const etat = {
   articleOuvert: false,
 
   /**
+   * Les études du projet, et celle qu'on remplit.
+   *
+   * Le questionnaire vivait dans la page : fermer l'onglet perdait quarante
+   * réponses. Elles vont désormais en base — les **réponses**, jamais les
+   * conclusions, qui se recalculent à l'ouverture. Plusieurs études par projet,
+   * parce qu'un même bâtiment se regarde en 3e famille B puis en 2e famille
+   * avec un escalier de plus, et que ce sont deux hypothèses, pas deux
+   * versions.
+   */
+  etudes: [],
+  etudeId: "",
+  etudesChargees: false,
+  /** Ce que la barre dit de l'enregistrement : « enregistrée », « en cours »… */
+  enregistrement: "",
+  /**
+   * Ce qui a bougé depuis le dernier enregistrement de l'étude ouverte.
+   *
+   * Les conclusions ne sont pas conservées ; leur **empreinte** l'est. On ne
+   * peut donc pas dire laquelle a changé, mais on peut dire qu'il y en a une —
+   * et se taire là-dessus serait laisser signer sur une lecture périmée.
+   */
+  changeDepuis: null,
+
+  /**
    * Le dépouillement du module désigné, quand on l'a demandé.
    *
    * Il ne s'ouvre que pour les comptes inscrits côté serveur. Un refus n'est
@@ -164,6 +194,12 @@ function oublierLeProjet() {
   etat.noticeChargee = false;
   etat.noticeErreur = "";
   etat.venuesDeLaMemoire = {};
+  etat.etudes = [];
+  etat.etudeId = "";
+  etat.etudesChargees = false;
+  etat.enregistrement = "";
+  etat.changeDepuis = null;
+  annulerLEnregistrement();
   fermerLaPhrase();
   // Les articles, eux, restent : le texte de l'arrêté ne dépend pas du projet.
 }
@@ -187,6 +223,7 @@ export function renderIncendieHabitation(root, { force = false } = {}) {
     window.addEventListener("resize", () => { if (root.isConnected) tracerLesLiens(root); }, { passive: true });
   }
   if (!etat.vue) void consulter(root);
+  if (!etat.etudesChargees) void reprendreLesEtudes(root);
   registerProjectPrimaryScrollSource(root.closest("#projectStudioRouterScroll") || document.getElementById("projectStudioRouterScroll"));
 }
 
@@ -200,12 +237,288 @@ async function consulter(root) {
     // afficher » ne doit pas paraître puis disparaître au premier clic.
     etat.peutToutMontrer = etat.vue?.inspecteur === true;
     tenirLeParcours();
+    // Les conclusions viennent d'être recalculées : c'est le moment de dire si
+    // elles ne sont plus celles du dernier enregistrement.
+    comparerALEnregistrement();
+    planifierLEnregistrement(root);
   } catch (erreur) {
     etat.erreur = erreur instanceof Error ? erreur.message : String(erreur);
   } finally {
     etat.enCours = false;
     if (root?.isConnected) dessiner(root);
   }
+}
+
+/* ------------------------------------------------------------------ *
+ * Les études, en base
+ * ------------------------------------------------------------------ */
+
+/**
+ * Reprendre le travail là où il a été laissé.
+ *
+ * On ouvre la dernière étude touchée : c'est celle sur laquelle on travaillait,
+ * et c'est ce qu'on vient reprendre. Aucune étude enregistrée ouvre un
+ * questionnaire vierge, comme avant — la première réponse en créera une.
+ */
+async function reprendreLesEtudes(root) {
+  etat.etudesChargees = true;
+  const projet = clefDuProjetAffiche();
+  if (!projet) return;
+
+  etat.etudes = await lireLesEtudes(projet);
+  // Celle qu'on regardait, sinon la dernière touchée. Ouvrir une étude ne
+  // l'écrit pas — sans quoi une simple consultation en ferait « la plus
+  // récente » et rafraîchirait l'empreinte avant qu'on ait lu l'alerte —, donc
+  // la date d'écriture ne dit pas ce qu'on regardait. Le navigateur, lui, le
+  // sait, et c'est une préférence de poste, pas une donnée du projet.
+  const derniere = etat.etudes.find((etude) => String(etude.id) === derniereOuverte(projet));
+  const reprise = derniere ?? etudeAOuvrir(etat.etudes);
+  // Ne rien écraser : quelqu'un a pu commencer à répondre pendant la lecture,
+  // et ses réponses valent mieux que celles d'hier.
+  if (reprise && Object.keys(etat.reponses).length === 0) {
+    etat.etudeId = String(reprise.id);
+    retenirLOuverte(projet, etat.etudeId);
+    etat.reponses = { ...reprise.reponses };
+    etat.parcours = [];
+    etat.position = 0;
+    etat.deplacementManuel = false;
+    await consulter(root);
+    return;
+  }
+  if (reprise && !etat.etudeId) { etat.etudeId = String(reprise.id); retenirLOuverte(projet, etat.etudeId); }
+  if (root?.isConnected) dessiner(root);
+}
+
+/**
+ * Quelle étude était ouverte, sur ce poste.
+ *
+ * Une préférence d'écran : elle n'appartient pas au projet, elle n'a pas à
+ * partir en base, et elle ne vaut que pour ce navigateur — deux personnes
+ * n'ouvrent pas la même hypothèse.
+ */
+const CLE_DERNIERE = "mdall.incendie.etude";
+
+function derniereOuverte(projet) {
+  try {
+    return String(window.localStorage.getItem(`${CLE_DERNIERE}.${projet}`) ?? "");
+  } catch {
+    return "";
+  }
+}
+
+function retenirLOuverte(projet, id) {
+  try {
+    if (id) window.localStorage.setItem(`${CLE_DERNIERE}.${projet}`, String(id));
+    else window.localStorage.removeItem(`${CLE_DERNIERE}.${projet}`);
+  } catch {
+    // Un navigateur qui refuse le stockage local ne doit pas empêcher de
+    // travailler : on rouvrira la dernière écrite, ce qui est déjà une réponse.
+  }
+}
+
+/** L'étude ouverte, telle qu'on l'a lue. */
+function etudeCourante() {
+  return etat.etudes.find((etude) => String(etude.id) === String(etat.etudeId)) ?? null;
+}
+
+/**
+ * Ce que le référentiel dit aujourd'hui, comparé à ce qu'il disait.
+ *
+ * On ne garde pas les conclusions : on garde leur empreinte. On sait donc
+ * qu'une chose a changé, pas laquelle — et le dire ainsi vaut mieux que de se
+ * taire, ou que de prétendre en savoir plus.
+ */
+function comparerALEnregistrement() {
+  const etude = etudeCourante();
+  etat.changeDepuis = etude
+    ? ceQuiAChange(etude, etat.vue?.modules ?? [], etat.vue?.version ?? "")
+    : null;
+}
+
+let enregistrementDiffere = null;
+
+function annulerLEnregistrement() {
+  if (enregistrementDiffere) clearTimeout(enregistrementDiffere);
+  enregistrementDiffere = null;
+}
+
+/**
+ * Enregistrer, mais pas à chaque frappe.
+ *
+ * Une réponse relance le raisonnement, et l'on répond vite : trois cases
+ * cochées de suite feraient trois écritures pour un seul état utile. Un délai
+ * court suffit à n'en faire qu'une, et reste assez bref pour qu'une fermeture
+ * d'onglet ne perde rien de ce qu'on vient de dire.
+ */
+function planifierLEnregistrement(root) {
+  annulerLEnregistrement();
+  if (!clefDuProjetAffiche() || !lesReponsesOntChange()) return;
+  enregistrementDiffere = setTimeout(() => { void enregistrerMaintenant(root); }, 700);
+}
+
+/**
+ * Y a-t-il quelque chose à écrire ?
+ *
+ * Rouvrir une étude la relit et la recalcule ; cela ne la modifie pas. Écrire
+ * quand même aurait deux effets, tous deux mauvais : la date de dernière
+ * touche remonterait à chaque simple consultation — l'étude « sur laquelle on
+ * travaillait » ne serait plus la bonne —, et l'empreinte serait rafraîchie
+ * avant que personne n'ait lu qu'une conclusion avait changé.
+ */
+function lesReponsesOntChange() {
+  const etude = etudeCourante();
+  if (!etude) return Object.keys(etat.reponses).length > 0;
+  return memeJeu(etude.reponses, etat.reponses) === false;
+}
+
+/** Deux jeux de réponses identiques, quel que soit l'ordre des clés. */
+function memeJeu(gauche = {}, droite = {}) {
+  const a = Object.keys(gauche ?? {}).sort();
+  const b = Object.keys(droite ?? {}).sort();
+  if (a.length !== b.length) return false;
+  return a.every((cle, rang) => cle === b[rang]
+    && JSON.stringify(gauche[cle]) === JSON.stringify(droite[cle]));
+}
+
+async function enregistrerMaintenant(root, { force = false } = {}) {
+  annulerLEnregistrement();
+  const projet = clefDuProjetAffiche();
+  if (!projet) return;
+  // Une étude vide n'a rien à conserver : la créer à l'ouverture de l'écran
+  // remplirait la liste de lignes que personne n'a demandées.
+  if (!etat.etudeId && Object.keys(etat.reponses).length === 0) return;
+  if (!force && !lesReponsesOntChange()) return;
+
+  etat.enregistrement = "Enregistrement…";
+  if (root?.isConnected && etat.onglet === "questionnaire") rafraichirLaBarre(root);
+
+  if (!etat.etudeId) {
+    const neuve = await ouvrirUneEtude(projet, {
+      titre: titreParDefaut(etat.etudes), rang: rangSuivant(etat.etudes)
+    });
+    if (!neuve) {
+      etat.enregistrement = "Non enregistrée";
+      if (root?.isConnected && etat.onglet === "questionnaire") rafraichirLaBarre(root);
+      return;
+    }
+    etat.etudes = [...etat.etudes, neuve];
+    etat.etudeId = String(neuve.id);
+    retenirLOuverte(projet, etat.etudeId);
+  }
+
+  const empreinte = empreinteDesConclusions(etat.vue?.modules ?? []);
+  const referentiel = String(etat.vue?.version ?? "");
+  const fait = await enregistrerLEtude(etat.etudeId, { reponses: etat.reponses, referentiel, empreinte });
+
+  const etude = etudeCourante();
+  if (etude && fait) {
+    etude.reponses = { ...etat.reponses };
+    etude.referentiel = referentiel;
+    etude.empreinte = empreinte;
+    etude.updated_at = new Date().toISOString();
+  }
+  // Ce qui vient d'être enregistré est, par construction, ce qui s'affiche :
+  // l'alerte de changement n'a plus lieu d'être.
+  if (fait) etat.changeDepuis = null;
+  etat.enregistrement = fait ? "Enregistrée" : "Non enregistrée";
+  if (root?.isConnected && etat.onglet === "questionnaire") rafraichirLaBarre(root);
+}
+
+/** La barre seule : redessiner l'écran entier ferait perdre le focus du champ. */
+function rafraichirLaBarre(root) {
+  const hote = root?.querySelector("[data-incendie-etudes]");
+  if (hote) hote.innerHTML = dessinerLesEtudes(pourLaBarre());
+}
+
+function pourLaBarre() {
+  return {
+    etudes: etat.etudes, courante: etat.etudeId, enregistrement: etat.enregistrement,
+    change: etat.changeDepuis, reliee: Boolean(clefDuProjetAffiche())
+  };
+}
+
+/** Ouvrir une autre étude : ses réponses remplacent celles de l'écran. */
+async function ouvrirLEtude(root, id) {
+  if (String(id) === String(etat.etudeId)) return;
+  // Ce qui est en cours part en base avant qu'on change de page : sans cela,
+  // les dernières secondes de travail resteraient dans la page qu'on quitte.
+  await enregistrerMaintenant(root);
+
+  const etude = etat.etudes.find((candidate) => String(candidate.id) === String(id));
+  if (!etude) return;
+  etat.etudeId = String(etude.id);
+  retenirLOuverte(clefDuProjetAffiche(), etat.etudeId);
+  etat.reponses = { ...etude.reponses };
+  etat.parcours = [];
+  etat.position = 0;
+  etat.deplacementManuel = false;
+  etat.enregistrement = "";
+  await consulter(root);
+}
+
+/**
+ * Ouvrir une hypothèse neuve, sans toucher à celle qu'on quitte.
+ *
+ * C'est le geste qui manquait : « et si c'était une 2e famille ? » se répondait
+ * en écrasant l'étude en cours, donc en la perdant.
+ */
+async function ouvrirUneEtudeNeuve(root) {
+  const projet = clefDuProjetAffiche();
+  if (!projet) return;
+  await enregistrerMaintenant(root);
+
+  const neuve = await ouvrirUneEtude(projet, {
+    titre: titreParDefaut(etat.etudes), rang: rangSuivant(etat.etudes)
+  });
+  if (!neuve) { etat.enregistrement = "Non enregistrée"; dessiner(root); return; }
+
+  etat.etudes = [...etat.etudes, neuve];
+  etat.etudeId = String(neuve.id);
+  retenirLOuverte(projet, etat.etudeId);
+  etat.reponses = {};
+  etat.parcours = [];
+  etat.position = 0;
+  etat.deplacementManuel = false;
+  etat.enregistrement = "";
+  etat.changeDepuis = null;
+  await consulter(root);
+}
+
+/** Renommer : le nom est ce par quoi on reconnaît une hypothèse trois semaines après. */
+async function renommerLEtude(root) {
+  const etude = etudeCourante();
+  if (!etude) return;
+  const propose = window.prompt("Nom de cette étude", etude.titre || "");
+  if (propose === null) return;
+
+  etude.titre = String(propose).trim();
+  dessiner(root);
+  const fait = await enregistrerLEtude(etat.etudeId, { titre: etude.titre });
+  etat.enregistrement = fait ? "Enregistrée" : "Non enregistrée";
+  if (root?.isConnected && etat.onglet === "questionnaire") rafraichirLaBarre(root);
+}
+
+/** Supprimer : ce qui est effacé ne se retrouve pas, donc on demande. */
+async function supprimerLEtudeCourante(root) {
+  const etude = etudeCourante();
+  if (!etude) return;
+  if (!window.confirm(`Supprimer « ${etude.titre || "cette étude"} » et ses réponses ?`)) return;
+
+  annulerLEnregistrement();
+  const fait = await supprimerLEtude(etat.etudeId);
+  if (!fait) { etat.enregistrement = "Non supprimée"; dessiner(root); return; }
+
+  etat.etudes = etat.etudes.filter((candidate) => String(candidate.id) !== String(etat.etudeId));
+  const reprise = etudeAOuvrir(etat.etudes);
+  etat.etudeId = reprise ? String(reprise.id) : "";
+  retenirLOuverte(clefDuProjetAffiche(), etat.etudeId);
+  etat.reponses = reprise ? { ...reprise.reponses } : {};
+  etat.parcours = [];
+  etat.position = 0;
+  etat.deplacementManuel = false;
+  etat.enregistrement = "";
+  etat.changeDepuis = null;
+  await consulter(root);
 }
 
 /**
@@ -218,9 +531,18 @@ async function consulter(root) {
  * arrière.
  */
 function tenirLeParcours() {
+  // Ce à quoi il a déjà été répondu revient décrit du serveur : une étude
+  // reprise en base porte ses réponses et pas leur libellé, et une liste de
+  // clés ne se relit pas.
+  for (const question of etat.vue?.questionsRepondues ?? []) etat.questionsVues[question.cle] = question;
+
   const demandees = (etat.vue?.questions ?? []).map((q) => q.cle);
   const repondues = Object.keys(etat.reponses);
   etat.parcours = etat.parcours.filter((cle) => repondues.includes(cle) || demandees.includes(cle));
+  // Le chemin se reconstitue : sans lui, on lirait les conclusions d'une étude
+  // sans pouvoir revenir sur une seule des réponses qui les ont produites.
+  const retrouvees = repondues.filter((cle) => !etat.parcours.includes(cle) && etat.questionsVues[cle]);
+  if (retrouvees.length) etat.parcours = [...retrouvees, ...etat.parcours];
   for (const cle of demandees) if (!etat.parcours.includes(cle)) etat.parcours.push(cle);
   if (etat.deplacementManuel) {
     etat.position = Math.min(Math.max(0, etat.position), Math.max(0, etat.parcours.length - 1));
@@ -302,6 +624,20 @@ function brancher(root) {
       if (etat.onglet === "notice") void rediger(root);
       return;
     }
+    const etude = evenement.target.closest("[data-incendie-etude]");
+    if (etude) { void ouvrirLEtude(root, etude.dataset.incendieEtude); return; }
+    if (evenement.target.closest("[data-incendie-etude-neuve]")) { void ouvrirUneEtudeNeuve(root); return; }
+    if (evenement.target.closest("[data-incendie-etude-renommer]")) { void renommerLEtude(root); return; }
+    if (evenement.target.closest("[data-incendie-etude-supprimer]")) { void supprimerLEtudeCourante(root); return; }
+    // Prendre acte d'un changement du référentiel : l'alerte a été lue, et
+    // l'étude retient désormais ce que le référentiel dit aujourd'hui. Sans ce
+    // geste, l'avertissement resterait tant qu'on ne répond pas à une question
+    // de plus — c'est-à-dire souvent pour toujours.
+    if (evenement.target.closest("[data-incendie-etude-vu]")) {
+      void enregistrerMaintenant(root, { force: true }).then(() => dessiner(root));
+      return;
+    }
+
     const oublier = evenement.target.closest("[data-incendie-oublier]");
     if (oublier) {
       delete etat.reponses[oublier.dataset.incendieOublier];
@@ -780,7 +1116,9 @@ function dessiner(root) {
           </div>
 
           ${!vue ? `<p class="gh-text-muted">${etat.enCours ? "Lecture du référentiel…" : "Le référentiel n'a pas répondu."}</p>` : ""}
-          ${vue && etat.onglet === "questionnaire" ? dessinerQuestionnaire(vue) : ""}
+          ${vue && etat.onglet === "questionnaire"
+            ? `<div data-incendie-etudes>${dessinerLesEtudes(pourLaBarre())}</div>${dessinerQuestionnaire(vue)}`
+            : ""}
           ${vue && etat.onglet === "resultats" ? dessinerResultats(vue) : ""}
           ${vue && etat.onglet === "schema" ? dessinerSchema(vue) : ""}
           ${vue && etat.onglet === "notice" ? dessinerLaNotice({
