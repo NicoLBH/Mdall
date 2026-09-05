@@ -125,39 +125,69 @@ Depuis un résultat incendie **conclu** du copilote (§2).
 
 ---
 
-## 3 bis. Verser en mémoire
+## 3 bis. Transformer — sujet ou proposition
+
+**Rien n'entre jamais directement dans la mémoire du projet** (voir
+[`docs/fondamentaux.md`](fondamentaux.md)). Un utilitaire propose deux sorties,
+et aucune n'écrit.
 
 **Atelier › Incendie › Incendie Habitation › Résultats.**
 
-- [ ] Un panneau **« Verser en mémoire »** s'ouvre au-dessus des conclusions. Il
-      ne propose **que des exigences** — un degré, un classement, une distance
-      maximale. Ni « le bâtiment comporte un sous-sol », ni « le classement
-      retient trois étages » : ce sont des reformulations du cas, elles
-      n'imposent rien à personne.
+- [ ] Le panneau **« Ce qui partira dans une proposition »** s'ouvre au-dessus
+      des conclusions. Il ne liste **que des exigences** — un degré, un
+      classement, une distance maximale. Ni « le bâtiment comporte un sous-sol »,
+      ni « le classement retient trois étages » : ce sont des reformulations du
+      cas, elles n'imposent rien à personne.
+- [ ] Il ne porte **aucun bouton qui écrit**. Vérifier qu'il n'y a plus de
+      « Verser en mémoire » nulle part.
 - [ ] Chaque ligne dit ce que la mémoire en pense : **nouvelle** (bord vert),
       **déjà en mémoire à l'identique** (grisée, décochée), ou **la mémoire dit
-      « … »** (bord orange, cochée). La phrase à côté du bouton compte les trois.
-- [ ] **Verser.** Les contraintes retenues arrivent dans **Mémoire**, avec la
-      nature « Contrainte », le domaine « Incendie », et l'article dans le
-      détail. Le panneau se relit : ce qu'on vient de verser passe en « déjà en
-      mémoire, à l'identique ».
-- [ ] **Rouvrir l'onglet Résultats.** La mémoire est **relue** — si quelqu'un a
-      versé autre chose entre-temps, ou modifié une contrainte depuis l'écran
-      Mémoire, la ligne le dit.
-- [ ] **Verser une seconde fois une valeur qui a changé** (répondre autrement à
-      une question dont dépend un degré). La ligne passe en « la mémoire dit
-      … » ; après versement, l'ancienne affirmation est **périmée** dans l'écran
-      Mémoire, pas effacée — et ce qui reposait dessus est marqué à revérifier.
+      « … »** (bord orange, cochée).
 - [ ] **La portée.** Le menu propose les zones définies dans la mémoire du
-      projet. Verser sur « Bâtiment B » ne périme pas ce qui a été versé sur
-      l'ensemble : ce sont deux affirmations, et les deux sont vraies.
-- [ ] **Une seule porte.** Le copilote **ne verse rien** : son bloc le dit
-      encore (« Ce résultat n'entre pas dans la mémoire du projet »). Pour verser
-      ce qu'il a conclu, on passe par « Ouvrir dans l'Atelier », puis par ce
-      panneau. Vérifier qu'aucun bouton de versement n'apparaît dans la
-      discussion.
+      projet. Une conclusion versée sur « Bâtiment B » ne périmera pas ce qui
+      vaut pour l'ensemble.
 
----
+### Le bouton « Transformer »
+
+En haut de l'écran, à côté de « Recommencer ». Le même bouton existe dans
+**Neige, Vent & Gel** et dans **Fondations superficielles — calcul**.
+
+- [ ] Cliquer sur **« Transformer »** — le bouton entier, pas seulement le
+      chevron — ouvre un menu de deux lignes : **Ouvrir un sujet** et **Faire une
+      proposition**.
+- [ ] **« Ouvrir un sujet ».** Le formulaire de création s'ouvre, pré-rempli :
+      le titre nomme l'étude, la description liste les conclusions avec leur
+      article, et se termine par « Rien n'est entré dans la mémoire du projet ».
+      C'est l'étape où l'on veut l'avis de l'équipe avant de conclure.
+- [ ] **« Faire une proposition ».** Une proposition **ouverte** est créée avec
+      une ligne par conclusion, et l'écran bascule sur l'onglet Propositions.
+      Vérifier :
+      - elle porte le nom de l'étude ;
+      - sa description liste les affirmations, avec leur article ;
+      - chaque ligne est au statut **proposé** — rien n'est décidé ;
+      - **la mémoire du projet n'a pas bougé** : ouvrir l'onglet Mémoire et
+        vérifier qu'aucune contrainte incendie n'y est apparue.
+- [ ] **Signer.** Fusionner la proposition depuis son écran. C'est **là**, et
+      seulement là, que les contraintes entrent en mémoire — avec leur nature
+      « Contrainte », leur domaine « Incendie », et l'article dans le détail.
+- [ ] **La portée survit à la signature.** Une proposition faite sur une zone
+      donne des affirmations portées sur cette zone, pas sur l'ensemble.
+- [ ] **Le copilote ne transforme pas.** Son bloc de résultat n'a ni bouton de
+      versement ni bouton « Transformer » : il propose « Ouvrir dans l'Atelier »,
+      et c'est de là que l'on transforme.
+
+### Le même geste ailleurs
+
+- [ ] **Atelier › Neige, Vent & Gel** : « Transformer » remplace l'ancien
+      « Transformer en sujet ». Le sujet est identique à ce qu'il était ; la
+      proposition porte les zones de neige et de vent, l'altitude, la profondeur
+      hors gel et le H0 retenu — en **contraintes**, domaine structure.
+- [ ] **Atelier › Fondations superficielles — calcul** : le bouton est sur la
+      ligne de titre, au-dessus du tableau de l'étude. La proposition porte les
+      cotes des semelles **qui vérifient** — en **données de base**, domaine
+      structure. Une semelle en défaut ou non calculée n'y figure pas.
+- [ ] Le nom **« Fondations superficielles - calcul »** apparaît dans le rail
+      comme en tête d'écran.
 
 ## 4. Le référentiel a changé
 
@@ -230,8 +260,10 @@ calcul jointe conviennent bien, parce qu'elles durent.
 
 Pour mémoire, et pour ne pas le prendre pour un défaut :
 
-- Le versement se fait **depuis l'Atelier seulement** : le copilote propose,
-  l'Atelier verse. Ce n'est pas un manque, c'est la règle — « une seule porte ».
+- **Rien ne se verse.** Le copilote propose, l'Atelier transforme, la
+  proposition signe. Ce n'est pas un manque, c'est la règle fondamentale.
+- **Défaire une proposition** n'existe pas encore. On avancera en défaisant ;
+  d'ici là, une proposition signée se corrige par une autre proposition.
 - Les **verdicts de conformité** (« l'escalier prévu satisfait-il ce que le texte
   exige ? ») ne se versent pas : ce sont des constats sur le projet, pas des
   contraintes qui s'imposent à lui. Ils viendront, avec leur nature à eux.

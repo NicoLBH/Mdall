@@ -1,30 +1,29 @@
 /**
- * Ce qu'une étude incendie verse dans la mémoire du projet.
+ * Ce qu'une étude incendie propose à la mémoire du projet.
  *
- * ## Pourquoi verser, alors que tout se recalcule
+ * ## Elle ne verse rien
  *
- * Les conclusions du référentiel se refont à chaque ouverture : elles servent à
- * décider, elles ne sont pas décidées. Mais il arrive un moment où quelqu'un
- * **retient** un degré — il l'écrit dans la notice, il le dit au maître
- * d'ouvrage, l'acousticien et le structure s'en servent. À ce moment-là, ce
- * n'est plus une lecture de l'arrêté, c'est une décision du projet, et « ce qui
- * a été décidé se conserve ».
+ * Ce fichier s'appelait « versement » quand l'écran écrivait directement dans
+ * la mémoire. Il ne le fait plus, et ne le fera plus : **rien n'entre jamais
+ * directement dans la mémoire du projet** (voir `docs/fondamentaux.md`). Ce qui
+ * sort d'un utilitaire passe par un sujet — pour en débattre — ou par une
+ * proposition — que quelqu'un signe.
  *
- * Le versement est donc un geste, jamais un effet de bord : rien ne part en
- * mémoire parce qu'on a répondu à une question.
+ * Ce qui reste ici est le **choix** : quelles conclusions partiront, sur quelle
+ * portée, et ce que la mémoire en dit déjà.
  *
- * ## Une contrainte, et pas une hypothèse
+ * ## Pourquoi montrer la mémoire avant de transformer
  *
- * Le test de la taxonomie : *si je ne suis pas d'accord, ai-je un recours ?*
- * Non — c'est l'arrêté qui décide. Elle est même nommée dans la définition :
- * « zones neige, vent et sismique, **classement incendie**, article du PLU ».
+ * Une proposition confronte de toute façon ses lignes à ce que le projet a
+ * décidé — c'est son travail. Mais on n'a pas envie de le découvrir à la
+ * signature : voir tout de suite qu'une conclusion contredit ce qui est en
+ * mémoire, c'est souvent la raison d'ouvrir un sujet plutôt qu'une proposition.
  *
- * ## Ce qui ne se verse pas
+ * ## Ce qui ne part pas
  *
  * Un « sans objet » n'affirme rien sur l'ouvrage : « aucune circulation
  * horizontale protégée n'est exigée » n'est pas un degré à respecter, c'est
- * l'absence d'exigence. Le verser remplirait la mémoire de lignes qui ne
- * décident de rien et rendraient les vraies moins visibles.
+ * l'absence d'exigence.
  *
  * Les **reformulations du cas** non plus. Le référentiel conclut sur cent
  * quatre points, et « le bâtiment comporte un sous-sol » ou « le classement
@@ -32,14 +31,7 @@
  * dépend, mais elles ne demandent rien à personne. C'est le référentiel qui
  * marque la différence, module par module — la deviner à la forme de la
  * question serait faux quelque part sans qu'on sache où.
- *
- * ## Et l'on montre ce que la mémoire dit déjà
- *
- * Verser ce qu'elle porte déjà à l'identique est du bruit ; verser ce qui la
- * contredit est le geste le plus important de l'écran, et il ne doit pas se
- * faire sans le voir. Les trois cas sont donc affichés avant le clic.
  */
-
 import { normalizeSubjectKey } from "./project-memory.js";
 import { currentAssertions } from "./project-memory.js";
 import { zonesOf } from "./project-zones.js";
@@ -121,18 +113,18 @@ export function etatDuVersement(conclusions = [], assertions = [], zone = "") {
  * Ce qui est coché quand le panneau s'ouvre.
  *
  * Ce que la mémoire ignore, et ce qu'elle dit autrement. Pas ce qu'elle porte
- * déjà à l'identique : réécrire une ligne pour la même valeur périme la
- * précédente et fait remonter une décision d'il y a trois mois à aujourd'hui,
- * ce qui est faux.
+ * déjà à l'identique : proposer une ligne pour une valeur déjà décidée ferait
+ * une proposition qui, une fois signée, remonterait à aujourd'hui une décision
+ * d'il y a trois mois.
  */
 export function retenuesParDefaut(lignes = []) {
   return new Set(lignes.filter((ligne) => ligne.etat !== "identique").map((ligne) => ligne.id));
 }
 
-/** Ce que le bouton va faire, en une phrase. */
+/** Ce qu'une transformation emportera, en une phrase. */
 export function phraseDuVersement(lignes = [], retenues = new Set()) {
   const prises = lignes.filter((ligne) => retenues.has(ligne.id));
-  if (!prises.length) return "Rien à verser : aucune conclusion retenue.";
+  if (!prises.length) return "Rien à proposer : aucune conclusion retenue.";
 
   const neuves = prises.filter((ligne) => ligne.etat === "absente").length;
   const corrigees = prises.filter((ligne) => ligne.etat === "differente").length;
@@ -142,5 +134,5 @@ export function phraseDuVersement(lignes = [], retenues = new Set()) {
   const reecrites = prises.length - neuves - corrigees;
   if (reecrites) morceaux.push(`${reecrites} réécrite${reecrites > 1 ? "s" : ""} à l'identique`);
 
-  return `${prises.length} contrainte${prises.length > 1 ? "s" : ""} — ${morceaux.join(", ")}.`;
+  return `${prises.length} contrainte${prises.length > 1 ? "s" : ""} partiront — ${morceaux.join(", ")}.`;
 }

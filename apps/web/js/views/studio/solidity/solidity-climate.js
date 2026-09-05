@@ -5,6 +5,8 @@ import { getLastStudioToolResult, resolveStudioClimateTool } from "../../../serv
 import { getEffectiveProjectLocation } from "./solidity-climate-tool-common.js";
 import { resolveCurrentBackendProjectId } from "../../../services/project-supabase-sync.js";
 import { renderGhActionButton } from "../../ui/gh-split-button.js";
+import { renderTransformer, TRANSFORMER } from "../../ui/transformer.js";
+import { NATURE, DOMAIN } from "../../../services/assertion-taxonomy.js";
 import { fetchGoogleMapsPlaceEmbedUrl } from "../../../services/google-maps-embed-service.js";
 import { renderProjectLocationMapCard } from "../../shared/project-location-map-card.js";
 
@@ -15,7 +17,10 @@ const TOOL_LABELS = {
   frost: "Gel"
 };
 
-const state = { loading: false, error: "", projectId: "", location: null, results: {}, mapUrl: "", mapLoading: false };
+const state = {
+  // Vrai le temps qu'une proposition se prépare : le bouton le dit, et ne se
+  // reclique pas.
+  transforming: false, loading: false, error: "", projectId: "", location: null, results: {}, mapUrl: "", mapLoading: false };
 
 function buildClimateDraftDescription() {
   const projectName = String(store.projectForm?.projectName || store.currentProject?.name || "").trim() || "Nom_du projet";
@@ -47,6 +52,47 @@ H >  **${frostDepthText}**
 avec H0 retenu: **${h0SelectedText}**`;
 }
 
+/**
+ * Ce que ces résultats affirment du projet.
+ *
+ * Des **contraintes** : une zone de neige n'est ni choisie ni mesurée, elle est
+ * fixée par un texte. La taxonomie les nomme en premier — « zones neige, vent et
+ * sismique ». Le fait qu'elles se déduisent de la commune n'en fait pas des
+ * suppositions : la déduction fait partie de leur définition.
+ *
+ * Ce qui n'a pas de valeur n'entre pas : une zone qu'on n'a pas su lire ne
+ * s'affirme pas « — ».
+ */
+function affirmationsClimatiques() {
+  const neige = state.results?.snow?.result_payload || {};
+  const vent = state.results?.wind?.result_payload || {};
+  const gel = state.results?.frost?.result_payload || {};
+
+  const nombre = (valeur, chiffres, unite) => {
+    const n = Number(valeur);
+    return Number.isFinite(n) ? `${n.toFixed(chiffres)} ${unite}`.trim() : "";
+  };
+
+  const commune = [state.location?.city, state.location?.postalCode].filter(Boolean).join(" ");
+  const source = commune ? `Zonages réglementaires — ${commune}` : "Zonages réglementaires";
+
+  return [
+    { sujet: "Zone de neige", valeur: String(neige?.snow_zone || "").trim(), source: `${source} (NF EN 1991-1-3 / annexe nationale)` },
+    { sujet: "Zone de vent", valeur: String(vent?.wind_zone || "").trim(), source: `${source} (NF EN 1991-1-4 / annexe nationale)` },
+    { sujet: "Altitude du site", valeur: nombre(neige?.altitude ?? state.location?.altitude, 2, "m"), source },
+    { sujet: "Profondeur hors gel", valeur: nombre(gel?.frost_depth_m, 3, "m"), source: `${source} (NF DTU 13.1)` },
+    { sujet: "H0 retenu pour le département", valeur: nombre(gel?.h0_selected_m, 1, "m"), source: `${source} (NF DTU 13.1)` }
+  ]
+    .filter((affirmation) => affirmation.valeur)
+    .map((affirmation) => ({
+      ...affirmation,
+      nature: NATURE.CONTRAINTE,
+      domain: DOMAIN.STRUCTURE,
+      domaine: DOMAIN.STRUCTURE,
+      atelier: "Neige, Vent & Gel"
+    }));
+}
+
 function buildClimateDraftTitle() {
   const city = String(state.location?.city || "").trim();
   return `Charges climatiques applicables au projet (neige, vent et gel) - ${city || "Ville inconnue"}`;
@@ -68,27 +114,73 @@ export async function renderSolidityClimate(root, { force = false } = {}) {
       return;
     }
 
-    const toSubjectTrigger = event.target.closest('[data-action-id="solidityToolToSubject-climate"]');
-    if (toSubjectTrigger) {
-      const description = buildClimateDraftDescription();
-      const title = buildClimateDraftTitle();
-      const opener = typeof window !== "undefined" ? window.openStudioToolSubjectDraft : null;
-      if (typeof opener === "function") {
-        opener({
-          origin: "studio-climate",
-          title,
-          description,
-          meta: {
-            labels: ["climatique"]
-          }
-        });
-      } else {
-        console.warn("[studio-tool-subject] open-draft unavailable", { toolKey: "climate" });
-      }
-    }
   };
 
+  // « Transformer » : ouvrir un sujet pour en débattre, ou préparer une
+  // proposition à signer. Aucune des deux n'écrit dans la mémoire du projet —
+  // voir `docs/fondamentaux.md`.
+  root.addEventListener("ghaction:action", (event) => {
+    const quoi = event.detail?.action;
+    if (quoi === TRANSFORMER.SUJET) {
+      const opener = typeof window !== "undefined" ? window.openStudioToolSubjectDraft : null;
+      if (typeof opener !== "function") {
+        console.warn("[studio-tool-subject] open-draft unavailable", { toolKey: "climate" });
+        return;
+      }
+      opener({
+        origin: "studio-climate",
+        title: buildClimateDraftTitle(),
+        description: buildClimateDraftDescription(),
+        meta: { labels: ["climatique"] }
+      });
+      return;
+    }
+    if (quoi === TRANSFORMER.PROPOSITION) void proposerLesZones(root);
+  });
+
   registerProjectPrimaryScrollSource(root.closest("#projectStudioRouterScroll") || document.getElementById("projectStudioRouterScroll"));
+}
+
+/**
+ * Préparer une proposition à partir des zonages.
+ *
+ * Elle reste **ouverte** : le système la remplit, quelqu'un la relit, arbitre ce
+ * qui contredit ce que le projet a déjà décidé, et signe. C'est cette signature
+ * qui fait entrer les zones dans la mémoire, jamais ce bouton.
+ */
+async function proposerLesZones(root) {
+  if (state.transforming) return;
+
+  const affirmations = affirmationsClimatiques();
+  if (!affirmations.length) {
+    state.error = "Rien à proposer : aucun zonage n'a été calculé.";
+    render(root);
+    return;
+  }
+
+  state.transforming = true;
+  state.error = "";
+  render(root);
+
+  const { preparerUneProposition } = await import("../../../services/atelier-proposition.js");
+  const rendu = await preparerUneProposition({
+    projectId: state.projectId,
+    titre: buildClimateDraftTitle(),
+    intro: "Zonages réglementaires applicables au projet, tels que les référentiels les fixent.",
+    source: affirmations[0]?.source || "",
+    affirmations
+  });
+
+  state.transforming = false;
+  if (!rendu.ok) {
+    state.error = rendu.raison;
+    render(root);
+    return;
+  }
+
+  render(root);
+  const projet = String(store.currentProjectId || "").trim();
+  if (projet) window.location.hash = `#project/${projet}/propositions`;
 }
 
 async function hydrateState() {
@@ -146,7 +238,7 @@ function render(root) {
             <span class="settings-card__head-title">
               <h4>Zones et charges climatiques</h4>
               <div class="studio-tool-card__actions">
-                ${renderGhActionButton({ id: "solidityToolToSubject-climate", label: "Transformer en sujet", tone: "default", size: "md", disabled: !hasResult, mainAction: "" })}
+                ${renderTransformer({ id: "solidityToolTransform-climate", disabled: !hasResult || state.transforming })}
                 ${renderGhActionButton({ id: "solidityToolCalculate-climate", label: actionLabel, tone: "primary", size: "md", disabled: !!state.loading, mainAction: "" })}
               </div>
             </span>

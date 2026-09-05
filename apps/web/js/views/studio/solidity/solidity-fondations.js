@@ -1,5 +1,5 @@
 /**
- * L'écran « Fondations — calcul » de l'Atelier.
+ * L'écran « Fondations superficielles — calcul » de l'Atelier.
  *
  * Il tient un rôle et un seul : recueillir les données, les faire calculer
  * ailleurs, et montrer ce qui revient. Aucune pondération, aucune combinaison,
@@ -16,6 +16,8 @@
 import { escapeHtml } from "../../../utils/escape-html.js";
 import { registerProjectPrimaryScrollSource } from "../../project-shell-chrome.js";
 import { renderGhActionButton } from "../../ui/gh-split-button.js";
+import { renderTransformer, TRANSFORMER } from "../../ui/transformer.js";
+import { NATURE, DOMAIN } from "../../../services/assertion-taxonomy.js";
 import { svgIcon } from "../../../ui/icons.js";
 import {
   ZONES, CHOIX, CAS_DE_CHARGE, COMPOSANTES, NAPPES, BARRES,
@@ -64,6 +66,8 @@ const etat = {
   ouverte: null,
   etudeChargee: false,
   etudeErreur: "",
+  /** Non vide pendant qu'une transformation se prépare : le bouton le dit. */
+  transformation: "",
   /**
    * Vrai quand l'étude n'a pas pu s'ouvrir — pas de projet, table absente,
    * base muette. Le formulaire reste utilisable, et l'écran dit que ce calcul
@@ -402,6 +406,14 @@ function brancher(root) {
     if (root.isConnected) dessiner(root);
   });
 
+  // « Transformer » : ouvrir un sujet, ou préparer une proposition. Aucune des
+  // deux n'écrit dans la mémoire du projet — voir `docs/fondamentaux.md`.
+  root.addEventListener("ghaction:action", (evenement) => {
+    const quoi = evenement.detail?.action;
+    if (quoi === TRANSFORMER.SUJET) ouvrirUnSujetDeFondations();
+    else if (quoi === TRANSFORMER.PROPOSITION) void proposerLesFondations(root);
+  });
+
   // La saisie ne redessine rien : redessiner à chaque frappe ferait perdre le
   // curseur, et l'écran n'a rien de nouveau à dire tant qu'on tape.
   root.addEventListener("input", (evenement) => {
@@ -617,6 +629,111 @@ function sceller(rang, marque, resultat, erreurDite) {
  * volume de béton en tout. Le détail d'une semelle s'ouvre en cliquant sa
  * ligne, et l'on passe de l'une à l'autre sans repasser par ici.
  */
+/**
+ * Ce que l'étude de fondations affirme du projet.
+ *
+ * Les cotes retenues, semelle par semelle. Ce sont des **données de base** : le
+ * projet les pose lui-même — personne d'extérieur ne les impose, aucune mesure
+ * ne les établit —, et elles sont en amont de tout ce qu'on en déduira.
+ *
+ * Une semelle qui ne vérifie pas n'entre pas : proposer une cote dont le calcul
+ * vient de dire qu'elle ne tient pas serait proposer une erreur. Une semelle
+ * qu'on n'a pas su calculer non plus — « je ne sais pas » n'est pas « ça passe ».
+ */
+function affirmationsDesSemelles() {
+  const table = synthese(etat.semelles, resultatsAJour());
+
+  return table.lignes
+    .filter((ligne) => ligne.verifiee === true)
+    .map((ligne) => {
+      const cote = (valeur) => nombreLisible(valeur, 2);
+      const dimensions = `${cote(ligne.entrees?.sectionLx)} × ${cote(ligne.entrees?.sectionLy)} × ${
+        cote(ligne.entrees?.hauteurLz)} m`;
+      const combien = ligne.nombre > 1 ? ` — ${ligne.nombre} massifs` : "";
+
+      return {
+        sujet: `Semelle « ${ligne.designation} »`,
+        valeur: `${dimensions}${combien}`,
+        nature: NATURE.DONNEE_BASE,
+        domaine: DOMAIN.STRUCTURE,
+        source: "Fondations superficielles — calcul (NF DTU 13.1)",
+        article: ligne.ratio !== null ? `ratio déterminant ${nombreLisible(ligne.ratio, 3)}` : "",
+        reference: ligne.id,
+        atelier: "Fondations superficielles — calcul"
+      };
+    });
+}
+
+/**
+ * Ouvrir un sujet à partir de l'étude.
+ *
+ * C'est l'étape où quelque chose reste à régler : une contrainte de sol à faire
+ * confirmer, une descente de charges à recouper. On en débat, on revient
+ * corriger, **puis** on propose.
+ */
+function ouvrirUnSujetDeFondations() {
+  const affirmations = affirmationsDesSemelles();
+  const ouvrir = typeof window !== "undefined" ? window.openStudioToolSubjectDraft : null;
+  if (typeof ouvrir !== "function") return;
+
+  const table = synthese(etat.semelles, resultatsAJour());
+  ouvrir({
+    origin: "studio-fondations",
+    title: "Fondations superficielles — cotes retenues",
+    description: [
+      `${affirmations.length} semelle${affirmations.length > 1 ? "s vérifient" : " vérifie"}, `
+        + `${table.totaux.massifs} massif${table.totaux.massifs > 1 ? "s" : ""}, `
+        + `${nombreLisible(table.totaux.volume, 2)} m³ de béton.`,
+      "",
+      ...affirmations.map((a) => `- **${a.sujet}** : ${a.valeur}${a.article ? ` — ${a.article}` : ""}`),
+      "",
+      "_Rien n'est entré dans la mémoire du projet._"
+    ].join("\n"),
+    meta: { labels: ["fondations"] }
+  });
+}
+
+/**
+ * Préparer une proposition à partir de l'étude.
+ *
+ * Elle reste **ouverte** : le système la remplit, quelqu'un la signe. C'est
+ * cette signature qui fait entrer les cotes dans la mémoire.
+ */
+async function proposerLesFondations(root) {
+  if (etat.transformation) return;
+
+  const affirmations = affirmationsDesSemelles();
+  if (!affirmations.length) {
+    etat.etudeErreur = "Rien à proposer : aucune semelle vérifiée.";
+    dessiner(root);
+    return;
+  }
+
+  etat.transformation = "Préparation de la proposition…";
+  etat.etudeErreur = "";
+  dessiner(root);
+
+  const { preparerUneProposition } = await import("../../../services/atelier-proposition.js");
+  const rendu = await preparerUneProposition({
+    projectId: projetCourant,
+    titre: "Fondations superficielles — cotes retenues",
+    intro: "Cotes des semelles retenues par le pré-dimensionnement, celles qui vérifient.",
+    source: "Fondations superficielles — calcul (NF DTU 13.1)",
+    affirmations
+  });
+
+  etat.transformation = "";
+  if (!rendu.ok) {
+    etat.etudeErreur = rendu.raison;
+    dessiner(root);
+    return;
+  }
+
+  dessiner(root);
+  const projet = String(store.currentProjectId || "").trim();
+  if (projet) window.location.hash = `#project/${projet}/propositions`;
+}
+
 function dessinerSynthese() {
   const table = synthese(etat.semelles, resultatsAJour());
 
@@ -872,8 +989,14 @@ function dessiner(root) {
         <div class="settings-card__head studio-tool-card__head">
           <div>
             <span class="settings-card__head-title">
-              <h4>Fondations — calcul</h4>
+              <h4>Fondations superficielles — calcul</h4>
               <div class="studio-tool-card__actions">
+                ${surLeTableau ? renderTransformer({
+                  id: "fondationsTransformer",
+                  // Rien à transformer tant qu'aucune semelle ne vérifie : une
+                  // cote qu'on vient de dire fausse ne se propose pas.
+                  disabled: etat.transformation !== "" || affirmationsDesSemelles().length === 0
+                }) : ""}
                 ${surLeTableau ? "" : renderGhActionButton({ id: "fondationsReinitialiser", label: "Réinitialiser", tone: "default", size: "md", disabled: etat.calculEnCours, mainAction: "" })}
                 ${surLeTableau ? "" : renderGhActionButton({ id: "fondationsCalculer", label: etat.calculEnCours ? "Calcul en cours…" : dejaCalcule ? "Recalculer" : "Calculer", tone: "primary", size: "md", disabled: etat.calculEnCours, mainAction: "" })}
               </div>
