@@ -19244,3 +19244,23 @@ html.est-fige-par-le-graphe, body.est-fige-par-le-graphe{ overflow:hidden; }
 .avant-apres__tag--inconnu{ border-style:dashed; }
 
 .avant-apres__refus{ display:block; margin-top:4px; color:rgb(248,81,73); font-size:11px; }
+
+/* ── Ce qui continue après la fusion ────────────────────────────────────────
+   La décision est déjà prise et affichée ; cette ligne dit seulement ce que la
+   base est en train d'écrire derrière. Discrète, donc : elle informe, elle
+   n'inquiète pas — rien de ce qu'elle annonce ne peut défaire la fusion. */
+.review-finishing{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin:0 0 12px;
+  padding:8px 12px;
+  border:1px solid var(--border);
+  border-radius:6px;
+  background:var(--panel2);
+  color:var(--muted);
+  font-size:12px;
+}
+.review-finishing__spin{ display:inline-flex; animation:review-finishing-turn 1.4s linear infinite; }
+@keyframes review-finishing-turn{ to{ transform:rotate(360deg); } }
+@media (prefers-reduced-motion:reduce){ .review-finishing__spin{ animation:none; } }

@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  corpsDuMessage, titreDuSujet, descriptionDuSujet, messagesACommenter, origineDuMessage
+  corpsDuMessage, titreDuSujet, descriptionDuSujet, messagesACommenter, origineDuMessage,
+  expliquerLeRefus
 } from "./copilote-en-sujet.js";
 
 const DISCUSSION = {
@@ -58,4 +59,23 @@ test("ce que le copilote a dit porte sa marque", () => {
   // Sans elle, une réponse du copilote se lirait comme un avis du projet.
   assert.equal(origineDuMessage({ role: "assistant" }), "copilote");
   assert.equal(origineDuMessage({ role: "user" }), "human");
+});
+
+test("un refus de la base se dit, et nomme ce qui manque", () => {
+  const refus = expliquerLeRefus(new Error(
+    '/rest/v1/subject_messages failed (400): {"code":"23514","message":"new row for relation '
+    + '\"subject_messages\" violates check constraint \"subject_messages_origin_check\""}'
+  ));
+
+  assert.match(refus, /copilote/);
+  assert.match(refus, /202609150001/);
+});
+
+test("un refus qu'on ne connaît pas se rend tel quel plutôt que traduit à tort", () => {
+  assert.equal(expliquerLeRefus(new Error("permission denied for table subject_messages")),
+    "permission denied for table subject_messages");
+});
+
+test("un refus muet le dit : « 0 sur 5 » sans raison a coûté deux tours", () => {
+  assert.match(expliquerLeRefus(null), /sans dire pourquoi/);
 });

@@ -145,6 +145,22 @@ export async function writeAssertions(rows = []) {
 }
 
 /**
+ * Exécute des écritures indépendantes par paquets.
+ *
+ * Le nombre est un compromis, pas une mesure : assez large pour que le réseau
+ * cesse d'être le facteur limitant, assez étroit pour qu'aucune fusion n'ouvre
+ * cent connexions d'un coup. Un échec dans un paquet arrête tout — c'est ce que
+ * faisait déjà la boucle, et l'appelant sait le dire.
+ */
+const PAR_PAQUET = 8;
+
+async function enParallele(taches = [], taille = PAR_PAQUET) {
+  for (let debut = 0; debut < taches.length; debut += taille) {
+    await Promise.all(taches.slice(debut, debut + taille).map((tache) => tache()));
+  }
+}
+
+/**
  * Marque des affirmations remplacées.
  *
  * Le lien part dans les deux sens : l'ancienne porte celle qui la remplace,
@@ -158,22 +174,34 @@ export async function markSuperseded(liens = []) {
   const valides = (Array.isArray(liens) ? liens : []).filter((lien) => lien?.oldId && lien?.newId);
   if (valides.length === 0) return true;
 
-  try {
-    for (const lien of valides) {
-      await request("project_assertions", {
-        method: "PATCH",
-        params: { id: `eq.${lien.oldId}` },
-        headers: { Prefer: "return=minimal" },
-        body: { superseded_by: lien.newId, superseded_at: lien.at || new Date().toISOString() }
-      });
+  // Chaque lien vaut deux écritures, sur deux lignes différentes, et aucune ne
+  // dépend d'une autre. Les enchaîner une par une faisait payer un aller-retour
+  // réseau par écriture : un lot de soixante-dix avis demandait cent quarante
+  // allers-retours, et la fusion restait sans réponse à l'écran près de deux
+  // minutes — pour un travail que la base fait en quelques centaines de
+  // millisecondes.
+  //
+  // On les envoie donc par paquets. Le plafond n'est pas décoratif : sans lui,
+  // cent quarante requêtes simultanées se font étrangler par le navigateur ou
+  // par la base, et l'on échange une lenteur régulière contre une lenteur
+  // imprévisible.
+  const ecritures = valides.flatMap((lien) => [
+    () => request("project_assertions", {
+      method: "PATCH",
+      params: { id: `eq.${lien.oldId}` },
+      headers: { Prefer: "return=minimal" },
+      body: { superseded_by: lien.newId, superseded_at: lien.at || new Date().toISOString() }
+    }),
+    () => request("project_assertions", {
+      method: "PATCH",
+      params: { id: `eq.${lien.newId}` },
+      headers: { Prefer: "return=minimal" },
+      body: { supersedes: lien.oldId }
+    })
+  ]);
 
-      await request("project_assertions", {
-        method: "PATCH",
-        params: { id: `eq.${lien.newId}` },
-        headers: { Prefer: "return=minimal" },
-        body: { supersedes: lien.oldId }
-      });
-    }
+  try {
+    await enParallele(ecritures);
     return true;
   } catch {
     return false;
