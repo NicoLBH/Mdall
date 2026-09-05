@@ -6517,7 +6517,12 @@ body.route--project.documents-pdf-sticky-mode.project-shell-compact .gh-header.g
 .documents-shell .documents-topbar{
   position:sticky;
   top:var(--app-top);
-  z-index:calc(var(--z-header) - 3);
+  /* Au-dessus de la barre du lecteur PDF (`- 2`), qui vient juste en dessous.
+     Un `z-index` sur un élément positionné crée un contexte d'empilement : le
+     menu du kebab, si haut soit-il, ne monte jamais plus haut que sa barre —
+     il passait donc sous les boutons du PDF, et on ne lisait qu'une moitié de
+     menu. */
+  z-index:calc(var(--z-header) - 1);
 }
 body.route--project.project-shell-compact .documents-shell .documents-topbar,
 body.documents-local-chrome-compact .documents-shell .documents-topbar,
@@ -16939,7 +16944,7 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .est-survole .depot-voile{ display:grid; }
 .depot-voile__contenu{ display:flex; flex-direction:column; align-items:center; gap:14px; }
 .depot-voile__contenu{ gap:22px; }
-.depot-voile__cartes{ width:452px; height:206px; max-width:min(70vw, 452px); }
+.depot-voile__cartes{ width:226px; height:103px; max-width:min(50vw, 226px); }
 .depot-voile__mot{ margin:0; color:var(--text); font-size:20px; font-weight:600; }
 .copilote-outil__cle{ color:var(--muted); min-width:0; }
 .copilote-outil__source{ color:var(--muted); font-size:11px; font-style:italic; }
@@ -19147,3 +19152,95 @@ html.est-fige-par-le-graphe, body.est-fige-par-le-graphe{ overflow:hidden; }
    ni la voie normale ni un danger — défaire n'efface rien, cela propose. */
 .tl-activity__trailing{ margin-left:auto; display:flex; align-items:center; gap:8px; }
 .proposition-defaire{ white-space:nowrap; }
+
+/* ── Le tableau avant / après d'une proposition ──────────────────────────────
+   Deux colonnes de valeurs face à face, une ligne par sujet. Ce qu'on doit
+   voir sans lire, c'est l'écart : la colonne de droite porte donc le poids
+   typographique, et la ligne qui corrige porte un filet à gauche.
+
+   Le tableau défile dans son cadre plutôt que d'élargir la page : une valeur
+   longue ne doit pas faire glisser l'écran entier. */
+.avant-apres__scroll{ overflow-x:auto; }
+
+.avant-apres{
+  width:100%;
+  border-collapse:collapse;
+  font-size:13px;
+}
+
+.avant-apres thead th{
+  position:sticky;
+  top:0;
+  padding:8px 16px;
+  text-align:left;
+  font-size:11px;
+  font-weight:600;
+  letter-spacing:.02em;
+  text-transform:uppercase;
+  color:var(--muted);
+  background:var(--panel2);
+  border-bottom:1px solid var(--border);
+  white-space:nowrap;
+}
+
+.avant-apres__domaine th{
+  padding:10px 16px 4px;
+  text-align:left;
+  font-size:11px;
+  font-weight:600;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+  color:var(--muted);
+  background:transparent;
+  border-bottom:1px solid var(--border2);
+}
+
+.avant-apres__ligne > *{
+  padding:10px 16px;
+  border-bottom:1px solid var(--border2);
+  vertical-align:top;
+}
+
+.avant-apres__sujet{
+  display:table-cell;
+  text-align:left;
+  font-weight:400;
+  min-width:200px;
+}
+
+.avant-apres__titre{ display:block; color:var(--text); font-weight:600; }
+.avant-apres__portee,
+.avant-apres__appui{ display:block; margin-top:2px; color:var(--muted); font-size:11px; }
+
+.avant-apres__avant{ color:var(--muted); }
+.avant-apres__apres{ color:var(--text); font-weight:600; }
+
+/* Une case vide se dit. Blanche, elle se lit comme un défaut d'affichage. */
+.avant-apres__vide{ color:var(--muted); font-style:italic; font-weight:400; opacity:.75; }
+
+/* La correction est la seule ligne qui demande une décision : elle se repère
+   de loin, les autres ne se déguisent pas en elle. */
+.avant-apres__ligne--correction{ box-shadow:inset 2px 0 0 rgb(210,153,34); }
+.avant-apres__ligne--correction .avant-apres__apres{ color:rgb(210,153,34); }
+.avant-apres__ligne--retrait .avant-apres__avant{ text-decoration:line-through; }
+.avant-apres__ligne--identique .avant-apres__apres{ font-weight:400; color:var(--muted); }
+
+.avant-apres__etat{ white-space:nowrap; }
+
+.avant-apres__tag{
+  display:inline-block;
+  padding:1px 8px;
+  border-radius:999px;
+  border:1px solid var(--border);
+  background:var(--panel2);
+  color:var(--muted);
+  font-size:11px;
+  line-height:18px;
+}
+
+.avant-apres__tag--nouveau{ border-color:rgba(35,134,54,.5); color:rgb(63,185,80); }
+.avant-apres__tag--correction{ border-color:rgba(210,153,34,.5); color:rgb(210,153,34); }
+.avant-apres__tag--retrait{ border-color:rgba(248,81,73,.4); color:rgb(248,81,73); }
+.avant-apres__tag--inconnu{ border-style:dashed; }
+
+.avant-apres__refus{ display:block; margin-top:4px; color:rgb(248,81,73); font-size:11px; }

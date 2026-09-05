@@ -81,6 +81,32 @@ qui.
 C'est ce qui manquait pour oser déposer. Un document ajouté par erreur n'avait
 aucune correction, et la seule issue était de vivre avec.
 
+### On ne signe pas sans savoir ce que le projet dit déjà
+
+Une proposition qui n'affiche que ce qu'elle apporte demande de connaître par
+cœur l'état de la mémoire. Personne ne le connaît. L'onglet **Changements**
+montre donc les deux valeurs côte à côte, une ligne par sujet — ce que le projet
+dit aujourd'hui, ce que la proposition en dirait — et l'écart se lit sans rien
+ouvrir.
+
+Quatre lectures, et une seule demande une décision :
+
+| Ce qu'on voit | Ce que ça veut dire |
+| --- | --- |
+| la colonne de gauche est vide | une **entrée nouvelle** |
+| les deux diffèrent | une **correction** — c'est pour elle que le tableau existe |
+| la colonne de droite est vide | un **retrait** |
+| les deux disent la même chose | rien ne change, et on l'affiche quand même |
+
+Sur une proposition **fusionnée**, « aujourd'hui » mentirait : la mémoire porte
+déjà ce que la proposition a écrit, et les deux colonnes afficheraient la même
+valeur. On lit alors ce qu'elle a réellement écrit et ce que cette écriture
+remplaçait — l'histoire est en base, il suffit de la lire au bon endroit.
+
+Et si la mémoire n'a pas pu être lue, aucune ligne ne se prétend nouvelle : une
+lecture ratée qui afficherait « le projet ne dit rien » ferait signer douze
+corrections prises pour douze ajouts (règle 5).
+
 ### Ce que cela impose au code
 
 - Un écran d'Atelier propose un bouton **« Transformer »**, jamais un bouton qui

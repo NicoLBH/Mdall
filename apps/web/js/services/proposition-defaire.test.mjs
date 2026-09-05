@@ -80,7 +80,8 @@ test("un item sans clé n'entre pas", () => {
 });
 
 test("le titre dit quelle proposition on défait", () => {
-  assert.equal(titreDuDefaire(PROPOSITION), "Défaire #12 — Zones climatiques");
+  // `#P12` et non `#12` : le second citerait le **sujet** numéro douze.
+  assert.equal(titreDuDefaire(PROPOSITION), "Défaire #P12 — Zones climatiques");
   assert.equal(titreDuDefaire({ title: "Sans numéro" }), "Défaire — Sans numéro");
 });
 
@@ -98,7 +99,7 @@ test("la description dit ce qui est remis, écarté, et ce qui ne l'est pas", ()
     documents: [{ id: "d1", original_filename: "plan.pdf" }]
   });
 
-  assert.match(texte, /Revient sur la proposition #12, fusionnée le 4 septembre 2026/);
+  assert.match(texte, /Revient sur la proposition #P12, fusionnée le 4 septembre 2026/);
   assert.match(texte, /Rien n'est effacé/);
   assert.match(texte, /zone-de-neige : A1 _\(au lieu de A2\)_/);
   assert.match(texte, /zone-de-vent : 2/);
