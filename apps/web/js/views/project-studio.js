@@ -25,6 +25,7 @@ import {
   transcrireLaDiscussion
 } from "./studio/copilote/copilote.js";
 import { conversationTitle } from "../services/copilote-conversations.js";
+import { store } from "../store.js";
 import {
   deleteConversation,
   renameConversation
@@ -81,6 +82,11 @@ function renderCopiloteHistorique() {
               ${svgIcon("copy")}<span>Copier la discussion</span>
               <em class="copilote-fil-menu__temporaire">dev</em>
             </button>
+            <button type="button" class="copilote-fil-menu__item" role="menuitem"
+              data-copilote-en-sujet="${escapeHtml(conversation.id)}"
+              title="Les messages deviennent des commentaires, visibles par l'équipe du projet">
+              ${svgIcon("issue-opened")}<span>Créer un sujet</span>
+            </button>
             <button type="button" class="copilote-fil-menu__item is-danger" role="menuitem"
               data-copilote-delete="${escapeHtml(conversation.id)}">
               ${svgIcon("trash")}<span>Effacer</span>
@@ -128,7 +134,7 @@ function renderStudioNav() {
           iconHtml: svgIcon("shield", { className: "octicon octicon-shield" })
         }),
         renderNavListItem({
-          label: "Fondations - calcul",
+          label: "Fondations superficielles - calcul",
           dataAttributes: { "data-side-nav-target": "solidity-fondations" },
           iconHtml: svgIcon("gear", { className: "octicon octicon-gear" })
         }),
@@ -463,6 +469,14 @@ function brancherCopilote(root, copiloteRoot, getScrollSource) {
       return;
     }
 
+    const enSujet = event.target.closest("[data-copilote-en-sujet]");
+    if (enSujet) {
+      event.stopPropagation();
+      fermerMenus();
+      await ouvrirUnSujetDepuisLeFil(enSujet.dataset.copiloteEnSujet);
+      return;
+    }
+
     const effacer = event.target.closest("[data-copilote-delete]");
     if (effacer) {
       event.stopPropagation();
@@ -520,6 +534,52 @@ function brancherCopilote(root, copiloteRoot, getScrollSource) {
    * Une conversation avec le copilote est privée, et la copier pour soi n'est
    * pas la partager.
    */
+  /**
+   * Ouvrir un sujet à partir d'une discussion.
+   *
+   * **Ce qui part ne revient pas** : le sujet est visible par toute l'équipe du
+   * projet, et la discussion, elle, reste privée. On demande donc avant, en
+   * disant ce que le geste fait — pas « êtes-vous sûr ? », qui ne dit rien.
+   */
+  async function ouvrirUnSujetDepuisLeFil(id) {
+    const conversation = copiloteConversations().find((entree) => entree.id === id);
+    if (!conversation) return;
+
+    const nombre = (conversation.messages ?? []).filter((message) => String(message?.content || "").trim()).length;
+    if (!nombre) {
+      window.alert("Cette discussion n'a rien à montrer.");
+      return;
+    }
+
+    const nom = conversationTitle(conversation) || "cette discussion";
+    const ok = window.confirm(
+      `Ouvrir un sujet « ${nom} » ?\n\n`
+      + `Les ${nombre} messages deviendront des commentaires, visibles par toute l'équipe du projet. `
+      + `La discussion, elle, reste privée.`
+    );
+    if (!ok) return;
+
+    try {
+      const { transformerEnSujet } = await import("../services/copilote-en-sujet.js");
+      const { resolveCurrentBackendProjectId } = await import("../services/project-supabase-sync.js");
+      const projet = await resolveCurrentBackendProjectId().catch(() => "");
+      const rendu = await transformerEnSujet({ projectId: projet, conversation });
+
+      if (!rendu.ok) { window.alert(rendu.raison); return; }
+      if (rendu.commentaires < rendu.attendus) {
+        window.alert(
+          `Le sujet « ${rendu.sujet.title} » est ouvert, avec ${rendu.commentaires} commentaire`
+          + `${rendu.commentaires > 1 ? "s" : ""} sur ${rendu.attendus}. Les autres n'ont pas pu être écrits.`
+        );
+      }
+
+      const projetAffiche = String(store.currentProjectId || "").trim();
+      if (projetAffiche) window.location.hash = `#project/${projetAffiche}/sujets`;
+    } catch (erreur) {
+      window.alert(`Le sujet n'a pas pu être ouvert. ${erreur?.message || ""}`.trim());
+    }
+  }
+
   async function copierLeFil(id) {
     const texte = await transcrireLaDiscussion(id);
     if (!texte) {

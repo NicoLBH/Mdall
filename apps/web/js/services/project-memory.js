@@ -163,6 +163,11 @@ export function assertionsFromProposition({ proposition = {}, items = [], decide
         status,
         nature,
         domain,
+        // La portée voyage dans le payload de l'item : une proposition venue de
+        // l'Atelier peut ne valoir que pour un bâtiment, et la perdre à la
+        // fusion ferait périmer le degré du bâtiment A par celui du bâtiment B.
+        zones: Array.isArray(item.payload?.zones) && item.payload.zones.length
+          ? item.payload.zones : null,
         payload: item.payload ?? null,
         proposition_id: proposition.id,
         proposition_number: Number(proposition.number) || null,
@@ -320,101 +325,6 @@ export function declaredBaseDatum({
       domain: normalizeDomain(domain),
       zones: portees.length ? portees : null,
       payload: { subject: sujet, value: valeur, declared: true },
-      proposition_id: null,
-      proposition_number: null,
-      source_document_id: null,
-      decided_by: declaredBy ?? null,
-      decided_at: quand
-    }
-  };
-}
-
-/**
- * Une contrainte, versée par un utilitaire de l'Atelier.
- *
- * ## Pourquoi une contrainte, et pas une donnée de base
- *
- * Un degré coupe-feu n'est ni choisi ni mesuré : il est **imposé** par l'arrêté
- * du 31 janvier 1986. Le test de la taxonomie tient en une question — *si je ne
- * suis pas d'accord, ai-je un recours ?* Non. C'est une contrainte, et elle y
- * est nommée explicitement : « zones neige, vent et sismique, classement
- * incendie, article du PLU ».
- *
- * Le fait qu'elle se **déduise** du bâtiment n'en fait pas une supposition : la
- * déduction fait partie de sa définition. Le degré coupe-feu d'un immeuble de
- * 3ᵉ famille B n'est pas une estimation de cet immeuble, c'est une propriété de
- * cet immeuble.
- *
- * ## Ce qui doit voyager avec elle
- *
- * L'article et la phrase du texte. Une contrainte sans sa source ne se défend
- * pas en réunion, et six mois plus tard personne ne saura si le degré a été lu
- * dans l'arrêté ou retenu de mémoire. Ils vivent dans le `payload` : la mémoire
- * n'a pas de colonne pour eux, et une phrase de plus dans l'énoncé le rendrait
- * illisible dans les listes.
- *
- * ## Elle se corrige, elle ne se révise pas
- *
- * Une contrainte fausse n'a pas d'histoire : elle n'aurait jamais dû être
- * écrite ainsi. Verser deux fois le même sujet périme donc la précédente, comme
- * pour les autres — et ce qui reposait dessus devient suspect, ce qui est le
- * comportement voulu : se tromper sur une contrainte veut dire qu'on a calculé
- * faux.
- *
- * @returns {{ok: true, row: object}|{ok: false, reason: string}}
- */
-export function declaredConstraint({
-  projectId = "",
-  subject = "",
-  value = "",
-  source = "",
-  article = "",
-  citation = "",
-  reference = "",
-  domain = null,
-  zone = "",
-  zones = [],
-  declaredBy = null,
-  at = ""
-} = {}) {
-  const projet = texte(projectId);
-  const sujet = texte(subject);
-  const valeur = texte(value);
-
-  if (!projet) return { ok: false, reason: "Aucun projet." };
-  if (!sujet) return { ok: false, reason: "Une contrainte a besoin d'un sujet : « degré coupe-feu des planchers »." };
-  if (!valeur) return { ok: false, reason: "Une contrainte a besoin d'une valeur : c'est elle qui s'impose au projet." };
-
-  const quand = texte(at) || new Date().toISOString();
-  const portees = porteesDe([...(Array.isArray(zones) ? zones : []), zone]) ?? [];
-
-  return {
-    ok: true,
-    row: {
-      project_id: projet,
-      // La provenance reste celle d'une déclaration : personne d'extérieur n'a
-      // rempli cette ligne, c'est l'Atelier qui l'a versée sur un geste. La
-      // nature, elle, est écrite — et c'est elle qui prime à la lecture.
-      kind: BASE_DATUM_KIND,
-      subject_key: portees.length ? `${normalizeSubjectKey(sujet)}@${portees.join("+")}` : normalizeSubjectKey(sujet),
-      statement: `${sujet} : ${valeur}`,
-      detail: texte(citation) || null,
-      status: MEMORY.ASSUMED,
-      nature: NATURE.CONTRAINTE,
-      domain: normalizeDomain(domain),
-      zones: portees.length ? portees : null,
-      payload: {
-        subject: sujet,
-        value: valeur,
-        declared: true,
-        // De quoi rouvrir le texte à la bonne ligne devant qui conteste.
-        source: texte(source),
-        article: texte(article),
-        citation: texte(citation),
-        // Le nom du module du référentiel : il ne bouge pas quand le libellé
-        // est réécrit, et c'est par lui qu'un utilitaire retrouvera sa valeur.
-        reference: texte(reference)
-      },
       proposition_id: null,
       proposition_number: null,
       source_document_id: null,

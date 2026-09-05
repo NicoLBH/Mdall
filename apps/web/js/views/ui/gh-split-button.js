@@ -69,7 +69,16 @@ export function renderGhActionButton({
   iconOnly = false,
   disabled = false,
   className = "",
-  mainActionMode = "explicit"
+  mainActionMode = "explicit",
+  /**
+   * Le bouton principal **ouvre le menu** au lieu de déclencher une action.
+   *
+   * Pour un bouton qui n'a pas d'action par défaut — « Transformer » : on ne
+   * transforme pas, on choisit en quoi. Sans cela, la moitié gauche du bouton
+   * ne fait rien, et l'on clique deux fois avant de comprendre qu'il faut viser
+   * le chevron.
+   */
+  menuOnMain = false
 }) {
   const hasMenu = Array.isArray(items) && items.length > 0;
   const resolvedMainAction = hasMenu && mainActionMode === "first-item"
@@ -112,11 +121,13 @@ export function renderGhActionButton({
       class="${rootClasses}"
       data-action-id="${escapeAttr(id)}"
       data-main-action="${escapeAttr(resolvedMainAction)}"
+      ${menuOnMain ? "data-action-menu-on-main=\"true\"" : ""}
     >
       <button
         type="button"
         class="gh-btn gh-action__main ${btnToneClass} ${btnSizeClass}"
         data-action-main
+        ${menuOnMain ? 'aria-haspopup="menu" aria-expanded="false"' : ""}
         ${disabled ? "disabled" : ""}
       >
         ${contentHtml}
@@ -189,7 +200,11 @@ export function bindGhActionButtons() {
     const menuItem = event.target.closest?.("[data-menu-action]");
     const root = event.target.closest?.(".gh-action");
 
-    if (toggle && root) {
+    // Le bouton principal ouvre le menu quand il n'a pas d'action à lui : voir
+    // `menuOnMain`. On le traite exactement comme le chevron.
+    const ouvreLeMenu = toggle || (main && root?.dataset.actionMenuOnMain === "true");
+
+    if (ouvreLeMenu && root) {
       event.preventDefault();
       event.stopPropagation();
 
@@ -199,7 +214,9 @@ export function bindGhActionButtons() {
       closeAllActionMenus(isOpen ? "" : id);
       root.classList.toggle("is-open", !isOpen);
 
-      toggle.setAttribute("aria-expanded", !isOpen ? "true" : "false");
+      for (const bouton of root.querySelectorAll("[data-action-toggle], [aria-haspopup='menu']")) {
+        bouton.setAttribute("aria-expanded", !isOpen ? "true" : "false");
+      }
       return;
     }
 

@@ -11,6 +11,18 @@
  * **Rien n'est modifié.** On écrit des affirmations, et on marque des
  * affirmations remplacées. Aucune ligne n'est corrigée, aucune n'est effacée :
  * une mémoire qui se réécrit n'est pas une mémoire.
+ *
+ * ## Ce fichier n'est pas une porte ouverte
+ *
+ * **Rien n'entre jamais directement dans la mémoire du projet** — voir
+ * `docs/fondamentaux.md`. La voie normale est `rememberProposition` : une
+ * proposition relue, ses conflits arbitrés, signée par quelqu'un.
+ *
+ * `rememberHypothesis` et `rememberBaseDatum` sont l'exception, et une seule :
+ * la déclaration faite **à la main** dans l'écran Mémoire, où l'auteur est
+ * présent et signe par son geste. Aucun utilitaire de l'Atelier ne les appelle,
+ * et aucun ne doit les appeler : ce qu'un calcul produit passe par une
+ * proposition, comme le reste.
  */
 
 import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
@@ -294,17 +306,6 @@ export async function rememberHypothesis(row) {
  * @returns {Promise<{written: object, superseded: number, flagged: number}|null>}
  */
 export async function rememberBaseDatum(row) {
-  return remplacerSurSaCle(row);
-}
-
-/**
- * Écrire une contrainte versée par l'Atelier.
- *
- * Même geste qu'une donnée de base : on écrit, on périme la précédente de même
- * clé, on marque ce qui reposait dessus. Une contrainte fausse veut dire qu'on
- * a calculé faux — le drapeau n'est pas une politesse.
- */
-export async function rememberConstraint(row) {
   return remplacerSurSaCle(row);
 }
 

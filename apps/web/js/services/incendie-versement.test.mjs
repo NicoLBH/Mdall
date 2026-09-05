@@ -96,12 +96,12 @@ test("ce que la mémoire porte déjà à l'identique n'est pas coché", () => {
   assert.equal(retenues.has("planchersCoupeFeu"), true);
 });
 
-test("le bouton dit ce qu'il va faire", () => {
+test("la phrase dit ce qui partira", () => {
   const lignes = etatDuVersement(conclusionsVersables(VUE), [
     assertion("degre-coupe-feu-des-planchers", "CF 1/2 h")
   ]);
 
   assert.equal(phraseDuVersement(lignes, retenuesParDefaut(lignes)),
-    "2 contraintes — 1 nouvelle, 1 qui corrige la mémoire.");
-  assert.equal(phraseDuVersement(lignes, new Set()), "Rien à verser : aucune conclusion retenue.");
+    "2 contraintes partiront — 1 nouvelle, 1 qui corrige la mémoire.");
+  assert.equal(phraseDuVersement(lignes, new Set()), "Rien à proposer : aucune conclusion retenue.");
 });

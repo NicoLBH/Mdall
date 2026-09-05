@@ -58,10 +58,11 @@ import {
 import {
   conclusionsVersables, etatDuVersement, retenuesParDefaut, phraseDuVersement
 } from "../../../services/incendie-versement.js";
-import { declaredConstraint } from "../../../services/project-memory.js";
-import { listProjectAssertions, rememberConstraint } from "../../../services/project-memory-supabase.js";
+import { listProjectAssertions } from "../../../services/project-memory-supabase.js";
+import { preparerUneProposition } from "../../../services/atelier-proposition.js";
+import { renderTransformer, TRANSFORMER } from "../../ui/transformer.js";
 import { zoneChoices, ZONE_TOUT_LOUVRAGE } from "../../../services/project-zones.js";
-import { DOMAIN } from "../../../services/assertion-taxonomy.js";
+import { DOMAIN, NATURE } from "../../../services/assertion-taxonomy.js";
 import { store } from "../../../store.js";
 import { resolveCurrentBackendProjectId } from "../../../services/project-supabase-sync.js";
 
@@ -694,12 +695,17 @@ function retenuesCourantes(lignes) {
 }
 
 /**
- * Le panneau de versement.
+ * Ce que la transformation emportera.
  *
- * Il montre **avant** de cliquer les trois cas : ce que la mémoire ignore, ce
- * qu'elle porte déjà à l'identique, et ce qu'elle dit autrement. Ce dernier est
- * le geste le plus lourd de l'écran — corriger une contrainte veut dire qu'on a
- * calculé faux quelque part — et il ne doit pas se faire sans le voir.
+ * **Ce panneau n'écrit rien.** Il n'y a plus de bouton « Verser » : rien
+ * n'entre jamais directement dans la mémoire du projet (voir
+ * `docs/fondamentaux.md`). Il montre ce qu'une proposition porterait, et
+ * confronte chaque ligne à ce que le projet a déjà décidé — parce que c'est ce
+ * qu'on veut voir **avant** de transformer, pas au moment de signer.
+ *
+ * Trois cas : ce que la mémoire ignore, ce qu'elle porte déjà à l'identique, et
+ * ce qu'elle dit autrement. Le dernier est le plus lourd — corriger une
+ * contrainte veut dire qu'on a calculé faux quelque part.
  */
 function dessinerLeVersement() {
   const lignes = lignesDuVersement();
@@ -711,11 +717,12 @@ function dessinerLeVersement() {
   return `
     <section class="incendie-versement">
       <header class="incendie-versement__tete">
-        <h5>${svgIcon("stack", { width: 16, height: 16 })} Verser en mémoire</h5>
+        <h5>${svgIcon("stack", { width: 16, height: 16 })} Ce qui partira dans une proposition</h5>
         <p class="gh-text-muted">
           Les conclusions se recalculent tant qu'elles servent à décider. Celles qu'on retient
-          deviennent des <strong>contraintes</strong> du projet : imposées par l'arrêté, elles
-          s'écrivent avec leur article et la phrase qui décide.
+          deviennent des <strong>contraintes</strong> du projet — mais elles n'entrent pas ici :
+          <strong>Transformer</strong>, en haut, ouvre un sujet ou prépare une proposition, et
+          c'est quelqu'un qui la signe.
         </p>
       </header>
 
@@ -751,10 +758,6 @@ function dessinerLeVersement() {
       </ul>
 
       <div class="incendie-versement__pied">
-        <button type="button" class="gh-btn gh-btn--primary" data-incendie-versement-faire
-          ${etat.versementEnCours || etat.versementLit || retenues.size === 0 ? "disabled" : ""}>
-          ${etat.versementEnCours ? "Versement en cours…" : "Verser en mémoire"}
-        </button>
         <span class="gh-text-muted">${escapeHtml(etat.versementDit || phraseDuVersement(lignes, retenues))}</span>
       </div>
     </section>
@@ -762,62 +765,110 @@ function dessinerLeVersement() {
 }
 
 /**
- * Verser ce qui est retenu.
+ * Ce que l'étude a produit, prêt à être transformé.
  *
- * Une contrainte à la fois, dans l'ordre : chaque écriture périme la précédente
- * de même clé et marque ce qui reposait dessus. Un échec au milieu laisse ce qui
- * est déjà passé — on le dit plutôt que de faire croire que rien n'a été écrit.
+ * Les exigences retenues, avec leur article et la phrase qui décide. Ni la
+ * proposition ni le sujet ne se construisent ici : ce sont les mêmes
+ * affirmations qui partent dans l'un ou dans l'autre.
  */
-async function verserEnMemoire(root) {
-  if (etat.versementEnCours || !projetEnBase) return;
-
+function affirmationsRetenues() {
   const lignes = lignesDuVersement();
   const retenues = retenuesCourantes(lignes);
-  const prises = lignes.filter((ligne) => retenues.has(ligne.id));
-  if (!prises.length) return;
+  const portee = etat.zoneDuVersement ? [etat.zoneDuVersement] : [];
 
-  etat.versementEnCours = true;
-  etat.versementDit = "";
-  dessiner(root);
+  return lignes.filter((ligne) => retenues.has(ligne.id)).map((ligne) => ({
+    sujet: ligne.sujet,
+    valeur: ligne.valeur,
+    nature: NATURE.CONTRAINTE,
+    domaine: DOMAIN.INCENDIE,
+    source: etat.vue?.texteDeReference?.source || "arrêté du 31 janvier 1986 modifié",
+    article: ligne.article,
+    citation: ligne.citation,
+    reference: ligne.id,
+    zones: portee,
+    atelier: "Incendie — Habitation"
+  }));
+}
 
-  let ecrites = 0;
-  let refus = "";
+/** De quoi nommer ce qui sort de cette étude. */
+function nomDeLEtudeCourante() {
+  return etudeCourante()?.titre || "Incendie — Habitation";
+}
 
-  for (const ligne of prises) {
-    const prepare = declaredConstraint({
-      projectId: projetEnBase,
-      subject: ligne.sujet,
-      value: ligne.valeur,
-      // De quoi rouvrir le texte à la bonne ligne devant qui conteste.
-      source: etat.vue?.texteDeReference?.source || "arrêté du 31 janvier 1986 modifié",
-      article: ligne.article,
-      citation: ligne.citation,
-      // L'identifiant du module ne bouge pas quand le libellé est réécrit.
-      reference: ligne.id,
-      domain: DOMAIN.INCENDIE,
-      zone: etat.zoneDuVersement
-    });
-
-    if (!prepare.ok) { refus = prepare.reason; break; }
-
-    try {
-      const rendu = await rememberConstraint(prepare.row);
-      if (!rendu) { refus = "La mémoire n'a pas accepté l'écriture."; break; }
-      ecrites += 1;
-    } catch (erreur) {
-      refus = erreur?.message || "La mémoire n'a pas accepté l'écriture.";
-      break;
-    }
+/**
+ * Ouvrir un sujet à partir des conclusions.
+ *
+ * C'est l'étape où l'on n'est pas encore sûr : un niveau qu'on ne compte pas
+ * pareil, un coefficient à faire confirmer. Le sujet est visible par l'équipe,
+ * on en débat, on revient corriger l'étude, **puis** on propose.
+ */
+function ouvrirUnSujetDepuisLEtude() {
+  const affirmations = affirmationsRetenues();
+  const ouvrir = typeof window !== "undefined" ? window.openStudioToolSubjectDraft : null;
+  if (typeof ouvrir !== "function") {
+    etat.versementDit = "L'écran des sujets n'est pas disponible.";
+    return;
   }
 
-  etat.versementEnCours = false;
-  etat.retenues = null;
-  etat.versementDit = refus
-    ? `${ecrites} contrainte${ecrites > 1 ? "s" : ""} versée${ecrites > 1 ? "s" : ""} avant l'arrêt. ${refus}`
-    : `${ecrites} contrainte${ecrites > 1 ? "s" : ""} versée${ecrites > 1 ? "s" : ""} dans la mémoire du projet.`;
+  const lignes = affirmations.map((a) => `- **${a.sujet}** : ${a.valeur}${a.article ? ` — ${a.article}` : ""}`);
+  ouvrir({
+    origin: "studio-incendie",
+    title: `Incendie — ${nomDeLEtudeCourante()}`,
+    description: [
+      "Conclusions de l'étude incendie, à valider avec l'équipe avant d'en faire une proposition.",
+      "",
+      ...lignes,
+      "",
+      "_Rien n'est entré dans la mémoire du projet._"
+    ].join("\n"),
+    meta: { labels: ["incendie"] }
+  });
+}
 
-  await lireLaMemoire(root);
-  if (root?.isConnected) dessiner(root);
+/**
+ * Préparer une proposition à partir des conclusions.
+ *
+ * **Elle reste ouverte.** Le système la remplit, quelqu'un la relit, arbitre ce
+ * qui contredit ce que le projet a déjà décidé, et signe. C'est cette signature,
+ * et elle seule, qui fait entrer quoi que ce soit dans la mémoire.
+ */
+async function proposerDepuisLEtude(root) {
+  if (etat.versementEnCours) return;
+
+  const affirmations = affirmationsRetenues();
+  if (!affirmations.length) {
+    etat.versementDit = "Rien à proposer : aucune conclusion retenue.";
+    dessiner(root);
+    return;
+  }
+
+  etat.versementEnCours = true;
+  etat.versementDit = "Préparation de la proposition…";
+  dessiner(root);
+
+  const rendu = await preparerUneProposition({
+    projectId: projetEnBase,
+    titre: `Incendie — ${nomDeLEtudeCourante()}`,
+    intro: "Conclusions de l'étude incendie, telles que le référentiel les a établies.",
+    source: etat.vue?.texteDeReference?.source || "arrêté du 31 janvier 1986 modifié",
+    affirmations
+  });
+
+  etat.versementEnCours = false;
+  if (!rendu.ok) {
+    etat.versementDit = rendu.raison;
+    dessiner(root);
+    return;
+  }
+
+  etat.versementDit = `Proposition « ${rendu.proposition.title} » ouverte — ${rendu.items} affirmation${
+    rendu.items > 1 ? "s" : ""}. Elle attend d'être signée.`;
+  dessiner(root);
+
+  // On va où la signature se donne. Le rail garde l'étude : on revient dessus
+  // par où l'on est venu.
+  const projet = String(store.currentProjectId || "").trim();
+  if (projet) window.location.hash = `#project/${projet}/propositions`;
 }
 
 /** Renommer : le nom est ce par quoi on reconnaît une hypothèse trois semaines après. */
@@ -901,6 +952,19 @@ function questionCourante() {
 }
 
 function brancher(root) {
+  // « Transformer » : les deux seules sorties d'un utilitaire. Aucune n'écrit
+  // dans la mémoire du projet — voir `docs/fondamentaux.md`.
+  root.addEventListener("ghaction:action", (evenement) => {
+    const quoi = evenement.detail?.action;
+    if (quoi === TRANSFORMER.SUJET) {
+      // Le versement se lit sur l'onglet Résultats : c'est là qu'on choisit ce
+      // qui part, et c'est là qu'on revient si la liste ne convient pas.
+      ouvrirUnSujetDepuisLEtude();
+      return;
+    }
+    if (quoi === TRANSFORMER.PROPOSITION) void proposerDepuisLEtude(root);
+  });
+
   // Une remise arrive après que le panneau a été dessiné : sans cette écoute,
   // elle n'apparaîtrait qu'au rechargement de la page — c'est-à-dire jamais.
   window.addEventListener(REMISE_INCENDIE_ANNONCEE, () => {
@@ -1006,10 +1070,7 @@ function brancher(root) {
       return;
     }
 
-    if (evenement.target.closest("[data-incendie-versement-faire]")) {
-      void verserEnMemoire(root);
-      return;
-    }
+
     const remise = evenement.target.closest("[data-incendie-remise]");
     if (remise) {
       const geste = remise.dataset.incendieRemise;
@@ -1485,6 +1546,12 @@ function dessiner(root) {
             <span class="settings-card__head-title">
               <h4>Incendie — Habitation</h4>
               <div class="studio-tool-card__actions">
+                ${renderTransformer({
+                  id: "incendieTransformer",
+                  // Rien à transformer tant que le référentiel n'a rien conclu
+                  // qui s'impose au projet.
+                  disabled: etat.enCours || etat.versementEnCours || lignesDuVersement().length === 0
+                })}
                 ${renderGhActionButton({ id: "incendieRecommencer", label: "Recommencer", tone: "default", size: "md", disabled: etat.enCours, mainAction: "" })}
               </div>
             </span>

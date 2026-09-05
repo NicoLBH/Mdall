@@ -255,6 +255,47 @@ export async function listProjectDecisions(projectId, { exceptPropositionId = nu
  *   plutôt que de laisser croire à des réponses retenues qui seraient perdues au
  *   prochain rechargement.
  */
+/**
+ * Porter des affirmations dans une proposition, **sans les décider**.
+ *
+ * C'est la différence avec `decidePropositionItems`, et elle est le sujet
+ * entier : ici on soumet. Le statut reste « proposé », personne ne signe, et
+ * rien n'entre dans la mémoire du projet — voir `docs/fondamentaux.md`.
+ *
+ * `on_conflict` en fusion : proposer deux fois la même affirmation dans la même
+ * proposition met la seconde à jour au lieu d'échouer. Un utilitaire qu'on
+ * relance après avoir corrigé une entrée doit pouvoir remplacer ce qu'il avait
+ * proposé, pas ouvrir une seconde ligne pour le même sujet.
+ *
+ * @returns {Promise<boolean>} faux quand rien n'a été écrit — l'écran le dit
+ *   plutôt que d'annoncer une proposition qui porterait des lignes absentes.
+ */
+export async function soumettreDesItems({ propositionId, projectId, items = [] } = {}) {
+  if (!propositionId || !projectId || items.length === 0) return false;
+
+  try {
+    await request("proposition_items", {
+      method: "POST",
+      params: { on_conflict: "proposition_id,item_type,item_key" },
+      headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+      body: items.map(({ itemType, itemKey, payload = null }) => ({
+        proposition_id: propositionId,
+        project_id: projectId,
+        item_type: itemType,
+        item_key: itemKey,
+        payload,
+        status: "proposed",
+        // Ni signataire ni date : rien n'a été décidé.
+        decided_by: null,
+        decided_at: null
+      }))
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function decidePropositionItems({ propositionId, projectId, decisions = [] } = {}) {
   if (!propositionId || !projectId || decisions.length === 0) return true;
 

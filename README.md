@@ -1,3 +1,9 @@
+## Les fondamentaux
+
+Les règles dont tout le reste dépend — et la première : **rien n'entre jamais
+directement dans la mémoire du projet**, la seule voie est une proposition
+qu'un humain signe. [`docs/fondamentaux.md`](docs/fondamentaux.md).
+
 ## Recette manuelle — Incendie Habitation et Copilote
 
 Les tests automatiques vérifient que les pièces fonctionnent ; ils ne vérifient
