@@ -119,6 +119,9 @@ export function descriptionDeLaProposition({ intro = "", affirmations = [], sour
  * **Elle reste ouverte.** Rien ici ne la fusionne, et c'est le point de tout ce
  * fichier : le système prépare, l'humain signe.
  *
+ * `affirmations` accepte aussi des **items déjà formés** — c'est ce que fait un
+ * retrait, qui ne décrit pas une valeur mais un document à sortir du corpus.
+ *
  * @returns {Promise<{ok: true, proposition: object, items: number}|{ok: false, raison: string}>}
  */
 export async function preparerUneProposition({
@@ -126,12 +129,18 @@ export async function preparerUneProposition({
   titre = "",
   intro = "",
   source = "",
-  affirmations = []
+  affirmations = [],
+  // Une description écrite par l'appelant. Elle sert quand ce qu'il y a à dire
+  // n'est pas une liste de valeurs — défaire une proposition raconte ce qu'on
+  // remet, ce qu'on écarte et ce qu'on laisse.
+  description = ""
 } = {}) {
   const projet = texte(projectId);
   if (!projet) return { ok: false, raison: "Ce projet n'est pas relié à la base." };
 
-  const items = itemsDeProposition(affirmations);
+  const items = Array.isArray(affirmations) && affirmations.length && affirmations[0]?.itemType
+    ? affirmations
+    : itemsDeProposition(affirmations);
   if (!items.length) return { ok: false, raison: "Il n'y a rien à proposer." };
 
   const { createProposition, soumettreDesItems } = await import("./propositions-supabase.js");
@@ -139,7 +148,7 @@ export async function preparerUneProposition({
   const proposition = await createProposition({
     projectId: projet,
     title: texte(titre) || "Proposition depuis l'Atelier",
-    description: descriptionDeLaProposition({ intro, affirmations, source })
+    description: texte(description) || descriptionDeLaProposition({ intro, affirmations, source })
   });
   if (!proposition?.id) return { ok: false, raison: "La proposition n'a pas pu être ouverte." };
 

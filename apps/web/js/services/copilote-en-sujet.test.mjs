@@ -1,50 +1,61 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { quiParle, corpsDuMessage, titreDuSujet, descriptionDuSujet } from "./copilote-en-sujet.js";
+import {
+  corpsDuMessage, titreDuSujet, descriptionDuSujet, messagesACommenter, origineDuMessage
+} from "./copilote-en-sujet.js";
 
-test("un commentaire dit qui parlait", () => {
-  // Sans cela, on lirait une réponse du copilote comme un avis du projet.
-  assert.equal(quiParle({ role: "user" }), "Question");
-  assert.equal(quiParle({ role: "assistant" }), "Copilote");
+const DISCUSSION = {
+  id: "c1",
+  title: "Hors gel du site",
+  messages: [
+    { role: "user", content: "quelle profondeur hors gel pour ce projet ?", ts: "2026-09-04T19:58:00Z" },
+    { role: "assistant", content: "0,99 m — H0 0,45 m, altitude 241 m.", ts: "2026-09-04T19:58:30Z" },
+    { role: "user", content: "et à 450 m d'altitude ?", ts: "2026-09-04T20:01:00Z" }
+  ]
+};
 
-  const corps = corpsDuMessage({
-    role: "assistant", content: "La cote hors gel est de 0,99 m.", ts: "2026-09-04T10:30:00Z"
-  });
-  assert.match(corps, /^\*\*Copilote\*\* · /);
-  assert.match(corps, /La cote hors gel est de 0,99 m\./);
+test("le titre est celui de la discussion, y compris renommée", () => {
+  assert.equal(titreDuSujet(DISCUSSION), "Hors gel du site");
+  // Sans nom donné, c'est la première question qui nomme la discussion dans le
+  // rail : le sujet porte le même nom, sans qu'on ait à renommer deux fois.
+  assert.equal(
+    titreDuSujet({ messages: [{ role: "user", content: "quelle profondeur hors gel ?" }] }),
+    "quelle profondeur hors gel ?");
 });
 
-test("l'horodatage est celui du message, pas celui de la transformation", () => {
-  const corps = corpsDuMessage({ role: "user", content: "et à 2 bars ?", ts: "2026-09-04T10:30:00Z" });
-  assert.match(corps, /04\/09\/2026/);
+test("la description du sujet est la première question, telle qu'elle a été posée", () => {
+  // Pas une notice d'utilisation de l'application : c'est le premier bloc,
+  // modifiable et versionné, celui que l'équipe lit en arrivant.
+  assert.equal(descriptionDuSujet(DISCUSSION.messages), "quelle profondeur hors gel pour ce projet ?");
+  assert.equal(descriptionDuSujet([{ role: "assistant", content: "bonjour" }]), "");
+  assert.equal(descriptionDuSujet(null), "");
 });
 
-test("un message sans contenu ne fait pas un commentaire vide", () => {
+test("la première question ne se répète pas en commentaire", () => {
+  const suite = messagesACommenter(DISCUSSION.messages);
+  assert.equal(suite.length, 2);
+  assert.equal(suite[0].content, "0,99 m — H0 0,45 m, altitude 241 m.");
+  assert.equal(suite[1].content, "et à 450 m d'altitude ?");
+});
+
+test("un commentaire ne porte que ce qui a été dit", () => {
+  // Ni auteur ni horodatage dans le texte : les écrire les conserverait en
+  // base, et l'heure d'une conversation privée n'a pas à voyager.
+  const corps = corpsDuMessage(DISCUSSION.messages[1]);
+  assert.equal(corps, "0,99 m — H0 0,45 m, altitude 241 m.");
+  assert.doesNotMatch(corps, /Copilote/);
+  assert.doesNotMatch(corps, /2026/);
+  assert.doesNotMatch(corps, /19:58/);
+});
+
+test("un message vide ne fait pas un commentaire vide", () => {
   assert.equal(corpsDuMessage({ role: "user", content: "  " }), "");
   assert.equal(corpsDuMessage(null), "");
 });
 
-test("une date illisible ne fait pas tomber le commentaire", () => {
-  const corps = corpsDuMessage({ role: "user", content: "bonjour", ts: "pas une date" });
-  assert.equal(corps, "**Question**\n\nbonjour");
-});
-
-test("le titre du sujet est celui de la discussion", () => {
-  assert.equal(titreDuSujet({ title: "Hors gel du site" }), "Hors gel du site");
-  assert.equal(titreDuSujet({ title: "  " }, "Discussion du 4 septembre"), "Discussion du 4 septembre");
-  assert.equal(titreDuSujet(null), "Discussion avec le copilote");
-});
-
-test("la description dit d'où le sujet vient, et ce que ses commentaires valent", () => {
-  const texte = descriptionDuSujet({
-    messages: [{ content: "a" }, { content: "b" }, { content: "  " }],
-    le: new Date("2026-09-04T10:00:00Z")
-  });
-
-  assert.match(texte, /discussion privée avec le copilote, le 4 septembre 2026/);
-  assert.match(texte, /Les 2 messages/);
-  // Ce que le copilote a répondu n'a pas été tranché : le sujet le dit.
-  assert.match(texte, /n'a \*\*pas été tranché\*\*/);
-  assert.match(texte, /La discussion d'origine reste privée/);
+test("ce que le copilote a dit porte sa marque", () => {
+  // Sans elle, une réponse du copilote se lirait comme un avis du projet.
+  assert.equal(origineDuMessage({ role: "assistant" }), "copilote");
+  assert.equal(origineDuMessage({ role: "user" }), "human");
 });

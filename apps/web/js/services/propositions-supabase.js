@@ -278,14 +278,19 @@ export async function soumettreDesItems({ propositionId, projectId, items = [] }
       method: "POST",
       params: { on_conflict: "proposition_id,item_type,item_key" },
       headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
-      body: items.map(({ itemType, itemKey, payload = null }) => ({
+      body: items.map(({ itemType, itemKey, payload = null, status = "proposed" }) => ({
         proposition_id: propositionId,
         project_id: projectId,
         item_type: itemType,
         item_key: itemKey,
         payload,
-        status: "proposed",
-        // Ni signataire ni date : rien n'a été décidé.
+        // « proposé » d'ordinaire. **« refusé » est un retrait** : c'est ainsi
+        // qu'on sort un document du corpus ou qu'on écarte une affirmation, et
+        // c'est déjà ce que la fusion sait appliquer — un document refusé passe
+        // hors corpus, une affirmation refusée entre en mémoire comme écartée.
+        // Le mot dit ce que le projet en fait, pas ce qu'on pense d'elle.
+        status,
+        // Ni signataire ni date : rien n'a encore été décidé. La fusion signe.
         decided_by: null,
         decided_at: null
       }))

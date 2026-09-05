@@ -179,6 +179,9 @@ async function proposerLesZones(root) {
   }
 
   render(root);
+  // On va où la signature se donne, **et sur la proposition elle-même** : la
+  // liste obligerait à retrouver à la main celle qu'on vient de préparer.
+  store.pendingPropositionId = rendu.proposition.id;
   const projet = String(store.currentProjectId || "").trim();
   if (projet) window.location.hash = `#project/${projet}/propositions`;
 }

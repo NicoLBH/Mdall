@@ -132,12 +132,15 @@ export function createProjectSubjectsThread(config = {}) {
 
     const origin = String(row?.origin || "human").trim().toLowerCase();
     const isMdall = origin === "mdall";
+    // Repris d'une discussion avec le copilote : il porte son icône et son nom,
+    // pas l'avatar de qui a transformé la discussion en sujet.
+    const isCopilote = origin === "copilote";
     const isEphemeral = visibility === "ephemeral";
     const authorProfile = resolveAuthorProfile(row);
     const isFrozen = !!row.is_frozen;
     const stateLabel = isFrozen ? "figé (vu par un tiers)" : "modifiable";
-    const actor = isMdall ? "Mdall" : authorProfile.displayName;
-    const agent = isMdall ? "mdall" : "human";
+    const actor = isMdall ? "Mdall" : isCopilote ? "Copilote" : authorProfile.displayName;
+    const agent = isMdall ? "mdall" : isCopilote ? "copilote" : "human";
     return {
       ts: firstNonEmpty(row.created_at, nowIso()),
       entity_type: "sujet",
@@ -162,6 +165,7 @@ export function createProjectSubjectsThread(config = {}) {
         state_label: stateLabel,
         origin,
         is_mdall: isMdall,
+        is_copilote: isCopilote,
         is_ephemeral: isEphemeral,
         visible_until: isEphemeral ? (visibleUntilRaw || null) : null,
         llm_request_id: normalizeId(row?.llm_request_id),
@@ -1082,6 +1086,14 @@ priority=${firstNonEmpty(subject.priority, "")}`
         avatarInitial: "M"
       };
     }
+    if (entry?.meta?.is_copilote || agent === "copilote") {
+      return {
+        displayName: "Copilote",
+        avatarType: "agent",
+        avatarHtml: svgIcon("copilot"),
+        avatarInitial: "C"
+      };
+    }
     const isRapso = agent === "specialist_ps";
     if (isRapso) {
       return { displayName: "Agent specialist_ps", avatarType: "agent", avatarHtml: "", avatarInitial: "AS" };
@@ -1161,7 +1173,8 @@ priority=${firstNonEmpty(subject.priority, "")}`
       : "";
     const semanticClasses = [
       entry?.meta?.is_ephemeral ? "thread-item--ephemeral" : "",
-      entry?.meta?.is_mdall ? "thread-item--mdall" : ""
+      entry?.meta?.is_mdall ? "thread-item--mdall" : "",
+      entry?.meta?.is_copilote ? "thread-item--copilote" : ""
     ].filter(Boolean).join(" ");
     const commentClassName = entry?.meta?.is_ephemeral ? "gh-comment--ephemeral" : "";
     const isExpanded = replyUi.expandedMessageId === commentId;

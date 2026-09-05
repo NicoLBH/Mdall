@@ -100,6 +100,9 @@ export function renderMessageThreadActivity({
   authorIconHtml = "",
   textHtml = "",
   noteHtml = "",
+  // Ce que la ligne propose de faire, à son extrémité droite. Une ligne qui
+  // raconte un acte est le seul endroit d'où l'on peut vouloir le défaire.
+  trailingHtml = "",
   className = ""
 } = {}) {
   return `
@@ -109,6 +112,7 @@ export function renderMessageThreadActivity({
           ${iconHtml}
           ${authorIconHtml}
           <div class="tl-activity__text">${textHtml}</div>
+          ${trailingHtml ? `<div class="tl-activity__trailing">${trailingHtml}</div>` : ""}
         </div>
         ${noteHtml || ""}
       </div>

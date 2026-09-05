@@ -1523,7 +1523,7 @@ function render(root) {
   root.innerHTML = `
     <section class="settings-section is-active copilote-section" data-copilote-depot>
       <div class="copilote${vide ? " copilote--empty" : ""}">
-        ${renderVoileDeDepot("Déposez une note de calcul (PDF)")}
+        ${renderVoileDeDepot("Ajouter des fichiers")}
         ${renderCorps(etat)}
 
         <div class="copilote-composer">

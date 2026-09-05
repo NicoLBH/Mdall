@@ -50,6 +50,37 @@ Il met alors ses données à jour dans l'utilitaire, il recalcule, **puis** il
 transforme en proposition — et c'est là que les tests, la détection de conflits,
 leur arbitrage et la signature ont lieu.
 
+### Défaire, c'est proposer de plus
+
+Une proposition fusionnée se **défait**, depuis la ligne qui raconte sa fusion.
+Rien n'est effacé et rien n'est rejoué à l'envers : le geste prépare **une
+proposition de plus** — celle qui remet ce qui valait avant — et quelqu'un la
+signe. La mémoire portera l'aller *et* le retour, ce qui est exactement ce qu'on
+veut relire six mois plus tard.
+
+Deux cas, et le second compte autant que le premier :
+
+- l'affirmation en remplaçait une autre → on remet **celle d'avant**, telle
+  qu'elle était écrite ;
+- elle n'en remplaçait aucune → elle est **écartée**. Elle reste lisible ; un
+  refus est une information.
+
+Ce qu'on ne défait pas : une affirmation qu'une décision **plus récente** a déjà
+remplacée. La défaire ressusciterait une valeur périmée par-dessus un choix
+postérieur que personne n'a demandé d'annuler. La proposition le dit, plutôt que
+de laisser croire à un retour en arrière complet qui n'a pas eu lieu.
+
+### Un retrait est un refus
+
+Sortir un document du corpus, écarter une affirmation : c'est le même geste, et
+le vocabulaire existait déjà. Un **item refusé** — un document refusé passe hors
+corpus, une affirmation refusée entre en mémoire comme écartée. Rien n'est
+effacé : le fichier reste en base, visible et marqué, et l'on sait quand et par
+qui.
+
+C'est ce qui manquait pour oser déposer. Un document ajouté par erreur n'avait
+aucune correction, et la seule issue était de vivre avec.
+
 ### Ce que cela impose au code
 
 - Un écran d'Atelier propose un bouton **« Transformer »**, jamais un bouton qui
