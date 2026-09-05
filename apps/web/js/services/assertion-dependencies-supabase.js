@@ -97,19 +97,31 @@ export async function markNeedsReview(marques = []) {
   const lignes = (Array.isArray(marques) ? marques : []).filter((entry) => entry?.assertionId && entry?.since);
   if (lignes.length === 0) return 0;
 
-  let marquees = 0;
+  // Un drapeau ne porte qu'une date, et toutes celles d'une même fusion sont la
+  // même. On écrit donc une requête par date, pas une par affirmation : la
+  // boucle faisait payer un aller-retour réseau par drapeau, et une fusion qui
+  // en lève soixante attendait soixante fois la base pour écrire soixante fois
+  // la même valeur.
+  const parDate = new Map();
   for (const marque of lignes) {
+    const date = String(marque.since);
+    if (!parDate.has(date)) parDate.set(date, []);
+    parDate.get(date).push(marque.assertionId);
+  }
+
+  let marquees = 0;
+  for (const [since, ids] of parDate) {
     try {
       await request("project_assertions", {
         method: "PATCH",
-        params: { id: `eq.${marque.assertionId}` },
+        params: { id: `in.(${ids.join(",")})` },
         headers: { Prefer: "return=minimal" },
-        body: { needs_review_since: marque.since }
+        body: { needs_review_since: since }
       });
-      marquees += 1;
+      marquees += ids.length;
     } catch {
-      // Un marquage raté n'empêche pas les autres : mieux vaut six drapeaux sur
-      // sept qu'aucun.
+      // Un lot raté n'empêche pas les autres : mieux vaut six drapeaux sur sept
+      // qu'aucun.
     }
   }
   return marquees;

@@ -136,6 +136,7 @@ export async function transformerEnSujet({ projectId = "", conversation = null }
   const depot = createSubjectMessagesSupabaseRepository();
 
   let ecrits = 0;
+  let raison = "";
   for (const message of aCommenter) {
     try {
       await depot.createMessage({
@@ -147,12 +148,41 @@ export async function transformerEnSujet({ projectId = "", conversation = null }
         origin: origineDuMessage(message)
       });
       ecrits += 1;
-    } catch {
+    } catch (erreur) {
       // On s'arrête au premier refus : la suite échouerait pareil, et le sujet
       // porte déjà ce qui est passé.
+      //
+      // **Et on garde le pourquoi.** Un « 0 commentaire sur 5 » sans raison a
+      // coûté deux tours : la base refusait la valeur `copilote` pour `origin`,
+      // et rien à l'écran ne permettait de le deviner. Ne pas savoir n'autorise
+      // pas à prétendre qu'il n'y a rien — et taire un refus revient au même.
+      raison = expliquerLeRefus(erreur);
       break;
     }
   }
 
-  return { ok: true, sujet, commentaires: ecrits, attendus: aCommenter.length };
+  return { ok: true, sujet, commentaires: ecrits, attendus: aCommenter.length, raison };
+}
+
+/**
+ * Ce que la base a répondu, traduit une fois.
+ *
+ * Le message brut de PostgREST est lisible par qui connaît la table ; il ne
+ * l'est pas dans une boîte de dialogue. On nomme donc le cas qu'on a déjà
+ * rencontré, et on garde le texte d'origine derrière : c'est lui qui permettra
+ * de diagnostiquer le suivant.
+ */
+export function expliquerLeRefus(erreur) {
+  const brut = texte(erreur?.message) || texte(erreur);
+  if (!brut) return "La base a refusé le commentaire, sans dire pourquoi.";
+
+  if (brut.includes("subject_messages_origin_check")) {
+    return "La base n'accepte pas encore qu'un commentaire vienne du copilote "
+      + "(contrainte « subject_messages_origin_check »). La migration "
+      + "202609150001 l'autorise : tant qu'elle n'est pas appliquée, les "
+      + "messages ne peuvent pas être écrits avec leur marque — et les écrire "
+      + "sans elle ferait passer le copilote pour vous.";
+  }
+
+  return brut;
 }

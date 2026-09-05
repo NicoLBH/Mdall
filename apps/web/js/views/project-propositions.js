@@ -2221,6 +2221,21 @@ function renderReview(root) {
       )}</p></div>`
     : "";
 
+  // Ce qui continue après la fusion.
+  //
+  // La décision est prise dès que la base a marqué la proposition fusionnée :
+  // l'écran le dit à cet instant-là, et non à la fin des écritures qui suivent.
+  // Celles-ci — la mémoire, les drapeaux, le suivi des avis — se disent ici,
+  // pendant qu'elles se font. Attendre pour tout montrer d'un coup laissait
+  // l'écran figé sur le formulaire pendant près de deux minutes, sans rien qui
+  // dise si l'on avait cliqué.
+  const suite = review.finishing
+    ? `<div class="review-finishing">
+         <span class="review-finishing__spin">${svgIcon("sync", { className: "octicon" })}</span>
+         <span>${escapeHtml(review.step || "Écritures en cours…")}</span>
+       </div>`
+    : "";
+
   const panneau =
     onglet === "deposits"
       ? renderDeposits(review)
@@ -2233,6 +2248,7 @@ function renderReview(root) {
   return `
     ${entete}
     ${gele ? renderFrozenNote(proposition, review) : ""}
+    ${suite}
     ${avertissement}
     ${renderLightTabs({
       tabs: reviewTabs(review),
@@ -3066,17 +3082,6 @@ async function merge(root) {
       return;
     }
 
-    // Les rattachements tranchés deviennent la mémoire du projet, avec leur
-    // signe : accepté rattache l'affaire, refusé l'écarte pour de bon.
-    const rattachements = items.filter((entry) => entry.itemType === ITEM_TYPE.ATTACHMENT);
-    for (const entry of rattachements) {
-      const rejected = entry.status === ITEM.REFUSED;
-      await rememberProjectMarkers(
-        proposition.project_id,
-        markersToRemember(entry.payload.markers ?? [], [], { rejected })
-      );
-    }
-
     view.review.merging = false;
     view.review.confirming = false;
     // L'écran devient le procès-verbal sans attendre un rechargement : les
@@ -3093,6 +3098,38 @@ async function merge(root) {
       merge_note: String(view.mergeNote ?? "").trim(),
       snapshot: gele
     };
+
+    // **On l'affiche maintenant.** La base a marqué la proposition fusionnée :
+    // c'est fait, et rien de ce qui suit ne peut le défaire. Tout ce qui restait
+    // — les rattachements, la mémoire, le suivi des avis — s'écrivait avant le
+    // premier rendu, et l'écran restait sur son formulaire près de deux minutes
+    // sans dire s'il avait entendu le clic.
+    //
+    // L'histoire se refait ici avec les noms déjà chargés : recharger les
+    // auteurs pour afficher la fusion ferait attendre un aller-retour de plus
+    // pour un nom qu'on a en main. `restoryAfterClosing` la reprendra ensuite,
+    // avec celui de la personne qui vient de signer.
+    view.review.finishing = true;
+    view.review.step = "Écriture de la mémoire du projet";
+    view.review.story = buildStory({
+      proposition: view.open,
+      documents: view.review.documentRows ?? [],
+      decisions: view.review.decisionRows ?? [],
+      comments: view.review.comments ?? [],
+      names: view.review.authors ?? new Map()
+    });
+    renderContent(root);
+
+    // Les rattachements tranchés deviennent la mémoire du projet, avec leur
+    // signe : accepté rattache l'affaire, refusé l'écarte pour de bon.
+    const rattachements = items.filter((entry) => entry.itemType === ITEM_TYPE.ATTACHMENT);
+    for (const entry of rattachements) {
+      const rejected = entry.status === ITEM.REFUSED;
+      await rememberProjectMarkers(
+        proposition.project_id,
+        markersToRemember(entry.payload.markers ?? [], [], { rejected })
+      );
+    }
 
     // Ce que la proposition fait entrer devient la mémoire du projet : des
     // affirmations datées, signées, tracées jusqu'à la proposition qui les a
@@ -3130,12 +3167,46 @@ async function merge(root) {
     store.projectPropositionsView = { openCount: getOpenPropositionCount() };
 
     await recomputeAfterMerge(root, proposition);
+
+    // Le tableau avant / après se relit sur ce que la fusion a écrit : « avant »
+    // n'est plus l'état d'aujourd'hui mais ce que la proposition a remplacé.
+    await relireLeTableau(proposition);
+    view.review.finishing = false;
+    view.review.step = "";
   } catch {
     view.review.merging = false;
+    view.review.finishing = false;
     view.review.notice = "La fusion n'a pas abouti. La proposition reste ouverte : rien n'a été perdu.";
   }
 
   renderContent(root);
+}
+
+/**
+ * Relit le tableau avant / après après une fusion.
+ *
+ * La mémoire porte désormais ce que la proposition a écrit : lue telle quelle,
+ * elle afficherait la même valeur des deux côtés. `tableauAvantApres` sait le
+ * faire — encore faut-il lui redonner la mémoire d'après, et une proposition
+ * dont le statut a changé.
+ */
+async function relireLeTableau(proposition) {
+  if (!view.open || view.open.id !== proposition.id || !view.review) return;
+
+  try {
+    const { listProjectAssertions } = await import("../services/project-memory-supabase.js");
+    const affirmations = await listProjectAssertions(proposition.project_id);
+    if (!view.open || view.open.id !== proposition.id || !view.review) return;
+
+    view.review.avantApres = tableauAvantApres({
+      proposition: view.open,
+      items: view.review.decisionRows ?? [],
+      assertions: affirmations
+    });
+  } catch {
+    // Le tableau reste celui d'avant la fusion. Il est daté par l'écran qui le
+    // porte, et une relecture ratée ne défait pas une fusion.
+  }
 }
 
 /**

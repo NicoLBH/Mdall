@@ -567,9 +567,12 @@ function brancherCopilote(root, copiloteRoot, getScrollSource) {
 
       if (!rendu.ok) { window.alert(rendu.raison); return; }
       if (rendu.commentaires < rendu.attendus) {
+        // Le compte seul ne sert à rien : « 0 sur 5 » a laissé chercher deux
+        // tours. C'est la raison qu'on lit, le compte n'en est que le décor.
         window.alert(
           `Le sujet « ${rendu.sujet.title} » est ouvert, avec ${rendu.commentaires} commentaire`
-          + `${rendu.commentaires > 1 ? "s" : ""} sur ${rendu.attendus}. Les autres n'ont pas pu être écrits.`
+          + `${rendu.commentaires > 1 ? "s" : ""} sur ${rendu.attendus}.\n\n`
+          + (rendu.raison || "Les autres n'ont pas pu être écrits.")
         );
       }
 
