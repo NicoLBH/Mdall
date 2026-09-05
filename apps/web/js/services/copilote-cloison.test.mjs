@@ -59,7 +59,12 @@ const LECTEURS_AUTORISES = new Map([
   ["apps/web/assets/js/auth.js", "efface tout à la déconnexion"],
   ["apps/web/js/services/copilote-service.js", "envoie les titres des autres discussions, jamais leur contenu"],
   ["apps/web/js/views/project-studio.js", "affiche les titres dans le rail"],
-  ["apps/web/js/views/studio/copilote/copilote.js", "l'écran du copilote lui-même"]
+  ["apps/web/js/views/studio/copilote/copilote.js", "l'écran du copilote lui-même"],
+  // Il n'en lit que le **titre**, pour nommer le sujet qu'on ouvre à partir
+  // d'une discussion : le nom du sujet doit être celui de la discussion, sans
+  // quoi on renommerait deux fois. Le module des règles n'a lui-même aucun
+  // accès à la base — c'est ce que vérifie le premier test de ce fichier.
+  ["apps/web/js/services/copilote-en-sujet.js", "reprend le titre de la discussion pour nommer le sujet"]
 ]);
 
 function cheminRelatif(chemin) {

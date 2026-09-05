@@ -562,12 +562,21 @@ export function createSubjectMessagesSupabaseRepository() {
       if (!personId) throw new Error("current person is required");
       if (!bodyMarkdown && !uploadSessionId) throw new Error("bodyMarkdown or uploadSessionId is required");
 
+      // Qui parle, quand ce n'est pas la personne qui écrit.
+      //
+      // Un message repris d'une discussion avec le copilote porte sa marque :
+      // l'écran lui met son icône et son nom au lieu de l'avatar de qui a
+      // transformé. Sans elle, une réponse du copilote se lirait comme un avis
+      // du projet. `human` par défaut — la colonne existe déjà pour Mdall.
+      const origine = String(payload.origin || "").trim().toLowerCase();
+
       const baseInsertPayload = {
         project_id: projectId,
         subject_id: subjectId,
         parent_message_id: normalizeId(payload.parentMessageId) || null,
         author_person_id: personId,
-        author_user_id: normalizeId(store?.user?.id || "") || null
+        author_user_id: normalizeId(store?.user?.id || "") || null,
+        ...(origine && origine !== "human" ? { origin: origine } : {})
       };
 
       let rows = null;

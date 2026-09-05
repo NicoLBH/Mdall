@@ -49,6 +49,8 @@ function renderMenuItems(items = []) {
         type="button"
         class="gh-menu__item${item.danger ? " is-danger" : ""}"
         data-menu-action="${escapeAttr(item.action || "")}"
+        ${item.disabled ? "disabled" : ""}
+        ${item.title ? `title="${escapeAttr(item.title)}"` : ""}
       >
         ${item.icon ? `<span class="gh-menu__item-icon">${item.icon}</span>` : ""}
         <span>${item.label || ""}</span>
@@ -78,7 +80,15 @@ export function renderGhActionButton({
    * ne fait rien, et l'on clique deux fois avant de comprendre qu'il faut viser
    * le chevron.
    */
-  menuOnMain = false
+  menuOnMain = false,
+  /**
+   * Un seul bouton, qui porte le menu : le kebab.
+   *
+   * `menuOnMain` garde le chevron à côté ; ici il n'y a rien à côté — l'icône
+   * **est** le bouton, et un chevron collé à trois points ne dirait rien de
+   * plus.
+   */
+  menuOnly = false
 }) {
   const hasMenu = Array.isArray(items) && items.length > 0;
   const resolvedMainAction = hasMenu && mainActionMode === "first-item"
@@ -88,7 +98,7 @@ export function renderGhActionButton({
   const btnSizeClass = size ? `gh-btn--${size}` : "";
   const rootClasses = [
     "gh-action",
-    hasMenu ? "gh-action--split" : "gh-action--single",
+    hasMenu && !menuOnly ? "gh-action--split" : "gh-action--single",
     className
   ].filter(Boolean).join(" ");
 
@@ -97,21 +107,24 @@ export function renderGhActionButton({
     ${!iconOnly ? `<span class="gh-action__label">${label}</span>` : ""}
   `;
 
-  if (!hasMenu) {
+  if (!hasMenu || menuOnly) {
     return `
       <div
         class="${rootClasses}"
         data-action-id="${escapeAttr(id)}"
         data-main-action="${escapeAttr(resolvedMainAction)}"
+        ${menuOnly || menuOnMain ? "data-action-menu-on-main=\"true\"" : ""}
       >
         <button
           type="button"
           class="gh-btn gh-action__main ${btnToneClass} ${btnSizeClass}"
           data-action-main
+          ${menuOnly || menuOnMain ? 'aria-haspopup="menu" aria-expanded="false"' : ""}
           ${disabled ? "disabled" : ""}
         >
           ${contentHtml}
         </button>
+        ${menuOnly ? `<div class="gh-menu" role="menu">${renderMenuItems(items)}</div>` : ""}
       </div>
     `;
   }

@@ -1112,11 +1112,20 @@ function renderOutcomeCard(event) {
 }
 
 /** Une ligne d'activité : un acte qui n'est pas une parole. */
-function renderConversationActivity(event, index) {
+function renderConversationActivity(event, index, { defaisable = false } = {}) {
   const identite = identityOf(event);
+
+  // Défaire se propose **là où la fusion s'est produite**, sur la ligne qui la
+  // raconte. Un bouton ailleurs demanderait de chercher ce qu'on veut annuler.
+  const defaire = defaisable && event.kind === STORY.MERGED
+    ? `<button type="button" class="gh-btn gh-btn--sm proposition-defaire" data-proposition-defaire
+        ${view.review?.defaisant ? "disabled" : ""}>${
+        view.review?.defaisant ? "Préparation…" : "Défaire"}</button>`
+    : "";
 
   return renderMessageThreadActivity({
     idx: index,
+    trailingHtml: defaire,
     // La même pastille que dans un sujet : un disque, un contour de la couleur du
     // fond, qui pose l'icône sur la ligne du fil sans la couper.
     iconHtml: `<span class="tl-ico-wrap tl-ico-${escapeHtml(event.kind)}">${svgIcon(
@@ -1285,11 +1294,17 @@ function renderConversation(proposition, review) {
   const avant = rangFin >= 0 ? histoire.slice(0, rangFin + 1) : histoire;
   const apres = rangFin >= 0 ? histoire.slice(rangFin + 1) : [];
 
+  // Défaire ne se propose que sur une proposition **fusionnée**, et une seule
+  // fois : sur celle qui défait déjà quelque chose, le bouton reviendrait à
+  // défaire le fait de défaire, ce qui ne veut plus rien dire à l'écran. Elle
+  // reste défaisable comme une autre depuis sa propre page.
+  const defaisable = proposition?.status === PROPOSITION.MERGED;
+
   const raconter = (events, depart) =>
     events
       .map((event, index) => {
         if (event.kind === STORY.COMMENT) return renderConversationComment(event, depart + index);
-        return renderConversationActivity(event, depart + index);
+        return renderConversationActivity(event, depart + index, { defaisable });
       })
       .join("");
 
@@ -2483,6 +2498,93 @@ function bindConversation(root) {
 
   for (const bouton of root.querySelectorAll("[data-comment-remove]")) {
     bouton.addEventListener("click", () => removeComment(root, bouton.getAttribute("data-comment-remove")));
+  }
+
+  root.querySelector("[data-proposition-defaire]")
+    ?.addEventListener("click", () => void defaireLaProposition(root));
+}
+
+/**
+ * Défaire une proposition fusionnée.
+ *
+ * **On avance en défaisant, on ne recule jamais.** Rien n'est effacé et rien
+ * n'est rejoué à l'envers : on prépare une proposition de plus, celle qui remet
+ * ce qui valait avant, et quelqu'un la signe. La mémoire portera l'aller **et**
+ * le retour, ce qui est exactement ce qu'on veut relire six mois plus tard.
+ */
+async function defaireLaProposition(root) {
+  const proposition = view.open;
+  if (!proposition?.id || proposition.status !== PROPOSITION.MERGED) return;
+  if (view.review?.defaisant) return;
+
+  view.review.defaisant = true;
+  view.review.notice = null;
+  renderContent(root);
+
+  try {
+    const [
+      { ceQuUnePropositionADonne, itemsPourDefaire, titreDuDefaire, descriptionDuDefaire },
+      { listProjectAssertions },
+      { preparerUneProposition },
+      propositionsApi
+    ] = await Promise.all([
+      import("../services/proposition-defaire.js"),
+      import("../services/project-memory-supabase.js"),
+      import("../services/atelier-proposition.js"),
+      import("../services/propositions-supabase.js")
+    ]);
+
+    const memoire = await listProjectAssertions(proposition.project_id);
+    if (memoire === null) {
+      view.review.defaisant = false;
+      // Ne pas savoir n'autorise pas à prétendre qu'il n'y a rien : proposer de
+      // défaire sur une mémoire qu'on n'a pas lue écrirait n'importe quoi.
+      view.review.notice = "La mémoire du projet n'a pas pu être lue : rien n'a été préparé.";
+      renderContent(root);
+      return;
+    }
+
+    const { restaurations, retraits, depassees } = ceQuUnePropositionADonne(proposition, memoire);
+    // Les documents que cette proposition avait fait entrer au corpus en
+    // sortent : c'est la moitié documentaire du même geste.
+    const documents = (await propositionsApi.listPropositionDocuments(proposition.id))
+      .filter((document) => String(document?.corpus_state ?? "accepted") === "accepted");
+
+    const items = itemsPourDefaire({ restaurations, retraits, documents });
+    if (!items.length) {
+      view.review.defaisant = false;
+      view.review.notice = depassees.length
+        ? "Rien à défaire : tout ce que cette proposition avait posé a déjà été remplacé depuis."
+        : "Rien à défaire : cette proposition n'a rien laissé en mémoire ni au corpus.";
+      renderContent(root);
+      return;
+    }
+
+    const rendu = await preparerUneProposition({
+      projectId: proposition.project_id,
+      titre: titreDuDefaire(proposition),
+      affirmations: items,
+      // Ce qu'on remet, ce qu'on écarte, et ce qu'on laisse : une liste de
+      // valeurs ne dirait pas la troisième, qui est la plus importante.
+      description: descriptionDuDefaire({ proposition, restaurations, retraits, depassees, documents })
+    });
+
+    view.review.defaisant = false;
+    if (!rendu.ok) {
+      view.review.notice = rendu.raison;
+      renderContent(root);
+      return;
+    }
+
+    // La liste se recharge en même temps qu'on ouvre : sans cela, la proposition
+    // qu'on vient de préparer n'existerait pas dans le rail derrière elle.
+    view.review.notice = null;
+    view.propositions = [rendu.proposition, ...(view.propositions ?? [])];
+    openProposition(root, rendu.proposition.id);
+  } catch (erreur) {
+    view.review.defaisant = false;
+    view.review.notice = `La proposition qui défait n'a pas pu être préparée. ${erreur?.message || ""}`.trim();
+    renderContent(root);
   }
 }
 

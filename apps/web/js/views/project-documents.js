@@ -1220,9 +1220,51 @@ function renderDocumentsToolbar() {
   });
 }
 
+/**
+ * Le menu du fil d'Ariane.
+ *
+ * Deux boutons — « Ajouter un dossier » et « + Documents » — occupaient la barre
+ * pour deux gestes qu'on fait rarement, et il n'y avait de place nulle part pour
+ * le troisième : **retirer un document**. Un dépôt fait par erreur n'avait aucune
+ * correction, ce qui est le genre de manque qui fait qu'on n'ose plus déposer.
+ *
+ * Retirer ne supprime pas et ne se fait pas d'un clic : cela **prépare une
+ * proposition**, comme tout ce qui touche au projet (voir
+ * `docs/fondamentaux.md`). Le rouge dit la gravité du geste, pas son
+ * immédiateté.
+ */
+function renderDocumentsMenu(selectedDocument) {
+  const nomDuFichier = String(selectedDocument?.name || "").trim();
+
+  return renderGhActionButton({
+    id: "documentsMenu",
+    icon: svgIcon("kebab-horizontal", { className: "octicon" }),
+    iconOnly: true,
+    menuOnly: true,
+    tone: "default",
+    items: [
+      { action: "documents-add-folder", icon: svgIcon("file-directory", { width: 14, height: 14 }), label: "Ajouter un dossier" },
+      { action: "add-documents", icon: getPlusIconSvg(), label: "Ajouter un document" },
+      { separator: true },
+      {
+        action: "documents-remove",
+        icon: svgIcon("trash", { width: 14, height: 14 }),
+        label: nomDuFichier ? "Retirer ce document" : "Retirer un document",
+        danger: true,
+        disabled: !nomDuFichier,
+        title: nomDuFichier
+          ? `Prépare une proposition qui sort « ${nomDuFichier} » du corpus`
+          : "Ouvrez un document pour pouvoir le retirer"
+      }
+    ]
+  });
+}
+
 function renderDocumentsTopBar() {
-  const isRoot = !docsViewState.currentFolderId;
-  if (isRoot) return "";
+  const enApercu = docsViewState.mode === "pdf-preview";
+  // À la racine, la barre ne servait à rien — sauf quand on regarde un
+  // document : il faut alors savoir lequel, et pouvoir le retirer.
+  if (!docsViewState.currentFolderId && !enApercu) return "";
   const toggleIcon = docsViewState.documentTreeOpen
     ? svgIcon("sidebar-expand", { className: "octicon octicon-sidebar-expand" })
     : svgIcon("sidebar-collapse", { className: "octicon octicon-sidebar-collapse" });
@@ -1232,16 +1274,9 @@ function renderDocumentsTopBar() {
         <button type="button" class="documents-tree__toggle" id="documentsTreeToggleBtn">${toggleIcon}</button>
         ${renderDocumentsBreadcrumb()}
       </div>
-      ${docsViewState.mode === "pdf-preview" ? "" : `<div class="documents-topbar__right">
-        <button type="button" class="gh-btn" id="documentsAddFolderBtn">Ajouter un dossier</button>
-        ${renderGhActionButton({
-          id: "documentsAddAction",
-          label: "Documents",
-          icon: getPlusIconSvg(),
-          tone: "primary",
-          mainAction: "add-documents"
-        })}
-      </div>`}
+      <div class="documents-topbar__right">
+        ${renderDocumentsMenu(enApercu ? decorateDocumentWithPhase(getSelectedPdfDocument()) : null)}
+      </div>
     </div>
   `;
 }
@@ -2587,6 +2622,102 @@ function bindDocumentsSplitActions(root) {
       }
     });
   }
+
+  const menu = document.querySelector('[data-action-id="documentsMenu"]');
+  if (menu) {
+    menu.addEventListener("ghaction:action", (event) => {
+      const action = event.detail?.action || "";
+      if (action === "add-documents") {
+        docsViewState.mode = "upload";
+        renderProjectDocuments(root);
+        return;
+      }
+      if (action === "documents-add-folder") { void creerUnDossier(root); return; }
+      if (action === "documents-remove") void retirerLeDocument(root);
+    });
+  }
+}
+
+/** Créer un dossier. Le même geste depuis le bouton et depuis le menu. */
+async function creerUnDossier(root) {
+  const name = String(window.prompt("Nom du dossier ?") || "").trim();
+  if (!name) {
+    setDocumentsActivity({ tone: "warning", title: "Nom invalide", message: "Le nom du dossier ne peut pas être vide." });
+    renderProjectDocumentsContent(root);
+    return;
+  }
+  try {
+    console.info("[documents-view] create-folder.submit", { parentFolderId: docsViewState.currentFolderId || null });
+    await createDocumentFolder(String(store.currentProject?.backendProjectId || store.currentProject?.id || store.currentProjectId || ""), docsViewState.currentFolderId || null, name);
+    await loadCurrentDirectory();
+    if (docsViewState.documentTreeOpen) console.info("[documents-tree] refresh-after-mutation", { action: "create-folder" });
+    renderProjectDocumentsContent(root);
+  } catch (error) {
+    setDocumentsActivity({ tone: "error", title: "Création impossible", message: error instanceof Error ? error.message : "Erreur Supabase lors de la création du dossier." });
+    renderProjectDocumentsContent(root);
+  }
+}
+
+/**
+ * Retirer un document du corpus.
+ *
+ * **Rien n'est supprimé, et rien n'est immédiat.** Le geste prépare une
+ * proposition ; le fichier reste en base, et il n'en sortira qu'une fois cette
+ * proposition signée — après quoi il restera visible et marqué, jamais effacé :
+ * un fichier qui existe en base et n'apparaît nulle part est le mensonge qu'on
+ * a déjà corrigé une fois.
+ *
+ * C'est ce qui manquait pour oser déposer : une erreur de dépôt n'avait aucune
+ * correction, et la seule issue était de vivre avec.
+ */
+async function retirerLeDocument(root) {
+  const fichier = decorateDocumentWithPhase(getSelectedPdfDocument());
+  if (!fichier?.id) return;
+
+  const nom = String(fichier.name || fichier.original_filename || "ce document").trim();
+  const motif = window.prompt(
+    `Retirer « ${nom} » du corpus du projet ?\n\n`
+    + "Une proposition sera préparée. Le fichier ne sera pas effacé, et rien ne se produit "
+    + "tant que quelqu'un ne l'a pas signée.\n\nPourquoi le retirer ? (facultatif)",
+    ""
+  );
+  if (motif === null) return;
+
+  try {
+    const [{ itemsPourRetirerDesDocuments, descriptionDuRetrait }, { preparerUneProposition },
+      { resolveCurrentBackendProjectId }] = await Promise.all([
+      import("../services/proposition-defaire.js"),
+      import("../services/atelier-proposition.js"),
+      import("../services/project-supabase-sync.js")
+    ]);
+
+    const projet = await resolveCurrentBackendProjectId().catch(() => "");
+    const fiche = { id: fichier.id, original_filename: nom };
+    const rendu = await preparerUneProposition({
+      projectId: projet,
+      titre: `Retirer « ${nom} » du corpus`,
+      affirmations: itemsPourRetirerDesDocuments([fiche]),
+      description: descriptionDuRetrait([fiche], String(motif || "").trim())
+    });
+
+    if (!rendu.ok) {
+      setDocumentsActivity({ tone: "warning", title: "Retrait non préparé", message: rendu.raison });
+      renderProjectDocumentsContent(root);
+      return;
+    }
+
+    // On va où la signature se donne, et sur la proposition elle-même.
+    store.pendingPropositionId = rendu.proposition.id;
+    const projetAffiche = String(store.currentProjectId || "").trim();
+    if (projetAffiche) window.location.hash = `#project/${projetAffiche}/propositions`;
+  } catch (erreur) {
+    setDocumentsActivity({
+      tone: "warning",
+      title: "Retrait non préparé",
+      message: erreur?.message || "La proposition n'a pas pu être ouverte."
+    });
+    renderProjectDocumentsContent(root);
+  }
 }
 
 function bindDocumentsView(root) {
@@ -2663,26 +2794,7 @@ function bindDocumentsView(root) {
     }
   });
   const addFolderBtn = document.getElementById("documentsAddFolderBtn");
-  if (addFolderBtn) {
-    addFolderBtn.addEventListener("click", async () => {
-      const name = String(window.prompt("Nom du dossier ?") || "").trim();
-      if (!name) {
-        setDocumentsActivity({ tone: "warning", title: "Nom invalide", message: "Le nom du dossier ne peut pas être vide." });
-        renderProjectDocumentsContent(root);
-        return;
-      }
-      try {
-        console.info("[documents-view] create-folder.submit", { parentFolderId: docsViewState.currentFolderId || null });
-        await createDocumentFolder(String(store.currentProject?.backendProjectId || store.currentProject?.id || store.currentProjectId || ""), docsViewState.currentFolderId || null, name);
-        await loadCurrentDirectory();
-        if (docsViewState.documentTreeOpen) console.info("[documents-tree] refresh-after-mutation", { action: "create-folder" });
-        renderProjectDocumentsContent(root);
-      } catch (error) {
-        setDocumentsActivity({ tone: "error", title: "Création impossible", message: error instanceof Error ? error.message : "Erreur Supabase lors de la création du dossier." });
-        renderProjectDocumentsContent(root);
-      }
-    });
-  }
+  if (addFolderBtn) addFolderBtn.addEventListener("click", () => { void creerUnDossier(root); });
 
   document.querySelectorAll("[data-folder-rename-id]").forEach((btn) => {
     btn.addEventListener("click", async (event) => {

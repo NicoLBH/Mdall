@@ -19,72 +19,77 @@
  *
  * ## Ce qu'un message devient
  *
- * Un commentaire, dans l'ordre du fil, en disant **qui parlait**. Sans cela, un
- * lecteur du sujet lirait une suite de paragraphes sans savoir lesquels sont une
- * question de l'auteur et lesquels sont une réponse du copilote — et prendrait
- * la seconde pour un avis du projet.
+ * **La première question devient la description du sujet.** C'est le premier
+ * bloc, modifiable et versionné, celui que l'équipe lit en arrivant : la place
+ * du problème, pas d'une notice d'utilisation.
  *
- * Les commentaires portent tous la signature de qui transforme, parce que c'est
- * la seule identité disponible et qu'un faux auteur serait pire qu'une mention
- * dans le texte. Ils le disent donc dans leur corps.
+ * Les autres messages deviennent des commentaires, dans l'ordre, **avec leur
+ * contenu et rien d'autre**. Qui parle se lit à l'avatar et au nom du bandeau ;
+ * la date, à celle du commentaire. L'écrire dans le texte le conserverait en
+ * base — et l'heure d'une conversation privée n'a pas à voyager.
+ *
+ * Ce que le copilote a dit porte son icône et son nom, comme les messages de
+ * Mdall portent les leurs. Sans cette marque, une réponse du copilote se lirait
+ * comme un avis du projet.
  */
+
+import { conversationTitle } from "./copilote-conversations.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
-/** Qui parlait, en un mot. */
-export function quiParle(message) {
-  return message?.role === "user" ? "Question" : "Copilote";
+/**
+ * Le titre du sujet : celui de la discussion, tel qu'il s'affiche.
+ *
+ * `conversationTitle` est la fonction qui nomme la discussion dans le rail —
+ * le nom que quelqu'un lui a donné, ou sa première question à défaut. En lire
+ * un autre ici obligerait à renommer deux fois : une fois la discussion, une
+ * fois le sujet.
+ */
+export function titreDuSujet(conversation) {
+  return conversationTitle(conversation) || "Discussion avec le copilote";
 }
 
 /**
- * Un message de la discussion, écrit comme un commentaire.
+ * Ce qui ouvre le sujet.
  *
- * L'horodatage est celui du message, pas celui de la transformation : le sujet
- * raconte quand la chose a été dite.
+ * **La première question, telle qu'elle a été posée.** C'est la description du
+ * sujet : le premier bloc, modifiable et versionné, celui que l'équipe lit en
+ * arrivant. Y écrire comment l'application transfère une discussion serait y
+ * mettre une notice d'utilisation à la place du problème.
+ */
+export function descriptionDuSujet(messages = []) {
+  const premiere = (Array.isArray(messages) ? messages : [])
+    .find((message) => message?.role === "user" && texte(message?.content));
+  return texte(premiere?.content);
+}
+
+/**
+ * Ce qui devient un commentaire, et dans quel ordre.
+ *
+ * Tout sauf la première question : elle est déjà la description, et la répéter
+ * en tête du fil ferait lire deux fois la même phrase.
+ */
+export function messagesACommenter(messages = []) {
+  const liste = (Array.isArray(messages) ? messages : []).filter((message) => texte(message?.content));
+  const rang = liste.findIndex((message) => message?.role === "user");
+  return rang === -1 ? liste : [...liste.slice(0, rang), ...liste.slice(rang + 1)];
+}
+
+/**
+ * Le corps d'un commentaire : ce qui a été dit, et rien d'autre.
+ *
+ * Pas d'auteur, pas d'horodatage. Qui parle se lit à l'avatar et au nom du
+ * bandeau ; la date, à celle du commentaire. Les écrire dans le texte les
+ * **conserverait en base** — et ces dates-là sont celles d'une conversation
+ * privée. Personne n'a à savoir quand on a parlé au copilote.
  */
 export function corpsDuMessage(message) {
-  const contenu = texte(message?.content);
-  if (!contenu) return "";
-
-  const quand = message?.ts ? new Date(message.ts) : null;
-  const date = quand && !Number.isNaN(quand.getTime())
-    ? quand.toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })
-    : "";
-
-  return `**${quiParle(message)}**${date ? ` · ${date}` : ""}\n\n${contenu}`;
+  return texte(message?.content);
 }
 
-/**
- * Le titre du sujet : celui de la discussion, tel quel.
- *
- * Le renommer serait perdre le lien entre les deux — on cherche « la discussion
- * sur le hors gel », pas « Sujet #47 ».
- */
-export function titreDuSujet(conversation, secours = "Discussion avec le copilote") {
-  return texte(conversation?.title) || texte(secours);
-}
-
-/**
- * Ce que le sujet dit de lui-même avant le premier commentaire.
- *
- * Il annonce d'où il vient. Un sujet dont les commentaires commencent par
- * « Copilote » sans rien dire de plus laisse croire que le copilote participe
- * au projet, ce qui n'est pas le cas : il a répondu à quelqu'un, en privé, et
- * quelqu'un a décidé de le montrer.
- */
-export function descriptionDuSujet({ messages = [], le = new Date() } = {}) {
-  const combien = (Array.isArray(messages) ? messages : []).filter((m) => texte(m?.content)).length;
-  const jour = le.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
-
-  return [
-    `Ouvert depuis une discussion privée avec le copilote, le ${jour}.`,
-    "",
-    `Les ${combien} message${combien > 1 ? "s" : ""} de la discussion suivent en commentaires, dans l'ordre.`,
-    "Ils sont repris tels quels : ce que le copilote a répondu n'a **pas été tranché** —",
-    "c'est une exploration, pas une décision du projet.",
-    "",
-    "_La discussion d'origine reste privée._"
-  ].join("\n");
+/** D'où vient un commentaire : de quelqu'un, ou du copilote. */
+export function origineDuMessage(message) {
+  return message?.role === "assistant" ? "copilote" : "human";
 }
 
 /**
@@ -104,6 +109,9 @@ export async function transformerEnSujet({ projectId = "", conversation = null }
   const messages = (conversation?.messages ?? []).filter((message) => texte(message?.content));
   if (!messages.length) return { ok: false, raison: "Cette discussion n'a rien à montrer." };
 
+  const description = descriptionDuSujet(messages);
+  const aCommenter = messagesACommenter(messages);
+
   const { createManualSubject, updateSubjectDescription } =
     await import("./project-subjects-supabase.js");
 
@@ -115,26 +123,28 @@ export async function transformerEnSujet({ projectId = "", conversation = null }
   }
   if (!sujet?.id) return { ok: false, raison: "Le sujet n'a pas pu être ouvert." };
 
-  try {
-    await updateSubjectDescription({
-      subjectId: sujet.id,
-      description: descriptionDuSujet({ messages })
-    });
-  } catch {
-    // La description manque, le sujet existe : on continue plutôt que de
-    // laisser un sujet vide dont personne ne saura d'où il vient.
+  if (description) {
+    try {
+      await updateSubjectDescription({ subjectId: sujet.id, description });
+    } catch {
+      // La description manque, le sujet existe : on continue plutôt que de
+      // s'arrêter sur un sujet ouvert sans son énoncé.
+    }
   }
 
   const { createSubjectMessagesSupabaseRepository } = await import("./subject-messages-supabase.js");
   const depot = createSubjectMessagesSupabaseRepository();
 
   let ecrits = 0;
-  for (const message of messages) {
+  for (const message of aCommenter) {
     try {
       await depot.createMessage({
         projectId: projet,
         subjectId: sujet.id,
-        bodyMarkdown: corpsDuMessage(message)
+        bodyMarkdown: corpsDuMessage(message),
+        // Ce que le copilote a répondu se signale par son icône et son nom, pas
+        // par une ligne de texte : la marque est sur le message, pas dedans.
+        origin: origineDuMessage(message)
       });
       ecrits += 1;
     } catch {
@@ -144,5 +154,5 @@ export async function transformerEnSujet({ projectId = "", conversation = null }
     }
   }
 
-  return { ok: true, sujet, commentaires: ecrits, attendus: messages.length };
+  return { ok: true, sujet, commentaires: ecrits, attendus: aCommenter.length };
 }

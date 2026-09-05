@@ -16495,7 +16495,7 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
    bas mal réglé ; dehors, il n'occupe rien tant qu'on ne le demande pas, et
    l'espace qu'il prend au survol aère le fil. */
 .copilote-msg__bulle{
-  padding:12px; border-radius:12px; background:rgba(240,246,252,.03);
+  padding:12px; border-radius:12px; background:rgb(21, 27, 35);
 }
 /* La date en bas à droite, et au survol seulement : sur un message qu'on vient
    d'écrire elle n'apprend rien ; sur un fil relu trois semaines plus tard elle
@@ -16924,17 +16924,23 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
    pas le temps de lire : le pointeur est en l'air, le fichier attend. Le flou
    fait le reste du travail — ce qui reste visible ne se lit plus, mais on voit
    encore où l'on dépose. */
+/* Le voile couvre **tout l'écran**, pas seulement la zone qui écoute.
+   Un cadre en pointillés autour d'un panneau demande de viser ; un fichier
+   qu'on tient au-dessus de la fenêtre se lâche où l'on veut, et c'est ce que
+   le voile doit dire. Plus de contour, donc, et un fond qu'on traverse encore
+   un peu : on voit où l'on est, on ne lit plus ce qu'il y a dessous. */
 .depot-voile{
-  position:absolute; inset:0; z-index:5; display:none; place-items:center;
-  background:rgba(13,17,23,.96); border:2px dashed var(--border); border-radius:12px;
-  backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px);
+  position:fixed; inset:0; z-index:9999; display:none; place-items:center;
+  background:rgba(13,17,23,.88);
+  backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
   pointer-events:none;
 }
 .est-survole > .depot-voile,
 .est-survole .depot-voile{ display:grid; }
 .depot-voile__contenu{ display:flex; flex-direction:column; align-items:center; gap:14px; }
-.depot-voile__cartes{ width:226px; height:103px; max-width:60%; }
-.depot-voile__mot{ margin:0; color:var(--text); font-size:15px; font-weight:600; }
+.depot-voile__contenu{ gap:22px; }
+.depot-voile__cartes{ width:452px; height:206px; max-width:min(70vw, 452px); }
+.depot-voile__mot{ margin:0; color:var(--text); font-size:20px; font-weight:600; }
 .copilote-outil__cle{ color:var(--muted); min-width:0; }
 .copilote-outil__source{ color:var(--muted); font-size:11px; font-style:italic; }
 /* L'écart se montre, il n'accuse pas : la couleur alerte, le texte décrit. */
@@ -19130,3 +19136,14 @@ html.est-fige-par-le-graphe, body.est-fige-par-le-graphe{ overflow:hidden; }
 }
 .copilote-msg__body > p:first-child{ margin-top:0; }
 .copilote-msg__body > p:last-child{ margin-bottom:0; }
+
+/* Un commentaire repris d'une discussion avec le copilote : il porte son icône
+   et son nom, comme un message de Mdall porte les siens. */
+.thread-item--copilote .tl-activity__avatar,
+.thread-item--copilote .gh-comment__avatar{ color:#f0883e; }
+
+/* « Défaire » se pose au bout de la ligne qui raconte la fusion : c'est le seul
+   endroit d'où l'on peut vouloir revenir sur elle. Gris, comme tout ce qui n'est
+   ni la voie normale ni un danger — défaire n'efface rien, cela propose. */
+.tl-activity__trailing{ margin-left:auto; display:flex; align-items:center; gap:8px; }
+.proposition-defaire{ white-space:nowrap; }
