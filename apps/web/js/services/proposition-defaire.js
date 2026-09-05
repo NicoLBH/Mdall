@@ -128,7 +128,9 @@ export function itemsPourDefaire({ restaurations = [], retraits = [], documents 
 export function titreDuDefaire(proposition) {
   const numero = Number(proposition?.number);
   const nom = texte(proposition?.title) || "une proposition";
-  return Number.isFinite(numero) && numero > 0 ? `Défaire #${numero} — ${nom}` : `Défaire — ${nom}`;
+  // `#P12`, jamais `#12` : le second cite un **sujet**, et le lien mènerait
+  // ailleurs — au sujet numéro douze, qui n'a rien à voir.
+  return Number.isFinite(numero) && numero > 0 ? `Défaire #P${numero} — ${nom}` : `Défaire — ${nom}`;
 }
 
 /**
@@ -145,7 +147,7 @@ export function descriptionDuDefaire({ proposition, restaurations = [], retraits
     : "";
 
   const lignes = [
-    `Revient sur ${Number.isFinite(numero) && numero > 0 ? `la proposition #${numero}` : "une proposition"}`
+    `Revient sur ${Number.isFinite(numero) && numero > 0 ? `la proposition #P${numero}` : "une proposition"}`
       + `${quand ? `, fusionnée le ${quand}` : ""}.`,
     "",
     "Rien n'est effacé : cette proposition en écrit une de plus. Une fois signée,",

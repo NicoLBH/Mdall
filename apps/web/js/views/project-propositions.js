@@ -69,6 +69,12 @@ import {
   diffAvis,
   documentItems
 } from "../services/proposition-review.js";
+import {
+  CHANGEMENT,
+  CHANGEMENT_LABELS,
+  resumeDuTableau,
+  tableauAvantApres
+} from "../services/proposition-avant-apres.js";
 import { avisFromFigures, mergeAvis } from "../services/avis-from-figures.js";
 import { describeReadingStack } from "../services/run-workflow.js";
 
@@ -857,9 +863,10 @@ function groupDeposits(documents = [], names = new Map()) {
  *    vit le bouton de fusion, comme sur GitHub : on ne fusionne pas au milieu
  *    d'un tableau, on fusionne au bout d'une discussion.
  *  - **Dépôts** — qu'est-ce qui est entré, quand, déposé par qui ? (les commits)
- *  - **Analyse** — qu'en dit la machine ? (les checks) Ce que l'analyse a lu,
- *    ce qu'elle en tire, et ce qu'elle n'a pas pu lire.
- *  - **Ce qui change** — qu'accepte-t-on, une affirmation à la fois ? (le diff)
+ *  - **Vérifications** — qu'en dit la machine ? (les checks) Ce que l'analyse a
+ *    lu, ce qu'elle en tire, et ce qu'elle n'a pas pu lire.
+ *  - **Changements** — qu'accepte-t-on, et par rapport à quoi ? (le diff) Un
+ *    tableau avant / après en tête, puis les mouvements du corpus.
  *
  * La valeur de ce découpage se voit surtout **six mois plus tard** : on revient
  * presque toujours pour la Conversation — qui a décidé, quand, sur quelle
@@ -870,15 +877,18 @@ function groupDeposits(documents = [], names = new Map()) {
 const REVIEW_TABS = [
   { id: "conversation", label: "Conversation", iconName: "comment-discussion" },
   { id: "deposits", label: "Dépôts", iconName: "git-commit" },
-  { id: "analysis", label: "Analyse", iconName: "report" },
-  { id: "changes", label: "Ce qui change", iconName: "file-diff" }
+  { id: "analysis", label: "Vérifications", iconName: "report" },
+  { id: "changes", label: "Changements", iconName: "file-diff" }
 ];
 
 function reviewTabs(review) {
   const items = review.items ?? [];
   const compte = {
     deposits: (review.deposits ?? []).length,
-    changes: items.length
+    // Les affirmations comptent : elles sont dans l'onglet, et un compteur qui
+    // les oublie annonce « Changements » sans chiffre sur une proposition qui
+    // en porte douze.
+    changes: items.length + (review.avantApres?.lignes ?? []).length
   };
 
   return REVIEW_TABS.map((tab) => ({
@@ -1973,14 +1983,126 @@ function renderAnalysis(proposition, review) {
   `;
 }
 
+/* ────────────────────────────────────────────────────────────────────────────
+ * Le tableau avant / après
+ *
+ * Une proposition qui n'affiche que ce qu'elle apporte demande de connaître par
+ * cœur ce que le projet dit déjà. Personne ne le connaît. On met donc les deux
+ * valeurs côte à côte, une ligne par sujet, et l'écart se lit sans rien ouvrir.
+ *
+ * L'ordre des lignes est celui du métier — du gros œuvre aux abords —, pas
+ * l'ordre d'arrivée : on relit une proposition par domaine, jamais par ordre de
+ * saisie.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+const CHANGEMENT_TONES = {
+  [CHANGEMENT.NOUVEAU]: "avant-apres__tag--nouveau",
+  [CHANGEMENT.CORRECTION]: "avant-apres__tag--correction",
+  [CHANGEMENT.RETRAIT]: "avant-apres__tag--retrait",
+  [CHANGEMENT.IDENTIQUE]: "avant-apres__tag--identique",
+  [CHANGEMENT.INCONNU]: "avant-apres__tag--inconnu"
+};
+
+/** Une case vide se dit, elle ne se laisse pas blanche : blanc se lit « bug ». */
+function renderCellule(valeur, absence) {
+  return valeur
+    ? `<span class="avant-apres__valeur">${escapeHtml(valeur)}</span>`
+    : `<span class="avant-apres__vide">${escapeHtml(absence)}</span>`;
+}
+
+function renderAvantApres(proposition, review) {
+  const tableau = review.avantApres;
+  const lignes = tableau?.lignes ?? [];
+  if (!lignes.length) return "";
+
+  // Sur une proposition fusionnée, « aujourd'hui » désignerait un état qui
+  // contient déjà ce qu'elle a écrit : les colonnes se nomment autrement.
+  const fusionnee = proposition?.status === PROPOSITION.MERGED;
+  const enteteGauche = fusionnee ? "Avant" : "Ce que le projet dit aujourd'hui";
+  const enteteDroite = fusionnee ? "Après" : "Ce que cette proposition dit";
+  const absenceGauche = fusionnee ? "rien avant" : "le projet ne dit rien";
+  const absenceDroite = "sort de la mémoire";
+
+  let domaineCourant = null;
+  const corps = lignes
+    .map((ligne) => {
+      const enTete =
+        ligne.domaineLabel !== domaineCourant
+          ? `<tr class="avant-apres__domaine"><th colspan="4" scope="colgroup">${escapeHtml(ligne.domaineLabel)}</th></tr>`
+          : "";
+      domaineCourant = ligne.domaineLabel;
+
+      const portee = Array.isArray(ligne.zones) && ligne.zones.length ? ligne.zones.join(", ") : "";
+      const appui = [ligne.source, ligne.article].filter(Boolean).join(" · ");
+
+      return `
+        ${enTete}
+        <tr class="avant-apres__ligne avant-apres__ligne--${escapeHtml(ligne.changement)}">
+          <th scope="row" class="avant-apres__sujet">
+            <span class="avant-apres__titre">${escapeHtml(ligne.sujet)}</span>
+            ${portee ? `<span class="avant-apres__portee">${escapeHtml(portee)}</span>` : ""}
+            ${appui ? `<span class="avant-apres__appui">${escapeHtml(appui)}</span>` : ""}
+          </th>
+          <td class="avant-apres__avant">${renderCellule(ligne.avant, absenceGauche)}</td>
+          <td class="avant-apres__apres">${renderCellule(ligne.apres, absenceDroite)}</td>
+          <td class="avant-apres__etat">
+            <span class="avant-apres__tag ${CHANGEMENT_TONES[ligne.changement] ?? ""}">${escapeHtml(
+              CHANGEMENT_LABELS[ligne.changement] ?? ligne.changement
+            )}</span>
+            ${ligne.refusee ? `<span class="avant-apres__refus">écartée</span>` : ""}
+          </td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  return `
+    <section class="review-block">
+      <div class="review-panel">
+        <div class="review-block__head review-block__head--plain">
+          <div class="review-block__headbody">
+            <h3 class="review-block__title">
+              Affirmations
+              <span class="review-block__count">${lignes.length}</span>
+            </h3>
+            <span class="review-block__state">${escapeHtml(resumeDuTableau(tableau))}</span>
+          </div>
+        </div>
+        <div class="avant-apres__scroll">
+          <table class="avant-apres">
+            <thead>
+              <tr>
+                <th scope="col">Sujet</th>
+                <th scope="col">${escapeHtml(enteteGauche)}</th>
+                <th scope="col">${escapeHtml(enteteDroite)}</th>
+                <th scope="col">Ce qui change</th>
+              </tr>
+            </thead>
+            <tbody>${corps}</tbody>
+          </table>
+        </div>
+        ${
+          tableau.memoireLue
+            ? ""
+            : `<p class="review-silent__note">
+                 La mémoire du projet n'a pas pu être lue : la colonne de gauche manque, et aucune ligne
+                 ne prétend être nouvelle. Rouvrir la proposition relira.
+               </p>`
+        }
+      </div>
+    </section>
+  `;
+}
+
 /** Ce qui change : les contradictions d'abord, puis les affirmations. */
-function renderChanges(review) {
+function renderChanges(proposition, review) {
   const items = review.items ?? [];
   const parType = (type) => items.filter((entry) => entry.itemType === type);
   const gele = review.frozen === true;
 
   return `
     ${renderConflicts(review.conflicts ?? [])}
+    ${renderAvantApres(proposition, review)}
     ${renderReviewBlock(
       ITEM_TYPE.DOCUMENT,
       "Documents",
@@ -2105,7 +2227,7 @@ function renderReview(root) {
       : onglet === "analysis"
         ? renderAnalysis(proposition, review)
         : onglet === "changes"
-          ? renderChanges(review)
+          ? renderChanges(proposition, review)
           : renderConversation(proposition, review);
 
   return `
@@ -3574,11 +3696,15 @@ function setPropositionsHeader() {
 async function openFrozen(root, proposition) {
   try {
     const propositions = await import("../services/propositions-supabase.js");
-    const [stored, documents] = await Promise.all([
+    const { listProjectAssertions } = await import("../services/project-memory-supabase.js");
+    const [stored, documents, affirmationsDuProjet] = await Promise.all([
       propositions.listPropositionItems(proposition.id),
       // Les documents restent lisibles : ils disent qui a déposé quoi, et quand.
       // Ce sont des faits, ils ne se recalculent pas.
-      propositions.listPropositionDocuments(proposition.id)
+      propositions.listPropositionDocuments(proposition.id),
+      // La mémoire n'est pas rejouée : elle est lue. Ce que cette proposition y
+      // a écrit porte son identifiant et ce qu'il remplaçait.
+      listProjectAssertions(proposition.project_id)
     ]);
 
     if (!view.open || view.open.id !== proposition.id) return;
@@ -3619,7 +3745,10 @@ async function openFrozen(root, proposition) {
       // La décision est figée, la conversation ne l'est pas : on commente une
       // proposition close comme une autre.
       story: buildStory({ proposition, documents, decisions: stored, comments, names }),
-      items: itemsFromDecisions(stored)
+      items: itemsFromDecisions(stored),
+      // Sur une proposition fusionnée, « avant » se lit dans l'histoire écrite
+      // en mémoire — ce que la proposition a posé, et ce que cela remplaçait.
+      avantApres: tableauAvantApres({ proposition, items: stored, assertions: affirmationsDuProjet })
     };
 
     // Les photos ne se recalculent pas : elles ont été découpées, hachées et
@@ -3693,20 +3822,31 @@ async function openProposition(root, propositionId) {
   }
 
   try {
-    const [{ analyzeProposition }, propositions, { loadCtAnalysis }, { loadProjectMarkers }] = await Promise.all([
+    const [
+      { analyzeProposition },
+      propositions,
+      { loadCtAnalysis },
+      { loadProjectMarkers },
+      { listProjectAssertions }
+    ] = await Promise.all([
       import("../services/proposition-analysis.js"),
       import("../services/propositions-supabase.js"),
       import("../services/ct-analysis-supabase.js"),
-      import("../services/project-identity-supabase.js")
+      import("../services/project-identity-supabase.js"),
+      import("../services/project-memory-supabase.js")
     ]);
 
     const projectId = proposition.project_id;
-    const [memoire, marqueurs, decisions, assumees] = await Promise.all([
+    const [memoire, marqueurs, decisions, assumees, affirmationsDuProjet] = await Promise.all([
       loadCtAnalysis(projectId),
       loadProjectMarkers(projectId),
       propositions.listPropositionItems(proposition.id),
       // Ce que le projet a déjà assumé, et que l'analyse pourrait contredire.
-      propositions.listProjectDecisions(projectId, { exceptPropositionId: proposition.id })
+      propositions.listProjectDecisions(projectId, { exceptPropositionId: proposition.id }),
+      // Ce que le projet dit aujourd'hui : la colonne de gauche du tableau
+      // avant / après. `null` quand la lecture a échoué — et le tableau le dit
+      // plutôt que d'annoncer des entrées nouvelles.
+      listProjectAssertions(projectId)
     ]);
 
     const analyse = await analyzeProposition({
@@ -3769,7 +3909,11 @@ async function openProposition(root, propositionId) {
       items: applyDecisions(
         [...documentItems(documents), ...attachmentItems(analyse.attachments), ...avisItems(analyse.diff)],
         decisions
-      )
+      ),
+      // Les affirmations de la proposition, en face de ce que le projet dit
+      // aujourd'hui. Elles ne passent pas par `items` : celui-ci porte les
+      // mouvements du corpus, qui n'ont pas de valeur d'avant.
+      avantApres: tableauAvantApres({ proposition, items: decisions, assertions: affirmationsDuProjet })
     };
 
     // Les conflits portent les mêmes objets que les blocs — pas des copies : ce
