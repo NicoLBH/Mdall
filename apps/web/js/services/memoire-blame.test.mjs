@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   fichiersDeLaMemoire, dossiersDeLaMemoire, blameDeLaLigne, histoireDeLaLigne,
-  chaleurDeLaLigne, bornesDuFichier, propositionsSansTrace, dernierVersementDe, versementsDeLaMemoire
+  chaleurDeLaLigne, bornesDuFichier, dernierVersementDe, versementsDeLaMemoire
 } from "./memoire-blame.js";
 
 const assertion = (id, cle, valeur, extra = {}) => ({
@@ -99,47 +99,6 @@ test("la marge se colore par ancienneté, du plus ancien au plus récent", () =>
 test("un fichier d'une seule ligne ne se colore pas à moitié", () => {
   const seule = assertion("a1", "x", "1");
   assert.equal(chaleurDeLaLigne(seule, bornesDuFichier([seule])), 4);
-});
-
-test("une proposition fusionnée qui n'a rien laissé en mémoire se repère", () => {
-  const propositions = [
-    { id: "p1", status: "merged", number: 1 },
-    { id: "p2", status: "merged", number: 2 },
-    { id: "p3", status: "open", number: 3 }
-  ];
-  const memoire = [assertion("a1", "x", "1", { proposition_id: "p1" })];
-
-  const manquantes = propositionsSansTrace(propositions, memoire);
-
-  assert.deepEqual(manquantes.map((p) => p.id), ["p2"]);
-});
-
-test("aucune proposition fusionnée, rien à rattraper", () => {
-  assert.deepEqual(propositionsSansTrace([{ id: "p1", status: "open" }], []), []);
-  assert.deepEqual(propositionsSansTrace(), []);
-});
-
-test("une proposition vide n'a rien manqué de verser : la bannière se tait", () => {
-  const propositions = [
-    { id: "p-vide", number: 1, status: "merged" },
-    { id: "p-pleine", number: 2, status: "merged" }
-  ];
-
-  // Sans la liste des propositions porteuses, on signale : ne pas savoir
-  // n'autorise pas à se taire.
-  assert.deepEqual(propositionsSansTrace(propositions, []).map((p) => p.id), ["p-vide", "p-pleine"]);
-
-  const porteuses = new Set(["p-pleine"]);
-  assert.deepEqual(
-    propositionsSansTrace(propositions, [], { porteuses }).map((p) => p.id),
-    ["p-pleine"]
-  );
-
-  // Et une fois versée, plus rien.
-  assert.deepEqual(
-    propositionsSansTrace(propositions, [{ proposition_id: "p-pleine" }], { porteuses }),
-    []
-  );
 });
 
 test("les versements se comptent en actes, pas en lignes", () => {

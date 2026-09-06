@@ -145,7 +145,7 @@ export function renderBarre({ chemin = [], query = "", ouverte = true, racine = 
   ].join("");
 
   return `
-    <div class="documents-topbar memoire-barre">
+    <div class="documents-topbar memoire-barre${racine ? "" : " memoire-barre--pleine"}">
       <div class="documents-topbar__left">
         ${racine ? "" : `<button type="button" class="documents-tree__toggle" data-memoire-replier
           aria-label="${escapeHtml(ouverte ? "Replier la barre latérale" : "Étendre la barre latérale")}"
@@ -453,8 +453,10 @@ export function fichierEnClair(fichier, { enClair } = {}) {
  * cela se perd : il reste un chiffre, et six mois plus tard personne ne sait
  * plus si on pouvait en discuter.
  *
- * Le raisonnement s'écrit donc **avant** la valeur qu'il produit — du général
- * au particulier, comme on lit un texte, et à l'inverse d'un tableur.
+ * L'affirmation vient d'abord ; son raisonnement s'indente dessous, comme un
+ * alinéa sous l'article qu'il précise. C'est l'indentation qui dit à quoi la
+ * ligne se rapporte : écrit au-dessus, le bloc flottait, et « dépend de Commune
+ * du projet » en tête de fichier ne se rattachait visiblement à rien.
  *
  * @returns {{jetons: object[], nature: string}[]}
  */
@@ -489,7 +491,7 @@ export function lignesDeLAssertion(assertion = {}) {
     dependDe: raisonnement.dependDe ?? []
   }).map((jetons) => ({ nature: "raisonnement", jetons }));
 
-  return [...bloc, affirmation];
+  return [affirmation, ...bloc];
 }
 
 /**
@@ -507,8 +509,7 @@ export function gesteDeLAssertion(assertion = {}) {
 
 /** Une affirmation, sur sa seule ligne de valeur — sans son raisonnement. */
 export function jetonsDeLAssertion(assertion = {}) {
-  const lignes = lignesDeLAssertion(assertion);
-  return lignes[lignes.length - 1].jetons;
+  return lignesDeLAssertion(assertion)[0].jetons;
 }
 
 function renderJetons(jetons = []) {

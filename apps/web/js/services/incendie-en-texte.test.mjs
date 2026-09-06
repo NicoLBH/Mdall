@@ -93,7 +93,7 @@ test("un raisonnement se lit dans le graphe : condition, raison, socles", () => 
   assert.deepEqual(raisonnement.dependDe, ["Classement du bâtiment"]);
 });
 
-test("le raisonnement s'écrit avant la valeur qu'il produit", () => {
+test("le raisonnement s'indente sous la valeur qu'il justifie", () => {
   const vue = {
     graphe: { liens: [{ de: "m-classement", vers: "m-planchers" }] },
     modules: [
@@ -106,7 +106,7 @@ test("le raisonnement s'écrit avant la valeur qu'il produit", () => {
 
   const fichier = fichierDeLEtude(vue);
   const natures = fichier.lignes.map((ligne) => ligne.nature);
-  assert.deepEqual(natures, ["raisonnement", "raisonnement", "raisonnement", "raisonnement", "affirmation"]);
+  assert.deepEqual(natures, ["affirmation", "raisonnement", "raisonnement", "raisonnement", "raisonnement"]);
   assert.equal(fichier.compte.affirmations, 1);
   assert.equal(fichier.compte.raisonnements, 4);
 });

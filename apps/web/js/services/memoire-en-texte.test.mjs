@@ -61,9 +61,9 @@ test("une décision s'écrit dans les mots de l'arrêté, et marque la branche p
   });
 
   assert.deepEqual(lignes.map(enClair), [
-    "si hauteur du dernier plancher > 8 m",
-    "   alors escalier encloisonné  ✓ retenu",
-    "   sinon escalier à l'air libre"
+    "   si hauteur du dernier plancher > 8 m",
+    "      alors escalier encloisonné  ✓ retenu",
+    "      sinon escalier à l'air libre"
   ]);
 });
 
@@ -128,9 +128,9 @@ test("un raisonnement porte sa raison, son exception et ses dépendances", () =>
   });
 
   assert.deepEqual(lignes.map(enClair), [
-    "si hauteur du dernier plancher > 8 m",
-    "   alors escalier protégé  ✓ retenu",
-    "   sinon aucun escalier protégé exigé",
+    "   si hauteur du dernier plancher > 8 m",
+    "      alors escalier protégé  ✓ retenu",
+    "      sinon aucun escalier protégé exigé",
     "   parce que au-delà de 8 m l'échelle des secours n'atteint plus les baies",
     "   sauf si le bâtiment ne comporte qu'une seule unité de passage",
     "   dépend de hauteur du dernier plancher · classement du bâtiment"
@@ -139,7 +139,7 @@ test("un raisonnement porte sa raison, son exception et ses dépendances", () =>
 
 test("ce qu'un raisonnement n'a pas ne s'écrit pas en creux", () => {
   const lignes = blocDeRaisonnement({ condition: "c", alors: "a", retenu: "a" });
-  assert.deepEqual(lignes.map(enClair), ["si c", "   alors a  ✓ retenu"]);
+  assert.deepEqual(lignes.map(enClair), ["   si c", "      alors a  ✓ retenu"]);
 });
 
 test("les dépendances se séparent d'un point médian : un sujet peut porter une virgule", () => {
