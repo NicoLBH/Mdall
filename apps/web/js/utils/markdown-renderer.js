@@ -283,7 +283,12 @@ export function renderMarkdownToHtml(markdown = "", options = {}) {
     if (fence) {
       flushParagraph(paragraphLines, html, options);
       flushList(listState, html);
-      codeBlockState = { langue: String(fence[1] || "").trim().toLowerCase(), lines: [] };
+      // Le premier mot est la langue ; ce qui suit lui appartient — l'écriture
+      // Mdall y range l'ancre de la ligne citée. Prendre la chaîne entière
+      // aurait donné une langue « mdall affirmation:… », que personne ne
+      // reconnaît.
+      const [langue = ""] = String(fence[1] || "").trim().toLowerCase().split(/\s+/);
+      codeBlockState = { langue, lines: [] };
       return;
     }
 

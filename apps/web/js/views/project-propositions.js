@@ -77,12 +77,12 @@ import {
   tableauAvantApres
 } from "../services/proposition-avant-apres.js";
 import { depotDeLaProposition, resumeDuDepot } from "../services/proposition-depot.js";
-import { ETAT, arbreDesReperes, comparerDesReperes, resumeDuDiff } from "../services/depot-reperes.js";
+import { ETAT, arbreDesReperes, comparerDesReperes, lignesNumerotees, resumeDuDiff } from "../services/depot-reperes.js";
 import { aChange, reperesDuDepot } from "../services/depot-carburants.js";
 import { limiterAuDepot } from "../services/depot-portee.js";
 import { ISSUE, passerLesControles, resumeDesControles } from "../services/depot-controles.js";
 import { bindSideResizer, renderSideResizer } from "./ui/side-resizer.js";
-import { enClair, ligneDAffirmation } from "../services/memoire-en-texte.js";
+import { cheminDeFichier, enClair, ligneDAffirmation, nomDeFichier } from "../services/memoire-en-texte.js";
 import { avisFromFigures, mergeAvis } from "../services/avis-from-figures.js";
 import { describeReadingStack } from "../services/run-workflow.js";
 
@@ -2724,8 +2724,8 @@ function renderDiffTree(groupes, ouverte) {
                       <span class="documents-tree__indent"><span class="documents-tree__divider is-expanded"></span></span>
                       <span class="documents-tree__caret-spacer"></span>
                       <button type="button" class="documents-tree__item" data-diff-goto="${escapeHtml(groupe.cle)}">
-                        <span class="documents-tree__icon-slot">${svgIcon("file-directory", { className: "octicon" })}</span>
-                        <span class="documents-tree__label">${escapeHtml(groupe.chemin[1] ?? groupe.label)}</span>
+                        <span class="documents-tree__icon-slot">${svgIcon("file", { className: "octicon" })}</span>
+                        <span class="documents-tree__label">${escapeHtml(nomDeFichier(groupe.chemin))}</span>
                         ${groupe.compte > 0 ? `<span class="diff-tree__compte">${groupe.compte}</span>` : ""}
                       </button>
                     </div>
@@ -2755,11 +2755,8 @@ function renderDiffTree(groupes, ouverte) {
  */
 function renderDiffGroupe(groupe) {
   const replie = view.diffGroupesReplies?.has(groupe.cle) === true;
-  // Deux compteurs, comme dans un diff unifié : la ligne d'avant et celle
-  // d'après. Une valeur retirée n'a pas de numéro à droite, une valeur ajoutée
-  // n'en a pas à gauche — et c'est ce déséquilibre qui se lit d'un coup d'œil.
-  const numero = { avant: 0, apres: 0 };
-  const corps = groupe.lignes.map((ligne) => lignesDuRepere(groupe, ligne, numero)).join("");
+  const fichier = cheminDeFichier(groupe.chemin);
+  const numerotees = lignesNumerotees(groupe);
 
   return `
     <section class="diff-groupe" id="diff-groupe-${escapeHtml(cleHtml(groupe.cle))}">
@@ -2769,98 +2766,49 @@ function renderDiffGroupe(groupe) {
           ${svgIcon(replie ? "chevron-right" : "chevron-down", { className: "octicon" })}
         </button>
         <button type="button" class="diff-groupe__titre" data-diff-groupe-fold="${escapeHtml(groupe.cle)}">
-          ${escapeHtml(groupe.chemin.join(" / "))}
+          ${escapeHtml(fichier)}
         </button>
         <span class="diff-groupe__compte">${groupe.lignes.length} entrée${groupe.lignes.length > 1 ? "s" : ""}</span>
       </header>
-      ${replie ? "" : `<div class="diff-groupe__corps">${corps}</div>`}
+      ${replie ? "" : `<div class="diff-groupe__corps">${numerotees.map((ligne) => renderDiffLigne(groupe, ligne)).join("")}</div>`}
     </section>
   `;
 }
 
 /**
- * Les lignes d'un repère.
+ * Une ligne du diff, ce qu'on y a écrit, et le bouton qui l'annote.
  *
- * Un champ modifié en fait deux — l'avant et l'après —, un champ inchangé une
- * seule, sans signe : c'est la ligne de contexte d'un diff de code. Le nom du
- * champ n'apparaît que lorsque le repère en porte plusieurs : sur une donnée de
- * base, qui n'a qu'une valeur, écrire « Valeur » à chaque ligne n'apprend rien.
+ * Deux colonnes de numéros. Ce ne sont pas des numéros de lignes d'un fichier
+ * réel — mais d'un fichier engendré, ce qui revient au même tant que le rendu
+ * ne change pas : c'est pour cela que l'écriture porte sa version.
+ *
+ * **Ce à quoi une remarque se rattache n'est jamais le numéro.** C'est le
+ * repère, son champ, et son côté. Ancrée sur « la ligne 3 », elle deviendrait
+ * fausse au premier dépôt qui insère une valeur au-dessus ; ancrée sur
+ * `affirmation:zone-de-neige · Valeur · apres`, elle reste juste. C'est la
+ * différence avec GitHub, dont les commentaires passent « outdated ».
  */
-function lignesDuRepere(groupe, ligne, numero) {
-  const plusieurs = ligne.champs.length > 1;
-  const libelle = (champ) => (plusieurs ? `${ligne.titre} · ${champ.nom}` : ligne.titre);
-
-  // La provenance vit sur la ligne, derrière la flèche : c'est l'invention de
-  // l'écriture Mdall, et elle n'a de sens que collée à la valeur qu'elle fonde.
-  const source = [ligne.provenance?.source, ligne.provenance?.article].filter(Boolean).join(", ");
-
-  return ligne.champs
-    .map((champ, rang) => {
-      const ancre = { groupe, ligne, champ, rang };
-
-      if (champ.etat === ETAT.INCHANGE) {
-        numero.avant += 1;
-        numero.apres += 1;
-        return renderDiffLigne({
-          gauche: numero.avant, droite: numero.apres, signe: " ",
-          nom: libelle(champ), valeur: champ.apres || champ.avant, source, ton: "inchange",
-          ancre: { ...ancre, cote: COTE.CONTEXTE }
-        });
-      }
-
-      const cellules = [];
-      if (champ.avant) {
-        numero.avant += 1;
-        cellules.push(renderDiffLigne({
-          gauche: numero.avant, droite: null, signe: "-",
-          nom: libelle(champ), valeur: champ.avant, source, ton: "retire",
-          ancre: { ...ancre, cote: COTE.AVANT }
-        }));
-      }
-      if (champ.apres) {
-        numero.apres += 1;
-        cellules.push(renderDiffLigne({
-          gauche: null, droite: numero.apres, signe: "+",
-          nom: libelle(champ), valeur: champ.apres, source, ton: "ajoute",
-          ancre: { ...ancre, cote: COTE.APRES }
-        }));
-      }
-      return cellules.join("");
-    })
-    .join("");
-}
-
-/**
- * Une ligne du diff, et le bouton qui l'annote.
- *
- * Deux colonnes de numéros, comme dans un diff unifié. Ce ne sont pas des
- * numéros de lignes d'un fichier — il n'y a pas de fichier — mais des repères
- * de lecture : un point où poser le doigt quand on discute à deux devant
- * l'écran, et l'endroit d'où part une remarque.
- *
- * **Ce à quoi la remarque se rattache n'est pas le numéro.** C'est le repère,
- * son champ, et son côté. Un commentaire ancré sur « la ligne 3 » deviendrait
- * faux au premier dépôt qui insère une valeur au-dessus ; ancré sur
- * `affirmation:zone-de-neige · Valeur`, il reste juste. C'est la différence
- * avec GitHub, dont les commentaires passent « outdated » — et elle nous est
- * offerte par le travail déjà fait sur les repères.
- */
-function renderDiffLigne({ gauche, droite, signe, nom, valeur, source, ton, ancre }) {
-  const cle = ancreDeLigne(ancre);
-  const ouverte = view.diffAnnotations?.has(cle) === true;
+function renderDiffLigne(groupe, entree) {
+  const cle = ancreDeLigne(entree);
+  const enEcriture = view.diffAnnotations?.has(cle) === true;
+  const deja = commentairesDeLAncre(cle);
+  const source = [entree.ligne.provenance?.source, entree.ligne.provenance?.article].filter(Boolean).join(", ");
 
   return `
-    <div class="diff-ligne diff-ligne--${escapeHtml(ton)}">
-      <span class="diff-ligne__num">${gauche ?? ""}</span>
-      <span class="diff-ligne__num">${droite ?? ""}</span>
+    <div class="diff-ligne diff-ligne--${escapeHtml(entree.ton)}">
+      <span class="diff-ligne__num">${entree.gauche ?? ""}</span>
+      <span class="diff-ligne__num">${entree.droite ?? ""}</span>
       <button type="button" class="diff-ligne__annoter" data-diff-annoter="${escapeHtml(cle)}"
         title="Commenter cette ligne" aria-label="Commenter cette ligne">
         ${svgIcon("plus", { className: "octicon" })}
       </button>
-      <span class="diff-ligne__signe">${escapeHtml(signe)}</span>
-      <span class="diff-ligne__code">${renderJetons(ligneDAffirmation({ sujet: nom, valeur, source }))}</span>
+      <span class="diff-ligne__signe">${escapeHtml(entree.signe)}</span>
+      <span class="diff-ligne__code">${renderJetons(
+        ligneDAffirmation({ sujet: entree.nom, valeur: entree.valeur, source })
+      )}</span>
     </div>
-    ${ouverte ? renderAnnotationEnLigne(cle) : ""}
+    ${deja.length ? renderCommentairesEnLigne(deja) : ""}
+    ${enEcriture ? renderAnnotationEnLigne(cle) : ""}
   `;
 }
 
@@ -2876,6 +2824,38 @@ function renderJetons(jetons = []) {
   return jetons
     .map((entree) => `<span class="mdall-${escapeHtml(entree.type)}">${escapeHtml(entree.texte)}</span>`)
     .join("");
+}
+
+/**
+ * Les remarques déjà écrites sur une ligne, **dans le code**.
+ *
+ * C'est là qu'on les cherche : une remarque sur une valeur se lit à côté de la
+ * valeur, pas au bout d'un fil. Elle reste aussi dans la conversation — le
+ * même message, à deux endroits, parce qu'il répond à deux questions : « qu'a-t-on
+ * dit de cette ligne ? » et « qu'a-t-on dit de cette proposition ? ».
+ */
+function renderCommentairesEnLigne(commentaires) {
+  return `
+    <div class="diff-fil">
+      ${commentaires
+        .map((commentaire) => {
+          const identite = identityOf(commentaire);
+          return `
+            <div class="diff-fil__message">
+              <span class="diff-fil__avatar">${identite.avatarHtml || ""}</span>
+              <div class="diff-fil__corps">
+                <div class="diff-fil__tete">
+                  <b>${escapeHtml(identite.displayName)}</b>
+                  ${commentaire.at ? `<span class="diff-fil__date">${escapeHtml(formatDate(commentaire.at))}</span>` : ""}
+                </div>
+                <div class="diff-fil__texte">${humanTextHtml(commentaire.propos)}</div>
+              </div>
+            </div>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
 }
 
 /**
@@ -2934,24 +2914,20 @@ const COTE = { AVANT: "avant", APRES: "apres", CONTEXTE: "contexte" };
  * dépôt insérera une valeur au-dessus.
  */
 function ancreDeLigne({ ligne, champ, rang, cote }) {
-  return `${ligne.id}|${champ.nom || rang}|${cote}`;
+  return `${ligne.id}|${champ?.nom || rang}|${cote}`;
 }
 
-/** Retrouver la ligne visée à partir de son adresse. */
-function ligneDeLAncre(cle) {
+/** Retrouver la ligne visée, et les quatre qui la précèdent. */
+function contexteDeLAncre(cle) {
   for (const groupe of arbreDesReperes(view.review?.diffDuDepot?.lignes ?? [])) {
-    for (const ligne of groupe.lignes) {
-      for (const [rang, champ] of ligne.champs.entries()) {
-        for (const cote of Object.values(COTE)) {
-          if (ancreDeLigne({ ligne, champ, rang, cote }) === cle) {
-            return {
-              groupe, ligne, champ, cote,
-              source: [ligne.provenance?.source, ligne.provenance?.article].filter(Boolean).join(", ")
-            };
-          }
-        }
-      }
-    }
+    const numerotees = lignesNumerotees(groupe);
+    const rang = numerotees.findIndex((entree) => ancreDeLigne(entree) === cle);
+    if (rang === -1) continue;
+
+    // Quatre lignes avant, comme un diff en montre autour d'une modification :
+    // une valeur seule ne dit pas de quoi elle est entourée, et c'est souvent
+    // le voisinage qui explique la remarque.
+    return { groupe, avant: numerotees.slice(Math.max(0, rang - 4), rang), cible: numerotees[rang] };
   }
   return null;
 }
@@ -2959,31 +2935,65 @@ function ligneDeLAncre(cle) {
 /**
  * L'extrait qui part avec la remarque.
  *
- * Le commentaire va dans le fil, où il se relira dans six mois — quand le
- * dépôt aura été fusionné et que l'écran des changements aura disparu. Sans
- * l'extrait, il ne resterait qu'un avis sur rien. On l'écrit donc **dans le
- * message**, en clair, plutôt que de le rattacher à un état qui ne durera pas.
+ * Le commentaire va dans le fil, où il se relira dans six mois — quand le dépôt
+ * aura été fusionné et que l'écran des changements aura disparu. Sans l'extrait,
+ * il ne resterait qu'un avis sur rien.
+ *
+ * L'ancre voyage dans la clôture du bloc. C'est **notre** marque, écrite et
+ * relue par nous : elle permet de reposer la remarque au bon endroit du diff, et
+ * elle ne relit jamais la prose de quelqu'un.
  */
 export function extraitDeLaLigne(cible) {
   if (!cible) return "";
-  const { groupe, ligne, champ, cote } = cible;
-  // Le signe et la valeur viennent du **même** côté. Les mélanger citait « - »
-  // devant la valeur d'après : une remarque sur ce que personne n'avait écrit.
-  const signe = cote === COTE.AVANT ? "-" : cote === COTE.APRES ? "+" : " ";
-  const valeur = cote === COTE.AVANT ? champ.avant : champ.apres || champ.avant;
-  const nom = ligne.champs.length > 1 ? `${ligne.titre} · ${champ.nom}` : ligne.titre;
+  const { groupe, avant = [], cible: visee } = cible;
+  if (!visee) return "";
 
-  // Un bloc clôturé, dans l'écriture du projet. La citation entre chevrons
-  // superposait deux syntaxes — le Markdown et la nôtre — et le rendu du fil ne
-  // savait lire ni l'une ni l'autre : l'extrait s'affichait avec ses accents
-  // graves en toutes lettres.
+  const ecrire = (entree) => {
+    const source = [entree.ligne.provenance?.source, entree.ligne.provenance?.article].filter(Boolean).join(", ");
+    const numeros = `${String(entree.gauche ?? "").padStart(3, " ")} ${String(entree.droite ?? "").padStart(3, " ")}`;
+    return `${numeros}  ${entree.signe} ${enClair(ligneDAffirmation({ sujet: entree.nom, valeur: entree.valeur, source }))}`;
+  };
+
   return [
-    "```mdall",
-    `§ ${groupe.chemin.join(" · ")}`,
-    `${signe} ${enClair(ligneDAffirmation({ sujet: nom, valeur, source: cible.source ?? "" }))}`,
+    "```mdall " + ancreDeLigne(visee),
+    `§ ${cheminDeFichier(groupe.chemin)}`,
+    ...avant.map(ecrire),
+    ecrire(visee),
     "```",
     ""
   ].join("\n");
+}
+
+/**
+ * Les remarques rattachées à une ligne.
+ *
+ * On les retrouve par l'ancre que le message porte dans la clôture de son
+ * extrait. Rien d'autre n'est relu : ni la prose, ni les valeurs — seulement la
+ * marque qu'on y a écrite.
+ */
+function commentairesDeLAncre(cle) {
+  return (view.review?.story ?? [])
+    .filter((event) => event.kind === STORY.COMMENT && !event.deleted)
+    .map((event) => ({ ...event, ancre: ancreDuMessage(event.body), propos: sansExtrait(event.body) }))
+    .filter((event) => event.ancre === cle);
+}
+
+/** L'ancre écrite dans la clôture d'un extrait, s'il y en a une. */
+export function ancreDuMessage(corps = "") {
+  const trouve = String(corps ?? "").match(/^```mdall\s+(\S+)\s*$/m);
+  return trouve ? trouve[1] : "";
+}
+
+/**
+ * Le message sans son extrait.
+ *
+ * Dans le diff, la ligne est juste au-dessus : la citer une seconde fois ferait
+ * lire deux fois la même valeur. Dans la conversation, où la ligne n'est pas
+ * là, l'extrait reste — c'est le même message, lu à deux endroits qui n'ont pas
+ * le même besoin.
+ */
+function sansExtrait(corps = "") {
+  return String(corps ?? "").replace(/^```mdall[\s\S]*?^```\s*$/m, "").trim();
 }
 
 /** Une clé de chemin, utilisable comme identifiant HTML. */
@@ -3161,15 +3171,16 @@ function renderReview(root) {
     ${gele ? renderFrozenNote(proposition, review) : ""}
     ${suite}
     ${avertissement}
-    <div class="review-tabs-row${onglet === "changes" ? " review-tabs-row--pleine" : ""}">
-      ${renderLightTabs({
-        tabs: reviewTabs(review),
-        activeTabId: onglet,
-        className: "review-tabs",
-        ariaLabel: "Sections de la proposition"
-      })}
-      ${renderDiffStat(review)}
-    </div>
+    ${renderLightTabs({
+      tabs: reviewTabs(review),
+      activeTabId: onglet,
+      className: "review-tabs",
+      ariaLabel: "Sections de la proposition",
+      // Le compteur d'ajouts et de suppressions accompagne les onglets sans en
+      // être un : c'est le composant qui le pose, pas cet écran.
+      trailingHtml: renderDiffStat(review),
+      rowClassName: onglet === "changes" ? "light-tabs-row--pleine" : ""
+    })}
     <div class="review-tabpanel${onglet === "changes" ? " review-tabpanel--pleine" : ""}">${panneau}</div>
   `;
 }
@@ -3981,7 +3992,7 @@ async function postComment(root, { keepGoing = false, source = "conversation" } 
   const ecrit = String((depuisLeDiff ? view.diffDraft : view.draft) ?? "").trim();
   // L'extrait s'ajoute à l'envoi, pas à la saisie : le champ reste celui d'un
   // message, et personne ne réédite une citation qu'il n'a pas écrite.
-  const extrait = depuisLeDiff && view.diffAncre ? extraitDeLaLigne(ligneDeLAncre(view.diffAncre)) : "";
+  const extrait = depuisLeDiff && view.diffAncre ? extraitDeLaLigne(contexteDeLAncre(view.diffAncre)) : "";
   const texte = extrait ? `${extrait}\n${ecrit}` : ecrit;
   if (!proposition || !ecrit || view.review.posting) return;
 
