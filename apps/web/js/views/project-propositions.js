@@ -51,7 +51,8 @@ import {
   defaultMergeMessage,
   describeSnapshotGap,
   freezeDecisions,
-  itemsFromDecisions
+  itemsFromDecisions,
+  toutCeQueLaPropositionPorte
 } from "../services/proposition-freeze.js";
 import {
   describeBlocking,
@@ -4168,8 +4169,15 @@ async function decide(root, items, status, reason = null) {
  */
 async function merge(root) {
   const proposition = view.open;
-  const items = view.review?.items ?? [];
   if (!proposition || proposition.status !== PROPOSITION.OPEN || view.review.merging) return;
+
+  // Ce que la proposition porte, **et pas seulement ce que l'analyse a
+  // trouvé**. Une proposition venue de l'Atelier n'apporte aucun livrable : ses
+  // affirmations sont en base depuis son ouverture, et l'analyse ne les
+  // recalcule pas. La fusion ne versait donc rien pour elles — vingt-cinq
+  // lignes signées, zéro en mémoire, et la proposition suivante trouvait
+  // légitimement quarante-huit nouveautés puisqu'il n'y avait rien à comparer.
+  const items = toutCeQueLaPropositionPorte(view.review?.items ?? [], view.review?.decisionRows ?? []);
 
   // Le bouton est déjà désactivé ; la règle est répétée ici parce qu'elle n'a
   // pas à dépendre de l'état d'un bouton pour tenir.
@@ -4712,7 +4720,10 @@ async function restoryAfterClosing(propositions) {
  */
 async function freeze(propositions, proposition) {
   const review = view.review ?? {};
-  const items = review.items ?? [];
+  // Le même ensemble que la fusion verse : ce que l'analyse a trouvé **et** ce
+  // que la proposition a déposé. Un procès-verbal qui ne porterait pas les
+  // affirmations de l'Atelier décrirait une fusion qui n'a pas eu lieu.
+  const items = toutCeQueLaPropositionPorte(review.items ?? [], review.decisionRows ?? []);
 
   const ok = await propositions.decidePropositionItems({
     propositionId: proposition.id,
