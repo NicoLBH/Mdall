@@ -1,11 +1,33 @@
 import { escapeHtml } from "./escape-html.js";
 import { renderLatexToHtml } from "./math-renderer.js";
+import { natureDeLaLigne } from "../services/memoire-en-texte.js";
 
 const LIST_ITEM_PATTERN = /^\s*([-*])\s+(.*)$/;
 const ORDERED_LIST_PATTERN = /^\s*\d+[\.)]\s+(.*)$/;
 const CHECKLIST_PATTERN = /^\s*[-*]\s+\[( |x|X)\]\s+(.*)$/;
 const BLOCKQUOTE_PATTERN = /^\s*>\s?(.*)$/;
 const HEADING_PATTERN = /^\s{0,3}(#{1,6})\s+(.+)$/;
+const FENCE_PATTERN = /^```(.*)$/;
+
+/**
+ * Un bloc de code.
+ *
+ * Chaque ligne est enveloppée, et non versée en bloc dans un `<pre>` : c'est ce
+ * qui permet d'en colorer une en vert et la suivante en rouge. Pour l'écriture
+ * de Mdall, la classe de chaque ligne vient de sa marque de tête — voir
+ * `memoire-en-texte.js`, qui est le seul endroit qui connaît ces marques.
+ */
+function renderCodeBlock({ langue = "", lines = [] } = {}) {
+  const classe = langue ? ` md-code--${escapeHtml(langue.replace(/[^\w-]/g, ""))}` : "";
+  const corps = lines
+    .map((ligne) => {
+      const nature = langue === "mdall" ? ` md-code__line--${natureDeLaLigne(ligne)}` : "";
+      return `<span class="md-code__line${nature}">${escapeHtml(ligne)}</span>`;
+    })
+    .join("");
+
+  return `<pre class="md-code${classe}"><code>${corps}</code></pre>`;
+}
 
 function sanitizeLinkHref(rawHref = "") {
   const value = String(rawHref || "").trim();
@@ -213,6 +235,7 @@ export function renderMarkdownToHtml(markdown = "", options = {}) {
   const paragraphLines = [];
   const listState = { type: "", items: [] };
   let mathBlockState = null;
+  let codeBlockState = null;
 
   const lines = source.split("\n");
   // Un tableau tient sur plusieurs lignes : celles qu'il a prises ne repassent
@@ -238,6 +261,29 @@ export function renderMarkdownToHtml(markdown = "", options = {}) {
       } else {
         mathBlockState.lines.push(line);
       }
+      return;
+    }
+
+    // Un bloc de code clôturé.
+    //
+    // Il manquait, et c'est une lacune ordinaire du rendu Markdown — jusqu'au
+    // jour où un commentaire a cité un extrait de la mémoire : les clôtures
+    // s'affichaient telles quelles, et l'extrait devenait illisible.
+    if (codeBlockState) {
+      if (FENCE_PATTERN.test(trimmed)) {
+        html.push(renderCodeBlock(codeBlockState));
+        codeBlockState = null;
+      } else {
+        codeBlockState.lines.push(line);
+      }
+      return;
+    }
+
+    const fence = trimmed.match(FENCE_PATTERN);
+    if (fence) {
+      flushParagraph(paragraphLines, html, options);
+      flushList(listState, html);
+      codeBlockState = { langue: String(fence[1] || "").trim().toLowerCase(), lines: [] };
       return;
     }
 
@@ -330,6 +376,11 @@ export function renderMarkdownToHtml(markdown = "", options = {}) {
   if (mathBlockState) {
     html.push(`<p>${escapeHtml(mathBlockState.delimiter)}<br>${mathBlockState.lines.map((line) => escapeHtml(line)).join('<br>')}</p>`);
   }
+
+  // Un bloc qu'on a ouvert sans le refermer se rend quand même : perdre la fin
+  // d'un message parce qu'il manque trois accents graves serait pire que de
+  // l'afficher sans sa clôture.
+  if (codeBlockState) html.push(renderCodeBlock(codeBlockState));
 
   flushParagraph(paragraphLines, html, options);
   flushList(listState, html);

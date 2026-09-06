@@ -153,3 +153,25 @@ test("un lien reste un lien à côté d'une image", () => {
   assert.match(html, /<img class="md-image" src="\/a\.png"/);
   assert.match(html, /<a href="https:\/\/exemple\.test\/r\.pdf"/);
 });
+
+test("un bloc de code clôturé se rend, ligne par ligne", () => {
+  const html = renderMarkdownToHtml("avant\n```\nune ligne\ndeux\n```\naprès");
+
+  assert.match(html, /<pre class="md-code"><code>/);
+  assert.match(html, /<span class="md-code__line">une ligne<\/span>/);
+  assert.ok(!html.includes("```"), "les clôtures ne s'affichent pas");
+});
+
+test("un extrait de l'écriture Mdall porte la nature de chaque ligne", () => {
+  const html = renderMarkdownToHtml("```mdall\n§ Données de base · Structure\n- zone de neige  A1\n+ zone de neige  A2\n```");
+
+  assert.match(html, /md-code--mdall/);
+  assert.match(html, /md-code__line--section/);
+  assert.match(html, /md-code__line--retire/);
+  assert.match(html, /md-code__line--ajoute/);
+});
+
+test("un bloc ouvert sans être refermé se rend quand même", () => {
+  const html = renderMarkdownToHtml("```\nune ligne");
+  assert.match(html, /md-code__line">une ligne</);
+});
