@@ -15474,13 +15474,47 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 
 .review-block__head{
   display:grid;
-  grid-template-columns:22px 1fr;
+  /* Trois colonnes fixes : la case, le caret, le titre. Le caret garde sa
+     colonne même quand il n'y a rien à déplier — sinon le titre d'un bloc vide
+     se décalerait d'un cran, et la colonne cesserait d'être une colonne. */
+  grid-template-columns:22px 16px 1fr;
   gap:10px;
   align-items:start;
   padding:20px 16px;
   background:var(--panel);
   border-bottom:1px solid var(--border);
 }
+/* Un bloc vide n'annonce rien : le filet promettait un contenu qui n'existe
+   pas, et le trait se lisait comme un titre de liste. */
+.review-block__head--vide{ border-bottom:0; padding-bottom:8px; }
+.review-block__empty--sansfilet{ padding-top:0; }
+
+.review-block__caret{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:16px;
+  height:20px;
+  padding:0;
+  border:0;
+  background:transparent;
+  color:var(--muted);
+  cursor:pointer;
+}
+.review-block__caret:hover{ color:var(--text); }
+.review-block__caret--absent{ cursor:default; }
+
+/* On clique le titre aussi : viser un chevron de douze pixels est un geste de
+   précision pour une action qui n'en demande aucune. */
+.review-block__titre-bouton{
+  padding:0;
+  border:0;
+  background:transparent;
+  color:inherit;
+  font:inherit;
+  cursor:pointer;
+}
+.review-block__titre-bouton:hover{ text-decoration:underline; }
 
 /* Un en-tête sans case à cocher n'a pas de colonne pour elle : la garder
    creuserait une gouttière que rien ne remplit. */
@@ -19561,4 +19595,70 @@ body.proposition-merge-open{ overflow:hidden; }
 @media (max-width: 860px){
   .diff-shell{ grid-template-columns:minmax(0, 1fr); }
   .diff-tree{ position:static; max-height:none; }
+}
+
+/* ── Les contrôles d'un dépôt ───────────────────────────────────────────────
+   La liste de checks d'une pull request. Quatre issues, pas trois : « non
+   vérifiable » n'est ni un succès ni un échec, et elle porte donc sa propre
+   couleur — voir `depot-controles.js`. */
+.controles{ margin:0; padding:0; list-style:none; }
+.controle{
+  display:flex;
+  align-items:flex-start;
+  gap:10px;
+  padding:12px 16px;
+  border-bottom:1px solid var(--border2);
+}
+.controle:last-child{ border-bottom:0; }
+.controle__pastille{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  flex:0 0 auto;
+  width:16px;
+  height:16px;
+  margin-top:1px;
+  border-radius:50%;
+  color:#fff;
+  background:var(--border);
+}
+.controle__pastille .octicon{ width:11px; height:11px; }
+.controle--tenu .controle__pastille{ background:rgb(35,134,54); }
+.controle--non-tenu .controle__pastille{ background:rgb(218,54,51); }
+.controle--non-verifiable .controle__pastille{ background:rgb(158,106,3); }
+.controle--sans-objet .controle__pastille{ background:transparent; border:1px solid var(--border); color:var(--muted); }
+.controle--en-cours .controle__pastille{
+  background:transparent;
+  color:var(--muted);
+  animation:review-finishing-turn 1.4s linear infinite;
+}
+@media (prefers-reduced-motion:reduce){ .controle--en-cours .controle__pastille{ animation:none; } }
+
+.controle__corps{ display:flex; flex-direction:column; gap:2px; min-width:0; flex:1 1 auto; }
+.controle__label{ color:var(--text); font-size:13px; font-weight:600; }
+.controle__phrase{ color:var(--muted); font-size:12px; }
+.controle__detail{ color:var(--muted); font-size:11px; font-style:italic; }
+.controle--sans-objet .controle__label{ color:var(--muted); font-weight:400; }
+
+.controle__issue{
+  flex:0 0 auto;
+  display:flex;
+  align-items:center;
+  gap:6px;
+  color:var(--muted);
+  font-size:11px;
+  white-space:nowrap;
+}
+.controle--non-tenu .controle__issue{ color:rgb(248,81,73); }
+.controle--non-verifiable .controle__issue{ color:rgb(210,153,34); }
+/* « requis » ne colore rien : il dit seulement que ce contrôle retient la
+   fusion. C'est son issue qui porte la couleur, pas son statut. */
+.controle__requis{
+  padding:0 6px;
+  border:1px solid var(--border);
+  border-radius:999px;
+  color:var(--muted);
+  font-size:10px;
+  text-transform:uppercase;
+  letter-spacing:.03em;
 }
