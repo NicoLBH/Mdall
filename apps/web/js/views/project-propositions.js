@@ -79,6 +79,8 @@ import {
 import { depotDeLaProposition, resumeDuDepot } from "../services/proposition-depot.js";
 import { ETAT, ETAT_LABELS, arbreDesReperes, comparerDesReperes, resumeDuDiff } from "../services/depot-reperes.js";
 import { aChange, reperesDuDepot } from "../services/depot-carburants.js";
+import { limiterAuDepot } from "../services/depot-portee.js";
+import { passerLesControles, resumeDesControles } from "../services/depot-controles.js";
 import { avisFromFigures, mergeAvis } from "../services/avis-from-figures.js";
 import { describeReadingStack } from "../services/run-workflow.js";
 
@@ -112,6 +114,8 @@ const view = {
   /** L'arborescence du diff, et ce qu'il montre. */
   diffTreeOpen: true,
   diffOnlyChanged: true,
+  /** Les blocs de l'onglet Dépôts qu'on a dépliés. Repliés par défaut. */
+  blocsOuverts: new Set(),
   /** De quoi citer dans ce projet : ses sujets et ses propositions. */
   refs: [],
   /** Le menu de citation ouvert sous le champ, s'il y en a un. */
@@ -894,10 +898,15 @@ function renderReviewBlock(type, titre, items, renderer, vide) {
       ? `${ecartes} écarté${ecartes > 1 ? "s" : ""} sur ${items.length}`
       : `Tout est accepté`;
 
+  // Replié par défaut, et c'est ce qu'on veut : un dépôt de soixante-huit avis
+  // se lit d'abord par son nombre. On l'ouvre quand on va trancher.
+  const ouvert = view.blocsOuverts?.has(type) === true;
+  const pliable = items.length > 0;
+
   return `
     <section class="review-block">
       <div class="review-panel">
-        <div class="review-block__head${ecartes > 0 ? " is-partial" : ""}">
+        <div class="review-block__head${ecartes > 0 ? " is-partial" : ""}${pliable ? "" : " review-block__head--vide"}">
           <label class="review-item__check">
             ${
               items.length > 0 && view.review?.frozen !== true
@@ -911,17 +920,38 @@ function renderReviewBlock(type, titre, items, renderer, vide) {
                 : ""
             }
           </label>
+          ${
+            // Le caret occupe sa place même quand il n'y a rien à déplier :
+            // sans cela, un bloc vide décalerait son titre d'un cran par
+            // rapport aux autres, et la colonne cesserait d'être une colonne.
+            pliable
+              ? `<button type="button" class="review-block__caret" data-review-block-toggle="${escapeHtml(type)}"
+                   aria-expanded="${ouvert ? "true" : "false"}"
+                   aria-label="${escapeHtml(ouvert ? `Replier ${titre}` : `Déplier ${titre}`)}">
+                   ${svgIcon(ouvert ? "chevron-down" : "chevron-right", { className: "octicon" })}
+                 </button>`
+              : `<span class="review-block__caret review-block__caret--absent" aria-hidden="true"></span>`
+          }
           <div class="review-block__headbody">
             <h3 class="review-block__title">
-              ${escapeHtml(titre)} <span class="review-block__count">${items.length}</span>
+              ${
+                pliable
+                  ? `<button type="button" class="review-block__titre-bouton" data-review-block-toggle="${escapeHtml(type)}">${escapeHtml(titre)}</button>`
+                  : escapeHtml(titre)
+              }
+              <span class="review-block__count">${items.length}</span>
             </h3>
             ${items.length > 0 ? `<span class="review-block__state">${escapeHtml(etat)}</span>` : ""}
           </div>
         </div>
         ${
           items.length === 0
-            ? `<p class="review-block__empty">${escapeHtml(vide)}</p>`
-            : `<ul class="review-list">${items.map(renderer).join("")}</ul>`
+            // Pas de filet au-dessus d'une phrase qui dit qu'il n'y a rien :
+            // le trait annonçait un contenu, et il n'y en a pas.
+            ? `<p class="review-block__empty review-block__empty--sansfilet">${escapeHtml(vide)}</p>`
+            : ouvert
+              ? `<ul class="review-list">${items.map(renderer).join("")}</ul>`
+              : ""
         }
       </div>
     </section>
@@ -2162,22 +2192,96 @@ function renderDepotDeDocuments(depot, figures) {
  * du suivi surprend, six mois plus tard, et qu'on veut savoir quel moteur et
  * quel vocabulaire l'avaient produit.
  */
+/**
+ * Les contrôles d'un dépôt — la liste de checks d'une pull request.
+ *
+ * L'écran ne connaît aucun contrôle : il affiche ce que `depot-controles.js`
+ * lui rend. Un contrôle de plus n'ajoute pas une ligne ici.
+ */
+function renderControles(proposition, review) {
+  const rendu = passerLesControles(contexteDesControles(proposition, review));
+
+  return `
+    <section class="review-block">
+      <div class="review-panel">
+        <div class="review-block__head review-block__head--plain">
+          <div class="review-block__headbody">
+            <h3 class="review-block__title">
+              Contrôles
+              <span class="review-block__count">${rendu.lignes.length}</span>
+            </h3>
+            <span class="review-block__state${rendu.bloque ? " is-blocking" : ""}">${escapeHtml(
+              resumeDesControles(rendu)
+            )}</span>
+          </div>
+        </div>
+        <ul class="controles">
+          ${rendu.lignes
+            .map(
+              (ligne) => `
+                <li class="controle controle--${escapeHtml(ligne.issue)}">
+                  <span class="controle__pastille">${svgIcon(ligne.icone, { className: "octicon" })}</span>
+                  <div class="controle__corps">
+                    <span class="controle__label">${escapeHtml(ligne.label)}</span>
+                    <span class="controle__phrase">${escapeHtml(ligne.phrase)}</span>
+                    ${ligne.detail ? `<span class="controle__detail">${escapeHtml(ligne.detail)}</span>` : ""}
+                  </div>
+                  <span class="controle__issue">
+                    ${escapeHtml(ligne.issueLabel)}
+                    ${ligne.bloquant ? `<span class="controle__requis" title="Ce contrôle retient la fusion tant qu'il n'est pas tenu">requis</span>` : ""}
+                  </span>
+                </li>
+              `
+            )
+            .join("")}
+        </ul>
+      </div>
+    </section>
+  `;
+}
+
+/**
+ * Ce sur quoi les contrôles se prononcent.
+ *
+ * Rassemblé ici, une fois. Chaque contrôle y puise ce qui le concerne et ignore
+ * le reste — c'est ce qui permet d'en ajouter un sans toucher aux autres.
+ */
+function contexteDesControles(proposition, review) {
+  const items = review.items ?? [];
+  const documents = review.documentRows ?? [];
+
+  return {
+    enCours: review.running === true,
+    depot: depotDeLaProposition({
+      proposition,
+      affirmations: affirmationsDUneProposition(review.decisionRows ?? []),
+      documents,
+      unreachable: review.unreachable ?? [],
+      analyseFaite: !review.running && !review.error
+    }),
+    conflits: review.conflicts ?? [],
+    blocage: describeBlocking(review.conflicts ?? []),
+    documents,
+    unreachable: review.unreachable ?? [],
+    analyseFaite: !review.running && !review.error,
+    pile: review.frozen === true
+      ? describeReadingStack(proposition.snapshot?.engine, proposition.snapshot?.packs)
+      : describeReadingStack(
+          review.result?.engineVersion,
+          Object.values(review.result?.packsUsed ?? {}).map((pack) => `${pack.pack_id} v${pack.pack_version}`)
+        ),
+    avis: items.filter((entry) => entry.itemType === ITEM_TYPE.AVIS).length,
+    avisHorsDepot: Number(review.diff?.horsDepot) || 0
+  };
+}
+
 function renderAnalysis(proposition, review) {
   if (review.running) {
     return `
-      <section class="review-block">
-        <div class="review-panel">
-          <div class="review-block__head review-block__head--plain">
-            <div class="review-block__headbody">
-              <h3 class="review-block__title">Ce que l'analyse lit</h3>
-              <span class="review-block__state">en cours</span>
-            </div>
-          </div>
-          <p class="review-empty-note">${escapeHtml(
-            review.step || "Lecture des livrables du projet et de ceux de cette proposition."
-          )}</p>
-        </div>
-      </section>
+      ${renderControles(proposition, review)}
+      <p class="review-empty-note">${escapeHtml(
+        review.step || "Lecture des livrables du projet et de ceux de cette proposition."
+      )}</p>
     `;
   }
 
@@ -2210,6 +2314,7 @@ function renderAnalysis(proposition, review) {
   ];
 
   return `
+    ${renderControles(proposition, review)}
     <section class="review-block">
       <div class="review-panel">
         <div class="review-block__head review-block__head--plain">
@@ -3018,6 +3123,18 @@ function bindReview(root) {
 
   bindConversation(root);
   bindRefLinks(root);
+
+  // Les blocs de l'onglet Dépôts se déplient au clic — sur le caret comme sur
+  // le titre : viser un chevron de douze pixels est un geste de précision pour
+  // une action qui n'en demande aucune.
+  for (const bouton of root.querySelectorAll("[data-review-block-toggle]")) {
+    bouton.addEventListener("click", () => {
+      const type = bouton.getAttribute("data-review-block-toggle");
+      if (view.blocsOuverts.has(type)) view.blocsOuverts.delete(type);
+      else view.blocsOuverts.add(type);
+      renderContent(root);
+    });
+  }
 
   // La barre latérale du diff se replie, comme celle des Documents : sur un
   // dépôt de trois cents repères on veut la voir, sur trois on veut la place.
@@ -3895,7 +4012,13 @@ function mergeFigureAvis(root, { knownAvis = [], decisions = [], assumees = [], 
   const complet = mergeAvis(analyse?.computedAvis ?? [], lignes);
   const connus = knownAvisFor(knownAvis, decisions);
 
-  view.review.diff = diffAvis(connus, complet);
+  // La même garde qu'à l'analyse : les fiches viennent des livrables du dépôt,
+  // et refaire le diff ici sans la portée réintroduirait les avis du corpus
+  // entier — que l'analyse venait justement d'écarter.
+  view.review.diff = limiterAuDepot(diffAvis(connus, complet), {
+    documentIds: documents.map((row) => row.id),
+    reports: analyse?.reports ?? []
+  });
   view.review.items = applyDecisions(
     [
       ...documentItems(documents),
@@ -4199,10 +4322,14 @@ async function recomputeAfterMerge(root, proposition) {
     view.review.step = "Mise à jour du suivi des avis";
     renderContent(root);
 
+    const { PORTEE } = await import("../services/depot-portee.js");
     const analyse = await analyzeProposition({
       projectId: proposition.project_id,
       // Ses documents sont désormais dans le corpus accepté : il n'y a plus rien
       // à y ajouter, et l'analyse porte donc sur le projet tel qu'il est devenu.
+      // C'est le seul appel qui regarde le projet entier — et c'est sa raison
+      // d'être : réécrire le suivi, pas décrire un dépôt.
+      portee: PORTEE.PROJET,
       proposition,
       project: store.projectForm ?? {},
       knownAvis: [],

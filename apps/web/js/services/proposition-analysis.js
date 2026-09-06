@@ -24,6 +24,7 @@ import { mergeAvis } from "./avis-from-figures.js";
 import { avisFromReports } from "./avis-from-tables.js";
 import { readTableColumns } from "./avis-figures.js";
 import { journal, STATUT } from "./run-journal.js";
+import { PORTEE, limiterAuDepot, riensALire } from "./depot-portee.js";
 
 /** La famille de documents que le suivi des avis sait exploiter. */
 const CT_REPORT_KIND = "ct_report";
@@ -62,7 +63,15 @@ export async function analyzeProposition({
   project = {},
   knownAvis = [],
   knownMarkers = [],
-  onProgress = null
+  onProgress = null,
+  // Ce que l'analyse regarde. Par défaut, **ce que ce dépôt apporte** — voir
+  // `depot-portee.js` : relire tout le corpus pour l'attribuer à une
+  // proposition qui n'y est pour rien lui faisait porter quatre cent
+  // quatre-vingt-neuf avis qu'elle n'avait jamais déposés.
+  //
+  // `PORTEE.PROJET` reste pour la réécriture du suivi après une fusion : elle
+  // porte sur le projet entier, c'est sa raison d'être.
+  portee = PORTEE.DEPOT
 } = {}) {
   // `computedAvis: null` et non `[]` : quand l'analyse n'a pas tourné, on ne
   // sait pas quels avis les documents portent — ce n'est pas qu'ils n'en
@@ -130,6 +139,19 @@ export async function analyzeProposition({
     }
     carnet.dire(`corpus retenu : ${acceptes.length + soumisExploitables.length} livrable(s)`);
   });
+
+  // Rien à lire, donc rien à comparer.
+  //
+  // Une proposition venue de l'Atelier n'apporte aucun livrable : relire le
+  // corpus du projet ne peut rien lui attribuer de vrai, et coûtait une minute
+  // pour produire un diff entièrement faux.
+  if (portee === PORTEE.DEPOT && riensALire(soumisExploitables)) {
+    const carnet = journal();
+    carnet.dire("Ce dépôt n'apporte aucun livrable exploitable : il n'y a rien à relire.");
+    carnet.dire("Les avis du projet appartiennent aux dépôts qui les ont apportés, pas à celui-ci.");
+    steps.push({ id: "portee", label: "Portée du dépôt", ms: null, statut: STATUT.OK, lignes: carnet.lignes() });
+    return { ...vide, steps, error: null };
+  }
 
   const corpus = [...acceptes, ...soumisExploitables];
 
@@ -240,13 +262,39 @@ export async function analyzeProposition({
   const enTableau = avisFromReports(reports, readTableColumns);
   const computedAvis = result ? mergeAvis(avisWithTitles(result), enTableau) : enTableau.length > 0 ? enTableau : null;
 
+  /**
+   * Le diff, ramené à ce que ce dépôt a réellement apporté.
+   *
+   * L'analyse lit le corpus entier — il le faut, un avis se compare à son
+   * historique. Mais ce que la **proposition** porte, ce sont les avis lus dans
+   * ses propres livrables. Le reste appartient au projet, qui le sait déjà.
+   */
+  const diffDuLot = (avis) => {
+    const complet = diffAvis(knownAvis, avis);
+    if (portee !== PORTEE.DEPOT) return complet;
+
+    const limite = limiterAuDepot(complet, {
+      documentIds: soumisExploitables.map((row) => row.id),
+      reports
+    });
+
+    if (limite.horsDepot > 0) {
+      const carnet = journal();
+      carnet.dire(`${limite.added.length + limite.changed.length} avis viennent des livrables de ce dépôt`);
+      carnet.avertir(`${limite.horsDepot} avis relevés dans le corpus n'appartiennent pas à ce dépôt : ils ne lui sont pas attribués`);
+      steps.push({ id: "portee", label: "Portée du dépôt", ms: null, statut: STATUT.OK, lignes: carnet.lignes() });
+    }
+
+    return limite;
+  };
+
   return {
     result,
     reports,
     unreachable,
     computedAvis,
     attachments: groupAttachments(attachments),
-    diff: computedAvis ? diffAvis(knownAvis, computedAvis) : vide.diff,
+    diff: computedAvis ? diffDuLot(computedAvis) : vide.diff,
     // Ce que chaque phase a réellement pris. L'appelant y ajoutera l'écriture,
     // qu'il est le seul à pouvoir mesurer.
     steps,

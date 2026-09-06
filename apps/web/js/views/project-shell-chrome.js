@@ -302,6 +302,20 @@ function syncCompactState() {
 }
 
 
+/**
+ * La barre du projet — et la question de sa suppression.
+ *
+ * **À retirer.** Elle n'affiche plus que son eyebrow, c'est-à-dire le nom de
+ * l'onglet actif, déjà écrit dans la barre d'onglets juste au-dessus. `title`,
+ * `subtitle` et `metaHtml` sont vides chez tous ses appelants ; le seul qui les
+ * transmettrait, `project-doctrine-page.js`, n'est importé nulle part. Cinq
+ * écrans la masquent déjà (`hideBar: true`) — Situations, Mémoire, Atelier,
+ * Propositions.
+ *
+ * Ce qui retient : `contextLabel` alimente aussi le titre compact au
+ * défilement. La retirer demande de décider où cette information vit ensuite —
+ * probablement dans l'onglet Actions, avec le journal des exécutions.
+ */
 function renderProjectViewHeader({
   contextLabel,
   title = "",
