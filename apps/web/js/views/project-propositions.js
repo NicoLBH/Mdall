@@ -2769,6 +2769,10 @@ function renderDiffGroupe(groupe) {
         <button type="button" class="diff-groupe__titre" data-diff-groupe-fold="${escapeHtml(groupe.cle)}">
           ${escapeHtml(fichier)}
         </button>
+        <button type="button" class="diff-groupe__copier" data-diff-copier="${escapeHtml(groupe.cle)}"
+          title="Copier ce diff dans le presse-papiers" aria-label="Copier ce diff dans le presse-papiers">
+          ${svgIcon("copy", { className: "octicon" })}
+        </button>
         <span class="diff-groupe__compte">${groupe.lignes.length} entrée${groupe.lignes.length > 1 ? "s" : ""}</span>
       </header>
       ${replie ? "" : `<div class="diff-groupe__corps">${numerotees.map((ligne) => renderDiffLigne(groupe, ligne)).join("")}</div>`}
@@ -3010,6 +3014,22 @@ export function ancreDuMessage(corps = "") {
  */
 function sansExtrait(corps = "") {
   return String(corps ?? "").replace(/^```mdall[\s\S]*?^```\s*$/m, "").trim();
+}
+
+/**
+ * Un diff, en clair.
+ *
+ * Ce qu'on colle dans une conversation pour montrer ce qu'on voit. L'écriture
+ * s'y prête : elle est déjà du texte, et les numéros comme les signes sont ceux
+ * de l'écran — une copie qui reformaterait ne montrerait plus la même chose.
+ */
+export function diffEnClair(groupe) {
+  const lignes = lignesNumerotees(groupe).map((entree) => {
+    const numeros = `${String(entree.gauche ?? "").padStart(3, " ")} ${String(entree.droite ?? "").padStart(3, " ")}`;
+    return `${numeros}  ${entree.signe} ${enClair(jetonsDeLaLigne(entree))}`;
+  });
+
+  return [`§ ${cheminDeFichier(groupe.chemin)}`, ...lignes].join("\n");
 }
 
 /** Une clé de chemin, utilisable comme identifiant HTML. */
@@ -3654,6 +3674,26 @@ function bindReview(root) {
     bouton.addEventListener("click", () => {
       const cible = root.querySelector(`#diff-groupe-${CSS.escape(cleHtml(bouton.getAttribute("data-diff-goto")))}`);
       cible?.scrollIntoView({ block: "start", behavior: "smooth" });
+    });
+  }
+
+  // Copier un diff : c'est ce qu'on colle dans une conversation quand on veut
+  // montrer ce qu'on voit. L'écriture s'y prête — elle est déjà du texte.
+  for (const bouton of root.querySelectorAll("[data-diff-copier]")) {
+    bouton.addEventListener("click", async () => {
+      const cle = bouton.getAttribute("data-diff-copier");
+      const groupe = arbreDesReperes(view.review?.diffDuDepot?.lignes ?? [])
+        .find((candidat) => candidat.cle === cle);
+      if (!groupe) return;
+
+      const texte = diffEnClair(groupe);
+      try {
+        await navigator.clipboard.writeText(texte);
+      } catch {
+        // Un presse-papiers refusé n'est pas une raison de perdre le texte : on
+        // l'affiche, il reste sélectionnable.
+        window.prompt("Le presse-papiers a été refusé — copiez le texte ci-dessous.", texte);
+      }
     });
   }
 

@@ -161,6 +161,38 @@ export function chaleurDeLaLigne(assertion, { plusAncien = 0, plusRecent = 0 } =
   return Math.max(0, Math.min(4, Math.round(part * 4)));
 }
 
+/**
+ * Les propositions fusionnées qui n'ont rien laissé en mémoire.
+ *
+ * C'est la signature exacte du défaut qu'on vient de corriger : une proposition
+ * venue de l'Atelier était fusionnée, son procès-verbal écrit, et pas une ligne
+ * ne passait — parce que la fusion versait les lignes de l'analyse et elles
+ * seules.
+ *
+ * Le contrôle est bon marché : une proposition qui a versé quelque chose a
+ * forcément au moins une affirmation qui porte son identifiant. Aucune ne le
+ * porte, elle n'a rien versé. On ne lit pas ses lignes pour le savoir — cela
+ * demanderait une requête par proposition, et le rattrapage les lira de toute
+ * façon.
+ *
+ * On ne devine pas au-delà : une proposition qui n'apportait *rien* apparaîtra
+ * ici aussi. Le rattrapage est rejouable et n'écrit qu'une fois chaque
+ * affirmation, donc la relancer pour rien ne coûte que le temps de la lire.
+ */
+export function propositionsSansTrace(propositions = [], assertions = []) {
+  const fusionnees = (Array.isArray(propositions) ? propositions : [])
+    .filter((entry) => texte(entry?.status) === "merged");
+  if (!fusionnees.length) return [];
+
+  const tracees = new Set(
+    (Array.isArray(assertions) ? assertions : [])
+      .map((row) => texte(row?.proposition_id))
+      .filter(Boolean)
+  );
+
+  return fusionnees.filter((proposition) => !tracees.has(texte(proposition.id)));
+}
+
 /** Les bornes de temps d'un fichier, pour en colorer la marge. */
 export function bornesDuFichier(lignes = []) {
   const dates = (Array.isArray(lignes) ? lignes : [])
