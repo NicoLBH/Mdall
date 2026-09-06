@@ -105,6 +105,13 @@ import {
   verdictLabel
 } from "../services/hypothesis-acts.js";
 import { bindGhActionButtons, bindGhSelectMenus, renderGhActionButton, renderGhSelectMenu } from "./ui/gh-split-button.js";
+import {
+  LECTURE, preparerLaMemoire, fichierDuChemin, fichierEnClair,
+  renderArbre, renderBarre, renderDossiers, renderFichiers, renderFichier
+} from "./project-memoire-fichiers.js";
+import { enClair } from "../services/memoire-en-texte.js";
+import { propositionsSansTrace } from "../services/memoire-blame.js";
+import { bindSideResizer } from "./ui/side-resizer.js";
 
 /**
  * Les champs interrogeables de la mémoire.
@@ -199,6 +206,17 @@ function largeurRetenue() {
   }
 }
 
+/** Retenir la largeur et le repli : ce sont des réglages, pas un état de page. */
+function setNavWidth(largeur) {
+  view.navWidth = largeur;
+  try { window.localStorage.setItem(NAV_WIDTH_KEY, String(largeur)); } catch { /* un refus n'est pas une perte */ }
+}
+
+function setNavCollapsed(replie) {
+  view.navCollapsed = Boolean(replie);
+  try { window.localStorage.setItem(NAV_COLLAPSED_KEY, view.navCollapsed ? "1" : "0"); } catch { /* idem */ }
+}
+
 /** Le repli tel qu'on l'a laissé. Déplié par défaut : on ne cache rien d'office. */
 function repliRetenu() {
   try {
@@ -234,6 +252,21 @@ const view = {
   /** Les socles cochés, en attente de déclaration. */
   dependsDraft: [],
   navWidth: largeurRetenue(),
+  /**
+   * Où l'on est dans la mémoire, comme dans Documents.
+   *
+   * `[]` la racine et ses dossiers, `["Contraintes"]` un dossier et ses
+   * fichiers, `["Contraintes", "Incendie"]` un fichier et son contenu.
+   */
+  chemin: [],
+  /** Les dossiers repliés dans le rail. */
+  replies: new Set(),
+  /** « Code » ou « Blame » — deux questions, pas deux affichages. */
+  lecture: LECTURE.CODE,
+  /** Les noms des signataires, pour la marge du Blame. */
+  auteurs: new Map(),
+  /** Les propositions du projet, pour repérer celles qui n'ont rien versé. */
+  propositions: [],
   draft: { subject: "", value: "", domain: "", zones: [] },
   notice: "",
   busy: false,
@@ -1652,33 +1685,33 @@ function renderContent(root) {
   }
 
   const resume = summarizeMemory(view.assertions);
-  // Le vocabulaire se compte sur **ce qui vaut aujourd'hui**, pas sur toute
-  // l'histoire : « 40 sans domaine » doit dire quarante affirmations à classer,
-  // pas quarante états successifs de quatre d'entre elles.
-  const vocabulaire = summarizeTaxonomy(currentAssertions(view.assertions));
-  const lignes = lignesVisibles();
-  const enAttente = pendingReviews(currentAssertions(view.assertions)).length;
+  const memoire = preparerLaMemoire(view.assertions);
+  const ouverte = view.navCollapsed !== true;
+  const largeur = ouverte ? Math.max(220, Math.min(520, Number(view.navWidth) || 280)) : 0;
+
+  // La recherche traverse les dossiers : c'est le geste qu'on fait quand on ne
+  // sait pas où c'est rangé, et un navigateur qui refuserait de chercher
+  // obligerait à ouvrir cinq dossiers pour trouver une ligne.
+  const cherche = String(view.query ?? "").trim().length > 0;
 
   root.innerHTML = `
-    <section class="project-simple-page project-simple-page--memory"
-      style="--project-rail-width:${railWidth(view.navWidth, view.navCollapsed)}px">
+    <section class="project-simple-page project-simple-page--memory">
       <div class="propositions-shell">
         ${renderMemoryHead(resume, { busy: view.busy })}
+        ${renderRattrapage()}
+        ${view.notice ? `<div class="propositions-empty propositions-empty--warn"><p>${escapeHtml(view.notice)}</p></div>` : ""}
+        ${renderHypothesisForm()}
 
-        <div class="project-rail-layout${view.navCollapsed ? " project-rail-layout--collapsed" : ""}">
-          ${renderMemoryNav()}
+        ${renderBarre({ chemin: view.chemin, query: view.query, ouverte })}
 
-          <div class="project-rail-layout__content">
-            ${renderHypothesisForm()}
-
-            ${view.notice ? `<div class="propositions-empty propositions-empty--warn"><p>${escapeHtml(view.notice)}</p></div>` : ""}
-
-            ${renderCounts(resume, vocabulaire, enAttente)}
-            ${renderSearch()}
-            <div class="memory-table">
-              ${renderTableHead()}
-              ${renderList(lignes, view.page)}
-            </div>
+        <div class="memoire-layout${ouverte ? "" : " memoire-layout--replie"}" style="--memoire-tree-width:${largeur}px">
+          ${renderArbre(memoire, { chemin: view.chemin, replies: view.replies, ouverte })}
+          <div class="memoire-corps">
+            ${
+              cherche
+                ? `<div class="memory-table">${renderTableHead()}${renderList(lignesVisibles(), view.page)}</div>`
+                : renderVue(memoire)
+            }
           </div>
         </div>
       </div>
@@ -1686,6 +1719,166 @@ function renderContent(root) {
   `;
 
   bind(root);
+}
+
+/**
+ * Ce qui manque à la mémoire, dit avant qu'on le cherche.
+ *
+ * Une proposition fusionnée qui n'a pas laissé une ligne est la signature d'un
+ * défaut qu'on a corrigé — la fusion versait les lignes de l'analyse et elles
+ * seules, donc rien pour une proposition venue de l'Atelier. Les propositions
+ * signées avant le correctif restent muettes, et personne n'ira presser un
+ * bouton dont il ignore l'existence.
+ *
+ * L'écran le dit donc lui-même, et propose le geste. Il ne le fait pas tout
+ * seul : verser en mémoire est un acte, même quand c'en est le rattrapage.
+ */
+function renderRattrapage() {
+  const manquantes = propositionsSansTrace(view.propositions ?? [], view.assertions ?? []);
+  if (!manquantes.length) return "";
+
+  const combien = manquantes.length;
+  const numeros = manquantes
+    .slice(0, 6)
+    .map((proposition) => `#P${Number(proposition.number) || "?"}`)
+    .join(", ");
+
+  return `
+    <div class="propositions-empty propositions-empty--warn memoire-rattrapage">
+      <b>${combien} proposition${combien > 1 ? "s fusionnées n'ont" : " fusionnée n'a"} rien laissé en mémoire</b>
+      <p>
+        ${escapeHtml(numeros)}${combien > 6 ? `, et ${combien - 6} autre${combien - 6 > 1 ? "s" : ""}` : ""}.
+        Leur procès-verbal est intact : le rattrapage relit ce qui a été décidé et le verse tel quel,
+        avec les dates des fusions. Rien n'est recalculé, et le geste se rejoue sans dégât.
+      </p>
+      <button type="button" class="gh-btn gh-btn--primary" data-memory-backfill ${view.busy ? "disabled" : ""}>
+        Rattraper ${combien > 1 ? "ces propositions" : "cette proposition"}
+      </button>
+    </div>
+  `;
+}
+
+/**
+ * L'écran qui correspond au chemin : la racine, un dossier, ou un fichier.
+ *
+ * Un chemin qui ne mène nulle part se dit plutôt que de retomber en silence sur
+ * la racine — on saurait qu'on a cliqué, on ne saurait pas pourquoi il ne s'est
+ * rien passé.
+ */
+function renderVue(memoire) {
+  if (view.chemin.length === 0) return renderDossiers(memoire);
+  if (view.chemin.length === 1) return renderFichiers(memoire, view.chemin[0]);
+
+  const fichier = fichierDuChemin(memoire, view.chemin);
+  if (!fichier) {
+    return `<div class="propositions-empty"><b>Ce fichier n'existe plus</b>
+      <p>Rien ne s'y range aujourd'hui. Il réapparaîtra dès qu'une proposition y versera une ligne.</p></div>`;
+  }
+
+  return renderFichier(fichier, { lecture: view.lecture, auteurs: view.auteurs });
+}
+
+/**
+ * Les gestes du navigateur : aller, plier, changer de lecture, copier.
+ *
+ * Le même vocabulaire que l'onglet Documents — un chemin, un fil d'Ariane, une
+ * arborescence repliable et redimensionnable — parce que ce sont les mêmes
+ * gestes, et qu'en apprendre deux pour un seul geste est un coût qu'on paie à
+ * chaque écran.
+ */
+function bindNavigateur(root) {
+  // Le rattrapage, proposé là où le manque se voit. Le bouton du menu « Verser »
+  // reste : celui-ci est le raccourci de l'écran qui vient de dire ce qui
+  // manque.
+  root.querySelector("[data-memory-backfill]")?.addEventListener("click", () => { void backfill(root); });
+
+  for (const bouton of root.querySelectorAll("[data-memoire-aller]")) {
+    bouton.addEventListener("click", () => {
+      const cible = bouton.getAttribute("data-memoire-aller") || "";
+      view.chemin = cible ? cible.split("/").filter(Boolean) : [];
+      // Changer de fichier ne change pas la question qu'on se pose : la lecture
+      // reste celle qu'on avait choisie.
+      renderContent(root);
+    });
+  }
+
+  for (const bouton of root.querySelectorAll("[data-memoire-plier]")) {
+    bouton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const nom = bouton.getAttribute("data-memoire-plier");
+      if (view.replies.has(nom)) view.replies.delete(nom);
+      else view.replies.add(nom);
+      renderContent(root);
+    });
+  }
+
+  root.querySelector("[data-memoire-replier]")?.addEventListener("click", () => {
+    setNavCollapsed(!view.navCollapsed);
+    renderContent(root);
+  });
+
+  for (const bouton of root.querySelectorAll("[data-memoire-lecture]")) {
+    bouton.addEventListener("click", () => {
+      view.lecture = bouton.getAttribute("data-memoire-lecture") === LECTURE.BLAME ? LECTURE.BLAME : LECTURE.CODE;
+      renderContent(root);
+    });
+  }
+
+  // Le blâme mène à la proposition qui a versé la ligne : c'est là qu'on lit la
+  // discussion qui a mené là, et c'est la question à laquelle cette mémoire
+  // existe pour répondre.
+  for (const bouton of root.querySelectorAll("[data-memoire-proposition]")) {
+    bouton.addEventListener("click", () => {
+      store.pendingPropositionId = bouton.getAttribute("data-memoire-proposition");
+      const projet = String(store.currentProjectId || "").trim();
+      if (projet) window.location.hash = `#project/${projet}/propositions`;
+    });
+  }
+
+  root.querySelector("[data-memoire-copier]")?.addEventListener("click", async () => {
+    const memoire = preparerLaMemoire(view.assertions ?? []);
+    const fichier = fichierDuChemin(memoire, view.chemin);
+    if (!fichier) return;
+
+    try {
+      await navigator.clipboard.writeText(fichierEnClair(fichier, { enClair }));
+      view.notice = "Le fichier est dans le presse-papiers.";
+    } catch {
+      // Un presse-papiers refusé n'est pas une raison de perdre le texte : on
+      // l'affiche, il reste sélectionnable.
+      window.prompt("Le presse-papiers a été refusé — copiez le texte ci-dessous.", fichierEnClair(fichier, { enClair }));
+      view.notice = "";
+    }
+    renderContent(root);
+  });
+
+  const poignee = root.querySelector("#memoireTreeResize");
+  if (poignee) {
+    bindSideResizer({
+      handle: poignee,
+      guide: root.querySelector("#memoireTreeResizeGuide"),
+      getWidth: () => Number(view.navWidth) || 280,
+      onResize: (largeur) => {
+        view.navWidth = largeur;
+        root.querySelector(".memoire-layout")?.style.setProperty("--memoire-tree-width", `${largeur}px`);
+      },
+      onEnd: (largeur) => { setNavWidth(largeur); renderContent(root); }
+    });
+  }
+
+  const chercher = root.querySelector("[data-memoire-query]");
+  if (chercher) {
+    chercher.addEventListener("input", (event) => {
+      view.query = event.target.value;
+      view.page = 1;
+      renderContent(root);
+      // Le curseur revient là où il était : redessiner l'écran à chaque touche
+      // le renverrait au début du champ.
+      const champ = root.querySelector("[data-memoire-query]");
+      champ?.focus();
+      champ?.setSelectionRange(champ.value.length, champ.value.length);
+    });
+  }
 }
 
 /**
@@ -1734,6 +1927,7 @@ function bindListDelegation(root) {
 function bind(root) {
   bindListDelegation(root);
   bindExportButton(root);
+  bindNavigateur(root);
 
   const recherche = root.querySelector("[data-memory-search]");
   if (recherche) {
@@ -2311,6 +2505,9 @@ export function renderProjectMemory(root) {
   view.page = 1;
   view.navCollapsed = repliRetenu();
   view.navWidth = largeurRetenue();
+  view.chemin = [];
+  view.lecture = LECTURE.CODE;
+  view.query = "";
   renderContent(root);
 
   (async () => {
@@ -2335,6 +2532,22 @@ export function renderProjectMemory(root) {
       // candidates, y compris celles que le bureau de contrôle a validées.
       const { listHypothesisActs } = await import("../services/hypothesis-acts-supabase.js");
       view.acts = view.projectId ? await listHypothesisActs(view.projectId) : null;
+
+      // Les noms des signataires, pour la marge du Blame. Un identifiant dans
+      // la marge ne dit rien à personne : c'est le nom qu'on cherche quand on
+      // se demande qui a décidé cela.
+      // Les propositions fusionnées : c'est en les comparant à la mémoire qu'on
+      // sait si l'une d'elles n'a rien laissé.
+      const { listPropositions, loadAuthors } = await import("../services/propositions-supabase.js");
+      view.propositions = view.projectId ? ((await listPropositions(view.projectId)) ?? []) : [];
+
+      const auteurs = await loadAuthors((view.assertions ?? []).map((row) => row.decided_by));
+      view.auteurs = new Map(
+        [...(auteurs ?? new Map()).entries()].map(([cle, valeur]) => [
+          String(cle),
+          typeof valeur === "string" ? valeur : String(valeur?.name || valeur?.full_name || valeur?.email || "")
+        ])
+      );
     } catch {
       view.assertions = null;
       view.dependencies = null;

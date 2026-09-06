@@ -15457,7 +15457,10 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .review-head--pleine.details-head--compact .overlay-chrome__bar,
 #propositionsDetailsTitle.review-head--pleine.details-head--compact .overlay-chrome__bar{
   max-width:none;
-  padding:0;
+  /* Vingt de chaque côté : le titre compacté prend la largeur, mais collé au
+     bord de l'écran il ne commence plus dans la même colonne que le diff qu'il
+     titre. */
+  padding:0 20px;
 }
 .overlay-chrome--compact .review-head{ padding:6px 0; }
 
@@ -19676,6 +19679,16 @@ body.proposition-merge-open{ overflow:hidden; }
   cursor:pointer;
 }
 .diff-groupe__titre:hover{ text-decoration:underline; }
+.diff-groupe__copier{
+  display:inline-flex;
+  padding:3px;
+  border:0;
+  border-radius:6px;
+  background:transparent;
+  color:var(--muted);
+  cursor:pointer;
+}
+.diff-groupe__copier:hover{ background:rgba(110,118,129,.14); color:var(--text); }
 .diff-groupe__compte{ margin-left:auto; color:var(--muted); font-size:11px; }
 .diff-groupe__corps{ font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; }
 
@@ -19892,3 +19905,152 @@ body.proposition-merge-open{ overflow:hidden; }
 /* La portée fait partie de l'identité : deux études sur deux zones produisent
    deux affirmations, et rien ne le disait. */
 .mdall-portee{ color:rgb(255,166,87); }
+
+/* ── La mémoire, parcourue comme un dépôt ───────────────────────────────────
+   Les mêmes gestes que l'onglet Documents — un chemin, un fil d'Ariane, une
+   arborescence repliable et redimensionnable — parce que ce sont les mêmes
+   gestes, et qu'en apprendre deux pour un seul est un coût payé à chaque
+   écran. */
+.memoire-barre{ padding:8px 0 12px; }
+.memoire-recherche{ display:inline-flex; align-items:center; gap:6px; color:var(--muted); }
+.memoire-recherche .gh-input{ width:min(280px, 40vw); }
+
+.memoire-layout{
+  display:grid;
+  grid-template-columns:var(--memoire-tree-width, 280px) minmax(0, 1fr);
+  align-items:stretch;
+  gap:0;
+  border-top:1px solid var(--border);
+  min-height:calc(100vh - var(--app-top) - 220px);
+}
+.memoire-layout--replie{ grid-template-columns:minmax(0, 1fr); }
+.memoire-tree{ width:var(--memoire-tree-width, 280px); align-self:stretch; }
+.memoire-tree.is-collapsed{ display:none; }
+.memoire-tree .documents-tree__panel{ min-height:100%; height:auto; }
+.memoire-corps{ min-width:0; padding:20px 0 20px 20px; }
+
+/* La liste d'un dossier, ou de la racine. Chaque dossier porte sa phrase :
+   « Contraintes » et « Données de base » se ressemblent assez pour qu'on y
+   range au hasard, et un dossier nommé sans être expliqué se remplit de
+   travers. */
+.memoire-liste{ display:flex; flex-direction:column; border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
+.memoire-entree{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:12px 16px;
+  border:0;
+  border-bottom:1px solid var(--border2);
+  background:transparent;
+  color:inherit;
+  text-align:left;
+  cursor:pointer;
+}
+.memoire-entree:last-child{ border-bottom:0; }
+.memoire-entree:hover{ background:rgba(110,118,129,.08); }
+.memoire-entree__icone{ flex:0 0 auto; color:var(--muted); display:inline-flex; }
+.memoire-entree__corps{ display:flex; flex-direction:column; gap:2px; min-width:0; flex:1 1 auto; }
+.memoire-entree__nom{ color:var(--text); font-size:14px; font-weight:600; }
+.memoire-entree__phrase{ color:var(--muted); font-size:12px; }
+.memoire-entree__compte{ flex:0 0 auto; color:var(--muted); font-size:11px; white-space:nowrap; }
+
+/* Un fichier ouvert. Le contenu est le même dans les deux lectures — c'est la
+   marge qui change. Deux rendus du même fichier finiraient par ne plus montrer
+   la même chose, et l'on ne saurait plus lequel croire. */
+.memoire-fichier{ border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
+.memoire-fichier__tete{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:8px 12px;
+  border-bottom:1px solid var(--border);
+  background:var(--panel2);
+}
+.memoire-fichier__nom{
+  color:var(--text);
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:12px;
+  font-weight:600;
+}
+.memoire-fichier__copier{
+  display:inline-flex;
+  padding:3px;
+  border:0;
+  border-radius:6px;
+  background:transparent;
+  color:var(--muted);
+  cursor:pointer;
+}
+.memoire-fichier__copier:hover{ background:rgba(110,118,129,.14); color:var(--text); }
+.memoire-fichier__lectures{ margin-left:auto; display:inline-flex; border:1px solid var(--border); border-radius:6px; overflow:hidden; }
+.memoire-lecture{
+  padding:3px 10px;
+  border:0;
+  background:transparent;
+  color:var(--muted);
+  font:inherit;
+  font-size:12px;
+  cursor:pointer;
+}
+.memoire-lecture.is-active{ background:var(--btn-bg); color:var(--text); }
+
+.memoire-fichier__corps{
+  padding:10px 0;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:12px;
+  line-height:1.9;
+  overflow-x:auto;
+}
+.memoire-ligne{ display:flex; align-items:baseline; gap:10px; padding:0 12px; white-space:pre; }
+.memoire-ligne:hover{ background:rgba(110,118,129,.08); }
+/* Le numéro porte son écart : en mode Blame la gouttière tombe à zéro — la
+   marge du blâme a la sienne —, et le numéro se collait au code. */
+.memoire-ligne__num{ flex:0 0 40px; padding-right:12px; text-align:right; color:var(--muted); font-size:11px; user-select:none; }
+.memoire-ligne__code{ min-width:0; }
+.memoire-ligne--ecartee .memoire-ligne__code{ opacity:.55; text-decoration:line-through; }
+
+/* La marge du Blame : la proposition, sa date, et l'ancienneté en couleur.
+   « Ceci a été décidé la semaine dernière, ceci tient depuis le début » se lit
+   sans y penser. */
+.memoire-ligne--blame{ gap:0; }
+.memoire-blame{
+  flex:0 0 190px;
+  display:flex;
+  align-items:baseline;
+  gap:8px;
+  padding:0 10px;
+  margin-right:10px;
+  border:0;
+  border-left:3px solid var(--border);
+  background:transparent;
+  color:var(--muted);
+  font:inherit;
+  font-size:11px;
+  text-align:left;
+  cursor:pointer;
+  overflow:hidden;
+}
+.memoire-blame:hover:not(:disabled){ background:rgba(110,118,129,.14); color:var(--text); }
+.memoire-blame:disabled{ cursor:default; }
+.memoire-blame__ref{ flex:0 0 auto; font-variant-numeric:tabular-nums; }
+.memoire-blame__date{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.memoire-blame--chaleur-0{ border-left-color:rgba(88,166,255,.15); }
+.memoire-blame--chaleur-1{ border-left-color:rgba(88,166,255,.3); }
+.memoire-blame--chaleur-2{ border-left-color:rgba(88,166,255,.5); }
+.memoire-blame--chaleur-3{ border-left-color:rgba(88,166,255,.7); }
+.memoire-blame--chaleur-4{ border-left-color:rgb(88,166,255); }
+
+.memoire-fichier__ecartees{
+  padding:12px;
+  border-top:1px solid var(--border);
+  background:var(--panel2);
+  font-family:inherit;
+}
+.memoire-fichier__ecartees p{ margin:2px 0 10px; color:var(--muted); font-size:12px; }
+.memoire-fichier__ecartees .memoire-ligne{ font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; }
+
+@media (max-width: 900px){
+  .memoire-layout{ grid-template-columns:minmax(0, 1fr); }
+  .memoire-tree{ display:none; }
+  .memoire-corps{ padding-left:0; }
+}
