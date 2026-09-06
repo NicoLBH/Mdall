@@ -19535,6 +19535,10 @@ body.proposition-merge-open{ overflow:hidden; }
 .review-tabs-row .light-tabs{ margin:0; }
 .review-tabs-row .light-tabs::before{ display:none; }
 .review-tabs-row .diff-stat{ padding-bottom:10px; }
+/* L'onglet actif ne referme pas son bas : c'est le dessin des onglets partout
+   ailleurs dans l'application, et deux façons de dessiner un onglet actif se
+   lisent comme deux composants. */
+.review-tabs-row .light-tabs__item.is-active{ border-bottom-color:transparent; }
 .diff-stat{ display:inline-flex; align-items:center; gap:6px; font-size:12px; white-space:nowrap; }
 .diff-stat__plus{ color:rgb(63,185,80); font-variant-numeric:tabular-nums; }
 .diff-stat__moins{ color:rgb(248,81,73); font-variant-numeric:tabular-nums; }
@@ -19557,7 +19561,7 @@ body.proposition-merge-open{ overflow:hidden; }
   padding-left:24px;
   padding-right:24px;
 }
-.review-tabpanel--pleine{ padding-left:0; padding-right:0; }
+
 
 /* ── Le diff d'un dépôt ─────────────────────────────────────────────────────
    Le châssis de GitHub — une barre d'outils, une arborescence à gauche, les
@@ -19567,7 +19571,10 @@ body.proposition-merge-open{ overflow:hidden; }
   display:flex;
   align-items:center;
   gap:12px;
-  padding:8px 0 12px;
+  /* Seize en haut, seize en bas. L'espace du bandeau, la gouttière et le
+     rembourrage s'additionnaient : la barre occupait la moitié d'un écran de
+     portable pour deux boutons. */
+  padding:16px 0;
 }
 .diff-barre__resume{ flex:1 1 auto; min-width:0; color:var(--muted); font-size:12px; }
 
@@ -19581,7 +19588,10 @@ body.proposition-merge-open{ overflow:hidden; }
   border-top:1px solid var(--border);
   min-height:calc(100vh - var(--app-top) - 180px);
 }
-.diff-layout--replie{ grid-template-columns:0 minmax(0, 1fr); }
+/* Repliée, la barre latérale disparaît et le code prend toute la largeur.
+   La grille gardait sa colonne à zéro **et** son écart : le code se décalait
+   sans rien gagner. */
+.diff-layout--replie{ grid-template-columns:minmax(0, 1fr); }
 
 /* L'arborescence reprend celle des Documents — mêmes classes, même allure,
    même poignée. Deux arborescences qui se ressemblent à peu près donnent
@@ -19648,7 +19658,7 @@ body.proposition-merge-open{ overflow:hidden; }
   display:grid;
   /* Deux colonnes de numéros — l'avant et l'après —, le bouton d'annotation,
      le signe, le nom, la valeur. */
-  grid-template-columns:36px 36px 20px 16px minmax(200px, 30%) minmax(0, 1fr);
+  grid-template-columns:36px 36px 20px 16px minmax(0, 1fr);
   gap:8px;
   padding:3px 12px 3px 0;
   align-items:baseline;
@@ -19688,8 +19698,7 @@ body.proposition-merge-open{ overflow:hidden; }
 .diff-ligne:hover .diff-ligne__annoter,
 .diff-ligne__annoter:focus-visible{ opacity:1; }
 .diff-ligne__signe{ text-align:center; }
-.diff-ligne__nom{ color:var(--muted); overflow-wrap:anywhere; }
-.diff-ligne__valeur{ color:var(--text); overflow-wrap:anywhere; }
+.diff-ligne__code{ min-width:0; overflow-wrap:anywhere; }
 .diff-ligne--ajoute{ background:rgba(46,160,67,.12); }
 .diff-ligne--ajoute .diff-ligne__signe{ color:rgb(63,185,80); }
 .diff-ligne--retire{ background:rgba(248,81,73,.1); }
@@ -19727,3 +19736,53 @@ body.proposition-merge-open{ overflow:hidden; }
   .diff-tree{ display:none; }
   .review-tabpanel--pleine{ margin-left:0; margin-right:0; padding-left:0; padding-right:0; }
 }
+
+/* ── L'écriture Mdall ───────────────────────────────────────────────────────
+   Une couleur par nature de mot, comme un éditeur de code — mais le vocabulaire
+   est le nôtre : le sujet, la valeur, son unité, et ce qui la fonde derrière la
+   flèche. L'écran ne décide de rien : `memoire-en-texte.js` dit de quelle
+   nature est chaque morceau, ces règles lui donnent sa couleur. */
+.mdall-sujet{ color:rgb(121,192,255); }
+.mdall-valeur{ color:var(--text); font-weight:600; }
+.mdall-unite{ color:rgb(210,168,255); }
+/* La flèche est discrète, ce qu'elle porte l'est aussi : la provenance se
+   consulte, elle ne se lit pas à chaque passage. */
+.mdall-depuis{ color:rgb(139,148,158); }
+.mdall-source{ color:rgb(139,148,158); font-style:italic; }
+.mdall-section{ color:rgb(255,166,87); font-weight:600; }
+.mdall-note{ color:rgb(139,148,158); font-style:italic; }
+.mdall-mot{ color:rgb(255,123,114); }
+.mdall-marque{ color:rgb(63,185,80); }
+.mdall-neutre{ white-space:pre; }
+
+/* Un extrait cité dans une discussion. Le même dessin que le diff dont il
+   vient : un commentaire qui cite l'écriture du projet doit se lire comme
+   l'écriture du projet. */
+.md-code{
+  margin:8px 0;
+  padding:8px 0;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  background:var(--panel2);
+  overflow-x:auto;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:12px;
+  line-height:1.6;
+}
+.md-code code{ display:block; background:none; padding:0; }
+.md-code__line{ display:block; padding:0 12px; white-space:pre; }
+.md-code__line--section{ color:rgb(255,166,87); font-weight:600; }
+.md-code__line--note{ color:var(--muted); font-style:italic; }
+.md-code__line--ajoute{ background:rgba(46,160,67,.15); color:rgb(63,185,80); }
+.md-code__line--retire{ background:rgba(248,81,73,.12); color:rgb(248,81,73); }
+
+/* Le champ d'écriture, ouvert sous la ligne commentée. Une boîte au milieu de
+   l'écran faisait perdre de vue la ligne dont on parle. */
+.diff-annotation{
+  margin:6px 12px 10px 96px;
+  border:1px solid var(--borderColor-accent-emphasis);
+  border-radius:var(--radius);
+  background:var(--bg);
+  font-family:inherit;
+}
+.comment-composer--proposition-diff{ padding:12px; }

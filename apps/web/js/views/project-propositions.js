@@ -82,6 +82,7 @@ import { aChange, reperesDuDepot } from "../services/depot-carburants.js";
 import { limiterAuDepot } from "../services/depot-portee.js";
 import { ISSUE, passerLesControles, resumeDesControles } from "../services/depot-controles.js";
 import { bindSideResizer, renderSideResizer } from "./ui/side-resizer.js";
+import { enClair, ligneDAffirmation } from "../services/memoire-en-texte.js";
 import { avisFromFigures, mergeAvis } from "../services/avis-from-figures.js";
 import { describeReadingStack } from "../services/run-workflow.js";
 
@@ -118,8 +119,10 @@ const view = {
   /** Les familles repliées dans l'arborescence, et les groupes repliés du diff. */
   diffTreeReplies: new Set(),
   diffGroupesReplies: new Set(),
-  /** La boîte pour commenter depuis le diff. */
+  /** La boîte pour commenter depuis le diff, et la ligne annotée s'il y en a une. */
   diffComment: false,
+  diffAnnotations: new Set(),
+  diffAncre: "",
   diffDraft: "",
   diffPreview: false,
   /** Les blocs de l'onglet Dépôts qu'on a dépliés. Repliés par défaut. */
@@ -2787,6 +2790,10 @@ function lignesDuRepere(groupe, ligne, numero) {
   const plusieurs = ligne.champs.length > 1;
   const libelle = (champ) => (plusieurs ? `${ligne.titre} · ${champ.nom}` : ligne.titre);
 
+  // La provenance vit sur la ligne, derrière la flèche : c'est l'invention de
+  // l'écriture Mdall, et elle n'a de sens que collée à la valeur qu'elle fonde.
+  const source = [ligne.provenance?.source, ligne.provenance?.article].filter(Boolean).join(", ");
+
   return ligne.champs
     .map((champ, rang) => {
       const ancre = { groupe, ligne, champ, rang };
@@ -2796,7 +2803,7 @@ function lignesDuRepere(groupe, ligne, numero) {
         numero.apres += 1;
         return renderDiffLigne({
           gauche: numero.avant, droite: numero.apres, signe: " ",
-          nom: libelle(champ), valeur: champ.apres || champ.avant, ton: "inchange",
+          nom: libelle(champ), valeur: champ.apres || champ.avant, source, ton: "inchange",
           ancre: { ...ancre, cote: COTE.CONTEXTE }
         });
       }
@@ -2806,7 +2813,7 @@ function lignesDuRepere(groupe, ligne, numero) {
         numero.avant += 1;
         cellules.push(renderDiffLigne({
           gauche: numero.avant, droite: null, signe: "-",
-          nom: libelle(champ), valeur: champ.avant, ton: "retire",
+          nom: libelle(champ), valeur: champ.avant, source, ton: "retire",
           ancre: { ...ancre, cote: COTE.AVANT }
         }));
       }
@@ -2814,7 +2821,7 @@ function lignesDuRepere(groupe, ligne, numero) {
         numero.apres += 1;
         cellules.push(renderDiffLigne({
           gauche: null, droite: numero.apres, signe: "+",
-          nom: libelle(champ), valeur: champ.apres, ton: "ajoute",
+          nom: libelle(champ), valeur: champ.apres, source, ton: "ajoute",
           ancre: { ...ancre, cote: COTE.APRES }
         }));
       }
@@ -2838,8 +2845,9 @@ function lignesDuRepere(groupe, ligne, numero) {
  * avec GitHub, dont les commentaires passent « outdated » — et elle nous est
  * offerte par le travail déjà fait sur les repères.
  */
-function renderDiffLigne({ gauche, droite, signe, nom, valeur, ton, ancre }) {
+function renderDiffLigne({ gauche, droite, signe, nom, valeur, source, ton, ancre }) {
   const cle = ancreDeLigne(ancre);
+  const ouverte = view.diffAnnotations?.has(cle) === true;
 
   return `
     <div class="diff-ligne diff-ligne--${escapeHtml(ton)}">
@@ -2850,8 +2858,61 @@ function renderDiffLigne({ gauche, droite, signe, nom, valeur, ton, ancre }) {
         ${svgIcon("plus", { className: "octicon" })}
       </button>
       <span class="diff-ligne__signe">${escapeHtml(signe)}</span>
-      <span class="diff-ligne__nom">${escapeHtml(nom)}</span>
-      <span class="diff-ligne__valeur">${escapeHtml(valeur || "—")}</span>
+      <span class="diff-ligne__code">${renderJetons(ligneDAffirmation({ sujet: nom, valeur, source }))}</span>
+    </div>
+    ${ouverte ? renderAnnotationEnLigne(cle) : ""}
+  `;
+}
+
+/**
+ * Des jetons, colorés.
+ *
+ * L'écran ne décide de rien : `memoire-en-texte.js` dit de quelle nature est
+ * chaque morceau, et la feuille de style lui donne sa couleur. Colorer ici, en
+ * regardant le texte, reviendrait à réécrire une seconde fois les règles du
+ * langage — et les deux finiraient par ne plus dire la même chose.
+ */
+function renderJetons(jetons = []) {
+  return jetons
+    .map((entree) => `<span class="mdall-${escapeHtml(entree.type)}">${escapeHtml(entree.texte)}</span>`)
+    .join("");
+}
+
+/**
+ * Le champ d'écriture, ouvert **sous la ligne**.
+ *
+ * C'est là qu'on a la remarque en tête. Une boîte au milieu de l'écran ferait
+ * perdre de vue la ligne dont on parle — et c'est précisément elle qu'on est en
+ * train de citer.
+ */
+function renderAnnotationEnLigne(cle) {
+  const review = view.review ?? {};
+
+  return `
+    <div class="diff-annotation" data-diff-annotation="${escapeHtml(cle)}">
+      ${renderCommentComposer({
+        hideAvatar: true,
+        hideTitle: true,
+        previewMode: view.diffPreview === true,
+        textareaId: "propositionDiffComment",
+        previewId: "propositionDiffCommentPreview",
+        textareaValue: view.diffDraft ?? "",
+        textareaAttributes: { "data-diff-comment-draft": "1" },
+        placeholder: "Ce que cet écart vous inspire — il se relira dans six mois.",
+        composerClassName: "comment-composer--proposition-diff",
+        tabWriteAction: "proposition-diff-tab-write",
+        tabPreviewAction: "proposition-diff-tab-preview",
+        previewHtml: humanTextHtml(view.diffDraft ?? ""),
+        hintHtml: review.commentNotice
+          ? `<span class="review-comment__notice">${escapeHtml(review.commentNotice)}</span>`
+          : "",
+        actionsHtml: `
+          <button type="button" class="gh-btn gh-btn--sm" data-diff-comment-close>Annuler</button>
+          <button type="button" class="gh-btn gh-btn--sm gh-btn--primary" data-diff-comment-post ${
+            String(view.diffDraft ?? "").trim() && !review.posting ? "" : "disabled"
+          }>${review.posting ? "Envoi…" : "Commenter"}</button>
+        `
+      })}
     </div>
   `;
 }
@@ -2882,7 +2943,12 @@ function ligneDeLAncre(cle) {
     for (const ligne of groupe.lignes) {
       for (const [rang, champ] of ligne.champs.entries()) {
         for (const cote of Object.values(COTE)) {
-          if (ancreDeLigne({ ligne, champ, rang, cote }) === cle) return { groupe, ligne, champ, cote };
+          if (ancreDeLigne({ ligne, champ, rang, cote }) === cle) {
+            return {
+              groupe, ligne, champ, cote,
+              source: [ligne.provenance?.source, ligne.provenance?.article].filter(Boolean).join(", ")
+            };
+          }
         }
       }
     }
@@ -2907,12 +2973,15 @@ export function extraitDeLaLigne(cible) {
   const valeur = cote === COTE.AVANT ? champ.avant : champ.apres || champ.avant;
   const nom = ligne.champs.length > 1 ? `${ligne.titre} · ${champ.nom}` : ligne.titre;
 
+  // Un bloc clôturé, dans l'écriture du projet. La citation entre chevrons
+  // superposait deux syntaxes — le Markdown et la nôtre — et le rendu du fil ne
+  // savait lire ni l'une ni l'autre : l'extrait s'affichait avec ses accents
+  // graves en toutes lettres.
   return [
-    `> **${groupe.chemin.join(" / ")}**`,
-    ">",
-    "> ```",
-    `> ${signe} ${nom} : ${valeur || "—"}`,
-    "> ```",
+    "```mdall",
+    `§ ${groupe.chemin.join(" · ")}`,
+    `${signe} ${enClair(ligneDAffirmation({ sujet: nom, valeur, source: cible.source ?? "" }))}`,
+    "```",
     ""
   ].join("\n");
 }
@@ -3331,30 +3400,27 @@ function bindDiffComment(root) {
     renderContent(root);
   });
 
-  // Commenter une ligne : la boîte s'ouvre avec l'extrait déjà écrit, et le
-  // curseur en dessous. On ne recopie pas la valeur dont on parle — c'est
-  // précisément ce qu'on recopiait de travers.
+  // Commenter une ligne : le champ s'ouvre **sous elle**, et l'extrait part
+  // avec le message sans qu'on ait à le recopier — c'est précisément ce qu'on
+  // recopiait de travers.
   for (const bouton of root.querySelectorAll("[data-diff-annoter]")) {
     bouton.addEventListener("click", () => {
-      const cible = ligneDeLAncre(bouton.getAttribute("data-diff-annoter"));
-      const extrait = extraitDeLaLigne(cible);
-      view.diffDraft = extrait ? `${extrait}\n` : "";
-      view.diffComment = true;
+      const cle = bouton.getAttribute("data-diff-annoter");
+      view.diffAnnotations = new Set([cle]);
+      view.diffAncre = cle;
+      view.diffDraft = "";
       view.diffPreview = false;
+      view.diffComment = false;
       renderContent(root);
-      // Le curseur va après l'extrait : on écrit sa remarque, on ne réédite pas
-      // la citation.
-      const champ = root.querySelector("[data-diff-comment-draft]");
-      if (champ) {
-        champ.focus();
-        champ.setSelectionRange(champ.value.length, champ.value.length);
-      }
+      root.querySelector("[data-diff-comment-draft]")?.focus();
     });
   }
 
   for (const bouton of root.querySelectorAll("[data-diff-comment-close]")) {
     bouton.addEventListener("click", () => {
       view.diffComment = false;
+      view.diffAnnotations = new Set();
+      view.diffAncre = "";
       renderContent(root);
     });
   }
@@ -3912,8 +3978,12 @@ async function postComment(root, { keepGoing = false, source = "conversation" } 
   // Deux champs pour un seul fil : celui du bas de la conversation, et celui de
   // la boîte ouverte depuis le diff. Ce qu'ils écrivent va au même endroit.
   const depuisLeDiff = source === "diff";
-  const texte = String((depuisLeDiff ? view.diffDraft : view.draft) ?? "").trim();
-  if (!proposition || !texte || view.review.posting) return;
+  const ecrit = String((depuisLeDiff ? view.diffDraft : view.draft) ?? "").trim();
+  // L'extrait s'ajoute à l'envoi, pas à la saisie : le champ reste celui d'un
+  // message, et personne ne réédite une citation qu'il n'a pas écrite.
+  const extrait = depuisLeDiff && view.diffAncre ? extraitDeLaLigne(ligneDeLAncre(view.diffAncre)) : "";
+  const texte = extrait ? `${extrait}\n${ecrit}` : ecrit;
+  if (!proposition || !ecrit || view.review.posting) return;
 
   view.review.posting = true;
   view.review.commentNotice = null;
@@ -3940,6 +4010,8 @@ async function postComment(root, { keepGoing = false, source = "conversation" } 
       view.diffDraft = "";
       view.diffPreview = false;
       view.diffComment = false;
+      view.diffAnnotations = new Set();
+      view.diffAncre = "";
     } else {
       view.draft = "";
       view.preview = false;
