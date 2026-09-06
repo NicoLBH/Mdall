@@ -187,17 +187,18 @@ export function fichierDeLEtude(vue, {
   le = ""
 } = {}) {
   const modules = Array.isArray(vue?.modules) ? vue.modules : [];
-  // Le raisonnement précède la valeur qu'il produit : on lit du général au
-  // particulier, et la valeur arrive **après** ce qui la fonde. C'est l'inverse
-  // d'un tableur, et c'est voulu.
+  // L'affirmation d'abord, son raisonnement indenté dessous. Écrit au-dessus,
+  // le bloc flottait : on lisait « dépend de Commune du projet » sans savoir de
+  // quoi cela parlait, puisque rien ne le rattachait à la ligne suivante.
+  // L'indentation dit l'appartenance — voir `RETRAIT` dans `memoire-en-texte`.
   const corps = modules
     .map((module) => ligneDuModule(module, referentiel, vue))
     .filter(Boolean)
     .flatMap((ligne) => [
+      ligne,
       ...(ligne.raisonnement
         ? blocDeRaisonnement(ligne.raisonnement).map((jetons) => ({ nature: "raisonnement", jetons }))
-        : []),
-      ligne
+        : [])
     ]);
 
   return {

@@ -11,14 +11,15 @@
  * un fait daté. C'est le partage de GitHub : tous les commits sont la mémoire,
  * seuls quelques-uns deviennent des issues.
  *
- * Trois gestes y vivent :
+ * Deux gestes y vivent :
  *
- *  - **lire** : chercher, filtrer, et voir d'où vient chaque affirmation ;
+ *  - **lire** : parcourir les dossiers, chercher, et voir d'où vient chaque
+ *    affirmation ;
  *  - **transmettre** : copier le dossier de contexte, qui est cette mémoire
- *    mise à plat, dans un ordre déterministe, avec ses dates et ses sources ;
- *  - **rattraper** : verser les propositions fusionnées avant que cette table
- *    n'existe. Leur procès-verbal a été conservé au gel — c'est précisément ce
- *    qui rend le rattrapage possible sans rien recalculer.
+ *    mise à plat, dans un ordre déterministe, avec ses dates et ses sources.
+ *
+ * Il n'y en a pas de troisième. Cet écran **n'écrit pas** dans la mémoire : ce
+ * que le projet retient passe par une proposition, et quelqu'un la signe.
  */
 
 import { escapeHtml } from "../utils/escape-html.js";
@@ -110,7 +111,6 @@ import {
   renderArbre, renderBarre, renderDossiers, renderFichiers, renderFichier
 } from "./project-memoire-fichiers.js";
 import { enClair } from "../services/memoire-en-texte.js";
-import { propositionsSansTrace } from "../services/memoire-blame.js";
 import { bindSideResizer } from "./ui/side-resizer.js";
 
 /**
@@ -1143,14 +1143,13 @@ function renderVerserButton(busy = false) {
     size: "md",
     disabled: busy,
     items: [
-      { action: "verser:site", label: "Verser les contraintes du site" },
-      { action: "verser:propositions", label: "Verser les propositions fusionnées" }
+      { action: "verser:site", label: "Verser les contraintes du site" }
     ]
   });
 }
 
 /**
- * Les deux versements, derrière un seul bouton.
+ * Le versement, derrière son bouton.
  *
  * Séparé de l'export parce qu'ils ne vont pas dans le même sens : l'un sort la
  * mémoire, l'autre y fait entrer.
@@ -1162,7 +1161,6 @@ function bindVerserButton(root) {
   action.addEventListener("ghaction:action", (event) => {
     const quoi = String(event.detail?.action || "");
     if (quoi === "verser:site") void versSiteConstraints(root);
-    if (quoi === "verser:propositions") void backfill(root);
   });
 }
 
@@ -1702,13 +1700,12 @@ function renderContent(root) {
     <section class="project-simple-page project-simple-page--memory">
       <div class="propositions-shell">
         ${renderMemoryHead(resume, { busy: view.busy })}
-        ${renderRattrapage()}
         ${view.notice ? `<div class="propositions-empty propositions-empty--warn"><p>${escapeHtml(view.notice)}</p></div>` : ""}
         ${renderHypothesisForm()}
 
         ${renderBarre({ chemin: view.chemin, query: view.query, ouverte, racine })}
 
-        <div class="memoire-layout${ouverte ? "" : " memoire-layout--replie"}${racine ? " memoire-layout--racine" : ""}" style="--memoire-tree-width:${largeur}px">
+        <div class="memoire-layout${ouverte ? "" : " memoire-layout--replie"}${racine ? " memoire-layout--racine" : " memoire-layout--pleine"}" style="--memoire-tree-width:${largeur}px">
           ${racine ? "" : renderArbre(memoire, { chemin: view.chemin, replies: view.replies, ouverte })}
           <div class="memoire-corps">
             ${
@@ -1723,45 +1720,6 @@ function renderContent(root) {
   `;
 
   bind(root);
-}
-
-/**
- * Ce qui manque à la mémoire, dit avant qu'on le cherche.
- *
- * Une proposition fusionnée qui n'a pas laissé une ligne est la signature d'un
- * défaut qu'on a corrigé — la fusion versait les lignes de l'analyse et elles
- * seules, donc rien pour une proposition venue de l'Atelier. Les propositions
- * signées avant le correctif restent muettes, et personne n'ira presser un
- * bouton dont il ignore l'existence.
- *
- * L'écran le dit donc lui-même, et propose le geste. Il ne le fait pas tout
- * seul : verser en mémoire est un acte, même quand c'en est le rattrapage.
- */
-function renderRattrapage() {
-  const manquantes = propositionsSansTrace(view.propositions ?? [], view.assertions ?? [], {
-    porteuses: view.propositionsPorteuses ?? null
-  });
-  if (!manquantes.length) return "";
-
-  const combien = manquantes.length;
-  const numeros = manquantes
-    .slice(0, 6)
-    .map((proposition) => `#P${Number(proposition.number) || "?"}`)
-    .join(", ");
-
-  return `
-    <div class="propositions-empty propositions-empty--warn memoire-rattrapage">
-      <b>${combien} proposition${combien > 1 ? "s fusionnées n'ont" : " fusionnée n'a"} rien laissé en mémoire</b>
-      <p>
-        ${escapeHtml(numeros)}${combien > 6 ? `, et ${combien - 6} autre${combien - 6 > 1 ? "s" : ""}` : ""}.
-        Leur procès-verbal est intact : le rattrapage relit ce qui a été décidé et le verse tel quel,
-        avec les dates des fusions. Rien n'est recalculé, et le geste se rejoue sans dégât.
-      </p>
-      <button type="button" class="gh-btn gh-btn--primary" data-memory-backfill ${view.busy ? "disabled" : ""}>
-        Rattraper ${combien > 1 ? "ces propositions" : "cette proposition"}
-      </button>
-    </div>
-  `;
 }
 
 /**
@@ -1800,11 +1758,6 @@ function propositionsParId() {
  * chaque écran.
  */
 function bindNavigateur(root) {
-  // Le rattrapage, proposé là où le manque se voit. Le bouton du menu « Verser »
-  // reste : celui-ci est le raccourci de l'écran qui vient de dire ce qui
-  // manque.
-  root.querySelector("[data-memory-backfill]")?.addEventListener("click", () => { void backfill(root); });
-
   for (const bouton of root.querySelectorAll("[data-memoire-aller]")) {
     bouton.addEventListener("click", () => {
       const cible = bouton.getAttribute("data-memoire-aller") || "";
@@ -2236,67 +2189,6 @@ async function copyContext(root) {
 }
 
 /**
- * Verse les propositions fusionnées avant que la mémoire n'existe.
- *
- * Rien n'est recalculé : on lit leur procès-verbal, celui qui a été écrit au
- * gel, et on le verse tel quel. Les dates sont celles des fusions, pas celle
- * d'aujourd'hui — dater une décision de six mois du jour où l'on rattrape
- * serait réécrire l'histoire pour se simplifier la vie.
- *
- * Le geste est rejouable : une proposition ne verse qu'une fois chaque
- * affirmation, la base s'en assure.
- */
-async function backfill(root) {
-  if (view.busy) return;
-  view.busy = true;
-  view.notice = "Versement des propositions fusionnées…";
-  renderContent(root);
-
-  try {
-    const [propositions, memoire] = await Promise.all([
-      import("../services/propositions-supabase.js"),
-      import("../services/project-memory-supabase.js")
-    ]);
-
-    const toutes = (await propositions.listPropositions(view.projectId)) ?? [];
-    const fusionnees = toutes
-      .filter((entry) => entry.status === "merged")
-      .sort((gauche, droite) => String(gauche.merged_at ?? "").localeCompare(String(droite.merged_at ?? "")));
-
-    let versees = 0;
-    let echecs = 0;
-
-    for (const proposition of fusionnees) {
-      const items = await propositions.listPropositionItems(proposition.id);
-      const resultat = await memoire.rememberProposition({
-        proposition,
-        items: (items ?? []).map((row) => ({
-          itemType: row.item_type,
-          itemKey: row.item_key,
-          payload: row.payload,
-          status: row.status,
-          reason: row.reason
-        }))
-      });
-      if (!resultat) echecs += 1;
-      else versees += resultat.written;
-    }
-
-    view.assertions = await memoire.listProjectAssertions(view.projectId);
-    view.notice = echecs
-      ? `${versees} affirmation(s) versée(s). ${echecs} proposition(s) n'ont pas pu l'être.`
-      : versees > 0
-        ? `${versees} affirmation(s) versée(s) depuis ${fusionnees.length} proposition(s) fusionnée(s).`
-        : "Rien à rattraper : la mémoire portait déjà tout ce que les propositions fusionnées ont décidé.";
-  } catch {
-    view.notice = "Le rattrapage n'a pas abouti. La mémoire reste ce qu'elle était.";
-  }
-
-  view.busy = false;
-  renderContent(root);
-}
-
-/**
  * Verse les contraintes que le site impose.
  *
  * Rien n'est calculé ici : les zones ont été établies par les outils de
@@ -2551,13 +2443,8 @@ export function renderProjectMemory(root) {
       // se demande qui a décidé cela.
       // Les propositions fusionnées : c'est en les comparant à la mémoire qu'on
       // sait si l'une d'elles n'a rien laissé.
-      const { listPropositions, loadAuthors, propositionsPorteuses } =
-        await import("../services/propositions-supabase.js");
+      const { listPropositions, loadAuthors } = await import("../services/propositions-supabase.js");
       view.propositions = view.projectId ? ((await listPropositions(view.projectId)) ?? []) : [];
-      // Lesquelles portaient quelque chose. Une proposition vide n'a rien
-      // manqué de verser, et la signaler ferait revenir la bannière pour
-      // toujours.
-      view.propositionsPorteuses = view.projectId ? await propositionsPorteuses(view.projectId) : null;
 
       const auteurs = await loadAuthors((view.assertions ?? []).map((row) => row.decided_by));
       view.auteurs = new Map(

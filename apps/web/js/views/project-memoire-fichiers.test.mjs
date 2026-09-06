@@ -18,7 +18,7 @@ test("une valeur sans raisonnement reste une seule ligne", () => {
   assert.match(clair(lignes[0]), /^Zone de neige {2}A1 {2}← Zonages réglementaires$/);
 });
 
-test("le raisonnement s'écrit avant la valeur, et la valeur ne s'écrit qu'une fois en base", () => {
+test("le raisonnement s'indente sous l'affirmation qu'il justifie", () => {
   const lignes = lignesDeLAssertion({
     payload: {
       subject: "Degré coupe-feu des planchers",
@@ -33,15 +33,15 @@ test("le raisonnement s'écrit avant la valeur, et la valeur ne s'écrit qu'une 
   });
 
   const textes = lignes.map(clair);
-  assert.equal(lignes[0].nature, "raisonnement");
-  assert.equal(lignes[lignes.length - 1].nature, "affirmation");
+  assert.equal(lignes[0].nature, "affirmation");
+  assert.equal(lignes[1].nature, "raisonnement");
   assert.deepEqual(textes, [
-    "si Classement du bâtiment = 3e famille B",
-    "   alors CF 1 h  ✓ retenu",
+    "Degré coupe-feu des planchers  CF 1 h",
+    "   si Classement du bâtiment = 3e famille B",
+    "      alors CF 1 h  ✓ retenu",
     "   parce que « …coupe-feu de degré une heure… »",
     "   sauf si le bâtiment ne comporte qu'une seule unité de passage",
-    "   dépend de Classement du bâtiment",
-    "Degré coupe-feu des planchers  CF 1 h"
+    "   dépend de Classement du bâtiment"
   ]);
 });
 

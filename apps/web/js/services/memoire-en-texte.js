@@ -120,6 +120,25 @@ export const JETON = {
    * plus tard d'un chiffre qu'on croyait mesuré.
    */
   GESTE: "geste",
+  /**
+   * Les mots-clés du raisonnement, un type par construction.
+   *
+   * ## Pourquoi ils ne partagent pas le type `MOT`
+   *
+   * Un éditeur de code ne colore pas `if`, `throw` et `import` de la même
+   * teinte : la couleur du mot dit de quelle **espèce** est la ligne, et c'est
+   * ce qui permet de survoler un fichier sans le lire. Écrites toutes en rouge,
+   * les quatre constructions du raisonnement se lisaient comme une seule prose,
+   * et il fallait déchiffrer chaque ligne pour savoir laquelle justifiait,
+   * laquelle limitait, laquelle liait.
+   */
+  MOT_CONDITION: "mot-condition",
+  /** `parce que` — le mot qui introduit ce qui fonde. */
+  MOT_RAISON: "mot-raison",
+  /** `sauf si` — le mot qui introduit la limite. */
+  MOT_EXCEPTION: "mot-exception",
+  /** `dépend de` — le mot qui introduit les socles. */
+  MOT_DEPENDANCE: "mot-dependance",
   /** `parce que …` — ce qui fonde le raisonnement, pas la valeur. */
   RAISON: "raison",
   /** `sauf si …` — le cas où la règle ne s'applique pas. */
@@ -152,6 +171,27 @@ export const GESTE = {
 
 const texte = (valeur) => String(valeur ?? "").trim();
 const jeton = (type, contenu) => ({ type, texte: contenu });
+
+/**
+ * Le pas d'indentation, et pourquoi c'en est un.
+ *
+ * ## L'indentation est la syntaxe
+ *
+ * Une ligne indentée **appartient** à la ligne pleine qui la précède. C'est la
+ * seule chose qui disait à qui se rapportait un « dépend de Commune du projet »
+ * flottant en tête de fichier : rien. On lisait quatre lignes de raisonnement
+ * sans savoir ce qu'elles justifiaient.
+ *
+ * Le langage n'emprunte pas ses mots à l'informatique, mais il lui emprunte
+ * cette convention-là — un bloc s'indente sous ce qu'il détaille — parce
+ * qu'elle n'est pas informatique : c'est celle d'un alinéa, d'un sous-article,
+ * d'une note sous un tableau.
+ *
+ * Trois espaces, jamais une tabulation : la largeur d'une tabulation dépend de
+ * qui la lit, et une mémoire qui se lit différemment selon l'écran n'est pas
+ * une mémoire.
+ */
+export const RETRAIT = "   ";
 
 /**
  * Une valeur et son unité, séparées.
@@ -398,8 +438,8 @@ export function blocDeRaisonnement({
 
   if (texte(parceQue)) {
     lignes.push([
-      jeton(JETON.NEUTRE, "   "),
-      jeton(JETON.MOT, "parce que"),
+      jeton(JETON.NEUTRE, RETRAIT),
+      jeton(JETON.MOT_RAISON, "parce que"),
       jeton(JETON.NEUTRE, " "),
       jeton(JETON.RAISON, texte(parceQue))
     ]);
@@ -407,8 +447,8 @@ export function blocDeRaisonnement({
 
   for (const cas of (Array.isArray(saufSi) ? saufSi : [saufSi]).map(texte).filter(Boolean)) {
     lignes.push([
-      jeton(JETON.NEUTRE, "   "),
-      jeton(JETON.MOT, "sauf si"),
+      jeton(JETON.NEUTRE, RETRAIT),
+      jeton(JETON.MOT_EXCEPTION, "sauf si"),
       jeton(JETON.NEUTRE, " "),
       jeton(JETON.EXCEPTION, cas)
     ]);
@@ -417,8 +457,8 @@ export function blocDeRaisonnement({
   const socles = (Array.isArray(dependDe) ? dependDe : [dependDe]).map(texte).filter(Boolean);
   if (socles.length) {
     lignes.push([
-      jeton(JETON.NEUTRE, "   "),
-      jeton(JETON.MOT, "dépend de"),
+      jeton(JETON.NEUTRE, RETRAIT),
+      jeton(JETON.MOT_DEPENDANCE, "dépend de"),
       jeton(JETON.NEUTRE, " "),
       // Les dépendances se lisent séparées d'un point médian, jamais d'une
       // virgule : un sujet peut en contenir une, et l'on ne saurait plus où
@@ -442,7 +482,8 @@ export function lignesDeDecision({ condition = "", alors = "", sinon = "", reten
   if (!texte(condition)) return lignes;
 
   lignes.push([
-    jeton(JETON.MOT, "si"),
+    jeton(JETON.NEUTRE, RETRAIT),
+    jeton(JETON.MOT_CONDITION, "si"),
     jeton(JETON.NEUTRE, " "),
     jeton(JETON.SUJET, texte(condition))
   ]);
@@ -450,8 +491,8 @@ export function lignesDeDecision({ condition = "", alors = "", sinon = "", reten
   const branche = (mot, valeur) => {
     if (!texte(valeur)) return;
     const jetons = [
-      jeton(JETON.NEUTRE, "   "),
-      jeton(JETON.MOT, mot),
+      jeton(JETON.NEUTRE, RETRAIT + RETRAIT),
+      jeton(JETON.MOT_CONDITION, mot),
       jeton(JETON.NEUTRE, " "),
       jeton(JETON.VALEUR, texte(valeur))
     ];

@@ -19890,6 +19890,10 @@ body.proposition-merge-open{ overflow:hidden; }
 .mdall-ligne{ padding:0 14px; white-space:pre; min-height:1.9em; }
 .mdall-ligne:hover{ background:rgba(110,118,129,.08); }
 .mdall-ligne--vide{ color:var(--muted); font-style:italic; white-space:normal; }
+/* Le bloc appartient à la ligne qu'il détaille : l'indentation le dit dans le
+   texte, un filet le dit à l'œil. Sans lui, quatre lignes indentées entre deux
+   affirmations flottent. */
+.mdall-ligne--raisonnement{ box-shadow:inset 16px 0 0 -14px rgba(110,118,129,.45); }
 /* « sans objet » et « en attente » sont des conclusions, pas des trous : elles
    portent leur couleur, plus discrète que celle d'une exigence. */
 .mdall-sans-objet{ color:rgb(139,148,158); font-style:italic; }
@@ -19906,14 +19910,31 @@ body.proposition-merge-open{ overflow:hidden; }
    deux affirmations, et rien ne le disait. */
 .mdall-portee{ color:rgb(255,166,87); }
 
-/* Ce que la mémoire garde en plus des valeurs : le geste qui pose la ligne, la
-   raison qui la fonde, l'exception qui la borne, ce dont elle dépend. Chacun a
-   sa couleur — un raisonnement lu en une seule teinte n'est plus qu'un
-   paragraphe, et l'on cesse d'y distinguer ce qu'on peut contester. */
+/* Ce que la mémoire garde en plus des valeurs : le geste qui pose la ligne, le
+   raisonnement appliqué, la raison qui le fonde, l'exception qui le borne, les
+   socles dont il dépend.
+
+   Chaque construction a **sa** teinte, mot-clé compris, comme un éditeur de code
+   ne colore pas `if` et `import` pareil : c'est la couleur du mot qui dit de
+   quelle espèce est la ligne, et c'est ce qui permet de survoler un bloc sans le
+   lire. Écrites toutes en rouge, les quatre se lisaient comme une seule prose.
+
+      si / alors / sinon   rouge      le raisonnement appliqué
+      parce que            vert       ce qui le fonde
+      sauf si              orange     ce qui le limite
+      dépend de            violet     ce qui l'oblige à être refait */
 .mdall-geste{ color:rgb(210,153,34); font-weight:600; }
-.mdall-raison{ color:rgb(139,148,158); }
-.mdall-exception{ color:rgb(210,153,34); }
-.mdall-dependance{ color:rgb(121,192,255); opacity:.85; }
+
+.mdall-mot-condition{ color:rgb(255,123,114); }
+
+.mdall-mot-raison{ color:rgb(63,185,80); }
+.mdall-raison{ color:rgb(126,231,135); opacity:.85; }
+
+.mdall-mot-exception{ color:rgb(219,109,40); }
+.mdall-exception{ color:rgb(240,166,86); opacity:.9; }
+
+.mdall-mot-dependance{ color:rgb(188,140,255); }
+.mdall-dependance{ color:rgb(210,168,255); opacity:.85; }
 
 /* ── La mémoire, parcourue comme un dépôt ───────────────────────────────────
    Les mêmes gestes que l'onglet Documents — un chemin, un fil d'Ariane, une
@@ -19934,6 +19955,18 @@ body.proposition-merge-open{ overflow:hidden; }
 }
 .memoire-layout--replie,
 .memoire-layout--racine{ grid-template-columns:minmax(0, 1fr); }
+
+/* Dès qu'on entre dans un dossier, l'écran prend la largeur : un rail, un
+   tableau de fichiers et un code monospace ne tiennent pas dans la colonne de
+   lecture d'une conversation. La racine, elle, reste centrée — cinq dossiers
+   étalés sur deux mille pixels se lisent moins bien, pas mieux. */
+.memoire-barre--pleine,
+.memoire-layout--pleine{
+  margin-left:calc(50% - 50vw);
+  margin-right:calc(50% - 50vw);
+  padding-left:24px;
+  padding-right:24px;
+}
 .memoire-layout--racine .memoire-corps{ padding-left:0; }
 .memoire-tree{ width:var(--memoire-tree-width, 280px); align-self:stretch; }
 .memoire-tree.is-collapsed{ display:none; }
@@ -20107,7 +20140,19 @@ body.proposition-merge-open{ overflow:hidden; }
   line-height:1.9;
   overflow-x:auto;
 }
-.memoire-ligne{ display:flex; align-items:baseline; gap:10px; padding:0 12px; white-space:pre; }
+/* La ligne prend la largeur de son texte, jamais celle du cadre : sinon le
+   corps déclare `overflow-x:auto` et ne défile pas, parce qu'aucune ligne ne le
+   déborde — elles se coupaient au bord. `min-width:100%` garde le survol sur
+   toute la largeur pour les lignes courtes. */
+.memoire-ligne{
+  display:flex;
+  align-items:baseline;
+  gap:10px;
+  padding:0 12px;
+  white-space:pre;
+  width:max-content;
+  min-width:100%;
+}
 .memoire-ligne:hover{ background:rgba(110,118,129,.08); }
 /* Le numéro porte son écart : en mode Blame la gouttière tombe à zéro — la
    marge du blâme a la sienne —, et le numéro se collait au code. */
@@ -20145,7 +20190,9 @@ body.proposition-merge-open{ overflow:hidden; }
   margin-right:10px;
   border-left:3px solid transparent;
 }
-.memoire-ligne--raisonnement .memoire-ligne__code{ color:var(--muted); }
+/* Le bloc appartient à la ligne qu'il détaille : l'indentation le dit dans le
+   texte, un filet le dit à l'œil. */
+.memoire-ligne--raisonnement .memoire-ligne__code{ box-shadow:inset 2px 0 0 0 rgba(110,118,129,.45); }
 .memoire-blame__ref{ flex:0 0 auto; font-variant-numeric:tabular-nums; }
 .memoire-blame__date{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .memoire-blame--chaleur-0{ border-left-color:rgba(88,166,255,.15); }

@@ -181,38 +181,6 @@ export async function listPropositionDocuments(propositionId) {
 }
 
 /**
- * Les propositions qui portent au moins une ligne.
- *
- * ## Pourquoi cette question existe
- *
- * L'écran de la mémoire signale les propositions fusionnées qui n'ont rien
- * laissé — c'est la signature d'un versement qui n'a pas eu lieu. Mais une
- * proposition **vide** produit la même signature sans être un défaut : elle n'a
- * jamais rien eu à verser. Sans cette liste, la bannière de rattrapage
- * réapparaissait indéfiniment, et un avertissement qui ne s'éteint jamais cesse
- * d'être lu.
- *
- * Une seule requête, une seule colonne : on ne veut pas les lignes, seulement
- * savoir lesquelles en ont.
- *
- * @returns {Promise<Set<string>>} les identifiants des propositions non vides
- */
-export async function propositionsPorteuses(projectId) {
-  if (!projectId) return new Set();
-
-  try {
-    const lignes = (await request("proposition_items", {
-      params: { select: "proposition_id", project_id: `eq.${projectId}` }
-    })) ?? [];
-    return new Set(lignes.map((ligne) => String(ligne?.proposition_id ?? "")).filter(Boolean));
-  } catch {
-    // On ne sait pas. Ne pas savoir n'autorise pas à prétendre qu'il n'y a
-    // rien : un ensemble vide ferait taire la bannière pour tout le monde.
-    return null;
-  }
-}
-
-/**
  * Les décisions déjà prises sur une proposition.
  *
  * Elles seules se conservent. Ce que l'analyse produit se recalcule à chaque

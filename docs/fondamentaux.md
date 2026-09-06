@@ -181,13 +181,26 @@ L'écriture Mdall les distingue donc, à même la ligne :
 on retient hauteur du dernier plancher  8,00 m  ← relevé du géomètre
 on suppose portance du sol  0,2 MPa  ← à confirmer par le G2
 
-si classement du bâtiment = 3e famille B
-   alors CF 1 h  ✓ retenu
-   sinon CF 1/2 h
+Degré coupe-feu des planchers  CF 1 h  ← arrêté du 31 janvier 1986, article 6
+   si classement du bâtiment = 3e famille B
+      alors CF 1 h  ✓ retenu
+      sinon CF 1/2 h
    parce que « Les planchers sont coupe-feu de degré une heure. »
    sauf si le bâtiment ne comporte qu'une seule unité de passage
    dépend de classement du bâtiment · hauteur du dernier plancher
 ```
+
+**L'indentation est la syntaxe.** Une ligne indentée appartient à la ligne
+pleine qui la précède : c'est ce qui dit à quoi se rapporte un « dépend de ».
+Écrit au-dessus, le bloc flottait — on lisait quatre lignes de raisonnement sans
+savoir ce qu'elles justifiaient. Le langage n'emprunte pas ses mots à
+l'informatique, mais il lui emprunte cette convention-là, parce qu'elle n'est pas
+informatique : c'est celle d'un alinéa, d'un sous-article, d'une note sous un
+tableau.
+
+**Chaque construction a sa couleur, mot-clé compris.** Un éditeur ne colore pas
+`if` et `import` de la même teinte : la couleur du mot dit de quelle espèce est
+la ligne, et c'est ce qui permet de survoler un bloc sans le lire.
 
 Trois conséquences pour le code :
 
