@@ -15474,10 +15474,11 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 
 .review-block__head{
   display:grid;
-  /* Trois colonnes fixes : la case, le caret, le titre. Le caret garde sa
-     colonne même quand il n'y a rien à déplier — sinon le titre d'un bloc vide
-     se décalerait d'un cran, et la colonne cesserait d'être une colonne. */
-  grid-template-columns:22px 16px 1fr;
+  /* Le caret d'abord, puis la case, puis le titre. Le caret prend ainsi la
+     place exacte de l'icône de la carte de dépôt, au-dessus : des chevrons et
+     des icônes qui ne s'alignent pas sur la même verticale donnent l'impression
+     de deux listes empilées au hasard. */
+  grid-template-columns:16px 22px 1fr;
   gap:10px;
   align-items:start;
   padding:20px 16px;
@@ -15488,9 +15489,9 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
    là, et le trait se lisait comme un titre de liste. */
 .review-block__head--replie{ border-bottom:0; }
 
-/* La phrase d'un bloc vide s'aligne sur son titre : 16 (padding) + 22 (case)
-   + 10 (gouttière) + 16 (caret) + 10 (gouttière). Repartie du bord gauche,
-   elle se lirait comme le texte d'un autre bloc. */
+/* La phrase d'un bloc vide s'aligne sur son titre : 16 (padding) + 16 (caret)
+   + 10 (gouttière) + 22 (case) + 10 (gouttière). Repartie du bord gauche, elle
+   se lirait comme le texte d'un autre bloc. */
 .review-block__empty--aligne{ padding-top:0; padding-left:74px; }
 
 .review-block__caret{
@@ -19519,13 +19520,21 @@ body.proposition-merge-open{ overflow:hidden; }
 /* ── Les onglets d'une proposition ──────────────────────────────────────────
    Le compteur d'ajouts et de suppressions vit à droite de la rangée, comme sur
    GitHub : on ne le lit pas, on le voit. */
+/* Le filet court sous toute la rangée, compteur compris. Porté par les onglets
+   seuls, il s'arrêtait après le dernier — et la ligne inachevée se lisait comme
+   un défaut d'affichage. */
 .review-tabs-row{
   display:flex;
-  align-items:center;
+  align-items:flex-end;
   justify-content:space-between;
   gap:16px;
   flex-wrap:wrap;
+  margin:0 0 16px;
+  border-bottom:1px solid var(--border);
 }
+.review-tabs-row .light-tabs{ margin:0; }
+.review-tabs-row .light-tabs::before{ display:none; }
+.review-tabs-row .diff-stat{ padding-bottom:10px; }
 .diff-stat{ display:inline-flex; align-items:center; gap:6px; font-size:12px; white-space:nowrap; }
 .diff-stat__plus{ color:rgb(63,185,80); font-variant-numeric:tabular-nums; }
 .diff-stat__moins{ color:rgb(248,81,73); font-variant-numeric:tabular-nums; }
@@ -19540,7 +19549,15 @@ body.proposition-merge-open{ overflow:hidden; }
 .review-tabpanel{ padding-bottom:64px; }
 /* Le diff prend la largeur : une arborescence plus deux colonnes de valeurs ne
    tiennent pas dans la colonne de lecture d'une conversation. */
-.review-tabpanel--pleine{ margin-left:calc(50% - 50vw); margin-right:calc(50% - 50vw); padding-left:24px; padding-right:24px; }
+.review-tabpanel--pleine,
+.review-tabs-row--pleine,
+.review-head--pleine{
+  margin-left:calc(50% - 50vw);
+  margin-right:calc(50% - 50vw);
+  padding-left:24px;
+  padding-right:24px;
+}
+.review-tabpanel--pleine{ padding-left:0; padding-right:0; }
 
 /* ── Le diff d'un dépôt ─────────────────────────────────────────────────────
    Le châssis de GitHub — une barre d'outils, une arborescence à gauche, les
@@ -19557,17 +19574,24 @@ body.proposition-merge-open{ overflow:hidden; }
 .diff-layout{
   display:grid;
   grid-template-columns:var(--diff-tree-width, 280px) minmax(0, 1fr);
-  align-items:start;
-  gap:2px;
+  align-items:stretch;
+  gap:0;
+  /* Le filet sépare la barre d'outils de ce qu'elle commande. Sans lui, le
+     bouton vert flottait au-dessus du diff sans qu'on sache à quoi il tient. */
+  border-top:1px solid var(--border);
+  min-height:calc(100vh - var(--app-top) - 180px);
 }
 .diff-layout--replie{ grid-template-columns:0 minmax(0, 1fr); }
 
 /* L'arborescence reprend celle des Documents — mêmes classes, même allure,
    même poignée. Deux arborescences qui se ressemblent à peu près donnent
    l'impression de deux applications. */
-.diff-tree{ width:var(--diff-tree-width, 280px); }
+/* L'arborescence descend jusqu'en bas : une colonne qui s'arrête à mi-hauteur
+   laisse le diff flotter sans bord gauche, et l'œil ne sait plus où commence
+   la colonne de lecture. */
+.diff-tree{ width:var(--diff-tree-width, 280px); align-self:stretch; }
 .diff-tree.is-collapsed{ display:none; }
-.diff-tree .documents-tree__panel{ min-height:0; height:auto; max-height:calc(100vh - 260px); }
+.diff-tree .documents-tree__panel{ min-height:100%; height:auto; }
 .diff-tree__compte{
   margin-left:auto;
   padding:0 6px;
@@ -19578,7 +19602,7 @@ body.proposition-merge-open{ overflow:hidden; }
   font-variant-numeric:tabular-nums;
 }
 
-.diff-corps{ min-width:0; display:flex; flex-direction:column; gap:12px; }
+.diff-corps{ min-width:0; display:flex; flex-direction:column; gap:12px; padding:20px 0 20px 20px; }
 
 /* Un groupe, ses lignes. Cinq valeurs de neige et de vent occupaient cinq
    encadrés séparés, chacun avec son en-tête et son pied ; elles tiennent
@@ -19620,22 +19644,49 @@ body.proposition-merge-open{ overflow:hidden; }
 .diff-groupe__corps{ font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; }
 
 .diff-ligne{
+  position:relative;
   display:grid;
-  grid-template-columns:44px 16px minmax(200px, 30%) minmax(0, 1fr);
+  /* Deux colonnes de numéros — l'avant et l'après —, le bouton d'annotation,
+     le signe, le nom, la valeur. */
+  grid-template-columns:36px 36px 20px 16px minmax(200px, 30%) minmax(0, 1fr);
   gap:8px;
   padding:3px 12px 3px 0;
   align-items:baseline;
 }
-/* Le numéro n'est pas celui d'une ligne de fichier — il n'en existe pas ici.
-   C'est un point où poser le doigt quand on discute à deux devant l'écran. */
+/* Les numéros ne sont pas ceux d'un fichier — il n'y a pas de fichier. Ce sont
+   des points où poser le doigt quand on discute à deux devant l'écran. Ce à
+   quoi une remarque se rattache, en revanche, n'est jamais le numéro : c'est le
+   repère et son champ. Un commentaire ancré sur « la ligne 3 » deviendrait faux
+   au premier dépôt qui insère une valeur au-dessus. */
 .diff-ligne__num{
   padding-right:8px;
-  border-right:1px solid var(--border2);
   color:var(--muted);
   font-size:11px;
   text-align:right;
   user-select:none;
 }
+.diff-ligne__num:nth-of-type(2){ border-right:1px solid var(--border2); }
+
+/* Le bouton n'apparaît qu'au survol : soixante-huit croix bleues alignées sur
+   un diff se lisent comme un motif, plus comme des boutons. */
+.diff-ligne__annoter{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  width:18px;
+  height:18px;
+  padding:0;
+  border:0;
+  border-radius:4px;
+  background:var(--borderColor-accent-emphasis);
+  color:#fff;
+  cursor:pointer;
+  opacity:0;
+  transition:opacity .12s ease;
+}
+.diff-ligne__annoter .octicon{ width:12px; height:12px; }
+.diff-ligne:hover .diff-ligne__annoter,
+.diff-ligne__annoter:focus-visible{ opacity:1; }
 .diff-ligne__signe{ text-align:center; }
 .diff-ligne__nom{ color:var(--muted); overflow-wrap:anywhere; }
 .diff-ligne__valeur{ color:var(--text); overflow-wrap:anywhere; }
