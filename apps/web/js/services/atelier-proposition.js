@@ -84,7 +84,11 @@ export function itemsDeProposition(affirmations = []) {
           reference: texte(affirmation.reference) || null,
           // D'où elle vient. Six mois plus tard, personne ne saura si une cote a
           // été dimensionnée à la main ou proposée par un calcul.
-          atelier: texte(affirmation.atelier) || null
+          atelier: texte(affirmation.atelier) || null,
+          // Et si elle sort d'un calcul : lequel, et avec quelles entrées. La
+          // ligne l'écrit derrière une double flèche — c'est ce qui permettra,
+          // le jour où une entrée change, de savoir quoi refaire sans chercher.
+          deduitDe: affirmation.deduitDe ?? null
         }
       };
     });

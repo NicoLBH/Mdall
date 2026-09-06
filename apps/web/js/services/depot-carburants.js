@@ -33,6 +33,7 @@
 
 import { ETAT } from "./depot-reperes.js";
 import { ITEM_TYPE, STATUS_LABELS } from "./proposition-review.js";
+import { cheminDeRangement } from "./memoire-rangement.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 const lisible = (valeur) => STATUS_LABELS[texte(valeur)] ?? texte(valeur);
@@ -52,7 +53,9 @@ export function reperesDAvis(items = []) {
 
   for (const item of avis) {
     const payload = item.payload ?? {};
-    const chemin = ["Avis", texte(payload.rubric) || "Sans rubrique"];
+    // Un avis est un constat : observé, à une date, par quelqu'un. Il suit la
+    // même politique de rangement que le reste.
+    const chemin = cheminDeRangement({ nature: "constat", domain: payload.domain });
     const titre = texte(payload.reference)
       ? `Avis ${texte(payload.reference)}${texte(payload.title) ? ` — ${texte(payload.title)}` : ""}`
       : texte(payload.title) || "Avis relevé sur une fiche";
@@ -104,9 +107,17 @@ export function reperesDAffirmations(tableau = null) {
     const commun = {
       id: `affirmation:${texte(ligne.cle)}`,
       famille: "affirmation",
-      chemin: ["Données de base", texte(ligne.domaineLabel) || "Non classé"],
+      // Le rangement suit la **nature**, pas le domaine : les conclusions d'une
+      // étude incendie atterrissaient dans « données de base » alors que ce
+      // sont des contraintes. Voir `memoire-rangement.js`.
+      chemin: cheminDeRangement({ nature: ligne.nature, domain: ligne.domaine }),
       titre: texte(ligne.sujet) || texte(ligne.cle),
-      provenance: { source: texte(ligne.source) || null, article: texte(ligne.article) || null }
+      provenance: {
+        source: texte(ligne.source) || null,
+        article: texte(ligne.article) || null,
+        zones: Array.isArray(ligne.zones) ? ligne.zones : [],
+        deduitDe: ligne.deduitDe ?? null
+      }
     };
 
     if (texte(ligne.avant)) avant.push({ ...commun, champs: { "Valeur": texte(ligne.avant) } });
@@ -134,7 +145,7 @@ export function reperesDeDocuments(items = []) {
     const repere = {
       id: `document:${texte(item.itemKey)}`,
       famille: "document",
-      chemin: ["Documents"],
+      chemin: cheminDeRangement({ nature: "intendance", domain: "" }),
       titre: texte(payload.name) || texte(item.itemKey) || "Document",
       champs: {
         "Nature": texte(payload.kindLabel) || "non reconnue",
@@ -167,7 +178,7 @@ export function reperesDeRattachements(items = []) {
       return {
         id: `rattachement:${texte(item.itemKey)}`,
         famille: "rattachement",
-        chemin: ["Rattachements"],
+        chemin: cheminDeRangement({ nature: "intendance", domain: "" }),
         titre: texte(payload.label) || texte(item.itemKey) || "Affaire",
         champs: { "Verdict": texte(payload.verdict), "Raison": texte(payload.reason) },
         provenance: null
