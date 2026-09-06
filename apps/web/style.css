@@ -19264,3 +19264,121 @@ html.est-fige-par-le-graphe, body.est-fige-par-le-graphe{ overflow:hidden; }
 .review-finishing__spin{ display:inline-flex; animation:review-finishing-turn 1.4s linear infinite; }
 @keyframes review-finishing-turn{ to{ transform:rotate(360deg); } }
 @media (prefers-reduced-motion:reduce){ .review-finishing__spin{ animation:none; } }
+
+/* ── L'état de l'analyse, dans la barre de titre ────────────────────────────
+   Le même bouton dit deux choses selon le moment : ce que la machine fait, et
+   si l'on peut signer. Il reste visible depuis les quatre onglets — décider
+   n'impose plus de revenir dans la conversation et de descendre jusqu'au bas
+   du fil. */
+.merge-state{ display:inline-flex; align-items:center; gap:6px; }
+.merge-state--running{ color:var(--muted); cursor:default; }
+.merge-state__spin{ display:inline-flex; animation:review-finishing-turn 1.4s linear infinite; }
+@media (prefers-reduced-motion:reduce){ .merge-state__spin{ animation:none; } }
+.merge-state--ready{ border-color:rgba(35,134,54,.5); color:rgb(63,185,80); }
+.merge-state--ready:hover{ background:rgba(35,134,54,.12); }
+.merge-state--held{ border-color:rgba(210,153,34,.5); color:rgb(210,153,34); }
+.merge-state--held:hover{ background:rgba(210,153,34,.12); }
+
+/* Le pavé de fusion pendant l'analyse : gris, sans promesse. */
+.merge-box--waiting{ border-color:var(--border); }
+.merge-box--waiting .merge-box__avatar{ color:var(--muted); animation:review-finishing-turn 1.4s linear infinite; }
+@media (prefers-reduced-motion:reduce){ .merge-box--waiting .merge-box__avatar{ animation:none; } }
+
+/* ── Le panneau de fusion ───────────────────────────────────────────────────
+   Le contenu du pavé, sorti de son cadre : ici la couleur ne dirait rien que
+   le bouton d'état ne dise déjà. */
+.merge-drawer{ position:fixed; inset:0; z-index:1200; }
+.merge-drawer__voile{ position:absolute; inset:0; background:rgba(1,4,9,.6); }
+.merge-drawer__panneau{
+  position:absolute;
+  top:0; left:0; bottom:0;
+  width:min(460px, 92vw);
+  display:flex;
+  flex-direction:column;
+  background:var(--bg);
+  border-right:1px solid var(--border);
+  box-shadow:0 0 40px rgba(1,4,9,.6);
+  overflow-y:auto;
+}
+.merge-drawer__tete{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:14px 16px;
+  border-bottom:1px solid var(--border);
+  font-size:14px;
+}
+.merge-drawer__fermer{
+  display:inline-flex;
+  padding:4px;
+  border:0;
+  border-radius:6px;
+  background:transparent;
+  color:var(--muted);
+  cursor:pointer;
+}
+.merge-drawer__fermer:hover{ background:rgba(110,118,129,.14); color:var(--text); }
+/* Sans cadre : le panneau *est* le cadre, et la couleur du pavé ne dirait rien
+   que le bouton d'état de la barre de titre ne dise déjà. */
+.merge-box__panel--drawer{
+  border:0;
+  border-radius:0;
+  background:transparent;
+  overflow:visible;
+}
+.merge-box__panel--drawer .merge-box__row{ padding:12px 4px; }
+.merge-box__panel--drawer .merge-box__actions{
+  flex-direction:column;
+  align-items:stretch;
+  gap:8px;
+  padding:14px 0 0;
+  border-top:0;
+  background:transparent;
+}
+.merge-box__panel--drawer .merge-form{
+  padding:14px 0 0;
+  border-top:0;
+  background:transparent;
+}
+
+/* ── La carte d'un dépôt ────────────────────────────────────────────────────
+   Verser le résultat d'un utilitaire est un dépôt, au même titre qu'un
+   fichier joint. La carte se clique et mène aux Changements — un dépôt dit
+   qu'il s'est passé quelque chose, le diff dit quoi. */
+.depot-carte{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  width:100%;
+  padding:14px 16px;
+  border:0;
+  background:transparent;
+  color:inherit;
+  text-align:left;
+  cursor:pointer;
+}
+.depot-carte:hover{ background:rgba(110,118,129,.08); }
+.depot-carte__icone{ display:inline-flex; color:var(--muted); flex:0 0 auto; }
+.depot-carte__corps{ display:flex; flex-direction:column; gap:3px; min-width:0; flex:1 1 auto; }
+.depot-carte__titre{ color:var(--text); font-size:14px; font-weight:600; }
+.depot-carte__meta{ display:flex; align-items:center; gap:5px; flex-wrap:wrap; color:var(--muted); font-size:12px; }
+.depot-carte__meta b{ color:var(--text); font-weight:600; }
+.depot-carte__avatar{ display:inline-flex; }
+.depot-carte__avatar svg{ width:16px; height:16px; border-radius:50%; }
+
+/* La pastille n'est pas une décoration : elle affirme qu'on sait d'où vient ce
+   qui est déposé. Quand ce n'est pas le cas, elle le dit — et son info-bulle
+   nomme ce qui manque. */
+.depot-carte__sceau{
+  flex:0 0 auto;
+  padding:1px 8px;
+  border:1px solid var(--border);
+  border-radius:999px;
+  font-size:11px;
+  line-height:18px;
+  color:var(--muted);
+}
+.depot-carte__sceau--verifie{ border-color:rgba(35,134,54,.5); color:rgb(63,185,80); }
+.depot-carte__sceau--partiel{ border-color:rgba(210,153,34,.5); color:rgb(210,153,34); }
+.depot-carte__sceau--vide{ border-style:dashed; }

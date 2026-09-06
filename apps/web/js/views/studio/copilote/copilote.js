@@ -960,7 +960,7 @@ function renderRemise(execution) {
 
   return `
     <button type="button" class="copilote-action copilote-outil__remise" data-remise-outil="${escapeHtml(execution.outil)}">
-      ${svgIcon("gear")}
+      ${svgIcon("cpu")}
       <span>Ouvrir dans l'Atelier</span>
       <em>${tenus.length} massif${tenus.length > 1 ? "s" : ""}</em>
     </button>
@@ -984,7 +984,7 @@ function renderRemiseIncendie(execution) {
   return `
     <button type="button" class="copilote-action copilote-outil__remise"
       data-remise-incendie="${escapeHtml(execution.outil)}">
-      ${svgIcon("gear")}
+      ${svgIcon("cpu")}
       <span>Ouvrir dans l'Atelier</span>
       <em>${combien} réponse${combien > 1 ? "s" : ""}</em>
     </button>

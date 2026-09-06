@@ -72,9 +72,11 @@ import {
 import {
   CHANGEMENT,
   CHANGEMENT_LABELS,
+  affirmationsDUneProposition,
   resumeDuTableau,
   tableauAvantApres
 } from "../services/proposition-avant-apres.js";
+import { depotDeLaProposition, resumeDuDepot } from "../services/proposition-depot.js";
 import { avisFromFigures, mergeAvis } from "../services/avis-from-figures.js";
 import { describeReadingStack } from "../services/run-workflow.js";
 
@@ -369,7 +371,82 @@ function renderExportButton() {
  * Ce que la proposition met dans ces cases lui est propre : son numéro à la
  * place de la référence, sa pastille d'état à la place de celle du sujet.
  */
-function renderReviewHead(proposition) {
+/**
+ * L'état de l'analyse, et l'accès à la fusion — dans la barre de titre.
+ *
+ * Un même bouton dit deux choses selon le moment : ce que la machine est en
+ * train de faire, et si l'on peut signer. Il vit dans la barre parce que la
+ * barre reste : jusqu'ici, décider imposait de revenir dans la conversation
+ * puis de descendre jusqu'au bas du fil — trois gestes pour un seul acte, et
+ * l'état de l'analyse invisible depuis les trois autres onglets.
+ *
+ * Il ne fusionne pas. Il ouvre le panneau qui énonce les conditions, et c'est
+ * là qu'on signe, en deux temps comme avant.
+ */
+function renderMergeStateButton(proposition, review) {
+  // Une proposition close n'attend plus rien : le bouton n'aurait ni état à
+  // dire ni acte à proposer.
+  if (!proposition || proposition.status !== PROPOSITION.OPEN) return "";
+
+  if (review?.running) {
+    return `
+      <button type="button" class="gh-btn gh-btn--sm merge-state merge-state--running" disabled
+        title="${escapeHtml(review.step || "Lecture des livrables du projet et de ceux de cette proposition.")}">
+        <span class="merge-state__spin">${svgIcon("sync", { className: "octicon" })}</span>
+        <span>Analyse</span>
+      </button>
+    `;
+  }
+
+  const blocage = describeBlocking(review?.conflicts ?? []);
+  const empeche = Boolean(blocage) || Boolean(review?.error);
+
+  return `
+    <button type="button" class="gh-btn gh-btn--sm merge-state merge-state--${empeche ? "held" : "ready"}"
+      data-merge-open>
+      ${svgIcon(empeche ? "alert" : "check", { className: "octicon" })}
+      <span>${escapeHtml(empeche ? "À arbitrer" : "Prêt à fusionner")}</span>
+    </button>
+  `;
+}
+
+/**
+ * Le panneau de fusion, ouvert par-dessus l'écran.
+ *
+ * Le même contenu que le pavé de fin de conversation — les conditions, puis le
+ * formulaire —, sorti de son cadre vert : ici, la couleur ne dit plus rien
+ * qu'un bouton d'état ne dise déjà.
+ *
+ * **Il n'existe qu'à un seul endroit à la fois.** La conversation cesse de le
+ * rendre pendant qu'il est ouvert : deux copies simultanées partageraient les
+ * mêmes identifiants de champ, et l'écran écrirait le message de la fusion
+ * dans celle qu'on ne regarde pas.
+ */
+function renderMergeDrawer(proposition, review) {
+  if (!view.mergeDrawer || proposition?.status !== PROPOSITION.OPEN) return "";
+
+  const blocage = describeBlocking(review.conflicts ?? []);
+  const empeche = Boolean(blocage) || Boolean(review.error);
+
+  return `
+    <div class="merge-drawer" data-merge-drawer>
+      <div class="merge-drawer__voile" data-merge-drawer-close></div>
+      <aside class="merge-drawer__panneau" role="dialog" aria-modal="true" aria-label="Fusionner la proposition">
+        <header class="merge-drawer__tete">
+          <b>Fusionner la proposition</b>
+          <button type="button" class="merge-drawer__fermer" data-merge-drawer-close
+            aria-label="Fermer">${svgIcon("x", { className: "octicon" })}</button>
+        </header>
+        <div class="merge-box__panel merge-box__panel--drawer">
+          ${review.confirming ? "" : renderMergeConditions(review, empeche, blocage)}
+          ${review.confirming ? renderMergeForm(proposition, review) : renderMergeAction(review, empeche, blocage)}
+        </div>
+      </aside>
+    </div>
+  `;
+}
+
+function renderReviewHead(proposition, review) {
   const titleWrapHtml = renderSharedDetailsTitleWrap(proposition, {
     emptyText: "Aucune proposition",
     buildTitleTextHtml: (entry) => `<span class="details-title-text">${escapeHtml(entry.title)}</span>`,
@@ -397,7 +474,7 @@ function renderReviewHead(proposition) {
     headId: "propositionsDetailsTitle",
     titleHtml: titleWrapHtml,
     headClassName: "review-head",
-    actionsHtml: renderExportButton()
+    actionsHtml: `${renderMergeStateButton(proposition, review)}${renderExportButton()}`
   });
 }
 
@@ -884,7 +961,9 @@ const REVIEW_TABS = [
 function reviewTabs(review) {
   const items = review.items ?? [];
   const compte = {
-    deposits: (review.deposits ?? []).length,
+    // La proposition est elle-même un dépôt — c'est la carte de tête —, et les
+    // lots de documents s'ajoutent à elle.
+    deposits: 1 + (review.deposits ?? []).length,
     // Les affirmations comptent : elles sont dans l'onglet, et un compteur qui
     // les oublie annonce « Changements » sans chiffre sur une proposition qui
     // en porte douze.
@@ -1336,7 +1415,11 @@ function renderConversation(proposition, review) {
       })}
     </div>
     <div class="review-end" role="separator" aria-label="Fin de la discussion"></div>
-    ${proposition.status === PROPOSITION.OPEN ? renderMergeBox(proposition, review) : ""}
+    ${
+      // Le pavé s'efface pendant que le panneau de la barre de titre est
+      // ouvert : deux copies partageraient les identifiants de leurs champs.
+      proposition.status === PROPOSITION.OPEN && !view.mergeDrawer ? renderMergeBox(proposition, review) : ""
+    }
     ${
       depuis
         ? `<div class="review-thread-host review-thread-host--after">
@@ -1377,9 +1460,71 @@ const STORY_ICON = {
  * l'auteur peut dire pourquoi, et l'instant où il s'en souvient encore.
  */
 function renderMergeBox(proposition, review) {
-  const items = review.items ?? [];
+  // Pendant l'analyse, les conditions ne veulent rien dire : elles compteraient
+  // zéro avis en mouvement sur un lot qu'on n'a pas encore lu. Le pavé dit donc
+  // qu'on attend, et l'état exact se lit dans la barre de titre.
+  if (review.running) {
+    return `
+      <section class="merge-area">
+        <div class="merge-box merge-box--waiting">
+          <span class="merge-box__avatar">${svgIcon("sync", { className: "octicon", width: 20, height: 20 })}</span>
+          <div class="merge-box__panel">
+            <div class="merge-box__body">
+              <div class="merge-box__row merge-box__row--lead">
+                <span class="merge-box__icon merge-box__icon--plain">${svgIcon("sync", { className: "octicon" })}</span>
+                <div>
+                  <b>L'analyse est en cours</b>
+                  <span class="merge-box__note">${escapeHtml(
+                    review.step || "Lecture des livrables du projet et de ceux de cette proposition."
+                  )}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    `;
+  }
+
   const blocage = describeBlocking(review.conflicts ?? []);
   const empeche = Boolean(blocage) || Boolean(review.error);
+
+  return `
+    <section class="merge-area">
+      <div class="merge-box merge-box--${empeche ? "blocked" : "ready"}${
+        review.confirming ? " merge-box--confirming" : ""
+      }">
+        <span class="merge-box__avatar">${svgIcon("git-compare", {
+          className: "octicon",
+          width: 20,
+          height: 20
+        })}</span>
+
+        <div class="merge-box__panel">
+          ${
+            // Au moment de signer, les conditions s'effacent : elles ont servi à
+            // décider, et ce qui reste à faire est d'écrire. Les garder sous le
+            // formulaire ferait relire un état déjà admis.
+            review.confirming ? "" : renderMergeConditions(review, empeche, blocage)
+          }
+          ${review.confirming ? renderMergeForm(proposition, review) : renderMergeAction(review, empeche, blocage)}
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+/**
+ * Ce que la fusion fera, et ce qui la retient.
+ *
+ * Énoncé **avant** le bouton, comme GitHub énonce l'état de ses checks : ce qui
+ * bloque doit se lire sans cliquer pour découvrir que ça ne marche pas. Le
+ * pavé de la conversation et le panneau ouvert par la barre de titre montrent
+ * exactement les mêmes lignes — une seule source, sinon les deux divergent et
+ * l'on ne sait plus laquelle croire.
+ */
+function renderMergeConditions(review, empeche, blocage = "") {
+  const items = review.items ?? [];
 
   const conditions = [
     {
@@ -1399,57 +1544,32 @@ function renderMergeBox(proposition, review) {
   ];
 
   return `
-    <section class="merge-area">
-      <div class="merge-box merge-box--${empeche ? "blocked" : "ready"}${
-        review.confirming ? " merge-box--confirming" : ""
-      }">
-        <span class="merge-box__avatar">${svgIcon("git-compare", {
-          className: "octicon",
-          width: 20,
-          height: 20
-        })}</span>
-
-        <div class="merge-box__panel">
-          ${
-            // Au moment de signer, les conditions s'effacent : elles ont servi à
-            // décider, et ce qui reste à faire est d'écrire. Les garder sous le
-            // formulaire ferait relire un état déjà admis.
-            review.confirming
-              ? ""
-              : `
-            <div class="merge-box__body">
-              <div class="merge-box__row merge-box__row--lead">
-                <span class="merge-box__icon merge-box__icon--plain">${svgIcon("pulse", { className: "octicon" })}</span>
-                <div>
-                  <b>Le suivi des avis sera réécrit</b>
-                  <span class="merge-box__note">
-                    La fusion fait entrer les documents acceptés au corpus, puis relit tout le dossier.
-                    Rien n'est calculé à moitié.
-                  </span>
-                </div>
-              </div>
-
-              ${conditions
-                .map(
-                  (ligne) => `
-                    <div class="merge-box__row merge-box__row--${ligne.tone}">
-                      <span class="merge-box__icon">${svgIcon(ligne.icon, { className: "octicon" })}</span>
-                      <div>
-                        <b>${escapeHtml(ligne.text)}</b>
-                        ${ligne.note ? `<span class="merge-box__note">${escapeHtml(ligne.note)}</span>` : ""}
-                      </div>
-                    </div>
-                  `
-                )
-                .join("")}
-            </div>
-          `
-          }
-
-          ${review.confirming ? renderMergeForm(proposition, review) : renderMergeAction(review, empeche, blocage)}
+    <div class="merge-box__body">
+      <div class="merge-box__row merge-box__row--lead">
+        <span class="merge-box__icon merge-box__icon--plain">${svgIcon("pulse", { className: "octicon" })}</span>
+        <div>
+          <b>Le suivi des avis sera réécrit</b>
+          <span class="merge-box__note">
+            La fusion fait entrer les documents acceptés au corpus, puis relit tout le dossier.
+            Rien n'est calculé à moitié.
+          </span>
         </div>
       </div>
-    </section>
+
+      ${conditions
+        .map(
+          (ligne) => `
+            <div class="merge-box__row merge-box__row--${ligne.tone}">
+              <span class="merge-box__icon">${svgIcon(ligne.icon, { className: "octicon" })}</span>
+              <div>
+                <b>${escapeHtml(ligne.text)}</b>
+                ${ligne.note ? `<span class="merge-box__note">${escapeHtml(ligne.note)}</span>` : ""}
+              </div>
+            </div>
+          `
+        )
+        .join("")}
+    </div>
   `;
 }
 
@@ -1850,11 +1970,61 @@ function syncViewerNav() {
  */
 export function renderDeposits(review) {
   const depots = review.deposits ?? [];
-  if (depots.length === 0) {
-    return `<div class="propositions-empty"><b>Aucun dépôt</b><p>Cette proposition n'apporte aucun document.</p></div>`;
-  }
+  return `${renderDepotDeLaProposition(review)}${depots
+    .map((depot) => renderDepotDeDocuments(depot, review.figures))
+    .join("")}`;
+}
 
-  return depots
+/**
+ * Le dépôt de la proposition elle-même.
+ *
+ * Verser le résultat d'un utilitaire **est** un dépôt : quelqu'un a produit de
+ * la matière et l'apporte au projet. L'onglet ne montrait que des fichiers, et
+ * une proposition venue de l'Atelier s'y lisait vide — comme si rien n'avait
+ * été déposé.
+ *
+ * La carte se clique et mène aux Changements, comme un commit mène à son diff :
+ * on lit ici *qu'*il y a eu un dépôt, on lit là-bas *ce qu'*il change.
+ */
+function renderDepotDeLaProposition(review) {
+  const depot = depotDeLaProposition({
+    proposition: view.open,
+    // Les lignes brutes, pas celles du tableau : c'est leur `payload` qui dit
+    // d'où vient chaque valeur — le texte et son article, ou l'utilitaire.
+    affirmations: affirmationsDUneProposition(review.decisionRows ?? []),
+    documents: review.documentRows ?? [],
+    unreachable: review.unreachable ?? [],
+    analyseFaite: !review.running && !review.error
+  });
+
+  const identite = identityOf(
+    (review.story ?? []).find((event) => event.kind === STORY.OPENED) ?? {}
+  );
+
+  return `
+    <section class="review-block">
+      <div class="review-panel">
+        <button type="button" class="depot-carte" data-review-goto-changes>
+          <span class="depot-carte__icone">${svgIcon("git-commit", { className: "octicon" })}</span>
+          <span class="depot-carte__corps">
+            <span class="depot-carte__titre">${escapeHtml(depot.titre)}</span>
+            <span class="depot-carte__meta">
+              ${identite.avatarHtml ? `<span class="depot-carte__avatar">${identite.avatarHtml}</span>` : ""}
+              <b>${escapeHtml(identite.displayName)}</b>
+              ${depot.quand ? ` a déposé le ${escapeHtml(formatDate(depot.quand))}` : " a déposé"}
+              · ${escapeHtml(resumeDuDepot(depot))}
+            </span>
+          </span>
+          <span class="depot-carte__sceau depot-carte__sceau--${escapeHtml(depot.provenance)}"
+            title="${escapeHtml(depot.pourquoi)}">${escapeHtml(depot.provenanceLabel)}</span>
+        </button>
+      </div>
+    </section>
+  `;
+}
+
+function renderDepotDeDocuments(depot, figures) {
+  return [depot]
     .map(
       (depot) => `
         <section class="review-block">
@@ -1895,7 +2065,7 @@ export function renderDeposits(review) {
                               : ""
                           }
                         </span>
-                        ${renderDocumentFigures(document, review.figures)}
+                        ${renderDocumentFigures(document, figures)}
                       </div>
                     </li>
                   `
@@ -1917,6 +2087,24 @@ export function renderDeposits(review) {
  * quel vocabulaire l'avaient produit.
  */
 function renderAnalysis(proposition, review) {
+  if (review.running) {
+    return `
+      <section class="review-block">
+        <div class="review-panel">
+          <div class="review-block__head review-block__head--plain">
+            <div class="review-block__headbody">
+              <h3 class="review-block__title">Ce que l'analyse lit</h3>
+              <span class="review-block__state">en cours</span>
+            </div>
+          </div>
+          <p class="review-empty-note">${escapeHtml(
+            review.step || "Lecture des livrables du projet et de ceux de cette proposition."
+          )}</p>
+        </div>
+      </section>
+    `;
+  }
+
   const gele = review.frozen === true;
   const snapshot = proposition.snapshot ?? null;
   const items = review.items ?? [];
@@ -2100,6 +2288,18 @@ function renderChanges(proposition, review) {
   const parType = (type) => items.filter((entry) => entry.itemType === type);
   const gele = review.frozen === true;
 
+  // Le tableau des affirmations se lit tout de suite : il vient de la base. Ce
+  // qui dépend de la lecture des livrables ne se prononce pas encore — dire
+  // « aucun document » avant d'avoir regardé serait une réponse inventée.
+  if (review.running) {
+    return `
+      ${renderAvantApres(proposition, review)}
+      <p class="review-empty-note">${escapeHtml(
+        review.step || "Les documents, les rattachements et les avis arrivent avec l'analyse."
+      )}</p>
+    `;
+  }
+
   return `
     ${renderConflicts(review.conflicts ?? [])}
     ${renderAvantApres(proposition, review)}
@@ -2196,19 +2396,23 @@ function renderSilentAvis(review) {
 function renderReview(root) {
   const proposition = view.open;
   const review = view.review;
-  const entete = renderReviewHead(proposition);
+  const entete = renderReviewHead(proposition, review);
 
-  if (!review || review.running) {
+  // La conversation et les affirmations n'attendent plus l'analyse : elles sont
+  // en base. Ce qui reste à savoir — où en est la lecture des livrables — se
+  // dit dans la barre de titre, visible depuis les quatre onglets. Le plein
+  // cadre « Analyse en cours… » cachait une page entière déjà écrite.
+  if (!review || (review.running && !review.story)) {
     return `
       ${entete}
       <div class="propositions-empty">
-        <b>Analyse en cours…</b>
-        <p>${escapeHtml(review?.step ?? "Lecture des livrables du projet et de ceux de cette proposition.")}</p>
+        <b>Ouverture de la proposition…</b>
+        <p>Lecture de la discussion, des dépôts et de ce que le projet dit déjà.</p>
       </div>
     `;
   }
 
-  if (review.error && (review.items ?? []).length === 0) {
+  if (!review.running && review.error && (review.items ?? []).length === 0) {
     return `${entete}${renderAnalysisFailure(review)}`;
   }
 
@@ -2257,6 +2461,7 @@ function renderReview(root) {
       ariaLabel: "Sections de la proposition"
     })}
     <div class="review-tabpanel">${panneau}</div>
+    ${renderMergeDrawer(proposition, review)}
   `;
 }
 
@@ -2531,8 +2736,25 @@ function bindReview(root) {
     renderContent(root);
   });
 
+  // Le bouton de la barre de titre : il ouvre le panneau, il ne fusionne pas.
+  root.querySelector("[data-merge-open]")?.addEventListener("click", () => {
+    view.mergeDrawer = true;
+    view.review.confirming = false;
+    renderContent(root);
+  });
+
+  for (const bouton of root.querySelectorAll("[data-merge-drawer-close]")) {
+    bouton.addEventListener("click", () => {
+      view.mergeDrawer = false;
+      view.review.confirming = false;
+      renderContent(root);
+    });
+  }
+
   root.querySelector("[data-merge-cancel]")?.addEventListener("click", () => {
     view.review.confirming = false;
+    // Annuler le formulaire ne referme pas le panneau : on revient aux
+    // conditions, qui sont ce qu'on relit avant de renoncer ou de recommencer.
     renderContent(root);
   });
 
@@ -2602,10 +2824,15 @@ function bindConversation(root) {
   });
 
   // « Régler les conflits » ne fusionne rien : il emmène là où l'on trancherait.
-  root.querySelector("[data-review-goto-changes]")?.addEventListener("click", () => {
-    view.tab = "changes";
-    renderContent(root);
-  });
+  // La carte d'un dépôt y mène aussi — un dépôt dit qu'il s'est passé quelque
+  // chose, les Changements disent quoi, comme un commit mène à son diff.
+  for (const bouton of root.querySelectorAll("[data-review-goto-changes]")) {
+    bouton.addEventListener("click", () => {
+      view.tab = "changes";
+      view.mergeDrawer = false;
+      renderContent(root);
+    });
+  }
 
   // Une note ratée se redemande : c'est un appel qui a échoué, pas un état du
   // dossier. On repart des mêmes faits, ceux que l'analyse a déjà établis.
@@ -3084,6 +3311,8 @@ async function merge(root) {
 
     view.review.merging = false;
     view.review.confirming = false;
+    // Le panneau se referme : ce qu'il proposait vient d'avoir lieu.
+    view.mergeDrawer = false;
     // L'écran devient le procès-verbal sans attendre un rechargement : les
     // cases disparaissent, l'état affiché est celui qu'on vient d'arrêter.
     view.review.frozen = true;
@@ -3874,7 +4103,15 @@ async function openProposition(root, propositionId) {
   releaseViewer();
   view.viewer = null;
   removePdfViewerHost();
-  view.review = { running: true, step: "", items: [], unreachable: [], diff: { unchanged: 0 }, error: null };
+  view.review = {
+    running: true, step: "", items: [], unreachable: [], diff: { unchanged: 0 }, error: null,
+    // L'écran se dessine avec ces listes vides pendant le temps des quatre
+    // requêtes qui les remplissent. Elles doivent exister : un onglet qui lit
+    // `undefined.length` casse le rendu avant d'avoir rien montré.
+    story: [], comments: [], deposits: [], documentRows: [], decisionRows: [], conflicts: [],
+    authors: new Map(), avantApres: null
+  };
+  view.mergeDrawer = false;
 
   // La barre compacte nomme la proposition : c'est elle qu'on lit, pas l'onglet.
   setProjectViewHeader({
@@ -3893,31 +4130,88 @@ async function openProposition(root, propositionId) {
   }
 
   try {
-    const [
-      { analyzeProposition },
-      propositions,
-      { loadCtAnalysis },
-      { loadProjectMarkers },
-      { listProjectAssertions }
-    ] = await Promise.all([
-      import("../services/proposition-analysis.js"),
+    const [propositions, { listPropositionComments }, { listProjectAssertions }] = await Promise.all([
       import("../services/propositions-supabase.js"),
-      import("../services/ct-analysis-supabase.js"),
-      import("../services/project-identity-supabase.js"),
+      import("../services/proposition-comments.js"),
       import("../services/project-memory-supabase.js")
     ]);
 
     const projectId = proposition.project_id;
-    const [memoire, marqueurs, decisions, assumees, affirmationsDuProjet] = await Promise.all([
-      loadCtAnalysis(projectId),
-      loadProjectMarkers(projectId),
+
+    // ── Ce qui se lit sans analyse ──────────────────────────────────────────
+    //
+    // La conversation, les dépôts et les affirmations sont en base : les lire
+    // coûte quatre requêtes. L'écran les affichait pourtant derrière un
+    // « Analyse en cours… » plein cadre, parce qu'ils étaient chargés **après**
+    // une analyse qui relit cent vingt PDF. On ouvrait une proposition et on
+    // attendait une minute pour lire une phrase déjà écrite.
+    //
+    // Ils arrivent donc d'abord, les onglets s'affichent, et l'analyse remplit
+    // les siens quand elle aboutit. Son état se lit dans la barre de titre, où
+    // il reste visible quel que soit l'onglet ouvert.
+    const [decisions, documents, comments, affirmationsDuProjet] = await Promise.all([
       propositions.listPropositionItems(proposition.id),
-      // Ce que le projet a déjà assumé, et que l'analyse pourrait contredire.
-      propositions.listProjectDecisions(projectId, { exceptPropositionId: proposition.id }),
+      propositions.listPropositionDocuments(proposition.id),
+      listPropositionComments(proposition.id),
       // Ce que le projet dit aujourd'hui : la colonne de gauche du tableau
       // avant / après. `null` quand la lecture a échoué — et le tableau le dit
       // plutôt que d'annoncer des entrées nouvelles.
       listProjectAssertions(projectId)
+    ]);
+
+    if (!view.open || view.open.id !== proposition.id) return;
+
+    const names = await propositions.loadAuthors([
+      proposition.created_by,
+      proposition.merged_by,
+      proposition.closed_by,
+      ...documents.map((row) => row.created_by),
+      ...decisions.map((row) => row.decided_by),
+      ...comments.map((row) => row.author_id)
+    ]);
+
+    if (!view.open || view.open.id !== proposition.id) return;
+
+    view.review = {
+      running: true,
+      step: "",
+      merging: false,
+      error: null,
+      unreachable: [],
+      diff: { unchanged: 0 },
+      result: null,
+      notice: null,
+      deposits: groupDeposits(documents, names),
+      // Conservés pour pouvoir refaire l'histoire après un message, sans
+      // relancer l'analyse : écrire une phrase ne relit pas cent vingt PDF.
+      documentRows: documents,
+      decisionRows: decisions,
+      comments,
+      authors: names,
+      posting: false,
+      commentNotice: null,
+      conflicts: [],
+      story: buildStory({ proposition, documents, decisions, comments, names }),
+      items: [],
+      // Les affirmations de la proposition, en face de ce que le projet dit
+      // aujourd'hui. Elles ne passent pas par `items` : celui-ci porte les
+      // mouvements du corpus, qui n'ont pas de valeur d'avant.
+      avantApres: tableauAvantApres({ proposition, items: decisions, assertions: affirmationsDuProjet })
+    };
+    renderContent(root);
+
+    // ── Ce qui demande de tout relire ───────────────────────────────────────
+    const [{ analyzeProposition }, { loadCtAnalysis }, { loadProjectMarkers }] = await Promise.all([
+      import("../services/proposition-analysis.js"),
+      import("../services/ct-analysis-supabase.js"),
+      import("../services/project-identity-supabase.js")
+    ]);
+
+    const [memoire, marqueurs, assumees] = await Promise.all([
+      loadCtAnalysis(projectId),
+      loadProjectMarkers(projectId),
+      // Ce que le projet a déjà assumé, et que l'analyse pourrait contredire.
+      propositions.listProjectDecisions(projectId, { exceptPropositionId: proposition.id })
     ]);
 
     const analyse = await analyzeProposition({
@@ -3937,34 +4231,14 @@ async function openProposition(root, propositionId) {
     // calculer ne décrirait plus ce que l'utilisateur a sous les yeux.
     if (!view.open || view.open.id !== proposition.id) return;
 
-    const documents = await propositions.listPropositionDocuments(proposition.id);
-
-    const { listPropositionComments } = await import("../services/proposition-comments.js");
-    const comments = await listPropositionComments(proposition.id);
-
-    const names = await propositions.loadAuthors([
-      proposition.created_by,
-      proposition.merged_by,
-      proposition.closed_by,
-      ...documents.map((row) => row.created_by),
-      ...decisions.map((row) => row.decided_by),
-      ...comments.map((row) => row.author_id)
-    ]);
-
     view.review = {
+      ...view.review,
       running: false,
       step: "",
-      merging: false,
       error: analyse.error,
       unreachable: analyse.unreachable,
       diff: analyse.diff,
       result: analyse.result,
-      notice: null,
-      deposits: groupDeposits(documents, names),
-      // Conservés pour pouvoir refaire l'histoire après un message, sans
-      // relancer l'analyse : écrire une phrase ne relit pas cent vingt PDF.
-      documentRows: documents,
-      decisionRows: decisions,
       // Le suivi des avis, indexé par référence : c'est lui qui redonne un
       // extrait aux décisions figées avant qu'on ne les conserve.
       suiviDesAvis: new Map(
@@ -3972,19 +4246,10 @@ async function openProposition(root, propositionId) {
           .map((avis) => [String(avis.external_reference ?? "").trim(), avis])
           .filter(([cle]) => cle)
       ),
-      comments,
-      authors: names,
-      posting: false,
-      commentNotice: null,
-      story: buildStory({ proposition, documents, decisions, comments, names }),
       items: applyDecisions(
         [...documentItems(documents), ...attachmentItems(analyse.attachments), ...avisItems(analyse.diff)],
         decisions
-      ),
-      // Les affirmations de la proposition, en face de ce que le projet dit
-      // aujourd'hui. Elles ne passent pas par `items` : celui-ci porte les
-      // mouvements du corpus, qui n'ont pas de valeur d'avant.
-      avantApres: tableauAvantApres({ proposition, items: decisions, assertions: affirmationsDuProjet })
+      )
     };
 
     // Les conflits portent les mêmes objets que les blocs — pas des copies : ce
