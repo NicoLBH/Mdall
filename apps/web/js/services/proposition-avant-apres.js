@@ -194,6 +194,13 @@ export function tableauAvantApres({ proposition = null, items = [], assertions =
       // ses entrées. C'est ce qui permettra, le jour où une entrée change, de
       // savoir sans chercher ce qu'il faut refaire.
       deduitDe: item?.payload?.deduitDe ?? apresPorteur?.payload?.deduitDe ?? null,
+      // Le geste et le raisonnement font partie de ce qui change : passer d'un
+      // « on suppose » à un « on retient » est un changement même à valeur
+      // égale, et une raison qui change en est un aussi.
+      geste: texte(item?.payload?.geste) || texte(apresPorteur?.payload?.geste) || "",
+      gesteAvant: texte(avantPorteur?.payload?.geste) || "",
+      raisonnement: item?.payload?.raisonnement ?? apresPorteur?.payload?.raisonnement ?? null,
+      raisonnementAvant: avantPorteur?.payload?.raisonnement ?? null,
       avant,
       apres,
       changement,

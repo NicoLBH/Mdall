@@ -785,6 +785,7 @@ function affirmationsRetenues() {
     source: etat.vue?.texteDeReference?.source || "arrêté du 31 janvier 1986 modifié",
     article: ligne.article,
     citation: ligne.citation,
+    raisonnement: ligne.raisonnement ?? null,
     reference: ligne.id,
     zones: portee,
     atelier: "Incendie — Habitation"

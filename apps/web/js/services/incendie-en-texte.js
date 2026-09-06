@@ -39,7 +39,7 @@
 
 import {
   enTeteDeFichier, ligneDAffirmation, ligneSansObjet, ligneEnAttente,
-  nomDeFichier, cheminDeFichier
+  blocDeRaisonnement, nomDeFichier, cheminDeFichier
 } from "./memoire-en-texte.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
@@ -60,7 +60,7 @@ export function sourceDuModule(module = {}, referentiel = "") {
  * `null` quand le module ne dit rien qui concerne l'ouvrage : une reformulation
  * du cas, ou un module qui n'a pas commencé.
  */
-export function ligneDuModule(module = {}, referentiel = "") {
+export function ligneDuModule(module = {}, referentiel = "", vue = {}) {
   const sujet = texte(module.titre);
   if (!sujet) return null;
 
@@ -83,7 +83,86 @@ export function ligneDuModule(module = {}, referentiel = "") {
 
   return {
     nature: "affirmation",
-    jetons: ligneDAffirmation({ sujet, valeur, source: sourceDuModule(module, referentiel) })
+    jetons: ligneDAffirmation({ sujet, valeur, source: sourceDuModule(module, referentiel) }),
+    // Ce qui entoure la valeur, quand le référentiel le donne : le raisonnement
+    // appliqué, sa justification, ses exceptions, ce dont elle dépend. Une
+    // valeur seule ne se conteste pas — on l'accepte ou on la refuse, sans
+    // savoir sur quoi.
+    raisonnement: raisonnementDuModule(module, vue)
+  };
+}
+
+/**
+ * Les modules dont une conclusion a eu besoin, avec ce qu'ils ont conclu.
+ *
+ * Le référentiel ne livre pas ses conditions — elles restent au serveur, et
+ * c'est voulu : le corpus est le produit. Mais il livre son **graphe**, et le
+ * graphe dit exactement quel module a alimenté quel autre. C'est de là que se
+ * lit la condition : « si classement du bâtiment = 3e famille B ». Rien n'est
+ * inventé, tout est relu.
+ */
+export function amontDuModule(module = {}, vue = {}) {
+  const id = texte(module.id);
+  if (!id) return [];
+
+  const liens = Array.isArray(vue?.graphe?.liens) ? vue.graphe.liens : [];
+  const modules = Array.isArray(vue?.modules) ? vue.modules : [];
+  const parId = new Map(modules.map((m) => [texte(m?.id), m]));
+
+  const amonts = [];
+  const vus = new Set();
+  for (const lien of liens) {
+    if (texte(lien?.vers) !== id) continue;
+    const de = texte(lien?.de);
+    if (!de || vus.has(de)) continue;
+    vus.add(de);
+    const amont = parId.get(de);
+    if (!amont || texte(amont.statut) !== "conclu") continue;
+    const titre = texte(amont.titre);
+    if (!titre) continue;
+    amonts.push({ titre, valeur: texte(amont.valeur) });
+  }
+
+  return amonts;
+}
+
+/**
+ * Ce qui entoure une conclusion : la règle appliquée, sa raison, ses socles.
+ *
+ * Une valeur seule ne se conteste pas — on l'accepte ou on la refuse, sans
+ * savoir sur quoi. Le bloc dit sous quelle condition elle vaut, pourquoi le
+ * texte le dit, et de quoi elle dépendrait si l'une de ces entrées changeait.
+ *
+ * Rien n'est deviné. Un « parce que » inventé serait pire que pas de « parce
+ * que », puisqu'on le citerait en réunion.
+ *
+ * @returns {object|null} `null` quand le module n'apporte aucun raisonnement
+ */
+export function raisonnementDuModule(module = {}, vue = {}) {
+  const pourquoi = module.pourquoi ?? {};
+  const amont = amontDuModule(module, vue);
+
+  // « classement du bâtiment = 3e famille B et hauteur du dernier plancher = 18 m »
+  const condition = amont
+    .filter((entree) => entree.valeur)
+    .map((entree) => `${entree.titre} = ${entree.valeur}`)
+    .join(" et ");
+  // La citation est une phrase de l'arrêté, pas une reformulation : elle porte
+  // ses guillemets, comme partout ailleurs dans l'application. Qui la relit en
+  // réunion doit voir tout de suite qu'il cite le texte et non nous.
+  const citation = texte(pourquoi.citation);
+  const parceQue = citation ? `« ${citation} »` : "";
+  const dependDe = amont.map((entree) => entree.titre);
+
+  if (!condition && !parceQue && !dependDe.length) return null;
+
+  const valeur = texte(module.valeur);
+  return {
+    condition,
+    alors: condition ? valeur : "",
+    retenu: condition ? valeur : "",
+    parceQue,
+    dependDe
   };
 }
 
@@ -108,9 +187,18 @@ export function fichierDeLEtude(vue, {
   le = ""
 } = {}) {
   const modules = Array.isArray(vue?.modules) ? vue.modules : [];
+  // Le raisonnement précède la valeur qu'il produit : on lit du général au
+  // particulier, et la valeur arrive **après** ce qui la fonde. C'est l'inverse
+  // d'un tableur, et c'est voulu.
   const corps = modules
-    .map((module) => ligneDuModule(module, referentiel))
-    .filter(Boolean);
+    .map((module) => ligneDuModule(module, referentiel, vue))
+    .filter(Boolean)
+    .flatMap((ligne) => [
+      ...(ligne.raisonnement
+        ? blocDeRaisonnement(ligne.raisonnement).map((jetons) => ({ nature: "raisonnement", jetons }))
+        : []),
+      ligne
+    ]);
 
   return {
     nom: nomDeFichier(chemin),
@@ -120,6 +208,7 @@ export function fichierDeLEtude(vue, {
     // Ce que le fichier porte, en chiffres. Rien n'est estimé : ce sont des
     // comptes, et ils disent ce qu'on lira avant d'ouvrir.
     compte: {
+      raisonnements: corps.filter((ligne) => ligne.nature === "raisonnement").length,
       affirmations: corps.filter((ligne) => ligne.nature === "affirmation").length,
       sansObjet: corps.filter((ligne) => ligne.nature === "sans-objet").length,
       attente: corps.filter((ligne) => ligne.nature === "attente").length

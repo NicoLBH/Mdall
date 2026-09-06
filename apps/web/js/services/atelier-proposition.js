@@ -47,6 +47,37 @@ const texte = (valeur) => String(valeur ?? "").trim();
  * @property {string[]} [zones] la portée, vide pour l'ensemble
  */
 
+/**
+ * Ce qu'on garde d'un raisonnement, et rien de plus.
+ *
+ * Un utilitaire peut passer un objet plus riche que ce que la mémoire sait
+ * relire. On ne stocke que les cinq champs que l'écriture Mdall rend — le reste
+ * dormirait dans la base sans jamais s'afficher, et finirait par diverger de ce
+ * qui s'affiche.
+ *
+ * `alors` et `retenu` n'en font pas partie : ce sont la valeur elle-même, que
+ * `payload.value` porte déjà. Une valeur écrite à deux endroits finit par
+ * diverger — ici, l'écriture les reconstruit à la lecture.
+ */
+export function raisonnementRetenu(raisonnement) {
+  if (!raisonnement || typeof raisonnement !== "object") return null;
+
+  const liste = (valeur) => (Array.isArray(valeur) ? valeur : [valeur])
+    .map(texte).filter(Boolean);
+
+  const garde = {
+    condition: texte(raisonnement.condition),
+    sinon: texte(raisonnement.sinon),
+    parceQue: texte(raisonnement.parceQue),
+    saufSi: liste(raisonnement.saufSi),
+    dependDe: liste(raisonnement.dependDe)
+  };
+
+  const porteQuelqueChose = garde.condition || garde.sinon || garde.parceQue
+    || garde.saufSi.length || garde.dependDe.length;
+  return porteQuelqueChose ? garde : null;
+}
+
 /** La clé métier d'une affirmation, portée comprise. */
 export function cleDAffirmation(affirmation) {
   const base = normalizeSubjectKey(affirmation?.sujet ?? "");
@@ -88,7 +119,15 @@ export function itemsDeProposition(affirmations = []) {
           // Et si elle sort d'un calcul : lequel, et avec quelles entrées. La
           // ligne l'écrit derrière une double flèche — c'est ce qui permettra,
           // le jour où une entrée change, de savoir quoi refaire sans chercher.
-          deduitDe: affirmation.deduitDe ?? null
+          deduitDe: affirmation.deduitDe ?? null,
+          // Le geste : une valeur constatée ne s'écrit pas comme une valeur
+          // qu'on retient, ni comme une valeur qu'on suppose. La mémoire d'un
+          // projet garde les trois, et les confondre fait qu'on ne sait plus
+          // ce qui était acquis et ce qui restait à confirmer.
+          geste: texte(affirmation.geste) || null,
+          // Et ce qui l'entoure : sous quelle condition elle vaut, pourquoi,
+          // ses exceptions, ses socles. Une valeur seule ne se conteste pas.
+          raisonnement: raisonnementRetenu(affirmation.raisonnement)
         }
       };
     });

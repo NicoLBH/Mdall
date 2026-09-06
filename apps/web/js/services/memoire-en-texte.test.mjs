@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   ECRITURE, JETON, ligneDAffirmation, ligneDeSection, ligneDeNote, enTeteDeFichier,
-  lignesDeDecision, enClair, couperLUnite, natureDeLaLigne
+  lignesDeDecision, blocDeRaisonnement, GESTE, enClair, couperLUnite, natureDeLaLigne
 } from "./memoire-en-texte.js";
 
 const typeDe = (jetons, type) => jetons.filter((j) => j.type === type).map((j) => j.texte);
@@ -107,4 +107,46 @@ test("la marque se lit après les colonnes de numéros d'un extrait cité", () =
   assert.equal(natureDeLaLigne("      1  + altitude du site  490,03 m"), "ajoute");
   assert.equal(natureDeLaLigne("  1      - zone de neige  A1"), "retire");
   assert.equal(natureDeLaLigne("  2   3    zone de vent  1"), "contexte");
+});
+
+test("un geste précède le sujet : une décision ne se lit pas comme une mesure", () => {
+  assert.equal(enClair(ligneDAffirmation({ geste: GESTE.DECISION, sujet: "hauteur retenue", valeur: "8,00 m" })),
+    "on retient hauteur retenue  8,00 m");
+  assert.equal(enClair(ligneDAffirmation({ geste: GESTE.HYPOTHESE, sujet: "portance du sol", valeur: "0,2 MPa" })),
+    "on suppose portance du sol  0,2 MPa");
+  // Un relevé n'annonce rien : c'est le cas ordinaire.
+  assert.equal(enClair(ligneDAffirmation({ sujet: "altitude", valeur: "490 m" })), "altitude  490 m");
+});
+
+test("un raisonnement porte sa raison, son exception et ses dépendances", () => {
+  const lignes = blocDeRaisonnement({
+    condition: "hauteur du dernier plancher > 8 m",
+    alors: "escalier protégé", sinon: "aucun escalier protégé exigé", retenu: "escalier protégé",
+    parceQue: "au-delà de 8 m l'échelle des secours n'atteint plus les baies",
+    saufSi: ["le bâtiment ne comporte qu'une seule unité de passage"],
+    dependDe: ["hauteur du dernier plancher", "classement du bâtiment"]
+  });
+
+  assert.deepEqual(lignes.map(enClair), [
+    "si hauteur du dernier plancher > 8 m",
+    "   alors escalier protégé  ✓ retenu",
+    "   sinon aucun escalier protégé exigé",
+    "   parce que au-delà de 8 m l'échelle des secours n'atteint plus les baies",
+    "   sauf si le bâtiment ne comporte qu'une seule unité de passage",
+    "   dépend de hauteur du dernier plancher · classement du bâtiment"
+  ]);
+});
+
+test("ce qu'un raisonnement n'a pas ne s'écrit pas en creux", () => {
+  const lignes = blocDeRaisonnement({ condition: "c", alors: "a", retenu: "a" });
+  assert.deepEqual(lignes.map(enClair), ["si c", "   alors a  ✓ retenu"]);
+});
+
+test("les dépendances se séparent d'un point médian : un sujet peut porter une virgule", () => {
+  const lignes = blocDeRaisonnement({ condition: "c", alors: "a", dependDe: ["hauteur, mesurée", "classement"] });
+  assert.match(lignes.map(enClair).join("\n"), /dépend de hauteur, mesurée · classement/);
+});
+
+test("l'écriture a changé de version : le diff doit pouvoir le dire", () => {
+  assert.equal(ECRITURE, "2.0");
 });

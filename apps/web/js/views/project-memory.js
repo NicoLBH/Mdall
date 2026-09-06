@@ -1686,7 +1686,11 @@ function renderContent(root) {
 
   const resume = summarizeMemory(view.assertions);
   const memoire = preparerLaMemoire(view.assertions);
-  const ouverte = view.navCollapsed !== true;
+  // La racine n'a pas de rail : le rail sert à passer d'un fichier à l'autre, et
+  // à la racine il redirait mot pour mot ce que la page montre déjà. Un dépôt
+  // ouvre de la même façon.
+  const racine = view.chemin.length === 0;
+  const ouverte = !racine && view.navCollapsed !== true;
   const largeur = ouverte ? Math.max(220, Math.min(520, Number(view.navWidth) || 280)) : 0;
 
   // La recherche traverse les dossiers : c'est le geste qu'on fait quand on ne
@@ -1702,10 +1706,10 @@ function renderContent(root) {
         ${view.notice ? `<div class="propositions-empty propositions-empty--warn"><p>${escapeHtml(view.notice)}</p></div>` : ""}
         ${renderHypothesisForm()}
 
-        ${renderBarre({ chemin: view.chemin, query: view.query, ouverte })}
+        ${renderBarre({ chemin: view.chemin, query: view.query, ouverte, racine })}
 
-        <div class="memoire-layout${ouverte ? "" : " memoire-layout--replie"}" style="--memoire-tree-width:${largeur}px">
-          ${renderArbre(memoire, { chemin: view.chemin, replies: view.replies, ouverte })}
+        <div class="memoire-layout${ouverte ? "" : " memoire-layout--replie"}${racine ? " memoire-layout--racine" : ""}" style="--memoire-tree-width:${largeur}px">
+          ${racine ? "" : renderArbre(memoire, { chemin: view.chemin, replies: view.replies, ouverte })}
           <div class="memoire-corps">
             ${
               cherche
@@ -1734,7 +1738,9 @@ function renderContent(root) {
  * seul : verser en mémoire est un acte, même quand c'en est le rattrapage.
  */
 function renderRattrapage() {
-  const manquantes = propositionsSansTrace(view.propositions ?? [], view.assertions ?? []);
+  const manquantes = propositionsSansTrace(view.propositions ?? [], view.assertions ?? [], {
+    porteuses: view.propositionsPorteuses ?? null
+  });
   if (!manquantes.length) return "";
 
   const combien = manquantes.length;
@@ -1766,8 +1772,10 @@ function renderRattrapage() {
  * rien passé.
  */
 function renderVue(memoire) {
-  if (view.chemin.length === 0) return renderDossiers(memoire);
-  if (view.chemin.length === 1) return renderFichiers(memoire, view.chemin[0]);
+  const contexte = { auteurs: view.auteurs ?? new Map(), propositions: propositionsParId() };
+
+  if (view.chemin.length === 0) return renderDossiers(memoire, { assertions: view.assertions ?? [] });
+  if (view.chemin.length === 1) return renderFichiers(memoire, view.chemin[0], contexte);
 
   const fichier = fichierDuChemin(memoire, view.chemin);
   if (!fichier) {
@@ -1775,7 +1783,12 @@ function renderVue(memoire) {
       <p>Rien ne s'y range aujourd'hui. Il réapparaîtra dès qu'une proposition y versera une ligne.</p></div>`;
   }
 
-  return renderFichier(fichier, { lecture: view.lecture, auteurs: view.auteurs });
+  return renderFichier(fichier, { lecture: view.lecture, ...contexte });
+}
+
+/** Les propositions, retrouvables par leur identifiant — pour les intitulés. */
+function propositionsParId() {
+  return new Map((view.propositions ?? []).map((proposition) => [String(proposition.id), proposition]));
 }
 
 /**
@@ -2538,8 +2551,13 @@ export function renderProjectMemory(root) {
       // se demande qui a décidé cela.
       // Les propositions fusionnées : c'est en les comparant à la mémoire qu'on
       // sait si l'une d'elles n'a rien laissé.
-      const { listPropositions, loadAuthors } = await import("../services/propositions-supabase.js");
+      const { listPropositions, loadAuthors, propositionsPorteuses } =
+        await import("../services/propositions-supabase.js");
       view.propositions = view.projectId ? ((await listPropositions(view.projectId)) ?? []) : [];
+      // Lesquelles portaient quelque chose. Une proposition vide n'a rien
+      // manqué de verser, et la signaler ferait revenir la bannière pour
+      // toujours.
+      view.propositionsPorteuses = view.projectId ? await propositionsPorteuses(view.projectId) : null;
 
       const auteurs = await loadAuthors((view.assertions ?? []).map((row) => row.decided_by));
       view.auteurs = new Map(

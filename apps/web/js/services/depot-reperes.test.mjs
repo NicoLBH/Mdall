@@ -184,3 +184,28 @@ test("le nom d'une ligne ne porte le champ que si le repère en a plusieurs", ()
   const noms = lignesNumerotees(arbreDesReperes(lignes)[0]).map((l) => l.nom);
   assert.deepEqual(noms, ["un", "deux · État", "deux · Appréciation"]);
 });
+
+test("une raison qui change est un changement, même à valeur égale", () => {
+  const { avant, apres } = reperesDAffirmations({
+    lignes: [{
+      cle: "planchers", sujet: "Degré coupe-feu des planchers",
+      nature: "contrainte", domaine: "incendie",
+      avant: "CF 1 h", apres: "CF 1 h",
+      raisonnementAvant: { parceQue: "article 5" },
+      raisonnement: { parceQue: "article 6", dependDe: ["Classement du bâtiment"] }
+    }]
+  });
+
+  const compare = comparerDesReperes({ avant, apres });
+  const ligne = compare.lignes.find((entree) => entree.id === "affirmation:planchers");
+  const changes = ligne.champs.filter((champ) => champ.etat !== ETAT.INCHANGE).map((champ) => champ.nom);
+
+  assert.deepEqual(changes.sort(), ["Dépend de", "Raison"]);
+});
+
+test("un champ absent des deux côtés ne s'invente pas", () => {
+  const { apres } = reperesDAffirmations({
+    lignes: [{ cle: "neige", sujet: "Zone de neige", apres: "A1" }]
+  });
+  assert.deepEqual(Object.keys(apres[0].champs), ["Valeur"]);
+});
