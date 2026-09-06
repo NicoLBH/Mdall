@@ -19270,45 +19270,71 @@ html.est-fige-par-le-graphe, body.est-fige-par-le-graphe{ overflow:hidden; }
    si l'on peut signer. Il reste visible depuis les quatre onglets — décider
    n'impose plus de revenir dans la conversation et de descendre jusqu'au bas
    du fil. */
-.merge-state{ display:inline-flex; align-items:center; gap:6px; }
-.merge-state--running{ color:var(--muted); cursor:default; }
+.merge-state{ display:inline-flex; align-items:center; gap:6px; color:var(--text); }
+/* Pendant l'analyse : la roue seule. Le mot « Analyse » à côté d'elle disait
+   deux fois la même chose, et le bouton sautait de largeur en s'arrêtant. */
+.merge-state--running{ color:var(--muted); cursor:default; padding-left:8px; padding-right:8px; }
 .merge-state__spin{ display:inline-flex; animation:review-finishing-turn 1.4s linear infinite; }
 @media (prefers-reduced-motion:reduce){ .merge-state__spin{ animation:none; } }
-.merge-state--ready{ border-color:rgba(35,134,54,.5); color:rgb(63,185,80); }
-.merge-state--ready:hover{ background:rgba(35,134,54,.12); }
-.merge-state--held{ border-color:rgba(210,153,34,.5); color:rgb(210,153,34); }
-.merge-state--held:hover{ background:rgba(210,153,34,.12); }
+
+/* La couleur est sur la pastille, pas sur le bouton. Un bouton vert dit
+   « appuyez ici » ; une pastille verte dit « c'est prêt » — et c'est la seconde
+   phrase qu'on veut. */
+.merge-state__pastille{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:16px;
+  height:16px;
+  border-radius:50%;
+  color:#fff;
+}
+.merge-state__pastille .octicon{ width:11px; height:11px; }
+.merge-state--ready .merge-state__pastille{ background:rgb(35,134,54); }
+.merge-state--held .merge-state__pastille{ background:rgb(158,106,3); }
 
 /* Le pavé de fusion pendant l'analyse : gris, sans promesse. */
+/* L'avatar ne tourne pas : c'est le visage du pavé, pas un indicateur. Une
+   icône d'identité qui tourne se lit comme une panne. */
 .merge-box--waiting{ border-color:var(--border); }
-.merge-box--waiting .merge-box__avatar{ color:var(--muted); animation:review-finishing-turn 1.4s linear infinite; }
-@media (prefers-reduced-motion:reduce){ .merge-box--waiting .merge-box__avatar{ animation:none; } }
+.merge-box--waiting .merge-box__avatar{ color:var(--muted); }
 
 /* ── Le panneau de fusion ───────────────────────────────────────────────────
    Le contenu du pavé, sorti de son cadre : ici la couleur ne dirait rien que
    le bouton d'état ne dise déjà. */
-.merge-drawer{ position:fixed; inset:0; z-index:1200; }
-.merge-drawer__voile{ position:absolute; inset:0; background:rgba(1,4,9,.6); }
+/* `overlay-host--side` fait le reste : plein écran, ancré à droite, au-dessus
+   de tout. Le panneau est monté sur `document.body` — rendu dans l'écran, il
+   passait sous la barre du projet, un ancêtre positionné l'y enfermant. */
+.merge-drawer__voile{ position:absolute; inset:0; }
 .merge-drawer__panneau{
-  position:absolute;
-  top:0; left:0; bottom:0;
-  width:min(460px, 92vw);
+  position:relative;
+  width:min(480px, 96vw);
+  height:100%;
   display:flex;
   flex-direction:column;
+  min-height:0;
   background:var(--bg);
-  border-right:1px solid var(--border);
+  border-left:1px solid var(--border);
+  border-radius:0;
   box-shadow:0 0 40px rgba(1,4,9,.6);
-  overflow-y:auto;
 }
 .merge-drawer__tete{
   display:flex;
   align-items:center;
   justify-content:space-between;
   gap:12px;
-  padding:14px 16px;
+  padding:14px 20px;
   border-bottom:1px solid var(--border);
   font-size:14px;
 }
+.merge-drawer__corps{
+  flex:1 1 auto;
+  min-height:0;
+  overflow-y:auto;
+  padding:20px;
+}
+/* Le panneau prend la main : la page ne défile plus derrière lui. */
+body.proposition-merge-open{ overflow:hidden; }
 .merge-drawer__fermer{
   display:inline-flex;
   padding:4px;
@@ -19364,8 +19390,11 @@ html.est-fige-par-le-graphe, body.est-fige-par-le-graphe{ overflow:hidden; }
 .depot-carte__titre{ color:var(--text); font-size:14px; font-weight:600; }
 .depot-carte__meta{ display:flex; align-items:center; gap:5px; flex-wrap:wrap; color:var(--muted); font-size:12px; }
 .depot-carte__meta b{ color:var(--text); font-weight:600; }
-.depot-carte__avatar{ display:inline-flex; }
-.depot-carte__avatar svg{ width:16px; height:16px; border-radius:50%; }
+/* L'avatar est une vignette, pas un portrait : sans contrainte, une photo de
+   profil occupait la carte entière. */
+.depot-carte__avatar{ display:inline-flex; flex:0 0 auto; width:16px; height:16px; }
+.depot-carte__avatar img,
+.depot-carte__avatar svg{ width:16px; height:16px; border-radius:50%; object-fit:cover; }
 
 /* La pastille n'est pas une décoration : elle affirme qu'on sait d'où vient ce
    qui est déposé. Quand ce n'est pas le cas, elle le dit — et son info-bulle
@@ -19382,3 +19411,154 @@ html.est-fige-par-le-graphe, body.est-fige-par-le-graphe{ overflow:hidden; }
 .depot-carte__sceau--verifie{ border-color:rgba(35,134,54,.5); color:rgb(63,185,80); }
 .depot-carte__sceau--partiel{ border-color:rgba(210,153,34,.5); color:rgb(210,153,34); }
 .depot-carte__sceau--vide{ border-style:dashed; }
+
+/* ── Le diff d'un dépôt ─────────────────────────────────────────────────────
+   Le châssis de GitHub — une arborescence à gauche, les écarts à droite — sur
+   une unité qui n'est pas la ligne de texte mais le repère : un avis, un
+   article, une donnée de base. Voir `depot-reperes.js`. */
+.diff-shell{
+  display:grid;
+  grid-template-columns:minmax(200px, 260px) minmax(0, 1fr);
+  gap:16px;
+  align-items:start;
+}
+.diff-shell--closed{ grid-template-columns:auto minmax(0, 1fr); }
+
+.diff-tree{
+  position:sticky;
+  top:calc(var(--app-top) + 8px);
+  max-height:calc(100vh - var(--app-top) - 24px);
+  display:flex;
+  flex-direction:column;
+  min-height:0;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  background:var(--panel2);
+  overflow:hidden;
+}
+.diff-tree__head{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:8px 10px;
+  border-bottom:1px solid var(--border);
+}
+.diff-tree__toggle{
+  display:inline-flex;
+  padding:4px;
+  border:0;
+  border-radius:6px;
+  background:transparent;
+  color:var(--muted);
+  cursor:pointer;
+}
+.diff-tree__toggle:hover{ background:rgba(110,118,129,.14); color:var(--text); }
+.diff-tree__resume{ color:var(--muted); font-size:11px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.diff-shell--closed .diff-tree__resume,
+.diff-shell--closed .diff-tree__corps{ display:none; }
+
+.diff-tree__corps{ flex:1 1 auto; min-height:0; overflow-y:auto; padding:6px 0 10px; }
+.diff-tree__groupe{ padding:4px 0; }
+.diff-tree__dossier{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  padding:4px 10px;
+  color:var(--muted);
+  font-size:11px;
+  font-weight:600;
+  letter-spacing:.02em;
+  text-transform:uppercase;
+}
+.diff-tree__ligne{
+  display:flex;
+  align-items:baseline;
+  gap:6px;
+  width:100%;
+  padding:3px 10px 3px 22px;
+  border:0;
+  background:transparent;
+  color:var(--text);
+  font-size:12px;
+  text-align:left;
+  cursor:pointer;
+}
+.diff-tree__ligne:hover{ background:rgba(110,118,129,.12); }
+.diff-tree__signe{ flex:0 0 auto; width:10px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+.diff-tree__titre{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.diff-tree__ligne--ajoute .diff-tree__signe{ color:rgb(63,185,80); }
+.diff-tree__ligne--modifie .diff-tree__signe{ color:rgb(210,153,34); }
+.diff-tree__ligne--retire .diff-tree__signe{ color:rgb(248,81,73); }
+.diff-tree__vide{ margin:0; padding:10px; color:var(--muted); font-size:12px; font-style:italic; }
+
+.diff-corps{ min-width:0; display:flex; flex-direction:column; gap:12px; }
+.diff-corps__barre{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  flex-wrap:wrap;
+  color:var(--muted);
+  font-size:12px;
+}
+.diff-corps__filtre{ display:inline-flex; align-items:center; gap:6px; cursor:pointer; }
+
+.diff-fichier{
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  overflow:hidden;
+  scroll-margin-top:calc(var(--app-top) + 16px);
+}
+.diff-fichier__tete{
+  display:flex;
+  align-items:baseline;
+  gap:8px;
+  flex-wrap:wrap;
+  padding:8px 12px;
+  border-bottom:1px solid var(--border);
+  background:var(--panel2);
+  font-size:12px;
+}
+.diff-fichier__signe{ font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+.diff-fichier__signe--ajoute{ color:rgb(63,185,80); }
+.diff-fichier__signe--modifie{ color:rgb(210,153,34); }
+.diff-fichier__signe--retire{ color:rgb(248,81,73); }
+.diff-fichier__chemin{ color:var(--muted); }
+.diff-fichier__titre{ color:var(--text); font-weight:600; }
+.diff-fichier__etat{ margin-left:auto; padding:0 8px; border:1px solid var(--border); border-radius:999px; font-size:11px; color:var(--muted); }
+.diff-fichier__etat--ajoute{ border-color:rgba(35,134,54,.5); color:rgb(63,185,80); }
+.diff-fichier__etat--modifie{ border-color:rgba(210,153,34,.5); color:rgb(210,153,34); }
+.diff-fichier__etat--retire{ border-color:rgba(248,81,73,.4); color:rgb(248,81,73); }
+.diff-fichier__corps{ font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; }
+.diff-fichier__pied{ padding:6px 12px; border-top:1px solid var(--border2); color:var(--muted); font-size:11px; }
+
+.diff-ligne{
+  display:grid;
+  grid-template-columns:44px 16px minmax(90px, auto) minmax(0, 1fr);
+  gap:8px;
+  padding:3px 12px 3px 0;
+  align-items:baseline;
+}
+/* Le numéro n'est pas celui d'une ligne de fichier — il n'en existe pas ici.
+   C'est un point où poser le doigt quand on discute à deux devant l'écran. */
+.diff-ligne__num{
+  padding-right:8px;
+  border-right:1px solid var(--border2);
+  color:var(--muted);
+  font-size:11px;
+  text-align:right;
+  user-select:none;
+}
+.diff-ligne__signe{ text-align:center; }
+.diff-ligne__nom{ color:var(--muted); }
+.diff-ligne__valeur{ color:var(--text); overflow-wrap:anywhere; }
+.diff-ligne--ajoute{ background:rgba(46,160,67,.12); }
+.diff-ligne--ajoute .diff-ligne__signe{ color:rgb(63,185,80); }
+.diff-ligne--retire{ background:rgba(248,81,73,.1); }
+.diff-ligne--retire .diff-ligne__signe{ color:rgb(248,81,73); }
+.diff-ligne--inchange{ background:transparent; }
+
+@media (max-width: 860px){
+  .diff-shell{ grid-template-columns:minmax(0, 1fr); }
+  .diff-tree{ position:static; max-height:none; }
+}

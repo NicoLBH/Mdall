@@ -77,6 +77,8 @@ import {
   tableauAvantApres
 } from "../services/proposition-avant-apres.js";
 import { depotDeLaProposition, resumeDuDepot } from "../services/proposition-depot.js";
+import { ETAT, ETAT_LABELS, arbreDesReperes, comparerDesReperes, resumeDuDiff } from "../services/depot-reperes.js";
+import { aChange, reperesDuDepot } from "../services/depot-carburants.js";
 import { avisFromFigures, mergeAvis } from "../services/avis-from-figures.js";
 import { describeReadingStack } from "../services/run-workflow.js";
 
@@ -105,6 +107,11 @@ const view = {
   /** Ce qu'on écrira en fusionnant. */
   mergeTitle: "",
   mergeNote: "",
+  /** Le panneau de fusion, ouvert par la barre de titre. */
+  mergeDrawer: false,
+  /** L'arborescence du diff, et ce qu'il montre. */
+  diffTreeOpen: true,
+  diffOnlyChanged: true,
   /** De quoi citer dans ce projet : ses sujets et ses propositions. */
   refs: [],
   /** Le menu de citation ouvert sous le champ, s'il y en a un. */
@@ -256,8 +263,14 @@ function renderContent(root) {
       </section>
     `;
     bindReview(root);
+    // Le panneau vit hors de l'écran, sur `document.body` : il se resynchronise
+    // après chaque rendu, sans quoi il porterait l'état d'avant.
+    syncMergeDrawer(root);
     return;
   }
+
+  // Retour à la liste : le panneau n'a plus de proposition à fusionner.
+  closeMergeDrawer();
 
   root.innerHTML = `
     <section class="project-simple-page project-simple-page--propositions">
@@ -388,12 +401,15 @@ function renderMergeStateButton(proposition, review) {
   // dire ni acte à proposer.
   if (!proposition || proposition.status !== PROPOSITION.OPEN) return "";
 
+  // Pendant l'analyse : le spinner seul. Écrire « Analyse » à côté d'une roue
+  // qui tourne dit deux fois la même chose, et fait sauter le bouton de largeur
+  // quand elle s'arrête.
   if (review?.running) {
     return `
       <button type="button" class="gh-btn gh-btn--sm merge-state merge-state--running" disabled
+        aria-label="Analyse en cours"
         title="${escapeHtml(review.step || "Lecture des livrables du projet et de ceux de cette proposition.")}">
         <span class="merge-state__spin">${svgIcon("sync", { className: "octicon" })}</span>
-        <span>Analyse</span>
       </button>
     `;
   }
@@ -401,10 +417,13 @@ function renderMergeStateButton(proposition, review) {
   const blocage = describeBlocking(review?.conflicts ?? []);
   const empeche = Boolean(blocage) || Boolean(review?.error);
 
+  // La pastille porte la couleur, le bouton reste gris : c'est la lecture de
+  // GitHub, et elle vaut mieux qu'un bouton entier coloré — le vert d'un bouton
+  // dit « appuyez ici », celui d'une pastille dit « c'est prêt ».
   return `
     <button type="button" class="gh-btn gh-btn--sm merge-state merge-state--${empeche ? "held" : "ready"}"
       data-merge-open>
-      ${svgIcon(empeche ? "alert" : "check", { className: "octicon" })}
+      <span class="merge-state__pastille">${svgIcon(empeche ? "alert" : "check", { className: "octicon" })}</span>
       <span>${escapeHtml(empeche ? "À arbitrer" : "Prêt à fusionner")}</span>
     </button>
   `;
@@ -423,27 +442,68 @@ function renderMergeStateButton(proposition, review) {
  * dans celle qu'on ne regarde pas.
  */
 function renderMergeDrawer(proposition, review) {
-  if (!view.mergeDrawer || proposition?.status !== PROPOSITION.OPEN) return "";
-
   const blocage = describeBlocking(review.conflicts ?? []);
   const empeche = Boolean(blocage) || Boolean(review.error);
 
   return `
-    <div class="merge-drawer" data-merge-drawer>
-      <div class="merge-drawer__voile" data-merge-drawer-close></div>
-      <aside class="merge-drawer__panneau" role="dialog" aria-modal="true" aria-label="Fusionner la proposition">
-        <header class="merge-drawer__tete">
-          <b>Fusionner la proposition</b>
-          <button type="button" class="merge-drawer__fermer" data-merge-drawer-close
-            aria-label="Fermer">${svgIcon("x", { className: "octicon" })}</button>
-        </header>
+    <aside class="merge-drawer__panneau gh-panel gh-panel--details" role="dialog" aria-modal="true"
+      aria-label="Fusionner la proposition">
+      <header class="merge-drawer__tete gh-panel__head gh-panel__head--tight">
+        <b>Fusionner la proposition #${Number(proposition.number) || "?"}</b>
+        <button type="button" class="merge-drawer__fermer" data-merge-drawer-close
+          aria-label="Fermer">${svgIcon("x", { className: "octicon" })}</button>
+      </header>
+      <div class="merge-drawer__corps details-body">
         <div class="merge-box__panel merge-box__panel--drawer">
           ${review.confirming ? "" : renderMergeConditions(review, empeche, blocage)}
           ${review.confirming ? renderMergeForm(proposition, review) : renderMergeAction(review, empeche, blocage)}
         </div>
-      </aside>
-    </div>
+      </div>
+    </aside>
   `;
+}
+
+/**
+ * Le panneau vit sur `document.body`, pas dans l'écran.
+ *
+ * Rendu dans la coque des propositions, il passait **sous** la barre du projet :
+ * un ancêtre positionné crée un contexte d'empilement, et un `position: fixed`
+ * qui y est pris n'en sort plus, si haut soit son `z-index`. C'est le mécanisme
+ * exact qui avait déjà coupé le menu des Documents.
+ *
+ * Les panneaux latéraux de l'application vivent tous là pour cette raison — on
+ * reprend leur coque (`overlay-host--side`, qui s'ancre à droite) plutôt que
+ * d'en inventer une cinquième.
+ */
+function syncMergeDrawer(root) {
+  const existant = document.getElementById("propositionMergeDrawer");
+  const proposition = view.open;
+  const review = view.review;
+  const ouvert = Boolean(view.mergeDrawer) && proposition?.status === PROPOSITION.OPEN && review && !review.running;
+
+  if (!ouvert) {
+    existant?.remove();
+    document.body.classList.remove("proposition-merge-open");
+    return;
+  }
+
+  const hote = existant ?? document.createElement("div");
+  if (!existant) {
+    hote.id = "propositionMergeDrawer";
+    document.body.appendChild(hote);
+  }
+  hote.className = "overlay-host overlay-host--side is-open merge-drawer";
+  hote.innerHTML = `<div class="merge-drawer__voile" data-merge-drawer-close></div>${renderMergeDrawer(proposition, review)}`;
+  document.body.classList.add("proposition-merge-open");
+
+  bindMergePanel(hote, root);
+}
+
+/** Fermer le panneau quand on quitte la proposition : il n'a plus d'objet. */
+function closeMergeDrawer() {
+  view.mergeDrawer = false;
+  document.getElementById("propositionMergeDrawer")?.remove();
+  document.body.classList.remove("proposition-merge-open");
 }
 
 function renderReviewHead(proposition, review) {
@@ -958,16 +1018,30 @@ const REVIEW_TABS = [
   { id: "changes", label: "Changements", iconName: "file-diff" }
 ];
 
+/**
+ * Le diff du dépôt, recalculé à partir de ce que la revue porte.
+ *
+ * Il ne se stocke pas ailleurs qu'ici : deux copies d'un même écart finissent
+ * par ne plus dire la même chose, et c'est celle qu'on ne regarde pas qui a
+ * raison le jour où l'on cherche.
+ */
+function recalculerLeDiff(review) {
+  if (!review) return;
+  review.diffDuDepot = comparerDesReperes(reperesDuDepot({
+    items: review.items ?? [],
+    avantApres: review.avantApres ?? null
+  }));
+}
+
 function reviewTabs(review) {
-  const items = review.items ?? [];
   const compte = {
     // La proposition est elle-même un dépôt — c'est la carte de tête —, et les
     // lots de documents s'ajoutent à elle.
     deposits: 1 + (review.deposits ?? []).length,
-    // Les affirmations comptent : elles sont dans l'onglet, et un compteur qui
-    // les oublie annonce « Changements » sans chiffre sur une proposition qui
-    // en porte douze.
-    changes: items.length + (review.avantApres?.lignes ?? []).length
+    // Les changements comptent ce qui **a bougé**, pas ce que le dépôt contient.
+    // Un dépôt de trois cents repères dont deux changent annonce deux : c'est
+    // le nombre qu'on veut voir avant de cliquer.
+    changes: (review.diffDuDepot?.lignes ?? []).filter(aChange).length
   };
 
   return REVIEW_TABS.map((tab) => ({
@@ -1467,7 +1541,7 @@ function renderMergeBox(proposition, review) {
     return `
       <section class="merge-area">
         <div class="merge-box merge-box--waiting">
-          <span class="merge-box__avatar">${svgIcon("sync", { className: "octicon", width: 20, height: 20 })}</span>
+          <span class="merge-box__avatar">${svgIcon("git-compare", { className: "octicon", width: 20, height: 20 })}</span>
           <div class="merge-box__panel">
             <div class="merge-box__body">
               <div class="merge-box__row merge-box__row--lead">
@@ -1970,9 +2044,11 @@ function syncViewerNav() {
  */
 export function renderDeposits(review) {
   const depots = review.deposits ?? [];
-  return `${renderDepotDeLaProposition(review)}${depots
-    .map((depot) => renderDepotDeDocuments(depot, review.figures))
-    .join("")}`;
+  return `
+    ${renderDepotDeLaProposition(review)}
+    ${depots.map((depot) => renderDepotDeDocuments(depot, review.figures)).join("")}
+    ${renderDepotLignes(view.open, review)}
+  `;
 }
 
 /**
@@ -2283,26 +2359,32 @@ function renderAvantApres(proposition, review) {
 }
 
 /** Ce qui change : les contradictions d'abord, puis les affirmations. */
-function renderChanges(proposition, review) {
+/**
+ * Ce que le dépôt apporte, ligne par ligne — et ce qu'on en accepte.
+ *
+ * C'est le contenu d'un commit, pas celui d'un diff. GitHub sépare les deux
+ * pour une raison qui vaut ici : un commit est un **acte**, daté, signé, avec
+ * ce qu'il apporte ; un diff est une **soustraction**, que personne ne signe.
+ * Les cases à cocher appartiennent à l'acte — on accepte ou l'on refuse ce qui
+ * est déposé, pas un écart.
+ *
+ * Une différence assumée avec GitHub : là-bas on ne prend pas un commit ligne
+ * par ligne. Ici si, parce qu'un rapport de bureau de contrôle n'est pas un
+ * patch qu'on prend ou qu'on laisse en bloc — on lève un avis et pas l'autre.
+ */
+function renderDepotLignes(proposition, review) {
   const items = review.items ?? [];
   const parType = (type) => items.filter((entry) => entry.itemType === type);
   const gele = review.frozen === true;
 
-  // Le tableau des affirmations se lit tout de suite : il vient de la base. Ce
-  // qui dépend de la lecture des livrables ne se prononce pas encore — dire
-  // « aucun document » avant d'avoir regardé serait une réponse inventée.
   if (review.running) {
-    return `
-      ${renderAvantApres(proposition, review)}
-      <p class="review-empty-note">${escapeHtml(
-        review.step || "Les documents, les rattachements et les avis arrivent avec l'analyse."
-      )}</p>
-    `;
+    return `<p class="review-empty-note">${escapeHtml(
+      review.step || "Les documents, les rattachements et les avis arrivent avec l'analyse."
+    )}</p>`;
   }
 
   return `
     ${renderConflicts(review.conflicts ?? [])}
-    ${renderAvantApres(proposition, review)}
     ${renderReviewBlock(
       ITEM_TYPE.DOCUMENT,
       "Documents",
@@ -2329,6 +2411,166 @@ function renderChanges(proposition, review) {
           : "Aucun livrable exploitable : il n'y a pas d'avis à en tirer."
     )}
     ${renderSilentAvis(review)}
+  `;
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Les changements : un diff, et rien d'autre
+ *
+ * Une barre latérale qui range ce qui a bougé, un panneau qui montre l'écart
+ * champ par champ. Le châssis est celui de GitHub ; l'unité comparée ne l'est
+ * pas — ce n'est pas la ligne de texte, c'est le **repère** : un avis, un
+ * article, un point d'ordre du jour, une donnée de base. Voir
+ * `depot-reperes.js` pour ce qui a mené là.
+ *
+ * L'écran ne connaît aucun de ces types. Il affiche ce que le moteur lui rend,
+ * et un carburant de plus n'ajoute pas une ligne ici.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+function renderChanges(proposition, review) {
+  const diff = review.diffDuDepot ?? { lignes: [], compte: {} };
+  const lignes = diff.lignes ?? [];
+
+  if (review.running && lignes.length === 0) {
+    return `<p class="review-empty-note">${escapeHtml(
+      review.step || "Les écarts se calculent au fur et à mesure de la lecture des livrables."
+    )}</p>`;
+  }
+
+  if (lignes.length === 0) {
+    return `<div class="propositions-empty"><b>Rien à comparer</b><p>Ce dépôt n'apporte aucun repère identifié.</p></div>`;
+  }
+
+  const arbre = arbreDesReperes(lignes);
+  const seulementCeQuiBouge = view.diffOnlyChanged !== false;
+  const visibles = seulementCeQuiBouge ? lignes.filter(aChange) : lignes;
+  const groupes = arbreDesReperes(visibles);
+
+  return `
+    <div class="diff-shell${view.diffTreeOpen === false ? " diff-shell--closed" : ""}">
+      <aside class="diff-tree" aria-label="Ce qui a changé">
+        <div class="diff-tree__head">
+          <button type="button" class="diff-tree__toggle" data-diff-tree-toggle
+            aria-label="${escapeHtml(view.diffTreeOpen === false ? "Étendre la barre latérale" : "Replier la barre latérale")}">
+            ${svgIcon(view.diffTreeOpen === false ? "sidebar-expand" : "sidebar-collapse", { className: "octicon" })}
+          </button>
+          <span class="diff-tree__resume">${escapeHtml(resumeDuDiff(diff.compte))}</span>
+        </div>
+        <div class="diff-tree__corps">
+          ${groupes
+            .map(
+              (groupe) => `
+                <div class="diff-tree__groupe">
+                  <div class="diff-tree__dossier">
+                    ${svgIcon("file-directory", { className: "octicon" })}
+                    <span>${escapeHtml(groupe.chemin.join(" / "))}</span>
+                  </div>
+                  ${groupe.lignes
+                    .map(
+                      (ligne) => `
+                        <button type="button" class="diff-tree__ligne diff-tree__ligne--${escapeHtml(ligne.etat)}"
+                          data-diff-goto="${escapeHtml(ligne.id)}">
+                          <span class="diff-tree__signe">${escapeHtml(ligne.signe)}</span>
+                          <span class="diff-tree__titre">${escapeHtml(ligne.titre)}</span>
+                        </button>
+                      `
+                    )
+                    .join("")}
+                </div>
+              `
+            )
+            .join("")}
+          ${
+            groupes.length === 0
+              ? `<p class="diff-tree__vide">Rien n'a bougé dans ce dépôt.</p>`
+              : ""
+          }
+        </div>
+      </aside>
+
+      <div class="diff-corps">
+        <div class="diff-corps__barre">
+          <label class="diff-corps__filtre">
+            <input type="checkbox" data-diff-only-changed ${seulementCeQuiBouge ? "checked" : ""}>
+            <span>N'afficher que ce qui a changé</span>
+          </label>
+          <span class="diff-corps__compte">${escapeHtml(resumeDuDiff(diff.compte))}</span>
+        </div>
+        ${visibles.map(renderDiffRepere).join("")
+          || `<p class="review-empty-note">Rien n'a bougé : ce dépôt confirme ce que le projet dit déjà.</p>`}
+      </div>
+    </div>
+  `;
+}
+
+/** Un repère et son écart, champ par champ — la « hunk » d'un diff. */
+function renderDiffRepere(ligne) {
+  const numero = { compteur: 0 };
+
+  const champs = ligne.champs
+    .map((champ) => {
+      // Un champ qui n'a pas bougé s'écrit **une fois**, sans signe : c'est une
+      // ligne de contexte, comme dans un diff de code. L'écrire deux fois — en
+      // rouge puis en vert — annonçait un changement là où il n'y en avait pas.
+      if (champ.etat === ETAT.INCHANGE) {
+        numero.compteur += 1;
+        return renderDiffLigne(numero.compteur, " ", champ.nom, champ.apres || champ.avant, "inchange");
+      }
+
+      const cellules = [];
+      if (champ.avant) {
+        numero.compteur += 1;
+        cellules.push(renderDiffLigne(numero.compteur, "-", champ.nom, champ.avant, "retire"));
+      }
+      if (champ.apres) {
+        numero.compteur += 1;
+        cellules.push(renderDiffLigne(numero.compteur, "+", champ.nom, champ.apres, "ajoute"));
+      }
+      return cellules.join("");
+    })
+    .join("");
+
+  const provenance = [ligne.provenance?.source, ligne.provenance?.article]
+    .filter(Boolean).join(" · ");
+  const page = ligne.provenance?.page;
+
+  return `
+    <section class="diff-fichier" id="diff-${escapeHtml(ligne.id)}">
+      <header class="diff-fichier__tete">
+        <span class="diff-fichier__signe diff-fichier__signe--${escapeHtml(ligne.etat)}">${escapeHtml(ligne.signe)}</span>
+        <span class="diff-fichier__chemin">${escapeHtml(ligne.chemin.join(" / "))}</span>
+        <span class="diff-fichier__titre">${escapeHtml(ligne.titre)}</span>
+        <span class="diff-fichier__etat diff-fichier__etat--${escapeHtml(ligne.etat)}">${escapeHtml(
+          ETAT_LABELS[ligne.etat] ?? ligne.etat
+        )}</span>
+      </header>
+      <div class="diff-fichier__corps">${champs}</div>
+      ${
+        provenance || page
+          ? `<footer class="diff-fichier__pied">${escapeHtml(
+              [provenance, page ? `page ${page}` : ""].filter(Boolean).join(" · ")
+            )}</footer>`
+          : ""
+      }
+    </section>
+  `;
+}
+
+/**
+ * Une ligne du diff.
+ *
+ * Le numéro n'est pas celui d'une ligne de fichier — il n'en existe pas ici.
+ * C'est un repère de lecture, comme dans un diff de code : il donne un point où
+ * poser le doigt quand on discute à deux devant l'écran.
+ */
+function renderDiffLigne(numero, signe, nom, valeur, ton) {
+  return `
+    <div class="diff-ligne diff-ligne--${escapeHtml(ton)}">
+      <span class="diff-ligne__num">${numero}</span>
+      <span class="diff-ligne__signe">${escapeHtml(signe)}</span>
+      <span class="diff-ligne__nom">${escapeHtml(nom)}</span>
+      <span class="diff-ligne__valeur">${escapeHtml(valeur || "—")}</span>
+    </div>
   `;
 }
 
@@ -2461,7 +2703,6 @@ function renderReview(root) {
       ariaLabel: "Sections de la proposition"
     })}
     <div class="review-tabpanel">${panneau}</div>
-    ${renderMergeDrawer(proposition, review)}
   `;
 }
 
@@ -2648,6 +2889,57 @@ function showPdfViewer(root) {
 }
 
 /** Le retour à la liste, les cases, les raisons, et la fusion. */
+/**
+ * Les gestes du pavé de fusion, où qu'il soit rendu.
+ *
+ * Deux racines possibles — l'écran, et le panneau monté sur `document.body` —
+ * pour un seul jeu de gestes. `scope` dit où chercher les boutons ; `root` dit
+ * quoi redessiner, et c'est toujours l'écran.
+ */
+function bindMergePanel(scope, root) {
+  // Le premier clic ouvre le formulaire ; c'est « Confirmer » qui fusionne.
+  scope.querySelector("[data-review-merge]")?.addEventListener("click", () => {
+    const { title, note } = defaultMergeMessage({ proposition: view.open, items: view.review?.items ?? [] });
+    view.mergeTitle = title;
+    view.mergeNote = note;
+    view.review.confirming = true;
+    renderContent(root);
+  });
+
+  for (const bouton of scope.querySelectorAll("[data-merge-drawer-close]")) {
+    bouton.addEventListener("click", () => {
+      view.mergeDrawer = false;
+      view.review.confirming = false;
+      renderContent(root);
+    });
+  }
+
+  scope.querySelector("[data-merge-cancel]")?.addEventListener("click", () => {
+    // Annuler le formulaire ne referme pas le panneau : on revient aux
+    // conditions, qui sont ce qu'on relit avant de renoncer ou de recommencer.
+    view.review.confirming = false;
+    renderContent(root);
+  });
+
+  const titre = scope.querySelector("[data-merge-title]");
+  if (titre) titre.addEventListener("input", (event) => { view.mergeTitle = event.target.value; });
+  const note = scope.querySelector("[data-merge-note]");
+  if (note) note.addEventListener("input", (event) => { view.mergeNote = event.target.value; });
+
+  scope.querySelector("[data-merge-confirm]")?.addEventListener("click", () => merge(root));
+
+  // « Régler les conflits » ne fusionne rien : il emmène là où l'on trancherait.
+  // La carte d'un dépôt y mène aussi — un dépôt dit qu'il s'est passé quelque
+  // chose, les Changements disent quoi, comme un commit mène à son diff.
+  for (const bouton of scope.querySelectorAll("[data-review-goto-changes]")) {
+    bouton.addEventListener("click", () => {
+      view.tab = "changes";
+      view.mergeDrawer = false;
+      renderContent(root);
+    });
+  }
+}
+
 function bindReview(root) {
   // Le même mécanisme que pour un sujet : la page défile, la coque prend
   // `overlay-chrome--compact`, l'en-tête prend `details-head--compact`, et le
@@ -2727,14 +3019,26 @@ function bindReview(root) {
   bindConversation(root);
   bindRefLinks(root);
 
-  // Le premier clic ouvre le formulaire ; c'est « Confirmer » qui fusionne.
-  root.querySelector("[data-review-merge]")?.addEventListener("click", () => {
-    const { title, note } = defaultMergeMessage({ proposition: view.open, items: view.review?.items ?? [] });
-    view.mergeTitle = title;
-    view.mergeNote = note;
-    view.review.confirming = true;
+  // La barre latérale du diff se replie, comme celle des Documents : sur un
+  // dépôt de trois cents repères on veut la voir, sur trois on veut la place.
+  root.querySelector("[data-diff-tree-toggle]")?.addEventListener("click", () => {
+    view.diffTreeOpen = view.diffTreeOpen === false;
     renderContent(root);
   });
+
+  // Par défaut on ne montre que ce qui bouge — c'est ce qu'on vient chercher.
+  // Le reste se demande, il ne s'impose pas.
+  root.querySelector("[data-diff-only-changed]")?.addEventListener("change", (event) => {
+    view.diffOnlyChanged = event.target.checked;
+    renderContent(root);
+  });
+
+  for (const bouton of root.querySelectorAll("[data-diff-goto]")) {
+    bouton.addEventListener("click", () => {
+      const cible = root.querySelector(`#diff-${CSS.escape(bouton.getAttribute("data-diff-goto"))}`);
+      cible?.scrollIntoView({ block: "start", behavior: "smooth" });
+    });
+  }
 
   // Le bouton de la barre de titre : il ouvre le panneau, il ne fusionne pas.
   root.querySelector("[data-merge-open]")?.addEventListener("click", () => {
@@ -2743,27 +3047,7 @@ function bindReview(root) {
     renderContent(root);
   });
 
-  for (const bouton of root.querySelectorAll("[data-merge-drawer-close]")) {
-    bouton.addEventListener("click", () => {
-      view.mergeDrawer = false;
-      view.review.confirming = false;
-      renderContent(root);
-    });
-  }
-
-  root.querySelector("[data-merge-cancel]")?.addEventListener("click", () => {
-    view.review.confirming = false;
-    // Annuler le formulaire ne referme pas le panneau : on revient aux
-    // conditions, qui sont ce qu'on relit avant de renoncer ou de recommencer.
-    renderContent(root);
-  });
-
-  const titre = root.querySelector("[data-merge-title]");
-  if (titre) titre.addEventListener("input", (event) => { view.mergeTitle = event.target.value; });
-  const note = root.querySelector("[data-merge-note]");
-  if (note) note.addEventListener("input", (event) => { view.mergeNote = event.target.value; });
-
-  root.querySelector("[data-merge-confirm]")?.addEventListener("click", () => merge(root));
+  bindMergePanel(root, root);
   root.querySelector("[data-review-abandon]")?.addEventListener("click", () => abandon(root));
 }
 
@@ -2822,17 +3106,6 @@ function bindConversation(root) {
     view.editPreview = false;
     renderContent(root);
   });
-
-  // « Régler les conflits » ne fusionne rien : il emmène là où l'on trancherait.
-  // La carte d'un dépôt y mène aussi — un dépôt dit qu'il s'est passé quelque
-  // chose, les Changements disent quoi, comme un commit mène à son diff.
-  for (const bouton of root.querySelectorAll("[data-review-goto-changes]")) {
-    bouton.addEventListener("click", () => {
-      view.tab = "changes";
-      view.mergeDrawer = false;
-      renderContent(root);
-    });
-  }
 
   // Une note ratée se redemande : c'est un appel qui a échoué, pas un état du
   // dossier. On repart des mêmes faits, ceux que l'analyse a déjà établis.
@@ -3432,6 +3705,7 @@ async function relireLeTableau(proposition) {
       items: view.review.decisionRows ?? [],
       assertions: affirmations
     });
+    recalculerLeDiff(view.review);
   } catch {
     // Le tableau reste celui d'avant la fusion. Il est daté par l'écran qui le
     // porte, et une relecture ratée ne défait pas une fusion.
@@ -3630,6 +3904,7 @@ function mergeFigureAvis(root, { knownAvis = [], decisions = [], assumees = [], 
     ],
     decisions
   );
+  recalculerLeDiff(view.review);
   view.review.conflicts = findMemoryConflicts(view.review.items, assumees);
 
   // La note de dépôt s'appuie sur ce diff-là : lui laisser l'ancien lui ferait
@@ -3979,7 +4254,7 @@ async function recomputeAfterMerge(root, proposition) {
 
 /** L'en-tête de la liste. */
 function setPropositionsHeader() {
-  setProjectViewHeader({ contextLabel: "Propositions", variant: "propositions" });
+  setProjectViewHeader({ contextLabel: "Propositions", variant: "propositions", hideBar: true });
 }
 
 /**
@@ -4050,6 +4325,7 @@ async function openFrozen(root, proposition) {
       // en mémoire — ce que la proposition a posé, et ce que cela remplaçait.
       avantApres: tableauAvantApres({ proposition, items: stored, assertions: affirmationsDuProjet })
     };
+    recalculerLeDiff(view.review);
 
     // Les photos ne se recalculent pas : elles ont été découpées, hachées et
     // écrites en base au moment de l'analyse. Une proposition close les perdait
@@ -4117,6 +4393,11 @@ async function openProposition(root, propositionId) {
   setProjectViewHeader({
     contextLabel: "Propositions",
     variant: "propositions",
+    // La barre du projet n'affichait que le mot « Propositions », déjà écrit
+    // dans l'onglet actif juste au-dessus, et juste au-dessus du titre de la
+    // proposition. Trois lignes pour dire où l'on est. Les écrans les plus
+    // denses — Situations, Mémoire, Atelier — la masquent déjà.
+    hideBar: true,
     compactLabel: `#${Number(proposition.number) || "?"} ${proposition.title}`,
     onCompactLabelClick: () => backToList(root)
   });
@@ -4198,6 +4479,7 @@ async function openProposition(root, propositionId) {
       // mouvements du corpus, qui n'ont pas de valeur d'avant.
       avantApres: tableauAvantApres({ proposition, items: decisions, assertions: affirmationsDuProjet })
     };
+    recalculerLeDiff(view.review);
     renderContent(root);
 
     // ── Ce qui demande de tout relire ───────────────────────────────────────
@@ -4251,6 +4533,7 @@ async function openProposition(root, propositionId) {
         decisions
       )
     };
+    recalculerLeDiff(view.review);
 
     // Les conflits portent les mêmes objets que les blocs — pas des copies : ce
     // qu'on tranche dans l'un se voit dans l'autre, et la fusion se débloque
