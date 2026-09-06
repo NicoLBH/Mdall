@@ -2792,7 +2792,6 @@ function renderDiffLigne(groupe, entree) {
   const cle = ancreDeLigne(entree);
   const enEcriture = view.diffAnnotations?.has(cle) === true;
   const deja = commentairesDeLAncre(cle);
-  const source = [entree.ligne.provenance?.source, entree.ligne.provenance?.article].filter(Boolean).join(", ");
 
   return `
     <div class="diff-ligne diff-ligne--${escapeHtml(entree.ton)}">
@@ -2803,13 +2802,30 @@ function renderDiffLigne(groupe, entree) {
         ${svgIcon("plus", { className: "octicon" })}
       </button>
       <span class="diff-ligne__signe">${escapeHtml(entree.signe)}</span>
-      <span class="diff-ligne__code">${renderJetons(
-        ligneDAffirmation({ sujet: entree.nom, valeur: entree.valeur, source })
-      )}</span>
+      <span class="diff-ligne__code">${renderJetons(jetonsDeLaLigne(entree))}</span>
     </div>
     ${deja.length ? renderCommentairesEnLigne(deja) : ""}
     ${enEcriture ? renderAnnotationEnLigne(cle) : ""}
   `;
+}
+
+/**
+ * Ce qu'une ligne du diff dit, dans l'écriture du projet.
+ *
+ * Rassemblé ici, une fois : le rendu du diff, l'extrait cité et le fichier de
+ * l'Atelier écrivent la même ligne, et trois écritures pour une même valeur
+ * finiraient par différer d'un espace — ce qui suffirait à faire croire à un
+ * changement.
+ */
+function jetonsDeLaLigne(entree) {
+  const provenance = entree.ligne.provenance ?? {};
+  return ligneDAffirmation({
+    sujet: entree.nom,
+    valeur: entree.valeur,
+    zones: provenance.zones ?? [],
+    deduitDe: provenance.deduitDe ?? null,
+    source: [provenance.source, provenance.article].filter(Boolean).join(", ")
+  });
 }
 
 /**
@@ -2949,9 +2965,8 @@ export function extraitDeLaLigne(cible) {
   if (!visee) return "";
 
   const ecrire = (entree) => {
-    const source = [entree.ligne.provenance?.source, entree.ligne.provenance?.article].filter(Boolean).join(", ");
     const numeros = `${String(entree.gauche ?? "").padStart(3, " ")} ${String(entree.droite ?? "").padStart(3, " ")}`;
-    return `${numeros}  ${entree.signe} ${enClair(ligneDAffirmation({ sujet: entree.nom, valeur: entree.valeur, source }))}`;
+    return `${numeros}  ${entree.signe} ${enClair(jetonsDeLaLigne(entree))}`;
   };
 
   return [

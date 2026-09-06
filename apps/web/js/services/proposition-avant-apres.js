@@ -190,6 +190,10 @@ export function tableauAvantApres({ proposition = null, items = [], assertions =
       zones: item?.payload?.zones ?? apresPorteur?.zones ?? null,
       source: texte(item?.payload?.source) || texte(apresPorteur?.payload?.source) || "",
       article: texte(item?.payload?.article) || texte(apresPorteur?.payload?.article) || "",
+      // D'où la valeur sort quand elle sort d'un calcul : le nom du calcul et
+      // ses entrées. C'est ce qui permettra, le jour où une entrée change, de
+      // savoir sans chercher ce qu'il faut refaire.
+      deduitDe: item?.payload?.deduitDe ?? apresPorteur?.payload?.deduitDe ?? null,
       avant,
       apres,
       changement,

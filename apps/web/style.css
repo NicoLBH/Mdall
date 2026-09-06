@@ -15451,6 +15451,14 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   margin-right:auto;
   padding:0 16px;
 }
+/* Sauf sur les Changements, où le contenu prend l'écran : un titre compacté
+   qui reste dans une colonne de 1012 pixels au-dessus d'un diff pleine largeur
+   se lit comme le titre d'autre chose. */
+.review-head--pleine.details-head--compact .overlay-chrome__bar,
+#propositionsDetailsTitle.review-head--pleine.details-head--compact .overlay-chrome__bar{
+  max-width:none;
+  padding:0;
+}
 .overlay-chrome--compact .review-head{ padding:6px 0; }
 
 .review-description{
@@ -19873,3 +19881,14 @@ body.proposition-merge-open{ overflow:hidden; }
    portent leur couleur, plus discrète que celle d'une exigence. */
 .mdall-sans-objet{ color:rgb(139,148,158); font-style:italic; }
 .mdall-attente{ color:rgb(210,153,34); }
+
+/* Deux flèches, deux choses différentes, et les confondre coûte cher :
+   `←` je l'ai lu ici — une valeur qui tient toute seule ;
+   `⇐` je l'ai calculé — une valeur qui ne tient que tant que ses entrées
+   tiennent. La seconde porte donc sa propre couleur, et le calcul qui la suit
+   se lit comme un appel : c'est bien de cela qu'il s'agit. */
+.mdall-deduit{ color:rgb(210,168,255); }
+.mdall-calcul{ color:rgb(210,168,255); opacity:.8; }
+/* La portée fait partie de l'identité : deux études sur deux zones produisent
+   deux affirmations, et rien ne le disait. */
+.mdall-portee{ color:rgb(255,166,87); }

@@ -83,12 +83,14 @@ test("le résumé met ce qui bouge en tête", () => {
 
 test("un avis ajouté n'a pas d'avant : on ne lui en invente pas un", () => {
   const { avant, apres } = reperesDAvis([
-    { itemType: "avis", itemKey: "A-12", payload: { change: "added", reference: "A-12", status: "OPEN", rubric: "Incendie" } }
+    { itemType: "avis", itemKey: "A-12", payload: { change: "added", reference: "A-12", status: "OPEN", domain: "incendie" } }
   ]);
 
   assert.equal(avant.length, 0);
   assert.equal(apres.length, 1);
-  assert.deepEqual(apres[0].chemin, ["Avis", "Incendie"]);
+  // Un avis est un constat : il se range comme tel, et non dans un dossier
+  // « Avis » qui n'existerait que pour lui.
+  assert.deepEqual(apres[0].chemin, ["Constats", "Incendie"]);
   assert.equal(apres[0].id, "avis:A-12");
 });
 

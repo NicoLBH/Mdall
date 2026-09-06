@@ -98,6 +98,12 @@ export const JETON = {
   SANS_OBJET: "sans-objet",
   /** « en attente » — il manque une réponse pour conclure. */
   ATTENTE: "attente",
+  /** `⇐` — la double flèche : cette valeur a été **calculée**. */
+  DEDUIT: "deduit",
+  /** Le calcul et ses entrées, derrière la double flèche. */
+  CALCUL: "calcul",
+  /** `@ escalier B` — la portée d'une affirmation. */
+  PORTEE: "portee",
   /** Ce qui ne se colore pas : les espaces, les séparateurs. */
   NEUTRE: "neutre"
 };
@@ -131,9 +137,19 @@ export function couperLUnite(valeur) {
  * dessine pas une case pour dire qu'elle est vide (fondamentaux, règle 5 — ce
  * qui manque n'apparaît pas, plutôt que d'apparaître creux).
  */
-export function ligneDAffirmation({ sujet = "", valeur = "", source = "" } = {}) {
+export function ligneDAffirmation({ sujet = "", valeur = "", source = "", zones = [], deduitDe = null } = {}) {
   const { nombre, unite } = couperLUnite(valeur);
   const jetons = [jeton(JETON.SUJET, texte(sujet))];
+
+  // La portée fait partie de l'identité, donc de la ligne. Deux études sur deux
+  // zones produisent deux affirmations différentes, et rien ne le disait :
+  // l'écran annonçait quarante-huit lignes nouvelles là où vingt-cinq
+  // portaient le même sujet sur une autre zone.
+  const portees = (Array.isArray(zones) ? zones : [zones]).map(texte).filter(Boolean);
+  if (portees.length) {
+    jetons.push(jeton(JETON.NEUTRE, " "));
+    jetons.push(jeton(JETON.PORTEE, `@ ${portees.join(" + ")}`));
+  }
 
   if (nombre) {
     jetons.push(jeton(JETON.NEUTRE, "  "));
@@ -142,6 +158,25 @@ export function ligneDAffirmation({ sujet = "", valeur = "", source = "" } = {})
       jetons.push(jeton(JETON.NEUTRE, " "));
       jetons.push(jeton(JETON.UNITE, unite));
     }
+  }
+
+  // Deux flèches, deux choses différentes, et les confondre coûte cher :
+  //
+  //   ←  je l'ai **lu** ici       une valeur relevée, qui tient toute seule
+  //   ⇐  je l'ai **calculé**      une valeur qui ne tient que tant que ses
+  //                               entrées tiennent
+  //
+  // La seconde nomme le calcul et ce qui y est entré. C'est ce qui permet, le
+  // jour où l'altitude change, de savoir sans chercher ce qu'il faut refaire.
+  if (deduitDe && texte(deduitDe.calcul)) {
+    const entrees = (deduitDe.entrees ?? [])
+      .map((entree) => `${texte(entree?.sujet)} = ${texte(entree?.valeur)}`)
+      .filter((phrase) => phrase !== " = ");
+
+    jetons.push(jeton(JETON.NEUTRE, "  "));
+    jetons.push(jeton(JETON.DEDUIT, "⇐"));
+    jetons.push(jeton(JETON.NEUTRE, " "));
+    jetons.push(jeton(JETON.CALCUL, `${texte(deduitDe.calcul)}${entrees.length ? `(${entrees.join(" ; ")})` : ""}`));
   }
 
   if (texte(source)) {

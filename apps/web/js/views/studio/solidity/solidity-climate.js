@@ -76,21 +76,54 @@ function affirmationsClimatiques() {
   const commune = [state.location?.city, state.location?.postalCode].filter(Boolean).join(" ");
   const source = commune ? `Zonages réglementaires — ${commune}` : "Zonages réglementaires";
 
+  const altitude = nombre(neige?.altitude ?? state.location?.altitude, 2, "m");
+  const h0 = nombre(gel?.h0_selected_m, 1, "m");
+
+  // Cet utilitaire produit **deux natures**, et les confondre range de travers.
+  //
+  // Une zone lue sur une carte est une **donnée de base** : elle est relevée,
+  // elle ne se calcule pas, et personne ne la négocie. Une profondeur hors gel
+  // est une **contrainte déduite** : elle s'impose comme si elle sortait d'un
+  // texte, mais elle ne tient que tant que ses entrées tiennent — d'où la
+  // double flèche qui nomme le calcul, sur sa propre ligne.
   return [
-    { sujet: "Zone de neige", valeur: String(neige?.snow_zone || "").trim(), source: `${source} (NF EN 1991-1-3 / annexe nationale)` },
-    { sujet: "Zone de vent", valeur: String(vent?.wind_zone || "").trim(), source: `${source} (NF EN 1991-1-4 / annexe nationale)` },
-    { sujet: "Altitude du site", valeur: nombre(neige?.altitude ?? state.location?.altitude, 2, "m"), source },
-    { sujet: "Profondeur hors gel", valeur: nombre(gel?.frost_depth_m, 3, "m"), source: `${source} (NF DTU 13.1)` },
-    { sujet: "H0 retenu pour le département", valeur: nombre(gel?.h0_selected_m, 1, "m"), source: `${source} (NF DTU 13.1)` }
+    { sujet: "Zone de neige", valeur: String(neige?.snow_zone || "").trim(),
+      nature: NATURE.DONNEE_BASE, source: `${source} (NF EN 1991-1-3 / annexe nationale)` },
+    { sujet: "Zone de vent", valeur: String(vent?.wind_zone || "").trim(),
+      nature: NATURE.DONNEE_BASE, source: `${source} (NF EN 1991-1-4 / annexe nationale)` },
+    { sujet: "Altitude du site", valeur: altitude, nature: NATURE.DONNEE_BASE, source },
+    {
+      sujet: "Profondeur hors gel", valeur: nombre(gel?.frost_depth_m, 3, "m"),
+      nature: NATURE.CONTRAINTE,
+      source: `${source} (NF DTU 13.1)`,
+      deduitDe: {
+        calcul: "hors gel",
+        entrees: [
+          { sujet: "H0 du département", valeur: h0 },
+          { sujet: "altitude du site", valeur: altitude }
+        ].filter((entree) => entree.valeur)
+      }
+    },
+    {
+      sujet: "H0 retenu pour le département", valeur: h0,
+      nature: NATURE.CONTRAINTE,
+      source: `${source} (NF DTU 13.1)`,
+      deduitDe: { calcul: "abaque H0", entrees: [{ sujet: "département", valeur: departementDe(state.location) }] }
+    }
   ]
     .filter((affirmation) => affirmation.valeur)
     .map((affirmation) => ({
       ...affirmation,
-      nature: NATURE.CONTRAINTE,
       domain: DOMAIN.STRUCTURE,
       domaine: DOMAIN.STRUCTURE,
       atelier: "Neige, Vent & Gel"
     }));
+}
+
+/** Le département, tel qu'on le nomme dans l'abaque. */
+function departementDe(location) {
+  const code = String(location?.postalCode || "").trim().slice(0, 2);
+  return code || "";
 }
 
 function buildClimateDraftTitle() {
