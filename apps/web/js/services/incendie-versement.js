@@ -35,6 +35,7 @@
 import { normalizeSubjectKey } from "./project-memory.js";
 import { currentAssertions } from "./project-memory.js";
 import { zonesOf } from "./project-zones.js";
+import { raisonnementDuModule } from "./incendie-en-texte.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -58,7 +59,12 @@ export function conclusionsVersables(vue) {
       article: texte(module.pourquoi?.article
         ? `article ${module.pourquoi.article}${module.pourquoi.paragraphe ? `, ${module.pourquoi.paragraphe}` : ""}`
         : module.article ? `article ${module.article}` : ""),
-      citation: texte(module.pourquoi?.citation)
+      citation: texte(module.pourquoi?.citation),
+      // Sous quelle condition la valeur vaut, pourquoi le texte le dit, et de
+      // quoi elle dépendrait si l'une de ces entrées changeait. Une contrainte
+      // versée sans cela n'est plus qu'un chiffre : on ne peut ni la contester
+      // ni savoir quoi refaire quand le classement change.
+      raisonnement: raisonnementDuModule(module, vue)
     }))
     .filter((conclusion) => conclusion.sujet && conclusion.valeur);
 }

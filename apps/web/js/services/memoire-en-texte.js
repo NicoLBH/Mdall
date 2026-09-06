@@ -71,8 +71,14 @@
  * décision, pas le moteur de la décision.
  */
 
-/** La version de l'écriture. Elle change quand la façon d'écrire change. */
-export const ECRITURE = "1.0";
+/**
+ * La version de l'écriture. Elle change quand la façon d'écrire change.
+ *
+ * v2.0 — une mémoire de projet ne garde pas que des valeurs. Elle garde des
+ * décisions, des hypothèses, des raisonnements, des justifications, des
+ * exceptions et des dépendances. L'écriture les dit maintenant.
+ */
+export const ECRITURE = "2.0";
 
 /** Ce qu'un morceau de ligne est, pour qui le colore. */
 export const JETON = {
@@ -104,12 +110,45 @@ export const JETON = {
   CALCUL: "calcul",
   /** `@ escalier B` — la portée d'une affirmation. */
   PORTEE: "portee",
+  /**
+   * Ce qui n'est pas un fait.
+   *
+   * Une mémoire de projet ne garde pas que des valeurs relevées. Elle garde
+   * **ce que quelqu'un a décidé** (« on retient 8 m »), **ce qu'on suppose en
+   * attendant** (« on suppose 0,2 MPa »), et il faut que la ligne le dise :
+   * lues pareil, une mesure et un choix se confondent, et l'on discute six mois
+   * plus tard d'un chiffre qu'on croyait mesuré.
+   */
+  GESTE: "geste",
+  /** `parce que …` — ce qui fonde le raisonnement, pas la valeur. */
+  RAISON: "raison",
+  /** `sauf si …` — le cas où la règle ne s'applique pas. */
+  EXCEPTION: "exception",
+  /** `dépend de …` — ce qui, en changeant, oblige à refaire. */
+  DEPENDANCE: "dependance",
   /** Ce qui ne se colore pas : les espaces, les séparateurs. */
   NEUTRE: "neutre"
 };
 
 /** Les mots de la langue du métier. Aucun n'est emprunté à un langage. */
-export const MOTS = ["si", "alors", "sinon", "sauf si", "dans le cas où", "et", "ou"];
+export const MOTS = ["si", "alors", "sinon", "sauf si", "parce que", "dépend de", "et", "ou"];
+
+/**
+ * Ce qu'une ligne est, quand ce n'est pas un simple relevé.
+ *
+ * Le geste précède le sujet, et se lit avant lui : « on retient 8 m » n'est pas
+ * « 8 m ». Sans le geste, une décision de réunion et une mesure de géomètre
+ * s'écrivent identiquement — et l'on rediscute six mois plus tard d'un chiffre
+ * qu'on croyait mesuré.
+ */
+export const GESTE = {
+  /** Un relevé, une lecture. Rien ne précède le sujet. */
+  FAIT: "",
+  /** Quelqu'un a tranché. « on retient » — et l'on sait qu'on peut en rediscuter. */
+  DECISION: "on retient",
+  /** On suppose, en attendant mieux. Ce qui en dépend devient suspect si ça change. */
+  HYPOTHESE: "on suppose"
+};
 
 const texte = (valeur) => String(valeur ?? "").trim();
 const jeton = (type, contenu) => ({ type, texte: contenu });
@@ -137,9 +176,19 @@ export function couperLUnite(valeur) {
  * dessine pas une case pour dire qu'elle est vide (fondamentaux, règle 5 — ce
  * qui manque n'apparaît pas, plutôt que d'apparaître creux).
  */
-export function ligneDAffirmation({ sujet = "", valeur = "", source = "", zones = [], deduitDe = null } = {}) {
+export function ligneDAffirmation({
+  sujet = "", valeur = "", source = "", zones = [], deduitDe = null, geste = GESTE.FAIT
+} = {}) {
   const { nombre, unite } = couperLUnite(valeur);
-  const jetons = [jeton(JETON.SUJET, texte(sujet))];
+  const jetons = [];
+
+  // Le geste d'abord : c'est ce qui change la nature de la phrase, et on le lit
+  // avant de lire le chiffre.
+  if (texte(geste)) {
+    jetons.push(jeton(JETON.GESTE, texte(geste)));
+    jetons.push(jeton(JETON.NEUTRE, " "));
+  }
+  jetons.push(jeton(JETON.SUJET, texte(sujet)));
 
   // La portée fait partie de l'identité, donc de la ligne. Deux études sur deux
   // zones produisent deux affirmations différentes, et rien ne le disait :
@@ -299,6 +348,84 @@ export function enTeteDeFichier({ chemin = [], produitPar = "", le = "" } = {}) 
     lignes.push(ligneDeNote(`établi par ${texte(produitPar)}${texte(le) ? `, le ${texte(le)}` : ""}`));
   }
   lignes.push(ligneDeNote(`écriture Mdall v${ECRITURE}`));
+
+  return lignes;
+}
+
+/**
+ * Un raisonnement, tel qu'on le relit.
+ *
+ * ## Ce qu'une mémoire garde en plus des valeurs
+ *
+ * Une valeur seule ne se conteste pas : on l'accepte ou on la refuse, sans
+ * savoir sur quoi. Ce qui permet d'en discuter, six mois plus tard, ce sont les
+ * quatre choses qui l'entourent :
+ *
+ * ```
+ * si … alors … sinon …    le raisonnement — ce qui a été appliqué
+ * parce que …             la justification — pourquoi cette règle
+ * sauf si …               l'exception — quand elle ne s'applique pas
+ * dépend de …             les dépendances — ce qui, en changeant, oblige à refaire
+ * ```
+ *
+ * Les trois dernières manquaient, et leur absence coûtait cher : sans la
+ * justification on rediscute la règle à chaque projet ; sans l'exception on la
+ * découvre en réunion ; sans les dépendances on ne sait pas quoi recalculer
+ * quand une entrée bouge.
+ *
+ * ## L'ordre, qui n'est pas décoratif
+ *
+ * Le raisonnement, puis sa raison, puis son exception, puis la valeur qui en
+ * sort, puis ce dont elle dépend. On lit du général au particulier, et la
+ * valeur arrive **après** ce qui la fonde — c'est l'inverse d'un tableur, et
+ * c'est voulu.
+ *
+ * @param {object} bloc
+ * @param {string} bloc.condition   « hauteur du dernier plancher > 8 m »
+ * @param {string} bloc.alors       ce qui vaut si la condition tient
+ * @param {string} bloc.sinon       ce qui vaut sinon
+ * @param {string} bloc.retenu      la branche prise
+ * @param {string} bloc.parceQue    ce qui fonde la règle
+ * @param {string[]} bloc.saufSi    les cas où elle ne s'applique pas
+ * @param {string[]} bloc.dependDe  ce qui, en changeant, oblige à refaire
+ * @returns {object[][]} des lignes de jetons
+ */
+export function blocDeRaisonnement({
+  condition = "", alors = "", sinon = "", retenu = "",
+  parceQue = "", saufSi = [], dependDe = []
+} = {}) {
+  const lignes = lignesDeDecision({ condition, alors, sinon, retenu });
+
+  if (texte(parceQue)) {
+    lignes.push([
+      jeton(JETON.NEUTRE, "   "),
+      jeton(JETON.MOT, "parce que"),
+      jeton(JETON.NEUTRE, " "),
+      jeton(JETON.RAISON, texte(parceQue))
+    ]);
+  }
+
+  for (const cas of (Array.isArray(saufSi) ? saufSi : [saufSi]).map(texte).filter(Boolean)) {
+    lignes.push([
+      jeton(JETON.NEUTRE, "   "),
+      jeton(JETON.MOT, "sauf si"),
+      jeton(JETON.NEUTRE, " "),
+      jeton(JETON.EXCEPTION, cas)
+    ]);
+  }
+
+  const socles = (Array.isArray(dependDe) ? dependDe : [dependDe]).map(texte).filter(Boolean);
+  if (socles.length) {
+    lignes.push([
+      jeton(JETON.NEUTRE, "   "),
+      jeton(JETON.MOT, "dépend de"),
+      jeton(JETON.NEUTRE, " "),
+      // Les dépendances se lisent séparées d'un point médian, jamais d'une
+      // virgule : un sujet peut en contenir une, et l'on ne saurait plus où
+      // finit le premier socle.
+      jeton(JETON.DEPENDANCE, socles.join(" · "))
+    ]);
+  }
 
   return lignes;
 }

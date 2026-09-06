@@ -2,8 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  cleDAffirmation, itemsDeProposition, descriptionDeLaProposition
-} from "./atelier-proposition.js";
+  cleDAffirmation, itemsDeProposition, descriptionDeLaProposition, raisonnementRetenu } from "./atelier-proposition.js";
 
 const DEGRE = {
   sujet: "Degré coupe-feu des planchers",
@@ -67,4 +66,38 @@ test("la description se lit avant de signer", () => {
   assert.match(texte, /- \*\*Classement\*\* : 3e famille B — article 3/);
   // Elle dit ce qui n'a pas eu lieu : rien n'est entré en mémoire.
   assert.match(texte, /Rien n'est encore entré dans la mémoire du projet/);
+});
+
+test("le raisonnement voyage avec l'affirmation, sans sa valeur", () => {
+  const [item] = itemsDeProposition([{
+    sujet: "Degré coupe-feu des planchers",
+    valeur: "CF 1 h",
+    geste: "on retient",
+    raisonnement: {
+      condition: "Classement du bâtiment = 3e famille B",
+      alors: "CF 1 h",
+      retenu: "CF 1 h",
+      parceQue: "« …une heure… »",
+      saufSi: ["une seule unité de passage", ""],
+      dependDe: ["Classement du bâtiment"]
+    }
+  }]);
+
+  assert.equal(item.payload.geste, "on retient");
+  assert.deepEqual(item.payload.raisonnement, {
+    condition: "Classement du bâtiment = 3e famille B",
+    sinon: "",
+    parceQue: "« …une heure… »",
+    saufSi: ["une seule unité de passage"],
+    dependDe: ["Classement du bâtiment"]
+  });
+});
+
+test("une affirmation sans raisonnement n'en fabrique pas un vide", () => {
+  const [item] = itemsDeProposition([{ sujet: "Zone de neige", valeur: "A1" }]);
+  assert.equal(item.payload.raisonnement, null);
+  assert.equal(item.payload.geste, null);
+
+  assert.equal(raisonnementRetenu({ condition: "", saufSi: [], dependDe: [] }), null);
+  assert.equal(raisonnementRetenu(null), null);
 });

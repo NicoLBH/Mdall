@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { fichierDeLEtude, ligneDuModule, sourceDuModule } from "./incendie-en-texte.js";
+import { fichierDeLEtude, ligneDuModule, sourceDuModule, raisonnementDuModule } from "./incendie-en-texte.js";
 import { enClair, ECRITURE } from "./memoire-en-texte.js";
 
 const VUE = {
@@ -70,5 +70,47 @@ test("un référentiel non cité ne s'invente pas d'article", () => {
 test("une étude vide rend un fichier vide, pas une erreur", () => {
   const fichier = fichierDeLEtude(null);
   assert.deepEqual(fichier.lignes, []);
-  assert.deepEqual(fichier.compte, { affirmations: 0, sansObjet: 0, attente: 0 });
+  assert.deepEqual(fichier.compte, { affirmations: 0, sansObjet: 0, attente: 0, raisonnements: 0 });
+});
+
+test("un raisonnement se lit dans le graphe : condition, raison, socles", () => {
+  const vue = {
+    graphe: { liens: [{ de: "m-classement", vers: "m-planchers", fait: "famille" }] },
+    modules: [
+      { id: "m-classement", titre: "Classement du bâtiment", statut: "conclu",
+        valeur: "3e famille B", exigence: false },
+      { id: "m-planchers", titre: "Degré coupe-feu des planchers", statut: "conclu",
+        valeur: "CF 1 h", exigence: true,
+        pourquoi: { article: "6", citation: "Les planchers sont coupe-feu de degré une heure." } }
+    ]
+  };
+
+  const raisonnement = raisonnementDuModule(vue.modules[1], vue);
+  assert.equal(raisonnement.condition, "Classement du bâtiment = 3e famille B");
+  assert.equal(raisonnement.alors, "CF 1 h");
+  assert.equal(raisonnement.retenu, "CF 1 h");
+  assert.equal(raisonnement.parceQue, "« Les planchers sont coupe-feu de degré une heure. »");
+  assert.deepEqual(raisonnement.dependDe, ["Classement du bâtiment"]);
+});
+
+test("le raisonnement s'écrit avant la valeur qu'il produit", () => {
+  const vue = {
+    graphe: { liens: [{ de: "m-classement", vers: "m-planchers" }] },
+    modules: [
+      { id: "m-classement", titre: "Classement du bâtiment", statut: "conclu",
+        valeur: "3e famille B", exigence: false },
+      { id: "m-planchers", titre: "Degré coupe-feu des planchers", statut: "conclu",
+        valeur: "CF 1 h", exigence: true, pourquoi: { article: "6", citation: "…une heure…" } }
+    ]
+  };
+
+  const fichier = fichierDeLEtude(vue);
+  const natures = fichier.lignes.map((ligne) => ligne.nature);
+  assert.deepEqual(natures, ["raisonnement", "raisonnement", "raisonnement", "raisonnement", "affirmation"]);
+  assert.equal(fichier.compte.affirmations, 1);
+  assert.equal(fichier.compte.raisonnements, 4);
+});
+
+test("sans amont ni citation, une conclusion reste une simple ligne", () => {
+  assert.equal(raisonnementDuModule({ id: "seul", titre: "x", valeur: "y" }, { modules: [], graphe: {} }), null);
 });

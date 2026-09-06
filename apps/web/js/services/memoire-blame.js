@@ -123,6 +123,69 @@ export function blameDeLaLigne(assertion = {}, auteurs = new Map()) {
 }
 
 /**
+ * Le dernier versement qui a touché un ensemble de lignes.
+ *
+ * ## Pourquoi il s'affiche en haut
+ *
+ * GitHub met en tête de chaque dossier le dernier commit : qui, quoi, quand.
+ * C'est la question qu'on se pose en arrivant — « qu'est-ce qui a bougé ? » —
+ * et y répondre avant qu'on la pose évite d'ouvrir trois fichiers pour le
+ * découvrir.
+ *
+ * Le message est le **titre de la proposition**, pas une phrase fabriquée : ce
+ * qu'on lit ici doit être exactement ce qu'on relira sur la proposition, sinon
+ * on cherche deux fois.
+ *
+ * @param {object[]} lignes les affirmations d'un fichier, d'un dossier, ou de tout
+ * @param {object} [contexte]
+ * @param {Map} [contexte.auteurs] identifiant → nom
+ * @param {Map} [contexte.propositions] identifiant → la proposition
+ * @returns {object|null} `null` quand rien n'a de date
+ */
+export function dernierVersementDe(lignes = [], { auteurs = new Map(), propositions = new Map() } = {}) {
+  let derniere = null;
+  for (const ligne of Array.isArray(lignes) ? lignes : []) {
+    const quand = Date.parse(texte(ligne?.decided_at));
+    if (!Number.isFinite(quand)) continue;
+    if (!derniere || quand > Date.parse(texte(derniere.decided_at))) derniere = ligne;
+  }
+  if (!derniere) return null;
+
+  const blame = blameDeLaLigne(derniere, auteurs);
+  const proposition = propositions.get?.(texte(derniere.proposition_id)) ?? null;
+
+  return {
+    ...blame,
+    // Le titre de la proposition tient lieu de message. À défaut — une
+    // déclaration à la main —, on dit le sujet qu'elle portait : c'est ce
+    // qu'un message aurait dit.
+    message: texte(proposition?.title) || texte(derniere?.statement) || texte(derniere?.subject_key)
+  };
+}
+
+/**
+ * Ce que la mémoire a reçu, en chiffres.
+ *
+ * Le nombre de **versements**, pas de lignes : une proposition qui verse trente
+ * contraintes est un acte, pas trente. C'est l'acte qu'on compte, comme on
+ * compte des commits.
+ */
+export function versementsDeLaMemoire(assertions = []) {
+  const actes = new Set();
+  let plusRecent = null;
+
+  for (const assertion of Array.isArray(assertions) ? assertions : []) {
+    // Une déclaration à la main est un acte aussi : elle a un auteur et une
+    // date. Elle se compte par sa ligne, faute de proposition qui la porte.
+    actes.add(texte(assertion?.proposition_id) || `main:${texte(assertion?.id)}`);
+    const quand = Date.parse(texte(assertion?.decided_at));
+    if (Number.isFinite(quand) && (plusRecent === null || quand > plusRecent)) plusRecent = quand;
+  }
+
+  return { versements: actes.size, plusRecent: plusRecent === null ? null : new Date(plusRecent).toISOString() };
+}
+
+/**
  * L'histoire d'une ligne : ce qu'elle a valu, de la plus récente à la première.
  *
  * On remonte par `supersedes`, qui est écrit dans les deux sens au moment du
@@ -175,11 +238,16 @@ export function chaleurDeLaLigne(assertion, { plusAncien = 0, plusRecent = 0 } =
  * demanderait une requête par proposition, et le rattrapage les lira de toute
  * façon.
  *
- * On ne devine pas au-delà : une proposition qui n'apportait *rien* apparaîtra
- * ici aussi. Le rattrapage est rejouable et n'écrit qu'une fois chaque
- * affirmation, donc la relancer pour rien ne coûte que le temps de la lire.
+ * `porteuses` — les propositions qui ont au moins une ligne — écarte le seul
+ * faux positif que ce contrôle produisait : une proposition **vide** n'avait
+ * rien à verser, et la signaler faisait revenir la bannière indéfiniment. Un
+ * avertissement qui ne s'éteint jamais cesse d'être lu.
+ *
+ * @param {object} [options]
+ * @param {Set<string>|null} [options.porteuses] `null` quand on ne sait pas :
+ *   on signale alors, comme avant. Ne pas savoir n'autorise pas à se taire.
  */
-export function propositionsSansTrace(propositions = [], assertions = []) {
+export function propositionsSansTrace(propositions = [], assertions = [], { porteuses = null } = {}) {
   const fusionnees = (Array.isArray(propositions) ? propositions : [])
     .filter((entry) => texte(entry?.status) === "merged");
   if (!fusionnees.length) return [];
@@ -190,7 +258,16 @@ export function propositionsSansTrace(propositions = [], assertions = []) {
       .filter(Boolean)
   );
 
-  return fusionnees.filter((proposition) => !tracees.has(texte(proposition.id)));
+  return fusionnees.filter((proposition) => {
+    const id = texte(proposition.id);
+    if (tracees.has(id)) return false;
+    // Une proposition qui ne portait aucune ligne n'a rien manqué de verser :
+    // la signaler ferait revenir l'avertissement à chaque ouverture, sans que
+    // rien ne puisse l'éteindre. Quand on ne sait pas lesquelles portent
+    // quelque chose (`porteuses` vaut `null`), on ne tranche pas : on signale.
+    if (porteuses && !porteuses.has(id)) return false;
+    return true;
+  });
 }
 
 /** Les bornes de temps d'un fichier, pour en colorer la marge. */

@@ -19906,6 +19906,15 @@ body.proposition-merge-open{ overflow:hidden; }
    deux affirmations, et rien ne le disait. */
 .mdall-portee{ color:rgb(255,166,87); }
 
+/* Ce que la mémoire garde en plus des valeurs : le geste qui pose la ligne, la
+   raison qui la fonde, l'exception qui la borne, ce dont elle dépend. Chacun a
+   sa couleur — un raisonnement lu en une seule teinte n'est plus qu'un
+   paragraphe, et l'on cesse d'y distinguer ce qu'on peut contester. */
+.mdall-geste{ color:rgb(210,153,34); font-weight:600; }
+.mdall-raison{ color:rgb(139,148,158); }
+.mdall-exception{ color:rgb(210,153,34); }
+.mdall-dependance{ color:rgb(121,192,255); opacity:.85; }
+
 /* ── La mémoire, parcourue comme un dépôt ───────────────────────────────────
    Les mêmes gestes que l'onglet Documents — un chemin, un fil d'Ariane, une
    arborescence repliable et redimensionnable — parce que ce sont les mêmes
@@ -19923,7 +19932,9 @@ body.proposition-merge-open{ overflow:hidden; }
   border-top:1px solid var(--border);
   min-height:calc(100vh - var(--app-top) - 220px);
 }
-.memoire-layout--replie{ grid-template-columns:minmax(0, 1fr); }
+.memoire-layout--replie,
+.memoire-layout--racine{ grid-template-columns:minmax(0, 1fr); }
+.memoire-layout--racine .memoire-corps{ padding-left:0; }
 .memoire-tree{ width:var(--memoire-tree-width, 280px); align-self:stretch; }
 .memoire-tree.is-collapsed{ display:none; }
 .memoire-tree .documents-tree__panel{ min-height:100%; height:auto; }
@@ -19954,6 +19965,96 @@ body.proposition-merge-open{ overflow:hidden; }
 .memoire-entree__phrase{ color:var(--muted); font-size:12px; }
 .memoire-entree__compte{ flex:0 0 auto; color:var(--muted); font-size:11px; white-space:nowrap; }
 
+/* Le tableau des fichiers d'un dossier : trois colonnes, comme un dépôt. Le nom
+   à gauche, ce que le dernier versement disait au milieu, sa date à droite —
+   c'est l'ordre dans lequel on lit un changement. */
+.memoire-liste--tableau .memoire-entree,
+.memoire-entete{
+  display:grid;
+  grid-template-columns:minmax(160px, 2fr) minmax(0, 3fr) minmax(90px, auto);
+  align-items:center;
+  gap:12px;
+}
+.memoire-entete{
+  padding:8px 16px;
+  border-bottom:1px solid var(--border);
+  background:var(--panel2);
+  color:var(--muted);
+  font-size:12px;
+}
+.memoire-entete__date{ text-align:right; }
+.memoire-entree__message,
+.memoire-entree__date{
+  color:var(--muted);
+  font-size:12px;
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.memoire-entree__date{ text-align:right; }
+.memoire-entree--fichier .memoire-entree__nom{ display:inline-flex; align-items:center; gap:8px; min-width:0; }
+
+/* La ligne de titre de la racine : quand la mémoire a bougé, et combien d'actes
+   l'ont faite. On compte des versements, pas des lignes — trente contraintes
+   versées d'un coup sont un acte, pas trente. */
+.memoire-entete-racine{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:0 4px 10px;
+  color:var(--muted);
+  font-size:12px;
+}
+.memoire-entete-racine__espace{ flex:1 1 auto; }
+.memoire-entete-racine__compte{ display:inline-flex; align-items:center; gap:5px; }
+.memoire-entete-racine__compte b{ color:var(--text); font-variant-numeric:tabular-nums; }
+
+/* Le dernier versement, en tête d'un dossier ou d'un fichier. Il remplace un
+   filet horizontal qui ne disait rien. */
+.memoire-versement{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:10px 16px;
+  border:1px solid var(--border);
+  border-bottom:0;
+  border-radius:var(--radius) var(--radius) 0 0;
+  background:var(--panel2);
+  font-size:12px;
+}
+.memoire-versement + .memoire-liste{ border-radius:0 0 var(--radius) var(--radius); }
+.memoire-fichier .memoire-versement{ border:0; border-bottom:1px solid var(--border); border-radius:0; }
+.memoire-versement__avatar{
+  flex:0 0 auto;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:22px;
+  height:22px;
+  border-radius:50%;
+  background:var(--btn-bg);
+  color:var(--muted);
+  font-size:10px;
+  font-weight:600;
+}
+.memoire-versement__qui{ flex:0 0 auto; color:var(--text); font-weight:600; }
+.memoire-versement__message{ min-width:0; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.memoire-versement__espace{ flex:1 1 auto; }
+.memoire-versement__sep,
+.memoire-versement__date{ flex:0 0 auto; color:var(--muted); }
+.memoire-versement__ref{
+  flex:0 0 auto;
+  padding:0;
+  border:0;
+  background:transparent;
+  color:var(--link);
+  font:inherit;
+  font-variant-numeric:tabular-nums;
+  cursor:pointer;
+}
+.memoire-versement__ref:hover{ text-decoration:underline; }
+
 /* Un fichier ouvert. Le contenu est le même dans les deux lectures — c'est la
    marge qui change. Deux rendus du même fichier finiraient par ne plus montrer
    la même chose, et l'on ne saurait plus lequel croire. */
@@ -19982,7 +20083,12 @@ body.proposition-merge-open{ overflow:hidden; }
   cursor:pointer;
 }
 .memoire-fichier__copier:hover{ background:rgba(110,118,129,.14); color:var(--text); }
-.memoire-fichier__lectures{ margin-left:auto; display:inline-flex; border:1px solid var(--border); border-radius:6px; overflow:hidden; }
+/* La bascule est à gauche : c'est le geste qu'on fait le plus souvent, et une
+   commande qu'on cherche à droite se cherche deux fois. La mesure la suit, le
+   presse-papiers ferme la barre. */
+.memoire-fichier__lectures{ display:inline-flex; border:1px solid var(--border); border-radius:6px; overflow:hidden; }
+.memoire-fichier__mesure{ color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums; }
+.memoire-fichier__espace{ flex:1 1 auto; }
 .memoire-lecture{
   padding:3px 10px;
   border:0;
@@ -20032,6 +20138,14 @@ body.proposition-merge-open{ overflow:hidden; }
 }
 .memoire-blame:hover:not(:disabled){ background:rgba(110,118,129,.14); color:var(--text); }
 .memoire-blame:disabled{ cursor:default; }
+/* Les lignes d'un même bloc viennent du même versement : répéter le numéro
+   quatre fois ferait croire à quatre décisions. */
+.memoire-blame--suite{
+  flex:0 0 190px;
+  margin-right:10px;
+  border-left:3px solid transparent;
+}
+.memoire-ligne--raisonnement .memoire-ligne__code{ color:var(--muted); }
 .memoire-blame__ref{ flex:0 0 auto; font-variant-numeric:tabular-nums; }
 .memoire-blame__date{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .memoire-blame--chaleur-0{ border-left-color:rgba(88,166,255,.15); }

@@ -161,3 +161,40 @@ Un écran qui n'a pas pu lire dit qu'il n'a pas pu lire. Il n'affiche pas une
 liste vide, il ne remplit pas un champ d'une valeur plausible, et un modèle
 n'invente jamais une entrée de calcul : il la demande, ou il s'en passe et le
 dit.
+
+---
+
+## 6. Une mémoire de projet ne garde pas que des valeurs
+
+Un projet ne se souvient pas d'une liste de chiffres. Il se souvient de ce qu'on
+a **décidé**, de ce qu'on **suppose** en attendant mieux, du **raisonnement** qui
+a mené là, de la **raison** qui le fonde, des **exceptions** qui le bornent et de
+ce dont il **dépend**.
+
+Une valeur seule ne se conteste pas : on l'accepte ou on la refuse, sans savoir
+sur quoi. Et six mois plus tard, personne ne sait plus si « 8 m » était un relevé,
+un choix qu'on pouvait discuter, ou une supposition qu'il fallait confirmer.
+
+L'écriture Mdall les distingue donc, à même la ligne :
+
+```
+on retient hauteur du dernier plancher  8,00 m  ← relevé du géomètre
+on suppose portance du sol  0,2 MPa  ← à confirmer par le G2
+
+si classement du bâtiment = 3e famille B
+   alors CF 1 h  ✓ retenu
+   sinon CF 1/2 h
+   parce que « Les planchers sont coupe-feu de degré une heure. »
+   sauf si le bâtiment ne comporte qu'une seule unité de passage
+   dépend de classement du bâtiment · hauteur du dernier plancher
+```
+
+Trois conséquences pour le code :
+
+1. **Le raisonnement voyage avec l'affirmation**, dans son `payload`. Il n'a pas
+   sa table : ce qui a produit une valeur n'a de sens qu'attaché à cette valeur.
+2. **`alors` et `retenu` ne sont pas stockés** — ils *sont* la valeur, que
+   `payload.value` porte déjà (règle 4). L'écriture les reconstruit à la lecture.
+3. **Rien ne s'invente.** Un « parce que » fabriqué serait pire que pas de
+   « parce que », puisqu'on le citerait en réunion (règle 5). Un utilitaire qui
+   ne sait pas pourquoi n'écrit pas de raison — il écrit la valeur, et c'est tout.

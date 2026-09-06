@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   fichiersDeLaMemoire, dossiersDeLaMemoire, blameDeLaLigne, histoireDeLaLigne,
-  chaleurDeLaLigne, bornesDuFichier, propositionsSansTrace
+  chaleurDeLaLigne, bornesDuFichier, propositionsSansTrace, dernierVersementDe, versementsDeLaMemoire
 } from "./memoire-blame.js";
 
 const assertion = (id, cle, valeur, extra = {}) => ({
@@ -117,4 +117,56 @@ test("une proposition fusionnée qui n'a rien laissé en mémoire se repère", (
 test("aucune proposition fusionnée, rien à rattraper", () => {
   assert.deepEqual(propositionsSansTrace([{ id: "p1", status: "open" }], []), []);
   assert.deepEqual(propositionsSansTrace(), []);
+});
+
+test("une proposition vide n'a rien manqué de verser : la bannière se tait", () => {
+  const propositions = [
+    { id: "p-vide", number: 1, status: "merged" },
+    { id: "p-pleine", number: 2, status: "merged" }
+  ];
+
+  // Sans la liste des propositions porteuses, on signale : ne pas savoir
+  // n'autorise pas à se taire.
+  assert.deepEqual(propositionsSansTrace(propositions, []).map((p) => p.id), ["p-vide", "p-pleine"]);
+
+  const porteuses = new Set(["p-pleine"]);
+  assert.deepEqual(
+    propositionsSansTrace(propositions, [], { porteuses }).map((p) => p.id),
+    ["p-pleine"]
+  );
+
+  // Et une fois versée, plus rien.
+  assert.deepEqual(
+    propositionsSansTrace(propositions, [{ proposition_id: "p-pleine" }], { porteuses }),
+    []
+  );
+});
+
+test("les versements se comptent en actes, pas en lignes", () => {
+  const { versements, plusRecent } = versementsDeLaMemoire([
+    { proposition_id: "p1", decided_at: "2026-01-10T00:00:00Z" },
+    { proposition_id: "p1", decided_at: "2026-01-10T00:00:00Z" },
+    { proposition_id: "p2", decided_at: "2026-03-02T00:00:00Z" },
+    { id: "a-la-main", decided_at: "2026-02-01T00:00:00Z" }
+  ]);
+
+  assert.equal(versements, 3);
+  assert.equal(plusRecent, "2026-03-02T00:00:00.000Z");
+});
+
+test("le dernier versement prend le titre de la proposition pour message", () => {
+  const dernier = dernierVersementDe(
+    [
+      { proposition_id: "p1", proposition_number: 7, decided_at: "2026-01-10T00:00:00Z", decided_by: "u1" },
+      { proposition_id: "p2", proposition_number: 8, decided_at: "2026-03-02T00:00:00Z", decided_by: "u2" }
+    ],
+    {
+      auteurs: new Map([["u2", "Camille Roux"]]),
+      propositions: new Map([["p2", { id: "p2", title: "Contraintes incendie du bâtiment A" }]])
+    }
+  );
+
+  assert.equal(dernier.intitule, "#P8");
+  assert.equal(dernier.qui, "Camille Roux");
+  assert.equal(dernier.message, "Contraintes incendie du bâtiment A");
 });
