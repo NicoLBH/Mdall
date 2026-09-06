@@ -8,8 +8,7 @@ import {
   defaultMergeMessage,
   describeSnapshotGap,
   freezeDecisions,
-  itemsFromDecisions
-} from "./proposition-freeze.js";
+  itemsFromDecisions, toutCeQueLaPropositionPorte } from "./proposition-freeze.js";
 
 function item(status, reason = null) {
   return { itemType: ITEM_TYPE.AVIS, itemKey: "234", payload: { reference: "234" }, status, reason };
@@ -113,4 +112,36 @@ test("sans rien à fusionner, la note ne raconte rien", () => {
 
   assert.equal(message.title, "Fusion de la proposition #1 — Vide");
   assert.equal(message.note, "");
+});
+
+test("une proposition porte ses propres affirmations, pas seulement ce que l'analyse a trouvé", () => {
+  // Une proposition venue de l'Atelier n'apporte aucun livrable : ses lignes
+  // sont en base, et l'analyse ne les recalcule pas. Les oublier à la fusion
+  // versait zéro affirmation en mémoire pour vingt-cinq lignes signées.
+  const calculees = [{ itemType: "document", itemKey: "d1", payload: {} }];
+  const stockees = [
+    { item_type: "base-datum", item_key: "degre-coupe-feu", payload: { value: "CF 1 h" }, status: "proposed" },
+    { item_type: "base-datum", item_key: "zone-de-neige", payload: { value: "A2" }, status: "proposed" }
+  ];
+
+  const tout = toutCeQueLaPropositionPorte(calculees, stockees);
+
+  assert.equal(tout.length, 3);
+  assert.deepEqual(tout.filter((item) => item.itemType === "base-datum").map((item) => item.itemKey),
+    ["degre-coupe-feu", "zone-de-neige"]);
+});
+
+test("sur un doublon, l'analyse l'emporte : elle vient de lire les documents", () => {
+  const calculees = [{ itemType: "avis", itemKey: "A-12", payload: { status: "RESOLVED" } }];
+  const stockees = [{ item_type: "avis", item_key: "A-12", payload: { status: "OPEN" }, status: "proposed" }];
+
+  const tout = toutCeQueLaPropositionPorte(calculees, stockees);
+
+  assert.equal(tout.length, 1);
+  assert.equal(tout[0].payload.status, "RESOLVED");
+});
+
+test("une ligne sans type ni clé n'entre pas", () => {
+  assert.deepEqual(toutCeQueLaPropositionPorte([], [{ item_type: "", item_key: "x" }]), []);
+  assert.deepEqual(toutCeQueLaPropositionPorte(), []);
 });

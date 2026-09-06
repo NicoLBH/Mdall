@@ -105,6 +105,44 @@ export function itemsFromDecisions(stored = []) {
 }
 
 /**
+ * Tout ce que la proposition porte : ce que l'analyse a trouvé, **et ce qu'elle
+ * a déposé elle-même**.
+ *
+ * ## Vingt-cinq lignes versées, zéro en mémoire
+ *
+ * L'analyse d'une proposition construit ses lignes à partir des livrables : les
+ * documents, les rattachements, les avis. Une proposition venue de l'Atelier
+ * n'apporte aucun livrable — elle apporte des **affirmations**, écrites en base
+ * au moment où elle a été ouverte, et l'analyse ne les recalcule pas puisqu'elle
+ * ne les a pas produites.
+ *
+ * La fusion versait donc en mémoire les lignes de l'analyse, et elles seules :
+ * les affirmations de l'Atelier n'entraient jamais. On fusionnait vingt-cinq
+ * lignes, la mémoire restait vide, et la proposition suivante trouvait
+ * légitimement quarante-huit nouveautés — il n'y avait rien à quoi les comparer.
+ *
+ * ## La règle
+ *
+ * Ce qu'une proposition porte est l'union des deux : les lignes de l'analyse, et
+ * celles qu'elle a déposées et que l'analyse ne produit pas. En cas de doublon
+ * c'est l'analyse qui l'emporte — elle vient de lire les documents, elle sait
+ * l'état d'aujourd'hui.
+ *
+ * @param {object[]} calculees ce que l'analyse a trouvé
+ * @param {object[]} stockees les lignes de la proposition, telles qu'en base
+ */
+export function toutCeQueLaPropositionPorte(calculees = [], stockees = []) {
+  const lues = Array.isArray(calculees) ? calculees : [];
+  const vues = new Set(lues.map((item) => `${item?.itemType}|${item?.itemKey}`));
+
+  const siennes = itemsFromDecisions(Array.isArray(stockees) ? stockees : [])
+    .filter((item) => item.itemType && item.itemKey)
+    .filter((item) => !vues.has(`${item.itemType}|${item.itemKey}`));
+
+  return [...lues, ...siennes];
+}
+
+/**
  * Ce qu'on dit d'une proposition close dont l'état n'a pas été conservé.
  *
  * Les propositions fusionnées avant le gel n'ont en base que leurs décisions
