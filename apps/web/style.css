@@ -15484,10 +15484,14 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
   background:var(--panel);
   border-bottom:1px solid var(--border);
 }
-/* Un bloc vide n'annonce rien : le filet promettait un contenu qui n'existe
-   pas, et le trait se lisait comme un titre de liste. */
-.review-block__head--vide{ border-bottom:0; padding-bottom:8px; }
-.review-block__empty--sansfilet{ padding-top:0; }
+/* Un bloc replié n'annonce rien : le filet promettait un contenu qui n'est pas
+   là, et le trait se lisait comme un titre de liste. */
+.review-block__head--replie{ border-bottom:0; }
+
+/* La phrase d'un bloc vide s'aligne sur son titre : 16 (padding) + 22 (case)
+   + 10 (gouttière) + 16 (caret) + 10 (gouttière). Repartie du bord gauche,
+   elle se lirait comme le texte d'un autre bloc. */
+.review-block__empty--aligne{ padding-top:0; padding-left:74px; }
 
 .review-block__caret{
   display:inline-flex;
@@ -19446,157 +19450,6 @@ body.proposition-merge-open{ overflow:hidden; }
 .depot-carte__sceau--partiel{ border-color:rgba(210,153,34,.5); color:rgb(210,153,34); }
 .depot-carte__sceau--vide{ border-style:dashed; }
 
-/* ── Le diff d'un dépôt ─────────────────────────────────────────────────────
-   Le châssis de GitHub — une arborescence à gauche, les écarts à droite — sur
-   une unité qui n'est pas la ligne de texte mais le repère : un avis, un
-   article, une donnée de base. Voir `depot-reperes.js`. */
-.diff-shell{
-  display:grid;
-  grid-template-columns:minmax(200px, 260px) minmax(0, 1fr);
-  gap:16px;
-  align-items:start;
-}
-.diff-shell--closed{ grid-template-columns:auto minmax(0, 1fr); }
-
-.diff-tree{
-  position:sticky;
-  top:calc(var(--app-top) + 8px);
-  max-height:calc(100vh - var(--app-top) - 24px);
-  display:flex;
-  flex-direction:column;
-  min-height:0;
-  border:1px solid var(--border);
-  border-radius:var(--radius);
-  background:var(--panel2);
-  overflow:hidden;
-}
-.diff-tree__head{
-  display:flex;
-  align-items:center;
-  gap:8px;
-  padding:8px 10px;
-  border-bottom:1px solid var(--border);
-}
-.diff-tree__toggle{
-  display:inline-flex;
-  padding:4px;
-  border:0;
-  border-radius:6px;
-  background:transparent;
-  color:var(--muted);
-  cursor:pointer;
-}
-.diff-tree__toggle:hover{ background:rgba(110,118,129,.14); color:var(--text); }
-.diff-tree__resume{ color:var(--muted); font-size:11px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.diff-shell--closed .diff-tree__resume,
-.diff-shell--closed .diff-tree__corps{ display:none; }
-
-.diff-tree__corps{ flex:1 1 auto; min-height:0; overflow-y:auto; padding:6px 0 10px; }
-.diff-tree__groupe{ padding:4px 0; }
-.diff-tree__dossier{
-  display:flex;
-  align-items:center;
-  gap:6px;
-  padding:4px 10px;
-  color:var(--muted);
-  font-size:11px;
-  font-weight:600;
-  letter-spacing:.02em;
-  text-transform:uppercase;
-}
-.diff-tree__ligne{
-  display:flex;
-  align-items:baseline;
-  gap:6px;
-  width:100%;
-  padding:3px 10px 3px 22px;
-  border:0;
-  background:transparent;
-  color:var(--text);
-  font-size:12px;
-  text-align:left;
-  cursor:pointer;
-}
-.diff-tree__ligne:hover{ background:rgba(110,118,129,.12); }
-.diff-tree__signe{ flex:0 0 auto; width:10px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
-.diff-tree__titre{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.diff-tree__ligne--ajoute .diff-tree__signe{ color:rgb(63,185,80); }
-.diff-tree__ligne--modifie .diff-tree__signe{ color:rgb(210,153,34); }
-.diff-tree__ligne--retire .diff-tree__signe{ color:rgb(248,81,73); }
-.diff-tree__vide{ margin:0; padding:10px; color:var(--muted); font-size:12px; font-style:italic; }
-
-.diff-corps{ min-width:0; display:flex; flex-direction:column; gap:12px; }
-.diff-corps__barre{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:12px;
-  flex-wrap:wrap;
-  color:var(--muted);
-  font-size:12px;
-}
-.diff-corps__filtre{ display:inline-flex; align-items:center; gap:6px; cursor:pointer; }
-
-.diff-fichier{
-  border:1px solid var(--border);
-  border-radius:var(--radius);
-  overflow:hidden;
-  scroll-margin-top:calc(var(--app-top) + 16px);
-}
-.diff-fichier__tete{
-  display:flex;
-  align-items:baseline;
-  gap:8px;
-  flex-wrap:wrap;
-  padding:8px 12px;
-  border-bottom:1px solid var(--border);
-  background:var(--panel2);
-  font-size:12px;
-}
-.diff-fichier__signe{ font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
-.diff-fichier__signe--ajoute{ color:rgb(63,185,80); }
-.diff-fichier__signe--modifie{ color:rgb(210,153,34); }
-.diff-fichier__signe--retire{ color:rgb(248,81,73); }
-.diff-fichier__chemin{ color:var(--muted); }
-.diff-fichier__titre{ color:var(--text); font-weight:600; }
-.diff-fichier__etat{ margin-left:auto; padding:0 8px; border:1px solid var(--border); border-radius:999px; font-size:11px; color:var(--muted); }
-.diff-fichier__etat--ajoute{ border-color:rgba(35,134,54,.5); color:rgb(63,185,80); }
-.diff-fichier__etat--modifie{ border-color:rgba(210,153,34,.5); color:rgb(210,153,34); }
-.diff-fichier__etat--retire{ border-color:rgba(248,81,73,.4); color:rgb(248,81,73); }
-.diff-fichier__corps{ font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; }
-.diff-fichier__pied{ padding:6px 12px; border-top:1px solid var(--border2); color:var(--muted); font-size:11px; }
-
-.diff-ligne{
-  display:grid;
-  grid-template-columns:44px 16px minmax(90px, auto) minmax(0, 1fr);
-  gap:8px;
-  padding:3px 12px 3px 0;
-  align-items:baseline;
-}
-/* Le numéro n'est pas celui d'une ligne de fichier — il n'en existe pas ici.
-   C'est un point où poser le doigt quand on discute à deux devant l'écran. */
-.diff-ligne__num{
-  padding-right:8px;
-  border-right:1px solid var(--border2);
-  color:var(--muted);
-  font-size:11px;
-  text-align:right;
-  user-select:none;
-}
-.diff-ligne__signe{ text-align:center; }
-.diff-ligne__nom{ color:var(--muted); }
-.diff-ligne__valeur{ color:var(--text); overflow-wrap:anywhere; }
-.diff-ligne--ajoute{ background:rgba(46,160,67,.12); }
-.diff-ligne--ajoute .diff-ligne__signe{ color:rgb(63,185,80); }
-.diff-ligne--retire{ background:rgba(248,81,73,.1); }
-.diff-ligne--retire .diff-ligne__signe{ color:rgb(248,81,73); }
-.diff-ligne--inchange{ background:transparent; }
-
-@media (max-width: 860px){
-  .diff-shell{ grid-template-columns:minmax(0, 1fr); }
-  .diff-tree{ position:static; max-height:none; }
-}
-
 /* ── Les contrôles d'un dépôt ───────────────────────────────────────────────
    La liste de checks d'une pull request. Quatre issues, pas trois : « non
    vérifiable » n'est ni un succès ni un échec, et elle porte donc sa propre
@@ -19661,4 +19514,165 @@ body.proposition-merge-open{ overflow:hidden; }
   font-size:10px;
   text-transform:uppercase;
   letter-spacing:.03em;
+}
+
+/* ── Les onglets d'une proposition ──────────────────────────────────────────
+   Le compteur d'ajouts et de suppressions vit à droite de la rangée, comme sur
+   GitHub : on ne le lit pas, on le voit. */
+.review-tabs-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  flex-wrap:wrap;
+}
+.diff-stat{ display:inline-flex; align-items:center; gap:6px; font-size:12px; white-space:nowrap; }
+.diff-stat__plus{ color:rgb(63,185,80); font-variant-numeric:tabular-nums; }
+.diff-stat__moins{ color:rgb(248,81,73); font-variant-numeric:tabular-nums; }
+.diff-stat__cases{ display:inline-flex; gap:2px; }
+.diff-stat__case{ width:8px; height:8px; border-radius:1px; }
+.diff-stat__case--ajout{ background:rgb(63,185,80); }
+.diff-stat__case--retrait{ background:rgb(248,81,73); }
+
+/* Le même fond de page sous les quatre onglets : sans lui, passer des
+   Changements à la Conversation faisait sauter le défilement au moment où la
+   barre de titre bascule en mode compact. */
+.review-tabpanel{ padding-bottom:64px; }
+/* Le diff prend la largeur : une arborescence plus deux colonnes de valeurs ne
+   tiennent pas dans la colonne de lecture d'une conversation. */
+.review-tabpanel--pleine{ margin-left:calc(50% - 50vw); margin-right:calc(50% - 50vw); padding-left:24px; padding-right:24px; }
+
+/* ── Le diff d'un dépôt ─────────────────────────────────────────────────────
+   Le châssis de GitHub — une barre d'outils, une arborescence à gauche, les
+   écarts à droite — sur une unité qui n'est pas la ligne de texte mais le
+   repère : un avis, un article, une donnée de base. Voir `depot-reperes.js`. */
+.diff-barre{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:8px 0 12px;
+}
+.diff-barre__resume{ flex:1 1 auto; min-width:0; color:var(--muted); font-size:12px; }
+
+.diff-layout{
+  display:grid;
+  grid-template-columns:var(--diff-tree-width, 280px) minmax(0, 1fr);
+  align-items:start;
+  gap:2px;
+}
+.diff-layout--replie{ grid-template-columns:0 minmax(0, 1fr); }
+
+/* L'arborescence reprend celle des Documents — mêmes classes, même allure,
+   même poignée. Deux arborescences qui se ressemblent à peu près donnent
+   l'impression de deux applications. */
+.diff-tree{ width:var(--diff-tree-width, 280px); }
+.diff-tree.is-collapsed{ display:none; }
+.diff-tree .documents-tree__panel{ min-height:0; height:auto; max-height:calc(100vh - 260px); }
+.diff-tree__compte{
+  margin-left:auto;
+  padding:0 6px;
+  border-radius:999px;
+  background:var(--panel2);
+  color:var(--muted);
+  font-size:11px;
+  font-variant-numeric:tabular-nums;
+}
+
+.diff-corps{ min-width:0; display:flex; flex-direction:column; gap:12px; }
+
+/* Un groupe, ses lignes. Cinq valeurs de neige et de vent occupaient cinq
+   encadrés séparés, chacun avec son en-tête et son pied ; elles tiennent
+   maintenant sous un titre, numérotées — la lecture d'un fichier dans un diff. */
+.diff-groupe{
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  overflow:hidden;
+  scroll-margin-top:calc(var(--app-top) + 16px);
+}
+.diff-groupe__tete{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  padding:8px 12px;
+  border-bottom:1px solid var(--border);
+  background:var(--panel2);
+  font-size:12px;
+}
+.diff-groupe__caret{
+  display:inline-flex;
+  padding:0;
+  border:0;
+  background:transparent;
+  color:var(--muted);
+  cursor:pointer;
+}
+.diff-groupe__titre{
+  padding:0;
+  border:0;
+  background:transparent;
+  color:var(--text);
+  font:inherit;
+  font-weight:600;
+  cursor:pointer;
+}
+.diff-groupe__titre:hover{ text-decoration:underline; }
+.diff-groupe__compte{ margin-left:auto; color:var(--muted); font-size:11px; }
+.diff-groupe__corps{ font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; }
+
+.diff-ligne{
+  display:grid;
+  grid-template-columns:44px 16px minmax(200px, 30%) minmax(0, 1fr);
+  gap:8px;
+  padding:3px 12px 3px 0;
+  align-items:baseline;
+}
+/* Le numéro n'est pas celui d'une ligne de fichier — il n'en existe pas ici.
+   C'est un point où poser le doigt quand on discute à deux devant l'écran. */
+.diff-ligne__num{
+  padding-right:8px;
+  border-right:1px solid var(--border2);
+  color:var(--muted);
+  font-size:11px;
+  text-align:right;
+  user-select:none;
+}
+.diff-ligne__signe{ text-align:center; }
+.diff-ligne__nom{ color:var(--muted); overflow-wrap:anywhere; }
+.diff-ligne__valeur{ color:var(--text); overflow-wrap:anywhere; }
+.diff-ligne--ajoute{ background:rgba(46,160,67,.12); }
+.diff-ligne--ajoute .diff-ligne__signe{ color:rgb(63,185,80); }
+.diff-ligne--retire{ background:rgba(248,81,73,.1); }
+.diff-ligne--retire .diff-ligne__signe{ color:rgb(248,81,73); }
+.diff-ligne--inchange{ background:transparent; }
+
+/* ── Écrire depuis le diff ──────────────────────────────────────────────────
+   La remarque se prend devant l'écart, pas au bout d'une conversation qu'il
+   faut aller rouvrir. Le message, lui, part dans le fil. */
+.diff-comment{ position:fixed; inset:0; z-index:var(--z-modal); display:flex; align-items:flex-start; justify-content:center; }
+.diff-comment__voile{ position:absolute; inset:0; background:rgba(1,4,9,.6); }
+.diff-comment__boite{
+  position:relative;
+  width:min(620px, 94vw);
+  margin-top:12vh;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  background:var(--bg);
+  box-shadow:0 8px 40px rgba(1,4,9,.6);
+  overflow:hidden;
+}
+.diff-comment__tete{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:12px 16px;
+  border-bottom:1px solid var(--border);
+  font-size:14px;
+}
+.comment-composer--proposition-diff{ padding:16px; }
+
+@media (max-width: 900px){
+  .diff-layout{ grid-template-columns:minmax(0, 1fr); }
+  .diff-tree{ display:none; }
+  .review-tabpanel--pleine{ margin-left:0; margin-right:0; padding-left:0; padding-right:0; }
 }

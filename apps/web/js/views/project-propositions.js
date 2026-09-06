@@ -77,10 +77,11 @@ import {
   tableauAvantApres
 } from "../services/proposition-avant-apres.js";
 import { depotDeLaProposition, resumeDuDepot } from "../services/proposition-depot.js";
-import { ETAT, ETAT_LABELS, arbreDesReperes, comparerDesReperes, resumeDuDiff } from "../services/depot-reperes.js";
+import { ETAT, arbreDesReperes, comparerDesReperes, resumeDuDiff } from "../services/depot-reperes.js";
 import { aChange, reperesDuDepot } from "../services/depot-carburants.js";
 import { limiterAuDepot } from "../services/depot-portee.js";
-import { passerLesControles, resumeDesControles } from "../services/depot-controles.js";
+import { ISSUE, passerLesControles, resumeDesControles } from "../services/depot-controles.js";
+import { bindSideResizer, renderSideResizer } from "./ui/side-resizer.js";
 import { avisFromFigures, mergeAvis } from "../services/avis-from-figures.js";
 import { describeReadingStack } from "../services/run-workflow.js";
 
@@ -113,7 +114,14 @@ const view = {
   mergeDrawer: false,
   /** L'arborescence du diff, et ce qu'il montre. */
   diffTreeOpen: true,
-  diffOnlyChanged: true,
+  diffTreeWidth: 280,
+  /** Les familles repliées dans l'arborescence, et les groupes repliés du diff. */
+  diffTreeReplies: new Set(),
+  diffGroupesReplies: new Set(),
+  /** La boîte pour commenter depuis le diff. */
+  diffComment: false,
+  diffDraft: "",
+  diffPreview: false,
   /** Les blocs de l'onglet Dépôts qu'on a dépliés. Repliés par défaut. */
   blocsOuverts: new Set(),
   /** De quoi citer dans ce projet : ses sujets et ses propositions. */
@@ -419,7 +427,7 @@ function renderMergeStateButton(proposition, review) {
   }
 
   const blocage = describeBlocking(review?.conflicts ?? []);
-  const empeche = Boolean(blocage) || Boolean(review?.error);
+  const empeche = fusionRetenue(review ?? {});
 
   // La pastille porte la couleur, le bouton reste gris : c'est la lecture de
   // GitHub, et elle vaut mieux qu'un bouton entier coloré — le vert d'un bouton
@@ -447,7 +455,7 @@ function renderMergeStateButton(proposition, review) {
  */
 function renderMergeDrawer(proposition, review) {
   const blocage = describeBlocking(review.conflicts ?? []);
-  const empeche = Boolean(blocage) || Boolean(review.error);
+  const empeche = fusionRetenue(review);
 
   return `
     <aside class="merge-drawer__panneau gh-panel gh-panel--details" role="dialog" aria-modal="true"
@@ -900,13 +908,18 @@ function renderReviewBlock(type, titre, items, renderer, vide) {
 
   // Replié par défaut, et c'est ce qu'on veut : un dépôt de soixante-huit avis
   // se lit d'abord par son nombre. On l'ouvre quand on va trancher.
+  //
+  // Le caret existe **même à zéro**. « Cette proposition n'apporte aucun
+  // document » écrit sous chaque bloc vide occupait trois paragraphes pour dire
+  // trois fois rien, alors que le compteur le disait déjà. La phrase reste — un
+  // bloc vide sur lequel on clique doit répondre quelque chose —, elle attend
+  // simplement qu'on la demande.
   const ouvert = view.blocsOuverts?.has(type) === true;
-  const pliable = items.length > 0;
 
   return `
     <section class="review-block">
       <div class="review-panel">
-        <div class="review-block__head${ecartes > 0 ? " is-partial" : ""}${pliable ? "" : " review-block__head--vide"}">
+        <div class="review-block__head${ecartes > 0 ? " is-partial" : ""}${ouvert ? "" : " review-block__head--replie"}">
           <label class="review-item__check">
             ${
               items.length > 0 && view.review?.frozen !== true
@@ -920,38 +933,27 @@ function renderReviewBlock(type, titre, items, renderer, vide) {
                 : ""
             }
           </label>
-          ${
-            // Le caret occupe sa place même quand il n'y a rien à déplier :
-            // sans cela, un bloc vide décalerait son titre d'un cran par
-            // rapport aux autres, et la colonne cesserait d'être une colonne.
-            pliable
-              ? `<button type="button" class="review-block__caret" data-review-block-toggle="${escapeHtml(type)}"
-                   aria-expanded="${ouvert ? "true" : "false"}"
-                   aria-label="${escapeHtml(ouvert ? `Replier ${titre}` : `Déplier ${titre}`)}">
-                   ${svgIcon(ouvert ? "chevron-down" : "chevron-right", { className: "octicon" })}
-                 </button>`
-              : `<span class="review-block__caret review-block__caret--absent" aria-hidden="true"></span>`
-          }
+          <button type="button" class="review-block__caret" data-review-block-toggle="${escapeHtml(type)}"
+            aria-expanded="${ouvert ? "true" : "false"}"
+            aria-label="${escapeHtml(ouvert ? `Replier ${titre}` : `Déplier ${titre}`)}">
+            ${svgIcon(ouvert ? "chevron-down" : "chevron-right", { className: "octicon" })}
+          </button>
           <div class="review-block__headbody">
             <h3 class="review-block__title">
-              ${
-                pliable
-                  ? `<button type="button" class="review-block__titre-bouton" data-review-block-toggle="${escapeHtml(type)}">${escapeHtml(titre)}</button>`
-                  : escapeHtml(titre)
-              }
+              <button type="button" class="review-block__titre-bouton" data-review-block-toggle="${escapeHtml(type)}">${escapeHtml(titre)}</button>
               <span class="review-block__count">${items.length}</span>
             </h3>
             ${items.length > 0 ? `<span class="review-block__state">${escapeHtml(etat)}</span>` : ""}
           </div>
         </div>
         ${
-          items.length === 0
-            // Pas de filet au-dessus d'une phrase qui dit qu'il n'y a rien :
-            // le trait annonçait un contenu, et il n'y en a pas.
-            ? `<p class="review-block__empty review-block__empty--sansfilet">${escapeHtml(vide)}</p>`
-            : ouvert
-              ? `<ul class="review-list">${items.map(renderer).join("")}</ul>`
-              : ""
+          !ouvert
+            ? ""
+            : items.length === 0
+              // Alignée sur le titre : une phrase qui repartirait du bord
+              // gauche se lirait comme le texte d'un autre bloc.
+              ? `<p class="review-block__empty review-block__empty--aligne">${escapeHtml(vide)}</p>`
+              : `<ul class="review-list">${items.map(renderer).join("")}</ul>`
         }
       </div>
     </section>
@@ -1061,6 +1063,48 @@ function recalculerLeDiff(review) {
     items: review.items ?? [],
     avantApres: review.avantApres ?? null
   }));
+}
+
+/**
+ * Le compteur d'ajouts et de suppressions, à droite des onglets.
+ *
+ * Celui de GitHub : deux nombres et une barre de cases. On ne le lit pas, on le
+ * voit — et il dit en un coup d'œil si l'on a affaire à trois lignes ou à trois
+ * cents, avant même d'ouvrir l'onglet.
+ */
+function renderDiffStat(review) {
+  const lignes = review.diffDuDepot?.lignes ?? [];
+  if (lignes.length === 0) return "";
+
+  // Une modification compte des deux côtés : elle retire une valeur et en met
+  // une autre. C'est ce que fait un diff de code, et pour la même raison — une
+  // correction n'est pas un ajout.
+  let ajouts = 0;
+  let retraits = 0;
+  for (const ligne of lignes) {
+    for (const champ of ligne.champs ?? []) {
+      if (champ.etat === ETAT.INCHANGE) continue;
+      if (champ.avant) retraits += 1;
+      if (champ.apres) ajouts += 1;
+    }
+  }
+  if (ajouts + retraits === 0) return "";
+
+  const total = ajouts + retraits;
+  const cases = Array.from({ length: 5 }, (_, rang) => {
+    const part = Math.round((ajouts / total) * 5);
+    return rang < part ? "ajout" : "retrait";
+  });
+
+  return `
+    <span class="diff-stat" title="${escapeHtml(`${ajouts} ajout${ajouts > 1 ? "s" : ""}, ${retraits} suppression${retraits > 1 ? "s" : ""}`)}">
+      <span class="diff-stat__plus">+${ajouts}</span>
+      <span class="diff-stat__moins">−${retraits}</span>
+      <span class="diff-stat__cases">${cases
+        .map((ton) => `<span class="diff-stat__case diff-stat__case--${ton}"></span>`)
+        .join("")}</span>
+    </span>
+  `;
 }
 
 function reviewTabs(review) {
@@ -1563,6 +1607,44 @@ const STORY_ICON = {
  * au moment du commit pour cette raison exacte — c'est le seul instant où
  * l'auteur peut dire pourquoi, et l'instant où il s'en souvient encore.
  */
+/** Le bilan d'un sous-ensemble de contrôles, pour en écrire le résumé. */
+function bilanDe(lignes = []) {
+  const bilan = { tenu: 0, "non-tenu": 0, "sans-objet": 0, "non-verifiable": 0, "en-cours": 0 };
+  for (const ligne of lignes) bilan[ligne.issue] += 1;
+  return bilan;
+}
+
+/**
+ * Ce qui retient la fusion.
+ *
+ * Un contrôle **requis** qui n'est pas tenu, ou une analyse qui n'a pas abouti.
+ * Un contrôle non vérifiable ne bloque pas : ne pas savoir n'est pas un échec,
+ * et c'est à l'humain de décider s'il signe sans savoir.
+ */
+function fusionRetenue(review) {
+  if (review.running) return true;
+  if (review.error) return true;
+  return passerLesControles(contexteDesControles(view.open ?? {}, review)).bloque;
+}
+
+/**
+ * Ce qui retient, en toutes lettres.
+ *
+ * « Arbitrez ce qui est en attente » ne disait pas quoi. Un blocage qu'on ne
+ * sait pas lever n'est qu'un mur, et l'on cherche dans quatre onglets.
+ */
+function retenuPar(review) {
+  if (review.running) return "L'analyse est en cours";
+  if (review.error) return "L'analyse n'a pas abouti";
+
+  const retenus = passerLesControles(contexteDesControles(view.open ?? {}, review))
+    .lignes.filter((ligne) => ligne.bloquant && ligne.issue === ISSUE.NON_TENU);
+
+  if (retenus.length === 0) return "Quelque chose retient la fusion";
+  if (retenus.length === 1) return retenus[0].label;
+  return `${retenus.length} contrôles requis ne sont pas tenus`;
+}
+
 function renderMergeBox(proposition, review) {
   // Pendant l'analyse, les conditions ne veulent rien dire : elles compteraient
   // zéro avis en mouvement sur un lot qu'on n'a pas encore lu. Le pavé dit donc
@@ -1591,7 +1673,7 @@ function renderMergeBox(proposition, review) {
   }
 
   const blocage = describeBlocking(review.conflicts ?? []);
-  const empeche = Boolean(blocage) || Boolean(review.error);
+  const empeche = fusionRetenue(review);
 
   return `
     <section class="merge-area">
@@ -1628,7 +1710,13 @@ function renderMergeBox(proposition, review) {
  * l'on ne sait plus laquelle croire.
  */
 function renderMergeConditions(review, empeche, blocage = "") {
-  const items = review.items ?? [];
+  // Les conditions ne se réécrivent plus ici : ce sont **les contrôles**, et ce
+  // qui bloque la fusion est ce qu'ils disent. Deux listes de conditions — une
+  // dans l'onglet Vérifications, une dans le pavé — auraient fini par ne plus
+  // dire la même chose, et c'est celle qu'on ne regarde pas qui aurait raison.
+  const controles = passerLesControles(contexteDesControles(view.open ?? {}, review));
+  const requis = controles.lignes.filter((ligne) => ligne.bloquant);
+  const autres = controles.lignes.filter((ligne) => !ligne.bloquant);
 
   const conditions = [
     {
@@ -1639,11 +1727,19 @@ function renderMergeConditions(review, empeche, blocage = "") {
       text: review.error ? "L'analyse n'a pas abouti" : "L'analyse a abouti",
       note: review.error ? review.error : describeAnalysis(review)
     },
+    // Un contrôle requis se lit en toutes lettres : c'est lui qui retient, et
+    // « la fusion est bloquée » sans dire par quoi n'est qu'un mur.
+    ...requis.map((ligne) => ({
+      tone: ligne.issue === ISSUE.TENU || ligne.issue === ISSUE.SANS_OBJET ? "ok" : "warn",
+      icon: ligne.icone,
+      text: ligne.label,
+      note: [ligne.phrase, ligne.detail].filter(Boolean).join(" ")
+    })),
     {
-      tone: blocage ? "warn" : "ok",
-      icon: blocage ? "alert" : "check",
-      text: blocage ? "La mémoire du projet est contredite" : "Rien ne contredit la mémoire du projet",
-      note: blocage || "Aucune décision passée n'est remise en cause par ce lot."
+      tone: "ok",
+      icon: "checklist",
+      text: `${autres.length} autre${autres.length > 1 ? "s contrôles" : " contrôle"}`,
+      note: resumeDesControles({ lignes: autres, bilan: bilanDe(autres) })
     }
   ];
 
@@ -1694,13 +1790,15 @@ function renderMergeAction(review, empeche, blocage = "") {
       <span class="merge-box__hint">
         ${escapeHtml(
           empeche
-            ? "Arbitrez ce qui est en attente pour pouvoir fusionner."
+            ? `${retenuPar(review)} — la fusion attend.`
             : "Vous écrirez le message de la fusion avant qu'elle ne s'applique."
         )}
         ${
           blocage
             ? `<button type="button" class="merge-box__link" data-review-goto-changes>Régler les conflits</button>`
-            : ""
+            : empeche
+              ? `<button type="button" class="merge-box__link" data-review-goto-checks>Voir les contrôles</button>`
+              : ""
         }
         ${
           review.error
@@ -2546,119 +2644,162 @@ function renderChanges(proposition, review) {
     return `<div class="propositions-empty"><b>Rien à comparer</b><p>Ce dépôt n'apporte aucun repère identifié.</p></div>`;
   }
 
-  const arbre = arbreDesReperes(lignes);
-  const seulementCeQuiBouge = view.diffOnlyChanged !== false;
-  const visibles = seulementCeQuiBouge ? lignes.filter(aChange) : lignes;
-  const groupes = arbreDesReperes(visibles);
+  const groupes = arbreDesReperes(lignes);
+  const ouverte = view.diffTreeOpen !== false;
+  const largeur = ouverte ? Math.max(220, Math.min(520, Number(view.diffTreeWidth) || 280)) : 0;
 
   return `
-    <div class="diff-shell${view.diffTreeOpen === false ? " diff-shell--closed" : ""}">
-      <aside class="diff-tree" aria-label="Ce qui a changé">
-        <div class="diff-tree__head">
-          <button type="button" class="diff-tree__toggle" data-diff-tree-toggle
-            aria-label="${escapeHtml(view.diffTreeOpen === false ? "Étendre la barre latérale" : "Replier la barre latérale")}">
-            ${svgIcon(view.diffTreeOpen === false ? "sidebar-expand" : "sidebar-collapse", { className: "octicon" })}
-          </button>
-          <span class="diff-tree__resume">${escapeHtml(resumeDuDiff(diff.compte))}</span>
-        </div>
-        <div class="diff-tree__corps">
-          ${groupes
-            .map(
-              (groupe) => `
-                <div class="diff-tree__groupe">
-                  <div class="diff-tree__dossier">
-                    ${svgIcon("file-directory", { className: "octicon" })}
-                    <span>${escapeHtml(groupe.chemin.join(" / "))}</span>
-                  </div>
-                  ${groupe.lignes
-                    .map(
-                      (ligne) => `
-                        <button type="button" class="diff-tree__ligne diff-tree__ligne--${escapeHtml(ligne.etat)}"
-                          data-diff-goto="${escapeHtml(ligne.id)}">
-                          <span class="diff-tree__signe">${escapeHtml(ligne.signe)}</span>
-                          <span class="diff-tree__titre">${escapeHtml(ligne.titre)}</span>
-                        </button>
-                      `
-                    )
-                    .join("")}
-                </div>
-              `
-            )
-            .join("")}
-          ${
-            groupes.length === 0
-              ? `<p class="diff-tree__vide">Rien n'a bougé dans ce dépôt.</p>`
-              : ""
-          }
-        </div>
-      </aside>
+    <div class="diff-barre">
+      <button type="button" class="documents-tree__toggle" data-diff-tree-toggle
+        aria-label="${escapeHtml(ouverte ? "Replier la barre latérale" : "Étendre la barre latérale")}"
+        title="${escapeHtml(ouverte ? "Replier la barre latérale" : "Étendre la barre latérale")}">
+        ${svgIcon(ouverte ? "sidebar-collapse" : "sidebar-expand", { className: "octicon" })}
+      </button>
+      <span class="diff-barre__resume">${escapeHtml(resumeDuDiff(diff.compte))}</span>
+      <button type="button" class="gh-btn gh-btn--primary gh-btn--sm" data-diff-comment-open>
+        Soumettre un commentaire
+      </button>
+    </div>
 
+    <div class="diff-layout${ouverte ? "" : " diff-layout--replie"}" style="--diff-tree-width:${largeur}px">
+      ${renderDiffTree(groupes, ouverte)}
       <div class="diff-corps">
-        <div class="diff-corps__barre">
-          <label class="diff-corps__filtre">
-            <input type="checkbox" data-diff-only-changed ${seulementCeQuiBouge ? "checked" : ""}>
-            <span>N'afficher que ce qui a changé</span>
-          </label>
-          <span class="diff-corps__compte">${escapeHtml(resumeDuDiff(diff.compte))}</span>
-        </div>
-        ${visibles.map(renderDiffRepere).join("")
-          || `<p class="review-empty-note">Rien n'a bougé : ce dépôt confirme ce que le projet dit déjà.</p>`}
+        ${groupes.map(renderDiffGroupe).join("")}
       </div>
     </div>
+    ${renderDiffCommentBox(proposition, review)}
   `;
 }
 
-/** Un repère et son écart, champ par champ — la « hunk » d'un diff. */
-function renderDiffRepere(ligne) {
-  const numero = { compteur: 0 };
+/**
+ * L'arborescence, celle de l'onglet Documents.
+ *
+ * Mêmes classes, même allure, même poignée de redimensionnement : deux
+ * arborescences qui se ressemblent à peu près donnent l'impression de deux
+ * applications. Le chemin d'un repère devient une hiérarchie réelle —
+ * « Données de base » puis « Structure » —, et non un libellé où l'on aurait
+ * écrit une barre oblique.
+ */
+function renderDiffTree(groupes, ouverte) {
+  // Deux rangs, parce que le chemin en a deux : la famille, puis la rubrique.
+  // Les aplatir en « Données de base / Structure » ferait d'une hiérarchie une
+  // chaîne de caractères, et l'on ne replierait plus une famille entière.
+  const familles = new Map();
+  for (const groupe of groupes) {
+    const racine = groupe.chemin[0] ?? "Sans rubrique";
+    if (!familles.has(racine)) familles.set(racine, []);
+    familles.get(racine).push(groupe);
+  }
 
-  const champs = ligne.champs
+  const corps = [...familles.entries()]
+    .map(([racine, enfants]) => {
+      const replieeFamille = view.diffTreeReplies?.has(racine) === true;
+      const bouge = enfants.reduce((total, groupe) => total + groupe.compte, 0);
+
+      return `
+        <div class="documents-tree__row">
+          <button type="button" class="documents-tree__caret" data-diff-tree-fold="${escapeHtml(racine)}"
+            aria-expanded="${replieeFamille ? "false" : "true"}">
+            ${svgIcon(replieeFamille ? "chevron-right" : "chevron-down", { className: "octicon" })}
+          </button>
+          <button type="button" class="documents-tree__item" data-diff-tree-fold="${escapeHtml(racine)}">
+            <span class="documents-tree__icon-slot">${svgIcon("file-directory", { className: "octicon" })}</span>
+            <span class="documents-tree__label">${escapeHtml(racine)}</span>
+            ${bouge > 0 ? `<span class="diff-tree__compte">${bouge}</span>` : ""}
+          </button>
+        </div>
+        ${
+          replieeFamille
+            ? ""
+            : enfants
+                .map(
+                  (groupe) => `
+                    <div class="documents-tree__row">
+                      <span class="documents-tree__indent"><span class="documents-tree__divider is-expanded"></span></span>
+                      <span class="documents-tree__caret-spacer"></span>
+                      <button type="button" class="documents-tree__item" data-diff-goto="${escapeHtml(groupe.cle)}">
+                        <span class="documents-tree__icon-slot">${svgIcon("file-directory", { className: "octicon" })}</span>
+                        <span class="documents-tree__label">${escapeHtml(groupe.chemin[1] ?? groupe.label)}</span>
+                        ${groupe.compte > 0 ? `<span class="diff-tree__compte">${groupe.compte}</span>` : ""}
+                      </button>
+                    </div>
+                  `
+                )
+                .join("")
+        }
+      `;
+    })
+    .join("");
+
+  return `
+    <aside class="documents-tree diff-tree${ouverte ? " is-open" : " is-collapsed"}" aria-label="Ce qui a changé">
+      <div class="documents-tree__panel">${corps}</div>
+      ${renderSideResizer({ id: "propositionDiffTreeResize", className: "documents-tree__resize-handle" })}
+    </aside>
+  `;
+}
+
+/**
+ * Un groupe et ses lignes — la « hunk » d'un diff.
+ *
+ * Cinq valeurs de neige et de vent occupaient cinq encadrés séparés, chacun
+ * avec son en-tête et son pied. On regroupe : un titre par rubrique, puis les
+ * lignes, numérotées. C'est exactement la lecture d'un fichier dans un diff, et
+ * c'est ce qu'on cherchait.
+ */
+function renderDiffGroupe(groupe) {
+  const replie = view.diffGroupesReplies?.has(groupe.cle) === true;
+  const numero = { compteur: 0 };
+  const corps = groupe.lignes.map((ligne) => lignesDuRepere(ligne, numero)).join("");
+
+  return `
+    <section class="diff-groupe" id="diff-groupe-${escapeHtml(cleHtml(groupe.cle))}">
+      <header class="diff-groupe__tete">
+        <button type="button" class="diff-groupe__caret" data-diff-groupe-fold="${escapeHtml(groupe.cle)}"
+          aria-expanded="${replie ? "false" : "true"}">
+          ${svgIcon(replie ? "chevron-right" : "chevron-down", { className: "octicon" })}
+        </button>
+        <button type="button" class="diff-groupe__titre" data-diff-groupe-fold="${escapeHtml(groupe.cle)}">
+          ${escapeHtml(groupe.chemin.join(" / "))}
+        </button>
+        <span class="diff-groupe__compte">${groupe.lignes.length} entrée${groupe.lignes.length > 1 ? "s" : ""}</span>
+      </header>
+      ${replie ? "" : `<div class="diff-groupe__corps">${corps}</div>`}
+    </section>
+  `;
+}
+
+/**
+ * Les lignes d'un repère.
+ *
+ * Un champ modifié en fait deux — l'avant et l'après —, un champ inchangé une
+ * seule, sans signe : c'est la ligne de contexte d'un diff de code. Le nom du
+ * champ n'apparaît que lorsque le repère en porte plusieurs : sur une donnée de
+ * base, qui n'a qu'une valeur, écrire « Valeur » à chaque ligne n'apprend rien.
+ */
+function lignesDuRepere(ligne, numero) {
+  const plusieurs = ligne.champs.length > 1;
+  const libelle = (champ) => (plusieurs ? `${ligne.titre} · ${champ.nom}` : ligne.titre);
+
+  return ligne.champs
     .map((champ) => {
-      // Un champ qui n'a pas bougé s'écrit **une fois**, sans signe : c'est une
-      // ligne de contexte, comme dans un diff de code. L'écrire deux fois — en
-      // rouge puis en vert — annonçait un changement là où il n'y en avait pas.
       if (champ.etat === ETAT.INCHANGE) {
         numero.compteur += 1;
-        return renderDiffLigne(numero.compteur, " ", champ.nom, champ.apres || champ.avant, "inchange");
+        return renderDiffLigne(numero.compteur, " ", libelle(champ), champ.apres || champ.avant, "inchange");
       }
 
       const cellules = [];
       if (champ.avant) {
         numero.compteur += 1;
-        cellules.push(renderDiffLigne(numero.compteur, "-", champ.nom, champ.avant, "retire"));
+        cellules.push(renderDiffLigne(numero.compteur, "-", libelle(champ), champ.avant, "retire"));
       }
       if (champ.apres) {
         numero.compteur += 1;
-        cellules.push(renderDiffLigne(numero.compteur, "+", champ.nom, champ.apres, "ajoute"));
+        cellules.push(renderDiffLigne(numero.compteur, "+", libelle(champ), champ.apres, "ajoute"));
       }
       return cellules.join("");
     })
     .join("");
-
-  const provenance = [ligne.provenance?.source, ligne.provenance?.article]
-    .filter(Boolean).join(" · ");
-  const page = ligne.provenance?.page;
-
-  return `
-    <section class="diff-fichier" id="diff-${escapeHtml(ligne.id)}">
-      <header class="diff-fichier__tete">
-        <span class="diff-fichier__signe diff-fichier__signe--${escapeHtml(ligne.etat)}">${escapeHtml(ligne.signe)}</span>
-        <span class="diff-fichier__chemin">${escapeHtml(ligne.chemin.join(" / "))}</span>
-        <span class="diff-fichier__titre">${escapeHtml(ligne.titre)}</span>
-        <span class="diff-fichier__etat diff-fichier__etat--${escapeHtml(ligne.etat)}">${escapeHtml(
-          ETAT_LABELS[ligne.etat] ?? ligne.etat
-        )}</span>
-      </header>
-      <div class="diff-fichier__corps">${champs}</div>
-      ${
-        provenance || page
-          ? `<footer class="diff-fichier__pied">${escapeHtml(
-              [provenance, page ? `page ${page}` : ""].filter(Boolean).join(" · ")
-            )}</footer>`
-          : ""
-      }
-    </section>
-  `;
 }
 
 /**
@@ -2675,6 +2816,59 @@ function renderDiffLigne(numero, signe, nom, valeur, ton) {
       <span class="diff-ligne__signe">${escapeHtml(signe)}</span>
       <span class="diff-ligne__nom">${escapeHtml(nom)}</span>
       <span class="diff-ligne__valeur">${escapeHtml(valeur || "—")}</span>
+    </div>
+  `;
+}
+
+/** Une clé de chemin, utilisable comme identifiant HTML. */
+function cleHtml(cle) {
+  return String(cle ?? "").replace(/[^\w-]+/g, "-");
+}
+
+/**
+ * Écrire depuis le diff.
+ *
+ * C'est là qu'on a la remarque en tête — devant l'écart, pas au bout d'une
+ * conversation qu'il faut aller rouvrir. Le message part **dans le fil**, où
+ * il se relira six mois plus tard avec le reste : un commentaire rangé à part
+ * dans un onglet de diff serait perdu le jour où la proposition est close.
+ */
+function renderDiffCommentBox(proposition, review) {
+  if (!view.diffComment) return "";
+
+  return `
+    <div class="diff-comment" data-diff-comment>
+      <div class="diff-comment__voile" data-diff-comment-close></div>
+      <div class="diff-comment__boite" role="dialog" aria-modal="true" aria-label="Soumettre un commentaire">
+        <header class="diff-comment__tete">
+          <b>Soumettre un commentaire</b>
+          <button type="button" class="merge-drawer__fermer" data-diff-comment-close
+            aria-label="Fermer">${svgIcon("x", { className: "octicon" })}</button>
+        </header>
+        ${renderCommentComposer({
+          hideAvatar: true,
+          hideTitle: true,
+          previewMode: view.diffPreview === true,
+          textareaId: "propositionDiffComment",
+          previewId: "propositionDiffCommentPreview",
+          textareaValue: view.diffDraft ?? "",
+          textareaAttributes: { "data-diff-comment-draft": "1" },
+          placeholder: "Ce que cet écart vous inspire — il se relira dans six mois.",
+          composerClassName: "comment-composer--proposition-diff",
+          tabWriteAction: "proposition-diff-tab-write",
+          tabPreviewAction: "proposition-diff-tab-preview",
+          previewHtml: humanTextHtml(view.diffDraft ?? ""),
+          hintHtml: review.commentNotice
+            ? `<span class="review-comment__notice">${escapeHtml(review.commentNotice)}</span>`
+            : "",
+          actionsHtml: `
+            <button type="button" class="gh-btn gh-btn--sm" data-diff-comment-close>Annuler</button>
+            <button type="button" class="gh-btn gh-btn--sm gh-btn--primary" data-diff-comment-post ${
+              String(view.diffDraft ?? "").trim() && !review.posting ? "" : "disabled"
+            }>${review.posting ? "Envoi…" : "Soumettre"}</button>
+          `
+        })}
+      </div>
     </div>
   `;
 }
@@ -2801,13 +2995,16 @@ function renderReview(root) {
     ${gele ? renderFrozenNote(proposition, review) : ""}
     ${suite}
     ${avertissement}
-    ${renderLightTabs({
-      tabs: reviewTabs(review),
-      activeTabId: onglet,
-      className: "review-tabs",
-      ariaLabel: "Sections de la proposition"
-    })}
-    <div class="review-tabpanel">${panneau}</div>
+    <div class="review-tabs-row">
+      ${renderLightTabs({
+        tabs: reviewTabs(review),
+        activeTabId: onglet,
+        className: "review-tabs",
+        ariaLabel: "Sections de la proposition"
+      })}
+      ${renderDiffStat(review)}
+    </div>
+    <div class="review-tabpanel${onglet === "changes" ? " review-tabpanel--pleine" : ""}">${panneau}</div>
   `;
 }
 
@@ -2995,6 +3192,79 @@ function showPdfViewer(root) {
 
 /** Le retour à la liste, les cases, les raisons, et la fusion. */
 /**
+ * La poignée de l'arborescence du diff.
+ *
+ * Le même composant que l'arbre des Documents et le rail de la Mémoire : une
+ * seule façon de redimensionner, donc une seule façon de se tromper.
+ */
+function bindDiffTreeResize(root) {
+  const handle = root.querySelector("#propositionDiffTreeResize");
+  if (!handle) return;
+
+  bindSideResizer({
+    handle,
+    guide: root.querySelector("#propositionDiffTreeResizeGuide"),
+    getWidth: () => Number(view.diffTreeWidth) || 280,
+    onResize: (largeur) => {
+      view.diffTreeWidth = largeur;
+      // Pendant le glissé, on écrit la variable : refaire l'écran à chaque
+      // pixel le rendrait poussif, et redimensionner sans voir revient à viser
+      // en aveugle.
+      root.querySelector(".diff-layout")?.style.setProperty("--diff-tree-width", `${largeur}px`);
+    },
+    onEnd: (largeur) => {
+      view.diffTreeWidth = largeur;
+      renderContent(root);
+    }
+  });
+}
+
+/**
+ * Écrire depuis le diff.
+ *
+ * Le message part dans le fil de la conversation, pas dans un coin de l'onglet :
+ * c'est là qu'on relira, six mois plus tard, pourquoi cette valeur-là a été
+ * discutée. Le fil le range tout seul — avant l'encart de fusion tant que la
+ * proposition est ouverte, après le procès-verbal une fois qu'elle est close.
+ */
+function bindDiffComment(root) {
+  root.querySelector("[data-diff-comment-open]")?.addEventListener("click", () => {
+    view.diffComment = true;
+    view.diffPreview = false;
+    renderContent(root);
+  });
+
+  for (const bouton of root.querySelectorAll("[data-diff-comment-close]")) {
+    bouton.addEventListener("click", () => {
+      view.diffComment = false;
+      renderContent(root);
+    });
+  }
+
+  const champ = root.querySelector("[data-diff-comment-draft]");
+  if (champ) {
+    champ.addEventListener("input", (event) => {
+      view.diffDraft = event.target.value;
+      // Le bouton s'active à la première lettre, mais la frappe ne redessine
+      // rien : un rendu par touche ferait sauter le curseur.
+      const envoyer = root.querySelector("[data-diff-comment-post]");
+      if (envoyer) envoyer.disabled = !String(view.diffDraft).trim();
+    });
+  }
+
+  root.querySelector('[data-action="proposition-diff-tab-preview"]')?.addEventListener("click", () => {
+    view.diffPreview = true;
+    renderContent(root);
+  });
+  root.querySelector('[data-action="proposition-diff-tab-write"]')?.addEventListener("click", () => {
+    view.diffPreview = false;
+    renderContent(root);
+  });
+
+  root.querySelector("[data-diff-comment-post]")?.addEventListener("click", () => postComment(root, { source: "diff" }));
+}
+
+/**
  * Les gestes du pavé de fusion, où qu'il soit rendu.
  *
  * Deux racines possibles — l'écran, et le panneau monté sur `document.body` —
@@ -3039,6 +3309,14 @@ function bindMergePanel(scope, root) {
   for (const bouton of scope.querySelectorAll("[data-review-goto-changes]")) {
     bouton.addEventListener("click", () => {
       view.tab = "changes";
+      view.mergeDrawer = false;
+      renderContent(root);
+    });
+  }
+
+  for (const bouton of scope.querySelectorAll("[data-review-goto-checks]")) {
+    bouton.addEventListener("click", () => {
+      view.tab = "analysis";
       view.mergeDrawer = false;
       renderContent(root);
     });
@@ -3143,19 +3421,33 @@ function bindReview(root) {
     renderContent(root);
   });
 
-  // Par défaut on ne montre que ce qui bouge — c'est ce qu'on vient chercher.
-  // Le reste se demande, il ne s'impose pas.
-  root.querySelector("[data-diff-only-changed]")?.addEventListener("change", (event) => {
-    view.diffOnlyChanged = event.target.checked;
-    renderContent(root);
-  });
+  for (const bouton of root.querySelectorAll("[data-diff-tree-fold]")) {
+    bouton.addEventListener("click", () => {
+      const racine = bouton.getAttribute("data-diff-tree-fold");
+      if (view.diffTreeReplies.has(racine)) view.diffTreeReplies.delete(racine);
+      else view.diffTreeReplies.add(racine);
+      renderContent(root);
+    });
+  }
+
+  for (const bouton of root.querySelectorAll("[data-diff-groupe-fold]")) {
+    bouton.addEventListener("click", () => {
+      const cle = bouton.getAttribute("data-diff-groupe-fold");
+      if (view.diffGroupesReplies.has(cle)) view.diffGroupesReplies.delete(cle);
+      else view.diffGroupesReplies.add(cle);
+      renderContent(root);
+    });
+  }
 
   for (const bouton of root.querySelectorAll("[data-diff-goto]")) {
     bouton.addEventListener("click", () => {
-      const cible = root.querySelector(`#diff-${CSS.escape(bouton.getAttribute("data-diff-goto"))}`);
+      const cible = root.querySelector(`#diff-groupe-${CSS.escape(cleHtml(bouton.getAttribute("data-diff-goto")))}`);
       cible?.scrollIntoView({ block: "start", behavior: "smooth" });
     });
   }
+
+  bindDiffTreeResize(root);
+  bindDiffComment(root);
 
   // Le bouton de la barre de titre : il ouvre le panneau, il ne fusionne pas.
   root.querySelector("[data-merge-open]")?.addEventListener("click", () => {
@@ -3497,9 +3789,12 @@ async function refreshComments(root) {
   if (root.isConnected) renderContent(root);
 }
 
-async function postComment(root, { keepGoing = false } = {}) {
+async function postComment(root, { keepGoing = false, source = "conversation" } = {}) {
   const proposition = view.open;
-  const texte = String(view.draft ?? "").trim();
+  // Deux champs pour un seul fil : celui du bas de la conversation, et celui de
+  // la boîte ouverte depuis le diff. Ce qu'ils écrivent va au même endroit.
+  const depuisLeDiff = source === "diff";
+  const texte = String((depuisLeDiff ? view.diffDraft : view.draft) ?? "").trim();
   if (!proposition || !texte || view.review.posting) return;
 
   view.review.posting = true;
@@ -3523,8 +3818,14 @@ async function postComment(root, { keepGoing = false } = {}) {
       return;
     }
 
-    view.draft = "";
-    view.preview = false;
+    if (depuisLeDiff) {
+      view.diffDraft = "";
+      view.diffPreview = false;
+      view.diffComment = false;
+    } else {
+      view.draft = "";
+      view.preview = false;
+    }
     if (!keepGoing) await refreshComments(root);
   } catch {
     view.review.posting = false;
