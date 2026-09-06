@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { comparerDesReperes, arbreDesReperes, resumeDuDiff, ETAT } from "./depot-reperes.js";
+import { comparerDesReperes, arbreDesReperes, lignesNumerotees, resumeDuDiff, ETAT } from "./depot-reperes.js";
 import {
   reperesDAvis, reperesDAffirmations, reperesDeDocuments, reperesDuDepot, CARBURANTS
 } from "./depot-carburants.js";
@@ -150,4 +150,35 @@ test("chaque carburant déclaré sait se lire sans données", () => {
     assert.deepEqual(lu.avant, []);
     assert.deepEqual(lu.apres, []);
   }
+});
+
+test("les lignes d'un groupe portent deux numéros, comme un diff unifié", () => {
+  const { lignes } = comparerDesReperes({
+    avant: [repere("a", { Valeur: "A1" }), repere("c", { Valeur: "2" })],
+    apres: [repere("a", { Valeur: "A2" }), repere("b", { Valeur: "490" }), repere("c", { Valeur: "2" })]
+  });
+
+  const numerotees = lignesNumerotees(arbreDesReperes(lignes)[0]);
+
+  assert.deepEqual(
+    numerotees.map((l) => [l.gauche, l.droite, l.signe, l.valeur]),
+    [
+      [1, null, "-", "A1"],
+      [null, 1, "+", "A2"],
+      [null, 2, "+", "490"],
+      [2, 3, " ", "2"]
+    ]
+  );
+});
+
+test("le nom d'une ligne ne porte le champ que si le repère en a plusieurs", () => {
+  const { lignes } = comparerDesReperes({
+    apres: [
+      repere("un", { Valeur: "A2" }),
+      repere("deux", { "État": "Levé", "Appréciation": "conforme" })
+    ]
+  });
+
+  const noms = lignesNumerotees(arbreDesReperes(lignes)[0]).map((l) => l.nom);
+  assert.deepEqual(noms, ["un", "deux · État", "deux · Appréciation"]);
 });

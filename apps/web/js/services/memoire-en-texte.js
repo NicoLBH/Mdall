@@ -94,6 +94,10 @@ export const JETON = {
   MOT: "mot",
   /** `✓ retenu`, `✗ écarté` — la branche prise. */
   MARQUE: "marque",
+  /** « sans objet » — le référentiel a conclu qu'il n'exige rien ici. */
+  SANS_OBJET: "sans-objet",
+  /** « en attente » — il manque une réponse pour conclure. */
+  ATTENTE: "attente",
   /** Ce qui ne se colore pas : les espaces, les séparateurs. */
   NEUTRE: "neutre"
 };
@@ -148,6 +152,86 @@ export function ligneDAffirmation({ sujet = "", valeur = "", source = "" } = {})
   }
 
   return jetons;
+}
+
+/**
+ * Une exigence que le référentiel a écartée.
+ *
+ * « sans objet » n'est pas une valeur manquante : c'est une conclusion. Le
+ * référentiel a examiné le cas et n'exige rien — et cela se lit, parce que
+ * l'absence d'exigence est une information qu'on cherchera un jour.
+ */
+export function ligneSansObjet({ sujet = "", motif = "", source = "" } = {}) {
+  const jetons = [
+    jeton(JETON.SUJET, texte(sujet)),
+    jeton(JETON.NEUTRE, "  "),
+    jeton(JETON.SANS_OBJET, "sans objet")
+  ];
+
+  if (texte(motif)) {
+    jetons.push(jeton(JETON.NEUTRE, "  "));
+    jetons.push(jeton(JETON.SANS_OBJET, `— ${texte(motif)}`));
+  }
+  if (texte(source)) {
+    jetons.push(jeton(JETON.NEUTRE, "  "), jeton(JETON.DEPUIS, "←"),
+      jeton(JETON.NEUTRE, " "), jeton(JETON.SOURCE, texte(source)));
+  }
+  return jetons;
+}
+
+/**
+ * Ce qui ne peut pas encore conclure, et ce qui manque pour cela.
+ *
+ * Ne pas savoir n'autorise pas à prétendre qu'il n'y a rien (fondamentaux,
+ * règle 5). Une exigence en attente s'écrit, avec le nom de ce qui la retient —
+ * sans quoi elle disparaîtrait du fichier, et personne n'irait la chercher.
+ */
+export function ligneEnAttente({ sujet = "", manque = [] } = {}) {
+  const attendus = (Array.isArray(manque) ? manque : [manque]).map(texte).filter(Boolean);
+  const jetons = [
+    jeton(JETON.SUJET, texte(sujet)),
+    jeton(JETON.NEUTRE, "  "),
+    jeton(JETON.ATTENTE, "en attente")
+  ];
+
+  if (attendus.length) {
+    jetons.push(jeton(JETON.NEUTRE, "  "));
+    jetons.push(jeton(JETON.ATTENTE, `— il manque ${attendus.join(", ")}`));
+  }
+  return jetons;
+}
+
+/**
+ * Le nom du fichier d'une rubrique.
+ *
+ * Une arborescence qui s'arrête sur un dossier laisse le lecteur devant du vide :
+ * on est habitué à trouver **quelque chose** au bout, et un contenu qui apparaît
+ * sans porter de nom perturbe plus qu'il n'informe. La dernière marche du chemin
+ * devient donc un fichier, et l'extension dit dans quelle écriture il est.
+ *
+ * Les accents partent, les espaces deviennent des tirets : c'est ce qu'on
+ * attend d'un nom de fichier, et cela le rend citable dans une phrase.
+ */
+export function nomDeFichier(chemin = []) {
+  const morceaux = (Array.isArray(chemin) ? chemin : []).map(texte).filter(Boolean);
+  const dernier = morceaux[morceaux.length - 1] ?? "sans-rubrique";
+
+  const base = dernier
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return `${base || "sans-rubrique"}.mdall`;
+}
+
+/** Le chemin complet d'un fichier : les dossiers, puis son nom. */
+export function cheminDeFichier(chemin = []) {
+  const morceaux = (Array.isArray(chemin) ? chemin : []).map(texte).filter(Boolean);
+  const dossiers = morceaux.slice(0, -1).map((morceau) =>
+    morceau.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""));
+  return [...dossiers, nomDeFichier(chemin)].filter(Boolean).join("/");
 }
 
 /** Le titre d'un fichier : `§ Données de base · Structure`. */
@@ -235,12 +319,14 @@ export function enClair(jetons = []) {
  * que la marque de tête, jamais le contenu.
  */
 export function natureDeLaLigne(ligne = "") {
-  const brut = String(ligne ?? "");
-  const premier = brut.trimStart()[0] ?? "";
+  // Les colonnes de numéros passent avant la marque : un extrait cité les
+  // porte, et lire le tout premier caractère y trouvait un espace. La marque
+  // est le premier caractère qui ne soit ni un blanc ni un chiffre.
+  const marque = String(ligne ?? "").replace(/^[\s\d]+/, "")[0] ?? "";
 
-  if (premier === "§") return "section";
-  if (premier === "¶") return "note";
-  if (premier === "-") return "retire";
-  if (premier === "+") return "ajoute";
+  if (marque === "§") return "section";
+  if (marque === "¶") return "note";
+  if (marque === "-") return "retire";
+  if (marque === "+") return "ajoute";
   return "contexte";
 }

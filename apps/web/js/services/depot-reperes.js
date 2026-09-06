@@ -184,6 +184,54 @@ export function arbreDesReperes(lignes = []) {
 }
 
 /**
+ * Les lignes d'un groupe, numérotées.
+ *
+ * Deux compteurs, comme dans un diff unifié : la ligne d'avant et celle
+ * d'après. Une valeur retirée n'a pas de numéro à droite, une valeur ajoutée
+ * n'en a pas à gauche.
+ *
+ * C'est une fonction pure, et elle sert deux fois : à dessiner le diff, et à
+ * découper l'extrait qui part avec un commentaire. Numéroter deux fois de deux
+ * façons donnerait deux numérotations, et la citation ne désignerait plus la
+ * ligne qu'on croyait.
+ */
+export function lignesNumerotees(groupe = {}) {
+  const sorties = [];
+  let avant = 0;
+  let apres = 0;
+
+  for (const ligne of groupe.lignes ?? []) {
+    const plusieurs = (ligne.champs ?? []).length > 1;
+
+    for (const [rang, champ] of (ligne.champs ?? []).entries()) {
+      const nom = plusieurs ? `${ligne.titre} · ${champ.nom}` : ligne.titre;
+      const commun = { ligne, champ, rang, nom };
+
+      if (champ.etat === ETAT.INCHANGE) {
+        avant += 1;
+        apres += 1;
+        sorties.push({ ...commun, gauche: avant, droite: apres, signe: " ",
+          cote: "contexte", valeur: champ.apres || champ.avant, ton: "inchange" });
+        continue;
+      }
+
+      if (champ.avant) {
+        avant += 1;
+        sorties.push({ ...commun, gauche: avant, droite: null, signe: "-",
+          cote: "avant", valeur: champ.avant, ton: "retire" });
+      }
+      if (champ.apres) {
+        apres += 1;
+        sorties.push({ ...commun, gauche: null, droite: apres, signe: "+",
+          cote: "apres", valeur: champ.apres, ton: "ajoute" });
+      }
+    }
+  }
+
+  return sorties;
+}
+
+/**
  * Ce que le diff dit en une phrase.
  *
  * On lit d'abord ce qui bouge. Un dépôt de trois cents repères dont deux

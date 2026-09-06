@@ -102,3 +102,9 @@ test("une section sans chemin se nomme plutôt que de rester vide", () => {
   assert.equal(enClair(ligneDeSection([])), "§ Sans rubrique");
   assert.equal(enClair(ligneDeNote("quelque chose")), "¶ quelque chose");
 });
+
+test("la marque se lit après les colonnes de numéros d'un extrait cité", () => {
+  assert.equal(natureDeLaLigne("      1  + altitude du site  490,03 m"), "ajoute");
+  assert.equal(natureDeLaLigne("  1      - zone de neige  A1"), "retire");
+  assert.equal(natureDeLaLigne("  2   3    zone de vent  1"), "contexte");
+});

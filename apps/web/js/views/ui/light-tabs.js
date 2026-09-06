@@ -7,23 +7,39 @@ function normalizeTone(value = '') {
   return tone.replace(/[^a-z0-9_-]/g, '');
 }
 
+/**
+ * Une rangée d'onglets, et ce qu'on pose à sa droite.
+ *
+ * `trailingHtml` accueille ce qui accompagne les onglets sans en être un : un
+ * compteur, un bouton. C'est le composant qui s'en charge, et non chacun des
+ * écrans — l'onglet actif doit masquer le filet du dessous, et une rangée
+ * bricolée à côté du composant réintroduisait la bordure qu'il sait justement
+ * effacer.
+ *
+ * Sans `trailingHtml`, le rendu ne change pas d'un caractère : les écrans qui
+ * n'en ont pas besoin ne portent pas d'enveloppe de plus.
+ */
 export function renderLightTabs({
   tabs = [],
   activeTabId = '',
   tone = '',
   className = '',
   navClassName = '',
-  ariaLabel = 'Onglets'
+  ariaLabel = 'Onglets',
+  trailingHtml = '',
+  rowClassName = ''
 } = {}) {
   const resolvedTone = normalizeTone(tone);
+  const suite = String(trailingHtml || '').trim();
   const navClasses = [
     'light-tabs',
     resolvedTone ? `light-tabs--${resolvedTone}` : '',
+    suite ? 'light-tabs--en-rangee' : '',
     className,
     navClassName
   ].filter(Boolean).join(' ');
 
-  return `
+  const nav = `
     <div class="${navClasses}" role="tablist" aria-label="${escapeHtml(ariaLabel)}">
       ${tabs.map((tab) => {
         const tabId = String(tab?.id || '').trim();
@@ -43,6 +59,18 @@ export function renderLightTabs({
           </button>
         `;
       }).join('')}
+    </div>
+  `;
+
+  if (!suite) return nav;
+
+  // Le filet passe sur la rangée entière, compteur compris ; l'onglet actif le
+  // masque comme il masquait celui du `nav`. Porté par les onglets seuls, il
+  // s'arrêtait après le dernier.
+  return `
+    <div class="light-tabs-row ${escapeHtml(rowClassName)}">
+      ${nav}
+      <div class="light-tabs__trailing">${suite}</div>
     </div>
   `;
 }

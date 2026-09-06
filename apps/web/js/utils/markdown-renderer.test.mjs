@@ -175,3 +175,10 @@ test("un bloc ouvert sans être refermé se rend quand même", () => {
   const html = renderMarkdownToHtml("```\nune ligne");
   assert.match(html, /md-code__line">une ligne</);
 });
+
+test("l'ancre rangée après la langue n'empêche pas de reconnaître la langue", () => {
+  const html = renderMarkdownToHtml("```mdall affirmation:zone-neige|Valeur|apres\n+ zone de neige  A2\n```");
+
+  assert.match(html, /md-code--mdall"/);
+  assert.match(html, /md-code__line--ajoute/);
+});

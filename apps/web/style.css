@@ -19520,25 +19520,38 @@ body.proposition-merge-open{ overflow:hidden; }
 /* ── Les onglets d'une proposition ──────────────────────────────────────────
    Le compteur d'ajouts et de suppressions vit à droite de la rangée, comme sur
    GitHub : on ne le lit pas, on le voit. */
-/* Le filet court sous toute la rangée, compteur compris. Porté par les onglets
-   seuls, il s'arrêtait après le dernier — et la ligne inachevée se lisait comme
-   un défaut d'affichage. */
-.review-tabs-row{
+/* Une rangée d'onglets avec quelque chose à sa droite.
+   Le filet court sur toute la largeur, et l'onglet actif le masque exactement
+   comme il masque celui d'une rangée sans suite : c'est le même dessin, tenu
+   par le même composant. */
+.light-tabs-row{
+  position:relative;
   display:flex;
   align-items:flex-end;
   justify-content:space-between;
   gap:16px;
   flex-wrap:wrap;
   margin:0 0 16px;
-  border-bottom:1px solid var(--border);
 }
-.review-tabs-row .light-tabs{ margin:0; }
-.review-tabs-row .light-tabs::before{ display:none; }
-.review-tabs-row .diff-stat{ padding-bottom:10px; }
-/* L'onglet actif ne referme pas son bas : c'est le dessin des onglets partout
-   ailleurs dans l'application, et deux façons de dessiner un onglet actif se
-   lisent comme deux composants. */
-.review-tabs-row .light-tabs__item.is-active{ border-bottom-color:transparent; }
+.light-tabs-row::before{
+  content:"";
+  position:absolute;
+  left:0;
+  right:0;
+  bottom:0;
+  border-bottom:1px solid var(--border);
+  pointer-events:none;
+}
+.light-tabs--en-rangee{ margin:0; }
+.light-tabs--en-rangee::before{ display:none; }
+.light-tabs__trailing{
+  position:relative;
+  z-index:2;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding-bottom:10px;
+}
 .diff-stat{ display:inline-flex; align-items:center; gap:6px; font-size:12px; white-space:nowrap; }
 .diff-stat__plus{ color:rgb(63,185,80); font-variant-numeric:tabular-nums; }
 .diff-stat__moins{ color:rgb(248,81,73); font-variant-numeric:tabular-nums; }
@@ -19551,10 +19564,14 @@ body.proposition-merge-open{ overflow:hidden; }
    Changements à la Conversation faisait sauter le défilement au moment où la
    barre de titre bascule en mode compact. */
 .review-tabpanel{ padding-bottom:64px; }
+/* La coque espace déjà ses blocs de douze pixels : une marge basse de plus sous
+   les onglets, plus le rembourrage de la barre d'outils, empilaient trois
+   espaces pour un seul intervalle. */
+.light-tabs-row--pleine{ margin:0; }
 /* Le diff prend la largeur : une arborescence plus deux colonnes de valeurs ne
    tiennent pas dans la colonne de lecture d'une conversation. */
 .review-tabpanel--pleine,
-.review-tabs-row--pleine,
+.light-tabs-row--pleine,
 .review-head--pleine{
   margin-left:calc(50% - 50vw);
   margin-right:calc(50% - 50vw);
@@ -19571,10 +19588,11 @@ body.proposition-merge-open{ overflow:hidden; }
   display:flex;
   align-items:center;
   gap:12px;
-  /* Seize en haut, seize en bas. L'espace du bandeau, la gouttière et le
-     rembourrage s'additionnaient : la barre occupait la moitié d'un écran de
-     portable pour deux boutons. */
-  padding:16px 0;
+  /* Quatre en haut, quatre en bas. La coque et la rangée d'onglets donnent déjà
+     l'air qu'il faut ; l'espace du bandeau, la gouttière et le rembourrage
+     s'additionnaient, et la barre occupait la moitié d'un écran de portable
+     pour deux boutons. */
+  padding:4px 0;
 }
 .diff-barre__resume{ flex:1 1 auto; min-width:0; color:var(--muted); font-size:12px; }
 
@@ -19699,6 +19717,33 @@ body.proposition-merge-open{ overflow:hidden; }
 .diff-ligne__annoter:focus-visible{ opacity:1; }
 .diff-ligne__signe{ text-align:center; }
 .diff-ligne__code{ min-width:0; overflow-wrap:anywhere; }
+
+/* Les remarques déjà écrites, dans le code. C'est là qu'on les cherche : une
+   remarque sur une valeur se lit à côté de la valeur, pas au bout d'un fil. */
+.diff-fil{
+  margin:6px 12px 10px 96px;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  background:var(--panel2);
+  font-family:var(--font, inherit);
+  font-size:13px;
+}
+.diff-fil__message{
+  display:flex;
+  gap:10px;
+  padding:10px 12px;
+  border-bottom:1px solid var(--border2);
+}
+.diff-fil__message:last-child{ border-bottom:0; }
+.diff-fil__avatar{ flex:0 0 auto; width:20px; height:20px; }
+.diff-fil__avatar svg,
+.diff-fil__avatar img{ width:20px; height:20px; border-radius:50%; }
+.diff-fil__corps{ min-width:0; flex:1 1 auto; }
+.diff-fil__tete{ display:flex; align-items:baseline; gap:8px; margin-bottom:2px; }
+.diff-fil__date{ color:var(--muted); font-size:11px; }
+.diff-fil__texte{ color:var(--text); font-family:inherit; }
+.diff-fil__texte .md-render > *:first-child{ margin-top:0; }
+.diff-fil__texte .md-render > *:last-child{ margin-bottom:0; }
 .diff-ligne--ajoute{ background:rgba(46,160,67,.12); }
 .diff-ligne--ajoute .diff-ligne__signe{ color:rgb(63,185,80); }
 .diff-ligne--retire{ background:rgba(248,81,73,.1); }
@@ -19786,3 +19831,45 @@ body.proposition-merge-open{ overflow:hidden; }
   font-family:inherit;
 }
 .comment-composer--proposition-diff{ padding:12px; }
+
+/* ── Un fichier Mdall, affiché ──────────────────────────────────────────────
+   Le questionnaire montre ce qu'on demande, les résultats ce qu'on conclut ;
+   l'écriture montre ce que le projet retiendra, dans la forme où il le
+   retiendra — la même page que celle qu'on relira dans le diff d'une
+   proposition. */
+.mdall-fichier{
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  overflow:hidden;
+}
+.mdall-fichier__tete{
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:12px;
+  flex-wrap:wrap;
+  padding:8px 14px;
+  border-bottom:1px solid var(--border);
+  background:var(--panel2);
+}
+.mdall-fichier__nom{
+  color:var(--text);
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:12px;
+  font-weight:600;
+}
+.mdall-fichier__compte{ color:var(--muted); font-size:11px; }
+.mdall-fichier__corps{
+  padding:12px 0;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:12px;
+  line-height:1.9;
+  overflow-x:auto;
+}
+.mdall-ligne{ padding:0 14px; white-space:pre; min-height:1.9em; }
+.mdall-ligne:hover{ background:rgba(110,118,129,.08); }
+.mdall-ligne--vide{ color:var(--muted); font-style:italic; white-space:normal; }
+/* « sans objet » et « en attente » sont des conclusions, pas des trous : elles
+   portent leur couleur, plus discrète que celle d'une exigence. */
+.mdall-sans-objet{ color:rgb(139,148,158); font-style:italic; }
+.mdall-attente{ color:rgb(210,153,34); }
