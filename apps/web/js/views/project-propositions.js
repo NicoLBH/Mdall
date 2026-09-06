@@ -545,7 +545,10 @@ function renderReviewHead(proposition, review) {
   return renderOverlayChromeHead({
     headId: "propositionsDetailsTitle",
     titleHtml: titleWrapHtml,
-    headClassName: "review-head",
+    // La barre de titre s'élargit avec l'onglet des Changements : un titre
+    // centré au-dessus d'un diff pleine largeur laisse deux gouttières vides
+    // et donne l'impression de deux pages superposées.
+    headClassName: `review-head${view.tab === "changes" ? " review-head--pleine" : ""}`,
     actionsHtml: `${renderMergeStateButton(proposition, review)}${renderExportButton()}`
   });
 }
@@ -920,6 +923,11 @@ function renderReviewBlock(type, titre, items, renderer, vide) {
     <section class="review-block">
       <div class="review-panel">
         <div class="review-block__head${ecartes > 0 ? " is-partial" : ""}${ouvert ? "" : " review-block__head--replie"}">
+          <button type="button" class="review-block__caret" data-review-block-toggle="${escapeHtml(type)}"
+            aria-expanded="${ouvert ? "true" : "false"}"
+            aria-label="${escapeHtml(ouvert ? `Replier ${titre}` : `Déplier ${titre}`)}">
+            ${svgIcon(ouvert ? "chevron-down" : "chevron-right", { className: "octicon" })}
+          </button>
           <label class="review-item__check">
             ${
               items.length > 0 && view.review?.frozen !== true
@@ -933,11 +941,6 @@ function renderReviewBlock(type, titre, items, renderer, vide) {
                 : ""
             }
           </label>
-          <button type="button" class="review-block__caret" data-review-block-toggle="${escapeHtml(type)}"
-            aria-expanded="${ouvert ? "true" : "false"}"
-            aria-label="${escapeHtml(ouvert ? `Replier ${titre}` : `Déplier ${titre}`)}">
-            ${svgIcon(ouvert ? "chevron-down" : "chevron-right", { className: "octicon" })}
-          </button>
           <div class="review-block__headbody">
             <h3 class="review-block__title">
               <button type="button" class="review-block__titre-bouton" data-review-block-toggle="${escapeHtml(type)}">${escapeHtml(titre)}</button>
@@ -2749,8 +2752,11 @@ function renderDiffTree(groupes, ouverte) {
  */
 function renderDiffGroupe(groupe) {
   const replie = view.diffGroupesReplies?.has(groupe.cle) === true;
-  const numero = { compteur: 0 };
-  const corps = groupe.lignes.map((ligne) => lignesDuRepere(ligne, numero)).join("");
+  // Deux compteurs, comme dans un diff unifié : la ligne d'avant et celle
+  // d'après. Une valeur retirée n'a pas de numéro à droite, une valeur ajoutée
+  // n'en a pas à gauche — et c'est ce déséquilibre qui se lit d'un coup d'œil.
+  const numero = { avant: 0, apres: 0 };
+  const corps = groupe.lignes.map((ligne) => lignesDuRepere(groupe, ligne, numero)).join("");
 
   return `
     <section class="diff-groupe" id="diff-groupe-${escapeHtml(cleHtml(groupe.cle))}">
@@ -2777,25 +2783,40 @@ function renderDiffGroupe(groupe) {
  * champ n'apparaît que lorsque le repère en porte plusieurs : sur une donnée de
  * base, qui n'a qu'une valeur, écrire « Valeur » à chaque ligne n'apprend rien.
  */
-function lignesDuRepere(ligne, numero) {
+function lignesDuRepere(groupe, ligne, numero) {
   const plusieurs = ligne.champs.length > 1;
   const libelle = (champ) => (plusieurs ? `${ligne.titre} · ${champ.nom}` : ligne.titre);
 
   return ligne.champs
-    .map((champ) => {
+    .map((champ, rang) => {
+      const ancre = { groupe, ligne, champ, rang };
+
       if (champ.etat === ETAT.INCHANGE) {
-        numero.compteur += 1;
-        return renderDiffLigne(numero.compteur, " ", libelle(champ), champ.apres || champ.avant, "inchange");
+        numero.avant += 1;
+        numero.apres += 1;
+        return renderDiffLigne({
+          gauche: numero.avant, droite: numero.apres, signe: " ",
+          nom: libelle(champ), valeur: champ.apres || champ.avant, ton: "inchange",
+          ancre: { ...ancre, cote: COTE.CONTEXTE }
+        });
       }
 
       const cellules = [];
       if (champ.avant) {
-        numero.compteur += 1;
-        cellules.push(renderDiffLigne(numero.compteur, "-", libelle(champ), champ.avant, "retire"));
+        numero.avant += 1;
+        cellules.push(renderDiffLigne({
+          gauche: numero.avant, droite: null, signe: "-",
+          nom: libelle(champ), valeur: champ.avant, ton: "retire",
+          ancre: { ...ancre, cote: COTE.AVANT }
+        }));
       }
       if (champ.apres) {
-        numero.compteur += 1;
-        cellules.push(renderDiffLigne(numero.compteur, "+", libelle(champ), champ.apres, "ajoute"));
+        numero.apres += 1;
+        cellules.push(renderDiffLigne({
+          gauche: null, droite: numero.apres, signe: "+",
+          nom: libelle(champ), valeur: champ.apres, ton: "ajoute",
+          ancre: { ...ancre, cote: COTE.APRES }
+        }));
       }
       return cellules.join("");
     })
@@ -2803,21 +2824,97 @@ function lignesDuRepere(ligne, numero) {
 }
 
 /**
- * Une ligne du diff.
+ * Une ligne du diff, et le bouton qui l'annote.
  *
- * Le numéro n'est pas celui d'une ligne de fichier — il n'en existe pas ici.
- * C'est un repère de lecture, comme dans un diff de code : il donne un point où
- * poser le doigt quand on discute à deux devant l'écran.
+ * Deux colonnes de numéros, comme dans un diff unifié. Ce ne sont pas des
+ * numéros de lignes d'un fichier — il n'y a pas de fichier — mais des repères
+ * de lecture : un point où poser le doigt quand on discute à deux devant
+ * l'écran, et l'endroit d'où part une remarque.
+ *
+ * **Ce à quoi la remarque se rattache n'est pas le numéro.** C'est le repère,
+ * son champ, et son côté. Un commentaire ancré sur « la ligne 3 » deviendrait
+ * faux au premier dépôt qui insère une valeur au-dessus ; ancré sur
+ * `affirmation:zone-de-neige · Valeur`, il reste juste. C'est la différence
+ * avec GitHub, dont les commentaires passent « outdated » — et elle nous est
+ * offerte par le travail déjà fait sur les repères.
  */
-function renderDiffLigne(numero, signe, nom, valeur, ton) {
+function renderDiffLigne({ gauche, droite, signe, nom, valeur, ton, ancre }) {
+  const cle = ancreDeLigne(ancre);
+
   return `
     <div class="diff-ligne diff-ligne--${escapeHtml(ton)}">
-      <span class="diff-ligne__num">${numero}</span>
+      <span class="diff-ligne__num">${gauche ?? ""}</span>
+      <span class="diff-ligne__num">${droite ?? ""}</span>
+      <button type="button" class="diff-ligne__annoter" data-diff-annoter="${escapeHtml(cle)}"
+        title="Commenter cette ligne" aria-label="Commenter cette ligne">
+        ${svgIcon("plus", { className: "octicon" })}
+      </button>
       <span class="diff-ligne__signe">${escapeHtml(signe)}</span>
       <span class="diff-ligne__nom">${escapeHtml(nom)}</span>
       <span class="diff-ligne__valeur">${escapeHtml(valeur || "—")}</span>
     </div>
   `;
+}
+
+/**
+ * De quel côté de l'écart une ligne se trouve.
+ *
+ * Une modification en produit deux — la valeur d'avant, celle d'après — et
+ * elles se commentent séparément. Sans ce côté dans l'adresse, une remarque
+ * posée sur « A1 » citait « A2 » : le signe d'une ligne et la valeur de
+ * l'autre. C'est la sonde de rendu qui l'a montré.
+ */
+const COTE = { AVANT: "avant", APRES: "apres", CONTEXTE: "contexte" };
+
+/**
+ * L'adresse d'une ligne, stable d'un dépôt à l'autre.
+ *
+ * Le repère, le champ, le côté. Rien du numéro affiché, qui bougera dès qu'un
+ * dépôt insérera une valeur au-dessus.
+ */
+function ancreDeLigne({ ligne, champ, rang, cote }) {
+  return `${ligne.id}|${champ.nom || rang}|${cote}`;
+}
+
+/** Retrouver la ligne visée à partir de son adresse. */
+function ligneDeLAncre(cle) {
+  for (const groupe of arbreDesReperes(view.review?.diffDuDepot?.lignes ?? [])) {
+    for (const ligne of groupe.lignes) {
+      for (const [rang, champ] of ligne.champs.entries()) {
+        for (const cote of Object.values(COTE)) {
+          if (ancreDeLigne({ ligne, champ, rang, cote }) === cle) return { groupe, ligne, champ, cote };
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * L'extrait qui part avec la remarque.
+ *
+ * Le commentaire va dans le fil, où il se relira dans six mois — quand le
+ * dépôt aura été fusionné et que l'écran des changements aura disparu. Sans
+ * l'extrait, il ne resterait qu'un avis sur rien. On l'écrit donc **dans le
+ * message**, en clair, plutôt que de le rattacher à un état qui ne durera pas.
+ */
+export function extraitDeLaLigne(cible) {
+  if (!cible) return "";
+  const { groupe, ligne, champ, cote } = cible;
+  // Le signe et la valeur viennent du **même** côté. Les mélanger citait « - »
+  // devant la valeur d'après : une remarque sur ce que personne n'avait écrit.
+  const signe = cote === COTE.AVANT ? "-" : cote === COTE.APRES ? "+" : " ";
+  const valeur = cote === COTE.AVANT ? champ.avant : champ.apres || champ.avant;
+  const nom = ligne.champs.length > 1 ? `${ligne.titre} · ${champ.nom}` : ligne.titre;
+
+  return [
+    `> **${groupe.chemin.join(" / ")}**`,
+    ">",
+    "> ```",
+    `> ${signe} ${nom} : ${valeur || "—"}`,
+    "> ```",
+    ""
+  ].join("\n");
 }
 
 /** Une clé de chemin, utilisable comme identifiant HTML. */
@@ -2995,7 +3092,7 @@ function renderReview(root) {
     ${gele ? renderFrozenNote(proposition, review) : ""}
     ${suite}
     ${avertissement}
-    <div class="review-tabs-row">
+    <div class="review-tabs-row${onglet === "changes" ? " review-tabs-row--pleine" : ""}">
       ${renderLightTabs({
         tabs: reviewTabs(review),
         activeTabId: onglet,
@@ -3233,6 +3330,27 @@ function bindDiffComment(root) {
     view.diffPreview = false;
     renderContent(root);
   });
+
+  // Commenter une ligne : la boîte s'ouvre avec l'extrait déjà écrit, et le
+  // curseur en dessous. On ne recopie pas la valeur dont on parle — c'est
+  // précisément ce qu'on recopiait de travers.
+  for (const bouton of root.querySelectorAll("[data-diff-annoter]")) {
+    bouton.addEventListener("click", () => {
+      const cible = ligneDeLAncre(bouton.getAttribute("data-diff-annoter"));
+      const extrait = extraitDeLaLigne(cible);
+      view.diffDraft = extrait ? `${extrait}\n` : "";
+      view.diffComment = true;
+      view.diffPreview = false;
+      renderContent(root);
+      // Le curseur va après l'extrait : on écrit sa remarque, on ne réédite pas
+      // la citation.
+      const champ = root.querySelector("[data-diff-comment-draft]");
+      if (champ) {
+        champ.focus();
+        champ.setSelectionRange(champ.value.length, champ.value.length);
+      }
+    });
+  }
 
   for (const bouton of root.querySelectorAll("[data-diff-comment-close]")) {
     bouton.addEventListener("click", () => {
