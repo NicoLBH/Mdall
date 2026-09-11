@@ -36,6 +36,7 @@ import { valeursSubstituables, consequencesDeLaVariante, varieEnBloc } from "./m
 import { valeursTrouvees, rangDeLaReponse } from "./recherche-de-valeur.js";
 import { rejouerLesUtilitaires } from "./utilitaires-rejeu.js";
 import { couvertureDeLaVariante, ligneDeLEngagement, phraseDeLaCouverture } from "./couverture.js";
+import { phraseDuRang, rangDeLActe } from "./ce-qui-couvre.js";
 import {
   estLaLocalisation, localisationDeLAdresse, localisationCalculable,
   substitutionsDeLaLocalisation, adresseEnUneLigne
@@ -315,6 +316,10 @@ function engagementDit(engagement) {
     le: texte(engagement?.acte?.created_at).slice(0, 10),
     note: texte(engagement?.acte?.note) || null,
     sort: phraseDeLaCouverture(engagement?.etat),
+    // Ce que ça coûterait de passer outre, dit sans chiffre. Le modèle en a
+    // besoin pour répondre « trois viennent d'un bureau de contrôle » plutôt
+    // que « trois engagements », qui ne dit rien de ce qui est en jeu.
+    qui: phraseDuRang(rangDeLActe(engagement?.acte)),
     dit: ligneDeLEngagement(engagement)
   };
 }

@@ -44,6 +44,7 @@ import { uniteImposee } from "../../services/saisie-unite.js";
 import { differencesDuTableau, resumeParColonne, structureDuTableau } from "../../services/memoire-variante.js";
 import { colonneNommee, sensDeLaValeur, pireEcart, margeDeclaree } from "../../services/tableau-structure.js";
 import { enchainementDeLaVariante } from "../../services/variante-enchainement.js";
+import { jalonnerLEnchainement, phraseDuRaisonnementJalonne } from "../../services/raisonnement-jalonne.js";
 import { renderEnchainement, SENS } from "../ui/enchainement.js";
 import { renderSaisieAdresse } from "../ui/saisie-adresse.js";
 import { estLaLocalisation } from "../../services/adresse-saisie.js";
@@ -835,10 +836,16 @@ function renderResultat(etat) {
   const bougees = rendu.recalculees.filter((ligne) => ligne.valeurABouge || ligne.reservesOntBouge).length
     + rendu.rejouees.length;
 
-  // La chaîne de ce qui a suivi, quand il y a une chaîne à montrer.
-  const etapes = enchainementDeLaVariante(rendu, {
-    sujet: choisie?.sujet, valeur: choisie?.valeur, essaye: saisie
-  });
+  // La chaîne de ce qui a suivi, quand il y a une chaîne à montrer — et les
+  // jalons **sur** les étapes qui les traversent. Ce qui tombe était déjà dit
+  // dans une section à part : c'est un rapport. Le lire là où il se produit
+  // fait de la chaîne un raisonnement jalonné, et non une suite de calculs.
+  const etapes = jalonnerLEnchainement(
+    enchainementDeLaVariante(rendu, {
+      sujet: choisie?.sujet, valeur: choisie?.valeur, essaye: saisie
+    }),
+    couverture
+  );
 
   const rangs = renderRangs(rendu, couverture);
 
@@ -866,6 +873,14 @@ function renderResultat(etat) {
         etapes.length
           ? `<aside class="variante-chaine">
               <h5>${svgIcon("git-branch", { className: "octicon" })} Ce qui a suivi</h5>
+              ${
+                // Ce que la chaîne traverse, quand elle traverse quelque chose.
+                // Vide le plus souvent : une phrase qui dirait « 0 jalon » à
+                // chaque variante ferait un compteur qu'on apprend à ignorer.
+                phraseDuRaisonnementJalonne(etapes)
+                  ? `<p class="variante-chaine__jalons">${escapeHtml(phraseDuRaisonnementJalonne(etapes))}</p>`
+                  : ""
+              }
               <div class="variante-chaine__vue">
                 ${renderEnchainement(etapes, { sens: SENS.HORIZONTAL })}
               </div>

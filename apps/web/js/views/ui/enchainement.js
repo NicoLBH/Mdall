@@ -93,6 +93,44 @@ function renderFlux(titre, noms = []) {
  * l'étape est déclarée consultable. Les deux conditions, parce qu'un écran peut
  * avoir des étapes qui s'ouvrent et d'autres qui n'ont rien enregistré.
  */
+/**
+ * Le jalon d'une étape : là où quelqu'un avait mis son nom.
+ *
+ * ## Pourquoi sur l'étape, et pas dans une liste à côté
+ *
+ * Ce que la variante fait tomber était déjà dit — dans une section, en bas, à
+ * part. C'est un rapport. Le lire **sur l'étape qui le traverse** en fait autre
+ * chose : la chaîne cesse d'être une suite de calculs et devient une suite
+ * d'étapes dont certaines ont été actées. C'est toute la différence, et c'est ce
+ * qui manquait.
+ *
+ * ## Rien quand rien n'est croisé
+ *
+ * Et c'est le cas le plus fréquent. Une mention sur chaque étape ferait un
+ * gabarit qu'on apprend à ignorer, et donnerait à l'écran l'air de tenir un
+ * registre — ce que Mdall ne fait pas (règle 12).
+ */
+function renderJalon(jalon = null) {
+  const sorte = texte(jalon?.sorte);
+  if (!sorte) return "";
+
+  const combien = Number(jalon?.combien) || 0;
+  const qui = (jalon?.engagements ?? [])
+    .map((engagement) => texte(engagement?.acte?.note).split("—")[0].trim())
+    .filter(Boolean);
+
+  return `
+    <span class="run-graph__jalon run-graph__jalon--${escapeHtml(sorte)}">
+      ${svgIcon("shield", { className: "octicon" })}
+      <span>${escapeHtml(
+        sorte === "traverse"
+          ? `Examinée${combien > 1 ? ` ${combien} fois` : ""}${qui.length ? ` — ${qui[0]}` : ""}`
+          : `Ce dont dépend une valeur examinée${qui.length ? ` — ${qui[0]}` : ""}`
+      )}</span>
+    </span>
+  `;
+}
+
 function renderEtape(noeud, { attributDuLien = "", consultables = null } = {}) {
   const id = texte(noeud?.id);
   const ouvrable = Boolean(attributDuLien) && (consultables ? consultables.has(id) : true);
@@ -120,6 +158,7 @@ function renderEtape(noeud, { attributDuLien = "", consultables = null } = {}) {
       ${texte(noeud?.detail) ? `<span class="run-graph__detail">${escapeHtml(texte(noeud.detail))}</span>` : ""}
       ${renderFlux("lit", noeud?.entrees)}
       ${renderFlux("écrit", noeud?.sorties)}
+      ${renderJalon(noeud?.jalon)}
       ${
         noeud?.duration === null || noeud?.duration === undefined
           ? ""

@@ -98,5 +98,6 @@ export const CONSIGNES_VARIANTE = [
   "- Dis ce qui ne couvre plus, ce qui avait été examiné, et quand. Jamais « invalidé » ni « périmé » : un constat reste vrai à sa date, c'est sa couverture qui tombe.",
   "- N'écris jamais les mots « visa », « à viser », « validé », « en attente » ni « approbation ». Dis ce qui a été fait, par qui, et quand.",
   "- `aRevoirCote` n'est pas la même chose : ce qui a été examiné n'a pas bougé, mais une de ses entrées si. Dis « à revérifier », pas « ne couvre plus ».",
-  "- Ne conclus jamais qu'un examen tient toujours parce que le changement te paraît favorable. Tu n'as pas à en juger : dis ce qui a bougé, quelqu'un tranchera."
+  "- Ne conclus jamais qu'un examen tient toujours parce que le changement te paraît favorable. Tu n'as pas à en juger : dis ce qui a bougé, quelqu'un tranchera.",
+  "- Chaque engagement porte `qui` : ce que ça coûterait de passer outre. Dis-le en toutes lettres — « celui-là vient d'un bureau de contrôle » — et jamais sous forme de note, de score ou de nombre de validations. Il ne sert à rien d'autre : il n'arbitre aucun calcul et ne départage aucune valeur."
 ].join("\n");

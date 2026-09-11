@@ -554,17 +554,77 @@ projet comme non examiné parce qu'on n'a pas regardé serait affirmer une absen
 qu'on n'a pas vérifiée. L'écran n'affirme rien dans les deux cas, mais le code
 distingue, et c'est ce qui permettra de le dire un jour.
 
-### Étape 4 — le raisonnement jalonné · *à faire*
+### Étape 4 — le raisonnement jalonné · *fait*
 
 Un raisonnement n'est pas une suite de calculs : c'est une suite d'étapes dont
-certaines ont été **actées**. Une fois les trois étapes précédentes en place, le
-moteur n'a qu'une question à poser à chaque nœud — *ce nœud est-il couvert ?* —
-et il sait s'il a le droit de le refaire en silence, ou s'il doit s'arrêter et le
-dire.
+certaines ont été **actées**. C'est la raison de traiter tout ceci avant le
+raisonnement — sans cela, un moteur refait tout à chaque fois et perd la seule
+chose qui distingue Mdall d'une feuille de calcul.
 
-C'est la raison de traiter tout ceci **avant** le raisonnement. Sans cela, un
-moteur refait tout à chaque fois et perd la seule chose qui distingue Mdall d'une
-feuille de calcul : la trace de ce que des gens ont engagé.
+`services/raisonnement-jalonne.js` est le seul endroit où la question se pose :
+`leMoteurPeutRefaireEnSilence(valeur)`.
+
+#### La décision qui commande le reste : il ne s'arrête pas, il cesse de se taire
+
+Le plan écrivait : *« il sait s'il a le droit de le refaire en silence, ou s'il
+doit s'arrêter et le dire »*. Lu au pied de la lettre, cela voudrait dire
+interrompre la chaîne au premier jalon. **On ne le fait pas.**
+
+Arrêter la chaîne perdrait les conséquences. Si le calcul s'arrête sur « zone de
+neige », on ne saura jamais que les fondations changeaient aussi — et c'est
+exactement, et uniquement, ce pour quoi une variante existe. On remplacerait un
+moteur qui traverse sans rien dire par un moteur qui ne dit rien du tout.
+
+Ce qui s'arrête, c'est le **silence**. Le moteur calcule tout et nomme chaque
+jalon qu'il traverse. Un test garde cette décision : la chaîne entière est
+rendue, jalon ou pas.
+
+Un vrai arrêt reste possible un jour, et il coûtera une chose : savoir
+distinguer « je recalcule pour voir » de « je recalcule pour écrire ». Une
+variante n'écrit rien ; le jour où quelque chose écrira, c'est là qu'un arrêt
+aura un sens.
+
+#### Le jalon se lit sur l'étape, pas dans une liste à côté
+
+Ce qui tombe était **déjà** dit, depuis l'étape 1 : dans une section, en bas, à
+part. C'est un rapport. Le lire sur l'étape qui le traverse est autre chose — la
+chaîne cesse d'être une suite de calculs et devient une suite d'étapes dont
+certaines ont été actées. C'est toute la différence, et c'est ce qui manquait.
+
+```
+Ce que vous essayez  →  Zonage climatique  →  Cote hors gel  →  Fondations
+                        🛡 Examinée — SOCOTEC
+```
+
+Et deux sortes de jalon, qui ne se disent pas pareil : **traversé** — l'étape
+réécrit une valeur examinée — et **à revoir** — elle touche à ce dont une valeur
+examinée dépend. Les confondre ferait crier au loup sur ce qui n'a peut-être pas
+bougé.
+
+#### Rien quand rien n'est croisé
+
+Et c'est le cas le plus fréquent. Aucune mention sur les étapes ordinaires,
+aucune phrase « 0 jalon traversé » : un compteur qu'on voit toujours est un
+compteur qu'on apprend à ignorer, et un écran qui tient un registre a l'air de
+réclamer quelque chose (règle 12).
+
+#### Ce que le copilote en dit
+
+Chaque engagement porte désormais `qui` — ce que ça coûterait de passer outre —
+et les consignes serveur lui demandent de le dire en toutes lettres, « celui-là
+vient d'un bureau de contrôle », jamais sous forme de note ou de score.
+
+#### Ce qui est branché, et ce qui ne l'est pas
+
+`rejouerLesRegles` accepte les actes et rend ses `jalons` : c'est la réponse du
+moteur, testée. **Aucun écran ne la lit encore**, et c'est normal — rien
+n'écrit automatiquement dans la mémoire (règle 1), donc rien n'a encore besoin
+de s'arrêter. Ce que les écrans montrent vient de `couvertureDeLaVariante`, qui
+en voit davantage : les utilitaires aussi, pas seulement les règles. Le jour où
+un recalcul écrira, le crochet est là.
+
+Et sans les actes, `jalons` vaut `null` — **pas** une liste vide : ne pas savoir
+n'autorise pas à répondre « aucun » (règle 5).
 
 ---
 
