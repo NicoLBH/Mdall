@@ -472,6 +472,9 @@ export const TABS = [
 /** Une page de tableau : deux mille lignes d'un coup figent le navigateur. */
 const PAGE_SIZE = 50;
 
+/** Le texte d'une valeur, sans surprise. */
+const texteDe = (valeur) => String(valeur ?? "").trim();
+
 /**
  * La famille de documents que cet atelier sait exploiter.
  *
@@ -2437,6 +2440,70 @@ function renderPatternEditor(state) {
  * **Ce qui est déjà en mémoire.** Sans ce compte, un lot sans rien de nouveau
  * ressemblerait à un lot vide.
  */
+/**
+ * La relecture par le modèle, et ce qu'elle a rendu.
+ *
+ * ## Pourquoi elle est offerte et non imposée
+ *
+ * Elle coûte un appel par pièce. La lancer d'office ferait payer une lecture que
+ * personne n'a demandée, sur un lot qu'on ne verse peut-être pas.
+ *
+ * ## Pourquoi elle vaut le geste
+ *
+ * L'extraction en dur lit **un** modèle de rapport. Le métier en produit
+ * beaucoup plus, et les émetteurs refont leurs maquettes. Surtout, elle perdait
+ * le **constat** — « Neige — Favorable » sans « Région A2, altitude 260 m » —,
+ * c'est-à-dire ce que le bureau a réellement examiné. Sans lui, un engagement ne
+ * se vérifie pas.
+ *
+ * ## Ce que l'écran ne cache pas
+ *
+ * Ce que le serveur a **écarté** faute de citation vérifiable. Un modèle peut
+ * inventer ; c'est le document qui tranche, et le compte de ce qui n'a pas
+ * passé la porte est la mesure de ce que la lecture n'a pas su faire (règle 5).
+ */
+function renderRelecture(relecture, lot) {
+  if (relecture.running) {
+    return `<p class="ctlab__hint">${svgIcon("sync", { className: "octicon" })}
+      Relecture en cours${relecture.courant ? ` — ${escapeHtml(relecture.courant)}` : ""}…</p>`;
+  }
+
+  const lectures = relecture.lectures ?? null;
+
+  if (!lectures?.size) {
+    return `
+      <p class="ctlab__hint">
+        Ces avis ont été lus par l'extraction en place, qui connaît <b>un</b> modèle de rapport et
+        ne rend pas ce que le bureau a écrit à côté du verdict. Une relecture par le modèle lit
+        n'importe quelle forme et rend le constat — « Région A2, altitude 260 m ».
+      </p>
+      ${relecture.error ? `<div class="ctlab__alert">${escapeHtml(relecture.error)}</div>` : ""}
+      <p>
+        <button type="button" class="gh-btn gh-btn--sm" data-ctlab-relire>Relire les rapports</button>
+      </p>
+    `;
+  }
+
+  const ecartes = [...lectures.values()].reduce((total, lecture) => total + lecture.ecartes, 0);
+  const organismes = [...new Set([...lectures.values()].map((lecture) => lecture.organisme).filter(Boolean))];
+
+  return `
+    <div class="ctlab__notice ctlab__notice--info">
+      <span class="ctlab__notice-icon" aria-hidden="true">${svgIcon("check-circle", { className: "octicon" })}</span>
+      <span>
+        <b>${lectures.size} rapport${lectures.size > 1 ? "s" : ""} relu${lectures.size > 1 ? "s" : ""}</b>
+        ${organismes.length ? `— ${escapeHtml(organismes.join(", "))}` : ""}
+        <br><span class="ctlab__hint">${escapeHtml([
+          `${lot?.versables?.length ?? 0} avis à proposer`,
+          // Ce que le document n'a pas confirmé. Jamais tu.
+          ecartes ? `${ecartes} ligne${ecartes > 1 ? "s" : ""} écartée${ecartes > 1 ? "s" : ""} : leur citation ne se retrouve pas dans le document` : "",
+          relecture.refus?.length ? `${relecture.refus.length} rapport non relu` : ""
+        ].filter(Boolean).join(" · "))}</span>
+      </span>
+    </div>
+  `;
+}
+
 export function renderVersement(state) {
   const lot = state.lot;
   if (!lot) return "";
@@ -2492,9 +2559,11 @@ export function renderVersement(state) {
   }).join("");
 
   const versement = state.versement ?? {};
+  const relecture = state.relecture ?? {};
 
   return `
     <h3>Ce qui peut entrer dans la mémoire</h3>
+    ${renderRelecture(relecture, lot)}
     <p class="ctlab__hint">
       Un avis de contrôle technique est un <b>fait du projet</b>, daté, rendu par un organisme qui engage
       sa responsabilité. Il se verse comme le reste : par une proposition que quelqu'un signe. Ce qui porte
@@ -3776,6 +3845,14 @@ export function renderCtContinuityLab(root) {
     lot: null,
     /** La mémoire du projet, telle qu'elle est aujourd'hui. */
     assertions: null,
+    /**
+     * Ce que le modèle a relu, par document.
+     *
+     * `null` tant que personne ne l'a demandé : la relecture coûte un appel par
+     * pièce, et la lancer d'office ferait payer une lecture que personne n'a
+     * demandée.
+     */
+    relecture: null,
     /** Où en est le versement : ce qui tourne, ce qui a échoué, ce qui est ouvert. */
     versement: { running: false, error: "", proposition: null },
     /**
@@ -4261,6 +4338,7 @@ export function renderCtContinuityLab(root) {
     state.result = null;
     state.lot = null;
     state.versement = { running: false, error: "", proposition: null };
+    state.relecture = null;
     state.unreachable = null;
     state.selectedCell = null;
     state.selectedReference = null;
@@ -4321,6 +4399,22 @@ export function renderCtContinuityLab(root) {
    * s'efface, et c'est la bonne façon de se taire — on ne prétend pas qu'il n'y
    * a rien à verser, on n'affiche pas la question.
    */
+  /**
+   * Les avis du lot, de la meilleure lecture disponible.
+   *
+   * La relecture par le modèle remplace **document par document** : un lot dont
+   * un seul rapport a pu être relu garde l'extraction en dur pour les autres,
+   * plutôt que de tout perdre.
+   */
+  const avisDuLotCourant = () => {
+    const lus = collectAvis(state.result?.predictions ?? []);
+    const relus = state.relecture?.lectures ?? null;
+    if (!relus?.size) return lus;
+
+    const enDur = lus.filter((avis) => !relus.has(texteDe(avis?.provenance?.source_id)));
+    return [...enDur, ...[...relus.values()].flatMap((lecture) => lecture.avis)];
+  };
+
   const refreshLot = async () => {
     state.lot = null;
     if (!state.result) return;
@@ -4337,7 +4431,10 @@ export function renderCtContinuityLab(root) {
       state.assertions = await listProjectAssertions(projectId);
       state.lot = avisDuLot({
         sources: state.result.sources,
-        avis: collectAvis(state.result.predictions),
+        // Ce que le modèle a relu l'emporte sur l'extraction en dur : il rend le
+        // **constat** — « Région A2, altitude 260 m » —, c'est-à-dire ce que le
+        // bureau a réellement examiné, que l'extraction en dur perdait.
+        avis: avisDuLotCourant(),
         assertions: state.assertions
       });
     } catch {
@@ -4353,6 +4450,40 @@ export function renderCtContinuityLab(root) {
    * (`services/avis-engagement.js`). On **reste ici** — le lien vers la
    * proposition est offert, pas imposé.
    */
+  /**
+   * Relire les rapports du lot par le modèle.
+   *
+   * En série, document par document : un lot de trente rapports lancé d'un coup
+   * se ferait limiter, et l'on perdrait tout le lot pour avoir voulu aller vite.
+   */
+  const relireLeLotParLeModele = async () => {
+    if (!state.result?.sources?.length || state.relecture?.running) return;
+
+    state.relecture = { running: true, courant: "", lectures: null, refus: [], error: "" };
+    refresh();
+
+    try {
+      const { relireLeLot } = await import("../../../services/avis-par-le-modele.js");
+      const { lectures, refus } = await relireLeLot({
+        sources: state.result.sources,
+        onEtape: ({ nom }) => {
+          state.relecture = { ...state.relecture, courant: nom };
+          refresh();
+        }
+      });
+
+      state.relecture = { running: false, courant: "", lectures, refus, error: "" };
+    } catch (error) {
+      state.relecture = { running: false, courant: "", lectures: null, refus: [], error: error.message };
+    }
+
+    // Le lot se refait sur la nouvelle lecture : ce qui était déjà proposé
+    // portait l'ancienne, et les deux ne disent pas la même chose.
+    state.versement = { running: false, error: "", proposition: null };
+    await refreshLot();
+    refresh();
+  };
+
   const verserLeLot = async () => {
     if (!state.lot?.versables?.length || state.versement.running) return;
 
@@ -4526,8 +4657,10 @@ export function renderCtContinuityLab(root) {
     state.running = false;
     state.stages = [];
     // Ce qui a déjà été proposé appartient à l'analyse précédente : le garder
-    // ferait croire qu'on vient d'ouvrir une proposition pour ce lot-ci.
+    // ferait croire qu'on vient d'ouvrir une proposition pour ce lot-ci. La
+    // relecture non plus ne survit pas : elle portait sur d'autres pages.
     state.versement = { running: false, error: "", proposition: null };
+    state.relecture = null;
     await refreshLot();
     refresh();
   };
@@ -4597,7 +4730,7 @@ export function renderCtContinuityLab(root) {
         "[data-ctlab-as-of], " +
         "[data-pagination-entity='ctlab-avis'], " +
         "[data-ctlab-export-text], [data-ctlab-apply-patterns], [data-ctlab-reset-patterns], " +
-        "[data-ctlab-time-travel], [data-ctlab-verser], " +
+        "[data-ctlab-time-travel], [data-ctlab-verser], [data-ctlab-relire], " +
         "[data-action-id='ctlabRun'], [data-action-id='ctlabReset']"
     );
     if (!target) return;
@@ -4610,6 +4743,12 @@ export function renderCtContinuityLab(root) {
 
     if (target.dataset.actionId === "ctlabReset") {
       resetAll();
+      return;
+    }
+
+    if (target.dataset.ctlabRelire !== undefined) {
+      captureEditors();
+      await relireLeLotParLeModele();
       return;
     }
 

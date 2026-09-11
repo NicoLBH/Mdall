@@ -2608,80 +2608,79 @@ proposer au lieu de verser. Le jour où plus rien n'écrit directement, les lign
 `site:*` cessent d'apparaître et la déduplication devient sans objet — on la
 retirera alors plutôt que de la garder par prudence.
 
-## 34. Quarante-cinq extracteurs, ou un seul appel
+## 34. Quarante-cinq extracteurs, ou un seul appel · *tranché, et fait*
 
-Mdall lit aujourd'hui les rapports de bureau de contrôle en JavaScript :
-`spikes/ct-continuity` découpe les blocs, lit la légende des codes d'avis, tire
-les lignes du tableau, et un pack par organisme dit ce que celui-ci imprime sur
-ses livrables. C'est précis, c'est testé, ça ne coûte rien à l'exécution, et
-ça se vérifie ligne à ligne.
+Cette ligne quittait le carnet le jour où l'un des trois signaux qu'elle
+nommait se produirait. **Deux se sont produits en même temps**, et un troisième
+s'y est ajouté qu'elle n'avait pas prévu.
 
-Et c'est calibré sur **un** type de document : un rapport normalisé, avec un
-tableau, une légende et une mise en page stable. Demain les mêmes avis arriveront
-dans des comptes rendus de réunion de chantier, des comptes rendus de conception,
-des courriels, des notes manuscrites scannées. Aucun tableau, aucune légende,
-aucune mise en page — et la même question à leur poser : qu'est-ce qui a été dit
-du projet, par qui, et sur quoi ?
+### Ce qui a tranché
 
-### Ce qui plaide pour l'appel au modèle
+**Le nombre de formes, et non le nombre d'organismes.** Un bureau de contrôle ne
+produit pas un rapport, il en produit une famille : RICT, fiche d'examen de
+document, fiche de travaux, rapport d'étape, RFCT, RVRAT. Le carnet comptait les
+packs par organisme ; il fallait les compter par **forme × organisme**.
 
-**Le coût de maintenance est le vrai sujet, pas le coût d'exécution.** Un
-extracteur par forme de document, c'est quarante-cinq extracteurs dans deux ans,
-chacun avec ses cas particuliers, ses régressions et ses tests. Un appel au
-modèle s'exécute **une fois par pièce**, au versement, jamais à la lecture.
-Comparé à cela, un appel cher est bon marché.
+**Les maquettes changent.** SOCOTEC vient de refaire toutes les siennes. Un
+extracteur calé sur une mise en page n'est pas un actif, c'est une dette dont
+l'échéance est fixée par quelqu'un d'autre.
 
-**Ce n'est pas une première.** Un modèle extrait déjà des sujets depuis les
-comptes rendus de chantier. Le chemin existe, il est éprouvé, et il sait déjà
-rendre une structure qu'on relit avant de signer.
+**Et surtout : l'extraction en dur perdait l'essentiel.** Sur « Neige —
+Favorable », elle laissait tomber « Région A2, altitude 260 m ». Autrement dit
+elle gardait le verdict et jetait **ce qui avait été examiné**. Un engagement
+qu'on ne peut pas confronter à une valeur ne se vérifie pas, et tout le
+mécanisme des étapes 1 à 4 repose là-dessus. Ce n'était plus une question de
+maintenance : la lecture ne rendait pas la donnée dont le reste a besoin.
 
-**L'hétérogénéité est exactement ce qu'un modèle absorbe sans qu'on le
-reprogramme.** Un rapport, un courriel et une note manuscrite ne demandent pas
-trois consignes différentes.
+### Ce qui a été fait
 
-### Ce qui plaide pour garder le JavaScript
+`supabase/functions/extract-avis` — un appel par pièce, au serveur. La clé et la
+consigne n'entrent jamais dans le navigateur : il envoie des pages, il reçoit
+des avis.
 
-**Il se vérifie.** Une ligne extraite par une expression régulière se retrouve
-dans le document, au caractère près. Une ligne extraite par un modèle se
-ressemble — et ressembler ne suffit pas quand ce qui est extrait devient un
-engagement qui couvre une valeur.
+Le schéma demande ce que l'extraction en dur ne rendait pas :
 
-**Il ne varie pas.** Deux exécutions sur le même PDF rendent le même tableau. Ce
-n'est pas un détail dans un outil dont l'argument est la mémoire.
+| champ | ce que c'est |
+| --- | --- |
+| `intitule` | ce qui a été examiné, tel qu'écrit |
+| `teneur` | le code **tel qu'écrit** — F, S, A, R… jamais traduit |
+| `teneur_libelle` | ce que la légende du document en dit |
+| **`constat`** | ce que le bureau a écrit en plus du verdict |
+| `citation` | la ligne d'où l'avis sort, recopiée mot pour mot |
+| `legende` | les codes et leur sens, **lus dans le document** |
 
-**Il est déjà là et il marche.** Le remplacer maintenant échangerait du code
-éprouvé contre du code à éprouver, sans rien débloquer qu'on attende.
+La légende lue dans le document est ce qui rend la lecture indépendante de
+l'émetteur : « A : Acceptable » chez l'un, « F : Favorable » chez l'autre, et
+rien à écrire dans le code pour le second.
 
-### La forme qui sort de l'arbitrage : les deux, et le désaccord se dit
+### Le garde-fou, et il est mécanique
 
-Ni l'un ni l'autre : **les deux en parallèle**, avec le désaccord rendu visible.
-Le JavaScript reste le lecteur de référence là où il sait lire — un rapport
-normalisé — et le modèle prend les formes qu'il ne sait pas lire. Quand les deux
-répondent, ce qu'ils disent différemment se signale au lieu de se choisir : c'est
-exactement ce que fait déjà la reconnaissance de l'organisme, qui refuse de
-trancher entre deux candidats et le dit.
+Un modèle peut inventer une ligne entière — un avis plausible sur un point
+plausible —, et rien dans sa réponse ne le trahit. Ce qui le trahit, c'est le
+**document** : chaque avis porte sa citation, et cette citation est recherchée
+dans le texte de la page **au serveur, avant la réponse**. Ce qui ne s'y
+retrouve pas est écarté, et le compte de ce qui a été écarté se dit à l'écran.
 
-C'est aussi la seule façon de mesurer : on ne saura ce que vaut le modèle sur des
-rapports qu'en le faisant tourner à côté de celui qui a raison.
+La comparaison ignore ce que la typographie d'un PDF fait aux chaînes — espaces
+doublés, insécables, apostrophes courbes — sans quoi on jetterait de vrais avis
+pour des raisons de mise en page. Et une page annoncée fausse ne fait pas perdre
+l'avis : elle se corrige, parce qu'un lien vers la mauvaise page ferait échouer
+la vérification humaine sur une ligne pourtant juste.
 
-### Pourquoi pas maintenant
+### Ce qui n'a pas été fait, et pourquoi
 
-Parce que rien de ce qui est en cours ne l'attend. Le plan de fabrication va de
-la couverture d'une valeur au raisonnement jalonné, et il se nourrit d'avis déjà
-extraits — leur provenance ne change rien à ce qu'on en fait. Ouvrir ce chantier
-maintenant, c'est arrêter une démonstration à mi-course pour en commencer une
-autre, ce que l'ordre du plan interdit expressément.
+**L'extraction en dur reste.** Elle n'est pas retirée : elle sert encore quand la
+relecture échoue, et elle est le point de comparaison. Le choix se fait
+**document par document** — un lot dont un seul rapport a pu être relu garde
+l'extraction en dur pour les autres.
 
-Une chose a quand même été faite tout de suite, parce qu'elle bloquait
-réellement : **qui a émis le document**, désormais lu dans la pièce elle-même
-(`apps/web/js/services/emetteur-du-document.js`). Elle est déjà écrite pour des
-documents hétérogènes — elle ne suppose ni tableau, ni légende, ni pages —, et
-c'est la part de ce chantier qui ne pouvait pas attendre.
+**La relecture ne se lance pas d'office.** Un appel par pièce sur un lot qu'on ne
+verse peut-être pas ferait payer une lecture que personne n'a demandée. Elle
+s'offre, elle ne s'impose pas.
 
-### Ce qui décidera du moment
+### Ce qui reste à décider, une fois qu'on aura mesuré
 
-1. **Le premier compte rendu de réunion dont on veut tirer des avis.** C'est là
-   que le JavaScript s'arrête net, et c'est le vrai signal.
-2. **Le deuxième organisme dont il faut écrire le pack.** Un pack, c'est du
-   travail de forme ; deux, c'est une méthode à remettre en cause.
-3. **La fin du plan de fabrication**, qui est la borne par défaut.
+Faut-il retirer l'extraction en dur ? La réponse ne s'écrit pas d'avance : elle
+demande de les avoir fait tourner côte à côte sur un vrai corpus, et de savoir ce
+que chacune trouve que l'autre manque. C'est ce que le choix par document rend
+possible.
