@@ -130,6 +130,39 @@ export async function createProposition({ projectId, title, description = "" } =
 }
 
 /**
+ * Corrige le titre ou la description d'une proposition.
+ *
+ * **Ce qui est permis se décide ailleurs.** `edition-de-la-proposition.js` dit
+ * ce qui est modifiable et jusqu'à quand ; ici on écrit ce qu'on nous donne.
+ * Mêler les deux mettrait la règle à deux endroits, et la base ne serait plus
+ * qu'un deuxième avis sur la question (règle 4).
+ *
+ * @param {object} options
+ * @param {string} options.propositionId
+ * @param {object} options.champs `{title}` ou `{description}` — ce que le
+ *   service pur a calculé, et rien de plus : envoyer la ligne entière
+ *   réécrirait des colonnes que personne n'a touchées.
+ * @returns {Promise<object|null>} la ligne à jour, ou `null` si la base n'a pas
+ *   répondu — l'écran garde alors le brouillon plutôt que de faire croire à un
+ *   enregistrement.
+ */
+export async function modifierLaProposition({ propositionId, champs = null } = {}) {
+  if (!propositionId || !champs || Object.keys(champs).length === 0) return null;
+
+  try {
+    const rows = await request("propositions", {
+      method: "PATCH",
+      params: { id: `eq.${propositionId}`, select: COLUMNS },
+      headers: { Prefer: "return=representation" },
+      body: champs
+    });
+    return rows?.[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Rattache des documents déjà déposés à une proposition, et les met en attente.
  *
  * Les documents sont écrits **avant** — le dépôt existe par lui-même, et n'a pas

@@ -1,9 +1,6 @@
 import { getDisplayAuthorName, getAuthorIdentity } from "../ui/author-identity.js";
-import { renderBoutonCopier } from "../ui/bouton-copier.js";
-import { etatDeLEcoute, quandOnCopie, renderBoutonDeTri, veillerSurLaTete } from "../ui/tete-de-tableau.js";
+import { renderBoutonDeTri } from "../ui/tete-de-tableau.js";
 import { TRI, motDuTri } from "../../services/tri-des-sujets.js";
-import { diagnosticDeLaListeDesSujets } from "../../services/diagnostic-de-la-liste.js";
-import { journalEnTexte, noter } from "../../services/journal-des-gestes.js";
 import { renderProblemsCountsIconHtml } from "../ui/subissues-counts.js";
 import { formatObjectiveDueDateLabel } from "./project-subject-milestones.js";
 import {
@@ -325,66 +322,6 @@ function renderSubjectsStatusHeadHtml() {
   });
 }
 
-/**
- * Ce que la liste sait d'elle-même, au moment où on le demande.
- *
- * Une liste qui annonce trois sujets fermés et n'en montre aucun ne se
- * diagnostique pas depuis le code : chaque maillon y est juste isolément. Ce
- * qui manque, ce sont **les nombres du moment** — et c'est le seul endroit d'où
- * on peut les prendre.
- *
- * La mise en forme vit dans `services/diagnostic-de-la-liste.js`, qui ne mesure
- * rien : c'est ce qui l'empêche de mentir.
- */
-function etatDeLaListeDesSujets() {
-  const statut = getCurrentSubjectsStatusFilter();
-  const recherche = String(store.projectSubjectsView?.search ?? store.situationsView?.search ?? "");
-  const charges = getFlatSubjects();
-  const apresFiltres = getFilteredFlatSubjects();
-  const pagination = getSubjectsPaginationState(apresFiltres.length);
-
-  return diagnosticDeLaListeDesSujets({
-    statut,
-    priorite: getCurrentSubjectsPriorityFilter(),
-    tri: getCurrentSubjectsSort(),
-    recherche,
-    comptes: getSubjectsStatusCounts(recherche.trim().toLowerCase()),
-    charges: charges.length,
-    apresFiltres: apresFiltres.length,
-    affiches: Math.max(0, (pagination.endIndex ?? 0) - (pagination.startIndex ?? 0)),
-    lignes: document.querySelectorAll("#situationsTableHost .issue-row").length,
-    pagination,
-    sousVue: String(store.situationsView?.subjectsSubview || ""),
-    tableSeule: !!store.situationsView?.showTableOnly,
-    // Les quatre cases où le filtre a vécu. Si elles divergent encore, c'est
-    // ici qu'on le verra.
-    etatBrut: {
-      "projectSubjectsView.subjectsStatusFilter": store.projectSubjectsView?.subjectsStatusFilter,
-      "projectSubjectsView.filters.status": store.projectSubjectsView?.filters?.status,
-      "situationsView.subjectsStatusFilter": store.situationsView?.subjectsStatusFilter,
-      "situationsView.filters.status": store.situationsView?.filters?.status
-    },
-    // Ce que l'écoute de la tête sait d'elle-même : posée ou non, ce qu'elle
-    // écoute, et ce qu'elle a réellement reçu. Ces faits se constatent ; les
-    // déduire du code a coûté cinq tours (règle 12).
-    ecoute: etatDeLEcoute(),
-    // Et la suite réelle des événements : geste reçu, état écrit, rendu entré,
-    // rendu sorti. Ce qui manque entre deux lignes nomme le maillon rompu.
-    journal: journalEnTexte(),
-    recouvrements: veillerSurLaTete(document.getElementById("situationsPanelHost")),
-    // La question qui tranche : ce que portent vraiment les sujets que le
-    // compteur trouve fermés.
-    fermes: charges
-      .filter((sujet) => sujetMatchesStatusFilter(sujet, "closed"))
-      .slice(0, 20)
-      .map((sujet) => ({
-        id: sujet?.id,
-        status: sujet?.status,
-        effectif: getEffectiveSujetStatus(sujet?.id),
-        titre: sujet?.title
-      }))
-  });
-}
 
 function renderSubjectsPriorityHeadHtml() {
   const current = getCurrentSubjectsPriorityFilter();
@@ -2930,18 +2867,6 @@ function rerenderPanels() {
   const panelHost = document.getElementById("situationsPanelHost");
   const searchInput = document.getElementById("situationsSearch");
 
-  // **Où ce rendu va écrire.** Le geste arrive, l'état s'écrit, et l'écran ne
-  // change pas : il reste alors une famille de causes entière, celle où le
-  // rendu a bien lieu mais **ailleurs** — dans un hôte détaché, ou dans le
-  // second d'un doublon. Deux nombres la tranchent, et ils se relèvent ici.
-  noter("redessin · entrée", {
-    hotes: document.querySelectorAll("#situationsPanelHost").length,
-    hoteTrouve: !!panelHost,
-    hoteConnecte: !!panelHost?.isConnected,
-    tableSeule: !!store.situationsView?.showTableOnly,
-    sousVue: String(store.situationsView?.subjectsSubview || "")
-  });
-
   if (searchInput) searchInput.value = store.situationsView.search || "";
 
   rerenderSubjectsToolbar();
@@ -2970,24 +2895,6 @@ function rerenderPanels() {
         filteredSituations,
         deps: getSubjectsTableDeps()
       })}</div>`;
-      // L'état de la liste se copie d'un clic. Il se relève **au clic**, pas au
-      // rendu : ce qu'on veut savoir est ce que la liste porte à l'instant où
-      // l'on constate qu'elle est vide.
-      //
-      // L'écoute du bouton copier se pose avec la barre de commandes, où il
-      // vit désormais — pas ici, où le tableau se redessine.
-      noter("redessin · tableau écrit", {
-        branche: "table",
-        filtre: getCurrentSubjectsStatusFilter(),
-        apresFiltres: getFilteredFlatSubjects().length,
-        lignesEcrites: panelHost.querySelectorAll(".issue-row").length
-      });
-      // Puis on va **voir** si ces boutons reçoivent le geste. Un bouton
-      // recouvert par un élément transparent se survole encore, et rien ne le
-      // distingue à l'écran d'un bouton sans écoute : c'est la confusion qui a
-      // coûté cinq tours. La mesure se prend après le dessin, quand les cadres
-      // sont posés.
-      requestAnimationFrame(() => veillerSurLaTete(document.getElementById("situationsPanelHost")));
       syncSituationsPrimaryScrollSource();
     } else {
       const details = getProjectSubjectDetail().renderDetailsHtml(null, {
@@ -3028,9 +2935,6 @@ function rerenderPanels() {
 
   if (store.situationsView.drilldown?.isOpen) getProjectSubjectDrilldown().updateDrilldownPanel();
   refreshProjectShellChrome("situations");
-  noter("redessin · sortie", {
-    lignesVisibles: document.querySelectorAll("#situationsTableHost .issue-row").length
-  });
 }
 
 
@@ -3869,21 +3773,6 @@ function renderSituationsViewHeaderHtml() {
   }
 
   const rightHtml = [
-    // **Le bouton qui copie l'état de la liste, à gauche de la recherche.**
-    //
-    // Il vivait dans la tête du tableau, contre le filtre dont il devait
-    // expliquer le silence — et il s'est tu avec lui. Un outil de diagnostic
-    // qui tombe en panne avec ce qu'il doit diagnostiquer ne sert à rien : il
-    // vit désormais dans la barre de commandes, qui ne dépend pas du rendu du
-    // tableau.
-    renderProjectTableToolbarGroup({
-      html: renderBoutonCopier({
-        cible: "sujets-liste",
-        className: "project-table-toolbar__copier",
-        titre: "Copier l'état de la liste et le journal des gestes",
-        titreCopie: "État copié"
-      })
-    }),
     renderProjectTableToolbarGroup({
       html: renderProjectTableToolbarSearch({
         id: "situationsSearch",
@@ -3930,10 +3819,6 @@ function rerenderSubjectsToolbar() {
       ${headerHtml}
     </div>
   `;
-  // Le geste s'enregistre là où le bouton se dessine. Le texte, lui, se relève
-  // **au clic** : ce qu'on veut copier est l'état du moment où l'on constate
-  // quelque chose, pas celui du dernier dessin.
-  quandOnCopie("sujets-liste", () => etatDeLaListeDesSujets());
 }
 
 function formatObjectiveMeta(objective) {

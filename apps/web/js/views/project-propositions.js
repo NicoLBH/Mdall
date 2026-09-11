@@ -46,6 +46,9 @@ import {
 import { STORY, buildStory } from "../services/proposition-story.js";
 import { composerActions } from "../services/proposition-composer.js";
 import { renderSharedDetailsTitleWrap } from "./ui/detail-header.js";
+import {
+  QUOI, aucuneEdition, ceQuiChange, echecDeLEnregistrement, modifiable, ouvrirLEdition, peutEnregistrer
+} from "../services/edition-de-la-proposition.js";
 import { ITEM, PROPOSITION, describeMerge } from "../services/proposition-state.js";
 import {
   buildSnapshot,
@@ -110,6 +113,14 @@ const view = {
   /** Le message en cours d'écriture, et son aperçu. */
   draft: "",
   preview: false,
+  /**
+   * Le titre ou la description en cours de correction, s'il y en a un.
+   *
+   * Un seul des deux à la fois : deux éditeurs ouverts ensemble donneraient
+   * deux boutons « Enregistrer » pour deux textes différents, et l'on ne
+   * saurait plus lequel on est en train d'écrire.
+   */
+  edition: aucuneEdition(),
   /** Le message en cours de modification, s'il y en a un. */
   editing: null,
   editDraft: "",
@@ -539,8 +550,63 @@ function closeMergeDrawer() {
   document.body.classList.remove("proposition-merge-open");
 }
 
+/**
+ * Le titre en cours de correction, à la place du titre.
+ *
+ * **Les classes sont celles du sujet**, à la lettre : `subject-title-edit`, son
+ * champ, ses deux boutons. Un sujet et une proposition se corrigent de la même
+ * façon, et deux habillages différents pour un même geste divergeraient au
+ * premier ajustement (règle 10).
+ */
+function renderTitreEnEdition(proposition) {
+  const etat = view.edition;
+  const enregistre = etat.enregistre === true;
+
+  return `
+    <div class="subject-title-edit subject-title-edit--inline">
+      <div class="subject-title-edit__row">
+        <div class="subject-title-edit__input-wrap">
+          <input
+            class="subject-title-edit__input objective-edit-form__input"
+            type="text"
+            value="${escapeHtml(etat.brouillon)}"
+            data-proposition-titre-brouillon
+            autocomplete="off"
+            ${enregistre ? "disabled" : ""}
+          />
+        </div>
+        <div class="subject-title-edit__actions">
+          <button class="gh-btn gh-btn--sm subject-title-edit__action" type="button"
+            data-proposition-edition-annuler ${enregistre ? "disabled" : ""}>Annuler</button>
+          <button class="gh-btn gh-btn--primary gh-btn--sm subject-title-edit__action subject-title-edit__save-btn"
+            type="button" data-proposition-titre-enregistrer
+            ${peutEnregistrer(etat, proposition) ? "" : "disabled"}>
+            <span>${enregistre ? "Enregistrement…" : "Enregistrer"}</span>
+            <span class="subject-title-edit__shortcut" aria-hidden="true">⏎</span>
+          </button>
+        </div>
+      </div>
+      ${etat.erreur ? `<div class="subject-title-edit__error">${escapeHtml(etat.erreur)}</div>` : ""}
+    </div>
+  `;
+}
+
+/**
+ * Le bouton « Modifier », gris, à gauche de l'état de fusion.
+ *
+ * Il n'apparaît que sur une proposition ouverte : une fois fusionnée ou fermée,
+ * son titre est celui sous lequel les décisions ont été prises. Le refus se
+ * voit par l'absence du bouton, pas par un message — il n'y a rien à expliquer
+ * à quelqu'un qui ne demande rien.
+ */
+function renderBoutonModifier(proposition) {
+  if (!modifiable(proposition) || view.edition.quoi !== QUOI.RIEN) return "";
+
+  return `<button type="button" class="gh-btn gh-btn--sm" data-proposition-titre-modifier>Modifier</button>`;
+}
+
 function renderReviewHead(proposition, review) {
-  const titleWrapHtml = renderSharedDetailsTitleWrap(proposition, {
+  const titreLu = renderSharedDetailsTitleWrap(proposition, {
     emptyText: "Aucune proposition",
     buildTitleTextHtml: (entry) => `<span class="details-title-text">${escapeHtml(entry.title)}</span>`,
     buildIdHtml: (entry) => `#${Number(entry.number) || "?"}`,
@@ -554,6 +620,8 @@ function renderReviewHead(proposition, review) {
       idHtml
     })
   });
+
+  const titleWrapHtml = view.edition.quoi === QUOI.TITRE ? renderTitreEnEdition(proposition) : titreLu;
 
   // Aucun bouton de retour : re-cliquer l'onglet « Propositions » ramène à la
   // liste, comme l'onglet « Sujets » ramène à la sienne. Un bouton de plus dans
@@ -576,6 +644,7 @@ function renderReviewHead(proposition, review) {
     // précis où l'on en a besoin, c'est-à-dire en cours de lecture.
     titleLeadHtml: view.tab === "changes" ? renderDiffReplieBouton() : "",
     actionsHtml: `${view.tab === "changes" ? renderDiffCommentBouton() : ""}${
+      renderBoutonModifier(proposition)}${
       renderMergeStateButton(proposition, review)}${renderExportButton()}`
   });
 }
@@ -1618,6 +1687,50 @@ function renderRefMenu() {
 }
 
 /**
+ * La description en cours de correction, à la place du premier message.
+ *
+ * **C'est le composeur des sujets**, avec ses onglets « Écrire / Aperçu » et sa
+ * barre Markdown : une description de proposition et une description de sujet
+ * s'écrivent de la même façon, et deux composeurs différents se mettraient à
+ * diverger dès le premier ajustement.
+ *
+ * Ce qu'il n'emporte pas : les pièces jointes. La description d'une proposition
+ * n'en a jamais porté — les documents d'une proposition sont ses dépôts, et
+ * ouvrir une seconde porte pour les mêmes fichiers ferait exactement ce que le
+ * dépôt direct faisait, entrer sans passer par le pipeline.
+ */
+function renderDescriptionEnEdition(proposition) {
+  const etat = view.edition;
+  const enregistre = etat.enregistre === true;
+
+  return `
+    ${renderCommentComposer({
+      hideAvatar: true,
+      hideTitle: true,
+      previewMode: etat.apercu === true,
+      textareaId: `propositionDescriptionEdit-${proposition.id}`,
+      previewId: `propositionDescriptionEditPreview-${proposition.id}`,
+      textareaValue: etat.brouillon,
+      textareaAttributes: { "data-proposition-description-brouillon": proposition.id },
+      placeholder: "Dire pourquoi cette proposition existe…",
+      tabWriteAction: "proposition-description-tab-write",
+      tabPreviewAction: "proposition-description-tab-preview",
+      composerClassName: "comment-composer--proposition-edit",
+      previewHtml: humanTextHtml(etat.brouillon),
+      actionsHtml: `
+        <button type="button" class="gh-btn gh-btn--sm" data-proposition-edition-annuler
+          ${enregistre ? "disabled" : ""}>Annuler</button>
+        <button type="button" class="gh-btn gh-btn--sm gh-btn--primary" data-proposition-description-enregistrer
+          ${peutEnregistrer(etat, proposition) ? "" : "disabled"}>${
+            enregistre ? "Enregistrement…" : "Mettre à jour la description"
+          }</button>
+      `
+    })}
+    ${etat.erreur ? `<div class="subject-title-edit__error">${escapeHtml(etat.erreur)}</div>` : ""}
+  `;
+}
+
+/**
  * La conversation : la description comme premier message, puis les actes.
  *
  * GitHub présente la description d'une pull request comme le premier message
@@ -1647,13 +1760,25 @@ function renderConversation(proposition, review) {
     ? `${ecrite}${noteDuDepot}`
     : `<p class="review-empty-note">Aucune description n'a été donnée. La proposition parle alors d'elle-même : ce qu'elle dépose et ce qu'on en décide.</p>`;
 
+  // Le crayon de l'en-tête, comme sur la description d'un sujet : même icône,
+  // même place, même classe. Il n'apparaît que sur une proposition ouverte.
+  const crayon = modifiable(proposition) && view.edition.quoi === QUOI.RIEN
+    ? `<button class="icon-btn icon-btn--sm gh-comment-edit-btn" type="button"
+         data-proposition-description-modifier
+         aria-label="Modifier la description" title="Modifier la description">${svgIcon("pencil")}</button>`
+    : "";
+
   const premier = renderMessageThreadComment({
     idx: 0,
     author: identite.displayName,
     tsHtml: `<span class="gh-comment-ts">a ouvert cette proposition le ${escapeHtml(
       formatDate(proposition.created_at)
     )}</span>`,
-    bodyHtml: description,
+    bodyHtml: view.edition.quoi === QUOI.DESCRIPTION
+      ? renderDescriptionEnEdition(proposition)
+      : description,
+    headerClassName: crayon ? "gh-comment-header--editable" : "",
+    headerRightHtml: crayon,
     avatarHtml: identite.avatarHtml,
     avatarType: identite.avatarType,
     avatarInitial: identite.avatarInitial
@@ -3888,6 +4013,124 @@ function bindMergePanel(scope, root) {
   }
 }
 
+/**
+ * Corriger le titre et la description : les deux mêmes gestes que sur un sujet.
+ *
+ * Les deux éditeurs partagent un état et un bouton « Annuler » : un seul texte
+ * se corrige à la fois, et deux « Enregistrer » ouverts ensemble feraient
+ * douter de ce qu'on est en train d'écrire.
+ */
+function brancherLEditionDeLaProposition(root) {
+  const proposition = view.open;
+
+  const rouvrir = (quoi) => {
+    view.edition = { ...ouvrirLEdition(proposition, quoi), apercu: false };
+    renderContent(root);
+  };
+
+  root.querySelector("[data-proposition-titre-modifier]")
+    ?.addEventListener("click", () => rouvrir(QUOI.TITRE));
+  root.querySelector("[data-proposition-description-modifier]")
+    ?.addEventListener("click", () => rouvrir(QUOI.DESCRIPTION));
+
+  root.querySelector("[data-proposition-edition-annuler]")?.addEventListener("click", () => {
+    view.edition = aucuneEdition();
+    renderContent(root);
+  });
+
+  const champTitre = root.querySelector("[data-proposition-titre-brouillon]");
+  champTitre?.addEventListener("input", (evenement) => {
+    view.edition = { ...view.edition, brouillon: evenement.target.value, erreur: "" };
+    // Seul le bouton change d'état : redessiner ici ferait perdre le curseur à
+    // chaque lettre.
+    const bouton = root.querySelector("[data-proposition-titre-enregistrer]");
+    if (bouton) bouton.disabled = !peutEnregistrer(view.edition, proposition);
+  });
+  champTitre?.addEventListener("keydown", (evenement) => {
+    if (evenement.key === "Enter" && peutEnregistrer(view.edition, proposition)) {
+      evenement.preventDefault();
+      enregistrerLEdition(root);
+    }
+    if (evenement.key === "Escape") {
+      view.edition = aucuneEdition();
+      renderContent(root);
+    }
+  });
+  // Le curseur arrive dans le champ, à la fin du texte : on vient corriger, pas
+  // tout retaper.
+  if (champTitre) {
+    champTitre.focus();
+    champTitre.setSelectionRange(champTitre.value.length, champTitre.value.length);
+  }
+
+  const champDescription = root.querySelector("[data-proposition-description-brouillon]");
+  champDescription?.addEventListener("input", (evenement) => {
+    view.edition = { ...view.edition, brouillon: evenement.target.value, erreur: "" };
+    const bouton = root.querySelector("[data-proposition-description-enregistrer]");
+    if (bouton) bouton.disabled = !peutEnregistrer(view.edition, proposition);
+  });
+
+  root.querySelector("[data-proposition-titre-enregistrer]")
+    ?.addEventListener("click", () => enregistrerLEdition(root));
+  root.querySelector("[data-proposition-description-enregistrer]")
+    ?.addEventListener("click", () => enregistrerLEdition(root));
+
+  // L'aperçu de la description a **son** état : le partager avec celui du
+  // composeur de messages ferait basculer les deux d'un seul clic, et l'on
+  // relirait son message en croyant relire sa description (règle 4).
+  root.querySelector('[data-action="proposition-description-tab-write"]')?.addEventListener("click", () => {
+    view.edition = { ...view.edition, apercu: false };
+    renderContent(root);
+  });
+  root.querySelector('[data-action="proposition-description-tab-preview"]')?.addEventListener("click", () => {
+    view.edition = { ...view.edition, apercu: true };
+    renderContent(root);
+  });
+}
+
+/**
+ * Enregistrer la correction.
+ *
+ * La ligne rendue par la base remplace celle qu'on avait : elle porte le
+ * `updated_at` qui vient d'être écrit, et se recopier soi-même ferait diverger
+ * l'écran de ce qui est enregistré (règle 4).
+ *
+ * Quand la base ne répond pas, **le brouillon reste** et l'écran le dit. Perdre
+ * le texte de quelqu'un parce que le réseau a hésité est la faute qu'on ne
+ * rattrape pas.
+ */
+async function enregistrerLEdition(root) {
+  const proposition = view.open;
+  const champs = ceQuiChange(view.edition, proposition);
+  if (!champs) return;
+
+  view.edition = { ...view.edition, enregistre: true, erreur: "" };
+  renderContent(root);
+
+  const { modifierLaProposition } = await import("../services/propositions-supabase.js");
+  const ligne = await modifierLaProposition({ propositionId: proposition.id, champs });
+
+  if (!ligne) {
+    view.edition = echecDeLEnregistrement(view.edition);
+    renderContent(root);
+    return;
+  }
+
+  // On **fusionne** plutôt que de remplacer : la proposition ouverte porte des
+  // champs que la table ne rend pas — le nombre de documents, par exemple — et
+  // les perdre en corrigeant un titre viderait la ligne de la liste.
+  view.open = { ...view.open, ...ligne };
+  // La liste porte la même proposition : la laisser avec l'ancien titre ferait
+  // lire deux noms pour une seule chose selon l'écran qu'on regarde.
+  if (Array.isArray(view.propositions)) {
+    view.propositions = view.propositions.map((entree) =>
+      String(entree?.id || "") === String(ligne.id || "") ? { ...entree, ...ligne } : entree
+    );
+  }
+  view.edition = aucuneEdition();
+  renderContent(root);
+}
+
 function bindReview(root) {
   // Le même mécanisme que pour un sujet : la page défile, la coque prend
   // `overlay-chrome--compact`, l'en-tête prend `details-head--compact`, et le
@@ -4100,6 +4343,9 @@ function bindConversation(root) {
   root.querySelector("[data-note-retry]")?.addEventListener("click", () => retryDepositNote(root));
 
   root.querySelector("[data-comment-post]")?.addEventListener("click", () => postComment(root));
+
+  brancherLEditionDeLaProposition(root);
+
 
   for (const bouton of root.querySelectorAll("[data-comment-edit]")) {
     bouton.addEventListener("click", () => {
@@ -5500,6 +5746,9 @@ async function openProposition(root, propositionId) {
   view.preview = false;
   view.editing = null;
   view.editDraft = "";
+  // Un texte en cours de correction appartient à la proposition qu'on quitte :
+  // le garder ouvert le ferait enregistrer sur la suivante.
+  view.edition = aucuneEdition();
   // Un livrable ouvert appartient à la proposition qu'on quitte.
   releaseViewer();
   view.viewer = null;

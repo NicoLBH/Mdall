@@ -9362,41 +9362,6 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
   font-weight:600;
 }
 
-/* Le bouton qui copie l'état de la liste, à côté du filtre. Discret au repos :
-   il ne sert qu'en cas de doute, et une liste qui va bien n'a pas à le porter
-   dans le regard. */
-.table-head-filter__copier{
-  margin-left:8px;
-  opacity:.45;
-  transition:opacity .12s ease;
-}
-.table-head-filter-group:hover .table-head-filter__copier,
-.table-head-filter__copier:focus-visible{ opacity:1; }
-
-/* Le bouton qui copie l'état de la liste vit maintenant dans la barre de
-   commandes, à gauche de la recherche. Il vivait dans la tête du tableau, et
-   s'est tu avec les filtres qu'il devait aider à comprendre : un outil de
-   diagnostic ne peut pas dépendre de ce qu'il diagnostique. */
-.project-table-toolbar__copier{
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  height:28px;
-  width:28px;
-  border:1px solid var(--border);
-  border-radius:6px;
-  background:var(--panel2, transparent);
-  color:var(--muted);
-  cursor:pointer;
-  transition:color .12s ease,border-color .12s ease;
-}
-.project-table-toolbar__copier:hover,
-.project-table-toolbar__copier:focus-visible{
-  color:var(--fg, #fff);
-  border-color:var(--border2, var(--border));
-  outline:none;
-}
-
 .table-head-filter__label{
   display:inline-flex;
   align-items:center;
@@ -9439,21 +9404,6 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
   opacity:1;
   color:#fff;
   background:rgba(110,118,129,.18);
-}
-
-/* Ce que la tête dit quand un de ses boutons ne reçoit pas le geste. Elle ne
-   l'écrit que dans ce cas : un bouton qui répond ne porte aucune phrase. Se
-   taire laisserait croire à un bouton sans écoute — la confusion qui a coûté
-   cinq tours. */
-.table-head-veille{
-  grid-column:1 / -1;
-  margin-top:6px;
-  padding:4px 6px;
-  border-radius:6px;
-  background:rgba(210,153,34,.14);
-  color:var(--fgColor-attention, #d29922);
-  font-size:11px;
-  line-height:1.4;
 }
 
 .project-page-shell{

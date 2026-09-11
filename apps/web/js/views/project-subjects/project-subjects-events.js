@@ -25,7 +25,6 @@ import { isMetaDropdownOpenForAnchor } from "../ui/select-dropdown-controller.js
 import { mountHandwritingComposerOverlay } from "../ui/handwriting-composer-overlay.js";
 import { quandOnClique } from "../ui/tete-de-tableau.js";
 import { TRI, normaliserLeTri, triSuivant } from "../../services/tri-des-sujets.js";
-import { noter, noterLEchec } from "../../services/journal-des-gestes.js";
 
 export function createProjectSubjectsEvents(config) {
   const EMOJI_GRID_COLUMNS = 6;
@@ -5667,32 +5666,15 @@ export function createProjectSubjectsEvents(config) {
   }
 
   /**
-   * Redessiner après un geste de la tête — et **dire si cela a eu lieu**.
+   * Revenir à la première page, puis redessiner.
    *
-   * Le constat qui a renversé cinq tours d'enquête : on clique « Fermés », rien
-   * ne bouge ; on change d'onglet, on revient, et la liste des fermés s'affiche.
-   * L'état est donc écrit et le geste reçu — ce qui manque est le rendu qui
-   * devait suivre. Une exception ici ne fait rien tomber : elle s'écrit dans la
-   * console et la page continue, l'air de rien, laissant croire à un bouton
-   * sans écoute.
-   *
-   * On note donc l'entrée et la sortie. Ce qui manque entre les deux nomme le
-   * maillon rompu.
+   * Les deux gestes de la tête font la même chose : ils changent ce qu'est
+   * « la première page », puis demandent le rendu. Les écrire deux fois les
+   * ferait diverger le jour où l'un des deux gagne une étape (règle 4).
    */
-  function redessinerApresUnGeste(quoi) {
-    try {
-      resetSubjectsPaginationPage();
-    } catch (erreur) {
-      noterLEchec("pagination · échec", erreur);
-    }
-
-    noter("redessin · demandé", { apres: quoi, parCe: typeof rerenderPanels });
-    try {
-      rerenderPanels();
-      noter("redessin · rendu", { apres: quoi });
-    } catch (erreur) {
-      noterLEchec("redessin · échec", erreur);
-    }
+  function redessinerApresUnGeste() {
+    resetSubjectsPaginationPage();
+    rerenderPanels();
   }
 
   /**
@@ -5716,13 +5698,11 @@ export function createProjectSubjectsEvents(config) {
       if (!store.projectSubjectsView || typeof store.projectSubjectsView !== "object") {
         store.projectSubjectsView = {};
       }
-      const avant = String(store.projectSubjectsView.subjectsStatusFilter || "");
       store.projectSubjectsView.subjectsStatusFilter = demande;
       // `filters.status` reste écrit **ici aussi**, pour ce qui le lit encore —
       // mais il est désormais une copie, jamais une source.
       if (store.projectSubjectsView.filters) store.projectSubjectsView.filters.status = demande;
-      noter("filtre écrit", { avant, apres: store.projectSubjectsView.subjectsStatusFilter });
-      redessinerApresUnGeste("filtre");
+      redessinerApresUnGeste();
     });
 
     quandOnClique("subjects-sort", (valeur) => {
@@ -5734,12 +5714,10 @@ export function createProjectSubjectsEvents(config) {
       const demande = valeur === TRI.PROJET || valeur === TRI.DERNIERE_ACTIVITE
         ? normaliserLeTri(valeur)
         : triSuivant(store.projectSubjectsView.subjectsSort);
-      const avant = String(store.projectSubjectsView.subjectsSort || "");
       store.projectSubjectsView.subjectsSort = demande;
-      noter("tri écrit", { avant, apres: store.projectSubjectsView.subjectsSort });
       // Changer l'ordre change ce qu'est « la première page » : y rester
       // montrerait le milieu d'une liste qu'on vient de retourner.
-      redessinerApresUnGeste("tri");
+      redessinerApresUnGeste();
     });
   }
 
@@ -6240,6 +6218,39 @@ export function createProjectSubjectsEvents(config) {
     projectSubjectMilestones?.bindGlobalEvents();
   }
 
+  /**
+   * Revenir à la première page.
+   *
+   * **Ces trois fonctions vivaient hors de la fabrique**, après son accolade
+   * fermante, là où `store` n'existe pas. Chaque appel levait donc un
+   * `ReferenceError` — silencieusement, comme toute exception dans un
+   * écouteur —, et le gestionnaire s'arrêtait là, juste avant le redessin.
+   *
+   * C'est la panne qui a coûté cinq tours : le clic arrivait, le filtre
+   * s'écrivait, et l'écran ne bougeait pas. On ne voyait le nouveau filtre qu'en
+   * revenant sur l'onglet, seul chemin qui redessine sans passer par ici.
+   */
+  const resetSubjectsPaginationPage = () => {
+    if (!store.projectSubjectsView || typeof store.projectSubjectsView !== "object") store.projectSubjectsView = {};
+    if (!store.projectSubjectsView.pagination || typeof store.projectSubjectsView.pagination !== "object") {
+      store.projectSubjectsView.pagination = { currentPage: 1, pageSize: 25 };
+    }
+    store.projectSubjectsView.pagination.currentPage = 1;
+  };
+
+  const isPaginationDebugEnabled = () => {
+    try {
+      return String(window?.localStorage?.getItem?.("debug:pagination") || "").trim() === "1";
+    } catch {
+      return false;
+    }
+  };
+
+  const logPagination = ({ entity, previousPage, nextPage, totalPages }) => {
+    if (!isPaginationDebugEnabled()) return;
+    console.info("[pagination]", { entity, previousPage, nextPage, totalPages });
+  };
+
   // La tête du tableau s'écoute dès la construction de l'écran : elle ne passe
   // par aucune racine, et rien de ce qui se redessine ne peut la faire taire.
   ecouterLaTeteDesSujets();
@@ -6256,21 +6267,3 @@ export function createProjectSubjectsEvents(config) {
     bindSituationsEvents
   };
 }
-    const resetSubjectsPaginationPage = () => {
-      if (!store.projectSubjectsView || typeof store.projectSubjectsView !== "object") store.projectSubjectsView = {};
-      if (!store.projectSubjectsView.pagination || typeof store.projectSubjectsView.pagination !== "object") {
-        store.projectSubjectsView.pagination = { currentPage: 1, pageSize: 25 };
-      }
-      store.projectSubjectsView.pagination.currentPage = 1;
-    };
-    const isPaginationDebugEnabled = () => {
-      try {
-        return String(window?.localStorage?.getItem?.("debug:pagination") || "").trim() === "1";
-      } catch {
-        return false;
-      }
-    };
-    const logPagination = ({ entity, previousPage, nextPage, totalPages }) => {
-      if (!isPaginationDebugEnabled()) return;
-      console.info("[pagination]", { entity, previousPage, nextPage, totalPages });
-    };
