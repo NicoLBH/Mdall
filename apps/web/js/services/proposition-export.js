@@ -41,7 +41,8 @@ const DECISION_LABELS = {
 const ITEM_TYPE_LABELS = {
   [ITEM_TYPE.DOCUMENT]: "Document",
   [ITEM_TYPE.ATTACHMENT]: "Rattachement",
-  [ITEM_TYPE.AVIS]: "Avis"
+  [ITEM_TYPE.AVIS]: "Avis",
+  [ITEM_TYPE.SUJET]: "Point de chantier"
 };
 
 function texte(value) {
@@ -138,6 +139,19 @@ function itemLigne(entry) {
   if (entry?.itemType === ITEM_TYPE.AVIS) {
     const { label, detail } = describeAvisChange(payload);
     return { ...base, libelle: texte(payload.title) || texte(payload.reference), mouvement: label, detail, payload };
+  }
+
+  if (entry?.itemType === ITEM_TYPE.SUJET) {
+    return {
+      ...base,
+      libelle: texte(payload.titre) || base.cle,
+      // Le lot et le numéro du compte rendu : c'est par eux qu'on retrouve le
+      // point dans le document, et un export qui ne les porte pas ne se
+      // confronte plus à la pièce.
+      mouvement: [texte(payload.lot), texte(payload.reference)].filter(Boolean).join(" · ") || null,
+      detail: texte(payload.description) || null,
+      payload
+    };
   }
 
   if (entry?.itemType === ITEM_TYPE.ATTACHMENT) {

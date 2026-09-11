@@ -2840,47 +2840,168 @@ en le reconstituant de tête, et c'est exactement ce que Mdall prétend éviter.
 
 ---
 
-## 38. Le dépôt d'un document ne mène plus nulle part
+## 38. Le dépôt d'un document ne mène plus nulle part · *fait*
 
-**Vu, diagnostiqué, pas fait.** Déposer un CR de chantier n'ajoute aucun sujet,
-qu'on passe par une proposition ou par « déposer directement dans le projet ».
+**Ce qui n'allait pas.** Déposer un compte rendu de chantier n'ajoutait aucun
+sujet, qu'on passe par une proposition ou par « déposer directement dans le
+projet ». Un seul reconnaisseur existait — celui des livrables de bureau de
+contrôle —, et tout le reste retombait sur « aucun émetteur reconnu ». Un
+compte rendu déposé n'était pas *mal* traité : il n'était **pas traité du tout**.
 
-### Ce qui reste de l'ancienne pipeline
+### Ce qui a été retiré, et pourquoi ce n'est pas du nettoyage
 
-Le dépôt direct est encore soumis au réglage **Paramètres > Automatisations >
-« Déclencher l'analyse IA des sujets après dépôt d'un document »**. Ce chemin est
-périmé : il produisait des sujets à partir d'un PDF **sans passer par une
-proposition**, ce qui contredit la règle 1 — rien n'entre directement.
+Le réglage **Paramètres > Automatisations > « Déclencher l'analyse IA des sujets
+après le dépôt d'un document »** produisait des sujets **à partir d'un PDF, sans
+proposition**. Il contournait la règle 1 — rien n'entre directement — et c'est
+la seule raison pour laquelle il s'en va.
 
-Où il vit, exactement :
+Il avait deux autres défauts qui ne se rattrapaient pas : il ne traitait qu'un
+seul document du lot, et il ne regardait pas ce que le document était — le même
+traitement pour un rapport de bureau de contrôle et pour un compte rendu.
 
-| Fichier | Ce qu'il porte |
+Quatre fichiers l'ont perdu : le catalogue (`services/project-automation.js`),
+sa case (`views/project-parametres/project-parametres-automatisations.js`), son
+déclenchement (`views/project-documents.js`) et l'état « automatique » du bouton
+d'analyse (`views/project-situations-runbar.js`).
+
+**La distinction qui comptait.** `runAnalysis` reste joignable à la main, depuis
+l'écran d'analyse. Ce qui disparaît est son *déclenchement automatique au
+dépôt*, pas l'écran : les confondre aurait retiré le seul chemin qui marchait
+encore. Un test lit les fichiers pour que le raccourci ne se réintroduise pas —
+il est commode, et c'est précisément le danger.
+
+**Le réglage retenu chez ceux qui l'avaient coché n'est pas effacé.** Une clé
+inconnue du catalogue est ignorée, et supprimer un réglage qu'on ne lit plus
+n'apporte qu'un risque.
+
+### L'aiguillage
+
+Un reconnaisseur de plus, et c'est tout ce que le registre demandait :
+`services/document-recognizer-cr.js`.
+
+**Le titre tranche** — « Compte rendu de réunion de chantier », « CR de chantier
+n° 12 », « procès-verbal de chantier ». Le reste ne vaut qu'ensemble : une
+réunion de chantier mentionnée **plus deux** marques de forme (présents,
+diffusion, prochaine réunion, lots, maîtrise d'œuvre) donnent un probable,
+jamais un certain. C'est le piège de cette famille : un livrable de bureau de
+contrôle cite les réunions de chantier, nomme la maîtrise d'œuvre et porte une
+liste de diffusion — le prendre pour un compte rendu l'enverrait vers les sujets
+au lieu des avis, en silence.
+
+**L'auteur ne se devine pas.** Un compte rendu nomme tout le monde. Il n'est
+nommé que lorsqu'**une seule** mention légale figure au document ; sinon, rien
+(règle 5).
+
+Une convocation est reconnue **sans contenu** plutôt que rejetée : c'est un
+compte rendu au sens du titre, et il n'y a rien dedans.
+
+De là, `services/proposition-analysis.js` aiguille :
+
+| ce que le document est | où il part |
 | --- | --- |
-| `services/project-automation.js` | le réglage `autoAnalysisAfterUpload` et `shouldAutoRunAnalysisAfterUpload()` |
-| `views/project-parametres/project-parametres-automatisations.js` | sa case dans les Paramètres |
-| `views/project-documents.js` | `triggerAnalysisAfterDeposit()`, appelé au dépôt hors proposition |
-| `views/project-situations-runbar.js` | la barre qui change d'allure selon le réglage |
+| `ct_report` | les avis — le chemin qui existait |
+| `cr_chantier` | les points à traiter — le chemin neuf |
+| autre chose | nulle part, **et il est nommé** |
 
-`runAnalysis` lui-même (`services/analysis-runner.js`) reste atteignable à la
-main ; **c'est le déclenchement automatique au dépôt qui s'en va**, pas l'écran
-d'analyse. Les distinguer évite de supprimer, au passage, le seul chemin qui
-marche encore.
+La garde de portée ne s'applique plus que lorsque **les deux** chemins sont
+vides : un dépôt qui n'apporte qu'un compte rendu a bien quelque chose à lire.
+C'est ce point précis qui faisait ressortir un dépôt vide.
 
-### Ce qu'on veut à la place : un aiguillage au dépôt
+Le chemin des comptes rendus ne tourne qu'en portée **dépôt**. La réécriture du
+suivi après une fusion repasse par la même fonction avec la portée *projet*, et
+les comptes rendus y sont toujours attachés : les relire appellerait le modèle
+une seconde fois sur chaque pièce, pour reproposer des points qu'on vient
+d'ouvrir — un appel payant pour un résultat qu'on jetterait.
 
-On dépose un PDF, et le système **reconnaît ce que c'est** avant de décider quoi
-en faire :
+**L'aiguillage se dit au dépôt**, pas seulement à l'ouverture de la proposition :
+« 2 livrables de bureau de contrôle partent vers les avis, 1 compte rendu de
+chantier part vers les points à traiter. » Il se décide là, et c'est là qu'on
+regarde. La phrase ne promet rien de ce qui en sortira — un compte rendu peut ne
+porter aucun point neuf, et l'annoncer serait mentir avant d'avoir lu.
 
-- un **rapport de bureau de contrôle** → le flux des avis, qui existe
-  (`services/avis-par-le-modele.js`, `emetteur-du-document.js`) ;
-- un **CR de chantier** → le flux des sujets, par proposition.
+### La lecture d'un compte rendu, par le modèle
 
-La reconnaissance de l'émetteur est déjà écrite et rend ses preuves ; ce qui
-manque est la reconnaissance du **type** de document, et la bifurcation qui s'en
-suit.
+Même raison que pour les avis, en pire : un livrable de bureau de contrôle suit
+au moins la maquette de son émetteur ; un compte rendu suit celle de son maître
+d'œuvre, et il y en a autant que d'agences.
 
-**Ce qui se passe si on ne le fait pas :** le dépôt reste un geste sans effet, et
-un réglage périmé continue d'offrir un chemin qui contourne la règle 1.
+`supabase/functions/extract-sujets` lit, `_shared/sujets-du-modele.js` porte le
+schéma et les consignes. La clé et les consignes restent au serveur : le
+navigateur envoie des pages et reçoit des points vérifiés.
+
+**Le garde-fou pèse plus lourd ici que pour un avis.** Un avis inventé porte un
+code que la légende ne connaît pas ; un point inventé est *plausible* —
+« Reprise d'étanchéité en toiture terrasse » pourrait figurer dans n'importe quel
+compte rendu, et rien dans la réponse du modèle ne le distinguerait d'un vrai. Ce
+qui l'en distingue est le document : chaque point porte sa ligne, cette ligne est
+recherchée dans la page, et ce qui ne s'y retrouve pas est écarté — et compté.
+
+Le garde-fou lui-même a déménagé dans `_shared/citation-verifiee.js` : il vaut
+pour toute lecture par le modèle, et une règle recopiée diverge par le bas
+(règle 4). Les avis s'y sont ramenés sans rien changer à leur contrat.
+
+**On ne lui demande aucun jugement** — ni priorité, ni gravité, ni urgence. Un
+compte rendu ne les écrit pas, et les deviner ferait classer un chantier sur une
+intuition.
+
+### Le report, qui est tout le problème
+
+Un compte rendu **reporte** : la douzième réunion reprend les points de la
+onzième, qui reprenait ceux de la dixième. C'est sa raison d'être — un point
+reste écrit tant qu'il n'est pas soldé. Verser tout ce qu'il porte ouvrirait
+douze fois le même sujet.
+
+Et l'erreur inverse est pire : écarter un point parce qu'il ressemble à un autre
+ferait taire une observation nouvelle sur un ouvrage déjà discuté.
+
+`services/sujets-du-cr.js` reconnaît qu'un point est déjà là de trois façons,
+dans cet ordre : **son numéro** (« 12.02.1 » désigne le même point d'un compte
+rendu à l'autre — c'est ce que la numérotation du métier veut dire), **un sujet
+du projet qui porte le même titre**, puis **le lot lui-même**, deux comptes
+rendus déposés ensemble se recouvrant.
+
+Un point **déjà écarté** ne se repose pas non plus — on ne repose pas une
+question tranchée —, mais il ne se dit pas « déjà versé » : les deux n'appellent
+pas la même réaction, et annoncer un refus comme un versement ferait chercher un
+sujet qui n'existe pas.
+
+Ce qui est écarté revient avec ce qui est proposé, toujours les deux : une liste
+courte sans ce qu'on lui a retiré ferait croire à un compte rendu maigre
+(règle 5). L'écran les montre sous « Déjà suivis », sans case à cocher — ce n'est
+pas une question.
+
+### Rien ne s'ouvre sans qu'on l'ait signé
+
+Les points deviennent des affirmations de la proposition (`ITEM_TYPE.SUJET`),
+cochables une par une. **Trois choses, et il faut les trois, pour qu'un sujet
+s'ouvre** : le point a été lu dans un document (la citation le prouve), il a été
+coché par quelqu'un, et la proposition a été signée. Retirer l'une des trois,
+c'est revenir à l'ancienne pipeline.
+
+La description du sujet porte ce que le compte rendu dit, sa provenance et **la
+citation**. Ce n'est pas un ornement : un sujet ouvert par une lecture
+automatique doit pouvoir se contester, et un sujet dont on ne peut pas remonter à
+la phrase d'origine ne se discute plus, il s'accepte.
+
+Un échec n'annule pas la fusion — les documents sont entrés, c'est fait —, et il
+se dit plutôt que de se taire : on croirait le compte rendu traité. Les sujets
+s'ouvrent un par un ; sur douze points, en perdre onze parce que le troisième a
+échoué serait le pire des deux mondes.
+
+### Ce qui reste à faire
+
+- **La liaison d'un point à une valeur du projet.** Un avis se raccroche à ce
+  qu'il examine ; un point de chantier, pas encore. « Le ferraillage du voile V12
+  ne suit pas le plan BA-102 » ne dit rien à la mémoire tant que le plan BA-102
+  n'y est pas un objet. C'est ce qui manque pour qu'un point de chantier compte
+  dans une variante.
+- **L'état d'un point suivi d'une réunion à l'autre.** Le modèle lit « soldé » et
+  « en cours » quand le document les écrit, et on n'en fait rien : un point
+  soldé devrait fermer le sujet qu'il a ouvert. C'est le § 39, et il faut
+  d'abord trancher ce qu'ouvrir et fermer veulent dire en mémoire.
+- **Le dépôt direct.** Il reste possible, et il n'aiguille vers rien : un
+  document déposé hors proposition entre au corpus et s'arrête là. Ce n'est plus
+  un contournement — il n'ouvre rien —, mais ce n'est pas non plus un chemin.
 
 ---
 

@@ -527,6 +527,11 @@ export function natureFromKind(kind) {
   if (brut === DECLARED_KIND) return NATURE.HYPOTHESE;
   if (brut === BASE_DATUM_KIND) return NATURE.DONNEE_BASE;
   if (brut === ITEM_TYPE.AVIS) return NATURE.CONSTAT;
+  // Un point de compte rendu de chantier est un **constat** : quelqu'un a vu
+  // quelque chose sur l'ouvrage et l'a écrit. Ce n'est ni une décision — le
+  // compte rendu ne tranche pas —, ni de l'intendance : c'est l'état du
+  // chantier à une date, et cela se conserve comme tel (règle 6).
+  if (brut === ITEM_TYPE.SUJET) return NATURE.CONSTAT;
   if (brut === ITEM_TYPE.DOCUMENT || brut === ITEM_TYPE.ATTACHMENT) return NATURE.INTENDANCE;
   return null;
 }

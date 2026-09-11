@@ -61,7 +61,15 @@ export const ITEM_TYPE = {
   /** Une affaire est rattachée au projet, ou en est écartée. */
   ATTACHMENT: "attachment",
   /** Un avis apparaît, change d'état, ou est levé. */
-  AVIS: "avis"
+  AVIS: "avis",
+  /**
+   * Un point d'un compte rendu de chantier, proposé à l'ouverture.
+   *
+   * **Proposé**, jamais ouvert. Ouvrir un sujet engage quelqu'un à le traiter :
+   * c'est une décision, et elle se signe. C'est exactement ce que l'ancienne
+   * pipeline faisait sans le demander, et ce pour quoi elle s'en va.
+   */
+  SUJET: "sujet"
 };
 
 function item(type, key, payload) {
@@ -156,6 +164,40 @@ export function avisItems(diff = {}) {
   );
 
   return [...nouveaux, ...changes];
+}
+
+/**
+ * Les points qu'un compte rendu de chantier propose d'ouvrir.
+ *
+ * La clé est celle que `sujets-du-cr.js` a arrêtée : le numéro du compte rendu
+ * quand il en donne un, sinon le titre réduit. C'est elle qui fait qu'un point
+ * reporté de la onzième réunion à la douzième ne se rouvre pas — et c'est la
+ * seule chose qui le fasse, un compte rendu ne portant aucun identifiant stable
+ * en dehors de sa propre numérotation.
+ *
+ * Ce qui a été écarté ne passe **pas** par ici : un point déjà suivi n'est pas
+ * une question qu'on pose, et en faire une affirmation de plus reviendrait à
+ * demander douze fois d'accepter la même chose. Il se dit ailleurs, et il se
+ * dit — c'est la règle 5, pas une exception à celle-ci.
+ */
+export function sujetItems(points = []) {
+  return (Array.isArray(points) ? points : []).map((point) =>
+    item(ITEM_TYPE.SUJET, point.key, {
+      titre: point.titre ?? "",
+      description: point.description ?? "",
+      lot: point.lot ?? null,
+      reference: point.reference ?? null,
+      qui: point.qui ?? null,
+      echeance: point.echeance ?? null,
+      etat: point.etat ?? null,
+      // La provenance voyage avec la proposition : un point se vérifie en
+      // ouvrant sa page, et un sujet qu'on ne peut pas remonter à son compte
+      // rendu ne se conteste plus.
+      sourceId: point.provenance?.source_id ?? null,
+      page: point.provenance?.page ?? null,
+      evidence: point.provenance?.excerpt ?? null
+    })
+  );
 }
 
 /**

@@ -19,12 +19,6 @@ import { svgIcon } from "../ui/icons.js";
 import { renderDataTableShell, renderDataTableHead, renderDataTableEmptyState } from "./ui/data-table-shell.js";
 import { escapeHtml } from "../utils/escape-html.js";
 import { proposeTitle } from "../services/proposition-title.js";
-import { shouldAutoRunAnalysisAfterUpload } from "../services/project-automation.js";
-import {
-  getCurrentAnalysisRunMeta,
-  isAnalysisRunning,
-  runAnalysis
-} from "../services/analysis-runner.js";
 import { addProjectDocument, decorateDocumentWithPhase, getEnabledProjectPhasesCatalog, getProjectDocumentById, getProjectDocumentPreviewUrl, getProjectDocuments, resolveDocumentRefs, setActiveProjectDocument } from "../services/project-documents-store.js";
 import { listDocumentDirectory, listDocumentFolders, createDocumentFolder, renameDocumentFolder, moveDocumentFile, resolveCurrentBackendProjectId, syncProjectDocumentsFromSupabase } from "../services/project-supabase-sync.js";
 import { getEffectiveSituationStatus, getEffectiveSujetStatus } from "./project-situations.js";
@@ -3750,7 +3744,7 @@ async function commitDeposit(root) {
 
   let results = [];
   try {
-    const [{ ensureBackendProject }, { depositBatch, summarizeDeposit, ENTRY }] = await Promise.all([
+    const [{ ensureBackendProject }, { depositBatch, orientationDuDepot, summarizeDeposit, ENTRY }] = await Promise.all([
       import("../services/backend-project.js"),
       import("../services/document-batch.js")
     ]);
@@ -3804,18 +3798,20 @@ async function commitDeposit(root) {
     await loadCurrentDirectory().catch(() => {});
 
     const suite = proposition?.message ? ` ${proposition.message}` : "";
+    // **L'aiguillage se dit ici.** Il se décide au dépôt, par la reconnaissance ;
+    // le taire jusqu'à l'ouverture de la proposition laissait croire qu'un dépôt
+    // ne faisait rien — c'est exactement ce qu'on reprochait à l'écran.
+    const vers = orientationDuDepot(results);
     setDocumentsActivity({
       tone: proposition?.failed ? "warning" : summary.tone,
       title: summary.deposited > 0 ? "Documents déposés" : "Dépôt sans effet",
-      message: `${ecartes.length > 0 ? `${summary.message} ${ecartes.join(" · ")}` : summary.message}${suite}`
+      message: `${ecartes.length > 0 ? `${summary.message} ${ecartes.join(" · ")}` : summary.message}${
+        vers ? ` ${vers}` : ""}${suite}`
     });
     // `setDocumentsActivity` ne fait que poser l'état : sans ce rendu, le bandeau
     // resterait celui du dépôt précédent.
     renderProjectDocuments(root);
 
-    // L'analyse par IA ne concerne que le dépôt direct : une proposition sera
-    // analysée à sa lecture, par le moteur du suivi, et non par cette pipeline-ci.
-    if (!proposition) triggerAnalysisAfterDeposit(root, results);
   } catch (error) {
     docsViewState.isUploading = false;
     docsViewState.uploadProgress = null;
@@ -3898,56 +3894,36 @@ async function submitToProposition(projectId, documentIds = []) {
 }
 
 /**
- * L'analyse par IA, si le projet l'a demandée — et seulement après le dépôt.
+ * Ce qui se passe désormais après un dépôt : **rien d'automatique**.
  *
- * Elle ne conditionne plus rien : le document est déjà en base quand on arrive
- * ici. Ce chemin est celui de l'ancienne pipeline, qui produit des sujets à
- * partir d'un PDF ; il sera remplacé par l'analyse d'une proposition. En
- * attendant, il reste joignable pour qui s'en sert, à ceci près qu'il ne traite
- * qu'un document à la fois — et l'écran le dit plutôt que de le taire.
+ * ## Ce qui vivait ici, et pourquoi c'est parti
+ *
+ * `triggerAnalysisAfterDeposit` lançait l'ancienne pipeline d'analyse dès qu'un
+ * PDF était déposé hors proposition, si la case « Déclencher l'analyse IA des
+ * sujets après le dépôt d'un document » était cochée dans les Paramètres. Elle
+ * produisait des sujets **à partir d'un PDF, sans proposition** : elle
+ * contournait la règle 1, celle qui veut que rien n'entre directement.
+ *
+ * Elle avait deux autres défauts qui ne se rattrapent pas : elle ne traitait
+ * qu'un seul document du lot, et elle ne regardait pas ce que le document
+ * était — le même traitement pour un rapport de bureau de contrôle et pour un
+ * compte rendu de chantier.
+ *
+ * ## Ce qui la remplace
+ *
+ * L'aiguillage, et il se fait à la lecture d'une proposition :
+ *
+ *  - un **livrable de bureau de contrôle** part vers les avis ;
+ *  - un **compte rendu de chantier** part vers les points à traiter, que la
+ *    proposition fait signer un par un avant d'ouvrir quoi que ce soit.
+ *
+ * Voir `services/proposition-analysis.js` pour la bifurcation, et
+ * `services/document-recognizer-cr.js` pour ce qui la décide.
+ *
+ * `runAnalysis` existe toujours et reste joignable à la main, depuis l'écran
+ * d'analyse. Ce qui disparaît est son **déclenchement automatique au dépôt**,
+ * pas l'écran : les confondre aurait retiré le seul chemin qui marchait encore.
  */
-function triggerAnalysisAfterDeposit(root, results = []) {
-  if (!shouldAutoRunAnalysisAfterUpload()) return;
-
-  const deposited = results.filter((result) => result.documentId && /\.pdf$/i.test(result.file?.name ?? ""));
-  if (deposited.length === 0) return;
-
-  if (isAnalysisRunning()) {
-    const currentRun = getCurrentAnalysisRunMeta();
-    setDocumentsActivity({
-      tone: "warning",
-      title: "Documents déposés",
-      message: `Le dépôt a abouti, mais l'analyse n'a pas été lancée : un traitement est déjà en cours${
-        currentRun.runId ? ` (${currentRun.runId})` : ""
-      }.`
-    });
-    renderProjectDocuments(root);
-    return;
-  }
-
-  const premier = deposited[0];
-  store.projectForm.pdfFile = premier.file;
-
-  setDocumentsActivity({
-    tone: "info",
-    title: "Documents déposés",
-    message:
-      deposited.length > 1
-        ? `Analyse lancée sur « ${premier.file.name} ». Elle ne traite qu'un document à la fois.`
-        : `Analyse lancée sur « ${premier.file.name} ».`
-  });
-
-  runAnalysis({
-    triggerType: "document-upload",
-    triggerLabel: "Dépôt de document",
-    documentName: premier.file.name,
-    currentFolderId: docsViewState.currentFolderId || null,
-    documentIds: [premier.documentId],
-    summary: "Analyse déclenchée après dépôt d'un document."
-  });
-
-  renderProjectDocuments(root);
-}
 
 function handleSubmit(root) {
   if (!canSubmitUpload()) return;
