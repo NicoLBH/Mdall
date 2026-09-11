@@ -48,6 +48,7 @@ import { renderEnchainement, SENS } from "../ui/enchainement.js";
 import { renderSaisieAdresse } from "../ui/saisie-adresse.js";
 import { estLaLocalisation } from "../../services/adresse-saisie.js";
 import { ligneDeLEngagement, phraseDeLaCouverture } from "../../services/couverture.js";
+import { ORDRE_DES_RANGS, RANG, rangDeLActe, rangLePlusHaut } from "../../services/ce-qui-couvre.js";
 import { champDeLIdentifiant } from "../../services/tableau-structure.js";
 import { valeursTrouvees } from "../../services/recherche-de-valeur.js";
 
@@ -664,13 +665,39 @@ function renderTesterUneVariante(choisie, { saisie = "", echec = "", etape = ETA
  * raison que pour « À revérifier » — une alarme qui rassure apprend à ne plus la
  * regarder.
  */
+/**
+ * Ce que la variante coûterait, dit sans chiffre.
+ *
+ * Compter les examens ne dit pas ce qu'on casse : trois relectures internes et
+ * trois avis de bureau de contrôle se comptent pareil et ne se paient pas
+ * pareil. On nomme donc **le plus lourd** et combien en relèvent, et rien de
+ * plus — aucune arithmétique de poids, aucun score (règle 12).
+ */
+function ceQuiEstEnJeu(tombees = []) {
+  const haut = rangLePlusHaut(tombees.map((engagement) => rangDeLActe(engagement.acte)));
+  if (haut === RANG.RIEN || haut === RANG.INTERNE) return "";
+
+  const combien = tombees.filter(
+    (engagement) => rangDeLActe(engagement.acte) === haut
+  ).length;
+
+  return `${combien === tombees.length ? "Tous" : combien} ${
+    accorde(combien, "vient", "viennent")} d'un bureau de contrôle.`;
+}
+
 function renderCeQuiTombe(couverture = null) {
   const tombees = couverture?.tombees ?? [];
   const aRevoir = couverture?.aRevoir ?? [];
   if (!tombees.length && !aRevoir.length) return "";
 
+  // Le plus coûteux d'abord. Ce qu'on veut voir en premier n'est pas le plus
+  // récent : c'est ce qui fait le plus mal à casser — un avis de bureau de
+  // contrôle avant une relecture interne.
+  const parRang = (gauche, droite) =>
+    ORDRE_DES_RANGS.indexOf(rangDeLActe(droite.acte)) - ORDRE_DES_RANGS.indexOf(rangDeLActe(gauche.acte));
+
   const ligne = (engagement) => `
-    <li class="variante-ligne">
+    <li class="variante-ligne variante-ligne--${escapeHtml(rangDeLActe(engagement.acte))}">
       <span class="variante-ligne__sujet">${escapeHtml(ligneDeLEngagement(engagement))}</span>
       ${
         // Ce qui a été examiné, et ce que la variante en ferait. Montrer la
@@ -690,7 +717,8 @@ function renderCeQuiTombe(couverture = null) {
           <p>
             ${tombees.length
               ? `${tombees.length} ${accorde(tombees.length, "examen portait", "examens portaient")}
-                 sur ${accorde(tombees.length, "une valeur", "des valeurs")} que cette variante change.`
+                 sur ${accorde(tombees.length, "une valeur", "des valeurs")} que cette variante change.
+                 ${escapeHtml(ceQuiEstEnJeu(tombees))}`
               : ""}
             ${aRevoir.length
               ? `${aRevoir.length} ${accorde(aRevoir.length, "autre est", "autres sont")} à revérifier :
@@ -698,7 +726,7 @@ function renderCeQuiTombe(couverture = null) {
               : ""}
           </p>
           <ul class="variante-lignes">
-            ${tombees.map(ligne).join("")}${aRevoir.map(ligne).join("")}
+            ${[...tombees].sort(parRang).map(ligne).join("")}${[...aRevoir].sort(parRang).map(ligne).join("")}
           </ul>
         </section>`;
 }

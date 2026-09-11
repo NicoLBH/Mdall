@@ -53,6 +53,7 @@
 import { escapeHtml } from "../../utils/escape-html.js";
 import { svgIcon } from "../../ui/icons.js";
 import { NOEUD } from "../../services/memoire-plan.js";
+import { RANG } from "../../services/ce-qui-couvre.js";
 import {
   GENRE, avalDeLaRegle, cerveauDuProjet, chaleurDuLien, chaleurDuNoeud, dansLEnveloppe, dilaterLEnveloppe,
   dispositionDuCerveau, dispositionEclatee, dispositionEnVolume, domainesDuCerveau, enveloppeConvexe,
@@ -108,6 +109,23 @@ const ROUGE = "248,81,73";
  * qu'elle est le mécanisme qui les produit.
  */
 const REGLE = "163,113,247";
+
+/**
+ * L'anneau d'un nœud examiné, par rang.
+ *
+ * Absent pour `RANG.RIEN` — et pour `null`, qui veut dire « on n'a pas lu les
+ * actes » : dessiner tout le projet comme non examiné parce qu'on n'a pas
+ * regardé serait affirmer une absence qu'on n'a pas vérifiée (règle 5). Un
+ * anneau qui manque parce qu'on ne sait pas et un anneau qui manque parce que
+ * personne ne s'est engagé se ressemblent, mais dans les deux cas l'écran
+ * n'affirme rien.
+ */
+const ANNEAU_DU_RANG = {
+  [RANG.INTERNE]: { trait: "rgba(139,148,158,.55)", epaisseur: 1 },
+  [RANG.MAITRISE_DOEUVRE]: { trait: "rgba(88,166,255,.7)", epaisseur: 1.2 },
+  [RANG.CONTROLE_TECHNIQUE]: { trait: "rgba(63,185,80,.85)", epaisseur: 1.6 },
+  [RANG.CONTRACTUEL]: { trait: "rgba(63,185,80,1)", epaisseur: 2.2 }
+};
 
 /**
  * La couleur d'une impulsion, selon ce que l'écran est en train de dire.
@@ -1267,6 +1285,27 @@ function dessiner(ctx, etat, largeur, hauteur, temps) {
       ctx.stroke();
     }
 
+    /**
+     * Ce que quelqu'un a examiné : un anneau, jamais une couleur de nœud.
+     *
+     * Une couleur dirait ce que la valeur **est** ; l'anneau dit ce qui
+     * l'entoure — qui s'est engagé dessus. C'est la bonne métaphore : un examen
+     * n'ajoute pas un état à une valeur, il ajoute une ligne à son histoire
+     * (règle 12).
+     *
+     * Et il n'y a aucun nombre à lire : l'anneau d'un avis de bureau de contrôle
+     * est plus franc que celui d'une relecture interne, et c'est tout ce qu'un
+     * « poids » doit faire voir.
+     */
+    const anneau = ANNEAU_DU_RANG[noeud.rang];
+    if (anneau) {
+      ctx.strokeStyle = anneau.trait;
+      ctx.lineWidth = anneau.epaisseur;
+      ctx.beginPath();
+      ctx.arc(x, y, rayon + 2, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
     if (noeud.id === choisi || noeud.id === survole) {
       ctx.strokeStyle = "#f0f6fc";
       ctx.lineWidth = 1.5;
@@ -1877,14 +1916,16 @@ let ouverte = null;
  * @param {string} [options.selection] ce que la requête retient, en toutes
  *   lettres — vide quand on regarde tout
  */
-export function ouvrirLeCerveau({ assertions = [], applications = null, selection = "" } = {}) {
+export function ouvrirLeCerveau({
+  assertions = [], applications = null, selection = "", actes = null
+} = {}) {
   // Une fenêtre dont l'hôte a quitté le document est fermée, quoi qu'en dise le
   // verrou : sans cette ligne, un rendu qui balaie la page laisse le verrou posé
   // et l'écran ne se rouvre plus jamais.
   if (ouverte && !ouverte.isConnected) ouverte = null;
   if (ouverte) return;
 
-  let cerveau = cerveauDuProjet(assertions, applications, { avecLesFonctions: true });
+  let cerveau = cerveauDuProjet(assertions, applications, { avecLesFonctions: true, actes });
   if (!cerveau.noeuds.length) {
     // Deux vides, et ils ne se disent pas pareil. « Ce projet ne porte aucune
     // affirmation » était vrai tant que le cerveau recevait tout ; il montre
@@ -1993,7 +2034,9 @@ export function ouvrirLeCerveau({ assertions = [], applications = null, selectio
    * des nœuds absents, et l'onde sauterait dans le vide.
    */
   const relire = () => {
-    cerveau = cerveauDuProjet(assertions, applications, { avecLesFonctions: etat.avecLesFonctions });
+    cerveau = cerveauDuProjet(assertions, applications, {
+      avecLesFonctions: etat.avecLesFonctions, actes
+    });
     isoles = noeudsIsoles(cerveau);
     etat.poidsMax = cerveau.compte.poidsMax;
     etat.rangsDeFonctions = cerveau.rangsDeFonctions;

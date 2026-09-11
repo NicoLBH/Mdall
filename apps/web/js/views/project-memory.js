@@ -109,6 +109,7 @@ import {
   stateOf,
   verdictLabel
 } from "../services/memoire-actes.js";
+import { ceQuiCouvre, phraseDeLaCouvertureDe } from "../services/ce-qui-couvre.js";
 import { bindGhActionButtons, bindGhSelectMenus, renderGhActionButton, renderGhSelectMenu } from "./ui/gh-split-button.js";
 import { renderLightTabs, bindLightTabs } from "./ui/light-tabs.js";
 import { renderSharedDetailsTitleWrap } from "./ui/detail-header.js";
@@ -714,6 +715,7 @@ function renderAssertion(assertion) {
         </div>
         ${renderMarqueDeVariante(assertion)}
         ${renderHypothesisState(assertion)}
+        ${renderCeQuiCouvre(assertion)}
         ${renderReviewBanner(assertion)}
         ${assertion.detail ? `<span class="memory-row__detail">${escapeHtml(assertion.detail)}</span>` : ""}
         ${renderDependentsCount(assertion)}
@@ -727,6 +729,50 @@ function renderAssertion(assertion) {
         </span>
       </div>
     </li>
+  `;
+}
+
+/**
+ * Ce qui couvre cette valeur, sur sa ligne.
+ *
+ * ## Une mention, jamais un état
+ *
+ * Une valeur examinée ne change pas d'état : son histoire s'allonge, c'est tout
+ * (règle 12). D'où une **mention discrète** et non une pastille : une pastille
+ * se lit comme un statut, et un statut appelle un circuit — exactement ce que
+ * Mdall ne sera jamais.
+ *
+ * ## Et rien du tout quand rien ne couvre
+ *
+ * Pas de « non examinée » sur chaque ligne de la mémoire. L'absence de mention
+ * **est** l'absence d'examen ; le répéter partout donnerait à l'écran l'air de
+ * réclamer quelque chose à quelqu'un.
+ *
+ * ## Le rang se voit, il ne se lit pas
+ *
+ * Le rang — relu en interne, avis d'un bureau de contrôle — ne s'écrit nulle
+ * part en toutes lettres : il donne sa nuance à la mention. Ce qui se lit est ce
+ * qui a été fait, et par qui. Le survol donne la liste entière, avec ses dates.
+ */
+function renderCeQuiCouvre(assertion) {
+  if (view.acts === null) return "";
+
+  const couverture = ceQuiCouvre(assertion?.id, { actes: view.acts, nommer: nameOf });
+  if (!couverture.couverte) return "";
+
+  // Toute la liste au survol : la mention dit le dernier examen, et on veut
+  // parfois savoir s'il y en a eu d'autres, et lesquels.
+  const detail = couverture.lignes
+    .map((ligne) => [formatDate(ligne.quand), ligne.organisme || ligne.qui, ligne.quoi]
+      .filter(Boolean).join(" — "))
+    .join("\n");
+
+  return `
+    <span class="memory-couverture memory-couverture--${escapeHtml(couverture.rang)}"
+      title="${escapeHtml(detail)}">
+      ${svgIcon("check-circle", { className: "octicon" })}
+      ${escapeHtml(phraseDeLaCouvertureDe(couverture, { dater: formatDate }))}
+    </span>
   `;
 }
 
@@ -1185,7 +1231,7 @@ export function renderMemoryDetail(assertions, cible = {}) {
                         .join("")}</dl>`
                     : `<p class="memory-detail__vide">Cette affirmation ne porte ni source, ni article, ni
                        citation. Ce n'est pas qu'elle n'en a pas : personne ne les a écrits.</p>`
-                }${renderActsPanel(courante)}`
+                }${renderActsPanel(courante)}${renderCouverturePanel(courante)}`
         }
       </div>
 
@@ -1857,6 +1903,69 @@ async function declareHypothesis(root) {
       ? "Hypothèse versée. Elle remplace la valeur précédente du même sujet."
       : "Hypothèse versée.";
   renderContent(root);
+}
+
+/**
+ * Ce qui couvre cette valeur, et le seul geste qu'on pose dessus.
+ *
+ * ## Le geste le plus léger possible
+ *
+ * **« J'ai vérifié »**, et rien d'autre. Il écrit une ligne et ne demande rien à
+ * personne : aucune notification ne part, personne n'est bloqué, aucune file ne
+ * se remplit. C'est la ligne que Mdall ne franchira pas (règle 12) — il existe
+ * d'excellents outils de gestion de visas, et Mdall n'en sera jamais un.
+ *
+ * On peut ne jamais s'en servir : la valeur ne change pas d'état, seule son
+ * histoire s'allonge.
+ *
+ * ## Sur tout, et pas seulement sur les hypothèses
+ *
+ * Examiner vaut partout — une zone de neige n'est pas une hypothèse, et un
+ * bureau de contrôle porte pourtant bien un avis sur elle. Se **prononcer**,
+ * en revanche, n'a de sens que sur une hypothèse : c'est l'autre panneau.
+ *
+ * ## Ce que la liste montre
+ *
+ * Qui s'est engagé, quand, et ce qui a été dit. Le rang ne s'écrit nulle part :
+ * il donne sa nuance à la ligne. Un nombre appellerait une arithmétique qui n'a
+ * aucun sens — « poids 5 > poids 3, donc on garde ».
+ */
+function renderCouverturePanel(courante) {
+  if (view.acts === null) {
+    return `
+      <div class="memory-acts memory-acts--unknown">
+        <h3 class="memory-detail__section">Ce qui la couvre</h3>
+        <p>Les actes n'ont pas pu être lus. Ce n'est pas qu'il n'y en a aucun.</p>
+      </div>
+    `;
+  }
+
+  const couverture = ceQuiCouvre(courante?.id, { actes: view.acts, nommer: nameOf });
+
+  const ligne = (entree) => `
+    <li class="memory-acts__item memory-acts__item--${escapeHtml(entree.rang)}">
+      <b>${escapeHtml(entree.organisme || entree.qui || "quelqu'un")}</b>
+      le ${escapeHtml(formatDate(entree.quand))}
+      ${entree.quoi ? `<span class="memory-acts__note">${escapeHtml(entree.quoi)}</span>` : ""}
+    </li>
+  `;
+
+  return `
+    <div class="memory-acts">
+      <h3 class="memory-detail__section">Ce qui la couvre</h3>
+      ${
+        couverture.couverte
+          ? `<ol class="memory-acts__list">${couverture.lignes.map(ligne).join("")}</ol>`
+          : `<p class="memory-acts__empty">Personne ne l'a examinée. Ce n'est pas un manque :
+               une valeur se tient toute seule, et Mdall ne réclame rien à personne.</p>`
+      }
+      <div class="memory-acts__actions">
+        <button type="button" class="gh-btn" data-memory-couvre="${escapeHtml(courante?.id ?? "")}" ${
+          view.busy ? "disabled" : ""
+        }>J'ai vérifié</button>
+      </div>
+    </div>
+  `;
 }
 
 /**
@@ -2804,6 +2913,17 @@ function bind(root) {
     bouton.addEventListener("click", () => markAsReviewed(root, bouton.getAttribute("data-memory-reviewed")));
   }
 
+  // « J'ai vérifié » : une ligne de plus dans l'histoire de la valeur, et rien
+  // d'autre. Pas de note demandée — la demander ferait un formulaire, et un
+  // formulaire fait une procédure.
+  root.querySelector("[data-memory-couvre]")?.addEventListener("click", (event) => {
+    recordHypothesisAct(root, {
+      assertionId: event.currentTarget.getAttribute("data-memory-couvre"),
+      verdict: ACT.COUVRE,
+      note: "Vérifiée dans le projet"
+    });
+  });
+
   root.querySelector("[data-memory-validate]")?.addEventListener("click", (event) => {
     recordHypothesisAct(root, { assertionId: event.currentTarget.getAttribute("data-memory-validate"), verdict: ACT.VALIDATED });
   });
@@ -3289,6 +3409,9 @@ function brancherLeCerveau(root) {
     ouvrirLeCerveau({
       assertions: selectionMemoire(view.memoire ?? []),
       applications: view.applications,
+      // Ce qui a été examiné, et par qui. `null` quand la lecture a échoué : le
+      // cerveau distingue « personne ne s'est engagé » de « on n'a pas regardé ».
+      actes: view.acts,
       // Ce qu'on regarde, en toutes lettres. Un cerveau de douze nœuds sans
       // prévenir qu'un filtre est posé ferait croire à un projet de douze
       // affirmations, et l'on chercherait longtemps ce qui manque (règle 5).

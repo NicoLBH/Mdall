@@ -22785,3 +22785,38 @@ button.memoire-ligne__caret:hover{ background:rgba(110,118,129,.16); color:var(-
   .cerveau__tete{ flex-wrap:wrap; gap:8px 12px; }
   .cerveau__compte{ order:3; width:100%; }
 }
+
+/* Ce qui couvre une valeur, sur sa ligne de mémoire.
+
+   Une **mention**, jamais une pastille : une pastille se lit comme un statut, et
+   un statut appelle un circuit d'approbation — ce que Mdall ne sera jamais. Une
+   valeur examinée ne change pas d'état ; son histoire s'allonge, c'est tout.
+
+   Le rang ne s'écrit pas : il donne sa nuance. Plus l'engagement coûte cher à
+   casser, plus la mention se détache — c'est tout ce qu'un « poids » doit faire,
+   et il n'y a aucun nombre à lire. */
+.memory-couverture{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  margin:4px 0;
+  font-size:12px;
+  color:var(--muted);
+}
+.memory-couverture .octicon{ width:14px; height:14px; flex:0 0 14px; }
+.memory-couverture--interne{ color:var(--muted); }
+.memory-couverture--controle-technique{ color:var(--fgColor-open); font-weight:600; }
+.memory-couverture--contractuel{ color:var(--fgColor-open); font-weight:600; }
+
+/* Le rang d'un engagement que la variante fait tomber.
+
+   Ce qu'on veut voir d'abord n'est pas le plus récent : c'est ce qui fait le
+   plus mal à casser. Le rang ne s'écrit pas en toutes lettres — il se voit, et
+   la liste est triée du plus coûteux au plus léger. */
+.variante-ligne--controle-technique .variante-ligne__sujet{ font-weight:600; }
+.variante-ligne--controle-technique{ border-left:2px solid rgba(210,153,34,.55); padding-left:8px; }
+
+/* Le rang d'un examen, dans la liste de « Ce qui la couvre ». Une nuance, pas un
+   chiffre : ce qui coûte le plus cher à casser se détache, et rien ne se lit. */
+.memory-acts__item--controle-technique b{ color:var(--fgColor-open); }
+.memory-acts__item--contractuel b{ color:var(--fgColor-open); }

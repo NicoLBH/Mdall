@@ -1012,3 +1012,38 @@ test("le domaine tourne dans le disque sans changer d'étage", () => {
   };
   assert.notEqual(cap("a").toFixed(3), cap("b").toFixed(3));
 });
+
+/* ── Ce qui couvre un nœud ───────────────────────────────────────────────── */
+
+/**
+ * Un nœud examiné se dessine autrement. Ce n'est pas une décoration : devant un
+ * graphe de cent nœuds, la seule question qui compte avant de changer une valeur
+ * est « qu'est-ce que je casse ? », et un anneau y répond sans qu'on clique.
+ */
+test("un nœud porte ce qui le couvre, et le rang le plus coûteux", () => {
+  const actes = [
+    { id: "a1", assertion_id: "alt", verdict: "covers", note: "Vérifiée dans le projet",
+      created_at: "2026-02-01T09:00:00Z" },
+    { id: "a2", assertion_id: "alt", verdict: "covers", note: "SOCOTEC — Favorable",
+      created_at: "2026-03-01T09:00:00Z" },
+    { id: "a3", assertion_id: "cls", verdict: "validated", note: "SOCOTEC",
+      created_at: "2026-03-01T09:00:00Z" }
+  ];
+
+  const cerveau = cerveauDuProjet(memoire(), lectures(), { actes });
+  const noeud = (id) => cerveau.noeuds.find((entree) => entree.id === id);
+
+  assert.equal(noeud("alt").rang, "controle-technique", "le plus coûteux l'emporte");
+  assert.equal(noeud("cls").rang, "rien", "valider n'est pas examiner");
+  assert.equal(noeud("gel").rang, "rien");
+});
+
+/**
+ * Le piège que règle 5 nomme : ne pas savoir n'autorise pas à dessiner tout le
+ * projet comme non examiné. Sans actes, le nœud ne dit rien — il ne dit pas
+ * « rien ».
+ */
+test("sans les actes, un nœud ne prétend pas ne rien porter", () => {
+  const cerveau = cerveauDuProjet(memoire(), lectures());
+  assert.equal(cerveau.noeuds.find((entree) => entree.id === "alt").rang, null);
+});

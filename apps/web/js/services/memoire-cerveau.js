@@ -55,6 +55,7 @@ import { DOMAINS, domainLabel } from "./assertion-taxonomy.js";
 import { VERDICT, auditerLaMemoire } from "./memoire-audit.js";
 import { cleDuSujet } from "./memoire-identifiants.js";
 import { zonesLisibles } from "./memoire-blame.js";
+import { RANG, couvertureDuProjet } from "./ce-qui-couvre.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -287,7 +288,9 @@ export function pasDuRaisonnement(enVigueur = [], applications = null) {
   return stratesDuGraphe(ids, liens, { cout: (id) => (regles.has(id) ? 1 : 0) }).profondeur;
 }
 
-export function cerveauDuProjet(assertions = [], applications = null, { avecLesFonctions = false } = {}) {
+export function cerveauDuProjet(
+  assertions = [], applications = null, { avecLesFonctions = false, actes = null } = {}
+) {
   const enVigueur = currentAssertions(Array.isArray(assertions) ? assertions : []);
 
   const valeurs = enVigueur.filter((assertion) => !estUneRegle(assertion)).filter((a) => texte(a?.id));
@@ -337,6 +340,10 @@ export function cerveauDuProjet(assertions = [], applications = null, { avecLesF
     if (degres.has(lien.vers)) degres.get(lien.vers).entrant += lien.poids;
   }
 
+  // Ce qui couvre chaque valeur, en une passe : un appel par nœud parcourrait
+  // tous les actes autant de fois qu'il y a de nœuds.
+  const couvertures = Array.isArray(actes) ? couvertureDuProjet({ actes }) : null;
+
   const noeuds = dessines.map((assertion) => {
     const id = texte(assertion.id);
     const fonction = estUneRegle(assertion);
@@ -370,6 +377,14 @@ export function cerveauDuProjet(assertions = [], applications = null, { avecLesF
        * lui-même. C'est ce que l'écran fait graviter autour de lui.
        */
       famille: fonction ? null : (familles.get(cleDuSujet(texte(assertion?.payload?.subject))) ?? null),
+      /**
+       * Ce qui couvre ce nœud, et ce que ça coûterait de le casser.
+       *
+       * `null` quand les actes n'ont pas été donnés — **pas** « rien » : ne pas
+       * savoir n'autorise pas à dessiner tout le projet comme non examiné
+       * (règle 5). L'écran distingue les deux.
+       */
+      rang: couvertures ? (couvertures.get(id)?.rang ?? RANG.RIEN) : null,
       titre: titreDeLAffirmation(assertion),
       sujet: texte(assertion?.payload?.subject) || titreDeLAffirmation(assertion),
       valeur: texte(assertion?.payload?.value),

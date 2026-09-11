@@ -166,7 +166,7 @@ export function liaisonDeLAvis({ avis = null, assertions = [] } = {}) {
  * « éventuel ». La frontière se vérifie donc des deux côtés : ce qui précède et
  * ce qui suit doit être autre chose qu'une lettre ou un chiffre.
  */
-function nommeEntierement(intitule, nom) {
+export function nommeEntierement(intitule, nom) {
   if (!nom) return false;
 
   let depuis = 0;
