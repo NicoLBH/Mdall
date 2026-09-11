@@ -2,6 +2,7 @@ import { renderProblemsCountsIconHtml } from "../ui/subissues-counts.js";
 import { getDisplayAuthorName } from "../ui/author-identity.js";
 import { findCollaboratorByAssigneeId, normalizeAssigneeIds } from "../../services/subject-assignees-service.js";
 import { normalizePaginationState, paginateItems, renderPaginationControls } from "../ui/pagination.js";
+import { videDeLaListeDesSujets } from "../../services/liste-vide-des-sujets.js";
 export function getSituationsTableGridTemplate() {
   return "minmax(0, 1fr) 84px max-content";
 }
@@ -295,6 +296,20 @@ export function renderProjectSubjectsTable({ filteredSituations, deps }) {
 
   const rows = flatSubjects.map((sujet) => renderFlatSujetRow(sujet, "", { isSelectable: false, deps }));
 
+  // **Pourquoi c'est vide.** « Aucun résultat pour les filtres actuels » ne dit
+  // pas lequel des filtres a vidé la liste, ni s'il y avait quelque chose à
+  // vider : on clique « Fermés », rien n'apparaît, et l'on conclut au défaut
+  // alors que le projet n'a peut-être fermé aucun sujet. La phrase nomme le
+  // filtre en cause et **combien il y en a de l'autre côté**.
+  const dit = videDeLaListeDesSujets({
+    statut: activeStatusFilter,
+    priorite: activePriorityFilter,
+    recherche: store?.projectSubjectsView?.search ?? store?.situationsView?.search ?? "",
+    comptes: typeof deps.getSubjectsStatusCounts === "function" ? deps.getSubjectsStatusCounts("") : {},
+    paginee: !!pagination?.enabled
+  });
+  const vide = { emptyTitle: dit.titre, emptyDescription: dit.explication };
+
   if (!rows.length) {
     return renderIssuesTable({
       gridTemplate: getSituationsTableGridTemplate(),
@@ -306,10 +321,7 @@ export function renderProjectSubjectsTable({ filteredSituations, deps }) {
           { className: "cell cell-assignees-head", html: "Assignés" }
         ]
       }),
-      emptyTitle: "Aucun résultat",
-      emptyDescription: pagination?.enabled
-        ? "Aucun résultat pour cette page avec les filtres actuels."
-        : "Aucun résultat pour les filtres actuels."
+      ...vide
     });
   }
 
@@ -324,10 +336,7 @@ export function renderProjectSubjectsTable({ filteredSituations, deps }) {
       ]
     }),
     rowsHtml: rows.join(""),
-    emptyTitle: "Aucun résultat",
-    emptyDescription: pagination?.enabled
-      ? "Aucun résultat pour cette page avec les filtres actuels."
-      : "Aucun résultat pour les filtres actuels."
+    ...vide
   });
   const paginationHtml = renderPaginationControls(pagination, { entity: "subjects" });
   return `${tableHtml}${paginationHtml}`;
