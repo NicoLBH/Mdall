@@ -1,3 +1,4 @@
+import { normaliserLeTri, trierLesSujets } from "../../services/tri-des-sujets.js";
 import {
   getChildrenBySubjectIdMapFromRawResult,
   getParentBySubjectIdMapFromRawResult,
@@ -332,6 +333,17 @@ export function createProjectSubjectsSelectors({
     return value === "closed" ? "closed" : "open";
   }
 
+  /**
+   * L'ordre demandé pour le tableau.
+   *
+   * Il n'a **qu'une case**, et volontairement : le filtre d'à côté a coûté
+   * quatre tours pour avoir vécu dans quatre (règle 4). L'ancien état des
+   * Situations n'en porte pas de copie, et n'en portera pas.
+   */
+  function getCurrentSubjectsSort() {
+    return normaliserLeTri(store?.projectSubjectsView?.subjectsSort);
+  }
+
   /** Même règle : l'original d'abord, la copie à défaut. */
   function getCurrentSubjectsPriorityFilter() {
     const v = getViewState();
@@ -428,17 +440,26 @@ export function createProjectSubjectsSelectors({
     return getStandaloneCustomSubjects().filter((sujet) => subjectMatchesFilters(sujet, query));
   }
 
+  /**
+   * Les sujets filtrés, **et rangés**.
+   *
+   * Le tri se pose ici et nulle part ailleurs : le tableau, la pagination, les
+   * compteurs et le diagnostic lisent tous cette liste. Trier dans le rendu
+   * ferait afficher un ordre que la pagination ne connaîtrait pas, et la page 2
+   * ne montrerait pas ce qui suit la page 1.
+   */
   function getFilteredFlatSubjects() {
     const query = String(getViewState().search || "").trim().toLowerCase();
     const activeStatusFilter = getCurrentSubjectsStatusFilter();
     const activePriorityFilter = getCurrentSubjectsPriorityFilter();
     const flatSubjects = getFlatSubjects();
-    return flatSubjects.filter((subject) => {
+    const retenus = flatSubjects.filter((subject) => {
       if (!subjectMatchesFilters(subject, query)) return false;
       if (!sujetMatchesStatusFilter(subject, activeStatusFilter)) return false;
       if (!sujetMatchesPriorityFilter(subject, activePriorityFilter)) return false;
       return true;
     });
+    return trierLesSujets(retenus, getCurrentSubjectsSort());
   }
 
   function getPaginatedFilteredFlatSubjects() {
@@ -506,6 +527,7 @@ export function createProjectSubjectsSelectors({
     getSubjectsDataSourceInfo,
     getCurrentSubjectsStatusFilter,
     getCurrentSubjectsPriorityFilter,
+    getCurrentSubjectsSort,
     sujetMatchesPriorityFilter,
     getAvailableSubjectPriorities,
     sujetMatchesStatusFilter,

@@ -36,6 +36,17 @@ test("le relevé porte les longueurs à chaque étape", () => {
  * réellement ? Si la liste est vide alors qu'ils sont là, le défaut est dans le
  * rendu ; s'ils n'y sont pas, il est dans la lecture du statut.
  */
+/**
+ * L'ordre fait partie de l'état de la liste. Une liste rangée par dernière
+ * activité ne montre pas les mêmes lignes en page 1 qu'une liste dans l'ordre du
+ * projet — et si le relevé n'en dit rien, deux captures d'écran du même écran
+ * paraissent se contredire.
+ */
+test("le relevé dit dans quel ordre la liste est rangée", () => {
+  assert.match(diagnosticDeLaListeDesSujets({ tri: "derniere-activite" }), /tri\s+: derniere-activite/);
+  assert.match(diagnosticDeLaListeDesSujets({}), /tri\s+: ordre du projet/);
+});
+
 test("il dit ce que portent les sujets comptés fermés", () => {
   const dit = diagnosticDeLaListeDesSujets(etat());
 
