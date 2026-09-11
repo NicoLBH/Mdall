@@ -1,5 +1,8 @@
 import { getDisplayAuthorName, getAuthorIdentity } from "../ui/author-identity.js";
-import { renderBoutonDeTri } from "../ui/tete-de-tableau.js";
+import { quandOnClique, renderBoutonDeTri } from "../ui/tete-de-tableau.js";
+import {
+  EPINGLES_AU_PLUS, estEpingle, motDeLEpingle, sujetsEpingles
+} from "../../services/epingles-des-sujets.js";
 import { TRI, motDuTri } from "../../services/tri-des-sujets.js";
 import { renderProblemsCountsIconHtml } from "../ui/subissues-counts.js";
 import { formatObjectiveDueDateLabel } from "./project-subject-milestones.js";
@@ -96,6 +99,7 @@ export function createProjectSubjectsView(deps) {
     getFilteredSituations,
     getVisibleCounts,
     renderProjectSubjectsTable,
+    renderSujetsEpinglesHtml,
     wireDetailsInteractive,
     bindDetailsScroll,
     refreshProjectShellChrome,
@@ -307,6 +311,113 @@ function renderSubjectsAssigneesHeadHtml() {
     actif: tri === TRI.DERNIERE_ACTIVITE,
     titre: motDuTri(tri)
   })}<span class="cell-assignees-head__label">Assignés</span>`;
+}
+
+/* ── Les sujets qu'on garde sous les yeux ─────────────────────────────────── */
+
+/**
+ * Les épingles de qui regarde, sur ce projet.
+ *
+ * `null` veut dire « pas encore lues », `[]` « aucune ». Les confondre ferait
+ * dessiner un bouton « Épingler » avant de savoir, qui se contredirait une
+ * seconde plus tard (règle 5).
+ *
+ * **On ne marque lu que ce qui a répondu** : marquer avant l'appel
+ * transformerait le moindre hoquet de réseau en bandeau disparu jusqu'au
+ * prochain rechargement.
+ */
+let epinglesDuProjet = { projectId: "", lues: null };
+let epinglesEnCours = false;
+
+function getEpinglesDuProjet() {
+  const projet = String(store.currentProjectId || "").trim();
+  return epinglesDuProjet.projectId === projet ? epinglesDuProjet.lues : null;
+}
+
+function assurerLesEpingles() {
+  const projet = String(store.currentProjectId || "").trim();
+  if (!projet || epinglesEnCours) return;
+  if (epinglesDuProjet.projectId === projet && epinglesDuProjet.lues !== null) return;
+
+  epinglesEnCours = true;
+  (async () => {
+    try {
+      const [{ listerLesEpingles }, { resolveCurrentBackendProjectId }] = await Promise.all([
+        import("../../services/sujets-epingles-supabase.js"),
+        import("../../services/project-supabase-sync.js")
+      ]);
+
+      // **Deux identifiants, et il faut le bon.** La route porte celui du
+      // frontal, la base classe tout par un UUID. Passer le premier rendrait
+      // une liste vide qui ressemble à « aucune épingle ».
+      const backendProjectId = await resolveCurrentBackendProjectId();
+      if (!backendProjectId) return;
+
+      const lues = await listerLesEpingles(backendProjectId);
+      if (lues === null) return;
+
+      epinglesDuProjet = { projectId: projet, lues };
+      rerenderPanels();
+    } catch {
+      // Rien n'est retenu : la prochaine ouverture réessaiera.
+    } finally {
+      epinglesEnCours = false;
+    }
+  })();
+}
+
+/** Poser ou retirer une épingle, puis redessiner. */
+async function basculerLEpingle(subjectId) {
+  const cle = String(subjectId || "").trim();
+  const projet = String(store.currentProjectId || "").trim();
+  const epingles = getEpinglesDuProjet();
+  if (!cle || !projet || epingles === null) return;
+
+  const { epinglerLeSujet, retirerLEpingle } = await import("../../services/sujets-epingles-supabase.js");
+  const { resolveCurrentBackendProjectId } = await import("../../services/project-supabase-sync.js");
+
+  if (estEpingle(cle, epingles)) {
+    if (!(await retirerLEpingle({ subjectId: cle }))) return;
+    epinglesDuProjet = { projectId: projet, lues: epingles.filter((epingle) => epingle.subjectId !== cle) };
+  } else {
+    // Le nombre maximum se vérifie **avant** l'appel, par le service qui dessine
+    // aussi le bouton : le redire ici en ferait une règle à deux endroits.
+    if (epingles.length >= EPINGLES_AU_PLUS) return;
+    const backendProjectId = await resolveCurrentBackendProjectId();
+    const posee = await epinglerLeSujet({ projectId: backendProjectId, subjectId: cle });
+    if (!posee) return;
+    epinglesDuProjet = { projectId: projet, lues: [...epingles, posee] };
+  }
+
+  rerenderPanels();
+}
+
+/**
+ * Là où l'épingle a le droit d'exister.
+ *
+ * Le nom de cette classe est écrit deux fois — ici et dans le bouton, quelques
+ * centaines de lignes plus bas — et c'est déjà une fois de trop : on le pose
+ * donc à un seul endroit, que les deux lisent (règle 10).
+ */
+const CLASSE_DE_L_EPINGLE = "subject-meta-field--epingle";
+const ZONE_DE_L_EPINGLE = `.${CLASSE_DE_L_EPINGLE}`;
+
+/**
+ * L'épingle écoute **comme les boutons de la tête du tableau**, et pour la même
+ * raison.
+ *
+ * Le panneau de droite est redessiné en entier à chaque changement. Une écoute
+ * posée sur le bouton, ou sur une racine que le rendu remplace, se perd au
+ * premier redessin — et pire : ce qu'on presse disparaît sous le doigt, donc le
+ * `click` n'est jamais produit et le bouton paraît sourd alors qu'il n'a rien
+ * eu à entendre. C'est exactement ce qui a coûté six tours sur « Ouverts /
+ * Fermés ».
+ *
+ * L'écoute unique du document entend l'appui autant que le clic, ne dépend
+ * d'aucune racine, et ne laisse échouer aucun geste en silence.
+ */
+function ecouterLEpingle() {
+  quandOnClique("subject-pin", (subjectId) => basculerLEpingle(subjectId), { zone: ZONE_DE_L_EPINGLE });
 }
 
 function renderSubjectsStatusHeadHtml() {
@@ -2360,6 +2471,47 @@ function renderSubjectMetaControls(subject) {
         scopeHost: "main",
         instance: "detail-aside"
       })}
+      ${renderBoutonEpingler(subjectId)}
+    </div>
+  `;
+}
+
+/**
+ * Épingler ce sujet, ou le retirer des épinglés.
+ *
+ * **Il vit dans le panneau de droite**, avec les assignés, les labels et les
+ * objectifs : ce sont les choses qu'on décide *à propos* du sujet, par
+ * opposition à ce qu'on écrit *dans* le sujet. Une épingle est de celles-là —
+ * elle ne dit rien du sujet, elle dit qu'on le garde sous les yeux.
+ *
+ * Le bouton annonce **ce que le clic va faire**, et quand il ne peut rien
+ * faire, il dit pourquoi : trois épingles sont posées, il faut en retirer une.
+ * Se griser sans un mot ferait chercher la cause dans les droits ou dans le
+ * statut du sujet (règle 5).
+ */
+function renderBoutonEpingler(subjectId) {
+  const cle = String(subjectId || "").trim();
+  if (!cle) return "";
+
+  const epingles = getEpinglesDuProjet();
+  // On n'a pas encore lu les épingles : un bouton qui annoncerait « épingler »
+  // avant de savoir se contredirait une seconde plus tard.
+  if (epingles === null) return "";
+
+  const mot = motDeLEpingle(cle, epingles);
+  const pose = estEpingle(cle, epingles);
+
+  return `
+    <div class="subject-meta-field ${CLASSE_DE_L_EPINGLE}">
+      <button type="button"
+        class="subject-meta-field__label subject-epingle${pose ? " is-active" : ""}"
+        data-subject-pin="${escapeHtml(cle)}"
+        ${mot.possible ? "" : "disabled"}
+        title="${escapeHtml(mot.titre)}" aria-label="${escapeHtml(mot.titre)}"
+        aria-pressed="${pose ? "true" : "false"}">
+        ${svgIcon(pose ? "unpin" : "pin", { className: "octicon" })}
+        <span>${pose ? "Retirer des épinglés" : "Épingler"}</span>
+      </button>
     </div>
   `;
 }
@@ -2891,10 +3043,20 @@ function rerenderPanels() {
       panelHost.innerHTML = `<div id="objectivesTableHost" class="project-table-host">${getProjectSubjectMilestones().renderObjectivesTableHtml()}</div>`;
       syncSituationsPrimaryScrollSource();
     } else if (store.situationsView.showTableOnly) {
-      panelHost.innerHTML = `<div id="situationsTableHost" class="project-table-host">${renderProjectSubjectsTable({
-        filteredSituations,
-        deps: getSubjectsTableDeps()
-      })}</div>`;
+      // Les épingles se demandent dès qu'on regarde la liste, et elles arrivent
+      // après : le bandeau se dessine alors, au-dessus du tableau.
+      assurerLesEpingles();
+      const tableDeps = getSubjectsTableDeps();
+      panelHost.innerHTML = `
+        ${renderSujetsEpinglesHtml({
+          sujets: sujetsEpingles(getFlatSubjects(), getEpinglesDuProjet() ?? []),
+          deps: tableDeps
+        })}
+        <div id="situationsTableHost" class="project-table-host">${renderProjectSubjectsTable({
+          filteredSituations,
+          deps: tableDeps
+        })}</div>
+      `;
       syncSituationsPrimaryScrollSource();
     } else {
       const details = getProjectSubjectDetail().renderDetailsHtml(null, {
@@ -3856,6 +4018,8 @@ function getObjectiveById(objectiveId) {
   return getObjectives().find((objective) => String(objective?.id || "") === normalizedObjectiveId) || null;
 }
 
+
+  ecouterLEpingle();
 
   return {
     dropdownController: subjectSelectDropdown,

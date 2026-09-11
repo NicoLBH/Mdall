@@ -130,6 +130,53 @@ test("sans rien de cliquable, la décision reste muette", () => {
   assert.equal(gesteDeLaTete({}, { attributs: ["x"] }).geste, GESTE.RIEN);
 });
 
+/* ── Un bouton qui n'est pas dans la tête du tableau ─────────────────────── */
+
+const DANS_LE_PANNEAU = [{ attributs: { classe: "subject-meta-field--epingle" } }];
+
+/**
+ * L'épingle vit dans le panneau de droite, pas dans la tête. Elle a pourtant
+ * besoin de la même écoute, et pour la même raison : le panneau est redessiné
+ * en entier, donc ce qu'on presse disparaît sous le doigt.
+ *
+ * Elle nomme donc sa zone. Ouvrir l'écoute à toute la page à la place ferait de
+ * ce fichier l'écoute de tout.
+ */
+test("un bouton peut déclarer sa propre zone", () => {
+  const geste = gesteDeLaTete(
+    noeud({ "data-subject-pin": "s-1" }, DANS_LE_PANNEAU),
+    { attributs: [{ attribut: "subject-pin", zone: ".subject-meta-field--epingle" }] }
+  );
+
+  assert.equal(geste.geste, GESTE.BOUTON);
+  assert.equal(geste.attribut, "subject-pin");
+  assert.equal(geste.valeur, "s-1");
+});
+
+/**
+ * **La zone n'est pas décorative.** Le même attribut posé ailleurs par mégarde
+ * — un gabarit recopié, un sujet listé dans un autre écran — ne doit pas
+ * déclencher le geste d'un panneau qui n'est pas là.
+ */
+test("hors de sa zone, un bouton déclaré ne déclenche rien", () => {
+  const geste = gesteDeLaTete(
+    noeud({ "data-subject-pin": "s-1" }, DANS_UNE_TETE),
+    { attributs: [{ attribut: "subject-pin", zone: ".subject-meta-field--epingle" }] }
+  );
+
+  assert.equal(geste.geste, GESTE.RIEN);
+});
+
+/** Un simple nom veut toujours dire « dans la tête du tableau ». */
+test("un nom seul garde la tête du tableau pour zone", () => {
+  assert.equal(
+    gesteDeLaTete(noeud({ "data-subjects-sort": "projet" }, DANS_LE_PANNEAU), {
+      attributs: ["subjects-sort"]
+    }).geste,
+    GESTE.RIEN
+  );
+});
+
 /* ── Le bouton de tri ────────────────────────────────────────────────────── */
 
 test("le bouton de tri porte son attribut, son état et ce qu'il va faire", () => {
@@ -181,6 +228,7 @@ test("l'écran des sujets n'écoute plus sa tête depuis une racine", async () =
   );
   assert.match(evenements, /quandOnClique\("subjects-status-filter"/);
   assert.match(evenements, /quandOnClique\("subjects-sort"/);
+  assert.match(vue, /quandOnClique\("subject-pin"/);
 
   assert.doesNotMatch(
     vue,

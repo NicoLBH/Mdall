@@ -22,11 +22,30 @@ const stateSource = fs.readFileSync(statePath, "utf8");
 const stylePath = path.resolve(__dirname, "../../../style.css");
 const styleSource = fs.readFileSync(stylePath, "utf8");
 
-test("le header normal de détail sujet expose le bouton Nouveau sujet au même niveau que Modifier", () => {
-  assert.match(detailsRendererSource, /<div class="subject-title-display__actions">[\s\S]*data-action="edit-subject-title"[\s\S]*data-action="open-create-subject-from-detail"/);
+/**
+ * **Le crayon suit le titre ; « Nouveau sujet » reste dans les actions.**
+ *
+ * Le bouton gris « Modifier » vivait à l'autre bout de la barre, à côté de
+ * « Nouveau sujet » : deux boutons de même allure pour deux portées très
+ * différentes — l'un corrige trois mots, l'autre ouvre un sujet. Une icône
+ * collée au titre dit ce qu'elle touche, et c'est déjà le geste de la
+ * description un cran plus bas.
+ */
+test("le crayon du titre suit le titre, le bouton Nouveau sujet reste dans les actions", () => {
+  assert.match(
+    detailsRendererSource,
+    /details-title-inline-ref[\s\S]*data-action="edit-subject-title"[\s\S]*<div class="subject-title-display__spacer"/,
+    "le crayon n'est plus sur la ligne du titre"
+  );
+  assert.match(
+    detailsRendererSource,
+    /<div class="subject-title-display__actions">[\s\S]*data-action="open-create-subject-from-detail"/
+  );
   assert.match(detailsRendererSource, /subject-title-display__edit-action/);
+  assert.match(detailsRendererSource, /svgIcon\("pencil"\)/);
+  // Plus de bouton gris : c'est ce qu'on vient de retirer.
+  assert.doesNotMatch(detailsRendererSource, /gh-btn--sm subject-title-edit__action subject-title-display__edit-action/);
   assert.match(detailsRendererSource, /class="gh-btn gh-action__main gh-btn--primary gh-btn--md subject-title-display__create-from-detail-action"/);
-  assert.match(styleSource, /\.subject-title-display__edit-action\{height:32px;\}/);
   assert.match(styleSource, /\.subject-title-display__create-from-detail-action\{margin-left:8px;\}/);
   assert.match(detailControllerSource, /showCreateFromDetailAction: true/);
 });

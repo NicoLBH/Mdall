@@ -597,23 +597,35 @@ function renderTitreEnEdition(proposition) {
 }
 
 /**
- * Le bouton « Modifier », gris, à gauche de l'état de fusion.
+ * Le crayon qui corrige le titre, à la suite du titre et de son numéro.
+ *
+ * **Il a remplacé un bouton gris posé à l'autre bout de la barre**, qui se
+ * lisait comme une action sur l'écran alors qu'il n'agit que sur le titre. Une
+ * icône collée au titre dit ce qu'elle touche, et c'est déjà le geste de la
+ * description un cran plus bas — un seul à apprendre, comme sur un sujet.
  *
  * Il n'apparaît que sur une proposition ouverte : une fois fusionnée ou fermée,
  * son titre est celui sous lequel les décisions ont été prises. Le refus se
- * voit par l'absence du bouton, pas par un message — il n'y a rien à expliquer
+ * voit par l'absence du crayon, pas par un message — il n'y a rien à expliquer
  * à quelqu'un qui ne demande rien.
  */
-function renderBoutonModifier(proposition) {
+function renderCrayonDuTitre(proposition) {
   if (!modifiable(proposition) || view.edition.quoi !== QUOI.RIEN) return "";
 
-  return `<button type="button" class="gh-btn gh-btn--sm" data-proposition-titre-modifier>Modifier</button>`;
+  return `
+    <button class="icon-btn icon-btn--sm gh-comment-edit-btn details-title__edit-action" type="button"
+      data-proposition-titre-modifier
+      aria-label="Modifier le titre" title="Modifier le titre">${svgIcon("pencil")}</button>
+  `;
 }
 
 function renderReviewHead(proposition, review) {
   const titreLu = renderSharedDetailsTitleWrap(proposition, {
     emptyText: "Aucune proposition",
     buildTitleTextHtml: (entry) => `<span class="details-title-text">${escapeHtml(entry.title)}</span>`,
+    // Le crayon se pose après le titre **et son numéro** : c'est là que se lit
+    // l'identité de la proposition, et c'est elle qu'il corrige.
+    buildTrailingHtml: (entry) => renderCrayonDuTitre(entry),
     buildIdHtml: (entry) => `#${Number(entry.number) || "?"}`,
     buildExpandedBottomHtml: (entry) => `${statePill(entry)}${propositionMetaHtml(entry)}`,
     buildCompactConfig: (entry, { titleTextHtml, idHtml }) => ({
@@ -649,7 +661,6 @@ function renderReviewHead(proposition, review) {
     // précis où l'on en a besoin, c'est-à-dire en cours de lecture.
     titleLeadHtml: view.tab === "changes" ? renderDiffReplieBouton() : "",
     actionsHtml: `${view.tab === "changes" ? renderDiffCommentBouton() : ""}${
-      renderBoutonModifier(proposition)}${
       renderMergeStateButton(proposition, review)}${renderExportButton()}`
   });
 }
