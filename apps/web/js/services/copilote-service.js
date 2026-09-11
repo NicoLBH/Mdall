@@ -44,6 +44,7 @@
 import { store } from "../store.js";
 import { buildAssistContext } from "./copilote-context.js";
 import { executerUtilitaire } from "./utilitaires-service.js";
+import { executerLaVariante } from "./copilote-variante.js";
 import { conversationTitle } from "./copilote-conversations.js";
 import { buildSupabaseAuthHeaders, getSupabaseUrl } from "../../assets/js/auth.js";
 import { resolveCurrentBackendProjectId } from "./project-supabase-sync.js";
@@ -263,6 +264,30 @@ export async function sendAssistMessage(message, {
     await souffler();
 
     for (const appel of appels) {
+      // **Où il s'exécute**, c'est le serveur qui le dit. Un seul outil tourne
+      // ici — le moteur de variante, qui est déjà dans la page puisque c'est
+      // l'écran « Tester une variante ». Le porter au serveur en ferait une
+      // seconde implémentation du même raisonnement (règle 4), et le router sur
+      // son nom reviendrait à apprendre au navigateur quels outils existent.
+      if (appel?.ou === "navigateur") {
+        const { resultat, pourLeModele } = await executerLaVariante({
+          entrees: safeJsonParse(appel?.arguments) ?? {},
+          assertions,
+          projectId,
+          onEtape: (dit) => etape(onEtape, dit?.texte, dit?.detail)
+        });
+
+        executions.push(resultat);
+        if (typeof onToolRun === "function") onToolRun(resultat);
+        echanges.push({
+          call_id: appel?.call_id,
+          name: appel?.name,
+          arguments: appel?.arguments,
+          output: JSON.stringify(pourLeModele)
+        });
+        continue;
+      }
+
       // L'utilitaire s'exécute **au serveur** : le catalogue, les garde-fous et
       // l'enchaînement y sont, et le navigateur n'en connaît que la réponse.
       const { resultat, pourLeModele } = await executerUtilitaire({

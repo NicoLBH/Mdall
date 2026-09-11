@@ -61,6 +61,9 @@ import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { requireUser } from "../_shared/require-user.ts";
 import { declarationsPourModele } from "../_shared/utilitaires/catalogue.js";
+import {
+  DECLARATION_VARIANTE, CONSIGNES_VARIANTE, OUTILS_DU_NAVIGATEUR
+} from "../_shared/utilitaires/variante-outil.js";
 
 type ToolDeclaration = {
   type?: string;
@@ -182,7 +185,8 @@ function systemPrompt(memoryWasRead: boolean, tronque: boolean) {
     "",
     "Tes connaissances générales du bâtiment servent à expliquer et à raisonner, jamais à fournir une valeur que ce projet n'a pas tranchée.",
     "",
-    "Assume tes limites. Ne cherche pas à répondre à tout prix : « je ne sais pas », « la mémoire ne le dit pas », « il me faut cette valeur » sont des réponses professionnelles. Une réponse fabriquée pour ne pas rester sans réponse coûte la confiance de tous ceux qui liront les suivantes."
+    "Assume tes limites. Ne cherche pas à répondre à tout prix : « je ne sais pas », « la mémoire ne le dit pas », « il me faut cette valeur » sont des réponses professionnelles. Une réponse fabriquée pour ne pas rester sans réponse coûte la confiance de tous ceux qui liront les suivantes.",
+    CONSIGNES_VARIANTE
   ];
 
   if (!memoryWasRead) {
@@ -241,7 +245,12 @@ function extractToolCalls(payload: unknown) {
     .map((item) => ({
       call_id: texte(item.call_id),
       name: texte(item.name),
-      arguments: texte(item.arguments) || "{}"
+      arguments: texte(item.arguments) || "{}",
+      // **Où l'appel s'exécute**, dit ici et pas deviné là-bas. Un seul outil
+      // s'exécute au navigateur — le moteur de variante, qui y est déjà —, et
+      // c'est le serveur qui le sait : le navigateur n'a pas à connaître le nom
+      // des outils pour router, ce qui reviendrait à lui en apprendre un.
+      ou: OUTILS_DU_NAVIGATEUR.includes(texte(item.name)) ? "navigateur" : "serveur"
     }))
     .filter((appel) => appel.call_id && appel.name);
 }
@@ -359,7 +368,13 @@ serve(async (req) => {
   // décident quand un utilitaire est appelé : les laisser descendre dans la
   // page revenait à publier la méthode tout en protégeant l'arithmétique.
   // Le navigateur ne les envoie plus, et ne les recevrait pas non plus.
-  const outils = declarationsPourModele()
+  //
+  // « Tester une variante » s'y ajoute, et **en tête** : c'est le seul outil dont
+  // la réponse porte sur le projet entier, et une coupe au budget ne doit pas le
+  // faire disparaître avant les calculs de détail. Il s'exécute au navigateur —
+  // le moteur y est déjà, c'est l'écran « Tester une variante » — et ce qui
+  // reste ici est ce qui compte : la décision de l'appeler.
+  const outils = [DECLARATION_VARIANTE, ...declarationsPourModele()]
     .slice(0, MAX_TOOLS)
     .filter((outil) => texte(outil?.name) && outil?.parameters);
 

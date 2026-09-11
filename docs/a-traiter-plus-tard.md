@@ -2510,3 +2510,71 @@ argileuse (règle 5).
    au serveur, seule l'entrée `georisques` du registre change.
 3. **L'altitude ne suit toujours pas la commune**, comme au
    [§ 30](#30-quatre-colonnes-qui-varient-une-seule-quon-gardait).
+
+## 32. La variante devient un geste qu'on demande
+
+« Tester une variante » était un **écran** : on cherchait une valeur dans une
+liste, on tapait la nouvelle, on cliquait. Tout le raisonnement était là — ce qui
+dépend, ce qu'il faut rejouer, ce qui bouge et ce qui casse — et il fallait
+savoir où cliquer pour l'atteindre.
+
+Il devient un outil du copilote. « Quelles conséquences si je change l'adresse
+pour avenue de l'Aiguille à Chamonix ? » se répond maintenant par des chiffres
+calculés : la commune est résolue, les six colonnes de la localisation sont
+remplacées, les zonages, la cote hors gel, la zone de sismicité, le spectre et
+les fondations se rejouent, et le modèle raconte ce qui a bougé.
+
+### Le même moteur, jamais un second
+
+`rejouerLesUtilitaires` puis `consequencesDeLaVariante` : la suite exacte que
+l'écran exécute, dans le même ordre, avec les mêmes services. Ce qui est neuf
+n'est pas le calcul, c'est **la façon de le demander** — deux mots au lieu d'un
+parcours d'écran :
+
+| ce que fait `services/variante-demandee.js` | pourquoi c'était nécessaire |
+| --- | --- |
+| trouve dans la mémoire ce que « l'adresse du projet » désigne | le modèle parle en français, pas en identifiants d'affirmation |
+| résout l'adresse avant de la substituer | « avenue de l'Aiguille » n'est pas une localisation tant qu'un service d'adresses n'en a pas fait un code INSEE |
+| refuse quand deux valeurs se valent | choisir la première ferait varier l'altitude quand on parlait du sol |
+| résume ce qui bouge | le rendu entier porte les lignes de mémoire complètes : vingt fois trop pour une réponse écrite |
+
+### Où il s'exécute, et pourquoi ce n'est pas au serveur
+
+C'est **la seule exception** à « les utilitaires s'exécutent au serveur », et elle
+se défend en une phrase : le moteur de variante *est déjà* dans la page — c'est
+l'écran que n'importe qui ouvre depuis l'Atelier. Le porter au serveur en ferait
+une seconde implémentation du même raisonnement, et deux réponses à une même
+question finissent par diverger (règle 4).
+
+Ce qui reste au serveur est ce qui devait y rester : **la déclaration** de
+l'outil et les consignes qui règlent quand le modèle l'appelle. Le navigateur
+n'apprend même pas son nom — le serveur marque l'appel `ou: "navigateur"`, et la
+boucle route dessus. Le garde-fou de `scripts/prepare-utilitaires.mjs` continue
+de refuser que `variante-outil.js` descende dans la page.
+
+### Une recherche qui lit une phrase
+
+Elle comparait la requête **d'un bloc** : « adresse » répondait, « l'adresse du
+projet » ne répondait rien. Tolérable dans un champ de recherche où l'on tape un
+mot ; impossible quand la demande arrive en français. Les articles sont
+maintenant retirés et chaque mot est essayé, le meilleur l'emporte — ce qui
+corrige au passage la recherche de l'écran, où « la localisation » ne trouvait
+rien non plus.
+
+Et l'ambiguïté ne se déclare plus qu'entre **égaux** : chercher « altitude »
+ramenait « Altitude du site », qui s'appelle ainsi, et « longitude », dont la
+description mentionne l'altitude. Les mettre sur le même plan faisait demander de
+choisir entre les deux.
+
+### Ce qui reste
+
+1. **La conversation ne garde pas la variante.** Le résumé part au modèle, le
+   rendu complet reste dans l'exécution — mais rien ne permet encore d'ouvrir
+   depuis la conversation la variante que le copilote vient de calculer, ni de
+   la porter dans l'écran. C'est le lien qui manque entre les deux.
+2. **Une seule variante à la fois.** Le modèle ne peut faire varier qu'une
+   valeur par appel. « Et si on déplaçait le projet *et* qu'on montait d'un
+   étage ? » demande deux appels, et leurs conséquences ne se composent pas.
+3. **Le doublon du [§ 24](#24-verser-les-contraintes-du-site) se voit ici aussi** :
+   le résumé rend « Zone de neige A1 → E » deux fois, parce que la mémoire porte
+   deux lignes pour ce fait.

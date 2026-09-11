@@ -83,12 +83,36 @@ export function motsDeLEntree(entree = null) {
   };
 }
 
-/** À quel rang une entrée répond à la requête. `0` si elle n'y répond pas. */
-export function rangDeLaReponse(entree = null, requete = "") {
-  const dit = aplati(requete);
-  if (!dit) return 1;
+/**
+ * Les mots d'une requête qui portent quelque chose.
+ *
+ * Une phrase entière ne se trouvait pas : la requête était comparée d'un bloc,
+ * si bien que « adresse » répondait et « l'adresse du projet » ne répondait
+ * rien. C'était tolérable dans un champ de recherche, où l'on tape un mot ; ça
+ * ne l'est plus quand la demande arrive en français — « quelles conséquences si
+ * je change l'adresse ? ».
+ *
+ * Les articles et les prépositions sont retirés, et rien d'autre : ce sont eux
+ * qui font le bruit. Un mot de deux lettres qui reste — « ou » — est un
+ * synonyme déclaré, et le perdre reviendrait à défaire ce que la table dit.
+ */
+const MOTS_VIDES = new Set([
+  "le", "la", "les", "un", "une", "des", "du", "de", "au", "aux",
+  "et", "ou'", "pour", "sur", "dans", "par", "avec", "sans",
+  "ce", "cet", "cette", "ces", "mon", "ma", "mes", "son", "sa", "ses", "notre", "nos",
+  "si", "que", "qui", "quoi", "est", "sont", "je", "on", "il", "elle"
+]);
 
-  const mots = motsDeLEntree(entree);
+function motsDeLaRequete(requete = "") {
+  return aplati(requete)
+    // L'apostrophe sépare : « l'adresse » porte « adresse ».
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean)
+    .filter((mot) => !MOTS_VIDES.has(mot));
+}
+
+/** À quel rang une entrée répond à un seul mot. `0` si elle n'y répond pas. */
+function rangDuMot(mots, dit) {
   if (mots.nom.some((mot) => mot.includes(dit))) return 3;
   // Un synonyme se reconnaît **en entier** : « ou » est un synonyme de la
   // localisation, et le chercher dans un texte ramènerait tout ce qui contient
@@ -96,6 +120,34 @@ export function rangDeLaReponse(entree = null, requete = "") {
   if (mots.synonyme.some((mot) => mot === dit || mot.startsWith(dit))) return 2;
   if (mots.quoi.some((mot) => mot.includes(dit))) return 1;
   return 0;
+}
+
+/**
+ * À quel rang une entrée répond à la requête. `0` si elle n'y répond pas.
+ *
+ * La requête entière d'abord — c'est elle qui doit l'emporter quand elle
+ * répond —, puis mot à mot. Une phrase où **un** mot porte suffit : « change
+ * l'adresse du projet » doit trouver l'adresse, et personne ne tapera jamais
+ * une requête dont chaque mot est le nom d'une colonne.
+ */
+export function rangDeLaReponse(entree = null, requete = "") {
+  const dit = aplati(requete);
+  if (!dit) return 1;
+
+  const mots = motsDeLEntree(entree);
+
+  const entiere = rangDuMot(mots, dit);
+  if (entiere > 0) return entiere;
+
+  // Mot à mot, et le meilleur l'emporte. Le rang reste celui du mot : « adresse »
+  // dans « l'adresse du projet » vaut ce qu'il vaut tout seul, et la liste se
+  // range comme avant.
+  // Un seul mot qui reste après les articles compte aussi : « la localisation »
+  // ne se trouvait pas, alors que « localisation » se trouvait.
+  const separes = motsDeLaRequete(requete);
+  if (!separes.length) return 0;
+
+  return separes.reduce((meilleur, mot) => Math.max(meilleur, rangDuMot(mots, mot)), 0);
 }
 
 /**
