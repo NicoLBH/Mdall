@@ -164,6 +164,9 @@ export function createProjectSubjectsState({ store }) {
     if (typeof v.subjectsPriorityFilter !== "string") v.subjectsPriorityFilter = String(v.filters.priority || "");
     v.filters.status = String(v.subjectsStatusFilter || v.filters.status || "open");
     v.filters.priority = String(v.subjectsPriorityFilter || v.filters.priority || "");
+    // L'ordre du tableau n'a qu'une case, et pas de copie dans `filters` :
+    // c'est ce qui a manqué au filtre d'à côté pendant quatre tours.
+    if (typeof v.subjectsSort !== "string") v.subjectsSort = "";
     if (typeof v.situationsStatusFilter !== "string") v.situationsStatusFilter = "open";
     if (typeof v.subjectsSubview !== "string") v.subjectsSubview = "subjects";
     if (typeof v.objectivesStatusFilter !== "string") v.objectivesStatusFilter = "open";

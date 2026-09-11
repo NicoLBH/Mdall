@@ -9378,6 +9378,45 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
   align-items:center;
 }
 
+/* Le bouton qui range le tableau, dans la colonne dont il change l'ordre
+   d'arrivée. Discret au repos, franc une fois le tri en place : c'est le seul
+   moyen de savoir, en revenant sur l'écran, qu'on ne lit pas l'ordre du
+   projet. */
+.cell-assignees-head{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+}
+
+.table-head-sort{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding:2px;
+  border:0;
+  border-radius:6px;
+  background:none;
+  color:inherit;
+  opacity:.45;
+  cursor:pointer;
+  transition:opacity .12s ease,background-color .12s ease,color .12s ease;
+}
+
+.data-table-shell__head:hover .table-head-sort,
+.table-head-sort:focus-visible{ opacity:1; }
+
+.table-head-sort:hover,
+.table-head-sort:focus-visible{
+  background:rgba(110,118,129,.18);
+  outline:none;
+}
+
+.table-head-sort.is-active{
+  opacity:1;
+  color:#fff;
+  background:rgba(110,118,129,.18);
+}
+
 .project-page-shell{
   max-width:1216px;
   margin:0 auto;

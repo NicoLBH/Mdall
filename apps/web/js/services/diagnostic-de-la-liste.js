@@ -74,7 +74,7 @@ function ligneDeSujet(sujet = {}) {
  */
 export function diagnosticDeLaListeDesSujets(etat = {}) {
   const {
-    statut = "", priorite = "", recherche = "",
+    statut = "", priorite = "", recherche = "", tri = "",
     comptes = {}, charges = null, apresFiltres = null, affiches = null, lignes = null,
     pagination = {}, sousVue = "", tableSeule = null,
     etatBrut = {}, fermes = []
@@ -87,6 +87,7 @@ export function diagnosticDeLaListeDesSujets(etat = {}) {
     `filtre statut    : ${texte(statut) || "?"}`,
     `filtre priorité  : ${texte(priorite) || "—"}`,
     `recherche        : ${texte(recherche) ? `« ${texte(recherche)} »` : "—"}`,
+    `tri              : ${texte(tri) || "ordre du projet"}`,
     `sous-vue         : ${texte(sousVue) || "?"} · tableSeule=${tableSeule === null ? "?" : String(!!tableSeule)}`,
     "",
     `comptés          : ${dit(comptes.open)} ouverts, ${dit(comptes.closed)} fermés`,

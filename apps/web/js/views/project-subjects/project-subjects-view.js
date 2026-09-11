@@ -1,5 +1,7 @@
 import { getDisplayAuthorName, getAuthorIdentity } from "../ui/author-identity.js";
-import { brancherLesBoutonsCopier, renderBoutonCopier } from "../ui/bouton-copier.js";
+import { renderBoutonCopier } from "../ui/bouton-copier.js";
+import { quandOnCopie, renderBoutonDeTri } from "../ui/tete-de-tableau.js";
+import { TRI, motDuTri } from "../../services/tri-des-sujets.js";
 import { diagnosticDeLaListeDesSujets } from "../../services/diagnostic-de-la-liste.js";
 import { renderProblemsCountsIconHtml } from "../ui/subissues-counts.js";
 import { formatObjectiveDueDateLabel } from "./project-subject-milestones.js";
@@ -79,6 +81,7 @@ export function createProjectSubjectsView(deps) {
     getFilteredFlatSubjects,
     getCurrentSubjectsStatusFilter,
     getCurrentSubjectsPriorityFilter,
+    getCurrentSubjectsSort,
     sujetMatchesStatusFilter,
     sujetMatchesPriorityFilter,
     getAvailableSubjectPriorities,
@@ -289,6 +292,25 @@ function renderDocumentRefsCard(selection) {
   `;
 }
 
+/**
+ * La colonne des assignés, et le bouton qui range le tableau.
+ *
+ * Le bouton est **à gauche de l'intitulé**, dans la colonne dont il change
+ * l'ordre d'arrivée. Il répond à une question à laquelle aucun compteur ne
+ * répond : est-ce que des sujets continuent d'arriver ? Un nombre qui ne bouge
+ * pas ne dit pas si rien n'entre ou si ce qui entre se range au milieu de
+ * soixante-treize lignes. Ce qui a bougé en dernier, en tête, le dit.
+ */
+function renderSubjectsAssigneesHeadHtml() {
+  const tri = getCurrentSubjectsSort();
+  return `${renderBoutonDeTri({
+    attribut: "subjects-sort",
+    valeur: tri === TRI.DERNIERE_ACTIVITE ? TRI.PROJET : TRI.DERNIERE_ACTIVITE,
+    actif: tri === TRI.DERNIERE_ACTIVITE,
+    titre: motDuTri(tri)
+  })}<span class="cell-assignees-head__label">Assignés</span>`;
+}
+
 function renderSubjectsStatusHeadHtml() {
   const current = getCurrentSubjectsStatusFilter();
   const query = String(store.situationsView.search || "").trim().toLowerCase();
@@ -329,6 +351,7 @@ function etatDeLaListeDesSujets() {
   return diagnosticDeLaListeDesSujets({
     statut,
     priorite: getCurrentSubjectsPriorityFilter(),
+    tri: getCurrentSubjectsSort(),
     recherche,
     comptes: getSubjectsStatusCounts(recherche.trim().toLowerCase()),
     charges: charges.length,
@@ -1184,6 +1207,7 @@ function getSubjectsTableDeps() {
     renderIssuesTable,
     renderDataTableHead,
     renderSubjectsStatusHeadHtml,
+    renderSubjectsAssigneesHeadHtml,
     renderSubjectsPriorityHeadHtml,
     getCurrentSubjectsStatusFilter,
     getCurrentSubjectsPriorityFilter,
@@ -2934,7 +2958,12 @@ function rerenderPanels() {
       // L'état de la liste se copie d'un clic. Il se relève **au clic**, pas au
       // rendu : ce qu'on veut savoir est ce que la liste porte à l'instant où
       // l'on constate qu'elle est vide.
-      brancherLesBoutonsCopier(panelHost, { texteDe: () => etatDeLaListeDesSujets() });
+      //
+      // L'écoute ne se pose plus sur le panneau : elle vit avec la tête de
+      // tableau, en un seul endroit que le rendu ne peut pas perdre. Brancher
+      // un écouteur sur un nœud qu'on vient de redessiner est précisément ce
+      // qui a rendu ce bouton muet.
+      quandOnCopie("sujets-liste", () => etatDeLaListeDesSujets());
       syncSituationsPrimaryScrollSource();
     } else {
       const details = getProjectSubjectDetail().renderDetailsHtml(null, {

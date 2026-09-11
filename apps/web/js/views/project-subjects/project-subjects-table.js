@@ -63,7 +63,7 @@ function renderWelcomeHtml(deps) {
       columns: [
         { className: "cell cell-theme", html: deps.renderSubjectsStatusHeadHtml() },
         { className: "cell cell-messages-head", html: "" },
-        { className: "cell cell-assignees-head", html: "Assignés" }
+        { className: "cell cell-assignees-head", html: deps.renderSubjectsAssigneesHeadHtml?.() ?? "Assignés" }
       ]
     }),
     emptyTitle: "Aucune analyse disponible",
@@ -275,7 +275,7 @@ export function renderProjectSubjectsTable({ filteredSituations, deps }) {
         columns: [
           { className: "cell cell-theme", html: deps.renderSubjectsStatusHeadHtml() },
           { className: "cell cell-messages-head", html: "" },
-          { className: "cell cell-assignees-head", html: "Assignés" }
+          { className: "cell cell-assignees-head", html: deps.renderSubjectsAssigneesHeadHtml?.() ?? "Assignés" }
         ]
       }),
       state: "loading",
@@ -318,7 +318,7 @@ export function renderProjectSubjectsTable({ filteredSituations, deps }) {
         columns: [
           { className: "cell cell-theme", html: deps.renderSubjectsStatusHeadHtml() },
           { className: "cell cell-messages-head", html: "" },
-          { className: "cell cell-assignees-head", html: "Assignés" }
+          { className: "cell cell-assignees-head", html: deps.renderSubjectsAssigneesHeadHtml?.() ?? "Assignés" }
         ]
       }),
       ...vide
@@ -332,7 +332,7 @@ export function renderProjectSubjectsTable({ filteredSituations, deps }) {
       columns: [
         { className: "cell cell-theme", html: deps.renderSubjectsStatusHeadHtml() },
         { className: "cell cell-messages-head", html: "" },
-        { className: "cell cell-assignees-head", html: "Assignés" }
+        { className: "cell cell-assignees-head", html: deps.renderSubjectsAssigneesHeadHtml?.() ?? "Assignés" }
       ]
     }),
     rowsHtml: rows.join(""),

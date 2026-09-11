@@ -23,6 +23,8 @@ import { autosizeTextarea } from "../../utils/textarea-autosize.js";
 import { renderSubjectAttachmentTile, renderSubjectAttachmentsPreviewList } from "./project-subjects-attachments-ui.js";
 import { isMetaDropdownOpenForAnchor } from "../ui/select-dropdown-controller.js";
 import { mountHandwritingComposerOverlay } from "../ui/handwriting-composer-overlay.js";
+import { quandOnClique } from "../ui/tete-de-tableau.js";
+import { TRI, normaliserLeTri, triSuivant } from "../../services/tri-des-sujets.js";
 
 export function createProjectSubjectsEvents(config) {
   const EMOJI_GRID_COLUMNS = 6;
@@ -5663,7 +5665,54 @@ export function createProjectSubjectsEvents(config) {
     );
   }
 
+  /**
+   * Les gestes de la tête du tableau des sujets.
+   *
+   * Ils sont enregistrés **avant** le garde-fou qui empêche de brancher deux
+   * fois la racine, et ils n'en dépendent pas : c'est justement pour avoir été
+   * attachés à une racine qu'ils sont restés muets quatre tours durant. Poser
+   * la même main deux fois ne coûte rien — chaque geste vit sous son nom, et le
+   * second enregistrement remplace le premier (règle 10).
+   */
+  function ecouterLaTeteDesSujets() {
+    quandOnClique("subjects-status-filter", (valeur) => {
+      const demande = String(valeur || "open").toLowerCase() === "closed" ? "closed" : "open";
+      // **Un seul endroit**, celui que les sélecteurs lisent.
+      //
+      // Le clic écrivait dans l'ancien état, qui partage son `filters.status`
+      // avec le filtre des Situations : la normalisation de l'autre onglet
+      // remettait « Ouverts » sans que rien ne le dise. Une valeur écrite à deux
+      // endroits finit par diverger (règle 4).
+      if (!store.projectSubjectsView || typeof store.projectSubjectsView !== "object") {
+        store.projectSubjectsView = {};
+      }
+      store.projectSubjectsView.subjectsStatusFilter = demande;
+      // `filters.status` reste écrit **ici aussi**, pour ce qui le lit encore —
+      // mais il est désormais une copie, jamais une source.
+      if (store.projectSubjectsView.filters) store.projectSubjectsView.filters.status = demande;
+      resetSubjectsPaginationPage();
+      rerenderPanels();
+    });
+
+    quandOnClique("subjects-sort", (valeur) => {
+      if (!store.projectSubjectsView || typeof store.projectSubjectsView !== "object") {
+        store.projectSubjectsView = {};
+      }
+      // Le bouton porte déjà ce qu'il demande ; on ne le recalcule que s'il ne
+      // porte rien, pour que la bascule reste vraie même sans attribut.
+      const demande = valeur === TRI.PROJET || valeur === TRI.DERNIERE_ACTIVITE
+        ? normaliserLeTri(valeur)
+        : triSuivant(store.projectSubjectsView.subjectsSort);
+      store.projectSubjectsView.subjectsSort = demande;
+      // Changer l'ordre change ce qu'est « la première page » : y rester
+      // montrerait le milieu d'une liste qu'on vient de retourner.
+      resetSubjectsPaginationPage();
+      rerenderPanels();
+    });
+  }
+
   function bindSituationsEvents(root, headerRoot) {
+    ecouterLaTeteDesSujets();
     if (root?.dataset?.subjectsEventsBound === "1") return;
     if (root?.dataset) root.dataset.subjectsEventsBound = "1";
     const toolbarRoot = document.getElementById("situationsToolbarHost");
@@ -5961,31 +6010,6 @@ export function createProjectSubjectsEvents(config) {
       }
 
       if (projectSubjectMilestones?.handleRootClick(event)) {
-        return;
-      }
-
-      const subjectsStatusFilterButton = event.target.closest("[data-subjects-status-filter]");
-      if (subjectsStatusFilterButton) {
-        event.preventDefault();
-        const demande = String(subjectsStatusFilterButton.dataset.subjectsStatusFilter || "open").toLowerCase() === "closed" ? "closed" : "open";
-        // **Un seul endroit**, celui que les sélecteurs lisent.
-        //
-        // Le clic écrivait dans l'ancien état, qui partage son `filters.status`
-        // avec le filtre des Situations : la normalisation de l'autre onglet
-        // remettait « Ouverts » sans que rien ne le dise, et le bouton
-        // paraissait mort. Une valeur écrite à deux endroits finit par diverger
-        // (règle 4) — celle-ci avait déjà été réparée une fois par une copie de
-        // plus, ce qui n'a fait que déplacer la divergence.
-        if (!store.projectSubjectsView || typeof store.projectSubjectsView !== "object") {
-          store.projectSubjectsView = {};
-        }
-        store.projectSubjectsView.subjectsStatusFilter = demande;
-        // `filters.status` reste écrit **ici aussi**, pour ce qui le lit encore —
-        // mais il est désormais une copie, jamais une source : le filtre se lit
-        // sur `subjectsStatusFilter`, et sur lui seul.
-        if (store.projectSubjectsView.filters) store.projectSubjectsView.filters.status = demande;
-        resetSubjectsPaginationPage();
-        rerenderPanels();
         return;
       }
 
