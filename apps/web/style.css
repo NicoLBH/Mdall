@@ -9362,6 +9362,17 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
   font-weight:600;
 }
 
+/* Le bouton qui copie l'état de la liste, à côté du filtre. Discret au repos :
+   il ne sert qu'en cas de doute, et une liste qui va bien n'a pas à le porter
+   dans le regard. */
+.table-head-filter__copier{
+  margin-left:8px;
+  opacity:.45;
+  transition:opacity .12s ease;
+}
+.table-head-filter-group:hover .table-head-filter__copier,
+.table-head-filter__copier:focus-visible{ opacity:1; }
+
 .table-head-filter__label{
   display:inline-flex;
   align-items:center;
@@ -20017,7 +20028,20 @@ html.est-fige-par-le-graphe, body.est-fige-par-le-graphe{ overflow:hidden; }
 /* L'avatar ne tourne pas : c'est le visage du pavé, pas un indicateur. Une
    icône d'identité qui tourne se lit comme une panne. */
 .merge-box--waiting{ border-color:var(--border); }
-.merge-box--waiting .merge-box__avatar{ color:var(--muted); }
+/* Pendant l'attente, l'icône reste **blanche** sur son carré vert. Elle passait
+   au gris de secours, qui ne se lit plus sur ce fond : un symbole illisible sur
+   une pastille de couleur donne l'impression d'un élément désactivé, alors que
+   c'est l'écran qui travaille. Le carré dit déjà que rien n'est tranché. */
+.merge-box--waiting .merge-box__avatar{ color:#fff; }
+
+/* Le sablier de l'attente, **ambre sur cet écran**. Une analyse en cours n'est
+   ni un succès ni une panne : c'est un état intermédiaire, et c'est la couleur
+   que Mdall emploie déjà partout pour « ça n'est pas encore tranché ». Ailleurs
+   — le copilote — il garde la couleur du texte : là, l'attente est la seule
+   chose qui se passe, et la souligner ne dirait rien de plus. */
+.merge-box--waiting .copilote-spinner,
+.merge-state--running .copilote-spinner{ color:var(--attention-fg, #d29922); }
+.merge-state--running{ color:var(--attention-fg, #d29922); }
 
 /* ── Le panneau de fusion ───────────────────────────────────────────────────
    Le contenu du pavé, sorti de son cadre : ici la couleur ne dirait rien que

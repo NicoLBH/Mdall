@@ -148,6 +148,11 @@ const docsViewState = {
    * déplace jamais ce choix sous la main de l'utilisateur : `depositModeTouched`
    * le fige dès qu'il y a touché.
    */
+  /**
+   * Où va le dépôt : `"proposition"` pour une nouvelle, sinon l'identifiant
+   * d'une proposition ouverte. Il n'y a plus de dépôt direct — voir
+   * `renderDepositMode`.
+   */
   depositMode: null,
   depositModeTouched: false,
   /** Vrai dès que l'utilisateur a écrit le titre lui-même : on n'y touche plus. */
@@ -3630,9 +3635,10 @@ async function inspectSelection(root) {
     if (!inchangee) return;
 
     docsViewState.inspection = { running: false, exploitable, byFile };
-    if (!docsViewState.depositModeTouched) {
-      docsViewState.depositMode = exploitable > 0 ? "proposition" : "direct";
-    }
+    // Une proposition, toujours. Ce que l'examen apprend sert au **titre**, pas
+    // au chemin : un document qu'on ne sait pas lire entre par la même porte
+    // que les autres.
+    if (!docsViewState.depositModeTouched) docsViewState.depositMode = "proposition";
     // Maintenant qu'on sait ce que sont les documents, le titre peut le dire :
     // « 3 rapports d'étape et 2 fiches avis travaux — SOCOTEC » plutôt qu'un
     // nom de fichier. Il reste modifiable, et on n'y touche plus si on l'a écrit.
@@ -3640,25 +3646,47 @@ async function inspectSelection(root) {
       docsViewState.title = proposeTitle(files.map((file) => byFile.get(file) ?? null).filter(Boolean));
     }
   } catch {
-    // Ne pas savoir ce que sont les fichiers n'empêche pas de les déposer : on
-    // retombe sur le dépôt direct, et l'utilisateur garde le choix.
+    // Ne pas savoir ce que sont les fichiers n'empêche pas de les déposer : ils
+    // entrent par la même porte, et la proposition dira ce qu'on n'a pas su lire.
     docsViewState.inspection = { running: false, exploitable: 0, byFile: null };
-    if (!docsViewState.depositModeTouched) docsViewState.depositMode = "direct";
+    if (!docsViewState.depositModeTouched) docsViewState.depositMode = "proposition";
   }
 
   if (root?.isConnected) renderProjectDocuments(root);
 }
 
 /**
- * Les deux choix du dépôt, à la manière de GitHub.
+ * Où va ce dépôt : une proposition nouvelle, ou une proposition ouverte.
  *
- * Le troisième n'apparaît que lorsqu'une proposition est ouverte : proposer
+ * ## Le dépôt direct n'est plus proposé, et c'est délibéré
+ *
+ * Il laissait entrer un fichier **sans qu'il passe par l'analyse** : il se
+ * rangeait, se partageait, et rien de ce qu'il disait n'entrait en mémoire.
+ * Deux portes pour une seule matière, et la seconde silencieuse.
+ *
+ * Trois raisons de la fermer, et la troisième est la plus lourde :
+ *
+ *  - **elle complique la lecture.** Deux documents côte à côte dans
+ *    l'arborescence, l'un lu et l'autre non, sans que rien ne l'explique au
+ *    moment où on les regarde ;
+ *  - **elle fabrique des erreurs.** Déposer son rapport de contrôle par la
+ *    mauvaise porte, voir son nom dans la liste, et croire le projet au
+ *    courant ;
+ *  - **elle empêche d'automatiser l'entrée des documents.** Un dépôt qui vient
+ *    du dehors — un courriel, un dossier surveillé — ne peut pas choisir entre
+ *    deux portes. S'il n'y en a qu'une, il n'a rien à choisir.
+ *
+ * Ce qui entre passe donc par le chemin habituel : proposition, analyse,
+ * signature. Les documents déjà déposés directement restent ce qu'ils sont, et
+ * l'arborescence continue de le dire — voir `services/etiquette-du-document.js`.
+ *
+ * Le second choix n'apparaît que lorsqu'une proposition est ouverte : proposer
  * d'ajouter à quelque chose qui n'existe pas serait offrir une porte sur un mur.
  */
 function renderDepositMode() {
   if (docsViewState.selectedFiles.length === 0) return "";
 
-  const mode = docsViewState.depositMode ?? "direct";
+  const mode = docsViewState.depositMode ?? "proposition";
   const { running, exploitable } = docsViewState.inspection;
 
   const choix = (value, icon, label, hint) => `
@@ -3687,7 +3715,6 @@ function renderDepositMode() {
 
   return `
     <div class="documents-deposit-modes">
-      ${choix("direct", "git-commit", "Déposer directement dans le projet", "Les documents entrent aussitôt dans le corpus.")}
       ${choix(
         "proposition",
         "git-compare",
@@ -3871,8 +3898,11 @@ async function refreshOpenPropositionCount(projectId) {
  *   dépôt direct — il n'y a alors rien à raconter de plus.
  */
 async function submitToProposition(projectId, documentIds = []) {
-  const mode = docsViewState.depositMode ?? "direct";
-  if (mode === "direct" || documentIds.length === 0) return null;
+  // Plus de sortie par le dépôt direct : `mode` nomme désormais soit une
+  // proposition nouvelle, soit une proposition ouverte. Un lot vide n'a rien à
+  // soumettre, et c'est le seul cas qui ne passe par aucune.
+  const mode = docsViewState.depositMode ?? "proposition";
+  if (documentIds.length === 0) return null;
 
   try {
     const { attachDocuments, createProposition } = await import("../services/propositions-supabase.js");

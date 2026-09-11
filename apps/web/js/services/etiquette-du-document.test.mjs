@@ -8,10 +8,9 @@ import {
 /* ── Le dépôt direct se voit ─────────────────────────────────────────────── */
 
 /**
- * Le dépôt direct est un usage légitime — Mdall comme simple gestion
- * documentaire, ou l'échange d'une pièce sans l'engager. Mais un fichier qui
- * ressemble à tous les autres laisse croire qu'il compte comme les autres :
- * quelqu'un déposera son rapport de contrôle directement et croira le projet au
+ * La porte du dépôt direct est fermée, mais les documents qui sont entrés par
+ * là existent. Le taire ferait mentir l'arborescence sur ce qui y est déjà :
+ * quelqu'un ouvrirait un rapport déposé l'an dernier et croirait le projet au
  * courant.
  */
 test("un document déposé directement se dit hors mémoire", () => {
@@ -19,7 +18,7 @@ test("un document déposé directement se dit hors mémoire", () => {
 
   assert.equal(etiquette, ETIQUETTE.HORS_MEMOIRE);
   assert.equal(motDeLEtiquette(etiquette), "hors mémoire");
-  assert.match(explicationDeLEtiquette(etiquette), /sans passer par une proposition/);
+  assert.match(explicationDeLEtiquette(etiquette), /rien de ce qu'il dit\s+n'est entré/);
 });
 
 test("un document entré par une proposition ne porte aucun mot", () => {
@@ -91,10 +90,27 @@ test("aucun mot de l'arborescence ne parle comme un outil de visa", () => {
  * au dépôt, et il a deux bonnes raisons. L'explication le dit.
  */
 test("l'explication d'un dépôt direct ne le présente pas comme un défaut", () => {
+  // Ces documents sont entrés par une porte qui existait : ce n'est pas leur
+  // faute qu'elle ait été fermée depuis.
   const dit = explicationDeLEtiquette(ETIQUETTE.HORS_MEMOIRE);
 
   assert.match(dit, /se range, se lit et se partage/);
   for (const interdit of [/erreur/i, /oubli/i, /il faudrait/i, /manque/i]) {
     assert.doesNotMatch(dit, interdit);
   }
+});
+
+/**
+ * La porte est fermée : plus aucun nouveau document ne peut être « hors
+ * mémoire ». Ce test garde l'écran de dépôt, pas l'étiquette.
+ */
+test("l'écran de dépôt ne propose plus le dépôt direct", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+  const source = readFileSync(
+    fileURLToPath(new URL("../views/project-documents.js", import.meta.url)), "utf8"
+  );
+
+  assert.doesNotMatch(source, /Déposer directement dans le projet/);
+  assert.doesNotMatch(source, /choix\("direct"/);
 });
