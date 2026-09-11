@@ -53,11 +53,27 @@ test("qui a émis l'avis ne se confond pas avec qui l'a saisi", () => {
   assert.match(versable.provenance.quoi, /page 12/);
 });
 
-test("un avis sans numéro ne se verse pas", () => {
+/**
+ * Le trou que le rapport réel a montré. Un bureau de contrôle ne numérote que
+ * ce qui reste **ouvert** : sur le rapport d'essai, deux avis sur vingt-quatre
+ * portent un numéro, et ce sont les deux suspendus. « Neige — Favorable » et
+ * « Vent — Favorable » n'en ont aucun — et ce sont exactement ceux qui couvrent
+ * une valeur. S'en tenir au numéro faisait entrer les points ouverts et laissait
+ * dehors tout ce qui avait été examiné.
+ */
+test("un avis sans numéro se verse quand même, sous son intitulé", () => {
+  assert.equal(sujetDeLAvis({ title_raw: "Zone de neige" }), "Avis de contrôle technique — Zone de neige");
+
+  const versable = avisVersable({ avis: { title_raw: "Zone de neige", opinion_label: "Favorable" } });
+  // L'intitulé ne se répète pas : il est déjà dans le sujet.
+  assert.equal(versable.valeur, "Favorable");
+});
+
+test("un avis sans numéro ni intitulé ne se verse pas", () => {
   // Sans identité, deux avis anonymes du même rapport se périmeraient l'un
   // l'autre à la fusion.
-  assert.equal(sujetDeLAvis({ title_raw: "Zone de neige" }), "");
-  assert.equal(avisVersable({ avis: { title_raw: "Zone de neige" } }), null);
+  assert.equal(sujetDeLAvis({ title_raw: "" }), "");
+  assert.equal(avisVersable({ avis: { title_raw: "" } }), null);
 });
 
 test("la teneur se verse telle qu'elle est écrite, quelle qu'elle soit", () => {
