@@ -2752,3 +2752,161 @@ Le fichier était le premier à faire : lu par des humains **et** par le copilot
 il coûte le moins et rend la réponse exportable. Le filtre par variable dans la
 Mémoire vient ensuite, quand on saura, en s'étant servi du fichier, ce qu'on y
 cherche vraiment.
+
+---
+
+## 36. La phrase d'un engagement, et le rail qui restait en l'air · *fait*
+
+Deux corrections d'écran, sans rapport entre elles sinon qu'on les a vues au
+même moment.
+
+### « Ce qui ne couvre plus » se lisait comme un enregistrement
+
+La ligne juxtaposait ses champs :
+
+```
+Zone de vent — F — Région 2 — 2026-09-11
+```
+
+Exact, et illisible. Il fallait connaître l'ordre des champs pour la lire, et
+surtout **rien n'y disait qui s'était engagé** — or c'est la première chose
+qu'on cherche : un avis d'un bureau de contrôle se redemande en six semaines,
+une relecture interne se refait dans l'heure. Devant une décision qui coûte, on
+ne fait pas décoder une ligne à celui qui lit.
+
+Elle se dit maintenant en deux phrases — `phraseDeLEngagement` :
+
+> **SOCOTEC — 11/09/2026 : avis F sur Zone de vent = Région 2.**
+> Cet avis ne couvre plus : la valeur passerait à Région 1.
+
+**Qui a dit quoi**, puis **ce qu'il advient**. Courtes, parce qu'on en lit dix
+d'affilée.
+
+Trois choses qu'elle ne fait pas, et chacune pour une raison :
+
+- **elle ne traduit pas le code.** Si le rapport écrit « F », la phrase écrit
+  « F ». La légende du document est la seule chose qui sache ce que « F » veut
+  dire chez cet émetteur-là, et deviner « favorable » serait faux chez le
+  suivant ;
+- **elle n'invente pas d'auteur** (règle 5). Sans organisme nommé dans la note,
+  la phrase commence par la date. Un « Quelqu'un » ferait croire à un auteur
+  qu'on n'a pas ;
+- **elle ne juge pas.** Elle dit que la valeur change, jamais si c'est grave.
+
+La colonne `A1 → E` qui suivait a disparu : les deux phrases portent déjà la
+valeur examinée et celle qu'elle deviendrait, et la dire trois fois n'était pas
+plus clair.
+
+La date se met en français **dans l'écran**, pas dans le service : un service ne
+connaît pas la locale de celui qui lit.
+
+### Le rail restait calé à la hauteur qu'il avait au rendu
+
+Dans l'Atelier, en défilant, le rail de gauche gardait son haut là où il était
+au premier rendu pendant que les onglets du projet se repliaient au-dessus de
+lui. Un blanc s'ouvrait entre les deux, et ne se refermait jamais.
+
+La cause : `followRailScroll` écoutait `window`. Or **tous les onglets ne
+défilent pas de la même façon** — la Mémoire défile la page, l'Atelier défile
+*dans un conteneur* (`projectStudioRouterScroll`), et le défilement d'un élément
+ne remonte pas jusqu'à la fenêtre.
+
+Les événements `scroll` ne remontent pas, mais ils **descendent** : l'écoute
+passe en capture sur le document, et voit désormais tous les conteneurs. Un
+écran de plus se règlera tout seul, sans avoir à déclarer son conteneur. Un
+`ResizeObserver` sur les onglets rattrape en outre la fin de la transition de
+repli, que la mesure prise pendant l'image du défilement manquait.
+
+---
+
+## 37. Ce qui a suivi : une liste, là où il faut un graphe
+
+**Demandé, pas fait.** « Ce qui a suivi » énumère les étapes du rejeu dans
+l'ordre où elles se sont produites. Une liste ne dit pas **qui alimente quoi** :
+deux branches parallèles s'y lisent comme une suite, et une bifurcation ne se
+voit pas du tout.
+
+Ce qu'il faut : des branches parallèles, des bifurcations aux nœuds, et le
+pliage au caret des détails LIT / ÉCRIT de chaque étape — aujourd'hui toujours
+déroulés, ce qui noie le peu qu'on cherche.
+
+Deux choses existent déjà et devraient servir plutôt que d'être refaites :
+`views/ui/enchainement.js`, qui dessine la suite, et le cerveau du projet, qui
+sait déjà placer des nœuds et leurs liens. La question ouverte est de savoir
+lequel des deux porte la forme.
+
+**Ce qui se passe si on ne le fait pas :** on continue de lire un raisonnement
+en le reconstituant de tête, et c'est exactement ce que Mdall prétend éviter.
+
+---
+
+## 38. Le dépôt d'un document ne mène plus nulle part
+
+**Vu, diagnostiqué, pas fait.** Déposer un CR de chantier n'ajoute aucun sujet,
+qu'on passe par une proposition ou par « déposer directement dans le projet ».
+
+### Ce qui reste de l'ancienne pipeline
+
+Le dépôt direct est encore soumis au réglage **Paramètres > Automatisations >
+« Déclencher l'analyse IA des sujets après dépôt d'un document »**. Ce chemin est
+périmé : il produisait des sujets à partir d'un PDF **sans passer par une
+proposition**, ce qui contredit la règle 1 — rien n'entre directement.
+
+Où il vit, exactement :
+
+| Fichier | Ce qu'il porte |
+| --- | --- |
+| `services/project-automation.js` | le réglage `autoAnalysisAfterUpload` et `shouldAutoRunAnalysisAfterUpload()` |
+| `views/project-parametres/project-parametres-automatisations.js` | sa case dans les Paramètres |
+| `views/project-documents.js` | `triggerAnalysisAfterDeposit()`, appelé au dépôt hors proposition |
+| `views/project-situations-runbar.js` | la barre qui change d'allure selon le réglage |
+
+`runAnalysis` lui-même (`services/analysis-runner.js`) reste atteignable à la
+main ; **c'est le déclenchement automatique au dépôt qui s'en va**, pas l'écran
+d'analyse. Les distinguer évite de supprimer, au passage, le seul chemin qui
+marche encore.
+
+### Ce qu'on veut à la place : un aiguillage au dépôt
+
+On dépose un PDF, et le système **reconnaît ce que c'est** avant de décider quoi
+en faire :
+
+- un **rapport de bureau de contrôle** → le flux des avis, qui existe
+  (`services/avis-par-le-modele.js`, `emetteur-du-document.js`) ;
+- un **CR de chantier** → le flux des sujets, par proposition.
+
+La reconnaissance de l'émetteur est déjà écrite et rend ses preuves ; ce qui
+manque est la reconnaissance du **type** de document, et la bifurcation qui s'en
+suit.
+
+**Ce qui se passe si on ne le fait pas :** le dépôt reste un geste sans effet, et
+un réglage périmé continue d'offrir un chemin qui contourne la règle 1.
+
+---
+
+## 39. Ouvrir, modifier, fermer un sujet sont des décisions
+
+**Réflexion, pas encore du code.** Fermer un sujet, c'est trancher. Alors
+l'ouvrir l'est aussi — on a jugé qu'il y avait là quelque chose à traiter —, et
+le modifier également.
+
+Aujourd'hui ces gestes ne laissent rien en mémoire. Ils devraient y verser des
+décisions, comme n'importe quel autre acte du projet — par le chemin habituel,
+jamais directement (règle 1).
+
+Ce que cela débloque est un **jalon de plus** dans le circuit d'une variante, et
+c'est lui qui vaut la peine :
+
+> Attention : cela contredit un sujet fermé le 12/03/2026.
+> Attention : cela contredit une décision du 04/02/2026.
+
+Le mécanisme des jalons existe (`services/raisonnement-jalonne.js`) et ne
+connaît aujourd'hui que ce qu'un examen couvre. Lui donner les décisions à lire
+est la même mécanique appliquée à une autre matière — c'est ce qui rend la
+question mûre, et c'est pourquoi elle est écrite ici plutôt qu'oubliée.
+
+**La question ouverte** est celle de la contradiction : une décision ne devient
+jamais fausse (règle 6). Une variante qui la contredit ne l'annule donc pas —
+elle signale qu'on est en train de revenir sur quelque chose de tranché, et
+c'est à celui qui lit de dire s'il assume. Reste à décider ce qui s'écrit alors,
+et où.

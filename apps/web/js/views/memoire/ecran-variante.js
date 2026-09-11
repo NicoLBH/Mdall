@@ -48,7 +48,21 @@ import { jalonnerLEnchainement, phraseDuRaisonnementJalonne } from "../../servic
 import { renderEnchainement, SENS } from "../ui/enchainement.js";
 import { renderSaisieAdresse } from "../ui/saisie-adresse.js";
 import { estLaLocalisation } from "../../services/adresse-saisie.js";
-import { ligneDeLEngagement, phraseDeLaCouverture } from "../../services/couverture.js";
+import { phraseDeLEngagement } from "../../services/couverture.js";
+
+/**
+ * Une date en français.
+ *
+ * Ici et non dans le service : c'est l'écran qui connaît la langue de celui qui
+ * lit, et un service qui formaterait une locale déciderait de l'affichage à sa
+ * place — l'export, lui, veut la date brute.
+ */
+const enFrancais = (iso) => {
+  const date = new Date(`${String(iso ?? "")}T00:00:00Z`);
+  return Number.isNaN(date.getTime())
+    ? String(iso ?? "")
+    : date.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" });
+};
 import { ORDRE_DES_RANGS, RANG, rangDeLActe, rangLePlusHaut } from "../../services/ce-qui-couvre.js";
 import { champDeLIdentifiant } from "../../services/tableau-structure.js";
 import { valeursTrouvees } from "../../services/recherche-de-valeur.js";
@@ -697,20 +711,19 @@ function renderCeQuiTombe(couverture = null) {
   const parRang = (gauche, droite) =>
     ORDRE_DES_RANGS.indexOf(rangDeLActe(droite.acte)) - ORDRE_DES_RANGS.indexOf(rangDeLActe(gauche.acte));
 
-  const ligne = (engagement) => `
+  const ligne = (engagement) => {
+    // Deux phrases : **qui a dit quoi**, puis **ce qu'il advient**. La ligne
+    // d'avant juxtaposait des morceaux — « Zone de vent — F — Région 2 —
+    // 2026-09-11 » —, exact et illisible : il fallait connaître l'ordre des
+    // champs pour comprendre, et rien ne disait qui avait rendu cet avis.
+    const dit = phraseDeLEngagement(engagement, { dater: enFrancais });
+
+    return `
     <li class="variante-ligne variante-ligne--${escapeHtml(rangDeLActe(engagement.acte))}">
-      <span class="variante-ligne__sujet">${escapeHtml(ligneDeLEngagement(engagement))}</span>
-      ${
-        // Ce qui a été examiné, et ce que la variante en ferait. Montrer la
-        // valeur d'aujourd'hui n'aurait rien dit : une variante n'écrit rien,
-        // c'est encore celle qui a été examinée.
-        engagement.deviendrait
-          ? `<span class="variante-ligne__valeurs">${
-              escapeHtml(engagement.examinee?.payload?.value ?? "")} → ${escapeHtml(engagement.deviendrait)}</span>`
-          : ""
-      }
-      <span class="variante-ligne__note">${escapeHtml(phraseDeLaCouverture(engagement.etat))}</span>
+      <span class="variante-ligne__sujet">${escapeHtml(dit.quoi)}</span>
+      <span class="variante-ligne__note">${escapeHtml(dit.alors)}</span>
     </li>`;
+  };
 
   return `
         <section class="variante-rang variante-rang--suspect">
