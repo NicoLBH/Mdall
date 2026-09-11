@@ -5668,11 +5668,11 @@ export function createProjectSubjectsEvents(config) {
   /**
    * Les gestes de la tête du tableau des sujets.
    *
-   * Ils sont enregistrés **avant** le garde-fou qui empêche de brancher deux
-   * fois la racine, et ils n'en dépendent pas : c'est justement pour avoir été
-   * attachés à une racine qu'ils sont restés muets quatre tours durant. Poser
-   * la même main deux fois ne coûte rien — chaque geste vit sous son nom, et le
-   * second enregistrement remplace le premier (règle 10).
+   * Ils ne dépendent d'**aucune racine** et d'aucun rendu : ils sont posés une
+   * fois, à la construction de l'écran, et pas au branchement de la racine —
+   * lequel peut ne pas avoir lieu. Poser la même main deux fois ne coûte rien :
+   * chaque geste vit sous son nom, et le second enregistrement remplace le
+   * premier (règle 10).
    */
   function ecouterLaTeteDesSujets() {
     quandOnClique("subjects-status-filter", (valeur) => {
@@ -5712,7 +5712,6 @@ export function createProjectSubjectsEvents(config) {
   }
 
   function bindSituationsEvents(root, headerRoot) {
-    ecouterLaTeteDesSujets();
     if (root?.dataset?.subjectsEventsBound === "1") return;
     if (root?.dataset) root.dataset.subjectsEventsBound = "1";
     const toolbarRoot = document.getElementById("situationsToolbarHost");
@@ -6209,7 +6208,12 @@ export function createProjectSubjectsEvents(config) {
     projectSubjectMilestones?.bindGlobalEvents();
   }
 
+  // La tête du tableau s'écoute dès la construction de l'écran : elle ne passe
+  // par aucune racine, et rien de ce qui se redessine ne peut la faire taire.
+  ecouterLaTeteDesSujets();
+
   return {
+    ecouterLaTeteDesSujets,
     bindSubjectMetaDropdownDocumentEvents,
     detachSubjectMetaDropdownDocumentEvents,
     resetSubjectsTabView,
