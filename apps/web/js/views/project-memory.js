@@ -960,11 +960,34 @@ export function renderMemoryList(lignes, page = 1, {
  * l'on en est dans la liste, elle n'en fait pas partie.
  */
 function renderList(lignes, page = 1) {
-  return renderMemoryList(lignes, page, {
-    grouped: lectureDe(view.query) !== READER.ALL,
-    reader: lectureDe(view.query),
-    enteteHtml: renderTableHead()
-  });
+  // **Un conteneur stable**, et c'est ce qui manquait. `renderMemoryList` rend
+  // le tableau **et** sa pagination ; les redessins remplaçaient `.memory-results`,
+  // c'est-à-dire l'**intérieur** du tableau. Chaque frappe imbriquait donc un
+  // tableau complet — en-tête et filtres compris — dans le précédent, et l'écran
+  // se remplissait de barres de filtres vides.
+  //
+  // Avec cette enveloppe, il y a une chose à remplacer et elle se nomme.
+  return `
+    <div class="memory-liste" data-memory-liste>
+      ${renderMemoryList(lignes, page, {
+        grouped: lectureDe(view.query) !== READER.ALL,
+        reader: lectureDe(view.query),
+        enteteHtml: renderTableHead()
+      })}
+    </div>
+  `;
+}
+
+/**
+ * Redessiner la liste seule, sans redessiner la page.
+ *
+ * Redessiner la page ferait perdre le curseur à chaque touche. Un seul endroit
+ * sait comment s'y prendre : deux écritures de ce geste finiraient par ne plus
+ * remplacer la même chose (règle 4).
+ */
+function redessinerLaListe(root) {
+  const hote = root.querySelector("[data-memory-liste]");
+  if (hote) hote.outerHTML = renderList(lignesVisibles(), view.page);
 }
 
 /**
@@ -2866,10 +2889,9 @@ function bind(root) {
       // Chercher ramène à la première page : rester en page 4 d'un résultat qui
       // en compte deux montrerait un vide qu'on prendrait pour une absence.
       view.page = 1;
-      const hote = root.querySelector(".memory-results, .propositions-empty:not(.propositions-empty--warn)");
       // Les mêmes filtres que l'écran entier, sinon taper une lettre ferait
       // réapparaître ce que la nature ou le domaine venaient d'écarter.
-      if (hote) hote.outerHTML = renderList(lignesVisibles(), view.page);
+      redessinerLaListe(root);
       bindPagination(root);
       syncLecture(root);
       syncMiroir(root);
@@ -3313,8 +3335,7 @@ function appliquerSuggestion(root, rang) {
   champ.setSelectionRange(curseur, curseur);
   view.suggestion = -1;
 
-  const hote = root.querySelector(".memory-results, .propositions-empty:not(.propositions-empty--warn)");
-  if (hote) hote.outerHTML = renderList(lignesVisibles(), view.page);
+  redessinerLaListe(root);
   bindPagination(root);
   syncLecture(root);
   syncMiroir(root);
