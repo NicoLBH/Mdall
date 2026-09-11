@@ -773,6 +773,15 @@ function mapDocumentRowToViewModel(row = {}) {
     // visible, grisé : un fichier qui existe en base et n'apparaît nulle part
     // est le mensonge qu'on a déjà corrigé une fois.
     corpusState: safeString(row.corpus_state) || "accepted",
+    // La proposition par laquelle ce document est entré, **s'il en a une**.
+    //
+    // `undefined` est conservé tel quel : toutes les lectures de la table ne
+    // demandent pas cette colonne, et le rabattre sur `null` ferait dire « ce
+    // document n'est rattaché à rien » d'un document dont on n'a simplement pas
+    // posé la question (règle 5). Voir `services/etiquette-du-document.js`.
+    propositionId: row.proposition_id === undefined
+      ? undefined
+      : (safeString(row.proposition_id) || null),
     documentKind,
     // Ce que Mdall a reconnu du document : sa nature, son émetteur, et la
     // raison quand il n'a pas su. Générique par construction — demain un

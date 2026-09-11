@@ -2879,14 +2879,36 @@ n'apporte qu'un risque.
 Un reconnaisseur de plus, et c'est tout ce que le registre demandait :
 `services/document-recognizer-cr.js`.
 
-**Le titre tranche** — « Compte rendu de réunion de chantier », « CR de chantier
-n° 12 », « procès-verbal de chantier ». Le reste ne vaut qu'ensemble : une
-réunion de chantier mentionnée **plus deux** marques de forme (présents,
-diffusion, prochaine réunion, lots, maîtrise d'œuvre) donnent un probable,
-jamais un certain. C'est le piège de cette famille : un livrable de bureau de
-contrôle cite les réunions de chantier, nomme la maîtrise d'œuvre et porte une
-liste de diffusion — le prendre pour un compte rendu l'enverrait vers les sujets
-au lieu des avis, en silence.
+**Deux questions, pas une** — et c'est la leçon du premier essai, qui a rejeté
+le premier vrai compte rendu qu'on lui a donné.
+
+La première version cherchait un titre disant « compte rendu de chantier », d'un
+seul tenant. **Aucun compte rendu réel ne s'appelle ainsi.** Ils s'appellent
+« compte rendu de réunion n° 14 », et c'est une ligne plus bas, dans un tableau
+d'en-tête, qu'on lit « Objet : suivi de chantier ».
+
+On pose donc deux questions séparées, et c'est leur conjonction qui tranche :
+
+1. **le document se nomme-t-il compte rendu ?** — « compte rendu de réunion »,
+   « procès-verbal », « CR n° 14 » ;
+2. **parle-t-il d'un chantier ?** — le mot lui-même, ou une rubrique de lot
+   (« Lot n° 1 : Démolition / Gros œuvre »), qui est la façon dont un compte
+   rendu de chantier est toujours découpé.
+
+Prises isolément, ni l'une ni l'autre ne suffit : un compte rendu de commission
+de sécurité répond oui à la première, un devis répond oui à la seconde.
+
+Ce qui n'est **pas** un titre, et ne le sera pas : « réunion de chantier » tout
+court. Un rapport de bureau de contrôle écrit « établi à la suite de la réunion
+de chantier du 3 septembre », et le tenir pour un titre l'enverrait vers les
+sujets au lieu des avis, en silence. Numérotée — « Réunion de chantier n° 3 » —
+c'est un titre ; sans numéro, c'est une allusion. Le numéro sépare les deux.
+
+Quand les deux familles réclament le même document, **c'est le bureau de
+contrôle qui l'emporte** : ses avis sont ce qu'on vient y chercher. Ce n'est pas
+au reconnaisseur des comptes rendus de s'en occuper — il redirait ce que l'autre
+sait déjà (règle 10) ; c'est le registre qui tranche, par l'ordre
+d'enregistrement.
 
 **L'auteur ne se devine pas.** Un compte rendu nomme tout le monde. Il n'est
 nommé que lorsqu'**une seule** mention légale figure au document ; sinon, rien
@@ -2894,6 +2916,10 @@ nommé que lorsqu'**une seule** mention légale figure au document ; sinon, rien
 
 Une convocation est reconnue **sans contenu** plutôt que rejetée : c'est un
 compte rendu au sens du titre, et il n'y a rien dedans.
+
+Et ce qui rend un compte rendu exploitable n'est pas seulement le point numéroté
+« 12.02.4 » : c'est aussi, et bien plus souvent, **la puce sous une rubrique de
+lot**. La manquer rendait « sans contenu » un compte rendu qui en porte trente.
 
 De là, `services/proposition-analysis.js` aiguille :
 
@@ -2999,35 +3025,170 @@ s'ouvrent un par un ; sur douze points, en perdre onze parce que le troisième a
   « en cours » quand le document les écrit, et on n'en fait rien : un point
   soldé devrait fermer le sujet qu'il a ouvert. C'est le § 39, et il faut
   d'abord trancher ce qu'ouvrir et fermer veulent dire en mémoire.
-- **Le dépôt direct.** Il reste possible, et il n'aiguille vers rien : un
-  document déposé hors proposition entre au corpus et s'arrête là. Ce n'est plus
-  un contournement — il n'ouvre rien —, mais ce n'est pas non plus un chemin.
+- **Le dépôt direct** · *tranché, et fait*. Ce n'est pas une lacune : c'est un
+  usage, et il en a deux. Des équipes veulent se servir de Mdall comme d'une
+  simple gestion documentaire — ranger, partager, sans rien de compliqué et sans
+  consommer d'IA. Et l'on veut pouvoir échanger une pièce sans l'engager : un
+  plan de travail, une version de lecture.
+
+  Ces documents sont **hors mémoire** : rien de ce qu'ils disent n'est entré, et
+  rien ne s'appuie dessus. Ce qui manquait n'était pas un chemin, c'était **que
+  cela se lise**. Un fichier qui ressemble à tous les autres dans l'arborescence
+  laisse croire qu'il compte comme les autres — quelqu'un dépose son rapport de
+  contrôle directement, voit son nom dans la liste, et croit le projet au
+  courant.
+
+  La ligne porte donc un mot, et deux couleurs qui disent deux choses
+  différentes : **« hors corpus »** en rouge pour ce qu'on a sorti,
+  **« hors mémoire »** en gris pour ce qui n'y est jamais entré. Les peindre
+  pareil ferait lire un choix comme un incident. Voir
+  `services/etiquette-du-document.js`.
+
+  Et le mot ne se dit **que si la requête a posé la question** : plusieurs
+  lectures de la table des documents ne demandent pas la colonne du
+  rattachement, et rabattre « je n'ai pas demandé » sur « il n'y a rien »
+  étiquetterait un dossier entier à tort (règle 5).
 
 ---
 
 ## 39. Ouvrir, modifier, fermer un sujet sont des décisions
 
-**Réflexion, pas encore du code.** Fermer un sujet, c'est trancher. Alors
-l'ouvrir l'est aussi — on a jugé qu'il y avait là quelque chose à traiter —, et
-le modifier également.
+**Réflexion. Rien de ceci n'est codé.** Ce qui suit tranche là où l'on peut
+trancher, et nomme ce qui reste ouvert.
 
-Aujourd'hui ces gestes ne laissent rien en mémoire. Ils devraient y verser des
-décisions, comme n'importe quel autre acte du projet — par le chemin habituel,
-jamais directement (règle 1).
+Fermer un sujet, c'est prendre parti. Alors l'ouvrir l'est aussi — on a jugé
+qu'il y avait là quelque chose à traiter — et le modifier peut l'être. Ces
+gestes ne laissent aujourd'hui aucune trace en mémoire, et c'est pour cela
+qu'aucun jalon ne peut dire « attention, cela contredit un sujet fermé le… ».
 
-Ce que cela débloque est un **jalon de plus** dans le circuit d'une variante, et
-c'est lui qui vaut la peine :
+### L'idée à l'origine de cette section, et ce que j'en pense
+
+> À chaque nouveau compte rendu de chantier, l'évolution ou non du point est
+> ajoutée comme un commentaire dans la discussion du sujet.
+
+**Sur le fond, oui, et pour une raison qui va plus loin que la commodité.** Un
+compte rendu ne corrige pas le précédent : il en écrit un autre. Le point du
+12 septembre disait ceci ; celui du 19 dit cela ; les deux sont vrais, chacun à
+sa date. Une discussion est exactement la forme de cela — une suite d'énoncés
+datés qui ne s'effacent pas. Mettre l'évolution à jour **dans** le sujet, en
+remplaçant sa description, écraserait au contraire ce que le compte rendu
+précédent avait dit, et c'est précisément ce que la règle 6 interdit : un
+constat ne devient jamais faux.
+
+Trois avantages de plus, et ils comptent : l'information se lit **là où l'on
+travaille** — celui qui traite un sujet ouvre le sujet, il ne va pas fouiller
+les documents ; la forme existe déjà, avec ses auteurs et ses dates ; et un
+commentaire **ne décide rien**, ce qui est honnête, puisque le compte rendu
+rapporte sans trancher.
+
+**Sur le « ou non », non.** C'est la moitié dangereuse de l'idée. Si chaque
+compte rendu écrit « aucune évolution » sur chaque sujet ouvert, le vingtième
+sujet porte dix-neuf commentaires qui ne disent rien — et l'on cesse de lire les
+discussions. **Un silence répété n'est pas une information, c'est du bruit**, et
+il enterre les commentaires qui en portent une.
+
+La distinction à faire est celle entre un **journal** et un **compteur** :
+
+| ce que le compte rendu fait du point | ce que Mdall en fait |
+| --- | --- |
+| il le reformule, en déplace l'échéance, en change le destinataire, en change l'état | **un commentaire**, daté, avec sa citation |
+| il le reprend à l'identique | **aucun commentaire** — un fait dérivé sur le sujet : « repris sans changement au CR n° 19 du 12/11 » |
+| il ne le mentionne plus | rien, et surtout pas « clos » — voir plus bas |
+
+Le second cas se **dérive**, il ne s'écrit pas : c'est le plus récent compte
+rendu qui mentionne ce point, et cela se recalcule. C'est la même mécanique que
+les engagements dérivés des avis (§ 38), et elle a la même vertu — rien à
+migrer, rien à nettoyer, et les comptes rendus déjà versés en bénéficient
+rétroactivement.
+
+**Et le commentaire doit être visiblement écrit par la machine, avec sa
+citation.** Un commentaire automatique qui a l'air d'avoir été écrit par un
+collègue est pire que pas de commentaire du tout.
+
+### La question que l'idée ne pose pas, et c'est la plus importante
+
+**Un point marqué « soldé » ferme-t-il le sujet ?**
+
+Non. Pas tout seul, et c'est le cœur de cette section.
+
+« Soldé » est ce que le maître d'œuvre écrit. Fermer le sujet est ce que **le
+projet décide**. Ce ne sont pas le même acte, et les confondre coûterait deux
+fois :
+
+- une erreur de lecture fermerait un sujet réel ;
+- la fermeture aurait lieu **sans que personne ne la signe**, ce qui est
+  exactement l'automatisme qu'on vient de retirer du dépôt (§ 38).
+
+Ce qui s'ensuit est simple, et tient dans ce qui existe déjà. Le compte rendu
+qui porte « soldé » produit **deux choses** : un commentaire dans la discussion
+du sujet (« le compte rendu n° 19 porte ce point comme soldé », avec la ligne
+citée), et une **proposition de fermeture**. La proposition est le lieu de la
+signature, et elle existe déjà : c'est celle que le dépôt du compte rendu ouvre.
+
+Autrement dit, `ITEM_TYPE.SUJET` gagne un **mouvement** — ouvrir, fermer,
+rouvrir — au lieu de ne savoir qu'ouvrir. Un même dépôt fait alors signer d'un
+seul geste ce qu'il ouvre et ce qu'il ferme, sur le même écran.
+
+### Ce qu'il faut d'abord, et qui manque
+
+**Le sujet ne porte pas la clé du compte rendu.** À la fusion, il est créé avec
+son titre et rien d'autre : la clé `cr:12.02.1`, qui est la seule identité
+stable d'un point d'une réunion à l'autre, reste dans la mémoire et ne suit pas
+jusqu'au sujet. Sans elle, « soldé au CR n° 19 » ne peut pas retrouver ce qui a
+été ouvert au CR n° 14 — et l'on retomberait sur la comparaison des titres, qui
+casse à la première reformulation.
+
+**C'est la première chose à faire, et elle est petite.** Tout le reste en
+dépend.
+
+### Ce qui doit entrer en mémoire, et ce qui ne doit pas
+
+Ouvrir laisse déjà une trace : la fusion verse une affirmation `sujet`. Fermer
+doit la laisser aussi, et symétriquement — une **décision**, datée, signée,
+portant le sujet et la raison. C'est elle, et rien d'autre, qui rend le jalon
+possible.
+
+**Modifier, en revanche, ne doit pas tout verser.** Corriger une faute dans un
+titre n'est pas une décision ; changer ce que le sujet affirme — son échéance,
+ce qu'il demande, à qui — peut en être une. Verser chaque frappe remplirait la
+mémoire d'un bruit qui noierait ce qu'on y cherche, et une mémoire qu'on ne lit
+plus ne protège plus rien.
+
+Ma recommandation : **ne verser que ce qui peut être contredit**. Une fermeture,
+une réouverture, et une modification de ce sur quoi le sujet s'appuie. Le reste
+est de l'édition, et l'historique du sujet le porte déjà.
+
+C'est la position que je défends ; c'est aussi celle où je peux me tromper, et
+c'est pourquoi elle est écrite ici plutôt qu'appliquée.
+
+### Le jalon, enfin
+
+Le mécanisme existe (`services/raisonnement-jalonne.js`) et ne connaît
+aujourd'hui que ce qu'un examen couvre. Lui donner les décisions à lire est la
+même mécanique appliquée à une autre matière :
 
 > Attention : cela contredit un sujet fermé le 12/03/2026.
 > Attention : cela contredit une décision du 04/02/2026.
 
-Le mécanisme des jalons existe (`services/raisonnement-jalonne.js`) et ne
-connaît aujourd'hui que ce qu'un examen couvre. Lui donner les décisions à lire
-est la même mécanique appliquée à une autre matière — c'est ce qui rend la
-question mûre, et c'est pourquoi elle est écrite ici plutôt qu'oubliée.
+**Et la contradiction n'annule rien** (règle 6). Une variante qui contredit une
+décision ne la rend pas fausse : elle signale qu'on revient sur quelque chose de
+tranché, et à quelle date, et par qui. C'est au lecteur d'assumer.
 
-**La question ouverte** est celle de la contradiction : une décision ne devient
-jamais fausse (règle 6). Une variante qui la contredit ne l'annule donc pas —
-elle signale qu'on est en train de revenir sur quelque chose de tranché, et
-c'est à celui qui lit de dire s'il assume. Reste à décider ce qui s'écrit alors,
-et où.
+Ce qui s'écrit alors, et c'est la réponse à la question laissée ouverte la
+dernière fois : **rien, automatiquement**. Mais la variante, si elle devient une
+proposition, porte « rouvrir le sujet n° 48 » comme un article de plus — signé
+comme le reste. Une réouverture est une décision, au même titre que la fermeture
+qu'elle défait, et les deux restent lisibles côte à côte.
+
+### L'ordre
+
+1. **Le sujet porte la clé du compte rendu.** Petit, et tout en dépend.
+2. **`ITEM_TYPE.SUJET` gagne son mouvement** — ouvrir, fermer, rouvrir.
+3. **Fermer verse une décision** en mémoire, datée et signée.
+4. **Le commentaire d'évolution**, sur changement seulement, avec sa citation.
+5. **Le jalon** lit les décisions, et dit la contradiction sans l'annuler.
+
+**Ce qui se passe si on ne le fait pas :** les sujets ouverts par un compte rendu
+ne se referment jamais tout seuls, la douzième réunion les répète sans qu'on
+sache lesquels sont vivants, et une variante continue de contredire en silence
+des décisions que le projet a prises.

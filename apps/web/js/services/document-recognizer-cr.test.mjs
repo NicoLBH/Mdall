@@ -21,6 +21,45 @@ const CR = [
   "PROCHAINE RÉUNION : le 10/09/2026"
 ].join("\n");
 
+/**
+ * La forme réelle, et celle que la première version rejetait.
+ *
+ * Aucun compte rendu ne s'appelle « compte rendu de chantier ». Ils s'appellent
+ * **« compte rendu de réunion n° 14 »**, et c'est une ligne plus bas, dans un
+ * tableau d'en-tête, qu'on lit « Objet : suivi de chantier ». Les points ne sont
+ * pas numérotés : ce sont des puces sous une rubrique de lot.
+ *
+ * Cette forme est celle du document déposé pour l'essai, ramenée à sa structure.
+ * Aucun nom, aucune commune, aucune entreprise réels.
+ */
+const CR_REEL = [
+  "BUREAU D'ÉTUDES DU NORD 00000 VILLE",
+  "1234_CR_14 Page 1 sur 5",
+  "",
+  "Réhabilitation d'un bâtiment communal",
+  "",
+  "compte rendu de réunion n° 14",
+  "Objet Suivi de chantier",
+  "Date de réunion 20/08/2026",
+  "Auteur du compte rendu D. R.",
+  "",
+  "Représenté par Téléphone email présent absent Convoqué prochain rdv diffusion CR",
+  "Maître d'ouvrage Commune X",
+  "Maîtrise d'œuvre Atelier Nord",
+  "",
+  "A) OBSERVATIONS SUR COMPTE RENDU PRECEDENT",
+  "Aucune observation des intervenants sur le compte rendu précédent.",
+  "",
+  "C) PREPARATION / AVANCEMENT / OBSERVATIONS / SUITE DES OPERATIONS",
+  "",
+  "Lot n° 1 : Démolition / Gros Œuvre : Entreprise Alpha",
+  "❑ Préparation coffrage dalle en cours, nappe inférieure en place au plus tard le 26/08/2026",
+  "❑ Il faudra déplacer les barrières au plus près de l'angle du bâtiment",
+  "",
+  "Lot n°2 : CHARPENTE : Entreprise Beta",
+  "❑ Etablir vos plans de fabrication et notes de calcul"
+].join("\n");
+
 const pagesDe = (texte) =>
   texte.split("\n\n").map((bloc, rang) => ({ page: rang + 1, text: bloc }));
 
@@ -42,6 +81,36 @@ test("le verdict porte la ligne qui l'établit, et sa page", () => {
 
   assert.match(verdict.evidence.text, /COMPTE RENDU DE RÉUNION DE CHANTIER/);
   assert.equal(verdict.evidence.page, 1);
+});
+
+/**
+ * Le cas qui a été rejeté à l'essai, et la raison pour laquelle ce fichier a été
+ * réécrit. Le titre ne dit pas « chantier » : c'est le corps qui le dit.
+ */
+test("un compte rendu qui ne dit « chantier » que dans son objet est reconnu", () => {
+  const verdict = lit({ text: CR_REEL, pages: pagesDe(CR_REEL), filename: "1234_CR_14.pdf" });
+
+  assert.equal(verdict.status, RECOGNITION.RECOGNIZED);
+  assert.equal(verdict.kind, "cr_chantier");
+  assert.equal(verdict.confidence, "certain");
+  assert.match(verdict.evidence.text, /compte rendu de réunion n° 14/);
+});
+
+/**
+ * Et il porte bien de quoi en tirer des points. La première version n'y voyait
+ * que des points numérotés « 12.02.4 » ; la forme la plus répandue est la puce
+ * sous une rubrique de lot, et la manquer rendrait « sans contenu » un compte
+ * rendu qui en porte trente.
+ */
+test("des puces sous une rubrique de lot font un compte rendu exploitable", () => {
+  const sansNumeros = [
+    "compte rendu de réunion n° 14",
+    "Objet Suivi de chantier",
+    "Lot n° 1 : Gros Œuvre : Entreprise Alpha",
+    "❑ Préparation coffrage dalle en cours"
+  ].join("\n");
+
+  assert.equal(lit({ text: sansNumeros }).status, RECOGNITION.RECOGNIZED);
 });
 
 test("les abréviations du métier se lisent aussi", () => {
@@ -145,4 +214,47 @@ test("un compte rendu ne prétend porter aucun marqueur d'affaire", () => {
   // Il n'en porte pas, et en inventer ferait poser une question à laquelle rien
   // ne répond.
   assert.deepEqual(lit({ text: CR }).markers, []);
+});
+
+/* ── Quand les deux familles se disputent un document ─────────────────────── */
+
+/**
+ * Un rapport de bureau de contrôle peut porter les mots « compte rendu » et
+ * « chantier » — un rapport de visite en porte souvent les deux. Les deux
+ * reconnaisseurs le réclament alors, et il faut que ce soit **celui du bureau de
+ * contrôle qui gagne** : ses avis sont ce qu'on vient y chercher, et l'envoyer
+ * vers les sujets les perdrait en silence.
+ *
+ * Ce n'est pas au reconnaisseur des comptes rendus de s'en occuper — il
+ * redirait alors ce que l'autre sait déjà (règle 10). C'est le registre qui
+ * tranche, par l'ordre d'enregistrement, et c'est ce que ce test garde.
+ */
+test("un livrable de bureau de contrôle reste un livrable de bureau de contrôle", async () => {
+  const { createCtReportRecognizer } = await import("./document-recognizer-ct.js");
+
+  // Le moteur de l'atelier, réduit à ce que le reconnaisseur lui demande.
+  const ct = createCtReportRecognizer({
+    readDocumentMeta: () => ({
+      document_type: "RVRAT", document_type_label: "Rapport de visite",
+      chrono_reference: "1234/5678", issued_at: "2026-09-03",
+      chrono_affaire: null, affaire_reference: null
+    }),
+    discoverLegend: () => ({ codes: [{ code: "F", libelle: "Favorable" }] })
+  });
+
+  const ambigu = [
+    "SOCOTEC — RAPPORT DE VISITE DE CHANTIER",
+    "Compte rendu de la visite du 03/09/2026",
+    "Maîtrise d'œuvre : Atelier Nord",
+    "Lot n° 1 : Gros Œuvre",
+    "Vent F Région 2, site normal"
+  ].join("\n");
+
+  // Les deux le réclament…
+  assert.equal(lit({ text: ambigu }).kind, "cr_chantier", "le reconnaisseur des comptes rendus le réclame");
+
+  // …et c'est celui du bureau de contrôle qui l'emporte, dans l'ordre du
+  // catalogue.
+  const ensemble = recognizeDocument({ text: ambigu }, { recognizers: [ct, reconnaisseur] });
+  assert.equal(ensemble.kind, "ct_report");
 });
