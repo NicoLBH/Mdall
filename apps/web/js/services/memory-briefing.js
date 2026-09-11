@@ -61,7 +61,7 @@ import {
   settledByLabel
 } from "./assertion-taxonomy.js";
 import { dependenciesOf, needsReview } from "./assertion-dependencies.js";
-import { HYPOTHESIS_STATE, stateLabel, stateOf } from "./hypothesis-acts.js";
+import { HYPOTHESIS_STATE, stateLabel, stateOf } from "./memoire-actes.js";
 import { definedZones, describeZonesOf, zonesOf } from "./project-zones.js";
 import { describeConflict, findConflicts } from "./assertion-conflicts.js";
 

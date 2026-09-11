@@ -324,8 +324,8 @@ export async function rememberHypothesis(row) {
   // son histoire un premier point, et évite qu'une hypothèse validée plus tard
   // paraisse sortie de nulle part.
   try {
-    const { ACT } = await import("./hypothesis-acts.js");
-    const { recordAct } = await import("./hypothesis-acts-supabase.js");
+    const { ACT } = await import("./memoire-actes.js");
+    const { recordAct } = await import("./memoire-actes-supabase.js");
     await recordAct({
       project_id: row.project_id,
       assertion_id: nouvelle.id,

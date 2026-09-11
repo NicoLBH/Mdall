@@ -1,5 +1,31 @@
 /**
- * Ce que les gens font à une hypothèse : l'émettre, la valider, la contester.
+ * Ce que les gens font à une affirmation : l'émettre, la valider, la contester
+ * — et **la couvrir**.
+ *
+ * ## Croire n'est pas couvrir
+ *
+ * Les trois premiers actes ne valent que sur une **hypothèse** : ils disent ce
+ * qu'on croit d'une valeur que personne n'a encore mesurée. Le quatrième vaut
+ * partout ailleurs, et il dit tout autre chose.
+ *
+ * Un bureau de contrôle qui rend un avis favorable sur « zone de neige A1 » ne
+ * *croit* pas que la zone est A1 — un texte la fixe, personne ne vote. Il dit
+ * qu'il l'a **examinée** et qu'il engage sa responsabilité sur le fait que c'est
+ * la bonne pour ce projet-ci. C'est ce que `COUVRE` enregistre, et c'est la
+ * chose la plus chère de la mémoire : elle a coûté des semaines.
+ *
+ * | sur une hypothèse | ailleurs |
+ * | --- | --- |
+ * | « je crois cette valeur » | « j'ai examiné cette valeur et je m'engage dessus » |
+ * | se conteste, se revalide | ne se conteste pas : elle cesse de couvrir |
+ * | l'état vient du dernier acte | l'état vient de la chaîne des remplacements |
+ *
+ * Un acte porte l'identifiant d'une affirmation — donc d'une **version**. C'est
+ * ce qui fait qu'une couverture tombe toute seule quand la valeur est
+ * remplacée : elle reste accrochée à ce qui a réellement été examiné. Ce que
+ * cela donne se lit dans `services/couverture.js` ; ici on n'écrit que l'acte.
+ *
+ * Le mot « visa » ne paraît jamais à l'écran — `docs/fondamentaux.md`, règle 12.
  *
  * Une hypothèse n'est pas seulement une valeur : c'est une valeur **que
  * quelqu'un a posée**, et sur laquelle d'autres se prononcent. Dans les avis
@@ -53,13 +79,32 @@
 
 import { classifyAssertion, isContestable, natureIndefinie, settledByLabel } from "./assertion-taxonomy.js";
 
-/** Ce qu'on peut faire à une hypothèse. */
+/** Ce qu'on peut faire à une affirmation. */
 export const ACT = {
   /** Quelqu'un l'a posée. La déclaration elle-même en est une. */
   EMITTED: "emitted",
   VALIDATED: "validated",
-  CONTESTED: "contested"
+  CONTESTED: "contested",
+  /**
+   * Quelqu'un l'a examinée et s'engage dessus.
+   *
+   * Le seul acte qui vaille sur ce qu'aucun avis ne déplace — une contrainte,
+   * un constat, une décision. Il ne rend pas la valeur plus vraie ; il dit que
+   * quelqu'un a mis son nom en face.
+   *
+   * La colonne `verdict` est du texte libre en base : ce quatrième mot n'a
+   * demandé aucune migration.
+   */
+  COUVRE: "covers"
 };
+
+/** Les actes qui ne disent pas ce qu'on croit, mais ce qu'on a examiné. */
+const ACTES_QUI_COUVRENT = [ACT.COUVRE];
+
+/** Vrai quand cet acte engage quelqu'un sur une valeur. */
+export function acteQuiCouvre(acte = null) {
+  return ACTES_QUI_COUVRENT.includes(texte(acte?.verdict));
+}
 
 /** L'état d'une hypothèse, déduit de ses actes — jamais stocké. */
 export const HYPOTHESIS_STATE = {
@@ -78,7 +123,11 @@ const STATE_LABELS = {
 const VERDICT_LABELS = {
   [ACT.EMITTED]: "émise",
   [ACT.VALIDATED]: "validée",
-  [ACT.CONTESTED]: "contestée"
+  [ACT.CONTESTED]: "contestée",
+  // Jamais « visée » : le mot du métier reste dans le code et ne monte pas à
+  // l'écran (règle 12). Ce qu'on lit est ce qui a été fait, pas le nom du
+  // mécanisme.
+  [ACT.COUVRE]: "examinée"
 };
 
 function texte(value) {
@@ -157,7 +206,11 @@ export function verdictLabel(verdict) {
  * @returns {{validations: number, contestations: number, sources: number, acts: number}}
  */
 export function corroboration(assertionId, acts = []) {
-  const histoire = actsOf(assertionId, acts);
+  // **Examiner ne corrobore pas.** Un acte qui couvre dit qu'on a regardé et
+  // qu'on s'engage ; il ne dit pas qu'on croit la valeur. Les compter ici
+  // ferait passer un avis de bureau de contrôle pour une voix de plus dans un
+  // débat qui n'a pas lieu.
+  const histoire = actsOf(assertionId, acts).filter((acte) => !acteQuiCouvre(acte));
 
   const sources = new Set();
   for (const acte of histoire) {
@@ -248,18 +301,28 @@ export function planAct({
   const cible = texte(assertion?.id);
   const quoi = texte(verdict);
 
-  if (!cible) return { ok: false, reason: "Aucune hypothèse." };
-  if (![ACT.EMITTED, ACT.VALIDATED, ACT.CONTESTED].includes(quoi)) {
-    return { ok: false, reason: "Un acte est une émission, une validation ou une contestation." };
+  if (!cible) return { ok: false, reason: "Aucune affirmation." };
+  if (![ACT.EMITTED, ACT.VALIDATED, ACT.CONTESTED, ACT.COUVRE].includes(quoi)) {
+    return { ok: false, reason: "Un acte est une émission, une validation, une contestation ou un examen." };
   }
 
-  // Se prononcer n'a de sens que sur une hypothèse. Sur une contrainte, un avis
-  // ne change rien — cinq personnes d'accord ne déplacent pas une zone de neige
-  // — et sur un constat il arrive trop tard : ce qui a été vu a été vu. L'écran
-  // ne propose déjà ces boutons que sur les hypothèses ; la règle est répétée
-  // ici parce qu'un appel ne passe pas toujours par l'écran, et qu'une règle qui
-  // ne tient qu'à l'affichage n'en est pas une.
   const { nature } = classifyAssertion(assertion);
+
+  // **Examiner vaut partout.** Une zone de neige n'est pas une hypothèse, et un
+  // avis de bureau de contrôle porte pourtant bien sur elle : il ne dit pas
+  // qu'il la croit, il dit qu'il l'a regardée et qu'il engage son nom dessus.
+  // C'est le seul acte qu'on accepte sur ce qu'aucun avis ne déplace.
+  if (quoi === ACT.COUVRE) {
+    return { ok: true, act: acteEcrit({ assertion, cible, quoi, avancee: "", note, sourceAssertionId, declaredBy, at }) };
+  }
+
+  // Se prononcer, en revanche, n'a de sens que sur une hypothèse. Sur une
+  // contrainte, un avis ne change rien — cinq personnes d'accord ne déplacent
+  // pas une zone de neige — et sur un constat il arrive trop tard : ce qui a
+  // été vu a été vu. L'écran ne propose déjà ces boutons que sur les
+  // hypothèses ; la règle est répétée ici parce qu'un appel ne passe pas
+  // toujours par l'écran, et qu'une règle qui ne tient qu'à l'affichage n'en
+  // est pas une.
   if (!isContestable(nature)) {
     // L'article vient avec le nom : « une constat » se lisait mal, et deux des
     // natures sont masculines.
@@ -278,18 +341,25 @@ export function planAct({
   // le même geste.
   const avancee = quoi === ACT.CONTESTED ? texte(proposedValue) : "";
 
+  return { ok: true, act: acteEcrit({ assertion, cible, quoi, avancee, note, sourceAssertionId, declaredBy, at }) };
+}
+
+/**
+ * La ligne qu'un acte écrit, quelle que soit sa nature.
+ *
+ * Une seule construction pour les quatre verdicts : deux écritures de la même
+ * ligne finiraient par ne plus porter les mêmes colonnes (règle 4).
+ */
+function acteEcrit({ assertion, cible, quoi, avancee, note, sourceAssertionId, declaredBy, at }) {
   return {
-    ok: true,
-    act: {
-      project_id: texte(assertion.project_id) || null,
-      assertion_id: cible,
-      verdict: quoi,
-      proposed_value: avancee || null,
-      note: texte(note) || null,
-      source_assertion_id: texte(sourceAssertionId) || null,
-      declared_by: texte(declaredBy) || null,
-      created_at: texte(at) || new Date().toISOString()
-    }
+    project_id: texte(assertion.project_id) || null,
+    assertion_id: cible,
+    verdict: quoi,
+    proposed_value: avancee || null,
+    note: texte(note) || null,
+    source_assertion_id: texte(sourceAssertionId) || null,
+    declared_by: texte(declaredBy) || null,
+    created_at: texte(at) || new Date().toISOString()
   };
 }
 

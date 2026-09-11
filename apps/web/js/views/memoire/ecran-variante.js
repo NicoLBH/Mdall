@@ -47,6 +47,7 @@ import { enchainementDeLaVariante } from "../../services/variante-enchainement.j
 import { renderEnchainement, SENS } from "../ui/enchainement.js";
 import { renderSaisieAdresse } from "../ui/saisie-adresse.js";
 import { estLaLocalisation } from "../../services/adresse-saisie.js";
+import { ligneDeLEngagement, phraseDeLaCouverture } from "../../services/couverture.js";
 import { champDeLIdentifiant } from "../../services/tableau-structure.js";
 import { valeursTrouvees } from "../../services/recherche-de-valeur.js";
 
@@ -640,14 +641,79 @@ function renderTesterUneVariante(choisie, { saisie = "", echec = "", etape = ETA
  * ────────────────────────────────────────────────────────────────────────── */
 
 /**
+ * Ce que la variante ferait tomber.
+ *
+ * ## Pourquoi ce rang passe devant les autres
+ *
+ * Les chiffres se recalculent en une seconde ; un avis de bureau de contrôle se
+ * redemande en six semaines. Sur les deux moitiés de la réponse — « la zone
+ * passe de A1 à E » et « les trois avis ne couvrent plus » —, c'est la seconde
+ * qui fait décider en réunion. Elle se lit donc en premier.
+ *
+ * ## Ce qu'on n'écrit jamais ici
+ *
+ * Ni « visa », ni « validé », ni « en attente » : Mdall n'est pas un outil de
+ * gestion de visas et ne le sera jamais (`docs/fondamentaux.md`, règle 12). Un
+ * engagement se dit par **ce qu'il a examiné, son auteur et sa date**, et rien
+ * d'autre. Et il ne « devient pas faux » : il **cesse de couvrir**, parce qu'un
+ * constat reste vrai à sa date.
+ *
+ * ## Le silence, quand il n'y a rien
+ *
+ * Aucun engagement lu, aucun engagement touché : la section n'existe pas. Même
+ * raison que pour « À revérifier » — une alarme qui rassure apprend à ne plus la
+ * regarder.
+ */
+function renderCeQuiTombe(couverture = null) {
+  const tombees = couverture?.tombees ?? [];
+  const aRevoir = couverture?.aRevoir ?? [];
+  if (!tombees.length && !aRevoir.length) return "";
+
+  const ligne = (engagement) => `
+    <li class="variante-ligne">
+      <span class="variante-ligne__sujet">${escapeHtml(ligneDeLEngagement(engagement))}</span>
+      ${
+        // Ce qui a été examiné, et ce que la variante en ferait. Montrer la
+        // valeur d'aujourd'hui n'aurait rien dit : une variante n'écrit rien,
+        // c'est encore celle qui a été examinée.
+        engagement.deviendrait
+          ? `<span class="variante-ligne__valeurs">${
+              escapeHtml(engagement.examinee?.payload?.value ?? "")} → ${escapeHtml(engagement.deviendrait)}</span>`
+          : ""
+      }
+      <span class="variante-ligne__note">${escapeHtml(phraseDeLaCouverture(engagement.etat))}</span>
+    </li>`;
+
+  return `
+        <section class="variante-rang variante-rang--suspect">
+          <h5>${svgIcon("alert", { className: "octicon" })} Ce qui ne couvre plus</h5>
+          <p>
+            ${tombees.length
+              ? `${tombees.length} ${accorde(tombees.length, "examen portait", "examens portaient")}
+                 sur ${accorde(tombees.length, "une valeur", "des valeurs")} que cette variante change.`
+              : ""}
+            ${aRevoir.length
+              ? `${aRevoir.length} ${accorde(aRevoir.length, "autre est", "autres sont")} à revérifier :
+                 ce qui a été examiné n'a pas bougé, mais une de ses entrées, si.`
+              : ""}
+          </p>
+          <ul class="variante-lignes">
+            ${tombees.map(ligne).join("")}${aRevoir.map(ligne).join("")}
+          </ul>
+        </section>`;
+}
+
+/**
  * Les trois rangs de ce qu'une variante change.
  *
  * Sortis du rendu principal parce qu'ils vivent maintenant dans une colonne, à
  * gauche de la chaîne. Une colonne se remplit, elle ne s'écrit pas au milieu
  * d'une mise en page.
  */
-function renderRangs(rendu) {
+function renderRangs(rendu, couverture = null) {
   return `
+        ${renderCeQuiTombe(couverture)}
+
         <section class="variante-rang variante-rang--sur">
           <h5>${svgIcon("check", { className: "octicon" })} Recalculé</h5>
           ${
@@ -712,7 +778,7 @@ function renderRangs(rendu) {
  * surtout ce qui **ne** se passe pas : rien ne s'écrit au serveur.
  */
 function renderResultat(etat) {
-  const { etape, choisie, saisie, rendu } = etat;
+  const { etape, choisie, saisie, rendu, couverture } = etat;
 
   if (etape === ETAPE.ATTENTE) {
     return `
@@ -746,7 +812,7 @@ function renderResultat(etat) {
     sujet: choisie?.sujet, valeur: choisie?.valeur, essaye: saisie
   });
 
-  const rangs = renderRangs(rendu);
+  const rangs = renderRangs(rendu, couverture);
 
   return `
     <section class="variante-resultat">

@@ -633,6 +633,6 @@ qui se comparerait par un `>`.
 `docs/ce-qui-couvre-une-valeur.md` — le plan entier, ses six décisions et ses
 quatre étapes.
 
-`apps/web/js/services/hypothesis-acts.js` — les actes sur une hypothèse, dont
+`apps/web/js/services/memoire-actes.js` — les actes sur une hypothèse, dont
 ceci est la généralisation : l'état déduit et jamais stocké, le dernier acte qui
 fait foi, et la répétition qui ne vaut pas validation.

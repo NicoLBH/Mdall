@@ -350,3 +350,82 @@ test("un refus s'exporte aussi : c'est une réponse", () => {
   assert.equal(json.resultat, null);
   assert.match(json.refus, /déjà ce que le projet dit/);
 });
+
+/* ── Ce qui ne couvre plus ───────────────────────────────────────────────── */
+
+const at = "2026-03-12T09:00:00Z";
+
+const zone = {
+  id: "neige", project_id: "p1", superseded_by: null, decided_at: at,
+  statement: "Zone de neige : A1",
+  payload: { subject: "Zone de neige", value: "A1" }
+};
+
+const RENDU = {
+  ok: true, depart: [], rejouees: [], aRevoir: [], cycles: [],
+  recalculees: [{
+    assertion: zone, sujet: "Zone de neige", avant: "A1", apres: "E",
+    valeurABouge: true, reservesAvant: [], reservesApres: [], reservesOntBouge: false,
+    utilitaire: "deduction_zone_neige_commune_V1"
+  }],
+  inchangees: 4, confirmees: 0
+};
+
+const COUVERTURE = {
+  engagements: 1,
+  tombees: [{
+    acte: { created_at: at, note: "avis du bureau de contrôle", declared_by: "u1" },
+    examinee: zone,
+    courante: { ...zone, payload: { subject: "Zone de neige", value: "E" } },
+    etat: "ne-couvre-plus",
+    pourquoi: "directe"
+  }],
+  aRevoir: []
+};
+
+/**
+ * La moitié de la réponse que les chiffres ne donnent pas. Un zonage se
+ * recalcule en une seconde ; un avis de bureau de contrôle se redemande en six
+ * semaines — c'est donc lui qui se lit en premier.
+ */
+test("ce qui ne couvre plus se dit, et avant le reste", () => {
+  const html = renderEcranDeVariante({
+    valeurs: VALEURS, etape: ETAPE.RESULTAT, choisie: VALEURS[0], saisie: "E",
+    rendu: RENDU, couverture: COUVERTURE
+  });
+
+  assert.match(html, /Ce qui ne couvre plus/);
+  assert.match(html, /avis du bureau de contrôle/);
+  assert.match(html, /2026-03-12/);
+  // En tête des rangs : avant « Recalculé ».
+  assert.ok(html.indexOf("Ce qui ne couvre plus") < html.indexOf("Recalculé"),
+    "ce qui coûte se lit avant ce qui se recalcule");
+});
+
+/**
+ * **Règle 12.** Mdall n'est pas un outil de gestion de visas, et l'écran ne doit
+ * jamais en avoir l'air. Le mot du métier reste dans le code ; ce qui se lit est
+ * ce qui a été fait, par qui, et quand.
+ */
+test("l'écran ne parle jamais comme un outil de visa", () => {
+  const html = renderEcranDeVariante({
+    valeurs: VALEURS, etape: ETAPE.RESULTAT, choisie: VALEURS[0], saisie: "E",
+    rendu: RENDU, couverture: COUVERTURE
+  });
+
+  for (const interdit of [/\bvisas?\b/i, /\bviser\b/i, /\bvisée?s?\b/i,
+    /en attente de/i, /à valider/i, /approbation/i, /circuit/i]) {
+    assert.doesNotMatch(html, interdit, `l'écran emploie « ${interdit} »`);
+  }
+});
+
+test("sans engagement touché, la section n'existe pas", () => {
+  // Une alarme qui rassure apprend à ne plus la regarder : même raison que pour
+  // « À revérifier ».
+  const html = renderEcranDeVariante({
+    valeurs: VALEURS, etape: ETAPE.RESULTAT, choisie: VALEURS[0], saisie: "E",
+    rendu: RENDU, couverture: { engagements: 0, tombees: [], aRevoir: [] }
+  });
+
+  assert.doesNotMatch(html, /Ce qui ne couvre plus/);
+});

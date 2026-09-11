@@ -11,7 +11,7 @@ import {
   planContestationFlags,
   stateLabel,
   stateOf
-} from "./hypothesis-acts.js";
+} from "./memoire-actes.js";
 
 // Une vraie hypothèse : un essai la trancherait, et il n'a pas eu lieu. La
 // zone de neige qui servait ici auparavant n'en était pas une — rien ne la

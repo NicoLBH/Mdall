@@ -51,6 +51,21 @@ async function applicationsDuProjet(projectId) {
 }
 
 /**
+ * Ce que des gens ont engagé sur des valeurs de ce projet.
+ *
+ * Sans eux, la variante dit ce qui change et pas **ce que ça coûte**. Leur
+ * absence n'est pas une panne : un projet peut n'avoir aucun engagement.
+ */
+async function actesDuProjet(projectId) {
+  try {
+    const { listHypothesisActs } = await import("./memoire-actes-supabase.js");
+    return await listHypothesisActs(projectId);
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Exécuter la variante que le modèle vient de demander.
  *
  * Rend la même forme que les utilitaires du serveur — `{ resultat, pourLeModele }`
@@ -74,12 +89,15 @@ export async function executerLaVariante({
 
   dire("Lecture de ce qui dépend de cette valeur", sujet ? `on fait varier ${sujet}` : "");
 
-  const applications = await applicationsDuProjet(projectId);
+  const [applications, actes] = await Promise.all([
+    applicationsDuProjet(projectId),
+    actesDuProjet(projectId)
+  ]);
   const moteur = tester ?? testerUneVariante;
 
   let rendu = null;
   try {
-    rendu = await moteur({ projectId, assertions, applications, sujet, valeur });
+    rendu = await moteur({ projectId, assertions, applications, actes, sujet, valeur });
   } catch (erreur) {
     const motif = erreur instanceof Error ? erreur.message : String(erreur);
     return refuse(`Le test de variante n'a pas abouti : ${motif}`);
@@ -93,8 +111,14 @@ export async function executerLaVariante({
   }
 
   const resume = resumeDeLaVariante(rendu);
+  const tombees = resume.neCouvrentPlus.length;
   dire("Variante calculée",
-    `${resume.ontBouge} valeur${resume.ontBouge > 1 ? "s" : ""} bouge${resume.ontBouge > 1 ? "nt" : ""}`);
+    [
+      `${resume.ontBouge} valeur${resume.ontBouge > 1 ? "s" : ""} bouge${resume.ontBouge > 1 ? "nt" : ""}`,
+      // Ce qui tombe se dit dès le compte rendu : c'est la ligne qu'on lit
+      // pendant que le modèle rédige, et la plus chère des deux.
+      tombees ? `${tombees} examen${tombees > 1 ? "s ne couvrent" : " ne couvre"} plus` : ""
+    ].filter(Boolean).join(" · "));
 
   return {
     resultat: {

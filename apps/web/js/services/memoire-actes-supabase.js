@@ -3,7 +3,7 @@
  *
  * Lire les actes d'un projet, en écrire un — et, quand c'est une contestation,
  * lever aussitôt les drapeaux de ce qui reposait sur l'hypothèse. La règle de
- * ce qui entraîne quoi vit dans `hypothesis-acts.js`, qui est pur et testé.
+ * ce qui entraîne quoi vit dans `memoire-actes.js`, qui est pur et testé.
  *
  * Comme partout dans la mémoire : `null` quand la lecture a échoué, `[]` quand
  * il n'y a rien. Confondre les deux montrerait une hypothèse contestée comme
@@ -95,7 +95,7 @@ export async function recordAct(acte) {
  */
 async function flagAfterContestation(acte) {
   try {
-    const { planContestationFlags } = await import("./hypothesis-acts.js");
+    const { planContestationFlags } = await import("./memoire-actes.js");
     const { listAssertionDependencies, markNeedsReview } = await import("./assertion-dependencies-supabase.js");
 
     const liens = await listAssertionDependencies(acte.project_id);
