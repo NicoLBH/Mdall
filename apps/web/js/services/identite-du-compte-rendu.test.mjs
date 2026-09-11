@@ -122,3 +122,50 @@ test("un compte rendu réel dit les deux", () => {
 test("un document muet rend deux réponses vides, pas une invention", () => {
   assert.deepEqual(identiteDuCompteRendu("Un texte sans en-tête"), { numero: "", tenueLe: "" });
 });
+
+/* ── Ce qu'un vrai compte rendu écrit, et qu'on ne lisait pas ────────────── */
+
+/**
+ * **Deux comptes rendus de chantier réels n'ont pas rendu leur date.**
+ *
+ * Ils l'écrivent pourtant en première page, dans l'en-tête, en toutes lettres.
+ * Mais elle est dans une case de tableau : l'intitulé d'un côté, la date de
+ * l'autre, et le texte extrait du PDF les colle sans ponctuation —
+ * « Date de réunion 25/06/2025 ». On exigeait des deux-points, on répondait
+ * « je ne sais pas » (règle 5 prise à l'envers), et la ligne des reprises
+ * perdait son « depuis le … ».
+ */
+test("la date se lit sans deux-points quand l'intitulé la qualifie", () => {
+  assert.equal(tenueLeDuCompteRendu("Date de réunion 25/06/2025"), "2025-06-25");
+  assert.equal(tenueLeDuCompteRendu("Date de la réunion   02/07/2025"), "2025-07-02");
+  // Et elle continue de se lire quand la ponctuation est là.
+  assert.equal(tenueLeDuCompteRendu("Date de réunion : 25/06/2025"), "2025-06-25");
+});
+
+/**
+ * Nu, l'intitulé garde ses deux-points : « Date » seul ouvre des lignes qui ne
+ * parlent pas de la réunion — une date de mise à jour, une date de livraison —
+ * et la première venue deviendrait le jour de la séance.
+ */
+test("« Date » seul demande toujours ses deux-points", () => {
+  assert.equal(tenueLeDuCompteRendu("Date : 12/03/2026"), "2026-03-12");
+  assert.equal(tenueLeDuCompteRendu("Date de mise à jour du planning 12/03/2026"), "");
+});
+
+/**
+ * L'en-tête d'un compte rendu annonce sa réunion, et le pied annonce la
+ * suivante. Confondre les deux daterait chaque compte rendu de la semaine
+ * d'après.
+ */
+test("l'en-tête l'emporte sur le prochain rendez-vous", () => {
+  const cr = [
+    "compte rendu de réunion n° 6",
+    "Objet Suivi de chantier",
+    "Date de réunion 25/06/2025",
+    "",
+    "Prochain rendez-vous de chantier :",
+    "Prochain RDV Le mercredi 02/07/2025 à 9 h 00"
+  ].join("\n");
+
+  assert.deepEqual(identiteDuCompteRendu(cr), { numero: "6", tenueLe: "2025-06-25" });
+});

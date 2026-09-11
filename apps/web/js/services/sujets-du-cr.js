@@ -127,17 +127,28 @@ export function sujetsDuCompteRendu({ lus = [], connus = [], sujetsDuProjet = []
     const cle = texte(point?.key) || `cr:${titreAplati(titre)}`;
     const aplati = titreAplati(titre);
 
+    // **Le sujet voyage avec le point, quel que soit le motif.** L'écran doit
+    // pouvoir y renvoyer — sinon « déjà suivi » est une affirmation qu'on ne
+    // peut pas vérifier — et le suivi des reprises en a besoin pour savoir de
+    // quel sujet ce compte rendu vient de reparler.
+    //
+    // Il ne se cherchait que dans la branche des titres, et c'est ce qui a rendu
+    // les sujets muets. Un point ouvert par le compte rendu n° 6 laisse une
+    // affirmation en mémoire ; au n° 7, le même point tombe dans la branche de
+    // la mémoire — **avant** celle des titres — et repartait sans son sujet.
+    // La reprise n'avait alors rien à quoi s'accrocher, aucune ligne n'était
+    // écrite, et le sujet restait sans activité de la réunion n° 6 jusqu'à la
+    // fin du chantier. « Rien n'a bougé » et « personne n'a rien analysé » se
+    // confondaient — précisément ce que ce suivi existe pour distinguer.
+    const dejaSuivi = titresDuProjet.get(aplati);
+
     const repondu = repondus.get(cle);
     if (repondu) {
-      deja.push({ ...point, motif: repondu });
+      deja.push({ ...point, motif: repondu, ...(dejaSuivi ? { sujet: dejaSuivi } : {}) });
       continue;
     }
 
-    const dejaSuivi = titresDuProjet.get(aplati);
     if (dejaSuivi) {
-      // Le sujet qui existe déjà voyage avec le motif : l'écran doit pouvoir y
-      // renvoyer, sinon « déjà suivi » est une affirmation qu'on ne peut pas
-      // vérifier.
       deja.push({ ...point, motif: DEJA.MEME_TITRE, sujet: dejaSuivi });
       continue;
     }

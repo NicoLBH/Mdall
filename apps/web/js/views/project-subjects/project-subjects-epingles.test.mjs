@@ -113,3 +113,38 @@ test("le bandeau est branché de bout en bout", () => {
   );
   assert.match(vue, /renderSujetsEpinglesHtml\(\{/);
 });
+
+/**
+ * **Un nom qu'on attend et que personne ne donne.**
+ *
+ * `getFlatSubjects` était déjà déstructuré des dépendances de la vue, et
+ * personne ne le fournissait : il valait `undefined`, sans bruit, tant que rien
+ * ne l'appelait. Le bandeau a été le premier à l'appeler — et le tableau des
+ * sujets a disparu de l'écran, sur un `TypeError` levé au premier rendu.
+ *
+ * C'est la même famille que le défaut des six tours : un nom qui ne désigne
+ * rien, qui ne se plaint qu'au moment où quelqu'un s'en sert, et dont la panne
+ * ressemble à tout autre chose. Ici la vérification est possible sans exécuter
+ * l'écran, alors on la fait.
+ */
+test("tout ce que la vue attend, la racine le fournit", () => {
+  const vue = lis("./project-subjects-view.js");
+  const racine = lis("../project-subjects.js");
+
+  const debut = vue.indexOf("export function createProjectSubjectsView(deps) {");
+  assert.ok(debut >= 0, "la fabrique a changé de nom");
+  const bloc = vue.slice(debut, vue.indexOf("} = deps;", debut));
+  const attendus = [...bloc.matchAll(/^ {4}([A-Za-z_$][\w$]*),?\s*$/gm)].map((trouve) => trouve[1]);
+
+  assert.ok(attendus.length > 20, "la liste des dépendances n'a pas été relue");
+
+  const ouvre = racine.indexOf("createProjectSubjectsView({");
+  assert.ok(ouvre >= 0, "la fabrique n'est plus appelée avec un objet littéral");
+  const config = racine.slice(ouvre, racine.indexOf("\n});", ouvre));
+
+  const manquants = attendus.filter(
+    (nom) => !new RegExp(`(^|[\\s{,])${nom}\\s*[:,]`, "m").test(config)
+  );
+
+  assert.deepEqual(manquants, [], `la vue attend des dépendances que personne ne lui donne : ${manquants.join(", ")}`);
+});
