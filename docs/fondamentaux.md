@@ -565,3 +565,74 @@ portées, et ce qu'une correction a remplacé.
 
 `apps/web/js/services/memoire-perimetre.js` — ce qui a quitté le présent, et
 pourquoi.
+
+---
+
+## 12. On enregistre ce qui a été vérifié ; on ne le réclame jamais
+
+Un projet se rend unique par **ce que des gens ont engagé dessus**. N'importe
+quel projet en Haute-Savoie trouvera la même zone de neige ; un seul a l'avis
+favorable du bureau de contrôle daté du 12 mars. Cet engagement est la chose la
+plus chère de la mémoire, et Mdall doit savoir ce qu'un changement lui fait.
+
+Mais **Mdall n'est pas un outil de visa, et ne le sera jamais.** Il en existe
+d'excellents. Notre marché — les petits et moyens projets de construction — est
+allergique aux procédures, et une procédure de plus est une raison de plus de ne
+pas se servir de l'outil.
+
+La ligne tient en une phrase : **Mdall ne réclame rien à personne.** Un outil de
+visa *sollicite* — file d'attente, circuits d'approbation, relances, statuts
+d'avancement. Mdall **enregistre ce qui a été dit, et en tire les conséquences**.
+Personne n'est jamais bloqué en attendant que quelqu'un valide.
+
+### Trois conséquences pour le code
+
+1. **Un engagement porte sur une version, jamais sur un sujet.** Il pointe vers
+   l'identifiant d'une affirmation. Quand la valeur est remplacée, il ne suit
+   pas : il reste accroché à ce qui a réellement été examiné. La chaîne des
+   remplacements *est* le mécanisme de péremption — il n'y en a pas d'autre à
+   écrire.
+
+2. **Un engagement allonge une histoire, il n'ajoute pas un état.** Pas de cycle
+   *en attente → approuvé → refusé* sur une valeur. La valeur ne change pas
+   d'état ; seule son histoire s'allonge. C'est ce qui permet de ne jamais s'en
+   servir sans que rien ne se bloque.
+
+3. **Un avis ne devient jamais faux — il cesse de couvrir.** Un constat reste
+   vrai à sa date (règle 6). Ce qui tombe est sa couverture, pas lui. On écrit
+   « ne couvre plus la valeur d'aujourd'hui », jamais « invalidé ».
+
+### Le mot `visa` est un mot de code
+
+Il reste dans le code parce que c'est le mot juste du métier et qu'en inventer un
+autre serait pire. Il **n'apparaît jamais à l'écran**, et un test le vérifie.
+
+| jamais à l'écran | à l'écran |
+| --- | --- |
+| « visa », « à viser », « en attente de visa » | rien : la chose se dit par son auteur et sa date |
+| une pastille « VALIDÉ », un niveau de validation | « Avis F — bureau de contrôle, 12 mars » |
+| un circuit, une file, une relance | *(n'existe pas)* |
+
+Le geste, quand il existe, est le plus léger possible : une action discrète sur
+une valeur — **« j'ai vérifié »** — qui écrit une ligne et ne demande rien à
+personne.
+
+### Ce que le système ne décide jamais
+
+Il dit **ce qui tombe**, jamais ce qui tient. Deviner qu'un changement est
+favorable et garder l'avis serait un jugement d'ingénieur ; se tromper garderait
+en vie un avis mort, qu'on citerait en réunion. C'est la règle 5 : on dit « cet
+avis portait sur une valeur qui a changé », et quelqu'un tranche.
+
+Il ne compte pas non plus les voix. Cinq signatures du même bureau ne font pas
+cinq vérifications : on rend **la liste** de ce qui a été engagé, jamais un score
+qui se comparerait par un `>`.
+
+### Où c'est écrit
+
+`docs/ce-qui-couvre-une-valeur.md` — le plan entier, ses six décisions et ses
+quatre étapes.
+
+`apps/web/js/services/hypothesis-acts.js` — les actes sur une hypothèse, dont
+ceci est la généralisation : l'état déduit et jamais stocké, le dernier acte qui
+fait foi, et la répétition qui ne vaut pas validation.
