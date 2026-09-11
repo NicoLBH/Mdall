@@ -1,5 +1,6 @@
 import { getDisplayAuthorName, getAuthorIdentity } from "../ui/author-identity.js";
-import { quandOnClique, renderBoutonDeTri } from "../ui/tete-de-tableau.js";
+import { renderBoutonCopier } from "../ui/bouton-copier.js";
+import { quandOnClique, quandOnCopie, renderBoutonDeTri } from "../ui/tete-de-tableau.js";
 import {
   EPINGLES_AU_PLUS, estEpingle, motDeLEpingle, sujetsEpingles
 } from "../../services/epingles-des-sujets.js";
@@ -395,12 +396,18 @@ async function basculerLEpingle(subjectId) {
 /**
  * Là où l'épingle a le droit d'exister.
  *
- * Le nom de cette classe est écrit deux fois — ici et dans le bouton, quelques
- * centaines de lignes plus bas — et c'est déjà une fois de trop : on le pose
- * donc à un seul endroit, que les deux lisent (règle 10).
+ * **Deux endroits, et c'est le même geste** : le bouton du panneau de droite,
+ * qui pose l'épingle, et la croix d'une carte du bandeau, qui la retire. Les
+ * écouter séparément ferait deux chemins pour une seule décision, et le jour où
+ * l'un change, l'autre diverge (règle 4).
+ *
+ * Le nom de la classe du panneau est écrit deux fois — ici et dans le bouton,
+ * quelques centaines de lignes plus bas — et c'est déjà une fois de trop : il
+ * vit donc ici, et les deux le lisent (règle 10). Celui de la carte appartient
+ * au tableau, qui la dessine.
  */
 const CLASSE_DE_L_EPINGLE = "subject-meta-field--epingle";
-const ZONE_DE_L_EPINGLE = `.${CLASSE_DE_L_EPINGLE}`;
+const ZONE_DE_L_EPINGLE = `.${CLASSE_DE_L_EPINGLE}, .subject-pinned-card`;
 
 /**
  * L'épingle écoute **comme les boutons de la tête du tableau**, et pour la même
@@ -418,6 +425,84 @@ const ZONE_DE_L_EPINGLE = `.${CLASSE_DE_L_EPINGLE}`;
  */
 function ecouterLEpingle() {
   quandOnClique("subject-pin", (subjectId) => basculerLEpingle(subjectId), { zone: ZONE_DE_L_EPINGLE });
+}
+
+/* ── Un bouton provisoire, le temps de comprendre ────────────────────────── */
+
+/**
+ * Le constat du suivi, copié dans le presse-papiers.
+ *
+ * ## Pourquoi il existe
+ *
+ * La ligne « pas de modification du compte rendu n° X à Y » ne s'affiche
+ * toujours pas. Elle a été relue deux fois, corrigée deux fois — et elle reste
+ * muette. Le problème n'est plus d'analyser le code : c'est qu'**on ne voit pas
+ * où la chaîne s'arrête**. Quatre maillons peuvent échouer sans bruit, et
+ * l'écran affiche la même chose dans les quatre cas : rien.
+ *
+ * Ce bouton lit les données et rend un constat par maillon. C'est ce qui
+ * distingue « aucun compte rendu n'a jamais été fusionné » de « les reprises
+ * sont écrites mais la phrase se calcule mal » — deux causes qu'une troisième
+ * relecture du code ne séparera pas.
+ *
+ * ## Il est provisoire, et cela s'écrit
+ *
+ * Il s'en va le jour où la ligne s'affiche. Le laisser traîner ferait un second
+ * endroit où l'on va chercher ce que le sujet dit déjà — et un bouton de
+ * diagnostic qui survit à son diagnostic finit par être pris pour une
+ * fonctionnalité.
+ */
+const CONSTAT_DU_SUIVI = "constat-du-suivi";
+
+function renderBoutonDeConstat() {
+  return renderBoutonCopier({
+    cible: CONSTAT_DU_SUIVI,
+    className: "bouton-copier--constat",
+    titre: "Copier le constat du suivi des comptes rendus (provisoire)",
+    titreCopie: "Constat copié"
+  });
+}
+
+/**
+ * Ce que le bouton copie, résolu **au geste**.
+ *
+ * Jamais au rendu : on veut l'état du moment où l'on constate, pas celui du
+ * dernier dessin. Et les lectures coûtent un aller-retour — les faire à chaque
+ * rendu du tableau serait payer cher pour une question qu'on ne pose pas.
+ */
+async function constatDuSuivi() {
+  const projetRoute = String(store.currentProjectId || "").trim();
+
+  try {
+    const [{ diagnosticDuSuivi }, { documentsDuProjet }, { resolveCurrentBackendProjectId },
+      { listSubjectCrMentions }] = await Promise.all([
+      import("../../services/diagnostic-du-suivi.js"),
+      import("../../services/diagnostic-du-suivi-supabase.js"),
+      import("../../services/project-supabase-sync.js"),
+      import("../../services/project-subjects-supabase.js")
+    ]);
+
+    const projetBackend = (await resolveCurrentBackendProjectId()) || "";
+    const sujets = getFlatSubjects();
+
+    const [documents, reprises] = await Promise.all([
+      documentsDuProjet(projetBackend),
+      listSubjectCrMentions(sujets.map((sujet) => sujet?.id))
+    ]);
+
+    return diagnosticDuSuivi({
+      projetRoute,
+      projetBackend,
+      documents,
+      sujets,
+      reprises,
+      epingles: getEpinglesDuProjet() ?? []
+    });
+  } catch (erreur) {
+    // **L'échec se copie aussi.** Un bouton de diagnostic qui rend une chaîne
+    // vide quand il échoue ajoute une panne à celle qu'on cherchait.
+    return `Le constat n'a pas pu être établi : ${String(erreur?.message || erreur)}`;
+  }
 }
 
 function renderSubjectsStatusHeadHtml() {
@@ -3936,6 +4021,9 @@ function renderSituationsViewHeaderHtml() {
 
   const rightHtml = [
     renderProjectTableToolbarGroup({
+      html: renderBoutonDeConstat()
+    }),
+    renderProjectTableToolbarGroup({
       html: renderProjectTableToolbarSearch({
         id: "situationsSearch",
         value: String(store.situationsView.search || ""),
@@ -4020,6 +4108,7 @@ function getObjectiveById(objectiveId) {
 
 
   ecouterLEpingle();
+  quandOnCopie(CONSTAT_DU_SUIVI, constatDuSuivi);
 
   return {
     dropdownController: subjectSelectDropdown,
