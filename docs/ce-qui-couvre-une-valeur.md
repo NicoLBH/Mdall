@@ -487,11 +487,72 @@ quelqu'un signe (règle 1).
 Deux organismes qui signent le même document ne se départagent pas non plus : le
 système le dit et s'arrête.
 
-### Étape 3 — le poids se voit · *à faire*
+### Étape 3 — le poids se voit · *fait*
 
-La liste et le rang, dans la mémoire, dans la variante, dans le cerveau du
-projet. C'est là que la notion de poids est vraiment utile : elle y est
-visuelle, et non arithmétique. Un nœud couvert se dessine autrement.
+`services/ce-qui-couvre.js` dérive des actes les deux choses annoncées plus
+haut — **la liste** et **le rang** —, et rien n'est stocké.
+
+#### Le rang se voit, il ne se lit jamais
+
+Nulle part le rang ne s'écrit en toutes lettres. Il donne sa **nuance** à ce qui
+se lit déjà :
+
+| où | ce qu'on voit | ce qu'on lit |
+| --- | --- | --- |
+| la mémoire | une mention discrète, jamais une pastille | « Examinée par SOCOTEC le 12 mars » |
+| la variante | ce qui coûte le plus cher, en tête de liste | « Tous viennent d'un bureau de contrôle. » |
+| le cerveau | un anneau autour du nœud, plus franc s'il coûte plus | *(rien — c'est un dessin)* |
+
+Une **mention** et non une pastille : une pastille se lit comme un statut, et un
+statut appelle un circuit. Un **anneau** et non une couleur de nœud : la couleur
+dirait ce que la valeur *est*, l'anneau dit ce qui l'entoure — qui s'est engagé
+dessus. C'est la métaphore juste, et c'est la règle 12 : un examen n'ajoute pas
+un état à une valeur, il ajoute une ligne à son histoire.
+
+#### Le geste, et il est unique
+
+**« J'ai vérifié »** sur une valeur. Il écrit une ligne, aucune notification ne
+part, personne n'est bloqué, aucune file ne se remplit. Pas de note demandée : la
+demander ferait un formulaire, et un formulaire fait une procédure. On peut ne
+jamais s'en servir et Mdall marche pareil.
+
+Il vaut sur **toute** valeur, et pas seulement sur les hypothèses : une zone de
+neige n'est pas une hypothèse, et un bureau de contrôle porte pourtant bien un
+avis sur elle. Se *prononcer*, en revanche, n'a de sens que sur une hypothèse —
+c'est l'autre panneau, et il ne change pas.
+
+#### Deux rangs déclarés que rien n'atteint
+
+Le vocabulaire est ordonné en entier parce que **l'ordre est son sens**. Mais
+trois niveaux seulement sont dérivables aujourd'hui, et le dire vaut mieux que de
+laisser croire que les autres ne se rencontrent jamais (règle 5) :
+
+| rang | ce qui l'établit | atteignable |
+| --- | --- | --- |
+| rien | aucun acte | oui |
+| relu en interne | quelqu'un du projet a signé | oui |
+| visé par la maîtrise d'œuvre | le rôle du signataire | **non** — Mdall ne connaît pas les rôles |
+| avis d'un bureau de contrôle | un organisme reconnu dans la pièce | oui |
+| acté contractuellement | la nature contractuelle de la pièce | **non** — rien ne la porte |
+
+Chacun des deux manquants demande **une** chose, nommée ci-dessus. Le jour où
+elle existe, une ligne suffit. Un test garde le compte de ce qui est atteint :
+il échouera le jour où l'on croira avoir ajouté un rang sans l'avoir fait.
+
+#### Un document non attribué ne monte pas le rang
+
+Un acte qui cite une pièce dont l'organisme n'a pas été reconnu reste « relu en
+interne ». C'est délibéré : un rang qui reposerait sur une pièce qu'on n'a pas su
+attribuer dirait « bureau de contrôle » sans pouvoir nommer lequel — exactement
+le faux plausible que le projet refuse partout ailleurs. C'est aussi ce qui donne
+sa valeur à l'étape 2 bis : mieux on reconnaît, plus le rang est juste.
+
+#### Ce que le cerveau ne prétend pas savoir
+
+Sans les actes, un nœud porte `rang: null` — **pas** « rien ». Dessiner tout le
+projet comme non examiné parce qu'on n'a pas regardé serait affirmer une absence
+qu'on n'a pas vérifiée. L'écran n'affirme rien dans les deux cas, mais le code
+distingue, et c'est ce qui permettra de le dire un jour.
 
 ### Étape 4 — le raisonnement jalonné · *à faire*
 
