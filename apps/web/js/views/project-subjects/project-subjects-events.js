@@ -5968,11 +5968,22 @@ export function createProjectSubjectsEvents(config) {
       if (subjectsStatusFilterButton) {
         event.preventDefault();
         const demande = String(subjectsStatusFilterButton.dataset.subjectsStatusFilter || "open").toLowerCase() === "closed" ? "closed" : "open";
-        store.situationsView.subjectsStatusFilter = demande;
-        // La copie suit tout de suite : sans elle, tout ce qui lit encore
-        // `filters.status` — la pagination, un compteur — décrirait l'autre moitié
-        // de la liste jusqu'à la prochaine normalisation.
-        if (store.situationsView.filters) store.situationsView.filters.status = demande;
+        // **Un seul endroit**, celui que les sélecteurs lisent.
+        //
+        // Le clic écrivait dans l'ancien état, qui partage son `filters.status`
+        // avec le filtre des Situations : la normalisation de l'autre onglet
+        // remettait « Ouverts » sans que rien ne le dise, et le bouton
+        // paraissait mort. Une valeur écrite à deux endroits finit par diverger
+        // (règle 4) — celle-ci avait déjà été réparée une fois par une copie de
+        // plus, ce qui n'a fait que déplacer la divergence.
+        if (!store.projectSubjectsView || typeof store.projectSubjectsView !== "object") {
+          store.projectSubjectsView = {};
+        }
+        store.projectSubjectsView.subjectsStatusFilter = demande;
+        // `filters.status` reste écrit **ici aussi**, pour ce qui le lit encore —
+        // mais il est désormais une copie, jamais une source : le filtre se lit
+        // sur `subjectsStatusFilter`, et sur lui seul.
+        if (store.projectSubjectsView.filters) store.projectSubjectsView.filters.status = demande;
         resetSubjectsPaginationPage();
         rerenderPanels();
         return;
@@ -5998,7 +6009,17 @@ export function createProjectSubjectsEvents(config) {
         event.preventDefault();
         event.stopPropagation();
 
-        store.situationsView.subjectsPriorityFilter = normalizeBackendPriority(subjectsPriorityItem.dataset.subjectsPriorityFilter || "");
+        // Le même foyer que le statut, pour la même raison : `filters.priority`
+        // était disputé de la même façon, et la faute n'y dormait que faute
+        // d'un second écrivain.
+        if (!store.projectSubjectsView || typeof store.projectSubjectsView !== "object") {
+          store.projectSubjectsView = {};
+        }
+        store.projectSubjectsView.subjectsPriorityFilter =
+          normalizeBackendPriority(subjectsPriorityItem.dataset.subjectsPriorityFilter || "");
+        if (store.projectSubjectsView.filters) {
+          store.projectSubjectsView.filters.priority = store.projectSubjectsView.subjectsPriorityFilter;
+        }
         resetSubjectsPaginationPage();
 
         const currentBtn = root.querySelector("#subjectsPriorityHeadBtn");

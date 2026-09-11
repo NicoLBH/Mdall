@@ -33,14 +33,25 @@ export function createProjectSubjectsSelectors({
 
     if (legacyView && legacyView !== projectView) {
       if (typeof legacyView.search === "string") projectView.search = legacyView.search;
-      if (typeof legacyView.subjectsStatusFilter === "string") projectView.subjectsStatusFilter = legacyView.subjectsStatusFilter;
-      if (typeof legacyView.subjectsPriorityFilter === "string") projectView.subjectsPriorityFilter = legacyView.subjectsPriorityFilter;
+      // **Les deux filtres de statut ne se recopient plus depuis l'ancien état.**
+      //
+      // Ils y vivaient avec ceux des Situations, dans le même `filters.status`.
+      // Deux normalisations écrivaient donc la même case, chacune depuis sa
+      // propre source : passer par l'onglet Situations remettait « Ouverts » au
+      // tableau des Sujets, et le clic de l'utilisateur disparaissait au rendu
+      // suivant sans que rien ne le dise.
+      //
+      // Le remède n'est pas une copie de plus dans l'autre sens : c'est qu'il
+      // n'y ait qu'un seul endroit (règle 4). Ce filtre-ci vit désormais dans
+      // `projectSubjectsView`, celui que ces sélecteurs lisent, et nulle part
+      // ailleurs.
       if (legacyView.filters && typeof legacyView.filters === "object") {
+        const { status, priority, ...ailleurs } = legacyView.filters;
         projectView.filters = {
           ...(projectView.filters && typeof projectView.filters === "object" ? projectView.filters : {}),
-          ...legacyView.filters,
-          status: String(legacyView.subjectsStatusFilter || legacyView.filters.status || projectView.filters?.status || "open"),
-          priority: String(legacyView.subjectsPriorityFilter || legacyView.filters.priority || projectView.filters?.priority || "")
+          // Les autres filtres de l'ancien état continuent de suivre : eux
+          // n'ont jamais été disputés.
+          ...ailleurs
         };
       }
       if (typeof legacyView.subjectsSubview === "string") projectView.subjectsSubview = legacyView.subjectsSubview;

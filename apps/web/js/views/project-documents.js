@@ -19,6 +19,12 @@ import { svgIcon } from "../ui/icons.js";
 import { renderDataTableShell, renderDataTableHead, renderDataTableEmptyState } from "./ui/data-table-shell.js";
 import { escapeHtml } from "../utils/escape-html.js";
 import { proposeTitle } from "../services/proposition-title.js";
+import {
+  ETIQUETTE,
+  etiquetteDuDocument,
+  explicationDeLEtiquette,
+  motDeLEtiquette
+} from "../services/etiquette-du-document.js";
 import { addProjectDocument, decorateDocumentWithPhase, getEnabledProjectPhasesCatalog, getProjectDocumentById, getProjectDocumentPreviewUrl, getProjectDocuments, resolveDocumentRefs, setActiveProjectDocument } from "../services/project-documents-store.js";
 import { listDocumentDirectory, listDocumentFolders, createDocumentFolder, renameDocumentFolder, moveDocumentFile, resolveCurrentBackendProjectId, syncProjectDocumentsFromSupabase } from "../services/project-supabase-sync.js";
 import { getEffectiveSituationStatus, getEffectiveSujetStatus } from "./project-situations.js";
@@ -1444,15 +1450,14 @@ function renderRepoDocumentRow(doc) {
   const isPdf = isPdfDocument(decoratedDoc);
   const isPreviewablePdf = canPreviewPdf(decoratedDoc);
   const recognition = describeRecognition(decoratedDoc);
-  // Un document hors corpus reste là, grisé, avec le mot qui le dit. Le faire
-  // disparaître recréerait le mensonge qu'on a corrigé : un fichier qui existe
-  // en base et n'apparaît nulle part.
-  //
-  // « Hors corpus » plutôt que « refusé » : les deux chemins y mènent — un
-  // livrable écarté en revue, et un document retiré ensuite par une
-  // proposition. Écrire « refusé » sur un document qui a servi trois mois
-  // laisserait croire qu'il n'était jamais entré.
-  const refuse = decoratedDoc.corpusState === "refused";
+  // Ce que la ligne dit du rapport de ce document à la mémoire : « hors
+  // corpus » quand il en est sorti, « hors mémoire » quand il a été déposé
+  // directement, rien quand il est entré par une proposition. Le mot et son
+  // explication vivent dans `services/etiquette-du-document.js` — un fichier
+  // qui ressemble à tous les autres laisse croire qu'il compte comme les
+  // autres.
+  const etiquette = etiquetteDuDocument(decoratedDoc);
+  const refuse = etiquette === ETIQUETTE.HORS_CORPUS;
 
   return `
     <div
@@ -1463,7 +1468,13 @@ function renderRepoDocumentRow(doc) {
       <div class="documents-repo__cell documents-repo__cell--name">
         <span class="documents-repo__icon documents-repo__icon--document">${getDocumentIconSvg()}</span>
         <button type="button" class="documents-repo__name documents-repo__name-trigger js-document-title-trigger" data-document-id="${escapeHtml(decoratedDoc.id || "")}">${escapeHtml(decoratedDoc.name)}</button>
-        ${refuse ? `<span class="documents-repo__refused" title="Ce document ne fait plus partie du corpus : il n'est plus lu par les analyses. Il reste en base, et l'histoire dit quand il en est sorti.">hors corpus</span>` : ""}
+        ${
+          etiquette
+            ? `<span class="documents-repo__etiquette documents-repo__etiquette--${escapeHtml(etiquette)}"
+                     title="${escapeHtml(explicationDeLEtiquette(etiquette))}">${
+                escapeHtml(motDeLEtiquette(etiquette))}</span>`
+            : ""
+        }
       </div>
       <div class="documents-repo__cell documents-repo__cell--message">
         <div class="documents-repo__message-main${recognition.known ? " documents-repo__message-main--known" : ""}" title="${escapeHtml(recognition.title)}">${escapeHtml(recognition.main)}</div>
