@@ -1,18 +1,11 @@
 import { escapeHtml } from "../../utils/escape-html.js";
 import { renderCountBadge } from "./status-badges.js";
 
-/**
- * @param {object} [options]
- * @param {string} [options.suffixeHtml] ce qui suit les boutons **dans le
- *   groupe** : un geste sur la liste, pas un filtre de plus. Le laisser dehors
- *   le priverait de l'alignement et du survol du groupe.
- */
 export function renderTableHeadFilterToggle({
   groupClassName = "",
   buttonClassName = "",
   activeValue = "open",
-  items = [],
-  suffixeHtml = ""
+  items = []
 } = {}) {
   const groupClass = ["table-head-filter-group", groupClassName].filter(Boolean).join(" ");
 
@@ -33,7 +26,7 @@ export function renderTableHeadFilterToggle({
             ${renderCountBadge(count, { className: "project-tabs__counter", ariaLabel })}
           </button>
         `;
-      }).join("")}${suffixeHtml}
+      }).join("")}
     </div>
   `;
 }
