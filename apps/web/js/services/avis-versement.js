@@ -20,7 +20,13 @@
  * porte `decided_by`, qui est l'utilisateur Mdall ayant signé la proposition. Si
  * l'on s'en contentait, la mémoire dirait que le stagiaire a rendu un avis
  * favorable. L'organisme qui engage sa responsabilité est donc écrit
- * séparément, et il ne se déduit de rien.
+ * séparément.
+ *
+ * Il ne se **déduit** de rien, mais il se **lit** : l'étape précédente le
+ * demandait à l'utilisateur, au motif qu'il ne se lisait pas de façon fiable —
+ * c'était faux. Il est imprimé en pied de chaque page et dans le domaine des
+ * adresses électroniques, et `services/emetteur-du-document.js` le reconnaît.
+ * `avisDuRapport` le lui demande quand l'appelant ne le donne pas.
  *
  * **Sur quoi il porte.** La liaison proposée par `services/avis-liaison.js`
  * voyage dans le payload. Elle ne devient un engagement qu'après la fusion —
@@ -39,6 +45,7 @@
 import { NATURE } from "./assertion-taxonomy.js";
 import { PROVENANCE, STATUT } from "./memoire-en-texte.js";
 import { LIAISON, intituleDeLAvis, liaisonsProposees } from "./avis-liaison.js";
+import { emetteurDuDocument, organismeCertain } from "./emetteur-du-document.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -128,16 +135,34 @@ export function avisVersable({
  * ne veut pas : il faut qu'il entre en mémoire, et qu'on voie qu'il n'est
  * accroché à rien.
  *
- * @returns {{versables: object[], sansLiaison: number}}
+ * ## L'organisme se lit dans le rapport
+ *
+ * `emisPar` reste acceptable — un appelant qui le sait le donne —, mais il n'est
+ * plus obligatoire : sans lui, le texte du rapport est lu et l'émetteur
+ * reconnu. Seule une reconnaissance **certaine** entre : « probablement
+ * SOCOTEC » n'est pas une signature, et `emetteur` voyage à côté pour que
+ * l'écran puisse proposer ce qui n'est pas sûr.
+ *
+ * @param {object} options
+ * @param {object[]} options.avis les avis lus dans le rapport
+ * @param {object[]} options.assertions la mémoire du projet
+ * @param {string} [options.emisPar] l'organisme, quand l'appelant le sait déjà
+ * @param {object[]} [options.pages] les pages du rapport, pour le reconnaître
+ * @param {string} [options.texte] le rapport entier, à défaut de pages
+ * @returns {{versables: object[], sansLiaison: number, emetteur: object}}
  */
 export function avisDuRapport({
-  avis = [], assertions = [], emisPar = "", rapport = "", documentId = "", le = ""
+  avis = [], assertions = [], emisPar = "", rapport = "", documentId = "", le = "",
+  pages = [], texte: contenu = ""
 } = {}) {
   const liaisons = liaisonsProposees({ avis, assertions });
 
+  const emetteur = emetteurDuDocument({ texte: contenu, pages });
+  const organisme = texte(emisPar) || organismeCertain(emetteur);
+
   const versables = liaisons
     .map((liaison) => avisVersable({
-      avis: liaison.avis, emisPar, rapport, documentId, le, liaison
+      avis: liaison.avis, emisPar: organisme, rapport, documentId, le, liaison
     }))
     .filter(Boolean);
 
@@ -145,6 +170,9 @@ export function avisDuRapport({
     versables,
     // Ce qui entre sans être accroché. Se dit, se compte, et ne se cache pas :
     // c'est la mesure de ce que l'extraction n'a pas su reconnaître.
-    sansLiaison: versables.filter((versable) => !versable.porteSur).length
+    sansLiaison: versables.filter((versable) => !versable.porteSur).length,
+    // Ce qu'on a su de l'émetteur, preuves comprises. L'écran en a besoin même
+    // quand c'est certain : quelqu'un doit pouvoir vérifier ce qui a été lu.
+    emetteur
   };
 }

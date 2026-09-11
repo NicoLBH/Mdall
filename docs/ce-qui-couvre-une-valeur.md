@@ -269,6 +269,9 @@ distincts dès le premier jour :
 - `émis par` — qui engage sa responsabilité, dehors ;
 - et la **pièce** d'où ça sort, quand il y en a une.
 
+`émis par` ne se **déduit** de rien — aucun champ de la mémoire ne le porte —,
+mais il se **lit** : le document le dit lui-même (étape 2 bis).
+
 ---
 
 ## Les étapes
@@ -386,12 +389,60 @@ tomber.
 #### Ce qui manque encore : l'écran qui déclenche
 
 Le chemin est complet et testé de bout en bout, mais **aucun écran ne l'appelle
-encore**. Il lui faut deux choses, et une seule est du code :
+encore**. Il lui faut un endroit d'où partir : le suivi des avis, qui tient déjà
+la liste.
 
-1. un endroit d'où partir — le suivi des avis, qui tient déjà la liste ;
-2. **le nom de l'organisme**, que personne ne peut deviner : il ne se lit pas
-   dans le PDF de façon fiable, et il ne se déduit de rien. Quelqu'un le tape
-   une fois par rapport.
+### Étape 2 bis — l'organisme se lit dans le document · *fait*
+
+#### Ce qui était écrit ici, et qui était faux
+
+> *le nom de l'organisme, que personne ne peut deviner : il ne se lit pas dans le
+> PDF de façon fiable, et il ne se déduit de rien. Quelqu'un le tape une fois par
+> rapport.*
+
+C'était la deuxième chose qui manquait à l'étape 2, et c'était une erreur. Il
+suffit d'ouvrir un rapport pour la voir : le nom y est imprimé en pied de chaque
+page, dans la raison sociale complète, dans l'adresse du siège, et dans le
+domaine de l'adresse électronique du responsable d'affaire. Un outil qui demande
+de retaper ce qui est écrit six fois sous les yeux de son utilisateur ne passe
+pas pour prudent : il passe pour un idiot.
+
+Les bureaux de contrôle agréés ne sont d'ailleurs pas nombreux — SOCOTEC, APAVE,
+Bureau Veritas, Qualiconsult, Alpes Contrôle, Dekra, Batiplus —, et une raison
+sociale ne s'écrit que d'une façon.
+
+#### Ce qui rend la lecture sûre : des signaux, pas une fréquence
+
+Compter les occurrences accrocherait le client : un rapport nomme son maître
+d'ouvrage autant que son auteur. Ce sont des signaux de **nature** différente,
+classés par ce qu'ils prouvent :
+
+| Signal | Ce qu'il prouve | Force |
+| --- | --- | --- |
+| le domaine d'une adresse électronique | personne n'écrit le domaine d'un autre | certitude |
+| la raison sociale en mention légale | on ne met la sienne qu'au pied de ses pages | certitude |
+| le nom, simplement écrit | un compte rendu cite le contrôleur sans être de lui | vraisemblance |
+
+Sur le rapport d'essai, les trois convergent et se lisent en page 1. Et le
+domaine du **destinataire**, qui figure deux fois sur la même page, n'accroche
+rien : un domaine ne compte que s'il est celui d'un organisme de la liste.
+
+#### Une liste courte qui ne ferme pas la question
+
+Demain les documents ne seront plus des rapports normalisés : des comptes rendus
+de réunion, des courriels, des notes. Un émetteur que la liste ignore se
+**propose** donc au lieu de se taire (règle 5) — et il se propose par sa mention
+légale, jamais par une adresse électronique, pour la raison ci-dessus.
+
+#### Ce qui n'entre pas dans la mémoire
+
+Seul un organisme **certain**. « Probablement SOCOTEC » n'est pas une signature :
+un avis porte la responsabilité de qui l'a rendu. Ce qui est seulement
+vraisemblable se dit à l'écran, avec ses preuves — la ligne lue et sa page —, et
+quelqu'un signe (règle 1).
+
+Deux organismes qui signent le même document ne se départagent pas non plus : le
+système le dit et s'arrête.
 
 ### Étape 3 — le poids se voit · *à faire*
 
