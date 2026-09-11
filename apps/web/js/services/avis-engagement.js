@@ -43,15 +43,19 @@ export function engagementsDeLaFusion({ ecrites = [], par = "", le = "" } = {}) 
   const quand = texte(le) || new Date().toISOString();
 
   return (Array.isArray(ecrites) ? ecrites : [])
-    .map((ligne) => {
-      const porteSur = texte(ligne?.payload?.porteSur);
-      if (!porteSur) return null;
-
+    .flatMap((ligne) => {
       // Une ligne écartée ne couvre rien : ce que quelqu'un a refusé ne peut pas
       // engager qui que ce soit.
-      if (texte(ligne?.status) === "rejected") return null;
+      if (texte(ligne?.status) === "rejected") return [];
 
-      return {
+      // Un avis porte souvent sur **plusieurs** parties de l'ouvrage : un
+      // engagement par portée. Les lignes écrites avant que la liste existe
+      // portent une chaîne, et se lisent pareil.
+      const portees = (Array.isArray(ligne?.payload?.porteSur)
+        ? ligne.payload.porteSur
+        : [ligne?.payload?.porteSur]).map(texte).filter(Boolean);
+
+      return portees.map((porteSur) => ({
         project_id: texte(ligne?.project_id) || null,
         // La valeur examinée — donc **cette version-là** de la valeur. C'est ce
         // qui fait qu'un engagement tombe tout seul quand elle est remplacée.
@@ -67,9 +71,8 @@ export function engagementsDeLaFusion({ ecrites = [], par = "", le = "" } = {}) 
         source_page: Number.isFinite(Number(ligne?.payload?.page)) ? Number(ligne.payload.page) : null,
         declared_by: texte(par) || null,
         created_at: quand
-      };
-    })
-    .filter(Boolean);
+      }));
+    });
 }
 
 /**

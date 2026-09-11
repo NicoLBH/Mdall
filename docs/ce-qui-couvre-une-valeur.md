@@ -412,6 +412,33 @@ l'échelle du lot :
 3. **un avis dont la teneur a changé, si** — suspendu devenu favorable : c'est
    une valeur nouvelle, elle se verse par-dessus (règle 11).
 
+#### Deux causes de silence, trouvées sur un vrai projet
+
+Le mécanisme entier est resté **muet** sur le premier projet réel : un rapport
+chargé, une variante lancée, et aucun jalon. Deux causes indépendantes, et
+chacune suffisait.
+
+**Le contenant et le contenu étaient inversés.** Un rapport de bureau de
+contrôle intitule ses lignes « Neige », « Vent » — des mots de tableau. La
+mémoire dit « Zone de neige ». La reconnaissance cherchait le sujet **dans**
+l'intitulé ; il fallait aussi chercher l'intitulé **dans** le sujet. Ce second
+sens n'accroche que lorsqu'il désigne **un seul** sujet — « Zone » est dans
+trois sujets différents, et là c'est une vraie ambiguïté — et refuse les
+intitulés de moins de quatre lettres, qui sont des codes de mission.
+
+**Un sujet porté par plusieurs parties de l'ouvrage n'accrochait rien.** Le
+module refusait de choisir entre le bâtiment A et le bâtiment B. Prudent dans
+l'abstrait, stérilisant dans le réel : le projet d'essai porte quatre lignes de
+« Zone de neige », donc aucun avis ne s'accrochait. L'avis les couvre maintenant
+**toutes** — en choisir une serait deviner, n'en choisir aucune perdait
+l'information, et un bureau de contrôle qui écrit « Neige » sans nommer de
+bâtiment parle de la neige du projet. `porteSur` est donc une **liste**, et la
+fusion écrit un engagement par portée.
+
+C'est la même erreur que celle du numéro, une strate plus bas : une règle
+défendable dans l'abstrait qui, mise devant un vrai document, ne laisse rien
+passer.
+
 #### Ce que le rapport réel a montré, et que les tests ne montraient pas
 
 Le sujet d'un avis était son **numéro**, au motif que rien d'autre ne le suit

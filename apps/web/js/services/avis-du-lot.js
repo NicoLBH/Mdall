@@ -112,7 +112,7 @@ export function avisDuLot({ sources = [], avis = [], assertions = [] } = {}) {
       versables: aVerser,
       lus: versables.length,
       dejaVerses: versables.length - aVerser.length,
-      sansLiaison: aVerser.filter((versable) => !versable.porteSur).length
+      sansLiaison: aVerser.filter((versable) => !versable.porteSur.length).length
     };
   });
 
@@ -121,8 +121,12 @@ export function avisDuLot({ sources = [], avis = [], assertions = [] } = {}) {
   return {
     documents,
     versables,
-    accroches: versables.filter((versable) => versable.porteSur).length,
-    sansLiaison: versables.filter((versable) => !versable.porteSur).length,
+    accroches: versables.filter((versable) => versable.porteSur.length).length,
+    // Ceux qui couvrent plusieurs parties de l'ouvrage. Se dit **avant** la
+    // signature : personne ne doit découvrir après coup qu'un avis en couvrait
+    // quatre lignes.
+    surPlusieursPortees: versables.filter((versable) => versable.porteSur.length > 1).length,
+    sansLiaison: versables.filter((versable) => !versable.porteSur.length).length,
     dejaVerses: documents.reduce((total, document) => total + document.dejaVerses, 0),
     // Les documents dont l'organisme n'est pas certain. Leurs avis entrent
     // quand même — un avis est un fait du projet —, mais sans nom d'émetteur,
@@ -163,6 +167,11 @@ export function titreDuLot(lot = null, { le = "" } = {}) {
         ? `${lot.sansLiaison} n'${lot.sansLiaison > 1 ? "ont" : "a"} pas été `
           + `${lot.sansLiaison > 1 ? "accrochés" : "accroché"} à une valeur : `
           + `${lot.sansLiaison > 1 ? "ils entrent" : "il entre"} quand même, sans rien couvrir.`
+        : "",
+      lot?.surPlusieursPortees
+        ? `${lot.surPlusieursPortees} ${lot.surPlusieursPortees > 1 ? "portent" : "porte"} sur un sujet `
+          + "que plusieurs parties de l'ouvrage se partagent : "
+          + `${lot.surPlusieursPortees > 1 ? "ils les couvrent" : "il les couvre"} toutes.`
         : "",
       lot?.dejaVerses
         ? `${lot.dejaVerses} ${lot.dejaVerses > 1 ? "étaient" : "était"} déjà en mémoire à l'identique `

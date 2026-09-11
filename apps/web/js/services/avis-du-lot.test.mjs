@@ -187,3 +187,28 @@ test("deux organismes dans le lot ne se laissent pas résumer en un nom", () => 
 
   assert.match(titreDuLot(lot).titre, /^Avis de contrôle technique/);
 });
+
+/* ── Un sujet que plusieurs parties de l'ouvrage se partagent ────────────── */
+
+/**
+ * Sur un projet réel, « Zone de neige » porte quatre lignes — toutes zones,
+ * bâtiment A, bâtiment B, magasin. L'avis les couvre toutes, et il faut que ça
+ * se lise **avant** la signature : personne ne doit découvrir après coup qu'un
+ * avis en couvrait quatre.
+ */
+test("un avis qui couvre plusieurs portées le dit avant la signature", () => {
+  const parZone = (zone) => ({
+    id: `neige-${zone}`, superseded_by: null,
+    payload: { subject: "Zone de neige", value: "A1" }, zones: [zone]
+  });
+
+  const lot = avisDuLot({
+    sources: [rapport("doc-1", "rapport.pdf", ENTETE_SOCOTEC)],
+    avis: [avis("2.1.3", "Neige", "Favorable", "doc-1")],
+    assertions: [parZone("batiment-a"), parZone("batiment-b")]
+  });
+
+  assert.deepEqual(lot.versables[0].porteSur, ["neige-batiment-a", "neige-batiment-b"]);
+  assert.equal(lot.surPlusieursPortees, 1);
+  assert.match(titreDuLot(lot).description, /plusieurs parties de l'ouvrage/);
+});

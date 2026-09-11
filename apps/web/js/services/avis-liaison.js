@@ -51,8 +51,8 @@ export const LIAISON = {
   PAR_LE_SUJET: "par-le-sujet",
   /** Rien dans la mémoire ne porte ce nom. */
   SANS_SUJET: "sans-sujet",
-  /** Plusieurs valeurs portent ce nom, et rien ne les départage. */
-  PLUSIEURS: "plusieurs",
+  /** Le sujet vaut pour plusieurs portées : l'avis les couvre toutes. */
+  TOUTES_LES_PORTEES: "toutes-les-portees",
   /** L'avis n'a pas d'intitulé : il n'y a rien à reconnaître. */
   SANS_INTITULE: "sans-intitule"
 };
@@ -60,7 +60,7 @@ export const LIAISON = {
 const PHRASES = {
   [LIAISON.PAR_LE_SUJET]: "son intitulé nomme cette valeur",
   [LIAISON.SANS_SUJET]: "aucune valeur de la mémoire ne porte ce nom",
-  [LIAISON.PLUSIEURS]: "plusieurs valeurs portent ce nom : il faut dire laquelle",
+  [LIAISON.TOUTES_LES_PORTEES]: "ce sujet vaut pour plusieurs parties de l'ouvrage, et l'avis les couvre toutes",
   [LIAISON.SANS_INTITULE]: "cet avis n'a pas d'intitulé : il n'y a rien à reconnaître"
 };
 
@@ -127,13 +127,29 @@ function sujetsDeLaMemoire(assertions = []) {
  * Quand deux sujets sont reconnus dans le même intitulé, c'est le **plus long**
  * qui l'emporte : « Zone de neige » bat « Zone », parce qu'il dit plus.
  *
+ * ## Un sujet porté par plusieurs parties de l'ouvrage : toutes
+ *
+ * Ce module refusait d'accrocher dans ce cas, au motif que rien dans
+ * « Zone de neige » ne dit s'il s'agit du bâtiment A ou du B. C'était prudent
+ * dans l'abstrait et **stérilisant dans le réel** : dès qu'un projet porte deux
+ * bâtiments, plus aucun avis ne s'accrochait, et tout le mécanisme des
+ * engagements ne servait plus à rien. Vérifié sur un projet réel : « Neige » et
+ * « Vent » n'étaient accrochés à rien parce que quatre portées les portaient.
+ *
+ * L'avis porte donc sur **toutes** les portées du sujet. Ce n'est pas deviner,
+ * c'est le contraire : en choisir une seule serait deviner, n'en choisir aucune
+ * perdrait l'information. Un bureau de contrôle qui écrit « Neige — Favorable »
+ * dans un rapport qui ne nomme aucune partie d'ouvrage parle de la neige **du
+ * projet**. Et la conséquence est juste : déplacer le projet fait tomber les
+ * quatre, parce que la zone de neige des quatre change.
+ *
  * @param {object} avis l'avis lu dans le rapport
  * @param {object[]} assertions la mémoire du projet
- * @returns {{assertion: object|null, motif: string, candidats: string[]}}
+ * @returns {{assertions: object[], motif: string}}
  */
 export function liaisonDeLAvis({ avis = null, assertions = [] } = {}) {
   const intitule = aplati(intituleDeLAvis(avis));
-  if (!intitule) return { assertion: null, motif: LIAISON.SANS_INTITULE, candidats: [] };
+  if (!intitule) return { assertions: [], motif: LIAISON.SANS_INTITULE };
 
   const parSujet = sujetsDeLaMemoire(assertions);
 
@@ -142,21 +158,55 @@ export function liaisonDeLAvis({ avis = null, assertions = [] } = {}) {
     .filter((cle) => nommeEntierement(intitule, cle))
     .sort((gauche, droite) => droite.length - gauche.length);
 
-  if (!reconnus.length) return { assertion: null, motif: LIAISON.SANS_SUJET, candidats: [] };
+  // Rien dans ce sens : l'intitulé est peut-être **plus court** que le sujet.
+  // C'est le cas ordinaire d'un rapport de bureau de contrôle, dont le tableau
+  // porte « Neige » et « Vent » là où la mémoire dit « Zone de neige » et
+  // « Zone de vent ». Le contenant et le contenu sont inversés, la preuve est
+  // la même.
+  const cle = reconnus.length ? reconnus[0] : sujetQuiContient(intitule, parSujet);
+  if (!cle) return { assertions: [], motif: LIAISON.SANS_SUJET };
 
-  const portees = parSujet.get(reconnus[0]) ?? [];
+  const portees = parSujet.get(cle) ?? [];
 
-  // Un sujet porté par plusieurs affirmations — une par zone — ne se départage
-  // pas depuis un intitulé de rapport. On le dit plutôt que d'en choisir une.
-  if (portees.length > 1) {
-    return {
-      assertion: null,
-      motif: LIAISON.PLUSIEURS,
-      candidats: portees.map((portee) => texte(portee?.id)).filter(Boolean)
-    };
-  }
+  if (!portees.length) return { assertions: [], motif: LIAISON.SANS_SUJET };
 
-  return { assertion: portees[0] ?? null, motif: LIAISON.PAR_LE_SUJET, candidats: [] };
+  return {
+    assertions: portees,
+    motif: portees.length > 1 ? LIAISON.TOUTES_LES_PORTEES : LIAISON.PAR_LE_SUJET
+  };
+}
+
+/**
+ * Le sujet de la mémoire qui **contient** l'intitulé, quand il n'y en a qu'un.
+ *
+ * ## Pourquoi ce sens compte, et il compte beaucoup
+ *
+ * Un rapport de bureau de contrôle intitule ses lignes « Neige », « Vent »,
+ * « Référentiel » — des mots de tableau, pas des noms de valeur. La mémoire,
+ * elle, dit « Zone de neige ». Le sens contenant/contenu est donc **inversé**,
+ * et ne chercher que dans un sens laissait dehors exactement les avis qui
+ * couvrent quelque chose. Vérifié sur un projet réel : « Neige — Favorable » et
+ * « Vent — Favorable » n'accrochaient rien.
+ *
+ * ## Ce qui le garde sûr
+ *
+ * **Un seul sujet, ou rien.** « Zone » est contenu dans « Zone de neige »,
+ * « Zone de vent » et « Zone de sismicité » : trois sujets **différents**, et
+ * rien ne les départage. On ne devine pas — c'est une vraie ambiguïté, pas la
+ * même chose que plusieurs portées d'un même sujet.
+ *
+ * **Un mot de quatre lettres au moins.** « CF », « L », « S » sont des codes de
+ * mission ou de degré, pas des noms ; ils se retrouveraient dans la moitié de
+ * la mémoire.
+ *
+ * **Et le sens direct l'emporte toujours.** Un intitulé qui nomme le sujet en
+ * entier dit plus qu'un intitulé qui en est un morceau.
+ */
+function sujetQuiContient(intitule, parSujet) {
+  if (intitule.length < 4) return null;
+
+  const contenants = [...parSujet.keys()].filter((cle) => nommeEntierement(cle, intitule));
+  return contenants.length === 1 ? contenants[0] : null;
 }
 
 /**

@@ -2579,7 +2579,36 @@ choisir entre les deux.
    le résumé rend « Zone de neige A1 → E » deux fois, parce que la mémoire porte
    deux lignes pour ce fait.
 
-## 33. Quarante-cinq extracteurs, ou un seul appel
+## 33. Le doublon du § 24 cesse de se voir, il ne cesse pas d'être
+
+La variante annonçait deux fois « Zone de neige : A1 → E ». La cause est celle
+du [§ 24](#24-verser-les-contraintes-du-site) : une même valeur porte deux lignes
+en mémoire — celle versée par une proposition, et une ancienne contrainte de
+site écrite **directement** par un écran, hors proposition, du temps où cela se
+faisait. Les deux déclarent lire la localisation, donc les deux se rejouaient.
+
+Le rejeu ne retient plus qu'une reprise **par sujet et par portée**, la plus
+récemment décidée. Sur le projet d'essai, sept recalculs deviennent quatre, et
+les trois écartés étaient des vestiges — l'un d'eux calculait encore d'après une
+commune que le projet a quittée.
+
+**Ce n'est pas la réparation.** La mémoire porte toujours deux lignes, et la
+cause est toujours là : un écran verse encore directement, ce que la règle 1
+interdit. Ce qui est corrigé, c'est qu'on ne le montre plus deux fois — autre
+chose, et qui se dit franchement.
+
+Deux portées d'un même sujet restent bien deux reprises : la zone de neige du
+bâtiment A et celle du bâtiment B sont deux valeurs, et les fondre en perdrait
+une.
+
+### Ce qui le fermera
+
+Refaire l'écran RNT et l'écran climat à la manière de « Neige, Vent & Gel » :
+proposer au lieu de verser. Le jour où plus rien n'écrit directement, les lignes
+`site:*` cessent d'apparaître et la déduplication devient sans objet — on la
+retirera alors plutôt que de la garder par prudence.
+
+## 34. Quarante-cinq extracteurs, ou un seul appel
 
 Mdall lit aujourd'hui les rapports de bureau de contrôle en JavaScript :
 `spikes/ct-continuity` découpe les blocs, lit la légende des codes d'avis, tire

@@ -18,28 +18,70 @@ const avis = (titre, reste = {}) => ({ title_raw: titre, ...reste });
 /* ── Ce qu'on reconnaît ──────────────────────────────────────────────────── */
 
 test("un intitulé qui nomme un sujet l'accroche", () => {
-  const { assertion, motif } = liaisonDeLAvis({ avis: avis("Zone de neige"), assertions: MEMOIRE });
+  const { assertions, motif } = liaisonDeLAvis({ avis: avis("Zone de neige"), assertions: MEMOIRE });
 
-  assert.equal(assertion.id, "neige");
+  assert.deepEqual(assertions.map((a) => a.id), ["neige"]);
   assert.equal(motif, LIAISON.PAR_LE_SUJET);
   assert.match(phraseDeLaLiaison(motif), /nomme cette valeur/);
 });
 
 test("le nom peut être noyé dans une phrase, il reste reconnu", () => {
-  const { assertion } = liaisonDeLAvis({
+  const { assertions } = liaisonDeLAvis({
     avis: avis("Vérification de la Classe de sol EC8 retenue pour le projet"), assertions: MEMOIRE
   });
-  assert.equal(assertion.id, "sol");
+  assert.deepEqual(assertions.map((a) => a.id), ["sol"]);
 });
 
 test("le sujet le plus long l'emporte", () => {
   // « Zone de neige » dit plus que « Zone » : c'est lui qu'on retient.
   const memoire = [...MEMOIRE, { id: "zone", superseded_by: null, payload: { subject: "Zone" } }];
-  const { assertion } = liaisonDeLAvis({ avis: avis("Zone de neige du bâtiment"), assertions: memoire });
-  assert.equal(assertion.id, "neige");
+  const { assertions } = liaisonDeLAvis({ avis: avis("Zone de neige du bâtiment"), assertions: memoire });
+  assert.deepEqual(assertions.map((a) => a.id), ["neige"]);
+});
+
+/**
+ * Le défaut qui rendait tout le mécanisme muet sur un projet réel, et le plus
+ * difficile à voir : un rapport de bureau de contrôle intitule ses lignes
+ * « Neige », « Vent » — des mots de tableau, pas des noms de valeur. La mémoire
+ * dit « Zone de neige ». Le contenant et le contenu sont **inversés**, et ne
+ * chercher que dans un sens laissait dehors exactement les avis qui couvrent
+ * quelque chose.
+ */
+test("un intitulé plus court que le sujet l'accroche aussi", () => {
+  const { assertions, motif } = liaisonDeLAvis({ avis: avis("Neige"), assertions: MEMOIRE });
+
+  assert.deepEqual(assertions.map((a) => a.id), ["neige"]);
+  assert.equal(motif, LIAISON.PAR_LE_SUJET);
+});
+
+test("le sens direct l'emporte sur le sens inverse", () => {
+  // « Zone de neige » nomme le sujet en entier : cela dit plus que d'en être un
+  // morceau, et c'est ce qu'on retient.
+  const memoire = [...MEMOIRE, { id: "zone", superseded_by: null, payload: { subject: "Zone" } }];
+  const { assertions } = liaisonDeLAvis({ avis: avis("Zone de neige"), assertions: memoire });
+
+  assert.deepEqual(assertions.map((a) => a.id), ["neige"]);
 });
 
 /* ── Ce qu'on refuse de reconnaître ──────────────────────────────────────── */
+
+test("un intitulé contenu dans plusieurs sujets différents n'accroche rien", () => {
+  // « Zone » est dans « Zone de neige », « Zone de vent » et « Zone de
+  // sismicité ». Trois sujets **différents**, et rien ne les départage : c'est
+  // une vraie ambiguïté, pas la même chose que plusieurs portées d'un sujet.
+  const { assertions, motif } = liaisonDeLAvis({ avis: avis("Zone"), assertions: MEMOIRE });
+
+  assert.deepEqual(assertions, []);
+  assert.equal(motif, LIAISON.SANS_SUJET);
+});
+
+test("un intitulé trop court ne sert pas à reconnaître", () => {
+  // « CF », « L », « S » sont des codes de mission ou de degré, pas des noms :
+  // ils se retrouveraient dans la moitié de la mémoire.
+  const memoire = [{ id: "cf", superseded_by: null, payload: { subject: "Degré CF du plancher" } }];
+
+  assert.deepEqual(liaisonDeLAvis({ avis: avis("CF"), assertions: memoire }).assertions, []);
+});
 
 /**
  * Le cœur du fichier. Un avis mal accroché couvrirait une valeur que personne
@@ -47,9 +89,9 @@ test("le sujet le plus long l'emporte", () => {
  * favorable » sur une valeur que le bureau de contrôle n'a jamais regardée.
  */
 test("un nom qui n'est pas dans la mémoire ne s'accroche à rien", () => {
-  const { assertion, motif } = liaisonDeLAvis({ avis: avis("Zonage climatique"), assertions: MEMOIRE });
+  const { assertions, motif } = liaisonDeLAvis({ avis: avis("Zonage climatique"), assertions: MEMOIRE });
 
-  assert.equal(assertion, null);
+  assert.deepEqual(assertions, []);
   assert.equal(motif, LIAISON.SANS_SUJET);
 });
 
@@ -57,28 +99,38 @@ test("on ne reconnaît que des mots entiers", () => {
   // « sol » est dans « solive », « vent » dans « éventuel ». Un `includes` nu
   // accrocherait la classe de sol sur une solive de plancher.
   for (const titre of ["Solives du plancher haut", "Dispositions éventuelles de sécurité"]) {
-    const { assertion } = liaisonDeLAvis({
+    const { assertions } = liaisonDeLAvis({
       avis: avis(titre),
       assertions: [{ id: "x", superseded_by: null, payload: { subject: "sol" } },
         { id: "y", superseded_by: null, payload: { subject: "vent" } }]
     });
-    assert.equal(assertion, null, `« ${titre} » ne doit rien accrocher`);
+    assert.deepEqual(assertions, [], `« ${titre} » ne doit rien accrocher`);
   }
 });
 
-test("un sujet porté par plusieurs zones ne se départage pas depuis un rapport", () => {
-  // Rien dans « Zone de neige » ne dit s'il s'agit du bâtiment A ou du B. En
-  // choisir un accrocherait l'avis sur la moitié du projet, au hasard.
+/**
+ * Le défaut trouvé sur un projet réel. Ce module **refusait** d'accrocher quand
+ * plusieurs portées partageaient le sujet, au motif que rien dans « Zone de
+ * neige » ne dit s'il s'agit du bâtiment A ou du B. Prudent dans l'abstrait,
+ * stérilisant dans le réel : quatre portées sur « Neige » et « Vent », donc
+ * aucun avis accroché, donc aucun engagement, donc tout le mécanisme inerte.
+ *
+ * En choisir une serait deviner ; n'en choisir aucune perdait l'information.
+ * Toutes est exactement ce que le rapport dit.
+ */
+test("un sujet porté par plusieurs zones s'accroche à toutes", () => {
   const memoire = [
     { id: "neige-a", superseded_by: null, payload: { subject: "Zone de neige" }, zones: ["batiment-a"] },
     { id: "neige-b", superseded_by: null, payload: { subject: "Zone de neige" }, zones: ["batiment-b"] }
   ];
 
-  const { assertion, motif, candidats } = liaisonDeLAvis({ avis: avis("Zone de neige"), assertions: memoire });
+  const { assertions, motif } = liaisonDeLAvis({ avis: avis("Zone de neige"), assertions: memoire });
 
-  assert.equal(assertion, null);
-  assert.equal(motif, LIAISON.PLUSIEURS);
-  assert.deepEqual(candidats, ["neige-a", "neige-b"]);
+  assert.deepEqual(assertions.map((a) => a.id), ["neige-a", "neige-b"]);
+  assert.equal(motif, LIAISON.TOUTES_LES_PORTEES);
+  // Et l'écran doit pouvoir le dire : personne ne doit découvrir après coup que
+  // l'avis couvrait quatre lignes.
+  assert.match(phraseDeLaLiaison(motif), /plusieurs parties de l'ouvrage/);
 });
 
 test("une valeur remplacée ne s'accroche plus", () => {
@@ -98,11 +150,11 @@ test("un avis sans intitulé ne s'accroche à rien, et le dit autrement", () => 
 test("le commentaire sert d'intitulé quand il n'y en a pas", () => {
   // Certains rapports se lisent ligne à ligne et ne portent pas de titre : la
   // phrase du commentaire est alors tout ce qu'on a.
-  const { assertion } = liaisonDeLAvis({
+  const { assertions } = liaisonDeLAvis({
     avis: { title_raw: "", description_raw: "La Zone de vent retenue appelle une remarque." },
     assertions: MEMOIRE
   });
-  assert.equal(assertion.id, "vent");
+  assert.deepEqual(assertions.map((a) => a.id), ["vent"]);
 });
 
 test("la référence du rapport ne sert jamais à reconnaître", () => {
@@ -121,7 +173,7 @@ test("tous les avis sont rendus, y compris ceux qu'on n'accroche pas", () => {
   });
 
   assert.equal(proposees.length, 2);
-  assert.deepEqual(proposees.map((p) => p.assertion?.id ?? null), ["neige", null]);
+  assert.deepEqual(proposees.map((p) => p.assertions.map((a) => a.id)), [["neige"], []]);
   assert.deepEqual(proposees.map((p) => p.motif), [LIAISON.PAR_LE_SUJET, LIAISON.SANS_SUJET]);
 });
 
@@ -135,5 +187,5 @@ test("la teneur de l'avis n'entre jamais dans la reconnaissance", () => {
     avis: avis("Zone de neige", { value: { opinion_raw: "S" } }), assertions: MEMOIRE
   });
 
-  assert.equal(favorable.assertion.id, suspendu.assertion.id);
+  assert.deepEqual(favorable.assertions.map((a) => a.id), suspendu.assertions.map((a) => a.id));
 });

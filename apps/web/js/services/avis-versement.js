@@ -149,7 +149,15 @@ export function avisVersable({
     emisPar: organisme,
     documentId: texte(documentId),
     page: Number.isFinite(page) ? page : null,
-    porteSur: texte(liaison?.assertion?.id),
+    /**
+     * **Une liste**, et pas un identifiant.
+     *
+     * Un sujet vaut souvent pour plusieurs parties de l'ouvrage — la zone de
+     * neige du bâtiment A et celle du bâtiment B sont deux affirmations. Un
+     * avis qui ne nomme aucune partie porte sur toutes, et n'en garder qu'une
+     * ferait tomber la moitié d'un projet en silence.
+     */
+    porteSur: (liaison?.assertions ?? []).map((portee) => texte(portee?.id)).filter(Boolean),
     liaison: texte(liaison?.motif) || LIAISON.SANS_INTITULE
   };
 }
@@ -197,7 +205,7 @@ export function avisDuRapport({
     versables,
     // Ce qui entre sans être accroché. Se dit, se compte, et ne se cache pas :
     // c'est la mesure de ce que l'extraction n'a pas su reconnaître.
-    sansLiaison: versables.filter((versable) => !versable.porteSur).length,
+    sansLiaison: versables.filter((versable) => !versable.porteSur.length).length,
     // Ce qu'on a su de l'émetteur, preuves comprises. L'écran en a besoin même
     // quand c'est certain : quelqu'un doit pouvoir vérifier ce qui a été lu.
     emetteur
