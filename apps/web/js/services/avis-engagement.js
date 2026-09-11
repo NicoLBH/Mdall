@@ -22,9 +22,13 @@
  * écarté ne couvre rien.
  */
 
-import { ACT } from "./memoire-actes.js";
+import { ACT, acteQuiCouvre } from "./memoire-actes.js";
+import { liaisonDeLAvis } from "./avis-liaison.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
+
+/** Ce que le suivi des avis écrit en mémoire : `kind: "avis"`. */
+const AVIS = "avis";
 
 /**
  * Les actes à écrire après une fusion, d'après ce qu'elle vient d'écrire.
@@ -86,4 +90,114 @@ function noteDeLAvis(ligne) {
   const organisme = texte(ligne?.payload?.emisPar);
   const teneur = texte(ligne?.payload?.value ?? ligne?.payload?.valeur);
   return [organisme, teneur].filter(Boolean).join(" — ") || null;
+}
+
+/**
+ * Les engagements que portent les avis **déjà en mémoire**.
+ *
+ * ## Le trou que ceci ferme, et c'était le vrai
+ *
+ * Il y a deux chemins par lesquels un avis entre en mémoire, et ils ne se
+ * ressemblent pas :
+ *
+ *  - le **suivi des avis BC**, qui existait bien avant tout ceci et qui écrit
+ *    des lignes `kind: "avis"` — « Avis — Zone de neige », appréciation « F »,
+ *    extrait « Région A2, altitude 109 m ». C'est celui qu'on utilise ;
+ *  - le versement construit pour les engagements, qui écrit un `constat` et
+ *    porte `porteSur`.
+ *
+ * Seul le second écrivait des engagements. Le premier, qui porte pourtant dans
+ * `payload.title` **exactement le nom du sujet** — « Zone de neige » —,
+ * n'accrochait rien. Résultat : des avis en mémoire, une variante qui change la
+ * valeur, et aucun jalon. C'était la quatrième cause du silence, indépendante
+ * des trois autres, et la seule qui restait.
+ *
+ * ## Pourquoi on **dérive** au lieu d'écrire
+ *
+ * Écrire des actes pour ces avis demanderait de les reverser tous : ceux qui
+ * sont en mémoire ont été fusionnés par du code qui ne connaissait pas les
+ * engagements, et aucune écriture rétroactive ne les rattraperait.
+ *
+ * On ne stocke donc rien. C'est la doctrine du projet, celle de l'état d'une
+ * hypothèse comme celle du rang : **déduit, jamais stocké**. Un avis en mémoire
+ * qui nomme un sujet couvre ce sujet, et cela se recalcule à chaque lecture —
+ * pour ce qui est déjà là comme pour ce qui entrera.
+ *
+ * ## Ce qui l'empêche de compter deux fois
+ *
+ * Un avis pour lequel un acte a **déjà** été écrit ne dérive rien : l'acte
+ * explicite fait foi, et les deux se compteraient comme deux examens.
+ *
+ * ## Ce que le rang y perd, et pourquoi on ne triche pas
+ *
+ * Ces lignes ne portent pas le nom du bureau — le suivi ne l'écrivait pas. Le
+ * rang reste donc « examinée dans le projet » plutôt que « par un bureau de
+ * contrôle » : un rang qui reposerait sur une pièce qu'on n'a pas su attribuer
+ * dirait « bureau de contrôle » sans pouvoir nommer lequel
+ * (`services/ce-qui-couvre.js`). Il montera de lui-même pour les avis relus par
+ * le modèle, qui, eux, nomment l'organisme.
+ *
+ * @returns {object[]} des actes **dérivés**, jamais écrits en base
+ */
+export function engagementsDerivesDesAvis({ assertions = [], actes = [] } = {}) {
+  const enVigueur = (Array.isArray(assertions) ? assertions : [])
+    .filter((assertion) => !texte(assertion?.superseded_by));
+
+  // Les avis pour lesquels quelqu'un a déjà écrit un acte : on ne double pas.
+  const dejaEcrits = new Set(
+    (Array.isArray(actes) ? actes : [])
+      .filter(acteQuiCouvre)
+      .map((acte) => texte(acte?.source_assertion_id))
+      .filter(Boolean)
+  );
+
+  const derives = [];
+
+  for (const avis of enVigueur) {
+    if (texte(avis?.kind) !== AVIS) continue;
+    if (dejaEcrits.has(texte(avis?.id))) continue;
+
+    const intitule = texte(avis?.payload?.title);
+    if (!intitule) continue;
+
+    // La même reconnaissance que pour un avis qu'on verse : l'intitulé contre
+    // les sujets de la mémoire, dans les deux sens, et toutes les portées.
+    const { assertions: portees } = liaisonDeLAvis({
+      avis: { title_raw: intitule },
+      assertions: enVigueur
+    });
+
+    for (const portee of portees) {
+      derives.push({
+        project_id: texte(avis?.project_id) || null,
+        assertion_id: texte(portee?.id),
+        verdict: ACT.COUVRE,
+        proposed_value: null,
+        note: noteDeLAvisEnMemoire(avis),
+        source_assertion_id: texte(avis?.id) || null,
+        source_document_id: texte(avis?.payload?.sourceId) || null,
+        source_page: Number.isFinite(Number(avis?.payload?.page)) ? Number(avis.payload.page) : null,
+        declared_by: texte(avis?.decided_by) || null,
+        created_at: texte(avis?.decided_at) || texte(avis?.created_at) || null,
+        /** Dérivé d'un avis en mémoire, pas écrit : rien à migrer, rien à nettoyer. */
+        derive: true
+      });
+    }
+  }
+
+  return derives;
+}
+
+/**
+ * Ce qu'un avis du suivi dit, en une ligne.
+ *
+ * L'appréciation et **l'extrait** : « F — Région A2, altitude 109 m ». C'est
+ * l'extrait qui dit ce que le bureau a examiné, et sans lui l'engagement ne se
+ * vérifie pas.
+ */
+function noteDeLAvisEnMemoire(avis) {
+  const evidence = avis?.payload?.evidence;
+  const extrait = typeof evidence === "string" ? evidence : texte(evidence?.text);
+
+  return [texte(avis?.payload?.opinion), extrait].filter(Boolean).join(" — ") || null;
 }

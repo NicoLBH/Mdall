@@ -2684,3 +2684,41 @@ Faut-il retirer l'extraction en dur ? La réponse ne s'écrit pas d'avance : ell
 demande de les avoir fait tourner côte à côte sur un vrai corpus, et de savoir ce
 que chacune trouve que l'autre manque. C'est ce que le choix par document rend
 possible.
+
+
+## 35. Ce qu'une variable touche, sans montrer la plomberie
+
+Devant un constat, la question est : **est-il raccroché à ce que je crois ?**
+Elle vient d'être fermée là où elle se posait le plus — sur un avis, qui dit
+maintenant ce qu'il couvre, par le nom du sujet et rien d'autre.
+
+Elle reste ouverte ailleurs, et de trois façons qui ne se valent pas.
+
+### Ce qu'on ne fera pas : dérouler les liens sur chaque détail
+
+Montrer, sur chaque affirmation, les lectures enregistrées, les identifiants et
+les règles qui la touchent, c'est exposer la mécanique. Cela ne répond pas à la
+question — cela l'enterre sous ce qui n'est pas elle. Le cerveau du projet
+existe pour ça, et c'est là que la forme du raisonnement se regarde.
+
+### Ce qui vaut mieux : un filtre dans la Mémoire
+
+« Montre-moi ce qui touche à *Zone de neige* » se demande une fois et se lit
+d'un coup, au lieu de se reconstituer d'écran en écran. La requête sait déjà
+filtrer par nature, par domaine et par état ; il lui manque **par variable**.
+C'est peu de code et c'est le bon endroit — sous les données de base, comme
+demandé.
+
+### Le minimum : `variables-du-projet.ref` le dit déjà, mais à moitié
+
+Le fichier déclare les variables du projet. Il ne dit pas, pour chacune, si le
+projet porte à son sujet un constat, une hypothèse, une décision ou une
+contrainte — alors que c'est exactement ce qu'on vient y chercher quand on
+l'ouvre. Une colonne de plus par variable, et l'export dit d'un coup ce qui
+demande aujourd'hui quinze écrans.
+
+### Dans quel ordre
+
+Le fichier d'abord : il est lu par des humains **et** par le copilote, il coûte
+le moins, et il rend la réponse exportable. Le filtre ensuite, quand on saura ce
+qu'on y cherche vraiment.
