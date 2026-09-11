@@ -117,11 +117,25 @@ export const SCHEMA_DES_SUJETS = {
             nom: { anyOf: [{ type: "string" }, { type: "null" }] },
             /** Son rôle tel qu'écrit — « maîtrise d'œuvre », « lot 02 — gros œuvre ». */
             role: { anyOf: [{ type: "string" }, { type: "null" }] },
+            /**
+             * Son adresse électronique, **recopiée** — jamais reconstruite.
+             *
+             * Un compte rendu en porte presque toujours : la liste de diffusion
+             * les aligne sous les noms. La recopier n'est pas deviner, c'est
+             * lire — et c'est ce qui permet de rattacher la personne à son
+             * compte Mdall le jour où elle en ouvre un.
+             *
+             * Ce qui reste interdit est de la **fabriquer** : « M. A. » chez
+             * « SARL Alpha » ne devient pas `a@alpha.fr`. Une adresse inventée
+             * dans un annuaire de personnes réelles finit par recevoir du
+             * courrier.
+             */
+            courriel: { anyOf: [{ type: "string" }, { type: "null" }] },
             page: { anyOf: [{ type: "integer" }, { type: "null" }] },
             /** La ligne d'où l'intervenant sort. Sans elle, rien n'entre. */
             citation: { type: "string" }
           },
-          required: ["societe", "nom", "role", "page", "citation"]
+          required: ["societe", "nom", "role", "courriel", "page", "citation"]
         }
       }
     },
@@ -154,8 +168,9 @@ export const CONSIGNES = [
   "- `societe` : l'entreprise ou l'organisme, tel qu'écrit. C'est le champ obligatoire : une ligne sans société n'est pas un intervenant.",
   "- `nom` : la personne, UNIQUEMENT si le document la nomme. Jamais un nom que tu supposes, jamais un nom reconstruit à partir d'une adresse.",
   "- `role` : son rôle tel qu'écrit — « maîtrise d'œuvre », « lot 02 — gros œuvre », « bureau de contrôle ». Sinon null.",
+  "- `courriel` : son adresse électronique, RECOPIÉE telle qu'écrite dans le document — la liste de diffusion en porte presque toujours. Sinon null. Ne la reconstruis JAMAIS à partir d'un nom et d'une société : une adresse inventée dans un annuaire de personnes réelles finit par recevoir du courrier.",
   "- `citation` : la ligne d'où il sort, RECOPIÉE MOT POUR MOT.",
-  "Ne relève pas d'adresse électronique ni de numéro de téléphone, même écrits : ils ne servent à rien ici et ils n'ont pas à voyager.",
+  "Ne relève pas de numéro de téléphone : il ne sert à rien ici et il n'a pas à voyager.",
   "Une même entreprise citée trois fois ne se relève qu'une fois, avec le nom de personne le plus complet que le document en donne.",
   "",
   "Ce qui n'est pas dans le document vaut null. N'invente jamais pour remplir un champ.",
@@ -238,6 +253,7 @@ export function intervenantsAuFormatDuMoteur(retenus = [], { sourceId = "" } = {
       societe,
       nom: String(ligne?.nom ?? "").trim() || null,
       role: String(ligne?.role ?? "").trim() || null,
+      courriel: String(ligne?.courriel ?? "").trim().toLowerCase() || null,
       provenance: {
         source_id: sourceId,
         page: Number.isFinite(Number(ligne?.page)) ? Number(ligne.page) : null,

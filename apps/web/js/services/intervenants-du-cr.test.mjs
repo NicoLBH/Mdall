@@ -2,8 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  CONNU, aQuiRevientLePoint, intervenantsDuCompteRendu, lotDuProjetPour, nomPourLeRepertoire,
-  phraseDuConnu, societeAplatie
+  CONNU, aQuiRevientLePoint, courrielLu, groupeDuRole, intervenantsDuCompteRendu, libelleDuLot,
+  lotDuProjetPour, nomPourLeRepertoire, phraseDuConnu, societeAplatie
 } from "./intervenants-du-cr.js";
 
 /*
@@ -179,34 +179,87 @@ const LOTS = [
 ];
 
 test("le lot se reconnaît à son libellé", () => {
-  assert.equal(lotDuProjetPour("Lot 02 — GROS ŒUVRE", LOTS)?.id, "lot-a");
+  assert.equal(lotDuProjetPour("Lot 02 — GROS ŒUVRE", LOTS).lot?.id, "lot-a");
 });
 
 test("à défaut de libellé, à son code", () => {
-  assert.equal(lotDuProjetPour("lot 05", LOTS)?.id, "lot-b");
+  assert.equal(lotDuProjetPour("lot 05", LOTS).lot?.id, "lot-b");
 });
 
 /**
- * **Aucun lot ne s'invente.** Un lot que le projet n'a pas activé ne s'active
- * pas parce qu'un document le mentionne : ce serait changer les paramètres du
- * projet par un dépôt de fichier, exactement ce qu'on refuse ailleurs.
+ * **Un lot fermé que le compte rendu nomme n'est pas une hypothèse.**
+ * L'entreprise est sur le chantier, elle était à la réunion, et ses points sont
+ * dans le document. Le laisser fermé la laisserait dehors, pour protéger un
+ * paramètre que la réalité a déjà tranché — on l'ouvre, à la fusion, pour une
+ * ligne que quelqu'un a cochée.
  */
-test("un lot que le projet n'a pas activé ne compte pas", () => {
+test("un lot que le projet n'a pas activé se désigne, et demande à l'être", () => {
   const eteints = [{ id: "lot-c", code: "09", label: "Peinture", activated: false }];
-  assert.equal(lotDuProjetPour("lot 09 — peinture", eteints), null);
+  const trouve = lotDuProjetPour("lot 09 — peinture", eteints);
+
+  assert.equal(trouve.lot?.id, "lot-c");
+  assert.equal(trouve.aActiver, true);
 });
 
-test("un rôle qui ne désigne aucun lot n'en désigne aucun", () => {
-  assert.equal(lotDuProjetPour("maîtrise d'ouvrage", LOTS), null);
-  assert.equal(lotDuProjetPour("", LOTS), null);
+test("un lot déjà activé n'a rien à activer", () => {
+  assert.equal(lotDuProjetPour("Lot 02 — GROS ŒUVRE", LOTS).aActiver, false);
 });
 
-test("deux lots aussi plausibles n'en désignent aucun", () => {
+/**
+ * Aucun lot du projet ne correspond : on en ouvre un, avec les mots du
+ * document. Renvoyer l'entreprise aux paramètres laisserait ses points sans
+ * destinataire pour un geste que personne n'a le temps de faire.
+ */
+test("un rôle qu'aucun lot ne porte donne de quoi en ouvrir un", () => {
+  const trouve = lotDuProjetPour("Lot 14 — Ascenseurs", LOTS);
+
+  assert.equal(trouve.lot, null);
+  assert.equal(trouve.aOuvrir.label, "Ascenseurs");
+  assert.equal(trouve.aOuvrir.groupCode, "groupe-entreprise");
+});
+
+test("deux lots aussi plausibles n'en désignent aucun, et n'en ouvrent aucun", () => {
   const jumeaux = [
     { id: "lot-a", code: "02", label: "Gros œuvre", activated: true },
     { id: "lot-b", code: "03", label: "Gros œuvre", activated: true }
   ];
-  assert.equal(lotDuProjetPour("gros œuvre", jumeaux), null);
+  const trouve = lotDuProjetPour("gros œuvre", jumeaux);
+
+  assert.equal(trouve.lot, null);
+  assert.equal(trouve.aOuvrir, null);
+});
+
+test("sans rôle, rien à chercher et rien à ouvrir", () => {
+  assert.deepEqual(lotDuProjetPour("", LOTS), { lot: null, aOuvrir: null });
+});
+
+/* ── Le libellé d'un lot qu'on ouvre ─────────────────────────────────────── */
+
+/**
+ * Le numéro appartient au compte rendu, pas au projet : deux maîtres d'œuvre ne
+ * numérotent pas pareil, et un lot nommé « 02 » ne se retrouverait plus au
+ * chantier suivant.
+ */
+test("le numéro du compte rendu ne devient pas le nom du lot", () => {
+  assert.equal(libelleDuLot("Lot 14 — ASCENSEURS"), "Ascenseurs");
+  assert.equal(libelleDuLot("LOT N° 3 : Charpente bois"), "Charpente bois");
+});
+
+test("un rôle sans numéro garde ses mots", () => {
+  assert.equal(libelleDuLot("Maîtrise d'œuvre"), "Maîtrise d'œuvre");
+});
+
+/* ── À quelle famille un rôle appartient ─────────────────────────────────── */
+
+test("les quatre familles du projet, et le doute va aux entreprises", () => {
+  assert.equal(groupeDuRole("Maître d'ouvrage"), "groupe-maitrise-ouvrage");
+  assert.equal(groupeDuRole("Maîtrise d'œuvre"), "groupe-maitrise-oeuvre");
+  assert.equal(groupeDuRole("Architecte"), "groupe-maitrise-oeuvre");
+  assert.equal(groupeDuRole("Bureau de contrôle"), "groupe-divers");
+  assert.equal(groupeDuRole("Coordonnateur SPS"), "groupe-divers");
+  // C'est ce qu'un compte rendu de chantier nomme le plus, et de loin.
+  assert.equal(groupeDuRole("Lot 02 — Gros œuvre"), "groupe-entreprise");
+  assert.equal(groupeDuRole(""), "groupe-entreprise");
 });
 
 /* ── Comment une personne s'écrit dans le répertoire ─────────────────────── */
@@ -294,9 +347,10 @@ test("le serveur lit les intervenants, et les vérifie comme le reste", async ()
   assert.match(modele, /estVide: \(ligne\) => !String\(ligne\?\.societe \?\? ""\)\.trim\(\)/);
   assert.match(fonction, /verifierLesIntervenants\(\{/);
 
-  // Aucune adresse, aucun téléphone : ils ne servent à rien ici et n'ont pas à
-  // voyager.
-  assert.match(modele, /Ne relève pas d'adresse électronique ni de numéro de téléphone/);
+  // L'adresse se recopie, jamais ne se fabrique. Le téléphone ne voyage pas.
+  assert.match(modele, /RECOPIÉE telle qu'écrite dans le document/);
+  assert.match(modele, /Ne la reconstruis JAMAIS à partir d'un nom et d'une société/);
+  assert.match(modele, /Ne relève pas de numéro de téléphone/);
 });
 
 test("le sujet ouvert se voit assigner son entreprise", async () => {
@@ -340,4 +394,71 @@ test("l'annuaire accepte une personne sans adresse, et l'unicité tient", async 
   // Additive : rien n'est supprimé ni renommé, et aucune ligne existante ne
   // devient invalide.
   assert.doesNotMatch(migration, /\bdrop\s+(table|column|index|constraint)\b/i);
+});
+
+/* ── L'adresse : lue, jamais fabriquée ───────────────────────────────────── */
+
+/**
+ * Un compte rendu porte presque toujours les adresses — la liste de diffusion
+ * les aligne sous les noms. Les recopier n'est pas deviner, c'est lire, et
+ * c'est ce qui rattache quelqu'un à son compte Mdall le jour où il en ouvre un.
+ */
+test("une adresse écrite se lit", () => {
+  assert.equal(courrielLu("Contact@Alpha.example"), "contact@alpha.example");
+});
+
+/**
+ * Ce qui est douteux est **écarté, pas rafistolé** : corriger une chaîne qui
+ * n'a pas la tête d'une adresse reviendrait à en inventer une.
+ */
+test("ce qui n'a pas la forme d'une adresse n'en est pas une", () => {
+  for (const douteux of ["M. A.", "alpha.example", "a@b", "deux mots@alpha.example", "@alpha.example", ""]) {
+    assert.equal(courrielLu(douteux), "", `« ${douteux} » est passé pour une adresse`);
+  }
+});
+
+test("l'adresse voyage avec la société proposée", () => {
+  const tri = intervenantsDuCompteRendu({
+    lus: [lu({ courriel: "Contact@Alpha.example" })],
+    collaborateurs: []
+  });
+
+  assert.equal(tri.proposes[0].courriel, "contact@alpha.example");
+});
+
+/**
+ * L'adresse est ce qui manque le plus souvent : la première mention qui en
+ * porte une la donne à la ligne, quelle que soit sa place dans le document.
+ */
+test("deux mentions de la même société : l'adresse de celle qui en a une", () => {
+  const tri = intervenantsDuCompteRendu({
+    lus: [lu({ courriel: "" }), lu({ courriel: "contact@alpha.example" })],
+    collaborateurs: []
+  });
+
+  assert.equal(tri.proposes.length, 1);
+  assert.equal(tri.proposes[0].courriel, "contact@alpha.example");
+});
+
+/**
+ * **Avec une adresse, la porte ordinaire ; sans, celle des documents.** La
+ * première rattache la personne à un compte Mdall et permet de l'inviter ; la
+ * seconde la fait exister sans l'inviter nulle part, puisqu'il n'y a nulle part
+ * où l'inviter.
+ */
+test("l'adresse décide par quelle porte la société entre", async () => {
+  const vue = await lire("../views/project-propositions.js");
+
+  assert.match(vue, /if \(adresse\) \{\n\s*await addProjectCollaboratorToSupabase\(/);
+  assert.match(vue, /\} else \{\n\s*await addProjectCollaboratorFromDocument\(/);
+});
+
+test("le lot s'active ou s'ouvre à la fusion, pour une ligne cochée", async () => {
+  const vue = await lire("../views/project-propositions.js");
+
+  assert.match(vue, /persistProjectLotActivationToSupabase\(lot\.id, true\)/);
+  assert.match(vue, /addCustomProjectLotToSupabase\(trouve\.aOuvrir\)/);
+  // Toujours à la fusion, jamais au dépôt : c'est ce qui le distingue d'un
+  // effet de bord.
+  assert.match(vue, /await ajouterLesIntervenantsRetenus\(root, proposition, items\)/);
 });

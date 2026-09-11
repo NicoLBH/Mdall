@@ -35,13 +35,21 @@
  * d'autre. On reconnaît donc par la société ; le nom de la personne
  * l'accompagne quand le document le donne, et se met à jour quand il change.
  *
- * ## Ce qu'on ne devine pas
+ * ## L'adresse se lit, elle ne se fabrique pas
  *
- * **Aucune adresse électronique.** Ni lue, ni reconstruite à partir d'un nom.
- * Un collaborateur sans adresse ne peut pas être invité à se connecter, et
- * c'est très bien : il est là pour qu'on puisse lui assigner un point et
- * chercher ce qui lui revient, pas pour recevoir des courriels qu'il n'a pas
- * demandés.
+ * Un compte rendu porte presque toujours les adresses : la liste de diffusion
+ * les aligne sous les noms. Les recopier n'est pas deviner, c'est lire — et
+ * c'est ce qui permet de rattacher quelqu'un à son compte Mdall le jour où il
+ * en ouvre un.
+ *
+ * Ce qui reste interdit est de la **fabriquer**. « M. A. » chez « SARL Alpha »
+ * ne devient pas `a@alpha.fr` : une adresse inventée dans un annuaire de
+ * personnes réelles finit par recevoir du courrier, ou par entrer en collision
+ * avec une vraie. Une adresse qui n'a pas la forme d'une adresse est écartée
+ * plutôt que corrigée.
+ *
+ * Sans adresse, la personne existe quand même : elle reçoit des points, et elle
+ * ne peut simplement pas être invitée à se connecter.
  *
  * **Aucun rôle inventé.** Le rôle vient du document ou reste vide.
  */
@@ -76,6 +84,20 @@ const FORMES = new Set(["sarl", "sas", "sasu", "sa", "eurl", "sci", "snc", "scop
 export function societeAplatie(valeur) {
   const mots = aplati(valeur).split(" ").filter((mot) => mot && !FORMES.has(mot));
   return mots.join(" ") || aplati(valeur);
+}
+
+/**
+ * L'adresse telle qu'elle est écrite, ou rien.
+ *
+ * On vérifie la **forme**, pas l'existence : une chaîne qui n'a pas la tête
+ * d'une adresse n'en est pas une, et la corriger reviendrait à en inventer une.
+ * Ce qui est douteux est écarté, pas rafistolé (règle 5).
+ */
+export function courrielLu(valeur) {
+  const dit = texte(valeur).toLowerCase();
+  if (!dit) return "";
+  // Une adresse et rien d'autre : pas d'espace, un seul arobase, un point après.
+  return /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/.test(dit) ? dit : "";
 }
 
 /** Pourquoi un intervenant lu n'est pas proposé. Nommé : l'écran doit le dire. */
@@ -139,6 +161,9 @@ export function intervenantsDuCompteRendu({ lus = [], collaborateurs = [] } = {}
       // seule dans un en-tête de lot, et la personne dans la liste des présents.
       if (texte(lu?.nom).length > texte(dejaVu.nom).length) dejaVu.nom = texte(lu.nom);
       if (!texte(dejaVu.role) && texte(lu?.role)) dejaVu.role = texte(lu.role);
+      // L'adresse est ce qui manque le plus souvent : la première mention qui
+      // en porte une la donne à la ligne, quelle que soit sa place.
+      if (!dejaVu.courriel && courrielLu(lu?.courriel)) dejaVu.courriel = courrielLu(lu.courriel);
       deja.push({ ...lu, motif: CONNU.DANS_LE_LOT });
       continue;
     }
@@ -148,7 +173,8 @@ export function intervenantsDuCompteRendu({ lus = [], collaborateurs = [] } = {}
       key: texte(lu?.key) || `intervenant:${cle}`,
       societe,
       nom: texte(lu?.nom),
-      role: texte(lu?.role)
+      role: texte(lu?.role),
+      courriel: courrielLu(lu?.courriel)
     };
     vus.set(cle, propose);
     proposes.push(propose);
@@ -158,43 +184,97 @@ export function intervenantsDuCompteRendu({ lus = [], collaborateurs = [] } = {}
 }
 
 /**
- * Le lot du projet sous lequel ranger une entreprise.
+ * Sous quel lot ranger une entreprise, et ce qu'il faut faire pour cela.
  *
- * **Un collaborateur ne peut pas exister sans rôle** : la base l'exige, et
- * c'est juste — quelqu'un dont on ne sait pas ce qu'il fait sur le chantier ne
- * sert à rien dans une liste. Le compte rendu, lui, écrit le lot à côté de
- * l'entreprise : « Lot 02 — GROS ŒUVRE ». C'est exactement ce qu'il faut.
+ * ## Un collaborateur ne peut pas exister sans lot
  *
- * On cherche donc le lot du projet dont le libellé ou le code se retrouve dans
- * ce que le compte rendu écrit. **Et on n'en invente aucun** : un lot que le
- * projet n'a pas activé ne s'active pas tout seul parce qu'un document le
- * mentionne — ce serait changer les paramètres du projet par un dépôt de
- * fichier, c'est-à-dire précisément ce qu'on refuse ailleurs.
+ * La base l'exige, et c'est juste : quelqu'un dont on ne sait pas ce qu'il fait
+ * sur le chantier ne sert à rien dans une liste. Le compte rendu, lui, écrit le
+ * lot à côté de l'entreprise — « Lot 02 — GROS ŒUVRE ». C'est exactement ce
+ * qu'il faut.
+ *
+ * ## Le lot s'ouvre si besoin, parce que le chantier l'a déjà ouvert
+ *
+ * Un lot que le projet n'a pas activé et qu'un compte rendu nomme n'est pas une
+ * hypothèse : **l'entreprise est sur le chantier, elle était à la réunion, et
+ * ses points sont dans le document**. Refuser de l'activer laisserait la moitié
+ * des sociétés dehors et les sujets sans destinataire, pour protéger des
+ * paramètres que la réalité a déjà tranchés.
+ *
+ * Cela ne contourne rien : l'activation a lieu **à la fusion**, pour une ligne
+ * que quelqu'un a cochée. C'est le même geste signé que le reste, pas un effet
+ * de bord du dépôt.
  *
  * @param {string} role ce que le compte rendu écrit comme rôle, et son lot
- * @param {object[]} lots les lots activés du projet, `{id, code, label}`
- * @returns {object|null}
+ * @param {object[]} lots les lots du projet, activés ou non
+ * @returns {{lot: object, aActiver: boolean}|{lot: null, aOuvrir: {label: string, groupCode: string}}}
+ *   soit un lot du projet — avec ce qu'il reste à en faire —, soit de quoi en
+ *   ouvrir un.
  */
 export function lotDuProjetPour(role = "", lots = []) {
   const cherche = aplati(role);
-  if (!cherche) return null;
+  if (!cherche) return { lot: null, aOuvrir: null };
 
-  const actifs = (Array.isArray(lots) ? lots : []).filter((lot) => lot?.activated !== false);
+  const connus = Array.isArray(lots) ? lots : [];
 
   // Le libellé d'abord : « gros œuvre » est plus sûr qu'un « 02 » qui peut
   // désigner une page, une version ou un rang dans une liste.
-  const parLibelle = actifs.filter((lot) => {
+  const parLibelle = connus.filter((lot) => {
     const libelle = aplati(lot?.label);
     return libelle && contientLeMot(cherche, libelle);
   });
-  if (parLibelle.length === 1) return parLibelle[0];
-  if (parLibelle.length > 1) return null;
-
-  const parCode = actifs.filter((lot) => {
+  const parCode = connus.filter((lot) => {
     const code = aplati(lot?.code);
     return code && contientLeMot(cherche, code);
   });
-  return parCode.length === 1 ? parCode[0] : null;
+
+  const trouves = parLibelle.length ? parLibelle : parCode;
+
+  // Deux lots aussi plausibles n'en désignent aucun : ranger l'entreprise sous
+  // le premier venu la ferait disparaître du bon lot.
+  if (trouves.length === 1) {
+    return { lot: trouves[0], aActiver: trouves[0]?.activated === false };
+  }
+  if (trouves.length > 1) return { lot: null, aOuvrir: null };
+
+  return { lot: null, aOuvrir: { label: libelleDuLot(role), groupCode: groupeDuRole(role) } };
+}
+
+/**
+ * Le libellé sous lequel ouvrir un lot que le projet n'a pas.
+ *
+ * On garde **les mots du document**, débarrassés de la seule numérotation :
+ * « Lot 02 — GROS ŒUVRE » devient « Gros œuvre ». Le numéro appartient au
+ * compte rendu, pas au projet — deux maîtres d'œuvre ne numérotent pas pareil,
+ * et un lot nommé « 02 » ne se retrouverait plus au chantier suivant.
+ */
+export function libelleDuLot(role = "") {
+  const dit = texte(role)
+    .replace(/^\s*lots?\s*n?[°ºo]?\s*\d{1,3}\s*[-—–:.]*\s*/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!dit) return texte(role);
+  return dit.charAt(0).toUpperCase() + dit.slice(1).toLowerCase();
+}
+
+/**
+ * À quelle famille un rôle appartient.
+ *
+ * Les quatre familles sont celles du projet, et la base n'en accepte pas
+ * d'autres. Le doute va aux entreprises : c'est ce qu'un compte rendu de
+ * chantier nomme le plus, et de loin.
+ */
+export function groupeDuRole(role = "") {
+  const dit = aplati(role);
+
+  if (/\bmaitr(e|ise) d ouvrage\b|\bmoa\b|\bmaitre d ouvrage\b/.test(dit)) return "groupe-maitrise-ouvrage";
+  if (/\bmaitr(e|ise) d (?:oeuvre|uvre)\b|\bmoe\b|\barchitecte\b/.test(dit)) return "groupe-maitrise-oeuvre";
+  if (/\bbureau de controle\b|\bcontroleur technique\b|\bsps\b|\bopc\b|\bgeotechnicien\b/.test(dit)) {
+    return "groupe-divers";
+  }
+
+  return "groupe-entreprise";
 }
 
 /**

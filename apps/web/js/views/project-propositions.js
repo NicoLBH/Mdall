@@ -853,7 +853,7 @@ function renderAvisItem(item) {
  * connecter, il existe pour qu'on puisse lui assigner un point.
  */
 function renderIntervenantItem(item) {
-  const { societe, nom, role, page } = item.payload;
+  const { societe, nom, role, courriel, page } = item.payload;
 
   const situe = [
     role ? escapeHtml(role) : "",
@@ -868,7 +868,14 @@ function renderIntervenantItem(item) {
         ${escapeHtml(societe || "Société sans nom")}
       </span>
       ${situe ? `<span class="review-item__where">${situe}</span>` : ""}
-      ${nom ? `<span class="review-item__meta">${escapeHtml(nom)}</span>` : ""}
+      ${
+        // Qui entre exactement, et avec quelle adresse. On ajoute une personne
+        // à un projet : la ligne doit montrer ce qu'elle va inscrire, sans quoi
+        // on coche sans savoir.
+        [nom, courriel].filter(Boolean).length
+          ? `<span class="review-item__meta">${[nom, courriel].filter(Boolean).map(escapeHtml).join(" · ")}</span>`
+          : ""
+      }
     `
   );
 }
@@ -5122,41 +5129,70 @@ async function ajouterLesIntervenantsRetenus(root, proposition, items = []) {
   view.review.step = `Ajout de ${retenus.length} société(s) au projet`;
   renderContent(root);
 
-  const sansLot = [];
   const manques = [];
 
   try {
-    const { addProjectCollaboratorFromDocument, syncProjectLotsFromSupabase } = await import(
-      "../services/project-supabase-sync.js"
-    );
+    const {
+      addCustomProjectLotToSupabase,
+      addProjectCollaboratorFromDocument,
+      addProjectCollaboratorToSupabase,
+      persistProjectLotActivationToSupabase,
+      syncProjectLotsFromSupabase
+    } = await import("../services/project-supabase-sync.js");
 
     // Les lots du projet ne sont pas chargés sur cet écran : on ne les a jamais
-    // demandés ici. Les lire vides ferait conclure qu'aucun lot ne correspond,
-    // et aucune société n'entrerait — avec un message qui accuserait les
-    // paramètres du projet d'un tort qui est le nôtre.
-    const lots = await syncProjectLotsFromSupabase().catch(() => []);
+    // demandés ici. Les lire vides ferait ouvrir un lot neuf pour chaque
+    // société, en double de ceux qui existent déjà.
+    let lots = await syncProjectLotsFromSupabase().catch(() => []);
 
     for (const entry of retenus) {
-      const { societe, nom, role } = entry.payload ?? {};
-      const lot = lotDuProjetPour(`${role ?? ""} ${societe ?? ""}`, lots);
-
-      if (!lot?.id) {
-        sansLot.push(societe ?? "");
-        continue;
-      }
+      const { societe, nom, role, courriel } = entry.payload ?? {};
+      const dit = `${role ?? ""} ${societe ?? ""}`;
 
       try {
+        const trouve = lotDuProjetPour(dit, lots);
+        let lot = trouve.lot;
+
+        // **Le lot s'ouvre si besoin.** Une entreprise nommée dans un compte
+        // rendu est sur le chantier : elle était à la réunion, et ses points
+        // sont dans le document. Laisser le lot fermé la laisserait dehors,
+        // pour protéger un paramètre que la réalité a déjà tranché.
+        if (lot && trouve.aActiver) {
+          lot = await persistProjectLotActivationToSupabase(lot.id, true);
+        } else if (!lot && trouve.aOuvrir?.label) {
+          lot = await addCustomProjectLotToSupabase(trouve.aOuvrir);
+          lots = Array.isArray(store.projectLots?.items) ? store.projectLots.items : lots;
+        }
+
+        if (!lot?.id) {
+          manques.push(societe ?? "");
+          continue;
+        }
+
         const { firstName, lastName } = nomPourLeRepertoire({ nom, societe });
-        // **La porte des documents, pas celle des paramètres.** Celle-ci exige
-        // une adresse pour inviter la personne à se connecter ; un compte rendu
-        // n'en donne pas, et il ne faut pas en inventer une. Deux portes, deux
-        // exigences.
-        await addProjectCollaboratorFromDocument({
-          firstName,
-          lastName,
-          company: String(societe ?? "").trim(),
-          projectLotId: lot.id
-        });
+        const adresse = String(courriel ?? "").trim();
+
+        // **Deux portes, et c'est l'adresse qui décide.** Avec une adresse, la
+        // personne entre par la porte ordinaire : elle se rattache à un compte
+        // Mdall existant, et pourra être invitée. Sans adresse, par celle des
+        // documents — elle existe, reçoit des points, et n'est invitée nulle
+        // part puisqu'il n'y a nulle part où l'inviter.
+        if (adresse) {
+          await addProjectCollaboratorToSupabase({
+            email: adresse,
+            firstName,
+            lastName,
+            company: String(societe ?? "").trim(),
+            projectLotId: lot.id
+          });
+        } else {
+          await addProjectCollaboratorFromDocument({
+            firstName,
+            lastName,
+            company: String(societe ?? "").trim(),
+            projectLotId: lot.id
+          });
+        }
       } catch {
         // Déjà au projet sur ce rôle, ou la base a refusé : dans les deux cas la
         // fusion tient, et la liste des collaborateurs se corrige à la main.
@@ -5167,18 +5203,12 @@ async function ajouterLesIntervenantsRetenus(root, proposition, items = []) {
     manques.push(...retenus.map((entry) => entry.payload?.societe ?? ""));
   }
 
-  if (sansLot.length > 0) {
-    view.review.notice = [
-      view.review.notice,
-      `${sansLot.length} société(s) n'ont pas pu être ajoutées faute de lot correspondant : `
-        + `${sansLot.filter(Boolean).slice(0, 3).join(", ")}. `
-        + "Activez le lot dans les paramètres du projet, puis ajoutez-les à la main."
-    ].filter(Boolean).join(" ");
-  }
   if (manques.length > 0) {
     view.review.notice = [
       view.review.notice,
-      `${manques.length} société(s) n'ont pas pu être ajoutées. La fusion est faite.`
+      `${manques.length} société(s) n'ont pas pu être ajoutées : `
+        + `${manques.filter(Boolean).slice(0, 3).join(", ")}. `
+        + "La fusion est faite ; elles s'ajoutent à la main depuis les paramètres du projet."
     ].filter(Boolean).join(" ");
   }
 }
