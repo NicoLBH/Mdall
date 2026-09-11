@@ -70,6 +70,13 @@ export function affirmationOf(item = {}) {
     return String(payload.verdict ?? "");
   }
 
+  // Un point de chantier affirme qu'il y a là quelque chose à traiter, et rien
+  // d'autre. Le compte rendu suivant le redit dans les mêmes termes tant qu'il
+  // n'est pas soldé : deux lectures du même report ne sont pas une
+  // contradiction, ce sont deux fois la même phrase. Ce qui empêche de le
+  // rouvrir n'est pas ici, c'est `sujets-du-cr.js`.
+  if (item.itemType === ITEM_TYPE.SUJET) return "";
+
   // Un document affirme qu'il entre au corpus, et rien d'autre. Redéposé, il
   // porte un nouvel identifiant : ce n'est plus la mémoire qui le rattrape,
   // c'est la détection de doublon, qui travaille sur le contenu.

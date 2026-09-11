@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { ENTRY, planBatch, summarizeDeposit } from "./document-batch.js";
+import { ENTRY, orientationDuDepot, planBatch, summarizeDeposit } from "./document-batch.js";
 
 /** Un fichier, réduit à ce que la répartition regarde. */
 const file = (name, type = "") => ({ name, type });
@@ -90,4 +90,54 @@ test("un lot entièrement déposé se dit au singulier quand il n'y en a qu'un",
 
 test("un dépôt sans rien à déposer le dit", () => {
   assert.equal(summarizeDeposit([]).message, "Aucun fichier à déposer.");
+});
+
+/* ── L'aiguillage se dit au dépôt ────────────────────────────────────────── */
+
+/**
+ * On déposait un PDF et il ne se passait rien de visible : « 1 document
+ * déposé », et c'était tout. L'aiguillage se décide pourtant **là**, par la
+ * reconnaissance — et c'est là qu'on regarde, et qu'on sait encore de quel
+ * fichier on parle.
+ */
+const entre = (kind) => ({ entry: ENTRY.DEPOSITED, documentId: "d", kind });
+
+test("le dépôt dit vers quel atelier chaque document part", () => {
+  const dit = orientationDuDepot([entre("ct_report"), entre("cr_chantier")]);
+
+  assert.match(dit, /1 livrable de bureau de contrôle part vers les avis/);
+  assert.match(dit, /1 compte rendu de chantier part vers les points à traiter/);
+});
+
+test("le pluriel se pose, parce qu'on dépose des lots", () => {
+  const dit = orientationDuDepot([entre("cr_chantier"), entre("cr_chantier")]);
+  assert.match(dit, /2 comptes rendus de chantier partent/);
+});
+
+/**
+ * Règle 5, et c'est l'information la plus utile des trois : elle explique le
+ * silence qui suivra. Un document qu'aucun atelier ne lit ne produira rien, et
+ * mieux vaut le savoir au dépôt qu'en cherchant pourquoi la proposition est
+ * vide.
+ */
+test("un document qu'aucun atelier ne réclame se compte et se dit", () => {
+  assert.match(orientationDuDepot([entre(null)]), /n'est reconnu par aucun atelier/);
+});
+
+test("ce qui n'est pas entré ne s'oriente pas", () => {
+  // Un doublon, un fichier refusé : ils ne partent nulle part, et les compter
+  // annoncerait un travail qui n'aura pas lieu.
+  assert.equal(orientationDuDepot([{ entry: ENTRY.DUPLICATE, kind: "cr_chantier" }]), "");
+  assert.equal(orientationDuDepot([]), "");
+});
+
+/**
+ * Elle dit où le document part, jamais ce qui en sortira : un compte rendu peut
+ * ne porter aucun point neuf, et l'annoncer serait mentir avant d'avoir lu.
+ */
+test("le dépôt ne promet aucun résultat", () => {
+  const dit = orientationDuDepot([entre("cr_chantier")]);
+  for (const interdit of [/sujets? (?:ouverts?|créés?)/i, /avis relevés/i, /\bva créer\b/i]) {
+    assert.doesNotMatch(dit, interdit);
+  }
 });

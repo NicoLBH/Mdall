@@ -69,7 +69,8 @@ import {
   avisItems,
   describeAvisChange,
   diffAvis,
-  documentItems
+  documentItems,
+  sujetItems
 } from "../services/proposition-review.js";
 import {
   CHANGEMENT,
@@ -78,6 +79,7 @@ import {
   resumeDuTableau,
   tableauAvantApres
 } from "../services/proposition-avant-apres.js";
+import { descriptionDuPoint, phraseDuDeja } from "../services/sujets-du-cr.js";
 import { depotDeLaProposition, resumeDuDepot } from "../services/proposition-depot.js";
 import { ETAT, arbreDesReperes, comparerDesReperes, lignesNumerotees, resumeDuDiff } from "../services/depot-reperes.js";
 import { aChange, reperesDuDepot } from "../services/depot-carburants.js";
@@ -754,6 +756,101 @@ function renderAvisItem(item) {
       <span class="review-item__meta">${escapeHtml(mouvement.detail)}</span>
     `
   );
+}
+
+/**
+ * Un point d'un compte rendu de chantier, proposé à l'ouverture.
+ *
+ * Cocher ouvre un sujet à la fusion. C'est le geste le plus engageant de cet
+ * écran — un sujet ouvert est un sujet que quelqu'un devra traiter —, et c'est
+ * pour cela qu'il se coche, un par un, plutôt que de s'ouvrir tout seul au
+ * dépôt comme le faisait l'ancienne pipeline.
+ *
+ * Le lot d'abord : c'est par lui qu'on cherche dans un compte rendu, et c'est
+ * ce qui dit à qui la question se pose. Ce que le document n'écrit pas ne
+ * s'affiche pas — un point sans échéance n'en gagne pas une.
+ */
+function renderSujetItem(item) {
+  const { titre, description, lot, reference, qui, echeance, etat, page } = item.payload;
+
+  const situe = [
+    lot ? escapeHtml(lot) : "",
+    reference ? `n° ${escapeHtml(reference)}` : "",
+    page ? `page ${escapeHtml(String(page))}` : ""
+  ].filter(Boolean).join(" · ");
+
+  const demande = [
+    qui ? `pour ${escapeHtml(qui)}` : "",
+    echeance ? `échéance ${escapeHtml(echeance)}` : "",
+    etat ? escapeHtml(etat) : ""
+  ].filter(Boolean).join(" · ");
+
+  return renderReviewItem(
+    item,
+    `
+      <span class="review-item__title">
+        <span class="review-item__badge review-item__badge--added">À ouvrir</span>
+        ${escapeHtml(titre || "Point sans intitulé")}
+      </span>
+      ${situe ? `<span class="review-item__where">${situe}</span>` : ""}
+      ${demande ? `<span class="review-item__meta">${demande}</span>` : ""}
+      ${
+        // La description n'est reprise que lorsqu'elle dit plus que le titre :
+        // la même phrase deux fois ne se lit pas deux fois.
+        description && description !== titre
+          ? `<span class="review-item__meta">${escapeHtml(description)}</span>`
+          : ""
+      }
+    `
+  );
+}
+
+/**
+ * Ce qu'un compte rendu redit, et qu'on ne repropose pas.
+ *
+ * Un compte rendu **reporte** : la douzième réunion reprend les points de la
+ * onzième. Les reproposer demanderait douze fois d'accepter la même chose ; les
+ * taire ferait croire à un compte rendu maigre. On les dit donc, sans case à
+ * cocher — ce n'est pas une question (règle 5).
+ */
+function renderSujetsDeja(review) {
+  const deja = review.sujetsDeja ?? [];
+  if (deja.length === 0) return "";
+
+  // Le châssis est celui de « Non repris par ce lot » : même nature de bloc —
+  // ce qui se lit sans se décider —, donc même forme. Deux mises en page pour
+  // une même intention se remarquent, et pas en bien.
+  return `
+    <section class="review-block">
+      <div class="review-panel">
+        <div class="review-block__head review-block__head--plain">
+          <div class="review-block__headbody">
+            <h3 class="review-block__title">
+              Déjà suivis
+              <span class="review-block__count">${deja.length}</span>
+            </h3>
+            <span class="review-block__state">rien à décider</span>
+          </div>
+        </div>
+        <p class="review-silent__note">
+          Un compte rendu de chantier reporte ses points d'une réunion à la suivante.
+          ${deja.length > 1 ? "Ceux-ci sont" : "Celui-ci est"} déjà ${deja.length > 1 ? "connus" : "connu"}
+          du projet : cette proposition ne ${deja.length > 1 ? "les" : "le"} rouvre pas.
+        </p>
+        <ul class="review-list">
+          ${deja.slice(0, 12).map((point) => `
+            <li class="review-item review-item--plain">
+              <span class="review-item__check">${svgIcon("dot-fill-pending", { className: "octicon" })}</span>
+              <div class="review-item__body">
+                <span class="review-item__title">${escapeHtml(point.titre ?? "")}</span>
+                <span class="review-item__meta">${escapeHtml(phraseDuDeja(point.motif))}</span>
+              </div>
+            </li>`).join("")}
+        </ul>
+        ${deja.length > 12 ? `<p class="review-silent__note">et ${deja.length - 12} autre(s).</p>` : ""}
+      </div>
+    </section>
+  `;
 }
 
 /**
@@ -2632,6 +2729,16 @@ function renderDepotLignes(proposition, review) {
           ? "Aucun avis ne changeait, ou l'état conservé ne le dit pas."
           : "Aucun livrable exploitable : il n'y a pas d'avis à en tirer."
     )}
+    ${renderReviewBlock(
+      ITEM_TYPE.SUJET,
+      "Points de chantier",
+      parType(ITEM_TYPE.SUJET),
+      renderSujetItem,
+      gele
+        ? "Aucun point de chantier, ou l'état conservé ne le dit pas."
+        : "Aucun compte rendu de chantier dans ce dépôt : il n'y a pas de point à en tirer."
+    )}
+    ${renderSujetsDeja(review)}
     ${renderSilentAvis(review)}
   `;
 }
@@ -4538,6 +4645,13 @@ async function merge(root) {
         "Elle se rattrape depuis l'onglet Mémoire.";
     }
 
+    // Les points de chantier retenus deviennent des sujets. **C'est ici, et
+    // nulle part ailleurs, qu'un sujet s'ouvre depuis un document** : après
+    // qu'une proposition a été signée, et seulement pour ce qui a été coché.
+    // L'ancienne pipeline les ouvrait au dépôt, sans que personne ait rien dit —
+    // c'est ce qu'on vient de retirer.
+    await ouvrirLesSujetsRetenus(root, proposition, items);
+
     // L'histoire se refait maintenant : sans cela, le fil resterait celui d'une
     // proposition ouverte — sans acte de fusion, sans carte de fin — jusqu'au
     // prochain rechargement, et un message écrit dans la foulée se retrouverait
@@ -4565,6 +4679,90 @@ async function merge(root) {
   }
 
   renderContent(root);
+}
+
+/**
+ * Ouvre les sujets qu'une proposition fusionnée a retenus.
+ *
+ * ## Ce qui fait qu'on a le droit de les ouvrir
+ *
+ * Trois choses, et il faut les trois. Le point a été **lu dans un document**
+ * (la citation le prouve) ; il a été **coché par quelqu'un** sur cet écran ; et
+ * la proposition a été **signée**. Retirer l'une des trois, c'est revenir à
+ * l'ancienne pipeline, qui ouvrait des sujets parce qu'un PDF était arrivé.
+ *
+ * ## Un échec n'annule pas la fusion
+ *
+ * Les documents sont entrés, la mémoire est écrite : c'est fait. Un sujet qui
+ * n'a pas pu s'ouvrir se dit, et se rouvre à la main — on ne défait pas une
+ * signature pour un appel qui a échoué. Ce qui serait grave est de se taire :
+ * on croirait le compte rendu traité.
+ *
+ * Les sujets s'ouvrent **un par un**, et un échec n'emporte pas les suivants :
+ * sur douze points, en perdre onze parce que le troisième a échoué serait le
+ * pire des deux mondes.
+ */
+async function ouvrirLesSujetsRetenus(root, proposition, items = []) {
+  const retenus = items.filter(
+    (entry) => entry.itemType === ITEM_TYPE.SUJET && entry.status !== ITEM.REFUSED
+  );
+  if (retenus.length === 0) return;
+
+  view.review.step = `Ouverture de ${retenus.length} sujet(s)`;
+  renderContent(root);
+
+  let ouverts = 0;
+  const manques = [];
+
+  try {
+    const { createManualSubject, updateSubjectDescription } = await import(
+      "../services/project-subjects-supabase.js"
+    );
+
+    for (const entry of retenus) {
+      const point = entry.payload ?? {};
+      try {
+        const sujet = await createManualSubject({
+          projectId: proposition.project_id,
+          title: String(point.titre ?? "").trim()
+        });
+
+        // La description porte la provenance et la citation : un sujet ouvert
+        // par une lecture automatique doit pouvoir se contester. Si elle
+        // échoue, le sujet existe quand même — mieux vaut un sujet nu qu'un
+        // point perdu.
+        if (sujet?.id) {
+          await updateSubjectDescription({
+            subjectId: sujet.id,
+            description: descriptionDuPoint(point, { document: nomDuDocumentDuPoint(point) })
+          }).catch(() => {});
+          ouverts += 1;
+        } else {
+          manques.push(point.titre ?? "");
+        }
+      } catch {
+        manques.push(point.titre ?? "");
+      }
+    }
+  } catch {
+    manques.push(...retenus.map((entry) => entry.payload?.titre ?? ""));
+  }
+
+  if (manques.length > 0) {
+    view.review.notice = [
+      view.review.notice,
+      `${ouverts} sujet(s) ouvert(s), ${manques.length} n'ont pas pu l'être. ` +
+        "La fusion est faite : ces points se rouvrent à la main depuis l'onglet Sujets."
+    ].filter(Boolean).join(" ");
+  }
+}
+
+/** Le nom du compte rendu d'où un point sort, quand l'écran le connaît encore. */
+function nomDuDocumentDuPoint(point = {}) {
+  const id = String(point.sourceId ?? "").trim();
+  if (!id) return "";
+  const row = (view.review?.documentRows ?? []).find((entry) => entry.id === id);
+  return String(row?.original_filename ?? row?.filename ?? "").trim();
 }
 
 /**
@@ -4789,7 +4987,12 @@ function mergeFigureAvis(root, { knownAvis = [], decisions = [], assumees = [], 
     [
       ...documentItems(documents),
       ...attachmentItems(analyse?.attachments ?? []),
-      ...avisItems(view.review.diff)
+      ...avisItems(view.review.diff),
+      // Les fiches ne concernent que les avis, mais cette liste est reconstruite
+      // **entière** : omettre les points de chantier les effacerait de l'écran
+      // après qu'on les a lus. C'est le piège d'une reconstruction complète, et
+      // il se referme ici.
+      ...sujetItems(analyse?.sujets ?? [])
     ],
     decisions
   );
@@ -5403,11 +5606,16 @@ async function openProposition(root, propositionId) {
       import("../services/project-identity-supabase.js")
     ]);
 
-    const [memoire, marqueurs, assumees] = await Promise.all([
+    const [memoire, marqueurs, assumees, sujetsDuProjet] = await Promise.all([
       loadCtAnalysis(projectId),
       loadProjectMarkers(projectId),
       // Ce que le projet a déjà assumé, et que l'analyse pourrait contredire.
-      propositions.listProjectDecisions(projectId, { exceptPropositionId: proposition.id })
+      propositions.listProjectDecisions(projectId, { exceptPropositionId: proposition.id }),
+      // Ce que le projet suit déjà. Un compte rendu de chantier reporte ses
+      // points d'une réunion à la suivante : sans cette liste, la douzième
+      // réunion reproposerait douze fois ce qui est déjà ouvert. `null` quand
+      // la lecture échoue — et l'on préfère alors reproposer que taire.
+      propositions.listProjectSubjectTitles(projectId)
     ]);
 
     const analyse = await analyzeProposition({
@@ -5416,6 +5624,10 @@ async function openProposition(root, propositionId) {
       project: store.projectForm ?? {},
       knownAvis: memoire?.avis ?? [],
       knownMarkers: marqueurs,
+      // Les deux mémoires du report : ce qui a déjà été versé, et ce qui est
+      // déjà ouvert.
+      knownAssertions: affirmationsDuProjet ?? [],
+      sujetsDuProjet: sujetsDuProjet ?? [],
       onProgress: (step) => {
         if (!view.open || view.open.id !== proposition.id) return;
         view.review.step = `${step.label} (${step.done}/${step.total})`;
@@ -5442,8 +5654,20 @@ async function openProposition(root, propositionId) {
           .map((avis) => [String(avis.external_reference ?? "").trim(), avis])
           .filter(([cle]) => cle)
       ),
+      // Ce qu'un compte rendu redit sans que ce soit neuf. Ce n'est pas une
+      // affirmation qu'on pose — on ne demande pas douze fois d'accepter la
+      // même chose — mais cela se dit : une liste courte sans ce qu'on lui a
+      // retiré ferait croire à un compte rendu maigre (règle 5).
+      sujetsDeja: analyse.sujetsDeja ?? [],
       items: applyDecisions(
-        [...documentItems(documents), ...attachmentItems(analyse.attachments), ...avisItems(analyse.diff)],
+        [
+          ...documentItems(documents),
+          ...attachmentItems(analyse.attachments),
+          ...avisItems(analyse.diff),
+          // L'autre moitié de l'aiguillage : ce qu'un compte rendu de chantier
+          // propose d'ouvrir. Proposé, jamais ouvert.
+          ...sujetItems(analyse.sujets ?? [])
+        ],
         decisions
       )
     };

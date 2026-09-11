@@ -13,6 +13,20 @@
  * produit est dérivé ; le conserver reviendrait à garder une photographie qui
  * périme au premier progrès du moteur. Ce qui se conserve, ce sont les
  * **réponses** — et elles vivent ailleurs.
+ *
+ * ## L'aiguillage
+ *
+ * Un dépôt ne porte pas qu'une seule nature de document, et ce qu'on en fait
+ * dépend de ce qu'il est. La reconnaissance a déjà tranché, au dépôt ; ici on
+ * se contente de suivre :
+ *
+ *  - un **livrable de bureau de contrôle** part vers les avis ;
+ *  - un **compte rendu de chantier** part vers les points à traiter.
+ *
+ * Les deux chemins cohabitent dans un même dépôt, et un document qui n'est ni
+ * l'un ni l'autre est nommé plutôt que passé sous silence : un livrable soumis
+ * qui n'entre nulle part doit se voir, sinon on cherche longtemps pourquoi
+ * rien n'est sorti.
  */
 
 import { runCtLab } from "./ct-lab-engine.js";
@@ -28,6 +42,8 @@ import { PORTEE, limiterAuDepot, riensALire } from "./depot-portee.js";
 
 /** La famille de documents que le suivi des avis sait exploiter. */
 const CT_REPORT_KIND = "ct_report";
+/** Celle dont on tire des points à traiter. */
+const CR_CHANTIER_KIND = "cr_chantier";
 
 /**
  * Rapatrie et relit un document du stockage.
@@ -71,7 +87,25 @@ export async function analyzeProposition({
   //
   // `PORTEE.PROJET` reste pour la réécriture du suivi après une fusion : elle
   // porte sur le projet entier, c'est sa raison d'être.
-  portee = PORTEE.DEPOT
+  portee = PORTEE.DEPOT,
+  // Ce que le projet suit déjà, pour ne pas reproposer ce qui est ouvert.
+  sujetsDuProjet = [],
+  // Les affirmations de la mémoire : c'est par elles qu'on reconnaît un point
+  // déjà versé, et c'est ce qui empêche la douzième réunion d'en rouvrir douze.
+  knownAssertions = [],
+  /**
+   * Les entrées/sorties, injectables.
+   *
+   * **Pourquoi ce n'est pas de l'échafaudage de test.** L'aiguillage est le
+   * cœur de cette fonction, et c'est là qu'une erreur coûte le plus cher : un
+   * compte rendu envoyé vers les avis n'ouvre aucun sujet, et le dépôt ressort
+   * vide sans rien dire. C'est exactement le défaut qu'on vient de corriger, et
+   * il a vécu parce qu'aucun test ne pouvait l'atteindre — tout passait par des
+   * imports dynamiques qu'on ne peut pas remplacer.
+   *
+   * Chacune vaut par défaut la vraie : rien ne change pour l'application.
+   */
+  entrees = {}
 } = {}) {
   // `computedAvis: null` et non `[]` : quand l'analyse n'a pas tourné, on ne
   // sait pas quels avis les documents portent — ce n'est pas qu'ils n'en
@@ -82,7 +116,11 @@ export async function analyzeProposition({
     unreachable: [],
     computedAvis: null,
     attachments: [],
-    diff: { added: [], changed: [], silent: [], unchanged: 0 }
+    diff: { added: [], changed: [], silent: [], unchanged: 0 },
+    // `sujets: []` et non `null` : quand aucun compte rendu n'est soumis, il
+    // n'y a effectivement aucun point à proposer — ce n'est pas une lacune.
+    sujets: [],
+    sujetsDeja: []
   };
   if (!projectId || !proposition?.id) return { ...vide, error: "Aucune proposition à analyser." };
 
@@ -115,13 +153,26 @@ export async function analyzeProposition({
     }
   };
 
-  const { downloadDocumentFile, listProjectDocuments } = await import("./document-deposit.js");
-  const { listPropositionDocuments } = await import("./propositions-supabase.js");
+  // Chaque entrée n'est chargée que si elle n'a pas été fournie. Ce n'est pas
+  // une optimisation : ces modules parlent à Supabase et au modèle, et les
+  // charger pour les remplacer aussitôt ferait échouer l'import lui-même — donc
+  // rendrait l'aiguillage intestable, ce qui est la raison de son défaut.
+  const depuisLeDepot = (nom) => async (...args) =>
+    (await import("./document-deposit.js"))[nom](...args);
+
+  const listProjectDocuments = entrees.listProjectDocuments ?? depuisLeDepot("listProjectDocuments");
+  const downloadDocumentFile = entrees.downloadDocumentFile ?? depuisLeDepot("downloadDocumentFile");
+  const listPropositionDocuments = entrees.listPropositionDocuments
+    ?? (async (...args) => (await import("./propositions-supabase.js")).listPropositionDocuments(...args));
+  const lire = entrees.lireLeLotDeComptesRendus
+    ?? (async (options) => (await import("./sujets-par-le-modele.js")).lireLeLotDeComptesRendus(options));
+  const lireUnDocument = entrees.readDocument ?? readDocument;
 
   // Les deux moitiés du corpus. Rien n'est copié : ce sont deux lectures.
   let acceptes = [];
   let soumis = [];
   let soumisExploitables = [];
+  let comptesRendus = [];
   await chrono("corpus", "Corpus relu", async (carnet) => {
     [acceptes, soumis] = await Promise.all([
       listProjectDocuments(projectId, { kind: CT_REPORT_KIND, corpusState: "accepted" }),
@@ -130,12 +181,28 @@ export async function analyzeProposition({
     carnet.dire(`${acceptes.length} livrable(s) déjà acceptés dans le projet`);
     carnet.dire(`${soumis.length} livrable(s) soumis par la proposition`);
 
+    // **L'aiguillage.** Ce qu'on fait d'un document dépend de ce qu'il est, et
+    // la reconnaissance a déjà tranché au dépôt.
     soumisExploitables = soumis.filter((row) => row.detected_kind === CT_REPORT_KIND);
-    // Ce qui est écarté est nommé : un livrable soumis qui n'entre pas au
-    // corpus doit se voir, sinon on cherche longtemps pourquoi un avis manque.
+    // **Seulement quand on décrit un dépôt.** La réécriture du suivi après une
+    // fusion repasse ici avec `PORTEE.PROJET` : relire les comptes rendus à ce
+    // moment-là appellerait le modèle une seconde fois sur chaque pièce, pour
+    // reproposer des points qu'on vient justement d'ouvrir. Un appel payant
+    // pour un résultat qu'on jetterait.
+    comptesRendus = portee === PORTEE.DEPOT
+      ? soumis.filter((row) => row.detected_kind === CR_CHANTIER_KIND)
+      : [];
+
+    if (comptesRendus.length) {
+      carnet.dire(`${comptesRendus.length} compte(s) rendu(s) de chantier : ils partent vers les points à traiter`);
+    }
+
+    // Ce qui est écarté est nommé : un livrable soumis qui n'entre nulle part
+    // doit se voir, sinon on cherche longtemps pourquoi rien n'est sorti. Seuls
+    // les documents qu'aucun des deux chemins ne réclame sont concernés.
     for (const row of soumis) {
-      if (row.detected_kind === CT_REPORT_KIND) continue;
-      carnet.avertir(`${nomDuLivrable(row)} : écarté, reconnu « ${row.detected_kind || "non reconnu"} » et non « ${CT_REPORT_KIND} »`);
+      if (row.detected_kind === CT_REPORT_KIND || row.detected_kind === CR_CHANTIER_KIND) continue;
+      carnet.avertir(`${nomDuLivrable(row)} : écarté, reconnu « ${row.detected_kind || "non reconnu"} » — aucun atelier ne le lit`);
     }
     carnet.dire(`corpus retenu : ${acceptes.length + soumisExploitables.length} livrable(s)`);
   });
@@ -145,7 +212,9 @@ export async function analyzeProposition({
   // Une proposition venue de l'Atelier n'apporte aucun livrable : relire le
   // corpus du projet ne peut rien lui attribuer de vrai, et coûtait une minute
   // pour produire un diff entièrement faux.
-  if (portee === PORTEE.DEPOT && riensALire(soumisExploitables)) {
+  // Un dépôt qui n'apporte que des comptes rendus a bien quelque chose à lire :
+  // la garde ne vaut que lorsque **les deux** chemins sont vides.
+  if (portee === PORTEE.DEPOT && riensALire(soumisExploitables) && comptesRendus.length === 0) {
     const carnet = journal();
     carnet.dire("Ce dépôt n'apporte aucun livrable exploitable : il n'y a rien à relire.");
     carnet.dire("Les avis du projet appartiennent aux dépôts qui les ont apportés, pas à celui-ci.");
@@ -153,10 +222,65 @@ export async function analyzeProposition({
     return { ...vide, steps, error: null };
   }
 
+  /**
+   * Le chemin des comptes rendus de chantier.
+   *
+   * Il est indépendant de celui des avis — deux documents, deux ateliers — et
+   * il tourne **avant**, parce qu'il ne dépend de rien : ni du corpus accepté,
+   * ni du suivi, ni du moteur. Un dépôt qui n'apporte qu'un compte rendu sort
+   * donc d'ici avec ses points, sans avoir relu quoi que ce soit d'autre.
+   */
+  let sujets = [];
+  let sujetsDeja = [];
+  const unreachableCr = [];
+  if (comptesRendus.length > 0) {
+    const { sujetsDuCompteRendu } = await import("./sujets-du-cr.js");
+
+    await chrono("sujets", "Points de chantier relevés", async (carnet) => {
+      const lisibles = [];
+      for (const row of comptesRendus) {
+        try {
+          const lu = await lireUnDocument(row, downloadDocumentFile, `cr-${lisibles.length + 1}`);
+          lisibles.push({ sourceId: lu.sourceId, nom: nomDuLivrable(row), pages: lu.pages ?? [] });
+        } catch (cause) {
+          unreachableCr.push(row);
+          carnet.echouer(`${nomDuLivrable(row)} : non rapatrié — ${String(cause?.message || cause)}`);
+        }
+      }
+
+      const { lectures, refus } = await lire({ sources: lisibles });
+
+      // Ce qu'on n'a pas su lire se dit. Une liste courte sans son motif ferait
+      // croire à un compte rendu maigre (règle 5).
+      for (const { sourceId, motif } of refus) {
+        const nom = lisibles.find((source) => source.sourceId === sourceId)?.nom ?? sourceId;
+        carnet.avertir(`${nom} : ${motif}`);
+      }
+
+      const lus = [...lectures.values()].flatMap((lecture) => lecture.sujets ?? []);
+      const ecartes = [...lectures.values()].reduce((total, lecture) => total + (lecture.ecartes ?? 0), 0);
+      if (ecartes > 0) {
+        carnet.avertir(`${ecartes} ligne(s) écartée(s) : leur citation ne se retrouve pas dans le document`);
+      }
+
+      const tri = sujetsDuCompteRendu({ lus, connus: knownAssertions, sujetsDuProjet });
+      sujets = tri.proposes;
+      sujetsDeja = tri.deja;
+
+      carnet.dire(`${sujets.length} point(s) proposé(s) à l'ouverture`);
+      if (sujetsDeja.length > 0) {
+        carnet.dire(`${sujetsDeja.length} point(s) déjà suivis : ils ne sont pas reproposés`);
+      }
+    });
+  }
+
   const corpus = [...acceptes, ...soumisExploitables];
 
+  // Un dépôt qui n'apporte que des comptes rendus sort ici : il a ses points, et
+  // il n'y a aucun avis à relever. Les rendre malgré tout est la seule chose qui
+  // compte — s'arrêter sur `vide` les perdrait après les avoir lus.
   if (corpus.length === 0) {
-    return { ...vide, steps, error: null };
+    return { ...vide, unreachable: unreachableCr, sujets, sujetsDeja, steps, error: null };
   }
 
   const reports = [];
@@ -173,7 +297,7 @@ export async function analyzeProposition({
       let lu = null;
       let echec = null;
       try {
-        lu = await readDocument(row, downloadDocumentFile, `doc-${reports.length + 1}`);
+        lu = await lireUnDocument(row, downloadDocumentFile, `doc-${reports.length + 1}`);
         reports.push(lu);
       } catch (cause) {
         echec = String(cause?.message || cause || "cause inconnue");
@@ -291,10 +415,16 @@ export async function analyzeProposition({
   return {
     result,
     reports,
-    unreachable,
+    // Un compte rendu non rapatrié se dit au même endroit que les autres :
+    // l'écran n'a pas à connaître deux listes de ce qui manque.
+    unreachable: [...unreachable, ...unreachableCr],
     computedAvis,
     attachments: groupAttachments(attachments),
     diff: computedAvis ? diffDuLot(computedAvis) : vide.diff,
+    // Les deux chemins se rejoignent ici : une proposition peut porter à la fois
+    // des avis et des points de chantier, et l'écran les montre ensemble.
+    sujets,
+    sujetsDeja,
     // Ce que chaque phase a réellement pris. L'appelant y ajoutera l'écriture,
     // qu'il est le seul à pouvoir mesurer.
     steps,

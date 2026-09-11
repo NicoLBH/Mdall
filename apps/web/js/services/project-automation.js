@@ -60,18 +60,16 @@ const DEFAULT_AUTOMATION_CATALOG = {
     defaultEnabled: true,
     order: 5
   },
-  // Décochée par défaut, et le nom dit désormais laquelle des deux analyses
-  // elle déclenche. Elle ne conditionne plus le dépôt : un document déposé est
-  // écrit en base que cette case soit cochée ou non — ce n'était pas le cas
-  // avant, et l'écran annonçait pourtant « le dépôt a été enregistré ».
-  autoAnalysisAfterUpload: {
-    key: "autoAnalysisAfterUpload",
-    label: "Déclencher l'analyse IA des sujets après le dépôt d'un document",
-    implemented: true,
-    available: true,
-    defaultEnabled: false,
-    order: 10
-  },
+  // « Déclencher l'analyse IA des sujets après le dépôt d'un document » vivait
+  // ici, et elle n'y est plus. Elle produisait des sujets **à partir d'un PDF,
+  // sans proposition** : elle contournait la règle 1, celle qui veut que rien
+  // n'entre directement. Ce qui la remplace est l'aiguillage au dépôt — un
+  // compte rendu de chantier part vers les points à traiter, qu'une proposition
+  // fait ensuite signer.
+  //
+  // Le réglage retenu chez ceux qui l'avaient coché ne se supprime pas : une
+  // clé inconnue du catalogue est simplement ignorée, et effacer un réglage
+  // qu'on ne lit plus n'apporte rien qu'un risque.
   autoComparePreviousVersion: {
     key: "autoComparePreviousVersion",
     label: "Déclencher une comparaison automatique du document déposé à sa version précédente",
@@ -340,12 +338,6 @@ export function shouldAutoRunProjectBaseDataEnrichment() {
   return isAutomationEnabled("autoProjectBaseDataEnrichment");
 }
 
-export function shouldAutoRunAnalysisAfterUpload() {
-  return Boolean(
-    isAutomationEnabled("autoAnalysisAfterUpload") && getPrimaryAnalysisAgent()
-  );
-}
-
 function normalizeRunLifecycleStatus(status) {
   const normalized = String(status || "").toLowerCase();
 
@@ -430,10 +422,15 @@ function getRunStatusForDisplay(entry = {}) {
   return normalizeRunOutcomeStatus(entry.outcomeStatus || entry.status, "completed") || "completed";
 }
 
+/**
+ * Le libellé du bouton d'analyse.
+ *
+ * Il disait « Analyse automatique activée » quand le dépôt déclenchait
+ * lui-même l'analyse. Ce déclenchement n'existe plus : le bouton ne dit donc
+ * plus qu'une seule chose, parce qu'il ne fait plus qu'une seule chose.
+ */
 export function getAnalyzeButtonLabel() {
-  return shouldAutoRunAnalysisAfterUpload()
-    ? "Analyse automatique activée"
-    : "Analyser";
+  return "Analyser";
 }
 
 export function getRunLogEntries() {

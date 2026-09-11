@@ -1,9 +1,6 @@
 import { svgIcon } from "../ui/icons.js";
 import { bindGhActionButtons, initGhActionButton, renderGhActionButton } from "./ui/gh-split-button.js";
-import {
-  getAnalyzeButtonLabel,
-  shouldAutoRunAnalysisAfterUpload
-} from "../services/project-automation.js";
+import { getAnalyzeButtonLabel } from "../services/project-automation.js";
 
 let runbarState = {
   run_id: null,
@@ -15,21 +12,23 @@ let runbarState = {
 
 const PLAY_ICON = svgIcon("play", { className: "octicon octicon-play" });
 
+/**
+ * Le bouton n'a plus qu'un seul état.
+ *
+ * Il en avait deux : « Analyser », et « Analyse automatique activée » — grisé,
+ * inerte, parce que le dépôt d'un document déclenchait l'analyse tout seul. Ce
+ * déclenchement est parti : il produisait des sujets sans proposition, et
+ * contournait la règle 1. Un bouton désactivé par un réglage qui n'existe plus
+ * serait la pire trace qu'on puisse en laisser.
+ */
 function getRunbarButtonConfig() {
-  const autoMode = shouldAutoRunAnalysisAfterUpload();
-
   return {
-    autoMode,
-    mainAction: autoMode ? "" : "run",
+    mainAction: "run",
     mainLabel: getAnalyzeButtonLabel(),
-    items: autoMode
-      ? [
-          { label: "Reset", action: "reset" }
-        ]
-      : [
-          { label: "Analyser", action: "run", icon: PLAY_ICON },
-          { label: "Reset", action: "reset" }
-        ]
+    items: [
+      { label: "Analyser", action: "run", icon: PLAY_ICON },
+      { label: "Reset", action: "reset" }
+    ]
   };
 }
 
@@ -73,7 +72,6 @@ export function bindProjectSituationsRunbar(root = document) {
 
     if (action === "run") {
       if (runbarState.isBusy) return;
-      if (shouldAutoRunAnalysisAfterUpload()) return;
       document.dispatchEvent(new CustomEvent("runAnalysis"));
     }
 
@@ -98,7 +96,6 @@ export function syncProjectSituationsRunbar(run = {}) {
   const topBanner = document.getElementById("topBanner");
 
   const isBusy = !!runbarState.isBusy || runbarState.status === "running";
-  const autoMode = shouldAutoRunAnalysisAfterUpload();
   const bannerMode = runbarState.status === "running"
     ? "running"
     : runbarState.status === "error"
@@ -106,14 +103,10 @@ export function syncProjectSituationsRunbar(run = {}) {
       : null;
 
   if (mainBtn) {
-    mainBtn.disabled = isBusy || autoMode;
-    mainBtn.classList.toggle("is-disabled", isBusy || autoMode);
-    mainBtn.setAttribute(
-      "title",
-      autoMode
-        ? "L’analyse est configurée en mode automatique après dépôt réussi d’un document."
-        : ""
-    );
+    // Seule une analyse en cours désactive le bouton, désormais.
+    mainBtn.disabled = isBusy;
+    mainBtn.classList.toggle("is-disabled", isBusy);
+    mainBtn.setAttribute("title", "");
   }
 
   if (toggleBtn) {
@@ -121,7 +114,7 @@ export function syncProjectSituationsRunbar(run = {}) {
   }
 
   if (actionRoot) {
-    actionRoot.dataset.mainAction = autoMode ? "" : "run";
+    actionRoot.dataset.mainAction = "run";
   }
 
   if (labelNode) {

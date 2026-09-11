@@ -156,6 +156,42 @@ export async function attachDocuments(propositionId, documentIds = []) {
   }
 }
 
+/**
+ * Les sujets que le projet suit déjà.
+ *
+ * **Pourquoi cette lecture existe.** Un compte rendu de chantier reporte ses
+ * points d'une réunion à la suivante : c'est sa raison d'être, un point reste
+ * écrit tant qu'il n'est pas soldé. Sans savoir ce qui est déjà ouvert, la
+ * douzième réunion reproposerait douze fois la même chose.
+ *
+ * La requête est délibérément maigre — un identifiant, un titre, un état — et
+ * elle **ne dépend d'aucun écran**. Se servir de ce que l'onglet Sujets a laissé
+ * dans la mémoire de la page ferait une comparaison qui ne marche que si l'on
+ * passe d'abord par ailleurs.
+ *
+ * @returns {Promise<object[]|null>} `null` quand on n'a pas pu demander. La
+ *   distinction porte une décision : ne pas savoir ce qui est ouvert n'autorise
+ *   pas à prétendre que rien ne l'est (règle 5) — et l'appelant préfère alors
+ *   reproposer un point déjà suivi plutôt que de le taire.
+ */
+export async function listProjectSubjectTitles(projectId) {
+  if (!projectId) return [];
+
+  try {
+    return (
+      (await request("subjects", {
+        params: {
+          select: "id,subject_number,title,status",
+          project_id: `eq.${projectId}`,
+          order: "subject_number.asc"
+        }
+      })) ?? []
+    );
+  } catch {
+    return null;
+  }
+}
+
 /** Les documents rattachés à une proposition. */
 export async function listPropositionDocuments(propositionId) {
   if (!propositionId) return [];

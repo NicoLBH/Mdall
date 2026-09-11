@@ -37,7 +37,18 @@
  *
  * **De juger.** Il ne dit pas si l'avis est important, ni ce qu'il faudrait en
  * faire. Il lit.
+ *
+ * ## Le garde-fou lui-même vit ailleurs
+ *
+ * La vérification par la citation ne concerne pas que les avis : elle vaut pour
+ * toute lecture par le modèle, et les comptes rendus de chantier s'y soumettent
+ * de la même façon. Elle est donc dans `citation-verifiee.js`, écrite une seule
+ * fois — une règle recopiée diverge, et elle diverge par le bas.
  */
+
+import { ECART, verifierLesCitations } from "./citation-verifiee.js";
+
+export { ECART, PHRASES_DE_LECART, pagesEnTexte } from "./citation-verifiee.js";
 
 /** Ce que le modèle doit rendre, et rien d'autre. */
 export const SCHEMA_DES_AVIS = {
@@ -118,136 +129,34 @@ export const CONSIGNES = [
   "Ce qui n'est pas dans le document vaut null. N'invente jamais pour remplir un champ."
 ].join("\n");
 
-/** Le document tel qu'on le donne à lire : une page à la fois, numérotée. */
-export function pagesEnTexte(pages = [], { maxCaracteres = 120000 } = {}) {
-  const morceaux = [];
-  let total = 0;
-
-  for (const page of Array.isArray(pages) ? pages : []) {
-    const numero = Number(page?.page);
-    const texte = String(page?.text ?? page?.texte ?? "").trim();
-    if (!texte) continue;
-
-    const bloc = `\n=== PAGE ${Number.isFinite(numero) ? numero : "?"} ===\n${texte}`;
-    if (total + bloc.length > maxCaracteres) break;
-
-    morceaux.push(bloc);
-    total += bloc.length;
-  }
-
-  return morceaux.join("\n");
-}
-
-/**
- * Le texte, réduit à ce qui se compare.
- *
- * Une extraction de PDF coupe les lignes où la mise en page le veut, double les
- * espaces et garde les insécables. Comparer des chaînes brutes ferait échouer
- * des citations exactes pour des raisons de typographie.
- */
-function aplati(valeur) {
-  return String(valeur ?? "")
-    .normalize("NFD").replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .replace(/[   ]/g, " ")
-    .replace(/[’‘]/g, "'")
-    .replace(/[“”]/g, '"')
-    .replace(/[–—]/g, "-")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-/** Pourquoi un avis rendu par le modèle n'entre pas. */
-export const ECART = {
-  /** Aucune citation : rien à vérifier, donc rien à croire. */
-  SANS_CITATION: "sans-citation",
-  /** La citation ne se retrouve pas dans le document. */
-  INTROUVABLE: "introuvable",
-  /** Ni intitulé ni teneur : ce n'est pas un avis. */
-  VIDE: "vide"
-};
-
-export const PHRASES_DE_LECART = {
-  [ECART.SANS_CITATION]: "cette ligne ne cite pas le document",
-  [ECART.INTROUVABLE]: "cette citation ne se retrouve pas dans le document",
-  [ECART.VIDE]: "cette ligne ne porte ni intitulé ni teneur"
-};
-
 /**
  * Ce que le modèle a rendu, confronté au document.
  *
- * ## Le seul garde-fou qui compte
+ * Le refus est celui de `citation-verifiee.js` — le même pour toutes les
+ * lectures. Ce qui appartient aux avis, et qu'on lui apprend ici, est ce qui
+ * fait qu'une ligne **n'est pas un avis** : ni intitulé, ni teneur. La
+ * vérification ne peut pas le savoir toute seule, et le lui écrire en dur
+ * l'aurait rendue inutilisable pour la lecture suivante.
  *
- * Un modèle peut inventer une ligne entière — un avis plausible sur un point
- * plausible. Rien dans sa réponse ne le trahit. Ce qui le trahit, c'est le
- * **document** : une citation qu'on n'y retrouve pas n'a pas été lue.
- *
- * La recherche se fait d'abord dans la page annoncée — c'est le cas strict —,
- * puis dans le document entier : une erreur d'une page sur la citation d'une
- * ligne réelle ne doit pas faire perdre l'avis, mais elle se note.
- *
- * ## Ce qui est écarté se compte
- *
- * On ne rend pas une liste propre en taisant ce qu'on a jeté : c'est la mesure
- * de ce que la lecture n'a pas su faire, et elle doit se voir avant qu'on signe.
+ * Les écarts se rendent sous le nom que ce module emploie depuis toujours —
+ * `avis` et non `ligne` : changer une clé pour une raison de refactorisation
+ * ferait taire un appelant qui, lui, n'a pas changé.
  *
  * @returns {{retenus: object[], ecartes: object[], pagesCorrigees: number}}
  */
 export function verifierLesAvis({ avis = [], pages = [] } = {}) {
-  const parPage = new Map();
-  const morceaux = [];
+  const { retenus, ecartes, pagesCorrigees } = verifierLesCitations({
+    lignes: avis,
+    pages,
+    estVide: (ligne) =>
+      !String(ligne?.intitule ?? "").trim() && !String(ligne?.teneur ?? "").trim()
+  });
 
-  for (const page of Array.isArray(pages) ? pages : []) {
-    const numero = Number(page?.page);
-    const plat = aplati(page?.text ?? page?.texte);
-    if (!plat) continue;
-
-    if (Number.isFinite(numero)) parPage.set(numero, plat);
-    morceaux.push(plat);
-  }
-
-  const document = morceaux.join(" ");
-
-  const retenus = [];
-  const ecartes = [];
-  let pagesCorrigees = 0;
-
-  for (const ligne of Array.isArray(avis) ? avis : []) {
-    const intitule = String(ligne?.intitule ?? "").trim();
-    const teneur = String(ligne?.teneur ?? "").trim();
-    if (!intitule && !teneur) {
-      ecartes.push({ avis: ligne, motif: ECART.VIDE });
-      continue;
-    }
-
-    const citation = aplati(ligne?.citation);
-    if (!citation) {
-      ecartes.push({ avis: ligne, motif: ECART.SANS_CITATION });
-      continue;
-    }
-
-    const annoncee = Number(ligne?.page);
-    const surSaPage = Number.isFinite(annoncee) && (parPage.get(annoncee) ?? "").includes(citation);
-
-    if (surSaPage) {
-      retenus.push({ ...ligne, citationVerifiee: true, pageVerifiee: true });
-      continue;
-    }
-
-    // La citation existe, mais pas là où le modèle l'a dite. On la garde — la
-    // ligne a bien été lue — et l'on cherche sa vraie page, sans quoi le lien
-    // vers le PDF ouvrirait la mauvaise.
-    if (document.includes(citation)) {
-      const vraie = [...parPage.entries()].find(([, plat]) => plat.includes(citation))?.[0] ?? null;
-      pagesCorrigees += 1;
-      retenus.push({ ...ligne, page: vraie, citationVerifiee: true, pageVerifiee: false });
-      continue;
-    }
-
-    ecartes.push({ avis: ligne, motif: ECART.INTROUVABLE });
-  }
-
-  return { retenus, ecartes, pagesCorrigees };
+  return {
+    retenus,
+    ecartes: ecartes.map(({ ligne, motif }) => ({ avis: ligne, motif })),
+    pagesCorrigees
+  };
 }
 
 /**

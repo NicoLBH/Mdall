@@ -112,6 +112,51 @@ export function summarizeDeposit(results = []) {
 }
 
 /**
+ * Où partent les documents qu'on vient de déposer.
+ *
+ * ## Pourquoi cette phrase existe
+ *
+ * On déposait un PDF et il ne se passait rien de visible. Le document entrait,
+ * l'écran disait « 1 document déposé », et c'était tout — il fallait ouvrir la
+ * proposition pour découvrir, ou non, qu'il avait servi à quelque chose.
+ *
+ * L'aiguillage se décide au dépôt, par la reconnaissance. Il doit donc **se
+ * dire au dépôt** : c'est là qu'on regarde, et c'est là qu'on sait encore de
+ * quel fichier on parle.
+ *
+ * ## Ce qu'elle ne fait pas
+ *
+ * Elle ne promet rien. Elle dit vers quel atelier le document part, pas ce qui
+ * en sortira : un compte rendu de chantier peut ne porter aucun point neuf, et
+ * l'annoncer serait mentir avant d'avoir lu.
+ *
+ * Un document qu'aucun atelier ne réclame se compte et se dit (règle 5). C'est
+ * l'information la plus utile des trois : elle explique le silence qui suivra.
+ */
+export function orientationDuDepot(results = []) {
+  const entres = (Array.isArray(results) ? results : []).filter((result) => result.entry === ENTRY.DEPOSITED);
+  if (entres.length === 0) return "";
+
+  const compte = (kind) => entres.filter((result) => result.kind === kind).length;
+  const rapports = compte("ct_report");
+  const comptesRendus = compte("cr_chantier");
+  const inconnus = entres.length - rapports - comptesRendus;
+
+  const parts = [];
+  if (rapports > 0) {
+    parts.push(`${rapports} ${rapports > 1 ? "livrables de bureau de contrôle partent" : "livrable de bureau de contrôle part"} vers les avis`);
+  }
+  if (comptesRendus > 0) {
+    parts.push(`${comptesRendus} ${comptesRendus > 1 ? "comptes rendus de chantier partent" : "compte rendu de chantier part"} vers les points à traiter`);
+  }
+  if (inconnus > 0) {
+    parts.push(`${inconnus} ${inconnus > 1 ? "ne sont reconnus par aucun atelier" : "n'est reconnu par aucun atelier"}`);
+  }
+
+  return parts.length > 0 ? `${parts.join(", ")}.` : "";
+}
+
+/**
  * Dépose un lot dans un projet, fichier par fichier.
  *
  * Trois règles, qui sont les mêmes qu'à l'atelier parce qu'il n'y a qu'un seul
@@ -189,7 +234,16 @@ export async function depositBatch(
         // Le fichier suivant doit pouvoir se comparer à celui-ci : deux copies du
         // même document dans un même lot n'entrent qu'une fois.
         known.push(row);
-        results.push({ file, entry: ENTRY.DEPOSITED, documentId: row.id });
+        // La nature reconnue voyage avec le résultat : c'est elle qui décide de
+        // ce que le document deviendra, et l'écran doit pouvoir le dire au
+        // moment du dépôt — pas seulement quand on ouvre la proposition.
+        results.push({
+          file,
+          entry: ENTRY.DEPOSITED,
+          documentId: row.id,
+          kind: inspection?.recognition?.kind ?? null,
+          kindLabel: inspection?.recognition?.kindLabel ?? null
+        });
       } else {
         results.push({ file, entry: ENTRY.FAILED, reason: "La base n'a pas rendu de document." });
       }

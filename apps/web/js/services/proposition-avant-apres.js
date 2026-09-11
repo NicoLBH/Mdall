@@ -73,11 +73,12 @@ export const CHANGEMENT_LABELS = {
 /**
  * Ce qui relève de l'intendance, et n'a pas sa place dans ce tableau.
  *
- * Un document qui entre au corpus, une affaire rattachée, un avis relevé : ce
- * sont des mouvements, pas des affirmations sur le projet, et ils ont déjà
- * leurs blocs. Les mêler ici ferait comparer un nom de fichier à une valeur.
+ * Un document qui entre au corpus, une affaire rattachée, un avis relevé, un
+ * point de chantier proposé : ce sont des mouvements, pas des affirmations sur
+ * le projet, et ils ont déjà leurs blocs. Les mêler ici ferait comparer un nom
+ * de fichier à une valeur — ou un point de chantier à une zone de neige.
  */
-const INTENDANCE = new Set([ITEM_TYPE.DOCUMENT, ITEM_TYPE.ATTACHMENT, ITEM_TYPE.AVIS]);
+const INTENDANCE = new Set([ITEM_TYPE.DOCUMENT, ITEM_TYPE.ATTACHMENT, ITEM_TYPE.AVIS, ITEM_TYPE.SUJET]);
 
 const typeDe = (item) => texte(item?.itemType ?? item?.item_type);
 const cleDe = (item) => texte(item?.itemKey ?? item?.item_key);

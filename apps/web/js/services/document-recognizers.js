@@ -13,6 +13,7 @@
 
 import { recognizeDocument } from "./document-recognition.js";
 import { createCtReportRecognizer } from "./document-recognizer-ct.js";
+import { createCrChantierRecognizer } from "./document-recognizer-cr.js";
 
 const VENDOR_BASE = "../../vendor/spikes";
 
@@ -28,7 +29,11 @@ async function loadRecognizers() {
     createCtReportRecognizer({
       readDocumentMeta: documentMeta.readDocumentMeta,
       discoverLegend: legend.discoverLegend
-    })
+    }),
+    // Le compte rendu de chantier ne dépend d'aucun moteur : il se reconnaît à
+    // ce qu'il écrit de lui-même. C'est ce que le registre promettait — une
+    // nature de plus, un reconnaisseur de plus, et rien d'autre à toucher.
+    createCrChantierRecognizer()
   ];
 }
 

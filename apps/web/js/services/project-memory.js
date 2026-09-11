@@ -53,6 +53,7 @@ const KIND_LABELS = {
   [ITEM_TYPE.AVIS]: "Avis",
   [ITEM_TYPE.ATTACHMENT]: "Rattachement",
   [ITEM_TYPE.DOCUMENT]: "Document",
+  [ITEM_TYPE.SUJET]: "Point de chantier",
   [DECLARED_KIND]: "Hypothèse"
 };
 
@@ -88,6 +89,16 @@ function statementOf(item = {}) {
 
   if (item.itemType === ITEM_TYPE.ATTACHMENT) {
     return `Rattachement au projet : ${texte(payload.label) || texte(item.itemKey)}`;
+  }
+
+  // Un point de compte rendu se lit par son lot et ce qu'il dit. Le numéro
+  // seul — « 12.02.1 » — ne désigne rien pour qui ne tient pas le compte rendu
+  // ouvert à côté.
+  if (item.itemType === ITEM_TYPE.SUJET) {
+    const titre = texte(payload.titre);
+    const lot = texte(payload.lot);
+    if (!titre) return `Point de chantier ${texte(payload.reference) || texte(item.itemKey)}`;
+    return lot ? `${lot} — ${titre}` : titre;
   }
 
   // Une **affirmation** dit ce qu'elle affirme : « Accès des véhicules lourds :
@@ -150,6 +161,17 @@ function detailOf(item = {}, status = MEMORY.ASSUMED) {
   }
 
   if (item.itemType === ITEM_TYPE.ATTACHMENT) return texte(payload.verdict);
+
+  if (item.itemType === ITEM_TYPE.SUJET) {
+    // À qui c'est demandé et pour quand, tels qu'écrits. Ce que le compte rendu
+    // n'écrit pas ne se lit pas : un point sans échéance n'en gagne pas une.
+    return [
+      texte(payload.qui) ? `pour ${texte(payload.qui)}` : "",
+      texte(payload.echeance) ? `échéance ${texte(payload.echeance)}` : "",
+      texte(payload.etat)
+    ].filter(Boolean).join(" · ");
+  }
+
   return texte(payload.kindLabel);
 }
 

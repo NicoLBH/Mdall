@@ -15975,6 +15975,11 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .review-item__title--danger{ color:var(--fgColor-danger); }
 .review-item__title--warn{ color:#d29922; }
 .review-item__meta{ color:var(--muted); font-size:12px; }
+/* Où la ligne se trouve dans le document : le lot, son numéro, sa page. Elle
+   suit le titre d'un avis sans numéro, et celui d'un point de chantier — c'est
+   par elle qu'on retourne au PDF, donc elle se lit, sans se disputer le regard
+   avec ce qui est dit. */
+.review-item__where{ color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums; }
 .review-item__reason-text{ color:var(--muted); font-size:12px; font-style:italic; }
 .review-item__reason{ margin-top:4px; max-width:52ch; font-size:12px; }
 
