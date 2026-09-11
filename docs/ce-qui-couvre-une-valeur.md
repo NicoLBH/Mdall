@@ -316,14 +316,82 @@ l'inverse qui aurait été risqué.
 Un test refuse que l'écran parle comme un outil de visa : ni « visa », ni
 « viser », ni « à valider », ni « en attente », ni « approbation ».
 
-### Étape 2 — les avis du bureau de contrôle s'accrochent · *à faire*
+### Étape 2 — les avis du bureau de contrôle s'accrochent · *le chemin est fait*
 
-Le suivi des avis lit déjà les rapports. Il lui manque de **proposer** la
-liaison : « cet avis porte sur cette affirmation ».
+L'avis était **lu et restait dehors** : le moteur d'extraction sait depuis
+longtemps tirer d'un rapport le numéro, l'intitulé, la teneur et la page de
+chaque avis, et tout cela vivait dans une analyse — un tableau qu'on consulte,
+que rien ne cite, et dont rien ne dépend.
 
-Semi-automatique, et jamais autrement : l'extraction propose, un humain
-confirme. Un avis mal accroché est pire qu'un avis non accroché — il couvrirait
-une valeur que personne n'a examinée.
+**L'avis entre maintenant en mémoire comme un `constat`**, versé par une
+proposition comme le reste (règle 1). C'était le prérequis manquant : sans lui,
+un engagement n'aurait eu qu'un numéro de page à citer.
+
+#### La reconnaissance refuse plus souvent qu'elle n'accepte
+
+`services/avis-liaison.js` propose sur quoi un avis porte, en rapprochant son
+**intitulé** des sujets de la mémoire. La reconnaissance est **exacte et sur des
+mots entiers** :
+
+| l'intitulé | ce qu'on en fait |
+| --- | --- |
+| « Zone de neige » | accroché |
+| « Vérification de la Classe de sol EC8 retenue » | accroché — le nom est noyé, il reste reconnu |
+| « Zonage climatique » | rien : aucun sujet ne porte ce nom |
+| « Solives du plancher haut » | rien : `sol` n'est pas un mot de cette phrase |
+| « Zone de neige », mais deux bâtiments la portent | rien : il faudrait dire lequel |
+
+Pas de distance approchée, pas de « à peu près », pas de premier de la liste. Un
+avis mal accroché couvrirait **en silence** une valeur que personne n'a
+examinée, et la variante dirait « couvert par un avis favorable » sur une valeur
+que le bureau de contrôle n'a jamais regardée. C'est la seule façon de rendre
+tout ce mécanisme dangereux.
+
+La **référence** du rapport — « 2.1.3 » — ne sert jamais à reconnaître : elle
+numérote une place dans un document, elle ne nomme rien du projet.
+
+Et la **teneur** de l'avis n'entre pas non plus dans la reconnaissance : un avis
+défavorable s'accroche exactement comme un favorable. C'est même celui-là qu'on
+veut voir tomber.
+
+#### La signature est la confirmation
+
+Il n'y a **pas de second geste**. La liaison proposée voyage dans la proposition
+qui verse l'avis ; quelqu'un lit la liste et signe ; la fusion écrit
+l'engagement. Ni file d'attente, ni écran de validation, ni relance (règle 12).
+
+Un avis qu'on n'a pas su accrocher entre **quand même** — c'est un fait du
+projet — et n'écrit aucun engagement. On le voit alors en mémoire sans qu'il
+couvre rien, ce qui est la vérité. Ce qui n'a pas été reconnu se **compte**.
+
+Un avis **écarté** à la revue n'écrit rien : ce que quelqu'un a refusé ne couvre
+rien.
+
+#### Le piège s'est refermé
+
+`emisPar` n'est **pas** `decided_by`. L'un est l'organisme qui engage sa
+responsabilité, l'autre l'utilisateur Mdall qui a signé la proposition. Sans
+cette séparation, la mémoire aurait dit que le stagiaire a rendu un avis
+favorable. Aucune migration : le champ vit dans la charge de l'avis.
+
+#### Un maillon qui se serait cassé sans un mot
+
+La charge d'un item de proposition est une **liste blanche** — « ce qu'on n'a
+pas déclaré ne voyage pas ». `porteSur` s'y perdait silencieusement, et
+l'engagement n'aurait jamais été écrit sans que rien ne le dise. Les quatre
+champs de l'avis y sont donc déclarés, et un test traverse la chaîne entière —
+rapport, versable, item, affirmation, engagement, puis la variante qui le fait
+tomber.
+
+#### Ce qui manque encore : l'écran qui déclenche
+
+Le chemin est complet et testé de bout en bout, mais **aucun écran ne l'appelle
+encore**. Il lui faut deux choses, et une seule est du code :
+
+1. un endroit d'où partir — le suivi des avis, qui tient déjà la liste ;
+2. **le nom de l'organisme**, que personne ne peut deviner : il ne se lit pas
+   dans le PDF de façon fiable, et il ne se déduit de rien. Quelqu'un le tape
+   une fois par rapport.
 
 ### Étape 3 — le poids se voit · *à faire*
 
