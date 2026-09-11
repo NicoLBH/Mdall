@@ -378,7 +378,8 @@ const COUVERTURE = {
     examinee: zone,
     courante: { ...zone, payload: { subject: "Zone de neige", value: "E" } },
     etat: "ne-couvre-plus",
-    pourquoi: "directe"
+    pourquoi: "directe",
+    deviendrait: "E"
   }],
   aRevoir: []
 };
@@ -395,8 +396,10 @@ test("ce qui ne couvre plus se dit, et avant le reste", () => {
   });
 
   assert.match(html, /Ce qui ne couvre plus/);
-  assert.match(html, /avis du bureau de contrôle/);
-  assert.match(html, /2026-03-12/);
+  // Une phrase, pas des morceaux juxtaposés : qui a dit quoi, sur quoi, quand.
+  assert.match(html, /avis du bureau de contrôle sur Zone de neige/);
+  assert.match(html, /12\/03\/2026/, "la date se lit en français, pas en ISO");
+  assert.match(html, /ne couvre plus : la valeur passerait à E/);
   // En tête des rangs : avant « Recalculé ».
   assert.ok(html.indexOf("Ce qui ne couvre plus") < html.indexOf("Recalculé"),
     "ce qui coûte se lit avant ce qui se recalcule");

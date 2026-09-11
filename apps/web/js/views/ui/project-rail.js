@@ -70,8 +70,26 @@ export function renderProjectRail({ id = "projectRail", navHtml = "", collapsed 
  * On mesure, et on écrit la valeur dans une variable — le placement reste au
  * CSS, seule la mesure vient d'ici.
  *
+ * ## Pourquoi on écoute le document et non la fenêtre
+ *
+ * Tous les onglets ne défilent pas de la même façon. La Mémoire défile la page
+ * entière ; **l'Atelier défile dans un conteneur** (`projectStudioRouterScroll`),
+ * et un défilement d'élément ne remonte pas jusqu'à la fenêtre. Le rail y restait
+ * donc calé à la hauteur qu'il avait au rendu, pendant que les onglets se
+ * compactaient au-dessus de lui — un blanc entre les deux, qui ne se refermait
+ * jamais.
+ *
+ * Les événements `scroll` ne remontent pas, mais ils **descendent** : une écoute
+ * en capture sur le document les voit tous, quel que soit le conteneur qui
+ * défile. Un écran de plus se règlera tout seul, sans avoir à déclarer son
+ * conteneur ici.
+ *
+ * La compaction de l'en-tête est de surcroît une **transition** : la hauteur
+ * mesurée pendant l'image du défilement n'est pas celle d'arrivée. On observe
+ * donc aussi la taille des onglets, ce qui rattrape la fin du mouvement.
+ *
  * @returns {() => void} de quoi débrancher : sans cela chaque rendu ajouterait
- *   deux écouteurs de plus sur la fenêtre, et ils survivraient à l'écran.
+ *   des écouteurs de plus sur le document, et ils survivraient à l'écran.
  */
 export function followRailScroll(rail) {
   if (!rail) return () => {};
@@ -103,12 +121,21 @@ export function followRailScroll(rail) {
     });
   };
 
-  window.addEventListener("scroll", auDefilement, { passive: true });
+  // En capture : c'est la seule écoute qui voie le défilement d'un conteneur
+  // aussi bien que celui de la page.
+  document.addEventListener("scroll", auDefilement, { capture: true, passive: true });
   window.addEventListener("resize", auDefilement, { passive: true });
 
+  const onglets = document.querySelector(".project-tabs");
+  const observateur = onglets && typeof ResizeObserver === "function"
+    ? new ResizeObserver(auDefilement)
+    : null;
+  observateur?.observe(onglets);
+
   return () => {
-    window.removeEventListener("scroll", auDefilement);
+    document.removeEventListener("scroll", auDefilement, { capture: true });
     window.removeEventListener("resize", auDefilement);
+    observateur?.disconnect();
   };
 }
 

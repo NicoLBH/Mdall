@@ -46,6 +46,7 @@
 
 import { acteQuiCouvre } from "./memoire-actes.js";
 import { engagementsDerivesDesAvis } from "./avis-engagement.js";
+import { organismeNomme } from "./ce-qui-couvre.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -297,4 +298,94 @@ export function ligneDeLEngagement(engagement = null) {
   const note = texte(acte.note);
 
   return [quoi, note, quand].filter(Boolean).join(" — ");
+}
+
+/**
+ * « avis F » et non « avis avis F ». La note d'un engagement commence parfois
+ * par le mot que la phrase met déjà devant elle.
+ */
+function sansLeMotAvis(valeur = "") {
+  return texte(valeur).replace(/^avis\s+/i, "");
+}
+
+/**
+ * Ce qu'un engagement dit, **en français**.
+ *
+ * ## Pourquoi une phrase, et pas la même ligne
+ *
+ * `ligneDeLEngagement` juxtapose des morceaux : « Zone de vent — F — Région 2 —
+ * 2026-09-11 ». C'est exact et c'est illisible : il faut connaître l'ordre des
+ * champs pour comprendre, et rien ne dit qui a rendu cet avis ni ce que « F »
+ * veut dire. Devant une décision qui coûte six semaines, on ne fait pas décoder
+ * une ligne à celui qui lit.
+ *
+ * On écrit donc :
+ *
+ * > **SOCOTEC — 11/09/2026 : avis F sur Zone de vent = Région 2.**
+ * > Cet avis ne couvre plus : la valeur passerait à 1.
+ *
+ * Deux phrases : **qui a dit quoi**, puis **ce qu'il advient**. Courtes, parce
+ * qu'on en lit dix d'affilée.
+ *
+ * ## Ce qu'elle ne fait pas
+ *
+ * Elle ne traduit pas le code. Si le rapport dit « F », la phrase dit « F » —
+ * la légende du document est la seule chose qui sache ce que « F » veut dire
+ * chez cet émetteur-là, et deviner « favorable » serait faux chez le suivant.
+ * Le libellé s'écrit **entre parenthèses** quand on le connaît, jamais à la
+ * place du code.
+ *
+ * Et elle ne juge pas : elle dit que la valeur change, jamais si c'est grave.
+ *
+ * @param {object} engagement ce que `couvertureDeLaVariante` a rendu
+ * @param {object} [options]
+ * @param {(iso: string) => string} [options.dater] la date en français — le
+ *   service ne connaît pas la locale de celui qui lit
+ * @returns {{quoi: string, alors: string}} deux phrases, jamais un paragraphe
+ */
+export function phraseDeLEngagement(engagement = null, { dater = null } = {}) {
+  const acte = engagement?.acte ?? null;
+  if (!acte) return { quoi: "", alors: "" };
+
+  const sujet = texte(engagement.examinee?.payload?.subject)
+    || texte(engagement.examinee?.statement);
+  const examinee = texte(engagement.examinee?.payload?.value);
+
+  const brut = texte(acte.created_at).slice(0, 10);
+  const quand = brut ? (dater ? texte(dater(brut)) : brut) : "";
+
+  // La note porte « <organisme> — <teneur> » ou « <appréciation> — <extrait> »,
+  // selon le chemin par lequel l'avis est entré. On la découpe pour placer
+  // chaque morceau à sa place ; ce qui n'y est pas ne s'invente pas — un
+  // engagement sans organisme se dit sans organisme, pas sous un nom supposé.
+  const nomme = organismeNomme(acte.note);
+  const organisme = nomme?.label ?? "";
+  const teneur = sansLeMotAvis(
+    texte(acte.note)
+      .split("—")
+      .map((morceau) => morceau.trim())
+      .filter(Boolean)
+      // Le morceau qui *est* l'organisme s'enlève quel qu'en soit la casse :
+      // c'est le texte du rapport, pas le libellé de la liste.
+      .filter((morceau) => !nomme || organismeNomme(morceau) !== nomme)
+      .join(" — ")
+  );
+
+  const qui = [organisme, quand].filter(Boolean).join(" — ");
+  const dit = [
+    teneur ? `avis ${teneur}` : "examen",
+    sujet ? ` sur ${sujet}` : "",
+    // Pas deux fois la même chose : quand la note *est* déjà ce qui a été
+    // examiné, la répéter derrière un « = » ne dirait rien de plus.
+    examinee && examinee !== teneur ? ` = ${examinee}` : ""
+  ].join("");
+
+  const quoi = `${qui ? `${qui} : ` : ""}${dit}.`;
+
+  const deviendrait = texte(engagement.deviendrait);
+  const alors = engagement.etat === COUVERTURE.A_REVERIFIER
+    ? "À revérifier : une valeur dont cet examen dépend change."
+    : `Cet avis ne couvre plus${deviendrait ? ` : la valeur passerait à ${deviendrait}` : " : la valeur change"}.`;
+
+  return { quoi, alors };
 }

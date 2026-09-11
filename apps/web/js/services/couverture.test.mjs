@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   COUVERTURE, couvertureDeLaVariante, engagementsDuProjet,
-  ligneDeLEngagement, phraseDeLaCouverture
+  ligneDeLEngagement, phraseDeLEngagement, phraseDeLaCouverture
 } from "./couverture.js";
 import { ACT, planAct } from "./memoire-actes.js";
 
@@ -246,5 +246,78 @@ test("aucune phrase de ce service ne nomme le mécanisme", () => {
     const phrase = phraseDeLaCouverture(etat);
     assert.ok(phrase, `${etat} n'a pas de phrase`);
     assert.doesNotMatch(phrase, /visa|valid|approuv/i, `« ${phrase} » parle comme un outil de visa`);
+  }
+});
+
+/* ── La phrase, celle qu'on lit devant une décision qui coûte ────────────── */
+
+/** Ce que `couvertureDeLaVariante` rend pour un engagement qui tombe. */
+const tombe = (note, reste = {}) => ({
+  acte: { created_at: at, note, declared_by: "u1" },
+  examinee: dite({ id: "vent", sujet: "Zone de vent", valeur: "Région 2" }),
+  etat: COUVERTURE.NE_COUVRE_PLUS,
+  deviendrait: "Région 1",
+  ...reste
+});
+
+/**
+ * La ligne d'avant juxtaposait des morceaux — « Zone de vent — F — Région 2 —
+ * 2026-09-11 ». Il fallait connaître l'ordre des champs pour la lire, et rien
+ * n'y disait **qui** s'était engagé. Devant un avis qui se redemande en six
+ * semaines, on ne fait pas décoder une ligne à celui qui lit.
+ */
+test("un engagement se dit en deux phrases : qui a dit quoi, puis ce qu'il advient", () => {
+  const dit = phraseDeLEngagement(tombe("SOCOTEC — F"), { dater: (iso) => iso.split("-").reverse().join("/") });
+
+  assert.equal(dit.quoi, "SOCOTEC — 12/03/2026 : avis F sur Zone de vent = Région 2.");
+  assert.equal(dit.alors, "Cet avis ne couvre plus : la valeur passerait à Région 1.");
+});
+
+/**
+ * Le code reste le code. La légende du document est la seule chose qui sache ce
+ * que « F » veut dire chez cet émetteur-là ; deviner « favorable » serait faux
+ * chez le suivant.
+ */
+test("la phrase ne traduit pas le code de l'avis", () => {
+  const dit = phraseDeLEngagement(tombe("APAVE — S — Absence d'information"));
+  assert.match(dit.quoi, /avis S — Absence d'information sur Zone de vent/);
+  assert.doesNotMatch(dit.quoi, /favorable|suspend/i);
+});
+
+test("sans organisme nommé, la phrase n'en invente pas un", () => {
+  // Règle 5 : ne pas savoir n'autorise pas à prétendre. Ni un nom supposé, ni
+  // un « Quelqu'un » qui ferait croire à un auteur qu'on n'a pas.
+  const dit = phraseDeLEngagement(tombe("F — Région A2, altitude 260 m"));
+
+  assert.equal(dit.quoi, "2026-03-12 : avis F — Région A2, altitude 260 m sur Zone de vent = Région 2.");
+});
+
+test("la note ne redit pas « avis » quand la phrase le dit déjà", () => {
+  const dit = phraseDeLEngagement(tombe("avis du bureau de contrôle"));
+  assert.match(dit.quoi, /: avis du bureau de contrôle sur Zone de vent/);
+});
+
+test("ce qui a été examiné ne se dit pas deux fois", () => {
+  // La note du suivi porte parfois l'extrait, qui *est* la valeur examinée.
+  const dit = phraseDeLEngagement(tombe("Région 2"));
+  assert.equal(dit.quoi, "2026-03-12 : avis Région 2 sur Zone de vent.");
+});
+
+test("un engagement à revérifier ne dit pas qu'il est tombé", () => {
+  const dit = phraseDeLEngagement(tombe("SOCOTEC — F", {
+    etat: COUVERTURE.A_REVERIFIER, deviendrait: ""
+  }));
+
+  assert.match(dit.alors, /^À revérifier/);
+});
+
+test("sans acte, la phrase est vide plutôt que fautive", () => {
+  assert.deepEqual(phraseDeLEngagement(null), { quoi: "", alors: "" });
+});
+
+test("la phrase d'un engagement ne parle jamais comme un outil de visa", () => {
+  const dit = phraseDeLEngagement(tombe("SOCOTEC — F"));
+  for (const interdit of [/visa/i, /valid/i, /approuv/i, /à vérifier par/i]) {
+    assert.doesNotMatch(`${dit.quoi} ${dit.alors}`, interdit);
   }
 });
