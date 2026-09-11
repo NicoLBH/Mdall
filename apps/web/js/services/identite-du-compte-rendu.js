@@ -71,7 +71,16 @@ const ANNONCE_LA_DATE = [
   /\br[ée]unions?\s+du\s+/i,
   /\bs[ée]ance\s+du\s+/i,
   /\bcomptes?[\s-]*rendus?\b[^\n]{0,60}?\bdu\s+/i,
-  /^[\t ]*date\s*(?:de\s+(?:la\s+)?r[ée]union\s*)?[:.]\s*/im
+  // **L'intitulé qualifié se passe de deux-points.** Dans un compte rendu, la
+  // date est presque toujours dans une case de tableau — « Date de réunion »
+  // d'un côté, « 25/06/2025 » de l'autre — et le texte extrait les colle sans
+  // ponctuation. Exiger les deux-points faisait répondre « je ne sais pas » sur
+  // une date écrite noir sur blanc en première page, et la ligne des reprises
+  // perdait son « depuis le … ».
+  /^[\t ]*date\s+de\s+(?:la\s+)?r[ée]union\s*[:.]?\s*/im,
+  // Nu — « Date : 12/03/2026 » —, il lui faut les deux-points : « Date » seul
+  // ouvre trop de lignes qui ne parlent pas de la réunion.
+  /^[\t ]*date\s*[:.]\s*/im
 ];
 
 const JJMMAAAA = /(\d{1,2})\s*[/.-]\s*(\d{1,2})\s*[/.-]\s*(\d{4})/;

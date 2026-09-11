@@ -213,6 +213,7 @@ const {
   getFilteredSituations,
   getStandaloneCustomSubjects,
   getFilteredStandaloneSubjects,
+  getFlatSubjects,
   getFilteredFlatSubjects,
   getPaginatedFilteredFlatSubjects,
   getSubjectsPaginationState,
@@ -906,6 +907,10 @@ const projectSubjectsView = createProjectSubjectsView({
   getBlockedBySubjects: (...args) => getBlockedBySubjects(...args),
   getBlockingSubjects: (...args) => getBlockingSubjects(...args),
   getFilteredStandaloneSubjects: (...args) => getFilteredStandaloneSubjects(...args),
+  // Le bandeau des épinglés lit **tous** les sujets, pas ceux que le filtre
+  // laisse passer : on a épinglé un sujet pour le garder sous les yeux, et il
+  // disparaîtrait le jour où l'on regarde les fermés.
+  getFlatSubjects: (...args) => getFlatSubjects(...args),
   getFilteredFlatSubjects: (...args) => getFilteredFlatSubjects(...args),
   getPaginatedFilteredFlatSubjects: (...args) => getPaginatedFilteredFlatSubjects(...args),
   getSubjectsPaginationState: (...args) => getSubjectsPaginationState(...args),

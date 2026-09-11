@@ -165,3 +165,72 @@ test("la phrase d'un point ne parle jamais comme un outil de visa", () => {
     assert.doesNotMatch(dit, interdit);
   }
 });
+
+/* ── Le sujet muet d'une réunion à l'autre ───────────────────────────────── */
+
+/**
+ * **Le défaut qui rendait un sujet muet pour le reste du chantier.**
+ *
+ * Le compte rendu n° 6 ouvre un point : la fusion laisse une affirmation en
+ * mémoire, sous la clé du point. Le n° 7 reprend le même point mot pour mot. Il
+ * tombe alors dans la branche de la mémoire — celle qui répond « déjà répondu »
+ * — et elle passe **avant** celle des titres, la seule qui attachait le sujet.
+ *
+ * Le point repartait donc sans savoir de quel sujet il parlait. Le suivi des
+ * reprises n'avait rien à quoi s'accrocher, aucune ligne n'était écrite, et le
+ * sujet n'affichait plus aucune activité de la réunion n° 6 jusqu'à la fin du
+ * chantier.
+ *
+ * C'est exactement la confusion que ce suivi existe pour lever : un sujet muet
+ * voulait dire « rien n'a bougé » autant que « personne n'a rien analysé ».
+ */
+test("un point déjà répondu en mémoire sait toujours quel sujet il concerne", () => {
+  const suivi = { id: "sujet-A", title: point().titre };
+
+  const { proposes, deja } = sujetsDuCompteRendu({
+    lus: [point()],
+    // Ce que la fusion du compte rendu précédent a laissé.
+    connus: [{ kind: "sujet", subject_key: point().key, status: "accepted" }],
+    sujetsDuProjet: [suivi]
+  });
+
+  assert.equal(proposes.length, 0, "on ne repropose pas un point déjà répondu");
+  assert.equal(deja.length, 1);
+  // Le motif dit pourquoi il n'est pas reproposé…
+  assert.equal(deja[0].motif, DEJA.MEME_NUMERO);
+  // …et le sujet dit de quoi il parle. Sans lui, la reprise ne s'écrit pas.
+  assert.equal(deja[0].sujet?.id, "sujet-A");
+});
+
+/**
+ * Un point écarté à la main l'est aussi pour de bon, et il garde son motif :
+ * savoir qu'il a été refusé n'est pas la même chose que savoir qu'il a été
+ * versé, et les deux se lisent différemment à l'écran.
+ */
+test("un point écarté garde son motif, et son sujet s'il en a un", () => {
+  const suivi = { id: "sujet-B", title: point().titre };
+
+  const { deja } = sujetsDuCompteRendu({
+    lus: [point()],
+    connus: [{ kind: "sujet", subject_key: point().key, status: "rejected" }],
+    sujetsDuProjet: [suivi]
+  });
+
+  assert.equal(deja[0].motif, DEJA.DEJA_ECARTE);
+  assert.equal(deja[0].sujet?.id, "sujet-B");
+});
+
+/**
+ * Et quand aucun sujet du projet ne lui correspond, on n'en invente pas :
+ * le point est déjà répondu, c'est tout ce qu'on sait.
+ */
+test("sans sujet correspondant, le point repart sans en inventer un", () => {
+  const { deja } = sujetsDuCompteRendu({
+    lus: [point()],
+    connus: [{ kind: "sujet", subject_key: point().key, status: "accepted" }],
+    sujetsDuProjet: []
+  });
+
+  assert.equal(deja[0].motif, DEJA.MEME_NUMERO);
+  assert.equal(deja[0].sujet, undefined);
+});
