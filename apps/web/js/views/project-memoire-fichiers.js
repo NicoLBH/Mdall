@@ -51,6 +51,7 @@ import {
 } from "../services/memoire-blame.js";
 import {
   resolutionDuSujet, renvoisSansDeclaration, nomsDeclaresDeuxFois, variablesDeLaMemoire, definitionsDesVariables,
+  naturesDesVariables,
   cleDuSujet, typeDeLaValeur
 } from "../services/memoire-identifiants.js";
 
@@ -192,7 +193,11 @@ export { FICHIER_DES_VARIABLES };
 export function fichierDesVariables(dossiers = [], { ouEcrit = null } = {}) {
   const fichiers = (Array.isArray(dossiers) ? dossiers : []).flatMap((dossier) => dossier.fichiers ?? []);
   const variables = variablesDeLaMemoire(fichiers, (fichier) => lignesAffichables(fichier, { ouEcrit }));
-  const definitions = definitionsDesVariables(variables, explicationsVersees(fichiers));
+  // Ce que le projet porte de chaque nom : c'est ce qu'on vient y chercher pour
+  // décider si l'on réutilise un nom ou si l'on en crée un autre.
+  const definitions = definitionsDesVariables(
+    variables, explicationsVersees(fichiers), naturesDesVariables(fichiers)
+  );
   if (!definitions.length) return null;
 
   const lignesPretes = [

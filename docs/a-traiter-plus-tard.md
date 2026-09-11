@@ -2684,3 +2684,71 @@ Faut-il retirer l'extraction en dur ? La réponse ne s'écrit pas d'avance : ell
 demande de les avoir fait tourner côte à côte sur un vrai corpus, et de savoir ce
 que chacune trouve que l'autre manque. C'est ce que le choix par document rend
 possible.
+
+
+## 35. Ce qu'une variable touche, sans montrer la plomberie
+
+Devant un constat, la question est : **est-il raccroché à ce que je crois ?**
+Elle vient d'être fermée là où elle se posait le plus — sur un avis, qui dit
+maintenant ce qu'il couvre, par le nom du sujet et rien d'autre.
+
+Elle reste ouverte ailleurs, et de trois façons qui ne se valent pas.
+
+### Ce qu'on ne fera pas : dérouler les liens sur chaque détail
+
+Montrer, sur chaque affirmation, les lectures enregistrées, les identifiants et
+les règles qui la touchent, c'est exposer la mécanique. Cela ne répond pas à la
+question — cela l'enterre sous ce qui n'est pas elle. Le cerveau du projet
+existe pour ça, et c'est là que la forme du raisonnement se regarde.
+
+### Ce qui vaut mieux : un filtre dans la Mémoire
+
+« Montre-moi ce qui touche à *Zone de neige* » se demande une fois et se lit
+d'un coup, au lieu de se reconstituer d'écran en écran. La requête sait déjà
+filtrer par nature, par domaine et par état ; il lui manque **par variable**.
+C'est peu de code et c'est le bon endroit — sous les données de base, comme
+demandé.
+
+### `variables-du-projet.ref` le dit maintenant · *fait*
+
+Chaque variable porte un champ de plus :
+
+```
+const Zone de neige = {
+   type: "texte",
+   description: "…",
+   utilisation: "…",
+   ce que le projet en dit: "1 contrainte · 2 constats",
+   déjà utilisé dans: [ … ]
+};
+```
+
+**Par nature, jamais en un seul nombre.** Trois constats et une contrainte ne
+sont pas quatre de la même chose : une contrainte tranchée par un texte pèse
+autrement qu'une hypothèse que personne n'a confirmée. Et l'ordre suit ce poids
+— c'est la plus lourde qu'on veut lire d'abord.
+
+**Ce qui a été remplacé ne compte pas** : ce que le projet *dit* est ce qu'il
+tient aujourd'hui.
+
+**« Rien » est la réponse la plus utile**, et c'est pour elle que le champ
+existe :
+
+```
+   ce que le projet en dit: "rien — aucune affirmation du projet ne porte ce nom",
+```
+
+Un nom qu'une règle cite et qu'aucune affirmation ne porte est un trou du
+raisonnement : la règle s'appuie sur ce que personne n'a versé. Le taire
+reviendrait à ne montrer que ce qui va bien (règle 5).
+
+Le champ est **absent** — et non vide — quand la carte des natures n'a pas été
+demandée : le fichier ne prétend pas répondre à une question qu'on ne lui a pas
+posée.
+
+### Reste le filtre
+
+Le fichier était le premier à faire : lu par des humains **et** par le copilote,
+il coûte le moins et rend la réponse exportable. Le filtre par variable dans la
+Mémoire vient ensuite, quand on saura, en s'étant servi du fichier, ce qu'on y
+cherche vraiment.

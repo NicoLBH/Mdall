@@ -45,6 +45,7 @@
  */
 
 import { acteQuiCouvre } from "./memoire-actes.js";
+import { engagementsDerivesDesAvis } from "./avis-engagement.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -147,8 +148,14 @@ export function engagementsDuProjet({ assertions = [], actes = [] } = {}) {
     (Array.isArray(assertions) ? assertions : []).map((a) => [texte(a?.id), a])
   );
 
+  // Les avis déjà en mémoire engagent, eux aussi. Le suivi des avis BC les
+  // écrivait bien avant que les engagements existent, et ils portent dans leur
+  // intitulé exactement le nom du sujet qu'ils couvrent. On les **dérive** —
+  // rien n'est écrit, rien n'est à migrer (`services/avis-engagement.js`).
+  const tous = [...(Array.isArray(actes) ? actes : []), ...engagementsDerivesDesAvis({ assertions, actes })];
+
   const engagements = [];
-  for (const acte of Array.isArray(actes) ? actes : []) {
+  for (const acte of tous) {
     if (!acteQuiCouvre(acte)) continue;
 
     const { examinee, courante, etat } = suivreLaChaine(acte, parId);

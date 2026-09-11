@@ -1193,7 +1193,8 @@ export function lignesDeStructure(champs = null, profondeur = 1) {
  *          utilisation?: string, usages?: {fonction: string, fichier: string}[]}} variable
  */
 export function blocDeVariable({
-  nom = "", type = "", unite = "", description = "", utilisation = "", usages = [], structure = null
+  nom = "", type = "", unite = "", description = "", utilisation = "", usages = [], structure = null,
+  ceQueLeProjetEnDit = null
 } = {}, profondeur = 0) {
   const dit = texte(nom);
   if (!dit) return [];
@@ -1225,6 +1226,22 @@ export function blocDeVariable({
   if (texte(unite)) lignes.push(champ("unité", texte(unite)));
   lignes.push(champ("description", texte(description) || À_DÉCRIRE.description));
   lignes.push(champ("utilisation", texte(utilisation) || À_DÉCRIRE.utilisation));
+
+  /**
+   * Ce que le projet **porte** à son sujet, par nature.
+   *
+   * On ouvre ce fichier pour décider si l'on réutilise un nom ou si l'on en
+   * crée un autre, et c'est souvent la vraie question : ce nom porte-t-il une
+   * contrainte tranchée par un texte, un constat daté, une hypothèse que
+   * personne n'a confirmée — ou rien du tout ?
+   *
+   * « Rien du tout » est la réponse la plus utile : un nom qu'une règle cite et
+   * qu'aucune affirmation ne porte est un trou du raisonnement.
+   *
+   * Absent quand la carte n'a pas été demandée : le fichier ne prétend pas
+   * répondre à une question qu'on ne lui a pas posée (règle 5).
+   */
+  if (texte(ceQueLeProjetEnDit)) lignes.push(champ("ce que le projet en dit", ceQueLeProjetEnDit));
 
   // Ce qu'un tableau contient, champ par champ. Une variable dont le type est
   // « tableau » ne dit rien tant qu'on ignore ce qu'il y a dans une ligne — et

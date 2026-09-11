@@ -304,3 +304,109 @@ test("l'engagement ainsi écrit tombe quand la variante change la valeur", async
   assert.equal(tombees[0].examinee.id, "neige");
   assert.equal(tombees[0].deviendrait, "E");
 });
+
+/* ── Les avis déjà en mémoire, ceux du suivi ─────────────────────────────── */
+
+/**
+ * La quatrième cause du silence, et la seule qui restait.
+ *
+ * Il y a **deux** chemins par lesquels un avis entre en mémoire. Le suivi des
+ * avis BC existait bien avant les engagements et écrit des lignes
+ * `kind: "avis"` — « Avis — Zone de neige », appréciation « F », extrait
+ * « Région A2, altitude 109 m ». C'est celui qu'on utilise, et il n'accrochait
+ * rien : des avis en mémoire, une variante qui change la valeur, aucun jalon.
+ *
+ * On **dérive** plutôt que d'écrire : les avis déjà en mémoire ont été fusionnés
+ * par du code qui ne connaissait pas les engagements, et aucune écriture
+ * rétroactive ne les rattraperait. C'est la doctrine du projet — déduit, jamais
+ * stocké.
+ */
+test("un avis du suivi couvre le sujet que son intitulé nomme", async () => {
+  const { engagementsDerivesDesAvis } = await import("./avis-engagement.js");
+
+  const avisDuSuivi = {
+    id: "avis-suivi", kind: "avis", project_id: "p1", superseded_by: null,
+    decided_at: "2026-09-11T10:00:00Z", decided_by: "u-1",
+    payload: { title: "Zone de neige", opinion: "F", evidence: "Région A2, altitude 109 m", page: 8 }
+  };
+
+  const [derive] = engagementsDerivesDesAvis({ assertions: [...MEMOIRE, avisDuSuivi], actes: [] });
+
+  assert.equal(derive.assertion_id, "neige");
+  assert.equal(derive.verdict, ACT.COUVRE);
+  assert.equal(derive.source_assertion_id, "avis-suivi");
+  assert.equal(derive.derive, true, "dérivé, jamais écrit en base");
+  // L'extrait dit ce que le bureau a examiné : sans lui, l'engagement ne se
+  // vérifie pas.
+  assert.match(derive.note, /Région A2, altitude 109 m/);
+});
+
+test("un avis pour lequel un acte existe déjà ne compte pas deux fois", () => {
+  // L'acte explicite fait foi ; les deux se compteraient comme deux examens.
+  const avisDuSuivi = {
+    id: "avis-suivi", kind: "avis", superseded_by: null,
+    payload: { title: "Zone de neige", opinion: "F" }
+  };
+  const dejaEcrit = {
+    id: "acte-1", assertion_id: "neige", verdict: ACT.COUVRE,
+    source_assertion_id: "avis-suivi", created_at: "2026-09-11T10:00:00Z"
+  };
+
+  return import("./avis-engagement.js").then(({ engagementsDerivesDesAvis }) => {
+    assert.deepEqual(
+      engagementsDerivesDesAvis({ assertions: [...MEMOIRE, avisDuSuivi], actes: [dejaEcrit] }),
+      []
+    );
+  });
+});
+
+test("un avis dont l'intitulé ne nomme rien ne couvre rien", async () => {
+  const { engagementsDerivesDesAvis } = await import("./avis-engagement.js");
+
+  const avisDuSuivi = {
+    id: "avis-suivi", kind: "avis", superseded_by: null,
+    payload: { title: "Dispositions constructives générales", opinion: "S" }
+  };
+
+  assert.deepEqual(engagementsDerivesDesAvis({ assertions: [...MEMOIRE, avisDuSuivi] }), []);
+});
+
+test("un avis remplacé ne couvre plus rien", async () => {
+  const { engagementsDerivesDesAvis } = await import("./avis-engagement.js");
+
+  const perime = {
+    id: "avis-vieux", kind: "avis", superseded_by: "avis-neuf",
+    payload: { title: "Zone de neige", opinion: "F" }
+  };
+
+  assert.deepEqual(engagementsDerivesDesAvis({ assertions: [...MEMOIRE, perime] }), []);
+});
+
+/**
+ * Le bout en bout qui compte : un avis du suivi, une variante qui change la
+ * valeur, et le jalon qui apparaît. C'est exactement ce qui ne marchait pas.
+ */
+test("un avis du suivi fait tomber sa couverture quand la variante change la valeur", async () => {
+  const { couvertureDeLaVariante } = await import("./couverture.js");
+
+  const zone = MEMOIRE[0];
+  const avisDuSuivi = {
+    id: "avis-suivi", kind: "avis", superseded_by: null, decided_at: "2026-09-11T10:00:00Z",
+    payload: { title: "Zone de neige", opinion: "F", evidence: "Région A2, altitude 109 m" }
+  };
+
+  const { tombees } = couvertureDeLaVariante({
+    rendu: {
+      ok: true, depart: [], rejouees: [], aRevoir: [],
+      recalculees: [{ assertion: zone, sujet: "Zone de neige", avant: "A1", apres: "E" }]
+    },
+    assertions: [zone, avisDuSuivi],
+    // **Aucun acte en base** : tout vient de l'avis lui-même.
+    actes: [],
+    applications: []
+  });
+
+  assert.equal(tombees.length, 1);
+  assert.equal(tombees[0].examinee.id, "neige");
+  assert.equal(tombees[0].deviendrait, "E");
+});

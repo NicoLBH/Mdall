@@ -110,6 +110,7 @@ import {
   verdictLabel
 } from "../services/memoire-actes.js";
 import { ceQuiCouvre, phraseDeLaCouvertureDe } from "../services/ce-qui-couvre.js";
+import { liaisonDeLAvis } from "../services/avis-liaison.js";
 import { bindGhActionButtons, bindGhSelectMenus, renderGhActionButton, renderGhSelectMenu } from "./ui/gh-split-button.js";
 import { renderLightTabs, bindLightTabs } from "./ui/light-tabs.js";
 import { renderSharedDetailsTitleWrap } from "./ui/detail-header.js";
@@ -389,6 +390,9 @@ function formatDate(value) {
   if (Number.isNaN(date.getTime())) return "date inconnue";
   return date.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
 }
+
+/** Le texte d'une valeur, sans surprise. */
+const texteDe = (valeur) => String(valeur ?? "").trim();
 
 function nameOf(userId) {
   if (!userId) return "un collaborateur";
@@ -1254,7 +1258,7 @@ export function renderMemoryDetail(assertions, cible = {}) {
                         .join("")}</dl>`
                     : `<p class="memory-detail__vide">Cette affirmation ne porte ni source, ni article, ni
                        citation. Ce n'est pas qu'elle n'en a pas : personne ne les a écrits.</p>`
-                }${renderActsPanel(courante)}${renderCouverturePanel(courante)}`
+                }${renderCeQueLAvisCouvre(courante)}${renderActsPanel(courante)}${renderCouverturePanel(courante)}`
         }
       </div>
 
@@ -1926,6 +1930,55 @@ async function declareHypothesis(root) {
       ? "Hypothèse versée. Elle remplace la valeur précédente du même sujet."
       : "Hypothèse versée.";
   renderContent(root);
+}
+
+/**
+ * Ce qu'un avis couvre, sur l'avis lui-même.
+ *
+ * ## La question qu'on se pose devant un avis, et à laquelle rien ne répondait
+ *
+ * « Est-il bien raccroché à ce que je crois ? » Un avis intitulé « Zone de
+ * neige » est censé couvrir la zone de neige du projet ; rien ne le disait, et
+ * il fallait faire une variante pour le découvrir.
+ *
+ * ## Ce qu'on montre, et ce qu'on se refuse à montrer
+ *
+ * **Le nom du sujet couvert, et rien d'autre.** Pas les identifiants, pas les
+ * lectures enregistrées, pas la mécanique de reconnaissance : c'est de la
+ * plomberie, et l'exposer brouillerait le message sans répondre à la question.
+ * « Cet avis porte sur : Zone de neige » y répond entièrement.
+ *
+ * Et quand il ne porte sur rien, on le dit — c'est même le cas le plus utile :
+ * un avis qui n'est accroché à rien ne fera jamais tomber quoi que ce soit, et
+ * il vaut mieux l'apprendre ici que devant une variante muette (règle 5).
+ */
+function renderCeQueLAvisCouvre(courante) {
+  if (texteDe(courante?.kind) !== "avis") return "";
+
+  const intitule = texteDe(courante?.payload?.title);
+  const { assertions: portees } = liaisonDeLAvis({
+    avis: { title_raw: intitule },
+    assertions: view.assertions ?? []
+  });
+
+  const sujets = [...new Set(portees.map((portee) => texteDe(portee?.payload?.subject)).filter(Boolean))];
+
+  return `
+    <div class="memory-acts">
+      <h3 class="memory-detail__section">Ce que cet avis couvre</h3>
+      ${
+        sujets.length
+          ? `<p class="memory-acts__empty">Il porte sur <b>${escapeHtml(sujets.join(", "))}</b>${
+              portees.length > sujets.length
+                ? ` — ${portees.length} lignes, une par partie de l'ouvrage`
+                : ""
+            }. Le jour où cette valeur change, cet avis cesse de la couvrir.</p>`
+          : `<p class="memory-acts__empty">Il n'est accroché à aucune valeur de la mémoire.
+               ${intitule ? `Rien ne s'appelle « ${escapeHtml(intitule)} » ici.` : "Il n'a pas d'intitulé."}
+               Il ne fera donc tomber aucune couverture.</p>`
+      }
+    </div>
+  `;
 }
 
 /**
