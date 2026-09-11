@@ -28,7 +28,10 @@ export function createProjectSubjectsDetailsRenderer(config) {
     renderSubjectMetaControls,
     priorityBadge,
     renderDocumentRefsCard,
-    canRenderCreateFromDetailAction
+    canRenderCreateFromDetailAction,
+    // Le glyphe seul. Le sens du bouton est dans son `aria-label` : un écran qui
+    // ne le recevrait pas garde un bouton qui se lit, au lieu de tomber.
+    svgIcon = () => ""
   } = config;
 
   function renderSubjectTitleContent(currentSelection, options = {}) {
@@ -58,6 +61,11 @@ export function createProjectSubjectsDetailsRenderer(config) {
       ? `<div class="subject-title-edit__error">${escapeHtml(editState.error)}</div>`
       : "";
 
+    // **Le crayon suit le titre, à la ligne, après son numéro.** Un bouton gris
+    // posé à l'autre bout de la barre se lit comme une action sur l'écran ; une
+    // icône collée au titre se lit comme une action sur le titre, et c'est ce
+    // qu'elle fait. C'est le geste de la description un cran plus bas : un seul
+    // à apprendre, au lieu de deux formes pour une même intention (règle 10).
     if (!isEditing) {
       const showCreateFromDetailAction = options.showCreateFromDetailAction === true
         && (typeof canRenderCreateFromDetailAction === "function"
@@ -68,10 +76,12 @@ export function createProjectSubjectsDetailsRenderer(config) {
           <div class="subject-title-display__main">
             <span class="details-title-text ${titleSeenClass}">${escapeHtml(firstNonEmpty(item.title, item.id, "Détail"))}</span>
             <span class="details-title-inline-ref">${entityDisplayLinkHtml(currentSelection.type, item.id)}</span>
+            <button class="icon-btn icon-btn--sm gh-comment-edit-btn subject-title-display__edit-action"
+              type="button" data-action="edit-subject-title"
+              aria-label="Modifier le titre" title="Modifier le titre">${svgIcon("pencil")}</button>
           </div>
           <div class="subject-title-display__spacer" aria-hidden="true"></div>
           <div class="subject-title-display__actions">
-            <button class="gh-btn gh-btn--sm subject-title-edit__action subject-title-display__edit-action" type="button" data-action="edit-subject-title">Modifier</button>
             ${showCreateFromDetailAction ? `<button class="gh-btn gh-action__main gh-btn--primary gh-btn--md subject-title-display__create-from-detail-action" type="button" data-action="open-create-subject-from-detail">Nouveau sujet</button>` : ""}
           </div>
         </div>

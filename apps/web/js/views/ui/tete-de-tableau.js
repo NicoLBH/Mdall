@@ -35,8 +35,10 @@
  *    dès qu'elle a agi ;
  *  - **il ne coupe pas la route de l'événement** : les menus qui se referment
  *    sur un clic ailleurs continuent de l'entendre. Être le premier suffit ;
- *  - **il ne se mêle que de ce qui est dans une zone de commande et déclaré
- *    ici** : un écran qui n'a rien enregistré ne voit aucune différence ;
+ *  - **il ne se mêle que de ce qui est déclaré ici, et dans la zone déclarée
+ *    avec** : un écran qui n'a rien enregistré ne voit aucune différence. La
+ *    tête du tableau est la zone par défaut parce que c'est là que ces gestes
+ *    sont nés ; un bouton d'ailleurs nomme la sienne en s'enregistrant ;
  *  - **il ne laisse aucun geste échouer en silence.**
  */
 
@@ -79,16 +81,22 @@ const nomSain = (valeur) => /^[a-z][a-z0-9-]*$/.test(texte(valeur));
 export function gesteDeLaTete(cible, { attributs = [], copies = [] } = {}) {
   const rien = { geste: GESTE.RIEN };
   if (!cible || typeof cible.closest !== "function") return rien;
-  if (!cible.closest(ZONES)) return rien;
 
-  for (const nom of copies) {
-    if (!texte(nom)) continue;
-    const noeud = cible.closest(`[data-copier="${CSS_ECHAPPE(nom)}"]`);
-    if (noeud) return { geste: GESTE.COPIE, cible: texte(nom), noeud };
+  if (cible.closest(ZONES)) {
+    for (const nom of copies) {
+      if (!texte(nom)) continue;
+      const noeud = cible.closest(`[data-copier="${CSS_ECHAPPE(nom)}"]`);
+      if (noeud) return { geste: GESTE.COPIE, cible: texte(nom), noeud };
+    }
   }
 
-  for (const attribut of attributs) {
+  for (const entree of attributs) {
+    const { attribut, zone } = declarationLue(entree);
     if (!nomSain(attribut)) continue;
+    // La zone d'abord : elle dit où ce bouton a le droit d'exister, et un même
+    // attribut posé ailleurs par mégarde ne doit pas déclencher son geste.
+    if (zone && !cible.closest(zone)) continue;
+
     const noeud = cible.closest(`[data-${attribut}]`);
     if (noeud) {
       return {
@@ -101,6 +109,19 @@ export function gesteDeLaTete(cible, { attributs = [], copies = [] } = {}) {
   }
 
   return rien;
+}
+
+/**
+ * Une déclaration de bouton, quelle que soit la forme sous laquelle elle arrive.
+ *
+ * Un simple nom veut dire « dans la tête du tableau », qui est l'endroit d'où
+ * ces gestes viennent. Le reste le dit.
+ */
+function declarationLue(entree) {
+  if (entree && typeof entree === "object") {
+    return { attribut: texte(entree.attribut), zone: texte(entree.zone) || ZONES };
+  }
+  return { attribut: texte(entree), zone: ZONES };
 }
 
 /* ── L'écoute, une seule fois pour toute l'application ───────────────────── */
@@ -139,7 +160,7 @@ async function auGeste(evenement) {
   if (!cible || typeof cible.closest !== "function") return;
 
   const geste = gesteDeLaTete(cible, {
-    attributs: Array.from(BOUTONS.keys()),
+    attributs: Array.from(BOUTONS, ([attribut, declare]) => ({ attribut, zone: declare.zone })),
     copies: Array.from(COPIES.keys())
   });
 
@@ -173,7 +194,7 @@ async function auGeste(evenement) {
       return;
     }
 
-    BOUTONS.get(geste.attribut)?.(geste.valeur, geste.noeud);
+    await BOUTONS.get(geste.attribut)?.faire(geste.valeur, geste.noeud);
   } catch (erreur) {
     // eslint-disable-next-line no-console
     console.error("[mdall] le geste de la tête a échoué", { geste: geste.attribut || geste.cible }, erreur);
@@ -204,14 +225,23 @@ function poserLEcoute() {
 }
 
 /**
- * Écouter un bouton de tête, désigné par son attribut de données.
+ * Écouter un bouton, désigné par son attribut de données.
+ *
+ * **La zone dit où ce bouton a le droit d'exister**, et rien ne se passe
+ * ailleurs. Elle vaut la tête du tableau par défaut, parce que c'est de là que
+ * ces gestes viennent ; un bouton d'ailleurs — l'épingle d'un sujet, dans le
+ * panneau de droite — nomme la sienne. Ouvrir l'écoute à toute la page à la
+ * place ferait de ce fichier l'écoute de tout, et le premier attribut
+ * homonyme déclencherait le geste d'un autre écran.
  *
  * @param {string} attribut sans le `data-` (`"subjects-status-filter"`)
- * @param {(valeur: string, noeud: Element) => void} faire
+ * @param {(valeur: string, noeud: Element) => void|Promise<void>} faire
+ * @param {object} [options]
+ * @param {string} [options.zone] un sélecteur CSS ; par défaut la tête du tableau
  */
-export function quandOnClique(attribut, faire) {
+export function quandOnClique(attribut, faire, { zone = ZONES } = {}) {
   if (!nomSain(attribut) || typeof faire !== "function") return;
-  BOUTONS.set(texte(attribut), faire);
+  BOUTONS.set(texte(attribut), { faire, zone: texte(zone) || ZONES });
   poserLEcoute();
 }
 

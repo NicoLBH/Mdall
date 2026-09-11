@@ -182,35 +182,36 @@ test("la description se corrige avec le crayon du sujet", async () => {
 });
 
 /**
- * **À gauche de « Fusionner ».** L'ordre est celui qu'on lit : ce qui corrige
- * avant ce qui engage. Un bouton gris après un bouton d'état se prend pour une
- * suite de la fusion.
+ * **Le crayon suit le titre, pas la barre d'actions.**
+ *
+ * Un bouton gris posé à l'autre bout de la barre se lit comme une action sur
+ * l'écran ; il vivait à côté de « Fusionner », qui engage tout autre chose.
+ * Une icône collée au titre dit ce qu'elle touche — et c'est déjà le geste de
+ * la description, un cran plus bas.
  */
-test("le bouton Modifier se dessine avant l'état de fusion", async () => {
+test("le crayon du titre se dessine dans le titre", async () => {
   const vue = await lire("../views/project-propositions.js");
-  const actions = vue.slice(vue.indexOf("actionsHtml: `${view.tab === \"changes\""));
 
-  const modifier = actions.indexOf("renderBoutonModifier(proposition)");
-  const fusion = actions.indexOf("renderMergeStateButton(proposition, review)");
-
-  assert.ok(modifier >= 0 && fusion >= 0, "les deux boutons ne sont plus dans la barre de titre");
-  assert.ok(modifier < fusion, "« Modifier » est passé à droite de l'état de fusion");
+  assert.match(vue, /buildTrailingHtml: \(entry\) => renderCrayonDuTitre\(entry\)/);
+  assert.match(vue, /data-proposition-titre-modifier/);
+  assert.match(vue, /svgIcon\("pencil"\)/);
 });
 
-test("le bouton Modifier est gris, jamais coloré", async () => {
+test("plus de bouton gris dans la barre d'actions", async () => {
   const vue = await lire("../views/project-propositions.js");
-  const bouton = vue.slice(vue.indexOf("data-proposition-titre-modifier"));
+  const actions = vue.slice(vue.indexOf('actionsHtml: `${view.tab === "changes"'));
 
-  assert.doesNotMatch(bouton.slice(0, 200), /gh-btn--primary|gh-btn--danger/);
+  assert.doesNotMatch(actions.slice(0, 300), /renderBoutonModifier|>Modifier</);
+  assert.match(actions.slice(0, 300), /renderMergeStateButton\(proposition, review\)/);
 });
 
 /**
- * Le refus se voit par l'absence du bouton, pas par un message : il n'y a rien
+ * Le refus se voit par l'absence du crayon, pas par un message : il n'y a rien
  * à expliquer à quelqu'un qui ne demande rien.
  */
-test("l'écran ne dessine ces boutons que sur une proposition ouverte", async () => {
+test("l'écran ne dessine ces gestes que sur une proposition ouverte", async () => {
   const vue = await lire("../views/project-propositions.js");
 
-  assert.match(vue, /function renderBoutonModifier\(proposition\) \{\n\s*if \(!modifiable\(proposition\)/);
+  assert.match(vue, /function renderCrayonDuTitre\(proposition\) \{\n\s*if \(!modifiable\(proposition\)/);
   assert.match(vue, /const crayon = modifiable\(proposition\)/);
 });

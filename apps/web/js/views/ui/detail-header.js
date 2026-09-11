@@ -35,7 +35,16 @@ export function renderSharedDetailsTitleWrap(selection, options = {}) {
     buildTitleTextHtml,
     buildIdHtml,
     buildExpandedBottomHtml,
-    buildCompactConfig
+    buildCompactConfig,
+    /**
+     * Ce qui suit le titre et son numéro, sur la même ligne.
+     *
+     * Le crayon qui corrige le titre y vit : posé à l'autre bout de la barre, il
+     * se lisait comme une action sur l'écran alors qu'il ne touche que le titre.
+     * La barre compacte ne le porte pas — elle n'a plus la place, et l'on ne
+     * corrige pas un titre qu'on est en train de dépasser au défilement.
+     */
+    buildTrailingHtml = null
   } = options;
 
   if (!selection) {
@@ -46,6 +55,7 @@ export function renderSharedDetailsTitleWrap(selection, options = {}) {
   const idHtml = buildIdHtml(selection) || "";
   const expandedBottomHtml = buildExpandedBottomHtml(selection) || "";
   const compactConfig = buildCompactConfig(selection, { titleTextHtml, idHtml }) || {};
+  const trailingHtml = typeof buildTrailingHtml === "function" ? (buildTrailingHtml(selection) || "") : "";
 
   return `
     <div class="details-title-wrap details-title--expanded">
@@ -54,6 +64,7 @@ export function renderSharedDetailsTitleWrap(selection, options = {}) {
           <div class="details-title-topline">
             ${titleTextHtml}
             ${idHtml ? `<span class="details-title-id mono">${idHtml}</span>` : ""}
+            ${trailingHtml}
           </div>
           <div class="details-title-bottomline">
             ${expandedBottomHtml}

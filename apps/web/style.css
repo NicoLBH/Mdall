@@ -637,6 +637,63 @@ body.sidebar-collapsed #sidebar{overflow:hidden;width:0;min-width:0;padding:0;ma
 
 .subject-meta-field__label{font-size:11px;font-weight:600;color:var(--muted);}
 
+/* ── Les sujets qu'on garde sous les yeux ────────────────────────────────── */
+
+/*
+ * Le bandeau est **au-dessus du tableau et hors de lui** : il ne se filtre pas,
+ * ne se trie pas, ne se pagine pas. C'est ce qui en fait un repère — il est au
+ * même endroit à chaque ouverture, quoi qu'on ait fait de la liste en dessous.
+ *
+ * Il n'a donc pas de hauteur à lui : il fait celle de ses lignes, et le tableau
+ * garde tout le reste.
+ */
+.subjects-pinned{
+  flex:0 0 auto;
+  padding:0 12px 8px 12px;
+}
+
+/*
+ * Le gabarit partagé se dessine pour occuper ce qu'on lui donne : pleine
+ * hauteur, corps qui défile. Ici il doit faire l'inverse — la hauteur de ses
+ * lignes, et rien de plus. Le bandeau ne se parcourt pas, il se voit.
+ *
+ * Et il n'a pas de tête : les colonnes sont celles du tableau deux lignes plus
+ * bas, les nommer deux fois de suite ferait lire le bandeau comme un autre
+ * tableau.
+ */
+.subjects-pinned .data-table-shell{
+  height:auto;
+  flex:0 0 auto;
+}
+
+.subjects-pinned .data-table-shell__body{
+  flex:0 0 auto;
+  overflow:visible;
+}
+
+.subject-meta-field--epingle{padding:8px 0 0 0;}
+
+.subject-epingle{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  width:100%;
+  padding:6px 8px;
+  border:none;
+  border-radius:var(--radius);
+  background:transparent;
+  color:var(--muted);
+  text-align:left;
+  cursor:pointer;
+}
+
+.subject-epingle:hover:not(:disabled){background:rgba(110,118,129,.12);color:var(--text);}
+.subject-epingle.is-active{color:var(--text);}
+
+/* Il reste lisible : grisé sans un mot, on chercherait la cause dans les
+   droits ou dans le statut du sujet. Son titre porte la raison. */
+.subject-epingle:disabled{opacity:.55;cursor:not-allowed;}
+
 .subject-meta-field__gear{
   color:var(--muted);
   display:inline-flex;
@@ -3550,7 +3607,18 @@ body.is-resizing{
 .subject-title-display__main{min-width:0;display:flex;align-items:baseline;gap:4px;flex:1 1 auto;}
 .subject-title-display__spacer{flex:1 1 auto;min-width:0;}
 .subject-title-display__actions{flex:0 0 auto;display:flex;align-items:center;justify-content:flex-end;margin-left:auto;}
-.subject-title-display__edit-action{height:32px;}
+/* Le crayon qui corrige le titre, à sa suite. Discret au repos : il ne sert
+   qu'à corriger, et un titre qui va bien n'a pas à le porter dans le regard. */
+.subject-title-display__edit-action,
+.details-title__edit-action{
+  margin-left:6px;
+  opacity:.45;
+  transition:opacity .12s ease;
+}
+.subject-title-display:hover .subject-title-display__edit-action,
+.details-title-topline:hover .details-title__edit-action,
+.subject-title-display__edit-action:focus-visible,
+.details-title__edit-action:focus-visible{ opacity:1; }
 .subject-title-display__create-from-detail-action{margin-left:8px;}
 .details-title--expanded .subject-title-display{align-items:normal;}
 .details-title--expanded .subject-title-display__actions{height:50px;align-items:center;}

@@ -110,7 +110,8 @@ import {
   getSituationsTableGridTemplate,
   renderFlatSujetRow,
   renderProjectSubjectsTable,
-  renderSituationsTableHeadHtml
+  renderSituationsTableHeadHtml,
+  renderSujetsEpinglesHtml
 } from "./project-subjects/project-subjects-table.js";
 import { createProjectSubjectDetailController } from "./project-subjects/project-subject-detail.js";
 import { createProjectSubjectDrilldownController } from "./project-subjects/project-subject-drilldown.js";
@@ -494,6 +495,7 @@ const {
 } = projectSubjectsEvents;
 
 const projectSubjectsDetailsRenderer = createProjectSubjectsDetailsRenderer({
+  svgIcon,
   getActiveSelection,
   getSelectionEntityType,
   getEffectiveSujetStatus,
@@ -926,6 +928,7 @@ const projectSubjectsView = createProjectSubjectsView({
   getFilteredSituations: (...args) => getFilteredSituations(...args),
   getVisibleCounts: (...args) => getVisibleCounts(...args),
   renderProjectSubjectsTable,
+  renderSujetsEpinglesHtml,
   wireDetailsInteractive: (...args) => projectSubjectsEvents.wireDetailsInteractive(...args),
   bindDetailsScroll: (...args) => projectSubjectsEvents.bindDetailsScroll(...args),
   refreshProjectShellChrome,

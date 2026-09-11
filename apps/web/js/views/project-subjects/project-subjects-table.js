@@ -227,6 +227,46 @@ export function renderFlatSujetRow(sujet, situationId, options = {}) {
   `;
 }
 
+/**
+ * Le bandeau des sujets épinglés, au-dessus du tableau.
+ *
+ * ## Pourquoi un bandeau et pas un tri
+ *
+ * Un chantier porte soixante-treize sujets ouverts ; trois occupent la semaine.
+ * Les remonter par un tri les mélangerait au reste dès qu'on trie autrement, et
+ * un filtre ne les rassemble pas — ce n'est ni un statut, ni un lot, ni une
+ * échéance qui les réunit, c'est l'attention de quelqu'un.
+ *
+ * Le bandeau est **hors du tableau** : il ne se filtre pas, ne se trie pas, ne
+ * se pagine pas. C'est ce qui en fait un repère — il est au même endroit à
+ * chaque ouverture, quoi qu'on ait fait de la liste en dessous.
+ *
+ * ## Les lignes sont celles du tableau
+ *
+ * Même rendu, mêmes colonnes, même gabarit. Un sujet épinglé qui ne
+ * ressemblerait pas à lui-même deux lignes plus bas se lirait comme un autre
+ * objet (règle 10).
+ */
+export function renderSujetsEpinglesHtml({ sujets = [], deps = {} } = {}) {
+  const epingles = Array.isArray(sujets) ? sujets : [];
+  if (epingles.length === 0) return "";
+
+  const { renderIssuesTable } = deps;
+  if (typeof renderIssuesTable !== "function") return "";
+
+  const rows = epingles.map((sujet) => renderFlatSujetRow(sujet, "", { isSelectable: false, deps }));
+
+  return `
+    <section class="subjects-pinned" aria-label="Sujets épinglés">
+      ${renderIssuesTable({
+        className: "issues-table",
+        gridTemplate: getSituationsTableGridTemplate(),
+        rowsHtml: rows.join("")
+      })}
+    </section>
+  `;
+}
+
 export function renderProjectSubjectsTable({ filteredSituations, deps }) {
   const {
     store,
