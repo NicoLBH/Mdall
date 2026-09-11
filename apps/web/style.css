@@ -9406,6 +9406,20 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
   background:rgba(110,118,129,.18);
 }
 
+/* La ligne qui dit qu'un point est repris de réunion en réunion sans bouger.
+   Une seule ligne, qui s'étend : un message par réunion enterrerait ce qui dit
+   quelque chose. Elle ne juge pas — au-delà d'un seuil elle se remarque, et
+   c'est une question de lisibilité, pas un verdict. */
+.thread-item--reprise .thread-reprise__texte{
+  color:var(--muted);
+  font-size:12px;
+}
+
+.thread-item--reprise-longue .thread-reprise__texte{
+  color:var(--fgColor-attention, #d29922);
+  font-weight:500;
+}
+
 .project-page-shell{
   max-width:1216px;
   margin:0 auto;

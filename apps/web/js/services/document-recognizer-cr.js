@@ -52,6 +52,7 @@
 
 import { CONFIDENCE } from "./document-recognition.js";
 import { candidatsDuDocument } from "./emetteur-du-document.js";
+import { identiteDuCompteRendu } from "./identite-du-compte-rendu.js";
 
 const FAMILY = "cr_chantier";
 const FAMILY_LABEL = "Compte rendu de chantier";
@@ -208,6 +209,8 @@ export function createCrChantierRecognizer() {
       const candidats = candidatsDuDocument({ texte: text, pages });
       const auteur = candidats.length === 1 ? candidats[0] : null;
 
+      const identite = identiteDuCompteRendu(text);
+
       return {
         kind: FAMILY,
         kindLabel: FAMILY_LABEL,
@@ -218,8 +221,19 @@ export function createCrChantierRecognizer() {
         author: null,
         authorLabel: auteur?.label ?? null,
         confidence,
-        declaredReference: null,
-        issuedAt: null,
+        // **Son numéro et le jour de la réunion, quand il les écrit.**
+        //
+        // Ce n'est pas un numéro d'affaire de bureau de contrôle — un compte
+        // rendu n'en a pas —, c'est son identité à lui, en première ligne :
+        // « COMPTE RENDU DE RÉUNION N° 14 », « Réunion du 12/03/2026 ». Les
+        // taire obligeait à repérer les comptes rendus par leur nom de fichier,
+        // qui n'est pas une donnée du projet — et interdisait d'écrire « pas de
+        // modification des comptes rendus n° 15 à 23 », qui est toute la raison
+        // de les lire.
+        //
+        // Vide quand le document ne le dit pas : ne pas savoir se dit (règle 5).
+        declaredReference: identite.numero || null,
+        issuedAt: identite.tenueLe || null,
         // Un compte rendu ne porte pas de numéro d'affaire de bureau de
         // contrôle. Il ne se rattache donc pas par marqueur, et prétendre le
         // contraire ferait poser une question à laquelle rien ne répond.
@@ -228,8 +242,8 @@ export function createCrChantierRecognizer() {
         exploitable,
         note: exploitable
           ? `Reconnu comme compte rendu de chantier${
-              auteur ? ` rédigé par ${auteur.label}` : ""
-            }${aDesLots ? ", découpé en lots" : ""}.`
+              identite.numero ? ` n° ${identite.numero}` : ""
+            }${auteur ? ` rédigé par ${auteur.label}` : ""}${aDesLots ? ", découpé en lots" : ""}.`
           : `Reconnu comme compte rendu de chantier, mais il ne porte ni rubrique de lot ` +
             `ni point à traiter : il n'y a pas de sujet à en tirer.`
       };

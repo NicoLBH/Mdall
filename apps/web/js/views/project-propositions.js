@@ -84,6 +84,7 @@ import {
 } from "../services/proposition-avant-apres.js";
 import { renderAttenteSpinner } from "./ui/spinner.js";
 import { descriptionDuPoint, phraseDuDeja } from "../services/sujets-du-cr.js";
+import { reprisesAEnregistrer, sourceDuPoint } from "../services/reprise-sans-changement.js";
 import { depotDeLaProposition, resumeDuDepot } from "../services/proposition-depot.js";
 import { ETAT, arbreDesReperes, comparerDesReperes, lignesNumerotees, resumeDuDiff } from "../services/depot-reperes.js";
 import { aChange, reperesDuDepot } from "../services/depot-carburants.js";
@@ -4979,6 +4980,7 @@ async function ouvrirLesSujetsRetenus(root, proposition, items = []) {
 
   let ouverts = 0;
   const manques = [];
+  const nes = [];
 
   try {
     const { createManualSubject, updateSubjectDescription } = await import(
@@ -5002,6 +5004,7 @@ async function ouvrirLesSujetsRetenus(root, proposition, items = []) {
             subjectId: sujet.id,
             description: descriptionDuPoint(point, { document: nomDuDocumentDuPoint(point) })
           }).catch(() => {});
+          nes.push({ subjectId: sujet.id, point });
           ouverts += 1;
         } else {
           manques.push(point.titre ?? "");
@@ -5014,6 +5017,8 @@ async function ouvrirLesSujetsRetenus(root, proposition, items = []) {
     manques.push(...retenus.map((entry) => entry.payload?.titre ?? ""));
   }
 
+  await enregistrerLesReprises(proposition, nes);
+
   if (manques.length > 0) {
     view.review.notice = [
       view.review.notice,
@@ -5023,11 +5028,96 @@ async function ouvrirLesSujetsRetenus(root, proposition, items = []) {
   }
 }
 
-/** Le nom du compte rendu d'où un point sort, quand l'écran le connaît encore. */
+/**
+ * Enregistre ce que ce dépôt a redit des sujets du projet.
+ *
+ * ## Pourquoi cela s'écrit au moment de la fusion
+ *
+ * Un compte rendu de chantier **reporte** : la douzième réunion reprend les
+ * points de la onzième. Mdall sait déjà ne pas rouvrir douze fois le même
+ * sujet — mais jusqu'ici il n'en gardait aucune trace, et deux informations se
+ * perdaient avec elles.
+ *
+ * D'abord celle qu'on cherche vraiment : **qu'un point soit relancé depuis
+ * trente-quatre réunions sans que rien ne bouge** est la seule chose qui
+ * distingue un chantier qui avance d'un chantier qui piétine.
+ *
+ * Ensuite, plus sournoise : sans trace, **on ne pouvait pas savoir si le compte
+ * rendu suivant avait été lu**. Un sujet muet voulait dire « rien n'a bougé »
+ * comme « personne n'a rien analysé ».
+ *
+ * ## Ce qu'un échec coûte, et ce qu'il ne coûte pas
+ *
+ * La fusion est faite : les documents sont entrés, la mémoire est écrite, les
+ * sujets sont ouverts. Une reprise qui ne s'enregistre pas ne défait rien de
+ * cela — elle laisse seulement une ligne d'activité muette, qui se rattrapera
+ * au compte rendu suivant. On le dit, et on continue : refuser la fusion pour
+ * un suivi serait faire payer l'essentiel par l'accessoire.
+ */
+async function enregistrerLesReprises(proposition, nes = []) {
+  const deja = view.review?.sujetsDeja ?? [];
+  const identites = view.review?.identiteDesComptesRendus ?? [];
+  if (nes.length === 0 && deja.length === 0) return;
+  if (identites.length === 0) return;
+
+  try {
+    const { listSubjectCrMentions, recordSubjectCrMentions } = await import(
+      "../services/project-subjects-supabase.js"
+    );
+
+    // L'état de la dernière reprise connue : c'est à lui qu'une nouvelle se
+    // compare, et c'est ce qui dit si le point a bougé.
+    const concernes = [
+      ...nes.map((ne) => ne.subjectId),
+      ...deja.map((point) => String(point?.sujet?.id ?? "")).filter(Boolean)
+    ];
+    const connues = (await listSubjectCrMentions(concernes)) ?? [];
+
+    const aEcrire = reprisesAEnregistrer({
+      ouverts: nes,
+      deja,
+      documents: new Map(identites.map((identite) => [identite.sourceId, identite])),
+      connues
+    });
+
+    const ecrites = await recordSubjectCrMentions(aEcrire, { propositionId: proposition?.id });
+    if (ecrites === null) {
+      view.review.notice = [
+        view.review.notice,
+        "Les reprises de ce compte rendu n'ont pas pu être enregistrées. " +
+          "La fusion est faite ; le suivi reprendra au compte rendu suivant."
+      ].filter(Boolean).join(" ");
+    }
+  } catch {
+    // Même raison : la fusion tient, le suivi se rattrape.
+  }
+}
+
+/**
+ * Le nom du compte rendu d'où un point sort.
+ *
+ * **Il se cherchait au mauvais endroit.** Un point porte son origine dans sa
+ * provenance — `provenance.source_id` —, pas à sa racine, et il porte une
+ * étiquette de lecture (« cr-1 ») et non un identifiant de document. La
+ * fonction lisait donc une chaîne vide, la comparait aux lignes de documents,
+ * ne trouvait rien, et chaque sujet ouvert depuis un compte rendu s'écrivait
+ * « Relevé dans un compte rendu de chantier » sans jamais nommer lequel. En
+ * silence, comme toujours quand on cherche une clé absente.
+ *
+ * L'identité des comptes rendus, elle, est rangée par cette étiquette : c'est
+ * elle qui répond.
+ */
 function nomDuDocumentDuPoint(point = {}) {
-  const id = String(point.sourceId ?? "").trim();
-  if (!id) return "";
-  const row = (view.review?.documentRows ?? []).find((entry) => entry.id === id);
+  const source = sourceDuPoint(point);
+  if (!source) return "";
+
+  const identite = (view.review?.identiteDesComptesRendus ?? [])
+    .find((entree) => entree.sourceId === source);
+  if (identite?.nom) return String(identite.nom).trim();
+
+  // Le chemin d'avant, pour un point qui porterait directement l'identifiant
+  // d'un document — il n'y en a pas aujourd'hui, et cela ne coûte rien.
+  const row = (view.review?.documentRows ?? []).find((entry) => entry.id === source);
   return String(row?.original_filename ?? row?.filename ?? "").trim();
 }
 
@@ -5928,6 +6018,9 @@ async function openProposition(root, propositionId) {
       // même chose — mais cela se dit : une liste courte sans ce qu'on lui a
       // retiré ferait croire à un compte rendu maigre (règle 5).
       sujetsDeja: analyse.sujetsDeja ?? [],
+      // Qui est chaque compte rendu lu. La fusion en a besoin pour enregistrer
+      // les reprises : c'est l'analyse qui les a sous la main, pas elle.
+      identiteDesComptesRendus: analyse.identiteDesComptesRendus ?? [],
       items: applyDecisions(
         [
           ...documentItems(documents),

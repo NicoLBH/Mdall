@@ -3,6 +3,11 @@ import { renderSubjectMarkdownToolbar } from "../ui/subject-rich-editor.js";
 import { shouldShowHandwritingButton } from "../../utils/input-capabilities.js";
 import { renderSubjectAttachmentTile } from "./project-subjects-attachments-ui.js";
 import {
+  mentionsDesLignes,
+  repriseQuiInterpelle,
+  repriseSansChangement
+} from "../../services/reprise-sans-changement.js";
+import {
   buildBusinessActivitySummary,
   getBusinessActivityAppearance,
   mapBusinessEventRowToThreadActivity as mapBusinessEventRowToThreadActivityShared
@@ -47,6 +52,80 @@ export function createProjectSubjectsThread(config = {}) {
     normActorName,
     miniAuthorIconHtml
   } = config;
+
+  /* ── Ce que les comptes rendus ont redit de ce sujet ───────────────────── */
+
+  /**
+   * Les reprises d'un sujet, lues une fois par ouverture.
+   *
+   * **On ne marque demandé que ce qui a répondu.** Marquer avant l'appel
+   * transformerait le moindre échec de réseau en état définitif : plus aucune
+   * tentative, et rien pour le dire. Un sujet sans reprise n'a rien à raconter ;
+   * un sujet dont on n'a pas pu lire les reprises a quelque chose qu'on ne sait
+   * pas, et il faut pouvoir y revenir (règle 5).
+   */
+  const reprisesParSujet = new Map();
+  const reprisesEnCours = new Set();
+
+  function assurerLesReprises(subjectId) {
+    const cle = normalizeId(subjectId);
+    if (!cle || reprisesEnCours.has(cle) || reprisesParSujet.has(cle)) return;
+    reprisesEnCours.add(cle);
+
+    (async () => {
+      try {
+        const { listSubjectCrMentions } = await import("../../services/project-subjects-supabase.js");
+        const lues = await listSubjectCrMentions([cle]);
+        // `null` : la base n'a pas répondu. On ne retient rien, et la prochaine
+        // ouverture réessaiera.
+        if (Array.isArray(lues)) reprisesParSujet.set(cle, lues);
+      } catch {
+        // Même chose : rien de retenu, donc rien de définitif.
+      } finally {
+        reprisesEnCours.delete(cle);
+      }
+      // Ce qui vient d'arriver change la fin de la discussion : sans ce second
+      // passage, la ligne n'apparaîtrait qu'au prochain geste de l'utilisateur,
+      // sans qu'il comprenne pourquoi.
+      requestRerender?.();
+    })();
+  }
+
+  const enFrancais = (iso) => {
+    const [annee, mois, jour] = String(iso ?? "").slice(0, 10).split("-");
+    return annee && mois && jour ? `${jour}/${mois}/${annee}` : String(iso ?? "");
+  };
+
+  /**
+   * La ligne qui dit qu'un point est repris sans bouger.
+   *
+   * **Une seule ligne, et elle s'étend.** Un journal qui grandit d'un message
+   * par réunion enterre les commentaires qui disent quelque chose ; un compteur
+   * qui s'incrémente reste lisible et dit la même chose — en mieux, puisqu'il
+   * donne la durée d'un coup d'œil.
+   *
+   * Elle ne juge pas : neuf réunions sans mouvement peuvent être un point
+   * bloqué, ou un point dont l'échéance est en mars. Elle donne le compte ;
+   * c'est à celui qui lit de dire si c'est grave. Au-delà d'un seuil, elle se
+   * remarque — cela reste une question de lisibilité, pas un verdict.
+   */
+  function renderRepriseSansChangement(subjectId, idx) {
+    const lignes = reprisesParSujet.get(normalizeId(subjectId));
+    if (!Array.isArray(lignes) || lignes.length === 0) return "";
+
+    const mentions = mentionsDesLignes(lignes);
+    const dit = repriseSansChangement(mentions, { dater: enFrancais });
+    if (!dit.texte) return "";
+
+    const interpelle = repriseQuiInterpelle(mentions);
+
+    return renderMessageThreadActivity({
+      idx,
+      className: `thread-item--reprise${interpelle ? " thread-item--reprise-longue" : ""}`,
+      iconHtml: `<span class="tl-icon" aria-hidden="true">${svgIcon("history", { className: "octicon" })}</span>`,
+      textHtml: `<span class="thread-reprise__texte">${escapeHtml(dit.texte)}</span>`
+    });
+  }
 
   const subjectTimelineCache = new Map();
   const subjectTimelineState = new Map();
@@ -1499,7 +1578,18 @@ priority=${firstNonEmpty(subject.priority, "")}`
     try {
       const resolvedSelection = selection || getActiveSelection();
       const thread = getThreadForSelection(resolvedSelection);
-      if (!thread.length) return "";
+
+      // Les reprises se demandent dès qu'on regarde le sujet, et elles arrivent
+      // après : la discussion se redessine alors avec sa dernière ligne.
+      const sujetRegarde = normalizeId(resolvedSelection?.item?.id);
+      if (sujetRegarde) assurerLesReprises(sujetRegarde);
+      const repriseHtml = renderRepriseSansChangement(sujetRegarde, thread.length);
+
+      // Un sujet ouvert par un compte rendu n'a parfois aucun message, et sa
+      // seule activité est d'être repris de réunion en réunion. S'arrêter sur
+      // une discussion vide ferait disparaître précisément ce qu'on cherchait
+      // à voir.
+      if (!thread.length && !repriseHtml) return "";
       const scopeHost = String(options.scopeHost || "").trim().toLowerCase() === "drilldown" ? "drilldown" : "main";
       debugThreadScope("render", {
         host: scopeHost,
@@ -1820,9 +1910,12 @@ priority=${firstNonEmpty(subject.priority, "")}`
       });
       }).join("");
 
+      // La ligne des reprises ferme la discussion : elle parle du présent du
+      // point, pas de son histoire, et la mettre au milieu la ferait lire comme
+      // un événement de plus.
       return `
         <div class="gh-timeline-title gh-timeline-title--hidden mono">Discussion</div>
-        ${renderMessageThread({ itemsHtml })}
+        ${renderMessageThread({ itemsHtml: `${itemsHtml}${repriseHtml}` })}
       `;
     } finally {
       threadRenderDepth = Math.max(0, threadRenderDepth - 1);
