@@ -228,6 +228,10 @@ export function intervenantItems(intervenants = []) {
       societe: entree.societe ?? "",
       nom: entree.nom ?? "",
       role: entree.role ?? "",
+      // L'adresse telle que le document l'écrit. Elle décide par quelle porte
+      // la personne entre : avec, elle se rattache à un compte Mdall ; sans,
+      // elle existe sans pouvoir être invitée nulle part.
+      courriel: entree.courriel ?? "",
       // La provenance voyage avec la proposition : on doit pouvoir ouvrir la
       // page et vérifier que cette entreprise est bien nommée là.
       sourceId: entree.provenance?.source_id ?? null,
