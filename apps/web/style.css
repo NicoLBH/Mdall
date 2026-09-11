@@ -9373,6 +9373,30 @@ body.route--project #situationsDetailsHost .detail-chrome__sticky{
 .table-head-filter-group:hover .table-head-filter__copier,
 .table-head-filter__copier:focus-visible{ opacity:1; }
 
+/* Le bouton qui copie l'état de la liste vit maintenant dans la barre de
+   commandes, à gauche de la recherche. Il vivait dans la tête du tableau, et
+   s'est tu avec les filtres qu'il devait aider à comprendre : un outil de
+   diagnostic ne peut pas dépendre de ce qu'il diagnostique. */
+.project-table-toolbar__copier{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  height:28px;
+  width:28px;
+  border:1px solid var(--border);
+  border-radius:6px;
+  background:var(--panel2, transparent);
+  color:var(--muted);
+  cursor:pointer;
+  transition:color .12s ease,border-color .12s ease;
+}
+.project-table-toolbar__copier:hover,
+.project-table-toolbar__copier:focus-visible{
+  color:var(--fg, #fff);
+  border-color:var(--border2, var(--border));
+  outline:none;
+}
+
 .table-head-filter__label{
   display:inline-flex;
   align-items:center;

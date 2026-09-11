@@ -3,6 +3,7 @@ import { renderBoutonCopier } from "../ui/bouton-copier.js";
 import { etatDeLEcoute, quandOnCopie, renderBoutonDeTri, veillerSurLaTete } from "../ui/tete-de-tableau.js";
 import { TRI, motDuTri } from "../../services/tri-des-sujets.js";
 import { diagnosticDeLaListeDesSujets } from "../../services/diagnostic-de-la-liste.js";
+import { journalEnTexte, noter } from "../../services/journal-des-gestes.js";
 import { renderProblemsCountsIconHtml } from "../ui/subissues-counts.js";
 import { formatObjectiveDueDateLabel } from "./project-subject-milestones.js";
 import {
@@ -320,13 +321,7 @@ function renderSubjectsStatusHeadHtml() {
     items: [
       { label: "Ouverts", value: "open", count: counts.open, dataAttr: "subjects-status-filter" },
       { label: "Fermés", value: "closed", count: counts.closed, dataAttr: "subjects-status-filter" }
-    ],
-    suffixeHtml: renderBoutonCopier({
-      cible: "sujets-liste",
-      className: "table-head-filter__copier",
-      titre: "Copier l'état de la liste (filtres, comptes, pagination)",
-      titreCopie: "État copié"
-    })
+    ]
   });
 }
 
@@ -373,6 +368,9 @@ function etatDeLaListeDesSujets() {
     // écoute, et ce qu'elle a réellement reçu. Ces faits se constatent ; les
     // déduire du code a coûté cinq tours (règle 12).
     ecoute: etatDeLEcoute(),
+    // Et la suite réelle des événements : geste reçu, état écrit, rendu entré,
+    // rendu sorti. Ce qui manque entre deux lignes nomme le maillon rompu.
+    journal: journalEnTexte(),
     recouvrements: veillerSurLaTete(document.getElementById("situationsPanelHost")),
     // La question qui tranche : ce que portent vraiment les sujets que le
     // compteur trouve fermés.
@@ -2932,6 +2930,18 @@ function rerenderPanels() {
   const panelHost = document.getElementById("situationsPanelHost");
   const searchInput = document.getElementById("situationsSearch");
 
+  // **Où ce rendu va écrire.** Le geste arrive, l'état s'écrit, et l'écran ne
+  // change pas : il reste alors une famille de causes entière, celle où le
+  // rendu a bien lieu mais **ailleurs** — dans un hôte détaché, ou dans le
+  // second d'un doublon. Deux nombres la tranchent, et ils se relèvent ici.
+  noter("redessin · entrée", {
+    hotes: document.querySelectorAll("#situationsPanelHost").length,
+    hoteTrouve: !!panelHost,
+    hoteConnecte: !!panelHost?.isConnected,
+    tableSeule: !!store.situationsView?.showTableOnly,
+    sousVue: String(store.situationsView?.subjectsSubview || "")
+  });
+
   if (searchInput) searchInput.value = store.situationsView.search || "";
 
   rerenderSubjectsToolbar();
@@ -2964,11 +2974,14 @@ function rerenderPanels() {
       // rendu : ce qu'on veut savoir est ce que la liste porte à l'instant où
       // l'on constate qu'elle est vide.
       //
-      // L'écoute ne se pose plus sur le panneau : elle vit avec la tête de
-      // tableau, en un seul endroit que le rendu ne peut pas perdre. Brancher
-      // un écouteur sur un nœud qu'on vient de redessiner est précisément ce
-      // qui a rendu ce bouton muet.
-      quandOnCopie("sujets-liste", () => etatDeLaListeDesSujets());
+      // L'écoute du bouton copier se pose avec la barre de commandes, où il
+      // vit désormais — pas ici, où le tableau se redessine.
+      noter("redessin · tableau écrit", {
+        branche: "table",
+        filtre: getCurrentSubjectsStatusFilter(),
+        apresFiltres: getFilteredFlatSubjects().length,
+        lignesEcrites: panelHost.querySelectorAll(".issue-row").length
+      });
       // Puis on va **voir** si ces boutons reçoivent le geste. Un bouton
       // recouvert par un élément transparent se survole encore, et rien ne le
       // distingue à l'écran d'un bouton sans écoute : c'est la confusion qui a
@@ -3015,6 +3028,9 @@ function rerenderPanels() {
 
   if (store.situationsView.drilldown?.isOpen) getProjectSubjectDrilldown().updateDrilldownPanel();
   refreshProjectShellChrome("situations");
+  noter("redessin · sortie", {
+    lignesVisibles: document.querySelectorAll("#situationsTableHost .issue-row").length
+  });
 }
 
 
@@ -3853,6 +3869,21 @@ function renderSituationsViewHeaderHtml() {
   }
 
   const rightHtml = [
+    // **Le bouton qui copie l'état de la liste, à gauche de la recherche.**
+    //
+    // Il vivait dans la tête du tableau, contre le filtre dont il devait
+    // expliquer le silence — et il s'est tu avec lui. Un outil de diagnostic
+    // qui tombe en panne avec ce qu'il doit diagnostiquer ne sert à rien : il
+    // vit désormais dans la barre de commandes, qui ne dépend pas du rendu du
+    // tableau.
+    renderProjectTableToolbarGroup({
+      html: renderBoutonCopier({
+        cible: "sujets-liste",
+        className: "project-table-toolbar__copier",
+        titre: "Copier l'état de la liste et le journal des gestes",
+        titreCopie: "État copié"
+      })
+    }),
     renderProjectTableToolbarGroup({
       html: renderProjectTableToolbarSearch({
         id: "situationsSearch",
@@ -3899,6 +3930,10 @@ function rerenderSubjectsToolbar() {
       ${headerHtml}
     </div>
   `;
+  // Le geste s'enregistre là où le bouton se dessine. Le texte, lui, se relève
+  // **au clic** : ce qu'on veut copier est l'état du moment où l'on constate
+  // quelque chose, pas celui du dernier dessin.
+  quandOnCopie("sujets-liste", () => etatDeLaListeDesSujets());
 }
 
 function formatObjectiveMeta(objective) {

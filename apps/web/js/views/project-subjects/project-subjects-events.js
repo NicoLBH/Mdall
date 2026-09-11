@@ -25,6 +25,7 @@ import { isMetaDropdownOpenForAnchor } from "../ui/select-dropdown-controller.js
 import { mountHandwritingComposerOverlay } from "../ui/handwriting-composer-overlay.js";
 import { quandOnClique } from "../ui/tete-de-tableau.js";
 import { TRI, normaliserLeTri, triSuivant } from "../../services/tri-des-sujets.js";
+import { noter, noterLEchec } from "../../services/journal-des-gestes.js";
 
 export function createProjectSubjectsEvents(config) {
   const EMOJI_GRID_COLUMNS = 6;
@@ -5666,6 +5667,35 @@ export function createProjectSubjectsEvents(config) {
   }
 
   /**
+   * Redessiner après un geste de la tête — et **dire si cela a eu lieu**.
+   *
+   * Le constat qui a renversé cinq tours d'enquête : on clique « Fermés », rien
+   * ne bouge ; on change d'onglet, on revient, et la liste des fermés s'affiche.
+   * L'état est donc écrit et le geste reçu — ce qui manque est le rendu qui
+   * devait suivre. Une exception ici ne fait rien tomber : elle s'écrit dans la
+   * console et la page continue, l'air de rien, laissant croire à un bouton
+   * sans écoute.
+   *
+   * On note donc l'entrée et la sortie. Ce qui manque entre les deux nomme le
+   * maillon rompu.
+   */
+  function redessinerApresUnGeste(quoi) {
+    try {
+      resetSubjectsPaginationPage();
+    } catch (erreur) {
+      noterLEchec("pagination · échec", erreur);
+    }
+
+    noter("redessin · demandé", { apres: quoi, parCe: typeof rerenderPanels });
+    try {
+      rerenderPanels();
+      noter("redessin · rendu", { apres: quoi });
+    } catch (erreur) {
+      noterLEchec("redessin · échec", erreur);
+    }
+  }
+
+  /**
    * Les gestes de la tête du tableau des sujets.
    *
    * Ils ne dépendent d'**aucune racine** et d'aucun rendu : ils sont posés une
@@ -5686,12 +5716,13 @@ export function createProjectSubjectsEvents(config) {
       if (!store.projectSubjectsView || typeof store.projectSubjectsView !== "object") {
         store.projectSubjectsView = {};
       }
+      const avant = String(store.projectSubjectsView.subjectsStatusFilter || "");
       store.projectSubjectsView.subjectsStatusFilter = demande;
       // `filters.status` reste écrit **ici aussi**, pour ce qui le lit encore —
       // mais il est désormais une copie, jamais une source.
       if (store.projectSubjectsView.filters) store.projectSubjectsView.filters.status = demande;
-      resetSubjectsPaginationPage();
-      rerenderPanels();
+      noter("filtre écrit", { avant, apres: store.projectSubjectsView.subjectsStatusFilter });
+      redessinerApresUnGeste("filtre");
     });
 
     quandOnClique("subjects-sort", (valeur) => {
@@ -5703,11 +5734,12 @@ export function createProjectSubjectsEvents(config) {
       const demande = valeur === TRI.PROJET || valeur === TRI.DERNIERE_ACTIVITE
         ? normaliserLeTri(valeur)
         : triSuivant(store.projectSubjectsView.subjectsSort);
+      const avant = String(store.projectSubjectsView.subjectsSort || "");
       store.projectSubjectsView.subjectsSort = demande;
+      noter("tri écrit", { avant, apres: store.projectSubjectsView.subjectsSort });
       // Changer l'ordre change ce qu'est « la première page » : y rester
       // montrerait le milieu d'une liste qu'on vient de retourner.
-      resetSubjectsPaginationPage();
-      rerenderPanels();
+      redessinerApresUnGeste("tri");
     });
   }
 

@@ -52,12 +52,22 @@
 import { escapeHtml } from "../../utils/escape-html.js";
 import { svgIcon } from "../../ui/icons.js";
 import { copierDansLePressePapiers, marquerCopie } from "./bouton-copier.js";
+import { noter, noterLEchec } from "../../services/journal-des-gestes.js";
 
 /** Ce que la tête peut avoir été cliquée pour faire. */
 export const GESTE = { RIEN: "", BOUTON: "bouton", COPIE: "copie" };
 
-/** Là où ces gestes ont le droit d'exister. Ailleurs, on ne se mêle de rien. */
-export const TETE = ".data-table-shell__head";
+/**
+ * Là où ces gestes ont le droit d'exister. Ailleurs, on ne se mêle de rien.
+ *
+ * Deux zones, et c'est le même tableau : sa tête, et la barre de commandes qui
+ * la surplombe. Les séparer obligerait à deux écoutes, et une valeur — ici, un
+ * geste — qui vit à deux endroits finit par diverger (règle 4).
+ */
+export const ZONES = ".data-table-shell__head, .project-table-toolbar";
+
+/** @deprecated le nom d'avant, quand il n'y avait que la tête. */
+export const TETE = ZONES;
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -79,7 +89,7 @@ const nomSain = (valeur) => /^[a-z][a-z0-9-]*$/.test(texte(valeur));
 export function gesteDeLaTete(cible, { attributs = [], copies = [] } = {}) {
   const rien = { geste: GESTE.RIEN };
   if (!cible || typeof cible.closest !== "function") return rien;
-  if (!cible.closest(TETE)) return rien;
+  if (!cible.closest(ZONES)) return rien;
 
   for (const nom of copies) {
     if (!texte(nom)) continue;
@@ -145,12 +155,22 @@ async function auGeste(evenement) {
     attributs: Array.from(BOUTONS.keys()),
     copies: Array.from(COPIES.keys())
   });
-  if (geste.geste === GESTE.RIEN) return;
+
+  if (geste.geste === GESTE.RIEN) {
+    // Un geste dans une zone de commande qui ne correspond à rien : c'est rare,
+    // et c'est exactement ce qu'on veut voir si un jour les boutons se
+    // taisent parce que le nœud cliqué n'est pas celui qu'on croit.
+    if (evenement.type === "pointerdown" && cible.closest(ZONES)) {
+      noter("zone · appui sans geste", { sur: nomDuNoeud(cible) });
+    }
+    return;
+  }
 
   const quand = Date.now();
   const cle = geste.geste === GESTE.COPIE ? `copie:${geste.cible}` : `${geste.attribut}=${geste.valeur}`;
   PERCU.dernier = { cle, par: evenement.type, quand };
   PERCU.combien += 1;
+  noter("geste reçu", { quoi: cle, par: evenement.type, sur: nomDuNoeud(geste.noeud) });
 
   // **On ne touche pas à l'appui.** Empêcher son geste par défaut supprimerait
   // le clic qui devait suivre, la prise de focus, la sélection — et le
@@ -167,13 +187,23 @@ async function auGeste(evenement) {
   if (evenement.type === "click" && clicDuMemeAppui(quand)) return;
   if (evenement.type === "pointerdown") APPUI.traiteA = quand;
 
-  if (geste.geste === GESTE.COPIE) {
-    const dit = await COPIES.get(geste.cible)?.();
-    if (await copierDansLePressePapiers(dit)) marquerCopie(geste.noeud);
-    return;
-  }
+  // **Ce qui suit ne doit jamais se perdre.** Une exception dans un écouteur
+  // s'écrit dans la console et la page continue, l'air de rien : un rendu qui
+  // ne s'est jamais produit passe alors pour un bouton sans écoute. C'est
+  // précisément la confusion qui a coûté cinq tours.
+  try {
+    if (geste.geste === GESTE.COPIE) {
+      const dit = await COPIES.get(geste.cible)?.();
+      if (await copierDansLePressePapiers(dit)) marquerCopie(geste.noeud);
+      noter("geste fait", { quoi: cle });
+      return;
+    }
 
-  BOUTONS.get(geste.attribut)?.(geste.valeur, geste.noeud);
+    BOUTONS.get(geste.attribut)?.(geste.valeur, geste.noeud);
+    noter("geste fait", { quoi: cle });
+  } catch (erreur) {
+    noterLEchec("geste · échec", erreur);
+  }
 }
 
 /**
@@ -345,7 +375,7 @@ export function veillerSurLaTete(racine = null) {
 
   const ennuis = [];
 
-  for (const tete of ou.querySelectorAll(TETE)) {
+  for (const tete of ou.querySelectorAll(ZONES)) {
     const boutons = Array.from(tete.querySelectorAll(selecteurs.join(","))).map((noeud) => ({
       cle: nomDuNoeud(noeud),
       noeud,
