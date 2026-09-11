@@ -2029,6 +2029,113 @@ export async function addProjectCollaboratorToSupabase({ personId = "", userId =
   return nextItem;
 }
 
+/**
+ * Ajoute au projet une personne relevée dans un document.
+ *
+ * ## Pourquoi une seconde porte, et pas un paramètre de plus
+ *
+ * `addProjectCollaboratorToSupabase` sert la porte des paramètres : on tape une
+ * adresse, la personne est invitée à se connecter, et l'adresse est donc exigée.
+ * C'est juste, et il ne faut pas l'affaiblir.
+ *
+ * Un compte rendu de chantier, lui, ne donne pas d'adresse. Il nomme des
+ * entreprises et parfois des personnes, et c'est tout. Relâcher l'exigence sur
+ * la porte des paramètres pour lui faire de la place ferait entrer des lignes
+ * muettes là où l'on attend une invitation ; d'où deux fonctions, chacune avec
+ * ses exigences à elle.
+ *
+ * ## Ce qui identifie quelqu'un qu'on n'a pas d'adresse pour
+ *
+ * La société et le nom. C'est ce que le document donne, et c'est ce qui permet
+ * de ne pas créer deux fois la même personne au compte rendu suivant. Ce n'est
+ * pas aussi sûr qu'une adresse — deux homonymes dans deux entreprises
+ * différentes sont deux personnes, et la société les sépare.
+ *
+ * @returns {Promise<object|null>} le collaborateur ajouté, ou `null`
+ */
+export async function addProjectCollaboratorFromDocument({
+  company = "", firstName = "", lastName = "", projectLotId = "", status = "Actif"
+} = {}) {
+  const backendProjectId = await resolveCurrentBackendProjectId();
+  const lotId = safeString(projectLotId);
+  const societe = safeString(company);
+  const nom = safeString(lastName) || societe;
+
+  if (!backendProjectId) throw new Error("Projet Supabase introuvable pour l'ajout du collaborateur.");
+  if (!lotId) throw new Error("Aucun lot du projet ne correspond.");
+  if (!societe && !nom) throw new Error("Aucune société ni personne à ajouter.");
+
+  const personId = await ensurePersonSansCourriel({ company: societe, firstName, lastName: nom });
+  if (!personId) throw new Error("La personne n'a pas pu être enregistrée.");
+
+  const currentUser = await getCurrentUser().catch(() => null);
+  const existing = Array.isArray(store.projectForm.collaborators) ? store.projectForm.collaborators : [];
+  const dejaLa = existing.find(
+    (item) => safeString(item.personId) === personId && safeString(item.projectLotId) === lotId
+  ) || null;
+
+  // Déjà sur ce rôle, et actif : il n'y a rien à faire, et ce n'est pas une
+  // erreur. Un compte rendu redit chaque semaine qui travaille là.
+  if (dejaLa && safeString(dejaLa.status) === "Actif") return dejaLa;
+
+  if (dejaLa) {
+    await restUpdate("project_collaborators", { id: safeString(dejaLa.id) }, {
+      status: safeString(status) || "Actif",
+      removed_at: null
+    }, { select: "id" });
+  } else {
+    await restInsert("project_collaborators", {
+      project_id: backendProjectId,
+      person_id: personId,
+      project_lot_id: lotId,
+      status: safeString(status) || "Actif",
+      invited_by_user_id: safeString(currentUser?.id || "") || null
+    }, { select: "id" });
+  }
+
+  const items = await syncProjectCollaboratorsFromSupabase({ force: true });
+  const ajoute = items.find(
+    (item) => safeString(item.personId) === personId && safeString(item.projectLotId) === lotId
+  ) || null;
+
+  dispatchProjectSupabaseSync({ section: "collaborators", collaboratorsCount: items.length });
+  return ajoute;
+}
+
+/**
+ * La personne du répertoire pour une société et un nom, créée au besoin.
+ *
+ * **Sans adresse, et sans en inventer une.** Un courriel plausible dans un
+ * annuaire de personnes réelles finirait par recevoir du courrier, ou par
+ * entrer en collision avec une vraie adresse. Une adresse absente s'écrit
+ * `null` (règle 5).
+ */
+async function ensurePersonSansCourriel({ company = "", firstName = "", lastName = "" } = {}) {
+  const societe = safeString(company);
+  const nom = safeString(lastName);
+
+  const params = new URLSearchParams([["select", "id,company,last_name"], ["limit", "50"]]);
+  params.append("email", "is.null");
+  if (societe) params.append("company", `eq.${societe}`);
+
+  const rows = await restFetch("directory_people", params).catch(() => []);
+  const trouve = (Array.isArray(rows) ? rows : []).find(
+    (row) => safeString(row?.last_name).toLowerCase() === nom.toLowerCase()
+  );
+  if (trouve?.id) return safeString(trouve.id);
+
+  const currentUser = await getCurrentUser().catch(() => null);
+  const inserted = await restInsert("directory_people", {
+    email: null,
+    first_name: safeString(firstName) || null,
+    last_name: nom || null,
+    company: societe || null,
+    created_by_user_id: safeString(currentUser?.id || "") || null
+  }, { select: "id" });
+
+  return safeString(inserted?.id || "");
+}
+
 export async function updateProjectCollaboratorRoleInSupabase(projectCollaboratorId = "", projectLotId = "") {
   const collaboratorId = safeString(projectCollaboratorId);
   const lotId = safeString(projectLotId);

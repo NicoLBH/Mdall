@@ -29,7 +29,13 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { requireUser } from "../_shared/require-user.ts";
 import {
-  CONSIGNES, SCHEMA_DES_SUJETS, pagesEnTexte, sujetsAuFormatDuMoteur, verifierLesSujets
+  CONSIGNES,
+  SCHEMA_DES_SUJETS,
+  intervenantsAuFormatDuMoteur,
+  pagesEnTexte,
+  sujetsAuFormatDuMoteur,
+  verifierLesIntervenants,
+  verifierLesSujets
 } from "../_shared/sujets-du-modele.js";
 
 const openAiApiKey = Deno.env.get("OPENAI_API_KEY")!;
@@ -102,14 +108,26 @@ serve(async (req) => {
       pages
     });
 
+    // Les intervenants passent le même garde-fou, et pour une raison plus forte
+    // encore : un intervenant inventé est une entreprise qui n'existe pas sur
+    // ce chantier, à qui l'on finirait par assigner des points.
+    const gens = verifierLesIntervenants({
+      intervenants: (lu.intervenants as unknown[]) ?? [],
+      pages
+    });
+
     return reponse({
       numero_de_reunion: lu.numero_de_reunion ?? null,
       tenue_le: lu.tenue_le ?? null,
       redige_par: lu.redige_par ?? null,
       sujets: sujetsAuFormatDuMoteur(retenus, { sourceId }),
+      intervenants: intervenantsAuFormatDuMoteur(gens.retenus, { sourceId }),
       // Ce qui a été jeté, et pourquoi. Se dit, se compte, ne se cache pas.
-      ecartes: ecartes.map((ecart: { motif: string }) => ecart.motif),
-      pages_corrigees: pagesCorrigees,
+      ecartes: [
+        ...ecartes.map((ecart: { motif: string }) => ecart.motif),
+        ...gens.ecartes.map((ecart: { motif: string }) => ecart.motif)
+      ],
+      pages_corrigees: pagesCorrigees + gens.pagesCorrigees,
       modele: MODELE
     });
   } catch (error) {

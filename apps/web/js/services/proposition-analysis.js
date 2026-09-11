@@ -90,6 +90,8 @@ export async function analyzeProposition({
   portee = PORTEE.DEPOT,
   // Ce que le projet suit déjà, pour ne pas reproposer ce qui est ouvert.
   sujetsDuProjet = [],
+  // Qui le projet compte déjà, pour ne pas reproposer une entreprise qui y est.
+  collaborateursDuProjet = [],
   // Les affirmations de la mémoire : c'est par elles qu'on reconnaît un point
   // déjà versé, et c'est ce qui empêche la douzième réunion d'en rouvrir douze.
   knownAssertions = [],
@@ -121,6 +123,8 @@ export async function analyzeProposition({
     // n'y a effectivement aucun point à proposer — ce n'est pas une lacune.
     sujets: [],
     sujetsDeja: [],
+    intervenants: [],
+    intervenantsDeja: [],
     // L'identité des comptes rendus lus, par source. Elle sert à la fusion, qui
     // enregistre les reprises : sans elle, la ligne d'activité ne pourrait pas
     // nommer le compte rendu qui a repris un point.
@@ -236,10 +240,13 @@ export async function analyzeProposition({
    */
   let sujets = [];
   let sujetsDeja = [];
+  let intervenants = [];
+  let intervenantsDeja = [];
   const identiteDesComptesRendus = [];
   const unreachableCr = [];
   if (comptesRendus.length > 0) {
     const { sujetsDuCompteRendu } = await import("./sujets-du-cr.js");
+    const { intervenantsDuCompteRendu } = await import("./intervenants-du-cr.js");
 
     await chrono("sujets", "Points de chantier relevés", async (carnet) => {
       const lisibles = [];
@@ -283,7 +290,22 @@ export async function analyzeProposition({
       sujets = tri.proposes;
       sujetsDeja = tri.deja;
 
+      // **Qui travaille sur ce chantier.** Un compte rendu nomme tout le monde :
+      // présents, absents, excusés, et l'entreprise de chaque lot. C'est la
+      // source la plus complète et la plus à jour qui existe, et sans elle un
+      // sujet ne peut être assigné à personne — c'est ce qui rend le suivi d'une
+      // semaine à l'autre si pénible.
+      const gens = intervenantsDuCompteRendu({
+        lus: [...lectures.values()].flatMap((lecture) => lecture.intervenants ?? []),
+        collaborateurs: collaborateursDuProjet
+      });
+      intervenants = gens.proposes;
+      intervenantsDeja = gens.deja;
+
       carnet.dire(`${sujets.length} point(s) proposé(s) à l'ouverture`);
+      if (intervenants.length > 0) {
+        carnet.dire(`${intervenants.length} société(s) nommée(s) que le projet ne connaît pas encore`);
+      }
       if (sujetsDeja.length > 0) {
         carnet.dire(`${sujetsDeja.length} point(s) déjà suivis : ils ne sont pas reproposés`);
       }
@@ -297,7 +319,8 @@ export async function analyzeProposition({
   // compte — s'arrêter sur `vide` les perdrait après les avoir lus.
   if (corpus.length === 0) {
     return {
-      ...vide, unreachable: unreachableCr, sujets, sujetsDeja, identiteDesComptesRendus, steps, error: null
+      ...vide, unreachable: unreachableCr, sujets, sujetsDeja,
+      intervenants, intervenantsDeja, identiteDesComptesRendus, steps, error: null
     };
   }
 
@@ -443,6 +466,8 @@ export async function analyzeProposition({
     // des avis et des points de chantier, et l'écran les montre ensemble.
     sujets,
     sujetsDeja,
+    intervenants,
+    intervenantsDeja,
     identiteDesComptesRendus,
     // Ce que chaque phase a réellement pris. L'appelant y ajoutera l'écriture,
     // qu'il est le seul à pouvoir mesurer.

@@ -91,6 +91,10 @@ export async function lireLesSujets({ sourceId = "", pages = [] } = {}) {
   return {
     ok: true,
     sujets,
+    // Qui le compte rendu nomme. Une liste vide est une réponse : un compte
+    // rendu qui ne nomme personne existe, et il ne faut pas le confondre avec
+    // un serveur qui n'aurait rien rendu.
+    intervenants: Array.isArray(rendu?.intervenants) ? rendu.intervenants : [],
     numeroDeReunion: texte(rendu?.numero_de_reunion),
     tenueLe: texte(rendu?.tenue_le),
     redigePar: texte(rendu?.redige_par),

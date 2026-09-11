@@ -69,7 +69,21 @@ export const ITEM_TYPE = {
    * c'est une décision, et elle se signe. C'est exactement ce que l'ancienne
    * pipeline faisait sans le demander, et ce pour quoi elle s'en va.
    */
-  SUJET: "sujet"
+  SUJET: "sujet",
+  /**
+   * Une entreprise que le compte rendu nomme, proposée au projet.
+   *
+   * **Et surtout pas versée directement.** Ajouter quelqu'un à un projet par un
+   * dépôt de fichier est exactement ce que la règle 1 interdit, et ce serait
+   * pire ici qu'ailleurs : il s'agit de personnes réelles, à qui du travail va
+   * être assigné.
+   *
+   * Aucune exception n'a été nécessaire pour autant : le compte rendu arrive
+   * déjà par une proposition. Les intervenants qu'il nomme y sont des lignes
+   * comme les autres, acceptées ou refusées une par une, et qui entrent à la
+   * fusion avec le reste.
+   */
+  INTERVENANT: "intervenant"
 };
 
 function item(type, key, payload) {
@@ -196,6 +210,29 @@ export function sujetItems(points = []) {
       sourceId: point.provenance?.source_id ?? null,
       page: point.provenance?.page ?? null,
       evidence: point.provenance?.excerpt ?? null
+    })
+  );
+}
+
+/**
+ * Les intervenants qu'un compte rendu propose d'ajouter au projet.
+ *
+ * La clé est la société aplatie : c'est le repère qui tient d'une réunion à
+ * l'autre. Le représentant change, l'entreprise reste — prendre le nom de la
+ * personne ferait reproposer la même société dès qu'elle envoie quelqu'un
+ * d'autre.
+ */
+export function intervenantItems(intervenants = []) {
+  return (Array.isArray(intervenants) ? intervenants : []).map((entree) =>
+    item(ITEM_TYPE.INTERVENANT, entree.key, {
+      societe: entree.societe ?? "",
+      nom: entree.nom ?? "",
+      role: entree.role ?? "",
+      // La provenance voyage avec la proposition : on doit pouvoir ouvrir la
+      // page et vérifier que cette entreprise est bien nommée là.
+      sourceId: entree.provenance?.source_id ?? null,
+      page: entree.provenance?.page ?? null,
+      evidence: entree.provenance?.excerpt ?? null
     })
   );
 }

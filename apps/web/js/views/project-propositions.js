@@ -73,6 +73,7 @@ import {
   describeAvisChange,
   diffAvis,
   documentItems,
+  intervenantItems,
   sujetItems
 } from "../services/proposition-review.js";
 import {
@@ -85,6 +86,9 @@ import {
 import { renderAttenteSpinner } from "./ui/spinner.js";
 import { descriptionDuPoint, phraseDuDeja } from "../services/sujets-du-cr.js";
 import { reprisesAEnregistrer, sourceDuPoint } from "../services/reprise-sans-changement.js";
+import {
+  aQuiRevientLePoint, lotDuProjetPour, nomPourLeRepertoire, phraseDuConnu
+} from "../services/intervenants-du-cr.js";
 import { depotDeLaProposition, resumeDuDepot } from "../services/proposition-depot.js";
 import { ETAT, arbreDesReperes, comparerDesReperes, lignesNumerotees, resumeDuDiff } from "../services/depot-reperes.js";
 import { aChange, reperesDuDepot } from "../services/depot-carburants.js";
@@ -838,6 +842,38 @@ function renderAvisItem(item) {
 }
 
 /**
+ * Une entreprise que le compte rendu nomme, proposée au projet.
+ *
+ * **La société d'abord, la personne ensuite.** C'est l'entreprise qui tient
+ * d'une réunion à l'autre : le conducteur de travaux change, le lot reste. Et
+ * c'est par elle qu'on cherchera qui doit reprendre un point.
+ *
+ * Ce que le compte rendu n'écrit pas ne s'affiche pas — pas de rôle inventé,
+ * et aucune adresse : un collaborateur ajouté ainsi n'est pas invité à se
+ * connecter, il existe pour qu'on puisse lui assigner un point.
+ */
+function renderIntervenantItem(item) {
+  const { societe, nom, role, page } = item.payload;
+
+  const situe = [
+    role ? escapeHtml(role) : "",
+    page ? `page ${escapeHtml(String(page))}` : ""
+  ].filter(Boolean).join(" · ");
+
+  return renderReviewItem(
+    item,
+    `
+      <span class="review-item__title">
+        <span class="review-item__badge review-item__badge--added">Au projet</span>
+        ${escapeHtml(societe || "Société sans nom")}
+      </span>
+      ${situe ? `<span class="review-item__where">${situe}</span>` : ""}
+      ${nom ? `<span class="review-item__meta">${escapeHtml(nom)}</span>` : ""}
+    `
+  );
+}
+
+/**
  * Un point d'un compte rendu de chantier, proposé à l'ouverture.
  *
  * Cocher ouvre un sujet à la fusion. C'est le geste le plus engageant de cet
@@ -894,7 +930,15 @@ function renderSujetItem(item) {
  */
 function renderSujetsDeja(review) {
   const deja = review.sujetsDeja ?? [];
-  if (deja.length === 0) return "";
+  // Les sociétés que le compte rendu nomme et que le projet connaît déjà se
+  // lisent au même endroit : c'est la même nature de ligne — ce qu'on a retiré
+  // de ce qui est proposé, et qui doit se dire (règle 5).
+  const societes = (review.intervenantsDeja ?? []).map((entree) => ({
+    titre: entree.societe ?? "",
+    motif: entree.motif
+  }));
+  const lignes = [...deja, ...societes];
+  if (lignes.length === 0) return "";
 
   // Le châssis est celui de « Non repris par ce lot » : même nature de bloc —
   // ce qui se lit sans se décider —, donc même forme. Deux mises en page pour
@@ -905,28 +949,29 @@ function renderSujetsDeja(review) {
         <div class="review-block__head review-block__head--plain">
           <div class="review-block__headbody">
             <h3 class="review-block__title">
-              Déjà suivis
-              <span class="review-block__count">${deja.length}</span>
+              Déjà connus
+              <span class="review-block__count">${lignes.length}</span>
             </h3>
             <span class="review-block__state">rien à décider</span>
           </div>
         </div>
         <p class="review-silent__note">
-          Un compte rendu de chantier reporte ses points d'une réunion à la suivante.
-          ${deja.length > 1 ? "Ceux-ci sont" : "Celui-ci est"} déjà ${deja.length > 1 ? "connus" : "connu"}
-          du projet : cette proposition ne ${deja.length > 1 ? "les" : "le"} rouvre pas.
+          Un compte rendu de chantier reporte ses points d'une réunion à la suivante,
+          et renomme chaque semaine les mêmes entreprises.
+          ${lignes.length > 1 ? "Ceux-ci sont" : "Celui-ci est"} déjà ${lignes.length > 1 ? "connus" : "connu"}
+          du projet : cette proposition ne ${lignes.length > 1 ? "les" : "le"} rouvre pas.
         </p>
         <ul class="review-list">
-          ${deja.slice(0, 12).map((point) => `
+          ${lignes.slice(0, 12).map((point) => `
             <li class="review-item review-item--plain">
               <span class="review-item__check">${svgIcon("dot-fill-pending", { className: "octicon" })}</span>
               <div class="review-item__body">
                 <span class="review-item__title">${escapeHtml(point.titre ?? "")}</span>
-                <span class="review-item__meta">${escapeHtml(phraseDuDeja(point.motif))}</span>
+                <span class="review-item__meta">${escapeHtml(phraseDuDeja(point.motif) || phraseDuConnu(point.motif))}</span>
               </div>
             </li>`).join("")}
         </ul>
-        ${deja.length > 12 ? `<p class="review-silent__note">et ${deja.length - 12} autre(s).</p>` : ""}
+        ${lignes.length > 12 ? `<p class="review-silent__note">et ${lignes.length - 12} autre(s).</p>` : ""}
       </div>
     </section>
   `;
@@ -2883,6 +2928,15 @@ function renderDepotLignes(proposition, review) {
       gele
         ? "Aucun point de chantier, ou l'état conservé ne le dit pas."
         : "Aucun compte rendu de chantier dans ce dépôt : il n'y a pas de point à en tirer."
+    )}
+    ${renderReviewBlock(
+      ITEM_TYPE.INTERVENANT,
+      "Intervenants",
+      parType(ITEM_TYPE.INTERVENANT),
+      renderIntervenantItem,
+      gele
+        ? "Aucun intervenant relevé, ou l'état conservé ne le dit pas."
+        : "Aucune société nommée que le projet ne connaisse déjà."
     )}
     ${renderSujetsDeja(review)}
     ${renderSilentAvis(review)}
@@ -4917,6 +4971,10 @@ async function merge(root) {
     // qu'une proposition a été signée, et seulement pour ce qui a été coché.
     // L'ancienne pipeline les ouvrait au dépôt, sans que personne ait rien dit —
     // c'est ce qu'on vient de retirer.
+    // Les sociétés retenues entrent **avant** les sujets : un sujet ne peut
+    // être assigné qu'à quelqu'un qui existe, et l'ordre inverse laisserait
+    // chaque point du premier compte rendu sans destinataire.
+    await ajouterLesIntervenantsRetenus(root, proposition, items);
     await ouvrirLesSujetsRetenus(root, proposition, items);
 
     // L'histoire se refait maintenant : sans cela, le fil resterait celui d'une
@@ -5018,6 +5076,7 @@ async function ouvrirLesSujetsRetenus(root, proposition, items = []) {
   }
 
   await enregistrerLesReprises(proposition, nes);
+  await assignerLesSujets(nes);
 
   if (manques.length > 0) {
     view.review.notice = [
@@ -5025,6 +5084,142 @@ async function ouvrirLesSujetsRetenus(root, proposition, items = []) {
       `${ouverts} sujet(s) ouvert(s), ${manques.length} n'ont pas pu l'être. ` +
         "La fusion est faite : ces points se rouvrent à la main depuis l'onglet Sujets."
     ].filter(Boolean).join(" ");
+  }
+}
+
+/**
+ * Ajoute au projet les sociétés retenues.
+ *
+ * ## Pourquoi cela passe par ici, et pas par les paramètres
+ *
+ * Ajouter quelqu'un à un projet est une décision : on lui assignera du travail,
+ * son nom apparaîtra dans des listes, et il faut que quelqu'un l'ait voulu. La
+ * règle 1 l'interdit donc par un dépôt de fichier — et ce serait pire ici
+ * qu'ailleurs, puisqu'il s'agit de personnes réelles.
+ *
+ * **Aucune exception n'a été nécessaire** : le compte rendu arrive déjà par une
+ * proposition. Les sociétés qu'il nomme y sont des lignes qu'on coche ou qu'on
+ * refuse, et elles entrent ici avec le reste, une fois signées.
+ *
+ * ## Un lot est exigé, et il ne s'invente pas
+ *
+ * La base veut un rôle pour chaque collaborateur, et c'est juste : quelqu'un
+ * dont on ne sait pas ce qu'il fait sur le chantier ne sert à rien dans une
+ * liste. Le compte rendu écrit le lot à côté de l'entreprise, et c'est lui
+ * qu'on cherche parmi les lots **activés du projet**.
+ *
+ * Quand aucun ne correspond, la société n'entre pas — et l'écran le dit avec ce
+ * qu'il faut faire. Activer un lot du projet parce qu'un document le mentionne
+ * serait changer les paramètres par un dépôt de fichier, c'est-à-dire
+ * exactement ce qu'on vient de refuser.
+ */
+async function ajouterLesIntervenantsRetenus(root, proposition, items = []) {
+  const retenus = items.filter(
+    (entry) => entry.itemType === ITEM_TYPE.INTERVENANT && entry.status !== ITEM.REFUSED
+  );
+  if (retenus.length === 0) return;
+
+  view.review.step = `Ajout de ${retenus.length} société(s) au projet`;
+  renderContent(root);
+
+  const sansLot = [];
+  const manques = [];
+
+  try {
+    const { addProjectCollaboratorFromDocument, syncProjectLotsFromSupabase } = await import(
+      "../services/project-supabase-sync.js"
+    );
+
+    // Les lots du projet ne sont pas chargés sur cet écran : on ne les a jamais
+    // demandés ici. Les lire vides ferait conclure qu'aucun lot ne correspond,
+    // et aucune société n'entrerait — avec un message qui accuserait les
+    // paramètres du projet d'un tort qui est le nôtre.
+    const lots = await syncProjectLotsFromSupabase().catch(() => []);
+
+    for (const entry of retenus) {
+      const { societe, nom, role } = entry.payload ?? {};
+      const lot = lotDuProjetPour(`${role ?? ""} ${societe ?? ""}`, lots);
+
+      if (!lot?.id) {
+        sansLot.push(societe ?? "");
+        continue;
+      }
+
+      try {
+        const { firstName, lastName } = nomPourLeRepertoire({ nom, societe });
+        // **La porte des documents, pas celle des paramètres.** Celle-ci exige
+        // une adresse pour inviter la personne à se connecter ; un compte rendu
+        // n'en donne pas, et il ne faut pas en inventer une. Deux portes, deux
+        // exigences.
+        await addProjectCollaboratorFromDocument({
+          firstName,
+          lastName,
+          company: String(societe ?? "").trim(),
+          projectLotId: lot.id
+        });
+      } catch {
+        // Déjà au projet sur ce rôle, ou la base a refusé : dans les deux cas la
+        // fusion tient, et la liste des collaborateurs se corrige à la main.
+        manques.push(societe ?? "");
+      }
+    }
+  } catch {
+    manques.push(...retenus.map((entry) => entry.payload?.societe ?? ""));
+  }
+
+  if (sansLot.length > 0) {
+    view.review.notice = [
+      view.review.notice,
+      `${sansLot.length} société(s) n'ont pas pu être ajoutées faute de lot correspondant : `
+        + `${sansLot.filter(Boolean).slice(0, 3).join(", ")}. `
+        + "Activez le lot dans les paramètres du projet, puis ajoutez-les à la main."
+    ].filter(Boolean).join(" ");
+  }
+  if (manques.length > 0) {
+    view.review.notice = [
+      view.review.notice,
+      `${manques.length} société(s) n'ont pas pu être ajoutées. La fusion est faite.`
+    ].filter(Boolean).join(" ");
+  }
+}
+
+/**
+ * Assigne chaque sujet ouvert à l'entreprise que le compte rendu désigne.
+ *
+ * **C'est ce qui rend le suivi possible.** Sans assigné, « qui doit reprendre
+ * l'étanchéité » reste du texte : personne ne le voit arriver, personne ne
+ * filtre dessus, et l'on relit trente points chaque semaine pour retrouver les
+ * trois qui nous concernent.
+ *
+ * On n'assigne que lorsque **une seule** entreprise correspond. Deux
+ * correspondances aussi bonnes n'en désignent aucune : mettre un travail sur le
+ * dos de quelqu'un que personne n'a choisi ferait que le vrai destinataire ne
+ * verrait jamais le point. Un sujet sans assigné se corrige en un clic ; un
+ * sujet assigné à la mauvaise entreprise se découvre trois semaines plus tard.
+ *
+ * Un échec n'annule rien : le sujet est ouvert, et son assignation se pose à la
+ * main comme n'importe quelle autre.
+ */
+async function assignerLesSujets(nes = []) {
+  if (nes.length === 0) return;
+
+  const collaborateurs = Array.isArray(store.projectForm?.collaborators)
+    ? store.projectForm.collaborators
+    : [];
+  if (collaborateurs.length === 0) return;
+
+  try {
+    const { addSubjectAssignee } = await import("../services/project-subjects-supabase.js");
+
+    for (const { subjectId, point } of nes) {
+      const personne = aQuiRevientLePoint(point, collaborateurs);
+      const personId = String(personne?.personId ?? "").trim();
+      if (!personId) continue;
+
+      await addSubjectAssignee(subjectId, personId).catch(() => {});
+    }
+  } catch {
+    // La fusion tient : l'assignation se pose à la main.
   }
 }
 
@@ -5987,6 +6182,11 @@ async function openProposition(root, propositionId) {
       // déjà ouvert.
       knownAssertions: affirmationsDuProjet ?? [],
       sujetsDuProjet: sujetsDuProjet ?? [],
+      // Qui le projet compte déjà. Sans cette liste, chaque compte rendu
+      // reproposerait les mêmes entreprises, réunion après réunion.
+      collaborateursDuProjet: Array.isArray(store.projectForm?.collaborators)
+        ? store.projectForm.collaborators
+        : [],
       onProgress: (step) => {
         if (!view.open || view.open.id !== proposition.id) return;
         view.review.step = `${step.label} (${step.done}/${step.total})`;
@@ -6018,6 +6218,9 @@ async function openProposition(root, propositionId) {
       // même chose — mais cela se dit : une liste courte sans ce qu'on lui a
       // retiré ferait croire à un compte rendu maigre (règle 5).
       sujetsDeja: analyse.sujetsDeja ?? [],
+      // Les sociétés que le compte rendu nomme et que le projet connaît déjà :
+      // elles ne sont pas reproposées, et cela se dit.
+      intervenantsDeja: analyse.intervenantsDeja ?? [],
       // Qui est chaque compte rendu lu. La fusion en a besoin pour enregistrer
       // les reprises : c'est l'analyse qui les a sous la main, pas elle.
       identiteDesComptesRendus: analyse.identiteDesComptesRendus ?? [],
@@ -6028,7 +6231,12 @@ async function openProposition(root, propositionId) {
           ...avisItems(analyse.diff),
           // L'autre moitié de l'aiguillage : ce qu'un compte rendu de chantier
           // propose d'ouvrir. Proposé, jamais ouvert.
-          ...sujetItems(analyse.sujets ?? [])
+          ...sujetItems(analyse.sujets ?? []),
+          // Et qui il nomme. Une entreprise entre au projet par la même porte
+          // que le reste : une ligne qu'on accepte ou qu'on refuse, signée à la
+          // fusion. Aucune exception à la règle 1 n'a été nécessaire — le compte
+          // rendu arrivait déjà par une proposition.
+          ...intervenantItems(analyse.intervenants ?? [])
         ],
         decisions
       )
