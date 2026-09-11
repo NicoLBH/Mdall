@@ -1,4 +1,6 @@
 import { getDisplayAuthorName, getAuthorIdentity } from "../ui/author-identity.js";
+import { brancherLesBoutonsCopier, renderBoutonCopier } from "../ui/bouton-copier.js";
+import { diagnosticDeLaListeDesSujets } from "../../services/diagnostic-de-la-liste.js";
 import { renderProblemsCountsIconHtml } from "../ui/subissues-counts.js";
 import { formatObjectiveDueDateLabel } from "./project-subject-milestones.js";
 import {
@@ -73,6 +75,7 @@ export function createProjectSubjectsView(deps) {
     getBlockedBySubjects,
     getBlockingSubjects,
     getFilteredStandaloneSubjects,
+    getFlatSubjects,
     getFilteredFlatSubjects,
     getCurrentSubjectsStatusFilter,
     getCurrentSubjectsPriorityFilter,
@@ -295,7 +298,65 @@ function renderSubjectsStatusHeadHtml() {
     items: [
       { label: "Ouverts", value: "open", count: counts.open, dataAttr: "subjects-status-filter" },
       { label: "Fermés", value: "closed", count: counts.closed, dataAttr: "subjects-status-filter" }
-    ]
+    ],
+    suffixeHtml: renderBoutonCopier({
+      cible: "sujets-liste",
+      className: "table-head-filter__copier",
+      titre: "Copier l'état de la liste (filtres, comptes, pagination)",
+      titreCopie: "État copié"
+    })
+  });
+}
+
+/**
+ * Ce que la liste sait d'elle-même, au moment où on le demande.
+ *
+ * Une liste qui annonce trois sujets fermés et n'en montre aucun ne se
+ * diagnostique pas depuis le code : chaque maillon y est juste isolément. Ce
+ * qui manque, ce sont **les nombres du moment** — et c'est le seul endroit d'où
+ * on peut les prendre.
+ *
+ * La mise en forme vit dans `services/diagnostic-de-la-liste.js`, qui ne mesure
+ * rien : c'est ce qui l'empêche de mentir.
+ */
+function etatDeLaListeDesSujets() {
+  const statut = getCurrentSubjectsStatusFilter();
+  const recherche = String(store.projectSubjectsView?.search ?? store.situationsView?.search ?? "");
+  const charges = getFlatSubjects();
+  const apresFiltres = getFilteredFlatSubjects();
+  const pagination = getSubjectsPaginationState(apresFiltres.length);
+
+  return diagnosticDeLaListeDesSujets({
+    statut,
+    priorite: getCurrentSubjectsPriorityFilter(),
+    recherche,
+    comptes: getSubjectsStatusCounts(recherche.trim().toLowerCase()),
+    charges: charges.length,
+    apresFiltres: apresFiltres.length,
+    affiches: Math.max(0, (pagination.endIndex ?? 0) - (pagination.startIndex ?? 0)),
+    lignes: document.querySelectorAll("#situationsTableHost .issue-row").length,
+    pagination,
+    sousVue: String(store.situationsView?.subjectsSubview || ""),
+    tableSeule: !!store.situationsView?.showTableOnly,
+    // Les quatre cases où le filtre a vécu. Si elles divergent encore, c'est
+    // ici qu'on le verra.
+    etatBrut: {
+      "projectSubjectsView.subjectsStatusFilter": store.projectSubjectsView?.subjectsStatusFilter,
+      "projectSubjectsView.filters.status": store.projectSubjectsView?.filters?.status,
+      "situationsView.subjectsStatusFilter": store.situationsView?.subjectsStatusFilter,
+      "situationsView.filters.status": store.situationsView?.filters?.status
+    },
+    // La question qui tranche : ce que portent vraiment les sujets que le
+    // compteur trouve fermés.
+    fermes: charges
+      .filter((sujet) => sujetMatchesStatusFilter(sujet, "closed"))
+      .slice(0, 20)
+      .map((sujet) => ({
+        id: sujet?.id,
+        status: sujet?.status,
+        effectif: getEffectiveSujetStatus(sujet?.id),
+        titre: sujet?.title
+      }))
   });
 }
 
@@ -2870,6 +2931,10 @@ function rerenderPanels() {
         filteredSituations,
         deps: getSubjectsTableDeps()
       })}</div>`;
+      // L'état de la liste se copie d'un clic. Il se relève **au clic**, pas au
+      // rendu : ce qu'on veut savoir est ce que la liste porte à l'instant où
+      // l'on constate qu'elle est vide.
+      brancherLesBoutonsCopier(panelHost, { texteDe: () => etatDeLaListeDesSujets() });
       syncSituationsPrimaryScrollSource();
     } else {
       const details = getProjectSubjectDetail().renderDetailsHtml(null, {

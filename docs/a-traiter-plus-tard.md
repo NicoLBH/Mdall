@@ -3081,25 +3081,59 @@ les documents ; la forme existe déjà, avec ses auteurs et ses dates ; et un
 commentaire **ne décide rien**, ce qui est honnête, puisque le compte rendu
 rapporte sans trancher.
 
-**Sur le « ou non », non.** C'est la moitié dangereuse de l'idée. Si chaque
-compte rendu écrit « aucune évolution » sur chaque sujet ouvert, le vingtième
-sujet porte dix-neuf commentaires qui ne disent rien — et l'on cesse de lire les
-discussions. **Un silence répété n'est pas une information, c'est du bruit**, et
-il enterre les commentaires qui en portent une.
+**Sur le « ou non » : à moitié seulement, et la première rédaction se trompait
+sur la moitié qui compte.** · *corrigé*
 
-La distinction à faire est celle entre un **journal** et un **compteur** :
+Elle disait : n'écrire un commentaire que lorsque quelque chose bouge, parce que
+trente-quatre « aucune évolution » d'affilée enterrent les commentaires qui
+disent quelque chose. C'est vrai — trente-quatre messages identiques sont du
+bruit — et c'est tout ce qui était vrai.
+
+Ce qu'elle manquait : **qu'un point soit relancé depuis trente-quatre réunions
+sans que rien ne bouge est exactement l'information qu'on cherche.** C'est même
+la seule qui distingue un chantier qui avance d'un chantier qui piétine. Jeter
+le bruit avait jeté le signal avec lui.
+
+Et une seconde perte, plus sournoise : sans trace, **on ne peut pas savoir si le
+compte rendu suivant a été lu**. Un sujet muet peut vouloir dire « rien n'a
+bougé » comme « personne n'a rien analysé ». Deux choses très différentes, et le
+silence les confond.
+
+La distinction n'est donc pas entre écrire et se taire, mais entre un
+**journal** et un **compteur** :
 
 | ce que le compte rendu fait du point | ce que Mdall en fait |
 | --- | --- |
 | il le reformule, en déplace l'échéance, en change le destinataire, en change l'état | **un commentaire**, daté, avec sa citation |
-| il le reprend à l'identique | **aucun commentaire** — un fait dérivé sur le sujet : « repris sans changement au CR n° 19 du 12/11 » |
+| il le reprend à l'identique | **une ligne d'activité, qui se réécrit** — pas un message de plus |
 | il ne le mentionne plus | rien, et surtout pas « clos » — voir plus bas |
 
-Le second cas se **dérive**, il ne s'écrit pas : c'est le plus récent compte
-rendu qui mentionne ce point, et cela se recalcule. C'est la même mécanique que
-les engagements dérivés des avis (§ 38), et elle a la même vertu — rien à
-migrer, rien à nettoyer, et les comptes rendus déjà versés en bénéficient
-rétroactivement.
+La ligne s'étend au lieu de se répéter (`services/reprise-sans-changement.js`) :
+
+```
+Pas de modification au compte rendu n° 15 du 12/11/2026.
+Pas de modification des comptes rendus n° 15 à 16 — 2 réunions depuis le 12/11/2026.
+Pas de modification des comptes rendus n° 15 à 23 — 9 réunions depuis le 12/11/2026.
+```
+
+Un journal qui grandit d'une ligne par réunion devient illisible ; un compteur
+qui s'incrémente reste lisible et dit la même chose — **en mieux**, puisqu'il
+donne la durée d'un coup d'œil.
+
+Trois précautions, et chacune a son test :
+
+- **elle repart du dernier mouvement.** Ce qui a changé a son propre
+  commentaire, daté ; sans cela elle annoncerait « rien n'a bougé depuis la
+  première réunion » sur un sujet qui a changé trois fois ;
+- **les bornes et le compte peuvent ne pas concorder** — un compte rendu qui ne
+  reprend pas le point. C'est une information, pas une incohérence ;
+- **elle ne juge pas.** Neuf réunions sans mouvement peuvent être un point
+  bloqué, ou un point dont l'échéance est en mars. Elle donne le compte ; c'est
+  à celui qui lit de dire si c'est grave.
+
+Le service est écrit et testé. **Il n'est branché à rien**, et ne peut pas
+l'être : il lui faut la liste des comptes rendus qui mentionnent un point, donc
+la clé du compte rendu sur le sujet — l'étape 1 ci-dessous.
 
 **Et le commentaire doit être visiblement écrit par la machine, avec sa
 citation.** Un commentaire automatique qui a l'air d'avoir été écrit par un
@@ -3182,10 +3216,14 @@ qu'elle défait, et les deux restent lisibles côte à côte.
 
 ### L'ordre
 
-1. **Le sujet porte la clé du compte rendu.** Petit, et tout en dépend.
+1. **Le sujet porte la clé du compte rendu.** Petit, et tout en dépend — y
+   compris la ligne de reprise, qui a besoin de savoir quels comptes rendus ont
+   mentionné le point.
 2. **`ITEM_TYPE.SUJET` gagne son mouvement** — ouvrir, fermer, rouvrir.
 3. **Fermer verse une décision** en mémoire, datée et signée.
-4. **Le commentaire d'évolution**, sur changement seulement, avec sa citation.
+4. **Le commentaire d'évolution** sur changement, et **la ligne de reprise**
+   quand rien ne bouge. Le service de la seconde est écrit et testé
+   (`services/reprise-sans-changement.js`) ; il attend l'étape 1.
 5. **Le jalon** lit les décisions, et dit la contradiction sans l'annuler.
 
 **Ce qui se passe si on ne le fait pas :** les sujets ouverts par un compte rendu
@@ -3286,3 +3324,72 @@ lectures possibles — un projet sans sujet fermé, ou un filtre en panne — sa
 avoir à cliquer l'autre bouton. Si la phrase annonce un compte non nul et que
 rien ne s'affiche, le défaut est dans le rendu ; si elle annonce zéro, le filtre
 n'a jamais été en cause.
+
+---
+
+## 41. Une seule porte d'entrée, et de quoi diagnostiquer une liste
+
+### Le dépôt direct s'en va · *tranché, et fait*
+
+Le § 38 le tenait pour un usage légitime, et la § 40 lui avait donné son mot
+dans l'arborescence. C'était une erreur, et elle a été tranchée dans l'autre
+sens : **ce qui entre passe par le chemin habituel**, sans exception.
+
+Trois raisons, et la troisième est la plus lourde :
+
+- **elle complique la lecture.** Deux documents côte à côte, l'un lu et l'autre
+  non, sans que rien ne l'explique au moment où on les regarde ;
+- **elle fabrique des erreurs.** Déposer son rapport de contrôle par la mauvaise
+  porte, voir son nom dans la liste, et croire le projet au courant ;
+- **elle empêche d'automatiser l'entrée des documents.** Un dépôt qui vient du
+  dehors — un courriel, un dossier surveillé — ne peut pas choisir entre deux
+  portes. S'il n'y en a qu'une, il n'a rien à choisir. C'est la raison qui
+  emporte les deux autres : elle ne parle pas de confort mais de ce que le
+  produit pourra faire.
+
+Il reste donc, sous la zone de dépôt, **ouvrir une proposition** ou **ajouter à
+une proposition ouverte**.
+
+**L'étiquette « hors mémoire » reste**, et ce n'est pas une hésitation : les
+documents déposés directement avant ce jour existent, et rien de ce qu'ils
+disent n'est en mémoire. Le taire maintenant que la porte est fermée ferait
+mentir l'arborescence sur ce qui y est déjà. Elle ne se posera simplement plus
+sur rien de nouveau.
+
+### Le filtre « Fermés » : de quoi le diagnostiquer · *outil livré, cause non trouvée*
+
+Le compteur annonce trois sujets fermés, et la liste n'en montre aucun. Trois
+tours y ont été consacrés, et chaque maillon a été vérifié **isolément** :
+
+| maillon | vérifié |
+| --- | --- |
+| l'état du filtre | se met à jour, survit aux relectures — testé |
+| le bouton | porte son attribut, le gestionnaire l'atteint |
+| le compte | `getFlatSubjects` + le même prédicat que la liste |
+| la liste | `getFilteredFlatSubjects`, même prédicat, plus recherche et priorité |
+| la pagination | page ramenée à 1 au clic, taille par défaut à 25 |
+| le rendu d'une ligne | aucune sortie anticipée, toujours du HTML |
+
+Chacun est juste. Ensemble, ils rendent une liste vide — ce qui veut dire que ce
+qui manque n'est pas une idée de plus, mais **les nombres du moment**.
+
+Le bouton de copie, à côté du filtre, les relève **au clic** : les comptes, les
+longueurs à chaque étape, l'état de la pagination, les quatre cases où le filtre
+a vécu, et — la question qui tranche — ce que portent réellement comme statut les
+sujets que le compteur trouve fermés.
+
+Il reste après le diagnostic. Une liste qui ne montre pas ce qu'elle compte est
+le genre de défaut qui revient, et ce bouton permettra de dire en une fois ce
+qu'il a fallu trois tours à ne pas deviner.
+
+### Deux couleurs
+
+L'icône de fusion passait au gris de secours pendant l'attente, sur son carré
+vert — illisible, et lue comme un élément désactivé alors que c'est l'écran qui
+travaille. Elle reste blanche : le carré dit déjà que rien n'est tranché.
+
+Le sablier d'attente passe à l'ambre **sur cet écran seulement**. Une analyse en
+cours n'est ni un succès ni une panne : c'est un état intermédiaire, et c'est la
+couleur que Mdall emploie déjà pour « pas encore tranché ». Ailleurs — le
+copilote — il garde la couleur du texte : là, l'attente est la seule chose qui
+se passe, et la souligner ne dirait rien de plus.

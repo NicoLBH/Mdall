@@ -1,27 +1,24 @@
 /**
  * Ce qu'une ligne de l'arborescence dit du rapport d'un document à la mémoire.
  *
- * ## Pourquoi le dépôt direct existe, et pourquoi il doit se voir
+ * ## La porte est fermée, l'étiquette reste
  *
- * Deux usages légitimes, et ni l'un ni l'autre n'est un contournement :
+ * Le dépôt direct laissait entrer un fichier **sans qu'il passe par l'analyse**.
+ * Il a été retiré : ce qui entre passe désormais par une proposition, sans
+ * exception — la raison qui emporte les autres étant qu'un dépôt venu du dehors
+ * (un courriel, un dossier surveillé) ne peut pas choisir entre deux portes.
  *
- *  - **Mdall comme simple gestion documentaire.** Des équipes veulent ranger et
- *    partager des fichiers, sans rien de compliqué et sans consommer d'IA. Leur
- *    imposer une proposition par fichier serait leur imposer un outil qu'elles
- *    n'ont pas demandé.
- *  - **Échanger une pièce sans l'engager.** Un plan de travail, une version de
- *    lecture, une pièce qu'on transmet : elle doit circuler sans que rien n'en
- *    soit versé au projet.
+ * **Ce fichier reste malgré tout**, et ce n'est pas une hésitation : les
+ * documents déposés directement avant ce jour existent, et rien de ce qu'ils
+ * disent n'est en mémoire. Le taire maintenant que la porte est fermée ferait
+ * mentir l'arborescence sur ce qui y est déjà. L'étiquette ne se posera
+ * simplement plus sur rien de nouveau.
  *
- * Dans les deux cas, le document est **hors mémoire** : rien de ce qu'il dit
- * n'est entré, et rien ne s'appuie dessus. Ce n'est ni un défaut ni un retard —
- * c'est le choix qui a été fait au dépôt.
- *
- * ## Mais cela doit se lire
+ * ## Pourquoi elle doit se lire
  *
  * Un fichier qui ressemble à tous les autres dans l'arborescence laisse croire
- * qu'il compte comme les autres. Quelqu'un déposera son rapport de contrôle
- * directement, verra son nom dans la liste, et croira le projet au courant. Le
+ * qu'il compte comme les autres. Quelqu'un ouvrira un rapport déposé l'an
+ * dernier, verra son nom dans la liste, et croira le projet au courant. Le
  * silence de l'écran aurait fabriqué cette croyance.
  *
  * ## Ce que ce fichier refuse de dire
@@ -59,9 +56,9 @@ export const EXPLICATIONS = {
     "Ce document ne fait plus partie du corpus : il n'est plus lu par les analyses. "
     + "Il reste en base, et l'histoire dit quand il en est sorti.",
   [ETIQUETTE.HORS_MEMOIRE]:
-    "Ce document a été déposé directement, sans passer par une proposition : "
-    + "il se range, se lit et se partage, mais rien de ce qu'il dit n'est entré "
-    + "dans la mémoire du projet."
+    "Ce document a été déposé directement, avant que tout dépôt ne passe par une "
+    + "proposition : il se range, se lit et se partage, mais rien de ce qu'il dit "
+    + "n'est entré dans la mémoire du projet."
 };
 
 /**
