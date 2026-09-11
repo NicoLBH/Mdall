@@ -3324,6 +3324,13 @@ function renderUploadView() {
   return `
     <section class="project-simple-page project-simple-page--documents">
       <div class="documents-shell documents-shell--upload documents-shell--project-page" id="projectDocumentScroll">
+        ${
+          // **Où l'on dépose.** L'écran de dépôt n'avait pas de chemin : on y
+          // arrivait depuis un dossier sans plus rien pour le voir, ni pour en
+          // sortir. Le dernier morceau du fil est le dossier de destination —
+          // c'est exactement ce qu'il faut lire avant de lâcher un fichier.
+          renderDocumentsBreadcrumb()
+        }
         ${renderDocumentsActivityBanner()}
           <div class="documents-upload-layout">
             <section class="documents-dropzone ${isBusy}" id="documentsDropzone">
@@ -3960,8 +3967,12 @@ function bindDocumentsSplitActions(root) {
     addAction.addEventListener("ghaction:action", (event) => {
       const action = event.detail?.action || "";
       if (action === "add-documents") {
+        // `renderProjectDocuments` est le chemin de **l'arrivée sur l'onglet** :
+        // il repasse par `retourALAccueilDesFichiers`, qui oublie le dossier
+        // courant. Déposer depuis un dossier renvoyait donc à la racine, avant
+        // même d'avoir choisi un fichier — et le dépôt atterrissait à la racine.
         docsViewState.mode = "upload";
-        renderProjectDocuments(root);
+        renderProjectDocumentsContent(root);
       }
     });
   }
@@ -3971,8 +3982,9 @@ function bindDocumentsSplitActions(root) {
     menu.addEventListener("ghaction:action", (event) => {
       const action = event.detail?.action || "";
       if (action === "add-documents") {
+        // Même raison qu'au bouton : on dépose là où l'on est.
         docsViewState.mode = "upload";
-        renderProjectDocuments(root);
+        renderProjectDocumentsContent(root);
         return;
       }
       if (action === "documents-add-folder") { void creerUnDossier(root); return; }
@@ -4145,6 +4157,10 @@ function bindDocumentsView(root) {
     crumb.addEventListener("click", async () => {
       const folderId = crumb.getAttribute("data-breadcrumb-folder-id") || null;
       console.info("[documents-view] breadcrumb-click", { folderId: folderId || null });
+      // Sur l'écran de dépôt, le fil ne quitte pas l'écran : il **change la
+      // destination**. C'est ce qu'il y montre — le dernier morceau est le
+      // dossier où les fichiers vont atterrir —, et en sortir sans le dire
+      // ferait perdre les fichiers déjà choisis.
       await loadCurrentDirectory({ forceFolderId: folderId || null });
       renderProjectDocumentsContent(root);
     });

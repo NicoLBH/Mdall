@@ -42,6 +42,10 @@ import { messageQuiADemande } from "./fil.js";
 import { escapeHtml } from "../../../utils/escape-html.js";
 import { copierDansLePressePapiers, marquerCopie, ICONES } from "../../ui/bouton-copier.js";
 import { svgIcon } from "../../../ui/icons.js";
+// Le sablier vit désormais dans `views/ui/spinner.js` : la revue d'une
+// proposition attend de la même façon, et deux figures pour une même attente
+// feraient croire à deux choses différentes.
+import { renderAttenteSpinner } from "../../ui/spinner.js";
 import { sendAssistMessage } from "../../../services/copilote-service.js";
 import { brancherLaZoneDeDepot, trierLesFichiers } from "../../ui/zone-de-depot.js";
 import { rendreLeMarkdown } from "../../ui/markdown-leger.js";
@@ -1298,7 +1302,7 @@ function lignesDAttente(etapes = []) {
   const courante = etapes[etapes.length - 1];
   return etapes.slice(0, -1).map(ligneDEtape).join("") + `
     <li class="copilote-etape est-en-cours">
-      <span class="copilote-spinner" aria-hidden="true">${svgIcon("attachment-upload-spinner")}</span>
+      ${renderAttenteSpinner()}
       <span class="copilote-etape__quoi">${escapeHtml(courante?.texte || "Le copilote réfléchit")}</span>
       ${courante?.detail ? `<span class="copilote-etape__detail">${escapeHtml(courante.detail)}</span>` : ""}
     </li>

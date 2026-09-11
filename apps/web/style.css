@@ -6712,6 +6712,12 @@ body.route--project.documents-pdf-sticky-mode.documents-local-chrome-compact #ap
   display:grid;
   grid-template-columns:minmax(0, 1fr);
   gap:16px;
+  /* De quoi faire remonter le formulaire au-dessus du bord bas.
+     Le champ de description et les boutons tombaient sous la ligne de
+     flottaison sur un écran d'ordinateur portable, et il fallait lutter contre
+     le défilement pour atteindre « Valider ». Une réserve en bas coûte un blanc
+     et rend le geste possible d'un seul mouvement. */
+  padding-bottom:250px;
 }
 
 .documents-dropzone{
@@ -18240,8 +18246,20 @@ body.route--project .project-collaborator-create__body .project-collaborators-mo
 .memory-step__body{ grid-column:2; display:flex; flex-direction:column; gap:4px; min-width:0; }
 .memory-step__meta{ color:var(--muted); font-size:12px; }
 
-/* La note de dépôt : ce que la machine a compris du lot, signé comme tel. La
-   provenance est écrite sous le texte — une note qui ne dirait pas d'où elle
+/* La note de dépôt : ce que la machine a compris du lot, dans le message de
+   celui qui dépose. Elle n'a plus d'avatar à elle — ouvrir une proposition est
+   l'acte d'une personne, et Mdall n'a rien à dire dans le fil.
+
+   Un filet la sépare de la description écrite à la main, quand il y en a une :
+   deux textes de deux plumes différentes dans un même message doivent se
+   distinguer sans se disputer la parole. */
+.review-deposit-note__body{ margin-top:12px; }
+.gh-comment-body > :not(.review-deposit-note__body) + .review-deposit-note__body{
+  padding-top:12px;
+  border-top:1px solid var(--border2);
+}
+
+/* La provenance est écrite sous le texte — une note qui ne dirait pas d'où elle
    vient serait lue comme la parole de quelqu'un. */
 .deposit-note__source{
   margin:10px 0 0;

@@ -80,6 +80,7 @@ export function createProjectSubjectsView(deps) {
     sujetMatchesPriorityFilter,
     getAvailableSubjectPriorities,
     getSubjectsStatusCounts,
+    getSubjectsPaginationState,
     getProjectSubjectMilestones,
     getProjectSubjectLabels,
     getProjectSubjectDetail,
@@ -1125,6 +1126,11 @@ function getSubjectsTableDeps() {
     renderSubjectsPriorityHeadHtml,
     getCurrentSubjectsStatusFilter,
     getCurrentSubjectsPriorityFilter,
+    // Les comptes servent à dire **pourquoi** la liste est vide : « aucun sujet
+    // fermé, les 63 qu'il porte sont ouverts » répond sans qu'on ait à cliquer
+    // l'autre bouton.
+    getSubjectsStatusCounts,
+    getSubjectsPaginationState,
     getFilteredStandaloneSubjects,
     getFilteredFlatSubjects,
     getSituationSubjects,

@@ -3192,3 +3192,97 @@ qu'elle défait, et les deux restent lisibles côte à côte.
 ne se referment jamais tout seuls, la douzième réunion les répète sans qu'on
 sache lesquels sont vivants, et une variante continue de contredire en silence
 des décisions que le projet a prises.
+
+---
+
+## 40. Sept corrections d'écran, et un doute qu'on n'a pas su lever
+
+### Le dépôt quittait le dossier avant même d'avoir commencé
+
+Déposer depuis un dossier renvoyait à la racine. La cause n'était pas dans le
+dépôt : les deux boutons « Ajouter des documents » appelaient
+`renderProjectDocuments`, qui est le chemin de **l'arrivée sur l'onglet** — il
+repasse par `retourALAccueilDesFichiers`, qui oublie le dossier courant. On
+partait donc à la racine avant même d'avoir choisi un fichier, et le dépôt y
+atterrissait.
+
+L'écran de dépôt porte en outre le **fil d'Ariane**, qu'il n'avait pas : on y
+arrivait depuis un dossier sans plus rien pour voir où l'on était, ni pour en
+sortir. Son dernier morceau est le dossier de destination — c'est exactement ce
+qu'il faut lire avant de lâcher un fichier. Et le fil n'y quitte pas l'écran :
+il **change la destination**, parce qu'en sortir ferait perdre les fichiers déjà
+choisis.
+
+Une réserve de 250 pixels en bas, enfin : le champ de description et les boutons
+tombaient sous la ligne de flottaison sur un portable, et il fallait lutter
+contre le défilement pour atteindre « Valider ».
+
+### La page du tableau des sujets
+
+Ouvrir un sujet de la cinquième page et revenir par l'onglet ramenait à la
+première. La relecture des sujets conservait la sélection, les sujets dépliés et
+`page` — mais remplaçait l'objet de pagination en entier, `currentPage: 1`
+compris. La taille de page y passait aussi : c'est un réglage de l'écran, pas un
+résultat de la requête.
+
+### Une seule figure pour une seule attente
+
+Trois écrans attendent quelque chose : le copilote pendant qu'il réfléchit, la
+revue d'une proposition pendant que l'analyse tourne, la ligne des écritures
+après une fusion. Trois attentes de même nature, et trois figures différentes —
+le sablier du copilote d'un côté, une roue à deux flèches de l'autre.
+
+Le sablier passe dans `views/ui/spinner.js` et les trois s'en servent. Il n'est
+pas `renderSpinnerHtml` : celui-là est l'anneau des chargements de tableaux,
+gros et centré dans un vide ; celui-ci se pose **en ligne**, à côté d'un mot, et
+c'est ce qui le rend utilisable dans un bouton.
+
+Le bouton d'état **dit aussi ce qu'on attend**. Il ne portait que la roue, au
+motif qu'écrire « Analyse » à côté aurait dit deux fois la même chose. C'était
+faux : une roue dit « ça tourne », elle ne dit pas *quoi* — et depuis que la
+lecture d'un compte rendu passe par le modèle, elle tourne assez longtemps pour
+qu'on croie l'écran figé.
+
+### Qui parle dans le fil d'une proposition
+
+L'écran montrait deux messages : un premier, de l'utilisateur, annonçant
+« aucune description n'a été donnée » ; un second, de Mdall, portant la note de
+dépôt — c'est-à-dire le texte que le premier prétendait absent. Deux voix pour
+un seul acte, et la première muette.
+
+Mdall **rédige** la note ; il ne la **dit** pas. Ouvrir une proposition est un
+acte, et c'est une personne qui le pose : la note est ce que cette personne
+dépose et soumet, et elle la signe. La note devient donc le corps du premier
+message, sous la description quand il y en a une, séparée par un filet.
+
+Ce qui reste dit, et doit le rester : **que le texte a été calculé, et quand**.
+C'est la ligne de provenance, à l'intérieur du message. Le taire serait la seule
+chose vraiment malhonnête ici.
+
+### Le filtre « Fermés », troisième tentative · *non résolu*
+
+**Ce qui a été fait, et qui est juste.** Le filtre vivait dans quatre cases
+entretenues par des copies dans les deux sens, et l'ancienne case
+`filters.status` était partagée avec le filtre des Situations. Il n'a plus qu'un
+foyer, et un test lit deux fois de suite — c'est au second appel que le choix
+disparaissait.
+
+**Ce qui n'a pas été trouvé.** L'écran de l'utilisateur ne le suit toujours pas.
+Les trois maillons ont été vérifiés un par un et sont justes isolément : l'état
+se met à jour et survit aux relectures, le bouton porte bien son attribut, le
+tableau applique bien le filtre et compte de la même façon qu'il liste. Sans
+pouvoir ouvrir l'application, le dernier maillon reste hors de portée.
+
+**Ce qui a été fait à la place, et qui vaut mieux qu'une troisième réparation à
+l'aveugle.** Une liste vide dit désormais **pourquoi** elle est vide, et surtout
+combien il y a de sujets de l'autre côté :
+
+> **Aucun sujet fermé** — Aucun sujet de ce projet n'a encore été fermé. Les 63
+> sujets qu'il porte sont ouverts.
+
+C'est la règle 5 appliquée à un tableau : ne pas savoir pourquoi c'est vide
+n'autorise pas l'écran à se taire. Et c'est ce qui tranche entre les deux
+lectures possibles — un projet sans sujet fermé, ou un filtre en panne — sans
+avoir à cliquer l'autre bouton. Si la phrase annonce un compte non nul et que
+rien ne s'affiche, le défaut est dans le rendu ; si elle annonce zéro, le filtre
+n'a jamais été en cause.

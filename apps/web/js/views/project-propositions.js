@@ -79,6 +79,7 @@ import {
   resumeDuTableau,
   tableauAvantApres
 } from "../services/proposition-avant-apres.js";
+import { renderAttenteSpinner } from "./ui/spinner.js";
 import { descriptionDuPoint, phraseDuDeja } from "../services/sujets-du-cr.js";
 import { depotDeLaProposition, resumeDuDepot } from "../services/proposition-depot.js";
 import { ETAT, arbreDesReperes, comparerDesReperes, lignesNumerotees, resumeDuDiff } from "../services/depot-reperes.js";
@@ -425,15 +426,23 @@ function renderMergeStateButton(proposition, review) {
   // dire ni acte à proposer.
   if (!proposition || proposition.status !== PROPOSITION.OPEN) return "";
 
-  // Pendant l'analyse : le spinner seul. Écrire « Analyse » à côté d'une roue
-  // qui tourne dit deux fois la même chose, et fait sauter le bouton de largeur
-  // quand elle s'arrête.
+  // Pendant l'analyse : le sablier **et** ce qu'on attend.
+  //
+  // Le bouton ne portait que la roue, au motif qu'écrire « Analyse » à côté
+  // aurait dit deux fois la même chose. Ce n'était pas vrai : une roue dit
+  // « ça tourne », elle ne dit pas *quoi*. Et sur un compte rendu, où la
+  // lecture par le modèle prend maintenant plusieurs dizaines de secondes, une
+  // roue muette laisse croire à un écran figé.
+  //
+  // C'est le sablier du copilote, celui qu'on regarde déjà tourner sous ses
+  // étapes : la même attente doit avoir la même figure.
   if (review?.running) {
+    const quoi = String(review.step || "").trim() || "Analyse en cours";
     return `
       <button type="button" class="gh-btn gh-btn--sm merge-state merge-state--running" disabled
-        aria-label="Analyse en cours"
         title="${escapeHtml(review.step || "Lecture des livrables du projet et de ceux de cette proposition.")}">
-        <span class="merge-state__spin">${svgIcon("sync", { className: "octicon" })}</span>
+        ${renderAttenteSpinner()}
+        <span>${escapeHtml(quoi)}</span>
       </button>
     `;
   }
@@ -1312,32 +1321,47 @@ function describeNoteFailure(code) {
 }
 
 /**
- * La note de dépôt, en tête du fil.
+ * La note de dépôt — **le corps du premier message**, pas un message de plus.
+ *
+ * ## Qui parle, et qui signe
  *
  * Une pull request porte un texte écrit par celui qui l'ouvre : il sait ce
  * qu'il a changé, il vient de l'écrire. Celui qui dépose dix-sept PDF ne sait
- * pas ce qu'ils contiennent — c'est la machine qui les a lus. Le corps du
- * message revient donc à la machine, et il est signé comme tel : un message de
- * Mdall, à sa place dans le fil, juste après celui qui a ouvert.
+ * pas ce qu'ils contiennent — c'est la machine qui les a lus. La note est donc
+ * **rédigée** par Mdall.
  *
- * Elle se place là plutôt qu'à sa date : une note décrit un lot, et sa place
- * est là où le lot entre. Sa date, elle, est dite — c'est ce qui permet de
- * savoir qu'elle a été réécrite après un second dépôt.
+ * Elle n'est pas pour autant **dite** par Mdall. Ouvrir une proposition est un
+ * acte, et c'est une personne qui le pose : la note est ce que cette personne
+ * dépose et soumet, et elle la signe. Mdall tenait la plume, il n'a rien à dire
+ * dans le fil.
+ *
+ * L'écran en faisait un second message, avec un second avatar, sous un premier
+ * message vide qui disait « aucune description n'a été donnée » — alors qu'une
+ * description avait été écrite, juste en dessous, par quelqu'un d'autre. Deux
+ * voix pour un seul acte, et la première muette.
+ *
+ * **Ce qui reste dit, et doit le rester** : que le texte a été calculé, et
+ * quand. C'est la ligne de provenance, à l'intérieur du message. Un lecteur
+ * doit pouvoir savoir qu'il ne lit pas une phrase écrite à la main — le taire
+ * serait la seule chose vraiment malhonnête ici.
  */
-function renderDepositNote(review) {
+function renderDepositNoteBody(review) {
   const etat = review.noteState ?? "idle";
   const note = review.note ?? null;
   if (!note && etat === "idle") return "";
 
-  const identite = getAuthorIdentity({ author: "system", agent: "system" });
-
   const corps = note
     ? `${noteTextHtml(note.markdown)}
        <p class="deposit-note__source">${escapeHtml(
-         `Rédigée à partir des faits relevés par l'analyse${note.model ? ` (${note.model})` : ""}. Elle ne dit rien qui n'ait été calculé.`
+         [
+           "Note rédigée par Mdall",
+           note.created_at ? `le ${formatDate(note.created_at)}` : "",
+           note.model ? `(${note.model})` : ""
+         ].filter(Boolean).join(" ")
+         + " à partir des faits relevés par l'analyse. Elle ne dit rien qui n'ait été calculé."
        )}</p>`
     : etat === "writing"
-      ? `<p class="review-empty-note">Mdall lit le lot et rédige sa note…</p>`
+      ? `<p class="review-empty-note">Mdall lit le lot et rédige la note du dépôt…</p>`
       : `<p class="review-comment__notice">${escapeHtml(describeNoteFailure(review.noteError))}</p>`;
 
   // Une note ratée se redemande : c'est un appel qui a échoué, pas un état du
@@ -1347,18 +1371,7 @@ function renderDepositNote(review) {
       ? `<div class="deposit-note__retry"><button type="button" class="gh-btn gh-btn--sm" data-note-retry>Réessayer</button></div>`
       : "";
 
-  return renderMessageThreadComment({
-    idx: 0,
-    author: identite.displayName,
-    tsHtml: `<span class="gh-comment-ts">${escapeHtml(
-      note?.created_at ? `a rédigé la note de dépôt le ${formatDate(note.created_at)}` : "rédige la note de dépôt"
-    )}</span>`,
-    bodyHtml: `${corps}${reprise}`,
-    avatarHtml: identite.avatarHtml,
-    avatarType: identite.avatarType,
-    avatarInitial: identite.avatarInitial,
-    className: "review-deposit-note"
-  });
+  return `<div class="review-deposit-note__body">${corps}${reprise}</div>`;
 }
 
 /** Le corps d'un message : du Markdown, comme dans un sujet. */
@@ -1622,8 +1635,16 @@ function renderConversation(proposition, review) {
   const ouverture = histoire.find((event) => event.kind === STORY.OPENED);
   const identite = identityOf(ouverture ?? {});
 
-  const description = proposition.description
-    ? humanTextHtml(proposition.description)
+  // **Un seul premier message.** La note de dépôt en fait partie : elle est ce
+  // que cette personne dépose, quand bien même Mdall a tenu la plume.
+  const noteDuDepot = renderDepositNoteBody(review);
+  const ecrite = proposition.description ? humanTextHtml(proposition.description) : "";
+
+  // Le mot « aucune description » ne se dit que lorsqu'il n'y a vraiment rien à
+  // lire. Il s'affichait au-dessus de la note, qui disait pourtant tout : un
+  // message vide suivi du texte qu'il prétendait absent.
+  const description = ecrite || noteDuDepot
+    ? `${ecrite}${noteDuDepot}`
     : `<p class="review-empty-note">Aucune description n'a été donnée. La proposition parle alors d'elle-même : ce qu'elle dépose et ce qu'on en décide.</p>`;
 
   const premier = renderMessageThreadComment({
@@ -1661,7 +1682,6 @@ function renderConversation(proposition, review) {
       })
       .join("");
 
-  const note = renderDepositNote(review);
   const suite = raconter(avant.filter((event) => event.kind !== STORY.OPENED), 1);
   const depuis = raconter(apres, avant.length);
 
@@ -1672,7 +1692,7 @@ function renderConversation(proposition, review) {
   return `
     <div class="review-thread-host">
       ${renderMessageThread({
-        itemsHtml: `${premier}${note}${suite}`,
+        itemsHtml: `${premier}${suite}`,
         // Quand un second fil suit, la ligne du premier ne s'arrête plus à son
         // dernier acte : elle traverse le trait et rejoint ce qui se dit depuis.
         className: `review-thread review-thread--before${depuis ? " review-thread--continues" : ""}`
@@ -1773,7 +1793,7 @@ function renderMergeBox(proposition, review) {
           <div class="merge-box__panel">
             <div class="merge-box__body">
               <div class="merge-box__row merge-box__row--lead">
-                <span class="merge-box__icon merge-box__icon--plain">${svgIcon("sync", { className: "octicon" })}</span>
+                <span class="merge-box__icon merge-box__icon--plain">${renderAttenteSpinner()}</span>
                 <div>
                   <b>L'analyse est en cours</b>
                   <span class="merge-box__note">${escapeHtml(
@@ -3333,7 +3353,7 @@ function renderReview(root) {
   // dise si l'on avait cliqué.
   const suite = review.finishing
     ? `<div class="review-finishing">
-         <span class="review-finishing__spin">${svgIcon("sync", { className: "octicon" })}</span>
+         ${renderAttenteSpinner()}
          <span>${escapeHtml(review.step || "Écritures en cours…")}</span>
        </div>`
     : "";

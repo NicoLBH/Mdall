@@ -1670,6 +1670,20 @@ export async function loadFlatSubjectsForCurrentProject(options = {}) {
   const previousPage = Number.isFinite(Number(store.projectSubjectsView?.page))
     ? Math.max(1, Number(store.projectSubjectsView.page))
     : 1;
+  // **La page du tableau, et elle se garde comme le reste.**
+  //
+  // Cette relecture est aussi celle que déclenche un retour à l'onglet Sujets.
+  // Elle conservait la sélection, les sujets dépliés et `page`, mais remplaçait
+  // l'objet de pagination en entier — donc ramenait la liste à la première
+  // page. Ouvrir un sujet de la cinquième page et revenir faisait chercher à
+  // nouveau où l'on en était.
+  const previousPagination = store.projectSubjectsView?.pagination;
+  const previousCurrentPage = Number.isFinite(Number(previousPagination?.currentPage))
+    ? Math.max(1, Number(previousPagination.currentPage))
+    : 1;
+  const previousPageSize = Number.isFinite(Number(previousPagination?.pageSize)) && Number(previousPagination.pageSize) > 0
+    ? Number(previousPagination.pageSize)
+    : null;
 
   try {
     const mappedBackendProjectId = normalizeUuid(getMappedBackendProjectId());
@@ -1887,8 +1901,10 @@ export async function loadFlatSubjectsForCurrentProject(options = {}) {
     store.projectSubjectsView.page = previousPage;
     store.projectSubjectsView.pagination = {
       mode: "full",
-      pageSize: null,
-      currentPage: 1,
+      // La taille de page est un réglage de l'écran, pas un résultat de la
+      // requête : la relecture n'a aucune raison de l'oublier.
+      pageSize: previousPageSize,
+      currentPage: previousCurrentPage,
       totalItems: result.pagination?.totalItems || (Array.isArray(result.subjects) ? result.subjects.length : 0),
       loadedItems: result.pagination?.loadedItems || (Array.isArray(result.subjects) ? result.subjects.length : 0),
       hasNextPage: false,
