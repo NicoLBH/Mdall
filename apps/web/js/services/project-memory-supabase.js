@@ -267,7 +267,21 @@ export async function rememberProposition({ proposition, items = [] } = {}) {
     memoire: existantes ?? [], ecrites, projectId: proposition.project_id, propositionId: proposition.id
   });
 
-  return { written: ecrites.length, superseded: liens.length, flagged: suspectes, lectures };
+  // Les avis qui viennent d'entrer et qui **portaient** une liaison deviennent
+  // des engagements : quelqu'un vient de signer la proposition qui les
+  // proposait, et cette signature est la confirmation. Il n'y a pas de second
+  // geste (`docs/fondamentaux.md`, règle 12).
+  //
+  // Isolé et silencieux en cas d'échec, comme les lectures : la mémoire est
+  // versée, et manquer un engagement ne doit pas défaire la fusion. Il se
+  // rattrape en reversant l'avis.
+  const engagements = await enregistrerLesEngagements({
+    ecrites, par: proposition.merged_by, le: quand
+  });
+
+  return {
+    written: ecrites.length, superseded: liens.length, flagged: suspectes, lectures, engagements
+  };
 }
 
 /** Les lectures d'un versement, sans jamais faire échouer le versement. */
@@ -275,6 +289,33 @@ async function enregistrerLesLectures(quoi) {
   try {
     const { enregistrerLeVersement } = await import("./memoire-applications-supabase.js");
     return await enregistrerLeVersement(quoi);
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Écrit les engagements que cette fusion vient de confirmer.
+ *
+ * Le calcul est pur et vit ailleurs (`services/avis-engagement.js`) ; ici on ne
+ * fait que l'aller-retour. Un acte qui n'entre pas n'en empêche pas un autre :
+ * on les écrit un par un, et l'on compte ce qui est passé.
+ */
+async function enregistrerLesEngagements({ ecrites = [], par = "", le = "" } = {}) {
+  try {
+    const [{ engagementsDeLaFusion }, { recordAct }] = await Promise.all([
+      import("./avis-engagement.js"),
+      import("./memoire-actes-supabase.js")
+    ]);
+
+    const actes = engagementsDeLaFusion({ ecrites, par, le });
+    if (!actes.length) return 0;
+
+    let ecrits = 0;
+    for (const acte of actes) {
+      if (await recordAct(acte)) ecrits += 1;
+    }
+    return ecrits;
   } catch {
     return 0;
   }

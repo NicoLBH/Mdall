@@ -351,7 +351,25 @@ export function itemsDeProposition(affirmations = []) {
           zoneKey: affirmation.zoneDefinition === true
             ? normalizeZoneKey(affirmation.zoneKey ?? affirmation.sujet ?? "")
             : null,
-          retiree: affirmation.retiree === true ? true : null
+          retiree: affirmation.retiree === true ? true : null,
+
+          // ── Ce qu'un avis de bureau de contrôle porte en plus ──────────────
+          //
+          // Quatre champs déclarés, comme le reste : ce qu'on ne déclare pas ne
+          // voyage pas, et ces quatre-là ne se déduisent d'aucun autre.
+          //
+          // `emisPar` n'est **pas** `decided_by`. L'un est l'organisme qui
+          // engage sa responsabilité, l'autre l'utilisateur Mdall qui a signé la
+          // proposition. Les confondre ferait dire à la mémoire que celui qui a
+          // cliqué a rendu l'avis.
+          //
+          // `porteSur` est la valeur que l'avis a examinée — **cette version-là**.
+          // Il devient un engagement à la fusion, et pas avant : c'est la
+          // signature qui confirme. Voir `services/avis-engagement.js`.
+          emisPar: texte(affirmation.emisPar) || null,
+          porteSur: texte(affirmation.porteSur) || null,
+          documentId: texte(affirmation.documentId) || null,
+          page: Number.isFinite(Number(affirmation.page)) ? Number(affirmation.page) : null
         }
       };
     }));
