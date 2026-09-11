@@ -2709,16 +2709,46 @@ filtrer par nature, par domaine et par état ; il lui manque **par variable**.
 C'est peu de code et c'est le bon endroit — sous les données de base, comme
 demandé.
 
-### Le minimum : `variables-du-projet.ref` le dit déjà, mais à moitié
+### `variables-du-projet.ref` le dit maintenant · *fait*
 
-Le fichier déclare les variables du projet. Il ne dit pas, pour chacune, si le
-projet porte à son sujet un constat, une hypothèse, une décision ou une
-contrainte — alors que c'est exactement ce qu'on vient y chercher quand on
-l'ouvre. Une colonne de plus par variable, et l'export dit d'un coup ce qui
-demande aujourd'hui quinze écrans.
+Chaque variable porte un champ de plus :
 
-### Dans quel ordre
+```
+const Zone de neige = {
+   type: "texte",
+   description: "…",
+   utilisation: "…",
+   ce que le projet en dit: "1 contrainte · 2 constats",
+   déjà utilisé dans: [ … ]
+};
+```
 
-Le fichier d'abord : il est lu par des humains **et** par le copilote, il coûte
-le moins, et il rend la réponse exportable. Le filtre ensuite, quand on saura ce
-qu'on y cherche vraiment.
+**Par nature, jamais en un seul nombre.** Trois constats et une contrainte ne
+sont pas quatre de la même chose : une contrainte tranchée par un texte pèse
+autrement qu'une hypothèse que personne n'a confirmée. Et l'ordre suit ce poids
+— c'est la plus lourde qu'on veut lire d'abord.
+
+**Ce qui a été remplacé ne compte pas** : ce que le projet *dit* est ce qu'il
+tient aujourd'hui.
+
+**« Rien » est la réponse la plus utile**, et c'est pour elle que le champ
+existe :
+
+```
+   ce que le projet en dit: "rien — aucune affirmation du projet ne porte ce nom",
+```
+
+Un nom qu'une règle cite et qu'aucune affirmation ne porte est un trou du
+raisonnement : la règle s'appuie sur ce que personne n'a versé. Le taire
+reviendrait à ne montrer que ce qui va bien (règle 5).
+
+Le champ est **absent** — et non vide — quand la carte des natures n'a pas été
+demandée : le fichier ne prétend pas répondre à une question qu'on ne lui a pas
+posée.
+
+### Reste le filtre
+
+Le fichier était le premier à faire : lu par des humains **et** par le copilote,
+il coûte le moins et rend la réponse exportable. Le filtre par variable dans la
+Mémoire vient ensuite, quand on saura, en s'étant servi du fichier, ce qu'on y
+cherche vraiment.

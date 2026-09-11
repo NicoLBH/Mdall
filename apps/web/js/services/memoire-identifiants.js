@@ -38,6 +38,7 @@
  */
 
 import { couperLUnite, estMesuree } from "./memoire-en-texte.js";
+import { NATURE, classifyAssertion, natureLabel } from "./assertion-taxonomy.js";
 
 const texte = (valeur) => String(valeur ?? "").trim();
 
@@ -375,11 +376,12 @@ export function variablesDeLaMemoire(fichiers = [], lireLesLignes = () => []) {
  *
  * @returns {{nom: string, type: string, unite: string, devine: boolean}[]}
  */
-export function definitionsDesVariables(variables = [], explications = null) {
+export function definitionsDesVariables(variables = [], explications = null, natures = null) {
   return (Array.isArray(variables) ? variables : [])
     .map((variable) => {
       const { type, unite } = typeDeLaValeur(variable?.valeur);
       const dit = explications instanceof Map ? explications.get(texte(variable?.cle)) : null;
+      const porte = natures instanceof Map ? natures.get(texte(variable?.cle)) : null;
       // Une forme déclarée l'emporte sur un type deviné : « 2 lignes » se lit
       // comme un texte, alors que la variable **est** un tableau — et c'est le
       // genre de type faux qui fait recréer un nom voisin.
@@ -397,10 +399,97 @@ export function definitionsDesVariables(variables = [], explications = null) {
         // valeur : elle se verse avec l'affirmation, et se relit ici.
         structure: Array.isArray(dit?.structure) && dit.structure.length ? dit.structure : null,
         usages: Array.isArray(variable?.usages) ? variable.usages : [],
+        /**
+         * Ce que le projet **porte** à son sujet, par nature.
+         *
+         * `null` quand on ne l'a pas demandé — et `""` n'aurait pas voulu dire
+         * la même chose : ne pas savoir n'est pas savoir qu'il n'y a rien
+         * (règle 5). Les deux se distinguent, et l'écriture s'en sert.
+         */
+        ceQueLeProjetEnDit: natures instanceof Map ? phraseDesNatures(porte) : null,
         devine: true
       };
     })
     .filter((definition) => definition.nom);
+}
+
+/**
+ * Ce que le projet porte de chaque variable, par nature.
+ *
+ * ## La question à laquelle rien ne répondait
+ *
+ * On ouvre ce fichier pour décider si l'on réutilise un nom ou si l'on en crée
+ * un autre. Il disait le type, l'unité, ce que le nom désigne, où il sert — et
+ * pas **ce que le projet en dit**. Or c'est souvent la question : ce nom
+ * porte-t-il une contrainte tranchée par un texte, un constat daté, une
+ * hypothèse que personne n'a confirmée, ou rien du tout ?
+ *
+ * ## Rien du tout est la réponse la plus utile
+ *
+ * Un nom qu'une règle cite et qu'aucune affirmation ne porte est un trou du
+ * raisonnement : la règle s'appuie sur ce que personne n'a versé. C'est
+ * exactement ce qu'on vient chercher, et le taire reviendrait à ne montrer que
+ * ce qui va bien (règle 5).
+ *
+ * ## On compte des affirmations, pas des versements
+ *
+ * Les lignes remplacées ne comptent pas : ce que le projet **dit** est ce qu'il
+ * tient aujourd'hui. Et l'on compte par nature, jamais en un seul nombre — trois
+ * constats et une contrainte ne sont pas quatre de la même chose.
+ *
+ * @param {{lignes: object[]}[]} fichiers les fichiers de la mémoire
+ * @returns {Map<string, Map<string, number>>} par clé de sujet, le compte par nature
+ */
+export function naturesDesVariables(fichiers = []) {
+  const parVariable = new Map();
+
+  for (const fichier of Array.isArray(fichiers) ? fichiers : []) {
+    for (const assertion of fichier?.lignes ?? []) {
+      if (texte(assertion?.superseded_by)) continue;
+
+      const sujet = texte(assertion?.payload?.subject) || texte(assertion?.subject_key);
+      const cle = cleDuSujet(sujet);
+      if (!cle) continue;
+
+      const { nature } = classifyAssertion(assertion);
+      const connue = texte(nature) || NATURE.HYPOTHESE;
+
+      if (!parVariable.has(cle)) parVariable.set(cle, new Map());
+      const comptes = parVariable.get(cle);
+      comptes.set(connue, (comptes.get(connue) ?? 0) + 1);
+    }
+  }
+
+  return parVariable;
+}
+
+/**
+ * Ce que le projet porte d'une variable, en une phrase.
+ *
+ * De la plus lourde à la plus légère : une contrainte tranchée par un texte
+ * pèse autrement qu'une hypothèse que personne n'a confirmée, et c'est la
+ * première qu'on veut lire.
+ *
+ * Vide quand la carte n'a pas été demandée ; « rien » quand elle l'a été et
+ * qu'il n'y a rien. Les deux ne se disent pas pareil.
+ */
+const ORDRE_DES_NATURES = [NATURE.CONTRAINTE, NATURE.DECISION, NATURE.CONSTAT, NATURE.HYPOTHESE];
+
+export function phraseDesNatures(comptes = null) {
+  if (!(comptes instanceof Map) || !comptes.size) {
+    return "rien — aucune affirmation du projet ne porte ce nom";
+  }
+
+  const connues = ORDRE_DES_NATURES.filter((nature) => comptes.has(nature));
+  const autres = [...comptes.keys()].filter((nature) => !ORDRE_DES_NATURES.includes(nature));
+
+  return [...connues, ...autres]
+    .map((nature) => {
+      const combien = comptes.get(nature) ?? 0;
+      const mot = natureLabel(nature).toLowerCase();
+      return `${combien} ${combien > 1 ? `${mot}s` : mot}`;
+    })
+    .join(" · ");
 }
 
 /**

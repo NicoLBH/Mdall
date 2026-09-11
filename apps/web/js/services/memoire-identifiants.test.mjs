@@ -3,9 +3,10 @@ import assert from "node:assert/strict";
 
 import {
   cleDuSujet, sujetsDeclares, roleDesJetons, resolutionDuSujet,
-  renvoisSansDeclaration, variablesDeLaMemoire, ROLE, RESOLUTION, nomsDeclaresDeuxFois
+  renvoisSansDeclaration, variablesDeLaMemoire, ROLE, RESOLUTION, nomsDeclaresDeuxFois,
+  naturesDesVariables, phraseDesNatures, definitionsDesVariables
 } from "./memoire-identifiants.js";
-import { blocDeRegle, blocDAffirmation, OPERATEUR, PROVENANCE } from "./memoire-en-texte.js";
+import { blocDeRegle, blocDAffirmation, blocDeVariable, OPERATEUR, PROVENANCE } from "./memoire-en-texte.js";
 
 const assertion = (sujet, extra = {}) => ({
   id: `a-${sujet}`, subject_key: sujet, status: "assumed", superseded_by: null,
@@ -154,4 +155,85 @@ test("un nom déclaré une seule fois ne se signale pas", () => {
     () => [{ jetons: [{ type: "sujet", texte: "Altitude du site" }, { type: "valeur", texte: "13" }] }]
   );
   assert.deepEqual(nomsDeclaresDeuxFois(variables), []);
+});
+
+/* ── Ce que le projet dit d'une variable ─────────────────────────────────── */
+
+/** Un fichier de la mémoire, tel que `fichiersDeLaMemoire` le rend. */
+const fichierAvec = (lignes) => ({ fichier: "memoire/structure.ctr", lignes });
+
+const porte = (sujet, nature, extra = {}) => ({
+  id: `a-${sujet}-${nature}`, subject_key: sujet, status: "assumed", superseded_by: null,
+  nature, payload: { subject: sujet, value: "x" }, ...extra
+});
+
+/**
+ * La question à laquelle le fichier ne répondait pas. On l'ouvre pour décider
+ * si l'on réutilise un nom ou si l'on en crée un autre — et c'est souvent
+ * celle-là : ce nom porte-t-il une contrainte, un constat, une hypothèse, ou
+ * rien ?
+ */
+test("une variable dit ce que le projet porte à son sujet, par nature", () => {
+  const natures = naturesDesVariables([fichierAvec([
+    porte("Zone de neige", "contrainte"),
+    porte("Zone de neige", "constat", { id: "a-2" }),
+    porte("Zone de neige", "constat", { id: "a-3" })
+  ])]);
+
+  assert.equal(phraseDesNatures(natures.get(cleDuSujet("Zone de neige"))), "1 contrainte · 2 constats");
+});
+
+test("la plus lourde se lit en premier", () => {
+  // Une contrainte tranchée par un texte pèse autrement qu'une hypothèse que
+  // personne n'a confirmée, et c'est la première qu'on veut lire.
+  const natures = naturesDesVariables([fichierAvec([
+    porte("Altitude du site", "hypothese"),
+    porte("Altitude du site", "contrainte", { id: "a-2" })
+  ])]);
+
+  assert.match(phraseDesNatures(natures.get(cleDuSujet("Altitude du site"))), /^1 contrainte/);
+});
+
+/**
+ * La réponse la plus utile du fichier. Un nom qu'une règle cite et qu'aucune
+ * affirmation ne porte est un trou du raisonnement : la règle s'appuie sur ce
+ * que personne n'a versé.
+ */
+test("un nom que rien ne porte le dit, et c'est ce qu'on vient chercher", () => {
+  assert.match(phraseDesNatures(naturesDesVariables([]).get("x")), /aucune affirmation/);
+  assert.match(phraseDesNatures(null), /aucune affirmation/);
+});
+
+test("ce qui a été remplacé ne compte plus", () => {
+  // Ce que le projet **dit** est ce qu'il tient aujourd'hui.
+  const natures = naturesDesVariables([fichierAvec([
+    porte("Zone de vent", "contrainte", { superseded_by: "a-neuve" })
+  ])]);
+
+  assert.equal(natures.has(cleDuSujet("Zone de vent")), false);
+});
+
+/* ── Ce que la définition en fait ────────────────────────────────────────── */
+
+test("la définition porte la phrase, et la distingue de « on n'a pas demandé »", () => {
+  // `null` et « rien » ne disent pas la même chose : ne pas savoir n'est pas
+  // savoir qu'il n'y a rien (règle 5).
+  const variables = [{ cle: cleDuSujet("Zone de neige"), nom: "Zone de neige", valeur: "A1" }];
+
+  const sansCarte = definitionsDesVariables(variables, null, null);
+  assert.equal(sansCarte[0].ceQueLeProjetEnDit, null);
+
+  const avecCarte = definitionsDesVariables(variables, null, naturesDesVariables([]));
+  assert.match(avecCarte[0].ceQueLeProjetEnDit, /aucune affirmation/);
+});
+
+test("le bloc écrit le champ, et l'omet quand on ne l'a pas demandé", () => {
+  const avec = blocDeVariable({ nom: "Zone de neige", ceQueLeProjetEnDit: "1 contrainte · 2 constats" })
+    .flat().map((jeton) => jeton?.texte ?? "").join("");
+  assert.match(avec, /ce que le projet en dit/);
+  assert.match(avec, /1 contrainte · 2 constats/);
+
+  const sans = blocDeVariable({ nom: "Zone de neige" })
+    .flat().map((jeton) => jeton?.texte ?? "").join("");
+  assert.doesNotMatch(sans, /ce que le projet en dit/);
 });
