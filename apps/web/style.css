@@ -20236,10 +20236,12 @@ body.proposition-merge-open{ overflow:hidden; }
    sa règle de style — est parti avec. */
 .variante-ecran{ display:flex; flex-direction:column; gap:16px; }
 
-/* Deux colonnes tant que l'écran les porte : la question et la réponse doivent
-   se lire ensemble — c'est ce que les fenêtres empilées interdisaient. */
-.variante-ecran__rang--haut{ display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:start; }
-@media (max-width:900px){ .variante-ecran__rang--haut{ grid-template-columns:1fr; } }
+/* La question et la réponse **sur une ligne**, et non dans deux colonnes de
+   moitié chacune : la liste des valeurs et la saisie n'ont pas la même largeur
+   naturelle, et deux colonnes égales serraient l'une en laissant l'autre vide.
+   Elles se placent donc côte à côte et prennent ce dont elles ont besoin. */
+.variante-ecran__rang--haut{ display:flex; flex-wrap:wrap; gap:16px; align-items:flex-start; }
+.variante-ecran__rang--haut > *{ flex:1 1 320px; min-width:0; }
 
 .variante-colonne{
   display:flex; flex-direction:column; gap:10px;

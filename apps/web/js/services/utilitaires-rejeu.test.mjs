@@ -681,3 +681,50 @@ test("déplacer le point rejoue l'aléa argileux, et lui seul", () => {
     ["Retrait-gonflement des argiles", { latitude: 45.9, longitude: 6.13 }, ""]
   ]);
 });
+
+/* ── Un sujet, une reprise ───────────────────────────────────────────────── */
+
+/**
+ * Le doublon qu'on voyait à l'écran, et qui vient d'un projet réel.
+ *
+ * Une même valeur y porte deux lignes : celle versée par une proposition et une
+ * ancienne contrainte de site écrite directement par un écran, du temps où cela
+ * se faisait (`docs/a-traiter-plus-tard.md`, § 24). Les deux déclarent lire la
+ * localisation, donc les deux se rejouaient, et la variante annonçait deux fois
+ * « Zone de neige : A1 → E ».
+ *
+ * Deux lignes du même sujet dans la même portée ne sont pas deux faits : c'est
+ * un fait et son vestige. On rejoue la plus récente.
+ */
+test("deux lignes du même sujet ne se rejouent qu'une fois", () => {
+  const ancienne = {
+    ...neige("A1"), id: "snow-ancienne", subject_key: "site:snow_zone",
+    decided_at: "2026-01-02T09:00:00Z"
+  };
+  const recente = {
+    ...neige("A1"), id: "snow-recente", subject_key: "zone-de-neige",
+    decided_at: "2026-06-30T09:00:00Z"
+  };
+
+  const reprises = contraintesAReprendre({
+    enVigueur: [dit("ddb-alt", "Altitude du site", "13 m"), ancienne, recente],
+    substitutions: new Map([["ddb-alt", "1035 m"]])
+  });
+
+  assert.equal(reprises.length, 1, "une seule reprise pour « Zone de neige »");
+  assert.equal(reprises[0].assertion.id, "snow-recente", "et c'est la plus récente");
+});
+
+test("le même sujet dans deux portées se rejoue deux fois", () => {
+  // Ce n'est pas un doublon : la zone de neige du bâtiment A et celle du
+  // bâtiment B sont deux valeurs, et les fondre en perdrait une.
+  const batimentA = { ...neige("A1"), id: "snow-a", zones: ["batiment-a"] };
+  const batimentB = { ...neige("A1"), id: "snow-b", zones: ["batiment-b"] };
+
+  const reprises = contraintesAReprendre({
+    enVigueur: [dit("ddb-alt", "Altitude du site", "13 m"), batimentA, batimentB],
+    substitutions: new Map([["ddb-alt", "1035 m"]])
+  });
+
+  assert.deepEqual(reprises.map((r) => r.assertion.id).sort(), ["snow-a", "snow-b"]);
+});

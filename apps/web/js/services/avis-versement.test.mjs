@@ -92,7 +92,7 @@ test("tout le rapport entre, accroché ou non", () => {
   });
 
   assert.equal(versables.length, 2, "un avis non accroché entre quand même");
-  assert.deepEqual(versables.map((v) => v.porteSur), ["neige", ""]);
+  assert.deepEqual(versables.map((v) => v.porteSur), [["neige"], []]);
   assert.equal(versables[1].liaison, LIAISON.SANS_SUJET);
   // Ce qui n'a pas été reconnu se **compte** : c'est la mesure de ce que
   // l'extraction n'a pas su faire, et elle ne se cache pas.
@@ -155,7 +155,7 @@ test("un avis accroché devient un engagement à la fusion", () => {
     payload: {
       subject: "Avis de contrôle technique n° 2.1.3",
       value: "Favorable — Zone de neige",
-      porteSur: "neige", emisPar: "Organisme de contrôle", documentId: "doc-1", page: 12
+      porteSur: ["neige"], emisPar: "Organisme de contrôle", documentId: "doc-1", page: 12
     }
   }];
 
@@ -173,10 +173,42 @@ test("un avis accroché devient un engagement à la fusion", () => {
   assert.match(acte.note, /Organisme de contrôle/, "et qui a rendu l'avis");
 });
 
+/**
+ * Le défaut trouvé sur un projet réel : un sujet porté par quatre parties
+ * d'ouvrage n'accrochait rien du tout. Il les couvre maintenant toutes, et
+ * chacune reçoit **son** engagement — sans quoi déplacer le projet ne ferait
+ * tomber qu'un quart de ce que le bureau de contrôle avait examiné.
+ */
+test("un avis qui couvre plusieurs portées écrit un engagement par portée", () => {
+  const ecrites = [{
+    id: "avis-1", project_id: "p1", status: "assumed",
+    payload: {
+      subject: "Avis de contrôle technique — Neige", value: "Favorable",
+      porteSur: ["neige-a", "neige-b", "neige-toutes"], emisPar: "Organisme de contrôle"
+    }
+  }];
+
+  const actes = engagementsDeLaFusion({ ecrites, par: "u-signataire", le: "2026-03-12T09:00:00Z" });
+
+  assert.deepEqual(actes.map((a) => a.assertion_id), ["neige-a", "neige-b", "neige-toutes"]);
+  assert.ok(actes.every((a) => a.verdict === ACT.COUVRE && a.source_assertion_id === "avis-1"));
+});
+
+test("une ligne écrite avant la liste se lit encore", () => {
+  // `porteSur` était une chaîne. Les lignes déjà en mémoire la portent toujours,
+  // et une migration n'a pas lieu d'être pour ça.
+  const ecrites = [{
+    id: "avis-0", project_id: "p1", status: "assumed",
+    payload: { subject: "Avis de contrôle technique n° 2.1.3", value: "Favorable", porteSur: "neige" }
+  }];
+
+  assert.deepEqual(engagementsDeLaFusion({ ecrites }).map((a) => a.assertion_id), ["neige"]);
+});
+
 test("un avis non accroché n'engage rien", () => {
   const ecrites = [{
     id: "avis-2", project_id: "p1", status: "assumed",
-    payload: { subject: "Avis de contrôle technique n° 2.1.4", value: "Favorable", porteSur: "" }
+    payload: { subject: "Avis de contrôle technique n° 2.1.4", value: "Favorable", porteSur: [] }
   }];
 
   assert.deepEqual(engagementsDeLaFusion({ ecrites }), []);
@@ -186,7 +218,7 @@ test("un avis écarté à la revue n'engage rien non plus", () => {
   // Ce que quelqu'un a refusé ne peut pas couvrir une valeur.
   const ecrites = [{
     id: "avis-3", project_id: "p1", status: "rejected",
-    payload: { subject: "Avis de contrôle technique n° 2.1.5", value: "Favorable", porteSur: "neige" }
+    payload: { subject: "Avis de contrôle technique n° 2.1.5", value: "Favorable", porteSur: ["neige"] }
   }];
 
   assert.deepEqual(engagementsDeLaFusion({ ecrites }), []);
@@ -221,7 +253,7 @@ test("un avis traverse le rapport, la proposition et la fusion sans rien perdre"
 
   // 2. La proposition. C'est ici que la liste blanche pouvait tout perdre.
   const items = itemsDeProposition(versables);
-  assert.equal(items[0].payload.porteSur, "neige", "la liaison doit survivre à l'item");
+  assert.deepEqual(items[0].payload.porteSur, ["neige"], "la liaison doit survivre à l'item");
   assert.equal(items[0].payload.emisPar, "Organisme de contrôle");
   assert.equal(items[0].payload.page, 12);
 
@@ -232,7 +264,7 @@ test("un avis traverse le rapport, la proposition et la fusion sans rien perdre"
   }).map((ligne, rang) => ({ ...ligne, id: `ecrite-${rang}` }));
 
   assert.equal(ecrites[0].nature, "constat", "un avis est un constat");
-  assert.equal(ecrites[0].payload.porteSur, "neige");
+  assert.deepEqual(ecrites[0].payload.porteSur, ["neige"]);
 
   // 4. L'engagement, écrit parce que quelqu'un a signé.
   const [acte] = engagementsDeLaFusion({ ecrites, par: "u-signataire", le: "2026-03-12T09:00:00Z" });
@@ -254,7 +286,7 @@ test("l'engagement ainsi écrit tombe quand la variante change la valeur", async
   const ecrites = [{
     id: "avis-1", project_id: "p1", status: "assumed",
     payload: { subject: "Avis de contrôle technique n° 2.1.3", value: "Favorable — Zone de neige",
-      porteSur: "neige", emisPar: "Organisme de contrôle" }
+      porteSur: ["neige"], emisPar: "Organisme de contrôle" }
   }];
   const [acte] = engagementsDeLaFusion({ ecrites, par: "u1", le: "2026-03-12T09:00:00Z" });
 

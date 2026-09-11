@@ -53,6 +53,7 @@
 import { inputsStateOf } from "./derived-constraints.js";
 import { RESERVES } from "../utilitaires/reserves.js";
 import { cleDuSujet } from "./memoire-identifiants.js";
+import { normalizeZoneKey } from "./project-zones.js";
 import { lireUnNombre } from "./memoire-en-texte.js";
 import { champDeLIdentifiant, memoireAvecLesChamps } from "./tableau-structure.js";
 import { agentByReference, utilitaireByReference } from "../utilitaires/catalogue.js";
@@ -349,7 +350,64 @@ export function contraintesAReprendre({ enVigueur = [], substitutions = new Map(
     });
   }
 
-  return reprises;
+  return uneSeuleParSujetEtPortee(reprises);
+}
+
+/**
+ * La portée d'une affirmation, sous une forme comparable.
+ *
+ * Vide veut dire « partout » — c'est une portée, pas une absence de réponse.
+ */
+function porteeDe(assertion) {
+  const zones = Array.isArray(assertion?.zones) && assertion.zones.length
+    ? assertion.zones
+    : (Array.isArray(assertion?.payload?.zones) ? assertion.payload.zones : []);
+
+  return [...new Set(zones.map(normalizeZoneKey).filter(Boolean))].sort().join("+");
+}
+
+/** Quand cette ligne a été décidée. Sans date, elle passe pour la plus ancienne. */
+function decideeLe(assertion) {
+  const brut = texte(assertion?.decided_at) || texte(assertion?.created_at);
+  const date = brut ? new Date(brut).getTime() : Number.NaN;
+  return Number.isNaN(date) ? 0 : date;
+}
+
+/**
+ * Une reprise par sujet **et par portée**, la plus récemment décidée.
+ *
+ * ## Le doublon qu'on voyait à l'écran
+ *
+ * Un projet réel porte deux lignes pour la zone de neige : celle versée par une
+ * proposition (`zone-de-neige`) et une ancienne contrainte de site
+ * (`site:snow_zone`) écrite directement par un écran, du temps où cela se
+ * faisait. Les deux déclarent lire la localisation, donc les deux se
+ * rejouaient — et la variante annonçait deux fois « Zone de neige : A1 → E ».
+ *
+ * Deux lignes qui disent le même sujet dans la même portée ne sont pas deux
+ * faits : c'est un fait et son vestige. Le projet tient **la plus récente** ;
+ * rejouer l'autre ne produit qu'une seconde fois la même réponse, et parfois
+ * pire — sur ce projet, la ligne ancienne calculait encore d'après une commune
+ * que le projet a quittée.
+ *
+ * ## Ce que cela ne fait pas
+ *
+ * Cela ne **répare** pas le doublon : la mémoire porte toujours deux lignes, et
+ * c'est un autre chantier — l'écran qui verse encore directement, hors
+ * proposition (`docs/a-traiter-plus-tard.md`, § 24). Cela cesse de le montrer
+ * deux fois, ce qui est autre chose et se dit franchement.
+ */
+function uneSeuleParSujetEtPortee(reprises = []) {
+  const retenues = new Map();
+
+  for (const reprise of reprises) {
+    const cle = `${cleDuSujet(reprise.sujet)}|${porteeDe(reprise.assertion)}`;
+    const deja = retenues.get(cle);
+
+    if (!deja || decideeLe(reprise.assertion) > decideeLe(deja.assertion)) retenues.set(cle, reprise);
+  }
+
+  return [...retenues.values()];
 }
 
 /**

@@ -246,6 +246,18 @@ export function sansDoublonDItems(items = []) {
  * Une affirmation sans sujet ou sans valeur n'entre pas : elle n'affirmerait
  * rien, et une proposition qui porte des lignes vides ne se relit pas.
  */
+/**
+ * Sur quoi un avis porte, toujours sous forme de liste.
+ *
+ * Une chaîne pour les lignes écrites avant que la liste existe, une liste
+ * ensuite. `null` quand il n'y a rien : une liste vide et « rien » se
+ * ressemblent, mais `null` dit qu'aucune liaison n'a été proposée.
+ */
+function porteesDeLAvis(valeur) {
+  const liste = (Array.isArray(valeur) ? valeur : [valeur]).map(texte).filter(Boolean);
+  return liste.length ? liste : null;
+}
+
 export function itemsDeProposition(affirmations = []) {
   return sansDoublonDItems((Array.isArray(affirmations) ? affirmations : [])
     .filter((affirmation) => texte(affirmation?.sujet) && texte(affirmation?.valeur))
@@ -367,7 +379,9 @@ export function itemsDeProposition(affirmations = []) {
           // Il devient un engagement à la fusion, et pas avant : c'est la
           // signature qui confirme. Voir `services/avis-engagement.js`.
           emisPar: texte(affirmation.emisPar) || null,
-          porteSur: texte(affirmation.porteSur) || null,
+          // Une **liste** : un avis porte souvent sur plusieurs parties de l'ouvrage.
+    // Les anciennes lignes portent une chaîne ; les deux formes se lisent.
+    porteSur: porteesDeLAvis(affirmation.porteSur),
           documentId: texte(affirmation.documentId) || null,
           page: Number.isFinite(Number(affirmation.page)) ? Number(affirmation.page) : null
         }
